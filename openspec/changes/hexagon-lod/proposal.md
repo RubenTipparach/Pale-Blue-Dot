@@ -77,6 +77,18 @@ so it needs a rule a tile can evaluate alone, from its own direction and the
 camera, and still agree with its neighbours. `design.md` carries the candidates
 and the one that looks right; this is the part to prototype before building.
 
+## Now load-bearing, not optional
+
+The radius decision (4,800 m at level 11, in `preview-scale-and-shader-parity`)
+makes this change a prerequisite rather than an optimisation. A uniform level 11
+over that body is 41,943,042 cells and about 5 GiB of topology. The gold
+standard's 2.833 m tile underfoot is reachable on a body that size only if the
+finest tier is a cap around the player rather than a globe.
+
+The seam question is therefore the critical path, and it is stated on its own in
+[SEAM-BRIEF.md](SEAM-BRIEF.md), written to be readable with no access to the
+rest of the repository.
+
 ## Non-goals
 
 - Editable voxels, caves and streaming. That is `voxel-engine-foundation`. This
