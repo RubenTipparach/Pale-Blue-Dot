@@ -27,10 +27,25 @@ planet. What is open is the radius, since the two are locked by
       topology record shrunk first.
 - [ ] `PLANET_RADIUS` and `SUBDIVISIONS` move together to that pair, and
       `ELEVATION_STEP` goes from 6 m to 1 m.
-- [ ] Scale the dependent numbers in the same change: the 4,800 m atmosphere
-      shell, the 4,600 m cloud layer, the 2,300 m foliage range, the 3,200 m
-      draw-budget switch, and the terrain amplitude (positive relief currently
-      peaks near 426 m, which is 71% of a 600 m radius and absurd on one).
+- [ ] **Cut the relief to ~100-150 m peaks.** Measured by sampling
+      `surface_height` over 400,000 directions, the current terrain runs
+      **-516 m to +432 m** - 948 m of relief, about 10.8% of the 4,000 m radius.
+      The target makes mountains climbable rather than scenery, and it decides
+      how many one-metre layers a column needs once the voxel engine lands.
+
+      Reference point: Tenebris, the project taken as definitive for hex size and
+      gravity, uses a **128-layer column with sea level at index 64** -
+      `MAX_LAND_HEIGHT` 40 m above sea, `MAX_OCEAN_DEPTH` 24 m below, reaching
+      ~62 m at worst on a seeded world. So ~100-150 m peaks are roughly twice
+      Tenebris's column budget in absolute terms, and far less than the ~640 m
+      that scaling its proportions to a 4,800 m body would give. Size our column
+      against the chosen figure, not against the old relief.
+- [ ] Scale the dependent numbers in the same change: the atmosphere shell and
+      cloud layer (currently `PLANET_RADIUS + 800` and `+ 600`, placed to clear
+      the old +426 m peaks - at ~150 m they come down with the terrain), the
+      2,300 m foliage range, and the 3,200 m draw-budget switch, which is set
+      above `2300 + max_peak` on purpose so the cutoff never clips a tree that
+      would have been drawn.
 - [ ] Re-tune the tree geometry in `planet_surface.wgsl`, which is authored for
       the old scale: trunks span 18 m and canopies reach 33 m, against roughly
       6 m for a Tenebris tree.
