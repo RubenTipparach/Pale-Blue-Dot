@@ -11,6 +11,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const STANDALONE_SHADERS: [&str; 7] = [
+    "atmosphere.wgsl",
+    "hex_faces.wgsl",
+    "hex_terrain.wgsl",
+    "planet_surface.wgsl",
+    "planet_visibility.wgsl",
+    "voxel_light.wgsl",
+    "water.wgsl",
+];
+// These assets require Bevy's composer, mesh/view imports and substitutions.
+// Explicit names keep newly added shaders from silently escaping validation.
+const BEVY_COMPOSED_SHADERS: [&str; 1] = ["sky_atmosphere.wgsl"];
+
 fn parse_and_validate(source: &str) -> Result<Module, String> {
     let module = naga::front::wgsl::parse_str(source).map_err(|e| e.emit_to_string(source))?;
     Validator::new(ValidationFlags::all(), Capabilities::empty())
@@ -161,6 +174,23 @@ fn validate(path: &Path) -> Result<(), String> {
             check_entries(&module, &render_entries)?;
             check_bindings(&module, &[(0, 0)])?;
         }
+        "planet_surface.wgsl" | "planet_visibility.wgsl" => {
+            check_struct(&module, "Cell", 128, &[0, 16, 112])?;
+            check_struct(&module, "Params", 112, &[0, 64, 80, 96])?;
+            check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3)])?;
+            if filename == "planet_surface.wgsl" {
+                check_entries(&module, &render_entries)?;
+            } else {
+                check_struct(&module, "DrawArgs", 16, &[0, 4, 8, 12])?;
+                check_entries(
+                    &module,
+                    &[
+                        ("clear_indirect", ShaderStage::Compute, [1, 1, 1]),
+                        ("compact_visible", ShaderStage::Compute, [128, 1, 1]),
+                    ],
+                )?;
+            }
+        }
         _ => return Err(format!("no interface contract registered for {filename}")),
     }
     println!("PASS {filename}: WGSL semantics, bindings, entry points, storage/uniform layout");
@@ -177,20 +207,35 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect::<Result<_, _>>()?;
     paths.retain(|path| path.extension().is_some_and(|ext| ext == "wgsl"));
     paths.sort();
-    if paths.len() != 5 {
-        return Err(format!("expected five WGSL assets, got {}", paths.len()).into());
-    }
     let mut failures = Vec::new();
+    let mut validated = BTreeSet::new();
     for path in paths {
+        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+            failures.push(format!("invalid shader filename: {}", path.display()));
+            continue;
+        };
+        if BEVY_COMPOSED_SHADERS.contains(&filename) {
+            println!("DEFER {filename}: requires Bevy composer and runtime pipeline validation");
+            continue;
+        }
         if let Err(error) = validate(&path) {
             failures.push(format!("{}:\n{error}", path.display()));
+        } else {
+            validated.insert(filename.to_owned());
+        }
+    }
+    for required in STANDALONE_SHADERS {
+        if !validated.contains(required) {
+            failures.push(format!(
+                "required standalone shader not validated: {required}"
+            ));
         }
     }
     if !failures.is_empty() {
         return Err(failures.join("\n").into());
     }
     println!(
-        "All five shaders validated with Naga 27.0.3; no GPU execution or render integration claimed."
+        "All seven standalone shaders validated with Naga 27.0.3; Bevy materials require separate runtime validation."
     );
     Ok(())
 }

@@ -1,0 +1,4 @@
+CAPTURE_REQUEST C:\Users\santi\repos\Pale-Blue-Dot\output\captures\performance-culled\runs\20260916-001400-669-dad66875\polar-round-03.png frame=3600
+CAPTURE_SAVED C:\Users\santi\repos\Pale-Blue-Dot\output\captures\performance-culled\runs\20260916-001400-669-dad66875\polar-round-03.png
+RENDERED_TOUR completed=true degrees=360.093 seconds=56.300 min_clearance_m=567.243 max_speed_m_s=600.000 protection_events=0
+FRAME_WALL_MS p50=1.71 p95=2.21 p99=2.48 samples=3539

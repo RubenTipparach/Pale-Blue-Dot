@@ -38,6 +38,11 @@ See [source-migration.md](docs/source-migration.md) for pinned provenance and
 - Free rotation is quaternion-backed. Rebase poses, interpolation history,
   physics state, and frame-relative velocities together at a tick boundary.
   Station passengers simulate in the station's local frame.
+- Start the desktop explorer in first-person walking mode on dry land. Player
+  mouse look uses the current frame's raw displacement, with no camera easing,
+  smoothing, interpolation delay, or dependence on ship angular response.
+  Physical ship limits still apply independently. Terrain textures use nearest
+  point sampling; do not replace it with linear filtering.
 - Exiting a ship changes its occupancy, never its existence. Persist its ID,
   pose/frame, inventory, damage, and ownership so it remains boardable.
 - A spherical hex world includes twelve pentagons. Use explicit 5/6 degree

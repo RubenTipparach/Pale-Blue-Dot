@@ -1,10 +1,22 @@
 # Engine architecture: spherical hex worlds in Bevy and Avian
 
-Status: target design with an initial Rust/Avian foundation and standalone WGSL
-ports. This document is a blueprint, not a claim that streamed planets or the
-GPU terrain renderer already run. See [source migration](source-migration.md)
-for existing artifacts versus remaining integration and
-[shader port](shader-port.md) for shader-specific contracts.
+Status: target architecture plus a desktop walking and flight prototype. The
+subdivision-8 hex/pentagon planet, GPU visibility compaction/indirect drawing,
+Avian flight, camera/HUD, and atmospheric shell have compiled and
+rendered on native Vulkan hardware. The recorded flight baseline passed 35
+release tests; its headless and rendered default/polar tours each completed a
+physical 360-degree lap in 56.3 seconds. Those captures and wall-frame
+measurements are preserved in the [validation record](validation.md).
+No GPU timestamp measurements were collected,
+and the prototype does not establish production-game performance.
+
+The prototype is a surface-column explorer. It does not yet implement editable
+meter-scale volumetric voxels, caves, streamed radial slabs, or durable edits.
+The ledger below describes the implemented boundary; subsequent design
+sections describe the production target unless explicitly marked as current.
+See [flight controls](flight-controls.md) for preview controls and verification
+commands, [source migration](source-migration.md) for pinned upstream provenance,
+and [shader port](shader-port.md) for the standalone volumetric shader contracts.
 
 ## 1. Decisions and compatibility baseline
 
@@ -12,8 +24,10 @@ Build a new Bevy host around reusable Tenebris world concepts and swarm-demo's
 separation between CPU rules and GPU presentation. Keep the pixel-art material
 language, Goldberg hex/pentagon terrain, propagated voxel light, atmospheric
 shells, and depth-aware water. Replace Sokol/OpenGL rendering and rocket orbital
-simulation. Avian owns local contacts and rigid-body integration; WGSL compute
-produces visible terrain faces without uploading expanded vertices every edit.
+simulation. Avian owns local contacts and rigid-body integration. The desktop
+prototype compacts visible columns on the GPU and reconstructs their geometry
+in the vertex shader. The target volumetric renderer will additionally generate
+exposed faces from edited occupancy without uploading expanded vertices.
 
 Use **Bevy 0.18.1 with Avian 0.6.1** as the initial compatible, pinned baseline.
 This deliberately matches swarm-demo's Bevy release; it is not a claim that
@@ -31,7 +45,7 @@ not a compute backend. No native-only capability is required for the baseline.
 | --- | --- | --- |
 | Stable IDs, procedural inputs, cell edits, flight policy | `pbd-core` | Independent of Bevy and GPU |
 | Input, ECS scheduling, task orchestration, Avian adapters | `pbd-app` | Convert engine events into explicit core commands |
-| GPU allocations, bind groups, pipelines, extracted changes | Render-world plugin, to be integrated | Cannot mutate authoritative gameplay |
+| GPU allocations, bind groups, pipelines, extracted changes | `pbd-app::planet` currently; volumetric chunk renderer later | Cannot mutate authoritative gameplay |
 | Durable journal, snapshots, migrations | Persistence service, to be implemented | Serializes stable core data, never ECS entity IDs |
 | Biomes, materials, ship limits, atmosphere/water settings | Validated asset manifests | Data versions and units are explicit |
 
@@ -39,6 +53,85 @@ Start with two crates; extract renderer, storage, or server crates when concrete
 boundaries justify them. Do not create a crate per system. Pure deterministic
 world rules can be shared by a future dedicated server; Avian collision outcomes
 are server-authoritative, not assumed bit-identical across client hardware.
+
+### Current implementation ledger
+
+The ledger separates the implemented and exercised prototype from the
+production target. Native evidence covers Windows 10, an RTX 3070 with NVIDIA
+595.97/Vulkan, 1440 × 900, and seed `0x5eed2026`; broader platform, gameplay, and
+performance acceptance remains part of the target work.
+
+| Area | Implemented in the source tree | Production target still outstanding |
+| --- | --- | --- |
+| Desktop host | Window, camera/HUD, input, screenshots, graphical tours, and headless verification run on the recorded native device; launcher and actual-window control/screenshot smoke passed | Other devices/platforms, final user interface, and settings |
+| Spherical topology | `planet_topology.rs` builds a complete level-8 icosahedron dual with 655,362 columns, including twelve pentagons and shared corner/neighbor data | Hierarchical persistent cell IDs, patch streaming, and fine/coarse LOD transitions |
+| Terrain authority | `planet_terrain.rs` evaluates a deterministic spherical height/climate field on the CPU; 6 m elevation steps and compressed positive heights yield a sampled peak near 426 m | Editable 3D occupancy, radial materials, caves, overhangs, geology, and edit transactions |
+| GPU geometry | `planet.rs`, `planet_visibility.wgsl`, and `planet_surface.wgsl` wire persistent 128-byte column records, horizon visibility compaction, GPU-written indirect arguments, and vertex pulling into Bevy | Volumetric exposed-face extraction, dirty-page updates, allocator retirement, streamed halos, and production culling/LOD |
+| Preview materials | The active planet shader uses integer texel loads from the committed `fields.png` source atlas; explicit nearest/point image settings preserve pixels. Biome palettes, local texture detail, and decorative trees remain active | Independent production texture layers from all biome sheets, reviewed seams/mips, and full material/geometry variants |
+| Preview lighting | CPU generation derives a local sky-occlusion factor from adjacent column heights; the surface shader adds a fixed sun/terminator and atmospheric treatment | Propagated sky/RGB light through volumetric occupancy, removal/invalidation, cross-chunk light exchange, and gameplay light authority |
+| Preview ocean | The planet surface shader shades sea-level ocean columns with depth color, wave/specular/Fresnel cues, and atmospheric fade | Resolved-scene refraction, underwater transitions, the standalone `water.wgsl` pass, and authoritative local fluids |
+| Preview atmosphere | Native captures exercise the Bevy material shell with sixteen view/four light samples, an 800 m air shell, and clouds at 600 m above sea level | Multi-body/airless configuration, offset/rebased bodies, production composition, and quality tiers |
+| Flight | Input runs before physics; `ShipController` submits bounded accelerations and Avian integrates position/quaternion attitude once. Player view now reads raw mouse orientation immediately, independently of bounded physical attitude; no camera interpolation is applied | Fuel, damage, ship construction, station docking, full terrain colliders, and gameplay-ready landing |
+| Walking | Default first-person walker uses Avian integration, exact CPU intersections with rendered hex caps, swept footprint/step support, jumping, and planet-relative up; F switches the active controller | Swimming, cave/overhang/tree colliders, interaction-based boarding, and edited terrain collision |
+| Flight protection | A sampled segment check enforces 1.6 m manual clearance against exact rendered cap heights; automated tours retain the conservative radial height/ocean field and 45 m clearance | Detailed collision for voxel edits, caves, overhangs, trees, and streamed collider replacement |
+| Celestial motion | Core supports analytic rails; the desktop scene includes a decorative moon on a rail and a static origin planet for flight | Planet spin/orbital reference-frame transitions, walkable stations, and multi-planet travel |
+| Validation | The recorded flight baseline passed 35 release tests, strict Clippy/formatting, seven standalone WGSL modules and three validator regressions; five static scene captures, two rendered full tours, and actual-window flight/screenshot evidence are preserved | Production acceptance cases below, GPU timestamp profiling, repeated comparative benchmarks, and other hardware/backend tiers |
+
+At radius 4 km, 655,362 columns average about 307 square metres each, roughly
+19 m between neighboring centers for an equivalent regular hex grid. Their
+128-byte GPU topology records occupy about 80 MiB. They are
+coarse surface columns, not the one-meter microvoxels specified below. A single
+height per column cannot represent an interior cave or independently removable
+blocks. The prototype eagerly constructs this modest whole-globe topology once;
+that does not justify allocating an entire fine voxel planet.
+
+The walking controller shares those CPU column records with the renderer;
+explicit neighbor IDs add about 15 MiB and the contact seed index adds 24 KiB.
+Its capsule footprint samples exact rendered cap triangles before resolving
+ground contact. Dry-land walking defaults to 8 m/s, Shift sprint to 14 m/s,
+a 0.6 m automatic step, and a 12 m/s jump (about 8 m at 9 m/s^2 gravity).
+The eye sits 1.6 m above the feet, with a small contact skin. Walking preserves
+planet-relative up and clamps pitch to +/-89 degrees. Water blocks entry until
+swimming exists; trees, caves, and overhangs have no preview contact geometry.
+F changes creative walking/flight mode while retaining the ship entity;
+returning to walking places the player on dry ground below or nearby.
+
+Both manual cameras apply raw mouse motion at 0.002 radians per pixel, without
+easing or pose interpolation. Interactive presentation uses VSync and requests
+a maximum frame latency of one from the backend; this is a queue hint, not a
+measured end-to-end latency guarantee. There is no additional main-thread frame
+pacer. Capture runs remain uncapped with VSync disabled.
+
+The live GPU path uses a visible-ID buffer sized for every prototype column;
+each compute invocation can append at most one ID. It performs horizon rejection
+and indirect column drawing, not the standalone `hex_faces.wgsl` volumetric
+mesher. Near views draw 162 vertices per visible column, including optional
+decorative trees. Above 3,200 m sea-level camera altitude, indirect draws use
+only the 54 terrain vertices: even summit trees are then beyond the shader's
+2,300 m decoration range. Its topology remains on the GPU after the initial
+upload; steady-state planet updates write a 112-byte view/time uniform per view,
+and a roughly 2.5 MiB per-view visible-ID buffer remains GPU-resident. Measured
+wall-frame results are in [validation.md](validation.md); no controlled CPU-mesh
+comparison or isolated GPU timing establishes a relative throughput improvement.
+
+Preview flight uses a 120 m/s normal target, 600 m/s cruise, **80 m/s^2 controlled
+acceleration**, and approximately 1.6 m of manual terrain clearance. Automated
+tours retain 45 m clearance. The 20 m/s^2 values later in this document remain
+the original game-design tuning
+proposal. At the preview tour's 5 km orbital radius, a 600 m/s circular path
+needs 72 m/s^2 of centripetal acceleration. This is controller-driven movement
+around the planet, not assigning an on-rails orbit to the ship. The tour's
+completion checks accumulate angle from Avian's actual position. The final
+default and polar paths each reached 360.093 degrees in 56.300 seconds, with
+zero emergency terrain projections. Minimum clearance was 657.284 m and
+567.243 m respectively. The recorded maximums were 600 m/s, 80 m/s^2,
+0.120 rad/s, and 0.017 rad/s^2. These route results do not replace landing,
+collision, or other gravity-transition tests.
+
+The current preview uses a single origin-centered `f32` physics/render bubble.
+The core includes `f64` position/frame math, but the desktop scene does not yet
+exercise global rebasing or rotating station frames. Its moon and its own height
+field are illustrative inputs, not a complete implementation of the catalog.
 
 ## 2. Scale, coordinates, and topology
 
@@ -116,9 +209,10 @@ v_local = inverse(Q) * (v_world - V - omega cross (x_world - O))
 
 Use these transforms when changing frames, including station approach and
 departure. Rebase only at fixed-tick boundaries and shift current/previous
-poses, collider locations, camera interpolation, joints, trails, cached bounds,
-and extracted render origins together. Do not infer velocity from a rebased
-`Transform`. A render extraction carries one origin epoch; mixed epochs cannot
+poses, collider locations, camera poses, any actor interpolation history,
+joints, trails, cached bounds, and extracted render origins together. Do not
+infer velocity from a rebased `Transform`. A render extraction carries one
+origin epoch; mixed epochs cannot
 share a draw. Quaternion basis vectors are derived views, never competing
 orientation authorities.
 
@@ -214,7 +308,9 @@ The target fixed-tick pipeline is:
 
 Avian 0.6 defaults to `FixedPostUpdate` and exposes physics schedules/sets.
 Choose one schedule configuration, order systems using that version's actual
-sets, and use its interpolation support for render transforms. Never integrate
+sets. Interpolation may be used for other actors' render transforms; the local
+player camera deliberately uses immediate mouse orientation and the latest
+physical position, without interpolation or easing. Never integrate
 the same body once in a pure core update and again in Avian. Core returns control
 accelerations or target velocities; the adapter applies them at the correct
 physics boundary. See [Avian scheduling and interpolation](https://docs.rs/avian3d/0.6.1/avian3d/).
@@ -321,8 +417,9 @@ Display/test this distinction instead of quietly violating the acceleration
 contract. Caps are frame-relative, never the planet's absolute orbital speed.
 
 Inertial dampeners can offer a player-selected coast mode, but safety envelopes
-remain active. Rotation damping makes released rotation settle smoothly. Hover
-requires adequate control authority; tune gravity and available acceleration
+remain active. Rotation damping stabilizes physical ship attitude; it never
+smooths or delays the player's mouse look. Hover requires adequate control
+authority; tune gravity and available acceleration
 together. Fuel/power loss behavior is a later explicit gameplay mode, not an
 excuse to reintroduce orbital rocket simulation.
 
@@ -337,11 +434,15 @@ arguments, and the expanded positions produced by vertex pulling. Procedural
 GPU terrain generation may later accelerate cosmetic detail, but authoritative
 terrain must not depend on cross-vendor floating-point noise agreement.
 
-The initial shader contract uses 16-byte face descriptors
+The standalone volumetric shader contract uses 16-byte face descriptors
 `{cell, face, material, light}`, 32-byte cell records, and 112-byte column records
 containing six corner rays plus center/degree. These deliberately explicit
 prototype layouts are documented in [shader-port.md](shader-port.md). Their
 size is a reason to stream them, not to upload every column on the planet.
+They are separate from the desktop surface renderer's currently integrated
+128-byte column ABI and visibility-ID buffer described in the implementation
+ledger. Supplying the desktop renderer does not integrate these volumetric
+shaders automatically.
 Keep Rust storage structs `repr(C)`, explicit padding, and asserted sizes; WGSL
 `vec3` alignment cannot be inferred from a Rust `[f32; 3]` field.
 
@@ -489,7 +590,8 @@ displacements and buoyancy samples; they are not a global per-voxel fluid solver
 Retain single scattering, Rayleigh/Mie phase terms, shell intersection,
 planet shadowing, scale height, and per-body wavelengths/sunset controls from
 Tenebris's atmosphere shader. The source uses eight view samples and four light
-samples; keep a comparable reference path before introducing LUTs/half-resolution
+samples; the integrated desktop preview uses sixteen/four to improve its
+terminator. Keep a comparable reference path before introducing LUTs/half-resolution
 passes and temporal reuse. Benchmark those later choices, including GPU cost
 at the horizon and banding on the pixel-art palette.
 
@@ -501,12 +603,13 @@ cheap shell/LUT appearances while the active body uses the detailed effect.
 
 ### Pixel-art presentation
 
-Use the biome atlas manifest as the material authority. Near textures use
-nearest sampling, deliberate 16/32-pixel motifs, readable value clusters, and
-restrained emissive colors. Mid/far tiers need curated/palette-aware mipmaps
-and stable sampling to avoid shimmer; unrestricted nearest sampling at all
-distances is not a performance or visual-quality solution. Avoid aggressive
-temporal blur and photoreal roughness detail that erase the pixel language.
+Use the biome atlas manifest as the material authority. Pixel textures use
+nearest/point sampling, deliberate 16/32-pixel motifs, readable value clusters,
+and restrained emissive colors. Future distance tiers can use curated,
+palette-aware mip levels selected without blending, alongside geometric LOD
+and reduced distant detail. Preserve nearest filtering rather than introducing
+bilinear/trilinear texture blur. Avoid temporal blur and photoreal roughness
+detail that erase the pixel language.
 The terrain shader should preserve material colors while receiving baked
 light, atmosphere, weather wetness, and controlled directional shading.
 
@@ -556,3 +659,6 @@ and an edit journal; (3) integrated GPU face path and overflow/lifetime handling
 storage/recovery hardening, then multiplayer. Stages 2-3 together supply the
 terrain laboratory gate, including save/reload and a pentagon/seam. Each stage
 keeps a runnable diagnostic scene and clear pass/fail evidence.
+The coarse desktop explorer is an intermediate rendering/flight prototype. Its
+whole-globe display and tour implementation do not complete the terrain
+laboratory gate's editable microvoxels, durable saves, or collider-swap evidence.

@@ -1,0 +1,112 @@
+﻿{
+    "metadata":  {
+                     "schema_version":  1,
+                     "started_utc":  "2026-09-16T05:20:14.2321642Z",
+                     "executable":  "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\target\\release\\pbd-app.exe",
+                     "executable_sha256":  "F8C08F6734A7327E0EEA819B3B91D1BA6804CC95CB41783FC205FAAD9304FB97",
+                     "executable_modified_utc":  "2026-09-16T04:48:50.3627597Z",
+                     "executable_bytes":  81481216,
+                     "shader_hashes":  [
+                                           {
+                                               "path":  "assets\\shaders\\atmosphere.wgsl",
+                                               "sha256":  "34FE5D029C65F99D5883822E1F80DCA71B5B9D407085791D3E85266FFD3A02D3"
+                                           },
+                                           {
+                                               "path":  "assets\\shaders\\hex_faces.wgsl",
+                                               "sha256":  "C34194E1572F9393FB67DF288D66376EEEB19CBDF8689125B6178CD69AFECD96"
+                                           },
+                                           {
+                                               "path":  "assets\\shaders\\hex_terrain.wgsl",
+                                               "sha256":  "ADE9D813DE847A635AC434B12660492D12FC07C94D6F4783C29601C489E1CA72"
+                                           },
+                                           {
+                                               "path":  "assets\\shaders\\planet_surface.wgsl",
+                                               "sha256":  "D46CA5A4FBD88C4FCE3E62BB92827E7C9C1EF18D65979C6C76C1F5B2DA26FE5B"
+                                           },
+                                           {
+                                               "path":  "assets\\shaders\\planet_visibility.wgsl",
+                                               "sha256":  "71ACA529E8CAA81FE9DE7A9245E84E8FAE0C9E52CD40E24446E9C9268D97D3F6"
+                                           },
+                                           {
+                                               "path":  "assets\\shaders\\sky_atmosphere.wgsl",
+                                               "sha256":  "2B8FCB99ADBB68C418742EB4C65FD6D68F4474E9AB5D5952F6807F039B646309"
+                                           },
+                                           {
+                                               "path":  "assets\\shaders\\voxel_light.wgsl",
+                                               "sha256":  "D67526037572F9BC051B6EF41D321095F22D7448695B40909BD772B59EEA2D11"
+                                           },
+                                           {
+                                               "path":  "assets\\shaders\\water.wgsl",
+                                               "sha256":  "99B5FBF166BBACE9F6D96E8457B3D11C226F69FF34CC1916FE47BFA6FFAE8991"
+                                           }
+                                       ],
+                     "hardware":  {
+                                      "cpu":  [
+                                                  "Intel(R) Core(TM) i7-9700F CPU @ 3.00GHz"
+                                              ],
+                                      "gpu":  [
+                                                  {
+                                                      "Name":  "Parsec Virtual Display Adapter",
+                                                      "DriverVersion":  "0.45.0.0"
+                                                  },
+                                                  {
+                                                      "Name":  "Meta Virtual Monitor",
+                                                      "DriverVersion":  "5.3.57.114"
+                                                  },
+                                                  {
+                                                      "Name":  "NVIDIA GeForce RTX 3070",
+                                                      "DriverVersion":  "32.0.15.9597"
+                                                  }
+                                              ],
+                                      "os":  "Microsoft Windows 10 Home",
+                                      "installed_memory_mib":  32711.5
+                                  },
+                     "resolution":  "1440x900 (current application default; check capture dimensions)",
+                     "terrain_seed":  "0x5eed2026 (current application default)",
+                     "warmup_frames":  60,
+                     "screenshot_frames_excluded":  true,
+                     "timing":  "Application-reported wall-frame intervals; not GPU timestamps. Capture mode disables application pacing and requests AutoNoVsync.",
+                     "memory":  "Process memory sampled about every 100 ms across startup and rendering. Peak working set also uses the OS process counter. These are CPU process figures, not GPU VRAM.",
+                     "terrain_upload":  "Current renderer: one immutable 128-byte record per column (655362 columns), 112-byte view/time update per view, and a GPU-resident visible-ID buffer. These are implementation sizes, not measured transfer counters.",
+                     "target_frame_ms":  16.666666666666668,
+                     "static_frames":  1200,
+                     "tour_frames":  36000,
+                     "timeout_seconds":  120,
+                     "rounds":  1,
+                     "scenes":  [
+                                    "polar"
+                                ]
+                 },
+    "runs":  [
+                 {
+                     "scene":  "polar",
+                     "round":  1,
+                     "frames_requested":  36000,
+                     "p50_ms":  1.66,
+                     "p95_ms":  2.1,
+                     "p99_ms":  2.36,
+                     "sample_count":  35939,
+                     "p95_within_target":  true,
+                     "sampled_peak_working_set_mib":  590.61,
+                     "os_peak_working_set_mib":  590.63,
+                     "sampled_peak_private_mib":  782.94,
+                     "last_working_set_mib":  382,
+                     "last_private_mib":  452.54,
+                     "memory_samples":  562,
+                     "elapsed_seconds":  62.764,
+                     "exit_code":  0,
+                     "timed_out":  false,
+                     "error_count":  0,
+                     "tour_completed":  true,
+                     "capture_saved":  true,
+                     "focus_acquired":  true,
+                     "focus_interrupted":  false,
+                     "focus_checks":  111,
+                     "foreground_checks":  111,
+                     "valid_run":  true,
+                     "capture":  "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\captures\\performance-soak\\runs\\20260916-002012-823-3f6da07b\\polar-round-01.png",
+                     "stdout":  "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\captures\\performance-soak\\runs\\20260916-002012-823-3f6da07b\\polar-round-01.stdout.txt",
+                     "stderr":  "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\captures\\performance-soak\\runs\\20260916-002012-823-3f6da07b\\polar-round-01.stderr.txt"
+                 }
+             ]
+}

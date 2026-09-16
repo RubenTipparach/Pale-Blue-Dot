@@ -1,6 +1,14 @@
 # Shader port and GPU interfaces
 
-The repository includes five standalone WGSL modules, semantically validated with Naga **27.0.3**, the version in the source `swarm-demo` lockfile alongside Bevy 0.18.1 and wgpu 27.0.1. They contain working shader algorithms and explicit interfaces. **They are not registered in a Bevy render graph, dispatched by the current application, visually matched against Tenebris, or GPU benchmarked.** The engine foundation can run without a window or render dependencies. Shader validation proves language and interface correctness, not rendered output or frame rate.
+The repository contains **eight shader assets**: five standalone ports for the planned voxel engine, two standalone WGSL modules wired into the desktop planet pipeline, and one Bevy-composed atmosphere material. Seven standalone modules have passed semantic/interface validation with Naga **27.0.3**, the version in the source `swarm-demo` lockfile alongside Bevy 0.18.1 and wgpu 27.0.1. Final native orbit, coast, surface, night, pole and survey-tour captures of the revised **655,362-column** scene have been inspected without reported GPU pipeline errors. Those captures demonstrate actual compute/indirect rendering and Bevy sky composition; they do not establish complete Tenebris parity or all target-device performance budgets. Shader validation and runtime evidence are recorded separately.
+
+| Assets | Current application connection | Validation/status boundary |
+| --- | --- | --- |
+| `hex_faces.wgsl`, `hex_terrain.wgsl`, `voxel_light.wgsl`, `water.wgsl`, `atmosphere.wgsl` | Original standalone ports; no desktop dispatch/material binding | Naga semantics and interfaces passed. These do not become active simply because the desktop prototype exists. |
+| `planet_visibility.wgsl`, `planet_surface.wgsl` | `PlanetPlugin` creates persistent storage, bind groups, visibility compute and indirect surface draw | Naga semantics/interfaces passed. Subdivision-8 rendering and altitude-dependent draw budgets exercised in native captures. |
+| `sky_atmosphere.wgsl` | `SkyPlugin` registers `SkyMaterial` and spawns a shell mesh through Bevy's material pipeline | Bevy imports/substitutions compiled and rendered with the revised shell/cloud parameters. Explicitly deferred by the standalone validator; night-side review motivated the 16-step/soft-penumbra refinement. |
+
+The headless physics/core path remains available without the desktop feature. Detailed interfaces below distinguish the live desktop prototype from the original volumetric/optical ports.
 
 ## Source traceability
 
@@ -9,7 +17,7 @@ Reference revisions inspected:
 - Tenebris: [`ef9865166349c7a3c4ae09acdd20640daf85b4fd`](https://github.com/RubenTipparach/tenebris/tree/ef9865166349c7a3c4ae09acdd20640daf85b4fd).
 - Swarm demo: [`625596b437fec454412b3c7083a3a04e510617f1`](https://github.com/RubenTipparach/swarm-demo/tree/625596b437fec454412b3c7083a3a04e510617f1).
 
-Paths below are relative to those repositories. No top-level `LICENSE` or `COPYING` file was found in either inspected checkout; these ports do not assign a new license to the source mathematics or upstream expression. The upstream rain-ripple code specifically attributes Zavie / Ctrl-Alt-Test's “H - Immersion”; that externally attributed kernel is **not copied** into these assets. Repository access is not itself a license grant. Preserve this provenance when distributing adaptations.
+Paths below are relative to those repositories. Tenebris's Rust Cargo metadata declares MIT and swarm-demo declares MIT OR Apache-2.0; no top-level `LICENSE` or `COPYING` file was found in either inspected checkout. These ports preserve provenance rather than assigning a new license to upstream art or third-party content. The upstream rain-ripple code specifically attributes Zavie / Ctrl-Alt-Test's “H - Immersion”; that externally attributed kernel is **not copied** into these assets.
 
 | New asset | Upstream file and exact mathematical source | Implemented changes |
 | --- | --- | --- |
@@ -18,6 +26,8 @@ Paths below are relative to those repositories. No top-level `LICENSE` or `COPYI
 | `assets/shaders/hex_terrain.wgsl` | `tenebris-rs/shaders/hex.glsl`: vertex terminator and baked-light interface; `tenebris-rs/crates/tenebris-client/src/shaders/hex.fs.glsl`: `hex_bayer4`, base `lit` expression, underwater attenuation, atmospheric limb block | Preserves hard pixel cutouts/dither, day/night ambient, Lambert sun times sky visibility, underwater absorption and altitude-gated limb. Expands scalar torch lighting to RGB baked light and replaces atlas constants with texture-array layers. Adds original vertex pulling. |
 | `assets/shaders/voxel_light.wgsl` | `tenebris-rs/crates/tenebris-core/src/world_light.rs`: `voxel_neighbours_with_cost`, `sky_seed_one_column`, `bfs_one_pop`, incremental/full rebuild semantics | New parallel Jacobi implementation of seeded, attenuated neighbor propagation. RGB + sky is an intentional extension beyond upstream `(sky << 4) | block`. Removal requires reseeding, not repeated maximum against stale results. CPU BFS/priority scheduling itself is not translated into this shader. |
 | `assets/shaders/hex_faces.wgsl` | Architectural reference: `swarm-demo/crates/swarm_app/src/swarm.rs`, `SwarmPlugin::build`, `init_tick_pipeline`, `SwarmTickNode::run`; `assets/shaders/swarm.wgsl` storage layout | Original topology-aware face extraction, bounded writes, counters, indirect arguments and vertex expansion. Adopts persistent GPU buffers and ordered compute-before-draw dispatches. Does not transplant swarm movement, combat or density algorithms. |
+| `assets/shaders/planet_visibility.wgsl` and `planet_surface.wgsl` | New prototype code informed by the same swarm compute/draw lifecycle and Tenebris cap/side, terminator, skylight and rim concepts above | Horizon-culls CPU-generated surface columns, compacts IDs, draws caps/skirts/cosmetic trees by vertex pulling, and shades ocean caps with a simpler wave/Fresnel model. This is not the standalone voxel face kernel or optical water port. |
+| `assets/shaders/sky_atmosphere.wgsl` | Adaptation of the documented `atmosphere.wgsl` port and its upstream 8-view/4-sun integration | Actual Bevy material interface, front/inside shell selection, 16-view/4-sun midpoint sampling, 36–60 m soft planetary penumbra, premultiplied scattering, warm dusk, daylight veil and stylized cloud noise. Does not reproduce upstream cube clouds or a full scene-depth atmospheric composite. |
 
 The source `world_light.rs` introduction says “6-neighbour,” but the actual surface is a Goldberg grid: a column has five or six horizontal neighbors plus two radial neighbors. The port uses an explicit eight-slot topology table and supports pentagons; it does not infer spherical adjacency from flat axial coordinates.
 
@@ -30,7 +40,35 @@ cargo run --manifest-path tools/validate_shaders/Cargo.toml --locked
 cargo test --manifest-path tools/validate_shaders/Cargo.toml --locked
 ```
 
-The utility has its own workspace and lockfile. It parses all five modules, runs all Naga validation flags with no optional capabilities enabled, checks declared bindings, checks entry-point stages/workgroup sizes, and asserts important struct spans/member offsets. Negative tests demonstrate rejection of a type error, an invalid uniform-array layout, and the 16-to-32-byte padding mistake caused by substituting `vec3<u32>` for three scalar pads. It does not create a GPU adapter, compile a backend pipeline, check texture contents, or exercise read/write ordering on hardware.
+The utility has its own workspace and lockfile. It requires seven explicitly named standalone modules, runs all Naga validation flags with no optional capabilities enabled, checks declared bindings, checks entry-point stages/workgroup sizes, and asserts important struct spans/member offsets. It explicitly defers `sky_atmosphere.wgsl` because its Bevy imports and material substitutions require Bevy's shader composer. Unknown shader names remain errors. All seven standalone checks and three negative tests passed: the tests demonstrate rejection of a type error, an invalid uniform-array layout, and the 16-to-32-byte padding mistake caused by substituting `vec3<u32>` for three scalar pads. The tool does not create a GPU adapter, compile a backend pipeline, check texture contents, or exercise read/write ordering on hardware.
+
+The final Rust verification passed 35 tests. Two scripted circumnavigation checks completed with zero protection events, and all six native capture views were rerun with the final 16-view/4-sun sky material. These validate the integrated prototype; the five unbound standalone ports still require their own GPU dispatch, image and readback acceptance checks when connected.
+
+## Desktop pipeline currently wired in code
+
+`pbd-app/src/desktop.rs` adds `PlanetPlugin` and `SkyPlugin` to its Bevy/Avian application. These use separate interfaces from the original five port assets. The default scene is one 4 km-radius planet at the local origin; no multi-planet streamed voxel renderer is implied.
+
+`planet_topology.rs` constructs a closed dual of a subdivided icosahedron, including twelve pentagons and shared corner rays. The revised subdivision-8 setting contains 655,362 cells: approximately 80 MiB at 128 bytes per GPU column, plus about 2.5 MiB of visible IDs per view. At a 4 km sea-level radius the cells average roughly 19 m across; this is a surface preview, not the planned metre-scale volumetric world. `planet_terrain.rs` supplies CPU heights/biomes and halves positive elevations before 6 m quantization, retaining the coast mask. Its observed sampled peak is approximately 426 m; that is not a universal upper-bound proof. `PlanetPlugin` uploads one immutable whole-globe column buffer and keeps one visible-ID/indirect allocation per view. Only view/time uniforms change each frame. Neighbor-height occlusion is baked on the CPU into one scalar sky-visibility value; the RGB propagation kernel is not running in this path.
+
+| Desktop struct | Span | Members/offsets |
+| --- | ---: | --- |
+| `Cell` / Rust `GpuCell` | 128 B | center ray xyz and height w at 0; six corner rays with adjacent edge height w at 16 (stride 16); degree/biome/scalar sky/stable array ID at 112 |
+| `Params` / Rust `PlanetParams` | 112 B | clip-from-world matrix at 0; camera vec4 at 64; sun vec4 at 80; radius/count/time/vertices-per-cell vec4 at 96 |
+| `DrawArgs` | 16 B | vertex count at 0; atomic instance count at 4; first vertex at 8; first instance at 12 |
+
+Both planet modules use bind group 0. The compute layout binds parameters (0), read-only cells (1), read/write visible IDs (2), and read/write indirect arguments (3). The surface layout binds parameters (0), read-only cells (1), read-only visible IDs (2), and the `fields.png` texture view (3). Texture reads use `textureLoad` on a defined nearest 32×32 source grid per sheet tile; there is no sampler or texture-array importer in this prototype.
+
+`PlanetComputeNode` runs before `CameraDriverLabel`: `clear_indirect` dispatches one workgroup, then `compact_visible` dispatches `ceil(cell_count/128)` workgroups. Each cell can append at most one ID. The host allocates exactly `cell_count` ID slots, which is the capacity invariant this particular compactor relies on; it does not implement the standalone face kernel's overflow/replacement protocol. Draw arguments use zero first vertex/instance. Above 3,200 m camera altitude the draw emits 54 vertices per visible cell (cap and exposed skirts); nearer views emit 162, including optional cosmetic tree cubes. Degenerate triangles cover inactive pieces. This altitude switch reduces vertex work, not the authoritative topology resolution.
+
+The custom planet draw is queued at the start of Bevy's `Transparent3d` phase but its pipeline uses opaque color output and reverse-Z depth writes. This is an explicit prototype integration detail, not an assertion that it participates in the opaque prepass or supplies an already-resolved scene-color/depth texture to the water port. `SkyMaterial` then uses normal Bevy mesh/view bindings and premultiplied blending with depth writes disabled. Native captures of the revised resolution, terrain and sky confirmed their composition in orbit and near the ground; the optical water path remains separate.
+
+Ocean caps in `planet_surface.wgsl` clamp negative terrain heights to sea radius. Their fragment path uses terrain-depth tint, pixel-scale procedural waves, Fresnel response and warm sun glints. It does **not** sample opaque scene depth/color, displace a full fluid simulation, or provide underwater refraction. Keep this distinction from standalone `water.wgsl` explicit.
+
+`sky.rs` supplies a five-vec4 (80 B) material uniform containing center/solid radius, atmosphere radius/density coefficients, sun vector/radiance, scatter ratios/anisotropy, and cloud settings. The revised shell radius is **4,800 m**, with clouds at **4,600 m** and exponential density scale height **176 m** (`0.22 × 800 m`). Density tapers smoothly over the outer 28% of the shell. Sun radiance is 3.2, Rayleigh/Mie scales are 0.30/0.018, RGB scattering ratios are `(0.16, 0.52, 1.30)`, and cloud opacity is capped at 0.52; these are artistic parameters, not calibrated physical units. The shader imports `bevy_pbr::forward_io::VertexOutput` and `bevy_pbr::mesh_view_bindings::view`; it uses the default mesh vertex shader and therefore cannot be passed directly to the standalone validator. Near-surface/daylight star suppression fades out by the outer atmosphere boundary. No automatic floating-origin update is installed for the shell: a moved planet must update the mesh transform and center uniform together.
+
+Night-side capture review exposed discrete bands from the original eight midpoint samples combined with binary planet-shadow rejection. The integrated material now uses sixteen view samples and smooth sun visibility based on the sun ray's closest radius to the planet, with an artistic 36–60 m penumbra. Shadowed segments still accumulate extinction. The native night recapture confirmed that the diagonal shadow wedges were removed. The original standalone atmosphere port remains at its documented eight-view/four-sun interface.
+
+Runtime comparisons, including actual Tenebris reference screenshots and the distinction between its prebuilt binary and inspected source revision, are tracked in [tenebris-comparison.md](tenebris-comparison.md).
 
 ## Coordinate and color contract
 
@@ -42,7 +80,9 @@ Atmosphere receives camera position relative to the body center and camera/sun v
 
 Texture-array albedo should use an sRGB texture view so sampling yields linear color. Lighting, water scene color and scattering are linear; tone mapping belongs to the final camera pass. Use nearest texture filtering for terrain, optional nearest mip selection, and edge-safe tile layers. The terrain alpha output is ordinary opaque alpha; Tenebris's repurposed wetness alpha channel is not carried into Bevy's scene color.
 
-## Opaque face extraction and vertex pulling
+## Standalone voxel face extraction and vertex pulling
+
+The following contract belongs to `hex_faces.wgsl`/`hex_terrain.wgsl`, which the current desktop surface-column pipeline does not dispatch.
 
 Storage structures use tightly specified WGSL layouts. Array stride equals the stated span.
 
@@ -92,7 +132,9 @@ For this correctness-first format all instances draw 18 vertices. A hex cap uses
 
 Material `m >= 1` maps to texture-array layers `(m-1)*3 + {0 top,1 side,2 bottom}`. Asset import must build those layers from the biome tile manifests. PNG sheets are not directly bindable texture arrays, and that importer is not implemented here. The old atlas's `93/108` scaling is deliberately absent.
 
-## Baked RGB and skylight
+## Standalone baked RGB and skylight
+
+This section describes `voxel_light.wgsl` and its associated face format. The desktop prototype currently uses the separate CPU scalar sky-occlusion value described above.
 
 Both terrain and light compute use `u32` values whose low 16 bits are `R | (G << 4) | (B << 8) | (sky << 12)`, each channel 0–15. This format is an extension, not bit-compatible with Tenebris's two-channel byte. Migration from old data maps old block intensity through the old torch tint into RGB and keeps the sky nibble. Display intensity is shader-configured; the normalized channel value is not a physical lux measurement.
 
@@ -104,7 +146,9 @@ For initial generation or an edit that removes a source/blocks daylight, reseed 
 
 Run up to 15 ordered relaxation dispatches, swapping distinct previous/next buffers after each. With seeds already initialized, channel values bounded by 15 and unit attenuation, this covers the possible nonzero influence radius; preserve frozen boundaries. The final buffer feeds face extraction binding 7 directly. GPU values remain a visual cache; networking/gameplay/collision must query authoritative CPU state. CPU removal queues and budgeted authoritative light updates remain separate work. Face light currently samples one exposed neighbor, so there is no per-corner light smoothing or ambient occlusion term yet.
 
-## Water integration contract
+## Standalone optical water integration contract
+
+This is the interface of `water.wgsl`, not the simpler ocean-cap fragment branch currently wired into the desktop planet shader.
 
 `WaterView` is 352 bytes: two 64-byte matrices, then fourteen 16-byte vectors in declaration order. Group 0 binding 0 is the uniform. Group 1 bindings 0,1,2 are resolved opaque scene color, resolved depth and a sampler. Resolve/prepare those textures before water and do not read/write the same scene-color attachment in one pass.
 
@@ -116,7 +160,9 @@ Refraction rejects samples that cross the sky/terrain boundary or pull geometry 
 
 Differences pending visual review: gradient projection uses the geometric face normal, displacement is gated to upward faces, RGB replaces scalar torch light, and scene reconstruction replaces the upstream depth approximation. Foam retains height/slope response. Waterfalls' flow UV advection, rain impacts, screen-space caustics, shoreline foam and multi-layer transparent sorting are not implemented. No promise of complete visual parity is implied.
 
-## Atmosphere integration contract
+## Standalone fullscreen atmosphere integration contract
+
+This interface belongs to `atmosphere.wgsl`; the integrated shell material uses the separate 80-byte `SkyParameters` contract described above.
 
 `AtmosphereView` is 176 bytes: eleven vec4 values, group 0 binding 0. `vertex` emits a fullscreen triangle from `vertex_index`; `fragment` integrates the body-local shell. `radii.z` is dimensionless scale height normalized to the shell thickness, matching the original function, not metres. Nonpositive/empty shells return transparent. Use nonzero camera basis/sun vectors; an atmosphere center is not a valid camera position for this model.
 
@@ -124,13 +170,13 @@ Draw only where reverse-Z scene depth equals its clear value 0, depth writes dis
 
 The source clamps ground-hit rays and can output opaque atmosphere over ground. This module is deliberately **sky-only**; terrain aerial perspective, partial terrain-depth ray truncation and shared water/terrain fog color evaluation still need a dedicated depth-aware composite. The terrain limb term is ported independently. Multiple visible atmospheres must be composed in distance order with an agreed transmittance model; no planet-order solution is hidden in the shader.
 
-## Renderer integration and acceptance work
+## Remaining volumetric renderer integration and acceptance work
 
-Use the source swarm's `RenderApp` extraction/prepare/render separation: extract immutable chunk snapshots and revisions; prepare persistent buffers/bind groups in render schedules; queue ready pipelines; encode light and mesh jobs before camera draws. Create custom render pipelines for these standalone modules; they do not use Bevy's `#import` material interface and cannot simply be attached as a `StandardMaterial`.
+The desktop planet plugin already follows the source swarm's `RenderApp` extraction/prepare/render separation for an immutable surface globe. Extend that wiring to immutable chunk snapshots/revisions, per-chunk buffers, light/face jobs and revision-safe publication. The original five standalone ports still require their own corresponding custom pipelines; they do not use Bevy's `#import` material interface and cannot simply be attached as a `StandardMaterial`.
 
 Before claiming this path is ready, implement and verify:
 
-- Buffer allocation/reclamation, bind-group layouts, topology/texture import, adapter limits and a CPU fallback for unsupported adapters.
+- Chunk buffer allocation/reclamation, the standalone contracts' bind-group layouts, full biome/texture-array import, adapter limits and a CPU fallback for unsupported adapters.
 - Revision-safe chunk publication, old-allocation retirement, device-loss recreation and bounded outstanding work.
 - GPU tests comparing isolated hex/pentagon, stacked cells, neighbor occlusion, seam halos, zero capacity, overflow and stale edits against a CPU face oracle.
 - RGB/sky addition/removal and chunk-boundary parity tests, including a deep vertical shaft and an opaque edit that closes it.

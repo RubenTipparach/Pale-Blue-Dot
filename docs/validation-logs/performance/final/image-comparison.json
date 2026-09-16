@@ -1,0 +1,74 @@
+[
+  {
+    "scene": "surface",
+    "round": 1,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "surface",
+    "round": 2,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "surface",
+    "round": 3,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "orbit",
+    "round": 1,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "orbit",
+    "round": 2,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "orbit",
+    "round": 3,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "tour",
+    "round": 1,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "tour",
+    "round": 2,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "tour",
+    "round": 3,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "polar",
+    "round": 1,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "polar",
+    "round": 2,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  },
+  {
+    "scene": "polar",
+    "round": 3,
+    "maximum_channel_delta": 0,
+    "tested_pixels": 947520
+  }
+]

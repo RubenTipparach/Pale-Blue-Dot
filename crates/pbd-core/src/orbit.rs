@@ -22,6 +22,16 @@ pub struct CircularOrbit {
 }
 
 impl CircularOrbit {
+    /// A fixed root anchor, evaluated through the same ephemeris as orbiting bodies.
+    pub fn stationary() -> Self {
+        Self {
+            radius: 0.0,
+            period: 1.0,
+            phase: 0.0,
+            plane: DQuat::IDENTITY,
+        }
+    }
+
     pub fn new(radius: f64, period: f64, phase: f64, plane: DQuat) -> Result<Self, &'static str> {
         if !radius.is_finite()
             || radius <= 0.0
@@ -104,6 +114,15 @@ impl Ephemeris {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stationary_root_has_no_position_or_velocity_drift() {
+        for time in [0.0, -1000.0, 1e12] {
+            let state = CircularOrbit::stationary().sample(time);
+            assert_eq!(state.position, DVec3::ZERO);
+            assert_eq!(state.velocity, DVec3::ZERO);
+        }
+    }
 
     #[test]
     fn circular_orbit_radius_period_and_tangent_velocity_do_not_drift() {

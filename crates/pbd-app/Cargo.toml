@@ -4,7 +4,16 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["desktop"]
+desktop = [
+    "bevy/default_app", "bevy/3d_bevy_render", "bevy/ui_bevy_render",
+    "bevy/default_font", "bevy/bevy_winit", "bevy/x11", "bevy/keyboard",
+    "bevy/mouse", "dep:bytemuck",
+]
+
 [dependencies]
 avian3d.workspace = true
 bevy.workspace = true
 pbd-core = { path = "../pbd-core" }
+bytemuck = { version = "1", features = ["derive"], optional = true }

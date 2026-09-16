@@ -1,5 +1,14 @@
-//! Headless Bevy + Avian integration proof. No renderer or planet mesh is wired.
+//! Bevy + Avian simulation shared by the desktop explorer and headless checks.
 //! `PaleBlueDotPlugin` submits accelerations; Avian alone integrates ship pose.
+
+#[cfg(feature = "desktop")]
+pub mod flight_view;
+#[cfg(feature = "desktop")]
+pub mod planet;
+#[cfg(feature = "desktop")]
+pub mod sky;
+#[cfg(feature = "desktop")]
+pub mod walking;
 
 use std::time::Duration;
 
@@ -50,6 +59,21 @@ pub struct CelestialScene {
 }
 
 impl CelestialScene {
+    pub fn planet_at_origin(radius: f64, surface_gravity: f64) -> Self {
+        let ephemeris = Ephemeris::new(vec![RailsBody {
+            kind: RailsBodyKind::Planet,
+            parent: None,
+            orbit: CircularOrbit::stationary(),
+        }])
+        .unwrap();
+        let states = ephemeris.sample(0.0);
+        Self {
+            ephemeris,
+            states,
+            gravity: vec![(0, radius, surface_gravity)],
+        }
+    }
+
     pub fn vacuum() -> Self {
         Self {
             ephemeris: Ephemeris::new(vec![]).unwrap(),

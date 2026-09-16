@@ -108,8 +108,8 @@ pub struct FlightAcceleration {
 
 /// Project a reachable candidate velocity onto the desired speed sphere.
 /// Starting inside that sphere preserves BOTH acceleration and speed bounds.
-/// Starting outside (new mode, collision) brakes at bounded acceleration: there
-/// is no physically possible instant solution satisfying both bounds.
+/// Starting outside (new mode, collision, f32 rounding) preserves steering when
+/// the speed sphere is reachable. Otherwise full bounded braking is required.
 fn bounded_acceleration(
     velocity: DVec3,
     requested: DVec3,
@@ -117,12 +117,28 @@ fn bounded_acceleration(
     max_speed: f64,
     dt: f64,
 ) -> DVec3 {
-    if velocity.length_squared() > max_speed * max_speed {
-        let desired = velocity.clamp_length_max(max_speed);
-        return ((desired - velocity) / dt).clamp_length_max(max_acceleration);
+    let speed = velocity.length();
+    let maximum_step = max_acceleration * dt;
+    if speed > max_speed + maximum_step {
+        // A real mode change can put the speed target outside this tick's
+        // reachable velocities. Brake without snapping the existing momentum.
+        return -velocity / speed * max_acceleration;
     }
     let candidate = velocity + requested.clamp_length_max(max_acceleration) * dt;
-    let target = candidate.clamp_length_max(max_speed);
+    let mut target = candidate.clamp_length_max(max_speed);
+    if speed > max_speed && target.distance_squared(velocity) > maximum_step * maximum_step {
+        // The two velocity balls intersect, but projecting onto the speed ball
+        // alone would exceed the acceleration budget. Their intersection circle
+        // retains as much requested steering as possible while meeting both.
+        let axis = velocity / speed;
+        let along = ((speed * speed + max_speed * max_speed - maximum_step * maximum_step)
+            / (2.0 * speed))
+            .clamp(-max_speed, max_speed);
+        let lateral_radius = (max_speed * max_speed - along * along).max(0.0).sqrt();
+        let lateral =
+            (target - axis * target.dot(axis)).normalize_or(axis.any_orthonormal_vector());
+        target = axis * along + lateral * lateral_radius;
+    }
     ((target - velocity) / dt).clamp_length_max(max_acceleration)
 }
 
@@ -244,6 +260,32 @@ mod tests {
             motion.velocity += command.linear * dt;
         }
         assert!(motion.velocity.length() < limits.speed);
+    }
+
+    #[test]
+    fn f32_rounding_at_the_speed_limit_does_not_disable_centripetal_steering() {
+        // A valid local f32 velocity can exceed the f64 limit by a few micrometres/s.
+        let velocity = (DVec3::new(0.3, 0.8, 0.7).normalize() * 600.0)
+            .as_vec3()
+            .as_dvec3();
+        assert!(velocity.length() > 600.0);
+        let turn = velocity.normalize().any_orthonormal_vector();
+        let acceleration = bounded_acceleration(velocity, turn * 72.0, 80.0, 600.0, 1.0 / 60.0);
+        assert!(
+            acceleration.dot(turn) > 71.9,
+            "steering was dropped: {acceleration:?}"
+        );
+        assert!(acceleration.length() <= 80.0 + 1e-9);
+        assert!((velocity + acceleration / 60.0).length() <= 600.0 + 1e-9);
+    }
+
+    #[test]
+    fn reachable_overspeed_keeps_steering_inside_both_velocity_balls() {
+        let velocity = DVec3::X * 600.5;
+        let acceleration = bounded_acceleration(velocity, DVec3::Y * 80.0, 80.0, 600.0, 1.0 / 60.0);
+        assert!(acceleration.x < 0.0 && acceleration.y > 70.0);
+        assert!(acceleration.length() <= 80.0 + 1e-9);
+        assert!((velocity + acceleration / 60.0).length() <= 600.0 + 1e-9);
     }
 
     #[test]
