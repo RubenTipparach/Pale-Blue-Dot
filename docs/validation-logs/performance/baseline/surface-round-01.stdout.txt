@@ -1,0 +1,3 @@
+CAPTURE_REQUEST C:\Users\santi\repos\Pale-Blue-Dot\output\captures\performance-baseline\runs\20260916-001209-257-8e5f456b\surface-round-01.png frame=1200
+CAPTURE_SAVED C:\Users\santi\repos\Pale-Blue-Dot\output\captures\performance-baseline\runs\20260916-001209-257-8e5f456b\surface-round-01.png
+FRAME_WALL_MS p50=1.65 p95=2.07 p99=2.35 samples=1139

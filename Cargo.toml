@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["crates/pbd-core", "crates/pbd-app"]
+default-members = ["crates/pbd-core", "crates/pbd-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+
+[workspace.dependencies]
+glam = "0.30.10"
+bevy = { version = "=0.18.1", default-features = false, features = ["std", "multi_threaded"] }
+avian3d = { version = "=0.6.1", default-features = false, features = ["3d", "f32", "parry-f32", "parallel"] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+strip = true
+lto = "thin"
