@@ -1,0 +1,11 @@
+[package]
+name = "validate-pale-blue-dot-shaders"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Independent utility; deliberately does not add render dependencies to the game.
+[workspace]
+
+[dependencies]
+naga = { version = "=27.0.3", features = ["wgsl-in"] }

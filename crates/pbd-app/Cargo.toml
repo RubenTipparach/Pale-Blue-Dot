@@ -1,0 +1,10 @@
+[package]
+name = "pbd-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+avian3d.workspace = true
+bevy.workspace = true
+pbd-core = { path = "../pbd-core" }
