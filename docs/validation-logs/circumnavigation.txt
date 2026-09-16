@@ -1,1 +1,0 @@
-CIRCUMNAVIGATION completed=true degrees=360.093 seconds=56.300 min_clearance_m=657.284 max_speed_m_s=600.000 max_command_acceleration_m_s2=80.000 max_angular_speed_rad_s=0.120 max_angular_acceleration_rad_s2=0.017 protection_events=0

@@ -1,7 +1,0 @@
-2026-09-16T04:53:38.205571Z  INFO bevy_render::renderer: AdapterInfo { name: "NVIDIA GeForce RTX 3070", vendor: 4318, device: 9348, device_type: DiscreteGpu, driver: "NVIDIA", driver_info: "595.97", backend: Vulkan }
-2026-09-16T04:53:38.437534Z  INFO bevy_render::batching::gpu_preprocessing: GPU preprocessing is fully supported on this device.
-2026-09-16T04:53:38.441363Z  INFO bevy_winit::system: Creating new window Pale Blue Dot | Planet Explorer (0v0)
-2026-09-16T04:53:39.742620Z  INFO pbd_app::planet: Planet ready: 655362 columns, 12 pentagons, 80.0 MiB topology, 1.18s generation
-CAPTURE_REQUEST output/captures/final-orbit.png frame=600
-CAPTURE_SAVED output/captures/final-orbit.png
-FRAME_WALL_MS p50=2.14 p95=3.73 p99=5.16 samples=539

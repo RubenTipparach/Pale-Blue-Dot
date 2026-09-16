@@ -38,8 +38,7 @@ Rust 1.96.0, Bevy 0.18.1, Avian 0.6.1, and wgpu 27. Terrain seed:
 | Offline gallery JavaScript and browser rendering | Script parsed; gallery rendered and inspected in headless Microsoft Edge |
 
 The interactive control evidence is preserved in
-[pbd-manual-flight.png](screenshots/pbd-manual-flight.png) and the
-[interactive log](validation-logs/interactive.txt). The subsequent
+[pbd-manual-flight.png](screenshots/pbd-manual-flight.png). The subsequent
 [ready-state screenshot](screenshots/pbd-ready.png) shows the reset ship at
 0 m/s, 252 m altitude, approximately +28.6° latitude and zero longitude;
 the cursor was released and the game remained open. The completed checks
@@ -78,11 +77,7 @@ poses or elapsed-time substitute drove the ship.
 | Maximum commanded angular acceleration | 0.017 rad/s² | 0.017 rad/s² |
 | Emergency terrain corrections | 0 | 0 |
 
-Preserved headless reports:
-[circumnavigation.txt](validation-logs/circumnavigation.txt) and
-[circumnavigation-polar.txt](validation-logs/circumnavigation-polar.txt).
-The [rendered default tour](validation-logs/final-tour.txt) and
-[rendered polar tour](validation-logs/final-tour-polar.txt) independently report
+The two headless circumnavigations and the two rendered tours independently report
 the same completed angle, duration, clearance, speed, and zero emergency
 corrections. The default path reaches approximately ±28.6° latitude; the polar
 run physically crosses both poles.
@@ -110,15 +105,15 @@ There is no expanded terrain vertex/index upload per frame. The steady-state
 planet path updates a 112-byte view/time uniform per view; this is not a claim
 that the whole Bevy application uploads only 112 bytes.
 
-| Final S8 scene / image | Log | Wall-frame p50 (ms) | p95 (ms) | p99 (ms) | Samples |
-| --- | --- | ---: | ---: | ---: | ---: |
-| [Orbit](screenshots/pbd-orbit.png) | [Log](validation-logs/final-orbit.txt) | 2.14 | 3.73 | 5.16 | 539 |
-| [Coast](screenshots/pbd-coast.png) | [Log](validation-logs/final-coast.txt) | 2.09 | 3.48 | 4.37 | 539 |
-| [Surface](screenshots/pbd-surface.png) | [Log](validation-logs/final-surface.txt) | 2.78 | 4.93 | 7.19 | 539 |
-| [Night](screenshots/pbd-night.png) | [Log](validation-logs/final-night.txt) | 1.88 | 2.76 | 3.27 | 539 |
-| [Pole](screenshots/pbd-pole.png) | [Log](validation-logs/final-pole.txt) | 1.84 | 2.72 | 3.03 | 539 |
-| [Default physical tour](screenshots/pbd-tour.png) | [Log](validation-logs/final-tour.txt) | 2.35 | 3.86 | 5.22 | 3,539 |
-| [Polar physical tour](screenshots/pbd-tour-polar.png) | [Log](validation-logs/final-tour-polar.txt) | 1.81 | 16.77 | 17.85 | 3,539 |
+| Final S8 scene / image | Wall-frame p50 (ms) | p95 (ms) | p99 (ms) | Samples |
+| --- | ---: | ---: | ---: | ---: |
+| [Orbit](screenshots/pbd-orbit.png) | 2.14 | 3.73 | 5.16 | 539 |
+| [Coast](screenshots/pbd-coast.png) | 2.09 | 3.48 | 4.37 | 539 |
+| [Surface](screenshots/pbd-surface.png) | 2.78 | 4.93 | 7.19 | 539 |
+| [Night](screenshots/pbd-night.png) | 1.88 | 2.76 | 3.27 | 539 |
+| [Pole](screenshots/pbd-pole.png) | 1.84 | 2.72 | 3.03 | 539 |
+| [Default physical tour](screenshots/pbd-tour.png) | 2.35 | 3.86 | 5.22 | 3,539 |
+| [Polar physical tour](screenshots/pbd-tour-polar.png) | 1.81 | 16.77 | 17.85 | 3,539 |
 
 Static captures requested frame 600; both tour captures requested frame 3,600.
 Capture mode uses fixed simulation steps and disables the interactive frame

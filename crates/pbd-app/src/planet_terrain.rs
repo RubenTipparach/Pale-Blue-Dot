@@ -6,6 +6,15 @@ use bevy::prelude::*;
 /// Sea-level radius in metres. This preview planet is eight kilometres wide.
 pub const PLANET_RADIUS: f32 = 4_000.0;
 
+/// Vertical quantum of the surface, in metres: one column cap sits this far
+/// above the next. It is the world's height resolution, so it belongs beside
+/// the radius rather than inline in the generator. The target engine layers
+/// near-player terrain at 1 m (see docs/engine-architecture.md); this preview
+/// steps six times coarser because one height per 19 m column cannot carry
+/// metre-scale relief anyway. Read with `PLANET_RADIUS` when judging scale:
+/// together they are why a 1.6 m walker reads as small here.
+pub const ELEVATION_STEP: f32 = 6.0;
+
 fn hash(x: i32, y: i32, z: i32) -> f32 {
     let mut n = (x as u32).wrapping_mul(0x8da6b343)
         ^ (y as u32).wrapping_mul(0xd8163841)
@@ -52,7 +61,7 @@ pub fn surface_height(direction: Vec3) -> f32 {
     // relief to this eight-kilometre world. The former ~850m summits overwhelmed
     // its silhouette; the same ranges now peak around425m with broad lowlands.
     let height = generated_height.min(0.) + generated_height.max(0.) * 0.5;
-    (height / 6.).floor() * 6.
+    (height / ELEVATION_STEP).floor() * ELEVATION_STEP
 }
 
 /// Solid terrain or water surface radius for assisted-flight clearance.
@@ -95,7 +104,7 @@ mod tests {
         for cell in super::super::topology::dual_sphere(3) {
             let h = surface_height(cell.direction);
             assert!(h.is_finite());
-            assert_eq!(h % 6., 0.);
+            assert_eq!(h % ELEVATION_STEP, 0.);
             assert_eq!(terrain_radius(cell.direction), PLANET_RADIUS + h.max(0.));
             assert_eq!(h, surface_height(cell.direction));
             if h < 0. {

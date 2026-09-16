@@ -90,6 +90,220 @@ The surface view shows pixel textures, stepped hex columns and block-shaped tree
 
 The night view retains a dark hemisphere and a bright twilight rim, with a warm ocean highlight on the lit side. The final atmosphere has a continuous shadow transition after the sampling/penumbra correction. Separate pole and completed survey-tour captures also rendered the closed globe without missing seams in the reviewed views.
 
+## Measured dimensional comparison
+
+The complaint that started this section was that the camera "feels really short
+compared to the hexagons". It is correct, and the reason is not the camera. The
+avatar was taken from Tenebris at 1:1 while the world around it was built about
+six and a half times larger.
+
+Every number below is read out of the two source trees. The tile widths are
+measured rather than derived: `planet::tile_widths` walks the real
+`dual_sphere(8)` and reports the centre-to-centre spacing of every neighbouring
+pair, which is the flat-to-flat width of the shared tile. The startup log prints
+it, and `measured_tile_width_follows_the_subdivision_law_and_pins_the_shipped_scale`
+pins it, so this table cannot quietly drift from the code again.
+
+| Quantity | Tenebris | Pale Blue Dot | Ratio |
+| --- | ---: | ---: | ---: |
+| Sea-level radius | 300 m | 4,000 m | 13.3x |
+| Dual subdivision level | 7 | 8 | +1 |
+| Surface cells | 163,842 | 655,362 | 4.0x |
+| Tile width, mean | 2.83 m | **18.88 m** | 6.67x |
+| Tile width, range | 2.59 - 3.10 m | 17.30 - 20.67 m | 6.67x |
+| Vertical quantum | 1.00 m | **6.00 m** | 6.0x |
+| Eye height | 1.60 m | 1.60 m | 1.0x |
+| Walk / sprint | 8 / 14 m/s | 8 / 14 m/s | 1.0x |
+| Jump velocity | 12 m/s | 12 m/s | 1.0x |
+| Surface gravity | 9.81 m/s^2 | 9.00 m/s^2 | 0.92x |
+| Atlas tile across a cap | 2.83 m (one tile per face) | 28 m | 9.9x |
+| Atlas tile down a wall | 1.00 m (one tile per face) | 18 m | 18x |
+| Texel at the surface | 8.8 cm | 87.5 cm | 9.9x |
+| Tree height | about 6 m | 28 - 45 m | about 5.5x |
+
+Sources: `planet.rs::BODIES_INIT` and `subdivisions_for_radius` (which caps at 7
+and is what the runtime actually calls, not the level in the body table),
+`world.rs::BLOCK_HEIGHT`, `player_ctrl.rs::EYE_HEIGHT`/`WALK_SPEED`/`SPRINT_SPEED`,
+`config.rs::jump_velocity_mps` on the Tenebris side; `planet.rs::SUBDIVISIONS`,
+`planet_terrain.rs::PLANET_RADIUS`/`ELEVATION_STEP`, `walking.rs::EYE_HEIGHT` and
+`WalkConfig` on ours. The atlas figures are the `/28.0` cap divisor and the
+`/18.` wall repeat in `planet_surface.wgsl` against Tenebris's one atlas tile per
+block face; the texel is that over the 32-pixel tile grid both use.
+
+### What the ratios mean in the frame
+
+Expressing the two world scales in units of the player makes the complaint
+arithmetic rather than taste:
+
+| Read in eye heights (1.6 m) | Tenebris | Pale Blue Dot |
+| --- | ---: | ---: |
+| Width of one hexagon | 1.8 | **11.8** |
+| Height of one terrain step | 0.63 | **3.75** |
+| Height of one tree | 3.8 | 21 |
+| Size of one art pixel | 0.055 | 0.55 |
+
+A hexagon is under two people wide in Tenebris and nearly twelve people wide
+here. A terrain step is something you walk up there and a wall well over twice
+your height here. That is the whole of the effect: the eye is at a human
+1.60 m in both, so the only thing that changed is everything else.
+
+It also changes what the same jump input does. Both worlds fire the player off
+at 12 m/s, which is an apex of 7.34 m under Tenebris's 9.81 m/s^2 and 8.00 m
+under our 9.00. Against a 1 m block that clears **7.3 steps**; against a 6 m
+quantum it clears **1.3**. Terrain Tenebris lets you hop over is a cliff here,
+and a walker who can only just clear one step of the ground reads as small for
+that reason as much as for the camera.
+
+### Against this project's own target
+
+`engine-architecture.md` already specifies the intended surface: near-player
+radial layers 1 m high and a lateral cell area of roughly 1 to 4 square metres,
+which it works out as level 12 on a 4 km body, `4*pi*R^2/cells = 1.198 m^2`, or
+about 1.18 m across. The prototype runs level 8. So it is **16x coarser
+laterally and 6x coarser vertically than the design it is a preview of**, and
+the gap is a known one rather than a regression. The doc says so in passing
+already ("coarse surface columns, not the one-meter microvoxels specified
+below"); what was missing is that a reader could not tell how coarse without
+measuring it.
+
+Level 12 is not reachable the way the prototype is built. It is 167,772,162
+cells, and at this pipeline's 128-byte topology record that is **21.5 GB** for
+one globe, before heights, meshes or collision. The architecture doc's own rule
+covers it: the engine must never allocate the whole detailed globe.
+
+### What can actually be done about it
+
+Three options, cheapest first. None of them is a camera change: the eye is
+already at a human height, and raising it only turns the walker into a giant
+without making a tile smaller.
+
+1. **Shrink the preview body.** Tile width is `1.209 * R / 2^L`, so at level 8
+   a radius of **600 m** lands Tenebris's 2.83 m tiles and **250 m** lands the
+   architecture doc's 1.18 m. This is one constant, keeps the globe closed and
+   eagerly built, and costs nothing per frame. What it costs is the 8 km world:
+   flight altitudes, the atmosphere shell at 4,800 m, the cloud layer at
+   4,600 m, the 2,300 m foliage range, the 3,200 m draw-budget switch and the
+   terrain amplitude all scale with the radius and would have to move together.
+2. **Scale the avatar to the world.** For the same tiles-per-second and
+   steps-per-jump as Tenebris the walker wants an eye around 10.7 m, walk and
+   sprint around 53 and 93 m/s, and a jump velocity near 28 m/s. Cheap and
+   self-consistent, and it abandons the premise of a person standing on a
+   planet.
+3. **Keep level 8 as the far tier and stream a finer near-player grid.** This
+   is what `engine-architecture.md` already plans in its chunk/radial-slab
+   section, and it is the only option that gets metre-scale ground on an 8 km
+   world. It is also the whole remaining engine.
+
+Option 1 is the honest one for a preview whose stated job is the whole-globe
+silhouette. It is recorded here as a measurement and a set of options, not
+applied: rescaling the body moves nine other tuned numbers and every capture in
+this document, and that is a decision to take deliberately.
+
+## Measured shader comparison
+
+There are three shader families in play, not two, and knowing which is which is
+most of the answer to "why does it not look like Tenebris".
+
+| Job | Tenebris, GLSL 410 | Our standalone port, WGSL | Our live prototype, WGSL |
+| --- | --- | --- | --- |
+| Terrain | `hex.vs` + `hex.fs`, 76 + 351 lines | `hex_terrain.wgsl` 117, `hex_faces.wgsl` 71, `voxel_light.wgsl` 50 | `planet_surface.wgsl` 194 + `planet_visibility.wgsl` 55 |
+| Water | `water.vs` + `water.fs`, 28 + 311 | `water.wgsl` 162 | a 12-line branch inside `planet_surface.wgsl` |
+| Sky | `atmosphere.vs` + `atmosphere.fs`, 17 + 166 | `atmosphere.wgsl` 102 | `sky_atmosphere.wgsl` 147, a Bevy material |
+| Bound to a pipeline | yes | **no** | yes |
+
+`shader-port.md` already records that the standalone ports are unbound and that
+the live modules are a simpler prototype rather than the port. What that table
+does not say, and what matters when comparing pictures, is that **the faithful
+Tenebris port and the shader that actually renders are different shaders**, and
+the faithful one is the one that is not running. Everything below follows from
+that single fact.
+
+### Terrain, term by term
+
+| Term | Tenebris `hex.fs` | Port `hex_terrain.wgsl` | Live `planet_surface.wgsl` |
+| --- | --- | --- | --- |
+| Terminator | `smoothstep(lo, hi, dot(radial, sun))`, uniform band | same, uniform band | same shape, band inline as `(-0.13, 0.20)` |
+| Ambient | `ambient * max(0.05, mix(night, 1, bright) * sky)` | same, floor is `settings.y` | `(0.16,0.21,0.27) * mix(0.12,1,day) * sky`, **no floor** |
+| Direct | `max(dot(n,sun),0) * bright * sky` | same, times `sun.w` | same, sun colour inline as `(1.12,1.03,0.87)` |
+| Block / torch light | `torch.rgb * torch.w * v_torch_light` | `rgb * ambient.w`, 4 bits per channel | **absent** |
+| Light is sampled | per **vertex**, interpolated | per **face**, flat | per **cell**, flat across a 19 m tile |
+| Underwater absorption | `exp(-absorption * depth)`, then mix to water colour | identical | **absent**, surface tint only |
+| Cutout foliage | 4x4 Bayer screen door | identical | **absent** |
+| Limb rim | `fres^p * (0.25 + 0.75*day) * intensity * (1 - ff^2) * sky` | identical, every term a uniform | `pow(...,4) * day * (1 - air) * 0.55`, **night floor dropped**, every term a literal |
+| Distance fog | its own composite pass | not ported | `(1 - exp(-d * 0.00036)) * air * day`, mixed at 0.55 |
+| Rain wetness | ripples, rivulets, sheen, glint; about 150 lines driven by `weather.yaml` | not ported | absent |
+| Mining cracks | `hex_fs_crack[10]` and a crack texture | not ported | absent |
+| Per-planet palette | `lod.yaml`, one section per tileset | uniforms | one planet's palette inline |
+
+Four of those differences are visible in a still frame:
+
+1. **The night limb goes black.** Tenebris keeps a night-side rim floor, and it
+   is a designer knob rather than an accident: `lod.yaml` carries
+   `distant_rim_floor: 0.25`, which is the `0.25 + 0.75 * day` in `hex.fs`. The
+   live rim here is multiplied by `daylight` outright, so the unlit edge falls
+   to zero. `hex_terrain.wgsl` has the floor and is not the shader running.
+2. **Light is flat across a whole tile.** Tenebris carries sky and torch light
+   as vertex attributes and interpolates them, so a wall grades from its lit top
+   to its shaded foot. Ours is `@interpolate(flat)` per column, so an 18.9 m
+   hexagon is one brightness and every tile edge is a hard step. At Tenebris's
+   2.8 m tiles a flat sample is nearly free; at ours it is the single biggest
+   reason the ground reads as faceted plates instead of terrain, and it
+   compounds the scale problem measured in the section above.
+3. **There is no second planet.** Every colour, threshold and falloff in the
+   live shader is a numeric literal, so a second tileset means editing WGSL.
+   Tenebris answers this with a `lod.yaml` section per tileset (water colour and
+   depth, sky-reflection tones, rim colour, fog colour and scale), and the
+   standalone port already exposes all of them as uniforms. Our own
+   `CLAUDE.md` asks for "tunable values in validated data with units, and one
+   source for defaults"; the live shader is where that is not yet true.
+4. **The ocean is two different shaders.** `water.wgsl` is the real port:
+   screen-space refraction with depth reconstruction, absorption over the
+   reconstructed path length, Fresnel between horizon and zenith reflection
+   tones, foam by height and by slope, an underwater back-face path, and
+   distance fog, all as uniforms. The ocean that renders is a depth tint, a
+   Fresnel to the fourth, two sines and a specular to the 160th.
+
+### Structural differences that are not defects
+
+These are deliberate and worth keeping straight from the list above.
+
+- **Vertex pulling instead of vertex buffers.** Tenebris uploads a CPU-built
+  mesh per chunk carrying position, normal, UV, sky light, torch light and a
+  wetness flag. We upload a 128-byte `Cell` per column and reconstruct caps,
+  walls and trees in the vertex shader with no vertex buffer at all. That is
+  what makes a 655,362-column globe cost 80 MiB, and it is also exactly why
+  nothing can vary *inside* a tile: there are no vertices to carry it.
+- **Texture addressing.** Both sample nearest. Tenebris uses a texture array
+  with a nearest sampler; `pixel_tile` here uses `textureLoad` with an explicit
+  floor to the 32-pixel tile grid and a 0.025/0.95 inset to dodge the sheet's
+  soft seams. Ours is the more defensive of the two.
+- **Language and interface.** Tenebris is desktop GL 4.1 with hand-indexed
+  `uniform vec4 name[N]` arrays, by its own standing rule. Ours is WGSL under
+  Bevy 0.18.1 and wgpu 27, with named structs. No parity is owed here.
+
+### The cheap part of closing the gap
+
+Ranked by what it costs against what it shows, and none of it is started:
+
+1. **Restore the night-side rim floor** in `planet_surface.wgsl`: one
+   `0.25 + 0.75 * daylight` in place of the bare `daylight`, matching both
+   Tenebris and our own unbound port. One line, and it is the difference
+   between a visible planet edge at night and none.
+2. **Lift the live shader's literals into the existing params uniform.**
+   `Params.settings` already carries radius, cell count, time and the vertex
+   budget; rim colour, rim power, rim intensity, fog height, fog density,
+   terminator band and ambient/sun tint are the ones Tenebris keeps per
+   tileset. This is the step that makes a second planet possible at all.
+3. **Interpolate skylight instead of flattening it**, which needs a per-corner
+   value rather than a per-cell one, so it is real work on the upload side.
+4. **Bind `water.wgsl`**, which needs its scene colour and depth inputs and its
+   own pipeline. `shader-port.md` already lists that as outstanding.
+
+Steps 1 and 2 are the ones that pay immediately, and neither changes the
+topology or the upload. They are recorded here rather than applied: both change
+what every capture in this document looks like, and a look change wants the
+owner's eye on a before and after rather than a green test.
+
 ## Acceptance and comparison boundaries
 
 The original five standalone shaders and the two integrated planet pipeline modules (`planet_surface.wgsl`, `planet_visibility.wgsl`) have explicit contracts in the dedicated Naga validation tool. `sky_atmosphere.wgsl` is explicitly deferred by name because it includes Bevy imports and material substitutions; it must be validated through Bevy's shader composer and the running visual application rather than treated as standalone WGSL. Unknown shader names are still errors, so adding a new module cannot silently skip validation.
