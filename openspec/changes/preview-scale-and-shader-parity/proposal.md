@@ -19,7 +19,7 @@ tiles are 18.883 m against the standard's 2.833 m, and the elevation step is
 14 m/s, same 12 m/s jump - so read in
 eye heights, a hexagon is 1.8 people wide there and 11.8 people wide here, and a
 terrain step goes from something you walk up (0.63 of eye height) to a wall over
-twice your height (3.75). The same jump clears 7.3 blocks in Tenebris and 1.3
+twice your height (3.75). The same jump clears 2.9 blocks in Tenebris and 1.3
 steps here, so terrain Tenebris lets you hop over is a cliff.
 
 **The faithful shader is the one that is not running.** `hex_terrain.wgsl` is a
