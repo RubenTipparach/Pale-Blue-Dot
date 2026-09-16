@@ -36,14 +36,26 @@ takes 0.28 s there and **1.15 s** here. Fixing the hex scale alone leaves this:
 - The surface constant becomes a declared value with a recorded reason, shared
   by both fields so they agree at the surface by construction.
 
-## Open question for the owner
+## Decided: `tenebris-rs` is the definitive spec for gravity
 
-Whether `tenebris-rs` is the definitive spec for gravity the way it now is for
-hex size. The hex rule names the main Tenebris planet as the gold standard; the
-equivalent here would be 25 m/s^2 at 1 g, `1.4 R` / `1.8 R` bands, and the
-two-field split. That is a decision, not a measurement, and this change does not
-assume it: the band shape and the selection rule are worth taking on their own
-merits even if the constant is retuned for this project's larger bodies.
+The owner's call, on the same terms as the hex size. The standard is therefore:
+
+| Quantity | Value |
+| --- | ---: |
+| Surface gravity at 1 g | **25.0 m/s^2** |
+| Full pull out to | **1.4 R** |
+| Linear taper to zero by | **1.8 R** |
+| Fields | **two**, anchored to one shared surface constant |
+
+So 9.0 m/s^2 goes, and with it the floaty walker: the fall through one cell
+height comes back to Tenebris's 0.28 s from today's 1.15 s.
+
+The constant is taken as-is rather than retuned for a larger body. Its own
+comment ties 25 to a ~300 m planet, which is an argument for retuning it on a
+4 km one - but gravity is felt at human scale, not planet scale, and a walker
+who steps off a ledge should fall the same way on every body for the same reason
+a hex is the same size on every body. A body that wants to feel different says
+so with `gravity_g`, which is what that field is for.
 
 ## Non-goals
 

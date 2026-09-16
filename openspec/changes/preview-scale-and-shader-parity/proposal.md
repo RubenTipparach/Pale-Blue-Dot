@@ -43,33 +43,48 @@ does:
    `1.209 * R / 2^L`, so at level 8 a 600 m radius lands Tenebris's 2.83 m
    tiles and 250 m lands this project's own 1.18 m target.
 
-## Open decision: the radius
+## Decided: radius 4,800 m at level 11, which makes LOD load-bearing
 
-Scaling the avatar instead is no longer an option - the hex size is spec now, so
-the world moves, not the player. What is still open is which radius, because
-holding the tile at 2.833 m locks the radius to the level:
+The owner's call, in two steps: keep a ~4 km-class body rather than shrinking to
+fit a uniform subdivision level, then take **4,800 m** once the ladder showed
+that 4,000 m cannot hold the standard at any level. The working table below is
+kept because it is the reasoning, not just the answer.
 
-```text
-R = 300 m * 2^(L - 7)
-```
+The planet stays the size it is, near enough. That settles the trilemma by dropping the third
+corner - the eagerly-built whole globe - and it makes `hexagon-lod` a
+prerequisite rather than an optimisation. A uniform level cannot serve a 4 km
+body at the gold standard: level 11 is 42 million cells and 5 GiB of topology.
 
-| level | radius | diameter | cells | topology at 128 B | eager build |
-| ---: | ---: | ---: | ---: | ---: | --- |
-| 8 | 600 m | 1.2 km | 655,362 | 80 MiB | today's exact budget |
-| 9 | 1,200 m | 2.4 km | 2,621,442 | 320 MiB | comfortable |
-| 10 | 2,400 m | 4.8 km | 10,485,762 | 1.3 GiB | tight |
-| 11 | 4,800 m | 9.6 km | 41,943,042 | 5.0 GiB | no |
+### One correction that follows: 4,000 m is not on the ladder
 
-The authored catalog wants 4 km radii and 5-12 km diameters, which needs level
-11 and is not eagerly buildable. So the whole-globe preview survives only if the
-planet shrinks, and the catalog's sizes wait for `voxel-engine-foundation`.
+Holding the tile at 2.833 m locks radius to level as `R = 300 m * 2^(L - 7)`,
+and 4,000 m sits between two rungs. Measured:
 
-One lever before choosing: 92 of the 128 bytes per cell are pure topology - the
-direction and the six corner rays - identical for every body at a given level,
-and each corner ray is shared by three cells. Storing corners once and indexing
-them gets a cell to roughly 50 bytes, which buys about one level: level 10 at
-around 520 MiB, so 4.8 km diameters come into range. It does not reach a 4 km
-radius.
+| radius | level | tile width | verdict |
+| ---: | ---: | ---: | --- |
+| 4,000 m | 10 | 4.721 m | too coarse |
+| 4,000 m | 11 | **2.361 m** | 17% under gold, outside the 2.595 - 3.101 m spread |
+| 2,400 m | 10 | **2.833 m** | exact |
+| **4,800 m** | **11** | **2.833 m** | **exact** |
+
+**4,800 m at level 11 is the decision.** It is *larger* than today's 4,000 m, so
+it keeps the intent rather than bending it; it lands the gold
+standard to the digit; and its 9.6 km diameter sits inside the authored
+catalog's own 5 - 12 km range, which 4,000 m's 8 km also does. Nothing is given
+up by moving up 20%.
+
+Level 11 is the level underfoot, not the resident level. What is resident is a
+cap around the player sized by render distance, and the rest of the sphere is
+coarser tiers costing `4/3` of one level in total. That is the whole of what
+`hexagon-lod` buys.
+
+### What still moves with the radius
+
+Unchanged from before: the 4,800 m atmosphere shell, the 4,600 m cloud layer,
+the 2,300 m foliage range, the 3,200 m draw-budget switch and the terrain
+amplitude all scale with the body, and `ELEVATION_STEP` goes from 6 m to the
+standard's 1 m. At a 4,800 m radius the scale factor is 1.2 rather than the 0.15
+a 600 m body would have needed, so the relief stays broadly as authored.
 
 ## Non-goals
 
