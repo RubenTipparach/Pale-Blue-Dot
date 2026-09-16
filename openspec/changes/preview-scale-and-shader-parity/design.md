@@ -55,3 +55,27 @@ at every edge, which is the largest single reason the ground reads as faceted
 plates. The fix is a per-corner skylight value rather than a per-cell one, so it
 is upload-side work and is deliberately not bundled with the two cheap shader
 changes.
+
+## One water shader, viewed from above and below
+
+`water.wgsl` is the visual reference because it is the existing faithful port
+of the previous Tenebris water shader. The live water branch in
+`planet_surface.wgsl` is not a fallback reference: it is a second,
+feature-incomplete implementation and is removed once the dedicated water pass
+is live.
+
+The dedicated pass receives the same water surface, camera and body-local frame
+on both sides of the interface. Scene colour and scene depth are explicit render
+inputs so the shader can recover the prior refraction and optical path-length
+absorption instead of approximating them. Whether the camera is above or below
+the surface selects a branch inside this one shader and one parameter set; it
+does not select a separate material, pipeline look, wave model or palette.
+
+"Exactly the same as before" means visual parity with the committed faithful
+port and its Tenebris source, not byte-identical output from a different graphics
+API. Acceptance therefore uses fixed-camera, fixed-time captures above and below
+the surface and checks the visible terms separately: wave displacement and
+normals, Fresnel reflection, refraction, foam, depth/path-length absorption and
+the underwater view. Crossing the surface must not introduce a discontinuity in
+wave phase, water colour or geometry. Parser validation alone cannot establish
+this; the real render graph and both camera positions must be exercised.

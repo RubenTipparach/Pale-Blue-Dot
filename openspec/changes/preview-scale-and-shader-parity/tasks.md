@@ -16,7 +16,22 @@
 - [ ] Only then give a second tileset its own values, and pin the Rust and WGSL
       layouts against each other the way `pipeline_tests` already does.
 
-## 3. Hold the gold standard
+## 3. Restore the one faithful water renderer
+- [ ] Bind `water.wgsl` through a dedicated live pipeline with the scene-colour
+      and scene-depth inputs required by its refraction and path-length terms.
+- [ ] Feed above-water and underwater views from the same water geometry, wave
+      state, body-local camera data and parameter set; camera side only selects
+      the appropriate path inside that implementation.
+- [ ] Remove the inline water approximation from `planet_surface.wgsl` so there
+      is no second live water look or wave model.
+- [ ] Validate the shader and its actual render-graph bindings, including the
+      scene texture/depth layouts; a parser-only check is insufficient.
+- [ ] Capture fixed-camera, fixed-time reference frames above and below the
+      surface and a crossing sequence. Compare wave phase and normals, Fresnel,
+      refraction, foam, absorption, colour and geometry continuity with the
+      faithful port before asking the owner to accept visual parity.
+
+## 4. Hold the gold standard
 
 The hex size is decided: 2.833 m tile, 1.000 m cell height, off Tenebris's main
 planet. What is open is the radius, since the two are locked by
@@ -42,7 +57,7 @@ planet. What is open is the radius, since the two are locked by
       `openspec/specs/`, and retake every capture in
       `docs/tenebris-comparison.md`, all in the same commit.
 
-## 4. The topology record, if a bigger body is wanted
+## 5. The topology record, if a bigger body is wanted
 - [ ] 92 of the 128 bytes per cell are pure topology (direction, six corner
       rays), identical for every body at a level, and each corner ray is shared
       by three cells. Store corners once and index them.

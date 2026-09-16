@@ -357,9 +357,12 @@ deltas.
    amplitude, the tree geometry and the atlas UV divisors.
 5. **The gravity model**, and collapse `walking.rs`'s duplicate falloff onto the
    core well while in there.
-6. **The two cheap shader fixes** - the night rim floor is one line; lifting the
+6. **Shader and water parity.** The night rim floor is one line; lifting the
    literals into the params uniform is a refactor that should keep the shipped
-   values byte-identical on the first pass.
+   values byte-identical on the first pass. Then bind the faithful `water.wgsl`
+   port as the single water system above and below the surface, with its scene
+   colour/depth inputs, and remove the live inline approximation. Fixed-camera,
+   fixed-time captures on both sides of the surface settle parity.
 7. **The voxel engine**, which is the whole remaining game.
 
 ### What a visual change needs
