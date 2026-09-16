@@ -115,7 +115,7 @@ pins it, so this table cannot quietly drift from the code again.
 | Eye height | 1.60 m | 1.60 m | 1.0x |
 | Walk / sprint | 8 / 14 m/s | 8 / 14 m/s | 1.0x |
 | Jump velocity | 12 m/s | 12 m/s | 1.0x |
-| Surface gravity | 9.81 m/s^2 | 9.00 m/s^2 | 0.92x |
+| Surface gravity at 1 g | **25.00 m/s^2** | 9.00 m/s^2 | 0.36x |
 | Atlas tile across a cap | 2.83 m (one tile per face) | 28 m | 9.9x |
 | Atlas tile down a wall | 1.00 m (one tile per face) | 18 m | 18x |
 | Texel at the surface | 8.8 cm | 87.5 cm | 9.9x |
@@ -147,12 +147,17 @@ here. A terrain step is something you walk up there and a wall well over twice
 your height here. That is the whole of the effect: the eye is at a human
 1.60 m in both, so the only thing that changed is everything else.
 
-It also changes what the same jump input does. Both worlds fire the player off
-at 12 m/s, which is an apex of 7.34 m under Tenebris's 9.81 m/s^2 and 8.00 m
-under our 9.00. Against a 1 m block that clears **7.3 steps**; against a 6 m
-quantum it clears **1.3**. Terrain Tenebris lets you hop over is a cliff here,
-and a walker who can only just clear one step of the ground reads as small for
-that reason as much as for the camera.
+It also changes what the same jump input does, and gravity is the second half
+of that. Both worlds fire the player off at 12 m/s, but Tenebris's surface
+gravity is **25 m/s^2**, not Earth's: `SURFACE_GRAVITY_MPS2_PER_G` is 25.0,
+arcade-scaled on purpose to its ~300 m planets, and the comment there says so.
+Ours is 9.0. So the apex is 2.88 m there and 8.00 m here.
+
+Against a 1 m block that clears **2.9 steps**; against a 6 m quantum it clears
+**1.3**. Terrain Tenebris lets you hop over is a cliff here. And the fall is
+where it is felt most: dropping one step height takes **0.28 s** there and
+**1.15 s** here, four times longer, so a walker who can only just clear one step
+also floats down from it.
 
 ### Against this project's own target
 
@@ -199,6 +204,80 @@ Option 1 is the honest one for a preview whose stated job is the whole-globe
 silhouette. It is recorded here as a measurement and a set of options, not
 applied: rescaling the body moves nine other tuned numbers and every capture in
 this document, and that is a decision to take deliberately.
+
+## Measured gravity comparison
+
+Tenebris runs **two gravity fields for two modes**, anchored to one shared
+surface constant. Pale Blue Dot runs one field. That is the substantive
+difference, and the surface number differs too.
+
+| | Tenebris | Pale Blue Dot |
+| --- | --- | --- |
+| Surface gravity at 1 g | **25.0 m/s^2** (`SURFACE_GRAVITY_MPS2_PER_G`) | 9.0 m/s^2 (`planet_at_origin`) |
+| Fields | two: an anchor field and an orbital field | one |
+| Anchor field | full pull to `1.4 R`, linear taper to zero at `1.8 R`, then nothing | n/a |
+| Space transition | outside `1.8 R` the query returns no body, which IS `is_in_space` | none |
+| Orbital field | sum of true inverse-square from EVERY body, plus a central star | single well |
+| Multi-body | strongest pull wins, so a moon beats its parent when you hover over it | one well, no contest to resolve |
+| Interior | clamped at `0.5 R` so a query at the centre cannot blow up | linear to zero at the centre, uniform density |
+| Exterior falloff | inverse square, uncapped (orbital field) | inverse square, uncapped |
+
+### The surface number, and why it is not Earth's
+
+Tenebris's `SURFACE_GRAVITY_MPS2_PER_G` is **25.0**, not 9.81, and the comment
+beside it says why: it is arcade-scaled to that project's ~300 m planets, and
+the orbital field anchors to the same value so space and surface physics agree
+at the surface. One shared constant, deliberately, rather than two.
+
+Ours is 9.0 on a body thirteen times larger. Combined with the identical 12 m/s
+jump both projects use, that is:
+
+| | Tenebris | Pale Blue Dot |
+| --- | ---: | ---: |
+| Jump apex | 2.88 m | 8.00 m |
+| ... in steps of that world's cell height | 2.9 | 1.3 |
+| Fall time through one step height | 0.28 s | **1.15 s** |
+
+So the walker here jumps nearly three times higher in metres while clearing
+less than half as much terrain, and takes four times as long to come down. The
+floatiness is a second defect independent of the tile size: fixing the hex scale
+alone would leave it, because 9.0 m/s^2 on a 6 m step is slow whatever the tile
+is doing.
+
+### Two fields is the part worth copying
+
+The split is not redundancy, it is two different jobs:
+
+- **`gravity_at`** picks the single anchor body and returns a multiplier that is
+  1 inside `1.4 R`, tapers linearly to 0 by `1.8 R`, and is absent beyond. It
+  drives the surface basis, the atmosphere shell, the walker's down, and the
+  flip into 6DOF flight. A hard edge is exactly what a *mode* boundary wants:
+  there is a definite radius where you stop being on a planet.
+- **`orbital_gravity_at`** sums true inverse-square pull from every body and the
+  star, with no cutoff. It is what makes a prograde burn raise a real transfer
+  arc and an unpowered coast fall toward the nearest mass.
+
+A single uncapped inverse-square field, which is what we have, cannot express
+the first job. There is no radius at which it says "you are in space now", so
+the walker/flight handoff has to be decided somewhere else, by something that
+can drift out of step with the field.
+
+Tenebris's tie-break is worth keeping too, and its comment records the bug that
+produced it: pick the strongest pull rather than the nearest centre, because
+Crag's well overlaps Quartz's and the moon you are hovering over should win even
+when the parent planet's centre is closer.
+
+### What is NOT a difference
+
+Both use inverse square outside the body and both guard the centre. The interior
+models differ in shape (uniform-density linear here, a `0.5 R` clamp there) but
+neither is reachable in normal play, and ours is the more principled of the two.
+
+### Status
+
+This is a measurement, not a decision. Whether Tenebris is the definitive spec
+for gravity the way it now is for hex size is the owner's call; see the
+`gravity-model` change for what adopting it would mean.
 
 ## Measured shader comparison
 
