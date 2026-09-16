@@ -2,7 +2,7 @@
 
 Revision 0.1 · Design baseline, September 2026 · Working title
 
-This document defines the intended game. The repository currently contains a tested engine foundation, shader ports, and generated biome art sources; the complete game and GPU terrain renderer are staged work. See [engine architecture](engine-architecture.md), [shader status](shader-port.md), and [migration record](source-migration.md) for the implementation boundary.
+This document defines the intended game. The repository currently contains a tested engine foundation, shader ports, and generated biome art sources; the complete game and GPU terrain renderer are staged work. See [engine architecture](../openspec/changes/voxel-engine-foundation/design.md), [shader status](shader-port.md), and [migration record](source-migration.md) for the implementation boundary.
 
 ## 1. The experience
 

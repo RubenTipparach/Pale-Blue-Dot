@@ -86,9 +86,14 @@ remain distinct from bounded commanded acceleration.
 
 ## Design and verification
 
+- [Requirements](openspec/specs/): what the engine does today, one capability
+  per directory, every requirement pinned by a passing test.
+- [Changes in flight](openspec/changes/): what is designed but not built,
+  including the [volumetric voxel engine](openspec/changes/voxel-engine-foundation/design.md)
+  (target streaming, ECS, precision, physics and GPU geometry) and the
+  [scale and shader parity](openspec/changes/preview-scale-and-shader-parity/proposal.md)
+  findings.
 - [Comprehensive game design](docs/game-design.md): the full multi-planet game.
-- [Engine architecture](docs/engine-architecture.md): target streaming, ECS,
-  precision, physics and GPU geometry design.
 - [Tenebris comparison](docs/tenebris-comparison.md): actual reference captures
   and visual differences.
 - [Shader ports](docs/shader-port.md): original port contracts and approximations.
@@ -97,12 +102,14 @@ remain distinct from bounded commanded acceleration.
 - [Validation record](docs/validation.md): tested behavior and remaining limits.
 - [Performance results](docs/performance.md): measured release frame times and
   memory, with a repeatable [benchmark harness](docs/performance-harness.md).
-- [AGENTS.md](AGENTS.md): contributor instructions.
+- [CLAUDE.md](CLAUDE.md): contributor instructions, and the only copy of them.
+  `AGENTS.md` is a pointer to it.
 
 ```sh
 cargo test --release --locked --workspace
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
+openspec validate --all          # npm install -g @fission-ai/openspec
 cargo run --manifest-path tools/validate_shaders/Cargo.toml --locked
 python tools/build_art_catalog.py
 ```

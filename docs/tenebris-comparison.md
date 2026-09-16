@@ -156,7 +156,8 @@ that reason as much as for the camera.
 
 ### Against this project's own target
 
-`engine-architecture.md` already specifies the intended surface: near-player
+The `voxel-engine-foundation` change's design already specifies the intended
+surface: near-player
 radial layers 1 m high and a lateral cell area of roughly 1 to 4 square metres,
 which it works out as level 12 on a 4 km body, `4*pi*R^2/cells = 1.198 m^2`, or
 about 1.18 m across. The prototype runs level 8. So it is **16x coarser
@@ -190,8 +191,8 @@ without making a tile smaller.
    self-consistent, and it abandons the premise of a person standing on a
    planet.
 3. **Keep level 8 as the far tier and stream a finer near-player grid.** This
-   is what `engine-architecture.md` already plans in its chunk/radial-slab
-   section, and it is the only option that gets metre-scale ground on an 8 km
+   is what the `voxel-engine-foundation` change already plans in its
+   chunk/radial-slab section, and it is the only option that gets metre-scale ground on an 8 km
    world. It is also the whole remaining engine.
 
 Option 1 is the honest one for a preview whose stated job is the whole-globe

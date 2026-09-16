@@ -148,7 +148,7 @@ rebasing remain unimplemented. The height-shell safety guard is not a landing
 or voxel-collision system. Standalone optical water and voxel meshing/light
 kernels are not automatically active because their validation passed.
 
-The [engine architecture](engine-architecture.md),
+The [engine architecture](../openspec/changes/voxel-engine-foundation/design.md),
 [flight controls](flight-controls.md), and
 [game design acceptance gates](game-design.md#17-milestones-and-acceptance-gates)
 describe the implementation boundaries and remaining work.

@@ -4,7 +4,8 @@ These instructions adapt the useful engineering rules from Tenebris and
 swarm-demo. The current user's Bevy, Avian, GPU geometry, and assisted-flight
 requirements take precedence over either upstream's historical rules.
 See [source-migration.md](docs/source-migration.md) for pinned provenance and
-[engine-architecture.md](docs/engine-architecture.md) for the target design.
+[the voxel-engine-foundation change](openspec/changes/voxel-engine-foundation/design.md)
+for the target design.
 
 **This file is the only copy of these rules.** `AGENTS.md` is a pointer to it
 and must stay one: an agent that looks for `AGENTS.md` finds its way here, and
@@ -13,6 +14,34 @@ never restore a second copy "for the other tool" - two files that have to agree
 are two files that will not, and the one that is wrong is always the one nobody
 is reading. If some tool insists on generating `AGENTS.md`, let it own that file
 outright and leave the pointer to this one at the top of what it writes.
+
+## Spec-driven work: OpenSpec
+
+Requirements and in-flight design live in `openspec/`, driven by the OpenSpec
+CLI (`npm install -g @fission-ai/openspec`, Node 20.19+). The split is the point
+and it is the same distinction this file already demands between implemented,
+validated and proposed work, made structural:
+
+- **`openspec/specs/<capability>/spec.md` is what the engine DOES.** Every
+  requirement in it is satisfied today and pinned by a passing test. A
+  requirement describing behaviour the engine does not have does not belong
+  here, however certain the plan is.
+- **`openspec/changes/<name>/` is what is designed but not built**: a proposal,
+  a design, spec deltas under `## ADDED/MODIFIED/REMOVED Requirements`, and
+  tasks. The volumetric voxel engine lives here, because it is not built.
+- **`openspec/changes/archive/`** takes a change once its deltas have been
+  merged into the main specs and its work is real.
+
+The workflow is `/opsx:explore` to think, `/opsx:propose` to write the planning
+artifacts, `/opsx:apply` to implement, `/opsx:archive` when it lands. Proposing
+creates planning artifacts only and stops; implementing is a separate request.
+
+`openspec validate --all` must pass before a push, alongside the Rust checks.
+Move a requirement from a change into `openspec/specs/` in the same commit that
+makes it true and adds the test that proves it - never ahead of one.
+
+`openspec/config.yaml` points at this file rather than restating it, for the
+same reason `AGENTS.md` does.
 
 ## Architecture and authority
 

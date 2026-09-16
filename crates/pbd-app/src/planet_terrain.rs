@@ -9,7 +9,8 @@ pub const PLANET_RADIUS: f32 = 4_000.0;
 /// Vertical quantum of the surface, in metres: one column cap sits this far
 /// above the next. It is the world's height resolution, so it belongs beside
 /// the radius rather than inline in the generator. The target engine layers
-/// near-player terrain at 1 m (see docs/engine-architecture.md); this preview
+/// near-player terrain at 1 m (see the voxel-engine-foundation change); this
+/// preview
 /// steps six times coarser because one height per 19 m column cannot carry
 /// metre-scale relief anyway. Read with `PLANET_RADIUS` when judging scale:
 /// together they are why a 1.6 m walker reads as small here.

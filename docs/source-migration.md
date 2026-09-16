@@ -100,7 +100,7 @@ This distinction matters at pentagons and must not be flattened during a port.
 | Artifact | Concrete scope | Does not yet establish |
 | --- | --- | --- |
 | [AGENTS.md](../AGENTS.md) | Adapted contributor invariants and source boundaries | Upstream CLAUDE files becoming live instructions |
-| [Game design](game-design.md) and [engine architecture](engine-architecture.md) | Product vision, catalog, systems, budgets, interfaces, milestones | A complete playable multi-planet game |
+| [Game design](game-design.md) and [engine architecture](../openspec/changes/voxel-engine-foundation/design.md) | Product vision, catalog, systems, budgets, interfaces, milestones | A complete playable multi-planet game |
 | `crates/pbd-core/src/hex.rs` | Local pointy axial coordinates, prism and chunk-address foundations | Global Goldberg seams, pentagons, production streamed topology |
 | `crates/pbd-core/src/terrain.rs` | Deterministic CPU terrain sampling foundation | Tenebris's full climate, caves, flora, resource, and hydrology generator |
 | `crates/pbd-core/src/frame.rs` | f64 origin/velocity conversion and rebase math | Rotating frame/deck physics or production render-origin synchronization |

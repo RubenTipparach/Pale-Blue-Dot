@@ -650,7 +650,7 @@ mod tests {
             "a subdivision must halve the tile: {coarse} m -> {fine} m"
         );
 
-        // docs/engine-architecture.md quotes the equal-area hexagon instead of
+        // The planet/scale capability quotes the equal-area hexagon instead of
         // measuring. The two have to agree or one of them is describing a
         // different planet.
         let cells = 10. * 4_f32.powi(5) + 2.;
