@@ -43,6 +43,29 @@ makes it true and adds the test that proves it - never ahead of one.
 `openspec/config.yaml` points at this file rather than restating it, for the
 same reason `AGENTS.md` does.
 
+## Write it up before touching code
+
+**Standing instruction from the user.** The write-up comes first. Investigate,
+measure, and put the finding and the plan in `openspec/` - a proposal, a design,
+the spec deltas - and stop there. Editing source is a separate step taken after
+the write-up exists, and on a request to take it.
+
+This is the OpenSpec workflow above applied to everything, not only to a tracked
+feature: `/opsx:propose` deliberately creates planning artifacts and stops, and
+that is the shape of all work here. A change argued in a document can be read,
+disagreed with and redirected for the cost of reading it. The same change argued
+in a diff has already been made.
+
+The one honest exception is a **measurement instrument** - code whose only
+purpose is to produce a number the write-up needs, like a function that measures
+tile width off the real topology. It is still a code change: say in the write-up
+what is being measured and why before reaching for it, keep it to the
+instrument, and never let "I needed to measure" carry a behaviour change in with
+it.
+
+Specifically, do not: rename or rescale a tuning constant, change a shader term,
+alter a default, or refactor toward a plan, before the plan is written down.
+
 ## Hex size is fixed across every planet: the Tenebris gold standard
 
 **Standing instruction from the user.** A cell is the same size on every body.
