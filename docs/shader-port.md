@@ -8,6 +8,10 @@ The repository contains **eight shader assets**: five standalone ports for the p
 | `planet_visibility.wgsl`, `planet_surface.wgsl` | `PlanetPlugin` creates persistent storage, bind groups, visibility compute and indirect surface draw | Naga semantics/interfaces passed. Subdivision-8 rendering and altitude-dependent draw budgets exercised in native captures. |
 | `sky_atmosphere.wgsl` | `SkyPlugin` registers `SkyMaterial` and spawns a shell mesh through Bevy's material pipeline | Bevy imports/substitutions compiled and rendered with the revised shell/cloud parameters. Explicitly deferred by the standalone validator; night-side review motivated the 16-step/soft-penumbra refinement. |
 
+For a term-by-term diff of the three families against the Tenebris originals,
+and what the live shader drops, see the measured shader comparison in
+[tenebris-comparison.md](tenebris-comparison.md).
+
 The headless physics/core path remains available without the desktop feature. Detailed interfaces below distinguish the live desktop prototype from the original volumetric/optical ports.
 
 ## Source traceability

@@ -1,3 +1,0 @@
-CAPTURE_REQUEST C:\Users\santi\repos\Pale-Blue-Dot\output\captures\performance-culled\runs\20260916-001400-669-dad66875\orbit-round-03.png frame=1200
-CAPTURE_SAVED C:\Users\santi\repos\Pale-Blue-Dot\output\captures\performance-culled\runs\20260916-001400-669-dad66875\orbit-round-03.png
-FRAME_WALL_MS p50=2.04 p95=2.60 p99=2.95 samples=1139

@@ -13,7 +13,7 @@ mod terrain;
 mod topology;
 
 pub use contact::{PlanetContact, SurfaceContact};
-pub use terrain::{PLANET_RADIUS, surface_height, terrain_radius};
+pub use terrain::{ELEVATION_STEP, PLANET_RADIUS, surface_height, terrain_radius};
 
 use bevy::{
     core_pipeline::core_3d::{CORE_3D_DEPTH_FORMAT, Transparent3d},
@@ -120,11 +120,23 @@ fn create_planet(mut commands: Commands, assets: Res<AssetServer>) {
     let cells = topology::dual_sphere(SUBDIVISIONS);
     let columns = Arc::new(generate_columns(&cells));
     let contacts = PlanetContact::new(columns.clone(), &cells);
+    let (narrowest, mean_width, widest) = tile_widths(&cells);
     info!(
         "Planet ready: {} columns, 12 pentagons, {:.1} MiB topology, {:.2}s generation",
         columns.len(),
         (columns.len() * size_of::<GpuCell>()) as f64 / 1_048_576.,
         started.elapsed().as_secs_f64()
+    );
+    info!(
+        "Planet scale: L{} on r={:.0} m gives {:.2} m mean tile width ({:.2}-{:.2} m), \
+         {:.0} m elevation step; the walker's eye is {:.2} m",
+        SUBDIVISIONS,
+        PLANET_RADIUS,
+        mean_width,
+        narrowest,
+        widest,
+        ELEVATION_STEP,
+        crate::walking::EYE_HEIGHT,
     );
     commands.insert_resource(contacts);
     commands.insert_resource(PlanetColumns(columns));
@@ -139,6 +151,33 @@ fn create_planet(mut commands: Commands, assets: Res<AssetServer>) {
     ));
 }
 
+/// Centre-to-centre spacing of two neighbouring columns, in metres: the
+/// flat-to-flat width of the shared tile. A dual cell sits on a primal vertex
+/// and two cells adjoin exactly when their vertices share a primal edge, so
+/// this chord IS that edge scaled onto the body. Slope shading and the scale
+/// readout both need it; one function so they cannot disagree.
+fn tile_width(cell: &topology::DualCell, neighbor: &topology::DualCell) -> f32 {
+    cell.direction.distance(neighbor.direction) * PLANET_RADIUS
+}
+
+/// Measured `(min, mean, max)` tile width over the whole globe, in metres.
+/// Reported at startup because the number that decides whether a 1.6 m walker
+/// reads as human-sized is a property of the topology, not of a document: it
+/// moves the moment `SUBDIVISIONS` or `PLANET_RADIUS` does.
+fn tile_widths(cells: &[topology::DualCell]) -> (f32, f32, f32) {
+    let (mut min, mut max, mut total, mut count) = (f32::MAX, 0f32, 0f32, 0u32);
+    for cell in cells {
+        for &neighbor in &cell.neighbors {
+            let width = tile_width(cell, &cells[neighbor]);
+            min = min.min(width);
+            max = max.max(width);
+            total += width;
+            count += 1;
+        }
+    }
+    (min, total / count.max(1) as f32, max)
+}
+
 fn generate_columns(cells: &[topology::DualCell]) -> Vec<GpuCell> {
     let heights: Vec<_> = cells.iter().map(|c| surface_height(c.direction)).collect();
     cells
@@ -151,10 +190,7 @@ fn generate_columns(cells: &[topology::DualCell]) -> Vec<GpuCell> {
             for (side, corner) in cell.corners.iter().enumerate() {
                 let neighbor_height = heights[cell.neighbors[side]].max(0.);
                 corners[side] = [corner.x, corner.y, corner.z, neighbor_height];
-                let separation = cell
-                    .direction
-                    .distance(cells[cell.neighbors[side]].direction)
-                    * PLANET_RADIUS;
+                let separation = tile_width(cell, &cells[cell.neighbors[side]]);
                 occlusion +=
                     ((neighbor_height - height.max(0.)) / separation.max(1.)).clamp(0., 1.);
             }
@@ -594,5 +630,46 @@ impl render_graph::Node for PlanetComputeNode {
             pass.dispatch_workgroups(planet.count.div_ceil(128), 1, 1);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The scale readout has to be a measurement, not a remembered number, and
+    /// the cheap way to keep it honest is that the dual halves its edge on every
+    /// subdivision: measure two low levels, check the halving, and the shipped
+    /// level follows without meshing 655,362 cells in a debug test.
+    #[test]
+    fn measured_tile_width_follows_the_subdivision_law_and_pins_the_shipped_scale() {
+        let coarse = tile_widths(&topology::dual_sphere(4)).1;
+        let fine = tile_widths(&topology::dual_sphere(5)).1;
+        assert!(
+            (coarse / fine - 2.).abs() < 0.01,
+            "a subdivision must halve the tile: {coarse} m -> {fine} m"
+        );
+
+        // The planet/scale capability quotes the equal-area hexagon instead of
+        // measuring. The two have to agree or one of them is describing a
+        // different planet.
+        let cells = 10. * 4_f32.powi(5) + 2.;
+        let area = 4. * std::f32::consts::PI * PLANET_RADIUS * PLANET_RADIUS / cells;
+        let equal_area = (area / (3_f32.sqrt() / 2.)).sqrt();
+        assert!(
+            (fine / equal_area - 1.).abs() < 0.02,
+            "measured {fine} m vs equal-area {equal_area} m"
+        );
+
+        // What the shipped configuration actually is. This number is why a
+        // 1.6 m walker reads as small: one tile is about twelve of him. Change
+        // SUBDIVISIONS or PLANET_RADIUS and update docs/tenebris-comparison.md
+        // in the same commit.
+        let shipped = fine / 2_f32.powi(SUBDIVISIONS as i32 - 5);
+        assert!(
+            (shipped - 18.9).abs() < 0.1,
+            "shipped tile width {shipped} m at L{SUBDIVISIONS} on r={PLANET_RADIUS} m"
+        );
+        assert!(shipped > crate::walking::EYE_HEIGHT * 10.);
     }
 }

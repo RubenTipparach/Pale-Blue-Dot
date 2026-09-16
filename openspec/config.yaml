@@ -1,0 +1,55 @@
+schema: spec-driven
+
+# Read CLAUDE.md before planning anything. It is the only copy of this
+# project's engineering rules, and this field deliberately points at it rather
+# than restating it: a summary here would be a second copy to keep in step.
+context: |
+  Read CLAUDE.md at the repository root first. It is the single source for this
+  project's architecture boundaries, world and flight invariants, and
+  verification rules, and it takes precedence over any summary.
+
+  Rust workspace: pbd-core is engine-independent (glam only, no Bevy, no
+  rendering); pbd-app adapts it to Bevy 0.18.1 and Avian 0.6.1. That direction
+  never reverses.
+
+  openspec/specs holds what the prototype actually does today, and every
+  requirement in it is pinned by a passing test. Work that is designed but not
+  built belongs in openspec/changes, never in specs: a spec asserting behaviour
+  the engine does not have is the thing this project most wants to avoid.
+
+  Before claiming anything is done: cargo fmt --all -- --check,
+  cargo clippy --workspace --all-targets -- -D warnings, cargo test --workspace,
+  and the Naga validator in tools/validate_shaders when a shader interface
+  moved. A visual change is not settled by a green test; it needs a before and
+  after capture the owner has seen.
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

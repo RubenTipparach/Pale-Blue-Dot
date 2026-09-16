@@ -1,4 +1,0 @@
-CAPTURE_REQUEST output/captures/flight-9670.png frame=9670
-CAPTURE_SAVED output/captures/flight-9670.png
-CAPTURE_REQUEST output/captures/flight-13570.png frame=13570
-CAPTURE_SAVED output/captures/flight-13570.png

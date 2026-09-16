@@ -80,7 +80,7 @@ corner rays every frame, and must be measured again.
 
 Naga and the native GPU pipeline accepted the final shader. A float32 numerical
 probe covered 1,110,916 input pairs, including boundary values, with no modeled
-false rejection ([numerical report](validation-logs/performance/final/horizon-numerics.txt)).
+false rejection.
 All twelve final world captures were
 **pixel-identical to their corresponding baseline images** outside the HUD:
 947,520 world pixels compared per image. The HUD was excluded because its FPS
@@ -95,14 +95,12 @@ round's JSON, CSV, logs and native screenshot in a unique output directory.
 It fails invalid captures, GPU/log errors, incomplete tours and lost focus.
 Exceeding the frame budget produces an explicit warning.
 
-Preserved evidence includes [final results](validation-logs/performance/final/results.json),
-[final CSV](validation-logs/performance/final/summary.csv),
-[pixel comparisons](validation-logs/performance/final/image-comparison.json),
-[extended flight](validation-logs/performance/extended/results.json),
-[baseline results](validation-logs/performance/baseline/results.json), and
-[frustum trial results](validation-logs/performance/frustum-trial/results.json).
-Each directory includes the original stdout/stderr; the three comparison
-directories also include their visibility shader snapshots as text.
+The harness writes `results.json`, `summary.csv`, `image-comparison.json`, the
+per-round stdout/stderr and the visibility shader snapshot into its own run
+directory under `output/captures/performance/<run-id>/`. That output is not
+tracked: a run is one machine's driver banner and belongs where it was
+produced. The numbers quoted above are the record; rerun the harness on the
+hardware you care about rather than reading someone else's log.
 Original local PNG paths remain in the JSON; the native
 captures remain under the ignored `output/captures` directories.
 

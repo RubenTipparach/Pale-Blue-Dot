@@ -1,3 +1,0 @@
-CAPTURE_REQUEST C:\Users\santi\repos\Pale-Blue-Dot\output\captures\performance-culled\runs\20260916-001400-669-dad66875\surface-round-02.png frame=1200
-CAPTURE_SAVED C:\Users\santi\repos\Pale-Blue-Dot\output\captures\performance-culled\runs\20260916-001400-669-dad66875\surface-round-02.png
-FRAME_WALL_MS p50=1.66 p95=2.20 p99=2.56 samples=1139

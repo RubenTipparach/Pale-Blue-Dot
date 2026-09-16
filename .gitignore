@@ -1,4 +1,12 @@
 target/
 /.reference/
-/output/captures/
+/output/
 __pycache__/
+
+# Run output. The benchmark harness writes captures and per-round stdout/stderr
+# under /output; copying a run into the tree made 98 tracked files of one
+# machine's driver banner. Quote the measured numbers in docs/ instead, and
+# keep the raw logs where they were produced.
+/docs/validation-logs/
+*.stdout.txt
+*.stderr.txt
