@@ -5,10 +5,18 @@
 Two findings, measured rather than felt, both in
 `docs/tenebris-comparison.md`.
 
-**The world is 6.7x too big for its avatar.** The walker is Tenebris's at 1:1 -
-same 1.6 m eye, same 8 and 14 m/s, same 12 m/s jump - and the ground around it
-is not. Measured off the real `dual_sphere(8)`: tiles are 18.883 m across
-against Tenebris's 2.832 m, and the elevation step is 6 m against 1 m. Read in
+**The world is 6.7x too big for its avatar, and the hex size is now a fixed
+spec.** The owner's decision: a cell is the same size on every body, because a
+cell is a unit of material and a unit that changes size between worlds is not a
+unit. `tenebris-rs` is the definitive spec and its **main Tenebris planet**
+(radius 300 m, level 7) is the gold standard - **2.833 m tile width, 1.000 m
+cell height**. Its other bodies are prototype stage and Sequoia is still under
+development; neither is a reference.
+
+This preview holds neither number. Measured off the real `dual_sphere(8)`:
+tiles are 18.883 m against the standard's 2.833 m, and the elevation step is
+6 m against 1 m. The avatar is Tenebris's at 1:1 - same 1.6 m eye, same 8 and
+14 m/s, same 12 m/s jump - so read in
 eye heights, a hexagon is 1.8 people wide there and 11.8 people wide here, and a
 terrain step goes from something you walk up (0.63 of eye height) to a wall over
 twice your height (3.75). The same jump clears 7.3 blocks in Tenebris and 1.3
@@ -35,17 +43,33 @@ does:
    `1.209 * R / 2^L`, so at level 8 a 600 m radius lands Tenebris's 2.83 m
    tiles and 250 m lands this project's own 1.18 m target.
 
-## Open decision
+## Open decision: the radius
 
-Option 3 is the owner's call and is not assumed here. Shrinking the radius moves
-nine other tuned numbers with it - the 4,800 m atmosphere shell, the 4,600 m
-cloud layer, the 2,300 m foliage range, the 3,200 m draw-budget switch, the
-terrain amplitude - and invalidates every capture in the comparison document.
-The alternative, scaling the avatar to the world (eye near 10.7 m, walk and
-sprint near 53 and 93 m/s, jump near 28 m/s), is equally cheap and abandons the
-premise of a person standing on a planet. The third path is the streamed
-near-player grid, which is `voxel-engine-foundation` and is the whole remaining
-engine.
+Scaling the avatar instead is no longer an option - the hex size is spec now, so
+the world moves, not the player. What is still open is which radius, because
+holding the tile at 2.833 m locks the radius to the level:
+
+```text
+R = 300 m * 2^(L - 7)
+```
+
+| level | radius | diameter | cells | topology at 128 B | eager build |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 8 | 600 m | 1.2 km | 655,362 | 80 MiB | today's exact budget |
+| 9 | 1,200 m | 2.4 km | 2,621,442 | 320 MiB | comfortable |
+| 10 | 2,400 m | 4.8 km | 10,485,762 | 1.3 GiB | tight |
+| 11 | 4,800 m | 9.6 km | 41,943,042 | 5.0 GiB | no |
+
+The authored catalog wants 4 km radii and 5-12 km diameters, which needs level
+11 and is not eagerly buildable. So the whole-globe preview survives only if the
+planet shrinks, and the catalog's sizes wait for `voxel-engine-foundation`.
+
+One lever before choosing: 92 of the 128 bytes per cell are pure topology - the
+direction and the six corner rays - identical for every body at a given level,
+and each corner ray is shared by three cells. Storing corners once and indexing
+them gets a cell to roughly 50 bytes, which buys about one level: level 10 at
+around 520 MiB, so 4.8 km diameters come into range. It does not reach a 4 km
+radius.
 
 ## Non-goals
 

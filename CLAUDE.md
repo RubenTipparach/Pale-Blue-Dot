@@ -43,6 +43,49 @@ makes it true and adds the test that proves it - never ahead of one.
 `openspec/config.yaml` points at this file rather than restating it, for the
 same reason `AGENTS.md` does.
 
+## Hex size is fixed across every planet: the Tenebris gold standard
+
+**Standing instruction from the user.** A cell is the same size on every body.
+Digging a hex of dirt on one planet, flying to another and finding the hexes a
+different size is the bug this rule exists to prevent - a cell is a unit of
+material, and a unit that changes size between worlds is not a unit.
+
+The definitive spec is `tenebris-rs`, and the gold standard is its **main
+Tenebris planet** (radius 300 m at Goldberg level 7). Its other bodies are
+prototype stage and are NOT the reference; Sequoia is still under development
+and is not either. Measured off that body:
+
+| Quantity | Value |
+| --- | ---: |
+| Tile width, mean (flat-to-flat, = centre-to-centre spacing) | **2.833 m** |
+| Tile width across the sphere | 2.595 - 3.101 m |
+| Cell height (one vertical layer) | **1.000 m** |
+
+The range is geodesic distortion and is not a tolerance to spend: the dual of a
+subdivided icosahedron varies about +/-9% around its mean at every level, so
+that spread is the same shape on every body and cancels out of any comparison.
+
+**Tile width follows from the radius and the level**, measured on the unit
+sphere as `1.2087 * R / 2^L`. Holding it at the gold standard therefore locks
+the two together:
+
+```text
+R = 300 m * 2^(L - 7)     ->   300, 600, 1200, 2400, 4800, 9600 m
+```
+
+So an authored body radius SHALL sit on that ladder, or the level that serves
+it SHALL be chosen to land within the measured spread of 2.833 m. Do not author
+a radius first and accept whatever tile size falls out - that is how a planet
+ends up with cells six times the size of another's.
+
+Do NOT port Tenebris's `subdivisions_for_radius` as the rule. It writes the
+constant as 1.05 where the measured value is 1.2087, and it clamps the level at
+7, so it silently stops holding the standard on any body large enough to need
+more - which is exactly the case this repository cares about.
+
+`planet::tile_widths` measures the shipped value and the startup log reports it;
+a test pins it. When the scale moves, both move in the same commit.
+
 ## Architecture and authority
 
 - Work in this repository's Rust workspace. `.reference/` contains read-only
