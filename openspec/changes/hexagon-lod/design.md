@@ -34,7 +34,30 @@ indirect draw.
 
 Nothing per frame, nothing per LOD change, nothing back.
 
-## Choosing the level, on the GPU
+## Choosing the level, on the GPU: DECIDED
+
+A tile's level is quantised from its **great-circle distance to the player**,
+with the band thresholds stored as cosines so no trig runs per tile:
+
+```text
+cos_angle = dot(tile_direction, normalize(player_pos - body_centre))
+T         = the band cos_angle falls into
+```
+
+One dot product and a few compares per tile. Neighbours agree by construction,
+because `T` is a continuous function of the tile's own direction and one global
+vector, so the only disagreement is at a threshold - and a threshold is a circle
+of known radius rather than an arbitrary boundary.
+
+**From the player, not the camera.** Camera-anchored bands re-shuffle whenever
+the player looks around or the view pulls back; player-anchored bands move only
+when the player moves.
+
+What remains: what closes the ring (skirts, most likely), the thresholds
+themselves, hysteresis across a boundary as the player walks, and the twelve
+pentagons. `SEAM-BRIEF.md` carries those.
+
+## The reasoning that led there
 
 The target level for a tile is a function of the angle it subtends from the
 camera: the same tile wants finer subdivision when it is near and coarser when

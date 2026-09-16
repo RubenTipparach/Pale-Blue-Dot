@@ -3,15 +3,67 @@
 This file is written to be handed to someone, or something, with no access to
 the rest of the repository. Everything needed to answer the question is in it.
 
-## The question, in one sentence
+## DECIDED: the level comes from spherical distance to the PLAYER
+
+The owner's call, and it settles the half of the question that was hardest.
+
+A tile's level is a function of its **great-circle distance from the player**,
+quantised into bands:
+
+```text
+p         = normalize(player_position - body_centre)   // published once per tick
+d         = the tile's own direction (unit, from the topology)
+cos_angle = dot(d, p)
+distance  = R * acos(cos_angle)                        // never actually computed
+T         = the band cos_angle falls into
+```
+
+`acos` is never evaluated: the band thresholds are stored as **cosines**, so a
+tile costs one dot product and a few compares. Essentially free over 42 million
+tiles.
+
+Two properties fall out, and they are why this works:
+
+- **Neighbours agree by construction.** `T` is a function of the tile's own
+  direction and one global vector, and it is continuous in that direction.
+  Adjacent tiles are 2.833 m apart on a 4,800 m sphere, so their `cos_angle`
+  differs by almost nothing and they land in the same band - unless they straddle
+  a threshold, and a threshold is a **circle of known radius**. The seam is no
+  longer "wherever the estimator happened to disagree"; it is a ring whose
+  position is closed-form.
+- **The PLAYER, not the camera.** Anchoring to the camera would re-shuffle every
+  band whenever the player merely looks around or pulls the view back. Anchored
+  to the player, the bands move only when the player moves, so looking around
+  costs nothing and most of the "boundary sweeps across the ground" problem never
+  arises.
+
+## What is still open
+
+The rule above decides **which level**. It does not yet decide:
+
+1. **What closes the ring.** At a band threshold the coarse side's tiles overlap
+   the fine side's. The leading candidate is a **skirt**: a tile on the outer
+   edge of a band extends a wall down to the coarser neighbour's height, which is
+   the same trick the surface pass already uses for ordinary terrain steps
+   between adjacent columns, so it needs no new machinery.
+2. **The band thresholds.** How many bands, at what great-circle distances, given
+   2.833 m tiles at level 11 on a 4,800 m body.
+3. **Hysteresis.** A tile sitting exactly on a threshold as the player walks
+   should not flip-flop between levels frame to frame. Anchoring to the player
+   already removes the camera-driven case; what remains is the player's own
+   motion across a boundary.
+4. **Pentagons.** There are twelve, they have five neighbours rather than six,
+   and they sit on band boundaries like anything else.
+
+Everything below is the context those four need.
+
+## The original question, for reference
 
 > When two levels of detail meet on a spherical hexagon grid, how does a tile
 > decide **alone, on the GPU, from its own direction and the camera** whether to
 > draw itself and at which level - so that the surface stays closed, nothing is
 > drawn twice, and the boundary does not visibly sweep across the ground as the
 > camera moves?
-
-Everything below is context for that sentence.
 
 ## The grid
 
@@ -115,8 +167,9 @@ the level **without letting them talk to each other**.
 Not exhaustive, and not ranked by confidence - the point of the exercise is to
 decide between them on evidence.
 
-1. **Quantise the level from an angular band around the sub-camera point**, not
-   from a free per-tile estimate. Every tile whose direction lies within an
+1. **CHOSEN.** Quantise the level from an angular band - in the event, great-circle
+   distance from the PLAYER rather than the sub-camera point, which is strictly
+   better for the reason given at the top. Every tile whose direction lies within an
    angular band of the point directly beneath the camera gets the same `T`.
    Agreement is then by construction, because the band is a function of the
    tile's direction alone and is continuous in it. The seams become circles
@@ -133,8 +186,9 @@ decide between them on evidence.
    machinery. This is the GPU equivalent of building boundary geometry, computed
    rather than uploaded.
 
-A likely-looking combination is 1 + 2 + 3: band-quantised `T`, prefix rule for
-membership, skirts to close the circles. That is a hypothesis, not a conclusion.
+The combination is 1 + 2 + 3: player-distance-banded `T`, prefix rule for
+membership, skirts to close the circles. 1 is decided; 2 follows from the
+geometry; 3 is the leading candidate and is what a prototype should test first.
 
 ## What counts as an answer
 

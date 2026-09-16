@@ -44,6 +44,20 @@ NOT be treated as a violation of the standard.
 - **THEN** the tiles they can walk on, dig, or stand beside are 2.833 m across
   and 1 m tall
 
+### Requirement: Level is quantised from distance to the player
+A tile's level of detail SHALL be a function of its great-circle distance from
+the player, quantised into bands, computed from the tile's own direction and one
+published player direction. It SHALL NOT be anchored to the camera, so that
+looking around does not change any tile's level.
+
+#### Scenario: The player stands still and looks around
+- **WHEN** the camera turns or pulls back while the player does not move
+- **THEN** no tile changes level
+
+#### Scenario: Two adjacent tiles away from a threshold
+- **WHEN** two neighbouring tiles are both well inside one band
+- **THEN** both are assigned the same level, without consulting each other
+
 ### Requirement: A band boundary is not visible as a seam
 Where two levels of detail meet, the surface SHALL remain closed: no crack to
 space, no double-drawn ground, and no boundary that sweeps visibly across the
