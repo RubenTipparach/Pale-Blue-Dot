@@ -102,3 +102,13 @@ how they reach the GPU.
 `has_atmosphere(body)` answered once and read by the sky pass, the distance fog
 term, the cloud shell and any future precipitation. Not four conditions that
 happen to agree today.
+
+## Implementation verification: translated capture
+
+The authorized first implementation covers the declared body-local frame.
+Add a static-capture-only `--render-offset x y z` instrument: translate the
+camera, planet, atmosphere and backdrop together by changing the local frame
+origin and camera placement. Compare fixed-time origin and translated captures
+at identical resolution, excluding the timing HUD. This exercises the actual
+surface and sky pipelines without changing authoritative system coordinates.
+Record image differences and keep generated captures under `output/`.

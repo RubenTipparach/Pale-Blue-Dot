@@ -177,11 +177,34 @@ fn validate(path: &Path) -> Result<(), String> {
         "planet_surface.wgsl" | "planet_visibility.wgsl" => {
             check_struct(&module, "Cell", 128, &[0, 16, 112])?;
             check_struct(&module, "Params", 112, &[0, 64, 80, 96])?;
-            check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3)])?;
             if filename == "planet_surface.wgsl" {
+                check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3)])?;
                 check_entries(&module, &render_entries)?;
             } else {
+                check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)])?;
                 check_struct(&module, "DrawArgs", 16, &[0, 4, 8, 12])?;
+                let args = module
+                    .global_variables
+                    .iter()
+                    .find(|(_, variable)| {
+                        variable
+                            .binding
+                            .as_ref()
+                            .is_some_and(|binding| binding.group == 0 && binding.binding == 3)
+                    })
+                    .map(|(_, variable)| variable)
+                    .ok_or("missing indirect argument binding")?;
+                if !matches!(
+                    module.types[args.ty].inner,
+                    TypeInner::Array {
+                        base,
+                        size: naga::ArraySize::Constant(count),
+                        stride: 16,
+                    } if count.get() == 2
+                        && module.types[base].name.as_deref() == Some("DrawArgs")
+                ) {
+                    return Err("visibility must publish two 16-byte indirect draws".into());
+                }
                 check_entries(
                     &module,
                     &[

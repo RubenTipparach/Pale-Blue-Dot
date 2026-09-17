@@ -16,11 +16,9 @@ use avian3d::prelude::*;
 use bevy::{prelude::*, time::TimeUpdateStrategy};
 use pbd_core::{
     DQuat, DVec3,
-    flight::{
-        FlightAcceleration, FlightInput, FlightLimits, FlightMotion, GravityWell,
-        control_acceleration,
-    },
+    flight::{FlightAcceleration, FlightInput, FlightLimits, FlightMotion, control_acceleration},
     frame::{KinematicState, LocalFrame},
+    gravity::{GravityQuery, GravityWell, anchor_gravity_at},
     orbit::{CircularOrbit, Ephemeris, RailsBody, RailsBodyKind},
 };
 
@@ -54,12 +52,13 @@ pub struct LastFlightCommand(pub FlightAcceleration);
 pub struct CelestialScene {
     pub ephemeris: Ephemeris,
     pub states: Vec<KinematicState>,
-    /// (body index, surface radius in metres, surface acceleration in m/s²).
-    pub gravity: Vec<(usize, f64, f64)>,
+    /// Body IDs index the ephemeris; centres are sampled from its current states.
+    pub gravity: Vec<GravityWell>,
 }
 
 impl CelestialScene {
-    pub fn planet_at_origin(radius: f64, surface_gravity: f64) -> Self {
+    /// A stationary planet with gravity expressed in Tenebris g (25 m/s²).
+    pub fn planet_at_origin(radius: f64, gravity_g: f64) -> Self {
         let ephemeris = Ephemeris::new(vec![RailsBody {
             kind: RailsBodyKind::Planet,
             parent: None,
@@ -70,7 +69,7 @@ impl CelestialScene {
         Self {
             ephemeris,
             states,
-            gravity: vec![(0, radius, surface_gravity)],
+            gravity: vec![GravityWell::new(0, DVec3::ZERO, radius, gravity_g)],
         }
     }
 
@@ -107,22 +106,24 @@ impl CelestialScene {
         Self {
             ephemeris,
             states,
-            gravity: vec![(0, 4_000.0, 9.0), (1, 500.0, 1.0)],
+            gravity: vec![
+                GravityWell::new(0, DVec3::ZERO, 4_000.0, 1.0),
+                // Preserve the demo moon's authored 1 m/s² surface pull.
+                GravityWell::new(1, DVec3::ZERO, 500.0, 0.04),
+            ],
         }
     }
 
-    fn acceleration_at(&self, global_position: DVec3) -> DVec3 {
-        self.gravity
-            .iter()
-            .map(|&(index, radius, surface_acceleration)| {
-                GravityWell {
-                    center: self.states[index].position,
-                    radius,
-                    surface_acceleration,
-                }
-                .acceleration_at(global_position)
-            })
-            .sum()
+    /// The sole gameplay gravity policy for actors and assistance. Absence of
+    /// an anchor also defines space; no separate altitude cutoff is maintained.
+    pub fn gravity_at(&self, global_position: DVec3) -> GravityQuery {
+        anchor_gravity_at(
+            self.gravity.iter().map(|well| GravityWell {
+                center: self.states[well.body_id].position,
+                ..*well
+            }),
+            global_position,
+        )
     }
 }
 
@@ -179,7 +180,7 @@ fn apply_ship_controls(
         let command = control_acceleration(
             motion,
             controller.input,
-            scene.acceleration_at(global_position),
+            scene.gravity_at(global_position).acceleration(),
             controller.limits,
             time.delta_secs_f64(),
         );

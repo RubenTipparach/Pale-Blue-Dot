@@ -33,19 +33,27 @@ than in their own change because they touch `planet_visibility.wgsl`, and
 touching one pass twice for two reasons is exactly the divergent-path risk this
 project's rules warn about.
 
-- [ ] **Frustum cull.** `params.clip_from_world` is declared and BOUND in the
-      visibility pass and `compact_visible` never reads it. The only test is the
-      sphere-horizon one, so there is no frustum, far-plane or distance culling
-      anywhere in the pipeline: standing on the ground submits the whole visible
-      hemisphere, about 327,000 cells. The matrix is already there.
-- [ ] **Per-cell foliage distance.** `FOLIAGE_DRAW_CUTOFF_ALTITUDE` is one
-      global altitude switch, so below 3,200 m every visible cell is submitted at
-      162 vertices; the tree branch then discards beyond 2,300 m *after*
-      submission, as degenerate triangles. That is about 108 wasted tree vertices
-      per cell across hundreds of thousands of cells. The per-cell distance test
-      already exists in the shader - it just runs too late.
+- [x] **Frustum cull.** `params.clip_from_world` was declared and BOUND in the
+      visibility pass while `compact_visible` never read it, so the only test was
+      the sphere-horizon one: standing on the ground submitted the whole visible
+      hemisphere, about 327,000 cells. The pass now tests body-local cap/wall
+      bounding spheres against all six homogeneous clip planes and retains
+      intersecting bounds conservatively.
+- [x] **Per-cell foliage distance.** `FOLIAGE_DRAW_CUTOFF_ALTITUDE` was one
+      global altitude switch, so below 3,200 m every visible cell was submitted
+      at 162 vertices and the tree branch discarded beyond 2,300 m *after*
+      submission, as degenerate triangles - about 108 wasted tree vertices per
+      cell across hundreds of thousands of cells. Nearby vegetated cells now
+      compact into a separate ID buffer and a 108-vertex indirect foliage draw,
+      while terrain uses 54. The compute pass owns the only foliage eligibility
+      test, keeping the 3,200 m altitude gate as a conservative early disable and
+      giving the GPU the per-cell 2,300 m range and material/seed predicate.
+      There is no runtime GPU readback.
 - [ ] Measure both, before and after, in a reproducible release scene. Neither is
       a speedup until it has a number.
+
+Tier selection, the seam and performance measurement remain open; this covers
+only the two culling fixes, which were independent of LOD.
 
 ## 6. Then the radius
 - [ ] With LOD landed, revisit the radius in

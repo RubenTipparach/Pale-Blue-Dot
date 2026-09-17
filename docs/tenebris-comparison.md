@@ -30,6 +30,12 @@ A second capture used `TENEBRIS_DEV_DIVE=-12`, `TENEBRIS_DEV_TIME=0.46` and clea
 
 The surface capture shows fine, continuous reflective wave ripples over very dark water, with a blocky forest silhouette beyond the curved shoreline. Its low-light result reinforces that the prototype needs a chosen sunlit landing viewpoint for material review, rather than treating a global clock preset as a camera lighting guarantee.
 
+The two actual native captures are also fixed side by side below as the water
+parity **baseline**. This is evidence of the starting mismatch, not an after
+image and not a claim that parity has already been achieved.
+
+![Water parity baseline from actual native captures](screenshots/water-parity-baseline.png)
+
 ## What the captured reference actually looks like
 
 - Terrain keeps small, high-contrast pixels at the coast: pale sand borders saturated green vegetation and deep blue water. This visible material contrast matters more than continuous physically based roughness.
@@ -89,6 +95,12 @@ The surface view shows pixel textures, stepped hex columns and block-shaped tree
 ![Pale Blue Dot native night view](screenshots/pbd-night.png)
 
 The night view retains a dark hemisphere and a bright twilight rim, with a warm ocean highlight on the lit side. The final atmosphere has a continuous shadow transition after the sampling/penumbra correction. Separate pole and completed survey-tour captures also rendered the closed globe without missing seams in the reviewed views.
+
+The committed orbit and night frames are paired below as the baseline for the
+planned night-rim and uniform refactor. Any eventual after capture must use the
+same views rather than relying on a differently framed beauty shot.
+
+![Live shader orbit and night baseline](screenshots/shader-parity-baseline.png)
 
 ## Measured dimensional comparison
 

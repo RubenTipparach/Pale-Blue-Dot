@@ -12,6 +12,7 @@ use bevy::{
 };
 
 use crate::{
+    CelestialScene, PhysicsFrame,
     flight_view::{
         FlightCamera, FlightInputState, FlightViewConfig, FlightViewInput, FlightViewPostPhysics,
         MOUSE_LOOK_SENSITIVITY, PilotShip, teleport_pilot,
@@ -413,7 +414,8 @@ fn read_walking_input(
 fn drive_walker(
     mut state: ResMut<WalkingState>,
     config: Res<WalkingConfig>,
-    flight: Res<FlightViewConfig>,
+    scene: Res<CelestialScene>,
+    frame: Res<PhysicsFrame>,
     mut walkers: ParamSet<(
         Query<
             (
@@ -453,10 +455,8 @@ fn drive_walker(
         rotation.0 = Quat::from_rotation_arc(Vec3::Y, up);
     }
     for mut forces in &mut walkers.p1() {
-        let position = forces.position().0;
-        let up = position.normalize();
-        let gravity = flight.surface_gravity * (PLANET_RADIUS / position.length()).powi(2);
-        forces.apply_linear_acceleration(-up * gravity);
+        let position = frame.0.origin + forces.position().0.as_dvec3();
+        forces.apply_linear_acceleration(scene.gravity_at(position).acceleration().as_vec3());
     }
 }
 
@@ -580,7 +580,7 @@ mod tests {
     fn app_with_terrain(terrain: PlanetContact) -> App {
         let mut app = crate::headless_app();
         app.insert_resource(terrain)
-            .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 9.0))
+            .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
             .insert_resource(FlightViewConfig {
                 minimum_clearance: EYE_HEIGHT,
                 ..default()
@@ -688,6 +688,108 @@ mod tests {
     }
 
     #[test]
+    fn one_metre_fall_matches_tenebris_and_reports_the_old_gravity_baseline() {
+        for (acceleration, height) in [(9.0_f32, 1.0_f32), (25.0, 1.0), (9.0, 6.0), (25.0, 6.0)] {
+            let mut app = app();
+            app.world_mut().resource_mut::<CelestialScene>().gravity[0].gravity_g =
+                acceleration as f64 / pbd_core::gravity::SURFACE_GRAVITY_MPS2_PER_G;
+            let body = app.world().resource::<WalkingState>().body;
+            let resting = app.world().get::<Position>(body).unwrap().0;
+            let start = resting + resting.normalize() * height;
+            app.world_mut().entity_mut(body).insert((
+                Position(start),
+                // Teleports must update Bevy's pose as well as Avian's pose,
+                // just like place_walker; otherwise transform sync restores
+                // the grounded spawn before the first physics tick.
+                Transform::from_translation(start),
+                LinearVelocity::ZERO,
+                GroundState {
+                    previous: start,
+                    grounded: false,
+                },
+            ));
+            let mut ticks = 0;
+            while !app.world().get::<GroundState>(body).unwrap().grounded && ticks < 120 {
+                app.update();
+                ticks += 1;
+            }
+            let elapsed = ticks as f32 / crate::FIXED_HZ as f32;
+            let expected = (2.0 * height / acceleration).sqrt();
+            println!(
+                "fall {height} m at {acceleration} m/s²: {elapsed:.3} s ({ticks} ticks), analytic {expected:.3} s"
+            );
+            assert!((elapsed - expected).abs() <= 1.0 / crate::FIXED_HZ as f32);
+            assert!(
+                (app.world().get::<Position>(body).unwrap().0.length() - resting.length()).abs()
+                    < 0.03
+            );
+        }
+    }
+
+    #[test]
+    fn walker_and_unassisted_ship_sample_the_same_banded_gravity() {
+        use pbd_core::{
+            DVec3,
+            flight::{FlightInput, FlightLimits},
+        };
+        for radius_multiplier in [1.2, 1.6, 2.0] {
+            let mut app = app();
+            let walker = app.world().resource::<WalkingState>().body;
+            let position = Vec3::Y * PLANET_RADIUS * radius_multiplier;
+            app.world_mut().entity_mut(walker).insert((
+                Position(position),
+                Transform::from_translation(position),
+                LinearVelocity::ZERO,
+                GroundState {
+                    previous: position,
+                    grounded: false,
+                },
+            ));
+            let ship = crate::spawn_ship(
+                app.world_mut(),
+                position,
+                crate::ShipController {
+                    limits: FlightLimits {
+                        acceleration: 80.0,
+                        ..Default::default()
+                    },
+                    input: FlightInput {
+                        inertial_dampeners: false,
+                        ..Default::default()
+                    },
+                },
+            );
+            // The test compares forces at identical positions, not collision response.
+            app.world_mut()
+                .entity_mut(ship)
+                .remove::<Collider>()
+                .insert(Transform::from_translation(position));
+            let gravity = app
+                .world()
+                .resource::<CelestialScene>()
+                .gravity_at(position.as_dvec3());
+            let expected = gravity.acceleration() / crate::FIXED_HZ;
+            app.update();
+            for body in [walker, ship] {
+                let actual = app
+                    .world()
+                    .get::<LinearVelocity>(body)
+                    .unwrap()
+                    .0
+                    .as_dvec3();
+                assert!(
+                    (actual - expected).length() < 1e-5,
+                    "body={body:?}, actual={actual:?}, expected={expected:?}"
+                );
+            }
+            if radius_multiplier == 2.0 {
+                assert!(gravity.is_in_space());
+                assert_eq!(expected, DVec3::ZERO);
+            }
+        }
+    }
+
+    #[test]
     fn jump_uses_avian_gravity_and_lands_without_held_key_bunny_hopping() {
         let mut app = app();
         app.world_mut().resource_mut::<WalkingState>().captured = true;
@@ -707,7 +809,7 @@ mod tests {
             peak = peak.max(app.world().get::<Position>(body).unwrap().0.length());
         }
         assert!(
-            (7.5..8.5).contains(&(peak - start)),
+            (2.7..3.0).contains(&(peak - start)),
             "jump rise={}",
             peak - start
         );
@@ -803,7 +905,7 @@ mod tests {
             peak = peak.max(app.world().get::<Position>(body).unwrap().0.length());
         }
         assert!(
-            peak - position.length() > 7.5,
+            peak - position.length() > 2.7,
             "wall reduced jump rise to {}",
             peak - position.length()
         );

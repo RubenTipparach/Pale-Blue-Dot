@@ -7,6 +7,25 @@ Everything numeric below was measured off the two source trees (`Pale-Blue-Dot`
 and `tenebris-rs`) rather than derived or remembered. Where a figure came out
 differently than first reported, the corrected value is the one here.
 
+## Implementation update: 2026-09-17
+
+The user has now requested implementation; the historical "keep planning"
+answer below no longer describes the current authorization. This pass covers:
+
+- Shared gameplay gravity: 25 m/s^2 at 1 g, full through 1.4 R, tapering to
+  zero at 1.8 R; walking, flight and hover assistance query the same core rule.
+- A body-local surface camera and clip transform, with the atmosphere shell
+  following the same frame and a translated-scene capture instrument.
+- GPU frustum culling and separate terrain/nearby-foliage indirect draws.
+- The live surface shader's 0.25 night-side rim floor.
+
+The 4,800 m/L11 rescale still depends on proving and implementing the LOD seam.
+The current preview remains at 4,000 m/L8 with six-metre steps. RON body assets,
+the dedicated faithful water pipeline, and the volumetric engine remain planned.
+The measurements and "not yet acted on" findings below describe the earlier
+baseline; current implementation and validation status is tracked in the
+OpenSpec task files and [validation results](handoff-validation.md).
+
 ---
 
 ## 1. The project in one paragraph
@@ -418,16 +437,24 @@ deltas.
    amplitude, the tree geometry and the atlas UV divisors.
 6. **The gravity model**, and collapse `walking.rs`'s duplicate falloff onto the
    core well while in there.
-7. **The two cheap shader fixes** - the night rim floor is one line; lifting the
+7. **Shader and water parity.** The night rim floor is one line; lifting the
    literals into the params uniform is a refactor that should keep the shipped
-   values byte-identical on the first pass.
+   values byte-identical on the first pass. Then bind the faithful `water.wgsl`
+   port as the single water system above and below the surface, with its scene
+   colour/depth inputs, and remove the live inline approximation. Fixed-camera,
+   fixed-time captures on both sides of the surface settle parity.
 8. **The voxel engine**, which is the whole remaining game.
 
 ### What a visual change needs
 
 Green tests do not settle a look. A rendering change wants a before-and-after
 capture the owner has seen. The repository has a headless capture harness and a
-benchmark script; run output belongs where it was produced, not committed.
+benchmark script; raw run output belongs where it was produced, not committed.
+Two selected proof plates are committed as the explicit baselines requested for
+this handoff: `docs/screenshots/water-parity-baseline.png` pairs the native
+Tenebris and live PBD water captures, and
+`docs/screenshots/shader-parity-baseline.png` fixes the current orbit/night
+views. They are labelled as baselines, not presented as completed parity.
 
 ---
 

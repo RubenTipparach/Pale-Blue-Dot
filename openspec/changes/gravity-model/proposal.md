@@ -29,8 +29,10 @@ takes 0.28 s there and **1.15 s** here. Fixing the hex scale alone leaves this:
 
 ## What changes
 
-- A second, mode-anchoring field beside the orbital one, with the band shape and
-  the strongest-pull selection Tenebris uses.
+- A second, mode-anchoring field beside the inverse-square reference, with the
+  band shape and strongest-multiplier selection Tenebris uses. Walker, assisted
+  ship, and hover compensation use the anchor field; the reference is not
+  summed into gameplay ship motion.
 - The space transition becomes a property of that field rather than a separate
   decision.
 - The surface constant becomes a declared value with a recorded reason, shared
@@ -47,8 +49,10 @@ The owner's call, on the same terms as the hex size. The standard is therefore:
 | Linear taper to zero by | **1.8 R** |
 | Fields | **two**, anchored to one shared surface constant |
 
-So 9.0 m/s^2 goes, and with it the floaty walker: the fall through one cell
-height comes back to Tenebris's 0.28 s from today's 1.15 s.
+So 9.0 m/s^2 goes. A one-metre fall takes Tenebris's approximately 0.28 s;
+the current preview's six-metre step falls in approximately 0.69 s instead of
+1.15 s. Bringing the step itself down to one metre belongs to the separate
+scale change.
 
 The constant is taken as-is rather than retuned for a larger body. Its own
 comment ties 25 to a ~300 m planet, which is an argument for retuning it on a
@@ -60,8 +64,7 @@ so with `gravity_g`, which is what that field is for.
 ## Non-goals
 
 - Patched conics, maneuver nodes, transfer-window planning or n-body ship
-  simulation. The existing invariant against all of that stands; the orbital
-  field is a summed force, not an element solver.
+  simulation. The inverse-square reference does not add a second ship force.
 - Re-tuning jump, walk and sprint. Those are the avatar's, and they are shared
   with the scale question in `preview-scale-and-shader-parity`.
 - Multi-body scenes. The selection rule is worth having before there are two

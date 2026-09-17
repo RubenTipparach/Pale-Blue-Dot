@@ -22,24 +22,36 @@ terrain step goes from something you walk up (0.63 of eye height) to a wall over
 twice your height (3.75). The same jump clears 2.9 blocks in Tenebris and 1.3
 steps here, so terrain Tenebris lets you hop over is a cliff.
 
-**The faithful shader is the one that is not running.** `hex_terrain.wgsl` is a
+**The faithful shaders are the ones that are not running.** `hex_terrain.wgsl` is a
 term-for-term Tenebris port with every knob a uniform, and it is bound to no
 pipeline. The live `planet_surface.wgsl` reimplements a subset with every knob a
 literal, and it drops the night-side rim floor, the ambient floor, torch light,
 underwater absorption and the Bayer cutout. Two of those show in a still frame:
 the night limb falls to black, and lighting is flat across a whole 18.9 m tile.
 
+The same split has left the ocean with two implementations. `water.wgsl`
+preserves the previous Tenebris water model, including refraction, optical
+path-length absorption, foam and the underwater view, but no live pipeline binds
+it. The water that actually renders is a short branch in `planet_surface.wgsl`
+with a Fresnel term and two sine waves. The live path therefore cannot preserve
+the prior look or guarantee that crossing the surface keeps above-water and
+underwater rendering as two views of one water system.
+
 ## What changes
 
-Two things that are cheap and do not touch topology or uploads, and one that
-does:
+The two cheap shader corrections stay separate from the dedicated water
+pipeline and the scale change:
 
 1. Restore the night-side rim floor in the live shader, matching Tenebris's
    configured `distant_rim_floor` and our own unbound port.
 2. Lift the live shader's hard-coded rim, fog, terminator and light-tint
    numbers into the params uniform it already fills, so a second planet becomes
    possible without editing WGSL.
-3. Decide the preview body's scale deliberately. Tile width is
+3. Bind the existing faithful `water.wgsl` port as the one water implementation
+   for views from both sides of the surface. Its scene-colour and depth inputs
+   become explicit pipeline dependencies; the inline surface-shader water
+   approximation is removed rather than retained as a second look.
+4. Decide the preview body's scale deliberately. Tile width is
    `1.209 * R / 2^L`, so at level 8 a 600 m radius lands Tenebris's 2.83 m
    tiles and 250 m lands this project's own 1.18 m target.
 
@@ -88,8 +100,8 @@ a 600 m body would have needed, so the relief stays broadly as authored.
 
 ## Non-goals
 
-- Binding `water.wgsl`. It needs scene colour and depth inputs and its own
-  pipeline; `docs/shader-port.md` already carries it as outstanding.
+- Redesigning or retuning the water look. The work binds the faithful port and
+  preserves the previous appearance; it does not replace it with a new ocean.
 - Interpolating skylight per corner. It is the right fix for the flat-tile
   lighting and it is upload-side work, not a shader edit.
 - Any look change landing without a before-and-after capture the owner has seen.

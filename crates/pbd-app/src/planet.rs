@@ -11,10 +11,14 @@ mod contact;
 mod terrain;
 #[path = "planet_topology.rs"]
 mod topology;
+#[cfg(test)]
+#[path = "planet_visibility_tests.rs"]
+mod visibility_tests;
 
 pub use contact::{PlanetContact, SurfaceContact};
 pub use terrain::{ELEVATION_STEP, PLANET_RADIUS, surface_height, terrain_radius};
 
+use bevy::math::{DMat4, DVec3};
 use bevy::{
     core_pipeline::core_3d::{CORE_3D_DEPTH_FORMAT, Transparent3d},
     ecs::system::SystemParamItem,
@@ -46,11 +50,49 @@ use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, num::NonZeroU64, sync::Arc};
 
 const SUBDIVISIONS: u32 = 8;
-const TERRAIN_VERTICES_PER_CELL: u32 = 54;
-const DECORATED_VERTICES_PER_CELL: u32 = 162;
 // At this sea-level altitude even the highest preview summit and its trees
 // are beyond the shader's 2,300 m decorative-geometry range.
 const FOLIAGE_DRAW_CUTOFF_ALTITUDE: f32 = 3_200.;
+const FOLIAGE_DRAW_DISTANCE: f32 = 2_300.;
+
+/// The preview body's centre in the translating render/physics frame. System
+/// positions are subtracted in f64 before any bounded GPU coordinate is cast.
+#[derive(Resource, Clone, Copy, Default, ExtractResource)]
+pub(crate) struct PlanetRenderFrame {
+    pub(crate) center: DVec3,
+}
+
+pub(crate) fn update_planet_frame(
+    scene: Res<crate::CelestialScene>,
+    frame: Res<crate::PhysicsFrame>,
+    mut render_frame: ResMut<PlanetRenderFrame>,
+) {
+    if let Some(body) = scene.states.first() {
+        render_frame.center = body.position - frame.0.origin;
+    }
+}
+
+impl PlanetRenderFrame {
+    fn camera_and_clip(
+        self,
+        world_from_view: &GlobalTransform,
+        clip_from_view: Mat4,
+        clip_from_world: Option<Mat4>,
+    ) -> (Vec3, Mat4) {
+        let camera = (world_from_view.translation().as_dvec3() - self.center).as_vec3();
+        let clip_from_body = if let Some(clip) = clip_from_world {
+            (clip.as_dmat4() * DMat4::from_translation(self.center)).as_mat4()
+        } else {
+            // Equivalent to clip_from_world * world_from_body, but invert the
+            // bounded camera transform so large translations never enter f32
+            // matrix multiplication before cancelling one another.
+            let mut body_from_view = world_from_view.to_matrix();
+            body_from_view.w_axis = camera.extend(1.);
+            clip_from_view * body_from_view.inverse()
+        };
+        (camera, clip_from_body)
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -89,10 +131,16 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<PlanetColumns>::default(),
             ExtractResourcePlugin::<PlanetClock>::default(),
             ExtractResourcePlugin::<PlanetArt>::default(),
+            ExtractResourcePlugin::<PlanetRenderFrame>::default(),
             ExtractComponentPlugin::<PlanetSurface>::default(),
         ))
         .init_resource::<PlanetClock>()
+        .init_resource::<PlanetRenderFrame>()
         .add_systems(Startup, create_planet)
+        .add_systems(
+            PostUpdate,
+            update_planet_frame.before(TransformSystems::Propagate),
+        )
         .add_systems(Update, |time: Res<Time>, mut clock: ResMut<PlanetClock>| {
             clock.0 = time.elapsed_secs();
         });
@@ -211,10 +259,10 @@ fn generate_columns(cells: &[topology::DualCell]) -> Vec<GpuCell> {
 
 #[derive(Clone, ShaderType)]
 struct PlanetParams {
-    clip_from_world: Mat4,
+    clip_from_body: Mat4,
     camera: Vec4,
     sun: Vec4,
-    // Sea radius, cell count, elapsed seconds, vertices per cell.
+    // Sea radius, cell count, elapsed seconds, foliage range (zero disables it).
     settings: Vec4,
 }
 
@@ -229,8 +277,10 @@ struct PlanetViewGpu {
     uniform: UniformBuffer<PlanetParams>,
     // Held by bind groups as well; retained explicitly to make lifetime clear.
     _visible: Buffer,
+    _foliage: Buffer,
     indirect: Buffer,
     draw_bind_group: BindGroup,
+    foliage_bind_group: BindGroup,
     compute_bind_group: BindGroup,
 }
 
@@ -290,7 +340,8 @@ fn compute_layout() -> BindGroupLayoutDescriptor {
                 uniform_buffer::<PlanetParams>(false),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(size_of::<GpuCell>() as u64)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
-                storage_buffer_sized(false, NonZeroU64::new(16)),
+                storage_buffer_sized(false, NonZeroU64::new(32)),
+                storage_buffer_sized(false, NonZeroU64::new(4)),
             ),
         ),
     )
@@ -380,6 +431,7 @@ fn prepare_views(
     art: Res<PlanetArt>,
     images: Res<RenderAssets<GpuImage>>,
     clock: Res<PlanetClock>,
+    frame: Res<PlanetRenderFrame>,
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
     let Some(planet) = planet else {
@@ -389,25 +441,22 @@ fn prepare_views(
         return;
     };
     for (entity, view, existing) in &mut views {
-        let camera_position = view.world_from_view.translation();
-        let vertices_per_cell =
+        let (camera_position, clip_from_body) = frame.camera_and_clip(
+            &view.world_from_view,
+            view.clip_from_view,
+            view.clip_from_world,
+        );
+        let foliage_range =
             if camera_position.length() - PLANET_RADIUS > FOLIAGE_DRAW_CUTOFF_ALTITUDE {
-                TERRAIN_VERTICES_PER_CELL
+                0.
             } else {
-                DECORATED_VERTICES_PER_CELL
+                FOLIAGE_DRAW_DISTANCE
             };
         let params = PlanetParams {
-            clip_from_world: view.clip_from_world.unwrap_or_else(|| {
-                view.clip_from_view * view.world_from_view.to_matrix().inverse()
-            }),
+            clip_from_body,
             camera: camera_position.extend(1.),
             sun: crate::sky::SUN_DIRECTION.normalize().extend(1.),
-            settings: Vec4::new(
-                PLANET_RADIUS,
-                planet.count as f32,
-                clock.0,
-                vertices_per_cell as f32,
-            ),
+            settings: Vec4::new(PLANET_RADIUS, planet.count as f32, clock.0, foliage_range),
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
@@ -424,8 +473,14 @@ fn prepare_views(
         });
         let indirect = device.create_buffer(&BufferDescriptor {
             label: Some("GPU planet indirect draw arguments"),
-            size: 16,
+            size: 32,
             usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
+            mapped_at_creation: false,
+        });
+        let foliage = device.create_buffer(&BufferDescriptor {
+            label: Some("GPU nearby foliage column IDs"),
+            size: planet.count as u64 * 4,
+            usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
         let draw_bind_group = device.create_bind_group(
@@ -446,13 +501,26 @@ fn prepare_views(
                 planet.cells.as_entire_binding(),
                 visible.as_entire_binding(),
                 indirect.as_entire_binding(),
+                foliage.as_entire_binding(),
+            )),
+        );
+        let foliage_bind_group = device.create_bind_group(
+            Some("planet foliage view"),
+            &cache.get_bind_group_layout(&pipeline.draw_layout),
+            &BindGroupEntries::sequential((
+                &uniform,
+                planet.cells.as_entire_binding(),
+                foliage.as_entire_binding(),
+                &atlas.texture_view,
             )),
         );
         commands.entity(entity).insert(PlanetViewGpu {
             uniform,
             _visible: visible,
+            _foliage: foliage,
             indirect,
             draw_bind_group,
+            foliage_bind_group,
             compute_bind_group,
         });
     }
@@ -506,6 +574,8 @@ impl<P: PhaseItem> RenderCommand<P> for DrawPlanetIndirect {
         };
         pass.set_bind_group(0, &view.draw_bind_group, &[]);
         pass.draw_indirect(&view.indirect, 0);
+        pass.set_bind_group(0, &view.foliage_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 16);
         RenderCommandResult::Success
     }
 }
