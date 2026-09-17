@@ -23,5 +23,7 @@
       streaks), the lens, and a wall face (rivulets).
 - [x] The one-intensity requirement moved into `openspec/specs/world/weather/`
       with the wetness test. The landing and sky-gate requirements stay here:
-      validated by capture, pinned by no unit test. Finding: at Tenebris's
-      `rain_width_m` the streaks are sub-pixel under 4x MSAA and read as grain.
+      validated by capture, pinned by no unit test. Finding on the way: the
+      shower drew nothing because the globe was queued LAST in the transparent
+      phase (`f32::MAX` sorts nearest); at `f32::MIN` the streaks read as rain
+      at Tenebris's own width.

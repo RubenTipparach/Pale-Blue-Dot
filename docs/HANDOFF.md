@@ -358,9 +358,14 @@ and the Bayer cutout. Four differences show in a still frame:
    and the P key drives ripples, wetness, lens droplets and a near-shower
    streak mesh, and the flow hook reads a zero buffer. Knobs are
    `assets/config/water.ron` and `weather.ron`. Three look findings for the
-   owner's eye are in `tenebris-comparison.md` under "Status after
-   implementation": grazing-angle brightness, sparkle above ~20 m, sub-pixel
-   streaks. The mosaic in the water is gone with the inline branch.
+   owner's eye were in `tenebris-comparison.md` under "Status after
+   implementation"; the owner called the shine and the self-overlap, and both
+   are fixed there with a private sheet depth buffer, a `detail_fade` on the
+   wave normal and re-authored reflection values. One real bug came out of
+   the shower not drawing: the globe was queued in the transparent phase at
+   `f32::MAX`, which Bevy sorts LAST, so it painted over every transparent
+   mesh in front of it. It is `f32::MIN` now. The mosaic in the water is gone
+   with the inline branch.
 
 ### 5.2 A confirmed latent bug: the camera is not planet-local
 

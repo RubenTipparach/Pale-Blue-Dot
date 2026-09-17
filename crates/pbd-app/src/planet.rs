@@ -603,7 +603,11 @@ fn queue_planet(
         let pipeline = specialized.specialize(&cache, &pipeline, (msaa.samples(), view.hdr));
         for (entity, main_entity) in &surfaces {
             phase.add(Transparent3d {
-                distance: f32::MAX,
+                // Bevy sorts this phase ascending with values increasing toward
+                // the camera, so the opaque globe goes first: at f32::MAX it
+                // drew LAST and painted over every transparent mesh in front
+                // of it, which is how the rain shower rendered as nothing.
+                distance: f32::MIN,
                 pipeline,
                 entity: (entity, *main_entity),
                 draw_function: draw,

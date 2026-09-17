@@ -46,6 +46,8 @@ const FOG_DENSITY_PER_M: f32 = 0.00036;
 const FOG_HEIGHT_M: f32 = 1050.0;
 const FOG_MIX: f32 = 0.55;
 const TERMINATOR: (f32, f32) = (-0.13, 0.20);
+/// The sheet's own depth buffer, single-sample like the post-process targets.
+const WATER_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
 /// Matches `WaterView` in `water.wgsl` field for field; a test pins the size.
 #[derive(Clone, ShaderType)]
@@ -229,6 +231,26 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 "lens",
             ),
         };
+        // The sheet self-sorts against its own single-sample depth buffer, so
+        // a near crest occludes a far trough whatever order the cells come in
+        // (Tenebris: "depth write + LESS_EQUAL to self-sort"). Compose shares
+        // the pass and so declares the same attachment, without touching it;
+        // the scene's own occlusion is the shader's discard against the
+        // sampled main-pass depth, which may be multisampled.
+        let depth_stencil = match key.pass {
+            Pass::Lens => None,
+            pass => Some(DepthStencilState {
+                format: WATER_DEPTH_FORMAT,
+                depth_write_enabled: pass == Pass::Cap,
+                depth_compare: if pass == Pass::Cap {
+                    CompareFunction::GreaterEqual
+                } else {
+                    CompareFunction::Always
+                },
+                stencil: default(),
+                bias: default(),
+            }),
+        };
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed(label)),
             layout: vec![self.data_layout.clone(), scene],
@@ -248,9 +270,9 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 cull_mode: None,
                 ..default()
             },
+            depth_stencil,
             // The post-process targets are single-sample whatever the main
             // pass's MSAA; only the depth texture read is multisampled.
-            depth_stencil: None,
             multisample: MultisampleState::default(),
             ..default()
         }
@@ -267,6 +289,9 @@ pub(super) struct WaterViewGpu {
     cap: CachedRenderPipelineId,
     compose: CachedRenderPipelineId,
     lens: CachedRenderPipelineId,
+    /// The sheet's private depth, recreated when the view's size changes.
+    depth: TextureView,
+    depth_size: UVec2,
     multisampled: bool,
     lens_needed: bool,
     was_under: bool,
@@ -366,15 +391,20 @@ fn prepare_water_views(
                 weather_settings.rain_lens_speed,
                 weather_settings.rain_lens_size,
             ),
-            screen: Vec4::new(aspect, band, s.wet_blur, 0.0),
+            screen: Vec4::new(aspect, band, s.wet_blur, s.detail_fade),
         };
         let lens_needed = weather.rain > 0.001 || drips > 0.001;
+        let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
             gpu.lens_needed = lens_needed;
             gpu.was_under = was_under;
             gpu.emerge_until = emerge_until;
+            if gpu.depth_size != size {
+                gpu.depth = water_depth(&device, size);
+                gpu.depth_size = size;
+            }
             continue;
         }
         let mut uniform = UniformBuffer::from(params);
@@ -418,6 +448,8 @@ fn prepare_water_views(
             cap: pipeline(Pass::Cap),
             compose: pipeline(Pass::Compose),
             lens: pipeline(Pass::Lens),
+            depth: water_depth(&device, size),
+            depth_size: size,
             uniform,
             _flow: flow,
             data_bind_group,
@@ -427,6 +459,25 @@ fn prepare_water_views(
             emerge_until,
         });
     }
+}
+
+fn water_depth(device: &RenderDevice, size: UVec2) -> TextureView {
+    device
+        .create_texture(&TextureDescriptor {
+            label: Some("water sheet depth"),
+            size: Extent3d {
+                width: size.x,
+                height: size.y,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: WATER_DEPTH_FORMAT,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+        .create_view(&TextureViewDescriptor::default())
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
@@ -488,7 +539,16 @@ impl ViewNode for WaterCompositeNode {
                         store: StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                // Reverse-Z: clear to the far plane so the first sheet fragment
+                // at any pixel wins and nearer ones overwrite it.
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    view: &water.depth,
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(0.0),
+                        store: StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });

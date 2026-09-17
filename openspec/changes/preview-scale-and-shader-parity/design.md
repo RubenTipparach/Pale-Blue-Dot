@@ -75,7 +75,21 @@ rain intensity and a flow field, which this project does not have, and the
 composite, wetness, precipitation and flow systems have no counterpart here at
 all. Binding the port is therefore the first step of the water work and not
 the whole of it; the remaining systems are each their own change and are not
-yet written up. The live water branch in
+yet written up.
+
+**Two terms the port now carries that Tenebris does not, both on the owner's
+call after seeing the first captures ("water super glitchy where it overlaps",
+"way too shiny").** The sheet self-sorts against a private single-sample depth
+buffer, because a wavy sheet with no depth between its own fragments lets a far
+trough draw over a near crest in whatever order the cells come; Tenebris has
+the same self-sort through its swapchain depth. And the wave height and
+gradient are scaled by `1 / (1 + footprint * detail_fade)`, where footprint is
+the per-pixel change of the noise coordinate, so once the fbm's features fall
+under a pixel they fade instead of aliasing into white sparkle; `detail_fade`
+0 is Tenebris exactly. The shine itself was data: `sky_horizon_color`,
+`sky_zenith_color`, `sky_horizon_strength` and `specular_intensity` are
+re-authored for this tone-mapped pipeline in `water.ron`, and the Tenebris
+values are in the file's history. The live water branch in
 `planet_surface.wgsl` is not a fallback reference: it is a second,
 feature-incomplete implementation and is removed once the dedicated water pass
 is live.

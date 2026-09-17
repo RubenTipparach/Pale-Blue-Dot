@@ -33,7 +33,7 @@ struct WaterView {
     limits: vec4<f32>,        // fog ceiling, terminator lo, terminator hi, fog mix
     fx: vec4<f32>,            // underwater distortion, submersion 0/0.5/1, rain, emerge
     lens: vec4<f32>,          // droplet density, refraction, speed, size
-    screen: vec4<f32>,        // aspect, surface band m, wet blur, spare
+    screen: vec4<f32>,        // aspect, surface band m, wet blur, detail fade
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -159,7 +159,9 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.local_position = view.planet_center.xyz + displaced;
     out.clip = view.clip_from_local*vec4<f32>(out.local_position,1.0);
     out.normal = axis;
-    out.sky_light = f32(cell.metadata.z)/65535.0;
+    // The sheet is open sky by construction in a heightfield; the cell's
+    // baked occlusion is the seabed's and would tile the sea by column.
+    out.sky_light = 1.0;
     out.flow_uv = vec2<f32>(0.0);
     if (id < arrayLength(&flow)) { out.flow_uv = flow[id]; }
     return out;
@@ -214,10 +216,16 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         - (tangent_u*in.flow_uv.x + tangent_v*in.flow_uv.y)*time*0.35*horizontal;
     let p = advected*view.ripple.x;
     let t = time*view.ripple.y;
-    let height = fbm3(p,t);
-    var gradient = vec3<f32>(fbm3(p+vec3<f32>(0.08,0.,0.),t)-height,
-        fbm3(p+vec3<f32>(0.,0.08,0.),t)-height,
-        fbm3(p+vec3<f32>(0.,0.,0.08),t)-height)*12.5;
+    // Not Tenebris's: once the fbm's features fall under a pixel, its
+    // point-sampled height and gradient are noise, and Fresnel and specular
+    // turn that noise into white sparkle across the whole far sea. Fade both
+    // by the per-pixel footprint of the noise coordinate; `detail_fade` 0 is
+    // the unfiltered original.
+    let detail = 1.0/(1.0+length(fwidth(p))*max(view.screen.w,0.0));
+    let height = fbm3(p,t)*detail;
+    var gradient = vec3<f32>(fbm3(p+vec3<f32>(0.08,0.,0.),t)-fbm3(p,t),
+        fbm3(p+vec3<f32>(0.,0.08,0.),t)-fbm3(p,t),
+        fbm3(p+vec3<f32>(0.,0.,0.08),t)-fbm3(p,t))*12.5*detail;
     gradient -= radial*dot(gradient,radial);
     if (view.fx.z > 0.001) {
         let uv = vec2<f32>(dot(in.body_position,tangent_u),dot(in.body_position,tangent_v))*view.ripple.z;

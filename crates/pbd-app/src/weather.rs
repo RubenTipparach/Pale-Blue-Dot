@@ -6,9 +6,10 @@
 //! with the sky shader exists; see `openspec/changes/weather-rain`.
 
 use crate::config::WeatherSettings;
-use crate::planet::{PLANET_RADIUS, PlanetRenderFrame, surface_height, terrain_radius};
+use crate::planet::{PLANET_RADIUS, PlanetContact, PlanetRenderFrame, surface_height};
 use bevy::{
     asset::RenderAssetUsages,
+    camera::primitives::Aabb,
     mesh::{Indices, PrimitiveTopology},
     prelude::*,
     render::extract_resource::ExtractResource,
@@ -54,9 +55,9 @@ fn cycle_rain(keys: Res<ButtonInput<KeyCode>>, mut weather: ResMut<Weather>) {
 /// The near shower: Tenebris's `weather_fx.rs`, on the CPU, as one mesh of
 /// camera-facing streak quads rebuilt every frame. Stateless: each streak is
 /// hashed to an angle, radius and phase and animated off the clock, so there
-/// are no stored particles. Every streak lands on `terrain_radius`, which is
-/// the surface or the sea, whichever is higher, so none is drawn below the
-/// waterline or inside the ground.
+/// are no stored particles. Every streak lands on the authoritative surface
+/// contact, which is the rendered cap or the sea, whichever is higher, so none
+/// is drawn below the waterline or inside the ground.
 #[derive(Component)]
 struct Shower;
 
@@ -85,13 +86,17 @@ fn spawn_shower(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    // Born with one degenerate triangle rather than no vertices: a mesh with
+    // nothing in it has nothing to allocate on the GPU, and the first real
+    // rebuild must replace a buffer, not create one.
     let mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
     )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new())
-    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, Vec::<[f32; 4]>::new())
-    .with_inserted_indices(Indices::U32(Vec::new()));
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vec![[0.0f32; 3]; 3])
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0f32, 1.0, 0.0]; 3])
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[0.0f32; 4]; 3])
+    .with_inserted_indices(Indices::U32(vec![0, 1, 2]));
     commands.spawn((
         Name::new("Near shower"),
         Shower,
@@ -105,6 +110,9 @@ fn spawn_shower(
             ..default()
         })),
         Transform::IDENTITY,
+        // The mesh is rebuilt around the camera every frame; a bound computed
+        // once from its first contents would cull it the moment the camera moved.
+        bevy::camera::visibility::NoFrustumCulling,
         bevy::light::NotShadowCaster,
         bevy::light::NotShadowReceiver,
     ));
@@ -116,14 +124,22 @@ fn rebuild_shower(
     weather: Res<Weather>,
     settings: Res<WeatherSettings>,
     frame: Res<PlanetRenderFrame>,
+    contact: Option<Res<PlanetContact>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    cameras: Query<&GlobalTransform, With<Camera3d>>,
-    mut showers: Query<(&mut Transform, &Mesh3d, &mut Visibility), With<Shower>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    mut showers: Query<(Entity, &mut Transform, &Mesh3d, &mut Visibility), With<Shower>>,
+    mut commands: Commands,
 ) {
-    let Ok(camera) = cameras.single() else {
+    // Walking keeps the flight camera parked and inactive beside its own;
+    // the shower follows whichever one is drawing.
+    let active = cameras
+        .iter()
+        .find(|(_, camera)| camera.is_active)
+        .map(|(transform, _)| transform);
+    let (Some(camera), Some(contact)) = (active, contact) else {
         return;
     };
-    let Ok((mut transform, mesh, mut visibility)) = showers.single_mut() else {
+    let Ok((entity, mut transform, mesh, mut visibility)) = showers.single_mut() else {
         return;
     };
     let center = frame.center.as_vec3();
@@ -132,8 +148,9 @@ fn rebuild_shower(
     let radius = eye.length();
     let up = eye / radius.max(1e-3);
     // No shower when the camera cannot see the sky: under water, or under
-    // the terrain beneath it.
-    let ground = terrain_radius(up);
+    // the terrain beneath it. The rendered cap, not the point-sampled noise,
+    // which can sit a whole step above a walker standing on a cell edge.
+    let ground = contact.sample(up).radius;
     let submerged = surface_height(up) < 0.0 && radius < PLANET_RADIUS;
     let count = if radius < 1.0 || submerged || radius < ground - 0.8 {
         0
@@ -164,7 +181,7 @@ fn rebuild_shower(
         let distance = spread * settings.shower_radius_m;
         let mark = eye + (t1 * angle.cos() + t2 * angle.sin()) * distance;
         let direction = mark.normalize();
-        let base = direction * terrain_radius(direction);
+        let base = direction * contact.sample(direction).radius;
         let fallen = (now * settings.rain_fall_mps / column + phase).rem_euclid(1.0);
         let top = base + up * (column * (1.0 - fallen));
         let bottom = top - up * settings.rain_streak_m;
@@ -188,7 +205,27 @@ fn rebuild_shower(
         colors.extend([color; 4]);
         indices.extend([first, first + 1, first + 2, first, first + 2, first + 3]);
     }
+    // The bound follows the streaks: a bound computed once from the mesh's
+    // first contents would sit at the planet's centre and cull the shower on
+    // the GPU whatever the CPU-side culling was told.
+    let (mut low, mut high) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+    for p in &positions {
+        low = low.min(Vec3::from_array(*p));
+        high = high.max(Vec3::from_array(*p));
+    }
+    if positions.is_empty() {
+        low = eye;
+        high = eye;
+    }
+    commands
+        .entity(entity)
+        .insert(Aabb::from_min_max(low, high));
+    // Normals are not optional for a standard-material mesh: without the
+    // attribute the varying is never written and the fragment comes out NaN,
+    // which blends to nothing. The scene's star mesh learned the same thing.
+    let normals = vec![up.to_array(); positions.len()];
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_indices(Indices::U32(indices));
 }

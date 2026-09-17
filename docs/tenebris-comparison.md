@@ -552,24 +552,35 @@ Captured on lavapipe with the same `--view shore --height N` series, plus
 - **In rain on land** the grass carries impact rings and a sky sheen, the
   trunks run with rivulets, and the lens beads.
 
-Three things the captures show that need the owner's eye, recorded rather
-than retuned because each is a look change:
+Three things the first captures showed, and what the owner said and what
+changed. Recorded here because each was a look change and the owner made the
+call:
 
-1. **The sheet is bright at grazing angles.** Schlick at an eye 1.6 m up
-   puts most of the visible sea near total reflection of `sky_horizon_color`
-   (0.85, 0.92, 0.98), and under Bevy's tone mapping that reads whiter than
-   the same numbers do in Tenebris's untonemapped GL swapchain. The terms are
-   Tenebris's; the values may want re-authoring for this pipeline.
-2. **Above about 20 m the sheet sparkles.** The fbm normal has no level of
+1. **The sheet was bright at grazing angles** ("way too shiny"). Schlick at
+   an eye 1.6 m up put most of the visible sea near total reflection of
+   `sky_horizon_color` (0.85, 0.92, 0.98), and under Bevy's tone mapping that
+   reads whiter than the same numbers do in Tenebris's untonemapped GL
+   swapchain. The terms are Tenebris's; the values were data and are
+   re-authored in `water.ron`: horizon (0.46, 0.60, 0.74), zenith
+   (0.18, 0.34, 0.62), horizon strength 0.35, specular 0.12.
+2. **Above about 20 m the sheet sparkled.** The fbm normal has no level of
    detail, so past the height where its 15 cm features fall under a pixel the
-   Fresnel and specular alias into white speckle across the whole sea. Tenebris
-   never looks at its water from that height on a 300 m body; a distance
-   falloff on the gradient would be a term Tenebris does not have and is a
-   proposal, not a fix made here.
-3. **Streaks are sub-pixel.** `rain_width_m` 0.012 is Tenebris's value; under
-   4x MSAA a quad that thin mostly vanishes, so the near shower reads as a
-   faint grain rather than rain. A width is data, and the number to turn is in
-   `weather.ron`.
+   Fresnel and specular aliased into white speckle across the whole sea.
+   `detail_fade` now scales the height and gradient by the per-pixel
+   footprint of the noise coordinate; at 50 m and 200 m the sea reads as a
+   sea. This is a term Tenebris does not have, and zero restores it exactly.
+3. **The sheet self-overlapped** ("super glitchy where it overlaps"). Drawn
+   with no depth of its own, a far trough could paint over a near crest in
+   whatever order the cells came. The sheet now has a private single-sample
+   depth buffer, which is Tenebris's own self-sort by another route.
+4. **The shower did not draw at all, and the width was never the reason.**
+   The globe's transparent-phase item was queued at `distance: f32::MAX`,
+   meant as "farthest, draw first". Bevy sorts that phase ascending with
+   values increasing toward the camera, so it drew LAST and painted over
+   every transparent mesh in front of it: the streaks, and a diagnostic cube
+   spawned in front of the eye. At `f32::MIN` the globe goes first and the
+   shower reads as rain at Tenebris's own 12 mm width. The same bug would
+   have hidden any alpha-blended mesh this project ever added.
 
 ### Structural differences that are not defects
 

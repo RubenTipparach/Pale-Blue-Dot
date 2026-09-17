@@ -145,6 +145,11 @@ pub struct WaterSettings {
     pub emerge_dry_s: f32,
     /// Radial scroll speed of the wave field on vertical water faces.
     pub flow_uv_speed_falling: f32,
+    /// How fast the wave normal and crest foam fade as the fbm's features fall
+    /// under a pixel: the gradient is scaled by `1 / (1 + footprint * fade)`
+    /// where footprint is the per-pixel change of the noise coordinate. Zero
+    /// is Tenebris exactly, which sparkles from altitude.
+    pub detail_fade: f32,
 }
 
 impl Default for WaterSettings {
@@ -164,9 +169,9 @@ impl Default for WaterSettings {
             max_path_m: 200.0,
             absorption_per_m: [0.60, 0.20, 0.10],
             deep_color: [0.02, 0.10, 0.22],
-            sky_horizon_color: [0.85, 0.92, 0.98],
-            sky_zenith_color: [0.35, 0.55, 0.85],
-            sky_horizon_strength: 0.5,
+            sky_horizon_color: [0.46, 0.60, 0.74],
+            sky_zenith_color: [0.18, 0.34, 0.62],
+            sky_horizon_strength: 0.35,
             foam_crest_lo: 0.35,
             foam_crest_hi: 0.60,
             foam_crest_weight: 0.55,
@@ -175,7 +180,7 @@ impl Default for WaterSettings {
             foam_slope_weight: 0.26,
             foam_intensity: 0.10,
             foam_color: [0.95, 0.97, 1.00],
-            specular_intensity: 0.30,
+            specular_intensity: 0.12,
             specular_power: 140.0,
             sun_tint: [1.35, 1.25, 1.10],
             night_floor: 0.18,
@@ -187,6 +192,7 @@ impl Default for WaterSettings {
             partial_band_m: 0.8,
             emerge_dry_s: 2.6,
             flow_uv_speed_falling: 1.0,
+            detail_fade: 4.0,
         }
     }
 }
@@ -221,6 +227,7 @@ impl Validated for WaterSettings {
                 s.partial_band_m,
                 s.emerge_dry_s,
                 s.flow_uv_speed_falling,
+                s.detail_fade,
             ],
         )?;
         non_negative("absorption_per_m", &s.absorption_per_m)?;
