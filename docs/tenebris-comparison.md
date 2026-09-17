@@ -299,7 +299,7 @@ most of the answer to "why does it not look like Tenebris".
 | Job | Tenebris, GLSL 410 | Our standalone port, WGSL | Our live prototype, WGSL |
 | --- | --- | --- | --- |
 | Terrain | `hex.vs` + `hex.fs`, 76 + 351 lines | `hex_terrain.wgsl` 117, `hex_faces.wgsl` 71, `voxel_light.wgsl` 50 | `planet_surface.wgsl` 194 + `planet_visibility.wgsl` 55 |
-| Water | `water.vs` + `water.fs`, 28 + 311 | `water.wgsl` 162 | a 12-line branch inside `planet_surface.wgsl` |
+| Water | `water.vs` + `water.fs`, 28 + 311, plus `composite.fs` 339, the rain block of `hex.fs`, `weather_fx.rs` and `world_water.rs` | `water.wgsl` 162, the cap pass only | a 16-line branch inside `planet_surface.wgsl` |
 | Sky | `atmosphere.vs` + `atmosphere.fs`, 17 + 166 | `atmosphere.wgsl` 102 | `sky_atmosphere.wgsl` 147, a Bevy material |
 | Bound to a pipeline | yes | **no** | yes |
 
@@ -348,20 +348,41 @@ Four of those differences are visible in a still frame:
    standalone port already exposes all of them as uniforms. Our own
    `CLAUDE.md` asks for "tunable values in validated data with units, and one
    source for defaults"; the live shader is where that is not yet true.
-4. **The ocean is two different shaders.** `water.wgsl` is the real port:
-   screen-space refraction with depth reconstruction, absorption over the
-   reconstructed path length, Fresnel between horizon and zenith reflection
-   tones, foam by height and by slope, an underwater back-face path, and
+4. **The ocean is two different shaders, and Tenebris's is five systems.**
+   `water.wgsl` ports the cap pass: screen-space refraction with depth
+   reconstruction, absorption over the reconstructed path length, Fresnel
+   between horizon and zenith tones, foam, an underwater back-face path and
    distance fog, all as uniforms. The ocean that renders is a depth tint, a
-   Fresnel to the fourth, two sines and a specular to the 160th.
+   Fresnel to the fourth, two sines and a specular to the 160th. And the cap
+   pass is one of five water systems in Tenebris; the water section below
+   inventories all of them.
 
-### Water, term by term, and at five heights
+### Water: five systems in Tenebris, one branch here
 
-The ocean that renders is the 16-line branch in `planet_surface.wgsl`
-(lines 166-181). It is captured here at five camera heights above the polar
-shore, with `--view shore --height N` (the `shore` preset walks east from 72 N
-to the first water cell, lifts the eye N metres above the last land cell and
-aims N metres out to sea, so every frame looks down at about 45 degrees):
+**A correction first.** The first version of this section compared one file
+against one file: Tenebris's `water.fs.glsl` against `water.wgsl`, and said the
+port "matches on every still-ocean term". That was wrong in two ways. Tenebris's
+water is not one shader, it is five systems that hand results to each other
+across the frame, and the comparison had looked at one of them. And even inside
+that one shader the port drops terms the first read marked identical. This
+section is the full inventory, checked file by file.
+
+| System | Where it lives in `tenebris-rs` | What it does | Pale Blue Dot |
+| --- | --- | --- | --- |
+| **Water cap pass** | `water.vs.glsl` + `water.fs.glsl` (28 + 311), `renderer.rs::body_draw_water` | Swell, fbm waves, rain ripples, flow advection, refraction, absorption, Fresnel, foam, specular, torch light, fog | `water.wgsl` ports most of it, **unbound**; the live branch has a depth tint and two sines |
+| **Composite pass** | `composite.fs.glsl` (339), `composite.rs`, two modes (compose, lens) | Underwater fog with a dry / straddling / submerged tri-state, screen distortion, per-pixel waterline mask, atmospheric-fog gating, depth blur, rain-on-glass lens droplets, emerge-from-water drips | **nothing**; there is no post-process pass of any kind |
+| **Terrain wetness** | the rain block of `hex.fs.glsl` (its `rain_ripple_grad` and rivulet kernels, and the `wet_amt` branch in `main`), `hex_fs_rain[4]`, `hex_fs_water[2]` | Submerged terrain absorbed per tileset; in rain, a rippled wet sheet, impact rings, rivulets down side faces and trunks, wet darkening, sky sheen, sun glint | **nothing** |
+| **Precipitation** | `weather_fx.rs` (near shower + distant storm shafts), `core::weather` | World-space rain streaks and snow flakes from cloud deck to surface or water, per-column by biome, suppressed underwater and in caves | **nothing** |
+| **Flow simulation** | `world_water.rs` (1,955 lines), `flow_direction`, the F5 arrow overlay | Per-voxel source / falling / level state, a bounded scheduler, flow direction per tile; saved and sent over the wire; feeds the cap pass's flow UVs | **nothing** |
+
+A sixth, the mobile cap (`water_mobile.rs`, a normal-map variant reading
+`water_normal.png`), is a simpler sibling of the first and is not counted
+against this project.
+
+What the live branch draws was captured at five camera heights above the polar
+shore with `--view shore --height N` (the preset walks east from 72 N to the
+first water cell, lifts the eye N metres above the last land cell and aims N
+metres out to sea, so every frame looks down at about 45 degrees):
 
 | Height | What the live water shows |
 | ---: | --- |
@@ -374,51 +395,129 @@ aims N metres out to sea, so every frame looks down at about 45 degrees):
 The 1,000 m frame is a finding about the sky rather than the water. Tenebris's
 main planet sets `radius_mult: 1.24` in `atmosphere.yaml`, which is 72 m of
 atmosphere on a 300 m body; ours is 800 m on 4,000 m, or 1.20 R. Proportionally
-the two agree within a fifth. In absolute terms, a walker's jump apex or a 1 km
-survey flight is inside Tenebris's shell and outside ours only because the
-bodies differ by 13x in radius, and this is one more number that moves with the
+the two agree within a fifth, and this is one more number that moves with the
 rescale rather than a separate defect.
 
-Term by term, across the three implementations:
+#### 1. The cap pass, term by term
 
 | Term | Tenebris `water.fs.glsl` | Port `water.wgsl` (unbound) | Live branch in `planet_surface.wgsl` |
 | --- | --- | --- | --- |
-| Geometry | its own water mesh at sea level, one sheet per chunk | its own vertex stage, expects a water mesh | the **cap of each water cell** at `R + max(height, 0)`, so a flat hexagon at `R` |
-| Wave field | 3-octave gradient-noise fbm, hash constants 374761393 / 668265263 / 1274126177 / 1103515245 | identical fbm and hash constants | product of two sines on a 3 m-quantised position |
-| Vertex displacement | 3 sines, 0.18 / 0.12 / 0.06, scaled by `swell_amplitude` 0.5 m, faded off steep faces | identical | none |
-| Normal | fbm gradient x12.5, projected off the face, slope capped by `slope_max` 1.6 | identical, cap is `refraction.z` | the **radial** direction; the wave only nudges the specular dot by `0.008` |
-| Depth source | scene depth reconstructed per fragment, so shallows grade continuously | identical, via `reconstruct_local` | `-height` of the cell, `@interpolate(flat)`, so depth is one value per hexagon |
-| Refraction | screen-space offset from the gradient, clamped to `refract_max_uv` 0.03, rejected if it lands on sky or in front of the surface | identical | none |
-| Absorption | `exp(-absorption * path_length)` along the reconstructed ray, `[0.60, 0.20, 0.10]` per metre | identical | `exp(-depth * 0.028)` mixes two fixed colours |
-| Underwater view | back-face path, deep colour by camera distance, Snell's-window edge | identical | none; the cap is opaque from below |
-| Fresnel | Schlick, `0.02 + 0.98 * (1 - n.v)^5`, floored by `sky_horizon_strength` 0.5 | identical, floor is `horizon_color.w` | `(1 - radial.v)^4` against the radial, not the wave normal |
-| Reflection colour | horizon to zenith by reflected-ray height, from `lod.yaml` per tileset | identical, uniforms | one literal `(0.09, 0.22, 0.34)` |
-| Foam | by crest height and by slope, `foam_crest_lo/hi` 0.35 / 0.60, `foam_slope_lo/hi` 0.50 / 1.20, `foam_intensity` 0.10 | identical | none |
-| Specular | Blinn-Phong to `specular_power` 140, `specular_intensity` 0.30, `sun_tint` | identical | to the 160th, one literal colour |
-| Day/night | terminator band times `sky`, floored | identical, floor is `absorption.w` | `mix(0.18, 1, daylight)`; no separate floor |
-| Torch / block light | `fs_params[13]` and baked sky | `baked_rgb_sky * lighting.z * (fresnel + foam)` | none |
-| Distance fog | own composite pass, ceiling `fog_max` 0.82 | inline, ceiling `limits.x` | the terrain's haze, applied after the branch |
-| Rain ripples | Zavie raindrop gradient into the normal, gated by rain intensity `fs_params[14].y` | **not ported** | none |
-| Flow | `v_flow_uv` scrolls the wave field along river flow | **not ported** | none |
-| Horizon fade / wet band | `horizon_fade_m` 600, `wet_fade_band_m` 0.5, `partial_band_m` 0.8, `underwater_distortion` | not ported | none |
-| Configuration | `water.yaml`, 36 look knobs plus 12 flow knobs, per world | one `WaterView` uniform of 16 vec4, every knob a field | about 20 literals inline |
+| Geometry | its own water mesh per chunk, `a_pos / a_normal / a_uv / a_sky_light / a_torch_light` | its own vertex stage, expects a water mesh | the **cap of each water cell** at `R + max(height, 0)`, a flat hexagon at `R` |
+| Vertex swell | 3 sines, 0.18 / 0.12 / 0.06, x `swell_amplitude` 0.5 m, on **every** vertex | same sines, but gated to upward faces by `smoothstep(0.35, 0.9, dot(face, radial))` | none |
+| Sun brightness | per **vertex**, `v_sun_brightness` | per fragment | per fragment |
+| Wave field | 3-octave gradient-noise fbm, hash constants 374761393 / 668265263 / 1274126177 / 1103515245, x `time_scale` 0.75 | identical | product of two sines on a 3 m-quantised position |
+| **Flow advection** | the noise sample point is moved by `v_flow_uv` along the tangent frame, x `time * 0.35`, so rivers stream | **absent**; samples `body_position * scale` | none |
+| **Waterfall scroll** | vertical faces scroll the sample along the radial at `u_flow_speed_falling` (`flow_uv_speed_falling` 1.0) | **absent** | none |
+| Ripple scale | `ripple_scale` 1.5 on the sample position | `waves.y` | none |
+| Gradient | fbm finite difference x12.5, projected off the **radial** | same, projected off the **face normal** | none |
+| **Rain ripples** | Zavie raindrop kernel (3x3, 3 cells/m, strength 6) added into the gradient, gated by `u_rain` (`fs_params[14].y`) | **absent** | none |
+| Slope cap | `slope_max` 1.6 on the gradient before it bends the normal | identical, `refraction.z` | none |
+| Normal | `normalize(radial - gradient * wave_steepness)`, 0.65 | same, built on the face normal | the **radial**; the wave only nudges the specular dot by `0.008` |
+| Depth test | discard where the scene is nearer | identical (reverse-Z) | none |
+| Refraction offset | `gradient.xy * refract_amount` 0.04, capped at `refract_max_uv` 0.03 | gradient taken through the clip matrix first, then capped | none |
+| Refraction validity | rejected across the sky boundary or in front of the surface | identical | none |
+| Depth source | scene depth, linearised with near/far | scene depth, reconstructed through `local_from_clip` | `-height` of the cell, `@interpolate(flat)`, one value per hexagon |
+| Absorption | `exp(-absorption * path)`, `[0.60, 0.20, 0.10]` per metre, tinted per tileset from `lod.yaml` | identical form, uniforms | `exp(-depth * 0.028)` mixes two fixed colours |
+| Underwater view | back-face path: deep colour by camera distance, Snell's-window edge at 0.55-0.75 | identical | none; the cap is opaque from below |
+| Fresnel | Schlick `0.02 + 0.98 (1 - n.v)^5`, floored by `sky_horizon_strength` 0.5 | identical | `(1 - radial.v)^4` against the radial |
+| Reflection colour | horizon to zenith by reflected-ray height, per tileset | identical, uniforms | one literal |
+| **Foam** | `max(crest * crest_weight 0.55, slope * slope_weight 0.26) * foam_intensity 0.10` | **drops both per-term weights**: `max(crest, slope) * strength` | none |
+| **Specular** | `sun_tint [1.35, 1.25, 1.10] * pow(n.h, 140) * 0.30` | **drops `sun_tint`**: a white `pow(n.h, power) * intensity` | `pow(radial.h, 160)`, one literal colour |
+| Day / night | `mix(night_floor, 1, sun_brightness * sky_light)` | identical, `absorption.w` | `mix(0.18, 1, daylight)` |
+| Torch light | `torch.rgb * torch.w * v_torch_light * (fresnel + foam)` | `baked_rgb_sky.rgb * gain * (fresnel + foam)` | none |
+| Distance fog | inline, ceiling `fog_max` 0.82, applied because the pass draws after the composite | identical, `limits.x` | the terrain's haze, after the branch |
+| Configuration | `water.yaml`: 36 look knobs + 12 flow knobs, per tileset overrides in `lod.yaml` | one `WaterView` uniform of 16 vec4 | about 20 literals inline |
 
-Three conclusions follow, and they are the ones the captures show:
+So the port carries the optics (refraction, absorption, Fresnel, the underwater
+window, the fog ceiling) and the wave field, and is missing **five** things
+from this pass alone: rain ripples, flow advection, the waterfall scroll, the
+two foam weights, and the specular sun tint. Three of the five need an input
+this project does not have (rain intensity, a flow field); two are one-line
+omissions in the port itself. `shader-port.md` already listed flow, rain and
+caustics as not implemented; the earlier version of this section did not carry
+that forward.
 
-1. **The port is complete for the look and missing only weather and rivers.**
-   Every term Tenebris draws on a still ocean is in `water.wgsl` with the same
-   constants; what it lacks is rain ripples, river flow UVs and the horizon and
-   wet-band fades, all of which need inputs (a rain intensity, a flow field, a
-   wetness flag) that this project does not yet have either. Binding it is the
-   whole of the water task, as `preview-scale-and-shader-parity` already says.
-2. **The mosaic in the water is the terrain's flat-tile defect, not a water
-   bug.** The live branch reads depth off the cell's own height, and that is
-   flat per hexagon by construction. Tenebris never has this problem because
-   it reads scene depth per fragment; so does the port. No tuning of the live
-   branch removes it, and it gets worse, not better, at the 19 m tile.
-3. **The rectangles are the wave term.** `floor(position / 3.0) * 3.0` was
-   meant as a pixel-art quantisation and at 1.6 m it is the only surface
-   detail in view. The port's fbm has no such step.
+#### 2. The composite pass, which has no counterpart here
+
+`composite.fs.glsl` runs twice: a **compose** pass (fog and blur into an
+intermediate target, which the water pass then draws over) and a **lens** pass
+(droplets only, sampling the post-water image into the swapchain, so the drops
+refract the real water). Every term below is absent in Pale Blue Dot, which has
+no post-process pass at all: the only render-graph node is the planet's compute
+pass.
+
+| Term | What it does | Knob |
+| --- | --- | --- |
+| Submersion tri-state | `fx_params.z` is 0 dry, 0.5 straddling, 1 under, decided on the CPU from the camera's **voxel** (`Block::Water`) and a wave-height band at the eye, so a cave below sea level stays dry | `partial_band_m` 0.8 |
+| Underwater fog | per pixel, `mix(deep, scene, exp(-absorption * travel))`; travel is the view distance to geometry, and for sky pixels the analytic exit distance `gap / d_up` off the mean sea sphere, saturating for rays that never surface | `deep_color`, `absorption`, per tileset |
+| Waterline mask | geometry pixels are wet only below the mean sea radius, smoothed over a band, so the seabed just under the line gets its murk and the sky above stays clear | `partial_band_m` |
+| Screen distortion | a sin/cos UV wobble on wet pixels | `underwater_distortion` 0.0015 |
+| Atmospheric-fog gating | where water fog owns a pixel the air fog backs off, so the two never stack | `fog_params` |
+| Depth blur | a 17-tap two-ring blur on the distant background while rain or a just-surfaced camera is active | `wet_blur` 0.02 |
+| Rain-on-glass | Martijn Steinrucken's "Heartfelt" droplets: static drops, two falling layers with trails, refraction only, masked to above the waterline by ray direction | `rain_lens_density / refract / speed / size` |
+| Emerge drips | the same droplets running down and drying off for 2.6 s after surfacing, re-armed while straddling | `DRY_SECONDS` in `renderer.rs` |
+
+#### 3. Terrain wetness, inside the terrain shader
+
+`hex.fs.glsl` carries two water blocks. Submerged terrain is absorbed with the
+cap's own `absorption` and `deep_color`, per tileset, so a seabed tints the way
+its sea does. In rain, gated by sky light (caves stay dry) and by being above
+the waterline (no rings on the seabed), an up-face gets a continuous rippled wet
+sheet plus raindrop impact rings, a side face and a tree trunk get the Heartfelt
+drop layer mapped in the block's own texture UV so water trickles down as
+rivulets, and both get a wet darkening, a sky-driven sheen and a sun glint.
+Thirteen knobs in `weather.yaml` (`rain_ripple_*`, `rain_flow_*`,
+`rain_wave_*`, `rain_wet_darken`, `rain_sky_sheen`, `rain_glint_*`). The
+terrain section above already records this as "not ported"; it is listed here
+because it is half of what makes rain read as water on the ground.
+
+#### 4. Precipitation
+
+`weather_fx.rs` draws the rain itself: a dense near shower on a tangent disk
+around the player and translucent storm shafts under every raining cloud cell
+across the visible hemisphere, so a storm reads from orbit. It is stateless
+(animated off the world clock, no stored particles), voxel-aware (every streak
+falls from the cloud deck to the surface or the water surface, never below the
+waterline or into terrain), suppressed underwater and under a roof, and chooses
+snow or rain per column by biome. `weather.yaml` has 66 knobs, 39 of them
+prefixed `rain_` and 3 `snow_`: fall speed, streak length, density, colour, near and far alpha, an LOD
+altitude and impostor tint, and the lens droplet set.
+
+#### 5. The flow simulation
+
+`world_water.rs` is a per-voxel fluid state (source, falling, a 3-bit level up to `WATER_LEVEL_MAX` 7, cappable from YAML) with a
+bounded ring-buffer scheduler running the flow rule from the C tree's
+`water.md`, round-tripped through saves and the `WATER_STATE_DIFF` wire message.
+`flow_direction` derives a per-tile flow vector that the mesher writes into the
+water mesh's UVs, which is the `v_flow_uv` the cap pass advects its noise by.
+Twelve `flow_*` knobs in `water.yaml`, and an F5 arrow overlay to see it. This
+is Core (SP and MP share it) and it is what makes a river a river rather than a
+blue floor.
+
+#### What follows
+
+1. **Nothing in the live Pale Blue Dot ocean is Tenebris's.** It has a
+   per-cell depth tint, a Fresnel to the fourth against the radial, two sines
+   and a specular. None of the five systems above exists here in any form, and
+   the two captures that look acceptable (200 m and 1,000 m) do so because
+   distance hides everything the sheet lacks.
+2. **Binding `water.wgsl` gives the cap pass back, less five terms.** It is
+   still the right first step and `preview-scale-and-shader-parity` says so.
+   But "bind the port" was being read as "restore the water", and it is not:
+   with the port bound and nothing else, the sea still has no underwater view
+   from inside it (the composite owns that), no rain, no rivers, and no wet
+   ground. The two one-line omissions (foam weights, sun tint) should be fixed
+   in the port before it is bound, since it is the reference.
+3. **Parity is a systems list, not a shader.** In dependency order: the
+   composite pass (needs scene colour and depth, which binding the port needs
+   anyway); a weather field with a rain intensity (unblocks rain ripples on the
+   cap, the lens droplets, terrain wetness and precipitation together); the
+   flow simulation (unblocks flow advection and waterfalls). Each of those is
+   its own change and none is written up yet.
+4. **The mosaic in the water is the terrain's flat-tile defect, not a water
+   bug.** The live branch reads depth off the cell's own height, flat per
+   hexagon by construction; Tenebris and the port read scene depth per
+   fragment. No tuning of the live branch removes it.
 
 The captures live under the session scratchpad and are not committed; the
 command that reproduces each one is the height column above.

@@ -59,11 +59,23 @@ changes.
 ## One water shader, viewed from above and below
 
 `water.wgsl` is the visual reference because it is the existing faithful port
-of the previous Tenebris water shader. The term-by-term measurement, and captures of the
-live branch at 1.6, 10, 50, 200 and 1000 m, are in
-`docs/tenebris-comparison.md` under "Water, term by term, and at five heights":
-the port lacks only rain ripples, river flow and the horizon/wet-band fades, all
-of which need inputs this project does not have yet. The live water branch in
+of the previous Tenebris water shader. The full inventory, with captures of the live
+branch at 1.6, 10, 50, 200 and 1000 m, is in `docs/tenebris-comparison.md`
+under "Water: five systems in Tenebris, one branch here".
+
+**What binding the port does and does not restore.** Tenebris's water is five
+systems: the cap pass, the composite pass (underwater fog, distortion, lens
+droplets, emerge drips), terrain wetness in `hex.fs`, precipitation, and the
+CPU flow simulation. `water.wgsl` ports the cap pass and, measured against
+`water.fs.glsl` line by line, drops five terms from it: rain ripples, flow
+advection, the waterfall scroll, the two foam weights and the specular sun
+tint. The last two are one-line omissions and SHALL be corrected in the port
+before it is bound, since the port is the reference. The first three need a
+rain intensity and a flow field, which this project does not have, and the
+composite, wetness, precipitation and flow systems have no counterpart here at
+all. Binding the port is therefore the first step of the water work and not
+the whole of it; the remaining systems are each their own change and are not
+yet written up. The live water branch in
 `planet_surface.wgsl` is not a fallback reference: it is a second,
 feature-incomplete implementation and is removed once the dedicated water pass
 is live.

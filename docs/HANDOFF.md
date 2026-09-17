@@ -330,15 +330,25 @@ and the Bayer cutout. Four differences show in a still frame:
    absorption, foam and an underwater path; the one that renders is a Fresnel
    and two sines.
 
-   Measured term by term and captured at 1.6, 10, 50, 200 and 1,000 m above the
-   polar shore (`--view shore --height N`; see `tenebris-comparison.md`, "Water,
-   term by term, and at five heights"). Three things the captures show: the
-   port is complete for a still ocean and lacks only rain ripples, river flow
-   and the horizon/wet-band fades, which need inputs we do not have; the
-   hexagon mosaic visible in the water is the terrain's flat-per-cell depth,
-   not a water bug, and no tuning of the live branch removes it; and above
-   800 m the sky goes black because `ATMOSPHERE_RADIUS` is `R + 800`, which is
-   1.20 R against Tenebris's 1.24 R and moves with the rescale.
+   Measured against the whole Tenebris water system and captured at 1.6, 10,
+   50, 200 and 1,000 m above the polar shore (`--view shore --height N`; see
+   `tenebris-comparison.md`, "Water: five systems in Tenebris, one branch
+   here"). Tenebris's water is **five systems**: the cap pass, the composite
+   pass (underwater fog with a dry/straddling/submerged tri-state, screen
+   distortion, rain-on-glass lens droplets, emerge drips), terrain wetness in
+   `hex.fs` (wet sheet, impact rings, rivulets, sheen, glint), world-space
+   precipitation (`weather_fx.rs`), and the CPU flow simulation
+   (`world_water.rs`, which feeds the cap's flow UVs). `water.wgsl` ports the
+   cap pass only and drops five of its terms: rain ripples, flow advection,
+   the waterfall scroll, the two foam weights and the specular sun tint. Pale
+   Blue Dot has none of the other four systems in any form; there is no
+   post-process pass at all. So "bind the port" is the first water step, not
+   the whole of it, and the rest is a systems list in dependency order:
+   composite, then a weather field with a rain intensity, then flow. Two more
+   things the captures show: the hexagon mosaic in the water is the terrain's
+   flat-per-cell depth, not a water bug; and above 800 m the sky goes black
+   because `ATMOSPHERE_RADIUS` is `R + 800`, 1.20 R against Tenebris's 1.24 R,
+   which moves with the rescale.
 
 ### 5.2 A confirmed latent bug: the camera is not planet-local
 
