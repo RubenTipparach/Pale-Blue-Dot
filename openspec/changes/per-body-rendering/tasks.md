@@ -1,17 +1,27 @@
 # Tasks
 
 ## 1. Make the surface pass planet-local
-- [ ] Hand the shader `camera_world - body_world`, and build clip from
+- [x] Hand the shader `camera_world - body_world`, and build clip from
       `clip_from_world * world_from_body`, so vertex positions stay body-local.
-- [ ] Move the Rust-side foliage cutoff onto the same body-local altitude.
-- [ ] The same convention for the sky pass and, when it is bound, the water
+- [x] Move the Rust-side foliage cutoff onto the same body-local altitude.
+- [x] The same convention for the sky pass and, when it is bound, the water
       pass. One declared frame, not one per pass.
 
+The existing inline ocean shares the corrected surface frame. The dedicated
+water pass remains the separate shader-parity change. The sky shell and its
+centre uniform follow the same `PlanetRenderFrame`, derived from the preview
+body's f64 system position minus the physics/render origin before casting.
+
 ## 2. Prove it with an offset body
-- [ ] Render a body at the origin and the same body offset, and require the two
+- [x] Render a body at the origin and the same body offset, and require the two
       pictures to match. This is the test `CLAUDE.md` already asks for and
       nothing performs, and it is what makes the rule enforceable rather than
       aspirational.
+
+Validated with fixed-time surface and night captures translated by
+(16,384, -8,192, 32,768) m. The scene region matches to bounded rasterization
+precision (99.9493% and 99.9555% identical pixels); see
+`docs/handoff-validation.md` for commands, tolerances and measurements.
 
 ## 3. Per-body rendering data
 - [ ] Add `serde` (derive) and `ron`, and a small Bevy `AssetLoader`. This is the

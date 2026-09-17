@@ -10,12 +10,9 @@ use bevy::{
     prelude::*,
     transform::TransformSystems,
 };
-use pbd_core::{
-    DVec3,
-    flight::{FlightLimits, GravityWell},
-};
+use pbd_core::{DVec3, flight::FlightLimits};
 
-use crate::{LastFlightCommand, ShipController, planet, spawn_ship};
+use crate::{CelestialScene, LastFlightCommand, PhysicsFrame, ShipController, planet, spawn_ship};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FlyMode {
@@ -36,8 +33,6 @@ pub struct FlightViewConfig {
     pub surface_speed: f32,
     pub cruise_speed: f32,
     pub acceleration: f32,
-    /// Must agree with the active CelestialScene's origin planet.
-    pub surface_gravity: f32,
     pub minimum_clearance: f32,
     /// Camera/ship pitch below the local tangent at spawn, in radians.
     pub view_pitch_down: f32,
@@ -54,7 +49,6 @@ impl Default for FlightViewConfig {
             surface_speed: 120.0,
             cruise_speed: 600.0,
             acceleration: 80.0,
-            surface_gravity: 9.0,
             minimum_clearance: 45.0,
             view_pitch_down: 0.31,
             startup_camera: true,
@@ -79,6 +73,8 @@ pub struct FlightReadout {
     pub dampeners: bool,
     pub cruise: bool,
     pub protection_events: u64,
+    /// No body's anchor field reaches the ship's current position.
+    pub is_in_space: bool,
 }
 
 /// Completed means the physical ship has travelled an actual full great circle.
@@ -370,6 +366,10 @@ pub fn teleport_pilot(world: &mut World, position: Vec3, orientation: Quat) -> b
         world.resource::<FlightViewConfig>().mode,
         world.get_resource::<planet::PlanetContact>(),
     );
+    let is_in_space = world
+        .resource::<CelestialScene>()
+        .gravity_at(frame.origin + position.as_dvec3())
+        .is_in_space();
     *world.resource_mut::<FlightReadout>() = FlightReadout {
         position,
         altitude: position.length() - planet::PLANET_RADIUS,
@@ -377,6 +377,7 @@ pub fn teleport_pilot(world: &mut World, position: Vec3, orientation: Quat) -> b
         latitude_deg: direction.y.clamp(-1.0, 1.0).asin().to_degrees(),
         longitude_deg: direction.z.atan2(direction.x).to_degrees(),
         dampeners,
+        is_in_space,
         ..Default::default()
     };
     true
@@ -387,16 +388,6 @@ fn reset_flight(world: &mut World) {
         let (position, orientation, _) = spawn_pose(*world.resource::<FlightViewConfig>());
         teleport_pilot(world, position, orientation);
     }
-}
-
-fn gravity_at(position: Vec3, config: FlightViewConfig) -> Vec3 {
-    GravityWell {
-        center: DVec3::ZERO,
-        radius: planet::PLANET_RADIUS as f64,
-        surface_acceleration: config.surface_gravity as f64,
-    }
-    .acceleration_at(position.as_dvec3())
-    .as_vec3()
 }
 
 fn flight_surface_radius(
@@ -416,6 +407,8 @@ fn flight_surface_radius(
 
 fn update_flight_command(
     config: Res<FlightViewConfig>,
+    scene: Res<CelestialScene>,
+    frame: Res<PhysicsFrame>,
     mut intent: ResMut<FlightInputState>,
     progress: Res<TourProgress>,
     mut ships: Query<
@@ -430,7 +423,10 @@ fn update_flight_command(
     >,
 ) {
     for (position, rotation, velocity, angular, mut controller) in &mut ships {
-        let gravity = gravity_at(position.0, *config);
+        let gravity = scene
+            .gravity_at(frame.0.origin + position.0.as_dvec3())
+            .acceleration()
+            .as_vec3();
         controller.limits.acceleration = config.acceleration as f64;
         controller.limits.speed = if intent.cruise || config.mode == FlyMode::Tour {
             config.cruise_speed as f64
@@ -507,10 +503,13 @@ fn protect_terrain_clearance(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn publish_flight_readout(
     time: Res<Time<Physics>>,
     config: Res<FlightViewConfig>,
     intent: Res<FlightInputState>,
+    scene: Res<CelestialScene>,
+    frame: Res<PhysicsFrame>,
     terrain: Option<Res<planet::PlanetContact>>,
     mut readout: ResMut<FlightReadout>,
     mut progress: ResMut<TourProgress>,
@@ -541,6 +540,9 @@ fn publish_flight_readout(
                 || config.mode == FlyMode::Tour,
             cruise: intent.cruise || config.mode == FlyMode::Tour,
             protection_events: progress.protection_events,
+            is_in_space: scene
+                .gravity_at(frame.0.origin + position.0.as_dvec3())
+                .is_in_space(),
         };
         if config.mode == FlyMode::Tour && !progress.completed {
             let sine = progress
@@ -600,7 +602,7 @@ mod tests {
             })
             .insert_resource(crate::CelestialScene::planet_at_origin(
                 planet::PLANET_RADIUS as f64,
-                9.0,
+                1.0,
             ));
         app.finish();
         app.cleanup();
@@ -741,7 +743,6 @@ mod tests {
         app.add_plugins(FlightViewPlugin)
             .insert_resource(FlightViewConfig {
                 startup_camera: false,
-                surface_gravity: 0.0,
                 ..Default::default()
             });
         app.finish();
@@ -838,7 +839,7 @@ mod tests {
             })
             .insert_resource(crate::CelestialScene::planet_at_origin(
                 planet::PLANET_RADIUS as f64,
-                9.0,
+                1.0,
             ));
         app.finish();
         app.cleanup();
@@ -877,7 +878,7 @@ mod tests {
             })
             .insert_resource(crate::CelestialScene::planet_at_origin(
                 planet::PLANET_RADIUS as f64,
-                9.0,
+                1.0,
             ));
         app.finish();
         app.cleanup();
@@ -921,6 +922,36 @@ mod tests {
     }
 
     #[test]
+    fn flight_space_readout_uses_the_anchor_edge_and_honours_overrides() {
+        let mut app = crate::headless_app();
+        let mut scene = crate::CelestialScene::planet_at_origin(planet::PLANET_RADIUS as f64, 1.0);
+        scene.gravity[0].bands.outer = Some(2.2);
+        app.insert_resource(scene)
+            .insert_resource(FlightViewConfig {
+                startup_camera: false,
+                ..Default::default()
+            })
+            .add_plugins(FlightViewPlugin);
+        app.finish();
+        app.cleanup();
+        app.update();
+        for (radius_multiplier, in_space) in [(2.0, false), (2.2, true)] {
+            let position = Vec3::Y * planet::PLANET_RADIUS * radius_multiplier;
+            assert!(teleport_pilot(app.world_mut(), position, Quat::IDENTITY));
+            assert_eq!(
+                app.world().resource::<FlightReadout>().is_in_space,
+                in_space
+            );
+            app.update();
+            assert_eq!(
+                app.world().resource::<FlightReadout>().is_in_space,
+                in_space
+            );
+            assert!(app.world().resource::<FlightReadout>().speed < 0.001);
+        }
+    }
+
+    #[test]
     fn released_controls_hover_in_the_actual_planet_gravity_field() {
         let mut app = crate::headless_app();
         app.add_plugins(FlightViewPlugin)
@@ -930,7 +961,7 @@ mod tests {
             })
             .insert_resource(crate::CelestialScene::planet_at_origin(
                 planet::PLANET_RADIUS as f64,
-                9.0,
+                1.0,
             ));
         app.finish();
         app.cleanup();

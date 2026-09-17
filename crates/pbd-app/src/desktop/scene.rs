@@ -8,7 +8,9 @@ pub fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    frame: Res<pbd_app::PhysicsFrame>,
 ) {
+    let offset = (-frame.0.origin).as_vec3();
     let sun = pbd_app::sky::SUN_DIRECTION.normalize();
     commands.spawn((
         DirectionalLight {
@@ -26,7 +28,7 @@ pub fn setup(
             perceptual_roughness: 1.0,
             ..default()
         })),
-        Transform::from_xyz(-16000.0, 6500.0, -19000.0),
+        Transform::from_translation(Vec3::new(-16000.0, 6500.0, -19000.0) + offset),
         MoonOrbit(CircularOrbit::new(26000.0, 8000.0, 3.8, DQuat::from_rotation_x(0.35)).unwrap()),
     ));
     let mut positions = Vec::new();
@@ -82,14 +84,16 @@ pub fn setup(
             ..default()
         })),
         bevy::camera::visibility::NoFrustumCulling,
+        Transform::from_translation(offset),
     ));
 }
 
 pub fn move_moon(
     time: Res<pbd_app::SimulationClock>,
+    frame: Res<pbd_app::PhysicsFrame>,
     mut moons: Query<(&MoonOrbit, &mut Transform)>,
 ) {
     for (orbit, mut transform) in &mut moons {
-        transform.translation = orbit.0.sample(time.seconds).position.as_vec3();
+        transform.translation = (orbit.0.sample(time.seconds).position - frame.0.origin).as_vec3();
     }
 }

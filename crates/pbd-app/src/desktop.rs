@@ -15,7 +15,7 @@ use bevy::{
     window::PresentMode,
 };
 use pbd_app::{
-    CelestialScene, FIXED_HZ, PaleBlueDotPlugin,
+    CelestialScene, FIXED_HZ, PaleBlueDotPlugin, PhysicsFrame,
     flight_view::{FlightViewConfig, FlightViewPlugin, FlyMode, TourProgress},
     planet::{PLANET_RADIUS, PlanetPlugin, terrain_radius},
     sky::SkyPlugin,
@@ -35,6 +35,8 @@ pub struct Launch {
     pub fixed: bool,
     pub fly: bool,
     pub walk: bool,
+    /// Static capture instrument: translate the scene within the local frame.
+    pub render_offset: Vec3,
 }
 
 impl Launch {
@@ -47,6 +49,7 @@ impl Launch {
             fixed: false,
             fly: false,
             walk: false,
+            render_offset: Vec3::ZERO,
         };
         let mut i = 0;
         while i < args.len() {
@@ -72,6 +75,22 @@ impl Launch {
                 "--fly" => result.fly = true,
                 "--walk" => result.walk = true,
                 "--fixed-dt" => result.fixed = true,
+                "--render-offset" => {
+                    let mut components = [0.0; 3];
+                    for component in &mut components {
+                        i += 1;
+                        *component = args
+                            .get(i)
+                            .expect("--render-offset requires x y z in metres")
+                            .parse::<f32>()
+                            .expect("invalid render offset");
+                    }
+                    result.render_offset = Vec3::from_array(components);
+                    assert!(
+                        result.render_offset.is_finite(),
+                        "render offset must be finite"
+                    );
+                }
                 "--verify-flight" => {}
                 unknown => panic!("unknown argument {unknown}; use --help"),
             }
@@ -88,6 +107,11 @@ impl Launch {
         assert!(
             result.frames >= 60 && result.frames <= 100_000,
             "capture frames must be 60..100000"
+        );
+        assert!(
+            result.render_offset == Vec3::ZERO
+                || (result.capture.is_some() && !result.walk && !result.fly && !result.tour),
+            "--render-offset requires a static --capture"
         );
         result
     }
@@ -157,7 +181,11 @@ pub fn run(args: &[String]) {
         FlightViewPlugin,
         SkyPlugin,
     ))
-    .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 9.0))
+    .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
+    .insert_resource(PhysicsFrame(pbd_core::frame::LocalFrame {
+        origin: -launch.render_offset.as_dvec3(),
+        ..default()
+    }))
     .insert_resource(Time::<Fixed>::from_duration(step))
     .insert_resource(SubstepCount(4))
     .insert_resource(FlightViewConfig {
@@ -243,10 +271,9 @@ fn photo_camera(mut commands: Commands, launch: Res<Launch>) {
         position + tangent * 1600.0 - direction * if altitude > 300.0 { 900.0 } else { 150.0 }
     };
     let up = if look_down { Vec3::Y } else { direction };
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_translation(position).looking_at(target, up),
-    ));
+    let mut transform = Transform::from_translation(position).looking_at(target, up);
+    transform.translation += launch.render_offset;
+    commands.spawn((Camera3d::default(), transform));
 }
 
 fn capture(
@@ -361,7 +388,7 @@ fn measure_frames(mut stats: ResMut<FrameStats>) {
 fn verify_flight(polar: bool) {
     let mut app = pbd_app::headless_app();
     app.add_plugins(FlightViewPlugin)
-        .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 9.0))
+        .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
         .insert_resource(FlightViewConfig {
             mode: FlyMode::Tour,
             spawn_direction: if polar {

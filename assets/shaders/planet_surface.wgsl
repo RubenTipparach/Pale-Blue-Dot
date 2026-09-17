@@ -7,7 +7,7 @@ struct Cell {
     metadata: vec4<u32>,
 }
 struct Params {
-    clip_from_world: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
+    clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -87,27 +87,24 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     } else {
         kind = 2u;
         let seed = hash(cell.metadata.w);
-        let tree = (material==3u && seed%4u!=0u) || (material==2u && seed%9u==0u) || (material==7u && seed%7u==0u);
-        // Cosmetic geometry is omitted at orbital distances. The draw remains
-        // bounded and terrain authority does not depend on a visual tree.
-        if tree && distance(params.camera.xyz,axis*radius)<2300.0 {
-            let part = (vertex-54u)/36u;
-            let cube = box_vertex((vertex-54u)%36u);
-            let scale = 0.85+random(seed)*0.50;
-            var halfsize = vec3(1.7,9.,1.7)*scale;
-            var elevation = 9.*scale;
-            material = 8u;
-            if part==1u { halfsize=vec3(9.,6.,9.)*scale; elevation=20.*scale; material=9u; }
-            if part==2u { halfsize=vec3(6.,5.,6.)*scale; elevation=28.*scale; material=9u; }
-            let local = cube.position*halfsize + vec3(0.,elevation,0.);
-            position = axis*radius+tangent*local.x+axis*local.y-bitangent*local.z;
-            normal = tangent*cube.normal.x+axis*cube.normal.y-bitangent*cube.normal.z;
-            uv = cube.uv;
-        }
+        // The compute pass selects nearby vegetated cells before submitting
+        // this separate indirect draw; no rejected tree vertices are invoked.
+        let part = (vertex-54u)/36u;
+        let cube = box_vertex((vertex-54u)%36u);
+        let scale = 0.85+random(seed)*0.50;
+        var halfsize = vec3(1.7,9.,1.7)*scale;
+        var elevation = 9.*scale;
+        material = 8u;
+        if part==1u { halfsize=vec3(9.,6.,9.)*scale; elevation=20.*scale; material=9u; }
+        if part==2u { halfsize=vec3(6.,5.,6.)*scale; elevation=28.*scale; material=9u; }
+        let local = cube.position*halfsize + vec3(0.,elevation,0.);
+        position = axis*radius+tangent*local.x+axis*local.y-bitangent*local.z;
+        normal = tangent*cube.normal.x+axis*cube.normal.y-bitangent*cube.normal.z;
+        uv = cube.uv;
     }
     var out: VertexOut;
     out.position = position;
-    out.clip = params.clip_from_world*vec4(position,1.);
+    out.clip = params.clip_from_body*vec4(position,1.);
     out.normal = normal;
     out.uv = uv;
     out.material = material;
@@ -189,6 +186,6 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let sky = mix(vec3(0.10,0.20,0.29),vec3(0.32,0.49,0.57),max(sun_elevation,0.));
     color=mix(color,sky,fog*0.55);
     let rim = pow(1.-clamp(dot(radial,toward_camera),0.,1.),4.);
-    color+=vec3(0.07,0.16,0.25)*rim*daylight*(1.-air)*0.55;
+    color+=vec3(0.07,0.16,0.25)*rim*(0.25+0.75*daylight)*(1.-air)*0.55;
     return vec4(color,1.);
 }

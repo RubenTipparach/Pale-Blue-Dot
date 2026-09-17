@@ -1,7 +1,7 @@
 # Tasks
 
 ## 1. Night-side rim floor
-- [ ] Replace the bare `daylight` multiplier on the rim term in
+- [x] Replace the bare `daylight` multiplier on the rim term in
       `planet_surface.wgsl` with `0.25 + 0.75 * daylight`, matching
       `hex_terrain.wgsl` and Tenebris's `distant_rim_floor`.
 - [ ] Capture the night and orbit views before and after; the owner confirms
@@ -37,9 +37,9 @@ The hex size is decided: 2.833 m tile, 1.000 m cell height, off Tenebris's main
 planet. What is open is the radius, since the two are locked by
 `R = 300 m * 2^(L - 7)`. See `proposal.md` for the ladder and its costs.
 
-- [ ] Owner picks a radius from the ladder. 600 m holds the standard at today's
-      exact level and memory budget; 1,200 m costs 320 MiB; 2,400 m needs the
-      topology record shrunk first.
+- [x] Adopt the handoff's settled radius: 4,800 m at level 11 underfoot. The
+      implementation depends on hexagon LOD; a uniform whole-globe level 11 is
+      not the selected implementation.
 - [ ] `PLANET_RADIUS` and `SUBDIVISIONS` move together to that pair, and
       `ELEVATION_STEP` goes from 6 m to 1 m.
 - [ ] **Cut the relief to ~100-150 m peaks.** Measured by sampling

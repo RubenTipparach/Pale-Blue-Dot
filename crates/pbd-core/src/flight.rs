@@ -4,33 +4,6 @@
 use glam::{DQuat, DVec3};
 
 #[derive(Clone, Copy, Debug)]
-pub struct GravityWell {
-    pub center: DVec3,
-    pub radius: f64,
-    pub surface_acceleration: f64,
-}
-
-impl GravityWell {
-    /// Inverse-square exterior falloff; a uniform-density interior makes the
-    /// acceleration continuous at the surface and zero at the centre.
-    pub fn acceleration_at(self, position: DVec3) -> DVec3 {
-        assert!(self.radius.is_finite() && self.radius > 0.0);
-        assert!(self.surface_acceleration.is_finite() && self.surface_acceleration >= 0.0);
-        let offset = self.center - position;
-        let distance = offset.length();
-        if distance < 1e-9 {
-            return DVec3::ZERO;
-        }
-        let falloff = if distance >= self.radius {
-            (self.radius / distance).powi(2)
-        } else {
-            distance / self.radius
-        };
-        offset / distance * self.surface_acceleration * falloff
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
 pub struct FlightLimits {
     /// Desired frame-relative mode speed; changing this does not snap momentum.
     pub speed: f64,
@@ -195,22 +168,6 @@ pub fn control_acceleration(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn gravity_falls_to_quarter_at_twice_radius_and_is_finite_inside() {
-        let well = GravityWell {
-            center: DVec3::ZERO,
-            radius: 4_000.0,
-            surface_acceleration: 9.0,
-        };
-        assert_eq!(well.acceleration_at(DVec3::Y * 4_000.0), DVec3::NEG_Y * 9.0);
-        assert_eq!(
-            well.acceleration_at(DVec3::Y * 8_000.0),
-            DVec3::NEG_Y * 2.25
-        );
-        assert_eq!(well.acceleration_at(DVec3::ZERO), DVec3::ZERO);
-        assert_eq!(well.acceleration_at(DVec3::Y * 2_000.0), DVec3::NEG_Y * 4.5);
-    }
 
     #[test]
     fn sustained_diagonal_thrust_and_gravity_respect_all_four_limits() {

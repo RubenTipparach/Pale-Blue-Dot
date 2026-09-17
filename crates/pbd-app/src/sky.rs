@@ -3,6 +3,7 @@
 //! Planet terrain/ocean are owned by `planet`; this shell contributes sky,
 //! orbital haze and sparse clouds. Camera and sphere positions use the same
 //! local world frame. See `docs/tenebris-comparison.md` for visual provenance.
+use crate::planet::{PlanetRenderFrame, update_planet_frame};
 use bevy::{
     light::{NotShadowCaster, NotShadowReceiver},
     mesh::MeshVertexBufferLayoutRef,
@@ -27,7 +28,13 @@ pub struct SkyPlugin;
 impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<SkyMaterial>::default())
-            .add_systems(Startup, spawn_atmosphere);
+            .add_systems(Startup, spawn_atmosphere)
+            .add_systems(
+                PostUpdate,
+                position_atmosphere
+                    .after(update_planet_frame)
+                    .before(TransformSystems::Propagate),
+            );
     }
 }
 
@@ -49,6 +56,31 @@ pub struct SkyParameters {
 pub struct SkyMaterial {
     #[uniform(0)]
     pub parameters: SkyParameters,
+}
+
+#[derive(Component)]
+struct PlanetAtmosphere;
+
+fn position_atmosphere(
+    frame: Res<PlanetRenderFrame>,
+    mut shells: Query<(&mut Transform, &MeshMaterial3d<SkyMaterial>), With<PlanetAtmosphere>>,
+    mut materials: ResMut<Assets<SkyMaterial>>,
+) {
+    // This is already bounded by the f64 system-origin subtraction shared with
+    // the terrain. Mesh positions and the shader's body centre must move as one.
+    let center = frame.center.as_vec3();
+    for (mut transform, material) in &mut shells {
+        if transform.translation != center {
+            transform.translation = center;
+        }
+        if materials
+            .get(&material.0)
+            .is_some_and(|sky| sky.parameters.center_radius.truncate() != center)
+            && let Some(sky) = materials.get_mut(&material.0)
+        {
+            sky.parameters.center_radius = center.extend(PLANET_RADIUS);
+        }
+    }
 }
 
 impl Material for SkyMaterial {
@@ -102,10 +134,75 @@ fn spawn_atmosphere(
     });
     commands.spawn((
         Name::new("Planet atmosphere and cloud shell"),
+        PlanetAtmosphere,
         Mesh3d(meshes.add(Sphere::new(ATMOSPHERE_RADIUS).mesh().uv(96, 64))),
         MeshMaterial3d(material),
         Transform::IDENTITY,
         NotShadowCaster,
         NotShadowReceiver,
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CelestialScene, PhysicsFrame};
+    use bevy::math::DVec3;
+
+    #[test]
+    fn sky_shell_and_uniform_follow_the_same_f64_body_frame_as_terrain() {
+        let body = DVec3::new(1e12, -2e12, 3e12);
+        let mut scene = CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 25.);
+        scene.states[0].position = body;
+        let mut app = App::new();
+        app.insert_resource(scene)
+            .insert_resource(PhysicsFrame(pbd_core::frame::LocalFrame {
+                origin: body,
+                ..default()
+            }))
+            .init_resource::<PlanetRenderFrame>()
+            .init_resource::<Assets<SkyMaterial>>()
+            .add_systems(
+                PostUpdate,
+                (update_planet_frame, position_atmosphere).chain(),
+            );
+        let material = app
+            .world_mut()
+            .resource_mut::<Assets<SkyMaterial>>()
+            .add(SkyMaterial {
+                parameters: SkyParameters {
+                    center_radius: Vec3::ZERO.extend(PLANET_RADIUS),
+                    atmosphere: Vec4::ZERO,
+                    sun: Vec4::ZERO,
+                    scatter: Vec4::ZERO,
+                    clouds: Vec4::ZERO,
+                },
+            });
+        let shell = app
+            .world_mut()
+            .spawn((
+                PlanetAtmosphere,
+                MeshMaterial3d(material.clone()),
+                Transform::IDENTITY,
+            ))
+            .id();
+
+        for center in [Vec3::ZERO, Vec3::new(20_000.125, -40_000.25, 80_000.5)] {
+            app.world_mut().resource_mut::<PhysicsFrame>().0.origin = body - center.as_dvec3();
+            app.update();
+            assert_eq!(
+                app.world().resource::<PlanetRenderFrame>().center,
+                center.as_dvec3()
+            );
+            assert_eq!(
+                app.world().get::<Transform>(shell).unwrap().translation,
+                center
+            );
+            let materials = app.world().resource::<Assets<SkyMaterial>>();
+            assert_eq!(
+                materials.get(&material).unwrap().parameters.center_radius,
+                center.extend(PLANET_RADIUS)
+            );
+        }
+    }
 }

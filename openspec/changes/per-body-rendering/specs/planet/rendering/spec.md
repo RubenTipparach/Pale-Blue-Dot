@@ -1,6 +1,6 @@
 # Surface Rendering Specification
 
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: View-dependent shading is computed in the body's own frame
 Every pass that shades a body SHALL receive the camera in that body's local
@@ -18,6 +18,8 @@ as a body's centre.
 - **WHEN** a body is rendered at the origin and then offset, with nothing else
   changed
 - **THEN** the two images match
+
+## ADDED Requirements
 
 ### Requirement: A body's look is data
 The values that decide how a body appears SHALL be supplied per body as data:

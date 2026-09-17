@@ -47,8 +47,18 @@ incomplete tours, lost focus, or a nonzero process exit fail the harness.
 Process working set and private memory are sampled about every 100 ms across
 startup and rendering. The OS peak working set is recorded separately. These
 figures include CPU-side application/driver allocations and do not measure GPU
-VRAM. The current terrain renderer's 80 MiB topology allocation, about 2.5 MiB
-of visible IDs per view, and 112-byte steady-state planet uniform update are
+VRAM. The current terrain renderer's 80 MiB topology allocation, two 2.5 MiB
+ID lists per view (terrain and foliage), and 112-byte steady-state uniform update are
 implementation sizes; this harness does not measure GPU allocation totals or
 transfer counters. Compare all rounds and tail latency rather than choosing
 the fastest run.
+
+For the body-frame rendering regression, static captures accept
+`--render-offset x y z` in metres. For example, compare otherwise identical
+`--capture origin.png --view surface --frames 240 --fixed-dt` and
+`--capture offset.png --view surface --frames 240 --fixed-dt --render-offset 16384 -8192 32768`
+runs. The instrument translates the local frame, camera and backdrop together;
+the authoritative planet stays at the same system coordinates. Compare the
+scene region between HUD bars (rows 94 through 751 at 1440 by 900), allowing
+small rasterization differences from local f32 coordinates. This option is
+restricted to static captures and is not a player movement control.

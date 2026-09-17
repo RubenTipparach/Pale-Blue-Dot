@@ -33,19 +33,24 @@ than in their own change because they touch `planet_visibility.wgsl`, and
 touching one pass twice for two reasons is exactly the divergent-path risk this
 project's rules warn about.
 
-- [ ] **Frustum cull.** `params.clip_from_world` is declared and BOUND in the
-      visibility pass and `compact_visible` never reads it. The only test is the
-      sphere-horizon one, so there is no frustum, far-plane or distance culling
-      anywhere in the pipeline: standing on the ground submits the whole visible
-      hemisphere, about 327,000 cells. The matrix is already there.
-- [ ] **Per-cell foliage distance.** `FOLIAGE_DRAW_CUTOFF_ALTITUDE` is one
-      global altitude switch, so below 3,200 m every visible cell is submitted at
-      162 vertices; the tree branch then discards beyond 2,300 m *after*
-      submission, as degenerate triangles. That is about 108 wasted tree vertices
-      per cell across hundreds of thousands of cells. The per-cell distance test
-      already exists in the shader - it just runs too late.
+- [x] **Frustum cull.** Use the bound body-local clip matrix in the visibility
+      pass, retaining conservative cell bounds that intersect a frustum plane.
+      The previous pass performed only sphere-horizon culling.
+- [x] **Per-cell foliage distance.** Select nearby vegetated cells before vertex
+      submission, instead of submitting 108 tree vertices for every visible cell
+      and degenerating the distant/nonvegetated instances in the vertex shader.
+      Keep the existing conservative 3,200 m altitude gate as an early disable;
+      the GPU owns the per-cell 2,300 m range and material/seed predicate.
 - [ ] Measure both, before and after, in a reproducible release scene. Neither is
       a speedup until it has a number.
+
+Implementation: the GPU tests body-local cap/wall bounding spheres against all
+six homogeneous clip planes, and retains intersecting bounds conservatively.
+Nearby vegetated cells compact into a separate ID buffer and 108-vertex
+indirect foliage draw; terrain uses 54 vertices. The compute pass owns the only
+foliage eligibility test. There is no runtime GPU readback. This implements the
+independent culling fixes; tier selection, seams and performance measurement
+remain open.
 
 ## 6. Then the radius
 - [ ] With LOD landed, revisit the radius in

@@ -3,6 +3,7 @@
 
 pub mod flight;
 pub mod frame;
+pub mod gravity;
 pub mod hex;
 pub mod orbit;
 pub mod terrain;
