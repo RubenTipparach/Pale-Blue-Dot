@@ -59,7 +59,11 @@ changes.
 ## One water shader, viewed from above and below
 
 `water.wgsl` is the visual reference because it is the existing faithful port
-of the previous Tenebris water shader. The live water branch in
+of the previous Tenebris water shader. The term-by-term measurement, and captures of the
+live branch at 1.6, 10, 50, 200 and 1000 m, are in
+`docs/tenebris-comparison.md` under "Water, term by term, and at five heights":
+the port lacks only rain ripples, river flow and the horizon/wet-band fades, all
+of which need inputs this project does not have yet. The live water branch in
 `planet_surface.wgsl` is not a fallback reference: it is a second,
 feature-incomplete implementation and is removed once the dedicated water pass
 is live.

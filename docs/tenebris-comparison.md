@@ -355,6 +355,74 @@ Four of those differences are visible in a still frame:
    distance fog, all as uniforms. The ocean that renders is a depth tint, a
    Fresnel to the fourth, two sines and a specular to the 160th.
 
+### Water, term by term, and at five heights
+
+The ocean that renders is the 16-line branch in `planet_surface.wgsl`
+(lines 166-181). It is captured here at five camera heights above the polar
+shore, with `--view shore --height N` (the `shore` preset walks east from 72 N
+to the first water cell, lifts the eye N metres above the last land cell and
+aims N metres out to sea, so every frame looks down at about 45 degrees):
+
+| Height | What the live water shows |
+| ---: | --- |
+| 1.6 m | A flat, opaque teal sheet to a hard horizon line. No surface relief, no reflection of the sky or the coast, no foam or wet band where sea meets land. The only texture is the "wave" term, and it resolves as 3 m **rectangles**, because the wave phase is sampled at `floor(position / 3) * 3`. |
+| 10 m | The hexagon mosaic appears **in the water**: the depth tint is per cell, so shallows are a tiling of flat hexagons rather than a gradient. The 3 m rectangles are legible as rectangles. |
+| 50 m | The mosaic dominates the frame; each cell is one flat tone, stepped at every edge, the same defect the terrain section records for skylight. |
+| 200 m | Reads well at this range: a depth gradient from the sand into deep water, the coast, the snow cap. The cell mosaic is still visible but no longer the subject. |
+| 1000 m | **The sky is black.** `ATMOSPHERE_RADIUS` is `PLANET_RADIUS + 800.0` (`sky.rs:22`), so at 1,000 m the camera is outside the sky shell and looks back at a lit limb under stars. The water is a uniform teal with one broad specular. |
+
+The 1,000 m frame is a finding about the sky rather than the water. Tenebris's
+main planet sets `radius_mult: 1.24` in `atmosphere.yaml`, which is 72 m of
+atmosphere on a 300 m body; ours is 800 m on 4,000 m, or 1.20 R. Proportionally
+the two agree within a fifth. In absolute terms, a walker's jump apex or a 1 km
+survey flight is inside Tenebris's shell and outside ours only because the
+bodies differ by 13x in radius, and this is one more number that moves with the
+rescale rather than a separate defect.
+
+Term by term, across the three implementations:
+
+| Term | Tenebris `water.fs.glsl` | Port `water.wgsl` (unbound) | Live branch in `planet_surface.wgsl` |
+| --- | --- | --- | --- |
+| Geometry | its own water mesh at sea level, one sheet per chunk | its own vertex stage, expects a water mesh | the **cap of each water cell** at `R + max(height, 0)`, so a flat hexagon at `R` |
+| Wave field | 3-octave gradient-noise fbm, hash constants 374761393 / 668265263 / 1274126177 / 1103515245 | identical fbm and hash constants | product of two sines on a 3 m-quantised position |
+| Vertex displacement | 3 sines, 0.18 / 0.12 / 0.06, scaled by `swell_amplitude` 0.5 m, faded off steep faces | identical | none |
+| Normal | fbm gradient x12.5, projected off the face, slope capped by `slope_max` 1.6 | identical, cap is `refraction.z` | the **radial** direction; the wave only nudges the specular dot by `0.008` |
+| Depth source | scene depth reconstructed per fragment, so shallows grade continuously | identical, via `reconstruct_local` | `-height` of the cell, `@interpolate(flat)`, so depth is one value per hexagon |
+| Refraction | screen-space offset from the gradient, clamped to `refract_max_uv` 0.03, rejected if it lands on sky or in front of the surface | identical | none |
+| Absorption | `exp(-absorption * path_length)` along the reconstructed ray, `[0.60, 0.20, 0.10]` per metre | identical | `exp(-depth * 0.028)` mixes two fixed colours |
+| Underwater view | back-face path, deep colour by camera distance, Snell's-window edge | identical | none; the cap is opaque from below |
+| Fresnel | Schlick, `0.02 + 0.98 * (1 - n.v)^5`, floored by `sky_horizon_strength` 0.5 | identical, floor is `horizon_color.w` | `(1 - radial.v)^4` against the radial, not the wave normal |
+| Reflection colour | horizon to zenith by reflected-ray height, from `lod.yaml` per tileset | identical, uniforms | one literal `(0.09, 0.22, 0.34)` |
+| Foam | by crest height and by slope, `foam_crest_lo/hi` 0.35 / 0.60, `foam_slope_lo/hi` 0.50 / 1.20, `foam_intensity` 0.10 | identical | none |
+| Specular | Blinn-Phong to `specular_power` 140, `specular_intensity` 0.30, `sun_tint` | identical | to the 160th, one literal colour |
+| Day/night | terminator band times `sky`, floored | identical, floor is `absorption.w` | `mix(0.18, 1, daylight)`; no separate floor |
+| Torch / block light | `fs_params[13]` and baked sky | `baked_rgb_sky * lighting.z * (fresnel + foam)` | none |
+| Distance fog | own composite pass, ceiling `fog_max` 0.82 | inline, ceiling `limits.x` | the terrain's haze, applied after the branch |
+| Rain ripples | Zavie raindrop gradient into the normal, gated by rain intensity `fs_params[14].y` | **not ported** | none |
+| Flow | `v_flow_uv` scrolls the wave field along river flow | **not ported** | none |
+| Horizon fade / wet band | `horizon_fade_m` 600, `wet_fade_band_m` 0.5, `partial_band_m` 0.8, `underwater_distortion` | not ported | none |
+| Configuration | `water.yaml`, 36 look knobs plus 12 flow knobs, per world | one `WaterView` uniform of 16 vec4, every knob a field | about 20 literals inline |
+
+Three conclusions follow, and they are the ones the captures show:
+
+1. **The port is complete for the look and missing only weather and rivers.**
+   Every term Tenebris draws on a still ocean is in `water.wgsl` with the same
+   constants; what it lacks is rain ripples, river flow UVs and the horizon and
+   wet-band fades, all of which need inputs (a rain intensity, a flow field, a
+   wetness flag) that this project does not yet have either. Binding it is the
+   whole of the water task, as `preview-scale-and-shader-parity` already says.
+2. **The mosaic in the water is the terrain's flat-tile defect, not a water
+   bug.** The live branch reads depth off the cell's own height, and that is
+   flat per hexagon by construction. Tenebris never has this problem because
+   it reads scene depth per fragment; so does the port. No tuning of the live
+   branch removes it, and it gets worse, not better, at the 19 m tile.
+3. **The rectangles are the wave term.** `floor(position / 3.0) * 3.0` was
+   meant as a pixel-art quantisation and at 1.6 m it is the only surface
+   detail in view. The port's fbm has no such step.
+
+The captures live under the session scratchpad and are not committed; the
+command that reproduces each one is the height column above.
+
 ### Structural differences that are not defects
 
 These are deliberate and worth keeping straight from the list above.

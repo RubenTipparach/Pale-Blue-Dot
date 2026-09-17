@@ -37,6 +37,9 @@ pub struct Launch {
     pub walk: bool,
     /// Static capture instrument: translate the scene within the local frame.
     pub render_offset: Vec3,
+    /// Capture instrument for the `shore` view: camera height above the last
+    /// land cell in metres. Absent means standing eye height.
+    pub height: Option<f32>,
 }
 
 impl Launch {
@@ -50,6 +53,7 @@ impl Launch {
             fly: false,
             walk: false,
             render_offset: Vec3::ZERO,
+            height: None,
         };
         let mut i = 0;
         while i < args.len() {
@@ -91,6 +95,19 @@ impl Launch {
                         "render offset must be finite"
                     );
                 }
+                "--height" => {
+                    i += 1;
+                    let height: f32 = args
+                        .get(i)
+                        .expect("--height requires metres above the shore")
+                        .parse()
+                        .expect("invalid height");
+                    assert!(
+                        height.is_finite() && height >= 0.0,
+                        "height must be finite and non-negative"
+                    );
+                    result.height = Some(height);
+                }
                 "--verify-flight" => {}
                 unknown => panic!("unknown argument {unknown}; use --help"),
             }
@@ -107,6 +124,10 @@ impl Launch {
         assert!(
             result.frames >= 60 && result.frames <= 100_000,
             "capture frames must be 60..100000"
+        );
+        assert!(
+            result.height.is_none() || (result.view == "shore" && result.capture.is_some()),
+            "--height requires --view shore with a static --capture"
         );
         assert!(
             result.render_offset == Vec3::ZERO
@@ -262,6 +283,9 @@ fn photo_camera(mut commands: Commands, launch: Res<Launch>) {
         // so walk east from 72 N until land meets water, stand on the last land
         // cell at eye height, and look at the sea surface on the first water
         // cell. Bounded to one circuit so a latitude with no coast cannot spin.
+        // `--height` lifts the eye and pushes the aim point out to sea by the
+        // same distance, so every height in a series looks down at about 45
+        // degrees instead of straight down.
         let lat = 72_f32.to_radians();
         let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
         let step = 2.0 * 19.0 / PLANET_RADIUS;
@@ -274,8 +298,10 @@ fn photo_camera(mut commands: Commands, launch: Res<Launch>) {
         }
         let water = at(lon);
         let land = at(lon - step);
-        let eye = land * (terrain_radius(land) + EYE_HEIGHT);
-        let sea = water * terrain_radius(water);
+        let height = launch.height.unwrap_or(EYE_HEIGHT);
+        let eye = land * (terrain_radius(land) + height);
+        let east = (water - land).normalize_or_zero();
+        let sea = water * terrain_radius(water) + east * height;
         let mut transform = Transform::from_translation(eye).looking_at(sea, land);
         transform.translation += launch.render_offset;
         commands.spawn((Camera3d::default(), transform));

@@ -330,6 +330,16 @@ and the Bayer cutout. Four differences show in a still frame:
    absorption, foam and an underwater path; the one that renders is a Fresnel
    and two sines.
 
+   Measured term by term and captured at 1.6, 10, 50, 200 and 1,000 m above the
+   polar shore (`--view shore --height N`; see `tenebris-comparison.md`, "Water,
+   term by term, and at five heights"). Three things the captures show: the
+   port is complete for a still ocean and lacks only rain ripples, river flow
+   and the horizon/wet-band fades, which need inputs we do not have; the
+   hexagon mosaic visible in the water is the terrain's flat-per-cell depth,
+   not a water bug, and no tuning of the live branch removes it; and above
+   800 m the sky goes black because `ATMOSPHERE_RADIUS` is `R + 800`, which is
+   1.20 R against Tenebris's 1.24 R and moves with the rescale.
+
 ### 5.2 A confirmed latent bug: the camera is not planet-local
 
 `planet.rs` sends the **world** camera to the surface shader, and both sides then
