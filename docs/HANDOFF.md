@@ -52,6 +52,16 @@ while the world around it was built about six and a half times larger.
 | Texel at the surface | 8.8 cm | 87.5 cm | 9.9x |
 | Tree height | about 6 m | 28 - 45 m | about 5.5x |
 
+Terrain relief, measured rather than estimated (400,000 sampled directions for
+Pale Blue Dot; constants for Tenebris):
+
+| | Tenebris | Pale Blue Dot |
+| --- | ---: | ---: |
+| Highest peak above sea | 40 m (`MAX_LAND_HEIGHT`) | **+432 m** |
+| Deepest ocean | 24 m (`MAX_OCEAN_DEPTH`) | **-516 m** |
+| Total relief | 64 m | **948 m** (10.8% of radius) |
+| Column height | **128 layers**, sea at index 64 | n/a - one height per column |
+
 ### Read in units of the player
 
 | In eye heights (1.6 m) | Tenebris | Pale Blue Dot |
@@ -129,7 +139,7 @@ R = 300 m * 2^(L - 7)   ->   300, 600, 1200, 2400, 4800, 9600 m
 
 ## 4. Decisions made this session
 
-All seven are settled. They are recorded in `CLAUDE.md` and in the change
+All seven are settled; four further answers follow in 4.8. They are recorded in `CLAUDE.md` and in the change
 proposals; this is the summary.
 
 ### 4.1 One hex size on every body
@@ -241,6 +251,39 @@ write-up needs - and that is still a code change.
 
 ---
 
+### 4.8 Four further answers
+
+| Question | Answer |
+| --- | --- |
+| Finest LOD tier extent | **~300 m** great-circle from the player |
+| Terrain relief after the rescale | **~100-150 m peaks** |
+| Per-body config format | **RON assets** (serde + a Bevy asset loader) |
+| What to build first | **Nothing yet - keep planning** |
+
+**The 300 m fine tier is cheap and is this project's own idea.** Tenebris has no
+radial render distance to port: it meshes the entire planet as one chunked mesh
+whenever the body is active and culls only on a horizon test, with its single
+distance number (`MAX_DETAIL_DIST_M = 5000.0`) applying to the whole body.
+Measured cell counts on a 4,800 m body at 2.833 m tiles:
+
+| fine tier extent | cells | topology at 128 B |
+| ---: | ---: | ---: |
+| 124 m (standing horizon) | 6,950 | 0.8 MiB |
+| **300 m** | **40,670** | **5.0 MiB** |
+| 600 m | 162,520 | 19.8 MiB |
+| 1,200 m | 647,543 | 79.0 MiB |
+
+1,200 m of full detail costs the same 79 MiB the preview currently spends on the
+whole globe at 18.9 m tiles. 300 m clears the standing horizon (124 m) with 2.4x
+margin, which matters because a band boundary sitting exactly at the visible
+horizon is the worst place for a seam.
+
+**The relief target wants a flag.** ~100-150 m peaks sit between Tenebris's
+absolute 40 m and the ~640 m that scaling its proportions to a 4,800 m body would
+give. It is a defensible middle, and it implies a column roughly twice
+Tenebris's 128 layers. If matching Tenebris matters more than the figure, the
+number changes and nothing downstream is built yet.
+
 ## 5. Findings not yet acted on
 
 ### 5.1 There are three shader families, and the faithful one is not running
@@ -321,6 +364,19 @@ make the mechanism an explicit optional.
   water.
 - `walking.rs` writes the gravity falloff curve a second time inline, so the
   walker and the ship each carry their own copy.
+- **`planet_visibility.wgsl` binds `clip_from_world` and never reads it.** The
+  only test is the sphere-horizon one, so there is no frustum, far-plane or
+  distance culling anywhere: standing on the ground submits the whole visible
+  hemisphere, about 327,000 cells.
+- **The foliage cutoff wastes vertices.** `FOLIAGE_DRAW_CUTOFF_ALTITUDE` is one
+  global altitude switch, so below 3,200 m every visible cell is submitted at 162
+  vertices and the tree branch discards beyond 2,300 m *after* submission, as
+  degenerate triangles - about 108 wasted tree vertices per cell over hundreds of
+  thousands of cells. The per-cell distance test exists; it runs too late.
+- **The project has no runtime config of any kind.** No `assets/config`, no
+  serde, no custom asset loader; every tunable is a Rust `const`. This is in open
+  tension with `CLAUDE.md`'s own rule about tunable values living in validated
+  data.
 - 92 of the 128 bytes per cell are pure topology (direction, six corner rays),
   identical for every body at a level, and each corner ray is shared by three
   cells. Deduplicating gets a cell to roughly 50 bytes and buys about one level
@@ -351,25 +407,43 @@ deltas.
    still frame of two adjacent bands settles it; prose will not.
 2. **The planet-local camera fix** can go any time, independently. It is small,
    it is a real bug, and it gets harder to find the longer it waits.
-3. **Hexagon LOD**, once the seam is settled.
-4. **The rescale** to 4,800 m and 1 m steps, which drags with it the atmosphere
+   `sky_atmosphere.wgsl` already does it correctly - line 77 subtracts the planet
+   centre - so this is extending an existing pattern, not inventing one.
+3. **The frustum cull and the per-cell foliage distance**, which are independent
+   of LOD and already paid for: the matrix is bound and the distance test
+   exists.
+4. **Hexagon LOD**, once the seam is settled.
+5. **The rescale** to 4,800 m and 1 m steps, which drags with it the atmosphere
    shell, the cloud layer, the foliage range, the draw-budget switch, the terrain
    amplitude, the tree geometry and the atlas UV divisors.
-5. **The gravity model**, and collapse `walking.rs`'s duplicate falloff onto the
+6. **The gravity model**, and collapse `walking.rs`'s duplicate falloff onto the
    core well while in there.
+<<<<<<< ours
 6. **Shader and water parity.** The night rim floor is one line; lifting the
+=======
+7. **Shader and water parity.** The night rim floor is one line; lifting the
+>>>>>>> theirs
    literals into the params uniform is a refactor that should keep the shipped
    values byte-identical on the first pass. Then bind the faithful `water.wgsl`
    port as the single water system above and below the surface, with its scene
    colour/depth inputs, and remove the live inline approximation. Fixed-camera,
    fixed-time captures on both sides of the surface settle parity.
+<<<<<<< ours
 7. **The voxel engine**, which is the whole remaining game.
+=======
+8. **The voxel engine**, which is the whole remaining game.
+>>>>>>> theirs
 
 ### What a visual change needs
 
 Green tests do not settle a look. A rendering change wants a before-and-after
 capture the owner has seen. The repository has a headless capture harness and a
-benchmark script; run output belongs where it was produced, not committed.
+benchmark script; raw run output belongs where it was produced, not committed.
+Two selected proof plates are committed as the explicit baselines requested for
+this handoff: `docs/screenshots/water-parity-baseline.png` pairs the native
+Tenebris and live PBD water captures, and
+`docs/screenshots/shader-parity-baseline.png` fixes the current orbit/night
+views. They are labelled as baselines, not presented as completed parity.
 
 ---
 

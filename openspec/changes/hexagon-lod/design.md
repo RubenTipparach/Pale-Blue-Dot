@@ -34,6 +34,48 @@ indirect draw.
 
 Nothing per frame, nothing per LOD change, nothing back.
 
+## How far the finest tier extends: 300 m
+
+**~300 m of great-circle distance from the player**, and this figure is this
+project's own rather than a ported one: Tenebris has no radial render distance
+at all. It meshes the entire planet as one chunked mesh whenever the body is
+active and culls only on a horizon/backface angular test, with its single
+distance number (`MAX_DETAIL_DIST_M = 5000.0`) applying to the WHOLE BODY rather
+than to tiles within it.
+
+The fine tier turns out to be cheap, which is what makes the choice easy.
+Measured on a 4,800 m body at 2.833 m tiles, counting cells inside a cap of
+angular radius `d / R`:
+
+| fine tier extent | cells | topology at 128 B |
+| ---: | ---: | ---: |
+| 124 m | 6,950 | 0.8 MiB |
+| **300 m** | **40,670** | **5.0 MiB** |
+| 600 m | 162,520 | 19.8 MiB |
+| 1,200 m | 647,543 | 79.0 MiB |
+
+For scale, 1,200 m of full detail costs the same 79 MiB the preview currently
+spends on the *entire globe* at 18.9 m tiles.
+
+300 m is chosen against the horizon, which on a 4,800 m body is
+
+```text
+d = sqrt(2*R*h + h^2)
+```
+
+| eye or altitude | horizon | in tiles |
+| ---: | ---: | ---: |
+| 1.6 m (standing) | 124 m | 44 |
+| 10 m | 310 m | 109 |
+| 180 m (ship spawn) | 1,327 m | 468 |
+
+So 300 m covers a standing player's horizon with well over twice the margin,
+which matters because a band boundary sitting exactly AT the visible horizon is
+the worst possible place for a seam. It also keeps full detail under a low
+flyover. Beyond that the coarser bands carry the distance, which is what they
+are for: a ship at its 180 m spawn altitude sees 1,327 m, and none of that
+needs 2.833 m tiles.
+
 ## Choosing the level, on the GPU: DECIDED
 
 A tile's level is quantised from its **great-circle distance to the player**,

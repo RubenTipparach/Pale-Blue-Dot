@@ -29,6 +29,38 @@ The test that would have caught it is the one our `CLAUDE.md` already asks for
 and nothing does: render an offset body and compare against the same body at the
 origin. Those two pictures must be identical.
 
+## The format: RON assets
+
+**Decided: RON**, loaded through Bevy's asset server with a small custom
+`AssetLoader`. This is new infrastructure, not an extension: the project has
+**no runtime data loading at all** today. Confirmed by inspection - no
+`assets/config` directory, no `serde` in any of the three manifests, no custom
+`AssetLoader` implemented anywhere, and the only `assets.load` calls are two
+shaders and one texture atlas. Every tunable is a Rust `const`
+(`PLANET_RADIUS`, `ELEVATION_STEP`, `SUBDIVISIONS`,
+`FOLIAGE_DRAW_CUTOFF_ALTITUDE`, `EYE_HEIGHT`, `ATMOSPHERE_RADIUS`,
+`CLOUD_RADIUS`, ...), which sits in open tension with this project's own rule
+that tunable values live "in validated data with units".
+
+Why RON over the alternatives:
+
+- **Typed, through serde.** A malformed body definition is a load error rather
+  than a silently wrong planet - which is the failure mode that cost Tenebris a
+  bug where an unknown decal kind produced a plain white material and the picture
+  was misread twice as a texture authored wrong.
+- **`Option<T>` says "inherit" directly.** That is the mechanism this design
+  already requires and Tenebris's zero sentinel cannot express: a body that wants
+  a rim intensity of *zero* must be able to say so, and `None` vs `Some(0.0)`
+  distinguishes them with no convention to remember.
+- **Hot reload comes free** through the asset server, which is the whole point of
+  Tenebris keeping its sky in a file - dial `rayleigh_scale`, save, watch the
+  air thicken.
+- Nested vectors and colour triples, which this data is mostly made of, read
+  better in RON than in TOML.
+
+New dependencies: `serde` (derive) and `ron`. Bevy already pulls serde
+transitively, so this adds one small crate and one loader.
+
 ## The shape of per-body data
 
 Tenebris's pattern, worth copying exactly:

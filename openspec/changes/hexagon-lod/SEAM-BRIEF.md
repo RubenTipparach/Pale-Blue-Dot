@@ -48,10 +48,16 @@ The rule above decides **which level**. It does not yet decide:
    between adjacent columns, so it needs no new machinery.
 2. **The band thresholds.** How many bands, at what great-circle distances, given
    2.833 m tiles at level 11 on a 4,800 m body.
-3. **Hysteresis.** A tile sitting exactly on a threshold as the player walks
-   should not flip-flop between levels frame to frame. Anchoring to the player
-   already removes the camera-driven case; what remains is the player's own
-   motion across a boundary.
+3. **Hysteresis - candidate identified.** A tile sitting exactly on a threshold
+   as the player walks should not flip-flop between levels frame to frame.
+   Anchoring to the player already removes the camera-driven case; what remains
+   is the player's own motion across a boundary. Tenebris solves the same
+   problem once, for its whole-body detail cutoff, and the pattern ports
+   directly: a load threshold, an unload threshold at **1.5x** that, and a
+   **3 second debounce** which a re-crossing cancels outright. Applied per band
+   that means a tile refines at its threshold and coarsens only once it is well
+   past it and has stayed there, so walking a circle on a boundary costs one
+   transition rather than hundreds.
 4. **Pentagons.** There are twelve, they have five neighbours rather than six,
    and they sit on band boundaries like anything else.
 
@@ -116,6 +122,8 @@ Summed over all levels that is `4/3` of the finest level alone.
 | --- | --- |
 | Body radius | 4,800 m |
 | Finest level (underfoot) | 11, giving 2.833 m mean tile width |
+| Finest tier extent | ~300 m great-circle from the player (40,670 cells, 5.0 MiB) |
+| Standing horizon | 124 m, so the fine tier has 2.4x margin over it |
 | Vertical quantum | 1.000 m |
 | Player eye height | 1.6 m |
 | Cells at level 11 | 41,943,042 (**not** all resident - see the constraints) |
