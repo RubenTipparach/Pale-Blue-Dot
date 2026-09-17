@@ -33,6 +33,9 @@ pub struct LocalCell {
     pub cell: DualCell,
     pub point: LatticePoint,
     pub owners: [Vec3; 2],
+    /// Every neighbour's direction, present or not in this set, so a record
+    /// at the set's edge still knows the heights across its walls.
+    pub neighbor_directions: Vec<Vec3>,
 }
 
 pub struct Lattice {
@@ -80,17 +83,17 @@ impl Lattice {
                 (0, 0) => self.position(below(i / 2, j / 2)),
                 (1, 0) => midpoint(
                     self.position(below((i - 1) / 2, j / 2)),
-                    self.position(below((i + 1) / 2, j / 2)),
+                    self.position(below(i.div_ceil(2), j / 2)),
                 ),
                 (0, _) => midpoint(
                     self.position(below(i / 2, (j - 1) / 2)),
-                    self.position(below(i / 2, (j + 1) / 2)),
+                    self.position(below(i / 2, j.div_ceil(2))),
                 ),
                 // Both odd: the midpoint of the diagonal edge `i + j = const`,
                 // which is the only edge of the coarser lattice through it.
                 _ => midpoint(
-                    self.position(below((i + 1) / 2, (j - 1) / 2)),
-                    self.position(below((i - 1) / 2, (j + 1) / 2)),
+                    self.position(below(i.div_ceil(2), (j - 1) / 2)),
+                    self.position(below((i - 1) / 2, j.div_ceil(2))),
                 ),
             }
         };
@@ -118,15 +121,15 @@ impl Lattice {
             }
             (1, 0) => [
                 self.position(below((i - 1) / 2, j / 2)),
-                self.position(below((i + 1) / 2, j / 2)),
+                self.position(below(i.div_ceil(2), j / 2)),
             ],
             (0, _) => [
                 self.position(below(i / 2, (j - 1) / 2)),
-                self.position(below(i / 2, (j + 1) / 2)),
+                self.position(below(i / 2, j.div_ceil(2))),
             ],
             _ => [
-                self.position(below((i + 1) / 2, (j - 1) / 2)),
-                self.position(below((i - 1) / 2, (j + 1) / 2)),
+                self.position(below(i.div_ceil(2), (j - 1) / 2)),
+                self.position(below((i - 1) / 2, j.div_ceil(2))),
             ],
         }
     }
@@ -230,8 +233,23 @@ impl Lattice {
     /// `radius` radians of `center`. Triangles are enumerated out to two more
     /// tiles so every cell inside has its whole ring; cells whose ring is cut by
     /// the enumeration edge are dropped rather than returned incomplete.
+    #[cfg(test)]
     pub fn cells_in_cap(&mut self, level: u8, center: Vec3, radius: f32) -> Vec<LocalCell> {
+        self.cells_in_band(level, center, 0.0, radius)
+    }
+
+    /// The complete cells with centres between `inner` and `outer` radians of
+    /// `center`. A fine level is resident only where its band can be drawn, so
+    /// the inner part, which the finer level covers, is not generated.
+    pub fn cells_in_band(
+        &mut self,
+        level: u8,
+        center: Vec3,
+        inner: f32,
+        outer: f32,
+    ) -> Vec<LocalCell> {
         let center = center.normalize_or(Vec3::Y);
+        let radius = outer;
         let tile = 1.2087 / (1u32 << level) as f32;
         let triangles = self.triangles_in_cap(level, center, radius + 2.5 * tile);
         // Dedupe vertices on their bits: a point shared by two faces was built
@@ -254,6 +272,7 @@ impl Lattice {
             indexed.push(ids);
         }
         let cos_radius = radius.cos();
+        let cos_inner = inner.max(0.0).cos();
         let mut cells = Vec::new();
         for (index, cell) in dual_from_triangles(&vertices, &indexed)
             .into_iter()
@@ -262,15 +281,18 @@ impl Lattice {
             let Some(cell) = cell else {
                 continue;
             };
-            if cell.direction.dot(center) < cos_radius {
+            let along = cell.direction.dot(center);
+            if along < cos_radius || (inner > 0.0 && along > cos_inner) {
                 continue;
             }
             let point = points[index];
             let owners = self.owners(point);
+            let neighbor_directions = cell.neighbors.iter().map(|&n| vertices[n]).collect();
             cells.push(LocalCell {
                 cell,
                 point,
                 owners,
+                neighbor_directions,
             });
         }
         // Neighbour indices from `dual_from_triangles` refer to the deduped

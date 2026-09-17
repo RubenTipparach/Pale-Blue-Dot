@@ -4,6 +4,7 @@
 use super::*;
 use bevy::{
     math::DVec3,
+    math::UVec4,
     render::{
         renderer::initialize_renderer,
         settings::{WgpuSettings, WgpuSettingsPriority},
@@ -25,6 +26,9 @@ struct VisibilityGpu {
 struct VisibleCells {
     terrain: Vec<u32>,
     foliage: Vec<u32>,
+    /// Water sheets listed; the synthetic columns sit above the sea, so it
+    /// is zero for them and only the real-record test sees any.
+    water: u32,
 }
 
 impl VisibilityGpu {
@@ -162,9 +166,9 @@ impl VisibilityGpu {
             .expect("visibility readback must map");
         let mapped = slice.get_mapped_range();
         let words: &[u32] = bytemuck::cast_slice(&mapped);
-        assert_eq!([words[0], words[2], words[3]], [54, 0, 0]);
-        assert_eq!([words[4], words[6], words[7]], [108, 54, 0]);
-        assert_eq!([words[8], words[9], words[10], words[11]], [18, 0, 0, 0]);
+        assert_eq!([words[0], words[2], words[3]], [60, 0, 0]);
+        assert_eq!([words[4], words[6], words[7]], [108, 60, 0]);
+        assert_eq!([words[8], words[10], words[11]], [18, 0, 0]);
         let collect = |start: usize, count: u32, capacity: usize| {
             assert!(count as usize <= capacity, "draw exceeds ID capacity");
             let mut ids = words[start..start + count as usize].to_vec();
@@ -182,6 +186,7 @@ impl VisibilityGpu {
         VisibleCells {
             terrain: collect(12, words[1], capacities[0]),
             foliage: collect(12 + capacities[0], words[5], capacities[1]),
+            water: words[9],
         }
     }
 }
@@ -197,12 +202,23 @@ fn column(position: Vec3, degree: u32, width: f32, wall_depth: f32) -> GpuCell {
         let ray = (position + Vec3::new(angle.cos(), angle.sin(), 0.) * width).normalize();
         *corner = ray.extend(height - wall_depth).to_array();
     }
+    // A synthetic column is a finest-level cell that owns itself, so the
+    // partition rule keeps every one of them and the tests below exercise the
+    // horizon, frustum and foliage decisions on their own.
     GpuCell {
         direction_height: axis.extend(height).to_array(),
         corners,
-        metadata: [degree, 5, 65_535, 0],
+        metadata: [degree | (TEST_FINEST_LEVEL << 8), 5, 65_535, 0],
+        owner_a: axis.extend(height).to_array(),
+        owner_b: axis.extend(height).to_array(),
+        floors: [height; 4],
+        spare: [0.; 4],
     }
 }
+
+/// The base level the synthetic params declare; the finest is four above it.
+const TEST_BASE_LEVEL: u32 = 0;
+const TEST_FINEST_LEVEL: u32 = TEST_BASE_LEVEL + 4;
 
 fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
     let camera = Vec3::new(0., 0., RADIUS + camera_height);
@@ -222,6 +238,12 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         water_deep: Vec3::new(0.02, 0.10, 0.22).extend(0.),
         weather: Vec4::ZERO,
         rain: [Vec4::ZERO; 4],
+        // Every slot is in the base, so all of them are live; the bands are
+        // wider than the sphere, so every owner is fine and nothing is covered.
+        lod_offsets: UVec4::new(count as u32, 1, 0, 0),
+        lod_counts: UVec4::ZERO,
+        lod: Vec3::Z.extend(TEST_BASE_LEVEL as f32),
+        bands: Vec4::splat(-2.),
     }
 }
 
@@ -237,6 +259,7 @@ fn expect(
         VisibleCells {
             terrain: terrain.to_vec(),
             foliage: foliage.to_vec(),
+            water: 0,
         }
     );
 }
@@ -298,9 +321,9 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
     expect(&gpu, &cells, reverse, &[0, 3], &[]);
 
     // Eligibility fixtures pin the actual existing hash/biome contract without
-    // reimplementing the predicate in Rust: forest 0 passes and 1 fails; grass
-    // 10 passes and 0 fails; scrub 19 passes and 0 fails.
-    let mut cells: Vec<_> = [(3, 0), (3, 1), (2, 10), (2, 0), (7, 19), (7, 0), (5, 0)]
+    // reimplementing the predicate in Rust: forest 5 passes and 0 fails; grass
+    // 5 passes and 0 fails; scrub 15 passes and 0 fails.
+    let mut cells: Vec<_> = [(3, 5), (3, 0), (2, 5), (2, 0), (7, 15), (7, 0), (5, 0)]
         .into_iter()
         .map(|(biome, seed)| {
             let mut cell = at(0., 0., RADIUS + 500., 6, 2., 0.);
@@ -312,6 +335,7 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
     for height in [201., 200., 199.] {
         let mut cell = at(0., 0., RADIUS + height, 5, 2., 0.);
         cell.metadata[1] = 3;
+        cell.metadata[3] = 5;
         cells.push(cell);
     }
     expect(
@@ -327,9 +351,13 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
 
     // A crown may intersect the view while its cap is outside. The independent
     // foliage list keeps it; a distant or ineligible column gets no tree margin.
-    let mut tree = at(35., 0., RADIUS, 6, 2., 0.);
+    // The largest rescaled tree fits inside 15 m of its base, so a trunk at
+    // 20 m (cap corners at 18 to 22, outside the 10 m half-width) is kept by
+    // its crown alone.
+    let mut tree = at(20., 0., RADIUS, 6, 2., 0.);
     tree.metadata[1] = 3;
-    let rock = at(35., 0., RADIUS, 6, 2., 0.);
+    tree.metadata[3] = 5;
+    let rock = at(20., 0., RADIUS, 6, 2., 0.);
     let cells = [tree, rock];
     expect(&gpu, &cells, params(2, 100., 10.), &[], &[0]);
     expect(&gpu, &cells, params(2, 2500., 10.), &[], &[]);
@@ -346,7 +374,8 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
             gpu.run_with_capacities(&cells, params(cells.len(), 100., 10.), capacities),
             VisibleCells {
                 terrain: vec![],
-                foliage: vec![]
+                foliage: vec![],
+                water: 0,
             },
             "either undersized output must suppress the complete generation",
         );
@@ -375,4 +404,102 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
         translated.clip_from_body = clip;
         assert_eq!(gpu.run(&cells, translated), origin);
     }
+}
+
+/// The partition on the real records: the base and the fine set around one
+/// anchor, packed as `upload_planet` packs them, with a 12 m eye at the anchor
+/// looking along the ground through a 90-degree perspective. Every listed
+/// tile must be at the level its band says, so no coarse cap can poke up
+/// through fine ground and no band is left empty.
+#[test]
+#[ignore = "requires a GPU; run cargo test -p pbd-app --lib partition -- --ignored --nocapture"]
+fn the_partition_lists_each_tile_at_its_bands_level_on_the_real_records() {
+    let gpu = VisibilityGpu::new();
+    let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+    let base = lod::base_records(&topology::dual_sphere(lod::BASE_LEVEL as u32));
+    let fine = lod::generate_fine(anchor);
+    let capacity = fine.levels.iter().map(Vec::len).max().unwrap();
+    let blank = GpuCell {
+        direction_height: [0.; 4],
+        corners: [[0.; 4]; 6],
+        metadata: [0; 4],
+        owner_a: [0.; 4],
+        owner_b: [0.; 4],
+        floors: [0.; 4],
+        spare: [0.; 4],
+    };
+    let mut records = base.clone();
+    for level in &fine.levels {
+        records.extend_from_slice(level);
+        records.extend(std::iter::repeat_n(blank, capacity - level.len()));
+    }
+    let slots = records.len();
+    let tangent = Vec3::Y.cross(anchor).normalize();
+    let lod_params = lod::LodParams::new(anchor);
+    // The seam eye: 12 m up, along the ground, where the horizon is about
+    // 340 m out so the base is below it. Then 3,000 m up looking down, where
+    // every band is in view.
+    let eyes = [
+        (
+            anchor * (terrain_radius(anchor) + 12.),
+            tangent * 600. - anchor * 12.,
+            anchor,
+        ),
+        (anchor * (terrain_radius(anchor) + 3000.), -anchor, Vec3::Y),
+    ];
+    let mut per_level = [0usize; 5];
+    for (eye, (camera, look, up)) in eyes.into_iter().enumerate() {
+        let mut params = params(slots, 0., 0.);
+        params.camera = camera.extend(1.);
+        params.clip_from_body =
+            Mat4::perspective_infinite_reverse_rh(std::f32::consts::FRAC_PI_2, 1.6, 0.1)
+                * Mat4::look_at_rh(camera, camera + look, up);
+        params.settings = Vec4::new(PLANET_RADIUS, slots as f32, 0., lod::BAND_M[3]);
+        params.water_absorption.w = PLANET_RADIUS - 0.5;
+        params.lod_offsets = UVec4::new(base.len() as u32, capacity as u32, 0, 0);
+        params.lod_counts = UVec4::from_array(fine.levels.each_ref().map(|l| l.len() as u32));
+        params.lod = anchor.extend(lod::BASE_LEVEL as f32);
+        params.bands = lod_params.bands;
+        let listed = gpu.run_with_capacities(&records, params, [slots; 2]);
+        assert!(!listed.terrain.is_empty());
+        per_level = [0usize; 5];
+        for &id in &listed.terrain {
+            let cell = &records[id as usize];
+            let level = cell.metadata[0] >> 8;
+            let direction = Vec3::from_slice(&cell.direction_height[..3]);
+            let distance_m = direction.dot(anchor).clamp(-1., 1.).acos() * PLANET_RADIUS;
+            // A tile is never listed inside the band of the next finer level,
+            // and a fine tile is never listed outside its own band, give or take
+            // the coarser cell it is partitioned by.
+            let slack = lod::tile_width_m(level.max(8) as u8 - 1);
+            let k = level as usize - lod::BASE_LEVEL as usize;
+            if level < lod::FINEST_LEVEL as u32 {
+                assert!(
+                    distance_m + slack >= lod::BAND_M[k],
+                    "level {level} tile listed {distance_m:.0} m from the player, inside the {} m band",
+                    lod::BAND_M[k]
+                );
+            }
+            if level > lod::BASE_LEVEL as u32 {
+                assert!(
+                    distance_m - slack <= lod::BAND_M[k - 1],
+                    "level {level} tile listed {distance_m:.0} m out, past its {} m band",
+                    lod::BAND_M[k - 1]
+                );
+            }
+            per_level[k] += 1;
+        }
+        eprintln!("eye {eye}: listed per level L7..L11: {per_level:?}");
+        if eye == 0 {
+            assert!(
+                per_level[4] > 100,
+                "the finest band is empty: {per_level:?}"
+            );
+            assert_eq!(per_level[0], 0, "the base is below a 12 m eye's horizon");
+        }
+    }
+    assert!(
+        per_level.iter().all(|&n| n > 0),
+        "a band is empty: {per_level:?}"
+    );
 }

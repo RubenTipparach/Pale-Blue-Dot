@@ -3,18 +3,23 @@
 
 use bevy::prelude::*;
 
-/// Sea-level radius in metres. This preview planet is eight kilometres wide.
-pub const PLANET_RADIUS: f32 = 4_000.0;
+/// Sea-level radius in metres. It sits on the gold-standard ladder
+/// `R = 300 m * 2^(L - 7)`: level 11 underfoot gives the 2.833 m Tenebris tile
+/// (see `lod::tile_width_m` and the CLAUDE.md rule on hex size).
+pub const PLANET_RADIUS: f32 = 4_800.0;
 
 /// Vertical quantum of the surface, in metres: one column cap sits this far
 /// above the next. It is the world's height resolution, so it belongs beside
-/// the radius rather than inline in the generator. The target engine layers
-/// near-player terrain at 1 m (see the voxel-engine-foundation change); this
-/// preview
-/// steps six times coarser because one height per 19 m column cannot carry
-/// metre-scale relief anyway. Read with `PLANET_RADIUS` when judging scale:
-/// together they are why a 1.6 m walker reads as small here.
-pub const ELEVATION_STEP: f32 = 6.0;
+/// the radius rather than inline in the generator. One metre is the Tenebris
+/// cell height, and the walker's step is sized off it.
+pub const ELEVATION_STEP: f32 = 1.0;
+
+/// How far the generated relief is compressed above and below the sea, so
+/// the seeded coastline keeps its shape while summits land near 150 m and
+/// the ocean floor near 60 m down: mountains a walker can climb rather than
+/// scenery, on a body whose column is a few times Tenebris's 40 m of land.
+const LAND_RELIEF: f32 = 0.17;
+const OCEAN_RELIEF: f32 = 0.12;
 
 fn hash(x: i32, y: i32, z: i32) -> f32 {
     let mut n = (x as u32).wrapping_mul(0x8da6b343)
@@ -58,10 +63,9 @@ pub fn surface_height(direction: Vec3) -> f32 {
     let mountains = ridge * (noise(d * 5.4 + Vec3::splat(71.)) * 1.3 + 0.20).max(0.) * 430. * land;
     let detail = noise(d * 62.3) * 7. + noise(d * 124.9) * 3.;
     let generated_height = continent * 630. - 18. + mountains + detail;
-    // Keep the seeded coastline and ocean depths while fitting terrestrial
-    // relief to this eight-kilometre world. The former ~850m summits overwhelmed
-    // its silhouette; the same ranges now peak around425m with broad lowlands.
-    let height = generated_height.min(0.) + generated_height.max(0.) * 0.5;
+    // Keep the seeded coastline while fitting the relief to a body the
+    // walker measures in one-metre cells. The raw ranges reach ~860 m.
+    let height = generated_height.min(0.) * OCEAN_RELIEF + generated_height.max(0.) * LAND_RELIEF;
     (height / ELEVATION_STEP).floor() * ELEVATION_STEP
 }
 
@@ -75,14 +79,16 @@ pub(super) fn biome(direction: Vec3, height: f32) -> u32 {
     if height < 0. {
         return 0;
     }
-    if height < 12. {
+    // Thresholds are the pre-rescale ones (12, 155 and 300 m against +432 m
+    // peaks) scaled with the relief, so the biome map keeps its shape.
+    if height < 4. {
         return 1;
     }
-    let temperature = 1. - direction.y.abs() - height * 0.00045;
+    let temperature = 1. - direction.y.abs() - height * 0.0013;
     let moisture = noise(direction * 7.3 + Vec3::splat(91.));
-    if temperature < 0.06 || height > 300. {
+    if temperature < 0.06 || height > 102. {
         6
-    } else if height > 155. {
+    } else if height > 53. {
         5
     } else if temperature < 0.22 {
         7
@@ -119,5 +125,26 @@ mod tests {
             "a world needs substantial oceans and continents"
         );
         assert!(surface_height(Vec3::ZERO).is_finite());
+    }
+
+    /// The relief is authored for a walker: summits near 150 m rather than
+    /// the +432 m the 4,000 m preview carried, and an ocean floor a few
+    /// times Tenebris's 24 m rather than -516 m. Measured over a Fibonacci
+    /// sample of the sphere so no seam or pole is favoured.
+    #[test]
+    fn relief_is_cut_to_climbable_summits_and_a_shallow_ocean_floor() {
+        let samples = 200_000;
+        let golden = std::f32::consts::PI * (3. - 5_f32.sqrt());
+        let (mut peak, mut floor) = (f32::MIN, f32::MAX);
+        for i in 0..samples {
+            let y = 1. - 2. * (i as f32 + 0.5) / samples as f32;
+            let r = (1. - y * y).max(0.).sqrt();
+            let a = golden * i as f32;
+            let h = surface_height(Vec3::new(r * a.cos(), y, r * a.sin()));
+            peak = peak.max(h);
+            floor = floor.min(h);
+        }
+        assert!((120.0..=180.0).contains(&peak), "summit {peak} m");
+        assert!((-90.0..=-40.0).contains(&floor), "ocean floor {floor} m");
     }
 }

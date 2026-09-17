@@ -19,7 +19,9 @@ use pbd_app::{
     CelestialScene, FIXED_HZ, PaleBlueDotPlugin, PhysicsFrame,
     config::ConfigPlugin,
     flight_view::{FlightViewConfig, FlightViewPlugin, FlyMode, TourProgress},
-    planet::{PLANET_RADIUS, PlanetPlugin, surface_height, terrain_radius},
+    planet::{
+        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, surface_height, terrain_radius, tile_width_m,
+    },
     sky::SkyPlugin,
     walking::{EYE_HEIGHT, WalkingConfig, WalkingPlugin},
     weather::WeatherPlugin,
@@ -135,7 +137,7 @@ impl Launch {
         );
         assert!(
             [
-                "orbit", "coast", "surface", "night", "pole", "shore", "wade", "dive"
+                "orbit", "coast", "surface", "seam", "night", "pole", "shore", "wade", "dive"
             ]
             .contains(&result.view.as_str()),
             "unknown capture view"
@@ -321,7 +323,7 @@ fn photo_camera(
         // degrees instead of straight down.
         let lat = 72_f32.to_radians();
         let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
-        let step = 2.0 * 19.0 / PLANET_RADIUS;
+        let step = 2.0 * tile_width_m(FINEST_LEVEL) / PLANET_RADIUS;
         let mut lon = 0.0_f32;
         while surface_height(at(lon)) < 0.0 && lon < std::f32::consts::TAU {
             lon += step;
@@ -357,12 +359,19 @@ fn photo_camera(
         "night" => (Vec3::new(-0.75, 0.12, 0.8).normalize(), 6200.0, true),
         "pole" => (Vec3::new(0.01, 1.0, 0.05).normalize(), 4200.0, true),
         "surface" => (Vec3::new(0.8776, 0.4794, 0.0).normalize(), 90.0, false),
+        // A low eye at the spawn, looking down across the 300 m band boundary
+        // at about eleven degrees: the still frame the hexagon-lod change asks
+        // for. Higher than eye level so the spawn's own terraces and trees do
+        // not fill the frame.
+        "seam" => (Vec3::new(0.8776, 0.4794, 0.0).normalize(), 60.0, false),
         _ => (Vec3::new(0.8776, 0.4794, 0.0).normalize(), 420.0, false),
     };
     let position = direction * (terrain_radius(direction) + altitude);
     let tangent = Vec3::Y.cross(direction).normalize_or_zero();
     let target = if look_down {
         Vec3::ZERO
+    } else if altitude < 80.0 {
+        position + tangent * 300.0 - direction * altitude
     } else {
         position + tangent * 1600.0 - direction * if altitude > 300.0 { 900.0 } else { 150.0 }
     };

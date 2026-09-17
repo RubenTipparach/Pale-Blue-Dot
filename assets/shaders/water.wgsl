@@ -10,6 +10,10 @@ struct Cell {
     direction_height: vec4<f32>,
     corners: array<vec4<f32>,6>,
     metadata: vec4<u32>,
+    owner_a: vec4<f32>,
+    owner_b: vec4<f32>,
+    floors: vec4<f32>,
+    spare: vec4<f32>,
 }
 struct WaterView {
     clip_from_local: mat4x4<f32>,
@@ -34,6 +38,8 @@ struct WaterView {
     fx: vec4<f32>,            // underwater distortion, submersion 0/0.5/1, rain, emerge
     lens: vec4<f32>,          // droplet density, refraction, speed, size
     screen: vec4<f32>,        // aspect, surface band m, wet blur, detail fade
+    lod: vec4<f32>,           // xyz player direction, w base level
+    bands: vec4<f32>,         // cos(band radius / R) per fine level, coarsest first
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -54,6 +60,9 @@ struct VertexOut {
     @location(2) sky_light: f32,
     @location(3) body_position: vec3<f32>,
     @location(4) flow_uv: vec2<f32>,
+    @location(5) @interpolate(flat) level: u32,
+    @location(6) @interpolate(flat) owner_a: vec3<f32>,
+    @location(7) @interpolate(flat) owner_b: vec3<f32>,
 }
 fn safe_normal(v: vec3<f32>) -> vec3<f32> { return v * inverseSqrt(max(dot(v,v),1e-12)); }
 
@@ -136,7 +145,8 @@ fn rain_ripple_grad(uv: vec2<f32>, t: f32) -> vec2<f32> {
 fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> VertexOut {
     let id = water[instance];
     let cell = cells[id];
-    let degree = cell.metadata.x;
+    let degree = cell.metadata.x & 0xffu;
+    let level = cell.metadata.x >> 8u;
     let axis = cell.direction_height.xyz;
     let sea = view.planet_center.w;
     var ray = axis;
@@ -164,7 +174,17 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.sky_light = 1.0;
     out.flow_uv = vec2<f32>(0.0);
     if (id < arrayLength(&flow)) { out.flow_uv = flow[id]; }
+    out.level = level;
+    out.owner_a = cell.owner_a.xyz;
+    out.owner_b = cell.owner_b.xyz;
     return out;
+}
+fn water_band_cos(level: u32) -> f32 {
+    let k = level - u32(view.lod.w) - 1u;
+    if (k == 0u) { return view.bands.x; }
+    if (k == 1u) { return view.bands.y; }
+    if (k == 2u) { return view.bands.z; }
+    return view.bands.w;
 }
 
 fn load_depth(uv: vec2<f32>) -> f32 {
@@ -200,6 +220,16 @@ fn distance_fog(local_position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>) ->
 @fragment
 fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
     let radial = safe_normal(in.body_position);
+    // The same partition the terrain applies: a midpoint sheet split between
+    // a fine and a coarse owner draws only the fine half.
+    if (in.level > u32(view.lod.w)) {
+        let a_fine = dot(in.owner_a, view.lod.xyz) > water_band_cos(in.level);
+        let b_fine = dot(in.owner_b, view.lod.xyz) > water_band_cos(in.level);
+        if (a_fine != b_fine) {
+            let nearer_a = dot(radial, in.owner_a) >= dot(radial, in.owner_b);
+            if ((nearer_a && !a_fine) || (!nearer_a && !b_fine)) { discard; }
+        }
+    }
     let face = safe_normal(in.normal);
     let time = view.camera_time.w;
     // Tangent frame off X or Y, projected off the face, exactly as Tenebris
@@ -264,7 +294,16 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         path_length = min(path_length,max(length(background-view.camera_time.xyz)-camera_distance,0.0));
     }
     let absorption = max(view.absorption.rgb,vec3<f32>(0.));
-    if (!front) {
+    // Seen from below: decided by where the camera is, not by the polygon's
+    // winding. The swell tilts a 2.8 m cap by several degrees, more than the
+    // grazing angle at the horizon, so winding alone could flip a cap seen
+    // from above onto the underwater path. The pipeline culls nothing, so
+    // `front` is only a tie-break for a camera exactly on the sheet.
+    let camera_body = view.camera_time.xyz - view.planet_center.xyz;
+    let camera_radius = length(camera_body);
+    let sheet_radius = length(in.body_position);
+    let below = camera_radius < sheet_radius || (camera_radius == sheet_radius && !front);
+    if (below) {
         // Seen from below: the deep colour by camera distance, and Snell's window.
         let underwater = mix(view.deep_color.rgb,scene,exp(-absorption*camera_distance));
         return vec4<f32>(mix(view.deep_color.rgb,underwater,smoothstep(0.55,0.75,dot(-look,normal))),1.);

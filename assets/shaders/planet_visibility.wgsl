@@ -3,11 +3,42 @@ struct Cell {
     direction_height: vec4<f32>,
     corners: array<vec4<f32>,6>,
     metadata: vec4<u32>,
+    owner_a: vec4<f32>,
+    owner_b: vec4<f32>,
+    floors: vec4<f32>,
+    spare: vec4<f32>,
 }
 struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
     water_absorption: vec4<f32>, water_deep: vec4<f32>, weather: vec4<f32>,
     rain: array<vec4<f32>,4>,
+    lod_offsets: vec4<u32>, // x base count, y fine-region capacity
+    lod_counts: vec4<u32>,  // live records per fine level, coarsest first
+    lod: vec4<f32>,         // xyz player direction, w base level
+    bands: vec4<f32>,       // cos(band radius / R) per fine level, coarsest first
+}
+fn base_level() -> u32 { return u32(params.lod.w); }
+fn finest_level() -> u32 { return base_level() + 4u; }
+fn band_cos(level: u32) -> f32 {
+    let k = level - base_level() - 1u;
+    if k == 0u { return params.bands.x; }
+    if k == 1u { return params.bands.y; }
+    if k == 2u { return params.bands.z; }
+    return params.bands.w;
+}
+// Whether the level below's cell a tile belongs to is drawn at this tile's
+// level: the partition rule, one dot product against the player direction.
+fn owner_fine(owner: vec3<f32>, level: u32) -> bool {
+    return dot(owner, params.lod.xyz) > band_cos(level);
+}
+// Whether a tile at this level is covered by the next finer band.
+fn covered_by_finer(direction: vec3<f32>, level: u32) -> bool {
+    return level < finest_level() && dot(direction, params.lod.xyz) > band_cos(level + 1u);
+}
+fn floor_of(cell: Cell, side: u32) -> f32 {
+    if side == 0u { return cell.owner_a.w; }
+    if side == 1u { return cell.owner_b.w; }
+    return cell.floors[side - 2u];
 }
 struct DrawArgs {
     vertex_count: u32,
@@ -24,13 +55,14 @@ struct DrawArgs {
 
 @compute @workgroup_size(1)
 fn clear_indirect() {
-    args[0].vertex_count = 54u;
+    // Cap, walls and the cut wall; the tree draw starts after them.
+    args[0].vertex_count = 60u;
     atomicStore(&args[0].instance_count, 0u);
     args[0].first_vertex = 0u;
     args[0].first_instance = 0u;
     args[1].vertex_count = 108u;
     atomicStore(&args[1].instance_count, 0u);
-    args[1].first_vertex = 54u;
+    args[1].first_vertex = 60u;
     args[1].first_instance = 0u;
     // The water cap: one hexagon fan per listed water cell.
     args[2].vertex_count = 18u;
@@ -47,11 +79,48 @@ fn hash(x: u32) -> u32 {
 
 // This is the sole foliage eligibility decision. The foliage indirect draw
 // submits geometry only for these cells; its vertex path never rejects trees.
+// Trees stand on the three finest levels, never on a midpoint cell that is
+// split between a fine and a coarse owner, since its centre is the cut, and
+// a coarser cell carries the chance of the finest cells it covers so the
+// cover per area is the same at every distance they are drawn at.
 fn has_nearby_foliage(cell: Cell, center: vec3<f32>) -> bool {
-    let seed = hash(cell.metadata.w);
+    let level = cell.metadata.x >> 8u;
+    if level + 2u < finest_level() || level > finest_level() { return false; }
+    if !(owner_fine(cell.owner_a.xyz, level) && owner_fine(cell.owner_b.xyz, level)) { return false; }
+    // Per-material density out of 256, the Tenebris scatter rule at its
+    // rates: forest at its swamp groves' 34, grass at its fields' 13, the
+    // cold scrub at its tundra's 2; times four per level above the finest.
+    let cover = 1u << (2u*(finest_level()-level));
+    let roll = hash(cell.metadata.w) & 0xffu;
     let material = cell.metadata.y;
-    let tree = (material==3u && seed%4u!=0u) || (material==2u && seed%9u==0u) || (material==7u && seed%7u==0u);
+    let tree = (material==3u && roll<34u*cover) || (material==2u && roll<13u*cover) || (material==7u && roll<2u*cover);
     return tree && distance(params.camera.xyz,center)<params.settings.w;
+}
+
+// A record slot is live when it is in the base or below its fine level's
+// live count; the rest of a fine region is stale from an earlier set.
+fn slot_live(slot: u32) -> bool {
+    let base = params.lod_offsets.x;
+    if slot < base { return true; }
+    let k = (slot - base) / params.lod_offsets.y;
+    let within = (slot - base) % params.lod_offsets.y;
+    if k == 0u { return within < params.lod_counts.x; }
+    if k == 1u { return within < params.lod_counts.y; }
+    if k == 2u { return within < params.lod_counts.z; }
+    return within < params.lod_counts.w;
+}
+
+// The partition rule: a tile draws at its level when the next finer band does
+// not cover it and its owner at the level below is drawn at this level. A
+// midpoint cell with one fine owner draws and is split per fragment.
+fn drawn(cell: Cell) -> bool {
+    let level = cell.metadata.x >> 8u;
+    let direction = cell.direction_height.xyz;
+    if covered_by_finer(direction, level) { return false; }
+    if level > base_level() {
+        return owner_fine(cell.owner_a.xyz, level) || owner_fine(cell.owner_b.xyz, level);
+    }
+    return true;
 }
 
 fn in_frustum(center: vec3<f32>, radius: f32) -> bool {
@@ -72,9 +141,10 @@ fn terrain_bound(cell: Cell, center: vec3<f32>, top: f32) -> f32 {
     var radius_squared = 0.0;
     // Bound every cap and exposed wall endpoint, including the bottom of a
     // cliff. Testing only the centre would pop cells along the viewport edge.
-    for (var i=0u; i<cell.metadata.x; i++) {
+    let degree = cell.metadata.x & 0xffu;
+    for (var i=0u; i<degree; i++) {
         let a = cell.corners[i].xyz;
-        let b = cell.corners[(i+1u)%cell.metadata.x].xyz;
+        let b = cell.corners[(i+1u)%degree].xyz;
         let lower = min(top,params.settings.x+cell.corners[i].w);
         let cap = a*top-center;
         let wall_a = a*lower-center;
@@ -91,14 +161,17 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     let count = u32(params.settings.y);
     if arrayLength(&cells)<count || arrayLength(&visible)<count || arrayLength(&foliage)<count || arrayLength(&water)<count { return; }
     if id.x >= count { return; }
+    if !slot_live(id.x) { return; }
     let cell = cells[id.x];
-    if cell.metadata.x<5u || cell.metadata.x>6u { return; }
+    let degree = cell.metadata.x & 0xffu;
+    if degree<5u || degree>6u { return; }
+    if !drawn(cell) { return; }
     let radius = params.settings.x;
     let camera_radius = length(params.camera.xyz);
     // The angular horizons of camera and raised terrain overlap. Include a
-    // 55m column/foliage margin and base the occluder below the sea surface.
+    // column/foliage margin and base the occluder below the sea surface.
     let occluder = radius - 8.0;
-    let top = radius + max(cell.direction_height.w,0.0) + 55.0;
+    let top = radius + max(cell.direction_height.w,0.0) + 20.0;
     // cos(acos(a)+acos(b)+0.018), expanded by angle addition. Inputs are
     // in [0,1], so both angle sines are their nonnegative square roots.
     // (1-c)*(1+c) retains precision near c=1. The tiny downward allowance
@@ -125,7 +198,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
         let sea = params.water_absorption.w;
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;
-        for (var i=0u; i<cell.metadata.x; i++) {
+        for (var i=0u; i<degree; i++) {
             reach = max(reach, distance(cell.corners[i].xyz*sea, sheet));
         }
         // The swell lifts a vertex by at most a few metres; 4 m covers it.
@@ -134,9 +207,9 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
             water[slot] = id.x;
         }
     }
-    // The largest authored tree fits inside 55 m of its base. Keep a tree
+    // The largest authored tree fits inside 15 m of its base. Keep a tree
     // whose crown enters the frustum even when its terrain cap is outside.
-    if has_nearby_foliage(cell,center) && in_frustum(center,55.) {
+    if has_nearby_foliage(cell,center) && in_frustum(center,15.) {
         let slot = atomicAdd(&args[1].instance_count,1u);
         foliage[slot] = id.x;
     }

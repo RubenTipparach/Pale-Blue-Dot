@@ -111,7 +111,7 @@ impl CelestialScene {
             ephemeris,
             states,
             gravity: vec![
-                GravityWell::new(0, DVec3::ZERO, 4_000.0, 1.0),
+                GravityWell::new(0, DVec3::ZERO, planet::PLANET_RADIUS as f64, 1.0),
                 // Preserve the demo moon's authored 1 m/s² surface pull.
                 GravityWell::new(1, DVec3::ZERO, 500.0, 0.04),
             ],

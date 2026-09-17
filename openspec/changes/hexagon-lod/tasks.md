@@ -11,31 +11,31 @@
       seam. `design.md`, "Implementation decisions".
 
 ## 2. Per-level topology
-- [ ] A lattice generator: position by `(face, i, j, level)` through the
+- [x] A lattice generator: position by `(face, i, j, level)` through the
       recursive midpoint construction, bit-identical to `dual_sphere`, with a
       test that says so on the shared points.
-- [ ] A local dual builder over the level-`L` triangles intersecting a cap,
+- [x] A local dual builder over the level-`L` triangles intersecting a cap,
       reusing `dual_sphere`'s dual construction; a test that every cell inside
       the cap has a complete ring and the measured tile width at level 11 on
       4,800 m is 2.833 m.
-- [ ] Records carry level, two owner directions and six fine floors; the base
+- [x] Records carry level, two owner directions and six fine floors; the base
       level is uploaded once and the fine levels are regenerated per anchor.
 
 ## 3. GPU level selection and culling, one-way
-- [ ] Extend `planet_visibility.wgsl` with the partition rule: a tile draws
+- [x] Extend `planet_visibility.wgsl` with the partition rule: a tile draws
       when it is not fine itself and its owner is; midpoint cells whose owners
       disagree draw and split per fragment. One pass, not two.
-- [ ] Walls to the fine floor on a fine side, the cut wall along a midpoint
+- [x] Walls to the fine floor on a fine side, the cut wall along a midpoint
       cell's diagonal, and the per-fragment owner test in the surface shader.
-- [ ] Keep the draw indirect and the readback at zero. Nothing about a tile
+- [x] Keep the draw indirect and the readback at zero. Nothing about a tile
       returns to the CPU.
-- [ ] Keep the 32-group coarse cull (12 icosahedron vertices plus 20 face
+- [x] Keep the 32-group coarse cull (12 icosahedron vertices plus 20 face
       centres) if it measures better than testing every tile.
 
 ## 4. The far tier is hexagons
-- [ ] Draw the far tier from the same vertex-pulling path and the same shading
+- [x] Draw the far tier from the same vertex-pulling path and the same shading
       terms as the near tier.
-- [ ] Do not port `distant.fs.glsl` or any triangle impostor.
+- [x] Do not port `distant.fs.glsl` or any triangle impostor.
 
 ## 5. The culling the pass already pays for but does not do
 
@@ -67,7 +67,7 @@ Tier selection, the seam and performance measurement remain open; this covers
 only the two culling fixes, which were independent of LOD.
 
 ## 6. Then the radius
-- [ ] With LOD landed, revisit the radius in
+- [x] With LOD landed, revisit the radius in
       `preview-scale-and-shader-parity`. The resident cost stops being
       `10*4^L + 2` for the whole globe, so the ladder stops being the
       constraint that picks the planet size.

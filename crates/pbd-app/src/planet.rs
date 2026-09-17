@@ -9,6 +9,8 @@
 mod contact;
 #[path = "planet_lattice.rs"]
 pub(crate) mod lattice;
+#[path = "planet_lod.rs"]
+pub(crate) mod lod;
 #[path = "planet_terrain.rs"]
 mod terrain;
 #[path = "planet_topology.rs"]
@@ -20,6 +22,7 @@ mod visibility_tests;
 mod water;
 
 pub use contact::{PlanetContact, SurfaceContact};
+pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, tile_width_m};
 pub use terrain::{ELEVATION_STEP, PLANET_RADIUS, surface_height, terrain_radius};
 pub use water::{emerge, submersion};
 
@@ -54,11 +57,11 @@ use bevy::{
 use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, num::NonZeroU64, sync::Arc};
 
-const SUBDIVISIONS: u32 = 8;
-// At this sea-level altitude even the highest preview summit and its trees
-// are beyond the shader's 2,300 m decorative-geometry range.
-const FOLIAGE_DRAW_CUTOFF_ALTITUDE: f32 = 3_200.;
-const FOLIAGE_DRAW_DISTANCE: f32 = 2_300.;
+// Trees live on the finest tier, so they reach exactly as far as it does.
+// Above the band's radius plus the highest summit and a tree, no tree can be
+// in range, and the foliage draw is disabled outright.
+const FOLIAGE_DRAW_DISTANCE: f32 = lod::BAND_M[1];
+const FOLIAGE_DRAW_CUTOFF_ALTITUDE: f32 = FOLIAGE_DRAW_DISTANCE + 600.;
 
 /// The preview body's centre in the translating render/physics frame. System
 /// positions are subtracted in f64 before any bounded GPU coordinate is cast.
@@ -100,24 +103,41 @@ impl PlanetRenderFrame {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct GpuCell {
-    direction_height: [f32; 4],
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
+pub(crate) struct GpuCell {
+    pub direction_height: [f32; 4],
     // xyz is the shared corner ray; w is this edge's adjacent surface height,
     // negative under the sea.
-    corners: [[f32; 4]; 6],
-    // Degree, explicit biome, baked sky occlusion (0..65535), stable cell ID.
-    metadata: [u32; 4],
+    pub corners: [[f32; 4]; 6],
+    // Degree in the low byte and level above it, explicit biome, baked sky
+    // occlusion (0..65535), stable cell ID.
+    pub metadata: [u32; 4],
+    // The level below's cells this one belongs to: itself when centred on a
+    // coarse vertex, the two whose edge it bisects otherwise. w carries the
+    // fine floor of sides 0 and 1: the height at that edge's midpoint.
+    pub owner_a: [f32; 4],
+    pub owner_b: [f32; 4],
+    // Fine floors of sides 2 to 5.
+    pub floors: [f32; 4],
+    pub spare: [f32; 4],
+}
+
+impl GpuCell {
+    pub fn degree(&self) -> usize {
+        (self.metadata[0] & 0xff) as usize
+    }
 }
 
 // Match the WGSL Cell storage ABI. These inspect the actual upload type; the
 // standalone shader validator separately inspects the parsed shader layouts.
-const _: [(); 128] = [(); size_of::<GpuCell>()];
+const _: [(); 192] = [(); size_of::<GpuCell>()];
 const _: [(); 16] = [(); std::mem::offset_of!(GpuCell, corners)];
 const _: [(); 112] = [(); std::mem::offset_of!(GpuCell, metadata)];
+const _: [(); 128] = [(); std::mem::offset_of!(GpuCell, owner_a)];
+const _: [(); 160] = [(); std::mem::offset_of!(GpuCell, floors)];
 
 #[derive(Resource, Clone, ExtractResource)]
-struct PlanetColumns(Arc<Vec<GpuCell>>);
+struct PlanetBase(Arc<Vec<GpuCell>>);
 
 #[derive(Resource, Clone, Default, ExtractResource)]
 struct PlanetClock(f32);
@@ -134,7 +154,8 @@ pub struct PlanetPlugin;
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
-            ExtractResourcePlugin::<PlanetColumns>::default(),
+            ExtractResourcePlugin::<PlanetBase>::default(),
+            ExtractResourcePlugin::<lod::PlanetFine>::default(),
             ExtractResourcePlugin::<PlanetClock>::default(),
             ExtractResourcePlugin::<PlanetArt>::default(),
             ExtractResourcePlugin::<PlanetRenderFrame>::default(),
@@ -142,7 +163,9 @@ impl Plugin for PlanetPlugin {
         ))
         .init_resource::<PlanetClock>()
         .init_resource::<PlanetRenderFrame>()
+        .init_resource::<lod::LodRefresh>()
         .add_systems(Startup, create_planet)
+        .add_systems(Update, lod::refresh_lod)
         .add_systems(
             PostUpdate,
             update_planet_frame.before(TransformSystems::Propagate),
@@ -158,7 +181,9 @@ impl Plugin for PlanetPlugin {
             .add_systems(
                 Render,
                 (
-                    upload_planet.in_set(RenderSystems::PrepareResources),
+                    (upload_planet, upload_fine)
+                        .chain()
+                        .in_set(RenderSystems::PrepareResources),
                     prepare_views.in_set(RenderSystems::PrepareBindGroups),
                     queue_planet.in_set(RenderSystems::QueueMeshes),
                 ),
@@ -170,31 +195,54 @@ impl Plugin for PlanetPlugin {
     }
 }
 
-fn create_planet(mut commands: Commands, assets: Res<AssetServer>) {
+fn create_planet(
+    mut commands: Commands,
+    assets: Res<AssetServer>,
+    flight: Res<crate::flight_view::FlightViewConfig>,
+) {
     let started = std::time::Instant::now();
-    let cells = topology::dual_sphere(SUBDIVISIONS);
-    let columns = Arc::new(generate_columns(&cells));
-    let contacts = PlanetContact::new(columns.clone(), &cells);
+    let cells = topology::dual_sphere(lod::BASE_LEVEL as u32);
+    let base = Arc::new(lod::base_records(&cells));
+    let mut contacts = PlanetContact::new(base.clone(), &cells);
     let (narrowest, mean_width, widest) = tile_widths(&cells);
+    // The fine bands around the spawn, synchronously, so the walker has its
+    // tile to stand on before its first tick.
+    let anchor = contacts.find_land_near(flight.spawn_direction);
+    let fine = Arc::new(lod::generate_fine(anchor));
+    contacts.set_fine(&fine);
+    let fine_count: usize = fine.levels.iter().map(Vec::len).sum();
     info!(
-        "Planet ready: {} columns, 12 pentagons, {:.1} MiB topology, {:.2}s generation",
-        columns.len(),
-        (columns.len() * size_of::<GpuCell>()) as f64 / 1_048_576.,
+        "Planet ready: base L{} {} columns, fine L{}-L{} {} columns around the spawn, \
+         12 pentagons, {:.1} MiB records, {:.2}s generation",
+        lod::BASE_LEVEL,
+        base.len(),
+        lod::FINE_LEVELS[0],
+        lod::FINEST_LEVEL,
+        fine_count,
+        ((base.len() + fine_count) * size_of::<GpuCell>()) as f64 / 1_048_576.,
         started.elapsed().as_secs_f64()
     );
     info!(
-        "Planet scale: L{} on r={:.0} m gives {:.2} m mean tile width ({:.2}-{:.2} m), \
-         {:.0} m elevation step; the walker's eye is {:.2} m",
-        SUBDIVISIONS,
+        "Planet scale: r={:.0} m; base L{} gives {:.2} m mean tile width ({:.2}-{:.2} m), \
+         the finest L{} {:.3} m underfoot within {:.0} m; {:.0} m elevation step; \
+         the walker's eye is {:.2} m",
         PLANET_RADIUS,
+        lod::BASE_LEVEL,
         mean_width,
         narrowest,
         widest,
+        lod::FINEST_LEVEL,
+        lod::tile_width_m(lod::FINEST_LEVEL),
+        lod::BAND_M[3],
         ELEVATION_STEP,
         crate::walking::EYE_HEIGHT,
     );
     commands.insert_resource(contacts);
-    commands.insert_resource(PlanetColumns(columns));
+    commands.insert_resource(PlanetBase(base));
+    commands.insert_resource(lod::PlanetFine {
+        set: fine,
+        version: 1,
+    });
     commands.insert_resource(PlanetArt(assets.load_with_settings(
         "tilesets/fields.png",
         |settings: &mut ImageLoaderSettings| settings.sampler = ImageSampler::nearest(),
@@ -237,38 +285,6 @@ fn tile_widths(cells: &[topology::DualCell]) -> (f32, f32, f32) {
     (min, (total / f64::from(count.max(1))) as f32, max)
 }
 
-fn generate_columns(cells: &[topology::DualCell]) -> Vec<GpuCell> {
-    let heights: Vec<_> = cells.iter().map(|c| surface_height(c.direction)).collect();
-    cells
-        .iter()
-        .enumerate()
-        .map(|(index, cell)| {
-            let height = heights[index];
-            let mut corners = [[0.; 4]; 6];
-            let mut occlusion = 0.;
-            for (side, corner) in cell.corners.iter().enumerate() {
-                // The real neighbour height, below sea level included, so a
-                // seabed step draws its wall and the sheet has a floor to see.
-                let neighbor_height = heights[cell.neighbors[side]];
-                corners[side] = [corner.x, corner.y, corner.z, neighbor_height];
-                let separation = tile_width(cell, &cells[cell.neighbors[side]]);
-                occlusion += ((neighbor_height - height) / separation.max(1.)).clamp(0., 1.);
-            }
-            let skylight = 1. - occlusion / cell.corners.len() as f32 * 0.55;
-            GpuCell {
-                direction_height: [cell.direction.x, cell.direction.y, cell.direction.z, height],
-                corners,
-                metadata: [
-                    cell.corners.len() as u32,
-                    terrain::biome(cell.direction, height),
-                    (skylight * 65535.) as u32,
-                    index as u32,
-                ],
-            }
-        })
-        .collect()
-}
-
 #[derive(Clone, ShaderType)]
 struct PlanetParams {
     clip_from_body: Mat4,
@@ -285,12 +301,27 @@ struct PlanetParams {
     weather: Vec4,
     // The thirteen terrain-wetness knobs from `weather.ron`, in `hex.fs` order.
     rain: [Vec4; 4],
+    // Base record count and fine-region capacity; the fine regions follow the
+    // base at that stride.
+    lod_offsets: UVec4,
+    // Live record count per fine level.
+    lod_counts: UVec4,
+    // Player direction in the body frame; w the base level.
+    lod: Vec4,
+    // cos(band radius / R) per fine level, coarsest first.
+    bands: Vec4,
 }
 
 #[derive(Resource)]
 struct PlanetGpu {
     cells: Buffer,
-    count: u32,
+    /// Record slots in the buffer: the base then four fine regions.
+    slots: u32,
+    base_count: u32,
+    /// Live records per fine level, in `FINE_LEVELS` order.
+    counts: [u32; 4],
+    /// The fine set version the regions hold.
+    uploaded: u64,
 }
 
 #[derive(Component)]
@@ -309,25 +340,63 @@ struct PlanetViewGpu {
 
 fn upload_planet(
     mut commands: Commands,
-    columns: Option<Res<PlanetColumns>>,
+    base: Option<Res<PlanetBase>>,
     existing: Option<Res<PlanetGpu>>,
     device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
 ) {
     if existing.is_some() {
         return;
     }
-    let Some(columns) = columns else {
+    let Some(base) = base else {
         return;
     };
-    let cells = device.create_buffer_with_data(&BufferInitDescriptor {
-        label: Some("Persistent planet columns: directions, corner rays, materials"),
-        contents: bytemuck::cast_slice(columns.0.as_slice()),
-        usage: BufferUsages::STORAGE,
+    let base_count = base.0.len() as u32;
+    let slots = base_count + 4 * lod::FINE_CAPACITY;
+    // Zero-initialised: an empty slot has degree zero and the compute pass
+    // skips it, so the fine regions are inert until their first upload.
+    let cells = device.create_buffer(&BufferDescriptor {
+        label: Some("Persistent planet columns: base level, then four fine bands"),
+        size: slots as u64 * size_of::<GpuCell>() as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     });
+    queue.write_buffer(&cells, 0, bytemuck::cast_slice(base.0.as_slice()));
     commands.insert_resource(PlanetGpu {
         cells,
-        count: columns.0.len() as u32,
+        slots,
+        base_count,
+        counts: [0; 4],
+        uploaded: 0,
     });
+}
+
+/// Rewrite the fine regions when a new fine set has landed. Each level's
+/// records go at its own offset; the count is what the compute pass reads.
+fn upload_fine(
+    fine: Option<Res<lod::PlanetFine>>,
+    planet: Option<ResMut<PlanetGpu>>,
+    queue: Res<RenderQueue>,
+) {
+    let (Some(fine), Some(mut planet)) = (fine, planet) else {
+        return;
+    };
+    if planet.uploaded == fine.version {
+        return;
+    }
+    let stride = size_of::<GpuCell>() as u64;
+    for (k, level) in fine.set.levels.iter().enumerate() {
+        let offset = (planet.base_count as u64 + k as u64 * lod::FINE_CAPACITY as u64) * stride;
+        if !level.is_empty() {
+            queue.write_buffer(
+                &planet.cells,
+                offset,
+                bytemuck::cast_slice(level.as_slice()),
+            );
+        }
+        planet.counts[k] = level.len().min(lod::FINE_CAPACITY as usize) as u32;
+    }
+    planet.uploaded = fine.version;
 }
 
 #[derive(Resource)]
@@ -480,11 +549,16 @@ fn prepare_views(
                 FOLIAGE_DRAW_DISTANCE
             };
         let w = &weather_settings;
+        let lod = lod::LodParams::new(camera_position);
+        trace!(
+            "planet view {entity}: camera {camera_position:?}, lod player {:?}, base {} fine {:?}",
+            lod.player, planet.base_count, planet.counts
+        );
         let params = PlanetParams {
             clip_from_body,
             camera: camera_position.extend(1.),
             sun: crate::sky::SUN_DIRECTION.normalize().extend(1.),
-            settings: Vec4::new(PLANET_RADIUS, planet.count as f32, clock.0, foliage_range),
+            settings: Vec4::new(PLANET_RADIUS, planet.slots as f32, clock.0, foliage_range),
             water_absorption: Vec3::from_array(water_settings.absorption_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),
             water_deep: Vec3::from_array(water_settings.deep_color).extend(0.),
@@ -510,6 +584,10 @@ fn prepare_views(
                 ),
                 Vec4::new(w.rain_glint_strength, 0., 0., 0.),
             ],
+            lod_offsets: UVec4::new(planet.base_count, lod::FINE_CAPACITY, 0, 0),
+            lod_counts: UVec4::from_array(planet.counts),
+            lod: lod.player.extend(lod::BASE_LEVEL as f32),
+            bands: lod.bands,
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
@@ -520,7 +598,7 @@ fn prepare_views(
         uniform.write_buffer(&device, &queue);
         let visible = device.create_buffer(&BufferDescriptor {
             label: Some("GPU visible planet column IDs"),
-            size: planet.count as u64 * 4,
+            size: planet.slots as u64 * 4,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -532,13 +610,13 @@ fn prepare_views(
         });
         let foliage = device.create_buffer(&BufferDescriptor {
             label: Some("GPU nearby foliage column IDs"),
-            size: planet.count as u64 * 4,
+            size: planet.slots as u64 * 4,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
         let water = device.create_buffer(&BufferDescriptor {
             label: Some("GPU visible water cell IDs"),
-            size: planet.count as u64 * 4,
+            size: planet.slots as u64 * 4,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -674,7 +752,7 @@ mod pipeline_tests {
     fn actual_pipeline_layouts_use_static_offsets_and_correct_storage_access() {
         assert_eq!(
             PlanetParams::min_size().get(),
-            224,
+            288,
             "actual encoded Rust uniform must match WGSL Params"
         );
         for (layout, read_only_bindings) in
@@ -762,7 +840,7 @@ impl render_graph::Node for PlanetComputeNode {
             pass.set_pipeline(clear);
             pass.dispatch_workgroups(1, 1, 1);
             pass.set_pipeline(compact);
-            pass.dispatch_workgroups(planet.count.div_ceil(128), 1, 1);
+            pass.dispatch_workgroups(planet.slots.div_ceil(128), 1, 1);
         }
         Ok(())
     }
@@ -796,23 +874,23 @@ mod tests {
             "measured {fine} m vs equal-area {equal_area} m"
         );
 
-        // What the shipped configuration actually is, measured AT that level
-        // rather than extrapolated to it. The extrapolation is the cheap check
-        // above; this is the number the startup log prints, and pinning the
-        // extrapolation instead is what let an f32 accumulator under-report the
-        // real globe by 1.2% without failing anything. About 0.9 s in debug.
-        let shipped = tile_widths(&topology::dual_sphere(SUBDIVISIONS)).1;
+        // What the shipped base configuration actually is, measured AT that
+        // level rather than extrapolated to it: the number the startup log
+        // prints. The finest tier is pinned by the lattice's own test, since
+        // it is never a whole sphere.
+        let shipped = tile_widths(&topology::dual_sphere(lod::BASE_LEVEL as u32)).1;
         assert!(
-            (shipped - 18.886).abs() < 0.01,
-            "shipped tile width {shipped} m at L{SUBDIVISIONS} on r={PLANET_RADIUS} m"
+            (shipped - lod::tile_width_m(lod::BASE_LEVEL)).abs() < 0.05,
+            "shipped base tile width {shipped} m at L{} on r={PLANET_RADIUS} m",
+            lod::BASE_LEVEL
         );
-        // And the extrapolation must agree with it, which is what fails if the
-        // accumulator loses precision at the level that has the most terms.
-        let extrapolated = fine / 2_f32.powi(SUBDIVISIONS as i32 - 5);
+        let extrapolated = fine / 2_f32.powi(lod::BASE_LEVEL as i32 - 5);
         assert!(
             (extrapolated / shipped - 1.).abs() < 0.002,
             "extrapolated {extrapolated} m vs measured {shipped} m"
         );
         assert!(shipped > crate::walking::EYE_HEIGHT * 10.);
+        // And the finest tier is the one the walker's eye is measured against.
+        assert!(lod::tile_width_m(lod::FINEST_LEVEL) < crate::walking::EYE_HEIGHT * 2.);
     }
 }

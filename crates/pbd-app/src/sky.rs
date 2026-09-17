@@ -3,6 +3,7 @@
 //! Planet terrain/ocean are owned by `planet`; this shell contributes sky,
 //! orbital haze and sparse clouds. Camera and sphere positions use the same
 //! local world frame. See `docs/tenebris-comparison.md` for visual provenance.
+use crate::config::WaterSettings;
 use crate::planet::{PlanetRenderFrame, update_planet_frame};
 use bevy::{
     light::{NotShadowCaster, NotShadowReceiver},
@@ -17,11 +18,20 @@ use bevy::{
 };
 
 pub use crate::planet::PLANET_RADIUS;
-// The surface prototype peaks near +426 m after its elevation compression.
-// Keep clouds above those peaks and the outer shell above the cloud layer.
-pub const ATMOSPHERE_RADIUS: f32 = PLANET_RADIUS + 800.0;
-pub const CLOUD_RADIUS: f32 = PLANET_RADIUS + 600.0;
+// The shell keeps the ratio it was tuned at (1.2 R, which the scattering
+// scale height is normalized against); the clouds sit 300 m up, twice the
+// ~150 m summits, and the shell clears them by a wide margin.
+pub const ATMOSPHERE_RADIUS: f32 = PLANET_RADIUS * 1.2;
+pub const CLOUD_RADIUS: f32 = PLANET_RADIUS + 300.0;
 pub const SUN_DIRECTION: Vec3 = Vec3::new(0.65, 0.75, 0.35);
+
+/// The radius the sky treats as solid ground: the water sheet, which sits
+/// `depth_offset_m` below sea level. With the sea-level sphere instead, the
+/// few pixels between the sheet's silhouette and that sphere's tangent drew
+/// the sky shader's ground as a dark line along the sea horizon.
+pub fn solid_radius(water: &WaterSettings) -> f32 {
+    PLANET_RADIUS - water.depth_offset_m
+}
 
 pub struct SkyPlugin;
 
@@ -63,6 +73,7 @@ struct PlanetAtmosphere;
 
 fn position_atmosphere(
     frame: Res<PlanetRenderFrame>,
+    water: Res<WaterSettings>,
     mut shells: Query<(&mut Transform, &MeshMaterial3d<SkyMaterial>), With<PlanetAtmosphere>>,
     mut materials: ResMut<Assets<SkyMaterial>>,
 ) {
@@ -78,7 +89,7 @@ fn position_atmosphere(
             .is_some_and(|sky| sky.parameters.center_radius.truncate() != center)
             && let Some(sky) = materials.get_mut(&material.0)
         {
-            sky.parameters.center_radius = center.extend(PLANET_RADIUS);
+            sky.parameters.center_radius = center.extend(solid_radius(&water));
         }
     }
 }
@@ -121,11 +132,12 @@ fn spawn_atmosphere(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<SkyMaterial>>,
+    water: Res<WaterSettings>,
 ) {
     let sun = SUN_DIRECTION.normalize();
     let material = materials.add(SkyMaterial {
         parameters: SkyParameters {
-            center_radius: Vec3::ZERO.extend(PLANET_RADIUS),
+            center_radius: Vec3::ZERO.extend(solid_radius(&water)),
             atmosphere: Vec4::new(ATMOSPHERE_RADIUS, 0.22, 0.30, 0.018),
             sun: sun.extend(3.2),
             scatter: Vec4::new(0.16, 0.52, 1.30, 0.64),
@@ -161,6 +173,7 @@ mod tests {
                 ..default()
             }))
             .init_resource::<PlanetRenderFrame>()
+            .insert_resource(WaterSettings::default())
             .init_resource::<Assets<SkyMaterial>>()
             .add_systems(
                 PostUpdate,
@@ -171,7 +184,7 @@ mod tests {
             .resource_mut::<Assets<SkyMaterial>>()
             .add(SkyMaterial {
                 parameters: SkyParameters {
-                    center_radius: Vec3::ZERO.extend(PLANET_RADIUS),
+                    center_radius: Vec3::ZERO.extend(solid_radius(&WaterSettings::default())),
                     atmosphere: Vec4::ZERO,
                     sun: Vec4::ZERO,
                     scatter: Vec4::ZERO,
@@ -201,7 +214,7 @@ mod tests {
             let materials = app.world().resource::<Assets<SkyMaterial>>();
             assert_eq!(
                 materials.get(&material).unwrap().parameters.center_radius,
-                center.extend(PLANET_RADIUS)
+                center.extend(solid_radius(&WaterSettings::default()))
             );
         }
     }

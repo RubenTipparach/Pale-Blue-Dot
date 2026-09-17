@@ -105,9 +105,11 @@ same views rather than relying on a differently framed beauty shot.
 ## Measured dimensional comparison
 
 The complaint that started this section was that the camera "feels really short
-compared to the hexagons". It is correct, and the reason is not the camera. The
-avatar was taken from Tenebris at 1:1 while the world around it was built about
-six and a half times larger.
+compared to the hexagons". It was correct, and the reason was not the camera:
+the avatar was taken from Tenebris at 1:1 while the world around it was built
+about six and a half times larger. **This is now closed**: see "After the
+rescale and hexagon LOD" below for the numbers as they stand. The table and the
+options that follow are kept as the measurement that decided it.
 
 Every number below is read out of the two source trees. The tile widths are
 measured rather than derived: `planet::tile_widths` walks the real
@@ -212,10 +214,97 @@ without making a tile smaller.
    chunk/radial-slab section, and it is the only option that gets metre-scale ground on an 8 km
    world. It is also the whole remaining engine.
 
-Option 1 is the honest one for a preview whose stated job is the whole-globe
-silhouette. It is recorded here as a measurement and a set of options, not
-applied: rescaling the body moves nine other tuned numbers and every capture in
-this document, and that is a decision to take deliberately.
+Option 3 is what was built, with the radius moved to 4,800 m so that the
+finest level lands the standard exactly. The section below records the result.
+
+### After the rescale and hexagon LOD
+
+Measured on the shipped build (`planet::tile_widths` and `lod::tile_width_m`,
+printed at startup and pinned by tests):
+
+| Quantity | Tenebris | Pale Blue Dot now | Ratio |
+| --- | ---: | ---: | ---: |
+| Sea-level radius | 300 m | 4,800 m | 16x |
+| Level underfoot | 7 | 11 | +4 |
+| Tile width underfoot, mean | 2.833 m | **2.833 m** | 1.0x |
+| Base level (whole globe) | 7, 163,842 cells | 7, 163,842 cells | 1.0x |
+| Fine levels resident | none (whole body at 7) | 8 to 11 in bands of 2,400 / 1,200 / 600 / 300 m | our design |
+| Resident records | 163,842 | 163,842 base + ~160,000 fine, 59 MiB at 192 B | |
+| Vertical quantum | 1.00 m | **1.00 m** | 1.0x |
+| Summit / ocean floor | +40 m / -24 m | +147 m / -62 m | see below |
+| Walker step | one block | 1.05 m (one cell plus skin) | 1.0x |
+| Tree scatter | per biome out of 256 (jungle 115, fields 13) | forest 115, grass and scrub 13 | same rule |
+| Atlas tile across a cap | one tile per face | 1.5 tiles per face | |
+| Atlas tile down a wall | one tile per metre | one tile per metre | 1.0x |
+
+The relief is the one number that is deliberately not Tenebris's: the owner
+chose ~100-150 m summits over Tenebris's 40 m, and the generator compresses its
+raw ranges by 0.17 above the sea and 0.12 below it, keeping the coastline.
+
+![Orbit after the rescale](screenshots/lod-orbit.png)
+
+From orbit only the level-7 base draws: the whole globe is hexagons and twelve
+pentagons at 45 m, the same closed dual the preview always had, with the sky
+shell at the same 1.2 R ratio and the clouds down at 300 m.
+
+![Surface after the rescale](screenshots/lod-surface.png)
+
+The surface view from 90 m at the spawn looks across all four bands: 2.833 m
+tiles with one-metre terraces underfoot, the 45 m base tiles on the far ridge,
+and the transitions between them along the way, with the forest scattered at
+Tenebris's rates out to the level-9 band.
+
+![The walker after the rescale](screenshots/lod-walk.png)
+
+The walker at the spawn, in a forest scattered at Tenebris's rates: 2.833 m
+tiles at its feet, a one-metre step at the right edge, trunks about a metre
+across and crowns six metres up.
+
+![The band boundary at a grazing angle](screenshots/lod-seam.png)
+
+The `seam` capture preset is a 60 m eye at the spawn looking down at about
+eleven degrees across the 300 m boundary between level 11 and level 10, which
+sits under the crosshair, with the 600 m and 1,200 m boundaries beyond it.
+This is the still frame the hexagon-lod change asked for before the tiers were
+built, taken as the first frame of the built partition instead, on the owner's
+instruction to build. What it shows: the sand's one-metre contours run
+through the boundary without a crack, a doubled cap or a line, and the forest
+cover is continuous out to the level-9 band. What it cannot show is motion,
+which is where a boundary would sweep: that needs the owner's eye in the
+running game, walking the band edge, and is the remaining seam requirement in
+the `hexagon-lod` change.
+
+Three findings from these captures, each fixed in the same commit:
+
+1. **The seam camera's first frame was a wall of blue.** A 12 m eye at the
+   spawn sat among the spawn's own terraces and read as 45 m tiles at arm's
+   length. A per-level tint of the surface shader (not committed) showed every
+   tile in it was level 11, and a GPU test on the real records
+   (`the_partition_lists_each_tile_at_its_bands_level_on_the_real_records`)
+   confirmed the partition lists no tile outside its band from that eye, so
+   the frame was a framing, and the preset moved up to 60 m.
+2. **The forest ended in a straight line at 300 m.** Trees were eligible on
+   the finest level only, so the band edge was drawn by what stood on it.
+   Trees are eligible on levels 9 to 11 now at the same cover per area
+   (`hexagon-lod/design.md`, "Trees on three levels").
+3. **A dark line where the sea met the sky** (`shore` view), a few pixels
+   tall with the sheet's cells stepping along it. Three wrong theories were
+   tested and dropped in turn (a back-facing cap taking the underwater path,
+   the seabed showing through, the horizon-strength knob dimming Fresnel;
+   the first left a robustness change behind, the sheet deciding above or
+   below by camera height rather than winding). The cause was geometric: the
+   sheet sits `depth_offset_m` (0.5 m) below sea level, and the sky shader
+   treated the full sea-level sphere as solid ground, so between the sheet's
+   silhouette and that sphere's tangent the sky drew its ground colour.
+   `sky::solid_radius` hands the sky the sheet's radius instead.
+
+![The shore after the rescale](screenshots/lod-shore.png)
+
+What this does not do: the surface is still one height per column, not a
+volume, and a fine set is regenerated on the CPU as one 160,000-record job
+when the player has walked 40 m (about 1.8 s in a debug build on this
+container's four cores, off the main thread). Nothing per tile returns from the
+GPU.
 
 ## Measured gravity comparison
 

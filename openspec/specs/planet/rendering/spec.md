@@ -86,12 +86,16 @@ intersects a clip plane. Infinite reverse-Z projections SHALL remain supported.
 ### Requirement: Only nearby eligible cells submit foliage vertices
 The GPU SHALL compact foliage IDs separately from terrain IDs using the
 material, stable seed and body-local camera distance. Terrain SHALL use a
-54-vertex indirect draw, and foliage SHALL use a 108-vertex indirect draw
-starting at vertex 54. Runtime per-cell visibility SHALL NOT return to the CPU.
+60-vertex indirect draw (the cap, six walls and the cut wall), and foliage SHALL
+use a 108-vertex indirect draw starting at vertex 60. Foliage SHALL be eligible
+on the three finest levels out to the level-9 band, at a per-material density
+out of 256 taken from Tenebris's scatter rule (forest 34, grass 13, scrub 2)
+times four per level above the finest, so the cover per area is the same at
+every drawn distance. Runtime per-cell visibility SHALL NOT return to the CPU.
 
 #### Scenario: Distant or nonvegetated ground
-- **WHEN** a column has no decorative tree or its base is at least 2,300 m from
-  the camera
+- **WHEN** a column has no decorative tree or its base is at least 1,200 m
+  from the camera
 - **THEN** it submits no foliage vertices
 - **AND** its terrain remains independently eligible for drawing
 
@@ -99,3 +103,69 @@ starting at vertex 54. Runtime per-cell visibility SHALL NOT return to the CPU.
 - **WHEN** a nearby tree's crown intersects the frustum while its terrain does
   not
 - **THEN** the foliage draw retains that tree independently
+
+### Requirement: Hexagons at every distance
+A body SHALL be drawn as hexagonal tiles at every level of detail, from the
+ground to the far limb. A triangle-mesh impostor SHALL NOT be substituted at
+distance.
+
+#### Scenario: Viewing a body from orbit
+- **WHEN** the camera is far enough that only the base level is drawn
+- **THEN** the body is made of hexagons and twelve pentagons
+- **AND** its silhouette is polygonal rather than a smooth sphere
+
+### Requirement: A resident set of levels around the player
+The base level (level 7, the whole globe) SHALL be uploaded once. Each finer
+level SHALL be resident only as a band around the player, regenerated as one
+set off the CPU height function when the player has moved farther than the
+regeneration distance, and published whole: a fine region is either the
+previous complete set or the next, never a partial one. A tile's height SHALL
+come from the one height function at every level, so a coarse cap and the fine
+cells it covers agree.
+
+#### Scenario: A vertex-centred fine cell
+- **WHEN** a fine cell is centred on a coarse vertex
+- **THEN** its direction and height are the coarse cell's, bit for bit
+
+#### Scenario: Capacity overflow
+- **WHEN** a band holds more cells than its region's capacity
+- **THEN** the farthest cells are dropped, the walker's contact trusts the
+  finest level only inside the radius that stayed complete, and nothing is
+  written past the region
+
+### Requirement: Level selection and culling never return to the CPU
+The level of detail for a tile, the visibility cull and the draw arguments SHALL
+be computed on the GPU and consumed by an indirect draw. No per-tile LOD or
+visibility state SHALL be read back, maintained per frame on the CPU, or
+uploaded per frame.
+
+#### Scenario: A frame while the camera moves
+- **WHEN** the camera moves and the level of detail changes for some tiles
+- **THEN** no buffer is read back from the GPU
+- **AND** no per-tile visibility or level set is rebuilt on the CPU
+
+### Requirement: The gold standard binds the tile underfoot
+The 2.833 m tile width and 1 m cell height SHALL hold for the tier a player
+occupies, on every body. A coarser tile on a distant part of the same body SHALL
+NOT be treated as a violation of the standard.
+
+#### Scenario: Standing on any body
+- **WHEN** a player stands on a body and looks at the ground
+- **THEN** the tiles they can walk on, dig, or stand beside are 2.833 m across
+  and 1 m tall
+
+### Requirement: Level is quantised from distance to the player
+A tile's level of detail SHALL be a function of its great-circle distance from
+the player, quantised into bands of 2,400, 1,200, 600 and 300 m for levels 8 to
+11, decided by the level below's cell the tile belongs to (its owner) against
+one published player direction. Midpoint cells with one fine owner SHALL be
+drawn and split per fragment along the owner boundary. It SHALL NOT be anchored
+to the camera, so that looking around does not change any tile's level.
+
+#### Scenario: The player stands still and looks around
+- **WHEN** the camera turns or pulls back while the player does not move
+- **THEN** no tile changes level
+
+#### Scenario: Two adjacent tiles away from a threshold
+- **WHEN** two neighbouring tiles are both well inside one band
+- **THEN** both are assigned the same level, without consulting each other

@@ -51,7 +51,7 @@ fn sun_visibility(p: vec3<f32>, sun: vec3<f32>) -> f32 {
     // its perpendicular distance to the body axis. Smooth that silhouette
     // instead of dropping whole view samples at a binary sphere intersection.
     let closest_radius = length(p-sun*along_sun);
-    let penumbra = 36.0 + min(-along_sun,4000.0)*0.006;
+    let penumbra = 36.0 + min(-along_sun,sky.center_radius.w)*0.006;
     return smoothstep(-penumbra,penumbra,closest_radius-sky.center_radius.w);
 }
 

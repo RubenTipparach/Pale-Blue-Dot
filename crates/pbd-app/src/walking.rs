@@ -42,7 +42,9 @@ impl Default for WalkingConfig {
             walk_speed: 8.0,
             sprint_speed: 14.0,
             jump_speed: 12.0,
-            step_height: 0.6,
+            // One terrain cell (`planet::ELEVATION_STEP`) plus the contact skin:
+            // Tenebris walks up one block, and a step it cannot climb is a wall.
+            step_height: 1.05,
         }
     }
 }

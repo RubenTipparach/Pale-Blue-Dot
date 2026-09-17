@@ -6,13 +6,42 @@ struct Cell {
     direction_height: vec4<f32>,
     corners: array<vec4<f32>,6>,
     metadata: vec4<u32>,
+    owner_a: vec4<f32>,
+    owner_b: vec4<f32>,
+    floors: vec4<f32>,
+    spare: vec4<f32>,
 }
 struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
-    water_absorption: vec4<f32>, // rgb per metre, w the water sheet's radius
-    water_deep: vec4<f32>,       // rgb submerged terrain converges to
-    weather: vec4<f32>,          // x ground wetness, y rain intensity
-    rain: array<vec4<f32>,4>,    // the thirteen wetness knobs, hex.fs order
+    water_absorption: vec4<f32>, water_deep: vec4<f32>, weather: vec4<f32>,
+    rain: array<vec4<f32>,4>,
+    lod_offsets: vec4<u32>, // x base count, y fine-region capacity
+    lod_counts: vec4<u32>,  // live records per fine level, coarsest first
+    lod: vec4<f32>,         // xyz player direction, w base level
+    bands: vec4<f32>,       // cos(band radius / R) per fine level, coarsest first
+}
+fn base_level() -> u32 { return u32(params.lod.w); }
+fn finest_level() -> u32 { return base_level() + 4u; }
+fn band_cos(level: u32) -> f32 {
+    let k = level - base_level() - 1u;
+    if k == 0u { return params.bands.x; }
+    if k == 1u { return params.bands.y; }
+    if k == 2u { return params.bands.z; }
+    return params.bands.w;
+}
+// Whether the level below's cell a tile belongs to is drawn at this tile's
+// level: the partition rule, one dot product against the player direction.
+fn owner_fine(owner: vec3<f32>, level: u32) -> bool {
+    return dot(owner, params.lod.xyz) > band_cos(level);
+}
+// Whether a tile at this level is covered by the next finer band.
+fn covered_by_finer(direction: vec3<f32>, level: u32) -> bool {
+    return level < finest_level() && dot(direction, params.lod.xyz) > band_cos(level + 1u);
+}
+fn floor_of(cell: Cell, side: u32) -> f32 {
+    if side == 0u { return cell.owner_a.w; }
+    if side == 1u { return cell.owner_b.w; }
+    return cell.floors[side - 2u];
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -29,6 +58,9 @@ struct VertexOut {
     @location(5) @interpolate(flat) skylight: f32,
     @location(6) @interpolate(flat) seed: u32,
     @location(7) @interpolate(flat) kind: u32,
+    @location(8) @interpolate(flat) level: u32,
+    @location(9) @interpolate(flat) owner_a: vec3<f32>,
+    @location(10) @interpolate(flat) owner_b: vec3<f32>,
 }
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
@@ -53,12 +85,14 @@ fn box_vertex(index: u32) -> BoxVertex {
 @vertex
 fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> VertexOut {
     let cell = cells[visible[instance]];
-    let degree = cell.metadata.x;
+    let degree = cell.metadata.x & 0xffu;
+    let level = cell.metadata.x >> 8u;
     let axis = cell.direction_height.xyz;
     let height = cell.direction_height.w;
     // The cap at its real height: a water cell draws its seabed here and the
     // sheet over it is the water pass's.
     let radius = params.settings.x + height;
+    let tile = 1.2087*params.settings.x/f32(1u << level);
     let reference = select(vec3(0.,1.,0.),vec3(1.,0.,0.),abs(axis.y)>0.95);
     let tangent = normalized(cross(reference,axis));
     let bitangent = cross(axis,tangent);
@@ -74,31 +108,87 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             let ray = cell.corners[(triangle+corner-1u)%degree].xyz;
             position = ray*radius;
             let local = (ray-axis)*params.settings.x;
-            uv = vec2(dot(local,tangent),dot(local,bitangent))/28.0 + 0.5;
+            uv = vec2(dot(local,tangent),dot(local,bitangent))/(1.5*tile) + 0.5;
         }
     } else if vertex < 54u {
         kind = 1u;
         let side = (vertex-18u)/6u;
         let i = (vertex-18u)%6u;
-        if side < degree && height>cell.corners[side].w {
-            let a = cell.corners[side].xyz;
-            let b = cell.corners[(side+1u)%degree].xyz;
-            let lower = params.settings.x + cell.corners[side].w;
-            let points = array<vec3<f32>,4>(a*lower,b*lower,b*radius,a*radius);
+        if side < degree {
+            // The wall goes down to the neighbour's cap, or, where the
+            // neighbour's region is drawn by the finer band, to the fine
+            // floor: the height at the edge midpoint, which is the midpoint
+            // cell that meets this edge. The neighbour's direction is the
+            // centre reflected through the edge midpoint.
+            var lower_height = cell.corners[side].w;
+            if level < finest_level() {
+                let mid = normalized(cell.corners[side].xyz + cell.corners[(side+1u)%degree].xyz);
+                let neighbor = normalized(2.0*mid - axis);
+                if covered_by_finer(neighbor, level) {
+                    lower_height = min(lower_height, floor_of(cell, side));
+                }
+            }
+            if height > lower_height {
+                let a = cell.corners[side].xyz;
+                let b = cell.corners[(side+1u)%degree].xyz;
+                let lower = params.settings.x + lower_height;
+                let points = array<vec3<f32>,4>(a*lower,b*lower,b*radius,a*radius);
+                let indices = array<u32,6>(0u,1u,2u,0u,2u,3u);
+                position = points[indices[i]];
+                normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
+                let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
+                uv = side_uv[indices[i]]*vec2(1.,max(1.,(radius-lower)/1.0));
+            }
+        }
+    } else if vertex < 60u {
+        // The cut wall: a midpoint cell with one fine owner is split along
+        // its long diagonal, and where its cap stands above the coarse
+        // owner's, this quad closes the step along that diagonal.
+        kind = 1u;
+        let i = vertex-54u;
+        let a_fine = level > base_level() && owner_fine(cell.owner_a.xyz, level);
+        let b_fine = level > base_level() && owner_fine(cell.owner_b.xyz, level);
+        if a_fine != b_fine {
+            let coarse = select(cell.owner_a.xyz, cell.owner_b.xyz, a_fine);
+            // The two corners equidistant from the owners lie on the diagonal.
+            var c1 = 0u; var c2 = 1u;
+            var best1 = 1e9; var best2 = 1e9;
+            for (var c = 0u; c < degree; c++) {
+                let gap = abs(dot(cell.corners[c].xyz, cell.owner_a.xyz) - dot(cell.corners[c].xyz, cell.owner_b.xyz));
+                if gap < best1 { best2 = best1; c2 = c1; best1 = gap; c1 = c; }
+                else if gap < best2 { best2 = gap; c2 = c; }
+            }
+            // The coarse cap's height is this cell's neighbour toward it.
+            var side = 0u; var best = -2.0;
+            for (var s = 0u; s < degree; s++) {
+                let mid = normalized(cell.corners[s].xyz + cell.corners[(s+1u)%degree].xyz);
+                let along = dot(mid, coarse);
+                if along > best { best = along; side = s; }
+            }
+            let lower_height = min(cell.corners[side].w, height);
+            let lower = params.settings.x + lower_height;
+            var p1 = cell.corners[c1].xyz;
+            var p2 = cell.corners[c2].xyz;
+            // Face the coarse side, which is where the step is seen from.
+            let facing = cross(p2*lower - p1*lower, p1*radius - p1*lower);
+            if dot(facing, coarse - axis) < 0.0 { let t = p1; p1 = p2; p2 = t; }
+            let points = array<vec3<f32>,4>(p1*lower,p2*lower,p2*radius,p1*radius);
             let indices = array<u32,6>(0u,1u,2u,0u,2u,3u);
             position = points[indices[i]];
             normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
             let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
-            uv = side_uv[indices[i]]*vec2(1.,max(1.,(radius-lower)/18.));
+            uv = side_uv[indices[i]]*vec2(1.,max(1.,(radius-lower)/1.0));
         }
     } else {
         kind = 2u;
         let seed = hash(cell.metadata.w);
         // The compute pass selects nearby vegetated cells before submitting
         // this separate indirect draw; no rejected tree vertices are invoked.
-        let part = (vertex-54u)/36u;
-        let cube = box_vertex((vertex-54u)%36u);
-        let scale = 0.85+random(seed)*0.50;
+        // Authored for the 2.833 m tile: a trunk under two metres across and
+        // a crown about six metres up, the size of a Tenebris tree.
+        let part = (vertex-60u)/36u;
+        let cube = box_vertex((vertex-60u)%36u);
+        let scale = (0.85+random(seed)*0.50)*0.3;
         var halfsize = vec3(1.7,9.,1.7)*scale;
         var elevation = 9.*scale;
         material = 8u;
@@ -119,6 +209,9 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.skylight = f32(cell.metadata.z)/65535.;
     out.seed = cell.metadata.w;
     out.kind = kind;
+    out.level = level;
+    out.owner_a = cell.owner_a.xyz;
+    out.owner_b = cell.owner_b.xyz;
     return out;
 }
 
@@ -190,6 +283,16 @@ fn rivulets(uv: vec2<f32>, t: f32) -> f32 {
 @fragment
 fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let radial = normalized(input.position);
+    // The partition: a midpoint cell split between a fine and a coarse owner
+    // draws only the half nearer the fine one; the coarse cap draws the rest.
+    if input.level > base_level() && input.kind != 2u {
+        let a_fine = owner_fine(input.owner_a, input.level);
+        let b_fine = owner_fine(input.owner_b, input.level);
+        if a_fine != b_fine {
+            let nearer_a = dot(radial, input.owner_a) >= dot(radial, input.owner_b);
+            if (nearer_a && !a_fine) || (!nearer_a && !b_fine) { discard; }
+        }
+    }
     let n = normalized(input.normal);
     let sun = params.sun.xyz;
     let toward_camera = normalized(params.camera.xyz-input.position);

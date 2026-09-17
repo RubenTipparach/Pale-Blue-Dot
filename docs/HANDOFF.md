@@ -19,12 +19,33 @@ answer below no longer describes the current authorization. This pass covers:
 - GPU frustum culling and separate terrain/nearby-foliage indirect draws.
 - The live surface shader's 0.25 night-side rim floor.
 
-The 4,800 m/L11 rescale still depends on proving and implementing the LOD seam.
-The current preview remains at 4,000 m/L8 with six-metre steps. RON body assets,
-the dedicated faithful water pipeline, and the volumetric engine remain planned.
-The measurements and "not yet acted on" findings below describe the earlier
-baseline; current implementation and validation status is tracked in the
-OpenSpec task files and [validation results](handoff-validation.md).
+- The five-system water port (cap pass, composite, wetness, precipitation,
+  flow hook), with `water.ron` and `weather.ron` as the tunables.
+- **Hexagon LOD and the rescale, built.** The body is **4,800 m** with a
+  level-7 base for the whole globe and levels 8 to 11 resident as bands of
+  2,400, 1,200, 600 and 300 m around the player, so the tile underfoot is the
+  gold-standard **2.833 m** and the step is **1 m**. The relief is cut to
+  ~150 m summits and a ~60 m ocean floor, the sky shell keeps its 1.2 R ratio,
+  clouds sit at +300 m, the walker steps one cell, and trees scatter at
+  Tenebris's per-biome rates. `planet::lattice` addresses any level's dual by
+  `(face, level, i, j)`, `planet::lod` generates the resident set off the CPU
+  height function and republishes it whole when the player has walked 40 m,
+  the GPU visibility pass partitions by the coarser level's cells, and the
+  surface shader closes the band boundary with fine floors, split midpoint
+  cells and a cut wall. Design and decisions:
+  `openspec/changes/hexagon-lod/design.md`; captures, three findings fixed
+  off them (a mis-framed seam preset, trees ending at the band edge, a dark
+  water horizon from the sky's solid sphere sitting above the sheet) and the
+  remaining seam
+  judgement, which is the owner walking a band edge in the running game:
+  [tenebris-comparison.md](tenebris-comparison.md), "After the rescale and
+  hexagon LOD".
+
+RON body assets and the volumetric engine remain planned. The measurements and
+"not yet acted on" findings below describe the earlier 4,000 m / level-8
+baseline and are kept as the record of why; current implementation and
+validation status is tracked in the OpenSpec task files and
+[validation results](handoff-validation.md).
 
 ---
 

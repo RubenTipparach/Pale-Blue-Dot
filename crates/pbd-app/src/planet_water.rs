@@ -74,6 +74,8 @@ pub(super) struct WaterView {
     fx: Vec4,
     lens: Vec4,
     screen: Vec4,
+    lod: Vec4,
+    bands: Vec4,
 }
 
 /// Which side of the surface the camera is on, from its body-local position:
@@ -392,6 +394,10 @@ fn prepare_water_views(
                 weather_settings.rain_lens_size,
             ),
             screen: Vec4::new(aspect, band, s.wet_blur, s.detail_fade),
+            lod: camera
+                .normalize_or(Vec3::Y)
+                .extend(super::lod::BASE_LEVEL as f32),
+            bands: super::lod::LodParams::new(camera).bands,
         };
         let lens_needed = weather.rain > 0.001 || drips > 0.001;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
@@ -413,7 +419,7 @@ fn prepare_water_views(
         // and no water voxels yet. See openspec/changes/water-flow.
         let flow = device.create_buffer(&BufferDescriptor {
             label: Some("GPU water flow vectors (zero until a fluid state exists)"),
-            size: (planet.count as u64 * 8).max(8),
+            size: (planet.slots as u64 * 8).max(8),
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -613,14 +619,14 @@ mod tests {
 
     #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
-        // Two mat4 and twenty vec4 in water.wgsl's WaterView, read off the
+        // Two mat4 and twenty-two vec4 in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
         let shader = include_str!("../../../assets/shaders/water.wgsl");
         let start = shader.find("struct WaterView {").unwrap();
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (2, 20));
+        assert_eq!((mat4, vec4), (2, 22));
         assert_eq!(
             WaterView::min_size().get() as usize,
             mat4 * 64 + vec4 * 16,

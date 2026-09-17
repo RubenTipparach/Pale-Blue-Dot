@@ -51,6 +51,11 @@
 
 ## 4. Hold the gold standard
 
+The `planet/scale` delta that lived beside this file moved whole into
+`openspec/specs/planet/scale/spec.md` in the commit that rescaled the body to
+4,800 m at level 11 with 1 m cells; the lattice's level-11 cap test and the
+terrain relief test pin it.
+
 The hex size is decided: 2.833 m tile, 1.000 m cell height, off Tenebris's main
 planet. What is open is the radius, since the two are locked by
 `R = 300 m * 2^(L - 7)`. See `proposal.md` for the ladder and its costs.
@@ -58,11 +63,13 @@ planet. What is open is the radius, since the two are locked by
 - [x] Adopt the handoff's settled radius: 4,800 m at level 11 underfoot. The
       implementation depends on hexagon LOD; a uniform whole-globe level 11 is
       not the selected implementation.
-- [ ] `PLANET_RADIUS` and `SUBDIVISIONS` move together to that pair, and
+- [x] `PLANET_RADIUS` and `SUBDIVISIONS` move together to that pair, and
       `ELEVATION_STEP` goes from 6 m to 1 m. The walker's `step_height` goes
       from 0.6 m to a cell with it: a 1 m step it cannot climb every 2.8 m is a
       wall, not terrain, and Tenebris walks up one block.
-- [ ] **Cut the relief to ~100-150 m peaks.** Measured by sampling
+- [x] **Cut the relief to ~100-150 m peaks.** Done: `LAND_RELIEF` 0.17 and
+      `OCEAN_RELIEF` 0.12 on the raw generator, measured +147 m and -62 m,
+      pinned by `relief_is_cut_to_climbable_summits_and_a_shallow_ocean_floor`. Measured by sampling
       `surface_height` over 400,000 directions, the current terrain runs
       **-516 m to +432 m** - 948 m of relief, about 10.8% of the 4,000 m radius.
       The target makes mountains climbable rather than scenery, and it decides
@@ -75,18 +82,19 @@ planet. What is open is the radius, since the two are locked by
       Tenebris's column budget in absolute terms, and far less than the ~640 m
       that scaling its proportions to a 4,800 m body would give. Size our column
       against the chosen figure, not against the old relief.
-- [ ] Scale the dependent numbers in the same change: the atmosphere shell and
+- [x] Scale the dependent numbers in the same change (shell at 1.2 R, clouds
+      at +300 m, foliage 300 m with the switch at 900 m): the atmosphere shell and
       cloud layer (currently `PLANET_RADIUS + 800` and `+ 600`, placed to clear
       the old +426 m peaks - at ~150 m they come down with the terrain), the
       2,300 m foliage range, and the 3,200 m draw-budget switch, which is set
       above `2300 + max_peak` on purpose so the cutoff never clips a tree that
       would have been drawn.
-- [ ] Re-tune the tree geometry in `planet_surface.wgsl`, which is authored for
+- [x] Re-tune the tree geometry in `planet_surface.wgsl`, which is authored for
       the old scale: trunks span 18 m and canopies reach 33 m, against roughly
       6 m for a Tenebris tree.
-- [ ] Re-tune the atlas UV divisors, `/28.0` on the cap and `/18.` down a wall,
+- [x] Re-tune the atlas UV divisors, `/28.0` on the cap and `/18.` down a wall,
       which were chosen against a 19 m tile.
-- [ ] Update the pinned tile width in
+- [x] Update the pinned tile width in
       `measured_tile_width_follows_the_subdivision_law_and_pins_the_shipped_scale`,
       move the `planet/scale` requirements from this change into
       `openspec/specs/`, and retake every capture in

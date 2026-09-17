@@ -236,6 +236,20 @@ at `B`'s height, and one of them must wall down to the other:
 The vertex budget per terrain instance goes from 54 to 60 for the cut wall;
 foliage stays a separate draw.
 
+**Trees on three levels, at one density per area.** The first capture of the
+built partition (`--view seam`) showed the forest ending in a straight line at
+the 300 m band edge, because trees were eligible on the finest level only: a
+band boundary made visible by what stands on it, which is the seam rule broken
+by foliage rather than by terrain. Trees are eligible on levels 9, 10 and 11
+now, out to the level-9 band (1,200 m), and a cell's chance of a tree is the
+finest level's per-material density times `4^(11 - level)`, so a level-10
+cell, which covers four finest cells, carries four times the chance and the
+forest has the same trees per hectare at every distance it is drawn at. Which
+cells carry them still comes off each cell's own stable ID, so the individual
+trees do change where a band moves; what does not change is the cover. The
+same geometry is drawn on every level, so distant groves are Tenebris-sized
+trees standing on coarser ground.
+
 ### What is not done, and stated
 
 - **Hysteresis.** A debounce needs a memory of which side a tile was on, and

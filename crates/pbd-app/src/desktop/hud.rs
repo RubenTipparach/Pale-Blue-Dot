@@ -156,7 +156,8 @@ pub fn update(
             )
         } else if launch.capture.is_some() && !launch.tour && !launch.fly {
             format!(
-                "TENEBRIS\n4,000 m radius   /   {} survey",
+                "TENEBRIS\n{} m radius   /   {} survey",
+                pbd_app::planet::PLANET_RADIUS,
                 launch.view.to_uppercase()
             )
         } else {

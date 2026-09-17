@@ -1,62 +1,12 @@
 # Surface Rendering Specification
 
+The hexagons-at-every-distance, resident-set, no-readback, gold-standard and
+level-quantisation requirements moved into
+`openspec/specs/planet/rendering/spec.md` with the commit that built them;
+`planet::lod`, `planet::lattice` and the GPU visibility regression pin them.
+What stays here is the seam, which only a picture settles.
+
 ## ADDED Requirements
-
-### Requirement: Hexagons at every distance
-A body SHALL be drawn as hexagonal tiles at every level of detail, from the
-ground to the far limb. A triangle-mesh impostor SHALL NOT be substituted at
-distance.
-
-#### Scenario: Viewing a body from orbit
-- **WHEN** the camera is far enough that the coarsest tier is drawn
-- **THEN** the body is made of hexagons and twelve pentagons
-- **AND** its silhouette is polygonal rather than a smooth sphere
-
-### Requirement: Coarse tiles are a prefix of the fine cells
-A coarse level's tiles SHALL be the cells the finest level already carries, at
-the same indices, rather than a separately generated or merged mesh. A coarse
-tile's height SHALL be read from the same height data as the fine tile at that
-index.
-
-#### Scenario: A tile at two levels
-- **WHEN** cell `i` exists at both a coarse and a fine level
-- **THEN** its direction is identical at both
-- **AND** its height comes from one array shared by both
-
-### Requirement: Level selection and culling never return to the CPU
-The level of detail for a tile, the visibility cull and the draw arguments SHALL
-be computed on the GPU and consumed by an indirect draw. No per-tile LOD or
-visibility state SHALL be read back, maintained per frame on the CPU, or
-uploaded per frame.
-
-#### Scenario: A frame while the camera moves
-- **WHEN** the camera moves and the level of detail changes for some tiles
-- **THEN** no buffer is read back from the GPU
-- **AND** no per-tile visibility or level set is rebuilt on the CPU
-
-### Requirement: The gold standard binds the tile underfoot
-The 2.833 m tile width and 1 m cell height SHALL hold for the tier a player
-occupies, on every body. A coarser tile on a distant part of the same body SHALL
-NOT be treated as a violation of the standard.
-
-#### Scenario: Standing on any body
-- **WHEN** a player stands on a body and looks at the ground
-- **THEN** the tiles they can walk on, dig, or stand beside are 2.833 m across
-  and 1 m tall
-
-### Requirement: Level is quantised from distance to the player
-A tile's level of detail SHALL be a function of its great-circle distance from
-the player, quantised into bands, computed from the tile's own direction and one
-published player direction. It SHALL NOT be anchored to the camera, so that
-looking around does not change any tile's level.
-
-#### Scenario: The player stands still and looks around
-- **WHEN** the camera turns or pulls back while the player does not move
-- **THEN** no tile changes level
-
-#### Scenario: Two adjacent tiles away from a threshold
-- **WHEN** two neighbouring tiles are both well inside one band
-- **THEN** both are assigned the same level, without consulting each other
 
 ### Requirement: A band boundary is not visible as a seam
 Where two levels of detail meet, the surface SHALL remain closed: no crack to
