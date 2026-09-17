@@ -59,7 +59,9 @@ planet. What is open is the radius, since the two are locked by
       implementation depends on hexagon LOD; a uniform whole-globe level 11 is
       not the selected implementation.
 - [ ] `PLANET_RADIUS` and `SUBDIVISIONS` move together to that pair, and
-      `ELEVATION_STEP` goes from 6 m to 1 m.
+      `ELEVATION_STEP` goes from 6 m to 1 m. The walker's `step_height` goes
+      from 0.6 m to a cell with it: a 1 m step it cannot climb every 2.8 m is a
+      wall, not terrain, and Tenebris walks up one block.
 - [ ] **Cut the relief to ~100-150 m peaks.** Measured by sampling
       `surface_height` over 400,000 directions, the current terrain runs
       **-516 m to +432 m** - 948 m of relief, about 10.8% of the 4,000 m radius.

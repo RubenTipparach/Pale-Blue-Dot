@@ -5,17 +5,15 @@ use bevy::prelude::*;
 use std::collections::BTreeMap;
 
 #[derive(Debug)]
-pub(super) struct DualCell {
+pub(crate) struct DualCell {
     pub direction: Vec3,
     pub corners: Vec<Vec3>,
     pub neighbors: Vec<usize>,
 }
 
-pub(super) fn dual_sphere(level: u32) -> Vec<DualCell> {
-    assert!(
-        level <= 8,
-        "preview topology has a bounded allocation budget"
-    );
+/// The base icosahedron, normalised. Every level of every generator starts
+/// here, so a point shared between generators is the same float.
+pub(super) fn icosahedron() -> (Vec<Vec3>, Vec<[usize; 3]>) {
     let t = (1.0 + 5.0_f32.sqrt()) * 0.5;
     let mut vertices = vec![
         Vec3::new(-1., t, 0.),
@@ -34,7 +32,7 @@ pub(super) fn dual_sphere(level: u32) -> Vec<DualCell> {
     for v in &mut vertices {
         *v = v.normalize();
     }
-    let mut triangles = vec![
+    let triangles = vec![
         [0, 11, 5],
         [0, 5, 1],
         [0, 1, 7],
@@ -56,24 +54,53 @@ pub(super) fn dual_sphere(level: u32) -> Vec<DualCell> {
         [8, 6, 7],
         [9, 8, 1],
     ];
+    (vertices, triangles)
+}
+
+/// The one midpoint every generator uses. Add then normalise, in this order,
+/// so a lattice point and a subdivided vertex are the same float.
+pub(super) fn midpoint(a: Vec3, b: Vec3) -> Vec3 {
+    (a + b).normalize()
+}
+
+pub(super) fn dual_sphere(level: u32) -> Vec<DualCell> {
+    assert!(
+        level <= 8,
+        "preview topology has a bounded allocation budget"
+    );
+    let (mut vertices, mut triangles) = icosahedron();
     for _ in 0..level {
         let mut edges = BTreeMap::new();
         let mut subdivided = Vec::with_capacity(triangles.len() * 4);
         for [a, b, c] in triangles {
-            let mut midpoint = |i: usize, j: usize| {
+            let mut mid = |i: usize, j: usize| {
                 *edges.entry((i.min(j), i.max(j))).or_insert_with(|| {
                     let index = vertices.len();
-                    vertices.push((vertices[i] + vertices[j]).normalize());
+                    vertices.push(midpoint(vertices[i], vertices[j]));
                     index
                 })
             };
-            let ab = midpoint(a, b);
-            let bc = midpoint(b, c);
-            let ca = midpoint(c, a);
+            let ab = mid(a, b);
+            let bc = mid(b, c);
+            let ca = mid(c, a);
             subdivided.extend([[a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]]);
         }
         triangles = subdivided;
     }
+    dual_from_triangles(&vertices, &triangles)
+        .into_iter()
+        .map(|cell| cell.expect("a closed sphere has a complete ring at every vertex"))
+        .collect()
+}
+
+/// The dual of a triangle set: one cell per vertex whose ring of incident
+/// triangles is complete (five at an icosahedron corner, six elsewhere),
+/// `None` where it is not. Shared by the whole-sphere and the local generators
+/// so their corner rings and neighbour order cannot differ.
+pub(super) fn dual_from_triangles(
+    vertices: &[Vec3],
+    triangles: &[[usize; 3]],
+) -> Vec<Option<DualCell>> {
     let centers: Vec<_> = triangles
         .iter()
         .map(|[a, b, c]| (vertices[*a] + vertices[*b] + vertices[*c]).normalize())
@@ -84,10 +111,15 @@ pub(super) fn dual_sphere(level: u32) -> Vec<DualCell> {
             incident[*v].push(index);
         }
     }
+    let (base, _) = icosahedron();
     vertices
         .iter()
         .enumerate()
         .map(|(index, direction)| {
+            let expected = if base.contains(direction) { 5 } else { 6 };
+            if incident[index].len() != expected {
+                return None;
+            }
             let tangent = direction.any_orthonormal_vector();
             let bitangent = direction.cross(tangent);
             incident[index].sort_by(|a, b| {
@@ -98,20 +130,20 @@ pub(super) fn dual_sphere(level: u32) -> Vec<DualCell> {
                     .total_cmp(&b.dot(bitangent).atan2(b.dot(tangent)))
             });
             let ring = &incident[index];
-            let neighbors = (0..ring.len())
-                .map(|side| {
-                    let a = triangles[ring[side]];
-                    let b = triangles[ring[(side + 1) % ring.len()]];
-                    *a.iter()
-                        .find(|&&v| v != index && b.contains(&v))
-                        .expect("adjacent dual corners share one primal edge")
-                })
-                .collect();
-            DualCell {
+            let mut neighbors = Vec::with_capacity(ring.len());
+            for side in 0..ring.len() {
+                let a = triangles[ring[side]];
+                let b = triangles[ring[(side + 1) % ring.len()]];
+                let shared = a.iter().find(|&&v| v != index && b.contains(&v));
+                // Two consecutive triangles of a complete ring always share the
+                // edge between them; anything else is a malformed set.
+                neighbors.push(*shared?);
+            }
+            Some(DualCell {
                 direction: *direction,
                 corners: ring.iter().map(|&tri| centers[tri]).collect(),
                 neighbors,
-            }
+            })
         })
         .collect()
 }

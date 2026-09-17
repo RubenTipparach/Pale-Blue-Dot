@@ -7,10 +7,12 @@
 
 #[path = "planet_contact.rs"]
 mod contact;
+#[path = "planet_lattice.rs"]
+pub(crate) mod lattice;
 #[path = "planet_terrain.rs"]
 mod terrain;
 #[path = "planet_topology.rs"]
-mod topology;
+pub(crate) mod topology;
 #[cfg(test)]
 #[path = "planet_visibility_tests.rs"]
 mod visibility_tests;
