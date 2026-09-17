@@ -3571,6 +3571,8 @@ dependencies = [
  "bevy",
  "bytemuck",
  "pbd-core",
+ "ron",
+ "serde",
 ]
 
 [[package]]

@@ -7,6 +7,7 @@ use bevy::{
     asset::AssetPlugin,
     core_pipeline::tonemapping::Tonemapping,
     prelude::*,
+    render::render_resource::TextureUsages,
     render::view::{
         Hdr,
         screenshot::{Screenshot, ScreenshotCaptured},
@@ -16,10 +17,12 @@ use bevy::{
 };
 use pbd_app::{
     CelestialScene, FIXED_HZ, PaleBlueDotPlugin, PhysicsFrame,
+    config::ConfigPlugin,
     flight_view::{FlightViewConfig, FlightViewPlugin, FlyMode, TourProgress},
     planet::{PLANET_RADIUS, PlanetPlugin, surface_height, terrain_radius},
     sky::SkyPlugin,
     walking::{EYE_HEIGHT, WalkingConfig, WalkingPlugin},
+    weather::WeatherPlugin,
 };
 use std::{
     path::PathBuf,
@@ -40,6 +43,8 @@ pub struct Launch {
     /// Capture instrument for the `shore` view: camera height above the last
     /// land cell in metres. Absent means standing eye height.
     pub height: Option<f32>,
+    /// Rain intensity at launch, 0..1.
+    pub rain: f32,
 }
 
 impl Launch {
@@ -54,6 +59,7 @@ impl Launch {
             walk: false,
             render_offset: Vec3::ZERO,
             height: None,
+            rain: 0.0,
         };
         let mut i = 0;
         while i < args.len() {
@@ -108,6 +114,16 @@ impl Launch {
                     );
                     result.height = Some(height);
                 }
+                "--rain" => {
+                    i += 1;
+                    let rain: f32 = args
+                        .get(i)
+                        .expect("--rain requires an intensity 0..1")
+                        .parse()
+                        .expect("invalid rain intensity");
+                    assert!((0.0..=1.0).contains(&rain), "rain must be within 0..1");
+                    result.rain = rain;
+                }
                 "--verify-flight" => {}
                 unknown => panic!("unknown argument {unknown}; use --help"),
             }
@@ -118,7 +134,10 @@ impl Launch {
             "--walk cannot be combined with --fly or --tour"
         );
         assert!(
-            ["orbit", "coast", "surface", "night", "pole", "shore"].contains(&result.view.as_str()),
+            [
+                "orbit", "coast", "surface", "night", "pole", "shore", "wade", "dive"
+            ]
+            .contains(&result.view.as_str()),
             "unknown capture view"
         );
         assert!(
@@ -198,6 +217,8 @@ pub fn run(args: &[String]) {
     .add_plugins((
         PhysicsPlugins::default(),
         PaleBlueDotPlugin,
+        ConfigPlugin,
+        WeatherPlugin { rain: launch.rain },
         PlanetPlugin,
         FlightViewPlugin,
         SkyPlugin,
@@ -257,8 +278,16 @@ pub fn run(args: &[String]) {
     app.run();
 }
 
-fn configure_camera(mut commands: Commands, cameras: Query<Entity, Added<Camera3d>>) {
-    for entity in &cameras {
+fn configure_camera(
+    mut commands: Commands,
+    mut cameras: Query<(Entity, &mut Camera3d), Added<Camera3d>>,
+) {
+    for (entity, mut camera) in &mut cameras {
+        // The water composite reads the main pass depth; Bevy only allocates
+        // a sampleable depth texture when a camera asks for one.
+        let usages =
+            TextureUsages::from(camera.depth_texture_usages) | TextureUsages::TEXTURE_BINDING;
+        camera.depth_texture_usages = usages.into();
         commands.entity(entity).insert((
             Hdr,
             Tonemapping::TonyMcMapface,
@@ -273,11 +302,15 @@ fn configure_camera(mut commands: Commands, cameras: Query<Entity, Added<Camera3
     }
 }
 
-fn photo_camera(mut commands: Commands, launch: Res<Launch>) {
+fn photo_camera(
+    mut commands: Commands,
+    launch: Res<Launch>,
+    water_settings: Res<pbd_app::config::WaterSettings>,
+) {
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
-    if launch.view == "shore" {
+    if ["shore", "wade", "dive"].contains(&launch.view.as_str()) {
         // A capture instrument, nothing more: the eye-height polar shoreline the
         // owner asked to see. Above ~70 N the polar snow line reaches the sea,
         // so walk east from 72 N until land meets water, stand on the last land
@@ -298,10 +331,22 @@ fn photo_camera(mut commands: Commands, launch: Res<Launch>) {
         }
         let water = at(lon);
         let land = at(lon - step);
-        let height = launch.height.unwrap_or(EYE_HEIGHT);
-        let eye = land * (terrain_radius(land) + height);
         let east = (water - land).normalize_or_zero();
-        let sea = water * terrain_radius(water) + east * height;
+        // The sheet sits below sea level by the configured offset; `wade` puts
+        // the eye inside the surface band and `dive` three metres under, both
+        // over the first water cell, looking out to sea.
+        let sheet = PLANET_RADIUS - water_settings.depth_offset_m;
+        let (eye, sea) = match launch.view.as_str() {
+            "wade" => (water * (sheet + 0.1), water * sheet + east * 40.0),
+            "dive" => (water * (sheet - 3.0), water * (sheet - 4.0) + east * 40.0),
+            _ => {
+                let height = launch.height.unwrap_or(EYE_HEIGHT);
+                (
+                    land * (terrain_radius(land) + height),
+                    water * terrain_radius(water) + east * height,
+                )
+            }
+        };
         let mut transform = Transform::from_translation(eye).looking_at(sea, land);
         transform.translation += launch.render_offset;
         commands.spawn((Camera3d::default(), transform));

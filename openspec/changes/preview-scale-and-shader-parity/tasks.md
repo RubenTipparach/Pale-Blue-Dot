@@ -17,32 +17,37 @@
       layouts against each other the way `pipeline_tests` already does.
 
 ## 3. Restore the one faithful water renderer
-- [ ] Bind `water.wgsl` through a dedicated live pipeline with the scene-colour
+- [x] Bind `water.wgsl` through a dedicated live pipeline with the scene-colour
       and scene-depth inputs required by its refraction and path-length terms.
       It draws inside the `water-composite` node, after the compose pass, into
       the post-process destination, reading the source; no depth attachment.
-- [ ] The vertex stage pulls the cap from the persistent `Cell` record, the way
+- [x] The vertex stage pulls the cap from the persistent `Cell` record, the way
       the terrain does, instead of expecting a water vertex stream that was
       never built: the visibility compute emits a third list of water cells
       and a third indirect draw.
-- [ ] Fix the two one-line omissions measured against `water.fs.glsl` before
+- [x] Fix the two one-line omissions measured against `water.fs.glsl` before
       binding: the per-term foam weights (`foam_crest_weight` 0.55,
       `foam_slope_weight` 0.26) and the specular `sun_tint`.
-- [ ] Water cells draw their **seabed** in the terrain pass at `R + height`
+- [x] Water cells draw their **seabed** in the terrain pass at `R + height`
       with real neighbour heights in the corner record, and the terrain
       shader applies the port's underwater absorption to submerged fragments,
       so refraction and absorption have a floor to see.
-- [ ] Remove the inline water approximation from `planet_surface.wgsl` so there
+- [x] Remove the inline water approximation from `planet_surface.wgsl` so there
       is no second live water look or wave model.
-- [ ] The cap's knobs are `assets/config/water.ron`, serde over RON with
+- [x] The cap's knobs are `assets/config/water.ron`, serde over RON with
       `#[serde(default)]`, the format `per-body-rendering` decided; the Rust
       defaults are the one source and a test loads the shipped file.
-- [ ] Validate the shader and its actual render-graph bindings, including the
+- [x] Validate the shader and its actual render-graph bindings, including the
       scene texture/depth layouts; a parser-only check is insufficient.
 - [ ] Capture fixed-camera, fixed-time reference frames above and below the
       surface and a crossing sequence. Compare wave phase and normals, Fresnel,
       refraction, foam, absorption, colour and geometry continuity with the
       faithful port before asking the owner to accept visual parity.
+      Captured above (`shore` at five heights), below (`dive`) and in the
+      band (`wade`) on lavapipe; three look findings are recorded in
+      `docs/tenebris-comparison.md` under "Status after implementation" and
+      the owner has not yet judged them. The two water requirements in this
+      change's spec delta stay here until that judgement.
 
 ## 4. Hold the gold standard
 

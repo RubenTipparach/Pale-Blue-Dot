@@ -14,9 +14,12 @@ mod topology;
 #[cfg(test)]
 #[path = "planet_visibility_tests.rs"]
 mod visibility_tests;
+#[path = "planet_water.rs"]
+mod water;
 
 pub use contact::{PlanetContact, SurfaceContact};
 pub use terrain::{ELEVATION_STEP, PLANET_RADIUS, surface_height, terrain_radius};
+pub use water::{emerge, submersion};
 
 use bevy::math::{DMat4, DVec3};
 use bevy::{
@@ -98,7 +101,8 @@ impl PlanetRenderFrame {
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct GpuCell {
     direction_height: [f32; 4],
-    // xyz is the shared corner ray; w is this edge's adjacent surface height.
+    // xyz is the shared corner ray; w is this edge's adjacent surface height,
+    // negative under the sea.
     corners: [[f32; 4]; 6],
     // Degree, explicit biome, baked sky occlusion (0..65535), stable cell ID.
     metadata: [u32; 4],
@@ -157,6 +161,7 @@ impl Plugin for PlanetPlugin {
                     queue_planet.in_set(RenderSystems::QueueMeshes),
                 ),
             );
+        water::build(render_app);
         let mut graph = render_app.world_mut().resource_mut::<RenderGraph>();
         graph.add_node(PlanetComputeLabel, PlanetComputeNode::default());
         graph.add_node_edge(PlanetComputeLabel, bevy::render::graph::CameraDriverLabel);
@@ -240,11 +245,12 @@ fn generate_columns(cells: &[topology::DualCell]) -> Vec<GpuCell> {
             let mut corners = [[0.; 4]; 6];
             let mut occlusion = 0.;
             for (side, corner) in cell.corners.iter().enumerate() {
-                let neighbor_height = heights[cell.neighbors[side]].max(0.);
+                // The real neighbour height, below sea level included, so a
+                // seabed step draws its wall and the sheet has a floor to see.
+                let neighbor_height = heights[cell.neighbors[side]];
                 corners[side] = [corner.x, corner.y, corner.z, neighbor_height];
                 let separation = tile_width(cell, &cells[cell.neighbors[side]]);
-                occlusion +=
-                    ((neighbor_height - height.max(0.)) / separation.max(1.)).clamp(0., 1.);
+                occlusion += ((neighbor_height - height) / separation.max(1.)).clamp(0., 1.);
             }
             let skylight = 1. - occlusion / cell.corners.len() as f32 * 0.55;
             GpuCell {
@@ -266,8 +272,17 @@ struct PlanetParams {
     clip_from_body: Mat4,
     camera: Vec4,
     sun: Vec4,
-    // Sea radius, cell count, elapsed seconds, foliage range (zero disables it).
+    // Sea-level radius, cell count, elapsed seconds, foliage range (zero disables it).
     settings: Vec4,
+    // RGB water absorption per metre; w the sheet's radius (sea level less the
+    // depth offset), which is where submerged shading starts.
+    water_absorption: Vec4,
+    // The colour submerged terrain converges to with depth.
+    water_deep: Vec4,
+    // Ground wetness, rain intensity, spare, spare.
+    weather: Vec4,
+    // The thirteen terrain-wetness knobs from `weather.ron`, in `hex.fs` order.
+    rain: [Vec4; 4],
 }
 
 #[derive(Resource)]
@@ -282,6 +297,8 @@ struct PlanetViewGpu {
     // Held by bind groups as well; retained explicitly to make lifetime clear.
     _visible: Buffer,
     _foliage: Buffer,
+    /// Water cell IDs the visibility pass listed; the water pass draws them.
+    water: Buffer,
     indirect: Buffer,
     draw_bind_group: BindGroup,
     foliage_bind_group: BindGroup,
@@ -344,7 +361,8 @@ fn compute_layout() -> BindGroupLayoutDescriptor {
                 uniform_buffer::<PlanetParams>(false),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(size_of::<GpuCell>() as u64)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
-                storage_buffer_sized(false, NonZeroU64::new(32)),
+                storage_buffer_sized(false, NonZeroU64::new(48)),
+                storage_buffer_sized(false, NonZeroU64::new(4)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
             ),
         ),
@@ -436,6 +454,9 @@ fn prepare_views(
     images: Res<RenderAssets<GpuImage>>,
     clock: Res<PlanetClock>,
     frame: Res<PlanetRenderFrame>,
+    water_settings: Res<crate::config::WaterSettings>,
+    weather_settings: Res<crate::config::WeatherSettings>,
+    weather: Res<crate::weather::Weather>,
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
     let Some(planet) = planet else {
@@ -456,11 +477,37 @@ fn prepare_views(
             } else {
                 FOLIAGE_DRAW_DISTANCE
             };
+        let w = &weather_settings;
         let params = PlanetParams {
             clip_from_body,
             camera: camera_position.extend(1.),
             sun: crate::sky::SUN_DIRECTION.normalize().extend(1.),
             settings: Vec4::new(PLANET_RADIUS, planet.count as f32, clock.0, foliage_range),
+            water_absorption: Vec3::from_array(water_settings.absorption_per_m)
+                .extend(PLANET_RADIUS - water_settings.depth_offset_m),
+            water_deep: Vec3::from_array(water_settings.deep_color).extend(0.),
+            weather: Vec4::new(weather.wetness, weather.rain, 0., 0.),
+            rain: [
+                Vec4::new(
+                    w.rain_ripple_scale,
+                    w.rain_ripple_strength,
+                    w.rain_flow_across,
+                    w.rain_flow_down,
+                ),
+                Vec4::new(
+                    w.rain_flow_speed,
+                    w.rain_flow_strength,
+                    w.rain_wave_scale,
+                    w.rain_wave_strength,
+                ),
+                Vec4::new(
+                    w.rain_wave_speed,
+                    w.rain_wet_darken,
+                    w.rain_sky_sheen,
+                    w.rain_glint_power,
+                ),
+                Vec4::new(w.rain_glint_strength, 0., 0., 0.),
+            ],
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
@@ -476,13 +523,19 @@ fn prepare_views(
             mapped_at_creation: false,
         });
         let indirect = device.create_buffer(&BufferDescriptor {
-            label: Some("GPU planet indirect draw arguments"),
-            size: 32,
+            label: Some("GPU planet indirect draw arguments: terrain, foliage, water"),
+            size: 48,
             usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
             mapped_at_creation: false,
         });
         let foliage = device.create_buffer(&BufferDescriptor {
             label: Some("GPU nearby foliage column IDs"),
+            size: planet.count as u64 * 4,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let water = device.create_buffer(&BufferDescriptor {
+            label: Some("GPU visible water cell IDs"),
             size: planet.count as u64 * 4,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
@@ -506,6 +559,7 @@ fn prepare_views(
                 visible.as_entire_binding(),
                 indirect.as_entire_binding(),
                 foliage.as_entire_binding(),
+                water.as_entire_binding(),
             )),
         );
         let foliage_bind_group = device.create_bind_group(
@@ -522,6 +576,7 @@ fn prepare_views(
             uniform,
             _visible: visible,
             _foliage: foliage,
+            water,
             indirect,
             draw_bind_group,
             foliage_bind_group,
@@ -613,7 +668,7 @@ mod pipeline_tests {
     fn actual_pipeline_layouts_use_static_offsets_and_correct_storage_access() {
         assert_eq!(
             PlanetParams::min_size().get(),
-            112,
+            224,
             "actual encoded Rust uniform must match WGSL Params"
         );
         for (layout, read_only_bindings) in

@@ -2,6 +2,8 @@
 //! `PaleBlueDotPlugin` submits accelerations; Avian alone integrates ship pose.
 
 #[cfg(feature = "desktop")]
+pub mod config;
+#[cfg(feature = "desktop")]
 pub mod flight_view;
 #[cfg(feature = "desktop")]
 pub mod planet;
@@ -9,6 +11,8 @@ pub mod planet;
 pub mod sky;
 #[cfg(feature = "desktop")]
 pub mod walking;
+#[cfg(feature = "desktop")]
+pub mod weather;
 
 use std::time::Duration;
 

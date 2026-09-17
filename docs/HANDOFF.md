@@ -350,6 +350,18 @@ and the Bayer cutout. Four differences show in a still frame:
    because `ATMOSPHERE_RADIUS` is `R + 800`, 1.20 R against Tenebris's 1.24 R,
    which moves with the rescale.
 
+   **Built since, on the same branch, on the owner's "implement all of
+   that":** the cap pass is bound (`planet_water.rs`, cap pulled from the
+   `Cell` record, the two omissions fixed), the composite node runs compose,
+   cap and lens with a CPU submersion tri-state, the terrain draws its seabed
+   and carries the `hex.fs` wetness block, a `Weather` resource with `--rain`
+   and the P key drives ripples, wetness, lens droplets and a near-shower
+   streak mesh, and the flow hook reads a zero buffer. Knobs are
+   `assets/config/water.ron` and `weather.ron`. Three look findings for the
+   owner's eye are in `tenebris-comparison.md` under "Status after
+   implementation": grazing-angle brightness, sparkle above ~20 m, sub-pixel
+   streaks. The mosaic in the water is gone with the inline branch.
+
 ### 5.2 A confirmed latent bug: the camera is not planet-local
 
 `planet.rs` sends the **world** camera to the surface shader, and both sides then

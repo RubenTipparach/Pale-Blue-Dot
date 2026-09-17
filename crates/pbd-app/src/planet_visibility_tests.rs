@@ -106,7 +106,11 @@ impl VisibilityGpu {
         };
         let terrain = output("terrain visibility under test", capacities[0]);
         let foliage = output("foliage visibility under test", capacities[1]);
-        let args = output("indirect arguments under test", 8);
+        // The water list is bound and cleared like the others; these synthetic
+        // columns sit above sea level, so it stays empty and its count is
+        // asserted to be zero.
+        let water = output("water visibility under test", capacities[0]);
+        let args = output("indirect arguments under test", 12);
         let bind_group = self.device.create_bind_group(
             "visibility regression inputs",
             &self.layout,
@@ -116,12 +120,13 @@ impl VisibilityGpu {
                 terrain.as_entire_binding(),
                 args.as_entire_binding(),
                 foliage.as_entire_binding(),
+                water.as_entire_binding(),
             )),
         );
         let list_bytes = capacities.map(|count| (count * size_of::<u32>()) as u64);
         let readback = self.device.create_buffer(&BufferDescriptor {
             label: Some("test-only visibility readback"),
-            size: 32 + list_bytes[0] + list_bytes[1],
+            size: 48 + list_bytes[0] + list_bytes[1],
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -138,9 +143,9 @@ impl VisibilityGpu {
             // the tail guards, including a completely spare workgroup.
             pass.dispatch_workgroups((cells.len() as u32).div_ceil(128) + 1, 1, 1);
         }
-        encoder.copy_buffer_to_buffer(&args, 0, &readback, 0, 32);
-        encoder.copy_buffer_to_buffer(&terrain, 0, &readback, 32, list_bytes[0]);
-        encoder.copy_buffer_to_buffer(&foliage, 0, &readback, 32 + list_bytes[0], list_bytes[1]);
+        encoder.copy_buffer_to_buffer(&args, 0, &readback, 0, 48);
+        encoder.copy_buffer_to_buffer(&terrain, 0, &readback, 48, list_bytes[0]);
+        encoder.copy_buffer_to_buffer(&foliage, 0, &readback, 48 + list_bytes[0], list_bytes[1]);
         let submitted = self.queue.submit([encoder.finish()]);
         let (sender, receiver) = std::sync::mpsc::channel();
         let slice = readback.slice(..);
@@ -159,6 +164,7 @@ impl VisibilityGpu {
         let words: &[u32] = bytemuck::cast_slice(&mapped);
         assert_eq!([words[0], words[2], words[3]], [54, 0, 0]);
         assert_eq!([words[4], words[6], words[7]], [108, 54, 0]);
+        assert_eq!([words[8], words[9], words[10], words[11]], [18, 0, 0, 0]);
         let collect = |start: usize, count: u32, capacity: usize| {
             assert!(count as usize <= capacity, "draw exceeds ID capacity");
             let mut ids = words[start..start + count as usize].to_vec();
@@ -174,8 +180,8 @@ impl VisibilityGpu {
             ids
         };
         VisibleCells {
-            terrain: collect(8, words[1], capacities[0]),
-            foliage: collect(8 + capacities[0], words[5], capacities[1]),
+            terrain: collect(12, words[1], capacities[0]),
+            foliage: collect(12 + capacities[0], words[5], capacities[1]),
         }
     }
 }
@@ -212,6 +218,10 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         camera: camera.extend(1.),
         sun: Vec3::new(0.3, 0.6, 0.7).normalize().extend(1.),
         settings: Vec4::new(RADIUS, count as f32, 0., 2300.),
+        water_absorption: Vec3::new(0.6, 0.2, 0.1).extend(RADIUS - 0.5),
+        water_deep: Vec3::new(0.02, 0.10, 0.22).extend(0.),
+        weather: Vec4::ZERO,
+        rain: [Vec4::ZERO; 4],
     }
 }
 

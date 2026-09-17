@@ -6,6 +6,8 @@ struct Cell {
 }
 struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
+    water_absorption: vec4<f32>, water_deep: vec4<f32>, weather: vec4<f32>,
+    rain: array<vec4<f32>,4>,
 }
 struct DrawArgs {
     vertex_count: u32,
@@ -16,8 +18,9 @@ struct DrawArgs {
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read_write> visible: array<u32>;
-@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,2>;
+@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,3>;
 @group(0) @binding(4) var<storage,read_write> foliage: array<u32>;
+@group(0) @binding(5) var<storage,read_write> water: array<u32>;
 
 @compute @workgroup_size(1)
 fn clear_indirect() {
@@ -29,6 +32,11 @@ fn clear_indirect() {
     atomicStore(&args[1].instance_count, 0u);
     args[1].first_vertex = 54u;
     args[1].first_instance = 0u;
+    // The water cap: one hexagon fan per listed water cell.
+    args[2].vertex_count = 18u;
+    atomicStore(&args[2].instance_count, 0u);
+    args[2].first_vertex = 0u;
+    args[2].first_instance = 0u;
 }
 
 fn hash(x: u32) -> u32 {
@@ -81,7 +89,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // Capacities cover the whole dispatch before any counts can be published;
     // malformed bindings must not create partial generations or invalid IDs.
     let count = u32(params.settings.y);
-    if arrayLength(&cells)<count || arrayLength(&visible)<count || arrayLength(&foliage)<count { return; }
+    if arrayLength(&cells)<count || arrayLength(&visible)<count || arrayLength(&foliage)<count || arrayLength(&water)<count { return; }
     if id.x >= count { return; }
     let cell = cells[id.x];
     if cell.metadata.x<5u || cell.metadata.x>6u { return; }
@@ -105,11 +113,26 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     if facing < horizon_cosine { return; }
     // Every invocation emits at most once, capacity equals authoritative cell
     // count. No partial geometry generation can be published on overflow.
-    let surface_radius = radius + max(cell.direction_height.w,0.0);
+    // The terrain cap sits at its real height, the seabed included; the water
+    // sheet over a submerged cell is listed separately at the sheet radius.
+    let surface_radius = radius + cell.direction_height.w;
     let center = cell.direction_height.xyz*surface_radius;
     if in_frustum(center,terrain_bound(cell,center,surface_radius)) {
         let slot = atomicAdd(&args[0].instance_count,1u);
         visible[slot] = id.x;
+    }
+    if cell.direction_height.w < 0.0 {
+        let sea = params.water_absorption.w;
+        let sheet = cell.direction_height.xyz*sea;
+        var reach = 0.0;
+        for (var i=0u; i<cell.metadata.x; i++) {
+            reach = max(reach, distance(cell.corners[i].xyz*sea, sheet));
+        }
+        // The swell lifts a vertex by at most a few metres; 4 m covers it.
+        if in_frustum(sheet, reach + 4.0) {
+            let slot = atomicAdd(&args[2].instance_count,1u);
+            water[slot] = id.x;
+        }
     }
     // The largest authored tree fits inside 55 m of its base. Keep a tree
     // whose crown enters the frustum even when its terrain cap is outside.

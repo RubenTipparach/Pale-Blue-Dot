@@ -522,6 +522,55 @@ blue floor.
 The captures live under the session scratchpad and are not committed; the
 command that reproduces each one is the height column above.
 
+#### Status after implementation
+
+Everything above was measured before the build. What is built now, on the
+same branch, against the five systems:
+
+| System | Built | Not built |
+| --- | --- | --- |
+| Cap pass | `water.wgsl` bound through `planet_water.rs`, cap pulled from the `Cell` record, foam weights and `sun_tint` restored, rain ripples, flow advection and falling-face scroll (zero field), fog from the terrain's constants | `shoreline_fade_m`, the mobile horizon fade, torch light (no source) |
+| Composite | compose (tri-state submersion, waterline mask, analytic sky murk, distortion, depth blur), cap, lens (Heartfelt droplets, emerge drips at 2.6 s) | the atmospheric-fog gate (this project's air fog lives in the terrain shader, so there is nothing to gate) |
+| Terrain wetness | submerged absorption per the cap's constants; the `hex.fs` rain block: wet sheet, impact rings, rivulets, darkening, sky sheen, sun glint, gated by sky light and the waterline | per-tileset water colours (one body) |
+| Precipitation | the near shower: up to 1,700 streaks on an 18 m disk, hashed and stateless, landing on `terrain_radius`, suppressed under water and under ground, from `--rain` or the P key | snow, and the distant storm shafts, which need a cloud field |
+| Flow simulation | the shader hook and a zero buffer | the simulation, blocked on `voxel-engine-foundation` and a river generator |
+
+Every knob is `assets/config/water.ron` and `weather.ron`, Tenebris's names and
+values, loaded through serde with missing fields inheriting the code defaults
+and a test holding the shipped files to them.
+
+Captured on lavapipe with the same `--view shore --height N` series, plus
+`--view dive`, `--view wade` and `--rain 1`:
+
+- **At eye height** the sheet has relief, a wavy horizon, Fresnel reflection of
+  the sky, the seabed refracted through it, and in rain a field of expanding
+  rings and droplets on the lens. The 3 m rectangles are gone.
+- **Diving** puts the camera in the composite's murk: the seabed tints to the
+  deep colour with distance and the surface reads from below through Snell's
+  window. **Wading** shows the straddle: sky pixels clear above the line, the
+  sheet's back faces below it, and drips on the lens from the emerge window.
+- **In rain on land** the grass carries impact rings and a sky sheen, the
+  trunks run with rivulets, and the lens beads.
+
+Three things the captures show that need the owner's eye, recorded rather
+than retuned because each is a look change:
+
+1. **The sheet is bright at grazing angles.** Schlick at an eye 1.6 m up
+   puts most of the visible sea near total reflection of `sky_horizon_color`
+   (0.85, 0.92, 0.98), and under Bevy's tone mapping that reads whiter than
+   the same numbers do in Tenebris's untonemapped GL swapchain. The terms are
+   Tenebris's; the values may want re-authoring for this pipeline.
+2. **Above about 20 m the sheet sparkles.** The fbm normal has no level of
+   detail, so past the height where its 15 cm features fall under a pixel the
+   Fresnel and specular alias into white speckle across the whole sea. Tenebris
+   never looks at its water from that height on a 300 m body; a distance
+   falloff on the gradient would be a term Tenebris does not have and is a
+   proposal, not a fix made here.
+3. **Streaks are sub-pixel.** `rain_width_m` 0.012 is Tenebris's value; under
+   4x MSAA a quad that thin mostly vanishes, so the near shower reads as a
+   faint grain rather than rain. A width is data, and the number to turn is in
+   `weather.ron`.
+
 ### Structural differences that are not defects
 
 These are deliberate and worth keeping straight from the list above.
