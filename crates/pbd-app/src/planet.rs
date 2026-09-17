@@ -209,21 +209,25 @@ fn tile_width(cell: &topology::DualCell, neighbor: &topology::DualCell) -> f32 {
 }
 
 /// Measured `(min, mean, max)` tile width over the whole globe, in metres.
+/// The running total is `f64` on purpose: the shipped level sums about 3.9
+/// million widths, and an `f32` accumulator stops resolving an addend of ~19
+/// once the total passes 2^24, which silently reported 18.66 m for a globe
+/// whose real mean is 18.89 m.
 /// Reported at startup because the number that decides whether a 1.6 m walker
 /// reads as human-sized is a property of the topology, not of a document: it
 /// moves the moment `SUBDIVISIONS` or `PLANET_RADIUS` does.
 fn tile_widths(cells: &[topology::DualCell]) -> (f32, f32, f32) {
-    let (mut min, mut max, mut total, mut count) = (f32::MAX, 0f32, 0f32, 0u32);
+    let (mut min, mut max, mut total, mut count) = (f32::MAX, 0f32, 0f64, 0u32);
     for cell in cells {
         for &neighbor in &cell.neighbors {
             let width = tile_width(cell, &cells[neighbor]);
             min = min.min(width);
             max = max.max(width);
-            total += width;
+            total += width as f64;
             count += 1;
         }
     }
-    (min, total / count.max(1) as f32, max)
+    (min, (total / f64::from(count.max(1))) as f32, max)
 }
 
 fn generate_columns(cells: &[topology::DualCell]) -> Vec<GpuCell> {
@@ -731,14 +735,22 @@ mod tests {
             "measured {fine} m vs equal-area {equal_area} m"
         );
 
-        // What the shipped configuration actually is. This number is why a
-        // 1.6 m walker reads as small: one tile is about twelve of him. Change
-        // SUBDIVISIONS or PLANET_RADIUS and update docs/tenebris-comparison.md
-        // in the same commit.
-        let shipped = fine / 2_f32.powi(SUBDIVISIONS as i32 - 5);
+        // What the shipped configuration actually is, measured AT that level
+        // rather than extrapolated to it. The extrapolation is the cheap check
+        // above; this is the number the startup log prints, and pinning the
+        // extrapolation instead is what let an f32 accumulator under-report the
+        // real globe by 1.2% without failing anything. About 0.9 s in debug.
+        let shipped = tile_widths(&topology::dual_sphere(SUBDIVISIONS)).1;
         assert!(
-            (shipped - 18.9).abs() < 0.1,
+            (shipped - 18.886).abs() < 0.01,
             "shipped tile width {shipped} m at L{SUBDIVISIONS} on r={PLANET_RADIUS} m"
+        );
+        // And the extrapolation must agree with it, which is what fails if the
+        // accumulator loses precision at the level that has the most terms.
+        let extrapolated = fine / 2_f32.powi(SUBDIVISIONS as i32 - 5);
+        assert!(
+            (extrapolated / shipped - 1.).abs() < 0.002,
+            "extrapolated {extrapolated} m vs measured {shipped} m"
         );
         assert!(shipped > crate::walking::EYE_HEIGHT * 10.);
     }
