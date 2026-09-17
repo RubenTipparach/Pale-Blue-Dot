@@ -17,9 +17,9 @@ use bevy::{
 use pbd_app::{
     CelestialScene, FIXED_HZ, PaleBlueDotPlugin, PhysicsFrame,
     flight_view::{FlightViewConfig, FlightViewPlugin, FlyMode, TourProgress},
-    planet::{PLANET_RADIUS, PlanetPlugin, terrain_radius},
+    planet::{PLANET_RADIUS, PlanetPlugin, surface_height, terrain_radius},
     sky::SkyPlugin,
-    walking::{WalkingConfig, WalkingPlugin},
+    walking::{EYE_HEIGHT, WalkingConfig, WalkingPlugin},
 };
 use std::{
     path::PathBuf,
@@ -101,7 +101,7 @@ impl Launch {
             "--walk cannot be combined with --fly or --tour"
         );
         assert!(
-            ["orbit", "coast", "surface", "night", "pole"].contains(&result.view.as_str()),
+            ["orbit", "coast", "surface", "night", "pole", "shore"].contains(&result.view.as_str()),
             "unknown capture view"
         );
         assert!(
@@ -254,6 +254,31 @@ fn configure_camera(mut commands: Commands, cameras: Query<Entity, Added<Camera3
 
 fn photo_camera(mut commands: Commands, launch: Res<Launch>) {
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
+        return;
+    }
+    if launch.view == "shore" {
+        // A capture instrument, nothing more: the eye-height polar shoreline the
+        // owner asked to see. Above ~70 N the polar snow line reaches the sea,
+        // so walk east from 72 N until land meets water, stand on the last land
+        // cell at eye height, and look at the sea surface on the first water
+        // cell. Bounded to one circuit so a latitude with no coast cannot spin.
+        let lat = 72_f32.to_radians();
+        let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
+        let step = 2.0 * 19.0 / PLANET_RADIUS;
+        let mut lon = 0.0_f32;
+        while surface_height(at(lon)) < 0.0 && lon < std::f32::consts::TAU {
+            lon += step;
+        }
+        while surface_height(at(lon)) >= 0.0 && lon < 2.0 * std::f32::consts::TAU {
+            lon += step;
+        }
+        let water = at(lon);
+        let land = at(lon - step);
+        let eye = land * (terrain_radius(land) + EYE_HEIGHT);
+        let sea = water * terrain_radius(water);
+        let mut transform = Transform::from_translation(eye).looking_at(sea, land);
+        transform.translation += launch.render_offset;
+        commands.spawn((Camera3d::default(), transform));
         return;
     }
     let (direction, altitude, look_down) = match launch.view.as_str() {
