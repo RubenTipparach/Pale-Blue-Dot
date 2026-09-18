@@ -40,6 +40,9 @@ pub struct Launch {
     pub fixed: bool,
     pub fly: bool,
     pub walk: bool,
+    /// Walk mode, placed at the shoreline and holding forward, so a capture can
+    /// photograph the water being entered. A walker with no input never moves.
+    pub swim: bool,
     /// Static capture instrument: translate the scene within the local frame.
     pub render_offset: Vec3,
     /// Capture instrument for the `shore` view: camera height above the last
@@ -59,6 +62,7 @@ impl Launch {
             fixed: false,
             fly: false,
             walk: false,
+            swim: false,
             render_offset: Vec3::ZERO,
             height: None,
             rain: 0.0,
@@ -86,6 +90,10 @@ impl Launch {
                 "--tour" => result.tour = true,
                 "--fly" => result.fly = true,
                 "--walk" => result.walk = true,
+                "--swim" => {
+                    result.walk = true;
+                    result.swim = true;
+                }
                 "--fixed-dt" => result.fixed = true,
                 "--render-offset" => {
                     let mut components = [0.0; 3];
@@ -277,6 +285,11 @@ pub fn run(args: &[String]) {
         Update,
         (configure_camera, scene::move_moon, hud::update, capture),
     )
+    // The scripted keys have to be written where the real ones are: after the
+    // input clear and before the walking input reads them, which is in
+    // RunFixedMainLoop. Pressed in `Update` they were wiped by the next
+    // frame's clear before anything looked, and the walker stood still.
+    .add_systems(PreUpdate, swim_script.after(bevy::input::InputSystems))
     .add_systems(Last, measure_frames);
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
@@ -431,6 +444,58 @@ fn photo_camera(
     let mut transform = Transform::from_translation(position).looking_at(target, up);
     transform.translation += launch.render_offset;
     commands.spawn((Camera3d::default(), transform));
+}
+
+/// The scripted swim: put the walker at the last dry cell of the `shore` walk
+/// and hold forward. It is the only way a headless capture can photograph the
+/// water being entered, since a walker with no input stands still, and it is
+/// the same shoreline the `shore`, `wade` and `dive` camera presets frame.
+fn swim_script(
+    launch: Res<Launch>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    mut placed: Local<bool>,
+    terrain: Res<pbd_app::planet::PlanetContact>,
+    mut walkers: Query<
+        (
+            &mut Position,
+            &mut pbd_app::walking::GroundState,
+            &mut Transform,
+        ),
+        With<pbd_app::walking::Walker>,
+    >,
+) {
+    if !launch.swim || !state.active {
+        return;
+    }
+    if !*placed {
+        let lat = 72_f32.to_radians();
+        let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
+        let step = 2.0 * tile_width_m(FINEST_LEVEL) / PLANET_RADIUS;
+        let mut lon = 0.0_f32;
+        while surface_height(at(lon)) < 0.0 && lon < std::f32::consts::TAU {
+            lon += step;
+        }
+        while surface_height(at(lon)) >= 0.0 && lon < 2.0 * std::f32::consts::TAU {
+            lon += step;
+        }
+        // The last dry cell, a few cells back from the water, facing the sea.
+        let land = at(lon - 4.0 * step);
+        let sea = at(lon);
+        let Ok((mut position, mut ground, mut transform)) = walkers.single_mut() else {
+            return;
+        };
+        let stand = land * (terrain.sample(land).floor_radius + 1.0);
+        position.0 = stand;
+        transform.translation = stand;
+        ground.previous = stand;
+        ground.grounded = true;
+        state.captured = true;
+        state.scripted = true;
+        state.face(land, (sea - land).normalize_or_zero());
+        *placed = true;
+    }
+    keys.press(KeyCode::KeyW);
 }
 
 fn capture(

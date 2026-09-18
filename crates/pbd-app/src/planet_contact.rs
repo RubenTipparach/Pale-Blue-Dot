@@ -31,6 +31,12 @@ pub struct SurfaceContact {
     pub biome: u32,
     /// Positive for water caps. The preview does not render a seabed beneath it.
     pub water_depth: f32,
+    /// The SOLID ground: the seabed under a water cap, and `radius` itself
+    /// everywhere else. `radius` is the surface an aircraft must clear and the
+    /// rain lands on, which over water is the sea; a walker stands on this
+    /// one, which is what lets them wade in and swim rather than walk on the
+    /// sheet as if it were a floor.
+    pub floor_radius: f32,
 }
 
 /// One level's records and neighbour table. `u32::MAX` marks a neighbour the
@@ -111,6 +117,7 @@ impl Tier {
             normal: normal.as_vec3(),
             biome: cell.metadata[1],
             water_depth: (-height).max(0.),
+            floor_radius: (normal.dot(center) / normal.dot(ray)) as f32 - (-height).max(0.),
         }
     }
 }

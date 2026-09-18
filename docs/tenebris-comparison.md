@@ -300,6 +300,56 @@ Three findings from these captures, each fixed in the same commit:
 
 ![The shore after the rescale](screenshots/lod-shore.png)
 
+### Swimming, and the two things that were in the way
+
+The owner: *"there's some weirdness with not being able to walk into water.
+Need to make parity with tenebris-rs and allow swimming and diving."* The sea
+was a wall, and the composite pass that fogs the view underwater, the Snell's
+window and the emerge drips were all built and none of them could be reached by
+playing.
+
+Two blockers, not one. The obvious one was a clause in the swept ground
+resolution that rejected a wet footprint exactly as it rejects a cliff. The
+second was underneath it: `SurfaceContact::radius` is computed at
+`PLANET_RADIUS + height.max(0)`, so over a water cap the contact plane sits at
+**sea level** and a walker would have walked out onto the top of the sea. The
+clamp is right for its other callers, assisted flight and rain, so the contact
+answers both questions now: `radius` is the surface you fly over, and
+`floor_radius` is the solid ground, the seabed under water.
+
+The model is Tenebris's, at its own numbers: three probes up one column at the
+feet, the body (+0.50 m) and the eyes (+1.60 m); speed x0.5, gravity x0.30 and
+a 3.0 per second drag on the vertical while the body is under; a continuous
+20 m/s^2 thrust while the swim control is HELD; a seabed jump weakened to 0.30;
+and `grounded` forced false whenever the eyes are under, which is what makes a
+swimmer always take gravity and never get a standing jump. Measured, the feel
+is the reference's: **rise at about 4.2 m/s while the control is held, sink at
+about 2.5 m/s when it is released** (the test measures -2.56 against a
+predicted -2.5). There is no buoyancy and nowhere to hover, which is the
+reference's design rather than an omission, and there is no breath or drowning
+because it has none.
+
+One number is not theirs. Their exit from deep water beside a bank is the
+jetpack, unlocked the moment the eyes clear the surface, and this project has
+no jetpack; so the thrust is gated on the body rather than the eyes while the
+feet are off the bottom, which covers the last metre out.
+
+![Swimming, reached by playing](screenshots/swim.png)
+
+That frame is the walker holding forward off the beach: 4.0 m/s, which is
+exactly the halved walk speed, at -2 m with the waterline across the eye. It
+is the first time the straddle view has been reached by walking rather than by
+a camera preset.
+
+**And it needed a scripted capture, which found two more defects.** A walker
+with no input never moves, so `--swim` places one at the shoreline and holds
+forward. Scripted keys pressed in `Update` are wiped by the next frame's input
+clear before `RunFixedMainLoop` reads them, so the walker stood still; and
+pointer capture follows the window's focus, which a headless window never
+reports, so the input path zeroed the movement axes every frame. Both are the
+same shape as a test that sets the movement axes directly: it passes while the
+real input path is broken. The tests drive keys now.
+
 ### Night, which is where the reflection really was the culprit
 
 ![The sea at night, before](screenshots/night-water-before.png)
