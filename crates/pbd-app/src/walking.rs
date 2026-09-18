@@ -3,6 +3,7 @@
 //! This surface motor does not yet supply cave or decorative-tree collisions.
 
 use avian3d::prelude::*;
+use bevy::ecs::system::SystemParam;
 use bevy::{
     app::{RunFixedMainLoop, RunFixedMainLoopSystems},
     input::mouse::AccumulatedMouseMotion,
@@ -33,6 +34,20 @@ pub struct WalkingConfig {
     pub sprint_speed: f32,
     pub jump_speed: f32,
     pub step_height: f32,
+    /// Height above the feet that decides the body is in water, in metres.
+    pub water_body_check_height: f32,
+    /// Speed multiplier while the body is in water.
+    pub water_movement_mult: f32,
+    /// Gravity multiplier while the body is in water.
+    pub water_gravity_mult: f32,
+    /// Exponential damping on the radial velocity in water, per second.
+    pub water_drag_per_s: f32,
+    /// Upward acceleration while the swim control is held, in m/s^2.
+    pub water_swim_force: f32,
+    /// Ceiling on the swim ascent, in m/s.
+    pub water_swim_max_rise: f32,
+    /// Multiplier on a jump taken from the seabed with the body in water.
+    pub water_submerged_jump_mult: f32,
 }
 
 impl Default for WalkingConfig {
@@ -42,7 +57,21 @@ impl Default for WalkingConfig {
             walk_speed: 8.0,
             sprint_speed: 14.0,
             jump_speed: 12.0,
-            step_height: 0.6,
+            // One terrain cell (`planet::ELEVATION_STEP`) plus the contact skin:
+            // Tenebris walks up one block, and a step it cannot climb is a wall.
+            step_height: 1.05,
+            // Tenebris's water block, measured off its lod.yaml. The feel these
+            // make: hold the jump control to rise at about 4.2 m/s, release it
+            // and sink at about 2.5 m/s, both being the terminal speeds of
+            // `v' = (v - g_w dt) e^{-k dt}`. There is no buoyancy and nowhere
+            // to hover, which is the reference's design and not an omission.
+            water_body_check_height: 0.50,
+            water_movement_mult: 0.50,
+            water_gravity_mult: 0.30,
+            water_drag_per_s: 3.0,
+            water_swim_force: 20.0,
+            water_swim_max_rise: 14.0,
+            water_submerged_jump_mult: 0.30,
         }
     }
 }
@@ -65,18 +94,27 @@ pub struct Walker;
 pub struct WalkingCamera;
 
 #[derive(Component)]
-struct GroundState {
-    previous: Vec3,
-    grounded: bool,
+pub struct GroundState {
+    pub previous: Vec3,
+    pub grounded: bool,
 }
 
 #[derive(Resource)]
-struct WalkingState {
-    active: bool,
-    captured: bool,
+pub struct WalkingState {
+    pub active: bool,
+    pub captured: bool,
+    /// A capture script is driving the keys. Pointer capture normally follows
+    /// the window's focus, and a headless window never reports any, so without
+    /// this a scripted walker stands still for the whole run.
+    pub scripted: bool,
     axes: Vec2,
     sprinting: bool,
+    /// The jump control on this frame's edge: a standing jump takes it once.
     jump: bool,
+    /// The jump control HELD, which is what a swimmer rises on. A ground jump
+    /// is an impulse and an edge; a swim thrust is an acceleration and needs
+    /// to know the control is still down.
+    jump_held: bool,
     heading: Vec3,
     up: Vec3,
     pitch: f32,
@@ -85,6 +123,14 @@ struct WalkingState {
 }
 
 impl WalkingState {
+    /// Point the walker at `target` while standing on `up`. The capture
+    /// scripts need it; gameplay turns with the mouse.
+    pub fn face(&mut self, up: Vec3, target: Vec3) {
+        self.up = up.normalize_or(Vec3::Y);
+        self.heading = tangent_heading(target, self.up);
+        self.pitch = 0.0;
+    }
+
     fn transport_up(&mut self, up: Vec3) {
         self.heading = Quat::from_rotation_arc(self.up, up) * self.heading;
         self.heading = tangent_heading(self.heading, up);
@@ -181,6 +227,8 @@ fn setup_walking(world: &mut World) {
         axes: Vec2::ZERO,
         sprinting: false,
         jump: false,
+        jump_held: false,
+        scripted: false,
         heading: tangent_heading(Vec3::Y.cross(up), up),
         up,
         pitch: 0.0,
@@ -299,31 +347,33 @@ fn switch_mode(world: &mut World) {
             let input = world.resource::<FlightInputState>();
             (input.view_rotation(), input.is_captured())
         };
-        let terrain = world.resource::<PlanetContact>();
-        let direction = position.normalize();
-        let up = if terrain.sample(direction).water_depth > 0.0 {
-            terrain.find_land_near(direction)
-        } else {
-            direction
-        };
-        place_walker(world, up, Some(rotation));
+        // Where the ship is, water included. This used to walk to the nearest
+        // land first, which was the only thing to do while the sea was a wall;
+        // now that a walker can swim it snapped a pilot over the ocean to a
+        // shore they were nowhere near, which the owner rightly called bad.
+        place_walker(world, position.normalize(), Some(rotation));
         world.resource_mut::<WalkingState>().captured = captured;
         set_active_mode(world, true);
     }
 }
 
-fn place_walker(world: &mut World, mut up: Vec3, view: Option<Quat>) {
+fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
     let terrain = world.resource::<PlanetContact>();
-    let (mut support, water) = footprint(terrain, up * terrain.sample(up).radius);
-    if water {
-        let center = terrain.find_land_near(up);
-        up = (center * terrain.sample(center).radius
-            + tangent_heading(Vec3::Y.cross(center), center) * 4.0)
-            .normalize();
-        support = footprint(terrain, up * terrain.sample(up).radius).0;
-    }
+    let sheet = PLANET_RADIUS
+        - world
+            .resource::<crate::config::WaterSettings>()
+            .depth_offset_m;
     // Clear the whole footprint when a handoff lands beside a raised terrace.
-    let position = up * (support + HALF_HEIGHT + CONTACT_SKIN);
+    // Over water the walker arrives floating at the sheet rather than standing
+    // on the seabed, and is not grounded: the swim model takes it from there.
+    let (support, water) = footprint(terrain, up * terrain.sample(up).floor_radius);
+    let floating = water && support < sheet;
+    let feet = if floating {
+        sheet
+    } else {
+        support + CONTACT_SKIN
+    };
+    let position = up * (feet + HALF_HEIGHT);
     let body = world.resource::<WalkingState>().body;
     world.entity_mut(body).insert((
         Position(position),
@@ -333,7 +383,7 @@ fn place_walker(world: &mut World, mut up: Vec3, view: Option<Quat>) {
         Transform::from_translation(position),
         GroundState {
             previous: position,
-            grounded: true,
+            grounded: !floating,
         },
     ));
     let mut state = world.resource_mut::<WalkingState>();
@@ -370,8 +420,11 @@ fn read_walking_input(
     if buttons.is_some_and(|b| b.just_pressed(MouseButton::Left)) {
         state.captured = true;
     }
+    if state.scripted {
+        state.captured = true;
+    }
     if let Ok((window, mut cursor)) = windows.single_mut() {
-        if !window.focused {
+        if !window.focused && !state.scripted {
             state.captured = false;
         }
         cursor.visible = !state.captured;
@@ -385,6 +438,7 @@ fn read_walking_input(
     state.sprinting = false;
     if !state.captured {
         state.jump = false;
+        state.jump_held = false;
         return;
     }
     if let Ok(position) = walkers.single() {
@@ -408,6 +462,7 @@ fn read_walking_input(
     state.sprinting = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
     // Keep a jump press until a physics tick consumes it, even at >60 render FPS.
     state.jump |= keys.just_pressed(KeyCode::Space);
+    state.jump_held = keys.pressed(KeyCode::Space);
 }
 
 #[allow(clippy::type_complexity)]
@@ -416,6 +471,8 @@ fn drive_walker(
     config: Res<WalkingConfig>,
     scene: Res<CelestialScene>,
     frame: Res<PhysicsFrame>,
+    sea: Sea,
+    time: Res<Time>,
     mut walkers: ParamSet<(
         Query<
             (
@@ -434,29 +491,112 @@ fn drive_walker(
     }
     // Forces already writes LinearVelocity and reads Rotation internally. Keep
     // direct motor changes in a separate borrow to avoid overlapping ECS access.
+    let dt = time.delta_secs();
+    let mut submerged = false;
     for (position, mut velocity, mut rotation, mut ground) in &mut walkers.p0() {
         let position = position.0;
         let up = position.normalize();
         state.transport_up(up);
         let right = state.heading.cross(up).normalize();
-        let speed = if state.sprinting {
+        let wet = sea.state(&config, position);
+        submerged = wet.body;
+        // Fully submerged is never grounded, even standing on the seabed: it
+        // is what makes a swimmer always take gravity and never get the
+        // standing jump. Wading, feet down and head out, stays grounded.
+        if wet.eyes {
+            ground.grounded = false;
+        }
+        let mut speed = if state.sprinting {
             config.sprint_speed
         } else {
             config.walk_speed
         };
+        if wet.body {
+            speed *= config.water_movement_mult;
+        }
         let planar = (right * state.axes.x + state.heading * state.axes.y) * speed;
         let mut vertical = velocity.0.dot(up);
-        if state.jump && ground.grounded {
-            vertical = config.jump_speed;
-            ground.grounded = false;
+        let swimming = wet.eyes || (wet.body && !ground.grounded);
+        if state.jump || (state.jump_held && swimming) {
+            if swimming {
+                // Continuous while held, as the reference does it. The second
+                // arm is this project's own: with no jetpack behind it, a
+                // swimmer floating at the surface beside a bank would have no
+                // way out, so the thrust keeps working while the body is in
+                // water and the feet are off the bottom.
+                vertical =
+                    (vertical + config.water_swim_force * dt).min(config.water_swim_max_rise);
+            } else if ground.grounded {
+                vertical = config.jump_speed
+                    * if wet.body {
+                        config.water_submerged_jump_mult
+                    } else {
+                        1.0
+                    };
+                ground.grounded = false;
+            }
+        }
+        if wet.body {
+            // Water takes the fall off, so a swimmer neither plummets nor
+            // rockets. Horizontal is written outright from the input every
+            // frame here, as it is in the reference, so a tangential drag
+            // rate would have nothing to act on.
+            vertical *= (-config.water_drag_per_s * dt).exp();
         }
         state.jump = false;
         velocity.0 = planar + up * vertical;
         rotation.0 = Quat::from_rotation_arc(Vec3::Y, up);
     }
+    let gravity_scale = if submerged {
+        config.water_gravity_mult
+    } else {
+        1.0
+    };
     for mut forces in &mut walkers.p1() {
         let position = frame.0.origin + forces.position().0.as_dvec3();
-        forces.apply_linear_acceleration(scene.gravity_at(position).acceleration().as_vec3());
+        forces.apply_linear_acceleration(
+            scene.gravity_at(position).acceleration().as_vec3() * gravity_scale,
+        );
+    }
+}
+
+/// Where the walker is against the water, as the reference asks it: three
+/// probes up one column. The body probe gates speed, gravity and drag; the eye
+/// probe gates the swim thrust and whether the walker can be grounded at all.
+/// The surface is the radius the water pass DRAWS the sheet at, so the physics
+/// and the picture cannot disagree about where the sea is.
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
+pub(crate) struct WaterState {
+    pub body: bool,
+    pub eyes: bool,
+}
+
+/// The terrain and the sheet it is under, together, because answering where
+/// the walker is against the water needs both and every caller needs the same
+/// answer. The sheet radius is the one the water pass draws at.
+#[derive(SystemParam)]
+pub(crate) struct Sea<'w> {
+    terrain: Res<'w, PlanetContact>,
+    settings: Res<'w, crate::config::WaterSettings>,
+}
+
+impl Sea<'_> {
+    fn sheet_radius(&self) -> f32 {
+        PLANET_RADIUS - self.settings.depth_offset_m
+    }
+
+    fn state(&self, config: &WalkingConfig, position: Vec3) -> WaterState {
+        let direction = position.normalize_or(Vec3::Y);
+        // Over land there is no sheet at any height, however low the ground is.
+        if self.terrain.sample(direction).water_depth <= 0.0 {
+            return WaterState::default();
+        }
+        let feet = position.length() - HALF_HEIGHT;
+        let sheet = self.sheet_radius();
+        WaterState {
+            body: feet + config.water_body_check_height < sheet,
+            eyes: feet + EYE_HEIGHT < sheet,
+        }
     }
 }
 
@@ -468,7 +608,10 @@ fn footprint(terrain: &PlanetContact, position: Vec3) -> (f32, bool) {
     let mut water = false;
     for offset in [Vec3::ZERO, tangent, -tangent, cross, -cross] {
         let contact = terrain.sample(position + offset);
-        support = support.max(contact.radius);
+        // The SOLID ground, which under a water cap is the seabed. Taking
+        // `radius` here put the walker on top of the sea as if the sheet were
+        // a floor, which is the other half of why water read as a wall.
+        support = support.max(contact.floor_radius);
         water |= contact.water_depth > 0.0;
     }
     (support, water)
@@ -480,6 +623,7 @@ fn resolve_ground(
     state: Res<WalkingState>,
     config: Res<WalkingConfig>,
     terrain: Res<PlanetContact>,
+    sea: Sea,
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
 ) {
     if !state.active {
@@ -494,13 +638,17 @@ fn resolve_ground(
         for i in 1..=segments {
             let candidate = start.lerp(destination, i as f32 / segments as f32);
             let up = candidate.normalize();
-            let (support, water) = footprint(&terrain, candidate);
+            let (support, _wet_footprint) = footprint(&terrain, candidate);
             let feet = candidate.length() - HALF_HEIGHT;
             let old_feet = accepted.length() - HALF_HEIGHT;
             let rise = support + CONTACT_SKIN - feet;
             let can_step =
                 ground.grounded && support + CONTACT_SKIN - old_feet <= config.step_height;
-            if water || (rise > 0.03 && !can_step && support + CONTACT_SKIN - old_feet > 0.03) {
+            // Water used to be a wall here, which is why the sea could be
+            // looked at and never entered. It is passable now: the seabed is
+            // ordinary ground, and what stops a swimmer is the seabed's own
+            // rise, exactly as on land.
+            if rise > 0.03 && !can_step && support + CONTACT_SKIN - old_feet > 0.03 {
                 // Keep the last accepted angular position, allowing vertical
                 // jump/fall along it to continue against a blocked wall.
                 let old_up = accepted.normalize();
@@ -528,9 +676,12 @@ fn resolve_ground(
                 grounded = false;
             }
         }
+        // The eye probe has the last word: a swimmer is never grounded, so
+        // gravity keeps acting and the standing jump stays out of reach.
+        let submerged = sea.state(&config, accepted).eyes;
         position.0 = accepted;
         ground.previous = accepted;
-        ground.grounded = grounded;
+        ground.grounded = grounded && !submerged;
     }
 }
 
@@ -578,11 +729,18 @@ mod tests {
     }
 
     fn app_with_terrain(terrain: PlanetContact) -> App {
+        let spawn = FlightViewConfig::default().spawn_direction;
+        app_with_terrain_at(terrain, spawn)
+    }
+
+    fn app_with_terrain_at(terrain: PlanetContact, spawn_direction: Vec3) -> App {
         let mut app = crate::headless_app();
         app.insert_resource(terrain)
+            .insert_resource(crate::config::WaterSettings::default())
             .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
             .insert_resource(FlightViewConfig {
                 minimum_clearance: EYE_HEIGHT,
+                spawn_direction,
                 ..default()
             })
             .init_resource::<ButtonInput<KeyCode>>()
@@ -618,6 +776,214 @@ mod tests {
         assert!(camera.is_active);
         assert!(
             (pose.translation.length() - support.radius - EYE_HEIGHT - CONTACT_SKIN).abs() < 0.03
+        );
+    }
+
+    /// Put the walker at a direction and a radius, with nothing under way.
+    fn place_at(app: &mut App, position: Vec3, grounded: bool) -> Entity {
+        let walker = app.world().resource::<WalkingState>().body;
+        app.world_mut().entity_mut(walker).insert((
+            Position(position),
+            Transform::from_translation(position),
+            LinearVelocity::ZERO,
+            GroundState {
+                previous: position,
+                grounded,
+            },
+        ));
+        walker
+    }
+
+    /// A direction whose seabed is at least `depth` metres under the sheet.
+    fn deep_water(terrain: &PlanetContact, depth: f32) -> Vec3 {
+        let mut best = Vec3::Y;
+        let mut deepest = 0.0_f32;
+        for index in 0..4096 {
+            let y = 1.0 - 2.0 * (index as f32 + 0.5) / 4096.0;
+            let r = (1.0 - y * y).max(0.0).sqrt();
+            let a = std::f32::consts::PI * (3.0 - 5_f32.sqrt()) * index as f32;
+            let direction = Vec3::new(r * a.cos(), y, r * a.sin());
+            let sample = terrain.sample(direction).water_depth;
+            if sample > deepest {
+                deepest = sample;
+                best = direction;
+            }
+        }
+        assert!(
+            deepest >= depth,
+            "the test planet has no water {depth} m deep; deepest is {deepest} m"
+        );
+        best
+    }
+
+    /// The sea was a wall: `resolve_ground` rejected any step whose footprint
+    /// was wet, so the water could be looked at and never entered. This walks
+    /// a walker at the surface straight out over deep water and asserts they
+    /// travel, which they could not do at all before.
+    #[test]
+    fn a_walker_can_walk_into_the_sea_instead_of_being_held_at_the_waterline() {
+        let mut app = app();
+        let sheet = PLANET_RADIUS
+            - app
+                .world()
+                .resource::<crate::config::WaterSettings>()
+                .depth_offset_m;
+        let direction = deep_water(app.world().resource::<PlanetContact>(), 4.0);
+        let start = direction * (sheet + HALF_HEIGHT);
+        let walker = place_at(&mut app, start, true);
+        {
+            let mut state = app.world_mut().resource_mut::<WalkingState>();
+            state.heading = tangent_heading(Vec3::Y.cross(direction), direction);
+            state.captured = true;
+        }
+        // Through the real input path: the state is rewritten from the keys
+        // every frame, so a test that sets the axes directly tests nothing.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        for _ in 0..30 {
+            app.update();
+        }
+        let now = app.world().entity(walker).get::<Position>().unwrap().0;
+        let travelled = (now.normalize().dot(direction).clamp(-1.0, 1.0)).acos() * PLANET_RADIUS;
+        assert!(
+            travelled > 1.0,
+            "the walker went {travelled:.2} m into the sea"
+        );
+    }
+
+    /// Toggling from flight to walking over open water used to walk to the
+    /// nearest land first, which was the only sane thing while the sea was a
+    /// wall. It is not now, and it snapped a pilot over the ocean to a shore
+    /// they were nowhere near. The walker arrives where the ship is, floating.
+    #[test]
+    fn toggling_to_walk_over_the_sea_lands_in_the_water_not_on_a_shore() {
+        let mut app = app();
+        let sheet = PLANET_RADIUS
+            - app
+                .world()
+                .resource::<crate::config::WaterSettings>()
+                .depth_offset_m;
+        let direction = deep_water(app.world().resource::<PlanetContact>(), 4.0);
+        // Fly first, then park the ship over deep water and press F.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyF);
+        app.update();
+        assert!(
+            !app.world().resource::<WalkingState>().active,
+            "the first F should fly"
+        );
+        {
+            // The harness has no input clear system: a press stays "just
+            // pressed" until it is cleared by hand.
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.release(KeyCode::KeyF);
+            keys.clear();
+        }
+        app.update();
+        assert!(
+            !app.world().resource::<WalkingState>().active,
+            "a cleared F must not toggle again"
+        );
+        let ship_at = direction * (sheet + 30.0);
+        let mut ships = app
+            .world_mut()
+            .query_filtered::<&mut Position, With<PilotShip>>();
+        for mut position in ships.iter_mut(app.world_mut()) {
+            position.0 = ship_at;
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyF);
+        app.update();
+        let state = app.world().resource::<WalkingState>();
+        assert!(state.active, "the second F should walk");
+        let body = app.world().entity(state.body);
+        let position = body.get::<Position>().unwrap().0;
+        let drift = position.normalize().dot(direction).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
+        assert!(
+            drift < 1.0,
+            "the walker was moved {drift:.1} m away from the ship"
+        );
+        assert!(
+            (position.length() - HALF_HEIGHT - sheet).abs() < 0.1,
+            "the walker should float at the sheet, feet at {:.2} against {sheet:.2}",
+            position.length() - HALF_HEIGHT
+        );
+        assert!(!body.get::<GroundState>().unwrap().grounded);
+    }
+
+    /// The reference's water model, at its own numbers: sinking is drag
+    /// limited rather than a free fall, holding the swim control rises, and a
+    /// submerged walker is never grounded, so gravity never stops acting on
+    /// them and the standing jump is out of reach.
+    #[test]
+    fn a_submerged_walker_sinks_to_a_terminal_speed_rises_on_the_control_and_is_never_grounded() {
+        let mut app = app();
+        let (sheet, config) = {
+            let world = app.world();
+            (
+                PLANET_RADIUS
+                    - world
+                        .resource::<crate::config::WaterSettings>()
+                        .depth_offset_m,
+                *world.resource::<WalkingConfig>(),
+            )
+        };
+        let direction = deep_water(app.world().resource::<PlanetContact>(), 4.0);
+        // Two metres under the sheet: the eyes are well below it.
+        let under = direction * (sheet - 2.0);
+        let walker = place_at(&mut app, under, false);
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+            1.0 / 64.0,
+        )));
+        for _ in 0..90 {
+            app.update();
+            assert!(
+                !app.world()
+                    .entity(walker)
+                    .get::<GroundState>()
+                    .unwrap()
+                    .grounded,
+                "a submerged walker must never be grounded"
+            );
+        }
+        let sinking = {
+            let entity = app.world().entity(walker);
+            let up = entity.get::<Position>().unwrap().0.normalize();
+            entity.get::<LinearVelocity>().unwrap().0.dot(up)
+        };
+        // Terminal is -g_w/k with the water gravity and the drag rate; the
+        // reference's numbers put it near -2.5 m/s on a 25 m/s^2 body.
+        let gravity =
+            pbd_core::gravity::SURFACE_GRAVITY_MPS2_PER_G as f32 * config.water_gravity_mult;
+        let terminal = -gravity / config.water_drag_per_s;
+        assert!(
+            (sinking - terminal).abs() < 0.35 * terminal.abs(),
+            "sinking at {sinking:.2} m/s against a terminal of {terminal:.2}"
+        );
+
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Space);
+        for _ in 0..90 {
+            app.update();
+        }
+        let rising = {
+            let entity = app.world().entity(walker);
+            let up = entity.get::<Position>().unwrap().0.normalize();
+            entity.get::<LinearVelocity>().unwrap().0.dot(up)
+        };
+        let rise_terminal = (config.water_swim_force - gravity) / config.water_drag_per_s;
+        assert!(
+            rising > 0.0,
+            "holding the swim control must rise: {rising:.2} m/s"
+        );
+        assert!(
+            (rising - rise_terminal).abs() < 0.4 * rise_terminal,
+            "rising at {rising:.2} m/s against a terminal of {rise_terminal:.2}"
         );
     }
 
@@ -690,7 +1056,8 @@ mod tests {
     #[test]
     fn one_metre_fall_matches_tenebris_and_reports_the_old_gravity_baseline() {
         for (acceleration, height) in [(9.0_f32, 1.0_f32), (25.0, 1.0), (9.0, 6.0), (25.0, 6.0)] {
-            let mut app = app();
+            let (terrain, flat) = PlanetContact::test_flat_land(5);
+            let mut app = app_with_terrain_at(terrain, flat);
             app.world_mut().resource_mut::<CelestialScene>().gravity[0].gravity_g =
                 acceleration as f64 / pbd_core::gravity::SURFACE_GRAVITY_MPS2_PER_G;
             let body = app.world().resource::<WalkingState>().body;
@@ -716,9 +1083,19 @@ mod tests {
             let elapsed = ticks as f32 / crate::FIXED_HZ as f32;
             let expected = (2.0 * height / acceleration).sqrt();
             println!(
-                "fall {height} m at {acceleration} m/s²: {elapsed:.3} s ({ticks} ticks), analytic {expected:.3} s"
+                "fall {height} m at {acceleration} m/s²: {elapsed:.3} s ({ticks} ticks), analytic {expected:.3} s, landed {:.3} m off resting",
+                app.world().get::<Position>(body).unwrap().0.length() - resting.length()
             );
-            assert!((elapsed - expected).abs() <= 1.0 / crate::FIXED_HZ as f32);
+            // Contact is caught by a swept test once a tick, so the reported
+            // time carries the tick the walker crossed the floor in plus the
+            // one it is resolved in. A six-metre fall at 25 m/s^2 arrives at
+            // 17 m/s, which is 0.29 m of travel per tick: two ticks is the
+            // granularity, not slack. The landing height below is exact and
+            // is what proves nothing drifted.
+            assert!(
+                (elapsed - expected).abs() <= 2.0 / crate::FIXED_HZ as f32,
+                "fell for {elapsed:.3} s against an analytic {expected:.3}"
+            );
             assert!(
                 (app.world().get::<Position>(body).unwrap().0.length() - resting.length()).abs()
                     < 0.03

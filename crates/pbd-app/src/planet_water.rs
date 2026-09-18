@@ -1,0 +1,681 @@
+//! The water cap pass and the composite that lets the sea be seen from inside.
+//!
+//! One render-graph node after Bevy's main pass owns three sub-passes in
+//! Tenebris's order: compose (underwater fog, distortion and depth blur into
+//! the post-process destination, a copy where the pixel is dry), the water cap
+//! drawn over it reading the same scene, and a lens pass (rain droplets and
+//! emerge drips) on a second swap so the drops refract the real sea. The
+//! camera's side of the surface is decided here on the CPU as a tri-state.
+//! Design: `openspec/changes/water-composite/design.md`.
+
+use super::{GpuCell, PlanetClock, PlanetGpu, PlanetRenderFrame, PlanetViewGpu, terrain};
+use crate::config::{WaterSettings, WeatherSettings};
+use crate::weather::Weather;
+use bevy::{
+    core_pipeline::{
+        FullscreenShader,
+        core_3d::graph::{Core3d, Node3d},
+    },
+    ecs::query::QueryItem,
+    prelude::*,
+    render::{
+        Render, RenderStartup, RenderSystems,
+        render_graph::{
+            NodeRunError, RenderGraphContext, RenderGraphExt, RenderLabel, ViewNode, ViewNodeRunner,
+        },
+        render_resource::{
+            binding_types::{
+                sampler, storage_buffer_read_only_sized, texture_2d, texture_depth_2d,
+                texture_depth_2d_multisampled, uniform_buffer,
+            },
+            *,
+        },
+        renderer::{RenderContext, RenderDevice, RenderQueue},
+        view::{ExtractedView, Msaa, ViewDepthTexture, ViewTarget},
+    },
+    shader::ShaderDefVal,
+};
+use std::{borrow::Cow, num::NonZeroU64};
+
+/// The terrain shader's haze, fed to the sheet so both fog out together. The
+/// terrain still carries these as literals in `planet_surface.wgsl`; lifting
+/// them into one uniform is task 2 of `preview-scale-and-shader-parity`.
+const FOG_NIGHT_SKY: Vec3 = Vec3::new(0.10, 0.20, 0.29);
+const FOG_DAY_SKY: Vec3 = Vec3::new(0.32, 0.49, 0.57);
+const FOG_DENSITY_PER_M: f32 = 0.00036;
+const FOG_HEIGHT_M: f32 = 1050.0;
+const FOG_MIX: f32 = 0.55;
+const TERMINATOR: (f32, f32) = (-0.13, 0.20);
+/// The sheet's own depth buffer, single-sample like the post-process targets.
+const WATER_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
+
+/// Matches `WaterView` in `water.wgsl` field for field; a test pins the size.
+#[derive(Clone, ShaderType)]
+pub(super) struct WaterView {
+    clip_from_local: Mat4,
+    local_from_clip: Mat4,
+    camera_time: Vec4,
+    planet_center: Vec4,
+    sun: Vec4,
+    waves: Vec4,
+    ripple: Vec4,
+    refraction: Vec4,
+    absorption: Vec4,
+    deep_color: Vec4,
+    horizon_color: Vec4,
+    zenith_color: Vec4,
+    /// The sky the sheet mirrors at night; the day gradient ramps to it.
+    night_sky: Vec4,
+    foam_color: Vec4,
+    foam_crest: Vec4,
+    foam_slope: Vec4,
+    sun_tint: Vec4,
+    fog_night: Vec4,
+    fog_day: Vec4,
+    limits: Vec4,
+    fx: Vec4,
+    lens: Vec4,
+    screen: Vec4,
+    lod: Vec4,
+    bands: Vec4,
+}
+
+/// Which side of the surface the camera is on, from its body-local position:
+/// 0 dry, 0.5 straddling the surface band, 1 fully under. Over land it is dry
+/// whatever its radius, and the band is wide enough to hold the swell so the
+/// wave function is never evaluated a second time on the CPU.
+pub fn submersion(camera_body: Vec3, sea_radius: f32, band: f32) -> f32 {
+    if camera_body.length_squared() < 1e-6 || terrain::surface_height(camera_body) >= 0.0 {
+        return 0.0;
+    }
+    let radius = camera_body.length();
+    if radius < sea_radius - band {
+        1.0
+    } else if radius <= sea_radius + band {
+        0.5
+    } else {
+        0.0
+    }
+}
+
+/// The emerge window: armed when the camera leaves the water and kept topped
+/// up while it straddles the surface, so the lens stays wet until it clears.
+/// Returns the drip intensity, 1 down to 0 over `dry_seconds`.
+pub fn emerge(
+    now: f32,
+    submersion: f32,
+    was_under: bool,
+    emerge_until: &mut f32,
+    dry_seconds: f32,
+) -> f32 {
+    let under = submersion > 0.75;
+    let straddling = submersion > 0.25 && !under;
+    if (was_under && !under) || straddling {
+        *emerge_until = now + dry_seconds;
+    }
+    if under {
+        0.0
+    } else {
+        ((*emerge_until - now) / dry_seconds.max(1e-6)).clamp(0.0, 1.0)
+    }
+}
+
+#[derive(Resource)]
+struct WaterPipelines {
+    shader: Handle<Shader>,
+    fullscreen: FullscreenShader,
+    data_layout: BindGroupLayoutDescriptor,
+    scene_layout: BindGroupLayoutDescriptor,
+    scene_layout_multisampled: BindGroupLayoutDescriptor,
+    sampler: Sampler,
+}
+
+fn data_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "water view, cells, water ids, flow",
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::VERTEX_FRAGMENT,
+            (
+                uniform_buffer::<WaterView>(false),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(size_of::<GpuCell>() as u64)),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(8)),
+            ),
+        ),
+    )
+}
+
+fn scene_layout(multisampled: bool) -> BindGroupLayoutDescriptor {
+    let depth = if multisampled {
+        texture_depth_2d_multisampled()
+    } else {
+        texture_depth_2d()
+    };
+    BindGroupLayoutDescriptor::new(
+        "water scene colour and depth",
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::FRAGMENT,
+            (
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                depth,
+                sampler(SamplerBindingType::Filtering),
+            ),
+        ),
+    )
+}
+
+fn initialize_pipelines(
+    mut commands: Commands,
+    assets: Res<AssetServer>,
+    device: Res<RenderDevice>,
+    fullscreen: Res<FullscreenShader>,
+) {
+    commands.insert_resource(WaterPipelines {
+        shader: assets.load("shaders/water.wgsl"),
+        fullscreen: fullscreen.clone(),
+        data_layout: data_layout(),
+        scene_layout: scene_layout(false),
+        scene_layout_multisampled: scene_layout(true),
+        sampler: device.create_sampler(&SamplerDescriptor {
+            label: Some("water scene sampler"),
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            ..default()
+        }),
+    });
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Pass {
+    Cap,
+    Compose,
+    Lens,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct WaterKey {
+    pass: Pass,
+    format: TextureFormat,
+    multisampled: bool,
+}
+
+impl SpecializedRenderPipeline for WaterPipelines {
+    type Key = WaterKey;
+    fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        let mut defs = Vec::new();
+        if key.multisampled {
+            defs.push(ShaderDefVal::from("MULTISAMPLED"));
+        }
+        let scene = if key.multisampled {
+            self.scene_layout_multisampled.clone()
+        } else {
+            self.scene_layout.clone()
+        };
+        let (label, vertex, entry) = match key.pass {
+            Pass::Cap => (
+                "Water cap over the composed scene",
+                VertexState {
+                    shader: self.shader.clone(),
+                    shader_defs: defs.clone(),
+                    entry_point: Some(Cow::Borrowed("vertex")),
+                    ..default()
+                },
+                "fragment",
+            ),
+            Pass::Compose => (
+                "Water compose: underwater fog, distortion, blur",
+                self.fullscreen.to_vertex_state(),
+                "compose",
+            ),
+            Pass::Lens => (
+                "Water lens: droplets and emerge drips",
+                self.fullscreen.to_vertex_state(),
+                "lens",
+            ),
+        };
+        // The sheet self-sorts against its own single-sample depth buffer, so
+        // a near crest occludes a far trough whatever order the cells come in
+        // (Tenebris: "depth write + LESS_EQUAL to self-sort"). Compose shares
+        // the pass and so declares the same attachment, without touching it;
+        // the scene's own occlusion is the shader's discard against the
+        // sampled main-pass depth, which may be multisampled.
+        let depth_stencil = match key.pass {
+            Pass::Lens => None,
+            pass => Some(DepthStencilState {
+                format: WATER_DEPTH_FORMAT,
+                depth_write_enabled: pass == Pass::Cap,
+                depth_compare: if pass == Pass::Cap {
+                    CompareFunction::GreaterEqual
+                } else {
+                    CompareFunction::Always
+                },
+                stencil: default(),
+                bias: default(),
+            }),
+        };
+        RenderPipelineDescriptor {
+            label: Some(Cow::Borrowed(label)),
+            layout: vec![self.data_layout.clone(), scene],
+            vertex,
+            fragment: Some(FragmentState {
+                shader: self.shader.clone(),
+                shader_defs: defs,
+                entry_point: Some(Cow::Borrowed(entry)),
+                targets: vec![Some(ColorTargetState {
+                    format: key.format,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState {
+                // Back faces are the underwater view; nothing is culled.
+                cull_mode: None,
+                ..default()
+            },
+            depth_stencil,
+            // The post-process targets are single-sample whatever the main
+            // pass's MSAA; only the depth texture read is multisampled.
+            multisample: MultisampleState::default(),
+            ..default()
+        }
+    }
+}
+
+/// Per-view GPU state and the submersion memory the emerge window needs.
+#[derive(Component)]
+pub(super) struct WaterViewGpu {
+    uniform: UniformBuffer<WaterView>,
+    // Held by the bind group; kept so its lifetime is explicit.
+    _flow: Buffer,
+    data_bind_group: BindGroup,
+    cap: CachedRenderPipelineId,
+    compose: CachedRenderPipelineId,
+    lens: CachedRenderPipelineId,
+    /// The sheet's private depth, recreated when the view's size changes.
+    depth: TextureView,
+    depth_size: UVec2,
+    multisampled: bool,
+    lens_needed: bool,
+    was_under: bool,
+    emerge_until: f32,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_water_views(
+    mut commands: Commands,
+    device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
+    cache: Res<PipelineCache>,
+    pipelines: Res<WaterPipelines>,
+    mut specialized: ResMut<SpecializedRenderPipelines<WaterPipelines>>,
+    planet: Option<Res<PlanetGpu>>,
+    settings: Res<WaterSettings>,
+    weather_settings: Res<WeatherSettings>,
+    weather: Res<Weather>,
+    clock: Res<PlanetClock>,
+    frame: Res<PlanetRenderFrame>,
+    mut views: Query<(
+        Entity,
+        &ExtractedView,
+        &Msaa,
+        &PlanetViewGpu,
+        Option<&mut WaterViewGpu>,
+    )>,
+) {
+    let Some(planet) = planet else {
+        return;
+    };
+    for (entity, view, msaa, planet_view, existing) in &mut views {
+        let (camera, clip_from_body) = frame.camera_and_clip(
+            &view.world_from_view,
+            view.clip_from_view,
+            view.clip_from_world,
+        );
+        let sea_radius = terrain::PLANET_RADIUS - settings.depth_offset_m;
+        let band = settings.swell_amplitude_m + settings.partial_band_m;
+        let state = submersion(camera, sea_radius, band);
+        let (mut was_under, mut emerge_until) = existing
+            .as_ref()
+            .map(|gpu| (gpu.was_under, gpu.emerge_until))
+            .unwrap_or((false, f32::NEG_INFINITY));
+        let drips = emerge(
+            clock.0,
+            state,
+            was_under,
+            &mut emerge_until,
+            settings.emerge_dry_s,
+        );
+        was_under = state > 0.75;
+        let aspect = view.viewport.z as f32 / view.viewport.w.max(1) as f32;
+        let s = &settings;
+        let v3 = |c: [f32; 3]| Vec3::from_array(c);
+        let params = WaterView {
+            clip_from_local: clip_from_body,
+            local_from_clip: clip_from_body.as_dmat4().inverse().as_mat4(),
+            camera_time: camera.extend(clock.0 * s.time_scale),
+            planet_center: Vec3::ZERO.extend(sea_radius),
+            sun: crate::sky::SUN_DIRECTION
+                .normalize()
+                .extend(s.specular_intensity),
+            waves: Vec4::new(
+                s.swell_amplitude_m,
+                s.swell_frequency,
+                s.swell_speed,
+                s.wave_steepness,
+            ),
+            ripple: Vec4::new(
+                s.ripple_scale,
+                s.ripple_speed,
+                s.rain_ripple_scale,
+                s.rain_ripple_strength,
+            ),
+            refraction: Vec4::new(
+                s.refract_amount,
+                s.refract_max_uv,
+                s.slope_max,
+                s.max_path_m,
+            ),
+            absorption: v3(s.absorption_per_m).extend(s.night_floor),
+            deep_color: v3(s.deep_color).extend(s.flow_uv_speed_falling),
+            horizon_color: v3(s.sky_horizon_color).extend(s.sky_horizon_strength),
+            zenith_color: v3(s.sky_zenith_color).extend(0.0),
+            night_sky: v3(s.night_sky_color).extend(crate::sky::ATMOSPHERE_RADIUS),
+            foam_color: v3(s.foam_color).extend(s.foam_intensity),
+            foam_crest: Vec4::new(s.foam_crest_lo, s.foam_crest_hi, s.foam_crest_weight, 0.0),
+            foam_slope: Vec4::new(s.foam_slope_lo, s.foam_slope_hi, s.foam_slope_weight, 0.0),
+            sun_tint: v3(s.sun_tint).extend(s.specular_power),
+            fog_night: FOG_NIGHT_SKY.extend(FOG_DENSITY_PER_M),
+            fog_day: FOG_DAY_SKY.extend(FOG_HEIGHT_M),
+            limits: Vec4::new(s.fog_max, TERMINATOR.0, TERMINATOR.1, FOG_MIX),
+            fx: Vec4::new(s.underwater_distortion, state, weather.rain, drips),
+            lens: Vec4::new(
+                weather_settings.rain_lens_density,
+                weather_settings.rain_lens_refract,
+                weather_settings.rain_lens_speed,
+                weather_settings.rain_lens_size,
+            ),
+            screen: Vec4::new(aspect, band, s.wet_blur, s.detail_fade),
+            // The partition the uploaded records can serve, read off the same
+            // place the surface pass reads it, so a sheet and the terrain
+            // under it can never be split on different anchors.
+            lod: planet.lod.player.extend(super::lod::BASE_LEVEL as f32),
+            bands: planet.lod.bands,
+        };
+        let lens_needed = weather.rain > 0.001 || drips > 0.001;
+        let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
+        if let Some(mut gpu) = existing {
+            gpu.uniform.set(params);
+            gpu.uniform.write_buffer(&device, &queue);
+            gpu.lens_needed = lens_needed;
+            gpu.was_under = was_under;
+            gpu.emerge_until = emerge_until;
+            if gpu.depth_size != size {
+                gpu.depth = water_depth(&device, size);
+                gpu.depth_size = size;
+            }
+            continue;
+        }
+        let mut uniform = UniformBuffer::from(params);
+        uniform.write_buffer(&device, &queue);
+        // The flow field: zero for every cell, because the world has no rivers
+        // and no water voxels yet. See openspec/changes/water-flow.
+        let flow = device.create_buffer(&BufferDescriptor {
+            label: Some("GPU water flow vectors (zero until a fluid state exists)"),
+            size: (planet.slots as u64 * 8).max(8),
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let data_bind_group = device.create_bind_group(
+            Some("water data"),
+            &cache.get_bind_group_layout(&pipelines.data_layout),
+            &BindGroupEntries::sequential((
+                &uniform,
+                planet.cells.as_entire_binding(),
+                planet_view.water.as_entire_binding(),
+                flow.as_entire_binding(),
+            )),
+        );
+        let format = if view.hdr {
+            ViewTarget::TEXTURE_FORMAT_HDR
+        } else {
+            TextureFormat::bevy_default()
+        };
+        let multisampled = msaa.samples() > 1;
+        let mut pipeline = |pass| {
+            specialized.specialize(
+                &cache,
+                &pipelines,
+                WaterKey {
+                    pass,
+                    format,
+                    multisampled,
+                },
+            )
+        };
+        commands.entity(entity).insert(WaterViewGpu {
+            cap: pipeline(Pass::Cap),
+            compose: pipeline(Pass::Compose),
+            lens: pipeline(Pass::Lens),
+            depth: water_depth(&device, size),
+            depth_size: size,
+            uniform,
+            _flow: flow,
+            data_bind_group,
+            multisampled,
+            lens_needed,
+            was_under,
+            emerge_until,
+        });
+    }
+}
+
+fn water_depth(device: &RenderDevice, size: UVec2) -> TextureView {
+    device
+        .create_texture(&TextureDescriptor {
+            label: Some("water sheet depth"),
+            size: Extent3d {
+                width: size.x,
+                height: size.y,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: WATER_DEPTH_FORMAT,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+        .create_view(&TextureViewDescriptor::default())
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+struct WaterCompositeLabel;
+
+#[derive(Default)]
+struct WaterCompositeNode;
+
+impl ViewNode for WaterCompositeNode {
+    type ViewQuery = (
+        &'static ViewTarget,
+        &'static ViewDepthTexture,
+        &'static PlanetViewGpu,
+        &'static WaterViewGpu,
+    );
+
+    fn run<'w>(
+        &self,
+        _: &mut RenderGraphContext,
+        ctx: &mut RenderContext<'w>,
+        (target, depth, planet_view, water): QueryItem<'w, '_, Self::ViewQuery>,
+        world: &'w World,
+    ) -> Result<(), NodeRunError> {
+        let pipelines = world.resource::<WaterPipelines>();
+        let cache = world.resource::<PipelineCache>();
+        let (Some(cap), Some(compose), Some(lens)) = (
+            cache.get_render_pipeline(water.cap),
+            cache.get_render_pipeline(water.compose),
+            cache.get_render_pipeline(water.lens),
+        ) else {
+            return Ok(());
+        };
+        let scene_layout = if water.multisampled {
+            &pipelines.scene_layout_multisampled
+        } else {
+            &pipelines.scene_layout
+        };
+        let device = ctx.render_device().clone();
+        let scene_bind_group = |source: &TextureView| {
+            device.create_bind_group(
+                Some("water scene"),
+                &cache.get_bind_group_layout(scene_layout),
+                &BindGroupEntries::sequential((source, depth.view(), &pipelines.sampler)),
+            )
+        };
+        // Compose then the cap, both reading the scene and writing the other
+        // main texture. Compose touches every pixel, so nothing needs clearing.
+        {
+            let post = target.post_process_write();
+            let scene = scene_bind_group(post.source);
+            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("Water compose and cap"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: post.destination,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                })],
+                // Reverse-Z: clear to the far plane so the first sheet fragment
+                // at any pixel wins and nearer ones overwrite it.
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    view: &water.depth,
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(0.0),
+                        store: StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_bind_group(0, &water.data_bind_group, &[]);
+            pass.set_bind_group(1, &scene, &[]);
+            pass.set_render_pipeline(compose);
+            pass.draw(0..3, 0..1);
+            pass.set_render_pipeline(cap);
+            pass.draw_indirect(&planet_view.indirect, 32);
+        }
+        if water.lens_needed {
+            let post = target.post_process_write();
+            let scene = scene_bind_group(post.source);
+            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("Water lens"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: post.destination,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_bind_group(0, &water.data_bind_group, &[]);
+            pass.set_bind_group(1, &scene, &[]);
+            pass.set_render_pipeline(lens);
+            pass.draw(0..3, 0..1);
+        }
+        Ok(())
+    }
+}
+
+pub(super) fn build(render_app: &mut SubApp) {
+    render_app
+        .init_resource::<SpecializedRenderPipelines<WaterPipelines>>()
+        .add_systems(RenderStartup, initialize_pipelines)
+        .add_systems(
+            Render,
+            prepare_water_views
+                .in_set(RenderSystems::PrepareBindGroups)
+                .after(super::prepare_views),
+        )
+        .add_render_graph_node::<ViewNodeRunner<WaterCompositeNode>>(Core3d, WaterCompositeLabel)
+        .add_render_graph_edges(
+            Core3d,
+            (
+                Node3d::EndMainPass,
+                WaterCompositeLabel,
+                Node3d::StartMainPassPostProcessing,
+            ),
+        );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_uniform_matches_the_wgsl_struct_size() {
+        // Two mat4 and twenty-three vec4 in water.wgsl's WaterView, read off the
+        // shipped shader rather than remembered.
+        let shader = include_str!("../../../assets/shaders/water.wgsl");
+        let start = shader.find("struct WaterView {").unwrap();
+        let block = &shader[start..start + shader[start..].find('}').unwrap()];
+        let mat4 = block.matches("mat4x4<f32>").count();
+        let vec4 = block.matches("vec4<f32>").count();
+        assert_eq!((mat4, vec4), (2, 23));
+        assert_eq!(
+            WaterView::min_size().get() as usize,
+            mat4 * 64 + vec4 * 16,
+            "the Rust uniform must be the WGSL struct's size"
+        );
+    }
+
+    #[test]
+    fn submersion_is_dry_over_land_and_a_tri_state_over_water() {
+        let sea = terrain::PLANET_RADIUS - 0.5;
+        let band = 1.3;
+        // Find one land and one ocean direction off the real generator.
+        let cells = super::super::topology::dual_sphere(3);
+        let land = cells
+            .iter()
+            .find(|c| terrain::surface_height(c.direction) >= 0.0)
+            .unwrap()
+            .direction;
+        let ocean = cells
+            .iter()
+            .find(|c| terrain::surface_height(c.direction) < 0.0)
+            .unwrap()
+            .direction;
+        assert_eq!(submersion(land * (sea - 10.0), sea, band), 0.0);
+        assert_eq!(submersion(ocean * (sea + 10.0), sea, band), 0.0);
+        assert_eq!(submersion(ocean * (sea + 1.0), sea, band), 0.5);
+        assert_eq!(submersion(ocean * (sea - 1.0), sea, band), 0.5);
+        assert_eq!(submersion(ocean * (sea - 3.0), sea, band), 1.0);
+        assert_eq!(submersion(Vec3::ZERO, sea, band), 0.0);
+    }
+
+    #[test]
+    fn the_emerge_window_arms_on_surfacing_and_dries_off() {
+        let dry = 2.6;
+        let mut until = f32::NEG_INFINITY;
+        assert_eq!(emerge(0.0, 1.0, false, &mut until, dry), 0.0);
+        // Straddling keeps the lens wet.
+        assert_eq!(emerge(1.0, 0.5, true, &mut until, dry), 1.0);
+        // Clear of the water: full drips, then fading.
+        assert_eq!(emerge(1.0, 0.0, false, &mut until, dry), 1.0);
+        let half = emerge(1.0 + dry / 2.0, 0.0, false, &mut until, dry);
+        assert!((half - 0.5).abs() < 1e-5);
+        assert_eq!(emerge(1.0 + dry + 1.0, 0.0, false, &mut until, dry), 0.0);
+        // Diving again: no drips while under, then a fresh window on surfacing.
+        assert_eq!(emerge(10.0, 1.0, false, &mut until, dry), 0.0);
+        assert_eq!(emerge(11.0, 0.0, true, &mut until, dry), 1.0);
+    }
+}

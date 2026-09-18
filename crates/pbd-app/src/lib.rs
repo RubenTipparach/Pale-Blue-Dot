@@ -2,6 +2,8 @@
 //! `PaleBlueDotPlugin` submits accelerations; Avian alone integrates ship pose.
 
 #[cfg(feature = "desktop")]
+pub mod config;
+#[cfg(feature = "desktop")]
 pub mod flight_view;
 #[cfg(feature = "desktop")]
 pub mod planet;
@@ -9,6 +11,8 @@ pub mod planet;
 pub mod sky;
 #[cfg(feature = "desktop")]
 pub mod walking;
+#[cfg(feature = "desktop")]
+pub mod weather;
 
 use std::time::Duration;
 
@@ -107,7 +111,7 @@ impl CelestialScene {
             ephemeris,
             states,
             gravity: vec![
-                GravityWell::new(0, DVec3::ZERO, 4_000.0, 1.0),
+                GravityWell::new(0, DVec3::ZERO, planet::PLANET_RADIUS as f64, 1.0),
                 // Preserve the demo moon's authored 1 m/s² surface pull.
                 GravityWell::new(1, DVec3::ZERO, 500.0, 0.04),
             ],

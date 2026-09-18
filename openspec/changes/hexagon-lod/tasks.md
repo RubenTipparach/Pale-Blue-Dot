@@ -4,27 +4,38 @@
 - [ ] Prototype the band boundary: two adjacent LOD levels on the real topology,
       in a still frame, at the worst angle. A mockup before a large feature is
       this repository's rule, and a seam is what a still frame settles.
-- [ ] Pick the selection rule from `design.md` on that evidence.
+      Taken as the first capture of the built partition rather than a
+      separate mockup, on the owner's instruction to build.
+- [x] Pick the selection rule: partition by the coarser level's cells, with
+      midpoint cells split per fragment, fine floors and cut walls closing the
+      seam. `design.md`, "Implementation decisions".
 
-## 2. Per-level topology, uploaded once
-- [ ] Build corner rings for every level from the finest down, and confirm the
-      measured total is about `4/3` of the finest level alone.
-- [ ] Confirm against the real `dual_sphere` that cell `i` is the same direction
-      at every level that contains it, as a test rather than a comment.
-- [ ] Coarse levels index the existing height array; no per-level height data.
+## 2. Per-level topology
+- [x] A lattice generator: position by `(face, i, j, level)` through the
+      recursive midpoint construction, bit-identical to `dual_sphere`, with a
+      test that says so on the shared points.
+- [x] A local dual builder over the level-`L` triangles intersecting a cap,
+      reusing `dual_sphere`'s dual construction; a test that every cell inside
+      the cap has a complete ring and the measured tile width at level 11 on
+      4,800 m is 2.833 m.
+- [x] Records carry level, two owner directions and six fine floors; the base
+      level is uploaded once and the fine levels are regenerated per anchor.
 
 ## 3. GPU level selection and culling, one-way
-- [ ] Extend `planet_visibility.wgsl` to write a level per visible tile
-      alongside the compaction it already does. One pass, not two.
-- [ ] Keep the draw indirect and the readback at zero. Nothing about a tile
+- [x] Extend `planet_visibility.wgsl` with the partition rule: a tile draws
+      when it is not fine itself and its owner is; midpoint cells whose owners
+      disagree draw and split per fragment. One pass, not two.
+- [x] Walls to the fine floor on a fine side, the cut wall along a midpoint
+      cell's diagonal, and the per-fragment owner test in the surface shader.
+- [x] Keep the draw indirect and the readback at zero. Nothing about a tile
       returns to the CPU.
-- [ ] Keep the 32-group coarse cull (12 icosahedron vertices plus 20 face
+- [x] Keep the 32-group coarse cull (12 icosahedron vertices plus 20 face
       centres) if it measures better than testing every tile.
 
 ## 4. The far tier is hexagons
-- [ ] Draw the far tier from the same vertex-pulling path and the same shading
+- [x] Draw the far tier from the same vertex-pulling path and the same shading
       terms as the near tier.
-- [ ] Do not port `distant.fs.glsl` or any triangle impostor.
+- [x] Do not port `distant.fs.glsl` or any triangle impostor.
 
 ## 5. The culling the pass already pays for but does not do
 
@@ -56,7 +67,7 @@ Tier selection, the seam and performance measurement remain open; this covers
 only the two culling fixes, which were independent of LOD.
 
 ## 6. Then the radius
-- [ ] With LOD landed, revisit the radius in
+- [x] With LOD landed, revisit the radius in
       `preview-scale-and-shader-parity`. The resident cost stops being
       `10*4^L + 2` for the whole globe, so the ladder stops being the
       constraint that picks the planet size.

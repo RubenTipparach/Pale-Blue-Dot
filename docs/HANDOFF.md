@@ -19,12 +19,33 @@ answer below no longer describes the current authorization. This pass covers:
 - GPU frustum culling and separate terrain/nearby-foliage indirect draws.
 - The live surface shader's 0.25 night-side rim floor.
 
-The 4,800 m/L11 rescale still depends on proving and implementing the LOD seam.
-The current preview remains at 4,000 m/L8 with six-metre steps. RON body assets,
-the dedicated faithful water pipeline, and the volumetric engine remain planned.
-The measurements and "not yet acted on" findings below describe the earlier
-baseline; current implementation and validation status is tracked in the
-OpenSpec task files and [validation results](handoff-validation.md).
+- The five-system water port (cap pass, composite, wetness, precipitation,
+  flow hook), with `water.ron` and `weather.ron` as the tunables.
+- **Hexagon LOD and the rescale, built.** The body is **4,800 m** with a
+  level-7 base for the whole globe and levels 8 to 11 resident as bands of
+  2,400, 1,200, 600 and 300 m around the player, so the tile underfoot is the
+  gold-standard **2.833 m** and the step is **1 m**. The relief is cut to
+  ~150 m summits and a ~60 m ocean floor, the sky shell keeps its 1.2 R ratio,
+  clouds sit at +300 m, the walker steps one cell, and trees scatter at
+  Tenebris's per-biome rates. `planet::lattice` addresses any level's dual by
+  `(face, level, i, j)`, `planet::lod` generates the resident set off the CPU
+  height function and republishes it whole when the player has walked 40 m,
+  the GPU visibility pass partitions by the coarser level's cells, and the
+  surface shader closes the band boundary with fine floors, split midpoint
+  cells and a cut wall. Design and decisions:
+  `openspec/changes/hexagon-lod/design.md`; captures, three findings fixed
+  off them (a mis-framed seam preset, trees ending at the band edge, a dark
+  water horizon from the sky's solid sphere sitting above the sheet) and the
+  remaining seam
+  judgement, which is the owner walking a band edge in the running game:
+  [tenebris-comparison.md](tenebris-comparison.md), "After the rescale and
+  hexagon LOD".
+
+RON body assets and the volumetric engine remain planned. The measurements and
+"not yet acted on" findings below describe the earlier 4,000 m / level-8
+baseline and are kept as the record of why; current implementation and
+validation status is tracked in the OpenSpec task files and
+[validation results](handoff-validation.md).
 
 ---
 
@@ -329,6 +350,43 @@ and the Bayer cutout. Four differences show in a still frame:
 4. **The ocean is two shaders.** `water.wgsl` has refraction, path-length
    absorption, foam and an underwater path; the one that renders is a Fresnel
    and two sines.
+
+   Measured against the whole Tenebris water system and captured at 1.6, 10,
+   50, 200 and 1,000 m above the polar shore (`--view shore --height N`; see
+   `tenebris-comparison.md`, "Water: five systems in Tenebris, one branch
+   here"). Tenebris's water is **five systems**: the cap pass, the composite
+   pass (underwater fog with a dry/straddling/submerged tri-state, screen
+   distortion, rain-on-glass lens droplets, emerge drips), terrain wetness in
+   `hex.fs` (wet sheet, impact rings, rivulets, sheen, glint), world-space
+   precipitation (`weather_fx.rs`), and the CPU flow simulation
+   (`world_water.rs`, which feeds the cap's flow UVs). `water.wgsl` ports the
+   cap pass only and drops five of its terms: rain ripples, flow advection,
+   the waterfall scroll, the two foam weights and the specular sun tint. Pale
+   Blue Dot has none of the other four systems in any form; there is no
+   post-process pass at all. So "bind the port" is the first water step, not
+   the whole of it, and the rest is a systems list in dependency order:
+   composite, then a weather field with a rain intensity, then flow. Two more
+   things the captures show: the hexagon mosaic in the water is the terrain's
+   flat-per-cell depth, not a water bug; and above 800 m the sky goes black
+   because `ATMOSPHERE_RADIUS` is `R + 800`, 1.20 R against Tenebris's 1.24 R,
+   which moves with the rescale.
+
+   **Built since, on the same branch, on the owner's "implement all of
+   that":** the cap pass is bound (`planet_water.rs`, cap pulled from the
+   `Cell` record, the two omissions fixed), the composite node runs compose,
+   cap and lens with a CPU submersion tri-state, the terrain draws its seabed
+   and carries the `hex.fs` wetness block, a `Weather` resource with `--rain`
+   and the P key drives ripples, wetness, lens droplets and a near-shower
+   streak mesh, and the flow hook reads a zero buffer. Knobs are
+   `assets/config/water.ron` and `weather.ron`. Three look findings for the
+   owner's eye were in `tenebris-comparison.md` under "Status after
+   implementation"; the owner called the shine and the self-overlap, and both
+   are fixed there with a private sheet depth buffer, a `detail_fade` on the
+   wave normal and re-authored reflection values. One real bug came out of
+   the shower not drawing: the globe was queued in the transparent phase at
+   `f32::MAX`, which Bevy sorts LAST, so it painted over every transparent
+   mesh in front of it. It is `f32::MIN` now. The mosaic in the water is gone
+   with the inline branch.
 
 ### 5.2 A confirmed latent bug: the camera is not planet-local
 

@@ -105,9 +105,11 @@ same views rather than relying on a differently framed beauty shot.
 ## Measured dimensional comparison
 
 The complaint that started this section was that the camera "feels really short
-compared to the hexagons". It is correct, and the reason is not the camera. The
-avatar was taken from Tenebris at 1:1 while the world around it was built about
-six and a half times larger.
+compared to the hexagons". It was correct, and the reason was not the camera:
+the avatar was taken from Tenebris at 1:1 while the world around it was built
+about six and a half times larger. **This is now closed**: see "After the
+rescale and hexagon LOD" below for the numbers as they stand. The table and the
+options that follow are kept as the measurement that decided it.
 
 Every number below is read out of the two source trees. The tile widths are
 measured rather than derived: `planet::tile_widths` walks the real
@@ -212,10 +214,568 @@ without making a tile smaller.
    chunk/radial-slab section, and it is the only option that gets metre-scale ground on an 8 km
    world. It is also the whole remaining engine.
 
-Option 1 is the honest one for a preview whose stated job is the whole-globe
-silhouette. It is recorded here as a measurement and a set of options, not
-applied: rescaling the body moves nine other tuned numbers and every capture in
-this document, and that is a decision to take deliberately.
+Option 3 is what was built, with the radius moved to 4,800 m so that the
+finest level lands the standard exactly. The section below records the result.
+
+### After the rescale and hexagon LOD
+
+Measured on the shipped build (`planet::tile_widths` and `lod::tile_width_m`,
+printed at startup and pinned by tests):
+
+| Quantity | Tenebris | Pale Blue Dot now | Ratio |
+| --- | ---: | ---: | ---: |
+| Sea-level radius | 300 m | 4,800 m | 16x |
+| Level underfoot | 7 | 11 | +4 |
+| Tile width underfoot, mean | 2.833 m | **2.833 m** | 1.0x |
+| Base level (whole globe) | 7, 163,842 cells | 7, 163,842 cells | 1.0x |
+| Fine levels resident | none (whole body at 7) | 8 to 11 in bands of 2,400 / 1,200 / 600 / 300 m | our design |
+| Resident records | 163,842 | 163,842 base + ~160,000 fine, 59 MiB at 192 B | |
+| Vertical quantum | 1.00 m | **1.00 m** | 1.0x |
+| Summit / ocean floor | +40 m / -24 m | +153 m / -87 m | see below |
+| Walker step | one block | 1.05 m (one cell plus skin) | 1.0x |
+| Tree scatter | per biome out of 256 (jungle 115, swamp 34, fields 13, tundra 2) | **the same table, on the biome in the record** | same rule |
+| Tree geometry | hex prisms, wood 0.20 and leaves 0.65-1.00 of the tile | **the same** | same rule |
+| Tree height | 5-6 m on fields, 9-10 m for a pine | **the same** | 1.0x |
+| Atlas tile across a cap | one tile per face | 1.5 tiles per face | |
+| Atlas tile down a wall | one tile per metre | one tile per metre | 1.0x |
+
+The relief is the one number that is deliberately not Tenebris's: the owner
+chose ~100-150 m summits over Tenebris's 40 m, and the generator compresses its
+raw ranges by 0.17 above the sea and 0.12 below it, keeping the coastline.
+
+![Orbit after the rescale](screenshots/lod-orbit.png)
+
+From orbit only the level-7 base draws: the whole globe is hexagons and twelve
+pentagons at 45 m, the same closed dual the preview always had, with the sky
+shell at the same 1.2 R ratio and the clouds down at 300 m.
+
+![Surface after the rescale](screenshots/lod-surface.png)
+
+The surface view from 90 m at the spawn looks across all four bands: 2.833 m
+tiles with one-metre terraces underfoot, the 45 m base tiles on the far ridge,
+and the transitions between them along the way, with the forest scattered at
+Tenebris's rates out to the level-9 band.
+
+![The walker after the rescale](screenshots/lod-walk.png)
+
+The walker at the spawn, in a forest scattered at Tenebris's rates: 2.833 m
+tiles at its feet, a one-metre step at the right edge, trunks about a metre
+across and crowns six metres up.
+
+![The band boundary at a grazing angle](screenshots/lod-seam.png)
+
+The `seam` capture preset is a 60 m eye at the spawn looking down at about
+eleven degrees across the 300 m boundary between level 11 and level 10, which
+sits under the crosshair, with the 600 m and 1,200 m boundaries beyond it.
+This is the still frame the hexagon-lod change asked for before the tiers were
+built, taken as the first frame of the built partition instead, on the owner's
+instruction to build. What it shows: the sand's one-metre contours run
+through the boundary without a crack, a doubled cap or a line, and the forest
+cover is continuous out to the level-9 band. What it cannot show is motion,
+which is where a boundary would sweep: that needs the owner's eye in the
+running game, walking the band edge, and is the remaining seam requirement in
+the `hexagon-lod` change.
+
+Three findings from these captures, each fixed in the same commit:
+
+1. **The seam camera's first frame was a wall of blue.** A 12 m eye at the
+   spawn sat among the spawn's own terraces and read as 45 m tiles at arm's
+   length. A per-level tint of the surface shader (not committed) showed every
+   tile in it was level 11, and a GPU test on the real records
+   (`the_partition_lists_each_tile_at_its_bands_level_on_the_real_records`)
+   confirmed the partition lists no tile outside its band from that eye, so
+   the frame was a framing, and the preset moved up to 60 m.
+2. **The forest ended in a straight line at 300 m.** Trees were eligible on
+   the finest level only, so the band edge was drawn by what stood on it.
+   Trees are eligible on levels 9 to 11 now at the same cover per area
+   (`hexagon-lod/design.md`, "Trees on three levels").
+3. **A dark line where the sea met the sky** (`shore` view), a few pixels
+   tall with the sheet's cells stepping along it. Three wrong theories were
+   tested and dropped in turn (a back-facing cap taking the underwater path,
+   the seabed showing through, the horizon-strength knob dimming Fresnel;
+   the first left a robustness change behind, the sheet deciding above or
+   below by camera height rather than winding). The cause was geometric: the
+   sheet sits `depth_offset_m` (0.5 m) below sea level, and the sky shader
+   treated the full sea-level sphere as solid ground, so between the sheet's
+   silhouette and that sphere's tangent the sky drew its ground colour.
+   `sky::solid_radius` hands the sky the sheet's radius instead.
+
+![The shore after the rescale](screenshots/lod-shore.png)
+
+### Swimming, and the two things that were in the way
+
+The owner: *"there's some weirdness with not being able to walk into water.
+Need to make parity with tenebris-rs and allow swimming and diving."* The sea
+was a wall, and the composite pass that fogs the view underwater, the Snell's
+window and the emerge drips were all built and none of them could be reached by
+playing.
+
+Two blockers, not one. The obvious one was a clause in the swept ground
+resolution that rejected a wet footprint exactly as it rejects a cliff. The
+second was underneath it: `SurfaceContact::radius` is computed at
+`PLANET_RADIUS + height.max(0)`, so over a water cap the contact plane sits at
+**sea level** and a walker would have walked out onto the top of the sea. The
+clamp is right for its other callers, assisted flight and rain, so the contact
+answers both questions now: `radius` is the surface you fly over, and
+`floor_radius` is the solid ground, the seabed under water.
+
+The model is Tenebris's, at its own numbers: three probes up one column at the
+feet, the body (+0.50 m) and the eyes (+1.60 m); speed x0.5, gravity x0.30 and
+a 3.0 per second drag on the vertical while the body is under; a continuous
+20 m/s^2 thrust while the swim control is HELD; a seabed jump weakened to 0.30;
+and `grounded` forced false whenever the eyes are under, which is what makes a
+swimmer always take gravity and never get a standing jump. Measured, the feel
+is the reference's: **rise at about 4.2 m/s while the control is held, sink at
+about 2.5 m/s when it is released** (the test measures -2.56 against a
+predicted -2.5). There is no buoyancy and nowhere to hover, which is the
+reference's design rather than an omission, and there is no breath or drowning
+because it has none.
+
+One number is not theirs. Their exit from deep water beside a bank is the
+jetpack, unlocked the moment the eyes clear the surface, and this project has
+no jetpack; so the thrust is gated on the body rather than the eyes while the
+feet are off the bottom, which covers the last metre out.
+
+![Swimming, reached by playing](screenshots/swim.png)
+
+That frame is the walker holding forward off the beach: 4.0 m/s, which is
+exactly the halved walk speed, at -2 m with the waterline across the eye. It
+is the first time the straddle view has been reached by walking rather than by
+a camera preset.
+
+![Diving, on the deepened sea](screenshots/dive.png)
+
+And this one is the same walk a few hundred frames later on the deepened sea:
+**-4 m, AIRBORNE**, which is the HUD's word for not grounded and is what a
+swimmer is by construction. The surface is overhead with its light on the
+underside, the seabed is below, and the absorption takes the colour with
+distance. The composite pass's underwater path had been built, tested and
+photographed by a camera preset for a day before anything could reach it by
+playing.
+
+**And the scripted swim proved the sea had no depth to dive in.** Seven hundred
+frames of holding forward left the walker still wading at two metres, because
+the rescale had compressed the ocean relief to 0.12 against the land's 0.17 and
+left a shelf one to two metres deep for hundreds of metres. That had been
+written up as a look problem, the flat pale sea in daylight; it is the same
+defect, and a walker who cannot submerge cannot dive, so it stopped being a
+question of taste. `OCEAN_RELIEF` is 0.45 now. The land does not move: the
+summits are what was asked to be climbable, and nobody walks on the sea floor.
+
+| out from the waterline | was | now |
+| ---: | ---: | ---: |
+| 45 m | -1 m | **-3 m** |
+| 91 m | -2 m | **-5 m** |
+| 181 m | -2 m | **-8 m** |
+| 725 m | -7 m | **-24 m** |
+
+Wading becomes swimming about forty metres out, which is a beach. The relief
+test was re-pinned and renamed with it: it asserts the sea within sight of a
+standing player is deeper than their eye, which is the property that matters,
+rather than a number somebody chose.
+
+**And it needed a scripted capture, which found two more defects.** A walker
+with no input never moves, so `--swim` places one at the shoreline and holds
+forward. Scripted keys pressed in `Update` are wiped by the next frame's input
+clear before `RunFixedMainLoop` reads them, so the walker stood still; and
+pointer capture follows the window's focus, which a headless window never
+reports, so the input path zeroed the movement axes every frame. Both are the
+same shape as a test that sets the movement axes directly: it passes while the
+real input path is broken. The tests drive keys now.
+
+### Night, which is where the reflection really was the culprit
+
+![The sea at night, before](screenshots/night-water-before.png)
+
+![The sea at night, after](screenshots/night-water-after.png)
+
+The owner's report was a sea glowing blue under a black starfield. The daytime
+diagnosis above does not cover it: in daylight the shine knobs are worth about
+2% of the frame, and at night the reflection is most of it. Two structural
+faults, both fixed, both measured on the `nightshore` capture preset added for
+this:
+
+- **The reflected sky never went out.** It was an authored daytime gradient
+  under a flat 0.18 night floor, so the sea mirrored the same blue at midnight
+  as at noon. Against terrain at roughly 0.006 linear, the sea sat between 0.03
+  and 0.07: five to twelve times brighter than the land beside it.
+- **The night floor was applied twice to the reflection**, once as the ambient
+  level the water body receives and once to the mirror itself, which then went
+  black at the horizon, where a mirror should be closest to the sky it mirrors.
+
+The reflection now ramps to a `night_sky_color` across the same terminator the
+fog uses, and the ambient floor applies to the transmitted body and the foam
+only. The sea at the horizon moved from 39.6, 52.2, 61.6 to 28.4, 46.2, 57.1,
+under both the sky (46.4, 73.1, 90.7) and the land's red (30.9), and the
+daytime frame is byte-identical.
+
+**Two lessons, and the second one cost three captures.** The reflected sky
+still does not vary with the direction the water looks at, while the sky this
+engine draws does, so one authored colour is right toward the terminator and
+too bright away from it, which is the direction the owner's screenshot was
+taken in. And: the first two attempts at this fix renamed a variable and left
+one use behind, so `water.wgsl` failed to compile and the cap did not draw at
+all. The frames looked plausible, because what is left is the seabed with its
+own submerged tint, and they measured darker, which is the direction the fix
+was meant to move them. The pipeline error was on line 10 of every log.
+**A shader that fails to compile here does not look broken, it looks like a
+slightly different scene.**
+
+### The colour of the sea, against a photograph
+
+![The owner's view before](screenshots/water-colour-before.png)
+
+![The same view after](screenshots/water-colour-after.png)
+
+![The reference: open ocean](screenshots/ocean-reference.webp)
+
+The owner's second report, with a photograph of open ocean beside their own
+frame, was that the water was still too shiny and too light. Measured the same
+way as everything above, the photograph is not dark: its red channel is under
+ten over most of the sea and its blue runs to 209, so its saturation sits
+between 87 and 166. The owner's frame was 84, 115, 138 at saturation 55, the
+same lightness as the photo's middle band with four times the red. "Too light"
+named a symptom, and the number is red.
+
+Two rounds of one-knob-at-a-time ablation at the owner's own view are tabled
+in `openspec/changes/water-look/design.md`. The short version: every shine and
+sky knob together is worth 31 levels of red and reaches saturation 85 against
+the photo's 134; darkening the body colour moves five levels and reads as grey;
+what the sea needed was a body colour with **no red in it at all**, and the
+shallows needed a harder red absorption, since the sand under a metre of water
+is red and only the water in front of it can take that out.
+
+| band (sRGB, saturation) | before | after | photo |
+| --- | --- | --- | --- |
+| `shore` from 12 m, far sea | 71, 106, 136 (65) | 33, 102, 142 (109) | 9, 100, 143 (134) |
+| `shore` from 12 m, near shallows | 84, 131, 133 (49) | 53, 125, 137 (84) | |
+| `wade`, the sheet at eye level | 99, 139, 177 (78) | 81, 135, 180 (99) | |
+| `wade`, the shallows under the eye | 115, 147, 149 (34) | 73, 135, 142 (69) | |
+| `dive`, four metres under | 42, 89, 128 (86) | 15, 96, 139 (124) | |
+| `nightshore`, the sea | 27, 42, 50 (23) | 18, 49, 67 (50) | |
+
+The sky bands in every pair are byte-identical, so the whole of the movement
+is the water's. The remaining red at the far sea (33 against the photo's 9) is
+the tone mapper's floor: `TonyMcMapface` desaturates everything it maps, and
+the values that hit the photo's number unmapped land a shade greyer through it.
+Tenebris applies no tone mapping, so its 0.02/0.10/0.22 body colour is 38, 89,
+130 on its screen; ours is the same lightness with the red taken out.
+
+![The sea from the waterline, after](screenshots/water-colour-wade.png)
+
+![Four metres under, after](screenshots/water-colour-dive.png)
+
+![The sea at night, after](screenshots/water-colour-night.png)
+
+![The coast from 420 m, after](screenshots/water-colour-coast.png)
+
+![Tenebris, four metres under its own ocean](screenshots/tenebris-dive.png)
+
+### The night side, and the deep, measured again
+
+Two more reports on the frames above: the sea still reflects too much on the
+night side, and the underwater should be a darker blue.
+
+**The night reflection was one colour; the sky it mirrors is not.** Across
+the `nightshore` sky alone the drawn night sky runs three to one, 20/36/45
+away from the sun to 79/116/138 toward it, because this engine's night sky is
+its upper atmosphere lit over the limb. The water mirrored `night_sky_color`
+everywhere: brighter than the sky on one side and under it on the other, and
+under a black sky a glowing sheet. The reflection now asks the sky's own
+question (`sun_visibility`) of the point where the reflected ray leaves the
+atmosphere, and is the night colour scaled by how much the ray faces the sun
+when lit, nothing when not. Finding on the way: the sun sits 48 degrees
+north, so the equator's antisolar longitude, where `nightshore` stands, is
+132 degrees from the sun and its sky is lit; the antisolar POINT is at 48 S,
+and a `midnight` preset stands there now, where the sky is black in every
+direction, which is the frame the owner's night report was taken in.
+
+![Midnight, before](screenshots/water-midnight-before.png)
+
+![Midnight, after](screenshots/water-midnight-after.png)
+
+| `midnight` | sky | sea | land |
+| --- | --- | --- | --- |
+| before | 3.7, 4.5, 7.0 | 15.3, 40.5, 50.9 | 29.4, 30.4, 24.0 |
+| after | 3.7, 4.5, 7.0 | **5.2, 32.7, 42.4** | 29.4, 30.4, 24.0 |
+
+What is left of the sea at midnight is its own body under the ambient floor
+(`night_floor` 0.18 of the deep colour), which is the same order as the land
+beside it. At `nightshore`, where the sky is lit, the sea moved by four levels
+on the side away from the sun and not at all toward it, which is the point:
+it follows the sky now.
+
+**The murk darkens with the eye's depth and with the night.** Seen from below
+and in the composite it was the deep colour exactly, at half a metre and at
+eight, at noon and at midnight, while the seabed under it was already darkened
+by its water depth. It is `deep * exp(-absorption * eye_depth) * lit` now, one
+function both paths call:
+
+| dive | before | after | Tenebris |
+| --- | --- | --- | --- |
+| 4 m, upper half | 15, 96, 139 | **5, 61, 124** | 29, 93, 149 |
+| 4 m, lower half | 15, 96, 129 | **8, 74, 123** | 14, 60, 107 |
+| 8 m, upper half | | **1, 37, 108** | |
+
+![Four metres under, after](screenshots/water-dive-4m.png)
+
+![Eight metres under, after](screenshots/water-dive-8m.png)
+
+The surface is untouched by construction (the eye depth is zero from above):
+the `wade` frame is byte-identical before and after.
+
+**Underwater is the same knob, and it was measured against Tenebris itself.**
+The composite saturates to `deep_color` over distance, so the dive frame went
+from a grey-blue 42, 89, 128 to a saturated 15, 96, 139 by the same change.
+The frame above is `tenebris-client` built from the reference checkout and run
+headless on the same software rasteriser with `TENEBRIS_DEV_DIVE=4` and
+`TENEBRIS_DEV_SHOT`, its eye four metres under the deepest tile of a fresh
+world: it measures 28, 90, 145 (saturation 117) in the upper half and 14, 59,
+106 (92) in the lower. Ours was the greyer of the two before this change (86
+against 117) and is now the same saturation with the same blue; what Tenebris
+has that ours does not is its surface seen from below, the caustic pattern
+over the whole frame, which the `dive` preset here looks level and away from.
+The look in the running game is still the owner's call.
+
+![Wading at the waterline](screenshots/lod-wade.png)
+
+![Three metres under](screenshots/lod-dive.png)
+
+![A rain walk](screenshots/lod-rain.png)
+
+![The coast from 420 m](screenshots/lod-coast.png)
+
+The water systems on the rescaled body: the sheet from the shore, from the
+waterline, from under it, in rain, and from the air. A fourth finding came out
+of retaking these. **The `dive` preset photographed the inside of a rock.** It
+descended a fixed three metres below the first water cell, which was right on
+the old body, where one elevation step was six metres and the first wet cell
+was already six metres deep. On the rescaled body that cell is **one metre**
+deep and the shelf stays under three for hundreds of metres, so the eye sat
+two metres inside the seabed and the frame was flat deep-water colour with no
+seabed, no surface and no Snell's window in it: a picture that looks like a
+shader failure and is a camera standing in the wrong place. The preset walks
+out until the floor clears the requested depth now, and `--height` sets that
+depth. **A constant that encodes another constant's value breaks silently when
+that one moves**, which is this rescale's own lesson from the other side: the
+tile width, the foliage range and the walker's step were all derived or moved
+in the same commit, and this one was a number nobody had connected to the
+elevation step.
+
+What this does not do: the surface is still one height per column, not a
+volume, and a fine set is regenerated on the CPU as one 160,000-record job
+when the player has walked 40 m (about 1.8 s in a debug build on this
+container's four cores, off the main thread). Nothing per tile returns from the
+GPU.
+
+## The terrain generator, ported
+
+The owner, off the coast frame: the terrain looks bad beside tenebris-rs.
+The reference was photographed from its own built client, and then its
+generator was ported term for term (`openspec/changes/tenebris-terrain`,
+`pbd_core::planet_gen`), with the owner's two calls: summits near 150 m,
+Tenebris's main body only.
+
+![Tenebris from 90 m up](screenshots/tenebris-terrain-hover.png)
+
+![Ours, the coast survey, before](screenshots/water-colour-coast.png)
+
+![Ours, the coast survey, after](screenshots/terrain-port-coast.png)
+
+![Ours from orbit, after](screenshots/terrain-port-orbit.png)
+
+![Ours at the surface, after](screenshots/terrain-port-surface.png)
+
+What changed is the shape, and it is the reference's rules rather than a
+retune: a six-octave continent with `sign * |n|^0.8` for crisp coasts, ridged
+mountains multiplied by the land so ranges stand inland, hills, detail, an
+ocean floor on a power curve, then islands lifted out of shallow sea, rivers
+pulled to a bed under it on lowland only, shorelines eased over six metres,
+and rocky highlands lifting whole regions. The noise primitive is the
+reference's gradient noise, pinned bit for bit at four seeds and points. The
+biome is one classification (ocean, beach, tundra, mountains, desert, swamp,
+jungle, fields) and the top block follows the reference's rule.
+
+**What had to be re-authored, and how it was measured.** Every scale is a
+frequency on the unit sphere and carries across unchanged: a continent that
+is a quarter of a 300 m body is a quarter of this one. Heights are absolute
+metres and do not, and a "max height" knob is not a summit: the fields sum to
+well under one, so the reference's 40 m reaches 34 with its uplift. Measured
+over 100,000 directions, 210 m per unit of land height gives a 153 m summit,
+320 per unit of depth an 87 m floor, and land is 49.5% of the sphere against
+the reference's seeded 47.1%. The elevation bands sit at the reached summit's
+proportions (Mountains above 105 m, snow above 100 on temperate hills, stone
+above 140, a snowcap at 150). The biome shares, against the reference's seeded
+world in brackets: Ocean 49.5 (45.4), Beach 4.8 (15.7), Fields 36.0 (27.8),
+Desert 3.0 (1.7), Jungle 2.9 (1.0), Swamp 0.1 (0.1), Mountains 0.5 (0.9),
+Tundra 3.1 (7.3) percent. The distribution report is an ignored test in the
+core, which is the instrument behind every one of those numbers.
+
+**What it costs.** Nothing measurable at generation: the full base plus the
+fine set is 2.22 s against 2.11 s before, in a debug build on this
+container's four cores.
+
+**What is still not the reference's.** The trees: a Tenebris tree is a column
+of hex prisms five metres tall and ours is three boxes eleven metres tall
+(`tenebris-tree-geometry`, still a proposal), which is why the forested frames
+read as a canopy rather than a wood. The cliff strata in the reference's frame
+are its column mesher drawing stone under grass on a steep face; ours draws
+one cap material per column. And the shallows: the eased shoreline is a wide
+shelf a few metres deep, so the near water at the shore preset is sand seen
+through water again (95, 131, 126 at the near band against 53, 125, 137
+before), which is the reference's own coast and the honest colour of a metre
+of water over sand.
+
+![The shore preset, after](screenshots/terrain-port-shore12.png)
+
+![Wading, after](screenshots/terrain-port-wade.png)
+
+## The world is not smooth any more: planet-scale and land-scale
+
+The owner, after the generator port: *pbd still looks way smoother across
+terrain surface, I wish for it to have more noise and height variation, rivers
+and every biome in tenebris-rs.* Three complaints, one cause, and it was
+arithmetic rather than taste.
+
+Every noise field is sampled on the unit sphere, so a feature's size is an
+ANGLE. The body is 4,800 m against the reference's 300, exactly sixteen times,
+and the cell stayed 2.833 m. So every feature the generator made was sixteen
+times wider in the cells a player walks over. Measured on both generators the
+same way, over 40,000 directions of land and their neighbours one cell away:
+
+| | Tenebris | ours, before | ours, now |
+| --- | ---: | ---: | ---: |
+| adjacent land cells differing by a block or more | 44.0% | **14.2%** | **37.0%** |
+| mean step between adjacent cells | 0.56 m | **0.17 m** | **0.59 m** |
+| finest continent feature | 11.7 m | 188 m | 188 m |
+| finest mountain feature | 11.3 m | 180 m | **64 m** |
+| finest hill feature | 15.0 m | 240 m | **15 m** |
+| finest detail feature | 12.5 m | 200 m | **12 m** |
+| finest river feature | 28.8 m | 462 m | **29 m** |
+| finest moisture feature | 23.4 m | 375 m | **24 m** |
+
+Sixteen on every line before, because sixteen is the radius ratio. That one row
+was all three complaints: nothing under 180 m meant nothing to walk over, a
+river channel is a fraction of its field's finest wavelength so ours was a
+462 m estuary, and a biome was a region kilometres across.
+
+**The fix is a distinction the port never made.** Each field is now declared as
+one of two kinds, and `TerrainConfig::scale_of` is the whole of it:
+
+- **Planet-scale** carries a unit-sphere frequency. A world has a handful of
+  continents whatever its radius, so the continent field and the rocky-region
+  field keep the reference's scales and the map keeps the shape it had.
+- **Land-scale** carries a size in METRES, and its frequency is derived from
+  the body's radius. The same config on a bigger body therefore makes MORE
+  hills rather than bigger ones. Hills (60 m), detail (25 m), rivers (231 m)
+  and moisture (188 m) are the reference's own metres.
+
+The two land-scale amplitudes moved to metres for the same reason: 6 m of hill
+and 2 m of detail, rather than a share of the relief budget. That is what lets
+the ground underfoot be as rough as the reference's while the summit stays at
+the 150 m the owner fixed - raising one no longer roughens the other.
+
+**Two numbers are deliberately not the reference's, and both are judgement.**
+The mountain field is matched by SLOPE rather than wavelength: fully metric it
+would put 180 m of ridge across a 120 m gap, which is a wall, so it runs at
+686 m for the reference's 0.27. And the moisture field was the one open
+question, rendered as three candidates and put to the owner, who chose the
+finest: the reference's own 188 m, so a walk crosses biomes rather than staying
+inside one.
+
+![A river, which the world could not show before](screenshots/terrain-scale-river.png)
+
+![Pasture, at eye height](screenshots/terrain-scale-meadow.png)
+
+![The coast from 420 m](screenshots/terrain-scale-coast.png)
+
+![From orbit](screenshots/terrain-scale-orbit.png)
+
+The river frame is the one that could not be taken at all before: `--view
+river` searches the sphere for a cell where the generator's OWN carve fires
+(`planet_gen::river_channel`, public now precisely so that finding a
+watercourse does not mean guessing from heights) with banks standing clear on
+both axes. The rivers were always generated; they were four hundred metres wide.
+
+**Two tests changed their assumptions rather than their subject, and both are
+worth recording.** The shore profile measured the sea's depth at exactly 100 m
+out from the waterline; a coastline with real structure has inlets and islands,
+so a single probe can land back on dry ground. It takes the deepest water
+within 400 m now, which is what the swim actually needs. And the one-metre-fall
+test allowed one tick of error: a six-metre fall at 25 m/s² arrives at 17 m/s,
+which is 0.29 m of travel per tick, so contact is caught one tick and resolved
+the next. Two ticks is the granularity, not slack - and the landing height,
+which is exact to a millimetre in all four cases, is what proves nothing
+drifted.
+
+## The trees are Tenebris's trees now
+
+The owner, in four words: *tenebris-rs has hexagon trees*. Ours were three
+axis-aligned boxes about eleven metres tall with a six-metre crown, authored
+against the old nineteen-metre tile and carried through the rescale by one
+multiplier. Tenebris's tree is not a mesh at all, which is the point of the
+port: it is **wood and leaf voxels in one column, drawn as ordinary hex prisms
+shrunk toward the tile centre**. `block_hex_width` returns 0.20 for wood and
+`0.65 + 0.35 * hash(tile, depth)` for a leaf, and `shrink_corner` lerps each
+corner toward the centre by that much.
+
+The record already carried what a prism needs - the cell's direction and its
+six corner rays - so a tree part is the terrain wall's own construction at a
+shrunk corner set.
+
+| | before | after | the reference |
+| --- | --- | --- | --- |
+| trunk across (flat to flat) | 1.0 m box | **0.57 m** | 0.57 m at 0.20 of the tile |
+| crown across | 6.0 m box | **1.84 - 2.83 m**, a roll per layer | the same hash |
+| pasture tree | 11 m | **5 - 6 m** | 5 - 6 m |
+| jungle tree | 11 m | **7 - 8 m** | 7 - 8 m |
+| swamp grove | 11 m | **8 - 9 m** | 8 - 9 m |
+| tundra pine | none | **9 - 10 m**, a 1 m bole under a cone | the same |
+| vertices per tree | 108 | **198** | n/a, it is voxels there |
+
+**The density is per BIOME now, which needed the biome in the record.** The
+rule was keyed on the top material at rates that had drifted from the ones
+they were taken from (the forest at the swamp's 34, the scrub at the tundra's
+2). The reference keys eligibility on the top BLOCK - any grass, or the one
+tree that grows on a non-grass top, the tundra pine standing in snow - and
+density on the BIOME: jungle 115 of 256, swamp 34, fields 13, tundra 2, desert
+and mountain rock none. The biome rides in the record's surface word beside the
+material, which is one fact each in one place, and the GPU regression now pins
+that rule structurally: four seeds whose rolls are 0, 28, 60 and 226 straddle
+the four rates, so each fixture pair proves one thing - that a biome uses its
+own rate, that the pine is the exception on snow, that snow on a PEAK is not a
+pine, and that a grass rate over rock grows nothing.
+
+**Every ground preset was photographing the rarest thing in the world.** The
+spawn sits at 87 m in jungle, so `surface`, `seam`, `coast` and the walk all
+looked at a closed canopy at the jungle's 45%, which is 2.9% of the sphere.
+Pasture is 36% of it and nothing could photograph it. `--view meadow` walks
+east along the spawn's latitude to the first pasture cell above 8 m and stands
+there at eye height.
+
+![Pasture, which is a third of the world](screenshots/tree-meadow.png)
+
+![Tenebris at 90 m, above, and ours at 90 m, below, at the same crop and zoom](screenshots/tree-compare.png)
+
+![Inside the jungle at eye level](screenshots/tree-jungle.png)
+
+The middle picture is the check that matters: the same tile size, the same
+camera height, the same crop, so a tree that reads bigger IS bigger. They are
+the same tree now. What still differs is the ground under it, which is the
+terrain port's own open item.
+
+**What is deliberately not ported.** The voxel column, because a tree here is
+cosmetic geometry on a heightfield rather than something a player can chop;
+vines, mushrooms and redwoods, which are Sequoia's roster; and collision, which
+our trees have never been in and should stay out of. The pine's crown is eight
+or nine one-metre layers in the reference and is the same span in the two the
+vertex budget carries, so its taper is two segments rather than nine.
+
+**One limit worth naming.** A cell above the finest level carries four times
+the chance, so the cover per area holds at any distance - until the rate
+saturates. Jungle's 115 times four is past 256, so a jungle reads as full cover
+on the two coarser bands rather than 45%. It was already true of the old rate
+at the coarsest band; it is true one band nearer now.
 
 ## Measured gravity comparison
 
@@ -299,7 +859,7 @@ most of the answer to "why does it not look like Tenebris".
 | Job | Tenebris, GLSL 410 | Our standalone port, WGSL | Our live prototype, WGSL |
 | --- | --- | --- | --- |
 | Terrain | `hex.vs` + `hex.fs`, 76 + 351 lines | `hex_terrain.wgsl` 117, `hex_faces.wgsl` 71, `voxel_light.wgsl` 50 | `planet_surface.wgsl` 194 + `planet_visibility.wgsl` 55 |
-| Water | `water.vs` + `water.fs`, 28 + 311 | `water.wgsl` 162 | a 12-line branch inside `planet_surface.wgsl` |
+| Water | `water.vs` + `water.fs`, 28 + 311, plus `composite.fs` 339, the rain block of `hex.fs`, `weather_fx.rs` and `world_water.rs` | `water.wgsl` 162, the cap pass only | a 16-line branch inside `planet_surface.wgsl` |
 | Sky | `atmosphere.vs` + `atmosphere.fs`, 17 + 166 | `atmosphere.wgsl` 102 | `sky_atmosphere.wgsl` 147, a Bevy material |
 | Bound to a pipeline | yes | **no** | yes |
 
@@ -348,12 +908,239 @@ Four of those differences are visible in a still frame:
    standalone port already exposes all of them as uniforms. Our own
    `CLAUDE.md` asks for "tunable values in validated data with units, and one
    source for defaults"; the live shader is where that is not yet true.
-4. **The ocean is two different shaders.** `water.wgsl` is the real port:
-   screen-space refraction with depth reconstruction, absorption over the
-   reconstructed path length, Fresnel between horizon and zenith reflection
-   tones, foam by height and by slope, an underwater back-face path, and
+4. **The ocean is two different shaders, and Tenebris's is five systems.**
+   `water.wgsl` ports the cap pass: screen-space refraction with depth
+   reconstruction, absorption over the reconstructed path length, Fresnel
+   between horizon and zenith tones, foam, an underwater back-face path and
    distance fog, all as uniforms. The ocean that renders is a depth tint, a
-   Fresnel to the fourth, two sines and a specular to the 160th.
+   Fresnel to the fourth, two sines and a specular to the 160th. And the cap
+   pass is one of five water systems in Tenebris; the water section below
+   inventories all of them.
+
+### Water: five systems in Tenebris, one branch here
+
+**A correction first.** The first version of this section compared one file
+against one file: Tenebris's `water.fs.glsl` against `water.wgsl`, and said the
+port "matches on every still-ocean term". That was wrong in two ways. Tenebris's
+water is not one shader, it is five systems that hand results to each other
+across the frame, and the comparison had looked at one of them. And even inside
+that one shader the port drops terms the first read marked identical. This
+section is the full inventory, checked file by file.
+
+| System | Where it lives in `tenebris-rs` | What it does | Pale Blue Dot |
+| --- | --- | --- | --- |
+| **Water cap pass** | `water.vs.glsl` + `water.fs.glsl` (28 + 311), `renderer.rs::body_draw_water` | Swell, fbm waves, rain ripples, flow advection, refraction, absorption, Fresnel, foam, specular, torch light, fog | `water.wgsl` ports most of it, **unbound**; the live branch has a depth tint and two sines |
+| **Composite pass** | `composite.fs.glsl` (339), `composite.rs`, two modes (compose, lens) | Underwater fog with a dry / straddling / submerged tri-state, screen distortion, per-pixel waterline mask, atmospheric-fog gating, depth blur, rain-on-glass lens droplets, emerge-from-water drips | **nothing**; there is no post-process pass of any kind |
+| **Terrain wetness** | the rain block of `hex.fs.glsl` (its `rain_ripple_grad` and rivulet kernels, and the `wet_amt` branch in `main`), `hex_fs_rain[4]`, `hex_fs_water[2]` | Submerged terrain absorbed per tileset; in rain, a rippled wet sheet, impact rings, rivulets down side faces and trunks, wet darkening, sky sheen, sun glint | **nothing** |
+| **Precipitation** | `weather_fx.rs` (near shower + distant storm shafts), `core::weather` | World-space rain streaks and snow flakes from cloud deck to surface or water, per-column by biome, suppressed underwater and in caves | **nothing** |
+| **Flow simulation** | `world_water.rs` (1,955 lines), `flow_direction`, the F5 arrow overlay | Per-voxel source / falling / level state, a bounded scheduler, flow direction per tile; saved and sent over the wire; feeds the cap pass's flow UVs | **nothing** |
+
+A sixth, the mobile cap (`water_mobile.rs`, a normal-map variant reading
+`water_normal.png`), is a simpler sibling of the first and is not counted
+against this project.
+
+What the live branch draws was captured at five camera heights above the polar
+shore with `--view shore --height N` (the preset walks east from 72 N to the
+first water cell, lifts the eye N metres above the last land cell and aims N
+metres out to sea, so every frame looks down at about 45 degrees):
+
+| Height | What the live water shows |
+| ---: | --- |
+| 1.6 m | A flat, opaque teal sheet to a hard horizon line. No surface relief, no reflection of the sky or the coast, no foam or wet band where sea meets land. The only texture is the "wave" term, and it resolves as 3 m **rectangles**, because the wave phase is sampled at `floor(position / 3) * 3`. |
+| 10 m | The hexagon mosaic appears **in the water**: the depth tint is per cell, so shallows are a tiling of flat hexagons rather than a gradient. The 3 m rectangles are legible as rectangles. |
+| 50 m | The mosaic dominates the frame; each cell is one flat tone, stepped at every edge, the same defect the terrain section records for skylight. |
+| 200 m | Reads well at this range: a depth gradient from the sand into deep water, the coast, the snow cap. The cell mosaic is still visible but no longer the subject. |
+| 1000 m | **The sky is black.** `ATMOSPHERE_RADIUS` is `PLANET_RADIUS + 800.0` (`sky.rs:22`), so at 1,000 m the camera is outside the sky shell and looks back at a lit limb under stars. The water is a uniform teal with one broad specular. |
+
+The 1,000 m frame is a finding about the sky rather than the water. Tenebris's
+main planet sets `radius_mult: 1.24` in `atmosphere.yaml`, which is 72 m of
+atmosphere on a 300 m body; ours is 800 m on 4,000 m, or 1.20 R. Proportionally
+the two agree within a fifth, and this is one more number that moves with the
+rescale rather than a separate defect.
+
+#### 1. The cap pass, term by term
+
+| Term | Tenebris `water.fs.glsl` | Port `water.wgsl` (unbound) | Live branch in `planet_surface.wgsl` |
+| --- | --- | --- | --- |
+| Geometry | its own water mesh per chunk, `a_pos / a_normal / a_uv / a_sky_light / a_torch_light` | its own vertex stage, expects a water mesh | the **cap of each water cell** at `R + max(height, 0)`, a flat hexagon at `R` |
+| Vertex swell | 3 sines, 0.18 / 0.12 / 0.06, x `swell_amplitude` 0.5 m, on **every** vertex | same sines, but gated to upward faces by `smoothstep(0.35, 0.9, dot(face, radial))` | none |
+| Sun brightness | per **vertex**, `v_sun_brightness` | per fragment | per fragment |
+| Wave field | 3-octave gradient-noise fbm, hash constants 374761393 / 668265263 / 1274126177 / 1103515245, x `time_scale` 0.75 | identical | product of two sines on a 3 m-quantised position |
+| **Flow advection** | the noise sample point is moved by `v_flow_uv` along the tangent frame, x `time * 0.35`, so rivers stream | **absent**; samples `body_position * scale` | none |
+| **Waterfall scroll** | vertical faces scroll the sample along the radial at `u_flow_speed_falling` (`flow_uv_speed_falling` 1.0) | **absent** | none |
+| Ripple scale | `ripple_scale` 1.5 on the sample position | `waves.y` | none |
+| Gradient | fbm finite difference x12.5, projected off the **radial** | same, projected off the **face normal** | none |
+| **Rain ripples** | Zavie raindrop kernel (3x3, 3 cells/m, strength 6) added into the gradient, gated by `u_rain` (`fs_params[14].y`) | **absent** | none |
+| Slope cap | `slope_max` 1.6 on the gradient before it bends the normal | identical, `refraction.z` | none |
+| Normal | `normalize(radial - gradient * wave_steepness)`, 0.65 | same, built on the face normal | the **radial**; the wave only nudges the specular dot by `0.008` |
+| Depth test | discard where the scene is nearer | identical (reverse-Z) | none |
+| Refraction offset | `gradient.xy * refract_amount` 0.04, capped at `refract_max_uv` 0.03 | gradient taken through the clip matrix first, then capped | none |
+| Refraction validity | rejected across the sky boundary or in front of the surface | identical | none |
+| Depth source | scene depth, linearised with near/far | scene depth, reconstructed through `local_from_clip` | `-height` of the cell, `@interpolate(flat)`, one value per hexagon |
+| Absorption | `exp(-absorption * path)`, `[0.60, 0.20, 0.10]` per metre, tinted per tileset from `lod.yaml` | identical form, uniforms | `exp(-depth * 0.028)` mixes two fixed colours |
+| Underwater view | back-face path: deep colour by camera distance, Snell's-window edge at 0.55-0.75 | identical | none; the cap is opaque from below |
+| Fresnel | Schlick `0.02 + 0.98 (1 - n.v)^5`, floored by `sky_horizon_strength` 0.5 | identical | `(1 - radial.v)^4` against the radial |
+| Reflection colour | horizon to zenith by reflected-ray height, per tileset | identical, uniforms | one literal |
+| **Foam** | `max(crest * crest_weight 0.55, slope * slope_weight 0.26) * foam_intensity 0.10` | **drops both per-term weights**: `max(crest, slope) * strength` | none |
+| **Specular** | `sun_tint [1.35, 1.25, 1.10] * pow(n.h, 140) * 0.30` | **drops `sun_tint`**: a white `pow(n.h, power) * intensity` | `pow(radial.h, 160)`, one literal colour |
+| Day / night | `mix(night_floor, 1, sun_brightness * sky_light)` | identical, `absorption.w` | `mix(0.18, 1, daylight)` |
+| Torch light | `torch.rgb * torch.w * v_torch_light * (fresnel + foam)` | `baked_rgb_sky.rgb * gain * (fresnel + foam)` | none |
+| Distance fog | inline, ceiling `fog_max` 0.82, applied because the pass draws after the composite | identical, `limits.x` | the terrain's haze, after the branch |
+| Configuration | `water.yaml`: 36 look knobs + 12 flow knobs, per tileset overrides in `lod.yaml` | one `WaterView` uniform of 16 vec4 | about 20 literals inline |
+
+So the port carries the optics (refraction, absorption, Fresnel, the underwater
+window, the fog ceiling) and the wave field, and is missing **five** things
+from this pass alone: rain ripples, flow advection, the waterfall scroll, the
+two foam weights, and the specular sun tint. Three of the five need an input
+this project does not have (rain intensity, a flow field); two are one-line
+omissions in the port itself. `shader-port.md` already listed flow, rain and
+caustics as not implemented; the earlier version of this section did not carry
+that forward.
+
+#### 2. The composite pass, which has no counterpart here
+
+`composite.fs.glsl` runs twice: a **compose** pass (fog and blur into an
+intermediate target, which the water pass then draws over) and a **lens** pass
+(droplets only, sampling the post-water image into the swapchain, so the drops
+refract the real water). Every term below is absent in Pale Blue Dot, which has
+no post-process pass at all: the only render-graph node is the planet's compute
+pass.
+
+| Term | What it does | Knob |
+| --- | --- | --- |
+| Submersion tri-state | `fx_params.z` is 0 dry, 0.5 straddling, 1 under, decided on the CPU from the camera's **voxel** (`Block::Water`) and a wave-height band at the eye, so a cave below sea level stays dry | `partial_band_m` 0.8 |
+| Underwater fog | per pixel, `mix(deep, scene, exp(-absorption * travel))`; travel is the view distance to geometry, and for sky pixels the analytic exit distance `gap / d_up` off the mean sea sphere, saturating for rays that never surface | `deep_color`, `absorption`, per tileset |
+| Waterline mask | geometry pixels are wet only below the mean sea radius, smoothed over a band, so the seabed just under the line gets its murk and the sky above stays clear | `partial_band_m` |
+| Screen distortion | a sin/cos UV wobble on wet pixels | `underwater_distortion` 0.0015 |
+| Atmospheric-fog gating | where water fog owns a pixel the air fog backs off, so the two never stack | `fog_params` |
+| Depth blur | a 17-tap two-ring blur on the distant background while rain or a just-surfaced camera is active | `wet_blur` 0.02 |
+| Rain-on-glass | Martijn Steinrucken's "Heartfelt" droplets: static drops, two falling layers with trails, refraction only, masked to above the waterline by ray direction | `rain_lens_density / refract / speed / size` |
+| Emerge drips | the same droplets running down and drying off for 2.6 s after surfacing, re-armed while straddling | `DRY_SECONDS` in `renderer.rs` |
+
+#### 3. Terrain wetness, inside the terrain shader
+
+`hex.fs.glsl` carries two water blocks. Submerged terrain is absorbed with the
+cap's own `absorption` and `deep_color`, per tileset, so a seabed tints the way
+its sea does. In rain, gated by sky light (caves stay dry) and by being above
+the waterline (no rings on the seabed), an up-face gets a continuous rippled wet
+sheet plus raindrop impact rings, a side face and a tree trunk get the Heartfelt
+drop layer mapped in the block's own texture UV so water trickles down as
+rivulets, and both get a wet darkening, a sky-driven sheen and a sun glint.
+Thirteen knobs in `weather.yaml` (`rain_ripple_*`, `rain_flow_*`,
+`rain_wave_*`, `rain_wet_darken`, `rain_sky_sheen`, `rain_glint_*`). The
+terrain section above already records this as "not ported"; it is listed here
+because it is half of what makes rain read as water on the ground.
+
+#### 4. Precipitation
+
+`weather_fx.rs` draws the rain itself: a dense near shower on a tangent disk
+around the player and translucent storm shafts under every raining cloud cell
+across the visible hemisphere, so a storm reads from orbit. It is stateless
+(animated off the world clock, no stored particles), voxel-aware (every streak
+falls from the cloud deck to the surface or the water surface, never below the
+waterline or into terrain), suppressed underwater and under a roof, and chooses
+snow or rain per column by biome. `weather.yaml` has 66 knobs, 39 of them
+prefixed `rain_` and 3 `snow_`: fall speed, streak length, density, colour, near and far alpha, an LOD
+altitude and impostor tint, and the lens droplet set.
+
+#### 5. The flow simulation
+
+`world_water.rs` is a per-voxel fluid state (source, falling, a 3-bit level up to `WATER_LEVEL_MAX` 7, cappable from YAML) with a
+bounded ring-buffer scheduler running the flow rule from the C tree's
+`water.md`, round-tripped through saves and the `WATER_STATE_DIFF` wire message.
+`flow_direction` derives a per-tile flow vector that the mesher writes into the
+water mesh's UVs, which is the `v_flow_uv` the cap pass advects its noise by.
+Twelve `flow_*` knobs in `water.yaml`, and an F5 arrow overlay to see it. This
+is Core (SP and MP share it) and it is what makes a river a river rather than a
+blue floor.
+
+#### What follows
+
+1. **Nothing in the live Pale Blue Dot ocean is Tenebris's.** It has a
+   per-cell depth tint, a Fresnel to the fourth against the radial, two sines
+   and a specular. None of the five systems above exists here in any form, and
+   the two captures that look acceptable (200 m and 1,000 m) do so because
+   distance hides everything the sheet lacks.
+2. **Binding `water.wgsl` gives the cap pass back, less five terms.** It is
+   still the right first step and `preview-scale-and-shader-parity` says so.
+   But "bind the port" was being read as "restore the water", and it is not:
+   with the port bound and nothing else, the sea still has no underwater view
+   from inside it (the composite owns that), no rain, no rivers, and no wet
+   ground. The two one-line omissions (foam weights, sun tint) should be fixed
+   in the port before it is bound, since it is the reference.
+3. **Parity is a systems list, not a shader.** In dependency order: the
+   composite pass (needs scene colour and depth, which binding the port needs
+   anyway); a weather field with a rain intensity (unblocks rain ripples on the
+   cap, the lens droplets, terrain wetness and precipitation together); the
+   flow simulation (unblocks flow advection and waterfalls). Each of those is
+   its own change and none is written up yet.
+4. **The mosaic in the water is the terrain's flat-tile defect, not a water
+   bug.** The live branch reads depth off the cell's own height, flat per
+   hexagon by construction; Tenebris and the port read scene depth per
+   fragment. No tuning of the live branch removes it.
+
+The captures live under the session scratchpad and are not committed; the
+command that reproduces each one is the height column above.
+
+#### Status after implementation
+
+Everything above was measured before the build. What is built now, on the
+same branch, against the five systems:
+
+| System | Built | Not built |
+| --- | --- | --- |
+| Cap pass | `water.wgsl` bound through `planet_water.rs`, cap pulled from the `Cell` record, foam weights and `sun_tint` restored, rain ripples, flow advection and falling-face scroll (zero field), fog from the terrain's constants | `shoreline_fade_m`, the mobile horizon fade, torch light (no source) |
+| Composite | compose (tri-state submersion, waterline mask, analytic sky murk, distortion, depth blur), cap, lens (Heartfelt droplets, emerge drips at 2.6 s) | the atmospheric-fog gate (this project's air fog lives in the terrain shader, so there is nothing to gate) |
+| Terrain wetness | submerged absorption per the cap's constants; the `hex.fs` rain block: wet sheet, impact rings, rivulets, darkening, sky sheen, sun glint, gated by sky light and the waterline | per-tileset water colours (one body) |
+| Precipitation | the near shower: up to 1,700 streaks on an 18 m disk, hashed and stateless, landing on `terrain_radius`, suppressed under water and under ground, from `--rain` or the P key | snow, and the distant storm shafts, which need a cloud field |
+| Flow simulation | the shader hook and a zero buffer | the simulation, blocked on `voxel-engine-foundation` and a river generator |
+
+Every knob is `assets/config/water.ron` and `weather.ron`, Tenebris's names and
+values, loaded through serde with missing fields inheriting the code defaults
+and a test holding the shipped files to them.
+
+Captured on lavapipe with the same `--view shore --height N` series, plus
+`--view dive`, `--view wade` and `--rain 1`:
+
+- **At eye height** the sheet has relief, a wavy horizon, Fresnel reflection of
+  the sky, the seabed refracted through it, and in rain a field of expanding
+  rings and droplets on the lens. The 3 m rectangles are gone.
+- **Diving** puts the camera in the composite's murk: the seabed tints to the
+  deep colour with distance and the surface reads from below through Snell's
+  window. **Wading** shows the straddle: sky pixels clear above the line, the
+  sheet's back faces below it, and drips on the lens from the emerge window.
+- **In rain on land** the grass carries impact rings and a sky sheen, the
+  trunks run with rivulets, and the lens beads.
+
+Three things the first captures showed, and what the owner said and what
+changed. Recorded here because each was a look change and the owner made the
+call:
+
+1. **The sheet was bright at grazing angles** ("way too shiny"). Schlick at
+   an eye 1.6 m up put most of the visible sea near total reflection of
+   `sky_horizon_color` (0.85, 0.92, 0.98), and under Bevy's tone mapping that
+   reads whiter than the same numbers do in Tenebris's untonemapped GL
+   swapchain. The terms are Tenebris's; the values were data and are
+   re-authored in `water.ron`: horizon (0.46, 0.60, 0.74), zenith
+   (0.18, 0.34, 0.62), horizon strength 0.35, specular 0.12.
+2. **Above about 20 m the sheet sparkled.** The fbm normal has no level of
+   detail, so past the height where its 15 cm features fall under a pixel the
+   Fresnel and specular aliased into white speckle across the whole sea.
+   `detail_fade` now scales the height and gradient by the per-pixel
+   footprint of the noise coordinate; at 50 m and 200 m the sea reads as a
+   sea. This is a term Tenebris does not have, and zero restores it exactly.
+3. **The sheet self-overlapped** ("super glitchy where it overlaps"). Drawn
+   with no depth of its own, a far trough could paint over a near crest in
+   whatever order the cells came. The sheet now has a private single-sample
+   depth buffer, which is Tenebris's own self-sort by another route.
+4. **The shower did not draw at all, and the width was never the reason.**
+   The globe's transparent-phase item was queued at `distance: f32::MAX`,
+   meant as "farthest, draw first". Bevy sorts that phase ascending with
+   values increasing toward the camera, so it drew LAST and painted over
+   every transparent mesh in front of it: the streaks, and a diagnostic cube
+   spawned in front of the eye. At `f32::MIN` the globe goes first and the
+   shower reads as rain at Tenebris's own 12 mm width. The same bug would
+   have hidden any alpha-blended mesh this project ever added.
 
 ### Structural differences that are not defects
 
@@ -395,6 +1182,244 @@ Steps 1 and 2 are the ones that pay immediately, and neither changes the
 topology or the upload. They are recorded here rather than applied: both change
 what every capture in this document looks like, and a look change wants the
 owner's eye on a before and after rather than a green test.
+
+## The ground has grass on it now: Tenebris's scatter as a fourth draw
+
+The owner looked at the meadow frames and said there was no grass, no rocks and
+no sticks on the ground, which was right: between the trees this world was flat
+painted hexagons.
+
+**Tenebris has twelve kinds of decorative scatter** in
+`hex_mesher.rs::build_scatter`, each gated on the surface block and the biome
+and placed by a deterministic per-tile hash. Five of them are ported here:
+grass tufts, flowers, pebbles, leafy bushes and the dead shrubs that are the
+desert's and the tundra's only ground cover. The eight left behind - cactus,
+fern, reed, kelp, seaweed, vine - are each their own vertex budget and are named
+in `openspec/changes/tenebris-ground-clutter/tasks.md` rather than forgotten.
+
+**The rules port and the geometry does not, which is the whole of the design.**
+The reference bakes its scatter into a CPU chunk mesh, so thousands of pieces
+ride one per-chunk draw; this project has no chunk mesh at all. So what came
+across is the per-cell hash, the densities, the sizes and the gates, onto a
+FOURTH indirect draw that builds every blade in the vertex shader from the
+record's own corner rays - exactly as the tree port took `block_hex_width` and
+`shrink_corner` and left the mesher behind.
+
+**The densities are the reference's, unchanged, and that is the gold standard
+paying off.** The cell is 2.833 m flat-to-flat on both sides, so a chance per
+tile and a size in metres mean the same thing in both worlds:
+`assets/config/scatter.ron` is `scatter.yaml` field for field.
+
+**What is ours is the REACH.** Tenebris meshes scatter over the whole of a 300 m
+planet; this body is 4,800 m, and its finest LOD band alone is 300 m. Two
+measurements decide the number from opposite directions:
+
+| clutter radius | grassy cells inside it | vertices |
+| ---: | ---: | ---: |
+| 40 m | 564 | 0.08 M |
+| **60 m** | **1,269** | **0.18 M** |
+| 80 m | 2,256 | 0.33 M |
+| 300 m (the whole finest band) | 31,729 | 4.57 M |
+
+against a frame that is about 19.6 M terrain vertices and 0.32 M of foliage. And
+at the capture's field of view one pixel subtends 0.00128 m per metre of range,
+so a 0.17 m blade covers 26.5 px at 5 m, 3.3 at 40, **2.2 at 60**, 1.1 at 120
+and 0.44 at 300. Past about 60 m a blade is sub-pixel shimmer that still costs a
+vertex. The tier is short because grass stops being visible, and it is cheap
+because it is short. The last 15 m fade the pieces into the ground rather than
+popping them, which is one multiplier on the height and no vertices at all.
+
+**Measured cost**, three runs each on one binary at the worst case - the meadow
+preset with the eye 0.45 m off the ground, where the blade count on screen is
+highest - 1440x900, lavapipe, `--frames 70`:
+
+| | p50 frame, ms |
+| --- | --- |
+| `clutter_radius_m: 0` | 283.8, 287.0, 297.3 |
+| `clutter_radius_m: 60` | 304.0, 307.7, 309.4 |
+
+Medians 287.0 against 307.7: **+20.7 ms, or 7.2%**, and the two ranges do not
+overlap, so it is a real difference rather than noise. On a software rasteriser
+this is fill cost, not vertex cost, and it is not a GPU number.
+
+**Two things came out of building it that are worth keeping.** A blade has to be
+visible from both sides, and the reference pays for that by emitting both
+windings of every quad; here the vertex shader knows where the camera is, so the
+quad is wound TOWARD it instead - one pipeline, half the vertices, the same
+picture. And the validator refused `clutter_radius_m: 0`, because the fade was
+longer than the reach - an off switch a config could not reach, caught only by
+trying to measure against it.
+
+**It is faithful, which the reference's own frame is what proves.** Rendering
+`TENEBRIS_DEV_GRASS` on the reference build shows the same thing ours does: not
+a lawn, but spaced tufts of broad tapering blades standing proud of a sod that
+is still visible between them. The instinct on first seeing ours was that the
+grass was too sparse; the reference says it is not.
+
+## The weather is a field now, and the clouds have a thickness
+
+The owner asked for thicker clouds and a rain system like Tenebris's. Two gaps,
+two different causes.
+
+**The clouds had no thickness because they were one sphere.** The sky shader
+took a single ray-sphere hit at `CLOUD_RADIUS`, sampled two octaves of value
+noise there and blended a flat colour over the sky. One sample at one depth is a
+stencil painted on a shell: nothing in it to be lit from one side, nothing to
+occlude anything, no silhouette from below.
+
+**The rain was one global number, and `weather.rs` said so in its own module
+comment**: *"Rain is global until a cloud field shared with the sky shader
+exists."* `Weather.rain` was cycled by a key and applied to the whole planet.
+You could not walk out of a storm, because there was no storm - there was a
+switch.
+
+### The field
+
+`pbd_core::weather` is Tenebris's `weather.rs`: a drifting field of warm pockets
+condenses the terrain's own moisture map into cloud, an aridity gamma clears the
+dry end so deserts rarely cloud, a smoothstep turns density into cover, and rain
+needs cover at or above a threshold. Nothing is stored. **Rain trails a cloud
+that has drifted off by sampling the same field `rain_min_s` earlier**, which is
+how the reference keeps a lifecycle stateless, and it ports exactly.
+
+**Half of it was already here.** `planet_gen::moisture` and `biome` came across
+with the terrain generator, and they are the expensive half. What was missing
+was the drifting warmth and the ramps over it.
+
+**Not one rain consumer changed.** The cap's ripples, the terrain's wet sheet
+and rivulets, the lens droplets, the shower and the wetness lag all read
+`Weather.rain` already; what changed is where that number comes from. That is
+the one-code-path rule collecting a dividend it was owed.
+
+**And P moves the FIELD rather than the rain.** The reference forces a storm
+with `moisture_boost`, which lerps every cell toward saturation. Forcing it
+through the field keeps one path deciding the weather: a forced storm is a real
+one, with the sky closing over because the field says it is overcast.
+
+Measured on the shipped values: the body averages **0.18 cover** with **5.9% of
+it precipitating** at any moment, and 65% of the sphere sits under 0.2 cover. A
+cover histogram over 2,000 directions is `[1300, 373, 208, 93, 26]` across the
+five fifths. At the spawn, which is Fields at moisture 0.606, cover runs 0.27 to
+0.59 over fifteen minutes - scattered cloud that comes and goes.
+
+### The slab
+
+The clouds are marched between an inner and an outer radius now, 300 m up and
+260 m deep, twelve samples with a four-sample sun march at each, Beer's law over
+both. A grazing ray crosses more slab than a vertical one **by construction**,
+which is what makes the horizon build up while the zenith stays open, and the
+lit top against the shadowed underside is the thickness itself.
+
+**Four things were wrong on the way, and each looked like something else.**
+
+1. **The whole sky closed to grey.** At the horizon the chord through a 260 m
+   shell is tens of kilometres, so every near-horizon ray saturated. A cap on
+   the marched span fixed it - and a cap that was too tight then under-integrated
+   the deck and left the horizon blue, which is the same number wrong the other
+   way.
+2. **A full overcast could never close.** `clouds.z` was the flat shell's peak
+   OPACITY, 0.52, and left in place it capped the slab at 0.52 however thick the
+   cloud got. The slab computes its own opacity from transmittance; the knob is
+   an extinction coefficient now.
+3. **Sharpening the shape made the storm thinner.** Squaring the noise before
+   the threshold cut density faster than a lower threshold could raise it, so a
+   forced storm came out as thin as a clear sky. The sharpening belongs after
+   the threshold, where it makes an edge without moving the coverage.
+4. **The march drew bands across every cloud.** Twelve samples on a fixed grid
+   put their step boundaries at the same depth for neighbouring pixels. Jittered
+   by a hash of the ray direction, the same error is noise nobody reads as a
+   pattern - and hashed rather than random, so it is stable frame to frame.
+
+**What it costs**, the same `--view surface` preset, 1440x900, lavapipe:
+
+| | p50 frame, ms |
+| --- | ---: |
+| the flat shell | 387.8 |
+| the slab, at the spawn's ~0.5 cover | 511.2 |
+| the slab, in a forced storm | 662.8 |
+
+**+32% at scattered cloud and +71% under a full overcast.** Every sky pixel
+marches twelve samples with four sun samples each, three octaves apiece, and a
+storm is the case where none of them can early-out. On a software rasteriser
+that is the whole bill; the step count is the knob if it ever needs paying down.
+
+### What is NOT ported
+
+The reference's clouds are **geometry**: puffs on a shell placed one per 30 m
+cell by a density hash, each a lump cluster, LODing to a slab past 230 m and to
+a texture shell past 5 km. That is a fifth indirect draw on this architecture
+and is its own change. The slab is what this renderer is shaped for.
+
+And the clouds agree with the rain **overhead but not at distance**: the shader
+gets the field's cover under the player, so the sky thickens as a front arrives
+and it rains when it is overcast, but a cloud on the horizon is still the
+shader's own noise. Making that exact means porting the moisture fBm into WGSL
+and pinning the two implementations against each other on the GPU. Wind and a
+snow particle are held for the same reason - both are named in the change's
+tasks rather than smuggled in.
+
+## The supercontinent, and the two reasons it was one
+
+The owner asked whether the main land mass could be broken into a few
+continents and some islands. It could, and an orbit capture understated how
+single that mass was: a land bridge one cell wide joins two masses that read as
+separate, and only a flood fill knows.
+
+**Measured** on a level-6 dual sphere, 40,962 cells, before and after:
+
+| | before | after |
+| --- | ---: | ---: |
+| Land | 48.1% | **39.7%** |
+| Connected masses | 28 | 62 |
+| Largest, share of all land | **90.2%** | **40.4%** |
+| Second / third / fourth | 7.4 / 1.7 / 0.2% | 27.8 / 20.5 / 8.1% |
+| Masses under forty cells | 25 | 55 |
+
+So it was one supercontinent, one large island and gravel; it is four
+continents and a tail of islands.
+
+**The obvious cause was the weaker one.** `continent_scale` was 0.8 on the unit
+sphere, less than one full period across the body, so the fractal's loudest
+octave was close to a single gradient. But raising the frequency alone barely
+helps - measured, at scale 2.4 with the land fraction untouched the largest
+mass is still **90.8%** of the land, and at 4.0 it is 61.4% across 118 pieces.
+**Above about 45% land the sphere is past percolation** and the masses join up
+however finely the field is cut. Dropping the land to around a third is what
+separates them, which is also where Earth sits at 29%.
+
+Three candidates were rendered from orbit with their numbers burned into the
+frame, the way the moisture scale was settled, and the owner chose **A**:
+`continent_scale` 1.6 with `land_bias` -0.05. `GENERATOR_VERSION` is 4.
+
+**Three pinned numbers moved, and all three are the choice's own consequences
+rather than drift.**
+
+- **The land band** in `relief_holds_the_budget_and_the_land_fraction` was
+  0.40-0.60 and is 0.30-0.45. Lowering it is the point of the change.
+- **The ocean floor** went from -110 m to -125 m, because the land bias shifts
+  the whole continent field down and the deepest basin goes with it. The band
+  widened to -145; what the assertion is for is unchanged, which is a sea a
+  walker can swim in and a floor that is not absurd under a 150 m summit.
+- **`a_kilometre_of_land_crosses_more_than_one_biome` now skips the cold
+  band**, and that is the interesting one. It failed at 16 of 50 walks staying
+  inside one biome against a limit of a quarter. Probing which biome showed
+  **14 of the 16 were tundra and only 2 were fields**: the polar caps are a
+  latitude band, uniform by construction, so a kilometre inside one staying
+  tundra is the generator being right. What changed is that the caps are the
+  same size in latitude while the land around them shrank, so tundra went from
+  3.6% of the body to 9.5% and more walks start inside one. The moisture
+  variety the test is actually about had not moved at all. **A test that fails
+  for a reason it was not measuring is worse than no test**, so it now says
+  which walks it is judging.
+
+The biome shares moved with the land: Ocean 49.6% to 58.2%, Fields 37.8% to
+24.8%, Tundra 3.6% to 9.5%, Jungle 1.8% to 1.1%. Swamp is still 0.1% and still
+a threshold rather than a scale.
+
+**The islands here come from the continent field**, not the island field:
+`island_scale` and its neighbours only lift ground already in shallow sea, so
+they make atolls near coasts rather than mid-ocean chains. That is left alone,
+so one change moves one thing.
 
 ## Acceptance and comparison boundaries
 

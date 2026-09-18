@@ -1,0 +1,39 @@
+// Decorative ground clutter: grass tufts, flowers, pebbles, leafy bushes and
+// dead shrubs, drawn from the cell record in the vertex shader. Every density
+// and size is Tenebris's shipped `scatter.yaml` value, because the cell is the
+// same size on both sides (2.833 m flat-to-flat, 1 m tall) and a density per
+// tile therefore carries over unchanged.
+//
+// An omitted field inherits the code default in `config.rs`; a present zero is
+// zero, so `grass_chance: 0.0` turns the grass off rather than restoring it.
+// A misspelled field is a startup error, not a knob that quietly does nothing.
+//
+// The two numbers that are OURS rather than the reference's are the first two.
+// Tenebris meshes its scatter over the whole of a 300 m planet; this body is
+// 4,800 m, so the clutter needs a reach. At the capture's field of view a
+// 0.17 m blade is 26 pixels wide at 5 m, 3.3 at 40, 2.2 at 60 and 1.1 at 120,
+// so past about 60 m a blade is sub-pixel shimmer that still costs a vertex.
+// The cost says the same thing: 1,269 grassy cells inside 60 m against 31,729
+// inside the 300 m finest band.
+(
+    clutter_radius_m: 60.0,
+    clutter_fade_m: 15.0,
+
+    grass_chance: 0.8,
+    grass_blades: 18.0,
+    grass_height_m: 0.55,
+    grass_blade_w_m: 0.085,
+    grass_base_shade: 0.55,
+
+    flower_chance: 0.12,
+    flower_height_m: 0.32,
+
+    rock_chance: 0.1,
+    rock_size_m: 0.16,
+
+    bush_chance: 0.05,
+    bush_size_m: 0.34,
+
+    shrub_chance: 0.14,
+    shrub_size_m: 0.38,
+)

@@ -17,3 +17,5 @@ avian3d.workspace = true
 bevy.workspace = true
 pbd-core = { path = "../pbd-core" }
 bytemuck = { version = "1", features = ["derive"], optional = true }
+ron = "0.12"
+serde = { version = "1", features = ["derive"] }

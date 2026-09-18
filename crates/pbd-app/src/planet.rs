@@ -7,16 +7,27 @@
 
 #[path = "planet_contact.rs"]
 mod contact;
+#[path = "planet_lattice.rs"]
+pub(crate) mod lattice;
+#[path = "planet_lod.rs"]
+pub(crate) mod lod;
 #[path = "planet_terrain.rs"]
-mod terrain;
+pub(crate) mod terrain;
 #[path = "planet_topology.rs"]
-mod topology;
+pub(crate) mod topology;
 #[cfg(test)]
 #[path = "planet_visibility_tests.rs"]
 mod visibility_tests;
+#[path = "planet_water.rs"]
+mod water;
 
 pub use contact::{PlanetContact, SurfaceContact};
-pub use terrain::{ELEVATION_STEP, PLANET_RADIUS, surface_height, terrain_radius};
+pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, tile_width_m};
+pub use terrain::{
+    ELEVATION_STEP, PLANET_RADIUS, TERRAIN, river_channel, surface_code, surface_height,
+    terrain_radius,
+};
+pub use water::{emerge, submersion};
 
 use bevy::math::{DMat4, DVec3};
 use bevy::{
@@ -49,11 +60,37 @@ use bevy::{
 use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, num::NonZeroU64, sync::Arc};
 
-const SUBDIVISIONS: u32 = 8;
-// At this sea-level altitude even the highest preview summit and its trees
-// are beyond the shader's 2,300 m decorative-geometry range.
-const FOLIAGE_DRAW_CUTOFF_ALTITUDE: f32 = 3_200.;
-const FOLIAGE_DRAW_DISTANCE: f32 = 2_300.;
+// Trees live on the finest tier, so they reach exactly as far as it does.
+// Above the band's radius plus the highest summit and a tree, no tree can be
+// in range, and the foliage draw is disabled outright.
+const FOLIAGE_DRAW_DISTANCE: f32 = lod::BAND_M[1];
+const FOLIAGE_DRAW_CUTOFF_ALTITUDE: f32 = FOLIAGE_DRAW_DISTANCE + 600.;
+
+/// Blades the clutter vertex budget covers. An indirect draw has ONE vertex
+/// count for every instance, so this is the upper bound a cell can roll and
+/// `ScatterSettings::validate` refuses a config that asks for more: a file that
+/// said twenty and drew eighteen would be a disagreement nobody could see.
+pub const GRASS_BLADE_BUDGET: u32 = 18;
+/// Vertices per clutter instance, which is the whole of what one cell can grow:
+/// the blades, then a flower, a pebble, a bush and a dead shrub. A piece a cell
+/// did not roll collapses to a degenerate triangle, the way a tree part a cell
+/// does not carry already does.
+///
+/// The shipping shader is the only consumer of these two, because an indirect
+/// draw reads its vertex count out of the buffer the compute pass wrote. They
+/// exist here so a test can hold that shader to the arithmetic, which is why
+/// they are test-only: a second copy compiled into the binary and read by
+/// nobody would be exactly the drift they are meant to catch.
+#[cfg(test)]
+pub(crate) fn clutter_vertices() -> u32 {
+    GRASS_BLADE_BUDGET * 2 * 6 + 18 + 54 + 108 + 36
+}
+/// Where the clutter branch starts in the shared vertex shader: after the
+/// terrain's 60 and the foliage's 198.
+#[cfg(test)]
+pub(crate) fn clutter_first_vertex() -> u32 {
+    60 + 198
+}
 
 /// The preview body's centre in the translating render/physics frame. System
 /// positions are subtracted in f64 before any bounded GPU coordinate is cast.
@@ -95,26 +132,53 @@ impl PlanetRenderFrame {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct GpuCell {
-    direction_height: [f32; 4],
-    // xyz is the shared corner ray; w is this edge's adjacent surface height.
-    corners: [[f32; 4]; 6],
-    // Degree, explicit biome, baked sky occlusion (0..65535), stable cell ID.
-    metadata: [u32; 4],
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
+pub(crate) struct GpuCell {
+    pub direction_height: [f32; 4],
+    // xyz is the shared corner ray; w is this edge's adjacent surface height,
+    // negative under the sea.
+    pub corners: [[f32; 4]; 6],
+    // Degree in the low byte and level above it, explicit biome, baked sky
+    // occlusion (0..65535), stable cell ID.
+    pub metadata: [u32; 4],
+    // The level below's cells this one belongs to: itself when centred on a
+    // coarse vertex, the two whose edge it bisects otherwise. w carries the
+    // fine floor of sides 0 and 1: the height at that edge's midpoint.
+    pub owner_a: [f32; 4],
+    pub owner_b: [f32; 4],
+    // Fine floors of sides 2 to 5.
+    pub floors: [f32; 4],
+    pub spare: [f32; 4],
+}
+
+impl GpuCell {
+    pub fn degree(&self) -> usize {
+        (self.metadata[0] & 0xff) as usize
+    }
 }
 
 // Match the WGSL Cell storage ABI. These inspect the actual upload type; the
 // standalone shader validator separately inspects the parsed shader layouts.
-const _: [(); 128] = [(); size_of::<GpuCell>()];
+const _: [(); 192] = [(); size_of::<GpuCell>()];
 const _: [(); 16] = [(); std::mem::offset_of!(GpuCell, corners)];
 const _: [(); 112] = [(); std::mem::offset_of!(GpuCell, metadata)];
+const _: [(); 128] = [(); std::mem::offset_of!(GpuCell, owner_a)];
+const _: [(); 160] = [(); std::mem::offset_of!(GpuCell, floors)];
 
 #[derive(Resource, Clone, ExtractResource)]
-struct PlanetColumns(Arc<Vec<GpuCell>>);
+struct PlanetBase(Arc<Vec<GpuCell>>);
 
 #[derive(Resource, Clone, Default, ExtractResource)]
-struct PlanetClock(f32);
+pub(crate) struct PlanetClock(f32);
+
+impl PlanetClock {
+    /// Elapsed seconds. The weather field is a function of time, and this is
+    /// the one clock the whole planet already runs on: a second source would be
+    /// a sky drifting at a different rate from the sea it is reflected in.
+    pub(crate) fn seconds(&self) -> f32 {
+        self.0
+    }
+}
 
 #[derive(Resource, Clone, ExtractResource)]
 struct PlanetArt(Handle<Image>);
@@ -128,7 +192,8 @@ pub struct PlanetPlugin;
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
-            ExtractResourcePlugin::<PlanetColumns>::default(),
+            ExtractResourcePlugin::<PlanetBase>::default(),
+            ExtractResourcePlugin::<lod::PlanetFine>::default(),
             ExtractResourcePlugin::<PlanetClock>::default(),
             ExtractResourcePlugin::<PlanetArt>::default(),
             ExtractResourcePlugin::<PlanetRenderFrame>::default(),
@@ -136,7 +201,9 @@ impl Plugin for PlanetPlugin {
         ))
         .init_resource::<PlanetClock>()
         .init_resource::<PlanetRenderFrame>()
+        .init_resource::<lod::LodRefresh>()
         .add_systems(Startup, create_planet)
+        .add_systems(Update, lod::refresh_lod)
         .add_systems(
             PostUpdate,
             update_planet_frame.before(TransformSystems::Propagate),
@@ -152,42 +219,68 @@ impl Plugin for PlanetPlugin {
             .add_systems(
                 Render,
                 (
-                    upload_planet.in_set(RenderSystems::PrepareResources),
+                    (upload_planet, upload_fine)
+                        .chain()
+                        .in_set(RenderSystems::PrepareResources),
                     prepare_views.in_set(RenderSystems::PrepareBindGroups),
                     queue_planet.in_set(RenderSystems::QueueMeshes),
                 ),
             );
+        water::build(render_app);
         let mut graph = render_app.world_mut().resource_mut::<RenderGraph>();
         graph.add_node(PlanetComputeLabel, PlanetComputeNode::default());
         graph.add_node_edge(PlanetComputeLabel, bevy::render::graph::CameraDriverLabel);
     }
 }
 
-fn create_planet(mut commands: Commands, assets: Res<AssetServer>) {
+fn create_planet(
+    mut commands: Commands,
+    assets: Res<AssetServer>,
+    flight: Res<crate::flight_view::FlightViewConfig>,
+) {
     let started = std::time::Instant::now();
-    let cells = topology::dual_sphere(SUBDIVISIONS);
-    let columns = Arc::new(generate_columns(&cells));
-    let contacts = PlanetContact::new(columns.clone(), &cells);
+    let cells = topology::dual_sphere(lod::BASE_LEVEL as u32);
+    let base = Arc::new(lod::base_records(&cells));
+    let mut contacts = PlanetContact::new(base.clone(), &cells);
     let (narrowest, mean_width, widest) = tile_widths(&cells);
+    // The fine bands around the spawn, synchronously, so the walker has its
+    // tile to stand on before its first tick.
+    let anchor = contacts.find_land_near(flight.spawn_direction);
+    let fine = Arc::new(lod::generate_fine(anchor));
+    contacts.set_fine(&fine);
+    let fine_count: usize = fine.levels.iter().map(Vec::len).sum();
     info!(
-        "Planet ready: {} columns, 12 pentagons, {:.1} MiB topology, {:.2}s generation",
-        columns.len(),
-        (columns.len() * size_of::<GpuCell>()) as f64 / 1_048_576.,
+        "Planet ready: base L{} {} columns, fine L{}-L{} {} columns around the spawn, \
+         12 pentagons, {:.1} MiB records, {:.2}s generation",
+        lod::BASE_LEVEL,
+        base.len(),
+        lod::FINE_LEVELS[0],
+        lod::FINEST_LEVEL,
+        fine_count,
+        ((base.len() + fine_count) * size_of::<GpuCell>()) as f64 / 1_048_576.,
         started.elapsed().as_secs_f64()
     );
     info!(
-        "Planet scale: L{} on r={:.0} m gives {:.2} m mean tile width ({:.2}-{:.2} m), \
-         {:.0} m elevation step; the walker's eye is {:.2} m",
-        SUBDIVISIONS,
+        "Planet scale: r={:.0} m; base L{} gives {:.2} m mean tile width ({:.2}-{:.2} m), \
+         the finest L{} {:.3} m underfoot within {:.0} m; {:.0} m elevation step; \
+         the walker's eye is {:.2} m",
         PLANET_RADIUS,
+        lod::BASE_LEVEL,
         mean_width,
         narrowest,
         widest,
+        lod::FINEST_LEVEL,
+        lod::tile_width_m(lod::FINEST_LEVEL),
+        lod::BAND_M[3],
         ELEVATION_STEP,
         crate::walking::EYE_HEIGHT,
     );
     commands.insert_resource(contacts);
-    commands.insert_resource(PlanetColumns(columns));
+    commands.insert_resource(PlanetBase(base));
+    commands.insert_resource(lod::PlanetFine {
+        set: fine,
+        version: 1,
+    });
     commands.insert_resource(PlanetArt(assets.load_with_settings(
         "tilesets/fields.png",
         |settings: &mut ImageLoaderSettings| settings.sampler = ImageSampler::nearest(),
@@ -209,52 +302,25 @@ fn tile_width(cell: &topology::DualCell, neighbor: &topology::DualCell) -> f32 {
 }
 
 /// Measured `(min, mean, max)` tile width over the whole globe, in metres.
+/// The running total is `f64` on purpose: the shipped level sums about 3.9
+/// million widths, and an `f32` accumulator stops resolving an addend of ~19
+/// once the total passes 2^24, which silently reported 18.66 m for a globe
+/// whose real mean is 18.89 m.
 /// Reported at startup because the number that decides whether a 1.6 m walker
 /// reads as human-sized is a property of the topology, not of a document: it
 /// moves the moment `SUBDIVISIONS` or `PLANET_RADIUS` does.
 fn tile_widths(cells: &[topology::DualCell]) -> (f32, f32, f32) {
-    let (mut min, mut max, mut total, mut count) = (f32::MAX, 0f32, 0f32, 0u32);
+    let (mut min, mut max, mut total, mut count) = (f32::MAX, 0f32, 0f64, 0u32);
     for cell in cells {
         for &neighbor in &cell.neighbors {
             let width = tile_width(cell, &cells[neighbor]);
             min = min.min(width);
             max = max.max(width);
-            total += width;
+            total += width as f64;
             count += 1;
         }
     }
-    (min, total / count.max(1) as f32, max)
-}
-
-fn generate_columns(cells: &[topology::DualCell]) -> Vec<GpuCell> {
-    let heights: Vec<_> = cells.iter().map(|c| surface_height(c.direction)).collect();
-    cells
-        .iter()
-        .enumerate()
-        .map(|(index, cell)| {
-            let height = heights[index];
-            let mut corners = [[0.; 4]; 6];
-            let mut occlusion = 0.;
-            for (side, corner) in cell.corners.iter().enumerate() {
-                let neighbor_height = heights[cell.neighbors[side]].max(0.);
-                corners[side] = [corner.x, corner.y, corner.z, neighbor_height];
-                let separation = tile_width(cell, &cells[cell.neighbors[side]]);
-                occlusion +=
-                    ((neighbor_height - height.max(0.)) / separation.max(1.)).clamp(0., 1.);
-            }
-            let skylight = 1. - occlusion / cell.corners.len() as f32 * 0.55;
-            GpuCell {
-                direction_height: [cell.direction.x, cell.direction.y, cell.direction.z, height],
-                corners,
-                metadata: [
-                    cell.corners.len() as u32,
-                    terrain::biome(cell.direction, height),
-                    (skylight * 65535.) as u32,
-                    index as u32,
-                ],
-            }
-        })
-        .collect()
+    (min, (total / f64::from(count.max(1))) as f32, max)
 }
 
 #[derive(Clone, ShaderType)]
@@ -262,14 +328,51 @@ struct PlanetParams {
     clip_from_body: Mat4,
     camera: Vec4,
     sun: Vec4,
-    // Sea radius, cell count, elapsed seconds, foliage range (zero disables it).
+    // Sea-level radius, cell count, elapsed seconds, foliage range (zero disables it).
     settings: Vec4,
+    // RGB water absorption per metre; w the sheet's radius (sea level less the
+    // depth offset), which is where submerged shading starts.
+    water_absorption: Vec4,
+    // The colour submerged terrain converges to with depth.
+    water_deep: Vec4,
+    // Ground wetness, rain intensity, spare, spare.
+    weather: Vec4,
+    // The thirteen terrain-wetness knobs from `weather.ron`, in `hex.fs` order.
+    rain: [Vec4; 4],
+    // Base record count and fine-region capacity; the fine regions follow the
+    // base at that stride.
+    lod_offsets: UVec4,
+    // Live record count per fine level.
+    lod_counts: UVec4,
+    // Player direction in the body frame; w the base level.
+    lod: Vec4,
+    // cos(band radius / R) per fine level, coarsest first.
+    bands: Vec4,
+    // Clutter reach and fade in metres, blade count, base shade.
+    clutter: Vec4,
+    // Clutter chances: grass, flower, rock, bush.
+    clutter_chance: Vec4,
+    // Clutter sizes in metres: blade height, blade half-width, rock, bush.
+    clutter_size: Vec4,
+    // Flower stem height, dead-shrub chance and twig length, spare.
+    clutter_more: Vec4,
 }
 
 #[derive(Resource)]
 struct PlanetGpu {
     cells: Buffer,
-    count: u32,
+    /// Record slots in the buffer: the base then four fine regions.
+    slots: u32,
+    base_count: u32,
+    /// Live records per fine level, in `FINE_LEVELS` order.
+    counts: [u32; 4],
+    /// The fine set version the regions hold.
+    uploaded: u64,
+    /// The partition the uploaded regions can serve: the anchor they were
+    /// generated around and the radius each level is complete to. It is
+    /// written here, beside the buffer, so the rule that decides what to HIDE
+    /// and the records that REPLACE it can never come from different frames.
+    lod: lod::LodParams,
 }
 
 #[derive(Component)]
@@ -278,33 +381,77 @@ struct PlanetViewGpu {
     // Held by bind groups as well; retained explicitly to make lifetime clear.
     _visible: Buffer,
     _foliage: Buffer,
+    _clutter: Buffer,
+    /// Water cell IDs the visibility pass listed; the water pass draws them.
+    water: Buffer,
     indirect: Buffer,
     draw_bind_group: BindGroup,
     foliage_bind_group: BindGroup,
+    clutter_bind_group: BindGroup,
     compute_bind_group: BindGroup,
 }
 
 fn upload_planet(
     mut commands: Commands,
-    columns: Option<Res<PlanetColumns>>,
+    base: Option<Res<PlanetBase>>,
     existing: Option<Res<PlanetGpu>>,
     device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
 ) {
     if existing.is_some() {
         return;
     }
-    let Some(columns) = columns else {
+    let Some(base) = base else {
         return;
     };
-    let cells = device.create_buffer_with_data(&BufferInitDescriptor {
-        label: Some("Persistent planet columns: directions, corner rays, materials"),
-        contents: bytemuck::cast_slice(columns.0.as_slice()),
-        usage: BufferUsages::STORAGE,
+    let base_count = base.0.len() as u32;
+    let slots = base_count + 4 * lod::FINE_CAPACITY;
+    // Zero-initialised: an empty slot has degree zero and the compute pass
+    // skips it, so the fine regions are inert until their first upload.
+    let cells = device.create_buffer(&BufferDescriptor {
+        label: Some("Persistent planet columns: base level, then four fine bands"),
+        size: slots as u64 * size_of::<GpuCell>() as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     });
+    queue.write_buffer(&cells, 0, bytemuck::cast_slice(base.0.as_slice()));
     commands.insert_resource(PlanetGpu {
         cells,
-        count: columns.0.len() as u32,
+        slots,
+        base_count,
+        counts: [0; 4],
+        uploaded: 0,
+        lod: lod::LodParams::base_only(),
     });
+}
+
+/// Rewrite the fine regions when a new fine set has landed. Each level's
+/// records go at its own offset; the count is what the compute pass reads.
+fn upload_fine(
+    fine: Option<Res<lod::PlanetFine>>,
+    planet: Option<ResMut<PlanetGpu>>,
+    queue: Res<RenderQueue>,
+) {
+    let (Some(fine), Some(mut planet)) = (fine, planet) else {
+        return;
+    };
+    if planet.uploaded == fine.version {
+        return;
+    }
+    let stride = size_of::<GpuCell>() as u64;
+    for (k, level) in fine.set.levels.iter().enumerate() {
+        let offset = (planet.base_count as u64 + k as u64 * lod::FINE_CAPACITY as u64) * stride;
+        if !level.is_empty() {
+            queue.write_buffer(
+                &planet.cells,
+                offset,
+                bytemuck::cast_slice(level.as_slice()),
+            );
+        }
+        planet.counts[k] = level.len().min(lod::FINE_CAPACITY as usize) as u32;
+    }
+    planet.uploaded = fine.version;
+    planet.lod = lod::LodParams::of(&fine.set);
 }
 
 #[derive(Resource)]
@@ -340,7 +487,9 @@ fn compute_layout() -> BindGroupLayoutDescriptor {
                 uniform_buffer::<PlanetParams>(false),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(size_of::<GpuCell>() as u64)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
-                storage_buffer_sized(false, NonZeroU64::new(32)),
+                storage_buffer_sized(false, NonZeroU64::new(64)),
+                storage_buffer_sized(false, NonZeroU64::new(4)),
+                storage_buffer_sized(false, NonZeroU64::new(4)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
             ),
         ),
@@ -432,6 +581,10 @@ fn prepare_views(
     images: Res<RenderAssets<GpuImage>>,
     clock: Res<PlanetClock>,
     frame: Res<PlanetRenderFrame>,
+    water_settings: Res<crate::config::WaterSettings>,
+    weather_settings: Res<crate::config::WeatherSettings>,
+    scatter: Res<crate::config::ScatterSettings>,
+    weather: Res<crate::weather::Weather>,
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
     let Some(planet) = planet else {
@@ -452,11 +605,77 @@ fn prepare_views(
             } else {
                 FOLIAGE_DRAW_DISTANCE
             };
+        let w = &weather_settings;
+        let lod = &planet.lod;
+        trace!(
+            "planet view {entity}: camera {camera_position:?}, lod player {:?}, base {} fine {:?}",
+            lod.player, planet.base_count, planet.counts
+        );
         let params = PlanetParams {
             clip_from_body,
             camera: camera_position.extend(1.),
             sun: crate::sky::SUN_DIRECTION.normalize().extend(1.),
-            settings: Vec4::new(PLANET_RADIUS, planet.count as f32, clock.0, foliage_range),
+            settings: Vec4::new(PLANET_RADIUS, planet.slots as f32, clock.0, foliage_range),
+            water_absorption: Vec3::from_array(water_settings.absorption_per_m)
+                .extend(PLANET_RADIUS - water_settings.depth_offset_m),
+            water_deep: Vec3::from_array(water_settings.deep_color).extend(0.),
+            weather: Vec4::new(weather.wetness, weather.rain, 0., 0.),
+            rain: [
+                Vec4::new(
+                    w.rain_ripple_scale,
+                    w.rain_ripple_strength,
+                    w.rain_flow_across,
+                    w.rain_flow_down,
+                ),
+                Vec4::new(
+                    w.rain_flow_speed,
+                    w.rain_flow_strength,
+                    w.rain_wave_scale,
+                    w.rain_wave_strength,
+                ),
+                Vec4::new(
+                    w.rain_wave_speed,
+                    w.rain_wet_darken,
+                    w.rain_sky_sheen,
+                    w.rain_glint_power,
+                ),
+                Vec4::new(w.rain_glint_strength, 0., 0., 0.),
+            ],
+            lod_offsets: UVec4::new(planet.base_count, lod::FINE_CAPACITY, 0, 0),
+            lod_counts: UVec4::from_array(planet.counts),
+            lod: lod.player.extend(lod::BASE_LEVEL as f32),
+            bands: lod.bands,
+            clutter: Vec4::new(
+                // Clutter rides the foliage cutoff: above it no cell of the
+                // finest tier is near enough to grow anything, and one gate
+                // for both keeps them from disagreeing about that.
+                if foliage_range == 0. {
+                    0.
+                } else {
+                    scatter.clutter_radius_m
+                },
+                scatter.clutter_fade_m,
+                scatter.grass_blades,
+                scatter.grass_base_shade,
+            ),
+            clutter_chance: Vec4::new(
+                scatter.grass_chance,
+                scatter.flower_chance,
+                scatter.rock_chance,
+                scatter.bush_chance,
+            ),
+            clutter_size: Vec4::new(
+                scatter.grass_height_m,
+                scatter.grass_blade_w_m,
+                scatter.rock_size_m,
+                scatter.bush_size_m,
+            ),
+            clutter_more: Vec4::new(
+                scatter.flower_height_m,
+                scatter.shrub_chance,
+                scatter.shrub_size_m,
+                0.,
+            ),
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
@@ -467,19 +686,31 @@ fn prepare_views(
         uniform.write_buffer(&device, &queue);
         let visible = device.create_buffer(&BufferDescriptor {
             label: Some("GPU visible planet column IDs"),
-            size: planet.count as u64 * 4,
+            size: planet.slots as u64 * 4,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
         let indirect = device.create_buffer(&BufferDescriptor {
-            label: Some("GPU planet indirect draw arguments"),
-            size: 32,
+            label: Some("GPU planet indirect draws: terrain, foliage, water, clutter"),
+            size: 64,
             usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
             mapped_at_creation: false,
         });
         let foliage = device.create_buffer(&BufferDescriptor {
             label: Some("GPU nearby foliage column IDs"),
-            size: planet.count as u64 * 4,
+            size: planet.slots as u64 * 4,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let water = device.create_buffer(&BufferDescriptor {
+            label: Some("GPU visible water cell IDs"),
+            size: planet.slots as u64 * 4,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let clutter = device.create_buffer(&BufferDescriptor {
+            label: Some("GPU nearby ground clutter column IDs"),
+            size: planet.slots as u64 * 4,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -502,6 +733,8 @@ fn prepare_views(
                 visible.as_entire_binding(),
                 indirect.as_entire_binding(),
                 foliage.as_entire_binding(),
+                water.as_entire_binding(),
+                clutter.as_entire_binding(),
             )),
         );
         let foliage_bind_group = device.create_bind_group(
@@ -514,13 +747,26 @@ fn prepare_views(
                 &atlas.texture_view,
             )),
         );
+        let clutter_bind_group = device.create_bind_group(
+            Some("planet clutter view"),
+            &cache.get_bind_group_layout(&pipeline.draw_layout),
+            &BindGroupEntries::sequential((
+                &uniform,
+                planet.cells.as_entire_binding(),
+                clutter.as_entire_binding(),
+                &atlas.texture_view,
+            )),
+        );
         commands.entity(entity).insert(PlanetViewGpu {
             uniform,
             _visible: visible,
             _foliage: foliage,
+            _clutter: clutter,
+            water,
             indirect,
             draw_bind_group,
             foliage_bind_group,
+            clutter_bind_group,
             compute_bind_group,
         });
     }
@@ -544,7 +790,11 @@ fn queue_planet(
         let pipeline = specialized.specialize(&cache, &pipeline, (msaa.samples(), view.hdr));
         for (entity, main_entity) in &surfaces {
             phase.add(Transparent3d {
-                distance: f32::MAX,
+                // Bevy sorts this phase ascending with values increasing toward
+                // the camera, so the opaque globe goes first: at f32::MAX it
+                // drew LAST and painted over every transparent mesh in front
+                // of it, which is how the rain shower rendered as nothing.
+                distance: f32::MIN,
                 pipeline,
                 entity: (entity, *main_entity),
                 draw_function: draw,
@@ -576,6 +826,8 @@ impl<P: PhaseItem> RenderCommand<P> for DrawPlanetIndirect {
         pass.draw_indirect(&view.indirect, 0);
         pass.set_bind_group(0, &view.foliage_bind_group, &[]);
         pass.draw_indirect(&view.indirect, 16);
+        pass.set_bind_group(0, &view.clutter_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 48);
         RenderCommandResult::Success
     }
 }
@@ -607,9 +859,11 @@ mod pipeline_tests {
 
     #[test]
     fn actual_pipeline_layouts_use_static_offsets_and_correct_storage_access() {
+        // 288 before the clutter knobs; four more vec4s for the reach and
+        // fade, the chances, the sizes and the shrub.
         assert_eq!(
             PlanetParams::min_size().get(),
-            112,
+            352,
             "actual encoded Rust uniform must match WGSL Params"
         );
         for (layout, read_only_bindings) in
@@ -697,7 +951,7 @@ impl render_graph::Node for PlanetComputeNode {
             pass.set_pipeline(clear);
             pass.dispatch_workgroups(1, 1, 1);
             pass.set_pipeline(compact);
-            pass.dispatch_workgroups(planet.count.div_ceil(128), 1, 1);
+            pass.dispatch_workgroups(planet.slots.div_ceil(128), 1, 1);
         }
         Ok(())
     }
@@ -731,15 +985,23 @@ mod tests {
             "measured {fine} m vs equal-area {equal_area} m"
         );
 
-        // What the shipped configuration actually is. This number is why a
-        // 1.6 m walker reads as small: one tile is about twelve of him. Change
-        // SUBDIVISIONS or PLANET_RADIUS and update docs/tenebris-comparison.md
-        // in the same commit.
-        let shipped = fine / 2_f32.powi(SUBDIVISIONS as i32 - 5);
+        // What the shipped base configuration actually is, measured AT that
+        // level rather than extrapolated to it: the number the startup log
+        // prints. The finest tier is pinned by the lattice's own test, since
+        // it is never a whole sphere.
+        let shipped = tile_widths(&topology::dual_sphere(lod::BASE_LEVEL as u32)).1;
         assert!(
-            (shipped - 18.9).abs() < 0.1,
-            "shipped tile width {shipped} m at L{SUBDIVISIONS} on r={PLANET_RADIUS} m"
+            (shipped - lod::tile_width_m(lod::BASE_LEVEL)).abs() < 0.05,
+            "shipped base tile width {shipped} m at L{} on r={PLANET_RADIUS} m",
+            lod::BASE_LEVEL
+        );
+        let extrapolated = fine / 2_f32.powi(lod::BASE_LEVEL as i32 - 5);
+        assert!(
+            (extrapolated / shipped - 1.).abs() < 0.002,
+            "extrapolated {extrapolated} m vs measured {shipped} m"
         );
         assert!(shipped > crate::walking::EYE_HEIGHT * 10.);
+        // And the finest tier is the one the walker's eye is measured against.
+        assert!(lod::tile_width_m(lod::FINEST_LEVEL) < crate::walking::EYE_HEIGHT * 2.);
     }
 }

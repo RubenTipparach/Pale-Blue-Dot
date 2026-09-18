@@ -157,3 +157,152 @@ The complaint that started this is a visual one, so the acceptance is visual:
   shader with its own hard-coded palette, which is the
   `preview-scale-and-shader-parity` complaint arriving from the other side.
 - A band boundary does not sweep visibly across the ground as the camera moves.
+
+
+## Implementation decisions, taken to build it
+
+The owner's "implement all of that" reached this change, so the open items in
+`SEAM-BRIEF.md` are decided here, on the evidence available, and the first
+build carries them. Each is a decision that can be revisited from a picture.
+
+### The prefix property is kept for the resident levels and cannot reach level 11
+
+"A coarse tile is a prefix of the fine array" is true and is what makes the
+resident coarse levels free: the base level's cells are the first `10*4^L+2`
+of any finer level. It cannot be how the finest tier is addressed, because the
+finest array is 42 million cells and is not resident. The fine cap is instead
+generated **locally by lattice address**: a vertex at level `L` on icosahedron
+face `f` is the lattice point `(i, j)` with `i + j <= 2^L`, its position is the
+recursive midpoint construction (`even/even` inherits the level below, an odd
+coordinate is the normalised midpoint of its two parents, the `odd/odd` case
+along the diagonal `i + j = const`), and that construction is bit-for-bit the
+one `dual_sphere` runs, so a fine point that is also a coarse point lands on
+the same float. Corners and neighbours come from enumerating the level-`L`
+triangles that intersect the cap (a quadtree descent from each face, pruned by
+bounding cap) and building the dual from them exactly as `dual_sphere` does
+from its own triangle list; shared vertices across faces dedupe on their bits.
+
+### Levels, bands and the partition rule
+
+| level | tile | drawn where |
+| ---: | ---: | --- |
+| 7 (base) | 45.3 m | everywhere the finer bands do not cover; resident whole, 163,842 cells |
+| 8 | 22.7 m | within 2,400 m of the player |
+| 9 | 11.3 m | within 1,200 m |
+| 10 | 5.67 m | within 600 m |
+| 11 | 2.833 m | within 300 m |
+
+Resident: the base plus about 30,000 to 40,000 cells per fine level, some
+300,000 in all, against 655,362 today.
+
+**The partition is by the coarser level's cells, not by a circle through
+tiles.** A partition by tile centres cannot be exact where two tile sizes
+meet: a coarse tile whose centre is just inside the fine band has area
+outside it that no fine tile covers, and one just outside has area inside it
+that fine tiles also cover, so it gaps on one side and double-draws on the
+other. The unit is therefore the coarse cell: a level-`L` cell `A` is **fine**
+when `dot(d_A, p) > cos(D_{L+1} / R)`, and then its whole region is drawn at
+level `L+1`. That is exact because the level-`L+1` cells inside `A` are known
+from the lattice: the one centred on `A` itself (a vertex-centred cell, wholly
+inside) and the six centred on the midpoints of `A`'s edges, each shared with
+the neighbour across that edge. A midpoint cell `M_AB` is split exactly in
+half by the coarse boundary between `A` and `B`, which runs along its own long
+diagonal, so `M_AB` draws the half nearer whichever of `A`, `B` is fine and
+discards the other per fragment: two dot products against two owner
+directions it carries in its record.
+
+A level-`L` tile therefore draws when it is not itself fine (its own centre is
+outside the `L+1` band) and its coarse owner is fine (or `L` is the base).
+Every test is a dot product of a direction the tile carries against one
+global player direction, so neighbours agree by construction and nothing is
+read from a neighbour.
+
+### Closing the seam
+
+Along the boundary between a fine coarse-cell `A` and a coarse one `B`, the
+fine side is half of `M_AB` at its own height and the coarse side is `B`'s cap
+at `B`'s height, and one of them must wall down to the other:
+
+- **`B` higher.** `B`'s ordinary side wall toward `A` goes down to the height
+  of `M_AB` instead of `A`'s; each record carries that **fine floor** per
+  side, the height at the edge midpoint, computed at generation from the same
+  `surface_height`.
+- **`M_AB` higher.** `M_AB` emits one more quad, a **cut wall** along its
+  diagonal from its own height down to `B`'s, which it already has as its
+  same-level neighbour height on that side, because the fine cell centred on
+  `B` shares `B`'s direction and so `B`'s height. The two diagonal corners are
+  the two of its six equidistant from `A` and `B`.
+
+The vertex budget per terrain instance goes from 54 to 60 for the cut wall;
+foliage stays a separate draw.
+
+**Trees on three levels, at one density per area.** The first capture of the
+built partition (`--view seam`) showed the forest ending in a straight line at
+the 300 m band edge, because trees were eligible on the finest level only: a
+band boundary made visible by what stands on it, which is the seam rule broken
+by foliage rather than by terrain. Trees are eligible on levels 9, 10 and 11
+now, out to the level-9 band (1,200 m), and a cell's chance of a tree is the
+finest level's per-material density times `4^(11 - level)`, so a level-10
+cell, which covers four finest cells, carries four times the chance and the
+forest has the same trees per hectare at every distance it is drawn at. Which
+cells carry them still comes off each cell's own stable ID, so the individual
+trees do change where a band moves; what does not change is the cover. The
+same geometry is drawn on every level, so distant groves are Tenebris-sized
+trees standing on coarser ground.
+
+### The partition is anchored to the SET, not to the camera
+
+The first build published the player direction off the live camera every frame
+and the nominal band radii. That opens holes, and the owner photographed them:
+concentric arcs of missing ground with the sea showing through. The rule hides
+a coarse tile when the next finer band covers it, and it was hiding tiles in a
+disc around the CAMERA while the fine records existed in a disc around the
+ANCHOR the set was generated at. The two coincide only while the player stands
+still. The margin a band is generated with is about 48 m at the finest level,
+so a camera that has moved further than that off the anchor opens a crescent
+where the coarse tile is hidden and the fine one does not exist; a regeneration
+takes about two seconds, and a flying player crosses hundreds of metres inside
+one, which is the wide gap in the picture.
+
+So the partition is published **beside the buffer, from the set that is in
+it**: `PlanetGpu` carries a `LodParams` written by the same system that writes
+the records, and both the surface and the water pass read it from there.
+Nothing reads the camera. A set that is a regeneration behind the player now
+draws a slightly stale level of detail, which nobody can see, instead of a
+hole, which everybody can.
+
+Two consequences worth stating:
+
+- **A truncated band stops hiding where it stops existing.** Each level reports
+  the radius it is actually complete to, clamped to its nominal band, and that
+  is what the coarser level is hidden inside. Capacity overflow therefore costs
+  detail at the rim rather than opening a ring of holes there.
+- **Before the first fine set is uploaded, the base draws alone.** The
+  placeholder partition hides nothing and makes no owner fine, so the globe is
+  closed at level 7 from the first frame rather than waiting on a set.
+
+The invariant is pinned by
+`every_level_is_resident_out_to_the_radius_it_hides_the_coarser_one_inside`,
+which samples each level's own edge and asserts a record is there. **What the
+partition hides, the set must replace**, and that is one sentence a test can
+check, where "the LOD looks right" is not.
+
+### What is not done, and stated
+
+- **Hysteresis.** A debounce needs a memory of which side a tile was on, and
+  the rule is that nothing about a tile persists on the GPU. Anchoring to the
+  player already removes the camera-driven case; the residual is a tile on a
+  band circle flickering as the player oscillates by centimetres across it.
+  Accepted for the first build; a pinned still frame of a boundary is the
+  evidence, and a frame-to-frame diff of a slow walk is the test a debounce
+  would earn its way in by.
+- **Streaming is whole-set, asynchronous.** When the player moves more than a
+  quarter of the finest band from the last anchor, every fine level is
+  regenerated for the new anchor on the compute pool and the fine region of
+  the storage buffer is rewritten when it lands. No incremental edits, no
+  per-frame CPU visibility state. The base level is uploaded once.
+- **The walker's contact** is the finest resident level: `PlanetContact` is
+  built over the level-11 cap and swapped with it, so a player stands on
+  2.833 m tiles and 1 m steps. The flight clearance keeps the analytic
+  `terrain_radius`. The walker's step height rises from 0.6 m to a cell, since
+  a step it cannot climb every 2.8 m is a wall, not terrain.

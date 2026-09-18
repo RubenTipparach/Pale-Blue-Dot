@@ -5,7 +5,10 @@
 
 use crate::hex::{Hex, Voxel};
 
-pub const GENERATOR_VERSION: u32 = 1;
+/// Version 2 is the spherical generator in [`crate::planet_gen`]; version 3
+/// splits its fields into planet-scale and land-scale, which moves every
+/// height on the body.
+pub const GENERATOR_VERSION: u32 = 4;
 
 #[repr(u16)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -16,6 +19,15 @@ pub enum Material {
     Grass = 3,
     Water = 4,
     Ore = 5,
+    /// The top blocks the spherical generator hands out beyond the planar
+    /// sampler's own: a beach or a desert, a yellow-green pasture, the deep
+    /// green of a jungle, a snowfield, a rocky outcrop, bare dirt.
+    Sand = 6,
+    DryGrass = 7,
+    JungleGrass = 8,
+    Snow = 9,
+    Rock = 10,
+    Dirt = 11,
 }
 
 #[derive(Clone, Copy, Debug)]
