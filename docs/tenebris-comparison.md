@@ -566,6 +566,68 @@ when the player has walked 40 m (about 1.8 s in a debug build on this
 container's four cores, off the main thread). Nothing per tile returns from the
 GPU.
 
+## The terrain generator, ported
+
+The owner, off the coast frame: the terrain looks bad beside tenebris-rs.
+The reference was photographed from its own built client, and then its
+generator was ported term for term (`openspec/changes/tenebris-terrain`,
+`pbd_core::planet_gen`), with the owner's two calls: summits near 150 m,
+Tenebris's main body only.
+
+![Tenebris from 90 m up](screenshots/tenebris-terrain-hover.png)
+
+![Ours, the coast survey, before](screenshots/water-colour-coast.png)
+
+![Ours, the coast survey, after](screenshots/terrain-port-coast.png)
+
+![Ours from orbit, after](screenshots/terrain-port-orbit.png)
+
+![Ours at the surface, after](screenshots/terrain-port-surface.png)
+
+What changed is the shape, and it is the reference's rules rather than a
+retune: a six-octave continent with `sign * |n|^0.8` for crisp coasts, ridged
+mountains multiplied by the land so ranges stand inland, hills, detail, an
+ocean floor on a power curve, then islands lifted out of shallow sea, rivers
+pulled to a bed under it on lowland only, shorelines eased over six metres,
+and rocky highlands lifting whole regions. The noise primitive is the
+reference's gradient noise, pinned bit for bit at four seeds and points. The
+biome is one classification (ocean, beach, tundra, mountains, desert, swamp,
+jungle, fields) and the top block follows the reference's rule.
+
+**What had to be re-authored, and how it was measured.** Every scale is a
+frequency on the unit sphere and carries across unchanged: a continent that
+is a quarter of a 300 m body is a quarter of this one. Heights are absolute
+metres and do not, and a "max height" knob is not a summit: the fields sum to
+well under one, so the reference's 40 m reaches 34 with its uplift. Measured
+over 100,000 directions, 210 m per unit of land height gives a 153 m summit,
+320 per unit of depth an 87 m floor, and land is 49.5% of the sphere against
+the reference's seeded 47.1%. The elevation bands sit at the reached summit's
+proportions (Mountains above 105 m, snow above 100 on temperate hills, stone
+above 140, a snowcap at 150). The biome shares, against the reference's seeded
+world in brackets: Ocean 49.5 (45.4), Beach 4.8 (15.7), Fields 36.0 (27.8),
+Desert 3.0 (1.7), Jungle 2.9 (1.0), Swamp 0.1 (0.1), Mountains 0.5 (0.9),
+Tundra 3.1 (7.3) percent. The distribution report is an ignored test in the
+core, which is the instrument behind every one of those numbers.
+
+**What it costs.** Nothing measurable at generation: the full base plus the
+fine set is 2.22 s against 2.11 s before, in a debug build on this
+container's four cores.
+
+**What is still not the reference's.** The trees: a Tenebris tree is a column
+of hex prisms five metres tall and ours is three boxes eleven metres tall
+(`tenebris-tree-geometry`, still a proposal), which is why the forested frames
+read as a canopy rather than a wood. The cliff strata in the reference's frame
+are its column mesher drawing stone under grass on a steep face; ours draws
+one cap material per column. And the shallows: the eased shoreline is a wide
+shelf a few metres deep, so the near water at the shore preset is sand seen
+through water again (95, 131, 126 at the near band against 53, 125, 137
+before), which is the reference's own coast and the honest colour of a metre
+of water over sand.
+
+![The shore preset, after](screenshots/terrain-port-shore12.png)
+
+![Wading, after](screenshots/terrain-port-wade.png)
+
 ## Measured gravity comparison
 
 Tenebris runs **two gravity fields for two modes**, anchored to one shared

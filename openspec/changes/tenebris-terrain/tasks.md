@@ -30,5 +30,6 @@
       and material occurs, the beach is sand; the existing shore, swim and
       walker suites pass. The one-metre-fall test now spawns at an inland
       cell's centre rather than wherever the generator's coast search lands.
-- [ ] Captures beside today's and beside the Tenebris frames.
+- [x] Captures beside today's and beside the Tenebris frames, in the
+      comparison doc ("The terrain generator, ported").
 - [ ] The owner's eye in the running game.
