@@ -195,3 +195,117 @@ mod tests {
         assert!((-110.0..=-60.0).contains(&floor), "ocean floor {floor} m");
     }
 }
+
+#[cfg(test)]
+mod landmass_report {
+    use super::*;
+
+    /// Sweep the continent field and report what each setting makes, so the
+    /// candidates worth rendering are chosen off numbers rather than guesses.
+    #[test]
+    #[ignore = "a report: cargo test -p pbd-app --lib continent_sweep -- --ignored --nocapture"]
+    fn continent_sweep() {
+        let cells = super::super::topology::dual_sphere(6);
+        println!("scale  bias  land%  masses  biggest%  top5 share of land");
+        for scale in [0.8f32, 1.6, 2.4, 3.2, 4.0, 5.0] {
+            for bias in [0.0f32, -0.05, -0.10] {
+                let cfg = TerrainConfig {
+                    continent_scale: scale,
+                    land_bias: bias,
+                    ..TERRAIN
+                };
+                let sea = cfg.sea_level_m;
+                let land: Vec<bool> = cells
+                    .iter()
+                    .map(|c| pbd_core::planet_gen::surface_altitude(&cfg, c.direction) >= sea)
+                    .collect();
+                let mut seen = vec![false; cells.len()];
+                let mut sizes = Vec::new();
+                for start in 0..cells.len() {
+                    if !land[start] || seen[start] {
+                        continue;
+                    }
+                    let mut stack = vec![start];
+                    seen[start] = true;
+                    let mut size = 0usize;
+                    while let Some(index) = stack.pop() {
+                        size += 1;
+                        for &next in &cells[index].neighbors {
+                            if land[next] && !seen[next] {
+                                seen[next] = true;
+                                stack.push(next);
+                            }
+                        }
+                    }
+                    sizes.push(size);
+                }
+                sizes.sort_unstable_by(|a, b| b.cmp(a));
+                let land_total: usize = sizes.iter().sum::<usize>().max(1);
+                let top5: usize = sizes.iter().take(5).sum();
+                println!(
+                    "{scale:>5.1} {bias:>5.2} {:>6.1} {:>7} {:>9.1} {:>8.1}",
+                    100.0 * land_total as f32 / cells.len() as f32,
+                    sizes.len(),
+                    100.0 * sizes.first().copied().unwrap_or(0) as f32 / land_total as f32,
+                    100.0 * top5 as f32 / land_total as f32,
+                );
+            }
+        }
+    }
+
+    /// Flood-fill the land on a level-`n` dual sphere and report the connected
+    /// components by share of the whole body. A measurement instrument: the
+    /// question "is this one continent or several" is not answerable by looking
+    /// at an orbit capture, because a land bridge one cell wide joins two
+    /// masses that read as separate.
+    #[test]
+    #[ignore = "a report: cargo test -p pbd-app --lib landmass_report -- --ignored --nocapture"]
+    fn landmass_report() {
+        let cells = super::super::topology::dual_sphere(6);
+        let sea = TERRAIN.sea_level_m;
+        let land: Vec<bool> = cells
+            .iter()
+            .map(|c| surface_height(c.direction) >= sea)
+            .collect();
+        let mut seen = vec![false; cells.len()];
+        let mut sizes = Vec::new();
+        for start in 0..cells.len() {
+            if !land[start] || seen[start] {
+                continue;
+            }
+            let mut stack = vec![start];
+            seen[start] = true;
+            let mut size = 0usize;
+            while let Some(index) = stack.pop() {
+                size += 1;
+                for &next in &cells[index].neighbors {
+                    if land[next] && !seen[next] {
+                        seen[next] = true;
+                        stack.push(next);
+                    }
+                }
+            }
+            sizes.push(size);
+        }
+        sizes.sort_unstable_by(|a, b| b.cmp(a));
+        let total = cells.len() as f32;
+        let land_total: usize = sizes.iter().sum();
+        println!(
+            "{} cells, land {:.1}% in {} masses",
+            cells.len(),
+            100.0 * land_total as f32 / total,
+            sizes.len()
+        );
+        for (rank, size) in sizes.iter().take(12).enumerate() {
+            println!(
+                "  #{:<2} {:>7} cells  {:>5.2}% of the body  {:>5.1}% of the land",
+                rank + 1,
+                size,
+                100.0 * *size as f32 / total,
+                100.0 * *size as f32 / land_total as f32
+            );
+        }
+        let islands = sizes.iter().filter(|s| **s < 40).count();
+        println!("  masses under 40 cells (islands): {islands}");
+    }
+}
