@@ -419,6 +419,61 @@ was meant to move them. The pipeline error was on line 10 of every log.
 **A shader that fails to compile here does not look broken, it looks like a
 slightly different scene.**
 
+### The colour of the sea, against a photograph
+
+![The owner's view before](screenshots/water-colour-before.png)
+
+![The same view after](screenshots/water-colour-after.png)
+
+![The reference: open ocean](screenshots/ocean-reference.webp)
+
+The owner's second report, with a photograph of open ocean beside their own
+frame, was that the water was still too shiny and too light. Measured the same
+way as everything above, the photograph is not dark: its red channel is under
+ten over most of the sea and its blue runs to 209, so its saturation sits
+between 87 and 166. The owner's frame was 84, 115, 138 at saturation 55, the
+same lightness as the photo's middle band with four times the red. "Too light"
+named a symptom, and the number is red.
+
+Two rounds of one-knob-at-a-time ablation at the owner's own view are tabled
+in `openspec/changes/water-look/design.md`. The short version: every shine and
+sky knob together is worth 31 levels of red and reaches saturation 85 against
+the photo's 134; darkening the body colour moves five levels and reads as grey;
+what the sea needed was a body colour with **no red in it at all**, and the
+shallows needed a harder red absorption, since the sand under a metre of water
+is red and only the water in front of it can take that out.
+
+| band (sRGB, saturation) | before | after | photo |
+| --- | --- | --- | --- |
+| `shore` from 12 m, far sea | 71, 106, 136 (65) | 33, 102, 142 (109) | 9, 100, 143 (134) |
+| `shore` from 12 m, near shallows | 84, 131, 133 (49) | 53, 125, 137 (84) | |
+| `wade`, the sheet at eye level | 99, 139, 177 (78) | 81, 135, 180 (99) | |
+| `wade`, the shallows under the eye | 115, 147, 149 (34) | 73, 135, 142 (69) | |
+| `dive`, four metres under | 42, 89, 128 (86) | 15, 96, 139 (124) | |
+| `nightshore`, the sea | 27, 42, 50 (23) | 18, 49, 67 (50) | |
+
+The sky bands in every pair are byte-identical, so the whole of the movement
+is the water's. The remaining red at the far sea (33 against the photo's 9) is
+the tone mapper's floor: `TonyMcMapface` desaturates everything it maps, and
+the values that hit the photo's number unmapped land a shade greyer through it.
+Tenebris applies no tone mapping, so its 0.02/0.10/0.22 body colour is 38, 89,
+130 on its screen; ours is the same lightness with the red taken out.
+
+![The sea from the waterline, after](screenshots/water-colour-wade.png)
+
+![Four metres under, after](screenshots/water-colour-dive.png)
+
+![The sea at night, after](screenshots/water-colour-night.png)
+
+![The coast from 420 m, after](screenshots/water-colour-coast.png)
+
+**Underwater is the same knob.** The composite saturates to `deep_color` over
+distance, so the dive frame went from a grey-blue 42, 89, 128 to a saturated
+15, 96, 139 by the same change, which is the direction the owner asked for
+there too. Whether it now reads as Tenebris's underwater is a judgement to make
+in the running game; a Tenebris dive frame is being captured for a direct
+comparison and is recorded below when it lands.
+
 ![Wading at the waterline](screenshots/lod-wade.png)
 
 ![Three metres under](screenshots/lod-dive.png)

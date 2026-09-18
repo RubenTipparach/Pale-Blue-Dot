@@ -56,6 +56,10 @@ wading at two metres.
 
 ## 4. Prove it
 
-- [ ] Shore, wade and coast captures before and after, with the measured sea
-      and sky RGB and saturation beside them, since "shiny" is a look and the
-      numbers are what make a look arguable.
+- [x] Shore, wade, dive, coast and night captures before and after, with the
+      measured sea RGB and saturation beside them, in the comparison doc
+      ("The colour of the sea, against a photograph"). The sky bands are
+      byte-identical in every pair.
+- [ ] The owner's in-game look at the surface and underwater. A capture on a
+      software rasteriser at the owner's view is the best a container can do
+      and it is not the game on their monitor.
