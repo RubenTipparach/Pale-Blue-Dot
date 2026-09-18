@@ -47,9 +47,12 @@ wading at two metres.
       applies no tone mapping and that every water value here is therefore
       authored against `TonyMcMapface` rather than ported verbatim, with the
       side-by-side table from the proposal.
-- [ ] Only after the depth lands, re-judge the shine knobs against a capture.
-      They are already below the reference's on every axis; the expectation is
-      that they come back UP, not down.
+- [x] Only after the depth lands, re-judge the shine knobs against a capture.
+      Done against the owner's own view and a photograph of open ocean, one
+      knob at a time (design, "Second round"). The shine knobs came DOWN after
+      all, but were worth little; the sea's red is the body colour's, and the
+      shallows' red is the sand's, so the body lost its red and the red
+      absorption went from 0.60 to 0.90 per metre.
 
 ## 4. Prove it
 

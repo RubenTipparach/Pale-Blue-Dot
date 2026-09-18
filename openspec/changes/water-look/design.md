@@ -86,6 +86,66 @@ to see their own feet.
    values would lift and desaturate into exactly the pale sheet this change
    exists to remove.
 
+## Second round: the owner's view against a photograph
+
+After the sea was deepened the owner sent their own frame beside a photograph
+of open ocean and said the water was still too shiny and too light. The photo
+was measured the same way, in four bands from the horizon down:
+
+| photo band | sRGB | saturation |
+| --- | --- | ---: |
+| at the horizon | 58, 177, 209 | 151 |
+| upper | 25, 151, 191 | 166 |
+| middle | 9, 100, 143 | 134 |
+| foreground | 4, 58, 91 | 87 |
+
+**The photo is not dark, it is saturated.** Its red channel is under 60
+everywhere and under 10 over most of the sea, while its blue runs to 209. The
+owner's frame (the `shore` preset from 12 m) measured 84, 115, 138 at
+saturation 55: the same lightness as the photo's middle band with four times
+the red in it. "Too light" named a symptom; the number is red.
+
+Every knob was then rendered one at a time at that view, on the deepened sea,
+150 frames each, the far sea band (rows 110-190) measured:
+
+| variant | far sea | saturation |
+| --- | --- | ---: |
+| shipped | 71.4, 106.2, 136.2 | 64.7 |
+| sky colours to a clear-day blue (0.20/0.42/0.70, 0.06/0.22/0.55) | 58.1, 100.9, 135.7 | 77.7 |
+| `deep_color` darkened to 0.003/0.08/0.18 | 61.8, 101.0, 129.9 | 68.1 |
+| waves calmed (steepness 0.45, slope cap 0.7) | 69.5, 104.6, 135.1 | 65.6 |
+| specular halved, sun tint cooled | 71.4, 106.2, 136.2 | 64.7 |
+| Fresnel floor 0.35 to 0.22 | 66.0, 102.5, 133.5 | 67.4 |
+| all five together | 40.1, 91.5, 125.6 | 85.5 |
+
+Together they take 31 levels of red out and reach saturation 85, against the
+photo's 134. **Darkening the body colour is the wrong direction**: it moves the
+frame five levels and reads as grey. The lever that was left is the body colour
+made brighter and purer, since the reflected sky is now as blue as a sky gets
+and the tone mapper takes saturation out of everything that goes through it:
+
+| variant (on top of the five) | far sea | sat | near shallows | sat |
+| --- | --- | ---: | --- | ---: |
+| `deep_color` 0/0.16/0.36 | 42.0, 112.5, 152.4 | 110 | 75.2, 133.7, 139.2 | 64 |
+| `deep_color` 0/0.24/0.48 | 47.6, 127.7, 164.7 | 117 | 76.1, 139.0, 144.7 | 69 |
+| 0/0.18/0.40 and absorption 0.90/0.25/0.08 | 43.4, 116.8, 155.8 | 112 | 55.3, 130.1, 142.7 | 87 |
+| the same, sky 0.10/0.36/0.72 and 0.03/0.18/0.55 | 37.6, 115.8, 156.1 | 119 | 54.6, 129.9, 142.7 | 88 |
+
+Two things fall out. A body colour with **no red in it at all** is what a
+saturated sea needs under this tone mapper, and Tenebris's 0.02 of red is
+worth ten levels on screen. And the **harder red absorption** (0.90/m against
+0.60) is what moves the near shallows, which no sky or body value reaches: the
+sand under a metre of water is red, and only the water in front of it can take
+that out.
+
+**The value shipped is the last row's sky and absorption with the body at
+0/0.12/0.28**, which is sRGB 0, 97, 143 unmapped: the photo's middle band, and
+darker than the brightest row above, because the owner asked for darker and
+because `deep_color` is also the colour the underwater view saturates to.
+Tenebris's is 0.02/0.10/0.22, which is 38, 89, 130 on screen; ours is the same
+lightness with the red taken out, which is the direction every measurement
+above points.
+
 ## What "shiny" turned out to mean
 
 Nothing in the frame is clipping: the brightest sea pixel is 174 of 255 and not
