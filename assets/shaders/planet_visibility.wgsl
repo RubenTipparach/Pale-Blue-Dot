@@ -16,6 +16,10 @@ struct Params {
     lod_counts: vec4<u32>,  // live records per fine level, coarsest first
     lod: vec4<f32>,         // xyz player direction, w base level
     bands: vec4<f32>,       // cos(band radius / R) per fine level, coarsest first
+    clutter: vec4<f32>,        // reach m, fade m, blades, base shade
+    clutter_chance: vec4<f32>, // grass, flower, rock, bush
+    clutter_size: vec4<f32>,   // blade height, blade half-width, rock, bush
+    clutter_more: vec4<f32>,   // flower height, shrub chance, shrub size, spare
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
@@ -49,9 +53,10 @@ struct DrawArgs {
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read_write> visible: array<u32>;
-@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,3>;
+@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,4>;
 @group(0) @binding(4) var<storage,read_write> foliage: array<u32>;
 @group(0) @binding(5) var<storage,read_write> water: array<u32>;
+@group(0) @binding(6) var<storage,read_write> clutter: array<u32>;
 
 @compute @workgroup_size(1)
 fn clear_indirect() {
@@ -69,12 +74,76 @@ fn clear_indirect() {
     atomicStore(&args[2].instance_count, 0u);
     args[2].first_vertex = 0u;
     args[2].first_instance = 0u;
+    // Ground clutter: eighteen blades of two segments, then a flower, a
+    // pebble, a bush and a dead shrub. CLUTTER_VERTICES in planet.rs is the
+    // same arithmetic and a test holds the two together.
+    args[3].vertex_count = 432u;
+    atomicStore(&args[3].instance_count, 0u);
+    args[3].first_vertex = 258u;
+    args[3].first_instance = 0u;
 }
 
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
     h = ((h >> ((h >> 28u)+4u))^h)*277803737u;
     return (h>>22u)^h;
+}
+
+// One decision about one cell, as a fraction. This is Tenebris's `hash2(tile,
+// salt)` in shape rather than bit for bit: its salts index a tile of a 300 m
+// world and ours index a cell record, so an identical stream would place
+// nothing in the same spot anyway. What carries over is that every decision is
+// a pure function of the cell, so a clutter pattern is the same on every frame
+// and every run and needs nothing stored. The vertex shader repeats these
+// rolls, which is the same arrangement `tile_has_rock` has with the reference's
+// own mesher.
+fn roll(id: u32, salt: u32) -> f32 {
+    return f32(hash(id ^ (salt*2654435761u)) & 0xffffffu)/16777216.;
+}
+
+// Salts, one distinct stream per decision. Matching the reference's numbering
+// so the two tables can be read side by side.
+const SALT_GRASS: u32 = 0x51u;
+const SALT_FLOWER: u32 = 0x52u;
+const SALT_BUSH: u32 = 0x53u;
+const SALT_ROCK: u32 = 0x54u;
+const SALT_SHRUB: u32 = 0x55u;
+
+fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
+// Dirt and beach sand share index 1, so "bare" is every dry top a pebble can
+// sit on. A bush wants soil, so it asks for grass instead of this.
+fn bare(material: u32) -> bool { return material==1u || material==4u || material==5u || material==6u; }
+
+// This is the sole clutter eligibility decision, on the same terms as the
+// foliage one above: the draw submits an instance only for a cell that grows
+// at least one piece, and the vertex path never rejects a whole instance.
+// Tenebris gates each kind on the surface BLOCK, which is this project's
+// material index, and its own densities are the ones in scatter.ron.
+fn has_clutter(cell: Cell, center: vec3<f32>) -> bool {
+    let reach = params.clutter.x;
+    if reach <= 0. { return false; }
+    // The finest tier only. A coarse cell covers four or sixteen of the finest,
+    // and spreading one cell's blades over that area would read as a thinning
+    // sward rather than a distant one; the band it would appear in is past the
+    // range a blade is a pixel wide at anyway.
+    let level = cell.metadata.x >> 8u;
+    if level != finest_level() { return false; }
+    if !(owner_fine(cell.owner_a.xyz, level) && owner_fine(cell.owner_b.xyz, level)) { return false; }
+    if distance(params.camera.xyz,center) >= reach { return false; }
+    let id = cell.metadata.w;
+    let material = cell.metadata.y & 0xffu;
+    let green = grassy(material);
+    let dry = bare(material);
+    let grass = green && roll(id,SALT_GRASS) < params.clutter_chance.x;
+    let flower = green && roll(id,SALT_FLOWER) < params.clutter_chance.y;
+    let bush = green && roll(id,SALT_BUSH) < params.clutter_chance.w;
+    // A pebble sits on bare ground, and sparsely on grass, which is the
+    // reference's own third.
+    let rock_chance = select(params.clutter_chance.z*0.3, params.clutter_chance.z, dry);
+    let rock = (green||dry) && roll(id,SALT_ROCK) < rock_chance;
+    // Dead twigs are the desert's and the tundra's only ground cover.
+    let shrub = (material==4u||material==6u) && roll(id,SALT_SHRUB) < params.clutter_more.y;
+    return grass || flower || bush || rock || shrub;
 }
 
 // This is the sole foliage eligibility decision. The foliage indirect draw
@@ -171,7 +240,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // Capacities cover the whole dispatch before any counts can be published;
     // malformed bindings must not create partial generations or invalid IDs.
     let count = u32(params.settings.y);
-    if arrayLength(&cells)<count || arrayLength(&visible)<count || arrayLength(&foliage)<count || arrayLength(&water)<count { return; }
+    if arrayLength(&cells)<count || arrayLength(&visible)<count || arrayLength(&foliage)<count || arrayLength(&water)<count || arrayLength(&clutter)<count { return; }
     if id.x >= count { return; }
     if !slot_live(id.x) { return; }
     let cell = cells[id.x];
@@ -224,5 +293,11 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     if has_nearby_foliage(cell,center) && in_frustum(center,15.) {
         let slot = atomicAdd(&args[1].instance_count,1u);
         foliage[slot] = id.x;
+    }
+    // A clutter bound is the cell's own hexagon and the tallest piece standing
+    // on it, which is a couple of metres rather than a tree's fifteen.
+    if has_clutter(cell,center) && in_frustum(center,4.) {
+        let slot = atomicAdd(&args[3].instance_count,1u);
+        clutter[slot] = id.x;
     }
 }

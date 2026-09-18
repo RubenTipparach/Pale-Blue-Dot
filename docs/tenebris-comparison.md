@@ -1183,6 +1183,79 @@ topology or the upload. They are recorded here rather than applied: both change
 what every capture in this document looks like, and a look change wants the
 owner's eye on a before and after rather than a green test.
 
+## The ground has grass on it now: Tenebris's scatter as a fourth draw
+
+The owner looked at the meadow frames and said there was no grass, no rocks and
+no sticks on the ground, which was right: between the trees this world was flat
+painted hexagons.
+
+**Tenebris has twelve kinds of decorative scatter** in
+`hex_mesher.rs::build_scatter`, each gated on the surface block and the biome
+and placed by a deterministic per-tile hash. Five of them are ported here:
+grass tufts, flowers, pebbles, leafy bushes and the dead shrubs that are the
+desert's and the tundra's only ground cover. The eight left behind - cactus,
+fern, reed, kelp, seaweed, vine - are each their own vertex budget and are named
+in `openspec/changes/tenebris-ground-clutter/tasks.md` rather than forgotten.
+
+**The rules port and the geometry does not, which is the whole of the design.**
+The reference bakes its scatter into a CPU chunk mesh, so thousands of pieces
+ride one per-chunk draw; this project has no chunk mesh at all. So what came
+across is the per-cell hash, the densities, the sizes and the gates, onto a
+FOURTH indirect draw that builds every blade in the vertex shader from the
+record's own corner rays - exactly as the tree port took `block_hex_width` and
+`shrink_corner` and left the mesher behind.
+
+**The densities are the reference's, unchanged, and that is the gold standard
+paying off.** The cell is 2.833 m flat-to-flat on both sides, so a chance per
+tile and a size in metres mean the same thing in both worlds:
+`assets/config/scatter.ron` is `scatter.yaml` field for field.
+
+**What is ours is the REACH.** Tenebris meshes scatter over the whole of a 300 m
+planet; this body is 4,800 m, and its finest LOD band alone is 300 m. Two
+measurements decide the number from opposite directions:
+
+| clutter radius | grassy cells inside it | vertices |
+| ---: | ---: | ---: |
+| 40 m | 564 | 0.08 M |
+| **60 m** | **1,269** | **0.18 M** |
+| 80 m | 2,256 | 0.33 M |
+| 300 m (the whole finest band) | 31,729 | 4.57 M |
+
+against a frame that is about 19.6 M terrain vertices and 0.32 M of foliage. And
+at the capture's field of view one pixel subtends 0.00128 m per metre of range,
+so a 0.17 m blade covers 26.5 px at 5 m, 3.3 at 40, **2.2 at 60**, 1.1 at 120
+and 0.44 at 300. Past about 60 m a blade is sub-pixel shimmer that still costs a
+vertex. The tier is short because grass stops being visible, and it is cheap
+because it is short. The last 15 m fade the pieces into the ground rather than
+popping them, which is one multiplier on the height and no vertices at all.
+
+**Measured cost**, three runs each on one binary at the worst case - the meadow
+preset with the eye 0.45 m off the ground, where the blade count on screen is
+highest - 1440x900, lavapipe, `--frames 70`:
+
+| | p50 frame, ms |
+| --- | --- |
+| `clutter_radius_m: 0` | 283.8, 287.0, 297.3 |
+| `clutter_radius_m: 60` | 304.0, 307.7, 309.4 |
+
+Medians 287.0 against 307.7: **+20.7 ms, or 7.2%**, and the two ranges do not
+overlap, so it is a real difference rather than noise. On a software rasteriser
+this is fill cost, not vertex cost, and it is not a GPU number.
+
+**Two things came out of building it that are worth keeping.** A blade has to be
+visible from both sides, and the reference pays for that by emitting both
+windings of every quad; here the vertex shader knows where the camera is, so the
+quad is wound TOWARD it instead - one pipeline, half the vertices, the same
+picture. And the validator refused `clutter_radius_m: 0`, because the fade was
+longer than the reach - an off switch a config could not reach, caught only by
+trying to measure against it.
+
+**It is faithful, which the reference's own frame is what proves.** Rendering
+`TENEBRIS_DEV_GRASS` on the reference build shows the same thing ours does: not
+a lawn, but spaced tufts of broad tapering blades standing proud of a sod that
+is still visible between them. The instinct on first seeing ours was that the
+grass was too sparse; the reference says it is not.
+
 ## Acceptance and comparison boundaries
 
 The original five standalone shaders and the two integrated planet pipeline modules (`planet_surface.wgsl`, `planet_visibility.wgsl`) have explicit contracts in the dedicated Naga validation tool. `sky_atmosphere.wgsl` is explicitly deferred by name because it includes Bevy imports and material substitutions; it must be validated through Bevy's shader composer and the running visual application rather than treated as standalone WGSL. Unknown shader names are still errors, so adding a new module cannot silently skip validation.

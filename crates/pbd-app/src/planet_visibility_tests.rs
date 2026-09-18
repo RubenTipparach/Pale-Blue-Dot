@@ -29,6 +29,8 @@ struct VisibleCells {
     /// Water sheets listed; the synthetic columns sit above the sea, so it
     /// is zero for them and only the real-record test sees any.
     water: u32,
+    /// Cells listed as growing ground clutter.
+    clutter: Vec<u32>,
 }
 
 impl VisibilityGpu {
@@ -114,7 +116,8 @@ impl VisibilityGpu {
         // columns sit above sea level, so it stays empty and its count is
         // asserted to be zero.
         let water = output("water visibility under test", capacities[0]);
-        let args = output("indirect arguments under test", 12);
+        let clutter = output("clutter visibility under test", capacities[0]);
+        let args = output("indirect arguments under test", 16);
         let bind_group = self.device.create_bind_group(
             "visibility regression inputs",
             &self.layout,
@@ -125,12 +128,13 @@ impl VisibilityGpu {
                 args.as_entire_binding(),
                 foliage.as_entire_binding(),
                 water.as_entire_binding(),
+                clutter.as_entire_binding(),
             )),
         );
         let list_bytes = capacities.map(|count| (count * size_of::<u32>()) as u64);
         let readback = self.device.create_buffer(&BufferDescriptor {
             label: Some("test-only visibility readback"),
-            size: 48 + list_bytes[0] + list_bytes[1],
+            size: 64 + list_bytes[0] + list_bytes[1] + list_bytes[0],
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -147,9 +151,16 @@ impl VisibilityGpu {
             // the tail guards, including a completely spare workgroup.
             pass.dispatch_workgroups((cells.len() as u32).div_ceil(128) + 1, 1, 1);
         }
-        encoder.copy_buffer_to_buffer(&args, 0, &readback, 0, 48);
-        encoder.copy_buffer_to_buffer(&terrain, 0, &readback, 48, list_bytes[0]);
-        encoder.copy_buffer_to_buffer(&foliage, 0, &readback, 48 + list_bytes[0], list_bytes[1]);
+        encoder.copy_buffer_to_buffer(&args, 0, &readback, 0, 64);
+        encoder.copy_buffer_to_buffer(&terrain, 0, &readback, 64, list_bytes[0]);
+        encoder.copy_buffer_to_buffer(&foliage, 0, &readback, 64 + list_bytes[0], list_bytes[1]);
+        encoder.copy_buffer_to_buffer(
+            &clutter,
+            0,
+            &readback,
+            64 + list_bytes[0] + list_bytes[1],
+            list_bytes[0],
+        );
         let submitted = self.queue.submit([encoder.finish()]);
         let (sender, receiver) = std::sync::mpsc::channel();
         let slice = readback.slice(..);
@@ -166,9 +177,21 @@ impl VisibilityGpu {
             .expect("visibility readback must map");
         let mapped = slice.get_mapped_range();
         let words: &[u32] = bytemuck::cast_slice(&mapped);
+        // The four draws' fixed arguments, read off the live shader. The
+        // clutter row is the one that would drift: its vertex count and its
+        // first vertex are arithmetic written out in two places, so this is
+        // where the shader and `planet.rs` are held together.
         assert_eq!([words[0], words[2], words[3]], [60, 0, 0]);
         assert_eq!([words[4], words[6], words[7]], [198, 60, 0]);
         assert_eq!([words[8], words[10], words[11]], [18, 0, 0]);
+        assert_eq!(
+            [words[12], words[14], words[15]],
+            [
+                crate::planet::clutter_vertices(),
+                crate::planet::clutter_first_vertex(),
+                0
+            ]
+        );
         let collect = |start: usize, count: u32, capacity: usize| {
             assert!(count as usize <= capacity, "draw exceeds ID capacity");
             let mut ids = words[start..start + count as usize].to_vec();
@@ -184,9 +207,10 @@ impl VisibilityGpu {
             ids
         };
         VisibleCells {
-            terrain: collect(12, words[1], capacities[0]),
-            foliage: collect(12 + capacities[0], words[5], capacities[1]),
+            terrain: collect(16, words[1], capacities[0]),
+            foliage: collect(16 + capacities[0], words[5], capacities[1]),
             water: words[9],
+            clutter: collect(16 + capacities[0] + capacities[1], words[13], capacities[0]),
         }
     }
 }
@@ -244,6 +268,13 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         lod_counts: UVec4::ZERO,
         lod: Vec3::Z.extend(TEST_BASE_LEVEL as f32),
         bands: Vec4::splat(-2.),
+        // Clutter OFF: a reach of zero. The fixtures below were written to
+        // measure foliage and the partition, and a second rule firing inside
+        // them would make a failure ambiguous. `clutter_params` turns it on.
+        clutter: Vec4::new(0., 15., 18., 0.55),
+        clutter_chance: Vec4::new(0.8, 0.12, 0.10, 0.05),
+        clutter_size: Vec4::new(0.55, 0.085, 0.16, 0.34),
+        clutter_more: Vec4::new(0.32, 0.14, 0.38, 0.),
     }
 }
 
@@ -260,6 +291,7 @@ fn expect(
             terrain: terrain.to_vec(),
             foliage: foliage.to_vec(),
             water: 0,
+            clutter: Vec::new(),
         }
     );
 }
@@ -396,6 +428,7 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
                 terrain: vec![],
                 foliage: vec![],
                 water: 0,
+                clutter: vec![],
             },
             "either undersized output must suppress the complete generation",
         );
@@ -521,5 +554,80 @@ fn the_partition_lists_each_tile_at_its_bands_level_on_the_real_records() {
     assert!(
         per_level.iter().all(|&n| n > 0),
         "a band is empty: {per_level:?}"
+    );
+}
+
+/// A column with a chosen surface word and stable ID, so a clutter fixture can
+/// say what the ground is made of. The surface word is `material | biome << 8`,
+/// exactly as `planet_terrain::surface_code` packs it.
+fn ground(position: Vec3, material: u32, id: u32) -> GpuCell {
+    let mut cell = column(position, 6, 2., 0.);
+    cell.metadata[1] = material;
+    cell.metadata[3] = id;
+    cell
+}
+
+/// `params` with the clutter rule turned on: a reach, and every chance forced
+/// so that the MATERIAL gate is the only thing left deciding. A chance of one
+/// means "whatever this ground can grow, it grows"; zero means nothing does.
+fn clutter_params(count: usize, camera_height: f32, reach: f32, chance: f32) -> PlanetParams {
+    let mut params = params(count, camera_height, 200.);
+    params.clutter.x = reach;
+    params.clutter_chance = Vec4::splat(chance);
+    params.clutter_more.y = chance;
+    params
+}
+
+#[test]
+#[ignore = "requires a GPU; run cargo test -p pbd-app --lib actual_gpu_clutter -- --ignored --nocapture"]
+fn actual_gpu_clutter_lists_a_cell_by_its_ground_its_level_and_its_range() {
+    let gpu = VisibilityGpu::new();
+    // Under the camera, then 30 m out, then 60 m out. At an eye height of 10 m
+    // those stand 10, 31.6 and 60.8 m away, so a reach can be put between them.
+    let near = Vec3::new(0., 0., RADIUS);
+    let mid = Vec3::new(30., 0., RADIUS);
+    let far = Vec3::new(60., 0., RADIUS);
+    // Pasture, jungle and swamp sod grow everything; beach sand and stone grow
+    // a pebble; desert sand and snow also grow a dead shrub; the seabed grows
+    // nothing at all, and that is the material gate's own clause.
+    let cells = [
+        ground(near, 2, 11),
+        ground(mid, 3, 22),
+        ground(far, 7, 33),
+        ground(Vec3::new(-30., 0., RADIUS), 0, 44),
+        ground(Vec3::new(-60., 0., RADIUS), 5, 55),
+    ];
+    let listed = |reach: f32, chance: f32| {
+        gpu.run(&cells, clutter_params(cells.len(), 10., reach, chance))
+            .clutter
+    };
+
+    // Every ground that can grow something, inside a reach that covers them
+    // all. The seabed is the one that is left out.
+    assert_eq!(listed(100., 1.), vec![0, 1, 2, 4], "the material decides");
+
+    // The reach is a reach: the same cells, a shorter one.
+    assert_eq!(
+        listed(50., 1.),
+        vec![0, 1],
+        "beyond the reach grows nothing"
+    );
+    assert_eq!(listed(20., 1.), vec![0], "and nearer still, only the one");
+    assert_eq!(listed(0., 1.), Vec::<u32>::new(), "a reach of zero is off");
+
+    // The chances are the chances. Nothing rolls under zero, so nothing is
+    // listed however good the ground is, which is what lets `scatter.ron` turn
+    // a kind off rather than only make it rare.
+    assert_eq!(listed(100., 0.), Vec::<u32>::new(), "no chance, no clutter");
+
+    // Clutter is the finest tier's alone: a coarser cell is not listed even
+    // standing on pasture under the camera, because its blades would have to
+    // cover four or sixteen cells' worth of ground.
+    let mut coarse = ground(near, 2, 11);
+    coarse.metadata[0] = 6 | ((TEST_FINEST_LEVEL - 1) << 8);
+    assert_eq!(
+        gpu.run(&[coarse], clutter_params(1, 10., 100., 1.)).clutter,
+        Vec::<u32>::new(),
+        "only the finest tier grows clutter"
     );
 }

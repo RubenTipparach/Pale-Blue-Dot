@@ -19,6 +19,10 @@ struct Params {
     lod_counts: vec4<u32>,  // live records per fine level, coarsest first
     lod: vec4<f32>,         // xyz player direction, w base level
     bands: vec4<f32>,       // cos(band radius / R) per fine level, coarsest first
+    clutter: vec4<f32>,        // reach m, fade m, blades, base shade
+    clutter_chance: vec4<f32>, // grass, flower, rock, bush
+    clutter_size: vec4<f32>,   // blade height, blade half-width, rock, bush
+    clutter_more: vec4<f32>,   // flower height, shrub chance, shrub size, spare
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
@@ -61,6 +65,9 @@ struct VertexOut {
     @location(8) @interpolate(flat) level: u32,
     @location(9) @interpolate(flat) owner_a: vec3<f32>,
     @location(10) @interpolate(flat) owner_b: vec3<f32>,
+    // How brightly this vertex takes its own albedo. One everywhere except
+    // down a grass blade, where the root is darker than the tip.
+    @location(11) shade: f32,
 }
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
@@ -78,6 +85,62 @@ fn leaf_width(id: u32, layer: u32) -> f32 {
     return 0.65+f32(h&0xffu)/255.0*0.35;
 }
 fn normalized(v: vec3<f32>) -> vec3<f32> { return v*inverseSqrt(max(dot(v,v),1e-12)); }
+
+// One decision about one cell. The visibility pass decides eligibility with
+// exactly this function and these salts; here the same rolls are repeated to
+// build what it listed. Keep the two in step - a cell listed for a pebble that
+// then rolls no pebble draws nothing at all.
+fn roll(id: u32, salt: u32) -> f32 {
+    return f32(hash(id ^ (salt*2654435761u)) & 0xffffffu)/16777216.;
+}
+const SALT_GRASS: u32 = 0x51u;
+const SALT_FLOWER: u32 = 0x52u;
+const SALT_BUSH: u32 = 0x53u;
+const SALT_ROCK: u32 = 0x54u;
+const SALT_SHRUB: u32 = 0x55u;
+const TAU: f32 = 6.28318530718;
+
+struct Piece { position: vec3<f32>, normal: vec3<f32>, uv: vec2<f32> }
+
+// A small hexagonal prism standing on the cap: 36 vertices of sides, then an
+// 18-vertex top fan. The same construction the trunk above uses, but centred on
+// a hashed point INSIDE the cell rather than on the cell's own corners, because
+// a pebble is a pebble rather than a shrunk copy of the tile.
+fn prism_vertex(part: u32, base: vec3<f32>, up: vec3<f32>, tangent: vec3<f32>,
+                bitangent: vec3<f32>, rad: f32, h: f32, phase: f32) -> Piece {
+    var out: Piece;
+    out.position = base;
+    out.normal = up;
+    out.uv = vec2(0.5);
+    if part < 36u {
+        let side = part/6u;
+        let i = part%6u;
+        let a0 = phase+f32(side)*TAU/6.;
+        let a1 = phase+f32(side+1u)*TAU/6.;
+        let c0 = base+(tangent*cos(a0)+bitangent*sin(a0))*rad;
+        let c1 = base+(tangent*cos(a1)+bitangent*sin(a1))*rad;
+        let points = array<vec3<f32>,4>(c0,c1,c1+up*h,c0+up*h);
+        let indices = array<u32,6>(0u,1u,2u,0u,2u,3u);
+        out.position = points[indices[i]];
+        out.normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
+        let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
+        out.uv = side_uv[indices[i]];
+    } else {
+        let t = (part-36u)/3u;
+        let c = (part-36u)%3u;
+        let top = base+up*h;
+        let a0 = phase+f32(t)*TAU/6.;
+        let a1 = phase+f32(t+1u)*TAU/6.;
+        let p0 = top+(tangent*cos(a0)+bitangent*sin(a0))*rad;
+        let p1 = top+(tangent*cos(a1)+bitangent*sin(a1))*rad;
+        out.position = select(select(p1,p0,c==1u),top,c==0u);
+        out.uv = select(select(vec2(0.9,0.9),vec2(0.1,0.9),c==1u),vec2(0.5,0.5),c==0u);
+    }
+    return out;
+}
+
+fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
+fn bare(material: u32) -> bool { return material==1u || material==4u || material==5u || material==6u; }
 
 
 @vertex
@@ -99,6 +162,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     var uv = vec2(0.5);
     var kind = 0u;
     var material = cell.metadata.y & 0xffu;
+    // One everywhere but down a grass blade, whose root is darker than its tip.
+    var out_shade = 1.;
     if vertex < 18u {
         let triangle = vertex/3u;
         let corner = vertex%3u;
@@ -177,7 +242,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
             uv = side_uv[indices[i]]*vec2(1.,max(1.,(radius-lower)/1.0));
         }
-    } else {
+    } else if vertex < 258u {
         kind = 2u;
         // Tenebris's tree, which is not a mesh but voxels in ONE column drawn
         // as ordinary hex prisms shrunk toward the tile centre: wood at 0.20
@@ -264,6 +329,205 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 uv = vec2(dot(local,tangent),dot(local,bitangent))/(1.5*tile)+0.5;
             }
         }
+    } else {
+        kind = 3u;
+        // Ground clutter: Tenebris's surface scatter, which it bakes into a CPU
+        // chunk mesh and this project has no chunk mesh to bake into. So the
+        // RULES are ported - the per-cell hash, the densities, the sizes, the
+        // gates - and the geometry is built here from the record's own corner
+        // rays, exactly as the tree above took `block_hex_width` and left the
+        // mesher behind. The compute pass listed this cell; every piece below
+        // repeats the roll that listed it.
+        //
+        // The instance's 432 vertices, in order: 18 blades of two segments,
+        // then a flower, a pebble, a bush of two lumps, and a dead shrub. A
+        // piece this cell did not roll collapses to a degenerate triangle at
+        // the cell centre, which is how a tree part a cell does not carry is
+        // already handled.
+        let v = vertex-258u;
+        let id = cell.metadata.w;
+        let green = grassy(material);
+        let dry = bare(material);
+        // Everything shrinks into the ground over the last stretch of the
+        // reach rather than popping out of existence: at 60 m a cell is under
+        // three metres wide and its blades are two pixels, so a hard edge
+        // would be a line of shimmer travelling with the player.
+        let reach = params.clutter.x;
+        let fade = clamp((reach-distance(params.camera.xyz,axis*radius))
+            /max(params.clutter.y,0.001),0.,1.);
+        let base_shade = params.clutter.w;
+        // A hashed point on the cap: the reference's own lerp from the centre
+        // toward a hashed corner, so a piece sits flush on the plane the cap
+        // is drawn in.
+        let seat = axis*radius;
+        var grown = false;
+        // Which piece this vertex belongs to, and the six-vertex quad or
+        // three-vertex triangle within it.
+        var quad = array<vec3<f32>,4>(seat,seat,seat,seat);
+        var quad_uv = array<vec2<f32>,4>(vec2(0.),vec2(0.),vec2(0.),vec2(0.));
+        var is_quad = false;
+        var shade_lo = 1.;
+        var shade_hi = 1.;
+        position = seat;
+        normal = axis;
+
+        if v < 216u {
+            // ---- grass: a blade of two stacked quads that curve and taper.
+            let j = v/12u;
+            let i = v%12u;
+            let blades = u32((0.6+0.4*roll(id,SALT_GRASS+1u))*params.clutter.z);
+            if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < blades {
+                let sj = SALT_GRASS+16u+j*8u;
+                let k = u32(roll(id,sj)*f32(degree));
+                let f0 = 0.15+0.60*roll(id,sj+1u);
+                let seat_dir = axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0;
+                let bottom = seat_dir*radius;
+                let ang = roll(id,sj+2u)*TAU;
+                let side = tangent*cos(ang)+bitangent*sin(ang);
+                let across = tangent*cos(ang+0.9)+bitangent*sin(ang+0.9);
+                let h = params.clutter_size.x*(0.8+0.4*roll(id,sj+3u))*fade;
+                let hw = params.clutter_size.y*(0.7+0.6*roll(id,sj+4u));
+                // Each blade crops its own vertical strip of the ground tile,
+                // so neighbouring blades pick up different pixels of art the
+                // project already ships. That is the reference's
+                // `tile_uv_slice` and it is why clutter needs no new texture.
+                let strip = roll(id,sj+5u)*0.78;
+                let seg = i/6u;
+                let a = f32(seg)*0.5;
+                let b = f32(seg+1u)*0.5;
+                // One cross-section: the centre walks up and leans on the
+                // SQUARE of the height fraction, so the blade curves rather
+                // than shearing, and the half-width tapers toward the tip.
+                let ca = bottom+axis*(h*a)+across*(h*0.15*a*a);
+                let cb = bottom+axis*(h*b)+across*(h*0.15*b*b);
+                let wa = hw*(1.-0.55*a);
+                let wb = hw*(1.-0.55*b);
+                quad = array<vec3<f32>,4>(ca-side*wa,ca+side*wa,cb+side*wb,cb-side*wb);
+                quad_uv = array<vec2<f32>,4>(vec2(strip,1.-a),vec2(strip+0.18,1.-a),
+                    vec2(strip+0.18,1.-b),vec2(strip,1.-b));
+                shade_lo = mix(base_shade,1.,a);
+                shade_hi = mix(base_shade,1.,b);
+                is_quad = true;
+                grown = h > 0.0001;
+            }
+        } else if v < 234u {
+            // ---- flower: a slim stem and a bright four-triangle head.
+            let i = v-216u;
+            if green && roll(id,SALT_FLOWER) < params.clutter_chance.y {
+                let k = u32(roll(id,SALT_FLOWER+1u)*f32(degree));
+                let f0 = 0.15+0.60*roll(id,SALT_FLOWER+2u);
+                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let ang = roll(id,SALT_FLOWER+3u)*TAU;
+                let side = tangent*cos(ang)+bitangent*sin(ang);
+                let h = params.clutter_more.x*fade;
+                if i < 6u {
+                    let ca = bottom;
+                    let cb = bottom+axis*h;
+                    quad = array<vec3<f32>,4>(ca-side*0.03,ca+side*0.03,cb+side*0.03,cb-side*0.03);
+                    quad_uv = array<vec2<f32>,4>(vec2(0.1,1.),vec2(0.28,1.),vec2(0.28,0.),vec2(0.1,0.));
+                    shade_lo = base_shade;
+                    is_quad = true;
+                } else {
+                    // The head takes its own colour: a white bloom or a warm
+                    // one, which is the reference's snow/crag pair.
+                    material = select(4u,6u,roll(id,SALT_FLOWER+4u) < 0.5);
+                    let t = (i-6u)/3u;
+                    let c = (i-6u)%3u;
+                    let tip = bottom+axis*h;
+                    let a0 = ang+f32(t)*TAU*0.25;
+                    let a1 = ang+f32(t+1u)*TAU*0.25;
+                    let p0 = tip+(tangent*cos(a0)+bitangent*sin(a0))*0.07;
+                    let p1 = tip+(tangent*cos(a1)+bitangent*sin(a1))*0.07;
+                    let top = tip+axis*0.03;
+                    position = select(select(top,p1,c==1u),p0,c==0u);
+                    uv = select(select(vec2(0.5,0.5),vec2(0.9,0.9),c==1u),vec2(0.1,0.9),c==0u);
+                }
+                grown = h > 0.0001;
+            }
+        } else if v < 288u {
+            // ---- pebble: one squat hexagonal prism on bare ground, and
+            // sparsely on grass at the reference's own third.
+            let rock_chance = select(params.clutter_chance.z*0.3,params.clutter_chance.z,dry);
+            if (green||dry) && roll(id,SALT_ROCK) < rock_chance {
+                let k = u32(roll(id,SALT_ROCK+1u)*f32(degree));
+                let f0 = 0.15+0.60*roll(id,SALT_ROCK+2u);
+                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let rad = params.clutter_size.z*(0.6+0.8*roll(id,SALT_ROCK+3u));
+                let h = rad*(0.4+0.5*roll(id,SALT_ROCK+4u))*fade;
+                let phase = roll(id,SALT_ROCK+5u)*TAU;
+                material = 5u;
+                let piece = prism_vertex(v-234u,bottom,axis,tangent,bitangent,rad,h,phase);
+                position = piece.position;
+                normal = piece.normal;
+                uv = piece.uv;
+                grown = h > 0.0001;
+            }
+        } else if v < 396u {
+            // ---- bush: two leafy lumps, the reference's pair.
+            if green && roll(id,SALT_BUSH) < params.clutter_chance.w {
+                let k = u32(roll(id,SALT_BUSH+1u)*f32(degree));
+                let f0 = 0.15+0.60*roll(id,SALT_BUSH+2u);
+                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let size = params.clutter_size.w*(0.8+0.4*roll(id,SALT_BUSH+3u));
+                let phase = roll(id,SALT_BUSH+4u)*TAU;
+                material = 9u;
+                let second = v >= 342u;
+                let lump = select(bottom,
+                    bottom+(tangent*cos(phase)+bitangent*sin(phase))*(size*1.1),second);
+                let rad = select(size,size*0.6,second);
+                let h = select(size*0.9,size*0.55,second)*fade;
+                let turn = select(phase,phase+0.7,second);
+                let part = select(v-288u,v-342u,second);
+                let piece = prism_vertex(part,lump,axis,tangent,bitangent,rad,h,turn);
+                position = piece.position;
+                normal = piece.normal;
+                uv = piece.uv;
+                grown = h > 0.0001;
+            }
+        } else {
+            // ---- dead shrub: a splay of dry twigs, which on desert sand and
+            // tundra snow is the only ground cover there is.
+            let i = v-396u;
+            if (material==4u||material==6u) && roll(id,SALT_SHRUB) < params.clutter_more.y {
+                let twig = i/6u;
+                let k = u32(roll(id,SALT_SHRUB+1u)*f32(degree));
+                let f0 = 0.15+0.60*roll(id,SALT_SHRUB+2u);
+                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let phase = roll(id,SALT_SHRUB+3u)*TAU;
+                let ang = phase+f32(twig)*TAU/6.+roll(id,SALT_SHRUB+8u+twig)*0.5;
+                let h = params.clutter_more.z*(0.6+0.7*roll(id,SALT_SHRUB+16u+twig))*fade;
+                let out_dir = tangent*cos(ang)+bitangent*sin(ang);
+                let side = tangent*cos(ang+1.57)+bitangent*sin(ang+1.57);
+                let top = bottom+axis*h+out_dir*(h*0.6);
+                material = 8u;
+                quad = array<vec3<f32>,4>(bottom-side*0.02,bottom+side*0.02,
+                    top+side*0.02,top-side*0.02);
+                quad_uv = array<vec2<f32>,4>(vec2(0.1,1.),vec2(0.3,1.),vec2(0.3,0.),vec2(0.1,0.));
+                is_quad = true;
+                grown = h > 0.0001;
+            }
+        }
+
+        if is_quad {
+            // A blade has to be visible from both sides, and the reference pays
+            // for that by emitting both windings. The vertex shader knows where
+            // the camera is, so instead the quad is WOUND toward it: one
+            // pipeline, half the vertices, the same result.
+            let i = v%6u;
+            let facing = dot(cross(quad[1]-quad[0],quad[3]-quad[0]),params.camera.xyz-quad[0]);
+            let forward = array<u32,6>(0u,1u,2u,0u,2u,3u);
+            let reversed = array<u32,6>(0u,2u,1u,0u,3u,2u);
+            var c = forward[i];
+            if facing < 0. { c = reversed[i]; }
+            position = quad[c];
+            uv = quad_uv[c];
+            // The normal is the surface UP, as the reference has it, so a piece
+            // shades exactly like the cap it stands on instead of popping
+            // against it.
+            normal = axis;
+            out_shade = select(shade_hi,shade_lo,c==0u||c==1u);
+        }
+        if !grown { position = axis*radius; }
     }
     var out: VertexOut;
     out.position = position;
@@ -278,6 +542,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.level = level;
     out.owner_a = cell.owner_a.xyz;
     out.owner_b = cell.owner_b.xyz;
+    out.shade = out_shade;
     return out;
 }
 
@@ -387,7 +652,10 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let texel = pixel_tile(input.uv,tile);
     let luminance = dot(texel,vec3(0.2126,0.7152,0.0722));
     let detail = mix(clamp(luminance*3.2,0.55,1.65),1.0,smoothstep(180.,1400.,distance_to_camera));
-    var albedo = base*detail*cell_variation;
+    // `shade` is one everywhere but down a grass blade, where the root sits at
+    // the configured fraction of full light and eases to the tip. That gradient
+    // is what makes a sward read as lush rather than as flat green paper.
+    var albedo = base*detail*cell_variation*input.shade;
     // A tiny cap-edge darkening makes the actual hex-column silhouette legible
     // while the atlas supplies the committed source pixel art at close range.
     var color = albedo*(vec3(0.16,0.21,0.27)*mix(0.12,1.,daylight)*skylight

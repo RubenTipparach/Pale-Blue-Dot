@@ -66,6 +66,32 @@ use std::{borrow::Cow, num::NonZeroU64, sync::Arc};
 const FOLIAGE_DRAW_DISTANCE: f32 = lod::BAND_M[1];
 const FOLIAGE_DRAW_CUTOFF_ALTITUDE: f32 = FOLIAGE_DRAW_DISTANCE + 600.;
 
+/// Blades the clutter vertex budget covers. An indirect draw has ONE vertex
+/// count for every instance, so this is the upper bound a cell can roll and
+/// `ScatterSettings::validate` refuses a config that asks for more: a file that
+/// said twenty and drew eighteen would be a disagreement nobody could see.
+pub const GRASS_BLADE_BUDGET: u32 = 18;
+/// Vertices per clutter instance, which is the whole of what one cell can grow:
+/// the blades, then a flower, a pebble, a bush and a dead shrub. A piece a cell
+/// did not roll collapses to a degenerate triangle, the way a tree part a cell
+/// does not carry already does.
+///
+/// The shipping shader is the only consumer of these two, because an indirect
+/// draw reads its vertex count out of the buffer the compute pass wrote. They
+/// exist here so a test can hold that shader to the arithmetic, which is why
+/// they are test-only: a second copy compiled into the binary and read by
+/// nobody would be exactly the drift they are meant to catch.
+#[cfg(test)]
+pub(crate) fn clutter_vertices() -> u32 {
+    GRASS_BLADE_BUDGET * 2 * 6 + 18 + 54 + 108 + 36
+}
+/// Where the clutter branch starts in the shared vertex shader: after the
+/// terrain's 60 and the foliage's 198.
+#[cfg(test)]
+pub(crate) fn clutter_first_vertex() -> u32 {
+    60 + 198
+}
+
 /// The preview body's centre in the translating render/physics frame. System
 /// positions are subtracted in f64 before any bounded GPU coordinate is cast.
 #[derive(Resource, Clone, Copy, Default, ExtractResource)]
@@ -313,6 +339,14 @@ struct PlanetParams {
     lod: Vec4,
     // cos(band radius / R) per fine level, coarsest first.
     bands: Vec4,
+    // Clutter reach and fade in metres, blade count, base shade.
+    clutter: Vec4,
+    // Clutter chances: grass, flower, rock, bush.
+    clutter_chance: Vec4,
+    // Clutter sizes in metres: blade height, blade half-width, rock, bush.
+    clutter_size: Vec4,
+    // Flower stem height, dead-shrub chance and twig length, spare.
+    clutter_more: Vec4,
 }
 
 #[derive(Resource)]
@@ -338,11 +372,13 @@ struct PlanetViewGpu {
     // Held by bind groups as well; retained explicitly to make lifetime clear.
     _visible: Buffer,
     _foliage: Buffer,
+    _clutter: Buffer,
     /// Water cell IDs the visibility pass listed; the water pass draws them.
     water: Buffer,
     indirect: Buffer,
     draw_bind_group: BindGroup,
     foliage_bind_group: BindGroup,
+    clutter_bind_group: BindGroup,
     compute_bind_group: BindGroup,
 }
 
@@ -442,7 +478,8 @@ fn compute_layout() -> BindGroupLayoutDescriptor {
                 uniform_buffer::<PlanetParams>(false),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(size_of::<GpuCell>() as u64)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
-                storage_buffer_sized(false, NonZeroU64::new(48)),
+                storage_buffer_sized(false, NonZeroU64::new(64)),
+                storage_buffer_sized(false, NonZeroU64::new(4)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
             ),
@@ -537,6 +574,7 @@ fn prepare_views(
     frame: Res<PlanetRenderFrame>,
     water_settings: Res<crate::config::WaterSettings>,
     weather_settings: Res<crate::config::WeatherSettings>,
+    scatter: Res<crate::config::ScatterSettings>,
     weather: Res<crate::weather::Weather>,
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
@@ -598,6 +636,37 @@ fn prepare_views(
             lod_counts: UVec4::from_array(planet.counts),
             lod: lod.player.extend(lod::BASE_LEVEL as f32),
             bands: lod.bands,
+            clutter: Vec4::new(
+                // Clutter rides the foliage cutoff: above it no cell of the
+                // finest tier is near enough to grow anything, and one gate
+                // for both keeps them from disagreeing about that.
+                if foliage_range == 0. {
+                    0.
+                } else {
+                    scatter.clutter_radius_m
+                },
+                scatter.clutter_fade_m,
+                scatter.grass_blades,
+                scatter.grass_base_shade,
+            ),
+            clutter_chance: Vec4::new(
+                scatter.grass_chance,
+                scatter.flower_chance,
+                scatter.rock_chance,
+                scatter.bush_chance,
+            ),
+            clutter_size: Vec4::new(
+                scatter.grass_height_m,
+                scatter.grass_blade_w_m,
+                scatter.rock_size_m,
+                scatter.bush_size_m,
+            ),
+            clutter_more: Vec4::new(
+                scatter.flower_height_m,
+                scatter.shrub_chance,
+                scatter.shrub_size_m,
+                0.,
+            ),
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
@@ -613,8 +682,8 @@ fn prepare_views(
             mapped_at_creation: false,
         });
         let indirect = device.create_buffer(&BufferDescriptor {
-            label: Some("GPU planet indirect draw arguments: terrain, foliage, water"),
-            size: 48,
+            label: Some("GPU planet indirect draws: terrain, foliage, water, clutter"),
+            size: 64,
             usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
             mapped_at_creation: false,
         });
@@ -626,6 +695,12 @@ fn prepare_views(
         });
         let water = device.create_buffer(&BufferDescriptor {
             label: Some("GPU visible water cell IDs"),
+            size: planet.slots as u64 * 4,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let clutter = device.create_buffer(&BufferDescriptor {
+            label: Some("GPU nearby ground clutter column IDs"),
             size: planet.slots as u64 * 4,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
@@ -650,6 +725,7 @@ fn prepare_views(
                 indirect.as_entire_binding(),
                 foliage.as_entire_binding(),
                 water.as_entire_binding(),
+                clutter.as_entire_binding(),
             )),
         );
         let foliage_bind_group = device.create_bind_group(
@@ -662,14 +738,26 @@ fn prepare_views(
                 &atlas.texture_view,
             )),
         );
+        let clutter_bind_group = device.create_bind_group(
+            Some("planet clutter view"),
+            &cache.get_bind_group_layout(&pipeline.draw_layout),
+            &BindGroupEntries::sequential((
+                &uniform,
+                planet.cells.as_entire_binding(),
+                clutter.as_entire_binding(),
+                &atlas.texture_view,
+            )),
+        );
         commands.entity(entity).insert(PlanetViewGpu {
             uniform,
             _visible: visible,
             _foliage: foliage,
+            _clutter: clutter,
             water,
             indirect,
             draw_bind_group,
             foliage_bind_group,
+            clutter_bind_group,
             compute_bind_group,
         });
     }
@@ -729,6 +817,8 @@ impl<P: PhaseItem> RenderCommand<P> for DrawPlanetIndirect {
         pass.draw_indirect(&view.indirect, 0);
         pass.set_bind_group(0, &view.foliage_bind_group, &[]);
         pass.draw_indirect(&view.indirect, 16);
+        pass.set_bind_group(0, &view.clutter_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 48);
         RenderCommandResult::Success
     }
 }
@@ -760,9 +850,11 @@ mod pipeline_tests {
 
     #[test]
     fn actual_pipeline_layouts_use_static_offsets_and_correct_storage_access() {
+        // 288 before the clutter knobs; four more vec4s for the reach and
+        // fade, the chances, the sizes and the shrub.
         assert_eq!(
             PlanetParams::min_size().get(),
-            288,
+            352,
             "actual encoded Rust uniform must match WGSL Params"
         );
         for (layout, read_only_bindings) in

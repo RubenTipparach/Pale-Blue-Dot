@@ -403,6 +403,114 @@ impl Validated for WeatherSettings {
     }
 }
 
+/// Decorative ground clutter: Tenebris's surface scatter, rebuilt as a GPU
+/// draw. Names follow its `scatter.yaml` so the two can be read side by side,
+/// and the shipped values are its shipped values. What is ours rather than the
+/// reference's is the REACH: Tenebris meshes scatter over its whole 300 m
+/// planet, and this body is sixteen times that radius, so the clutter needs a
+/// range of its own. See `openspec/changes/tenebris-ground-clutter`.
+#[derive(Resource, Clone, Debug, PartialEq, Deserialize, ExtractResource)]
+#[serde(default, deny_unknown_fields)]
+pub struct ScatterSettings {
+    /// How far from the camera clutter is drawn at all, metres. Beyond about
+    /// 60 m a blade is under two pixels wide and costs a vertex to shimmer.
+    pub clutter_radius_m: f32,
+    /// The last stretch of that reach, metres, over which a piece shrinks into
+    /// the ground rather than popping out of existence.
+    pub clutter_fade_m: f32,
+    /// Probability a grass cell grows a tuft.
+    pub grass_chance: f32,
+    /// Blades per covered cell, upper bound; a hash picks 60%..100% of it.
+    pub grass_blades: f32,
+    /// Blade height, metres; a per-blade hash varies it +-20%.
+    pub grass_height_m: f32,
+    /// Blade half-width at the base, metres.
+    pub grass_blade_w_m: f32,
+    /// How dark the blade root is against its tip, 0..1, which is what makes a
+    /// sward read as lush rather than flat.
+    pub grass_base_shade: f32,
+    /// Probability a grass cell gets a flower.
+    pub flower_chance: f32,
+    /// Flower stem height, metres.
+    pub flower_height_m: f32,
+    /// Probability a bare cell gets a pebble; a grass cell rolls a third of it.
+    pub rock_chance: f32,
+    /// Pebble footprint radius, metres.
+    pub rock_size_m: f32,
+    /// Probability a grass or dirt cell gets a leafy bush.
+    pub bush_chance: f32,
+    /// Bush footprint radius, metres.
+    pub bush_size_m: f32,
+    /// Probability a desert sand or tundra snow cell grows a dead shrub.
+    pub shrub_chance: f32,
+    /// Dead-shrub twig length, metres.
+    pub shrub_size_m: f32,
+}
+
+impl Default for ScatterSettings {
+    fn default() -> Self {
+        Self {
+            clutter_radius_m: 60.,
+            clutter_fade_m: 15.,
+            grass_chance: 0.8,
+            grass_blades: 18.,
+            grass_height_m: 0.55,
+            grass_blade_w_m: 0.085,
+            grass_base_shade: 0.55,
+            flower_chance: 0.12,
+            flower_height_m: 0.32,
+            rock_chance: 0.10,
+            rock_size_m: 0.16,
+            bush_chance: 0.05,
+            bush_size_m: 0.34,
+            shrub_chance: 0.14,
+            shrub_size_m: 0.38,
+        }
+    }
+}
+
+impl Validated for ScatterSettings {
+    fn validate(&self) -> Result<(), String> {
+        non_negative(
+            "clutter distances",
+            &[self.clutter_radius_m, self.clutter_fade_m],
+        )?;
+        // A reach of zero is the off switch, and an off switch that a config
+        // cannot reach is not one: the shader stops at the reach before it ever
+        // looks at the fade, so the fade is moot there. Everywhere else a fade
+        // longer than the reach would mean every piece is part-faded, which is
+        // a config nobody means to write.
+        (self.clutter_radius_m == 0. || self.clutter_fade_m <= self.clutter_radius_m)
+            .then_some(())
+            .ok_or("clutter_fade_m cannot exceed clutter_radius_m")?;
+        unit("grass_chance", self.grass_chance)?;
+        unit("flower_chance", self.flower_chance)?;
+        unit("rock_chance", self.rock_chance)?;
+        unit("bush_chance", self.bush_chance)?;
+        unit("shrub_chance", self.shrub_chance)?;
+        unit("grass_base_shade", self.grass_base_shade)?;
+        non_negative(
+            "clutter sizes",
+            &[
+                self.grass_height_m,
+                self.grass_blade_w_m,
+                self.flower_height_m,
+                self.rock_size_m,
+                self.bush_size_m,
+                self.shrub_size_m,
+            ],
+        )?;
+        // The vertex budget covers this many blades and no more; a config that
+        // asked for more would silently draw fewer, which is the kind of quiet
+        // disagreement between a file and the code this project has a rule
+        // about. GRASS_BLADE_BUDGET in planet.rs is the same number.
+        (self.grass_blades >= 0. && self.grass_blades <= crate::planet::GRASS_BLADE_BUDGET as f32)
+            .then_some(())
+            .ok_or("grass_blades must be within 0..=18, the vertex budget")?;
+        Ok(())
+    }
+}
+
 /// Loads every config file once at startup. Inserted before any plugin that
 /// reads them, so a system can take `Res<WaterSettings>` unconditionally.
 pub struct ConfigPlugin;
@@ -411,9 +519,11 @@ impl Plugin for ConfigPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(load::<WaterSettings>("water"))
             .insert_resource(load::<WeatherSettings>("weather"))
+            .insert_resource(load::<ScatterSettings>("scatter"))
             .add_plugins((
                 bevy::render::extract_resource::ExtractResourcePlugin::<WaterSettings>::default(),
                 bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
+                bevy::render::extract_resource::ExtractResourcePlugin::<ScatterSettings>::default(),
             ));
     }
 }
