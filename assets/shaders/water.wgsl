@@ -28,7 +28,7 @@ struct WaterView {
     deep_color: vec4<f32>,    // rgb, w falling-face flow speed
     horizon_color: vec4<f32>, // rgb, w horizon (grazing) reflection floor
     zenith_color: vec4<f32>,
-    night_sky: vec4<f32>,      // the sky the sheet mirrors at night  // rgb, w spare
+    night_sky: vec4<f32>,     // rgb the sky the sheet mirrors at night, w atmosphere radius m
     foam_color: vec4<f32>,    // rgb, w foam intensity
     foam_crest: vec4<f32>,    // lo, hi, weight, spare
     foam_slope: vec4<f32>,    // lo, hi, weight, spare
@@ -202,6 +202,44 @@ fn reconstruct_local(uv: vec2<f32>, depth: f32) -> vec3<f32> {
     // Callers avoid depth=0 infinite-far reconstruction.
     return homogeneous.xyz/max(abs(homogeneous.w),1e-8)*sign(homogeneous.w);
 }
+// The far water seen from inside it. The deep colour is what the surface reads
+// at the waterline; under it the light has crossed the eye's own depth of
+// water, so the murk darkens with depth as the seabed under it already does
+// (the terrain attenuates by its water depth), and at night it takes the same
+// ambient floor the surface body takes. Left at the bare deep colour it was
+// one blue at half a metre and at eight, and a lit room under a dark sky.
+fn murk(eye_depth: f32, radial: vec3<f32>) -> vec3<f32> {
+    let absorption = max(view.absorption.rgb,vec3<f32>(0.0));
+    let sun_elevation = dot(radial,safe_normal(view.sun.xyz));
+    let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
+    let lit = mix(clamp(view.absorption.w,0.,1.),1.0,daylight);
+    return view.deep_color.rgb*exp(-absorption*max(eye_depth,0.0))*lit;
+}
+
+// The sky the sheet mirrors at night, along the reflected ray. This engine's
+// night sky is its upper atmosphere lit over the limb, a twilight that fades
+// away from the terminator and is black past it: three to one across one
+// frame, measured. One colour in every direction was brighter than the sky on
+// the side away from the sun and a glowing sheet under a black one. So the
+// reflection asks the sky's own question (`sun_visibility` in the sky shader)
+// of the point where the reflected ray leaves the atmosphere: does the sun's
+// ray from there clear the planet. Lit, it is the night colour scaled by how
+// much the ray faces the sun, which is where the twilight is; unlit, nothing.
+fn night_sky(reflected: vec3<f32>, camera_body: vec3<f32>, sun: vec3<f32>) -> vec3<f32> {
+    let ground = view.planet_center.w;
+    let shell = max(view.night_sky.w,ground+1.0);
+    // Exit distance of the reflected ray from the shell; the camera is inside it.
+    let b = dot(camera_body,reflected);
+    let c = dot(camera_body,camera_body)-shell*shell;
+    let t = -b+sqrt(max(b*b-c,0.0));
+    let top = camera_body+reflected*t;
+    let along = dot(top,sun);
+    let clearance = length(top-sun*along)-ground;
+    let lit = select(1.0,smoothstep(0.0,shell-ground,clearance),along < 0.0);
+    let facing = 0.35+0.65*smoothstep(-0.6,0.6,dot(reflected,sun));
+    return view.night_sky.rgb*lit*facing;
+}
+
 // The terrain's own haze, so the sheet and the ground fog out together. The
 // terrain shader still carries these as literals; lifting them into one
 // uniform is task 2 of preview-scale-and-shader-parity, and until then the
@@ -306,11 +344,13 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let sheet_radius = length(in.body_position);
     let below = camera_radius < sheet_radius || (camera_radius == sheet_radius && !front);
     if (below) {
-        // Seen from below: the deep colour by camera distance, and Snell's window.
-        let underwater = mix(view.deep_color.rgb,scene,exp(-absorption*camera_distance));
-        return vec4<f32>(mix(view.deep_color.rgb,underwater,smoothstep(0.55,0.75,dot(-look,normal))),1.);
+        // Seen from below: the murk by camera distance, and Snell's window.
+        let deep = murk(sheet_radius-camera_radius,safe_normal(camera_body));
+        let underwater = mix(deep,scene,exp(-absorption*camera_distance));
+        return vec4<f32>(mix(deep,underwater,smoothstep(0.55,0.75,dot(-look,normal))),1.);
     }
-    let reflection_height = clamp(dot(reflect(-look,normal),radial),0.,1.);
+    let reflected_ray = reflect(-look,normal);
+    let reflection_height = clamp(dot(reflected_ray,radial),0.,1.);
     let fresnel = (0.02+0.98*pow(1.0-max(dot(look,normal),0.0),5.0))
         * mix(clamp(view.horizon_color.w,0.,1.),1.,reflection_height);
     // A reflection is of the SKY, so it is the sky's colour, not an authored
@@ -321,7 +361,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let sun_elevation = dot(radial,sun_direction);
     let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
     let day_sky = mix(view.horizon_color.rgb,view.zenith_color.rgb,reflection_height);
-    let reflected = mix(view.night_sky.rgb,day_sky,daylight);
+    let reflected = mix(night_sky(reflected_ray,camera_body,sun_direction),day_sky,daylight);
     let transmitted = mix(view.deep_color.rgb,scene,exp(-absorption*path_length));
     let crest = smoothstep(view.foam_crest.x,max(view.foam_crest.y,view.foam_crest.x+1e-4),height)*view.foam_crest.z;
     let slope = smoothstep(view.foam_slope.x,max(view.foam_slope.y,view.foam_slope.x+1e-4),raw_slope)*view.foam_slope.z;
@@ -421,7 +461,8 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         travel = max(0.0,-pixel_alt);
     }
     let absorption = max(view.absorption.rgb,vec3<f32>(0.));
-    color = mix(color, mix(view.deep_color.rgb,color,exp(-absorption*travel)), wet);
+    let deep = murk(cam_gap,safe_normal(ray.origin-center));
+    color = mix(color, mix(deep,color,exp(-absorption*travel)), wet);
     // Depth blur while the lens is wet: the distance softens, the foreground stays crisp.
     let dz_amt = max(view.fx.z,view.fx.w);
     if (dz_amt > 0.001 && !under) {

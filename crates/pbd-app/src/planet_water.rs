@@ -381,7 +381,7 @@ fn prepare_water_views(
             deep_color: v3(s.deep_color).extend(s.flow_uv_speed_falling),
             horizon_color: v3(s.sky_horizon_color).extend(s.sky_horizon_strength),
             zenith_color: v3(s.sky_zenith_color).extend(0.0),
-            night_sky: v3(s.night_sky_color).extend(0.0),
+            night_sky: v3(s.night_sky_color).extend(crate::sky::ATMOSPHERE_RADIUS),
             foam_color: v3(s.foam_color).extend(s.foam_intensity),
             foam_crest: Vec4::new(s.foam_crest_lo, s.foam_crest_hi, s.foam_crest_weight, 0.0),
             foam_slope: Vec4::new(s.foam_slope_lo, s.foam_slope_hi, s.foam_slope_weight, 0.0),

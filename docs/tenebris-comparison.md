@@ -469,6 +469,59 @@ Tenebris applies no tone mapping, so its 0.02/0.10/0.22 body colour is 38, 89,
 
 ![Tenebris, four metres under its own ocean](screenshots/tenebris-dive.png)
 
+### The night side, and the deep, measured again
+
+Two more reports on the frames above: the sea still reflects too much on the
+night side, and the underwater should be a darker blue.
+
+**The night reflection was one colour; the sky it mirrors is not.** Across
+the `nightshore` sky alone the drawn night sky runs three to one, 20/36/45
+away from the sun to 79/116/138 toward it, because this engine's night sky is
+its upper atmosphere lit over the limb. The water mirrored `night_sky_color`
+everywhere: brighter than the sky on one side and under it on the other, and
+under a black sky a glowing sheet. The reflection now asks the sky's own
+question (`sun_visibility`) of the point where the reflected ray leaves the
+atmosphere, and is the night colour scaled by how much the ray faces the sun
+when lit, nothing when not. Finding on the way: the sun sits 48 degrees
+north, so the equator's antisolar longitude, where `nightshore` stands, is
+132 degrees from the sun and its sky is lit; the antisolar POINT is at 48 S,
+and a `midnight` preset stands there now, where the sky is black in every
+direction, which is the frame the owner's night report was taken in.
+
+![Midnight, before](screenshots/water-midnight-before.png)
+
+![Midnight, after](screenshots/water-midnight-after.png)
+
+| `midnight` | sky | sea | land |
+| --- | --- | --- | --- |
+| before | 3.7, 4.5, 7.0 | 15.3, 40.5, 50.9 | 29.4, 30.4, 24.0 |
+| after | 3.7, 4.5, 7.0 | **5.2, 32.7, 42.4** | 29.4, 30.4, 24.0 |
+
+What is left of the sea at midnight is its own body under the ambient floor
+(`night_floor` 0.18 of the deep colour), which is the same order as the land
+beside it. At `nightshore`, where the sky is lit, the sea moved by four levels
+on the side away from the sun and not at all toward it, which is the point:
+it follows the sky now.
+
+**The murk darkens with the eye's depth and with the night.** Seen from below
+and in the composite it was the deep colour exactly, at half a metre and at
+eight, at noon and at midnight, while the seabed under it was already darkened
+by its water depth. It is `deep * exp(-absorption * eye_depth) * lit` now, one
+function both paths call:
+
+| dive | before | after | Tenebris |
+| --- | --- | --- | --- |
+| 4 m, upper half | 15, 96, 139 | **5, 61, 124** | 29, 93, 149 |
+| 4 m, lower half | 15, 96, 129 | **8, 74, 123** | 14, 60, 107 |
+| 8 m, upper half | | **1, 37, 108** | |
+
+![Four metres under, after](screenshots/water-dive-4m.png)
+
+![Eight metres under, after](screenshots/water-dive-8m.png)
+
+The surface is untouched by construction (the eye depth is zero from above):
+the `wade` frame is byte-identical before and after.
+
 **Underwater is the same knob, and it was measured against Tenebris itself.**
 The composite saturates to `deep_color` over distance, so the dive frame went
 from a grey-blue 42, 89, 128 to a saturated 15, 96, 139 by the same change.

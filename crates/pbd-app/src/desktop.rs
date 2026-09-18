@@ -151,6 +151,7 @@ impl Launch {
                 "seam",
                 "night",
                 "nightshore",
+                "midnight",
                 "pole",
                 "shore",
                 "wade",
@@ -165,7 +166,7 @@ impl Launch {
         );
         assert!(
             result.height.is_none()
-                || (["shore", "nightshore", "dive"].contains(&result.view.as_str())
+                || (["shore", "nightshore", "midnight", "dive"].contains(&result.view.as_str())
                     && result.capture.is_some()),
             "--height requires --view shore or dive with a static --capture"
         );
@@ -341,7 +342,7 @@ fn photo_camera(
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
-    if ["shore", "nightshore", "wade", "dive"].contains(&launch.view.as_str()) {
+    if ["shore", "nightshore", "midnight", "wade", "dive"].contains(&launch.view.as_str()) {
         // A capture instrument, nothing more: the eye-height polar shoreline the
         // owner asked to see. Above ~70 N the polar snow line reaches the sea,
         // so walk east from 72 N until land meets water, stand on the last land
@@ -354,9 +355,20 @@ fn photo_camera(
         // fixed direction, so a latitude can be in permanent day: 72 N is, at
         // every longitude. The equator is not, and its antisolar longitude is
         // the deepest night the body has, so that is where this one starts.
-        let night = launch.view == "nightshore";
+        // `midnight` is the antisolar POINT itself: the sun sits 48 degrees
+        // north, so the equator's antisolar longitude is still 132 degrees
+        // from the sun and its sky is lit by the upper atmosphere over the
+        // limb; only at the antisolar latitude is the sky black in every
+        // direction, which is the frame the owner's night report was taken in.
+        let night = launch.view == "nightshore" || launch.view == "midnight";
         let sun = pbd_app::sky::SUN_DIRECTION.normalize();
-        let lat = if night { 0.0 } else { 72_f32.to_radians() };
+        let lat = if launch.view == "midnight" {
+            (-sun.y).clamp(-1.0, 1.0).asin()
+        } else if night {
+            0.0
+        } else {
+            72_f32.to_radians()
+        };
         let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
         let step = 2.0 * tile_width_m(FINEST_LEVEL) / PLANET_RADIUS;
         let mut lon = if night { (-sun.z).atan2(-sun.x) } else { 0.0 };

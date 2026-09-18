@@ -16,6 +16,24 @@ latitude, height and one moisture octave. Everything a Tenebris world has that
 this one does not is missing from those two functions, and none of it is
 rendering.
 
+## The reference, photographed
+
+`tenebris-client` was built from the reference checkout and run headless on
+this container, a fresh seeded world, three frames (`docs/screenshots/`):
+
+![Tenebris from 90 m up, at its spawn](../../../docs/screenshots/tenebris-terrain-hover.png)
+
+![Tenebris at the waterline](../../../docs/screenshots/tenebris-terrain-ground.png)
+
+![Tenebris from 400 m, the whole disc](../../../docs/screenshots/tenebris-terrain-orbit.png)
+
+What is in the first frame and not in ours: sand shelves that follow the
+coast at every scale, from a bay to a spit, and read as one material meeting
+another rather than a band; islands in a lagoon, each with its own shelf;
+cliffs with strata, stone under grass under trees, where a slope is too steep
+to hold soil; a plateau with a real edge; and a shallow sea whose floor is
+visible and shaped. Every one of those is a term in the table below.
+
 ## What a Tenebris world actually is
 
 Measured off `tenebris-rs/crates/tenebris-core/src/planet_gen.rs` (1,261
