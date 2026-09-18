@@ -341,6 +341,16 @@ exactly the halved walk speed, at -2 m with the waterline across the eye. It
 is the first time the straddle view has been reached by walking rather than by
 a camera preset.
 
+![Diving, on the deepened sea](screenshots/dive.png)
+
+And this one is the same walk a few hundred frames later on the deepened sea:
+**-4 m, AIRBORNE**, which is the HUD's word for not grounded and is what a
+swimmer is by construction. The surface is overhead with its light on the
+underside, the seabed is below, and the absorption takes the colour with
+distance. The composite pass's underwater path had been built, tested and
+photographed by a camera preset for a day before anything could reach it by
+playing.
+
 **And the scripted swim proved the sea had no depth to dive in.** Seven hundred
 frames of holding forward left the walker still wading at two metres, because
 the rescale had compressed the ocean relief to 0.12 against the land's 0.17 and
