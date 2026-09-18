@@ -5,8 +5,10 @@
 
 use crate::hex::{Hex, Voxel};
 
-/// Version 2 is the spherical generator in [`crate::planet_gen`].
-pub const GENERATOR_VERSION: u32 = 2;
+/// Version 2 is the spherical generator in [`crate::planet_gen`]; version 3
+/// splits its fields into planet-scale and land-scale, which moves every
+/// height on the body.
+pub const GENERATOR_VERSION: u32 = 3;
 
 #[repr(u16)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

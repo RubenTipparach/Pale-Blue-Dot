@@ -20,7 +20,8 @@ use pbd_app::{
     config::ConfigPlugin,
     flight_view::{FlightViewConfig, FlightViewPlugin, FlyMode, TourProgress},
     planet::{
-        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, surface_height, terrain_radius, tile_width_m,
+        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, TERRAIN, river_channel, surface_code,
+        surface_height, terrain_radius, tile_width_m,
     },
     sky::SkyPlugin,
     walking::{EYE_HEIGHT, WalkingConfig, WalkingPlugin},
@@ -153,6 +154,7 @@ impl Launch {
                 "nightshore",
                 "midnight",
                 "meadow",
+                "river",
                 "pole",
                 "shore",
                 "wade",
@@ -167,7 +169,7 @@ impl Launch {
         );
         assert!(
             result.height.is_none()
-                || (["shore", "nightshore", "midnight", "meadow", "dive"]
+                || (["shore", "nightshore", "midnight", "meadow", "river", "dive"]
                     .contains(&result.view.as_str())
                     && result.capture.is_some()),
             "--height requires --view shore or dive with a static --capture"
@@ -344,6 +346,62 @@ fn photo_camera(
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
+    if launch.view == "river" {
+        // A river is a channel pulled to a bed below the sea on lowland only,
+        // so it is water with LAND on both sides a short way off - which is
+        // what tells one from a bay. Walk the spawn's latitude for a wet cell
+        // whose banks stand clear within sixty metres, and stand on one.
+        // One latitude circle does not reliably cross a channel, so search the
+        // sphere and take the one nearest the spawn: a wet cell whose banks
+        // both stand clear thirty metres off, on each of two axes, which is a
+        // watercourse rather than the edge of a bay.
+        let seed = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let bank = 30.0 / PLANET_RADIUS;
+        let golden = std::f32::consts::PI * (3.0 - 5_f32.sqrt());
+        let samples = 300_000;
+        let mut best: Option<(f32, Vec3, Vec3)> = None;
+        for i in 0..samples {
+            let y = 1.0 - 2.0 * (i as f32 + 0.5) / samples as f32;
+            let r = (1.0 - y * y).max(0.0).sqrt();
+            let t = golden * i as f32;
+            let here = Vec3::new(r * t.cos(), y, r * t.sin());
+            let toward = here.dot(seed);
+            let depth = surface_height(here);
+            // The generator's own carve, not a guess from heights: a shallow
+            // wet cell where the river field fires. Both banks must stand
+            // clear on both axes without being a cliff, or this is a canyon
+            // floor or the edge of a bay.
+            if toward < 0.85 || !(-4.0..0.0).contains(&depth) {
+                continue;
+            }
+            if river_channel(&TERRAIN, here) <= TERRAIN.river_threshold {
+                continue;
+            }
+            let (a, b) = here.any_orthonormal_pair();
+            let bankside =
+                |axis: Vec3, sign: f32| surface_height((here + axis * bank * sign).normalize());
+            if [(a, 1.0), (a, -1.0), (b, 1.0), (b, -1.0)]
+                .into_iter()
+                .any(|(axis, sign)| !(0.5..10.0).contains(&bankside(axis, sign)))
+            {
+                continue;
+            }
+            if best.is_none_or(|(near, _, _)| toward > near) {
+                best = Some((toward, here, a));
+            }
+        }
+        let (_, channel, across_axis) = best.unwrap_or((1.0, seed, Vec3::X));
+        // Stand back on the near bank and look across the water.
+        let here = (channel - across_axis * bank * 0.8).normalize();
+        let across = (channel + across_axis * bank * 0.9).normalize();
+        let height = launch.height.unwrap_or(EYE_HEIGHT);
+        let eye = here * (terrain_radius(here) + height);
+        let mut transform =
+            Transform::from_translation(eye).looking_at(across * terrain_radius(across), here);
+        transform.translation += launch.render_offset;
+        commands.spawn((Camera3d::default(), transform));
+        return;
+    }
     if launch.view == "meadow" {
         // Every other ground preset stands at the spawn, and the spawn is in
         // jungle: a closed canopy at the reference's 115-of-256, which is
@@ -359,7 +417,7 @@ fn photo_camera(
         while lon < start + std::f32::consts::TAU {
             let here = at(lon);
             let height = surface_height(here);
-            if height > 8.0 && pbd_app::planet::surface_code(here, height) & 0xff == 2 {
+            if height > 8.0 && surface_code(here, height) & 0xff == 2 {
                 break;
             }
             lon += step;

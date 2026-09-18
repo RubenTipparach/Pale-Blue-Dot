@@ -23,16 +23,28 @@ use crate::terrain::Material;
 pub struct TerrainConfig {
     /// World seed; folded into every noise field, each with its own salt.
     pub seed: u64,
-    /// Unit-sphere frequencies of the four altitude fields.
+    /// The body this config is authored for. A land-scale field's frequency
+    /// is derived from it, so the same config on a bigger body makes MORE
+    /// hills rather than bigger ones.
+    pub radius_m: f32,
+    /// PLANET-SCALE: a unit-sphere frequency, so the feature is an ANGLE and
+    /// a bigger body has the same few of them. A world has a handful of
+    /// continents whatever its radius.
     pub continent_scale: f32,
-    pub mountain_scale: f32,
-    pub hill_scale: f32,
-    pub detail_scale: f32,
-    /// Weights of the four fields in the normalised height.
+    /// LAND-SCALE: the coarsest feature in METRES, so the feature is a size a
+    /// player walks over. The reference's own metres, except the mountain,
+    /// which is matched by SLOPE instead: fully metric it would be 120 m, and
+    /// our taller ridge across a 120 m gap is a wall rather than a mountain.
+    pub mountain_m: f32,
+    pub hill_m: f32,
+    pub detail_m: f32,
+    /// Weights of the planet-scale fields in the normalised height.
     pub continent_weight: f32,
     pub mountain_height: f32,
-    pub hill_weight: f32,
-    pub detail_weight: f32,
+    /// The land-scale amplitudes, in METRES rather than as a share of the
+    /// relief budget, so the summit and the roughness underfoot move apart.
+    pub hill_amplitude_m: f32,
+    pub detail_amplitude_m: f32,
     /// Pushes the continent field toward land; the reference's 0.20 less its
     /// seeded-world trim of 0.16.
     pub land_bias: f32,
@@ -55,7 +67,7 @@ pub struct TerrainConfig {
     pub island_threshold: f32,
     pub island_height_m: f32,
     /// Rivers: a ridged iso-line pulled to a bed below the sea, on lowland only.
-    pub river_scale: f32,
+    pub river_m: f32,
     pub river_threshold: f32,
     pub river_depth_m: f32,
     pub river_max_elev_m: f32,
@@ -64,11 +76,12 @@ pub struct TerrainConfig {
     pub shore_band_m: f32,
     pub shore_flatten: f32,
     /// Rocky highlands: a region field lifts whole areas above the threshold.
+    /// Planet-scale: a mountain COUNTRY is a region of the world.
     pub rocky_scale: f32,
     pub rocky_above: f32,
     pub rocky_uplift_m: f32,
     /// Moisture field and the biome thresholds on it.
-    pub moisture_scale: f32,
+    pub moisture_m: f32,
     pub desert_below: f32,
     pub wet_above: f32,
     pub swamp_max_elev_m: f32,
@@ -92,14 +105,15 @@ impl TerrainConfig {
     /// near 90 m, about half the sphere land, measured).
     pub const TENEBRIS: Self = Self {
         seed: 0x5eed_2026,
+        radius_m: 4_800.0,
         continent_scale: 0.8,
-        mountain_scale: 2.5,
-        hill_scale: 5.0,
-        detail_scale: 12.0,
+        mountain_m: 686.0,
+        hill_m: 60.0,
+        detail_m: 25.0,
         continent_weight: 0.7,
         mountain_height: 0.8,
-        hill_weight: 0.15,
-        detail_weight: 0.05,
+        hill_amplitude_m: 6.0,
+        detail_amplitude_m: 2.0,
         land_bias: 0.0,
         ocean_depth_power: 1.1,
         land_scale_m: 210.0,
@@ -109,7 +123,7 @@ impl TerrainConfig {
         island_scale: 4.0,
         island_threshold: 0.68,
         island_height_m: 12.0,
-        river_scale: 1.3,
+        river_m: 231.0,
         river_threshold: 0.86,
         river_depth_m: 3.0,
         river_max_elev_m: 40.0,
@@ -118,7 +132,7 @@ impl TerrainConfig {
         rocky_scale: 2.0,
         rocky_above: 0.72,
         rocky_uplift_m: 60.0,
-        moisture_scale: 1.6,
+        moisture_m: 188.0,
         desert_below: 0.36,
         wet_above: 0.64,
         swamp_max_elev_m: 5.0,
@@ -135,6 +149,15 @@ impl TerrainConfig {
 impl Default for TerrainConfig {
     fn default() -> Self {
         Self::TENEBRIS
+    }
+}
+
+impl TerrainConfig {
+    /// The unit-sphere frequency a land-scale field runs at: a feature of
+    /// `metres` on this body. This one line is the whole of the planet-scale
+    /// / land-scale distinction.
+    pub fn scale_of(&self, metres: f32) -> f32 {
+        self.radius_m / metres.max(1.0)
     }
 }
 
@@ -287,17 +310,22 @@ pub fn surface_altitude(cfg: &TerrainConfig, direction: Vec3) -> f32 {
     let continent_value = continent.signum() * ((continent as f64).abs().powf(0.8) as f32);
 
     // Mountain ridges, multiplied by the land so ranges stand inland.
-    let mountain_noise = ridged(seed, d, cfg.mountain_scale, 4, 0.5, 2.2);
+    let mountain_noise = ridged(seed, d, cfg.scale_of(cfg.mountain_m), 4, 0.5, 2.2);
     let land_factor = continent_value.max(0.0);
     let mountain_height = mountain_noise * land_factor * cfg.mountain_height;
 
-    let hill_noise = fractal(seed, d, cfg.hill_scale, 3, 0.5, 2.0);
-    let detail_noise = fractal(seed, d, cfg.detail_scale, 2, 0.5, 2.0);
+    let hill_noise = fractal(seed, d, cfg.scale_of(cfg.hill_m), 3, 0.5, 2.0);
+    let detail_noise = fractal(seed, d, cfg.scale_of(cfg.detail_m), 2, 0.5, 2.0);
 
     let mut height = continent_value * cfg.continent_weight;
     height += mountain_height;
-    height += hill_noise * cfg.hill_weight * if land_factor > 0.1 { 1.0 } else { 0.3 };
-    height += detail_noise * cfg.detail_weight;
+    // The land-scale terms carry metres, so they are divided back out of the
+    // budget the normalised height is about to be multiplied by. Raising the
+    // summit therefore does not also roughen the ground underfoot.
+    height += hill_noise
+        * (cfg.hill_amplitude_m / cfg.land_scale_m)
+        * if land_factor > 0.1 { 1.0 } else { 0.3 };
+    height += detail_noise * (cfg.detail_amplitude_m / cfg.land_scale_m);
 
     // Normalised height to metres: a power curve on the ocean side so the
     // floor drops away past the beach.
@@ -322,8 +350,7 @@ pub fn surface_altitude(cfg: &TerrainConfig, direction: Vec3) -> f32 {
     // Rivers: a ridged iso-line of a mid-frequency field, pulled to a bed
     // under the sea, on lowland only so channels never climb the peaks.
     if base > sea && base < sea + cfg.river_max_elev_m {
-        let n = noise01(seed ^ RIVER_SEED_SALT, d, cfg.river_scale, 4);
-        let channel = 1.0 - (2.0 * n - 1.0).abs();
+        let channel = river_channel(cfg, d);
         if channel > cfg.river_threshold {
             let t = smooth((channel - cfg.river_threshold) / (1.0 - cfg.river_threshold));
             let bed = sea - cfg.river_depth_m;
@@ -352,6 +379,21 @@ pub fn surface_altitude(cfg: &TerrainConfig, direction: Vec3) -> f32 {
     base
 }
 
+/// How strongly the river field carves at a direction, in [0, 1]: the ridged
+/// iso-line of a mid-frequency field, which peaks where the raw noise sits
+/// mid-range. Above `river_threshold` the carve fires. Public because finding
+/// a watercourse by guessing at heights cannot tell one from a shallow bay,
+/// and because the altitude and anything looking for a river must agree.
+pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
+    let n = noise01(
+        cfg.seed ^ RIVER_SEED_SALT,
+        direction,
+        cfg.scale_of(cfg.river_m),
+        4,
+    );
+    1.0 - (2.0 * n - 1.0).abs()
+}
+
 /// The region field that drives the rocky uplift and the Mountains biome, in [0, 1].
 pub fn rockiness(cfg: &TerrainConfig, direction: Vec3) -> f32 {
     noise01(cfg.seed ^ ROCKY_SEED_SALT, direction, cfg.rocky_scale, 3)
@@ -362,7 +404,7 @@ pub fn moisture(cfg: &TerrainConfig, direction: Vec3) -> f32 {
     noise01(
         cfg.seed ^ MOISTURE_SEED_SALT,
         direction,
-        cfg.moisture_scale,
+        cfg.scale_of(cfg.moisture_m),
         4,
     )
 }
@@ -552,6 +594,98 @@ mod tests {
         assert!((0.40..=0.60).contains(&land), "{measured}");
     }
 
+    /// The ground a walker crosses is as stepped as the reference's. Measured
+    /// the same way on both generators: over land, the share of adjacent
+    /// cells whose one-metre caps differ. The reference is 44.0% at a mean
+    /// step of 0.56 m; before the land-scale split this was 14.2% at 0.17 m,
+    /// because the finest feature in the whole height field was 188 m, which
+    /// is sixty-six cells.
+    #[test]
+    fn the_ground_is_as_rough_as_the_reference() {
+        let cfg = TerrainConfig::default();
+        const TILE: f32 = 2.833;
+        let step = TILE / cfg.radius_m;
+        let (mut pairs, mut stepped, mut total) = (0usize, 0usize, 0.0f64);
+        for d in sphere(20_000) {
+            let h = surface_altitude(&cfg, d).floor();
+            if h < cfg.sea_level_m {
+                continue;
+            }
+            let (a, b) = d.any_orthonormal_pair();
+            for axis in [a, b] {
+                let n = (d + axis * step).normalize();
+                let nh = surface_altitude(&cfg, n);
+                if nh < cfg.sea_level_m {
+                    continue;
+                }
+                pairs += 1;
+                total += (nh.floor() - h).abs() as f64;
+                if (nh.floor() - h).abs() >= 1.0 {
+                    stepped += 1;
+                }
+            }
+        }
+        let share = stepped as f64 / pairs as f64;
+        let mean = total / pairs as f64;
+        assert!(
+            share >= 0.33,
+            "only {:.1}% of neighbours step, mean {mean:.2} m",
+            share * 100.0
+        );
+        assert!(mean >= 0.4, "mean step {mean:.2} m");
+        // And nothing in the field may be coarser than a few cells, which is
+        // the cause the share above is only a symptom of.
+        let finest = cfg.radius_m / (cfg.scale_of(cfg.detail_m) * 2.0);
+        assert!(finest < 20.0, "finest feature {finest:.0} m");
+        assert!(
+            finest / TILE < 7.0,
+            "finest feature {:.0} cells",
+            finest / TILE
+        );
+    }
+
+    /// A biome is a place a walker passes THROUGH, not a hemisphere they are
+    /// stuck in: the moisture field is land-scale, so a kilometre of land
+    /// crosses more than one of them.
+    #[test]
+    fn a_kilometre_of_land_crosses_more_than_one_biome() {
+        let cfg = TerrainConfig::default();
+        const TILE: f32 = 2.833;
+        let step = TILE / cfg.radius_m;
+        let mut walks = 0;
+        let mut single = 0;
+        for start in sphere(400) {
+            if surface_altitude(&cfg, start) < cfg.sea_level_m + 4.0 {
+                continue;
+            }
+            let (heading, _) = start.any_orthonormal_pair();
+            let mut seen = std::collections::BTreeSet::new();
+            let mut here = start;
+            let mut dry = true;
+            for _ in 0..(1_000.0 / TILE) as usize {
+                here = (here + heading * step).normalize();
+                let h = surface_altitude(&cfg, here);
+                if h < cfg.sea_level_m {
+                    dry = false;
+                    break;
+                }
+                seen.insert(biome_at(&cfg, here, h));
+            }
+            if !dry {
+                continue;
+            }
+            walks += 1;
+            if seen.len() < 2 {
+                single += 1;
+            }
+        }
+        assert!(walks > 20, "only {walks} inland walks to judge");
+        assert!(
+            single * 4 < walks,
+            "{single} of {walks} kilometre walks stayed inside one biome"
+        );
+    }
+
     /// Mountains stand on land: the ridges are multiplied by the continent,
     /// so nothing above the mountain elevation is within a beach of the sea.
     #[test]
@@ -586,8 +720,7 @@ mod tests {
             if !(cfg.sea_level_m - cfg.river_depth_m + 0.5..cfg.sea_level_m).contains(&h) {
                 continue;
             }
-            let n = noise01(cfg.seed ^ RIVER_SEED_SALT, d, cfg.river_scale, 4);
-            if 1.0 - (2.0 * n - 1.0).abs() <= cfg.river_threshold {
+            if river_channel(&cfg, d) <= cfg.river_threshold {
                 continue;
             }
             channels += 1;
@@ -707,9 +840,9 @@ mod tests {
     #[ignore]
     fn roughness_report() {
         let cfg = TerrainConfig::default();
-        const RADIUS: f32 = 4_800.0;
+        let radius = cfg.radius_m;
         const TILE: f32 = 2.833;
-        let step = TILE / RADIUS;
+        let step = TILE / radius;
         let (mut pairs, mut stepped, mut total) = (0usize, 0usize, 0.0f64);
         for d in sphere(40_000) {
             let h = surface_altitude(&cfg, d).floor();
@@ -737,15 +870,18 @@ mod tests {
         );
         for (name, scale, octaves, lacunarity) in [
             ("continent", cfg.continent_scale, 6u32, 2.0f32),
-            ("mountain", cfg.mountain_scale, 4, 2.2),
-            ("hill", cfg.hill_scale, 3, 2.0),
-            ("detail", cfg.detail_scale, 2, 2.0),
-            ("river", cfg.river_scale, 4, 2.0),
-            ("moisture", cfg.moisture_scale, 4, 2.0),
+            ("mountain", cfg.scale_of(cfg.mountain_m), 4, 2.2),
+            ("hill", cfg.scale_of(cfg.hill_m), 3, 2.0),
+            ("detail", cfg.scale_of(cfg.detail_m), 2, 2.0),
+            ("river", cfg.scale_of(cfg.river_m), 4, 2.0),
+            ("moisture", cfg.scale_of(cfg.moisture_m), 4, 2.0),
         ] {
-            let finest = RADIUS / (scale * lacunarity.powi(octaves as i32 - 1));
-            println!("  {name:9} coarsest {:7.0} m, finest {finest:6.0} m = {:5.0} cells",
-                RADIUS / scale, finest / TILE);
+            let finest = radius / (scale * lacunarity.powi(octaves as i32 - 1));
+            println!(
+                "  {name:9} coarsest {:7.0} m, finest {finest:6.0} m = {:5.0} cells",
+                radius / scale,
+                finest / TILE
+            );
         }
     }
 

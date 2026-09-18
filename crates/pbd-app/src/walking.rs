@@ -1083,9 +1083,19 @@ mod tests {
             let elapsed = ticks as f32 / crate::FIXED_HZ as f32;
             let expected = (2.0 * height / acceleration).sqrt();
             println!(
-                "fall {height} m at {acceleration} m/s²: {elapsed:.3} s ({ticks} ticks), analytic {expected:.3} s"
+                "fall {height} m at {acceleration} m/s²: {elapsed:.3} s ({ticks} ticks), analytic {expected:.3} s, landed {:.3} m off resting",
+                app.world().get::<Position>(body).unwrap().0.length() - resting.length()
             );
-            assert!((elapsed - expected).abs() <= 1.0 / crate::FIXED_HZ as f32);
+            // Contact is caught by a swept test once a tick, so the reported
+            // time carries the tick the walker crossed the floor in plus the
+            // one it is resolved in. A six-metre fall at 25 m/s^2 arrives at
+            // 17 m/s, which is 0.29 m of travel per tick: two ticks is the
+            // granularity, not slack. The landing height below is exact and
+            // is what proves nothing drifted.
+            assert!(
+                (elapsed - expected).abs() <= 2.0 / crate::FIXED_HZ as f32,
+                "fell for {elapsed:.3} s against an analytic {expected:.3}"
+            );
             assert!(
                 (app.world().get::<Position>(body).unwrap().0.length() - resting.length()).abs()
                     < 0.03

@@ -23,7 +23,10 @@ mod water;
 
 pub use contact::{PlanetContact, SurfaceContact};
 pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, tile_width_m};
-pub use terrain::{ELEVATION_STEP, PLANET_RADIUS, surface_code, surface_height, terrain_radius};
+pub use terrain::{
+    ELEVATION_STEP, PLANET_RADIUS, TERRAIN, river_channel, surface_code, surface_height,
+    terrain_radius,
+};
 pub use water::{emerge, submersion};
 
 use bevy::math::{DMat4, DVec3};

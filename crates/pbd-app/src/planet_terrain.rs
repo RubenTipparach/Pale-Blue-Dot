@@ -18,7 +18,7 @@ pub const ELEVATION_STEP: f32 = 1.0;
 /// The generator: Tenebris's, ported into `pbd_core::planet_gen` with the
 /// heights authored for this body. One config, one source of defaults; a
 /// second body is a second value of it.
-pub(super) const TERRAIN: TerrainConfig = TerrainConfig::TENEBRIS;
+pub const TERRAIN: TerrainConfig = TerrainConfig::TENEBRIS;
 
 /// Quantized terrain elevation above sea level, in metres, on a unit ray.
 /// Normalizing here also makes the collision query safe for arbitrary poses.
@@ -40,6 +40,12 @@ pub fn terrain_radius(direction: Vec3) -> f32 {
 /// foliage pass reads for its density and the tree for its height, which is
 /// how the reference keys both. Two facts in one word because they are
 /// written and read together and a cell has exactly one of each.
+/// The generator's river carve at a direction, for anything that needs to
+/// find a watercourse rather than infer one from a height.
+pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
+    planet_gen::river_channel(cfg, direction.normalize_or(Vec3::Y))
+}
+
 pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
     let biome = planet_gen::biome_at(&TERRAIN, d, height);
@@ -111,8 +117,21 @@ mod tests {
         while surface_height(at(lon)) >= 0.0 && lon < 2.0 * std::f32::consts::TAU {
             lon += step;
         }
-        let out = 100.0;
-        (out, -surface_height(at(lon + out / PLANET_RADIUS)))
+        // The deepest water within sight of the shore, rather than the depth
+        // at one fixed distance: a coastline with real structure has inlets
+        // and islands, so a single probe 100 m out can land back on dry
+        // ground. What the swim needs is that water deep enough to submerge
+        // in is reachable from the beach, which is what this measures.
+        let mut deepest = (0.0_f32, 0.0_f32);
+        let mut out = 0.0_f32;
+        while out < 400.0 {
+            out += 2.833;
+            let depth = -surface_height(at(lon + out / PLANET_RADIUS));
+            if depth > deepest.1 {
+                deepest = (out, depth);
+            }
+        }
+        deepest
     }
 
     /// What a capture preset is actually standing in, which is what decides
@@ -139,6 +158,15 @@ mod tests {
                 planet_gen::biome_at(&TERRAIN, d, h)
             );
         }
+    }
+
+    /// The generator is authored for THIS body: its land-scale fields derive
+    /// their frequency from the radius it carries, so a config authored for a
+    /// different one would put its hills at the wrong size. Two places hold
+    /// the radius, so a test holds them together.
+    #[test]
+    fn the_generator_is_authored_for_this_bodys_radius() {
+        assert_eq!(TERRAIN.radius_m, PLANET_RADIUS);
     }
 
     #[test]

@@ -630,6 +630,84 @@ of water over sand.
 
 ![Wading, after](screenshots/terrain-port-wade.png)
 
+## The world is not smooth any more: planet-scale and land-scale
+
+The owner, after the generator port: *pbd still looks way smoother across
+terrain surface, I wish for it to have more noise and height variation, rivers
+and every biome in tenebris-rs.* Three complaints, one cause, and it was
+arithmetic rather than taste.
+
+Every noise field is sampled on the unit sphere, so a feature's size is an
+ANGLE. The body is 4,800 m against the reference's 300, exactly sixteen times,
+and the cell stayed 2.833 m. So every feature the generator made was sixteen
+times wider in the cells a player walks over. Measured on both generators the
+same way, over 40,000 directions of land and their neighbours one cell away:
+
+| | Tenebris | ours, before | ours, now |
+| --- | ---: | ---: | ---: |
+| adjacent land cells differing by a block or more | 44.0% | **14.2%** | **37.0%** |
+| mean step between adjacent cells | 0.56 m | **0.17 m** | **0.59 m** |
+| finest continent feature | 11.7 m | 188 m | 188 m |
+| finest mountain feature | 11.3 m | 180 m | **64 m** |
+| finest hill feature | 15.0 m | 240 m | **15 m** |
+| finest detail feature | 12.5 m | 200 m | **12 m** |
+| finest river feature | 28.8 m | 462 m | **29 m** |
+| finest moisture feature | 23.4 m | 375 m | **24 m** |
+
+Sixteen on every line before, because sixteen is the radius ratio. That one row
+was all three complaints: nothing under 180 m meant nothing to walk over, a
+river channel is a fraction of its field's finest wavelength so ours was a
+462 m estuary, and a biome was a region kilometres across.
+
+**The fix is a distinction the port never made.** Each field is now declared as
+one of two kinds, and `TerrainConfig::scale_of` is the whole of it:
+
+- **Planet-scale** carries a unit-sphere frequency. A world has a handful of
+  continents whatever its radius, so the continent field and the rocky-region
+  field keep the reference's scales and the map keeps the shape it had.
+- **Land-scale** carries a size in METRES, and its frequency is derived from
+  the body's radius. The same config on a bigger body therefore makes MORE
+  hills rather than bigger ones. Hills (60 m), detail (25 m), rivers (231 m)
+  and moisture (188 m) are the reference's own metres.
+
+The two land-scale amplitudes moved to metres for the same reason: 6 m of hill
+and 2 m of detail, rather than a share of the relief budget. That is what lets
+the ground underfoot be as rough as the reference's while the summit stays at
+the 150 m the owner fixed - raising one no longer roughens the other.
+
+**Two numbers are deliberately not the reference's, and both are judgement.**
+The mountain field is matched by SLOPE rather than wavelength: fully metric it
+would put 180 m of ridge across a 120 m gap, which is a wall, so it runs at
+686 m for the reference's 0.27. And the moisture field was the one open
+question, rendered as three candidates and put to the owner, who chose the
+finest: the reference's own 188 m, so a walk crosses biomes rather than staying
+inside one.
+
+![A river, which the world could not show before](screenshots/terrain-scale-river.png)
+
+![Pasture, at eye height](screenshots/terrain-scale-meadow.png)
+
+![The coast from 420 m](screenshots/terrain-scale-coast.png)
+
+![From orbit](screenshots/terrain-scale-orbit.png)
+
+The river frame is the one that could not be taken at all before: `--view
+river` searches the sphere for a cell where the generator's OWN carve fires
+(`planet_gen::river_channel`, public now precisely so that finding a
+watercourse does not mean guessing from heights) with banks standing clear on
+both axes. The rivers were always generated; they were four hundred metres wide.
+
+**Two tests changed their assumptions rather than their subject, and both are
+worth recording.** The shore profile measured the sea's depth at exactly 100 m
+out from the waterline; a coastline with real structure has inlets and islands,
+so a single probe can land back on dry ground. It takes the deepest water
+within 400 m now, which is what the swim actually needs. And the one-metre-fall
+test allowed one tick of error: a six-metre fall at 25 m/s² arrives at 17 m/s,
+which is 0.29 m of travel per tick, so contact is caught one tick and resolved
+the next. Two ticks is the granularity, not slack - and the landing height,
+which is exact to a millimetre in all four cases, is what proves nothing
+drifted.
+
 ## The trees are Tenebris's trees now
 
 The owner, in four words: *tenebris-rs has hexagon trees*. Ours were three
