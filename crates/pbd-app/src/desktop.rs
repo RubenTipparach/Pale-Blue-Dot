@@ -137,7 +137,16 @@ impl Launch {
         );
         assert!(
             [
-                "orbit", "coast", "surface", "seam", "night", "pole", "shore", "wade", "dive"
+                "orbit",
+                "coast",
+                "surface",
+                "seam",
+                "night",
+                "nightshore",
+                "pole",
+                "shore",
+                "wade",
+                "dive"
             ]
             .contains(&result.view.as_str()),
             "unknown capture view"
@@ -148,7 +157,8 @@ impl Launch {
         );
         assert!(
             result.height.is_none()
-                || (["shore", "dive"].contains(&result.view.as_str()) && result.capture.is_some()),
+                || (["shore", "nightshore", "dive"].contains(&result.view.as_str())
+                    && result.capture.is_some()),
             "--height requires --view shore or dive with a static --capture"
         );
         assert!(
@@ -313,7 +323,7 @@ fn photo_camera(
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
-    if ["shore", "wade", "dive"].contains(&launch.view.as_str()) {
+    if ["shore", "nightshore", "wade", "dive"].contains(&launch.view.as_str()) {
         // A capture instrument, nothing more: the eye-height polar shoreline the
         // owner asked to see. Above ~70 N the polar snow line reaches the sea,
         // so walk east from 72 N until land meets water, stand on the last land
@@ -322,14 +332,21 @@ fn photo_camera(
         // `--height` lifts the eye and pushes the aim point out to sea by the
         // same distance, so every height in a series looks down at about 45
         // degrees instead of straight down.
-        let lat = 72_f32.to_radians();
+        // `nightshore` is the same instrument on the night side. The sun is a
+        // fixed direction, so a latitude can be in permanent day: 72 N is, at
+        // every longitude. The equator is not, and its antisolar longitude is
+        // the deepest night the body has, so that is where this one starts.
+        let night = launch.view == "nightshore";
+        let sun = pbd_app::sky::SUN_DIRECTION.normalize();
+        let lat = if night { 0.0 } else { 72_f32.to_radians() };
         let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
         let step = 2.0 * tile_width_m(FINEST_LEVEL) / PLANET_RADIUS;
-        let mut lon = 0.0_f32;
-        while surface_height(at(lon)) < 0.0 && lon < std::f32::consts::TAU {
+        let mut lon = if night { (-sun.z).atan2(-sun.x) } else { 0.0 };
+        let start = lon;
+        while surface_height(at(lon)) < 0.0 && lon < start + std::f32::consts::TAU {
             lon += step;
         }
-        while surface_height(at(lon)) >= 0.0 && lon < 2.0 * std::f32::consts::TAU {
+        while surface_height(at(lon)) >= 0.0 && lon < start + 2.0 * std::f32::consts::TAU {
             lon += step;
         }
         let land = at(lon - step);

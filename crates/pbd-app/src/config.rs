@@ -110,6 +110,12 @@ pub struct WaterSettings {
     pub sky_horizon_color: [f32; 3],
     /// Reflected sky at the zenith, linear RGB.
     pub sky_zenith_color: [f32; 3],
+    /// The sky the sheet mirrors at night, linear RGB. The two colours above
+    /// are the daytime gradient; this is what they ramp to across the
+    /// terminator. It is authored against the sky this engine actually draws
+    /// at night, which is dimmer than the fog's night colour, and it is the
+    /// knob to turn if the sea reads as lit under a dark sky.
+    pub night_sky_color: [f32; 3],
     /// Fresnel floor for grazing reflection, 0..1.
     pub sky_horizon_strength: f32,
     pub foam_crest_lo: f32,
@@ -171,6 +177,7 @@ impl Default for WaterSettings {
             deep_color: [0.02, 0.10, 0.22],
             sky_horizon_color: [0.46, 0.60, 0.74],
             sky_zenith_color: [0.18, 0.34, 0.62],
+            night_sky_color: [0.035, 0.070, 0.100],
             sky_horizon_strength: 0.35,
             foam_crest_lo: 0.35,
             foam_crest_hi: 0.60,
@@ -234,6 +241,7 @@ impl Validated for WaterSettings {
         non_negative("deep_color", &s.deep_color)?;
         non_negative("sky_horizon_color", &s.sky_horizon_color)?;
         non_negative("sky_zenith_color", &s.sky_zenith_color)?;
+        non_negative("night_sky_color", &s.night_sky_color)?;
         non_negative("foam_color", &s.foam_color)?;
         non_negative("sun_tint", &s.sun_tint)?;
         for (name, value) in [

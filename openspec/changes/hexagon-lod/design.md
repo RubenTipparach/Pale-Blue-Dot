@@ -250,6 +250,43 @@ trees do change where a band moves; what does not change is the cover. The
 same geometry is drawn on every level, so distant groves are Tenebris-sized
 trees standing on coarser ground.
 
+### The partition is anchored to the SET, not to the camera
+
+The first build published the player direction off the live camera every frame
+and the nominal band radii. That opens holes, and the owner photographed them:
+concentric arcs of missing ground with the sea showing through. The rule hides
+a coarse tile when the next finer band covers it, and it was hiding tiles in a
+disc around the CAMERA while the fine records existed in a disc around the
+ANCHOR the set was generated at. The two coincide only while the player stands
+still. The margin a band is generated with is about 48 m at the finest level,
+so a camera that has moved further than that off the anchor opens a crescent
+where the coarse tile is hidden and the fine one does not exist; a regeneration
+takes about two seconds, and a flying player crosses hundreds of metres inside
+one, which is the wide gap in the picture.
+
+So the partition is published **beside the buffer, from the set that is in
+it**: `PlanetGpu` carries a `LodParams` written by the same system that writes
+the records, and both the surface and the water pass read it from there.
+Nothing reads the camera. A set that is a regeneration behind the player now
+draws a slightly stale level of detail, which nobody can see, instead of a
+hole, which everybody can.
+
+Two consequences worth stating:
+
+- **A truncated band stops hiding where it stops existing.** Each level reports
+  the radius it is actually complete to, clamped to its nominal band, and that
+  is what the coarser level is hidden inside. Capacity overflow therefore costs
+  detail at the rim rather than opening a ring of holes there.
+- **Before the first fine set is uploaded, the base draws alone.** The
+  placeholder partition hides nothing and makes no owner fine, so the globe is
+  closed at level 7 from the first frame rather than waiting on a set.
+
+The invariant is pinned by
+`every_level_is_resident_out_to_the_radius_it_hides_the_coarser_one_inside`,
+which samples each level's own edge and asserts a record is there. **What the
+partition hides, the set must replace**, and that is one sentence a test can
+check, where "the LOD looks right" is not.
+
 ### What is not done, and stated
 
 - **Hysteresis.** A debounce needs a memory of which side a tile was on, and

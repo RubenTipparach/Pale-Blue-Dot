@@ -42,9 +42,10 @@ pub fn tile_width_m(level: u8) -> f32 {
     1.2087 * PLANET_RADIUS / (1u32 << level) as f32
 }
 
-/// The cosine of a fine level's band radius, which is what the GPU compares
-/// a tile's `dot(direction, player)` against. Levels outside `FINE_LEVELS`
-/// never test a band: the base draws everywhere finer bands do not.
+/// The cosine of a fine level's nominal band radius. `LodParams::of` is what
+/// the GPU actually compares against, since a truncated band is complete to
+/// less than its nominal radius; this is the nominal value the tests pin.
+#[cfg(test)]
 pub fn band_cos(level: u8) -> f32 {
     let k = (level - FINE_LEVELS[0]) as usize;
     (BAND_M[k] / PLANET_RADIUS).cos()
@@ -151,6 +152,11 @@ pub struct FineSet {
     /// The angular radius the finest level is complete to: the band plus the
     /// walk, or less when capacity truncated the band.
     finest_radius: f32,
+    /// Per level, the radius in metres out to which this level is resident AND
+    /// complete, clamped to its nominal band. This is the radius the partition
+    /// hides the coarser level inside, so what is hidden always has a
+    /// replacement: a truncated band stops hiding where it stops existing.
+    complete: [f32; 4],
 }
 
 impl FineSet {
@@ -158,6 +164,30 @@ impl FineSet {
     /// walker's contact stops trusting it.
     pub fn finest_radius(&self) -> f32 {
         self.finest_radius
+    }
+}
+
+impl LodParams {
+    /// The partition this set can actually serve. The anchor is the set's own,
+    /// never the live camera: the records exist around the anchor, so hiding a
+    /// coarse tile anywhere else is hiding it where nothing replaces it. A set
+    /// that is one regeneration behind the player therefore draws a slightly
+    /// stale level of detail, which nobody can see, rather than a hole, which
+    /// everybody can.
+    pub fn of(set: &FineSet) -> Self {
+        Self {
+            player: set.anchor,
+            bands: Vec4::from_array(set.complete.map(|m| (m / PLANET_RADIUS).cos())),
+        }
+    }
+
+    /// The partition before any fine set is resident: nothing is hidden and no
+    /// fine tile draws, so the base covers the globe on its own.
+    pub fn base_only() -> Self {
+        Self {
+            player: Vec3::Y,
+            bands: Vec4::splat(2.0),
+        }
     }
 }
 
@@ -185,6 +215,7 @@ pub fn generate_fine(anchor: Vec3) -> FineSet {
     let mut levels: [Vec<GpuCell>; 4] = Default::default();
     let mut finest_neighbors = Vec::new();
     let mut finest_radius = (BAND_M[3] + REGEN_DISTANCE_M) / PLANET_RADIUS;
+    let mut complete = BAND_M;
     for (k, &level) in FINE_LEVELS.iter().enumerate() {
         let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(level);
         let inner = if k + 1 < FINE_LEVELS.len() {
@@ -226,6 +257,14 @@ pub fn generate_fine(anchor: Vec3) -> FineSet {
                 kept.push(cell);
             }
             cells = kept;
+            // The band was cut short, so the level is complete only inside the
+            // farthest cell it kept, less its own ring. Report that rather than
+            // the nominal band, or the level above would hide tiles out to a
+            // radius this one does not reach.
+            let farthest = cells.last().map_or(0.0, |c| {
+                c.cell.direction.dot(anchor).clamp(-1.0, 1.0).acos()
+            }) * PLANET_RADIUS;
+            complete[k] = complete[k].min((farthest - 2.0 * tile_width_m(level)).max(0.0));
             if level == FINEST_LEVEL {
                 // Complete only inside the farthest kept cell less its ring.
                 let farthest = cells.last().map_or(0.0, |c| {
@@ -270,6 +309,7 @@ pub fn generate_fine(anchor: Vec3) -> FineSet {
         levels,
         finest_neighbors,
         finest_radius,
+        complete,
     }
 }
 
@@ -337,15 +377,6 @@ pub struct LodParams {
     pub bands: Vec4,
 }
 
-impl LodParams {
-    pub fn new(player: Vec3) -> Self {
-        Self {
-            player: player.normalize_or(Vec3::Y),
-            bands: Vec4::from_array(FINE_LEVELS.map(band_cos)),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,6 +417,51 @@ mod tests {
                         .iter()
                         .take((cell.metadata[0] & 0xff) as usize)
                         .all(|&n| n != u32::MAX)
+                );
+            }
+        }
+    }
+
+    /// What the partition HIDES, the set must REPLACE. The shader hides a
+    /// coarse tile inside `complete[k]` of the anchor and draws level k there
+    /// instead, so level k has to be resident out to that radius with no gap.
+    /// This is the invariant the first cut of the partition broke, by hiding
+    /// around the live camera while the records sat around the anchor: a
+    /// camera a few tens of metres off the anchor opened a ring of holes, and
+    /// a camera flying opened a wide one, because a regeneration takes about
+    /// two seconds and the player keeps moving through it.
+    #[test]
+    fn every_level_is_resident_out_to_the_radius_it_hides_the_coarser_one_inside() {
+        let anchor = Vec3::new(0.3, 0.8, -0.5).normalize();
+        let set = generate_fine(anchor);
+        assert_eq!(
+            LodParams::of(&set).player,
+            set.anchor,
+            "the anchor is the set's"
+        );
+        let tangent = anchor.cross(Vec3::X).normalize();
+        let bitangent = anchor.cross(tangent);
+        for (k, level) in set.levels.iter().enumerate() {
+            let tile = tile_width_m(FINE_LEVELS[k]);
+            // Just inside the radius the coarser level stops drawing at, which
+            // is the last place this level has to answer for.
+            let radius = (set.complete[k] * 0.995 / PLANET_RADIUS).max(0.0);
+            for step in 0..24 {
+                let theta = std::f32::consts::TAU * step as f32 / 24.0;
+                let out = tangent * theta.cos() + bitangent * theta.sin();
+                let direction = anchor * radius.cos() + out * radius.sin();
+                let nearest = level
+                    .iter()
+                    .map(|c| Vec3::from_slice(&c.direction_height[..3]).distance(direction))
+                    .fold(f32::MAX, f32::min)
+                    * PLANET_RADIUS;
+                assert!(
+                    nearest < 1.5 * tile,
+                    "level {} has no record within {:.1} m of its own edge at bearing {theta:.2}: \
+                     nearest {nearest:.1} m, complete to {:.0} m",
+                    FINE_LEVELS[k],
+                    1.5 * tile,
+                    set.complete[k]
                 );
             }
         }

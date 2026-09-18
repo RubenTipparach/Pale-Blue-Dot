@@ -27,7 +27,8 @@ struct WaterView {
     absorption: vec4<f32>,    // rgb per metre, w night floor
     deep_color: vec4<f32>,    // rgb, w falling-face flow speed
     horizon_color: vec4<f32>, // rgb, w horizon (grazing) reflection floor
-    zenith_color: vec4<f32>,  // rgb, w spare
+    zenith_color: vec4<f32>,
+    night_sky: vec4<f32>,      // the sky the sheet mirrors at night  // rgb, w spare
     foam_color: vec4<f32>,    // rgb, w foam intensity
     foam_crest: vec4<f32>,    // lo, hi, weight, spare
     foam_slope: vec4<f32>,    // lo, hi, weight, spare
@@ -231,6 +232,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         }
     }
     let face = safe_normal(in.normal);
+    let sun_direction = safe_normal(view.sun.xyz);
     let time = view.camera_time.w;
     // Tangent frame off X or Y, projected off the face, exactly as Tenebris
     // builds it; the flow vector lives in this frame.
@@ -311,18 +313,32 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let reflection_height = clamp(dot(reflect(-look,normal),radial),0.,1.);
     let fresnel = (0.02+0.98*pow(1.0-max(dot(look,normal),0.0),5.0))
         * mix(clamp(view.horizon_color.w,0.,1.),1.,reflection_height);
-    let reflected = mix(view.horizon_color.rgb,view.zenith_color.rgb,reflection_height);
+    // A reflection is of the SKY, so it is the sky's colour, not an authored
+    // daytime gradient under an ambient floor. Left that way the sea was a lit
+    // blue sheet under a black sky, brighter than the land beside it. It takes
+    // the same day/night sky the distance fog already mixes, which is one
+    // colour written down once and used by both.
+    let sun_elevation = dot(radial,sun_direction);
+    let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
+    let day_sky = mix(view.horizon_color.rgb,view.zenith_color.rgb,reflection_height);
+    let reflected = mix(view.night_sky.rgb,day_sky,daylight);
     let transmitted = mix(view.deep_color.rgb,scene,exp(-absorption*path_length));
     let crest = smoothstep(view.foam_crest.x,max(view.foam_crest.y,view.foam_crest.x+1e-4),height)*view.foam_crest.z;
     let slope = smoothstep(view.foam_slope.x,max(view.foam_slope.y,view.foam_slope.x+1e-4),raw_slope)*view.foam_slope.z;
     let foam = clamp(max(crest,slope)*view.foam_color.w,0.,1.);
-    var color = mix(mix(transmitted,reflected,fresnel),view.foam_color.rgb,foam);
-    let sun = safe_normal(view.sun.xyz);
-    let half_vector = safe_normal(look+sun);
-    color += view.sun_tint.rgb*pow(max(dot(normal,half_vector),0.),max(view.sun_tint.w,1.))*view.sun.w;
-    let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),dot(radial,sun));
-    color *= mix(clamp(view.absorption.w,0.,1.),1.,daylight*clamp(in.sky_light,0.,1.));
-    let fog = distance_fog(in.local_position,radial,sun);
+    // The night floor is an AMBIENT level: it belongs to the light that reaches
+    // the water body and the foam on it, and not to the reflection, which
+    // carries the sky's own level already. Applied to both, as it was, the sea
+    // at night was dimmed twice and went black at the horizon, where a mirror
+    // should be closest to the sky it mirrors. At day it is one, so nothing
+    // above the terminator moves.
+    let lit = mix(clamp(view.absorption.w,0.,1.),1.,daylight*clamp(in.sky_light,0.,1.));
+    var color = mix(mix(transmitted*lit,reflected,fresnel),view.foam_color.rgb*lit,foam);
+    let half_vector = safe_normal(look+sun_direction);
+    color += view.sun_tint.rgb
+        *pow(max(dot(normal,half_vector),0.),max(view.sun_tint.w,1.))
+        *view.sun.w*lit;
+    let fog = distance_fog(in.local_position,radial,sun_direction);
     return vec4<f32>(mix(color,fog.rgb,fog.a),1.);
 }
 

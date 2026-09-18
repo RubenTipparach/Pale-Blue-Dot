@@ -91,6 +91,60 @@ rock, one commit earlier: a number that silently depended on the elevation
 step. The ocean depth had no reason to be cut as hard as the land relief. The
 land was cut so a walker could climb a mountain; nobody walks up the sea floor.
 
+## And at night it glowed, which is a different defect entirely
+
+The owner: *"very important to verify night time stuff, the water is glowing
+here because of the shininess."* The picture is a black starfield, land you can
+barely see, and a sea lit up blue.
+
+It is not the shininess, and it is the one case where the reflection really was
+the culprit. Two things were wrong, both structural:
+
+1. **The reflected sky was an authored daytime gradient that never went out.**
+   The sea mirrored the same blue under a black sky as under a noon one, dimmed
+   only by a flat 0.18 night floor. The terrain at night is its albedo times a
+   dim ambient at 0.12, which on this palette lands near 0.006 linear; the sea
+   landed between 0.03 and 0.07. **Five to twelve times brighter than the land
+   beside it**, which is exactly what "glowing" describes.
+2. **The night floor was applied to the reflection as well as to the water
+   body.** An ambient floor is the light reaching the water; a reflection
+   carries the sky's own level and must not be dimmed by it a second time.
+
+Fixed: the reflection ramps from the daytime gradient to a `night_sky_color`
+across the same terminator the fog already uses, and the ambient floor applies
+to the transmitted body and the foam but not to the reflection. Measured on a
+night shoreline capture preset added for this:
+
+| | before | after |
+| --- | --- | --- |
+| sea at the horizon | 39.6, 52.2, 61.6 | **28.4, 46.2, 57.1** |
+| land beside it | 30.9, 31.4, 24.6 | unchanged |
+| sky above it | 46.4, 73.1, 90.7 | unchanged |
+| **sea in daylight** | 124.4, 149.1, 139.5 | **identical** |
+
+The sea now sits under both the sky and the land's red rather than over them,
+and nothing above the terminator moved at all.
+
+**What is still approximate, stated.** The water mirrors an analytic sky that
+does not vary with the direction it is looking, while the sky this engine draws
+does: looking toward the terminator it is twilight blue, looking away it is
+nearly black. So one authored night colour is right in one direction and wrong
+in the other, and the owner's screenshot is the wrong one. Sampling the real
+sky per reflected ray means either a second copy of the atmosphere integral in
+`water.wgsl`, which this project's rules forbid, or a screen-space reflection,
+which is a much larger change. The colour is a knob in `water.ron` in the
+meantime, and the gap is recorded here rather than papered over.
+
+**And the bug that hid inside this one.** The first two attempts at the fix
+renamed a variable and left one use behind, so `water.wgsl` failed to compile
+and the cap simply did not draw. The frames still looked plausible, because
+what remains is the seabed with its own submerged tint, and they measured
+*darker*, which is the direction the fix was supposed to move them. Two
+successive "improvements" were photographs of a missing shader. The log said
+so on line 10 and nobody was reading it. **A shader that fails to compile does
+not look broken in this pipeline; it looks like a slightly different scene.**
+Check the capture log for a pipeline error before believing a picture.
+
 ## What changes
 
 1. **Deepen the sea near the shore** so that the water a player looks across is

@@ -13,7 +13,20 @@
       floor clears the requested depth, so a deeper shelf should shorten that
       walk rather than lengthen it.
 
-## 2. Author for the tone mapper we have
+## 2. Night (done)
+
+- [x] The reflection ramps to `night_sky_color` across the terminator instead of
+      mirroring a daytime gradient forever, and the ambient night floor applies
+      to the transmitted body and the foam but no longer to the reflection.
+- [x] A `nightshore` capture preset, since the existing night view is from
+      orbit and the defect is at eye level. It walks the shoreline at the
+      antisolar longitude on the equator, because with a fixed sun the old
+      preset's 72 N is in permanent daylight.
+- [ ] The reflected sky does not vary with the direction the water looks, so
+      one authored colour is right toward the terminator and too bright away
+      from it. Decide whether that is worth a real sky sample.
+
+## 3. Author for the tone mapper we have
 
 - [ ] Record in `docs/shader-port.md` and the comparison doc that Tenebris
       applies no tone mapping and that every water value here is therefore
@@ -23,7 +36,7 @@
       They are already below the reference's on every axis; the expectation is
       that they come back UP, not down.
 
-## 3. Prove it
+## 4. Prove it
 
 - [ ] Shore, wade and coast captures before and after, with the measured sea
       and sky RGB and saturation beside them, since "shiny" is a look and the

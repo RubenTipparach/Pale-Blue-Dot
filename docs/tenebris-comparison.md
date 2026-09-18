@@ -300,6 +300,44 @@ Three findings from these captures, each fixed in the same commit:
 
 ![The shore after the rescale](screenshots/lod-shore.png)
 
+### Night, which is where the reflection really was the culprit
+
+![The sea at night, before](screenshots/night-water-before.png)
+
+![The sea at night, after](screenshots/night-water-after.png)
+
+The owner's report was a sea glowing blue under a black starfield. The daytime
+diagnosis above does not cover it: in daylight the shine knobs are worth about
+2% of the frame, and at night the reflection is most of it. Two structural
+faults, both fixed, both measured on the `nightshore` capture preset added for
+this:
+
+- **The reflected sky never went out.** It was an authored daytime gradient
+  under a flat 0.18 night floor, so the sea mirrored the same blue at midnight
+  as at noon. Against terrain at roughly 0.006 linear, the sea sat between 0.03
+  and 0.07: five to twelve times brighter than the land beside it.
+- **The night floor was applied twice to the reflection**, once as the ambient
+  level the water body receives and once to the mirror itself, which then went
+  black at the horizon, where a mirror should be closest to the sky it mirrors.
+
+The reflection now ramps to a `night_sky_color` across the same terminator the
+fog uses, and the ambient floor applies to the transmitted body and the foam
+only. The sea at the horizon moved from 39.6, 52.2, 61.6 to 28.4, 46.2, 57.1,
+under both the sky (46.4, 73.1, 90.7) and the land's red (30.9), and the
+daytime frame is byte-identical.
+
+**Two lessons, and the second one cost three captures.** The reflected sky
+still does not vary with the direction the water looks at, while the sky this
+engine draws does, so one authored colour is right toward the terminator and
+too bright away from it, which is the direction the owner's screenshot was
+taken in. And: the first two attempts at this fix renamed a variable and left
+one use behind, so `water.wgsl` failed to compile and the cap did not draw at
+all. The frames looked plausible, because what is left is the seabed with its
+own submerged tint, and they measured darker, which is the direction the fix
+was meant to move them. The pipeline error was on line 10 of every log.
+**A shader that fails to compile here does not look broken, it looks like a
+slightly different scene.**
+
 ![Wading at the waterline](screenshots/lod-wade.png)
 
 ![Three metres under](screenshots/lod-dive.png)

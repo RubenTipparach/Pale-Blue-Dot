@@ -19,6 +19,7 @@
     deep_color: (0.02, 0.10, 0.22),
     sky_horizon_color: (0.46, 0.60, 0.74),
     sky_zenith_color: (0.18, 0.34, 0.62),
+    night_sky_color: (0.035, 0.070, 0.100),
     sky_horizon_strength: 0.35,
     foam_crest_lo: 0.35,
     foam_crest_hi: 0.60,

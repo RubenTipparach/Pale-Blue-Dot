@@ -64,6 +64,8 @@ pub(super) struct WaterView {
     deep_color: Vec4,
     horizon_color: Vec4,
     zenith_color: Vec4,
+    /// The sky the sheet mirrors at night; the day gradient ramps to it.
+    night_sky: Vec4,
     foam_color: Vec4,
     foam_crest: Vec4,
     foam_slope: Vec4,
@@ -379,6 +381,7 @@ fn prepare_water_views(
             deep_color: v3(s.deep_color).extend(s.flow_uv_speed_falling),
             horizon_color: v3(s.sky_horizon_color).extend(s.sky_horizon_strength),
             zenith_color: v3(s.sky_zenith_color).extend(0.0),
+            night_sky: v3(s.night_sky_color).extend(0.0),
             foam_color: v3(s.foam_color).extend(s.foam_intensity),
             foam_crest: Vec4::new(s.foam_crest_lo, s.foam_crest_hi, s.foam_crest_weight, 0.0),
             foam_slope: Vec4::new(s.foam_slope_lo, s.foam_slope_hi, s.foam_slope_weight, 0.0),
@@ -394,10 +397,11 @@ fn prepare_water_views(
                 weather_settings.rain_lens_size,
             ),
             screen: Vec4::new(aspect, band, s.wet_blur, s.detail_fade),
-            lod: camera
-                .normalize_or(Vec3::Y)
-                .extend(super::lod::BASE_LEVEL as f32),
-            bands: super::lod::LodParams::new(camera).bands,
+            // The partition the uploaded records can serve, read off the same
+            // place the surface pass reads it, so a sheet and the terrain
+            // under it can never be split on different anchors.
+            lod: planet.lod.player.extend(super::lod::BASE_LEVEL as f32),
+            bands: planet.lod.bands,
         };
         let lens_needed = weather.rain > 0.001 || drips > 0.001;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
@@ -619,14 +623,14 @@ mod tests {
 
     #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
-        // Two mat4 and twenty-two vec4 in water.wgsl's WaterView, read off the
+        // Two mat4 and twenty-three vec4 in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
         let shader = include_str!("../../../assets/shaders/water.wgsl");
         let start = shader.find("struct WaterView {").unwrap();
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (2, 22));
+        assert_eq!((mat4, vec4), (2, 23));
         assert_eq!(
             WaterView::min_size().get() as usize,
             mat4 * 64 + vec4 * 16,

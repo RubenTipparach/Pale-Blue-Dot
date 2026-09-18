@@ -435,7 +435,7 @@ fn the_partition_lists_each_tile_at_its_bands_level_on_the_real_records() {
     }
     let slots = records.len();
     let tangent = Vec3::Y.cross(anchor).normalize();
-    let lod_params = lod::LodParams::new(anchor);
+    let lod_params = lod::LodParams::of(&fine);
     // The seam eye: 12 m up, along the ground, where the horizon is about
     // 340 m out so the base is below it. Then 3,000 m up looking down, where
     // every band is in view.

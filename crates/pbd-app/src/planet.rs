@@ -322,6 +322,11 @@ struct PlanetGpu {
     counts: [u32; 4],
     /// The fine set version the regions hold.
     uploaded: u64,
+    /// The partition the uploaded regions can serve: the anchor they were
+    /// generated around and the radius each level is complete to. It is
+    /// written here, beside the buffer, so the rule that decides what to HIDE
+    /// and the records that REPLACE it can never come from different frames.
+    lod: lod::LodParams,
 }
 
 #[derive(Component)]
@@ -368,6 +373,7 @@ fn upload_planet(
         base_count,
         counts: [0; 4],
         uploaded: 0,
+        lod: lod::LodParams::base_only(),
     });
 }
 
@@ -397,6 +403,7 @@ fn upload_fine(
         planet.counts[k] = level.len().min(lod::FINE_CAPACITY as usize) as u32;
     }
     planet.uploaded = fine.version;
+    planet.lod = lod::LodParams::of(&fine.set);
 }
 
 #[derive(Resource)]
@@ -549,7 +556,7 @@ fn prepare_views(
                 FOLIAGE_DRAW_DISTANCE
             };
         let w = &weather_settings;
-        let lod = lod::LodParams::new(camera_position);
+        let lod = &planet.lod;
         trace!(
             "planet view {entity}: camera {camera_position:?}, lod player {:?}, base {} fine {:?}",
             lod.player, planet.base_count, planet.counts
