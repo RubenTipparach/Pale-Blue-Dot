@@ -146,6 +146,72 @@ Tenebris's is 0.02/0.10/0.22, which is 38, 89, 130 on screen; ours is the same
 lightness with the red taken out, which is the direction every measurement
 above points.
 
+## Third round: the night side, and under the surface
+
+Two more reports after the colour landed: the sea still reflects too much light
+on the night side, and the underwater should be a darker blue.
+
+### The night reflection is one colour; the sky it mirrors is not
+
+The `nightshore` frame, measured across the sky alone, top row of the frame:
+
+| where | sRGB |
+| --- | --- |
+| away from the sun (left) | 20, 36, 45 |
+| middle | 40, 66, 84 |
+| toward the sun (right) | 58, 90, 114 |
+| horizon, toward the sun | 79, 116, 138 |
+
+A three-to-one range in one frame, because this engine's night sky is lit by
+its own upper atmosphere: with the shell at 1.2 R, a sample high in it sees the
+sun over the limb up to about 146 degrees from the sub-solar point, so the
+night side is a twilight that fades with distance from the terminator and
+with the direction looked in. The water reflects `night_sky_color` at every
+point and in every direction, 0.035/0.070/0.100 linear, which is about
+52, 75, 90 on screen: right in the middle of that range, so it is brighter
+than the sky on the side away from the sun and under it toward the sun. The
+owner's own night screenshot was under a black sky, which is the far end of
+the same scale, where the constant is simply a glowing sheet.
+
+**Decision: the night reflection follows the reflected ray, by the sky's own
+rule.** The sky shader lights an atmosphere sample when the sun's ray from it
+clears the planet (`sun_visibility`), and the water can ask the same question
+of one point: where the reflected ray leaves the atmosphere. Lit, the
+reflection is `night_sky_color` scaled by how much the ray faces the sun,
+which is where the twilight is; unlit, it is nothing, and the sea under a
+black sky is only its own body under the ambient floor. One extra number in
+the uniform (the atmosphere radius, in the spare lane of `night_sky`), one
+function, no second sky model: the test the sky already applies, applied to
+one more ray.
+
+### Underwater is the deep colour at any depth, day or night
+
+Seen from below, and in the composite's murk, the far water is `deep_color`
+exactly: at half a metre under and at eight metres, at noon and at midnight.
+Two things are wrong with that and both are the same omission. The seabed is
+already darkened by the water above it (`hex_terrain.wgsl` attenuates by
+`absorption * water_depth`), so a diver sees a floor that darkens with depth
+under a murk that does not, and the murk wins the frame. And at night the
+sea's body is lit by the ambient floor while the murk stays at full daylight
+colour: a glowing blue room under a dark sky.
+
+**Decision: the murk is the deep colour attenuated by the eye's own depth and
+by the same day/night level the surface uses.** `deep * exp(-absorption *
+eye_depth) * lit`, in one function called from both the cap seen from below
+and the composite, so the two cannot disagree. At the shipped values that is,
+by depth, unmapped:
+
+| eye depth | murk (linear) | sRGB |
+| ---: | --- | --- |
+| 0 m | 0, 0.120, 0.280 | 0, 97, 143 |
+| 2 m | 0, 0.073, 0.239 | 0, 76, 133 |
+| 4 m | 0, 0.044, 0.204 | 0, 60, 123 |
+| 8 m | 0, 0.016, 0.148 | 0, 36, 106 |
+
+which is a darker blue the deeper the dive, from the same knob the surface
+reads, and nothing new to author. The surface itself does not move: the eye
+depth is zero for every pixel seen from above.
+
 ## What "shiny" turned out to mean
 
 Nothing in the frame is clipping: the brightest sea pixel is 174 of 255 and not

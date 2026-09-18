@@ -63,3 +63,15 @@ wading at two metres.
 - [ ] The owner's in-game look at the surface and underwater. A capture on a
       software rasteriser at the owner's view is the best a container can do
       and it is not the game on their monitor.
+
+## 5. The night side and the deep (third round)
+
+- [ ] The night reflection follows the reflected ray: lit by the sky's own
+      `sun_visibility` rule at the point the ray leaves the atmosphere, scaled
+      by how much it faces the sun, and nothing under a black sky.
+- [ ] The murk is `deep_color` attenuated by the eye's depth and by the
+      day/night level, in one function the cap-from-below and the composite
+      both call.
+- [ ] Captures: `nightshore` and `night`, and `dive` at 4 m and 8 m, measured
+      against the frames above.
+
