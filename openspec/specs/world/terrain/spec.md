@@ -1,4 +1,12 @@
-## ADDED Requirements
+# Terrain Generation Specification
+
+## Purpose
+The surface is what a player walks on, digs into and looks across, and the
+reference's generator is the look the owner asked for. Every height and
+threshold is a field of one config with units, so a second body is a second
+value and never a second function.
+
+## Requirements
 
 ### Requirement: The terrain generator is Tenebris's
 The surface altitude SHALL be Tenebris's generator ported term for term at its

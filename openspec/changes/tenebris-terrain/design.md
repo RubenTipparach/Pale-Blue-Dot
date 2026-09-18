@@ -22,18 +22,31 @@ The altitude function is ported as written, with these deliberate changes:
    more of its range than the land so a swimmer can submerge (the
    `OCEAN_RELIEF` finding from the water work).
 
-   | Tenebris | ours |
-   | --- | ---: |
-   | `MAX_LAND_HEIGHT` 40 m | 150 m |
-   | `MAX_OCEAN_DEPTH` 24 m | 80 m |
-   | `ROCKY_UPLIFT_M` 22 m | 60 m |
-   | `ISLAND_HEIGHT_M` 10 m | 12 m |
-   | `RIVER_DEPTH_M` 3 m, `RIVER_MAX_ELEV_M` 14 m | 3 m, 40 m |
-   | `SHORE_BAND_M` 6 m | 6 m |
-   | `BEACH_BAND` 2 m | 2 m |
-   | `MOUNTAIN_ELEV_M` 24 m | 70 m |
-   | `MOUNTAIN_SNOWCAP_ELEV_M` 40 m | 120 m |
-   | snow line 22 m, stone 32 m | 90 m, 110 m |
+   The normalised height the fields sum to is well under one, so a "max
+   height" knob is not a summit: the reference's 40 m reaches 34 with its
+   uplift, and a knob is worth about half of itself at the top. Measured on
+   the port over 100,000 directions, and then authored to the budget:
+
+   | knob | Tenebris | ours | what it measures as |
+   | --- | ---: | ---: | --- |
+   | metres per unit of land height | 40 | 210 | summit 153 m |
+   | metres per unit of ocean depth | 24 (x2 seeded) | 320 | floor -87 m |
+   | land bias | 0.20 - 0.16 | 0.0 | land 49.5% (reference seeded 47.1%) |
+   | `rocky_uplift_m` | 22 | 60 | |
+   | `island_height_m` | 10 | 12 | |
+   | `river_depth_m`, `river_max_elev_m` | 3, 14 | 3, 40 | |
+   | `shore_band_m`, `beach_band_m` | 6, 2 | 6, 2 | |
+   | `mountain_elev_m` | 24 (0.7 of the summit) | 105 | Mountains 0.5% (reference 0.9%) |
+   | snow line, stone line | 22, 32 | 100, 140 | |
+   | `mountain_snowcap_elev_m` | 40 | 150 | |
+
+   The biome shares that come out, against the reference's seeded world:
+   Ocean 49.5 (45.4), Beach 4.8 (15.7), Fields 36.0 (27.8), Desert 3.0
+   (1.7), Jungle 2.9 (1.0), Swamp 0.1 (0.1), Mountains 0.5 (0.9), Tundra 3.1
+   (7.3) percent. The beach is thinner because two metres of a 210 m scale is
+   a thinner band than two of forty, and the tundra smaller because the same
+   cold latitude covers the same cap and the reference's is snow to a lower
+   line. Both are the reference's rules at this scale, not retunes.
 
    Bands that a walker experiences at their own scale (a beach, a river's
    depth, a shore's easing) keep Tenebris's metres. Bands that are a fraction
@@ -72,12 +85,15 @@ The altitude function is ported as written, with these deliberate changes:
 - Captures: `coast`, `surface`, `orbit` and the shore, beside the same views
   today, and beside the Tenebris frames in `docs/screenshots/tenebris-*.png`.
 
-## Open
+## Decided by the owner
 
-- **Whether `Sequoia`'s variants port.** Tenebris carries a second tileset's
-  thresholds through the same function behind `tileset ==` checks. They are a
-  second planet's data and belong in per-body config (`per-body-rendering`),
-  not in the generator. Recommend: port the Tenebris main body only, with
-  every threshold in the table above a field of a body's terrain config.
-- **The moisture field's scale** on a body sixteen times larger: at Tenebris's
-  1.6 a biome is a continent here. Likely 3 to 4; measured, not guessed.
+- **The height budget stands at 150 m summits** (with 80 m basins), not
+  Tenebris's 40/24: heights are absolute metres and do not scale with a body
+  sixteen times larger.
+- **Scope is Tenebris's main body only.** Sequoia's variants (its thresholds,
+  its river and island gates, its snow line) are a second planet's data and
+  belong in per-body config when that lands, not in the generator. Every
+  threshold in the table above is a field of one terrain config with units,
+  so a second body is a second file.
+- **The moisture field's scale** on a body sixteen times larger is measured,
+  not guessed: at Tenebris's 1.6 a biome would be a continent here.

@@ -301,6 +301,29 @@ impl PlanetContact {
         Self::new(Arc::new(super::lod::base_records(&cells)), &cells)
     }
 
+    /// The test planet and the centre of an inland cell on it. A cap is flat
+    /// and its centre is many metres from any edge at these subdivisions, so a
+    /// test about gravity measures gravity and not the terrace the generator
+    /// happened to put under the spawn it searched for.
+    #[cfg(test)]
+    pub(crate) fn test_flat_land(subdivisions: u32) -> (Self, Vec3) {
+        let cells = super::topology::dual_sphere(subdivisions);
+        let columns = Arc::new(super::lod::base_records(&cells));
+        let inland = cells
+            .iter()
+            .enumerate()
+            .find(|(id, cell)| {
+                columns[*id].direction_height[3] >= 4.0
+                    && cell
+                        .neighbors
+                        .iter()
+                        .all(|&n| columns[n].direction_height[3] >= 0.0)
+            })
+            .map(|(_, cell)| cell.direction)
+            .expect("an inland cell on the test planet");
+        (Self::new(columns, &cells), inland)
+    }
+
     /// A real generated terrace for motor regressions: the start lies 0.6 m
     /// inside its lower dry cap, and the unit tangent points through the shared
     /// edge toward a dry cap between 6 and 24 m higher. No test-only geometry or

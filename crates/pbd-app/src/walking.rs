@@ -729,12 +729,18 @@ mod tests {
     }
 
     fn app_with_terrain(terrain: PlanetContact) -> App {
+        let spawn = FlightViewConfig::default().spawn_direction;
+        app_with_terrain_at(terrain, spawn)
+    }
+
+    fn app_with_terrain_at(terrain: PlanetContact, spawn_direction: Vec3) -> App {
         let mut app = crate::headless_app();
         app.insert_resource(terrain)
             .insert_resource(crate::config::WaterSettings::default())
             .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
             .insert_resource(FlightViewConfig {
                 minimum_clearance: EYE_HEIGHT,
+                spawn_direction,
                 ..default()
             })
             .init_resource::<ButtonInput<KeyCode>>()
@@ -1050,7 +1056,8 @@ mod tests {
     #[test]
     fn one_metre_fall_matches_tenebris_and_reports_the_old_gravity_baseline() {
         for (acceleration, height) in [(9.0_f32, 1.0_f32), (25.0, 1.0), (9.0, 6.0), (25.0, 6.0)] {
-            let mut app = app();
+            let (terrain, flat) = PlanetContact::test_flat_land(5);
+            let mut app = app_with_terrain_at(terrain, flat);
             app.world_mut().resource_mut::<CelestialScene>().gravity[0].gravity_g =
                 acceleration as f64 / pbd_core::gravity::SURFACE_GRAVITY_MPS2_PER_G;
             let body = app.world().resource::<WalkingState>().body;
