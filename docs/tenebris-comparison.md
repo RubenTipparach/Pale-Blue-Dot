@@ -300,6 +300,31 @@ Three findings from these captures, each fixed in the same commit:
 
 ![The shore after the rescale](screenshots/lod-shore.png)
 
+![Wading at the waterline](screenshots/lod-wade.png)
+
+![Three metres under](screenshots/lod-dive.png)
+
+![A rain walk](screenshots/lod-rain.png)
+
+![The coast from 420 m](screenshots/lod-coast.png)
+
+The water systems on the rescaled body: the sheet from the shore, from the
+waterline, from under it, in rain, and from the air. A fourth finding came out
+of retaking these. **The `dive` preset photographed the inside of a rock.** It
+descended a fixed three metres below the first water cell, which was right on
+the old body, where one elevation step was six metres and the first wet cell
+was already six metres deep. On the rescaled body that cell is **one metre**
+deep and the shelf stays under three for hundreds of metres, so the eye sat
+two metres inside the seabed and the frame was flat deep-water colour with no
+seabed, no surface and no Snell's window in it: a picture that looks like a
+shader failure and is a camera standing in the wrong place. The preset walks
+out until the floor clears the requested depth now, and `--height` sets that
+depth. **A constant that encodes another constant's value breaks silently when
+that one moves**, which is this rescale's own lesson from the other side: the
+tile width, the foliage range and the walker's step were all derived or moved
+in the same commit, and this one was a number nobody had connected to the
+elevation step.
+
 What this does not do: the surface is still one height per column, not a
 volume, and a fine set is regenerated on the CPU as one 160,000-record job
 when the player has walked 40 m (about 1.8 s in a debug build on this

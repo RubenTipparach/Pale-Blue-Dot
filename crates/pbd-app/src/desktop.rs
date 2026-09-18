@@ -147,8 +147,9 @@ impl Launch {
             "capture frames must be 60..100000"
         );
         assert!(
-            result.height.is_none() || (result.view == "shore" && result.capture.is_some()),
-            "--height requires --view shore with a static --capture"
+            result.height.is_none()
+                || (["shore", "dive"].contains(&result.view.as_str()) && result.capture.is_some()),
+            "--height requires --view shore or dive with a static --capture"
         );
         assert!(
             result.render_offset == Vec3::ZERO
@@ -331,16 +332,50 @@ fn photo_camera(
         while surface_height(at(lon)) >= 0.0 && lon < 2.0 * std::f32::consts::TAU {
             lon += step;
         }
-        let water = at(lon);
         let land = at(lon - step);
-        let east = (water - land).normalize_or_zero();
+        let shore = at(lon);
+        // `dive` needs water deep enough to hold the camera. The rescaled
+        // shelf is one metre deep and stays under three for hundreds of
+        // metres, so a fixed descent below the first water cell puts the eye
+        // inside the seabed and the frame is flat deep-water colour with no
+        // seabed, no surface and no Snell's window in it. Keep walking out
+        // until the floor clears the requested depth. Bounded like the walk
+        // above, and it falls back to the deepest cell the walk found.
+        let depth = launch.height.unwrap_or(3.0);
+        let water = if launch.view == "dive" {
+            let clearance = -(depth + 1.0);
+            let mut out = lon;
+            let mut deepest = lon;
+            while out < lon + std::f32::consts::TAU {
+                let here = surface_height(at(out));
+                if here <= clearance {
+                    break;
+                }
+                if here < surface_height(at(deepest)) {
+                    deepest = out;
+                }
+                out += step;
+            }
+            at(if surface_height(at(out)) <= clearance {
+                out
+            } else {
+                deepest
+            })
+        } else {
+            shore
+        };
+        let east = (shore - land).normalize_or_zero();
         // The sheet sits below sea level by the configured offset; `wade` puts
-        // the eye inside the surface band and `dive` three metres under, both
-        // over the first water cell, looking out to sea.
+        // the eye inside the surface band over the first water cell, and
+        // `dive` `--height` metres under over the first cell deep enough,
+        // both looking out to sea.
         let sheet = PLANET_RADIUS - water_settings.depth_offset_m;
         let (eye, sea) = match launch.view.as_str() {
             "wade" => (water * (sheet + 0.1), water * sheet + east * 40.0),
-            "dive" => (water * (sheet - 3.0), water * (sheet - 4.0) + east * 40.0),
+            "dive" => (
+                water * (sheet - depth),
+                water * (sheet - depth - 1.0) + east * 40.0,
+            ),
             _ => {
                 let height = launch.height.unwrap_or(EYE_HEIGHT);
                 (
