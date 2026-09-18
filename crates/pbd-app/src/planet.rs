@@ -12,7 +12,7 @@ pub(crate) mod lattice;
 #[path = "planet_lod.rs"]
 pub(crate) mod lod;
 #[path = "planet_terrain.rs"]
-mod terrain;
+pub(crate) mod terrain;
 #[path = "planet_topology.rs"]
 pub(crate) mod topology;
 #[cfg(test)]
@@ -169,7 +169,16 @@ const _: [(); 160] = [(); std::mem::offset_of!(GpuCell, floors)];
 struct PlanetBase(Arc<Vec<GpuCell>>);
 
 #[derive(Resource, Clone, Default, ExtractResource)]
-struct PlanetClock(f32);
+pub(crate) struct PlanetClock(f32);
+
+impl PlanetClock {
+    /// Elapsed seconds. The weather field is a function of time, and this is
+    /// the one clock the whole planet already runs on: a second source would be
+    /// a sky drifting at a different rate from the sea it is reflected in.
+    pub(crate) fn seconds(&self) -> f32 {
+        self.0
+    }
+}
 
 #[derive(Resource, Clone, ExtractResource)]
 struct PlanetArt(Handle<Image>);

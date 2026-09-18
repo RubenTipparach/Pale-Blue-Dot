@@ -23,6 +23,12 @@ pub use crate::planet::PLANET_RADIUS;
 // ~150 m summits, and the shell clears them by a wide margin.
 pub const ATMOSPHERE_RADIUS: f32 = PLANET_RADIUS * 1.2;
 pub const CLOUD_RADIUS: f32 = PLANET_RADIUS + 300.0;
+/// How deep the cloud layer is. The clouds are a marched slab between
+/// `CLOUD_RADIUS` and this much above it, rather than a surface at one radius:
+/// a single sample has no interior to light, and thickness is the whole of what
+/// separates a mass from a decal. 260 m against 300 m of base altitude puts the
+/// tops at about twice the summit height, which is where the reference's sit.
+pub const CLOUD_THICKNESS: f32 = 260.0;
 pub const SUN_DIRECTION: Vec3 = Vec3::new(0.65, 0.75, 0.35);
 
 /// The radius the sky treats as solid ground: the water sheet, which sits
@@ -39,6 +45,7 @@ impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<SkyMaterial>::default())
             .add_systems(Startup, spawn_atmosphere)
+            .add_systems(Update, follow_weather)
             .add_systems(
                 PostUpdate,
                 position_atmosphere
@@ -60,6 +67,9 @@ pub struct SkyParameters {
     pub scatter: Vec4,
     /// Clouds radius, coverage threshold, opacity and night-floor brightness.
     pub clouds: Vec4,
+    /// Slab thickness in metres, the cover the weather field says is overhead,
+    /// drift seconds, and how dark a cloud's shadowed underside goes.
+    pub cloud_slab: Vec4,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -128,6 +138,31 @@ impl Material for SkyMaterial {
     }
 }
 
+/// Hand the sky what the weather field says is overhead, and the drift clock.
+///
+/// The cover is the SAME number that decides whether it is raining on the
+/// player, read off the same `Weather` resource: the sky a player stands under
+/// and the rain falling on them cannot disagree about whether it is overcast,
+/// because there is one answer and both read it. What the sky does NOT get is
+/// the field at a distance - a cloud on the horizon is still the shader's own
+/// noise, because `planet_gen::moisture` is fBm on the CPU. Closing that gap
+/// means porting the fBm into WGSL and pinning the two against each other; it
+/// is named in the change's tasks rather than pretended away here.
+fn follow_weather(
+    weather: Res<crate::weather::Weather>,
+    clock: Res<Time>,
+    shells: Query<&MeshMaterial3d<SkyMaterial>, With<PlanetAtmosphere>>,
+    mut materials: ResMut<Assets<SkyMaterial>>,
+) {
+    let seconds = clock.elapsed_secs();
+    for material in &shells {
+        if let Some(sky) = materials.get_mut(&material.0) {
+            sky.parameters.cloud_slab.y = weather.cover;
+            sky.parameters.cloud_slab.z = seconds;
+        }
+    }
+}
+
 fn spawn_atmosphere(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -141,7 +176,13 @@ fn spawn_atmosphere(
             atmosphere: Vec4::new(ATMOSPHERE_RADIUS, 0.22, 0.30, 0.018),
             sun: sun.extend(3.2),
             scatter: Vec4::new(0.16, 0.52, 1.30, 0.64),
-            clouds: Vec4::new(CLOUD_RADIUS, 0.61, 0.52, 0.045),
+            // Radius, the CLEAR-sky density threshold, the extinction scale and
+            // the night floor. 0.72 rather than the flat shell's 0.61: the slab
+            // integrates a whole path where the shell took one sample, so the
+            // same threshold covered far more sky. The overcast end is a
+            // fraction of it in the shader, so one knob moves both.
+            clouds: Vec4::new(CLOUD_RADIUS, 0.72, 0.52, 0.045),
+            cloud_slab: Vec4::new(CLOUD_THICKNESS, 0.0, 0.0, 0.34),
         },
     });
     commands.spawn((
@@ -189,6 +230,7 @@ mod tests {
                     sun: Vec4::ZERO,
                     scatter: Vec4::ZERO,
                     clouds: Vec4::ZERO,
+                    cloud_slab: Vec4::ZERO,
                 },
             });
         let shell = app

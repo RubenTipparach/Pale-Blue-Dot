@@ -272,6 +272,30 @@ impl Validated for WaterSettings {
 pub struct WeatherSettings {
     /// Seconds for ground wetness to follow the rain intensity (e-fold).
     pub wet_fade_tau_s: f32,
+
+    // ---- The weather field: where and when it rains at all. Names follow
+    // Tenebris's own weather.yaml; see `pbd_core::weather` for what each does.
+    /// Unit-sphere frequency of the drifting warm-pocket field.
+    pub solar_scale: f32,
+    /// How fast that field drifts, per second.
+    pub solar_drift: f32,
+    /// Warmth floor, so a moist region clouds even where the sun is weak.
+    pub solar_floor: f32,
+    /// Above one, clears the dry end harder: deserts rarely cloud or rain.
+    pub arid_gamma: f32,
+    /// Density below which the sky is clear.
+    pub cloud_min: f32,
+    /// Density above which the cover is full.
+    pub cloud_full: f32,
+    /// Opacity of the smallest just-forming cloud.
+    pub min_alpha: f32,
+    /// Cover a column needs before it rains, so a wisp does not.
+    pub rain_cover_min: f32,
+    /// How long rain trails a cloud that has drifted off, seconds.
+    pub rain_min_s: f32,
+    /// The frequency moisture is sampled at for WEATHER, on the unit sphere:
+    /// a weather system is far bigger than the 188 m a biome is decided on.
+    pub weather_moisture_scale: f32,
     /// Streak fall speed, metres per second.
     pub rain_fall_mps: f32,
     /// Streak half-width, metres.
@@ -322,6 +346,16 @@ impl Default for WeatherSettings {
     fn default() -> Self {
         Self {
             wet_fade_tau_s: 1.6,
+            solar_scale: 2.2,
+            solar_drift: 0.015,
+            solar_floor: 0.55,
+            arid_gamma: 1.35,
+            cloud_min: 0.22,
+            cloud_full: 0.52,
+            min_alpha: 0.32,
+            rain_cover_min: 0.62,
+            rain_min_s: 15.0,
+            weather_moisture_scale: 1.6,
             rain_fall_mps: 70.0,
             rain_width_m: 0.012,
             rain_streak_m: 1.5,
@@ -352,9 +386,54 @@ impl Default for WeatherSettings {
     }
 }
 
+impl WeatherSettings {
+    /// The field's own knobs, with a storm forcing folded in as the reference's
+    /// `moisture_boost`. Built here rather than stored, so the config file and
+    /// the P key cannot drift into two answers about what the weather is.
+    pub fn field(&self, forcing: f32) -> pbd_core::weather::WeatherField {
+        pbd_core::weather::WeatherField {
+            solar_scale: self.solar_scale,
+            solar_drift: self.solar_drift,
+            solar_floor: self.solar_floor,
+            arid_gamma: self.arid_gamma,
+            cloud_min: self.cloud_min,
+            cloud_full: self.cloud_full,
+            min_alpha: self.min_alpha,
+            rain_cover_min: self.rain_cover_min,
+            rain_min_s: self.rain_min_s,
+            weather_moisture_scale: self.weather_moisture_scale,
+            moisture_boost: forcing.clamp(0.0, 1.0),
+        }
+    }
+}
+
 impl Validated for WeatherSettings {
     fn validate(&self) -> Result<(), String> {
         let s = self;
+        non_negative(
+            "weather field scalars",
+            &[
+                s.solar_scale,
+                s.solar_drift,
+                s.arid_gamma,
+                s.rain_min_s,
+                s.weather_moisture_scale,
+            ],
+        )?;
+        unit("solar_floor", s.solar_floor)?;
+        unit("cloud_min", s.cloud_min)?;
+        unit("cloud_full", s.cloud_full)?;
+        unit("min_alpha", s.min_alpha)?;
+        unit("rain_cover_min", s.rain_cover_min)?;
+        // A ramp that runs backwards is a sky that clears as it thickens.
+        (s.cloud_min < s.cloud_full)
+            .then_some(())
+            .ok_or("cloud_min must be below cloud_full")?;
+        // And a rain threshold outside the ramp either rains always or never,
+        // both of which read as the global switch this replaced.
+        (s.rain_cover_min > 0.0 && s.rain_cover_min < 1.0)
+            .then_some(())
+            .ok_or("rain_cover_min must be inside the cover ramp, not at an end")?;
         non_negative(
             "weather scalars",
             &[

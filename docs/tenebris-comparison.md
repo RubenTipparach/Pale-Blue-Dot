@@ -1256,6 +1256,108 @@ a lawn, but spaced tufts of broad tapering blades standing proud of a sod that
 is still visible between them. The instinct on first seeing ours was that the
 grass was too sparse; the reference says it is not.
 
+## The weather is a field now, and the clouds have a thickness
+
+The owner asked for thicker clouds and a rain system like Tenebris's. Two gaps,
+two different causes.
+
+**The clouds had no thickness because they were one sphere.** The sky shader
+took a single ray-sphere hit at `CLOUD_RADIUS`, sampled two octaves of value
+noise there and blended a flat colour over the sky. One sample at one depth is a
+stencil painted on a shell: nothing in it to be lit from one side, nothing to
+occlude anything, no silhouette from below.
+
+**The rain was one global number, and `weather.rs` said so in its own module
+comment**: *"Rain is global until a cloud field shared with the sky shader
+exists."* `Weather.rain` was cycled by a key and applied to the whole planet.
+You could not walk out of a storm, because there was no storm - there was a
+switch.
+
+### The field
+
+`pbd_core::weather` is Tenebris's `weather.rs`: a drifting field of warm pockets
+condenses the terrain's own moisture map into cloud, an aridity gamma clears the
+dry end so deserts rarely cloud, a smoothstep turns density into cover, and rain
+needs cover at or above a threshold. Nothing is stored. **Rain trails a cloud
+that has drifted off by sampling the same field `rain_min_s` earlier**, which is
+how the reference keeps a lifecycle stateless, and it ports exactly.
+
+**Half of it was already here.** `planet_gen::moisture` and `biome` came across
+with the terrain generator, and they are the expensive half. What was missing
+was the drifting warmth and the ramps over it.
+
+**Not one rain consumer changed.** The cap's ripples, the terrain's wet sheet
+and rivulets, the lens droplets, the shower and the wetness lag all read
+`Weather.rain` already; what changed is where that number comes from. That is
+the one-code-path rule collecting a dividend it was owed.
+
+**And P moves the FIELD rather than the rain.** The reference forces a storm
+with `moisture_boost`, which lerps every cell toward saturation. Forcing it
+through the field keeps one path deciding the weather: a forced storm is a real
+one, with the sky closing over because the field says it is overcast.
+
+Measured on the shipped values: the body averages **0.18 cover** with **5.9% of
+it precipitating** at any moment, and 65% of the sphere sits under 0.2 cover. A
+cover histogram over 2,000 directions is `[1300, 373, 208, 93, 26]` across the
+five fifths. At the spawn, which is Fields at moisture 0.606, cover runs 0.27 to
+0.59 over fifteen minutes - scattered cloud that comes and goes.
+
+### The slab
+
+The clouds are marched between an inner and an outer radius now, 300 m up and
+260 m deep, twelve samples with a four-sample sun march at each, Beer's law over
+both. A grazing ray crosses more slab than a vertical one **by construction**,
+which is what makes the horizon build up while the zenith stays open, and the
+lit top against the shadowed underside is the thickness itself.
+
+**Four things were wrong on the way, and each looked like something else.**
+
+1. **The whole sky closed to grey.** At the horizon the chord through a 260 m
+   shell is tens of kilometres, so every near-horizon ray saturated. A cap on
+   the marched span fixed it - and a cap that was too tight then under-integrated
+   the deck and left the horizon blue, which is the same number wrong the other
+   way.
+2. **A full overcast could never close.** `clouds.z` was the flat shell's peak
+   OPACITY, 0.52, and left in place it capped the slab at 0.52 however thick the
+   cloud got. The slab computes its own opacity from transmittance; the knob is
+   an extinction coefficient now.
+3. **Sharpening the shape made the storm thinner.** Squaring the noise before
+   the threshold cut density faster than a lower threshold could raise it, so a
+   forced storm came out as thin as a clear sky. The sharpening belongs after
+   the threshold, where it makes an edge without moving the coverage.
+4. **The march drew bands across every cloud.** Twelve samples on a fixed grid
+   put their step boundaries at the same depth for neighbouring pixels. Jittered
+   by a hash of the ray direction, the same error is noise nobody reads as a
+   pattern - and hashed rather than random, so it is stable frame to frame.
+
+**What it costs**, the same `--view surface` preset, 1440x900, lavapipe:
+
+| | p50 frame, ms |
+| --- | ---: |
+| the flat shell | 387.8 |
+| the slab, at the spawn's ~0.5 cover | 511.2 |
+| the slab, in a forced storm | 662.8 |
+
+**+32% at scattered cloud and +71% under a full overcast.** Every sky pixel
+marches twelve samples with four sun samples each, three octaves apiece, and a
+storm is the case where none of them can early-out. On a software rasteriser
+that is the whole bill; the step count is the knob if it ever needs paying down.
+
+### What is NOT ported
+
+The reference's clouds are **geometry**: puffs on a shell placed one per 30 m
+cell by a density hash, each a lump cluster, LODing to a slab past 230 m and to
+a texture shell past 5 km. That is a fifth indirect draw on this architecture
+and is its own change. The slab is what this renderer is shaped for.
+
+And the clouds agree with the rain **overhead but not at distance**: the shader
+gets the field's cover under the player, so the sky thickens as a front arrives
+and it rains when it is overcast, but a cloud on the horizon is still the
+shader's own noise. Making that exact means porting the moisture fBm into WGSL
+and pinning the two implementations against each other on the GPU. Wind and a
+snow particle are held for the same reason - both are named in the change's
+tasks rather than smuggled in.
+
 ## Acceptance and comparison boundaries
 
 The original five standalone shaders and the two integrated planet pipeline modules (`planet_surface.wgsl`, `planet_visibility.wgsl`) have explicit contracts in the dedicated Naga validation tool. `sky_atmosphere.wgsl` is explicitly deferred by name because it includes Bevy imports and material substitutions; it must be validated through Bevy's shader composer and the running visual application rather than treated as standalone WGSL. Unknown shader names are still errors, so adding a new module cannot silently skip validation.

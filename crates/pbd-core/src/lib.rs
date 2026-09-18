@@ -8,5 +8,6 @@ pub mod hex;
 pub mod orbit;
 pub mod planet_gen;
 pub mod terrain;
+pub mod weather;
 
 pub use glam::{DQuat, DVec3};

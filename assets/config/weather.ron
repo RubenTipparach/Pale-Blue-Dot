@@ -4,6 +4,25 @@
 // Tenebris's weather.yaml and the values are its shipped ones.
 (
     wet_fade_tau_s: 1.6,
+
+    // The field: where and when it rains at all. A drifting field of warm
+    // pockets condenses the terrain's own moisture into cloud; where the cloud
+    // is thick enough it rains, and the rain trails the cloud by sampling the
+    // same field `rain_min_s` earlier rather than by remembering anything. See
+    // `pbd_core::weather`. Measured on the shipped values: the body averages
+    // 0.18 cover with 5.9% of it precipitating at any moment.
+    solar_scale: 2.2,
+    solar_drift: 0.015,
+    solar_floor: 0.55,
+    arid_gamma: 1.35,
+    cloud_min: 0.22,
+    cloud_full: 0.52,
+    min_alpha: 0.32,
+    rain_cover_min: 0.62,
+    rain_min_s: 15.0,
+    // A weather system is far bigger than the 188 m a biome is decided on, so
+    // moisture is asked a second question at its own planet-scale frequency.
+    weather_moisture_scale: 1.6,
     rain_fall_mps: 70.0,
     rain_width_m: 0.012,
     rain_streak_m: 1.5,

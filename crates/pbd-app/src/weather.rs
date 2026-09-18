@@ -1,11 +1,15 @@
-//! The weather field: one rain intensity, and the wetness the ground remembers.
+//! What the weather is HERE: the rain under the player, and the wetness the
+//! ground remembers.
 //!
 //! Every rain effect (the water cap's ripples, the terrain's wet sheet and
-//! rivulets, the lens droplets, the precipitation) reads these two numbers and
-//! keeps no rain state of its own. Rain is global until a cloud field shared
-//! with the sky shader exists; see `openspec/changes/weather-rain`.
+//! rivulets, the lens droplets, the precipitation) reads these numbers and
+//! keeps no rain state of its own. What changed when the field landed is only
+//! where `rain` comes from: `pbd_core::weather` sampled under the player,
+//! rather than a global switch. Not one consumer learned anything, which is the
+//! one-code-path rule collecting a dividend it was owed.
 
 use crate::config::WeatherSettings;
+use crate::planet::terrain::TERRAIN;
 use crate::planet::{PLANET_RADIUS, PlanetContact, PlanetRenderFrame, surface_height};
 use bevy::{
     asset::RenderAssetUsages,
@@ -14,6 +18,7 @@ use bevy::{
     prelude::*,
     render::extract_resource::ExtractResource,
 };
+use pbd_core::weather::{self as field, Precip};
 
 #[derive(Resource, Clone, Copy, Debug, Default, ExtractResource)]
 pub struct Weather {
@@ -21,13 +26,60 @@ pub struct Weather {
     pub rain: f32,
     /// What the ground remembers, 0..1; follows `rain` on `wet_fade_tau_s`.
     pub wetness: f32,
+    /// Cloud cover over the player, 0..1. The sky shader reads it, so the
+    /// overcast a player stands under is the same one that is raining on them.
+    pub cover: f32,
+    /// What is falling here. The shower draws rain streaks either way until
+    /// there is a snow particle; the field knows the difference already.
+    pub snowing: bool,
 }
+
+/// How hard a storm the P key is currently forcing, 0..1.
+///
+/// The reference's weather menu forces one with `moisture_boost`, which lerps
+/// every cell toward saturation. Forcing rain THROUGH the field rather than
+/// around it is what keeps one path deciding the weather: at a boost of one the
+/// whole planet is past the rain threshold, and it is still the field saying so.
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct StormForcing(pub f32);
 
 /// Wetness after `dt` seconds chasing `rain` with e-fold time `tau`. Pure so a
 /// test can hold the lag to the configured constant.
 pub fn settle_wetness(wetness: f32, rain: f32, dt: f32, tau: f32) -> f32 {
     let blend = 1.0 - (-dt / tau.max(1e-6)).exp();
     (wetness + (rain - wetness) * blend).clamp(0.0, 1.0)
+}
+
+/// Sample the field under the player. This is the only place `rain` is set.
+fn sample_field(
+    clock: Res<crate::planet::PlanetClock>,
+    forcing: Res<StormForcing>,
+    settings: Res<WeatherSettings>,
+    contact: Option<Res<PlanetContact>>,
+    frame: Res<PlanetRenderFrame>,
+    cameras: Query<&GlobalTransform, With<Camera3d>>,
+    mut weather: ResMut<Weather>,
+) {
+    let Ok(camera) = cameras.single() else {
+        return;
+    };
+    // The column under the player, in the body's own frame: the render frame
+    // holds where the body is, and weather is a function of a surface
+    // direction, so the camera has to come home before it can be asked.
+    let body_local = camera.translation().as_dvec3() - frame.center;
+    let Some(direction) = body_local.as_vec3().try_normalize() else {
+        return;
+    };
+    let _ = contact;
+    let cell = field::cloud_cell(
+        &settings.field(forcing.0),
+        &TERRAIN,
+        direction,
+        clock.seconds(),
+    );
+    weather.rain = if cell.raining { cell.cover } else { 0.0 };
+    weather.cover = cell.cover;
+    weather.snowing = cell.precip == Precip::Snow;
 }
 
 fn follow_rain(time: Res<Time>, settings: Res<WeatherSettings>, mut weather: ResMut<Weather>) {
@@ -39,16 +91,18 @@ fn follow_rain(time: Res<Time>, settings: Res<WeatherSettings>, mut weather: Res
     );
 }
 
-/// P cycles the rain through clear, half and full, the way Tenebris's storm
-/// key does, so a storm can be looked at on demand.
-fn cycle_rain(keys: Res<ButtonInput<KeyCode>>, mut weather: ResMut<Weather>) {
+/// P cycles the storm forcing through none, half and full, the way Tenebris's
+/// weather menu does. It moves the FIELD rather than the rain, so a forced storm
+/// is a real one: clouds thicken, the sky closes and it rains because the field
+/// says it is overcast, not because a number was written past it.
+fn cycle_rain(keys: Res<ButtonInput<KeyCode>>, mut forcing: ResMut<StormForcing>) {
     if keys.just_pressed(KeyCode::KeyP) {
-        weather.rain = match weather.rain {
-            r if r < 0.25 => 0.5,
-            r if r < 0.75 => 1.0,
+        forcing.0 = match forcing.0 {
+            f if f < 0.25 => 0.5,
+            f if f < 0.75 => 1.0,
             _ => 0.0,
         };
-        info!("Rain {:.1}", weather.rain);
+        info!("Storm forcing {:.1}", forcing.0);
     }
 }
 
@@ -237,17 +291,27 @@ pub struct WeatherPlugin {
 
 impl Plugin for WeatherPlugin {
     fn build(&self, app: &mut App) {
+        // `--rain` is a storm FORCING now, not a rain level: it asks the field
+        // for weather rather than overriding it, so the same one path decides
+        // what the sky is doing whether or not a flag was passed.
+        let forcing = self.rain.clamp(0.0, 1.0);
         app.insert_resource(Weather {
-            rain: self.rain.clamp(0.0, 1.0),
+            rain: forcing,
             // Launching into rain starts with wet ground; a capture at frame 60
             // should not be waiting on a 1.6 s fade.
-            wetness: self.rain.clamp(0.0, 1.0),
+            wetness: forcing,
+            cover: forcing,
+            snowing: false,
         })
+        .insert_resource(StormForcing(forcing))
         .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
             Weather,
         >::default())
         .add_systems(Startup, spawn_shower)
-        .add_systems(Update, (follow_rain, cycle_rain, rebuild_shower).chain());
+        .add_systems(
+            Update,
+            (sample_field, follow_rain, cycle_rain, rebuild_shower).chain(),
+        );
     }
 }
 
