@@ -285,11 +285,6 @@ pub fn run(args: &[String]) {
         Update,
         (configure_camera, scene::move_moon, hud::update, capture),
     )
-    // The scripted keys have to be written where the real ones are: after the
-    // input clear and before the walking input reads them, which is in
-    // RunFixedMainLoop. Pressed in `Update` they were wiped by the next
-    // frame's clear before anything looked, and the walker stood still.
-    .add_systems(PreUpdate, swim_script.after(bevy::input::InputSystems))
     .add_systems(Last, measure_frames);
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
@@ -297,6 +292,16 @@ pub fn run(args: &[String]) {
             ..default()
         })
         .add_plugins(WalkingPlugin);
+        if launch.swim {
+            // The scripted keys have to be written where the real ones are:
+            // after the input clear and before the walking input reads them,
+            // which is in RunFixedMainLoop. Pressed in `Update` they were
+            // wiped by the next frame's clear before anything looked, and the
+            // walker stood still. Registered only beside the walker it drives:
+            // a plain photo has no `WalkingState`, and a system that asks for
+            // one unconditionally panics the first frame.
+            app.add_systems(PreUpdate, swim_script.after(bevy::input::InputSystems));
+        }
     }
     if launch.fixed || launch.capture.is_some() {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
@@ -451,7 +456,6 @@ fn photo_camera(
 /// water being entered, since a walker with no input stands still, and it is
 /// the same shoreline the `shore`, `wade` and `dive` camera presets frame.
 fn swim_script(
-    launch: Res<Launch>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
     mut state: ResMut<pbd_app::walking::WalkingState>,
     mut placed: Local<bool>,
@@ -465,7 +469,7 @@ fn swim_script(
         With<pbd_app::walking::Walker>,
     >,
 ) {
-    if !launch.swim || !state.active {
+    if !state.active {
         return;
     }
     if !*placed {

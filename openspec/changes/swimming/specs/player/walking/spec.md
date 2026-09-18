@@ -44,3 +44,14 @@ out under their own control, without a separate flight mechanic.
 - **WHEN** a walker in deep water beside a ledge holds the jump control
 - **THEN** they rise to and above the surface
 - **AND** can then step onto the ledge
+
+### Requirement: Leaving the ship over water lands in the water
+Toggling from flight to walking SHALL put the walker where the ship is,
+floating at the surface if that is over water, and SHALL NOT move them to the
+nearest shore.
+
+#### Scenario: Toggling to walk over the open sea
+- **WHEN** a pilot over deep water toggles to walking
+- **THEN** the walker appears under the ship, with their feet at the water
+  surface, not grounded
+- **AND** the swim model takes over from there

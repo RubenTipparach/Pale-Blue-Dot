@@ -39,5 +39,14 @@
       pressed in `Update` are wiped by the next frame's input clear before
       `RunFixedMainLoop` reads them, and pointer capture follows the window's
       focus, which a headless window never reports.
+- [x] The flight-to-walk toggle no longer walks to the nearest land first.
+      That was the only sane thing while the sea was a wall; with a swimmer it
+      snapped a pilot over the ocean to a shore they were nowhere near. The
+      walker now arrives under the ship, floating at the sheet and not grounded
+      (`toggling_to_walk_over_the_sea_lands_in_the_water_not_on_a_shore`).
+- [x] Found on the way: the `--swim` script was registered unconditionally and
+      asked for `WalkingState`, which a plain photo never has, so every
+      `--capture --view <preset>` run since the swim landed panicked on its
+      first frame. It is registered beside the walker it drives now.
 - [ ] Ask the owner to swim in the running game. The feel of water is exactly
       the sort of thing a green test cannot settle.

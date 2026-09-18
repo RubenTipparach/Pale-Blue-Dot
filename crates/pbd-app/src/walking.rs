@@ -347,31 +347,33 @@ fn switch_mode(world: &mut World) {
             let input = world.resource::<FlightInputState>();
             (input.view_rotation(), input.is_captured())
         };
-        let terrain = world.resource::<PlanetContact>();
-        let direction = position.normalize();
-        let up = if terrain.sample(direction).water_depth > 0.0 {
-            terrain.find_land_near(direction)
-        } else {
-            direction
-        };
-        place_walker(world, up, Some(rotation));
+        // Where the ship is, water included. This used to walk to the nearest
+        // land first, which was the only thing to do while the sea was a wall;
+        // now that a walker can swim it snapped a pilot over the ocean to a
+        // shore they were nowhere near, which the owner rightly called bad.
+        place_walker(world, position.normalize(), Some(rotation));
         world.resource_mut::<WalkingState>().captured = captured;
         set_active_mode(world, true);
     }
 }
 
-fn place_walker(world: &mut World, mut up: Vec3, view: Option<Quat>) {
+fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
     let terrain = world.resource::<PlanetContact>();
-    let (mut support, water) = footprint(terrain, up * terrain.sample(up).radius);
-    if water {
-        let center = terrain.find_land_near(up);
-        up = (center * terrain.sample(center).radius
-            + tangent_heading(Vec3::Y.cross(center), center) * 4.0)
-            .normalize();
-        support = footprint(terrain, up * terrain.sample(up).radius).0;
-    }
+    let sheet = PLANET_RADIUS
+        - world
+            .resource::<crate::config::WaterSettings>()
+            .depth_offset_m;
     // Clear the whole footprint when a handoff lands beside a raised terrace.
-    let position = up * (support + HALF_HEIGHT + CONTACT_SKIN);
+    // Over water the walker arrives floating at the sheet rather than standing
+    // on the seabed, and is not grounded: the swim model takes it from there.
+    let (support, water) = footprint(terrain, up * terrain.sample(up).floor_radius);
+    let floating = water && support < sheet;
+    let feet = if floating {
+        sheet
+    } else {
+        support + CONTACT_SKIN
+    };
+    let position = up * (feet + HALF_HEIGHT);
     let body = world.resource::<WalkingState>().body;
     world.entity_mut(body).insert((
         Position(position),
@@ -381,7 +383,7 @@ fn place_walker(world: &mut World, mut up: Vec3, view: Option<Quat>) {
         Transform::from_translation(position),
         GroundState {
             previous: position,
-            grounded: true,
+            grounded: !floating,
         },
     ));
     let mut state = world.resource_mut::<WalkingState>();
@@ -842,6 +844,68 @@ mod tests {
             travelled > 1.0,
             "the walker went {travelled:.2} m into the sea"
         );
+    }
+
+    /// Toggling from flight to walking over open water used to walk to the
+    /// nearest land first, which was the only sane thing while the sea was a
+    /// wall. It is not now, and it snapped a pilot over the ocean to a shore
+    /// they were nowhere near. The walker arrives where the ship is, floating.
+    #[test]
+    fn toggling_to_walk_over_the_sea_lands_in_the_water_not_on_a_shore() {
+        let mut app = app();
+        let sheet = PLANET_RADIUS
+            - app
+                .world()
+                .resource::<crate::config::WaterSettings>()
+                .depth_offset_m;
+        let direction = deep_water(app.world().resource::<PlanetContact>(), 4.0);
+        // Fly first, then park the ship over deep water and press F.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyF);
+        app.update();
+        assert!(
+            !app.world().resource::<WalkingState>().active,
+            "the first F should fly"
+        );
+        {
+            // The harness has no input clear system: a press stays "just
+            // pressed" until it is cleared by hand.
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.release(KeyCode::KeyF);
+            keys.clear();
+        }
+        app.update();
+        assert!(
+            !app.world().resource::<WalkingState>().active,
+            "a cleared F must not toggle again"
+        );
+        let ship_at = direction * (sheet + 30.0);
+        let mut ships = app
+            .world_mut()
+            .query_filtered::<&mut Position, With<PilotShip>>();
+        for mut position in ships.iter_mut(app.world_mut()) {
+            position.0 = ship_at;
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyF);
+        app.update();
+        let state = app.world().resource::<WalkingState>();
+        assert!(state.active, "the second F should walk");
+        let body = app.world().entity(state.body);
+        let position = body.get::<Position>().unwrap().0;
+        let drift = position.normalize().dot(direction).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
+        assert!(
+            drift < 1.0,
+            "the walker was moved {drift:.1} m away from the ship"
+        );
+        assert!(
+            (position.length() - HALF_HEIGHT - sheet).abs() < 0.1,
+            "the walker should float at the sheet, feet at {:.2} against {sheet:.2}",
+            position.length() - HALF_HEIGHT
+        );
+        assert!(!body.get::<GroundState>().unwrap().grounded);
     }
 
     /// The reference's water model, at its own numbers: sinking is drag
