@@ -467,12 +467,20 @@ Tenebris applies no tone mapping, so its 0.02/0.10/0.22 body colour is 38, 89,
 
 ![The coast from 420 m, after](screenshots/water-colour-coast.png)
 
-**Underwater is the same knob.** The composite saturates to `deep_color` over
-distance, so the dive frame went from a grey-blue 42, 89, 128 to a saturated
-15, 96, 139 by the same change, which is the direction the owner asked for
-there too. Whether it now reads as Tenebris's underwater is a judgement to make
-in the running game; a Tenebris dive frame is being captured for a direct
-comparison and is recorded below when it lands.
+![Tenebris, four metres under its own ocean](screenshots/tenebris-dive.png)
+
+**Underwater is the same knob, and it was measured against Tenebris itself.**
+The composite saturates to `deep_color` over distance, so the dive frame went
+from a grey-blue 42, 89, 128 to a saturated 15, 96, 139 by the same change.
+The frame above is `tenebris-client` built from the reference checkout and run
+headless on the same software rasteriser with `TENEBRIS_DEV_DIVE=4` and
+`TENEBRIS_DEV_SHOT`, its eye four metres under the deepest tile of a fresh
+world: it measures 28, 90, 145 (saturation 117) in the upper half and 14, 59,
+106 (92) in the lower. Ours was the greyer of the two before this change (86
+against 117) and is now the same saturation with the same blue; what Tenebris
+has that ours does not is its surface seen from below, the caustic pattern
+over the whole frame, which the `dive` preset here looks level and away from.
+The look in the running game is still the owner's call.
 
 ![Wading at the waterline](screenshots/lod-wade.png)
 
