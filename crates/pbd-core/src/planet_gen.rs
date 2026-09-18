@@ -696,6 +696,59 @@ mod tests {
         );
     }
 
+    /// How BUMPY the ground is, which is the thing a walker feels and a
+    /// picture shows: over land, the share of adjacent cells whose one-metre
+    /// quantised caps differ at all, and by how much. A surface that reads as
+    /// smooth is one where most neighbours share a height. Also the finest
+    /// wavelength each term carries, in metres, since a height field has
+    /// nothing to show below the shortest one in it. Run with `--ignored
+    /// --nocapture`; the same numbers off `tenebris-core` are the reference.
+    #[test]
+    #[ignore]
+    fn roughness_report() {
+        let cfg = TerrainConfig::default();
+        const RADIUS: f32 = 4_800.0;
+        const TILE: f32 = 2.833;
+        let step = TILE / RADIUS;
+        let (mut pairs, mut stepped, mut total) = (0usize, 0usize, 0.0f64);
+        for d in sphere(40_000) {
+            let h = surface_altitude(&cfg, d).floor();
+            if h < cfg.sea_level_m {
+                continue;
+            }
+            let (a, b) = d.any_orthonormal_pair();
+            for axis in [a, b] {
+                let n = (d + axis * step).normalize();
+                if surface_altitude(&cfg, n) < cfg.sea_level_m {
+                    continue;
+                }
+                let delta = (surface_altitude(&cfg, n).floor() - h).abs();
+                pairs += 1;
+                total += delta as f64;
+                if delta >= 1.0 {
+                    stepped += 1;
+                }
+            }
+        }
+        println!(
+            "neighbours {pairs}: {:.1}% differ by a block or more, mean step {:.2} m",
+            100.0 * stepped as f64 / pairs as f64,
+            total / pairs as f64
+        );
+        for (name, scale, octaves, lacunarity) in [
+            ("continent", cfg.continent_scale, 6u32, 2.0f32),
+            ("mountain", cfg.mountain_scale, 4, 2.2),
+            ("hill", cfg.hill_scale, 3, 2.0),
+            ("detail", cfg.detail_scale, 2, 2.0),
+            ("river", cfg.river_scale, 4, 2.0),
+            ("moisture", cfg.moisture_scale, 4, 2.0),
+        ] {
+            let finest = RADIUS / (scale * lacunarity.powi(octaves as i32 - 1));
+            println!("  {name:9} coarsest {:7.0} m, finest {finest:6.0} m = {:5.0} cells",
+                RADIUS / scale, finest / TILE);
+        }
+    }
+
     /// Computed by `tenebris_core::rng::gnoise3d_seed` on these inputs.
     const REFERENCE_NOISE: [(u64, [f32; 3], u32); 4] = [
         (0x5eed_2026, [0.3, 0.7, 0.2], 0xbebfa87c),
