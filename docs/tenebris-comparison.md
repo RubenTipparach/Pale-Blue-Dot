@@ -341,6 +341,27 @@ exactly the halved walk speed, at -2 m with the waterline across the eye. It
 is the first time the straddle view has been reached by walking rather than by
 a camera preset.
 
+**And the scripted swim proved the sea had no depth to dive in.** Seven hundred
+frames of holding forward left the walker still wading at two metres, because
+the rescale had compressed the ocean relief to 0.12 against the land's 0.17 and
+left a shelf one to two metres deep for hundreds of metres. That had been
+written up as a look problem, the flat pale sea in daylight; it is the same
+defect, and a walker who cannot submerge cannot dive, so it stopped being a
+question of taste. `OCEAN_RELIEF` is 0.45 now. The land does not move: the
+summits are what was asked to be climbable, and nobody walks on the sea floor.
+
+| out from the waterline | was | now |
+| ---: | ---: | ---: |
+| 45 m | -1 m | **-3 m** |
+| 91 m | -2 m | **-5 m** |
+| 181 m | -2 m | **-8 m** |
+| 725 m | -7 m | **-24 m** |
+
+Wading becomes swimming about forty metres out, which is a beach. The relief
+test was re-pinned and renamed with it: it asserts the sea within sight of a
+standing player is deeper than their eye, which is the property that matters,
+rather than a number somebody chose.
+
 **And it needed a scripted capture, which found two more defects.** A walker
 with no input never moves, so `--swim` places one at the shoreline and holds
 forward. Scripted keys pressed in `Update` are wiped by the next frame's input

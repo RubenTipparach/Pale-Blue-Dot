@@ -14,12 +14,16 @@ pub const PLANET_RADIUS: f32 = 4_800.0;
 /// cell height, and the walker's step is sized off it.
 pub const ELEVATION_STEP: f32 = 1.0;
 
-/// How far the generated relief is compressed above and below the sea, so
-/// the seeded coastline keeps its shape while summits land near 150 m and
-/// the ocean floor near 60 m down: mountains a walker can climb rather than
-/// scenery, on a body whose column is a few times Tenebris's 40 m of land.
+/// How far the generated relief is compressed above and below the sea. The
+/// land is cut hard so a walker can climb a mountain in one-metre steps; the
+/// SEA is not, and cutting both together was a mistake with two consequences
+/// the owner hit. It left a shelf one to two metres deep for hundreds of
+/// metres, so the water a standing player looks across is sand seen through a
+/// film rather than water, and so a swimmer walking out to sea wades for a
+/// kilometre without ever submerging. Nobody walks on the sea floor, so it
+/// keeps more of its range.
 const LAND_RELIEF: f32 = 0.17;
-const OCEAN_RELIEF: f32 = 0.12;
+const OCEAN_RELIEF: f32 = 0.45;
 
 fn hash(x: i32, y: i32, z: i32) -> f32 {
     let mut n = (x as u32).wrapping_mul(0x8da6b343)
@@ -128,11 +132,33 @@ mod tests {
     }
 
     /// The relief is authored for a walker: summits near 150 m rather than
-    /// the +432 m the 4,000 m preview carried, and an ocean floor a few
-    /// times Tenebris's 24 m rather than -516 m. Measured over a Fibonacci
-    /// sample of the sphere so no seam or pole is favoured.
+    /// the +432 m the 4,000 m preview carried. The sea keeps more of its
+    /// range than the land, because a shelf a walker cannot submerge in is
+    /// not a sea. Measured over a Fibonacci sample of the sphere so no seam
+    /// or pole is favoured.
+    /// The walker's eye above its feet, which is the depth that decides
+    /// whether walking out to sea ever becomes swimming.
+    const EYE_PLUS_FEET: f32 = 2.5;
+
+    /// How deep the sea is a hundred metres out from the shoreline the capture
+    /// presets walk, which is well inside what a standing player can see.
+    fn shore_profile() -> (f32, f32) {
+        let lat = 72_f32.to_radians();
+        let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
+        let step = 2.833 / PLANET_RADIUS;
+        let mut lon = 0.0_f32;
+        while surface_height(at(lon)) < 0.0 && lon < std::f32::consts::TAU {
+            lon += step;
+        }
+        while surface_height(at(lon)) >= 0.0 && lon < 2.0 * std::f32::consts::TAU {
+            lon += step;
+        }
+        let out = 100.0;
+        (out, -surface_height(at(lon + out / PLANET_RADIUS)))
+    }
+
     #[test]
-    fn relief_is_cut_to_climbable_summits_and_a_shallow_ocean_floor() {
+    fn relief_is_cut_to_climbable_summits_over_a_sea_deep_enough_to_swim_in() {
         let samples = 200_000;
         let golden = std::f32::consts::PI * (3. - 5_f32.sqrt());
         let (mut peak, mut floor) = (f32::MIN, f32::MAX);
@@ -145,6 +171,15 @@ mod tests {
             floor = floor.min(h);
         }
         assert!((120.0..=180.0).contains(&peak), "summit {peak} m");
-        assert!((-90.0..=-40.0).contains(&floor), "ocean floor {floor} m");
+        // A shelf a walker cannot submerge in is not a sea: the water within
+        // sight of a standing player has to be deeper than their eye.
+        let shelf = shore_profile();
+        assert!(
+            shelf.1 > EYE_PLUS_FEET,
+            "the sea is {:.1} m deep {:.0} m out, which a walker wades rather than swims",
+            shelf.1,
+            shelf.0
+        );
+        assert!((-260.0..=-180.0).contains(&floor), "ocean floor {floor} m");
     }
 }

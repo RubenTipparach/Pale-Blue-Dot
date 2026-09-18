@@ -1,17 +1,32 @@
 # Tasks
 
-## 1. Give the sea depth
+## 1. Give the sea depth (done)
 
-- [ ] Raise `OCEAN_RELIEF` from 0.12 so the shelf falls away within sight of a
-      standing player, and re-pin
-      `relief_is_cut_to_climbable_summits_and_a_shallow_ocean_floor` to the new
-      floor. The land's `LAND_RELIEF` does not move: the summits are what the
-      owner asked to be climbable.
-- [ ] Measure the new shelf profile out from the `shore` walk, the way the
-      current one was measured, and put the table in the comparison doc.
-- [ ] Re-check the `dive` preset against the new profile: it walks out until the
-      floor clears the requested depth, so a deeper shelf should shorten that
-      walk rather than lengthen it.
+Brought forward by the swimming change: a walker who cannot submerge cannot
+dive, so this stopped being a look question and started being a blocked
+feature. A scripted swim walked seven hundred frames out to sea and was still
+wading at two metres.
+
+- [x] `OCEAN_RELIEF` 0.12 to **0.45**, and the relief test re-pinned and
+      renamed: it asserts the sea within sight of a standing player is deeper
+      than their eye, which is the property that actually matters, rather than
+      a number. `LAND_RELIEF` does not move: the summits are what the owner
+      asked to be climbable.
+- [x] The new shelf, measured along the `shore` walk, against the old:
+
+| out from the waterline | was | now |
+| ---: | ---: | ---: |
+| 10 m | -1 m | -1 m |
+| 25 m | -1 m | -2 m |
+| 45 m | -1 m | **-3 m** |
+| 91 m | -2 m | **-5 m** |
+| 181 m | -2 m | **-8 m** |
+| 363 m | -3 m | **-11 m** |
+| 725 m | -7 m | **-24 m** |
+
+      Wading becomes swimming about forty metres out, which is a beach.
+- [x] The `dive` preset walks out until the floor clears the requested depth,
+      so a deeper shelf shortens that walk rather than lengthening it.
 
 ## 2. Night (done)
 
