@@ -192,13 +192,90 @@ mod tests {
             shelf.1,
             shelf.0
         );
-        assert!((-110.0..=-60.0).contains(&floor), "ocean floor {floor} m");
+        // The floor band widened from -110 when the land bias landed. The bias
+        // shifts the whole continent field down to break the supercontinent, so
+        // the deepest basin goes down with it: measured -126 m against -110
+        // before. That is the choice's own consequence rather than a drift, and
+        // what this assertion is for is unchanged - a sea a walker can swim in
+        // and a floor that is not absurd under a 150 m summit.
+        assert!((-145.0..=-60.0).contains(&floor), "ocean floor {floor} m");
     }
 }
 
 #[cfg(test)]
 mod landmass_report {
     use super::*;
+
+    /// Group the land into connected masses on a level-`n` dual sphere, largest
+    /// first, as a share of all land. Shared by the pinning test and the two
+    /// reports so there is one flood fill rather than three.
+    fn land_masses(level: u32) -> (f32, Vec<f32>) {
+        let cells = super::super::topology::dual_sphere(level);
+        let sea = TERRAIN.sea_level_m;
+        let land: Vec<bool> = cells
+            .iter()
+            .map(|c| surface_height(c.direction) >= sea)
+            .collect();
+        let mut seen = vec![false; cells.len()];
+        let mut sizes = Vec::new();
+        for start in 0..cells.len() {
+            if !land[start] || seen[start] {
+                continue;
+            }
+            let mut stack = vec![start];
+            seen[start] = true;
+            let mut size = 0usize;
+            while let Some(index) = stack.pop() {
+                size += 1;
+                for &next in &cells[index].neighbors {
+                    if land[next] && !seen[next] {
+                        seen[next] = true;
+                        stack.push(next);
+                    }
+                }
+            }
+            sizes.push(size);
+        }
+        sizes.sort_unstable_by(|a, b| b.cmp(a));
+        let land_total: usize = sizes.iter().sum();
+        let shares = sizes
+            .iter()
+            .map(|s| *s as f32 / land_total.max(1) as f32)
+            .collect();
+        (land_total as f32 / cells.len() as f32, shares)
+    }
+
+    /// The land is several continents and a tail of islands, not one mass.
+    ///
+    /// Both halves are pinned because both causes are real: the continent
+    /// frequency cuts the field, and the land FRACTION decides whether the
+    /// pieces touch. Above about 45% land the sphere percolates and joins up
+    /// however finely it is cut - measured, at `continent_scale` 2.4 with no
+    /// land bias the largest mass is still 90.8% of the land. So a later
+    /// tuning that raises the land back over the band restores the
+    /// supercontinent without touching the frequency at all, and this fails.
+    #[test]
+    fn the_land_is_several_continents_and_a_tail_of_islands() {
+        let (land, shares) = land_masses(5);
+        assert!(
+            (0.30..0.45).contains(&land),
+            "land fraction {land:.3} is outside the band that keeps the masses apart"
+        );
+        assert!(
+            shares[0] < 0.55,
+            "the largest mass holds {:.1}% of the land: that is a supercontinent",
+            100.0 * shares[0]
+        );
+        // Several masses worth calling continents, rather than one and gravel.
+        let continents = shares.iter().filter(|s| **s > 0.05).count();
+        assert!(
+            (3..=8).contains(&continents),
+            "{continents} masses hold more than a twentieth of the land"
+        );
+        // And a real tail behind them: islands, not just two or three lumps.
+        let islands = shares.iter().filter(|s| **s < 0.01).count();
+        assert!(islands >= 10, "only {islands} islands");
+    }
 
     /// Sweep the continent field and report what each setting makes, so the
     /// candidates worth rendering are chosen off numbers rather than guesses.

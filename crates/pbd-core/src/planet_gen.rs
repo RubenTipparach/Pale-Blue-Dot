@@ -106,7 +106,7 @@ impl TerrainConfig {
     pub const TENEBRIS: Self = Self {
         seed: 0x5eed_2026,
         radius_m: 4_800.0,
-        continent_scale: 0.8,
+        continent_scale: 1.6,
         mountain_m: 686.0,
         hill_m: 60.0,
         detail_m: 25.0,
@@ -114,7 +114,7 @@ impl TerrainConfig {
         mountain_height: 0.8,
         hill_amplitude_m: 6.0,
         detail_amplitude_m: 2.0,
-        land_bias: 0.0,
+        land_bias: -0.05,
         ocean_depth_power: 1.1,
         land_scale_m: 210.0,
         ocean_scale_m: 320.0,
@@ -590,8 +590,13 @@ mod tests {
             land * 100.0
         );
         assert!((130.0..=180.0).contains(&peak), "{measured}");
-        assert!((-110.0..=-60.0).contains(&floor), "{measured}");
-        assert!((0.40..=0.60).contains(&land), "{measured}");
+        // The floor and the land band both moved with the land bias that broke
+        // the supercontinent. The bias shifts the whole continent field down,
+        // so the deepest basin goes with it (-125 m against -110 before), and
+        // the land fraction is the POINT: above about 45% the sphere percolates
+        // and the masses join up however finely the field is cut.
+        assert!((-145.0..=-60.0).contains(&floor), "{measured}");
+        assert!((0.30..=0.45).contains(&land), "{measured}");
     }
 
     /// The ground a walker crosses is as stepped as the reference's. Measured
@@ -658,6 +663,22 @@ mod tests {
             if surface_altitude(&cfg, start) < cfg.sea_level_m + 4.0 {
                 continue;
             }
+            // Outside the cold band. What this test is about is whether the
+            // MOISTURE field is fine enough that temperate land changes
+            // character within a kilometre; the polar caps are a latitude band
+            // and are uniform by construction, so a walk inside one staying
+            // tundra is the generator being right, not a field being coarse.
+            //
+            // It has to say so explicitly because the two only came apart when
+            // the land fraction dropped to break the supercontinent: the caps
+            // are the same size in latitude but a much larger share of what
+            // land is left (tundra went from 3.6% of the body to 9.5%), so
+            // more walks start in them. Measured at the moment it first
+            // failed, 14 of the 16 uniform walks were tundra and only 2 were
+            // fields - the moisture variety had not moved at all.
+            if start.y.abs() > cfg.cold_latitude {
+                continue;
+            }
             let (heading, _) = start.any_orthonormal_pair();
             let mut seen = std::collections::BTreeSet::new();
             let mut here = start;
@@ -684,6 +705,48 @@ mod tests {
             single * 4 < walks,
             "{single} of {walks} kilometre walks stayed inside one biome"
         );
+    }
+
+    #[test]
+    #[ignore = "a probe: cargo test -p pbd-core single_biome_walks -- --ignored --nocapture"]
+    fn single_biome_walks() {
+        const TILE: f32 = 2.833;
+        let cfg = TerrainConfig::default();
+        let step = TILE / cfg.radius_m;
+        let mut counts: std::collections::BTreeMap<String, usize> = Default::default();
+        let (mut walks, mut single) = (0, 0);
+        for start in sphere(400) {
+            if surface_altitude(&cfg, start) < cfg.sea_level_m + 4.0 {
+                continue;
+            }
+            let (heading, _) = start.any_orthonormal_pair();
+            let mut seen = std::collections::BTreeSet::new();
+            let mut here = start;
+            let mut dry = true;
+            for _ in 0..(1_000.0 / TILE) as usize {
+                here = (here + heading * step).normalize();
+                let h = surface_altitude(&cfg, here);
+                if h < cfg.sea_level_m {
+                    dry = false;
+                    break;
+                }
+                seen.insert(biome_at(&cfg, here, h));
+            }
+            if !dry {
+                continue;
+            }
+            walks += 1;
+            if seen.len() < 2 {
+                single += 1;
+                *counts
+                    .entry(format!("{:?}", seen.iter().next().unwrap()))
+                    .or_default() += 1;
+            }
+        }
+        println!("{single} of {walks} walks stayed in one biome");
+        for (biome, n) in counts {
+            println!("  {biome}: {n}");
+        }
     }
 
     /// Mountains stand on land: the ridges are multiplied by the continent,

@@ -1358,6 +1358,69 @@ and pinning the two implementations against each other on the GPU. Wind and a
 snow particle are held for the same reason - both are named in the change's
 tasks rather than smuggled in.
 
+## The supercontinent, and the two reasons it was one
+
+The owner asked whether the main land mass could be broken into a few
+continents and some islands. It could, and an orbit capture understated how
+single that mass was: a land bridge one cell wide joins two masses that read as
+separate, and only a flood fill knows.
+
+**Measured** on a level-6 dual sphere, 40,962 cells, before and after:
+
+| | before | after |
+| --- | ---: | ---: |
+| Land | 48.1% | **39.7%** |
+| Connected masses | 28 | 62 |
+| Largest, share of all land | **90.2%** | **40.4%** |
+| Second / third / fourth | 7.4 / 1.7 / 0.2% | 27.8 / 20.5 / 8.1% |
+| Masses under forty cells | 25 | 55 |
+
+So it was one supercontinent, one large island and gravel; it is four
+continents and a tail of islands.
+
+**The obvious cause was the weaker one.** `continent_scale` was 0.8 on the unit
+sphere, less than one full period across the body, so the fractal's loudest
+octave was close to a single gradient. But raising the frequency alone barely
+helps - measured, at scale 2.4 with the land fraction untouched the largest
+mass is still **90.8%** of the land, and at 4.0 it is 61.4% across 118 pieces.
+**Above about 45% land the sphere is past percolation** and the masses join up
+however finely the field is cut. Dropping the land to around a third is what
+separates them, which is also where Earth sits at 29%.
+
+Three candidates were rendered from orbit with their numbers burned into the
+frame, the way the moisture scale was settled, and the owner chose **A**:
+`continent_scale` 1.6 with `land_bias` -0.05. `GENERATOR_VERSION` is 4.
+
+**Three pinned numbers moved, and all three are the choice's own consequences
+rather than drift.**
+
+- **The land band** in `relief_holds_the_budget_and_the_land_fraction` was
+  0.40-0.60 and is 0.30-0.45. Lowering it is the point of the change.
+- **The ocean floor** went from -110 m to -125 m, because the land bias shifts
+  the whole continent field down and the deepest basin goes with it. The band
+  widened to -145; what the assertion is for is unchanged, which is a sea a
+  walker can swim in and a floor that is not absurd under a 150 m summit.
+- **`a_kilometre_of_land_crosses_more_than_one_biome` now skips the cold
+  band**, and that is the interesting one. It failed at 16 of 50 walks staying
+  inside one biome against a limit of a quarter. Probing which biome showed
+  **14 of the 16 were tundra and only 2 were fields**: the polar caps are a
+  latitude band, uniform by construction, so a kilometre inside one staying
+  tundra is the generator being right. What changed is that the caps are the
+  same size in latitude while the land around them shrank, so tundra went from
+  3.6% of the body to 9.5% and more walks start inside one. The moisture
+  variety the test is actually about had not moved at all. **A test that fails
+  for a reason it was not measuring is worse than no test**, so it now says
+  which walks it is judging.
+
+The biome shares moved with the land: Ocean 49.6% to 58.2%, Fields 37.8% to
+24.8%, Tundra 3.6% to 9.5%, Jungle 1.8% to 1.1%. Swamp is still 0.1% and still
+a threshold rather than a scale.
+
+**The islands here come from the continent field**, not the island field:
+`island_scale` and its neighbours only lift ground already in shallow sea, so
+they make atolls near coasts rather than mid-ocean chains. That is left alone,
+so one change moves one thing.
+
 ## Acceptance and comparison boundaries
 
 The original five standalone shaders and the two integrated planet pipeline modules (`planet_surface.wgsl`, `planet_visibility.wgsl`) have explicit contracts in the dedicated Naga validation tool. `sky_atmosphere.wgsl` is explicitly deferred by name because it includes Bevy imports and material substitutions; it must be validated through Bevy's shader composer and the running visual application rather than treated as standalone WGSL. Unknown shader names are still errors, so adding a new module cannot silently skip validation.

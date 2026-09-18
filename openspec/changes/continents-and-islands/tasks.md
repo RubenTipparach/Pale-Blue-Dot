@@ -13,25 +13,25 @@
 
 ## 2. Show the owner
 
-- [ ] Render the three candidates from orbit with their numbers burned into
+- [x] Render the three candidates from orbit with their numbers burned into
       the frame, the way the moisture scale was settled.
-- [ ] Take the owner's pick.
+- [x] Take the owner's pick.
 
 ## 3. Apply it
 
-- [ ] The chosen `continent_scale` and `land_bias` in `TerrainConfig::TENEBRIS`.
-- [ ] `GENERATOR_VERSION` to 4 in the same commit: it is part of saved world
+- [x] The chosen `continent_scale` and `land_bias` in `TerrainConfig::TENEBRIS`.
+- [x] `GENERATOR_VERSION` to 4 in the same commit: it is part of saved world
       IDs and the coastlines have moved.
-- [ ] A test that pins what was chosen - the land fraction inside a band, and
+- [x] A test that pins what was chosen - the land fraction inside a band, and
       the largest mass under a share of the land - so a later tuning cannot
       quietly restore the supercontinent.
-- [ ] Re-check the distribution report: the biome shares move with the land
+- [x] Re-check the distribution report: the biome shares move with the land
       fraction, and swamp was already at 0.1%.
 
 ## 4. Prove it
 
-- [ ] Orbit, coast and a ground preset re-captured.
-- [ ] `docs/tenebris-comparison.md`: the measured before and after.
+- [x] Orbit, coast and a ground preset re-captured.
+- [x] `docs/tenebris-comparison.md`: the measured before and after.
 
 ## 5. Held
 
