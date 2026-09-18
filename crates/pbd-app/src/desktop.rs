@@ -152,6 +152,7 @@ impl Launch {
                 "night",
                 "nightshore",
                 "midnight",
+                "meadow",
                 "pole",
                 "shore",
                 "wade",
@@ -166,7 +167,8 @@ impl Launch {
         );
         assert!(
             result.height.is_none()
-                || (["shore", "nightshore", "midnight", "dive"].contains(&result.view.as_str())
+                || (["shore", "nightshore", "midnight", "meadow", "dive"]
+                    .contains(&result.view.as_str())
                     && result.capture.is_some()),
             "--height requires --view shore or dive with a static --capture"
         );
@@ -340,6 +342,37 @@ fn photo_camera(
     water_settings: Res<pbd_app::config::WaterSettings>,
 ) {
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
+        return;
+    }
+    if launch.view == "meadow" {
+        // Every other ground preset stands at the spawn, and the spawn is in
+        // jungle: a closed canopy at the reference's 115-of-256, which is
+        // under three percent of this world. Pasture is a third of it and no
+        // preset could photograph it. Walk east along the spawn's latitude to
+        // the first pasture cell well clear of the shore and stand there.
+        let seed = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let lat = seed.y.clamp(-1.0, 1.0).asin();
+        let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
+        let step = 4.0 * tile_width_m(FINEST_LEVEL) / PLANET_RADIUS;
+        let mut lon = seed.z.atan2(seed.x);
+        let start = lon;
+        while lon < start + std::f32::consts::TAU {
+            let here = at(lon);
+            let height = surface_height(here);
+            if height > 8.0 && pbd_app::planet::surface_code(here, height) & 0xff == 2 {
+                break;
+            }
+            lon += step;
+        }
+        let ground = at(lon);
+        let height = launch.height.unwrap_or(EYE_HEIGHT);
+        let east = (at(lon + step) - ground).normalize_or_zero();
+        let eye = ground * (terrain_radius(ground) + height);
+        let look = at(lon + 20.0 * step);
+        let mut transform = Transform::from_translation(eye)
+            .looking_at(look * terrain_radius(look) + east * height, ground);
+        transform.translation += launch.render_offset;
+        commands.spawn((Camera3d::default(), transform));
         return;
     }
     if ["shore", "nightshore", "midnight", "wade", "dive"].contains(&launch.view.as_str()) {

@@ -369,7 +369,10 @@ pub fn moisture(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 
 // ---- The biome ---------------------------------------------------------------
 
-/// One classification of a direction that every layer reads.
+/// One classification of a direction that every layer reads. The
+/// discriminants are part of the interface: the record hands them to the
+/// shaders, which key the foliage density and the tree's height off them.
+#[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Biome {
     Ocean,

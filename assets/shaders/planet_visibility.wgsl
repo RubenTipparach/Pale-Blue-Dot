@@ -60,7 +60,7 @@ fn clear_indirect() {
     atomicStore(&args[0].instance_count, 0u);
     args[0].first_vertex = 0u;
     args[0].first_instance = 0u;
-    args[1].vertex_count = 108u;
+    args[1].vertex_count = 198u;
     atomicStore(&args[1].instance_count, 0u);
     args[1].first_vertex = 60u;
     args[1].first_instance = 0u;
@@ -87,13 +87,25 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>) -> bool {
     let level = cell.metadata.x >> 8u;
     if level + 2u < finest_level() || level > finest_level() { return false; }
     if !(owner_fine(cell.owner_a.xyz, level) && owner_fine(cell.owner_b.xyz, level)) { return false; }
-    // Per-material density out of 256, the Tenebris scatter rule at its
-    // rates: forest at its swamp groves' 34, grass at its fields' 13, the
-    // cold scrub at its tundra's 2; times four per level above the finest.
+    // The Tenebris scatter rule at its own rates. Eligibility is the top
+    // block, as it is there: a grass of any kind, or the one tree that grows
+    // on a non-grass top, the tundra pine standing in snow. Density is per
+    // BIOME out of 256 - jungles pack a closed canopy, swamps grow scattered
+    // groves, fields keep the classic 5%, tundra scatters lone pines, and
+    // desert and mountain rock grow nothing. Times four per level above the
+    // finest, so the cover per area is the same at every distance.
     let cover = 1u << (2u*(finest_level()-level));
     let roll = hash(cell.metadata.w) & 0xffu;
-    let material = cell.metadata.y;
-    let tree = (material==3u && roll<34u*cover) || (material==2u && roll<13u*cover) || (material==7u && roll<2u*cover);
+    let material = cell.metadata.y & 0xffu;
+    let biome = (cell.metadata.y >> 8u) & 0xffu;
+    let grass = material==2u || material==3u || material==7u;
+    let pine = biome==7u && material==6u;
+    var density = 0u;
+    if biome==4u { density = 115u; }
+    if biome==5u { density = 34u; }
+    if biome==2u || biome==1u { density = 13u; }
+    if biome==7u { density = 2u; }
+    let tree = (grass||pine) && roll < density*cover;
     return tree && distance(params.camera.xyz,center)<params.settings.w;
 }
 

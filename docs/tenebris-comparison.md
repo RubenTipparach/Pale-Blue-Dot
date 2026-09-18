@@ -231,9 +231,11 @@ printed at startup and pinned by tests):
 | Fine levels resident | none (whole body at 7) | 8 to 11 in bands of 2,400 / 1,200 / 600 / 300 m | our design |
 | Resident records | 163,842 | 163,842 base + ~160,000 fine, 59 MiB at 192 B | |
 | Vertical quantum | 1.00 m | **1.00 m** | 1.0x |
-| Summit / ocean floor | +40 m / -24 m | +147 m / -62 m | see below |
+| Summit / ocean floor | +40 m / -24 m | +153 m / -87 m | see below |
 | Walker step | one block | 1.05 m (one cell plus skin) | 1.0x |
-| Tree scatter | per biome out of 256 (jungle 115, fields 13) | forest 115, grass and scrub 13 | same rule |
+| Tree scatter | per biome out of 256 (jungle 115, swamp 34, fields 13, tundra 2) | **the same table, on the biome in the record** | same rule |
+| Tree geometry | hex prisms, wood 0.20 and leaves 0.65-1.00 of the tile | **the same** | same rule |
+| Tree height | 5-6 m on fields, 9-10 m for a pine | **the same** | 1.0x |
 | Atlas tile across a cap | one tile per face | 1.5 tiles per face | |
 | Atlas tile down a wall | one tile per metre | one tile per metre | 1.0x |
 
@@ -627,6 +629,75 @@ of water over sand.
 ![The shore preset, after](screenshots/terrain-port-shore12.png)
 
 ![Wading, after](screenshots/terrain-port-wade.png)
+
+## The trees are Tenebris's trees now
+
+The owner, in four words: *tenebris-rs has hexagon trees*. Ours were three
+axis-aligned boxes about eleven metres tall with a six-metre crown, authored
+against the old nineteen-metre tile and carried through the rescale by one
+multiplier. Tenebris's tree is not a mesh at all, which is the point of the
+port: it is **wood and leaf voxels in one column, drawn as ordinary hex prisms
+shrunk toward the tile centre**. `block_hex_width` returns 0.20 for wood and
+`0.65 + 0.35 * hash(tile, depth)` for a leaf, and `shrink_corner` lerps each
+corner toward the centre by that much.
+
+The record already carried what a prism needs - the cell's direction and its
+six corner rays - so a tree part is the terrain wall's own construction at a
+shrunk corner set.
+
+| | before | after | the reference |
+| --- | --- | --- | --- |
+| trunk across (flat to flat) | 1.0 m box | **0.57 m** | 0.57 m at 0.20 of the tile |
+| crown across | 6.0 m box | **1.84 - 2.83 m**, a roll per layer | the same hash |
+| pasture tree | 11 m | **5 - 6 m** | 5 - 6 m |
+| jungle tree | 11 m | **7 - 8 m** | 7 - 8 m |
+| swamp grove | 11 m | **8 - 9 m** | 8 - 9 m |
+| tundra pine | none | **9 - 10 m**, a 1 m bole under a cone | the same |
+| vertices per tree | 108 | **198** | n/a, it is voxels there |
+
+**The density is per BIOME now, which needed the biome in the record.** The
+rule was keyed on the top material at rates that had drifted from the ones
+they were taken from (the forest at the swamp's 34, the scrub at the tundra's
+2). The reference keys eligibility on the top BLOCK - any grass, or the one
+tree that grows on a non-grass top, the tundra pine standing in snow - and
+density on the BIOME: jungle 115 of 256, swamp 34, fields 13, tundra 2, desert
+and mountain rock none. The biome rides in the record's surface word beside the
+material, which is one fact each in one place, and the GPU regression now pins
+that rule structurally: four seeds whose rolls are 0, 28, 60 and 226 straddle
+the four rates, so each fixture pair proves one thing - that a biome uses its
+own rate, that the pine is the exception on snow, that snow on a PEAK is not a
+pine, and that a grass rate over rock grows nothing.
+
+**Every ground preset was photographing the rarest thing in the world.** The
+spawn sits at 87 m in jungle, so `surface`, `seam`, `coast` and the walk all
+looked at a closed canopy at the jungle's 45%, which is 2.9% of the sphere.
+Pasture is 36% of it and nothing could photograph it. `--view meadow` walks
+east along the spawn's latitude to the first pasture cell above 8 m and stands
+there at eye height.
+
+![Pasture, which is a third of the world](screenshots/tree-meadow.png)
+
+![Tenebris at 90 m, above, and ours at 90 m, below, at the same crop and zoom](screenshots/tree-compare.png)
+
+![Inside the jungle at eye level](screenshots/tree-jungle.png)
+
+The middle picture is the check that matters: the same tile size, the same
+camera height, the same crop, so a tree that reads bigger IS bigger. They are
+the same tree now. What still differs is the ground under it, which is the
+terrain port's own open item.
+
+**What is deliberately not ported.** The voxel column, because a tree here is
+cosmetic geometry on a heightfield rather than something a player can chop;
+vines, mushrooms and redwoods, which are Sequoia's roster; and collision, which
+our trees have never been in and should stay out of. The pine's crown is eight
+or nine one-metre layers in the reference and is the same span in the two the
+vertex budget carries, so its taper is two segments rather than nine.
+
+**One limit worth naming.** A cell above the finest level carries four times
+the chance, so the cover per area holds at any distance - until the rate
+saturates. Jungle's 115 times four is past 256, so a jungle reads as full cover
+on the two coarser bands rather than 45%. It was already true of the old rate
+at the coarsest band; it is true one band nearer now.
 
 ## Measured gravity comparison
 

@@ -68,19 +68,17 @@ fn hash(x: u32) -> u32 {
     return (h>>22u)^h;
 }
 fn random(x: u32) -> f32 { return f32(hash(x)&65535u)/65535.0; }
+
+// The reference's `block_hex_width` for a leaf: how far a layer's hex is
+// shrunk toward the tile centre, its own roll per layer, so no two layers of
+// one crown are the same width.
+fn leaf_width(id: u32, layer: u32) -> f32 {
+    var h = id*0xDEADBEEFu+layer*0x0BADF00Du+0x12345678u;
+    h = h^(h>>13u);
+    return 0.65+f32(h&0xffu)/255.0*0.35;
+}
 fn normalized(v: vec3<f32>) -> vec3<f32> { return v*inverseSqrt(max(dot(v,v),1e-12)); }
 
-struct BoxVertex { position: vec3<f32>, normal: vec3<f32>, uv: vec2<f32> }
-fn box_vertex(index: u32) -> BoxVertex {
-    let face = index/6u;
-    let triangle = array<u32,6>(0u,1u,2u,0u,2u,3u);
-    let quad = array<vec2<f32>,4>(vec2(-1.,-1.),vec2(1.,-1.),vec2(1.,1.),vec2(-1.,1.));
-    let uv = quad[triangle[index%6u]];
-    let normals = array<vec3<f32>,6>(vec3(1.,0.,0.),vec3(-1.,0.,0.),vec3(0.,1.,0.),vec3(0.,-1.,0.),vec3(0.,0.,1.),vec3(0.,0.,-1.));
-    let right = array<vec3<f32>,6>(vec3(0.,0.,-1.),vec3(0.,0.,1.),vec3(1.,0.,0.),vec3(1.,0.,0.),vec3(1.,0.,0.),vec3(-1.,0.,0.));
-    let up = cross(normals[face],right[face]);
-    return BoxVertex(normals[face]+right[face]*uv.x+up*uv.y,normals[face],uv*0.5+0.5);
-}
 
 @vertex
 fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> VertexOut {
@@ -100,7 +98,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     var normal = axis;
     var uv = vec2(0.5);
     var kind = 0u;
-    var material = cell.metadata.y;
+    var material = cell.metadata.y & 0xffu;
     if vertex < 18u {
         let triangle = vertex/3u;
         let corner = vertex%3u;
@@ -181,23 +179,91 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         }
     } else {
         kind = 2u;
-        let seed = hash(cell.metadata.w);
-        // The compute pass selects nearby vegetated cells before submitting
-        // this separate indirect draw; no rejected tree vertices are invoked.
-        // Authored for the 2.833 m tile: a trunk under two metres across and
-        // a crown about six metres up, the size of a Tenebris tree.
-        let part = (vertex-60u)/36u;
-        let cube = box_vertex((vertex-60u)%36u);
-        let scale = (0.85+random(seed)*0.50)*0.3;
-        var halfsize = vec3(1.7,9.,1.7)*scale;
-        var elevation = 9.*scale;
+        // Tenebris's tree, which is not a mesh but voxels in ONE column drawn
+        // as ordinary hex prisms shrunk toward the tile centre: wood at 0.20
+        // of the cell and each leaf layer at 0.65 + 0.35 * its own hash, so a
+        // canopy is irregular rather than stamped. The record's corner rays
+        // are what a prism needs, and `shrink_corner` in the reference is the
+        // same lerp toward the centre. The compute pass selects the cells; no
+        // tree vertex is invoked for a cell without one.
+        let id = cell.metadata.w;
+        let roll = hash(id);
+        let biome = (cell.metadata.y >> 8u) & 0xffu;
+        // Trunk metres: the reference's 3 + a hash bit + the biome's extra,
+        // so a jungle closes its canopy overhead and a swamp grove stands
+        // over a long bare bole.
+        var extra = 0u;
+        if biome == 4u { extra = 2u; }
+        if biome == 5u { extra = 3u; }
+        if biome == 7u { extra = 3u; }
+        let trunk = f32(3u + ((roll >> 8u) & 1u) + extra);
+        // The tundra pine is the reference's one per-shape override: a single
+        // wood block under a leaf run that tapers from a wide skirt to a
+        // point. Its run is eight or nine one-metre layers there; here it is
+        // the same span in the two the vertex budget carries, so the taper is
+        // two segments rather than nine.
+        let pine = biome == 7u;
+        var trunk_top = trunk;
+        var lo0 = trunk; var hi0 = trunk+1.; var w0a = 0.; var w0b = 0.;
+        var lo1 = trunk+1.; var hi1 = trunk+2.; var w1a = 0.; var w1b = 0.;
+        if pine {
+            trunk_top = 1.;
+            let crown = trunk+3.;
+            let mid = (1.+crown)*0.5;
+            lo0 = 1.; hi0 = mid; w0a = 0.95; w0b = 0.55;
+            lo1 = mid; hi1 = crown; w1a = 0.55; w1b = 0.15;
+        } else {
+            w0a = leaf_width(id,0u); w0b = w0a;
+            w1a = leaf_width(id,1u); w1b = w1a;
+        }
+        // Bottom and top metre, and bottom and top width, of this vertex's
+        // part: the trunk, then a leaf layer's sides, floor and ceiling.
+        let v = vertex-60u;
+        var lo = 0.; var hi = trunk_top; var wa = 0.20; var wb = 0.20;
         material = 8u;
-        if part==1u { halfsize=vec3(9.,6.,9.)*scale; elevation=20.*scale; material=9u; }
-        if part==2u { halfsize=vec3(6.,5.,6.)*scale; elevation=28.*scale; material=9u; }
-        let local = cube.position*halfsize + vec3(0.,elevation,0.);
-        position = axis*radius+tangent*local.x+axis*local.y-bitangent*local.z;
-        normal = tangent*cube.normal.x+axis*cube.normal.y-bitangent*cube.normal.z;
-        uv = cube.uv;
+        if v >= 54u && v < 126u { lo = lo0; hi = hi0; wa = w0a; wb = w0b; material = 9u; }
+        if v >= 126u { lo = lo1; hi = hi1; wa = w1a; wb = w1b; material = 9u; }
+        let lower = radius+lo;
+        let upper = radius+hi;
+        let part = select(v-54u, v, v < 54u) % 72u;
+        if part < 36u {
+            // A side of the prism, built like the terrain wall so the two
+            // agree about which way a face points.
+            let side = part/6u;
+            let i = part%6u;
+            if side < degree {
+                let ca = cell.corners[side].xyz;
+                let cb = cell.corners[(side+1u)%degree].xyz;
+                let points = array<vec3<f32>,4>(
+                    (axis+(ca-axis)*wa)*lower,(axis+(cb-axis)*wa)*lower,
+                    (axis+(cb-axis)*wb)*upper,(axis+(ca-axis)*wb)*upper);
+                let indices = array<u32,6>(0u,1u,2u,0u,2u,3u);
+                position = points[indices[i]];
+                normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
+                let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
+                uv = side_uv[indices[i]]*vec2(1.,max(1.,hi-lo));
+            }
+        } else {
+            // A cap: the fan the terrain cap already draws, at the shrunk
+            // corners. The trunk carries a top cap only, because it stands on
+            // the terrain and a narrow canopy does not cover it; a leaf layer
+            // carries both, because the layer it meets rolled its own width.
+            let up = v < 54u || part >= 54u;
+            let base = select(36u,54u,v >= 54u && up);
+            let t = (part-base)/3u;
+            let c = (part-base)%3u;
+            let r = select(lower,upper,up);
+            let w = select(wa,wb,up);
+            normal = select(-axis,axis,up);
+            position = axis*r;
+            if t < degree && c != 0u {
+                let k = select((t+2u-c)%degree,(t+c-1u)%degree,up);
+                let shrunk = axis+(cell.corners[k].xyz-axis)*w;
+                position = shrunk*r;
+                let local = (shrunk-axis)*params.settings.x;
+                uv = vec2(dot(local,tangent),dot(local,bitangent))/(1.5*tile)+0.5;
+            }
+        }
     }
     var out: VertexOut;
     out.position = position;

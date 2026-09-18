@@ -10,7 +10,7 @@
 
 use super::GpuCell;
 use super::lattice::{Lattice, LocalCell};
-use super::terrain::{PLANET_RADIUS, biome, surface_height};
+use super::terrain::{PLANET_RADIUS, surface_code, surface_height};
 use super::topology::{DualCell, midpoint};
 use bevy::{
     prelude::*,
@@ -106,7 +106,7 @@ fn record(source: CellSource, heights: &mut Heights) -> GpuCell {
         corners,
         metadata: [
             degree as u32 | (source.level as u32) << 8,
-            biome(source.direction, height),
+            surface_code(source.direction, height),
             (skylight * 65535.) as u32,
             source.id,
         ],

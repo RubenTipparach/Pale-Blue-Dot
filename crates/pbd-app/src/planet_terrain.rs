@@ -33,14 +33,22 @@ pub fn terrain_radius(direction: Vec3) -> f32 {
     PLANET_RADIUS + surface_height(direction).max(0.)
 }
 
-/// The material index the surface shader reads, off the generator's top
-/// block and biome. The shader's table is the authority for what each index
-/// draws (0 seabed, 1 beach, 2 pasture, 3 jungle, 4 desert, 5 stone, 6 snow,
-/// 7 marsh) and for which of them carry trees.
-pub(super) fn biome(direction: Vec3, height: f32) -> u32 {
-    use pbd_core::terrain::Material;
+/// What the record hands the shaders about a cell's surface: the material
+/// index in the low byte and the biome in the next one. The shader's table is
+/// the authority for what each material draws (0 seabed, 1 beach, 2 pasture,
+/// 3 jungle, 4 desert, 5 stone, 6 snow, 7 marsh); the biome is what the
+/// foliage pass reads for its density and the tree for its height, which is
+/// how the reference keys both. Two facts in one word because they are
+/// written and read together and a cell has exactly one of each.
+pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
     let biome = planet_gen::biome_at(&TERRAIN, d, height);
+    material_index(d, height, biome) | (biome as u32) << 8
+}
+
+fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
+    use pbd_core::terrain::Material;
+    let d = direction;
     match (planet_gen::top_material(&TERRAIN, d, height), biome) {
         (Material::Sand, _) if height < TERRAIN.sea_level_m => 0,
         (Material::Sand, Biome::Desert) => 4,
@@ -105,6 +113,32 @@ mod tests {
         }
         let out = 100.0;
         (out, -surface_height(at(lon + out / PLANET_RADIUS)))
+    }
+
+    /// What a capture preset is actually standing in, which is what decides
+    /// how dense its trees are: the density table is per biome, so a frame
+    /// that reads as closed canopy is a frame in a jungle rather than a
+    /// scatter rule gone wrong. Run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn biome_under_each_capture_preset() {
+        for (name, direction) in [
+            ("surface", Vec3::new(0.8776, 0.4794, 0.0)),
+            ("coast", Vec3::new(0.8776, 0.4794, 0.0)),
+            (
+                "spawn",
+                crate::flight_view::FlightViewConfig::default().spawn_direction,
+            ),
+        ] {
+            let d = direction.normalize();
+            let h = surface_height(d);
+            let code = surface_code(d, h);
+            println!(
+                "{name:8} height {h:6.1} m  material {}  biome {:?}",
+                code & 0xff,
+                planet_gen::biome_at(&TERRAIN, d, h)
+            );
+        }
     }
 
     #[test]

@@ -167,7 +167,7 @@ impl VisibilityGpu {
         let mapped = slice.get_mapped_range();
         let words: &[u32] = bytemuck::cast_slice(&mapped);
         assert_eq!([words[0], words[2], words[3]], [60, 0, 0]);
-        assert_eq!([words[4], words[6], words[7]], [108, 60, 0]);
+        assert_eq!([words[4], words[6], words[7]], [198, 60, 0]);
         assert_eq!([words[8], words[10], words[11]], [18, 0, 0]);
         let collect = |start: usize, count: u32, capacity: usize| {
             assert!(count as usize <= capacity, "draw exceeds ID capacity");
@@ -320,34 +320,54 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
             * Mat4::look_at_rh(reverse.camera.truncate(), Vec3::Z * RADIUS, Vec3::Y);
     expect(&gpu, &cells, reverse, &[0, 3], &[]);
 
-    // Eligibility fixtures pin the actual existing hash/biome contract without
-    // reimplementing the predicate in Rust: forest 5 passes and 0 fails; grass
-    // 5 passes and 0 fails; scrub 15 passes and 0 fails.
-    let mut cells: Vec<_> = [(3, 5), (3, 0), (2, 5), (2, 0), (7, 15), (7, 0), (5, 0)]
-        .into_iter()
-        .map(|(biome, seed)| {
-            let mut cell = at(0., 0., RADIUS + 500., 6, 2., 0.);
-            cell.metadata[1] = biome;
-            cell.metadata[3] = seed;
-            cell
-        })
-        .collect();
+    // Eligibility fixtures, on the real predicate rather than a Rust twin of
+    // it. The four seeds roll 60, 226, 0 and 28 out of 256, which straddle the
+    // reference's per-biome rates (jungle 115, swamp 34, fields 13, tundra 2),
+    // so each pair pins one rule: that a biome uses ITS rate, that the pine is
+    // the one tree on a non-grass top, that snow alone is not a pine, and that
+    // a grass rate over rock grows nothing.
+    const JUNGLE: u32 = 3 | 4 << 8;
+    const FIELDS: u32 = 2 | 2 << 8;
+    const SWAMP: u32 = 7 | 5 << 8;
+    const TUNDRA: u32 = 6 | 7 << 8;
+    const PEAK: u32 = 6 | 6 << 8;
+    const ROCK: u32 = 5 | 2 << 8;
+    let mut cells: Vec<_> = [
+        (JUNGLE, 1),  // roll 60 under jungle's 115: a tree
+        (JUNGLE, 0),  // roll 226 over it: none
+        (FIELDS, 15), // roll 0 under fields' 13: a tree
+        (FIELDS, 7),  // roll 28 over it, though under jungle's rate: none
+        (SWAMP, 7),   // roll 28 under the groves' 34: a tree
+        (SWAMP, 1),   // roll 60 over it: none
+        (TUNDRA, 15), // roll 0 under the pines' 2: a tree on snow
+        (TUNDRA, 7),  // roll 28 over it: none
+        (PEAK, 15),   // the same snow on a peak, which grows nothing
+        (ROCK, 15),   // a fields rate over rock, which is not a top a tree takes
+    ]
+    .into_iter()
+    .map(|(surface, seed)| {
+        let mut cell = at(0., 0., RADIUS + 500., 6, 2., 0.);
+        cell.metadata[1] = surface;
+        cell.metadata[3] = seed;
+        cell
+    })
+    .collect();
     for height in [201., 200., 199.] {
         let mut cell = at(0., 0., RADIUS + height, 5, 2., 0.);
-        cell.metadata[1] = 3;
-        cell.metadata[3] = 5;
+        cell.metadata[1] = JUNGLE;
+        cell.metadata[3] = 1;
         cells.push(cell);
     }
     expect(
         &gpu,
         &cells,
         params(cells.len(), 2500., 10.),
-        &(0..10).collect::<Vec<_>>(),
-        &[0, 2, 4, 7],
+        &(0..13).collect::<Vec<_>>(),
+        &[0, 2, 4, 6, 10],
     );
     let mut disabled = params(cells.len(), 2500., 10.);
     disabled.settings.w = 0.;
-    expect(&gpu, &cells, disabled, &(0..10).collect::<Vec<_>>(), &[]);
+    expect(&gpu, &cells, disabled, &(0..13).collect::<Vec<_>>(), &[]);
 
     // A crown may intersect the view while its cap is outside. The independent
     // foliage list keeps it; a distant or ineligible column gets no tree margin.
@@ -355,8 +375,8 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
     // 20 m (cap corners at 18 to 22, outside the 10 m half-width) is kept by
     // its crown alone.
     let mut tree = at(20., 0., RADIUS, 6, 2., 0.);
-    tree.metadata[1] = 3;
-    tree.metadata[3] = 5;
+    tree.metadata[1] = JUNGLE;
+    tree.metadata[3] = 1;
     let rock = at(20., 0., RADIUS, 6, 2., 0.);
     let cells = [tree, rock];
     expect(&gpu, &cells, params(2, 100., 10.), &[], &[0]);
