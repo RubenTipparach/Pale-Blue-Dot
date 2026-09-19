@@ -424,6 +424,58 @@ mod tests {
         );
     }
 
+    /// How many caves in the tier OPEN onto the surface. A walker can only
+    /// walk into a cave that has a mouth: an air gap in one column standing
+    /// higher than a neighbour's cap, so the gap is reachable from open air
+    /// without digging. The carve is damped toward the surface on purpose, so
+    /// this decides whether "walk into a cave" is a collision problem or a
+    /// worldgen one.
+    #[test]
+    #[ignore = "a report: cargo test -p pbd-app --lib cave_mouths -- --ignored --nocapture"]
+    fn cave_mouths() {
+        use pbd_core::column::layer_altitude;
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
+        let tier = set.take_columns();
+        let finest = set.finest_records();
+        let mut caves = 0;
+        let mut mouths = 0;
+        let mut walkable = 0;
+        for (index, &slot) in tier.slots.iter().enumerate() {
+            if slot == usize::MAX {
+                continue;
+            }
+            let runs = tier.columns[slot].drawn_runs();
+            if runs.len() < 2 {
+                continue;
+            }
+            caves += 1;
+            let cell = &finest[index];
+            let mut open = false;
+            let mut tall = false;
+            for pair in runs.windows(2) {
+                let floor = layer_altitude(pair[0].to);
+                let roof = layer_altitude(pair[1].from);
+                for side in 0..cell.degree() {
+                    let neighbor_cap = cell.corners[side][3];
+                    // The gap stands above the neighbour's ground, so a
+                    // walker on that ground can see and enter it.
+                    if roof > neighbor_cap + 0.5 && floor < neighbor_cap + 1.05 {
+                        open = true;
+                        tall |= roof - floor >= 1.8;
+                    }
+                }
+            }
+            mouths += open as usize;
+            walkable += tall as usize;
+        }
+        println!(
+            "\n{} columns, {caves} with a cave, {mouths} open to the surface, \
+             {walkable} of those tall enough to walk into",
+            tier.columns.len()
+        );
+    }
+
     #[test]
     fn every_packed_run_reads_back_as_the_column_says() {
         let (_, tier) = tier(Vec3::new(0.8, -0.1, 0.6).normalize());

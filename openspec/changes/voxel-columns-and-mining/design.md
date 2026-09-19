@@ -38,28 +38,140 @@ shaped rather than uniform: thresholded ridged noise gives connected tunnels
 where plain fBm gives isolated bubbles, and the threshold tightens toward the
 surface so the ground is not lace.
 
-## Collision: from a radius to a run
+## Collision: walking into a cave
 
-`SurfaceContact` answers one radius today. It grows to the **run** structure
-around a point:
+### What the two walkers already do
+
+**Tenebris** (`tenebris-client/src/player_ctrl.rs`, `tenebris-core/src/world.rs`)
+walks a tile-centred column stack with four primitives:
+
+| primitive | answers |
+| --- | --- |
+| `walkable_floor_near(tile, r, body_h)` | the nearest floor at or below `r` with `body_h` of passable cells over it; a floor within step height ABOVE wins (the bridge tiebreak) |
+| `ceiling_above(tile, head_r)` | the bottom of the first solid at or above the head |
+| `try_horizontal_step` | the candidate tile's floor must be within `step_height_m` (0.6) of the feet AND have headroom, else the move is a wall and slides |
+| the containment resolve | feet inside solid: lift to the top of that solid run, capped at step + body height |
+
+Around those sit a stack of rescues - the tree-ground override, the straddle
+probe, the neighbour-floor borrow, the topmost-solid fallback, four overshoot
+gates - and Tenebris's own `CLAUDE.md` records the fall-through bug they were
+written for as **still open**. The shape of that history is the lesson: a
+walker that reads ONE tile under its feet flips tiles at every boundary, and
+each flip is a new way to read the wrong column.
+
+**Ours** (`walking.rs`, `planet_contact.rs`) reads a five-point footprint - the
+centre and four points at `BODY_RADIUS` - and stands on the MAX floor of the
+five, swept in 0.2 m segments from the last accepted position. A rise over
+`step_height` (1.05 m) while grounded is a wall; tangential motion is dropped
+and vertical motion kept, which is what lets a jump beside a wall reach full
+height. That footprint is what keeps an edge stable: straddling a boundary
+takes the higher of two answers rather than whichever one the tile lookup
+landed on. Keep it. What it lacks is any notion of a ceiling, because
+`SurfaceContact` has one radius per direction and cannot express one.
+
+### Zero mouths, measured
+
+`cave_mouths` (an ignored report in `planet_column.rs`) counts the tier's caves
+whose air gap stands above a neighbour's cap, which is the only way a walker on
+open ground can enter one without digging. On the shipped tier:
+
+> 3,105 columns, 2,530 with a cave, **0 open to the surface**.
+
+That is by construction: `hollow` damps the carve to nothing over the top
+`roof_m` (9 m) of every column, so no gap ever reaches the ground. The rule was
+written to stop the surface being lace, and it works; the cost is that every
+cave is sealed. **Collision alone can therefore never let a player walk into a
+cave** - the most it buys is falling into one through a sinkhole, and there are
+none of those either.
+
+So "walk into caves like Minecraft" is three pieces, not one, and the write-up
+says which is which:
+
+1. a walker that understands floor AND ceiling (this section);
+2. a way in: either a **mouth rule** in the carve, or **digging** - and
+   Minecraft has both, since its caves open onto hillsides constantly and a
+   player digs the rest;
+3. the mining change already planned, which is what makes an opening anywhere.
+
+### The contact answer: a Stand, from one function
+
+`SurfaceContact` stays what it is - the surface flight, rain and the spawn
+read - and the walker gets a second query alongside it:
 
 ```rust
-pub struct ColumnContact {
-    /// Top of the solid run at or below the sample: what you stand on.
-    pub floor: f32,
-    /// Bottom of the solid run above it: what you hit your head on.
-    pub ceiling: Option<f32>,
+/// What a body at `position` stands between.
+pub struct Stand {
+    /// Top of the solid run at or below the feet: what you stand on.
+    pub floor_radius: f32,
+    /// Bottom of the solid run above the feet, if there is one.
+    pub ceiling_radius: Option<f32>,
+    pub water_depth: f32,
 }
+impl PlanetContact { pub fn stand(&self, position: Vec3) -> Stand }
 ```
 
-That is the whole of walking into a cave. The walker already resolves against a
-floor radius; it gains a ceiling, and the swept resolution that currently
-rejects a step up taller than a stride keeps working because a cave mouth is a
-step down into a run, not a cliff.
+Inside `PlanetContact`, because that is the only place that knows which tier
+answered: `FineTier::locate` already yields the finest RECORD index, and that
+index is what `ColumnTier::slots` is keyed by. `set_fine` already receives the
+whole `FineSet`, which carries the tier. Outside the column tier - and in the
+coarse tier, and off the finest band - `stand` is the heightfield's floor and
+no ceiling, so nothing in the walker learns that two representations exist.
+A footprint sample that lands off the tier answers with the surface, which is
+above any cave floor, so a cave meeting the tier's rim is a wall to the walker
+exactly as the solid rim is to the eye.
 
-**The heightfield path does not disappear.** Outside the finest tier there is no
-column, and `SurfaceContact` answers as it does now. One function decides which,
-so nothing else in the walker learns that two worlds exist.
+**The core's `Column::contact` answers the wrong thing today and this is the
+first fix.** It returns the top of the first solid LAYER at or below the point.
+A point 0.3 m inside a two-metre wall is therefore told its floor is one metre
+up, which the step rule accepts, and the walker steps into the middle of the
+wall. The floor is the top of the solid RUN, which is what
+`walkable_floor_near` returns and why it insists on a passable cell above.
+`contact` gains that rule and a test with a point inside a three-layer wall.
+
+### The walker: three additions, no new path
+
+- **A footprint takes the MIN ceiling as it takes the MAX floor.** Five
+  `stand` samples instead of five `sample`s; the floor logic is untouched.
+- **Headroom is a wall.** A candidate whose ceiling is under `floor + 2 x
+  HALF_HEIGHT + CONTACT_SKIN` is rejected in the sweep exactly as a tall rise
+  is: tangential motion dropped, vertical kept. This is Tenebris's headroom
+  check in `try_horizontal_step`, and it is what stops a walker forcing their
+  head into a low passage.
+- **The head clamps to the ceiling.** After the sweep, if the head is above
+  the ceiling, the position drops to `ceiling - height` and the upward velocity
+  is zeroed, tangential kept. Tenebris does this after integration and skips it
+  underwater, where it only zeroes the rise; ours does the same, since a
+  swimmer against rock stops rather than teleports.
+
+Not ported: the containment resolve and the rescue stack. The swept footprint
+is why they are not needed, and adding them would be adding the failure mode
+they were written against.
+
+### A way in, so there is something to walk into
+
+The carve's surface damping stays: lace was the right thing to prevent. What it
+needs is an exception that is a feature rather than a leak. A **mouth** is a
+place where the damping is lifted, chosen by the same seeded noise the carve
+uses so it is deterministic and rare: where a low-frequency mouth field crosses
+a threshold AND the surface slope is steep enough to be a hillside, `roof_m` is
+taken to zero over that patch, and the tunnel underneath is allowed to break
+the surface. Measured by `cave_mouths` before and after, with a target of a few
+per tier rather than one per hill.
+
+That is worldgen and gets its own write-up before its code. Digging needs no
+new rule at all and is task 4; between them, the recommended order is:
+
+1. `Column::contact` answers run tops. Core, one test.
+2. `PlanetContact::stand`, column-aware inside the tier. Tests: a cave floor,
+   a cave roof, and the band edge answering as before.
+3. The walker's three additions. Tests: standing on a cave floor, a jump under
+   a roof stopping at the roof, a 1.5 m gap being impassable, and the terrace
+   scenarios unchanged.
+4. Digging (task 4), which is the first way in and the first proof.
+5. The mouth rule, measured, as its own change.
+
+The owner's in-game check closes it, not a headless test: Tenebris's walker
+passed every test it had while falling through the world at trees.
 
 ## Rendering the runs
 

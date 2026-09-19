@@ -14,11 +14,30 @@
 
 ## 2. Collision
 
-- [ ] `ColumnContact` - the floor at or below a point and the ceiling above it.
-- [ ] One function decides column tier or heightfield, so the walker never
+- [ ] `Column::contact` answers the top of the solid RUN, not the layer: a
+      point inside a three-layer wall reports the wall top. Core, one test.
+- [ ] `PlanetContact::stand(position) -> Stand { floor, ceiling, water }`,
+      column-aware inside the tier through the finest record index, the
+      heightfield everywhere else. One function decides, so the walker never
       learns that two representations exist.
-- [ ] Tests: standing on a cave floor, a head bump on its roof, walking in at a
-      mouth, and the heightfield answer unchanged outside the band.
+- [ ] The walker: a footprint takes the MIN ceiling as it takes the MAX floor;
+      a candidate without headroom is a wall; the head clamps to the ceiling
+      after the sweep, with only the rise zeroed underwater.
+- [ ] Tests: standing on a cave floor, a jump under a roof stopping at the
+      roof, a 1.5 m gap impassable, a cave meeting the tier's rim blocking as
+      a wall, and every terrace scenario unchanged.
+- [ ] Not ported, and said so: Tenebris's containment resolve and rescue stack.
+      The swept five-point footprint is what makes them unnecessary.
+
+## 2b. A way in
+
+- [x] Measure the mouths: `cave_mouths` counts 2,530 caves in the tier and 0
+      open to the surface, because the carve is damped to nothing over the top
+      `roof_m` of every column. Collision alone cannot let anyone walk into a
+      cave; there is nothing to walk into.
+- [ ] A mouth rule in the carve - a seeded, rare patch on a hillside where the
+      surface damping is lifted - written up as its own change and measured
+      with `cave_mouths` before its code.
 
 ## 3. Rendering
 
