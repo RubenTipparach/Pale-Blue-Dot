@@ -1,0 +1,437 @@
+//! The ten slots, drawn.
+//!
+//! A slot carries its item's own THUMBNAIL rather than its name, which is the
+//! inherited UI rule: an inventory presented as a list of names is the failure
+//! that rule exists to prevent.
+//!
+//! The thumbnails need no new art. The terrain shader already samples
+//! `tilesets/fields.png` as a 4x4 grid and already maps every material to a
+//! tile in it and a base colour over it; a slot is the same tile at the same
+//! tint, so a block's icon IS the texture the ground is drawn with. That is the
+//! grass blades' own trick - they sample the ground tile they stand on - asked
+//! for a second time.
+
+use bevy::prelude::*;
+use pbd_core::inventory::{Item, SLOTS, Slots};
+use pbd_core::terrain::Material;
+
+/// The player's slots as a Bevy resource.
+///
+/// A newtype rather than a `Resource` derive on the core type: the core owns
+/// what a slot holds and depends on nothing but `std`, which is the rule that
+/// keeps engine APIs out of it. Everything here derefs straight through.
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct Hotbar(pub Slots);
+
+impl Hotbar {
+    /// What the player starts carrying.
+    ///
+    /// A kit rather than an empty row, and that is a preview decision worth
+    /// naming: there is nothing to dig yet, so an empty hotbar would draw ten
+    /// blank squares and prove nothing about the thumbnails. It goes when
+    /// mining lands and the world can fill the slots itself.
+    pub fn starting_kit() -> Self {
+        let mut slots = Slots::new();
+        for (material, count) in [
+            (Material::Grass, 64),
+            (Material::Dirt, 64),
+            (Material::Stone, 48),
+            (Material::Sand, 32),
+            (Material::Snow, 16),
+            (Material::Rock, 12),
+            (Material::Ore, 3),
+        ] {
+            slots.give(Item::Block(material), count);
+        }
+        Self(slots)
+    }
+}
+
+/// The atlas is a 4x4 grid of this many pixels a side.
+const ATLAS_TILES: f32 = 4.0;
+
+/// Which tile of the atlas a material draws with, and the colour the terrain
+/// shader lays over it. Both halves come from `planet_surface.wgsl`'s own
+/// table, so a slot and the ground cannot disagree about what dirt looks like.
+///
+/// Several materials share a tile, which is honest: they share it on the ground
+/// too, and what tells grass from swamp grass there is the tint, here as well.
+pub fn thumbnail(material: Material) -> Option<(Vec2, Color)> {
+    let (tile, rgb): ((f32, f32), (f32, f32, f32)) = match material {
+        Material::Air => return None,
+        Material::Grass | Material::DryGrass => ((0., 0.), (0.12, 0.32, 0.075)),
+        Material::JungleGrass => ((0., 0.), (0.07, 0.25, 0.105)),
+        Material::Soil | Material::Dirt => ((3., 2.), (0.61, 0.48, 0.25)),
+        Material::Sand => ((3., 2.), (0.72, 0.62, 0.42)),
+        Material::Stone => ((3., 0.), (0.31, 0.34, 0.33)),
+        Material::Rock => ((3., 0.), (0.37, 0.33, 0.29)),
+        Material::Snow => ((3., 0.), (0.80, 0.90, 0.91)),
+        Material::Ore => ((3., 0.), (0.72, 0.62, 0.34)),
+        Material::Water => ((0., 2.), (0.13, 0.40, 0.56)),
+    };
+    // The shader's albedo is a fraction of full brightness because the ground
+    // is then LIT by a sun, and a slot is lit by nothing. Lifting it by a
+    // GAMMA raises the dark materials without flattening the bright ones,
+    // which is what keeps snow whiter than stone and stone paler than soil.
+    //
+    // Normalising each material to its own brightest channel was the first
+    // attempt and it is the wrong shape: it throws away exactly the relative
+    // brightness that tells the materials apart, so snow came out the same
+    // grey as stone and sand came out brick red. Preserve the order, lift the
+    // floor.
+    let lift = |c: f32| c.clamp(0.0, 1.0).powf(0.6);
+    Some((
+        Vec2::new(tile.0, tile.1),
+        Color::srgb(lift(rgb.0), lift(rgb.1), lift(rgb.2)),
+    ))
+}
+
+/// Marks the slot at this index, so the update can find it without a lookup.
+#[derive(Component)]
+pub struct SlotCell(pub usize);
+/// The thumbnail inside a slot.
+#[derive(Component)]
+pub struct SlotIcon(pub usize);
+/// The stack count badge.
+#[derive(Component)]
+pub struct SlotCount(pub usize);
+
+const SLOT: f32 = 44.0;
+const GAP: f32 = 4.0;
+
+fn border_of(selected: bool) -> Color {
+    if selected {
+        Color::srgb(0.92, 0.97, 0.95)
+    } else {
+        Color::srgba(0.55, 0.75, 0.74, 0.5)
+    }
+}
+
+fn fill_of(selected: bool) -> Color {
+    if selected {
+        Color::srgba(0.09, 0.16, 0.18, 0.92)
+    } else {
+        Color::srgba(0.02, 0.06, 0.08, 0.72)
+    }
+}
+
+/// Build the row. One parent, ten children, each a bordered square holding an
+/// icon and a count.
+///
+/// `PostStartup` rather than `Startup`, because `PlanetArt` is inserted BY a
+/// startup system and a command is applied at the end of the schedule that
+/// queued it: asking for it alongside is asking for a resource that does not
+/// exist yet. The atlas handle is taken from there rather than loaded again, so
+/// the slot art and the ground art are one asset with one sampler - loading it
+/// a second time would make the nearest-point sampling depend on which load
+/// happened to win.
+pub fn spawn(
+    mut commands: Commands,
+    atlas: Res<pbd_app::planet::PlanetArt>,
+    existing: Query<(), With<SlotCell>>,
+) {
+    if !existing.is_empty() {
+        return;
+    }
+    let atlas = atlas.0.clone();
+    let commands = &mut commands;
+    commands
+        .spawn(Node {
+            position_type: PositionType::Absolute,
+            bottom: px(22),
+            left: percent(50),
+            margin: UiRect::left(px(-(SLOTS as f32 * (SLOT + GAP) - GAP) / 2.0)),
+            column_gap: px(GAP),
+            ..default()
+        })
+        .with_children(|row| {
+            for index in 0..SLOTS {
+                row.spawn((
+                    Node {
+                        width: px(SLOT),
+                        height: px(SLOT),
+                        border: UiRect::all(px(1)),
+                        padding: UiRect::all(px(4)),
+                        ..default()
+                    },
+                    BorderColor::all(border_of(index == 0)),
+                    BackgroundColor(fill_of(index == 0)),
+                    SlotCell(index),
+                ))
+                .with_children(|cell| {
+                    cell.spawn((
+                        ImageNode {
+                            image: atlas.clone(),
+                            color: Color::NONE,
+                            ..default()
+                        },
+                        Node {
+                            width: percent(100.0),
+                            height: percent(100.0),
+                            ..default()
+                        },
+                        SlotIcon(index),
+                    ));
+                    cell.spawn((
+                        Text::new(""),
+                        TextFont {
+                            font_size: 10.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.92, 0.97, 0.95)),
+                        TextShadow::default(),
+                        Node {
+                            position_type: PositionType::Absolute,
+                            bottom: px(1),
+                            right: px(3),
+                            ..default()
+                        },
+                        SlotCount(index),
+                    ));
+                });
+            }
+        });
+}
+
+/// Repaint the row from the store. Everything a slot shows is derived here, so
+/// the store stays the one place that knows what is carried.
+#[allow(clippy::type_complexity)]
+pub fn update(
+    slots: Res<Hotbar>,
+    images: Res<Assets<Image>>,
+    mut cells: Query<(&SlotCell, &mut BorderColor, &mut BackgroundColor)>,
+    mut icons: Query<(&SlotIcon, &mut ImageNode)>,
+    mut counts: Query<(&SlotCount, &mut Text)>,
+    mut art_ready: Local<bool>,
+) {
+    // Repaint when the store moves, and ALSO until the art has arrived once.
+    //
+    // Gating only on the store was a real bug and an invisible one: the atlas
+    // loads asynchronously, so on the first frame there is no image to crop a
+    // thumbnail out of, every icon was set transparent, and the store then
+    // never changed again - so they were never revisited and the row drew ten
+    // empty squares for ever. The stack counts were right the whole time,
+    // because a number needs no asset, which is exactly what made it look like
+    // a texture problem rather than a scheduling one.
+    let ready = !icons.is_empty()
+        && icons
+            .iter()
+            .next()
+            .is_some_and(|(_, node)| images.contains(&node.image));
+    if !slots.is_changed() && *art_ready {
+        return;
+    }
+    *art_ready = ready;
+    for (cell, mut border, mut background) in &mut cells {
+        let selected = cell.0 == slots.selected();
+        *border = BorderColor::all(border_of(selected));
+        background.0 = fill_of(selected);
+    }
+    for (icon, mut node) in &mut icons {
+        let art = slots.get(icon.0).and_then(|stack| match stack.item {
+            Item::Block(material) => thumbnail(material),
+            // A tool has no block texture. None of them is constructed yet, so
+            // this cannot be hit; when the first one lands it needs an icon of
+            // its own in the same change, which is the rule about no item
+            // shipping without a visual.
+            Item::Tool(_) => None,
+        });
+        match art {
+            Some((tile, tint)) => {
+                // The rect is in the image's own pixels, so it needs the loaded
+                // size. Until the atlas has loaded there is nothing to crop to,
+                // and a full-image icon would be sixteen tiles at once.
+                let Some(size) = images.get(&node.image).map(|image| image.size_f32()) else {
+                    node.color = Color::NONE;
+                    continue;
+                };
+                let step = size / ATLAS_TILES;
+                let min = Vec2::new(tile.x * step.x, tile.y * step.y);
+                // Inset by a twentieth of a tile, the same margin the shader
+                // keeps, so a thumbnail never bleeds the neighbouring tile.
+                let inset = step * 0.05;
+                node.rect = Some(Rect::from_corners(min + inset, min + step - inset));
+                node.color = tint;
+            }
+            None => node.color = Color::NONE,
+        }
+    }
+    for (count, mut text) in &mut counts {
+        let label = match slots.get(count.0) {
+            Some(stack) if stack.count > 1 => stack.count.to_string(),
+            _ => String::new(),
+        };
+        if text.0 != label {
+            text.0 = label;
+        }
+    }
+}
+
+/// Number row picks a slot, the wheel steps it.
+pub fn input(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut wheel: MessageReader<bevy::input::mouse::MouseWheel>,
+    walking: Option<Res<pbd_app::walking::WalkingReadout>>,
+    mut slots: ResMut<Hotbar>,
+) {
+    const ROW: [KeyCode; SLOTS] = [
+        KeyCode::Digit1,
+        KeyCode::Digit2,
+        KeyCode::Digit3,
+        KeyCode::Digit4,
+        KeyCode::Digit5,
+        KeyCode::Digit6,
+        KeyCode::Digit7,
+        KeyCode::Digit8,
+        KeyCode::Digit9,
+        KeyCode::Digit0,
+    ];
+    for (index, key) in ROW.iter().enumerate() {
+        if keys.just_pressed(*key) {
+            slots.select(index);
+        }
+    }
+    // The wheel already drives the camera's zoom. Only one of them may have it
+    // on a frame, or a player changing slots would dolly the camera at the same
+    // time: it picks slots on foot, where the hotbar is what a wheel is for,
+    // and stays the zoom in flight. The events are drained either way, because
+    // a reader that skips its messages delivers the whole backlog the next time
+    // it does read - which is the bug the camera drag already had once.
+    let walking = walking.is_some_and(|readout| readout.active);
+    let mut step = 0;
+    for message in wheel.read() {
+        step += if message.y > 0.0 {
+            -1
+        } else if message.y < 0.0 {
+            1
+        } else {
+            0
+        };
+    }
+    if walking && step != 0 {
+        slots.step(step);
+    }
+}
+
+/// The full binding list, behind `H`.
+#[derive(Component)]
+pub struct KeyPanel;
+
+/// Build it hidden. `Display::None` rather than `Visibility::Hidden`: a hidden
+/// node is still laid out and still picked, so an invisible panel would go on
+/// swallowing clicks over the middle of the screen the whole time it is shut.
+pub fn spawn_keys(mut commands: Commands) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: percent(50.0),
+                left: percent(50.0),
+                margin: UiRect::new(px(-210), px(0), px(-130), px(0)),
+                width: px(420),
+                padding: UiRect::all(px(18)),
+                border: UiRect::all(px(1)),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(6),
+                display: Display::None,
+                ..default()
+            },
+            BorderColor::all(Color::srgba(0.55, 0.75, 0.74, 0.6)),
+            BackgroundColor(Color::srgba(0.02, 0.06, 0.08, 0.93)),
+            KeyPanel,
+        ))
+        .with_children(|panel| {
+            for (heading, line) in [
+                ("ON FOOT", "WASD  walk    SPACE  jump    SHIFT  sprint"),
+                ("FLYING", "WASD  move    SPACE / CTRL  lift    Q / E  roll"),
+                ("", "SHIFT  cruise    X  dampeners    B  brake"),
+                ("SLOTS", "1 - 0  select    WHEEL  step"),
+                ("WORLD", "F  walk / fly    R  reset    P  storm"),
+                (
+                    "VIEW",
+                    "MOUSE  look    ESC  cursor    F12  photo    H  close",
+                ),
+            ] {
+                if !heading.is_empty() {
+                    panel.spawn((
+                        Text::new(heading),
+                        TextFont {
+                            font_size: 11.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgba(0.55, 0.75, 0.74, 0.85)),
+                    ));
+                }
+                panel.spawn((
+                    Text::new(line),
+                    TextFont {
+                        font_size: 12.0,
+                        ..default()
+                    },
+                    TextColor(Color::srgb(0.88, 0.94, 0.91)),
+                ));
+            }
+        });
+}
+
+/// `H` opens and closes it.
+pub fn toggle_keys(keys: Res<ButtonInput<KeyCode>>, mut panel: Query<&mut Node, With<KeyPanel>>) {
+    if !keys.just_pressed(KeyCode::KeyH) {
+        return;
+    }
+    for mut node in &mut panel {
+        node.display = match node.display {
+            Display::None => Display::Flex,
+            _ => Display::None,
+        };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every material the terrain can put on screen has a thumbnail, so a new
+    /// material cannot ship as a blank slot. Air is the one exclusion and it is
+    /// explicit: it is the absence of a block, not a block you could hold.
+    #[test]
+    fn every_drawable_material_has_a_thumbnail() {
+        for material in [
+            Material::Stone,
+            Material::Soil,
+            Material::Grass,
+            Material::Water,
+            Material::Ore,
+            Material::Sand,
+            Material::DryGrass,
+            Material::JungleGrass,
+            Material::Snow,
+            Material::Rock,
+            Material::Dirt,
+        ] {
+            let art = thumbnail(material);
+            assert!(art.is_some(), "{material:?} would draw a blank slot");
+            let (tile, _) = art.unwrap();
+            assert!(
+                (0.0..ATLAS_TILES).contains(&tile.x) && (0.0..ATLAS_TILES).contains(&tile.y),
+                "{material:?} points outside the {ATLAS_TILES}x{ATLAS_TILES} atlas"
+            );
+        }
+        assert!(thumbnail(Material::Air).is_none(), "air is not a block");
+    }
+
+    /// Snow is brighter than stone and stone brighter than soil, which is the
+    /// whole reason the lift is a gamma rather than a per-material normalise:
+    /// normalising threw this ordering away and made snow look like stone.
+    #[test]
+    fn the_thumbnails_keep_their_relative_brightness() {
+        let value = |material| {
+            let (_, colour) = thumbnail(material).unwrap();
+            let rgb = colour.to_srgba();
+            rgb.red + rgb.green + rgb.blue
+        };
+        assert!(value(Material::Snow) > value(Material::Stone));
+        assert!(value(Material::Stone) > value(Material::Grass));
+        assert!(value(Material::Sand) > value(Material::JungleGrass));
+    }
+}

@@ -30,36 +30,6 @@ pub fn setup(mut commands: Commands) {
         ));
     }
     commands.spawn((
-        Text::new("P A L E   B L U E   D O T"),
-        TextFont {
-            font_size: 20.0,
-            ..default()
-        },
-        TextColor(pale),
-        TextShadow::default(),
-        Node {
-            position_type: PositionType::Absolute,
-            top: px(30),
-            left: px(36),
-            ..default()
-        },
-    ));
-    commands.spawn((
-        Text::new("TENEBRIS    /    SURVEY FLIGHT"),
-        TextFont {
-            font_size: 12.0,
-            ..default()
-        },
-        TextColor(mint),
-        TextShadow::default(),
-        Node {
-            position_type: PositionType::Absolute,
-            top: px(62),
-            left: px(36),
-            ..default()
-        },
-    ));
-    commands.spawn((
         Text::new("DAMPENERS ONLINE"),
         TextFont {
             font_size: 12.0,
@@ -96,27 +66,29 @@ pub fn setup(mut commands: Commands) {
         TextShadow::default(),
         Node {
             position_type: PositionType::Absolute,
-            bottom: px(90),
+            bottom: px(30),
             left: px(36),
             ..default()
         },
         Instruments,
     ));
-    commands.spawn((Text::new("CLICK  look    WASD  walk    MOUSE  look    SPACE  jump    SHIFT  sprint\nF  walk / fly    R  reset    ESC  cursor    F12  photo"), TextFont { font_size: 12.0, ..default() }, TextColor(mint), TextShadow::default(), Node { position_type: PositionType::Absolute, bottom: px(30), left: px(36), ..default() }, Controls));
     commands.spawn((
-        Text::new("A WORLD WORTH\nGETTING LOST IN."),
+        Text::new(""),
         TextFont {
             font_size: 12.0,
             ..default()
         },
-        TextColor(pale.with_alpha(0.6)),
-        TextLayout::new_with_justify(Justify::Right),
+        TextColor(mint),
+        TextShadow::default(),
+        TextLayout::new_with_justify(Justify::Center),
         Node {
             position_type: PositionType::Absolute,
-            bottom: px(34),
-            right: px(36),
+            bottom: px(74),
+            left: px(0),
+            right: px(0),
             ..default()
         },
+        Controls,
     ));
 }
 
@@ -139,10 +111,13 @@ pub fn update(
     *last = time.elapsed_secs_f64();
     let walker = walking.as_deref().filter(|w| w.active);
     for mut text in &mut controls {
+        // One line naming what is to hand, not every binding there is. The
+        // wall it replaced was two lines of twelve, which is a manual rather
+        // than a HUD.
         let label = if walker.is_some() {
-            "CLICK  look    WASD  walk    MOUSE  look    SPACE  jump    SHIFT  sprint\nF  walk / fly    R  reset    ESC  cursor    F12  photo"
+            "WASD  walk    SPACE  jump    1-0  slot    F  fly    H  keys"
         } else {
-            "CLICK  fly    WASD  move    SPACE / CTRL  lift    MOUSE  look    Q / E  roll\nSHIFT  cruise    F  walk / fly    X  dampeners    B  brake    R  reset    ESC  cursor    F12  photo"
+            "WASD  fly    SPACE / CTRL  lift    Q / E  roll    F  walk    H  keys"
         };
         if text.0 != label {
             text.0 = label.into();
@@ -153,12 +128,6 @@ pub fn update(
             format!(
                 "{:>5.1} m/s       {:>6.0} m ALT\n{:+06.1} LAT     {:+07.1} LON",
                 walker.speed, walker.altitude, walker.latitude_deg, walker.longitude_deg
-            )
-        } else if launch.capture.is_some() && !launch.tour && !launch.fly {
-            format!(
-                "TENEBRIS\n{} m radius   /   {} survey",
-                pbd_app::planet::PLANET_RADIUS,
-                launch.view.to_uppercase()
             )
         } else {
             format!(

@@ -181,7 +181,7 @@ impl PlanetClock {
 }
 
 #[derive(Resource, Clone, ExtractResource)]
-struct PlanetArt(Handle<Image>);
+pub struct PlanetArt(pub Handle<Image>);
 
 #[derive(Component, Clone, Copy, ExtractComponent)]
 struct PlanetSurface;

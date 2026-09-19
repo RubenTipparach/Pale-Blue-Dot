@@ -11,7 +11,7 @@ use crate::hex::{Hex, Voxel};
 pub const GENERATOR_VERSION: u32 = 4;
 
 #[repr(u16)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum Material {
     Air = 0,
     Stone = 1,

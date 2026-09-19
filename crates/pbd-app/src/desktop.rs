@@ -1,5 +1,6 @@
 mod hud;
 mod scene;
+mod slots;
 
 use avian3d::prelude::*;
 use bevy::{
@@ -272,6 +273,7 @@ pub fn run(args: &[String]) {
         startup_camera: !photo,
         ..default()
     })
+    .insert_resource(slots::Hotbar::starting_kit())
     .insert_resource(ClearColor(Color::srgb(0.002, 0.004, 0.012)))
     .insert_resource(CaptureState {
         frame: 0,
@@ -286,9 +288,19 @@ pub fn run(args: &[String]) {
     })
     .insert_resource(launch.clone())
     .add_systems(Startup, (scene::setup, hud::setup, photo_camera))
+    .add_systems(Startup, slots::spawn_keys)
+    .add_systems(PostStartup, slots::spawn)
     .add_systems(
         Update,
-        (configure_camera, scene::move_moon, hud::update, capture),
+        (
+            configure_camera,
+            scene::move_moon,
+            hud::update,
+            slots::input,
+            slots::toggle_keys,
+            slots::update,
+            capture,
+        ),
     )
     .add_systems(Last, measure_frames);
     if !photo && !launch.tour {
