@@ -50,6 +50,11 @@ pub struct Launch {
     /// Capture instrument for the `shore` view: camera height above the last
     /// land cell in metres. Absent means standing eye height.
     pub height: Option<f32>,
+    /// `--spawn mouth` puts the spawn, and so the column tier, at the nearest
+    /// cave mouth to the default spawn. Mouth patches cover a few percent of
+    /// the land and the default spawn has none, so without this a walker has
+    /// nothing to walk into for the first few hundred metres.
+    pub spawn: Option<String>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
 }
@@ -67,6 +72,7 @@ impl Launch {
             swim: false,
             render_offset: Vec3::ZERO,
             height: None,
+            spawn: None,
             rain: 0.0,
         };
         let mut i = 0;
@@ -80,6 +86,12 @@ impl Launch {
                 "--view" => {
                     i += 1;
                     result.view = args.get(i).expect("--view requires a view name").clone();
+                }
+                "--spawn" => {
+                    i += 1;
+                    let spawn = args.get(i).expect("--spawn requires a place").clone();
+                    assert!(spawn == "mouth", "--spawn knows only mouth");
+                    result.spawn = Some(spawn);
                 }
                 "--frames" => {
                     i += 1;
@@ -161,7 +173,8 @@ impl Launch {
                 "wade",
                 "dive",
                 "cave",
-                "overhang"
+                "overhang",
+                "mouth"
             ]
             .contains(&result.view.as_str()),
             "unknown capture view"
@@ -265,11 +278,7 @@ pub fn run(args: &[String]) {
         } else {
             FlyMode::Manual
         },
-        spawn_direction: if launch.tour && launch.view == "pole" {
-            Vec3::Y
-        } else {
-            Vec3::new(0.8776, 0.4794, 0.0).normalize()
-        },
+        spawn_direction: spawn_direction(&launch),
         spawn_altitude: 240.0,
         minimum_clearance: if launch.tour { 45.0 } else { 1.6 },
         startup_camera: !photo,
@@ -332,6 +341,35 @@ pub fn run(args: &[String]) {
     app.run();
 }
 
+/// Where the walker, and with it the column tier, is anchored.
+fn spawn_direction(launch: &Launch) -> Vec3 {
+    let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+    if launch.tour && launch.view == "pole" {
+        return Vec3::Y;
+    }
+    if launch.spawn.as_deref() == Some("mouth") || launch.view == "mouth" {
+        let columns = pbd_app::config::ColumnSettings::default();
+        let found = pbd_core::column::nearest_mouth(
+            &columns.cave(),
+            &pbd_app::planet::TERRAIN,
+            default,
+            3_000.0,
+            8.0,
+        );
+        match found {
+            Some(mouth) => {
+                info!(
+                    "spawn moved {:.0} m to the nearest cave mouth",
+                    mouth.dot(default).clamp(-1., 1.).acos() * PLANET_RADIUS
+                );
+                return mouth;
+            }
+            None => warn!("no cave mouth within 3 km of the spawn; spawning at the default"),
+        }
+    }
+    default
+}
+
 fn configure_camera(
     mut commands: Commands,
     mut cameras: Query<(Entity, &mut Camera3d), Added<Camera3d>>,
@@ -375,7 +413,7 @@ fn cave_camera(
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
-    if launch.view != "cave" && launch.view != "overhang" {
+    if !["cave", "overhang", "mouth"].contains(&launch.view.as_str()) {
         return;
     }
     use pbd_core::column::layer_altitude;
@@ -407,6 +445,72 @@ fn cave_camera(
                 best = Some((buried, direction, floor, roof));
             }
         }
+    }
+    if launch.view == "mouth" {
+        // Stand on the ground outside a tunnel opening and look into it. An
+        // opening is the same thing `cave_mouths` counts: a column's air gap
+        // standing above a neighbour's cap, tall enough for a body, so a
+        // walker on that neighbour can see in and walk in.
+        use pbd_core::column::layer_altitude;
+        let mut best: Option<(f32, usize, usize, f32, f32)> = None;
+        for (index, &slot) in tier.slots.iter().enumerate() {
+            if slot == usize::MAX {
+                continue;
+            }
+            let runs = tier.columns[slot].drawn_runs();
+            let cell = &records[index];
+            for pair in runs.windows(2) {
+                let floor = layer_altitude(pair[0].to);
+                let roof = layer_altitude(pair[1].from);
+                if roof - floor < 1.8 {
+                    continue;
+                }
+                for (side, &neighbor) in fine.set.finest_neighbors[index]
+                    .iter()
+                    .enumerate()
+                    .take(cell.degree())
+                {
+                    if neighbor == u32::MAX {
+                        continue;
+                    }
+                    let cap = cell.corners[side][3];
+                    // The opening: the gap stands above the neighbour's ground
+                    // and its floor is within a step of it. The deepest tunnel
+                    // behind it is the one worth looking into.
+                    if roof > cap + 0.5 && floor < cap + 1.05 {
+                        let depth = roof - floor;
+                        if best.is_none_or(|(had, ..)| depth > had) {
+                            best = Some((depth, index, neighbor as usize, floor, roof));
+                        }
+                    }
+                }
+            }
+        }
+        let Some((depth, index, outside, floor, roof)) = best else {
+            panic!(
+                "no tunnel opening in the column tier; use --spawn mouth or lower mouth_threshold"
+            )
+        };
+        let inside = Vec3::from_slice(&records[index].direction_height[..3]);
+        let ground = Vec3::from_slice(&records[outside].direction_height[..3]);
+        info!(
+            "mouth capture: a {depth:.0} m opening, floor {floor:.0} m, roof {roof:.0} m, from ground at {:.0} m",
+            records[outside].direction_height[3]
+        );
+        // One cell further back from the opening, at eye height on the ground
+        // THERE: the ground a cell back is another cell's, and a frame that
+        // stood at the outside cell's height from a cell back was inside the
+        // rock of that cell, seeing the world from below through its cap.
+        let back = (ground - inside).normalize_or_zero();
+        let vantage = (ground + back * (3.0 / PLANET_RADIUS)).normalize();
+        let there =
+            pbd_app::planet::surface_height(vantage).max(records[outside].direction_height[3]);
+        let eye = vantage * (PLANET_RADIUS + there + EYE_HEIGHT);
+        let target = inside * (PLANET_RADIUS + (floor + roof) * 0.5);
+        let mut transform = Transform::from_translation(eye).looking_at(target, ground);
+        transform.translation += launch.render_offset;
+        commands.spawn((Camera3d::default(), transform));
+        return;
     }
     let Some((buried, here, floor, roof)) = best else {
         panic!("no chamber in the column tier to photograph; raise reach_m or lower cave_threshold")

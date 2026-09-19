@@ -17,6 +17,13 @@
     cave_roof_m: 9.0,
     cave_floor_layers: 3,
 
+    // Mouths. The damping above keeps every cave sealed - measured, 2,530
+    // caves in a tier and none open - so in rare seeded patches it is lifted
+    // and a tunnel may break the ground. 1.0 is no mouths.
+    mouth_scale_m: 48.0,
+    mouth_threshold: 0.65,
+    mouth_relax: 0.15,
+
     // A stand-in for the baked voxel light this change defers: a cell's
     // skylight was computed for its SURFACE, so without this a cave is lit
     // exactly like the hillside over it.

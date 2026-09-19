@@ -620,6 +620,16 @@ pub struct ColumnSettings {
     pub cave_roof_m: f32,
     /// Layers of solid the carve will not open at the very bottom.
     pub cave_floor_layers: u32,
+    /// Metres across a mouth patch, where the surface damping is lifted so a
+    /// tunnel can break the ground.
+    pub mouth_scale_m: f32,
+    /// Share of the mouth field above which a column is in a patch, 0..1.
+    /// Higher is rarer; 1.0 is no mouths at all.
+    pub mouth_threshold: f32,
+    /// How far the carve threshold drops at the ground inside a patch, so the
+    /// tunnel flares open where it meets the surface. Zero is a bare lift of
+    /// the damping, which opens almost nothing.
+    pub mouth_relax: f32,
     /// How much of the sky a face `cave_dark_depth_m` under the surface takes,
     /// 0..1. A STAND-IN for the baked voxel light this change defers: the
     /// skylight in a cell's record was computed for its SURFACE, so without
@@ -638,6 +648,9 @@ impl Default for ColumnSettings {
             cave_threshold: cave.threshold,
             cave_roof_m: cave.roof_m,
             cave_floor_layers: cave.floor_layers as u32,
+            mouth_scale_m: cave.mouth_scale_m,
+            mouth_threshold: cave.mouth_threshold,
+            mouth_relax: cave.mouth_relax,
             cave_dark: 0.45,
             cave_dark_depth_m: 10.,
         }
@@ -652,6 +665,9 @@ impl ColumnSettings {
             threshold: self.cave_threshold,
             roof_m: self.cave_roof_m,
             floor_layers: self.cave_floor_layers as usize,
+            mouth_scale_m: self.mouth_scale_m,
+            mouth_threshold: self.mouth_threshold,
+            mouth_relax: self.mouth_relax,
         }
     }
 }
@@ -672,6 +688,9 @@ impl Validated for ColumnSettings {
         ((self.cave_floor_layers as usize) < pbd_core::column::LAYERS)
             .then_some(())
             .ok_or("cave_floor_layers must be inside the column span")?;
+        positive("mouth_scale_m", &[self.mouth_scale_m])?;
+        unit("mouth_threshold", self.mouth_threshold)?;
+        unit("mouth_relax", self.mouth_relax)?;
         unit("cave_dark", self.cave_dark)?;
         positive("cave_dark_depth_m", &[self.cave_dark_depth_m])?;
         Ok(())

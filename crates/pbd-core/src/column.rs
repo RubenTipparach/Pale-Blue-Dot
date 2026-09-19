@@ -68,17 +68,29 @@ impl Column {
     /// The solid run a point is in or under, and the one above it: the floor to
     /// stand on and the ceiling to hit your head on. This is the whole of
     /// walking into a cave.
+    ///
+    /// The floor is the top of the solid RUN, not of the solid layer the point
+    /// happens to be in. The first cut answered the layer: a point 0.3 m inside
+    /// a two-metre wall was told its floor was one metre up, which is within a
+    /// step, and the walker climbed into the middle of the wall. Tenebris's
+    /// `walkable_floor_near` insists on a passable cell above a floor for the
+    /// same reason.
     pub fn contact(&self, altitude: f32) -> Contact {
         let here = (altitude - BASE_M as f32).floor();
         let start = here.clamp(0.0, LAYERS as f32 - 1.0) as usize;
-        // The floor is the top of the first solid layer at or below the sample.
-        let floor = (0..=start)
-            .rev()
-            .find(|index| self.solid(*index))
-            .map(|index| layer_altitude(index) + 1.0);
-        // The ceiling is the bottom of the first solid layer strictly above the
-        // air the sample stands in.
-        let ceiling = ((start + 1)..LAYERS)
+        // The first solid layer at or below the sample, then up through the run
+        // it belongs to.
+        let mut floor = None;
+        let mut top = start;
+        if let Some(first) = (0..=start).rev().find(|index| self.solid(*index)) {
+            top = (first..LAYERS)
+                .take_while(|index| self.solid(*index))
+                .last()
+                .unwrap_or(first);
+            floor = Some(layer_altitude(top) + 1.0);
+        }
+        // The ceiling is the bottom of the first solid layer above that run.
+        let ceiling = ((top + 1)..LAYERS)
             .find(|index| self.solid(*index))
             .map(layer_altitude);
         Contact { floor, ceiling }
@@ -209,6 +221,24 @@ pub struct Contact {
 
 /// Salt so the carve is its own noise stream rather than the terrain's.
 const CAVE_SEED_SALT: u64 = 0xca7e_0000_0000_0001;
+/// And the mouth field its own, so mouths do not sit where the tunnels do.
+const MOUTH_SEED_SALT: u64 = 0xca7e_0000_0000_0002;
+
+/// Whether this column is in a MOUTH patch: a place where the carve's surface
+/// damping is lifted so a tunnel can break the ground.
+///
+/// Measured before this existed: 2,530 caves in a tier and none open to the
+/// surface, because `roof_m` damps the carve to nothing over the top of every
+/// column. That damping is right - lifted everywhere the ground is lace - so
+/// the exception is a rare seeded patch rather than a lower `roof_m`. Never
+/// below the shore, where an opening would be a dry pocket under the sea.
+pub fn mouth(cave: &CaveField, terrain: &TerrainConfig, direction: Vec3, surface_m: f32) -> bool {
+    if surface_m < terrain.sea_level_m + terrain.beach_band_m {
+        return false;
+    }
+    let point = direction * (terrain.radius_m / cave.mouth_scale_m.max(1e-3));
+    planet_gen::noise01(terrain.seed ^ MOUTH_SEED_SALT, point, 1.0, 2) > cave.mouth_threshold
+}
 
 /// How the caves are cut. Ours, not the reference's: it carves nothing.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -222,6 +252,17 @@ pub struct CaveField {
     pub roof_m: f32,
     /// Layers of solid the carve will not open at the very bottom.
     pub floor_layers: usize,
+    /// Metres across a patch where the surface damping is LIFTED, so a tunnel
+    /// under it may break the ground: a cave mouth.
+    pub mouth_scale_m: f32,
+    /// Share of the mouth field's unit range above which a column is in a
+    /// mouth patch. Higher is rarer.
+    pub mouth_threshold: f32,
+    /// How far the carve threshold is lowered AT the ground inside a mouth
+    /// patch, easing back to none `roof_m` down: the tunnel sheet flares as it
+    /// reaches the surface, which is what turns a line where it crosses the
+    /// ground into an opening a walker fits through.
+    pub mouth_relax: f32,
 }
 
 impl CaveField {
@@ -236,6 +277,18 @@ impl CaveField {
         threshold: 0.88,
         roof_m: 9.0,
         floor_layers: 3,
+        // Patches a few tens of metres across: at a hundred and twenty the
+        // first mouth rendered as a crater thirty-five metres wide and
+        // fifteen deep, a basin with tunnels off its walls rather than a hole
+        // in a hillside. The field is fBm remapped to a
+        // unit range and rarely reaches its ends, so the threshold reads
+        // lower than it sounds: `mouth_sweep` measures 0.70 as 2% of the land
+        // and 0.60 as 17%. Between them is about one patch per ninety-metre
+        // tier, which is the Minecraft cadence of a cave entrance every few
+        // hundred metres.
+        mouth_scale_m: 48.0,
+        mouth_threshold: 0.65,
+        mouth_relax: 0.15,
     };
 }
 
@@ -257,6 +310,7 @@ pub fn hollow(
     direction: Vec3,
     altitude: f32,
     surface_m: f32,
+    mouth: bool,
 ) -> bool {
     let depth = surface_m - altitude;
     if depth <= 0.0 {
@@ -275,9 +329,50 @@ pub fn hollow(
     let point = direction * (radius / cave.scale_m.max(1e-3));
     let ridge = planet_gen::ridged(terrain.seed ^ CAVE_SEED_SALT, point, 1.0, 3, 0.5, 2.1);
     // Damped toward the surface, so a cave has a roof over it rather than
-    // opening the hillside into lace.
-    let roof = (depth / cave.roof_m.max(0.001)).clamp(0.0, 1.0);
-    ridge * roof > cave.threshold
+    // opening the hillside into lace. In a mouth patch the opposite: no
+    // damping, and the threshold LOWERED toward the ground so the tunnel
+    // flares open where it meets it. Lifting the damping alone was measured
+    // and was not enough - four columns in a hundred of a patch opened,
+    // each a single-cell hole where the thin sheet crossed the surface.
+    let near_surface = 1.0 - (depth / cave.roof_m.max(0.001)).clamp(0.0, 1.0);
+    if mouth {
+        ridge > cave.threshold - cave.mouth_relax * near_surface
+    } else {
+        ridge * (1.0 - near_surface) > cave.threshold
+    }
+}
+
+/// The nearest direction to `from` whose column is an OPEN mouth: in a mouth
+/// patch, and carved so its own top is below the ground the heightfield gives.
+/// A spiral out to `reach_m`, stepping by `step_m`; `None` if the reach holds
+/// no mouth. For putting a spawn or a camera where there is a cave to walk
+/// into, since patches cover a few percent of the land and a given spot has
+/// none more often than not.
+pub fn nearest_mouth(
+    cave: &CaveField,
+    terrain: &TerrainConfig,
+    from: Vec3,
+    reach_m: f32,
+    step_m: f32,
+) -> Option<Vec3> {
+    let from = from.normalize_or(Vec3::Y);
+    let tangent = Vec3::Y.cross(from).normalize_or(Vec3::X);
+    let bitangent = from.cross(tangent);
+    let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+    let count = ((reach_m / step_m.max(0.1)).powi(2)) as usize;
+    (0..count.max(1)).find_map(|i| {
+        let t = (i as f32 + 0.5) / count.max(1) as f32;
+        let radius = reach_m / terrain.radius_m * t.sqrt();
+        let angle = golden * i as f32;
+        let here = (from + (tangent * angle.cos() + bitangent * angle.sin()) * radius).normalize();
+        let surface = planet_gen::surface_altitude(terrain, here);
+        if !mouth(cave, terrain, here, surface) {
+            return None;
+        }
+        let column = generate(cave, terrain, here);
+        let top = layer_altitude(column.surface()?) + 1.0;
+        (top < surface - 0.5).then_some(here)
+    })
 }
 
 /// Build one cell's column.
@@ -304,6 +399,7 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
 fn build(cave: Option<&CaveField>, terrain: &TerrainConfig, direction: Vec3) -> Column {
     let surface_m = planet_gen::surface_altitude(terrain, direction);
     let top = planet_gen::top_material(terrain, direction, surface_m);
+    let open = cave.is_some_and(|cave| mouth(cave, terrain, direction, surface_m));
     let mut layers = [Material::Air; LAYERS];
     for (index, layer) in layers.iter_mut().enumerate() {
         let altitude = layer_altitude(index);
@@ -332,7 +428,7 @@ fn build(cave: Option<&CaveField>, terrain: &TerrainConfig, direction: Vec3) -> 
         };
         if let Some(cave) = cave
             && index > cave.floor_layers
-            && hollow(cave, terrain, direction, altitude, surface_m)
+            && hollow(cave, terrain, direction, altitude, surface_m, open)
         {
             *layer = Material::Air;
         }
@@ -465,7 +561,8 @@ mod tests {
                     let here = point.normalize();
                     let up = point.length() - TERRAIN.radius_m;
                     let surface = planet_gen::surface_altitude(&TERRAIN, here);
-                    if up < surface && !hollow(&cave, &TERRAIN, here, up, surface) {
+                    let open = mouth(&cave, &TERRAIN, here, surface);
+                    if up < surface && !hollow(&cave, &TERRAIN, here, up, surface, open) {
                         break;
                     }
                 }
@@ -485,6 +582,49 @@ mod tests {
             reach[reach.len() - 1],
             reach.len()
         );
+    }
+
+    /// The mouth rule, swept: how much of the land is in a patch at each
+    /// threshold, and how many of those columns actually OPEN - their carved
+    /// column has air within a metre of its own surface, which is a tunnel
+    /// breaking the ground rather than a sealed one under a lifted patch.
+    #[test]
+    #[ignore = "a report: cargo test -p pbd-core mouth_sweep -- --ignored --nocapture"]
+    fn mouth_sweep() {
+        let sample = dirs(20_000);
+        let land: Vec<(Vec3, f32)> = sample
+            .iter()
+            .map(|d| (*d, planet_gen::surface_altitude(&TERRAIN, *d)))
+            .filter(|(_, h)| *h >= TERRAIN.sea_level_m + TERRAIN.beach_band_m)
+            .collect();
+        println!("\n{} land columns of {}", land.len(), sample.len());
+        for threshold in [0.70f32, 0.65, 0.60] {
+            let cave = CaveField {
+                mouth_threshold: threshold,
+                ..CaveField::DEFAULT
+            };
+            let mut patched = 0;
+            let mut open = 0;
+            for (d, surface) in &land {
+                if !mouth(&cave, &TERRAIN, *d, *surface) {
+                    continue;
+                }
+                patched += 1;
+                let column = generate(&cave, &TERRAIN, *d);
+                let top = column.surface().unwrap();
+                // Open: some air in the two metres under the ground.
+                if (top.saturating_sub(2)..top).any(|i| !column.solid(i)) || {
+                    let below = layer_at(*surface - 1.0).unwrap_or(0);
+                    !column.solid(below)
+                } {
+                    open += 1;
+                }
+            }
+            println!(
+                "  threshold {threshold:.2}: {:.1}% of land in a patch, {open} of {patched} open",
+                100.0 * patched as f32 / land.len().max(1) as f32
+            );
+        }
     }
 
     /// Print a real cross-section, straight out of the generator. Proof that a
@@ -556,7 +696,8 @@ mod tests {
                     .normalize();
                 let surface_m = planet_gen::surface_altitude(&TERRAIN, d);
                 let altitude = surface_m - 30.0;
-                line.push(if hollow(&cave, &TERRAIN, d, altitude, surface_m) {
+                let open = mouth(&cave, &TERRAIN, d, surface_m);
+                line.push(if hollow(&cave, &TERRAIN, d, altitude, surface_m, open) {
                     ' '
                 } else {
                     '#'
@@ -633,6 +774,13 @@ mod tests {
             }
             let top = column.surface().expect("land has a solid layer");
             let top_m = layer_altitude(top) + 1.0;
+            if mouth(&cave, &TERRAIN, d, surface_m) {
+                // The one exception, and it is a hole rather than a drift: a
+                // mouth may take the ground DOWN, never up, and the app lowers
+                // the record to match so there is still one source.
+                assert!(top_m <= surface_m + 1.0, "a mouth never raises the ground");
+                continue;
+            }
             assert!(
                 (top_m - surface_m).abs() <= 1.0,
                 "column top {top_m} against surface {surface_m}"
@@ -803,6 +951,29 @@ mod tests {
         }
     }
 
+    /// The floor is the top of the RUN. A point inside a three-layer wall is
+    /// told the wall's top, not the top of the layer it is in: the difference
+    /// is a walker stepping onto a ledge and a walker climbing into a wall.
+    #[test]
+    fn a_point_inside_a_wall_is_told_the_top_of_the_wall() {
+        let mut column = generate_solid(&TERRAIN, Vec3::X);
+        let top = column.surface().unwrap();
+        // A chamber under three layers of wall under the surface.
+        for index in (top - 6)..(top - 3) {
+            column.set(index, Material::Air);
+        }
+        let wall_bottom = layer_altitude(top - 3);
+        let wall_top = layer_altitude(top) + 1.0;
+        // Inside the wall's lowest layer: the floor is the WALL's top.
+        let inside = column.contact(wall_bottom + 0.3);
+        assert_eq!(inside.floor, Some(wall_top));
+        assert_eq!(inside.ceiling, None, "nothing over the surface");
+        // In the chamber: floor and ceiling bound the chamber.
+        let chamber = column.contact(wall_bottom - 1.5);
+        assert_eq!(chamber.floor, Some(layer_altitude(top - 6)));
+        assert_eq!(chamber.ceiling, Some(wall_bottom));
+    }
+
     #[test]
     fn a_solid_column_has_one_run_and_the_same_top_as_the_carved_one() {
         let cave = CaveField::DEFAULT;
@@ -810,11 +981,14 @@ mod tests {
         for d in dirs(400) {
             let solid = generate_solid(&TERRAIN, d);
             let carved = generate(&cave, &TERRAIN, d);
-            assert_eq!(
-                solid.surface(),
-                carved.surface(),
-                "the carve never moves the ground underfoot"
-            );
+            let surface_m = planet_gen::surface_altitude(&TERRAIN, d);
+            if !mouth(&cave, &TERRAIN, d, surface_m) {
+                assert_eq!(
+                    solid.surface(),
+                    carved.surface(),
+                    "outside a mouth the carve never moves the ground underfoot"
+                );
+            }
             assert_eq!(solid.runs().len(), 1, "solid rock is one run");
             carved_somewhere |= carved.runs().len() > 1;
         }

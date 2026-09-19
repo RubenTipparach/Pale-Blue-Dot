@@ -147,28 +147,63 @@ Not ported: the containment resolve and the rescue stack. The swept footprint
 is why they are not needed, and adding them would be adding the failure mode
 they were written against.
 
-### A way in, so there is something to walk into
+### A way in: the mouth rule, built and measured
 
-The carve's surface damping stays: lace was the right thing to prevent. What it
-needs is an exception that is a feature rather than a leak. A **mouth** is a
-place where the damping is lifted, chosen by the same seeded noise the carve
-uses so it is deterministic and rare: where a low-frequency mouth field crosses
-a threshold AND the surface slope is steep enough to be a hillside, `roof_m` is
-taken to zero over that patch, and the tunnel underneath is allowed to break
-the surface. Measured by `cave_mouths` before and after, with a target of a few
-per tier rather than one per hill.
+The carve's surface damping stays; lace was the right thing to prevent. What is
+added is a **mouth**: a rare, seeded patch (`mouth`, on its own noise stream and
+never below the shore) inside which two things change in `hollow`:
 
-That is worldgen and gets its own write-up before its code. Digging needs no
-new rule at all and is task 4; between them, the recommended order is:
+- the damping is lifted, and
+- the carve threshold is LOWERED toward the ground (`mouth_relax`, 0.15 at the
+  surface easing to nothing `roof_m` down), so the tunnel sheet flares open
+  where it meets the surface.
 
-1. `Column::contact` answers run tops. Core, one test.
-2. `PlanetContact::stand`, column-aware inside the tier. Tests: a cave floor,
-   a cave roof, and the band edge answering as before.
-3. The walker's three additions. Tests: standing on a cave floor, a jump under
-   a roof stopping at the roof, a 1.5 m gap being impassable, and the terrace
-   scenarios unchanged.
-4. Digging (task 4), which is the first way in and the first proof.
-5. The mouth rule, measured, as its own change.
+The second is what made it work. Lifting the damping alone was measured first
+(`mouth_sweep`): four columns in a hundred of a patch opened, each a
+single-cell hole where the thin sheet crossed the ground. With the flare a
+quarter of a patch's columns open.
+
+**The field is fBm remapped to a unit range and rarely reaches its ends**, so
+the threshold reads lower than it sounds: 0.70 is 2.2% of the land in a patch
+and 0.60 is 17%. Shipped at 0.65, about 7%, which is roughly one patch per
+ninety-metre tier - the Minecraft cadence of an entrance every few hundred
+metres. The default spawn sits between patches; `--spawn mouth` moves the spawn,
+and so the tier, to the nearest one (92 m away, measured).
+
+**A mouth is a change to the RECORD, not only to the column.** Where the carve
+broke the ground, the column's top is below the height the record was built
+with, and the record is what the terrain pass caps, what the neighbours' walls
+go down to, and what the walker stands on outside a cave. Left alone it drew a
+meadow over the hole. So `column::build` lowers the record to the column's top,
+gives its cap the material that is actually there, and sets every neighbour's
+wall height for that side to match; the "one source" test keeps its rule
+everywhere the carve did not touch and learns the exception where it did.
+
+**And the wall between two column cells is the column pass's.** The terrain
+wall from cap to cap assumes rock all the way down, which across a mouth is a
+wall drawn over the opening. Between two cells that both have columns the
+terrain pass draws no wall, the column flank runs to its run's own top rather
+than stopping at the neighbour's cap, and the surface capture shows the
+terraces unchanged.
+
+What it looks like: at a 120 m patch scale the first mouth rendered as a
+**crater** thirty-five metres across and fifteen deep - a basin whose floor is
+the tunnel floor, with the tunnels leading off its walls (`cave_mouths` counts
+thirteen such openings in that tier, every one tall enough to walk into). That
+is a way in, and a crude one; the patch scale is 48 m now so a mouth is a pit
+with tunnels off it rather than a basin.
+
+### The order, as built
+
+1. `Column::contact` answers run tops. Done, with the wall test.
+2. `PlanetContact::stand`, column-aware through the finest record index; the
+   top run's floor is the DRAWN cap rather than the layer boundary over it,
+   or a walker floats a fraction of a metre over the ground it can see. Done.
+3. The walker: min ceiling over the footprint, no headroom is a wall, the head
+   clamps to the ceiling after the sweep. Done; the terrace scenarios are
+   unchanged and the ECS test stands the walker on a real cave floor.
+4. The mouth rule, above. Done.
+5. Digging (task 4), which opens a cave anywhere.
 
 The owner's in-game check closes it, not a headless test: Tenebris's walker
 passed every test it had while falling through the world at trees.

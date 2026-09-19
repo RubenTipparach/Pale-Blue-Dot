@@ -39,6 +39,20 @@ pub struct SurfaceContact {
     pub floor_radius: f32,
 }
 
+/// What a body at one point stands between: the answer a walker reads. Inside
+/// the column tier it is the column's own runs, so a cave has a floor and a
+/// ceiling; everywhere else it is the heightfield's floor and open sky, so
+/// nothing in the walker learns that two representations exist.
+#[derive(Debug, Clone, Copy)]
+pub struct Stand {
+    /// Top of the solid run at or below the feet: what you stand on.
+    pub floor_radius: f32,
+    /// Bottom of the solid run above that, if any: what you hit your head on.
+    pub ceiling_radius: Option<f32>,
+    /// Positive where the feet are under the sea.
+    pub water_depth: f32,
+}
+
 /// One level's records and neighbour table. `u32::MAX` marks a neighbour the
 /// set does not hold, which only the fine tier has.
 struct Tier {
@@ -126,6 +140,9 @@ impl Tier {
 /// seeds so a query starts within a few cells of its answer.
 struct FineTier {
     tier: Tier,
+    /// The set the tier came from, held for its columns: `locate` yields the
+    /// finest record index, which is what the column tier's slots are keyed by.
+    set: Arc<FineSet>,
     anchor: Vec3,
     cos_trusted: f32,
     tangent: Vec3,
@@ -135,7 +152,7 @@ struct FineTier {
 }
 
 impl FineTier {
-    fn new(set: &FineSet) -> Self {
+    fn new(set: &Arc<FineSet>) -> Self {
         let tier = Tier {
             columns: Arc::new(set.levels[3].clone()),
             neighbors: set.finest_neighbors.clone(),
@@ -146,6 +163,7 @@ impl FineTier {
         let grid_m = 3.0 * super::lod::tile_width_m(super::lod::FINEST_LEVEL);
         let mut fine = Self {
             tier,
+            set: set.clone(),
             anchor,
             // Trust the fine tier one grid cell inside where it is complete.
             cos_trusted: (set.finest_radius() - grid_m / PLANET_RADIUS).cos(),
@@ -237,8 +255,49 @@ impl PlanetContact {
     }
 
     /// Swap in the finest level of a fine set as the tier a walker stands on.
-    pub fn set_fine(&mut self, set: &FineSet) {
+    pub fn set_fine(&mut self, set: &Arc<FineSet>) {
         self.fine = Some(FineTier::new(set));
+    }
+
+    /// What a body whose FEET are at `feet` stands between. One function
+    /// decides column tier or heightfield, which is the whole of how the
+    /// walker gets a ceiling without learning where ceilings come from.
+    pub fn stand(&self, feet: Vec3) -> Stand {
+        let direction = feet.try_normalize().unwrap_or(Vec3::Y);
+        let surface = self.sample(direction);
+        let mut stand = Stand {
+            floor_radius: surface.floor_radius,
+            ceiling_radius: None,
+            water_depth: surface.water_depth,
+        };
+        let Some(fine) = &self.fine else {
+            return stand;
+        };
+        let Some(id) = fine.locate(direction) else {
+            return stand;
+        };
+        let Some(column) = fine.set.columns.column(id) else {
+            return stand;
+        };
+        let altitude = feet.length() - PLANET_RADIUS;
+        let contact = column.contact(altitude);
+        if let Some(floor) = contact.floor {
+            // The top run is the surface, and the surface is the drawn cap,
+            // not the layer boundary just over it: the column's top is the
+            // height rounded UP by under a layer, and a walker standing on
+            // that would float over the ground it can see. Inside a cave the
+            // run's own top is exactly the drawn cave floor.
+            let top = column
+                .surface()
+                .map_or(f32::MIN, |top| pbd_core::column::layer_altitude(top) + 1.0);
+            stand.floor_radius = if (floor - top).abs() < 1e-3 {
+                surface.floor_radius.min(PLANET_RADIUS + top)
+            } else {
+                PLANET_RADIUS + floor
+            };
+        }
+        stand.ceiling_radius = contact.ceiling.map(|c| PLANET_RADIUS + c);
+        stand
     }
 
     /// The base level's records, which tests and the spawn walk read.
@@ -527,8 +586,10 @@ mod tests {
     fn the_fine_tier_answers_inside_its_band_and_the_base_outside() {
         let mut contact = PlanetContact::test_planet(5);
         let anchor = contact.find_land_near(Vec3::new(0.8776, 0.4794, 0.0));
-        let set =
-            super::super::lod::generate_fine(anchor, &crate::config::ColumnSettings::default());
+        let set = Arc::new(super::super::lod::generate_fine(
+            anchor,
+            &crate::config::ColumnSettings::default(),
+        ));
         let base = contact.sample(anchor);
         contact.set_fine(&set);
         let fine = contact.sample(anchor);

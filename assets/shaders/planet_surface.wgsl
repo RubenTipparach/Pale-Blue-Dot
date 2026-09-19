@@ -259,7 +259,16 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         kind = 1u;
         let side = (vertex-18u)/6u;
         let i = (vertex-18u)%6u;
-        if side < degree {
+        // Between two cells that BOTH have columns, this wall is the column
+        // pass's: it draws the side exactly, run by run against the
+        // neighbour's air, and a wall drawn here from cap to cap would be rock
+        // across every cave mouth. Everywhere else the heightfield wall stands.
+        var columns_side = false;
+        let slot = column_slot(cell);
+        if slot != 0u && side < degree {
+            columns_side = column_side(columns[slot-1u], side) != NO_NEIGHBOR;
+        }
+        if side < degree && !columns_side {
             // The wall goes down to the neighbour's cap, or, where the
             // neighbour's region is drawn by the finer band, to the fine
             // floor: the height at the edge midpoint, which is the midpoint
@@ -387,7 +396,12 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     let hi = run_hi(word);
                     let gap = column_gap(column_side(rec,side),g);
                     let bottom = max(lo, gap.x);
-                    let top = min(min(hi, cell.corners[side].w), gap.y);
+                    // Against another column the terrain pass draws no wall
+                    // at all on this side, so the flank runs to the run's own
+                    // top; against the heightfield it stops at the
+                    // neighbour's cap, where the terrain wall takes over.
+                    var top = min(hi, gap.y);
+                    if column_side(rec,side) == NO_NEIGHBOR { top = min(top, cell.corners[side].w); }
                     if top-bottom > 0.001 {
                         material = run_body(word);
                         // The top metre of a flank is the surface layer and the

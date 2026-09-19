@@ -181,6 +181,47 @@ pub fn build(
         });
         columns.push(column);
     }
+    // A MOUTH lowers the ground. Where the carve broke the surface, the
+    // column's top is below the height the record was built with, and the
+    // record is what the terrain pass draws its cap from, what the neighbours
+    // draw their walls down to, and what the walker stands on outside a cave.
+    // Left alone it would draw a meadow over the hole and a wall across it.
+    // So the record takes the column's top, its cap wears the material that
+    // is actually there, and every neighbour's wall height for this side
+    // follows. Outside a mouth the column top is the height rounded up by
+    // less than a layer and the record is left exactly as it was, so the
+    // surface keeps its one source everywhere the carve did not touch it.
+    for (slot, &index) in members.iter().enumerate() {
+        let column = &columns[slot];
+        let Some(top) = column.surface() else {
+            continue;
+        };
+        let top_m = column::layer_altitude(top) + 1.0;
+        let height = finest[index].direction_height[3];
+        if top_m >= height {
+            continue;
+        }
+        finest[index].direction_height[3] = top_m;
+        let code = render_code(column.material(top));
+        finest[index].metadata[1] = (finest[index].metadata[1] & !0xff) | code;
+        let Some(table) = neighbors.get(index) else {
+            continue;
+        };
+        for &neighbor in table.iter().take(finest[index].degree()) {
+            if neighbor == u32::MAX {
+                continue;
+            }
+            let n = neighbor as usize;
+            // The neighbour's side that faces back at this cell.
+            let back = neighbors[n]
+                .iter()
+                .take(finest[n].degree())
+                .position(|&id| id as usize == index);
+            if let Some(side) = back {
+                finest[n].corners[side][3] = top_m;
+            }
+        }
+    }
     ColumnTier {
         columns,
         slots,
@@ -434,7 +475,22 @@ mod tests {
     #[ignore = "a report: cargo test -p pbd-app --lib cave_mouths -- --ignored --nocapture"]
     fn cave_mouths() {
         use pbd_core::column::layer_altitude;
-        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        // The nearest mouth to the spawn, which is what `--spawn mouth` does:
+        // the spawn itself sits between patches and would count nothing.
+        let spawn = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let anchor = pbd_core::column::nearest_mouth(
+            &settings.cave(),
+            &crate::planet::TERRAIN,
+            spawn,
+            3_000.0,
+            8.0,
+        )
+        .expect("a mouth within three kilometres of the spawn");
+        println!(
+            "anchored {:.0} m from the spawn",
+            anchor.dot(spawn).clamp(-1., 1.).acos() * PLANET_RADIUS
+        );
         let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
         let tier = set.take_columns();
         let finest = set.finest_records();
@@ -474,6 +530,61 @@ mod tests {
              {walkable} of those tall enough to walk into",
             tier.columns.len()
         );
+    }
+
+    /// A mouth is a change to the RECORD: the cap it draws is at the column's
+    /// top, and every neighbour's wall for that side goes down to it.
+    #[test]
+    fn a_mouth_lowers_its_record_and_its_neighbours_walls_follow() {
+        use pbd_core::column::layer_altitude;
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
+        let tier = set.take_columns();
+        let finest = set.finest_records();
+        let mut mouths = 0;
+        for (index, &slot) in tier.slots.iter().enumerate() {
+            if slot == usize::MAX {
+                continue;
+            }
+            let column = &tier.columns[slot];
+            let top_m = layer_altitude(column.surface().unwrap()) + 1.0;
+            let height = finest[index].direction_height[3];
+            // Either the column top is the height rounded up by under a layer,
+            // or the record was lowered to the column's top: never a cap
+            // drawn over air.
+            assert!(
+                (top_m >= height && top_m - height < 1.0001) || (top_m - height).abs() < 1e-4,
+                "cell {index}: column top {top_m} against record height {height}"
+            );
+            if (top_m - height).abs() < 1e-4 && top_m < planet_gen_height(finest, index) {
+                mouths += 1;
+                for (side, &neighbor) in set.finest_neighbors[index]
+                    .iter()
+                    .enumerate()
+                    .take(finest[index].degree())
+                {
+                    if neighbor == u32::MAX {
+                        continue;
+                    }
+                    let n = neighbor as usize;
+                    let back = set.finest_neighbors[n]
+                        .iter()
+                        .position(|&id| id as usize == index)
+                        .expect("adjacency is symmetric");
+                    assert_eq!(
+                        finest[n].corners[back][3], top_m,
+                        "neighbour {n} side {back} must draw its wall down to the mouth (our side {side})"
+                    );
+                }
+            }
+        }
+        println!("{mouths} mouth columns in the tier");
+    }
+
+    /// The surface the generator would have given a record, before any mouth
+    /// lowered it.
+    fn planet_gen_height(finest: &[GpuCell], index: usize) -> f32 {
+        crate::planet::surface_height(Vec3::from_slice(&finest[index].direction_height[..3]))
     }
 
     #[test]

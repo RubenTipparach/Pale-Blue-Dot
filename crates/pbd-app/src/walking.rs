@@ -199,7 +199,7 @@ fn setup_walking(world: &mut World) {
     let up = (center * ground.sample(center).radius
         + tangent_heading(Vec3::Y.cross(center), center) * 4.0)
         .normalize();
-    let support = footprint(ground, up * ground.sample(up).radius).0;
+    let support = footprint(ground, up * (ground.sample(up).radius + HALF_HEIGHT)).support;
     let position = up * (support + HALF_HEIGHT + CONTACT_SKIN);
     let body = world
         .spawn((
@@ -366,7 +366,10 @@ fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
     // Clear the whole footprint when a handoff lands beside a raised terrace.
     // Over water the walker arrives floating at the sheet rather than standing
     // on the seabed, and is not grounded: the swim model takes it from there.
-    let (support, water) = footprint(terrain, up * terrain.sample(up).floor_radius);
+    let Footprint { support, water, .. } = footprint(
+        terrain,
+        up * (terrain.sample(up).floor_radius + HALF_HEIGHT),
+    );
     let floating = water && support < sheet;
     let feet = if floating {
         sheet
@@ -600,21 +603,51 @@ impl Sea<'_> {
     }
 }
 
-fn footprint(terrain: &PlanetContact, position: Vec3) -> (f32, bool) {
+/// What the body at `position` stands between: the highest floor and the
+/// lowest ceiling over its five-point footprint.
+struct Footprint {
+    support: f32,
+    ceiling: Option<f32>,
+    water: bool,
+}
+
+fn footprint(terrain: &PlanetContact, position: Vec3) -> Footprint {
     let up = position.normalize();
     let tangent = up.any_orthonormal_vector() * BODY_RADIUS;
     let cross = up.cross(tangent);
+    // The query is made at the FEET: a column answers the run at or below the
+    // point asked, and the body's centre can be a metre up a wall the feet
+    // are standing beside.
+    let feet_radius = position.length() - HALF_HEIGHT;
     let mut support = 0.0_f32;
+    let mut ceiling: Option<f32> = None;
     let mut water = false;
     for offset in [Vec3::ZERO, tangent, -tangent, cross, -cross] {
-        let contact = terrain.sample(position + offset);
+        let feet = (position + offset).normalize() * feet_radius;
+        let stand = terrain.stand(feet);
         // The SOLID ground, which under a water cap is the seabed. Taking
-        // `radius` here put the walker on top of the sea as if the sheet were
-        // a floor, which is the other half of why water read as a wall.
-        support = support.max(contact.floor_radius);
-        water |= contact.water_depth > 0.0;
+        // the sheet put the walker on top of the sea as if it were a floor,
+        // which is the other half of why water read as a wall.
+        support = support.max(stand.floor_radius);
+        // The max floor keeps an edge stable; the MIN ceiling is the same
+        // rule read upward, so a head against any part of a roof is a head
+        // against the roof.
+        ceiling = match (ceiling, stand.ceiling_radius) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        water |= stand.water_depth > 0.0;
     }
-    (support, water)
+    Footprint {
+        support,
+        ceiling,
+        water,
+    }
+}
+
+/// Whether a body standing on `support` has room under `ceiling`.
+fn headroom(support: f32, ceiling: Option<f32>) -> bool {
+    ceiling.is_none_or(|c| c - (support + CONTACT_SKIN) >= 2.0 * HALF_HEIGHT + CONTACT_SKIN)
 }
 
 /// Swept support with a small capsule footprint. Steep rises block horizontal
@@ -638,23 +671,29 @@ fn resolve_ground(
         for i in 1..=segments {
             let candidate = start.lerp(destination, i as f32 / segments as f32);
             let up = candidate.normalize();
-            let (support, _wet_footprint) = footprint(&terrain, candidate);
+            let Footprint {
+                support, ceiling, ..
+            } = footprint(&terrain, candidate);
             let feet = candidate.length() - HALF_HEIGHT;
             let old_feet = accepted.length() - HALF_HEIGHT;
             let rise = support + CONTACT_SKIN - feet;
             let can_step =
                 ground.grounded && support + CONTACT_SKIN - old_feet <= config.step_height;
+            // A passage lower than the body is a wall, exactly as a tall rise
+            // is: Tenebris's headroom check in `try_horizontal_step`, and what
+            // stops a walker forcing their head into a low tunnel.
+            let low = i > 0 && !headroom(support, ceiling);
             // Water used to be a wall here, which is why the sea could be
             // looked at and never entered. It is passable now: the seabed is
             // ordinary ground, and what stops a swimmer is the seabed's own
             // rise, exactly as on land.
-            if rise > 0.03 && !can_step && support + CONTACT_SKIN - old_feet > 0.03 {
+            if low || (rise > 0.03 && !can_step && support + CONTACT_SKIN - old_feet > 0.03) {
                 // Keep the last accepted angular position, allowing vertical
                 // jump/fall along it to continue against a blocked wall.
                 let old_up = accepted.normalize();
                 // Only block tangential motion. Preserve the full fixed tick's
                 // vertical displacement, independent of the first hit fraction.
-                let floor = footprint(&terrain, accepted).0 + HALF_HEIGHT + CONTACT_SKIN;
+                let floor = footprint(&terrain, accepted).support + HALF_HEIGHT + CONTACT_SKIN;
                 accepted = old_up * destination.length().max(floor);
                 velocity.0 = old_up * velocity.0.dot(old_up);
                 grounded = accepted.length() <= floor + 0.03 && velocity.0.dot(old_up) <= 0.0;
@@ -676,9 +715,25 @@ fn resolve_ground(
                 grounded = false;
             }
         }
+        // The head against a ceiling. A jump under a cave roof stops at the
+        // roof: the body drops to hang under it and the rise is taken off,
+        // tangential motion kept. Underwater only the rise goes, so a swimmer
+        // against rock stops rather than being snapped.
+        let wet = sea.state(&config, accepted);
+        if let Some(ceiling) = footprint(&terrain, accepted).ceiling {
+            let up = accepted.normalize();
+            let head = accepted.length() + HALF_HEIGHT;
+            if head > ceiling - CONTACT_SKIN {
+                if !wet.body {
+                    accepted = up * (ceiling - HALF_HEIGHT - CONTACT_SKIN);
+                }
+                let rise = velocity.0.dot(up).max(0.0);
+                velocity.0 -= up * rise;
+            }
+        }
         // The eye probe has the last word: a swimmer is never grounded, so
         // gravity keeps acting and the standing jump stays out of reach.
-        let submerged = sea.state(&config, accepted).eyes;
+        let submerged = wet.eyes;
         position.0 = accepted;
         ground.previous = accepted;
         ground.grounded = grounded && !submerged;
@@ -1053,6 +1108,99 @@ mod tests {
         assert!((body.get::<LinearVelocity>().unwrap().0.length() - 14.0).abs() < 0.05);
     }
 
+    /// The column tier at a real cave: the walker settles on the CAVE floor
+    /// rather than the surface far above it or the void far below, and a
+    /// jump under the roof stops at the roof and comes back down.
+    #[test]
+    fn a_walker_stands_on_a_cave_floor_and_bumps_its_head_on_the_roof() {
+        use pbd_core::column::layer_altitude;
+        use std::sync::Arc;
+        let settings = crate::config::ColumnSettings::default();
+        let spawn = FlightViewConfig::default().spawn_direction;
+        let mut terrain = PlanetContact::test_planet(5);
+        let anchor = terrain.find_land_near(spawn);
+        let set = Arc::new(crate::planet::lod::generate_fine(anchor, &settings));
+        terrain.set_fine(&set);
+        // A chamber to stand in: the same pick the cave capture makes.
+        let records = set.finest_records();
+        let mut best: Option<(f32, Vec3, f32, f32)> = None;
+        for (index, &slot) in set.columns.slots.iter().enumerate() {
+            if slot == usize::MAX {
+                continue;
+            }
+            let column = &set.columns.columns[slot];
+            let runs = column.drawn_runs();
+            let surface = layer_altitude(column.surface().unwrap()) + 1.0;
+            for pair in runs.windows(2) {
+                let floor = layer_altitude(pair[0].to);
+                let roof = layer_altitude(pair[1].from);
+                let buried = surface - roof;
+                if (2.5..=12.0).contains(&(roof - floor))
+                    && (4.0..=40.0).contains(&buried)
+                    && best.is_none_or(|(had, _, _, _)| buried > had)
+                {
+                    let direction = Vec3::from_slice(&records[index].direction_height[..3]);
+                    best = Some((buried, direction, floor, roof));
+                }
+            }
+        }
+        let (_, here, floor, roof) = best.expect("a chamber in the tier");
+        let floor_radius = PLANET_RADIUS + floor;
+        let roof_radius = PLANET_RADIUS + roof;
+        let mut app = app_with_terrain_at(terrain, spawn);
+        let body = place_at(&mut app, here * (floor_radius + 0.5 + HALF_HEIGHT), false);
+        let mut ticks = 0;
+        while !app.world().get::<GroundState>(body).unwrap().grounded && ticks < 120 {
+            app.update();
+            ticks += 1;
+        }
+        let feet = app.world().get::<Position>(body).unwrap().0.length() - HALF_HEIGHT;
+        assert!(
+            (feet - floor_radius).abs() < 0.03,
+            "the walker must settle on the cave floor at {floor} m, not {:.2} m",
+            feet - PLANET_RADIUS
+        );
+        // Jump, the way a player does: the input system clears a jump flag
+        // set by hand, so the press has to be a press. The roof is under a
+        // jump's reach, so the head meets it.
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Space);
+        app.update();
+        // And let go. Without an input plugin a press stays just-pressed, and
+        // the walker jumped again the tick it landed: the trace showed a
+        // clean hop to the roof, a landing on the floor at tick 49, and a
+        // second hop.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::Space);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .clear_just_pressed(KeyCode::Space);
+        let mut highest_head = 0.0f32;
+        for _ in 0..90 {
+            app.update();
+            let head = app.world().get::<Position>(body).unwrap().0.length() + HALF_HEIGHT;
+            highest_head = highest_head.max(head);
+        }
+        assert!(
+            highest_head <= roof_radius + 0.02,
+            "the head reached {:.2} m over a roof at {roof} m",
+            highest_head - PLANET_RADIUS
+        );
+        assert!(
+            highest_head > floor_radius + 2.0 * HALF_HEIGHT + 0.2,
+            "the jump must actually have left the floor"
+        );
+        let landed = app.world().get::<Position>(body).unwrap().0.length() - HALF_HEIGHT;
+        assert!(app.world().get::<GroundState>(body).unwrap().grounded);
+        assert!(
+            (landed - floor_radius).abs() < 0.03,
+            "and come back down onto the floor"
+        );
+    }
+
     #[test]
     fn one_metre_fall_matches_tenebris_and_reports_the_old_gravity_baseline() {
         for (acceleration, height) in [(9.0_f32, 1.0_f32), (25.0, 1.0), (9.0, 6.0), (25.0, 6.0)] {
@@ -1300,7 +1448,7 @@ mod tests {
         );
         let body = app.world().resource::<WalkingState>().body;
         let before = app.world().get::<Position>(body).unwrap().0;
-        let support = footprint(app.world().resource::<PlanetContact>(), before).0;
+        let support = footprint(app.world().resource::<PlanetContact>(), before).support;
         assert!(before.length() - HALF_HEIGHT >= support);
         app.world_mut().resource_mut::<WalkingState>().captured = true;
         app.world_mut()

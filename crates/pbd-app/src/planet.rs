@@ -292,8 +292,17 @@ fn create_planet(
         .iter()
         .filter(|column| column.drawn_runs().len() > 1)
         .count();
+    let mouths = fine
+        .finest_records()
+        .iter()
+        .filter(|cell| {
+            let direction = Vec3::from_slice(&cell.direction_height[..3]);
+            cell.direction_height[3] < surface_height(direction) - 0.5
+        })
+        .count();
     info!(
         "Column tier: anchor {anchor:?}, {} columns within {:.0} m of it, {caves} of them carrying a cave, \
+         {mouths} records lowered by a mouth, \
          {:.2} runs mean, {:.2} MiB of records",
         tier.columns.len(),
         columns.reach_m,
