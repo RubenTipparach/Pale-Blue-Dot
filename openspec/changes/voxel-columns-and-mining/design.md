@@ -147,7 +147,157 @@ Not ported: the containment resolve and the rescue stack. The swept footprint
 is why they are not needed, and adding them would be adding the failure mode
 they were written against.
 
-### A way in: the mouth rule, built and measured
+### A way in: the damping IS the knob, measured
+
+The owner asked why the caves could not simply be raised. A height offset on
+its own does nothing - the tunnels move up into the top nine metres and the
+damping there erases them exactly as before - but the question was the right
+one, because the damping was a GUESS: it was written to stop the surface being
+lace, and lace was never measured. `damping_sweep` measures it:
+
+| `roof_m` | land columns open at the top | underground hollow | columns losing their surface layer |
+| ---: | ---: | ---: | ---: |
+| 9.0 | 0.0% | 3.4% | 0.0% |
+| 4.0 | 0.0% | 3.5% | 0.0% |
+| **2.0** | **3.7%** | 3.5% | **0.2%** |
+| 0.5 | 4.7% | 3.5% | 3.8% |
+
+Two metres opens one land column in twenty-seven with nothing worth calling
+lace; half a metre is where the ground starts going. So `roof_m` ships at 2.0,
+and most of what that opens is a HOLE - the tunnel sheet crossing the ground -
+that a walker drops into and follows down, which is how most Minecraft caves
+begin. On the default spawn's tier that is about ninety columns.
+
+The mouth patch below stays as a second knob on the same function: it is what
+makes a few WALK-IN openings, a tunnel entering a hillside at ground level,
+which the sweep's holes mostly are not (one in the default tier by the
+stricter `cave_mouths` measure, seven in a patch's).
+
+### Perlin worms: tubes, and openings where a worm starts at the surface
+
+The owner's call, and the right one: the sheet carve is replaced by WORMS.
+
+**A worm** is a seed, a start point and a walk. From its seed it takes a
+length, a starting radius and a heading; each step it moves `step_m` along
+its heading, turns its yaw and pitch by 3D noise sampled at where it is, and
+its radius wanders by the same noise, so a slow bend widens into a room. Pitch
+is held inside a band about the tangent plane so a worm tunnels rather than
+dives, it is held under the ground by at least its own radius plus a layer,
+and it never reaches the bedrock floor. What it carves is a chain of capsules.
+
+**Some worms start at the surface.** A share of them (`surface_share`) begin a
+layer under the ground heading down, and the first capsule of such a worm cuts
+the ground open: that is the opening, and it leads somewhere by construction,
+because the rest of the worm is behind it. The mouth patch, the flare and the
+damping sweep all go with the sheet; a worm that starts at the surface is what
+they were approximating.
+
+**A column stays a pure function of its direction, which is the property the
+whole tier rests on.** Worms are seeded on a fixed lattice - a cube-sphere grid
+whose cells are about a base tile across - and a cell's worms are a function of
+the cell's index and the world seed alone. To generate a column, gather every
+worm whose seed cell lies within the longest worm plus the widest radius of
+the column's direction, walk each (deterministic, so the same worm every time
+from anywhere), and test the column's layers against the capsules that pass
+near it. The tier build gathers and walks the region's worms ONCE and hands the
+paths to every column, which is the regional pre-pass the write-up said worms
+would need, done at the one place columns are built in bulk.
+
+**What replaced what.** `CaveField` became `WormField`: density per seed
+cell, length and radius ranges, step, turn rate, pitch band, surface share,
+start depth, steer scale, all in `column.ron` with units. `hollow`, the ridged
+salt, the mouth patch, the flare and the damping knob are gone; `generate`
+takes the gathered worms. The instruments stayed and were the acceptance.
+
+**Measured, at the default spawn, release build, one core of this container:**
+
+| Quantity | Sheet carve | Worms |
+| --- | ---: | ---: |
+| `sight_lines`, median across the cave | 2 m | 3 m |
+| `sight_lines`, longest ray | 12 m | **54 m**, along the tube |
+| hollow share of the underground | 3.5% | 0.50% |
+| land columns crossed by a cave | - | 23.4% |
+| `cave_mouths`, openings in the 90 m tier | 0 (1 with the damping at 2 m) | **12**, 11 walkable |
+| gather and walk, 90 m tier | - | 12.8 ms, 150 worms, 7,864 capsules |
+| one column | 22.3 us | 14.7 us, 1.26 runs mean |
+
+A tenth of the sheet's hollow volume and a quarter of the land crossed: the
+worms gather the air into tunnels a player can see down instead of spreading
+it into slabs, which is the whole difference. `worm_turn` is 0.12 rather than
+the 0.30 first tried, because at 0.30 a tunnel doubled back inside thirty
+metres and the longest sight line was 32 m; a bend radius of about seventeen
+metres at a two-metre step is a tunnel that reads as one.
+
+**Both ends of a capsule are held under the ground.** The first cut clamped a
+worm's position at the top of each step and pushed the capsule to wherever the
+step would land, so the far end was clamped only when it became the next
+step's start, and the last capsule of every worm never was: the suite caught a
+buried worm 0.1 m proud of the surface where the ground fell away. `hold`
+clamps the far end at the step it will be, before the capsule is recorded.
+
+**The cross-section changed shape.** `cave_cross_section` at the same column
+draws a 10 m room over a 3 m floor of rock over a second 6 m gallery below,
+where the sheet drew pancakes with pillars; the rooms are where a worm's
+radius wandered wide or two worms crossed.
+
+**A mouth is a gap a walker can STEP into, and the first rule counted holes.**
+The opening test was "the gap's roof stands above the neighbour's cap and its
+floor is below that cap", which is true of a tunnel running five metres under
+the meadow next door: a hole in its roof, not a doorway. The `--view mouth`
+frame showed it plainly - a camera on the grass aimed down into a slot at its
+feet. The floor must be within a STEP of the ground outside, and the step is
+`planet::column::STEP_M`, which `WalkingConfig::step_height` now reads too:
+what a walker can climb and what counts as a doorway are one fact, so a mouth
+the count offers is a mouth the walker can take. Counted that way the default
+tier has 9 openings and 8 walkable, against 12 and 11 under the loose rule and
+0 under the sheet.
+
+**The capture picks by SIGHT LINE, because burial was the slab's question.**
+`--view cave` took the chamber with the most rock over it, which is the only
+thing that distinguishes one two-metre slab pocket from another. With worms
+the frames differ by whether the tunnel carries on, so the pick walks cell to
+cell at eye height in each of six headings and takes the longest open run,
+then aims along it: 16 cells of open tunnel in the default tier, and the frame
+is a passage running into the dark with a gallery off it. `--view overhang`
+aims at the roof eight metres down that passage rather than the metre of
+ceiling over the lens, which was a grey wash at a grazing angle.
+
+### The carve WAS a sheet, and that was its real weakness
+
+The owner asked whether this is Perlin worms. It is not: `hollow` is one
+thresholded ridged field, air where `ridged(point / 46 m) > 0.88`. The crest of
+ridged noise is a surface, and a threshold near the top keeps a thin shell
+around it, so every cave is a slab. That one fact is behind three things this
+change measured and worked around rather than fixed:
+
+- `sight_lines` finds a median of 2 m inside a chamber and nothing past 12 m:
+  a slab seen edge-on is a wall.
+- the cross-sections are pancakes with pillars, and the 3.5% hollow figure is
+  spread thin rather than gathered into anything a player would call a tunnel;
+- a slab meeting the ground is a LINE of single-cell holes, which is why the
+  damping sweep opens 3.7% of columns and `cave_mouths` counts one of them as
+  a walk-in.
+
+**The next carve should be tubes, and the cheapest tube stays a pure function
+of position:** intersect two independent ridged fields, `ridge_a > t &&
+ridge_b > t`. The intersection of two sheets is a curve, and the threshold band
+around it is a tube - Minecraft's "spaghetti caves" since 1.18. It is a few
+lines in `hollow` with a second seed salt, and the instruments already here
+say whether it worked: `sight_lines` should go from metres to tens of metres,
+`carve_report` should hold the hollow share, and `cave_mouths` should count
+round openings where a tube meets the ground.
+
+**Perlin worms** are the other family: agents that walk a noise-steered path
+and carve capsules along it, which gives chosen radii, rooms where a worm slows
+or two cross, and mouths for free by starting a worm at the surface. What they
+cost is the property everything here rests on: a column stops being a function
+of its own direction, because a worm crosses cells. That means a regional
+pre-pass - worms seeded per region, carved into every column they touch, and
+the tier rebuild reading that region rather than generating per cell. It is
+the right tool for caves with intent, and it is its own change; the
+intersection comes first because it is an afternoon and it measures.
+
+### The mouth rule, built and measured
 
 The carve's surface damping stays; lace was the right thing to prevent. What is
 added is a **mouth**: a rare, seeded patch (`mouth`, on its own noise stream and

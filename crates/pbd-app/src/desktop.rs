@@ -348,14 +348,15 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
         return Vec3::Y;
     }
     if launch.spawn.as_deref() == Some("mouth") || launch.view == "mouth" {
+        // The nearest worm that starts at the surface within a kilometre.
         let columns = pbd_app::config::ColumnSettings::default();
-        let found = pbd_core::column::nearest_mouth(
-            &columns.cave(),
+        let found = pbd_core::worms::gather(
+            &columns.worms(),
             &pbd_app::planet::TERRAIN,
             default,
-            3_000.0,
-            8.0,
-        );
+            1_000.0,
+        )
+        .nearest_opening(default);
         match found {
             Some(mouth) => {
                 info!(
@@ -364,7 +365,7 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
                 );
                 return mouth;
             }
-            None => warn!("no cave mouth within 3 km of the spawn; spawning at the default"),
+            None => warn!("no cave mouth within a kilometre of the spawn; spawning at the default"),
         }
     }
     default
@@ -416,13 +417,60 @@ fn cave_camera(
     if !["cave", "overhang", "mouth"].contains(&launch.view.as_str()) {
         return;
     }
-    use pbd_core::column::layer_altitude;
+    use pbd_core::column::{layer_altitude, layer_at};
     let tier = &fine.set.columns;
     let records = fine.set.finest_records();
-    // The chamber with the most rock over it, no deeper than forty metres: at
-    // two hundred metres down the frame is rock in every direction, which
-    // proves the point and shows nothing.
-    let mut best: Option<(f32, Vec3, f32, f32)> = None;
+    // Air at this altitude in this cell's column, which is the one question
+    // both the pick and the aim ask.
+    let air = |cell: usize, altitude: f32| -> bool {
+        let slot = tier.slots.get(cell).copied().unwrap_or(usize::MAX);
+        if slot == usize::MAX {
+            return false;
+        }
+        layer_at(altitude).is_some_and(|layer| !tier.columns[slot].solid(layer))
+    };
+    // The chamber a player can SEE DOWN, not the one with the most rock over
+    // it. Burial was the sheet carve's pick and it was right for a slab, where
+    // every chamber is the same two metres across and depth is all that is
+    // left to choose by; with worms the frames differ by whether the tunnel
+    // carries on, so the pick is the sight line, which is the instrument the
+    // carve is measured with applied at capture time. Walking cell to cell,
+    // always taking the neighbour most nearly ahead.
+    let walk = |start: usize, heading: Vec3, altitude: f32| -> (usize, Vec3) {
+        let mut cell = start;
+        let mut at = Vec3::from_slice(&records[start].direction_height[..3]);
+        let mut ahead = heading;
+        for step in 1..=24 {
+            let mut next: Option<(f32, usize, Vec3)> = None;
+            for (side, &neighbor) in fine.set.finest_neighbors[cell]
+                .iter()
+                .enumerate()
+                .take(records[cell].degree())
+            {
+                if neighbor == u32::MAX {
+                    continue;
+                }
+                let there = Vec3::from_slice(&records[neighbor as usize].direction_height[..3]);
+                let toward = (there - at).normalize_or_zero();
+                let score = toward.dot(ahead);
+                let _ = side;
+                if next.is_none_or(|(had, ..)| score > had) {
+                    next = Some((score, neighbor as usize, toward));
+                }
+            }
+            let Some((_, neighbor, toward)) = next else {
+                return (step - 1, ahead);
+            };
+            if !air(neighbor, altitude) {
+                return (step - 1, ahead);
+            }
+            cell = neighbor;
+            at = Vec3::from_slice(&records[neighbor].direction_height[..3]);
+            ahead = toward;
+        }
+        (24, ahead)
+    };
+    let mut best: Option<(usize, Vec3, f32, f32, Vec3)> = None;
     for (index, &slot) in tier.slots.iter().enumerate() {
         if slot == usize::MAX {
             continue;
@@ -437,21 +485,28 @@ fn cave_camera(
             let roof = layer_altitude(pair[1].from);
             let gap = roof - floor;
             let buried = surface - roof;
-            if (2.5..=12.0).contains(&gap)
-                && (4.0..=40.0).contains(&buried)
-                && best.is_none_or(|(had, _, _, _)| buried > had)
-            {
-                let direction = Vec3::from_slice(&records[index].direction_height[..3]);
-                best = Some((buried, direction, floor, roof));
+            if !(2.5..=12.0).contains(&gap) || !(4.0..=40.0).contains(&buried) {
+                continue;
+            }
+            let here = Vec3::from_slice(&records[index].direction_height[..3]);
+            let eye_altitude = floor + EYE_HEIGHT.min(gap - 0.5);
+            let tangent = Vec3::Y.cross(here).normalize_or_zero();
+            let bitangent = here.cross(tangent);
+            for turn in 0..6 {
+                let angle = turn as f32 * std::f32::consts::TAU / 6.0;
+                let heading = tangent * angle.cos() + bitangent * angle.sin();
+                let (reach, _) = walk(index, heading, eye_altitude);
+                if best.is_none_or(|(had, ..)| reach > had) {
+                    best = Some((reach, here, floor, roof, heading));
+                }
             }
         }
     }
     if launch.view == "mouth" {
-        // Stand on the ground outside a tunnel opening and look into it. An
-        // opening is the same thing `cave_mouths` counts: a column's air gap
-        // standing above a neighbour's cap, tall enough for a body, so a
-        // walker on that neighbour can see in and walk in.
-        use pbd_core::column::layer_altitude;
+        // Stand on the ground outside a tunnel opening and look into it. What
+        // counts as an opening is `planet_column::mouth_of`, the same function
+        // the mouth count and the walker read, so a frame cannot be taken of
+        // something the count does not call a mouth.
         let mut best: Option<(f32, usize, usize, f32, f32)> = None;
         for (index, &slot) in tier.slots.iter().enumerate() {
             if slot == usize::MAX {
@@ -459,36 +514,23 @@ fn cave_camera(
             }
             let runs = tier.columns[slot].drawn_runs();
             let cell = &records[index];
-            for pair in runs.windows(2) {
-                let floor = layer_altitude(pair[0].to);
-                let roof = layer_altitude(pair[1].from);
-                if roof - floor < 1.8 {
-                    continue;
-                }
-                for (side, &neighbor) in fine.set.finest_neighbors[index]
-                    .iter()
-                    .enumerate()
-                    .take(cell.degree())
-                {
-                    if neighbor == u32::MAX {
-                        continue;
-                    }
-                    let cap = cell.corners[side][3];
-                    // The opening: the gap stands above the neighbour's ground
-                    // and its floor is within a step of it. The deepest tunnel
-                    // behind it is the one worth looking into.
-                    if roof > cap + 0.5 && floor < cap + 1.05 {
-                        let depth = roof - floor;
-                        if best.is_none_or(|(had, ..)| depth > had) {
-                            best = Some((depth, index, neighbor as usize, floor, roof));
-                        }
-                    }
-                }
+            let Some((floor, roof, side)) = pbd_app::planet::mouth_of(cell, &runs) else {
+                continue;
+            };
+            let neighbor = fine.set.finest_neighbors[index][side];
+            if neighbor == u32::MAX || roof - floor < 1.8 {
+                continue;
+            }
+            // The deepest tunnel behind the opening is the one worth looking
+            // into: a one-cell notch is a doorway with a wall behind it.
+            let depth = roof - floor;
+            if best.is_none_or(|(had, ..)| depth > had) {
+                best = Some((depth, index, neighbor as usize, floor, roof));
             }
         }
         let Some((depth, index, outside, floor, roof)) = best else {
             panic!(
-                "no tunnel opening in the column tier; use --spawn mouth or lower mouth_threshold"
+                "no tunnel opening in the column tier; use --spawn mouth or raise worm_surface_share"
             )
         };
         let inside = Vec3::from_slice(&records[index].direction_height[..3]);
@@ -497,40 +539,42 @@ fn cave_camera(
             "mouth capture: a {depth:.0} m opening, floor {floor:.0} m, roof {roof:.0} m, from ground at {:.0} m",
             records[outside].direction_height[3]
         );
-        // One cell further back from the opening, at eye height on the ground
-        // THERE: the ground a cell back is another cell's, and a frame that
-        // stood at the outside cell's height from a cell back was inside the
-        // rock of that cell, seeing the world from below through its cap.
+        // Three cells back from the opening on the outside ground, at eye
+        // height THERE: the ground a cell back is another cell's, and a frame
+        // that stood at the outside cell's height from a cell back was inside
+        // the rock of that cell, seeing the world from below through its cap.
         let back = (ground - inside).normalize_or_zero();
-        let vantage = (ground + back * (3.0 / PLANET_RADIUS)).normalize();
-        let there =
-            pbd_app::planet::surface_height(vantage).max(records[outside].direction_height[3]);
+        let vantage = (ground + back * (4.0 / PLANET_RADIUS)).normalize();
+        let there = pbd_app::planet::surface_height(vantage);
         let eye = vantage * (PLANET_RADIUS + there + EYE_HEIGHT);
-        let target = inside * (PLANET_RADIUS + (floor + roof) * 0.5);
-        let mut transform = Transform::from_translation(eye).looking_at(target, ground);
+        // Aim at the middle of the opening, which is where a walker's eyes go.
+        let target = inside * (PLANET_RADIUS + (floor + roof) * 0.5 + EYE_HEIGHT * 0.5);
+        let mut transform = Transform::from_translation(eye).looking_at(target, vantage);
         transform.translation += launch.render_offset;
         commands.spawn((Camera3d::default(), transform));
         return;
     }
-    let Some((buried, here, floor, roof)) = best else {
-        panic!("no chamber in the column tier to photograph; raise reach_m or lower cave_threshold")
+
+    let Some((reach, here, floor, roof, along)) = best else {
+        panic!("no chamber in the column tier to photograph; raise reach_m or worm_density")
     };
     let gap = roof - floor;
     info!(
-        "cave capture: a {gap:.0} m chamber under {buried:.0} m of rock, floor {floor:.0} m, \
-         roof {roof:.0} m, {:.0} m from the tier anchor",
+        "cave capture: a {gap:.0} m chamber with {reach} cells of open tunnel ahead, floor \
+         {floor:.0} m, roof {roof:.0} m, {:.0} m from the tier anchor",
         here.dot(fine.set.anchor).clamp(-1., 1.).acos() * PLANET_RADIUS
     );
-    // `cave` stands on the chamber floor at eye height and looks along it;
-    // `overhang` looks UP at the rock over it, which is the frame that says the
-    // world has a ceiling.
+    // `cave` stands on the chamber floor at eye height and looks along the
+    // tunnel; `overhang` looks UP at the rock over it, which is the frame that
+    // says the world has a ceiling.
     let eye_altitude = floor + EYE_HEIGHT.min(gap - 0.5);
     let eye = here * (PLANET_RADIUS + eye_altitude);
-    let tangent = Vec3::Y.cross(here).normalize_or_zero();
-    let bitangent = here.cross(tangent);
-    let along = (tangent * 0.8 + bitangent * 0.6).normalize();
     let target = if launch.view == "overhang" {
-        here * (PLANET_RADIUS + roof) + along * 1.5
+        // The roof EIGHT metres down the tunnel, not the one overhead: a
+        // ceiling a metre above the lens is one flat plane at a grazing angle,
+        // which is a grey wash rather than a picture of a roof. Eight metres
+        // out it recedes and the walls either side give it depth.
+        (here + along * (8.0 / PLANET_RADIUS)).normalize() * (PLANET_RADIUS + roof - 0.3)
     } else {
         (here + along * (12.0 / PLANET_RADIUS)).normalize() * (PLANET_RADIUS + eye_altitude)
     };

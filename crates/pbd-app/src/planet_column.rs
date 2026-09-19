@@ -24,6 +24,7 @@ use crate::config::ColumnSettings;
 use bevy::prelude::Vec3;
 use bytemuck::{Pod, Zeroable};
 use pbd_core::column::{self, Column, MAX_RUNS};
+use pbd_core::worms;
 
 /// Slots in the column buffer. The default tier is about 3,100 cells; the
 /// headroom is for a configured reach larger than that, and a reach that
@@ -120,7 +121,12 @@ pub fn build(
     settings: &ColumnSettings,
 ) -> ColumnTier {
     let anchor = anchor.normalize_or(Vec3::Y);
-    let cave = settings.cave();
+    // The region's worms, gathered ONCE: every worm that could reach any
+    // column of the tier, so each column's carve is complete whatever tier
+    // built it. This is the regional pre-pass the design said worms need,
+    // done at the one place columns are built in bulk.
+    let field = settings.worms();
+    let region = worms::gather(&field, &TERRAIN, anchor, settings.reach_m.max(0.));
     let reach = (settings.reach_m.max(0.) / PLANET_RADIUS).cos();
     let mut slots = vec![usize::MAX; finest.len()];
     let mut members = Vec::new();
@@ -172,7 +178,7 @@ pub fn build(
         let column = if rim {
             column::generate_solid(&TERRAIN, direction)
         } else {
-            column::generate(&cave, &TERRAIN, direction)
+            column::generate(&region, &field, &TERRAIN, direction)
         };
         records.push(GpuColumn {
             runs: column.packed_runs(render_code),
@@ -227,6 +233,37 @@ pub fn build(
         slots,
         records,
     }
+}
+
+/// The step a walker can take up or down, in metres: one cell of elevation
+/// plus the contact skin. `WalkingConfig::step_height` is the same number and
+/// reads it from here, because what a walker can climb and what counts as a
+/// doorway are one fact - a mouth a walker cannot step into is not a mouth.
+pub const STEP_M: f32 = crate::planet::terrain::ELEVATION_STEP + 0.05;
+
+/// Where this column is open to the ground NEXT DOOR, if it is: the floor and
+/// roof of the gap and the side it faces. A mouth is a gap whose FLOOR is
+/// within a step of the neighbour's cap, so a walker standing there walks in;
+/// a gap whose floor is five metres below their feet is a hole they fall into,
+/// which is what the first rule counted and what put the capture's camera over
+/// a pit looking down. The tallest such gap wins, and the count, the capture
+/// and the walker all ask this one function.
+pub fn mouth_of(cell: &GpuCell, runs: &[column::Run]) -> Option<(f32, f32, usize)> {
+    let mut best: Option<(f32, f32, usize)> = None;
+    for pair in runs.windows(2) {
+        let floor = column::layer_altitude(pair[0].to);
+        let roof = column::layer_altitude(pair[1].from);
+        for side in 0..cell.degree() {
+            let cap = cell.corners[side][3];
+            if (floor - cap).abs() <= STEP_M
+                && roof > cap + 0.5
+                && best.is_none_or(|(had_floor, had_roof, _)| roof - floor > had_roof - had_floor)
+            {
+                best = Some((floor, roof, side));
+            }
+        }
+    }
+    best
 }
 
 /// The slot a cell record carries, or `None`. What the shaders read off the
@@ -474,24 +511,12 @@ mod tests {
     #[test]
     #[ignore = "a report: cargo test -p pbd-app --lib cave_mouths -- --ignored --nocapture"]
     fn cave_mouths() {
-        use pbd_core::column::layer_altitude;
+        // The DEFAULT spawn, with the damping the sweep in pbd-core picked and
+        // no mouth patches at all: if openings are there, the patch rule is
+        // machinery for a question one number answers.
         let settings = ColumnSettings::default();
-        // The nearest mouth to the spawn, which is what `--spawn mouth` does:
-        // the spawn itself sits between patches and would count nothing.
-        let spawn = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
-        let anchor = pbd_core::column::nearest_mouth(
-            &settings.cave(),
-            &crate::planet::TERRAIN,
-            spawn,
-            3_000.0,
-            8.0,
-        )
-        .expect("a mouth within three kilometres of the spawn");
-        println!(
-            "anchored {:.0} m from the spawn",
-            anchor.dot(spawn).clamp(-1., 1.).acos() * PLANET_RADIUS
-        );
-        let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let mut set = lod::generate_fine(anchor, &settings);
         let tier = set.take_columns();
         let finest = set.finest_records();
         let mut caves = 0;
@@ -506,24 +531,9 @@ mod tests {
                 continue;
             }
             caves += 1;
-            let cell = &finest[index];
-            let mut open = false;
-            let mut tall = false;
-            for pair in runs.windows(2) {
-                let floor = layer_altitude(pair[0].to);
-                let roof = layer_altitude(pair[1].from);
-                for side in 0..cell.degree() {
-                    let neighbor_cap = cell.corners[side][3];
-                    // The gap stands above the neighbour's ground, so a
-                    // walker on that ground can see and enter it.
-                    if roof > neighbor_cap + 0.5 && floor < neighbor_cap + 1.05 {
-                        open = true;
-                        tall |= roof - floor >= 1.8;
-                    }
-                }
-            }
-            mouths += open as usize;
-            walkable += tall as usize;
+            let mouth = mouth_of(&finest[index], &runs);
+            mouths += mouth.is_some() as usize;
+            walkable += mouth.is_some_and(|(floor, roof, _)| roof - floor >= 1.8) as usize;
         }
         println!(
             "\n{} columns, {caves} with a cave, {mouths} open to the surface, \

@@ -57,9 +57,11 @@ impl Default for WalkingConfig {
             walk_speed: 8.0,
             sprint_speed: 14.0,
             jump_speed: 12.0,
-            // One terrain cell (`planet::ELEVATION_STEP`) plus the contact skin:
-            // Tenebris walks up one block, and a step it cannot climb is a wall.
-            step_height: 1.05,
+            // One terrain cell plus the contact skin: Tenebris walks up one
+            // block, and a step it cannot climb is a wall. The cave mouth rule
+            // asks the same constant, so a doorway the count offers is a
+            // doorway this walker can take.
+            step_height: crate::planet::column::STEP_M,
             // Tenebris's water block, measured off its lod.yaml. The feel these
             // make: hold the jump control to rise at about 4.2 m/s, release it
             // and sink at about 2.5 m/s, both being the terminal speeds of
