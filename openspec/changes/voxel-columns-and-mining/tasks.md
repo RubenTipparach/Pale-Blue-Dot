@@ -75,6 +75,11 @@
 
 ## 6. Held
 
+- [ ] Tubes, not sheets: intersect two ridged fields in `hollow` (Minecraft's
+      spaghetti caves), measured with `sight_lines`, `carve_report` and
+      `cave_mouths`. Perlin worms after that if caves need intent, as their
+      own change with a regional pre-pass.
+
 - [ ] Baked voxel light. A cave lit by surface sky occlusion is wrong inside;
       `cave_dark` is the stand-in and says so.
 - [ ] Skip a SEALED column when the camera is above ground. A column whose air

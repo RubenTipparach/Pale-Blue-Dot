@@ -173,6 +173,41 @@ makes a few WALK-IN openings, a tunnel entering a hillside at ground level,
 which the sweep's holes mostly are not (one in the default tier by the
 stricter `cave_mouths` measure, seven in a patch's).
 
+### The carve is a SHEET, and that is its real weakness
+
+The owner asked whether this is Perlin worms. It is not: `hollow` is one
+thresholded ridged field, air where `ridged(point / 46 m) > 0.88`. The crest of
+ridged noise is a surface, and a threshold near the top keeps a thin shell
+around it, so every cave is a slab. That one fact is behind three things this
+change measured and worked around rather than fixed:
+
+- `sight_lines` finds a median of 2 m inside a chamber and nothing past 12 m:
+  a slab seen edge-on is a wall.
+- the cross-sections are pancakes with pillars, and the 3.5% hollow figure is
+  spread thin rather than gathered into anything a player would call a tunnel;
+- a slab meeting the ground is a LINE of single-cell holes, which is why the
+  damping sweep opens 3.7% of columns and `cave_mouths` counts one of them as
+  a walk-in.
+
+**The next carve should be tubes, and the cheapest tube stays a pure function
+of position:** intersect two independent ridged fields, `ridge_a > t &&
+ridge_b > t`. The intersection of two sheets is a curve, and the threshold band
+around it is a tube - Minecraft's "spaghetti caves" since 1.18. It is a few
+lines in `hollow` with a second seed salt, and the instruments already here
+say whether it worked: `sight_lines` should go from metres to tens of metres,
+`carve_report` should hold the hollow share, and `cave_mouths` should count
+round openings where a tube meets the ground.
+
+**Perlin worms** are the other family: agents that walk a noise-steered path
+and carve capsules along it, which gives chosen radii, rooms where a worm slows
+or two cross, and mouths for free by starting a worm at the surface. What they
+cost is the property everything here rests on: a column stops being a function
+of its own direction, because a worm crosses cells. That means a regional
+pre-pass - worms seeded per region, carved into every column they touch, and
+the tier rebuild reading that region rather than generating per cell. It is
+the right tool for caves with intent, and it is its own change; the
+intersection comes first because it is an afternoon and it measures.
+
 ### The mouth rule, built and measured
 
 The carve's surface damping stays; lace was the right thing to prevent. What is
