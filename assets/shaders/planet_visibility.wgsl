@@ -20,6 +20,7 @@ struct Params {
     clutter_chance: vec4<f32>, // grass, flower, rock, bush
     clutter_size: vec4<f32>,   // blade height, blade half-width, rock, bush
     clutter_more: vec4<f32>,   // flower height, shrub chance, shrub size, spare
+    column: vec4<f32>,         // tier reach m, cave dark floor, cave dark depth m, cos(2 x reach / R)
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
@@ -53,10 +54,16 @@ struct DrawArgs {
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read_write> visible: array<u32>;
-@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,4>;
+@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,5>;
 @group(0) @binding(4) var<storage,read_write> foliage: array<u32>;
 @group(0) @binding(5) var<storage,read_write> water: array<u32>;
 @group(0) @binding(6) var<storage,read_write> clutter: array<u32>;
+@group(0) @binding(7) var<storage,read_write> column: array<u32>;
+
+// The bottom of a column's span, metres against sea level. `column::BASE_M` in
+// pbd-core is the one source; planet_surface.wgsl carries the same constant and
+// a test holds all three together.
+const COLUMN_BASE_M: f32 = -145.0;
 
 @compute @workgroup_size(1)
 fn clear_indirect() {
@@ -81,6 +88,14 @@ fn clear_indirect() {
     atomicStore(&args[3].instance_count, 0u);
     args[3].first_vertex = 258u;
     args[3].first_instance = 0u;
+    // The inside of the world: a ceiling and a floor per run, then a flank per
+    // side per run per stretch of the neighbour's air. COLUMN_VERTICES and
+    // COLUMN_FIRST_VERTEX in planet.rs are the same arithmetic and a test holds
+    // them together.
+    args[4].vertex_count = 864u;
+    atomicStore(&args[4].instance_count, 0u);
+    args[4].first_vertex = 690u;
+    args[4].first_instance = 0u;
 }
 
 fn hash(x: u32) -> u32 {
@@ -178,6 +193,30 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>) -> bool {
     return tree && distance(params.camera.xyz,center)<params.settings.w;
 }
 
+// Whether this cell has a voxel column to draw the inside of. The CPU decides
+// membership when it builds the tier and stamps the slot into the record, so
+// this is a read rather than a second copy of the radius rule. A reach of zero
+// is the config's off switch and turns the whole pass off here.
+fn has_column(cell: Cell, center: vec3<f32>) -> bool {
+    if params.column.x <= 0. { return false; }
+    if (cell.metadata.x >> 8u) != finest_level() { return false; }
+    // The slot plus one, in the high half of the skylight word. An integer
+    // field rather than a spare f32: a slot written as float bits is a denormal
+    // and a driver may flush it to zero, which would read as no column at all.
+    if (cell.metadata.z >> 16u) == 0u { return false; }
+    // ANGULAR reach, not a straight-line distance to the cell's cap.
+    //
+    // The first cut measured `distance(camera, center)` against twice the
+    // tier's reach, and `center` is the cell's SURFACE point. A camera deep
+    // underground is far from every surface point around it, so at 217 m down
+    // the gate dropped every column in the tier and the capture came back with
+    // no cave in it at all - the world seen from below, exactly as it looks
+    // with the tier switched off. How far down the camera is has nothing to do
+    // with whether a column near it is worth drawing.
+    let camera_dir = params.camera.xyz*inverseSqrt(max(dot(params.camera.xyz,params.camera.xyz),1.));
+    return dot(cell.direction_height.xyz,camera_dir) > params.column.w;
+}
+
 // A record slot is live when it is in the base or below its fine level's
 // live count; the rest of a fine region is stale from an earlier set.
 fn slot_live(slot: u32) -> bool {
@@ -240,7 +279,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // Capacities cover the whole dispatch before any counts can be published;
     // malformed bindings must not create partial generations or invalid IDs.
     let count = u32(params.settings.y);
-    if arrayLength(&cells)<count || arrayLength(&visible)<count || arrayLength(&foliage)<count || arrayLength(&water)<count || arrayLength(&clutter)<count { return; }
+    if arrayLength(&cells)<count || arrayLength(&visible)<count || arrayLength(&foliage)<count || arrayLength(&water)<count || arrayLength(&clutter)<count || arrayLength(&column)<count { return; }
     if id.x >= count { return; }
     if !slot_live(id.x) { return; }
     let cell = cells[id.x];
@@ -299,5 +338,17 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     if has_clutter(cell,center) && in_frustum(center,4.) {
         let slot = atomicAdd(&args[3].instance_count,1u);
         clutter[slot] = id.x;
+    }
+    // A column's faces all lie between the bedrock floor of the span and the
+    // cap, so the bound is the cap's own hexagon plus that depth. Loose on
+    // purpose: the tier is a few thousand cells inside ninety metres, so the
+    // tight bound - which would mean binding the runs to this pass as well -
+    // buys nothing a profile could see.
+    if has_column(cell,center) {
+        let span = cell.direction_height.w - COLUMN_BASE_M;
+        if in_frustum(center,terrain_bound(cell,center,surface_radius)+span) {
+            let slot = atomicAdd(&args[4].instance_count,1u);
+            column[slot] = id.x;
+        }
     }
 }

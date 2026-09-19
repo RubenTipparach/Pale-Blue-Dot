@@ -5,6 +5,8 @@
 //! walls, and decorative trees. No expanded terrain vertex buffer is uploaded.
 //! This is a surface-column prototype, not the editable volumetric chunk engine.
 
+#[path = "planet_column.rs"]
+pub(crate) mod column;
 #[path = "planet_contact.rs"]
 mod contact;
 #[path = "planet_lattice.rs"]
@@ -22,7 +24,7 @@ mod visibility_tests;
 mod water;
 
 pub use contact::{PlanetContact, SurfaceContact};
-pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, tile_width_m};
+pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, PlanetFine, tile_width_m};
 pub use terrain::{
     ELEVATION_STEP, PLANET_RADIUS, TERRAIN, river_channel, surface_code, surface_height,
     terrain_radius,
@@ -91,6 +93,29 @@ pub(crate) fn clutter_vertices() -> u32 {
 pub(crate) fn clutter_first_vertex() -> u32 {
     60 + 198
 }
+/// Bytes of indirect draw arguments the compute pass publishes: five draws of
+/// four words each - terrain, foliage, water, clutter, the column tier. The
+/// shader's `array<DrawArgs,5>` is the same number, and it is the binding's
+/// minimum size, which is what a fifth draw added to only one of the two fails
+/// on: a pipeline whose layout still says four is refused at creation with
+/// "shader global binding 3 is not available", which names the binding and not
+/// the draw that outgrew it.
+const INDIRECT_BYTES: u64 = 5 * 16;
+
+/// Vertices per column instance: a cave ceiling fan and a cave floor fan per
+/// run, then one flank quad per side per run per stretch of the NEIGHBOUR's
+/// air, since a column of `MAX_RUNS` runs has one more air gap than it has
+/// runs. Same arrangement as the clutter budget above, and for the same reason.
+#[cfg(test)]
+pub(crate) fn column_vertices() -> u32 {
+    let runs = pbd_core::column::MAX_RUNS as u32;
+    runs * (18 + 18) + 6 * runs * (runs + 1) * 6
+}
+/// Where the column branch starts: after the clutter.
+#[cfg(test)]
+pub(crate) fn column_first_vertex() -> u32 {
+    clutter_first_vertex() + clutter_vertices()
+}
 
 /// The preview body's centre in the translating render/physics frame. System
 /// positions are subtracted in f64 before any bounded GPU coordinate is cast.
@@ -133,7 +158,7 @@ impl PlanetRenderFrame {
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
-pub(crate) struct GpuCell {
+pub struct GpuCell {
     pub direction_height: [f32; 4],
     // xyz is the shared corner ray; w is this edge's adjacent surface height,
     // negative under the sea.
@@ -237,6 +262,7 @@ fn create_planet(
     mut commands: Commands,
     assets: Res<AssetServer>,
     flight: Res<crate::flight_view::FlightViewConfig>,
+    columns: Res<crate::config::ColumnSettings>,
 ) {
     let started = std::time::Instant::now();
     let cells = topology::dual_sphere(lod::BASE_LEVEL as u32);
@@ -246,7 +272,7 @@ fn create_planet(
     // The fine bands around the spawn, synchronously, so the walker has its
     // tile to stand on before its first tick.
     let anchor = contacts.find_land_near(flight.spawn_direction);
-    let fine = Arc::new(lod::generate_fine(anchor));
+    let fine = Arc::new(lod::generate_fine(anchor, &columns));
     contacts.set_fine(&fine);
     let fine_count: usize = fine.levels.iter().map(Vec::len).sum();
     info!(
@@ -259,6 +285,24 @@ fn create_planet(
         fine_count,
         ((base.len() + fine_count) * size_of::<GpuCell>()) as f64 / 1_048_576.,
         started.elapsed().as_secs_f64()
+    );
+    let tier = &fine.columns;
+    let caves = tier
+        .columns
+        .iter()
+        .filter(|column| column.drawn_runs().len() > 1)
+        .count();
+    info!(
+        "Column tier: anchor {anchor:?}, {} columns within {:.0} m of it, {caves} of them carrying a cave, \
+         {:.2} runs mean, {:.2} MiB of records",
+        tier.columns.len(),
+        columns.reach_m,
+        tier.columns
+            .iter()
+            .map(|c| c.drawn_runs().len())
+            .sum::<usize>() as f64
+            / tier.columns.len().max(1) as f64,
+        (tier.columns.len() * size_of::<column::GpuColumn>()) as f64 / 1_048_576.,
     );
     info!(
         "Planet scale: r={:.0} m; base L{} gives {:.2} m mean tile width ({:.2}-{:.2} m), \
@@ -356,11 +400,19 @@ struct PlanetParams {
     clutter_size: Vec4,
     // Flower stem height, dead-shrub chance and twig length, spare.
     clutter_more: Vec4,
+    // Column tier reach in metres (zero is off), the cave-darkening floor, the
+    // metres of burial it reaches that floor over, and the cosine of twice the
+    // reach: the ANGULAR gate the visibility pass gives a column tier cell.
+    column: Vec4,
 }
 
 #[derive(Resource)]
 struct PlanetGpu {
     cells: Buffer,
+    /// One record per column tier slot, rewritten with the fine set that built
+    /// it. The tier is the innermost part of the finest band, so this is small:
+    /// a few thousand slots of 48 bytes.
+    columns: Buffer,
     /// Record slots in the buffer: the base then four fine regions.
     slots: u32,
     base_count: u32,
@@ -382,12 +434,14 @@ struct PlanetViewGpu {
     _visible: Buffer,
     _foliage: Buffer,
     _clutter: Buffer,
+    _column_list: Buffer,
     /// Water cell IDs the visibility pass listed; the water pass draws them.
     water: Buffer,
     indirect: Buffer,
     draw_bind_group: BindGroup,
     foliage_bind_group: BindGroup,
     clutter_bind_group: BindGroup,
+    column_bind_group: BindGroup,
     compute_bind_group: BindGroup,
 }
 
@@ -415,8 +469,17 @@ fn upload_planet(
         mapped_at_creation: false,
     });
     queue.write_buffer(&cells, 0, bytemuck::cast_slice(base.0.as_slice()));
+    // Zero-initialised: every run word is the absent one, so a slot nothing has
+    // written draws no face at all.
+    let columns = device.create_buffer(&BufferDescriptor {
+        label: Some("Persistent planet voxel columns for the column tier"),
+        size: column::COLUMN_CAPACITY as u64 * size_of::<column::GpuColumn>() as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
     commands.insert_resource(PlanetGpu {
         cells,
+        columns,
         slots,
         base_count,
         counts: [0; 4],
@@ -450,6 +513,10 @@ fn upload_fine(
         }
         planet.counts[k] = level.len().min(lod::FINE_CAPACITY as usize) as u32;
     }
+    let records = fine.set.columns.gpu_records();
+    if !records.is_empty() {
+        queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(records));
+    }
     planet.uploaded = fine.version;
     planet.lod = lod::LodParams::of(&fine.set);
 }
@@ -473,6 +540,10 @@ fn draw_layout() -> BindGroupLayoutDescriptor {
                 storage_buffer_read_only_sized(false, NonZeroU64::new(size_of::<GpuCell>() as u64)),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
                 texture_2d(TextureSampleType::Float { filterable: false }),
+                storage_buffer_read_only_sized(
+                    false,
+                    NonZeroU64::new(size_of::<column::GpuColumn>() as u64),
+                ),
             ),
         ),
     )
@@ -487,7 +558,8 @@ fn compute_layout() -> BindGroupLayoutDescriptor {
                 uniform_buffer::<PlanetParams>(false),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(size_of::<GpuCell>() as u64)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
-                storage_buffer_sized(false, NonZeroU64::new(64)),
+                storage_buffer_sized(false, NonZeroU64::new(INDIRECT_BYTES)),
+                storage_buffer_sized(false, NonZeroU64::new(4)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
@@ -584,6 +656,7 @@ fn prepare_views(
     water_settings: Res<crate::config::WaterSettings>,
     weather_settings: Res<crate::config::WeatherSettings>,
     scatter: Res<crate::config::ScatterSettings>,
+    columns: Res<crate::config::ColumnSettings>,
     weather: Res<crate::weather::Weather>,
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
@@ -676,6 +749,19 @@ fn prepare_views(
                 scatter.shrub_size_m,
                 0.,
             ),
+            column: Vec4::new(
+                // The tier rides the foliage cutoff for the same reason the
+                // clutter does: above it nothing of the finest tier is near
+                // enough to be looked into, and one gate keeps them in step.
+                if foliage_range == 0. {
+                    0.
+                } else {
+                    columns.reach_m
+                },
+                columns.cave_dark,
+                columns.cave_dark_depth_m,
+                (2.0 * columns.reach_m / PLANET_RADIUS).cos(),
+            ),
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
@@ -691,8 +777,8 @@ fn prepare_views(
             mapped_at_creation: false,
         });
         let indirect = device.create_buffer(&BufferDescriptor {
-            label: Some("GPU planet indirect draws: terrain, foliage, water, clutter"),
-            size: 64,
+            label: Some("GPU planet indirect draws: terrain, foliage, water, clutter, columns"),
+            size: INDIRECT_BYTES,
             usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
             mapped_at_creation: false,
         });
@@ -708,22 +794,34 @@ fn prepare_views(
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
+        let column_list = device.create_buffer(&BufferDescriptor {
+            label: Some("GPU visible column tier cell IDs"),
+            size: planet.slots as u64 * 4,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
         let clutter = device.create_buffer(&BufferDescriptor {
             label: Some("GPU nearby ground clutter column IDs"),
             size: planet.slots as u64 * 4,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        let draw_bind_group = device.create_bind_group(
-            Some("planet surface view"),
-            &cache.get_bind_group_layout(&pipeline.draw_layout),
-            &BindGroupEntries::sequential((
-                &uniform,
-                planet.cells.as_entire_binding(),
-                visible.as_entire_binding(),
-                &atlas.texture_view,
-            )),
-        );
+        // One bind group per instance list, all reading the same records: what a
+        // draw differs in is WHICH cells it is given, never what it may read.
+        let view_bind_group = |label: &'static str, list: &Buffer| {
+            device.create_bind_group(
+                Some(label),
+                &cache.get_bind_group_layout(&pipeline.draw_layout),
+                &BindGroupEntries::sequential((
+                    &uniform,
+                    planet.cells.as_entire_binding(),
+                    list.as_entire_binding(),
+                    &atlas.texture_view,
+                    planet.columns.as_entire_binding(),
+                )),
+            )
+        };
+        let draw_bind_group = view_bind_group("planet surface view", &visible);
         let compute_bind_group = device.create_bind_group(
             Some("planet visibility view"),
             &cache.get_bind_group_layout(&pipeline.compute_layout),
@@ -735,38 +833,24 @@ fn prepare_views(
                 foliage.as_entire_binding(),
                 water.as_entire_binding(),
                 clutter.as_entire_binding(),
+                column_list.as_entire_binding(),
             )),
         );
-        let foliage_bind_group = device.create_bind_group(
-            Some("planet foliage view"),
-            &cache.get_bind_group_layout(&pipeline.draw_layout),
-            &BindGroupEntries::sequential((
-                &uniform,
-                planet.cells.as_entire_binding(),
-                foliage.as_entire_binding(),
-                &atlas.texture_view,
-            )),
-        );
-        let clutter_bind_group = device.create_bind_group(
-            Some("planet clutter view"),
-            &cache.get_bind_group_layout(&pipeline.draw_layout),
-            &BindGroupEntries::sequential((
-                &uniform,
-                planet.cells.as_entire_binding(),
-                clutter.as_entire_binding(),
-                &atlas.texture_view,
-            )),
-        );
+        let foliage_bind_group = view_bind_group("planet foliage view", &foliage);
+        let clutter_bind_group = view_bind_group("planet clutter view", &clutter);
+        let column_bind_group = view_bind_group("planet column view", &column_list);
         commands.entity(entity).insert(PlanetViewGpu {
             uniform,
             _visible: visible,
             _foliage: foliage,
             _clutter: clutter,
+            _column_list: column_list,
             water,
             indirect,
             draw_bind_group,
             foliage_bind_group,
             clutter_bind_group,
+            column_bind_group,
             compute_bind_group,
         });
     }
@@ -828,6 +912,10 @@ impl<P: PhaseItem> RenderCommand<P> for DrawPlanetIndirect {
         pass.draw_indirect(&view.indirect, 16);
         pass.set_bind_group(0, &view.clutter_bind_group, &[]);
         pass.draw_indirect(&view.indirect, 48);
+        // The inside of the world, last: everything before it is the surface,
+        // and a cave face is only ever seen through a hole in that surface.
+        pass.set_bind_group(0, &view.column_bind_group, &[]);
+        pass.draw_indirect(&view.indirect, 64);
         RenderCommandResult::Success
     }
 }
@@ -860,15 +948,17 @@ mod pipeline_tests {
     #[test]
     fn actual_pipeline_layouts_use_static_offsets_and_correct_storage_access() {
         // 288 before the clutter knobs; four more vec4s for the reach and
-        // fade, the chances, the sizes and the shrub.
+        // fade, the chances, the sizes and the shrub, and one for the column
+        // tier's reach and its cave-darkening stand-in.
         assert_eq!(
             PlanetParams::min_size().get(),
-            352,
+            368,
             "actual encoded Rust uniform must match WGSL Params"
         );
-        for (layout, read_only_bindings) in
-            [(draw_layout(), &[1, 2][..]), (compute_layout(), &[1][..])]
-        {
+        for (layout, read_only_bindings) in [
+            (draw_layout(), &[1, 2, 4][..]),
+            (compute_layout(), &[1][..]),
+        ] {
             for entry in &layout.entries {
                 if let BindingType::Buffer {
                     ty,

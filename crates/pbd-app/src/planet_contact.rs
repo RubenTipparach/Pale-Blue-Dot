@@ -527,7 +527,8 @@ mod tests {
     fn the_fine_tier_answers_inside_its_band_and_the_base_outside() {
         let mut contact = PlanetContact::test_planet(5);
         let anchor = contact.find_land_near(Vec3::new(0.8776, 0.4794, 0.0));
-        let set = super::super::lod::generate_fine(anchor);
+        let set =
+            super::super::lod::generate_fine(anchor, &crate::config::ColumnSettings::default());
         let base = contact.sample(anchor);
         contact.set_fine(&set);
         let fine = contact.sample(anchor);

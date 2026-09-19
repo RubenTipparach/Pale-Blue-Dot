@@ -13,6 +13,10 @@ use bevy::{
 use std::time::Duration;
 
 const RADIUS: f32 = 10_000.;
+/// Five indirect draws of four words each: terrain, foliage, water, clutter and
+/// the column tier.
+const ARG_WORDS: usize = 20;
+const ARG_BYTES: u64 = ARG_WORDS as u64 * 4;
 
 struct VisibilityGpu {
     device: RenderDevice,
@@ -31,6 +35,8 @@ struct VisibleCells {
     water: u32,
     /// Cells listed as growing ground clutter.
     clutter: Vec<u32>,
+    /// Cells listed as having a voxel column whose inside is drawn.
+    column: Vec<u32>,
 }
 
 impl VisibilityGpu {
@@ -117,7 +123,8 @@ impl VisibilityGpu {
         // asserted to be zero.
         let water = output("water visibility under test", capacities[0]);
         let clutter = output("clutter visibility under test", capacities[0]);
-        let args = output("indirect arguments under test", 16);
+        let column = output("column tier visibility under test", capacities[0]);
+        let args = output("indirect arguments under test", ARG_WORDS);
         let bind_group = self.device.create_bind_group(
             "visibility regression inputs",
             &self.layout,
@@ -129,12 +136,13 @@ impl VisibilityGpu {
                 foliage.as_entire_binding(),
                 water.as_entire_binding(),
                 clutter.as_entire_binding(),
+                column.as_entire_binding(),
             )),
         );
         let list_bytes = capacities.map(|count| (count * size_of::<u32>()) as u64);
         let readback = self.device.create_buffer(&BufferDescriptor {
             label: Some("test-only visibility readback"),
-            size: 64 + list_bytes[0] + list_bytes[1] + list_bytes[0],
+            size: ARG_BYTES + list_bytes[0] + list_bytes[1] + 2 * list_bytes[0],
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -151,14 +159,27 @@ impl VisibilityGpu {
             // the tail guards, including a completely spare workgroup.
             pass.dispatch_workgroups((cells.len() as u32).div_ceil(128) + 1, 1, 1);
         }
-        encoder.copy_buffer_to_buffer(&args, 0, &readback, 0, 64);
-        encoder.copy_buffer_to_buffer(&terrain, 0, &readback, 64, list_bytes[0]);
-        encoder.copy_buffer_to_buffer(&foliage, 0, &readback, 64 + list_bytes[0], list_bytes[1]);
+        encoder.copy_buffer_to_buffer(&args, 0, &readback, 0, ARG_BYTES);
+        encoder.copy_buffer_to_buffer(&terrain, 0, &readback, ARG_BYTES, list_bytes[0]);
+        encoder.copy_buffer_to_buffer(
+            &foliage,
+            0,
+            &readback,
+            ARG_BYTES + list_bytes[0],
+            list_bytes[1],
+        );
         encoder.copy_buffer_to_buffer(
             &clutter,
             0,
             &readback,
-            64 + list_bytes[0] + list_bytes[1],
+            ARG_BYTES + list_bytes[0] + list_bytes[1],
+            list_bytes[0],
+        );
+        encoder.copy_buffer_to_buffer(
+            &column,
+            0,
+            &readback,
+            ARG_BYTES + 2 * list_bytes[0] + list_bytes[1],
             list_bytes[0],
         );
         let submitted = self.queue.submit([encoder.finish()]);
@@ -177,9 +198,9 @@ impl VisibilityGpu {
             .expect("visibility readback must map");
         let mapped = slice.get_mapped_range();
         let words: &[u32] = bytemuck::cast_slice(&mapped);
-        // The four draws' fixed arguments, read off the live shader. The
-        // clutter row is the one that would drift: its vertex count and its
-        // first vertex are arithmetic written out in two places, so this is
+        // The five draws' fixed arguments, read off the live shader. The clutter
+        // and column rows are the ones that would drift: their vertex counts and
+        // first vertices are arithmetic written out in two places, so this is
         // where the shader and `planet.rs` are held together.
         assert_eq!([words[0], words[2], words[3]], [60, 0, 0]);
         assert_eq!([words[4], words[6], words[7]], [198, 60, 0]);
@@ -189,6 +210,14 @@ impl VisibilityGpu {
             [
                 crate::planet::clutter_vertices(),
                 crate::planet::clutter_first_vertex(),
+                0
+            ]
+        );
+        assert_eq!(
+            [words[16], words[18], words[19]],
+            [
+                crate::planet::column_vertices(),
+                crate::planet::column_first_vertex(),
                 0
             ]
         );
@@ -207,10 +236,19 @@ impl VisibilityGpu {
             ids
         };
         VisibleCells {
-            terrain: collect(16, words[1], capacities[0]),
-            foliage: collect(16 + capacities[0], words[5], capacities[1]),
+            terrain: collect(ARG_WORDS, words[1], capacities[0]),
+            foliage: collect(ARG_WORDS + capacities[0], words[5], capacities[1]),
             water: words[9],
-            clutter: collect(16 + capacities[0] + capacities[1], words[13], capacities[0]),
+            clutter: collect(
+                ARG_WORDS + capacities[0] + capacities[1],
+                words[13],
+                capacities[0],
+            ),
+            column: collect(
+                ARG_WORDS + 2 * capacities[0] + capacities[1],
+                words[17],
+                capacities[0],
+            ),
         }
     }
 }
@@ -275,6 +313,10 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         clutter_chance: Vec4::new(0.8, 0.12, 0.10, 0.05),
         clutter_size: Vec4::new(0.55, 0.085, 0.16, 0.34),
         clutter_more: Vec4::new(0.32, 0.14, 0.38, 0.),
+        // The column tier OFF, for the same reason the clutter is: a fixture
+        // written to measure the horizon and the partition should not have a
+        // second rule firing inside it. `column_params` turns it on.
+        column: Vec4::new(0., 0.45, 10., -2.),
     }
 }
 
@@ -292,6 +334,7 @@ fn expect(
             foliage: foliage.to_vec(),
             water: 0,
             clutter: Vec::new(),
+            column: Vec::new(),
         }
     );
 }
@@ -429,6 +472,7 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
                 foliage: vec![],
                 water: 0,
                 clutter: vec![],
+                column: vec![],
             },
             "either undersized output must suppress the complete generation",
         );
@@ -470,7 +514,7 @@ fn the_partition_lists_each_tile_at_its_bands_level_on_the_real_records() {
     let gpu = VisibilityGpu::new();
     let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
     let base = lod::base_records(&topology::dual_sphere(lod::BASE_LEVEL as u32));
-    let fine = lod::generate_fine(anchor);
+    let fine = lod::generate_fine(anchor, &crate::config::ColumnSettings::default());
     let capacity = fine.levels.iter().map(Vec::len).max().unwrap();
     let blank = GpuCell {
         direction_height: [0.; 4],

@@ -2,13 +2,13 @@
 
 ## 1. The column, in the core
 
-- [ ] `pbd_core::column`: a fixed 320-layer span over the measured relief,
+- [x] `pbd_core::column`: a fixed 320-layer span over the measured relief,
       generated from `surface_altitude` and the existing material rule so the
       surface has one source across both tiers.
-- [ ] Bedrock at the bottom entry, never mineable.
-- [ ] The 3D carve: ridged noise on `gnoise3d_seed`, thresholded so tunnels
+- [x] Bedrock at the bottom entry, never mineable.
+- [x] The 3D carve: ridged noise on `gnoise3d_seed`, thresholded so tunnels
       connect, tightening toward the surface so the ground is not lace.
-- [ ] Tests: the top of the column agrees with `surface_altitude` to the metre;
+- [x] Tests: the top of the column agrees with `surface_altitude` to the metre;
       bedrock is solid everywhere; a carve leaves connected runs rather than
       isolated bubbles; the same cell generates the same column every time.
 
@@ -22,9 +22,17 @@
 
 ## 3. Rendering
 
-- [ ] Draw a cap and walls per solid run, four runs at 240 vertices, the largest
-      four when a column has more.
-- [ ] Measure the frame cost in the band against the heightfield it replaces.
+- [x] The column tier: a sub-band of `reach_m` inside level 11, generated on the
+      fine set's own async task, because one column is 22.3 us and the whole
+      band would be 0.91 s of it.
+- [x] Pack a column as four runs plus its six neighbours' slots, and carry the
+      slot in the cell record, so the pass needs no second list.
+- [x] A fifth indirect draw: a cave ceiling, a cave floor, and a flank per run
+      per stretch of the **neighbour's** air - one quad over the widest stretch
+      leaves the rest as a window. 864 vertices, additive to the terrain's 60.
+- [x] The tier's rim is generated SOLID, because a face on the rim's outward
+      side is culled and an off-tier cell draws nothing under its cap.
+- [x] Measure the frame cost in the tier against the heightfield it adds to.
 
 ## 4. Mining and placing
 
@@ -39,12 +47,20 @@
 
 ## 5. Prove it
 
-- [ ] Captures: standing inside a cave, under an overhang, and a dug hole.
+- [x] Captures: standing inside a cave (`--view cave`) and under rock that
+      stands over open air (`--view overhang`), both in `docs/screenshots`.
+- [ ] A dug hole, which waits on mining.
 - [ ] The owner walks into one. Worldgen and collision have both passed headless
       while being wrong in the running game before.
 
 ## 6. Held
 
-- [ ] Baked voxel light. A cave lit by surface sky occlusion is wrong inside.
+- [ ] Baked voxel light. A cave lit by surface sky occlusion is wrong inside;
+      `cave_dark` is the stand-in and says so.
+- [ ] Skip a SEALED column when the camera is above ground. A column whose air
+      gaps all lie below every neighbour's cap cannot be seen from outside, and
+      the tier is about 30% of a surface frame on the software rasteriser -
+      every vertex of it invisible. The flag is computable when the tier is
+      built.
 - [ ] The streamed chunk store of `voxel-engine-foundation`, still the standing
       design for a planet dug to its core.

@@ -106,6 +106,98 @@ impl Column {
     }
 }
 
+/// Runs a renderer carries per column. Four, because most columns are one solid
+/// run from bedrock to the surface and a cave adds a second: the budget is a cap
+/// on RUNS rather than on layers, and a column with more draws its largest four,
+/// which is a bounded and visible failure rather than a buffer overrun.
+pub const MAX_RUNS: usize = 4;
+
+/// A solid run and the materials its faces are drawn in.
+///
+/// TWO materials, because a run is not made of one thing. A surface run is a
+/// metre of turf over tens of metres of rock, and a flank drawn in the material
+/// at its top is forty metres of wall painted like a meadow - which is exactly
+/// what the first capture from inside a cave showed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Run {
+    /// First solid layer.
+    pub from: usize,
+    /// One past the last solid layer.
+    pub to: usize,
+    /// The material at the run's top: its cap, and the first metre of its flank.
+    pub material: Material,
+    /// The material the rest of it is made of, taken at the run's bottom.
+    pub body: Material,
+}
+
+impl Run {
+    /// Packed for one GPU word: `from | to << 9 | code << 18`. A real run
+    /// always has `to >= 1`, so a word whose `to` field is zero is an absent
+    /// run - `from` cannot serve as the sentinel, because the bedrock run
+    /// legitimately starts at layer zero.
+    ///
+    /// The codes are the RENDERER's material table rather than this crate's
+    /// `Material`, because which tile and tint a material draws in is a fact
+    /// about a shader and this crate does not have one.
+    pub fn packed(self, code: u32, body: u32) -> u32 {
+        debug_assert!(self.to >= 1 && self.to <= LAYERS && self.from < LAYERS);
+        (self.from as u32 & 0x1ff)
+            | (self.to as u32 & 0x1ff) << 9
+            | (code & 0xf) << 18
+            | (body & 0xf) << 22
+    }
+
+    /// The word for a run that is not there.
+    pub const ABSENT: u32 = 0;
+}
+
+impl Column {
+    /// The `MAX_RUNS` runs a renderer draws, bottom up. Bottom up rather than
+    /// largest first, because the renderer asks "is this the top run" and "is
+    /// this the bottom one" of the list it is given.
+    ///
+    /// A column with more runs than the budget has them MERGED, never dropped:
+    /// the thinnest air gap is filled with rock and its two runs become one,
+    /// repeatedly, until the list fits. About one column in twenty on this body
+    /// has more than four runs (`column_cost` measures it; the most is eight).
+    ///
+    /// Merging rather than dropping, because the two failures are not
+    /// comparable. A dropped run is rock that is not drawn, which from inside a
+    /// cave is a WINDOW out of the world - the thing this tier exists to close.
+    /// A merged gap is a cave nobody can see, and the thinnest gap in a column
+    /// is the one least worth walking into. So the drawn runs always COVER
+    /// every solid layer, and what the budget costs is a cave rather than a
+    /// hole.
+    pub fn drawn_runs(&self) -> Vec<Run> {
+        let mut runs = self.runs();
+        while runs.len() > MAX_RUNS {
+            let thinnest = (1..runs.len())
+                .min_by_key(|&i| runs[i].0 - runs[i - 1].1)
+                .expect("more than MAX_RUNS runs leaves a gap to close");
+            runs[thinnest - 1].1 = runs[thinnest].1;
+            runs.remove(thinnest);
+        }
+        runs.into_iter()
+            .map(|(from, to)| Run {
+                from,
+                to,
+                material: self.material(to - 1),
+                body: self.material(from),
+            })
+            .collect()
+    }
+
+    /// The four packed words a GPU record carries, absent runs last. `code`
+    /// maps a material to the renderer's own table.
+    pub fn packed_runs(&self, code: impl Fn(Material) -> u32) -> [u32; MAX_RUNS] {
+        let mut words = [Run::ABSENT; MAX_RUNS];
+        for (word, run) in words.iter_mut().zip(self.drawn_runs()) {
+            *word = run.packed(code(run.material), code(run.body));
+        }
+        words
+    }
+}
+
 /// What a column presents to a body at one altitude.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Contact {
@@ -195,6 +287,21 @@ pub fn hollow(
 /// column tier read ONE description of where the ground is and what it is made
 /// of, so they cannot drift into two worlds.
 pub fn generate(cave: &CaveField, terrain: &TerrainConfig, direction: Vec3) -> Column {
+    build(Some(cave), terrain, direction)
+}
+
+/// The same column with NO carve: solid from bedrock to the surface.
+///
+/// What this is for is the EDGE of whatever region has columns at all. Every
+/// tier outside that region answers from the heightfield, which assumes the
+/// ground below a cap is solid; that assumption is only safe while nobody can
+/// be under a cap, and a cave is exactly being under one. A solid ring makes
+/// the assumption true rather than hoping it is.
+pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
+    build(None, terrain, direction)
+}
+
+fn build(cave: Option<&CaveField>, terrain: &TerrainConfig, direction: Vec3) -> Column {
     let surface_m = planet_gen::surface_altitude(terrain, direction);
     let top = planet_gen::top_material(terrain, direction, surface_m);
     let mut layers = [Material::Air; LAYERS];
@@ -223,7 +330,10 @@ pub fn generate(cave: &CaveField, terrain: &TerrainConfig, direction: Vec3) -> C
         } else {
             Material::Stone
         };
-        if index > cave.floor_layers && hollow(cave, terrain, direction, altitude, surface_m) {
+        if let Some(cave) = cave
+            && index > cave.floor_layers
+            && hollow(cave, terrain, direction, altitude, surface_m)
+        {
             *layer = Material::Air;
         }
     }
@@ -248,6 +358,133 @@ mod tests {
                 Vec3::new(a.cos() * r, y, a.sin() * r).normalize()
             })
             .collect()
+    }
+
+    /// What a column costs to build, which is what decides how many of them a
+    /// tier can hold. A report rather than an assertion: a timing is a fact
+    /// about this machine, and a test that pinned it would fail on another.
+    #[test]
+    #[ignore = "a report: cargo test -p pbd-core column_cost -- --ignored --nocapture"]
+    fn column_cost() {
+        let cave = CaveField::DEFAULT;
+        let sample = dirs(2_000);
+        let start = std::time::Instant::now();
+        let mut runs = 0usize;
+        for d in &sample {
+            runs += generate(&cave, &TERRAIN, *d).runs().len();
+        }
+        let each = start.elapsed().as_secs_f64() / sample.len() as f64;
+        let mut over = 0usize;
+        let mut most = 0usize;
+        for d in &sample {
+            let count = generate(&cave, &TERRAIN, *d).runs().len();
+            most = most.max(count);
+            if count > MAX_RUNS {
+                over += 1;
+            }
+        }
+        println!(
+            "\none column: {:.1} us, {:.2} runs mean, most {most}, {:.1}% over the budget of {MAX_RUNS}",
+            each * 1e6,
+            runs as f64 / sample.len() as f64,
+            100.0 * over as f64 / sample.len() as f64
+        );
+        for count in [4_000usize, 40_670, 65_536] {
+            println!(
+                "  {count} columns: {:.2} s, {:.1} MiB of layers",
+                each * count as f64,
+                (count * LAYERS) as f64 / 1048576.0
+            );
+        }
+    }
+
+    /// How far a line of sight actually runs inside the ground.
+    ///
+    /// The instrument that settled an argument about a picture. A capture from
+    /// inside a cave showed open sky and a sea two kilometres off, and there
+    /// were two candidate explanations: a renderer leaking, or a carve so
+    /// aggressive that the sight-lines are REAL. This measures the carve alone,
+    /// with no renderer in it: rays from a point in a chamber, sampled every
+    /// half metre, stopped at the first solid sample.
+    #[test]
+    #[ignore = "a report: cargo test -p pbd-core sight_lines -- --ignored --nocapture"]
+    fn sight_lines() {
+        let cave = CaveField::DEFAULT;
+        // The spawn, which is where the capture stands.
+        let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        // A spiral of directions inside thirty metres of the spawn, which is
+        // where the capture looks; `dirs` spreads over the whole sphere and a
+        // thirty metre cap on a 4,800 m body catches none of it.
+        let near = {
+            let t0 = Vec3::Y.cross(spawn).normalize();
+            let b0 = spawn.cross(t0);
+            let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+            (0..4_000)
+                .map(|i| {
+                    let t = (i as f32 + 0.5) / 4_000.0;
+                    let radius = 30.0 / TERRAIN.radius_m * t.sqrt();
+                    let angle = golden * i as f32;
+                    (spawn + (t0 * angle.cos() + b0 * angle.sin()) * radius).normalize()
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut start = None;
+        for d in near {
+            let column = generate(&cave, &TERRAIN, d);
+            let runs = column.drawn_runs();
+            let surface = column.surface().map_or(0.0, |t| layer_altitude(t) + 1.0);
+            for pair in runs.windows(2) {
+                let floor = layer_altitude(pair[0].to);
+                let roof = layer_altitude(pair[1].from);
+                if (2.5..=12.0).contains(&(roof - floor))
+                    && (4.0..=40.0).contains(&(surface - roof))
+                {
+                    start = Some((d, floor + 1.6));
+                    break;
+                }
+            }
+            if start.is_some() {
+                break;
+            }
+        }
+        let (direction, altitude) = start.expect("a chamber near the spawn");
+        let eye = direction * (TERRAIN.radius_m + altitude);
+        let tangent = Vec3::Y.cross(direction).normalize();
+        let bitangent = direction.cross(tangent);
+        // A fan of rays across the frame: level, and up and down a little.
+        let mut reach = Vec::new();
+        for i in 0..64 {
+            let yaw = std::f32::consts::TAU * i as f32 / 64.0;
+            for pitch in [-0.3f32, -0.1, 0.0, 0.1, 0.3] {
+                let ray = (tangent * yaw.cos() + bitangent * yaw.sin()) * pitch.cos()
+                    + direction * pitch.sin();
+                let mut travelled = 0.0f32;
+                while travelled < 300.0 {
+                    travelled += 0.5;
+                    let point = eye + ray * travelled;
+                    let here = point.normalize();
+                    let up = point.length() - TERRAIN.radius_m;
+                    let surface = planet_gen::surface_altitude(&TERRAIN, here);
+                    if up < surface && !hollow(&cave, &TERRAIN, here, up, surface) {
+                        break;
+                    }
+                }
+                reach.push(travelled);
+            }
+        }
+        reach.sort_by(f32::total_cmp);
+        let pick = |q: f32| reach[((reach.len() - 1) as f32 * q) as usize];
+        let escaped = reach.iter().filter(|r| **r >= 300.0).count();
+        println!(
+            "\nsight lines from a chamber at {altitude:.0} m, 320 rays:\n  \
+             median {:.0} m, p75 {:.0} m, p90 {:.0} m, longest {:.0} m\n  \
+             {escaped} of {} ran the whole 300 m without meeting rock",
+            pick(0.5),
+            pick(0.75),
+            pick(0.90),
+            reach[reach.len() - 1],
+            reach.len()
+        );
     }
 
     /// Print a real cross-section, straight out of the generator. Proof that a
@@ -495,6 +732,93 @@ mod tests {
             assert!(contact.ceiling.is_none(), "open sky must have no ceiling");
             assert!(contact.floor.is_some(), "and still have ground under it");
         }
+    }
+
+    #[test]
+    fn a_packed_run_survives_the_round_trip_and_an_absent_one_is_zero() {
+        // Every field at its widest: the bedrock run starting at layer zero,
+        // and a run reaching the top of the span.
+        for run in [
+            Run {
+                from: 0,
+                to: LAYERS,
+                material: Material::Stone,
+                body: Material::Stone,
+            },
+            Run {
+                from: LAYERS - 1,
+                to: LAYERS,
+                material: Material::Dirt,
+                body: Material::Dirt,
+            },
+        ] {
+            let word = run.packed(7, 5);
+            assert_ne!(word, Run::ABSENT, "a real run is never the absent word");
+            assert_eq!(word & 0x1ff, run.from as u32);
+            assert_eq!((word >> 9) & 0x1ff, run.to as u32);
+            assert_eq!((word >> 18) & 0xf, 7);
+            assert_eq!(word >> 22, 5);
+        }
+        // The sentinel is the `to` field, because `from` is zero on the run
+        // that holds the bedrock and that run is always drawn.
+        assert_eq!((Run::ABSENT >> 9) & 0x1ff, 0);
+    }
+
+    #[test]
+    fn the_drawn_runs_cover_every_solid_layer_within_the_budget() {
+        let mut column = generate(&CaveField::DEFAULT, &TERRAIN, Vec3::X);
+        // Cut four one-metre holes, which makes five runs of very different
+        // sizes out of whatever the carve left.
+        for index in [40, 60, 80, 100] {
+            column.set(index, Material::Air);
+        }
+        let runs = column.drawn_runs();
+        assert!(runs.len() <= MAX_RUNS, "the budget is four runs");
+        assert!(
+            runs.windows(2).all(|pair| pair[0].to <= pair[1].from),
+            "runs stay bottom up and disjoint: {runs:?}"
+        );
+        // The drawn runs COVER every solid layer. That is the invariant that
+        // matters: a solid layer left out of the list is rock nobody draws,
+        // which from inside a cave is a window out of the world.
+        for index in 0..LAYERS {
+            if column.solid(index) {
+                assert!(
+                    runs.iter().any(|r| (r.from..r.to).contains(&index)),
+                    "layer {index} is solid and is in no drawn run"
+                );
+            }
+        }
+        // The top of the column is still the top of the last run.
+        assert_eq!(
+            runs.last().map(|r| r.to),
+            column.runs().last().map(|&(_, to)| to),
+            "the ground underfoot is the top run's own top"
+        );
+        for run in &runs {
+            assert!(column.solid(run.to - 1), "a run's top layer is solid");
+            assert!(column.solid(run.from), "a run's bottom layer is solid");
+            assert_eq!(run.material, column.material(run.to - 1));
+            assert_eq!(run.body, column.material(run.from));
+        }
+    }
+
+    #[test]
+    fn a_solid_column_has_one_run_and_the_same_top_as_the_carved_one() {
+        let cave = CaveField::DEFAULT;
+        let mut carved_somewhere = false;
+        for d in dirs(400) {
+            let solid = generate_solid(&TERRAIN, d);
+            let carved = generate(&cave, &TERRAIN, d);
+            assert_eq!(
+                solid.surface(),
+                carved.surface(),
+                "the carve never moves the ground underfoot"
+            );
+            assert_eq!(solid.runs().len(), 1, "solid rock is one run");
+            carved_somewhere |= carved.runs().len() > 1;
+        }
+        assert!(carved_somewhere, "the sample must include a carved column");
     }
 
     #[test]
