@@ -11,5 +11,6 @@ pub mod orbit;
 pub mod planet_gen;
 pub mod terrain;
 pub mod weather;
+pub mod worms;
 
 pub use glam::{DQuat, DVec3};

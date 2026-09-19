@@ -599,37 +599,40 @@ impl Validated for ScatterSettings {
     }
 }
 
-/// The voxel column tier: how far it reaches, how the caves are cut, and the
-/// stand-in that keeps a cave interior from being lit like a hillside.
+/// The voxel column tier: how far it reaches, how the worms that carve its
+/// caves are grown, and the stand-in that keeps a cave interior from being lit
+/// like a hillside.
 ///
-/// The cave fields default to `pbd_core::column::CaveField::DEFAULT`, which is
-/// where the measured carve curve is recorded, so there is one source for them
+/// The worm fields default to `pbd_core::worms::WormField::DEFAULT`, which is
+/// where the measured values are recorded, so there is one source for them
 /// and this is its override. See `openspec/changes/voxel-columns-and-mining`.
 #[derive(Resource, Clone, Debug, PartialEq, Deserialize, ExtractResource)]
 #[serde(default, deny_unknown_fields)]
 pub struct ColumnSettings {
-    /// Great-circle metres from the band anchor out to which columns exist. One
-    /// column is 22.3 us to build, so this is what the tier costs: about 3,700
-    /// cells and 82 ms at ninety metres.
+    /// Great-circle metres from the band anchor out to which columns exist.
     pub reach_m: f32,
-    /// Metres across the coarsest tunnel feature.
-    pub cave_scale_m: f32,
-    /// Ridge value above which a point is hollow. Higher is fewer caves.
-    pub cave_threshold: f32,
-    /// Metres below the surface at which the carve reaches full strength.
-    pub cave_roof_m: f32,
-    /// Layers of solid the carve will not open at the very bottom.
+    /// Seed lattice cell for the worms, metres of arc. About a base tile.
+    pub worm_cell_m: f32,
+    /// Mean worms per seed cell.
+    pub worm_density: f32,
+    /// Shortest and longest worm, metres.
+    pub worm_length_m: (f32, f32),
+    /// Narrowest and widest tunnel radius, metres.
+    pub worm_radius_m: (f32, f32),
+    /// Metres a worm advances per step.
+    pub worm_step_m: f32,
+    /// Most a worm turns in one step, radians.
+    pub worm_turn: f32,
+    /// Steepest pitch off the tangent plane, radians.
+    pub worm_pitch_max: f32,
+    /// Share of worms that start at the surface heading down: the openings.
+    pub worm_surface_share: f32,
+    /// How far under the ground a buried worm starts, metres.
+    pub worm_start_depth_m: (f32, f32),
+    /// Metres across the noise a worm steers on.
+    pub worm_steer_scale_m: f32,
+    /// Layers of solid a worm keeps above the bedrock floor.
     pub cave_floor_layers: u32,
-    /// Metres across a mouth patch, where the surface damping is lifted so a
-    /// tunnel can break the ground.
-    pub mouth_scale_m: f32,
-    /// Share of the mouth field above which a column is in a patch, 0..1.
-    /// Higher is rarer; 1.0 is no mouths at all.
-    pub mouth_threshold: f32,
-    /// How far the carve threshold drops at the ground inside a patch, so the
-    /// tunnel flares open where it meets the surface. Zero is a bare lift of
-    /// the damping, which opens almost nothing.
-    pub mouth_relax: f32,
     /// How much of the sky a face `cave_dark_depth_m` under the surface takes,
     /// 0..1. A STAND-IN for the baked voxel light this change defers: the
     /// skylight in a cell's record was computed for its SURFACE, so without
@@ -641,16 +644,20 @@ pub struct ColumnSettings {
 
 impl Default for ColumnSettings {
     fn default() -> Self {
-        let cave = pbd_core::column::CaveField::DEFAULT;
+        let worms = pbd_core::worms::WormField::DEFAULT;
         Self {
             reach_m: 90.,
-            cave_scale_m: cave.scale_m,
-            cave_threshold: cave.threshold,
-            cave_roof_m: cave.roof_m,
-            cave_floor_layers: cave.floor_layers as u32,
-            mouth_scale_m: cave.mouth_scale_m,
-            mouth_threshold: cave.mouth_threshold,
-            mouth_relax: cave.mouth_relax,
+            worm_cell_m: worms.cell_m,
+            worm_density: worms.density,
+            worm_length_m: worms.length_m,
+            worm_radius_m: worms.radius_m,
+            worm_step_m: worms.step_m,
+            worm_turn: worms.turn,
+            worm_pitch_max: worms.pitch_max,
+            worm_surface_share: worms.surface_share,
+            worm_start_depth_m: worms.start_depth_m,
+            worm_steer_scale_m: worms.steer_scale_m,
+            cave_floor_layers: worms.floor_layers as u32,
             cave_dark: 0.45,
             cave_dark_depth_m: 10.,
         }
@@ -658,18 +665,29 @@ impl Default for ColumnSettings {
 }
 
 impl ColumnSettings {
-    /// The carve these settings describe.
-    pub fn cave(&self) -> pbd_core::column::CaveField {
-        pbd_core::column::CaveField {
-            scale_m: self.cave_scale_m,
-            threshold: self.cave_threshold,
-            roof_m: self.cave_roof_m,
+    /// The worms these settings grow.
+    pub fn worms(&self) -> pbd_core::worms::WormField {
+        pbd_core::worms::WormField {
+            cell_m: self.worm_cell_m,
+            density: self.worm_density,
+            length_m: self.worm_length_m,
+            radius_m: self.worm_radius_m,
+            step_m: self.worm_step_m,
+            turn: self.worm_turn,
+            pitch_max: self.worm_pitch_max,
+            surface_share: self.worm_surface_share,
+            start_depth_m: self.worm_start_depth_m,
+            steer_scale_m: self.worm_steer_scale_m,
             floor_layers: self.cave_floor_layers as usize,
-            mouth_scale_m: self.mouth_scale_m,
-            mouth_threshold: self.mouth_threshold,
-            mouth_relax: self.mouth_relax,
         }
     }
+}
+
+fn ordered(name: &str, range: (f32, f32)) -> Result<(), String> {
+    positive(name, &[range.0, range.1])?;
+    (range.0 <= range.1)
+        .then_some(())
+        .ok_or_else(|| format!("{name} must be (min, max) with min <= max"))
 }
 
 impl Validated for ColumnSettings {
@@ -677,20 +695,17 @@ impl Validated for ColumnSettings {
         // A reach of zero is the off switch: no columns, and every cell answers
         // from the heightfield exactly as it did before this tier existed.
         non_negative("reach_m", &[self.reach_m])?;
-        positive("cave_scale_m", &[self.cave_scale_m])?;
-        // The ridge the threshold is compared against is a unit value, so a
-        // threshold at or over one carves nothing and under nought carves
-        // everything; both are configs nobody means to write.
-        (self.cave_threshold > 0. && self.cave_threshold < 1.)
-            .then_some(())
-            .ok_or("cave_threshold must be within 0..1 exclusive")?;
-        positive("cave_roof_m", &[self.cave_roof_m])?;
+        positive("worm_cell_m", &[self.worm_cell_m])?;
+        non_negative("worm_density", &[self.worm_density])?;
+        ordered("worm_length_m", self.worm_length_m)?;
+        ordered("worm_radius_m", self.worm_radius_m)?;
+        ordered("worm_start_depth_m", self.worm_start_depth_m)?;
+        positive("worm_step_m", &[self.worm_step_m, self.worm_steer_scale_m])?;
+        non_negative("worm_turn", &[self.worm_turn, self.worm_pitch_max])?;
+        unit("worm_surface_share", self.worm_surface_share)?;
         ((self.cave_floor_layers as usize) < pbd_core::column::LAYERS)
             .then_some(())
             .ok_or("cave_floor_layers must be inside the column span")?;
-        positive("mouth_scale_m", &[self.mouth_scale_m])?;
-        unit("mouth_threshold", self.mouth_threshold)?;
-        unit("mouth_relax", self.mouth_relax)?;
         unit("cave_dark", self.cave_dark)?;
         positive("cave_dark_depth_m", &[self.cave_dark_depth_m])?;
         Ok(())

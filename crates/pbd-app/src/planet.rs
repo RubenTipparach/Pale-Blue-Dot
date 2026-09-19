@@ -7,6 +7,7 @@
 
 #[path = "planet_column.rs"]
 pub(crate) mod column;
+pub use column::mouth_of;
 #[path = "planet_contact.rs"]
 mod contact;
 #[path = "planet_lattice.rs"]
