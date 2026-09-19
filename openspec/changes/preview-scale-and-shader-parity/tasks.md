@@ -106,3 +106,20 @@ planet. What is open is the radius, since the two are locked by
       by three cells. Store corners once and index them.
 - [ ] Measure the result. It should reach roughly 50 bytes a cell, which buys
       about one level on the ladder.
+
+## 6. A face's tile follows the material, as Tenebris's does
+- [ ] `pbd_core::terrain` grows the one face rule beside `Material`:
+      `(material, Face::{Top,Side,Bottom}) -> tile code`, sod on top, the
+      grass-to-dirt transition on the sides, dirt underneath, for each of the
+      grass, dry-grass, jungle-grass and snow families. A test pins Tenebris's
+      own four rows (`blocks::face_tile`).
+- [ ] `render_code` stops collapsing `Soil` into the grass code and `Dirt` into
+      the sand code: a dirt layer and a cave wall through one are drawn as
+      dirt, not as sward.
+- [ ] The terrace wall drops its absolute-altitude dirt-to-stone blend
+      (`smoothstep(60.,180.)`) and reads the column it stands on instead: the
+      transition for the top metre, soil to the bottom of the soil, stone below.
+      The wall already carries its own height along the face.
+- [ ] The atlas gains nothing: tile `(1,0)` of every shipped tileset is the
+      transition and is sampled 0 times today. Capture a terrace, a mouth and a
+      cave before and after; the owner confirms a grass block reads as one.

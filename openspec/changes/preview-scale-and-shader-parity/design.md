@@ -47,6 +47,75 @@ terminator, the Lambert term and the fresnel rim, and drops:
 `hex_terrain.wgsl` already has all of them, as uniforms. It is the reference for
 anything restored here: change it there first if the two ever need to differ.
 
+## A face's tile is the MATERIAL's, and ours is the altitude's
+
+Measured against the reference and against the shipped art, not felt. Tenebris
+answers "what picture goes on this face" with one function,
+`blocks::face_tile(block, cap)`, and the answer is the standard Minecraft
+convention its own doc comment names:
+
+| block | top | side | bottom |
+| --- | --- | --- | --- |
+| Grass | `grass.png` | **`dirt_grass.png`** | `dirt.png` |
+| Snow | `snow.png` | **`dirt_snow.png`** | `dirt.png` |
+| Farmland | `farmland.png` | `dirt.png` | `dirt.png` |
+| everything else | its own tile | its own tile | its own tile |
+
+and its generator stacks the column so there is something for those tiles to
+describe: the top cell is the biome's sod, `altitude > surface - 4.0` is dirt
+(sand under a desert), and everything below that is stone.
+
+**Our column already stacks exactly that way.** `column::generate_solid` gives
+the top metre the biome material, the next three metres `Soil` (`Sand` under
+sand, `Stone` under rock and snow), and stone below. The stack is right. What
+is drawn on its faces is not, in three separate places:
+
+- **`render_code` collapses soil into grass.** `Material::Soil`, `Grass` and
+  `DryGrass` all become code 2, and code 2 is the fragment shader's default:
+  base `vec3(0.12,0.32,0.075)` on tile `(0,0)`, which is the sward. So a dirt
+  layer under the sod, and a cave wall cut through it, come out GREEN. The same
+  line collapses `Material::Dirt` into `Sand` (code 1, the sand tile), so the
+  one material actually named dirt is drawn as beach.
+- **A terrace wall ignores the material entirely.** `kind==1u` blends
+  `vec3(0.30,0.21,0.13)` to `vec3(0.34,0.36,0.37)` over `smoothstep(60.,180.)`
+  of ABSOLUTE PLANET HEIGHT and picks tile `(2,0)` or `(3,0)` the same way. So
+  a one-metre step in a meadow at 200 m draws stone to its foot, an identical
+  step at 40 m draws dirt to its foot, and neither asks what is actually in
+  those cells. There is no grass-to-dirt side anywhere on the body.
+- **The art for it is shipped and never sampled.** Each `assets/tilesets/*.png`
+  is a 4x4 grid of 313 px tiles, and `fields.png` holds the whole Tenebris set:
+  `(0,0)` sward, `(1,0)` **the grass-to-dirt transition**, `(2,0)` dirt, `(3,0)`
+  stone, with cobble, mossy stone, coarse dirt, dark soil, ore, clay, bark, a
+  log end, leaves and planks in the rest of it. `(1,0)` is sampled by nothing:
+  the only `vec2(1.,0.)` in the shader are UV corners of a side quad.
+
+**So the picture the owner is describing is already paid for.** The stack knows
+what it is made of, the atlas has the four pictures, and what is missing is the
+one function between them that Tenebris has and we do not: tile chosen from the
+material AND the face, with the top cell's side getting the transition.
+
+The shape of it, for when this is implemented:
+
+- `pbd_core::terrain` grows a face rule beside `Material`, the one authority:
+  `(material, Face::{Top,Side,Bottom}) -> tile code`, with the grass, dry
+  grass, jungle grass and snow families taking the transition on their sides
+  and dirt underneath. A test pins the four rows of Tenebris's table.
+- `render_code` stops collapsing `Soil` into the grass code and `Dirt` into the
+  sand code. They are different pictures, and the codes are what carry that to
+  the GPU.
+- The terrace wall's altitude blend goes. A wall runs from this cap down to the
+  neighbour's, so what it crosses is THIS column's layers: the transition for
+  the first metre, then soil to the bottom of the soil, then stone. The wall
+  already knows its own height along the face (`side_uv` runs 0 to 1 across
+  it), so the rule is a depth comparison rather than new data.
+- The column pass needs nothing new: a run already carries a cap material and a
+  body material, which is exactly top-and-side, and its flank is already drawn
+  run by run.
+
+Measured shares, so the work has a before: at the default spawn a wall face is
+drawn stone-by-altitude or grass-by-collapse on every one of the tier's 3,105
+columns, and the transition tile is drawn 0 times.
+
 ## Why the flat tile matters more here than there
 
 `@interpolate(flat)` on skylight costs Tenebris almost nothing across a 2.8 m
