@@ -70,6 +70,15 @@ fn non_negative(name: &str, values: &[f32]) -> Result<(), String> {
         .ok_or_else(|| format!("{name} must not be negative"))
 }
 
+fn positive(name: &str, values: &[f32]) -> Result<(), String> {
+    finite(name, values)?;
+    values
+        .iter()
+        .all(|v| *v > 0.0)
+        .then_some(())
+        .ok_or_else(|| format!("{name} must be greater than zero"))
+}
+
 /// The water cap pass and the composite's underwater terms. Names follow
 /// Tenebris's `water.yaml` so the two can be read side by side.
 #[derive(Resource, Clone, Debug, PartialEq, Deserialize, ExtractResource)]
@@ -590,6 +599,104 @@ impl Validated for ScatterSettings {
     }
 }
 
+/// The voxel column tier: how far it reaches, how the caves are cut, and the
+/// stand-in that keeps a cave interior from being lit like a hillside.
+///
+/// The cave fields default to `pbd_core::column::CaveField::DEFAULT`, which is
+/// where the measured carve curve is recorded, so there is one source for them
+/// and this is its override. See `openspec/changes/voxel-columns-and-mining`.
+#[derive(Resource, Clone, Debug, PartialEq, Deserialize, ExtractResource)]
+#[serde(default, deny_unknown_fields)]
+pub struct ColumnSettings {
+    /// Great-circle metres from the band anchor out to which columns exist. One
+    /// column is 22.3 us to build, so this is what the tier costs: about 3,700
+    /// cells and 82 ms at ninety metres.
+    pub reach_m: f32,
+    /// Metres across the coarsest tunnel feature.
+    pub cave_scale_m: f32,
+    /// Ridge value above which a point is hollow. Higher is fewer caves.
+    pub cave_threshold: f32,
+    /// Metres below the surface at which the carve reaches full strength.
+    pub cave_roof_m: f32,
+    /// Layers of solid the carve will not open at the very bottom.
+    pub cave_floor_layers: u32,
+    /// Metres across a mouth patch, where the surface damping is lifted so a
+    /// tunnel can break the ground.
+    pub mouth_scale_m: f32,
+    /// Share of the mouth field above which a column is in a patch, 0..1.
+    /// Higher is rarer; 1.0 is no mouths at all.
+    pub mouth_threshold: f32,
+    /// How far the carve threshold drops at the ground inside a patch, so the
+    /// tunnel flares open where it meets the surface. Zero is a bare lift of
+    /// the damping, which opens almost nothing.
+    pub mouth_relax: f32,
+    /// How much of the sky a face `cave_dark_depth_m` under the surface takes,
+    /// 0..1. A STAND-IN for the baked voxel light this change defers: the
+    /// skylight in a cell's record was computed for its SURFACE, so without
+    /// this a cave interior is lit exactly like the hillside over it.
+    pub cave_dark: f32,
+    /// Metres of burial over which that darkening reaches its floor.
+    pub cave_dark_depth_m: f32,
+}
+
+impl Default for ColumnSettings {
+    fn default() -> Self {
+        let cave = pbd_core::column::CaveField::DEFAULT;
+        Self {
+            reach_m: 90.,
+            cave_scale_m: cave.scale_m,
+            cave_threshold: cave.threshold,
+            cave_roof_m: cave.roof_m,
+            cave_floor_layers: cave.floor_layers as u32,
+            mouth_scale_m: cave.mouth_scale_m,
+            mouth_threshold: cave.mouth_threshold,
+            mouth_relax: cave.mouth_relax,
+            cave_dark: 0.45,
+            cave_dark_depth_m: 10.,
+        }
+    }
+}
+
+impl ColumnSettings {
+    /// The carve these settings describe.
+    pub fn cave(&self) -> pbd_core::column::CaveField {
+        pbd_core::column::CaveField {
+            scale_m: self.cave_scale_m,
+            threshold: self.cave_threshold,
+            roof_m: self.cave_roof_m,
+            floor_layers: self.cave_floor_layers as usize,
+            mouth_scale_m: self.mouth_scale_m,
+            mouth_threshold: self.mouth_threshold,
+            mouth_relax: self.mouth_relax,
+        }
+    }
+}
+
+impl Validated for ColumnSettings {
+    fn validate(&self) -> Result<(), String> {
+        // A reach of zero is the off switch: no columns, and every cell answers
+        // from the heightfield exactly as it did before this tier existed.
+        non_negative("reach_m", &[self.reach_m])?;
+        positive("cave_scale_m", &[self.cave_scale_m])?;
+        // The ridge the threshold is compared against is a unit value, so a
+        // threshold at or over one carves nothing and under nought carves
+        // everything; both are configs nobody means to write.
+        (self.cave_threshold > 0. && self.cave_threshold < 1.)
+            .then_some(())
+            .ok_or("cave_threshold must be within 0..1 exclusive")?;
+        positive("cave_roof_m", &[self.cave_roof_m])?;
+        ((self.cave_floor_layers as usize) < pbd_core::column::LAYERS)
+            .then_some(())
+            .ok_or("cave_floor_layers must be inside the column span")?;
+        positive("mouth_scale_m", &[self.mouth_scale_m])?;
+        unit("mouth_threshold", self.mouth_threshold)?;
+        unit("mouth_relax", self.mouth_relax)?;
+        unit("cave_dark", self.cave_dark)?;
+        positive("cave_dark_depth_m", &[self.cave_dark_depth_m])?;
+        Ok(())
+    }
+}
+
 /// Loads every config file once at startup. Inserted before any plugin that
 /// reads them, so a system can take `Res<WaterSettings>` unconditionally.
 pub struct ConfigPlugin;
@@ -599,10 +706,12 @@ impl Plugin for ConfigPlugin {
         app.insert_resource(load::<WaterSettings>("water"))
             .insert_resource(load::<WeatherSettings>("weather"))
             .insert_resource(load::<ScatterSettings>("scatter"))
+            .insert_resource(load::<ColumnSettings>("column"))
             .add_plugins((
                 bevy::render::extract_resource::ExtractResourcePlugin::<WaterSettings>::default(),
                 bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
                 bevy::render::extract_resource::ExtractResourcePlugin::<ScatterSettings>::default(),
+                bevy::render::extract_resource::ExtractResourcePlugin::<ColumnSettings>::default(),
             ));
     }
 }

@@ -23,6 +23,7 @@ struct Params {
     clutter_chance: vec4<f32>, // grass, flower, rock, bush
     clutter_size: vec4<f32>,   // blade height, blade half-width, rock, bush
     clutter_more: vec4<f32>,   // flower height, shrub chance, shrub size, spare
+    column: vec4<f32>,         // tier reach m, cave dark floor, cave dark depth m, cos(2 x reach / R)
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
@@ -51,6 +52,87 @@ fn floor_of(cell: Cell, side: u32) -> f32 {
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read> visible: array<u32>;
 @group(0) @binding(3) var atlas: texture_2d<f32>;
+// One voxel column per finest cell inside the column tier: the solid runs to
+// draw, and the slots of the neighbours whose rock decides how much of a run's
+// flank is actually exposed. `planet_column.rs` builds it; a cell outside the
+// tier carries slot zero and this array is never read for it.
+struct ColumnRec {
+    runs: vec4<u32>,
+    neighbors: vec4<u32>,
+    more: vec4<u32>,
+}
+@group(0) @binding(4) var<storage,read> columns: array<ColumnRec>;
+
+// The bottom and top of a column's span, metres against sea level.
+// `column::BASE_M` and `LAYERS` in pbd-core are the one source; the visibility
+// shader carries BASE_M too and a test holds all three together.
+const COLUMN_BASE_M: f32 = -145.0;
+const COLUMN_TOP_M: f32 = 175.0;
+const COLUMN_RUNS: u32 = 4u;
+// A column of `COLUMN_RUNS` runs has one more stretch of air than it has runs:
+// under the lowest, between each pair, and over the highest.
+const COLUMN_GAPS: u32 = COLUMN_RUNS + 1u;
+// Where the column branch starts in the shared vertex shader, after the
+// terrain's 60, the foliage's 198 and the clutter's 432.
+const COLUMN_FIRST_VERTEX: u32 = 690u;
+// Per run, a cave ceiling fan and a cave floor fan.
+const COLUMN_CAP_VERTICES: u32 = COLUMN_RUNS * 36u;
+// Per side, per run, per neighbouring air gap, one quad.
+const COLUMN_SIDE_VERTICES: u32 = COLUMN_RUNS * COLUMN_GAPS * 6u;
+const NO_NEIGHBOR: u32 = 0xffffffffu;
+
+// A run is absent when its TOP field is zero, not its bottom: the run holding
+// the bedrock legitimately starts at layer zero, so `from` cannot be the
+// sentinel. `Run::packed` in pbd-core writes exactly this.
+fn run_present(word: u32) -> bool { return ((word >> 9u) & 0x1ffu) != 0u; }
+fn run_lo(word: u32) -> f32 { return COLUMN_BASE_M + f32(word & 0x1ffu); }
+fn run_hi(word: u32) -> f32 { return COLUMN_BASE_M + f32((word >> 9u) & 0x1ffu); }
+// A run's two materials: the one metre at its top, and what the rest of it is
+// made of. One material a run is a forty metre wall of rock painted like the
+// meadow standing on it, which is what the first capture from inside a cave
+// came back as.
+fn run_code(word: u32) -> u32 { return (word >> 18u) & 0xfu; }
+fn run_body(word: u32) -> u32 { return (word >> 22u) & 0xfu; }
+fn column_side(rec: ColumnRec, side: u32) -> u32 {
+    if side < 4u { return rec.neighbors[side]; }
+    return rec.more[side - 4u];
+}
+// The slot a cell record carries, plus one, so the zero a record is born with
+// means "no column" and nothing has to be cleared to say so.
+fn column_slot(cell: Cell) -> u32 { return cell.metadata.z >> 16u; }
+
+/// The `g`th stretch of AIR in a neighbouring column, bottom up.
+///
+/// This is why a column record names its neighbours. A flank drawn down its
+/// run's full height is right wherever the neighbour is rock - buried,
+/// invisible - and SEALS THE PASSAGE wherever the neighbour is air, which is
+/// what a cave is made of: a tunnel is one run of air crossing many cells, and
+/// a wall at every cell boundary turns it into sealed rooms.
+///
+/// Every gap, not the largest one. The first cut drew a single quad per side,
+/// over whichever stretch of the neighbour's air was widest, on the reasoning
+/// that the rest is a sliver. It is not: a neighbour with two gaps had the
+/// second one drawn as solid rock with nothing in it, and from inside a cave
+/// that is a window. Four runs against five gaps is twenty quads a side, which
+/// is 864 vertices a column against the terrain pass's 60 - affordable on a
+/// tier of a few thousand cells, and the exact answer rather than most of one.
+fn column_gap(neighbor: u32, g: u32) -> vec2<f32> {
+    // Off the tier: solid below its cap, which is what the heightfield assumes
+    // everywhere, and what `planet_column.rs` makes TRUE by generating the
+    // tier's outermost ring with no carve in it.
+    if neighbor == NO_NEIGHBOR { return vec2(0.); }
+    let rec = columns[neighbor];
+    var count = 0u;
+    for (var k = 0u; k < COLUMN_RUNS; k++) {
+        if run_present(rec.runs[k]) { count = count + 1u; }
+    }
+    if g > count { return vec2(0.); }
+    var lo = COLUMN_BASE_M;
+    if g > 0u { lo = run_hi(rec.runs[g - 1u]); }
+    var hi = COLUMN_TOP_M;
+    if g < count { hi = run_lo(rec.runs[g]); }
+    return vec2(lo, hi);
+}
 
 struct VertexOut {
     @builtin(position) clip: vec4<f32>,
@@ -177,7 +259,16 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         kind = 1u;
         let side = (vertex-18u)/6u;
         let i = (vertex-18u)%6u;
-        if side < degree {
+        // Between two cells that BOTH have columns, this wall is the column
+        // pass's: it draws the side exactly, run by run against the
+        // neighbour's air, and a wall drawn here from cap to cap would be rock
+        // across every cave mouth. Everywhere else the heightfield wall stands.
+        var columns_side = false;
+        let slot = column_slot(cell);
+        if slot != 0u && side < degree {
+            columns_side = column_side(columns[slot-1u], side) != NO_NEIGHBOR;
+        }
+        if side < degree && !columns_side {
             // The wall goes down to the neighbour's cap, or, where the
             // neighbour's region is drawn by the finer band, to the fine
             // floor: the height at the edge midpoint, which is the midpoint
@@ -241,6 +332,94 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
             let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
             uv = side_uv[indices[i]]*vec2(1.,max(1.,(radius-lower)/1.0));
+        }
+    } else if vertex >= COLUMN_FIRST_VERTEX {
+        // ---- The inside of the world.
+        //
+        // What the terrain pass draws is a cap at the surface and a wall from it
+        // down to the neighbour's cap. This pass draws only what is BELOW that,
+        // so nothing here is coincident with it and the LOD partition, the fine
+        // floors and the cut wall are all untouched: a cave ceiling, a cave
+        // floor, and a run's flank wherever the neighbour leaves air against it.
+        kind = 4u;
+        let slot = column_slot(cell);
+        position = axis*radius;
+        normal = axis;
+        if slot != 0u {
+            let rec = columns[slot-1u];
+            let v = vertex-COLUMN_FIRST_VERTEX;
+            if v < COLUMN_CAP_VERTICES {
+                // A cave ceiling, then a cave floor: the same fan the cap
+                // draws, at the run's own altitude, facing the air it bounds.
+                let r = v/36u;
+                let part = v%36u;
+                let word = rec.runs[r];
+                if run_present(word) {
+                    let lo = run_lo(word);
+                    let hi = run_hi(word);
+                    let up = part >= 18u;
+                    let i = select(part,part-18u,up);
+                    // A cave FLOOR is the run's own top, so it wears the top
+                    // material; a cave CEILING is the underside of the run
+                    // above and is made of whatever that run is made of.
+                    material = select(run_body(word),run_code(word),up);
+                    // The lowest run's bottom is the bedrock floor of the span,
+                    // which nothing can ever be under, and the highest run's top
+                    // is the surface the terrain pass already capped.
+                    let skip = select((word & 0x1ffu) == 0u, hi >= height-0.001, up);
+                    let level = params.settings.x + select(lo,hi,up);
+                    normal = select(-axis,axis,up);
+                    position = axis*level;
+                    let t = i/3u;
+                    let c = i%3u;
+                    if !skip && t < degree && c != 0u {
+                        let k = select((t+2u-c)%degree,(t+c-1u)%degree,up);
+                        let ray = cell.corners[k].xyz;
+                        position = ray*level;
+                        let local = (ray-axis)*params.settings.x;
+                        uv = vec2(dot(local,tangent),dot(local,bitangent))/(1.5*tile)+0.5;
+                    }
+                }
+            } else {
+                // A flank: this run's rock against one stretch of the
+                // neighbour's air. It starts at the neighbour's cap, because
+                // above that the terrain wall has it.
+                let w = v-COLUMN_CAP_VERTICES;
+                let side = w/COLUMN_SIDE_VERTICES;
+                let rest = w%COLUMN_SIDE_VERTICES;
+                let r = rest/(COLUMN_GAPS*6u);
+                let g = (rest%(COLUMN_GAPS*6u))/6u;
+                let i = rest%6u;
+                let word = rec.runs[r];
+                if side < degree && run_present(word) {
+                    let lo = run_lo(word);
+                    let hi = run_hi(word);
+                    let gap = column_gap(column_side(rec,side),g);
+                    let bottom = max(lo, gap.x);
+                    // Against another column the terrain pass draws no wall
+                    // at all on this side, so the flank runs to the run's own
+                    // top; against the heightfield it stops at the
+                    // neighbour's cap, where the terrain wall takes over.
+                    var top = min(hi, gap.y);
+                    if column_side(rec,side) == NO_NEIGHBOR { top = min(top, cell.corners[side].w); }
+                    if top-bottom > 0.001 {
+                        material = run_body(word);
+                        // The top metre of a flank is the surface layer and the
+                        // rest is the rock under it.
+                        if top >= hi-1.001 { material = run_code(word); }
+                        let a = cell.corners[side].xyz;
+                        let b = cell.corners[(side+1u)%degree].xyz;
+                        let lower = params.settings.x + bottom;
+                        let upper = params.settings.x + top;
+                        let points = array<vec3<f32>,4>(a*lower,b*lower,b*upper,a*upper);
+                        let indices = array<u32,6>(0u,1u,2u,0u,2u,3u);
+                        position = points[indices[i]];
+                        normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
+                        let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
+                        uv = side_uv[indices[i]]*vec2(1.,max(1.,top-bottom));
+                    }
+                }
+            }
         }
     } else if vertex < 258u {
         kind = 2u;
@@ -536,7 +715,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.uv = uv;
     out.material = material;
     out.height = height;
-    out.skylight = f32(cell.metadata.z)/65535.;
+    // The low half only: the high half carries the column tier slot.
+    out.skylight = f32(cell.metadata.z & 0xffffu)/65535.;
     out.seed = cell.metadata.w;
     out.kind = kind;
     out.level = level;
@@ -665,6 +845,22 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         // shaded sides of terraces, instead of turning every step into black.
         color=albedo*(vec3(0.30,0.32,0.34)*mix(0.20,1.,daylight)*skylight
             + vec3(1.12,1.03,0.87)*direct*skylight)*0.95;
+    }
+    if input.kind==4u {
+        // A cave face. It takes the same broad sky fill a terrace wall does, so
+        // rock underground reads as rock, and then DARKENS WITH BURIAL.
+        //
+        // That darkening is a STAND-IN and is named as one: the skylight in a
+        // cell's record was baked for its SURFACE, so a face thirty metres inside
+        // a hill is handed the same sky as the hillside over it and a cave comes
+        // out lit like a meadow. The real answer is the baked voxel light this
+        // change defers. `cave_dark` and `cave_dark_depth_m` in column.ron are
+        // the two numbers, so a stand-in can be turned off rather than hunted for.
+        let buried = clamp((input.height-(length(input.position)-params.settings.x))
+            /max(params.column.z,0.001),0.,1.);
+        let lit = mix(1.,params.column.y,buried);
+        color=albedo*(vec3(0.30,0.32,0.34)*mix(0.20,1.,daylight)*skylight
+            + vec3(1.12,1.03,0.87)*direct*skylight)*lit;
     }
     // Submerged terrain: Tenebris's hex.fs absorption, the sheet's own
     // absorption and deep colour so the seabed tints the way its sea does.

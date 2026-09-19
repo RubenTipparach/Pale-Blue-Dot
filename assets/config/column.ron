@@ -1,0 +1,32 @@
+// The voxel column tier. See crates/pbd-app/src/config.rs for units and what
+// each knob does, and openspec/changes/voxel-columns-and-mining for why the
+// tier is a sub-band rather than the whole finest LOD band.
+//
+// These are the code defaults written out. A field left out inherits the code
+// default; a field written as zero IS zero. `reach_m: 0.0` is the off switch:
+// no columns anywhere, every cell answering from the heightfield.
+(
+    // About 3,700 cells and 82 ms of generation per rebuild.
+    reach_m: 90.0,
+
+    // The carve. The threshold is off a measured sweep, not a guess: 0.80 opens
+    // 14.4% of the underground, 0.85 opens 6.9%, 0.88 opens 3.7% with a cave
+    // somewhere in 31% of land columns, 0.94 opens 0.5%.
+    cave_scale_m: 46.0,
+    cave_threshold: 0.88,
+    cave_roof_m: 9.0,
+    cave_floor_layers: 3,
+
+    // Mouths. The damping above keeps every cave sealed - measured, 2,530
+    // caves in a tier and none open - so in rare seeded patches it is lifted
+    // and a tunnel may break the ground. 1.0 is no mouths.
+    mouth_scale_m: 48.0,
+    mouth_threshold: 0.65,
+    mouth_relax: 0.15,
+
+    // A stand-in for the baked voxel light this change defers: a cell's
+    // skylight was computed for its SURFACE, so without this a cave is lit
+    // exactly like the hillside over it.
+    cave_dark: 0.45,
+    cave_dark_depth_m: 10.0,
+)

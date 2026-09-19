@@ -9,9 +9,11 @@
 //! `openspec/changes/hexagon-lod/design.md`, "Implementation decisions".
 
 use super::GpuCell;
+use super::column::{self, ColumnTier};
 use super::lattice::{Lattice, LocalCell};
 use super::terrain::{PLANET_RADIUS, surface_code, surface_height};
 use super::topology::{DualCell, midpoint};
+use crate::config::ColumnSettings;
 use bevy::{
     prelude::*,
     render::extract_resource::ExtractResource,
@@ -157,6 +159,10 @@ pub struct FineSet {
     /// hides the coarser level inside, so what is hidden always has a
     /// replacement: a truncated band stops hiding where it stops existing.
     complete: [f32; 4],
+    /// The voxel columns for the innermost part of the finest level: what makes
+    /// a cave, an overhang and a block to remove expressible at all. Built on
+    /// this same task, because the records carry their own slots.
+    pub columns: ColumnTier,
 }
 
 impl FineSet {
@@ -164,6 +170,18 @@ impl FineSet {
     /// walker's contact stops trusting it.
     pub fn finest_radius(&self) -> f32 {
         self.finest_radius
+    }
+
+    /// The finest level's records, which are the ones a column belongs to.
+    pub fn finest_records(&self) -> &[GpuCell] {
+        &self.levels[3]
+    }
+
+    /// Take the column tier out, leaving an empty one. For tests that want the
+    /// tier and the records it was stamped into side by side.
+    #[cfg(test)]
+    pub(crate) fn take_columns(&mut self) -> ColumnTier {
+        std::mem::replace(&mut self.columns, ColumnTier::empty())
     }
 }
 
@@ -208,7 +226,7 @@ fn stable_id(cell: &LocalCell) -> u32 {
 /// inside the next finer band's radius to just outside its own, plus the
 /// regeneration distance, so the live bands stay resident as the player
 /// walks. Over capacity, the farthest cells are dropped, never the nearest.
-pub fn generate_fine(anchor: Vec3) -> FineSet {
+pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings) -> FineSet {
     let anchor = anchor.normalize_or(Vec3::Y);
     let mut lattice = Lattice::default();
     let mut heights = Heights::default();
@@ -304,12 +322,17 @@ pub fn generate_fine(anchor: Vec3) -> FineSet {
                 .collect();
         }
     }
+    // The column tier, last, because it stamps each finest record with its own
+    // slot: the tier and the records it is read through are one artifact and
+    // are built on one task.
+    let columns = column::build(anchor, &mut levels[3], &finest_neighbors, columns);
     FineSet {
         anchor,
         levels,
         finest_neighbors,
         finest_radius,
         complete,
+        columns,
     }
 }
 
@@ -346,6 +369,7 @@ pub fn refresh_lod(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     frame: Res<super::PlanetRenderFrame>,
     fine: Res<PlanetFine>,
+    settings: Res<ColumnSettings>,
     mut refresh: ResMut<LodRefresh>,
     mut contact: ResMut<super::PlanetContact>,
 ) {
@@ -366,8 +390,10 @@ pub fn refresh_lod(
     };
     let moved = direction.dot(fine.set.anchor).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
     if moved > REGEN_DISTANCE_M {
-        refresh.task =
-            Some(AsyncComputeTaskPool::get().spawn(async move { generate_fine(direction) }));
+        let settings = settings.clone();
+        refresh.task = Some(
+            AsyncComputeTaskPool::get().spawn(async move { generate_fine(direction, &settings) }),
+        );
     }
 }
 
@@ -391,7 +417,7 @@ mod tests {
             );
         }
         assert!(band_cos(11) > band_cos(8));
-        let set = generate_fine(Vec3::new(0.8776, 0.4794, 0.0));
+        let set = generate_fine(Vec3::new(0.8776, 0.4794, 0.0), &ColumnSettings::default());
         for (k, level) in set.levels.iter().enumerate() {
             assert!(!level.is_empty());
             assert!(
@@ -433,7 +459,7 @@ mod tests {
     #[test]
     fn every_level_is_resident_out_to_the_radius_it_hides_the_coarser_one_inside() {
         let anchor = Vec3::new(0.3, 0.8, -0.5).normalize();
-        let set = generate_fine(anchor);
+        let set = generate_fine(anchor, &ColumnSettings::default());
         assert_eq!(
             LodParams::of(&set).player,
             set.anchor,
@@ -472,7 +498,7 @@ mod tests {
     /// height the fine neighbour's height across a band boundary.
     #[test]
     fn a_vertex_centred_fine_cell_shares_its_owners_height() {
-        let set = generate_fine(Vec3::new(0.3, 0.8, -0.5));
+        let set = generate_fine(Vec3::new(0.3, 0.8, -0.5), &ColumnSettings::default());
         let coarse: HashMap<[u32; 3], f32> = set.levels[2]
             .iter()
             .map(|c| {

@@ -11,18 +11,22 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const STANDALONE_SHADERS: [&str; 7] = [
+const STANDALONE_SHADERS: [&str; 6] = [
     "atmosphere.wgsl",
     "hex_faces.wgsl",
     "hex_terrain.wgsl",
     "planet_surface.wgsl",
     "planet_visibility.wgsl",
     "voxel_light.wgsl",
-    "water.wgsl",
 ];
 // These assets require Bevy's composer, mesh/view imports and substitutions.
 // Explicit names keep newly added shaders from silently escaping validation.
-const BEVY_COMPOSED_SHADERS: [&str; 1] = ["sky_atmosphere.wgsl"];
+//
+// `water.wgsl` is here because it carries an `#ifdef MULTISAMPLED` block, which
+// is the composer's preprocessor and not WGSL: Naga refuses the file at the `#`
+// and always did. A required check that cannot pass is a check nobody runs, and
+// this one had taken the whole tool down with it.
+const BEVY_COMPOSED_SHADERS: [&str; 2] = ["sky_atmosphere.wgsl", "water.wgsl"];
 
 fn parse_and_validate(source: &str) -> Result<Module, String> {
     let module = naga::front::wgsl::parse_str(source).map_err(|e| e.emit_to_string(source))?;
@@ -152,18 +156,6 @@ fn validate(path: &Path) -> Result<(), String> {
             )?;
             check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)])?;
         }
-        "water.wgsl" => {
-            check_struct(
-                &module,
-                "WaterView",
-                352,
-                &[
-                    0, 64, 128, 144, 160, 176, 192, 208, 224, 240, 256, 272, 288, 304, 320, 336,
-                ],
-            )?;
-            check_entries(&module, &render_entries)?;
-            check_bindings(&module, &[(0, 0), (1, 0), (1, 1), (1, 2)])?;
-        }
         "atmosphere.wgsl" => {
             check_struct(
                 &module,
@@ -175,13 +167,33 @@ fn validate(path: &Path) -> Result<(), String> {
             check_bindings(&module, &[(0, 0)])?;
         }
         "planet_surface.wgsl" | "planet_visibility.wgsl" => {
-            check_struct(&module, "Cell", 128, &[0, 16, 112])?;
-            check_struct(&module, "Params", 112, &[0, 64, 80, 96])?;
+            // `GpuCell` and `PlanetParams` in planet.rs are the Rust side of
+            // both of these, and `actual_pipeline_layouts_...` pins them there.
+            check_struct(
+                &module,
+                "Cell",
+                192,
+                &[0, 16, 112, 128, 144, 160, 176],
+            )?;
+            check_struct(
+                &module,
+                "Params",
+                368,
+                &[
+                    0, 64, 80, 96, 112, 128, 144, 160, 224, 240, 256, 272, 288, 304, 320, 336, 352,
+                ],
+            )?;
             if filename == "planet_surface.wgsl" {
-                check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3)])?;
+                // The column records are binding 4: the fifth draw reads the
+                // runs of its own cell AND of its neighbours.
+                check_struct(&module, "ColumnRec", 48, &[0, 16, 32])?;
+                check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)])?;
                 check_entries(&module, &render_entries)?;
             } else {
-                check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)])?;
+                check_bindings(
+                    &module,
+                    &[(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7)],
+                )?;
                 check_struct(&module, "DrawArgs", 16, &[0, 4, 8, 12])?;
                 let args = module
                     .global_variables
@@ -194,16 +206,18 @@ fn validate(path: &Path) -> Result<(), String> {
                     })
                     .map(|(_, variable)| variable)
                     .ok_or("missing indirect argument binding")?;
+                // Terrain, foliage, water, clutter, columns. The indirect buffer
+                // in planet.rs is sized for exactly this many.
                 if !matches!(
                     module.types[args.ty].inner,
                     TypeInner::Array {
                         base,
                         size: naga::ArraySize::Constant(count),
                         stride: 16,
-                    } if count.get() == 2
+                    } if count.get() == 5
                         && module.types[base].name.as_deref() == Some("DrawArgs")
                 ) {
-                    return Err("visibility must publish two 16-byte indirect draws".into());
+                    return Err("visibility must publish five 16-byte indirect draws".into());
                 }
                 check_entries(
                     &module,
@@ -258,7 +272,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err(failures.join("\n").into());
     }
     println!(
-        "All seven standalone shaders validated with Naga 27.0.3; Bevy materials require separate runtime validation."
+        "All {} standalone shaders validated with Naga 27.0.3; Bevy materials require separate runtime validation.",
+        STANDALONE_SHADERS.len()
     );
     Ok(())
 }

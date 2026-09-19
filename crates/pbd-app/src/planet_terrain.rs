@@ -3,6 +3,7 @@
 
 use bevy::prelude::*;
 use pbd_core::planet_gen::{self, Biome, TerrainConfig};
+use pbd_core::terrain::Material;
 
 /// Sea-level radius in metres. It sits on the gold-standard ladder
 /// `R = 300 m * 2^(L - 7)`: level 11 underfoot gives the 2.833 m Tenebris tile
@@ -52,20 +53,33 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     material_index(d, height, biome) | (biome as u32) << 8
 }
 
+/// Which of `planet_surface.wgsl`'s material codes a material is drawn in.
+///
+/// ONE table, because a cave wall of stone and a mountain top of stone are the
+/// same rock and two tables would eventually disagree about it. What the surface
+/// adds on top of this is the handful of decisions that need a BIOME or a sea
+/// level, which a face underground has neither of.
+pub fn render_code(material: Material) -> u32 {
+    match material {
+        Material::Sand | Material::Dirt => 1,
+        Material::Stone | Material::Rock | Material::Ore => 5,
+        Material::Snow => 6,
+        Material::JungleGrass => 3,
+        Material::Water | Material::Air => 0,
+        // Soil, grass and dry grass: the shader's own default green.
+        _ => 2,
+    }
+}
+
 fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
-    use pbd_core::terrain::Material;
-    let d = direction;
-    match (planet_gen::top_material(&TERRAIN, d, height), biome) {
+    let material = planet_gen::top_material(&TERRAIN, direction, height);
+    match (material, biome) {
+        // Beach sand below the waterline is the seabed, which the water pass
+        // tints; a desert dune and a swamp sward are their own tiles.
         (Material::Sand, _) if height < TERRAIN.sea_level_m => 0,
         (Material::Sand, Biome::Desert) => 4,
-        (Material::Sand, _) => 1,
-        (Material::Stone, _) | (Material::Rock, _) => 5,
-        (Material::Snow, _) => 6,
-        (Material::JungleGrass, _) => 3,
         (Material::Grass, Biome::Swamp) => 7,
-        (Material::Dirt, _) => 1,
-        (Material::Water, _) => 0,
-        _ => 2,
+        _ => render_code(material),
     }
 }
 
