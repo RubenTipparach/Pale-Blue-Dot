@@ -147,7 +147,33 @@ Not ported: the containment resolve and the rescue stack. The swept footprint
 is why they are not needed, and adding them would be adding the failure mode
 they were written against.
 
-### A way in: the mouth rule, built and measured
+### A way in: the damping IS the knob, measured
+
+The owner asked why the caves could not simply be raised. A height offset on
+its own does nothing - the tunnels move up into the top nine metres and the
+damping there erases them exactly as before - but the question was the right
+one, because the damping was a GUESS: it was written to stop the surface being
+lace, and lace was never measured. `damping_sweep` measures it:
+
+| `roof_m` | land columns open at the top | underground hollow | columns losing their surface layer |
+| ---: | ---: | ---: | ---: |
+| 9.0 | 0.0% | 3.4% | 0.0% |
+| 4.0 | 0.0% | 3.5% | 0.0% |
+| **2.0** | **3.7%** | 3.5% | **0.2%** |
+| 0.5 | 4.7% | 3.5% | 3.8% |
+
+Two metres opens one land column in twenty-seven with nothing worth calling
+lace; half a metre is where the ground starts going. So `roof_m` ships at 2.0,
+and most of what that opens is a HOLE - the tunnel sheet crossing the ground -
+that a walker drops into and follows down, which is how most Minecraft caves
+begin. On the default spawn's tier that is about ninety columns.
+
+The mouth patch below stays as a second knob on the same function: it is what
+makes a few WALK-IN openings, a tunnel entering a hillside at ground level,
+which the sweep's holes mostly are not (one in the default tier by the
+stricter `cave_mouths` measure, seven in a patch's).
+
+### The mouth rule, built and measured
 
 The carve's surface damping stays; lace was the right thing to prevent. What is
 added is a **mouth**: a rare, seeded patch (`mouth`, on its own noise stream and

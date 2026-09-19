@@ -275,7 +275,11 @@ impl CaveField {
         // a cave somewhere in them, so there is plenty to find while the rock
         // stays rock. `carve_report` is the sweep.
         threshold: 0.88,
-        roof_m: 9.0,
+        // Two metres, off `damping_sweep`: nine sealed every cave, and half a
+        // metre takes the ground out from under one column in twenty-six. At
+        // two, one land column in twenty-seven opens at the top and two in a
+        // thousand lose their surface layer, which is a hole and not lace.
+        roof_m: 2.0,
         floor_layers: 3,
         // Patches a few tens of metres across: at a hundred and twenty the
         // first mouth rendered as a crater thirty-five metres wide and
@@ -584,6 +588,53 @@ mod tests {
         );
     }
 
+    /// The simplest possible mouth rule, swept: no patches, just less surface
+    /// damping everywhere. For each `roof_m`, the share of land columns whose
+    /// carved column has air in its top two metres (an opening), and the share
+    /// of the underground that is hollow (the lace check the damping was
+    /// written for, and never measured).
+    #[test]
+    #[ignore = "a report: cargo test -p pbd-core damping_sweep -- --ignored --nocapture"]
+    fn damping_sweep() {
+        let sample = dirs(12_000);
+        let land: Vec<(Vec3, f32)> = sample
+            .iter()
+            .map(|d| (*d, planet_gen::surface_altitude(&TERRAIN, *d)))
+            .filter(|(_, h)| *h >= TERRAIN.sea_level_m + TERRAIN.beach_band_m)
+            .collect();
+        println!("\n{} land columns", land.len());
+        for roof_m in [9.0f32, 4.0, 2.0, 0.5] {
+            let cave = CaveField {
+                roof_m,
+                mouth_threshold: 1.0,
+                ..CaveField::DEFAULT
+            };
+            let mut open = 0;
+            let mut hollow_layers = 0usize;
+            let mut underground = 0usize;
+            let mut top_air = 0usize;
+            for (d, surface) in &land {
+                let column = generate(&cave, &TERRAIN, *d);
+                let top = layer_at(*surface).unwrap_or(LAYERS - 1);
+                let opens = (top.saturating_sub(2)..top).any(|i| !column.solid(i));
+                open += opens as usize;
+                for i in 1..top {
+                    underground += 1;
+                    hollow_layers += !column.solid(i) as usize;
+                }
+                // Lace: a column whose SURFACE layer itself is gone, so the
+                // ground the heightfield draws is not there.
+                top_air += (top >= 1 && !column.solid(top - 1)) as usize;
+            }
+            println!(
+                "  roof_m {roof_m:>4.1}: {:5.1}% of land columns open at the top, {:4.1}% of the underground hollow, {:5.1}% lose their surface layer",
+                100.0 * open as f32 / land.len() as f32,
+                100.0 * hollow_layers as f32 / underground.max(1) as f32,
+                100.0 * top_air as f32 / land.len() as f32
+            );
+        }
+    }
+
     /// The mouth rule, swept: how much of the land is in a patch at each
     /// threshold, and how many of those columns actually OPEN - their carved
     /// column has air within a metre of its own surface, which is a tunnel
@@ -774,17 +825,21 @@ mod tests {
             }
             let top = column.surface().expect("land has a solid layer");
             let top_m = layer_altitude(top) + 1.0;
-            if mouth(&cave, &TERRAIN, d, surface_m) {
-                // The one exception, and it is a hole rather than a drift: a
-                // mouth may take the ground DOWN, never up, and the app lowers
-                // the record to match so there is still one source.
-                assert!(top_m <= surface_m + 1.0, "a mouth never raises the ground");
-                continue;
-            }
+            // The carve may take the ground DOWN, never up: a tunnel breaking
+            // the surface is a hole, and the app lowers the record to match so
+            // there is still one source. Where it did not, the top is the
+            // surface to the metre.
             assert!(
-                (top_m - surface_m).abs() <= 1.0,
-                "column top {top_m} against surface {surface_m}"
+                top_m <= surface_m + 1.0,
+                "the carve never raises the ground"
             );
+            let solid = generate_solid(&TERRAIN, d);
+            if solid.surface() == column.surface() {
+                assert!(
+                    (top_m - surface_m).abs() <= 1.0,
+                    "column top {top_m} against surface {surface_m}"
+                );
+            }
         }
     }
 
@@ -981,14 +1036,9 @@ mod tests {
         for d in dirs(400) {
             let solid = generate_solid(&TERRAIN, d);
             let carved = generate(&cave, &TERRAIN, d);
-            let surface_m = planet_gen::surface_altitude(&TERRAIN, d);
-            if !mouth(&cave, &TERRAIN, d, surface_m) {
-                assert_eq!(
-                    solid.surface(),
-                    carved.surface(),
-                    "outside a mouth the carve never moves the ground underfoot"
-                );
-            }
+            // The carve may lower the top where a tunnel breaks the ground,
+            // and never raises it.
+            assert!(carved.surface() <= solid.surface());
             assert_eq!(solid.runs().len(), 1, "solid rock is one run");
             carved_somewhere |= carved.runs().len() > 1;
         }

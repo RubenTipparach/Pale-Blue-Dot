@@ -14,7 +14,9 @@
     // somewhere in 31% of land columns, 0.94 opens 0.5%.
     cave_scale_m: 46.0,
     cave_threshold: 0.88,
-    cave_roof_m: 9.0,
+    // Two metres: nine sealed every cave. `damping_sweep` in pbd-core is
+    // the table; half a metre is where the ground starts going.
+    cave_roof_m: 2.0,
     cave_floor_layers: 3,
 
     // Mouths. The damping above keeps every cave sealed - measured, 2,530

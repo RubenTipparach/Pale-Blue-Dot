@@ -475,23 +475,16 @@ mod tests {
     #[ignore = "a report: cargo test -p pbd-app --lib cave_mouths -- --ignored --nocapture"]
     fn cave_mouths() {
         use pbd_core::column::layer_altitude;
-        let settings = ColumnSettings::default();
-        // The nearest mouth to the spawn, which is what `--spawn mouth` does:
-        // the spawn itself sits between patches and would count nothing.
-        let spawn = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
-        let anchor = pbd_core::column::nearest_mouth(
-            &settings.cave(),
-            &crate::planet::TERRAIN,
-            spawn,
-            3_000.0,
-            8.0,
-        )
-        .expect("a mouth within three kilometres of the spawn");
-        println!(
-            "anchored {:.0} m from the spawn",
-            anchor.dot(spawn).clamp(-1., 1.).acos() * PLANET_RADIUS
-        );
-        let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
+        // The DEFAULT spawn, with the damping the sweep in pbd-core picked and
+        // no mouth patches at all: if openings are there, the patch rule is
+        // machinery for a question one number answers.
+        let settings = ColumnSettings {
+            cave_roof_m: 2.0,
+            mouth_threshold: 1.0,
+            ..ColumnSettings::default()
+        };
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let mut set = lod::generate_fine(anchor, &settings);
         let tier = set.take_columns();
         let finest = set.finest_records();
         let mut caves = 0;
