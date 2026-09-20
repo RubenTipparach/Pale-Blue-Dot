@@ -471,6 +471,15 @@ with the sod's side (`if top >= hi-1.001`), so a duplicate flank drew a second
 transition partway down the wall the terrain pass had already drawn correctly.
 One rule, one wall, one transition.
 
+**And the run's top is not the cap.** `planet_column.rs` says it plainly where
+it decides whether a record is a mouth: "outside a mouth the column top is the
+height rounded up by less than a layer and the record is left exactly as it
+was". A cell's surface is a float; its topmost solid LAYER ends at the next
+whole metre above it. So an unclamped flank ran up to a metre above the cap the
+terrain pass draws - one cell of wall standing proud of the ground, wearing the
+sod's side because that is what a flank paints on its top metre. That is the
+owner's "extra layer of wall where there should just be air", named exactly.
+
 Measured by bisection, with each drawer disabled in turn: with the flank off
 the slab is gone and with the terrain wall off it remains, which is what names
 the flank as the one drawing it. After the clamp the seam view's background is
