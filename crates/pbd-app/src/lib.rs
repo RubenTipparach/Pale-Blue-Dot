@@ -10,13 +10,13 @@ pub mod flight_view;
 #[cfg(feature = "desktop")]
 pub mod planet;
 #[cfg(feature = "desktop")]
+pub mod saves;
+#[cfg(feature = "desktop")]
 pub mod sky;
 #[cfg(feature = "desktop")]
 pub mod walking;
 #[cfg(feature = "desktop")]
 pub mod weather;
-#[cfg(feature = "desktop")]
-pub mod world_edits;
 
 use std::time::Duration;
 

@@ -382,6 +382,15 @@ pub struct PlanetFine {
 #[derive(Resource, Default)]
 pub struct LodRefresh {
     task: Option<Task<FineSet>>,
+    /// Rebuild the tier whatever the player has or has not walked.
+    ///
+    /// The distance rule answers "has the player left the tier", which is the
+    /// only reason to rebuild while ONE world is open. Loading another changes
+    /// the edits under a tier that is still standing where it was, and a load
+    /// that lands a few metres from where the last one ended would otherwise
+    /// keep the previous world's holes until the player walked far enough to
+    /// notice.
+    force: bool,
 }
 
 /// The direction the bands are anchored on: the active camera, which is at
@@ -396,11 +405,18 @@ fn player_direction(
         .and_then(|(transform, _)| (transform.translation() - center).try_normalize())
 }
 
+impl LodRefresh {
+    /// Ask for a rebuild on the next frame, whatever the player has walked.
+    pub fn force(&mut self) {
+        self.force = true;
+    }
+}
+
 /// Rebuild the fine set on the compute pool once the player has walked
 /// `REGEN_DISTANCE_M` from its anchor, and swap it in, with the walker's
 /// contact, when it lands. One rebuild in flight at a time.
-// Eight parameters: the seven the rebuild already needed, and the edits,
-// which a set built without would quietly undig. A struct of them would be a
+// Eight parameters: the seven the rebuild already needed, and the save, whose
+// edits a set built without would quietly undig. A struct of them would be a
 // struct with one caller.
 #[allow(clippy::too_many_arguments)]
 pub fn refresh_lod(
@@ -411,7 +427,7 @@ pub fn refresh_lod(
     settings: Res<ColumnSettings>,
     mut refresh: ResMut<LodRefresh>,
     mut contact: ResMut<super::PlanetContact>,
-    edits: Res<crate::world_edits::WorldEdits>,
+    edits: Res<crate::saves::WorldSave>,
 ) {
     if let Some(task) = refresh.task.as_mut() {
         if let Some(set) = block_on(poll_once(task)) {
@@ -429,7 +445,8 @@ pub fn refresh_lod(
         return;
     };
     let moved = direction.dot(fine.set.anchor).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
-    if moved > REGEN_DISTANCE_M {
+    if refresh.force || moved > REGEN_DISTANCE_M {
+        refresh.force = false;
         let settings = settings.clone();
         // The edits travel WITH the task: the tier is rebuilt off the pool and
         // a set built without them would quietly undig every hole the moment

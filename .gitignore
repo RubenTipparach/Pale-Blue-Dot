@@ -10,4 +10,8 @@ __pycache__/
 /docs/validation-logs/
 *.stdout.txt
 *.stderr.txt
-saves/
+# The worlds, at the working directory's own root. ANCHORED: an unanchored
+# `saves/` matches any directory of that name at any depth, and it silently
+# swallowed `crates/pbd-app/src/saves/` - the module that writes them - which
+# would have committed a tree that does not build.
+/saves/

@@ -25,7 +25,7 @@ mod visibility_tests;
 mod water;
 
 pub use contact::{PlanetContact, SurfaceContact};
-pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, PlanetFine, tile_width_m};
+pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, PlanetFine, tile_width_m};
 pub use terrain::{
     DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, TERRAIN, river_channel, snow_slot,
     surface_code, surface_height, terrain_radius, tileset_slot,
@@ -264,7 +264,7 @@ fn create_planet(
     assets: Res<AssetServer>,
     flight: Res<crate::flight_view::FlightViewConfig>,
     columns: Res<crate::config::ColumnSettings>,
-    edits: Res<crate::world_edits::WorldEdits>,
+    edits: Res<crate::saves::WorldSave>,
 ) {
     let started = std::time::Instant::now();
     let cells = topology::dual_sphere(lod::BASE_LEVEL as u32);

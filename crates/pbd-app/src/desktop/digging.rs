@@ -13,7 +13,7 @@
 use bevy::prelude::*;
 use pbd_app::planet::PLANET_RADIUS;
 use pbd_app::planet::{PlanetContact, PlanetFine};
-use pbd_app::world_edits::WorldEdits;
+use pbd_app::saves::WorldSave;
 use pbd_core::aim::{self, Sample};
 use pbd_core::column::{self, LAYERS};
 use pbd_core::edits::Edit;
@@ -56,20 +56,54 @@ fn record_of(fine: &PlanetFine, cell: u32) -> Option<usize> {
         .position(|record| record.metadata[3] == cell)
 }
 
+/// What the player's hands do as part of an edit.
+///
+/// The hands are IN the transaction rather than beside it, and that is the
+/// whole reason this enum exists. The log line carries the hotbar after the
+/// edit, so the move has to be settled before the record is written: a dig
+/// recorded without the block it yielded is a world where the hole is durable
+/// and the block was never picked up.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Hands {
+    /// A dig: take what was there.
+    Take,
+    /// A place: spend one of the selected stack.
+    Spend,
+    /// A scripted edit, which has no player and no hands.
+    Empty,
+}
+
+/// Everything one edit touches, which is what says these four travel
+/// together: the geometry, what the walker stands on, the save, and the hands.
+/// A shorter argument list is the symptom; the reason is that an edit is a
+/// transaction over exactly these.
+pub struct Edited<'a> {
+    pub fine: &'a mut PlanetFine,
+    pub contact: &'a mut PlanetContact,
+    pub save: &'a mut WorldSave,
+    pub slots: &'a mut super::slots::Hotbar,
+}
+
 /// Accept a dig or a place, and put the world back together.
 ///
 /// Returns the material taken, if any. Everything it touches is what the
 /// design named: the column, its own record, its neighbours' records (their
-/// flanks are clipped against this column's air), and the contact the walker
-/// stands on.
+/// flanks are clipped against this column's air), the contact the walker
+/// stands on, and the hotbar - which moves only if the save took the record,
+/// so the world, the player and the disk agree or none of them moves.
 pub fn apply_edit(
-    fine: &mut PlanetFine,
-    contact: &mut PlanetContact,
-    edits: &mut WorldEdits,
+    world: &mut Edited,
+    hands: Hands,
     cell: u32,
     layer: usize,
     material: Material,
 ) -> Option<Material> {
+    let Edited {
+        fine,
+        contact,
+        save,
+        slots,
+    } = world;
     if layer == 0 || layer >= LAYERS {
         return None;
     }
@@ -82,13 +116,33 @@ pub fn apply_edit(
     if was == material {
         return None;
     }
-    if !edits.accept(Edit {
-        cell,
-        layer: layer as u16,
-        material,
-    }) {
+    // The move is made on a COPY first. What the log records is the hotbar
+    // after the edit, and what the player keeps is that same hotbar only if
+    // the record was taken.
+    let mut moved = slots.0.clone();
+    match hands {
+        Hands::Take => {
+            moved.give(Item::Block(was), 1);
+        }
+        Hands::Spend => {
+            let index = moved.selected();
+            if moved.take(index, 1) != 1 {
+                return None;
+            }
+        }
+        Hands::Empty => {}
+    }
+    if !save.accept(
+        Edit {
+            cell,
+            layer: layer as u16,
+            material,
+        },
+        &moved,
+    ) {
         return None;
     }
+    slots.0 = moved;
     let mut set = (*fine.set).clone();
     set.columns.set_layer(record, layer, material);
     set.columns.repack(record);
@@ -111,7 +165,7 @@ pub fn dig_and_place(
     buttons: Res<ButtonInput<MouseButton>>,
     mut fine: ResMut<PlanetFine>,
     mut contact: ResMut<PlanetContact>,
-    mut edits: ResMut<WorldEdits>,
+    mut edits: ResMut<WorldSave>,
     mut slots: ResMut<super::slots::Hotbar>,
     mut aimed: ResMut<Aim>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
@@ -138,14 +192,17 @@ pub fn dig_and_place(
 
     if buttons.just_pressed(MouseButton::Left) {
         if let Some(taken) = apply_edit(
-            &mut fine,
-            &mut contact,
-            &mut edits,
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut edits,
+                slots: &mut slots,
+            },
+            Hands::Take,
             target.dig.cell,
             target.dig.layer,
             Material::Air,
         ) {
-            slots.give(Item::Block(taken), 1);
             info!(
                 "dug {taken:?} from cell {} layer {}",
                 target.dig.cell, target.dig.layer
@@ -168,17 +225,19 @@ pub fn dig_and_place(
             return;
         }
         if apply_edit(
-            &mut fine,
-            &mut contact,
-            &mut edits,
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut edits,
+                slots: &mut slots,
+            },
+            Hands::Spend,
             place.cell,
             place.layer,
             material,
         )
         .is_some()
         {
-            let index = slots.selected();
-            slots.take(index, 1);
             info!(
                 "placed {material:?} in cell {} layer {}",
                 place.cell, place.layer
@@ -214,7 +273,8 @@ pub fn scripted_dig(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut fine: ResMut<PlanetFine>,
     mut contact: ResMut<PlanetContact>,
-    mut edits: ResMut<WorldEdits>,
+    mut edits: ResMut<WorldSave>,
+    mut slots: ResMut<super::slots::Hotbar>,
     mut done: Local<bool>,
 ) {
     if *done || launch.dig == 0 || launch.capture.is_none() {
@@ -232,9 +292,13 @@ pub fn scripted_dig(
             break;
         };
         if apply_edit(
-            &mut fine,
-            &mut contact,
-            &mut edits,
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut edits,
+                slots: &mut slots,
+            },
+            Hands::Take,
             target.dig.cell,
             target.dig.layer,
             Material::Air,
@@ -248,9 +312,15 @@ pub fn scripted_dig(
     }
     if let Some(bottom) = last.filter(|_| launch.place) {
         apply_edit(
-            &mut fine,
-            &mut contact,
-            &mut edits,
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut edits,
+                slots: &mut slots,
+            },
+            // The harness has no player: the block it puts back comes from
+            // nowhere, as it did before the hands were part of the edit.
+            Hands::Empty,
             bottom.cell,
             bottom.layer + 1,
             Material::Stone,

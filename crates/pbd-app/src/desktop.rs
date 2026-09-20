@@ -26,8 +26,9 @@ use pbd_app::{
         FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, TERRAIN, river_channel, surface_code,
         surface_height, terrain_radius, tile_width_m,
     },
+    saves::{self, Pose, WorldSave},
     sky::SkyPlugin,
-    walking::{EYE_HEIGHT, WalkingConfig, WalkingPlugin},
+    walking::{EYE_HEIGHT, RestoredPose, WalkingConfig, WalkingPlugin},
     weather::WeatherPlugin,
 };
 use std::{
@@ -65,7 +66,11 @@ pub struct Launch {
     pub spawn: Option<String>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
-    /// `--menu pause|settings` opens that screen at startup. A headless run has
+    /// `--world <name>` opens that save, creating it if it is not there.
+    /// Absent, an interactive run opens the one played most recently and a
+    /// capture writes to no world at all.
+    pub world: Option<String>,
+    /// `--menu pause|settings|saves` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
     pub menu: Option<String>,
@@ -88,6 +93,7 @@ impl Launch {
             height: None,
             spawn: None,
             rain: 0.0,
+            world: None,
             menu: None,
         };
         let mut i = 0;
@@ -106,12 +112,18 @@ impl Launch {
                         .expect("--dig requires a count");
                 }
                 "--place" => result.place = true,
+                "--world" => {
+                    i += 1;
+                    result.world = Some(args.get(i).expect("--world requires a name").clone());
+                }
                 "--menu" => {
                     i += 1;
-                    let screen = args.get(i).expect("--menu requires pause or settings");
+                    let screen = args
+                        .get(i)
+                        .expect("--menu requires pause, settings or saves");
                     assert!(
-                        matches!(screen.as_str(), "pause" | "settings"),
-                        "--menu takes pause or settings"
+                        matches!(screen.as_str(), "pause" | "settings" | "saves"),
+                        "--menu takes pause, settings or saves"
                     );
                     result.menu = Some(screen.clone());
                 }
@@ -258,6 +270,12 @@ pub fn run(args: &[String]) {
         std::fs::create_dir_all(parent).expect("capture directory");
     }
     let photo = launch.capture.is_some() && !launch.tour && !launch.walk && !launch.fly;
+    // The world is opened BEFORE the app is built, because where the player
+    // was standing decides where the planet's fine set and the column tier are
+    // anchored. Restoring the pose afterwards would build the world around the
+    // spawn and then teleport away from it.
+    let world = open_world(&launch);
+    let restored = world.pose;
     let step = Duration::from_secs_f64(1.0 / FIXED_HZ);
     let mut app = App::new();
     app.add_plugins(
@@ -310,19 +328,28 @@ pub fn run(args: &[String]) {
         } else {
             FlyMode::Manual
         },
-        spawn_direction: spawn_direction(&launch),
+        spawn_direction: restored
+            .map(|pose| pose.position.normalize_or(Vec3::Y))
+            .unwrap_or_else(|| spawn_direction(&launch)),
         spawn_altitude: 240.0,
         minimum_clearance: if launch.tour { 45.0 } else { 1.6 },
         startup_camera: !photo,
         ..default()
     })
-    .insert_resource(slots::Hotbar::starting_kit())
-    // The world's edits, loaded before the planet is built: `create_planet`
-    // reads them for the first tier, so a save's holes are there on the first
-    // frame rather than appearing when the player first walks.
-    .insert_resource(pbd_app::world_edits::WorldEdits::open(
-        std::path::PathBuf::from("saves/preview/edits.txt"),
-    ))
+    // What the save recorded, or the starting kit in a new world. The hotbar
+    // rides the edit log rather than a timer, so what comes back is what was
+    // held when the last block moved.
+    .insert_resource(
+        world
+            .carried
+            .clone()
+            .map(slots::Hotbar)
+            .unwrap_or_else(slots::Hotbar::starting_kit),
+    )
+    // The world, loaded before the planet is built: `create_planet` reads its
+    // edits for the first tier, so a save's holes are there on the first frame
+    // rather than appearing when the player first walks.
+    .insert_resource(world)
     .init_resource::<digging::Aim>()
     .insert_resource(ClearColor(if std::env::var("PBD_NO_SKY").is_ok() {
         // The hole detector's background: nothing in the palette is near it,
@@ -351,6 +378,7 @@ pub fn run(args: &[String]) {
     .insert_resource(match launch.menu.as_deref() {
         Some("pause") => menu::Screen::Pause,
         Some("settings") => menu::Screen::Settings,
+        Some("saves") => menu::Screen::Saves,
         _ => menu::Screen::Playing,
     })
     .add_systems(Startup, menu::spawn)
@@ -365,16 +393,25 @@ pub fn run(args: &[String]) {
             scene::move_moon,
             slots::input,
             slots::update,
-            (menu::press, menu::paint).chain(),
+            (menu::press, menu::paint, menu::rebuild_saves).chain(),
+            autosave,
             digging::dig_and_place,
             digging::scripted_dig,
             capture,
         ),
     )
-    .add_systems(Last, measure_frames);
+    .init_resource::<menu::SaveIndex>()
+    .init_resource::<menu::LoadRequest>()
+    .add_systems(PreUpdate, load_world.after(menu::toggle))
+    .add_systems(Last, (measure_frames, drain_saves));
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
+            restored: restored.map(|pose| RestoredPose {
+                position: pose.position,
+                heading: pose.heading,
+                pitch: pose.pitch,
+            }),
             ..default()
         })
         .add_plugins(WalkingPlugin);
@@ -393,6 +430,153 @@ pub fn run(args: &[String]) {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
     }
     app.run();
+}
+
+/// Which save this run opens.
+///
+/// A CAPTURE with no `--world` writes to nothing, which is the LOD camera's
+/// own lesson in another costume: a harness that pins a pose every frame and
+/// then saves it poisons the world for every later run. A capture that means
+/// to write says which world.
+fn open_world(launch: &Launch) -> WorldSave {
+    let root = std::path::PathBuf::from(saves::ROOT);
+    let seed = TERRAIN.seed;
+    let asked = launch.world.clone();
+    if asked.is_none() && launch.capture.is_some() {
+        return WorldSave::memory_only();
+    }
+    let listed = saves::list(&root);
+    let slot = match asked.as_deref() {
+        Some(name) => {
+            let id = saves::slot_id(name);
+            listed
+                .into_iter()
+                .find(|slot| slot.id == id || slot.file.name == name)
+                .or_else(|| saves::create(&root, name, seed).ok())
+        }
+        // No name: the one played most recently, which is what logging back
+        // on means. A first run has none and gets one.
+        None => listed
+            .into_iter()
+            .next()
+            .or_else(|| saves::create(&root, "Preview", seed).ok()),
+    };
+    let Some(slot) = slot else {
+        warn!("no world could be opened; this run will not be saved");
+        return WorldSave::memory_only();
+    };
+    if slot.file.seed != seed {
+        // A save is OF a world. Loading it into a different one would make it
+        // silently become somebody else's.
+        warn!(
+            "world '{}' was made in seed {} and this is {seed}; it will not be loaded",
+            slot.file.name, slot.file.seed
+        );
+        return WorldSave::memory_only();
+    }
+    WorldSave::open(root, slot)
+}
+
+/// Carry out a load the saves screen asked for.
+///
+/// An exclusive system, because a load touches more of the world than one set
+/// of borrows can hold: the save, the hotbar, the tier's refresh and the
+/// walker's own body. It happens between frames rather than inside the press
+/// that asked for it, which is also why `LoadRequest` exists at all.
+fn load_world(world: &mut World) {
+    let Some(slot) = world.resource_mut::<menu::LoadRequest>().0.take() else {
+        return;
+    };
+    let name = slot.file.name.clone();
+    let root = {
+        let open = world.resource::<WorldSave>();
+        // Everything queued for the world being left goes down before the
+        // writer moves: the queue is ordered, and a half-written world is the
+        // one thing a save must never leave behind.
+        open.drain();
+        open.root().to_path_buf()
+    };
+    let opened = WorldSave::open(root, slot);
+    let carried = opened.carried.clone();
+    let pose = opened.pose;
+    world.insert_resource(opened);
+    world.insert_resource(
+        carried
+            .map(slots::Hotbar)
+            .unwrap_or_else(slots::Hotbar::starting_kit),
+    );
+    // The tier is standing where the last world left it with the last world's
+    // holes in it. The distance rule cannot know that, so the load says so.
+    if let Some(mut refresh) = world.get_resource_mut::<pbd_app::planet::LodRefresh>() {
+        refresh.force();
+    }
+    if world
+        .get_resource::<pbd_app::walking::WalkingState>()
+        .is_some()
+    {
+        match pose {
+            Some(pose) => pbd_app::walking::restore(
+                world,
+                RestoredPose {
+                    position: pose.position,
+                    heading: pose.heading,
+                    pitch: pose.pitch,
+                },
+            ),
+            // A world nobody has played yet starts where a new world starts.
+            None => pbd_app::walking::respawn(world),
+        }
+    }
+    if let Some(pose) = pose {
+        world.resource_mut::<slots::Hotbar>().select(pose.selected);
+    }
+    // The list shows which world is open, so it is drawn again now one is.
+    world.resource_mut::<menu::SaveIndex>().set_changed();
+    info!("loaded world '{name}'");
+}
+
+/// Write the pose on a timer, and whenever a menu opens.
+///
+/// Pose is the one part of a save that is genuinely cheap to lose, which is
+/// exactly why it is the only part on a clock: the edits and the hotbar are
+/// written per edit and are already down. A menu opening counts because the
+/// player who opens one is usually the player about to quit.
+fn autosave(
+    time: Res<Time>,
+    screen: Res<menu::Screen>,
+    walking: Option<Res<pbd_app::walking::WalkingState>>,
+    slots: Res<slots::Hotbar>,
+    walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    mut save: ResMut<WorldSave>,
+    mut due: Local<f32>,
+) {
+    let opening = screen.is_changed() && *screen != menu::Screen::Playing;
+    *due -= time.delta_secs();
+    if !opening && *due > 0.0 {
+        return;
+    }
+    *due = saves::AUTOSAVE_S;
+    let (Some(state), Ok(position)) = (walking, walkers.single()) else {
+        return;
+    };
+    let (heading, pitch) = state.view();
+    save.snapshot(Pose {
+        position: position.0,
+        heading,
+        pitch,
+        selected: slots.selected(),
+    });
+}
+
+/// Wait for the disk on the way out.
+///
+/// The one place blocking is right is the place the player is already
+/// waiting: losing the last two digs to a quit would be the whole feature
+/// failing at its most visible moment.
+fn drain_saves(exits: MessageReader<AppExit>, save: Res<WorldSave>) {
+    if !exits.is_empty() {
+        save.drain();
+    }
 }
 
 /// Where the walker, and with it the column tier, is anchored.
