@@ -66,6 +66,12 @@ pub struct Launch {
     pub spawn: Option<String>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// `--dig-ahead` digs along the camera's LOOK rather than straight down.
+    /// Digging down is right for proving the verb and useless for judging the
+    /// result: the walker falls into its own pit and the eye ends up inside
+    /// the wall, so every capture of a hole is a screen of dirt. Digging ahead
+    /// leaves them standing on the rim looking at what they made.
+    pub dig_ahead: bool,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -104,6 +110,7 @@ impl Launch {
             world: None,
             time: None,
             torch: false,
+            dig_ahead: false,
             menu: None,
         };
         let mut i = 0;
@@ -123,6 +130,7 @@ impl Launch {
                 }
                 "--place" => result.place = true,
                 "--torch" => result.torch = true,
+                "--dig-ahead" => result.dig_ahead = true,
                 "--time" => {
                     i += 1;
                     let hour: f32 = args

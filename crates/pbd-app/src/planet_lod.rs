@@ -212,6 +212,22 @@ impl FineSet {
         &self.levels[3]
     }
 
+    /// Make one cell's record agree with the column under it, after an edit.
+    ///
+    /// The GPU rebuilds the geometry from what it is sent, so what is sent has
+    /// to be the whole truth: the runs say what is underground and the RECORD
+    /// says where the surface is. Repacking one and leaving the other is a
+    /// world where the hole is real and the lid over it is too.
+    pub fn reconcile(&mut self, record: usize) {
+        let Some(&slot) = self.columns.slots.get(record) else {
+            return;
+        };
+        let Some(column) = self.columns.columns.get(slot).cloned() else {
+            return;
+        };
+        column::reconcile_surface(&mut self.levels[3], &self.finest_neighbors, record, &column);
+    }
+
     /// Take the column tier out, leaving an empty one. For tests that want the
     /// tier and the records it was stamped into side by side.
     #[cfg(test)]

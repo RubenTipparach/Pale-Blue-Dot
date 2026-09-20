@@ -263,6 +263,54 @@ impl ColumnTier {
     }
 }
 
+/// Make a cell RECORD agree with the column under it.
+///
+/// **There are two representations of where the ground is**, and this is the
+/// only place they are reconciled. The column says what stands at every metre;
+/// the cell record carries the surface HEIGHT, the cap's material, and - in
+/// each neighbour's `corners[side].w` - how far down that neighbour draws its
+/// wall. The terrain pass draws from the record and the column pass draws from
+/// the runs, so a record that disagrees with its column is a meadow drawn over
+/// a hole and a wall drawn across it.
+///
+/// The reference has nothing like this because it has nothing to reconcile:
+/// `tenebris-core`'s `World::set` writes one `blocks` array and dirties the
+/// tile and its lateral neighbours, and its mesher derives the surface from
+/// that array. Everything it draws comes from the one representation. Ours has
+/// a heightfield tier that a column tier is embedded in, which is what buys a
+/// 4,800 m planet at 2.8 m cells - and the price is exactly this function.
+pub fn reconcile_surface(
+    finest: &mut [GpuCell],
+    neighbors: &[[u32; 6]],
+    index: usize,
+    column: &Column,
+) {
+    let Some(top) = column.surface() else {
+        return;
+    };
+    let top_m = column::layer_altitude(top) + 1.0;
+    finest[index].direction_height[3] = top_m;
+    let code = render_code(column.material(top));
+    finest[index].metadata[1] = (finest[index].metadata[1] & !0xff) | code;
+    let Some(table) = neighbors.get(index).copied() else {
+        return;
+    };
+    for &neighbor in table.iter().take(finest[index].degree()) {
+        if neighbor == u32::MAX {
+            continue;
+        }
+        let n = neighbor as usize;
+        // The neighbour's side that faces back at this cell.
+        let back = neighbors[n]
+            .iter()
+            .take(finest[n].degree())
+            .position(|&id| id as usize == index);
+        if let Some(side) = back {
+            finest[n].corners[side][3] = top_m;
+        }
+    }
+}
+
 /// The torch word of a column: the topmost torch layer plus one, shifted, or
 /// zero where there is none.
 ///
@@ -388,30 +436,15 @@ pub fn build(
             continue;
         };
         let top_m = column::layer_altitude(top) + 1.0;
-        let height = finest[index].direction_height[3];
-        if top_m >= height {
+        // Only DOWNWARD at build time. Outside a mouth the column top is the
+        // generated height rounded up by less than a layer, so raising would
+        // quantise every cell in the tier to whole metres and throw away the
+        // heightfield's own sub-metre surface. An EDIT is the other case and
+        // reconciles both ways - see `reconcile_surface`.
+        if top_m >= finest[index].direction_height[3] {
             continue;
         }
-        finest[index].direction_height[3] = top_m;
-        let code = render_code(column.material(top));
-        finest[index].metadata[1] = (finest[index].metadata[1] & !0xff) | code;
-        let Some(table) = neighbors.get(index) else {
-            continue;
-        };
-        for &neighbor in table.iter().take(finest[index].degree()) {
-            if neighbor == u32::MAX {
-                continue;
-            }
-            let n = neighbor as usize;
-            // The neighbour's side that faces back at this cell.
-            let back = neighbors[n]
-                .iter()
-                .take(finest[n].degree())
-                .position(|&id| id as usize == index);
-            if let Some(side) = back {
-                finest[n].corners[side][3] = top_m;
-            }
-        }
+        reconcile_surface(finest, neighbors, index, column);
     }
     let mut tier = ColumnTier {
         columns,

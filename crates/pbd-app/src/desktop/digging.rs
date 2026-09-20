@@ -161,6 +161,13 @@ pub fn apply_edit(
             set.columns.repack(neighbor as usize);
         }
     }
+    // And the SURFACE, which is a second representation of where the ground
+    // is: the terrain pass draws its cap from the cell record and every
+    // neighbour draws its wall down to it. Repacking the runs and leaving that
+    // alone is the bug the owner reported as broken geometry - the tier's own
+    // build pass says what it looks like in as many words, "a meadow over the
+    // hole and a wall across it", and that pass ran only at build.
+    set.reconcile(record);
     // The whole tier, at the measured six milliseconds. A block changes what
     // light reaches every cell it can be seen from, which is not a region this
     // code can name: a dug shaft lets daylight forty metres down, and a torch
@@ -301,7 +308,12 @@ pub fn scripted_dig(
         return;
     };
     let eye = transform.translation();
-    let down = -eye.normalize_or(Vec3::Y);
+    // Down, or along the look where the capture asked for it.
+    let down = if launch.dig_ahead {
+        transform.forward().as_vec3()
+    } else {
+        -eye.normalize_or(Vec3::Y)
+    };
     let mut dug = 0;
     let mut last: Option<Sample> = None;
     for _ in 0..launch.dig {
