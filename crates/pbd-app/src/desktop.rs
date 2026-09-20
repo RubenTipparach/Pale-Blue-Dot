@@ -285,7 +285,13 @@ pub fn run(args: &[String]) {
         ..default()
     })
     .insert_resource(slots::Hotbar::starting_kit())
-    .insert_resource(ClearColor(Color::srgb(0.002, 0.004, 0.012)))
+    .insert_resource(ClearColor(if std::env::var("PBD_NO_SKY").is_ok() {
+        // The hole detector's background: nothing in the palette is near it,
+        // so a magenta pixel is a pixel with no world behind it.
+        Color::srgb(1.0, 0.0, 1.0)
+    } else {
+        Color::srgb(0.002, 0.004, 0.012)
+    }))
     .insert_resource(CaptureState {
         frame: 0,
         requested: false,

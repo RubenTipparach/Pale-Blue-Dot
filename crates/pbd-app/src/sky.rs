@@ -169,6 +169,14 @@ fn spawn_atmosphere(
     mut materials: ResMut<Assets<SkyMaterial>>,
     water: Res<WaterSettings>,
 ) {
+    // `PBD_NO_SKY` leaves the atmosphere shell unspawned so the clear colour
+    // shows through. It is a hole DETECTOR rather than a look: against a flat
+    // background, anything that is not terrain is a place the ground failed to
+    // close, and no amount of squinting at a blue sky can tell those from the
+    // sky over a ridge.
+    if std::env::var("PBD_NO_SKY").is_ok() {
+        return;
+    }
     let sun = SUN_DIRECTION.normalize();
     let material = materials.add(SkyMaterial {
         parameters: SkyParameters {

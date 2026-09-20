@@ -419,6 +419,42 @@ with two gaps had the second drawn as nothing, and from inside a cave nothing is
 a window. 720 vertices is affordable on a tier of a few thousand cells and is
 the exact answer rather than most of one.
 
+### The wall the column pass was trusted to draw, and did not
+
+The terrain pass draws a cap and a wall from it down to the neighbour's cap.
+Between two cells that BOTH carry columns it drew no wall at all and left the
+side to the column pass, which draws a flank per run against each of the
+neighbour's air gaps. That yield was too wide, and the gap it left is the
+"holes in the terrain" the owner reported.
+
+**A flank is (this run) against (one of the neighbour's gaps), and between two
+ordinary cells there is no such pair spanning the step.** This cell's top run
+ends at its own surface and the neighbour's top gap begins at the neighbour's
+surface, so the band between the two caps belongs to no pair, and nobody drew
+it. Underground the flanks meet exactly, which is why the caves looked right
+and the meadow did not.
+
+**Measured, with an instrument built for it.** `PBD_NO_SKY` leaves the
+atmosphere shell unspawned and paints the clear colour magenta, so a pixel that
+is not terrain is a pixel with no world behind it - which a blue sky over a
+ridge can never be told apart from by eye. On the seam view: 407,484 background
+pixels with the tier on, 404,936 with `reach_m: 0.0`, and 404,936 again with
+the tier on and the terrain wall forced back. So the tier was adding 2,548
+pixels of nothing, and the wall it suppressed was the thing that had closed
+them. The meadow view closed 4,084.
+
+**The fix is a narrower yield, not a wider wall.** `run_covers` asks whether
+this cell's rock fills the step in one run; where it does, the heightfield wall
+stands as it always did, and where it does not - a mouth, a tunnel crossing the
+edge - the column pass keeps the side and draws it exactly. The cave captures
+and the mouth count are unchanged by it.
+
+**The lesson is the one this file keeps: a pass that yields must be able to say
+what the other pass will draw.** "The column pass has this side" was true of
+the cells it was tested on, underground, and false of every terrace on the
+surface, and nothing in the build could tell the difference because a hole in
+the ground with sky behind it looks exactly like sky.
+
 ### The tier's rim is generated SOLID
 
 A cell outside the tier answers from the heightfield, whose one assumption is

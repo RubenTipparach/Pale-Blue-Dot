@@ -93,10 +93,14 @@ cells that actually cover the edge; the cheap version samples the edge at the
 finer band's own spacing and takes the least, which bounds the error by how far
 the height field can move between two samples.
 
-This is NOT the column tier and NOT the cave carve: the tier reaches ninety
-metres and these slits are on a skyline. A before-and-after measurement of the
-enclosed-sky pixels across the worm change found 5,259 against 5,286, which is
-noise, so the slits predate it.
+This shortfall is real and is fixed, but it was NOT what the owner saw. That
+was the column tier suppressing the heightfield wall on every shared side
+(`voxel-columns-and-mining/design.md`, "The wall the column pass was trusted to
+draw"), measured with `PBD_NO_SKY` at 2,548 background pixels on the seam view
+and 4,084 on the meadow. The shortfall here changed no pixel of either view:
+the floor is read only where a band boundary falls on a wall, and neither
+capture has one in frame. It is closed because a wall that stops above the
+ground it meets is wrong, not because it was the reported bug.
 
 Everything below is the context those four need.
 

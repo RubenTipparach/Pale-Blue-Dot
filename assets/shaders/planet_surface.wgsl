@@ -118,6 +118,20 @@ fn column_slot(cell: Cell) -> u32 { return cell.metadata.z >> 16u; }
 /// that is a window. Four runs against five gaps is twenty quads a side, which
 /// is 864 vertices a column against the terrain pass's 60 - affordable on a
 /// tier of a few thousand cells, and the exact answer rather than most of one.
+// Is this column solid from `lo` to `hi`, in one run? What it answers is
+// whether the heightfield's wall would cover anything the flank does not: a
+// step of plain rock is one run's business, and only a hole in it needs the
+// column pass's exactness.
+fn run_covers(rec: ColumnRec, lo: f32, hi: f32) -> bool {
+    for (var k = 0u; k < COLUMN_RUNS; k++) {
+        let word = rec.runs[k];
+        if run_present(word) && run_lo(word) <= lo+0.001 && run_hi(word) >= hi-0.001 {
+            return true;
+        }
+    }
+    return false;
+}
+
 fn column_gap(neighbor: u32, g: u32) -> vec2<f32> {
     // Off the tier: solid below its cap, which is what the heightfield assumes
     // everywhere, and what `planet_column.rs` makes TRUE by generating the
@@ -261,14 +275,25 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         kind = 1u;
         let side = (vertex-18u)/6u;
         let i = (vertex-18u)%6u;
-        // Between two cells that BOTH have columns, this wall is the column
-        // pass's: it draws the side exactly, run by run against the
-        // neighbour's air, and a wall drawn here from cap to cap would be rock
-        // across every cave mouth. Everywhere else the heightfield wall stands.
+        // Between two cells that BOTH have columns, the column pass draws the
+        // side run by run against the neighbour's air, and a wall drawn here
+        // from cap to cap would be rock across a cave mouth. So this yields -
+        // but ONLY where this cell's rock does not already fill the step,
+        // which is the one case the flank says something different about.
+        //
+        // Yielding on every shared side was a hole: measured with the sky off
+        // and the background flat (`PBD_NO_SKY`), the seam view drew 2,548
+        // pixels of nothing where the terrace steps should be, and forcing
+        // this wall back on closed every one of them. The flank is drawn per
+        // run against one of the neighbour's gaps, and between two ordinary
+        // cells there is no gap that spans from the neighbour's cap to this
+        // one - so nobody drew that band at all.
         var columns_side = false;
         let slot = column_slot(cell);
         if slot != 0u && side < degree {
-            columns_side = column_side(columns[slot-1u], side) != NO_NEIGHBOR;
+            let rec = columns[slot-1u];
+            let foot = min(cell.corners[side].w, height);
+            columns_side = column_side(rec, side) != NO_NEIGHBOR && !run_covers(rec, foot, height);
         }
         if side < degree && !columns_side {
             // The wall goes down to the neighbour's cap, or, where the
