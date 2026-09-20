@@ -27,8 +27,8 @@ mod water;
 pub use contact::{PlanetContact, SurfaceContact};
 pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, PlanetFine, tile_width_m};
 pub use terrain::{
-    ELEVATION_STEP, PLANET_RADIUS, TERRAIN, river_channel, surface_code, surface_height,
-    terrain_radius,
+    DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, TERRAIN, river_channel, snow_slot,
+    surface_code, surface_height, terrain_radius, tileset_slot,
 };
 pub use water::{emerge, submersion};
 
@@ -336,7 +336,7 @@ fn create_planet(
         version: 1,
     });
     commands.insert_resource(PlanetArt(assets.load_with_settings(
-        "tilesets/fields.png",
+        "tilesets/atlas.png",
         |settings: &mut ImageLoaderSettings| settings.sampler = ImageSampler::nearest(),
     )));
     commands.spawn((
@@ -414,6 +414,37 @@ struct PlanetParams {
     // metres of burial it reaches that floor over, and the cosine of twice the
     // reach: the ANGULAR gate the visibility pass gives a column tier cell.
     column: Vec4,
+    // How deep the sod and the soil run, in metres, and two spares. Fed from
+    // `pbd_core::column`, which is where the cells themselves are stacked: a
+    // wall shows what a shovel would find, because both read these two numbers.
+    ground: Vec4,
+    // Which slot of `atlas.png` each biome draws from, in `Biome` order: ocean,
+    // beach, fields, desert, then jungle, swamp, mountains, tundra. The shader
+    // reads the biome off the cell it is already given, so a sheet per biome
+    // costs one lookup and no second binding.
+    tilesets: [UVec4; 2],
+}
+
+/// The eight biome slots, in `Biome` order, packed two vec4s wide for the
+/// uniform. Written here rather than in the shader because which sheet a
+/// biome draws from is the app's answer and the shader's lookup.
+fn tileset_slots() -> [UVec4; 2] {
+    use pbd_core::planet_gen::Biome;
+    let of = |b| terrain::tileset_slot(b);
+    [
+        UVec4::new(
+            of(Biome::Ocean),
+            of(Biome::Beach),
+            of(Biome::Fields),
+            of(Biome::Desert),
+        ),
+        UVec4::new(
+            of(Biome::Jungle),
+            of(Biome::Swamp),
+            of(Biome::Mountains),
+            of(Biome::Tundra),
+        ),
+    ]
 }
 
 #[derive(Resource)]
@@ -772,6 +803,13 @@ fn prepare_views(
                 columns.cave_dark_depth_m,
                 (2.0 * columns.reach_m / PLANET_RADIUS).cos(),
             ),
+            ground: Vec4::new(
+                pbd_core::column::SOD_DEPTH_M,
+                pbd_core::column::SOIL_DEPTH_M,
+                terrain::snow_slot() as f32,
+                0.,
+            ),
+            tilesets: tileset_slots(),
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
@@ -958,11 +996,12 @@ mod pipeline_tests {
     #[test]
     fn actual_pipeline_layouts_use_static_offsets_and_correct_storage_access() {
         // 288 before the clutter knobs; four more vec4s for the reach and
-        // fade, the chances, the sizes and the shrub, and one for the column
-        // tier's reach and its cave-darkening stand-in.
+        // fade, the chances, the sizes and the shrub, one for the column
+        // tier's reach and its cave-darkening stand-in, one for how deep the
+        // sod and the soil run, and two for the tileset slot per biome.
         assert_eq!(
             PlanetParams::min_size().get(),
-            368,
+            416,
             "actual encoded Rust uniform must match WGSL Params"
         );
         for (layout, read_only_bindings) in [

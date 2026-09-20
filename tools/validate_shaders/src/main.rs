@@ -178,9 +178,10 @@ fn validate(path: &Path) -> Result<(), String> {
             check_struct(
                 &module,
                 "Params",
-                368,
+                416,
                 &[
                     0, 64, 80, 96, 112, 128, 144, 160, 224, 240, 256, 272, 288, 304, 320, 336, 352,
+                    368, 384,
                 ],
             )?;
             if filename == "planet_surface.wgsl" {

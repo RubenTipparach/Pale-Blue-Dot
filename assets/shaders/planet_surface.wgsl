@@ -24,6 +24,8 @@ struct Params {
     clutter_size: vec4<f32>,   // blade height, blade half-width, rock, bush
     clutter_more: vec4<f32>,   // flower height, shrub chance, shrub size, spare
     column: vec4<f32>,         // tier reach m, cave dark floor, cave dark depth m, cos(2 x reach / R)
+    ground: vec4<f32>,         // sod depth m, soil depth m, snow tileset slot, spare
+    tilesets: array<vec4<u32>,2>, // atlas slot per biome, in Biome order
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
@@ -713,7 +715,10 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.clip = params.clip_from_body*vec4(position,1.);
     out.normal = normal;
     out.uv = uv;
-    out.material = material;
+    // The material in the low byte and the cell's BIOME above it, exactly as
+    // the record packs them: the fragment needs the biome to pick its sheet,
+    // and carrying it in a word it already has costs no interpolator.
+    out.material = (material & 0xffu) | (cell.metadata.y & 0xff00u);
     out.height = height;
     // The low half only: the high half carries the column tier slot.
     out.skylight = f32(cell.metadata.z & 0xffffu)/65535.;
@@ -726,12 +731,61 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     return out;
 }
 
-fn pixel_tile(uv: vec2<f32>, tile: vec2<f32>) -> vec3<f32> {
-    // Texture-load is intentionally nearest, with an explicit 32x32 source
-    // grid per tile. Interior sampling avoids the source sheet's soft seams.
+// `atlas.png` is every biome's tileset baked into one texture: four sheets
+// across and four down, each a 4x4 grid of 32-texel tiles. `slot` picks the
+// sheet, `tile` the picture within it. Texture-load is intentionally nearest,
+// and the bake took the shader's own sample points, so what a tile draws is
+// what the single-sheet build drew, texel for texel.
+fn pixel_tile(uv: vec2<f32>, tile: vec2<f32>, slot: u32) -> vec3<f32> {
     let pixel = (floor(fract(uv)*32.)+0.5)/32.;
-    let sheet_uv = (tile+0.025+pixel*0.95)*0.25;
+    let sheet = vec2(f32(slot%4u),f32(slot/4u))*0.25;
+    let sheet_uv = sheet+(tile+pixel)*(1./16.);
     return textureLoad(atlas,vec2<i32>(sheet_uv*vec2<f32>(textureDimensions(atlas))),0).rgb;
+}
+
+// Which sheet a biome draws from, as the app packed it.
+fn tileset_slot(biome: u32) -> u32 {
+    let row = params.tilesets[biome/4u];
+    if biome%4u == 0u { return row.x; }
+    if biome%4u == 1u { return row.y; }
+    if biome%4u == 2u { return row.z; }
+    return row.w;
+}
+
+// The material codes that are FACES rather than materials: the picture the
+// ground shows on its side. Nothing in a column is ever made of these, so no
+// cell carries them - they are derived here, from the cap and the depth.
+const DIRT_CODE = 10u;
+const GRASS_SIDE_CODE = 11u;
+const SNOW_SIDE_CODE = 12u;
+// What the side tile averages to. A face seen from far enough away fades to
+// it, exactly as a cap fades to its flat base, because a point-sampled tile
+// at range is shimmer rather than detail. The earth is two thirds of the tile
+// so its own average is the honest one.
+const GROUND_MEAN = vec3(0.466,0.342,0.255);
+
+// What a wall shows `depth` metres under the ground: the sod's own SIDE for
+// the first metre, the earth under it to the bottom of the soil, then stone.
+// `pbd_core::column::material_at_depth` is the same three bands for the cells
+// themselves, and `params.ground` carries its two depths, so the rule is
+// written twice and its numbers have one source.
+fn face_code(cap: u32, depth: f32) -> u32 {
+    if depth <= params.ground.x {
+        // Sward, jungle and marsh all fade into earth; snow fades into it too,
+        // which is Tenebris's `dirt_snow`. Sand, stone and earth show their own
+        // picture on every face, as the reference has them.
+        if cap == 2u || cap == 3u || cap == 7u { return GRASS_SIDE_CODE; }
+        if cap == 6u { return SNOW_SIDE_CODE; }
+        return cap;
+    }
+    if depth <= params.ground.y {
+        // Sand runs deep under a beach or a desert; rock and snow sit on rock
+        // with no soil between; everything else has earth under it.
+        if cap == 0u || cap == 1u || cap == 4u { return cap; }
+        if cap == 5u || cap == 6u { return 5u; }
+        return DIRT_CODE;
+    }
+    return 5u;
 }
 
 // ---- Rain wetness, from Tenebris's hex.fs: raindrop rings and a rippled wet
@@ -813,29 +867,55 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let direct = max(dot(n,sun),0.0)*daylight;
     let skylight = input.skylight;
     let cell_variation = 0.94+random(input.seed)*0.12;
+    // A cap shows its own material. A WALL - a terrace step or the flank of a
+    // cave run - shows what stands at ITS depth under the ground, which is the
+    // sod's side, then earth, then stone. The wall used to blend earth into
+    // stone over ABSOLUTE PLANET HEIGHT instead, so the same one-metre step
+    // drew stone at two hundred metres and earth at forty, and no face on the
+    // body ever showed the sod fading into the ground under it.
+    let cap = input.material & 0xffu;
+    // Which sheet this cell draws from. Every biome authors its own ground,
+    // its own side, its own earth and its own stone at the same four tile
+    // coordinates, so a biome is a slot and nothing else about the drawing
+    // changes. Snow is the one material that is not a biome - it caps a field
+    // above the snow line and a pole at any height - so it takes the tundra
+    // sheet, whose side is snow over earth, or a snowy meadow would fade into
+    // summer grass.
+    var slot = tileset_slot((input.material >> 8u) & 0xffu);
+    var code = cap;
+    if input.kind==1u || input.kind==4u {
+        let altitude = length(input.position)-params.settings.x;
+        code = face_code(cap,max(input.height-altitude,0.));
+    }
     var base = vec3(0.12,0.32,0.075);
     var tile = vec2(0.,0.);
     // Material 0 is the seabed: sand, darkened by the water column below.
-    if input.material==0u { base=vec3(0.52,0.45,0.30); tile=vec2(3.,2.); }
-    if input.material==1u { base=vec3(0.61,0.48,0.25); tile=vec2(3.,2.); }
-    if input.material==3u { base=vec3(0.07,0.25,0.105); }
-    if input.material==4u { base=vec3(0.64,0.36,0.13); tile=vec2(3.,2.); }
-    if input.material==5u { base=vec3(0.31,0.34,0.33); tile=vec2(3.,0.); }
-    if input.material==6u { base=vec3(0.80,0.90,0.91); tile=vec2(3.,0.); }
-    if input.material==7u { base=vec3(0.32,0.36,0.22); }
-    if input.kind==1u {
-        base=mix(vec3(0.30,0.21,0.13),vec3(0.34,0.36,0.37),smoothstep(60.,180.,input.height));
-        tile=select(vec2(2.,0.),vec2(3.,0.),input.height>170.);
-    }
-    if input.material==8u { base=vec3(0.16,0.105,0.055); tile=vec2(2.,1.); }
-    if input.material==9u { base=vec3(0.085,0.24,0.060); tile=vec2(0.,2.); }
-    let texel = pixel_tile(input.uv,tile);
+    if code==0u { base=vec3(0.52,0.45,0.30); tile=vec2(3.,2.); }
+    if code==1u { base=vec3(0.61,0.48,0.25); tile=vec2(3.,2.); }
+    if code==3u { base=vec3(0.07,0.25,0.105); }
+    if code==4u { base=vec3(0.64,0.36,0.13); tile=vec2(3.,2.); }
+    if code==5u { base=vec3(0.31,0.34,0.33); tile=vec2(3.,0.); }
+    if code==6u { base=vec3(0.80,0.90,0.91); tile=vec2(3.,0.); }
+    if code==7u { base=vec3(0.32,0.36,0.22); }
+    if code==8u { base=vec3(0.16,0.105,0.055); tile=vec2(2.,1.); }
+    if code==9u { base=vec3(0.085,0.24,0.060); tile=vec2(0.,2.); }
+    if code==6u || code==SNOW_SIDE_CODE { slot = u32(params.ground.z); }
+    let texel = pixel_tile(input.uv,tile,slot);
     let luminance = dot(texel,vec3(0.2126,0.7152,0.0722));
     let detail = mix(clamp(luminance*3.2,0.55,1.65),1.0,smoothstep(180.,1400.,distance_to_camera));
     // `shade` is one everywhere but down a grass blade, where the root sits at
     // the configured fraction of full light and eases to the tip. That gradient
     // is what makes a sward read as lush rather than as flat green paper.
     var albedo = base*detail*cell_variation*input.shade;
+    // The ground's own faces are drawn from the atlas's COLOURS rather than as
+    // a flat base scaled by the tile's brightness: a transition tile is two
+    // colours by definition, sod over earth, and one base cannot be both.
+    if code>=DIRT_CODE {
+        var art = pixel_tile(input.uv,vec2(2.,0.),slot);
+        if code>=GRASS_SIDE_CODE { art = pixel_tile(input.uv,vec2(1.,0.),slot); }
+        albedo = mix(art,GROUND_MEAN,smoothstep(180.,1400.,distance_to_camera))
+            *cell_variation*input.shade;
+    }
     // A tiny cap-edge darkening makes the actual hex-column silhouette legible
     // while the atlas supplies the committed source pixel art at close range.
     var color = albedo*(vec3(0.16,0.21,0.27)*mix(0.12,1.,daylight)*skylight

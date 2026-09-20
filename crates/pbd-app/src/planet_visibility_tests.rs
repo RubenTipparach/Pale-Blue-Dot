@@ -317,6 +317,13 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         // written to measure the horizon and the partition should not have a
         // second rule firing inside it. `column_params` turns it on.
         column: Vec4::new(0., 0.45, 10., -2.),
+        ground: Vec4::new(
+            pbd_core::column::SOD_DEPTH_M,
+            pbd_core::column::SOIL_DEPTH_M,
+            13.,
+            0.,
+        ),
+        tilesets: [UVec4::splat(4), UVec4::splat(4)],
     }
 }
 

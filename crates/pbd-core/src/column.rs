@@ -248,6 +248,38 @@ pub fn generate(
 /// ground below a cap is solid; that assumption is only safe while nobody can
 /// be under a cap, and a cave is exactly being under one. A solid ring makes
 /// the assumption true rather than hoping it is.
+/// The sod: the top layer, which is the biome's own material and the only
+/// layer that shows it. Tenebris's `planet_gen` gives the surface block one
+/// cell and this is that cell.
+pub const SOD_DEPTH_M: f32 = 1.0;
+
+/// How deep the soil runs under the sod, from Tenebris's `altitude_m > surface
+/// - 4.0`. Below it the body is stone.
+pub const SOIL_DEPTH_M: f32 = 4.0;
+
+/// What stands `depth_m` below a surface made of `top`: the sod for the first
+/// metre, then the soil that belongs to that sod (sand keeps sand, and a rocky
+/// or snowy top has stone directly under it, as the reference has), then
+/// stone. One rule, because the stack a player digs through, the material a
+/// wall shows at that depth and the wear a tool takes are the same question.
+///
+/// `planet_surface.wgsl` mirrors the three bands for a wall face and takes
+/// their depths from `params.ground`, which is fed from the two constants
+/// above: the numbers have one source even though the branch is written twice.
+pub fn material_at_depth(top: Material, depth_m: f32) -> Material {
+    if depth_m <= SOD_DEPTH_M {
+        return top;
+    }
+    if depth_m <= SOIL_DEPTH_M {
+        return match top {
+            Material::Sand => Material::Sand,
+            Material::Snow | Material::Rock | Material::Stone => Material::Stone,
+            _ => Material::Soil,
+        };
+    }
+    Material::Stone
+}
+
 pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
     let surface_m = planet_gen::surface_altitude(terrain, direction);
     let top = planet_gen::top_material(terrain, direction, surface_m);
@@ -265,18 +297,7 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
             };
             continue;
         }
-        let depth = surface_m - altitude;
-        *layer = if depth <= 1.0 {
-            top
-        } else if depth <= 4.0 {
-            match top {
-                Material::Sand => Material::Sand,
-                Material::Snow | Material::Rock | Material::Stone => Material::Stone,
-                _ => Material::Soil,
-            }
-        } else {
-            Material::Stone
-        };
+        *layer = material_at_depth(top, surface_m - altitude);
     }
     // Bedrock. Never mineable, and the reference's own rule.
     layers[0] = Material::Stone;
@@ -401,6 +422,56 @@ mod tests {
             "{:.1}% of land columns are crossed by a worm",
             100.0 * crossed_share
         );
+    }
+
+    /// Tenebris's own stack, from `planet_gen::sample_with_profile`: the sod
+    /// is one cell, dirt runs to four metres (sand under a desert), stone
+    /// below. A rocky or snowy top has no soil under it at all.
+    #[test]
+    fn the_stack_under_a_cap_is_sod_then_soil_then_stone() {
+        for (top, soil) in [
+            (Material::Grass, Material::Soil),
+            (Material::DryGrass, Material::Soil),
+            (Material::JungleGrass, Material::Soil),
+            (Material::Dirt, Material::Soil),
+            (Material::Sand, Material::Sand),
+            (Material::Snow, Material::Stone),
+            (Material::Rock, Material::Stone),
+            (Material::Stone, Material::Stone),
+        ] {
+            assert_eq!(material_at_depth(top, 0.0), top);
+            assert_eq!(material_at_depth(top, SOD_DEPTH_M), top);
+            assert_eq!(material_at_depth(top, SOD_DEPTH_M + 0.001), soil);
+            assert_eq!(material_at_depth(top, SOIL_DEPTH_M), soil);
+            assert_eq!(
+                material_at_depth(top, SOIL_DEPTH_M + 0.001),
+                Material::Stone
+            );
+            assert_eq!(material_at_depth(top, 200.0), Material::Stone);
+        }
+    }
+
+    /// The generated column IS that rule: one source, so a wall drawn from the
+    /// rule and a cell dug out of the column can never disagree.
+    #[test]
+    fn a_generated_column_agrees_with_the_depth_rule() {
+        let (spawn, _) = spawn();
+        for d in near(spawn, 60.0, 200) {
+            let column = generate_solid(&TERRAIN, d);
+            let surface_m = planet_gen::surface_altitude(&TERRAIN, d);
+            let top = planet_gen::top_material(&TERRAIN, d, surface_m);
+            for index in 1..LAYERS {
+                let altitude = layer_altitude(index);
+                if altitude >= surface_m {
+                    continue;
+                }
+                assert_eq!(
+                    column.layers[index],
+                    material_at_depth(top, surface_m - altitude),
+                    "layer {index} at {altitude} m under a {surface_m} m {top:?} surface"
+                );
+            }
+        }
     }
 
     #[test]

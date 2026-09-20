@@ -5,11 +5,12 @@
 //! that rule exists to prevent.
 //!
 //! The thumbnails need no new art. The terrain shader already samples
-//! `tilesets/fields.png` as a 4x4 grid and already maps every material to a
-//! tile in it and a base colour over it; a slot is the same tile at the same
-//! tint, so a block's icon IS the texture the ground is drawn with. That is the
-//! grass blades' own trick - they sample the ground tile they stand on - asked
-//! for a second time.
+//! `tilesets/atlas.png` - every biome's tileset baked into one texture, four
+//! sheets across and four down, each a 4x4 grid - and already maps every
+//! material to a sheet, a tile in it and a base colour over it; a slot is the
+//! same tile at the same tint, so a block's icon IS the texture the ground is
+//! drawn with. That is the grass blades' own trick - they sample the ground
+//! tile they stand on - asked for a second time.
 
 use bevy::prelude::*;
 use pbd_core::inventory::{Item, SLOTS, Slots};
@@ -47,7 +48,8 @@ impl Hotbar {
     }
 }
 
-/// The atlas is a 4x4 grid of this many pixels a side.
+/// Sheets across the atlas, and tiles across a sheet.
+const ATLAS_SHEETS: f32 = 4.0;
 const ATLAS_TILES: f32 = 4.0;
 
 /// Which tile of the atlas a material draws with, and the colour the terrain
@@ -56,18 +58,28 @@ const ATLAS_TILES: f32 = 4.0;
 ///
 /// Several materials share a tile, which is honest: they share it on the ground
 /// too, and what tells grass from swamp grass there is the tint, here as well.
-pub fn thumbnail(material: Material) -> Option<(Vec2, Color)> {
-    let (tile, rgb): ((f32, f32), (f32, f32, f32)) = match material {
+pub fn thumbnail(material: Material) -> Option<(u32, Vec2, Color)> {
+    use pbd_app::planet::{snow_slot, tileset_slot};
+    use pbd_core::planet_gen::Biome;
+    // Which SHEET a block comes from, which is the biome it is found in: sand
+    // is a beach's, snow is the tundra's, and the rest are the home meadow's.
+    // The ground asks the same two functions for the same answer.
+    let home = |biome| tileset_slot(biome);
+    let (slot, tile, rgb): (u32, (f32, f32), (f32, f32, f32)) = match material {
         Material::Air => return None,
-        Material::Grass | Material::DryGrass => ((0., 0.), (0.12, 0.32, 0.075)),
-        Material::JungleGrass => ((0., 0.), (0.07, 0.25, 0.105)),
-        Material::Soil | Material::Dirt => ((3., 2.), (0.61, 0.48, 0.25)),
-        Material::Sand => ((3., 2.), (0.72, 0.62, 0.42)),
-        Material::Stone => ((3., 0.), (0.31, 0.34, 0.33)),
-        Material::Rock => ((3., 0.), (0.37, 0.33, 0.29)),
-        Material::Snow => ((3., 0.), (0.80, 0.90, 0.91)),
-        Material::Ore => ((3., 0.), (0.72, 0.62, 0.34)),
-        Material::Water => ((0., 2.), (0.13, 0.40, 0.56)),
+        Material::Grass | Material::DryGrass => {
+            (home(Biome::Fields), (0., 0.), (0.12, 0.32, 0.075))
+        }
+        Material::JungleGrass => (home(Biome::Jungle), (0., 0.), (0.07, 0.25, 0.105)),
+        // Earth has its own picture at last, which is the tile a wall shows
+        // under the sod rather than the beach it used to borrow.
+        Material::Soil | Material::Dirt => (home(Biome::Fields), (2., 0.), (0.61, 0.48, 0.25)),
+        Material::Sand => (home(Biome::Beach), (0., 0.), (0.72, 0.62, 0.42)),
+        Material::Stone => (home(Biome::Fields), (3., 0.), (0.31, 0.34, 0.33)),
+        Material::Rock => (home(Biome::Mountains), (3., 0.), (0.37, 0.33, 0.29)),
+        Material::Snow => (snow_slot(), (0., 0.), (0.80, 0.90, 0.91)),
+        Material::Ore => (home(Biome::Fields), (0., 1.), (0.72, 0.62, 0.34)),
+        Material::Water => (home(Biome::Ocean), (2., 2.), (0.13, 0.40, 0.56)),
     };
     // The shader's albedo is a fraction of full brightness because the ground
     // is then LIT by a sun, and a slot is lit by nothing. Lifting it by a
@@ -81,6 +93,7 @@ pub fn thumbnail(material: Material) -> Option<(Vec2, Color)> {
     // floor.
     let lift = |c: f32| c.clamp(0.0, 1.0).powf(0.6);
     Some((
+        slot,
         Vec2::new(tile.0, tile.1),
         Color::srgb(lift(rgb.0), lift(rgb.1), lift(rgb.2)),
     ))
@@ -237,7 +250,7 @@ pub fn update(
             Item::Tool(_) => None,
         });
         match art {
-            Some((tile, tint)) => {
+            Some((slot, tile, tint)) => {
                 // The rect is in the image's own pixels, so it needs the loaded
                 // size. Until the atlas has loaded there is nothing to crop to,
                 // and a full-image icon would be sixteen tiles at once.
@@ -245,11 +258,17 @@ pub fn update(
                     node.color = Color::NONE;
                     continue;
                 };
-                let step = size / ATLAS_TILES;
-                let min = Vec2::new(tile.x * step.x, tile.y * step.y);
-                // Inset by a twentieth of a tile, the same margin the shader
-                // keeps, so a thumbnail never bleeds the neighbouring tile.
-                let inset = step * 0.05;
+                let sheet = size / ATLAS_SHEETS;
+                let step = sheet / ATLAS_TILES;
+                let origin = Vec2::new(
+                    (slot % ATLAS_SHEETS as u32) as f32 * sheet.x,
+                    (slot / ATLAS_SHEETS as u32) as f32 * sheet.y,
+                );
+                let min = origin + Vec2::new(tile.x * step.x, tile.y * step.y);
+                // Half a texel, which is all the bake leaves to guard: a tile
+                // is exactly 32 texels in the atlas with nothing bleeding into
+                // it, where the source sheets had soft edges to keep clear of.
+                let inset = step / 64.;
                 node.rect = Some(Rect::from_corners(min + inset, min + step - inset));
                 node.color = tint;
             }
@@ -411,10 +430,14 @@ mod tests {
         ] {
             let art = thumbnail(material);
             assert!(art.is_some(), "{material:?} would draw a blank slot");
-            let (tile, _) = art.unwrap();
+            let (slot, tile, _) = art.unwrap();
             assert!(
                 (0.0..ATLAS_TILES).contains(&tile.x) && (0.0..ATLAS_TILES).contains(&tile.y),
-                "{material:?} points outside the {ATLAS_TILES}x{ATLAS_TILES} atlas"
+                "{material:?} points outside its {ATLAS_TILES}x{ATLAS_TILES} sheet"
+            );
+            assert!(
+                slot < (ATLAS_SHEETS * ATLAS_SHEETS) as u32,
+                "{material:?} points at sheet {slot}, outside the atlas"
             );
         }
         assert!(thumbnail(Material::Air).is_none(), "air is not a block");
@@ -426,7 +449,7 @@ mod tests {
     #[test]
     fn the_thumbnails_keep_their_relative_brightness() {
         let value = |material| {
-            let (_, colour) = thumbnail(material).unwrap();
+            let (_, _, colour) = thumbnail(material).unwrap();
             let rgb = colour.to_srgba();
             rgb.red + rgb.green + rgb.blue
         };

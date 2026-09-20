@@ -81,6 +81,39 @@ impl Heights {
 /// included; the fine floor per side is the height at that edge's midpoint,
 /// which is the level below's midpoint cell; owners are the level below's
 /// cells this one belongs to.
+/// How far down a wall must reach to meet the ground a FINER band draws along
+/// this edge: the lowest cap on it, not the height at its middle.
+///
+/// The wall from this cell's cap to its neighbour's is what closes the step
+/// between them, and where the neighbour's region is drawn one level finer it
+/// has to reach the finer caps instead. That used to be a single sample, the
+/// height at the shared edge's midpoint, and a finer band draws SEVERAL cells
+/// along that edge: any of them lower than the one sample is ground the wall's
+/// foot hangs above, and what shows through the gap is sky. Measured over four
+/// thousand land edges at the spawn, the midpoint stood 0.45 m above the
+/// lowest cap on average and 2.0 m at worst, with one edge in eighty short by
+/// more than a whole cell - which is the slivers of sky between the terrace
+/// rows of a far hillside.
+///
+/// Nine samples across the edge, which is finer than any band that can draw
+/// against it, and the midpoint is one of them, so this can only ever reach
+/// further down than it did.
+fn fine_floor(here: Vec3, neighbor: Vec3, heights: &mut Heights) -> f32 {
+    let mut floor = heights.at(midpoint(here, neighbor));
+    for step in 1..FLOOR_SAMPLES {
+        let f = step as f32 / FLOOR_SAMPLES as f32;
+        floor = floor.min(heights.at((here * (1.0 - f) + neighbor * f).normalize()));
+    }
+    floor
+}
+
+/// Samples across a shared edge when measuring its fine floor. A band is one
+/// level finer than the band it meets, so at most a couple of cells stand on
+/// an edge; seventeen is well past that, and measured against a 64-sample
+/// ground truth it leaves the floor 0.05 m high on average against the nine
+/// samples' 0.11 m. The cost is paid once per record, at build time.
+const FLOOR_SAMPLES: usize = 17;
+
 fn record(source: CellSource, heights: &mut Heights) -> GpuCell {
     let height = heights.at(source.direction);
     let degree = source.corners.len();
@@ -92,7 +125,7 @@ fn record(source: CellSource, heights: &mut Heights) -> GpuCell {
         let neighbor = source.neighbor_directions[side];
         let neighbor_height = heights.at(neighbor);
         corners[side] = [corner.x, corner.y, corner.z, neighbor_height];
-        floors[side] = heights.at(midpoint(source.direction, neighbor));
+        floors[side] = fine_floor(source.direction, neighbor, heights);
         let separation = (source.direction.distance(neighbor) * PLANET_RADIUS).max(1.);
         occlusion += ((neighbor_height - height) / separation).clamp(0., 1.);
     }
@@ -522,5 +555,80 @@ mod tests {
             }
         }
         assert!(checked > 100, "{checked} shared cells checked");
+    }
+}
+
+#[cfg(test)]
+mod seam_report {
+    use super::*;
+    use crate::planet::terrain::{PLANET_RADIUS, TERRAIN};
+
+    /// How far a coarse cell's wall can stop ABOVE the finer caps it meets.
+    ///
+    /// A wall runs from this cell's cap down to the neighbour's, and where the
+    /// neighbour's region is drawn by a finer band it goes to the fine FLOOR
+    /// instead: one sample, the height at the shared edge's midpoint. The cells
+    /// actually drawn along that edge are many, and any of them lower than that
+    /// one sample is a cell whose cap the wall does not reach - which is a slit
+    /// of sky between the wall's foot and the ground.
+    ///
+    /// This measures the shortfall off the real height field rather than a
+    /// picture: for a coarse edge, the midpoint sample against the lowest of
+    /// the samples along the edge itself.
+    /// Not only a report: no edge may be short by a whole cell, which is the
+    /// state this found before `fine_floor` took the lowest cap rather than
+    /// the midpoint (0.45 m on average, 2.0 m at worst, one edge in eighty
+    /// short by more than a cell). A slit a cell tall is sky through the
+    /// ground, and it is the thing this measurement exists to keep shut.
+    #[test]
+    fn a_wall_reaches_within_a_cell_of_the_lowest_ground_it_meets() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let mut heights = Heights::default();
+        let golden = std::f32::consts::PI * (3.0 - 5_f32.sqrt());
+        let mut worst: f32 = 0.0;
+        let mut over_a_metre = 0usize;
+        let mut edges = 0usize;
+        let mut total: f64 = 0.0;
+        // Edges of about a coarse cell's width, spread over the region the
+        // player can see: a level-10 cell is twice a level-11 cell across.
+        let span = 2.0 * 1.2087 / (1u32 << 10) as f32;
+        for i in 0..4_000 {
+            let t = golden * i as f32;
+            let r = 0.02 * (i as f32 / 4_000.0).sqrt();
+            let (a, b) = anchor.any_orthonormal_pair();
+            let here = (anchor + a * (r * t.cos()) + b * (r * t.sin())).normalize();
+            let there = (here + a * span).normalize();
+            if heights.at(here) < TERRAIN.sea_level_m || heights.at(there) < TERRAIN.sea_level_m {
+                continue;
+            }
+            edges += 1;
+            // What the RECORD carries as this edge's floor, against the lowest
+            // cap actually on it. Sampled finer than `fine_floor` does, so the
+            // check cannot pass by measuring itself.
+            let carried = fine_floor(here, there, &mut heights);
+            let mut lowest = carried;
+            for k in 1..64 {
+                let f = k as f32 / 64.0;
+                lowest = lowest.min(heights.at((here * (1.0 - f) + there * f).normalize()));
+            }
+            let short = carried - lowest;
+            total += short as f64;
+            worst = worst.max(short);
+            over_a_metre += (short > 1.0) as usize;
+        }
+        assert!(
+            over_a_metre == 0,
+            "{over_a_metre} of {edges} edges leave a slit a whole cell tall"
+        );
+        println!(
+            "\ncoarse walls, {edges} land edges of {:.1} m: the recorded floor stands above the \
+             lowest cap it meets by {:.2} m on average, {:.1} m at worst; {} edges ({:.1}%) \
+             are short by more than a metre, which is a slit a cell tall",
+            span * PLANET_RADIUS,
+            total / edges.max(1) as f64,
+            worst,
+            over_a_metre,
+            100.0 * over_a_metre as f32 / edges.max(1) as f32
+        );
     }
 }

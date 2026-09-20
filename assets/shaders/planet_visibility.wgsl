@@ -21,6 +21,8 @@ struct Params {
     clutter_size: vec4<f32>,   // blade height, blade half-width, rock, bush
     clutter_more: vec4<f32>,   // flower height, shrub chance, shrub size, spare
     column: vec4<f32>,         // tier reach m, cave dark floor, cave dark depth m, cos(2 x reach / R)
+    ground: vec4<f32>,         // sod depth m, soil depth m, snow tileset slot, spare
+    tilesets: array<vec4<u32>,2>, // atlas slot per biome, in Biome order
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
