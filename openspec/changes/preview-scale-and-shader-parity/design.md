@@ -47,6 +47,65 @@ terminator, the Lambert term and the fresnel rim, and drops:
 `hex_terrain.wgsl` already has all of them, as uniforms. It is the reference for
 anything restored here: change it there first if the two ever need to differ.
 
+## ONE `daylight` drives the sun AND the sky, and the sun sets 7 degrees late
+
+The owner: a directional light dims as it crosses the horizon, and it cannot
+light anything below zero degrees. Measured against the shipped shader, both
+halves of that are right and the same line causes both.
+
+`planet_surface.wgsl` computes one number and multiplies everything by it:
+
+```wgsl
+let sun_elevation = dot(radial,sun);
+let daylight = smoothstep(-0.13,0.20,sun_elevation);
+let direct = max(dot(n,sun),0.0)*daylight;
+```
+
+`sun_elevation` is the SINE of the sun's altitude, so those edges are angles:
+
+| sun's altitude | our `daylight` |
+| ---: | ---: |
+| +10 deg | 0.982 |
+| +5 deg | 0.729 |
+| +2 deg | 0.500 |
+| **0 deg** | **0.343** |
+| -2 deg | 0.201 |
+| -4 deg | 0.088 |
+| **-7.5 deg** | **0.000** |
+
+So direct sunlight is at a third of full strength with the sun ON the horizon,
+and the ground is still being lit by a source seven and a half degrees under
+it. Anything that reads `direct` - the Lambert term, the specular, the rain
+glint, and the shadows this will grow - is lit by a sun that has set.
+
+**The standard says where it ends.** Sunset is defined at a geometric altitude
+of **-0.833 deg**: 34 arcminutes of refraction plus the sun's own 16 arcminute
+disc radius. Past that no direct light reaches a surface at sea level. What
+continues is SCATTERED light, and it has its own named bands - civil twilight
+to **-6 deg**, nautical to -12, astronomical to -18.
+
+**So the one number is two.** They are different physics and they want
+different curves:
+
+- **`sunlight`**, for the direct term, the specular and the glint: full while
+  the disc is up and nought by -0.833 deg, `smoothstep(-0.0145, 0.02, s)` on
+  the sine. Narrow on purpose - a surface already dims at grazing incidence
+  through `dot(n,sun)`, which is the geometry doing the work, and the present
+  ramp double-dims it. That is why the current model is BOTH too dark at noon
+  on a low sun and too bright after dark.
+- **`twilight`**, for the ambient, the distance fog and the rim: a long
+  falloff to about -6 deg, `smoothstep(-0.105, 0.05, s)`, which is the glow
+  that should be the only thing on the ground once the sun is down.
+
+The one-line split is the whole change, and it is deliberately not taken here:
+this document is the write-up and the edit is a separate request. What it will
+need with it is a capture at a few sun altitudes either side of zero, because
+the thing to check is that the last direct highlight dies at the horizon and
+the ground stays visibly blue rather than going black.
+
+Sources: [USNO, Rise, Set, and Twilight Definitions](https://aa.usno.navy.mil/faq/RST_defs)
+and [Sunset](https://en.wikipedia.org/wiki/Sunset).
+
 ## A face's tile is the MATERIAL's, and ours is the altitude's
 
 Measured against the reference and against the shipped art, not felt. Tenebris

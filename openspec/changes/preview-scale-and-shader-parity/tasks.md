@@ -127,3 +127,14 @@ planet. What is open is the radius, since the two are locked by
 - [ ] In-game confirmation on real hardware: the owner walks a terrace, a
       snow line and a cave mouth and says a grass block reads as one. The
       captures are a software rasteriser and are a limitation, not a sign-off.
+
+## 7. The sun sets at the horizon, the sky keeps glowing
+- [ ] Split `daylight` into `sunlight` and `twilight`. The direct term, the
+      specular and the rain glint take `sunlight`, which is nought by -0.833
+      deg (refraction plus the disc); the ambient, the distance fog and the rim
+      take `twilight`, which fades over civil twilight to -6 deg. Measured
+      today: direct light is at 0.343 with the sun ON the horizon and does not
+      reach nought until -7.5 deg.
+- [ ] Capture the terminator at a few sun altitudes either side of zero. What
+      to check: the last direct highlight dies at the horizon, and the ground
+      then reads blue rather than black.
