@@ -423,12 +423,14 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     let hi = run_hi(word);
                     let gap = column_gap(column_side(rec,side),g);
                     let bottom = max(lo, gap.x);
-                    // Against another column the terrain pass draws no wall
-                    // at all on this side, so the flank runs to the run's own
-                    // top; against the heightfield it stops at the
-                    // neighbour's cap, where the terrain wall takes over.
-                    var top = min(hi, gap.y);
-                    if column_side(rec,side) == NO_NEIGHBOR { top = min(top, cell.corners[side].w); }
+                    // A flank stops at the neighbour's CAP, always. Above
+                    // that is the heightfield's wall, and it draws it: the
+                    // exception that let a flank run to its own run top on a
+                    // shared side was a SECOND wall over the first, standing
+                    // in the air wherever the two disagreed, and drawing its
+                    // own top-metre sod partway down - which is the stack of
+                    // grass bands a single trench wall came out with.
+                    var top = min(hi, min(gap.y, cell.corners[side].w));
                     if top-bottom > 0.001 {
                         material = run_body(word);
                         // The top metre of a flank is the surface layer and the

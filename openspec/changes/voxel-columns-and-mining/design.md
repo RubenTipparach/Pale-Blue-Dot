@@ -455,6 +455,28 @@ the cells it was tested on, underground, and false of every terrace on the
 surface, and nothing in the build could tell the difference because a hole in
 the ground with sky behind it looks exactly like sky.
 
+### And the flank stops at the neighbour's CAP, always
+
+The other half of the same mistake, found the same day and by the same owner:
+a flank was allowed to run to its own run's top on a shared side, on the
+reasoning that the terrain pass drew nothing there. Once the terrain pass draws
+that step again, a flank that also draws it is a SECOND wall over the first -
+and where the two disagreed, the second one stood in the air with no floor
+under it and no cap over it. The owner's picture is a meadow with slabs of
+grass-topped earth standing in it.
+
+It was also why a single trench wall came out with a stack of grass bands down
+its face rather than one at the top. Each flank quad paints its own top metre
+with the sod's side (`if top >= hi-1.001`), so a duplicate flank drew a second
+transition partway down the wall the terrain pass had already drawn correctly.
+One rule, one wall, one transition.
+
+Measured by bisection, with each drawer disabled in turn: with the flank off
+the slab is gone and with the terrain wall off it remains, which is what names
+the flank as the one drawing it. After the clamp the seam view's background is
+404,936 pixels, equal to the tier being off, and `cave_mouths` still counts 9
+openings with 8 walkable.
+
 ### The tier's rim is generated SOLID
 
 A cell outside the tier answers from the heightfield, whose one assumption is
