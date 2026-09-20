@@ -37,6 +37,10 @@ use pbd_core::worms;
 /// cell record's skylight word.
 pub const COLUMN_CAPACITY: u32 = 16_384;
 
+/// Where a column record carries its torch layer, plus one: the high half of
+/// `more[3]`, whose low bit is the rim flag.
+pub const TORCH_SHIFT: u32 = 16;
+
 /// Where a cell record carries its column slot, plus one: the HIGH half of
 /// `metadata.z`, whose low half is the baked sky occlusion in 0..65535.
 ///
@@ -62,7 +66,13 @@ pub(crate) struct GpuColumn {
     pub runs: [u32; MAX_RUNS],
     /// Column slots of sides 0 to 3, `NO_NEIGHBOR` off the tier.
     pub neighbors: [u32; 4],
-    /// Sides 4 and 5, then the cell's own degree, then spare.
+    /// Sides 4 and 5, the cell's own degree, then the rim flag in the low bit
+    /// with the TORCH layer plus one in the high half.
+    ///
+    /// A torch is not solid, so it is in no run, so the shader has no other
+    /// way to know where one is: the runs are the whole of what it reads about
+    /// a column. Plus one, so the zero a record is born with means "no torch"
+    /// and nothing has to be cleared to say so.
     pub more: [u32; 4],
 }
 
@@ -141,8 +151,10 @@ impl ColumnTier {
             return;
         };
         let runs = column.packed_runs(render_code);
+        let torch = torch_word(column);
         if let Some(entry) = self.records.get_mut(slot) {
             entry.runs = runs;
+            entry.more[3] = (entry.more[3] & 0xffff) | torch;
         }
     }
 
@@ -151,13 +163,18 @@ impl ColumnTier {
         &self.records
     }
 
-    /// The sky level of one cell, 0 to `light::MAX`.
-    pub fn sky(&self, slot: usize, layer: usize) -> u8 {
+    /// What one cell is lit to, both channels.
+    pub fn light_at(&self, slot: usize, layer: usize) -> light::Light {
         self.light
             .get(slot)
             .and_then(|levels| levels.get(layer))
             .copied()
-            .unwrap_or(0)
+            .unwrap_or(light::Light::DARK)
+    }
+
+    /// The sky level of one cell, 0 to `light::MAX`.
+    pub fn sky(&self, slot: usize, layer: usize) -> u8 {
+        self.light_at(slot, layer).sky()
     }
 
     /// The light field packed for the GPU: four layers to a word, `LIGHT_WORDS`
@@ -174,7 +191,7 @@ impl ColumnTier {
             for (layer, &level) in levels.iter().enumerate() {
                 let word = slot * LIGHT_WORDS + layer / LIGHT_PER_WORD;
                 let shift = (layer % LIGHT_PER_WORD) * 8;
-                words[word] |= (level as u32) << shift;
+                words[word] |= (level.0 as u32) << shift;
             }
         }
         words
@@ -191,10 +208,39 @@ impl ColumnTier {
     /// "stayed dark forever".
     pub fn relight(&mut self) {
         let sides = self.neighbor_slots();
-        self.light = light::bake(&light::Region {
-            columns: &self.columns,
-            neighbors: &sides,
-        });
+        let emitters = self.emitters();
+        self.light = light::bake(
+            &light::Region {
+                columns: &self.columns,
+                neighbors: &sides,
+            },
+            &emitters,
+        );
+    }
+
+    /// Every cell in the tier that gives out light.
+    ///
+    /// DERIVED from the columns rather than kept beside them, which is what
+    /// makes a torch need no bookkeeping: placing one is an ordinary edit, and
+    /// the next relight finds it because it is in the column. A list kept
+    /// alongside would be a second place a dug-up torch had to be removed
+    /// from, and the one that was forgotten would light an empty cell for
+    /// ever.
+    fn emitters(&self) -> Vec<light::Emitter> {
+        let mut found = Vec::new();
+        for (slot, column) in self.columns.iter().enumerate() {
+            for layer in 0..LAYERS {
+                let level = column.material(layer).emission();
+                if level > 0 {
+                    found.push(light::Emitter {
+                        column: slot as u32,
+                        layer: layer as u16,
+                        level,
+                    });
+                }
+            }
+        }
+        found
     }
 
     /// The neighbour table in SLOT space, which is what the light field joins
@@ -215,6 +261,26 @@ impl ColumnTier {
             })
             .collect()
     }
+}
+
+/// The torch word of a column: the topmost torch layer plus one, shifted, or
+/// zero where there is none.
+///
+/// The TOPMOST, and placement refuses a second in the same column, so the one
+/// drawn and the one lighting are the same torch. A record that could hold one
+/// while the field lit two would be a lamp burning in an empty cell.
+fn torch_word(column: &Column) -> u32 {
+    for layer in (1..LAYERS).rev() {
+        if column.material(layer) == Material::Torch {
+            return (layer as u32 + 1) << TORCH_SHIFT;
+        }
+    }
+    0
+}
+
+/// Whether this column already holds a torch.
+pub fn has_torch(column: &Column) -> bool {
+    torch_word(column) != 0
 }
 
 /// Build the tier for an anchor, and stamp each finest record with its slot.
@@ -297,7 +363,12 @@ pub fn build(
         records.push(GpuColumn {
             runs: column.packed_runs(render_code),
             neighbors: [sides[0], sides[1], sides[2], sides[3]],
-            more: [sides[4], sides[5], degree as u32, rim as u32],
+            more: [
+                sides[4],
+                sides[5],
+                degree as u32,
+                rim as u32 | torch_word(&column),
+            ],
         });
         columns.push(column);
     }

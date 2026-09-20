@@ -85,6 +85,14 @@ const COLUMN_FIRST_VERTEX: u32 = 690u;
 const COLUMN_CAP_VERTICES: u32 = COLUMN_RUNS * 36u;
 // Per side, per run, per neighbouring air gap, one quad.
 const COLUMN_SIDE_VERTICES: u32 = COLUMN_RUNS * COLUMN_GAPS * 6u;
+// One torch: a slim four-sided post and a bright cap. A column holds at most
+// one, which placement enforces, so the torch drawn and the torch lighting are
+// the same torch.
+const COLUMN_TORCH_VERTICES: u32 = 30u;
+// Where a column record carries its torch layer, plus one. `planet_column.rs`
+// packs it; `the_shader_carries_the_reference_light_constants` pins the shift.
+const TORCH_SHIFT: u32 = 16u;
+fn torch_layer(rec: ColumnRec) -> u32 { return rec.more[3] >> TORCH_SHIFT; }
 const NO_NEIGHBOR: u32 = 0xffffffffu;
 
 // A run is absent when its TOP field is zero, not its bottom: the run holding
@@ -139,6 +147,12 @@ const CONTACT_2: f32 = 0.70;
 // other colour and threshold in this shader is one too; the change that lifts
 // them all into per-body data is `per-body-rendering` and it is not this one.
 const AMBIENT_FLOOR: f32 = 0.05;
+// What a lamp's light looks like. Tenebris's `torch_color` is (1.00, 0.70,
+// 0.30) and its shipped `torch_intensity` 1.25, which are these: a flame is
+// warm and a torch at full is a little brighter than the surface it lights, or
+// nobody would be able to tell it was on.
+const TORCH_TINT: vec3<f32> = vec3<f32>(1.00, 0.70, 0.30);
+const TORCH_GAIN: f32 = 1.25;
 
 // The layer holding an altitude, or a sentinel past the top.
 const LIGHT_LAYERS: u32 = 320u;
@@ -151,13 +165,19 @@ fn light_layer(altitude: f32) -> u32 {
 // The sky level of one cell, 0..1. A slot of zero is no column and a layer
 // past the top is open sky, which is what a tier edge and the air above the
 // world both are.
-fn sky_at(slot: u32, layer: u32) -> f32 {
-    if slot == 0u { return 1.0; }
-    if layer >= LIGHT_LAYERS { return 1.0; }
+// Sky in the high nibble, block in the low: `pbd_core::light::Light`'s own
+// byte. Two channels because only ONE of them goes out at night.
+fn light_at(slot: u32, layer: u32) -> vec2<f32> {
+    if slot == 0u { return vec2(1.0, 0.0); }
+    if layer >= LIGHT_LAYERS { return vec2(1.0, 0.0); }
     let word = (slot - 1u) * LIGHT_WORDS + layer / LIGHT_PER_WORD;
-    if word >= arrayLength(&light) { return 1.0; }
+    if word >= arrayLength(&light) { return vec2(1.0, 0.0); }
     let byte = (light[word] >> ((layer % LIGHT_PER_WORD) * 8u)) & 0xffu;
-    return f32(byte) / LIGHT_MAX;
+    return vec2(f32(byte >> 4u), f32(byte & 0xfu)) / LIGHT_MAX;
+}
+
+fn sky_at(slot: u32, layer: u32) -> f32 {
+    return light_at(slot, layer).x;
 }
 
 // Is this slot's cell solid at `layer`? Read off the run words, which already
@@ -192,30 +212,33 @@ fn solid_at(slot: u32, layer: u32) -> bool {
 // there that are not solid, then the contact ladder on how many of the two
 // SIDE neighbours are. The face's own cell is left out of the ladder because
 // it says nothing - a cap's is always air and a flank's always rock.
-fn corner_at(own: u32, a: u32, b: u32, layer: u32) -> f32 {
-    var sum = 0.0;
+// Both channels at a corner, or `-1` in x where nothing there was air. The
+// contact ladder multiplies BOTH, as the reference's own does: a crease is
+// dark whatever is lighting it.
+fn corner_at(own: u32, a: u32, b: u32, layer: u32) -> vec2<f32> {
+    var sum = vec2(0.0);
     var samples = 0.0;
     let slots = array<u32,3>(own, a, b);
     for (var i = 0u; i < 3u; i++) {
         if !solid_at(slots[i], layer) {
-            sum += sky_at(slots[i], layer);
+            sum += light_at(slots[i], layer);
             samples += 1.0;
         }
     }
     // Nothing there is air, which the caller has to be able to tell from dark.
-    if samples == 0.0 { return -1.0; }
+    if samples == 0.0 { return vec2(-1.0, 0.0); }
     var occluders = 0u;
     if solid_at(a, layer) { occluders++; }
     if solid_at(b, layer) { occluders++; }
     var contact = 1.0;
     if occluders == 1u { contact = CONTACT_1; }
     if occluders >= 2u { contact = CONTACT_2; }
-    return clamp(sum / samples * contact, 0.0, 1.0);
+    return clamp(sum / samples * contact, vec2(0.0), vec2(1.0));
 }
 
-fn corner_light(own: u32, a: u32, b: u32, layer: u32) -> f32 {
+fn corner_light(own: u32, a: u32, b: u32, layer: u32) -> vec2<f32> {
     let here = corner_at(own, a, b, layer);
-    if here >= 0.0 { return here; }
+    if here.x >= 0.0 { return here; }
     // Every cell there is rock, so this is not a dark corner, it is the wrong
     // LAYER: the metre a face stands at is the neighbour's last solid one, and
     // the air it actually opens onto is the metre above. A one-metre terrace
@@ -223,7 +246,7 @@ fn corner_light(own: u32, a: u32, b: u32, layer: u32) -> f32 {
     // dark line along every step in the world, which is the same symptom the
     // reference's own floor-contact fallback exists to prevent.
     let above = corner_at(own, a, b, layer + 1u);
-    return max(above, 0.0);
+    return max(above, vec2(0.0));
 }
 
 // What one vertex of a WALL is lit to: a quad on `side` running from `bottom`
@@ -243,8 +266,8 @@ fn corner_light(own: u32, a: u32, b: u32, layer: u32) -> f32 {
 // head's value, because "a floor-level corner always has SOME adjacent air to
 // derive light from, never a hard 0".
 fn wall_light(cell: Cell, own: u32, degree: u32, side: u32,
-              index: u32, bottom: f32, top: f32) -> f32 {
-    if own == 0u { return 1.0; }
+              index: u32, bottom: f32, top: f32) -> vec2<f32> {
+    if own == 0u { return vec2(1.0, 0.0); }
     let rec = columns[own - 1u];
     // Corners 0 and 3 stand on the edge's first ray, 1 and 2 on its second.
     let k = select(side, (side + 1u) % degree, index == 1u || index == 2u);
@@ -257,7 +280,7 @@ fn wall_light(cell: Cell, own: u32, degree: u32, side: u32,
     let head = corner_light(own, pair.x, pair.y, high);
     if index == 2u || index == 3u { return head; }
     let foot = corner_light(own, pair.x, pair.y, low);
-    return select(foot, head, foot == 0.0);
+    return select(foot, head, foot.x == 0.0 && foot.y == 0.0);
 }
 
 // The first layer at or above `altitude` in this column that is not rock.
@@ -354,7 +377,7 @@ struct VertexOut {
     // down a grass blade, where the root is darker than the tip.
     @location(11) shade: f32,
     // The voxel field at this vertex, INTERPOLATED - which is the point of it.
-    @location(12) voxel: f32,
+    @location(12) voxel: vec2<f32>,
 }
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
@@ -455,7 +478,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // where there is no field to ask. Per vertex rather than per cell, which
     // is the whole of what "baked vertex colours" means here: a face grades
     // across itself because its corners were sampled apart.
-    var out_voxel = 1.;
+    var out_voxel = vec2(1., 0.);
     let lit_slot = column_slot(cell);
     if vertex < 18u {
         let triangle = vertex/3u;
@@ -481,7 +504,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 // a bright centre with darkened corners is what makes the
                 // rasteriser's interpolation read as a shadow gathering in the
                 // corner rather than as a tile that is uniformly dimmer.
-                out_voxel = sky_at(lit_slot, air);
+                out_voxel = light_at(lit_slot, air);
             }
         }
     } else if vertex < 54u {
@@ -629,7 +652,59 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                         let pair = corner_slots(rec, k, degree);
                         out_voxel = corner_light(lit_slot, pair.x, pair.y, air);
                     } else {
-                        out_voxel = sky_at(lit_slot, air);
+                        out_voxel = light_at(lit_slot, air);
+                    }
+                }
+            } else if v >= COLUMN_CAP_VERTICES + 6u*COLUMN_SIDE_VERTICES {
+                // ---- A torch: a slim post standing on the floor with a lit
+                // head on it.
+                //
+                // Drawn HERE rather than in the clutter, because a torch is at
+                // a layer rather than on the surface: one can stand on a cave
+                // floor forty metres down, which is the whole reason to carry
+                // one.
+                let t = v-(COLUMN_CAP_VERTICES+6u*COLUMN_SIDE_VERTICES);
+                let layer = torch_layer(rec);
+                if layer != 0u {
+                    let foot = params.settings.x+COLUMN_BASE_M+f32(layer-1u);
+                    let up = axis;
+                    let post = 0.55;
+                    let rad = 0.06;
+                    if t < 24u {
+                        // The post: four flat sides, so it reads as a stick
+                        // rather than a cylinder at the pixel size it is drawn.
+                        let face = t/6u;
+                        let i = t%6u;
+                        let a0 = f32(face)*TAU/4.;
+                        let a1 = f32(face+1u)*TAU/4.;
+                        let base = axis*foot;
+                        let c0 = base+(tangent*cos(a0)+bitangent*sin(a0))*rad;
+                        let c1 = base+(tangent*cos(a1)+bitangent*sin(a1))*rad;
+                        let points = array<vec3<f32>,4>(c0,c1,c1+up*post,c0+up*post);
+                        let indices = array<u32,6>(0u,1u,2u,0u,2u,3u);
+                        position = points[indices[i]];
+                        normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
+                        let post_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
+                        uv = post_uv[indices[i]];
+                        material = 7u;
+                        out_voxel = vec2(sky_at(lit_slot,layer-1u),1.0);
+                    } else {
+                        // The head, at full lamp: it IS the light, so it is
+                        // drawn at the brightest the block channel goes rather
+                        // than at whatever reached the cell it stands in.
+                        let i = t-24u;
+                        let head = axis*(foot+post);
+                        let a0 = f32(i/3u)*TAU/2.;
+                        let a1 = f32(i/3u+1u)*TAU/2.;
+                        let c = i%3u;
+                        let p0 = head+(tangent*cos(a0)+bitangent*sin(a0))*rad*2.2;
+                        let p1 = head+(tangent*cos(a1)+bitangent*sin(a1))*rad*2.2;
+                        let tip = head+up*0.16;
+                        position = select(select(tip,p1,c==1u),p0,c==0u);
+                        uv = select(select(vec2(0.5,0.1),vec2(0.9,0.9),c==1u),vec2(0.1,0.9),c==0u);
+                        normal = up;
+                        material = 7u;
+                        out_voxel = vec2(0.0,1.0);
                     }
                 }
             } else {
@@ -1123,7 +1198,11 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // The heightfield's per-cell occlusion, times the voxel field's answer at
     // this vertex. Outside the column tier the second is one and this is what
     // it always was; inside it, it is what carries the cave and the crease.
-    let skylight = input.skylight * input.voxel;
+    let skylight = input.skylight * input.voxel.x;
+    // What a lamp put here. NOT multiplied by daylight - that is the whole of
+    // why the field carries two channels, and a torch that went out at dusk
+    // would be a torch nobody would place.
+    let lamp = input.voxel.y;
     let cell_variation = 0.94+random(input.seed)*0.12;
     // A cap shows its own material. A WALL - a terrace step or the flank of a
     // cave run - shows what stands at ITS depth under the ground, which is the
@@ -1202,6 +1281,11 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // be two rules for one fact, with the wrong one winning at every mouth.
     var color = albedo*(fill*max(AMBIENT_FLOOR,mix(night,1.,daylight)*skylight)
         + vec3(1.12,1.03,0.87)*direct*skylight)*gain;
+    // A lamp, ADDED. Warm, because everything that burns is, and over the
+    // albedo so a torch lights the ground it stands on rather than painting a
+    // flat orange patch over it. This is the term that makes a night worth
+    // carrying a light through.
+    color += albedo*TORCH_TINT*(lamp*TORCH_GAIN);
     // Submerged terrain: Tenebris's hex.fs absorption, the sheet's own
     // absorption and deep colour so the seabed tints the way its sea does.
     let water_depth = max(params.water_absorption.w - length(input.position), 0.);

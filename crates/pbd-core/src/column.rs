@@ -55,9 +55,13 @@ impl Column {
         self.layers.get(index).copied().unwrap_or(Material::Air)
     }
 
-    /// Whether a layer stops a player. Air and water do not; water is swum.
+    /// Whether a layer stops a player. Air and water do not; water is swum,
+    /// and a torch is walked through.
     pub fn solid(&self, index: usize) -> bool {
-        !matches!(self.material(index), Material::Air | Material::Water)
+        !matches!(
+            self.material(index),
+            Material::Air | Material::Water | Material::Torch
+        )
     }
 
     /// The topmost solid layer, which is the surface the heightfield tiers draw.

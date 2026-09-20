@@ -41,6 +41,9 @@ impl Hotbar {
             (Material::Snow, 16),
             (Material::Rock, 12),
             (Material::Ore, 3),
+            // Something to see with. A kit that could dig into the dark and
+            // not light it was a kit that could only dig in daylight.
+            (Material::Torch, 16),
         ] {
             slots.give(Item::Block(material), count);
         }
@@ -80,6 +83,13 @@ pub fn thumbnail(material: Material) -> Option<(u32, Vec2, Color)> {
         Material::Snow => (snow_slot(), (0., 0.), (0.80, 0.90, 0.91)),
         Material::Ore => (home(Biome::Fields), (0., 1.), (0.72, 0.62, 0.34)),
         Material::Water => (home(Biome::Ocean), (2., 2.), (0.13, 0.40, 0.56)),
+        // A torch: the wood tile, lit. The grain is what a torch is made of
+        // and the tint is the flame on it, which at a 44 px slot reads as a
+        // burning brand. It is a STAND-IN for art a torch has not been drawn
+        // yet - said here rather than left for a reader to notice, because
+        // this repository's rule is that an item ships with a visual and a
+        // borrowed tile is the weakest version of keeping it.
+        Material::Torch => (home(Biome::Fields), (2., 1.), (1.0, 0.62, 0.22)),
     };
     // The shader's albedo is a fraction of full brightness because the ground
     // is then LIT by a sun, and a slot is lit by nothing. Lifting it by a

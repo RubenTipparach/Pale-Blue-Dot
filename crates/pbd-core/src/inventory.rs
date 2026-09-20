@@ -68,6 +68,7 @@ fn material_name(material: Material) -> &'static str {
         Material::Snow => "snow",
         Material::Rock => "rock",
         Material::Dirt => "dirt",
+        Material::Torch => "torch",
     }
 }
 

@@ -119,6 +119,16 @@ pub fn apply_edit(
     // The move is made on a COPY first. What the log records is the hotbar
     // after the edit, and what the player keeps is that same hotbar only if
     // the record was taken.
+    // One lamp to a column. The record carries ONE torch layer, because a
+    // torch is not in a run and the runs are all the shader reads, so a second
+    // one would light a cell nothing was drawn in. Refusing is better than
+    // drawing the wrong one.
+    if material == Material::Torch
+        && let Some(column) = fine.set.columns.column(record)
+        && pbd_app::planet::column::has_torch(column)
+    {
+        return None;
+    }
     let mut moved = slots.0.clone();
     match hands {
         Hands::Take => {
@@ -151,6 +161,13 @@ pub fn apply_edit(
             set.columns.repack(neighbor as usize);
         }
     }
+    // The whole tier, at the measured six milliseconds. A block changes what
+    // light reaches every cell it can be seen from, which is not a region this
+    // code can name: a dug shaft lets daylight forty metres down, and a torch
+    // lights round a corner. The reference runs a bounded incremental pass
+    // because a full one costs it a second; ours costs six milliseconds, so it
+    // buys the exactness instead.
+    set.columns.relight();
     let set = Arc::new(set);
     contact.set_fine(&set);
     fine.set = set;
@@ -277,7 +294,7 @@ pub fn scripted_dig(
     mut slots: ResMut<super::slots::Hotbar>,
     mut done: Local<bool>,
 ) {
-    if *done || launch.dig == 0 || launch.capture.is_none() {
+    if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch) {
         return;
     }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
@@ -326,7 +343,35 @@ pub fn scripted_dig(
             Material::Stone,
         );
     }
-    if dug == 0 {
+    // A torch on the ground under the camera, which is what `--torch` is for:
+    // the place ray is the same one a dig uses, so the lamp lands in the air
+    // the ground opens onto rather than inside it.
+    if launch.torch
+        && let Some(target) = aim::march(eye, down, |point| sample_at(&fine, &contact, point))
+        && let Some(place) = target.place
+    {
+        let lit = apply_edit(
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut edits,
+                slots: &mut slots,
+            },
+            Hands::Empty,
+            place.cell,
+            place.layer,
+            Material::Torch,
+        );
+        match lit {
+            Some(_) => info!(
+                "scripted torch in cell {} layer {}",
+                place.cell, place.layer
+            ),
+            None => warn!("scripted torch refused at cell {}", place.cell),
+        }
+        *done = true;
+    }
+    if dug == 0 && !launch.torch {
         // Say why nothing happened rather than failing silently: a scripted
         // dig that finds no ground is either out of the tier or aimed wrong,
         // and a capture with no hole in it cannot tell those apart.
@@ -336,6 +381,23 @@ pub fn scripted_dig(
     }
     if dug > 0 {
         *done = true;
-        info!("scripted dig: {dug} layers taken under the camera");
+        // What the dug cells are LIT to, which is the one thing a picture of a
+        // hole cannot tell you: a stale field and a fresh one draw the same
+        // geometry, and the stale one draws it black. Rock has a sky level of
+        // zero because rock holds no light, so a cell dug out of it stays at
+        // zero until something re-bakes - which is exactly the bug this
+        // reports, and why it reports a NUMBER.
+        if let Some(bottom) = last {
+            let record = record_of(&fine, bottom.cell);
+            let tier = &fine.set.columns;
+            let sky = record
+                .and_then(|record| tier.slots.get(record).copied())
+                .map(|slot| tier.sky(slot, bottom.layer))
+                .unwrap_or(0);
+            info!(
+                "scripted dig: {dug} layers taken under the camera;                  the hole's floor cell is lit to {sky} of {}",
+                pbd_core::light::MAX
+            );
+        }
     }
 }

@@ -52,6 +52,7 @@ pub fn material_code(material: Material) -> u8 {
         Material::Snow => 9,
         Material::Rock => 10,
         Material::Dirt => 11,
+        Material::Torch => 12,
     }
 }
 
@@ -69,6 +70,7 @@ pub fn material_of(code: u8) -> Option<Material> {
         9 => Material::Snow,
         10 => Material::Rock,
         11 => Material::Dirt,
+        12 => Material::Torch,
         _ => return None,
     })
 }

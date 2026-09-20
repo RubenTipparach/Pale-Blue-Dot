@@ -67,8 +67,52 @@ pub struct Region<'a> {
 /// column tier already makes about a cell whose neighbour has no column.
 pub const OFF_REGION: u32 = u32::MAX;
 
-/// Every cell's sky level, one array of [`LAYERS`] per column.
-pub type Baked = Vec<[u8; LAYERS]>;
+/// What one cell is lit to: sky in the high nibble, block in the low, which
+/// is the reference's own `(sky << 4) | block`.
+///
+/// Two channels rather than one number, because only ONE of them goes out at
+/// night. Summed at bake time a torch would be as useless at midnight as the
+/// sun is, which is the opposite of what a torch is for.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Light(pub u8);
+
+impl Light {
+    pub const DARK: Light = Light(0);
+
+    pub fn new(sky: u8, block: u8) -> Self {
+        Self((sky.min(MAX) << 4) | block.min(MAX))
+    }
+
+    pub fn sky(self) -> u8 {
+        self.0 >> 4
+    }
+
+    pub fn block(self) -> u8 {
+        self.0 & 0xf
+    }
+
+    fn with_sky(self, level: u8) -> Self {
+        Self::new(level, self.block())
+    }
+
+    fn with_block(self, level: u8) -> Self {
+        Self::new(self.sky(), level)
+    }
+}
+
+/// A cell that gives out light: which column, which layer, how bright.
+///
+/// WHAT emits is the caller's business - a torch, a glowing flower, a fire -
+/// because this crate knows what light does and not what carries it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Emitter {
+    pub column: u32,
+    pub layer: u16,
+    pub level: u8,
+}
+
+/// Every cell's light, one array of [`LAYERS`] per column.
+pub type Baked = Vec<[Light; LAYERS]>;
 
 impl Region<'_> {
     /// Whether a cell stops light. Off the region counts as solid.
@@ -97,38 +141,98 @@ impl Region<'_> {
 /// is lit by that column's layer 60 and by nothing else. Seeding only the
 /// lowest open cell leaves the ones above it at [`MAX`] and never on the
 /// queue, so they light nothing sideways and the cave stays black.
-pub fn bake(region: &Region) -> Baked {
-    let mut light = vec![[0u8; LAYERS]; region.columns.len()];
+pub fn bake(region: &Region, emitters: &[Emitter]) -> Baked {
+    let mut light = vec![[Light::DARK; LAYERS]; region.columns.len()];
+    // The sky, seeded down every column.
     let mut queue: std::collections::VecDeque<(u32, u16)> = std::collections::VecDeque::new();
     for (index, column) in region.columns.iter().enumerate() {
         for layer in (0..LAYERS).rev() {
             if column.solid(layer) {
                 break;
             }
-            light[index][layer] = MAX;
+            light[index][layer] = light[index][layer].with_sky(MAX);
             queue.push_back((index as u32, layer as u16));
         }
     }
+    flood(region, &mut light, queue, Channel::Sky);
+    // Then the lamps, on the same machinery. An emitter inside solid rock is
+    // dropped rather than lighting from within it: a torch is placed in air.
+    let mut queue: std::collections::VecDeque<(u32, u16)> = std::collections::VecDeque::new();
+    for emitter in emitters {
+        let layer = emitter.layer as usize;
+        if layer >= LAYERS || region.opaque(emitter.column, layer) {
+            continue;
+        }
+        let Some(cell) = light
+            .get_mut(emitter.column as usize)
+            .and_then(|levels| levels.get_mut(layer))
+        else {
+            continue;
+        };
+        if cell.block() >= emitter.level {
+            continue;
+        }
+        *cell = cell.with_block(emitter.level.min(MAX));
+        queue.push_back((emitter.column, emitter.layer));
+    }
+    flood(region, &mut light, queue, Channel::Block);
+    light
+}
+
+/// Which nibble a flood fills.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Channel {
+    Sky,
+    Block,
+}
+
+impl Channel {
+    fn of(self, light: Light) -> u8 {
+        match self {
+            Channel::Sky => light.sky(),
+            Channel::Block => light.block(),
+        }
+    }
+
+    fn set(self, light: Light, level: u8) -> Light {
+        match self {
+            Channel::Sky => light.with_sky(level),
+            Channel::Block => light.with_block(level),
+        }
+    }
+}
+
+/// The flood. Every cell already at its seeded level is on the queue.
+///
+/// ONE implementation for both channels, which is what keeps a lamp's falloff
+/// and daylight's the same falloff: two floods written apart would be two
+/// answers to how far light travels, and a player would learn one of them.
+fn flood(
+    region: &Region,
+    light: &mut Baked,
+    mut queue: std::collections::VecDeque<(u32, u16)>,
+    channel: Channel,
+) {
     while let Some((column, layer)) = queue.pop_front() {
-        let level = light[column as usize][layer as usize];
+        let level = channel.of(light[column as usize][layer as usize]);
         if level <= STEP {
             continue;
         }
         let next = level - STEP;
         let give =
             |light: &mut Baked, queue: &mut std::collections::VecDeque<_>, to: u32, at: usize| {
-                if region.opaque(to, at) || light[to as usize][at] >= next {
+                if region.opaque(to, at) || channel.of(light[to as usize][at]) >= next {
                     return;
                 }
-                light[to as usize][at] = next;
+                light[to as usize][at] = channel.set(light[to as usize][at], next);
                 queue.push_back((to, at as u16));
             };
         let layer = layer as usize;
         if layer + 1 < LAYERS {
-            give(&mut light, &mut queue, column, layer + 1);
+            give(light, &mut queue, column, layer + 1);
         }
         if layer > 0 {
-            give(&mut light, &mut queue, column, layer - 1);
+            give(light, &mut queue, column, layer - 1);
         }
         for side in 0..6 {
             let Some(&neighbor) = region
@@ -139,11 +243,10 @@ pub fn bake(region: &Region) -> Baked {
                 continue;
             };
             if neighbor != OFF_REGION && (neighbor as usize) < region.columns.len() {
-                give(&mut light, &mut queue, neighbor, layer);
+                give(light, &mut queue, neighbor, layer);
             }
         }
     }
-    light
 }
 
 /// What one corner of a face is lit to, in 0..1.
@@ -178,7 +281,7 @@ pub fn corner(region: &Region, light: &Baked, cells: [u32; 3], layer: usize) -> 
         let Some(levels) = light.get(cell as usize) else {
             continue;
         };
-        sum += levels[layer] as u32;
+        sum += levels[layer].sky() as u32;
         samples += 1;
     }
     if samples == 0 {
@@ -237,20 +340,23 @@ mod tests {
 
     fn baked(columns: Vec<Column>) -> (Vec<Column>, Vec<[u32; 6]>, Baked) {
         let (columns, neighbors) = line(columns);
-        let light = bake(&Region {
-            columns: &columns,
-            neighbors: &neighbors,
-        });
+        let light = bake(
+            &Region {
+                columns: &columns,
+                neighbors: &neighbors,
+            },
+            &[],
+        );
         (columns, neighbors, light)
     }
 
     #[test]
     fn open_ground_is_full_daylight_and_the_rock_under_it_is_not_lit() {
         let (_, _, light) = baked(vec![ground(100)]);
-        assert_eq!(light[0][101], MAX, "the air over the ground");
-        assert_eq!(light[0][LAYERS - 1], MAX, "and all the way up");
-        assert_eq!(light[0][100], 0, "the rock itself holds no light");
-        assert_eq!(light[0][50], 0, "nor anything under it");
+        assert_eq!(light[0][101].sky(), MAX, "the air over the ground");
+        assert_eq!(light[0][LAYERS - 1].sky(), MAX, "and all the way up");
+        assert_eq!(light[0][100].sky(), 0, "the rock itself holds no light");
+        assert_eq!(light[0][50].sky(), 0, "nor anything under it");
     }
 
     /// The point of the field. A tunnel under rock is dark and its mouth is
@@ -263,10 +369,10 @@ mod tests {
             columns.push(roofed(50, 51, 100));
         }
         let (_, _, light) = baked(columns);
-        assert_eq!(light[0][51], MAX, "the mouth is open to the sky");
-        assert_eq!(light[1][51], MAX - 1, "one step in costs one level");
-        assert_eq!(light[2][51], MAX - 2);
-        assert_eq!(light[6][51], MAX - 6, "and it keeps falling off");
+        assert_eq!(light[0][51].sky(), MAX, "the mouth is open to the sky");
+        assert_eq!(light[1][51].sky(), MAX - 1, "one step in costs one level");
+        assert_eq!(light[2][51].sky(), MAX - 2);
+        assert_eq!(light[6][51].sky(), MAX - 6, "and it keeps falling off");
     }
 
     /// Past the range it is BLACK rather than dim, which is what makes a deep
@@ -278,7 +384,7 @@ mod tests {
             columns.push(roofed(50, 51, 100));
         }
         let (_, _, light) = baked(columns);
-        assert_eq!(light.last().unwrap()[51], 0, "past the range, dark");
+        assert_eq!(light.last().unwrap()[51].sky(), 0, "past the range, dark");
     }
 
     /// The bug the reference's own seed rule avoids, pinned. A column open to
@@ -291,8 +397,8 @@ mod tests {
         let open = Column::bedrock();
         let cave = roofed(59, 60, 100);
         let (_, _, light) = baked(vec![open, cave]);
-        assert_eq!(light[0][60], MAX, "the open column at that height");
-        assert_eq!(light[1][60], MAX - 1, "and the cave beside it");
+        assert_eq!(light[0][60].sky(), MAX, "the open column at that height");
+        assert_eq!(light[1][60].sky(), MAX - 1, "and the cave beside it");
     }
 
     /// Off the region is solid, never open: a tier boundary must not become
@@ -300,8 +406,153 @@ mod tests {
     #[test]
     fn light_does_not_leak_in_from_off_the_region() {
         let (_, _, light) = baked(vec![roofed(50, 51, 100)]);
-        assert_eq!(light[0][51], 0, "roofed and joined to nothing");
-        assert_eq!(light[0][101], MAX, "and open above the roof");
+        assert_eq!(light[0][51].sky(), 0, "roofed and joined to nothing");
+        assert_eq!(light[0][101].sky(), MAX, "and open above the roof");
+    }
+
+    /// **Digging changes the light, and the field has to be asked again.**
+    ///
+    /// This is the shipped bug the owner caught: the edit path repacked the
+    /// geometry and never re-baked, so a hole appeared with its walls black.
+    /// Rock has a sky level of zero because rock holds no light, so a cell dug
+    /// out of one stays at zero until something re-bakes - the picture is a
+    /// hole lit by the inside of a stone.
+    #[test]
+    fn a_dug_shaft_is_dark_until_it_is_baked_again() {
+        let (mut columns, neighbors) = line(vec![ground(100)]);
+        let before = bake(
+            &Region {
+                columns: &columns,
+                neighbors: &neighbors,
+            },
+            &[],
+        );
+        assert_eq!(before[0][98].sky(), 0, "rock holds no light");
+
+        // Dig three layers out of the top, as a player would.
+        for layer in 98..=100 {
+            columns[0].set(layer, Material::Air);
+        }
+        let stale = &before;
+        assert_eq!(
+            stale[0][98].sky(),
+            0,
+            "and the OLD field still says so, which is what drew black walls"
+        );
+
+        let after = bake(
+            &Region {
+                columns: &columns,
+                neighbors: &neighbors,
+            },
+            &[],
+        );
+        assert_eq!(
+            after[0][98].sky(),
+            MAX,
+            "a shaft open to the sky keeps full strength all the way down"
+        );
+    }
+
+    /// A lamp fills the dark, on the same falloff daylight uses.
+    #[test]
+    fn a_lamp_lights_a_buried_tunnel_and_the_sky_does_not_notice() {
+        let mut columns = vec![roofed(50, 51, 100)];
+        for _ in 0..6 {
+            columns.push(roofed(50, 51, 100));
+        }
+        let (columns, neighbors) = line(columns);
+        let region = Region {
+            columns: &columns,
+            neighbors: &neighbors,
+        };
+        let dark = bake(&region, &[]);
+        assert_eq!(dark[0][51].sky(), 0, "sealed, so no daylight");
+        assert_eq!(dark[0][51].block(), 0, "and no lamp yet");
+
+        let lit = bake(
+            &region,
+            &[Emitter {
+                column: 0,
+                layer: 51,
+                level: 14,
+            }],
+        );
+        assert_eq!(lit[0][51].block(), 14, "the lamp's own cell");
+        assert_eq!(lit[1][51].block(), 13, "one step costs one level");
+        assert_eq!(lit[6][51].block(), 8, "and it keeps falling off");
+        assert_eq!(lit[0][51].sky(), 0, "the sky channel is untouched");
+    }
+
+    /// **A lamp does not light through a wall**, which is the whole reason
+    /// this is a flood rather than the proximity sum the reference settled
+    /// for. Its own comment admits that one "ignores walls entirely - it leaks
+    /// through stone"; it settled there because a planet-wide relight cost it
+    /// a second per placement, and a tier of three thousand columns costs six
+    /// milliseconds.
+    #[test]
+    fn a_lamp_does_not_light_through_a_wall() {
+        // A lamp in a sealed pocket, and a second pocket next door with solid
+        // rock between them: adjacent in space, unreachable through the rock.
+        let mut near = ground(50);
+        near.set(51, Material::Air);
+        for layer in 52..100 {
+            near.set(layer, Material::Stone);
+        }
+        let wall = ground(100);
+        let far = near.clone();
+        let (columns, neighbors) = line(vec![near, wall, far]);
+        let region = Region {
+            columns: &columns,
+            neighbors: &neighbors,
+        };
+        let lit = bake(
+            &region,
+            &[Emitter {
+                column: 0,
+                layer: 51,
+                level: 15,
+            }],
+        );
+        assert_eq!(lit[0][51].block(), 15, "the lamp's own pocket");
+        assert_eq!(
+            lit[2][51].block(),
+            0,
+            "and nothing at all through one cell of rock"
+        );
+    }
+
+    /// A lamp buried in rock lights nothing: it is not in the world, and a
+    /// torch is placed in air.
+    #[test]
+    fn a_lamp_inside_rock_is_dropped() {
+        let (columns, neighbors) = line(vec![ground(100)]);
+        let region = Region {
+            columns: &columns,
+            neighbors: &neighbors,
+        };
+        let lit = bake(
+            &region,
+            &[Emitter {
+                column: 0,
+                layer: 50,
+                level: 15,
+            }],
+        );
+        assert_eq!(lit[0][50].block(), 0);
+        assert_eq!(lit[0][51].block(), 0, "and it does not leak upward");
+    }
+
+    /// The two channels are apart in one byte and neither reaches the other,
+    /// which is what lets a shader put the sun out and leave a lamp burning.
+    #[test]
+    fn the_two_channels_are_kept_apart_in_one_byte() {
+        let light = Light::new(12, 5);
+        assert_eq!(light.sky(), 12);
+        assert_eq!(light.block(), 5);
+        assert_eq!(Light::new(99, 99), Light::new(MAX, MAX), "clamped");
+        assert_eq!(Light::DARK.sky(), 0);
+        assert_eq!(Light::DARK.block(), 0);
     }
 
     /// The contact ladder, which is the crease where one block sits on

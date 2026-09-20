@@ -91,10 +91,10 @@ fn clear_indirect() {
     args[3].first_vertex = 258u;
     args[3].first_instance = 0u;
     // The inside of the world: a ceiling and a floor per run, then a flank per
-    // side per run per stretch of the neighbour's air. COLUMN_VERTICES and
-    // COLUMN_FIRST_VERTEX in planet.rs are the same arithmetic and a test holds
-    // them together.
-    args[4].vertex_count = 864u;
+    // side per run per stretch of the neighbour's air, then a torch.
+    // COLUMN_VERTICES and COLUMN_FIRST_VERTEX in planet.rs are the same
+    // arithmetic and a test holds them together.
+    args[4].vertex_count = 894u;
     atomicStore(&args[4].instance_count, 0u);
     args[4].first_vertex = 690u;
     args[4].first_instance = 0u;

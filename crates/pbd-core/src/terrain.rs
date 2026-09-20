@@ -28,6 +28,34 @@ pub enum Material {
     Snow = 9,
     Rock = 10,
     Dirt = 11,
+    /// A lamp on the ground. A MATERIAL rather than an entity, so it flows
+    /// through every piece of machinery a block already has: the hotbar holds
+    /// it, the aim ray targets it, the edit path places and removes it, the
+    /// save records it and the tier relights around it. Nothing new had to
+    /// learn about torches.
+    ///
+    /// It is neither solid nor opaque - a player walks through one and light
+    /// goes past it - which is what stops a torch shadowing itself and what
+    /// stops a corridor of them being a wall.
+    Torch = 12,
+}
+
+impl Material {
+    /// How much light this gives out, 0 for most things.
+    ///
+    /// On the MATERIAL because that is what a cell holds: a lamp that carried
+    /// its brightness somewhere else would be a second place to look, and the
+    /// tier's emitter list is derived from the columns rather than kept beside
+    /// them.
+    pub fn emission(self) -> u8 {
+        match self {
+            // Tenebris's `voxel_torch_emission`, which it ships at 14 and never
+            // reads. One below full, so a torch is plainly a lamp and plainly
+            // not the sun.
+            Material::Torch => 14,
+            _ => 0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

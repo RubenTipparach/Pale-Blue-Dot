@@ -6,7 +6,7 @@
 //! This is a surface-column prototype, not the editable volumetric chunk engine.
 
 #[path = "planet_column.rs"]
-pub(crate) mod column;
+pub mod column;
 pub use column::mouth_of;
 #[path = "planet_contact.rs"]
 mod contact;
@@ -110,7 +110,8 @@ const INDIRECT_BYTES: u64 = 5 * 16;
 #[cfg(test)]
 pub(crate) fn column_vertices() -> u32 {
     let runs = pbd_core::column::MAX_RUNS as u32;
-    runs * (18 + 18) + 6 * runs * (runs + 1) * 6
+    // ...and a torch: a four-sided post and a two-triangle head.
+    runs * (18 + 18) + 6 * runs * (runs + 1) * 6 + 30
 }
 /// Where the column branch starts: after the clutter.
 #[cfg(test)]

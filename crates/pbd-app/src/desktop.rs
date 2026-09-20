@@ -66,6 +66,10 @@ pub struct Launch {
     pub spawn: Option<String>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// `--torch` puts one torch on the ground under the capture camera. A
+    /// headless run has no hands, and a lamp is the one thing in this world
+    /// whose whole point is what it does to a dark place.
+    pub torch: bool,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -99,6 +103,7 @@ impl Launch {
             rain: 0.0,
             world: None,
             time: None,
+            torch: false,
             menu: None,
         };
         let mut i = 0;
@@ -117,6 +122,7 @@ impl Launch {
                         .expect("--dig requires a count");
                 }
                 "--place" => result.place = true,
+                "--torch" => result.torch = true,
                 "--time" => {
                     i += 1;
                     let hour: f32 = args
