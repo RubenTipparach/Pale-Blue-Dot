@@ -47,11 +47,21 @@ terminator, the Lambert term and the fresnel rim, and drops:
 `hex_terrain.wgsl` already has all of them, as uniforms. It is the reference for
 anything restored here: change it there first if the two ever need to differ.
 
-## ONE `daylight` drives the sun AND the sky, and the sun sets 7 degrees late
+## ONE `daylight` drives the sun AND the sky: measured, and HELD until shadows
 
-The owner: a directional light dims as it crosses the horizon, and it cannot
-light anything below zero degrees. Measured against the shipped shader, both
-halves of that are right and the same line causes both.
+**The owner's call: this is fine as it stands, and it becomes real work the day
+this renderer grows shadows.** Recorded here because the measurement was taken
+and the number is worth having when that day comes, not because anything is
+being asked for now. Nothing below is a defect report.
+
+The reason it can wait is that without shadows there is nothing in the picture
+that CONTRADICTS a sun under the horizon: the Lambert term fades on its own as
+the light goes grazing, so a long falloff reads as dusk rather than as an
+error. A shadow cannot be read that way. It is a hard-edged statement about
+where the light is, and one cast by a sun seven degrees down is a statement
+that is plainly false.
+
+Measured against the shipped shader:
 
 `planet_surface.wgsl` computes one number and multiplies everything by it:
 
@@ -97,11 +107,10 @@ different curves:
   falloff to about -6 deg, `smoothstep(-0.105, 0.05, s)`, which is the glow
   that should be the only thing on the ground once the sun is down.
 
-The one-line split is the whole change, and it is deliberately not taken here:
-this document is the write-up and the edit is a separate request. What it will
-need with it is a capture at a few sun altitudes either side of zero, because
-the thing to check is that the last direct highlight dies at the horizon and
-the ground stays visibly blue rather than going black.
+The one-line split is the whole change, and it waits for the shadows that make
+it matter. What it will need with it is a capture at a few sun altitudes either
+side of zero, because the thing to check is that the last direct highlight dies
+at the horizon and the ground stays visibly blue rather than going black.
 
 Sources: [USNO, Rise, Set, and Twilight Definitions](https://aa.usno.navy.mil/faq/RST_defs)
 and [Sunset](https://en.wikipedia.org/wiki/Sunset).

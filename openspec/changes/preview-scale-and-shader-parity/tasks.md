@@ -128,7 +128,10 @@ planet. What is open is the radius, since the two are locked by
       snow line and a cave mouth and says a grass block reads as one. The
       captures are a software rasteriser and are a limitation, not a sign-off.
 
-## 7. The sun sets at the horizon, the sky keeps glowing
+## 7. The sun sets at the horizon, the sky keeps glowing - HELD until shadows
+The owner's call: the present falloff is fine while nothing casts a shadow,
+because the Lambert term fades on its own and a long dusk reads as dusk. A
+shadow is a hard statement about where the light is, so this lands with them.
 - [ ] Split `daylight` into `sunlight` and `twilight`. The direct term, the
       specular and the rain glint take `sunlight`, which is nought by -0.833
       deg (refraction plus the disc); the ambient, the distance fog and the rim
