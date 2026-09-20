@@ -454,6 +454,45 @@ mod tests {
         );
     }
 
+    /// And the other verb: PLACING a block takes light away.
+    ///
+    /// The mirror of the dig case, and worth its own pin because the two are
+    /// not symmetric in the reference: its incremental pass has a REMOVAL
+    /// phase for exactly this, which has to walk back everything the now
+    /// blocked path used to light, and its own comment records the scar of
+    /// getting it wrong - a dug cell that "stayed dark forever". Re-baking
+    /// the whole region has no removal phase to get wrong.
+    #[test]
+    fn roofing_a_cell_takes_its_daylight_away() {
+        let (mut columns, neighbors) = line(vec![ground(50), ground(50)]);
+        let open = bake(
+            &Region {
+                columns: &columns,
+                neighbors: &neighbors,
+            },
+            &[],
+        );
+        assert_eq!(open[0][51].sky(), MAX, "open to the sky");
+
+        // Roof the first column over, as placing blocks does.
+        for layer in 52..70 {
+            columns[0].set(layer, Material::Stone);
+        }
+        let roofed = bake(
+            &Region {
+                columns: &columns,
+                neighbors: &neighbors,
+            },
+            &[],
+        );
+        assert_eq!(
+            roofed[0][51].sky(),
+            MAX - 1,
+            "now lit only from the open column beside it, one step away"
+        );
+        assert_eq!(roofed[0][60].sky(), 0, "and the rock itself holds none");
+    }
+
     /// A lamp fills the dark, on the same falloff daylight uses.
     #[test]
     fn a_lamp_lights_a_buried_tunnel_and_the_sky_does_not_notice() {
