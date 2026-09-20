@@ -221,6 +221,9 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<PlanetBase>::default(),
             ExtractResourcePlugin::<lod::PlanetFine>::default(),
             ExtractResourcePlugin::<PlanetClock>::default(),
+            // The sun moves now, so the render world needs this frame's, not
+            // the one the pipeline was built with.
+            ExtractResourcePlugin::<crate::sky::Sun>::default(),
             ExtractResourcePlugin::<PlanetArt>::default(),
             ExtractResourcePlugin::<PlanetRenderFrame>::default(),
             ExtractComponentPlugin::<PlanetSurface>::default(),
@@ -728,6 +731,21 @@ impl SpecializedRenderPipeline for PlanetPipeline {
     }
 }
 
+/// Every authored number this pass reads, in one place.
+///
+/// Four `Res<...Settings>` that always travel together, and the reason they
+/// are a struct is Bevy's own limit rather than taste: adding the sun took
+/// this system to seventeen parameters, and the error says nothing whatever
+/// about arguments - it says a function is "not a system set". That is the
+/// missing-struct smell `CLAUDE.md` names, arriving exactly as it warns.
+#[derive(bevy::ecs::system::SystemParam)]
+pub(crate) struct Tunables<'w> {
+    water: Res<'w, crate::config::WaterSettings>,
+    weather: Res<'w, crate::config::WeatherSettings>,
+    scatter: Res<'w, crate::config::ScatterSettings>,
+    columns: Res<'w, crate::config::ColumnSettings>,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn prepare_views(
     mut commands: Commands,
@@ -739,14 +757,16 @@ fn prepare_views(
     art: Res<PlanetArt>,
     images: Res<RenderAssets<GpuImage>>,
     clock: Res<PlanetClock>,
+    sun: Res<crate::sky::Sun>,
     frame: Res<PlanetRenderFrame>,
-    water_settings: Res<crate::config::WaterSettings>,
-    weather_settings: Res<crate::config::WeatherSettings>,
-    scatter: Res<crate::config::ScatterSettings>,
-    columns: Res<crate::config::ColumnSettings>,
+    tunables: Tunables,
     weather: Res<crate::weather::Weather>,
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
+    let water_settings = &tunables.water;
+    let weather_settings = &tunables.weather;
+    let scatter = &tunables.scatter;
+    let columns = &tunables.columns;
     let Some(planet) = planet else {
         return;
     };
@@ -774,7 +794,7 @@ fn prepare_views(
         let params = PlanetParams {
             clip_from_body,
             camera: camera_position.extend(1.),
-            sun: crate::sky::SUN_DIRECTION.normalize().extend(1.),
+            sun: sun.direction().extend(1.),
             settings: Vec4::new(PLANET_RADIUS, planet.slots as f32, clock.0, foliage_range),
             water_absorption: Vec3::from_array(water_settings.absorption_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),

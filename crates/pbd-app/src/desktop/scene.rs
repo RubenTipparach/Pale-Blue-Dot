@@ -9,10 +9,13 @@ pub fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     frame: Res<pbd_app::PhysicsFrame>,
+    sun: Res<pbd_app::sky::Sun>,
 ) {
     let offset = (-frame.0.origin).as_vec3();
-    let sun = pbd_app::sky::SUN_DIRECTION.normalize();
+    let sun = sun.direction();
     commands.spawn((
+        Name::new("Sun"),
+        SunLight,
         DirectionalLight {
             illuminance: 15_000.0,
             shadows_enabled: false,
@@ -95,5 +98,24 @@ pub fn move_moon(
 ) {
     for (orbit, mut transform) in &mut moons {
         transform.translation = (orbit.0.sample(time.seconds).position - frame.0.origin).as_vec3();
+    }
+}
+
+/// The scene's key light. Marked so it can be aimed at the sun every frame
+/// rather than at the constant it was spawned with.
+#[derive(Component)]
+pub struct SunLight;
+
+/// Keep the key light on the sun.
+///
+/// A directional light spawned once at a fixed direction is a world where the
+/// sun's own shell sets and the light on the ground does not, which is worse
+/// than no cycle at all: the terminator would cross a landscape that stayed
+/// lit from the morning.
+pub fn follow_sun(sun: Res<pbd_app::sky::Sun>, mut lights: Query<&mut Transform, With<SunLight>>) {
+    let direction = sun.direction();
+    for mut transform in &mut lights {
+        *transform =
+            Transform::from_translation(direction * 10_000.0).looking_at(Vec3::ZERO, Vec3::Y);
     }
 }

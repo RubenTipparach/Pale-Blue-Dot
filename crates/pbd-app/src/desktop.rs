@@ -66,6 +66,10 @@ pub struct Launch {
     pub spawn: Option<String>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
+    /// world has a day in it is a different picture every run, and a harness
+    /// cannot wait six minutes for dusk.
+    pub time: Option<f32>,
     /// `--world <name>` opens that save, creating it if it is not there.
     /// Absent, an interactive run opens the one played most recently and a
     /// capture writes to no world at all.
@@ -94,6 +98,7 @@ impl Launch {
             spawn: None,
             rain: 0.0,
             world: None,
+            time: None,
             menu: None,
         };
         let mut i = 0;
@@ -112,6 +117,18 @@ impl Launch {
                         .expect("--dig requires a count");
                 }
                 "--place" => result.place = true,
+                "--time" => {
+                    i += 1;
+                    let hour: f32 = args
+                        .get(i)
+                        .and_then(|h| h.parse().ok())
+                        .expect("--time requires an hour");
+                    assert!(
+                        (0.0..=24.0).contains(&hour),
+                        "--time takes an hour in 0..24"
+                    );
+                    result.time = Some(hour);
+                }
                 "--world" => {
                     i += 1;
                     result.world = Some(args.get(i).expect("--world requires a name").clone());
@@ -350,6 +367,15 @@ pub fn run(args: &[String]) {
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
     .insert_resource(world)
+    // The clock: pinned and stopped where a capture asked for an hour, so a
+    // picture is a function of its flags rather than of when it was taken.
+    .insert_resource(pbd_app::sky::Sun {
+        clock: match launch.time {
+            Some(hour) => pbd_core::daylight::Clock::at_hour(hour),
+            None => pbd_core::daylight::Clock::default(),
+        },
+        running: launch.time.is_none() && launch.capture.is_none(),
+    })
     .init_resource::<digging::Aim>()
     .insert_resource(ClearColor(if std::env::var("PBD_NO_SKY").is_ok() {
         // The hole detector's background: nothing in the palette is near it,
@@ -391,6 +417,7 @@ pub fn run(args: &[String]) {
         (
             configure_camera,
             scene::move_moon,
+            scene::follow_sun,
             slots::input,
             slots::update,
             (menu::press, menu::paint, menu::rebuild_saves).chain(),

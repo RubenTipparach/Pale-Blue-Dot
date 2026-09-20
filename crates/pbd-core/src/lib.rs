@@ -3,6 +3,7 @@
 
 pub mod aim;
 pub mod column;
+pub mod daylight;
 pub mod edits;
 pub mod flight;
 pub mod frame;
