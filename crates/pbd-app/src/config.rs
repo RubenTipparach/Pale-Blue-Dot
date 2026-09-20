@@ -633,13 +633,6 @@ pub struct ColumnSettings {
     pub worm_steer_scale_m: f32,
     /// Layers of solid a worm keeps above the bedrock floor.
     pub cave_floor_layers: u32,
-    /// How much of the sky a face `cave_dark_depth_m` under the surface takes,
-    /// 0..1. A STAND-IN for the baked voxel light this change defers: the
-    /// skylight in a cell's record was computed for its SURFACE, so without
-    /// this a cave interior is lit exactly like the hillside over it.
-    pub cave_dark: f32,
-    /// Metres of burial over which that darkening reaches its floor.
-    pub cave_dark_depth_m: f32,
 }
 
 impl Default for ColumnSettings {
@@ -658,8 +651,6 @@ impl Default for ColumnSettings {
             worm_start_depth_m: worms.start_depth_m,
             worm_steer_scale_m: worms.steer_scale_m,
             cave_floor_layers: worms.floor_layers as u32,
-            cave_dark: 0.45,
-            cave_dark_depth_m: 10.,
         }
     }
 }
@@ -706,8 +697,6 @@ impl Validated for ColumnSettings {
         ((self.cave_floor_layers as usize) < pbd_core::column::LAYERS)
             .then_some(())
             .ok_or("cave_floor_layers must be inside the column span")?;
-        unit("cave_dark", self.cave_dark)?;
-        positive("cave_dark_depth_m", &[self.cave_dark_depth_m])?;
         Ok(())
     }
 }

@@ -138,7 +138,7 @@ Material `m >= 1` maps to texture-array layers `(m-1)*3 + {0 top,1 side,2 bottom
 
 ## Standalone baked RGB and skylight
 
-This section describes `voxel_light.wgsl` and its associated face format. The desktop prototype currently uses the separate CPU scalar sky-occlusion value described above.
+This section describes `voxel_light.wgsl` and its associated face format. It remains UNBOUND. The live path is the `voxel-light` change: `pbd_core::light` bakes the sky channel on the CPU by breadth-first flood (exact, where a fixed-iteration Jacobi relaxation is approximate), the tier uploads it as one byte per (slot, layer) at draw binding 5, and `planet_surface.wgsl` samples it per vertex corner with Tenebris's own contact ladder. The CPU scalar sky-occlusion value described above still stands OUTSIDE the column tier, where a heightfield cell has no interior to light.
 
 Both terrain and light compute use `u32` values whose low 16 bits are `R | (G << 4) | (B << 8) | (sky << 12)`, each channel 0–15. This format is an extension, not bit-compatible with Tenebris's two-channel byte. Migration from old data maps old block intensity through the old torch tint into RGB and keeps the sky nibble. Display intensity is shader-configured; the normalized channel value is not a physical lux measurement.
 

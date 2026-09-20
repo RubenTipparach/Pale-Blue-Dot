@@ -174,6 +174,46 @@ mod tests {
         }
     }
 
+    /// The voxel light rule is written TWICE: in `pbd_core::light`, where it
+    /// is tested, and in `planet_surface.wgsl`, where it actually runs -
+    /// because every vertex in this renderer is generated in the shader, so
+    /// there is no CPU mesh to bake a corner into. Two copies of one fact
+    /// drift, so this reads the REAL shader and holds it to the core's
+    /// numbers.
+    ///
+    /// What it proves is narrow and worth saying: that the CONSTANTS agree. It
+    /// cannot prove the shader's arithmetic, and the captures are what check
+    /// that. A ladder quietly changed in one file lights every crease in the
+    /// world differently and nothing else in the build says a word.
+    #[test]
+    fn the_shader_carries_the_reference_light_constants() {
+        use pbd_core::light;
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        for line in [
+            format!("const LIGHT_MAX: f32 = {:.1};", light::MAX as f32),
+            format!("const CONTACT_1: f32 = {:.2};", light::CONTACT[1]),
+            format!("const CONTACT_2: f32 = {:.2};", light::CONTACT[2]),
+            format!("const LIGHT_LAYERS: u32 = {}u;", pbd_core::column::LAYERS),
+            format!(
+                "const LIGHT_WORDS: u32 = {}u;",
+                crate::planet::column::LIGHT_WORDS
+            ),
+        ] {
+            assert!(
+                shader.contains(&line),
+                "planet_surface.wgsl should declare `{line}`"
+            );
+        }
+        // The step is one, and the shader relies on it: `corner_light` steps
+        // up exactly one layer where it finds no air, and `sky_at` divides by
+        // LIGHT_MAX with nothing else in the way.
+        assert_eq!(
+            light::STEP,
+            1,
+            "a step of anything else needs the shader to know"
+        );
+    }
+
     /// The atlas is baked by `tools/build_tileset_atlas.py`, which derives its
     /// slot order by sorting the tileset file names. This names the same order
     /// and would be a silent lie if a tileset were added, so it reads the real

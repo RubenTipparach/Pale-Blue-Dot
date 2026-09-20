@@ -9,6 +9,7 @@ pub mod frame;
 pub mod gravity;
 pub mod hex;
 pub mod inventory;
+pub mod light;
 pub mod orbit;
 pub mod planet_gen;
 pub mod terrain;

@@ -64,6 +64,10 @@ struct ColumnRec {
     more: vec4<u32>,
 }
 @group(0) @binding(4) var<storage,read> columns: array<ColumnRec>;
+// The sky level of every cell of every column tier slot, four layers to a
+// `u32`, one byte each, `LIGHT_WORDS` words per slot. `ColumnTier::gpu_light`
+// packs it; nothing here writes it.
+@group(0) @binding(5) var<storage,read> light: array<u32>;
 
 // The bottom and top of a column's span, metres against sea level.
 // `column::BASE_M` and `LAYERS` in pbd-core are the one source; the visibility
@@ -102,6 +106,189 @@ fn column_side(rec: ColumnRec, side: u32) -> u32 {
 // The slot a cell record carries, plus one, so the zero a record is born with
 // means "no column" and nothing has to be cleared to say so.
 fn column_slot(cell: Cell) -> u32 { return cell.metadata.z >> 16u; }
+
+// ---- Voxel light: the field, and the contact darkening over it.
+//
+// Tenebris's `world_light.rs` bakes the field and its `hex_mesher.rs` bakes the
+// corner sample into a vertex colour. There is no CPU mesh here - every vertex
+// is generated in this shader - so the field is baked on the CPU into the
+// buffer above and the CORNER SAMPLE happens here, at the vertex that needs it.
+// `pbd_core::light` holds the same rule in Rust, tested, and
+// `the_shader_carries_the_reference_light_constants` pins these numbers
+// against it.
+
+// Layers per packed word, and words per slot. `LAYERS / LIGHT_PER_WORD`.
+const LIGHT_PER_WORD: u32 = 4u;
+const LIGHT_WORDS: u32 = 80u;
+// The brightest a cell is: Tenebris's `voxel_sky_max`.
+const LIGHT_MAX: f32 = 15.0;
+// Notch's three-step ladder, which is the reference's own comment and numbers:
+// how much a corner darkens for each of the two SIDE neighbours that is solid
+// where the face opens onto air.
+const CONTACT_1: f32 = 0.85;
+const CONTACT_2: f32 = 0.70;
+// The floor under the ambient term: what a surface the sun and sky never reach
+// is still lit to. Tenebris's `hex.fs` has it as a literal `max(0.05, ...)`
+// inside the ambient, and `docs/tenebris-comparison.md` has recorded its
+// absence here since the port ("**no floor**").
+//
+// Nothing needed it while every cell was four fifths lit. With a real field
+// behind the sky term a cave reads 11 of 255 without it, which is not a dark
+// room, it is a black screen with a hotbar on it - and a player cannot tell a
+// cave from a bug in the renderer. A const rather than a uniform because every
+// other colour and threshold in this shader is one too; the change that lifts
+// them all into per-body data is `per-body-rendering` and it is not this one.
+const AMBIENT_FLOOR: f32 = 0.05;
+
+// The layer holding an altitude, or a sentinel past the top.
+const LIGHT_LAYERS: u32 = 320u;
+fn light_layer(altitude: f32) -> u32 {
+    let index = floor(altitude - COLUMN_BASE_M);
+    if index < 0.0 { return LIGHT_LAYERS; }
+    return u32(index);
+}
+
+// The sky level of one cell, 0..1. A slot of zero is no column and a layer
+// past the top is open sky, which is what a tier edge and the air above the
+// world both are.
+fn sky_at(slot: u32, layer: u32) -> f32 {
+    if slot == 0u { return 1.0; }
+    if layer >= LIGHT_LAYERS { return 1.0; }
+    let word = (slot - 1u) * LIGHT_WORDS + layer / LIGHT_PER_WORD;
+    if word >= arrayLength(&light) { return 1.0; }
+    let byte = (light[word] >> ((layer % LIGHT_PER_WORD) * 8u)) & 0xffu;
+    return f32(byte) / LIGHT_MAX;
+}
+
+// Is this slot's cell solid at `layer`? Read off the run words, which already
+// say exactly that: a layer inside any present run is rock.
+//
+// A slot of zero - no column - answers SOLID. Off the tier is the one place
+// this shader and the light bake have to agree, and the bake treats off-region
+// as solid so light cannot flood out of the tier's edge and back in.
+fn solid_at(slot: u32, layer: u32) -> bool {
+    if slot == 0u { return true; }
+    if layer >= LIGHT_LAYERS { return false; }
+    let rec = columns[slot - 1u];
+    let altitude = COLUMN_BASE_M + f32(layer);
+    for (var k = 0u; k < COLUMN_RUNS; k++) {
+        let word = rec.runs[k];
+        if run_present(word) && run_lo(word) <= altitude + 0.001
+            && run_hi(word) >= altitude + 0.999 {
+            return true;
+        }
+    }
+    return false;
+}
+
+// What one corner of a face is lit to, in 0..1.
+//
+// `own`, `a` and `b` are the column slots that MEET at this corner, and
+// `layer` is the AIR layer the face opens onto - above a top cap, below a
+// bottom cap, beside a flank. Sampling the SOLID cell's own layer instead is
+// the reference's recorded bug: a sealed room's ceiling came out pitch black.
+//
+// Two steps, both `pbd_core::light::corner`'s: the mean level over the cells
+// there that are not solid, then the contact ladder on how many of the two
+// SIDE neighbours are. The face's own cell is left out of the ladder because
+// it says nothing - a cap's is always air and a flank's always rock.
+fn corner_at(own: u32, a: u32, b: u32, layer: u32) -> f32 {
+    var sum = 0.0;
+    var samples = 0.0;
+    let slots = array<u32,3>(own, a, b);
+    for (var i = 0u; i < 3u; i++) {
+        if !solid_at(slots[i], layer) {
+            sum += sky_at(slots[i], layer);
+            samples += 1.0;
+        }
+    }
+    // Nothing there is air, which the caller has to be able to tell from dark.
+    if samples == 0.0 { return -1.0; }
+    var occluders = 0u;
+    if solid_at(a, layer) { occluders++; }
+    if solid_at(b, layer) { occluders++; }
+    var contact = 1.0;
+    if occluders == 1u { contact = CONTACT_1; }
+    if occluders >= 2u { contact = CONTACT_2; }
+    return clamp(sum / samples * contact, 0.0, 1.0);
+}
+
+fn corner_light(own: u32, a: u32, b: u32, layer: u32) -> f32 {
+    let here = corner_at(own, a, b, layer);
+    if here >= 0.0 { return here; }
+    // Every cell there is rock, so this is not a dark corner, it is the wrong
+    // LAYER: the metre a face stands at is the neighbour's last solid one, and
+    // the air it actually opens onto is the metre above. A one-metre terrace
+    // riser is the whole of that case and it came out pitch black - a hard
+    // dark line along every step in the world, which is the same symptom the
+    // reference's own floor-contact fallback exists to prevent.
+    let above = corner_at(own, a, b, layer + 1u);
+    return max(above, 0.0);
+}
+
+// What one vertex of a WALL is lit to: a quad on `side` running from `bottom`
+// to `top` in metres, whose vertex `index` is one of the four corners.
+//
+// A wall's light is the air BESIDE it, so the cells sampled are this one and
+// the two that share the vertical edge the vertex stands on. The bottom pair
+// samples the bottom metre and the top pair the top metre, which is what makes
+// a wall grade from its lit head to its shaded foot instead of being one flat
+// tone - the difference `docs/tenebris-comparison.md` blames for the ground
+// reading as faceted plates.
+//
+// **The foot has a fallback, and it is the reference's.** A wall standing on
+// flat ground has every cell solid at its lowest metre, so the corner there
+// samples no air at all and would come out black: a hard dark line along the
+// bottom of every wall in the world. Where that happens the foot takes the
+// head's value, because "a floor-level corner always has SOME adjacent air to
+// derive light from, never a hard 0".
+fn wall_light(cell: Cell, own: u32, degree: u32, side: u32,
+              index: u32, bottom: f32, top: f32) -> f32 {
+    if own == 0u { return 1.0; }
+    let rec = columns[own - 1u];
+    // Corners 0 and 3 stand on the edge's first ray, 1 and 2 on its second.
+    let k = select(side, (side + 1u) % degree, index == 1u || index == 2u);
+    let pair = corner_slots(rec, k, degree);
+    // The bottom metre and the top metre of the quad. `corner_light` steps up
+    // a layer where those are rock, which is what a wall standing on flat
+    // ground always is at its foot.
+    let low = light_layer(bottom + 0.5);
+    let high = light_layer(max(top - 0.5, bottom + 0.5));
+    let head = corner_light(own, pair.x, pair.y, high);
+    if index == 2u || index == 3u { return head; }
+    let foot = corner_light(own, pair.x, pair.y, low);
+    return select(foot, head, foot == 0.0);
+}
+
+// The first layer at or above `altitude` in this column that is not rock.
+//
+// A heightfield cap sits at a FLOAT height - 76.3 m - which lies inside the
+// layer the ground fills, so the layer of the cap's own altitude is solid and
+// holds no light. What the cap opens onto is the metre above that. Three steps
+// is more than enough: the cap is by construction within a metre of the top.
+fn air_above(slot: u32, altitude: f32) -> u32 {
+    var layer = light_layer(altitude);
+    for (var i = 0u; i < 3u; i++) {
+        if !solid_at(slot, layer) { return layer; }
+        layer++;
+    }
+    return layer;
+}
+
+// The two columns that share corner `k` of this cell, as slots.
+//
+// Side `s` spans corners `s` and `s+1`, so corner `k` is shared by sides
+// `k-1` and `k` - the same relation the reference's `edge_neighbours` keeps.
+fn corner_slots(rec: ColumnRec, k: u32, degree: u32) -> vec2<u32> {
+    let before = column_side(rec, (k + degree - 1u) % degree);
+    let after = column_side(rec, k % degree);
+    // A neighbour off the tier has no column: the slot word is the sentinel
+    // and `solid_at` answers solid for it, which is what the bake assumes too.
+    return vec2<u32>(
+        select(before + 1u, 0u, before == NO_NEIGHBOR),
+        select(after + 1u, 0u, after == NO_NEIGHBOR),
+    );
+}
 
 /// The `g`th stretch of AIR in a neighbouring column, bottom up.
 ///
@@ -166,6 +353,8 @@ struct VertexOut {
     // How brightly this vertex takes its own albedo. One everywhere except
     // down a grass blade, where the root is darker than the tip.
     @location(11) shade: f32,
+    // The voxel field at this vertex, INTERPOLATED - which is the point of it.
+    @location(12) voxel: f32,
 }
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
@@ -262,6 +451,12 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     var material = cell.metadata.y & 0xffu;
     // One everywhere but down a grass blade, whose root is darker than its tip.
     var out_shade = 1.;
+    // The voxel field's answer at THIS vertex, one outside the column tier
+    // where there is no field to ask. Per vertex rather than per cell, which
+    // is the whole of what "baked vertex colours" means here: a face grades
+    // across itself because its corners were sampled apart.
+    var out_voxel = 1.;
+    let lit_slot = column_slot(cell);
     if vertex < 18u {
         let triangle = vertex/3u;
         let corner = vertex%3u;
@@ -270,6 +465,24 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             position = ray*radius;
             let local = (ray-axis)*params.settings.x;
             uv = vec2(dot(local,tangent),dot(local,bitangent))/(1.5*tile) + 0.5;
+        }
+        // The ground the player walks on is drawn HERE rather than by the
+        // column pass, so this is where a block standing on it darkens the
+        // crease beside it. The air the cap opens onto is the layer above it.
+        if lit_slot != 0u {
+            let air = air_above(lit_slot, height);
+            if triangle < degree && corner != 0u {
+                let k = (triangle+corner-1u)%degree;
+                let pair = corner_slots(columns[lit_slot-1u], k, degree);
+                out_voxel = corner_light(lit_slot, pair.x, pair.y, air);
+            } else {
+                // The CENTRE takes the field alone: no smoothing, no contact.
+                // The reference does the same and the reason is the picture -
+                // a bright centre with darkened corners is what makes the
+                // rasteriser's interpolation read as a shadow gathering in the
+                // corner rather than as a tile that is uniformly dimmer.
+                out_voxel = sky_at(lit_slot, air);
+            }
         }
     } else if vertex < 54u {
         kind = 1u;
@@ -319,6 +532,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
                 let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
                 uv = side_uv[indices[i]]*vec2(1.,max(1.,(radius-lower)/1.0));
+                out_voxel = wall_light(cell, lit_slot, degree, side,
+                    indices[i], lower_height, height);
             }
         }
     } else if vertex < 60u {
@@ -399,12 +614,22 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     position = axis*level;
                     let t = i/3u;
                     let c = i%3u;
+                    // The air this cap opens onto: the layer above a top cap
+                    // and below a bottom one. Sampling the cap's OWN layer is
+                    // the reference's recorded bug - it made a sealed room's
+                    // ceiling read pitch black, because the ceiling is rock
+                    // and rock holds no light.
+                    let air = select(light_layer(lo) - 1u, light_layer(hi), up);
                     if !skip && t < degree && c != 0u {
                         let k = select((t+2u-c)%degree,(t+c-1u)%degree,up);
                         let ray = cell.corners[k].xyz;
                         position = ray*level;
                         let local = (ray-axis)*params.settings.x;
                         uv = vec2(dot(local,tangent),dot(local,bitangent))/(1.5*tile)+0.5;
+                        let pair = corner_slots(rec, k, degree);
+                        out_voxel = corner_light(lit_slot, pair.x, pair.y, air);
+                    } else {
+                        out_voxel = sky_at(lit_slot, air);
                     }
                 }
             } else {
@@ -446,6 +671,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                         normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
                         let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
                         uv = side_uv[indices[i]]*vec2(1.,max(1.,top-bottom));
+                        out_voxel = wall_light(cell, lit_slot, degree, side,
+                            indices[i], bottom, top);
                     }
                 }
             }
@@ -755,6 +982,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.owner_a = cell.owner_a.xyz;
     out.owner_b = cell.owner_b.xyz;
     out.shade = out_shade;
+    out.voxel = out_voxel;
     return out;
 }
 
@@ -892,7 +1120,10 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let sun_elevation = dot(radial,sun);
     let daylight = smoothstep(-0.13,0.20,sun_elevation);
     let direct = max(dot(n,sun),0.0)*daylight;
-    let skylight = input.skylight;
+    // The heightfield's per-cell occlusion, times the voxel field's answer at
+    // this vertex. Outside the column tier the second is one and this is what
+    // it always was; inside it, it is what carries the cave and the crease.
+    let skylight = input.skylight * input.voxel;
     let cell_variation = 0.94+random(input.seed)*0.12;
     // A cap shows its own material. A WALL - a terrace step or the flank of a
     // cave run - shows what stands at ITS depth under the ground, which is the
@@ -945,30 +1176,32 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     }
     // A tiny cap-edge darkening makes the actual hex-column silhouette legible
     // while the atlas supplies the committed source pixel art at close range.
-    var color = albedo*(vec3(0.16,0.21,0.27)*mix(0.12,1.,daylight)*skylight
-        + vec3(1.12,1.03,0.87)*direct*skylight);
-    if input.kind==1u {
-        // Broad sky fill keeps the pixel-art dirt and stone legible on the
-        // shaded sides of terraces, instead of turning every step into black.
-        color=albedo*(vec3(0.30,0.32,0.34)*mix(0.20,1.,daylight)*skylight
-            + vec3(1.12,1.03,0.87)*direct*skylight)*0.95;
+    // What sky a face takes. A cap takes the cool overhead tone; a WALL - a
+    // terrace step or a cave flank - takes a broader, paler one, which is what
+    // keeps pixel-art dirt and stone legible on a shaded side instead of
+    // turning every step into black.
+    //
+    // ONE expression with the fill chosen, rather than three that each rebuild
+    // it: the floor under the ambient has to apply to every face, and while
+    // these were three assignments the later two silently dropped it. A cave
+    // is made almost entirely of the third kind, so the term that stops a cave
+    // being a black screen was missing from exactly the faces that needed it.
+    var fill = vec3(0.16,0.21,0.27);
+    var night = 0.12;
+    var gain = 1.;
+    if input.kind==1u || input.kind==4u {
+        fill = vec3(0.30,0.32,0.34);
+        night = 0.20;
+        gain = select(1.,0.95,input.kind==1u);
     }
-    if input.kind==4u {
-        // A cave face. It takes the same broad sky fill a terrace wall does, so
-        // rock underground reads as rock, and then DARKENS WITH BURIAL.
-        //
-        // That darkening is a STAND-IN and is named as one: the skylight in a
-        // cell's record was baked for its SURFACE, so a face thirty metres inside
-        // a hill is handed the same sky as the hillside over it and a cave comes
-        // out lit like a meadow. The real answer is the baked voxel light this
-        // change defers. `cave_dark` and `cave_dark_depth_m` in column.ron are
-        // the two numbers, so a stand-in can be turned off rather than hunted for.
-        let buried = clamp((input.height-(length(input.position)-params.settings.x))
-            /max(params.column.z,0.001),0.,1.);
-        let lit = mix(1.,params.column.y,buried);
-        color=albedo*(vec3(0.30,0.32,0.34)*mix(0.20,1.,daylight)*skylight
-            + vec3(1.12,1.03,0.87)*direct*skylight)*lit;
-    }
+    // The BURIAL stand-in is gone with this. It faded a cave face toward
+    // `cave_dark` over `cave_dark_depth_m` of depth, and its own comment named
+    // it as a placeholder for the baked voxel light that is now in `skylight`:
+    // "The real answer is the baked voxel light this change defers." Depth is
+    // not darkness - a cave mouth is deep and bright - and keeping both would
+    // be two rules for one fact, with the wrong one winning at every mouth.
+    var color = albedo*(fill*max(AMBIENT_FLOOR,mix(night,1.,daylight)*skylight)
+        + vec3(1.12,1.03,0.87)*direct*skylight)*gain;
     // Submerged terrain: Tenebris's hex.fs absorption, the sheet's own
     // absorption and deep colour so the seabed tints the way its sea does.
     let water_depth = max(params.water_absorption.w - length(input.position), 0.);

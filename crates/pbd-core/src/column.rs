@@ -42,6 +42,15 @@ pub struct Column {
 }
 
 impl Column {
+    /// A column of nothing but its bedrock floor, for a test or a caller that
+    /// is about to fill it. `set` refuses layer zero, so the floor is here
+    /// rather than left to the caller to remember.
+    pub fn bedrock() -> Self {
+        let mut layers = [Material::Air; LAYERS];
+        layers[0] = Material::Stone;
+        Self { layers }
+    }
+
     pub fn material(&self, index: usize) -> Material {
         self.layers.get(index).copied().unwrap_or(Material::Air)
     }

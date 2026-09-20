@@ -309,10 +309,27 @@ fn create_planet(
             cell.direction_height[3] < surface_height(direction) - 0.5
         })
         .count();
+    // What the light bake costs, measured rather than asserted: it decides
+    // whether a dig can afford to relight the whole tier, which is what a dig
+    // does.
+    let lit = std::time::Instant::now();
+    let mut relit = tier.clone();
+    relit.relight();
+    let relight_ms = lit.elapsed().as_secs_f64() * 1000.;
+    let dark = relit
+        .columns
+        .iter()
+        .enumerate()
+        .flat_map(|(slot, col)| {
+            (1..pbd_core::column::LAYERS).map(move |layer| (slot, layer, col.solid(layer)))
+        })
+        .filter(|&(slot, layer, solid)| !solid && relit.sky(slot, layer) == 0)
+        .count();
     info!(
         "Column tier: anchor {anchor:?}, {} columns within {:.0} m of it, {caves} of them carrying a cave, \
          {mouths} records lowered by a mouth, \
-         {:.2} runs mean, {:.2} MiB of records",
+         {:.2} runs mean, {:.2} MiB of records, \
+         {dark} unlit air cells, light bake {relight_ms:.1} ms, {:.2} MiB of light",
         tier.columns.len(),
         columns.reach_m,
         tier.columns
@@ -321,6 +338,7 @@ fn create_planet(
             .sum::<usize>() as f64
             / tier.columns.len().max(1) as f64,
         (tier.columns.len() * size_of::<column::GpuColumn>()) as f64 / 1_048_576.,
+        (tier.columns.len() * column::LIGHT_WORDS * 4) as f64 / 1_048_576.,
     );
     info!(
         "Planet scale: r={:.0} m; base L{} gives {:.2} m mean tile width ({:.2}-{:.2} m), \
@@ -462,6 +480,10 @@ struct PlanetGpu {
     /// it. The tier is the innermost part of the finest band, so this is small:
     /// a few thousand slots of 48 bytes.
     columns: Buffer,
+    /// The sky level of every cell of every column tier slot, four layers to a
+    /// word. What a face's corner samples to find out how much daylight
+    /// reached the air it opens onto.
+    light: Buffer,
     /// Record slots in the buffer: the base then four fine regions.
     slots: u32,
     base_count: u32,
@@ -518,6 +540,15 @@ fn upload_planet(
         mapped_at_creation: false,
     });
     queue.write_buffer(&cells, 0, bytemuck::cast_slice(base.0.as_slice()));
+    // Zero-initialised: a slot nothing has written is DARK, which is the safe
+    // way round. A light buffer defaulting to full daylight would light every
+    // cave in the tier on the frame before its bake arrived.
+    let light = device.create_buffer(&BufferDescriptor {
+        label: Some("Persistent planet voxel sky light for the column tier"),
+        size: column::COLUMN_CAPACITY as u64 * column::LIGHT_WORDS as u64 * 4,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
     // Zero-initialised: every run word is the absent one, so a slot nothing has
     // written draws no face at all.
     let columns = device.create_buffer(&BufferDescriptor {
@@ -527,6 +558,7 @@ fn upload_planet(
         mapped_at_creation: false,
     });
     commands.insert_resource(PlanetGpu {
+        light,
         cells,
         columns,
         slots,
@@ -565,6 +597,11 @@ fn upload_fine(
     let records = fine.set.columns.gpu_records();
     if !records.is_empty() {
         queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(records));
+        // The light goes up with the records that decide what it lights. Two
+        // uploads a frame apart would draw one frame of the new geometry lit
+        // by the old world.
+        let light = fine.set.columns.gpu_light();
+        queue.write_buffer(&planet.light, 0, bytemuck::cast_slice(&light));
     }
     planet.uploaded = fine.version;
     planet.lod = lod::LodParams::of(&fine.set);
@@ -593,6 +630,7 @@ fn draw_layout() -> BindGroupLayoutDescriptor {
                     false,
                     NonZeroU64::new(size_of::<column::GpuColumn>() as u64),
                 ),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
             ),
         ),
     )
@@ -807,8 +845,11 @@ fn prepare_views(
                 } else {
                     columns.reach_m
                 },
-                columns.cave_dark,
-                columns.cave_dark_depth_m,
+                // Two lanes the burial stand-in used. It is gone: the voxel
+                // field in `skylight` is what darkens a cave now, and a knob
+                // nothing reads is a knob the next reader has to prove dead.
+                0.,
+                0.,
                 (2.0 * columns.reach_m / PLANET_RADIUS).cos(),
             ),
             ground: Vec4::new(
@@ -874,6 +915,7 @@ fn prepare_views(
                     list.as_entire_binding(),
                     &atlas.texture_view,
                     planet.columns.as_entire_binding(),
+                    planet.light.as_entire_binding(),
                 )),
             )
         };
@@ -1013,7 +1055,9 @@ mod pipeline_tests {
             "actual encoded Rust uniform must match WGSL Params"
         );
         for (layout, read_only_bindings) in [
-            (draw_layout(), &[1, 2, 4][..]),
+            // 5 is the voxel sky light: read only, like the cells, the
+            // visible list and the column records it is sampled beside.
+            (draw_layout(), &[1, 2, 4, 5][..]),
             (compute_layout(), &[1][..]),
         ] {
             for entry in &layout.entries {

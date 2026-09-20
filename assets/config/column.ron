@@ -25,10 +25,4 @@
     worm_start_depth_m: (8.0, 50.0),
     worm_steer_scale_m: 30.0,
     cave_floor_layers: 3,
-
-    // A stand-in for the baked voxel light this change defers: a cell's
-    // skylight was computed for its SURFACE, so without this a cave is lit
-    // exactly like the hillside over it.
-    cave_dark: 0.45,
-    cave_dark_depth_m: 10.0,
 )

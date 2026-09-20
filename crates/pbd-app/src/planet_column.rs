@@ -23,8 +23,9 @@ use super::terrain::{PLANET_RADIUS, TERRAIN, render_code};
 use crate::config::ColumnSettings;
 use bevy::prelude::Vec3;
 use bytemuck::{Pod, Zeroable};
-use pbd_core::column::{self, Column, MAX_RUNS};
+use pbd_core::column::{self, Column, LAYERS, MAX_RUNS};
 use pbd_core::edits::Edits;
+use pbd_core::light;
 use pbd_core::terrain::Material;
 use pbd_core::worms;
 
@@ -73,6 +74,12 @@ const _: [(); 48] = [(); size_of::<GpuColumn>()];
 const _: [(); 16] = [(); std::mem::offset_of!(GpuColumn, neighbors)];
 const _: [(); 32] = [(); std::mem::offset_of!(GpuColumn, more)];
 
+/// Layers packed into one `u32` of the light buffer. Four nibble-ranged levels
+/// fit a byte each, and a byte array is not a thing WGSL can index.
+pub const LIGHT_PER_WORD: usize = 4;
+/// Words of light per column.
+pub const LIGHT_WORDS: usize = LAYERS / LIGHT_PER_WORD;
+
 /// The columns around one anchor, and the map from a finest record to its slot.
 #[derive(Clone)]
 pub struct ColumnTier {
@@ -83,6 +90,10 @@ pub struct ColumnTier {
     pub slots: Vec<usize>,
     /// What the vertex shader reads, one per slot.
     pub(crate) records: Vec<GpuColumn>,
+    /// The sky level of every cell, one array per slot. This is the field a
+    /// face's corner samples; the contact darkening is the shader's, because
+    /// there is no CPU mesh here to bake a vertex colour into.
+    light: light::Baked,
 }
 
 impl ColumnTier {
@@ -92,6 +103,7 @@ impl ColumnTier {
             columns: Vec::new(),
             slots: Vec::new(),
             records: Vec::new(),
+            light: Vec::new(),
         }
     }
 
@@ -137,6 +149,71 @@ impl ColumnTier {
     /// What the vertex shader reads, one record per slot.
     pub(crate) fn gpu_records(&self) -> &[GpuColumn] {
         &self.records
+    }
+
+    /// The sky level of one cell, 0 to `light::MAX`.
+    pub fn sky(&self, slot: usize, layer: usize) -> u8 {
+        self.light
+            .get(slot)
+            .and_then(|levels| levels.get(layer))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// The light field packed for the GPU: four layers to a word, `LIGHT_WORDS`
+    /// words per slot, slots end to end.
+    ///
+    /// A word rather than a byte array because WGSL indexes `u32`, and four to
+    /// a word rather than eight nibbles because a byte is what a level fits in
+    /// and unpacking a nibble in the vertex shader buys nothing: the buffer is
+    /// 5 MiB at full capacity either way against the 96 MiB the cell records
+    /// already hold.
+    pub fn gpu_light(&self) -> Vec<u32> {
+        let mut words = vec![0u32; self.light.len() * LIGHT_WORDS];
+        for (slot, levels) in self.light.iter().enumerate() {
+            for (layer, &level) in levels.iter().enumerate() {
+                let word = slot * LIGHT_WORDS + layer / LIGHT_PER_WORD;
+                let shift = (layer % LIGHT_PER_WORD) * 8;
+                words[word] |= (level as u32) << shift;
+            }
+        }
+        words
+    }
+
+    /// Re-light the whole tier from its columns.
+    ///
+    /// The whole tier rather than the reference's bounded incremental pass,
+    /// and that is a measurement rather than a preference: see the tier's
+    /// startup line for what a bake costs here. A dig that relights everything
+    /// in a few milliseconds is simpler than one that relights a sphere of
+    /// fifteen cells and has to get the removal pass right, and the removal
+    /// pass is where the reference records its own scar - a dug cell that
+    /// "stayed dark forever".
+    pub fn relight(&mut self) {
+        let sides = self.neighbor_slots();
+        self.light = light::bake(&light::Region {
+            columns: &self.columns,
+            neighbors: &sides,
+        });
+    }
+
+    /// The neighbour table in SLOT space, which is what the light field joins
+    /// on. `NO_NEIGHBOR` and `light::OFF_REGION` are the same value, and a test
+    /// holds them together.
+    fn neighbor_slots(&self) -> Vec<[u32; 6]> {
+        self.records
+            .iter()
+            .map(|record| {
+                [
+                    record.neighbors[0],
+                    record.neighbors[1],
+                    record.neighbors[2],
+                    record.neighbors[3],
+                    record.more[0],
+                    record.more[1],
+                ]
+            })
+            .collect()
     }
 }
 
@@ -265,11 +342,17 @@ pub fn build(
             }
         }
     }
-    ColumnTier {
+    let mut tier = ColumnTier {
         columns,
         slots,
         records,
-    }
+        light: Vec::new(),
+    };
+    // The light comes last, because it is a function of the finished columns:
+    // the rim's solid ring and every edit are already in them, and lighting
+    // before either would light a world that is not the one being drawn.
+    tier.relight();
+    tier
 }
 
 /// The step a walker can take up or down, in metres: one cell of elevation
