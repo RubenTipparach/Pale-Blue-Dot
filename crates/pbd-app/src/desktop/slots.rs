@@ -291,8 +291,14 @@ pub fn input(
     keys: Res<ButtonInput<KeyCode>>,
     mut wheel: MessageReader<bevy::input::mouse::MouseWheel>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
+    menu: Option<Res<pbd_app::controls::MenuOpen>>,
     mut slots: ResMut<Hotbar>,
 ) {
+    // A menu holds the keyboard, so the number row does not change what you
+    // are holding while you read the bindings. The wheel is still DRAINED
+    // below whatever happens here, which is the reader's own old lesson: a
+    // reader that skips its messages delivers the whole backlog next time.
+    let held = menu.is_some_and(|open| open.0);
     const ROW: [KeyCode; SLOTS] = [
         KeyCode::Digit1,
         KeyCode::Digit2,
@@ -306,7 +312,7 @@ pub fn input(
         KeyCode::Digit0,
     ];
     for (index, key) in ROW.iter().enumerate() {
-        if keys.just_pressed(*key) {
+        if !held && keys.just_pressed(*key) {
             slots.select(index);
         }
     }
@@ -327,82 +333,8 @@ pub fn input(
             0
         };
     }
-    if walking && step != 0 {
+    if walking && step != 0 && !held {
         slots.step(step);
-    }
-}
-
-/// The full binding list, behind `H`.
-#[derive(Component)]
-pub struct KeyPanel;
-
-/// Build it hidden. `Display::None` rather than `Visibility::Hidden`: a hidden
-/// node is still laid out and still picked, so an invisible panel would go on
-/// swallowing clicks over the middle of the screen the whole time it is shut.
-pub fn spawn_keys(mut commands: Commands) {
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                top: percent(50.0),
-                left: percent(50.0),
-                margin: UiRect::new(px(-210), px(0), px(-130), px(0)),
-                width: px(420),
-                padding: UiRect::all(px(18)),
-                border: UiRect::all(px(1)),
-                flex_direction: FlexDirection::Column,
-                row_gap: px(6),
-                display: Display::None,
-                ..default()
-            },
-            BorderColor::all(Color::srgba(0.55, 0.75, 0.74, 0.6)),
-            BackgroundColor(Color::srgba(0.02, 0.06, 0.08, 0.93)),
-            KeyPanel,
-        ))
-        .with_children(|panel| {
-            for (heading, line) in [
-                ("ON FOOT", "WASD  walk    SPACE  jump    SHIFT  sprint"),
-                ("FLYING", "WASD  move    SPACE / CTRL  lift    Q / E  roll"),
-                ("", "SHIFT  cruise    X  dampeners    B  brake"),
-                ("SLOTS", "1 - 0  select    WHEEL  step"),
-                ("WORLD", "F  walk / fly    R  reset    P  storm"),
-                (
-                    "VIEW",
-                    "MOUSE  look    ESC  cursor    F12  photo    H  close",
-                ),
-            ] {
-                if !heading.is_empty() {
-                    panel.spawn((
-                        Text::new(heading),
-                        TextFont {
-                            font_size: 11.0,
-                            ..default()
-                        },
-                        TextColor(Color::srgba(0.55, 0.75, 0.74, 0.85)),
-                    ));
-                }
-                panel.spawn((
-                    Text::new(line),
-                    TextFont {
-                        font_size: 12.0,
-                        ..default()
-                    },
-                    TextColor(Color::srgb(0.88, 0.94, 0.91)),
-                ));
-            }
-        });
-}
-
-/// `H` opens and closes it.
-pub fn toggle_keys(keys: Res<ButtonInput<KeyCode>>, mut panel: Query<&mut Node, With<KeyPanel>>) {
-    if !keys.just_pressed(KeyCode::KeyH) {
-        return;
-    }
-    for mut node in &mut panel {
-        node.display = match node.display {
-            Display::None => Display::Flex,
-            _ => Display::None,
-        };
     }
 }
 

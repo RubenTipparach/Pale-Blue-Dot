@@ -1,5 +1,6 @@
 mod digging;
 mod hud;
+mod menu;
 mod scene;
 mod slots;
 
@@ -64,6 +65,10 @@ pub struct Launch {
     pub spawn: Option<String>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// `--menu pause|settings` opens that screen at startup. A headless run has
+    /// no pointer and no keyboard, so a screen a player reaches with `Escape`
+    /// has to be reachable by a flag or it can never be photographed.
+    pub menu: Option<String>,
 }
 
 impl Launch {
@@ -83,6 +88,7 @@ impl Launch {
             height: None,
             spawn: None,
             rain: 0.0,
+            menu: None,
         };
         let mut i = 0;
         while i < args.len() {
@@ -100,6 +106,15 @@ impl Launch {
                         .expect("--dig requires a count");
                 }
                 "--place" => result.place = true,
+                "--menu" => {
+                    i += 1;
+                    let screen = args.get(i).expect("--menu requires pause or settings");
+                    assert!(
+                        matches!(screen.as_str(), "pause" | "settings"),
+                        "--menu takes pause or settings"
+                    );
+                    result.menu = Some(screen.clone());
+                }
                 "--view" => {
                     i += 1;
                     result.view = args.get(i).expect("--view requires a view name").clone();
@@ -333,17 +348,24 @@ pub fn run(args: &[String]) {
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
-    .add_systems(Startup, slots::spawn_keys)
+    .insert_resource(match launch.menu.as_deref() {
+        Some("pause") => menu::Screen::Pause,
+        Some("settings") => menu::Screen::Settings,
+        _ => menu::Screen::Playing,
+    })
+    .add_systems(Startup, menu::spawn)
     .add_systems(PostStartup, slots::spawn)
+    // Escape is read before either of the world's input readers, which live in
+    // `RunFixedMainLoop`, and is cleared there so neither ever sees it.
+    .add_systems(PreUpdate, menu::toggle.after(bevy::input::InputSystems))
     .add_systems(
         Update,
         (
             configure_camera,
             scene::move_moon,
-            hud::update,
             slots::input,
-            slots::toggle_keys,
             slots::update,
+            (menu::press, menu::paint).chain(),
             digging::dig_and_place,
             digging::scripted_dig,
             capture,

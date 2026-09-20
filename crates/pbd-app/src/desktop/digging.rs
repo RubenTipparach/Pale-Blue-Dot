@@ -119,10 +119,12 @@ pub fn dig_and_place(
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return;
     };
-    // Only on foot: a ship's guns are not a shovel. The READOUT rather than
-    // the walker's own state, because the state is a component on the walker
-    // and the readout is the resource that says whether it is driving.
-    if !walking.is_some_and(|readout| readout.active) {
+    // Only on foot, and only while the walker has the pointer. A ship's guns
+    // are not a shovel, and a click that is really "give me the mouse back"
+    // is not a dig: Bevy's UI does not consume the raw button, so without the
+    // capture test a click on a menu row swings the shovel through the button
+    // at whatever is behind it.
+    if !walking.is_some_and(|readout| readout.active && readout.captured) {
         aimed.target = None;
         return;
     }

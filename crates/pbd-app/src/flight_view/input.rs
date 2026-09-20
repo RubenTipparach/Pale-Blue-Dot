@@ -20,6 +20,7 @@ pub(super) fn read_pilot_input(
     config: Res<FlightViewConfig>,
     keys: Option<Res<ButtonInput<KeyCode>>>,
     pointer: PointerInput,
+    mut menu: crate::controls::Pointer,
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut intent: ResMut<FlightInputState>,
 ) {
@@ -27,18 +28,21 @@ pub(super) fn read_pilot_input(
     if !intent.enabled {
         return;
     }
-    if keys.just_pressed(KeyCode::KeyR) {
+    // The walker's rule, for the pilot: a menu holds the pointer, and on the
+    // frame it lets go the view takes it straight back. `Escape` is the
+    // menu's key now and is consumed before this system runs, so there is no
+    // arm for it here.
+    let menu_open = menu.menu_holds(&mut intent.captured);
+    if !menu_open && keys.just_pressed(KeyCode::KeyR) {
         intent.reset = true;
     }
     if config.mode == FlyMode::Tour {
         return;
     }
-    if keys.just_pressed(KeyCode::Escape) {
-        intent.captured = false;
-    }
-    if pointer
-        .buttons
-        .is_some_and(|buttons| buttons.just_pressed(MouseButton::Left))
+    if !menu_open
+        && pointer
+            .buttons
+            .is_some_and(|buttons| buttons.just_pressed(MouseButton::Left))
     {
         intent.captured = true;
     }
@@ -52,6 +56,14 @@ pub(super) fn read_pilot_input(
             CursorGrabMode::None
         };
         cursor.visible = !intent.captured;
+    }
+    if menu_open {
+        // The cursor is free above, so the menu can be clicked. Nothing else
+        // is read: not the brake, not the dampeners, not a stick.
+        intent.axes = Vec3::ZERO;
+        intent.cruise = false;
+        intent.brake = false;
+        return;
     }
     if keys.just_pressed(KeyCode::KeyX) {
         intent.dampeners = !intent.dampeners;
@@ -93,6 +105,7 @@ mod tests {
     fn input_app() -> App {
         let mut app = App::new();
         app.init_resource::<Time>()
+            .init_resource::<crate::controls::MenuOpen>()
             .init_resource::<FlightViewConfig>()
             .init_resource::<FlightInputState>()
             .init_resource::<ButtonInput<KeyCode>>()
@@ -134,8 +147,13 @@ mod tests {
         assert!(intent.axes.x > 0.0 && intent.axes.y > 0.0 && intent.axes.z < 0.0);
     }
 
+    /// A menu releases the pilot, and the frame it closes the view takes the
+    /// pointer back. This used to be `Escape` releases the pilot, and it is
+    /// the same rule one level up: `Escape` is the MENU's key now, consumed in
+    /// `PreUpdate` before this system runs, so the thing worth pinning is what
+    /// happens to the stick while a menu holds the pointer.
     #[test]
-    fn escape_releases_pilot_input_and_right_control_descends() {
+    fn a_menu_releases_the_pilot_and_right_control_still_descends() {
         let mut app = input_app();
         app.world_mut().resource_mut::<FlightInputState>().captured = true;
         app.world_mut()
@@ -144,12 +162,47 @@ mod tests {
         app.update();
         assert_eq!(app.world().resource::<FlightInputState>().axes, Vec3::NEG_Y);
         app.world_mut()
-            .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::Escape);
+            .resource_mut::<crate::controls::MenuOpen>()
+            .0 = true;
+        app.update();
+        {
+            let intent = app.world().resource::<FlightInputState>();
+            assert!(!intent.captured, "a menu holds the pointer");
+            assert_eq!(intent.axes, Vec3::ZERO, "and the stick reads nothing");
+        }
+        // Resuming hands it straight back, or the player lands on a free
+        // cursor and has to click to fly - and that click lands in the world.
+        app.world_mut()
+            .resource_mut::<crate::controls::MenuOpen>()
+            .0 = false;
         app.update();
         let intent = app.world().resource::<FlightInputState>();
-        assert!(!intent.captured);
-        assert_eq!(intent.axes, Vec3::ZERO);
+        assert!(intent.captured, "and gives it back on the frame it closes");
+        assert_eq!(intent.axes, Vec3::NEG_Y, "with the stick live again");
+    }
+
+    /// The keyboard is the menu's too. A brake or a dampener toggle read from
+    /// behind a settings page is the same defect as walking off a cliff while
+    /// reading it.
+    #[test]
+    fn a_menu_holds_the_keyboard_as_well_as_the_pointer() {
+        let mut app = input_app();
+        app.world_mut().resource_mut::<FlightInputState>().captured = true;
+        app.world_mut()
+            .resource_mut::<crate::controls::MenuOpen>()
+            .0 = true;
+        {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            for key in [KeyCode::KeyB, KeyCode::KeyX, KeyCode::KeyR] {
+                keys.press(key);
+            }
+        }
+        let before = app.world().resource::<FlightInputState>().dampeners;
+        app.update();
+        let intent = app.world().resource::<FlightInputState>();
+        assert!(!intent.brake, "no brake from behind a menu");
+        assert!(!intent.reset, "no reset either");
+        assert_eq!(intent.dampeners, before, "and the dampeners stay put");
     }
 
     #[test]

@@ -81,6 +81,11 @@ impl Default for WalkingConfig {
 #[derive(Resource, Clone, Copy, Default)]
 pub struct WalkingReadout {
     pub active: bool,
+    /// Whether the walker has the pointer. Anything the player aims has to
+    /// ask: a shovel that swings while the cursor is free swings through
+    /// whatever the cursor was over, which is a menu button or another
+    /// window.
+    pub captured: bool,
     pub grounded: bool,
     pub sprinting: bool,
     pub speed: f32,
@@ -309,6 +314,14 @@ fn set_active_mode(world: &mut World, walking: bool) {
 
 /// Mode handoff is explicit and instantaneous; the existing ship entity survives.
 fn switch_mode(world: &mut World) {
+    // A menu holds the keyboard: swapping to flight from behind the settings
+    // page is the same defect as walking off a cliff while reading it.
+    if world
+        .get_resource::<crate::controls::MenuOpen>()
+        .is_some_and(|open| open.0)
+    {
+        return;
+    }
     let Some(keys) = world.get_resource::<ButtonInput<KeyCode>>() else {
         return;
     };
@@ -411,6 +424,7 @@ fn read_walking_input(
     keys: Option<Res<ButtonInput<KeyCode>>>,
     buttons: Option<Res<ButtonInput<MouseButton>>>,
     mouse: Option<Res<AccumulatedMouseMotion>>,
+    mut pointer: crate::controls::Pointer,
     mut state: ResMut<WalkingState>,
     walkers: Query<&Position, With<Walker>>,
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
@@ -419,10 +433,13 @@ fn read_walking_input(
         return;
     }
     let Some(keys) = keys else { return };
-    if keys.just_pressed(KeyCode::Escape) {
-        state.captured = false;
-    }
-    if buttons.is_some_and(|b| b.just_pressed(MouseButton::Left)) {
+    // A menu is a second claimant on the pointer. While it holds it the walker
+    // reads nothing - not the look, not the keys, and above all not the click
+    // that presses a button, which would otherwise grab the mouse on its way
+    // through to the world. `Escape` is the menu's key now and is consumed
+    // before this system runs, so there is no arm for it here.
+    let menu_open = pointer.menu_holds(&mut state.captured);
+    if !menu_open && buttons.is_some_and(|b| b.just_pressed(MouseButton::Left)) {
         state.captured = true;
     }
     if state.scripted {
@@ -765,6 +782,7 @@ fn follow_walker(
     }
     *readout = WalkingReadout {
         active: true,
+        captured: state.captured,
         grounded: ground.grounded,
         sprinting: state.sprinting,
         speed: velocity.0.length(),
