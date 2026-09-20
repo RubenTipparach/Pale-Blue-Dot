@@ -264,6 +264,7 @@ fn create_planet(
     assets: Res<AssetServer>,
     flight: Res<crate::flight_view::FlightViewConfig>,
     columns: Res<crate::config::ColumnSettings>,
+    edits: Res<crate::world_edits::WorldEdits>,
 ) {
     let started = std::time::Instant::now();
     let cells = topology::dual_sphere(lod::BASE_LEVEL as u32);
@@ -273,7 +274,14 @@ fn create_planet(
     // The fine bands around the spawn, synchronously, so the walker has its
     // tile to stand on before its first tick.
     let anchor = contacts.find_land_near(flight.spawn_direction);
-    let fine = Arc::new(lod::generate_fine(anchor, &columns));
+    if !edits.edits.is_empty() {
+        info!(
+            "{} edits across {} cells loaded from the save",
+            edits.edits.len(),
+            edits.edits.cells()
+        );
+    }
+    let fine = Arc::new(lod::generate_fine(anchor, &columns, &edits.edits));
     contacts.set_fine(&fine);
     let fine_count: usize = fine.levels.iter().map(Vec::len).sum();
     info!(

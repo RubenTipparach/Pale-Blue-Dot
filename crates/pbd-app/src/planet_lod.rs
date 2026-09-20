@@ -19,6 +19,7 @@ use bevy::{
     render::extract_resource::ExtractResource,
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
 };
+use pbd_core::edits::Edits;
 use std::{collections::HashMap, sync::Arc};
 
 /// The coarsest level, resident for the whole globe: 163,842 cells.
@@ -178,6 +179,7 @@ pub fn base_records(cells: &[DualCell]) -> Vec<GpuCell> {
 
 /// The fine levels around one anchor, with the finest level's neighbour
 /// table for the walker's contact.
+#[derive(Clone)]
 pub struct FineSet {
     pub anchor: Vec3,
     /// Records per level in `FINE_LEVELS` order, each at most `FINE_CAPACITY`.
@@ -259,7 +261,7 @@ fn stable_id(cell: &LocalCell) -> u32 {
 /// inside the next finer band's radius to just outside its own, plus the
 /// regeneration distance, so the live bands stay resident as the player
 /// walks. Over capacity, the farthest cells are dropped, never the nearest.
-pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings) -> FineSet {
+pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings, edits: &Edits) -> FineSet {
     let anchor = anchor.normalize_or(Vec3::Y);
     let mut lattice = Lattice::default();
     let mut heights = Heights::default();
@@ -358,7 +360,7 @@ pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings) -> FineSet {
     // The column tier, last, because it stamps each finest record with its own
     // slot: the tier and the records it is read through are one artifact and
     // are built on one task.
-    let columns = column::build(anchor, &mut levels[3], &finest_neighbors, columns);
+    let columns = column::build(anchor, &mut levels[3], &finest_neighbors, columns, edits);
     FineSet {
         anchor,
         levels,
@@ -397,6 +399,10 @@ fn player_direction(
 /// Rebuild the fine set on the compute pool once the player has walked
 /// `REGEN_DISTANCE_M` from its anchor, and swap it in, with the walker's
 /// contact, when it lands. One rebuild in flight at a time.
+// Eight parameters: the seven the rebuild already needed, and the edits,
+// which a set built without would quietly undig. A struct of them would be a
+// struct with one caller.
+#[allow(clippy::too_many_arguments)]
 pub fn refresh_lod(
     mut commands: Commands,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
@@ -405,6 +411,7 @@ pub fn refresh_lod(
     settings: Res<ColumnSettings>,
     mut refresh: ResMut<LodRefresh>,
     mut contact: ResMut<super::PlanetContact>,
+    edits: Res<crate::world_edits::WorldEdits>,
 ) {
     if let Some(task) = refresh.task.as_mut() {
         if let Some(set) = block_on(poll_once(task)) {
@@ -424,8 +431,13 @@ pub fn refresh_lod(
     let moved = direction.dot(fine.set.anchor).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
     if moved > REGEN_DISTANCE_M {
         let settings = settings.clone();
+        // The edits travel WITH the task: the tier is rebuilt off the pool and
+        // a set built without them would quietly undig every hole the moment
+        // the player walked far enough.
+        let made = edits.edits.clone();
         refresh.task = Some(
-            AsyncComputeTaskPool::get().spawn(async move { generate_fine(direction, &settings) }),
+            AsyncComputeTaskPool::get()
+                .spawn(async move { generate_fine(direction, &settings, &made) }),
         );
     }
 }
@@ -450,7 +462,11 @@ mod tests {
             );
         }
         assert!(band_cos(11) > band_cos(8));
-        let set = generate_fine(Vec3::new(0.8776, 0.4794, 0.0), &ColumnSettings::default());
+        let set = generate_fine(
+            Vec3::new(0.8776, 0.4794, 0.0),
+            &ColumnSettings::default(),
+            &Edits::new(),
+        );
         for (k, level) in set.levels.iter().enumerate() {
             assert!(!level.is_empty());
             assert!(
@@ -492,7 +508,7 @@ mod tests {
     #[test]
     fn every_level_is_resident_out_to_the_radius_it_hides_the_coarser_one_inside() {
         let anchor = Vec3::new(0.3, 0.8, -0.5).normalize();
-        let set = generate_fine(anchor, &ColumnSettings::default());
+        let set = generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
         assert_eq!(
             LodParams::of(&set).player,
             set.anchor,
@@ -531,7 +547,11 @@ mod tests {
     /// height the fine neighbour's height across a band boundary.
     #[test]
     fn a_vertex_centred_fine_cell_shares_its_owners_height() {
-        let set = generate_fine(Vec3::new(0.3, 0.8, -0.5), &ColumnSettings::default());
+        let set = generate_fine(
+            Vec3::new(0.3, 0.8, -0.5),
+            &ColumnSettings::default(),
+            &Edits::new(),
+        );
         let coarse: HashMap<[u32; 3], f32> = set.levels[2]
             .iter()
             .map(|c| {

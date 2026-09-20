@@ -1,7 +1,9 @@
 //! Engine-independent contracts. Distances are metres, times seconds, angles radians.
 //! Planet positions and frame transforms stay f64; local Avian bodies use f32.
 
+pub mod aim;
 pub mod column;
+pub mod edits;
 pub mod flight;
 pub mod frame;
 pub mod gravity;

@@ -1,3 +1,4 @@
+mod digging;
 mod hud;
 mod scene;
 mod slots;
@@ -50,6 +51,12 @@ pub struct Launch {
     /// Capture instrument for the `shore` view: camera height above the last
     /// land cell in metres. Absent means standing eye height.
     pub height: Option<f32>,
+    /// `--dig N` digs N blocks straight down from the camera on the frame the
+    /// tier is ready, and `--place` puts one back on the layer above the last
+    /// hole. A headless run has no mouse, and a picture of a hole is the only
+    /// thing that says the verb works end to end.
+    pub dig: u32,
+    pub place: bool,
     /// `--spawn mouth` puts the spawn, and so the column tier, at the nearest
     /// cave mouth to the default spawn. Mouth patches cover a few percent of
     /// the land and the default spawn has none, so without this a walker has
@@ -65,6 +72,8 @@ impl Launch {
             capture: None,
             view: "coast".into(),
             frames: 180,
+            dig: 0,
+            place: false,
             tour: false,
             fixed: false,
             fly: false,
@@ -83,6 +92,14 @@ impl Launch {
                     result.capture =
                         Some(args.get(i).expect("--capture requires a PNG path").into());
                 }
+                "--dig" => {
+                    i += 1;
+                    result.dig = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--dig requires a count");
+                }
+                "--place" => result.place = true,
                 "--view" => {
                     i += 1;
                     result.view = args.get(i).expect("--view requires a view name").clone();
@@ -285,6 +302,13 @@ pub fn run(args: &[String]) {
         ..default()
     })
     .insert_resource(slots::Hotbar::starting_kit())
+    // The world's edits, loaded before the planet is built: `create_planet`
+    // reads them for the first tier, so a save's holes are there on the first
+    // frame rather than appearing when the player first walks.
+    .insert_resource(pbd_app::world_edits::WorldEdits::open(
+        std::path::PathBuf::from("saves/preview/edits.txt"),
+    ))
+    .init_resource::<digging::Aim>()
     .insert_resource(ClearColor(if std::env::var("PBD_NO_SKY").is_ok() {
         // The hole detector's background: nothing in the palette is near it,
         // so a magenta pixel is a pixel with no world behind it.
@@ -320,6 +344,8 @@ pub fn run(args: &[String]) {
             slots::input,
             slots::toggle_keys,
             slots::update,
+            digging::dig_and_place,
+            digging::scripted_dig,
             capture,
         ),
     )

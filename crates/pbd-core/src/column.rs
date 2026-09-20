@@ -234,10 +234,54 @@ pub fn generate(
     terrain: &TerrainConfig,
     direction: Vec3,
 ) -> Column {
+    generate_edited(worms, field, terrain, direction, &[])
+}
+
+/// The generated column with a player's changes applied over it.
+///
+/// The edits come LAST, after the worms, because they are what somebody did
+/// to the world the generator made. Taking `&[(u16, Material)]` rather than
+/// the whole [`Edits`](crate::edits::Edits) keeps this crate's one rule about
+/// order visible at the call: the slice is applied front to back, and it is
+/// the caller's business that its order is stable.
+///
+/// Bedrock is restored after them, so no edit can open a hole through the
+/// bottom of the world however it was recorded.
+/// A solid column with a player's changes applied: the tier's RIM, which is
+/// generated uncarved for the reason `planet_column.rs` gives, and still has
+/// to carry what somebody dug out of it.
+pub fn generate_edited_solid(
+    terrain: &TerrainConfig,
+    direction: Vec3,
+    edits: &[(u16, Material)],
+) -> Column {
+    let mut column = generate_solid(terrain, direction);
+    for &(layer, material) in edits {
+        if let Some(slot) = column.layers.get_mut(layer as usize) {
+            *slot = material;
+        }
+    }
+    column.layers[0] = Material::Stone;
+    column
+}
+
+pub fn generate_edited(
+    worms: &Worms,
+    field: &WormField,
+    terrain: &TerrainConfig,
+    direction: Vec3,
+    edits: &[(u16, Material)],
+) -> Column {
     let mut column = generate_solid(terrain, direction);
     worms.carve(terrain, direction, field.floor_layers, |index| {
         column.layers[index] = Material::Air;
     });
+    for &(layer, material) in edits {
+        if let Some(slot) = column.layers.get_mut(layer as usize) {
+            *slot = material;
+        }
+    }
+    column.layers[0] = Material::Stone;
     column
 }
 

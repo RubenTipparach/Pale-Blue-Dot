@@ -262,6 +262,14 @@ impl PlanetContact {
     /// What a body whose FEET are at `feet` stands between. One function
     /// decides column tier or heightfield, which is the whole of how the
     /// walker gets a ceiling without learning where ceilings come from.
+    /// Which finest-level record a direction falls in, when the fine tier is
+    /// resident there. The walk is the same one the walker's own contact uses,
+    /// so a ray and a pair of feet can never disagree about which cell they
+    /// are over.
+    pub fn finest_cell(&self, direction: Vec3) -> Option<usize> {
+        self.fine.as_ref()?.locate(direction)
+    }
+
     pub fn stand(&self, feet: Vec3) -> Stand {
         let direction = feet.try_normalize().unwrap_or(Vec3::Y);
         let surface = self.sample(direction);
@@ -589,6 +597,7 @@ mod tests {
         let set = Arc::new(super::super::lod::generate_fine(
             anchor,
             &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
         ));
         let base = contact.sample(anchor);
         contact.set_fine(&set);

@@ -1121,7 +1121,11 @@ mod tests {
         let spawn = FlightViewConfig::default().spawn_direction;
         let mut terrain = PlanetContact::test_planet(5);
         let anchor = terrain.find_land_near(spawn);
-        let set = Arc::new(crate::planet::lod::generate_fine(anchor, &settings));
+        let set = Arc::new(crate::planet::lod::generate_fine(
+            anchor,
+            &settings,
+            &pbd_core::edits::Edits::new(),
+        ));
         terrain.set_fine(&set);
         // A chamber to stand in: the same pick the cave capture makes.
         let records = set.finest_records();

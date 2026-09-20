@@ -13,6 +13,8 @@ pub mod sky;
 pub mod walking;
 #[cfg(feature = "desktop")]
 pub mod weather;
+#[cfg(feature = "desktop")]
+pub mod world_edits;
 
 use std::time::Duration;
 

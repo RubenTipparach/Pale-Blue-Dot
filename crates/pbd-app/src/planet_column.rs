@@ -24,6 +24,8 @@ use crate::config::ColumnSettings;
 use bevy::prelude::Vec3;
 use bytemuck::{Pod, Zeroable};
 use pbd_core::column::{self, Column, MAX_RUNS};
+use pbd_core::edits::Edits;
+use pbd_core::terrain::Material;
 use pbd_core::worms;
 
 /// Slots in the column buffer. The default tier is about 3,100 cells; the
@@ -72,6 +74,7 @@ const _: [(); 16] = [(); std::mem::offset_of!(GpuColumn, neighbors)];
 const _: [(); 32] = [(); std::mem::offset_of!(GpuColumn, more)];
 
 /// The columns around one anchor, and the map from a finest record to its slot.
+#[derive(Clone)]
 pub struct ColumnTier {
     /// The authoritative stacks, one per slot. Collision and mining read these;
     /// the GPU only ever sees the packed runs.
@@ -104,6 +107,33 @@ impl ColumnTier {
         self.columns.get_mut(slot)
     }
 
+    /// Write one layer of one record's column. `false` where there is no
+    /// column, or where the column refused it - bedrock does.
+    pub fn set_layer(&mut self, record: usize, layer: usize, material: Material) -> bool {
+        self.column_mut(record)
+            .is_some_and(|column| column.set(layer, material))
+    }
+
+    /// Repack a record's runs from its column.
+    ///
+    /// Called for the edited cell AND for each of its neighbours: a flank is
+    /// clipped against the air gaps of the column next to it, so a neighbour's
+    /// drawn side changes when this column does even though its own stack did
+    /// not. Everything else in the tier is left alone, which is the whole
+    /// reason an edit is not a rebuild.
+    pub fn repack(&mut self, record: usize) {
+        let Some(&slot) = self.slots.get(record) else {
+            return;
+        };
+        let Some(column) = self.columns.get(slot) else {
+            return;
+        };
+        let runs = column.packed_runs(render_code);
+        if let Some(entry) = self.records.get_mut(slot) {
+            entry.runs = runs;
+        }
+    }
+
     /// What the vertex shader reads, one record per slot.
     pub(crate) fn gpu_records(&self) -> &[GpuColumn] {
         &self.records
@@ -119,6 +149,7 @@ pub fn build(
     finest: &mut [GpuCell],
     neighbors: &[[u32; 6]],
     settings: &ColumnSettings,
+    edits: &Edits,
 ) -> ColumnTier {
     let anchor = anchor.normalize_or(Vec3::Y);
     // The region's worms, gathered ONCE: every worm that could reach any
@@ -175,10 +206,16 @@ pub fn build(
         // with the tier every `REGEN_DISTANCE_M`, so a player walking toward it
         // never arrives.
         let rim = sides[..degree].contains(&NO_NEIGHBOR);
+        // A player's edits come last, so a dug shelf survives the tier being
+        // rebuilt at a new anchor: the column is a pure function of its
+        // direction, the worms and what somebody did to it. The rim is solid
+        // by the rule above and takes its edits too - a wall you dug in is
+        // still a wall you dug in when the tier moves and it becomes the rim.
+        let made = &edits.for_cell(cell.metadata[3]);
         let column = if rim {
-            column::generate_solid(&TERRAIN, direction)
+            column::generate_edited_solid(&TERRAIN, direction, made)
         } else {
-            column::generate(&region, &field, &TERRAIN, direction)
+            column::generate_edited(&region, &field, &TERRAIN, direction, made)
         };
         records.push(GpuColumn {
             runs: column.packed_runs(render_code),
@@ -284,7 +321,7 @@ mod tests {
     /// The tier is built off the real fine set, so what is tested is what the
     /// frame is handed rather than a hand-built stand-in.
     fn tier(anchor: Vec3) -> (lod::FineSet, ColumnTier) {
-        let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
         let tier = set.take_columns();
         (set, tier)
     }
@@ -380,7 +417,7 @@ mod tests {
     #[test]
     fn side_s_of_the_record_and_side_s_of_the_neighbour_table_are_one_neighbour() {
         let anchor = Vec3::new(0.2, 0.6, -0.77).normalize();
-        let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
         let _ = set.take_columns();
         let finest = set.finest_records();
         let mut checked = 0;
@@ -409,7 +446,7 @@ mod tests {
     #[test]
     fn an_interior_cell_names_a_column_on_every_side() {
         let anchor = Vec3::new(0.51, -0.33, 0.79).normalize();
-        let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
         let tier = set.take_columns();
         let finest = set.finest_records();
         let reach = ColumnSettings::default().reach_m;
@@ -457,7 +494,7 @@ mod tests {
     fn air_by_layer() {
         use pbd_core::column::{LAYERS, layer_altitude};
         let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
-        let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
         let tier = set.take_columns();
         let total = tier.columns.len();
         println!("\n{total} columns in the tier");
@@ -516,7 +553,7 @@ mod tests {
         // machinery for a question one number answers.
         let settings = ColumnSettings::default();
         let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
-        let mut set = lod::generate_fine(anchor, &settings);
+        let mut set = lod::generate_fine(anchor, &settings, &Edits::new());
         let tier = set.take_columns();
         let finest = set.finest_records();
         let mut caves = 0;
@@ -548,7 +585,7 @@ mod tests {
     fn a_mouth_lowers_its_record_and_its_neighbours_walls_follow() {
         use pbd_core::column::layer_altitude;
         let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
-        let mut set = lod::generate_fine(anchor, &ColumnSettings::default());
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
         let tier = set.take_columns();
         let finest = set.finest_records();
         let mut mouths = 0;

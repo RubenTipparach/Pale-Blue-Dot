@@ -521,7 +521,11 @@ fn the_partition_lists_each_tile_at_its_bands_level_on_the_real_records() {
     let gpu = VisibilityGpu::new();
     let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
     let base = lod::base_records(&topology::dual_sphere(lod::BASE_LEVEL as u32));
-    let fine = lod::generate_fine(anchor, &crate::config::ColumnSettings::default());
+    let fine = lod::generate_fine(
+        anchor,
+        &crate::config::ColumnSettings::default(),
+        &pbd_core::edits::Edits::new(),
+    );
     let capacity = fine.levels.iter().map(Vec::len).max().unwrap();
     let blank = GpuCell {
         direction_height: [0.; 4],
