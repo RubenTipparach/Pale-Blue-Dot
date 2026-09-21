@@ -1,4 +1,6 @@
+mod digging;
 mod hud;
+mod menu;
 mod scene;
 mod slots;
 
@@ -24,8 +26,9 @@ use pbd_app::{
         FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, TERRAIN, river_channel, surface_code,
         surface_height, terrain_radius, tile_width_m,
     },
+    saves::{self, Pose, WorldSave},
     sky::SkyPlugin,
-    walking::{EYE_HEIGHT, WalkingConfig, WalkingPlugin},
+    walking::{EYE_HEIGHT, RestoredPose, WalkingConfig, WalkingPlugin},
     weather::WeatherPlugin,
 };
 use std::{
@@ -50,6 +53,12 @@ pub struct Launch {
     /// Capture instrument for the `shore` view: camera height above the last
     /// land cell in metres. Absent means standing eye height.
     pub height: Option<f32>,
+    /// `--dig N` digs N blocks straight down from the camera on the frame the
+    /// tier is ready, and `--place` puts one back on the layer above the last
+    /// hole. A headless run has no mouse, and a picture of a hole is the only
+    /// thing that says the verb works end to end.
+    pub dig: u32,
+    pub place: bool,
     /// `--spawn mouth` puts the spawn, and so the column tier, at the nearest
     /// cave mouth to the default spawn. Mouth patches cover a few percent of
     /// the land and the default spawn has none, so without this a walker has
@@ -57,6 +66,34 @@ pub struct Launch {
     pub spawn: Option<String>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// `--dig-ahead` digs along the camera's LOOK rather than straight down.
+    /// Digging down is right for proving the verb and useless for judging the
+    /// result: the walker falls into its own pit and the eye ends up inside
+    /// the wall, so every capture of a hole is a screen of dirt. Digging ahead
+    /// leaves them standing on the rim looking at what they made.
+    pub dig_ahead: bool,
+    /// `--pitch <degrees>` starts the walker looking that far below (negative)
+    /// or above the horizon. A capture that digs along the look needs to look
+    /// DOWN to dig a pit the way a player does - a slanted run of cells, each
+    /// taken from a different column at a different layer - and the headless
+    /// walker otherwise looks dead level at the horizon.
+    pub pitch: Option<f32>,
+    /// `--torch` puts one torch on the ground under the capture camera. A
+    /// headless run has no hands, and a lamp is the one thing in this world
+    /// whose whole point is what it does to a dark place.
+    pub torch: bool,
+    /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
+    /// world has a day in it is a different picture every run, and a harness
+    /// cannot wait six minutes for dusk.
+    pub time: Option<f32>,
+    /// `--world <name>` opens that save, creating it if it is not there.
+    /// Absent, an interactive run opens the one played most recently and a
+    /// capture writes to no world at all.
+    pub world: Option<String>,
+    /// `--menu pause|settings|saves` opens that screen at startup. A headless run has
+    /// no pointer and no keyboard, so a screen a player reaches with `Escape`
+    /// has to be reachable by a flag or it can never be photographed.
+    pub menu: Option<String>,
 }
 
 impl Launch {
@@ -65,6 +102,8 @@ impl Launch {
             capture: None,
             view: "coast".into(),
             frames: 180,
+            dig: 0,
+            place: false,
             tour: false,
             fixed: false,
             fly: false,
@@ -74,6 +113,12 @@ impl Launch {
             height: None,
             spawn: None,
             rain: 0.0,
+            world: None,
+            time: None,
+            torch: false,
+            dig_ahead: false,
+            pitch: None,
+            menu: None,
         };
         let mut i = 0;
         while i < args.len() {
@@ -82,6 +127,55 @@ impl Launch {
                     i += 1;
                     result.capture =
                         Some(args.get(i).expect("--capture requires a PNG path").into());
+                }
+                "--dig" => {
+                    i += 1;
+                    result.dig = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--dig requires a count");
+                }
+                "--place" => result.place = true,
+                "--torch" => result.torch = true,
+                "--dig-ahead" => result.dig_ahead = true,
+                "--pitch" => {
+                    i += 1;
+                    let degrees: f32 = args
+                        .get(i)
+                        .and_then(|d| d.parse().ok())
+                        .expect("--pitch requires degrees");
+                    assert!(
+                        (-89.0..=89.0).contains(&degrees),
+                        "--pitch takes degrees in -89..89"
+                    );
+                    result.pitch = Some(degrees);
+                }
+                "--time" => {
+                    i += 1;
+                    let hour: f32 = args
+                        .get(i)
+                        .and_then(|h| h.parse().ok())
+                        .expect("--time requires an hour");
+                    assert!(
+                        (0.0..=24.0).contains(&hour),
+                        "--time takes an hour in 0..24"
+                    );
+                    result.time = Some(hour);
+                }
+                "--world" => {
+                    i += 1;
+                    result.world = Some(args.get(i).expect("--world requires a name").clone());
+                }
+                "--menu" => {
+                    i += 1;
+                    let screen = args
+                        .get(i)
+                        .expect("--menu requires pause, settings or saves");
+                    assert!(
+                        matches!(screen.as_str(), "pause" | "settings" | "saves"),
+                        "--menu takes pause, settings or saves"
+                    );
+                    result.menu = Some(screen.clone());
                 }
                 "--view" => {
                     i += 1;
@@ -226,6 +320,12 @@ pub fn run(args: &[String]) {
         std::fs::create_dir_all(parent).expect("capture directory");
     }
     let photo = launch.capture.is_some() && !launch.tour && !launch.walk && !launch.fly;
+    // The world is opened BEFORE the app is built, because where the player
+    // was standing decides where the planet's fine set and the column tier are
+    // anchored. Restoring the pose afterwards would build the world around the
+    // spawn and then teleport away from it.
+    let world = open_world(&launch);
+    let restored = world.pose;
     let step = Duration::from_secs_f64(1.0 / FIXED_HZ);
     let mut app = App::new();
     app.add_plugins(
@@ -278,14 +378,45 @@ pub fn run(args: &[String]) {
         } else {
             FlyMode::Manual
         },
-        spawn_direction: spawn_direction(&launch),
+        spawn_direction: restored
+            .map(|pose| pose.position.normalize_or(Vec3::Y))
+            .unwrap_or_else(|| spawn_direction(&launch)),
         spawn_altitude: 240.0,
         minimum_clearance: if launch.tour { 45.0 } else { 1.6 },
         startup_camera: !photo,
         ..default()
     })
-    .insert_resource(slots::Hotbar::starting_kit())
-    .insert_resource(ClearColor(Color::srgb(0.002, 0.004, 0.012)))
+    // What the save recorded, or the starting kit in a new world. The hotbar
+    // rides the edit log rather than a timer, so what comes back is what was
+    // held when the last block moved.
+    .insert_resource(
+        world
+            .carried
+            .clone()
+            .map(slots::Hotbar)
+            .unwrap_or_else(slots::Hotbar::starting_kit),
+    )
+    // The world, loaded before the planet is built: `create_planet` reads its
+    // edits for the first tier, so a save's holes are there on the first frame
+    // rather than appearing when the player first walks.
+    .insert_resource(world)
+    // The clock: pinned and stopped where a capture asked for an hour, so a
+    // picture is a function of its flags rather than of when it was taken.
+    .insert_resource(pbd_app::sky::Sun {
+        clock: match launch.time {
+            Some(hour) => pbd_core::daylight::Clock::at_hour(hour),
+            None => pbd_core::daylight::Clock::default(),
+        },
+        running: launch.time.is_none() && launch.capture.is_none(),
+    })
+    .init_resource::<digging::Aim>()
+    .insert_resource(ClearColor(if std::env::var("PBD_NO_SKY").is_ok() {
+        // The hole detector's background: nothing in the palette is near it,
+        // so a magenta pixel is a pixel with no world behind it.
+        Color::srgb(1.0, 0.0, 1.0)
+    } else {
+        Color::srgb(0.002, 0.004, 0.012)
+    }))
     .insert_resource(CaptureState {
         frame: 0,
         requested: false,
@@ -303,24 +434,45 @@ pub fn run(args: &[String]) {
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
-    .add_systems(Startup, slots::spawn_keys)
+    .insert_resource(match launch.menu.as_deref() {
+        Some("pause") => menu::Screen::Pause,
+        Some("settings") => menu::Screen::Settings,
+        Some("saves") => menu::Screen::Saves,
+        _ => menu::Screen::Playing,
+    })
+    .add_systems(Startup, menu::spawn)
     .add_systems(PostStartup, slots::spawn)
+    // Escape is read before either of the world's input readers, which live in
+    // `RunFixedMainLoop`, and is cleared there so neither ever sees it.
+    .add_systems(PreUpdate, menu::toggle.after(bevy::input::InputSystems))
     .add_systems(
         Update,
         (
             configure_camera,
             scene::move_moon,
-            hud::update,
+            scene::follow_sun,
             slots::input,
-            slots::toggle_keys,
             slots::update,
+            (menu::press, menu::paint, menu::rebuild_saves).chain(),
+            autosave,
+            digging::dig_and_place,
+            digging::scripted_dig,
             capture,
         ),
     )
-    .add_systems(Last, measure_frames);
+    .init_resource::<menu::SaveIndex>()
+    .init_resource::<menu::LoadRequest>()
+    .add_systems(PreUpdate, load_world.after(menu::toggle))
+    .add_systems(Last, (measure_frames, drain_saves));
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
+            restored: restored.map(|pose| RestoredPose {
+                position: pose.position,
+                heading: pose.heading,
+                pitch: pose.pitch,
+            }),
+            pitch: launch.pitch.unwrap_or(0.0).to_radians(),
             ..default()
         })
         .add_plugins(WalkingPlugin);
@@ -341,6 +493,153 @@ pub fn run(args: &[String]) {
     app.run();
 }
 
+/// Which save this run opens.
+///
+/// A CAPTURE with no `--world` writes to nothing, which is the LOD camera's
+/// own lesson in another costume: a harness that pins a pose every frame and
+/// then saves it poisons the world for every later run. A capture that means
+/// to write says which world.
+fn open_world(launch: &Launch) -> WorldSave {
+    let root = std::path::PathBuf::from(saves::ROOT);
+    let seed = TERRAIN.seed;
+    let asked = launch.world.clone();
+    if asked.is_none() && launch.capture.is_some() {
+        return WorldSave::memory_only();
+    }
+    let listed = saves::list(&root);
+    let slot = match asked.as_deref() {
+        Some(name) => {
+            let id = saves::slot_id(name);
+            listed
+                .into_iter()
+                .find(|slot| slot.id == id || slot.file.name == name)
+                .or_else(|| saves::create(&root, name, seed).ok())
+        }
+        // No name: the one played most recently, which is what logging back
+        // on means. A first run has none and gets one.
+        None => listed
+            .into_iter()
+            .next()
+            .or_else(|| saves::create(&root, "Preview", seed).ok()),
+    };
+    let Some(slot) = slot else {
+        warn!("no world could be opened; this run will not be saved");
+        return WorldSave::memory_only();
+    };
+    if slot.file.seed != seed {
+        // A save is OF a world. Loading it into a different one would make it
+        // silently become somebody else's.
+        warn!(
+            "world '{}' was made in seed {} and this is {seed}; it will not be loaded",
+            slot.file.name, slot.file.seed
+        );
+        return WorldSave::memory_only();
+    }
+    WorldSave::open(root, slot)
+}
+
+/// Carry out a load the saves screen asked for.
+///
+/// An exclusive system, because a load touches more of the world than one set
+/// of borrows can hold: the save, the hotbar, the tier's refresh and the
+/// walker's own body. It happens between frames rather than inside the press
+/// that asked for it, which is also why `LoadRequest` exists at all.
+fn load_world(world: &mut World) {
+    let Some(slot) = world.resource_mut::<menu::LoadRequest>().0.take() else {
+        return;
+    };
+    let name = slot.file.name.clone();
+    let root = {
+        let open = world.resource::<WorldSave>();
+        // Everything queued for the world being left goes down before the
+        // writer moves: the queue is ordered, and a half-written world is the
+        // one thing a save must never leave behind.
+        open.drain();
+        open.root().to_path_buf()
+    };
+    let opened = WorldSave::open(root, slot);
+    let carried = opened.carried.clone();
+    let pose = opened.pose;
+    world.insert_resource(opened);
+    world.insert_resource(
+        carried
+            .map(slots::Hotbar)
+            .unwrap_or_else(slots::Hotbar::starting_kit),
+    );
+    // The tier is standing where the last world left it with the last world's
+    // holes in it. The distance rule cannot know that, so the load says so.
+    if let Some(mut refresh) = world.get_resource_mut::<pbd_app::planet::LodRefresh>() {
+        refresh.force();
+    }
+    if world
+        .get_resource::<pbd_app::walking::WalkingState>()
+        .is_some()
+    {
+        match pose {
+            Some(pose) => pbd_app::walking::restore(
+                world,
+                RestoredPose {
+                    position: pose.position,
+                    heading: pose.heading,
+                    pitch: pose.pitch,
+                },
+            ),
+            // A world nobody has played yet starts where a new world starts.
+            None => pbd_app::walking::respawn(world),
+        }
+    }
+    if let Some(pose) = pose {
+        world.resource_mut::<slots::Hotbar>().select(pose.selected);
+    }
+    // The list shows which world is open, so it is drawn again now one is.
+    world.resource_mut::<menu::SaveIndex>().set_changed();
+    info!("loaded world '{name}'");
+}
+
+/// Write the pose on a timer, and whenever a menu opens.
+///
+/// Pose is the one part of a save that is genuinely cheap to lose, which is
+/// exactly why it is the only part on a clock: the edits and the hotbar are
+/// written per edit and are already down. A menu opening counts because the
+/// player who opens one is usually the player about to quit.
+fn autosave(
+    time: Res<Time>,
+    screen: Res<menu::Screen>,
+    walking: Option<Res<pbd_app::walking::WalkingState>>,
+    slots: Res<slots::Hotbar>,
+    walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    mut save: ResMut<WorldSave>,
+    mut due: Local<f32>,
+) {
+    let opening = screen.is_changed() && *screen != menu::Screen::Playing;
+    *due -= time.delta_secs();
+    if !opening && *due > 0.0 {
+        return;
+    }
+    *due = saves::AUTOSAVE_S;
+    let (Some(state), Ok(position)) = (walking, walkers.single()) else {
+        return;
+    };
+    let (heading, pitch) = state.view();
+    save.snapshot(Pose {
+        position: position.0,
+        heading,
+        pitch,
+        selected: slots.selected(),
+    });
+}
+
+/// Wait for the disk on the way out.
+///
+/// The one place blocking is right is the place the player is already
+/// waiting: losing the last two digs to a quit would be the whole feature
+/// failing at its most visible moment.
+fn drain_saves(exits: MessageReader<AppExit>, save: Res<WorldSave>) {
+    if !exits.is_empty() {
+        save.drain();
+    }
+}
+
 /// Where the walker, and with it the column tier, is anchored.
 fn spawn_direction(launch: &Launch) -> Vec3 {
     let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
@@ -348,14 +647,15 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
         return Vec3::Y;
     }
     if launch.spawn.as_deref() == Some("mouth") || launch.view == "mouth" {
+        // The nearest worm that starts at the surface within a kilometre.
         let columns = pbd_app::config::ColumnSettings::default();
-        let found = pbd_core::column::nearest_mouth(
-            &columns.cave(),
+        let found = pbd_core::worms::gather(
+            &columns.worms(),
             &pbd_app::planet::TERRAIN,
             default,
-            3_000.0,
-            8.0,
-        );
+            1_000.0,
+        )
+        .nearest_opening(default);
         match found {
             Some(mouth) => {
                 info!(
@@ -364,7 +664,7 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
                 );
                 return mouth;
             }
-            None => warn!("no cave mouth within 3 km of the spawn; spawning at the default"),
+            None => warn!("no cave mouth within a kilometre of the spawn; spawning at the default"),
         }
     }
     default
@@ -416,13 +716,60 @@ fn cave_camera(
     if !["cave", "overhang", "mouth"].contains(&launch.view.as_str()) {
         return;
     }
-    use pbd_core::column::layer_altitude;
+    use pbd_core::column::{layer_altitude, layer_at};
     let tier = &fine.set.columns;
     let records = fine.set.finest_records();
-    // The chamber with the most rock over it, no deeper than forty metres: at
-    // two hundred metres down the frame is rock in every direction, which
-    // proves the point and shows nothing.
-    let mut best: Option<(f32, Vec3, f32, f32)> = None;
+    // Air at this altitude in this cell's column, which is the one question
+    // both the pick and the aim ask.
+    let air = |cell: usize, altitude: f32| -> bool {
+        let slot = tier.slots.get(cell).copied().unwrap_or(usize::MAX);
+        if slot == usize::MAX {
+            return false;
+        }
+        layer_at(altitude).is_some_and(|layer| !tier.columns[slot].solid(layer))
+    };
+    // The chamber a player can SEE DOWN, not the one with the most rock over
+    // it. Burial was the sheet carve's pick and it was right for a slab, where
+    // every chamber is the same two metres across and depth is all that is
+    // left to choose by; with worms the frames differ by whether the tunnel
+    // carries on, so the pick is the sight line, which is the instrument the
+    // carve is measured with applied at capture time. Walking cell to cell,
+    // always taking the neighbour most nearly ahead.
+    let walk = |start: usize, heading: Vec3, altitude: f32| -> (usize, Vec3) {
+        let mut cell = start;
+        let mut at = Vec3::from_slice(&records[start].direction_height[..3]);
+        let mut ahead = heading;
+        for step in 1..=24 {
+            let mut next: Option<(f32, usize, Vec3)> = None;
+            for (side, &neighbor) in fine.set.finest_neighbors[cell]
+                .iter()
+                .enumerate()
+                .take(records[cell].degree())
+            {
+                if neighbor == u32::MAX {
+                    continue;
+                }
+                let there = Vec3::from_slice(&records[neighbor as usize].direction_height[..3]);
+                let toward = (there - at).normalize_or_zero();
+                let score = toward.dot(ahead);
+                let _ = side;
+                if next.is_none_or(|(had, ..)| score > had) {
+                    next = Some((score, neighbor as usize, toward));
+                }
+            }
+            let Some((_, neighbor, toward)) = next else {
+                return (step - 1, ahead);
+            };
+            if !air(neighbor, altitude) {
+                return (step - 1, ahead);
+            }
+            cell = neighbor;
+            at = Vec3::from_slice(&records[neighbor].direction_height[..3]);
+            ahead = toward;
+        }
+        (24, ahead)
+    };
+    let mut best: Option<(usize, Vec3, f32, f32, Vec3)> = None;
     for (index, &slot) in tier.slots.iter().enumerate() {
         if slot == usize::MAX {
             continue;
@@ -437,21 +784,28 @@ fn cave_camera(
             let roof = layer_altitude(pair[1].from);
             let gap = roof - floor;
             let buried = surface - roof;
-            if (2.5..=12.0).contains(&gap)
-                && (4.0..=40.0).contains(&buried)
-                && best.is_none_or(|(had, _, _, _)| buried > had)
-            {
-                let direction = Vec3::from_slice(&records[index].direction_height[..3]);
-                best = Some((buried, direction, floor, roof));
+            if !(2.5..=12.0).contains(&gap) || !(4.0..=40.0).contains(&buried) {
+                continue;
+            }
+            let here = Vec3::from_slice(&records[index].direction_height[..3]);
+            let eye_altitude = floor + EYE_HEIGHT.min(gap - 0.5);
+            let tangent = Vec3::Y.cross(here).normalize_or_zero();
+            let bitangent = here.cross(tangent);
+            for turn in 0..6 {
+                let angle = turn as f32 * std::f32::consts::TAU / 6.0;
+                let heading = tangent * angle.cos() + bitangent * angle.sin();
+                let (reach, _) = walk(index, heading, eye_altitude);
+                if best.is_none_or(|(had, ..)| reach > had) {
+                    best = Some((reach, here, floor, roof, heading));
+                }
             }
         }
     }
     if launch.view == "mouth" {
-        // Stand on the ground outside a tunnel opening and look into it. An
-        // opening is the same thing `cave_mouths` counts: a column's air gap
-        // standing above a neighbour's cap, tall enough for a body, so a
-        // walker on that neighbour can see in and walk in.
-        use pbd_core::column::layer_altitude;
+        // Stand on the ground outside a tunnel opening and look into it. What
+        // counts as an opening is `planet_column::mouth_of`, the same function
+        // the mouth count and the walker read, so a frame cannot be taken of
+        // something the count does not call a mouth.
         let mut best: Option<(f32, usize, usize, f32, f32)> = None;
         for (index, &slot) in tier.slots.iter().enumerate() {
             if slot == usize::MAX {
@@ -459,36 +813,23 @@ fn cave_camera(
             }
             let runs = tier.columns[slot].drawn_runs();
             let cell = &records[index];
-            for pair in runs.windows(2) {
-                let floor = layer_altitude(pair[0].to);
-                let roof = layer_altitude(pair[1].from);
-                if roof - floor < 1.8 {
-                    continue;
-                }
-                for (side, &neighbor) in fine.set.finest_neighbors[index]
-                    .iter()
-                    .enumerate()
-                    .take(cell.degree())
-                {
-                    if neighbor == u32::MAX {
-                        continue;
-                    }
-                    let cap = cell.corners[side][3];
-                    // The opening: the gap stands above the neighbour's ground
-                    // and its floor is within a step of it. The deepest tunnel
-                    // behind it is the one worth looking into.
-                    if roof > cap + 0.5 && floor < cap + 1.05 {
-                        let depth = roof - floor;
-                        if best.is_none_or(|(had, ..)| depth > had) {
-                            best = Some((depth, index, neighbor as usize, floor, roof));
-                        }
-                    }
-                }
+            let Some((floor, roof, side)) = pbd_app::planet::mouth_of(cell, &runs) else {
+                continue;
+            };
+            let neighbor = fine.set.finest_neighbors[index][side];
+            if neighbor == u32::MAX || roof - floor < 1.8 {
+                continue;
+            }
+            // The deepest tunnel behind the opening is the one worth looking
+            // into: a one-cell notch is a doorway with a wall behind it.
+            let depth = roof - floor;
+            if best.is_none_or(|(had, ..)| depth > had) {
+                best = Some((depth, index, neighbor as usize, floor, roof));
             }
         }
         let Some((depth, index, outside, floor, roof)) = best else {
             panic!(
-                "no tunnel opening in the column tier; use --spawn mouth or lower mouth_threshold"
+                "no tunnel opening in the column tier; use --spawn mouth or raise worm_surface_share"
             )
         };
         let inside = Vec3::from_slice(&records[index].direction_height[..3]);
@@ -497,40 +838,42 @@ fn cave_camera(
             "mouth capture: a {depth:.0} m opening, floor {floor:.0} m, roof {roof:.0} m, from ground at {:.0} m",
             records[outside].direction_height[3]
         );
-        // One cell further back from the opening, at eye height on the ground
-        // THERE: the ground a cell back is another cell's, and a frame that
-        // stood at the outside cell's height from a cell back was inside the
-        // rock of that cell, seeing the world from below through its cap.
+        // Three cells back from the opening on the outside ground, at eye
+        // height THERE: the ground a cell back is another cell's, and a frame
+        // that stood at the outside cell's height from a cell back was inside
+        // the rock of that cell, seeing the world from below through its cap.
         let back = (ground - inside).normalize_or_zero();
-        let vantage = (ground + back * (3.0 / PLANET_RADIUS)).normalize();
-        let there =
-            pbd_app::planet::surface_height(vantage).max(records[outside].direction_height[3]);
+        let vantage = (ground + back * (4.0 / PLANET_RADIUS)).normalize();
+        let there = pbd_app::planet::surface_height(vantage);
         let eye = vantage * (PLANET_RADIUS + there + EYE_HEIGHT);
-        let target = inside * (PLANET_RADIUS + (floor + roof) * 0.5);
-        let mut transform = Transform::from_translation(eye).looking_at(target, ground);
+        // Aim at the middle of the opening, which is where a walker's eyes go.
+        let target = inside * (PLANET_RADIUS + (floor + roof) * 0.5 + EYE_HEIGHT * 0.5);
+        let mut transform = Transform::from_translation(eye).looking_at(target, vantage);
         transform.translation += launch.render_offset;
         commands.spawn((Camera3d::default(), transform));
         return;
     }
-    let Some((buried, here, floor, roof)) = best else {
-        panic!("no chamber in the column tier to photograph; raise reach_m or lower cave_threshold")
+
+    let Some((reach, here, floor, roof, along)) = best else {
+        panic!("no chamber in the column tier to photograph; raise reach_m or worm_density")
     };
     let gap = roof - floor;
     info!(
-        "cave capture: a {gap:.0} m chamber under {buried:.0} m of rock, floor {floor:.0} m, \
-         roof {roof:.0} m, {:.0} m from the tier anchor",
+        "cave capture: a {gap:.0} m chamber with {reach} cells of open tunnel ahead, floor \
+         {floor:.0} m, roof {roof:.0} m, {:.0} m from the tier anchor",
         here.dot(fine.set.anchor).clamp(-1., 1.).acos() * PLANET_RADIUS
     );
-    // `cave` stands on the chamber floor at eye height and looks along it;
-    // `overhang` looks UP at the rock over it, which is the frame that says the
-    // world has a ceiling.
+    // `cave` stands on the chamber floor at eye height and looks along the
+    // tunnel; `overhang` looks UP at the rock over it, which is the frame that
+    // says the world has a ceiling.
     let eye_altitude = floor + EYE_HEIGHT.min(gap - 0.5);
     let eye = here * (PLANET_RADIUS + eye_altitude);
-    let tangent = Vec3::Y.cross(here).normalize_or_zero();
-    let bitangent = here.cross(tangent);
-    let along = (tangent * 0.8 + bitangent * 0.6).normalize();
     let target = if launch.view == "overhang" {
-        here * (PLANET_RADIUS + roof) + along * 1.5
+        // The roof EIGHT metres down the tunnel, not the one overhead: a
+        // ceiling a metre above the lens is one flat plane at a grazing angle,
+        // which is a grey wash rather than a picture of a roof. Eight metres
+        // out it recedes and the walls either side give it depth.
+        (here + along * (8.0 / PLANET_RADIUS)).normalize() * (PLANET_RADIUS + roof - 0.3)
     } else {
         (here + along * (12.0 / PLANET_RADIUS)).normalize() * (PLANET_RADIUS + eye_altitude)
     };

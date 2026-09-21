@@ -262,6 +262,14 @@ impl PlanetContact {
     /// What a body whose FEET are at `feet` stands between. One function
     /// decides column tier or heightfield, which is the whole of how the
     /// walker gets a ceiling without learning where ceilings come from.
+    /// Which finest-level record a direction falls in, when the fine tier is
+    /// resident there. The walk is the same one the walker's own contact uses,
+    /// so a ray and a pair of feet can never disagree about which cell they
+    /// are over.
+    pub fn finest_cell(&self, direction: Vec3) -> Option<usize> {
+        self.fine.as_ref()?.locate(direction)
+    }
+
     pub fn stand(&self, feet: Vec3) -> Stand {
         let direction = feet.try_normalize().unwrap_or(Vec3::Y);
         let surface = self.sample(direction);
@@ -282,19 +290,10 @@ impl PlanetContact {
         let altitude = feet.length() - PLANET_RADIUS;
         let contact = column.contact(altitude);
         if let Some(floor) = contact.floor {
-            // The top run is the surface, and the surface is the drawn cap,
-            // not the layer boundary just over it: the column's top is the
-            // height rounded UP by under a layer, and a walker standing on
-            // that would float over the ground it can see. Inside a cave the
-            // run's own top is exactly the drawn cave floor.
-            let top = column
-                .surface()
-                .map_or(f32::MIN, |top| pbd_core::column::layer_altitude(top) + 1.0);
-            stand.floor_radius = if (floor - top).abs() < 1e-3 {
-                surface.floor_radius.min(PLANET_RADIUS + top)
-            } else {
-                PLANET_RADIUS + floor
-            };
+            // A run's top is the drawn face over it - the cap at the surface,
+            // the cave floor below - because the column and the record read
+            // one `surface_m`. A walker stands on exactly what it can see.
+            stand.floor_radius = PLANET_RADIUS + floor;
         }
         stand.ceiling_radius = contact.ceiling.map(|c| PLANET_RADIUS + c);
         stand
@@ -589,6 +588,7 @@ mod tests {
         let set = Arc::new(super::super::lod::generate_fine(
             anchor,
             &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
         ));
         let base = contact.sample(anchor);
         contact.set_fine(&set);

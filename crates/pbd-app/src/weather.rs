@@ -95,7 +95,14 @@ fn follow_rain(time: Res<Time>, settings: Res<WeatherSettings>, mut weather: Res
 /// weather menu does. It moves the FIELD rather than the rain, so a forced storm
 /// is a real one: clouds thicken, the sky closes and it rains because the field
 /// says it is overcast, not because a number was written past it.
-fn cycle_rain(keys: Res<ButtonInput<KeyCode>>, mut forcing: ResMut<StormForcing>) {
+fn cycle_rain(
+    keys: Res<ButtonInput<KeyCode>>,
+    menu: Option<Res<crate::controls::MenuOpen>>,
+    mut forcing: ResMut<StormForcing>,
+) {
+    if menu.is_some_and(|open| open.0) {
+        return;
+    }
     if keys.just_pressed(KeyCode::KeyP) {
         forcing.0 = match forcing.0 {
             f if f < 0.25 => 0.5,

@@ -5,11 +5,12 @@
 //! that rule exists to prevent.
 //!
 //! The thumbnails need no new art. The terrain shader already samples
-//! `tilesets/fields.png` as a 4x4 grid and already maps every material to a
-//! tile in it and a base colour over it; a slot is the same tile at the same
-//! tint, so a block's icon IS the texture the ground is drawn with. That is the
-//! grass blades' own trick - they sample the ground tile they stand on - asked
-//! for a second time.
+//! `tilesets/atlas.png` - every biome's tileset baked into one texture, four
+//! sheets across and four down, each a 4x4 grid - and already maps every
+//! material to a sheet, a tile in it and a base colour over it; a slot is the
+//! same tile at the same tint, so a block's icon IS the texture the ground is
+//! drawn with. That is the grass blades' own trick - they sample the ground
+//! tile they stand on - asked for a second time.
 
 use bevy::prelude::*;
 use pbd_core::inventory::{Item, SLOTS, Slots};
@@ -40,6 +41,9 @@ impl Hotbar {
             (Material::Snow, 16),
             (Material::Rock, 12),
             (Material::Ore, 3),
+            // Something to see with. A kit that could dig into the dark and
+            // not light it was a kit that could only dig in daylight.
+            (Material::Torch, 16),
         ] {
             slots.give(Item::Block(material), count);
         }
@@ -47,7 +51,8 @@ impl Hotbar {
     }
 }
 
-/// The atlas is a 4x4 grid of this many pixels a side.
+/// Sheets across the atlas, and tiles across a sheet.
+const ATLAS_SHEETS: f32 = 4.0;
 const ATLAS_TILES: f32 = 4.0;
 
 /// Which tile of the atlas a material draws with, and the colour the terrain
@@ -56,18 +61,35 @@ const ATLAS_TILES: f32 = 4.0;
 ///
 /// Several materials share a tile, which is honest: they share it on the ground
 /// too, and what tells grass from swamp grass there is the tint, here as well.
-pub fn thumbnail(material: Material) -> Option<(Vec2, Color)> {
-    let (tile, rgb): ((f32, f32), (f32, f32, f32)) = match material {
+pub fn thumbnail(material: Material) -> Option<(u32, Vec2, Color)> {
+    use pbd_app::planet::{snow_slot, tileset_slot};
+    use pbd_core::planet_gen::Biome;
+    // Which SHEET a block comes from, which is the biome it is found in: sand
+    // is a beach's, snow is the tundra's, and the rest are the home meadow's.
+    // The ground asks the same two functions for the same answer.
+    let home = |biome| tileset_slot(biome);
+    let (slot, tile, rgb): (u32, (f32, f32), (f32, f32, f32)) = match material {
         Material::Air => return None,
-        Material::Grass | Material::DryGrass => ((0., 0.), (0.12, 0.32, 0.075)),
-        Material::JungleGrass => ((0., 0.), (0.07, 0.25, 0.105)),
-        Material::Soil | Material::Dirt => ((3., 2.), (0.61, 0.48, 0.25)),
-        Material::Sand => ((3., 2.), (0.72, 0.62, 0.42)),
-        Material::Stone => ((3., 0.), (0.31, 0.34, 0.33)),
-        Material::Rock => ((3., 0.), (0.37, 0.33, 0.29)),
-        Material::Snow => ((3., 0.), (0.80, 0.90, 0.91)),
-        Material::Ore => ((3., 0.), (0.72, 0.62, 0.34)),
-        Material::Water => ((0., 2.), (0.13, 0.40, 0.56)),
+        Material::Grass | Material::DryGrass => {
+            (home(Biome::Fields), (0., 0.), (0.12, 0.32, 0.075))
+        }
+        Material::JungleGrass => (home(Biome::Jungle), (0., 0.), (0.07, 0.25, 0.105)),
+        // Earth has its own picture at last, which is the tile a wall shows
+        // under the sod rather than the beach it used to borrow.
+        Material::Soil | Material::Dirt => (home(Biome::Fields), (2., 0.), (0.61, 0.48, 0.25)),
+        Material::Sand => (home(Biome::Beach), (0., 0.), (0.72, 0.62, 0.42)),
+        Material::Stone => (home(Biome::Fields), (3., 0.), (0.31, 0.34, 0.33)),
+        Material::Rock => (home(Biome::Mountains), (3., 0.), (0.37, 0.33, 0.29)),
+        Material::Snow => (snow_slot(), (0., 0.), (0.80, 0.90, 0.91)),
+        Material::Ore => (home(Biome::Fields), (0., 1.), (0.72, 0.62, 0.34)),
+        Material::Water => (home(Biome::Ocean), (2., 2.), (0.13, 0.40, 0.56)),
+        // A torch: the wood tile, lit. The grain is what a torch is made of
+        // and the tint is the flame on it, which at a 44 px slot reads as a
+        // burning brand. It is a STAND-IN for art a torch has not been drawn
+        // yet - said here rather than left for a reader to notice, because
+        // this repository's rule is that an item ships with a visual and a
+        // borrowed tile is the weakest version of keeping it.
+        Material::Torch => (home(Biome::Fields), (2., 1.), (1.0, 0.62, 0.22)),
     };
     // The shader's albedo is a fraction of full brightness because the ground
     // is then LIT by a sun, and a slot is lit by nothing. Lifting it by a
@@ -81,6 +103,7 @@ pub fn thumbnail(material: Material) -> Option<(Vec2, Color)> {
     // floor.
     let lift = |c: f32| c.clamp(0.0, 1.0).powf(0.6);
     Some((
+        slot,
         Vec2::new(tile.0, tile.1),
         Color::srgb(lift(rgb.0), lift(rgb.1), lift(rgb.2)),
     ))
@@ -237,7 +260,7 @@ pub fn update(
             Item::Tool(_) => None,
         });
         match art {
-            Some((tile, tint)) => {
+            Some((slot, tile, tint)) => {
                 // The rect is in the image's own pixels, so it needs the loaded
                 // size. Until the atlas has loaded there is nothing to crop to,
                 // and a full-image icon would be sixteen tiles at once.
@@ -245,11 +268,17 @@ pub fn update(
                     node.color = Color::NONE;
                     continue;
                 };
-                let step = size / ATLAS_TILES;
-                let min = Vec2::new(tile.x * step.x, tile.y * step.y);
-                // Inset by a twentieth of a tile, the same margin the shader
-                // keeps, so a thumbnail never bleeds the neighbouring tile.
-                let inset = step * 0.05;
+                let sheet = size / ATLAS_SHEETS;
+                let step = sheet / ATLAS_TILES;
+                let origin = Vec2::new(
+                    (slot % ATLAS_SHEETS as u32) as f32 * sheet.x,
+                    (slot / ATLAS_SHEETS as u32) as f32 * sheet.y,
+                );
+                let min = origin + Vec2::new(tile.x * step.x, tile.y * step.y);
+                // Half a texel, which is all the bake leaves to guard: a tile
+                // is exactly 32 texels in the atlas with nothing bleeding into
+                // it, where the source sheets had soft edges to keep clear of.
+                let inset = step / 64.;
                 node.rect = Some(Rect::from_corners(min + inset, min + step - inset));
                 node.color = tint;
             }
@@ -272,8 +301,14 @@ pub fn input(
     keys: Res<ButtonInput<KeyCode>>,
     mut wheel: MessageReader<bevy::input::mouse::MouseWheel>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
+    menu: Option<Res<pbd_app::controls::MenuOpen>>,
     mut slots: ResMut<Hotbar>,
 ) {
+    // A menu holds the keyboard, so the number row does not change what you
+    // are holding while you read the bindings. The wheel is still DRAINED
+    // below whatever happens here, which is the reader's own old lesson: a
+    // reader that skips its messages delivers the whole backlog next time.
+    let held = menu.is_some_and(|open| open.0);
     const ROW: [KeyCode; SLOTS] = [
         KeyCode::Digit1,
         KeyCode::Digit2,
@@ -287,7 +322,7 @@ pub fn input(
         KeyCode::Digit0,
     ];
     for (index, key) in ROW.iter().enumerate() {
-        if keys.just_pressed(*key) {
+        if !held && keys.just_pressed(*key) {
             slots.select(index);
         }
     }
@@ -308,82 +343,8 @@ pub fn input(
             0
         };
     }
-    if walking && step != 0 {
+    if walking && step != 0 && !held {
         slots.step(step);
-    }
-}
-
-/// The full binding list, behind `H`.
-#[derive(Component)]
-pub struct KeyPanel;
-
-/// Build it hidden. `Display::None` rather than `Visibility::Hidden`: a hidden
-/// node is still laid out and still picked, so an invisible panel would go on
-/// swallowing clicks over the middle of the screen the whole time it is shut.
-pub fn spawn_keys(mut commands: Commands) {
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                top: percent(50.0),
-                left: percent(50.0),
-                margin: UiRect::new(px(-210), px(0), px(-130), px(0)),
-                width: px(420),
-                padding: UiRect::all(px(18)),
-                border: UiRect::all(px(1)),
-                flex_direction: FlexDirection::Column,
-                row_gap: px(6),
-                display: Display::None,
-                ..default()
-            },
-            BorderColor::all(Color::srgba(0.55, 0.75, 0.74, 0.6)),
-            BackgroundColor(Color::srgba(0.02, 0.06, 0.08, 0.93)),
-            KeyPanel,
-        ))
-        .with_children(|panel| {
-            for (heading, line) in [
-                ("ON FOOT", "WASD  walk    SPACE  jump    SHIFT  sprint"),
-                ("FLYING", "WASD  move    SPACE / CTRL  lift    Q / E  roll"),
-                ("", "SHIFT  cruise    X  dampeners    B  brake"),
-                ("SLOTS", "1 - 0  select    WHEEL  step"),
-                ("WORLD", "F  walk / fly    R  reset    P  storm"),
-                (
-                    "VIEW",
-                    "MOUSE  look    ESC  cursor    F12  photo    H  close",
-                ),
-            ] {
-                if !heading.is_empty() {
-                    panel.spawn((
-                        Text::new(heading),
-                        TextFont {
-                            font_size: 11.0,
-                            ..default()
-                        },
-                        TextColor(Color::srgba(0.55, 0.75, 0.74, 0.85)),
-                    ));
-                }
-                panel.spawn((
-                    Text::new(line),
-                    TextFont {
-                        font_size: 12.0,
-                        ..default()
-                    },
-                    TextColor(Color::srgb(0.88, 0.94, 0.91)),
-                ));
-            }
-        });
-}
-
-/// `H` opens and closes it.
-pub fn toggle_keys(keys: Res<ButtonInput<KeyCode>>, mut panel: Query<&mut Node, With<KeyPanel>>) {
-    if !keys.just_pressed(KeyCode::KeyH) {
-        return;
-    }
-    for mut node in &mut panel {
-        node.display = match node.display {
-            Display::None => Display::Flex,
-            _ => Display::None,
-        };
     }
 }
 
@@ -411,10 +372,14 @@ mod tests {
         ] {
             let art = thumbnail(material);
             assert!(art.is_some(), "{material:?} would draw a blank slot");
-            let (tile, _) = art.unwrap();
+            let (slot, tile, _) = art.unwrap();
             assert!(
                 (0.0..ATLAS_TILES).contains(&tile.x) && (0.0..ATLAS_TILES).contains(&tile.y),
-                "{material:?} points outside the {ATLAS_TILES}x{ATLAS_TILES} atlas"
+                "{material:?} points outside its {ATLAS_TILES}x{ATLAS_TILES} sheet"
+            );
+            assert!(
+                slot < (ATLAS_SHEETS * ATLAS_SHEETS) as u32,
+                "{material:?} points at sheet {slot}, outside the atlas"
             );
         }
         assert!(thumbnail(Material::Air).is_none(), "air is not a block");
@@ -426,7 +391,7 @@ mod tests {
     #[test]
     fn the_thumbnails_keep_their_relative_brightness() {
         let value = |material| {
-            let (_, colour) = thumbnail(material).unwrap();
+            let (_, _, colour) = thumbnail(material).unwrap();
             let rgb = colour.to_srgba();
             rgb.red + rgb.green + rgb.blue
         };

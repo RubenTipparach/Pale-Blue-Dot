@@ -875,10 +875,10 @@ that single fact.
 | Term | Tenebris `hex.fs` | Port `hex_terrain.wgsl` | Live `planet_surface.wgsl` |
 | --- | --- | --- | --- |
 | Terminator | `smoothstep(lo, hi, dot(radial, sun))`, uniform band | same, uniform band | same shape, band inline as `(-0.13, 0.20)` |
-| Ambient | `ambient * max(0.05, mix(night, 1, bright) * sky)` | same, floor is `settings.y` | `(0.16,0.21,0.27) * mix(0.12,1,day) * sky`, **no floor** |
+| Ambient | `ambient * max(0.05, mix(night, 1, bright) * sky)` | same, floor is `settings.y` | `(0.16,0.21,0.27) * max(0.05, mix(0.12,1,day) * sky)`, floor PORTED by `voxel-light` |
 | Direct | `max(dot(n,sun),0) * bright * sky` | same, times `sun.w` | same, sun colour inline as `(1.12,1.03,0.87)` |
-| Block / torch light | `torch.rgb * torch.w * v_torch_light` | `rgb * ambient.w`, 4 bits per channel | **absent** |
-| Light is sampled | per **vertex**, interpolated | per **face**, flat | per **cell**, flat across a 19 m tile |
+| Block / torch light | a per-vertex inverse-square proximity sum; its BFS block nibble is dead code | `rgb * ambient.w`, 4 bits per channel | **absent**, and held: there is no lamp to place |
+| Light is sampled | per **vertex**, interpolated | per **face**, flat | per **vertex** inside the column tier since `voxel-light`; per cell and flat outside it |
 | Underwater absorption | `exp(-absorption * depth)`, then mix to water colour | identical | **absent**, surface tint only |
 | Cutout foliage | 4x4 Bayer screen door | identical | **absent** |
 | Limb rim | `fres^p * (0.25 + 0.75*day) * intensity * (1 - ff^2) * sky` | identical, every term a uniform | `pow(...,4) * day * (1 - air) * 0.55`, **night floor dropped**, every term a literal |
@@ -894,13 +894,19 @@ Four of those differences are visible in a still frame:
    `distant_rim_floor: 0.25`, which is the `0.25 + 0.75 * day` in `hex.fs`. The
    live rim here is multiplied by `daylight` outright, so the unlit edge falls
    to zero. `hex_terrain.wgsl` has the floor and is not the shader running.
-2. **Light is flat across a whole tile.** Tenebris carries sky and torch light
-   as vertex attributes and interpolates them, so a wall grades from its lit top
-   to its shaded foot. Ours is `@interpolate(flat)` per column, so an 18.9 m
-   hexagon is one brightness and every tile edge is a hard step. At Tenebris's
-   2.8 m tiles a flat sample is nearly free; at ours it is the single biggest
-   reason the ground reads as faceted plates instead of terrain, and it
-   compounds the scale problem measured in the section above.
+2. **Light was flat across a whole tile, and inside the column tier it is not
+   any more.** Tenebris carries sky light as a vertex attribute and
+   interpolates it, so a wall grades from its lit top to its shaded foot. Ours
+   was `@interpolate(flat)` per cell, which this section called "the single
+   biggest reason the ground reads as faceted plates instead of terrain".
+   `voxel-light` bakes the propagated field per (cell, layer) and samples it
+   per CORNER in the vertex shader, with the reference's own contact ladder
+   over it, so a face now varies across itself. **Outside the column tier the
+   old flat value still stands**, because a heightfield cell has no inside to
+   light: the faceting is gone where there are blocks and caves and remains
+   where there is only a surface. Measured: a cave interior went from 74.2 of
+   255 to 26.4, and the open meadow from 92.5 to 92.3 - the control, unchanged
+   to within 0.2%.
 3. **There is no second planet.** Every colour, threshold and falloff in the
    live shader is a numeric literal, so a second tileset means editing WGSL.
    Tenebris answers this with a `lod.yaml` section per tileset (water colour and

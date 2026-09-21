@@ -6,7 +6,8 @@
 //! This is a surface-column prototype, not the editable volumetric chunk engine.
 
 #[path = "planet_column.rs"]
-pub(crate) mod column;
+pub mod column;
+pub use column::mouth_of;
 #[path = "planet_contact.rs"]
 mod contact;
 #[path = "planet_lattice.rs"]
@@ -24,10 +25,10 @@ mod visibility_tests;
 mod water;
 
 pub use contact::{PlanetContact, SurfaceContact};
-pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, PlanetFine, tile_width_m};
+pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, PlanetFine, tile_width_m};
 pub use terrain::{
-    ELEVATION_STEP, PLANET_RADIUS, TERRAIN, river_channel, surface_code, surface_height,
-    terrain_radius,
+    DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, TERRAIN, river_channel, snow_slot,
+    surface_code, surface_height, terrain_radius, tileset_slot,
 };
 pub use water::{emerge, submersion};
 
@@ -109,7 +110,8 @@ const INDIRECT_BYTES: u64 = 5 * 16;
 #[cfg(test)]
 pub(crate) fn column_vertices() -> u32 {
     let runs = pbd_core::column::MAX_RUNS as u32;
-    runs * (18 + 18) + 6 * runs * (runs + 1) * 6
+    // ...and a torch: a four-sided post and a two-triangle head.
+    runs * (18 + 18) + 6 * runs * (runs + 1) * 6 + 30
 }
 /// Where the column branch starts: after the clutter.
 #[cfg(test)]
@@ -220,6 +222,9 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<PlanetBase>::default(),
             ExtractResourcePlugin::<lod::PlanetFine>::default(),
             ExtractResourcePlugin::<PlanetClock>::default(),
+            // The sun moves now, so the render world needs this frame's, not
+            // the one the pipeline was built with.
+            ExtractResourcePlugin::<crate::sky::Sun>::default(),
             ExtractResourcePlugin::<PlanetArt>::default(),
             ExtractResourcePlugin::<PlanetRenderFrame>::default(),
             ExtractComponentPlugin::<PlanetSurface>::default(),
@@ -263,6 +268,7 @@ fn create_planet(
     assets: Res<AssetServer>,
     flight: Res<crate::flight_view::FlightViewConfig>,
     columns: Res<crate::config::ColumnSettings>,
+    edits: Res<crate::saves::WorldSave>,
 ) {
     let started = std::time::Instant::now();
     let cells = topology::dual_sphere(lod::BASE_LEVEL as u32);
@@ -272,7 +278,14 @@ fn create_planet(
     // The fine bands around the spawn, synchronously, so the walker has its
     // tile to stand on before its first tick.
     let anchor = contacts.find_land_near(flight.spawn_direction);
-    let fine = Arc::new(lod::generate_fine(anchor, &columns));
+    if !edits.edits.is_empty() {
+        info!(
+            "{} edits across {} cells loaded from the save",
+            edits.edits.len(),
+            edits.edits.cells()
+        );
+    }
+    let fine = Arc::new(lod::generate_fine(anchor, &columns, &edits.edits));
     contacts.set_fine(&fine);
     let fine_count: usize = fine.levels.iter().map(Vec::len).sum();
     info!(
@@ -300,10 +313,27 @@ fn create_planet(
             cell.direction_height[3] < surface_height(direction) - 0.5
         })
         .count();
+    // What the light bake costs, measured rather than asserted: it decides
+    // whether a dig can afford to relight the whole tier, which is what a dig
+    // does.
+    let lit = std::time::Instant::now();
+    let mut relit = tier.clone();
+    relit.relight();
+    let relight_ms = lit.elapsed().as_secs_f64() * 1000.;
+    let dark = relit
+        .columns
+        .iter()
+        .enumerate()
+        .flat_map(|(slot, col)| {
+            (1..pbd_core::column::LAYERS).map(move |layer| (slot, layer, col.solid(layer)))
+        })
+        .filter(|&(slot, layer, solid)| !solid && relit.sky(slot, layer) == 0)
+        .count();
     info!(
         "Column tier: anchor {anchor:?}, {} columns within {:.0} m of it, {caves} of them carrying a cave, \
          {mouths} records lowered by a mouth, \
-         {:.2} runs mean, {:.2} MiB of records",
+         {:.2} runs mean, {:.2} MiB of records, \
+         {dark} unlit air cells, light bake {relight_ms:.1} ms, {:.2} MiB of light",
         tier.columns.len(),
         columns.reach_m,
         tier.columns
@@ -312,6 +342,7 @@ fn create_planet(
             .sum::<usize>() as f64
             / tier.columns.len().max(1) as f64,
         (tier.columns.len() * size_of::<column::GpuColumn>()) as f64 / 1_048_576.,
+        (tier.columns.len() * column::LIGHT_WORDS * 4) as f64 / 1_048_576.,
     );
     info!(
         "Planet scale: r={:.0} m; base L{} gives {:.2} m mean tile width ({:.2}-{:.2} m), \
@@ -335,7 +366,7 @@ fn create_planet(
         version: 1,
     });
     commands.insert_resource(PlanetArt(assets.load_with_settings(
-        "tilesets/fields.png",
+        "tilesets/atlas.png",
         |settings: &mut ImageLoaderSettings| settings.sampler = ImageSampler::nearest(),
     )));
     commands.spawn((
@@ -413,6 +444,37 @@ struct PlanetParams {
     // metres of burial it reaches that floor over, and the cosine of twice the
     // reach: the ANGULAR gate the visibility pass gives a column tier cell.
     column: Vec4,
+    // How deep the sod and the soil run, in metres, and two spares. Fed from
+    // `pbd_core::column`, which is where the cells themselves are stacked: a
+    // wall shows what a shovel would find, because both read these two numbers.
+    ground: Vec4,
+    // Which slot of `atlas.png` each biome draws from, in `Biome` order: ocean,
+    // beach, fields, desert, then jungle, swamp, mountains, tundra. The shader
+    // reads the biome off the cell it is already given, so a sheet per biome
+    // costs one lookup and no second binding.
+    tilesets: [UVec4; 2],
+}
+
+/// The eight biome slots, in `Biome` order, packed two vec4s wide for the
+/// uniform. Written here rather than in the shader because which sheet a
+/// biome draws from is the app's answer and the shader's lookup.
+fn tileset_slots() -> [UVec4; 2] {
+    use pbd_core::planet_gen::Biome;
+    let of = |b| terrain::tileset_slot(b);
+    [
+        UVec4::new(
+            of(Biome::Ocean),
+            of(Biome::Beach),
+            of(Biome::Fields),
+            of(Biome::Desert),
+        ),
+        UVec4::new(
+            of(Biome::Jungle),
+            of(Biome::Swamp),
+            of(Biome::Mountains),
+            of(Biome::Tundra),
+        ),
+    ]
 }
 
 #[derive(Resource)]
@@ -422,6 +484,10 @@ struct PlanetGpu {
     /// it. The tier is the innermost part of the finest band, so this is small:
     /// a few thousand slots of 48 bytes.
     columns: Buffer,
+    /// The sky level of every cell of every column tier slot, four layers to a
+    /// word. What a face's corner samples to find out how much daylight
+    /// reached the air it opens onto.
+    light: Buffer,
     /// Record slots in the buffer: the base then four fine regions.
     slots: u32,
     base_count: u32,
@@ -478,6 +544,15 @@ fn upload_planet(
         mapped_at_creation: false,
     });
     queue.write_buffer(&cells, 0, bytemuck::cast_slice(base.0.as_slice()));
+    // Zero-initialised: a slot nothing has written is DARK, which is the safe
+    // way round. A light buffer defaulting to full daylight would light every
+    // cave in the tier on the frame before its bake arrived.
+    let light = device.create_buffer(&BufferDescriptor {
+        label: Some("Persistent planet voxel sky light for the column tier"),
+        size: column::COLUMN_CAPACITY as u64 * column::LIGHT_WORDS as u64 * 4,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
     // Zero-initialised: every run word is the absent one, so a slot nothing has
     // written draws no face at all.
     let columns = device.create_buffer(&BufferDescriptor {
@@ -487,6 +562,7 @@ fn upload_planet(
         mapped_at_creation: false,
     });
     commands.insert_resource(PlanetGpu {
+        light,
         cells,
         columns,
         slots,
@@ -525,6 +601,11 @@ fn upload_fine(
     let records = fine.set.columns.gpu_records();
     if !records.is_empty() {
         queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(records));
+        // The light goes up with the records that decide what it lights. Two
+        // uploads a frame apart would draw one frame of the new geometry lit
+        // by the old world.
+        let light = fine.set.columns.gpu_light();
+        queue.write_buffer(&planet.light, 0, bytemuck::cast_slice(&light));
     }
     planet.uploaded = fine.version;
     planet.lod = lod::LodParams::of(&fine.set);
@@ -553,6 +634,7 @@ fn draw_layout() -> BindGroupLayoutDescriptor {
                     false,
                     NonZeroU64::new(size_of::<column::GpuColumn>() as u64),
                 ),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
             ),
         ),
     )
@@ -650,6 +732,21 @@ impl SpecializedRenderPipeline for PlanetPipeline {
     }
 }
 
+/// Every authored number this pass reads, in one place.
+///
+/// Four `Res<...Settings>` that always travel together, and the reason they
+/// are a struct is Bevy's own limit rather than taste: adding the sun took
+/// this system to seventeen parameters, and the error says nothing whatever
+/// about arguments - it says a function is "not a system set". That is the
+/// missing-struct smell `CLAUDE.md` names, arriving exactly as it warns.
+#[derive(bevy::ecs::system::SystemParam)]
+pub(crate) struct Tunables<'w> {
+    water: Res<'w, crate::config::WaterSettings>,
+    weather: Res<'w, crate::config::WeatherSettings>,
+    scatter: Res<'w, crate::config::ScatterSettings>,
+    columns: Res<'w, crate::config::ColumnSettings>,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn prepare_views(
     mut commands: Commands,
@@ -661,14 +758,16 @@ fn prepare_views(
     art: Res<PlanetArt>,
     images: Res<RenderAssets<GpuImage>>,
     clock: Res<PlanetClock>,
+    sun: Res<crate::sky::Sun>,
     frame: Res<PlanetRenderFrame>,
-    water_settings: Res<crate::config::WaterSettings>,
-    weather_settings: Res<crate::config::WeatherSettings>,
-    scatter: Res<crate::config::ScatterSettings>,
-    columns: Res<crate::config::ColumnSettings>,
+    tunables: Tunables,
     weather: Res<crate::weather::Weather>,
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
+    let water_settings = &tunables.water;
+    let weather_settings = &tunables.weather;
+    let scatter = &tunables.scatter;
+    let columns = &tunables.columns;
     let Some(planet) = planet else {
         return;
     };
@@ -696,7 +795,7 @@ fn prepare_views(
         let params = PlanetParams {
             clip_from_body,
             camera: camera_position.extend(1.),
-            sun: crate::sky::SUN_DIRECTION.normalize().extend(1.),
+            sun: sun.direction().extend(1.),
             settings: Vec4::new(PLANET_RADIUS, planet.slots as f32, clock.0, foliage_range),
             water_absorption: Vec3::from_array(water_settings.absorption_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),
@@ -767,10 +866,20 @@ fn prepare_views(
                 } else {
                     columns.reach_m
                 },
-                columns.cave_dark,
-                columns.cave_dark_depth_m,
+                // Two lanes the burial stand-in used. It is gone: the voxel
+                // field in `skylight` is what darkens a cave now, and a knob
+                // nothing reads is a knob the next reader has to prove dead.
+                0.,
+                0.,
                 (2.0 * columns.reach_m / PLANET_RADIUS).cos(),
             ),
+            ground: Vec4::new(
+                pbd_core::column::SOD_DEPTH_M,
+                pbd_core::column::SOIL_DEPTH_M,
+                terrain::snow_slot() as f32,
+                0.,
+            ),
+            tilesets: tileset_slots(),
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
@@ -827,6 +936,7 @@ fn prepare_views(
                     list.as_entire_binding(),
                     &atlas.texture_view,
                     planet.columns.as_entire_binding(),
+                    planet.light.as_entire_binding(),
                 )),
             )
         };
@@ -957,15 +1067,18 @@ mod pipeline_tests {
     #[test]
     fn actual_pipeline_layouts_use_static_offsets_and_correct_storage_access() {
         // 288 before the clutter knobs; four more vec4s for the reach and
-        // fade, the chances, the sizes and the shrub, and one for the column
-        // tier's reach and its cave-darkening stand-in.
+        // fade, the chances, the sizes and the shrub, one for the column
+        // tier's reach and its cave-darkening stand-in, one for how deep the
+        // sod and the soil run, and two for the tileset slot per biome.
         assert_eq!(
             PlanetParams::min_size().get(),
-            368,
+            416,
             "actual encoded Rust uniform must match WGSL Params"
         );
         for (layout, read_only_bindings) in [
-            (draw_layout(), &[1, 2, 4][..]),
+            // 5 is the voxel sky light: read only, like the cells, the
+            // visible list and the column records it is sampled beside.
+            (draw_layout(), &[1, 2, 4, 5][..]),
             (compute_layout(), &[1][..]),
         ] {
             for entry in &layout.entries {

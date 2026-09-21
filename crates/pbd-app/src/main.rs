@@ -22,8 +22,14 @@ fn main() {
     }
     if args.iter().any(|s| s == "--help" || s == "-h") {
         println!(
-            "Pale Blue Dot — planet explorer\n\n  run.bat                         Walk on the planet\n  run.bat --fly                   Start in free flight\n  run.bat --tour                  Automated planet flight\n  run.bat --verify-flight         Headless full circumnavigation check\n  run.bat --headless 600          Core simulation smoke\n  run.bat --capture walk.png --walk --frames 180\n  run.bat --capture orbit.png --view orbit --frames 180\n  run.bat --capture sea.png --view shore --height 50\n  run.bat --capture rain.png --view shore --rain 1\n  run.bat --capture cave.png --view cave\n  run.bat --walk --spawn mouth        Start beside a cave mouth\n\nViews: orbit, coast, surface, night, pole, shore (eye-height polar coast), wade, dive,\n       cave (inside a generated cave), overhang (looking up at its roof),\n       mouth (a tunnel opening seen from outside; --spawn mouth anchors the world on one)\nP cycles the rain.\nClick to capture mouse; WASD move; mouse look; F walk/fly; R reset; Esc cursor; F12 screenshot.\nWalking: Space jump, Shift sprint. Flying: Space/Ctrl lift, Q/E roll, Shift cruise, X dampeners, B brake."
+            "Pale Blue Dot - planet explorer\n\n  run.bat                         Walk on the planet\n  run.bat --fly                   Start in free flight\n  run.bat --tour                  Automated planet flight\n  run.bat --verify-flight         Headless full circumnavigation check\n  run.bat --headless 600          Core simulation smoke\n  run.bat --capture walk.png --walk --frames 180\n  run.bat --capture orbit.png --view orbit --frames 180\n  run.bat --capture sea.png --view shore --height 50\n  run.bat --capture rain.png --view shore --rain 1\n  run.bat --capture cave.png --view cave\n  run.bat --capture pause.png --menu pause    Photograph a menu screen\n  run.bat --walk --spawn mouth        Start beside a cave mouth\n  run.bat --world Caves               Open (or make) a named world\n\nViews: orbit, coast, surface, night, pole, shore (eye-height polar coast), wade, dive,\n       cave (inside a generated cave), overhang (looking up at its roof),\n       mouth (a tunnel opening seen from outside; --spawn mouth anchors the world on one)\n\nControls. The same table the settings page draws, so the two cannot disagree:"
         );
+        // One table, read here and by the settings page. It used to be written
+        // out three times - here, in a panel behind `H`, and in a strip over
+        // the hotbar - and all three had gone stale in the same way: none of
+        // them mentioned digging, months after it shipped.
+        #[cfg(feature = "desktop")]
+        println!("{}", pbd_app::controls::help_text());
         return;
     }
     #[cfg(feature = "desktop")]

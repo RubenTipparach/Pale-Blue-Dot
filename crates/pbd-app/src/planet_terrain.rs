@@ -25,9 +25,14 @@ pub const TERRAIN: TerrainConfig = TerrainConfig::TENEBRIS;
 /// Normalizing here also makes the collision query safe for arbitrary poses.
 pub fn surface_height(direction: Vec3) -> f32 {
     let d = direction.normalize_or(Vec3::Y);
-    let height = planet_gen::surface_altitude(&TERRAIN, d);
-    (height / ELEVATION_STEP).floor() * ELEVATION_STEP
+    // The column's own rule, so a cap and the column top under it are one
+    // number: `column::surface_m` floors to the layer, and the layer is the
+    // elevation step.
+    pbd_core::column::surface_m(&TERRAIN, d)
 }
+// The record's step and the column's layer are the same metre; if the step
+// ever moves, `surface_height` has to quantise to it rather than to the layer.
+const _: () = assert!(ELEVATION_STEP == 1.0);
 
 /// Solid terrain or water surface radius for assisted-flight clearance.
 pub fn terrain_radius(direction: Vec3) -> f32 {
@@ -61,15 +66,84 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
 /// level, which a face underground has neither of.
 pub fn render_code(material: Material) -> u32 {
     match material {
-        Material::Sand | Material::Dirt => 1,
+        Material::Sand => 1,
         Material::Stone | Material::Rock | Material::Ore => 5,
         Material::Snow => 6,
         Material::JungleGrass => 3,
         Material::Water | Material::Air => 0,
-        // Soil, grass and dry grass: the shader's own default green.
+        // Earth. It was drawn as the sward for as long as it shared a code
+        // with grass, so a dirt layer under the turf and a cave wall cut
+        // through one both came out green; and the material actually named
+        // dirt shared the SAND code, so a mud flat was drawn as beach.
+        Material::Soil | Material::Dirt => DIRT,
+        // Grass and dry grass: the shader's own default green.
         _ => 2,
     }
 }
+
+/// The tilesets in the order `atlas.png` holds them, which is the sorted file
+/// name. Both this and `tools/build_tileset_atlas.py` DERIVE the order from
+/// the names rather than storing a manifest, so there is no third file to fall
+/// out of step; `the_atlas_holds_the_tilesets_this_names` reads the real
+/// directory and the real PNG and holds them together.
+pub const TILESETS: [&str; 14] = [
+    "asteroid",
+    "basalt_wastes",
+    "beach",
+    "desert",
+    "fields",
+    "frozen_wastes",
+    "jungle",
+    "lunar_regolith",
+    "mountains",
+    "ocean",
+    "redwood_forest",
+    "sporewood",
+    "swamp",
+    "tundra",
+];
+
+/// Which tileset a biome is drawn from. Every sheet keeps the same layout -
+/// (0,0) its own ground, (1,0) that ground fading into the earth under it,
+/// (2,0) the earth, (3,0) the stone - so a biome is a slot and nothing else
+/// about the drawing changes.
+pub fn tileset_slot(biome: Biome) -> u32 {
+    let name = match biome {
+        Biome::Ocean => "ocean",
+        Biome::Beach => "beach",
+        Biome::Fields => "fields",
+        Biome::Desert => "desert",
+        Biome::Jungle => "jungle",
+        Biome::Swamp => "swamp",
+        Biome::Mountains => "mountains",
+        Biome::Tundra => "tundra",
+    };
+    TILESETS
+        .iter()
+        .position(|&t| t == name)
+        .expect("every biome names a shipped tileset") as u32
+}
+
+/// Snow is a MATERIAL rather than a biome: it caps a field above the snow line
+/// and a pole at any height, so its side cannot come from the cell's own sheet
+/// or a snowy meadow would fade into summer grass. It takes the tundra sheet,
+/// whose (1,0) is snow over earth - Tenebris's `dirt_snow`, authored.
+pub fn snow_slot() -> u32 {
+    tileset_slot(Biome::Tundra)
+}
+
+/// Earth, on its own code at last. The two above it are faces rather than
+/// materials - the picture a sod cell shows on its SIDE, which is that sod
+/// fading into the earth under it - and nothing in a column is ever made of
+/// them, so they are the shader's to derive and never a cell's material.
+pub const DIRT: u32 = 10;
+/// The side of a grass cell: `fields.png` tile (1,0), the shipped transition.
+pub const GRASS_SIDE: u32 = 11;
+/// The side of a snow cell: the same transition with its sod band taken to
+/// snow, which is Tenebris's `dirt_snow` derived rather than authored. The
+/// authored tile exists at (1,0) of `tundra.png` and `frozen_wastes.png` and
+/// is out of reach until a body can bind its own tileset.
+pub const SNOW_SIDE: u32 = 12;
 
 fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
     let material = planet_gen::top_material(&TERRAIN, direction, height);
@@ -85,6 +159,96 @@ fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    /// The three face codes are written here AND in `planet_surface.wgsl`,
+    /// which is two copies of one fact. So this reads the REAL shader and
+    /// holds it to these: a code that drifts is a wall drawn as something
+    /// else, and nothing else in the build would notice.
+    #[test]
+    fn the_shader_agrees_about_the_face_codes() {
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        for (name, code) in [
+            ("DIRT_CODE", super::DIRT),
+            ("GRASS_SIDE_CODE", super::GRASS_SIDE),
+            ("SNOW_SIDE_CODE", super::SNOW_SIDE),
+        ] {
+            let line = format!("const {name} = {code}u;");
+            assert!(
+                shader.contains(&line),
+                "planet_surface.wgsl should declare `{line}`"
+            );
+        }
+    }
+
+    /// The voxel light rule is written TWICE: in `pbd_core::light`, where it
+    /// is tested, and in `planet_surface.wgsl`, where it actually runs -
+    /// because every vertex in this renderer is generated in the shader, so
+    /// there is no CPU mesh to bake a corner into. Two copies of one fact
+    /// drift, so this reads the REAL shader and holds it to the core's
+    /// numbers.
+    ///
+    /// What it proves is narrow and worth saying: that the CONSTANTS agree. It
+    /// cannot prove the shader's arithmetic, and the captures are what check
+    /// that. A ladder quietly changed in one file lights every crease in the
+    /// world differently and nothing else in the build says a word.
+    #[test]
+    fn the_shader_carries_the_reference_light_constants() {
+        use pbd_core::light;
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        for line in [
+            format!("const LIGHT_MAX: f32 = {:.1};", light::MAX as f32),
+            format!("const CONTACT_1: f32 = {:.2};", light::CONTACT[1]),
+            format!("const CONTACT_2: f32 = {:.2};", light::CONTACT[2]),
+            format!("const LIGHT_LAYERS: u32 = {}u;", pbd_core::column::LAYERS),
+            format!(
+                "const LIGHT_WORDS: u32 = {}u;",
+                crate::planet::column::LIGHT_WORDS
+            ),
+        ] {
+            assert!(
+                shader.contains(&line),
+                "planet_surface.wgsl should declare `{line}`"
+            );
+        }
+        // The step is one, and the shader relies on it: `corner_light` steps
+        // up exactly one layer where it finds no air, and `sky_at` divides by
+        // LIGHT_MAX with nothing else in the way.
+        assert_eq!(
+            light::STEP,
+            1,
+            "a step of anything else needs the shader to know"
+        );
+    }
+
+    /// The atlas is baked by `tools/build_tileset_atlas.py`, which derives its
+    /// slot order by sorting the tileset file names. This names the same order
+    /// and would be a silent lie if a tileset were added, so it reads the real
+    /// directory and the real PNG's header.
+    #[test]
+    fn the_atlas_holds_the_tilesets_this_names() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/tilesets");
+        let mut found: Vec<String> = std::fs::read_dir(&dir)
+            .expect("the tilesets ship with the repository")
+            .filter_map(|entry| {
+                let path = entry.ok()?.path();
+                let stem = path.file_stem()?.to_str()?.to_owned();
+                (path.extension()? == "png" && stem != "atlas").then_some(stem)
+            })
+            .collect();
+        found.sort();
+        assert_eq!(found, super::TILESETS, "the slot order is the sorted name");
+
+        let atlas = std::fs::read(dir.join("atlas.png")).expect("the atlas is committed");
+        let width = u32::from_be_bytes(atlas[16..20].try_into().unwrap());
+        let height = u32::from_be_bytes(atlas[20..24].try_into().unwrap());
+        // Four sheets across and down, four tiles each, 32 texels a tile:
+        // the grid `pixel_tile` indexes.
+        assert_eq!(
+            (width, height),
+            (512, 512),
+            "atlas.png is 4x4 sheets of 4x4 tiles"
+        );
+    }
+
     use super::*;
     #[test]
     fn clearance_is_finite_quantized_and_covers_land_and_ocean() {

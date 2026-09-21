@@ -30,6 +30,17 @@ const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
 #[derive(Resource, Clone, Copy)]
 pub struct WalkingConfig {
     pub start_walking: bool,
+    /// Where a LOADED world puts the walker.
+    ///
+    /// The spawn rule finds land near a direction and steps four metres off
+    /// the trunk, which is right for a new world and wrong for a save: a
+    /// player who logged off in a cave, on a ledge or in the sea expects to
+    /// come back THERE, and the spawn rule would put them on the surface
+    /// nearby. Absent is a new world.
+    pub restored: Option<RestoredPose>,
+    /// The look pitch a walker starts with when nothing is restored, radians.
+    /// A capture that digs along the look sets it; a fresh game looks level.
+    pub pitch: f32,
     pub walk_speed: f32,
     pub sprint_speed: f32,
     pub jump_speed: f32,
@@ -50,16 +61,28 @@ pub struct WalkingConfig {
     pub water_submerged_jump_mult: f32,
 }
 
+/// Exactly where a save left the player.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RestoredPose {
+    pub position: Vec3,
+    pub heading: Vec3,
+    pub pitch: f32,
+}
+
 impl Default for WalkingConfig {
     fn default() -> Self {
         Self {
             start_walking: true,
+            restored: None,
+            pitch: 0.0,
             walk_speed: 8.0,
             sprint_speed: 14.0,
             jump_speed: 12.0,
-            // One terrain cell (`planet::ELEVATION_STEP`) plus the contact skin:
-            // Tenebris walks up one block, and a step it cannot climb is a wall.
-            step_height: 1.05,
+            // One terrain cell plus the contact skin: Tenebris walks up one
+            // block, and a step it cannot climb is a wall. The cave mouth rule
+            // asks the same constant, so a doorway the count offers is a
+            // doorway this walker can take.
+            step_height: crate::planet::column::STEP_M,
             // Tenebris's water block, measured off its lod.yaml. The feel these
             // make: hold the jump control to rise at about 4.2 m/s, release it
             // and sink at about 2.5 m/s, both being the terminal speeds of
@@ -79,6 +102,11 @@ impl Default for WalkingConfig {
 #[derive(Resource, Clone, Copy, Default)]
 pub struct WalkingReadout {
     pub active: bool,
+    /// Whether the walker has the pointer. Anything the player aims has to
+    /// ask: a shovel that swings while the cursor is free swings through
+    /// whatever the cursor was over, which is a menu button or another
+    /// window.
+    pub captured: bool,
     pub grounded: bool,
     pub sprinting: bool,
     pub speed: f32,
@@ -123,6 +151,13 @@ pub struct WalkingState {
 }
 
 impl WalkingState {
+    /// Where the player is looking: the tangent heading and the pitch off it.
+    /// What an autosave writes, and the only thing outside this module that
+    /// needs the view's two halves apart.
+    pub fn view(&self) -> (Vec3, f32) {
+        (self.heading, self.pitch)
+    }
+
     /// Point the walker at `target` while standing on `up`. The capture
     /// scripts need it; gameplay turns with the mouse.
     pub fn face(&mut self, up: Vec3, target: Vec3) {
@@ -193,14 +228,22 @@ fn setup_walking(world: &mut World) {
     assert!(config.step_height.is_finite() && config.step_height >= 0.0);
     let direction = world.resource::<FlightViewConfig>().spawn_direction;
     let ground = world.resource::<PlanetContact>();
-    let center = ground.find_land_near(direction).normalize();
-    // Cosmetic trunks occupy cell centers. Start four metres beside the trunk,
-    // still safely inside this cap, so the first-person view opens onto the land.
-    let up = (center * ground.sample(center).radius
-        + tangent_heading(Vec3::Y.cross(center), center) * 4.0)
-        .normalize();
-    let support = footprint(ground, up * (ground.sample(up).radius + HALF_HEIGHT)).support;
-    let position = up * (support + HALF_HEIGHT + CONTACT_SKIN);
+    let (position, up) = match config.restored {
+        // A save says exactly where, and the ground rule is not consulted:
+        // the position it holds is one the player was standing at.
+        Some(pose) => (pose.position, pose.position.normalize_or(direction)),
+        None => {
+            let center = ground.find_land_near(direction).normalize();
+            // Cosmetic trunks occupy cell centers. Start four metres beside the
+            // trunk, still safely inside this cap, so the first-person view
+            // opens onto the land.
+            let up = (center * ground.sample(center).radius
+                + tangent_heading(Vec3::Y.cross(center), center) * 4.0)
+                .normalize();
+            let support = footprint(ground, up * (ground.sample(up).radius + HALF_HEIGHT)).support;
+            (up * (support + HALF_HEIGHT + CONTACT_SKIN), up)
+        }
+    };
     let body = world
         .spawn((
             Name::new("Planet walker"),
@@ -229,9 +272,15 @@ fn setup_walking(world: &mut World) {
         jump: false,
         jump_held: false,
         scripted: false,
-        heading: tangent_heading(Vec3::Y.cross(up), up),
+        heading: match config.restored {
+            Some(pose) => tangent_heading(pose.heading, up),
+            None => tangent_heading(Vec3::Y.cross(up), up),
+        },
         up,
-        pitch: 0.0,
+        pitch: config
+            .restored
+            .map_or(config.pitch, |pose| pose.pitch)
+            .clamp(-PITCH_LIMIT, PITCH_LIMIT),
         spawn_direction: up,
         body,
     };
@@ -307,6 +356,14 @@ fn set_active_mode(world: &mut World, walking: bool) {
 
 /// Mode handoff is explicit and instantaneous; the existing ship entity survives.
 fn switch_mode(world: &mut World) {
+    // A menu holds the keyboard: swapping to flight from behind the settings
+    // page is the same defect as walking off a cliff while reading it.
+    if world
+        .get_resource::<crate::controls::MenuOpen>()
+        .is_some_and(|open| open.0)
+    {
+        return;
+    }
     let Some(keys) = world.get_resource::<ButtonInput<KeyCode>>() else {
         return;
     };
@@ -355,6 +412,45 @@ fn switch_mode(world: &mut World) {
         world.resource_mut::<WalkingState>().captured = captured;
         set_active_mode(world, true);
     }
+}
+
+/// Put the walker exactly where a loaded save says.
+///
+/// Not [`place_walker`], which finds the ground under a DIRECTION: that is the
+/// spawn rule and it is right for a new world, where any patch of land will
+/// do. A save holds a place the player was actually standing - a ledge, a
+/// cave floor, the sea - and putting them on the surface near it instead is a
+/// load that quietly moved them.
+pub fn restore(world: &mut World, pose: RestoredPose) {
+    let up = pose.position.normalize_or(Vec3::Y);
+    let body = world.resource::<WalkingState>().body;
+    world.entity_mut(body).insert((
+        Position(pose.position),
+        Rotation(Quat::from_rotation_arc(Vec3::Y, up)),
+        LinearVelocity::ZERO,
+        AngularVelocity::ZERO,
+        Transform::from_translation(pose.position),
+        // Not grounded: whether the feet are on anything is the ground check's
+        // answer on the next tick, and claiming it here would let a player
+        // loaded into mid-air jump off nothing.
+        GroundState {
+            previous: pose.position,
+            grounded: false,
+        },
+    ));
+    let mut state = world.resource_mut::<WalkingState>();
+    state.transport_up(up);
+    state.heading = tangent_heading(pose.heading, up);
+    state.pitch = pose.pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT);
+    state.axes = Vec2::ZERO;
+    state.jump = false;
+}
+
+/// Put the walker back at this world's spawn, which is what a NEW world and
+/// the reset key both want.
+pub fn respawn(world: &mut World) {
+    let up = world.resource::<WalkingState>().spawn_direction;
+    place_walker(world, up, None);
 }
 
 fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
@@ -409,6 +505,7 @@ fn read_walking_input(
     keys: Option<Res<ButtonInput<KeyCode>>>,
     buttons: Option<Res<ButtonInput<MouseButton>>>,
     mouse: Option<Res<AccumulatedMouseMotion>>,
+    mut pointer: crate::controls::Pointer,
     mut state: ResMut<WalkingState>,
     walkers: Query<&Position, With<Walker>>,
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
@@ -417,10 +514,13 @@ fn read_walking_input(
         return;
     }
     let Some(keys) = keys else { return };
-    if keys.just_pressed(KeyCode::Escape) {
-        state.captured = false;
-    }
-    if buttons.is_some_and(|b| b.just_pressed(MouseButton::Left)) {
+    // A menu is a second claimant on the pointer. While it holds it the walker
+    // reads nothing - not the look, not the keys, and above all not the click
+    // that presses a button, which would otherwise grab the mouse on its way
+    // through to the world. `Escape` is the menu's key now and is consumed
+    // before this system runs, so there is no arm for it here.
+    let menu_open = pointer.menu_holds(&mut state.captured);
+    if !menu_open && buttons.is_some_and(|b| b.just_pressed(MouseButton::Left)) {
         state.captured = true;
     }
     if state.scripted {
@@ -763,6 +863,7 @@ fn follow_walker(
     }
     *readout = WalkingReadout {
         active: true,
+        captured: state.captured,
         grounded: ground.grounded,
         sprinting: state.sprinting,
         speed: velocity.0.length(),
@@ -1119,7 +1220,11 @@ mod tests {
         let spawn = FlightViewConfig::default().spawn_direction;
         let mut terrain = PlanetContact::test_planet(5);
         let anchor = terrain.find_land_near(spawn);
-        let set = Arc::new(crate::planet::lod::generate_fine(anchor, &settings));
+        let set = Arc::new(crate::planet::lod::generate_fine(
+            anchor,
+            &settings,
+            &pbd_core::edits::Edits::new(),
+        ));
         terrain.set_fine(&set);
         // A chamber to stand in: the same pick the cave capture makes.
         let records = set.finest_records();

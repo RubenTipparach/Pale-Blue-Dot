@@ -29,7 +29,65 @@ pub const CLOUD_RADIUS: f32 = PLANET_RADIUS + 300.0;
 /// separates a mass from a decal. 260 m against 300 m of base altitude puts the
 /// tops at about twice the summit height, which is where the reference's sit.
 pub const CLOUD_THICKNESS: f32 = 260.0;
+/// Where the sun was when it did not move. Kept as the arc's REFERENCE frame
+/// rather than as the answer: `Sun` turns about it, so the old fixed light is
+/// still the shape of noon and every capture framed against it still reads.
 pub const SUN_DIRECTION: Vec3 = Vec3::new(0.65, 0.75, 0.35);
+
+/// The world's clock and the one sun direction derived from it.
+///
+/// It was a `const` that six call sites each normalised their own copy of -
+/// the sky, the water, the terrain, the scene's directional light, the capture
+/// harness. One resource now, advanced in one place, read everywhere: a fact
+/// written six times is a fact five of them eventually have wrong, and a sun
+/// that MOVES is exactly the kind of fact that finds them.
+#[derive(Resource, Clone, Copy, Debug, bevy::render::extract_resource::ExtractResource)]
+pub struct Sun {
+    pub clock: pbd_core::daylight::Clock,
+    /// Whether the clock advances. A capture pins the hour instead, or the
+    /// picture is a different one every run.
+    pub running: bool,
+}
+
+impl Default for Sun {
+    fn default() -> Self {
+        Self {
+            clock: pbd_core::daylight::Clock::default(),
+            running: true,
+        }
+    }
+}
+
+impl Sun {
+    /// The direction toward the sun, in the planet's frame.
+    ///
+    /// The clock's arc is built about `SUN_DIRECTION`, so noon here is where
+    /// the light always was: the tilt and the turn are applied to that frame
+    /// rather than to the world's axes, and a world whose sun crossed the
+    /// wrong sky would be a different planet.
+    pub fn direction(&self) -> Vec3 {
+        let noon = SUN_DIRECTION.normalize();
+        let east = Vec3::Y.cross(noon).normalize_or(Vec3::X);
+        let local = self.clock.sun();
+        // The core's arc turns about +Y with noon at +X; place that frame on
+        // the planet's own noon.
+        (noon * local.x + Vec3::Y * local.y + east * local.z).normalize_or(noon)
+    }
+
+    /// How high the sun stands over a point, as a cosine. Positive is day.
+    pub fn elevation(&self, up: Vec3) -> f32 {
+        self.direction().dot(up.normalize_or(Vec3::Y))
+    }
+}
+
+/// Advance the clock. One writer, so the hour cannot differ between systems
+/// inside a frame.
+fn run_clock(time: Res<Time>, mut sun: ResMut<Sun>) {
+    if sun.running {
+        let step = time.delta_secs();
+        sun.clock.advance(step);
+    }
+}
 
 /// The radius the sky treats as solid ground: the water sheet, which sits
 /// `depth_offset_m` below sea level. With the sea-level sphere instead, the
@@ -44,8 +102,9 @@ pub struct SkyPlugin;
 impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<SkyMaterial>::default())
+            .init_resource::<Sun>()
             .add_systems(Startup, spawn_atmosphere)
-            .add_systems(Update, follow_weather)
+            .add_systems(Update, (run_clock, follow_weather))
             .add_systems(
                 PostUpdate,
                 position_atmosphere
@@ -151,6 +210,7 @@ impl Material for SkyMaterial {
 fn follow_weather(
     weather: Res<crate::weather::Weather>,
     clock: Res<Time>,
+    sun: Res<Sun>,
     shells: Query<&MeshMaterial3d<SkyMaterial>, With<PlanetAtmosphere>>,
     mut materials: ResMut<Assets<SkyMaterial>>,
 ) {
@@ -159,6 +219,12 @@ fn follow_weather(
         if let Some(sky) = materials.get_mut(&material.0) {
             sky.parameters.cloud_slab.y = weather.cover;
             sky.parameters.cloud_slab.z = seconds;
+            // The shell's sun rides the same clock everything else does. Its
+            // radiance scale is untouched: what a moving sun changes is where
+            // the light comes FROM, and the terminator the sky already draws
+            // is what turns that into a sunset.
+            let direction = sun.direction();
+            sky.parameters.sun = direction.extend(sky.parameters.sun.w);
         }
     }
 }
@@ -168,8 +234,17 @@ fn spawn_atmosphere(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<SkyMaterial>>,
     water: Res<WaterSettings>,
+    sun: Res<Sun>,
 ) {
-    let sun = SUN_DIRECTION.normalize();
+    // `PBD_NO_SKY` leaves the atmosphere shell unspawned so the clear colour
+    // shows through. It is a hole DETECTOR rather than a look: against a flat
+    // background, anything that is not terrain is a place the ground failed to
+    // close, and no amount of squinting at a blue sky can tell those from the
+    // sky over a ridge.
+    if std::env::var("PBD_NO_SKY").is_ok() {
+        return;
+    }
+    let sun = sun.direction();
     let material = materials.add(SkyMaterial {
         parameters: SkyParameters {
             center_radius: Vec3::ZERO.extend(solid_radius(&water)),

@@ -315,6 +315,7 @@ fn prepare_water_views(
     weather_settings: Res<WeatherSettings>,
     weather: Res<Weather>,
     clock: Res<PlanetClock>,
+    sun: Res<crate::sky::Sun>,
     frame: Res<PlanetRenderFrame>,
     mut views: Query<(
         Entity,
@@ -356,9 +357,7 @@ fn prepare_water_views(
             local_from_clip: clip_from_body.as_dmat4().inverse().as_mat4(),
             camera_time: camera.extend(clock.0 * s.time_scale),
             planet_center: Vec3::ZERO.extend(sea_radius),
-            sun: crate::sky::SUN_DIRECTION
-                .normalize()
-                .extend(s.specular_intensity),
+            sun: sun.direction().extend(s.specular_intensity),
             waves: Vec4::new(
                 s.swell_amplitude_m,
                 s.swell_frequency,

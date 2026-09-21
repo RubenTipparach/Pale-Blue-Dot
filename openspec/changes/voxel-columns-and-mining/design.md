@@ -147,7 +147,157 @@ Not ported: the containment resolve and the rescue stack. The swept footprint
 is why they are not needed, and adding them would be adding the failure mode
 they were written against.
 
-### A way in: the mouth rule, built and measured
+### A way in: the damping IS the knob, measured
+
+The owner asked why the caves could not simply be raised. A height offset on
+its own does nothing - the tunnels move up into the top nine metres and the
+damping there erases them exactly as before - but the question was the right
+one, because the damping was a GUESS: it was written to stop the surface being
+lace, and lace was never measured. `damping_sweep` measures it:
+
+| `roof_m` | land columns open at the top | underground hollow | columns losing their surface layer |
+| ---: | ---: | ---: | ---: |
+| 9.0 | 0.0% | 3.4% | 0.0% |
+| 4.0 | 0.0% | 3.5% | 0.0% |
+| **2.0** | **3.7%** | 3.5% | **0.2%** |
+| 0.5 | 4.7% | 3.5% | 3.8% |
+
+Two metres opens one land column in twenty-seven with nothing worth calling
+lace; half a metre is where the ground starts going. So `roof_m` ships at 2.0,
+and most of what that opens is a HOLE - the tunnel sheet crossing the ground -
+that a walker drops into and follows down, which is how most Minecraft caves
+begin. On the default spawn's tier that is about ninety columns.
+
+The mouth patch below stays as a second knob on the same function: it is what
+makes a few WALK-IN openings, a tunnel entering a hillside at ground level,
+which the sweep's holes mostly are not (one in the default tier by the
+stricter `cave_mouths` measure, seven in a patch's).
+
+### Perlin worms: tubes, and openings where a worm starts at the surface
+
+The owner's call, and the right one: the sheet carve is replaced by WORMS.
+
+**A worm** is a seed, a start point and a walk. From its seed it takes a
+length, a starting radius and a heading; each step it moves `step_m` along
+its heading, turns its yaw and pitch by 3D noise sampled at where it is, and
+its radius wanders by the same noise, so a slow bend widens into a room. Pitch
+is held inside a band about the tangent plane so a worm tunnels rather than
+dives, it is held under the ground by at least its own radius plus a layer,
+and it never reaches the bedrock floor. What it carves is a chain of capsules.
+
+**Some worms start at the surface.** A share of them (`surface_share`) begin a
+layer under the ground heading down, and the first capsule of such a worm cuts
+the ground open: that is the opening, and it leads somewhere by construction,
+because the rest of the worm is behind it. The mouth patch, the flare and the
+damping sweep all go with the sheet; a worm that starts at the surface is what
+they were approximating.
+
+**A column stays a pure function of its direction, which is the property the
+whole tier rests on.** Worms are seeded on a fixed lattice - a cube-sphere grid
+whose cells are about a base tile across - and a cell's worms are a function of
+the cell's index and the world seed alone. To generate a column, gather every
+worm whose seed cell lies within the longest worm plus the widest radius of
+the column's direction, walk each (deterministic, so the same worm every time
+from anywhere), and test the column's layers against the capsules that pass
+near it. The tier build gathers and walks the region's worms ONCE and hands the
+paths to every column, which is the regional pre-pass the write-up said worms
+would need, done at the one place columns are built in bulk.
+
+**What replaced what.** `CaveField` became `WormField`: density per seed
+cell, length and radius ranges, step, turn rate, pitch band, surface share,
+start depth, steer scale, all in `column.ron` with units. `hollow`, the ridged
+salt, the mouth patch, the flare and the damping knob are gone; `generate`
+takes the gathered worms. The instruments stayed and were the acceptance.
+
+**Measured, at the default spawn, release build, one core of this container:**
+
+| Quantity | Sheet carve | Worms |
+| --- | ---: | ---: |
+| `sight_lines`, median across the cave | 2 m | 3 m |
+| `sight_lines`, longest ray | 12 m | **54 m**, along the tube |
+| hollow share of the underground | 3.5% | 0.50% |
+| land columns crossed by a cave | - | 23.4% |
+| `cave_mouths`, openings in the 90 m tier | 0 (1 with the damping at 2 m) | **12**, 11 walkable |
+| gather and walk, 90 m tier | - | 12.8 ms, 150 worms, 7,864 capsules |
+| one column | 22.3 us | 14.7 us, 1.26 runs mean |
+
+A tenth of the sheet's hollow volume and a quarter of the land crossed: the
+worms gather the air into tunnels a player can see down instead of spreading
+it into slabs, which is the whole difference. `worm_turn` is 0.12 rather than
+the 0.30 first tried, because at 0.30 a tunnel doubled back inside thirty
+metres and the longest sight line was 32 m; a bend radius of about seventeen
+metres at a two-metre step is a tunnel that reads as one.
+
+**Both ends of a capsule are held under the ground.** The first cut clamped a
+worm's position at the top of each step and pushed the capsule to wherever the
+step would land, so the far end was clamped only when it became the next
+step's start, and the last capsule of every worm never was: the suite caught a
+buried worm 0.1 m proud of the surface where the ground fell away. `hold`
+clamps the far end at the step it will be, before the capsule is recorded.
+
+**The cross-section changed shape.** `cave_cross_section` at the same column
+draws a 10 m room over a 3 m floor of rock over a second 6 m gallery below,
+where the sheet drew pancakes with pillars; the rooms are where a worm's
+radius wandered wide or two worms crossed.
+
+**A mouth is a gap a walker can STEP into, and the first rule counted holes.**
+The opening test was "the gap's roof stands above the neighbour's cap and its
+floor is below that cap", which is true of a tunnel running five metres under
+the meadow next door: a hole in its roof, not a doorway. The `--view mouth`
+frame showed it plainly - a camera on the grass aimed down into a slot at its
+feet. The floor must be within a STEP of the ground outside, and the step is
+`planet::column::STEP_M`, which `WalkingConfig::step_height` now reads too:
+what a walker can climb and what counts as a doorway are one fact, so a mouth
+the count offers is a mouth the walker can take. Counted that way the default
+tier has 9 openings and 8 walkable, against 12 and 11 under the loose rule and
+0 under the sheet.
+
+**The capture picks by SIGHT LINE, because burial was the slab's question.**
+`--view cave` took the chamber with the most rock over it, which is the only
+thing that distinguishes one two-metre slab pocket from another. With worms
+the frames differ by whether the tunnel carries on, so the pick walks cell to
+cell at eye height in each of six headings and takes the longest open run,
+then aims along it: 16 cells of open tunnel in the default tier, and the frame
+is a passage running into the dark with a gallery off it. `--view overhang`
+aims at the roof eight metres down that passage rather than the metre of
+ceiling over the lens, which was a grey wash at a grazing angle.
+
+### The carve WAS a sheet, and that was its real weakness
+
+The owner asked whether this is Perlin worms. It is not: `hollow` is one
+thresholded ridged field, air where `ridged(point / 46 m) > 0.88`. The crest of
+ridged noise is a surface, and a threshold near the top keeps a thin shell
+around it, so every cave is a slab. That one fact is behind three things this
+change measured and worked around rather than fixed:
+
+- `sight_lines` finds a median of 2 m inside a chamber and nothing past 12 m:
+  a slab seen edge-on is a wall.
+- the cross-sections are pancakes with pillars, and the 3.5% hollow figure is
+  spread thin rather than gathered into anything a player would call a tunnel;
+- a slab meeting the ground is a LINE of single-cell holes, which is why the
+  damping sweep opens 3.7% of columns and `cave_mouths` counts one of them as
+  a walk-in.
+
+**The next carve should be tubes, and the cheapest tube stays a pure function
+of position:** intersect two independent ridged fields, `ridge_a > t &&
+ridge_b > t`. The intersection of two sheets is a curve, and the threshold band
+around it is a tube - Minecraft's "spaghetti caves" since 1.18. It is a few
+lines in `hollow` with a second seed salt, and the instruments already here
+say whether it worked: `sight_lines` should go from metres to tens of metres,
+`carve_report` should hold the hollow share, and `cave_mouths` should count
+round openings where a tube meets the ground.
+
+**Perlin worms** are the other family: agents that walk a noise-steered path
+and carve capsules along it, which gives chosen radii, rooms where a worm slows
+or two cross, and mouths for free by starting a worm at the surface. What they
+cost is the property everything here rests on: a column stops being a function
+of its own direction, because a worm crosses cells. That means a regional
+pre-pass - worms seeded per region, carved into every column they touch, and
+the tier rebuild reading that region rather than generating per cell. It is
+the right tool for caves with intent, and it is its own change; the
+intersection comes first because it is an afternoon and it measures.
+
+### The mouth rule, built and measured
 
 The carve's surface damping stays; lace was the right thing to prevent. What is
 added is a **mouth**: a rare, seeded patch (`mouth`, on its own noise stream and
@@ -242,11 +392,14 @@ So the column pass draws only **what is below what the terrain pass draws**:
 | --- | --- |
 | a cave ceiling | the bottom of every run but the lowest |
 | a cave floor | the top of every run but the highest |
-| a run flank | from the neighbour's cap down to the run's bottom |
+| a run flank | wherever the run's rock meets the neighbour's air, bedrock to our cap |
 
-Nothing is coincident: the terrain wall spans from our cap down to the
-neighbour's cap, and a column flank starts where that wall stops. The top run's
-own top cap stays the terrain pass's.
+Between two cells that both carry columns the terrain pass draws NO wall: the
+side is the column pass's, whole. That is the third rule this side has had, and
+"One drawer per side" below says why the first two - a flank that started at
+the neighbour's cap, then a terrain wall that yielded only where the rock did
+not fill the step - each left a band that was nobody's. The top run's own top
+cap stays the terrain pass's.
 
 ### A flank must be clipped against EVERY air gap the neighbour has
 
@@ -268,6 +421,155 @@ sliver and the exact answer costs 720 vertices. It is not a sliver: a neighbour
 with two gaps had the second drawn as nothing, and from inside a cave nothing is
 a window. 720 vertices is affordable on a tier of a few thousand cells and is
 the exact answer rather than most of one.
+
+### The wall the column pass was trusted to draw, and did not
+
+The terrain pass draws a cap and a wall from it down to the neighbour's cap.
+Between two cells that BOTH carry columns it drew no wall at all and left the
+side to the column pass, which draws a flank per run against each of the
+neighbour's air gaps. That yield was too wide, and the gap it left is the
+"holes in the terrain" the owner reported.
+
+**A flank is (this run) against (one of the neighbour's gaps), and between two
+ordinary cells there is no such pair spanning the step.** This cell's top run
+ends at its own surface and the neighbour's top gap begins at the neighbour's
+surface, so the band between the two caps belongs to no pair, and nobody drew
+it. Underground the flanks meet exactly, which is why the caves looked right
+and the meadow did not.
+
+**Measured, with an instrument built for it.** `PBD_NO_SKY` leaves the
+atmosphere shell unspawned and paints the clear colour magenta, so a pixel that
+is not terrain is a pixel with no world behind it - which a blue sky over a
+ridge can never be told apart from by eye. On the seam view: 407,484 background
+pixels with the tier on, 404,936 with `reach_m: 0.0`, and 404,936 again with
+the tier on and the terrain wall forced back. So the tier was adding 2,548
+pixels of nothing, and the wall it suppressed was the thing that had closed
+them. The meadow view closed 4,084.
+
+**The fix is a narrower yield, not a wider wall.** `run_covers` asks whether
+this cell's rock fills the step in one run; where it does, the heightfield wall
+stands as it always did, and where it does not - a mouth, a tunnel crossing the
+edge - the column pass keeps the side and draws it exactly. The cave captures
+and the mouth count are unchanged by it.
+
+**The lesson is the one this file keeps: a pass that yields must be able to say
+what the other pass will draw.** "The column pass has this side" was true of
+the cells it was tested on, underground, and false of every terrace on the
+surface, and nothing in the build could tell the difference because a hole in
+the ground with sky behind it looks exactly like sky.
+
+### And the flank stops at the neighbour's CAP, always
+
+The other half of the same mistake, found the same day and by the same owner:
+a flank was allowed to run to its own run's top on a shared side, on the
+reasoning that the terrain pass drew nothing there. Once the terrain pass draws
+that step again, a flank that also draws it is a SECOND wall over the first -
+and where the two disagreed, the second one stood in the air with no floor
+under it and no cap over it. The owner's picture is a meadow with slabs of
+grass-topped earth standing in it.
+
+It was also why a single trench wall came out with a stack of grass bands down
+its face rather than one at the top. Each flank quad paints its own top metre
+with the sod's side (`if top >= hi-1.001`), so a duplicate flank drew a second
+transition partway down the wall the terrain pass had already drawn correctly.
+One rule, one wall, one transition.
+
+**And the run's top is not the cap.** `planet_column.rs` says it plainly where
+it decides whether a record is a mouth: "outside a mouth the column top is the
+height rounded up by less than a layer and the record is left exactly as it
+was". A cell's surface is a float; its topmost solid LAYER ends at the next
+whole metre above it. So an unclamped flank ran up to a metre above the cap the
+terrain pass draws - one cell of wall standing proud of the ground, wearing the
+sod's side because that is what a flank paints on its top metre. That is the
+owner's "extra layer of wall where there should just be air", named exactly.
+
+Measured by bisection, with each drawer disabled in turn: with the flank off
+the slab is gone and with the terrain wall off it remains, which is what names
+the flank as the one drawing it. After the clamp the seam view's background is
+404,936 pixels, equal to the tier being off, and `cave_mouths` still counts 9
+openings with 8 walkable.
+
+### One drawer per side, and the metre of rock the cap was drawn inside of
+
+The owner's picture, the third on this seam: a pit dug at a cave, its walls
+part stone, part earth, part sky. Reviewed against Tenebris again, whose
+`build_tile` has ONE rule for a side face - a quad wherever a solid voxel meets
+a neighbour that does not cover it, at the same depth - and nothing else.
+
+**Two defects, and the first one made the second one necessary.**
+
+**1. Every column stood one layer proud of its cap.** `column::generate_solid`
+filled every layer whose altitude was under the generator's UNFLOORED altitude
+(74.6 m: solid through the layer at 74), while the record was drawn at the
+floored one (74.0). So every cell in the tier carried a metre of rock its cap
+sat a metre inside of, and the tree kept saying so in its own words: "outside a
+mouth the column top is the height rounded up by less than a layer". Three
+things followed, and each had been worked around rather than named:
+
+- **The aim ray dug the invisible layer first.** `sample_at` answers solid off
+  the COLUMN, so a click on the ground took the rock over the cap, which
+  changed nothing anybody could see, and a slanted dig into a wall entered the
+  neighbour under its top layer and left a roofed pocket with no way in.
+- **The first edit to any cell raised its cap a metre.** `reconcile_surface`
+  sets the record to the column's top, which was one above it, so the ground
+  popped up under the player on the first dig.
+- **Both wall rules had to dodge it.** The flank was clamped to the
+  neighbour's cap because its run top stood proud of the cap (the slab in the
+  meadow); the terrain wall yielded only where the rock filled the step in one
+  run because a flank could not be trusted above the cap. Each rule answered
+  half of the side, and on a side where the rock did NOT fill the step - a
+  cave mouth breaking the surface run, or a pit dug sideways into a wall -
+  neither drew the band. From inside the pit that band is the sky.
+
+`column::surface_m` is the one function now: the generator's altitude,
+floored to the layer, read by the column and by the record
+(`planet::surface_height`) alike, so a cap and the column top under it are one
+number by construction. `every_column_top_is_its_records_height` holds it on
+the whole tier, `PlanetContact::stand` lost its special case for the rounded
+top, and the mouth test asserts equality rather than "within a layer".
+
+**2. With that, the side is the reference's rule and nothing else.** Between
+two tier cells the terrain wall is not drawn at all; a flank is (this run)
+against (one of the neighbour's air gaps), `max(lo, gap.lo)` to
+`min(hi, gap.hi)`. No clamp to the neighbour's cap, no `run_covers`, no
+float-cap adjustment at either end, because there is no float cap. A pass that
+yields must be able to say what the other pass draws, and now it says "all of
+it".
+
+**Found by an audit, not by a picture.** `every_side_of_the_tier_draws_what_
+the_reference_exposes` transcribes the shader's band arithmetic (the run words,
+`column_gap`) into Rust and holds it, on every shared side of the real tier,
+equal to the reference's rule computed from the columns alone. Under the two
+half-rules it failed on the BUILT tier, before any edit: `cell 33816 side 3
+draws [] where the reference exposes [(58.0, 60.0)]` - two metres of a natural
+mouth's wall drawn by nobody - and again after a layer was dug into a
+neighbour's side. `a_dug_or_placed_cell_and_its_neighbours_draw_what_is_
+exposed` digs a pit, digs sideways into its wall, and places a block back in
+each, and audits the cell and its ring after every step.
+
+**And a flank wears what a wall wears.** The flank was painted in the run's
+BOTTOM material, top metre excepted, so the first metre under a pit's grass was
+stone beside a terrain wall drawn in earth. A flank now carries the run's top
+material and measures its depth from the run's own top, so `face_code` gives
+it sod, earth, then stone exactly as it gives the terrain wall, and a cave run
+whose top is rock is rock. This is Tenebris's rule as well: a voxel's side
+wears the voxel.
+
+**The capture that found the first defect** was `--walk --fixed-dt --pitch -40
+--dig 8 --dig-ahead`: the scripted dig logged its three layers as 220, 219 and
+218 of a cell whose top was 221 - a pocket under an unbroken roof, lit to 0 of
+15 - and the flank of that roof's one-layer run stood in the frame as a wall
+of earth. `--pitch` is new for exactly this: a headless walker looked dead
+level, and a pit a player digs is a slanted run of cells, each taken from a
+different column at a different layer.
+
+**Measured, the same capture on the fixed build.** The three layers are 220,
+219 and 218 of a cell whose top IS 220, so the pit is open to the sky and each
+is lit to 15 of 15; with the sky off (`PBD_NO_SKY`) the frame has 0 background
+pixels; the frame mean is 75.3 of 255 against the roofed pocket's 19.2.
+`docs/screenshots/dig-pit-before.png` and `dig-pit-after.png` are the pair,
+and `column-mouth.png` is a natural mouth on the same build. The audit passes
+on the built tier and after every edit in its sequence.
 
 ### The tier's rim is generated SOLID
 

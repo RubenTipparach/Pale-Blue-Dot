@@ -317,6 +317,13 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         // written to measure the horizon and the partition should not have a
         // second rule firing inside it. `column_params` turns it on.
         column: Vec4::new(0., 0.45, 10., -2.),
+        ground: Vec4::new(
+            pbd_core::column::SOD_DEPTH_M,
+            pbd_core::column::SOIL_DEPTH_M,
+            13.,
+            0.,
+        ),
+        tilesets: [UVec4::splat(4), UVec4::splat(4)],
     }
 }
 
@@ -514,7 +521,11 @@ fn the_partition_lists_each_tile_at_its_bands_level_on_the_real_records() {
     let gpu = VisibilityGpu::new();
     let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
     let base = lod::base_records(&topology::dual_sphere(lod::BASE_LEVEL as u32));
-    let fine = lod::generate_fine(anchor, &crate::config::ColumnSettings::default());
+    let fine = lod::generate_fine(
+        anchor,
+        &crate::config::ColumnSettings::default(),
+        &pbd_core::edits::Edits::new(),
+    );
     let capacity = fine.levels.iter().map(Vec::len).max().unwrap();
     let blank = GpuCell {
         direction_height: [0.; 4],

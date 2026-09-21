@@ -68,6 +68,7 @@ fn material_name(material: Material) -> &'static str {
         Material::Snow => "snow",
         Material::Rock => "rock",
         Material::Dirt => "dirt",
+        Material::Torch => "torch",
     }
 }
 
@@ -195,11 +196,60 @@ impl Slots {
         let item = self.held()?.item;
         (self.take(self.selected, 1) == 1).then_some(item)
     }
+
+    /// Put exactly this in exactly this slot, which is what LOADING a save
+    /// needs and what `give` cannot express: `give` merges and spills, because
+    /// that is what picking something up does, and a restore is not a pickup.
+    ///
+    /// A count over the item's own limit is clamped rather than refused, so a
+    /// save damaged into an impossible stack loads as a legal one instead of
+    /// taking the whole world with it. A count of zero is an empty slot, since
+    /// nothing here ever holds a stack of nothing.
+    pub fn set(&mut self, index: usize, stack: Option<Stack>) {
+        let Some(slot) = self.slots.get_mut(index) else {
+            return;
+        };
+        *slot = match stack {
+            Some(stack) if stack.count > 0 => Some(Stack {
+                item: stack.item,
+                count: stack.count.min(stack.item.stack_limit()),
+            }),
+            _ => None,
+        };
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A restore puts a stack back exactly, which is the one thing `give`
+    /// deliberately cannot do: it merges and spills, because that is what
+    /// picking something up does.
+    #[test]
+    fn a_slot_can_be_set_exactly_and_an_impossible_stack_is_made_legal() {
+        let mut slots = Slots::new();
+        slots.set(3, Some(Stack::new(Item::Block(Material::Stone), 7)));
+        assert_eq!(
+            slots.get(3),
+            Some(Stack::new(Item::Block(Material::Stone), 7))
+        );
+        let limit = Item::Block(Material::Stone).stack_limit();
+        slots.set(
+            4,
+            Some(Stack::new(Item::Block(Material::Stone), limit + 50)),
+        );
+        assert_eq!(
+            slots.get(4).map(|s| s.count),
+            Some(limit),
+            "a damaged save loads as a legal stack rather than an illegal one"
+        );
+        slots.set(3, None);
+        assert!(slots.get(3).is_none(), "and a slot can be emptied");
+        slots.set(5, Some(Stack::new(Item::Block(Material::Dirt), 0)));
+        assert!(slots.get(5).is_none(), "nothing holds a stack of nothing");
+        slots.set(999, Some(Stack::new(Item::Block(Material::Dirt), 1)));
+    }
 
     const DIRT: Item = Item::Block(Material::Dirt);
     const STONE: Item = Item::Block(Material::Stone);

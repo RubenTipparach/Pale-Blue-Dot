@@ -61,6 +61,47 @@ The rule above decides **which level**. It does not yet decide:
 4. **Pentagons.** There are twelve, they have five neighbours rather than six,
    and they sit on band boundaries like anything else.
 
+## MEASURED: the skirt is already there and it is too SHORT
+
+The ring is not open because nothing closes it. A coarse cell's wall already
+runs down to the fine side, and it stops at the wrong place: the record carries
+ONE height per side for that, the **midpoint of the shared edge**
+(`planet_lod::record`, `floors[side] = heights.at(midpoint(...))`), and the
+finer band draws MANY cells along that edge, any of which can sit lower than
+that single sample. The wall's foot then hangs above the ground it was meant to
+meet, and what shows through the gap is sky.
+
+Measured off the real height field at the default spawn, over four thousand
+land edges of a level-10 cell's width
+(`how_far_a_coarse_wall_can_stop_above_the_fine_ground`):
+
+| the fine floor stands above the lowest cap it meets by | |
+| --- | ---: |
+| on average | **0.45 m** |
+| at worst | **2.0 m** |
+| edges short by more than a whole cell | **1.3%** |
+
+A cell is one metre, so one edge in eighty leaves a slit at least a cell tall,
+and that is exactly the scale of the slivers of sky visible between the terrace
+rows of a far hillside.
+
+**The fix is the same skirt reaching further**: the per-side floor becomes the
+MINIMUM cap of the finer cells that share the edge rather than the height at
+its midpoint. It is a record-build change and costs nothing at draw time - the
+shader already reads one number per side. The honest version walks the finer
+cells that actually cover the edge; the cheap version samples the edge at the
+finer band's own spacing and takes the least, which bounds the error by how far
+the height field can move between two samples.
+
+This shortfall is real and is fixed, but it was NOT what the owner saw. That
+was the column tier suppressing the heightfield wall on every shared side
+(`voxel-columns-and-mining/design.md`, "The wall the column pass was trusted to
+draw"), measured with `PBD_NO_SKY` at 2,548 background pixels on the seam view
+and 4,084 on the meadow. The shortfall here changed no pixel of either view:
+the floor is read only where a band boundary falls on a wall, and neither
+capture has one in frame. It is closed because a wall that stops above the
+ground it meets is wrong, not because it was the reported bug.
+
 Everything below is the context those four need.
 
 ## The original question, for reference

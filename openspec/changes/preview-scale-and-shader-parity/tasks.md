@@ -92,6 +92,8 @@ planet. What is open is the radius, since the two are locked by
 - [x] Re-tune the tree geometry in `planet_surface.wgsl`, which is authored for
       the old scale: trunks span 18 m and canopies reach 33 m, against roughly
       6 m for a Tenebris tree.
+- [x] A cap draws its tile's colours, as a wall does, fading to its flat base
+      at range: the grass top is the grass art, not a tint of its brightness.
 - [x] Re-tune the atlas UV divisors, `/28.0` on the cap and `/18.` down a wall,
       which were chosen against a 19 m tile.
 - [x] Update the pinned tile width in
@@ -106,3 +108,38 @@ planet. What is open is the radius, since the two are locked by
       by three cells. Store corners once and index them.
 - [ ] Measure the result. It should reach roughly 50 bytes a cell, which buys
       about one level on the ladder.
+
+## 6. A face's tile follows the material, as Tenebris's does
+- [x] The rule landed in two halves rather than one, which is the honest
+      split: `pbd_core::column::material_at_depth` answers what STANDS at a
+      depth (sod, then soil, then stone - Tenebris's own stack, and the rule
+      the cells are generated from), and `planet_surface.wgsl`'s `face_code`
+      answers what a wall SHOWS there. The two depths live in `params.ground`,
+      fed from the core's constants, so the numbers have one source.
+- [x] `render_code` stopped collapsing `Soil` into the grass code and `Dirt`
+      into the sand code: earth is code 10 and draws the earth tile.
+- [x] The terrace wall dropped its absolute-altitude blend and reads its own
+      depth instead. Measured in the picture: a far hillside that was one flat
+      grey-brown wash now reads as terrace rows, grass over earth.
+- [x] Every biome draws from its OWN tileset. `tools/build_tileset_atlas.py`
+      bakes all fourteen into one 512 px `atlas.png` at the 32 texels a tile
+      the shader has always sampled, so the sheets cost one binding and the
+      fields art is texel-identical to what shipped. Snow takes the tundra
+      sheet wherever it falls, because snow is a material rather than a biome.
+- [ ] In-game confirmation on real hardware: the owner walks a terrace, a
+      snow line and a cave mouth and says a grass block reads as one. The
+      captures are a software rasteriser and are a limitation, not a sign-off.
+
+## 7. The sun sets at the horizon, the sky keeps glowing - HELD until shadows
+The owner's call: the present falloff is fine while nothing casts a shadow,
+because the Lambert term fades on its own and a long dusk reads as dusk. A
+shadow is a hard statement about where the light is, so this lands with them.
+- [ ] Split `daylight` into `sunlight` and `twilight`. The direct term, the
+      specular and the rain glint take `sunlight`, which is nought by -0.833
+      deg (refraction plus the disc); the ambient, the distance fog and the rim
+      take `twilight`, which fades over civil twilight to -6 deg. Measured
+      today: direct light is at 0.343 with the sun ON the horizon and does not
+      reach nought until -7.5 deg.
+- [ ] Capture the terminator at a few sun altitudes either side of zero. What
+      to check: the last direct highlight dies at the horizon, and the ground
+      then reads blue rather than black.

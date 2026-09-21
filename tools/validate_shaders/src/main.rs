@@ -178,16 +178,19 @@ fn validate(path: &Path) -> Result<(), String> {
             check_struct(
                 &module,
                 "Params",
-                368,
+                416,
                 &[
                     0, 64, 80, 96, 112, 128, 144, 160, 224, 240, 256, 272, 288, 304, 320, 336, 352,
+                    368, 384,
                 ],
             )?;
             if filename == "planet_surface.wgsl" {
                 // The column records are binding 4: the fifth draw reads the
-                // runs of its own cell AND of its neighbours.
+                // runs of its own cell AND of its neighbours. Binding 5 is the
+                // voxel sky light over those same columns, which a corner
+                // samples at up to three slots.
                 check_struct(&module, "ColumnRec", 48, &[0, 16, 32])?;
-                check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)])?;
+                check_bindings(&module, &[(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5)])?;
                 check_entries(&module, &render_entries)?;
             } else {
                 check_bindings(
