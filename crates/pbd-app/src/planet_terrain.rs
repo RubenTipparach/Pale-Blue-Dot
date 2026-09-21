@@ -204,6 +204,14 @@ mod tests {
                 "const LIGHT_WORDS: u32 = {}u;",
                 crate::planet::column::LIGHT_WORDS
             ),
+            format!(
+                "const MATERIAL_WORDS: u32 = {}u;",
+                crate::planet::column::MATERIAL_WORDS
+            ),
+            format!(
+                "const MATERIAL_PER_WORD: u32 = {}u;",
+                crate::planet::column::MATERIAL_PER_WORD
+            ),
         ] {
             assert!(
                 shader.contains(&line),

@@ -368,21 +368,24 @@ pub fn scripted_dig(
         last = Some(target.dig);
         dug += 1;
     }
-    if let Some(bottom) = last.filter(|_| launch.place) {
-        apply_edit(
-            &mut Edited {
-                fine: &mut fine,
-                contact: &mut contact,
-                save: &mut edits,
-                slots: &mut slots,
-            },
-            // The harness has no player: the block it puts back comes from
-            // nowhere, as it did before the hands were part of the edit.
-            Hands::Empty,
-            bottom.cell,
-            bottom.layer + 1,
-            Material::Stone,
-        );
+    if let Some(bottom) = last.filter(|_| launch.place > 0) {
+        // A tower: N stones stacked on the hole. The harness has no player,
+        // so the blocks come from nowhere, as they did before the hands were
+        // part of the edit.
+        for step in 1..=launch.place as usize {
+            apply_edit(
+                &mut Edited {
+                    fine: &mut fine,
+                    contact: &mut contact,
+                    save: &mut edits,
+                    slots: &mut slots,
+                },
+                Hands::Empty,
+                bottom.cell,
+                bottom.layer + step,
+                Material::Stone,
+            );
+        }
     }
     // A torch on the ground under the camera, which is what `--torch` is for:
     // the place ray is the same one a dig uses, so the lamp lands in the air

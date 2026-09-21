@@ -68,6 +68,22 @@ struct ColumnRec {
 // `u32`, one byte each, `LIGHT_WORDS` words per slot. `ColumnTier::gpu_light`
 // packs it; nothing here writes it.
 @group(0) @binding(5) var<storage,read> light: array<u32>;
+// Every layer's render code of every column tier slot, eight to a `u32`,
+// `MATERIAL_WORDS` words per slot: what a column-pass face WEARS. A face is
+// drawn in its own voxel's material, as Tenebris's `face_tile(block, cap)`
+// draws it, and not in a rule on depth under the run's top: a placed stone is
+// stone at whatever depth it sits. `ColumnTier::gpu_materials` packs it.
+@group(0) @binding(6) var<storage,read> materials: array<u32>;
+const MATERIAL_PER_WORD: u32 = 8u;
+const MATERIAL_WORDS: u32 = 40u;
+// The render code of the layer `layer` of column slot `slot` (plus one, as
+// the record carries it). Off the tier, or past the span: air.
+fn material_at(slot: u32, layer: u32) -> u32 {
+    if slot == 0u || layer >= LIGHT_LAYERS { return 0u; }
+    let word = (slot - 1u) * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
+    if word >= arrayLength(&materials) { return 0u; }
+    return (materials[word] >> ((layer % MATERIAL_PER_WORD) * 4u)) & 0xfu;
+}
 
 // The bottom and top of a column's span, metres against sea level.
 // `column::BASE_M` and `LAYERS` in pbd-core are the one source; the visibility
@@ -392,6 +408,9 @@ struct VertexOut {
     @location(11) shade: f32,
     // The voxel field at this vertex, INTERPOLATED - which is the point of it.
     @location(12) voxel: vec2<f32>,
+    // The column tier slot plus one, or zero off the tier: what a column-pass
+    // face asks for the material of the layer it stands on.
+    @location(13) @interpolate(flat) slot: u32,
 }
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
@@ -1068,6 +1087,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.owner_b = cell.owner_b.xyz;
     out.shade = out_shade;
     out.voxel = out_voxel;
+    out.slot = lit_slot;
     return out;
 }
 
@@ -1230,9 +1250,34 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // summer grass.
     var slot = tileset_slot((input.material >> 8u) & 0xffu);
     var code = cap;
-    if input.kind==1u || input.kind==4u {
-        let altitude = length(input.position)-params.settings.x;
+    let altitude = length(input.position)-params.settings.x;
+    if input.kind==1u {
+        // The heightfield's own wall, which stands only where a cell has no
+        // column: no layer to ask, so the depth rule, which is the
+        // generator's own stack.
         code = face_code(cap,max(input.height-altitude,0.));
+    }
+    if input.kind==4u {
+        // A column-pass face wears the LAYER it bounds: the block under an
+        // upward face, over a downward one, and at the fragment's altitude on
+        // a flank, clamped inside the run so its top edge never reads the air
+        // over it. The side rule is Tenebris's `face_tile`: the sod's side is
+        // the transition, snow's its own, a sod's underside earth, and
+        // everything else its own tile.
+        let radial = normalized(input.position);
+        let facing = dot(input.normal, radial);
+        var layer = light_layer(altitude);
+        if facing > 0.5 { layer = light_layer(altitude-0.5); }
+        else if facing < -0.5 { layer = light_layer(altitude+0.5); }
+        else { layer = min(layer, max(light_layer(input.height-0.5), 0u)); }
+        let own = material_at(input.slot, layer);
+        code = own;
+        if abs(facing) < 0.5 {
+            if grassy(own) { code = GRASS_SIDE_CODE; }
+            if own == 6u { code = SNOW_SIDE_CODE; }
+        } else if facing < -0.5 && grassy(own) {
+            code = DIRT_CODE;
+        }
     }
     // Which tile each material draws, per sheet. Every sheet keeps the same
     // layout - #0 (0,0) its own ground, #1 that ground over the earth, #2 the

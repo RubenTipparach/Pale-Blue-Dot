@@ -89,6 +89,13 @@ const _: [(); 32] = [(); std::mem::offset_of!(GpuColumn, more)];
 pub const LIGHT_PER_WORD: usize = 4;
 /// Words of light per column.
 pub const LIGHT_WORDS: usize = LAYERS / LIGHT_PER_WORD;
+/// Layers packed into one `u32` of the material buffer: a render code is four
+/// bits, so eight to a word and forty words a column.
+pub const MATERIAL_PER_WORD: usize = 8;
+/// Words of material per column.
+pub const MATERIAL_WORDS: usize = LAYERS / MATERIAL_PER_WORD;
+// Every render code has to fit its nibble.
+const _: () = assert!(super::terrain::DIRT < 16);
 
 /// The columns around one anchor, and the map from a finest record to its slot.
 #[derive(Clone)]
@@ -192,6 +199,23 @@ impl ColumnTier {
                 let word = slot * LIGHT_WORDS + layer / LIGHT_PER_WORD;
                 let shift = (layer % LIGHT_PER_WORD) * 8;
                 words[word] |= (level.0 as u32) << shift;
+            }
+        }
+        words
+    }
+
+    /// Every layer's render code, eight to a word, `MATERIAL_WORDS` words per
+    /// slot, slots end to end: what lets a face be drawn in its own voxel's
+    /// material rather than in a rule on depth. A placed stone is stone on
+    /// every face because the layer says so, and a hillside is sod, earth
+    /// and stone because those are the layers the generator wrote.
+    pub fn gpu_materials(&self) -> Vec<u32> {
+        let mut words = vec![0u32; self.columns.len() * MATERIAL_WORDS];
+        for (slot, column) in self.columns.iter().enumerate() {
+            for layer in 0..LAYERS {
+                let word = slot * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
+                let shift = (layer % MATERIAL_PER_WORD) * 4;
+                words[word] |= (render_code(column.material(layer)) & 0xf) << shift;
             }
         }
         words
@@ -1133,6 +1157,34 @@ mod tests {
         // Then one on top of the neighbour, standing proud of the meadow.
         edit(&mut set, side_cell, side_top + 1, Material::Stone);
         audit(&set, "a block placed on the meadow");
+    }
+
+    /// The material buffer says what every layer is, and a stone placed in a
+    /// column reads back as stone at exactly that layer, with the layers
+    /// around it what they were: the face drawn from it wears the voxel.
+    #[test]
+    fn a_placed_stone_reads_back_as_stone_at_its_own_layer() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let index = interior_cell(&set, anchor);
+        let top = set.columns.column(index).unwrap().surface().unwrap();
+        edit(&mut set, index, top + 1, Material::Stone);
+        edit(&mut set, index, top + 2, Material::Stone);
+        let slot = set.columns.slots[index];
+        let words = set.columns.gpu_materials();
+        let code_at = |layer: usize| {
+            (words[slot * MATERIAL_WORDS + layer / MATERIAL_PER_WORD]
+                >> ((layer % MATERIAL_PER_WORD) * 4))
+                & 0xf
+        };
+        assert_eq!(code_at(top + 1), render_code(Material::Stone));
+        assert_eq!(code_at(top + 2), render_code(Material::Stone));
+        assert_eq!(
+            code_at(top),
+            render_code(set.columns.column(index).unwrap().material(top))
+        );
+        assert_eq!(code_at(top + 3), render_code(Material::Air));
+        assert_eq!(words.len(), set.columns.columns.len() * MATERIAL_WORDS);
     }
 
     /// A pit dug from the top is OPEN to the sky, so its floor is at full

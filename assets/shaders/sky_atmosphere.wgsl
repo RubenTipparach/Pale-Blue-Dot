@@ -47,6 +47,11 @@ fn sun_depth(p: vec3<f32>, direction: vec3<f32>) -> f32 {
     return depth;
 }
 
+// The sun disc: 0.6 degrees of angular radius, cosines of its edge and of a
+// softened rim inside it, and its colour before the radiance scale.
+const SUN_COS_OUTER: f32 = 0.999945;
+const SUN_COS_INNER: f32 = 0.999975;
+const SUN_COLOUR: vec3<f32> = vec3<f32>(1.0,0.93,0.80);
 fn sun_visibility(p: vec3<f32>, sun: vec3<f32>) -> f32 {
     let along_sun = dot(p,sun);
     if (along_sun >= 0.0) { return 1.0; }
@@ -165,6 +170,8 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     scattered += vec3<f32>(0.8,0.24,0.055)*dusk*horizon*low_camera*0.18;
     let average_beta = dot(beta_r,vec3<f32>(1.0/3.0))+beta_m;
     var opacity = clamp(1.0-exp(-view_depth*average_beta),0.0,0.94);
+    // How much cloud this ray crossed, for the sun disc to be seen through.
+    var cloud_cover = 0.0;
     // Art-directed daylight veil keeps bright stars out of the surface sky.
     // It fades out with altitude, revealing the star field continuously.
     let veil_altitude = max(length(camera)-sky.center_radius.w,0.0);
@@ -251,11 +258,26 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
                 if (transmittance < 0.01) { break; }
             }
             let cloud_alpha = clamp(1.0-transmittance,0.0,1.0);
+            cloud_cover = cloud_alpha;
             if (cloud_alpha > 0.0) {
                 scattered = scattered*(1.0-cloud_alpha)+luminance/max(1.0-transmittance,1e-4)*cloud_alpha;
                 opacity = opacity+(1.0-opacity)*cloud_alpha;
             }
         }
     }
+    // The sun itself: a disc along the sun direction with a darkened limb and
+    // a glow that reaches a few radii, hidden by the planet's own shadow and
+    // by the cloud this ray crossed. There was a sunset here and no sun; the
+    // scattering brightened toward a direction nothing was drawn along.
+    // Tenebris draws its disc as an angular-size-correct billboard inside the
+    // far plane; the shell is that surface here. The radius is a few times
+    // the real sun's 0.27 degrees, for legibility at the shell's resolution.
+    let disc = smoothstep(SUN_COS_OUTER,SUN_COS_INNER,cosine);
+    let limb = mix(0.62,1.0,smoothstep(SUN_COS_OUTER,1.0,cosine));
+    let glow = pow(max(cosine,0.0),1800.0)*0.55;
+    let shadowed = sun_visibility(camera,sun)*(1.0-cloud_cover);
+    let sun_light = SUN_COLOUR*sky.sun.w*(disc*limb+glow)*shadowed;
+    scattered += sun_light;
+    opacity = max(opacity,disc*shadowed);
     return vec4<f32>(max(scattered,vec3<f32>(0.0)),opacity);
 }

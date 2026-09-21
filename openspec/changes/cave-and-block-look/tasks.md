@@ -19,7 +19,14 @@
 - [x] `wall_light` transcribes it; the constants test pins `CONTACT_3`.
 - [x] The pit capture probed: the foot darker than the middle.
 
-## 5. Held
+## 5. A face wears its voxel
+- [x] `gpu_materials`: every layer's render code, eight to a word, beside the
+      light; a test packs and reads back a column with a placed stone in it.
+- [x] `material_at` in the shader; kind-4 faces take the layer's own code
+      with the reference's side rule.
+- [x] `--place N` stacks N stones; a tower captured.
+
+## 6. Held
 - [ ] The dithered face: a `--pitch -8` capture over a dug floor, then
       nearest-filtered mips if it shows.
 - [ ] The owner's in-game look at all of it.

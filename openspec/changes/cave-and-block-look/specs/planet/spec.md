@@ -52,3 +52,22 @@ four-rung ladder, with the same rule in the core and the shader.
 
 - **WHEN** the cell across from a wall is solid one layer above the wall's top
 - **THEN** the wall's top is darker than its middle
+
+### Requirement: A face is drawn in its own voxel's material
+
+Every face drawn from a column SHALL take its material from the layer it
+bounds - the layer under an upward face, over a downward one, and at the
+fragment's altitude on a flank - with the sod's side drawn as its transition
+and a sod's underside as earth, never from a rule on depth.
+
+#### Scenario: A placed stone is stone on every face
+
+- **WHEN** a stone is placed in a column at any layer
+- **THEN** every exposed face of that layer draws the stone tile
+
+#### Scenario: A hillside is unchanged
+
+- **WHEN** a column is the generator's own
+- **THEN** its flank draws sod, then earth, then stone, because those are its
+  layers
+

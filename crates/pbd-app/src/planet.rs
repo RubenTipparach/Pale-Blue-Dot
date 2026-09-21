@@ -488,6 +488,9 @@ struct PlanetGpu {
     /// word. What a face's corner samples to find out how much daylight
     /// reached the air it opens onto.
     light: Buffer,
+    /// Every layer's render code, per column tier slot: what a column-pass
+    /// face wears. `ColumnTier::gpu_materials` packs it.
+    materials: Buffer,
     /// Record slots in the buffer: the base then four fine regions.
     slots: u32,
     base_count: u32,
@@ -553,6 +556,12 @@ fn upload_planet(
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    let materials = device.create_buffer(&BufferDescriptor {
+        label: Some("Persistent planet voxel materials for the column tier"),
+        size: column::COLUMN_CAPACITY as u64 * column::MATERIAL_WORDS as u64 * 4,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
     // Zero-initialised: every run word is the absent one, so a slot nothing has
     // written draws no face at all.
     let columns = device.create_buffer(&BufferDescriptor {
@@ -563,6 +572,7 @@ fn upload_planet(
     });
     commands.insert_resource(PlanetGpu {
         light,
+        materials,
         cells,
         columns,
         slots,
@@ -606,6 +616,10 @@ fn upload_fine(
         // by the old world.
         let light = fine.set.columns.gpu_light();
         queue.write_buffer(&planet.light, 0, bytemuck::cast_slice(&light));
+        // And the materials, for the same reason: a face drawn from a stale
+        // layer is a placed stone wearing the earth that was there before.
+        let materials = fine.set.columns.gpu_materials();
+        queue.write_buffer(&planet.materials, 0, bytemuck::cast_slice(&materials));
     }
     planet.uploaded = fine.version;
     planet.lod = lod::LodParams::of(&fine.set);
@@ -634,6 +648,7 @@ fn draw_layout() -> BindGroupLayoutDescriptor {
                     false,
                     NonZeroU64::new(size_of::<column::GpuColumn>() as u64),
                 ),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
             ),
         ),
@@ -937,6 +952,7 @@ fn prepare_views(
                     &atlas.texture_view,
                     planet.columns.as_entire_binding(),
                     planet.light.as_entire_binding(),
+                    planet.materials.as_entire_binding(),
                 )),
             )
         };
@@ -1076,9 +1092,10 @@ mod pipeline_tests {
             "actual encoded Rust uniform must match WGSL Params"
         );
         for (layout, read_only_bindings) in [
-            // 5 is the voxel sky light: read only, like the cells, the
-            // visible list and the column records it is sampled beside.
-            (draw_layout(), &[1, 2, 4, 5][..]),
+            // 5 is the voxel sky light and 6 the layer materials: read
+            // only, like the cells, the visible list and the column records
+            // they are sampled beside.
+            (draw_layout(), &[1, 2, 4, 5, 6][..]),
             (compute_layout(), &[1][..]),
         ] {
             for entry in &layout.entries {

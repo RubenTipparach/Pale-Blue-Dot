@@ -103,3 +103,38 @@ is a capture at `--pitch -8` over a dug floor, which is the angle in the
 picture; if the dither is there, the fix is a nearest-filtered mip level
 chosen by distance, which keeps the point-sampling rule and stops the
 shimmer. Held until that capture says so.
+
+## A face wears its own voxel, not a depth rule
+
+The owner built a tower of placed stone and its sides came out sod, then
+earth, then stone by height. The STORAGE was right: `apply_edit` writes the
+held item's material into the column and the log, and the column is what the
+walker, the aim ray and the bake read. What inferred was the DRAWING: a flank
+carried one material per run - the run's top - and `face_code` turned that
+into sod, earth and stone by depth under the run's top. That rule is the
+generator's own stack, and it is exactly right for a column the generator
+made, which is why it survived; it is exactly wrong for a column somebody
+built, because a placed stone is a stone at whatever depth it sits.
+
+Tenebris draws every face in its own voxel's tile: `face_tile(block, cap)`,
+with the top of a grass block the grass, its side the transition and its
+underside dirt. So does this now. `ColumnTier::gpu_materials` packs every
+layer's render code - four bits, eight to a word, forty words a column - into
+a storage buffer beside the light, uploaded with it; `material_at(slot,
+layer)` reads it back in the shader; and a column-pass face (kind 4) takes its
+code from the layer it stands on rather than from its run: the block below an
+up-facing cap, the block above a down-facing one, and for a flank the layer at
+the fragment's own altitude. The side rule is the reference's `face_tile`:
+the sod's side is the transition, snow's side its transition, a grass block's
+underside earth, everything else its own tile.
+
+The generator fills its layers by `material_at_depth`, so a natural hillside
+draws exactly what the depth rule drew - sod, four metres of earth, stone -
+because those are the layers. Nothing was inferred; the layers were always
+there and the drawing stopped asking the run for them. The heightfield's own
+walls (kind 1), which stand only where a cell has no column, keep `face_code`,
+because there is no layer to ask.
+
+`--place N` in the harness stacks N stones on the last hole, so a built tower
+can be photographed; before this it placed one.
+

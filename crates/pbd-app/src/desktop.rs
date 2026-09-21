@@ -54,11 +54,13 @@ pub struct Launch {
     /// land cell in metres. Absent means standing eye height.
     pub height: Option<f32>,
     /// `--dig N` digs N blocks straight down from the camera on the frame the
-    /// tier is ready, and `--place` puts one back on the layer above the last
+    /// tier is ready, and `--place N` stacks N stones on the layer above the last
     /// hole. A headless run has no mouse, and a picture of a hole is the only
     /// thing that says the verb works end to end.
     pub dig: u32,
-    pub place: bool,
+    /// `--place N` stacks N stones on the last hole, so a tower somebody built
+    /// can be photographed wearing the stone it is made of.
+    pub place: u32,
     /// `--spawn mouth` puts the spawn, and so the column tier, at the nearest
     /// cave mouth to the default spawn. Mouth patches cover a few percent of
     /// the land and the default spawn has none, so without this a walker has
@@ -103,7 +105,7 @@ impl Launch {
             view: "coast".into(),
             frames: 180,
             dig: 0,
-            place: false,
+            place: 0,
             tour: false,
             fixed: false,
             fly: false,
@@ -135,7 +137,13 @@ impl Launch {
                         .and_then(|n| n.parse().ok())
                         .expect("--dig requires a count");
                 }
-                "--place" => result.place = true,
+                "--place" => {
+                    i += 1;
+                    result.place = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--place requires a count");
+                }
                 "--torch" => result.torch = true,
                 "--dig-ahead" => result.dig_ahead = true,
                 "--pitch" => {
@@ -450,6 +458,7 @@ pub fn run(args: &[String]) {
         (
             configure_camera,
             scene::move_moon,
+            scene::turn_stars,
             scene::follow_sun,
             slots::input,
             slots::update,

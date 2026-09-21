@@ -5,9 +5,10 @@
 The planet's pole is the tilted axis `daylight::TILT` already tilts the sun's
 arc about. `Spin::at(clock)` is the quaternion that turns about that pole by
 `fraction * TAU`; at fraction 0.5 (noon) the body's noon meridian faces the
-sun. The system frame is what the sky is fixed in: the sun at `SUN_FIXED` (the
-old `SUN_DIRECTION`, so noon is where every capture has always been lit
-from), the star field where `scene.rs` spawned it, the moon on its orbit.
+sun. The system frame is what the sky is fixed in: the sun at `SUN_FIXED` - the old
+`SUN_DIRECTION`'s azimuth at the tilt's latitude, because the old constant's
+own latitude was 45 degrees, a sun that never sets north of it - the star
+field where `scene.rs` spawned it, the moon on its orbit.
 
 Body frame = `spin.inverse() * system frame`. `Clock::sun()` becomes exactly
 that product applied to `SUN_FIXED`, which is what it already computes by
