@@ -27,10 +27,11 @@ mod water;
 pub use contact::{PlanetContact, SurfaceContact};
 pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m};
 pub use terrain::{
-    DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, TERRAIN, river_channel, snow_slot,
-    surface_code, surface_height, terrain_radius, tileset_slot,
+    DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, TERRAIN, WATER,
+    nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, terrain_radius,
+    tileset_slot,
 };
-pub use water::{emerge, submersion};
+pub use water::{EyeWater, EyeWaterState, emerge, submersion};
 
 use bevy::math::{DMat4, DVec3};
 use bevy::{
@@ -226,6 +227,7 @@ impl Plugin for PlanetPlugin {
             // the one the pipeline was built with.
             ExtractResourcePlugin::<crate::sky::Sun>::default(),
             ExtractResourcePlugin::<PlanetArt>::default(),
+            ExtractResourcePlugin::<water::EyeWaterState>::default(),
             ExtractResourcePlugin::<PlanetRenderFrame>::default(),
             ExtractComponentPlugin::<PlanetSurface>::default(),
         ))
@@ -233,8 +235,9 @@ impl Plugin for PlanetPlugin {
         .init_resource::<PlanetRenderFrame>()
         .init_resource::<lod::LodRefresh>()
         .init_resource::<lod::NearField>()
+        .init_resource::<water::EyeWaterState>()
         .add_systems(Startup, create_planet)
-        .add_systems(Update, lod::refresh_lod)
+        .add_systems(Update, (lod::refresh_lod, water::publish_eye_water))
         .add_systems(
             PostUpdate,
             update_planet_frame.before(TransformSystems::Propagate),

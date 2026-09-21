@@ -41,6 +41,17 @@ pub const COLUMN_CAPACITY: u32 = 16_384;
 /// `more[3]`, whose low bit is the rim flag.
 pub const TORCH_SHIFT: u32 = 16;
 
+/// Where a column record carries the top of its water, as a layer plus one:
+/// the middle of `more[3]`, between the rim flag and the torch. Nought is a
+/// column with no water in it at all, which is every column under dry land.
+///
+/// Nine bits, because a layer index is at most `LAYERS`, and a test holds
+/// that against the shader's own copy of the shift.
+pub const WATER_SHIFT: u32 = 4;
+pub const WATER_MASK: u32 = 0x1ff;
+const _: () = assert!(LAYERS < WATER_MASK as usize);
+const _: () = assert!(WATER_SHIFT + 9 <= TORCH_SHIFT);
+
 /// Where a cell record carries its column slot, plus one: the HIGH half of
 /// `metadata.z`, whose low half is the baked sky occlusion in 0..65535.
 ///
@@ -158,10 +169,13 @@ impl ColumnTier {
             return;
         };
         let runs = column.packed_runs(render_code);
-        let torch = torch_word(column);
+        let state = state_word(column);
         if let Some(entry) = self.records.get_mut(slot) {
             entry.runs = runs;
-            entry.more[3] = (entry.more[3] & 0xffff) | torch;
+            // The rim flag is the tier's to know and everything else in the
+            // word is the column's, derived in one place so a build and an
+            // edit cannot pack it differently.
+            entry.more[3] = (entry.more[3] & RIM_BIT) | state;
         }
     }
 
@@ -355,6 +369,35 @@ pub fn has_torch(column: &Column) -> bool {
     torch_word(column) != 0
 }
 
+/// The rim flag's bit in `more[3]`.
+pub const RIM_BIT: u32 = 1;
+
+/// The topmost water layer of a column, plus one, shifted: nought where the
+/// column holds no water. The shader turns it into the altitude of the water's
+/// surface, which is what decides whether a face under sea level is wet.
+fn water_word(column: &Column) -> u32 {
+    for layer in (1..LAYERS).rev() {
+        if column.material(layer) == Material::Water {
+            return (layer as u32 + 1) << WATER_SHIFT;
+        }
+    }
+    0
+}
+
+/// Everything in `more[3]` that is the COLUMN's rather than the tier's: where
+/// its water tops out and where its torch is. One function, because a record
+/// packed at build and a record repacked by an edit that disagreed would be a
+/// column whose lamp or waterline depended on when it was last touched.
+fn state_word(column: &Column) -> u32 {
+    water_word(column) | torch_word(column)
+}
+
+/// The topmost water layer of a column, if it holds any: what `more[3]` packs.
+pub fn water_top_layer(column: &Column) -> Option<usize> {
+    let word = (water_word(column) >> WATER_SHIFT) & WATER_MASK;
+    (word != 0).then(|| word as usize - 1)
+}
+
 /// Build the tier for an anchor, and stamp each finest record with its slot.
 ///
 /// Two passes, because a column's record names its neighbours' SLOTS and a slot
@@ -439,7 +482,7 @@ pub fn build(
                 sides[4],
                 sides[5],
                 degree as u32,
-                rim as u32 | torch_word(&column),
+                rim as u32 | state_word(&column),
             ],
         });
         columns.push(column);
@@ -523,6 +566,50 @@ pub(crate) fn slot_of(cell: &GpuCell) -> Option<u32> {
 }
 
 #[cfg(test)]
+mod water_word_tests {
+    use super::*;
+
+    fn flooded(ground: usize, sea: usize) -> Column {
+        let mut column = Column::bedrock();
+        for layer in 1..=ground {
+            column.set(layer, Material::Stone);
+        }
+        for layer in ground + 1..=sea {
+            column.set(layer, Material::Water);
+        }
+        column
+    }
+
+    /// The record carries the top of the column's water where the shader
+    /// looks for it, and nought where the column holds none: that nought is
+    /// what makes a dry cave dry, so it is worth a test of its own.
+    #[test]
+    fn a_columns_water_top_rides_its_record_and_dry_is_nought() {
+        let wet = flooded(20, 40);
+        assert_eq!(water_top_layer(&wet), Some(40));
+        let packed = (state_word(&wet) >> WATER_SHIFT) & WATER_MASK;
+        assert_eq!(packed, 41, "the layer plus one, as the shader reads it");
+        // The shader turns the packed word into the water's SURFACE, which is
+        // the altitude of the top layer plus one.
+        assert_eq!(
+            pbd_core::column::BASE_M as f32 + packed as f32,
+            pbd_core::column::layer_altitude(40) + 1.0
+        );
+
+        let dry = flooded(20, 20);
+        assert_eq!(water_top_layer(&dry), None);
+        assert_eq!(state_word(&dry) >> WATER_SHIFT & WATER_MASK, 0);
+
+        // The torch shares the word and must survive beside it.
+        let mut lit = wet;
+        lit.set(45, Material::Torch);
+        assert_eq!((state_word(&lit) >> TORCH_SHIFT), 46);
+        assert_eq!((state_word(&lit) >> WATER_SHIFT) & WATER_MASK, 41);
+        assert_eq!(state_word(&lit) & RIM_BIT, 0, "the rim is the tier's");
+    }
+}
+
+#[cfg(test)]
 mod water_below_sea {
     //! A measurement instrument for the volumetric-water change: how much of
     //! the spawn tier is air below sea level, split by whether the ground
@@ -533,25 +620,7 @@ mod water_below_sea {
     use super::*;
     use crate::planet::lod;
 
-    /// The nearest direction to `from` within 3 km whose ground stands in
-    /// `band` metres of altitude, searched on rings of the tangent plane.
-    fn nearest_ground_in(from: Vec3, band: std::ops::Range<f32>) -> Option<Vec3> {
-        let u = Vec3::Y.cross(from).normalize();
-        let v = from.cross(u);
-        for ring in 1..=60 {
-            let metres = ring as f32 * 50.0;
-            let arc = metres / PLANET_RADIUS;
-            for step in 0..48 {
-                let a = step as f32 / 48.0 * std::f32::consts::TAU;
-                let d = (from * arc.cos() + (u * a.cos() + v * a.sin()) * arc.sin()).normalize();
-                let height = super::super::terrain::surface_height(d);
-                if band.contains(&height) {
-                    return Some(d);
-                }
-            }
-        }
-        None
-    }
+    use super::super::terrain::nearest_ground_near;
 
     fn report(label: &str, anchor: Vec3) {
         let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::default());
@@ -606,11 +675,11 @@ mod water_below_sea {
     fn water_below_sea_in_the_spawn_tier() {
         let spawn = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
         report("spawn", spawn);
-        match nearest_ground_in(spawn, 0.5..4.0) {
+        match nearest_ground_near(spawn, 0.5..4.0) {
             Some(shore) => report("nearest shore", shore),
             None => eprintln!("no shore within 3 km of the spawn"),
         }
-        match nearest_ground_in(spawn, -12.0..-2.0) {
+        match nearest_ground_near(spawn, -12.0..-2.0) {
             Some(shallows) => report("nearest shallows", shallows),
             None => eprintln!("no shallows within 3 km of the spawn"),
         }

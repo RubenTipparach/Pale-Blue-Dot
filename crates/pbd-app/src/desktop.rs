@@ -691,6 +691,20 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
     if launch.tour && launch.view == "pole" {
         return Vec3::Y;
     }
+    if launch.view == "seacave" {
+        // The tier has to be somewhere that HAS caves below sea level, and
+        // the spawn is seventy-four metres up. The shore is where the ground
+        // meets the waterline; `nearest_ground_near` is the same locator the
+        // change's measuring test uses, so the picture and the numbers are
+        // taken of one place.
+        if let Some(shore) = pbd_app::planet::nearest_ground_near(default, 0.5..4.0) {
+            info!(
+                "seacave spawn moved {:.0} m to the shore",
+                shore.dot(default).clamp(-1., 1.).acos() * PLANET_RADIUS
+            );
+            return shore;
+        }
+    }
     if launch.spawn.as_deref() == Some("mouth") || launch.view == "mouth" {
         // The nearest worm that starts at the surface within a kilometre.
         let columns = pbd_app::config::ColumnSettings::default();
@@ -758,9 +772,12 @@ fn cave_camera(
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
-    if !["cave", "overhang", "mouth"].contains(&launch.view.as_str()) {
+    if !["cave", "overhang", "mouth", "seacave"].contains(&launch.view.as_str()) {
         return;
     }
+    // A chamber BELOW SEA LEVEL is the volumetric-water case: the column
+    // holds air there and a height field calls it sea.
+    let under_the_sea = launch.view == "seacave";
     use pbd_core::column::{layer_altitude, layer_at};
     let tier = &fine.set.columns;
     let records = fine.set.finest_records();
@@ -830,6 +847,9 @@ fn cave_camera(
             let gap = roof - floor;
             let buried = surface - roof;
             if !(2.5..=12.0).contains(&gap) || !(4.0..=40.0).contains(&buried) {
+                continue;
+            }
+            if under_the_sea && roof >= 0.0 {
                 continue;
             }
             let here = Vec3::from_slice(&records[index].direction_height[..3]);

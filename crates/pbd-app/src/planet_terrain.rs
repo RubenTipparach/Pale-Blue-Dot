@@ -70,7 +70,12 @@ pub fn render_code(material: Material) -> u32 {
         Material::Stone | Material::Rock | Material::Ore => 5,
         Material::Snow => 6,
         Material::JungleGrass => 3,
-        Material::Water | Material::Air => 0,
+        // Water is its OWN code, and air is nought. They shared nought until
+        // the day something had to ask a layer whether it was wet: the
+        // material buffer could not tell a flooded cell from an empty one, so
+        // every reader fell back to the radius and tinted dry caves as sea.
+        Material::Water => WATER,
+        Material::Air => 0,
         // Earth. It was drawn as the sward for as long as it shared a code
         // with grass, so a dirt layer under the turf and a cave wall cut
         // through one both came out green; and the material actually named
@@ -132,6 +137,37 @@ pub fn snow_slot() -> u32 {
     tileset_slot(Biome::Tundra)
 }
 
+/// The nearest direction to `from` whose ground stands inside `band` metres
+/// of altitude, searched on rings of the tangent plane out to three
+/// kilometres.
+///
+/// The spawn stands seventy-four metres up, so its column tier holds nothing
+/// below sea level at all: every question about water in a cave has to be
+/// asked somewhere else, and this is how both the measuring test and the
+/// capture harness get there. One implementation, so the picture and the
+/// number are taken of the same ground.
+pub fn nearest_ground_near(from: Vec3, band: std::ops::Range<f32>) -> Option<Vec3> {
+    let from = from.normalize_or(Vec3::Y);
+    let u = Vec3::Y.cross(from).normalize_or(Vec3::X);
+    let v = from.cross(u);
+    for ring in 1..=60 {
+        let arc = ring as f32 * 50.0 / PLANET_RADIUS;
+        for step in 0..48 {
+            let a = step as f32 / 48.0 * std::f32::consts::TAU;
+            let direction =
+                (from * arc.cos() + (u * a.cos() + v * a.sin()) * arc.sin()).normalize();
+            if band.contains(&surface_height(direction)) {
+                return Some(direction);
+            }
+        }
+    }
+    None
+}
+
+/// Water. Never a face - a water cell draws its seabed and the sheet draws
+/// its surface - so it has no tile in the shader's table; what reads it is
+/// the submerged term, asking a layer whether it is wet.
+pub const WATER: u32 = 13;
 /// Earth, on its own code at last. The two above it are faces rather than
 /// materials - the picture a sod cell shows on its SIDE, which is that sod
 /// fading into the earth under it - and nothing in a column is ever made of
@@ -211,6 +247,14 @@ mod tests {
             format!(
                 "const MATERIAL_PER_WORD: u32 = {}u;",
                 crate::planet::column::MATERIAL_PER_WORD
+            ),
+            format!(
+                "const COLUMN_WATER_SHIFT: u32 = {}u;",
+                crate::planet::column::WATER_SHIFT
+            ),
+            format!(
+                "const COLUMN_WATER_MASK: u32 = {:#x}u;",
+                crate::planet::column::WATER_MASK
             ),
         ] {
             assert!(
@@ -301,6 +345,18 @@ mod tests {
                 index(tile_of(code))
             );
         }
+        // Water draws NO face and so has no tile: a water cell shows its
+        // seabed, and the sheet shows its surface. What reads its code is the
+        // submerged term, asking a layer whether it is wet.
+        assert!(
+            !tiles.iter().any(|(code, _)| *code == WATER),
+            "water has a tile in the shader, so something draws a face of it"
+        );
+        assert_ne!(
+            render_code(Material::Water),
+            render_code(Material::Air),
+            "a face cannot tell water from air if they share a code"
+        );
         // Stone is every sheet's #3 and the sward every sheet's #0.
         assert_eq!(index(tile_of(5)), 3, "stone is the sheet's stone");
         assert_eq!(index(tile_of(2)), 0, "grass is the sheet's ground");

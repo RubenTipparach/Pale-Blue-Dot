@@ -5,16 +5,32 @@
       columns and layers in the spawn tier. Numbers in the design.
 
 ## 2. Water the renderer and the walker can see
-- [ ] `WATER_CODE` in `render_code`; the tile-name test learns a faceless
-      material; the constants test pins the code.
-- [ ] `planet_surface.wgsl`: the submerged term gated by the air-side layer's
-      material in the tier; heightfield rule off the tier. A cave capture
-      (`--view cave` and the owner's picture) before and after.
-- [ ] `submersion` asks the eye's column first; tests at a dry cave eye and
-      a sea eye.
-- [ ] `Column::contact` answers the water run; `PlanetContact::stand` sets
-      `water_depth` from it in the tier; a test that a walker in a cave
-      below sea level does not swim.
+- [x] `WATER` (13) in `render_code`, its own code at last; the tile test
+      holds that water has NO tile, since water draws no face, and that it
+      no longer shares air's code.
+- [x] The column record carries the top of its water where the shader reads
+      it (`more[3]`, nine bits between the rim flag and the torch);
+      `state_word` packs the column's half of that word for the build and
+      the repack alike, so an edit cannot disagree with a build.
+- [x] `planet_surface.wgsl`: the submerged term takes the column's own water
+      surface inside the tier, capped at the sheet, and the radius rule
+      stands outside it. `column_water_top_m` reads the record; a column
+      with no water has its surface a thousand kilometres down, so the
+      reader is one `min` and never a branch.
+- [x] `submersion` asks the column at the eye: `EyeWater::Air` is dry at any
+      depth, `Water` is read against ITS OWN surface, `Unknown` is the height
+      field. `publish_eye_water` answers it in the main world, where the
+      authoritative columns are, and the render world reads the extracted
+      resource.
+- [x] `Column::water_surface` and `Contact::water` in the core;
+      `PlanetContact::stand` takes `water_depth` from them inside the tier.
+      Tests: a seabed column reports the water standing on it, a cave under
+      land below sea level reports none, and the same cave flooded reports
+      the pool's own surface.
+- [x] `--view seacave`: the spawn moves to the shore (`nearest_ground_near`,
+      the locator the measuring test uses, so the picture and the numbers
+      are taken of one place) and the camera picks a chamber whose roof is
+      below sea level. Before and after in `docs/screenshots/`.
 
 ## 3. Flooding by connectivity
 - [ ] The bounded flood at `column::build` and on an edit; tests for a

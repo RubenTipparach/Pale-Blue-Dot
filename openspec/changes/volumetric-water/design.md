@@ -75,6 +75,30 @@ at a dry cave eye is 0 and at a sea eye is unchanged; the shader material
 term is exercised by the existing CPU audit with a water layer in the
 neighbourhood.
 
+## What phase 1 turned out to be, once written
+
+Two things moved from the design as written.
+
+**The fragment asks its COLUMN, not the air side of its face.** The design
+said to read the material on the air side: exact for a cap, and impossible
+for a flank, whose air is in the neighbour's column and whose slot the
+fragment does not have. What replaced it is simpler and is the same answer
+wherever the data is right: a fragment is submerged if the COLUMN it belongs
+to holds water, and it is below that water's surface. A column under land
+holds none, so its cave is dry at any depth; a column under the sea holds
+water from its ground to sea level, so its seabed cap and the flanks below
+read exactly as they did. The one case it answers differently from a
+per-face rule is the dry tube under the ocean, which it calls wet - and that
+column is the one phase 2 fills with water, so it is the answer that ages
+correctly.
+
+**The water surface is per column, not a flag.** It would have been one bit
+today, because every water run in a generated column stops at sea level. It
+is nine bits carrying the top of the run, because a pool is what phase 2
+makes and a pool's surface is lower than the sea's. The shader caps it at
+the sheet's radius, so a column whose water reaches sea level draws exactly
+as before: the sea did not move.
+
 ## Phase 2: flooding by connectivity
 
 At `column::build`, after the carve and the edits, a bounded flood: from

@@ -109,6 +109,19 @@ const COLUMN_TORCH_VERTICES: u32 = 30u;
 // packs it; `the_shader_carries_the_reference_light_constants` pins the shift.
 const TORCH_SHIFT: u32 = 16u;
 fn torch_layer(rec: ColumnRec) -> u32 { return rec.more[3] >> TORCH_SHIFT; }
+// Where the record carries the top of this column's water, as a layer plus
+// one; `planet_column.rs` packs it and a test holds the two shifts together.
+const COLUMN_WATER_SHIFT: u32 = 4u;
+const COLUMN_WATER_MASK: u32 = 0x1ffu;
+// The altitude of this column's water SURFACE, or a depth no world reaches
+// when it holds none. Below the world rather than a flag, so the reader is a
+// `min` against the sheet and never a branch: a column with no water has its
+// surface infinitely far down and nothing in it is ever wet.
+fn column_water_top_m(rec: ColumnRec) -> f32 {
+    let packed = (rec.more[3] >> COLUMN_WATER_SHIFT) & COLUMN_WATER_MASK;
+    if packed == 0u { return -1.0e9; }
+    return COLUMN_BASE_M + f32(packed);
+}
 const NO_NEIGHBOR: u32 = 0xffffffffu;
 
 // A run is absent when its TOP field is zero, not its bottom: the run holding
@@ -1354,7 +1367,19 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     color += albedo*TORCH_TINT*(lamp*TORCH_GAIN);
     // Submerged terrain: Tenebris's hex.fs absorption, the sheet's own
     // absorption and deep colour so the seabed tints the way its sea does.
-    let water_depth = max(params.water_absorption.w - length(input.position), 0.);
+    //
+    // WHERE the water is, is the COLUMN's answer wherever there is a column.
+    // A height field has only one: the radius, so every fragment under sea
+    // level was tinted as sea and a cave carved under land below sea level
+    // was a dry room full of ocean. The column says that pocket is air.
+    // Capped at the sheet, which is where the sea's own surface is drawn, so
+    // a column whose water reaches sea level reads exactly as it did.
+    var water_surface = params.water_absorption.w;
+    if input.slot != 0u {
+        water_surface = min(water_surface,
+            params.settings.x + column_water_top_m(columns[input.slot-1u]));
+    }
+    let water_depth = max(water_surface - length(input.position), 0.);
     if water_depth > 0. {
         let attenuation = exp(-params.water_absorption.rgb*water_depth);
         color = mix(color*attenuation, params.water_deep.rgb*attenuation,

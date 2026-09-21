@@ -296,6 +296,15 @@ impl PlanetContact {
             stand.floor_radius = PLANET_RADIUS + floor;
         }
         stand.ceiling_radius = contact.ceiling.map(|c| PLANET_RADIUS + c);
+        // And the water, which the column knows and the height field only
+        // guesses: a cell under the sea is wet at every depth to a height
+        // field, so a walker in a cave carved under land below sea level was
+        // told to swim in air. Inside the tier the column answers; outside it
+        // there are no caves, so the height field's answer above stands.
+        stand.water_depth = match (contact.water, contact.floor) {
+            (Some(surface), Some(floor)) => (surface - floor).max(0.0),
+            _ => 0.0,
+        };
         stand
     }
 
