@@ -104,6 +104,16 @@ picture; if the dither is there, the fix is a nearest-filtered mip level
 chosen by distance, which keeps the point-sampling rule and stops the
 shimmer. Held until that capture says so.
 
+The capture was taken, twice, and it says nothing:
+`docs/screenshots/placed-stone-grazing.png` is a placed stone beside its
+pit at `--pitch -8`, and `graze_dirt` the same aim over a bare dug floor,
+and neither shows a second face or a shimmer on the software rasteriser.
+That does not clear it: lavapipe rasterises a grazing texel differently from
+the owner's GPU, and a dither that is a hardware sampling artefact is
+exactly the kind that a headless render cannot reproduce. The nearest-mip
+fix stays proposed, and what settles it is the owner's in-game look at a
+dirt cap beside placed stone at a low sun.
+
 ## A face wears its own voxel, not a depth rule
 
 The owner built a tower of placed stone and its sides came out sod, then

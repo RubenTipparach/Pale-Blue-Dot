@@ -31,6 +31,8 @@
       logged it while every test stayed green and the planet drew nothing.
 
 ## 6. Held
-- [ ] The dithered face: a `--pitch -8` capture over a dug floor, then
-      nearest-filtered mips if it shows.
+- [ ] The dithered face: the `--pitch -8` captures over a dug floor and
+      beside placed stone show nothing on the software rasteriser
+      (`placed-stone-grazing.png`); nearest-filtered mips stay proposed,
+      pending the owner's in-game look.
 - [ ] The owner's in-game look at all of it.
