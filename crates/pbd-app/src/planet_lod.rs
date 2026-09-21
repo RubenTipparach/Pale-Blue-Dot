@@ -612,6 +612,122 @@ mod tests {
 }
 
 #[cfg(test)]
+mod streaming_cost {
+    //! A measurement instrument for the near-field-streaming change: what a
+    //! fine-set rebuild costs, level by level and then the tier, and what one
+    //! column and the worm gather cost on their own. Ignored because it takes
+    //! seconds in release and tens of seconds in debug; run it with
+    //! `cargo test -p pbd-app --release --lib streaming_cost -- --ignored --nocapture`.
+    use super::*;
+    use crate::planet::terrain::{PLANET_RADIUS, TERRAIN};
+    use std::time::Instant;
+
+    #[test]
+    #[ignore]
+    fn what_the_near_field_costs_to_build() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        let edits = Edits::default();
+        let mut lattice = Lattice::default();
+        let mut heights = Heights::default();
+        let mut finest = Vec::new();
+        let mut finest_neighbors = Vec::new();
+        let mut total_ms = 0.0;
+        for (k, &level) in FINE_LEVELS.iter().enumerate() {
+            let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(level);
+            let inner = if k + 1 < FINE_LEVELS.len() {
+                (BAND_M[k + 1] - margin).max(0.0)
+            } else {
+                0.0
+            };
+            let outer = BAND_M[k] + margin;
+            let started = Instant::now();
+            let cells =
+                lattice.cells_in_band(level, anchor, inner / PLANET_RADIUS, outer / PLANET_RADIUS);
+            let laid = started.elapsed().as_secs_f64() * 1000.;
+            let records: Vec<GpuCell> = cells
+                .iter()
+                .map(|local| {
+                    record(
+                        CellSource {
+                            direction: local.cell.direction,
+                            corners: &local.cell.corners,
+                            neighbor_directions: &local.neighbor_directions,
+                            level,
+                            owners: local.owners,
+                            id: stable_id(local),
+                        },
+                        &mut heights,
+                    )
+                })
+                .collect();
+            let recorded = started.elapsed().as_secs_f64() * 1000.;
+            total_ms += recorded;
+            eprintln!(
+                "level {level}: {} cells, lattice {laid:.0} ms, records {:.0} ms, {:.3} ms per cell",
+                cells.len(),
+                recorded - laid,
+                (recorded - laid) / cells.len().max(1) as f64
+            );
+            if level == FINEST_LEVEL {
+                finest_neighbors = cells
+                    .iter()
+                    .map(|local| {
+                        let mut ids = [u32::MAX; 6];
+                        for (id, &n) in ids.iter_mut().zip(&local.cell.neighbors) {
+                            *id = if n == usize::MAX { u32::MAX } else { n as u32 };
+                        }
+                        ids
+                    })
+                    .collect();
+                finest = records;
+            }
+        }
+        let started = Instant::now();
+        let field = settings.worms();
+        let region = pbd_core::worms::gather(&field, &TERRAIN, anchor, settings.reach_m);
+        let gathered = started.elapsed().as_secs_f64() * 1000.;
+        let started = Instant::now();
+        let tier = column::build(anchor, &mut finest, &finest_neighbors, &settings, &edits);
+        let built = started.elapsed().as_secs_f64() * 1000.;
+        total_ms += built;
+        eprintln!(
+            "tier: {} columns, worm gather {gathered:.1} ms, build (gather + columns + reconcile + \
+             relight) {built:.1} ms, {:.3} ms per column",
+            tier.columns.len(),
+            built / tier.columns.len().max(1) as f64
+        );
+        // One column on its own, as an on-demand edit would generate it: the
+        // mean over the tier's own directions, gather amortised away.
+        let started = Instant::now();
+        let mut generated = 0usize;
+        for cell in finest.iter().take(500) {
+            let direction = Vec3::from_slice(&cell.direction_height[..3]);
+            let column = pbd_core::column::generate_edited(
+                &region,
+                &field,
+                &TERRAIN,
+                direction,
+                edits.for_cell(cell.metadata[3]),
+            );
+            generated += usize::from(column.solid(0));
+        }
+        let single = started.elapsed().as_secs_f64() * 1000. / 500.;
+        eprintln!(
+            "one column, generated alone: {single:.3} ms (over 500; {generated} solid at the base)"
+        );
+        let started = Instant::now();
+        let whole = generate_fine(anchor, &settings, &edits);
+        let all = started.elapsed().as_secs_f64() * 1000.;
+        eprintln!(
+            "generate_fine whole: {all:.0} ms ({} records, tier {}), parts summed {total_ms:.0} ms",
+            whole.levels.iter().map(Vec::len).sum::<usize>(),
+            whole.columns.columns.len()
+        );
+    }
+}
+
+#[cfg(test)]
 mod seam_report {
     use super::*;
     use crate::planet::terrain::{PLANET_RADIUS, TERRAIN};
