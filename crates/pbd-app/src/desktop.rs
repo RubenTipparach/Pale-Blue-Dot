@@ -291,7 +291,8 @@ impl Launch {
                 "dive",
                 "cave",
                 "overhang",
-                "mouth"
+                "mouth",
+                "seacave"
             ]
             .contains(&result.view.as_str()),
             "unknown capture view"
