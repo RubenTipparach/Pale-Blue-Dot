@@ -556,12 +556,20 @@ whose top is rock is rock. This is Tenebris's rule as well: a voxel's side
 wears the voxel.
 
 **The capture that found the first defect** was `--walk --fixed-dt --pitch -40
---dig 8 --dig-ahead` with the sky off: the scripted dig logged its three layers
-as 220, 219 and 218 of a cell whose top was 221 - a pocket under an unbroken
-roof, lit to 0 of 15 - and the flank of that roof's one-layer run stood in the
-frame as a wall of earth. `--pitch` is new for exactly this: a headless walker
-looked dead level, and a pit a player digs is a slanted run of cells, each
-taken from a different column at a different layer.
+--dig 8 --dig-ahead`: the scripted dig logged its three layers as 220, 219 and
+218 of a cell whose top was 221 - a pocket under an unbroken roof, lit to 0 of
+15 - and the flank of that roof's one-layer run stood in the frame as a wall
+of earth. `--pitch` is new for exactly this: a headless walker looked dead
+level, and a pit a player digs is a slanted run of cells, each taken from a
+different column at a different layer.
+
+**Measured, the same capture on the fixed build.** The three layers are 220,
+219 and 218 of a cell whose top IS 220, so the pit is open to the sky and each
+is lit to 15 of 15; with the sky off (`PBD_NO_SKY`) the frame has 0 background
+pixels; the frame mean is 75.3 of 255 against the roofed pocket's 19.2.
+`docs/screenshots/dig-pit-before.png` and `dig-pit-after.png` are the pair,
+and `column-mouth.png` is a natural mouth on the same build. The audit passes
+on the built tier and after every edit in its sequence.
 
 ### The tier's rim is generated SOLID
 
