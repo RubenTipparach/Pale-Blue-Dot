@@ -42,7 +42,9 @@
       the ground underfoot, whether that cell has a column, metres from the
       resident set's anchor, the tier's column count, and how long a rebuild
       has been in flight. It is what says "you have outrun the streaming" on
-      the screen; it goes when this change lands.
+      the screen; it goes when this change lands
+      (`docs/screenshots/hud-near-field.png`: "underfoot L11, column | 3 m
+      from anchor | 3105 columns" at the spawn).
 - [x] An edit that changes nothing logs an ERROR with why: the eye ray
       entered ground with no column (`Unsampled`, with the cell and the depth
       and the readout line), a cell the set no longer holds, or a save that
