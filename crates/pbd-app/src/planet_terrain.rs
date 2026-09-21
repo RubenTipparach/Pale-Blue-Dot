@@ -198,6 +198,7 @@ mod tests {
             format!("const LIGHT_MAX: f32 = {:.1};", light::MAX as f32),
             format!("const CONTACT_1: f32 = {:.2};", light::CONTACT[1]),
             format!("const CONTACT_2: f32 = {:.2};", light::CONTACT[2]),
+            format!("const CONTACT_3: f32 = {:.2};", light::CONTACT[3]),
             format!("const LIGHT_LAYERS: u32 = {}u;", pbd_core::column::LAYERS),
             format!(
                 "const LIGHT_WORDS: u32 = {}u;",
@@ -217,6 +218,86 @@ mod tests {
             1,
             "a step of anything else needs the shader to know"
         );
+    }
+
+    /// The shader's tile table, `if code==Nu { ... tile=vec2(x.,y.); }`, read
+    /// off the shipped file: which tile of a sheet each material code draws.
+    fn shader_tiles() -> Vec<(u32, (u32, u32))> {
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        shader
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                let code = line
+                    .strip_prefix("if code==")?
+                    .split('u')
+                    .next()?
+                    .parse()
+                    .ok()?;
+                let tile = line.split("tile=vec2(").nth(1)?.split(')').next()?;
+                let mut parts = tile.split(',').map(|p| p.trim().trim_end_matches('.'));
+                Some((
+                    code,
+                    (parts.next()?.parse().ok()?, parts.next()?.parse().ok()?),
+                ))
+            })
+            .collect()
+    }
+
+    /// A sheet's sixteen tile names, from `biomes.json`, in the row-major order
+    /// the atlas holds them. A hand parse rather than a JSON crate: one array
+    /// of strings under one id is not worth a dependency.
+    fn sheet_tile_names(id: &str) -> Vec<String> {
+        let json = include_str!("../../../assets/tilesets/biomes.json");
+        let start = json
+            .find(&format!("\"id\": \"{id}\""))
+            .unwrap_or_else(|| panic!("biomes.json names the {id} sheet"));
+        let tiles = &json[start..];
+        let tiles = &tiles[tiles.find("\"tiles\"").expect("a tiles array")..];
+        let open = tiles.find('[').expect("an array");
+        let close = tiles.find(']').expect("a closed array");
+        tiles[open + 1..close]
+            .split(',')
+            .map(|name| name.trim().trim_matches('"').to_owned())
+            .collect()
+    }
+
+    /// Every material is drawn on a tile whose name in its sheet's own manifest
+    /// says what it is. This is `tools/block_audit.py`'s text output as an
+    /// assertion, and it is what would have caught the snow cap drawing the
+    /// tundra sheet's "cold granite" and every sand cap its sheet's "packed
+    /// path" - the tiles had only ever lent their brightness to a flat colour,
+    /// and the day caps drew real colours they showed what they pointed at.
+    #[test]
+    fn the_shader_draws_each_material_on_a_tile_named_for_it() {
+        let tiles = shader_tiles();
+        let tile_of = |code: u32| {
+            tiles
+                .iter()
+                .find(|(c, _)| *c == code)
+                .map(|(_, tile)| *tile)
+                .unwrap_or((0, 0))
+        };
+        let index = |(x, y): (u32, u32)| (y * 4 + x) as usize;
+        for (code, sheet, word) in [
+            (6, "tundra", "snow"),
+            (0, "ocean", "sand"),
+            (1, "beach", "sand"),
+            (4, "desert", "sand"),
+        ] {
+            let names = sheet_tile_names(sheet);
+            let name = &names[index(tile_of(code))];
+            assert!(
+                name.contains(word),
+                "code {code} draws {sheet}'s tile #{} \"{name}\", which is not {word}",
+                index(tile_of(code))
+            );
+        }
+        // Stone is every sheet's #3 and the sward every sheet's #0.
+        assert_eq!(index(tile_of(5)), 3, "stone is the sheet's stone");
+        assert_eq!(index(tile_of(2)), 0, "grass is the sheet's ground");
+        assert_eq!(&sheet_tile_names("fields")[3], "limestone");
+        assert_eq!(&sheet_tile_names("fields")[0], "pasture grass");
     }
 
     /// The atlas is baked by `tools/build_tileset_atlas.py`, which derives its

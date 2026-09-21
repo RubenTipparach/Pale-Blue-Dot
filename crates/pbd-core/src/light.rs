@@ -48,7 +48,9 @@ pub const STEP: u8 = 1;
 /// neighbour kernel for a stated reason: for a cap the cell itself is always
 /// air and for a side face always solid, so neither says anything about how
 /// exposed the corner is, and the two side neighbours do.
-pub const CONTACT: [f32; 3] = [1.0, 0.85, 0.70];
+/// Four rungs rather than the reference's three: the fourth is reached only
+/// by a wall, which counts the two cells past its edge as well ([`wall_corner`]).
+pub const CONTACT: [f32; 4] = [1.0, 0.85, 0.70, 0.55];
 
 /// The columns being lit and how they join.
 ///
@@ -292,6 +294,54 @@ pub fn corner(region: &Region, light: &Baked, cells: [u32; 3], layer: usize) -> 
         .iter()
         .filter(|&&cell| cell != OFF_REGION && region.opaque(cell, layer))
         .count();
+    (mean * CONTACT[occluders.min(CONTACT.len() - 1)]).clamp(0.0, 1.0)
+}
+
+/// A WALL's corner: [`corner`]'s rule plus the two cells one layer past the
+/// wall's edge, `beyond` - the column across and the column beside, at the
+/// layer below a foot or above a head.
+///
+/// The reference counts only the two side columns at the face's own layer,
+/// which for a cap is the whole rule. For a wall the plane in front of the
+/// face is the column across, and a vertex on the wall's edge has three cells
+/// that can shadow it: the side column at the wall's layer, and the across and
+/// side columns one layer past the edge. That is Minecraft's three-neighbour
+/// rule, which is where the reference's own ladder comes from, on a lattice
+/// where three columns meet at a corner. Without it a wall standing on a floor
+/// is lit the same at its foot as at its middle, and a wall under a lid as if
+/// nothing were over it - the picture the owner drew.
+pub fn wall_corner(
+    region: &Region,
+    light: &Baked,
+    cells: [u32; 3],
+    layer: usize,
+    beyond: usize,
+) -> f32 {
+    let mut sum = 0u32;
+    let mut samples = 0u32;
+    for &cell in &cells {
+        if cell == OFF_REGION || region.opaque(cell, layer) {
+            continue;
+        }
+        let Some(levels) = light.get(cell as usize) else {
+            continue;
+        };
+        sum += levels[layer].sky() as u32;
+        samples += 1;
+    }
+    if samples == 0 {
+        return 0.0;
+    }
+    let mean = sum as f32 / (samples * MAX as u32) as f32;
+    let solid = |cell: u32, at: usize| cell != OFF_REGION && region.opaque(cell, at);
+    let occluders = cells[1..]
+        .iter()
+        .filter(|&&cell| solid(cell, layer))
+        .count()
+        + cells[1..]
+            .iter()
+            .filter(|&&cell| solid(cell, beyond))
+            .count();
     (mean * CONTACT[occluders.min(CONTACT.len() - 1)]).clamp(0.0, 1.0)
 }
 
@@ -620,6 +670,39 @@ mod tests {
             against_one < open && wedged < against_one,
             "and it is a ladder"
         );
+    }
+
+    /// A wall's foot where it stands on a floor is darker than its middle,
+    /// and its head under a lid is darker than its middle: the two cells past
+    /// the wall's edge count, which is what the reference's ladder left out.
+    #[test]
+    fn a_walls_foot_on_a_floor_and_its_head_under_a_lid_are_darker_than_its_middle() {
+        // Column 0 is the floor at 50, column 1 the wall standing on it to
+        // 53, column 2 a lid over the floor from 55 up. The wall's face is
+        // toward column 0 at layers 51..=53.
+        let (columns, neighbors, light) = baked(vec![ground(50), ground(53), roofed(50, 54, 60)]);
+        let region = Region {
+            columns: &columns,
+            neighbors: &neighbors,
+        };
+        let cells = [1, 0, OFF_REGION];
+        let middle = corner(&region, &light, cells, 52);
+        // The foot: layer 51 of the face, and the floor at 50 past its edge.
+        let foot = wall_corner(&region, &light, cells, 51, 50);
+        assert!(foot < middle, "foot {foot} against middle {middle}");
+        assert!(
+            (foot - middle * CONTACT[1] / CONTACT[0]).abs() < 1e-6,
+            "one cell past the edge is one rung: {foot}"
+        );
+        // A head under a lid: the wall's top layer 53 of a face toward column
+        // 2, whose lid at 55 is one past the edge at 54... so use a face at
+        // layer 54 toward column 2 with the lid at 55 past it.
+        let lid = wall_corner(&region, &light, [1, 2, OFF_REGION], 54, 55);
+        let open = corner(&region, &light, [1, 2, OFF_REGION], 54);
+        assert!(lid < open, "head under a lid {lid} against open {open}");
+        // Without a cell past the edge the wall rule is the cap rule.
+        let same = wall_corner(&region, &light, cells, 52, 52);
+        assert!((same - middle).abs() < 1e-6, "{same} against {middle}");
     }
 
     /// A corner with no air to sample answers dark, and says so plainly, so
