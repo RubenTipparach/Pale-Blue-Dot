@@ -474,6 +474,7 @@ pub fn run(args: &[String]) {
             scene::follow_sun,
             slots::input,
             slots::update,
+            hud::near_field,
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             autosave,
             digging::dig_and_place,

@@ -36,3 +36,20 @@
       for 30 s with a capture every 5 s: no solid rim inside `reach_m`, and
       the tier's resident count and per-frame generation cost logged.
 - [ ] The owner's in-game walk: no wall ahead, digging works while walking.
+
+## 6. Instruments, built ahead of the change
+- [x] A HUD line (`hud::near_field`, off `lod::NearField`): the level drawing
+      the ground underfoot, whether that cell has a column, metres from the
+      resident set's anchor, the tier's column count, and how long a rebuild
+      has been in flight. It is what says "you have outrun the streaming" on
+      the screen; it goes when this change lands.
+- [x] An edit that changes nothing logs an ERROR with why: the eye ray
+      entered ground with no column (`Unsampled`, with the cell and the depth
+      and the readout line), a cell the set no longer holds, or a save that
+      refused. Refusals that are rules (bedrock, a second torch, an empty
+      hand, the player's own cell, the same material) log at `info`. Accepted
+      edits log their set version and the render world logs each version it
+      uploads, so an edit that saved and never showed is two lines that do
+      not meet.
+- [x] `refresh_lod` logs each landing: how long it took and how far the
+      player had got from its anchor.

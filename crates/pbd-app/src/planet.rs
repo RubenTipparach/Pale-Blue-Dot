@@ -25,7 +25,7 @@ mod visibility_tests;
 mod water;
 
 pub use contact::{PlanetContact, SurfaceContact};
-pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, PlanetFine, tile_width_m};
+pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m};
 pub use terrain::{
     DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, TERRAIN, river_channel, snow_slot,
     surface_code, surface_height, terrain_radius, tileset_slot,
@@ -232,6 +232,7 @@ impl Plugin for PlanetPlugin {
         .init_resource::<PlanetClock>()
         .init_resource::<PlanetRenderFrame>()
         .init_resource::<lod::LodRefresh>()
+        .init_resource::<lod::NearField>()
         .add_systems(Startup, create_planet)
         .add_systems(Update, lod::refresh_lod)
         .add_systems(
@@ -623,6 +624,10 @@ fn upload_fine(
     }
     planet.uploaded = fine.version;
     planet.lod = lod::LodParams::of(&fine.set);
+    // The other half of an edit's own log line: the version it made is the
+    // version the GPU now draws. An edit whose version never appears here is
+    // an edit nobody can see.
+    debug!("fine set version {} uploaded", fine.version);
 }
 
 #[derive(Resource)]

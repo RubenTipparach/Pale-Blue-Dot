@@ -157,6 +157,17 @@ band hysteresis `hexagon-lod` already names, are that change's work; this one
 moves only what the player is standing on. `FOLIAGE_DRAW_CUTOFF_ALTITUDE` and
 the altitude task on `hexagon-lod` are untouched.
 
+## The instruments that came first
+
+The owner asked for two tools before the change: the level under the player
+on the screen, and a hard error whenever a click that should have changed the
+world changed nothing. Both are built (`lod::NearField`, `hud::near_field`,
+the `error!` lines in `digging.rs`) and both are how this change is judged:
+when it lands, the readout should never say NO COLUMN on foot and the error
+should never fire while walking. The owner's own definition of blocked is the
+one the error implements: a click with no visual change and no collision
+change. Flying is exempt only because edits are not offered off foot yet.
+
 ## What is not settled
 
 - **The budget's default.** A few milliseconds is a guess until the owner's
