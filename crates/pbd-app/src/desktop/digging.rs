@@ -153,7 +153,9 @@ pub fn apply_edit(
         return None;
     }
     slots.0 = moved;
+    let started = std::time::Instant::now();
     let mut set = (*fine.set).clone();
+    let cloned = started.elapsed();
     set.columns.set_layer(record, layer, material);
     set.columns.repack(record);
     for &neighbor in set.finest_neighbors[record].iter() {
@@ -174,9 +176,24 @@ pub fn apply_edit(
     // lights round a corner. The reference runs a bounded incremental pass
     // because a full one costs it a second; ours costs six milliseconds, so it
     // buys the exactness instead.
+    let repacked = started.elapsed();
     set.columns.relight();
+    let relit = started.elapsed();
     let set = Arc::new(set);
     contact.set_fine(&set);
+    let contacted = started.elapsed();
+    // A `debug!` rather than an `info!`: it is one line per block edit, which
+    // is a wall of text while a player holds the button, and it is exactly
+    // what you want the moment an edit feels slow.
+    debug!(
+        "edit cost: clone {:.2} ms, repack+reconcile {:.2} ms, relight {:.2} ms, \
+         contact {:.2} ms, total {:.2} ms",
+        cloned.as_secs_f64() * 1000.,
+        (repacked - cloned).as_secs_f64() * 1000.,
+        (relit - repacked).as_secs_f64() * 1000.,
+        (contacted - relit).as_secs_f64() * 1000.,
+        contacted.as_secs_f64() * 1000.,
+    );
     fine.set = set;
     fine.version += 1;
     Some(was)
