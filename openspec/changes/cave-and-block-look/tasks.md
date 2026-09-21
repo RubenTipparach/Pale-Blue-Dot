@@ -25,6 +25,10 @@
 - [x] `material_at` in the shader; kind-4 faces take the layer's own code
       with the reference's side rule.
 - [x] `--place N` stacks N stones; a tower captured.
+- [x] The surface and visibility shaders parse and validate under naga in
+      the suite (`shader_tests.rs`): the first cut of `material_at` shadowed
+      the fragment's `altitude`, which WGSL forbids, and the pipeline cache
+      logged it while every test stayed green and the planet drew nothing.
 
 ## 6. Held
 - [ ] The dithered face: a `--pitch -8` capture over a dug floor, then

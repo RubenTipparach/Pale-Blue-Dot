@@ -1250,12 +1250,12 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // summer grass.
     var slot = tileset_slot((input.material >> 8u) & 0xffu);
     var code = cap;
-    let altitude = length(input.position)-params.settings.x;
+    let face_altitude = length(input.position)-params.settings.x;
     if input.kind==1u {
         // The heightfield's own wall, which stands only where a cell has no
         // column: no layer to ask, so the depth rule, which is the
         // generator's own stack.
-        code = face_code(cap,max(input.height-altitude,0.));
+        code = face_code(cap,max(input.height-face_altitude,0.));
     }
     if input.kind==4u {
         // A column-pass face wears the LAYER it bounds: the block under an
@@ -1266,9 +1266,9 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         // everything else its own tile.
         let radial = normalized(input.position);
         let facing = dot(input.normal, radial);
-        var layer = light_layer(altitude);
-        if facing > 0.5 { layer = light_layer(altitude-0.5); }
-        else if facing < -0.5 { layer = light_layer(altitude+0.5); }
+        var layer = light_layer(face_altitude);
+        if facing > 0.5 { layer = light_layer(face_altitude-0.5); }
+        else if facing < -0.5 { layer = light_layer(face_altitude+0.5); }
         else { layer = min(layer, max(light_layer(input.height-0.5), 0u)); }
         let own = material_at(input.slot, layer);
         code = own;
