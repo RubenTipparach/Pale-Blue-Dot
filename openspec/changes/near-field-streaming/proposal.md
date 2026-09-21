@@ -14,8 +14,9 @@ only cells that can be dug or built on) are generated together in
 player has walked `REGEN_DISTANCE_M` (40 m) from the set's anchor, and the
 whole set is swapped in on the frame the task lands.
 
-So the near field waits for the far field. The tier costs tens of milliseconds
-and the bands cost seconds, and the tier cannot arrive before the bands do.
+So the near field waits for the far field. Measured, the tier is 85 ms of a
+16 s rebuild on this container, half of one percent, and it cannot arrive
+before the other 99.5% does.
 While the task runs the player keeps walking, and the tier they are walking
 through is the OLD one, anchored 40 m or more behind them: at eight metres a
 second a player reaches the old tier's edge fifty metres on, which is six
