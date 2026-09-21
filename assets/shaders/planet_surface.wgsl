@@ -1219,22 +1219,26 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     if code==8u { base=vec3(0.16,0.105,0.055); tile=vec2(2.,1.); }
     if code==9u { base=vec3(0.085,0.24,0.060); tile=vec2(0.,2.); }
     if code==6u || code==SNOW_SIDE_CODE { slot = u32(params.ground.z); }
-    let texel = pixel_tile(input.uv,tile,slot);
-    let luminance = dot(texel,vec3(0.2126,0.7152,0.0722));
-    let detail = mix(clamp(luminance*3.2,0.55,1.65),1.0,smoothstep(180.,1400.,distance_to_camera));
+    // A face is drawn in its tile's COLOURS - the grass top is the grass art,
+    // a wall's first metre is the sod-into-earth transition - and fades at
+    // range to a flat mean, because a point-sampled tile at range is shimmer
+    // rather than detail. A cap used to take only its tile's BRIGHTNESS over a
+    // flat base, so a meadow was green paper with the sward stamped on it and
+    // the grass art showed nowhere but the top metre of a wall. Tenebris draws
+    // `grass.png` on the top, `dirt_grass.png` on the side and `dirt.png`
+    // underneath: three pictures, none of them a tint.
+    var far = base;
+    if code>=DIRT_CODE {
+        tile = vec2(2.,0.);
+        if code>=GRASS_SIDE_CODE { tile = vec2(1.,0.); }
+        far = GROUND_MEAN;
+    }
+    let art = pixel_tile(input.uv,tile,slot);
     // `shade` is one everywhere but down a grass blade, where the root sits at
     // the configured fraction of full light and eases to the tip. That gradient
     // is what makes a sward read as lush rather than as flat green paper.
-    var albedo = base*detail*cell_variation*input.shade;
-    // The ground's own faces are drawn from the atlas's COLOURS rather than as
-    // a flat base scaled by the tile's brightness: a transition tile is two
-    // colours by definition, sod over earth, and one base cannot be both.
-    if code>=DIRT_CODE {
-        var art = pixel_tile(input.uv,vec2(2.,0.),slot);
-        if code>=GRASS_SIDE_CODE { art = pixel_tile(input.uv,vec2(1.,0.),slot); }
-        albedo = mix(art,GROUND_MEAN,smoothstep(180.,1400.,distance_to_camera))
-            *cell_variation*input.shade;
-    }
+    var albedo = mix(art,far,smoothstep(180.,1400.,distance_to_camera))
+        *cell_variation*input.shade;
     // A tiny cap-edge darkening makes the actual hex-column silhouette legible
     // while the atlas supplies the committed source pixel art at close range.
     // What sky a face takes. A cap takes the cool overhead tone; a WALL - a

@@ -184,6 +184,34 @@ Measured shares, so the work has a before: at the default spawn a wall face is
 drawn stone-by-altitude or grass-by-collapse on every one of the tier's 3,105
 columns, and the transition tile is drawn 0 times.
 
+### The cap never drew its own tile either
+
+The owner, off the pit pictures: "are you using the right top face of the hex
+grass?" No. The walls draw the atlas's COLOURS since the section above landed
+(`code >= DIRT_CODE` samples the transition or the earth), but a CAP still went
+through the older path: a flat `base` colour per material, multiplied by the
+LUMINANCE of its tile, clamped to `0.55..1.65`. So a meadow was flat green paper
+with the sward tile's brightness stamped on it, and the one place the grass art
+showed at all was the top metre of a wall, which is the transition tile. The
+reference draws a grass block's top with `grass.png` itself
+(`face_tile(Grass, Top)`), its side with `dirt_grass.png`, and its bottom with
+`dirt.png`: three pictures, none of them a tint.
+
+Every cap draws its tile's colours now, exactly as a wall does, and fades to
+the material's flat `base` at the same range the wall fades to `GROUND_MEAN`,
+so the distant look is byte-for-byte what it was and the near look is the
+art. One path for a face's colour rather than one for caps and one for walls.
+The tile each code was already sampling for its brightness is the tile it now
+draws - `(0,0)` the ground for the sward, jungle and marsh, `(3,2)` for sand,
+`(3,0)` for stone and snow, the bark and the leaves for a tree - because those
+choices were already the material's, only their colour was not.
+
+`docs/screenshots/cap-tint-before.png` and `cap-art-after.png` are a meadow on
+each; `dig-pit-after.png` and `column-mouth.png` are retaken with it. The
+cap's texel is coarser than a wall's - about 13 cm against 5 - and that is the
+reference's own proportion: Tenebris spans the middle 60% of a 16-texel tile
+across a hex (28 cm a texel) and a full 16 down each metre of a side.
+
 ## Why the flat tile matters more here than there
 
 `@interpolate(flat)` on skylight costs Tenebris almost nothing across a 2.8 m

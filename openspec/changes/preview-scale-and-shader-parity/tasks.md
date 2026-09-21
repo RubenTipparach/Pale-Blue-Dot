@@ -92,6 +92,8 @@ planet. What is open is the radius, since the two are locked by
 - [x] Re-tune the tree geometry in `planet_surface.wgsl`, which is authored for
       the old scale: trunks span 18 m and canopies reach 33 m, against roughly
       6 m for a Tenebris tree.
+- [x] A cap draws its tile's colours, as a wall does, fading to its flat base
+      at range: the grass top is the grass art, not a tint of its brightness.
 - [x] Re-tune the atlas UV divisors, `/28.0` on the cap and `/18.` down a wall,
       which were chosen against a 19 m tile.
 - [x] Update the pinned tile width in
