@@ -776,9 +776,12 @@ fn cave_camera(
     if !["cave", "overhang", "mouth", "seacave"].contains(&launch.view.as_str()) {
         return;
     }
-    // A chamber BELOW SEA LEVEL is the volumetric-water case: the column
-    // holds air there and a height field calls it sea.
-    let under_the_sea = launch.view == "seacave";
+    // The volumetric-water case is a chamber below sea level UNDER LAND: the
+    // column holds no water at all, so the pocket is air, and only a height
+    // field would call it sea. A pocket under the SEA is not it - the column
+    // there really does hold water over the rock - and the first cut of this
+    // pick took one, which came out as a frame of open ocean.
+    let dry_cave_below_the_sea = launch.view == "seacave";
     use pbd_core::column::{layer_altitude, layer_at};
     let tier = &fine.set.columns;
     let records = fine.set.finest_records();
@@ -850,7 +853,7 @@ fn cave_camera(
             if !(2.5..=12.0).contains(&gap) || !(4.0..=40.0).contains(&buried) {
                 continue;
             }
-            if under_the_sea && roof >= 0.0 {
+            if dry_cave_below_the_sea && (roof >= 0.0 || surface <= 0.0) {
                 continue;
             }
             let here = Vec3::from_slice(&records[index].direction_height[..3]);
