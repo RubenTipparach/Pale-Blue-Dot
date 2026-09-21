@@ -155,6 +155,18 @@ pub struct WalkingState {
 }
 
 impl WalkingState {
+    /// Take the look from a camera rotation: its forward becomes the tangent
+    /// heading and the pitch off it, clamped as any look is.
+    fn look_along(&mut self, view: Quat, up: Vec3) {
+        let forward = view * Vec3::NEG_Z;
+        self.heading = tangent_heading(forward, up);
+        self.pitch = forward
+            .dot(up)
+            .clamp(-1.0, 1.0)
+            .asin()
+            .clamp(-PITCH_LIMIT, PITCH_LIMIT);
+    }
+
     /// Where the player is looking: the tangent heading and the pitch off it.
     /// What an autosave writes, and the only thing outside this module that
     /// needs the view's two halves apart.
@@ -399,11 +411,11 @@ fn switch_mode(world: &mut World) {
             .resource_mut::<FlightInputState>()
             .set_captured(captured);
     } else {
-        let Some(position) = world
-            .query_filtered::<&Position, With<PilotShip>>()
+        let Some((position, velocity)) = world
+            .query_filtered::<(&Position, &LinearVelocity), With<PilotShip>>()
             .iter(world)
             .next()
-            .map(|p| p.0)
+            .map(|(p, v)| (p.0, v.0))
         else {
             return;
         };
@@ -411,14 +423,42 @@ fn switch_mode(world: &mut World) {
             let input = world.resource::<FlightInputState>();
             (input.view_rotation(), input.is_captured())
         };
-        // Where the ship is, water included. This used to walk to the nearest
-        // land first, which was the only thing to do while the sea was a wall;
-        // now that a walker can swim it snapped a pilot over the ocean to a
-        // shore they were nowhere near, which the owner rightly called bad.
-        place_walker(world, position.normalize(), Some(rotation));
+        // Where the ship is, in the air or over water, and the walker FALLS
+        // from there. This used to stand the walker on the ground under the
+        // ship, which the owner called snapping: leaving flight is the same
+        // body with gravity back, as Tenebris's `toggle_fly` has it, so the
+        // eye stays where the ship's was and the ground contact does the
+        // rest, into the sea if that is what is under it.
+        drop_walker(world, position, velocity, rotation);
         world.resource_mut::<WalkingState>().captured = captured;
         set_active_mode(world, true);
     }
+}
+
+/// Put the walker in the air with its eye at `eye`, moving at `velocity`,
+/// looking along `view`, and not grounded: what leaving flight is. The body's
+/// centre is the eye less the eye height, which is the inverse of where the
+/// walk-to-fly handoff puts the ship.
+fn drop_walker(world: &mut World, eye: Vec3, velocity: Vec3, view: Quat) {
+    let up = eye.normalize_or(Vec3::Y);
+    let position = eye - up * (EYE_HEIGHT - HALF_HEIGHT);
+    let body = world.resource::<WalkingState>().body;
+    world.entity_mut(body).insert((
+        Position(position),
+        Rotation(Quat::from_rotation_arc(Vec3::Y, up)),
+        LinearVelocity(velocity),
+        AngularVelocity::ZERO,
+        Transform::from_translation(position),
+        GroundState {
+            previous: position,
+            grounded: false,
+        },
+    ));
+    let mut state = world.resource_mut::<WalkingState>();
+    state.transport_up(up);
+    state.axes = Vec2::ZERO;
+    state.jump = false;
+    state.look_along(view, up);
 }
 
 /// Put the walker exactly where a loaded save says.
@@ -497,13 +537,7 @@ fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
     state.axes = Vec2::ZERO;
     state.jump = false;
     if let Some(view) = view {
-        let forward = view * Vec3::NEG_Z;
-        state.heading = tangent_heading(forward, up);
-        state.pitch = forward
-            .dot(up)
-            .clamp(-1.0, 1.0)
-            .asin()
-            .clamp(-PITCH_LIMIT, PITCH_LIMIT);
+        state.look_along(view, up);
     }
 }
 
@@ -1015,10 +1049,77 @@ mod tests {
         );
     }
 
+    /// Leaving flight is the same body with gravity back: the walker starts
+    /// with its eye where the ship's was, not grounded, and falls to the
+    /// ground rather than being stood on it.
+    #[test]
+    fn toggling_to_walk_in_the_air_falls_rather_than_snapping() {
+        let mut app = app();
+        let direction = app.world().resource::<WalkingState>().spawn_direction;
+        let ground = app
+            .world()
+            .resource::<PlanetContact>()
+            .sample(direction)
+            .floor_radius;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyF);
+        app.update();
+        assert!(!app.world().resource::<WalkingState>().active);
+        {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.release(KeyCode::KeyF);
+            keys.clear();
+        }
+        app.update();
+        let ship_at = direction * (ground + 30.0);
+        let mut ships = app
+            .world_mut()
+            .query_filtered::<&mut Position, With<PilotShip>>();
+        for mut position in ships.iter_mut(app.world_mut()) {
+            position.0 = ship_at;
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyF);
+        app.update();
+        let state = app.world().resource::<WalkingState>();
+        assert!(state.active, "the second F should walk");
+        let body = state.body;
+        let eye =
+            app.world().get::<Position>(body).unwrap().0.length() + (EYE_HEIGHT - HALF_HEIGHT);
+        assert!(
+            (eye - (ground + 30.0)).abs() < 1.5,
+            "the eye should stay where the ship was: {eye:.1} vs {:.1}",
+            ground + 30.0
+        );
+        assert!(
+            !app.world().get::<GroundState>(body).unwrap().grounded,
+            "nothing is underfoot thirty metres up"
+        );
+        {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.release(KeyCode::KeyF);
+            keys.clear();
+        }
+        let mut lowest = f32::MAX;
+        for _ in 0..600 {
+            app.update();
+            lowest = lowest.min(app.world().get::<Position>(body).unwrap().0.length());
+        }
+        let ground_state = app.world().get::<GroundState>(body).unwrap();
+        assert!(ground_state.grounded, "the walker should have landed");
+        assert!(
+            lowest < ground + 2.0,
+            "the walker never came down: lowest centre {lowest:.1} over ground {ground:.1}"
+        );
+    }
+
     /// Toggling from flight to walking over open water used to walk to the
     /// nearest land first, which was the only sane thing while the sea was a
     /// wall. It is not now, and it snapped a pilot over the ocean to a shore
-    /// they were nowhere near. The walker arrives where the ship is, floating.
+    /// they were nowhere near. The walker starts where the ship is and falls
+    /// into the water.
     #[test]
     fn toggling_to_walk_over_the_sea_lands_in_the_water_not_on_a_shore() {
         let mut app = app();
@@ -1069,12 +1170,28 @@ mod tests {
             drift < 1.0,
             "the walker was moved {drift:.1} m away from the ship"
         );
+        let eye = position.length() + (EYE_HEIGHT - HALF_HEIGHT);
         assert!(
-            (position.length() - HALF_HEIGHT - sheet).abs() < 0.1,
-            "the walker should float at the sheet, feet at {:.2} against {sheet:.2}",
-            position.length() - HALF_HEIGHT
+            (eye - (sheet + 30.0)).abs() < 1.5,
+            "the eye should stay where the ship was: {eye:.1} vs {:.1}",
+            sheet + 30.0
         );
         assert!(!body.get::<GroundState>().unwrap().grounded);
+        let body = state.body;
+        {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.release(KeyCode::KeyF);
+            keys.clear();
+        }
+        for _ in 0..600 {
+            app.update();
+        }
+        let feet = app.world().get::<Position>(body).unwrap().0.length() - HALF_HEIGHT;
+        assert!(
+            feet < sheet + 1.0,
+            "the walker should have fallen into the sea: feet at {feet:.2} against {sheet:.2}"
+        );
+        assert!(!app.world().get::<GroundState>(body).unwrap().grounded);
     }
 
     /// The reference's water model, at its own numbers: sinking is drag

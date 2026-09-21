@@ -44,6 +44,18 @@
       snapped a pilot over the ocean to a shore they were nowhere near. The
       walker now arrives under the ship, floating at the sheet and not grounded
       (`toggling_to_walk_over_the_sea_lands_in_the_water_not_on_a_shore`).
+- [x] **F leaves flight where the ship is, and the walker FALLS.** The owner's
+      words: "change F to toggle off fly, therefore I must fall to the ground
+      instead of snapping to it." The toggle used to find the ground under
+      the ship and stand the walker on it; now the walker starts with its eye
+      where the ship's was, carrying the ship's velocity, not grounded, and
+      gravity and the ground contact take it from there, into the sea if
+      that is what is under it (`drop_walker`;
+      `toggling_to_walk_in_the_air_falls_rather_than_snapping` and the sea
+      test, which now falls thirty metres into the water). Tenebris's own
+      `toggle_fly` does the same: fly off is the same body with gravity back.
+      The spawn and the reset key keep the ground rule, since a new world
+      has no ship to fall from.
 - [x] Found on the way: the `--swim` script was registered unconditionally and
       asked for `WalkingState`, which a plain photo never has, so every
       `--capture --view <preset>` run since the swim landed panicked on its
