@@ -765,6 +765,19 @@ fn configure_camera(
 /// from inside rock nothing draws a face toward you, so the frame came back
 /// showing the whole world from impossible angles - which reads exactly like a
 /// renderer full of holes.
+/// Whether this capture view's camera is placed a schedule later, off the
+/// LIVE column tier, rather than from a direction and an altitude.
+///
+/// One list, because there were two and they disagreed: `seacave` was added
+/// to the one `cave_camera` reads and not to the one `capture_camera` reads,
+/// so BOTH spawned a camera and the frame came out of whichever won - a wide
+/// shot of the shore from four hundred metres up, with the cave camera
+/// standing in a chamber nobody photographed. `mouth` had been in the same
+/// state since it landed.
+fn placed_off_the_tier(view: &str) -> bool {
+    ["cave", "overhang", "mouth", "seacave"].contains(&view)
+}
+
 fn cave_camera(
     mut commands: Commands,
     launch: Res<Launch>,
@@ -773,7 +786,7 @@ fn cave_camera(
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
-    if !["cave", "overhang", "mouth", "seacave"].contains(&launch.view.as_str()) {
+    if !placed_off_the_tier(&launch.view) {
         return;
     }
     // The volumetric-water case is a chamber below sea level UNDER LAND: the
@@ -959,8 +972,8 @@ fn photo_camera(
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
-    // The two column-tier views are placed a schedule later, off the live tier.
-    if launch.view == "cave" || launch.view == "overhang" {
+    // The column-tier views are placed a schedule later, off the live tier.
+    if placed_off_the_tier(&launch.view) {
         return;
     }
     if launch.view == "river" {
