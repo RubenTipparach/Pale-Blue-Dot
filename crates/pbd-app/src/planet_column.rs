@@ -523,6 +523,101 @@ pub(crate) fn slot_of(cell: &GpuCell) -> Option<u32> {
 }
 
 #[cfg(test)]
+mod water_below_sea {
+    //! A measurement instrument for the volumetric-water change: how much of
+    //! the spawn tier is air below sea level, split by whether the ground
+    //! over it stands above the sea (a dry cave, which is right) or under it
+    //! (a dry tube under the ocean, which is not). Ignored because it builds
+    //! the fine set; run it with
+    //! `cargo test -p pbd-app --release --lib water_below_sea -- --ignored --nocapture`.
+    use super::*;
+    use crate::planet::lod;
+
+    /// The nearest direction to `from` within 3 km whose ground stands in
+    /// `band` metres of altitude, searched on rings of the tangent plane.
+    fn nearest_ground_in(from: Vec3, band: std::ops::Range<f32>) -> Option<Vec3> {
+        let u = Vec3::Y.cross(from).normalize();
+        let v = from.cross(u);
+        for ring in 1..=60 {
+            let metres = ring as f32 * 50.0;
+            let arc = metres / PLANET_RADIUS;
+            for step in 0..48 {
+                let a = step as f32 / 48.0 * std::f32::consts::TAU;
+                let d = (from * arc.cos() + (u * a.cos() + v * a.sin()) * arc.sin()).normalize();
+                let height = super::super::terrain::surface_height(d);
+                if band.contains(&height) {
+                    return Some(d);
+                }
+            }
+        }
+        None
+    }
+
+    fn report(label: &str, anchor: Vec3) {
+        let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::default());
+        let tier = &set.columns;
+        let sea = TERRAIN.sea_level_m;
+        let (mut dry_cave_columns, mut dry_cave_layers) = (0usize, 0usize);
+        let (mut dry_tube_columns, mut dry_tube_layers) = (0usize, 0usize);
+        let (mut water_columns, mut water_layers) = (0usize, 0usize);
+        for column in &tier.columns {
+            let surface = column
+                .surface()
+                .map_or(f32::MIN, |top| column::layer_altitude(top) + 1.0);
+            let mut air_below_sea = 0usize;
+            let mut water = 0usize;
+            for layer in 1..column::LAYERS {
+                let altitude = column::layer_altitude(layer);
+                if altitude >= sea {
+                    break;
+                }
+                match column.material(layer) {
+                    Material::Air => air_below_sea += 1,
+                    Material::Water => water += 1,
+                    _ => {}
+                }
+            }
+            if water > 0 {
+                water_columns += 1;
+                water_layers += water;
+            }
+            if air_below_sea > 0 {
+                if surface >= sea {
+                    dry_cave_columns += 1;
+                    dry_cave_layers += air_below_sea;
+                } else {
+                    dry_tube_columns += 1;
+                    dry_tube_layers += air_below_sea;
+                }
+            }
+        }
+        eprintln!(
+            "{label}: {} columns, ground at the anchor {:.1} m, sea level {sea:.1} m; \
+             {water_columns} columns hold {water_layers} water layers; \
+             {dry_cave_columns} columns under LAND carry {dry_cave_layers} air layers below sea level (dry caves, right); \
+             {dry_tube_columns} columns under the SEA carry {dry_tube_layers} air layers below sea level (dry tubes, wrong)",
+            tier.columns.len(),
+            super::super::terrain::surface_height(anchor)
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn water_below_sea_in_the_spawn_tier() {
+        let spawn = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        report("spawn", spawn);
+        match nearest_ground_in(spawn, 0.5..4.0) {
+            Some(shore) => report("nearest shore", shore),
+            None => eprintln!("no shore within 3 km of the spawn"),
+        }
+        match nearest_ground_in(spawn, -12.0..-2.0) {
+            Some(shallows) => report("nearest shallows", shallows),
+            None => eprintln!("no shallows within 3 km of the spawn"),
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::planet::lod;
