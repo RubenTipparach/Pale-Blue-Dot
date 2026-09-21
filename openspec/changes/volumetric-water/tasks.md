@@ -30,7 +30,10 @@
 - [x] `--view seacave`: the spawn moves to the shore (`nearest_ground_near`,
       the locator the measuring test uses, so the picture and the numbers
       are taken of one place) and the camera picks a chamber whose roof is
-      below sea level. Before and after in `docs/screenshots/`.
+      below sea level. `docs/screenshots/cave-below-sea-before-after.png`:
+      blue off 99.04% of the frame, red and green untouched; and a frame
+      taken in a seabed nook instead is byte identical before and after, so
+      the sea did not move.
 
 ## 3. Flooding by connectivity
 - [ ] The bounded flood at `column::build` and on an edit; tests for a

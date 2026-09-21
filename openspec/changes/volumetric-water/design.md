@@ -99,6 +99,32 @@ makes and a pool's surface is lower than the sea's. The shader caps it at
 the sheet's radius, so a column whose water reaches sea level draws exactly
 as before: the sea did not move.
 
+## The picture, and what it measures
+
+`--view seacave` moves the spawn 1,150 m to the shore and stands the camera
+in a chamber whose floor is 7 m and whose roof is 1 m below sea level, under
+land whose surface is above it: the owner's case. The same binary took both
+frames, with only the shader's rule swapped, since the WGSL is loaded off
+disk (`docs/screenshots/cave-below-sea-before-after.png`, both panels
+brightened by the same 3.2 because the chamber is unlit and the difference
+is otherwise real and invisible):
+
+| | mean R | mean G | mean B |
+| --- | ---: | ---: | ---: |
+| Before, the radius rule | 2.0 | 49.3 | **92.9** |
+| After, the column rule | 1.7 | 46.8 | **73.8** |
+
+Blue moved by more than 8 of 255 across **99.04%** of the frame; red moved
+across 0.00% and green across 0.11%. That is the shape of the fix: the sea's
+own absorption and deep colour come off the whole cave and nothing else
+changes. What is left is the dark blue of an unlit chamber's ambient, which
+is what a cave at night looks like in this engine.
+
+**And the sea did not move**, proved by accident. The first cut of the pick
+asked only for a chamber below sea level and took a nook in the SEABED, open
+to the water. Before and after of that frame are BYTE IDENTICAL: where the
+column holds water, the column's answer is the sea's answer.
+
 ## Phase 2: flooding by connectivity
 
 At `column::build`, after the carve and the edits, a bounded flood: from
