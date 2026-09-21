@@ -328,20 +328,6 @@ fn corner_slots(rec: ColumnRec, k: u32, degree: u32) -> vec2<u32> {
 /// that is a window. Four runs against five gaps is twenty quads a side, which
 /// is 864 vertices a column against the terrain pass's 60 - affordable on a
 /// tier of a few thousand cells, and the exact answer rather than most of one.
-// Is this column solid from `lo` to `hi`, in one run? What it answers is
-// whether the heightfield's wall would cover anything the flank does not: a
-// step of plain rock is one run's business, and only a hole in it needs the
-// column pass's exactness.
-fn run_covers(rec: ColumnRec, lo: f32, hi: f32) -> bool {
-    for (var k = 0u; k < COLUMN_RUNS; k++) {
-        let word = rec.runs[k];
-        if run_present(word) && run_lo(word) <= lo+0.001 && run_hi(word) >= hi-0.001 {
-            return true;
-        }
-    }
-    return false;
-}
-
 fn column_gap(neighbor: u32, g: u32) -> vec2<f32> {
     // Off the tier: solid below its cap, which is what the heightfield assumes
     // everywhere, and what `planet_column.rs` makes TRUE by generating the
@@ -474,6 +460,9 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     var material = cell.metadata.y & 0xffu;
     // One everywhere but down a grass blade, whose root is darker than its tip.
     var out_shade = 1.;
+    // The height a face measures its depth from: the cell's surface, except on
+    // a cave run's flank, where it is that run's own top.
+    var out_height = height;
     // The voxel field's answer at THIS vertex, one outside the column tier
     // where there is no field to ask. Per vertex rather than per cell, which
     // is the whole of what "baked vertex colours" means here: a face grades
@@ -511,25 +500,18 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         kind = 1u;
         let side = (vertex-18u)/6u;
         let i = (vertex-18u)%6u;
-        // Between two cells that BOTH have columns, the column pass draws the
-        // side run by run against the neighbour's air, and a wall drawn here
-        // from cap to cap would be rock across a cave mouth. So this yields -
-        // but ONLY where this cell's rock does not already fill the step,
-        // which is the one case the flank says something different about.
-        //
-        // Yielding on every shared side was a hole: measured with the sky off
-        // and the background flat (`PBD_NO_SKY`), the seam view drew 2,548
-        // pixels of nothing where the terrace steps should be, and forcing
-        // this wall back on closed every one of them. The flank is drawn per
-        // run against one of the neighbour's gaps, and between two ordinary
-        // cells there is no gap that spans from the neighbour's cap to this
-        // one - so nobody drew that band at all.
+        // Between two cells that BOTH have columns, this wall is not drawn at
+        // all: the column pass owns the whole side and draws it run by run
+        // against the neighbour's air, from the bedrock to this cell's own cap.
+        // ONE drawer per side. The two rules this replaces - a wall here that
+        // yielded only where the rock did not fill the step, and a flank that
+        // stopped at the neighbour's cap - each answered half of the side, and
+        // where a dig broke a column's side under an unchanged cap neither
+        // half was anybody's: a hole to the sky from inside every pit.
         var columns_side = false;
         let slot = column_slot(cell);
         if slot != 0u && side < degree {
-            let rec = columns[slot-1u];
-            let foot = min(cell.corners[side].w, height);
-            columns_side = column_side(rec, side) != NO_NEIGHBOR && !run_covers(rec, foot, height);
+            columns_side = column_side(columns[slot-1u], side) != NO_NEIGHBOR;
         }
         if side < degree && !columns_side {
             // The wall goes down to the neighbour's cap, or, where the
@@ -709,8 +691,10 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 }
             } else {
                 // A flank: this run's rock against one stretch of the
-                // neighbour's air. It starts at the neighbour's cap, because
-                // above that the terrain wall has it.
+                // neighbour's air. This is Tenebris's side-face rule, a face
+                // wherever solid meets not-solid at the same layer, and it
+                // needs nothing else because a cap and the column top under
+                // it are one number (`column::surface_m`).
                 let w = v-COLUMN_CAP_VERTICES;
                 let side = w/COLUMN_SIDE_VERTICES;
                 let rest = w%COLUMN_SIDE_VERTICES;
@@ -723,19 +707,17 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     let hi = run_hi(word);
                     let gap = column_gap(column_side(rec,side),g);
                     let bottom = max(lo, gap.x);
-                    // A flank stops at the neighbour's CAP, always. Above
-                    // that is the heightfield's wall, and it draws it: the
-                    // exception that let a flank run to its own run top on a
-                    // shared side was a SECOND wall over the first, standing
-                    // in the air wherever the two disagreed, and drawing its
-                    // own top-metre sod partway down - which is the stack of
-                    // grass bands a single trench wall came out with.
-                    var top = min(hi, min(gap.y, cell.corners[side].w));
+                    let top = min(hi, gap.y);
                     if top-bottom > 0.001 {
-                        material = run_body(word);
-                        // The top metre of a flank is the surface layer and the
-                        // rest is the rock under it.
-                        if top >= hi-1.001 { material = run_code(word); }
+                        // The run's TOP material, and the depth under it
+                        // decides the face - sod, earth, then stone - which is
+                        // the terrain wall's own rule (`face_code`) and the
+                        // reference's, where a voxel's side wears the voxel.
+                        // A flank painted in the run's bottom material was a
+                        // stone wall standing in the first metre under the
+                        // grass, beside a terrain wall drawn in earth.
+                        material = run_code(word);
+                        out_height = hi;
                         let a = cell.corners[side].xyz;
                         let b = cell.corners[(side+1u)%degree].xyz;
                         let lower = params.settings.x + bottom;
@@ -1048,7 +1030,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // the record packs them: the fragment needs the biome to pick its sheet,
     // and carrying it in a word it already has costs no interpolator.
     out.material = (material & 0xffu) | (cell.metadata.y & 0xff00u);
-    out.height = height;
+    out.height = out_height;
     // The low half only: the high half carries the column tier slot.
     out.skylight = f32(cell.metadata.z & 0xffffu)/65535.;
     out.seed = cell.metadata.w;
@@ -1271,7 +1253,7 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     if input.kind==1u || input.kind==4u {
         fill = vec3(0.30,0.32,0.34);
         night = 0.20;
-        gain = select(1.,0.95,input.kind==1u);
+        gain = 0.95;
     }
     // The BURIAL stand-in is gone with this. It faded a cave face toward
     // `cave_dark` over `cave_dark_depth_m` of depth, and its own comment named

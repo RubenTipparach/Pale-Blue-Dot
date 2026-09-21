@@ -82,7 +82,10 @@
 
 - [x] Captures: standing inside a cave (`--view cave`) and under rock that
       stands over open air (`--view overhang`), both in `docs/screenshots`.
-- [ ] A dug hole, which waits on mining.
+- [x] A dug hole, which waits on mining.
+- [x] The side-face audit: every shared side of the built tier, and of a pit
+      dug, dug into sideways and filled back, draws exactly the bands the
+      reference's rule exposes, and no band twice.
 - [ ] The owner walks into one. Worldgen and collision have both passed headless
       while being wrong in the running game before.
 

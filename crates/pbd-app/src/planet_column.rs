@@ -427,20 +427,18 @@ pub fn build(
     // Left alone it would draw a meadow over the hole and a wall across it.
     // So the record takes the column's top, its cap wears the material that
     // is actually there, and every neighbour's wall height for this side
-    // follows. Outside a mouth the column top is the height rounded up by
-    // less than a layer and the record is left exactly as it was, so the
-    // surface keeps its one source everywhere the carve did not touch it.
+    // follows. Outside a mouth the column top IS the record's height - both
+    // read `column::surface_m` - and the record is left exactly as it was.
     for (slot, &index) in members.iter().enumerate() {
         let column = &columns[slot];
         let Some(top) = column.surface() else {
             continue;
         };
         let top_m = column::layer_altitude(top) + 1.0;
-        // Only DOWNWARD at build time. Outside a mouth the column top is the
-        // generated height rounded up by less than a layer, so raising would
-        // quantise every cell in the tier to whole metres and throw away the
-        // heightfield's own sub-metre surface. An EDIT is the other case and
-        // reconciles both ways - see `reconcile_surface`.
+        // Only DOWNWARD at build time: a carve can only take the surface
+        // away, and a column top above the record is a fault a test holds
+        // out. An EDIT is the other case and reconciles both ways - see
+        // `reconcile_surface`.
         if top_m >= finest[index].direction_height[3] {
             continue;
         }
@@ -783,11 +781,11 @@ mod tests {
             let column = &tier.columns[slot];
             let top_m = layer_altitude(column.surface().unwrap()) + 1.0;
             let height = finest[index].direction_height[3];
-            // Either the column top is the height rounded up by under a layer,
-            // or the record was lowered to the column's top: never a cap
-            // drawn over air.
+            // The column top is the record's height, whether the carve
+            // lowered the record or not: never a cap drawn over air, never
+            // rock drawn over a cap.
             assert!(
-                (top_m >= height && top_m - height < 1.0001) || (top_m - height).abs() < 1e-4,
+                (top_m - height).abs() < 1e-4,
                 "cell {index}: column top {top_m} against record height {height}"
             );
             if (top_m - height).abs() < 1e-4 && top_m < planet_gen_height(finest, index) {
@@ -835,6 +833,365 @@ mod tests {
             for word in &tier.records[slot].runs[drawn.len()..] {
                 assert_eq!(*word, 0, "an absent run is the zero word");
             }
+        }
+    }
+
+    // ---- The side-face audit.
+    //
+    // Tenebris's `build_tile` has one rule for a side face: it is drawn
+    // wherever a solid voxel meets a neighbour that does not cover it, at the
+    // same depth. That is the SPEC. What this renderer draws on a side is two
+    // passes' worth of bands - the terrain wall and the column flanks - and
+    // every hole and every double wall so far has been those two passes
+    // disagreeing about who owns a band. So the audit computes both: the bands
+    // the reference says must be there, from the columns alone, and the bands
+    // the shader's own arithmetic yields, transcribed from `planet_surface.wgsl`
+    // (the run words, `column_gap`, the clamps), and holds them equal on every
+    // shared side of the real tier, before and after edits.
+    //
+    // A transcription rather than the artifact, and said so: the vertex shader
+    // cannot be run here. The constants it uses are pinned against the shipped
+    // WGSL by `the_shader_carries_the_reference_light_constants`; the RULE is
+    // pinned by this, and a change to one without the other is what these two
+    // tests exist to fail on.
+
+    use pbd_core::column::{BASE_M, LAYERS, layer_altitude};
+
+    const TOP_M: f32 = BASE_M as f32 + LAYERS as f32;
+
+    fn run_present(word: u32) -> bool {
+        (word >> 9) & 0x1ff != 0
+    }
+    fn run_lo(word: u32) -> f32 {
+        BASE_M as f32 + (word & 0x1ff) as f32
+    }
+    fn run_hi(word: u32) -> f32 {
+        BASE_M as f32 + ((word >> 9) & 0x1ff) as f32
+    }
+    fn column_side(rec: &GpuColumn, side: usize) -> u32 {
+        if side < 4 {
+            rec.neighbors[side]
+        } else {
+            rec.more[side - 4]
+        }
+    }
+    /// `column_gap` in the shader: the `g`th stretch of air in a neighbouring
+    /// column, bottom up, zero-sized past the last.
+    fn column_gap(records: &[GpuColumn], neighbor: u32, g: usize) -> (f32, f32) {
+        if neighbor == NO_NEIGHBOR {
+            return (0.0, 0.0);
+        }
+        let rec = &records[neighbor as usize];
+        let count = rec.runs.iter().filter(|w| run_present(**w)).count();
+        if g > count {
+            return (0.0, 0.0);
+        }
+        let lo = if g > 0 {
+            run_hi(rec.runs[g - 1])
+        } else {
+            BASE_M as f32
+        };
+        let hi = if g < count {
+            run_lo(rec.runs[g])
+        } else {
+            TOP_M
+        };
+        (lo, hi)
+    }
+
+    /// The bands the shader draws on `side` of record `index`: the terrain
+    /// wall where the neighbour has no column, the flanks where it has one.
+    /// This is `planet_surface.wgsl`'s vertex branch for kinds 1 and 4, in
+    /// Rust, and it must be changed WITH it.
+    fn drawn_bands(set: &lod::FineSet, index: usize, side: usize) -> Vec<(f32, f32)> {
+        let finest = set.finest_records();
+        let cell = &finest[index];
+        let height = cell.direction_height[3];
+        let neighbor_cap = cell.corners[side][3];
+        let slot = set.columns.slots[index];
+        let records = set.columns.gpu_records();
+        let mut bands = Vec::new();
+        let rec = &records[slot];
+        let across = column_side(rec, side);
+        if across == NO_NEIGHBOR {
+            // The terrain wall: from our cap down to the neighbour's.
+            if height > neighbor_cap {
+                bands.push((neighbor_cap, height));
+            }
+            return bands;
+        }
+        for &word in &rec.runs {
+            if !run_present(word) {
+                continue;
+            }
+            let lo = run_lo(word);
+            let hi = run_hi(word);
+            for g in 0..=MAX_RUNS {
+                let (gap_lo, gap_hi) = column_gap(records, across, g);
+                let bottom = lo.max(gap_lo);
+                let top = hi.min(gap_hi);
+                if top - bottom > 0.001 {
+                    bands.push((bottom, top));
+                }
+            }
+        }
+        bands
+    }
+
+    /// The bands the reference's rule requires on `side` of record `index`:
+    /// every layer where this column is solid and the neighbour's is not.
+    fn exposed_bands(set: &lod::FineSet, index: usize, side: usize) -> Vec<(f32, f32)> {
+        let finest = set.finest_records();
+        let cell = &finest[index];
+        let height = cell.direction_height[3];
+        let neighbor_cap = cell.corners[side][3];
+        let column = set.columns.column(index).expect("a tier cell");
+        let neighbor = set.finest_neighbors[index][side];
+        let Some(other) = set.columns.column(neighbor as usize) else {
+            // Off the tier: solid below its cap, as the heightfield assumes.
+            return if height > neighbor_cap {
+                vec![(neighbor_cap, height)]
+            } else {
+                vec![]
+            };
+        };
+        (0..LAYERS)
+            .filter(|&layer| column.solid(layer) && !other.solid(layer))
+            .map(|layer| (layer_altitude(layer), layer_altitude(layer) + 1.0))
+            .collect()
+    }
+
+    /// A column's top and its record's height are ONE number: both read
+    /// `column::surface_m`. A column standing a layer proud of its cap is the
+    /// invisible metre of rock that the aim ray dug first, that a first edit
+    /// reconciled the cap UP into, and that both wall rules had to dodge.
+    #[test]
+    fn every_column_top_is_its_records_height() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let finest = set.finest_records();
+        let mut checked = 0;
+        for (index, &slot) in set.columns.slots.iter().enumerate() {
+            if slot == usize::MAX {
+                continue;
+            }
+            let top = set.columns.columns[slot]
+                .surface()
+                .expect("bedrock at least");
+            let top_m = layer_altitude(top) + 1.0;
+            assert_eq!(
+                top_m, finest[index].direction_height[3],
+                "cell {index}: the column's top and the record's height disagree"
+            );
+            checked += 1;
+        }
+        assert!(checked > 3_000, "only {checked} cells checked");
+    }
+
+    /// Sorted, merged, so two lists that cover the same metres compare equal
+    /// however they were cut.
+    fn merged(mut bands: Vec<(f32, f32)>) -> Vec<(f32, f32)> {
+        bands.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut out: Vec<(f32, f32)> = Vec::new();
+        for (lo, hi) in bands {
+            match out.last_mut() {
+                Some(last) if lo <= last.1 + 1e-3 => last.1 = last.1.max(hi),
+                _ => out.push((lo, hi)),
+            }
+        }
+        out
+    }
+
+    /// A band drawn twice is a double wall, which is a picture (a slab standing
+    /// in a meadow) before it is a number.
+    fn overlaps(bands: &[(f32, f32)]) -> bool {
+        let mut sorted = bands.to_vec();
+        sorted.sort_by(|a, b| a.0.total_cmp(&b.0));
+        sorted.windows(2).any(|w| w[1].0 < w[0].1 - 1e-3)
+    }
+
+    fn audit_side(set: &lod::FineSet, index: usize, side: usize, what: &str) {
+        let drawn = drawn_bands(set, index, side);
+        assert!(
+            !overlaps(&drawn),
+            "{what}: cell {index} side {side} draws a band twice: {drawn:?}"
+        );
+        let drawn = merged(drawn);
+        let exposed = merged(exposed_bands(set, index, side));
+        assert_eq!(
+            drawn.len(),
+            exposed.len(),
+            "{what}: cell {index} side {side} draws {drawn:?} where the reference exposes {exposed:?}"
+        );
+        for (d, e) in drawn.iter().zip(&exposed) {
+            assert!(
+                (d.0 - e.0).abs() < 1e-3 && (d.1 - e.1).abs() < 1e-3,
+                "{what}: cell {index} side {side} draws {drawn:?} where the reference exposes {exposed:?}"
+            );
+        }
+    }
+
+    fn audit_cell(set: &lod::FineSet, index: usize, what: &str) {
+        let degree = set.finest_records()[index].degree();
+        for side in 0..degree {
+            audit_side(set, index, side, what);
+        }
+    }
+
+    /// An edit as `apply_edit` makes it, without the hands and the save.
+    fn edit(set: &mut lod::FineSet, record: usize, layer: usize, material: Material) {
+        assert!(set.columns.set_layer(record, layer, material));
+        set.columns.repack(record);
+        for &neighbor in set.finest_neighbors[record].iter() {
+            if neighbor != u32::MAX {
+                set.columns.repack(neighbor as usize);
+            }
+        }
+        set.reconcile(record);
+    }
+
+    /// A cell three tiles inside the tier, on dry land, with a column on every
+    /// side and a surface at least three layers above the bedrock's worth of
+    /// soil: the ordinary cell every edit test starts from.
+    fn interior_cell(set: &lod::FineSet, anchor: Vec3) -> usize {
+        let finest = set.finest_records();
+        let reach = ColumnSettings::default().reach_m;
+        let inner = (reach - 4.0 * lod::tile_width_m(lod::FINEST_LEVEL)) / PLANET_RADIUS;
+        (0..finest.len())
+            .find(|&index| {
+                let cell = &finest[index];
+                let direction = Vec3::from_slice(&cell.direction_height[..3]);
+                direction.dot(anchor).clamp(-1., 1.).acos() < inner
+                    && cell.direction_height[3] > 5.0
+                    && set
+                        .columns
+                        .column(index)
+                        .is_some_and(|c| c.drawn_runs().len() == 1)
+                    && set.finest_neighbors[index]
+                        .iter()
+                        .take(cell.degree())
+                        .all(|&n| n != u32::MAX && set.columns.column(n as usize).is_some())
+            })
+            .expect("an ordinary interior cell")
+    }
+
+    /// Every shared side of the tier as it is built - which includes every
+    /// mouth the carve opened - draws exactly the bands the reference exposes.
+    #[test]
+    fn every_side_of_the_tier_draws_what_the_reference_exposes() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let mut sides = 0;
+        for (index, &slot) in set.columns.slots.iter().enumerate() {
+            if slot == usize::MAX {
+                continue;
+            }
+            audit_cell(&set, index, "the built tier");
+            sides += set.finest_records()[index].degree();
+        }
+        assert!(sides > 10_000, "only {sides} sides audited");
+    }
+
+    /// The pit, the tunnel and the block: a dig from the top, a dig into a
+    /// SIDE that leaves the surface where it was, a dig that opens a column
+    /// into its neighbour's cave, and a block placed back. After each, the
+    /// edited cell and every neighbour draw exactly what is exposed.
+    #[test]
+    fn a_dug_or_placed_cell_and_its_neighbours_draw_what_is_exposed() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let index = interior_cell(&set, anchor);
+        let top = set.columns.column(index).unwrap().surface().unwrap();
+        let ring: Vec<usize> = set.finest_neighbors[index]
+            .iter()
+            .take(set.finest_records()[index].degree())
+            .map(|&n| n as usize)
+            .collect();
+        let audit = |set: &lod::FineSet, what: &str| {
+            audit_cell(set, index, what);
+            for &n in &ring {
+                audit_cell(set, n, what);
+            }
+        };
+        // A two-layer pit from the top.
+        edit(&mut set, index, top, Material::Air);
+        audit(&set, "one layer dug from the top");
+        edit(&mut set, index, top - 1, Material::Air);
+        audit(&set, "two layers dug from the top");
+        // The neighbour's SIDE, two layers under its own unchanged cap: the
+        // player standing in the pit digging sideways. This is the case where
+        // the neighbour's rock no longer fills the step in one run.
+        let side_cell = ring[0];
+        let side_top = set.columns.column(side_cell).unwrap().surface().unwrap();
+        edit(&mut set, side_cell, side_top - 1, Material::Air);
+        audit(&set, "a layer dug into a neighbour's side");
+        edit(&mut set, side_cell, side_top - 2, Material::Air);
+        audit(&set, "two layers dug into a neighbour's side");
+        // And a block placed back on the pit's floor.
+        edit(&mut set, index, top - 1, Material::Stone);
+        audit(&set, "a block placed in the pit");
+        // Then one on top of the neighbour, standing proud of the meadow.
+        edit(&mut set, side_cell, side_top + 1, Material::Stone);
+        audit(&set, "a block placed on the meadow");
+    }
+
+    /// A pit dug from the top is OPEN to the sky, so its floor is at full
+    /// daylight the moment it is re-baked: the field's own sky seed walks every
+    /// column down to its first solid layer, and a dug layer is not one.
+    #[test]
+    fn a_pit_dug_from_the_top_is_lit_by_the_sky_once_rebaked() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let index = interior_cell(&set, anchor);
+        let top = set.columns.column(index).unwrap().surface().unwrap();
+        for layer in [top, top - 1, top - 2] {
+            edit(&mut set, index, layer, Material::Air);
+        }
+        set.columns.relight();
+        let slot = set.columns.slots[index];
+        for layer in [top, top - 1, top - 2] {
+            assert_eq!(
+                set.columns.sky(slot, layer),
+                light::MAX,
+                "layer {layer} of the pit should be at full sky"
+            );
+        }
+        // And the floor it stands on, which is rock, holds no light of its
+        // own - the face above it samples the air, not the rock.
+        assert_eq!(set.columns.sky(slot, top - 3), 0);
+    }
+
+    /// A report: every cell within a few metres of the default spawn, with
+    /// its record height against its column's top, for reading a picture of
+    /// the spawn against the numbers that drew it.
+    #[test]
+    #[ignore = "a report: cargo test -p pbd-app --lib spawn_neighbourhood -- --ignored --nocapture"]
+    fn spawn_neighbourhood() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let finest = set.finest_records();
+        for (index, cell) in finest.iter().enumerate() {
+            let direction = Vec3::from_slice(&cell.direction_height[..3]);
+            let m = direction.dot(anchor).clamp(-1., 1.).acos() * PLANET_RADIUS;
+            if m > 7.0 {
+                continue;
+            }
+            let Some(column) = set.columns.column(index) else {
+                continue;
+            };
+            let top = column.surface().map(|t| layer_altitude(t) + 1.0);
+            let walls: Vec<f32> = (0..cell.degree()).map(|s| cell.corners[s][3]).collect();
+            println!(
+                "cell {index} id {} at {m:.1} m: height {:.2}, column top {top:?}, runs {:?}, gen {:.2}, walls {walls:?}",
+                cell.metadata[3],
+                cell.direction_height[3],
+                column
+                    .drawn_runs()
+                    .iter()
+                    .map(|r| (r.from, r.to))
+                    .collect::<Vec<_>>(),
+                crate::planet::surface_height(direction),
+            );
         }
     }
 }

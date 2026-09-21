@@ -72,6 +72,12 @@ pub struct Launch {
     /// the wall, so every capture of a hole is a screen of dirt. Digging ahead
     /// leaves them standing on the rim looking at what they made.
     pub dig_ahead: bool,
+    /// `--pitch <degrees>` starts the walker looking that far below (negative)
+    /// or above the horizon. A capture that digs along the look needs to look
+    /// DOWN to dig a pit the way a player does - a slanted run of cells, each
+    /// taken from a different column at a different layer - and the headless
+    /// walker otherwise looks dead level at the horizon.
+    pub pitch: Option<f32>,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -111,6 +117,7 @@ impl Launch {
             time: None,
             torch: false,
             dig_ahead: false,
+            pitch: None,
             menu: None,
         };
         let mut i = 0;
@@ -131,6 +138,18 @@ impl Launch {
                 "--place" => result.place = true,
                 "--torch" => result.torch = true,
                 "--dig-ahead" => result.dig_ahead = true,
+                "--pitch" => {
+                    i += 1;
+                    let degrees: f32 = args
+                        .get(i)
+                        .and_then(|d| d.parse().ok())
+                        .expect("--pitch requires degrees");
+                    assert!(
+                        (-89.0..=89.0).contains(&degrees),
+                        "--pitch takes degrees in -89..89"
+                    );
+                    result.pitch = Some(degrees);
+                }
                 "--time" => {
                     i += 1;
                     let hour: f32 = args
@@ -453,6 +472,7 @@ pub fn run(args: &[String]) {
                 heading: pose.heading,
                 pitch: pose.pitch,
             }),
+            pitch: launch.pitch.unwrap_or(0.0).to_radians(),
             ..default()
         })
         .add_plugins(WalkingPlugin);

@@ -290,19 +290,10 @@ impl PlanetContact {
         let altitude = feet.length() - PLANET_RADIUS;
         let contact = column.contact(altitude);
         if let Some(floor) = contact.floor {
-            // The top run is the surface, and the surface is the drawn cap,
-            // not the layer boundary just over it: the column's top is the
-            // height rounded UP by under a layer, and a walker standing on
-            // that would float over the ground it can see. Inside a cave the
-            // run's own top is exactly the drawn cave floor.
-            let top = column
-                .surface()
-                .map_or(f32::MIN, |top| pbd_core::column::layer_altitude(top) + 1.0);
-            stand.floor_radius = if (floor - top).abs() < 1e-3 {
-                surface.floor_radius.min(PLANET_RADIUS + top)
-            } else {
-                PLANET_RADIUS + floor
-            };
+            // A run's top is the drawn face over it - the cap at the surface,
+            // the cave floor below - because the column and the record read
+            // one `surface_m`. A walker stands on exactly what it can see.
+            stand.floor_radius = PLANET_RADIUS + floor;
         }
         stand.ceiling_radius = contact.ceiling.map(|c| PLANET_RADIUS + c);
         stand

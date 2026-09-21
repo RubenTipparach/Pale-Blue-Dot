@@ -392,11 +392,14 @@ So the column pass draws only **what is below what the terrain pass draws**:
 | --- | --- |
 | a cave ceiling | the bottom of every run but the lowest |
 | a cave floor | the top of every run but the highest |
-| a run flank | from the neighbour's cap down to the run's bottom |
+| a run flank | wherever the run's rock meets the neighbour's air, bedrock to our cap |
 
-Nothing is coincident: the terrain wall spans from our cap down to the
-neighbour's cap, and a column flank starts where that wall stops. The top run's
-own top cap stays the terrain pass's.
+Between two cells that both carry columns the terrain pass draws NO wall: the
+side is the column pass's, whole. That is the third rule this side has had, and
+"One drawer per side" below says why the first two - a flank that started at
+the neighbour's cap, then a terrain wall that yielded only where the rock did
+not fill the step - each left a band that was nobody's. The top run's own top
+cap stays the terrain pass's.
 
 ### A flank must be clipped against EVERY air gap the neighbour has
 
@@ -485,6 +488,80 @@ the slab is gone and with the terrain wall off it remains, which is what names
 the flank as the one drawing it. After the clamp the seam view's background is
 404,936 pixels, equal to the tier being off, and `cave_mouths` still counts 9
 openings with 8 walkable.
+
+### One drawer per side, and the metre of rock the cap was drawn inside of
+
+The owner's picture, the third on this seam: a pit dug at a cave, its walls
+part stone, part earth, part sky. Reviewed against Tenebris again, whose
+`build_tile` has ONE rule for a side face - a quad wherever a solid voxel meets
+a neighbour that does not cover it, at the same depth - and nothing else.
+
+**Two defects, and the first one made the second one necessary.**
+
+**1. Every column stood one layer proud of its cap.** `column::generate_solid`
+filled every layer whose altitude was under the generator's UNFLOORED altitude
+(74.6 m: solid through the layer at 74), while the record was drawn at the
+floored one (74.0). So every cell in the tier carried a metre of rock its cap
+sat a metre inside of, and the tree kept saying so in its own words: "outside a
+mouth the column top is the height rounded up by less than a layer". Three
+things followed, and each had been worked around rather than named:
+
+- **The aim ray dug the invisible layer first.** `sample_at` answers solid off
+  the COLUMN, so a click on the ground took the rock over the cap, which
+  changed nothing anybody could see, and a slanted dig into a wall entered the
+  neighbour under its top layer and left a roofed pocket with no way in.
+- **The first edit to any cell raised its cap a metre.** `reconcile_surface`
+  sets the record to the column's top, which was one above it, so the ground
+  popped up under the player on the first dig.
+- **Both wall rules had to dodge it.** The flank was clamped to the
+  neighbour's cap because its run top stood proud of the cap (the slab in the
+  meadow); the terrain wall yielded only where the rock filled the step in one
+  run because a flank could not be trusted above the cap. Each rule answered
+  half of the side, and on a side where the rock did NOT fill the step - a
+  cave mouth breaking the surface run, or a pit dug sideways into a wall -
+  neither drew the band. From inside the pit that band is the sky.
+
+`column::surface_m` is the one function now: the generator's altitude,
+floored to the layer, read by the column and by the record
+(`planet::surface_height`) alike, so a cap and the column top under it are one
+number by construction. `every_column_top_is_its_records_height` holds it on
+the whole tier, `PlanetContact::stand` lost its special case for the rounded
+top, and the mouth test asserts equality rather than "within a layer".
+
+**2. With that, the side is the reference's rule and nothing else.** Between
+two tier cells the terrain wall is not drawn at all; a flank is (this run)
+against (one of the neighbour's air gaps), `max(lo, gap.lo)` to
+`min(hi, gap.hi)`. No clamp to the neighbour's cap, no `run_covers`, no
+float-cap adjustment at either end, because there is no float cap. A pass that
+yields must be able to say what the other pass draws, and now it says "all of
+it".
+
+**Found by an audit, not by a picture.** `every_side_of_the_tier_draws_what_
+the_reference_exposes` transcribes the shader's band arithmetic (the run words,
+`column_gap`) into Rust and holds it, on every shared side of the real tier,
+equal to the reference's rule computed from the columns alone. Under the two
+half-rules it failed on the BUILT tier, before any edit: `cell 33816 side 3
+draws [] where the reference exposes [(58.0, 60.0)]` - two metres of a natural
+mouth's wall drawn by nobody - and again after a layer was dug into a
+neighbour's side. `a_dug_or_placed_cell_and_its_neighbours_draw_what_is_
+exposed` digs a pit, digs sideways into its wall, and places a block back in
+each, and audits the cell and its ring after every step.
+
+**And a flank wears what a wall wears.** The flank was painted in the run's
+BOTTOM material, top metre excepted, so the first metre under a pit's grass was
+stone beside a terrain wall drawn in earth. A flank now carries the run's top
+material and measures its depth from the run's own top, so `face_code` gives
+it sod, earth, then stone exactly as it gives the terrain wall, and a cave run
+whose top is rock is rock. This is Tenebris's rule as well: a voxel's side
+wears the voxel.
+
+**The capture that found the first defect** was `--walk --fixed-dt --pitch -40
+--dig 8 --dig-ahead` with the sky off: the scripted dig logged its three layers
+as 220, 219 and 218 of a cell whose top was 221 - a pocket under an unbroken
+roof, lit to 0 of 15 - and the flank of that roof's one-layer run stood in the
+frame as a wall of earth. `--pitch` is new for exactly this: a headless walker
+looked dead level, and a pit a player digs is a slanted run of cells, each
+taken from a different column at a different layer.
 
 ### The tier's rim is generated SOLID
 

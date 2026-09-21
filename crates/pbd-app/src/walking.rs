@@ -38,6 +38,9 @@ pub struct WalkingConfig {
     /// come back THERE, and the spawn rule would put them on the surface
     /// nearby. Absent is a new world.
     pub restored: Option<RestoredPose>,
+    /// The look pitch a walker starts with when nothing is restored, radians.
+    /// A capture that digs along the look sets it; a fresh game looks level.
+    pub pitch: f32,
     pub walk_speed: f32,
     pub sprint_speed: f32,
     pub jump_speed: f32,
@@ -71,6 +74,7 @@ impl Default for WalkingConfig {
         Self {
             start_walking: true,
             restored: None,
+            pitch: 0.0,
             walk_speed: 8.0,
             sprint_speed: 14.0,
             jump_speed: 12.0,
@@ -275,7 +279,8 @@ fn setup_walking(world: &mut World) {
         up,
         pitch: config
             .restored
-            .map_or(0.0, |pose| pose.pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT)),
+            .map_or(config.pitch, |pose| pose.pitch)
+            .clamp(-PITCH_LIMIT, PITCH_LIMIT),
         spawn_direction: up,
         body,
     };

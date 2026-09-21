@@ -337,8 +337,22 @@ pub fn material_at_depth(top: Material, depth_m: f32) -> Material {
     Material::Stone
 }
 
+/// Where the ground is, as a whole layer: the generator's altitude, floored.
+///
+/// ONE function, read by the column and by the heightfield record alike. The
+/// column used to fill every layer whose altitude was under the UNFLOORED
+/// altitude while the record was drawn at the floored one, so every cell in
+/// the tier carried a metre of rock its cap was drawn a metre inside of: the
+/// aim ray dug that invisible layer first, the first edit to a cell
+/// reconciled its cap UP a metre, and both wall rules had to dodge a top that
+/// stood proud of the cap. A surface is the layer boundary under the altitude,
+/// and the cap and the column's top are the same number by construction.
+pub fn surface_m(terrain: &TerrainConfig, direction: Vec3) -> f32 {
+    planet_gen::surface_altitude(terrain, direction).floor()
+}
+
 pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
-    let surface_m = planet_gen::surface_altitude(terrain, direction);
+    let surface_m = surface_m(terrain, direction);
     let top = planet_gen::top_material(terrain, direction, surface_m);
     let mut layers = [Material::Air; LAYERS];
     for (index, layer) in layers.iter_mut().enumerate() {
@@ -515,7 +529,7 @@ mod tests {
         let (spawn, _) = spawn();
         for d in near(spawn, 60.0, 200) {
             let column = generate_solid(&TERRAIN, d);
-            let surface_m = planet_gen::surface_altitude(&TERRAIN, d);
+            let surface_m = surface_m(&TERRAIN, d);
             let top = planet_gen::top_material(&TERRAIN, d, surface_m);
             for index in 1..LAYERS {
                 let altitude = layer_altitude(index);

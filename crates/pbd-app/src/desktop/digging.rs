@@ -353,6 +353,18 @@ pub fn scripted_dig(
         {
             break;
         }
+        // Every cell and layer taken, and what it is lit to once the edit's
+        // own re-bake has run: a picture of a pit cannot say which column a
+        // slanted dig landed in, nor whether the field under it is fresh.
+        let lit = record_of(&fine, target.dig.cell)
+            .and_then(|record| fine.set.columns.slots.get(record).copied())
+            .map(|slot| fine.set.columns.sky(slot, target.dig.layer));
+        info!(
+            "scripted dig {}: cell {} layer {} now lit to {lit:?}",
+            dug + 1,
+            target.dig.cell,
+            target.dig.layer
+        );
         last = Some(target.dig);
         dug += 1;
     }

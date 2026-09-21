@@ -25,9 +25,14 @@ pub const TERRAIN: TerrainConfig = TerrainConfig::TENEBRIS;
 /// Normalizing here also makes the collision query safe for arbitrary poses.
 pub fn surface_height(direction: Vec3) -> f32 {
     let d = direction.normalize_or(Vec3::Y);
-    let height = planet_gen::surface_altitude(&TERRAIN, d);
-    (height / ELEVATION_STEP).floor() * ELEVATION_STEP
+    // The column's own rule, so a cap and the column top under it are one
+    // number: `column::surface_m` floors to the layer, and the layer is the
+    // elevation step.
+    pbd_core::column::surface_m(&TERRAIN, d)
 }
+// The record's step and the column's layer are the same metre; if the step
+// ever moves, `surface_height` has to quantise to it rather than to the layer.
+const _: () = assert!(ELEVATION_STEP == 1.0);
 
 /// Solid terrain or water surface radius for assisted-flight clearance.
 pub fn terrain_radius(direction: Vec3) -> f32 {
