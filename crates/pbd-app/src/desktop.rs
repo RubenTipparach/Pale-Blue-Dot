@@ -347,7 +347,8 @@ pub fn run(args: &[String]) {
     // was standing decides where the planet's fine set and the column tier are
     // anchored. Restoring the pose afterwards would build the world around the
     // spawn and then teleport away from it.
-    let world = open_world(&launch);
+    let mut world = open_world(&launch);
+    let hotbar = slots::Hotbar::restore(&mut world);
     let restored = world.pose;
     let step = Duration::from_secs_f64(1.0 / FIXED_HZ);
     let mut app = App::new();
@@ -412,13 +413,7 @@ pub fn run(args: &[String]) {
     // What the save recorded, or the starting kit in a new world. The hotbar
     // rides the edit log rather than a timer, so what comes back is what was
     // held when the last block moved.
-    .insert_resource(
-        world
-            .carried
-            .clone()
-            .map(slots::Hotbar)
-            .unwrap_or_else(slots::Hotbar::starting_kit),
-    )
+    .insert_resource(hotbar)
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -580,15 +575,11 @@ fn load_world(world: &mut World) {
         open.drain();
         open.root().to_path_buf()
     };
-    let opened = WorldSave::open(root, slot);
-    let carried = opened.carried.clone();
+    let mut opened = WorldSave::open(root, slot);
+    let hotbar = slots::Hotbar::restore(&mut opened);
     let pose = opened.pose;
     world.insert_resource(opened);
-    world.insert_resource(
-        carried
-            .map(slots::Hotbar)
-            .unwrap_or_else(slots::Hotbar::starting_kit),
-    );
+    world.insert_resource(hotbar);
     // The tier is standing where the last world left it with the last world's
     // holes in it. The distance rule cannot know that, so the load says so.
     if let Some(mut refresh) = world.get_resource_mut::<pbd_app::planet::LodRefresh>() {

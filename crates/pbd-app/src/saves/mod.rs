@@ -157,6 +157,9 @@ pub struct WorldSave {
     pub edits: Edits,
     /// The hotbar as the log last recorded it, for the load to restore.
     pub carried: Option<Slots>,
+    /// The highest starting-kit version the log says was dealt into this
+    /// world's hotbar; nought where none was.
+    pub kit: u32,
     /// Where the player was, for the load to put them back.
     pub pose: Option<Pose>,
     slot: Option<Slot>,
@@ -169,6 +172,7 @@ impl Default for WorldSave {
         Self {
             edits: Edits::new(),
             carried: None,
+            kit: 0,
             pose: None,
             slot: None,
             root: PathBuf::from(ROOT),
@@ -181,7 +185,7 @@ impl WorldSave {
     /// Open a slot: replay its log, read its pose, and start the writer on it.
     pub fn open(root: PathBuf, slot: Slot) -> Self {
         let directory = root.join(&slot.id);
-        let (edits, carried, damaged) = replay(&directory.join(LOG));
+        let (edits, carried, kit, damaged) = replay(&directory.join(LOG));
         if damaged > 0 {
             warn!("{damaged} damaged lines skipped in {}", slot.id);
         }
@@ -200,6 +204,7 @@ impl WorldSave {
         Self {
             edits,
             carried,
+            kit,
             pose,
             slot: Some(slot),
             writer: SaveWriter::new(&directory),
@@ -248,6 +253,20 @@ impl WorldSave {
         true
     }
 
+    /// Record that the kit's grants up to `version` were dealt, and the hotbar
+    /// they were dealt into. The same durable path as an edit, for the same
+    /// reason: a grant that showed and did not save would be dealt again on
+    /// the next load, or lost, depending on which write won.
+    pub fn deal_kit(&mut self, version: u32, carried: &Slots) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        self.kit = version;
+        self.carried = Some(carried.clone());
+        self.writer.append(format::kit_line_of(version, carried));
+        true
+    }
+
     /// Queue the pose. Whole-file, so it is a replace rather than an append.
     pub fn snapshot(&mut self, pose: Pose) {
         let Some(slot) = self.slot.as_mut() else {
@@ -271,29 +290,34 @@ impl WorldSave {
 }
 
 /// Replay a log: the edits, the hotbar as the last line that carried one left
-/// it, and how many lines were damaged.
-fn replay(path: &Path) -> (Edits, Option<Slots>, usize) {
+/// it, the highest kit version dealt, and how many lines were damaged.
+fn replay(path: &Path) -> (Edits, Option<Slots>, u32, usize) {
     let mut edits = Edits::new();
     let mut carried = None;
+    let mut kit = 0;
     let mut damaged = 0;
     let Ok(text) = std::fs::read_to_string(path) else {
-        return (edits, carried, damaged);
+        return (edits, carried, kit, damaged);
     };
     for line in text.lines() {
         if line.trim().is_empty() {
             continue;
         }
         match format::parse_line(line) {
-            Some(Record { edit, slots }) => {
+            Some(Record::Edit { edit, slots }) => {
                 edits.set(edit);
                 if let Some(slots) = slots {
                     carried = Some(slots);
                 }
             }
+            Some(Record::Kit { version, slots }) => {
+                kit = kit.max(version);
+                carried = Some(slots);
+            }
             None => damaged += 1,
         }
     }
-    (edits, carried, damaged)
+    (edits, carried, kit, damaged)
 }
 
 #[cfg(test)]
@@ -400,11 +424,42 @@ mod tests {
             "every edit, in the order they apply"
         );
         assert_eq!(reopened.carried.as_ref(), Some(&carried), "and the hotbar");
+        assert_eq!(reopened.kit, 0, "no kit line was written");
         let pose = reopened.pose.expect("and the pose");
         assert_eq!(pose.position, Vec3::new(10.0, 20.0, 30.0));
         assert_eq!(pose.selected, 3);
         assert!((pose.pitch + 0.25).abs() < 1e-6);
         assert_eq!(reopened.slot().unwrap().file.seed, 4242, "and its world");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A kit line is the last word on the hotbar and on the version dealt,
+    /// and it survives the reopen like an edit does.
+    #[test]
+    fn a_dealt_kit_comes_back_with_its_version_and_its_hotbar() {
+        let root = temporary("kit");
+        let slot = create(&root, "Kit", 9).unwrap();
+        let mut carried = Slots::new();
+        carried.give(Item::Block(Material::Grass), 3);
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            assert!(save.accept(
+                Edit {
+                    cell: 77,
+                    layer: 200,
+                    material: Material::Air,
+                },
+                &carried
+            ));
+            carried.give(Item::Block(Material::Torch), 16);
+            assert!(save.deal_kit(3, &carried));
+            assert_eq!(save.kit, 3);
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        assert_eq!(reopened.kit, 3);
+        assert_eq!(reopened.carried.as_ref(), Some(&carried));
+        assert_eq!(reopened.edits.for_cell(77), &[(200, Material::Air)]);
         let _ = std::fs::remove_dir_all(&root);
     }
 

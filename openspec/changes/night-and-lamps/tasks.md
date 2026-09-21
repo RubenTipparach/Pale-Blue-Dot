@@ -24,6 +24,14 @@ which is which.
       the gain named as constants a test holds against the core's.
 
 ## 3. Torches - DONE
+- [x] A save made before torches joined the kit has none, and never would:
+      the hotbar rides the edit log and the kit is dealt only to a new world.
+      The kit is a VERSIONED GRANT now (`slots::KIT_VERSION`, one table of
+      what each version added), the log records the version dealt as a
+      `kit` line beside the hotbar, and a save opened behind the version is
+      dealt what it missed once, on the frame it opens, through the same
+      durable writer an edit uses. Tests: an old hotbar reopened gains the
+      torches once; a new world's kit is the base plus every grant.
 - [x] A `Material`, so the hotbar, `aim`, the edit path, the save and the
       relight all carry it with no second path.
 - [x] The column record carries the torch layer, so the shader knows where to
