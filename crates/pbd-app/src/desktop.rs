@@ -349,6 +349,13 @@ pub fn run(args: &[String]) {
     // spawn and then teleport away from it.
     let mut world = open_world(&launch);
     let hotbar = slots::Hotbar::restore(&mut world);
+    // The saves page is the front door of a plain launch: a player picks the
+    // world rather than being put in the last one.
+    let opening = menu::opening_screen(
+        launch.menu.as_deref(),
+        launch.world.is_some(),
+        launch.capture.is_some(),
+    );
     let restored = world.pose;
     let step = Duration::from_secs_f64(1.0 / FIXED_HZ);
     let mut app = App::new();
@@ -449,17 +456,19 @@ pub fn run(args: &[String]) {
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
-    .insert_resource(match launch.menu.as_deref() {
-        Some("pause") => menu::Screen::Pause,
-        Some("settings") => menu::Screen::Settings,
-        Some("saves") => menu::Screen::Saves,
-        _ => menu::Screen::Playing,
-    })
+    .insert_resource(opening)
+    .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
+    .init_resource::<menu::NameField>()
     .add_systems(Startup, menu::spawn)
     .add_systems(PostStartup, slots::spawn)
     // Escape is read before either of the world's input readers, which live in
     // `RunFixedMainLoop`, and is cleared there so neither ever sees it.
-    .add_systems(PreUpdate, menu::toggle.after(bevy::input::InputSystems))
+    .add_systems(
+        PreUpdate,
+        (menu::name_input, menu::toggle)
+            .chain()
+            .after(bevy::input::InputSystems),
+    )
     .add_systems(
         Update,
         (
@@ -534,14 +543,16 @@ fn open_world(launch: &Launch) -> WorldSave {
                 .or_else(|| saves::create(&root, name, seed).ok())
         }
         // No name: the one played most recently, which is what logging back
-        // on means. A first run has none and gets one.
-        None => listed
-            .into_iter()
-            .next()
-            .or_else(|| saves::create(&root, "Preview", seed).ok()),
+        // on means. A first run has none, and nothing is made behind the
+        // player's back: the saves page opens and offers NEW WORLD.
+        None => listed.into_iter().next(),
     };
     let Some(slot) = slot else {
-        warn!("no world could be opened; this run will not be saved");
+        if asked.is_some() {
+            warn!("no world could be opened; this run will not be saved");
+        } else {
+            info!("no worlds yet; the saves page will make the first");
+        }
         return WorldSave::memory_only();
     };
     if slot.file.seed != seed {
