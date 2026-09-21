@@ -41,6 +41,9 @@ pub struct WalkingConfig {
     /// The look pitch a walker starts with when nothing is restored, radians.
     /// A capture that digs along the look sets it; a fresh game looks level.
     pub pitch: f32,
+    /// The turn to the right of the default heading a walker starts with when
+    /// nothing is restored, radians. The default heading is the pole's east.
+    pub yaw: f32,
     pub walk_speed: f32,
     pub sprint_speed: f32,
     pub jump_speed: f32,
@@ -75,6 +78,7 @@ impl Default for WalkingConfig {
             start_walking: true,
             restored: None,
             pitch: 0.0,
+            yaw: 0.0,
             walk_speed: 8.0,
             sprint_speed: 14.0,
             jump_speed: 12.0,
@@ -274,7 +278,10 @@ fn setup_walking(world: &mut World) {
         scripted: false,
         heading: match config.restored {
             Some(pose) => tangent_heading(pose.heading, up),
-            None => tangent_heading(Vec3::Y.cross(up), up),
+            None => tangent_heading(
+                Quat::from_axis_angle(up, -config.yaw) * Vec3::Y.cross(up),
+                up,
+            ),
         },
         up,
         pitch: config

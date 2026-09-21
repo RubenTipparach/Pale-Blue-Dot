@@ -80,6 +80,11 @@ pub struct Launch {
     /// taken from a different column at a different layer - and the headless
     /// walker otherwise looks dead level at the horizon.
     pub pitch: Option<f32>,
+    /// `--yaw <degrees>` turns the walker's starting heading that far to the
+    /// right of the default. With `--time` the launch log says where the sun
+    /// stands from the spawn, as the yaw and pitch that would centre it, so a
+    /// sky capture is aimed off the clock rather than guessed.
+    pub yaw: Option<f32>,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -120,6 +125,7 @@ impl Launch {
             torch: false,
             dig_ahead: false,
             pitch: None,
+            yaw: None,
             menu: None,
         };
         let mut i = 0;
@@ -157,6 +163,15 @@ impl Launch {
                         "--pitch takes degrees in -89..89"
                     );
                     result.pitch = Some(degrees);
+                }
+                "--yaw" => {
+                    i += 1;
+                    let degrees: f32 = args
+                        .get(i)
+                        .and_then(|d| d.parse().ok())
+                        .expect("--yaw requires degrees");
+                    assert!(degrees.is_finite(), "--yaw takes finite degrees");
+                    result.yaw = Some(degrees);
                 }
                 "--time" => {
                     i += 1;
@@ -411,10 +426,7 @@ pub fn run(args: &[String]) {
     // The clock: pinned and stopped where a capture asked for an hour, so a
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
-        clock: match launch.time {
-            Some(hour) => pbd_core::daylight::Clock::at_hour(hour),
-            None => pbd_core::daylight::Clock::default(),
-        },
+        clock: sun_clock(&launch),
         running: launch.time.is_none() && launch.capture.is_none(),
     })
     .init_resource::<digging::Aim>()
@@ -482,6 +494,7 @@ pub fn run(args: &[String]) {
                 pitch: pose.pitch,
             }),
             pitch: launch.pitch.unwrap_or(0.0).to_radians(),
+            yaw: launch.yaw.unwrap_or(0.0).to_radians(),
             ..default()
         })
         .add_plugins(WalkingPlugin);
@@ -647,6 +660,26 @@ fn drain_saves(exits: MessageReader<AppExit>, save: Res<WorldSave>) {
     if !exits.is_empty() {
         save.drain();
     }
+}
+
+/// The clock a launch starts on: pinned where `--time` asked, and then the
+/// log says where the sun stands from the spawn, as the `--yaw` and `--pitch`
+/// that would centre it, so a sky capture is aimed rather than guessed.
+fn sun_clock(launch: &Launch) -> pbd_core::daylight::Clock {
+    let clock = match launch.time {
+        Some(hour) => pbd_core::daylight::Clock::at_hour(hour),
+        None => pbd_core::daylight::Clock::default(),
+    };
+    if launch.time.is_some() {
+        let up = spawn_direction(launch);
+        let heading = Vec3::Y.cross(up).normalize_or(Vec3::X);
+        let right = heading.cross(up);
+        let sun = clock.sun();
+        let yaw = sun.dot(right).atan2(sun.dot(heading)).to_degrees();
+        let pitch = sun.dot(up).clamp(-1.0, 1.0).asin().to_degrees();
+        info!("sun from the spawn at --time: --yaw {yaw:.1} --pitch {pitch:.1}");
+    }
+    clock
 }
 
 /// Where the walker, and with it the column tier, is anchored.

@@ -137,4 +137,11 @@ because there is no layer to ask.
 
 `--place N` in the harness stacks N stones on the last hole, so a built tower
 can be photographed; before this it placed one.
+`docs/screenshots/placed-stone-tower.png` is five placed stones seen from
+the pit they stand in: stone on every face, at every height, with the pit's
+dirt floor under them. `docs/screenshots/dug-pit-materials.png` is a three
+layer pit with nothing placed: the sod's side on the top layer, earth below,
+which is exactly what those layers are, so a natural wall draws what it
+always did. `docs/screenshots/cave-stone-no-haze.png` is the cave view on the
+same build, stone all round and no atmosphere in it.
 

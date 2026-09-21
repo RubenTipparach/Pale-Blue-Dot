@@ -49,6 +49,18 @@ is half an hour of world. `START_HOUR` stays at nine. The capture harness's
 `--time` still pins the clock, which is what keeps every screenshot the same
 hour.
 
+`--yaw <degrees>` turns the walker's starting heading to the right of the
+default, beside `--pitch`, and with `--time` the launch log says where the
+sun stands from the spawn as the yaw and pitch that would centre it. That is
+Tenebris's own lesson about photographing the sky: solve the aim off the
+thing being photographed rather than guess it. At the default spawn the sun
+rises at about yaw -160 and sets in front of the default heading, passing
+nearly overhead at fourteen hours, so one fixed aim cannot hold both ends of
+the day and the captures are two fixed aims from the one spot: the sunset
+aim (`--yaw 0 --pitch 40`) holds sixteen to twenty hours as the disc walks
+down the frame, and the sunrise aim (`--yaw -165 --pitch 30`) holds eight to
+ten as it climbs on the other side.
+
 ## Held: the rotating body frame
 
 For the walker nothing changes: the body frame IS the walker's frame. For a
