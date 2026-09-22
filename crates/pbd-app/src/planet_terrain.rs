@@ -70,7 +70,12 @@ pub fn render_code(material: Material) -> u32 {
         Material::Stone | Material::Rock | Material::Ore => 5,
         Material::Snow => 6,
         Material::JungleGrass => 3,
-        Material::Water | Material::Air => 0,
+        // Water is its OWN code, and air is nought. They shared nought until
+        // the day something had to ask a layer whether it was wet: the
+        // material buffer could not tell a flooded cell from an empty one, so
+        // every reader fell back to the radius and tinted dry caves as sea.
+        Material::Water => WATER,
+        Material::Air => 0,
         // Earth. It was drawn as the sward for as long as it shared a code
         // with grass, so a dirt layer under the turf and a cave wall cut
         // through one both came out green; and the material actually named
@@ -132,6 +137,37 @@ pub fn snow_slot() -> u32 {
     tileset_slot(Biome::Tundra)
 }
 
+/// The nearest direction to `from` whose ground stands inside `band` metres
+/// of altitude, searched on rings of the tangent plane out to three
+/// kilometres.
+///
+/// The spawn stands seventy-four metres up, so its column tier holds nothing
+/// below sea level at all: every question about water in a cave has to be
+/// asked somewhere else, and this is how both the measuring test and the
+/// capture harness get there. One implementation, so the picture and the
+/// number are taken of the same ground.
+pub fn nearest_ground_near(from: Vec3, band: std::ops::Range<f32>) -> Option<Vec3> {
+    let from = from.normalize_or(Vec3::Y);
+    let u = Vec3::Y.cross(from).normalize_or(Vec3::X);
+    let v = from.cross(u);
+    for ring in 1..=60 {
+        let arc = ring as f32 * 50.0 / PLANET_RADIUS;
+        for step in 0..48 {
+            let a = step as f32 / 48.0 * std::f32::consts::TAU;
+            let direction =
+                (from * arc.cos() + (u * a.cos() + v * a.sin()) * arc.sin()).normalize();
+            if band.contains(&surface_height(direction)) {
+                return Some(direction);
+            }
+        }
+    }
+    None
+}
+
+/// Water. Never a face - a water cell draws its seabed and the sheet draws
+/// its surface - so it has no tile in the shader's table; what reads it is
+/// the submerged term, asking a layer whether it is wet.
+pub const WATER: u32 = 13;
 /// Earth, on its own code at last. The two above it are faces rather than
 /// materials - the picture a sod cell shows on its SIDE, which is that sod
 /// fading into the earth under it - and nothing in a column is ever made of
@@ -198,10 +234,27 @@ mod tests {
             format!("const LIGHT_MAX: f32 = {:.1};", light::MAX as f32),
             format!("const CONTACT_1: f32 = {:.2};", light::CONTACT[1]),
             format!("const CONTACT_2: f32 = {:.2};", light::CONTACT[2]),
+            format!("const CONTACT_3: f32 = {:.2};", light::CONTACT[3]),
             format!("const LIGHT_LAYERS: u32 = {}u;", pbd_core::column::LAYERS),
             format!(
                 "const LIGHT_WORDS: u32 = {}u;",
                 crate::planet::column::LIGHT_WORDS
+            ),
+            format!(
+                "const MATERIAL_WORDS: u32 = {}u;",
+                crate::planet::column::MATERIAL_WORDS
+            ),
+            format!(
+                "const MATERIAL_PER_WORD: u32 = {}u;",
+                crate::planet::column::MATERIAL_PER_WORD
+            ),
+            format!(
+                "const COLUMN_WATER_SHIFT: u32 = {}u;",
+                crate::planet::column::WATER_SHIFT
+            ),
+            format!(
+                "const COLUMN_WATER_MASK: u32 = {:#x}u;",
+                crate::planet::column::WATER_MASK
             ),
         ] {
             assert!(
@@ -217,6 +270,98 @@ mod tests {
             1,
             "a step of anything else needs the shader to know"
         );
+    }
+
+    /// The shader's tile table, `if code==Nu { ... tile=vec2(x.,y.); }`, read
+    /// off the shipped file: which tile of a sheet each material code draws.
+    fn shader_tiles() -> Vec<(u32, (u32, u32))> {
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        shader
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                let code = line
+                    .strip_prefix("if code==")?
+                    .split('u')
+                    .next()?
+                    .parse()
+                    .ok()?;
+                let tile = line.split("tile=vec2(").nth(1)?.split(')').next()?;
+                let mut parts = tile.split(',').map(|p| p.trim().trim_end_matches('.'));
+                Some((
+                    code,
+                    (parts.next()?.parse().ok()?, parts.next()?.parse().ok()?),
+                ))
+            })
+            .collect()
+    }
+
+    /// A sheet's sixteen tile names, from `biomes.json`, in the row-major order
+    /// the atlas holds them. A hand parse rather than a JSON crate: one array
+    /// of strings under one id is not worth a dependency.
+    fn sheet_tile_names(id: &str) -> Vec<String> {
+        let json = include_str!("../../../assets/tilesets/biomes.json");
+        let start = json
+            .find(&format!("\"id\": \"{id}\""))
+            .unwrap_or_else(|| panic!("biomes.json names the {id} sheet"));
+        let tiles = &json[start..];
+        let tiles = &tiles[tiles.find("\"tiles\"").expect("a tiles array")..];
+        let open = tiles.find('[').expect("an array");
+        let close = tiles.find(']').expect("a closed array");
+        tiles[open + 1..close]
+            .split(',')
+            .map(|name| name.trim().trim_matches('"').to_owned())
+            .collect()
+    }
+
+    /// Every material is drawn on a tile whose name in its sheet's own manifest
+    /// says what it is. This is `tools/block_audit.py`'s text output as an
+    /// assertion, and it is what would have caught the snow cap drawing the
+    /// tundra sheet's "cold granite" and every sand cap its sheet's "packed
+    /// path" - the tiles had only ever lent their brightness to a flat colour,
+    /// and the day caps drew real colours they showed what they pointed at.
+    #[test]
+    fn the_shader_draws_each_material_on_a_tile_named_for_it() {
+        let tiles = shader_tiles();
+        let tile_of = |code: u32| {
+            tiles
+                .iter()
+                .find(|(c, _)| *c == code)
+                .map(|(_, tile)| *tile)
+                .unwrap_or((0, 0))
+        };
+        let index = |(x, y): (u32, u32)| (y * 4 + x) as usize;
+        for (code, sheet, word) in [
+            (6, "tundra", "snow"),
+            (0, "ocean", "sand"),
+            (1, "beach", "sand"),
+            (4, "desert", "sand"),
+        ] {
+            let names = sheet_tile_names(sheet);
+            let name = &names[index(tile_of(code))];
+            assert!(
+                name.contains(word),
+                "code {code} draws {sheet}'s tile #{} \"{name}\", which is not {word}",
+                index(tile_of(code))
+            );
+        }
+        // Water draws NO face and so has no tile: a water cell shows its
+        // seabed, and the sheet shows its surface. What reads its code is the
+        // submerged term, asking a layer whether it is wet.
+        assert!(
+            !tiles.iter().any(|(code, _)| *code == WATER),
+            "water has a tile in the shader, so something draws a face of it"
+        );
+        assert_ne!(
+            render_code(Material::Water),
+            render_code(Material::Air),
+            "a face cannot tell water from air if they share a code"
+        );
+        // Stone is every sheet's #3 and the sward every sheet's #0.
+        assert_eq!(index(tile_of(5)), 3, "stone is the sheet's stone");
+        assert_eq!(index(tile_of(2)), 0, "grass is the sheet's ground");
+        assert_eq!(&sheet_tile_names("fields")[3], "limestone");
+        assert_eq!(&sheet_tile_names("fields")[0], "pasture grass");
     }
 
     /// The atlas is baked by `tools/build_tileset_atlas.py`, which derives its

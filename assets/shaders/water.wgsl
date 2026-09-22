@@ -551,7 +551,8 @@ fn refract_through_drops(uv: vec2<f32>, drop_uv: vec2<f32>, t: f32, l0: f32, l1:
     let e = vec2<f32>(0.001,0.0);
     let cx = rd_drops(drop_uv+e,t,l0,l1,l2).x;
     let cy = rd_drops(drop_uv+e.yx,t,l0,l1,l2).x;
-    let n = vec2<f32>(cx-c.x,cy-c.x);
+    // A gradient in the y-up drop frame, negated in y for the y-down sample.
+    let n = vec2<f32>(cx-c.x,-(cy-c.x));
     let refracted = textureSampleLevel(scene_color,scene_sampler,clamp(uv-n*view.lens.y,vec2(0.),vec2(1.)),0.0).rgb;
     return vec4<f32>(refracted, clamp(c.x,0.0,1.0));
 }
@@ -569,7 +570,10 @@ fn lens(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let ray = view_ray(uv);
         above_water = smoothstep(-0.12,-0.02,dot(ray.direction,safe_normal(ray.origin-view.planet_center.xyz)));
     }
-    var drop_uv = uv-0.5;
+    // The drop math is the reference's, whose full-screen v_uv is y-UP ("high
+    // y = high on screen"); Bevy's fullscreen uv is y-down, and in it the same
+    // monotonic fall climbed. The lens works in the reference's frame.
+    var drop_uv = vec2<f32>(uv.x-0.5, 0.5-uv.y);
     drop_uv.x *= max(view.screen.x,0.1);
     let t = view.camera_time.w*0.2*view.lens.z;
     let rain = clamp(view.fx.z,0.0,1.0);

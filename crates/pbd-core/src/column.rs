@@ -108,7 +108,34 @@ impl Column {
         let ceiling = ((top + 1)..LAYERS)
             .find(|index| self.solid(*index))
             .map(layer_altitude);
-        Contact { floor, ceiling }
+        // And the water standing on the floor, which is the layer just above
+        // the run whether or not there is a ceiling over it.
+        let water = floor.and_then(|_| self.water_surface(layer_altitude(top + 1)));
+        Contact {
+            floor,
+            ceiling,
+            water,
+        }
+    }
+
+    /// The altitude of the surface of the water this altitude is IN, or `None`
+    /// where it is not in water.
+    ///
+    /// The surface is the top of the water run: water that reaches sea level
+    /// is the sea, and water that stops lower is a pool. Nothing fills a pool
+    /// yet, so today every water run in a generated column runs from the
+    /// ground to sea level - but the reader asks the run rather than the sea,
+    /// because the day flooding lands is the day a pool exists.
+    pub fn water_surface(&self, altitude: f32) -> Option<f32> {
+        let layer = layer_at(altitude)?;
+        if self.material(layer) != Material::Water {
+            return None;
+        }
+        let top = (layer..LAYERS)
+            .take_while(|index| self.material(*index) == Material::Water)
+            .last()
+            .unwrap_or(layer);
+        Some(layer_altitude(top) + 1.0)
     }
 
     /// Solid runs, bottom up, as half-open layer ranges. What the renderer draws
@@ -232,6 +259,14 @@ pub struct Contact {
     pub floor: Option<f32>,
     /// Altitude of the bottom of the solid run above, if any.
     pub ceiling: Option<f32>,
+    /// Altitude of the surface of the water standing ON that floor, if the
+    /// layer directly above it is water.
+    ///
+    /// The column is the authority on where water is, and this is how a
+    /// walker asks. A height field can only answer "how far below sea level
+    /// is the ground here", which says a cave carved under land below sea
+    /// level is full of sea; the column says that pocket is air, and it is.
+    pub water: Option<f32>,
 }
 
 /// Build one cell's column, carved by the region's worms.
@@ -373,6 +408,63 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
     // Bedrock. Never mineable, and the reference's own rule.
     layers[0] = Material::Stone;
     Column { layers }
+}
+
+#[cfg(test)]
+mod water_tests {
+    use super::*;
+
+    /// A column with rock to `ground` and water over it to `sea`.
+    fn flooded(ground: usize, sea: usize) -> Column {
+        let mut layers = [Material::Air; LAYERS];
+        layers[..=ground].fill(Material::Stone);
+        layers[ground + 1..=sea].fill(Material::Water);
+        Column { layers }
+    }
+
+    /// The sea: a walker on the seabed stands in water as deep as the sea is
+    /// over it, and the surface is the top of the water RUN rather than a
+    /// constant, so a pool that stops short reads as a pool.
+    #[test]
+    fn a_column_reports_the_water_standing_on_its_floor() {
+        let column = flooded(20, 40);
+        let floor = layer_altitude(20) + 1.0;
+        let surface = layer_altitude(40) + 1.0;
+        let contact = column.contact(floor + 0.5);
+        assert_eq!(contact.floor, Some(floor));
+        assert_eq!(contact.water, Some(surface));
+        assert_eq!(surface - floor, 20.0, "twenty layers of water");
+        // In it, over it, and in the rock under it.
+        assert_eq!(column.water_surface(floor + 0.5), Some(surface));
+        assert_eq!(column.water_surface(surface + 0.5), None);
+        assert_eq!(column.water_surface(floor - 0.5), None);
+    }
+
+    /// The owner's picture: a cave carved under land below sea level. There
+    /// is no water in the column, so there is none in the cave, whatever a
+    /// height field would say about its depth.
+    #[test]
+    fn a_cave_under_land_below_sea_level_holds_no_water() {
+        let mut layers = [Material::Stone; LAYERS];
+        // A pocket of air well under the ground, and nothing above sea level.
+        layers[30..36].fill(Material::Air);
+        layers[100..].fill(Material::Air);
+        let column = Column { layers };
+        let floor = layer_altitude(29) + 1.0;
+        let contact = column.contact(floor + 0.5);
+        assert_eq!(contact.floor, Some(floor));
+        assert_eq!(contact.ceiling, Some(layer_altitude(36)));
+        assert_eq!(contact.water, None, "a sealed pocket is dry");
+        assert_eq!(column.water_surface(floor + 0.5), None);
+        // And the same column with the pocket flooded says so, which is what
+        // the flooding phase will write.
+        let mut flooded = column;
+        flooded.layers[30..36].fill(Material::Water);
+        assert_eq!(
+            flooded.contact(floor + 0.5).water,
+            Some(layer_altitude(35) + 1.0)
+        );
+    }
 }
 
 #[cfg(test)]

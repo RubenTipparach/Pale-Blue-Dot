@@ -29,10 +29,10 @@ pub const CLOUD_RADIUS: f32 = PLANET_RADIUS + 300.0;
 /// separates a mass from a decal. 260 m against 300 m of base altitude puts the
 /// tops at about twice the summit height, which is where the reference's sit.
 pub const CLOUD_THICKNESS: f32 = 260.0;
-/// Where the sun was when it did not move. Kept as the arc's REFERENCE frame
-/// rather than as the answer: `Sun` turns about it, so the old fixed light is
-/// still the shape of noon and every capture framed against it still reads.
-pub const SUN_DIRECTION: Vec3 = Vec3::new(0.65, 0.75, 0.35);
+/// Where the sun is in the system frame: the core's fixed sun, which the
+/// planet turns under. Noon is exactly this, so every capture framed against
+/// the old constant still reads.
+pub const SUN_DIRECTION: Vec3 = pbd_core::daylight::SUN_FIXED;
 
 /// The world's clock and the one sun direction derived from it.
 ///
@@ -59,19 +59,17 @@ impl Default for Sun {
 }
 
 impl Sun {
-    /// The direction toward the sun, in the planet's frame.
-    ///
-    /// The clock's arc is built about `SUN_DIRECTION`, so noon here is where
-    /// the light always was: the tilt and the turn are applied to that frame
-    /// rather than to the world's axes, and a world whose sun crossed the
-    /// wrong sky would be a different planet.
+    /// The direction toward the sun, in the planet's frame: the fixed sun
+    /// carried in by the planet's spin, which is the core's one rotation.
     pub fn direction(&self) -> Vec3 {
-        let noon = SUN_DIRECTION.normalize();
-        let east = Vec3::Y.cross(noon).normalize_or(Vec3::X);
-        let local = self.clock.sun();
-        // The core's arc turns about +Y with noon at +X; place that frame on
-        // the planet's own noon.
-        (noon * local.x + Vec3::Y * local.y + east * local.z).normalize_or(noon)
+        self.clock.sun()
+    }
+
+    /// What carries anything fixed in the system frame - the star field, the
+    /// moon's orbit - into the planet's frame this frame. The same rotation
+    /// the sun direction is made of, so the sky turns as one.
+    pub fn sky_rotation(&self) -> Quat {
+        self.clock.sky_from_system()
     }
 
     /// How high the sun stands over a point, as a cosine. Positive is day.

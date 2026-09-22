@@ -68,6 +68,22 @@ struct ColumnRec {
 // `u32`, one byte each, `LIGHT_WORDS` words per slot. `ColumnTier::gpu_light`
 // packs it; nothing here writes it.
 @group(0) @binding(5) var<storage,read> light: array<u32>;
+// Every layer's render code of every column tier slot, eight to a `u32`,
+// `MATERIAL_WORDS` words per slot: what a column-pass face WEARS. A face is
+// drawn in its own voxel's material, as Tenebris's `face_tile(block, cap)`
+// draws it, and not in a rule on depth under the run's top: a placed stone is
+// stone at whatever depth it sits. `ColumnTier::gpu_materials` packs it.
+@group(0) @binding(6) var<storage,read> materials: array<u32>;
+const MATERIAL_PER_WORD: u32 = 8u;
+const MATERIAL_WORDS: u32 = 40u;
+// The render code of the layer `layer` of column slot `slot` (plus one, as
+// the record carries it). Off the tier, or past the span: air.
+fn material_at(slot: u32, layer: u32) -> u32 {
+    if slot == 0u || layer >= LIGHT_LAYERS { return 0u; }
+    let word = (slot - 1u) * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
+    if word >= arrayLength(&materials) { return 0u; }
+    return (materials[word] >> ((layer % MATERIAL_PER_WORD) * 4u)) & 0xfu;
+}
 
 // The bottom and top of a column's span, metres against sea level.
 // `column::BASE_M` and `LAYERS` in pbd-core are the one source; the visibility
@@ -93,6 +109,19 @@ const COLUMN_TORCH_VERTICES: u32 = 30u;
 // packs it; `the_shader_carries_the_reference_light_constants` pins the shift.
 const TORCH_SHIFT: u32 = 16u;
 fn torch_layer(rec: ColumnRec) -> u32 { return rec.more[3] >> TORCH_SHIFT; }
+// Where the record carries the top of this column's water, as a layer plus
+// one; `planet_column.rs` packs it and a test holds the two shifts together.
+const COLUMN_WATER_SHIFT: u32 = 4u;
+const COLUMN_WATER_MASK: u32 = 0x1ffu;
+// The altitude of this column's water SURFACE, or a depth no world reaches
+// when it holds none. Below the world rather than a flag, so the reader is a
+// `min` against the sheet and never a branch: a column with no water has its
+// surface infinitely far down and nothing in it is ever wet.
+fn column_water_top_m(rec: ColumnRec) -> f32 {
+    let packed = (rec.more[3] >> COLUMN_WATER_SHIFT) & COLUMN_WATER_MASK;
+    if packed == 0u { return -1.0e9; }
+    return COLUMN_BASE_M + f32(packed);
+}
 const NO_NEIGHBOR: u32 = 0xffffffffu;
 
 // A run is absent when its TOP field is zero, not its bottom: the run holding
@@ -135,6 +164,16 @@ const LIGHT_MAX: f32 = 15.0;
 // where the face opens onto air.
 const CONTACT_1: f32 = 0.85;
 const CONTACT_2: f32 = 0.70;
+// The fourth rung, which only a WALL can reach: the reference's ladder counts
+// the two side columns at the face's own layer, and a wall adds the two cells
+// one layer past its edge (`pbd_core::light::wall_corner`).
+const CONTACT_3: f32 = 0.55;
+fn contact(occluders: u32) -> f32 {
+    if occluders == 0u { return 1.0; }
+    if occluders == 1u { return CONTACT_1; }
+    if occluders == 2u { return CONTACT_2; }
+    return CONTACT_3;
+}
 // The floor under the ambient term: what a surface the sun and sky never reach
 // is still lit to. Tenebris's `hex.fs` has it as a literal `max(0.05, ...)`
 // inside the ambient, and `docs/tenebris-comparison.md` has recorded its
@@ -215,7 +254,10 @@ fn solid_at(slot: u32, layer: u32) -> bool {
 // Both channels at a corner, or `-1` in x where nothing there was air. The
 // contact ladder multiplies BOTH, as the reference's own does: a crease is
 // dark whatever is lighting it.
-fn corner_at(own: u32, a: u32, b: u32, layer: u32) -> vec2<f32> {
+// The mean of both channels over the cells at this corner that are air, in
+// xy, and how many of the two SIDE cells are solid in z. A corner with no air
+// at all answers -1 in x, which the caller has to be able to tell from dark.
+fn corner_at(own: u32, a: u32, b: u32, layer: u32) -> vec3<f32> {
     var sum = vec2(0.0);
     var samples = 0.0;
     let slots = array<u32,3>(own, a, b);
@@ -225,20 +267,20 @@ fn corner_at(own: u32, a: u32, b: u32, layer: u32) -> vec2<f32> {
             samples += 1.0;
         }
     }
-    // Nothing there is air, which the caller has to be able to tell from dark.
-    if samples == 0.0 { return vec2(-1.0, 0.0); }
+    if samples == 0.0 { return vec3(-1.0, 0.0, 0.0); }
+    return vec3(clamp(sum / samples, vec2(0.0), vec2(1.0)), f32(occluders_at(a, b, layer)));
+}
+
+fn occluders_at(a: u32, b: u32, layer: u32) -> u32 {
     var occluders = 0u;
     if solid_at(a, layer) { occluders++; }
     if solid_at(b, layer) { occluders++; }
-    var contact = 1.0;
-    if occluders == 1u { contact = CONTACT_1; }
-    if occluders >= 2u { contact = CONTACT_2; }
-    return clamp(sum / samples * contact, vec2(0.0), vec2(1.0));
+    return occluders;
 }
 
 fn corner_light(own: u32, a: u32, b: u32, layer: u32) -> vec2<f32> {
     let here = corner_at(own, a, b, layer);
-    if here.x >= 0.0 { return here; }
+    if here.x >= 0.0 { return here.xy * contact(u32(here.z)); }
     // Every cell there is rock, so this is not a dark corner, it is the wrong
     // LAYER: the metre a face stands at is the neighbour's last solid one, and
     // the air it actually opens onto is the metre above. A one-metre terrace
@@ -246,7 +288,21 @@ fn corner_light(own: u32, a: u32, b: u32, layer: u32) -> vec2<f32> {
     // dark line along every step in the world, which is the same symptom the
     // reference's own floor-contact fallback exists to prevent.
     let above = corner_at(own, a, b, layer + 1u);
-    return max(above, vec2(0.0));
+    return max(above.xy * contact(u32(above.z)), vec2(0.0));
+}
+
+// A wall's corner: the cap rule plus the two cells one layer PAST the wall's
+// edge - across and beside - which is Minecraft's third-neighbour rule on a
+// lattice where three columns meet at a corner. It is what darkens a wall's
+// foot where it stands on a floor and its head under a lid; without it a wall
+// on flat ground measured 92 of 255 at its foot and 92 at its middle.
+// `pbd_core::light::wall_corner` is the same rule in Rust, tested.
+fn wall_corner_light(own: u32, a: u32, b: u32, layer: u32, beyond: u32) -> vec2<f32> {
+    let extra = occluders_at(a, b, beyond);
+    let here = corner_at(own, a, b, layer);
+    if here.x >= 0.0 { return here.xy * contact(u32(here.z) + extra); }
+    let above = corner_at(own, a, b, layer + 1u);
+    return max(above.xy * contact(u32(above.z) + extra), vec2(0.0));
 }
 
 // What one vertex of a WALL is lit to: a quad on `side` running from `bottom`
@@ -277,9 +333,10 @@ fn wall_light(cell: Cell, own: u32, degree: u32, side: u32,
     // ground always is at its foot.
     let low = light_layer(bottom + 0.5);
     let high = light_layer(max(top - 0.5, bottom + 0.5));
-    let head = corner_light(own, pair.x, pair.y, high);
+    // The head's cells past the edge are one layer up; the foot's one down.
+    let head = wall_corner_light(own, pair.x, pair.y, high, high + 1u);
     if index == 2u || index == 3u { return head; }
-    let foot = corner_light(own, pair.x, pair.y, low);
+    let foot = wall_corner_light(own, pair.x, pair.y, low, max(low, 1u) - 1u);
     return select(foot, head, foot.x == 0.0 && foot.y == 0.0);
 }
 
@@ -364,6 +421,9 @@ struct VertexOut {
     @location(11) shade: f32,
     // The voxel field at this vertex, INTERPOLATED - which is the point of it.
     @location(12) voxel: vec2<f32>,
+    // The column tier slot plus one, or zero off the tier: what a column-pass
+    // face asks for the material of the layer it stands on.
+    @location(13) @interpolate(flat) slot: u32,
 }
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
@@ -1040,6 +1100,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.owner_b = cell.owner_b.xyz;
     out.shade = out_shade;
     out.voxel = out_voxel;
+    out.slot = lit_slot;
     return out;
 }
 
@@ -1202,19 +1263,51 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // summer grass.
     var slot = tileset_slot((input.material >> 8u) & 0xffu);
     var code = cap;
-    if input.kind==1u || input.kind==4u {
-        let altitude = length(input.position)-params.settings.x;
-        code = face_code(cap,max(input.height-altitude,0.));
+    let face_altitude = length(input.position)-params.settings.x;
+    if input.kind==1u {
+        // The heightfield's own wall, which stands only where a cell has no
+        // column: no layer to ask, so the depth rule, which is the
+        // generator's own stack.
+        code = face_code(cap,max(input.height-face_altitude,0.));
     }
+    if input.kind==4u {
+        // A column-pass face wears the LAYER it bounds: the block under an
+        // upward face, over a downward one, and at the fragment's altitude on
+        // a flank, clamped inside the run so its top edge never reads the air
+        // over it. The side rule is Tenebris's `face_tile`: the sod's side is
+        // the transition, snow's its own, a sod's underside earth, and
+        // everything else its own tile.
+        let radial = normalized(input.position);
+        let facing = dot(input.normal, radial);
+        var layer = light_layer(face_altitude);
+        if facing > 0.5 { layer = light_layer(face_altitude-0.5); }
+        else if facing < -0.5 { layer = light_layer(face_altitude+0.5); }
+        else { layer = min(layer, max(light_layer(input.height-0.5), 0u)); }
+        let own = material_at(input.slot, layer);
+        code = own;
+        if abs(facing) < 0.5 {
+            if grassy(own) { code = GRASS_SIDE_CODE; }
+            if own == 6u { code = SNOW_SIDE_CODE; }
+        } else if facing < -0.5 && grassy(own) {
+            code = DIRT_CODE;
+        }
+    }
+    // Which tile each material draws, per sheet. Every sheet keeps the same
+    // layout - #0 (0,0) its own ground, #1 that ground over the earth, #2 the
+    // earth, #3 the stone - so sand is each sheet's own ground and snow is the
+    // tundra sheet's wind packed snow at #10 (2,2). `tools/block_audit.py`
+    // reads this table off the shipped file and lays every pick beside the
+    // sheet's name for it, and a test holds the names; the snow cap drew
+    // "cold granite" and the sand caps "packed path" until it did.
     var base = vec3(0.12,0.32,0.075);
     var tile = vec2(0.,0.);
     // Material 0 is the seabed: sand, darkened by the water column below.
-    if code==0u { base=vec3(0.52,0.45,0.30); tile=vec2(3.,2.); }
-    if code==1u { base=vec3(0.61,0.48,0.25); tile=vec2(3.,2.); }
+    if code==0u { base=vec3(0.52,0.45,0.30); tile=vec2(0.,0.); }
+    if code==1u { base=vec3(0.61,0.48,0.25); tile=vec2(0.,0.); }
     if code==3u { base=vec3(0.07,0.25,0.105); }
-    if code==4u { base=vec3(0.64,0.36,0.13); tile=vec2(3.,2.); }
+    if code==4u { base=vec3(0.64,0.36,0.13); tile=vec2(0.,0.); }
     if code==5u { base=vec3(0.31,0.34,0.33); tile=vec2(3.,0.); }
-    if code==6u { base=vec3(0.80,0.90,0.91); tile=vec2(3.,0.); }
+    if code==6u { base=vec3(0.80,0.90,0.91); tile=vec2(2.,2.); }
     if code==7u { base=vec3(0.32,0.36,0.22); }
     if code==8u { base=vec3(0.16,0.105,0.055); tile=vec2(2.,1.); }
     if code==9u { base=vec3(0.085,0.24,0.060); tile=vec2(0.,2.); }
@@ -1274,7 +1367,19 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     color += albedo*TORCH_TINT*(lamp*TORCH_GAIN);
     // Submerged terrain: Tenebris's hex.fs absorption, the sheet's own
     // absorption and deep colour so the seabed tints the way its sea does.
-    let water_depth = max(params.water_absorption.w - length(input.position), 0.);
+    //
+    // WHERE the water is, is the COLUMN's answer wherever there is a column.
+    // A height field has only one: the radius, so every fragment under sea
+    // level was tinted as sea and a cave carved under land below sea level
+    // was a dry room full of ocean. The column says that pocket is air.
+    // Capped at the sheet, which is where the sea's own surface is drawn, so
+    // a column whose water reaches sea level reads exactly as it did.
+    var water_surface = params.water_absorption.w;
+    if input.slot != 0u {
+        water_surface = min(water_surface,
+            params.settings.x + column_water_top_m(columns[input.slot-1u]));
+    }
+    let water_depth = max(water_surface - length(input.position), 0.);
     if water_depth > 0. {
         let attenuation = exp(-params.water_absorption.rgb*water_depth);
         color = mix(color*attenuation, params.water_deep.rgb*attenuation,
@@ -1354,10 +1459,15 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // Tenebris-style limb and distance haze, all in the same body-local frame.
     let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
     let air = exp(-altitude/1050.);
-    let fog = (1.-exp(-distance_to_camera*0.00036))*air*daylight;
+    // Both take the FIELD: a face the sky does not reach has no atmosphere
+    // between it and the eye, and without this a cave wall forty metres
+    // underground fogged toward the sky colour exactly as a ridge at the same
+    // distance did. Tenebris gates its rim by `v_sky_light` for the same
+    // reason; the haze here is the same term one step earlier.
+    let fog = (1.-exp(-distance_to_camera*0.00036))*air*daylight*skylight;
     let sky = mix(vec3(0.10,0.20,0.29),vec3(0.32,0.49,0.57),max(sun_elevation,0.));
     color=mix(color,sky,fog*0.55);
     let rim = pow(1.-clamp(dot(radial,toward_camera),0.,1.),4.);
-    color+=vec3(0.07,0.16,0.25)*rim*(0.25+0.75*daylight)*(1.-air)*0.55;
+    color+=vec3(0.07,0.16,0.25)*rim*(0.25+0.75*daylight)*(1.-air)*0.55*skylight;
     return vec4(color,1.);
 }

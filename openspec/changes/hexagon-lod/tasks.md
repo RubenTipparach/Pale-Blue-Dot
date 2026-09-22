@@ -71,3 +71,15 @@ only the two culling fixes, which were independent of LOD.
       `preview-scale-and-shader-parity`. The resident cost stops being
       `10*4^L + 2` for the whole globe, so the ladder stops being the
       constraint that picks the planet size.
+
+## Altitude
+- [ ] The fine bands are chosen by great-circle distance from the sub-camera
+      point and nothing else: from orbit the finest hexes still draw and the
+      fine set still regenerates every 40 m the sub-camera point moves. Only
+      the foliage, the clutter and the column tier ride an altitude cutoff
+      (`FOLIAGE_DRAW_CUTOFF_ALTITUDE`, band 1 plus 600 m). The owner asked;
+      the answer is no. The level a cell draws at should be quantised from the
+      3D distance to the eye rather than the arc, which is one number in
+      `band_cos` and the refresh rule, and above the finest band's own radius
+      of altitude the fine set should stop regenerating at all.
+

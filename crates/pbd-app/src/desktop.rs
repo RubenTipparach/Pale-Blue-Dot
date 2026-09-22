@@ -54,11 +54,13 @@ pub struct Launch {
     /// land cell in metres. Absent means standing eye height.
     pub height: Option<f32>,
     /// `--dig N` digs N blocks straight down from the camera on the frame the
-    /// tier is ready, and `--place` puts one back on the layer above the last
+    /// tier is ready, and `--place N` stacks N stones on the layer above the last
     /// hole. A headless run has no mouse, and a picture of a hole is the only
     /// thing that says the verb works end to end.
     pub dig: u32,
-    pub place: bool,
+    /// `--place N` stacks N stones on the last hole, so a tower somebody built
+    /// can be photographed wearing the stone it is made of.
+    pub place: u32,
     /// `--spawn mouth` puts the spawn, and so the column tier, at the nearest
     /// cave mouth to the default spawn. Mouth patches cover a few percent of
     /// the land and the default spawn has none, so without this a walker has
@@ -78,6 +80,11 @@ pub struct Launch {
     /// taken from a different column at a different layer - and the headless
     /// walker otherwise looks dead level at the horizon.
     pub pitch: Option<f32>,
+    /// `--yaw <degrees>` turns the walker's starting heading that far to the
+    /// right of the default. With `--time` the launch log says where the sun
+    /// stands from the spawn, as the yaw and pitch that would centre it, so a
+    /// sky capture is aimed off the clock rather than guessed.
+    pub yaw: Option<f32>,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -103,7 +110,7 @@ impl Launch {
             view: "coast".into(),
             frames: 180,
             dig: 0,
-            place: false,
+            place: 0,
             tour: false,
             fixed: false,
             fly: false,
@@ -118,6 +125,7 @@ impl Launch {
             torch: false,
             dig_ahead: false,
             pitch: None,
+            yaw: None,
             menu: None,
         };
         let mut i = 0;
@@ -135,7 +143,13 @@ impl Launch {
                         .and_then(|n| n.parse().ok())
                         .expect("--dig requires a count");
                 }
-                "--place" => result.place = true,
+                "--place" => {
+                    i += 1;
+                    result.place = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--place requires a count");
+                }
                 "--torch" => result.torch = true,
                 "--dig-ahead" => result.dig_ahead = true,
                 "--pitch" => {
@@ -149,6 +163,15 @@ impl Launch {
                         "--pitch takes degrees in -89..89"
                     );
                     result.pitch = Some(degrees);
+                }
+                "--yaw" => {
+                    i += 1;
+                    let degrees: f32 = args
+                        .get(i)
+                        .and_then(|d| d.parse().ok())
+                        .expect("--yaw requires degrees");
+                    assert!(degrees.is_finite(), "--yaw takes finite degrees");
+                    result.yaw = Some(degrees);
                 }
                 "--time" => {
                     i += 1;
@@ -268,7 +291,8 @@ impl Launch {
                 "dive",
                 "cave",
                 "overhang",
-                "mouth"
+                "mouth",
+                "seacave"
             ]
             .contains(&result.view.as_str()),
             "unknown capture view"
@@ -324,7 +348,15 @@ pub fn run(args: &[String]) {
     // was standing decides where the planet's fine set and the column tier are
     // anchored. Restoring the pose afterwards would build the world around the
     // spawn and then teleport away from it.
-    let world = open_world(&launch);
+    let mut world = open_world(&launch);
+    let hotbar = slots::Hotbar::restore(&mut world);
+    // The saves page is the front door of a plain launch: a player picks the
+    // world rather than being put in the last one.
+    let opening = menu::opening_screen(
+        launch.menu.as_deref(),
+        launch.world.is_some(),
+        launch.capture.is_some(),
+    );
     let restored = world.pose;
     let step = Duration::from_secs_f64(1.0 / FIXED_HZ);
     let mut app = App::new();
@@ -389,13 +421,7 @@ pub fn run(args: &[String]) {
     // What the save recorded, or the starting kit in a new world. The hotbar
     // rides the edit log rather than a timer, so what comes back is what was
     // held when the last block moved.
-    .insert_resource(
-        world
-            .carried
-            .clone()
-            .map(slots::Hotbar)
-            .unwrap_or_else(slots::Hotbar::starting_kit),
-    )
+    .insert_resource(hotbar)
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -403,10 +429,7 @@ pub fn run(args: &[String]) {
     // The clock: pinned and stopped where a capture asked for an hour, so a
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
-        clock: match launch.time {
-            Some(hour) => pbd_core::daylight::Clock::at_hour(hour),
-            None => pbd_core::daylight::Clock::default(),
-        },
+        clock: sun_clock(&launch),
         running: launch.time.is_none() && launch.capture.is_none(),
     })
     .init_resource::<digging::Aim>()
@@ -434,25 +457,29 @@ pub fn run(args: &[String]) {
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
-    .insert_resource(match launch.menu.as_deref() {
-        Some("pause") => menu::Screen::Pause,
-        Some("settings") => menu::Screen::Settings,
-        Some("saves") => menu::Screen::Saves,
-        _ => menu::Screen::Playing,
-    })
+    .insert_resource(opening)
+    .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
+    .init_resource::<menu::NameField>()
     .add_systems(Startup, menu::spawn)
     .add_systems(PostStartup, slots::spawn)
     // Escape is read before either of the world's input readers, which live in
     // `RunFixedMainLoop`, and is cleared there so neither ever sees it.
-    .add_systems(PreUpdate, menu::toggle.after(bevy::input::InputSystems))
+    .add_systems(
+        PreUpdate,
+        (menu::name_input, menu::toggle)
+            .chain()
+            .after(bevy::input::InputSystems),
+    )
     .add_systems(
         Update,
         (
             configure_camera,
             scene::move_moon,
+            scene::turn_stars,
             scene::follow_sun,
             slots::input,
             slots::update,
+            hud::near_field,
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             autosave,
             digging::dig_and_place,
@@ -473,6 +500,7 @@ pub fn run(args: &[String]) {
                 pitch: pose.pitch,
             }),
             pitch: launch.pitch.unwrap_or(0.0).to_radians(),
+            yaw: launch.yaw.unwrap_or(0.0).to_radians(),
             ..default()
         })
         .add_plugins(WalkingPlugin);
@@ -516,14 +544,16 @@ fn open_world(launch: &Launch) -> WorldSave {
                 .or_else(|| saves::create(&root, name, seed).ok())
         }
         // No name: the one played most recently, which is what logging back
-        // on means. A first run has none and gets one.
-        None => listed
-            .into_iter()
-            .next()
-            .or_else(|| saves::create(&root, "Preview", seed).ok()),
+        // on means. A first run has none, and nothing is made behind the
+        // player's back: the saves page opens and offers NEW WORLD.
+        None => listed.into_iter().next(),
     };
     let Some(slot) = slot else {
-        warn!("no world could be opened; this run will not be saved");
+        if asked.is_some() {
+            warn!("no world could be opened; this run will not be saved");
+        } else {
+            info!("no worlds yet; the saves page will make the first");
+        }
         return WorldSave::memory_only();
     };
     if slot.file.seed != seed {
@@ -557,15 +587,11 @@ fn load_world(world: &mut World) {
         open.drain();
         open.root().to_path_buf()
     };
-    let opened = WorldSave::open(root, slot);
-    let carried = opened.carried.clone();
+    let mut opened = WorldSave::open(root, slot);
+    let hotbar = slots::Hotbar::restore(&mut opened);
     let pose = opened.pose;
     world.insert_resource(opened);
-    world.insert_resource(
-        carried
-            .map(slots::Hotbar)
-            .unwrap_or_else(slots::Hotbar::starting_kit),
-    );
+    world.insert_resource(hotbar);
     // The tier is standing where the last world left it with the last world's
     // holes in it. The distance rule cannot know that, so the load says so.
     if let Some(mut refresh) = world.get_resource_mut::<pbd_app::planet::LodRefresh>() {
@@ -640,11 +666,45 @@ fn drain_saves(exits: MessageReader<AppExit>, save: Res<WorldSave>) {
     }
 }
 
+/// The clock a launch starts on: pinned where `--time` asked, and then the
+/// log says where the sun stands from the spawn, as the `--yaw` and `--pitch`
+/// that would centre it, so a sky capture is aimed rather than guessed.
+fn sun_clock(launch: &Launch) -> pbd_core::daylight::Clock {
+    let clock = match launch.time {
+        Some(hour) => pbd_core::daylight::Clock::at_hour(hour),
+        None => pbd_core::daylight::Clock::default(),
+    };
+    if launch.time.is_some() {
+        let up = spawn_direction(launch);
+        let heading = Vec3::Y.cross(up).normalize_or(Vec3::X);
+        let right = heading.cross(up);
+        let sun = clock.sun();
+        let yaw = sun.dot(right).atan2(sun.dot(heading)).to_degrees();
+        let pitch = sun.dot(up).clamp(-1.0, 1.0).asin().to_degrees();
+        info!("sun from the spawn at --time: --yaw {yaw:.1} --pitch {pitch:.1}");
+    }
+    clock
+}
+
 /// Where the walker, and with it the column tier, is anchored.
 fn spawn_direction(launch: &Launch) -> Vec3 {
     let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
     if launch.tour && launch.view == "pole" {
         return Vec3::Y;
+    }
+    if launch.view == "seacave" {
+        // The tier has to be somewhere that HAS caves below sea level, and
+        // the spawn is seventy-four metres up. The shore is where the ground
+        // meets the waterline; `nearest_ground_near` is the same locator the
+        // change's measuring test uses, so the picture and the numbers are
+        // taken of one place.
+        if let Some(shore) = pbd_app::planet::nearest_ground_near(default, 0.5..4.0) {
+            info!(
+                "seacave spawn moved {:.0} m to the shore",
+                shore.dot(default).clamp(-1., 1.).acos() * PLANET_RADIUS
+            );
+            return shore;
+        }
     }
     if launch.spawn.as_deref() == Some("mouth") || launch.view == "mouth" {
         // The nearest worm that starts at the surface within a kilometre.
@@ -705,6 +765,19 @@ fn configure_camera(
 /// from inside rock nothing draws a face toward you, so the frame came back
 /// showing the whole world from impossible angles - which reads exactly like a
 /// renderer full of holes.
+/// Whether this capture view's camera is placed a schedule later, off the
+/// LIVE column tier, rather than from a direction and an altitude.
+///
+/// One list, because there were two and they disagreed: `seacave` was added
+/// to the one `cave_camera` reads and not to the one `capture_camera` reads,
+/// so BOTH spawned a camera and the frame came out of whichever won - a wide
+/// shot of the shore from four hundred metres up, with the cave camera
+/// standing in a chamber nobody photographed. `mouth` had been in the same
+/// state since it landed.
+fn placed_off_the_tier(view: &str) -> bool {
+    ["cave", "overhang", "mouth", "seacave"].contains(&view)
+}
+
 fn cave_camera(
     mut commands: Commands,
     launch: Res<Launch>,
@@ -713,9 +786,15 @@ fn cave_camera(
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
-    if !["cave", "overhang", "mouth"].contains(&launch.view.as_str()) {
+    if !placed_off_the_tier(&launch.view) {
         return;
     }
+    // The volumetric-water case is a chamber below sea level UNDER LAND: the
+    // column holds no water at all, so the pocket is air, and only a height
+    // field would call it sea. A pocket under the SEA is not it - the column
+    // there really does hold water over the rock - and the first cut of this
+    // pick took one, which came out as a frame of open ocean.
+    let dry_cave_below_the_sea = launch.view == "seacave";
     use pbd_core::column::{layer_altitude, layer_at};
     let tier = &fine.set.columns;
     let records = fine.set.finest_records();
@@ -785,6 +864,9 @@ fn cave_camera(
             let gap = roof - floor;
             let buried = surface - roof;
             if !(2.5..=12.0).contains(&gap) || !(4.0..=40.0).contains(&buried) {
+                continue;
+            }
+            if dry_cave_below_the_sea && (roof >= 0.0 || surface <= 0.0) {
                 continue;
             }
             let here = Vec3::from_slice(&records[index].direction_height[..3]);
@@ -890,8 +972,8 @@ fn photo_camera(
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
     }
-    // The two column-tier views are placed a schedule later, off the live tier.
-    if launch.view == "cave" || launch.view == "overhang" {
+    // The column-tier views are placed a schedule later, off the live tier.
+    if placed_off_the_tier(&launch.view) {
         return;
     }
     if launch.view == "river" {

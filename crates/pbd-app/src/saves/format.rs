@@ -23,15 +23,26 @@ use pbd_core::inventory::{Item, SLOTS, Slots, Stack, Tool};
 use pbd_core::terrain::Material;
 use serde::{Deserialize, Serialize};
 
-/// One line of the log: an edit, and what the player held once it was made.
+/// One line of the log: an edit, and what the player held once it was made,
+/// or a kit dealt, and what the player held once it was.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Record {
-    pub edit: Edit,
-    /// Absent on a line written before the hotbar rode the log. Such a line is
-    /// still a real edit, so it is kept: an older save loses the inventory it
-    /// never recorded and none of the world it did.
-    pub slots: Option<Slots>,
+pub enum Record {
+    Edit {
+        edit: Edit,
+        /// Absent on a line written before the hotbar rode the log. Such a
+        /// line is still a real edit, so it is kept: an older save loses the
+        /// inventory it never recorded and none of the world it did.
+        slots: Option<Slots>,
+    },
+    /// The starting kit's grants up to `version` were dealt into the hotbar,
+    /// which this line carries whole. A save opened behind the kit's version
+    /// is dealt what it missed, and this is what says it was, so it is never
+    /// dealt twice.
+    Kit { version: u32, slots: Slots },
 }
+
+/// The kit line's leading token, which no cell number can be.
+const KIT: &str = "kit";
 
 /// The material a saved code names, and the code it is saved as.
 ///
@@ -115,17 +126,49 @@ pub fn line_of(edit: Edit, slots: &Slots) -> String {
         edit.layer,
         material_code(edit.material)
     );
+    push_slots(&mut line, slots);
+    line
+}
+
+/// `kit version s0 s1 .. s9`, one line.
+pub fn kit_line_of(version: u32, slots: &Slots) -> String {
+    let mut line = format!("{KIT} {version}");
+    push_slots(&mut line, slots);
+    line
+}
+
+fn push_slots(line: &mut String, slots: &Slots) {
     for index in 0..SLOTS {
         line.push(' ');
         line.push_str(&stack_text(slots.get(index)));
     }
     line.push('\n');
-    line
+}
+
+/// The ten slot fields of a line, or `None` where there are not exactly ten.
+fn slots_of(carried: &[&str]) -> Option<Slots> {
+    if carried.len() != SLOTS {
+        return None;
+    }
+    let mut slots = Slots::new();
+    for (index, text) in carried.iter().enumerate() {
+        slots.set(index, stack_of(text)?);
+    }
+    Some(slots)
 }
 
 pub fn parse_line(line: &str) -> Option<Record> {
     let mut parts = line.split_whitespace();
-    let cell = parts.next()?.parse().ok()?;
+    let head = parts.next()?;
+    if head == KIT {
+        let version = parts.next()?.parse().ok()?;
+        let carried: Vec<&str> = parts.collect();
+        return Some(Record::Kit {
+            version,
+            slots: slots_of(&carried)?,
+        });
+    }
+    let cell = head.parse().ok()?;
     let layer = parts.next()?.parse().ok()?;
     let material = material_of(parts.next()?.parse().ok()?)?;
     let carried: Vec<&str> = parts.collect();
@@ -136,21 +179,14 @@ pub fn parse_line(line: &str) -> Option<Record> {
         // Three fields: a line from before the hotbar rode the log. A real
         // edit, and it claims no inventory.
         0 => None,
-        SLOTS => {
-            let mut slots = Slots::new();
-            for (index, text) in carried.iter().enumerate() {
-                slots.set(index, stack_of(text)?);
-            }
-            Some(slots)
-        }
-        // Anything between is a line that was being written when the power
-        // went out. Its edit looks intact and its hotbar is half there, and
-        // taking the edit alone would record the hole without the block that
-        // came out of it - which is the exact inconsistency the hotbar rides
-        // this line to prevent.
-        _ => return None,
+        // Anything between three and thirteen is a line that was being
+        // written when the power went out. Its edit looks intact and its
+        // hotbar is half there, and taking the edit alone would record the
+        // hole without the block that came out of it - which is the exact
+        // inconsistency the hotbar rides this line to prevent.
+        _ => Some(slots_of(&carried)?),
     };
-    Some(Record {
+    Some(Record::Edit {
         edit: Edit {
             cell,
             layer,
@@ -227,8 +263,34 @@ mod tests {
             material: Material::Air,
         };
         let record = parse_line(&line_of(edit, &kit())).expect("a line it just wrote");
-        assert_eq!(record.edit, edit);
-        assert_eq!(record.slots.as_ref(), Some(&kit()));
+        assert_eq!(
+            record,
+            Record::Edit {
+                edit,
+                slots: Some(kit())
+            }
+        );
+    }
+
+    /// A kit line carries the version dealt and the hotbar it was dealt
+    /// into, and comes back as exactly that; a kit line missing its hotbar
+    /// is a torn line and is skipped like any other.
+    #[test]
+    fn a_dealt_kit_survives_the_round_trip() {
+        let record = parse_line(&kit_line_of(2, &kit())).expect("a line it just wrote");
+        assert_eq!(
+            record,
+            Record::Kit {
+                version: 2,
+                slots: kit()
+            }
+        );
+        assert!(parse_line("kit 2").is_none(), "no hotbar");
+        assert!(parse_line("kit 2 b3,64").is_none(), "a partial hotbar");
+        assert!(
+            parse_line("kit x - - - - - - - - - -").is_none(),
+            "no version"
+        );
     }
 
     /// The three-field line is what the store wrote before the hotbar rode the
@@ -237,9 +299,12 @@ mod tests {
     #[test]
     fn a_line_from_before_the_hotbar_is_still_an_edit() {
         let record = parse_line("7 3 1").expect("three fields is the old line");
-        assert_eq!(record.edit.cell, 7);
-        assert_eq!(record.edit.material, Material::Stone);
-        assert!(record.slots.is_none(), "and claims no inventory");
+        let Record::Edit { edit, slots } = record else {
+            panic!("an edit line is an edit");
+        };
+        assert_eq!(edit.cell, 7);
+        assert_eq!(edit.material, Material::Stone);
+        assert!(slots.is_none(), "and claims no inventory");
     }
 
     /// A damaged line is skipped rather than guessed at, and the damage does

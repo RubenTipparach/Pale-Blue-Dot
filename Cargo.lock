@@ -3570,6 +3570,7 @@ dependencies = [
  "avian3d",
  "bevy",
  "bytemuck",
+ "naga",
  "pbd-core",
  "ron",
  "serde",

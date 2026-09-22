@@ -4,6 +4,10 @@ use pbd_core::{DQuat, orbit::CircularOrbit};
 #[derive(Component)]
 pub struct MoonOrbit(CircularOrbit);
 
+/// The star field, which is fixed in the system frame and turns with the sky.
+#[derive(Component)]
+pub struct Stars;
+
 pub fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -88,16 +92,30 @@ pub fn setup(
         })),
         bevy::camera::visibility::NoFrustumCulling,
         Transform::from_translation(offset),
+        Stars,
     ));
 }
 
+/// The moon on its orbit, in the system frame, carried into the planet's by
+/// the spin: it crosses the sky as the planet turns under it, as the sun does.
 pub fn move_moon(
     time: Res<pbd_app::SimulationClock>,
     frame: Res<pbd_app::PhysicsFrame>,
+    sun: Res<pbd_app::sky::Sun>,
     mut moons: Query<(&MoonOrbit, &mut Transform)>,
 ) {
+    let turn = sun.sky_rotation().as_dquat();
     for (orbit, mut transform) in &mut moons {
-        transform.translation = (orbit.0.sample(time.seconds).position - frame.0.origin).as_vec3();
+        let position = turn * orbit.0.sample(time.seconds).position;
+        transform.translation = (position - frame.0.origin).as_vec3();
+    }
+}
+
+/// The star field turns with the sky. One rotation, the sun's own, so a night
+/// in which the sun set and the stars stood still cannot be drawn.
+pub fn turn_stars(sun: Res<pbd_app::sky::Sun>, mut stars: Query<&mut Transform, With<Stars>>) {
+    for mut transform in &mut stars {
+        transform.rotation = sun.sky_rotation();
     }
 }
 

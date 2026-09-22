@@ -13,7 +13,12 @@
 //! node is still laid out and still PICKED, so an invisible panel goes on
 //! swallowing clicks over the middle of the screen for as long as it is shut.
 
-use bevy::{app::AppExit, prelude::*};
+use bevy::{
+    app::AppExit,
+    ecs::system::SystemParam,
+    input::keyboard::{Key, KeyboardInput},
+    prelude::*,
+};
 use pbd_app::controls::{BINDINGS, MenuOpen};
 use pbd_app::saves::{self, Slot, WorldSave};
 
@@ -31,7 +36,19 @@ pub enum Screen {
 impl Screen {
     /// One step back out. Settings to pause, pause to the world, and the world
     /// to the menu - which is what `Escape` does from wherever it is pressed.
-    fn back(self) -> Self {
+    ///
+    /// The saves page is the FRONT DOOR when the game opened on it: stepping
+    /// back from there goes into the open world, since a returning player
+    /// who presses nothing means "continue", and goes nowhere at all when no
+    /// world is open yet, since there is nothing to continue into.
+    fn back(self, front_door: bool, has_world: bool) -> Self {
+        if self == Screen::Saves && front_door {
+            return if has_world {
+                Screen::Playing
+            } else {
+                Screen::Saves
+            };
+        }
         match self {
             Screen::Playing => Screen::Pause,
             Screen::Pause => Screen::Playing,
@@ -59,7 +76,104 @@ pub enum MenuAction {
     /// Do not.
     Keep,
     New,
+    /// Put the keyboard in the name field.
+    EditName,
 }
+
+/// Whether the saves page is the screen the game opened on and no world has
+/// been chosen from it yet. Cleared by CONTINUE, LOAD and NEW WORLD, so a
+/// later visit through the pause menu steps back to the pause menu.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct FrontDoor(pub bool);
+
+/// The screen a launch opens on: what `--menu` names, else the saves page for
+/// a plain desktop launch, else the world. A launch that names its world, or
+/// takes a capture, does not want a menu in front of it.
+pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> Screen {
+    match menu {
+        Some("pause") => Screen::Pause,
+        Some("settings") => Screen::Settings,
+        Some("saves") => Screen::Saves,
+        _ if !world_named && !capture => Screen::Saves,
+        _ => Screen::Playing,
+    }
+}
+
+/// The longest name a world can be given. `saves::slot_id` derives a legal
+/// directory from anything; this only keeps the row readable.
+pub const NAME_MAX: usize = 32;
+
+/// The name field on the saves page: what has been typed, whether the
+/// keyboard is in it, and whether Enter asked for the world to be made.
+#[derive(Resource, Default, Clone, PartialEq, Eq, Debug)]
+pub struct NameField {
+    pub text: String,
+    pub focused: bool,
+    /// The field was typed in, so the page's prefill leaves it alone.
+    pub edited: bool,
+    /// Enter was pressed in the field; `press` makes the world.
+    pub submit: bool,
+}
+
+impl NameField {
+    /// One typed key. Characters and spaces go in up to `NAME_MAX`, Backspace
+    /// takes one off, and anything else is not text.
+    pub fn typed(&mut self, key: &Key) {
+        match key {
+            Key::Character(text) => {
+                for c in text.chars().filter(|c| !c.is_control()) {
+                    if self.text.chars().count() < NAME_MAX {
+                        self.text.push(c);
+                        self.edited = true;
+                    }
+                }
+            }
+            Key::Space => {
+                if self.text.chars().count() < NAME_MAX {
+                    self.text.push(' ');
+                    self.edited = true;
+                }
+            }
+            Key::Backspace => {
+                self.text.pop();
+                self.edited = true;
+            }
+            _ => {}
+        }
+    }
+
+    /// What the page shows in the field: the text, and a caret while the
+    /// keyboard is in it.
+    pub fn shown(&self) -> String {
+        if self.focused {
+            format!("{}_", self.text)
+        } else {
+            self.text.clone()
+        }
+    }
+
+    /// The name a world would be made with: what was typed, or the number
+    /// the page offered.
+    pub fn name(&self, worlds: usize) -> String {
+        let typed = self.text.trim();
+        if typed.is_empty() {
+            format!("World {}", worlds + 1)
+        } else {
+            typed.to_string()
+        }
+    }
+
+    /// Offer the next number unless the player has typed something.
+    pub fn prefill(&mut self, worlds: usize) {
+        if !self.edited {
+            self.text = format!("World {}", worlds + 1);
+        }
+    }
+}
+
+/// The name field's text node.
+#[derive(Component)]
+pub struct NameText;
 
 /// The slots as the screen last listed them, and which one is being asked
 /// about.
@@ -80,6 +194,17 @@ pub struct SaveIndex {
 /// than a button press can borrow at once.
 #[derive(Resource, Default)]
 pub struct LoadRequest(pub Option<Slot>);
+
+/// The saves page's own state, which a press reads and writes together: the
+/// list and what is asked about it, the load it asked for, whether it is the
+/// front door, and the name field.
+#[derive(SystemParam)]
+pub struct SavesPage<'w> {
+    pub index: ResMut<'w, SaveIndex>,
+    pub load: ResMut<'w, LoadRequest>,
+    pub front: ResMut<'w, FrontDoor>,
+    pub name: ResMut<'w, NameField>,
+}
 
 /// The part of the saves panel that is rebuilt when the list changes.
 #[derive(Component)]
@@ -347,6 +472,7 @@ fn since(then: u64) -> String {
 pub fn rebuild_saves(
     mut commands: Commands,
     index: Res<SaveIndex>,
+    name: Res<NameField>,
     open: Option<Res<WorldSave>>,
     lists: Query<Entity, With<SaveList>>,
 ) {
@@ -435,7 +561,9 @@ pub fn rebuild_saves(
                             ..default()
                         },
                     ));
-                    if !here {
+                    if here {
+                        small(line, "CONTINUE", MenuAction::Resume);
+                    } else {
                         small(line, "LOAD", MenuAction::Load(row));
                     }
                     small(line, "DELETE", MenuAction::Ask(row));
@@ -444,6 +572,47 @@ pub fn rebuild_saves(
             rows.spawn(Node {
                 height: px(6),
                 ..default()
+            });
+            // The name for a new world, typed in the game's own box: a
+            // native prompt over the window is the thing the inherited UI
+            // rule forbids. Prefilled with the number the page would have
+            // chosen, so Enter alone still makes one.
+            rows.spawn(Node {
+                column_gap: px(10),
+                align_items: AlignItems::Center,
+                ..default()
+            })
+            .with_children(|line| {
+                line.spawn((
+                    note("NAME".into(), Color::srgba(0.55, 0.75, 0.74, 0.85)),
+                    Node {
+                        width: px(50),
+                        ..default()
+                    },
+                ));
+                line.spawn((
+                    Button,
+                    Node {
+                        width: px(280),
+                        padding: UiRect::axes(px(9), px(4)),
+                        border: UiRect::all(px(1)),
+                        ..default()
+                    },
+                    BorderColor::all(EDGE),
+                    BackgroundColor(idle()),
+                    MenuAction::EditName,
+                ))
+                .with_children(|field| {
+                    field.spawn((
+                        Text::new(name.shown()),
+                        TextFont {
+                            font_size: 13.0,
+                            ..default()
+                        },
+                        TextColor(INK),
+                        NameText,
+                    ));
+                });
             });
             small_wide(rows, "NEW WORLD", MenuAction::New);
         });
@@ -489,12 +658,55 @@ fn small_wide(parent: &mut ChildSpawnerCommands, label: &str, action: MenuAction
 /// clearing it here means they never see it. That is why neither of them has
 /// an `Escape` arm any more: a key with one owner needs no agreement about who
 /// acts on it.
-pub fn toggle(mut keys: ResMut<ButtonInput<KeyCode>>, mut screen: ResMut<Screen>) {
+pub fn toggle(
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut screen: ResMut<Screen>,
+    front: Res<FrontDoor>,
+    save: Option<Res<WorldSave>>,
+) {
     if !keys.just_pressed(KeyCode::Escape) {
         return;
     }
     keys.clear_just_pressed(KeyCode::Escape);
-    *screen = screen.back();
+    let has_world = save.as_ref().is_some_and(|save| save.slot().is_some());
+    let next = screen.back(front.0, has_world);
+    if next != *screen {
+        *screen = next;
+    }
+}
+
+/// The keyboard while it is in the name field. Runs before `toggle` so that
+/// Escape leaves the field rather than the page, and before the world's
+/// readers, which stand down anyway while a menu is open.
+pub fn name_input(
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut typed: MessageReader<KeyboardInput>,
+    mut name: ResMut<NameField>,
+    mut texts: Query<&mut Text, With<NameText>>,
+) {
+    if !name.focused {
+        typed.clear();
+        return;
+    }
+    if keys.just_pressed(KeyCode::Escape) {
+        keys.clear_just_pressed(KeyCode::Escape);
+        name.focused = false;
+    }
+    if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::NumpadEnter) {
+        keys.clear_just_pressed(KeyCode::Enter);
+        keys.clear_just_pressed(KeyCode::NumpadEnter);
+        name.submit = true;
+    }
+    for event in typed.read() {
+        if event.state.is_pressed() {
+            name.typed(&event.logical_key);
+        }
+    }
+    if name.is_changed() {
+        for mut text in &mut texts {
+            text.0 = name.shown();
+        }
+    }
 }
 
 /// A press does what its own `MenuAction` says.
@@ -506,22 +718,39 @@ pub fn toggle(mut keys: ResMut<ButtonInput<KeyCode>>, mut screen: ResMut<Screen>
 pub fn press(
     mut screen: ResMut<Screen>,
     mut exit: MessageWriter<AppExit>,
-    mut index: ResMut<SaveIndex>,
-    mut load: ResMut<LoadRequest>,
+    mut page: SavesPage,
     save: Option<Res<WorldSave>>,
     rows: Query<(&Interaction, &MenuAction), Changed<Interaction>>,
 ) {
+    let SavesPage {
+        index,
+        load,
+        front,
+        name,
+    } = &mut page;
     let root = save.as_ref().map_or_else(
         || std::path::PathBuf::from(saves::ROOT),
         |s| s.root().into(),
     );
     let seed = pbd_app::planet::TERRAIN.seed;
-    for (interaction, action) in &rows {
-        if *interaction != Interaction::Pressed {
-            continue;
+    // Enter in the name field is the NEW WORLD button pressed.
+    let submitted = std::mem::take(&mut name.submit);
+    let pressed = rows
+        .iter()
+        .filter(|(interaction, _)| **interaction == Interaction::Pressed)
+        .map(|(_, action)| *action)
+        .chain(submitted.then_some(MenuAction::New));
+    for action in pressed {
+        // A press anywhere but the field takes the keyboard out of it.
+        if action != MenuAction::EditName && name.focused {
+            name.focused = false;
         }
-        match *action {
-            MenuAction::Resume => *screen = Screen::Playing,
+        match action {
+            MenuAction::EditName => name.focused = true,
+            MenuAction::Resume => {
+                front.0 = false;
+                *screen = Screen::Playing;
+            }
             MenuAction::Settings => *screen = Screen::Settings,
             // Only the screen: what is ON it is filled by `paint`, from the
             // one place that knows the screen has changed. Filling it here
@@ -530,7 +759,10 @@ pub fn press(
             // first run - and is this project's own lesson about two paths to
             // one job, where the one nobody presses is the one that is wrong.
             MenuAction::Saves => *screen = Screen::Saves,
-            MenuAction::Back => *screen = Screen::Pause,
+            MenuAction::Back => {
+                let has_world = save.as_ref().is_some_and(|s| s.slot().is_some());
+                *screen = screen.back(front.0, has_world);
+            }
             MenuAction::Quit => {
                 exit.write(AppExit::Success);
             }
@@ -560,11 +792,23 @@ pub fn press(
                 index.slots = saves::list(&root);
             }
             MenuAction::New => {
-                let name = format!("World {}", index.slots.len() + 1);
-                index.trouble = saves::create(&root, &name, seed)
-                    .err()
-                    .map(|error| format!("could not make a world: {error}"));
+                let wanted = name.name(index.slots.len());
                 index.asking = None;
+                match saves::create(&root, &wanted, seed) {
+                    Ok(slot) => {
+                        // Made, and entered: a world a player just named is
+                        // the world they want to be in.
+                        index.trouble = None;
+                        name.edited = false;
+                        name.focused = false;
+                        front.0 = false;
+                        load.0 = Some(slot);
+                        *screen = Screen::Playing;
+                    }
+                    Err(error) => {
+                        index.trouble = Some(format!("could not make a world: {error}"));
+                    }
+                }
                 index.slots = saves::list(&root);
             }
             MenuAction::Load(row) => {
@@ -580,6 +824,7 @@ pub fn press(
                     ));
                     continue;
                 }
+                front.0 = false;
                 load.0 = Some(slot);
                 *screen = Screen::Playing;
             }
@@ -595,6 +840,7 @@ pub fn paint(
     screen: Res<Screen>,
     mut menu: ResMut<MenuOpen>,
     mut index: ResMut<SaveIndex>,
+    mut name: ResMut<NameField>,
     save: Option<Res<WorldSave>>,
     mut panels: Query<(&Panel, &mut Node)>,
     mut rows: TouchedRows,
@@ -611,6 +857,9 @@ pub fn paint(
             index.slots = saves::list(&root);
             index.asking = None;
             index.trouble = None;
+            name.focused = false;
+            let worlds = index.slots.len();
+            name.prefill(worlds);
         }
         for (panel, mut node) in &mut panels {
             node.display = if panel.0 == *screen {
@@ -638,9 +887,62 @@ mod tests {
     /// the reason this is one enum rather than a pair of booleans.
     #[test]
     fn escape_steps_one_screen_at_a_time() {
-        assert_eq!(Screen::Playing.back(), Screen::Pause);
-        assert_eq!(Screen::Settings.back(), Screen::Pause);
-        assert_eq!(Screen::Pause.back(), Screen::Playing);
+        assert_eq!(Screen::Playing.back(false, true), Screen::Pause);
+        assert_eq!(Screen::Settings.back(false, true), Screen::Pause);
+        assert_eq!(Screen::Pause.back(false, true), Screen::Playing);
+        assert_eq!(Screen::Saves.back(false, true), Screen::Pause);
+    }
+
+    /// The saves page as the front door: back goes into the open world, and
+    /// nowhere when there is none to go into. Through the pause menu it is
+    /// the page it always was.
+    #[test]
+    fn the_front_door_steps_into_the_world_or_stays() {
+        assert_eq!(Screen::Saves.back(true, true), Screen::Playing);
+        assert_eq!(Screen::Saves.back(true, false), Screen::Saves);
+        assert_eq!(Screen::Saves.back(false, false), Screen::Pause);
+    }
+
+    /// A plain launch opens on the saves page; a named world or a capture
+    /// opens on the world; `--menu` names its own.
+    #[test]
+    fn a_plain_launch_opens_on_the_saves() {
+        assert_eq!(opening_screen(None, false, false), Screen::Saves);
+        assert_eq!(opening_screen(None, true, false), Screen::Playing);
+        assert_eq!(opening_screen(None, false, true), Screen::Playing);
+        assert_eq!(opening_screen(Some("pause"), true, true), Screen::Pause);
+        assert_eq!(opening_screen(Some("saves"), true, true), Screen::Saves);
+    }
+
+    /// The name field: typed text goes in, Backspace takes it out, the
+    /// prefill yields to anything typed, and an empty field makes the
+    /// numbered world the page offered.
+    #[test]
+    fn the_name_field_takes_typing_and_offers_a_number() {
+        let mut field = NameField::default();
+        field.prefill(2);
+        assert_eq!(field.text, "World 3");
+        assert_eq!(field.name(2), "World 3");
+        field.text.clear();
+        field.typed(&Key::Character("Ca".into()));
+        field.typed(&Key::Character("v".into()));
+        field.typed(&Key::Space);
+        field.typed(&Key::Character("e".into()));
+        field.typed(&Key::Backspace);
+        field.typed(&Key::Enter);
+        assert_eq!(field.text, "Cav ");
+        assert_eq!(field.name(2), "Cav");
+        field.prefill(5);
+        assert_eq!(field.text, "Cav ", "typed text is not overwritten");
+        field.focused = true;
+        assert_eq!(field.shown(), "Cav _");
+        for _ in 0..100 {
+            field.typed(&Key::Character("x".into()));
+        }
+        assert_eq!(field.text.chars().count(), NAME_MAX);
+        let mut blank = NameField::default();
+        blank.typed(&Key::Character("   ".into()));
+        assert_eq!(blank.name(0), "World 1", "blank is the offered number");
     }
 
     /// Anything but `Playing` holds the pointer. Written as the test of the

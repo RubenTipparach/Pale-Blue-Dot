@@ -19,3 +19,9 @@ pbd-core = { path = "../pbd-core" }
 bytemuck = { version = "1", features = ["derive"], optional = true }
 ron = "0.12"
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+# The shipped WGSL is parsed and validated on the CPU in tests, so a shader
+# that would fail in the pipeline cache fails the suite first. The same naga
+# wgpu already carries; a test-only dependency.
+naga = { version = "27", features = ["wgsl-in"] }

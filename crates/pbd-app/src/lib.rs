@@ -18,6 +18,9 @@ pub mod walking;
 #[cfg(feature = "desktop")]
 pub mod weather;
 
+#[cfg(test)]
+mod shader_tests;
+
 use std::time::Duration;
 
 use avian3d::prelude::*;

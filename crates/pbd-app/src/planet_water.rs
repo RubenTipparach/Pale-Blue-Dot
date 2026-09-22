@@ -20,6 +20,7 @@ use bevy::{
     prelude::*,
     render::{
         Render, RenderStartup, RenderSystems,
+        extract_resource::ExtractResource,
         render_graph::{
             NodeRunError, RenderGraphContext, RenderGraphExt, RenderLabel, ViewNode, ViewNodeRunner,
         },
@@ -80,21 +81,110 @@ pub(super) struct WaterView {
     bands: Vec4,
 }
 
+/// What the column tier says is at the camera's own cell: nothing, because
+/// there is no column there and the height field is the whole truth; air, so
+/// the camera is dry whatever its radius; or water, whose surface stands at
+/// this body radius.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum EyeWater {
+    #[default]
+    Unknown,
+    Air,
+    Water {
+        surface_radius: f32,
+    },
+}
+
+/// What the tier says is at the player's eye, published by the main world for
+/// the render world to shade with. The terrain is CPU-authoritative and this
+/// is one reader of it, extracted like every other derived fact.
+#[derive(Resource, Clone, Copy, Default, ExtractResource)]
+pub struct EyeWaterState(pub EyeWater);
+
 /// Which side of the surface the camera is on, from its body-local position:
-/// 0 dry, 0.5 straddling the surface band, 1 fully under. Over land it is dry
-/// whatever its radius, and the band is wide enough to hold the swell so the
-/// wave function is never evaluated a second time on the CPU.
-pub fn submersion(camera_body: Vec3, sea_radius: f32, band: f32) -> f32 {
-    if camera_body.length_squared() < 1e-6 || terrain::surface_height(camera_body) >= 0.0 {
+/// 0 dry, 0.5 straddling the surface band, 1 fully under. The band is wide
+/// enough to hold the swell so the wave function is never evaluated a second
+/// time on the CPU.
+///
+/// `eye` is the column's answer where there is a column. Without it the only
+/// question a height field can answer is "is the camera under sea level over
+/// a cell whose ground is", which drowns a camera standing in a dry cave
+/// carved below sea level.
+pub fn submersion(camera_body: Vec3, sea_radius: f32, band: f32, eye: EyeWater) -> f32 {
+    if camera_body.length_squared() < 1e-6 {
         return 0.0;
     }
+    let surface = match eye {
+        EyeWater::Air => return 0.0,
+        EyeWater::Water { surface_radius } => surface_radius,
+        // Off the tier there are no caves, so the ground's own height is the
+        // whole of it: over land, dry.
+        EyeWater::Unknown => {
+            if terrain::surface_height(camera_body) >= 0.0 {
+                return 0.0;
+            }
+            sea_radius
+        }
+    };
     let radius = camera_body.length();
-    if radius < sea_radius - band {
+    if radius < surface - band {
         1.0
-    } else if radius <= sea_radius + band {
+    } else if radius <= surface + band {
         0.5
     } else {
         0.0
+    }
+}
+
+/// Publish what the tier says is at the active camera's eye.
+///
+/// In the MAIN world, because that is where the authoritative columns live;
+/// the render world reads the extracted answer. The camera rather than the
+/// walker, because a flying player has an eye too and the sheet is composited
+/// for whatever is looking.
+pub fn publish_eye_water(
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    frame: Res<PlanetRenderFrame>,
+    contact: Option<Res<crate::planet::PlanetContact>>,
+    fine: Option<Res<crate::planet::PlanetFine>>,
+    mut eye: ResMut<EyeWaterState>,
+) {
+    let answer = eye_water(&cameras, &frame, contact.as_deref(), fine.as_deref());
+    if eye.0 != answer {
+        eye.0 = answer;
+    }
+}
+
+fn eye_water(
+    cameras: &Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    frame: &PlanetRenderFrame,
+    contact: Option<&crate::planet::PlanetContact>,
+    fine: Option<&crate::planet::PlanetFine>,
+) -> EyeWater {
+    let (Some(contact), Some(fine)) = (contact, fine) else {
+        return EyeWater::Unknown;
+    };
+    let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
+        return EyeWater::Unknown;
+    };
+    let body = transform.translation() - frame.center.as_vec3();
+    let Some(direction) = body.try_normalize() else {
+        return EyeWater::Unknown;
+    };
+    let Some(column) = contact
+        .finest_cell(direction)
+        .and_then(|record| fine.set.columns.column(record))
+    else {
+        return EyeWater::Unknown;
+    };
+    let altitude = body.length() - terrain::PLANET_RADIUS;
+    match column.water_surface(altitude) {
+        Some(surface) => EyeWater::Water {
+            surface_radius: terrain::PLANET_RADIUS + surface,
+        },
+        // Rock reads as air: a camera inside a wall sees nothing, and what it
+        // must not do is fill with sea.
+        None => EyeWater::Air,
     }
 }
 
@@ -317,6 +407,7 @@ fn prepare_water_views(
     clock: Res<PlanetClock>,
     sun: Res<crate::sky::Sun>,
     frame: Res<PlanetRenderFrame>,
+    eye: Res<EyeWaterState>,
     mut views: Query<(
         Entity,
         &ExtractedView,
@@ -336,7 +427,7 @@ fn prepare_water_views(
         );
         let sea_radius = terrain::PLANET_RADIUS - settings.depth_offset_m;
         let band = settings.swell_amplitude_m + settings.partial_band_m;
-        let state = submersion(camera, sea_radius, band);
+        let state = submersion(camera, sea_radius, band, eye.0);
         let (mut was_under, mut emerge_until) = existing
             .as_ref()
             .map(|gpu| (gpu.was_under, gpu.emerge_until))
@@ -637,6 +728,35 @@ mod tests {
         );
     }
 
+    /// The column has the last word: air at the eye is dry at any depth,
+    /// which is the dry cave below sea level, and water at the eye is read
+    /// against ITS OWN surface, which is what lets a pool be shallower than
+    /// the sea.
+    #[test]
+    fn the_column_at_the_eye_decides_and_a_dry_cave_is_dry() {
+        let sea = terrain::PLANET_RADIUS - 0.5;
+        let band = 1.3;
+        let cells = super::super::topology::dual_sphere(3);
+        let ocean = cells
+            .iter()
+            .find(|c| terrain::surface_height(c.direction) < 0.0)
+            .unwrap()
+            .direction;
+        // Twenty metres under the sea's own surface, over a cell whose ground
+        // is under it: the height field drowns it and the column does not.
+        let deep = ocean * (sea - 20.0);
+        assert_eq!(submersion(deep, sea, band, EyeWater::Unknown), 1.0);
+        assert_eq!(submersion(deep, sea, band, EyeWater::Air), 0.0);
+        // A pool whose surface is ten metres down: over it is dry, in it is
+        // under, and the band straddles its own surface rather than the sea's.
+        let pool = EyeWater::Water {
+            surface_radius: sea - 10.0,
+        };
+        assert_eq!(submersion(ocean * (sea - 5.0), sea, band, pool), 0.0);
+        assert_eq!(submersion(ocean * (sea - 10.5), sea, band, pool), 0.5);
+        assert_eq!(submersion(deep, sea, band, pool), 1.0);
+    }
+
     #[test]
     fn submersion_is_dry_over_land_and_a_tri_state_over_water() {
         let sea = terrain::PLANET_RADIUS - 0.5;
@@ -653,12 +773,27 @@ mod tests {
             .find(|c| terrain::surface_height(c.direction) < 0.0)
             .unwrap()
             .direction;
-        assert_eq!(submersion(land * (sea - 10.0), sea, band), 0.0);
-        assert_eq!(submersion(ocean * (sea + 10.0), sea, band), 0.0);
-        assert_eq!(submersion(ocean * (sea + 1.0), sea, band), 0.5);
-        assert_eq!(submersion(ocean * (sea - 1.0), sea, band), 0.5);
-        assert_eq!(submersion(ocean * (sea - 3.0), sea, band), 1.0);
-        assert_eq!(submersion(Vec3::ZERO, sea, band), 0.0);
+        assert_eq!(
+            submersion(land * (sea - 10.0), sea, band, EyeWater::Unknown),
+            0.0
+        );
+        assert_eq!(
+            submersion(ocean * (sea + 10.0), sea, band, EyeWater::Unknown),
+            0.0
+        );
+        assert_eq!(
+            submersion(ocean * (sea + 1.0), sea, band, EyeWater::Unknown),
+            0.5
+        );
+        assert_eq!(
+            submersion(ocean * (sea - 1.0), sea, band, EyeWater::Unknown),
+            0.5
+        );
+        assert_eq!(
+            submersion(ocean * (sea - 3.0), sea, band, EyeWater::Unknown),
+            1.0
+        );
+        assert_eq!(submersion(Vec3::ZERO, sea, band, EyeWater::Unknown), 0.0);
     }
 
     #[test]

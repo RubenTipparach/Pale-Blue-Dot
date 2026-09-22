@@ -212,6 +212,35 @@ impl FineSet {
         &self.levels[3]
     }
 
+    /// The level this set draws a direction at: the finest band whose
+    /// COMPLETE radius reaches it, or `None` where only the base draws. The
+    /// same `complete` array the partition uploads, so what this answers is
+    /// what the GPU is drawing, not what the nominal bands promise.
+    pub fn level_at(&self, direction: Vec3) -> Option<u8> {
+        let metres = direction
+            .normalize_or(Vec3::Y)
+            .dot(self.anchor)
+            .clamp(-1.0, 1.0)
+            .acos()
+            * PLANET_RADIUS;
+        FINE_LEVELS
+            .iter()
+            .zip(&self.complete)
+            .rev()
+            .find(|(_, radius)| metres <= **radius)
+            .map(|(level, _)| *level)
+    }
+
+    /// Great-circle metres from this set's anchor to a direction.
+    pub fn metres_from_anchor(&self, direction: Vec3) -> f32 {
+        direction
+            .normalize_or(Vec3::Y)
+            .dot(self.anchor)
+            .clamp(-1.0, 1.0)
+            .acos()
+            * PLANET_RADIUS
+    }
+
     /// Make one cell's record agree with the column under it, after an edit.
     ///
     /// The GPU rebuilds the geometry from what it is sent, so what is sent has
@@ -395,9 +424,47 @@ pub struct PlanetFine {
     pub version: u64,
 }
 
+/// What the streaming is doing under the player, for the HUD and for the
+/// error an edit logs when it finds nothing to edit. A player who has outrun
+/// the fine set reads it off the screen instead of inferring it from a wall
+/// that vanishes.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq)]
+pub struct NearField {
+    /// The level drawing the ground under the camera; `None` is the base.
+    pub level: Option<u8>,
+    /// Whether the cell under the camera has a column, which is the only
+    /// state in which it can be dug or built on.
+    pub column: bool,
+    /// Great-circle metres from the camera to the resident set's anchor.
+    pub from_anchor_m: f32,
+    /// Seconds the in-flight rebuild has been running, if one is.
+    pub rebuild_s: Option<f32>,
+    /// Columns resident in the tier.
+    pub columns: usize,
+}
+
+impl NearField {
+    /// One line for the HUD.
+    pub fn line(&self) -> String {
+        let level = self
+            .level
+            .map_or("L7 base".to_string(), |level| format!("L{level}"));
+        let column = if self.column { "column" } else { "NO COLUMN" };
+        let rebuild = self
+            .rebuild_s
+            .map_or(String::new(), |s| format!(" | rebuilding {s:.1} s"));
+        format!(
+            "underfoot {level}, {column} | {:.0} m from anchor | {} columns{rebuild}",
+            self.from_anchor_m, self.columns
+        )
+    }
+}
+
 #[derive(Resource, Default)]
 pub struct LodRefresh {
     task: Option<Task<FineSet>>,
+    /// When the in-flight task was spawned.
+    started: Option<std::time::Instant>,
     /// Rebuild the tier whatever the player has or has not walked.
     ///
     /// The distance rule answers "has the player left the tier", which is the
@@ -426,6 +493,14 @@ impl LodRefresh {
     pub fn force(&mut self) {
         self.force = true;
     }
+
+    /// How long the in-flight rebuild has been running, if one is.
+    pub fn in_flight_s(&self) -> Option<f32> {
+        self.task
+            .as_ref()
+            .and(self.started)
+            .map(|started| started.elapsed().as_secs_f32())
+    }
 }
 
 /// Rebuild the fine set on the compute pool once the player has walked
@@ -444,11 +519,36 @@ pub fn refresh_lod(
     mut refresh: ResMut<LodRefresh>,
     mut contact: ResMut<super::PlanetContact>,
     edits: Res<crate::saves::WorldSave>,
+    mut near: ResMut<NearField>,
 ) {
+    let direction = player_direction(&cameras, frame.center.as_vec3());
+    if let Some(direction) = direction {
+        let column = contact
+            .finest_cell(direction)
+            .is_some_and(|record| fine.set.columns.column(record).is_some());
+        let readout = NearField {
+            level: fine.set.level_at(direction),
+            column,
+            from_anchor_m: fine.set.metres_from_anchor(direction),
+            rebuild_s: refresh.in_flight_s(),
+            columns: fine.set.columns.columns.len(),
+        };
+        if *near != readout {
+            *near = readout;
+        }
+    }
     if let Some(task) = refresh.task.as_mut() {
         if let Some(set) = block_on(poll_once(task)) {
+            let took = refresh.in_flight_s().unwrap_or(0.0);
             refresh.task = None;
+            refresh.started = None;
             let set = Arc::new(set);
+            let behind = direction.map_or(0.0, |d| set.metres_from_anchor(d));
+            info!(
+                "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor",
+                fine.version + 1,
+                set.columns.columns.len()
+            );
             contact.set_fine(&set);
             commands.insert_resource(PlanetFine {
                 set,
@@ -457,10 +557,10 @@ pub fn refresh_lod(
         }
         return;
     }
-    let Some(direction) = player_direction(&cameras, frame.center.as_vec3()) else {
+    let Some(direction) = direction else {
         return;
     };
-    let moved = direction.dot(fine.set.anchor).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
+    let moved = fine.set.metres_from_anchor(direction);
     if refresh.force || moved > REGEN_DISTANCE_M {
         refresh.force = false;
         let settings = settings.clone();
@@ -468,6 +568,7 @@ pub fn refresh_lod(
         // a set built without them would quietly undig every hole the moment
         // the player walked far enough.
         let made = edits.edits.clone();
+        refresh.started = Some(std::time::Instant::now());
         refresh.task = Some(
             AsyncComputeTaskPool::get()
                 .spawn(async move { generate_fine(direction, &settings, &made) }),
@@ -608,6 +709,185 @@ mod tests {
             }
         }
         assert!(checked > 100, "{checked} shared cells checked");
+    }
+}
+
+#[cfg(test)]
+mod near_field_tests {
+    use super::*;
+
+    fn set_with_bands(anchor: Vec3, complete: [f32; 4]) -> FineSet {
+        FineSet {
+            anchor,
+            levels: Default::default(),
+            finest_neighbors: Vec::new(),
+            finest_radius: 0.0,
+            complete,
+            columns: ColumnTier::empty(),
+        }
+    }
+
+    fn metres_away(anchor: Vec3, metres: f32) -> Vec3 {
+        let axis = anchor.any_orthonormal_vector();
+        Quat::from_axis_angle(axis, metres / PLANET_RADIUS) * anchor
+    }
+
+    #[test]
+    fn the_level_underfoot_is_the_finest_complete_band_that_reaches_it() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let set = set_with_bands(anchor, BAND_M);
+        assert_eq!(set.level_at(anchor), Some(11));
+        assert_eq!(set.level_at(metres_away(anchor, 100.0)), Some(11));
+        assert_eq!(set.level_at(metres_away(anchor, 400.0)), Some(10));
+        assert_eq!(set.level_at(metres_away(anchor, 1_000.0)), Some(9));
+        assert_eq!(set.level_at(metres_away(anchor, 2_000.0)), Some(8));
+        assert_eq!(set.level_at(metres_away(anchor, 3_000.0)), None);
+        let away = set.metres_from_anchor(metres_away(anchor, 250.0));
+        assert!((away - 250.0).abs() < 0.5, "measured {away} m for 250 m");
+    }
+
+    #[test]
+    fn a_truncated_band_stops_answering_where_it_stops_being_complete() {
+        let anchor = Vec3::Y;
+        let set = set_with_bands(anchor, [2_400.0, 1_200.0, 600.0, 120.0]);
+        assert_eq!(set.level_at(metres_away(anchor, 200.0)), Some(10));
+    }
+
+    #[test]
+    fn the_readout_line_names_a_missing_column_loudly() {
+        let near = NearField {
+            level: Some(11),
+            column: false,
+            from_anchor_m: 97.0,
+            rebuild_s: Some(2.5),
+            columns: 3_105,
+        };
+        let line = near.line();
+        assert!(line.contains("L11") && line.contains("NO COLUMN"), "{line}");
+        assert!(
+            line.contains("97 m") && line.contains("rebuilding 2.5 s"),
+            "{line}"
+        );
+        assert_eq!(
+            NearField::default().line(),
+            "underfoot L7 base, NO COLUMN | 0 m from anchor | 0 columns"
+        );
+    }
+}
+
+#[cfg(test)]
+mod streaming_cost {
+    //! A measurement instrument for the near-field-streaming change: what a
+    //! fine-set rebuild costs, level by level and then the tier, and what one
+    //! column and the worm gather cost on their own. Ignored because it takes
+    //! seconds in release and tens of seconds in debug; run it with
+    //! `cargo test -p pbd-app --release --lib streaming_cost -- --ignored --nocapture`.
+    use super::*;
+    use crate::planet::terrain::{PLANET_RADIUS, TERRAIN};
+    use std::time::Instant;
+
+    #[test]
+    #[ignore]
+    fn what_the_near_field_costs_to_build() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        let edits = Edits::default();
+        let mut lattice = Lattice::default();
+        let mut heights = Heights::default();
+        let mut finest = Vec::new();
+        let mut finest_neighbors = Vec::new();
+        let mut total_ms = 0.0;
+        for (k, &level) in FINE_LEVELS.iter().enumerate() {
+            let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(level);
+            let inner = if k + 1 < FINE_LEVELS.len() {
+                (BAND_M[k + 1] - margin).max(0.0)
+            } else {
+                0.0
+            };
+            let outer = BAND_M[k] + margin;
+            let started = Instant::now();
+            let cells =
+                lattice.cells_in_band(level, anchor, inner / PLANET_RADIUS, outer / PLANET_RADIUS);
+            let laid = started.elapsed().as_secs_f64() * 1000.;
+            let records: Vec<GpuCell> = cells
+                .iter()
+                .map(|local| {
+                    record(
+                        CellSource {
+                            direction: local.cell.direction,
+                            corners: &local.cell.corners,
+                            neighbor_directions: &local.neighbor_directions,
+                            level,
+                            owners: local.owners,
+                            id: stable_id(local),
+                        },
+                        &mut heights,
+                    )
+                })
+                .collect();
+            let recorded = started.elapsed().as_secs_f64() * 1000.;
+            total_ms += recorded;
+            eprintln!(
+                "level {level}: {} cells, lattice {laid:.0} ms, records {:.0} ms, {:.3} ms per cell",
+                cells.len(),
+                recorded - laid,
+                (recorded - laid) / cells.len().max(1) as f64
+            );
+            if level == FINEST_LEVEL {
+                finest_neighbors = cells
+                    .iter()
+                    .map(|local| {
+                        let mut ids = [u32::MAX; 6];
+                        for (id, &n) in ids.iter_mut().zip(&local.cell.neighbors) {
+                            *id = if n == usize::MAX { u32::MAX } else { n as u32 };
+                        }
+                        ids
+                    })
+                    .collect();
+                finest = records;
+            }
+        }
+        let started = Instant::now();
+        let field = settings.worms();
+        let region = pbd_core::worms::gather(&field, &TERRAIN, anchor, settings.reach_m);
+        let gathered = started.elapsed().as_secs_f64() * 1000.;
+        let started = Instant::now();
+        let tier = column::build(anchor, &mut finest, &finest_neighbors, &settings, &edits);
+        let built = started.elapsed().as_secs_f64() * 1000.;
+        total_ms += built;
+        eprintln!(
+            "tier: {} columns, worm gather {gathered:.1} ms, build (gather + columns + reconcile + \
+             relight) {built:.1} ms, {:.3} ms per column",
+            tier.columns.len(),
+            built / tier.columns.len().max(1) as f64
+        );
+        // One column on its own, as an on-demand edit would generate it: the
+        // mean over the tier's own directions, gather amortised away.
+        let started = Instant::now();
+        let mut generated = 0usize;
+        for cell in finest.iter().take(500) {
+            let direction = Vec3::from_slice(&cell.direction_height[..3]);
+            let column = pbd_core::column::generate_edited(
+                &region,
+                &field,
+                &TERRAIN,
+                direction,
+                edits.for_cell(cell.metadata[3]),
+            );
+            generated += usize::from(column.solid(0));
+        }
+        let single = started.elapsed().as_secs_f64() * 1000. / 500.;
+        eprintln!(
+            "one column, generated alone: {single:.3} ms (over 500; {generated} solid at the base)"
+        );
+        let started = Instant::now();
+        let whole = generate_fine(anchor, &settings, &edits);
+        let all = started.elapsed().as_secs_f64() * 1000.;
+        eprintln!(
+            "generate_fine whole: {all:.0} ms ({} records, tier {}), parts summed {total_ms:.0} ms",
+            whole.levels.iter().map(Vec::len).sum::<usize>(),
+            whole.columns.columns.len()
+        );
     }
 }
 

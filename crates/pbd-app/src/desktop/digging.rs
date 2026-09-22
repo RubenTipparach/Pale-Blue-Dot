@@ -11,8 +11,9 @@
 //! reached the disk is the failure `CLAUDE.md` names.
 
 use bevy::prelude::*;
-use pbd_app::planet::PLANET_RADIUS;
-use pbd_app::planet::{PlanetContact, PlanetFine};
+use pbd_app::planet::NearField;
+use pbd_app::planet::surface_height;
+use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
 use pbd_core::aim::{self, Sample};
 use pbd_core::column::{self, LAYERS};
@@ -45,6 +46,37 @@ fn sample_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<
         layer,
         solid: column.solid(layer),
     })
+}
+
+/// Why a point along the eye ray could not be sampled although it is inside
+/// the ground: the streaming has not put a column there. The march reads air
+/// where the sampler answers nothing, so without this a click into a hill
+/// the tier has not reached looks exactly like a click at the sky.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Unsampled {
+    /// The point is under the heightfield surface but no finest record covers
+    /// its direction: outside the resident fine set.
+    OffTheFineSet { depth_m: f32 },
+    /// A finest record covers it but the record has no column: outside the
+    /// tier, or the tier is still being built here.
+    NoColumn { cell: u32, depth_m: f32 },
+}
+
+/// What kept `sample_at` from answering at `point`, if the point is inside
+/// the ground and so should have had an answer.
+fn why_unsampled(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Unsampled> {
+    let direction = point.try_normalize()?;
+    let depth_m = surface_height(direction) - (point.length() - PLANET_RADIUS);
+    if depth_m <= 0.0 {
+        return None;
+    }
+    match contact.finest_cell(direction) {
+        None => Some(Unsampled::OffTheFineSet { depth_m }),
+        Some(record) => (fine.set.columns.column(record).is_none()).then(|| Unsampled::NoColumn {
+            cell: fine.set.finest_records()[record].metadata[3],
+            depth_m,
+        }),
+    }
 }
 
 /// The record index of a cell by its stable ID. The march answers in stable
@@ -105,15 +137,36 @@ pub fn apply_edit(
         slots,
     } = world;
     if layer == 0 || layer >= LAYERS {
+        info!("edit refused: layer {layer} is bedrock or above the world");
         return None;
     }
-    let record = record_of(fine, cell)?;
-    let was = {
-        let tier = &fine.set.columns;
-        let slot = *tier.slots.get(record)?;
-        tier.columns.get(slot)?.material(layer)
+    // The world is fully editable on foot, so an edit that finds no column
+    // under a cell the march already resolved is a streaming failure and is
+    // logged as one. The march only answers cells it sampled through a column,
+    // so either of these is the set having changed under the click.
+    let Some(record) = record_of(fine, cell) else {
+        error!(
+            "edit BLOCKED: cell {cell} is not in the resident fine set (version {}, {} columns)",
+            fine.version,
+            fine.set.columns.columns.len()
+        );
+        return None;
+    };
+    let Some(was) = fine
+        .set
+        .columns
+        .column(record)
+        .map(|column| column.material(layer))
+    else {
+        error!(
+            "edit BLOCKED: cell {cell} has no column in the tier (version {}, {} columns)",
+            fine.version,
+            fine.set.columns.columns.len()
+        );
+        return None;
     };
     if was == material {
+        info!("edit refused: cell {cell} layer {layer} is already {material:?}");
         return None;
     }
     // The move is made on a COPY first. What the log records is the hotbar
@@ -127,6 +180,7 @@ pub fn apply_edit(
         && let Some(column) = fine.set.columns.column(record)
         && pbd_app::planet::column::has_torch(column)
     {
+        info!("edit refused: cell {cell} already carries a torch");
         return None;
     }
     let mut moved = slots.0.clone();
@@ -137,6 +191,7 @@ pub fn apply_edit(
         Hands::Spend => {
             let index = moved.selected();
             if moved.take(index, 1) != 1 {
+                info!("edit refused: nothing in the selected slot to place");
                 return None;
             }
         }
@@ -150,6 +205,9 @@ pub fn apply_edit(
         },
         &moved,
     ) {
+        // The durable path refused it, so the world must not change either:
+        // an edit that shows and does not save is the worse of the two.
+        error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
         return None;
     }
     slots.0 = moved;
@@ -210,6 +268,7 @@ pub fn dig_and_place(
     mut slots: ResMut<super::slots::Hotbar>,
     mut aimed: ResMut<Aim>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
+    near: Res<NearField>,
 ) {
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return;
@@ -225,9 +284,28 @@ pub fn dig_and_place(
     }
     let eye = transform.translation();
     let look = transform.forward().as_vec3();
-    let target = aim::march(eye, look, |point| sample_at(&fine, &contact, point));
+    // The march reads "nothing" as air. Remember the first point it read that
+    // way INSIDE the ground, because a click that lands there is a click the
+    // world should have answered.
+    let mut unsampled = None;
+    let target = aim::march(eye, look, |point| {
+        let sample = sample_at(&fine, &contact, point);
+        if sample.is_none() && unsampled.is_none() {
+            unsampled = why_unsampled(&fine, &contact, point);
+        }
+        sample
+    });
     aimed.target = target;
+    let clicked =
+        buttons.just_pressed(MouseButton::Left) || buttons.just_pressed(MouseButton::Right);
     let Some(target) = target else {
+        if clicked && let Some(why) = unsampled {
+            error!(
+                "edit BLOCKED: the eye ray entered ground the world cannot answer for: {why:?}; \
+                 {}",
+                near.line()
+            );
+        }
         return;
     };
 
@@ -245,8 +323,8 @@ pub fn dig_and_place(
             Material::Air,
         ) {
             info!(
-                "dug {taken:?} from cell {} layer {}",
-                target.dig.cell, target.dig.layer
+                "dug {taken:?} from cell {} layer {}, fine set version {}",
+                target.dig.cell, target.dig.layer, fine.version
             );
         }
         return;
@@ -254,15 +332,18 @@ pub fn dig_and_place(
 
     if buttons.just_pressed(MouseButton::Right) {
         let Some(place) = target.place else {
+            info!("edit refused: no air along the ray to place into");
             return;
         };
         let Some(Item::Block(material)) = slots.held().map(|stack| stack.item) else {
+            info!("edit refused: the selected slot holds no block");
             return;
         };
         // A block may not be placed into the player. Sealing yourself into
         // rock is a world you cannot move in, and the walker's own feet and
         // eye are what say where you are.
         if occupies(eye, place) {
+            info!("edit refused: that cell is where the player stands");
             return;
         }
         if apply_edit(
@@ -280,8 +361,8 @@ pub fn dig_and_place(
         .is_some()
         {
             info!(
-                "placed {material:?} in cell {} layer {}",
-                place.cell, place.layer
+                "placed {material:?} in cell {} layer {}, fine set version {}",
+                place.cell, place.layer, fine.version
             );
         }
     }
@@ -368,21 +449,24 @@ pub fn scripted_dig(
         last = Some(target.dig);
         dug += 1;
     }
-    if let Some(bottom) = last.filter(|_| launch.place) {
-        apply_edit(
-            &mut Edited {
-                fine: &mut fine,
-                contact: &mut contact,
-                save: &mut edits,
-                slots: &mut slots,
-            },
-            // The harness has no player: the block it puts back comes from
-            // nowhere, as it did before the hands were part of the edit.
-            Hands::Empty,
-            bottom.cell,
-            bottom.layer + 1,
-            Material::Stone,
-        );
+    if let Some(bottom) = last.filter(|_| launch.place > 0) {
+        // A tower: N stones stacked on the hole. The harness has no player,
+        // so the blocks come from nowhere, as they did before the hands were
+        // part of the edit.
+        for step in 1..=launch.place as usize {
+            apply_edit(
+                &mut Edited {
+                    fine: &mut fine,
+                    contact: &mut contact,
+                    save: &mut edits,
+                    slots: &mut slots,
+                },
+                Hands::Empty,
+                bottom.cell,
+                bottom.layer + step,
+                Material::Stone,
+            );
+        }
     }
     // A torch on the ground under the camera, which is what `--torch` is for:
     // the place ray is the same one a dig uses, so the lamp lands in the air
