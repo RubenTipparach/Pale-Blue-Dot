@@ -3,6 +3,7 @@ mod hud;
 mod menu;
 mod scene;
 mod slots;
+mod weather_ui;
 
 use avian3d::prelude::*;
 use bevy::{
@@ -213,7 +214,10 @@ impl Launch {
                 "--spawn" => {
                     i += 1;
                     let spawn = args.get(i).expect("--spawn requires a place").clone();
-                    assert!(spawn == "mouth", "--spawn knows only mouth");
+                    assert!(
+                        spawn == "mouth" || spawn == "snow",
+                        "--spawn knows mouth and snow"
+                    );
                     result.spawn = Some(spawn);
                 }
                 "--frames" => {
@@ -500,6 +504,7 @@ pub fn run(args: &[String]) {
             slots::update,
             hud::near_field,
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
+            (weather_ui::drag, weather_ui::show).chain(),
             autosave,
             digging::dig_and_place,
             digging::scripted_dig,
@@ -724,6 +729,34 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
             );
             return shore;
         }
+    }
+    if launch.spawn.as_deref() == Some("snow") {
+        // The nearest dry land where the field's precipitation is snow, so a
+        // capture can photograph a snowfall: a Fibonacci sweep of the sphere,
+        // nearest first. A measurement instrument, like `--weather-at`.
+        let count = 20_000;
+        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+        let found = (0..count)
+            .map(|i| {
+                let y = 1.0 - 2.0 * (i as f32 + 0.5) / count as f32;
+                let r = (1.0 - y * y).max(0.0).sqrt();
+                let a = golden * i as f32;
+                Vec3::new(a.cos() * r, y, a.sin() * r)
+            })
+            .filter(|d| {
+                pbd_app::planet::surface_height(*d) > 1.0
+                    && pbd_core::weather::precip_kind(&pbd_app::planet::TERRAIN, *d)
+                        == pbd_core::weather::Precip::Snow
+            })
+            .max_by(|a, b| a.dot(default).total_cmp(&b.dot(default)));
+        if let Some(snow) = found {
+            info!(
+                "spawn moved {:.0} m to the nearest snowfield",
+                snow.dot(default).clamp(-1., 1.).acos() * PLANET_RADIUS
+            );
+            return snow;
+        }
+        warn!("no snowfield found; spawning at the default");
     }
     if launch.spawn.as_deref() == Some("mouth") || launch.view == "mouth" {
         // The nearest worm that starts at the surface within a kilometre.

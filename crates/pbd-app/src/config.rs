@@ -313,6 +313,17 @@ pub struct WeatherSettings {
     pub rain_streak_m: f32,
     /// Streak colour, display (sRGB) RGB as Tenebris authored it.
     pub rain_color: [f32; 3],
+    /// Snow: fall speed (m/s), flake half-size (m), sideways sway (m), and
+    /// colour (display sRGB). Tenebris's snow falls at 3 m/s.
+    pub snow_fall_mps: f32,
+    pub snow_size_m: f32,
+    pub snow_sway_m: f32,
+    pub snow_color: [f32; 3],
+    /// How many more flakes than streaks the near shower draws in snow.
+    pub snow_density: f32,
+    /// Flake opacity at the camera and at the edge of the shower disk.
+    pub snow_alpha_near: f32,
+    pub snow_alpha_far: f32,
     /// Streak alpha at the camera and at the edge of the shower disk.
     pub rain_alpha_near: f32,
     pub rain_alpha_far: f32,
@@ -354,6 +365,8 @@ pub struct WeatherSettings {
     /// Weight of the sky mirrored in a puddle, 0..1. Wet ground outside a
     /// puddle takes a quarter of it.
     pub rain_mirror_strength: f32,
+    /// Strength of the raindrop rings on grass against bare ground, 0..1.
+    pub rain_grass_rings: f32,
 
     // ---- Overcast: what the cover over the player does to the light. Names
     // and values are Tenebris's. Each is a fraction taken off (or, for the
@@ -388,16 +401,18 @@ pub struct WeatherSettings {
     pub cloud_base_dark: f32,
     /// The same at full cover: a storm's base is slate, not grey.
     pub cloud_storm_dark: f32,
+    /// Extinction at full cover, per metre, mixed in by cover like the
+    /// threshold: a storm is denser cloud, not only more of it.
+    pub cloud_storm_extinction: f32,
 
-    // ---- Rain seen from outside it: Tenebris's distant shafts and far
-    // curtains, on a lattice of cells fixed to the body.
-    /// Size of a rain cell, metres. One curtain per raining cell.
+    // ---- Rain near: Tenebris's shafts of streaks over every raining cell of
+    // a lattice fixed to the body, inside the detail range. Beyond it the rain
+    // is the volume below.
+    /// Size of a rain cell, metres.
     pub rain_cell_m: f32,
-    /// How far raining cells are drawn at all, metres.
-    pub rain_range_m: f32,
-    /// Cells nearer than this draw streaks; beyond it, one curtain, metres.
+    /// Cells nearer than this draw streaks, metres.
     pub rain_detail_range_m: f32,
-    /// The streak-to-curtain cross-fade band ending at the detail range, metres.
+    /// The band ending at the detail range over which streaks fade out, metres.
     pub rain_lod_blend_m: f32,
     /// Share of a cell's streaks kept at the far edge of the detail range.
     pub rain_lod_far_frac: f32,
@@ -412,9 +427,36 @@ pub struct WeatherSettings {
     /// Camera altitude above which no rain is drawn and none runs down the
     /// lens, metres. The storm still reads through clouds, overcast and haze.
     pub rain_lod_alt_m: f32,
-    /// Far curtain tint, display (sRGB) RGB, and its opacity multiplier.
-    pub rain_impostor_color: [f32; 3],
-    pub rain_impostor_alpha: f32,
+
+    // ---- Rain far: a volume marched per pixel between the camera and the
+    // ground, the sea or the cloud base, off a map of the field around the
+    // camera. See `openspec/changes/storm`.
+    /// Cells along a side of the precipitation map (at most 128).
+    pub rain_map_size: u32,
+    /// Size of a map cell, metres.
+    pub rain_map_cell_m: f32,
+    /// Extinction per metre of full rain.
+    pub rain_volume_density: f32,
+    /// How far along a ray the volume is marched, metres.
+    pub rain_volume_range_m: f32,
+    /// How much longer than wide a falling streak of the volume is.
+    pub rain_volume_stretch: f32,
+    /// The volume's colour, display (sRGB) RGB. Snow is `snow_color`.
+    pub rain_volume_color: [f32; 3],
+
+    // ---- Lightning: `pbd_core::weather::Lightning`.
+    /// One slot of the lightning clock, seconds; at most one strike each.
+    pub lightning_slot_s: f32,
+    /// Chance a slot strikes over the heaviest rain.
+    pub lightning_chance: f32,
+    /// Rain intensity below which nothing strikes.
+    pub lightning_storm_min: f32,
+    /// How long one strike's flashes last, seconds.
+    pub lightning_flash_s: f32,
+    /// Brightness a strike lights the cloud from inside with.
+    pub lightning_cloud: f32,
+    /// Brightness a strike lights the ground and the rain with.
+    pub lightning_ground: f32,
 }
 
 impl Default for WeatherSettings {
@@ -435,6 +477,13 @@ impl Default for WeatherSettings {
             rain_width_m: 0.012,
             rain_streak_m: 1.5,
             rain_color: [0.52, 0.62, 0.90],
+            snow_fall_mps: 3.0,
+            snow_size_m: 0.07,
+            snow_sway_m: 0.5,
+            snow_color: [0.93, 0.95, 1.0],
+            snow_density: 3.0,
+            snow_alpha_near: 0.95,
+            snow_alpha_far: 0.6,
             rain_alpha_near: 0.78,
             rain_alpha_far: 0.10,
             shower_radius_m: 18.0,
@@ -459,6 +508,7 @@ impl Default for WeatherSettings {
             rain_puddle_scale_m: 0.4,
             rain_puddle_share: 0.35,
             rain_mirror_strength: 1.0,
+            rain_grass_rings: 0.5,
             overcast_sun_dim: 0.72,
             overcast_amb_dim: 0.48,
             overcast_sky_blue_cut: 0.75,
@@ -472,8 +522,8 @@ impl Default for WeatherSettings {
             cloud_night_floor: 0.045,
             cloud_base_dark: 0.34,
             cloud_storm_dark: 0.12,
+            cloud_storm_extinction: 0.03,
             rain_cell_m: 60.0,
-            rain_range_m: 1400.0,
             rain_detail_range_m: 150.0,
             rain_lod_blend_m: 60.0,
             rain_lod_far_frac: 0.25,
@@ -481,8 +531,18 @@ impl Default for WeatherSettings {
             rain_cell_width_mult: 6.0,
             rain_max_cell_streaks: 9000,
             rain_lod_alt_m: 200.0,
-            rain_impostor_color: [0.55, 0.58, 0.62],
-            rain_impostor_alpha: 0.5,
+            rain_map_size: 64,
+            rain_map_cell_m: 50.0,
+            rain_volume_density: 0.003,
+            rain_volume_range_m: 2000.0,
+            rain_volume_stretch: 10.0,
+            rain_volume_color: [0.55, 0.58, 0.62],
+            lightning_slot_s: 7.0,
+            lightning_chance: 0.5,
+            lightning_storm_min: 0.75,
+            lightning_flash_s: 0.7,
+            lightning_cloud: 6.0,
+            lightning_ground: 0.8,
         }
     }
 }
@@ -562,7 +622,15 @@ impl Validated for WeatherSettings {
                 s.cloud_fog_add,
                 s.rain_fog_mult,
                 s.cloud_extinction,
-                s.rain_range_m,
+                s.cloud_storm_extinction,
+                s.rain_map_cell_m,
+                s.rain_volume_density,
+                s.rain_volume_range_m,
+                s.rain_volume_stretch,
+                s.lightning_slot_s,
+                s.lightning_flash_s,
+                s.lightning_cloud,
+                s.lightning_ground,
                 s.rain_detail_range_m,
                 s.rain_lod_blend_m,
                 s.rain_cell_density,
@@ -572,13 +640,23 @@ impl Validated for WeatherSettings {
         )?;
         finite("rain_flow_strength", &[s.rain_flow_strength])?;
         non_negative("rain_color", &s.rain_color)?;
-        non_negative("rain_impostor_color", &s.rain_impostor_color)?;
+        non_negative("snow_color", &s.snow_color)?;
+        positive("snow fall and size", &[s.snow_fall_mps, s.snow_size_m])?;
+        non_negative("snow_sway_m", &[s.snow_sway_m])?;
+        (0.0..=10.0)
+            .contains(&s.snow_density)
+            .then_some(())
+            .ok_or("snow_density must be within 0..=10")?;
+        non_negative("rain_volume_color", &s.rain_volume_color)?;
         for (name, value) in [
             ("rain_alpha_near", s.rain_alpha_near),
             ("rain_alpha_far", s.rain_alpha_far),
+            ("snow_alpha_near", s.snow_alpha_near),
+            ("snow_alpha_far", s.snow_alpha_far),
             ("rain_wet_darken", s.rain_wet_darken),
             ("rain_puddle_share", s.rain_puddle_share),
             ("rain_mirror_strength", s.rain_mirror_strength),
+            ("rain_grass_rings", s.rain_grass_rings),
             ("overcast_sun_dim", s.overcast_sun_dim),
             ("overcast_amb_dim", s.overcast_amb_dim),
             ("overcast_sky_blue_cut", s.overcast_sky_blue_cut),
@@ -589,7 +667,8 @@ impl Validated for WeatherSettings {
             ("cloud_base_dark", s.cloud_base_dark),
             ("cloud_storm_dark", s.cloud_storm_dark),
             ("rain_lod_far_frac", s.rain_lod_far_frac),
-            ("rain_impostor_alpha", s.rain_impostor_alpha),
+            ("lightning_chance", s.lightning_chance),
+            ("lightning_storm_min", s.lightning_storm_min),
         ] {
             unit(name, value)?;
         }
@@ -607,9 +686,15 @@ impl Validated for WeatherSettings {
         (s.rain_cell_m >= 1.0)
             .then_some(())
             .ok_or("rain_cell_m must be at least a metre")?;
-        (s.rain_lod_blend_m <= s.rain_detail_range_m && s.rain_detail_range_m <= s.rain_range_m)
+        (s.rain_map_size >= 2 && s.rain_map_size <= 128)
             .then_some(())
-            .ok_or("rain ranges must nest: blend <= detail range <= range")?;
+            .ok_or("rain_map_size must be within 2..=128")?;
+        (s.lightning_flash_s < s.lightning_slot_s)
+            .then_some(())
+            .ok_or("lightning_flash_s must be shorter than lightning_slot_s")?;
+        (s.rain_lod_blend_m <= s.rain_detail_range_m)
+            .then_some(())
+            .ok_or("rain_lod_blend_m must not exceed rain_detail_range_m")?;
         (s.rain_max_cell_streaks <= 100_000)
             .then_some(())
             .ok_or("rain_max_cell_streaks is capped at 100000")?;

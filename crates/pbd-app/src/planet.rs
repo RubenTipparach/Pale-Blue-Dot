@@ -423,7 +423,7 @@ struct PlanetParams {
     water_absorption: Vec4,
     // The colour submerged terrain converges to with depth.
     water_deep: Vec4,
-    // Ground wetness, rain intensity, cloud cover over the player, spare.
+    // Ground wetness, rain intensity, cloud cover over the player, lightning.
     weather: Vec4,
     // The terrain-wetness knobs from `weather.ron`, then the overcast ones.
     rain: [Vec4; 6],
@@ -823,7 +823,14 @@ fn prepare_views(
             water_absorption: Vec3::from_array(water_settings.absorption_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),
             water_deep: Vec3::from_array(water_settings.deep_color).extend(0.),
-            weather: Vec4::new(weather.wetness, weather.rain, weather.cover, 0.),
+            weather: Vec4::new(
+                weather.wetness,
+                weather.rain,
+                weather.cover,
+                // Lightning, as the ground takes it: the strike's brightness
+                // now times `lightning_ground`.
+                weather.flash.w * w.lightning_ground,
+            ),
             rain: [
                 Vec4::new(
                     w.rain_ripple_scale,
@@ -847,7 +854,7 @@ fn prepare_views(
                     w.rain_glint_strength,
                     w.rain_puddle_scale_m,
                     w.rain_puddle_share,
-                    0.,
+                    w.rain_grass_rings,
                 ),
                 Vec4::new(
                     w.overcast_sun_dim,

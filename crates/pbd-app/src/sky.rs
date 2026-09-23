@@ -101,7 +101,11 @@ impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<SkyMaterial>::default())
             .init_resource::<Sun>()
-            .add_systems(Startup, spawn_atmosphere)
+            .init_resource::<CloudNow>()
+            .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
+                CloudNow,
+            >::default())
+            .add_systems(Startup, (load_cloud_module, spawn_atmosphere))
             .add_systems(Update, (run_clock, follow_weather))
             .add_systems(
                 PostUpdate,
@@ -129,8 +133,47 @@ pub struct SkyParameters {
     /// weather.
     pub cloud_slab: Vec4,
     /// The threshold at full cover, how dark the underside goes at full cover,
-    /// and two spare lanes.
+    /// the extinction per metre at full cover, and how brightly lightning lights
+    /// the cloud from inside.
     pub cloud_storm: Vec4,
+    /// A lightning strike: where it is, body-local metres, and how bright it
+    /// is right now; zero between strikes.
+    pub cloud_flash: Vec4,
+}
+
+/// The cloud layer as the shaders' `pbd::clouds::CloudLayer` reads it, this
+/// frame: the four lanes the sky shell carries, copied out so the SEA can march
+/// the same clouds over itself. One writer (`follow_weather`, through
+/// `apply_weather`), two readers.
+#[derive(
+    Resource, Clone, Copy, Debug, Default, bevy::render::extract_resource::ExtractResource,
+)]
+pub struct CloudNow {
+    pub clouds: Vec4,
+    pub slab: Vec4,
+    pub storm: Vec4,
+    pub flash: Vec4,
+}
+
+impl CloudNow {
+    fn of(sky: &SkyParameters) -> Self {
+        Self {
+            clouds: sky.clouds,
+            slab: sky.cloud_slab,
+            storm: sky.cloud_storm,
+            flash: sky.cloud_flash,
+        }
+    }
+}
+
+/// `shaders/clouds.wgsl` is imported (`#import pbd::clouds`) rather than drawn,
+/// so nothing loads it unless this does; held for the app's life so the import
+/// always resolves.
+#[derive(Resource)]
+struct CloudModule(#[allow(dead_code)] Handle<Shader>);
+
+fn load_cloud_module(mut commands: Commands, assets: Res<AssetServer>) {
+    commands.insert_resource(CloudModule(assets.load("shaders/clouds.wgsl")));
 }
 
 /// The dome's clear-sky Rayleigh scale, Mie scale and sun radiance: what the
@@ -235,12 +278,14 @@ fn follow_weather(
     sun: Res<Sun>,
     shells: Query<&MeshMaterial3d<SkyMaterial>, With<PlanetAtmosphere>>,
     mut materials: ResMut<Assets<SkyMaterial>>,
+    mut now: ResMut<CloudNow>,
 ) {
     let seconds = clock.elapsed_secs();
     for material in &shells {
         if let Some(sky) = materials.get_mut(&material.0) {
             sky.parameters.cloud_slab.z = seconds;
-            apply_weather(&mut sky.parameters, &settings, weather.cover);
+            apply_weather(&mut sky.parameters, &settings, &weather);
+            *now = CloudNow::of(&sky.parameters);
             // The shell's sun rides the same clock everything else does; what
             // a moving sun changes is where the light comes FROM, and the
             // terminator the sky already draws turns that into a sunset.
@@ -253,7 +298,13 @@ fn follow_weather(
 /// `weather.ron`, the cover overhead, and the overcast's greying and dimming of
 /// the scattering and the sun. One function for the spawn and every frame
 /// after it, so the first frame is not a sky with no thresholds in it.
-fn apply_weather(sky: &mut SkyParameters, settings: &WeatherSettings, cover: f32) {
+fn apply_weather(
+    sky: &mut SkyParameters,
+    settings: &WeatherSettings,
+    weather: &crate::weather::Weather,
+) {
+    let cover = weather.cover;
+    sky.cloud_flash = weather.flash;
     sky.clouds = Vec4::new(
         CLOUD_RADIUS,
         settings.cloud_threshold_clear,
@@ -265,8 +316,8 @@ fn apply_weather(sky: &mut SkyParameters, settings: &WeatherSettings, cover: f32
     sky.cloud_storm = Vec4::new(
         settings.cloud_threshold_overcast,
         settings.cloud_storm_dark,
-        0.0,
-        0.0,
+        settings.cloud_storm_extinction,
+        settings.lightning_cloud,
     );
     // The same cover that dims the ground greys the dome, so the two cannot
     // disagree about the weather.
@@ -303,8 +354,9 @@ fn spawn_atmosphere(
         clouds: Vec4::ZERO,
         cloud_slab: Vec4::new(CLOUD_THICKNESS, 0.0, 0.0, 0.0),
         cloud_storm: Vec4::ZERO,
+        cloud_flash: Vec4::ZERO,
     };
-    apply_weather(&mut parameters, &weather_settings, weather.cover);
+    apply_weather(&mut parameters, &weather_settings, &weather);
     let material = materials.add(SkyMaterial { parameters });
     commands.spawn((
         Name::new("Planet atmosphere and cloud shell"),
@@ -353,6 +405,7 @@ mod tests {
                     clouds: Vec4::ZERO,
                     cloud_slab: Vec4::ZERO,
                     cloud_storm: Vec4::ZERO,
+                    cloud_flash: Vec4::ZERO,
                 },
             });
         let shell = app

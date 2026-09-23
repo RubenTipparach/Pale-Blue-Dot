@@ -27,6 +27,17 @@
     rain_width_m: 0.012,
     rain_streak_m: 1.5,
     rain_color: (0.52, 0.62, 0.90),
+    // Where the field's column is cold it snows: slow flakes that sway.
+    // Tenebris's fall speed.
+    snow_fall_mps: 3.0,
+    snow_size_m: 0.07,
+    snow_sway_m: 0.5,
+    snow_color: (0.93, 0.95, 1.0),
+    // Snow falls twenty times slower than rain, so the near shower draws this
+    // many times more flakes; and snow is opaque where rain is a streak.
+    snow_density: 3.0,
+    snow_alpha_near: 0.95,
+    snow_alpha_far: 0.6,
     rain_alpha_near: 0.78,
     rain_alpha_far: 0.10,
     shower_radius_m: 18.0,
@@ -56,6 +67,8 @@
     rain_puddle_scale_m: 0.4,
     rain_puddle_share: 0.35,
     rain_mirror_strength: 1.0,
+    // Raindrop rings fall on every wet upward face; on grass at this share.
+    rain_grass_rings: 0.5,
 
     // Overcast: the cover over the player dims the light, so the ground cannot
     // go stormy while the sun still shines on it. Tenebris's values.
@@ -77,15 +90,16 @@
     cloud_night_floor: 0.045,
     cloud_base_dark: 0.34,
     cloud_storm_dark: 0.12,
+    // A storm is denser cloud, not only more of it: extinction is mixed from
+    // cloud_extinction to this by cover, so a raining sky closes overhead.
+    cloud_storm_extinction: 0.03,
 
-    // Rain seen from outside it. Every raining cell within the range draws:
-    // streaks inside the detail range, thinning to the far fraction, and one
-    // grey curtain beyond it, cross-faded over the blend band. No rain and no
-    // lens drops above the altitude gate. Tenebris's values, except the cell
-    // and its density, which are its 30 m cell's 52 streaks per square metre
-    // on a body sixteen times the size.
+    // Rain near: every raining cell inside the detail range draws shafts of
+    // streaks, thinning to the far fraction and fading out over the blend
+    // band. No rain and no lens drops above the altitude gate. Tenebris's
+    // values, except the cell and its density, which are its 30 m cell's 52
+    // streaks per square metre on a body sixteen times the size.
     rain_cell_m: 60.0,
-    rain_range_m: 1400.0,
     rain_detail_range_m: 150.0,
     rain_lod_blend_m: 60.0,
     rain_lod_far_frac: 0.25,
@@ -93,6 +107,25 @@
     rain_cell_width_mult: 6.0,
     rain_max_cell_streaks: 9000,
     rain_lod_alt_m: 200.0,
-    rain_impostor_color: (0.55, 0.58, 0.62),
-    rain_impostor_alpha: 0.5,
+
+    // Rain far: a volume marched per pixel off a 64 x 64 map of the field in
+    // 50 m cells round the camera, falling as stretched, scrolling streaks.
+    // At full rain a kilometre of it is an optical depth of 3: a storm hides
+    // the far side of a valley, which is what makes it read as a storm.
+    rain_map_size: 64,
+    rain_map_cell_m: 50.0,
+    rain_volume_density: 0.003,
+    rain_volume_range_m: 2000.0,
+    rain_volume_stretch: 10.0,
+    rain_volume_color: (0.55, 0.58, 0.62),
+
+    // Lightning, off the field alone: a slot of this many seconds strikes at
+    // this chance over the heaviest rain past the storm threshold; a strike
+    // flickers for flash_s and lights the cloud and the ground by these.
+    lightning_slot_s: 7.0,
+    lightning_chance: 0.5,
+    lightning_storm_min: 0.75,
+    lightning_flash_s: 0.7,
+    lightning_cloud: 6.0,
+    lightning_ground: 0.8,
 )

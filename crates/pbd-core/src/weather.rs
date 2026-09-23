@@ -296,6 +296,120 @@ pub fn raining_cells(
     cells
 }
 
+/// A square map of precipitation around a point, for a renderer to draw rain
+/// as a volume: `size` x `size` cells of `cell_m` metres on the plane tangent
+/// to `anchor` (a unit direction) at `radius`, row by row along `v`, each the
+/// field's rain intensity at its centre, NEGATIVE where it snows, zero where
+/// it is dry. `u` and `v` are the plane's unit axes.
+///
+/// A point is carried onto the plane gnomonically (`anchor * radius + u * x +
+/// v * y`, normalised), which is also how a shader reads the map back.
+#[allow(clippy::too_many_arguments)]
+pub fn precipitation_map(
+    field: &WeatherField,
+    terrain: &TerrainConfig,
+    anchor: Vec3,
+    u: Vec3,
+    v: Vec3,
+    radius: f32,
+    size: usize,
+    cell_m: f32,
+    seconds: f32,
+) -> Vec<f32> {
+    let mut map = Vec::with_capacity(size * size);
+    let half = size as f32 * 0.5;
+    for row in 0..size {
+        for column in 0..size {
+            let x = (column as f32 + 0.5 - half) * cell_m;
+            let y = (row as f32 + 0.5 - half) * cell_m;
+            let direction = (anchor * radius + u * x + v * y).normalize();
+            let cell = cloud_cell(field, terrain, direction, seconds);
+            map.push(match (cell.raining, cell.precip) {
+                (true, Precip::Snow) => -cell.cover,
+                (true, _) => cell.cover,
+                _ => 0.0,
+            });
+        }
+    }
+    map
+}
+
+/// When and where lightning strikes. Time is cut into `slot_s` slots and each
+/// slot's hash decides whether it strikes, when inside the slot, and which of
+/// the heavily raining places it picks: a pure function of the weather time and
+/// the rain, so every client sees the same strike without being told.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lightning {
+    /// Length of one slot, seconds.
+    pub slot_s: f32,
+    /// Chance a slot strikes when the heaviest rain is at full.
+    pub chance: f32,
+    /// Rain intensity below which nothing strikes.
+    pub storm_min: f32,
+    /// How long one strike's flashes last, seconds.
+    pub flash_s: f32,
+}
+
+/// A strike under way: where (a unit direction) and how bright right now.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Strike {
+    pub direction: Vec3,
+    pub brightness: f32,
+}
+
+fn slot_hash(slot: i64, salt: u32) -> f32 {
+    let mut n = (slot as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15)
+        ^ u64::from(salt).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    n ^= n >> 31;
+    n = n.wrapping_mul(0x94d0_49bb_1331_11eb);
+    n ^= n >> 29;
+    (n >> 40) as f32 / (1u64 << 24) as f32
+}
+
+impl Lightning {
+    /// The strike under way at `seconds`, if any, among `places`: unit
+    /// directions and their rain intensity (negative for snow, which never
+    /// strikes here). Silent where nothing rains past `storm_min`.
+    pub fn strike(&self, seconds: f32, places: &[(Vec3, f32)]) -> Option<Strike> {
+        let slot_s = self.slot_s.max(self.flash_s + 0.01);
+        let heavy: Vec<Vec3> = places
+            .iter()
+            .filter(|(_, rain)| *rain >= self.storm_min)
+            .map(|(direction, _)| *direction)
+            .collect();
+        if heavy.is_empty() {
+            return None;
+        }
+        let strongest = places.iter().map(|(_, rain)| *rain).fold(0.0f32, f32::max);
+        let storm =
+            ((strongest - self.storm_min) / (1.0 - self.storm_min).max(1e-3)).clamp(0.0, 1.0);
+        let slot = (seconds / slot_s).floor() as i64;
+        if slot_hash(slot, 1) >= self.chance * (0.35 + 0.65 * storm) {
+            return None;
+        }
+        let start = slot as f32 * slot_s + slot_hash(slot, 2) * (slot_s - self.flash_s);
+        let t = seconds - start;
+        if !(0.0..=self.flash_s).contains(&t) {
+            return None;
+        }
+        let pick = ((slot_hash(slot, 3) * heavy.len() as f32) as usize).min(heavy.len() - 1);
+        Some(Strike {
+            direction: heavy[pick],
+            brightness: flicker(t / self.flash_s),
+        })
+    }
+}
+
+/// A strike's brightness over its life, 0..1 of it: a bright first stroke and
+/// two weaker return strokes, which is what makes a flash read as lightning
+/// rather than a lamp switched on.
+pub fn flicker(t: f32) -> f32 {
+    let pulse = |at: f32, width: f32| (-((t - at) / width).powi(2)).exp();
+    pulse(0.08, 0.06)
+        .max(0.55 * pulse(0.38, 0.07))
+        .max(0.8 * pulse(0.62, 0.08))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +496,70 @@ mod tests {
                 first = Some(d);
             }
         });
+    }
+
+    #[test]
+    fn the_precipitation_map_is_the_field_at_each_cell() {
+        let f = WeatherField {
+            moisture_boost: 0.6,
+            ..WeatherField::DEFAULT
+        };
+        let anchor = Vec3::new(0.8772, 0.4801, 0.0).normalize();
+        let u = anchor.any_orthonormal_vector();
+        let v = anchor.cross(u);
+        let (size, cell, radius) = (16, 50.0, 4800.0);
+        let map = precipitation_map(&f, &TERRAIN, anchor, u, v, radius, size, cell, 120.0);
+        assert_eq!(map.len(), size * size);
+        for row in 0..size {
+            for column in 0..size {
+                let x = (column as f32 + 0.5 - 8.0) * cell;
+                let y = (row as f32 + 0.5 - 8.0) * cell;
+                let d = (anchor * radius + u * x + v * y).normalize();
+                let c = cloud_cell(&f, &TERRAIN, d, 120.0);
+                let want = if !c.raining {
+                    0.0
+                } else if c.precip == Precip::Snow {
+                    -c.cover
+                } else {
+                    c.cover
+                };
+                assert_eq!(map[row * size + column], want);
+            }
+        }
+    }
+
+    #[test]
+    fn lightning_is_deterministic_and_silent_without_a_storm() {
+        let bolt = Lightning {
+            slot_s: 7.0,
+            chance: 0.6,
+            storm_min: 0.75,
+            flash_s: 0.7,
+        };
+        let d = Vec3::Y;
+        // Nothing heavy enough: never a strike.
+        let light = [(d, 0.5), (Vec3::X, 0.7)];
+        for i in 0..2000 {
+            assert_eq!(bolt.strike(i as f32 * 0.37, &light), None);
+        }
+        // A storm: strikes happen, the same ones every time, where it pours.
+        let storm = [(d, 1.0), (Vec3::X, 0.2)];
+        let mut struck = 0;
+        for i in 0..20_000 {
+            let t = i as f32 * 0.05;
+            let a = bolt.strike(t, &storm);
+            assert_eq!(a, bolt.strike(t, &storm));
+            if let Some(s) = a {
+                assert_eq!(s.direction, d, "only the heavy place is struck");
+                assert!((0.0..=1.0).contains(&s.brightness));
+                struck += 1;
+            }
+        }
+        assert!(
+            struck > 100,
+            "a full storm over 1000 s strikes: {struck} samples lit"
+        );
+        assert!(flicker(0.08) > 0.99 && flicker(1.0) < 0.05);
     }
 
     #[test]

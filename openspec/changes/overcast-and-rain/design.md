@@ -258,3 +258,64 @@ packs generated and edited columns and compares the two.
   sea: the water pass has no column runs to ask.
 - Rain is vertical. A wall at a mouth is wet exactly where the air in front of
   it is open, not where wind would drive rain in.
+
+## 6. Rain that is lit, and a storm that closes
+
+**The owner, on a night storm looked up at from inside it: "not sure what this
+is... supposed to be rain???? should be transparent kindof... also shouldn't be
+bright like this in daylight, rain clouds should also be like opaque more."**
+
+### What the picture is
+
+The far curtains, seen from inside the storm. Three faults, all mine:
+
+1. **The rain is unlit.** Curtains and streaks are a fixed display grey on an
+   unlit material, so a night storm draws them at the same brightness as noon,
+   and noon under full overcast is still lit as if the sun were out. Grey sheets
+   glowing against a black sky is what the picture shows.
+2. **The sheets have hard tops.** A curtain is a 300 m rectangle from the ground
+   to the cloud base. From inside a storm, every raining cell within 1.4 km is
+   drawn, and looking up shows the top edges of hundreds of them as a fan of
+   bands. Rain has no top edge: it fades into the cloud it falls from.
+3. **The storm does not close overhead.** At full cover, the vertical optical
+   depth through the slab's thin middle third is about 1.5, so a fifth of the
+   starlight gets through, and stars show through a raining sky.
+
+### The fix
+
+- **Rain takes the ground's sky light.** A curtain and a streak are lit by the
+  same diffuse sky as the ground: the day curve the terrain shader uses
+  (`smoothstep(-0.13, 0.20, sun elevation)`, rising from a night floor of 0.12),
+  dimmed by `overcast_amb_dim` under cover. That is one function, `rain_light`,
+  on the CPU, with a test that reads the shader and holds its day curve to the
+  same literals. At night the rain is near black; under a storm at noon it is
+  about half its clear-day grey.
+- **A curtain fades toward its top.** It is drawn as two rows, full opacity up
+  to `rain_curtain_solid` (0.35) of its height and fading to nothing at the
+  cloud base, so it hangs from the cloud instead of standing in front of it.
+- **A storm is denser, not only lower-thresholded.** A new
+  `cloud_storm_extinction`, mixed in by cover like the threshold, raises the
+  slab's extinction at full cover so a vertical crossing is opaque (target
+  optical depth over 4, under 2% of the light through).
+
+Measured before and after on the same frames: a night storm and a noon storm,
+level and looking up, inside the rain.
+
+## 7. Rain on the ground you can see
+
+**The owner: "I want to see the puddle shaders! ... I'm supposed to see rain
+drops on the ground when it's raining! ... I barely see puddles."**
+
+Section 2 put the rings only inside puddles, and grass never puddles, so the
+meadow the game starts in shows none. That was a wrong reading of "rings only in
+puddles": the complaint was that the rings were DARK LINES, and the Fresnel
+mirror already fixed that. The rings go back on every wet upward face, grass at
+`rain_grass_rings` of the strength; the mirror at full weight stays in puddles.
+
+And the puddles were rarer than the knob says. The mask is two octaves of value
+noise, which bunches round 0.5, and the threshold `1 - share * soak` treats it as
+uniform. Transcribed and sampled: 13.9% of a soaked floor at a share of 0.35,
+0.6% half soaked. The threshold becomes the mask's own quantile: its mean and
+spread are measured off the transcription and the threshold is
+`mean + spread * logit(1 - share * soak) / 1.702` (the logistic stand-in for the
+normal quantile). Held by re-measuring the transcription at a few shares.
