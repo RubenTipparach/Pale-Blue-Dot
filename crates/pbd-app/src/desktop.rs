@@ -68,6 +68,11 @@ pub struct Launch {
     pub spawn: Option<String>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// `--weather-at SECONDS` starts the weather field that far into its own
+    /// time, so a capture can be taken under a chosen sky: the spawn is a wet
+    /// meadow whose cover sits near 0.6 at launch, and the body's average is
+    /// 0.18. Moves the field only, not the sun or the sea.
+    pub weather_at: f32,
     /// `--dig-ahead` digs along the camera's LOOK rather than straight down.
     /// Digging down is right for proving the verb and useless for judging the
     /// result: the walker falls into its own pit and the eye ends up inside
@@ -120,6 +125,7 @@ impl Launch {
             height: None,
             spawn: None,
             rain: 0.0,
+            weather_at: 0.0,
             world: None,
             time: None,
             torch: false,
@@ -265,6 +271,16 @@ impl Launch {
                     assert!((0.0..=1.0).contains(&rain), "rain must be within 0..1");
                     result.rain = rain;
                 }
+                "--weather-at" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .expect("--weather-at requires seconds")
+                        .parse()
+                        .expect("invalid weather seconds");
+                    assert!(seconds.is_finite(), "weather seconds must be finite");
+                    result.weather_at = seconds;
+                }
                 "--verify-flight" => {}
                 unknown => panic!("unknown argument {unknown}; use --help"),
             }
@@ -392,7 +408,10 @@ pub fn run(args: &[String]) {
         PhysicsPlugins::default(),
         PaleBlueDotPlugin,
         ConfigPlugin,
-        WeatherPlugin { rain: launch.rain },
+        WeatherPlugin {
+            rain: launch.rain,
+            weather_at: launch.weather_at,
+        },
         PlanetPlugin,
         FlightViewPlugin,
         SkyPlugin,

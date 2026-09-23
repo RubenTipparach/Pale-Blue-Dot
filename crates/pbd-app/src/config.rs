@@ -311,7 +311,7 @@ pub struct WeatherSettings {
     pub rain_width_m: f32,
     /// Streak length, metres.
     pub rain_streak_m: f32,
-    /// Streak colour, linear RGB.
+    /// Streak colour, display (sRGB) RGB as Tenebris authored it.
     pub rain_color: [f32; 3],
     /// Streak alpha at the camera and at the edge of the shower disk.
     pub rain_alpha_near: f32,
@@ -344,11 +344,77 @@ pub struct WeatherSettings {
     pub rain_wave_speed: f32,
     /// Albedo multiplier when fully wet, 0..1.
     pub rain_wet_darken: f32,
-    /// Sky-light sheen on the tilt of the wet normal.
-    pub rain_sky_sheen: f32,
     /// Sun glint exponent and strength.
     pub rain_glint_power: f32,
     pub rain_glint_strength: f32,
+    /// Size of the noise cells puddles are cut from, metres.
+    pub rain_puddle_scale_m: f32,
+    /// Share of a flat, fully soaked face that stands in puddles, 0..1.
+    pub rain_puddle_share: f32,
+    /// Weight of the sky mirrored in a puddle, 0..1. Wet ground outside a
+    /// puddle takes a quarter of it.
+    pub rain_mirror_strength: f32,
+
+    // ---- Overcast: what the cover over the player does to the light. Names
+    // and values are Tenebris's. Each is a fraction taken off (or, for the
+    // haze, added on) at full cover, scaled linearly by the cover.
+    /// Direct sun on the ground, the water's sun specular and the wet glint.
+    pub overcast_sun_dim: f32,
+    /// Fill (sky ambient) on the ground.
+    pub overcast_amb_dim: f32,
+    /// Sky dome Rayleigh scattering: the blue goes grey.
+    pub overcast_sky_blue_cut: f32,
+    /// Sky dome Mie scattering, as a gain: the white haze comes up.
+    pub overcast_sky_haze: f32,
+    /// Sky dome sun radiance, which is also the sun disc.
+    pub overcast_sky_dim: f32,
+    /// Extra distance-haze density per unit cover.
+    pub cloud_fog_add: f32,
+    /// Distance-haze density multiplier in full rain.
+    pub rain_fog_mult: f32,
+
+    // ---- The cloud slab (sky_atmosphere.wgsl). Tuned against the share of
+    // the sky that is cloud at each cover; see the overcast-and-rain change.
+    /// Density threshold with no cover overhead: only denser noise is cloud.
+    pub cloud_threshold_clear: f32,
+    /// Density threshold at full cover, where the slab closes over.
+    pub cloud_threshold_overcast: f32,
+    /// How much a metre of full-density cloud absorbs, per metre. The optical
+    /// depth of a vertical crossing is this times the slab's thickness.
+    pub cloud_extinction: f32,
+    /// Cloud brightness with the sun down, 0..1.
+    pub cloud_night_floor: f32,
+    /// How bright a cloud's self-shadowed underside is in fair weather, 0..1.
+    pub cloud_base_dark: f32,
+    /// The same at full cover: a storm's base is slate, not grey.
+    pub cloud_storm_dark: f32,
+
+    // ---- Rain seen from outside it: Tenebris's distant shafts and far
+    // curtains, on a lattice of cells fixed to the body.
+    /// Size of a rain cell, metres. One curtain per raining cell.
+    pub rain_cell_m: f32,
+    /// How far raining cells are drawn at all, metres.
+    pub rain_range_m: f32,
+    /// Cells nearer than this draw streaks; beyond it, one curtain, metres.
+    pub rain_detail_range_m: f32,
+    /// The streak-to-curtain cross-fade band ending at the detail range, metres.
+    pub rain_lod_blend_m: f32,
+    /// Share of a cell's streaks kept at the far edge of the detail range.
+    pub rain_lod_far_frac: f32,
+    /// Streaks per square metre of a raining cell at the camera.
+    pub rain_cell_density: f32,
+    /// Width multiplier on a cell streak at the detail range over a near-shower
+    /// streak, reached linearly from one at the camera, so a shaft a hundred
+    /// metres off is not all sub-pixel and one beside you is not a pole.
+    pub rain_cell_width_mult: f32,
+    /// Cap on cell streaks per frame.
+    pub rain_max_cell_streaks: u32,
+    /// Camera altitude above which no rain is drawn and none runs down the
+    /// lens, metres. The storm still reads through clouds, overcast and haze.
+    pub rain_lod_alt_m: f32,
+    /// Far curtain tint, display (sRGB) RGB, and its opacity multiplier.
+    pub rain_impostor_color: [f32; 3],
+    pub rain_impostor_alpha: f32,
 }
 
 impl Default for WeatherSettings {
@@ -388,9 +454,35 @@ impl Default for WeatherSettings {
             rain_wave_strength: 0.6,
             rain_wave_speed: 1.4,
             rain_wet_darken: 0.72,
-            rain_sky_sheen: 0.8,
             rain_glint_power: 24.0,
             rain_glint_strength: 0.5,
+            rain_puddle_scale_m: 0.4,
+            rain_puddle_share: 0.35,
+            rain_mirror_strength: 1.0,
+            overcast_sun_dim: 0.72,
+            overcast_amb_dim: 0.48,
+            overcast_sky_blue_cut: 0.75,
+            overcast_sky_haze: 0.6,
+            overcast_sky_dim: 0.6,
+            cloud_fog_add: 0.35,
+            rain_fog_mult: 1.6,
+            cloud_threshold_clear: 0.61,
+            cloud_threshold_overcast: 0.2016,
+            cloud_extinction: 0.0115,
+            cloud_night_floor: 0.045,
+            cloud_base_dark: 0.34,
+            cloud_storm_dark: 0.12,
+            rain_cell_m: 60.0,
+            rain_range_m: 1400.0,
+            rain_detail_range_m: 150.0,
+            rain_lod_blend_m: 60.0,
+            rain_lod_far_frac: 0.25,
+            rain_cell_density: 0.058,
+            rain_cell_width_mult: 6.0,
+            rain_max_cell_streaks: 9000,
+            rain_lod_alt_m: 200.0,
+            rain_impostor_color: [0.55, 0.58, 0.62],
+            rain_impostor_alpha: 0.5,
         }
     }
 }
@@ -464,20 +556,63 @@ impl Validated for WeatherSettings {
                 s.rain_wave_scale,
                 s.rain_wave_strength,
                 s.rain_wave_speed,
-                s.rain_sky_sheen,
                 s.rain_glint_power,
                 s.rain_glint_strength,
+                s.overcast_sky_haze,
+                s.cloud_fog_add,
+                s.rain_fog_mult,
+                s.cloud_extinction,
+                s.rain_range_m,
+                s.rain_detail_range_m,
+                s.rain_lod_blend_m,
+                s.rain_cell_density,
+                s.rain_cell_width_mult,
+                s.rain_lod_alt_m,
             ],
         )?;
         finite("rain_flow_strength", &[s.rain_flow_strength])?;
         non_negative("rain_color", &s.rain_color)?;
+        non_negative("rain_impostor_color", &s.rain_impostor_color)?;
         for (name, value) in [
             ("rain_alpha_near", s.rain_alpha_near),
             ("rain_alpha_far", s.rain_alpha_far),
             ("rain_wet_darken", s.rain_wet_darken),
+            ("rain_puddle_share", s.rain_puddle_share),
+            ("rain_mirror_strength", s.rain_mirror_strength),
+            ("overcast_sun_dim", s.overcast_sun_dim),
+            ("overcast_amb_dim", s.overcast_amb_dim),
+            ("overcast_sky_blue_cut", s.overcast_sky_blue_cut),
+            ("overcast_sky_dim", s.overcast_sky_dim),
+            ("cloud_threshold_clear", s.cloud_threshold_clear),
+            ("cloud_threshold_overcast", s.cloud_threshold_overcast),
+            ("cloud_night_floor", s.cloud_night_floor),
+            ("cloud_base_dark", s.cloud_base_dark),
+            ("cloud_storm_dark", s.cloud_storm_dark),
+            ("rain_lod_far_frac", s.rain_lod_far_frac),
+            ("rain_impostor_alpha", s.rain_impostor_alpha),
         ] {
             unit(name, value)?;
         }
+        (s.rain_puddle_scale_m > 0.0)
+            .then_some(())
+            .ok_or("rain_puddle_scale_m must be positive")?;
+        // A fog multiplier under one would CLEAR the air when it rains.
+        (s.rain_fog_mult >= 1.0)
+            .then_some(())
+            .ok_or("rain_fog_mult must be at least 1")?;
+        // Clear must be the higher threshold, or cover would thin the clouds.
+        (s.cloud_threshold_overcast <= s.cloud_threshold_clear)
+            .then_some(())
+            .ok_or("cloud_threshold_overcast must not exceed cloud_threshold_clear")?;
+        (s.rain_cell_m >= 1.0)
+            .then_some(())
+            .ok_or("rain_cell_m must be at least a metre")?;
+        (s.rain_lod_blend_m <= s.rain_detail_range_m && s.rain_detail_range_m <= s.rain_range_m)
+            .then_some(())
+            .ok_or("rain ranges must nest: blend <= detail range <= range")?;
+        (s.rain_max_cell_streaks <= 100_000)
+            .then_some(())
+            .ok_or("rain_max_cell_streaks is capped at 100000")?;
         (s.wet_fade_tau_s > 0.0)
             .then_some(())
             .ok_or("wet_fade_tau_s must be positive")?;

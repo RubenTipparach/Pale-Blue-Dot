@@ -217,6 +217,85 @@ pub fn rain_at(
     if cell.raining { cell.cover } else { 0.0 }
 }
 
+/// One cell of the rain lattice: a row from the north pole and a place along
+/// it, and the direction of its centre.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RainCell {
+    pub row: u32,
+    pub column: u32,
+    pub direction: Vec3,
+    /// What falls there.
+    pub precip: Precip,
+}
+
+/// The lattice rain is drawn on: rows of constant latitude `cell_angle` apart,
+/// each cut into as many cells as fit around it. It is FIXED TO THE BODY, the
+/// shape Tenebris's distant shafts use, so a curtain belongs to a place and
+/// does not slide as the camera moves; which cells rain is the field's answer
+/// and changes with time, the cells themselves never do.
+///
+/// Calls `visit` with every lattice cell whose centre is within `range_angle`
+/// of `eye`, in row then column order.
+pub fn lattice_near(
+    eye: Vec3,
+    cell_angle: f32,
+    range_angle: f32,
+    mut visit: impl FnMut(u32, u32, Vec3),
+) {
+    let Some(eye) = eye.try_normalize() else {
+        return;
+    };
+    let cell_angle = cell_angle.max(1e-5);
+    let cos_range = range_angle.min(std::f32::consts::PI).cos();
+    let rows = (std::f32::consts::PI / cell_angle).ceil() as u32;
+    let eye_theta = eye.y.clamp(-1.0, 1.0).acos();
+    for row in 0..rows {
+        let theta = (row as f32 + 0.5) * cell_angle;
+        if theta >= std::f32::consts::PI || (theta - eye_theta).abs() > range_angle + cell_angle {
+            continue;
+        }
+        let (sin_t, cos_t) = theta.sin_cos();
+        let columns = (std::f32::consts::TAU * sin_t.max(1e-4) / cell_angle)
+            .ceil()
+            .max(1.0) as u32;
+        let step = std::f32::consts::TAU / columns as f32;
+        for column in 0..columns {
+            let phi = (column as f32 + 0.5) * step;
+            let direction = Vec3::new(sin_t * phi.cos(), cos_t, sin_t * phi.sin());
+            if direction.dot(eye) >= cos_range {
+                visit(row, column, direction);
+            }
+        }
+    }
+}
+
+/// Every cell of the rain lattice within `range_angle` of `eye` that is raining
+/// now, which is where a curtain or a shaft is drawn: the field's own answer,
+/// sampled at each cell's centre, so a curtain stands exactly where the field
+/// says it rains and nowhere it does not.
+pub fn raining_cells(
+    field: &WeatherField,
+    terrain: &TerrainConfig,
+    eye: Vec3,
+    seconds: f32,
+    cell_angle: f32,
+    range_angle: f32,
+) -> Vec<RainCell> {
+    let mut cells = Vec::new();
+    lattice_near(eye, cell_angle, range_angle, |row, column, direction| {
+        let cell = cloud_cell(field, terrain, direction, seconds);
+        if cell.raining {
+            cells.push(RainCell {
+                row,
+                column,
+                direction,
+                precip: cell.precip,
+            });
+        }
+    });
+    cells
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,6 +314,74 @@ mod tests {
                 Vec3::new(a.cos() * r, y, a.sin() * r).normalize()
             })
             .collect()
+    }
+
+    #[test]
+    fn rain_is_drawn_on_every_raining_cell_in_view_and_no_dry_one() {
+        // 60 m cells within 1400 m on the 4,800 m body, the shipped shape.
+        let f = WeatherField {
+            moisture_boost: 0.35,
+            ..WeatherField::DEFAULT
+        };
+        let (cell, range) = (60.0 / 4800.0, 1400.0 / 4800.0);
+        let mut checked = 0;
+        for (i, eye) in dirs(12).into_iter().enumerate() {
+            let t = 311.0 * i as f32;
+            let drawn = raining_cells(&f, &TERRAIN, eye, t, cell, range);
+            // The brute force: every cell of the WHOLE lattice, asked directly.
+            let mut expected = Vec::new();
+            lattice_near(eye, cell, std::f32::consts::PI, |row, column, direction| {
+                if direction.dot(eye) >= range.cos()
+                    && cloud_cell(&f, &TERRAIN, direction, t).raining
+                {
+                    expected.push((row, column));
+                }
+            });
+            let got: Vec<_> = drawn.iter().map(|c| (c.row, c.column)).collect();
+            assert_eq!(
+                got, expected,
+                "eye {eye}: the curtains must be exactly the raining cells"
+            );
+            for c in &drawn {
+                assert!(cloud_cell(&f, &TERRAIN, c.direction, t).raining);
+                assert!(c.direction.dot(eye) >= range.cos() - 1e-6);
+            }
+            checked += expected.len();
+        }
+        assert!(
+            checked > 50,
+            "the forcing should put some rain in view; got {checked} cells"
+        );
+    }
+
+    #[test]
+    fn the_rain_lattice_is_fixed_to_the_body() {
+        // The same cell seen from two eyes is the same place, so a curtain
+        // does not slide as the camera moves.
+        let (cell, range) = (60.0 / 4800.0, 1400.0 / 4800.0);
+        let a = Vec3::new(0.3, 0.8, 0.2).normalize();
+        let b = Vec3::new(0.31, 0.79, 0.21).normalize();
+        let mut from_a = std::collections::BTreeMap::new();
+        lattice_near(a, cell, range, |r, c, d| {
+            from_a.insert((r, c), d);
+        });
+        let mut shared = 0;
+        lattice_near(b, cell, range, |r, c, d| {
+            if let Some(&other) = from_a.get(&(r, c)) {
+                assert_eq!(other, d);
+                shared += 1;
+            }
+        });
+        assert!(shared > 100);
+        // Neighbouring centres are about a cell apart, not a planet apart.
+        let mut first = None;
+        lattice_near(a, cell, cell * 1.5, |_, _, d| {
+            if let Some(f) = first {
+                assert!(d.angle_between(f) < cell * 3.0);
+            } else {
+                first = Some(d);
+            }
+        });
     }
 
     #[test]

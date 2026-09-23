@@ -442,13 +442,25 @@ fn prepare_water_views(
         was_under = state > 0.75;
         let aspect = view.viewport.z as f32 / view.viewport.w.max(1) as f32;
         let s = &settings;
+        // Rain on the lens only below the altitude the rain itself stops at:
+        // from 400 m up a storm reads through the clouds and the haze, not
+        // through drops on the glass. One gate for both, in `weather`.
+        let altitude = camera.length() - terrain::PLANET_RADIUS;
+        let lens_rain = if crate::weather::rain_drawn_at(altitude, &weather_settings) {
+            weather.rain
+        } else {
+            0.0
+        };
+        // The sea's sun specular takes the ground's overcast dim, so a storm
+        // does not glitter.
+        let sun_dim = 1.0 - weather.cover.clamp(0.0, 1.0) * weather_settings.overcast_sun_dim;
         let v3 = |c: [f32; 3]| Vec3::from_array(c);
         let params = WaterView {
             clip_from_local: clip_from_body,
             local_from_clip: clip_from_body.as_dmat4().inverse().as_mat4(),
             camera_time: camera.extend(clock.0 * s.time_scale),
             planet_center: Vec3::ZERO.extend(sea_radius),
-            sun: sun.direction().extend(s.specular_intensity),
+            sun: sun.direction().extend(s.specular_intensity * sun_dim),
             waves: Vec4::new(
                 s.swell_amplitude_m,
                 s.swell_frequency,
@@ -479,7 +491,7 @@ fn prepare_water_views(
             fog_night: FOG_NIGHT_SKY.extend(FOG_DENSITY_PER_M),
             fog_day: FOG_DAY_SKY.extend(FOG_HEIGHT_M),
             limits: Vec4::new(s.fog_max, TERMINATOR.0, TERMINATOR.1, FOG_MIX),
-            fx: Vec4::new(s.underwater_distortion, state, weather.rain, drips),
+            fx: Vec4::new(s.underwater_distortion, state, lens_rain, drips),
             lens: Vec4::new(
                 weather_settings.rain_lens_density,
                 weather_settings.rain_lens_refract,
@@ -493,7 +505,7 @@ fn prepare_water_views(
             lod: planet.lod.player.extend(super::lod::BASE_LEVEL as f32),
             bands: planet.lod.bands,
         };
-        let lens_needed = weather.rain > 0.001 || drips > 0.001;
+        let lens_needed = lens_rain > 0.001 || drips > 0.001;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);

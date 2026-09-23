@@ -137,3 +137,53 @@ seen from 400 m outside it.
 - Snow as its own particle; the field already answers where it falls.
 - Puddles that persist and drain on their own clock: today they follow
   `wetness`, which already lags the rain by `wet_fade_tau_s`.
+
+## What the build did differently, and why
+
+Written after the build, against the plan above, so a reader can tell the
+design from what shipped.
+
+- **The overcast dims the sky's share of the fill, not the floor under it.**
+  `AMBIENT_FLOOR` is what keeps a cave legible, and a cave is not darker for a
+  cloud over the hill it is dug into. The fill term is
+  `max(AMBIENT_FLOOR, sky_fill * (1 - cover * overcast_amb_dim))`.
+- **The ground's sky colour is one function, `ground_sky`**, used by the haze and
+  by the wet mirror, greyed by `overcast_sky_blue_cut` and dimmed by
+  `overcast_sky_dim` exactly as the dome is. That took the terrain uniform's
+  `rain` array from four vec4s to six. The hand-typed 416-byte size test that
+  guarded it is replaced by one that asks naga for the `Params` struct's size
+  in BOTH terrain shaders and holds the Rust struct to it.
+- **The haze thickens by rain intensity, not by a raining flag**:
+  `mix(1, rain_fog_mult, rain)`, so the edge of a shower does not step.
+- **Rain kept its near disk and gained a lattice beside it.** Widening the disk
+  to 150 m would have meant tens of thousands of streaks a frame to hold its
+  density, and it would still only ever draw rain falling on the camera. Rain
+  seen from outside it is Tenebris's shape instead: a lattice of 60 m cells
+  FIXED TO THE BODY (`pbd_core::weather::lattice_near`, so a curtain belongs to
+  a place and does not slide as the camera moves), every cell the field says is
+  raining within `rain_range_m` (1400 m) drawn as shafts of streaks inside the
+  detail range and one grey curtain beyond it, cross-faded over the blend band
+  (`cell_lod`). New knobs: `rain_cell_m`, `rain_range_m`, `rain_cell_density`
+  (Tenebris's 52 streaks per 30 m cell), `rain_cell_width_mult` (its 6x, reached
+  linearly from 1x at the camera, or a shaft beside you reads as a pole) and
+  `rain_max_cell_streaks` (its 9000 cap).
+- **The rain colours are display values.** Tenebris writes its colours straight
+  to the screen; Bevy's vertex colours are linear. Taken as linear, the 0.55
+  grey curtain drew at 196/255 and read as a white wall behind the trees, so
+  `weather.ron`'s rain colours are converted from sRGB on the way into the mesh.
+- **The lens gate also stops the sea's rain rings above 200 m**, because both
+  read one lane (`fx.z`). At that height a ring is sub-pixel.
+- **`cloud_extinction` is per metre.** The shader's hidden `* 0.012` is gone
+  and the knob carries it: the old 0.52 is 0.00624 per metre, an optical depth
+  of 1.6 over the 260 m slab.
+- **The weather was never sampled on foot.** `sample_field` asked for the one
+  `Camera3d`; walking keeps an inactive flight camera beside the walker's, so
+  the query failed every frame and the weather stayed at the launch forcing.
+  It takes the active camera now, as the shower already did, and logs the
+  cover under it whenever it moves a twentieth.
+- **`--weather-at SECONDS`** starts the field that far into its own time, a
+  measurement instrument: the spawn is a wet meadow at cover 0.59 at launch,
+  and the average sky the tuning targets (0.18) is there 2,520 s in.
+- **Curtains are feathered.** Hard-edged 60 m sheets stood as panels with
+  seams; each is now a cell and a half wide with its outer halves fading to
+  nothing, so neighbours blend into one wall of rain.

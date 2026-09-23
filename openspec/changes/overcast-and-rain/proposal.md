@@ -81,6 +81,24 @@ Four parts, in the order of what they buy.
    reference's density, far curtains over every raining cell in view, and the
    lens drops stopped above 200 m.
 
+## Measured after (built)
+
+Same frames, same method (`docs/screenshots/weather-after-*.png`):
+
+| Frame | Measure | Before | After |
+| --- | --- | ---: | ---: |
+| Ground, rain over clear | light ratio | 0.725 | **0.569** |
+| Ground, rain over clear | blue / red / green ratio | 0.36 / 0.72 / 0.75 | **0.46** / 0.54 / 0.58 |
+| Sky, cover 0.20 (`--weather-at 2520`) | cloud share | 0.0% | **28.4%** |
+| Sky, cover 0.59 (the spawn) | cloud share | - | 93.9% |
+| Sky, storm | cloud share | 94.1% | **100%** |
+| Coast at 420 m in rain | lens drops | yes | **none** |
+| Dry spawn, 119 raining cells within 1.4 km | curtains on the horizon | none drawn | **drawn** |
+
+The before's clear sky was measured under a cover it never had: walking,
+the field was not being sampled at all (see the design's last section), so
+the 0.0% was a sky pinned at the launch forcing of nothing.
+
 ## Measured before anything moves
 
 The table above is the before. Every part carries its own after, taken the same

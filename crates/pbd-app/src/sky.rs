@@ -3,7 +3,7 @@
 //! Planet terrain/ocean are owned by `planet`; this shell contributes sky,
 //! orbital haze and sparse clouds. Camera and sphere positions use the same
 //! local world frame. See `docs/tenebris-comparison.md` for visual provenance.
-use crate::config::WaterSettings;
+use crate::config::{WaterSettings, WeatherSettings};
 use crate::planet::{PlanetRenderFrame, update_planet_frame};
 use bevy::{
     light::{NotShadowCaster, NotShadowReceiver},
@@ -125,8 +125,31 @@ pub struct SkyParameters {
     /// Clouds radius, coverage threshold, opacity and night-floor brightness.
     pub clouds: Vec4,
     /// Slab thickness in metres, the cover the weather field says is overhead,
-    /// drift seconds, and how dark a cloud's shadowed underside goes.
+    /// drift seconds, and how dark a cloud's shadowed underside goes in fair
+    /// weather.
     pub cloud_slab: Vec4,
+    /// The threshold at full cover, how dark the underside goes at full cover,
+    /// and two spare lanes.
+    pub cloud_storm: Vec4,
+}
+
+/// The dome's clear-sky Rayleigh scale, Mie scale and sun radiance: what the
+/// overcast takes its fractions of. Written once, so the spawn and the per-frame
+/// overcast cannot disagree about what a clear sky is.
+const CLEAR_RAYLEIGH: f32 = 0.30;
+const CLEAR_MIE: f32 = 0.018;
+const CLEAR_SUN: f32 = 3.2;
+
+/// The dome's Rayleigh scale, Mie scale and sun radiance under `cover`, as
+/// Tenebris's renderer modulates them: the blue cut, the white haze lifted, the
+/// whole dimmed. Pure so a test can hold full cover to the configured factors.
+pub fn overcast_scatter(settings: &WeatherSettings, cover: f32) -> (f32, f32, f32) {
+    let cover = cover.clamp(0.0, 1.0);
+    (
+        CLEAR_RAYLEIGH * (1.0 - cover * settings.overcast_sky_blue_cut),
+        CLEAR_MIE * (1.0 + cover * settings.overcast_sky_haze),
+        CLEAR_SUN * (1.0 - cover * settings.overcast_sky_dim),
+    )
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -207,6 +230,7 @@ impl Material for SkyMaterial {
 /// is named in the change's tasks rather than pretended away here.
 fn follow_weather(
     weather: Res<crate::weather::Weather>,
+    settings: Res<WeatherSettings>,
     clock: Res<Time>,
     sun: Res<Sun>,
     shells: Query<&MeshMaterial3d<SkyMaterial>, With<PlanetAtmosphere>>,
@@ -215,16 +239,41 @@ fn follow_weather(
     let seconds = clock.elapsed_secs();
     for material in &shells {
         if let Some(sky) = materials.get_mut(&material.0) {
-            sky.parameters.cloud_slab.y = weather.cover;
             sky.parameters.cloud_slab.z = seconds;
-            // The shell's sun rides the same clock everything else does. Its
-            // radiance scale is untouched: what a moving sun changes is where
-            // the light comes FROM, and the terminator the sky already draws
-            // is what turns that into a sunset.
-            let direction = sun.direction();
-            sky.parameters.sun = direction.extend(sky.parameters.sun.w);
+            apply_weather(&mut sky.parameters, &settings, weather.cover);
+            // The shell's sun rides the same clock everything else does; what
+            // a moving sun changes is where the light comes FROM, and the
+            // terminator the sky already draws turns that into a sunset.
+            sky.parameters.sun = sun.direction().extend(sky.parameters.sun.w);
         }
     }
+}
+
+/// Everything the weather decides about the dome: the cloud numbers from
+/// `weather.ron`, the cover overhead, and the overcast's greying and dimming of
+/// the scattering and the sun. One function for the spawn and every frame
+/// after it, so the first frame is not a sky with no thresholds in it.
+fn apply_weather(sky: &mut SkyParameters, settings: &WeatherSettings, cover: f32) {
+    sky.clouds = Vec4::new(
+        CLOUD_RADIUS,
+        settings.cloud_threshold_clear,
+        settings.cloud_extinction,
+        settings.cloud_night_floor,
+    );
+    sky.cloud_slab.y = cover;
+    sky.cloud_slab.w = settings.cloud_base_dark;
+    sky.cloud_storm = Vec4::new(
+        settings.cloud_threshold_overcast,
+        settings.cloud_storm_dark,
+        0.0,
+        0.0,
+    );
+    // The same cover that dims the ground greys the dome, so the two cannot
+    // disagree about the weather.
+    let (rayleigh, mie, radiance) = overcast_scatter(settings, cover);
+    sky.atmosphere.z = rayleigh;
+    sky.atmosphere.w = mie;
+    sky.sun.w = radiance;
 }
 
 fn spawn_atmosphere(
@@ -232,6 +281,8 @@ fn spawn_atmosphere(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<SkyMaterial>>,
     water: Res<WaterSettings>,
+    weather_settings: Res<WeatherSettings>,
+    weather: Res<crate::weather::Weather>,
     sun: Res<Sun>,
 ) {
     // `PBD_NO_SKY` leaves the atmosphere shell unspawned so the clear colour
@@ -243,21 +294,18 @@ fn spawn_atmosphere(
         return;
     }
     let sun = sun.direction();
-    let material = materials.add(SkyMaterial {
-        parameters: SkyParameters {
-            center_radius: Vec3::ZERO.extend(solid_radius(&water)),
-            atmosphere: Vec4::new(ATMOSPHERE_RADIUS, 0.22, 0.30, 0.018),
-            sun: sun.extend(3.2),
-            scatter: Vec4::new(0.16, 0.52, 1.30, 0.64),
-            // Radius, the CLEAR-sky density threshold, the extinction scale and
-            // the night floor. 0.72 rather than the flat shell's 0.61: the slab
-            // integrates a whole path where the shell took one sample, so the
-            // same threshold covered far more sky. The overcast end is a
-            // fraction of it in the shader, so one knob moves both.
-            clouds: Vec4::new(CLOUD_RADIUS, 0.72, 0.52, 0.045),
-            cloud_slab: Vec4::new(CLOUD_THICKNESS, 0.0, 0.0, 0.34),
-        },
-    });
+    let mut parameters = SkyParameters {
+        center_radius: Vec3::ZERO.extend(solid_radius(&water)),
+        atmosphere: Vec4::new(ATMOSPHERE_RADIUS, 0.22, CLEAR_RAYLEIGH, CLEAR_MIE),
+        sun: sun.extend(CLEAR_SUN),
+        scatter: Vec4::new(0.16, 0.52, 1.30, 0.64),
+        // The cloud lanes are `apply_weather`'s, below.
+        clouds: Vec4::ZERO,
+        cloud_slab: Vec4::new(CLOUD_THICKNESS, 0.0, 0.0, 0.0),
+        cloud_storm: Vec4::ZERO,
+    };
+    apply_weather(&mut parameters, &weather_settings, weather.cover);
+    let material = materials.add(SkyMaterial { parameters });
     commands.spawn((
         Name::new("Planet atmosphere and cloud shell"),
         PlanetAtmosphere,
@@ -304,6 +352,7 @@ mod tests {
                     scatter: Vec4::ZERO,
                     clouds: Vec4::ZERO,
                     cloud_slab: Vec4::ZERO,
+                    cloud_storm: Vec4::ZERO,
                 },
             });
         let shell = app
@@ -332,5 +381,20 @@ mod tests {
                 center.extend(solid_radius(&WaterSettings::default()))
             );
         }
+    }
+
+    #[test]
+    fn full_cover_greys_and_dims_the_dome_by_the_configured_factors() {
+        let s = WeatherSettings::default();
+        assert_eq!(
+            overcast_scatter(&s, 0.0),
+            (CLEAR_RAYLEIGH, CLEAR_MIE, CLEAR_SUN)
+        );
+        let (rayleigh, mie, sun) = overcast_scatter(&s, 1.0);
+        assert!((rayleigh - CLEAR_RAYLEIGH * (1.0 - s.overcast_sky_blue_cut)).abs() < 1e-6);
+        assert!((mie - CLEAR_MIE * (1.0 + s.overcast_sky_haze)).abs() < 1e-6);
+        assert!((sun - CLEAR_SUN * (1.0 - s.overcast_sky_dim)).abs() < 1e-6);
+        // Cover outside the field's range is clamped, never extrapolated.
+        assert_eq!(overcast_scatter(&s, 3.0), overcast_scatter(&s, 1.0));
     }
 }

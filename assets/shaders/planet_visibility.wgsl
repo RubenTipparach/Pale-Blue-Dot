@@ -11,7 +11,7 @@ struct Cell {
 struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
     water_absorption: vec4<f32>, water_deep: vec4<f32>, weather: vec4<f32>,
-    rain: array<vec4<f32>,4>,
+    rain: array<vec4<f32>,6>, // wet knobs; overcast sun, fill, fog per cover, fog in rain; sky blue cut, sky dim
     lod_offsets: vec4<u32>, // x base count, y fine-region capacity
     lod_counts: vec4<u32>,  // live records per fine level, coarsest first
     lod: vec4<f32>,         // xyz player direction, w base level

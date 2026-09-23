@@ -423,10 +423,10 @@ struct PlanetParams {
     water_absorption: Vec4,
     // The colour submerged terrain converges to with depth.
     water_deep: Vec4,
-    // Ground wetness, rain intensity, spare, spare.
+    // Ground wetness, rain intensity, cloud cover over the player, spare.
     weather: Vec4,
-    // The thirteen terrain-wetness knobs from `weather.ron`, in `hex.fs` order.
-    rain: [Vec4; 4],
+    // The terrain-wetness knobs from `weather.ron`, then the overcast ones.
+    rain: [Vec4; 6],
     // Base record count and fine-region capacity; the fine regions follow the
     // base at that stride.
     lod_offsets: UVec4,
@@ -823,7 +823,7 @@ fn prepare_views(
             water_absorption: Vec3::from_array(water_settings.absorption_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),
             water_deep: Vec3::from_array(water_settings.deep_color).extend(0.),
-            weather: Vec4::new(weather.wetness, weather.rain, 0., 0.),
+            weather: Vec4::new(weather.wetness, weather.rain, weather.cover, 0.),
             rain: [
                 Vec4::new(
                     w.rain_ripple_scale,
@@ -840,10 +840,24 @@ fn prepare_views(
                 Vec4::new(
                     w.rain_wave_speed,
                     w.rain_wet_darken,
-                    w.rain_sky_sheen,
+                    w.rain_mirror_strength,
                     w.rain_glint_power,
                 ),
-                Vec4::new(w.rain_glint_strength, 0., 0., 0.),
+                Vec4::new(
+                    w.rain_glint_strength,
+                    w.rain_puddle_scale_m,
+                    w.rain_puddle_share,
+                    0.,
+                ),
+                Vec4::new(
+                    w.overcast_sun_dim,
+                    w.overcast_amb_dim,
+                    w.cloud_fog_add,
+                    w.rain_fog_mult,
+                ),
+                // The sky's own overcast pair, for the sky colour the ground
+                // hazes toward and mirrors: the same greying the dome takes.
+                Vec4::new(w.overcast_sky_blue_cut, w.overcast_sky_dim, 0., 0.),
             ],
             lod_offsets: UVec4::new(planet.base_count, lod::FINE_CAPACITY, 0, 0),
             lod_counts: UVec4::from_array(planet.counts),
@@ -1090,15 +1104,26 @@ mod pipeline_tests {
 
     #[test]
     fn actual_pipeline_layouts_use_static_offsets_and_correct_storage_access() {
-        // 288 before the clutter knobs; four more vec4s for the reach and
-        // fade, the chances, the sizes and the shrub, one for the column
-        // tier's reach and its cave-darkening stand-in, one for how deep the
-        // sod and the soil run, and two for the tileset slot per biome.
-        assert_eq!(
-            PlanetParams::min_size().get(),
-            416,
-            "actual encoded Rust uniform must match WGSL Params"
-        );
+        // Held against the struct each shader declares, as naga lays it out:
+        // a vec4 added on one side and not the other is a uniform read at the
+        // wrong offsets, which draws wrong rather than failing.
+        let rust = PlanetParams::min_size().get() as u32;
+        for (label, source) in [
+            (
+                "planet_surface.wgsl",
+                include_str!("../../../assets/shaders/planet_surface.wgsl"),
+            ),
+            (
+                "planet_visibility.wgsl",
+                include_str!("../../../assets/shaders/planet_visibility.wgsl"),
+            ),
+        ] {
+            assert_eq!(
+                rust,
+                crate::shader_tests::wgsl_struct_size(label, source, "Params"),
+                "the Rust PlanetParams must match {label}'s Params"
+            );
+        }
         for (layout, read_only_bindings) in [
             // 5 is the voxel sky light and 6 the layer materials: read
             // only, like the cells, the visible list and the column records

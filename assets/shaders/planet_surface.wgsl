@@ -14,7 +14,7 @@ struct Cell {
 struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
     water_absorption: vec4<f32>, water_deep: vec4<f32>, weather: vec4<f32>,
-    rain: array<vec4<f32>,4>,
+    rain: array<vec4<f32>,6>, // wet knobs; overcast sun, fill, fog per cover, fog in rain; sky blue cut, sky dim
     lod_offsets: vec4<u32>, // x base count, y fine-region capacity
     lod_counts: vec4<u32>,  // live records per fine level, coarsest first
     lod: vec4<f32>,         // xyz player direction, w base level
@@ -1218,6 +1218,25 @@ fn rivulets(uv: vec2<f32>, t: f32) -> f32 {
     return lane_on*across*clamp(flow,0.0,1.0);
 }
 
+// The sky colour the ground hazes toward and mirrors when wet, taken through
+// the same overcast the dome is: under full cover the blue goes grey by the
+// sky's blue cut and the whole of it dims by the sky's dim. One function, so
+// the haze on a far ridge and the sky in a puddle are the same sky.
+fn ground_sky(sun_elevation: f32, cover: f32) -> vec3<f32> {
+    let clear = mix(vec3(0.10,0.20,0.29),vec3(0.32,0.49,0.57),max(sun_elevation,0.));
+    let grey = vec3(dot(clear,vec3(0.2126,0.7152,0.0722)));
+    return mix(clear,grey,cover*params.rain[5].x)*(1.-cover*params.rain[5].y);
+}
+// Two octaves of value noise for the puddle mask, on cells of the given size.
+fn puddle_noise(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let w = f*f*(3.-2.*f);
+    let a = mix(rr_hash12(i),rr_hash12(i+vec2(1.,0.)),w.x);
+    let b = mix(rr_hash12(i+vec2(0.,1.)),rr_hash12(i+vec2(1.,1.)),w.x);
+    return mix(a,b,w.y);
+}
+
 @fragment
 fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let radial = normalized(input.position);
@@ -1237,7 +1256,15 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let distance_to_camera = distance(input.position,params.camera.xyz);
     let sun_elevation = dot(radial,sun);
     let daylight = smoothstep(-0.13,0.20,sun_elevation);
-    let direct = max(dot(n,sun),0.0)*daylight;
+    // Overcast: the cover over the player takes the sun down by
+    // `overcast_sun_dim` and the sky fill by `overcast_amb_dim` at full cover,
+    // Tenebris's model. The sun loses more than the fill, so the contrast
+    // between a lit face and a shaded one collapses too: a storm is flat grey
+    // light, not a dim noon.
+    let cover = clamp(params.weather.z,0.,1.);
+    let sun_dim = 1.-cover*params.rain[4].x;
+    let fill_dim = 1.-cover*params.rain[4].y;
+    let direct = max(dot(n,sun),0.0)*daylight*sun_dim;
     // The heightfield's per-cell occlusion, times the voxel field's answer at
     // this vertex. Outside the column tier the second is one and this is what
     // it always was; inside it, it is what carries the cave and the crease.
@@ -1358,7 +1385,10 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // "The real answer is the baked voxel light this change defers." Depth is
     // not darkness - a cave mouth is deep and bright - and keeping both would
     // be two rules for one fact, with the wrong one winning at every mouth.
-    var color = albedo*(fill*max(AMBIENT_FLOOR,mix(night,1.,daylight)*skylight)
+    // The overcast dims the SKY's share of the fill and leaves the floor under
+    // it alone: that floor is what keeps a cave legible, and a cave is not
+    // darker for a cloud over the hill it is dug into.
+    var color = albedo*(fill*max(AMBIENT_FLOOR,mix(night,1.,daylight)*skylight*fill_dim)
         + vec3(1.12,1.03,0.87)*direct*skylight)*gain;
     // A lamp, ADDED. Warm, because everything that burns is, and over the
     // albedo so a torch lights the ground it stands on rather than painting a
@@ -1400,9 +1430,11 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         let k_wave_strength = params.rain[1].w;
         let k_wave_speed = params.rain[2].x;
         let k_wet_darken = params.rain[2].y;
-        let k_sky_sheen = params.rain[2].z;
+        let k_mirror = params.rain[2].z;
         let k_glint_power = params.rain[2].w;
         let k_glint_strength = params.rain[3].x;
+        let k_puddle_scale = max(params.rain[3].y,0.01);
+        let k_puddle_share = params.rain[3].z;
         let wet_up = radial;
         let face = dot(n,wet_up);
         let top_w = smoothstep(0.35,0.85,face);
@@ -1418,8 +1450,19 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         else if an.z > an.y { uv = input.position.xy; ax_a = vec3(1.,0.,0.); ax_b = vec3(0.,1.,0.); }
         ax_a = normalized(ax_a-n*dot(ax_a,n));
         ax_b = normalized(ax_b-n*dot(ax_b,n));
+        // Where water STANDS: a flat face, not grass or leaves, under a noise
+        // mask that spreads as the ground soaks. Everything that says "water"
+        // - the sheet's waves, the rings, the full mirror - lives inside it;
+        // outside it the face is only wet. A meadow in rain is dark grass, not
+        // a tiled floor of identical rings.
+        let floor_like = !grassy(code) && code != 9u && code != GRASS_SIDE_CODE;
+        let flat = smoothstep(0.90,0.97,face);
+        let soak = clamp(params.weather.x,0.,1.);
+        let mask = puddle_noise(uv/k_puddle_scale)*0.65+puddle_noise(uv/(k_puddle_scale*0.37)+vec2(17.,5.))*0.35;
+        let edge = 1.-k_puddle_share*soak;
+        let puddle = select(0.,flat*smoothstep(edge,edge+0.06,mask),floor_like);
         var pg = vec2(0.);
-        if top_w > 0.001 {
+        if puddle > 0.001 {
             // A continuous rippled sheet so the whole wet face reads as a
             // normal map, then raindrop impact rings on top of it.
             pg += vec2(
@@ -1427,8 +1470,8 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
                     +0.7*cos((uv.x+uv.y)*k_wave_scale*0.6-wet_t*k_wave_speed*0.8),
                 cos(uv.y*k_wave_scale-wet_t*k_wave_speed*0.9)
                     +0.7*cos((uv.x-uv.y)*k_wave_scale*0.6+wet_t*k_wave_speed*0.7)
-            )*(k_wave_strength*top_w);
-            pg += rain_ripple_grad(uv*k_ripple_scale,wet_t)*(k_ripple_strength*top_w);
+            )*(k_wave_strength*puddle);
+            pg += rain_ripple_grad(uv*k_ripple_scale,wet_t)*(k_ripple_strength*puddle);
         }
         var pert = ax_a*pg.x+ax_b*pg.y;
         if side_w > 0.001 {
@@ -1447,14 +1490,30 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         }
         let wet = wet_amt*max(top_w,side_w);
         let wet_n = normalized(n+pert);
+        // Wet darkens AND saturates: water fills the grain, so the colour
+        // deepens toward its own hue rather than toward grey.
         color *= mix(1.,k_wet_darken,wet);
-        // Sky sheen off the ambient so the ripples show under the overcast,
-        // and a direct-sun glint that only adds when the sun is out.
-        let ambient = vec3(0.16,0.21,0.27)*mix(0.12,1.,daylight);
-        let sky_tilt = clamp(dot(wet_n,wet_up),0.,1.)-clamp(dot(n,wet_up),0.,1.);
-        color += ambient*(sky_tilt*k_sky_sheen*wet*skylight);
+        let grey = dot(color,vec3(0.2126,0.7152,0.0722));
+        color = max(mix(vec3(grey),color,1.+0.25*wet),vec3(0.));
+        // The sky, mirrored. Fresnel against the view along the RIPPLED
+        // normal, so a ring is the reflection bending - brighter on one side,
+        // darker on the other - where the old sheen could only subtract sky
+        // light and printed every ring as a dark line. A reflected ray that
+        // dips under the horizon sees the ground, not the sky. Full weight in
+        // a puddle, a quarter on a merely wet face.
+        let cos_v = clamp(dot(wet_n,toward_camera),0.,1.);
+        let fresnel = 0.02+0.98*pow(1.-cos_v,5.);
+        let r = reflect(-toward_camera,wet_n);
+        let r_up = dot(r,wet_up);
+        let sky_seen = ground_sky(sun_elevation,cover)*mix(0.12,1.,daylight)
+            *mix(0.55,1.,smoothstep(-0.05,0.35,r_up));
+        let mirror = fresnel*k_mirror*mix(0.25,1.,puddle)*wet_amt*top_w;
+        color = mix(color,sky_seen,clamp(mirror,0.,1.));
+        // The sun glint goes where the sun goes: under full cover it is
+        // `overcast_sun_dim` of itself, so a storm has none and a passing
+        // shower sparkles.
         let glint = pow(max(dot(wet_n,sun),0.),max(k_glint_power,1.));
-        color += vec3(k_glint_strength)*(glint*wet*daylight);
+        color += vec3(k_glint_strength)*(glint*wet*daylight*sun_dim);
     }
     // Tenebris-style limb and distance haze, all in the same body-local frame.
     let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
@@ -1464,9 +1523,13 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // underground fogged toward the sky colour exactly as a ridge at the same
     // distance did. Tenebris gates its rim by `v_sky_light` for the same
     // reason; the haze here is the same term one step earlier.
-    let fog = (1.-exp(-distance_to_camera*0.00036))*air*daylight*skylight;
-    let sky = mix(vec3(0.10,0.20,0.29),vec3(0.32,0.49,0.57),max(sun_elevation,0.));
-    color=mix(color,sky,fog*0.55);
+    //
+    // The air thickens under cloud (`cloud_fog_add` per unit cover) and in
+    // rain (up to `rain_fog_mult`), and hazes toward the overcast sky.
+    let haze_density = 0.00036*(1.+cover*params.rain[4].z)
+        *mix(1.,params.rain[4].w,clamp(params.weather.y,0.,1.));
+    let fog = (1.-exp(-distance_to_camera*haze_density))*air*daylight*skylight;
+    color=mix(color,ground_sky(sun_elevation,cover),fog*0.55);
     let rim = pow(1.-clamp(dot(radial,toward_camera),0.,1.),4.);
     color+=vec3(0.07,0.16,0.25)*rim*(0.25+0.75*daylight)*(1.-air)*0.55*skylight;
     return vec4(color,1.);

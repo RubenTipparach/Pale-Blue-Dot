@@ -13,8 +13,10 @@ struct SkyParameters {
     scatter: vec4<f32>,
     clouds: vec4<f32>,
     // Slab thickness (m), the cover the field says is overhead, drift seconds,
-    // and how dark a cloud's underside goes.
+    // and how dark a cloud's underside goes in fair weather.
     cloud_slab: vec4<f32>,
+    // The threshold at full cover and how dark the underside goes there.
+    cloud_storm: vec4<f32>,
 }
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> sky: SkyParameters;
 
@@ -215,7 +217,10 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
             // nothing the threshold is high and only the densest noise shows,
             // at full cover it is low and the slab closes over.
             let cover = clamp(sky.cloud_slab.y,0.0,1.0);
-            let threshold = mix(sky.clouds.y,sky.clouds.y*0.28,cover);
+            let threshold = mix(sky.clouds.y,sky.cloud_storm.x,cover);
+            // A storm's base goes slate: the self-shadowed underside darkens
+            // with the cover as well as thickening with it.
+            let base_dark = mix(sky.cloud_slab.w,sky.cloud_storm.y,cover);
             let drift = sky.cloud_slab.z;
             let span = slab_far-slab_near;
             let steps = 12.0;
@@ -238,20 +243,13 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
                 // underside IS the thickness; a single sample cannot have one.
                 let shadow = cloud_shadow(p,sun,inner,outer,threshold,drift);
                 let day = max(dot(normalize(p),sun),0.0);
-                let lit = mix(sky.cloud_slab.w,1.0,shadow)*(sky.clouds.w+day*0.90);
+                let lit = mix(base_dark,1.0,shadow)*(sky.clouds.w+day*0.90);
                 let tint = mix(vec3<f32>(0.46,0.62,0.85),vec3<f32>(1.0,0.96,0.86),day);
-                // Tuned so a full-density VERTICAL crossing of the slab comes
-                // out mostly opaque and a thin one stays translucent: 260 m at
-                // this coefficient is an optical depth of about 1.6.
-                // `clouds.z` was the flat shell's peak OPACITY, and left there
-                // it capped the slab at 0.52 however thick the cloud got - a
-                // full overcast that could never close. The slab computes its
-                // own opacity from transmittance, so the knob is an extinction
-                // coefficient now: how much a metre of full-density cloud
-                // absorbs. 260 m at the shipped value is an optical depth of
-                // about 1.6, so a vertical crossing of solid cloud is mostly
-                // opaque and a thin one stays translucent.
-                let absorbed = density*step_size*sky.clouds.z*0.012;
+                // `clouds.z` is an extinction coefficient per metre of
+                // full-density cloud (`cloud_extinction`): the slab computes
+                // its own opacity from transmittance, so the optical depth of
+                // a vertical crossing is this times the slab's thickness.
+                let absorbed = density*step_size*sky.clouds.z;
                 let fade = exp(-absorbed);
                 luminance += tint*lit*transmittance*(1.0-fade);
                 transmittance *= fade;

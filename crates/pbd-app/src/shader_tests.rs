@@ -55,3 +55,21 @@ fn the_visibility_shader_compiles_with_the_entry_points_its_pipelines_name() {
         );
     }
 }
+
+/// The byte size naga lays a named struct out at in a shipped WGSL source, so
+/// a Rust uniform can be held against the struct the shader actually declares
+/// rather than against a number somebody typed after counting vec4s by hand.
+pub(crate) fn wgsl_struct_size(label: &str, source: &str, name: &str) -> u32 {
+    let module = naga::front::wgsl::parse_str(source)
+        .unwrap_or_else(|error| panic!("{label} must parse:\n{}", error.emit_to_string(source)));
+    let mut layouter = naga::proc::Layouter::default();
+    layouter
+        .update(module.to_ctx())
+        .unwrap_or_else(|error| panic!("{label} must lay out: {error}"));
+    let (handle, _) = module
+        .types
+        .iter()
+        .find(|(_, ty)| ty.name.as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("{label} declares no struct `{name}`"));
+    layouter[handle].size
+}
