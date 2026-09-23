@@ -762,6 +762,9 @@ pub(crate) struct Tunables<'w> {
     weather: Res<'w, crate::config::WeatherSettings>,
     scatter: Res<'w, crate::config::ScatterSettings>,
     columns: Res<'w, crate::config::ColumnSettings>,
+    /// Whether an overlay is showing: the map hides the clouds, and so their
+    /// shadows.
+    maps: Res<'w, weather_maps::WeatherMapsNow>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -917,7 +920,11 @@ fn prepare_views(
                 pbd_core::column::SOD_DEPTH_M,
                 pbd_core::column::SOIL_DEPTH_M,
                 terrain::snow_slot() as f32,
-                w.cloud_shadow,
+                if tunables.maps.overlay_kind.is_some() {
+                    0.0
+                } else {
+                    w.cloud_shadow
+                },
             ),
             tilesets: tileset_slots(),
         };

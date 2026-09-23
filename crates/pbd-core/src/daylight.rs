@@ -98,6 +98,20 @@ impl Clock {
         (self.seconds / DAY_S as f64 / YEAR_DAYS).rem_euclid(1.0)
     }
 
+    /// The northern hemisphere's season, in words: each season is the quarter
+    /// of the year centred on its solstice or equinox, and the year starts at
+    /// the northern summer solstice. The southern hemisphere has the opposite.
+    pub fn season(self) -> &'static str {
+        const SEASONS: [&str; 4] = [
+            "northern summer",
+            "northern autumn",
+            "northern winter",
+            "northern spring",
+        ];
+        let quarter = ((self.year_fraction() + 0.125) * 4.0).floor() as usize % 4;
+        SEASONS[quarter]
+    }
+
     /// Where the sun is in the SYSTEM frame the stars are fixed in: along the
     /// ecliptic at the planet's orbital longitude, the ecliptic leaning
     /// [`TILT`] off the equator about +X.
@@ -332,5 +346,18 @@ mod tests {
             (extra.abs() - std::f64::consts::TAU).abs() < 1e-3,
             "a year's extra turning is {extra} radians"
         );
+    }
+
+    #[test]
+    fn the_season_follows_the_sun_north_and_south() {
+        let quarter = YEAR_DAYS as u32 / 4;
+        assert_eq!(Clock::at(0, 0.0).season(), "northern summer");
+        assert_eq!(Clock::at(quarter, 0.0).season(), "northern autumn");
+        assert_eq!(Clock::at(2 * quarter, 0.0).season(), "northern winter");
+        assert_eq!(Clock::at(3 * quarter, 0.0).season(), "northern spring");
+        assert_eq!(Clock::at(4 * quarter - 1, 0.0).season(), "northern summer");
+        // Summer is when the sun stands north.
+        assert!(Clock::at(0, 0.0).declination() > 0.3);
+        assert!(Clock::at(2 * quarter, 0.0).declination() < -0.3);
     }
 }

@@ -98,6 +98,9 @@ pub(super) struct WaterView {
     rain_look: Vec4,
     rain_tint: Vec4,
     snow_tint: Vec4,
+    /// The overlay (`overlay::overlay_lanes`); zero when none is showing.
+    overlay: Vec4,
+    overlay_flow: Vec4,
 }
 
 /// The largest precipitation map the rain buffer holds, cells on a side; the
@@ -307,6 +310,7 @@ enum Pass {
     Compose,
     Clouds,
     Rain,
+    Overlay,
     Lens,
 }
 
@@ -355,6 +359,11 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 self.fullscreen.to_vertex_state(),
                 "rain",
             ),
+            Pass::Overlay => (
+                "Weather overlay over the planet",
+                self.fullscreen.to_vertex_state(),
+                "overlay",
+            ),
             Pass::Lens => (
                 "Water lens: droplets and emerge drips",
                 self.fullscreen.to_vertex_state(),
@@ -368,7 +377,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
         // the scene's own occlusion is the shader's discard against the
         // sampled main-pass depth, which may be multisampled.
         let depth_stencil = match key.pass {
-            Pass::Lens | Pass::Rain | Pass::Clouds => None,
+            Pass::Lens | Pass::Rain | Pass::Clouds | Pass::Overlay => None,
             pass => Some(DepthStencilState {
                 format: WATER_DEPTH_FORMAT,
                 depth_write_enabled: pass == Pass::Cap,
@@ -425,6 +434,8 @@ pub(super) struct WaterViewGpu {
     clouds: CachedRenderPipelineId,
     lens: CachedRenderPipelineId,
     rain: CachedRenderPipelineId,
+    overlay: CachedRenderPipelineId,
+    overlay_needed: bool,
     /// The precipitation map, rewritten each frame from `weather::RainMap`.
     rain_buffer: Buffer,
     rain_needed: bool,
@@ -447,6 +458,7 @@ pub(super) struct WaterSky<'w> {
     weather: Res<'w, Weather>,
     clouds: Res<'w, crate::sky::CloudNow>,
     rain_map: Option<Res<'w, crate::weather::RainMap>>,
+    maps: Res<'w, super::weather_maps::WeatherMapsNow>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -480,7 +492,11 @@ fn prepare_water_views(
         weather,
         clouds,
         rain_map,
+        maps,
     } = sky;
+    let (overlay, overlay_flow) =
+        crate::overlay::overlay_lanes(maps.overlay_kind, &weather_settings);
+    let overlay_needed = maps.overlay_kind.is_some();
     for (entity, view, msaa, planet_view, existing) in &mut views {
         let (camera, clip_from_body) = frame.camera_and_clip(
             &view.world_from_view,
@@ -598,6 +614,8 @@ fn prepare_water_views(
             rain_tint: linear(weather_settings.rain_volume_color)
                 .extend(weather_settings.snow_fall_mps),
             snow_tint: linear(weather_settings.snow_color).extend(clock.0),
+            overlay,
+            overlay_flow,
         };
         let lens_needed = lens_rain > 0.001 || drips > 0.001;
         let map = rain_map.as_deref().filter(|map| {
@@ -612,6 +630,7 @@ fn prepare_water_views(
             gpu.uniform.write_buffer(&device, &queue);
             gpu.lens_needed = lens_needed;
             gpu.rain_needed = rain_needed;
+            gpu.overlay_needed = overlay_needed;
             if let Some(map) = map {
                 queue.write_buffer(&gpu.rain_buffer, 0, bytemuck::cast_slice(&map.values));
             }
@@ -676,6 +695,8 @@ fn prepare_water_views(
             clouds: pipeline(Pass::Clouds),
             lens: pipeline(Pass::Lens),
             rain: pipeline(Pass::Rain),
+            overlay: pipeline(Pass::Overlay),
+            overlay_needed,
             rain_buffer,
             rain_needed,
             depth: water_depth(&device, size),
@@ -733,14 +754,24 @@ impl ViewNode for WaterCompositeNode {
     ) -> Result<(), NodeRunError> {
         let pipelines = world.resource::<WaterPipelines>();
         let cache = world.resource::<PipelineCache>();
-        let (Some(cap), Some(compose), Some(clouds), Some(lens), Some(rain), Some(maps)) = (
+        let (
+            Some(cap),
+            Some(compose),
+            Some(clouds),
+            Some(lens),
+            Some(rain),
+            Some(overlay),
+            Some(maps),
+        ) = (
             cache.get_render_pipeline(water.cap),
             cache.get_render_pipeline(water.compose),
             cache.get_render_pipeline(water.clouds),
             cache.get_render_pipeline(water.lens),
             cache.get_render_pipeline(water.rain),
+            cache.get_render_pipeline(water.overlay),
             world.get_resource::<super::weather_maps::WeatherMapGpu>(),
-        ) else {
+        )
+        else {
             return Ok(());
         };
         let scene_layout = if water.multisampled {
@@ -794,8 +825,13 @@ impl ViewNode for WaterCompositeNode {
             pass.draw_indirect(&planet_view.indirect, 32);
         }
         for (needed, pipeline, label) in [
-            (true, clouds, "Clouds"),
+            // An overlay is a map: the clouds would hide the data under them,
+            // and the cloud overlay is where cloud is shown then.
+            (!water.overlay_needed, clouds, "Clouds"),
             (water.rain_needed, rain, "Rain volume"),
+            // After the rain, so the map reads through a storm, and before
+            // the lens, so the drops stay on top of it.
+            (water.overlay_needed, overlay, "Weather overlay"),
             (water.lens_needed, lens, "Water lens"),
         ] {
             if !needed {
@@ -855,14 +891,14 @@ mod tests {
 
     #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
-        // Two mat4 and twenty-three vec4 in water.wgsl's WaterView, read off the
+        // Two mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
         let shader = include_str!("../../../assets/shaders/water.wgsl");
         let start = shader.find("struct WaterView {").unwrap();
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (2, 35));
+        assert_eq!((mat4, vec4), (2, 37));
         assert_eq!(
             WaterView::min_size().get() as usize,
             mat4 * 64 + vec4 * 16,

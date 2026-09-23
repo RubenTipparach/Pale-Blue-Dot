@@ -10,6 +10,8 @@ pub mod controls;
 #[cfg(feature = "desktop")]
 pub mod flight_view;
 #[cfg(feature = "desktop")]
+pub mod overlay;
+#[cfg(feature = "desktop")]
 pub mod planet;
 #[cfg(feature = "desktop")]
 pub mod saves;

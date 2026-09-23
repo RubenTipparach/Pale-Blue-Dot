@@ -80,6 +80,8 @@ pub enum MenuAction {
     EditName,
     /// Set the storm forcing to this percentage: a weather preset.
     Weather(u8),
+    /// Show this overlay: 0 is off, then `Overlay::ALL` in order.
+    Overlay(u8),
 }
 
 /// Whether the saves page is the screen the game opened on and no world has
@@ -226,9 +228,9 @@ type TouchedRows<'w, 's> = Query<
 #[derive(Component)]
 pub struct Panel(Screen);
 
-const INK: Color = Color::srgb(0.88, 0.94, 0.91);
+pub(super) const INK: Color = Color::srgb(0.88, 0.94, 0.91);
 pub(super) const MINT: Color = Color::srgb(0.48, 0.8, 0.77);
-const PANEL_FILL: Color = Color::srgba(0.02, 0.06, 0.08, 0.94);
+pub(super) const PANEL_FILL: Color = Color::srgba(0.02, 0.06, 0.08, 0.94);
 pub(super) const EDGE: Color = Color::srgba(0.55, 0.75, 0.74, 0.6);
 
 fn idle() -> Color {
@@ -334,6 +336,7 @@ pub fn spawn(mut commands: Commands) {
                 .with_children(|panel| {
                     panel.spawn(title("PAUSED"));
                     super::weather_ui::spawn(panel);
+                    super::overlay_ui::spawn_row(panel);
                     button(panel, "RESUME", MenuAction::Resume);
                     button(panel, "SAVES", MenuAction::Saves);
                     button(panel, "SETTINGS", MenuAction::Settings);
@@ -725,6 +728,7 @@ pub fn press(
     save: Option<Res<WorldSave>>,
     rows: Query<(&Interaction, &MenuAction), Changed<Interaction>>,
     mut forcing: ResMut<pbd_app::weather::StormForcing>,
+    mut overlay: ResMut<pbd_app::overlay::OverlayMode>,
 ) {
     let SavesPage {
         index,
@@ -752,6 +756,7 @@ pub fn press(
         match action {
             MenuAction::EditName => name.focused = true,
             MenuAction::Weather(percent) => forcing.0 = f32::from(percent.min(100)) / 100.0,
+            MenuAction::Overlay(row) => overlay.0 = super::overlay_ui::mode_for(row),
             MenuAction::Resume => {
                 front.0 = false;
                 *screen = Screen::Playing;

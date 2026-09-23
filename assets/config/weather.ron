@@ -118,4 +118,12 @@
     lightning_flash_s: 0.7,
     lightning_cloud: 6.0,
     lightning_ground: 0.8,
+
+    // The overlays (M): how the map looks. What it shows is the atmosphere's.
+    // A streak is twelve steps of streak_step_m along the flow; at the top of
+    // the overlay's range it crawls streak_scroll streak lengths a second.
+    overlay_opacity: 0.7,
+    overlay_streak_step_m: 50.0,
+    overlay_streak_scroll: 0.35,
+    overlay_streak_strength: 0.8,
 )

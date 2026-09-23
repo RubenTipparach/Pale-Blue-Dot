@@ -63,3 +63,40 @@ lens, so drops stay on top.
   - streamline pixels align with the sampled flow (the mean angle between a
     streak's orientation and the wind at its point is under 20 deg);
   - calm areas carry no streaks.
+
+## What was built, against this design
+
+- **The streamlines are comets, not a convolution.** Each pixel walks twelve
+  steps UPSTREAM along the flow; a lattice cell the walk passes through may be a
+  seed (8% of them), and a seed sends a head downstream whose position scrolls
+  with time at a rate proportional to the local speed. The pixel is lit when a
+  head has just passed it, fading over a tail of a third of the streak. That is
+  12 texture reads a pixel rather than 24, and it gives streaks with a bright
+  head moving the way the flow does, which reads as direction where a symmetric
+  convolution only reads as orientation. A seed cell is 0.6 of a step, which is
+  how wide a streak is.
+- **Cloud and rain fade to nothing at zero**, like a radar map: clear sky and dry
+  ground show the scene. The other overlays cover the planet.
+- **Ranges, from the climate report**: surface wind 0-8 m/s (band means are
+  0-3.5 and the storms faster), jet 0-45, currents 0-0.08 (fastest measured
+  0.06), rain -10..10 mm/h with snow negative, sunlight 0-1000 W/m2,
+  temperature -30..40 C.
+- **The map is hidden, not wrong, while it is rebuilt.** `WeatherMapsNow`
+  carries which overlay the GPU map holds; the pass draws only when that is the
+  one asked for, so switching overlays never paints one field in another's ramp.
+- **The legend** is a Bevy UI panel top right: the name, the colour bar (a
+  256 x 1 image from `overlay::RAMPS`), both ends in their unit (the rain's say
+  which end is snow), the day and season, and `[M] NEXT`.
+
+What the overlays already SHOW about the simulation, from the first captures:
+the jet is at or near its 45 m/s cap across nearly every latitude outside the
+tropics, a slab rather than a ribbon. That is a finding for
+`atmospheric-circulation`, not an overlay defect.
+
+**Data mode (owner's direction after the first captures):** while an overlay
+shows, the clouds pass is skipped and the ground's cloud shadows are off, and
+the planet under the map is drawn in greyscale (its luminance), so the only
+colour on it is the data's. Relief and coastlines stay readable by brightness.
+The cloud overlay is where cloud is shown in this mode. Both follow the one
+fact `WeatherMapsNow::overlay_kind`, so the map, the missing clouds and the
+missing shadows cannot disagree.

@@ -443,6 +443,18 @@ pub struct WeatherSettings {
     pub lightning_cloud: f32,
     /// Brightness a strike lights the ground and the rain with.
     pub lightning_ground: f32,
+
+    // ---- The overlays (`overlay.rs`, the `overlay` pass in `water.wgsl`):
+    // what the map looks like, never what it shows.
+    /// How much of the overlay's colour is laid over the scene, 0..1.
+    pub overlay_opacity: f32,
+    /// One streamline step along the flow, metres. A streak is twelve.
+    pub overlay_streak_step_m: f32,
+    /// How fast the streaks crawl at the top of the overlay's range: streak
+    /// lengths per second. Slower flows crawl slower in proportion.
+    pub overlay_streak_scroll: f32,
+    /// How bright a streak is laid over the colour, 0..1.
+    pub overlay_streak_strength: f32,
 }
 
 impl Default for WeatherSettings {
@@ -522,6 +534,10 @@ impl Default for WeatherSettings {
             lightning_flash_s: 0.7,
             lightning_cloud: 6.0,
             lightning_ground: 0.8,
+            overlay_opacity: 0.7,
+            overlay_streak_step_m: 50.0,
+            overlay_streak_scroll: 0.35,
+            overlay_streak_strength: 0.8,
         }
     }
 }
@@ -608,9 +624,15 @@ impl Validated for WeatherSettings {
             ),
             ("cloud_scatter_phase_falloff", s.cloud_scatter_phase_falloff),
             ("rain_lod_far_frac", s.rain_lod_far_frac),
+            ("overlay_opacity", s.overlay_opacity),
+            ("overlay_streak_strength", s.overlay_streak_strength),
         ] {
             unit(name, value)?;
         }
+        positive(
+            "overlay streaks",
+            &[s.overlay_streak_step_m, s.overlay_streak_scroll],
+        )?;
         (s.rain_puddle_scale_m > 0.0)
             .then_some(())
             .ok_or("rain_puddle_scale_m must be positive")?;

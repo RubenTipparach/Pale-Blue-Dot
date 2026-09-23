@@ -32,6 +32,9 @@ pub struct WeatherMapsNow {
     /// The overlay's map, when one is showing: see `crate::overlay`.
     pub overlay: Option<Arc<Vec<[f32; 4]>>>,
     pub overlay_generation: u64,
+    /// Which overlay the map on the GPU holds, and so which one may be drawn:
+    /// `None` until the map for the one asked for has been built.
+    pub overlay_kind: Option<pbd_core::overlay::Overlay>,
 }
 
 fn publish(air: Option<Res<Air>>, mut now: ResMut<WeatherMapsNow>) {

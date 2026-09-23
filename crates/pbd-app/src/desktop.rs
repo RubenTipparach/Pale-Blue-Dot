@@ -1,6 +1,7 @@
 mod digging;
 mod hud;
 mod menu;
+mod overlay_ui;
 mod scene;
 mod slots;
 mod weather_ui;
@@ -102,6 +103,10 @@ pub struct Launch {
     /// `--day N` puts the clock on that day of the year, for a season. It
     /// pins the clock the way `--time` does.
     pub day: Option<u32>,
+    /// `--overlay <name>` opens with that weather overlay showing (`wind`,
+    /// `jet`, `currents`, `cloud`, `rain`, `humidity`, `sunlight`,
+    /// `temperature`), as M would.
+    pub overlay: Option<pbd_core::overlay::Overlay>,
     /// `--world <name>` opens that save, creating it if it is not there.
     /// Absent, an interactive run opens the one played most recently and a
     /// capture writes to no world at all.
@@ -133,6 +138,7 @@ impl Launch {
             world: None,
             time: None,
             day: None,
+            overlay: None,
             torch: false,
             dig_ahead: false,
             pitch: None,
@@ -276,6 +282,16 @@ impl Launch {
                         "height must be finite and non-negative"
                     );
                     result.height = Some(height);
+                }
+                "--overlay" => {
+                    i += 1;
+                    let name = args.get(i).expect("--overlay requires a name");
+                    result.overlay = Some(
+                        pbd_core::overlay::Overlay::ALL
+                            .into_iter()
+                            .find(|o| o.name().eq_ignore_ascii_case(name))
+                            .unwrap_or_else(|| panic!("no overlay called {name}")),
+                    );
                 }
                 "--rain" => {
                     i += 1;
@@ -488,7 +504,11 @@ pub fn run(args: &[String]) {
         previous: Instant::now(),
     })
     .insert_resource(launch.clone())
-    .add_systems(Startup, (scene::setup, hud::setup, photo_camera))
+    .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
+    .add_systems(
+        Startup,
+        (scene::setup, hud::setup, photo_camera, overlay_ui::spawn),
+    )
     // The column tier is built by a startup system and its records land when
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
@@ -518,6 +538,7 @@ pub fn run(args: &[String]) {
             hud::near_field,
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
+            overlay_ui::show,
             autosave,
             save_weather,
             digging::dig_and_place,

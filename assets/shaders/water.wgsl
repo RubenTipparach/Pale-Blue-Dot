@@ -6,7 +6,7 @@
 // Reverse-Z depth (near=1, sky=0), linear scene colour, the resolved
 // single-sample scene textures. Positions are body-local; `planet_center` is
 // where that frame sits in the render frame (zero today).
-#import pbd::clouds::{CloudLayer, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at}
+#import pbd::clouds::{CloudLayer, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at, cloud_map_smooth, cloud_hash}
 struct Cell {
     direction_height: vec4<f32>,
     corners: array<vec4<f32>,6>,
@@ -63,6 +63,13 @@ struct WaterView {
     rain_tint: vec4<f32>,
     // The snow's colour, linear; w the weather clock, seconds.
     snow_tint: vec4<f32>,
+    // The overlay (`overlay.rs`): x its ramp's row plus one, zero when none
+    // is showing; y and z the values the ramp's ends stand for; w opacity.
+    overlay: vec4<f32>,
+    // x one streak step (m), y how many streak lengths a second a flow at
+    // the top of the range crawls, z streak brightness, w flags: 1 the
+    // overlay flows (draw streaks), 2 it fades out toward zero.
+    overlay_flow: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -749,4 +756,129 @@ fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         if (transmittance < 0.02) { break; }
     }
     return vec4<f32>(scene*transmittance+light,1.0);
+}
+
+// ---- The overlays ----------------------------------------------------------
+// One colour ramp per `pbd_core::overlay::Ramp`, in its order, five stops
+// each, as display (sRGB) colours. `overlay.rs` holds the same table for the
+// legend's colour bar, and a test reads this one to hold them together.
+const OVERLAY_STOPS: u32 = 5u;
+const OVERLAY_RAMPS: array<vec3<f32>, 30> = array<vec3<f32>, 30>(
+    // Speed: calm blue, teal, green, yellow, red.
+    vec3<f32>(0.14, 0.20, 0.55), vec3<f32>(0.10, 0.55, 0.75), vec3<f32>(0.25, 0.75, 0.35),
+    vec3<f32>(0.95, 0.85, 0.25), vec3<f32>(0.85, 0.20, 0.15),
+    // Cover: clear night blue to white.
+    vec3<f32>(0.05, 0.10, 0.20), vec3<f32>(0.25, 0.32, 0.45), vec3<f32>(0.55, 0.60, 0.68),
+    vec3<f32>(0.80, 0.83, 0.88), vec3<f32>(1.00, 1.00, 1.00),
+    // Rain: heavy snow violet, light snow, dry, light rain, heavy rain blue.
+    vec3<f32>(0.55, 0.25, 0.80), vec3<f32>(0.80, 0.70, 0.95), vec3<f32>(0.92, 0.92, 0.92),
+    vec3<f32>(0.40, 0.65, 0.95), vec3<f32>(0.08, 0.20, 0.70),
+    // Humidity: dry brown to wet teal.
+    vec3<f32>(0.55, 0.40, 0.20), vec3<f32>(0.80, 0.70, 0.45), vec3<f32>(0.85, 0.88, 0.75),
+    vec3<f32>(0.40, 0.75, 0.70), vec3<f32>(0.10, 0.45, 0.55),
+    // Sunlight: dark through orange to pale yellow.
+    vec3<f32>(0.05, 0.03, 0.02), vec3<f32>(0.45, 0.15, 0.03), vec3<f32>(0.85, 0.40, 0.05),
+    vec3<f32>(0.98, 0.75, 0.25), vec3<f32>(1.00, 0.97, 0.75),
+    // Temperature: cold blue through white to hot red.
+    vec3<f32>(0.15, 0.25, 0.75), vec3<f32>(0.45, 0.70, 0.95), vec3<f32>(0.95, 0.95, 0.95),
+    vec3<f32>(0.98, 0.65, 0.30), vec3<f32>(0.80, 0.12, 0.10),
+);
+
+// Steps a streak is walked upstream over, and the share of the lattice cells
+// that seed one. A streak's head crawls down from its seed; its tail is
+// `OVERLAY_TAIL` of a streak's length.
+const OVERLAY_STREAK_STEPS: u32 = 12u;
+const OVERLAY_SEED_SHARE: f32 = 0.08;
+const OVERLAY_TAIL: f32 = 0.35;
+// A seed's lattice cell, as a share of one step: the cell is how WIDE a streak
+// is, and narrower than a step so a streak is a line rather than a dash.
+const OVERLAY_SEED_CELL: f32 = 0.6;
+// Where a fading overlay (cloud, rain) is fully drawn, as a share of its top.
+const OVERLAY_FADE_FULL: f32 = 0.15;
+
+fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
+    return select(pow((c + 0.055)/1.055, vec3<f32>(2.4)), c/12.92, c <= vec3<f32>(0.04045));
+}
+
+fn overlay_ramp(ramp: u32, t: f32) -> vec3<f32> {
+    var ramps = OVERLAY_RAMPS;
+    let x = clamp(t, 0.0, 1.0)*f32(OVERLAY_STOPS - 1u);
+    let i = min(u32(floor(x)), OVERLAY_STOPS - 2u);
+    let row = min(ramp, 5u)*OVERLAY_STOPS;
+    return srgb_to_linear(mix(ramps[row + i], ramps[row + i + 1u], x - f32(i)));
+}
+
+// Streamlines by walking the flow: from this point, step upstream along the
+// overlay's vector; a lattice cell the walk passes through may be a SEED, and
+// a seed sends a streak's head downstream at a rate that grows with the flow's
+// speed. The pixel is lit when a head has just passed it. So the streaks lie
+// along the flow and crawl the way it goes, as the wind map's do, with no
+// particles and nothing stored between frames.
+fn overlay_streaks(start: vec3<f32>, top: f32) -> f32 {
+    let radius = view.planet_center.w;
+    let step_m = view.overlay_flow.x;
+    let flow0 = textureSampleLevel(weather_overlay, weather_sampler, start, 0.0).yzw;
+    let speed0 = length(flow0);
+    if (speed0 < 1e-5 || step_m <= 0.0) { return 0.0; }
+    let share = clamp(speed0/max(top, 1e-6), 0.0, 1.5);
+    let rate = view.overlay_flow.y*max(share, 0.05);
+    let seconds = view.snow_tint.w;
+    let cell = step_m*OVERLAY_SEED_CELL;
+    var p = start;
+    var lit = 0.0;
+    for (var i = 0u; i < OVERLAY_STREAK_STEPS; i++) {
+        let flow = textureSampleLevel(weather_overlay, weather_sampler, p, 0.0).yzw;
+        let along = flow - p*dot(flow, p);
+        let len = length(along);
+        if (len < 1e-5) { break; }
+        p = normalize(p - along/len*(step_m/radius));
+        let cell_at = floor(p*radius/cell);
+        if (cloud_hash(cell_at) < OVERLAY_SEED_SHARE) {
+            let head = fract(cloud_hash(cell_at + vec3<f32>(7.1, 3.3, 5.7)) + seconds*rate);
+            let behind = head - f32(i + 1u)/f32(OVERLAY_STREAK_STEPS);
+            if (behind >= 0.0 && behind < OVERLAY_TAIL) {
+                lit = max(lit, 1.0 - behind/OVERLAY_TAIL);
+            }
+        }
+    }
+    return lit*smoothstep(0.0, 0.08, share);
+}
+
+@fragment
+fn overlay(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let uv = in.uv;
+    let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+    let row = view.overlay.x;
+    if (row < 0.5) { return vec4<f32>(scene,1.0); }
+    let ray = view_ray(uv);
+    let eye = ray.origin-view.planet_center.xyz;
+    // The planet point under the pixel: the ground or the sea, whichever is
+    // nearer. The sky has no depth; the moon has, and stands far above the
+    // cloud base, which is the test.
+    var far = 1.0e9;
+    let depth = load_depth(uv);
+    if (depth > 1e-7) { far = length(reconstruct_local(uv,depth)-ray.origin); }
+    let sea = cloud_sphere_hit(eye,ray.direction,view.planet_center.w);
+    if (sea.x > 0.0) { far = min(far,sea.x); }
+    if (far >= 1.0e9) { return vec4<f32>(scene,1.0); }
+    let point = eye+ray.direction*far;
+    if (length(point) > view.cloud_clouds.x) { return vec4<f32>(scene,1.0); }
+    let direction = normalize(point);
+    let here = cloud_map_smooth(weather_overlay,weather_sampler,direction);
+    let low = view.overlay.y;
+    let top = view.overlay.z;
+    let t = (here.x-low)/max(top-low,1e-6);
+    var colour = overlay_ramp(u32(row-0.5),t);
+    var alpha = clamp(view.overlay.w,0.0,1.0);
+    let flags = u32(view.overlay_flow.w+0.5);
+    if ((flags & 2u) != 0u) {
+        alpha *= clamp(abs(here.x)/max(top*OVERLAY_FADE_FULL,1e-6),0.0,1.0);
+    }
+    if ((flags & 1u) != 0u) {
+        colour += vec3<f32>(overlay_streaks(direction,top)*view.overlay_flow.z);
+    }
+    // The planet under a map is grey, so the only colour on it is the data's:
+    // the land keeps its relief and the coast its line, in brightness alone.
+    let grey = vec3<f32>(dot(scene,vec3<f32>(0.2126,0.7152,0.0722)));
+    return vec4<f32>(mix(grey,colour,alpha),1.0);
 }

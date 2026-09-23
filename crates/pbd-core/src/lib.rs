@@ -13,6 +13,7 @@ pub mod hex;
 pub mod inventory;
 pub mod light;
 pub mod orbit;
+pub mod overlay;
 pub mod planet_gen;
 pub mod terrain;
 pub mod topology;

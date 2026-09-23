@@ -806,6 +806,7 @@ impl Plugin for WeatherPlugin {
         .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
             Weather,
         >::default())
+        .init_resource::<crate::overlay::OverlayMode>()
         .add_systems(Startup, (spawn_shower, open_air))
         .add_systems(
             Update,
@@ -813,6 +814,8 @@ impl Plugin for WeatherPlugin {
                 sample_field,
                 crate::atmosphere::warm_capture,
                 crate::atmosphere::advance_air,
+                crate::overlay::cycle_overlay,
+                crate::overlay::fill_overlay,
                 follow_rain,
                 cycle_rain,
                 fill_rain_map,
