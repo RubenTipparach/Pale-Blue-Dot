@@ -74,7 +74,9 @@ fn main() {
     distribution("vapour/saturation", &humidity);
     // The bald spots: the cells with no cloud at all at the end of the run,
     // what they have in common, and how many are clear by how far.
-    let bald: Vec<usize> = (0..air.grid.len()).filter(|&i| air.cover(i) < 0.02).collect();
+    let bald: Vec<usize> = (0..air.grid.len())
+        .filter(|&i| air.cover(i) < 0.02)
+        .collect();
     let share = |f: &dyn Fn(usize) -> bool| {
         100.0 * bald.iter().filter(|&&i| f(i)).count() as f64 / bald.len().max(1) as f64
     };
