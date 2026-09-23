@@ -354,8 +354,53 @@ three-cell profile (`climate_nudge_tau_s`, as Held and Suarez's benchmark
 does). It is off by default and turned on only if the circulation claims fail,
 and the design will say so if it is.
 
-## 10. What this does not settle
+## 10. The ocean
 
-- Seasons: the permanent solstice, flagged in the proposal.
-- Ocean currents: they would reuse section 2's operators later.
-- Whether weather state should ride the per-edit durability path (section 7).
+A second layer on the same cells, stepped in the same step after the air. It
+uses the same gradient, divergence, transport and Coriolis rotation, so there
+is one code path for two fluids. It lives only on ocean cells, and an edge
+between an ocean cell and a land cell carries no flux, so the coast is a wall.
+
+| Field | Unit | Meaning |
+| --- | --- | --- |
+| `eta` | m^2/s^2 | sea-surface height anomaly, as geopotential |
+| `current` | m/s | surface current, tangent |
+| `ground_k` (ocean cells) | K | sea-surface temperature; the same field the air's stage 1 heats |
+
+- **Driven by the wind.** `d current/dt += wind_stress * (wind - current)` over
+  sea cells. Pressure is `-grad eta`, and the continuity equation is
+  `d eta/dt = -c_ocean^2 div(current)`.
+- **Turned and damped.** The same Coriolis rotation turns the current. A
+  bottom drag of `1 / tau_ocean_drag` damps it.
+- **Gyres.** A wind that blows one way in the trades and the other in the
+  westerlies, turned by a Coriolis force that grows toward the poles, drives
+  gyres. Because of that growth, the return flow bunches up against the western
+  coasts (Stommel's result). That bunched return flow is the Gulf Stream in the
+  owner's reference.
+- **Heat.** The current carries the sea-surface temperature by the same
+  semi-Lagrangian transport, so warm water travels poleward along the western
+  boundaries and warms the air over it.
+- **Its own clock.** The ocean is slower than the air (`c_ocean` about 5 m/s),
+  so it runs every step at the same dt; explicit stability needs `c dt` below
+  the spacing.
+- **Into the water shader.** The surface current becomes the water flow vector
+  `water-flow` already reads, so the sea's ripples move with it. That flow has
+  been zero since that change.
+
+**Measured as** (climate report):
+- a gyre in each ocean basin large enough to hold one, turning clockwise in
+  the northern subtropics and anticlockwise in the southern (the sign of the
+  basin-mean relative vorticity);
+- the fastest current in a basin within the western fifth of it;
+- the ocean's heat carried poleward, which shows as higher sea-surface
+  temperature on the western side of a basin's poleward half than the eastern.
+
+## 11. Seasons, and what this does not settle
+
+- The sun's latitude comes from `orbit-and-seasons`. The atmosphere reads the
+  clock's sun and nothing else, so the rain belt follows the sun north and
+  south over a 100-day year.
+- The climatology claims in section 9 are measured on a day at each solstice
+  and at an equinox.
+- Whether weather state should ride the per-edit durability path (section 7):
+  the owner said to save it, and the snapshot cadence is the plan.

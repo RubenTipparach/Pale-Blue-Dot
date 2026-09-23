@@ -30,6 +30,13 @@
       checked; `coriolis_scale` settled on its output; the numbers recorded
       here. If the three cells do not form, the nudge, and say so.
 
+## 2b. The ocean
+- [ ] The ocean layer on ocean cells, with walled coasts: wind stress, pressure,
+      Coriolis, drag, and heat carried by the current.
+- [ ] Tests: no flux through a coast; a steady wind over a closed basin makes
+      a gyre of the right sense; the heat budget closes.
+- [ ] Climate report: gyres, western intensification, poleward heat.
+
 ## 3. The seam
 - [ ] `cloud_cell` reads `&Atmosphere`; `rain_trailing` goes; the old field is
       kept only as the start's perturbation.
@@ -52,6 +59,8 @@
 - [ ] `slab.y`, the global cover lane, and the fixed drift removed;
       `CloudLayer` and the water view re-laid out; their size tests moved.
 - [ ] `tau_up` handed to `cloud-lighting`'s ambient.
+- [ ] The surface current into the water flow vector, so the sea's ripples
+      move with it.
 
 ## 6. Check
 - [ ] Captures: orbit at three hours, a 60-frame time-lapse of a low, and a

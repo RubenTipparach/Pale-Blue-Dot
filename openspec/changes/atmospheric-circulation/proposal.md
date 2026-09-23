@@ -90,43 +90,50 @@ of cloud, rain, snow, wind and lightning.
   moisture into the cells round them until a storm forms there. It no longer
   saturates the whole planet at once.
 
-## Deliberate departures, for the owner to overrule
+## Decided by the owner
 
-- **The weather becomes state.** The current spec says weather is "a
-  deterministic field, not a stored state", so multiplayer agrees without
-  sending anything. A simulation cannot be sampled at an arbitrary time; it has
-  to be stepped. This change replaces that requirement:
-  - the step is deterministic (fixed step, fixed order, basic arithmetic only);
-  - the state (about 0.4 MB) is saved with the world;
-  - a future server owns it and sends snapshots.
+- **The weather is saved state: yes.** The requirement that weather is "a
+  deterministic field, not a stored state" is removed. The step is
+  deterministic (fixed step, fixed order, basic arithmetic only), and the state
+  is saved with the world. A future server owns it and sends snapshots.
+- **The spin the air feels is a tuning knob.** "No real physics here: the spin
+  the atmosphere perceives can differ from the day/night spin." At the real spin,
+  the Held-Hou estimate puts the Hadley cell's edge at 80-90 deg: one cell from
+  equator to pole, like Venus, with no jets. `coriolis_scale` is set by
+  measurement so the planet gets Earth's three cells a hemisphere and a jet.
+  The day length is untouched.
+- **Seasons: yes.** The planet orbits its sun. That is its own change,
+  `orbit-and-seasons`: a 100-day year, with the sun's latitude swinging
+  +/-23.45 deg. The simulation reads the sun from the clock, so seasons reach it
+  without any code here.
+- **Ocean currents: yes, in this change.** The ocean is a second fluid layer on
+  the same cells, using the same operators. It is driven by wind stress, turned
+  by the same Coriolis force, walled by the coasts, and it carries the sea's heat.
+  Its surface current feeds the water shader's flow hook (`water-flow`), which
+  has been zero everywhere until now.
+- **Visual overlays** for wind, currents, cloud, rain, humidity, sunlight and
+  temperature are their own change, `weather-overlays`.
 
-  That is the price of air that moves.
-- **The Coriolis force is stronger than the visible spin implies.** At this
-  planet's size and day length, the physical Coriolis force is too weak to form
-  jets. The standard estimate (Held and Hou) puts the Hadley cell's edge at
-  80-90 deg, so there is one cell from equator to pole. That is a
-  slowly-rotating planet, like Venus. Earth's figure from the same formula is
-  35 deg. Matching it needs the model's rotation at about **3-6 times** the
-  visible spin. That is a documented knob (`coriolis_scale`); the day length is
-  untouched.
-- **The sun never moves north or south.** `daylight::SUN_FIXED` holds it at
-  23.45 deg N for ever: a permanent northern summer solstice. A simulation will
-  believe that. It will put the tropical rain belt in the northern tropics and
-  keep the south in permanent winter. This change keeps the sun as authored;
-  seasons would be a change to `daylight`, not to the weather.
-- **"Air flow ... like water current flows."** The atmosphere is simulated as
-  a fluid on the cells, which is how ocean currents are simulated. Ocean
-  currents themselves do not exist here: the `water-flow` field is zero
-  everywhere. The solver's operators (advection, pressure gradient,
-  divergence, Coriolis) are written for any field on the cells, so a later
-  ocean change reuses them with the wind as its driver. That is one code path
-  for two fluids. The sea-surface temperature the atmosphere needs is simulated
-  here, as the ocean's heat store.
+## The picture to aim at
+
+The owner's reference is an ISS photograph of a hurricane over the sea:
+- a spiral of dense cloud tens of cells across, with an eye;
+- feeder bands curling into it;
+- ragged cumulus streets over open ocean;
+- clear sea between systems.
+
+Dense cloud is **opaque and white on top**. Earth's wind and current maps are
+the reference for motion:
+- counter-rotating storm spirals in the westerlies;
+- a meandering western-boundary current shedding eddies.
+
+This change is judged against those pictures, from orbit. `cloud-lighting`
+owns the white tops.
 
 ## Out of scope
 
-- Ocean currents (reuse this solver later).
-- Seasons (a `daylight` change).
+- Seasons, which are `orbit-and-seasons`.
+- Overlays, which are `weather-overlays`.
 - Thunder audio: there is no audio in the engine.
 - Wind on grass, rain slant, and sailing. The surface wind is exposed from the
   core for those later consumers, but not wired.

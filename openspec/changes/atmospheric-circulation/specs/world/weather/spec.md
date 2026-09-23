@@ -93,3 +93,16 @@ around it. Where it strikes decides where the flash is drawn.
 #### Scenario: The outflow
 - **WHEN** a cell strikes
 - **THEN** on the next step air flows out of it into its neighbours
+
+### Requirement: The ocean has currents
+The ocean SHALL carry a surface current driven by the wind, turned by the same
+spin the air feels, blocked by the coasts, and carrying the sea's heat; the
+water surface SHALL move with it.
+
+#### Scenario: A wind-driven gyre
+- **WHEN** the trade winds and the westerlies blow over an ocean basin
+- **THEN** the basin's water circulates in a gyre, fastest along its western side
+
+#### Scenario: A coast is a wall
+- **WHEN** a current reaches a coast
+- **THEN** no water flows into the land cell
