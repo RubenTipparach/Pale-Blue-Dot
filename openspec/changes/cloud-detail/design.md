@@ -182,3 +182,63 @@ menu's RAIN preset (0.6) gave full cover and no rain. The forcing now also
 drives an updraft (`forcing_lift_mps`, 3 m/s at full), so the slider's storm
 rains by the same convective rule as any storm. A test pins both halves: it
 rains with the updraft, and not without it.
+
+## 5. The descent: space to the ground under a storm
+
+The capture harness gained a `column` view: a camera standing `--height`
+metres above the spawn's ground, tilted by `--pitch`. The weather's "here" is
+the camera's direction, so `--rain 1.0` brews the storm directly beneath it at
+every height. Ten frames were taken in one descent, under full cover and rain
+at every height (`docs/screenshots/descent/`, `sheet.jpg`):
+
+| Height above ground (m) | 8000 | 2500 | 1200 | 800 | 650 | 520 | 420 | 320 | 150 | 2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pitch (deg) | -89 | -65 | -45 | -30 | -20 | -10 | 0 | +10 | +20 | +30 |
+
+The cloud layer spans about 270-720 m above this ground (300-750 m above sea
+level).
+
+**What is right.**
+- The storm is where the atmosphere put it, at every height.
+- From above, the tops are white; from inside, it is a grey whiteout; from
+  below, the base is dark with rain falling.
+- Clouds beyond the horizon stand above the ground's limb, which is right on a
+  4.8 km planet: the cloud shell rises above the ground's horizon from altitude.
+- At 650 m the sky above is nearly black. That is also by design: the
+  atmosphere shell tops out 960 m above sea level, so less than 300 m of air
+  is overhead there.
+
+**What is wrong: the march samples too coarsely, four ways.**
+
+1. **Fur at grazing views** (1200 m, 800 m, 650 m). The cloud top turns into
+   strands radiating from the vanishing point. The march takes 16 steps across
+   the whole slab crossing, and at a grazing angle that crossing is kilometres
+   long, so a step is 100 m or more against detail of 9-38 m. Neighbouring rays
+   sample nearly the same sparse points, which smears the noise along the view
+   direction.
+2. **Speckle.** Per-pixel jitter turns banding into grain, but at 16 steps and
+   with no accumulation over frames the grain shows. It is worst at the cloud
+   top's edge against the sky.
+3. **Hard curved seams** (650 m, 520 m). A ray that leaves through the slab's
+   top and one that leaves through its base have very different lengths. With a
+   fixed step COUNT, the step LENGTH jumps between them, and the seam is that
+   jump drawn across the frame.
+4. **A fingerprint pattern at 2500 m.** At that range the fine octaves are at
+   full strength, and inside a storm (a low, where the wind curls) the combed
+   coordinate folds. The erosion then draws the fold lines.
+
+**The plan** (not built yet; it goes in on the owner's word):
+- **March by LENGTH, not count.** The step grows with distance from the eye
+  (a few metres near, tens far), with a cap on the count and the existing
+  early exit once the cloud is opaque. This removes the fur and the seams
+  together, because neighbouring rays then sample at matching intervals.
+- **LOD from the larger footprint.** Fade the fine octaves by the larger of the
+  pixel's footprint and the step length, so detail finer than the march can
+  resolve is never drawn.
+- **Cap the comb's push where the wind turns fast**, by the local curl, so it
+  cannot fold inside a low.
+- **Measure before and after**, at the same ten heights:
+  - the grain as the high-frequency energy of cloud pixels;
+  - the seams by eye on 650 m and 520 m;
+  - the frame cost at 650 m, where every pixel is in cloud. It is the dearest
+    frame, and on llvmpipe it is already the slowest.

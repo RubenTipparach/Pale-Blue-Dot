@@ -340,7 +340,8 @@ impl Launch {
                 "cave",
                 "overhang",
                 "mouth",
-                "seacave"
+                "seacave",
+                "column"
             ]
             .contains(&result.view.as_str()),
             "unknown capture view"
@@ -351,8 +352,16 @@ impl Launch {
         );
         assert!(
             result.height.is_none()
-                || (["shore", "nightshore", "midnight", "meadow", "river", "dive"]
-                    .contains(&result.view.as_str())
+                || ([
+                    "shore",
+                    "nightshore",
+                    "midnight",
+                    "meadow",
+                    "river",
+                    "dive",
+                    "column"
+                ]
+                .contains(&result.view.as_str())
                     && result.capture.is_some()),
             "--height requires --view shore or dive with a static --capture"
         );
@@ -1304,6 +1313,23 @@ fn photo_camera(
             }
         };
         let mut transform = Transform::from_translation(eye).looking_at(sea, land);
+        transform.translation += launch.render_offset;
+        commands.spawn((Camera3d::default(), transform));
+        return;
+    }
+    if launch.view == "column" {
+        // A camera standing straight over the spawn at `--height` metres
+        // above its ground, facing east and tilted by `--pitch` (-89 looks
+        // straight down): a descent through the weather is this view at a
+        // run of heights. The weather's "here" is the camera's own direction,
+        // so a forced storm (`--rain`) brews directly under it at any height.
+        let direction = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let height = launch.height.unwrap_or(EYE_HEIGHT);
+        let position = direction * (terrain_radius(direction) + height);
+        let east = Vec3::Y.cross(direction).normalize_or_zero();
+        let pitch = launch.pitch.unwrap_or(-30.0).to_radians();
+        let forward = east * pitch.cos() + direction * pitch.sin();
+        let mut transform = Transform::from_translation(position).looking_to(forward, direction);
         transform.translation += launch.render_offset;
         commands.spawn((Camera3d::default(), transform));
         return;
