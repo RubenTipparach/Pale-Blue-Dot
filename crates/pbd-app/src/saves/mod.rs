@@ -162,6 +162,9 @@ pub struct WorldSave {
     pub kit: u32,
     /// Where the player was, for the load to put them back.
     pub pose: Option<Pose>,
+    /// The world's clock when it was last snapshotted, for the load to resume
+    /// the hour and the season.
+    pub world_seconds: Option<f64>,
     slot: Option<Slot>,
     root: PathBuf,
     writer: SaveWriter,
@@ -174,6 +177,7 @@ impl Default for WorldSave {
             carried: None,
             kit: 0,
             pose: None,
+            world_seconds: None,
             slot: None,
             root: PathBuf::from(ROOT),
             writer: SaveWriter::none(),
@@ -201,11 +205,13 @@ impl WorldSave {
             pitch: slot.file.pitch,
             selected: slot.file.selected,
         });
+        let world_seconds = slot.file.world_seconds.filter(|s| s.is_finite());
         Self {
             edits,
             carried,
             kit,
             pose,
+            world_seconds,
             slot: Some(slot),
             writer: SaveWriter::new(&directory),
             root,
@@ -267,8 +273,12 @@ impl WorldSave {
         true
     }
 
-    /// Queue the pose. Whole-file, so it is a replace rather than an append.
-    pub fn snapshot(&mut self, pose: Pose) {
+    /// Queue the pose and the world's clock. Whole-file, so it is a replace
+    /// rather than an append.
+    pub fn snapshot(&mut self, pose: Pose, world_seconds: f64) {
+        if world_seconds.is_finite() {
+            self.world_seconds = Some(world_seconds);
+        }
         let Some(slot) = self.slot.as_mut() else {
             return;
         };
@@ -276,6 +286,7 @@ impl WorldSave {
         slot.file.heading = Some(pose.heading.to_array());
         slot.file.pitch = pose.pitch;
         slot.file.selected = pose.selected;
+        slot.file.world_seconds = self.world_seconds;
         slot.file.played_unix_s = now_unix_s();
         let path = self.root.join(&slot.id).join(WORLD);
         let body = slot.file.to_ron();
@@ -408,12 +419,15 @@ mod tests {
                     &carried
                 ));
             }
-            save.snapshot(Pose {
-                position: Vec3::new(10.0, 20.0, 30.0),
-                heading: Vec3::new(0.0, 0.0, 1.0),
-                pitch: -0.25,
-                selected: 3,
-            });
+            save.snapshot(
+                Pose {
+                    position: Vec3::new(10.0, 20.0, 30.0),
+                    heading: Vec3::new(0.0, 0.0, 1.0),
+                    pitch: -0.25,
+                    selected: 3,
+                },
+                40.5 * 2880.0,
+            );
             save.drain();
         }
         let listed = list(&root);
@@ -429,6 +443,7 @@ mod tests {
         assert_eq!(pose.position, Vec3::new(10.0, 20.0, 30.0));
         assert_eq!(pose.selected, 3);
         assert!((pose.pitch + 0.25).abs() < 1e-6);
+        assert_eq!(reopened.world_seconds, Some(40.5 * 2880.0), "and the clock");
         assert_eq!(reopened.slot().unwrap().file.seed, 4242, "and its world");
         let _ = std::fs::remove_dir_all(&root);
     }

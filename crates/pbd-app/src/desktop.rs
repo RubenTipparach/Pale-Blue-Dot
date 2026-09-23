@@ -99,6 +99,9 @@ pub struct Launch {
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
     pub time: Option<f32>,
+    /// `--day N` puts the clock on that day of the year, for a season. It
+    /// pins the clock the way `--time` does.
+    pub day: Option<u32>,
     /// `--world <name>` opens that save, creating it if it is not there.
     /// Absent, an interactive run opens the one played most recently and a
     /// capture writes to no world at all.
@@ -129,6 +132,7 @@ impl Launch {
             weather_at: 0.0,
             world: None,
             time: None,
+            day: None,
             torch: false,
             dig_ahead: false,
             pitch: None,
@@ -191,6 +195,14 @@ impl Launch {
                         "--time takes an hour in 0..24"
                     );
                     result.time = Some(hour);
+                }
+                "--day" => {
+                    i += 1;
+                    let day: u32 = args
+                        .get(i)
+                        .and_then(|d| d.parse().ok())
+                        .expect("--day requires a day number");
+                    result.day = Some(day);
                 }
                 "--world" => {
                     i += 1;
@@ -369,6 +381,7 @@ pub fn run(args: &[String]) {
     // anchored. Restoring the pose afterwards would build the world around the
     // spawn and then teleport away from it.
     let mut world = open_world(&launch);
+    let saved_seconds = world.world_seconds;
     let hotbar = slots::Hotbar::restore(&mut world);
     // The saves page is the front door of a plain launch: a player picks the
     // world rather than being put in the last one.
@@ -452,8 +465,8 @@ pub fn run(args: &[String]) {
     // The clock: pinned and stopped where a capture asked for an hour, so a
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
-        clock: sun_clock(&launch),
-        running: launch.time.is_none() && launch.capture.is_none(),
+        clock: sun_clock(&launch, saved_seconds),
+        running: launch.time.is_none() && launch.day.is_none() && launch.capture.is_none(),
     })
     .init_resource::<digging::Aim>()
     .insert_resource(ClearColor(if std::env::var("PBD_NO_SKY").is_ok() {
@@ -614,6 +627,11 @@ fn load_world(world: &mut World) {
     let mut opened = WorldSave::open(root, slot);
     let hotbar = slots::Hotbar::restore(&mut opened);
     let pose = opened.pose;
+    // The world resumes in its season and at its hour; one never played
+    // keeps the clock it had.
+    if let Some(seconds) = opened.world_seconds {
+        world.resource_mut::<pbd_app::sky::Sun>().clock.seconds = seconds;
+    }
     world.insert_resource(opened);
     world.insert_resource(hotbar);
     // The tier is standing where the last world left it with the last world's
@@ -658,6 +676,7 @@ fn autosave(
     walking: Option<Res<pbd_app::walking::WalkingState>>,
     slots: Res<slots::Hotbar>,
     walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    sun: Res<pbd_app::sky::Sun>,
     mut save: ResMut<WorldSave>,
     mut due: Local<f32>,
 ) {
@@ -671,12 +690,15 @@ fn autosave(
         return;
     };
     let (heading, pitch) = state.view();
-    save.snapshot(Pose {
-        position: position.0,
-        heading,
-        pitch,
-        selected: slots.selected(),
-    });
+    save.snapshot(
+        Pose {
+            position: position.0,
+            heading,
+            pitch,
+            selected: slots.selected(),
+        },
+        sun.clock.seconds,
+    );
 }
 
 /// Wait for the disk on the way out.
@@ -693,11 +715,20 @@ fn drain_saves(exits: MessageReader<AppExit>, save: Res<WorldSave>) {
 /// The clock a launch starts on: pinned where `--time` asked, and then the
 /// log says where the sun stands from the spawn, as the `--yaw` and `--pitch`
 /// that would centre it, so a sky capture is aimed rather than guessed.
-fn sun_clock(launch: &Launch) -> pbd_core::daylight::Clock {
-    let clock = match launch.time {
-        Some(hour) => pbd_core::daylight::Clock::at_hour(hour),
-        None => pbd_core::daylight::Clock::default(),
+fn sun_clock(launch: &Launch, saved_seconds: Option<f64>) -> pbd_core::daylight::Clock {
+    use pbd_core::daylight::{Clock, START_HOUR};
+    let clock = match (launch.day, launch.time, saved_seconds) {
+        (None, None, Some(seconds)) => Clock { seconds },
+        (day, hour, _) => Clock::at(day.unwrap_or(0), hour.unwrap_or(START_HOUR)),
     };
+    if launch.day.is_some() {
+        info!(
+            "day {} of {}: the sun stands {:.1} deg off the equator",
+            clock.day(),
+            pbd_core::daylight::YEAR_DAYS,
+            clock.declination().to_degrees()
+        );
+    }
     if launch.time.is_some() {
         let up = spawn_direction(launch);
         let heading = Vec3::Y.cross(up).normalize_or(Vec3::X);
