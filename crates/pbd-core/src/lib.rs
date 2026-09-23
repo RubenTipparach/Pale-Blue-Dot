@@ -2,6 +2,7 @@
 //! Planet positions and frame transforms stay f64; local Avian bodies use f32.
 
 pub mod aim;
+pub mod atmosphere;
 pub mod column;
 pub mod daylight;
 pub mod edits;
@@ -14,6 +15,7 @@ pub mod light;
 pub mod orbit;
 pub mod planet_gen;
 pub mod terrain;
+pub mod topology;
 pub mod weather;
 pub mod worms;
 
