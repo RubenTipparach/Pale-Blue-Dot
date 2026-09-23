@@ -49,7 +49,7 @@
     lapse_k_per_m: 0.08,
 
     // Water.
-    evaporation: 1.0e-4,
+    evaporation: 3.0e-4,
     evaporation_wind_mps: 10.0,
     evaporation_cooling: 8.0e4,
     saturation_kg: 30.0,
@@ -58,12 +58,28 @@
     lift_depth_m: 1000.0,
     condense_s: 60.0,
     latent_k_per_kg: 0.35,
-    rain_threshold_kg: 0.3,
+    // A warm cloud rains past this much water; a cold one past less, in
+    // proportion to what the air can hold below 15 C (ice); and a vigorous
+    // updraft (a storm, the afternoon's cumulus) past less again: the
+    // threshold halves at convective_rain_mps of ascent. So storms rain and
+    // a flat deck mostly does not; at 0.3 with neither rule 29% of the planet
+    // was raining at once, and it is 17% now.
+    rain_threshold_kg: 4.0,
     rain_s: 150.0,
+    convective_rain_mps: 0.5,
     cloud_evaporate_s: 120.0,
     cover_min_kg: 0.2,
     cover_full_kg: 0.8,
     raining_rate: 2.0e-4,
+    // Humid air is partly cloudy without rising, past this relative humidity
+    // (Sundqvist): the decks and hazes of cumulus away from the rain belt.
+    // Land's is higher, because those decks are mostly marine.
+    humid_cover_rh: 0.45,
+    humid_cover_rh_land: 0.7,
+    // Sunlit land lifts the air over it, past a threshold of absorbed
+    // sunlight: land clouds over by day and rains more in the afternoon.
+    convection_mps_per_wm2: 0.02,
+    convection_threshold_wm2: 300.0,
 
     // Lightning: charge from rising, condensing air; a strike drops a cold
     // pool whose outflow lifts the air round it.
@@ -95,4 +111,6 @@
     forcing_radius_m: 700.0,
     forcing_s: 5.0,
     forcing_cloud_kg: 1.2,
+    // The updraft it drives, m/s at full: a storm rains by the convective rule.
+    forcing_lift_mps: 3.0,
 )

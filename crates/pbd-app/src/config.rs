@@ -395,6 +395,22 @@ pub struct WeatherSettings {
     pub cloud_scatter_extinction_falloff: f32,
     pub cloud_scatter_energy_falloff: f32,
     pub cloud_scatter_phase_falloff: f32,
+    /// Detail finer than the atmosphere's cells (`cloud_density`). The floor
+    /// under the cover remap, 0..1: at full cover the noise's troughs below
+    /// it stay open, so a deck breaks into cells and lanes; tall convective
+    /// cloud keeps none and stands solid.
+    pub cloud_deck_floor: f32,
+    /// How much the fine octaves eat into a cloud's soft edges, 0..1.
+    pub cloud_erosion: f32,
+    /// How far detail is combed along the wind aloft at `cloud_shear_mps`
+    /// and above: 1 for none, and each unit past it one noise cell (about
+    /// 230 m) of push, varying from place to place so bands slide past one
+    /// another along the flow.
+    pub cloud_shear: f32,
+    pub cloud_shear_mps: f32,
+    /// How far convective cloud (a tall top) takes the cellular texture of
+    /// cumulus rather than the smooth one of a deck, 0..1.
+    pub cloud_cells: f32,
 
     // ---- Rain near: Tenebris's shafts of streaks over every raining cell of
     // a lattice fixed to the body, inside the detail range. Beyond it the rain
@@ -517,6 +533,11 @@ impl Default for WeatherSettings {
             cloud_scatter_extinction_falloff: 0.5,
             cloud_scatter_energy_falloff: 0.5,
             cloud_scatter_phase_falloff: 0.5,
+            cloud_deck_floor: 0.45,
+            cloud_erosion: 0.5,
+            cloud_shear: 2.0,
+            cloud_shear_mps: 25.0,
+            cloud_cells: 0.6,
             rain_cell_m: 60.0,
             rain_detail_range_m: 150.0,
             rain_lod_blend_m: 60.0,
@@ -623,6 +644,9 @@ impl Validated for WeatherSettings {
                 s.cloud_scatter_energy_falloff,
             ),
             ("cloud_scatter_phase_falloff", s.cloud_scatter_phase_falloff),
+            ("cloud_deck_floor", s.cloud_deck_floor),
+            ("cloud_erosion", s.cloud_erosion),
+            ("cloud_cells", s.cloud_cells),
             ("rain_lod_far_frac", s.rain_lod_far_frac),
             ("overlay_opacity", s.overlay_opacity),
             ("overlay_streak_strength", s.overlay_streak_strength),
@@ -633,6 +657,10 @@ impl Validated for WeatherSettings {
             "overlay streaks",
             &[s.overlay_streak_step_m, s.overlay_streak_scroll],
         )?;
+        (s.cloud_shear >= 1.0)
+            .then_some(())
+            .ok_or("cloud_shear must be at least 1 (1 draws no shear)")?;
+        positive("cloud_shear_mps", &[s.cloud_shear_mps])?;
         (s.rain_puddle_scale_m > 0.0)
             .then_some(())
             .ok_or("rain_puddle_scale_m must be positive")?;

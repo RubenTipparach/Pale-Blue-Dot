@@ -150,8 +150,14 @@ struct Report {
     land_cover: (f64, f64),
     clear: f64,
     full: f64,
+    cover_sum: f64,
+    raining: f64,
     samples: f64,
     land_rain_by_hour: [f64; 24],
+    /// Ground minus air over land, K, by local hour: what drives convection.
+    land_excess_by_hour: [(f64, f64); 24],
+    /// Lift, cloud water and humidity over land, by local hour.
+    land_by_hour: [[f64; 4]; 24],
     vorticity: [(f64, f64); 2],
     current_max: f32,
     strikes: usize,
@@ -174,8 +180,12 @@ impl Report {
             land_cover: (0.0, 0.0),
             clear: 0.0,
             full: 0.0,
+            cover_sum: 0.0,
+            raining: 0.0,
             samples: 0.0,
             land_rain_by_hour: [0.0; 24],
+            land_excess_by_hour: [(0.0, 0.0); 24],
+            land_by_hour: [[0.0; 4]; 24],
             vorticity: [(0.0, 0.0); 2],
             current_max: 0.0,
             strikes: 0,
@@ -190,7 +200,7 @@ impl Report {
         for i in 0..air.grid.len() {
             let c = air.grid.centre[i];
             let a = air.grid.area[i] as f64;
-            let cover = air.cover_of(air.cloud[i]) as f64;
+            let cover = air.cover(i) as f64;
             let b = &mut self.bands[latitude_band(c)];
             let e = east(c);
             let north = (Vec3::Y - c * c.y).normalize_or_zero();
@@ -221,10 +231,25 @@ impl Report {
                 let azimuth = c.z.atan2(c.x);
                 let hour = (12.0 + (azimuth - sun_azimuth) / std::f32::consts::TAU * 24.0)
                     .rem_euclid(24.0);
-                self.land_rain_by_hour[(hour as usize).min(23)] += air.rain_rate[i] as f64 * a;
+                let h = (hour as usize).min(23);
+                self.land_rain_by_hour[h] += air.rain_rate[i] as f64 * a;
+                self.land_excess_by_hour[h].0 += (air.ground_k[i] - air.air_k[i]) as f64 * a;
+                self.land_excess_by_hour[h].1 += a;
+                let humidity =
+                    air.humidity_of(air.vapour[i], air.air_k[i], air.surface.elevation[i]);
+                for (k, v) in [air.lift[i], air.cloud[i], humidity, 1.0]
+                    .iter()
+                    .enumerate()
+                {
+                    self.land_by_hour[h][k] += *v as f64 * a;
+                }
             }
             self.clear += if cover < 0.05 { a } else { 0.0 };
             self.full += if cover > 0.95 { a } else { 0.0 };
+            self.cover_sum += cover * a;
+            if air.rain_rate[i] > air.settings.raining_rate {
+                self.raining += a;
+            }
             self.samples += a;
         }
     }
@@ -266,6 +291,12 @@ impl Report {
             100.0 * self.full / self.samples,
             spread
         );
+        println!(
+            "whole planet: mean cover {:.3}, partly covered {:.1}%, raining {:.1}%",
+            self.cover_sum / self.samples,
+            100.0 * (self.samples - self.clear - self.full) / self.samples,
+            100.0 * self.raining / self.samples
+        );
         let peak = self
             .land_rain_by_hour
             .iter()
@@ -273,6 +304,46 @@ impl Report {
             .max_by(|a, b| a.1.total_cmp(b.1))
             .map_or(0, |(h, _)| h);
         println!("land rain peaks at local hour {peak}");
+        let total: f64 = self.land_rain_by_hour.iter().sum::<f64>().max(1e-12);
+        println!(
+            "land rain in the afternoon (12-18h) {:.0}%, before dawn (00-06h) {:.0}%",
+            100.0 * self.land_rain_by_hour[12..18].iter().sum::<f64>() / total,
+            100.0 * self.land_rain_by_hour[0..6].iter().sum::<f64>() / total
+        );
+        println!(
+            "land rain by hour, % of the day's: {}",
+            self.land_rain_by_hour
+                .iter()
+                .map(|r| format!("{:.0}", 100.0 * r / total))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+        let excess = |h: usize| {
+            let (sum, area) = self.land_excess_by_hour[h];
+            sum / area.max(1e-9)
+        };
+        for (name, k) in [("lift m/s", 0), ("cloud kg/m2", 1), ("humidity", 2)] {
+            println!(
+                "land {name} by hour 00/04/08/12/16/20: {}",
+                [0, 4, 8, 12, 16, 20]
+                    .iter()
+                    .map(|&h| format!(
+                        "{:.2}",
+                        self.land_by_hour[h][k] / self.land_by_hour[h][3].max(1e-9)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            );
+        }
+        println!(
+            "land ground minus air, K: 06h {:.1}, 09h {:.1}, 12h {:.1}, 15h {:.1}, 18h {:.1}, 00h {:.1}",
+            excess(6),
+            excess(9),
+            excess(12),
+            excess(15),
+            excess(18),
+            excess(0)
+        );
         println!(
             "ocean: fastest current {:.2} m/s; mean vorticity 15-45 deg, +Y side {:.2e}, -Y side {:.2e} /s",
             self.current_max,

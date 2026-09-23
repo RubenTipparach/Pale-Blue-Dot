@@ -90,6 +90,8 @@ pub(super) struct WaterView {
     cloud_storm: Vec4,
     cloud_flash: Vec4,
     cloud_light: Vec4,
+    cloud_shape: Vec4,
+    cloud_cells: Vec4,
     /// The precipitation map's frame (`weather::RainMap`) and the volume's
     /// look; see `rain` in `water.wgsl` for what each lane is.
     rain_map: Vec4,
@@ -596,6 +598,8 @@ fn prepare_water_views(
             cloud_storm: clouds.storm,
             cloud_flash: clouds.flash,
             cloud_light: clouds.light,
+            cloud_shape: clouds.shape,
+            cloud_cells: clouds.cells,
             rain_map: rain_map
                 .as_deref()
                 .map_or(Vec4::ZERO, |m| m.anchor.extend(m.cell_m)),
@@ -898,7 +902,7 @@ mod tests {
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (2, 37));
+        assert_eq!((mat4, vec4), (2, 39));
         assert_eq!(
             WaterView::min_size().get() as usize,
             mat4 * 64 + vec4 * 16,

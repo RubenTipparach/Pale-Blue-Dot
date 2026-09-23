@@ -87,6 +87,17 @@
     cloud_scatter_extinction_falloff: 0.5,
     cloud_scatter_energy_falloff: 0.5,
     cloud_scatter_phase_falloff: 0.5,
+    // Detail finer than the atmosphere's 181 m cells. The deck floor opens
+    // lanes in a full cover (convective cloud keeps none); erosion eats the
+    // soft edges (fading as its octaves fall under a pixel, or they alias);
+    // shear combs detail along the wind aloft, 1 for none and each unit past
+    // it a noise cell (~230 m) of push at shear_mps and above; cells is how
+    // far a tall convective cloud takes cumulus's cellular texture.
+    cloud_deck_floor: 0.45,
+    cloud_erosion: 0.5,
+    cloud_shear: 2.0,
+    cloud_shear_mps: 25.0,
+    cloud_cells: 0.6,
 
     // Rain near: every raining cell inside the detail range draws shafts of
     // streaks, thinning to the far fraction and fading out over the blend

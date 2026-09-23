@@ -140,6 +140,8 @@ pub struct CloudNow {
     pub storm: Vec4,
     pub flash: Vec4,
     pub light: Vec4,
+    pub shape: Vec4,
+    pub cells: Vec4,
 }
 
 impl CloudNow {
@@ -171,6 +173,13 @@ impl CloudNow {
                 settings.cloud_scatter_energy_falloff,
                 settings.cloud_scatter_phase_falloff,
             ),
+            shape: Vec4::new(
+                settings.cloud_deck_floor,
+                settings.cloud_erosion,
+                settings.cloud_shear,
+                settings.cloud_shear_mps,
+            ),
+            cells: Vec4::new(settings.cloud_cells, 0.0, 0.0, 0.0),
         }
     }
 }

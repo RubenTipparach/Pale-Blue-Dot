@@ -135,6 +135,10 @@ pub struct Atmosphere {
     pub sunlight: Vec<f32>,
     /// Strikes within the last `strike_keep_s`.
     pub strikes: Vec<Strike>,
+    /// Ascent the weather slider drives this step, m/s, per cell. Input, not
+    /// state: it is worked out afresh from the forcing every step, so it is
+    /// not saved.
+    forced: Vec<f32>,
     /// Variability finer than a cell, -1..1, refreshed now and then.
     mesoscale: Vec<f32>,
 }
@@ -164,6 +168,7 @@ impl Atmosphere {
             upper: vec![Vec3::ZERO; n],
             sunlight: vec![0.0; n],
             strikes: Vec::new(),
+            forced: vec![0.0; n],
             mesoscale: vec![0.0; n],
             grid: Arc::new(grid),
             settings,
@@ -213,6 +218,46 @@ impl Atmosphere {
         )
     }
 
+    /// Cover that humid air makes without rising (Sundqvist 1989): none up to
+    /// the critical humidity, all of it at saturation, and a square root
+    /// between, so the cover comes on quickly once the air is humid enough.
+    /// `sea` is the share of the place that is ocean, 0..1: the critical
+    /// humidity runs from the land's to the sea's with it.
+    pub fn humid_cover(&self, humidity: f32, sea: f32) -> f32 {
+        let s = self.settings;
+        let critical = s.humid_cover_rh_land
+            + (s.humid_cover_rh - s.humid_cover_rh_land) * sea.clamp(0.0, 1.0);
+        let dry = ((1.0 - humidity) / (1.0 - critical).max(1e-6)).clamp(0.0, 1.0);
+        1.0 - dry.sqrt()
+    }
+
+    /// Relative humidity of a column, 0..1: its vapour over saturation at the
+    /// air's temperature at the ground's height.
+    pub fn humidity_of(&self, vapour: f32, air_k: f32, elevation: f32) -> f32 {
+        (vapour / self.saturation(air_k - self.settings.lapse_k_per_m * elevation)).clamp(0.0, 1.0)
+    }
+
+    /// The cloud water that would show as `cover`: the inverse of `cover_of`
+    /// taken straight, so a deck that humidity alone makes has the thickness
+    /// its cover implies and shades what is under it.
+    pub fn water_for_cover(&self, cover: f32) -> f32 {
+        if cover <= 0.0 {
+            return 0.0;
+        }
+        let s = self.settings;
+        s.cover_min_kg + cover.clamp(0.0, 1.0) * (s.cover_full_kg - s.cover_min_kg)
+    }
+
+    /// A cell's cloud cover: the cover of the water condensed in it or of the
+    /// humid air in it, whichever is more. The one answer the sunlight, the
+    /// sample and the report all read.
+    pub fn cover(&self, i: usize) -> f32 {
+        let humidity = self.humidity_of(self.vapour[i], self.air_k[i], self.surface.elevation[i]);
+        let sea = if self.surface.ocean[i] { 1.0 } else { 0.0 };
+        self.cover_of(self.cloud[i])
+            .max(self.humid_cover(humidity, sea))
+    }
+
     /// Everything at a direction.
     pub fn sample(&self, direction: Vec3) -> Sample {
         let (cells, w) = self.grid.locate(direction);
@@ -233,8 +278,10 @@ impl Atmosphere {
                 }
             })
             .sum();
+        let humidity = self.humidity_of(vapour, air, elevation);
+        let humid = self.humid_cover(humidity, ocean_share);
         Sample {
-            cover: self.cover_of(cloud),
+            cover: self.cover_of(cloud).max(humid),
             cloud,
             cloud_top: self.cloud_top(cloud, lift),
             rain_rate: weighted(&self.rain_rate, cells, w).max(0.0),
@@ -246,11 +293,10 @@ impl Atmosphere {
             } else {
                 Vec3::ZERO
             },
-            humidity: (vapour / self.saturation(air - self.settings.lapse_k_per_m * elevation))
-                .clamp(0.0, 1.0),
+            humidity,
             sunlight: weighted(&self.sunlight, cells, w).max(0.0),
             temperature: ground,
-            optical_depth: cloud * 20.0,
+            optical_depth: cloud.max(self.water_for_cover(humid)) * 20.0,
         }
     }
 
@@ -341,6 +387,16 @@ impl Atmosphere {
         let mut vectors = vectors.into_iter();
         self.wind = vectors.next().expect("wind");
         self.current = vectors.next().expect("current");
+        // The mesoscale noise is not saved: it is a function of the step it
+        // was last refreshed at, so it is refreshed again as of that step.
+        // The step refreshes it when it begins on a multiple of the period;
+        // a new world refreshes it at step nought.
+        let every = (self.settings.mesoscale_every_s / self.settings.dt_s).max(1.0) as u64;
+        self.step = match step.checked_sub(1) {
+            Some(last) => last - last % every,
+            None => 0,
+        };
+        self.refresh_mesoscale();
         self.step = step;
         Ok(())
     }

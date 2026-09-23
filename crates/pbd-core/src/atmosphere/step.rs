@@ -28,15 +28,18 @@ impl Atmosphere {
         let broad: Vec<f32> = (0..n)
             .map(|i| divergence[i] + self.grid.neighbour_excess(&divergence, i, |_| false) * 0.75)
             .collect();
+        // The slider brews its storm before the water step, so the updraft it
+        // drives condenses and rains in the same step it is driven.
+        self.forced.fill(0.0);
+        for f in forcing {
+            self.force(*f, dt);
+        }
         self.water(&broad, dt);
         self.lightning(dt);
         self.seed_storms(dt);
         let every = (self.settings.mesoscale_every_s / dt).max(1.0) as u64;
         if self.step.is_multiple_of(every) {
             self.refresh_mesoscale();
-        }
-        for f in forcing {
-            self.force(*f, dt);
         }
         self.ocean(dt);
         self.guard();
@@ -51,7 +54,7 @@ impl Atmosphere {
         let before = self.ground_k.clone();
         for i in 0..n {
             let c = self.grid.centre[i];
-            let cover = self.cover_of(self.cloud[i]);
+            let cover = self.cover(i);
             let sunlight = s.solar_wm2 * c.dot(sun).max(0.0) * (1.0 - s.cloud_albedo * cover);
             self.sunlight[i] = sunlight;
             let absorbed = sunlight * (1.0 - self.surface.albedo[i]);
@@ -163,11 +166,24 @@ impl Atmosphere {
             // Signed: converging air and air driven up a slope rise and cool;
             // diverging air and air running downhill sink and dry, which is
             // what clears the sky under a high.
-            let rising = -divergence * s.lift_depth_m + wind.dot(self.surface.slope[i]);
-            let lift = rising.max(0.0);
-            self.lift[i] = lift;
             let ground = self.ground_k[i] - s.lapse_k_per_m * elevation;
             let air = self.air_k[i] - s.lapse_k_per_m * elevation;
+            // And sunlit land lifts the air over it: its heat capacity is small,
+            // so what it absorbs goes into the air by day. This is the
+            // afternoon's cumulus and its thunderstorm; the rain's own delay
+            // (condensing, then raining out) puts the peak after noon.
+            let buoyant = if self.surface.ocean[i] {
+                0.0
+            } else {
+                let absorbed = self.sunlight[i] * (1.0 - self.surface.albedo[i]);
+                (absorbed - s.convection_threshold_wm2).max(0.0) * s.convection_mps_per_wm2
+            };
+            let rising = -divergence * s.lift_depth_m
+                + wind.dot(self.surface.slope[i])
+                + buoyant
+                + self.forced[i];
+            let lift = rising.max(0.0);
+            self.lift[i] = lift;
             let deficit = (self.saturation(ground) - self.vapour[i]).max(0.0);
             let evaporated = s.evaporation
                 * deficit
@@ -191,8 +207,13 @@ impl Atmosphere {
                 self.cloud[i] -= dried;
                 self.vapour[i] += dried;
             }
-            let rained =
-                ((self.cloud[i] - s.rain_threshold_kg).max(0.0) * dt / s.rain_s).min(self.cloud[i]);
+            // Cold cloud rains (snows) out of less water: ice grows at the
+            // droplets' expense. So the threshold falls with what the air can
+            // hold below 15 C; without it the polar cloud never reached the
+            // threshold and never dried, and piled up day on day.
+            let cold = (self.saturation(air) / s.saturation_kg).min(1.0);
+            let threshold = s.rain_threshold_kg * cold / (1.0 + lift / s.convective_rain_mps);
+            let rained = ((self.cloud[i] - threshold).max(0.0) * dt / s.rain_s).min(self.cloud[i]);
             self.cloud[i] -= rained;
             self.rain_rate[i] = rained / dt;
             self.charge[i] += s.charge_rate * (condensed / dt) * lift * dt;
@@ -256,6 +277,7 @@ impl Atmosphere {
                 self.vapour[i] += (saturated * weight - self.vapour[i]) * rate;
             }
             self.charge[i] += weight * rate * 0.2;
+            self.forced[i] = self.forced[i].max(weight * s.forcing_lift_mps);
         }
     }
 

@@ -106,9 +106,15 @@ pub struct AtmosphereSettings {
     /// Warming of the air per kg/m^2 condensed, K: the latent heat that
     /// drives a storm.
     pub latent_k_per_kg: f32,
-    /// Cloud water beyond which a cloud rains, kg/m^2, and how fast, s.
+    /// Cloud water beyond which a WARM cloud rains, kg/m^2, and how fast, s.
+    /// Colder cloud rains out of less, in proportion to what the air can hold
+    /// below 15 C (ice grows at the droplets' expense).
     pub rain_threshold_kg: f32,
     pub rain_s: f32,
+    /// Ascent that halves the rain threshold, m/s: a vigorous updraft rains
+    /// out of less water than a flat deck does, so storms and the afternoon's
+    /// cumulus rain and a stratus deck mostly does not.
+    pub convective_rain_mps: f32,
     /// How fast cloud in unsaturated air evaporates, s.
     pub cloud_evaporate_s: f32,
     /// Cloud water that starts to show, and that makes full cover, kg/m^2.
@@ -116,6 +122,22 @@ pub struct AtmosphereSettings {
     pub cover_full_kg: f32,
     /// Precipitation rate that counts as raining, kg/m^2/s.
     pub raining_rate: f32,
+    /// Relative humidity above which air is partly cloudy without rising,
+    /// 0..1: the critical humidity of Sundqvist's sub-grid cloud. That cover
+    /// is a deck or a haze of small cumulus and rains nothing.
+    pub humid_cover_rh: f32,
+    /// The same over land, 0..1. Higher than the sea's: the decks humidity
+    /// alone makes are mostly marine (stratocumulus under the subtropical
+    /// highs), and with one threshold for both the land out-clouded the sea.
+    pub humid_cover_rh_land: f32,
+    /// Ascent per W/m^2 of sunlight the LAND absorbs past
+    /// `convection_threshold_wm2`, m/s per W/m^2: heated ground lifts the air
+    /// over it, so land clouds over by day and rains in the afternoon. The
+    /// sea is left out, because its heat goes into the water. (Ground minus
+    /// air was the first rule tried; measured over land it is negative at every
+    /// hour, so it never fired. See the `cloud-detail` design.)
+    pub convection_mps_per_wm2: f32,
+    pub convection_threshold_wm2: f32,
 
     // --- Lightning ---
     /// Charge built per kg/m^2/s condensed per m/s of ascent.
@@ -171,6 +193,9 @@ pub struct AtmosphereSettings {
     pub forcing_s: f32,
     /// Cloud water the forcing brews at full, kg/m^2.
     pub forcing_cloud_kg: f32,
+    /// The updraft the forcing drives at full, m/s: what makes its storm a
+    /// storm, so it rains by the same convective rule any storm does.
+    pub forcing_lift_mps: f32,
 }
 
 impl Default for AtmosphereSettings {
@@ -205,7 +230,7 @@ impl Default for AtmosphereSettings {
             sensible_wm2k: 15.0,
             heat_spread: 0.002,
             lapse_k_per_m: 0.08,
-            evaporation: 1.0e-4,
+            evaporation: 3.0e-4,
             evaporation_wind_mps: 10.0,
             evaporation_cooling: 8.0e4,
             saturation_kg: 30.0,
@@ -214,12 +239,17 @@ impl Default for AtmosphereSettings {
             lift_depth_m: 1000.0,
             condense_s: 60.0,
             latent_k_per_kg: 0.35,
-            rain_threshold_kg: 0.3,
+            rain_threshold_kg: 4.0,
             rain_s: 150.0,
+            convective_rain_mps: 0.5,
             cloud_evaporate_s: 120.0,
             cover_min_kg: 0.2,
             cover_full_kg: 0.8,
             raining_rate: 2.0e-4,
+            humid_cover_rh: 0.45,
+            humid_cover_rh_land: 0.7,
+            convection_mps_per_wm2: 0.02,
+            convection_threshold_wm2: 300.0,
             charge_rate: 0.3,
             charge_decay_s: 120.0,
             strike_charge: 1.0,
@@ -242,6 +272,7 @@ impl Default for AtmosphereSettings {
             forcing_radius_m: 700.0,
             forcing_s: 5.0,
             forcing_cloud_kg: 1.2,
+            forcing_lift_mps: 3.0,
         }
     }
 }
@@ -263,6 +294,7 @@ impl AtmosphereSettings {
             ("air_relax_s", self.air_relax_s),
             ("condense_s", self.condense_s),
             ("rain_s", self.rain_s),
+            ("convective_rain_mps", self.convective_rain_mps),
             ("cloud_evaporate_s", self.cloud_evaporate_s),
             ("charge_decay_s", self.charge_decay_s),
             ("ocean_drag_s", self.ocean_drag_s),
@@ -310,6 +342,8 @@ impl AtmosphereSettings {
             self.cover_min_kg,
             self.cover_full_kg,
             self.raining_rate,
+            self.convection_mps_per_wm2,
+            self.convection_threshold_wm2,
             self.charge_rate,
             self.strike_charge,
             self.strike_chance,
@@ -325,6 +359,7 @@ impl AtmosphereSettings {
             self.mesoscale,
             self.forcing_radius_m,
             self.forcing_cloud_kg,
+            self.forcing_lift_mps,
         ];
         if every.iter().any(|v| !v.is_finite() || *v < 0.0) {
             return Err("every atmosphere setting must be finite and not negative".into());
@@ -342,6 +377,14 @@ impl AtmosphereSettings {
         ] {
             if value > 1.0 {
                 return Err(format!("{name} must be at most 1"));
+            }
+        }
+        for (name, value) in [
+            ("humid_cover_rh", self.humid_cover_rh),
+            ("humid_cover_rh_land", self.humid_cover_rh_land),
+        ] {
+            if !(0.0..1.0).contains(&value) {
+                return Err(format!("{name} must be within 0..1"));
             }
         }
         if self.cover_full_kg <= self.cover_min_kg {

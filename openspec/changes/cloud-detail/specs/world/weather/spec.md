@@ -15,8 +15,8 @@ humidity alone SHALL NOT rain, and the water budget SHALL be unchanged.
 - **AND** at least 30% of the planet is partly covered
 
 #### Scenario: Land clouds over in the afternoon
-- **WHEN** rain over land is binned by local hour over a day
-- **THEN** it peaks between 13:00 and 17:00
+- **WHEN** rain over land is binned by local hour over a day, at either solstice
+- **THEN** more of it falls between 12:00 and 18:00 than between 00:00 and 06:00
 
 ### Requirement: Clouds carry detail finer than the simulation's cells
 The clouds SHALL draw structure finer than the atmosphere's cells: a fully

@@ -287,7 +287,125 @@ fn a_sample_reads_the_cells_under_it() {
     for i in (0..a.grid.len()).step_by(37) {
         let s = a.sample(a.grid.centre[i]);
         assert!((s.cloud - a.cloud[i]).abs() < 1e-3, "cell {i}");
-        assert!((s.cover - a.cover_of(a.cloud[i])).abs() < 1e-3);
+        assert!((s.cover - a.cover(i)).abs() < 1e-3);
         assert!((0.0..=1.0).contains(&s.humidity));
     }
+}
+
+/// A still planet: no wind, no storms, no noise, so a test controls every
+/// term the water step reads.
+fn still() -> Atmosphere {
+    let mut a = air(AtmosphereSettings {
+        storm_rate: 0.0,
+        mesoscale: 0.0,
+        belt_pressure: 0.0,
+        thermal_pressure: 0.0,
+        ..quiet()
+    });
+    for w in &mut a.wind {
+        *w = Vec3::ZERO;
+    }
+    a.phi.fill(0.0);
+    a.cloud.fill(0.0);
+    a
+}
+
+#[test]
+fn humid_air_is_partly_cloudy_and_does_not_rain() {
+    let mut a = still();
+    let s = a.settings;
+    // The Sundqvist curve: nothing up to the critical humidity, everything at
+    // saturation, rising between; and the land's threshold is the higher.
+    assert_eq!(a.humid_cover(s.humid_cover_rh, 1.0), 0.0);
+    assert!((a.humid_cover(1.0, 1.0) - 1.0).abs() < 1e-6);
+    assert!(a.humid_cover(0.8, 1.0) > a.humid_cover(0.7, 1.0));
+    assert!(a.humid_cover(0.8, 1.0) > a.humid_cover(0.8, 0.0));
+    // Humid air held below saturation, with nothing rising: cloudy, dry.
+    for i in 0..a.grid.len() {
+        let saturation = a.saturation(a.air_k[i] - s.lapse_k_per_m * a.surface.elevation[i]);
+        a.vapour[i] = 0.85 * saturation;
+    }
+    let sea = (0..a.grid.len())
+        .find(|&i| a.surface.ocean[i])
+        .expect("the planet has sea");
+    assert!(a.cover(sea) > 0.4, "cover {}", a.cover(sea));
+    assert_eq!(a.cloud[sea], 0.0, "that cover is not condensed water");
+    // Night everywhere the sea cell is, so nothing is lifted by the sun.
+    a.step(-a.grid.centre[sea], &[]);
+    assert_eq!(a.rain_rate[sea], 0.0, "humid air alone does not rain");
+}
+
+#[test]
+fn sunlit_land_lifts_the_air_and_night_land_does_not() {
+    let a = still();
+    let land = (0..a.grid.len())
+        .find(|&i| !a.surface.ocean[i] && a.surface.slope[i].length() < 1e-3)
+        .or_else(|| (0..a.grid.len()).find(|&i| !a.surface.ocean[i]))
+        .expect("the planet has land");
+    let overhead = a.grid.centre[land];
+    let mut day = a.clone();
+    let mut night = a.clone();
+    day.step(overhead, &[]);
+    night.step(-overhead, &[]);
+    assert!(
+        day.lift[land] > night.lift[land] + 1.0,
+        "noon lift {} against midnight {}",
+        day.lift[land],
+        night.lift[land]
+    );
+}
+
+#[test]
+fn cold_cloud_rains_out_of_less_water_than_warm() {
+    let mut a = still();
+    let sea: Vec<usize> = (0..a.grid.len()).filter(|&i| a.surface.ocean[i]).collect();
+    let (cold, warm) = (sea[0], sea[sea.len() / 2]);
+    let s = a.settings;
+    // The same cloud water, well under the warm threshold, in air at -20 C
+    // and at 25 C; the vapour just saturated so nothing condenses or dries.
+    for (i, k) in [(cold, -20.0), (warm, 25.0)] {
+        a.air_k[i] = k;
+        a.ground_k[i] = k;
+        a.cloud[i] = 0.5 * s.rain_threshold_kg;
+        a.vapour[i] = a.saturation(k - s.lapse_k_per_m * a.surface.elevation[i]);
+    }
+    a.step(-Vec3::Y, &[]);
+    assert!(a.rain_rate[cold] > 0.0, "cold cloud snows");
+    assert_eq!(
+        a.rain_rate[warm], 0.0,
+        "the same water in warm cloud does not rain"
+    );
+}
+
+/// The menu's RAIN preset (0.6) rains where it points. Its storm is a storm
+/// because of the updraft the forcing drives: once a warm cloud needed 4 kg/m^2
+/// to rain, a slider that only added cloud water brought full cover and no rain.
+#[test]
+fn the_rain_preset_rains() {
+    let here = Vec3::new(-0.3, 0.2, 0.9).normalize();
+    let rain = |lift: f32| {
+        let mut a = air(AtmosphereSettings {
+            forcing_radius_m: 1500.0,
+            forcing_lift_mps: lift,
+            ..quiet()
+        });
+        for _ in 0..40 {
+            a.step(
+                SUN,
+                &[Forcing {
+                    direction: here,
+                    strength: 0.6,
+                }],
+            );
+        }
+        (a.sample(here).rain_rate, a.settings.raining_rate)
+    };
+    let (with_updraft, raining) = rain(AtmosphereSettings::default().forcing_lift_mps);
+    assert!(
+        with_updraft > raining,
+        "rain {with_updraft} against the raining rate {raining}"
+    );
+    // And it is the updraft that does it: the same cloud without one is dry.
+    let (without, _) = rain(0.0);
+    assert!(without < raining, "rain {without} with no updraft");
 }

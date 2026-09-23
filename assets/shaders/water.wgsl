@@ -50,6 +50,8 @@ struct WaterView {
     cloud_storm: vec4<f32>,
     cloud_flash: vec4<f32>,
     cloud_light: vec4<f32>,
+    cloud_shape: vec4<f32>,
+    cloud_cells: vec4<f32>,
     // The precipitation map (`weather::RainMap`): the anchor direction and the
     // cell size in metres; the plane's u axis and the map's side in cells; its
     // v axis and the volume's extinction per metre of full rain.
@@ -90,7 +92,8 @@ struct WaterView {
 @group(2) @binding(2) var weather_overlay: texture_cube<f32>;
 @group(2) @binding(3) var weather_sampler: sampler;
 fn cloud_layer() -> CloudLayer {
-    return CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash,view.cloud_light);
+    return CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash,view.cloud_light,
+        view.cloud_shape,view.cloud_cells);
 }
 
 struct VertexOut {
@@ -684,9 +687,13 @@ fn rain_map_at(p: vec3<f32>) -> f32 {
 fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let uv = in.uv;
     let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+    // The angle one pixel spans, off the ray's own screen derivative: what
+    // fades the clouds' finer octaves as they fall under a pixel. Taken before
+    // any branch, where a derivative is defined.
+    let ray = view_ray(uv);
+    let pixel_angle = length(fwidth(ray.direction));
     // Under the sea the surface is the sky; the compose pass drew it.
     if (view.fx.y > 0.75) { return vec4<f32>(scene,1.0); }
-    let ray = view_ray(uv);
     let eye = ray.origin-view.planet_center.xyz;
     let layer = cloud_layer();
     var far = 1.0e9;
@@ -698,8 +705,12 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     if (sea.x > 0.0) { far = min(far,sea.x); }
     let span = cloud_span(eye,ray.direction,0.0,far,layer);
     if (span.y <= span.x) { return vec4<f32>(scene,1.0); }
+    // Interleaved gradient noise (Jimenez 2014) on the pixel: a different step
+    // offset for every pixel, so the march's banding becomes fine grain.
+    let pixel = floor(in.position.xy);
+    let jitter = fract(52.9829189*fract(dot(pixel,vec2<f32>(0.06711056,0.00583715))));
     let cloud = cloud_march(eye,ray.direction,span.x,span.y,layer,safe_normal(view.sun.xyz),
-        weather_cloud,weather_wind,weather_sampler);
+        weather_cloud,weather_wind,weather_sampler,jitter,pixel_angle);
     return vec4<f32>(scene*(1.0-cloud.w)+cloud.rgb,1.0);
 }
 

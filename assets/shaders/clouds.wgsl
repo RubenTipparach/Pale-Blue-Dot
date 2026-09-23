@@ -34,6 +34,11 @@ struct CloudLayer {
     // The sun's strength on a cloud, and the multiple-scattering octaves'
     // falloffs of extinction, energy and phase.
     light: vec4<f32>,
+    // Detail finer than the atmosphere's cells: the deck floor, the fine
+    // octaves' erosion, the wind shear's factor and the speed it reaches it at.
+    shape: vec4<f32>,
+    // How far convective cloud takes the cellular texture; three spare.
+    cells: vec4<f32>,
 }
 
 fn cloud_sphere_hit(ro: vec3<f32>, rd: vec3<f32>, radius: f32) -> vec2<f32> {
@@ -65,6 +70,59 @@ fn cloud_noise(p: vec3<f32>) -> f32 {
 fn cloud_shape(q: vec3<f32>) -> f32 {
     return cloud_noise(q)*0.55 + cloud_noise(q*2.7+vec3<f32>(7.0))*0.30
         + cloud_noise(q*6.1+vec3<f32>(19.0))*0.15;
+}
+
+// Two finer octaves, down to about 9 m on the cloud layer: what erodes a
+// cloud's soft edges into the torn fringe a cloud has seen from above.
+// `weights` fades each octave out as it falls under the pixel (see
+// `cloud_density`): noise finer than a pixel aliases into moire lines.
+const CLOUD_FINE_A: f32 = 12.5;
+const CLOUD_FINE_B: f32 = 26.0;
+fn cloud_fine(q: vec3<f32>, weights: vec2<f32>) -> f32 {
+    var fine = 0.0;
+    if (weights.x > 0.0) { fine += cloud_noise(q*CLOUD_FINE_A+vec3<f32>(31.0))*0.6*weights.x; }
+    if (weights.y > 0.0) { fine += cloud_noise(q*CLOUD_FINE_B+vec3<f32>(47.0))*0.4*weights.y; }
+    return fine;
+}
+
+// Cellular noise (Worley's F1, the distance to the nearest scattered point),
+// turned over so a cell's middle is high: the rounded heads and the gaps
+// between them of a field of cumulus, which value noise cannot draw. The
+// minimum is a SMOOTH one (a log-sum of exponentials): a hard minimum has a
+// crease wherever two cells meet, and the cover remap sharpened every crease
+// into a thin dark line across the cloud.
+const CLOUD_CELL_SMOOTH: f32 = 8.0;
+fn cloud_cells(q: vec3<f32>) -> f32 {
+    let cell = floor(q);
+    var sum = 0.0;
+    for (var x = -1; x <= 1; x++) {
+        for (var y = -1; y <= 1; y++) {
+            for (var z = -1; z <= 1; z++) {
+                let c = cell + vec3<f32>(f32(x), f32(y), f32(z));
+                let point = c + vec3<f32>(cloud_hash(c), cloud_hash(c+vec3<f32>(3.1)),
+                    cloud_hash(c+vec3<f32>(7.7)));
+                sum += exp(-CLOUD_CELL_SMOOTH*length(q - point));
+            }
+        }
+    }
+    let nearest = -log(max(sum, 1e-12))/CLOUD_CELL_SMOOTH;
+    return clamp(1.0 - nearest, 0.0, 1.0);
+}
+
+// The noise coordinate combed along the wind aloft: each point is pushed
+// along the wind by a smooth noise of where it is, so neighbouring bands of
+// cloud slide past one another along the flow and every feature is drawn out
+// that way: streets in a steady wind, arms where the flow curls round a low.
+// (Squeezing the coordinate along the wind cannot work here: the coordinate
+// is the point's own direction and the wind is tangent to it, so their dot
+// product is nought everywhere.) The push grows with the wind's speed, up to
+// `shape.z` noise cells at `shape.w` m/s.
+fn cloud_sheared(q: vec3<f32>, wind: vec3<f32>, layer: CloudLayer) -> vec3<f32> {
+    let speed = length(wind);
+    if (speed < 1e-3) { return q; }
+    let reach = max(layer.shape.z - 1.0, 0.0)*clamp(speed/max(layer.shape.w, 1e-3), 0.0, 1.0);
+    let comb = cloud_noise(q*0.7 + vec3<f32>(13.0)) - 0.5;
+    return q + (wind/speed)*comb*reach;
 }
 
 // Where a point reads the weather maps: its own direction pushed about by a
@@ -160,7 +218,8 @@ fn cloud_wind(at: vec3<f32>, wind_map: texture_cube<f32>, map_sampler: sampler) 
 // towers and a stratus deck lies flat. The noise drifts with the wind aloft
 // by a two-phase flow map, so the detail moves the way the air does without
 // ever stretching.
-fn cloud_density(p: vec3<f32>, layer: CloudLayer, local: vec4<f32>, wind: vec3<f32>) -> f32 {
+fn cloud_density(p: vec3<f32>, layer: CloudLayer, local: vec4<f32>, wind: vec3<f32>,
+        footprint: f32) -> f32 {
     let cover = clamp(local.x, 0.0, 1.0);
     if (cover <= 0.01) { return 0.0; }
     let inner = layer.clouds.x;
@@ -176,10 +235,36 @@ fn cloud_density(p: vec3<f32>, layer: CloudLayer, local: vec4<f32>, wind: vec3<f
     let phase_a = fract(seconds/period);
     let phase_b = fract(seconds/period + 0.5);
     let drift = wind*(per_metre*period);
-    let q = radial*22.0 + vec3<f32>(height*1.7);
-    let shape = mix(cloud_shape(q - drift*phase_a), cloud_shape(q - drift*phase_b),
-        abs(phase_a*2.0-1.0));
-    let d = clamp((shape*profile - (1.0-cover))/max(cover, 0.08), 0.0, 1.0);
+    let q = cloud_sheared(radial*22.0, wind, layer) + vec3<f32>(height*1.7);
+    let blend = abs(phase_a*2.0-1.0);
+    let qa = q - drift*phase_a;
+    let qb = q - drift*phase_b;
+    var shape = mix(cloud_shape(qa), cloud_shape(qb), blend);
+    // A tall top is convective: its lumps are the rounded cells of cumulus.
+    let convective = smoothstep(0.35, 0.8, local.y);
+    let cells = clamp(layer.cells.x, 0.0, 1.0)*convective;
+    if (cells > 0.01) {
+        shape = mix(shape, mix(cloud_cells(qa*3.0), cloud_cells(qb*3.0), blend), cells);
+    }
+    // The cover remap (HZD) with a floor: at full cover a deck's troughs stay
+    // open, so the deck breaks into cells and lanes; convective cloud keeps no
+    // floor and stands solid.
+    let open = max(1.0-cover, clamp(layer.shape.x, 0.0, 0.9)*(1.0-convective));
+    var d = clamp((shape*profile - open)/max(1.0-open, 0.08), 0.0, 1.0);
+    // The fine octaves eat the soft edge; a solid middle keeps its shape.
+    // `footprint` is how many metres of cloud one pixel covers here, nought
+    // for the light march, which takes the coarse shape only. An octave is
+    // drawn in full while its wavelength spans three pixels and gone by one
+    // and a half: from orbit a pixel is about 14 m and the finest octave 9 m,
+    // and drawn regardless it aliased into fine wavy lines across every mass.
+    let wavelength = inner/22.0;
+    let weights = vec2<f32>(
+        smoothstep(1.5, 3.0, wavelength/CLOUD_FINE_A/max(footprint, 1e-3)),
+        smoothstep(1.5, 3.0, wavelength/CLOUD_FINE_B/max(footprint, 1e-3)));
+    if (footprint > 0.0 && weights.x > 0.0 && d > 0.0 && d < 0.95) {
+        let fine = mix(cloud_fine(qa, weights), cloud_fine(qb, weights), blend);
+        d = clamp(d - layer.shape.y*fine*(1.0-d), 0.0, 1.0);
+    }
     return d*(2.0-d);
 }
 
@@ -196,7 +281,9 @@ fn cloud_light_depth(p: vec3<f32>, toward: vec3<f32>, layer: CloudLayer, local: 
     var depth = 0.0;
     for (var i = 0u; i < steps; i++) {
         let at = p + toward*(t + size*0.5);
-        depth += cloud_density(at, layer, local, wind)*size;
+        // The light is marched through the coarse shape only (HZD's cheap
+        // samples): the fine erosion is a fringe the light barely crosses.
+        depth += cloud_density(at, layer, local, wind, 0.0)*size;
         t += size;
         size *= 1.5;
     }
@@ -247,15 +334,17 @@ fn cloud_flash_at(p: vec3<f32>, layer: CloudLayer) -> f32 {
 // March the layer between `near` and `far` along the ray. Returns the cloud's
 // light, PREMULTIPLIED by its coverage, and the coverage in w: composite as
 // `under * (1 - w) + rgb`.
+// `jitter` (0..1) offsets this ray's samples by that fraction of a step. It
+// has to differ from one pixel to the next: the caller hashes the pixel's own
+// position. Hashed off the ray's direction, as it first was, neighbouring rays
+// got nearly the same offset, and the steps' banding survived as smooth
+// contour lines across every dense cloud.
 fn cloud_march(camera: vec3<f32>, direction: vec3<f32>, near: f32, far: f32, layer: CloudLayer,
         sun: vec3<f32>, cloud_map: texture_cube<f32>, wind_map: texture_cube<f32>,
-        map_sampler: sampler) -> vec4<f32> {
+        map_sampler: sampler, jitter: f32, pixel_angle: f32) -> vec4<f32> {
     if (far <= near) { return vec4<f32>(0.0); }
     let steps = 16.0;
     let step_size = (far-near)/steps;
-    // Offset each ray's samples by its own fraction of a step, hashed off the
-    // direction so it is stable frame to frame: banding becomes grain.
-    let jitter = cloud_hash(direction*911.0);
     let cos_theta = dot(direction, sun);
     var transmittance = 1.0;
     var luminance = vec3<f32>(0.0);
@@ -265,7 +354,8 @@ fn cloud_march(camera: vec3<f32>, direction: vec3<f32>, near: f32, far: f32, lay
         let local = cloud_local(at, cloud_map, map_sampler);
         if (local.x <= 0.01) { continue; }
         let wind = cloud_wind(at, wind_map, map_sampler);
-        let density = cloud_density(p, layer, local, wind);
+        let footprint = (near+step_size*(i+jitter))*pixel_angle;
+        let density = cloud_density(p, layer, local, wind, footprint);
         if (density <= 0.0) { continue; }
         let radial = normalize(p);
         let extinction = mix(layer.clouds.z, layer.storm.z, clamp(local.x, 0.0, 1.0));

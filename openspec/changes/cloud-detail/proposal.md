@@ -31,7 +31,7 @@ zone and the cores of seeded storms, and nowhere else. By latitude on day 0
 | 40-60 N (summer storm track) | 0.03-0.06 | 0.6-0.7 |
 | 20-40 N (subtropics) | 0.12-0.26 | 0.3-0.5, more over cool ocean |
 | 40-60 S (winter storm track) | 0.31-0.35 | 0.8 |
-| Whole planet | 0.31 | about 0.67 |
+| Whole planet | 0.196 (first estimated 0.31) | about 0.67 |
 
 The atmosphere has no cloud that forms from humidity alone: no stratus deck,
 no marine stratocumulus under the subtropical highs, and no broad cloudiness
