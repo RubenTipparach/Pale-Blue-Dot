@@ -3,11 +3,13 @@
 //!
 //! Every rain effect (the water cap's ripples, the terrain's wet sheet and
 //! rivulets, the lens droplets, the precipitation) reads these numbers and
-//! keeps no rain state of its own. What changed when the field landed is only
-//! where `rain` comes from: `pbd_core::weather` sampled under the player,
-//! rather than a global switch. Not one consumer learned anything, which is the
-//! one-code-path rule collecting a dividend it was owed.
+//! keeps no rain state of its own. Where `rain` comes from is the simulated
+//! atmosphere (`crate::atmosphere::Air`), read through `pbd_core::weather`'s
+//! seam under the player; when that replaced the stateless field, not one
+//! consumer learned anything, which is the one-code-path rule collecting a
+//! dividend it was owed a second time.
 
+use crate::atmosphere::Air;
 use crate::config::WeatherSettings;
 use crate::planet::terrain::TERRAIN;
 use crate::planet::{PLANET_RADIUS, PlanetContact, PlanetRenderFrame, surface_height};
@@ -40,6 +42,10 @@ pub struct Weather {
     /// is right now; zero between strikes. Lights the clouds, the rain and
     /// the ground.
     pub flash: Vec4,
+    /// Where the player is: the body-local unit direction of the active
+    /// camera, or zero before there is one. The weather slider brews its
+    /// storm here.
+    pub here: Vec3,
 }
 
 impl Weather {
@@ -99,40 +105,19 @@ impl Fall {
     }
 }
 
-/// How hard a storm the P key is currently forcing, 0..1.
+/// How hard a storm the P key and the slider are forcing, 0..1.
 ///
-/// The reference's weather menu forces one with `moisture_boost`, which lerps
-/// every cell toward saturation. Forcing rain THROUGH the field rather than
-/// around it is what keeps one path deciding the weather: at a boost of one the
-/// whole planet is past the rain threshold, and it is still the field saying so.
+/// It forces the ATMOSPHERE rather than the rain: the cells round the player
+/// are driven toward a storm (`pbd_core::atmosphere::Forcing`), and it rains
+/// because the atmosphere then has a storm in it. Released, the storm lives on
+/// and drifts with the wind; it is never the whole planet at once.
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct StormForcing(pub f32);
 
-/// Seconds added to the planet clock for the weather field alone: the
-/// `--weather-at` harness flag, and nothing else sets it.
+/// Seconds of weather run at launch beyond the spin-up: the `--weather-at`
+/// harness flag, and nothing else sets it.
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct WeatherEpoch(pub f32);
-
-/// The weather field as it stands now: its knobs with the storm forcing folded
-/// in, and the time it is asked at. ONE place, so the rain under the player and
-/// the rain drawn on the horizon are the same field at the same time.
-#[derive(bevy::ecs::system::SystemParam)]
-struct FieldNow<'w> {
-    clock: Res<'w, crate::planet::PlanetClock>,
-    forcing: Res<'w, StormForcing>,
-    epoch: Res<'w, WeatherEpoch>,
-    settings: Res<'w, WeatherSettings>,
-}
-
-impl FieldNow<'_> {
-    fn field(&self) -> field::WeatherField {
-        self.settings.field(self.forcing.0)
-    }
-
-    fn seconds(&self) -> f32 {
-        self.clock.seconds() + self.epoch.0
-    }
-}
 
 /// Wetness after `dt` seconds chasing `rain` with e-fold time `tau`. Pure so a
 /// test can hold the lag to the configured constant.
@@ -141,9 +126,9 @@ pub fn settle_wetness(wetness: f32, rain: f32, dt: f32, tau: f32) -> f32 {
     (wetness + (rain - wetness) * blend).clamp(0.0, 1.0)
 }
 
-/// Sample the field under the player. This is the only place `rain` is set.
+/// Sample the weather under the player. This is the only place `rain` is set.
 fn sample_field(
-    now: FieldNow,
+    air: Res<Air>,
     frame: Res<PlanetRenderFrame>,
     contact: Option<Res<PlanetContact>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
@@ -168,7 +153,8 @@ fn sample_field(
     let Some(direction) = body_local.as_vec3().try_normalize() else {
         return;
     };
-    let cell = field::cloud_cell(&now.field(), &TERRAIN, direction, now.seconds());
+    weather.here = direction;
+    let cell = field::cloud_cell(&air.now, direction);
     weather.rain = if cell.raining { cell.cover } else { 0.0 };
     weather.cover = cell.cover;
     weather.snowing = cell.precip == Precip::Snow;
@@ -203,7 +189,7 @@ fn follow_rain(time: Res<Time>, settings: Res<WeatherSettings>, mut weather: Res
 /// `pbd_core::weather::precipitation_map` on a plane tangent at `anchor`,
 /// extracted to the render world and uploaded for the water pass to march.
 /// Refilled when the camera strays a quarter of the map from the anchor, and
-/// once a second of weather time, since rain moves slowly.
+/// whenever the atmosphere publishes a new state.
 #[derive(Resource, Clone, Debug, Default, ExtractResource)]
 pub struct RainMap {
     pub anchor: Vec3,
@@ -213,11 +199,13 @@ pub struct RainMap {
     pub size: u32,
     /// Row-major along `v`; negative where it snows.
     pub values: Vec<f32>,
-    filled_at: f32,
+    /// The atmosphere's state it was filled from.
+    generation: u64,
 }
 
 fn fill_rain_map(
-    now: FieldNow,
+    air: Res<Air>,
+    settings: Res<WeatherSettings>,
     frame: Res<PlanetRenderFrame>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut map: ResMut<RainMap>,
@@ -235,11 +223,11 @@ fn fill_rain_map(
     else {
         return;
     };
-    let s = &now.settings;
+    let s = &settings;
     let reach = s.rain_map_size as f32 * s.rain_map_cell_m;
     let strayed = up.angle_between(map.anchor) * PLANET_RADIUS > reach * 0.25;
     let reshaped = map.size != s.rain_map_size || map.cell_m != s.rain_map_cell_m;
-    let stale = (now.seconds() - map.filled_at).abs() >= 1.0;
+    let stale = map.generation != air.generation;
     if !(map.values.is_empty() || strayed || reshaped || stale) {
         return;
     }
@@ -251,54 +239,52 @@ fn fill_rain_map(
     map.size = s.rain_map_size;
     map.cell_m = s.rain_map_cell_m;
     map.values = field::precipitation_map(
-        &now.field(),
-        &TERRAIN,
+        &air.now,
         map.anchor,
         map.u,
         map.v,
         PLANET_RADIUS,
         map.size as usize,
         map.cell_m,
-        now.seconds(),
     );
-    map.filled_at = now.seconds();
+    map.generation = air.generation;
 }
 
-/// Where a map cell is: its unit direction.
-fn map_direction(map: &RainMap, row: usize, column: usize) -> Vec3 {
-    let half = map.size as f32 * 0.5;
-    let x = (column as f32 + 0.5 - half) * map.cell_m;
-    let y = (row as f32 + 0.5 - half) * map.cell_m;
-    (map.anchor * PLANET_RADIUS + map.u * x + map.v * y).normalize()
-}
-
-/// Lightning, off the field alone (`pbd_core::weather::Lightning`), among the
-/// map's raining cells. A strike sits at the cloud base over its cell; its
-/// brightness is what the clouds, the rain and the ground are lit by.
-fn strike_lightning(now: FieldNow, map: Res<RainMap>, mut weather: ResMut<Weather>) {
-    let s = &now.settings;
-    let size = map.size as usize;
-    let mut places = Vec::new();
-    // Every fourth cell each way is plenty to find where it pours.
-    for row in (0..size).step_by(4) {
-        for column in (0..size).step_by(4) {
-            let rain = map.values.get(row * size + column).copied().unwrap_or(0.0);
-            if rain > 0.0 {
-                places.push((map_direction(&map, row, column), rain));
-            }
-        }
-    }
-    let bolt = field::Lightning {
-        slot_s: s.lightning_slot_s,
-        chance: s.lightning_chance,
-        storm_min: s.lightning_storm_min,
-        flash_s: s.lightning_flash_s,
-    };
-    weather.flash = match bolt.strike(now.seconds(), &places) {
-        Some(strike) => (strike.direction * crate::sky::CLOUD_RADIUS).extend(strike.brightness),
+/// Lightning: the atmosphere's own strikes (`pbd_core::atmosphere::Strike`),
+/// the most recent within reach of the camera, flickering over
+/// `lightning_flash_s` from the moment it struck. A strike sits at the cloud
+/// base over its cell; its brightness lights the clouds, the rain and the
+/// ground.
+fn strike_lightning(
+    air: Res<Air>,
+    sun: Res<crate::sky::Sun>,
+    settings: Res<WeatherSettings>,
+    mut weather: ResMut<Weather>,
+) {
+    let dt = air.now.settings.dt_s;
+    let since_state = (sun.clock.seconds - air.at_seconds).max(0.0) as f32;
+    let reach = (LIGHTNING_REACH_M / PLANET_RADIUS).cos();
+    let here = weather.here;
+    let strike = air
+        .now
+        .strikes
+        .iter()
+        .filter(|strike| here != Vec3::ZERO && strike.direction.dot(here) >= reach)
+        .map(|strike| {
+            let age = (air.now.step.saturating_sub(strike.step)) as f32 * dt + since_state;
+            (strike, age)
+        })
+        .filter(|(_, age)| *age <= settings.lightning_flash_s)
+        .min_by(|a, b| a.1.total_cmp(&b.1));
+    weather.flash = match strike {
+        Some((strike, age)) => (strike.direction * crate::sky::CLOUD_RADIUS)
+            .extend(strike.strength.max(0.4) * field::flicker(age / settings.lightning_flash_s)),
         None => Vec4::ZERO,
     };
 }
+
+/// How far from the camera a strike is seen, metres.
+const LIGHTNING_REACH_M: f32 = 3_000.0;
 
 /// A lightning bolt: a jagged ribbon from the cloud base at the strike down to
 /// the ground under it, its kinks hashed off where it struck so a strike keeps
@@ -331,9 +317,10 @@ fn push_bolt(quads: &mut Quads, flash: Vec4, ground: f32, right: Vec3) {
 }
 
 /// P cycles the storm forcing through none, half and full, the way Tenebris's
-/// weather menu does. It moves the FIELD rather than the rain, so a forced storm
-/// is a real one: clouds thicken, the sky closes and it rains because the field
-/// says it is overcast, not because a number was written past it.
+/// weather menu does. It forces the ATMOSPHERE rather than the rain, so a
+/// forced storm is a real one: clouds thicken, the sky closes and it rains
+/// because the atmosphere has a storm over the player, not because a number
+/// was written past it.
 fn cycle_rain(
     keys: Res<ButtonInput<KeyCode>>,
     menu: Option<Res<crate::controls::MenuOpen>>,
@@ -600,11 +587,11 @@ fn near_shower(frame: &ShowerFrame, rain: f32, snow: bool, quads: &mut Quads) {
 /// range, as shafts of streaks falling from the cloud base to the ground.
 /// Tenebris's `draw_distant_shafts`, on our lattice. Beyond it the rain is the
 /// volume the water pass marches (`RainMap`).
-fn cell_shafts(frame: &ShowerFrame, field: &field::WeatherField, seconds: f32, quads: &mut Quads) {
+fn cell_shafts(frame: &ShowerFrame, air: &pbd_core::atmosphere::Atmosphere, quads: &mut Quads) {
     let s = frame.settings;
     let cell_angle = s.rain_cell_m / PLANET_RADIUS;
     let range_angle = s.rain_detail_range_m / PLANET_RADIUS;
-    let cells = field::raining_cells(field, &TERRAIN, frame.up, seconds, cell_angle, range_angle);
+    let cells = field::raining_cells(air, frame.up, cell_angle, range_angle);
     let cloud_base = crate::sky::CLOUD_RADIUS;
     let per_cell = s.rain_cell_density * s.rain_cell_m * s.rain_cell_m;
     let mut streaks = 0u32;
@@ -667,7 +654,8 @@ fn cell_shafts(frame: &ShowerFrame, field: &field::WeatherField, seconds: f32, q
 fn rebuild_shower(
     time: Res<Time>,
     sun: Res<crate::sky::Sun>,
-    now: FieldNow,
+    air: Res<Air>,
+    settings: Res<WeatherSettings>,
     weather: Res<Weather>,
     frame: Res<PlanetRenderFrame>,
     contact: Option<Res<PlanetContact>>,
@@ -700,8 +688,7 @@ fn rebuild_shower(
     // from. Whether the eye is under rock is the column's answer, read off
     // `Weather` so the lens and the shower cannot disagree about it.
     let submerged = surface_height(up) < 0.0 && radius < PLANET_RADIUS;
-    let drawn =
-        radius >= 1.0 && !submerged && rain_drawn_at(height_above_ground(eye), &now.settings);
+    let drawn = radius >= 1.0 && !submerged && rain_drawn_at(height_above_ground(eye), &settings);
     let Some(mesh) = meshes.get_mut(&mesh.0) else {
         return;
     };
@@ -712,13 +699,13 @@ fn rebuild_shower(
         .try_normalize()
         .unwrap_or_else(|| reference.cross(up).normalize());
     let shower = ShowerFrame {
-        settings: &now.settings,
+        settings: &settings,
         contact: &contact,
         eye,
         up,
         right,
         now: time.elapsed_secs(),
-        light: rain_light(sun.elevation(up), weather.cover, &now.settings),
+        light: rain_light(sun.elevation(up), weather.cover, &settings),
     };
     let mut quads = Quads::default();
     if weather.flash.w > 0.0 {
@@ -734,7 +721,7 @@ fn rebuild_shower(
         if !weather.sheltered {
             near_shower(&shower, weather.rain, weather.snowing, &mut quads);
         }
-        cell_shafts(&shower, &now.field(), now.seconds(), &mut quads);
+        cell_shafts(&shower, &air.now, &mut quads);
     }
     *visibility = if quads.positions.is_empty() {
         Visibility::Hidden
@@ -766,6 +753,26 @@ fn rebuild_shower(
     mesh.insert_indices(Indices::U32(quads.indices));
 }
 
+/// Open the world's atmosphere: the save's state if there is one, a new one
+/// spun up if not, then `--weather-at`'s extra run. A capture (the clock
+/// pinned) steps in place from here on.
+fn open_air(
+    mut commands: Commands,
+    config: Res<crate::config::AtmosphereConfig>,
+    sun: Res<crate::sky::Sun>,
+    epoch: Res<WeatherEpoch>,
+    save: Option<Res<crate::saves::WorldSave>>,
+) {
+    let saved = save.as_ref().and_then(|save| save.weather.clone());
+    let mut air = Air::open(config.0, TERRAIN.seed, saved.as_deref(), sun.clock.seconds);
+    air.in_place = !sun.running;
+    if epoch.0 > 0.0 {
+        let steps = (epoch.0 / config.0.dt_s).ceil() as u32;
+        air.run(steps, &[]);
+    }
+    commands.insert_resource(air);
+}
+
 pub struct WeatherPlugin {
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
@@ -788,6 +795,7 @@ impl Plugin for WeatherPlugin {
             snowing: false,
             sheltered: false,
             flash: Vec4::ZERO,
+            here: Vec3::ZERO,
         })
         .insert_resource(StormForcing(forcing))
         .insert_resource(WeatherEpoch(self.weather_at))
@@ -798,11 +806,13 @@ impl Plugin for WeatherPlugin {
         .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
             Weather,
         >::default())
-        .add_systems(Startup, spawn_shower)
+        .add_systems(Startup, (spawn_shower, open_air))
         .add_systems(
             Update,
             (
                 sample_field,
+                crate::atmosphere::warm_capture,
+                crate::atmosphere::advance_air,
                 follow_rain,
                 cycle_rain,
                 fill_rain_map,

@@ -32,6 +32,7 @@ pub use grid::Grid;
 use grid::{weighted, weighted_vec};
 pub use numeric::smoothstep;
 pub use settings::AtmosphereSettings;
+use std::sync::Arc;
 
 /// A place a player is forcing a storm, with the slider's strength in 0..1.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,9 +97,11 @@ pub struct Sample {
 
 #[derive(Clone, Debug)]
 pub struct Atmosphere {
-    pub grid: Grid,
+    /// The cells, shared: they never change, so a copy of the weather taken
+    /// to step elsewhere copies only the state.
+    pub grid: Arc<Grid>,
     pub settings: AtmosphereSettings,
-    pub surface: Surface,
+    pub surface: Arc<Surface>,
     seed: u64,
     /// Steps taken since the world began.
     pub step: u64,
@@ -162,9 +165,9 @@ impl Atmosphere {
             sunlight: vec![0.0; n],
             strikes: Vec::new(),
             mesoscale: vec![0.0; n],
-            grid,
+            grid: Arc::new(grid),
             settings,
-            surface,
+            surface: Arc::new(surface),
         };
         let field = crate::weather::WeatherField::DEFAULT;
         for cell in 0..n {

@@ -25,6 +25,13 @@ use writer::SaveWriter;
 pub const LOG: &str = "edits.log";
 /// The metadata and the pose, replaced whole on a timer.
 pub const WORLD: &str = "world.ron";
+/// The simulated atmosphere's state (`pbd_core::atmosphere`), replaced whole
+/// on its own, slower timer.
+pub const WEATHER: &str = "weather.bin";
+/// How often the weather is written, seconds. It is simulated state rather
+/// than anything a player did: losing the last minute of it costs a minute of
+/// sky, and the simulation carries on from any state it is given.
+pub const WEATHER_SAVE_S: f32 = 60.0;
 /// Where the slots live, relative to the working directory.
 pub const ROOT: &str = "saves";
 /// The longest a world's name may be, in bytes. Tenebris's `NAME_MAX`, for
@@ -165,6 +172,8 @@ pub struct WorldSave {
     /// The world's clock when it was last snapshotted, for the load to resume
     /// the hour and the season.
     pub world_seconds: Option<f64>,
+    /// The atmosphere's saved state, for the load to restore.
+    pub weather: Option<Vec<u8>>,
     slot: Option<Slot>,
     root: PathBuf,
     writer: SaveWriter,
@@ -178,6 +187,7 @@ impl Default for WorldSave {
             kit: 0,
             pose: None,
             world_seconds: None,
+            weather: None,
             slot: None,
             root: PathBuf::from(ROOT),
             writer: SaveWriter::none(),
@@ -206,12 +216,14 @@ impl WorldSave {
             selected: slot.file.selected,
         });
         let world_seconds = slot.file.world_seconds.filter(|s| s.is_finite());
+        let weather = std::fs::read(directory.join(WEATHER)).ok();
         Self {
             edits,
             carried,
             kit,
             pose,
             world_seconds,
+            weather,
             slot: Some(slot),
             writer: SaveWriter::new(&directory),
             root,
@@ -291,6 +303,16 @@ impl WorldSave {
         let path = self.root.join(&slot.id).join(WORLD);
         let body = slot.file.to_ron();
         self.writer.replace(path, body);
+    }
+
+    /// Queue the atmosphere's state. Whole-file, like the pose.
+    pub fn snapshot_weather(&mut self, bytes: Vec<u8>) {
+        let Some(slot) = self.slot.as_ref() else {
+            return;
+        };
+        let path = self.root.join(&slot.id).join(WEATHER);
+        self.writer.replace(path, bytes.clone());
+        self.weather = Some(bytes);
     }
 
     /// Wait for everything queued to reach the disk. Called on the way out,
@@ -428,6 +450,7 @@ mod tests {
                 },
                 40.5 * 2880.0,
             );
+            save.snapshot_weather(vec![7, 1, 2, 3]);
             save.drain();
         }
         let listed = list(&root);
@@ -444,6 +467,7 @@ mod tests {
         assert_eq!(pose.selected, 3);
         assert!((pose.pitch + 0.25).abs() < 1e-6);
         assert_eq!(reopened.world_seconds, Some(40.5 * 2880.0), "and the clock");
+        assert_eq!(reopened.weather, Some(vec![7, 1, 2, 3]), "and the weather");
         assert_eq!(reopened.slot().unwrap().file.seed, 4242, "and its world");
         let _ = std::fs::remove_dir_all(&root);
     }

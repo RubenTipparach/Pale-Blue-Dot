@@ -199,15 +199,6 @@ struct PlanetBase(Arc<Vec<GpuCell>>);
 #[derive(Resource, Clone, Default, ExtractResource)]
 pub(crate) struct PlanetClock(f32);
 
-impl PlanetClock {
-    /// Elapsed seconds. The weather field is a function of time, and this is
-    /// the one clock the whole planet already runs on: a second source would be
-    /// a sky drifting at a different rate from the sea it is reflected in.
-    pub(crate) fn seconds(&self) -> f32 {
-        self.0
-    }
-}
-
 #[derive(Resource, Clone, ExtractResource)]
 pub struct PlanetArt(pub Handle<Image>);
 

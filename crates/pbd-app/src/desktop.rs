@@ -519,6 +519,7 @@ pub fn run(args: &[String]) {
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
             autosave,
+            save_weather,
             digging::dig_and_place,
             digging::scripted_dig,
             capture,
@@ -632,6 +633,20 @@ fn load_world(world: &mut World) {
     if let Some(seconds) = opened.world_seconds {
         world.resource_mut::<pbd_app::sky::Sun>().clock.seconds = seconds;
     }
+    // And under its own sky: the saved weather, or a new one spun up.
+    let air = {
+        let config = world.resource::<pbd_app::config::AtmosphereConfig>().0;
+        let sun = *world.resource::<pbd_app::sky::Sun>();
+        let mut air = pbd_app::atmosphere::Air::open(
+            config,
+            pbd_app::planet::TERRAIN.seed,
+            opened.weather.as_deref(),
+            sun.clock.seconds,
+        );
+        air.in_place = !sun.running;
+        air
+    };
+    world.insert_resource(air);
     world.insert_resource(opened);
     world.insert_resource(hotbar);
     // The tier is standing where the last world left it with the last world's
@@ -670,6 +685,7 @@ fn load_world(world: &mut World) {
 /// exactly why it is the only part on a clock: the edits and the hotbar are
 /// written per edit and are already down. A menu opening counts because the
 /// player who opens one is usually the player about to quit.
+#[allow(clippy::too_many_arguments)]
 fn autosave(
     time: Res<Time>,
     screen: Res<menu::Screen>,
@@ -706,9 +722,37 @@ fn autosave(
 /// The one place blocking is right is the place the player is already
 /// waiting: losing the last two digs to a quit would be the whole feature
 /// failing at its most visible moment.
-fn drain_saves(exits: MessageReader<AppExit>, save: Res<WorldSave>) {
+fn drain_saves(
+    exits: MessageReader<AppExit>,
+    air: Option<Res<pbd_app::atmosphere::Air>>,
+    mut save: ResMut<WorldSave>,
+) {
     if !exits.is_empty() {
+        if let Some(air) = air {
+            save.snapshot_weather(air.now.to_bytes());
+        }
         save.drain();
+    }
+}
+
+/// Write the atmosphere on its own, slower timer, and whenever a menu opens:
+/// half a megabyte is not a thing to write every five seconds, and losing a
+/// minute of weather costs a minute of sky.
+fn save_weather(
+    time: Res<Time>,
+    screen: Res<menu::Screen>,
+    air: Option<Res<pbd_app::atmosphere::Air>>,
+    mut save: ResMut<WorldSave>,
+    mut due: Local<f32>,
+) {
+    let opening = screen.is_changed() && *screen != menu::Screen::Playing;
+    *due -= time.delta_secs();
+    if !opening && *due > 0.0 {
+        return;
+    }
+    *due = saves::WEATHER_SAVE_S;
+    if let Some(air) = air {
+        save.snapshot_weather(air.now.to_bytes());
     }
 }
 
@@ -776,8 +820,11 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
             })
             .filter(|d| {
                 pbd_app::planet::surface_height(*d) > 1.0
-                    && pbd_core::weather::precip_kind(&pbd_app::planet::TERRAIN, *d)
-                        == pbd_core::weather::Precip::Snow
+                    && matches!(
+                        pbd_core::planet_gen::biome(&pbd_app::planet::TERRAIN, *d),
+                        pbd_core::planet_gen::Biome::Tundra
+                            | pbd_core::planet_gen::Biome::Mountains
+                    )
             })
             .max_by(|a, b| a.dot(default).total_cmp(&b.dot(default)));
         if let Some(snow) = found {

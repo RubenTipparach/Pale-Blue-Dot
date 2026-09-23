@@ -38,7 +38,7 @@ enum Job {
     Replace {
         seq: u64,
         path: PathBuf,
-        body: String,
+        body: Vec<u8>,
     },
     /// Write to this slot from now on.
     Slot(PathBuf),
@@ -113,7 +113,8 @@ impl SaveWriter {
     }
 
     /// Queue a whole-file replacement.
-    pub fn replace(&mut self, path: PathBuf, body: String) -> u64 {
+    pub fn replace(&mut self, path: PathBuf, body: impl Into<Vec<u8>>) -> u64 {
+        let body = body.into();
         self.send(|seq| Job::Replace { seq, path, body })
     }
 
@@ -188,14 +189,14 @@ fn log_file(slot: &Path) -> std::io::Result<File> {
 /// Replace a file whole: write a temporary beside it, sync it, and rename.
 /// A rename within a directory is atomic, so a reader sees the old file or the
 /// new one and never half of either.
-fn replace_file(path: &Path, body: &str) -> std::io::Result<()> {
+fn replace_file(path: &Path, body: &[u8]) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let temporary = path.with_extension("tmp");
     {
         let mut file = File::create(&temporary)?;
-        file.write_all(body.as_bytes())?;
+        file.write_all(body)?;
         file.sync_data()?;
     }
     std::fs::rename(&temporary, path)
@@ -335,8 +336,8 @@ mod tests {
         let slot = temporary("snap");
         let path = slot.join("world.ron");
         let mut writer = SaveWriter::new(&slot);
-        writer.replace(path.clone(), "first".into());
-        writer.replace(path.clone(), "second".into());
+        writer.replace(path.clone(), "first");
+        writer.replace(path.clone(), "second");
         writer.drain();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
         assert!(

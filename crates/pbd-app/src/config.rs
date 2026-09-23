@@ -282,29 +282,8 @@ pub struct WeatherSettings {
     /// Seconds for ground wetness to follow the rain intensity (e-fold).
     pub wet_fade_tau_s: f32,
 
-    // ---- The weather field: where and when it rains at all. Names follow
-    // Tenebris's own weather.yaml; see `pbd_core::weather` for what each does.
-    /// Unit-sphere frequency of the drifting warm-pocket field.
-    pub solar_scale: f32,
-    /// How fast that field drifts, per second.
-    pub solar_drift: f32,
-    /// Warmth floor, so a moist region clouds even where the sun is weak.
-    pub solar_floor: f32,
-    /// Above one, clears the dry end harder: deserts rarely cloud or rain.
-    pub arid_gamma: f32,
-    /// Density below which the sky is clear.
-    pub cloud_min: f32,
-    /// Density above which the cover is full.
-    pub cloud_full: f32,
-    /// Opacity of the smallest just-forming cloud.
-    pub min_alpha: f32,
-    /// Cover a column needs before it rains, so a wisp does not.
-    pub rain_cover_min: f32,
-    /// How long rain trails a cloud that has drifted off, seconds.
-    pub rain_min_s: f32,
-    /// The frequency moisture is sampled at for WEATHER, on the unit sphere:
-    /// a weather system is far bigger than the 188 m a biome is decided on.
-    pub weather_moisture_scale: f32,
+    // ---- Where it rains, and how hard, is the simulated atmosphere's
+    // (`atmosphere.ron`); these are how rain LOOKS.
     /// Streak fall speed, metres per second.
     pub rain_fall_mps: f32,
     /// Streak half-width, metres.
@@ -444,13 +423,8 @@ pub struct WeatherSettings {
     /// The volume's colour, display (sRGB) RGB. Snow is `snow_color`.
     pub rain_volume_color: [f32; 3],
 
-    // ---- Lightning: `pbd_core::weather::Lightning`.
-    /// One slot of the lightning clock, seconds; at most one strike each.
-    pub lightning_slot_s: f32,
-    /// Chance a slot strikes over the heaviest rain.
-    pub lightning_chance: f32,
-    /// Rain intensity below which nothing strikes.
-    pub lightning_storm_min: f32,
+    // ---- Lightning: where it strikes is the atmosphere's; this is how a
+    // strike looks.
     /// How long one strike's flashes last, seconds.
     pub lightning_flash_s: f32,
     /// Brightness a strike lights the cloud from inside with.
@@ -463,16 +437,6 @@ impl Default for WeatherSettings {
     fn default() -> Self {
         Self {
             wet_fade_tau_s: 1.6,
-            solar_scale: 2.2,
-            solar_drift: 0.015,
-            solar_floor: 0.55,
-            arid_gamma: 1.35,
-            cloud_min: 0.22,
-            cloud_full: 0.52,
-            min_alpha: 0.32,
-            rain_cover_min: 0.62,
-            rain_min_s: 15.0,
-            weather_moisture_scale: 1.6,
             rain_fall_mps: 70.0,
             rain_width_m: 0.012,
             rain_streak_m: 1.5,
@@ -537,9 +501,6 @@ impl Default for WeatherSettings {
             rain_volume_range_m: 2000.0,
             rain_volume_stretch: 10.0,
             rain_volume_color: [0.55, 0.58, 0.62],
-            lightning_slot_s: 7.0,
-            lightning_chance: 0.5,
-            lightning_storm_min: 0.75,
             lightning_flash_s: 0.7,
             lightning_cloud: 6.0,
             lightning_ground: 0.8,
@@ -547,54 +508,9 @@ impl Default for WeatherSettings {
     }
 }
 
-impl WeatherSettings {
-    /// The field's own knobs, with a storm forcing folded in as the reference's
-    /// `moisture_boost`. Built here rather than stored, so the config file and
-    /// the P key cannot drift into two answers about what the weather is.
-    pub fn field(&self, forcing: f32) -> pbd_core::weather::WeatherField {
-        pbd_core::weather::WeatherField {
-            solar_scale: self.solar_scale,
-            solar_drift: self.solar_drift,
-            solar_floor: self.solar_floor,
-            arid_gamma: self.arid_gamma,
-            cloud_min: self.cloud_min,
-            cloud_full: self.cloud_full,
-            min_alpha: self.min_alpha,
-            rain_cover_min: self.rain_cover_min,
-            rain_min_s: self.rain_min_s,
-            weather_moisture_scale: self.weather_moisture_scale,
-            moisture_boost: forcing.clamp(0.0, 1.0),
-        }
-    }
-}
-
 impl Validated for WeatherSettings {
     fn validate(&self) -> Result<(), String> {
         let s = self;
-        non_negative(
-            "weather field scalars",
-            &[
-                s.solar_scale,
-                s.solar_drift,
-                s.arid_gamma,
-                s.rain_min_s,
-                s.weather_moisture_scale,
-            ],
-        )?;
-        unit("solar_floor", s.solar_floor)?;
-        unit("cloud_min", s.cloud_min)?;
-        unit("cloud_full", s.cloud_full)?;
-        unit("min_alpha", s.min_alpha)?;
-        unit("rain_cover_min", s.rain_cover_min)?;
-        // A ramp that runs backwards is a sky that clears as it thickens.
-        (s.cloud_min < s.cloud_full)
-            .then_some(())
-            .ok_or("cloud_min must be below cloud_full")?;
-        // And a rain threshold outside the ramp either rains always or never,
-        // both of which read as the global switch this replaced.
-        (s.rain_cover_min > 0.0 && s.rain_cover_min < 1.0)
-            .then_some(())
-            .ok_or("rain_cover_min must be inside the cover ramp, not at an end")?;
         non_negative(
             "weather scalars",
             &[
@@ -627,7 +543,6 @@ impl Validated for WeatherSettings {
                 s.rain_volume_density,
                 s.rain_volume_range_m,
                 s.rain_volume_stretch,
-                s.lightning_slot_s,
                 s.lightning_flash_s,
                 s.lightning_cloud,
                 s.lightning_ground,
@@ -667,8 +582,6 @@ impl Validated for WeatherSettings {
             ("cloud_base_dark", s.cloud_base_dark),
             ("cloud_storm_dark", s.cloud_storm_dark),
             ("rain_lod_far_frac", s.rain_lod_far_frac),
-            ("lightning_chance", s.lightning_chance),
-            ("lightning_storm_min", s.lightning_storm_min),
         ] {
             unit(name, value)?;
         }
@@ -689,9 +602,9 @@ impl Validated for WeatherSettings {
         (s.rain_map_size >= 2 && s.rain_map_size <= 128)
             .then_some(())
             .ok_or("rain_map_size must be within 2..=128")?;
-        (s.lightning_flash_s < s.lightning_slot_s)
+        (s.lightning_flash_s > 0.0)
             .then_some(())
-            .ok_or("lightning_flash_s must be shorter than lightning_slot_s")?;
+            .ok_or("lightning_flash_s must be positive")?;
         (s.rain_lod_blend_m <= s.rain_detail_range_m)
             .then_some(())
             .ok_or("rain_lod_blend_m must not exceed rain_detail_range_m")?;
@@ -923,6 +836,18 @@ impl Validated for ColumnSettings {
 
 /// Loads every config file once at startup. Inserted before any plugin that
 /// reads them, so a system can take `Res<WaterSettings>` unconditionally.
+/// The simulated atmosphere's knobs (`pbd_core::atmosphere`), from
+/// `atmosphere.ron`. The defaults are the core's; this only carries them into
+/// the app as a resource.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+pub struct AtmosphereConfig(pub pbd_core::atmosphere::AtmosphereSettings);
+
+impl Validated for pbd_core::atmosphere::AtmosphereSettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::atmosphere::AtmosphereSettings::validate(self)
+    }
+}
+
 pub struct ConfigPlugin;
 
 impl Plugin for ConfigPlugin {
@@ -931,6 +856,7 @@ impl Plugin for ConfigPlugin {
             .insert_resource(load::<WeatherSettings>("weather"))
             .insert_resource(load::<ScatterSettings>("scatter"))
             .insert_resource(load::<ColumnSettings>("column"))
+            .insert_resource(AtmosphereConfig(load("atmosphere")))
             .add_plugins((
                 bevy::render::extract_resource::ExtractResourcePlugin::<WaterSettings>::default(),
                 bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
@@ -946,6 +872,7 @@ mod tests {
 
     const WATER_RON: &str = include_str!("../../../assets/config/water.ron");
     const WEATHER_RON: &str = include_str!("../../../assets/config/weather.ron");
+    const ATMOSPHERE_RON: &str = include_str!("../../../assets/config/atmosphere.ron");
 
     /// The shipped files are the defaults written out. If either drifts from
     /// the code, one of them is describing a different ocean, and this is the
@@ -958,6 +885,10 @@ mod tests {
         let weather: WeatherSettings = ron::from_str(WEATHER_RON).unwrap();
         weather.validate().unwrap();
         assert_eq!(weather, WeatherSettings::default());
+        let atmosphere: pbd_core::atmosphere::AtmosphereSettings =
+            ron::from_str(ATMOSPHERE_RON).unwrap();
+        Validated::validate(&atmosphere).unwrap();
+        assert_eq!(atmosphere, Default::default());
     }
 
     #[test]

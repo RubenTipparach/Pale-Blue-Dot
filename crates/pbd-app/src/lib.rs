@@ -2,6 +2,8 @@
 //! `PaleBlueDotPlugin` submits accelerations; Avian alone integrates ship pose.
 
 #[cfg(feature = "desktop")]
+pub mod atmosphere;
+#[cfg(feature = "desktop")]
 pub mod config;
 #[cfg(feature = "desktop")]
 pub mod controls;
