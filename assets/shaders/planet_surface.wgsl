@@ -424,6 +424,10 @@ struct VertexOut {
     // The column tier slot plus one, or zero off the tier: what a column-pass
     // face asks for the material of the layer it stands on.
     @location(13) @interpolate(flat) slot: u32,
+    // Whether rain reaches this face: one where the air in front of it has no
+    // solid layer of its column above it, zero under rock. Per face, from the
+    // column's own runs; `pbd_core::column::Column::open_to_sky` is the rule.
+    @location(14) @interpolate(flat) rain_open: f32,
 }
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
@@ -528,6 +532,10 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // is the whole of what "baked vertex colours" means here: a face grades
     // across itself because its corners were sampled apart.
     var out_voxel = vec2(1., 0.);
+    // Open to the rain unless the column pass says otherwise: the terrain
+    // pass's cap IS its column's top, its height-field walls stand only off
+    // the tier where nothing overhangs, and trees and clutter stand on the cap.
+    var out_rain = 1.;
     let lit_slot = column_slot(cell);
     if vertex < 18u {
         let triangle = vertex/3u;
@@ -649,6 +657,9 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // floors and the cut wall are all untouched: a cave ceiling, a cave
         // floor, and a run's flank wherever the neighbour leaves air against it.
         kind = 4u;
+        // Everything this pass draws is under rock until a face below proves
+        // it has the sky over the air in front of it.
+        out_rain = 0.;
         let slot = column_slot(cell);
         position = axis*radius;
         normal = axis;
@@ -685,6 +696,14 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     // ceiling read pitch black, because the ceiling is rock
                     // and rock holds no light.
                     let air = select(light_layer(lo) - 1u, light_layer(hi), up);
+                    // A floor is rained on only if no run of this column stands
+                    // over it: a cave floor is dry, and so is the ground under a
+                    // block put over it. A ceiling faces down and never is.
+                    var top_run = true;
+                    for (var k = r + 1u; k < COLUMN_RUNS; k++) {
+                        if run_present(rec.runs[k]) { top_run = false; }
+                    }
+                    out_rain = select(0., 1., up && top_run);
                     if !skip && t < degree && c != 0u {
                         let k = select((t+2u-c)%degree,(t+c-1u)%degree,up);
                         let ray = cell.corners[k].xyz;
@@ -768,6 +787,10 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     let gap = column_gap(column_side(rec,side),g);
                     let bottom = max(lo, gap.x);
                     let top = min(hi, gap.y);
+                    // A flank faces the neighbour's air: rained on only if that
+                    // is the neighbour's TOP gap, the one with nothing over it.
+                    // A terrace step is wet; the wall of a cave is not.
+                    out_rain = select(0., 1., gap.y >= COLUMN_TOP_M);
                     if top-bottom > 0.001 {
                         // The run's TOP material, and the depth under it
                         // decides the face - sod, earth, then stone - which is
@@ -1101,6 +1124,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.shade = out_shade;
     out.voxel = out_voxel;
     out.slot = lit_slot;
+    out.rain_open = out_rain;
     return out;
 }
 
@@ -1415,10 +1439,12 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         color = mix(color*attenuation, params.water_deep.rgb*attenuation,
             (1.-dot(attenuation,vec3(1./3.)))*0.5);
     }
-    // Rain wetness, gated by sky light (caves stay dry) and by being above
-    // the waterline (no rings on the seabed).
+    // Rain wetness, gated by whether rain REACHES this face - the column's
+    // answer, not the sky light's, because light spreads sideways into a cave
+    // a cell at a time and rain does not - and by being above the waterline
+    // (no rings on the seabed).
     let above_water = 1.-step(0.001,water_depth);
-    let wet_amt = clamp(params.weather.x,0.,1.)*skylight*above_water;
+    let wet_amt = clamp(params.weather.x,0.,1.)*input.rain_open*above_water;
     if wet_amt > 0.001 {
         let k_ripple_scale = params.rain[0].x;
         let k_ripple_strength = params.rain[0].y;
@@ -1438,7 +1464,9 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         let wet_up = radial;
         let face = dot(n,wet_up);
         let top_w = smoothstep(0.35,0.85,face);
-        let side_w = 1.-smoothstep(0.1,0.5,face);
+        // A wall takes rivulets; an UNDERSIDE takes none, since nothing runs
+        // down a face that points at the ground.
+        let side_w = (1.-smoothstep(0.1,0.5,face))*smoothstep(-0.5,-0.1,face);
         let wet_t = params.settings.z;
         // Triplanar UV on fixed body axes: a dot against the radial tangent is
         // roundoff at planet scale and reads as per-pixel noise.

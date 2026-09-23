@@ -37,3 +37,21 @@ above `rain_lod_alt_m`.
 - **WHEN** a cell 400 m from the camera is raining and the camera's is not
 - **THEN** a rain curtain is drawn over that cell
 - **AND** no rain runs down the lens
+
+### Requirement: Rain reaches only what is open to the sky
+
+A surface SHALL be wetted by rain only where the air in front of it has no solid
+layer of its column above it, and the camera SHALL show no lens drops and no
+near shower while a solid layer stands above its eye.
+
+#### Scenario: A cave in a storm
+
+- **WHEN** it is raining over a cave and the camera is inside it
+- **THEN** no cave floor, wall or ceiling under the rock takes puddles, rings or
+  rivulets
+- **AND** no rain runs down the lens
+
+#### Scenario: A block placed over wet ground
+
+- **WHEN** a solid block is placed one layer above a wet cap
+- **THEN** that cap is no longer rained on

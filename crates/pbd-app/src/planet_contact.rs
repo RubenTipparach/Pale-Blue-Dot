@@ -308,6 +308,23 @@ impl PlanetContact {
         stand
     }
 
+    /// Whether rain reaches a body-local `point`: nothing solid stands above it.
+    /// Inside the column tier this is the column's own answer
+    /// (`Column::open_to_sky`), so a cave, an overhang and a block the player
+    /// put overhead all keep the rain off. Outside it there are no caves and
+    /// nothing overhangs, so a point is open when it is above the drawn cap.
+    pub fn open_to_sky(&self, point: Vec3) -> bool {
+        let direction = point.try_normalize().unwrap_or(Vec3::Y);
+        let altitude = point.length() - PLANET_RADIUS;
+        if let Some(fine) = &self.fine
+            && let Some(id) = fine.locate(direction)
+            && let Some(column) = fine.set.columns.column(id)
+        {
+            return column.open_to_sky(altitude);
+        }
+        point.length() >= self.sample(direction).radius - 1e-3
+    }
+
     /// The base level's records, which tests and the spawn walk read.
     #[cfg(test)]
     fn columns(&self) -> &[GpuCell] {
@@ -479,6 +496,53 @@ fn bin_direction(bin: usize) -> Vec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A real chamber in a generated tier keeps the rain off: an eye standing
+    /// on its floor is sheltered, the ground on the hill over it is open, and
+    /// so is a point above the cap off the tier, where nothing overhangs.
+    #[test]
+    fn a_cave_is_sheltered_and_the_hill_over_it_is_not() {
+        use pbd_core::column::layer_altitude;
+        let mut terrain = PlanetContact::test_planet(5);
+        let anchor = terrain.find_land_near(Vec3::new(0.8776, 0.4794, 0.0).normalize());
+        let set = Arc::new(super::super::lod::generate_fine(
+            anchor,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        ));
+        terrain.set_fine(&set);
+        let records = set.finest_records();
+        let mut checked = 0;
+        for (index, &slot) in set.columns.slots.iter().enumerate() {
+            if slot == usize::MAX {
+                continue;
+            }
+            let column = &set.columns.columns[slot];
+            let direction = Vec3::from_slice(&records[index].direction_height[..3]);
+            let surface = layer_altitude(column.surface().unwrap()) + 1.0;
+            let runs = column.drawn_runs();
+            for pair in runs.windows(2) {
+                let floor = layer_altitude(pair[0].to);
+                let roof = layer_altitude(pair[1].from);
+                if roof - floor < 2.0 {
+                    continue;
+                }
+                let eye = direction * (PLANET_RADIUS + floor + 1.6).min(PLANET_RADIUS + roof - 0.1);
+                assert!(
+                    !terrain.open_to_sky(eye),
+                    "an eye in a cave at {floor} m is under rock"
+                );
+                assert!(!terrain.open_to_sky(direction * (PLANET_RADIUS + floor)));
+                checked += 1;
+            }
+            assert!(terrain.open_to_sky(direction * (PLANET_RADIUS + surface + 1.6)));
+        }
+        assert!(checked > 0, "the tier should hold at least one chamber");
+        let far = -anchor;
+        let cap = terrain.sample(far).radius;
+        assert!(terrain.open_to_sky(far * (cap + 1.6)));
+        assert!(!terrain.open_to_sky(far * (cap - 1.0)));
+    }
 
     #[test]
     fn contact_matches_actual_uploaded_fan_triangles_including_pentagons() {

@@ -138,6 +138,19 @@ impl Column {
         Some(layer_altitude(top) + 1.0)
     }
 
+    /// Whether rain reaches `altitude`: nothing solid stands above it in this
+    /// column. The ONE rule every rain effect asks, on the CPU here and on the
+    /// GPU as "the topmost drawn run's top", which is the same boundary
+    /// because merging runs only ever fills the gaps BETWEEN them
+    /// (`drawn_runs`). How much sky LIGHT reaches a point is a different
+    /// question: light spreads sideways into a cave and rain does not.
+    pub fn open_to_sky(&self, altitude: f32) -> bool {
+        match self.surface() {
+            None => true,
+            Some(top) => altitude >= layer_altitude(top) + 1.0 - 1e-3,
+        }
+    }
+
     /// Solid runs, bottom up, as half-open layer ranges. What the renderer draws
     /// a cap and walls for, instead of one cap at one height.
     pub fn runs(&self) -> Vec<(usize, usize)> {
@@ -408,6 +421,87 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
     // Bedrock. Never mineable, and the reference's own rule.
     layers[0] = Material::Stone;
     Column { layers }
+}
+
+#[cfg(test)]
+mod rain_tests {
+    use super::*;
+
+    /// Ground at `ground`, a roof from `roof_from` up to `roof_to`, air above.
+    fn roofed(ground: usize, roof_from: usize, roof_to: usize) -> Column {
+        let mut layers = [Material::Air; LAYERS];
+        layers[..=ground].fill(Material::Stone);
+        layers[roof_from..=roof_to].fill(Material::Stone);
+        Column { layers }
+    }
+
+    #[test]
+    fn rain_reaches_the_top_of_a_column_and_nothing_under_its_roof() {
+        let column = roofed(20, 25, 27);
+        let cave_floor = layer_altitude(20) + 1.0;
+        let roof_top = layer_altitude(27) + 1.0;
+        assert!(
+            !column.open_to_sky(cave_floor),
+            "a cave floor is under rock"
+        );
+        assert!(
+            !column.open_to_sky(cave_floor + 1.6),
+            "so is an eye in the cave"
+        );
+        assert!(
+            column.open_to_sky(roof_top),
+            "the ground on the roof is open"
+        );
+        assert!(column.open_to_sky(roof_top + 10.0));
+        // A single block placed over open ground covers it.
+        let mut covered = roofed(20, 0, 0);
+        let ground_top = layer_altitude(20) + 1.0;
+        assert!(covered.open_to_sky(ground_top));
+        covered.set(22, Material::Stone);
+        assert!(
+            !covered.open_to_sky(ground_top),
+            "a block overhead keeps the rain off"
+        );
+        assert!(covered.open_to_sky(layer_altitude(22) + 1.0));
+        // Water and torches are not a roof.
+        let mut pool = roofed(20, 0, 0);
+        pool.set(21, Material::Water);
+        pool.set(23, Material::Torch);
+        assert!(pool.open_to_sky(ground_top));
+    }
+
+    /// The GPU asks "is this the topmost drawn run", the CPU "is this above the
+    /// topmost solid layer". The packed runs are what the GPU sees, so the
+    /// topmost one's top must be exactly the CPU's boundary, even in a column
+    /// with more runs than the budget, whose gaps are merged.
+    #[test]
+    fn the_topmost_drawn_run_ends_where_the_sky_opens() {
+        let mut many = roofed(20, 0, 0);
+        for (i, layer) in (30..LAYERS - 2).step_by(3).enumerate().take(9) {
+            many.set(
+                layer,
+                if i % 2 == 0 {
+                    Material::Stone
+                } else {
+                    Material::Dirt
+                },
+            );
+        }
+        for column in [roofed(20, 25, 27), roofed(40, 0, 0), many] {
+            let runs = column.drawn_runs();
+            assert!(runs.len() <= MAX_RUNS);
+            let top = runs.last().expect("every column has bedrock").to;
+            let boundary = layer_altitude(top);
+            assert!(column.open_to_sky(boundary));
+            assert!(!column.open_to_sky(boundary - 0.01));
+            let word = column.packed_runs(|_| 1)[runs.len() - 1];
+            assert_eq!(
+                (word >> 9) & 0x1ff,
+                top as u32,
+                "the shader reads this field"
+            );
+        }
+    }
 }
 
 #[cfg(test)]

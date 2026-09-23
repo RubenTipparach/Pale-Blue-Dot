@@ -61,7 +61,32 @@
 - [x] Rain colours converted from display values to linear.
 - [x] Capture: a storm from outside it.
 
-## 5. Held
+## 5. Dry caves
+- [x] Capture the before: a cave, a mouth and an overhang in `--rain 1`. Inside
+      the cave and under the overhang, rain ran down the lens: the whole
+      before/after difference in those frames (0.38% and 0.40% of pixels) is
+      the drops, and it is gone.
+- [x] Measured the surface leak: of 744 cave floors under rock in the spawn's
+      tier, **96 (12.9%)** were reached by sky light and so wetted, at a mean
+      of 0.53 and up to 14/15 (`rain_under_rock_report`, ignored, prints).
+      Each is dry now by the column rule.
+- [x] `Column::open_to_sky` in the core, tested against a roof, a placed block,
+      water and a torch; a test that the topmost DRAWN run's top is the same
+      boundary, merged runs included, and is the word field the shader reads.
+- [x] `rain_open` per face in the vertex shader (the terrain pass open; a
+      column-pass floor open only as the topmost run; a ceiling never; a flank
+      only against the neighbour's top gap); it replaces the sky light in
+      `wet_amt`; no rivulets on a downward face.
+- [x] `PlanetContact::open_to_sky`, tested on a real generated chamber;
+      `Weather.sheltered` from the eye; no lens drops and no near shower when
+      sheltered; the lens on its own lane (`WaterView.rain`), the sea's rings
+      keep `fx.z`.
+- [ ] A capture of a lit cave floor just inside a mouth, and of a block placed
+      over wet ground. The harness has no view that stands inside a mouth
+      looking at its floor in daylight; the rule is pinned by the tests above
+      rather than by a picture.
+
+## 6. Held
 - [ ] Per-fragment cloud shadow on the ground.
 - [ ] Wind-slanted streaks; snow particles; puddles on their own clock.
 - [ ] The sea's mirrored sky colours are not yet greyed by the overcast; only

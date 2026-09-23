@@ -41,6 +41,7 @@ struct WaterView {
     screen: vec4<f32>,        // aspect, surface band m, wet blur, detail fade
     lod: vec4<f32>,           // xyz player direction, w base level
     bands: vec4<f32>,         // cos(band radius / R) per fine level, coarsest first
+    rain: vec4<f32>,          // x the rain on the LENS (zero under a roof), yzw spare
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -464,7 +465,7 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let deep = murk(cam_gap,safe_normal(ray.origin-center));
     color = mix(color, mix(deep,color,exp(-absorption*travel)), wet);
     // Depth blur while the lens is wet: the distance softens, the foreground stays crisp.
-    let dz_amt = max(view.fx.z,view.fx.w);
+    let dz_amt = max(view.rain.x,view.fx.w);
     if (dz_amt > 0.001 && !under) {
         let dz = smoothstep(28.0,190.0,view_dist)*clamp(dz_amt,0.0,1.0);
         if (dz > 0.002) { color = mix(color, blur(uv,dz*3.5), dz*clamp(view.screen.z,0.0,1.0)); }
@@ -576,7 +577,8 @@ fn lens(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var drop_uv = vec2<f32>(uv.x-0.5, 0.5-uv.y);
     drop_uv.x *= max(view.screen.x,0.1);
     let t = view.camera_time.w*0.2*view.lens.z;
-    let rain = clamp(view.fx.z,0.0,1.0);
+    // The rain on the camera, not on the sea: under a roof it is none.
+    let rain = clamp(view.rain.x,0.0,1.0);
     if (rain > 0.001) {
         let s = smoothstep(-0.5,1.0,rain)*2.0;
         let l1 = smoothstep(0.25,0.75,rain);

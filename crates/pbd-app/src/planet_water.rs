@@ -79,6 +79,10 @@ pub(super) struct WaterView {
     screen: Vec4,
     lod: Vec4,
     bands: Vec4,
+    /// The rain on the LENS, then three spare lanes. Its own lane rather than
+    /// `fx.z`, which is the rain on the SEA: a camera in a cave mouth is dry
+    /// while the sea it looks out at is still being rained on.
+    rain: Vec4,
 }
 
 /// What the column tier says is at the camera's own cell: nothing, because
@@ -442,15 +446,17 @@ fn prepare_water_views(
         was_under = state > 0.75;
         let aspect = view.viewport.z as f32 / view.viewport.w.max(1) as f32;
         let s = &settings;
-        // Rain on the lens only below the altitude the rain itself stops at:
-        // from 400 m up a storm reads through the clouds and the haze, not
-        // through drops on the glass. One gate for both, in `weather`.
+        // Rain below the altitude the rain itself stops at: from 400 m up a
+        // storm reads through the clouds and the haze, not through drops on
+        // the glass or rings on a sea a pixel wide. One gate, in `weather`.
         let altitude = camera.length() - terrain::PLANET_RADIUS;
-        let lens_rain = if crate::weather::rain_drawn_at(altitude, &weather_settings) {
+        let sea_rain = if crate::weather::rain_drawn_at(altitude, &weather_settings) {
             weather.rain
         } else {
             0.0
         };
+        // And on the lens only when nothing solid is over the eye.
+        let lens_rain = if weather.sheltered { 0.0 } else { sea_rain };
         // The sea's sun specular takes the ground's overcast dim, so a storm
         // does not glitter.
         let sun_dim = 1.0 - weather.cover.clamp(0.0, 1.0) * weather_settings.overcast_sun_dim;
@@ -491,7 +497,7 @@ fn prepare_water_views(
             fog_night: FOG_NIGHT_SKY.extend(FOG_DENSITY_PER_M),
             fog_day: FOG_DAY_SKY.extend(FOG_HEIGHT_M),
             limits: Vec4::new(s.fog_max, TERMINATOR.0, TERMINATOR.1, FOG_MIX),
-            fx: Vec4::new(s.underwater_distortion, state, lens_rain, drips),
+            fx: Vec4::new(s.underwater_distortion, state, sea_rain, drips),
             lens: Vec4::new(
                 weather_settings.rain_lens_density,
                 weather_settings.rain_lens_refract,
@@ -504,6 +510,7 @@ fn prepare_water_views(
             // under it can never be split on different anchors.
             lod: planet.lod.player.extend(super::lod::BASE_LEVEL as f32),
             bands: planet.lod.bands,
+            rain: Vec4::new(lens_rain, 0.0, 0.0, 0.0),
         };
         let lens_needed = lens_rain > 0.001 || drips > 0.001;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
@@ -732,7 +739,7 @@ mod tests {
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (2, 23));
+        assert_eq!((mat4, vec4), (2, 24));
         assert_eq!(
             WaterView::min_size().get() as usize,
             mat4 * 64 + vec4 * 16,

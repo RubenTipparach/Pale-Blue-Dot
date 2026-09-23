@@ -699,6 +699,40 @@ mod tests {
         (set, tier)
     }
 
+    /// Measurement for `overcast-and-rain` section 5: how many cave floors in
+    /// the tier around the spawn are under rock yet reached by sky LIGHT,
+    /// which is what used to wet them. Run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn rain_under_rock_report() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let (_, tier) = tier(anchor);
+        let (mut floors, mut lit, mut wet_sum, mut brightest) = (0usize, 0usize, 0.0f32, 0u8);
+        for (slot, column) in tier.columns.iter().enumerate() {
+            let runs = column.drawn_runs();
+            for run in &runs[..runs.len().saturating_sub(1)] {
+                if run.from == 0 && run.to <= 1 {
+                    continue;
+                }
+                let air = run.to.min(LAYERS - 1);
+                assert!(!column.open_to_sky(column::layer_altitude(run.to)));
+                floors += 1;
+                let sky = tier.light[slot][air].sky();
+                if sky > 0 {
+                    lit += 1;
+                    wet_sum += f32::from(sky) / 15.0;
+                    brightest = brightest.max(sky);
+                }
+            }
+        }
+        println!(
+            "cave floors under rock: {floors}; reached by sky light (so wetted before): {lit} \
+             ({:.1}%), mean wetness there {:.2}, brightest sky level {brightest}/15",
+            100.0 * lit as f32 / floors.max(1) as f32,
+            wet_sum / lit.max(1) as f32
+        );
+    }
+
     #[test]
     fn the_tier_covers_its_radius_and_stops_there() {
         let anchor = Vec3::new(0.3, 0.7, 0.2).normalize();

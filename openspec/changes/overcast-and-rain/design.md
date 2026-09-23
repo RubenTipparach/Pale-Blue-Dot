@@ -187,3 +187,74 @@ design from what shipped.
 - **Curtains are feathered.** Hard-edged 60 m sheets stood as panels with
   seams; each is now a cell and a half wide with its outer halves fading to
   nothing, so neighbours blend into one wall of rain.
+
+## 5. Dry caves: rain reaches only what the sky is open above
+
+**The owner's words: "make sure caves are nice and dry, as the block column
+logic should well understand that there is a block on top blocking the rain."**
+
+### What lets rain into a cave today
+
+Three paths, each answering "is this under the sky" with something other than
+the column:
+
+1. **Wet surfaces are gated by the voxel SKY LIGHT.** `wet_amt` multiplies by
+   `skylight`, the baked field. That field is light, and light spreads
+   sideways: like Minecraft's, it falls off a step per cell into a cave rather
+   than stopping at the mouth. So a cave floor two cells in from a mouth is
+   half lit and half wet: puddles with rain rings, and rivulets on walls under
+   a roof of solid rock. Downward faces count as "sides" (`side_w` is one for a
+   face pointing straight down), so cave ceilings take rivulets too.
+2. **Lens drops ask nothing about shelter.** `fx.z` is the rain at the
+   player's column, gated only by altitude: standing in a cave while it rains
+   outside, rain runs down the glass.
+3. **The near shower's shelter test is the height field's**, `radius < cap -
+   0.8`, which is right under a deep roof and wrong under a thin one, and knows
+   nothing of a block the player placed overhead.
+
+### The rule
+
+A point is **open to the sky** when no solid layer of its column stands above
+it. That is one line on `pbd_core::column::Column` (`open_to_sky`), and every
+rain effect asks it, or its exact transcription on the GPU:
+
+- **A face** is rained on when the AIR IN FRONT OF IT is open to the sky, decided
+  per face in the vertex shader from the column record's own runs:
+  - the terrain pass's cap is the column's top, so open by construction; its
+    height-field walls stand only off the tier, where nothing overhangs;
+  - a column-pass FLOOR (the top of a run) is open only if no run of the same
+    column stands above it, so a cave floor is dry and so is the ground under
+    a block the player put over it;
+  - a column-pass CEILING faces down and is never rained on;
+  - a column-pass FLANK is open only if the neighbour's air it faces is that
+    neighbour's TOP gap, the one with nothing above it. A terrace step outside
+    is wet; the wall of a cave is dry.
+
+  It is a flat varying (`rain_open`), zero or one, and it replaces the sky
+  light in `wet_amt`, since how much sky light reached a face was never the
+  question. A downward face takes no rivulets on any pass.
+- **The camera** is sheltered when its eye is not open to the sky
+  (`PlanetContact::open_to_sky`: the column inside the tier; the height field
+  outside it, where nothing overhangs). Sheltered, no lens drops and no near
+  shower. The distant shafts and curtains still draw: they stand on the
+  surface outside, the rock between hides them in a cave, and at a mouth they
+  are the rain you are sheltering from.
+- **The lens and the sea take separate lanes.** The rain on the sea's rings is
+  the rain on the SEA; the rain on the lens is the rain on the CAMERA. Sharing
+  `fx.z` would have taken the rings off the sea whenever the player stood in a
+  cave mouth looking at it, so the lens reads a lane of its own.
+
+### Why the GPU rule and the CPU rule agree
+
+The shader decides from runs: a run's top is open when it is the topmost present
+run. The column decides from layers: open above its topmost solid layer. They
+are the same number when the topmost run's top IS one above the topmost solid
+layer, and that is the packing's contract (`Run::packed`), held by a test that
+packs generated and edited columns and compares the two.
+
+### Held
+
+- The sea sheet inside a sea cave still takes rain rings from the rain on the
+  sea: the water pass has no column runs to ask.
+- Rain is vertical. A wall at a mouth is wet exactly where the air in front of
+  it is open, not where wind would drive rain in.

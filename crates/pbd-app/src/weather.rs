@@ -32,6 +32,10 @@ pub struct Weather {
     /// What is falling here. The shower draws rain streaks either way until
     /// there is a snow particle; the field knows the difference already.
     pub snowing: bool,
+    /// Whether something solid stands over the camera's eye, so the rain in
+    /// the sky does not reach it: no drops on the lens and no shower round
+    /// it. The column's answer (`PlanetContact::open_to_sky`).
+    pub sheltered: bool,
 }
 
 /// How hard a storm the P key is currently forcing, 0..1.
@@ -80,6 +84,7 @@ pub fn settle_wetness(wetness: f32, rain: f32, dt: f32, tau: f32) -> f32 {
 fn sample_field(
     now: FieldNow,
     frame: Res<PlanetRenderFrame>,
+    contact: Option<Res<PlanetContact>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut weather: ResMut<Weather>,
     mut reported: Local<Option<i32>>,
@@ -106,16 +111,18 @@ fn sample_field(
     weather.rain = if cell.raining { cell.cover } else { 0.0 };
     weather.cover = cell.cover;
     weather.snowing = cell.precip == Precip::Snow;
-    // Every twentieth the cover moves, so a capture says what weather it was
-    // taken under: the cloud tuning is measured against this number.
-    let step = (cell.cover * 20.0).round() as i32;
+    weather.sheltered = contact.is_some_and(|contact| !contact.open_to_sky(body_local.as_vec3()));
+    // Every twentieth the cover moves, and whenever the eye goes under or out
+    // from under rock, so a capture says what weather it was taken under.
+    let step = (cell.cover * 20.0).round() as i32 * 2 + i32::from(weather.sheltered);
     if *reported != Some(step) {
         *reported = Some(step);
         info!(
-            "Weather here: cover {:.2}, rain {:.2}{}",
+            "Weather here: cover {:.2}, rain {:.2}{}{}",
             cell.cover,
             weather.rain,
-            if weather.snowing { ", snow" } else { "" }
+            if weather.snowing { ", snow" } else { "" },
+            if weather.sheltered { ", sheltered" } else { "" }
         );
     }
 }
@@ -471,14 +478,14 @@ fn rebuild_shower(
     let eye = camera.translation() - center;
     let radius = eye.length();
     let up = eye / radius.max(1e-3);
-    // No rain when the camera cannot see the sky: under water, or under the
-    // terrain beneath it. The rendered cap, not the point-sampled noise, which
-    // can sit a whole step above a walker standing on a cell edge. And none
-    // from above the altitude gate.
-    let ground = contact.sample(up).radius;
+    // No rain at all from under the sea or above the altitude gate. Under
+    // ROCK, no shower round the camera - it is dry there - but the rain
+    // outside still draws: it stands on the surface, the rock hides it from
+    // inside a cave, and from a cave mouth it is the rain you are sheltering
+    // from. Whether the eye is under rock is the column's answer, read off
+    // `Weather` so the lens and the shower cannot disagree about it.
     let submerged = surface_height(up) < 0.0 && radius < PLANET_RADIUS;
-    let sheltered = radius < 1.0 || submerged || radius < ground - 0.8;
-    let drawn = !sheltered && rain_drawn_at(radius - PLANET_RADIUS, &now.settings);
+    let drawn = radius >= 1.0 && !submerged && rain_drawn_at(radius - PLANET_RADIUS, &now.settings);
     let Some(mesh) = meshes.get_mut(&mesh.0) else {
         return;
     };
@@ -498,7 +505,9 @@ fn rebuild_shower(
     };
     let mut quads = Quads::default();
     if drawn {
-        near_shower(&shower, weather.rain, &mut quads);
+        if !weather.sheltered {
+            near_shower(&shower, weather.rain, &mut quads);
+        }
         distant_rain(&shower, &now.field(), now.seconds(), &mut quads);
     }
     *visibility = if quads.positions.is_empty() {
@@ -551,6 +560,7 @@ impl Plugin for WeatherPlugin {
             wetness: forcing,
             cover: forcing,
             snowing: false,
+            sheltered: false,
         })
         .insert_resource(StormForcing(forcing))
         .insert_resource(WeatherEpoch(self.weather_at))
