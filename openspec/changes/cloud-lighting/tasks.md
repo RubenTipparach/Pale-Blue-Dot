@@ -11,18 +11,20 @@
       level camera.
 
 ## 2. The model, in `pbd::clouds`
-- [ ] The light march reads the layer's extinction; the `0.05` literal goes. A
+- [x] The light march reads the layer's extinction; the `0.05` literal goes. A
       test reads the shader and fails on a numeric extinction there.
-- [ ] Six-step light march with growing steps, clipped to the slab.
-- [ ] Multiple-scattering octaves; two-lobe HG phase.
-- [ ] Sky ambient from above through `tau_up`, ground bounce from below through
-      `tau_down`; the night floor kept as the floor.
-- [ ] `cloud_base_dark`, `cloud_storm_dark` and the `day*0.90` term removed;
+- [x] Six-step light march with growing steps, clipped to the slab.
+- [x] Multiple-scattering octaves (three, fixed); two-lobe HG phase.
+- [x] Sky ambient from above through `tau_up`; ground bounce fading with height
+      (no `tau_down` march, design section 5); the night floor kept as the floor.
+- [x] `cloud_base_dark`, `cloud_storm_dark` and the `day*0.90` term removed;
       `CloudLayer` re-laid out and its size test moved with it.
 
 ## 3. Knobs
-- [ ] The design's table into `WeatherSettings` and `weather.ron`, with units,
-      validation and the code-defaults test.
+- [x] The knobs that exist (design section 5) into `WeatherSettings` and
+      `weather.ron`, with units, validation and the code-defaults test.
+- [x] The weather map read with a cubic B-spline, shared with the ground's
+      cloud shadows: bilinear drew texel stairs round every cloud from orbit.
 
 ## 4. Check
 - [ ] `tools/cloud_light.py` updated with the new arithmetic; before and after

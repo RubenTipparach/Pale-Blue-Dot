@@ -83,12 +83,13 @@ pub(super) struct WaterView {
     /// `fx.z`, which is the rain on the SEA: a camera in a cave mouth is dry
     /// while the sea it looks out at is still being rained on.
     rain: Vec4,
-    /// The cloud layer (`sky::CloudNow`), so the sheet can march the sky's
-    /// own clouds over itself.
+    /// The cloud layer (`sky::CloudNow`): the clouds pass marches it over
+    /// the whole scene, and the rain is lit by its lightning.
     cloud_clouds: Vec4,
     cloud_slab: Vec4,
     cloud_storm: Vec4,
     cloud_flash: Vec4,
+    cloud_light: Vec4,
     /// The precipitation map's frame (`weather::RainMap`) and the volume's
     /// look; see `rain` in `water.wgsl` for what each lane is.
     rain_map: Vec4,
@@ -304,6 +305,7 @@ fn initialize_pipelines(
 enum Pass {
     Cap,
     Compose,
+    Clouds,
     Rain,
     Lens,
 }
@@ -343,6 +345,11 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 self.fullscreen.to_vertex_state(),
                 "compose",
             ),
+            Pass::Clouds => (
+                "Clouds over the whole scene, against its depth",
+                self.fullscreen.to_vertex_state(),
+                "clouds",
+            ),
             Pass::Rain => (
                 "Rain volume over the composed scene",
                 self.fullscreen.to_vertex_state(),
@@ -361,7 +368,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
         // the scene's own occlusion is the shader's discard against the
         // sampled main-pass depth, which may be multisampled.
         let depth_stencil = match key.pass {
-            Pass::Lens | Pass::Rain => None,
+            Pass::Lens | Pass::Rain | Pass::Clouds => None,
             pass => Some(DepthStencilState {
                 format: WATER_DEPTH_FORMAT,
                 depth_write_enabled: pass == Pass::Cap,
@@ -376,7 +383,11 @@ impl SpecializedRenderPipeline for WaterPipelines {
         };
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed(label)),
-            layout: vec![self.data_layout.clone(), scene],
+            layout: vec![
+                self.data_layout.clone(),
+                scene,
+                super::weather_maps::layout(),
+            ],
             vertex,
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
@@ -411,6 +422,7 @@ pub(super) struct WaterViewGpu {
     data_bind_group: BindGroup,
     cap: CachedRenderPipelineId,
     compose: CachedRenderPipelineId,
+    clouds: CachedRenderPipelineId,
     lens: CachedRenderPipelineId,
     rain: CachedRenderPipelineId,
     /// The precipitation map, rewritten each frame from `weather::RainMap`.
@@ -567,6 +579,7 @@ fn prepare_water_views(
             cloud_slab: clouds.slab,
             cloud_storm: clouds.storm,
             cloud_flash: clouds.flash,
+            cloud_light: clouds.light,
             rain_map: rain_map
                 .as_deref()
                 .map_or(Vec4::ZERO, |m| m.anchor.extend(m.cell_m)),
@@ -660,6 +673,7 @@ fn prepare_water_views(
         commands.entity(entity).insert(WaterViewGpu {
             cap: pipeline(Pass::Cap),
             compose: pipeline(Pass::Compose),
+            clouds: pipeline(Pass::Clouds),
             lens: pipeline(Pass::Lens),
             rain: pipeline(Pass::Rain),
             rain_buffer,
@@ -719,11 +733,13 @@ impl ViewNode for WaterCompositeNode {
     ) -> Result<(), NodeRunError> {
         let pipelines = world.resource::<WaterPipelines>();
         let cache = world.resource::<PipelineCache>();
-        let (Some(cap), Some(compose), Some(lens), Some(rain)) = (
+        let (Some(cap), Some(compose), Some(clouds), Some(lens), Some(rain), Some(maps)) = (
             cache.get_render_pipeline(water.cap),
             cache.get_render_pipeline(water.compose),
+            cache.get_render_pipeline(water.clouds),
             cache.get_render_pipeline(water.lens),
             cache.get_render_pipeline(water.rain),
+            world.get_resource::<super::weather_maps::WeatherMapGpu>(),
         ) else {
             return Ok(());
         };
@@ -771,12 +787,14 @@ impl ViewNode for WaterCompositeNode {
             });
             pass.set_bind_group(0, &water.data_bind_group, &[]);
             pass.set_bind_group(1, &scene, &[]);
+            pass.set_bind_group(2, &maps.bind_group, &[]);
             pass.set_render_pipeline(compose);
             pass.draw(0..3, 0..1);
             pass.set_render_pipeline(cap);
             pass.draw_indirect(&planet_view.indirect, 32);
         }
         for (needed, pipeline, label) in [
+            (true, clouds, "Clouds"),
             (water.rain_needed, rain, "Rain volume"),
             (water.lens_needed, lens, "Water lens"),
         ] {
@@ -802,6 +820,7 @@ impl ViewNode for WaterCompositeNode {
             });
             pass.set_bind_group(0, &water.data_bind_group, &[]);
             pass.set_bind_group(1, &scene, &[]);
+            pass.set_bind_group(2, &maps.bind_group, &[]);
             pass.set_render_pipeline(pipeline);
             pass.draw(0..3, 0..1);
         }
@@ -843,7 +862,7 @@ mod tests {
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (2, 34));
+        assert_eq!((mat4, vec4), (2, 35));
         assert_eq!(
             WaterView::min_size().get() as usize,
             mat4 * 64 + vec4 * 16,

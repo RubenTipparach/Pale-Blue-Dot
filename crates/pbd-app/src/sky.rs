@@ -23,12 +23,12 @@ pub use crate::planet::PLANET_RADIUS;
 // ~150 m summits, and the shell clears them by a wide margin.
 pub const ATMOSPHERE_RADIUS: f32 = PLANET_RADIUS * 1.2;
 pub const CLOUD_RADIUS: f32 = PLANET_RADIUS + 300.0;
-/// How deep the cloud layer is. The clouds are a marched slab between
-/// `CLOUD_RADIUS` and this much above it, rather than a surface at one radius:
-/// a single sample has no interior to light, and thickness is the whole of what
-/// separates a mass from a decal. 260 m against 300 m of base altitude puts the
-/// tops at about twice the summit height, which is where the reference's sit.
-pub const CLOUD_THICKNESS: f32 = 260.0;
+/// The tallest a cloud stands above its base. The clouds are a marched layer
+/// between `CLOUD_RADIUS` and this much above it, and each place's own cloud
+/// reaches a share of it that the weather map gives (`cloud_top`): a storm
+/// towers to the full 450 m and a stratus deck lies in the bottom third. The
+/// tops stay under the atmosphere shell (960 m up) with room to spare.
+pub const CLOUD_THICKNESS: f32 = 450.0;
 /// Where the sun is in the system frame: the core's fixed sun, which the
 /// planet turns under. Noon is exactly this, so every capture framed against
 /// the old constant still reads.
@@ -126,25 +126,11 @@ pub struct SkyParameters {
     pub sun: Vec4,
     /// Rayleigh wavelength ratios RGB and Mie anisotropy w.
     pub scatter: Vec4,
-    /// Clouds radius, coverage threshold, opacity and night-floor brightness.
-    pub clouds: Vec4,
-    /// Slab thickness in metres, the cover the weather field says is overhead,
-    /// drift seconds, and how dark a cloud's shadowed underside goes in fair
-    /// weather.
-    pub cloud_slab: Vec4,
-    /// The threshold at full cover, how dark the underside goes at full cover,
-    /// the extinction per metre at full cover, and how brightly lightning lights
-    /// the cloud from inside.
-    pub cloud_storm: Vec4,
-    /// A lightning strike: where it is, body-local metres, and how bright it
-    /// is right now; zero between strikes.
-    pub cloud_flash: Vec4,
 }
 
 /// The cloud layer as the shaders' `pbd::clouds::CloudLayer` reads it, this
-/// frame: the four lanes the sky shell carries, copied out so the SEA can march
-/// the same clouds over itself. One writer (`follow_weather`, through
-/// `apply_weather`), two readers.
+/// frame: its five lanes, built from `weather.ron` and the weather, extracted
+/// for the clouds pass. One writer (`follow_weather`).
 #[derive(
     Resource, Clone, Copy, Debug, Default, bevy::render::extract_resource::ExtractResource,
 )]
@@ -153,15 +139,38 @@ pub struct CloudNow {
     pub slab: Vec4,
     pub storm: Vec4,
     pub flash: Vec4,
+    pub light: Vec4,
 }
 
 impl CloudNow {
-    fn of(sky: &SkyParameters) -> Self {
+    /// The lanes, in the order `pbd::clouds::CloudLayer` declares them.
+    pub fn of(settings: &WeatherSettings, weather: &crate::weather::Weather, seconds: f32) -> Self {
         Self {
-            clouds: sky.clouds,
-            slab: sky.cloud_slab,
-            storm: sky.cloud_storm,
-            flash: sky.cloud_flash,
+            clouds: Vec4::new(
+                CLOUD_RADIUS,
+                settings.cloud_ambient_sky,
+                settings.cloud_extinction,
+                settings.cloud_night_floor,
+            ),
+            slab: Vec4::new(
+                CLOUD_THICKNESS,
+                settings.cloud_ambient_ground,
+                seconds,
+                settings.cloud_phase_forward,
+            ),
+            storm: Vec4::new(
+                settings.cloud_phase_back,
+                settings.cloud_phase_blend,
+                settings.cloud_storm_extinction,
+                settings.lightning_cloud,
+            ),
+            flash: weather.flash,
+            light: Vec4::new(
+                settings.cloud_sun,
+                settings.cloud_scatter_extinction_falloff,
+                settings.cloud_scatter_energy_falloff,
+                settings.cloud_scatter_phase_falloff,
+            ),
         }
     }
 }
@@ -261,16 +270,12 @@ impl Material for SkyMaterial {
     }
 }
 
-/// Hand the sky what the weather field says is overhead, and the drift clock.
+/// Hand the dome the cover overhead, and the clouds pass its lanes.
 ///
-/// The cover is the SAME number that decides whether it is raining on the
-/// player, read off the same `Weather` resource: the sky a player stands under
-/// and the rain falling on them cannot disagree about whether it is overcast,
-/// because there is one answer and both read it. What the sky does NOT get is
-/// the field at a distance - a cloud on the horizon is still the shader's own
-/// noise, because `planet_gen::moisture` is fBm on the CPU. Closing that gap
-/// means porting the fBm into WGSL and pinning the two against each other; it
-/// is named in the change's tasks rather than pretended away here.
+/// The dome's overcast greying reads the cover over the player, the same
+/// number that decides whether it is raining on them. The clouds themselves
+/// read the cover of every place they stand over, off the weather maps: a
+/// cloud on the horizon is the atmosphere's cloud there, not the player's.
 fn follow_weather(
     weather: Res<crate::weather::Weather>,
     settings: Res<WeatherSettings>,
@@ -280,12 +285,10 @@ fn follow_weather(
     mut materials: ResMut<Assets<SkyMaterial>>,
     mut now: ResMut<CloudNow>,
 ) {
-    let seconds = clock.elapsed_secs();
+    *now = CloudNow::of(&settings, &weather, clock.elapsed_secs());
     for material in &shells {
         if let Some(sky) = materials.get_mut(&material.0) {
-            sky.parameters.cloud_slab.z = seconds;
             apply_weather(&mut sky.parameters, &settings, &weather);
-            *now = CloudNow::of(&sky.parameters);
             // The shell's sun rides the same clock everything else does; what
             // a moving sun changes is where the light comes FROM, and the
             // terminator the sky already draws turns that into a sunset.
@@ -294,31 +297,15 @@ fn follow_weather(
     }
 }
 
-/// Everything the weather decides about the dome: the cloud numbers from
-/// `weather.ron`, the cover overhead, and the overcast's greying and dimming of
-/// the scattering and the sun. One function for the spawn and every frame
-/// after it, so the first frame is not a sky with no thresholds in it.
+/// Everything the weather decides about the dome: the overcast's greying and
+/// dimming of the scattering and the sun by the cover overhead. One function
+/// for the spawn and every frame after it.
 fn apply_weather(
     sky: &mut SkyParameters,
     settings: &WeatherSettings,
     weather: &crate::weather::Weather,
 ) {
     let cover = weather.cover;
-    sky.cloud_flash = weather.flash;
-    sky.clouds = Vec4::new(
-        CLOUD_RADIUS,
-        settings.cloud_threshold_clear,
-        settings.cloud_extinction,
-        settings.cloud_night_floor,
-    );
-    sky.cloud_slab.y = cover;
-    sky.cloud_slab.w = settings.cloud_base_dark;
-    sky.cloud_storm = Vec4::new(
-        settings.cloud_threshold_overcast,
-        settings.cloud_storm_dark,
-        settings.cloud_storm_extinction,
-        settings.lightning_cloud,
-    );
     // The same cover that dims the ground greys the dome, so the two cannot
     // disagree about the weather.
     let (rayleigh, mie, radiance) = overcast_scatter(settings, cover);
@@ -350,11 +337,6 @@ fn spawn_atmosphere(
         atmosphere: Vec4::new(ATMOSPHERE_RADIUS, 0.22, CLEAR_RAYLEIGH, CLEAR_MIE),
         sun: sun.extend(CLEAR_SUN),
         scatter: Vec4::new(0.16, 0.52, 1.30, 0.64),
-        // The cloud lanes are `apply_weather`'s, below.
-        clouds: Vec4::ZERO,
-        cloud_slab: Vec4::new(CLOUD_THICKNESS, 0.0, 0.0, 0.0),
-        cloud_storm: Vec4::ZERO,
-        cloud_flash: Vec4::ZERO,
     };
     apply_weather(&mut parameters, &weather_settings, &weather);
     let material = materials.add(SkyMaterial { parameters });
@@ -374,6 +356,33 @@ mod tests {
     use super::*;
     use crate::{CelestialScene, PhysicsFrame};
     use bevy::math::DVec3;
+
+    /// The light march and the view march take one extinction, the layer's,
+    /// mixed by the cover: a numeric extinction in the light march is a cloud
+    /// that shadows itself by a different rule than it hides the sky by, which
+    /// is the `0.05` this replaced.
+    #[test]
+    fn the_cloud_light_march_uses_the_layers_extinction() {
+        let shader = include_str!("../../../assets/shaders/clouds.wgsl");
+        assert!(
+            shader.contains(
+                "let extinction = mix(layer.clouds.z, layer.storm.z, clamp(local.x, 0.0, 1.0));"
+            ),
+            "the view march's extinction is no longer the layer's"
+        );
+        let calls: Vec<&str> = shader
+            .lines()
+            .filter(|line| line.contains("cloud_light_depth(") && !line.contains("fn "))
+            .collect();
+        assert!(!calls.is_empty());
+        for call in calls {
+            assert!(
+                call.contains(", extinction,"),
+                "a light march takes an extinction other than the layer's: {call}"
+            );
+        }
+        assert!(!shader.contains("*0.05"));
+    }
 
     #[test]
     fn sky_shell_and_uniform_follow_the_same_f64_body_frame_as_terrain() {
@@ -402,10 +411,6 @@ mod tests {
                     atmosphere: Vec4::ZERO,
                     sun: Vec4::ZERO,
                     scatter: Vec4::ZERO,
-                    clouds: Vec4::ZERO,
-                    cloud_slab: Vec4::ZERO,
-                    cloud_storm: Vec4::ZERO,
-                    cloud_flash: Vec4::ZERO,
                 },
             });
         let shell = app

@@ -2,6 +2,8 @@
 // skirts and cosmetic trees. Terminator/skylight/rim treatment follows the
 // previously documented Tenebris port in hex_terrain.wgsl. The sea is not
 // drawn here: water cells draw their seabed and water.wgsl draws the sheet.
+#import pbd::clouds::cloud_map_smooth
+
 struct Cell {
     direction_height: vec4<f32>,
     corners: array<vec4<f32>,6>,
@@ -27,6 +29,30 @@ struct Params {
     ground: vec4<f32>,         // sod depth m, soil depth m, snow tileset slot, spare
     tilesets: array<vec4<u32>,2>, // atlas slot per biome, in Biome order
 }
+// The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
+// depth per place, the wind aloft, the overlay; one sampler.
+@group(1) @binding(0) var weather_cloud: texture_cube<f32>;
+@group(1) @binding(1) var weather_wind: texture_cube<f32>;
+@group(1) @binding(2) var weather_overlay: texture_cube<f32>;
+@group(1) @binding(3) var weather_sampler: sampler;
+
+// How much of the sun reaches a point past the clouds: the cloud where the
+// ray toward the sun crosses the cloud layer (`clutter_more.w`, a radius),
+// thinned by that cloud's own optical depth. A cloud's shadow lies where the
+// sun puts it and moves with it; `ground.w` is how dark a full one is.
+fn cloud_sun(p: vec3<f32>, sun: vec3<f32>) -> f32 {
+    let strength = params.ground.w;
+    let layer = params.clutter_more.w;
+    if strength <= 0.0 || layer <= 0.0 { return 1.0; }
+    let up = normalized(p);
+    let rise = max(dot(up, sun), 0.08);
+    let t = max(layer - length(p), 0.0) / rise;
+    let at = normalized(p + sun * t);
+    let w = cloud_map_smooth(weather_cloud, weather_sampler, at);
+    let blocked = clamp(w.x, 0.0, 1.0) * (1.0 - exp(-max(w.w, 0.0) * 0.25));
+    return 1.0 - strength * blocked;
+}
+
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
 fn band_cos(level: u32) -> f32 {
@@ -1292,8 +1318,13 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // between a lit face and a shaded one collapses too: a storm is flat grey
     // light, not a dim noon.
     let cover = clamp(params.weather.z,0.,1.);
-    let sun_dim = 1.-cover*params.rain[4].x;
-    let fill_dim = 1.-cover*params.rain[4].y;
+    // The sun is cut by the cloud between this face and the sun, and the
+    // sky's fill by the cover over this face: both off the weather maps, so a
+    // storm on the far hills darkens the far hills and not the meadow under
+    // a clear sky. `overcast_amb_dim` stays the fill's knob.
+    let here_cover = clamp(textureSampleLevel(weather_cloud,weather_sampler,radial,0.0).x,0.,1.);
+    let sun_dim = cloud_sun(input.position,sun);
+    let fill_dim = 1.-here_cover*params.rain[4].y;
     let direct = max(dot(n,sun),0.0)*daylight*sun_dim;
     // The heightfield's per-cell occlusion, times the voxel field's answer at
     // this vertex. Outside the column tier the second is one and this is what

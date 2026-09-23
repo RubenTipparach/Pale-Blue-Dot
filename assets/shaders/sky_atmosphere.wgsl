@@ -5,22 +5,13 @@
 // Unlike the standalone asset, this consumes Bevy view/mesh bindings.
 #import bevy_pbr::forward_io::VertexOutput
 #import bevy_pbr::mesh_view_bindings::view
-#import pbd::clouds::{CloudLayer, cloud_sphere_hit, cloud_span, cloud_march}
+#import pbd::clouds::cloud_sphere_hit
 
 struct SkyParameters {
     center_radius: vec4<f32>,
     atmosphere: vec4<f32>,
     sun: vec4<f32>,
     scatter: vec4<f32>,
-    clouds: vec4<f32>,
-    // Slab thickness (m), the cover the field says is overhead, drift seconds,
-    // and how dark a cloud's underside goes in fair weather.
-    cloud_slab: vec4<f32>,
-    // The threshold at full cover, how dark the underside goes there, the
-    // extinction per metre there, and the lightning gain.
-    cloud_storm: vec4<f32>,
-    // A lightning strike: where, body-local, and how bright right now.
-    cloud_flash: vec4<f32>,
 }
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> sky: SkyParameters;
 
@@ -107,8 +98,6 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     scattered += vec3<f32>(0.8,0.24,0.055)*dusk*horizon*low_camera*0.18;
     let average_beta = dot(beta_r,vec3<f32>(1.0/3.0))+beta_m;
     var opacity = clamp(1.0-exp(-view_depth*average_beta),0.0,0.94);
-    // How much cloud this ray crossed, for the sun disc to be seen through.
-    var cloud_cover = 0.0;
     // Art-directed daylight veil keeps bright stars out of the surface sky.
     // It fades out with altitude, revealing the star field continuously.
     let veil_altitude = max(length(camera)-sky.center_radius.w,0.0);
@@ -116,22 +105,10 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     let day_veil = smoothstep(-0.12,0.20,sun_height)*surface_veil*0.985;
     opacity = max(opacity,day_veil);
 
-    // The clouds are a SLAB, not a shell. A single ray-sphere hit gives one
-    // sample at one depth, which is a stencil painted on a sphere: nothing in
-    // it to be lit from one side and no silhouette from below. Marching a shell
-    // of real thickness is what makes a mass. A grazing ray crosses more of it
-    // than a vertical one by construction, which is why the horizon builds up
-    // while the zenith stays open, and no extra term is needed for that.
-    // The clouds: `pbd::clouds`, the one march the sea runs too.
-    let layer = CloudLayer(sky.clouds,sky.cloud_slab,sky.cloud_storm,sky.cloud_flash);
-    let span = cloud_span(camera,direction,start,end,layer);
-    let cloud = cloud_march(camera,direction,span.x,span.y,layer,sun);
-    let cloud_alpha = cloud.w;
-    cloud_cover = cloud_alpha;
-    if (cloud_alpha > 0.0) {
-        scattered = scattered*(1.0-cloud_alpha)+cloud.rgb;
-        opacity = opacity+(1.0-opacity)*cloud_alpha;
-    }
+    // The clouds are not drawn here: the after-scene clouds pass
+    // (`water.wgsl`, `pbd::clouds`) draws them over everything against the
+    // scene's depth, so a cloud in front of a hill is in front of it and the
+    // sun disc below is covered wherever a cloud crosses it.
     // The sun itself: a disc along the sun direction with a darkened limb and
     // a glow that reaches a few radii, hidden by the planet's own shadow and
     // by the cloud this ray crossed. There was a sunset here and no sun; the
@@ -139,10 +116,11 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     // Tenebris draws its disc as an angular-size-correct billboard inside the
     // far plane; the shell is that surface here. The radius is a few times
     // the real sun's 0.27 degrees, for legibility at the shell's resolution.
+    // The clouds pass draws over it, so a cloud hides it.
     let disc = smoothstep(SUN_COS_OUTER,SUN_COS_INNER,cosine);
     let limb = mix(0.62,1.0,smoothstep(SUN_COS_OUTER,1.0,cosine));
     let glow = pow(max(cosine,0.0),1800.0)*0.55;
-    let shadowed = sun_visibility(camera,sun)*(1.0-cloud_cover);
+    let shadowed = sun_visibility(camera,sun);
     let sun_light = SUN_COLOUR*sky.sun.w*(disc*limb+glow)*shadowed;
     scattered += sun_light;
     opacity = max(opacity,disc*shadowed);

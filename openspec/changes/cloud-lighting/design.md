@@ -134,3 +134,48 @@ exists.
   luminance of cloud pixels over their tops against their bases.
 - The visual check in the running game is the owner's. Until then, the new
   requirement stays in this change.
+
+## 5. What was built, against this plan
+
+Built in `assets/shaders/clouds.wgsl` (one after-scene clouds pass in the water
+chain, so the sky, the sea and the land all get the same clouds). Where it
+differs from the sections above:
+
+- **Octaves and light steps are fixed in the shader**, at 3 and 6, not knobs.
+  Nothing in tuning called for another count, and a count is a loop bound the
+  shader would otherwise have to clamp. `cloud_scatter_octaves` and
+  `cloud_light_steps` were not added.
+- **No downward march.** The ground bounce is `ground * day * (1 - height)`: it
+  lights the base and fades toward the top. A `tau_down` march cost three more
+  density reads for a term that only ever reaches the bottom few samples.
+- **The knobs that exist** (`weather.ron`, validated): `cloud_sun`,
+  `cloud_ambient_sky`, `cloud_ambient_ground`, `cloud_phase_forward`,
+  `cloud_phase_back`, `cloud_phase_blend`, and the three scatter falloffs
+  (extinction, energy, phase). `cloud_base_dark`, `cloud_storm_dark` and the
+  `0.05` literal are gone.
+- **Where the cloud is comes from the atmosphere's weather map**, not the old
+  deterministic field. That map is 64 texels a cube face (118 m), and a cloud's
+  edge is a steep threshold on its cover. **Read bilinearly, every cloud from
+  orbit was outlined in texel-sized stairs.** A checkerboard written into the map
+  showed the sampler really was filtering: the stairs are what a threshold makes
+  of bilinear's slope jumping at every texel line. The map is read with a cubic
+  B-spline instead (`cloud_map_smooth`, four bilinear taps, placed on the face the
+  direction points through; a tap past a face's edge resolves on the next face).
+  The ground's cloud shadows import the same function, so a shadow and its
+  cloud cannot disagree.
+
+- **The stairs had a second, larger cause, and it was not the map.** With the
+  B-spline in, the orbit capture still showed screen-aligned blocks about seven
+  pixels across, inside the clouds as well as at their edges. Every after-scene
+  pass takes its ray's direction from a point reconstructed at clip depth 0.5
+  (`view_ray` in `water.wgsl`), which under Bevy's reverse-Z is twenty
+  centimetres ahead, minus the camera. Both are f32 body-local metres; from
+  orbit the camera is some 15 km out, where f32 rounds to about a millimetre, so
+  each ray was turned by up to 0.005 rad: seven pixels at this field of view.
+  The point is now taken a kilometre out (`VIEW_RAY_DEPTH`), which puts the same
+  millimetre at a microradian. It was the whole of the blockiness; the sea's
+  sheet and the rain use the same ray and were quietly carrying the same error.
+
+Still open: the transcription (`tools/cloud_light.py`) has not been updated to
+this model, and the captures below have not been measured against the
+proposal's four numbers. Until they are, this is implemented, not validated.

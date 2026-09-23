@@ -49,6 +49,7 @@ struct WaterView {
     cloud_slab: vec4<f32>,
     cloud_storm: vec4<f32>,
     cloud_flash: vec4<f32>,
+    cloud_light: vec4<f32>,
     // The precipitation map (`weather::RainMap`): the anchor direction and the
     // cell size in metres; the plane's u axis and the map's side in cells; its
     // v axis and the volume's extinction per metre of full rain.
@@ -75,6 +76,15 @@ struct WaterView {
 @group(1) @binding(1) var scene_depth: texture_depth_2d;
 #endif
 @group(1) @binding(2) var scene_sampler: sampler;
+// The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
+// depth per place; the wind aloft; the overlay; one sampler.
+@group(2) @binding(0) var weather_cloud: texture_cube<f32>;
+@group(2) @binding(1) var weather_wind: texture_cube<f32>;
+@group(2) @binding(2) var weather_overlay: texture_cube<f32>;
+@group(2) @binding(3) var weather_sampler: sampler;
+fn cloud_layer() -> CloudLayer {
+    return CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash,view.cloud_light);
+}
 
 struct VertexOut {
     @builtin(position) clip: vec4<f32>,
@@ -402,18 +412,9 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         *view.sun.w*lit;
     let fog = distance_fog(in.local_position,radial,sun_direction);
     let fogged = mix(color,fog.rgb,fog.a);
-    // The clouds between the eye and this water. The sky shell drew them, but
-    // it writes no depth and this sheet is drawn after it, so without this the
-    // sea painted over every cloud in front of it: from orbit the ocean was
-    // cloudless. The same march as the sky's, so it is the same cloud. From
-    // under the cloud base the span is empty and this costs nothing.
-    let to_sheet = in.body_position-camera_body;
-    let reach = length(to_sheet);
-    let along = to_sheet/max(reach,1e-3);
-    let layer = CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash);
-    let span = cloud_span(camera_body,along,0.0,reach,layer);
-    let cloud = cloud_march(camera_body,along,span.x,span.y,layer,sun_direction);
-    return vec4<f32>(fogged*(1.0-cloud.w)+cloud.rgb,1.);
+    // The clouds over this water are the clouds pass's, drawn after the sheet
+    // over everything against depth.
+    return vec4<f32>(fogged,1.);
 }
 
 // ---- The composite: compose before the cap, lens after it ------------------
@@ -441,10 +442,19 @@ fn blur(uv: vec2<f32>, focus: f32) -> vec3<f32> {
 }
 
 struct Ray { origin: vec3<f32>, direction: vec3<f32> }
+// Reverse-Z clip depth of the point a pixel's direction is taken through:
+// near/depth metres ahead, a kilometre at Bevy's 0.1 m near plane. The
+// direction is that point minus the camera, both in f32 body-local metres, so
+// it is only as good as the camera's position over the distance between them.
+// At 0.5 (twenty centimetres) the camera's millimetre of rounding at orbital
+// range turned every ray by about 0.005 rad, and the clouds, the sea and the
+// rain were drawn in screen-aligned blocks seven pixels across.
+const VIEW_RAY_DEPTH: f32 = 1.0e-4;
+
 fn view_ray(uv: vec2<f32>) -> Ray {
-    // A point part way down the frustum gives the direction; sky pixels have
-    // no depth to reconstruct at, so the direction never comes from one.
-    let ahead = reconstruct_local(uv,0.5);
+    // A point far down the frustum gives the direction; sky pixels have no
+    // depth to reconstruct at, so the direction never comes from one.
+    let ahead = reconstruct_local(uv,VIEW_RAY_DEPTH);
     return Ray(view.camera_time.xyz, safe_normal(ahead-view.camera_time.xyz));
 }
 
@@ -659,6 +669,33 @@ fn rain_map_at(p: vec3<f32>) -> f32 {
     return mix(a,b,fy);
 }
 
+// ---- The clouds, over everything ------------------------------------------
+// `pbd::clouds` marched along each pixel's ray from the eye to the nearest of
+// the scene's depth and the sea, and composited over what is there: the sky,
+// the sea and the land alike. A cloud in front of a hill is in front of it.
+@fragment
+fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let uv = in.uv;
+    let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+    // Under the sea the surface is the sky; the compose pass drew it.
+    if (view.fx.y > 0.75) { return vec4<f32>(scene,1.0); }
+    let ray = view_ray(uv);
+    let eye = ray.origin-view.planet_center.xyz;
+    let layer = cloud_layer();
+    var far = 1.0e9;
+    let depth = load_depth(uv);
+    if (depth > 1e-7) {
+        far = length(reconstruct_local(uv,depth)-ray.origin);
+    }
+    let sea = cloud_sphere_hit(eye,ray.direction,view.planet_center.w);
+    if (sea.x > 0.0) { far = min(far,sea.x); }
+    let span = cloud_span(eye,ray.direction,0.0,far,layer);
+    if (span.y <= span.x) { return vec4<f32>(scene,1.0); }
+    let cloud = cloud_march(eye,ray.direction,span.x,span.y,layer,safe_normal(view.sun.xyz),
+        weather_cloud,weather_wind,weather_sampler);
+    return vec4<f32>(scene*(1.0-cloud.w)+cloud.rgb,1.0);
+}
+
 @fragment
 fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let uv = in.uv;
@@ -682,7 +719,7 @@ fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let ceiling = cloud_sphere_hit(eye,ray.direction,base);
     if (ceiling.y > 0.0) { far = min(far,ceiling.y); }
     if (far <= 1.0) { return vec4<f32>(scene,1.0); }
-    let layer = CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash);
+    let layer = cloud_layer();
     let steps = 16.0;
     let step_size = far/steps;
     // Jittered per pixel so sixteen steps read as grain, not as bands.

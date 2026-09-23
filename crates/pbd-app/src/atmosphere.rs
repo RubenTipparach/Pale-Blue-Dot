@@ -162,7 +162,7 @@ pub fn weather_maps(atmosphere: &Atmosphere) -> WeatherMaps {
     for face in 0..6 {
         for row in 0..MAP_SIZE {
             for column in 0..MAP_SIZE {
-                let s = atmosphere.sample(cube_direction(face, row, column, MAP_SIZE));
+                let s = smoothed(atmosphere, cube_direction(face, row, column, MAP_SIZE));
                 let rain_mmh = s.rain_rate * 3600.0 * if s.snow { -1.0 } else { 1.0 };
                 maps.cloud
                     .push([s.cover, s.cloud_top, rain_mmh, s.optical_depth]);
@@ -171,6 +171,34 @@ pub fn weather_maps(atmosphere: &Atmosphere) -> WeatherMaps {
         }
     }
     maps
+}
+
+/// The atmosphere at a texel, averaged over a small disc round it: the cells
+/// are 181 m apart and a texel 118 m, so a single sample would hand the GPU
+/// the cells' own facets, and a cloud's edge would trace them.
+fn smoothed(atmosphere: &Atmosphere, direction: Vec3) -> pbd_core::atmosphere::Sample {
+    let reach = 90.0 / atmosphere.grid.radius;
+    let u = direction.any_orthonormal_vector();
+    let v = direction.cross(u);
+    let mut sum = atmosphere.sample(direction);
+    let mut weight = 1.0;
+    for k in 0..6 {
+        let angle = k as f32 * std::f32::consts::TAU / 6.0;
+        let (sin, cos) = angle.sin_cos();
+        let s = atmosphere.sample((direction + (u * cos + v * sin) * reach).normalize());
+        sum.cover += s.cover;
+        sum.cloud_top += s.cloud_top;
+        sum.rain_rate += s.rain_rate;
+        sum.optical_depth += s.optical_depth;
+        sum.upper += s.upper;
+        weight += 1.0;
+    }
+    sum.cover /= weight;
+    sum.cloud_top /= weight;
+    sum.rain_rate /= weight;
+    sum.optical_depth /= weight;
+    sum.upper /= weight;
+    sum
 }
 
 /// Where the weather slider is brewing a storm: at the player, at the

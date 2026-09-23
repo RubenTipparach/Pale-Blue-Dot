@@ -364,25 +364,37 @@ pub struct WeatherSettings {
     pub cloud_fog_add: f32,
     /// Distance-haze density multiplier in full rain.
     pub rain_fog_mult: f32,
+    /// How much of the sun a full, thick cloud keeps off the ground under it:
+    /// the depth of a cloud's shadow, 0..1.
+    pub cloud_shadow: f32,
 
-    // ---- The cloud slab (sky_atmosphere.wgsl). Tuned against the share of
-    // the sky that is cloud at each cover; see the overcast-and-rain change.
-    /// Density threshold with no cover overhead: only denser noise is cloud.
-    pub cloud_threshold_clear: f32,
-    /// Density threshold at full cover, where the slab closes over.
-    pub cloud_threshold_overcast: f32,
-    /// How much a metre of full-density cloud absorbs, per metre. The optical
-    /// depth of a vertical crossing is this times the slab's thickness.
+    // ---- The clouds (`shaders/clouds.wgsl`): where they are is the
+    // atmosphere's weather map; this is how they are lit. See the
+    // cloud-lighting change for the model and what each knob does to it.
+    /// How much a metre of full-density cloud absorbs, per metre, in fair
+    /// weather: for the view AND for the light, one number for both.
     pub cloud_extinction: f32,
-    /// Cloud brightness with the sun down, 0..1.
-    pub cloud_night_floor: f32,
-    /// How bright a cloud's self-shadowed underside is in fair weather, 0..1.
-    pub cloud_base_dark: f32,
-    /// The same at full cover: a storm's base is slate, not grey.
-    pub cloud_storm_dark: f32,
-    /// Extinction at full cover, per metre, mixed in by cover like the
-    /// threshold: a storm is denser cloud, not only more of it.
+    /// Extinction at full cover, per metre, mixed in by the local cover: a
+    /// storm is denser cloud, not only more of it.
     pub cloud_storm_extinction: f32,
+    /// Cloud brightness with the sun down.
+    pub cloud_night_floor: f32,
+    /// The sun's strength on a cloud.
+    pub cloud_sun: f32,
+    /// Sky light from above, through the cloud over a sample.
+    pub cloud_ambient_sky: f32,
+    /// Light bounced up off the ground onto a cloud's base.
+    pub cloud_ambient_ground: f32,
+    /// The phase function's forward lobe (a silver lining toward the sun),
+    /// its back lobe, and their blend: Henyey-Greenstein g in -1..1.
+    pub cloud_phase_forward: f32,
+    pub cloud_phase_back: f32,
+    pub cloud_phase_blend: f32,
+    /// Multiple scattering (three octaves): each octave's extinction, energy
+    /// and phase are these shares of the last, 0..1.
+    pub cloud_scatter_extinction_falloff: f32,
+    pub cloud_scatter_energy_falloff: f32,
+    pub cloud_scatter_phase_falloff: f32,
 
     // ---- Rain near: Tenebris's shafts of streaks over every raining cell of
     // a lattice fixed to the body, inside the detail range. Beyond it the rain
@@ -480,13 +492,19 @@ impl Default for WeatherSettings {
             overcast_sky_dim: 0.6,
             cloud_fog_add: 0.35,
             rain_fog_mult: 1.6,
-            cloud_threshold_clear: 0.61,
-            cloud_threshold_overcast: 0.2016,
+            cloud_shadow: 0.8,
             cloud_extinction: 0.0115,
-            cloud_night_floor: 0.045,
-            cloud_base_dark: 0.34,
-            cloud_storm_dark: 0.12,
             cloud_storm_extinction: 0.03,
+            cloud_night_floor: 0.045,
+            cloud_sun: 0.55,
+            cloud_ambient_sky: 0.9,
+            cloud_ambient_ground: 0.35,
+            cloud_phase_forward: 0.8,
+            cloud_phase_back: -0.3,
+            cloud_phase_blend: 0.5,
+            cloud_scatter_extinction_falloff: 0.5,
+            cloud_scatter_energy_falloff: 0.5,
+            cloud_scatter_phase_falloff: 0.5,
             rain_cell_m: 60.0,
             rain_detail_range_m: 150.0,
             rain_lod_blend_m: 60.0,
@@ -576,11 +594,19 @@ impl Validated for WeatherSettings {
             ("overcast_amb_dim", s.overcast_amb_dim),
             ("overcast_sky_blue_cut", s.overcast_sky_blue_cut),
             ("overcast_sky_dim", s.overcast_sky_dim),
-            ("cloud_threshold_clear", s.cloud_threshold_clear),
-            ("cloud_threshold_overcast", s.cloud_threshold_overcast),
+            ("cloud_shadow", s.cloud_shadow),
             ("cloud_night_floor", s.cloud_night_floor),
-            ("cloud_base_dark", s.cloud_base_dark),
-            ("cloud_storm_dark", s.cloud_storm_dark),
+            ("cloud_phase_forward", s.cloud_phase_forward),
+            ("cloud_phase_blend", s.cloud_phase_blend),
+            (
+                "cloud_scatter_extinction_falloff",
+                s.cloud_scatter_extinction_falloff,
+            ),
+            (
+                "cloud_scatter_energy_falloff",
+                s.cloud_scatter_energy_falloff,
+            ),
+            ("cloud_scatter_phase_falloff", s.cloud_scatter_phase_falloff),
             ("rain_lod_far_frac", s.rain_lod_far_frac),
         ] {
             unit(name, value)?;
@@ -593,9 +619,14 @@ impl Validated for WeatherSettings {
             .then_some(())
             .ok_or("rain_fog_mult must be at least 1")?;
         // Clear must be the higher threshold, or cover would thin the clouds.
-        (s.cloud_threshold_overcast <= s.cloud_threshold_clear)
+        (-1.0..=0.0)
+            .contains(&s.cloud_phase_back)
             .then_some(())
-            .ok_or("cloud_threshold_overcast must not exceed cloud_threshold_clear")?;
+            .ok_or("cloud_phase_back must be within -1..0")?;
+        non_negative(
+            "cloud light",
+            &[s.cloud_sun, s.cloud_ambient_sky, s.cloud_ambient_ground],
+        )?;
         (s.rain_cell_m >= 1.0)
             .then_some(())
             .ok_or("rain_cell_m must be at least a metre")?;

@@ -63,20 +63,30 @@
     overcast_sky_dim: 0.6,
     cloud_fog_add: 0.35,
     rain_fog_mult: 1.6,
+    // A full, thick cloud keeps this share of the sun off the ground under
+    // it: the depth of a cloud's shadow, cast where the sun puts it.
+    cloud_shadow: 0.8,
 
-    // The cloud slab. Thresholds on a density noise: the clear one with no
-    // cover overhead, the overcast one at full cover. Extinction is per metre
-    // of full-density cloud; times the 260 m slab it is the optical depth of a
-    // vertical crossing.
-    cloud_threshold_clear: 0.61,
-    cloud_threshold_overcast: 0.2016,
+    // The clouds: where they are is the atmosphere's; this is how they are
+    // lit (shaders/clouds.wgsl; the cloud-lighting change). One extinction per
+    // metre for the view and the light, fair and at full cover.
     cloud_extinction: 0.0115,
-    cloud_night_floor: 0.045,
-    cloud_base_dark: 0.34,
-    cloud_storm_dark: 0.12,
-    // A storm is denser cloud, not only more of it: extinction is mixed from
-    // cloud_extinction to this by cover, so a raining sky closes overhead.
     cloud_storm_extinction: 0.03,
+    cloud_night_floor: 0.045,
+    // The sun's strength on a cloud, sky light from above and ground bounce
+    // from below; the cloud over a sample dims the sky light, which is what
+    // darkens a thick base.
+    cloud_sun: 0.55,
+    cloud_ambient_sky: 0.9,
+    cloud_ambient_ground: 0.35,
+    // Two Henyey-Greenstein lobes: forward (the silver lining), back, blend.
+    cloud_phase_forward: 0.8,
+    cloud_phase_back: -0.3,
+    cloud_phase_blend: 0.5,
+    // Multiple scattering, three octaves: each is this share of the last.
+    cloud_scatter_extinction_falloff: 0.5,
+    cloud_scatter_energy_falloff: 0.5,
+    cloud_scatter_phase_falloff: 0.5,
 
     // Rain near: every raining cell inside the detail range draws shafts of
     // streaks, thinning to the far fraction and fading out over the blend
