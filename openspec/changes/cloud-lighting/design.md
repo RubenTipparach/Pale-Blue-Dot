@@ -25,6 +25,14 @@ The shadow term at noon, sun 60 deg, fair cover, shape 0.9:
   top is thin. So the top the eye sees averages to grey: **0.44 against 0.82**
   for a fully lit sample.
 
+**Captured**, noon, slider at half:
+- **From 900 m above the shore** (`docs/screenshots/cloud-lighting-before-above-half.png`), the deck's
+  sunlit top reads as a grey band with darker smudges. Its unsaturated pixels
+  have luminance median **0.57**, p90 0.65 and brightest **0.69** of display
+  white *(measured)*. No part of a sunlit top reaches white.
+- **From below** (`cloud-lighting-before-up-half.png`), the sky is an even grey
+  sheet with no bases to tell apart.
+
 ## 2. The model
 
 Every term below is inside `pbd::clouds`. Both the sky shell and the sea cap

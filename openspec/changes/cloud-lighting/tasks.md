@@ -3,9 +3,12 @@
 ## 1. Measure
 - [x] Transcribe the march's lighting (`tools/cloud_light.py`); record the top,
       the base and the shadow profile (design section 1).
-- [ ] Baseline captures: fair, half and storm cover at noon and at sun 20 deg,
-      from below, from the side at 250 m, and from above at 900 m; tops against
-      bases measured.
+- [x] Baseline at half cover, noon: from below (flat grey) and from 900 m
+      above (deck median 0.57, brightest 0.69 of white).
+- [ ] The rest of the baseline set, before the model changes: fair and storm
+      cover, sun 20 deg, and a true side view. `--view shore --pitch 0` looks
+      down at the ground, not across at the clouds, so the side view needs a
+      level camera.
 
 ## 2. The model, in `pbd::clouds`
 - [ ] The light march reads the layer's extinction; the `0.05` literal goes. A
