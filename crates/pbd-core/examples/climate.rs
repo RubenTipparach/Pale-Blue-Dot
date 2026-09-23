@@ -72,6 +72,42 @@ fn main() {
         .map(|i| air.vapour[i] / air.saturation(air.air_k[i]))
         .collect();
     distribution("vapour/saturation", &humidity);
+    // The bald spots: the cells with no cloud at all at the end of the run,
+    // what they have in common, and how many are clear by how far.
+    let bald: Vec<usize> = (0..air.grid.len()).filter(|&i| air.cover(i) < 0.02).collect();
+    let share = |f: &dyn Fn(usize) -> bool| {
+        100.0 * bald.iter().filter(|&&i| f(i)).count() as f64 / bald.len().max(1) as f64
+    };
+    println!(
+        "bald cells (cover < 0.02): {:.1}% of the planet; {:.0}% sea, {:.0}% sinking air, {:.0}% within 35 deg of the equator",
+        100.0 * bald.len() as f64 / air.grid.len() as f64,
+        share(&|i| air.surface.ocean[i]),
+        share(&|i| air.lift[i] <= 0.0),
+        share(&|i| air.grid.centre[i].y.abs() < 35f32.to_radians().sin())
+    );
+    let edges: [f32; 8] = [0.0, 0.02, 0.1, 0.2, 0.3, 0.5, 0.95, 1.01];
+    let covers: Vec<f32> = (0..air.grid.len()).map(|i| air.cover(i)).collect();
+    println!(
+        "cover histogram, share of cells: {}",
+        edges
+            .windows(2)
+            .map(|w| format!(
+                "{:.2}-{:.2} {:.1}%",
+                w[0],
+                w[1].min(1.0),
+                100.0 * covers.iter().filter(|c| (w[0]..w[1]).contains(*c)).count() as f64
+                    / covers.len() as f64
+            ))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let bald_rh: Vec<f32> = bald
+        .iter()
+        .map(|&i| air.humidity_of(air.vapour[i], air.air_k[i], air.surface.elevation[i]))
+        .collect();
+    if !bald_rh.is_empty() {
+        distribution("bald cells' humidity", &bald_rh);
+    }
     let mut phi_band = [(0.0f64, 0.0f64); BANDS];
     for i in 0..air.grid.len() {
         let b = latitude_band(air.grid.centre[i]);
