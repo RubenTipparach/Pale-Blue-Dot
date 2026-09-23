@@ -133,6 +133,29 @@ cells it covers agree.
   finest level only inside the radius that stayed complete, and nothing is
   written past the region
 
+### Requirement: The fine set does not depend on the thread count
+A fine-set build SHALL produce the same records, byte for byte, whatever the
+number of threads it is built on. A height is a pure function of its
+direction, so a record is the same whichever thread and memo built it.
+
+#### Scenario: One thread and six
+- **WHEN** the same anchor is built on one thread and on six
+- **THEN** every level's records, the finest neighbour table, the complete
+  radii and the column records are identical
+  (`fast_build_tests::the_parallel_build_is_the_serial_build`)
+
+### Requirement: A fine floor is present wherever the shader reads one
+Every side of a coarse fine record on which the wall branch of
+`planet_surface.wgsl` reads a fine floor (a level coarser than the finest,
+the neighbour found by reflecting the centre through the edge midpoint inside
+the next finer level's complete radius) SHALL carry the full fine floor for
+that edge. Sides the shader never reads MAY carry the neighbour's height.
+
+#### Scenario: The shader's own test at the spawn
+- **WHEN** the shader's `covered_by_finer` holds for a side
+- **THEN** the record's floor equals `fine_floor` for that edge
+  (`fast_build_tests::a_floor_is_computed_wherever_the_shader_reads_one`)
+
 ### Requirement: Level selection and culling never return to the CPU
 The level of detail for a tile, the visibility cull and the draw arguments SHALL
 be computed on the GPU and consumed by an indirect draw. No per-tile LOD or

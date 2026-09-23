@@ -39,10 +39,11 @@ assumed.
 
 ### The rule the CPU applies
 
-`record` takes a `floor_within: Option<f32>`, a cosine: `None` on the finest
-level, `Some(cos((complete[k+1] + 2 * tile_width_m(level)) / R))` on the
-others. A side computes `fine_floor` iff its neighbour's direction dotted with
-the anchor exceeds that cosine; otherwise it carries the neighbour's height.
+`record` takes a `FloorRule`: `None` on the finest level, `Every` on the base
+(whose finer neighbour band moves with every anchor), and on levels 8 to 10
+`Within { anchor, cos: cos((complete[k+1] + 2 * tile_width_m(level)) / R) }`.
+A side computes `fine_floor` iff the rule reads its neighbour's direction;
+otherwise it carries the neighbour's height.
 
 The two-tile guard covers the one approximation: the shader reflects the
 centre through the edge midpoint to find the neighbour, the CPU uses the
@@ -122,14 +123,51 @@ instrument that says so if it ever does.
 
 ## Measured after
 
-The implementation re-runs `streaming_cost` on the owner's desktop and records
-the totals here, split the same way as before.
+`streaming_cost`, release, the owner's desktop (i7-9700F, eight threads), the
+default spawn:
+
+| | Before | After, one thread | After, eight threads |
+| --- | ---: | ---: | ---: |
+| `generate_fine`, whole | 16,089 ms | 1,807 ms | **535 ms** |
+
+The bands lay in 127 to 211 ms each (in parallel, so the slowest is what
+counts), the tier is 85 ms, and one column alone is 5 us. The floor test
+counts 41,988 of 665,063 coarse sides the shader reads a floor on (6.3%);
+level 11's 48,631 cells carry none.
+
+The base level cannot use the rule (the finer band it meets moves with every
+anchor, so every side is read somewhere), so it is built on every core in
+chunks instead. Startup (`Planet ready`, base plus the first fine set) went
+from 31.16 s before this change, through 17.03 s with only the fine set fixed,
+to **4.40 s**.
+
+In the game, the same desktop, a scripted session of real input (synthetic
+keyboard and mouse into the release build, logs and screenshots kept outside
+the tree): forty seconds sprinting while clicking dig twice a second, a
+flight, stepping out, digging on landing, walking on.
+
+| | Before (`44d1d6d`) | After |
+| --- | ---: | ---: |
+| Fine set landing time | 16.6 s | 0.5 - 0.8 s |
+| Digs taken | 19 | 149 |
+| `edit BLOCKED` lines | 78 | **0** |
+| Startup (`Planet ready`) | 31.2 s | 4.4 s |
+| Stepping out of the ship to the set landing on the player | | 0.84 s |
+| Stepping out of the ship to the first dig | | 1.0 s |
+
+The baseline's 78 errors are every one `NoColumn`, starting six seconds into
+the sprint at 91 m from the anchor, which is the tier's 90 m edge: the failure
+the proposal predicted, reproduced on the owner's machine.
+
+Adoption never fired in the session: at half a second a rebuild, the tier was
+always there before the click. It is the guarantee rather than the mechanism,
+and `a_dig_past_the_tiers_edge_adopts_the_column_and_lands` is what holds it.
 
 ## What is not settled
 
 - Whether the record chunks should leave a core for the main thread. The
-  task already competes with the frame on eight cores; the first measurement
-  decides.
+  session above showed no hitch worth a number, but it was not measured as
+  frame time; `performance-harness` is where that belongs.
 - Whether `near-field-streaming`'s growth is still wanted once the rebuild is
   fast. It still removes the whole-set upload every 40 m; that is a frame-time
   question, not an arrival one, and is left to that change.

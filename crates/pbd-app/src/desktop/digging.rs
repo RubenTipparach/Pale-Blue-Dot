@@ -33,50 +33,54 @@ pub struct Aim {
 /// The walk is `PlanetContact`'s, which steps cell to cell across whichever
 /// edge the ray falls outside of, so a march's samples cost a step from the
 /// last rather than a search.
+///
+/// A finest record with no column answers from its own cap: solid below it.
+/// That is the ground the heightfield draws there and exactly what the tier
+/// would generate for it as rim, so the ray stops on the cap the player sees
+/// and the edit adopts the column (`apply_edit`) instead of the click passing
+/// into the hill as if it were sky.
 fn sample_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Sample> {
     let direction = point.try_normalize()?;
     let record = contact.finest_cell(direction)?;
     let altitude = point.length() - PLANET_RADIUS;
     let layer = column::layer_at(altitude)?;
-    let tier = &fine.set.columns;
-    let slot = *tier.slots.get(record)?;
-    let column = tier.columns.get(slot)?;
+    let cell = &fine.set.finest_records()[record];
+    let solid = match fine.set.columns.column(record) {
+        Some(column) => column.solid(layer),
+        None => column::layer_altitude(layer) + 0.5 < cell.direction_height[3],
+    };
     Some(Sample {
-        cell: fine.set.finest_records()[record].metadata[3],
+        cell: cell.metadata[3],
         layer,
-        solid: column.solid(layer),
+        solid,
     })
 }
 
 /// Why a point along the eye ray could not be sampled although it is inside
-/// the ground: the streaming has not put a column there. The march reads air
-/// where the sampler answers nothing, so without this a click into a hill
-/// the tier has not reached looks exactly like a click at the sky.
+/// the ground: the finest level is not resident there at all. The march reads
+/// air where the sampler answers nothing, so without this a click into a hill
+/// the fine set has not reached looks exactly like a click at the sky. A
+/// record with no column is not in this list: the sampler answers it from the
+/// cap and the edit adopts the column.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Unsampled {
     /// The point is under the heightfield surface but no finest record covers
     /// its direction: outside the resident fine set.
     OffTheFineSet { depth_m: f32 },
-    /// A finest record covers it but the record has no column: outside the
-    /// tier, or the tier is still being built here.
-    NoColumn { cell: u32, depth_m: f32 },
 }
 
 /// What kept `sample_at` from answering at `point`, if the point is inside
 /// the ground and so should have had an answer.
-fn why_unsampled(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Unsampled> {
+fn why_unsampled(contact: &PlanetContact, point: Vec3) -> Option<Unsampled> {
     let direction = point.try_normalize()?;
     let depth_m = surface_height(direction) - (point.length() - PLANET_RADIUS);
     if depth_m <= 0.0 {
         return None;
     }
-    match contact.finest_cell(direction) {
-        None => Some(Unsampled::OffTheFineSet { depth_m }),
-        Some(record) => (fine.set.columns.column(record).is_none()).then(|| Unsampled::NoColumn {
-            cell: fine.set.finest_records()[record].metadata[3],
-            depth_m,
-        }),
-    }
+    contact
+        .finest_cell(direction)
+        .is_none()
+        .then_some(Unsampled::OffTheFineSet { depth_m })
 }
 
 /// The record index of a cell by its stable ID. The march answers in stable
@@ -152,14 +156,20 @@ pub fn apply_edit(
         );
         return None;
     };
-    let Some(was) = fine
-        .set
-        .columns
-        .column(record)
+    // A record past the tier's edge is given its column NOW rather than when
+    // the next rebuild reaches it: generated solid with the save's edits, as
+    // the rim is, and adopted below once the save has taken the edit.
+    let adopting = match fine.set.columns.column(record) {
+        Some(_) => None,
+        None => fine.set.adoptable(record, &save.edits),
+    };
+    let Some(was) = adopting
+        .as_ref()
+        .or_else(|| fine.set.columns.column(record))
         .map(|column| column.material(layer))
     else {
         error!(
-            "edit BLOCKED: cell {cell} has no column in the tier (version {}, {} columns)",
+            "edit BLOCKED: cell {cell} has no column and none could be made (version {}, {} columns)",
             fine.version,
             fine.set.columns.columns.len()
         );
@@ -177,10 +187,20 @@ pub fn apply_edit(
     // one would light a cell nothing was drawn in. Refusing is better than
     // drawing the wrong one.
     if material == Material::Torch
-        && let Some(column) = fine.set.columns.column(record)
+        && let Some(column) = adopting
+            .as_ref()
+            .or_else(|| fine.set.columns.column(record))
         && pbd_app::planet::column::has_torch(column)
     {
         info!("edit refused: cell {cell} already carries a torch");
+        return None;
+    }
+    // Adopting takes a slot, so a full tier refuses here, BEFORE the save:
+    // an edit that saved and could not be shown is the worse failure.
+    if adopting.is_some()
+        && fine.set.columns.columns.len() >= pbd_app::planet::column::COLUMN_CAPACITY as usize
+    {
+        error!("edit BLOCKED: cell {cell} needs a column and the tier is full");
         return None;
     }
     let mut moved = slots.0.clone();
@@ -214,6 +234,12 @@ pub fn apply_edit(
     let started = std::time::Instant::now();
     let mut set = (*fine.set).clone();
     let cloned = started.elapsed();
+    if let Some(column) = adopting {
+        // Checked before the save took the edit, so this cannot refuse.
+        let adopted = set.adopt(record, column);
+        debug_assert!(adopted, "adoption was checked before the save");
+        info!("adopted cell {cell} into the tier ahead of the streaming");
+    }
     set.columns.set_layer(record, layer, material);
     set.columns.repack(record);
     for &neighbor in set.finest_neighbors[record].iter() {
@@ -291,7 +317,7 @@ pub fn dig_and_place(
     let target = aim::march(eye, look, |point| {
         let sample = sample_at(&fine, &contact, point);
         if sample.is_none() && unsampled.is_none() {
-            unsampled = why_unsampled(&fine, &contact, point);
+            unsampled = why_unsampled(&contact, point);
         }
         sample
     });

@@ -27,7 +27,10 @@
 - [ ] `tier_budget_ms` in `ColumnSettings`, validated, with its unit.
 
 ## 4. An edit never waits
-- [ ] The digging march generates a missing column synchronously and adds it.
+Built by `fine-set-in-a-second` (`ColumnTier::adopt`), which also took the
+whole rebuild from 16 s to 0.5 s on the owner's desktop; the growth in
+section 3 is now a frame-time question rather than an arrival one.
+- [x] The digging march generates a missing column synchronously and adds it.
       Test: an edit at a cell outside the resident tier succeeds and the
       column is resident afterwards.
 

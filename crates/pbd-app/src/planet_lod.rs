@@ -20,7 +20,14 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
 };
 use pbd_core::edits::Edits;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    ops::Range,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 /// The coarsest level, resident for the whole globe: 163,842 cells.
 pub const BASE_LEVEL: u8 = 7;
@@ -115,7 +122,38 @@ fn fine_floor(here: Vec3, neighbor: Vec3, heights: &mut Heights) -> f32 {
 /// samples' 0.11 m. The cost is paid once per record, at build time.
 const FLOOR_SAMPLES: usize = 17;
 
-fn record(source: CellSource, heights: &mut Heights) -> GpuCell {
+/// Which sides of a record carry a fine floor.
+///
+/// The shader reads a floor in ONE place, the wall branch of
+/// `planet_surface.wgsl`, and only on a level coarser than the finest, where
+/// the neighbour across that side is inside the next finer band. Seventeen
+/// samples on every side of every cell was ninety-seven percent of a sixteen
+/// second rebuild, measured on the owner's desktop, and almost none of it was
+/// ever read (`openspec/changes/fine-set-in-a-second/design.md`). A side the
+/// rule skips carries the neighbour's own height, which is what its wall
+/// reaches down to anyway, so even a read the rule missed draws the wall a
+/// finest-level side draws.
+#[derive(Clone, Copy)]
+enum FloorRule {
+    /// Every side: the base, which is built once and serves every anchor.
+    Every,
+    /// Sides whose neighbour's direction dotted with `anchor` exceeds `cos`.
+    Within { anchor: Vec3, cos: f32 },
+    /// No side: the finest level, which nothing is drawn finer than.
+    None,
+}
+
+impl FloorRule {
+    fn reads(self, neighbor: Vec3) -> bool {
+        match self {
+            FloorRule::Every => true,
+            FloorRule::Within { anchor, cos } => neighbor.dot(anchor) > cos,
+            FloorRule::None => false,
+        }
+    }
+}
+
+fn record(source: CellSource, heights: &mut Heights, rule: FloorRule) -> GpuCell {
     let height = heights.at(source.direction);
     let degree = source.corners.len();
     let mut corners = [[0.; 4]; 6];
@@ -126,7 +164,11 @@ fn record(source: CellSource, heights: &mut Heights) -> GpuCell {
         let neighbor = source.neighbor_directions[side];
         let neighbor_height = heights.at(neighbor);
         corners[side] = [corner.x, corner.y, corner.z, neighbor_height];
-        floors[side] = fine_floor(source.direction, neighbor, heights);
+        floors[side] = if rule.reads(neighbor) {
+            fine_floor(source.direction, neighbor, heights)
+        } else {
+            neighbor_height
+        };
         let separation = (source.direction.distance(neighbor) * PLANET_RADIUS).max(1.);
         occlusion += ((neighbor_height - height) / separation).clamp(0., 1.);
     }
@@ -155,26 +197,46 @@ fn record(source: CellSource, heights: &mut Heights) -> GpuCell {
 
 /// The base level's records from the whole-sphere dual. Owners are the cell
 /// itself: the base has no level below it to be partitioned by.
+///
+/// Every side carries its floor, because the finer band the base meets moves
+/// with every anchor; so this is the most expensive thing the planet builds,
+/// and it is built on every core, in chunks joined in order.
 pub fn base_records(cells: &[DualCell]) -> Vec<GpuCell> {
-    let mut heights = Heights::default();
-    let mut records = Vec::with_capacity(cells.len());
-    let mut neighbors = Vec::with_capacity(6);
-    for (index, cell) in cells.iter().enumerate() {
-        neighbors.clear();
-        neighbors.extend(cell.neighbors.iter().map(|&n| cells[n].direction));
-        records.push(record(
-            CellSource {
-                direction: cell.direction,
-                corners: &cell.corners,
-                neighbor_directions: &neighbors,
-                level: BASE_LEVEL,
-                owners: [cell.direction; 2],
-                id: index as u32,
-            },
-            &mut heights,
-        ));
-    }
-    records
+    let build = |range: Range<usize>| -> Vec<GpuCell> {
+        let mut heights = Heights::default();
+        let mut neighbors = Vec::with_capacity(6);
+        range
+            .map(|index| {
+                let cell = &cells[index];
+                neighbors.clear();
+                neighbors.extend(cell.neighbors.iter().map(|&n| cells[n].direction));
+                record(
+                    CellSource {
+                        direction: cell.direction,
+                        corners: &cell.corners,
+                        neighbor_directions: &neighbors,
+                        level: BASE_LEVEL,
+                        owners: [cell.direction; 2],
+                        id: index as u32,
+                    },
+                    &mut heights,
+                    FloorRule::Every,
+                )
+            })
+            .collect()
+    };
+    let threads = build_threads();
+    let chunk = cells.len().div_ceil(threads).max(1);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..cells.len())
+            .step_by(chunk)
+            .map(|start| scope.spawn(move || build(start..(start + chunk).min(cells.len()))))
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|handle| handle.join().expect("a chunk of the base"))
+            .collect()
+    })
 }
 
 /// The fine levels around one anchor, with the finest level's neighbour
@@ -257,6 +319,25 @@ impl FineSet {
         column::reconcile_surface(&mut self.levels[3], &self.finest_neighbors, record, &column);
     }
 
+    /// The column a finest record would have if the tier adopted it now:
+    /// solid, as the rim is, with the save's edits for its cell. What an edit
+    /// reads the material it takes from, before anything is committed.
+    pub fn adoptable(&self, record: usize, edits: &Edits) -> Option<pbd_core::column::Column> {
+        let cell = self.levels[3].get(record)?;
+        Some(pbd_core::column::generate_edited_solid(
+            &super::terrain::TERRAIN,
+            Vec3::from_slice(&cell.direction_height[..3]),
+            edits.for_cell(cell.metadata[3]),
+        ))
+    }
+
+    /// Adopt a column for a finest record outside the tier; see
+    /// `ColumnTier::adopt`.
+    pub fn adopt(&mut self, record: usize, column: pbd_core::column::Column) -> bool {
+        self.columns
+            .adopt(&mut self.levels[3], &self.finest_neighbors, record, column)
+    }
+
     /// Take the column tier out, leaving an empty one. For tests that want the
     /// tier and the records it was stamped into side by side.
     #[cfg(test)]
@@ -302,78 +383,166 @@ fn stable_id(cell: &LocalCell) -> u32 {
     h ^ (h >> 12)
 }
 
-/// Generate every fine level for an anchor. Each level is a band from just
-/// inside the next finer band's radius to just outside its own, plus the
-/// regeneration distance, so the live bands stay resident as the player
-/// walks. Over capacity, the farthest cells are dropped, never the nearest.
-pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings, edits: &Edits) -> FineSet {
-    let anchor = anchor.normalize_or(Vec3::Y);
+/// One fine level laid around an anchor: its cells, truncated to capacity
+/// nearest first, and the radius it is complete to.
+pub(crate) struct Band {
+    pub(crate) cells: Vec<LocalCell>,
+    /// Metres from the anchor this level is resident AND complete to.
+    complete_m: f32,
+    /// The angular radius the level is complete to, band plus walk, or less
+    /// where capacity truncated it. Only the finest level's is kept.
+    radius: f32,
+}
+
+/// Lay fine level `FINE_LEVELS[k]` as a band from just inside the next finer
+/// band's radius to just outside its own, plus the regeneration distance, so
+/// the live bands stay resident as the player walks. Over capacity, the
+/// farthest cells are dropped, never the nearest.
+pub(crate) fn lay_band(k: usize, anchor: Vec3) -> Band {
+    let level = FINE_LEVELS[k];
     let mut lattice = Lattice::default();
-    let mut heights = Heights::default();
-    let mut levels: [Vec<GpuCell>; 4] = Default::default();
-    let mut finest_neighbors = Vec::new();
-    let mut finest_radius = (BAND_M[3] + REGEN_DISTANCE_M) / PLANET_RADIUS;
-    let mut complete = BAND_M;
-    for (k, &level) in FINE_LEVELS.iter().enumerate() {
-        let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(level);
-        let inner = if k + 1 < FINE_LEVELS.len() {
-            (BAND_M[k + 1] - margin).max(0.0)
-        } else {
-            0.0
-        };
-        let outer = BAND_M[k] + margin;
-        let mut cells =
-            lattice.cells_in_band(level, anchor, inner / PLANET_RADIUS, outer / PLANET_RADIUS);
-        if cells.len() > FINE_CAPACITY as usize {
-            warn!(
-                "level {level} band holds {} cells over a capacity of {FINE_CAPACITY}; dropping the farthest",
-                cells.len()
-            );
-            let mut order: Vec<usize> = (0..cells.len()).collect();
-            order.sort_by(|&a, &b| {
-                cells[b]
-                    .cell
-                    .direction
-                    .dot(anchor)
-                    .total_cmp(&cells[a].cell.direction.dot(anchor))
-            });
-            let mut remap = vec![usize::MAX; cells.len()];
-            for (new, &old) in order.iter().take(FINE_CAPACITY as usize).enumerate() {
-                remap[old] = new;
-            }
-            let mut kept: Vec<LocalCell> = Vec::with_capacity(FINE_CAPACITY as usize);
-            let mut taken: Vec<Option<LocalCell>> = cells.into_iter().map(Some).collect();
-            for &old in order.iter().take(FINE_CAPACITY as usize) {
-                let mut cell = taken[old].take().expect("each cell is taken once");
-                for n in &mut cell.cell.neighbors {
-                    *n = if *n == usize::MAX {
-                        usize::MAX
-                    } else {
-                        remap[*n]
-                    };
-                }
-                kept.push(cell);
-            }
-            cells = kept;
-            // The band was cut short, so the level is complete only inside the
-            // farthest cell it kept, less its own ring. Report that rather than
-            // the nominal band, or the level above would hide tiles out to a
-            // radius this one does not reach.
-            let farthest = cells.last().map_or(0.0, |c| {
-                c.cell.direction.dot(anchor).clamp(-1.0, 1.0).acos()
-            }) * PLANET_RADIUS;
-            complete[k] = complete[k].min((farthest - 2.0 * tile_width_m(level)).max(0.0));
-            if level == FINEST_LEVEL {
-                // Complete only inside the farthest kept cell less its ring.
-                let farthest = cells.last().map_or(0.0, |c| {
-                    c.cell.direction.dot(anchor).clamp(-1.0, 1.0).acos()
-                });
-                finest_radius = finest_radius
-                    .min(farthest - 2.0 * tile_width_m(level) / PLANET_RADIUS)
-                    .max(0.0);
-            }
+    let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(level);
+    let inner = if k + 1 < FINE_LEVELS.len() {
+        (BAND_M[k + 1] - margin).max(0.0)
+    } else {
+        0.0
+    };
+    let outer = BAND_M[k] + margin;
+    let mut cells =
+        lattice.cells_in_band(level, anchor, inner / PLANET_RADIUS, outer / PLANET_RADIUS);
+    let mut complete_m = BAND_M[k];
+    let mut radius = (BAND_M[k] + REGEN_DISTANCE_M) / PLANET_RADIUS;
+    if cells.len() > FINE_CAPACITY as usize {
+        warn!(
+            "level {level} band holds {} cells over a capacity of {FINE_CAPACITY}; dropping the farthest",
+            cells.len()
+        );
+        let mut order: Vec<usize> = (0..cells.len()).collect();
+        order.sort_by(|&a, &b| {
+            cells[b]
+                .cell
+                .direction
+                .dot(anchor)
+                .total_cmp(&cells[a].cell.direction.dot(anchor))
+        });
+        let mut remap = vec![usize::MAX; cells.len()];
+        for (new, &old) in order.iter().take(FINE_CAPACITY as usize).enumerate() {
+            remap[old] = new;
         }
-        levels[k] = cells
+        let mut kept: Vec<LocalCell> = Vec::with_capacity(FINE_CAPACITY as usize);
+        let mut taken: Vec<Option<LocalCell>> = cells.into_iter().map(Some).collect();
+        for &old in order.iter().take(FINE_CAPACITY as usize) {
+            let mut cell = taken[old].take().expect("each cell is taken once");
+            for n in &mut cell.cell.neighbors {
+                *n = if *n == usize::MAX {
+                    usize::MAX
+                } else {
+                    remap[*n]
+                };
+            }
+            kept.push(cell);
+        }
+        cells = kept;
+        // The band was cut short, so the level is complete only inside the
+        // farthest cell it kept, less its own ring. Report that rather than
+        // the nominal band, or the level above would hide tiles out to a
+        // radius this one does not reach.
+        let farthest = cells.last().map_or(0.0, |c| {
+            c.cell.direction.dot(anchor).clamp(-1.0, 1.0).acos()
+        });
+        complete_m =
+            complete_m.min((farthest * PLANET_RADIUS - 2.0 * tile_width_m(level)).max(0.0));
+        radius = radius
+            .min(farthest - 2.0 * tile_width_m(level) / PLANET_RADIUS)
+            .max(0.0);
+    }
+    Band {
+        cells,
+        complete_m,
+        radius,
+    }
+}
+
+/// The floor rule for fine level `k`, once every finer level's complete
+/// radius is settled: a side reads a floor where its neighbour is inside the
+/// next finer level's complete radius, and two of this level's tiles past it
+/// cover the one approximation, which is that the shader finds the neighbour
+/// by reflecting the centre through the edge midpoint rather than knowing it.
+fn floor_rule(k: usize, anchor: Vec3, complete: &[f32; 4]) -> FloorRule {
+    if k + 1 >= FINE_LEVELS.len() {
+        return FloorRule::None;
+    }
+    let guard = 2.0 * tile_width_m(FINE_LEVELS[k]);
+    FloorRule::Within {
+        anchor,
+        cos: ((complete[k + 1] + guard) / PLANET_RADIUS).cos(),
+    }
+}
+
+/// Threads a rebuild may use: every core. The rebuild is what the player is
+/// waiting on, and a core it leaves idle is a longer wait on ground that
+/// cannot be dug.
+fn build_threads() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| n.get())
+}
+
+/// Generate every fine level for an anchor, on every core.
+pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings, edits: &Edits) -> FineSet {
+    generate_fine_on(anchor, columns, edits, build_threads())
+}
+
+/// Generate every fine level on `threads` threads. The output does not depend
+/// on the count: a band is laid by its own lattice, and a record is a pure
+/// function of its cell whichever memo it was built with, so the parallel set
+/// is the serial one byte for byte, and a test holds it to that.
+pub(crate) fn generate_fine_on(
+    anchor: Vec3,
+    columns: &ColumnSettings,
+    edits: &Edits,
+    threads: usize,
+) -> FineSet {
+    let anchor = anchor.normalize_or(Vec3::Y);
+    let threads = threads.max(1);
+    // The bands first, all four, because a coarse level's floors depend on
+    // how far the next finer level is complete to, and truncation decides
+    // that.
+    let bands: Vec<Band> = if threads > 1 {
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..FINE_LEVELS.len())
+                .map(|k| scope.spawn(move || lay_band(k, anchor)))
+                .collect();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("a band laid"))
+                .collect()
+        })
+    } else {
+        (0..FINE_LEVELS.len())
+            .map(|k| lay_band(k, anchor))
+            .collect()
+    };
+    let complete: [f32; 4] = std::array::from_fn(|k| bands[k].complete_m);
+    let finest_radius = bands[3].radius;
+    // Then the records, cut into chunks the threads take in turn. Each chunk
+    // has its own height memo, which costs some sharing across chunk edges
+    // and buys no locks.
+    let total: usize = bands.iter().map(|band| band.cells.len()).sum();
+    let chunk = (total / (threads * 4)).max(256);
+    let jobs: Vec<(usize, Range<usize>)> = bands
+        .iter()
+        .enumerate()
+        .flat_map(|(k, band)| {
+            let len = band.cells.len();
+            (0..len)
+                .step_by(chunk)
+                .map(move |start| (k, start..(start + chunk).min(len)))
+        })
+        .collect();
+    let build = |(k, range): &(usize, Range<usize>)| -> Vec<GpuCell> {
+        let level = FINE_LEVELS[*k];
+        let rule = floor_rule(*k, anchor, &complete);
+        let mut heights = Heights::default();
+        bands[*k].cells[range.clone()]
             .iter()
             .map(|local| {
                 record(
@@ -386,22 +555,48 @@ pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings, edits: &Edits) -> F
                         id: stable_id(local),
                     },
                     &mut heights,
+                    rule,
                 )
             })
-            .collect();
-        if level == FINEST_LEVEL {
-            finest_neighbors = cells
-                .iter()
-                .map(|local| {
-                    let mut ids = [u32::MAX; 6];
-                    for (id, &n) in ids.iter_mut().zip(&local.cell.neighbors) {
-                        *id = if n == usize::MAX { u32::MAX } else { n as u32 };
+            .collect()
+    };
+    let built: Vec<Vec<GpuCell>> = if threads > 1 {
+        let next = AtomicUsize::new(0);
+        let done: Vec<Mutex<Vec<GpuCell>>> = jobs.iter().map(|_| Mutex::default()).collect();
+        std::thread::scope(|scope| {
+            for _ in 0..threads.min(jobs.len()) {
+                scope.spawn(|| {
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(work) = jobs.get(index) else {
+                            break;
+                        };
+                        *done[index].lock().expect("one writer per job") = build(work);
                     }
-                    ids
-                })
-                .collect();
-        }
+                });
+            }
+        });
+        done.into_iter()
+            .map(|slot| slot.into_inner().expect("one writer per job"))
+            .collect()
+    } else {
+        jobs.iter().map(build).collect()
+    };
+    let mut levels: [Vec<GpuCell>; 4] = Default::default();
+    for ((k, _), records) in jobs.iter().zip(built) {
+        levels[*k].extend(records);
     }
+    let finest_neighbors: Vec<[u32; 6]> = bands[3]
+        .cells
+        .iter()
+        .map(|local| {
+            let mut ids = [u32::MAX; 6];
+            for (id, &n) in ids.iter_mut().zip(&local.cell.neighbors) {
+                *id = if n == usize::MAX { u32::MAX } else { n as u32 };
+            }
+            ids
+        })
+        .collect();
     // The column tier, last, because it stamps each finest record with its own
     // slot: the tier and the records it is read through are one artifact and
     // are built on one task.
@@ -777,13 +972,14 @@ mod near_field_tests {
 
 #[cfg(test)]
 mod streaming_cost {
-    //! A measurement instrument for the near-field-streaming change: what a
-    //! fine-set rebuild costs, level by level and then the tier, and what one
-    //! column and the worm gather cost on their own. Ignored because it takes
-    //! seconds in release and tens of seconds in debug; run it with
+    //! A measurement instrument for the near-field-streaming and
+    //! fine-set-in-a-second changes: what a fine-set rebuild costs, split into
+    //! the bands laid, the records and the tier, on one thread and on every
+    //! core, and what one column and the worm gather cost on their own.
+    //! Ignored because it takes seconds; run it with
     //! `cargo test -p pbd-app --release --lib streaming_cost -- --ignored --nocapture`.
     use super::*;
-    use crate::planet::terrain::{PLANET_RADIUS, TERRAIN};
+    use crate::planet::terrain::TERRAIN;
     use std::time::Instant;
 
     #[test]
@@ -792,101 +988,154 @@ mod streaming_cost {
         let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
         let settings = ColumnSettings::default();
         let edits = Edits::default();
-        let mut lattice = Lattice::default();
-        let mut heights = Heights::default();
-        let mut finest = Vec::new();
-        let mut finest_neighbors = Vec::new();
-        let mut total_ms = 0.0;
-        for (k, &level) in FINE_LEVELS.iter().enumerate() {
-            let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(level);
-            let inner = if k + 1 < FINE_LEVELS.len() {
-                (BAND_M[k + 1] - margin).max(0.0)
-            } else {
-                0.0
-            };
-            let outer = BAND_M[k] + margin;
+        for (k, level) in FINE_LEVELS.iter().enumerate() {
             let started = Instant::now();
-            let cells =
-                lattice.cells_in_band(level, anchor, inner / PLANET_RADIUS, outer / PLANET_RADIUS);
-            let laid = started.elapsed().as_secs_f64() * 1000.;
-            let records: Vec<GpuCell> = cells
-                .iter()
-                .map(|local| {
-                    record(
-                        CellSource {
-                            direction: local.cell.direction,
-                            corners: &local.cell.corners,
-                            neighbor_directions: &local.neighbor_directions,
-                            level,
-                            owners: local.owners,
-                            id: stable_id(local),
-                        },
-                        &mut heights,
-                    )
-                })
-                .collect();
-            let recorded = started.elapsed().as_secs_f64() * 1000.;
-            total_ms += recorded;
+            let band = lay_band(k, anchor);
             eprintln!(
-                "level {level}: {} cells, lattice {laid:.0} ms, records {:.0} ms, {:.3} ms per cell",
-                cells.len(),
-                recorded - laid,
-                (recorded - laid) / cells.len().max(1) as f64
+                "level {level}: {} cells laid in {:.0} ms",
+                band.cells.len(),
+                started.elapsed().as_secs_f64() * 1000.
             );
-            if level == FINEST_LEVEL {
-                finest_neighbors = cells
-                    .iter()
-                    .map(|local| {
-                        let mut ids = [u32::MAX; 6];
-                        for (id, &n) in ids.iter_mut().zip(&local.cell.neighbors) {
-                            *id = if n == usize::MAX { u32::MAX } else { n as u32 };
-                        }
-                        ids
-                    })
-                    .collect();
-                finest = records;
-            }
         }
-        let started = Instant::now();
         let field = settings.worms();
+        let started = Instant::now();
         let region = pbd_core::worms::gather(&field, &TERRAIN, anchor, settings.reach_m);
         let gathered = started.elapsed().as_secs_f64() * 1000.;
+        let whole = |threads: usize| {
+            let started = Instant::now();
+            let set = generate_fine_on(anchor, &settings, &edits, threads);
+            (set, started.elapsed().as_secs_f64() * 1000.)
+        };
+        let (serial, one) = whole(1);
+        let threads = build_threads();
+        let (_, all) = whole(threads);
+        let mut finest = serial.levels[3].clone();
         let started = Instant::now();
-        let tier = column::build(anchor, &mut finest, &finest_neighbors, &settings, &edits);
+        let tier = column::build(
+            anchor,
+            &mut finest,
+            &serial.finest_neighbors,
+            &settings,
+            &edits,
+        );
         let built = started.elapsed().as_secs_f64() * 1000.;
-        total_ms += built;
         eprintln!(
             "tier: {} columns, worm gather {gathered:.1} ms, build (gather + columns + reconcile + \
-             relight) {built:.1} ms, {:.3} ms per column",
+             relight) {built:.1} ms",
             tier.columns.len(),
-            built / tier.columns.len().max(1) as f64
         );
-        // One column on its own, as an on-demand edit would generate it: the
-        // mean over the tier's own directions, gather amortised away.
         let started = Instant::now();
-        let mut generated = 0usize;
         for cell in finest.iter().take(500) {
             let direction = Vec3::from_slice(&cell.direction_height[..3]);
-            let column = pbd_core::column::generate_edited(
+            std::hint::black_box(pbd_core::column::generate_edited(
                 &region,
                 &field,
                 &TERRAIN,
                 direction,
                 edits.for_cell(cell.metadata[3]),
-            );
-            generated += usize::from(column.solid(0));
+            ));
         }
-        let single = started.elapsed().as_secs_f64() * 1000. / 500.;
         eprintln!(
-            "one column, generated alone: {single:.3} ms (over 500; {generated} solid at the base)"
+            "one column, generated alone: {:.3} ms (over 500)",
+            started.elapsed().as_secs_f64() * 1000. / 500.
         );
-        let started = Instant::now();
-        let whole = generate_fine(anchor, &settings, &edits);
-        let all = started.elapsed().as_secs_f64() * 1000.;
         eprintln!(
-            "generate_fine whole: {all:.0} ms ({} records, tier {}), parts summed {total_ms:.0} ms",
-            whole.levels.iter().map(Vec::len).sum::<usize>(),
-            whole.columns.columns.len()
+            "generate_fine whole ({} records, tier {}): one thread {one:.0} ms, {threads} threads \
+             {all:.0} ms",
+            serial.levels.iter().map(Vec::len).sum::<usize>(),
+            serial.columns.columns.len()
+        );
+    }
+}
+
+#[cfg(test)]
+mod fast_build_tests {
+    use super::*;
+
+    /// The parallel build is the serial build, record for record and byte
+    /// for byte: a thread count is never allowed to change the world.
+    #[test]
+    fn the_parallel_build_is_the_serial_build() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        let serial = generate_fine_on(anchor, &settings, &Edits::new(), 1);
+        let parallel = generate_fine_on(anchor, &settings, &Edits::new(), 6);
+        assert_eq!(serial.complete, parallel.complete);
+        assert_eq!(serial.finest_radius, parallel.finest_radius);
+        assert_eq!(serial.finest_neighbors, parallel.finest_neighbors);
+        for ((one, many), level) in serial.levels.iter().zip(&parallel.levels).zip(FINE_LEVELS) {
+            assert_eq!(one.len(), many.len());
+            assert!(
+                bytemuck::cast_slice::<GpuCell, u8>(one)
+                    == bytemuck::cast_slice::<GpuCell, u8>(many),
+                "level {level} differs between one thread and six"
+            );
+        }
+        assert_eq!(
+            bytemuck::cast_slice::<_, u8>(serial.columns.gpu_records()),
+            bytemuck::cast_slice::<_, u8>(parallel.columns.gpu_records())
+        );
+    }
+
+    fn floor_of(cell: &GpuCell, side: usize) -> f32 {
+        match side {
+            0 => cell.owner_a[3],
+            1 => cell.owner_b[3],
+            _ => cell.floors[side - 2],
+        }
+    }
+
+    /// Every side the SHADER reads a floor on carries the full floor.
+    ///
+    /// This is `planet_surface.wgsl`'s wall branch in Rust: a level coarser
+    /// than the finest, the neighbour found by reflecting the centre through
+    /// the edge's midpoint, and `covered_by_finer` against the set's own
+    /// partition. Wherever that holds, the record's floor must be what
+    /// `fine_floor` gives for the edge, computed afresh. It also reports how
+    /// many sides that is, which is the size of the ring the build still pays
+    /// seventeen samples for.
+    #[test]
+    fn a_floor_is_computed_wherever_the_shader_reads_one() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let set = generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let params = LodParams::of(&set);
+        let bands = params.bands.to_array();
+        let mut read = 0usize;
+        let mut sides = 0usize;
+        for k in 0..FINE_LEVELS.len() - 1 {
+            let laid = lay_band(k, anchor);
+            assert_eq!(laid.cells.len(), set.levels[k].len());
+            for (local, cell) in laid.cells.iter().zip(&set.levels[k]) {
+                let axis = Vec3::from_slice(&cell.direction_height[..3]);
+                let degree = cell.degree();
+                for side in 0..degree {
+                    sides += 1;
+                    let a = Vec3::from_slice(&cell.corners[side][..3]);
+                    let b = Vec3::from_slice(&cell.corners[(side + 1) % degree][..3]);
+                    let mid = (a + b).normalize();
+                    let neighbor = (2.0 * mid - axis).normalize();
+                    if neighbor.dot(params.player) <= bands[k + 1] {
+                        continue;
+                    }
+                    read += 1;
+                    let expected = fine_floor(
+                        local.cell.direction,
+                        local.neighbor_directions[side],
+                        &mut Heights::default(),
+                    );
+                    assert_eq!(
+                        floor_of(cell, side),
+                        expected,
+                        "level {} side {side}: the shader reads a floor the build skipped",
+                        FINE_LEVELS[k]
+                    );
+                }
+            }
+        }
+        assert!(read > 1_000, "only {read} floored sides were checked");
+        println!(
+            "{read} of {sides} coarse sides are read as floors ({:.1}%)",
+            100.0 * read as f32 / sides as f32
         );
     }
 }

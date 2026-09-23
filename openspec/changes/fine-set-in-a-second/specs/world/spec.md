@@ -1,32 +1,23 @@
 # World: the fine set arrives with the player
 
+The two requirements this change made true and pinned with tests (the build
+does not depend on the thread count; a floor is present wherever the shader
+reads one) are in `openspec/specs/planet/rendering/spec.md`. What remains here
+is measured in-game rather than pinned by a passing test, or rests on digging,
+which is itself still the `dig-and-place` change.
+
 ## ADDED Requirements
 
 ### Requirement: The fine set rebuilds in under a second
 
 A whole fine-set rebuild (the four fine bands and the column tier) SHALL take
-under one second in a release build on the owner's desktop, and SHALL produce
-the same records whatever the thread count.
+under one second in a release build on the owner's desktop.
 
 #### Scenario: Arriving at new ground
 
-- **WHEN** the player arrives at ground the resident set does not cover
+- **WHEN** the player steps out of the ship onto ground the resident set does
+  not cover
 - **THEN** the finest level and the column tier land within one second
-
-#### Scenario: The parallel build is the serial build
-
-- **WHEN** the same anchor is built on one thread and on many
-- **THEN** every record is byte-identical
-
-### Requirement: A fine floor is present wherever the shader reads one
-
-Every side of a coarse fine record whose neighbour the shader treats as drawn
-by the next finer band SHALL carry the full fine floor for that edge.
-
-#### Scenario: The shader's own test
-
-- **WHEN** the wall branch's `covered_by_finer` test holds for a side
-- **THEN** that side's floor equals `fine_floor` for the edge
 
 ### Requirement: A dig never waits for the streaming
 
