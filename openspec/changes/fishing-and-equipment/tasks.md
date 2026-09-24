@@ -10,7 +10,10 @@
       a shovel dug dirt. No page errors. Four defects found and fixed in the
       mockup (design section 9).
 - [x] Tenebris's fishing, fauna and tool rules measured (design section 1).
-- [ ] The owner's answers to the six questions in the proposal.
+- [x] Eight species (five from Tenebris with their icons, three new), three
+      water zones and a field guide with one entry per species, added to the
+      mockup and driven headless.
+- [ ] The owner's answers to the seven questions in the proposal.
 
 ## 1. Equipment in the core
 - [ ] `Tool { Rod, Shovel, Pickaxe, Axe }` replaces the `Pick` placeholder;
@@ -47,8 +50,11 @@
 ## 5. Fauna
 - [ ] `pbd_core::fauna::School`: packed arrays, the boid terms of design
       section 6, bounds from the sea and ground queries, a seeded goal walk.
-- [ ] `assets/config/fauna.ron`: per-body rosters; tests for icons, disjoint
-      species and empty lifeless rosters.
+- [ ] `assets/config/fauna.ron`: the eight species of design section 7 with
+      their field-guide entries and tips; zone thresholds; tests for entries,
+      icons, disjoint bodies, zone coverage and empty lifeless rosters.
+- [ ] Water zones from `Atmosphere::sample(dir).temperature` at spawn.
+- [ ] Bottom dwellers: the goal off the bed and the vertical hold.
 - [ ] App: spawn ring, caps, despawn, a fixed 30 Hz step, and one instanced
       draw per species.
 - [ ] Tests: in the band and in the sea; deterministic over two runs; no
@@ -63,15 +69,26 @@
 - [ ] Tests: the window over strengths 1 to 5; a patient reel lands the fish
       and a held one snaps; the bobber rides the sea.
 
-## 7. Saves and icons
-- [ ] `slots`, `hand` and `fell` lines; `f{species},{n}` and `t0..t3` codes;
-      `KIT_GRANTS` widened to grants of tools; round-trip tests.
-- [ ] `tools/gen_item_icons.py` writes 16x16 PNGs for the tools and fish, with
-      a manifest; tests that every tool and species has one.
+## 7. The field guide
+- [ ] In-game panel on J and on a click on a caught fish: the list, the entry
+      with a 96 px nearest-sampled icon, numbers read from the species record,
+      and the player's catch record.
+- [ ] `tools/gen_fish_wiki.py` writes `docs/wiki/fish.md`; a test that the
+      committed page equals the generator's output.
+- [ ] Tests: J opens the guide; a catch raises the count and best length, and
+      both survive a reload.
 
-## 8. Prove it
+## 8. Saves and icons
+- [ ] `catch`, `hand` and `fell` lines; the catch record folded on load; `f{species},{n}` and `t0..t3` codes;
+      `KIT_GRANTS` widened to grants of tools; round-trip tests.
+- [ ] Copy Tenebris's five fish PNGs into `assets/items/fish/` with
+      `PROVENANCE.md` and recorded hashes; a test checks them.
+- [ ] `tools/gen_item_icons.py` writes 16x16 PNGs for the tools and the three
+      new fish, with a manifest; tests that every tool and species has one.
+
+## 9. Prove it
 - [ ] Captures: the picker open, a school under a floating bobber, a felled
-      tree.
+      tree, the field guide open.
 - [ ] `openspec validate --all`, fmt, clippy and tests.
 - [ ] Move the requirements into `openspec/specs` in the commits that make
       them true.

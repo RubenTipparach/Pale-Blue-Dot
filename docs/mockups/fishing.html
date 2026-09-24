@@ -94,7 +94,47 @@ body{background:var(--ground);color:var(--ink);font-family:var(--body);overflow:
 .opt[aria-selected="true"] span{color:var(--amber)}
 .opt:focus-visible{outline:2px solid var(--amber)}
 
+/* field guide */
+.fishgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px}
+.fishbtn{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:4px 2px;border:1px solid var(--line);border-radius:3px;background:var(--slot)}
+.fishbtn canvas{width:32px;height:32px;image-rendering:pixelated}
+.fishbtn span{font-family:var(--display);font-size:11px;letter-spacing:.04em;color:var(--muted);text-align:center;line-height:1.1}
+.fishbtn:focus-visible,.fishbtn:hover{border-color:var(--wind)}
+.fishbtn[aria-current="true"]{border-color:var(--amber)}
+.fishbtn[aria-current="true"] span{color:var(--amber)}
+.guide{left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 32px));max-height:calc(100% - 180px);display:grid;grid-template-columns:220px 1fr;overflow:hidden;z-index:5}
+.guide header{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;padding:12px 14px;border-bottom:1px solid var(--line)}
+.guide header h2{margin:0;font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:.03em}
+.guide header button{all:unset;cursor:pointer;font-family:var(--mono);font-size:12px;color:var(--muted);padding:2px 6px;border:1px solid var(--line);border-radius:3px}
+.guide header button:focus-visible{outline:2px solid var(--amber)}
+.guide nav{overflow:auto;border-right:1px solid var(--line);padding:8px;display:grid;gap:4px;align-content:start}
+.gitem{all:unset;cursor:pointer;display:grid;grid-template-columns:32px 1fr auto;gap:8px;align-items:center;padding:3px 6px 3px 3px;border-radius:3px;border:1px solid transparent}
+.gitem canvas{width:32px;height:32px;image-rendering:pixelated;background:var(--slot);border-radius:2px}
+.gitem span{font-family:var(--display);font-size:15px;font-weight:600;letter-spacing:.03em}
+.gitem small{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.gitem[aria-current="true"]{border-color:var(--amber);background:rgba(240,180,60,.12)}
+.gitem:focus-visible{outline:2px solid var(--amber)}
+.entry{overflow:auto;padding:14px 16px;display:grid;gap:12px;align-content:start}
+.entry .head{display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:center}
+.entry .head canvas{width:96px;height:96px;image-rendering:pixelated;background:var(--slot);border:1px solid var(--slot-edge);border-radius:4px}
+.entry h3{margin:0;font-family:var(--display);font-size:26px;font-weight:700;letter-spacing:.02em;line-height:1}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip{font-family:var(--display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:3px;border:1px solid var(--line);color:var(--muted)}
+.chip.src{border-color:var(--wind);color:var(--wind)}
+.entry p{margin:0;font-size:14px;line-height:1.55;max-width:62ch;color:var(--ink)}
+.stats{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:13px}
+.stats dt{font-family:var(--display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);align-self:center}
+.stats dd{margin:0;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+.pips{letter-spacing:2px;color:var(--amber)}
+.pips i{font-style:normal;color:var(--line)}
+.entry .tip{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.slot.fish{cursor:pointer}
+
 @media (max-width:760px){
+  .guide{grid-template-columns:1fr;max-height:calc(100% - 140px)}
+  .guide nav{grid-auto-flow:column;grid-auto-columns:max-content;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
+  .gitem{grid-template-columns:32px auto}.gitem small{display:none}
+  .entry .head{grid-template-columns:64px 1fr}.entry .head canvas{width:64px;height:64px}
   .world{display:none}
   .brief .keys{display:none}
   .hotbar{gap:6px}.slots{gap:2px}
@@ -119,6 +159,7 @@ body{background:var(--ground);color:var(--ink);font-family:var(--body);overflow:
       <dt>left</dt><dd>use the tool: cast, hook, reel, dig, chop</dd>
       <dt>right</dt><dd>reel in the line; places a block in the game</dd>
       <dt>1-0, wheel</dt><dd>block slots, as today</dd>
+      <dt>J</dt><dd>field guide; click a caught fish for its entry</dd>
     </dl>
   </section>
 
@@ -129,15 +170,27 @@ body{background:var(--ground);color:var(--ink);font-family:var(--body);overflow:
       <button type="button" data-w="overcast" aria-pressed="false">Overcast</button>
       <button type="button" data-w="rain" aria-pressed="false">Rain</button>
     </div>
+    <div class="eyebrow">Water</div>
+    <div class="presets" id="zones">
+      <button type="button" data-z="temperate" aria-pressed="true">Temperate coast</button>
+      <button type="button" data-z="warm" aria-pressed="false">Tropical reef</button>
+      <button type="button" data-z="cold" aria-pressed="false">Cold sea</button>
+    </div>
     <label class="check"><input type="checkbox" id="clearwater" checked> See-through water</label>
     <label class="check"><input type="checkbox" id="debug"> Show each school's goal and the lure's scent</label>
-    <div class="eyebrow">Schools</div>
-    <div class="table" id="schools"></div>
+    <div class="eyebrow" style="display:flex;justify-content:space-between"><span>In this water</span><span>J · field guide</span></div>
+    <div class="fishgrid" id="schools"></div>
     <div class="eyebrow">Catch</div>
     <div class="log" id="log" aria-live="polite">Nothing yet.</div>
     <p class="note"><b>A flat 70 m patch of shore.</b> The engine's sphere curves 0.5 m over it, so the fish, bobber and line use the engine's own
       gravity (25 m/s²) and a sea of a few waves standing in for <code>pbd_core::sea</code>. Fish are boids per school:
       separation, alignment, cohesion, a wandering goal, the surface and seabed as walls.</p>
+  </section>
+
+  <section class="panel guide" id="guide" hidden aria-label="Field guide">
+    <header><h2>Field guide <span class="eyebrow" id="guideCount"></span></h2><button type="button" id="guideClose">Esc · close</button></header>
+    <nav id="guideList" aria-label="Species"></nav>
+    <article class="entry" id="entry"></article>
   </section>
 
   <div class="cross" aria-hidden="true"><svg viewBox="0 0 40 40"><circle id="ring" cx="20" cy="20" r="17" stroke="var(--amber)" stroke-dasharray="0 200"/></svg></div>
@@ -235,20 +288,68 @@ const MATERIALS = {
 // Wrong tool: this many times slower. A rod digs nothing at all.
 const WRONG_TOOL = 4;
 
-// Species: the planet's roster, which is data, not code.
+// Species: the planet's roster, which is data, not code. Five come from
+// Tenebris (its speeds, strengths and 16x16 icons, pinned at ef98651), three
+// are new. Each lives in the waters it lists and nowhere else, and each carries
+// its own field-guide entry: a species with no entry or no icon is a failed test.
+const ZONES = { warm:"Tropical reef", temperate:"Temperate coast", cold:"Cold sea" };
 const SPECIES = [
-  { id:"silverfin", name:"Silverfin",    color:0xcfe3ea, count:34, len:0.22, speed:[1.2,3.2], depth:[0.4,2.5], sense:7,  bite:0.55, pull:0.55, strength:1 },
-  { id:"perch",     name:"Banded perch", color:0xd8a13a, count:14, len:0.38, speed:[0.8,2.4], depth:[1.0,4.0], sense:9,  bite:0.40, pull:0.85, strength:2 },
-  { id:"deepback",  name:"Deepback",     color:0x4f6f8f, count:7,  len:0.7,  speed:[0.6,1.8], depth:[2.5,6.0], sense:12, bite:0.22, pull:1.35, strength:4 },
+  { id:"minnow", name:"Minnow", from:"Tenebris", zones:["warm","temperate"], color:0x7896b4,
+    count:[24,36], len:0.14, shape:[0.5,0.5,1], speed:[1.0,2.6], depth:[0.3,1.8], sense:8, bite:0.6, pull:0.4, strength:1,
+    wiki:"The first fish most anglers land. Minnows crowd the shallows in schools of thirty or more and turn as one when a shadow crosses them. They bite quickly and give up easily.",
+    tip:"Cast anywhere near the shore. A school finds the lure in seconds." },
+  { id:"silverfin", name:"Silverfin", from:"new", zones:["temperate","cold"], color:0xcfe3ea,
+    count:[18,30], len:0.22, shape:[0.5,0.5,1], speed:[1.2,3.2], depth:[0.4,2.5], sense:7, bite:0.55, pull:0.55, strength:1,
+    wiki:"A bright, fast surface fish of cool coasts. Silverfin skim the top two metres and scatter at a splash, then close ranks again a few seconds later.",
+    tip:"Let the splash settle before you expect a bite." },
+  { id:"perch", name:"Banded perch", from:"new", zones:["temperate"], color:0xd8a13a,
+    count:[8,14], len:0.38, shape:[0.55,0.62,1], speed:[0.8,2.4], depth:[1.0,4.0], sense:9, bite:0.40, pull:0.85, strength:2,
+    wiki:"Striped, deep-bodied and curious. Perch hold mid-water in loose groups of a dozen, and one will follow a lure a long way before it commits.",
+    tip:"Nibbles come in threes. Wait for the float to go under." },
+  { id:"ray", name:"Ray", from:"Tenebris", zones:["warm","temperate"], color:0xb9a57d, bed:true,
+    count:[1,2], len:0.6, shape:[1.7,0.22,0.8], speed:[0.5,1.2], depth:[1.5,6.0], sense:10, bite:0.35, pull:0.9, strength:2,
+    wiki:"A flat grazer that lies on the sand and lifts off in slow wingbeats. Rays travel alone or in pairs along the bed, well out from the beach.",
+    tip:"Cast long, over sand. Rays never school, so a bite is one fish, not one of many." },
+  { id:"eel", name:"Eel", from:"Tenebris", zones:["warm","temperate"], color:0x788248, bed:true,
+    count:[1,2], len:0.9, shape:[0.28,0.28,1.8], speed:[0.7,1.9], depth:[1.0,5.0], sense:9, bite:0.3, pull:1.1, strength:3,
+    wiki:"Long, dark and patient. Eels keep to the bed in ones and twos and fight in hard, twisting runs.",
+    tip:"Ease off whenever it runs. More lines are lost to eels than to anything else." },
+  { id:"reef", name:"Reef fish", from:"Tenebris", zones:["warm"], color:0x3c9696,
+    count:[6,12], len:0.42, shape:[0.5,0.8,1], speed:[0.6,1.6], depth:[0.8,3.0], sense:8, bite:0.25, pull:1.2, strength:5,
+    wiki:"The prize of warm water. Tall-finned and nervous, reef fish shoal in small groups over the shallows and give the shortest bite window of anything in the sea.",
+    tip:"The hook window is under half a second. Watch the float, not the fish." },
+  { id:"deepback", name:"Deepback", from:"new", zones:["cold"], color:0x4f6f8f,
+    count:[4,7], len:0.7, shape:[0.55,0.55,1], speed:[0.6,1.8], depth:[2.5,6.0], sense:12, bite:0.22, pull:1.35, strength:4,
+    wiki:"A heavy cold-water fish of the deep shelf. Small schools cruise below two and a half metres, and a hooked deepback runs long and tires slowly.",
+    tip:"Fish past the drop-off, where the water turns dark." },
+  { id:"serpent", name:"Sea serpent", from:"Tenebris", zones:["cold","warm"], color:0x30786a,
+    count:[1,1], len:1.3, shape:[0.35,0.4,2.2], speed:[0.8,2.2], depth:[3.5,6.0], sense:14, bite:0.12, pull:1.45, strength:4,
+    wiki:"Rare and solitary, found only past the drop-off. A serpent seldom takes a lure and pulls like a boat. Every angler has a story about one that got away.",
+    tip:"There is at most one in any water. Deep water, a long cast and patience." },
 ];
 // The hook window, from Tenebris: 0.9 s for the weakest fish, 13% shorter per
 // step of strength, never under a quarter second.
 const hookWindow = sp => Math.max(0.25, 0.9*(1 - (sp.strength - 1)*0.13));
+// Icons. Tenebris's five are its own PNGs, copied byte for byte; the three new
+// ones are drawn here on the same 16x16 grid and palette rules.
+const TENEBRIS_PNG = {
+  minnow:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAASklEQVR42mNgGN4gJLPuPzLGqQiXxoppW1AwVoPQBbFpRMYiYlK4DcGnEd0lWL1CtgGkuADDC4TCYM+FJ2CMMyApjgWK08EoYAAAItTeRAzBgk8AAAAASUVORK5CYII=",
+  reef:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAVUlEQVR42mNgoCVQSUj5D8Jka7aZNg2M8RqCTRJZM0FD0J2JTTOyIVgNgkng0kjQJcRqBmERMSlMQwaHAeiGTLt2DYwJhgHFsUBxOqA4JdIsL9ANAAB6Xfby+uMlDAAAAABJRU5ErkJggg==",
+  eel:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAS0lEQVR42mNgGFLAJ0zvPwyTpbmiyQOO8RqCbBMMI2sGYRExKUxDcClGx1i9gU8jumuI9iNJAYbNBWQZQoxXSIpvigzCF7UMowAOAMzyo1KMQhqzAAAAAElFTkSuQmCC",
+  ray:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAS0lEQVR42mNgGNSgpyriPwiTrXnn0lowJtkQZM0kGQJzMrpmZEOwGkRII16D8GkUEZMCY3wGUe4CqoQBIYOI0ghThKyQJBsZRi4AAO2S5yl4uXlmAAAAAElFTkSuQmCC",
+  serpent:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAYUlEQVR42mNgoCeQC3D6D8NkaTaoSINjETEp3AZhswndAKwugQliUwhib7uwCS6G04kwRTAaGYPE8DobWREuTDCQ8NpCbEgju4IiQ3CGNqmGkGUQtuijmkFkhw1FeYFmAADfWLL3hn8T9QAAAABJRU5ErkJggg==",
+};
 const FISH_ICON = {
   silverfin: grid(["................","................","................","................","..........s.....","....ssssssss..t.","..sssssssssssst.",".seSsssssssssstt","..sssssssssssst.","....ssssssss..t.","..........s.....","................","................","................","................","................"],{s:"#cfe3ea",S:"#9fb9c2",e:"#1b1b1b",t:"#9fb9c2"}),
   perch: grid(["................","................","......d.d.......",".....ddddd......","...pbpbpbpbp..t.","..pbpbpbpbpbp.t.",".epbpbpbpbpbpttt","..pbpbpbpbpbp.t.","...pbpbpbpbp..t.",".....ppppp......","................","................","................","................","................","................"],{p:"#d8a13a",b:"#6b4a18",d:"#c8612b",e:"#1b1b1b",t:"#c8612b"}),
   deepback: grid(["................","................","........dd......","......dddd......","..ddddddddddd...",".dddddddddddddtt","eddddddddddddttt",".lllllllllllddtt","..lllllllllll...","................","................","................","................","................","................","................"],{d:"#4f6f8f",l:"#9fb6c9",e:"#e8e8e8",t:"#4f6f8f"}),
 };
+for (const [id, b64] of Object.entries(TENEBRIS_PNG)){
+  const c = document.createElement("canvas"); c.width = c.height = 16; FISH_ICON[id] = c;
+  const img = new Image();
+  img.onload = () => { c.getContext("2d").drawImage(img, 0, 0); iconsChanged(); };
+  img.src = "data:image/png;base64," + b64;
+}
 const WEATHER = { clear:{bite:1.0, sky:0x8fb9d6, fog:0x9fc3da}, overcast:{bite:1.35, sky:0x8d9aa3, fog:0x8e9aa2}, rain:{bite:1.7, sky:0x5f6b73, fog:0x66717a} };
 
 // ---------------------------------------------------------------- terrain
@@ -334,24 +435,34 @@ function rnd(a, b){ return a + Math.random()*(b - a); }
 function waterPoint(sp){
   for (let i = 0; i < 200; i++){
     const x = rnd(-24, 24), z = rnd(3, 26), d = depthAt(x, z);
-    if (d >= sp.depth[0] + 0.3){ const y = -rnd(sp.depth[0], Math.min(sp.depth[1], d - 0.3)); return new THREE.Vector3(x, y, z); }
+    if (d >= sp.depth[0] + 0.3 && (!sp.bed || d <= sp.depth[1])){
+      // A bed fish keeps a hand's width off the bottom; the rest swim in their band.
+      const y = sp.bed ? ground(x, z) + 0.3 : -rnd(sp.depth[0], Math.min(sp.depth[1], d - 0.3));
+      return new THREE.Vector3(x, y, z);
+    }
   }
   return new THREE.Vector3(0, -2, 20);
 }
-SPECIES.forEach((sp, si) => {
-  const n = sp.count;
-  const mesh = new THREE.InstancedMesh(fishGeo, new THREE.MeshLambertMaterial({color:sp.color}), n);
-  mesh.renderOrder = 1; scene.add(mesh);
-  const home = waterPoint(sp);
-  const fish = [];
-  for (let i = 0; i < n; i++){
-    fish.push({ p: home.clone().add(new THREE.Vector3(rnd(-1.5,1.5), rnd(-0.4,0.4), rnd(-1.5,1.5))),
-                v: new THREE.Vector3(rnd(-1,1), 0, rnd(-1,1)), a: new THREE.Vector3(), spook: 0 });
-  }
-  const goalMark = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshBasicMaterial({color:sp.color}));
-  goalMark.visible = false; scene.add(goalMark);
-  schools.push({ sp, si, mesh, fish, goal: waterPoint(sp), goalT: rnd(6, 12), goalMark });
-});
+let zone = "temperate";
+function spawnSchools(){
+  for (const s of schools){ scene.remove(s.mesh, s.goalMark); s.mesh.dispose(); }
+  schools.length = 0;
+  SPECIES.filter(sp => sp.zones.includes(zone)).forEach((sp, si) => {
+    const n = Math.round(rnd(sp.count[0], sp.count[1]));
+    const mesh = new THREE.InstancedMesh(fishGeo, new THREE.MeshLambertMaterial({color:sp.color}), n);
+    mesh.renderOrder = 1; scene.add(mesh);
+    const home = waterPoint(sp);
+    const fish = [];
+    for (let i = 0; i < n; i++){
+      fish.push({ p: home.clone().add(new THREE.Vector3(rnd(-1.5,1.5), sp.bed ? 0 : rnd(-0.4,0.4), rnd(-1.5,1.5))),
+                  v: new THREE.Vector3(rnd(-1,1), 0, rnd(-1,1)), a: new THREE.Vector3(), spook: 0 });
+    }
+    const goalMark = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshBasicMaterial({color:sp.color}));
+    goalMark.visible = false; scene.add(goalMark);
+    schools.push({ sp, si, mesh, fish, goal: waterPoint(sp), goalT: rnd(6, 12), goalMark });
+  });
+}
+spawnSchools();
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), q = new THREE.Quaternion(), m4 = new THREE.Matrix4(), fwd = new THREE.Vector3(0,0,1);
 // Weights of the three rules and the walls. Per school, neighbours are its own fish.
 const W = { sep:2.6, ali:1.0, coh:0.7, goal:0.45, lured:1.4, wall:6, rSep:0.55, rNbr:2.2 };
@@ -377,6 +488,8 @@ function stepSchool(s, dt, t){
     const top = sea(f.p.x, f.p.z, t) - 0.25, bed = ground(f.p.x, f.p.z) + 0.25;
     if (f.p.y > top - 0.3) acc.y -= W.wall*(f.p.y - (top - 0.3) + 0.1);
     if (f.p.y < bed + 0.3) acc.y += W.wall*((bed + 0.3) - f.p.y + 0.1);
+    // A bed fish is held to the bottom as a school is held to its goal.
+    if (sp.bed && !(fishing.interested && fishing.interested.f === f)) acc.y += 3*((bed + 0.1) - f.p.y);
     if (depthAt(f.p.x, f.p.z) < sp.depth[0] + 0.4) acc.z += W.wall;
     if (Math.abs(f.p.x) > 30) acc.x -= Math.sign(f.p.x)*W.wall;
     if (f.p.z > 40) acc.z -= W.wall;
@@ -396,7 +509,7 @@ function stepSchool(s, dt, t){
   F.forEach((f, i) => {
     q.setFromUnitVectors(fwd, tmp.copy(f.v).normalize());
     const wig = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), 0.25*Math.sin(t*9 + i));
-    m4.compose(f.p, q.multiply(wig), new THREE.Vector3(sp.len*0.55, sp.len*0.5, sp.len));
+    m4.compose(f.p, q.multiply(wig), new THREE.Vector3(sp.len*sp.shape[0], sp.len*sp.shape[1], sp.len*sp.shape[2]));
     s.mesh.setMatrixAt(i, m4);
   });
   s.mesh.instanceMatrix.needsUpdate = true;
@@ -448,6 +561,7 @@ function paintInto(canvasEl, src){ const x = canvasEl.getContext("2d"); x.clearR
   for (let i = 0; i < 10; i++){
     const d = document.createElement("div"); d.className = "slot";
     d.innerHTML = `<kbd>${(i + 1) % 10}</kbd><canvas width="16" height="16"></canvas><small></small>`;
+    d.addEventListener("click", () => { const s = slots[i]; if (s && FISH_ICON[s[0]]) openGuide(s[0]); });
     row.appendChild(d); slotEls.push(d);
   }
 }
@@ -457,6 +571,7 @@ function drawSlots(){
     paintInto(el.querySelector("canvas"), s && iconFor(s[0]));
     el.querySelector("small").textContent = s && s[1] > 1 ? s[1] : "";
     el.title = s ? `${(MATERIALS[s[0]] || SPECIES.find(x => x.id === s[0])).name}` : "empty";
+    el.classList.toggle("fish", !!(s && FISH_ICON[s[0]]));
   });
   paintInto(document.getElementById("equipIcon"), TOOL_ART[TOOLS[tool].id]);
   document.getElementById("equipSlot").title = TOOLS[tool].name;
@@ -547,7 +662,7 @@ function stepFishing(dt, t){
       f.checkT = 0.5;
       for (const s of schools){
         const c = centroid(s), d = Math.hypot(c.x - f.pos.x, c.z - f.pos.z);
-        if (d < 3*s.sp.sense && d > 2.5){ s.lured = true; s.goal.set(f.pos.x, Math.max(-s.sp.depth[1], Math.min(-s.sp.depth[0], -depthAt(f.pos.x, f.pos.z)*0.5)), f.pos.z); s.goalT = 3; }
+        if (d < 3*s.sp.sense && d > 2.5){ s.lured = true; s.goal.set(f.pos.x, s.sp.bed ? ground(f.pos.x, f.pos.z) + 0.3 : Math.max(-s.sp.depth[1], Math.min(-s.sp.depth[0], -depthAt(f.pos.x, f.pos.z)*0.5)), f.pos.z); s.goalT = 3; }
       }
       // Each school near the lure gets a chance to send one fish; the weather sharpens it.
       for (const s of schools){
@@ -594,7 +709,10 @@ function stepFishing(dt, t){
     else if (f.len <= 1.3 || depthAt(f.pos.x, f.pos.z) < 0.15){
       const ok = give(sp.id); const idx = f.interested.s.fish.indexOf(k);
       if (idx >= 0){ k.p.copy(waterPoint(sp)); }  // it rejoins the pool elsewhere: the roster is data, not a count
-      log(`<b>${sp.name}</b> ${(sp.len*100*rnd(0.85,1.25)).toFixed(0)} cm${ok ? "" : " (hotbar full)"}`);
+      const cm = Math.round(sp.len*100*rnd(0.85, 1.25));
+      const rec = caught[sp.id] || (caught[sp.id] = { n:0, best:0 }); rec.n++; rec.best = Math.max(rec.best, cm);
+      log(`<b data-fish="${sp.id}">${sp.name}</b> ${cm} cm${ok ? "" : " (hotbar full)"}${rec.n === 1 ? " · new in the field guide" : ""}`);
+      drawSchools(); if (!guideEl.hidden) drawGuide();
       f.reset(); setState("Caught", `${sp.name} into the hotbar.`); toast(sp.name); meter();
     }
   }
@@ -657,10 +775,68 @@ let toastT = 0;
 function toast(s){ const e = document.getElementById("toast"); e.textContent = s; e.classList.add("show"); toastT = 1.4; }
 const logLines = [];
 function log(s){ logLines.unshift(s); document.getElementById("log").innerHTML = logLines.slice(0, 30).join("<br>"); }
+const caught = {};
 function drawSchools(){
-  document.getElementById("schools").innerHTML = `<span class="h">Species</span><span class="h">Fish</span><span class="h">Depth</span>` +
-    schools.map(s => `<span><i class="sw" style="background:#${s.sp.color.toString(16).padStart(6,"0")}"></i>${s.sp.name}</span><output>${s.fish.length}</output><output>${s.sp.depth[0]}-${s.sp.depth[1]} m</output>`).join("");
+  const box = document.getElementById("schools"); box.innerHTML = "";
+  for (const sch of schools){
+    const b = document.createElement("button"); b.type = "button"; b.className = "fishbtn";
+    b.title = `${sch.sp.name}: ${sch.fish.length} here. Open its field-guide entry.`;
+    b.innerHTML = `<canvas width="16" height="16"></canvas><span>${sch.sp.name}<br>${sch.fish.length === 1 ? "alone" : "×" + sch.fish.length}</span>`;
+    paintInto(b.querySelector("canvas"), FISH_ICON[sch.sp.id]);
+    b.addEventListener("click", () => openGuide(sch.sp.id));
+    box.appendChild(b);
+  }
 }
+// The field guide: one entry per species, every number read off the same
+// record the schools and the hook use, so an entry cannot disagree with the fish.
+const guideEl = document.getElementById("guide");
+let guideOn = "minnow";
+function pips(n){ return `<span class="pips" aria-label="${n} of 5">${"●".repeat(n)}<i>${"●".repeat(5 - n)}</i></span>`; }
+function drawGuide(){
+  const nav = document.getElementById("guideList"); nav.innerHTML = "";
+  document.getElementById("guideCount").textContent = `${Object.keys(caught).length} of ${SPECIES.length} caught`;
+  for (const sp of SPECIES){
+    const b = document.createElement("button"); b.type = "button"; b.className = "gitem"; b.setAttribute("aria-current", String(sp.id === guideOn));
+    b.innerHTML = `<canvas width="16" height="16"></canvas><span>${sp.name}</span><small>${caught[sp.id] ? "×" + caught[sp.id].n : "-"}</small>`;
+    paintInto(b.querySelector("canvas"), FISH_ICON[sp.id]);
+    b.addEventListener("click", () => { guideOn = sp.id; drawGuide(); });
+    nav.appendChild(b);
+  }
+  const sp = SPECIES.find(x => x.id === guideOn), rec = caught[sp.id];
+  const found = sp.count[1] === 1 ? "alone" : sp.count[0] <= 2 ? `alone or in pairs` : `schools of ${sp.count[0]}-${sp.count[1]}`;
+  document.getElementById("entry").innerHTML = `
+    <div class="head"><canvas width="16" height="16"></canvas><div>
+      <h3>${sp.name}</h3>
+      <div class="chips"><span class="chip src">${sp.from === "Tenebris" ? "From Tenebris" : "New to Pale Blue Dot"}</span>${sp.zones.map(z => `<span class="chip">${ZONES[z]}</span>`).join("")}${sp.bed ? `<span class="chip">Bottom dweller</span>` : ""}</div>
+    </div></div>
+    <p>${sp.wiki}</p>
+    <dl class="stats">
+      <dt>Depth</dt><dd>${sp.bed ? "on the bed, " : ""}${sp.depth[0]}-${sp.depth[1]} m</dd>
+      <dt>Found</dt><dd>${found}</dd>
+      <dt>Length</dt><dd>about ${Math.round(sp.len*100)} cm</dd>
+      <dt>Strength</dt><dd>${pips(sp.strength)}</dd>
+      <dt>Hook window</dt><dd>${hookWindow(sp).toFixed(2)} s</dd>
+      <dt>Swims</dt><dd>${sp.speed[0]}-${sp.speed[1]} m/s</dd>
+      <dt>Caught</dt><dd>${rec ? `${rec.n}, best ${rec.best} cm` : "not yet"}</dd>
+    </dl>
+    <p class="tip">${sp.tip}</p>`;
+  paintInto(document.querySelector("#entry .head canvas"), FISH_ICON[sp.id]);
+}
+function openGuide(id){
+  if (id) guideOn = id;
+  if (document.pointerLockElement) { try { document.exitPointerLock(); } catch(_){} }
+  guideEl.hidden = false; drawGuide();
+}
+function closeGuide(){ guideEl.hidden = true; }
+document.getElementById("guideClose").addEventListener("click", closeGuide);
+document.getElementById("log").addEventListener("click", e => { const id = e.target.dataset && e.target.dataset.fish; if (id) openGuide(id); });
+function iconsChanged(){ drawSlots(); drawSchools(); if (!guideEl.hidden) drawGuide(); }
+document.querySelectorAll("#zones button").forEach(b => b.addEventListener("click", () => {
+  zone = b.dataset.z; document.querySelectorAll("#zones button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  waterMat.color.setHex({ warm:0x2a8f98, temperate:0x2f6f86, cold:0x2c4a5c }[zone]);
+  fishing.reset(`The water changed: ${ZONES[zone].toLowerCase()}.`); meter();
+  spawnSchools(); drawSchools(); toast(ZONES[zone]);
+}));
 let weather = "clear", debug = false;
 document.querySelectorAll("#weather button").forEach(b => b.addEventListener("click", () => {
   weather = b.dataset.w; document.querySelectorAll("#weather button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
@@ -700,6 +876,8 @@ function leftUp(){ if (fishing.state === "charging"){ castRelease(); meter(); } 
 window.addEventListener("keydown", e => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
+  if (k === "j"){ guideEl.hidden ? openGuide() : closeGuide(); return; }
+  if (k === "escape" && !guideEl.hidden){ closeGuide(); return; }
   if (k === "g"){ gDown = performance.now(); return; }
   if (/^[0-9]$/.test(k)){ selected = (Number(k) + 9) % 10; drawSlots(); return; }
   keys.add(k);

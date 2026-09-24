@@ -52,7 +52,7 @@ pub struct Equipment { owned: ToolSet, held: Tool }   // ToolSet: one bit per to
   the tools out of the ten means the tools never compete with blocks and fish
   for room.
 - `Tool::Pick`, the placeholder, becomes `Tool::Pickaxe`. It was never
-  constructed, so no save contains it (section 7).
+  constructed, so no save contains it (section 8).
 - `Item::Tool` stays, because a future dropped tool or a chest is still an item.
 
 **Input**, on foot only:
@@ -62,7 +62,7 @@ pub struct Equipment { owned: ToolSet, held: Tool }   // ToolSet: one bit per to
 | G down | Note the time. Nothing else happens yet. |
 | G held 0.18 s | The picker opens beside the tool slot, highlighting the held tool. |
 | Wheel while the picker is open | Moves the highlight and wraps. The slots and the camera zoom do not see it. |
-| G up with the picker open | Equips the highlight. A change of tool is a save (section 7). |
+| G up with the picker open | Equips the highlight. A change of tool is a save (section 8). |
 | G up before 0.18 s | A tap: board the craft in reach, as today. |
 | Esc with the picker open | Closes it without a change. |
 
@@ -185,7 +185,7 @@ Ready -> Charging -> Flying -> Floating -> Nibble -> Bite -> Hooked -> Ready
     bobber in water under 0.15 m deep, lands the fish.
 - **Catch.** `Slots::give(Item::Fish(species), 1)`. A full hotbar refuses it,
   and the fish is released with a message rather than lost silently.
-  Recording it is section 7.
+  Recording it is section 8.
 
 **Weather.** The bite multiplier reads the atmosphere at the bobber: clear
 ×1.0, overcast ×1.35 and rain ×1.7 in the mockup. Here it becomes a smooth
@@ -232,7 +232,7 @@ aim at.
    canopy. The nearer hit wins.
 3. **A durable "felled" edit.** An `Edits` entry gains a cell-level flag. It
    is uploaded with the fine set, and the visibility pass then treats the cell
-   as having no tree. The flag goes in the save log (section 7).
+   as having no tree. The flag goes in the save log (section 8).
 4. **Wood.** A new `Material::Wood`. The tileset already has a wood tile at
    (2,1) of `fields.png`, so the thumbnail test passes with no new art, and
    wood is placeable as a block. Felling gives
@@ -288,30 +288,156 @@ the draw.
 - Candidates are fine-set cells whose water depth covers the species' band
   plus 0.3 m. Depth is `sea radius − ground_under`, the same ground rule the
   boats use.
-- Each species has a cap on resident schools (2, 1 and 1 in the proposal),
+- Each species has a cap on resident schools (`max_schools`, section 7),
   and a school is dropped beyond 90 m.
+- A candidate cell also has to be in one of the species' **water zones**
+  (section 7).
 - **Gate:** a body whose `fauna.ron` roster is empty spawns nothing, and the
   rod's aim line says "nothing lives in this water". That covers the airless,
   frozen and asteroid catalog worlds.
 
-**The roster** (`assets/config/fauna.ron`), per body:
+The roster and each species' entry are section 7.
+
+## 7. Species, water zones and the field guide
+
+**The owner's addition:** "one more thing to add to the design, is different
+species of fish, you may reuse fish from tenebris, but make sure each fish has
+a wiki entry, and a thumbnail to represent them in the inventory".
+
+### Eight species: five from Tenebris, three new
+
+Tenebris's water roster (`tenebris-core/src/fauna.rs:145-305`, pinned at
+`ef98651`, the same pin as `docs/source-migration.md`) has five catchable fish
+and a turtle. The turtle stays behind: Tenebris itself marks it as not on the
+hook (`is_fish`, `fauna.rs:283-293`), and a creature you cannot catch belongs
+in a change about wildlife rather than one about fishing.
+
+| Species | From | Waters | Depth, m | Found | Strength | Hook window, s | Tenebris speed, m/s |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: |
+| Minnow | Tenebris `Fish` | tropical, temperate | 0.3-1.8 | schools of 24-36 | 1 | 0.90 | 1.6 |
+| Silverfin | new | temperate, cold | 0.4-2.5 | schools of 18-30 | 1 | 0.90 | - |
+| Banded perch | new | temperate | 1.0-4.0 | schools of 8-14 | 2 | 0.78 | - |
+| Ray | Tenebris `FlatFish` | tropical, temperate | on the bed, 1.5-6.0 | alone or in pairs | 2 | 0.78 | 1.0 |
+| Eel | Tenebris `LongFish` | tropical, temperate | on the bed, 1.0-5.0 | alone or in pairs | 3 | 0.67 | 1.9 |
+| Reef fish | Tenebris `LargeFish` | tropical | 0.8-3.0 | schools of 6-12 | 5 | 0.43 | 1.2 |
+| Deepback | new | cold | 2.5-6.0 | schools of 4-7 | 4 | 0.55 | - |
+| Sea serpent | Tenebris `SerpentFish` | tropical, cold | 3.5-6.0 | alone, one per water | 4 | 0.55 | 2.2 |
+
+- **Taken from Tenebris as is:** the strengths (`fish_strength`), the hook
+  window formula, and each species' 16×16 icon. Each Tenebris speed is the top
+  of our speed band. Schooling, depth bands and water zones are new, because
+  Tenebris has none of the three.
+- **The three new species are placeholders** from the first mockup. Their
+  names and looks are the owner's to change.
+- **The depths fit the shelf a player can fish from.** The mockup's bed falls
+  to 6 m within 16 m of the shore. Real open ocean is deeper, and the deep
+  species' bands can widen once boats carry a rod (owner question 6).
+- **Bottom dwellers** (ray, eel) carry `bed: true`. Their goal sits 0.3 m off
+  the bed, and a vertical term holds them there. The same boid rules apply
+  with one or two fish per school: separation and alignment do nothing,
+  cohesion keeps a pair together, and the goal walk does the rest.
+- **Behaviour the table does not show:** the sea serpent's bite factor is 0.12
+  against the minnow's 0.6, and there is at most one serpent in a zone at a
+  time. That is Tenebris's "rarest on the line" expressed as a spawn cap
+  rather than a table weight.
+
+### Water zones
+
+A species lives in the waters it lists: **tropical**, **temperate** or
+**cold**. A spawn candidate's zone is classified from the surface temperature
+`Atmosphere::sample(dir).temperature` already gives:
+- cold below 8 °C;
+- tropical above 22 °C;
+- temperate otherwise.
+
+Both thresholds are in `fauna.ron`. The zone is read once, when a school
+spawns, and the school keeps it until it despawns. Because the temperature
+moves with the 100-day year (orbit-and-seasons), warm-water fish reach further
+from the equator in summer. That falls out of the rule and needs no code.
+
+The rule "no species on two bodies" is about bodies: zones divide one body's
+roster, they do not copy it.
+
+### The roster, in data
+
+`assets/config/fauna.ron`, per body. It holds the numbers the simulation reads
+and the field-guide text, side by side, for one species at a time:
 
 ```ron
-(bodies: { "pale-blue-dot": (species: [
-    (id: "silverfin", name: "Silverfin", length_m: 0.22, speed_mps: (1.2, 3.2),
-     depth_m: (0.4, 2.5), school: (18, 34), sense_m: 7.0, bite: 0.55,
-     pull: 0.55, strength: 1, colour: (0.81, 0.89, 0.92), icon: "fish/silverfin"),
-    (id: "banded-perch", ...strength: 2...), (id: "deepback", ...strength: 4...),
+(zones: (cold_below_c: 8.0, tropical_above_c: 22.0),
+ bodies: { "pale-blue-dot": (species: [
+    (id: "minnow", name: "Minnow", from: Tenebris("Fish"),
+     zones: [Tropical, Temperate], length_m: 0.14, speed_mps: (1.0, 2.6),
+     depth_m: (0.3, 1.8), bed: false, school: (24, 36), max_schools: 2,
+     sense_m: 8.0, bite: 0.6, pull: 0.4, strength: 1,
+     colour: (0.47, 0.59, 0.71), shape: (0.5, 0.5, 1.0), icon: "fish/minnow",
+     guide: (
+       entry: "The first fish most anglers land. Minnows crowd the shallows...",
+       tip: "Cast anywhere near the shore. A school finds the lure in seconds.",
+     )),
+    // ... silverfin, perch, ray, eel, reef, deepback, serpent
 ])})
 ```
 
-- The three species are the mockup's placeholders. Their names and looks are
-  the owner's to change.
-- A test asserts that every species has an icon in the manifest, that no
-  species id appears on two bodies, and that the lifeless bodies' rosters are
-  empty. This is the rule Tenebris's CLAUDE.md set after its own leak.
+- `from` records provenance per species. The entry shows it as a "From
+  Tenebris" chip, and the provenance test checks it against the copied icons
+  (section 9).
+- **The roster is append-only**, because a saved fish is its index in it
+  (section 8). A test pins the order.
 
-## 7. What is saved, and when
+### The field guide: one entry per species
+
+The owner asked for a wiki entry for each fish. The entry is the species' own
+record, drawn in two places from one source:
+
+1. **In the game: the field guide.**
+   - **Opening it:** J opens it, and so does clicking a fish in the slots
+     while the pointer is free. The mockup's world panel also lists "In this
+     water", one thumbnail per species present, and each opens its entry.
+   - **The list:** every species on the body, with its icon and your catch
+     count.
+   - **The entry:**
+     - the icon at 96 px, sampled nearest-point, so the 16×16 art stays crisp;
+     - the name, a provenance chip, the waters it lives in, and a bottom
+       dweller chip where it applies;
+     - the entry text;
+     - its numbers: depth, how it is found, length, strength as five pips,
+       hook window, speed;
+     - your own record: how many you have caught and your best length;
+     - a one-line angler's tip.
+   - **Where the numbers come from:** every one is read from the same record
+     the school and the hook read. The hook window shown is
+     `hook_window(strength)`, the same function that times the bite. **An
+     entry therefore cannot disagree with the fish.**
+2. **Outside the game: `docs/wiki/fish.md`**, generated from `fauna.ron` by
+   `tools/gen_fish_wiki.py`. It gives one section per species with its icon, and
+   a test fails when the committed page differs from what the generator writes.
+   That is the same "shipped artifact equals its source" check the RON files
+   have. Tenebris's wiki (`public/wiki.html`) has no creatures at all, so this
+   page is new rather than ported.
+
+**The catch record** is new durable state: per species, a count and a best
+length.
+- It rides the `slots` line a catch already writes (section 8), as
+  `catch {species} {cm} s0..s9`, so the fish and its record reach the disk in
+  one line.
+- A fish's length is drawn from a deterministic hash of the school seed and
+  the fish's index, scaled to 85 to 125% of the species' length, so the same
+  fish always measures the same.
+
+**Tests:**
+- every species on every body has a non-empty entry and tip, and an icon in
+  the manifest;
+- no species id appears on two bodies;
+- the lifeless bodies' rosters are empty;
+- every species has at least one zone;
+- every zone on a living body has at least one species;
+- the generated wiki page equals the committed one.
+
+The last three are new. The rest extend the rule Tenebris's CLAUDE.md set
+after its own roster leak.
+
+## 8. What is saved, and when
 
 The save log (`saves/format.rs`) has two line kinds today:
 
@@ -328,7 +454,7 @@ New content:
 
 | Event | Line, written that frame | Why |
 | --- | --- | --- |
-| A catch | `slots s0..s9` | The slots changed without an edit. |
+| A catch | `catch {species} {cm} s0..s9` | The slots changed without an edit, and the field guide's record grew. One line carries both. |
 | A tool change | `hand {tool} {owned bits}` | The equipped tool is player state that must survive a reload. |
 | A tree felled | `fell {cell} s0..s9` | The world changed, and the wood went into the slots, in one line. |
 
@@ -342,26 +468,43 @@ New content:
   `(Grant, u16)`, where a grant is an item or a tool. A saved world therefore
   gets the four tools, with the rod in hand, once, exactly as it got its
   torches.
-- **Old saves** load unchanged: they have no `slots`, `hand` or `fell` lines.
+- **The field guide's record** is rebuilt on load by folding the `catch`
+  lines: a count and a best length per species. There is no second store to
+  keep in step.
+- **Old saves** load unchanged: they have no `catch`, `hand` or `fell` lines.
   A save written by this change is not readable by an older build. That is
   the same direction every save change here has taken, and the world ID
   records the format.
 
-## 8. Icons
+## 9. Icons
 
-Every new item gets a thumbnail in the same change.
-- **Fish** get three 16×16 PNGs.
+Every new item gets a thumbnail in the same change, and the field guide draws
+the same thumbnail as the slot.
+- **Five fish reuse Tenebris's own icons.** `fish_minnow.png`,
+  `fish_reef.png`, `fish_eel.png`, `fish_ray.png` and `fish_serpent.png` from
+  `tenebris-rs/assets/textures/items/` at `ef98651` are 16×16 RGBA, 131 to 154
+  bytes each. They are copied byte for byte into `assets/items/fish/` and never
+  referenced from `.reference/`, per the provenance rule. A `PROVENANCE.md`
+  beside them names the source path and commit, and a test hashes each copy
+  against the hash recorded there. Tenebris's Rust tree is MIT
+  (`docs/source-migration.md`). The mockup embeds these exact PNGs.
+- **Three new fish** (silverfin, banded perch, deepback) get 16×16 PNGs drawn
+  on the same rules as Tenebris's generator (`tools/gen-fish-sprites.py`):
+  head to the right, a dark, mid and light ramp per species, a 1 px eye, and a
+  transparent ground.
 - **Tools** get four 16×16 PNGs for the picker and the slot.
 - **Wood** needs nothing new: it is a block, so its icon is its terrain tile.
 
-The PNGs are committed under `assets/items/` with a manifest, and generated by
-`tools/gen_item_icons.py` (stdlib and zlib only) from the same pixel grids the
-mockup draws. Nearest-point sampling, per the art rule.
+The new PNGs are generated by `tools/gen_item_icons.py` (stdlib and zlib only)
+from the same pixel grids the mockup draws. The tool writes the new icons only:
+the copied ones are sources, not outputs. Nearest-point sampling, per the art
+rule.
 
 The existing test that every material has a thumbnail gains siblings: every
-tool, and every species on every roster, has an icon in the manifest.
+tool and every species on every roster has an icon in the manifest, and the
+five copied fish match their recorded hashes.
 
-## 9. What the mockup found
+## 10. What the mockup found
 
 - **A sagging line runs under the water** unless each point is clamped to the
   sea surface.
@@ -378,7 +521,7 @@ tool, and every species on every roster, has an icon in the manifest.
   accumulated motion, but the fix is noted here for the vehicle seat and the
   picker.
 
-## 10. Proof, when it is built
+## 11. Proof, when it is built
 
 - **Core tests:**
   - boids stay between the bed and the surface, and inside the band;
@@ -388,14 +531,19 @@ tool, and every species on every roster, has an icon in the manifest.
   - `secs` for every material and tool;
   - `tree_at` agrees with the WGSL over 10,000 IDs on a headless adapter;
   - equipment round-trips through the save format;
-  - `fauna.ron` equals the code defaults.
+  - `fauna.ron` equals the code defaults;
+  - the roster tests of section 7: entries, icons, disjoint bodies, zones
+    covered, and the generated wiki page equals the committed one;
+  - the copied Tenebris icons match their recorded hashes.
 - **App tests:**
   - a tap of G boards and a hold opens the picker;
   - the wheel moves the highlight and not the slots while the picker is open;
-  - a catch writes a `slots` line in the same update;
+  - a catch writes a `catch` line in the same update, and the field guide's
+    count and best length come back after a reload;
+  - J and a click on a caught fish open that species' entry;
   - a felled tree stays felled after the tier is rebuilt and after a reload;
   - a lifeless body spawns no school.
 - **Captures:** the picker open over the HUD, a cast bobber with a school
-  under it, and a felled tree.
+  under it, a felled tree, and the field guide open on a species.
 - **Limitation:** the feel of the bite and reel, and whether the schools read
   as schools on screen, can only be confirmed by the owner in game.

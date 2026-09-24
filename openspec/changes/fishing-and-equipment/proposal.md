@@ -6,7 +6,9 @@
 the player a fishing rod. Reserve a spot on the hotbar for inventory items. if
 player hold G, show options next to it, and they can scroll to change
 equipment", then "this equipment being fishing rod, vs shovel, axe, pickaxe",
-then "yea and the mockup".**
+then "yea and the mockup", then "one more thing to add to the design, is
+different species of fish, you may reuse fish from tenebris, but make sure each
+fish has a wiki entry, and a thumbnail to represent them in the inventory".**
 
 Today:
 
@@ -30,7 +32,8 @@ Today:
 - **A mockup came first, as asked.** `docs/mockups/fishing.html`, published at
   <https://claude.ai/artifact/9XiEvkxSFJMtqaktg4eovj>, is a three.js
   prototype. It uses the engine's gravity (25 m/s²) and a small sea standing in
-  for `pbd_core::sea`. It has three schools of boids, and a rod you charge,
+  for `pbd_core::sea`. It has eight fish species in three kinds of water, each with a
+  field-guide entry, swimming as schools of boids, and a rod you charge,
   cast, hook with and reel under line tension. It has the tool slot with its
   hold-G picker, and the shovel, pickaxe and axe working on sample blocks and a
   tree. It was driven headless end to end: cast, a school turns toward the
@@ -65,6 +68,17 @@ Today:
     step of strength, never under 0.25 s.
   - Reeling is held against a tension meter; too much tension snaps the line.
   - The catch goes into the slots with its own icon.
+- **Eight species, each with a field-guide entry and a thumbnail.**
+  - Five come from Tenebris: minnow, ray, eel, reef fish and sea serpent. They
+    bring Tenebris's strengths, its hook window, and its own 16×16 icons,
+    copied with provenance.
+  - Three are new: silverfin, banded perch and deepback.
+  - They live in three water zones (tropical, temperate and cold), classified
+    from the sea's surface temperature.
+  - Each species' entry is its own record in `fauna.ron`: its numbers, its
+    text and a tip. It opens in game with J or a click on a caught fish, and a
+    `docs/wiki/fish.md` page is generated from the same data.
+  - A test fails if any species lacks an entry or an icon.
 - **The rosters are planet data.** Each body lists its species in `fauna.ron`.
   An empty roster, as on an airless, frozen or barren world, means no fish
   spawn and the rod says so.
@@ -98,11 +112,17 @@ These come with defaults, and the mockup already shows each default.
    foot, like digging. Fishing from the Loon or the Tern is an obvious next
    step.
 
+7. **Where the wiki lives.** The default is both an in-game field guide and a
+   generated `docs/wiki/fish.md`, from one source. If "wiki" means a web page
+   like Tenebris's `wiki.html` linked from the menu, the generator writes HTML
+   instead. The data does not change.
+
 ## Non-goals
 
 - Tool tiers, durability and crafting. There is one of each tool, and it never
   wears out.
 - Cooking, eating or selling fish. A fish is an item and nothing more yet.
-- Land fauna, birds, and anything that attacks.
+- Land fauna, birds, and anything that attacks. Tenebris's turtle stays
+  behind for the same reason: Tenebris does not let it be caught.
 - A bag behind the ten slots. The owner questions assume the ten are enough
   for now.
