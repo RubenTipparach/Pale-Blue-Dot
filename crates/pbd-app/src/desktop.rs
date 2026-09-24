@@ -41,6 +41,10 @@ use std::{
 #[derive(Resource, Clone)]
 pub struct Launch {
     pub capture: Option<PathBuf>,
+    /// `--frame-log PATH`: a measurement instrument. Every frame's wall time,
+    /// written as CSV with the fine set's state on the same clock, so a hitch
+    /// can be attributed rather than guessed at (`far-side-flight`).
+    pub frame_log: Option<PathBuf>,
     pub view: String,
     pub frames: u32,
     pub tour: bool,
@@ -126,6 +130,7 @@ impl Launch {
     fn parse(args: &[String]) -> Self {
         let mut result = Self {
             capture: None,
+            frame_log: None,
             view: "coast".into(),
             frames: 180,
             dig: 0,
@@ -244,6 +249,12 @@ impl Launch {
                         "--spawn knows mouth and snow"
                     );
                     result.spawn = Some(spawn);
+                }
+                "--frame-log" => {
+                    i += 1;
+                    result.frame_log = Some(PathBuf::from(
+                        args.get(i).expect("--frame-log requires a path"),
+                    ));
                 }
                 "--frames" => {
                     i += 1;
@@ -404,6 +415,9 @@ pub struct FrameStats {
     pub frame_ms: f32,
     pub samples: Vec<f64>,
     previous: Instant,
+    /// When the app started: the frame log's clock, to line a slow frame up
+    /// with what the log says happened then.
+    started: Instant,
 }
 
 pub fn run(args: &[String]) {
@@ -528,6 +542,7 @@ pub fn run(args: &[String]) {
         frame_ms: 0.0,
         samples: Vec::new(),
         previous: Instant::now(),
+        started: Instant::now(),
     })
     .insert_resource(launch.clone())
     .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
@@ -575,7 +590,11 @@ pub fn run(args: &[String]) {
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
     .add_systems(PreUpdate, load_world.after(menu::toggle))
-    .add_systems(Last, (measure_frames, drain_saves));
+    .insert_resource(FrameLog::open(launch.frame_log.as_deref()))
+    .add_systems(
+        Last,
+        ((measure_frames, write_frame_log).chain(), drain_saves),
+    );
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
@@ -1538,6 +1557,55 @@ fn capture(
         eprintln!("Screenshot did not complete");
         exit.write(AppExit::error());
     }
+}
+
+/// The `--frame-log` CSV, open for the run when asked for.
+#[derive(Resource)]
+struct FrameLog(Option<std::io::BufWriter<std::fs::File>>);
+
+impl FrameLog {
+    fn open(path: Option<&std::path::Path>) -> Self {
+        Self(path.map(|path| {
+            use std::io::Write;
+            let file = std::fs::File::create(path)
+                .unwrap_or_else(|error| panic!("--frame-log {}: {error}", path.display()));
+            let mut out = std::io::BufWriter::new(file);
+            writeln!(
+                out,
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps"
+            )
+            .expect("frame log header");
+            out
+        }))
+    }
+}
+
+/// One row per frame: the frame's wall time, the fine set drawn, the age of
+/// the rebuild in flight (empty when none), and how high and fast the player
+/// is, so an over-budget frame lines up with what the streaming was doing.
+fn write_frame_log(
+    mut log: ResMut<FrameLog>,
+    stats: Res<FrameStats>,
+    fine: Res<pbd_app::planet::PlanetFine>,
+    near: Res<pbd_app::planet::NearField>,
+    readout: Option<Res<pbd_app::flight_view::FlightReadout>>,
+) {
+    use std::io::Write;
+    let Some(out) = log.0.as_mut() else {
+        return;
+    };
+    let Some(ms) = stats.samples.last() else {
+        return;
+    };
+    let rebuild = near.rebuild_s.map_or(String::new(), |s| format!("{s:.3}"));
+    let (clearance, speed) = readout.map_or((f32::NAN, f32::NAN), |r| (r.clearance, r.speed));
+    let _ = writeln!(
+        out,
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1}",
+        stats.samples.len(),
+        stats.started.elapsed().as_secs_f64(),
+        fine.version
+    );
 }
 
 fn measure_frames(mut stats: ResMut<FrameStats>) {

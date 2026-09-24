@@ -478,6 +478,11 @@ pub fn build(
     edits: &Edits,
 ) -> ColumnTier {
     let anchor = anchor.normalize_or(Vec3::Y);
+    // No finest level (the player is too high for it to be live): no column
+    // to build, and no worms to gather for them.
+    if finest.is_empty() {
+        return ColumnTier::empty();
+    }
     // The region's worms, gathered ONCE: every worm that could reach any
     // column of the tier, so each column's carve is complete whatever tier
     // built it. This is the regional pre-pass the design said worms need,

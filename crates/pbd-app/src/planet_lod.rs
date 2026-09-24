@@ -46,10 +46,50 @@ pub const FINE_CAPACITY: u32 = 65_536;
 /// The bands extend past their radii by this much so the live bands, which
 /// move with the player, never leave the resident set.
 pub const REGEN_DISTANCE_M: f32 = 40.0;
+/// Metres of extra margin per metre of height above the ground. Aloft the
+/// bands are laid this much wider and rebuilt this much less often: at flight
+/// speeds a 40 m margin is a rebuild every few frames, and from a kilometre up
+/// a band a few hundred metres behind the ship is detail no one can see is
+/// stale (`far-side-flight`).
+pub const REGEN_PER_HEIGHT: f32 = 0.3;
+
+/// The rebuild margin at a height above the ground: the walk's
+/// `REGEN_DISTANCE_M` on the ground, growing with height.
+pub fn regen_m(height: f32) -> f32 {
+    REGEN_DISTANCE_M + REGEN_PER_HEIGHT * height.max(0.0)
+}
 
 /// Mean centre-to-centre tile width at a level, metres, on the shipped radius.
 pub fn tile_width_m(level: u8) -> f32 {
     1.2087 * PLANET_RADIUS / (1u32 << level) as f32
+}
+
+/// How far each fine band reaches across the ground, great-circle metres from
+/// the point under the player, for a player `player_radius` from the planet's
+/// centre over ground at `ground_radius`. A band is a SLANT radius: the ground
+/// within `BAND_M[k]` of the player's eye, not of the ground under it. From
+/// height `h` it reaches the ground out to about `sqrt(B^2 - h^2)`, exactly
+/// by the triangle through the centre, and not at all once `h >= B`. So from a
+/// kilometre up there is no finest band to build or draw: its nearest tile
+/// would be a kilometre away (`far-side-flight`). Standing on the ground this
+/// is `BAND_M` itself.
+pub fn live_bands_m(player_radius: f32, ground_radius: f32) -> [f32; 4] {
+    let height = (player_radius - ground_radius).max(0.0) as f64;
+    // The triangle through the centre, drawn on the sphere every band is
+    // measured on (great-circle metres at PLANET_RADIUS, as `metres_from_anchor`
+    // measures), so on the ground it is `BAND_M` exactly. In f64: the cosine is
+    // within 1e-5 of one, where f32's acos loses a metre in three hundred.
+    let ground = PLANET_RADIUS as f64;
+    let eye = ground + height;
+    std::array::from_fn(|k| {
+        let band = BAND_M[k] as f64;
+        if height >= band {
+            return 0.0;
+        }
+        let cos =
+            ((eye * eye + ground * ground - band * band) / (2.0 * eye * ground)).clamp(-1.0, 1.0);
+        ((cos.acos() * ground) as f32).min(BAND_M[k])
+    })
 }
 
 /// The cosine of a fine level's nominal band radius. `LodParams::of` is what
@@ -256,6 +296,11 @@ pub struct FineSet {
     /// hides the coarser level inside, so what is hidden always has a
     /// replacement: a truncated band stops hiding where it stops existing.
     complete: [f32; 4],
+    /// The live band radii this set was laid for (`live_bands_m` at the height
+    /// it was requested from); zero for a band it did not lay.
+    live: [f32; 4],
+    /// The rebuild margin this set was laid with (`regen_m`).
+    regen: f32,
     /// The voxel columns for the innermost part of the finest level: what makes
     /// a cave, an overhang and a block to remove expressible at all. Built on
     /// this same task, because the records carry their own slots.
@@ -289,8 +334,30 @@ impl FineSet {
             .iter()
             .zip(&self.complete)
             .rev()
-            .find(|(_, radius)| metres <= **radius)
+            .find(|(_, radius)| **radius > 0.0 && metres <= **radius)
             .map(|(level, _)| *level)
+    }
+
+    /// Whether this set no longer serves a player `moved` metres from its
+    /// anchor whose live bands are `live`: a band now live that the set did
+    /// not lay, or a live band about to outrun what was laid. On the ground
+    /// that is the walk rule, `moved > REGEN_DISTANCE_M`; higher up the set
+    /// was laid with a wider margin (`regen_m`), so fast flight rebuilds far
+    /// less often. A set with fine bands, seen from high
+    /// enough that none is live, is replaced once by an empty one, with a
+    /// margin so hovering at the edge does not flip it back and forth.
+    pub fn outrun(&self, live: &[f32; 4], moved: f32, clear_of_all: bool) -> bool {
+        let outran = live
+            .iter()
+            .zip(&self.live)
+            .filter(|(now, _)| **now > 0.0)
+            .any(|(now, laid)| *laid <= 0.0 || moved > laid - now + self.regen);
+        outran || clear_of_all && self.live.iter().any(|m| *m > 0.0)
+    }
+
+    /// The live radii this set was laid for.
+    pub fn live(&self) -> [f32; 4] {
+        self.live
     }
 
     /// Great-circle metres from this set's anchor to a direction.
@@ -356,7 +423,15 @@ impl LodParams {
     pub fn of(set: &FineSet) -> Self {
         Self {
             player: set.anchor,
-            bands: Vec4::from_array(set.complete.map(|m| (m / PLANET_RADIUS).cos())),
+            // A band the set did not lay is 2.0, which no dot product exceeds:
+            // cos(0) would still admit a tile exactly at the anchor.
+            bands: Vec4::from_array(set.complete.map(|m| {
+                if m > 0.0 {
+                    (m / PLANET_RADIUS).cos()
+                } else {
+                    2.0
+                }
+            })),
         }
     }
 
@@ -396,22 +471,30 @@ pub(crate) struct Band {
 
 /// Lay fine level `FINE_LEVELS[k]` as a band from just inside the next finer
 /// band's radius to just outside its own, plus the regeneration distance, so
-/// the live bands stay resident as the player walks. Over capacity, the
-/// farthest cells are dropped, never the nearest.
-pub(crate) fn lay_band(k: usize, anchor: Vec3) -> Band {
+/// the live bands stay resident as the player walks. The radii are the live
+/// ones (`live_bands_m`); a band that is not live is not laid at all. Over
+/// capacity, the farthest cells are dropped, never the nearest.
+pub(crate) fn lay_band(k: usize, anchor: Vec3, live: &[f32; 4], regen: f32) -> Band {
+    if live[k] <= 0.0 {
+        return Band {
+            cells: Vec::new(),
+            complete_m: 0.0,
+            radius: 0.0,
+        };
+    }
     let level = FINE_LEVELS[k];
     let mut lattice = Lattice::default();
-    let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(level);
+    let margin = regen + 3.0 * tile_width_m(level);
     let inner = if k + 1 < FINE_LEVELS.len() {
-        (BAND_M[k + 1] - margin).max(0.0)
+        (live[k + 1] - margin).max(0.0)
     } else {
         0.0
     };
-    let outer = BAND_M[k] + margin;
+    let outer = live[k] + margin;
     let mut cells =
         lattice.cells_in_band(level, anchor, inner / PLANET_RADIUS, outer / PLANET_RADIUS);
-    let mut complete_m = BAND_M[k];
-    let mut radius = (BAND_M[k] + REGEN_DISTANCE_M) / PLANET_RADIUS;
+    let mut complete_m = live[k];
+    let mut radius = (live[k] + regen) / PLANET_RADIUS;
     if cells.len() > FINE_CAPACITY as usize {
         warn!(
             "level {level} band holds {} cells over a capacity of {FINE_CAPACITY}; dropping the farthest",
@@ -486,17 +569,61 @@ fn build_threads() -> usize {
     std::thread::available_parallelism().map_or(1, |n| n.get())
 }
 
-/// Generate every fine level for an anchor, on every core.
-pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings, edits: &Edits) -> FineSet {
-    generate_fine_on(anchor, columns, edits, build_threads())
+/// Threads a rebuild may use while the player is PLAYING, not waiting: a
+/// quarter of the cores. On every core the rebuild starved the main thread:
+/// measured on the far-side tour (8 cores, 1440x900), frames over 16.7 ms fell
+/// from 195 to 3 and p99.9 from 47.5 ms to 5.6 ms at two threads
+/// (`far-side-flight`). A forced rebuild, which the player is waiting on,
+/// still takes every core.
+fn background_threads() -> usize {
+    (build_threads() / 4).max(1)
 }
 
-/// Generate every fine level on `threads` threads. The output does not depend
-/// on the count: a band is laid by its own lattice, and a record is a pure
-/// function of its cell whichever memo it was built with, so the parallel set
-/// is the serial one byte for byte, and a test holds it to that.
+/// Generate every fine level for an anchor on the ground, on every core.
+pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings, edits: &Edits) -> FineSet {
+    generate_fine_live(
+        anchor,
+        BAND_M,
+        REGEN_DISTANCE_M,
+        columns,
+        edits,
+        build_threads(),
+    )
+}
+
+/// Generate the fine levels live at `live` (`live_bands_m` for the player's
+/// height) around an anchor, on `threads` threads. A band that is not live is
+/// not built.
+pub fn generate_fine_live(
+    anchor: Vec3,
+    live: [f32; 4],
+    regen: f32,
+    columns: &ColumnSettings,
+    edits: &Edits,
+    threads: usize,
+) -> FineSet {
+    generate_fine_live_on(anchor, live, regen, columns, edits, threads)
+}
+
+/// Generate every fine level for an anchor on the ground on `threads` threads.
+#[cfg(test)]
 pub(crate) fn generate_fine_on(
     anchor: Vec3,
+    columns: &ColumnSettings,
+    edits: &Edits,
+    threads: usize,
+) -> FineSet {
+    generate_fine_live_on(anchor, BAND_M, REGEN_DISTANCE_M, columns, edits, threads)
+}
+
+/// Generate the live fine levels on `threads` threads. The output does not
+/// depend on the count: a band is laid by its own lattice, and a record is a
+/// pure function of its cell whichever memo it was built with, so the parallel
+/// set is the serial one byte for byte, and a test holds it to that.
+pub(crate) fn generate_fine_live_on(
+    anchor: Vec3,
+    live: [f32; 4],
+    regen: f32,
     columns: &ColumnSettings,
     edits: &Edits,
     threads: usize,
@@ -509,7 +636,7 @@ pub(crate) fn generate_fine_on(
     let bands: Vec<Band> = if threads > 1 {
         std::thread::scope(|scope| {
             let handles: Vec<_> = (0..FINE_LEVELS.len())
-                .map(|k| scope.spawn(move || lay_band(k, anchor)))
+                .map(|k| scope.spawn(move || lay_band(k, anchor, &live, regen)))
                 .collect();
             handles
                 .into_iter()
@@ -518,7 +645,7 @@ pub(crate) fn generate_fine_on(
         })
     } else {
         (0..FINE_LEVELS.len())
-            .map(|k| lay_band(k, anchor))
+            .map(|k| lay_band(k, anchor, &live, regen))
             .collect()
     };
     let complete: [f32; 4] = std::array::from_fn(|k| bands[k].complete_m);
@@ -607,6 +734,8 @@ pub(crate) fn generate_fine_on(
         finest_neighbors,
         finest_radius,
         complete,
+        live,
+        regen,
         columns,
     }
 }
@@ -671,16 +800,16 @@ pub struct LodRefresh {
     force: bool,
 }
 
-/// The direction the bands are anchored on: the active camera, which is at
-/// the player whether walking or flying.
-fn player_direction(
+/// Where the bands are measured from: the active camera, which is at the
+/// player whether walking or flying, body-local (from the planet's centre).
+fn player_position(
     cameras: &Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     center: Vec3,
 ) -> Option<Vec3> {
     cameras
         .iter()
         .find(|(_, camera)| camera.is_active)
-        .and_then(|(transform, _)| (transform.translation() - center).try_normalize())
+        .map(|(transform, _)| transform.translation() - center)
 }
 
 impl LodRefresh {
@@ -716,7 +845,8 @@ pub fn refresh_lod(
     edits: Res<crate::saves::WorldSave>,
     mut near: ResMut<NearField>,
 ) {
-    let direction = player_direction(&cameras, frame.center.as_vec3());
+    let player = player_position(&cameras, frame.center.as_vec3());
+    let direction = player.and_then(|p| p.try_normalize());
     if let Some(direction) = direction {
         let column = contact
             .finest_cell(direction)
@@ -752,11 +882,24 @@ pub fn refresh_lod(
         }
         return;
     }
-    let Some(direction) = direction else {
+    let (Some(player), Some(direction)) = (player, direction) else {
         return;
     };
+    // The bands as the player can use them from where they are: from high up
+    // the finest are not live at all, and nothing is built for them.
+    let ground = super::terrain::terrain_radius(direction);
+    let live = live_bands_m(player.length(), ground);
+    let regen = regen_m(player.length() - ground);
+    // Past the coarsest band by a margin, so hovering at the edge does not
+    // swap an empty set in and out.
+    let clear_of_all = player.length() - ground > BAND_M[0] * 1.05;
     let moved = fine.set.metres_from_anchor(direction);
-    if refresh.force || moved > REGEN_DISTANCE_M {
+    if refresh.force || fine.set.outrun(&live, moved, clear_of_all) {
+        let threads = if refresh.force {
+            build_threads()
+        } else {
+            background_threads()
+        };
         refresh.force = false;
         let settings = settings.clone();
         // The edits travel WITH the task: the tier is rebuilt off the pool and
@@ -764,10 +907,9 @@ pub fn refresh_lod(
         // the player walked far enough.
         let made = edits.edits.clone();
         refresh.started = Some(std::time::Instant::now());
-        refresh.task = Some(
-            AsyncComputeTaskPool::get()
-                .spawn(async move { generate_fine(direction, &settings, &made) }),
-        );
+        refresh.task = Some(AsyncComputeTaskPool::get().spawn(async move {
+            generate_fine_live(direction, live, regen, &settings, &made, threads)
+        }));
     }
 }
 
@@ -780,6 +922,92 @@ pub struct LodParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// On the ground the live bands are the nominal ones; from height they
+    /// shrink by the slant distance, level 11 is gone from 300 m up and every
+    /// fine band from 2,400 m (`far-side-flight`).
+    #[test]
+    fn bands_are_measured_from_the_players_height() {
+        let ground = PLANET_RADIUS + 12.0;
+        let on_ground = live_bands_m(ground, ground);
+        for k in 0..4 {
+            assert!((on_ground[k] - BAND_M[k]).abs() < 0.01, "{on_ground:?}");
+        }
+        let at = |h: f32| live_bands_m(ground + h, ground);
+        let low = at(250.0);
+        assert!(
+            low[3] > 0.0 && low[3] < 170.0,
+            "level 11 at 250 m: {}",
+            low[3]
+        );
+        assert_eq!(at(300.0)[3], 0.0, "no level 11 from 300 m up");
+        // From a kilometre up the coarsest band reaches 1,999 m on this curved
+        // 4.8 km world (the triangle through the centre), not a flat 2,182 m.
+        let km = at(1_000.0);
+        assert!((km[0] - 1_999.0).abs() < 2.0 && km[2] == 0.0, "{km:?}");
+        assert_eq!(at(2_400.0), [0.0; 4], "no fine band from 2,400 m up");
+        let mut previous = on_ground;
+        for h in [10.0, 100.0, 400.0, 900.0, 1_500.0, 2_300.0] {
+            let now = at(h);
+            for k in 0..4 {
+                assert!(
+                    now[k] <= previous[k],
+                    "bands only shrink as the player climbs"
+                );
+            }
+            previous = now;
+        }
+    }
+
+    /// The rebuild rule: the walk's 40 m on the ground; a band that turns live
+    /// and was not laid forces a rebuild; a set seen from above every band is
+    /// swapped for an empty one.
+    #[test]
+    fn a_set_is_outrun_by_distance_or_by_a_band_turning_live() {
+        let anchor = Vec3::Y;
+        let set = super::near_field_tests::set_with_bands(anchor, BAND_M);
+        assert!(!set.outrun(&BAND_M, REGEN_DISTANCE_M - 1.0, false));
+        assert!(set.outrun(&BAND_M, REGEN_DISTANCE_M + 1.0, false));
+        let mut aloft = super::near_field_tests::set_with_bands(anchor, BAND_M);
+        aloft.live = [2_000.0, 600.0, 0.0, 0.0];
+        assert!(
+            aloft.outrun(&[2_000.0, 600.0, 500.0, 0.0], 0.0, false),
+            "level 10 turned live"
+        );
+        assert!(!aloft.outrun(&[0.0; 4], 0.0, false));
+        assert!(
+            aloft.outrun(&[0.0; 4], 0.0, true),
+            "high above: replaced by an empty set"
+        );
+        let mut empty = super::near_field_tests::set_with_bands(anchor, [0.0; 4]);
+        empty.live = [0.0; 4];
+        assert!(
+            !empty.outrun(&[0.0; 4], 10_000.0, true),
+            "an empty set is never rebuilt aloft"
+        );
+    }
+
+    /// A set requested from above the finest band lays no finest level and no
+    /// columns, and whatever it lays still serves as a set.
+    #[test]
+    fn a_set_built_from_altitude_has_no_finest_level() {
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let ground = super::super::terrain::terrain_radius(anchor);
+        let live = live_bands_m(ground + 800.0, ground);
+        assert_eq!(live[3], 0.0);
+        let set = generate_fine_live_on(
+            anchor,
+            live,
+            regen_m(800.0),
+            &ColumnSettings::default(),
+            &Edits::default(),
+            2,
+        );
+        assert!(set.levels[3].is_empty() && set.levels[2].is_empty());
+        assert!(!set.levels[0].is_empty(), "level 8 is live from 800 m");
+        assert!(set.columns.columns.is_empty());
+        assert_eq!(set.level_at(anchor), Some(FINE_LEVELS[1]));
+    }
 
     #[test]
     fn bands_halve_with_the_tile_and_stay_inside_capacity() {
@@ -911,13 +1139,15 @@ mod tests {
 mod near_field_tests {
     use super::*;
 
-    fn set_with_bands(anchor: Vec3, complete: [f32; 4]) -> FineSet {
+    pub(super) fn set_with_bands(anchor: Vec3, complete: [f32; 4]) -> FineSet {
         FineSet {
             anchor,
             levels: Default::default(),
             finest_neighbors: Vec::new(),
             finest_radius: 0.0,
             complete,
+            live: complete,
+            regen: REGEN_DISTANCE_M,
             columns: ColumnTier::empty(),
         }
     }
@@ -930,7 +1160,7 @@ mod near_field_tests {
     #[test]
     fn the_level_underfoot_is_the_finest_complete_band_that_reaches_it() {
         let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
-        let set = set_with_bands(anchor, BAND_M);
+        let set = super::near_field_tests::set_with_bands(anchor, BAND_M);
         assert_eq!(set.level_at(anchor), Some(11));
         assert_eq!(set.level_at(metres_away(anchor, 100.0)), Some(11));
         assert_eq!(set.level_at(metres_away(anchor, 400.0)), Some(10));
@@ -990,7 +1220,7 @@ mod streaming_cost {
         let edits = Edits::default();
         for (k, level) in FINE_LEVELS.iter().enumerate() {
             let started = Instant::now();
-            let band = lay_band(k, anchor);
+            let band = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M);
             eprintln!(
                 "level {level}: {} cells laid in {:.0} ms",
                 band.cells.len(),
@@ -1103,7 +1333,7 @@ mod fast_build_tests {
         let mut read = 0usize;
         let mut sides = 0usize;
         for k in 0..FINE_LEVELS.len() - 1 {
-            let laid = lay_band(k, anchor);
+            let laid = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M);
             assert_eq!(laid.cells.len(), set.levels[k].len());
             for (local, cell) in laid.cells.iter().zip(&set.levels[k]) {
                 let axis = Vec3::from_slice(&cell.direction_height[..3]);
