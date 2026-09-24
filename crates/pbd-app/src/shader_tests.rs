@@ -112,7 +112,8 @@ pub(crate) fn wgsl_struct_size(label: &str, source: &str, name: &str) -> u32 {
 /// the physics knows nothing about.
 #[test]
 fn the_water_vertex_draws_the_sea_table_and_no_literal_waves() {
-    let source = include_str!("../../../assets/shaders/water.wgsl");
+    // Line endings as committed, whatever the checkout made of them.
+    let source = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
     let start = source
         .find("@vertex")
         .expect("water.wgsl has a vertex stage");
