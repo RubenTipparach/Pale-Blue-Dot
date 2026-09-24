@@ -50,6 +50,8 @@ pub enum SailState {
 pub struct TernTelemetry {
     /// Speed over the ground, m/s.
     pub speed: f64,
+    /// Speed through local water in the tangent plane, m/s.
+    pub water_speed: f64,
     /// The true and apparent wind at the sail, planet frame, m/s.
     pub true_wind: DVec3,
     pub apparent: DVec3,
@@ -57,7 +59,7 @@ pub struct TernTelemetry {
     /// starboard, rad.
     pub apparent_angle: f64,
     pub true_angle: f64,
-    /// Heel, rad, starboard down positive; leeway, rad.
+    /// Heel, rad, starboard down positive; water-relative leeway, rad.
     pub heel: f64,
     pub leeway: f64,
     /// Speed made good straight upwind, m/s.
@@ -155,18 +157,8 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     };
 
     // The keel and the rudder, where they are in the water.
-    let wet_foil = |body: &mut super::body::RigidBody, spec: &foil::FoilSpec, deflect: f64| {
-        let at = body.point(v3(spec.at) - com);
-        let (height, _) = cx.water(at, 0.0);
-        let depth = height - (at.length() - cx.env.sea_radius);
-        if depth <= 0.0 {
-            return FoilForce::default();
-        }
-        let (_, velocity) = cx.water(at, depth);
-        foil::apply(body, spec, com, velocity, SEA_DENSITY, deflect, 1.0, 1.0)
-    };
-    let keel = wet_foil(body, &s.keel, 0.0);
-    wet_foil(body, &s.rudder, st.tiller);
+    let keel = cx.wet_foil(body, &s.keel, com, 0.0);
+    cx.wet_foil(body, &s.rudder, com, st.tiller);
     let (_, surface_water) = cx.water(body.position, 0.3);
     let froude = resist(
         body,
@@ -215,10 +207,11 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let forward = body.axis(FORWARD);
     let flat = |v: DVec3| v - up * v.dot(up);
     let over_ground = flat(body.velocity);
+    let through_water = flat(body.velocity - surface_water);
     let bow = flat(forward).normalize_or_zero();
-    let leeway = over_ground
+    let leeway = through_water
         .dot(flat(right).normalize_or_zero())
-        .atan2(over_ground.dot(bow).max(0.05));
+        .atan2(through_water.dot(bow).max(0.05));
     let upwind = flat(-true_wind).normalize_or_zero();
     let off_bow = |wind: DVec3| {
         let from = body.local(-wind);
@@ -233,6 +226,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     };
     *telemetry = Telemetry::Tern(TernTelemetry {
         speed: over_ground.length(),
+        water_speed: through_water.length(),
         true_wind,
         apparent,
         apparent_angle: off_bow(apparent),

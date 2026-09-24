@@ -2,29 +2,19 @@
 
 ## ADDED Requirements
 
-### Requirement: Foil forces remain oriented through reverse flow
-Every vehicle foil SHALL orient lift perpendicular to relative flow with a
-consistent span direction, including reverse flow. Drag SHALL oppose motion
-relative to the fluid; changing flow direction SHALL NOT flip lift at
-normal incidence through an artificial normal-vector sign change.
+### Requirement: Chase views frame the craft and avoid terrain
+The Tern's default chase view SHALL include its masthead. A chase camera
+SHALL shorten its boom when terrain obstructs it, with a positive clearance,
+and retain the requested zoom distance for when the obstruction clears.
+This correction SHALL NOT ease or delay raw mouse look.
 
-#### Scenario: Reverse flow from below
-- **WHEN** a symmetric horizontal foil meets reverse flow from below
-- **THEN** its vertical force is upward, and its net force does nonpositive work against its motion through the fluid
+#### Scenario: Canoe beside a steep shore
+- **WHEN** the Loon's desired chase camera lies behind shoreline terrain
+- **THEN** the camera is placed on the clear part of the boom instead of inside the ground
 
-### Requirement: Rotor steering requires rotor power
-The Kestrel's rotor steering SHALL be bounded by delivered rotor power.
-Zero throttle with assist off SHALL produce no powered rotor force or
-cyclic/yaw torque. Assisted controls SHALL stay finite when local gravity
-falls to zero.
-
-#### Scenario: Unpowered controls
-- **WHEN** an airborne stationary Kestrel has zero throttle and assist off and the pilot requests rotation
-- **THEN** its rotors produce no thrust or steering torque
-
-#### Scenario: Gravity fades away
-- **WHEN** the assisted Kestrel is stepped with zero local gravity and centred input
-- **THEN** its pose, velocity and controls remain finite
+#### Scenario: Tern rig in view
+- **WHEN** the Tern is boarded in its default chase view
+- **THEN** the masthead and hull fit within the vertical field of view
 
 ### Requirement: Boat instruments distinguish water motion from ground motion
 Boat telemetry SHALL report motion through water separately from motion over

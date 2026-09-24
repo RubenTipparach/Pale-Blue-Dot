@@ -125,3 +125,27 @@ and `--help` print.
 - **WHEN** a walker stands within reach of the Loon's boarding point and
   presses the interaction key
 - **THEN** the walker is aboard as the paddler and the vehicle camera is active
+
+### Requirement: Foil forces remain oriented through reverse flow
+Every vehicle foil SHALL orient lift perpendicular to relative flow with a
+consistent span direction, including reverse flow. Drag SHALL oppose motion
+relative to the fluid; changing flow direction SHALL NOT flip lift at
+normal incidence through an artificial normal-vector sign change.
+
+#### Scenario: Reverse flow from below
+- **WHEN** a symmetric horizontal foil meets reverse flow from below
+- **THEN** its vertical force is upward, and its net force does nonpositive work against its motion through the fluid
+
+### Requirement: Rotor steering requires rotor power
+The Kestrel's rotor steering SHALL be bounded by delivered rotor power.
+Zero throttle with assist off SHALL produce no powered rotor force or
+cyclic/yaw torque. Assisted controls SHALL stay finite when local gravity
+falls to zero.
+
+#### Scenario: Unpowered controls
+- **WHEN** an airborne stationary Kestrel has zero throttle and assist off and the pilot requests rotation
+- **THEN** its rotors produce no thrust or steering torque
+
+#### Scenario: Gravity fades away
+- **WHEN** the assisted Kestrel is stepped with zero local gravity and centred input
+- **THEN** its pose, velocity and controls remain finite

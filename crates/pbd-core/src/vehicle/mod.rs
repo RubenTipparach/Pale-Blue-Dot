@@ -223,6 +223,27 @@ impl Context<'_> {
             - self.sea.height(at.as_vec3(), self.env.sea_radius as f32) as f64
     }
 
+    /// A hydrofoil samples immersion and water velocity at its own force
+    /// point. Another surface's wetness cannot switch this one on or off.
+    pub fn wet_foil(
+        &self,
+        body: &mut RigidBody,
+        spec: &foil::FoilSpec,
+        com: DVec3,
+        deflection: f64,
+    ) -> foil::FoilForce {
+        let at = body.point(v3(spec.at) - com);
+        let depth = -self.above_sea(at);
+        if depth <= 0.0 {
+            return foil::FoilForce {
+                at,
+                ..Default::default()
+            };
+        }
+        let (_, velocity) = self.water(at, depth);
+        foil::apply(body, spec, com, velocity, SEA_DENSITY, deflection, 1.0, 1.0)
+    }
+
     pub fn water_view(&self) -> hull::Water<'_> {
         hull::Water {
             sea: &self.sea,

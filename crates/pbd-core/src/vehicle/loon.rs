@@ -4,7 +4,7 @@
 //! canoe cannot outrun its own blade. Rain and waves over the gunwale fill it,
 //! and the water sloshes to the low side, which is what swamps a canoe.
 
-use super::foil::{self, FoilForce};
+use super::foil::FoilForce;
 use super::hull::{bilge_flow, float, resist};
 use super::{
     Context, Craft, CraftState, FORWARD, Input, RIGHT, SEA_DENSITY, Telemetry, contact, v3, windage,
@@ -43,9 +43,12 @@ impl Default for LoonState {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LoonTelemetry {
-    /// Speed ahead, and sideways drift (starboard positive), m/s.
+    /// Speed ahead and sideways drift over ground (starboard positive), m/s.
     pub speed: f64,
     pub drift: f64,
+    /// Forward and sideways motion through local water, m/s.
+    pub water_speed: f64,
+    pub water_drift: f64,
     /// Heel, rad, starboard down positive.
     pub heel: f64,
     /// The lowest the gunwale stands over the sea, m.
@@ -175,13 +178,8 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     }
 
     // The hull's own grip on the water, and its resistance.
-    let lateral_at = body.point(v3(s.lateral.at) - com);
-    let (height, _) = cx.water(lateral_at, 0.0);
-    if height - (lateral_at.length() - cx.env.sea_radius) > -0.05 {
-        let (_, water) = cx.water(lateral_at, 0.05);
-        foil::apply(body, &s.lateral, com, water, SEA_DENSITY, 0.0, 1.0, 1.0);
-        foil::apply(body, &s.skeg, com, water, SEA_DENSITY, 0.0, 1.0, 1.0);
-    }
+    cx.wet_foil(body, &s.lateral, com, 0.0);
+    cx.wet_foil(body, &s.skeg, com, 0.0);
     let (_, surface_water) = cx.water(body.position, 0.1);
     resist(
         body,
@@ -229,9 +227,12 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let forward = body.axis(FORWARD);
     let flat = |v: DVec3| v - up * v.dot(up);
     let over_ground = flat(body.velocity);
+    let through_water = flat(body.velocity - surface_water);
     *telemetry = Telemetry::Loon(LoonTelemetry {
         speed: over_ground.dot(flat(forward).normalize_or_zero()),
         drift: over_ground.dot(flat(right).normalize_or_zero()),
+        water_speed: through_water.dot(flat(forward).normalize_or_zero()),
+        water_drift: through_water.dot(flat(right).normalize_or_zero()),
         heel,
         freeboard,
         blade,

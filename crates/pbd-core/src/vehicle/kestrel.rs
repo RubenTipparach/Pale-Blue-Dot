@@ -73,6 +73,8 @@ pub struct KestrelTelemetry {
     pub wet_loss: f64,
     /// The vertical speed at the last touchdown, m/s.
     pub touchdown: f64,
+    /// Collective currently commands vertical speed rather than moving the power lever.
+    pub climb_hold: bool,
 }
 
 /// The two wing panels' foils, from the wing's incidence and dihedral.
@@ -143,7 +145,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         let drift = body.velocity - up * body.velocity.dot(up);
         let centred = roll == 0.0 && pitch == 0.0;
         let hold = |component: f64| {
-            if centred {
+            if centred && g > 1e-6 {
                 (a.drift_gain as f64 * component / g)
                     .clamp(-a.drift_tilt as f64, a.drift_tilt as f64)
             } else {
@@ -171,7 +173,8 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     // Power: a climb hold in the hover, a lever otherwise.
     let vertical_speed = body.velocity.dot(up);
     let axis = body.axis(DVec3::new(0.0, sb, -st.nacelle.cos()));
-    if st.assist && hover > 0.5 {
+    let climb_hold = st.assist && hover > 0.5;
+    if climb_hold {
         let want = if occupied {
             climb * a.climb_mps as f64
         } else {
@@ -202,6 +205,10 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     // The rotors.
     let mut thrust_total = DVec3::ZERO;
     let mut rotor_up = 0.0;
+    // Differential thrust redistributes available collective; it cannot
+    // start a stopped rotor or demand power beyond either rotor's range.
+    let headroom = st.throttle.min(1.0 - st.throttle);
+    let differential = (cr * s.rotor.roll_mix as f64 * hover).clamp(-headroom, headroom);
     for side in [-1.0, 1.0] {
         let [x, y, z] = s.rotor.at;
         let at = body.point(DVec3::new(x as f64 * side, y as f64, z as f64) - com);
@@ -214,7 +221,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         let ratio = s.rotor.radius_m as f64 / (4.0 * clearance);
         let ground_effect =
             (1.0 / (1.0 - ratio * ratio)).clamp(1.0, s.rotor.ground_effect_max as f64);
-        let power = (st.throttle - side * cr * s.rotor.roll_mix as f64 * hover).clamp(0.0, 1.0);
+        let power = st.throttle - side * differential;
         let thrust = s.rotor.thrust_n as f64 * power * lost * (1.0 + (ground_effect - 1.0) * sb);
         let across = air_here - axis * air_here.dot(axis);
         let force = axis * thrust + across * (s.rotor.edgewise_drag as f64 * power);
@@ -222,7 +229,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         thrust_total += axis * thrust;
         rotor_up += force.dot(up);
     }
-    let authority = hover * (0.25 + st.throttle);
+    let authority = hover * thrust_total.length() / (2.0 * s.rotor.thrust_n as f64);
     body.twist(body.axis(DVec3::new(
         cp * s.rotor.pitch_torque as f64 * authority,
         -cy * s.rotor.yaw_torque as f64 * authority,
@@ -338,5 +345,6 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         } else {
             previous
         },
+        climb_hold,
     });
 }

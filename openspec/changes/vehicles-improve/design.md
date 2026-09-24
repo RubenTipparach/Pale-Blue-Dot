@@ -71,6 +71,27 @@ measurements; in-engine appearance is not yet claimed verified. Preserve
 that executable when its build completes and inspect baseline captures before
 visual edits, then record before/after evidence with the visual commit.
 
+Baseline captures subsequently inspected, before any app visual edits:
+`output/vehicles-improve/before-{kestrel,tern,loon}.png`, using the retained
+baseline executable, `--aboard KIND --frames 180 --time 12`, no saved world.
+The scene uses seed `0x5eed2026`, 1440x900, i7-9700F, 32 GiB system RAM,
+RTX 3070 8192 MiB, driver 595.97. The first 60 frames are the capture
+instrument's warm-up; no performance improvement is claimed (other builds
+were running, upload bytes and GPU memory were not measured).
+
+Visible findings: unbacked instrument text is difficult to separate from
+rain/water/terrain; the Tern's rig is cut off at the top of its default
+chase view; the Loon's default chase eye is inside the shoreline, with
+foreground terrain hiding almost the whole canoe. The Kestrel's flat
+single wing is visible. Add two concrete view corrections to the visual
+phase: target the Tern's rig with enough default stand-off to fit its mast,
+and shorten a chase boom immediately when its segment meets terrain.
+Use the existing body-local ground query, a small positive eye clearance
+and sampling finer than a voxel layer; keep the requested zoom distance so
+the view returns when clear. This is camera collision, not craft collision,
+and introduces no mouse smoothing. Test a blocked and clear boom and actual
+Tern mast projection before claiming the captures improved.
+
 ### Spec/code gaps kept separate
 
 The original proposal's status still says no Rust exists, whereas its design
@@ -131,6 +152,9 @@ camera interpolation, shader changes, or wholesale vehicle art replacement.
    fixed-tick progress or ship response. Test menu suppression and active
    camera selection in water-state preparation, including a translated
    frame. Use existing capture flags, not a new gameplay automation mode.
+   Order vehicle placement/following after the planet-frame update and before
+   transform propagation, then publish water-at-eye after propagation. This
+   prevents an origin change from mixing the previous centre with the new eye.
 7. **Readable vehicle panel.** Add a subdued backing and concise state/action
    text to the existing vehicle-only panel; retain binding hints from the
    authoritative table. Keep controls discoverable without changing key
@@ -141,6 +165,22 @@ camera interpolation, shader changes, or wholesale vehicle art replacement.
    screenshots assess legibility and geometry.
 
 ## Risks / Trade-offs
+
+Implementation measurement: the first power-bounded cyclic correction exposed
+a conversion regression (33.7 m height loss and 22.1 degrees pitch, versus
+12.9 m / 9.2 degrees baseline). Do not relax the conversion acceptance band.
+Measure the effect of calibrating the configured full-power cyclic/yaw
+ratings against the old controller's authority at nominal hover collective
+(0.625 for 1200 kg at 25 m/s^2 with two 24000 N rotors). The old formula
+delivered 0.875 times the rating there; a power-linear model needs 1.4 times
+the full-power rating to match that nominal point. Only change these validated
+ratings if the probe restores the conversion/hover bands; retain zero torque
+at zero delivered thrust and keep thrust, nacelle limits and stall unchanged.
+The measured 1.4 calibration restores conversion to 13.03 m loss and 9.17
+degrees maximum pitch, with 7.1283 m/s climb and 1.2102 m/s crosswind drift.
+Adopt 12600 N m pitch / 9800 N m yaw as the full-power ratings, regenerate
+the shipped RON from defaults, and pin conversion below 20 m loss / 12
+degrees pitch. No thrust or nacelle-rate tuning changes.
 
 - Reverse-flow forces affect sternway and sailing at broad angles: rerun
   every existing scenario and compare the deterministic probe.
@@ -163,3 +203,36 @@ the visual/instrument changes and tests/specs with before/after evidence.
 Every commit follows fmt check, both release package test suites offline,
 and all-target Clippy. Validate OpenSpec as well. No push or branch switch.
 Rollback is a normal revert; no saved data migration is needed.
+
+## Implementation measurements
+
+The same release probe after the core corrections (default torque scale 1):
+
+| Scenario | After | Comparison |
+| --- | --- | --- |
+| Kestrel climb, 3 s | 7.1283 m/s; 0.4916 degrees tilt | Essentially unchanged |
+| Kestrel crosswind, 20 s | 1.2102 m/s drift; 100.1550 m height | Essentially unchanged |
+| Kestrel conversion | 85.6500 m/s air; -15.1420 m/s climb; 9.1738 degrees maximum pitch; 86.9740 m minimum height; wing share 1 | Baseline range retained after rating calibration |
+| Zero gravity / unpowered controls | Finite / 0.000000 rad/s | Both demonstrated defects removed |
+| Tern close reach | 3.1754 m/s; 1.6425 m/s VMG; 19.5870 degrees heel | Unchanged |
+| Tern cross-current leeway | -0.7339 degrees | Down from 88.5674 degrees; small windage during the tick remains physical |
+| Loon alternating strokes | 1.3517 m/s; 50 strokes/min | Unchanged |
+| Loon stern rudder | +/-6.8091 degrees in 1 s | Unchanged, correct directions |
+| Forward / reverse tail foil force | +365.3430 / +176.1025 N upward | Forward unchanged; reverse corrected from -172.0212 N |
+
+The core release suite now has 176 passing tests and 6 existing ignored
+reports. New regressions cover the force direction/continuity, unpowered
+controls, vanishing gravity, conversion envelope, water-relative readings,
+rudder signs and independently immersed, locally sampled wet foils.
+Raw probe/check logs and retained executables are local ignored evidence in
+`output/vehicles-improve/`; the example and this table are committed so the
+measurements can be repeated without those files.
+
+Core commit verification: fmt and all-target Clippy pass offline; the core
+release suite passes. The first app run terminated with Windows
+`STATUS_ACCESS_VIOLATION`, without a Rust assertion failure. Its retained
+test executable passed all 130 library tests serially. The subsequent full
+`cargo test -p pbd-app --release --offline -j 2` run passed 135 library and
+14 desktop tests, including the separately prepared integration regressions.
+The process crash's underlying cause is not established; it is not silently
+counted as a passing run. OpenSpec validates all 56 items.

@@ -248,8 +248,11 @@ impl Default for KestrelSpec {
                 edgewise_drag: 55.0,
                 tilt_rate: 0.26,
                 roll_mix: 0.12,
-                pitch_torque: 9000.0,
-                yaw_torque: 7000.0,
+                // Full-power ratings: preserve the measured hover authority
+                // at nominal collective 0.625 after removing the old 0.25
+                // torque floor (0.875 / 0.625 = 1.4).
+                pitch_torque: 12600.0,
+                yaw_torque: 9800.0,
             },
             assist: AssistSpec {
                 hover_bank: 0.44,

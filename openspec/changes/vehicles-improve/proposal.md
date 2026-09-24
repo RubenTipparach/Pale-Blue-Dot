@@ -20,6 +20,8 @@ bug and visible geometry that disagrees with the forces it represents.
   for sailing, clear vehicle state/action hints, and water/ground speeds.
   Match the canoe's visible rudder blade and the Kestrel's wing panels to
   their physical state and configured geometry.
+- Frame the Tern's full rig in its default chase view and keep chase cameras
+  out of shoreline terrain, as exposed by the baseline captures.
 - Place a new fleet correctly on translated planets, and test vehicle
   camera selection, raw same-frame mouse look, controls and menu suppression.
 - Keep a reproducible measurement example and before/after release captures.
