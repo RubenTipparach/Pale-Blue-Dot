@@ -8,6 +8,9 @@
       on every core, a landing, or something else).
 
 ## 2. Frame pacing
+- [ ] Bands by slant distance from the player's height: one per-frame table of
+      band cosines, published to the GPU and read by the fine-set builder; tests
+      that level 11 is empty at 300 m up and the whole fine set at 2.4 km.
 - [ ] Gate fine-set rebuilds on clearance, from the projection, in every flight
       mode (manual flight included).
 - [ ] Leave a core free for the main thread, only if the frame log shows it helps.

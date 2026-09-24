@@ -50,6 +50,23 @@ applies: it is a setting that damps the roll and the swings.
 
 ## Frame pacing
 
+- **Bands measured from the player's true position, height included.** The
+  owner: "the player cant even see that! detailed sets should also account for
+  height radius". Today a band is a great-circle radius on the ground (`BAND_M`,
+  `band_cos` in `planet_lod.rs` and `planet_visibility.wgsl`), so from 1 km up
+  the 300 m finest band is still built and drawn under the ship, although the
+  nearest ground is 1 km away.
+  - **The rule:** a band of slant radius `B`, seen from height `h` above the
+    ground, covers the ground out to `sqrt(B^2 - h^2)`, and is empty once
+    `h >= B`.
+  - **One table:** the CPU computes the four band cosines each frame from the
+    player's height and publishes them in the view uniform. The GPU's level
+    choice and the fine set's builder both read that table; neither keeps its
+    own copy of `BAND_M`.
+  - **What it gives:** at 300 m up level 11 is gone; at 2.4 km up the whole fine
+    set is empty and nothing is built. The height used is the player's (the
+    ship's), never the free camera's, so looking around still changes no
+    level.
 - **The fine-set gate, in every flight mode.** Rebuilds are skipped while the
   camera's clearance is above the height where the finest band's 2.8 m tile
   falls under a pixel. That height is computed from the projection, not written
