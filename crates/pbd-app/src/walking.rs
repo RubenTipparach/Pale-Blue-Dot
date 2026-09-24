@@ -22,7 +22,7 @@ use crate::{
 };
 
 pub const EYE_HEIGHT: f32 = 1.6;
-const HALF_HEIGHT: f32 = 0.9;
+pub const HALF_HEIGHT: f32 = 0.9;
 const BODY_RADIUS: f32 = 0.3;
 const CONTACT_SKIN: f32 = 0.015;
 const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
@@ -318,13 +318,30 @@ fn setup_walking(world: &mut World) {
     set_active_mode(world, config.start_walking);
 }
 
+/// Who the player is being: on foot, in the skiff, or aboard a vehicle.
+/// Exactly one camera is active and it is the view's; every system that reads
+/// "the camera" reads that one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum View {
+    Walking,
+    Flying,
+    Vehicle,
+}
+
 fn set_active_mode(world: &mut World, walking: bool) {
+    set_view(world, if walking { View::Walking } else { View::Flying });
+}
+
+/// Hand the player to a view: its body, its input and its camera, and nothing
+/// else's.
+pub fn set_view(world: &mut World, view: View) {
+    let walking = view == View::Walking;
     let body = world.resource::<WalkingState>().body;
     world.resource_mut::<WalkingState>().active = walking;
     world.resource_mut::<WalkingReadout>().active = walking;
     world
         .resource_mut::<FlightInputState>()
-        .set_enabled(!walking);
+        .set_enabled(view == View::Flying);
     if walking {
         world
             .entity_mut(body)
@@ -339,24 +356,33 @@ fn set_active_mode(world: &mut World, walking: bool) {
         .iter(world)
         .collect();
     for ship in ships {
-        if walking {
+        if view != View::Flying {
             world.entity_mut(ship).insert(ColliderDisabled);
         } else {
             world.entity_mut(ship).remove::<ColliderDisabled>();
         }
     }
     let mut camera_modes = Vec::new();
-    for (entity, mut camera, walker, flight) in world
-        .query::<(Entity, &mut Camera, Has<WalkingCamera>, Has<FlightCamera>)>()
+    for (entity, mut camera, walker, flight, vehicle) in world
+        .query::<(
+            Entity,
+            &mut Camera,
+            Has<WalkingCamera>,
+            Has<FlightCamera>,
+            Has<crate::vehicles::VehicleCamera>,
+        )>()
         .iter_mut(world)
     {
         if walker {
             camera.is_active = walking;
         }
         if flight {
-            camera.is_active = !walking;
+            camera.is_active = view == View::Flying;
         }
-        if walker || flight {
+        if vehicle {
+            camera.is_active = view == View::Vehicle;
+        }
+        if walker || flight || vehicle {
             camera_modes.push((entity, camera.is_active));
         }
     }
@@ -380,6 +406,13 @@ fn switch_mode(world: &mut World) {
     if world
         .get_resource::<crate::controls::MenuOpen>()
         .is_some_and(|open| open.0)
+    {
+        return;
+    }
+    // Aboard a vehicle, F is not the way out: G is, and it is the vehicle's.
+    if world
+        .get_resource::<crate::vehicles::Aboard>()
+        .is_some_and(|aboard| aboard.0.is_some())
     {
         return;
     }
@@ -439,7 +472,7 @@ fn switch_mode(world: &mut World) {
 /// looking along `view`, and not grounded: what leaving flight is. The body's
 /// centre is the eye less the eye height, which is the inverse of where the
 /// walk-to-fly handoff puts the ship.
-fn drop_walker(world: &mut World, eye: Vec3, velocity: Vec3, view: Quat) {
+pub fn drop_walker(world: &mut World, eye: Vec3, velocity: Vec3, view: Quat) {
     let up = eye.normalize_or(Vec3::Y);
     let position = eye - up * (EYE_HEIGHT - HALF_HEIGHT);
     let body = world.resource::<WalkingState>().body;

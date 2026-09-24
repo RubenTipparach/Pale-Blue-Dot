@@ -449,3 +449,48 @@ fn the_cloud_pace_slows_the_cloud_and_nothing_else() {
         "half pace moved the cloud {ratio:.3} as far as full pace"
     );
 }
+
+/// The waves follow the wind with a lag, and only over the sea.
+#[test]
+fn the_sea_state_follows_the_wind_over_the_sea_with_a_lag() {
+    let mut a = air(quiet());
+    let n = a.grid.len();
+    let sea = (0..n).find(|&i| a.surface.ocean[i]).expect("a sea cell");
+    let land = (0..n).find(|&i| !a.surface.ocean[i]).expect("a land cell");
+    let dt = a.settings.dt_s;
+    let tau = a.settings.sea_build_s;
+    a.wind[sea] = a.grid.centre[sea].any_orthonormal_vector() * 10.0;
+    a.sea[sea] = 0.0;
+    a.waves(dt);
+    let one = 10.0 * (1.0 - (-dt / tau).exp());
+    assert!((a.sea[sea] - one).abs() < 1e-4, "{} vs {one}", a.sea[sea]);
+    for _ in 0..(5.0 * tau / dt) as usize {
+        a.waves(dt);
+    }
+    assert!((a.sea[sea] - 10.0).abs() < 0.1);
+    a.wind[land] = a.grid.centre[land].any_orthonormal_vector() * 10.0;
+    a.waves(dt);
+    assert_eq!(a.sea[land], 0.0);
+}
+
+/// A save from before the sea state existed still loads; its sea is taken to
+/// have caught up with its wind.
+#[test]
+fn a_save_from_before_the_sea_state_still_loads() {
+    let mut a = air(quiet());
+    for _ in 0..20 {
+        a.step(SUN, &[]);
+    }
+    let n = a.grid.len();
+    let current = a.to_bytes();
+    // The old layout: the old header, and every scalar field but the last.
+    let header = MAGIC.len() + 16;
+    let mut old = b"PBDATM01".to_vec();
+    old.extend_from_slice(&current[MAGIC.len()..header]);
+    old.extend_from_slice(&current[header..header + n * 4 * (SCALARS - 1)]);
+    old.extend_from_slice(&current[header + n * 4 * SCALARS..]);
+    let mut b = air(quiet());
+    b.restore(&old).expect("an old save");
+    assert_eq!(b.wind, a.wind);
+    assert_eq!(b.sea, b.settled_sea());
+}

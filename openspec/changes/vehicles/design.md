@@ -2,10 +2,12 @@
 
 Three craft (a VTOL tiltrotor, a sailing keelboat and a paddled canoe), the sea
 they float on, the air that pushes them, and the rules that keep them in the
-world after you step out. **None of it is built.** The physics exists as the JS
-prototype in `docs/mockups/vehicles.html`
-([published](https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D)), which is the
-reference the Rust port will be held to.
+world after you step out. The JS prototype in `docs/mockups/vehicles.html`
+([published](https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D)) was approved
+and the Rust port is **built**: the sea, the gusts, the three craft, boarding
+and saving. Section 11 records where the build departs from this design and
+what is still open. The requirements that are true and tested have moved to
+`openspec/specs`; those left in this change are not yet proven.
 
 ## 1. What the engine has today, measured
 
@@ -397,3 +399,80 @@ there is nothing in it for the port.
    storms are local, so fetch-limiting (`max_hs_m`) may be wanted. Its
    default is off until someone has sailed one.
 3. **Keys.** G for board and leave, and T for moor, are proposals.
+
+## 11. What was built, and where it departs from this design
+
+Built and tested: `pbd_core::sea`, `pbd_core::wind`, `pbd_core::vehicle` (its
+`body`, `foil`, `hull`, `spec` and `record` modules and the three craft), the
+sea state in the atmosphere step (save format `PBDATM02`, with `PBDATM01` still
+loading), `assets/shaders/sea.wgsl` imported by `water.wgsl`, and
+`pbd_app::vehicles` (the plugin, placement, drawing, the camera and the HUD).
+The departures, each for a reason found while building:
+
+1. **Each craft integrates itself, not as an Avian body.** Avian's
+   `PhysicsSchedule` holds a force constant across its four substeps.
+   Buoyancy over hundreds of cells, the foils and the rotor inflow all depend
+   on the pose, which moves within a tick, and forces held for the whole tick
+   would be integrated against a stale pose (reasoned, not measured). So
+   `Craft::step` does semi-implicit Euler itself, at 60 Hz x 4 = 240 Hz,
+   re-evaluating every force at every substep. The cost is that a craft is not
+   in Avian's world: it contacts the terrain's own function, not colliders. A
+   walker does not collide with a craft, and craft do not collide with each
+   other. The design's contact rule was never Avian-specific, and that part
+   holds.
+2. **The table is 3D plane waves**: 12 Fibonacci directions x 5 wavelength
+   bands (7 to 112 m), plus one swell (70 m), each travelling along a
+   body-local direction rather than along `p.x`/`p.z`. A direction's
+   amplitude fades out as it leaves the local tangent plane, so on a sphere no
+   wave runs vertically. That is 61 components, not 31. The GPU check runs
+   the shipped WGSL on a headless adapter and agrees with the core to 1 mm at
+   360 points.
+3. **The ground query takes a point, not a direction.** It is
+   `PlanetContact::stand`, so a craft over a cave mouth or under an overhang
+   gets the column tier's answer, as the walker does.
+4. **The shader's sea state is the active camera's.** The water pass draws
+   the table at the sea state under the camera. A hull floats on the state
+   under the hull. They differ only by how much the weather changes between
+   the two points. Neither the weather-map channel nor the per-vertex state
+   is built (task 2).
+5. **Two spec corrections from the port:**
+   - The Kestrel's rotor hub moved from z 0.15 to z 0, over the centre of
+     mass. At 0.15 m aft, full hover thrust made a 4.5 kN m nose-down moment
+     that the cyclic spent itself holding.
+   - The Loon's `section_power` went from 1.6 to 4.0. The round section put
+     a laden canoe on too narrow a waterplane, and it listed 25 degrees.
+6. **T anchors only.** The world has no bollards yet, so "moor to a bollard
+   within 14 m" is not built. T drops an anchor where the seabed under the bow
+   is within 35 m, with a rode of 3 x depth + 2 m, or weighs it.
+7. **Occupancy is not saved.** While aboard, the walker is parked at the
+   craft's exit point rather than at the seat. The pose autosave therefore
+   writes a place a player can stand, and a player who quits aboard reloads
+   on foot beside the craft, which stays unattended until boarded.
+8. **No out-of-region step.** All three craft are stepped in full wherever
+   they are: three rigid bodies at 240 Hz are cheap. Sleeping and the coarse
+   drift step wait for the fleet to grow.
+9. **The chase view is rigid, not eased.** It turns with the craft's heading,
+   not its roll or pitch, so a heeling boat does not tip the horizon. Mouse
+   and wheel act on raw displacement.
+10. **The HUD is a text panel.** It is not yet the mockup's compass rose and
+    chips. Its key hints come from `controls::BINDINGS` through
+    `controls::line`, so the panel and the settings page read one table.
+11. **Where a new world's craft go.**
+    - The Kestrel goes on the first level pad (corners within 0.6 m over
+      5.5 m) 16 to 40 m from the player, nose toward them.
+    - The Loon goes in the nearest water at least 1.2 m deep.
+    - The Tern goes in the nearest water at least 3 m deep round the Loon,
+      at least 14 m from it.
+    - Both boats are anchored, bow out to sea.
+    - On the default world the Kestrel lands 16.3 m from the spawn, and the
+      nearest water deep enough for the Loon is 957 m away (measured).
+12. **Capture flags.** `--aboard kestrel|tern|loon` boards that craft once the
+    fleet is in, through the same seat path G takes. `--seat` takes the seat
+    view. A headless run has nobody to walk up to a craft.
+
+Still open: the owner's in-game check of the feel (section 10) and the three
+requirements left in this change:
+- the per-vertex alias filter, which no GPU test pins yet;
+- swamping, which no test pins yet;
+- the vehicle camera as the source of the water state.
+

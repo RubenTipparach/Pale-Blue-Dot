@@ -212,6 +212,7 @@ pub struct PlanetPlugin;
 
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(crate::sea::SeaPlugin);
         app.add_plugins((
             ExtractResourcePlugin::<PlanetBase>::default(),
             ExtractResourcePlugin::<lod::PlanetFine>::default(),

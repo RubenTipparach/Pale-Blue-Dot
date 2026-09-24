@@ -122,13 +122,16 @@ not a guarantee for arbitrary teleports or unbounded simulation steps.
 .\run.bat --capture output/captures/walk.png --walk --frames 180
 .\run.bat --capture output/captures/orbit.png --view orbit --frames 180
 .\run.bat --tour --fixed-dt --capture output/captures/tour.png --frames 1800
+.\run.bat --capture output/captures/tern.png --aboard tern --frames 240
 ```
 
 `--walk` explicitly selects the default walking mode and captures its ground
 spawn when combined with `--capture`. `--fly` starts manual flight and captures
 its flight spawn when combined with `--capture`. Without `--walk`, `--fly`, or
 `--tour`, a capture uses a static photograph; its available `--view` values are
-`orbit`, `coast`, `surface`, `night`, and `pole`.
+`orbit`, `coast`, `surface`, `night`, and `pole`. `--aboard kestrel`, `tern` or
+`loon` walks, then boards that craft as soon as the world's craft are placed and
+captures its chase view; add `--seat` for the view from the seat.
 
 The ordinary flight tour follows a great circle reaching approximately
 28.6 degrees north and south. The polar tour follows a meridian through both

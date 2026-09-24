@@ -191,6 +191,9 @@ pub struct AtmosphereSettings {
     pub ocean_drag_s: f32,
     /// How fast the sea-surface height settles, s.
     pub ocean_relax_s: f32,
+    /// How long the waves take to follow the wind, s: the sea state's lag. A
+    /// squall's sea builds over this and outlasts it by as much.
+    pub sea_build_s: f32,
 
     // --- Forcing (the weather slider) ---
     /// Radius round the player the slider brews a storm in, m.
@@ -276,6 +279,7 @@ impl Default for AtmosphereSettings {
             current_per_wind: 0.08,
             ocean_drag_s: 3000.0,
             ocean_relax_s: 20000.0,
+            sea_build_s: 180.0,
             forcing_radius_m: 700.0,
             forcing_s: 5.0,
             forcing_cloud_kg: 1.2,
@@ -306,6 +310,7 @@ impl AtmosphereSettings {
             ("charge_decay_s", self.charge_decay_s),
             ("ocean_drag_s", self.ocean_drag_s),
             ("ocean_relax_s", self.ocean_relax_s),
+            ("sea_build_s", self.sea_build_s),
             ("forcing_s", self.forcing_s),
             ("storm_radius_m", self.storm_radius_m),
             ("mesoscale_every_s", self.mesoscale_every_s),

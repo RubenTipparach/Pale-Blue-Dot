@@ -109,6 +109,8 @@
     current_per_wind: 0.08,
     ocean_drag_s: 3000.0,
     ocean_relax_s: 20000.0,
+    // The waves take this long to follow the wind, s.
+    sea_build_s: 180.0,
 
     // The weather slider brews a storm round the player.
     forcing_radius_m: 700.0,

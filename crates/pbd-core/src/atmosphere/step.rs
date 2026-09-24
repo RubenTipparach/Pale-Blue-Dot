@@ -42,6 +42,7 @@ impl Atmosphere {
             self.refresh_mesoscale();
         }
         self.ocean(dt);
+        self.waves(dt);
         self.guard();
         self.step += 1;
     }
@@ -283,6 +284,19 @@ impl Atmosphere {
 
     /// Any cell a bad value reached goes back to its climate, whole, so a NaN
     /// cannot spread across the planet from one cell.
+    /// The sea state follows the wind over the sea, with a lag: waves take
+    /// time to build and time to die down.
+    pub(super) fn waves(&mut self, dt: f32) {
+        let follow = 1.0 - (-dt / self.settings.sea_build_s).exp();
+        for i in 0..self.grid.len() {
+            self.sea[i] = if self.surface.ocean[i] {
+                self.sea[i] + (self.wind[i].length() - self.sea[i]) * follow
+            } else {
+                0.0
+            };
+        }
+    }
+
     fn guard(&mut self) {
         for i in 0..self.grid.len() {
             let fine = self.phi[i].is_finite()
@@ -293,7 +307,8 @@ impl Atmosphere {
                 && self.cloud[i].is_finite()
                 && self.charge[i].is_finite()
                 && self.eta[i].is_finite()
-                && self.current[i].is_finite();
+                && self.current[i].is_finite()
+                && self.sea[i].is_finite();
             if !fine {
                 let climate = super::climate_k(self.grid.centre[i].y);
                 self.phi[i] = 0.0;
@@ -305,6 +320,7 @@ impl Atmosphere {
                 self.charge[i] = 0.0;
                 self.eta[i] = 0.0;
                 self.current[i] = Vec3::ZERO;
+                self.sea[i] = 0.0;
             }
             self.vapour[i] = self.vapour[i].max(0.0);
             self.cloud[i] = self.cloud[i].max(0.0);

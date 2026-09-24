@@ -50,6 +50,11 @@ pub struct Launch {
     /// Walk mode, placed at the shoreline and holding forward, so a capture can
     /// photograph the water being entered. A walker with no input never moves.
     pub swim: bool,
+    /// `--aboard KIND` boards the Kestrel, Tern or Loon once the fleet is in,
+    /// and `--seat` takes the seat rather than the chase view: a headless run
+    /// has nobody to walk up to a craft and press G. Implies `--walk`.
+    pub aboard: Option<pbd_core::vehicle::Kind>,
+    pub seat: bool,
     /// Static capture instrument: translate the scene within the local frame.
     pub render_offset: Vec3,
     /// Capture instrument for the `shore` view: camera height above the last
@@ -130,6 +135,8 @@ impl Launch {
             fly: false,
             walk: false,
             swim: false,
+            aboard: None,
+            seat: false,
             render_offset: Vec3::ZERO,
             height: None,
             spawn: None,
@@ -253,6 +260,16 @@ impl Launch {
                     result.walk = true;
                     result.swim = true;
                 }
+                "--aboard" => {
+                    i += 1;
+                    let key = args.get(i).expect("--aboard requires a craft");
+                    result.aboard = Some(
+                        pbd_core::vehicle::Kind::from_key(key)
+                            .expect("--aboard knows kestrel, tern and loon"),
+                    );
+                    result.walk = true;
+                }
+                "--seat" => result.seat = true,
                 "--fixed-dt" => result.fixed = true,
                 "--render-offset" => {
                     let mut components = [0.0; 3];
@@ -571,7 +588,11 @@ pub fn run(args: &[String]) {
             yaw: launch.yaw.unwrap_or(0.0).to_radians(),
             ..default()
         })
-        .add_plugins(WalkingPlugin);
+        .add_plugins((WalkingPlugin, pbd_app::vehicles::VehiclePlugin))
+        .insert_resource(pbd_app::vehicles::VehicleScript {
+            board: launch.aboard,
+            seat: launch.seat,
+        });
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
             // after the input clear and before the walking input reads them,
@@ -647,6 +668,11 @@ fn load_world(world: &mut World) {
         return;
     };
     let name = slot.file.name.clone();
+    // The craft of the world being left are written into it before the queue
+    // is drained, and are gone from the scene before the next world's arrive.
+    if let Some(file) = pbd_app::vehicles::put_away(world) {
+        world.resource_mut::<WorldSave>().snapshot_vehicles(&file);
+    }
     let root = {
         let open = world.resource::<WorldSave>();
         // Everything queued for the world being left goes down before the
@@ -755,11 +781,16 @@ fn autosave(
 fn drain_saves(
     exits: MessageReader<AppExit>,
     air: Option<Res<pbd_app::atmosphere::Air>>,
+    fleet: Option<Res<pbd_app::vehicles::Fleet>>,
+    vehicles: Query<&pbd_app::vehicles::Vehicle>,
     mut save: ResMut<WorldSave>,
 ) {
     if !exits.is_empty() {
         if let Some(air) = air {
             save.snapshot_weather(air.now.to_bytes());
+        }
+        if let Some(file) = fleet.and_then(|f| pbd_app::vehicles::fleet_file(&f, &vehicles)) {
+            save.snapshot_vehicles(&file);
         }
         save.drain();
     }

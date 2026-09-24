@@ -89,13 +89,9 @@ pub struct WaterSettings {
     /// How far the sheet sits below the sea-level radius, metres, so a beach at
     /// sea level stands clear of the swell the way Tenebris's does.
     pub depth_offset_m: f32,
-    /// Vertex swell amplitude, metres.
-    pub swell_amplitude_m: f32,
-    /// Vertex swell spatial scale, cycles per metre (dimensionless multiplier
-    /// on the three sine frequencies).
-    pub swell_frequency: f32,
-    /// Vertex swell speed multiplier.
-    pub swell_speed: f32,
+    /// The sea's surface: the table the water cap draws and the hulls float
+    /// on (`pbd_core::sea`).
+    pub sea: pbd_core::sea::SeaSettings,
     /// fbm sample scale, cells per metre.
     pub ripple_scale: f32,
     /// fbm time multiplier.
@@ -153,8 +149,8 @@ pub struct WaterSettings {
     pub underwater_distortion: f32,
     /// Depth-blur blend while the lens is wet, 0..1.
     pub wet_blur: f32,
-    /// Half-width of the straddling band around the sea surface, metres,
-    /// added to the swell amplitude.
+    /// Half-width of the straddling band around the sea surface under the
+    /// camera, metres.
     pub partial_band_m: f32,
     /// Seconds the lens stays wet after surfacing.
     pub emerge_dry_s: f32,
@@ -172,9 +168,7 @@ impl Default for WaterSettings {
         Self {
             time_scale: 0.75,
             depth_offset_m: 0.5,
-            swell_amplitude_m: 0.5,
-            swell_frequency: 2.0,
-            swell_speed: 1.0,
+            sea: pbd_core::sea::SeaSettings::default(),
             ripple_scale: 1.5,
             ripple_speed: 1.0,
             wave_steepness: 0.45,
@@ -221,9 +215,6 @@ impl Validated for WaterSettings {
             &[
                 s.time_scale,
                 s.depth_offset_m,
-                s.swell_amplitude_m,
-                s.swell_frequency,
-                s.swell_speed,
                 s.ripple_scale,
                 s.ripple_speed,
                 s.wave_steepness,
@@ -246,6 +237,7 @@ impl Validated for WaterSettings {
                 s.detail_fade,
             ],
         )?;
+        s.sea.validate()?;
         non_negative("absorption_per_m", &s.absorption_per_m)?;
         non_negative("deep_color", &s.deep_color)?;
         non_negative("sky_horizon_color", &s.sky_horizon_color)?;
@@ -281,6 +273,9 @@ impl Validated for WaterSettings {
 pub struct WeatherSettings {
     /// Seconds for ground wetness to follow the rain intensity (e-fold).
     pub wet_fade_tau_s: f32,
+    /// The wind a craft feels: the atmosphere's wind sheared with height and
+    /// gusting (`pbd_core::wind`).
+    pub gusts: pbd_core::wind::GustSettings,
 
     // ---- Where it rains, and how hard, is the simulated atmosphere's
     // (`atmosphere.ron`); these are how rain LOOKS.
@@ -477,6 +472,7 @@ impl Default for WeatherSettings {
     fn default() -> Self {
         Self {
             wet_fade_tau_s: 1.6,
+            gusts: pbd_core::wind::GustSettings::default(),
             rain_fall_mps: 70.0,
             rain_width_m: 0.012,
             rain_streak_m: 1.5,
@@ -566,6 +562,7 @@ impl Default for WeatherSettings {
 impl Validated for WeatherSettings {
     fn validate(&self) -> Result<(), String> {
         let s = self;
+        s.gusts.validate()?;
         non_negative(
             "weather scalars",
             &[
@@ -929,6 +926,17 @@ impl Validated for pbd_core::atmosphere::AtmosphereSettings {
     }
 }
 
+/// The three craft (`pbd_core::vehicle::spec`), from `vehicles.ron`.
+impl Validated for pbd_core::vehicle::spec::VehicleSpecs {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::vehicle::spec::VehicleSpecs::validate(self)
+    }
+}
+
+/// Every number the craft are made of, loaded once.
+#[derive(Resource, Clone, Debug, PartialEq, Default)]
+pub struct VehiclesConfig(pub pbd_core::vehicle::spec::VehicleSpecs);
+
 pub struct ConfigPlugin;
 
 impl Plugin for ConfigPlugin {
@@ -938,6 +946,7 @@ impl Plugin for ConfigPlugin {
             .insert_resource(load::<ScatterSettings>("scatter"))
             .insert_resource(load::<ColumnSettings>("column"))
             .insert_resource(AtmosphereConfig(load("atmosphere")))
+            .insert_resource(VehiclesConfig(load("vehicles")))
             .add_plugins((
                 bevy::render::extract_resource::ExtractResourcePlugin::<WaterSettings>::default(),
                 bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
@@ -954,6 +963,7 @@ mod tests {
     const WATER_RON: &str = include_str!("../../../assets/config/water.ron");
     const WEATHER_RON: &str = include_str!("../../../assets/config/weather.ron");
     const ATMOSPHERE_RON: &str = include_str!("../../../assets/config/atmosphere.ron");
+    const VEHICLES_RON: &str = include_str!("../../../assets/config/vehicles.ron");
 
     /// The shipped files are the defaults written out. If either drifts from
     /// the code, one of them is describing a different ocean, and this is the
@@ -970,16 +980,16 @@ mod tests {
             ron::from_str(ATMOSPHERE_RON).unwrap();
         Validated::validate(&atmosphere).unwrap();
         assert_eq!(atmosphere, Default::default());
+        let vehicles: pbd_core::vehicle::spec::VehicleSpecs = ron::from_str(VEHICLES_RON).unwrap();
+        Validated::validate(&vehicles).unwrap();
+        assert_eq!(vehicles, Default::default());
     }
 
     #[test]
     fn a_missing_field_inherits_and_a_present_zero_is_zero() {
         let partial: WaterSettings = ron::from_str("(fog_max: 0.0)").unwrap();
         assert_eq!(partial.fog_max, 0.0);
-        assert_eq!(
-            partial.swell_amplitude_m,
-            WaterSettings::default().swell_amplitude_m
-        );
+        assert_eq!(partial.sea, WaterSettings::default().sea);
     }
 
     #[test]

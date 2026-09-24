@@ -15,9 +15,12 @@ pub mod light;
 pub mod orbit;
 pub mod overlay;
 pub mod planet_gen;
+pub mod sea;
 pub mod terrain;
 pub mod topology;
+pub mod vehicle;
 pub mod weather;
+pub mod wind;
 pub mod worms;
 
 pub use glam::{DQuat, DVec3};

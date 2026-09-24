@@ -4,6 +4,19 @@
 // Tenebris's weather.yaml and the values are its shipped ones.
 (
     wet_fade_tau_s: 1.6,
+    // The wind a craft feels (pbd_core::wind): gust strength as a share of
+    // the mean wind, and more of it per mm/h of rain; roughness lengths (m)
+    // for the log-law profile; its cap; the downdraft under rain, m/s per
+    // sqrt(mm/h); and the heights (m) over which it turns to the cloud wind.
+    gusts: (
+        gustiness: 0.25,
+        gustiness_per_mmh: 0.0125,
+        roughness_sea_m: 0.0005,
+        roughness_land_m: 0.03,
+        shear_max: 1.4,
+        downdraft: 0.3,
+        aloft_m: (150.0, 300.0),
+    ),
 
     // Where and when it rains is the simulated atmosphere's (atmosphere.ron);
     // what follows is how rain looks.

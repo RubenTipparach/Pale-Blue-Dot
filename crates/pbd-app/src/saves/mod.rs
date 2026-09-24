@@ -17,6 +17,7 @@ use bevy::prelude::*;
 use format::{Record, WorldFile};
 use pbd_core::edits::{Edit, Edits};
 use pbd_core::inventory::Slots;
+use pbd_core::vehicle::record::VehicleFile;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use writer::SaveWriter;
@@ -32,6 +33,10 @@ pub const WEATHER: &str = "weather.bin";
 /// than anything a player did: losing the last minute of it costs a minute of
 /// sky, and the simulation carries on from any state it is given.
 pub const WEATHER_SAVE_S: f32 = 60.0;
+/// Every craft in the world (`pbd_core::vehicle::record`), replaced whole
+/// whenever one is made, boarded, left, made fast, cast off or comes to rest,
+/// and on the pose's cadence while any moves.
+pub const VEHICLES: &str = "vehicles.ron";
 /// Where the slots live, relative to the working directory.
 pub const ROOT: &str = "saves";
 /// The longest a world's name may be, in bytes. Tenebris's `NAME_MAX`, for
@@ -174,6 +179,8 @@ pub struct WorldSave {
     pub world_seconds: Option<f64>,
     /// The atmosphere's saved state, for the load to restore.
     pub weather: Option<Vec<u8>>,
+    /// The craft as last written, for the load to put back.
+    pub vehicles: Option<VehicleFile>,
     slot: Option<Slot>,
     root: PathBuf,
     writer: SaveWriter,
@@ -188,6 +195,7 @@ impl Default for WorldSave {
             pose: None,
             world_seconds: None,
             weather: None,
+            vehicles: None,
             slot: None,
             root: PathBuf::from(ROOT),
             writer: SaveWriter::none(),
@@ -217,6 +225,7 @@ impl WorldSave {
         });
         let world_seconds = slot.file.world_seconds.filter(|s| s.is_finite());
         let weather = std::fs::read(directory.join(WEATHER)).ok();
+        let vehicles = read_vehicles(&directory.join(VEHICLES));
         Self {
             edits,
             carried,
@@ -224,6 +233,7 @@ impl WorldSave {
             pose,
             world_seconds,
             weather,
+            vehicles,
             slot: Some(slot),
             writer: SaveWriter::new(&directory),
             root,
@@ -315,10 +325,49 @@ impl WorldSave {
         self.weather = Some(bytes);
     }
 
+    /// Queue every craft. Whole-file, like the pose. Refused, and reported
+    /// as refused, once the writer has failed: the caller keeps the write
+    /// owed rather than believing a craft is saved that is not.
+    pub fn snapshot_vehicles(&mut self, file: &VehicleFile) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        self.vehicles = Some(file.clone());
+        let Some(slot) = self.slot.as_ref() else {
+            return true;
+        };
+        let body = ron::ser::to_string_pretty(file, ron::ser::PrettyConfig::default())
+            .expect("a vehicle file is plain data");
+        let path = self.root.join(&slot.id).join(VEHICLES);
+        self.writer.replace(path, body);
+        true
+    }
+
     /// Wait for everything queued to reach the disk. Called on the way out,
     /// which is the one place a player is already waiting.
     pub fn drain(&self) {
         self.writer.drain();
+    }
+}
+
+/// The craft file, or nothing: a world with no craft yet, or a file this
+/// build cannot read, which is logged and not a reason to refuse the world.
+fn read_vehicles(path: &Path) -> Option<VehicleFile> {
+    let text = std::fs::read_to_string(path).ok()?;
+    match ron::from_str::<VehicleFile>(&text) {
+        Ok(file) if file.version == pbd_core::vehicle::record::RECORD_VERSION => Some(file),
+        Ok(file) => {
+            warn!(
+                "{}: craft layout {} is not this build's",
+                path.display(),
+                file.version
+            );
+            None
+        }
+        Err(error) => {
+            warn!("{}: {error}", path.display());
+            None
+        }
     }
 }
 
@@ -420,6 +469,31 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// One craft left at anchor: what a vehicle file holds.
+    fn parked() -> VehicleFile {
+        use pbd_core::vehicle::{Craft, Hulls, Kind, spec::VehicleSpecs};
+        let specs = std::sync::Arc::new(VehicleSpecs::default());
+        let hulls = Hulls::new(&specs);
+        let mut craft = Craft::new(
+            Kind::Tern,
+            7,
+            specs,
+            hulls,
+            pbd_core::DVec3::new(0.0, 4799.5, 0.0),
+            pbd_core::DQuat::IDENTITY,
+        );
+        craft.mooring = Some(pbd_core::vehicle::Mooring {
+            at: pbd_core::DVec3::new(0.0, 4790.0, -3.0),
+            length: 30.0,
+            anchored: true,
+        });
+        VehicleFile {
+            version: pbd_core::vehicle::record::RECORD_VERSION,
+            next_id: 8,
+            vehicles: vec![craft.record()],
+        }
+    }
+
     /// The whole feature, end to end and on the disk: dig, put the pose down,
     /// and open it again as another run would.
     #[test]
@@ -451,6 +525,7 @@ mod tests {
                 40.5 * 2880.0,
             );
             save.snapshot_weather(vec![7, 1, 2, 3]);
+            assert!(save.snapshot_vehicles(&parked()));
             save.drain();
         }
         let listed = list(&root);
@@ -468,6 +543,11 @@ mod tests {
         assert!((pose.pitch + 0.25).abs() < 1e-6);
         assert_eq!(reopened.world_seconds, Some(40.5 * 2880.0), "and the clock");
         assert_eq!(reopened.weather, Some(vec![7, 1, 2, 3]), "and the weather");
+        assert_eq!(
+            reopened.vehicles,
+            Some(parked()),
+            "and every craft, where it was left"
+        );
         assert_eq!(reopened.slot().unwrap().file.seed, 4242, "and its world");
         let _ = std::fs::remove_dir_all(&root);
     }

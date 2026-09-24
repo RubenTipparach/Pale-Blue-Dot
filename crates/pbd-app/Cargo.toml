@@ -25,3 +25,6 @@ serde = { version = "1", features = ["derive"] }
 # that would fail in the pipeline cache fails the suite first. The same naga
 # wgpu already carries; a test-only dependency.
 naga = { version = "27", features = ["wgsl-in"] }
+# The sea's WGSL is RUN on a GPU adapter in a test and compared with the Rust it
+# transcribes (lavapipe in a container). The same wgpu Bevy already carries.
+wgpu = { version = "27", default-features = false, features = ["vulkan", "wgsl"] }

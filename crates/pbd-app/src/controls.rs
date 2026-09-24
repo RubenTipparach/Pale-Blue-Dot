@@ -94,13 +94,18 @@ impl Key {
                 KeyCode::KeyB => "B",
                 KeyCode::KeyD => "D",
                 KeyCode::KeyE => "E",
+                KeyCode::KeyC => "C",
                 KeyCode::KeyF => "F",
+                KeyCode::KeyG => "G",
                 KeyCode::KeyP => "P",
                 KeyCode::KeyQ => "Q",
                 KeyCode::KeyR => "R",
                 KeyCode::KeyS => "S",
+                KeyCode::KeyT => "T",
+                KeyCode::KeyV => "V",
                 KeyCode::KeyW => "W",
                 KeyCode::KeyX => "X",
+                KeyCode::KeyZ => "Z",
                 KeyCode::Space => "SPACE",
                 KeyCode::ShiftLeft | KeyCode::ShiftRight => "SHIFT",
                 KeyCode::ControlLeft | KeyCode::ControlRight => "CTRL",
@@ -198,6 +203,52 @@ const FLYING: [Binding; 6] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "brake"),
 ];
 
+const W_S: [Key; 2] = [Key::Board(KeyCode::KeyW), Key::Board(KeyCode::KeyS)];
+const A_D: [Key; 2] = [Key::Board(KeyCode::KeyA), Key::Board(KeyCode::KeyD)];
+const Q_E: [Key; 2] = [Key::Board(KeyCode::KeyQ), Key::Board(KeyCode::KeyE)];
+
+const VEHICLES: [Binding; 3] = [
+    row(&[Key::Board(KeyCode::KeyG)], " ", "board, or step off"),
+    row(&[Key::Board(KeyCode::KeyV)], " ", "seat or chase view"),
+    row(
+        &[Key::Board(KeyCode::KeyT)],
+        " ",
+        "anchor a boat, or weigh it",
+    ),
+];
+
+const KESTREL: [Binding; 7] = [
+    row(&W_S, "/", "pitch"),
+    row(&A_D, "/", "roll"),
+    row(&Q_E, "/", "yaw"),
+    row(
+        &[Key::Board(KeyCode::Space), Key::Board(KeyCode::ControlLeft)],
+        "/",
+        "power",
+    ),
+    row(
+        &[Key::Board(KeyCode::KeyZ), Key::Board(KeyCode::KeyC)],
+        "/",
+        "nacelles ahead or up",
+    ),
+    row(&[Key::Board(KeyCode::KeyX)], " ", "assist"),
+    row(&[Key::Board(KeyCode::KeyB)], " ", "wheel brake"),
+];
+
+const TERN: [Binding; 4] = [
+    row(&A_D, "/", "tiller"),
+    row(&W_S, "/", "sheet in or ease"),
+    row(&Q_E, "/", "hike to port or starboard"),
+    row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
+];
+
+const LOON: [Binding; 4] = [
+    row(&W_S, "/", "paddle ahead or back"),
+    row(&A_D, "/", "steer"),
+    row(&Q_E, "/", "blade as a rudder"),
+    row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
+];
+
 const WORLD: [Binding; 3] = [
     row(&[Key::Board(KeyCode::KeyF)], " ", "walk or fly"),
     row(&[Key::Board(KeyCode::KeyR)], " ", "return to the spawn"),
@@ -210,7 +261,7 @@ const SCREEN: [Binding; 2] = [
 ];
 
 /// Every control in the game, once.
-pub const BINDINGS: [Group; 4] = [
+pub const BINDINGS: [Group; 8] = [
     Group {
         heading: "ON FOOT",
         rows: &ON_FOOT,
@@ -218,6 +269,22 @@ pub const BINDINGS: [Group; 4] = [
     Group {
         heading: "FLYING",
         rows: &FLYING,
+    },
+    Group {
+        heading: "VEHICLES",
+        rows: &VEHICLES,
+    },
+    Group {
+        heading: "KESTREL",
+        rows: &KESTREL,
+    },
+    Group {
+        heading: "TERN",
+        rows: &TERN,
+    },
+    Group {
+        heading: "LOON",
+        rows: &LOON,
     },
     Group {
         heading: "WORLD",
@@ -239,6 +306,18 @@ impl Binding {
             .collect::<Vec<_>>()
             .join(self.joiner)
     }
+}
+
+/// The controls under one heading, as one line: what an instrument panel
+/// prints, off the same table the settings page reads.
+pub fn line(heading: &str) -> String {
+    BINDINGS
+        .iter()
+        .filter(|group| group.heading == heading)
+        .flat_map(|group| group.rows)
+        .map(|binding| format!("{} {}", binding.keys_label(), binding.does))
+        .collect::<Vec<_>>()
+        .join("   ")
 }
 
 /// The binding list for `--help`, so the terminal and the settings page read
@@ -265,7 +344,8 @@ mod tests {
     /// Every file that presses the keyboard or the mouse. The test reads their
     /// SOURCE rather than a second list in here, which is this repository's
     /// rule for a representation it cannot collapse: check the real artifact.
-    const READERS: [(&str, &str); 7] = [
+    const READERS: [(&str, &str); 8] = [
+        ("vehicles.rs", include_str!("vehicles.rs")),
         ("walking.rs", include_str!("walking.rs")),
         ("flight_view/input.rs", include_str!("flight_view/input.rs")),
         ("weather.rs", include_str!("weather.rs")),

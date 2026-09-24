@@ -7,6 +7,7 @@
 // single-sample scene textures. Positions are body-local; `planet_center` is
 // where that frame sits in the render frame (zero today).
 #import pbd::clouds::{CloudLayer, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at, cloud_map_smooth, cloud_hash}
+#import pbd::sea::{SeaView, sea_surface}
 struct Cell {
     direction_height: vec4<f32>,
     corners: array<vec4<f32>,6>,
@@ -24,7 +25,7 @@ struct WaterView {
     camera_time: vec4<f32>,   // xyz camera in the local frame, w seconds * time_scale
     planet_center: vec4<f32>, // xyz body centre in the local frame, w sea radius m
     sun: vec4<f32>,           // xyz toward the sun, w specular intensity
-    waves: vec4<f32>,         // swell amplitude m, swell frequency, swell speed, wave steepness
+    waves: vec4<f32>,         // xyz spare, w the ripples' steepness (the swell is `sea`)
     ripple: vec4<f32>,        // ripple scale cells/m, ripple speed, rain ripple cells/m, rain ripple strength
     refraction: vec4<f32>,    // strength, max uv offset, slope cap, max path m
     absorption: vec4<f32>,    // rgb per metre, w night floor
@@ -77,6 +78,10 @@ struct WaterView {
     // The clouds' accumulation (`calm-clouds`): x the new frame's share of
     // the blend, y one when the history is usable, z the frame number.
     cloud_history: vec4<f32>,
+    // The sea's table (`pbd::sea`), the same one the hulls float on.
+    sea: SeaView,
+    // x how far the sheet sits below sea level (`depth_offset_m`), yzw spare.
+    sea_frame: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -114,6 +119,8 @@ struct VertexOut {
     @location(5) @interpolate(flat) level: u32,
     @location(6) @interpolate(flat) owner_a: vec3<f32>,
     @location(7) @interpolate(flat) owner_b: vec3<f32>,
+    // The swell's slope along the sphere, for the normal.
+    @location(8) sea_slope: vec3<f32>,
 }
 fn safe_normal(v: vec3<f32>) -> vec3<f32> { return v * inverseSqrt(max(dot(v,v),1e-12)); }
 
@@ -207,15 +214,16 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         ray = cell.corners[(triangle+corner-1u)%degree].xyz;
     }
     let p = ray*sea;
-    // Tenebris's three-sine swell on every vertex, in body-local metres so a
-    // floating-origin shift cannot shift the phase.
-    let t = view.camera_time.w*view.waves.z;
-    let scale = view.waves.y;
-    let wave = (sin(t*0.9+p.x*1.4*scale+p.z*0.6*scale)*0.18
-        +sin(t*1.3-p.x*0.7*scale+p.z*1.2*scale)*0.12
-        +sin(t*1.7+p.x*2.3*scale-p.z*1.9*scale)*0.06)*view.waves.x;
-    let displaced = p + safe_normal(p)*wave;
+    // The sea the hulls float on (`pbd::sea`), in body-local metres so a
+    // floating-origin shift cannot shift the phase. The cell's height is its
+    // seabed; the filter drops any wave its own corners are too far apart to
+    // draw.
+    let depth = -cell.direction_height.w - view.sea_frame.x;
+    let spacing = length(cell.corners[0].xyz - axis)*sea;
+    let surface = sea_surface(view.sea, p, ray, depth, spacing);
+    let displaced = p + ray*surface.height;
     var out: VertexOut;
+    out.sea_slope = surface.gradient;
     out.body_position = displaced;
     out.local_position = view.planet_center.xyz + displaced;
     out.clip = view.clip_from_local*vec4<f32>(out.local_position,1.0);
@@ -357,7 +365,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // Foam still reads the raw gradient so storm foam keeps its bite.
     let raw_slope = length(gradient);
     var capped = gradient*min(1.0,max(view.refraction.z,0.0)/max(raw_slope,1e-6));
-    let normal = safe_normal(radial - capped*view.waves.w);
+    let normal = safe_normal(radial - in.sea_slope - capped*view.waves.w);
     let uv = in.clip.xy/vec2<f32>(textureDimensions(scene_depth));
     let own_depth = load_depth(uv);
     // Bevy/WebGPU reversed depth: larger depth is nearer.

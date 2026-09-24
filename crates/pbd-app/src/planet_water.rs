@@ -110,6 +110,32 @@ pub(super) struct WaterView {
     /// y one when the previous history can be used, z the frame number the
     /// jitter hashes, w spare.
     cloud_history: Vec4,
+    /// The sea's table (`pbd::sea` in `sea.wgsl`), the one the hulls float on.
+    sea: SeaView,
+    /// x how far the sheet sits below sea level, m; yzw spare.
+    sea_frame: Vec4,
+}
+
+/// `SeaView` in `sea.wgsl`: `pbd_core::sea::SeaGpu` laid out for the GPU.
+#[derive(Clone, ShaderType)]
+pub(crate) struct SeaView {
+    directions: [Vec4; pbd_core::sea::DIRECTIONS],
+    bands: [Vec4; pbd_core::sea::BANDS + 1],
+    phase: [Vec4; pbd_core::sea::COMPONENTS / 4],
+    heading: Vec4,
+    limits: Vec4,
+}
+
+impl From<&pbd_core::sea::SeaGpu> for SeaView {
+    fn from(sea: &pbd_core::sea::SeaGpu) -> Self {
+        Self {
+            directions: sea.directions,
+            bands: sea.bands,
+            phase: sea.phase,
+            heading: sea.heading,
+            limits: sea.limits,
+        }
+    }
 }
 
 /// The format of the clouds' history: the pass's own result, light
@@ -157,7 +183,7 @@ pub struct EyeWaterState(pub EyeWater);
 /// question a height field can answer is "is the camera under sea level over
 /// a cell whose ground is", which drowns a camera standing in a dry cave
 /// carved below sea level.
-pub fn submersion(camera_body: Vec3, sea_radius: f32, band: f32, eye: EyeWater) -> f32 {
+pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye: EyeWater) -> f32 {
     if camera_body.length_squared() < 1e-6 {
         return 0.0;
     }
@@ -173,6 +199,9 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, band: f32, eye: EyeWater) 
             sea_radius
         }
     };
+    // The band stands about the surface as it is under the camera now: a
+    // trough passing under a camera just over the sea leaves it dry.
+    let surface = surface + wave;
     let radius = camera_body.length();
     if radius < surface - band {
         1.0
@@ -528,6 +557,7 @@ pub(super) struct WaterSky<'w> {
     clouds: Res<'w, crate::sky::CloudNow>,
     rain_map: Option<Res<'w, crate::weather::RainMap>>,
     maps: Res<'w, super::weather_maps::WeatherMapsNow>,
+    sea: Res<'w, crate::sea::SeaNow>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -562,6 +592,7 @@ fn prepare_water_views(
         clouds,
         rain_map,
         maps,
+        sea: sea_now,
     } = sky;
     let (overlay, overlay_flow) =
         crate::overlay::overlay_lanes(maps.overlay_kind, &weather_settings);
@@ -573,8 +604,8 @@ fn prepare_water_views(
             view.clip_from_world,
         );
         let sea_radius = terrain::PLANET_RADIUS - settings.depth_offset_m;
-        let band = settings.swell_amplitude_m + settings.partial_band_m;
-        let state = submersion(camera, sea_radius, band, eye.0);
+        let band = settings.partial_band_m;
+        let state = submersion(camera, sea_radius, sea_now.camera_height, band, eye.0);
         let (mut was_under, mut emerge_until) = existing
             .as_ref()
             .map(|gpu| (gpu.was_under, gpu.emerge_until))
@@ -619,12 +650,7 @@ fn prepare_water_views(
             camera_time: camera.extend(clock.0 * s.time_scale),
             planet_center: Vec3::ZERO.extend(sea_radius),
             sun: sun.direction().extend(s.specular_intensity * sun_dim),
-            waves: Vec4::new(
-                s.swell_amplitude_m,
-                s.swell_frequency,
-                s.swell_speed,
-                s.wave_steepness,
-            ),
+            waves: Vec4::new(0.0, 0.0, 0.0, s.wave_steepness),
             ripple: Vec4::new(
                 s.ripple_scale,
                 s.ripple_speed,
@@ -691,6 +717,8 @@ fn prepare_water_views(
             overlay,
             overlay_flow,
             cloud_history: Vec4::ZERO,
+            sea: SeaView::from(&sea_now.gpu),
+            sea_frame: Vec4::new(s.depth_offset_m, 0.0, 0.0, 0.0),
         };
         let lens_needed = lens_rain > 0.001 || drips > 0.001;
         let map = rain_map.as_deref().filter(|map| {
@@ -1052,10 +1080,14 @@ mod tests {
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (3, 40));
+        assert_eq!((mat4, vec4), (3, 41));
+        assert!(block.contains("sea: SeaView,"));
+        let sea = crate::shader_tests::sea_source();
+        let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");
+        assert_eq!(SeaView::min_size().get() as u32, sea_size);
         assert_eq!(
             WaterView::min_size().get() as usize,
-            mat4 * 64 + vec4 * 16,
+            mat4 * 64 + vec4 * 16 + sea_size as usize,
             "the Rust uniform must be the WGSL struct's size"
         );
     }
@@ -1077,16 +1109,16 @@ mod tests {
         // Twenty metres under the sea's own surface, over a cell whose ground
         // is under it: the height field drowns it and the column does not.
         let deep = ocean * (sea - 20.0);
-        assert_eq!(submersion(deep, sea, band, EyeWater::Unknown), 1.0);
-        assert_eq!(submersion(deep, sea, band, EyeWater::Air), 0.0);
+        assert_eq!(submersion(deep, sea, 0.0, band, EyeWater::Unknown), 1.0);
+        assert_eq!(submersion(deep, sea, 0.0, band, EyeWater::Air), 0.0);
         // A pool whose surface is ten metres down: over it is dry, in it is
         // under, and the band straddles its own surface rather than the sea's.
         let pool = EyeWater::Water {
             surface_radius: sea - 10.0,
         };
-        assert_eq!(submersion(ocean * (sea - 5.0), sea, band, pool), 0.0);
-        assert_eq!(submersion(ocean * (sea - 10.5), sea, band, pool), 0.5);
-        assert_eq!(submersion(deep, sea, band, pool), 1.0);
+        assert_eq!(submersion(ocean * (sea - 5.0), sea, 0.0, band, pool), 0.0);
+        assert_eq!(submersion(ocean * (sea - 10.5), sea, 0.0, band, pool), 0.5);
+        assert_eq!(submersion(deep, sea, 0.0, band, pool), 1.0);
     }
 
     #[test]
@@ -1106,26 +1138,47 @@ mod tests {
             .unwrap()
             .direction;
         assert_eq!(
-            submersion(land * (sea - 10.0), sea, band, EyeWater::Unknown),
+            submersion(land * (sea - 10.0), sea, 0.0, band, EyeWater::Unknown),
             0.0
         );
         assert_eq!(
-            submersion(ocean * (sea + 10.0), sea, band, EyeWater::Unknown),
+            submersion(ocean * (sea + 10.0), sea, 0.0, band, EyeWater::Unknown),
             0.0
         );
         assert_eq!(
-            submersion(ocean * (sea + 1.0), sea, band, EyeWater::Unknown),
+            submersion(ocean * (sea + 1.0), sea, 0.0, band, EyeWater::Unknown),
             0.5
         );
         assert_eq!(
-            submersion(ocean * (sea - 1.0), sea, band, EyeWater::Unknown),
+            submersion(ocean * (sea - 1.0), sea, 0.0, band, EyeWater::Unknown),
             0.5
         );
         assert_eq!(
-            submersion(ocean * (sea - 3.0), sea, band, EyeWater::Unknown),
+            submersion(ocean * (sea - 3.0), sea, 0.0, band, EyeWater::Unknown),
             1.0
         );
-        assert_eq!(submersion(Vec3::ZERO, sea, band, EyeWater::Unknown), 0.0);
+        assert_eq!(
+            submersion(Vec3::ZERO, sea, 0.0, band, EyeWater::Unknown),
+            0.0
+        );
+    }
+
+    /// The band stands about the surface under the camera as it is now, not
+    /// about the mean sea: a trough passing under a camera just over the sea
+    /// leaves it dry, and a crest over it puts it in the water.
+    #[test]
+    fn in_a_trough_the_camera_is_dry() {
+        let sea = terrain::PLANET_RADIUS - 0.5;
+        let band = 0.8;
+        let cells = super::super::topology::dual_sphere(3);
+        let ocean = cells
+            .iter()
+            .find(|c| terrain::surface_height(c.direction) < 0.0)
+            .unwrap()
+            .direction;
+        let eye = ocean * (sea + 0.3);
+        assert_eq!(submersion(eye, sea, -1.0, band, EyeWater::Unknown), 0.0);
+        assert_eq!(submersion(eye, sea, 2.0, band, EyeWater::Unknown), 1.0);
     }
 
     #[test]

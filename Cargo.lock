@@ -3574,6 +3574,7 @@ dependencies = [
  "pbd-core",
  "ron",
  "serde",
+ "wgpu",
 ]
 
 [[package]]

@@ -16,12 +16,18 @@ pub mod planet;
 #[cfg(feature = "desktop")]
 pub mod saves;
 #[cfg(feature = "desktop")]
+pub mod sea;
+#[cfg(feature = "desktop")]
 pub mod sky;
+#[cfg(feature = "desktop")]
+pub mod vehicles;
 #[cfg(feature = "desktop")]
 pub mod walking;
 #[cfg(feature = "desktop")]
 pub mod weather;
 
+#[cfg(all(test, feature = "desktop"))]
+mod sea_gpu_tests;
 #[cfg(test)]
 mod shader_tests;
 
