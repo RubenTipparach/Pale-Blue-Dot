@@ -79,7 +79,35 @@ pub(super) struct WaterView {
     screen: Vec4,
     lod: Vec4,
     bands: Vec4,
+    /// The rain on the LENS, then three spare lanes. Its own lane rather than
+    /// `fx.z`, which is the rain on the SEA: a camera in a cave mouth is dry
+    /// while the sea it looks out at is still being rained on.
+    rain: Vec4,
+    /// The cloud layer (`sky::CloudNow`): the clouds pass marches it over
+    /// the whole scene, and the rain is lit by its lightning.
+    cloud_clouds: Vec4,
+    cloud_slab: Vec4,
+    cloud_storm: Vec4,
+    cloud_flash: Vec4,
+    cloud_light: Vec4,
+    cloud_shape: Vec4,
+    cloud_cells: Vec4,
+    /// The precipitation map's frame (`weather::RainMap`) and the volume's
+    /// look; see `rain` in `water.wgsl` for what each lane is.
+    rain_map: Vec4,
+    rain_u: Vec4,
+    rain_v: Vec4,
+    rain_look: Vec4,
+    rain_tint: Vec4,
+    snow_tint: Vec4,
+    /// The overlay (`overlay::overlay_lanes`); zero when none is showing.
+    overlay: Vec4,
+    overlay_flow: Vec4,
 }
+
+/// The largest precipitation map the rain buffer holds, cells on a side; the
+/// config validates `rain_map_size` against it.
+const RAIN_MAP_MAX: u64 = 128;
 
 /// What the column tier says is at the camera's own cell: nothing, because
 /// there is no column there and the height field is the whole truth; air, so
@@ -222,7 +250,7 @@ struct WaterPipelines {
 
 fn data_layout() -> BindGroupLayoutDescriptor {
     BindGroupLayoutDescriptor::new(
-        "water view, cells, water ids, flow",
+        "water view, cells, water ids, flow, precipitation map",
         &BindGroupLayoutEntries::sequential(
             ShaderStages::VERTEX_FRAGMENT,
             (
@@ -230,6 +258,7 @@ fn data_layout() -> BindGroupLayoutDescriptor {
                 storage_buffer_read_only_sized(false, NonZeroU64::new(size_of::<GpuCell>() as u64)),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(8)),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
             ),
         ),
     )
@@ -281,6 +310,9 @@ fn initialize_pipelines(
 enum Pass {
     Cap,
     Compose,
+    Clouds,
+    Rain,
+    Overlay,
     Lens,
 }
 
@@ -319,6 +351,21 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 self.fullscreen.to_vertex_state(),
                 "compose",
             ),
+            Pass::Clouds => (
+                "Clouds over the whole scene, against its depth",
+                self.fullscreen.to_vertex_state(),
+                "clouds",
+            ),
+            Pass::Rain => (
+                "Rain volume over the composed scene",
+                self.fullscreen.to_vertex_state(),
+                "rain",
+            ),
+            Pass::Overlay => (
+                "Weather overlay over the planet",
+                self.fullscreen.to_vertex_state(),
+                "overlay",
+            ),
             Pass::Lens => (
                 "Water lens: droplets and emerge drips",
                 self.fullscreen.to_vertex_state(),
@@ -332,7 +379,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
         // the scene's own occlusion is the shader's discard against the
         // sampled main-pass depth, which may be multisampled.
         let depth_stencil = match key.pass {
-            Pass::Lens => None,
+            Pass::Lens | Pass::Rain | Pass::Clouds | Pass::Overlay => None,
             pass => Some(DepthStencilState {
                 format: WATER_DEPTH_FORMAT,
                 depth_write_enabled: pass == Pass::Cap,
@@ -347,7 +394,11 @@ impl SpecializedRenderPipeline for WaterPipelines {
         };
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed(label)),
-            layout: vec![self.data_layout.clone(), scene],
+            layout: vec![
+                self.data_layout.clone(),
+                scene,
+                super::weather_maps::layout(),
+            ],
             vertex,
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
@@ -382,7 +433,14 @@ pub(super) struct WaterViewGpu {
     data_bind_group: BindGroup,
     cap: CachedRenderPipelineId,
     compose: CachedRenderPipelineId,
+    clouds: CachedRenderPipelineId,
     lens: CachedRenderPipelineId,
+    rain: CachedRenderPipelineId,
+    overlay: CachedRenderPipelineId,
+    overlay_needed: bool,
+    /// The precipitation map, rewritten each frame from `weather::RainMap`.
+    rain_buffer: Buffer,
+    rain_needed: bool,
     /// The sheet's private depth, recreated when the view's size changes.
     depth: TextureView,
     depth_size: UVec2,
@@ -390,6 +448,19 @@ pub(super) struct WaterViewGpu {
     lens_needed: bool,
     was_under: bool,
     emerge_until: f32,
+}
+
+/// What the sky is doing, as the water pass reads it: the weather, its
+/// settings, the clouds and the precipitation map. A struct because Bevy
+/// caps a system at sixteen parameters and the rain volume took this one to
+/// seventeen, which is the missing-struct smell the rules name.
+#[derive(bevy::ecs::system::SystemParam)]
+pub(super) struct WaterSky<'w> {
+    weather_settings: Res<'w, WeatherSettings>,
+    weather: Res<'w, Weather>,
+    clouds: Res<'w, crate::sky::CloudNow>,
+    rain_map: Option<Res<'w, crate::weather::RainMap>>,
+    maps: Res<'w, super::weather_maps::WeatherMapsNow>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -402,8 +473,7 @@ fn prepare_water_views(
     mut specialized: ResMut<SpecializedRenderPipelines<WaterPipelines>>,
     planet: Option<Res<PlanetGpu>>,
     settings: Res<WaterSettings>,
-    weather_settings: Res<WeatherSettings>,
-    weather: Res<Weather>,
+    sky: WaterSky,
     clock: Res<PlanetClock>,
     sun: Res<crate::sky::Sun>,
     frame: Res<PlanetRenderFrame>,
@@ -419,6 +489,16 @@ fn prepare_water_views(
     let Some(planet) = planet else {
         return;
     };
+    let WaterSky {
+        weather_settings,
+        weather,
+        clouds,
+        rain_map,
+        maps,
+    } = sky;
+    let (overlay, overlay_flow) =
+        crate::overlay::overlay_lanes(maps.overlay_kind, &weather_settings);
+    let overlay_needed = maps.overlay_kind.is_some();
     for (entity, view, msaa, planet_view, existing) in &mut views {
         let (camera, clip_from_body) = frame.camera_and_clip(
             &view.world_from_view,
@@ -442,13 +522,33 @@ fn prepare_water_views(
         was_under = state > 0.75;
         let aspect = view.viewport.z as f32 / view.viewport.w.max(1) as f32;
         let s = &settings;
+        // Rain below the altitude the rain itself stops at: from 400 m up a
+        // storm reads through the clouds and the haze, not through drops on
+        // the glass or rings on a sea a pixel wide. One gate, in `weather`.
+        let altitude = crate::weather::height_above_ground(camera);
+        let sea_rain = if crate::weather::rain_drawn_at(altitude, &weather_settings) {
+            weather.liquid()
+        } else {
+            0.0
+        };
+        // And on the lens only when nothing solid is over the eye.
+        let lens_rain = if weather.sheltered { 0.0 } else { sea_rain };
+        // The sea's sun specular takes the ground's overcast dim, so a storm
+        // does not glitter.
+        let sun_dim = 1.0 - weather.cover.clamp(0.0, 1.0) * weather_settings.overcast_sun_dim;
         let v3 = |c: [f32; 3]| Vec3::from_array(c);
+        // `weather.ron`'s rain and snow colours are display values, as the
+        // shower's vertex colours take them.
+        let linear = |c: [f32; 3]| {
+            let l = LinearRgba::from(Srgba::rgb(c[0], c[1], c[2]));
+            Vec3::new(l.red, l.green, l.blue)
+        };
         let params = WaterView {
             clip_from_local: clip_from_body,
             local_from_clip: clip_from_body.as_dmat4().inverse().as_mat4(),
             camera_time: camera.extend(clock.0 * s.time_scale),
             planet_center: Vec3::ZERO.extend(sea_radius),
-            sun: sun.direction().extend(s.specular_intensity),
+            sun: sun.direction().extend(s.specular_intensity * sun_dim),
             waves: Vec4::new(
                 s.swell_amplitude_m,
                 s.swell_frequency,
@@ -479,7 +579,7 @@ fn prepare_water_views(
             fog_night: FOG_NIGHT_SKY.extend(FOG_DENSITY_PER_M),
             fog_day: FOG_DAY_SKY.extend(FOG_HEIGHT_M),
             limits: Vec4::new(s.fog_max, TERMINATOR.0, TERMINATOR.1, FOG_MIX),
-            fx: Vec4::new(s.underwater_distortion, state, weather.rain, drips),
+            fx: Vec4::new(s.underwater_distortion, state, sea_rain, drips),
             lens: Vec4::new(
                 weather_settings.rain_lens_density,
                 weather_settings.rain_lens_refract,
@@ -492,13 +592,52 @@ fn prepare_water_views(
             // under it can never be split on different anchors.
             lod: planet.lod.player.extend(super::lod::BASE_LEVEL as f32),
             bands: planet.lod.bands,
+            rain: Vec4::new(lens_rain, 0.0, 0.0, 0.0),
+            cloud_clouds: clouds.clouds,
+            cloud_slab: clouds.slab,
+            cloud_storm: clouds.storm,
+            cloud_flash: clouds.flash,
+            cloud_light: clouds.light,
+            cloud_shape: clouds.shape,
+            cloud_cells: clouds.cells,
+            rain_map: rain_map
+                .as_deref()
+                .map_or(Vec4::ZERO, |m| m.anchor.extend(m.cell_m)),
+            rain_u: rain_map
+                .as_deref()
+                .map_or(Vec4::ZERO, |m| m.u.extend(m.size as f32)),
+            rain_v: rain_map.as_deref().map_or(Vec4::ZERO, |m| {
+                m.v.extend(weather_settings.rain_volume_density)
+            }),
+            rain_look: Vec4::new(
+                weather_settings.rain_fall_mps,
+                weather_settings.rain_volume_stretch,
+                crate::weather::rain_light(sun.elevation(camera), weather.cover, &weather_settings),
+                weather_settings.rain_volume_range_m,
+            ),
+            rain_tint: linear(weather_settings.rain_volume_color)
+                .extend(weather_settings.snow_fall_mps),
+            snow_tint: linear(weather_settings.snow_color).extend(clock.0),
+            overlay,
+            overlay_flow,
         };
-        let lens_needed = weather.rain > 0.001 || drips > 0.001;
+        let lens_needed = lens_rain > 0.001 || drips > 0.001;
+        let map = rain_map.as_deref().filter(|map| {
+            !map.values.is_empty() && map.values.iter().any(|value| value.abs() > 1e-3)
+        });
+        let rain_needed = map.is_some()
+            && camera.length() < clouds.clouds.x
+            && weather_settings.rain_volume_range_m > 0.0;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
             gpu.lens_needed = lens_needed;
+            gpu.rain_needed = rain_needed;
+            gpu.overlay_needed = overlay_needed;
+            if let Some(map) = map {
+                queue.write_buffer(&gpu.rain_buffer, 0, bytemuck::cast_slice(&map.values));
+            }
             gpu.was_under = was_under;
             gpu.emerge_until = emerge_until;
             if gpu.depth_size != size {
@@ -517,6 +656,15 @@ fn prepare_water_views(
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
+        let rain_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("precipitation map"),
+            size: RAIN_MAP_MAX * RAIN_MAP_MAX * 4,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        if let Some(map) = map {
+            queue.write_buffer(&rain_buffer, 0, bytemuck::cast_slice(&map.values));
+        }
         let data_bind_group = device.create_bind_group(
             Some("water data"),
             &cache.get_bind_group_layout(&pipelines.data_layout),
@@ -525,6 +673,7 @@ fn prepare_water_views(
                 planet.cells.as_entire_binding(),
                 planet_view.water.as_entire_binding(),
                 flow.as_entire_binding(),
+                rain_buffer.as_entire_binding(),
             )),
         );
         let format = if view.hdr {
@@ -547,7 +696,13 @@ fn prepare_water_views(
         commands.entity(entity).insert(WaterViewGpu {
             cap: pipeline(Pass::Cap),
             compose: pipeline(Pass::Compose),
+            clouds: pipeline(Pass::Clouds),
             lens: pipeline(Pass::Lens),
+            rain: pipeline(Pass::Rain),
+            overlay: pipeline(Pass::Overlay),
+            overlay_needed,
+            rain_buffer,
+            rain_needed,
             depth: water_depth(&device, size),
             depth_size: size,
             uniform,
@@ -603,11 +758,24 @@ impl ViewNode for WaterCompositeNode {
     ) -> Result<(), NodeRunError> {
         let pipelines = world.resource::<WaterPipelines>();
         let cache = world.resource::<PipelineCache>();
-        let (Some(cap), Some(compose), Some(lens)) = (
+        let (
+            Some(cap),
+            Some(compose),
+            Some(clouds),
+            Some(lens),
+            Some(rain),
+            Some(overlay),
+            Some(maps),
+        ) = (
             cache.get_render_pipeline(water.cap),
             cache.get_render_pipeline(water.compose),
+            cache.get_render_pipeline(water.clouds),
             cache.get_render_pipeline(water.lens),
-        ) else {
+            cache.get_render_pipeline(water.rain),
+            cache.get_render_pipeline(water.overlay),
+            world.get_resource::<super::weather_maps::WeatherMapGpu>(),
+        )
+        else {
             return Ok(());
         };
         let scene_layout = if water.multisampled {
@@ -654,16 +822,29 @@ impl ViewNode for WaterCompositeNode {
             });
             pass.set_bind_group(0, &water.data_bind_group, &[]);
             pass.set_bind_group(1, &scene, &[]);
+            pass.set_bind_group(2, &maps.bind_group, &[]);
             pass.set_render_pipeline(compose);
             pass.draw(0..3, 0..1);
             pass.set_render_pipeline(cap);
             pass.draw_indirect(&planet_view.indirect, 32);
         }
-        if water.lens_needed {
+        for (needed, pipeline, label) in [
+            // An overlay is a map: the clouds would hide the data under them,
+            // and the cloud overlay is where cloud is shown then.
+            (!water.overlay_needed, clouds, "Clouds"),
+            (water.rain_needed, rain, "Rain volume"),
+            // After the rain, so the map reads through a storm, and before
+            // the lens, so the drops stay on top of it.
+            (water.overlay_needed, overlay, "Weather overlay"),
+            (water.lens_needed, lens, "Water lens"),
+        ] {
+            if !needed {
+                continue;
+            }
             let post = target.post_process_write();
             let scene = scene_bind_group(post.source);
             let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("Water lens"),
+                label: Some(label),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: post.destination,
                     depth_slice: None,
@@ -679,7 +860,8 @@ impl ViewNode for WaterCompositeNode {
             });
             pass.set_bind_group(0, &water.data_bind_group, &[]);
             pass.set_bind_group(1, &scene, &[]);
-            pass.set_render_pipeline(lens);
+            pass.set_bind_group(2, &maps.bind_group, &[]);
+            pass.set_render_pipeline(pipeline);
             pass.draw(0..3, 0..1);
         }
         Ok(())
@@ -713,14 +895,14 @@ mod tests {
 
     #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
-        // Two mat4 and twenty-three vec4 in water.wgsl's WaterView, read off the
+        // Two mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
         let shader = include_str!("../../../assets/shaders/water.wgsl");
         let start = shader.find("struct WaterView {").unwrap();
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (2, 23));
+        assert_eq!((mat4, vec4), (2, 39));
         assert_eq!(
             WaterView::min_size().get() as usize,
             mat4 * 64 + vec4 * 16,

@@ -3,11 +3,13 @@
 //!
 //! Every rain effect (the water cap's ripples, the terrain's wet sheet and
 //! rivulets, the lens droplets, the precipitation) reads these numbers and
-//! keeps no rain state of its own. What changed when the field landed is only
-//! where `rain` comes from: `pbd_core::weather` sampled under the player,
-//! rather than a global switch. Not one consumer learned anything, which is the
-//! one-code-path rule collecting a dividend it was owed.
+//! keeps no rain state of its own. Where `rain` comes from is the simulated
+//! atmosphere (`crate::atmosphere::Air`), read through `pbd_core::weather`'s
+//! seam under the player; when that replaced the stateless field, not one
+//! consumer learned anything, which is the one-code-path rule collecting a
+//! dividend it was owed a second time.
 
+use crate::atmosphere::Air;
 use crate::config::WeatherSettings;
 use crate::planet::terrain::TERRAIN;
 use crate::planet::{PLANET_RADIUS, PlanetContact, PlanetRenderFrame, surface_height};
@@ -32,16 +34,90 @@ pub struct Weather {
     /// What is falling here. The shower draws rain streaks either way until
     /// there is a snow particle; the field knows the difference already.
     pub snowing: bool,
+    /// Whether something solid stands over the camera's eye, so the rain in
+    /// the sky does not reach it: no drops on the lens and no shower round
+    /// it. The column's answer (`PlanetContact::open_to_sky`).
+    pub sheltered: bool,
+    /// A lightning strike: where it is, body-local metres, and how bright it
+    /// is right now; zero between strikes. Lights the clouds, the rain and
+    /// the ground.
+    pub flash: Vec4,
+    /// Where the player is: the body-local unit direction of the active
+    /// camera, or zero before there is one. The weather slider brews its
+    /// storm here.
+    pub here: Vec3,
 }
 
-/// How hard a storm the P key is currently forcing, 0..1.
+impl Weather {
+    /// The rain that is WATER: what wets the ground, runs down the lens and
+    /// rings the sea. Snow is precipitation and none of those.
+    pub fn liquid(&self) -> f32 {
+        if self.snowing { 0.0 } else { self.rain }
+    }
+}
+
+/// What is falling, as the shower draws it: how fast, how long and wide a
+/// mark, what colour, and how far it sways. One description for rain and
+/// snow, so the near shower and the shafts draw either through one path.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Fall {
+    pub speed_mps: f32,
+    pub length_m: f32,
+    pub half_width_m: f32,
+    pub color: [f32; 3],
+    pub sway_m: f32,
+    /// Opacity at the camera and at the edge of the shower disk. Snow is
+    /// opaque where rain is a streak of water, so it keeps its own: at rain's
+    /// 0.3 a white flake vanished against grey rock under a grey sky.
+    pub alpha_near: f32,
+    pub alpha_far: f32,
+}
+
+impl Fall {
+    /// Rain or snow, off the settings.
+    pub fn of(settings: &WeatherSettings, snow: bool) -> Self {
+        if snow {
+            Fall {
+                speed_mps: settings.snow_fall_mps,
+                length_m: settings.snow_size_m * 2.0,
+                half_width_m: settings.snow_size_m,
+                color: settings.snow_color,
+                sway_m: settings.snow_sway_m,
+                alpha_near: settings.snow_alpha_near,
+                alpha_far: settings.snow_alpha_far,
+            }
+        } else {
+            Fall {
+                speed_mps: settings.rain_fall_mps,
+                length_m: settings.rain_streak_m,
+                half_width_m: settings.rain_width_m,
+                color: settings.rain_color,
+                sway_m: 0.0,
+                alpha_near: settings.rain_alpha_near,
+                alpha_far: settings.rain_alpha_far,
+            }
+        }
+    }
+
+    /// How far a mark has drifted sideways at `now`, from its own phase.
+    fn sway(&self, now: f32, phase: f32) -> f32 {
+        self.sway_m * (now * 0.7 + phase * std::f32::consts::TAU).sin()
+    }
+}
+
+/// How hard a storm the P key and the slider are forcing, 0..1.
 ///
-/// The reference's weather menu forces one with `moisture_boost`, which lerps
-/// every cell toward saturation. Forcing rain THROUGH the field rather than
-/// around it is what keeps one path deciding the weather: at a boost of one the
-/// whole planet is past the rain threshold, and it is still the field saying so.
+/// It forces the ATMOSPHERE rather than the rain: the cells round the player
+/// are driven toward a storm (`pbd_core::atmosphere::Forcing`), and it rains
+/// because the atmosphere then has a storm in it. Released, the storm lives on
+/// and drifts with the wind; it is never the whole planet at once.
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct StormForcing(pub f32);
+
+/// Seconds of weather run at launch beyond the spin-up: the `--weather-at`
+/// harness flag, and nothing else sets it.
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct WeatherEpoch(pub f32);
 
 /// Wetness after `dt` seconds chasing `rain` with e-fold time `tau`. Pure so a
 /// test can hold the lag to the configured constant.
@@ -50,17 +126,24 @@ pub fn settle_wetness(wetness: f32, rain: f32, dt: f32, tau: f32) -> f32 {
     (wetness + (rain - wetness) * blend).clamp(0.0, 1.0)
 }
 
-/// Sample the field under the player. This is the only place `rain` is set.
+/// Sample the weather under the player. This is the only place `rain` is set.
 fn sample_field(
-    clock: Res<crate::planet::PlanetClock>,
-    forcing: Res<StormForcing>,
-    settings: Res<WeatherSettings>,
-    contact: Option<Res<PlanetContact>>,
+    air: Res<Air>,
     frame: Res<PlanetRenderFrame>,
-    cameras: Query<&GlobalTransform, With<Camera3d>>,
+    contact: Option<Res<PlanetContact>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut weather: ResMut<Weather>,
+    mut reported: Local<Option<i32>>,
 ) {
-    let Ok(camera) = cameras.single() else {
+    // The ACTIVE camera. Walking keeps the flight camera parked and inactive
+    // beside its own, and `single()` over both failed every frame on foot, so
+    // the field was never sampled while walking and the weather stayed at
+    // whatever the launch forcing wrote.
+    let Some(camera) = cameras
+        .iter()
+        .find(|(_, camera)| camera.is_active)
+        .map(|(transform, _)| transform)
+    else {
         return;
     };
     // The column under the player, in the body's own frame: the render frame
@@ -70,31 +153,174 @@ fn sample_field(
     let Some(direction) = body_local.as_vec3().try_normalize() else {
         return;
     };
-    let _ = contact;
-    let cell = field::cloud_cell(
-        &settings.field(forcing.0),
-        &TERRAIN,
-        direction,
-        clock.seconds(),
-    );
+    weather.here = direction;
+    let cell = field::cloud_cell(&air.now, direction);
     weather.rain = if cell.raining { cell.cover } else { 0.0 };
     weather.cover = cell.cover;
     weather.snowing = cell.precip == Precip::Snow;
+    weather.sheltered = contact.is_some_and(|contact| !contact.open_to_sky(body_local.as_vec3()));
+    // Every twentieth the cover moves, and whenever the eye goes under or out
+    // from under rock, so a capture says what weather it was taken under.
+    let step = (cell.cover * 20.0).round() as i32 * 2 + i32::from(weather.sheltered);
+    if *reported != Some(step) {
+        *reported = Some(step);
+        info!(
+            "Weather here: cover {:.2}, rain {:.2}{}{}",
+            cell.cover,
+            weather.rain,
+            if weather.snowing { ", snow" } else { "" },
+            if weather.sheltered { ", sheltered" } else { "" }
+        );
+    }
 }
 
 fn follow_rain(time: Res<Time>, settings: Res<WeatherSettings>, mut weather: ResMut<Weather>) {
+    // Snow does not wet the ground.
+    let liquid = weather.liquid();
     weather.wetness = settle_wetness(
         weather.wetness,
-        weather.rain,
+        liquid,
         time.delta_secs(),
         settings.wet_fade_tau_s,
     );
 }
 
+/// The precipitation round the camera that the rain VOLUME is drawn from:
+/// `pbd_core::weather::precipitation_map` on a plane tangent at `anchor`,
+/// extracted to the render world and uploaded for the water pass to march.
+/// Refilled when the camera strays a quarter of the map from the anchor, and
+/// whenever the atmosphere publishes a new state.
+#[derive(Resource, Clone, Debug, Default, ExtractResource)]
+pub struct RainMap {
+    pub anchor: Vec3,
+    pub u: Vec3,
+    pub v: Vec3,
+    pub cell_m: f32,
+    pub size: u32,
+    /// Row-major along `v`; negative where it snows.
+    pub values: Vec<f32>,
+    /// The atmosphere's state it was filled from.
+    generation: u64,
+}
+
+fn fill_rain_map(
+    air: Res<Air>,
+    settings: Res<WeatherSettings>,
+    frame: Res<PlanetRenderFrame>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    mut map: ResMut<RainMap>,
+) {
+    let Some(camera) = cameras
+        .iter()
+        .find(|(_, camera)| camera.is_active)
+        .map(|(transform, _)| transform)
+    else {
+        return;
+    };
+    let Some(up) = (camera.translation().as_dvec3() - frame.center)
+        .as_vec3()
+        .try_normalize()
+    else {
+        return;
+    };
+    let s = &settings;
+    let reach = s.rain_map_size as f32 * s.rain_map_cell_m;
+    let strayed = up.angle_between(map.anchor) * PLANET_RADIUS > reach * 0.25;
+    let reshaped = map.size != s.rain_map_size || map.cell_m != s.rain_map_cell_m;
+    let stale = map.generation != air.generation;
+    if !(map.values.is_empty() || strayed || reshaped || stale) {
+        return;
+    }
+    if map.values.is_empty() || strayed || reshaped {
+        map.anchor = up;
+        map.u = up.any_orthonormal_vector();
+        map.v = up.cross(map.u);
+    }
+    map.size = s.rain_map_size;
+    map.cell_m = s.rain_map_cell_m;
+    map.values = field::precipitation_map(
+        &air.now,
+        map.anchor,
+        map.u,
+        map.v,
+        PLANET_RADIUS,
+        map.size as usize,
+        map.cell_m,
+    );
+    map.generation = air.generation;
+}
+
+/// Lightning: the atmosphere's own strikes (`pbd_core::atmosphere::Strike`),
+/// the most recent within reach of the camera, flickering over
+/// `lightning_flash_s` from the moment it struck. A strike sits at the cloud
+/// base over its cell; its brightness lights the clouds, the rain and the
+/// ground.
+fn strike_lightning(
+    air: Res<Air>,
+    sun: Res<crate::sky::Sun>,
+    settings: Res<WeatherSettings>,
+    mut weather: ResMut<Weather>,
+) {
+    let dt = air.now.settings.dt_s;
+    let since_state = (sun.clock.seconds - air.at_seconds).max(0.0) as f32;
+    let reach = (LIGHTNING_REACH_M / PLANET_RADIUS).cos();
+    let here = weather.here;
+    let strike = air
+        .now
+        .strikes
+        .iter()
+        .filter(|strike| here != Vec3::ZERO && strike.direction.dot(here) >= reach)
+        .map(|strike| {
+            let age = (air.now.step.saturating_sub(strike.step)) as f32 * dt + since_state;
+            (strike, age)
+        })
+        .filter(|(_, age)| *age <= settings.lightning_flash_s)
+        .min_by(|a, b| a.1.total_cmp(&b.1));
+    weather.flash = match strike {
+        Some((strike, age)) => (strike.direction * crate::sky::CLOUD_RADIUS)
+            .extend(strike.strength.max(0.4) * field::flicker(age / settings.lightning_flash_s)),
+        None => Vec4::ZERO,
+    };
+}
+
+/// How far from the camera a strike is seen, metres.
+const LIGHTNING_REACH_M: f32 = 3_000.0;
+
+/// A lightning bolt: a jagged ribbon from the cloud base at the strike down to
+/// the ground under it, its kinks hashed off where it struck so a strike keeps
+/// its shape through its flickers. Unlit and over white, so it blooms.
+fn push_bolt(quads: &mut Quads, flash: Vec4, ground: f32, right: Vec3) {
+    let top = flash.truncate();
+    let up = top.normalize();
+    let side = right - up * right.dot(up);
+    let side = side.try_normalize().unwrap_or(up.any_orthonormal_vector());
+    let depth = up.cross(side);
+    let height = top.length() - ground;
+    let seed = (top.x * 7.1 + top.y * 3.3 + top.z * 5.7).to_bits();
+    let color = [
+        2.4 * flash.w,
+        2.6 * flash.w,
+        3.2 * flash.w,
+        flash.w.clamp(0.0, 1.0),
+    ];
+    let mut last = top;
+    const KINKS: u32 = 9;
+    for k in 1..=KINKS {
+        let (angle, spread, _) = streak_seed(seed.wrapping_add(k));
+        let t = k as f32 / KINKS as f32;
+        let wander = if k == KINKS { 0.0 } else { 18.0 * spread };
+        let next =
+            up * (top.length() - height * t) + (side * angle.cos() + depth * angle.sin()) * wander;
+        quads.push(last, next, side * 0.9, color);
+        last = next;
+    }
+}
+
 /// P cycles the storm forcing through none, half and full, the way Tenebris's
-/// weather menu does. It moves the FIELD rather than the rain, so a forced storm
-/// is a real one: clouds thicken, the sky closes and it rains because the field
-/// says it is overcast, not because a number was written past it.
+/// weather menu does. It forces the ATMOSPHERE rather than the rain, so a
+/// forced storm is a real one: clouds thicken, the sky closes and it rains
+/// because the atmosphere has a storm over the player, not because a number
+/// was written past it.
 fn cycle_rain(
     keys: Res<ButtonInput<KeyCode>>,
     menu: Option<Res<crate::controls::MenuOpen>>,
@@ -179,11 +405,258 @@ fn spawn_shower(
     ));
 }
 
+/// Whether rain is drawn at all from a camera `altitude` metres above the
+/// GROUND under it: the streaks, the shafts and the drops on the lens. Above
+/// `rain_lod_alt_m` a streak is sub-pixel and the storm reads through the
+/// volume, the clouds and the haze. ONE gate, which the lens asks too.
+pub fn rain_drawn_at(altitude: f32, settings: &WeatherSettings) -> bool {
+    altitude <= settings.rain_lod_alt_m
+}
+
+/// How high a body-local point is above the ground under it, off the height
+/// field, which both worlds can ask. The ground, not the sea: measured from sea
+/// level the gate took every flake off a snowfield on a mountain 220 m up.
+pub fn height_above_ground(point: Vec3) -> f32 {
+    let Some(direction) = point.try_normalize() else {
+        return 0.0;
+    };
+    point.length() - (PLANET_RADIUS + surface_height(direction).max(0.0))
+}
+
+/// How a raining cell at `distance` metres is drawn: the share of its streaks
+/// kept and their opacity. Streaks thin toward `rain_lod_far_frac` across the
+/// detail range and fade out over the blend band ending at it, where the rain
+/// VOLUME has long since taken over the distance, so the handover never pops.
+/// Opacity falls from `rain_alpha_near` toward `rain_alpha_far` with distance.
+/// Pure so a test can hold the fade.
+pub fn cell_lod(distance: f32, settings: &WeatherSettings) -> CellLod {
+    let s = settings;
+    let detail = s.rain_detail_range_m.max(1.0);
+    let near = (1.0 - distance / detail).clamp(0.0, 1.0);
+    let alpha = s.rain_alpha_far + (s.rain_alpha_near - s.rain_alpha_far) * near;
+    let blend = s.rain_lod_blend_m.max(1.0);
+    let out = ((distance - (detail - blend)) / blend).clamp(0.0, 1.0);
+    let keep = (s.rain_lod_far_frac + (1.0 - s.rain_lod_far_frac) * near) * (1.0 - out);
+    CellLod {
+        streak_share: keep.clamp(0.0, 1.0),
+        streak_alpha: alpha * (1.0 - out),
+    }
+}
+
+/// See [`cell_lod`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CellLod {
+    pub streak_share: f32,
+    pub streak_alpha: f32,
+}
+
+/// One cell streak's offset across its cell (two numbers in -0.5..0.5) and its
+/// phase down the column, from the cell and the streak's index alone.
+fn cell_streak_seed(row: u32, column: u32, index: u32) -> (f32, f32, f32) {
+    let (a, b, c) = streak_seed(
+        index.wrapping_mul(0x27d4_eb2f)
+            ^ row.wrapping_mul(0x1656_67b1)
+            ^ column.wrapping_mul(0x9e37_79b9),
+    );
+    (a / std::f32::consts::TAU - 0.5, b * b - 0.5, c)
+}
+
+/// The terrain shader's day curve: `smoothstep` over these two sun
+/// elevations, and the share of the sky fill a face keeps at night. Written
+/// here because the rain is drawn by an unlit CPU mesh that has to take the
+/// same light as the ground; `the_rain_takes_the_grounds_day_curve` reads the
+/// shader and holds it to these numbers.
+const DAY_FROM: f32 = -0.13;
+const DAY_TO: f32 = 0.20;
+const NIGHT_FILL: f32 = 0.12;
+
+/// How brightly rain is lit, 0..1: the diffuse sky the ground takes, which is
+/// the day curve over a night floor, dimmed by the overcast's
+/// `overcast_amb_dim`. Rain is lit by the sky around it and never by the sun
+/// through the cloud it is falling out of, so there is no direct term.
+/// Pure so a test can hold night, noon and a storm.
+pub fn rain_light(sun_elevation: f32, cover: f32, settings: &WeatherSettings) -> f32 {
+    let t = ((sun_elevation - DAY_FROM) / (DAY_TO - DAY_FROM)).clamp(0.0, 1.0);
+    let daylight = t * t * (3.0 - 2.0 * t);
+    let fill = NIGHT_FILL + (1.0 - NIGHT_FILL) * daylight;
+    fill * (1.0 - cover.clamp(0.0, 1.0) * settings.overcast_amb_dim)
+}
+
+/// A `weather.ron` colour lit by `light` with an alpha, as the mesh's LINEAR
+/// vertex colour. The file's colours are Tenebris's, authored as display
+/// values for a renderer that writes them straight to the screen; taken as
+/// linear they come out far lighter here, and grey rain reads as white. The mesh is unlit, so the light is applied here or nowhere: without
+/// it a night storm glowed at noon's grey against a black sky.
+fn vertex_color(display: [f32; 3], light: f32, alpha: f32) -> [f32; 4] {
+    let linear = LinearRgba::from(Srgba::rgb(display[0], display[1], display[2]));
+    let light = light.clamp(0.0, 1.0);
+    [
+        linear.red * light,
+        linear.green * light,
+        linear.blue * light,
+        alpha.clamp(0.0, 1.0),
+    ]
+}
+
+/// The shower mesh under construction: camera-facing quads, one colour each.
+#[derive(Default)]
+struct Quads {
+    positions: Vec<[f32; 3]>,
+    colors: Vec<[f32; 4]>,
+    indices: Vec<u32>,
+}
+
+impl Quads {
+    /// A quad `half` either side of the segment from `top` down to `bottom`.
+    fn push(&mut self, top: Vec3, bottom: Vec3, half: Vec3, color: [f32; 4]) {
+        self.push_span(top, bottom, -half, half, [color, color]);
+    }
+
+    /// The strip between offsets `from` and `to` across the segment, each side
+    /// its own colour.
+    fn push_span(&mut self, top: Vec3, bottom: Vec3, from: Vec3, to: Vec3, colors: [[f32; 4]; 2]) {
+        let first = self.positions.len() as u32;
+        self.positions.extend([
+            (top + from).to_array(),
+            (top + to).to_array(),
+            (bottom + to).to_array(),
+            (bottom + from).to_array(),
+        ]);
+        self.colors
+            .extend([colors[0], colors[1], colors[1], colors[0]]);
+        self.indices
+            .extend([first, first + 1, first + 2, first, first + 2, first + 3]);
+    }
+}
+
+/// Everything the shower mesh is built from this frame.
+struct ShowerFrame<'a> {
+    settings: &'a WeatherSettings,
+    contact: &'a PlanetContact,
+    eye: Vec3,
+    up: Vec3,
+    right: Vec3,
+    now: f32,
+    /// How brightly the rain is lit (`rain_light`), at the camera.
+    light: f32,
+}
+
+/// The near shower: a dense disk of streaks round the camera while it is
+/// raining or snowing HERE: streaks, or flakes that sway.
+fn near_shower(frame: &ShowerFrame, rain: f32, snow: bool, quads: &mut Quads) {
+    let s = frame.settings;
+    let fall = Fall::of(s, snow);
+    // Snow falls twenty times slower than rain, so far fewer flakes cross the
+    // view at any moment; it takes more of them to read as a snowfall.
+    let density = if snow { s.snow_density } else { 1.0 };
+    let count = (s.shower_max_streaks as f32 * rain * density) as usize;
+    let reference = if frame.up.y.abs() < 0.9 {
+        Vec3::Y
+    } else {
+        Vec3::X
+    };
+    let t1 = reference.cross(frame.up).normalize();
+    let t2 = frame.up.cross(t1);
+    let column = s.shower_column_m.max(1.0);
+    for index in 0..count as u32 {
+        let (angle, spread, phase) = streak_seed(index);
+        let distance = spread * s.shower_radius_m;
+        let mark = frame.eye + (t1 * angle.cos() + t2 * angle.sin()) * distance;
+        let direction = mark.normalize();
+        let base = direction * frame.contact.sample(direction).radius;
+        let fallen = (frame.now * fall.speed_mps / column + phase).rem_euclid(1.0);
+        let top =
+            base + frame.up * (column * (1.0 - fallen)) + frame.right * fall.sway(frame.now, phase);
+        let alpha = fall.alpha_near
+            * column_fade(fallen, 0.15)
+            * (1.0 - spread * (1.0 - fall.alpha_far / fall.alpha_near.max(1e-3)));
+        // A streak passing a metre from the eye is a bar across the screen,
+        // not a raindrop; fade the ones that close out.
+        let near = (top.distance(frame.eye) - 1.0).clamp(0.0, 3.0) / 3.0;
+        let color = vertex_color(fall.color, frame.light, alpha * near);
+        quads.push(
+            top,
+            top - frame.up * fall.length_m,
+            frame.right * fall.half_width_m,
+            color,
+        );
+    }
+}
+
+/// Rain near: every raining cell of the body-fixed lattice inside the detail
+/// range, as shafts of streaks falling from the cloud base to the ground.
+/// Tenebris's `draw_distant_shafts`, on our lattice. Beyond it the rain is the
+/// volume the water pass marches (`RainMap`).
+fn cell_shafts(frame: &ShowerFrame, air: &pbd_core::atmosphere::Atmosphere, quads: &mut Quads) {
+    let s = frame.settings;
+    let cell_angle = s.rain_cell_m / PLANET_RADIUS;
+    let range_angle = s.rain_detail_range_m / PLANET_RADIUS;
+    let cells = field::raining_cells(air, frame.up, cell_angle, range_angle);
+    let cloud_base = crate::sky::CLOUD_RADIUS;
+    let per_cell = s.rain_cell_density * s.rain_cell_m * s.rain_cell_m;
+    let mut streaks = 0u32;
+    for cell in cells {
+        let up = cell.direction;
+        let base_r = frame.contact.sample(up).radius;
+        let height = cloud_base - base_r;
+        if height < 2.0 {
+            continue;
+        }
+        let base = up * base_r;
+        let distance = base.distance(frame.eye);
+        if distance > s.rain_detail_range_m {
+            continue;
+        }
+        let lod = cell_lod(distance, s);
+        // Square to the cell's own up and to the camera's line of sight: the
+        // streaks spread across the cell along this, turned to the eye.
+        let across = up
+            .cross(base - frame.eye)
+            .try_normalize()
+            .unwrap_or(frame.right);
+        let count = (per_cell * lod.streak_share).round() as u32;
+        if count == 0 || lod.streak_alpha <= 0.001 {
+            continue;
+        }
+        let t1 = across;
+        let t2 = up.cross(t1);
+        let fall = Fall::of(s, cell.precip == Precip::Snow);
+        // Widened with distance only: at the camera a shaft streak is a near
+        // shower streak, and six times one reads as a pole.
+        let widen = 1.0
+            + (s.rain_cell_width_mult - 1.0) * (distance / s.rain_detail_range_m.max(1.0)).min(1.0);
+        let half = across * (fall.half_width_m * widen);
+        for index in 0..count {
+            if streaks >= s.rain_max_cell_streaks {
+                return;
+            }
+            let (u, v, phase) = cell_streak_seed(cell.row, cell.column, index);
+            let foot = base + (t1 * u + t2 * v) * s.rain_cell_m;
+            // A cell is fixed to the body, so its clearance is constant and so
+            // is this rate. Tenebris's cells drift with the clouds, and keying
+            // the rate to a clearance that changed every frame ran its drops
+            // backwards; that cannot happen on a lattice that does not move.
+            let fallen = (frame.now * fall.speed_mps / height.max(1.0) + phase).rem_euclid(1.0);
+            let top = foot + up * (height * (1.0 - fallen)) + t1 * fall.sway(frame.now, phase);
+            let alpha = lod.streak_alpha * column_fade(fallen, 0.15);
+            quads.push(
+                top,
+                top - up * fall.length_m,
+                half,
+                vertex_color(fall.color, frame.light, alpha),
+            );
+            streaks += 1;
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn rebuild_shower(
     time: Res<Time>,
-    weather: Res<Weather>,
+    sun: Res<crate::sky::Sun>,
+    air: Res<Air>,
     settings: Res<WeatherSettings>,
+    weather: Res<Weather>,
     frame: Res<PlanetRenderFrame>,
     contact: Option<Res<PlanetContact>>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -208,73 +681,62 @@ fn rebuild_shower(
     let eye = camera.translation() - center;
     let radius = eye.length();
     let up = eye / radius.max(1e-3);
-    // No shower when the camera cannot see the sky: under water, or under
-    // the terrain beneath it. The rendered cap, not the point-sampled noise,
-    // which can sit a whole step above a walker standing on a cell edge.
-    let ground = contact.sample(up).radius;
+    // No rain at all from under the sea or above the altitude gate. Under
+    // ROCK, no shower round the camera - it is dry there - but the rain
+    // outside still draws: it stands on the surface, the rock hides it from
+    // inside a cave, and from a cave mouth it is the rain you are sheltering
+    // from. Whether the eye is under rock is the column's answer, read off
+    // `Weather` so the lens and the shower cannot disagree about it.
     let submerged = surface_height(up) < 0.0 && radius < PLANET_RADIUS;
-    let count = if radius < 1.0 || submerged || radius < ground - 0.8 {
-        0
-    } else {
-        (settings.shower_max_streaks as f32 * weather.rain) as usize
-    };
-    *visibility = if count == 0 {
-        Visibility::Hidden
-    } else {
-        Visibility::Inherited
-    };
+    let drawn = radius >= 1.0 && !submerged && rain_drawn_at(height_above_ground(eye), &settings);
     let Some(mesh) = meshes.get_mut(&mesh.0) else {
         return;
     };
     let reference = if up.y.abs() < 0.9 { Vec3::Y } else { Vec3::X };
-    let t1 = reference.cross(up).normalize();
-    let t2 = up.cross(t1);
     let mut right = camera.right().as_vec3();
     right -= up * right.dot(up);
-    let right = right.try_normalize().unwrap_or(t1);
-    let now = time.elapsed_secs();
-    let column = settings.shower_column_m.max(1.0);
-    let mut positions = Vec::with_capacity(count * 4);
-    let mut colors = Vec::with_capacity(count * 4);
-    let mut indices = Vec::with_capacity(count * 6);
-    for index in 0..count as u32 {
-        let (angle, spread, phase) = streak_seed(index);
-        let distance = spread * settings.shower_radius_m;
-        let mark = eye + (t1 * angle.cos() + t2 * angle.sin()) * distance;
-        let direction = mark.normalize();
-        let base = direction * contact.sample(direction).radius;
-        let fallen = (now * settings.rain_fall_mps / column + phase).rem_euclid(1.0);
-        let top = base + up * (column * (1.0 - fallen));
-        let bottom = top - up * settings.rain_streak_m;
-        let half = right * settings.rain_width_m;
-        let alpha = settings.rain_alpha_near
-            * column_fade(fallen, 0.15)
-            * (1.0 - spread * (1.0 - settings.rain_alpha_far / settings.rain_alpha_near.max(1e-3)));
-        let color = [
-            settings.rain_color[0],
-            settings.rain_color[1],
-            settings.rain_color[2],
-            alpha.clamp(0.0, 1.0),
-        ];
-        let first = positions.len() as u32;
-        positions.extend([
-            (top - half).to_array(),
-            (top + half).to_array(),
-            (bottom + half).to_array(),
-            (bottom - half).to_array(),
-        ]);
-        colors.extend([color; 4]);
-        indices.extend([first, first + 1, first + 2, first, first + 2, first + 3]);
+    let right = right
+        .try_normalize()
+        .unwrap_or_else(|| reference.cross(up).normalize());
+    let shower = ShowerFrame {
+        settings: &settings,
+        contact: &contact,
+        eye,
+        up,
+        right,
+        now: time.elapsed_secs(),
+        light: rain_light(sun.elevation(up), weather.cover, &settings),
+    };
+    let mut quads = Quads::default();
+    if weather.flash.w > 0.0 {
+        let strike = weather.flash.truncate().normalize();
+        push_bolt(
+            &mut quads,
+            weather.flash,
+            contact.sample(strike).radius,
+            right,
+        );
     }
+    if drawn {
+        if !weather.sheltered {
+            near_shower(&shower, weather.rain, weather.snowing, &mut quads);
+        }
+        cell_shafts(&shower, &air.now, &mut quads);
+    }
+    *visibility = if quads.positions.is_empty() {
+        Visibility::Hidden
+    } else {
+        Visibility::Inherited
+    };
     // The bound follows the streaks: a bound computed once from the mesh's
     // first contents would sit at the planet's centre and cull the shower on
     // the GPU whatever the CPU-side culling was told.
     let (mut low, mut high) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
-    for p in &positions {
+    for p in &quads.positions {
         low = low.min(Vec3::from_array(*p));
         high = high.max(Vec3::from_array(*p));
     }
-    if positions.is_empty() {
+    if quads.positions.is_empty() {
         low = eye;
         high = eye;
     }
@@ -284,16 +746,38 @@ fn rebuild_shower(
     // Normals are not optional for a standard-material mesh: without the
     // attribute the varying is never written and the fragment comes out NaN,
     // which blends to nothing. The scene's star mesh learned the same thing.
-    let normals = vec![up.to_array(); positions.len()];
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    let normals = vec![up.to_array(); quads.positions.len()];
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, quads.positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-    mesh.insert_indices(Indices::U32(indices));
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, quads.colors);
+    mesh.insert_indices(Indices::U32(quads.indices));
+}
+
+/// Open the world's atmosphere: the save's state if there is one, a new one
+/// spun up if not, then `--weather-at`'s extra run. A capture (the clock
+/// pinned) steps in place from here on.
+fn open_air(
+    mut commands: Commands,
+    config: Res<crate::config::AtmosphereConfig>,
+    sun: Res<crate::sky::Sun>,
+    epoch: Res<WeatherEpoch>,
+    save: Option<Res<crate::saves::WorldSave>>,
+) {
+    let saved = save.as_ref().and_then(|save| save.weather.clone());
+    let mut air = Air::open(config.0, TERRAIN.seed, saved.as_deref(), sun.clock.seconds);
+    air.in_place = !sun.running;
+    if epoch.0 > 0.0 {
+        let steps = (epoch.0 / config.0.dt_s).ceil() as u32;
+        air.run(steps, &[]);
+    }
+    commands.insert_resource(air);
 }
 
 pub struct WeatherPlugin {
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// Seconds the weather field starts at; see [`WeatherEpoch`].
+    pub weather_at: f32,
 }
 
 impl Plugin for WeatherPlugin {
@@ -309,15 +793,36 @@ impl Plugin for WeatherPlugin {
             wetness: forcing,
             cover: forcing,
             snowing: false,
+            sheltered: false,
+            flash: Vec4::ZERO,
+            here: Vec3::ZERO,
         })
         .insert_resource(StormForcing(forcing))
+        .insert_resource(WeatherEpoch(self.weather_at))
+        .init_resource::<RainMap>()
+        .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
+            RainMap,
+        >::default())
         .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
             Weather,
         >::default())
-        .add_systems(Startup, spawn_shower)
+        .init_resource::<crate::overlay::OverlayMode>()
+        .add_systems(Startup, (spawn_shower, open_air))
         .add_systems(
             Update,
-            (sample_field, follow_rain, cycle_rain, rebuild_shower).chain(),
+            (
+                sample_field,
+                crate::atmosphere::warm_capture,
+                crate::atmosphere::advance_air,
+                crate::overlay::cycle_overlay,
+                crate::overlay::fill_overlay,
+                follow_rain,
+                cycle_rain,
+                fill_rain_map,
+                strike_lightning,
+                rebuild_shower,
+            )
+                .chain(),
         );
     }
 }
@@ -340,6 +845,71 @@ mod tests {
         assert_eq!(column_fade(1.0, 0.15), 0.0);
         assert_eq!(column_fade(0.5, 0.15), 1.0);
         assert!((column_fade(0.075, 0.15) - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn the_rain_takes_the_grounds_day_curve() {
+        // The shader the curve is transcribed from, read as shipped.
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        assert!(
+            shader.contains(&format!(
+                "smoothstep({DAY_FROM:.2},{DAY_TO:.2},sun_elevation)"
+            )),
+            "the terrain's day curve moved; move DAY_FROM and DAY_TO with it"
+        );
+        assert!(
+            shader.contains(&format!("var night = {NIGHT_FILL:.2};")),
+            "the terrain's night fill moved; move NIGHT_FILL with it"
+        );
+        let s = WeatherSettings::default();
+        assert!(
+            (rain_light(1.0, 0.0, &s) - 1.0).abs() < 1e-6,
+            "clear noon is full light"
+        );
+        assert!(
+            (rain_light(-1.0, 0.0, &s) - NIGHT_FILL).abs() < 1e-6,
+            "night is the floor"
+        );
+        let storm_noon = rain_light(1.0, 1.0, &s);
+        assert!((storm_noon - (1.0 - s.overcast_amb_dim)).abs() < 1e-6);
+        assert!(
+            rain_light(-1.0, 1.0, &s) < 0.07,
+            "a night storm's rain is near black"
+        );
+    }
+
+    #[test]
+    fn no_rain_and_no_lens_drops_above_the_altitude_gate() {
+        let s = WeatherSettings::default();
+        assert!(rain_drawn_at(0.0, &s));
+        assert!(rain_drawn_at(s.rain_lod_alt_m, &s));
+        assert!(!rain_drawn_at(s.rain_lod_alt_m + 0.5, &s));
+        // The coast capture that showed drops on the glass was 420 m up.
+        assert!(!rain_drawn_at(420.0, &s));
+    }
+
+    #[test]
+    fn a_cells_streaks_fade_out_across_the_detail_range_without_a_pop() {
+        let s = WeatherSettings::default();
+        let near = cell_lod(0.0, &s);
+        assert!((near.streak_share - 1.0).abs() < 1e-6);
+        assert!((near.streak_alpha - s.rain_alpha_near).abs() < 1e-6);
+        assert_eq!(cell_lod(s.rain_detail_range_m, &s).streak_share, 0.0);
+        let mut last = near;
+        let mut d = 0.0;
+        while d < s.rain_detail_range_m {
+            d += 0.5;
+            let next = cell_lod(d, &s);
+            assert!(
+                (next.streak_share - last.streak_share).abs() < 0.02,
+                "streaks pop at {d} m"
+            );
+            assert!(
+                (next.streak_alpha - last.streak_alpha).abs() < 0.02,
+                "alpha pops at {d} m"
+            );
+            last = next;
+        }
     }
 
     #[test]

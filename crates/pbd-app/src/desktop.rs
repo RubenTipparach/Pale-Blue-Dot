@@ -1,8 +1,10 @@
 mod digging;
 mod hud;
 mod menu;
+mod overlay_ui;
 mod scene;
 mod slots;
+mod weather_ui;
 
 use avian3d::prelude::*;
 use bevy::{
@@ -68,6 +70,11 @@ pub struct Launch {
     pub spawn: Option<String>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
+    /// `--weather-at SECONDS` starts the weather field that far into its own
+    /// time, so a capture can be taken under a chosen sky: the spawn is a wet
+    /// meadow whose cover sits near 0.6 at launch, and the body's average is
+    /// 0.18. Moves the field only, not the sun or the sea.
+    pub weather_at: f32,
     /// `--dig-ahead` digs along the camera's LOOK rather than straight down.
     /// Digging down is right for proving the verb and useless for judging the
     /// result: the walker falls into its own pit and the eye ends up inside
@@ -93,6 +100,13 @@ pub struct Launch {
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
     pub time: Option<f32>,
+    /// `--day N` puts the clock on that day of the year, for a season. It
+    /// pins the clock the way `--time` does.
+    pub day: Option<u32>,
+    /// `--overlay <name>` opens with that weather overlay showing (`wind`,
+    /// `jet`, `currents`, `cloud`, `rain`, `humidity`, `sunlight`,
+    /// `temperature`), as M would.
+    pub overlay: Option<pbd_core::overlay::Overlay>,
     /// `--world <name>` opens that save, creating it if it is not there.
     /// Absent, an interactive run opens the one played most recently and a
     /// capture writes to no world at all.
@@ -120,8 +134,11 @@ impl Launch {
             height: None,
             spawn: None,
             rain: 0.0,
+            weather_at: 0.0,
             world: None,
             time: None,
+            day: None,
+            overlay: None,
             torch: false,
             dig_ahead: false,
             pitch: None,
@@ -185,6 +202,14 @@ impl Launch {
                     );
                     result.time = Some(hour);
                 }
+                "--day" => {
+                    i += 1;
+                    let day: u32 = args
+                        .get(i)
+                        .and_then(|d| d.parse().ok())
+                        .expect("--day requires a day number");
+                    result.day = Some(day);
+                }
                 "--world" => {
                     i += 1;
                     result.world = Some(args.get(i).expect("--world requires a name").clone());
@@ -207,7 +232,10 @@ impl Launch {
                 "--spawn" => {
                     i += 1;
                     let spawn = args.get(i).expect("--spawn requires a place").clone();
-                    assert!(spawn == "mouth", "--spawn knows only mouth");
+                    assert!(
+                        spawn == "mouth" || spawn == "snow",
+                        "--spawn knows mouth and snow"
+                    );
                     result.spawn = Some(spawn);
                 }
                 "--frames" => {
@@ -255,6 +283,16 @@ impl Launch {
                     );
                     result.height = Some(height);
                 }
+                "--overlay" => {
+                    i += 1;
+                    let name = args.get(i).expect("--overlay requires a name");
+                    result.overlay = Some(
+                        pbd_core::overlay::Overlay::ALL
+                            .into_iter()
+                            .find(|o| o.name().eq_ignore_ascii_case(name))
+                            .unwrap_or_else(|| panic!("no overlay called {name}")),
+                    );
+                }
                 "--rain" => {
                     i += 1;
                     let rain: f32 = args
@@ -264,6 +302,16 @@ impl Launch {
                         .expect("invalid rain intensity");
                     assert!((0.0..=1.0).contains(&rain), "rain must be within 0..1");
                     result.rain = rain;
+                }
+                "--weather-at" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .expect("--weather-at requires seconds")
+                        .parse()
+                        .expect("invalid weather seconds");
+                    assert!(seconds.is_finite(), "weather seconds must be finite");
+                    result.weather_at = seconds;
                 }
                 "--verify-flight" => {}
                 unknown => panic!("unknown argument {unknown}; use --help"),
@@ -292,7 +340,8 @@ impl Launch {
                 "cave",
                 "overhang",
                 "mouth",
-                "seacave"
+                "seacave",
+                "column"
             ]
             .contains(&result.view.as_str()),
             "unknown capture view"
@@ -303,8 +352,16 @@ impl Launch {
         );
         assert!(
             result.height.is_none()
-                || (["shore", "nightshore", "midnight", "meadow", "river", "dive"]
-                    .contains(&result.view.as_str())
+                || ([
+                    "shore",
+                    "nightshore",
+                    "midnight",
+                    "meadow",
+                    "river",
+                    "dive",
+                    "column"
+                ]
+                .contains(&result.view.as_str())
                     && result.capture.is_some()),
             "--height requires --view shore or dive with a static --capture"
         );
@@ -349,6 +406,7 @@ pub fn run(args: &[String]) {
     // anchored. Restoring the pose afterwards would build the world around the
     // spawn and then teleport away from it.
     let mut world = open_world(&launch);
+    let saved_seconds = world.world_seconds;
     let hotbar = slots::Hotbar::restore(&mut world);
     // The saves page is the front door of a plain launch: a player picks the
     // world rather than being put in the last one.
@@ -392,7 +450,10 @@ pub fn run(args: &[String]) {
         PhysicsPlugins::default(),
         PaleBlueDotPlugin,
         ConfigPlugin,
-        WeatherPlugin { rain: launch.rain },
+        WeatherPlugin {
+            rain: launch.rain,
+            weather_at: launch.weather_at,
+        },
         PlanetPlugin,
         FlightViewPlugin,
         SkyPlugin,
@@ -429,8 +490,8 @@ pub fn run(args: &[String]) {
     // The clock: pinned and stopped where a capture asked for an hour, so a
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
-        clock: sun_clock(&launch),
-        running: launch.time.is_none() && launch.capture.is_none(),
+        clock: sun_clock(&launch, saved_seconds),
+        running: launch.time.is_none() && launch.day.is_none() && launch.capture.is_none(),
     })
     .init_resource::<digging::Aim>()
     .insert_resource(ClearColor(if std::env::var("PBD_NO_SKY").is_ok() {
@@ -452,7 +513,11 @@ pub fn run(args: &[String]) {
         previous: Instant::now(),
     })
     .insert_resource(launch.clone())
-    .add_systems(Startup, (scene::setup, hud::setup, photo_camera))
+    .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
+    .add_systems(
+        Startup,
+        (scene::setup, hud::setup, photo_camera, overlay_ui::spawn),
+    )
     // The column tier is built by a startup system and its records land when
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
@@ -481,7 +546,10 @@ pub fn run(args: &[String]) {
             slots::update,
             hud::near_field,
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
+            (weather_ui::drag, weather_ui::show).chain(),
+            overlay_ui::show,
             autosave,
+            save_weather,
             digging::dig_and_place,
             digging::scripted_dig,
             capture,
@@ -590,6 +658,25 @@ fn load_world(world: &mut World) {
     let mut opened = WorldSave::open(root, slot);
     let hotbar = slots::Hotbar::restore(&mut opened);
     let pose = opened.pose;
+    // The world resumes in its season and at its hour; one never played
+    // keeps the clock it had.
+    if let Some(seconds) = opened.world_seconds {
+        world.resource_mut::<pbd_app::sky::Sun>().clock.seconds = seconds;
+    }
+    // And under its own sky: the saved weather, or a new one spun up.
+    let air = {
+        let config = world.resource::<pbd_app::config::AtmosphereConfig>().0;
+        let sun = *world.resource::<pbd_app::sky::Sun>();
+        let mut air = pbd_app::atmosphere::Air::open(
+            config,
+            pbd_app::planet::TERRAIN.seed,
+            opened.weather.as_deref(),
+            sun.clock.seconds,
+        );
+        air.in_place = !sun.running;
+        air
+    };
+    world.insert_resource(air);
     world.insert_resource(opened);
     world.insert_resource(hotbar);
     // The tier is standing where the last world left it with the last world's
@@ -628,12 +715,14 @@ fn load_world(world: &mut World) {
 /// exactly why it is the only part on a clock: the edits and the hotbar are
 /// written per edit and are already down. A menu opening counts because the
 /// player who opens one is usually the player about to quit.
+#[allow(clippy::too_many_arguments)]
 fn autosave(
     time: Res<Time>,
     screen: Res<menu::Screen>,
     walking: Option<Res<pbd_app::walking::WalkingState>>,
     slots: Res<slots::Hotbar>,
     walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    sun: Res<pbd_app::sky::Sun>,
     mut save: ResMut<WorldSave>,
     mut due: Local<f32>,
 ) {
@@ -647,12 +736,15 @@ fn autosave(
         return;
     };
     let (heading, pitch) = state.view();
-    save.snapshot(Pose {
-        position: position.0,
-        heading,
-        pitch,
-        selected: slots.selected(),
-    });
+    save.snapshot(
+        Pose {
+            position: position.0,
+            heading,
+            pitch,
+            selected: slots.selected(),
+        },
+        sun.clock.seconds,
+    );
 }
 
 /// Wait for the disk on the way out.
@@ -660,20 +752,57 @@ fn autosave(
 /// The one place blocking is right is the place the player is already
 /// waiting: losing the last two digs to a quit would be the whole feature
 /// failing at its most visible moment.
-fn drain_saves(exits: MessageReader<AppExit>, save: Res<WorldSave>) {
+fn drain_saves(
+    exits: MessageReader<AppExit>,
+    air: Option<Res<pbd_app::atmosphere::Air>>,
+    mut save: ResMut<WorldSave>,
+) {
     if !exits.is_empty() {
+        if let Some(air) = air {
+            save.snapshot_weather(air.now.to_bytes());
+        }
         save.drain();
+    }
+}
+
+/// Write the atmosphere on its own, slower timer, and whenever a menu opens:
+/// half a megabyte is not a thing to write every five seconds, and losing a
+/// minute of weather costs a minute of sky.
+fn save_weather(
+    time: Res<Time>,
+    screen: Res<menu::Screen>,
+    air: Option<Res<pbd_app::atmosphere::Air>>,
+    mut save: ResMut<WorldSave>,
+    mut due: Local<f32>,
+) {
+    let opening = screen.is_changed() && *screen != menu::Screen::Playing;
+    *due -= time.delta_secs();
+    if !opening && *due > 0.0 {
+        return;
+    }
+    *due = saves::WEATHER_SAVE_S;
+    if let Some(air) = air {
+        save.snapshot_weather(air.now.to_bytes());
     }
 }
 
 /// The clock a launch starts on: pinned where `--time` asked, and then the
 /// log says where the sun stands from the spawn, as the `--yaw` and `--pitch`
 /// that would centre it, so a sky capture is aimed rather than guessed.
-fn sun_clock(launch: &Launch) -> pbd_core::daylight::Clock {
-    let clock = match launch.time {
-        Some(hour) => pbd_core::daylight::Clock::at_hour(hour),
-        None => pbd_core::daylight::Clock::default(),
+fn sun_clock(launch: &Launch, saved_seconds: Option<f64>) -> pbd_core::daylight::Clock {
+    use pbd_core::daylight::{Clock, START_HOUR};
+    let clock = match (launch.day, launch.time, saved_seconds) {
+        (None, None, Some(seconds)) => Clock { seconds },
+        (day, hour, _) => Clock::at(day.unwrap_or(0), hour.unwrap_or(START_HOUR)),
     };
+    if launch.day.is_some() {
+        info!(
+            "day {} of {}: the sun stands {:.1} deg off the equator",
+            clock.day(),
+            pbd_core::daylight::YEAR_DAYS,
+            clock.declination().to_degrees()
+        );
+    }
     if launch.time.is_some() {
         let up = spawn_direction(launch);
         let heading = Vec3::Y.cross(up).normalize_or(Vec3::X);
@@ -705,6 +834,37 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
             );
             return shore;
         }
+    }
+    if launch.spawn.as_deref() == Some("snow") {
+        // The nearest dry land where the field's precipitation is snow, so a
+        // capture can photograph a snowfall: a Fibonacci sweep of the sphere,
+        // nearest first. A measurement instrument, like `--weather-at`.
+        let count = 20_000;
+        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+        let found = (0..count)
+            .map(|i| {
+                let y = 1.0 - 2.0 * (i as f32 + 0.5) / count as f32;
+                let r = (1.0 - y * y).max(0.0).sqrt();
+                let a = golden * i as f32;
+                Vec3::new(a.cos() * r, y, a.sin() * r)
+            })
+            .filter(|d| {
+                pbd_app::planet::surface_height(*d) > 1.0
+                    && matches!(
+                        pbd_core::planet_gen::biome(&pbd_app::planet::TERRAIN, *d),
+                        pbd_core::planet_gen::Biome::Tundra
+                            | pbd_core::planet_gen::Biome::Mountains
+                    )
+            })
+            .max_by(|a, b| a.dot(default).total_cmp(&b.dot(default)));
+        if let Some(snow) = found {
+            info!(
+                "spawn moved {:.0} m to the nearest snowfield",
+                snow.dot(default).clamp(-1., 1.).acos() * PLANET_RADIUS
+            );
+            return snow;
+        }
+        warn!("no snowfield found; spawning at the default");
     }
     if launch.spawn.as_deref() == Some("mouth") || launch.view == "mouth" {
         // The nearest worm that starts at the surface within a kilometre.
@@ -1153,6 +1313,23 @@ fn photo_camera(
             }
         };
         let mut transform = Transform::from_translation(eye).looking_at(sea, land);
+        transform.translation += launch.render_offset;
+        commands.spawn((Camera3d::default(), transform));
+        return;
+    }
+    if launch.view == "column" {
+        // A camera standing straight over the spawn at `--height` metres
+        // above its ground, facing east and tilted by `--pitch` (-89 looks
+        // straight down): a descent through the weather is this view at a
+        // run of heights. The weather's "here" is the camera's own direction,
+        // so a forced storm (`--rain`) brews directly under it at any height.
+        let direction = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let height = launch.height.unwrap_or(EYE_HEIGHT);
+        let position = direction * (terrain_radius(direction) + height);
+        let east = Vec3::Y.cross(direction).normalize_or_zero();
+        let pitch = launch.pitch.unwrap_or(-30.0).to_radians();
+        let forward = east * pitch.cos() + direction * pitch.sin();
+        let mut transform = Transform::from_translation(position).looking_to(forward, direction);
         transform.translation += launch.render_offset;
         commands.spawn((Camera3d::default(), transform));
         return;

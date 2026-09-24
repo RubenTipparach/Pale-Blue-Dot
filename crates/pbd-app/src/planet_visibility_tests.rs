@@ -299,7 +299,7 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         water_absorption: Vec3::new(0.6, 0.2, 0.1).extend(RADIUS - 0.5),
         water_deep: Vec3::new(0.02, 0.10, 0.22).extend(0.),
         weather: Vec4::ZERO,
-        rain: [Vec4::ZERO; 4],
+        rain: [Vec4::ZERO; 6],
         // Every slot is in the base, so all of them are live; the bands are
         // wider than the sphere, so every owner is fine and nothing is covered.
         lod_offsets: UVec4::new(count as u32, 1, 0, 0),

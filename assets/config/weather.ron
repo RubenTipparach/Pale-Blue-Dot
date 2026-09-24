@@ -5,28 +5,23 @@
 (
     wet_fade_tau_s: 1.6,
 
-    // The field: where and when it rains at all. A drifting field of warm
-    // pockets condenses the terrain's own moisture into cloud; where the cloud
-    // is thick enough it rains, and the rain trails the cloud by sampling the
-    // same field `rain_min_s` earlier rather than by remembering anything. See
-    // `pbd_core::weather`. Measured on the shipped values: the body averages
-    // 0.18 cover with 5.9% of it precipitating at any moment.
-    solar_scale: 2.2,
-    solar_drift: 0.015,
-    solar_floor: 0.55,
-    arid_gamma: 1.35,
-    cloud_min: 0.22,
-    cloud_full: 0.52,
-    min_alpha: 0.32,
-    rain_cover_min: 0.62,
-    rain_min_s: 15.0,
-    // A weather system is far bigger than the 188 m a biome is decided on, so
-    // moisture is asked a second question at its own planet-scale frequency.
-    weather_moisture_scale: 1.6,
+    // Where and when it rains is the simulated atmosphere's (atmosphere.ron);
+    // what follows is how rain looks.
     rain_fall_mps: 70.0,
     rain_width_m: 0.012,
     rain_streak_m: 1.5,
     rain_color: (0.52, 0.62, 0.90),
+    // Where the field's column is cold it snows: slow flakes that sway.
+    // Tenebris's fall speed.
+    snow_fall_mps: 3.0,
+    snow_size_m: 0.07,
+    snow_sway_m: 0.5,
+    snow_color: (0.93, 0.95, 1.0),
+    // Snow falls twenty times slower than rain, so the near shower draws this
+    // many times more flakes; and snow is opaque where rain is a streak.
+    snow_density: 3.0,
+    snow_alpha_near: 0.95,
+    snow_alpha_far: 0.6,
     rain_alpha_near: 0.78,
     rain_alpha_far: 0.10,
     shower_radius_m: 18.0,
@@ -46,7 +41,100 @@
     rain_wave_strength: 0.6,
     rain_wave_speed: 1.4,
     rain_wet_darken: 0.72,
-    rain_sky_sheen: 0.8,
     rain_glint_power: 24.0,
     rain_glint_strength: 0.5,
+    // Wet ground is WATER: it mirrors the sky by a Fresnel term along the
+    // rippled normal. Water stands in puddles on flat faces, cut from noise of
+    // this size and growing with the wetness to this share of a soaked floor;
+    // the rings and the full mirror live in the puddles. Grass is never a
+    // floor. Ours, not Tenebris's: its sheen could only darken.
+    rain_puddle_scale_m: 0.4,
+    rain_puddle_share: 0.35,
+    rain_mirror_strength: 1.0,
+    // Raindrop rings fall on every wet upward face; on grass at this share.
+    rain_grass_rings: 0.5,
+
+    // Overcast: the cover over the player dims the light, so the ground cannot
+    // go stormy while the sun still shines on it. Tenebris's values.
+    overcast_sun_dim: 0.72,
+    overcast_amb_dim: 0.48,
+    overcast_sky_blue_cut: 0.75,
+    overcast_sky_haze: 0.6,
+    overcast_sky_dim: 0.6,
+    cloud_fog_add: 0.35,
+    rain_fog_mult: 1.6,
+    // A full, thick cloud keeps this share of the sun off the ground under
+    // it: the depth of a cloud's shadow, cast where the sun puts it.
+    cloud_shadow: 0.8,
+
+    // The clouds: where they are is the atmosphere's; this is how they are
+    // lit (shaders/clouds.wgsl; the cloud-lighting change). One extinction per
+    // metre for the view and the light, fair and at full cover.
+    cloud_extinction: 0.0115,
+    cloud_storm_extinction: 0.03,
+    cloud_night_floor: 0.045,
+    // The sun's strength on a cloud, sky light from above and ground bounce
+    // from below; the cloud over a sample dims the sky light, which is what
+    // darkens a thick base.
+    cloud_sun: 0.55,
+    cloud_ambient_sky: 0.9,
+    cloud_ambient_ground: 0.35,
+    // Two Henyey-Greenstein lobes: forward (the silver lining), back, blend.
+    cloud_phase_forward: 0.8,
+    cloud_phase_back: -0.3,
+    cloud_phase_blend: 0.5,
+    // Multiple scattering, three octaves: each is this share of the last.
+    cloud_scatter_extinction_falloff: 0.5,
+    cloud_scatter_energy_falloff: 0.5,
+    cloud_scatter_phase_falloff: 0.5,
+    // Detail finer than the atmosphere's 181 m cells. The deck floor opens
+    // lanes in a full cover (convective cloud keeps none); erosion eats the
+    // soft edges (fading as its octaves fall under a pixel, or they alias);
+    // shear combs detail along the wind aloft, 1 for none and each unit past
+    // it a noise cell (~230 m) of push at shear_mps and above; cells is how
+    // far a tall convective cloud takes cumulus's cellular texture.
+    cloud_deck_floor: 0.45,
+    cloud_erosion: 0.5,
+    cloud_shear: 2.0,
+    cloud_shear_mps: 25.0,
+    cloud_cells: 0.6,
+
+    // Rain near: every raining cell inside the detail range draws shafts of
+    // streaks, thinning to the far fraction and fading out over the blend
+    // band. No rain and no lens drops above the altitude gate. Tenebris's
+    // values, except the cell and its density, which are its 30 m cell's 52
+    // streaks per square metre on a body sixteen times the size.
+    rain_cell_m: 60.0,
+    rain_detail_range_m: 150.0,
+    rain_lod_blend_m: 60.0,
+    rain_lod_far_frac: 0.25,
+    rain_cell_density: 0.058,
+    rain_cell_width_mult: 6.0,
+    rain_max_cell_streaks: 9000,
+    rain_lod_alt_m: 200.0,
+
+    // Rain far: a volume marched per pixel off a 64 x 64 map of the field in
+    // 50 m cells round the camera, falling as stretched, scrolling streaks.
+    // At full rain a kilometre of it is an optical depth of 3: a storm hides
+    // the far side of a valley, which is what makes it read as a storm.
+    rain_map_size: 64,
+    rain_map_cell_m: 50.0,
+    rain_volume_density: 0.003,
+    rain_volume_range_m: 2000.0,
+    rain_volume_stretch: 10.0,
+    rain_volume_color: (0.55, 0.58, 0.62),
+
+    // Lightning: where it strikes is the atmosphere's. A strike flickers for
+    // flash_s and lights the cloud and the ground by these.
+    lightning_flash_s: 0.7,
+    lightning_cloud: 6.0,
+    lightning_ground: 0.8,
+
+    // The overlays (M): how the map looks. What it shows is the atmosphere's.
+    // A streak is twelve steps of streak_step_m along the flow; at the top of
+    // the overlay's range it crawls streak_scroll streak lengths a second.
+    overlay_opacity: 0.7,
+    overlay_streak_step_m: 50.0,
+    overlay_streak_scroll: 0.35,
+    overlay_streak_strength: 0.8,
 )

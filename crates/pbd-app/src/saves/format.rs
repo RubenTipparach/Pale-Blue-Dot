@@ -215,6 +215,11 @@ pub struct WorldFile {
     pub heading: Option<[f32; 3]>,
     pub pitch: f32,
     pub selected: usize,
+    /// World time, seconds since midnight of day 0: the hour and the season
+    /// the world resumes in. Absent in a save from before the clock was
+    /// saved, which opens at the clock's start.
+    #[serde(default)]
+    pub world_seconds: Option<f64>,
 }
 
 impl WorldFile {
@@ -228,6 +233,7 @@ impl WorldFile {
             heading: None,
             pitch: 0.0,
             selected: 0,
+            world_seconds: None,
         }
     }
 
@@ -343,8 +349,20 @@ mod tests {
         file.heading = Some([0.0, 1.0, 0.0]);
         file.pitch = -0.3;
         file.selected = 4;
+        file.world_seconds = Some(123_456.75);
         let back = WorldFile::from_ron(&file.to_ron()).expect("what it just wrote");
         assert_eq!(back, file);
         assert!(WorldFile::from_ron("{ this is not ron").is_none());
+    }
+
+    /// A save written before the clock was saved still opens, at the start.
+    #[test]
+    fn a_world_file_from_before_the_clock_opens() {
+        let mut file = WorldFile::new("old".into(), 7, 1);
+        file.world_seconds = None;
+        let text = file.to_ron().replace("world_seconds: None,", "");
+        assert!(!text.contains("world_seconds"), "{text}");
+        let back = WorldFile::from_ron(&text).expect("an older file");
+        assert_eq!(back.world_seconds, None);
     }
 }
