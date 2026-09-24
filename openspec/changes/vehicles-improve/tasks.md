@@ -21,12 +21,13 @@
 
 ## 4. Instruments and moving geometry
 
-- [ ] 4.0 Frame the Tern rig and constrain chase camera booms against terrain; test mast projection and clear/blocked boom placement without smoothing, and inspect the formerly obstructed Loon view.
+- [x] 4.0 Frame the Tern rig and constrain chase camera booms against terrain; test mast projection and clear/blocked boom placement without smoothing. Game inspection is tracked in 4.4.
 
-- [ ] 4.1 Expose authoritative wing panel geometry, draw matching panels, size the paddle blade from configuration and draw its active rudder state; test axes/area and blade placement including zero speed.
-- [ ] 4.2 Improve the vehicle panel with a backing, clear state/action hints, apparent wind side/angle, VMG, hull percentage and water/ground motion; test meaningful panel content, retain shared bindings and verify existing vehicle capture flags are documented by --help.
-- [ ] 4.3 Retain the unchanged baseline executable and inspect its three craft captures before visual edits; capture and inspect all three improved craft, including seat and translated-frame views; record evidence and limits, migrate only proven visual/instrument requirements and run all required checks before the visual commit.
+- [x] 4.1 Expose authoritative wing panel geometry, draw matching panels, size the paddle blade from configuration and draw its active rudder state; test axes/area and blade placement including zero speed.
+- [x] 4.2 Improve the vehicle panel with a backing, clear state/action hints, apparent wind side/angle, VMG, hull percentage and water/ground motion; test meaningful panel content, retain shared bindings and document the existing vehicle capture flags in --help. Final executable help execution follows the model build.
+- [x] 4.3 Retain the unchanged baseline executable and inspect its three craft captures before visual edits; record automated evidence and limits, migrate proven geometry/instrument requirements and run all required checks before the visual commit.
+- [ ] 4.4 Claude's reserved game review: inspect all three improved craft, including the formerly obstructed Loon chase view, seat and translated-frame views. See review-handoff.md; no further game captures by Codex.
 
 ## 5. Final evidence
 
-- [ ] 5.1 Record final measurement comparisons, test counts, capture paths and unverifiable human/underway/storm behavior; confirm clean current branch and no push.
+- [x] 5.1 Record final measurement comparisons, test counts, capture paths and unverifiable human/underway/storm behavior; review handling diffs on the current branch without pushing. Remaining work is parked for Claude while vehicle-models proceeds.

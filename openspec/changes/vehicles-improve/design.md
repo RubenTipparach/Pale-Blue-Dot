@@ -246,3 +246,17 @@ orientation stays unchanged. Tests also exercise view switching, the three
 control mappings and menu suppression. A real generated water column reads
 the occupied camera's newly propagated underwater eye while ignoring the
 parked camera, then reads air when camera activity switches back.
+
+Visual/instrument implementation evidence: the final app release suite passes
+141 library and 14 desktop tests (13 existing ignored reports); core passes
+177 tests (6 ignored). The six added app geometry/chase/HUD tests and the core
+zero-speed/recovery paddle telemetry test pass. Formatting, all-target Clippy
+and OpenSpec validation pass. Wing area/axes and paddle area now match their
+configuration, and the final handling probe remains at the values above.
+
+The owner redirected the work to authored vehicle models and assigned all
+further game captures to Claude. `review-handoff.md` records the remaining
+appearance and human handling review. Only tested geometry/camera/content
+contracts move into main specs; this is not in-game appearance approval.
+All deltas have migrated with implementation/tests, so this change now sets
+`skip_specs: true` while remaining open solely for its outstanding review.

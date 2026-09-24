@@ -8,6 +8,7 @@
 //! the craft, the sea table and its state, the planet's gravity, and the
 //! walker's own ground query for anything a craft touches.
 
+mod chase;
 mod draw;
 mod hud;
 mod place;

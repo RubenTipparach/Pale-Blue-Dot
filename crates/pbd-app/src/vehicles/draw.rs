@@ -15,6 +15,25 @@ use std::f32::consts::FRAC_PI_2;
 const ROTOR_SPIN: f32 = 18.0;
 /// How far a recovering paddle blade is lifted clear of the water, m.
 const RECOVERY_LIFT_M: f32 = 0.45;
+const BLADE_HEIGHT_M: f32 = 0.45;
+
+fn wing_piece(
+    wing: &pbd_core::vehicle::spec::WingSpec,
+    foil: &pbd_core::vehicle::foil::FoilSpec,
+) -> (Mesh, Transform) {
+    let span = (wing.panel_area_m2 * wing.aspect * 2.0).sqrt() / 2.0;
+    let chord = Vec3::from(foil.chord);
+    let normal = Vec3::from(foil.normal);
+    let rotation = Quat::from_mat3(&Mat3::from_cols(chord.cross(normal), normal, -chord));
+    (
+        Cuboid::new(span, 0.16, foil.area_m2 / span).into(),
+        Transform::from_translation(Vec3::from(foil.at)).with_rotation(rotation),
+    )
+}
+
+fn paddle_blade(area_m2: f32) -> Mesh {
+    Cuboid::new(0.02, BLADE_HEIGHT_M, area_m2 / BLADE_HEIGHT_M).into()
+}
 
 /// A moving part and the craft it belongs to.
 #[derive(Component)]
@@ -165,20 +184,10 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
                 Vec3::new(0.0, 0.4, 3.9),
                 &body,
             );
-            // Wing: two panels, span and chord from their area and aspect.
-            let panel_span = (s.wing.panel_area_m2 * s.wing.aspect * 2.0).sqrt() / 2.0;
-            let chord = s.wing.panel_area_m2 / panel_span;
-            let [px, py, pz] = s.wing.panel_at;
-            b.cuboid(
-                entity,
-                Vec3::new(
-                    2.0 * (px + panel_span / 2.0).max(s.rotor.at[0]),
-                    0.16,
-                    chord,
-                ),
-                Vec3::new(0.0, py, pz),
-                &body,
-            );
+            for panel in s.wing.panels() {
+                let (mesh, transform) = wing_piece(&s.wing, &panel);
+                b.piece(entity, mesh, &body, transform);
+            }
             let foil = |area: f32, aspect: f32| {
                 let span = (area * aspect).sqrt();
                 (span, area / span)
@@ -305,7 +314,12 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
             b.piece(entity, mesh(p, i), &canoe, Transform::IDENTITY);
             let paddle = b.pivot(entity, Moving::Paddle, Transform::IDENTITY);
             b.cuboid(paddle, Vec3::new(0.04, 1.3, 0.04), Vec3::Y * 0.65, &dark);
-            b.cuboid(paddle, Vec3::new(0.02, 0.45, 0.2), Vec3::ZERO, &trim);
+            b.piece(
+                paddle,
+                paddle_blade(s.paddle.blade_m2),
+                &trim,
+                Transform::IDENTITY,
+            );
             b.crew(entity, s.seat.eye, &crew);
         }
     }
@@ -377,6 +391,11 @@ fn visible(shown: bool) -> Visibility {
 /// the stroke, and lifted forward again through the recovery.
 fn paddle(craft: &Craft, state: &pbd_core::vehicle::LoonState) -> Transform {
     let p = craft.specs().loon.paddle;
+    if let pbd_core::vehicle::Telemetry::Loon(t) = &craft.telemetry
+        && let Some(at) = t.rudder_at
+    {
+        return Transform::from_translation(at.as_vec3());
+    }
     let Some(stroke) = state.stroke else {
         // Resting across the gunwales.
         return Transform::from_xyz(0.0, 0.35, 0.5).with_rotation(Quat::from_rotation_z(FRAC_PI_2));
@@ -396,4 +415,99 @@ fn paddle(craft: &Craft, state: &pbd_core::vehicle::LoonState) -> Transform {
     let x = stroke.side as f32 * p.reach_m;
     Transform::from_xyz(x, p.depth_m + lift, z)
         .with_rotation(Quat::from_rotation_z(-x.signum() * 0.35))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pbd_core::vehicle::{Hulls, LoonTelemetry, Telemetry, spec::VehicleSpecs};
+    use std::sync::Arc;
+
+    fn dimensions(mesh: &Mesh) -> Vec3 {
+        let bevy::mesh::VertexAttributeValues::Float32x3(points) =
+            mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap()
+        else {
+            panic!("positions")
+        };
+        let lo = points
+            .iter()
+            .map(|p| Vec3::from(*p))
+            .fold(Vec3::splat(f32::INFINITY), Vec3::min);
+        let hi = points
+            .iter()
+            .map(|p| Vec3::from(*p))
+            .fold(Vec3::splat(f32::NEG_INFINITY), Vec3::max);
+        hi - lo
+    }
+
+    #[test]
+    fn drawn_panels_match_configured_foil_axes_and_area() {
+        let mut wing = VehicleSpecs::default().kestrel.wing;
+        // A nondefault case proves drawing consumes configuration as well as defaults.
+        for (incidence, dihedral, area) in [(3.0, 4.0, 8.0), (8.0, 12.0, 5.5)] {
+            wing.incidence_deg = incidence;
+            wing.dihedral_deg = dihedral;
+            wing.panel_area_m2 = area;
+            for foil in wing.panels() {
+                let (mesh, transform) = wing_piece(&wing, &foil);
+                let size = dimensions(&mesh);
+                assert!((size.x * size.z - foil.area_m2).abs() < 1e-5);
+                assert!(
+                    transform
+                        .rotation
+                        .mul_vec3(Vec3::NEG_Z)
+                        .distance(Vec3::from(foil.chord))
+                        < 1e-6
+                );
+                assert!(
+                    transform
+                        .rotation
+                        .mul_vec3(Vec3::Y)
+                        .distance(Vec3::from(foil.normal))
+                        < 1e-6
+                );
+                assert_eq!(transform.translation, Vec3::from(foil.at));
+            }
+        }
+    }
+
+    #[test]
+    fn paddle_mesh_and_motion_follow_area_and_working_rudder_without_force() {
+        let specs = Arc::new(VehicleSpecs::default());
+        let mut craft = Craft::new(
+            Kind::Loon,
+            1,
+            specs.clone(),
+            Hulls::new(&specs),
+            pbd_core::DVec3::Y * 4800.0,
+            pbd_core::DQuat::IDENTITY,
+        );
+        let size = dimensions(&paddle_blade(specs.loon.paddle.blade_m2));
+        assert!((size.y * size.z - specs.loon.paddle.blade_m2).abs() < 1e-6);
+        for side in [-1.0, 1.0] {
+            let at = pbd_core::DVec3::new(
+                side * specs.loon.paddle.rudder_at[0] as f64,
+                specs.loon.paddle.depth_m as f64,
+                specs.loon.paddle.rudder_at[1] as f64,
+            );
+            craft.telemetry = Telemetry::Loon(LoonTelemetry {
+                rudder_at: Some(at),
+                ..default()
+            });
+            let CraftState::Loon(state) = &mut craft.state else {
+                unreachable!()
+            };
+            // Recovery must not hide the working rudder either.
+            state.stroke = Some(pbd_core::vehicle::Stroke {
+                side,
+                direction: 1.0,
+                phase: 1.5,
+            });
+            let CraftState::Loon(state) = &craft.state else {
+                unreachable!()
+            };
+            assert_eq!(paddle(&craft, state).translation, at.as_vec3());
+            assert_eq!(craft.body.velocity, pbd_core::DVec3::ZERO);
+        }
+    }
 }

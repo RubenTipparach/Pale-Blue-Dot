@@ -17,10 +17,18 @@ pub struct VehicleCamera;
 /// How far the look turns, rad.
 const PITCH_LIMIT: f32 = 1.45;
 /// The chase camera's stand-off, m, per craft, and its range.
-const CHASE_M: [f32; 3] = [20.0, 12.0, 8.0];
+const CHASE_M: [f32; 3] = [20.0, 16.0, 8.0];
 const CHASE_RANGE_M: [f32; 2] = [4.0, 80.0];
 /// How far one wheel line moves it, as a share.
 const ZOOM_STEP: f32 = 0.12;
+
+pub(super) fn default_distance(kind: Kind) -> f32 {
+    CHASE_M[match kind {
+        Kind::Kestrel => 0,
+        Kind::Tern => 1,
+        Kind::Loon => 2,
+    }]
+}
 
 /// Where the camera aboard is looking.
 #[derive(Resource)]
@@ -122,6 +130,7 @@ pub fn follow(
     aboard: Res<Aboard>,
     mut view: ResMut<VehicleView>,
     frame: Res<crate::planet::PlanetRenderFrame>,
+    contact: Option<Res<crate::planet::PlanetContact>>,
     vehicles: Query<&Vehicle>,
     mut cameras: Query<&mut Transform, With<VehicleCamera>>,
 ) {
@@ -130,11 +139,7 @@ pub fn follow(
     };
     let craft = &vehicle.craft;
     if view.distance <= 0.0 {
-        view.distance = CHASE_M[match craft.kind {
-            Kind::Kestrel => 0,
-            Kind::Tern => 1,
-            Kind::Loon => 2,
-        }];
+        view.distance = default_distance(craft.kind);
     }
     let orientation = craft.body.orientation.as_quat();
     let Ok(mut camera) = cameras.single_mut() else {
@@ -149,17 +154,9 @@ pub fn follow(
     }
     // The chase view keeps the horizon level: it turns with the craft's
     // heading, not its roll or pitch, or a heeling boat would tip the world.
-    let centre = (frame.center + craft.body.position).as_vec3();
-    let up = craft
-        .body
-        .position
-        .normalize_or(pbd_core::DVec3::Y)
-        .as_vec3();
-    let bow = orientation * Vec3::NEG_Z;
-    let heading = (bow - up * bow.dot(up)).normalize_or(up.any_orthonormal_vector());
-    let look = Quat::from_axis_angle(up, view.yaw) * heading;
-    let right = look.cross(up).normalize_or(Vec3::X);
-    let forward = Quat::from_axis_angle(right, view.pitch) * look;
-    camera.translation = centre - forward * view.distance + up * (view.distance * 0.12);
-    camera.look_at(centre + up * 1.0, up);
+    let (eye, target, up) = super::chase::pose(craft, &view, |at| {
+        super::ground_under(contact.as_deref(), at)
+    });
+    camera.translation = (frame.center + eye).as_vec3();
+    camera.look_at((frame.center + target).as_vec3(), up);
 }

@@ -9,13 +9,13 @@
 //! attitude and climb held in the hover, drift over the ground cancelled with
 //! the stick centred, rates held in wingborne flight.
 
-use super::foil::{self, FoilSpec};
+use super::foil;
 use super::{
     AIR_DENSITY, Context, Craft, CraftState, FORWARD, Input, RIGHT, SEA_DENSITY, Telemetry,
     contact, v3,
 };
 use crate::vehicle::foil::smoothstep;
-use glam::{DQuat, DVec3};
+use glam::DVec3;
 use std::f64::consts::FRAC_PI_2;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -77,31 +77,11 @@ pub struct KestrelTelemetry {
     pub climb_hold: bool,
 }
 
-/// The two wing panels' foils, from the wing's incidence and dihedral.
-fn wing_panel(craft: &Craft, side: f64) -> FoilSpec {
-    let w = craft.specs().kestrel.wing;
-    let inc = (w.incidence_deg as f64).to_radians();
-    let dihedral = (w.dihedral_deg as f64).to_radians() * side;
-    let turn = DQuat::from_rotation_z(dihedral);
-    let chord = turn * DVec3::new(0.0, inc.sin(), -inc.cos());
-    let normal = turn * DVec3::new(0.0, inc.cos(), inc.sin());
-    let [x, y, z] = w.panel_at;
-    FoilSpec {
-        at: [x * side as f32, y, z],
-        chord: chord.as_vec3().to_array(),
-        normal: normal.as_vec3().to_array(),
-        area_m2: w.panel_area_m2,
-        aspect: w.aspect,
-        cl_max: w.cl_max,
-        cd0: w.cd0,
-    }
-}
-
 pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let specs = craft.specs.clone();
     let s = &specs.kestrel;
     let a = &s.assist;
-    let panels = [wing_panel(craft, -1.0), wing_panel(craft, 1.0)];
+    let panels = s.wing.panels();
     let occupied = craft.occupied;
     let com = craft.com;
     let Craft {

@@ -55,6 +55,9 @@ pub struct LoonTelemetry {
     pub freeboard: f64,
     /// The blade's force and where it pulled.
     pub blade: FoilForce,
+    /// Active stern-rudder blade centre in the craft reference frame, m.
+    /// Present even at zero relative water speed; absent during a power stroke.
+    pub rudder_at: Option<DVec3>,
     pub strokes_per_minute: f64,
     pub displaced_m3: f64,
     pub stroke: Option<Stroke>,
@@ -128,6 +131,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     // the stern as a rudder.
     let blade_at = |x: f64, z: f64| DVec3::new(x, p.depth_m as f64, z) - com;
     let mut blade = FoilForce::default();
+    let mut rudder_at = None;
     let pull = |body: &mut super::body::RigidBody, local: DVec3, stroke_speed: f64, area: f64| {
         let at = body.point(local);
         let (height, _) = cx.water(at, 0.0);
@@ -169,12 +173,9 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         );
     } else if occupied && input.rudder != 0.0 {
         let side = -(input.rudder as f64).signum();
-        blade = pull(
-            body,
-            blade_at(side * p.rudder_at[0] as f64, p.rudder_at[1] as f64),
-            0.0,
-            p.rudder_m2 as f64,
-        );
+        let local = blade_at(side * p.rudder_at[0] as f64, p.rudder_at[1] as f64);
+        rudder_at = Some(local + com);
+        blade = pull(body, local, 0.0, p.rudder_m2 as f64);
     }
 
     // The hull's own grip on the water, and its resistance.
@@ -236,6 +237,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         heel,
         freeboard,
         blade,
+        rudder_at,
         strokes_per_minute: st.strokes.len() as f64 * 10.0,
         displaced_m3: displaced,
         stroke: st.stroke,

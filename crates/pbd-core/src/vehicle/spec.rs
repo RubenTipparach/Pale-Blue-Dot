@@ -115,6 +115,28 @@ pub struct WingSpec {
     pub flap_rad: f32,
 }
 
+impl WingSpec {
+    /// Left and right foils in the reference frame, shared by forces and drawing.
+    pub fn panels(&self) -> [FoilSpec; 2] {
+        [-1.0, 1.0].map(|side| {
+            let inc = (self.incidence_deg as f64).to_radians();
+            let turn = glam::DQuat::from_rotation_z((self.dihedral_deg as f64).to_radians() * side);
+            let chord = turn * glam::DVec3::new(0.0, inc.sin(), -inc.cos());
+            let normal = turn * glam::DVec3::new(0.0, inc.cos(), inc.sin());
+            let [x, y, z] = self.panel_at;
+            FoilSpec {
+                at: [x * side as f32, y, z],
+                chord: chord.as_vec3().to_array(),
+                normal: normal.as_vec3().to_array(),
+                area_m2: self.panel_area_m2,
+                aspect: self.aspect,
+                cl_max: self.cl_max,
+                cd0: self.cd0,
+            }
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RotorSpec {

@@ -22,3 +22,17 @@ with no --world so investigation cannot modify a saved world. Inspect the
 actual images, including the Loon paddle and Tern instruments. Record
 hardware, resolution, world seed, frame count, and capture limitations.
 This is a correctness/handling investigation, not a performance claim.
+
+Repeat the numeric instrument with:
+
+```powershell
+cargo run -p pbd-core --example vehicle_probe --release --offline -j 2
+```
+
+The optional first argument scales only the instrument's Kestrel torque
+ratings for calibration (default 1); it does not edit defaults or assets.
+The unchanged executable and the original vehicle RON are retained as
+`output/vehicles-improve/baseline-pbd-app.exe` and `baseline-vehicles.ron`.
+The executable reads runtime assets: reproducing the baseline requires the
+original configuration as well as the executable. The committed baseline
+configuration is also available at the planning commit, `e986318`.

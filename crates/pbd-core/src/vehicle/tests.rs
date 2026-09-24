@@ -327,6 +327,90 @@ fn loon_skeg_immersion_is_independent_of_the_lateral_plane() {
 }
 
 #[test]
+fn loon_reports_a_working_rudder_at_rest_and_during_recovery() {
+    let mut world = World::new(RADIUS - 40.0);
+    world.sea = SeaTable::new(
+        SeaSettings {
+            swell_height_m: 0.0,
+            ..Default::default()
+        },
+        G as f32,
+    );
+    let ground = |_: DVec3| RADIUS - 40.0;
+    let env = Surroundings {
+        sea: &world.sea,
+        sea_state: world.sea.state(0.0, Vec3::ZERO),
+        sea_radius: RADIUS,
+        depth: 40.0,
+        air: AirHere {
+            wind: Vec3::ZERO,
+            upper: Vec3::ZERO,
+            rain_mmh: 0.0,
+            over_land: false,
+        },
+        gusts: &world.gusts,
+        gravity: DVec3::NEG_Y * G,
+        current: DVec3::ZERO,
+        ground: &ground,
+        seconds: 1000.0,
+    };
+    let cx = Context {
+        env: &env,
+        sea: world.sea.local(&env.sea_state, Vec3::Y, 40.0, env.seconds),
+        up: DVec3::Y,
+        ground: RADIUS - 40.0,
+        seconds: env.seconds,
+        dt: 0.0,
+    };
+    for phase in [None, Some(1.5), Some(0.5)] {
+        for rudder in [-1.0, 1.0] {
+            let mut craft = at_pole(Kind::Loon, 0.1, 0.0);
+            craft.board();
+            let CraftState::Loon(st) = &mut craft.state else {
+                unreachable!()
+            };
+            st.stroke = phase.map(|phase| Stroke {
+                side: 1.0,
+                direction: 1.0,
+                phase,
+            });
+            loon::forces(
+                &mut craft,
+                &Input {
+                    rudder,
+                    ..Default::default()
+                },
+                &cx,
+            );
+            let Telemetry::Loon(t) = &craft.telemetry else {
+                unreachable!()
+            };
+            if phase.is_some_and(|p| p < 1.0) {
+                assert_eq!(t.rudder_at, None, "the power stroke has priority");
+            } else {
+                let p = craft.specs.loon.paddle;
+                let at = t.rudder_at.expect("working even at rest");
+                assert_eq!(
+                    at,
+                    DVec3::new(
+                        -rudder as f64 * p.rudder_at[0] as f64,
+                        p.depth_m as f64,
+                        p.rudder_at[1] as f64
+                    )
+                );
+                assert_eq!(t.blade.force, DVec3::ZERO);
+                assert!(
+                    t.blade
+                        .at
+                        .distance(craft.reference_point(at.as_vec3().to_array()))
+                        < 1e-6
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn a_wet_foil_uses_orbital_velocity_and_current_at_its_own_depth() {
     let world = World::new(RADIUS - 40.0);
     let mut craft = at_pole(Kind::Tern, -1.0, 0.0);
