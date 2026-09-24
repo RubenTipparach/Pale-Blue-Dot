@@ -406,6 +406,17 @@ pub struct WeatherSettings {
     /// How far convective cloud (a tall top) takes the cellular texture of
     /// cumulus rather than the smooth one of a deck, 0..1.
     pub cloud_cells: f32,
+    // ---- What the clouds cost (`cloud-budget`): the march's resolution and
+    // its steps. Quality knobs, not weather.
+    /// The resolution the cloud march runs at, as a fraction of the view's
+    /// along each axis, 0.25..=1. A full-resolution composite lays it over
+    /// the scene.
+    pub cloud_render_scale: f32,
+    /// The march's nearest step, metres. Steps grow with distance from the
+    /// eye from here.
+    pub cloud_step_m: f32,
+    /// The most steps a ray takes through the layer, 8..=256.
+    pub cloud_max_steps: u32,
 
     // ---- Rain near: Tenebris's shafts of streaks over every raining cell of
     // a lattice fixed to the body, inside the detail range. Beyond it the rain
@@ -534,6 +545,9 @@ impl Default for WeatherSettings {
             cloud_shear: 2.0,
             cloud_shear_mps: 25.0,
             cloud_cells: 0.6,
+            cloud_render_scale: 0.4,
+            cloud_step_m: 12.0,
+            cloud_max_steps: 48,
             rain_cell_m: 60.0,
             rain_detail_range_m: 150.0,
             rain_lod_blend_m: 60.0,
@@ -654,6 +668,15 @@ impl Validated for WeatherSettings {
             "overlay streaks",
             &[s.overlay_streak_step_m, s.overlay_streak_scroll],
         )?;
+        (0.25..=1.0)
+            .contains(&s.cloud_render_scale)
+            .then_some(())
+            .ok_or("cloud_render_scale must be within 0.25..=1")?;
+        positive("cloud_step_m", &[s.cloud_step_m])?;
+        (8..=256)
+            .contains(&s.cloud_max_steps)
+            .then_some(())
+            .ok_or("cloud_max_steps must be within 8..=256")?;
         (s.cloud_shear >= 1.0)
             .then_some(())
             .ok_or("cloud_shear must be at least 1 (1 draws no shear)")?;

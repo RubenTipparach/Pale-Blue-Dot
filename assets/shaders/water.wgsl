@@ -6,7 +6,7 @@
 // Reverse-Z depth (near=1, sky=0), linear scene colour, the resolved
 // single-sample scene textures. Positions are body-local; `planet_center` is
 // where that frame sits in the render frame (zero today).
-#import pbd::clouds::{CloudLayer, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at, cloud_map_smooth, cloud_hash}
+#import pbd::clouds::{CloudLayer, CloudSample, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at, cloud_map_smooth, cloud_hash}
 #import pbd::sea::{SeaView, sea_surface}
 struct Cell {
     direction_height: vec4<f32>,
@@ -101,9 +101,15 @@ struct WaterView {
 @group(2) @binding(1) var weather_wind: texture_cube<f32>;
 @group(2) @binding(2) var weather_overlay: texture_cube<f32>;
 @group(2) @binding(3) var weather_sampler: sampler;
-// The clouds pass only: the previous frame's history of the cloud march.
+// The clouds passes only: a cloud-march target (the march reads the previous
+// frame's history, the composite this frame's), and the baked cellular noise
+// with its repeating sampler (`cloud-budget`).
 @group(3) @binding(0) var cloud_history: texture_2d<f32>;
 @group(3) @binding(1) var cloud_history_sampler: sampler;
+@group(3) @binding(2) var cloud_cells_tex: texture_3d<f32>;
+@group(3) @binding(3) var cloud_cells_sampler: sampler;
+// The composite only: how far along its ray each march texel's cloud is.
+@group(3) @binding(4) var cloud_depth: texture_2d<f32>;
 fn cloud_layer() -> CloudLayer {
     return CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash,view.cloud_light,
         view.cloud_shape,view.cloud_cells);
@@ -699,57 +705,79 @@ fn rain_map_at(p: vec3<f32>) -> f32 {
 // `pbd::clouds` marched along each pixel's ray from the eye to the nearest of
 // the scene's depth and the sea, and composited over what is there: the sky,
 // the sea and the land alike. A cloud in front of a hill is in front of it.
-// The clouds pass writes two targets: the scene with the clouds over it, and
-// the clouds alone (light premultiplied by coverage, and the coverage), which
-// is the next frame's history.
-struct CloudsOut {
-    @location(0) color: vec4<f32>,
-    @location(1) history: vec4<f32>,
-}
+// Two passes (`cloud-budget`). The MARCH runs at `cloud_render_scale` of the
+// view and writes the cloud alone (light premultiplied by coverage, and the
+// coverage), blended with the previous frame's: that target is the history.
+// The COMPOSITE runs at full resolution and lays it over the scene.
 
-@fragment
-fn clouds(in: FullscreenVertexOutput) -> CloudsOut {
-    let uv = in.uv;
-    let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
-    // The angle one pixel spans, off the ray's own screen derivative: what
-    // fades the clouds' finer octaves as they fall under a pixel. Taken before
-    // any branch, where a derivative is defined.
-    let ray = view_ray(uv);
-    let pixel_angle = length(fwidth(ray.direction));
-    var out: CloudsOut;
-    out.color = vec4<f32>(scene,1.0);
-    out.history = vec4<f32>(0.0);
-    // Under the sea the surface is the sky; the compose pass drew it.
-    if (view.fx.y > 0.75) { return out; }
-    let eye = ray.origin-view.planet_center.xyz;
-    let layer = cloud_layer();
+// The farthest scene depth over a march texel's footprint, as a distance
+// along the ray; the sea's hit included. Reverse-Z: the farthest is the
+// smallest depth, and zero is the sky. A march texel on a hill's silhouette
+// then holds the cloud its sky side sees, and the composite's own span test
+// keeps it off the hill.
+fn cloud_far(ray: Ray, uv: vec2<f32>, half_texel: vec2<f32>, eye: vec3<f32>) -> f32 {
+    var depth = 1.0;
+    for (var k = 0u; k < 4u; k++) {
+        let corner = vec2<f32>(select(-1.0, 1.0, (k & 1u) == 1u), select(-1.0, 1.0, (k & 2u) == 2u));
+        depth = min(depth, load_depth(clamp(uv + corner*half_texel, vec2<f32>(0.0), vec2<f32>(1.0))));
+    }
     var far = 1.0e9;
-    let depth = load_depth(uv);
     if (depth > 1e-7) {
         far = length(reconstruct_local(uv,depth)-ray.origin);
     }
     let sea = cloud_sphere_hit(eye,ray.direction,view.planet_center.w);
     if (sea.x > 0.0) { far = min(far,sea.x); }
+    return far;
+}
+
+struct CloudMarchOut {
+    // The history: the cloud's light premultiplied by coverage, and coverage.
+    @location(0) cloud: vec4<f32>,
+    // How far along the ray this frame's cloud is, metres, zero for none; and
+    // how far the march could see (the scene, the sea), capped to stay a
+    // finite half float.
+    @location(1) depth: vec2<f32>,
+}
+
+@fragment
+fn cloud_march_pass(in: FullscreenVertexOutput) -> CloudMarchOut {
+    let uv = in.uv;
+    // The angle one pixel of THIS target spans, off the ray's own screen
+    // derivative: what fades the clouds' finer octaves as they fall under a
+    // pixel. Taken before any branch, where a derivative is defined.
+    let ray = view_ray(uv);
+    let pixel_angle = length(fwidth(ray.direction));
+    let half_texel = 0.5*fwidth(uv);
+    var out: CloudMarchOut;
+    out.cloud = vec4<f32>(0.0);
+    out.depth = vec2<f32>(0.0, CLOUD_FAR_CAP_M);
+    // Under the sea the surface is the sky; the compose pass drew it.
+    if (view.fx.y > 0.75) { return out; }
+    let eye = ray.origin-view.planet_center.xyz;
+    let layer = cloud_layer();
+    let far = cloud_far(ray, uv, half_texel, eye);
+    out.depth.y = min(far, CLOUD_FAR_CAP_M);
     let span = cloud_span(eye,ray.direction,0.0,far,layer);
-    // No cloud to march: nothing drawn and an empty history, so a cloud
-    // never ghosts over a hill that has moved in front of it.
+    // No cloud to march: an empty history, so a cloud never ghosts over a
+    // hill that has moved in front of it.
     if (span.y <= span.x) { return out; }
     // A different step offset for every pixel AND every frame: white noise,
     // an integer hash of both. Each frame then samples the cloud at new
-    // depths and the history averages them; interleaved gradient noise, which
-    // this was, drew a fixed diagonal halftone with no history to average it.
+    // depths and the history averages them.
     let pixel = vec2<u32>(in.position.xy);
     var h = pixel.x*1973u + pixel.y*9277u + u32(view.cloud_history.z)*26699u + 1u;
     h = h*747796405u + 2891336453u;
     h = ((h >> ((h >> 28u) + 4u)) ^ h)*277803737u;
     h = (h >> 22u) ^ h;
     let jitter = f32(h & 0xffffffu)/16777216.0;
-    var cloud = cloud_march(eye,ray.direction,span.x,span.y,layer,safe_normal(view.sun.xyz),
-        weather_cloud,weather_wind,weather_sampler,jitter,pixel_angle);
+    let marched = cloud_march(eye,ray.direction,span.x,span.y,layer,safe_normal(view.sun.xyz),
+        weather_cloud,weather_wind,weather_sampler,cloud_cells_tex,cloud_cells_sampler,
+        jitter,pixel_angle);
+    var cloud = marched.cloud;
     // Blend into the history where this pixel's cloud was on the previous
-    // frame: the middle of the span, projected by the previous camera.
+    // frame: the cloud's own point, projected by the previous camera.
     if (view.cloud_history.y > 0.5) {
-        let point = ray.origin + ray.direction*(0.5*(span.x+span.y));
+        let point = ray.origin + ray.direction*marched.depth;
         let before = view.prev_clip_from_local*vec4<f32>(point,1.0);
         if (before.w > 0.0) {
             let ndc = before.xy/before.w;
@@ -760,10 +788,64 @@ fn clouds(in: FullscreenVertexOutput) -> CloudsOut {
             }
         }
     }
-    out.history = cloud;
-    out.color = vec4<f32>(scene*(1.0-cloud.w)+cloud.rgb,1.0);
+    out.cloud = cloud;
+    out.depth.x = select(0.0, marched.depth, marched.cloud.w > 1e-3);
     return out;
 }
+
+// Where the march stops for a ray that meets nothing, metres: a half float's
+// range with room to spare.
+const CLOUD_FAR_CAP_M: f32 = 60000.0;
+
+// The march texel's cloud laid over one full-resolution pixel: the four
+// texels round it, bilinearly, each dropped when it did not look where this
+// pixel looks: its cloud lies beyond this pixel's own ground, sea or limb, or
+// its march stopped on ground well short of where this pixel's ray goes. A
+// coarse texel straddling a silhouette otherwise carried the cloud across it
+// as a staircase of texels (`cloud-budget`).
+fn cloud_upsampled(uv: vec2<f32>, far: f32) -> vec4<f32> {
+    let size = vec2<i32>(textureDimensions(cloud_history));
+    let at = uv*vec2<f32>(size) - 0.5;
+    let base = vec2<i32>(floor(at));
+    let f = at - floor(at);
+    var sum = vec4<f32>(0.0);
+    var weight = 0.0;
+    for (var k = 0u; k < 4u; k++) {
+        let o = vec2<i32>(i32(k & 1u), i32((k >> 1u) & 1u));
+        let texel = clamp(base + o, vec2<i32>(0), size - 1);
+        let w = select(1.0-f.x, f.x, o.x == 1)*select(1.0-f.y, f.y, o.y == 1);
+        let depth = textureLoad(cloud_depth, texel, 0).rg;
+        let near_enough = depth.x <= far*1.03 + 10.0;
+        let far_enough = depth.y >= min(far, CLOUD_FAR_CAP_M)*0.97 - 10.0;
+        let kept = select(1e-3, 1.0, near_enough && far_enough);
+        sum += textureLoad(cloud_history, texel, 0)*w*kept;
+        weight += w*kept;
+    }
+    return sum/max(weight, 1e-6);
+}
+
+@fragment
+fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let uv = in.uv;
+    let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+    if (view.fx.y > 0.75) { return vec4<f32>(scene,1.0); }
+    // This pixel's own ray against its own depth: where it cannot reach the
+    // layer (a hill in front of the cloud) nothing is laid over it, so the
+    // hill keeps a full-resolution edge however coarse the march.
+    let ray = view_ray(uv);
+    let eye = ray.origin-view.planet_center.xyz;
+    let far = cloud_far(ray, uv, vec2<f32>(0.0), eye);
+    let span = cloud_span(eye,ray.direction,0.0,far,cloud_layer());
+    if (span.y <= span.x) { return vec4<f32>(scene,1.0); }
+    let cloud = cloud_upsampled(uv, far);
+    return vec4<f32>(scene*(1.0-cloud.w)+cloud.rgb,1.0);
+}
+
+// The streaks' two widths, metres, and the distance from the eye over which
+// the fine one hands over to the broad.
+const RAIN_STREAK_FINE_M: f32 = 1.5;
+const RAIN_STREAK_BROAD_M: f32 = 8.0;
+const RAIN_STREAK_BLEND_M: vec2<f32> = vec2<f32>(150.0, 700.0);
 
 @fragment
 fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
@@ -803,12 +885,20 @@ fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         if (abs(here) < 1e-3) { continue; }
         let snow = here < 0.0;
         let fall = select(view.rain_look.x,view.rain_tint.w,snow);
-        // A streak is a few metres across near and wider far, so it stays
-        // about a pixel rather than aliasing into shimmer.
-        let width = 1.5+t*0.004;
-        let across = vec2<f32>(dot(p,view.rain_u.xyz),dot(p,view.rain_v.xyz))/width;
-        let down = (length(p)+seconds*fall)/(width*max(view.rain_look.y,1.0));
-        let streak = smoothstep(0.1,0.9,gnoise3(vec3<f32>(across,down))*0.5+0.5);
+        // Streaks at two widths fixed in the world, fine near and broad far so
+        // each stays about a pixel rather than shimmering. The distance only
+        // weighs the two; where a streak IS depends on the point and the clock
+        // alone. A width that grew with the distance from the eye rescaled the
+        // whole pattern as the eye moved, and it slid up or down faster than
+        // it fell (`cloud-budget`).
+        let stretch = max(view.rain_look.y,1.0);
+        let rel = p-view.rain_map.xyz*view.planet_center.w;
+        let plane = vec2<f32>(dot(rel,view.rain_u.xyz),dot(rel,view.rain_v.xyz));
+        let drop = length(p)-view.planet_center.w+seconds*fall;
+        let fine = gnoise3(vec3<f32>(plane/RAIN_STREAK_FINE_M,drop/(RAIN_STREAK_FINE_M*stretch)));
+        let broad = gnoise3(vec3<f32>(plane/RAIN_STREAK_BROAD_M,drop/(RAIN_STREAK_BROAD_M*stretch)));
+        let n = mix(fine,broad,smoothstep(RAIN_STREAK_BLEND_M.x,RAIN_STREAK_BLEND_M.y,t));
+        let streak = smoothstep(0.1,0.9,n*0.5+0.5);
         let density = abs(here)*view.rain_v.w*(0.3+1.4*streak);
         let absorbed = 1.0-exp(-density*step_size);
         let tint = select(view.rain_tint.rgb,view.snow_tint.rgb,snow)*view.rain_look.z

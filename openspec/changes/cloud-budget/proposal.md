@@ -105,6 +105,52 @@ smears. That is the ghosted grey mass in the owner's first capture.
    from captures on this machine to hold 120 fps (8.3 ms p95) at the dearest
    height.
 
+## Measured after
+
+The same bench, the same machine, `cloud_render_scale: 0.4`,
+`cloud_step_m: 12`, `cloud_max_steps: 48` (the shipped defaults), two runs
+each, p50 / p95 ms:
+
+| Camera height | Before | After |
+| ---: | ---: | ---: |
+| 2 m (in the rain) | 3.3 / 4.5 | 3.7 / 5.2 |
+| 200 m (under the base) | 10.4 / 12.5 | 5.1 / 7.9 |
+| 450 m (in the layer) | 29.6 / 54.5 | 4.4 / 5.0 |
+| 650 m (in the layer) | **40.8 / 72.8** | **6.0 / 7.0** |
+| 900 m (over the tops) | 19.6 / 36.3 | 3.0 / 3.7 |
+| 2500 m | | 2.4 / 3.0 |
+| Ground, day, fair weather (`--view surface --pitch 20 --time 11`) | | 3.3 / 4.1 |
+
+Every view holds 120 fps at the 95th percentile at 1440 x 900. The steps
+there, 650 m p50:
+
+| Step | p50 |
+| --- | ---: |
+| Shipped | 40.8 |
+| + cells baked, off the light march, march by length, scale 1.0 | 43.6 |
+| ... at scale 0.5 | 10.9 |
+| + light march on the coarse shape, 4 + 2 steps | 8.1 |
+| ... at scale 0.4 | 6.0 |
+
+At full resolution the march by length costs what the old one did: it takes
+more, shorter steps where the cloud is near, and those are what remove the
+seam and the fur. Resolution is the lever. Clouds cost scales with the
+pixel count, so a 1920 x 1080 window is about 1.6 times the clouds' share of
+these numbers. 0.35 is the next step down if a larger window needs it.
+
+Two more defects turned up in the captures and are fixed here:
+
+- **Cloud past the base's horizon was never marched.** From above the base,
+  `cloud_span` ended every ray that dipped under the base sphere at that
+  point. A ray that passes under the base and comes back up into the layer
+  further out lost all the cloud there, which was cut off along the base's
+  horizon as a hard curve. That is the owner's "planet curvature through
+  opaque clouds", from above. The span now keeps the whole chord unless the
+  ground ends the ray first, and the march steps over the gap.
+- **The upsample stair-stepped along the limb.** The composite's depth-aware
+  upsample also compares where each march texel stopped with where the pixel's
+  own ray goes.
+
 ## Not in this change
 
 - Any change to where cloud is or how it is lit (the atmosphere, the lighting

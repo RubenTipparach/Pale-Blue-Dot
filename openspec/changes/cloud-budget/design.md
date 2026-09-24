@@ -21,7 +21,7 @@ moves when the eye does.
 
 ## Cellular noise texture
 
-`cloud_noise.rs` (pbd-app, derived render state) builds an `R8Unorm` 3D texture:
+`planet_cloud_noise.rs` (pbd-app, derived render state) builds an `R8Unorm` 3D texture:
 `CLOUD_CELLS_SIZE`^3 texels spanning `CLOUD_CELLS_PERIOD` lattice cells, with
 periodic hashing so the texture tiles. Each texel holds the shader's own
 function, `clamp(1 - smoothF1, 0, 1)` with smoothF1 the log-sum-exp minimum
@@ -41,13 +41,21 @@ lattice are the texture's; the shader holds no second copy of the function.
   `clamp(t * CLOUD_STEP_GROWTH, cloud_step_m, CLOUD_STEP_MAX_M)` at the eye's
   distance `t`. A sample with no cover takes two steps' length, because the
   cover is smooth at map scale. The loop ends at the span's end, at
-  `cloud_max_steps`, or when transmittance drops under 1%. The span's grazing
-  cap goes, because the step cap bounds the reach.
+  `cloud_max_steps`, or when transmittance drops under 1%. The span keeps its
+  grazing cap (40 layer thicknesses), which the probes for the cloud top read
+  along.
+- **The gap under the base.** From over the base, a ray that dips under it and
+  does not meet the ground comes back up into the layer beyond the base's
+  horizon. `cloud_span` keeps that whole chord, not only the part before the
+  dip, and the march jumps the stretch under the base.
 - **LOD from the larger footprint.** The fine octaves fade by
-  `max(pixel footprint, step)`, not by the footprint alone, so detail finer
-  than the march can resolve is not drawn.
+  `max(pixel footprint, step / 4)`, not by the footprint alone, so detail far
+  finer than the march can resolve is not drawn. A quarter, not the whole
+  step: the per-frame jitter and the history average along the ray, and fading
+  by the whole step removed the fine octaves everywhere past a few metres.
 - **Light.** The light march reads `cloud_density` with a zero footprint, which
-  now also skips the cellular texture.
+  now skips the cellular texture and the shape's third octave (its mean
+  stands in), in 4 steps toward the sun and 2 up, down from 6 and 3.
 - **Depth.** `sum(t * dA) / sum(dA)` over the coverage each sample adds, or the
   span's middle when nothing is drawn.
 
@@ -65,9 +73,9 @@ lattice are the texture's; the shader holds no second copy of the function.
   against its own depth. Where the span is empty it writes the scene
   untouched, so a hill in front of a cloud keeps a full-resolution edge.
 
-Group 3 for both passes: a 2D float texture, a filtering clamp sampler, the 3D
-cells texture and a repeating sampler. The march binds the previous history
-there. The composite binds this frame's.
+Group 3 of the march: the previous history, a filtering clamp sampler, the 3D
+cells texture and a repeating sampler. Group 3 of the composite: this frame's
+history, the sampler, and the distances at binding 4.
 
 The history pair is recreated when the view's size or the scale changes. The
 validity rules (`clouds_ran`, resize, `CLOUD_HISTORY_JUMP_M`) are unchanged.

@@ -6,19 +6,31 @@
       no light march, 8 steps.
 
 ## 2. Rain
-- [ ] Streak coordinates fixed in the world, two scales blended by distance.
+- [x] Streak coordinates fixed in the world, two scales blended by distance.
 
 ## 3. Clouds
-- [ ] Cellular noise baked into a tileable 3D texture; test that it tiles.
-- [ ] Light march without the cellular texture.
-- [ ] March by length, with a step cap and the footprint-or-step LOD.
-- [ ] Reproject the history by the cloud's coverage-weighted depth.
-- [ ] March at `cloud_render_scale`, composite at full resolution with the
+- [x] Cellular noise baked into a tileable 3D texture; test that it tiles.
+- [x] Light march without the cellular texture.
+- [x] March by length, with a step cap and the footprint-or-step LOD.
+- [x] Reproject the history by the cloud's coverage-weighted depth.
+- [x] March at `cloud_render_scale`, composite at full resolution with the
       pixel's own span test.
-- [ ] `cloud_render_scale`, `cloud_step_m`, `cloud_max_steps` in
+- [x] `cloud_render_scale`, `cloud_step_m`, `cloud_max_steps` in
       `weather.ron`, validated.
 
+- [x] Cloud past the base's horizon is marched (the gap under the base).
+- [x] Depth-aware upsample: cloud distance and march limit per texel.
+- [x] Light march on the coarse shape, 4 + 2 steps.
+
 ## 4. Verify
-- [ ] Re-run the bench; choose defaults for 120 fps at the dearest height.
-- [ ] Captures at the same heights; the seam and the fur by eye.
-- [ ] fmt, clippy, tests, `openspec validate --all`.
+- [x] Re-run the bench; choose defaults for 120 fps at the dearest height.
+- [x] Captures at the same heights; the seam and the fur by eye.
+- [x] fmt, clippy, tests, `openspec validate --all`.
+
+## 5. Not done
+- [ ] The rain fix judged in a moving capture. The capture harness takes stills,
+      and a still cannot show the fault. The fix is argued from the
+      coordinate: every term of the streak noise's input is now a function
+      of the point and the clock.
+- [ ] Requirements into `openspec/specs/`: they are verified by captures and
+      the bench, not yet by a test, so they stay in this change.

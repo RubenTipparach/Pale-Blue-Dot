@@ -5,6 +5,8 @@
 //! walls, and decorative trees. No expanded terrain vertex buffer is uploaded.
 //! This is a surface-column prototype, not the editable volumetric chunk engine.
 
+#[path = "planet_cloud_noise.rs"]
+mod cloud_noise;
 #[path = "planet_column.rs"]
 pub mod column;
 pub use column::mouth_of;

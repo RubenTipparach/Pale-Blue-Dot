@@ -111,6 +111,14 @@
     cloud_shear: 2.0,
     cloud_shear_mps: 25.0,
     cloud_cells: 0.6,
+    // What the clouds cost (cloud-budget): the march runs at this share of the
+    // view's resolution per axis (0.25..1) and a full-resolution composite
+    // lays it over the scene; its nearest step (m), growing with distance;
+    // and the most steps a ray takes (8..256). Measured on an RTX 3070 at
+    // 1440x900; see openspec/changes/cloud-budget.
+    cloud_render_scale: 0.4,
+    cloud_step_m: 12.0,
+    cloud_max_steps: 48,
 
     // Rain near: every raining cell inside the detail range draws shafts of
     // streaks, thinning to the far fraction and fading out over the blend
