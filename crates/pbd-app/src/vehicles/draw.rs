@@ -17,20 +17,6 @@ const ROTOR_SPIN: f32 = 18.0;
 const RECOVERY_LIFT_M: f32 = 0.45;
 const BLADE_HEIGHT_M: f32 = 0.45;
 
-fn wing_piece(
-    wing: &pbd_core::vehicle::spec::WingSpec,
-    foil: &pbd_core::vehicle::foil::FoilSpec,
-) -> (Mesh, Transform) {
-    let span = (wing.panel_area_m2 * wing.aspect * 2.0).sqrt() / 2.0;
-    let chord = Vec3::from(foil.chord);
-    let normal = Vec3::from(foil.normal);
-    let rotation = Quat::from_mat3(&Mat3::from_cols(chord.cross(normal), normal, -chord));
-    (
-        Cuboid::new(span, 0.16, foil.area_m2 / span).into(),
-        Transform::from_translation(Vec3::from(foil.at)).with_rotation(rotation),
-    )
-}
-
 fn paddle_blade(area_m2: f32) -> Mesh {
     Cuboid::new(0.02, BLADE_HEIGHT_M, area_m2 / BLADE_HEIGHT_M).into()
 }
@@ -49,11 +35,36 @@ enum Moving {
     /// The right (+1) or left (-1) nacelle.
     Nacelle(f32),
     Rotor,
+    Surface(usize),
     Boom,
     Tiller,
     Paddle,
     /// The figure aboard, drawn only from the chase view.
     Crew,
+}
+
+impl Part {
+    pub(super) fn named(owner: Entity, craft: Kind, name: &str) -> Option<Self> {
+        let kind = match name {
+            "nacelle_left" => Moving::Nacelle(-1.0),
+            "nacelle_right" => Moving::Nacelle(1.0),
+            "rotor_left" | "rotor_right" => Moving::Rotor,
+            "flaperon_left" => Moving::Surface(0),
+            "flaperon_right" => Moving::Surface(1),
+            "elevator" => Moving::Surface(2),
+            "rudder" if craft == Kind::Kestrel => Moving::Surface(3),
+            "rudder" | "tiller" => Moving::Tiller,
+            "boom" => Moving::Boom,
+            "paddle" => Moving::Paddle,
+            "crew" => Moving::Crew,
+            _ => return None,
+        };
+        Some(Self {
+            owner,
+            kind,
+            spin: 0.0,
+        })
+    }
 }
 
 fn mesh(positions: Vec<Vec3>, indices: Vec<u32>) -> Mesh {
@@ -152,6 +163,11 @@ impl Builder<'_> {
 
 /// Hang a craft's meshes under its entity.
 pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
+    if super::model::AUTHORED.contains(&craft.kind) {
+        super::model::build(world, entity, craft)
+            .expect("vehicle model: regenerate and export from Blender");
+        return;
+    }
     let hull = paint(world, Color::srgb(0.86, 0.84, 0.78), true);
     let dark = paint(world, Color::srgb(0.18, 0.2, 0.22), false);
     let trim = paint(world, Color::srgb(0.75, 0.32, 0.18), false);
@@ -162,86 +178,7 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
     };
     let specs = craft.specs().clone();
     match craft.kind {
-        Kind::Kestrel => {
-            let s = &specs.kestrel;
-            let body = paint(b.world, Color::srgb(0.78, 0.8, 0.82), false);
-            let glass = paint(b.world, Color::srgb(0.12, 0.2, 0.28), false);
-            b.cuboid(
-                entity,
-                Vec3::new(1.5, 1.5, 7.0),
-                Vec3::new(0.0, -0.15, -0.6),
-                &body,
-            );
-            b.cuboid(
-                entity,
-                Vec3::new(1.2, 0.7, 1.8),
-                Vec3::new(0.0, 0.7, -2.4),
-                &glass,
-            );
-            b.cuboid(
-                entity,
-                Vec3::new(0.6, 0.6, 3.6),
-                Vec3::new(0.0, 0.4, 3.9),
-                &body,
-            );
-            for panel in s.wing.panels() {
-                let (mesh, transform) = wing_piece(&s.wing, &panel);
-                b.piece(entity, mesh, &body, transform);
-            }
-            let foil = |area: f32, aspect: f32| {
-                let span = (area * aspect).sqrt();
-                (span, area / span)
-            };
-            let (span, chord) = foil(s.tail.area_m2, s.tail.aspect);
-            b.cuboid(
-                entity,
-                Vec3::new(span, 0.1, chord),
-                Vec3::from(s.tail.at),
-                &trim,
-            );
-            let (height, chord) = foil(s.fin.area_m2, s.fin.aspect);
-            b.cuboid(
-                entity,
-                Vec3::new(0.1, height, chord),
-                Vec3::from(s.fin.at),
-                &trim,
-            );
-            for gear in &s.gear {
-                let at = Vec3::from(gear.at);
-                b.cuboid(
-                    entity,
-                    Vec3::new(0.12, 0.7, 0.12),
-                    at + Vec3::Y * 0.35,
-                    &dark,
-                );
-                b.cuboid(entity, Vec3::new(0.2, 0.3, 0.5), at + Vec3::Y * 0.12, &dark);
-            }
-            for side in [1.0f32, -1.0] {
-                let [rx, ry, rz] = s.rotor.at;
-                let nacelle = b.pivot(
-                    entity,
-                    Moving::Nacelle(side),
-                    Transform::from_xyz(side * rx, ry, rz),
-                );
-                b.piece(
-                    nacelle,
-                    Cylinder::new(0.38, 2.0).into(),
-                    &body,
-                    Transform::from_xyz(0.0, -0.3, 0.0),
-                );
-                let rotor = b.pivot(nacelle, Moving::Rotor, Transform::from_xyz(0.0, 0.8, 0.0));
-                for blade in 0..3 {
-                    let turn = Quat::from_rotation_y(blade as f32 * std::f32::consts::TAU / 3.0);
-                    b.piece(
-                        rotor,
-                        Cuboid::new(0.22, 0.04, s.rotor.radius_m).into(),
-                        &dark,
-                        Transform::from_rotation(turn)
-                            .with_translation(turn * Vec3::Z * s.rotor.radius_m / 2.0),
-                    );
-                }
-            }
-        }
+        Kind::Kestrel => unreachable!("authored Kestrel loaded above"),
         Kind::Tern => {
             let s = &specs.tern;
             let shape = craft.hull().expect("a boat has a hull").clone();
@@ -355,6 +292,11 @@ pub fn place(
                     (part.spin + ROTOR_SPIN * s.throttle as f32 * dt) % std::f32::consts::TAU;
                 transform.rotation = Quat::from_rotation_y(part.spin);
             }
+            (Moving::Surface(index), CraftState::Kestrel(_)) => {
+                if let pbd_core::vehicle::Telemetry::Kestrel(t) = &craft.telemetry {
+                    transform.rotation = Quat::from_rotation_x(t.surface_deflections[index] as f32);
+                }
+            }
             (Moving::Boom, CraftState::Tern(s)) => {
                 transform.rotation = Quat::from_rotation_y(s.boom as f32);
             }
@@ -438,37 +380,6 @@ mod tests {
             .map(|p| Vec3::from(*p))
             .fold(Vec3::splat(f32::NEG_INFINITY), Vec3::max);
         hi - lo
-    }
-
-    #[test]
-    fn drawn_panels_match_configured_foil_axes_and_area() {
-        let mut wing = VehicleSpecs::default().kestrel.wing;
-        // A nondefault case proves drawing consumes configuration as well as defaults.
-        for (incidence, dihedral, area) in [(3.0, 4.0, 8.0), (8.0, 12.0, 5.5)] {
-            wing.incidence_deg = incidence;
-            wing.dihedral_deg = dihedral;
-            wing.panel_area_m2 = area;
-            for foil in wing.panels() {
-                let (mesh, transform) = wing_piece(&wing, &foil);
-                let size = dimensions(&mesh);
-                assert!((size.x * size.z - foil.area_m2).abs() < 1e-5);
-                assert!(
-                    transform
-                        .rotation
-                        .mul_vec3(Vec3::NEG_Z)
-                        .distance(Vec3::from(foil.chord))
-                        < 1e-6
-                );
-                assert!(
-                    transform
-                        .rotation
-                        .mul_vec3(Vec3::Y)
-                        .distance(Vec3::from(foil.normal))
-                        < 1e-6
-                );
-                assert_eq!(transform.translation, Vec3::from(foil.at));
-            }
-        }
     }
 
     #[test]

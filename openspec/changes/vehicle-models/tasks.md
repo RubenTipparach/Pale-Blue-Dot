@@ -8,10 +8,13 @@
 
 ## 2. Common pipeline and Kestrel commit
 
-- [ ] 2.1 Export authoritative config, foil frames and hull loft authoring inputs through a core example; document and run the regeneration command with no engine dependency in core.
-- [ ] 2.2 Build the Kestrel meshes, separate moving objects, exact-density UVs and pixel atlas in Blender; save `.blend`, `.glb`, PNG and region manifest; inspect Blender viewport screenshots.
-- [ ] 2.3 Convert and cache the supported GLB subset in the app, preserving names/hierarchy/transforms and explicit nearest sampling; test loading the actual Kestrel artifact into ECS.
-- [ ] 2.4 Expose actual core surface-deflection telemetry and drive the modeled surfaces plus existing nacelles/rotors/crew; test authoritative deflections and loaded moving pivots.
+- [ ] 2.0a Generate material swatches with the image-generation tool, normalize to 32-square / 2-metre repeats with nearest sampling and shared ramps, check wraps, commit source art/provenance, and compose them into each atlas with unique pixel overlays.
+- [x] 2.0 Apply owner/Claude texture review while preserving approved geometry: paint 3-5-shade material ramps and craft-specific pixel details, tightly pack with declared tile reuse, and verify actual color counts, nearest-upscaled atlases and neutral Blender renders for each craft.
+
+- [x] 2.1 Export authoritative config, foil frames and hull loft authoring inputs through a core example; document and run the regeneration command with no engine dependency in core.
+- [x] 2.2 Build the Kestrel meshes, separate moving objects, exact-density UVs and pixel atlas in Blender; save `.blend`, `.glb`, PNG and region manifest; inspect Blender viewport screenshots.
+- [x] 2.3 Convert and cache the supported GLB subset in the app, preserving names/hierarchy/transforms and explicit nearest sampling; test loading the actual Kestrel artifact into ECS.
+- [x] 2.4 Expose actual core surface-deflection telemetry and drive the modeled surfaces plus existing nacelles/rotors/crew; test authoritative deflections and loaded moving pivots.
 - [ ] 2.5 Replace the procedural Kestrel area/axis test with exported-art validation, including pivot/dimension/UV/texture checks and mutated-config rejection; record measured counts/sizes and migrate only the shared/Kestrel requirements with passing tests.
 - [ ] 2.6 Run fmt, both offline release package suites, all-target Clippy and OpenSpec validation; review the diff and commit the Kestrel and common pipeline.
 

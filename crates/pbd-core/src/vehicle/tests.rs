@@ -13,6 +13,36 @@ const RADIUS: f64 = 4799.5;
 const G: f64 = 25.0;
 const TICK: f64 = 1.0 / 60.0;
 
+#[test]
+fn kestrel_reports_the_deflections_used_by_its_foils() {
+    let mut craft = at_pole(Kind::Kestrel, 100.0, 0.0);
+    craft.occupied = true;
+    let CraftState::Kestrel(state) = &mut craft.state else {
+        unreachable!()
+    };
+    state.assist = false;
+    let input = Input {
+        roll: 0.5,
+        pitch: -0.25,
+        yaw: 0.75,
+        ..Default::default()
+    };
+    World::new(RADIUS - 100.0).run(&mut craft, TICK, |_| input);
+    let Telemetry::Kestrel(t) = &craft.telemetry else {
+        unreachable!()
+    };
+    let s = &craft.specs().kestrel;
+    let expected = [
+        s.wing.flap_rad as f64 + 0.5 * s.wing.aileron_rad as f64,
+        s.wing.flap_rad as f64 - 0.5 * s.wing.aileron_rad as f64,
+        0.25 * s.elevator_rad as f64,
+        -0.75 * s.rudder_rad as f64,
+    ];
+    for (actual, expected) in t.surface_deflections.into_iter().zip(expected) {
+        assert!((actual - expected).abs() < 1e-10);
+    }
+}
+
 struct World {
     sea: SeaTable,
     gusts: GustSettings,

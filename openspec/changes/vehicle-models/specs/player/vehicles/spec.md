@@ -7,7 +7,14 @@ Each authored vehicle model SHALL have committed editable Blender source, an
 exported model, a source PNG and a region manifest. Its surfaces SHALL use
 16 pixels per metre without UV stretching, integer-aligned chart origins and
 padded packing bounds, and nearest texture filtering. Albedo SHALL use a
-restrained palette with no painted lighting. Model geometry SHALL be render-only.
+restrained palette of roughly 12-24 actual colors, small material ramps and
+deliberate pixel details appropriate to each craft, with no painted lighting.
+Distinct atlas regions SHALL be tightly packed without overlap; intentional
+reuse of identical painted tiles SHALL be declared in the region manifest.
+Material imagery SHALL derive from committed image-generated swatches with
+recorded prompts, nearest downsampling, physical repeat sizes and quantization
+ramps. Atlas rebuilds SHALL compose these sources deterministically, with
+unique pixel markings layered on top. Model geometry SHALL be render-only.
 An exported model whose parts, pivots or configured geometric dimensions diverge
 from vehicle configuration SHALL fail validation and require regeneration from
 Blender; the runtime SHALL NOT reshape it to fit new configuration.
@@ -18,7 +25,11 @@ Blender; the runtime SHALL NOT reshape it to fit new configuration.
 
 #### Scenario: Exported texture scale
 - **WHEN** the actual exported triangles and their UVs are measured
-- **THEN** their texture-space edge lengths equal 16 times their metre lengths within export tolerance, and their padded charts stay inside the atlas without overlap
+- **THEN** their texture-space edge lengths equal 16 times their metre lengths within export tolerance, and their padded charts stay inside nonoverlapping atlas regions or explicitly declared shared tiles
+
+#### Scenario: Inspecting the painted source atlas
+- **WHEN** a craft's PNG is inspected with nearest enlargement
+- **THEN** its material ramps and construction details remain visible as compact pixel clusters, rather than flat solid strips or photographic noise
 
 ### Requirement: The Kestrel uses an authored tiltrotor model
 The Kestrel SHALL render a low-poly white/coral modeled fuselage, canopy, wings,

@@ -78,14 +78,20 @@ points. Do not introduce a parallel physical fuselage dimension.
 ### Art and UV contract
 
 Use **16 pixels per metre on every surface of every craft**, including machinery,
-crew and sail. One compact power-of-two PNG atlas per craft, initially 512 square
-with smaller dimensions permitted only when packing fits at the same density.
+crew and sail. One compact PNG atlas per craft, packed to the smallest useful
+rectangle in 16-pixel increments at the same density. Prefer 256-square or
+smaller when the painted islands fit; do not waste a 512-square sheet merely
+to keep power-of-two dimensions.
 Manifests record image dimensions, palette, semantic region/object/face, integer
 packing rectangle, UV chart origin and padding. Commit PNGs as source art beside
 their `.blend` and `.glb`; embed the same image in the GLB.
 
 Create planar face charts (triangulate nonplanar faces), project isometrically
-at exactly 16 px/m, and pack without scaling or overlapping islands. Chart
+at exactly 16 px/m, and pack without scaling or overlapping distinct regions.
+Identical painted tiles may be explicitly shared by multiple charts; record
+every user in the region manifest. Shared tiles retain each chart's isometric
+coordinates and density; this is intentional reuse, not accidental overlap.
+Use rotation and rectangle packing to reduce waste. Chart
 origins and enclosing rectangle edges sit on integer pixel coordinates. Use
 at least two texels of extruded edge padding; pixel marks/cluster edges lie on
 the integer texture grid. UV edge lengths must equal geometric edge lengths
@@ -104,6 +110,47 @@ albedo. Kestrel white/coral with dark navy canopy and mechanical details; Tern
 coral deck, pale hull/sail, restrained dark fittings; Loon teal hull with pale
 paddle and light seats. Flat mesh normals supply the chunky facets. Silhouette
 comes from tapered/lofted geometry, not texture shading.
+
+Owner/Claude review on 2026-09-24 approved the saved Kestrel/Tern geometry,
+parts and pivots but rejected the first atlases as flat color strips. Preserve
+that geometry. Redo painting with 3-5-color material ramps and roughly 12-24
+actual colors per craft. Dark seam pixels and light wear/bevel pixels describe
+material construction, never directional illumination. Every sufficiently
+resolved surface gets deliberate pixel detail; sub-texel thickness faces keep
+their physical density rather than being enlarged to fit decorative pixels.
+
+Kestrel: panel seams and rivet rows, wing walkway/anti-slip, coral edge trim,
+canopy frame and glint pair, K-1 stencil, rotor hazard chevrons, nacelle grilles,
+and blade tip stripes. Tern: coral deck planks, gunwale strip, darker hull
+antifouling below the hull-reference waterline (y=0) with a crisp boot-top stripe,
+pale cloth seam panels/batten, and tiller wood grain. Loon: teal canvas/plank
+clusters and inner rib marks, thwart grain/lashings, and paddle edge band.
+Patterns are deterministic construction marks, not stochastic noise.
+
+Owner addendum: material painting starts with image-generation swatches, one
+per distinct material (wood may be shared by tiller and thwarts). Generate
+flat-lit, top-down, tileable pixel art without perspective, shadows or baked
+lighting. Commit original generated PNGs and normalized swatches under
+`assets/models/vehicles/swatches/`, with exact prompts, original dimensions,
+nearest-neighbour sample mapping, physical repeat size and 3-5-color ramps.
+Normalize to 32 by 32 texels for a 2 by 2 metre repeat at 16 px/m, then quantize
+to the recorded shared material ramp. Repair wrap-edge continuity in the
+normalized tile if necessary; record the deterministic edge operation and
+inspect repeated/offset previews. Generated material marks remain the base
+of the actual craft atlases. Author.py composes these committed swatches
+without an image-model dependency during rebuild. Unique K-1 stencil, hazard
+chevrons, boot-top stripe, canopy glint and paddle edge band remain deliberate
+pixel overlays. Tests validate source palette, tiling edges and manifest links
+alongside the actual exported atlas contract. No procedural substitute for the
+generated material imagery is used.
+
+
+Use a near-neutral pale cloth ramp for the sail, check its front normal and
+double-sided material, and inspect an actual Blender render under neutral
+lighting as well as the material viewport. Inspect each PNG upscaled with
+nearest filtering. Tests count actual PNG colors and check painted variation,
+chart padding, sharing declarations, density and packing utilization. Record
+the owner's geometric approval separately from outstanding texture/game review.
 
 Blender image nodes use Closest interpolation. GLB samplers and Bevy images use
 nearest magnification and minification, with one mip level initially. Padding
@@ -176,7 +223,7 @@ and accessor reader rather than hand-parsing GLB binary layouts.
 
 Costs: one synchronous parse/PNG decode per model, CPU mesh storage, texture
 upload and an entity per named node/primitive; loader maintenance for the stated
-subset. A 512-square RGBA image is 1 MiB before GPU allocation overhead, with
+subset. RGBA storage costs width times height times four bytes before GPU allocation overhead, with
 no mip chain. Record actual file sizes/triangles/atlas occupancy after export.
 No startup-time, frame-rate or memory speedup claim is made without measurement.
 No model data enters collision, buoyancy, save state or controller decisions.
@@ -192,7 +239,7 @@ retain paddle motion, translated-frame and immediate-look integration tests.
 
 Inspect actual indexed triangles and UVs, not just declared metadata: finite
 attributes, triangle validity, isometric texel density, atlas bounds/padding,
-nonoverlapping chart rectangles, PNG dimensions/palette and nearest samplers.
+nonoverlapping distinct tile rectangles and declared chart sharing, PNG dimensions/palette and nearest samplers.
 Use loaded ECS hierarchies to test moving pivots and state updates. Prove that
 altered geometric config fails validation and forces regeneration.
 

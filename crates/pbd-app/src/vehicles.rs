@@ -11,6 +11,7 @@
 mod chase;
 mod draw;
 mod hud;
+mod model;
 mod place;
 mod view;
 

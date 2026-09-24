@@ -17,6 +17,7 @@ fn app(save: crate::saves::WorldSave) -> App {
     app.add_plugins(bevy::asset::AssetPlugin::default())
         .init_asset::<Mesh>()
         .init_asset::<StandardMaterial>()
+        .init_asset::<Image>()
         .insert_resource(PlanetContact::test_planet(5))
         .insert_resource(Sea::new(&water))
         .insert_resource(water)

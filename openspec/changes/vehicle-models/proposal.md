@@ -14,6 +14,13 @@ dimensions and moving pivots that the physics and handling tests establish.
   manifests and reproducible authoring inputs/scripts under `assets/models/`.
 - Use 16 pixels per metre throughout, padded UV charts and nearest filtering.
   Retain white/coral Kestrel, coral-deck/pale-sail Tern and teal/pale-paddle Loon.
+- Following owner/Claude review, keep the approved geometry and replace the
+  first flat-color atlases with deliberate pixel painting: small material ramps,
+  craft-specific seams/wear/markings, roughly 12-24 actual colors per craft,
+  and tightly packed sheets. Check nearest-upscaled atlases and Blender renders.
+- Generate material swatches with the image-generation tool; commit prompts,
+  originals, nearest-normalized/quantized tiles and palettes. Compose the atlas
+  reproducibly from those tiles and layer unique hand-placed marks on top.
 - Preserve the moving hierarchy and add modeled Kestrel control surfaces driven
   by the actual physics deflections. Keep every model render-only.
 - Convert the supported static glTF subset into Bevy meshes/materials at load

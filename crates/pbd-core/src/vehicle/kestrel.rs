@@ -75,6 +75,9 @@ pub struct KestrelTelemetry {
     pub touchdown: f64,
     /// Collective currently commands vertical speed rather than moving the power lever.
     pub climb_hold: bool,
+    /// Actual foil deflections, rad: left wing, right wing, elevator, rudder.
+    /// Renderers consume these instead of reproducing the assist controller.
+    pub surface_deflections: [f64; 4],
 }
 
 pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
@@ -222,11 +225,14 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let drag_scale = 1.0 + s.wet_cd_gain as f64 * wet;
     let flap = s.wing.flap_rad as f64 * sb;
     let aileron = s.wing.aileron_rad as f64 * cr;
+    let surface_deflections = [
+        flap + aileron,
+        flap - aileron,
+        -(s.elevator_rad as f64) * cp,
+        -(s.rudder_rad as f64) * cy,
+    ];
     let mut wing = [foil::FoilForce::default(); 2];
-    for (i, (panel, deflect)) in [(panels[0], flap + aileron), (panels[1], flap - aileron)]
-        .into_iter()
-        .enumerate()
-    {
+    for (i, (panel, deflect)) in panels.into_iter().zip(surface_deflections).enumerate() {
         let fluid = cx.wind(body.point(v3(panel.at) - com));
         wing[i] = foil::apply(
             body,
@@ -246,7 +252,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         com,
         tail_wind,
         AIR_DENSITY,
-        -(s.elevator_rad as f64) * cp,
+        surface_deflections[2],
         1.0,
         1.0,
     );
@@ -257,7 +263,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         com,
         fin_wind,
         AIR_DENSITY,
-        -(s.rudder_rad as f64) * cy,
+        surface_deflections[3],
         1.0,
         1.0,
     );
@@ -326,5 +332,6 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
             previous
         },
         climb_hold,
+        surface_deflections,
     });
 }
