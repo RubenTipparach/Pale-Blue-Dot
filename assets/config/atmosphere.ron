@@ -1,0 +1,116 @@
+// The simulated atmosphere and ocean (pbd_core::atmosphere): every knob, the
+// code defaults written out (crates/pbd-core/src/atmosphere/settings.rs has
+// what each one means and its unit); a test holds the two together. Omit a
+// field to inherit; a zero is a zero. None of these are physical constants:
+// they were chosen, then measured with
+//   cargo run --release -p pbd-core --example climate -- [days] [day] [level]
+// so a 4.8 km planet with a 48-minute day gets trade winds, a jet, desert
+// belts and storms. See openspec/changes/atmospheric-circulation.
+(
+    // Cells: level 5 is 10,242 cells 181 m apart, about 5 ms a step.
+    level: 5,
+    dt_s: 1.0,
+    // A new world's weather is run this long before its first frame, s.
+    spinup_s: 900.0,
+
+    // Dynamics. The air feels the spin four times harder than the day/night
+    // cycle shows: at the real spin a Hadley cell reaches the pole and there is
+    // no jet (Held-Hou).
+    coriolis_scale: 4.0,
+    gravity_wave_mps: 30.0,
+    pressure_relax_s: 2000.0,
+    thermal_pressure: 8.0,
+    // The three-cell belts, imposed: one layer cannot make them itself.
+    belt_pressure: 500.0,
+    belt_follow_sun: 0.6,
+    drag_land_s: 900.0,
+    drag_sea_s: 2400.0,
+    smoothing: 0.02,
+    // The jet: thermal wind at cloud height, and the share of it that carries
+    // the cloud.
+    thermal_wind: 70.0,
+    jet_max_mps: 45.0,
+    cloud_steering: 0.7,
+
+    // Sun and heat. Heat capacities are small because a day is 48 minutes.
+    solar_wm2: 1000.0,
+    cloud_albedo: 0.6,
+    ocean_albedo: 0.06,
+    land_albedo: 0.25,
+    snow_albedo: 0.7,
+    olr_a: 203.0,
+    olr_b: 2.09,
+    cloud_greenhouse: 40.0,
+    land_heat_capacity: 5.0e4,
+    ocean_heat_capacity: 3.0e6,
+    air_relax_s: 3000.0,
+    sensible_wm2k: 15.0,
+    heat_spread: 0.002,
+    lapse_k_per_m: 0.08,
+
+    // Water.
+    evaporation: 3.0e-4,
+    evaporation_wind_mps: 10.0,
+    evaporation_cooling: 8.0e4,
+    saturation_kg: 30.0,
+    saturation_per_k: 0.068,
+    lift_saturation: 0.35,
+    lift_depth_m: 1000.0,
+    condense_s: 60.0,
+    latent_k_per_kg: 0.35,
+    // A warm cloud rains past this much water; a cold one past less, in
+    // proportion to what the air can hold below 15 C (ice); and a vigorous
+    // updraft (a storm, the afternoon's cumulus) past less again: the
+    // threshold halves at convective_rain_mps of ascent. So storms rain and
+    // a flat deck mostly does not; at 0.3 with neither rule 29% of the planet
+    // was raining at once, and it is 17% now.
+    rain_threshold_kg: 4.0,
+    rain_s: 150.0,
+    convective_rain_mps: 0.5,
+    cloud_evaporate_s: 120.0,
+    cover_min_kg: 0.2,
+    cover_full_kg: 0.8,
+    raining_rate: 2.0e-4,
+    // Humid air is partly cloudy without rising, past this relative humidity
+    // (Sundqvist): the decks and hazes of cumulus away from the rain belt.
+    // Land's is higher, because those decks are mostly marine.
+    humid_cover_rh: 0.45,
+    humid_cover_rh_land: 0.7,
+    // Sunlit land lifts the air over it, past a threshold of absorbed
+    // sunlight: land clouds over by day and rains more in the afternoon.
+    convection_mps_per_wm2: 0.02,
+    convection_threshold_wm2: 300.0,
+
+    // Lightning: charge from rising, condensing air; a strike drops a cold
+    // pool whose outflow lifts the air round it.
+    charge_rate: 0.3,
+    charge_decay_s: 120.0,
+    strike_charge: 1.0,
+    strike_chance: 0.003,
+    pool_pressure: 40.0,
+    pool_k: 1.5,
+    strike_rain_share: 0.5,
+    strike_keep_s: 2.0,
+
+    // Storms, seeded over warm sea and steep fronts, then left to the physics.
+    storm_rate: 8.0e-5,
+    storm_depth: 250.0,
+    storm_radius_m: 900.0,
+    storm_sea_c: 24.0,
+    storm_front_k_per_km: 6.0,
+    mesoscale: 0.15,
+    mesoscale_every_s: 30.0,
+
+    // The ocean.
+    ocean_wave_mps: 6.0,
+    current_per_wind: 0.08,
+    ocean_drag_s: 3000.0,
+    ocean_relax_s: 20000.0,
+
+    // The weather slider brews a storm round the player.
+    forcing_radius_m: 700.0,
+    forcing_s: 5.0,
+    forcing_cloud_kg: 1.2,
+    // The updraft it drives, m/s at full: a storm rains by the convective rule.
+    forcing_lift_mps: 3.0,
+)

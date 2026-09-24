@@ -282,29 +282,8 @@ pub struct WeatherSettings {
     /// Seconds for ground wetness to follow the rain intensity (e-fold).
     pub wet_fade_tau_s: f32,
 
-    // ---- The weather field: where and when it rains at all. Names follow
-    // Tenebris's own weather.yaml; see `pbd_core::weather` for what each does.
-    /// Unit-sphere frequency of the drifting warm-pocket field.
-    pub solar_scale: f32,
-    /// How fast that field drifts, per second.
-    pub solar_drift: f32,
-    /// Warmth floor, so a moist region clouds even where the sun is weak.
-    pub solar_floor: f32,
-    /// Above one, clears the dry end harder: deserts rarely cloud or rain.
-    pub arid_gamma: f32,
-    /// Density below which the sky is clear.
-    pub cloud_min: f32,
-    /// Density above which the cover is full.
-    pub cloud_full: f32,
-    /// Opacity of the smallest just-forming cloud.
-    pub min_alpha: f32,
-    /// Cover a column needs before it rains, so a wisp does not.
-    pub rain_cover_min: f32,
-    /// How long rain trails a cloud that has drifted off, seconds.
-    pub rain_min_s: f32,
-    /// The frequency moisture is sampled at for WEATHER, on the unit sphere:
-    /// a weather system is far bigger than the 188 m a biome is decided on.
-    pub weather_moisture_scale: f32,
+    // ---- Where it rains, and how hard, is the simulated atmosphere's
+    // (`atmosphere.ron`); these are how rain LOOKS.
     /// Streak fall speed, metres per second.
     pub rain_fall_mps: f32,
     /// Streak half-width, metres.
@@ -313,6 +292,17 @@ pub struct WeatherSettings {
     pub rain_streak_m: f32,
     /// Streak colour, display (sRGB) RGB as Tenebris authored it.
     pub rain_color: [f32; 3],
+    /// Snow: fall speed (m/s), flake half-size (m), sideways sway (m), and
+    /// colour (display sRGB). Tenebris's snow falls at 3 m/s.
+    pub snow_fall_mps: f32,
+    pub snow_size_m: f32,
+    pub snow_sway_m: f32,
+    pub snow_color: [f32; 3],
+    /// How many more flakes than streaks the near shower draws in snow.
+    pub snow_density: f32,
+    /// Flake opacity at the camera and at the edge of the shower disk.
+    pub snow_alpha_near: f32,
+    pub snow_alpha_far: f32,
     /// Streak alpha at the camera and at the edge of the shower disk.
     pub rain_alpha_near: f32,
     pub rain_alpha_far: f32,
@@ -354,6 +344,8 @@ pub struct WeatherSettings {
     /// Weight of the sky mirrored in a puddle, 0..1. Wet ground outside a
     /// puddle takes a quarter of it.
     pub rain_mirror_strength: f32,
+    /// Strength of the raindrop rings on grass against bare ground, 0..1.
+    pub rain_grass_rings: f32,
 
     // ---- Overcast: what the cover over the player does to the light. Names
     // and values are Tenebris's. Each is a fraction taken off (or, for the
@@ -372,32 +364,62 @@ pub struct WeatherSettings {
     pub cloud_fog_add: f32,
     /// Distance-haze density multiplier in full rain.
     pub rain_fog_mult: f32,
+    /// How much of the sun a full, thick cloud keeps off the ground under it:
+    /// the depth of a cloud's shadow, 0..1.
+    pub cloud_shadow: f32,
 
-    // ---- The cloud slab (sky_atmosphere.wgsl). Tuned against the share of
-    // the sky that is cloud at each cover; see the overcast-and-rain change.
-    /// Density threshold with no cover overhead: only denser noise is cloud.
-    pub cloud_threshold_clear: f32,
-    /// Density threshold at full cover, where the slab closes over.
-    pub cloud_threshold_overcast: f32,
-    /// How much a metre of full-density cloud absorbs, per metre. The optical
-    /// depth of a vertical crossing is this times the slab's thickness.
+    // ---- The clouds (`shaders/clouds.wgsl`): where they are is the
+    // atmosphere's weather map; this is how they are lit. See the
+    // cloud-lighting change for the model and what each knob does to it.
+    /// How much a metre of full-density cloud absorbs, per metre, in fair
+    /// weather: for the view AND for the light, one number for both.
     pub cloud_extinction: f32,
-    /// Cloud brightness with the sun down, 0..1.
+    /// Extinction at full cover, per metre, mixed in by the local cover: a
+    /// storm is denser cloud, not only more of it.
+    pub cloud_storm_extinction: f32,
+    /// Cloud brightness with the sun down.
     pub cloud_night_floor: f32,
-    /// How bright a cloud's self-shadowed underside is in fair weather, 0..1.
-    pub cloud_base_dark: f32,
-    /// The same at full cover: a storm's base is slate, not grey.
-    pub cloud_storm_dark: f32,
+    /// The sun's strength on a cloud.
+    pub cloud_sun: f32,
+    /// Sky light from above, through the cloud over a sample.
+    pub cloud_ambient_sky: f32,
+    /// Light bounced up off the ground onto a cloud's base.
+    pub cloud_ambient_ground: f32,
+    /// The phase function's forward lobe (a silver lining toward the sun),
+    /// its back lobe, and their blend: Henyey-Greenstein g in -1..1.
+    pub cloud_phase_forward: f32,
+    pub cloud_phase_back: f32,
+    pub cloud_phase_blend: f32,
+    /// Multiple scattering (three octaves): each octave's extinction, energy
+    /// and phase are these shares of the last, 0..1.
+    pub cloud_scatter_extinction_falloff: f32,
+    pub cloud_scatter_energy_falloff: f32,
+    pub cloud_scatter_phase_falloff: f32,
+    /// Detail finer than the atmosphere's cells (`cloud_density`). The floor
+    /// under the cover remap, 0..1: at full cover the noise's troughs below
+    /// it stay open, so a deck breaks into cells and lanes; tall convective
+    /// cloud keeps none and stands solid.
+    pub cloud_deck_floor: f32,
+    /// How much the fine octaves eat into a cloud's soft edges, 0..1.
+    pub cloud_erosion: f32,
+    /// How far detail is combed along the wind aloft at `cloud_shear_mps`
+    /// and above: 1 for none, and each unit past it one noise cell (about
+    /// 230 m) of push, varying from place to place so bands slide past one
+    /// another along the flow.
+    pub cloud_shear: f32,
+    pub cloud_shear_mps: f32,
+    /// How far convective cloud (a tall top) takes the cellular texture of
+    /// cumulus rather than the smooth one of a deck, 0..1.
+    pub cloud_cells: f32,
 
-    // ---- Rain seen from outside it: Tenebris's distant shafts and far
-    // curtains, on a lattice of cells fixed to the body.
-    /// Size of a rain cell, metres. One curtain per raining cell.
+    // ---- Rain near: Tenebris's shafts of streaks over every raining cell of
+    // a lattice fixed to the body, inside the detail range. Beyond it the rain
+    // is the volume below.
+    /// Size of a rain cell, metres.
     pub rain_cell_m: f32,
-    /// How far raining cells are drawn at all, metres.
-    pub rain_range_m: f32,
-    /// Cells nearer than this draw streaks; beyond it, one curtain, metres.
+    /// Cells nearer than this draw streaks, metres.
     pub rain_detail_range_m: f32,
-    /// The streak-to-curtain cross-fade band ending at the detail range, metres.
+    /// The band ending at the detail range over which streaks fade out, metres.
     pub rain_lod_blend_m: f32,
     /// Share of a cell's streaks kept at the far edge of the detail range.
     pub rain_lod_far_frac: f32,
@@ -412,29 +434,60 @@ pub struct WeatherSettings {
     /// Camera altitude above which no rain is drawn and none runs down the
     /// lens, metres. The storm still reads through clouds, overcast and haze.
     pub rain_lod_alt_m: f32,
-    /// Far curtain tint, display (sRGB) RGB, and its opacity multiplier.
-    pub rain_impostor_color: [f32; 3],
-    pub rain_impostor_alpha: f32,
+
+    // ---- Rain far: a volume marched per pixel between the camera and the
+    // ground, the sea or the cloud base, off a map of the field around the
+    // camera. See `openspec/changes/storm`.
+    /// Cells along a side of the precipitation map (at most 128).
+    pub rain_map_size: u32,
+    /// Size of a map cell, metres.
+    pub rain_map_cell_m: f32,
+    /// Extinction per metre of full rain.
+    pub rain_volume_density: f32,
+    /// How far along a ray the volume is marched, metres.
+    pub rain_volume_range_m: f32,
+    /// How much longer than wide a falling streak of the volume is.
+    pub rain_volume_stretch: f32,
+    /// The volume's colour, display (sRGB) RGB. Snow is `snow_color`.
+    pub rain_volume_color: [f32; 3],
+
+    // ---- Lightning: where it strikes is the atmosphere's; this is how a
+    // strike looks.
+    /// How long one strike's flashes last, seconds.
+    pub lightning_flash_s: f32,
+    /// Brightness a strike lights the cloud from inside with.
+    pub lightning_cloud: f32,
+    /// Brightness a strike lights the ground and the rain with.
+    pub lightning_ground: f32,
+
+    // ---- The overlays (`overlay.rs`, the `overlay` pass in `water.wgsl`):
+    // what the map looks like, never what it shows.
+    /// How much of the overlay's colour is laid over the scene, 0..1.
+    pub overlay_opacity: f32,
+    /// One streamline step along the flow, metres. A streak is twelve.
+    pub overlay_streak_step_m: f32,
+    /// How fast the streaks crawl at the top of the overlay's range: streak
+    /// lengths per second. Slower flows crawl slower in proportion.
+    pub overlay_streak_scroll: f32,
+    /// How bright a streak is laid over the colour, 0..1.
+    pub overlay_streak_strength: f32,
 }
 
 impl Default for WeatherSettings {
     fn default() -> Self {
         Self {
             wet_fade_tau_s: 1.6,
-            solar_scale: 2.2,
-            solar_drift: 0.015,
-            solar_floor: 0.55,
-            arid_gamma: 1.35,
-            cloud_min: 0.22,
-            cloud_full: 0.52,
-            min_alpha: 0.32,
-            rain_cover_min: 0.62,
-            rain_min_s: 15.0,
-            weather_moisture_scale: 1.6,
             rain_fall_mps: 70.0,
             rain_width_m: 0.012,
             rain_streak_m: 1.5,
             rain_color: [0.52, 0.62, 0.90],
+            snow_fall_mps: 3.0,
+            snow_size_m: 0.07,
+            snow_sway_m: 0.5,
+            snow_color: [0.93, 0.95, 1.0],
+            snow_density: 3.0,
+            snow_alpha_near: 0.95,
+            snow_alpha_far: 0.6,
             rain_alpha_near: 0.78,
             rain_alpha_far: 0.10,
             shower_radius_m: 18.0,
@@ -459,6 +512,7 @@ impl Default for WeatherSettings {
             rain_puddle_scale_m: 0.4,
             rain_puddle_share: 0.35,
             rain_mirror_strength: 1.0,
+            rain_grass_rings: 0.5,
             overcast_sun_dim: 0.72,
             overcast_amb_dim: 0.48,
             overcast_sky_blue_cut: 0.75,
@@ -466,14 +520,25 @@ impl Default for WeatherSettings {
             overcast_sky_dim: 0.6,
             cloud_fog_add: 0.35,
             rain_fog_mult: 1.6,
-            cloud_threshold_clear: 0.61,
-            cloud_threshold_overcast: 0.2016,
+            cloud_shadow: 0.8,
             cloud_extinction: 0.0115,
+            cloud_storm_extinction: 0.03,
             cloud_night_floor: 0.045,
-            cloud_base_dark: 0.34,
-            cloud_storm_dark: 0.12,
+            cloud_sun: 0.55,
+            cloud_ambient_sky: 0.9,
+            cloud_ambient_ground: 0.35,
+            cloud_phase_forward: 0.8,
+            cloud_phase_back: -0.3,
+            cloud_phase_blend: 0.5,
+            cloud_scatter_extinction_falloff: 0.5,
+            cloud_scatter_energy_falloff: 0.5,
+            cloud_scatter_phase_falloff: 0.5,
+            cloud_deck_floor: 0.45,
+            cloud_erosion: 0.5,
+            cloud_shear: 2.0,
+            cloud_shear_mps: 25.0,
+            cloud_cells: 0.6,
             rain_cell_m: 60.0,
-            rain_range_m: 1400.0,
             rain_detail_range_m: 150.0,
             rain_lod_blend_m: 60.0,
             rain_lod_far_frac: 0.25,
@@ -481,29 +546,19 @@ impl Default for WeatherSettings {
             rain_cell_width_mult: 6.0,
             rain_max_cell_streaks: 9000,
             rain_lod_alt_m: 200.0,
-            rain_impostor_color: [0.55, 0.58, 0.62],
-            rain_impostor_alpha: 0.5,
-        }
-    }
-}
-
-impl WeatherSettings {
-    /// The field's own knobs, with a storm forcing folded in as the reference's
-    /// `moisture_boost`. Built here rather than stored, so the config file and
-    /// the P key cannot drift into two answers about what the weather is.
-    pub fn field(&self, forcing: f32) -> pbd_core::weather::WeatherField {
-        pbd_core::weather::WeatherField {
-            solar_scale: self.solar_scale,
-            solar_drift: self.solar_drift,
-            solar_floor: self.solar_floor,
-            arid_gamma: self.arid_gamma,
-            cloud_min: self.cloud_min,
-            cloud_full: self.cloud_full,
-            min_alpha: self.min_alpha,
-            rain_cover_min: self.rain_cover_min,
-            rain_min_s: self.rain_min_s,
-            weather_moisture_scale: self.weather_moisture_scale,
-            moisture_boost: forcing.clamp(0.0, 1.0),
+            rain_map_size: 64,
+            rain_map_cell_m: 50.0,
+            rain_volume_density: 0.003,
+            rain_volume_range_m: 2000.0,
+            rain_volume_stretch: 10.0,
+            rain_volume_color: [0.55, 0.58, 0.62],
+            lightning_flash_s: 0.7,
+            lightning_cloud: 6.0,
+            lightning_ground: 0.8,
+            overlay_opacity: 0.7,
+            overlay_streak_step_m: 50.0,
+            overlay_streak_scroll: 0.35,
+            overlay_streak_strength: 0.8,
         }
     }
 }
@@ -511,30 +566,6 @@ impl WeatherSettings {
 impl Validated for WeatherSettings {
     fn validate(&self) -> Result<(), String> {
         let s = self;
-        non_negative(
-            "weather field scalars",
-            &[
-                s.solar_scale,
-                s.solar_drift,
-                s.arid_gamma,
-                s.rain_min_s,
-                s.weather_moisture_scale,
-            ],
-        )?;
-        unit("solar_floor", s.solar_floor)?;
-        unit("cloud_min", s.cloud_min)?;
-        unit("cloud_full", s.cloud_full)?;
-        unit("min_alpha", s.min_alpha)?;
-        unit("rain_cover_min", s.rain_cover_min)?;
-        // A ramp that runs backwards is a sky that clears as it thickens.
-        (s.cloud_min < s.cloud_full)
-            .then_some(())
-            .ok_or("cloud_min must be below cloud_full")?;
-        // And a rain threshold outside the ramp either rains always or never,
-        // both of which read as the global switch this replaced.
-        (s.rain_cover_min > 0.0 && s.rain_cover_min < 1.0)
-            .then_some(())
-            .ok_or("rain_cover_min must be inside the cover ramp, not at an end")?;
         non_negative(
             "weather scalars",
             &[
@@ -562,7 +593,14 @@ impl Validated for WeatherSettings {
                 s.cloud_fog_add,
                 s.rain_fog_mult,
                 s.cloud_extinction,
-                s.rain_range_m,
+                s.cloud_storm_extinction,
+                s.rain_map_cell_m,
+                s.rain_volume_density,
+                s.rain_volume_range_m,
+                s.rain_volume_stretch,
+                s.lightning_flash_s,
+                s.lightning_cloud,
+                s.lightning_ground,
                 s.rain_detail_range_m,
                 s.rain_lod_blend_m,
                 s.rain_cell_density,
@@ -572,27 +610,57 @@ impl Validated for WeatherSettings {
         )?;
         finite("rain_flow_strength", &[s.rain_flow_strength])?;
         non_negative("rain_color", &s.rain_color)?;
-        non_negative("rain_impostor_color", &s.rain_impostor_color)?;
+        non_negative("snow_color", &s.snow_color)?;
+        positive("snow fall and size", &[s.snow_fall_mps, s.snow_size_m])?;
+        non_negative("snow_sway_m", &[s.snow_sway_m])?;
+        (0.0..=10.0)
+            .contains(&s.snow_density)
+            .then_some(())
+            .ok_or("snow_density must be within 0..=10")?;
+        non_negative("rain_volume_color", &s.rain_volume_color)?;
         for (name, value) in [
             ("rain_alpha_near", s.rain_alpha_near),
             ("rain_alpha_far", s.rain_alpha_far),
+            ("snow_alpha_near", s.snow_alpha_near),
+            ("snow_alpha_far", s.snow_alpha_far),
             ("rain_wet_darken", s.rain_wet_darken),
             ("rain_puddle_share", s.rain_puddle_share),
             ("rain_mirror_strength", s.rain_mirror_strength),
+            ("rain_grass_rings", s.rain_grass_rings),
             ("overcast_sun_dim", s.overcast_sun_dim),
             ("overcast_amb_dim", s.overcast_amb_dim),
             ("overcast_sky_blue_cut", s.overcast_sky_blue_cut),
             ("overcast_sky_dim", s.overcast_sky_dim),
-            ("cloud_threshold_clear", s.cloud_threshold_clear),
-            ("cloud_threshold_overcast", s.cloud_threshold_overcast),
+            ("cloud_shadow", s.cloud_shadow),
             ("cloud_night_floor", s.cloud_night_floor),
-            ("cloud_base_dark", s.cloud_base_dark),
-            ("cloud_storm_dark", s.cloud_storm_dark),
+            ("cloud_phase_forward", s.cloud_phase_forward),
+            ("cloud_phase_blend", s.cloud_phase_blend),
+            (
+                "cloud_scatter_extinction_falloff",
+                s.cloud_scatter_extinction_falloff,
+            ),
+            (
+                "cloud_scatter_energy_falloff",
+                s.cloud_scatter_energy_falloff,
+            ),
+            ("cloud_scatter_phase_falloff", s.cloud_scatter_phase_falloff),
+            ("cloud_deck_floor", s.cloud_deck_floor),
+            ("cloud_erosion", s.cloud_erosion),
+            ("cloud_cells", s.cloud_cells),
             ("rain_lod_far_frac", s.rain_lod_far_frac),
-            ("rain_impostor_alpha", s.rain_impostor_alpha),
+            ("overlay_opacity", s.overlay_opacity),
+            ("overlay_streak_strength", s.overlay_streak_strength),
         ] {
             unit(name, value)?;
         }
+        positive(
+            "overlay streaks",
+            &[s.overlay_streak_step_m, s.overlay_streak_scroll],
+        )?;
+        (s.cloud_shear >= 1.0)
+            .then_some(())
+            .ok_or("cloud_shear must be at least 1 (1 draws no shear)")?;
+        positive("cloud_shear_mps", &[s.cloud_shear_mps])?;
         (s.rain_puddle_scale_m > 0.0)
             .then_some(())
             .ok_or("rain_puddle_scale_m must be positive")?;
@@ -601,15 +669,26 @@ impl Validated for WeatherSettings {
             .then_some(())
             .ok_or("rain_fog_mult must be at least 1")?;
         // Clear must be the higher threshold, or cover would thin the clouds.
-        (s.cloud_threshold_overcast <= s.cloud_threshold_clear)
+        (-1.0..=0.0)
+            .contains(&s.cloud_phase_back)
             .then_some(())
-            .ok_or("cloud_threshold_overcast must not exceed cloud_threshold_clear")?;
+            .ok_or("cloud_phase_back must be within -1..0")?;
+        non_negative(
+            "cloud light",
+            &[s.cloud_sun, s.cloud_ambient_sky, s.cloud_ambient_ground],
+        )?;
         (s.rain_cell_m >= 1.0)
             .then_some(())
             .ok_or("rain_cell_m must be at least a metre")?;
-        (s.rain_lod_blend_m <= s.rain_detail_range_m && s.rain_detail_range_m <= s.rain_range_m)
+        (s.rain_map_size >= 2 && s.rain_map_size <= 128)
             .then_some(())
-            .ok_or("rain ranges must nest: blend <= detail range <= range")?;
+            .ok_or("rain_map_size must be within 2..=128")?;
+        (s.lightning_flash_s > 0.0)
+            .then_some(())
+            .ok_or("lightning_flash_s must be positive")?;
+        (s.rain_lod_blend_m <= s.rain_detail_range_m)
+            .then_some(())
+            .ok_or("rain_lod_blend_m must not exceed rain_detail_range_m")?;
         (s.rain_max_cell_streaks <= 100_000)
             .then_some(())
             .ok_or("rain_max_cell_streaks is capped at 100000")?;
@@ -838,6 +917,18 @@ impl Validated for ColumnSettings {
 
 /// Loads every config file once at startup. Inserted before any plugin that
 /// reads them, so a system can take `Res<WaterSettings>` unconditionally.
+/// The simulated atmosphere's knobs (`pbd_core::atmosphere`), from
+/// `atmosphere.ron`. The defaults are the core's; this only carries them into
+/// the app as a resource.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+pub struct AtmosphereConfig(pub pbd_core::atmosphere::AtmosphereSettings);
+
+impl Validated for pbd_core::atmosphere::AtmosphereSettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::atmosphere::AtmosphereSettings::validate(self)
+    }
+}
+
 pub struct ConfigPlugin;
 
 impl Plugin for ConfigPlugin {
@@ -846,6 +937,7 @@ impl Plugin for ConfigPlugin {
             .insert_resource(load::<WeatherSettings>("weather"))
             .insert_resource(load::<ScatterSettings>("scatter"))
             .insert_resource(load::<ColumnSettings>("column"))
+            .insert_resource(AtmosphereConfig(load("atmosphere")))
             .add_plugins((
                 bevy::render::extract_resource::ExtractResourcePlugin::<WaterSettings>::default(),
                 bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
@@ -861,6 +953,7 @@ mod tests {
 
     const WATER_RON: &str = include_str!("../../../assets/config/water.ron");
     const WEATHER_RON: &str = include_str!("../../../assets/config/weather.ron");
+    const ATMOSPHERE_RON: &str = include_str!("../../../assets/config/atmosphere.ron");
 
     /// The shipped files are the defaults written out. If either drifts from
     /// the code, one of them is describing a different ocean, and this is the
@@ -873,6 +966,10 @@ mod tests {
         let weather: WeatherSettings = ron::from_str(WEATHER_RON).unwrap();
         weather.validate().unwrap();
         assert_eq!(weather, WeatherSettings::default());
+        let atmosphere: pbd_core::atmosphere::AtmosphereSettings =
+            ron::from_str(ATMOSPHERE_RON).unwrap();
+        Validated::validate(&atmosphere).unwrap();
+        assert_eq!(atmosphere, Default::default());
     }
 
     #[test]

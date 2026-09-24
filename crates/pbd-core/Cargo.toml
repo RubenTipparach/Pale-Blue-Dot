@@ -6,3 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 glam.workspace = true
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+ron = "0.12"

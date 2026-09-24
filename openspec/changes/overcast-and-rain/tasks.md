@@ -86,7 +86,25 @@
       looking at its floor in daylight; the rule is pinned by the tests above
       rather than by a picture.
 
-## 6. Held
+## 6. Rain that is lit, and a storm that closes
+- [x] Before: night and noon storm, level and looking up.
+- [x] `rain_light` from the camera's sun elevation and cover, tested against the
+      shader's day curve; streaks, flakes and the rain volume take it.
+- [x] ~~Curtains fade toward their tops~~: superseded, the curtains are gone
+      (`openspec/changes/storm`, the rain volume).
+- [x] `cloud_storm_extinction`, mixed in by cover: a night storm looked up at
+      no longer shows stars.
+- [x] After, on the same frames.
+
+## 7. Rain on the ground you can see
+- [x] Rings on every wet upward face, grass at `rain_grass_rings` (0.5) of the
+      strength; the full mirror still only in puddles.
+- [x] The puddle threshold is the mask's own quantile (mean 0.5003, spread
+      0.1587, measured off a transcription): a share of 0.35 now puddles 37% of
+      a soaked floor and 20% of a half-soaked one (was 13.9% and 0.6%).
+- [x] Capture: the meadow and the shore in rain, rings on both.
+
+## 8. Held
 - [ ] Per-fragment cloud shadow on the ground.
 - [ ] Wind-slanted streaks; snow particles; puddles on their own clock.
 - [ ] The sea's mirrored sky colours are not yet greyed by the overcast; only

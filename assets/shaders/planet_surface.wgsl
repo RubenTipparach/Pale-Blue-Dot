@@ -2,6 +2,8 @@
 // skirts and cosmetic trees. Terminator/skylight/rim treatment follows the
 // previously documented Tenebris port in hex_terrain.wgsl. The sea is not
 // drawn here: water cells draw their seabed and water.wgsl draws the sheet.
+#import pbd::clouds::cloud_map_smooth
+
 struct Cell {
     direction_height: vec4<f32>,
     corners: array<vec4<f32>,6>,
@@ -27,6 +29,30 @@ struct Params {
     ground: vec4<f32>,         // sod depth m, soil depth m, snow tileset slot, spare
     tilesets: array<vec4<u32>,2>, // atlas slot per biome, in Biome order
 }
+// The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
+// depth per place, the wind aloft, the overlay; one sampler.
+@group(1) @binding(0) var weather_cloud: texture_cube<f32>;
+@group(1) @binding(1) var weather_wind: texture_cube<f32>;
+@group(1) @binding(2) var weather_overlay: texture_cube<f32>;
+@group(1) @binding(3) var weather_sampler: sampler;
+
+// How much of the sun reaches a point past the clouds: the cloud where the
+// ray toward the sun crosses the cloud layer (`clutter_more.w`, a radius),
+// thinned by that cloud's own optical depth. A cloud's shadow lies where the
+// sun puts it and moves with it; `ground.w` is how dark a full one is.
+fn cloud_sun(p: vec3<f32>, sun: vec3<f32>) -> f32 {
+    let strength = params.ground.w;
+    let layer = params.clutter_more.w;
+    if strength <= 0.0 || layer <= 0.0 { return 1.0; }
+    let up = normalized(p);
+    let rise = max(dot(up, sun), 0.08);
+    let t = max(layer - length(p), 0.0) / rise;
+    let at = normalized(p + sun * t);
+    let w = cloud_map_smooth(weather_cloud, weather_sampler, at);
+    let blocked = clamp(w.x, 0.0, 1.0) * (1.0 - exp(-max(w.w, 0.0) * 0.25));
+    return 1.0 - strength * blocked;
+}
+
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
 fn band_cos(level: u32) -> f32 {
@@ -1261,6 +1287,12 @@ fn puddle_noise(p: vec2<f32>) -> f32 {
     return mix(a,b,w.y);
 }
 
+// The puddle mask's mean and standard deviation, measured by sampling a
+// transcription of the two `puddle_noise` octaves over 60,000 points: the
+// identity of the noise rather than a tuning knob.
+const PUDDLE_MASK_MEAN: f32 = 0.5003;
+const PUDDLE_MASK_SPREAD: f32 = 0.1587;
+
 @fragment
 fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let radial = normalized(input.position);
@@ -1286,8 +1318,13 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // between a lit face and a shaded one collapses too: a storm is flat grey
     // light, not a dim noon.
     let cover = clamp(params.weather.z,0.,1.);
-    let sun_dim = 1.-cover*params.rain[4].x;
-    let fill_dim = 1.-cover*params.rain[4].y;
+    // The sun is cut by the cloud between this face and the sun, and the
+    // sky's fill by the cover over this face: both off the weather maps, so a
+    // storm on the far hills darkens the far hills and not the meadow under
+    // a clear sky. `overcast_amb_dim` stays the fill's knob.
+    let here_cover = clamp(textureSampleLevel(weather_cloud,weather_sampler,radial,0.0).x,0.,1.);
+    let sun_dim = cloud_sun(input.position,sun);
+    let fill_dim = 1.-here_cover*params.rain[4].y;
     let direct = max(dot(n,sun),0.0)*daylight*sun_dim;
     // The heightfield's per-cell occlusion, times the voxel field's answer at
     // this vertex. Outside the column tier the second is one and this is what
@@ -1419,6 +1456,10 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // flat orange patch over it. This is the term that makes a night worth
     // carrying a light through.
     color += albedo*TORCH_TINT*(lamp*TORCH_GAIN);
+    // Lightning: the storm's cloud lit from inside, which lights everything
+    // under open sky a cool white for the length of a flicker. Gated by the
+    // sky light, so a cave does not flash with the storm over it.
+    color += albedo*vec3(0.80,0.85,1.0)*(max(params.weather.w,0.)*skylight);
     // Submerged terrain: Tenebris's hex.fs absorption, the sheet's own
     // absorption and deep colour so the seabed tints the way its sea does.
     //
@@ -1461,6 +1502,7 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         let k_glint_strength = params.rain[3].x;
         let k_puddle_scale = max(params.rain[3].y,0.01);
         let k_puddle_share = params.rain[3].z;
+        let k_grass_rings = params.rain[3].w;
         let wet_up = radial;
         let face = dot(n,wet_up);
         let top_w = smoothstep(0.35,0.85,face);
@@ -1487,10 +1529,21 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         let flat = smoothstep(0.90,0.97,face);
         let soak = clamp(params.weather.x,0.,1.);
         let mask = puddle_noise(uv/k_puddle_scale)*0.65+puddle_noise(uv/(k_puddle_scale*0.37)+vec2(17.,5.))*0.35;
-        let edge = 1.-k_puddle_share*soak;
-        let puddle = select(0.,flat*smoothstep(edge,edge+0.06,mask),floor_like);
+        // The mask is NOT uniform - two octaves of value noise bunch round a
+        // half - so the threshold is its own quantile: its mean and spread,
+        // measured off a transcription of these two lines, and the logistic
+        // stand-in for the normal quantile. Taken as uniform, a share of 0.35
+        // puddled 13.9% of a soaked floor and 0.6% of a half-soaked one.
+        let wet_share = clamp(k_puddle_share*soak,1e-4,0.9999);
+        let edge = PUDDLE_MASK_MEAN+PUDDLE_MASK_SPREAD*log((1.-wet_share)/wet_share)/1.702;
+        let puddle = select(0.,flat*smoothstep(edge-0.03,edge+0.03,mask),floor_like);
+        // Raindrop rings land on EVERY wet upward face, grass at a lighter
+        // touch. They bend the mirrored sky rather than darken, so they read
+        // as water; putting them only in puddles left a meadow in a storm
+        // with none, and a meadow is where the game starts.
+        let rings = top_w*max(puddle,select(k_grass_rings,1.,floor_like));
         var pg = vec2(0.);
-        if puddle > 0.001 {
+        if rings > 0.001 {
             // A continuous rippled sheet so the whole wet face reads as a
             // normal map, then raindrop impact rings on top of it.
             pg += vec2(
@@ -1499,7 +1552,7 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
                 cos(uv.y*k_wave_scale-wet_t*k_wave_speed*0.9)
                     +0.7*cos((uv.x-uv.y)*k_wave_scale*0.6+wet_t*k_wave_speed*0.7)
             )*(k_wave_strength*puddle);
-            pg += rain_ripple_grad(uv*k_ripple_scale,wet_t)*(k_ripple_strength*puddle);
+            pg += rain_ripple_grad(uv*k_ripple_scale,wet_t)*(k_ripple_strength*rings);
         }
         var pert = ax_a*pg.x+ax_b*pg.y;
         if side_w > 0.001 {

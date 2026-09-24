@@ -23,6 +23,8 @@ pub(crate) mod topology;
 mod visibility_tests;
 #[path = "planet_water.rs"]
 mod water;
+#[path = "planet_weather.rs"]
+pub mod weather_maps;
 
 pub use contact::{PlanetContact, SurfaceContact};
 pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m};
@@ -199,15 +201,6 @@ struct PlanetBase(Arc<Vec<GpuCell>>);
 #[derive(Resource, Clone, Default, ExtractResource)]
 pub(crate) struct PlanetClock(f32);
 
-impl PlanetClock {
-    /// Elapsed seconds. The weather field is a function of time, and this is
-    /// the one clock the whole planet already runs on: a second source would be
-    /// a sky drifting at a different rate from the sea it is reflected in.
-    pub(crate) fn seconds(&self) -> f32 {
-        self.0
-    }
-}
-
 #[derive(Resource, Clone, ExtractResource)]
 pub struct PlanetArt(pub Handle<Image>);
 
@@ -245,6 +238,7 @@ impl Plugin for PlanetPlugin {
         .add_systems(Update, |time: Res<Time>, mut clock: ResMut<PlanetClock>| {
             clock.0 = time.elapsed_secs();
         });
+        weather_maps::build(app);
         let render_app = app.sub_app_mut(RenderApp);
         render_app
             .add_render_command::<Transparent3d, DrawPlanet>()
@@ -423,7 +417,7 @@ struct PlanetParams {
     water_absorption: Vec4,
     // The colour submerged terrain converges to with depth.
     water_deep: Vec4,
-    // Ground wetness, rain intensity, cloud cover over the player, spare.
+    // Ground wetness, rain intensity, cloud cover over the player, lightning.
     weather: Vec4,
     // The terrain-wetness knobs from `weather.ron`, then the overcast ones.
     rain: [Vec4; 6],
@@ -715,7 +709,7 @@ impl SpecializedRenderPipeline for PlanetPipeline {
     fn specialize(&self, (samples, hdr): Self::Key) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed("Opaque GPU hex world")),
-            layout: vec![self.draw_layout.clone()],
+            layout: vec![self.draw_layout.clone(), weather_maps::layout()],
             vertex: VertexState {
                 shader: self.shader.clone(),
                 entry_point: Some(Cow::Borrowed("vertex")),
@@ -768,6 +762,9 @@ pub(crate) struct Tunables<'w> {
     weather: Res<'w, crate::config::WeatherSettings>,
     scatter: Res<'w, crate::config::ScatterSettings>,
     columns: Res<'w, crate::config::ColumnSettings>,
+    /// Whether an overlay is showing: the map hides the clouds, and so their
+    /// shadows.
+    maps: Res<'w, weather_maps::WeatherMapsNow>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -823,7 +820,14 @@ fn prepare_views(
             water_absorption: Vec3::from_array(water_settings.absorption_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),
             water_deep: Vec3::from_array(water_settings.deep_color).extend(0.),
-            weather: Vec4::new(weather.wetness, weather.rain, weather.cover, 0.),
+            weather: Vec4::new(
+                weather.wetness,
+                weather.rain,
+                weather.cover,
+                // Lightning, as the ground takes it: the strike's brightness
+                // now times `lightning_ground`.
+                weather.flash.w * w.lightning_ground,
+            ),
             rain: [
                 Vec4::new(
                     w.rain_ripple_scale,
@@ -847,7 +851,7 @@ fn prepare_views(
                     w.rain_glint_strength,
                     w.rain_puddle_scale_m,
                     w.rain_puddle_share,
-                    0.,
+                    w.rain_grass_rings,
                 ),
                 Vec4::new(
                     w.overcast_sun_dim,
@@ -892,7 +896,9 @@ fn prepare_views(
                 scatter.flower_height_m,
                 scatter.shrub_chance,
                 scatter.shrub_size_m,
-                0.,
+                // Where the ground's cloud shadows are cast from: a radius a
+                // third of the way up the cloud layer.
+                crate::sky::CLOUD_RADIUS + crate::sky::CLOUD_THICKNESS * 0.35,
             ),
             column: Vec4::new(
                 // The tier rides the foliage cutoff for the same reason the
@@ -914,7 +920,11 @@ fn prepare_views(
                 pbd_core::column::SOD_DEPTH_M,
                 pbd_core::column::SOIL_DEPTH_M,
                 terrain::snow_slot() as f32,
-                0.,
+                if tunables.maps.overlay_kind.is_some() {
+                    0.0
+                } else {
+                    w.cloud_shadow
+                },
             ),
             tilesets: tileset_slots(),
         };
@@ -1050,19 +1060,20 @@ fn queue_planet(
 type DrawPlanet = (SetItemPipeline, DrawPlanetIndirect);
 struct DrawPlanetIndirect;
 impl<P: PhaseItem> RenderCommand<P> for DrawPlanetIndirect {
-    type Param = ();
+    type Param = Option<bevy::ecs::system::lifetimeless::SRes<weather_maps::WeatherMapGpu>>;
     type ViewQuery = Option<&'static PlanetViewGpu>;
     type ItemQuery = ();
     fn render<'w>(
         _: &P,
         view: Option<&'w PlanetViewGpu>,
         _: Option<()>,
-        _: SystemParamItem<'w, '_, Self::Param>,
+        maps: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let Some(view) = view else {
+        let (Some(view), Some(maps)) = (view, maps) else {
             return RenderCommandResult::Skip;
         };
+        pass.set_bind_group(1, &maps.into_inner().bind_group, &[]);
         pass.set_bind_group(0, &view.draw_bind_group, &[]);
         pass.draw_indirect(&view.indirect, 0);
         pass.set_bind_group(0, &view.foliage_bind_group, &[]);
@@ -1084,8 +1095,11 @@ mod pipeline_tests {
     #[test]
     fn live_pixel_material_uses_unfiltered_integer_texels() {
         let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        // The pixel atlas is loaded texel by texel and never sampled; the
+        // weather maps, in their own group, are filtered on purpose.
         assert!(shader.contains("textureLoad(atlas,"));
-        assert!(!shader.contains("textureSample"));
+        assert!(!shader.contains("textureSample(atlas"));
+        assert!(!shader.contains("textureSampleLevel(atlas"));
         assert_eq!(
             draw_layout().entries[3].ty,
             BindingType::Texture {
@@ -1108,11 +1122,9 @@ mod pipeline_tests {
         // a vec4 added on one side and not the other is a uniform read at the
         // wrong offsets, which draws wrong rather than failing.
         let rust = PlanetParams::min_size().get() as u32;
+        let surface = crate::shader_tests::planet_surface_source();
         for (label, source) in [
-            (
-                "planet_surface.wgsl",
-                include_str!("../../../assets/shaders/planet_surface.wgsl"),
-            ),
+            ("planet_surface.wgsl", surface.as_str()),
             (
                 "planet_visibility.wgsl",
                 include_str!("../../../assets/shaders/planet_visibility.wgsl"),

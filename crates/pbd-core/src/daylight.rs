@@ -11,31 +11,45 @@
 //! depend on nothing but arithmetic.
 
 use glam::{Quat, Vec3};
-use std::f32::consts::TAU;
+use std::f64::consts::{FRAC_PI_2, TAU as TAU64};
 
 /// How long a whole day takes, seconds. Forty-eight minutes: a minute of play
-/// is half an hour of world, which is the owner's number.
+/// is half an hour of world, which is the owner's number. This is the SOLAR
+/// day, noon to noon, which is what the clock's hours count.
 pub const DAY_S: f32 = 2880.0;
+
+/// How many of those days the planet takes to go round its sun: the owner's
+/// number. It turns one more time than this against the stars in a year,
+/// because each day it has moved a little way round its orbit and has to turn
+/// that much further to bring the sun back overhead.
+pub const YEAR_DAYS: f64 = 100.0;
 
 /// The hour the world opens on, in 0..24. Mid-morning: the sun is up, it is
 /// plainly climbing, and nothing has to be waited out to see the world lit.
 pub const START_HOUR: f32 = 9.0;
 
-/// How far the sun stands off the planet's equator, radians: the sub-solar
-/// latitude, Earth's own 23.5 degrees at a solstice. A sun over the equator
-/// would light every latitude alike; a sun at 45 degrees would never set
-/// north of it, which is what the old fixed light's latitude was.
+/// The planet's obliquity, radians: how far its equator leans off its orbit,
+/// and so how far north and south of the equator the sun wanders over a year.
+/// Earth's 23.5 degrees.
 pub const TILT: f32 = 0.41;
 
-/// Where the sun IS, in the system frame the sky is fixed in. It does not move;
-/// the planet turns under it. The azimuth is the old fixed light's, so noon
-/// faces where every capture has been lit from, at [`TILT`]'s latitude.
+/// Where the noon sun stands on day 0, the northern summer solstice the world
+/// opens on: at [`TILT`]'s latitude, on the azimuth every capture has been lit
+/// from. Day 0 IS the sky this module had before the planet had an orbit, so
+/// nothing framed against it moved.
 pub const SUN_FIXED: Vec3 = Vec3::new(0.807, 0.398, 0.435);
 
-/// What time it is, as a fraction of a day in 0..1 where 0 is midnight.
+/// The orbital longitude of day 0: the northern summer solstice.
+const START_LONGITUDE: f64 = FRAC_PI_2;
+
+/// What time it is: world seconds since midnight of day 0.
+///
+/// `f64`, because it is orbital time and grows without bound: at `f32` a
+/// world a few hundred days old could no longer tell one frame from the next.
+/// The hour, the day and the season are all derived from it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Clock {
-    pub fraction: f32,
+    pub seconds: f64,
 }
 
 impl Default for Clock {
@@ -45,26 +59,76 @@ impl Default for Clock {
 }
 
 impl Clock {
+    /// This hour of day 0.
     pub fn at_hour(hour: f32) -> Self {
+        Self::at(0, hour)
+    }
+
+    /// This hour of this day.
+    pub fn at(day: u32, hour: f32) -> Self {
+        let hour = if hour.is_finite() { hour } else { START_HOUR };
         Self {
-            fraction: (hour / 24.0).rem_euclid(1.0),
+            seconds: (day as f64 + (hour as f64 / 24.0).rem_euclid(1.0)) * DAY_S as f64,
         }
     }
 
-    /// Advance by `seconds` of wall time.
+    /// Advance by `seconds` of wall time. A non-finite step changes nothing.
     pub fn advance(&mut self, seconds: f32) {
-        if !seconds.is_finite() || DAY_S <= 0.0 {
-            return;
+        if seconds.is_finite() {
+            self.seconds += seconds as f64;
         }
-        self.fraction = (self.fraction + seconds / DAY_S).rem_euclid(1.0);
+    }
+
+    /// The solar time of day, 0..1, where 0 is midnight and 0.5 is noon.
+    pub fn fraction(self) -> f32 {
+        (self.seconds / DAY_S as f64).rem_euclid(1.0) as f32
     }
 
     pub fn hour(self) -> f32 {
-        self.fraction * 24.0
+        self.fraction() * 24.0
     }
 
-    /// The planet's rotation about its pole, +Y, in the system frame: one
-    /// full turn a day, noon meridian toward the sun at fraction 0.5.
+    /// Which day it is, counting from 0.
+    pub fn day(self) -> u64 {
+        (self.seconds / DAY_S as f64).max(0.0).floor() as u64
+    }
+
+    /// How far round the year, 0..1, from the northern summer solstice.
+    pub fn year_fraction(self) -> f64 {
+        (self.seconds / DAY_S as f64 / YEAR_DAYS).rem_euclid(1.0)
+    }
+
+    /// The northern hemisphere's season, in words: each season is the quarter
+    /// of the year centred on its solstice or equinox, and the year starts at
+    /// the northern summer solstice. The southern hemisphere has the opposite.
+    pub fn season(self) -> &'static str {
+        const SEASONS: [&str; 4] = [
+            "northern summer",
+            "northern autumn",
+            "northern winter",
+            "northern spring",
+        ];
+        let quarter = ((self.year_fraction() + 0.125) * 4.0).floor() as usize % 4;
+        SEASONS[quarter]
+    }
+
+    /// Where the sun is in the SYSTEM frame the stars are fixed in: along the
+    /// ecliptic at the planet's orbital longitude, the ecliptic leaning
+    /// [`TILT`] off the equator about +X.
+    pub fn sun_in_system(self) -> Vec3 {
+        let longitude = TAU64 * self.year_fraction() + START_LONGITUDE;
+        let (sin_l, cos_l) = longitude.sin_cos();
+        let (sin_t, cos_t) = (TILT as f64).sin_cos();
+        Vec3::new(cos_l as f32, (sin_t * sin_l) as f32, (cos_t * sin_l) as f32)
+    }
+
+    /// The sun's latitude, radians: `TILT` north at the northern solstice, 0
+    /// at the equinoxes, `TILT` south at the southern solstice.
+    pub fn declination(self) -> f32 {
+        self.sun_in_system().y.clamp(-1.0, 1.0).asin()
+    }
+
+    /// The planet's rotation about its pole, +Y, in the system frame.
     ///
     /// This is the ONE rotation. The sun, the star field and the moon are
     /// fixed directions in the system frame, and every one of them reaches the
@@ -73,21 +137,27 @@ impl Clock {
     /// Tenebris's `orbit.rs` keeps the same model: pin the body, rotate the
     /// whole sky by its spin.
     pub fn spin(self) -> Quat {
-        let angle = (self.fraction - 0.5) * TAU;
-        Quat::from_axis_angle(Vec3::Y, -angle)
+        self.sky_from_system().inverse()
     }
 
-    /// What carries a system-frame direction into the planet's frame: the
-    /// inverse of the spin.
+    /// What carries a system-frame direction into the planet's frame.
+    ///
+    /// Two parts about the pole, composed as one angle: the part that carries
+    /// the sun's right ascension for the season onto the noon azimuth, and the
+    /// hour angle for the solar time. Over a year the first part goes round
+    /// once, which is the extra turn against the stars.
     pub fn sky_from_system(self) -> Quat {
-        self.spin().inverse()
+        let sun = self.sun_in_system();
+        let right_ascension = (sun.z as f64).atan2(sun.x as f64);
+        let noon_azimuth = (SUN_FIXED.z as f64).atan2(SUN_FIXED.x as f64);
+        let hour_angle = (self.fraction() as f64 - 0.5) * TAU64;
+        let angle = (hour_angle + right_ascension - noon_azimuth).rem_euclid(TAU64);
+        Quat::from_axis_angle(Vec3::Y, angle as f32)
     }
 
-    /// Where the sun is, as a unit vector in the planet's own frame: the fixed
-    /// sun carried in by the spin. At fraction 0.5 - noon - it is
-    /// [`SUN_FIXED`] itself, and at 0 it is on the far side.
+    /// Where the sun is, as a unit vector in the planet's own frame.
     pub fn sun(self) -> Vec3 {
-        (self.sky_from_system() * SUN_FIXED.normalize()).normalize()
+        (self.sky_from_system() * self.sun_in_system()).normalize()
     }
 
     /// How high the sun stands over a point on the surface, as the cosine
@@ -105,15 +175,17 @@ mod tests {
     fn a_day_comes_round_and_the_clock_never_leaves_its_range() {
         let mut clock = Clock::at_hour(0.0);
         clock.advance(DAY_S);
-        assert!(
-            (clock.fraction - 0.0).abs() < 1e-4,
-            "a whole day is a whole turn: {}",
-            clock.fraction
-        );
+        let f = clock.fraction();
+        assert!(f.min(1.0 - f) < 1e-4, "a whole day is a whole turn: {f}");
         clock.advance(DAY_S * 3.5);
-        assert!((0.0..1.0).contains(&clock.fraction), "{}", clock.fraction);
+        assert!(
+            (0.0..1.0).contains(&clock.fraction()),
+            "{}",
+            clock.fraction()
+        );
+        let before = clock;
         clock.advance(f32::NAN);
-        assert!(clock.fraction.is_finite(), "a bad step changes nothing");
+        assert_eq!(clock, before, "a bad step changes nothing");
     }
 
     /// The sun is a unit vector at every hour, which every consumer assumes
@@ -160,6 +232,8 @@ mod tests {
         );
         // At the tilt's latitude, on the old light's azimuth.
         let fixed = SUN_FIXED.normalize();
+        // Noon of day 0 is half a day into the year: a hair off the solstice.
+        assert!((noon.declination() - TILT).abs() < 1e-3);
         assert!(
             (fixed.y.asin() - TILT).abs() < 0.01,
             "latitude {}",
@@ -172,8 +246,10 @@ mod tests {
         let star_then = later.sky_from_system() * star;
         // Both are a quarter turn about Y from where they were at noon.
         let quarter = Quat::from_axis_angle(Vec3::Y, std::f32::consts::FRAC_PI_2);
-        assert!((quarter * noon.sun()).dot(later.sun()) > 0.9999);
-        assert!((quarter * (noon.sky_from_system() * star)).dot(star_then) > 0.9999);
+        // A quarter of a day also carries the planet a four-hundredth of the
+        // way round its orbit, which turns the sky a further degree.
+        assert!((quarter * noon.sun()).dot(later.sun()) > 0.999);
+        assert!((quarter * (noon.sky_from_system() * star)).dot(star_then) > 0.999);
         // Latitude is preserved: the pole is the axis.
         assert!((star_then.y - star.y).abs() < 1e-5);
     }
@@ -193,5 +269,95 @@ mod tests {
             "a minute moved the sun by nothing: {dawn:?} {later:?}"
         );
         assert!(dawn.dot(later) > 0.0, "and not by half the sky");
+    }
+
+    fn degrees(radians: f32) -> f32 {
+        radians.to_degrees()
+    }
+
+    /// The solstices and the equinoxes fall where a 100-day year puts them.
+    #[test]
+    fn the_sun_swings_north_and_south_over_a_year() {
+        let at = |day: u32| Clock::at(day, 0.0).declination();
+        let tilt = degrees(TILT);
+        assert!((degrees(at(0)) - tilt).abs() < 0.2, "{}", degrees(at(0)));
+        assert!((degrees(at(50)) + tilt).abs() < 0.2, "{}", degrees(at(50)));
+        assert!(degrees(at(25)).abs() < 0.2, "{}", degrees(at(25)));
+        assert!(degrees(at(75)).abs() < 0.2, "{}", degrees(at(75)));
+    }
+
+    /// Noon is the middle of the day on every day of the year: the sun is at
+    /// its highest on the noon meridian, whatever the season.
+    #[test]
+    fn noon_is_noon_all_year() {
+        let meridian = Vec3::new(SUN_FIXED.x, 0.0, SUN_FIXED.z).normalize();
+        for day in [0, 13, 37, 50, 88] {
+            let noon = Clock::at(day, 12.0).sun();
+            let flat = Vec3::new(noon.x, 0.0, noon.z).normalize();
+            assert!(flat.dot(meridian) > 0.99999, "day {day}: {noon:?}");
+            let mut best = (f32::MIN, 0.0);
+            for step in 0..96 {
+                let hour = step as f32 * 0.25;
+                let e = Clock::at(day, hour).elevation(meridian);
+                if e > best.0 {
+                    best = (e, hour);
+                }
+            }
+            assert!(
+                (best.1 - 12.0).abs() < 0.26,
+                "day {day} peaks at {}",
+                best.1
+            );
+        }
+    }
+
+    /// A solar day brings the sun back; a year of them turns the stars one
+    /// more time than there are days, so the whole sky is back after a year.
+    #[test]
+    fn a_year_turns_the_stars_once_more_than_the_days() {
+        let start = Clock::at(0, 12.0);
+        let next = Clock::at(1, 12.0);
+        assert!(start.sun().dot(next.sun()) > 0.9995);
+        let year = Clock::at(YEAR_DAYS as u32, 12.0);
+        let star = Vec3::new(0.3, -0.2, 0.9).normalize();
+        assert!((start.sky_from_system() * star).dot(year.sky_from_system() * star) > 0.99999);
+        assert!(start.sun().dot(year.sun()) > 0.99999);
+        // Each solar day turns the stars a whole turn plus a little more (a
+        // little more near the solstices, less near the equinoxes: the
+        // equation of time). Summed over the year the extras are one turn.
+        let mut extra = 0.0f64;
+        let azimuth = |q: Quat| {
+            let x = q * Vec3::X;
+            (x.z as f64).atan2(x.x as f64)
+        };
+        for day in 0..YEAR_DAYS as u32 {
+            let a = azimuth(Clock::at(day, 12.0).sky_from_system());
+            let b = azimuth(Clock::at(day + 1, 12.0).sky_from_system());
+            let mut step = b - a;
+            while step > std::f64::consts::PI {
+                step -= std::f64::consts::TAU;
+            }
+            while step <= -std::f64::consts::PI {
+                step += std::f64::consts::TAU;
+            }
+            extra += step;
+        }
+        assert!(
+            (extra.abs() - std::f64::consts::TAU).abs() < 1e-3,
+            "a year's extra turning is {extra} radians"
+        );
+    }
+
+    #[test]
+    fn the_season_follows_the_sun_north_and_south() {
+        let quarter = YEAR_DAYS as u32 / 4;
+        assert_eq!(Clock::at(0, 0.0).season(), "northern summer");
+        assert_eq!(Clock::at(quarter, 0.0).season(), "northern autumn");
+        assert_eq!(Clock::at(2 * quarter, 0.0).season(), "northern winter");
+        assert_eq!(Clock::at(3 * quarter, 0.0).season(), "northern spring");
+        assert_eq!(Clock::at(4 * quarter - 1, 0.0).season(), "northern summer");
+        // Summer is when the sun stands north.
+        assert!(Clock::at(0, 0.0).declination() > 0.3);
+        assert!(Clock::at(2 * quarter, 0.0).declination() < -0.3);
     }
 }
