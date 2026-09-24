@@ -306,4 +306,73 @@ mod tests {
         assert!(cube_direction(0, 0, 32, 64).y > 0.5);
         assert!(cube_direction(4, 32, 0, 64).x < -0.5);
     }
+
+    /// A measurement instrument for the `calm-clouds` change: how fast the
+    /// cloud the player sees moves and changes, off the shipped atmosphere.
+    /// The wind at cloud height (what drifts the detail), what that is as an
+    /// angle a second overhead at the cloud base, and how much of the cover
+    /// map changes between one published map and the next. Run with
+    /// `cargo test -p pbd-app --release --lib cloud_pace -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn cloud_pace() {
+        let settings = pbd_core::atmosphere::AtmosphereSettings::default();
+        let start = 0.4 * pbd_core::daylight::DAY_S as f64;
+        let air = Air::open(settings, TERRAIN.seed, None, start);
+        let mut atmosphere = (*air.now).clone();
+        let mut before = weather_maps(&atmosphere);
+        let speeds: Vec<f32> = before
+            .wind
+            .iter()
+            .map(|w| Vec3::new(w[0], w[1], w[2]).length())
+            .collect();
+        let mut sorted = speeds.clone();
+        sorted.sort_by(f32::total_cmp);
+        let mean = speeds.iter().sum::<f32>() / speeds.len() as f32;
+        let p90 = sorted[sorted.len() * 9 / 10];
+        let base_m = crate::sky::CLOUD_RADIUS - crate::planet::terrain::PLANET_RADIUS;
+        eprintln!(
+            "wind at cloud height: mean {mean:.1} m/s, 90th percentile {p90:.1} m/s; \
+             overhead at the {base_m:.0} m base that is {:.2} deg/s mean, {:.2} deg/s p90",
+            (mean / base_m).to_degrees(),
+            (p90 / base_m).to_degrees()
+        );
+        let steering: Vec<f32> = atmosphere
+            .wind
+            .iter()
+            .zip(&atmosphere.upper)
+            .map(|(w, u)| w.lerp(*u, settings.cloud_steering).length())
+            .collect();
+        let surface: f32 =
+            atmosphere.wind.iter().map(|w| w.length()).sum::<f32>() / atmosphere.wind.len() as f32;
+        let steer = steering.iter().sum::<f32>() / steering.len() as f32;
+        eprintln!(
+            "per cell: surface wind {surface:.1} m/s, the steering wind that carries the \
+             cloud {steer:.1} m/s ({:.2} deg/s overhead)",
+            (steer / base_m).to_degrees()
+        );
+        let mut t = start;
+        for steps in [1u32, 1, 1, 5, 30] {
+            for _ in 0..steps {
+                t += settings.dt_s as f64;
+                atmosphere.step(Clock { seconds: t }.sun(), &[]);
+            }
+            let after = weather_maps(&atmosphere);
+            let deltas: Vec<f32> = before
+                .cloud
+                .iter()
+                .zip(&after.cloud)
+                .map(|(a, b)| (a[0] - b[0]).abs())
+                .collect();
+            let mean = deltas.iter().sum::<f32>() / deltas.len() as f32;
+            let moved = deltas.iter().filter(|d| **d > 0.05).count();
+            eprintln!(
+                "cover after {steps} step(s) of {} s: mean change {mean:.4}, {:.1}% of texels \
+                 change by more than 0.05",
+                settings.dt_s,
+                100.0 * moved as f32 / deltas.len() as f32
+            );
+            before = after;
+        }
+    }
 }
