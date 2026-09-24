@@ -236,3 +236,13 @@ test executable passed all 130 library tests serially. The subsequent full
 14 desktop tests, including the separately prepared integration regressions.
 The process crash's underlying cause is not established; it is not silently
 counted as a passing run. OpenSpec validates all 56 items.
+
+Integration evidence: all five new regressions pass in the 135-library /
+14-desktop release app suite. Fleet placement, boarding and the seat camera
+are checked at centre (8192, -4096, 2048) m; an additional origin change of
+(512, -256, 128) m is consumed by camera following on the same update.
+Raw look changes the seat camera with a zero-duration update while physical
+orientation stays unchanged. Tests also exercise view switching, the three
+control mappings and menu suppression. A real generated water column reads
+the occupied camera's newly propagated underwater eye while ignoring the
+parked camera, then reads air when camera activity switches back.

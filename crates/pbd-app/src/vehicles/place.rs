@@ -112,7 +112,9 @@ fn gather(world: &World, walker: Vec3) -> Option<(Vec<Craft>, u64, bool)> {
             }
         }
         None => {
-            let berths = Berths::find(sea, walker.normalize_or(Vec3::Y));
+            let center = world.resource::<crate::planet::PlanetRenderFrame>().center;
+            let local = walker.as_dvec3() - center;
+            let berths = Berths::find(sea, local.normalize_or(DVec3::Y).as_vec3());
             for (kind, berth) in berths.0 {
                 let Some(berth) = berth else {
                     warn!("no berth for the {} near the spawn", kind.name());
@@ -152,6 +154,39 @@ struct Berth {
 }
 
 struct Berths([(Kind, Option<Berth>); 3]);
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+
+    #[test]
+    fn translated_walker_finds_the_same_body_local_berths() {
+        let mut world = World::new();
+        world.insert_resource(Fleet::new(Default::default()));
+        world.insert_resource(PlanetContact::test_planet(5));
+        world.insert_resource(Sea::new(&Default::default()));
+        world.insert_resource(crate::saves::WorldSave::memory_only());
+        world.insert_resource(crate::planet::PlanetRenderFrame::default());
+        // Integer coordinates preserve exactly the same f32 local input after translation.
+        let walker = (crate::flight_view::FlightViewConfig::default().spawn_direction
+            * PLANET_RADIUS)
+            .round();
+        let original = gather(&world, walker).unwrap().0;
+        let offset = DVec3::new(8192.0, -4096.0, 2048.0);
+        world
+            .resource_mut::<crate::planet::PlanetRenderFrame>()
+            .center = offset;
+        let translated = gather(&world, (walker.as_dvec3() + offset).as_vec3())
+            .unwrap()
+            .0;
+        assert_eq!(original.len(), 3);
+        for (a, b) in original.iter().zip(&translated) {
+            assert_eq!(a.kind, b.kind);
+            assert!(a.body.position.distance(b.body.position) < 1e-6);
+            assert!(a.body.orientation.angle_between(b.body.orientation).abs() < 1e-6);
+        }
+    }
+}
 
 impl Berths {
     /// The Kestrel on the first level pad round the player; the Loon in the

@@ -15,9 +15,9 @@
 
 ## 3. Frame and camera integration
 
-- [ ] 3.1 Fix translated fleet placement; test equivalent body-local berths, boarding and camera translation with nonzero planet centre.
-- [ ] 3.2 Test direct same-update vehicle mouse look without a fixed tick, camera switching, control mappings and menu suppression; fix any exposed integration defect.
-- [ ] 3.3 Prove water-state selection follows the occupied camera and migrate that original delta with the test; migrate new frame/input requirements and run all required checks before the integration commit.
+- [x] 3.1 Fix translated fleet placement; test equivalent body-local berths, boarding and camera translation with nonzero planet centre.
+- [x] 3.2 Test direct same-update vehicle mouse look without a fixed tick, camera switching, control mappings and menu suppression; fix any exposed integration defect.
+- [x] 3.3 Prove water-state selection follows the occupied camera and migrate that original delta with the test; migrate new frame/input requirements and run all required checks before the integration commit.
 
 ## 4. Instruments and moving geometry
 

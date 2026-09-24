@@ -149,3 +149,35 @@ falls to zero.
 #### Scenario: Gravity fades away
 - **WHEN** the assisted Kestrel is stepped with zero local gravity and centred input
 - **THEN** its pose, velocity and controls remain finite
+
+### Requirement: Fleet placement respects the planet frame
+A new fleet SHALL be placed from the player's body-local position regardless
+of the planet's render-frame translation. Boarding and vehicle camera poses
+SHALL use the same frame conversion.
+
+#### Scenario: Translated planet
+- **WHEN** the planet and walker are translated together within the render frame
+- **THEN** the new craft retain equivalent body-local berths and are boardable with correctly translated cameras
+
+### Requirement: Vehicle input is immediate and respects menus
+Vehicle mouse look SHALL consume the current frame's raw displacement and
+change the camera on that update independently of fixed physics ticks.
+An open menu SHALL suppress vehicle controls and mouse look.
+
+#### Scenario: Looking between physics ticks
+- **WHEN** mouse displacement arrives while aboard without a physics tick
+- **THEN** the camera turns on that update while the craft's physical orientation stays unchanged
+
+#### Scenario: Menu owns input
+- **WHEN** the menu is open while vehicle keys and mouse motion arrive
+- **THEN** the vehicle control request and look do not change the craft or camera
+
+### Requirement: The vehicle camera is the active camera
+While a craft is occupied its camera SHALL be the active camera, so every
+system that reads the active camera (water state, weather, LOD anchor)
+follows it, and its seat view SHALL use the frame's raw mouse displacement.
+
+#### Scenario: Water state from a boat
+- **WHEN** the player sits in the Loon at sea
+- **THEN** the water state is computed at the vehicle camera, not at the
+  parked walker
