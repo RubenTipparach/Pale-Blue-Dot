@@ -7,13 +7,21 @@
       (`FRAME_WALL_MS` p50 9.2 ms, p95 15.6 ms, two runs).
 
 ## 2. Smooth
-- [ ] Step count from the span, floor and cap; per-pixel white-noise offset.
-- [ ] Captures before and after; frame time before and after.
+- [x] Tried, in captures of the same view (numbers in the proposal): white
+      noise instead of interleaved gradient noise (the halftone goes, a heavy
+      grain replaces it); 64 steps (clean-ish, frame 9.2 -> 22.7 ms p50); 32
+      steps (still grainy); light held over several samples (no saving, the
+      density is the cost); the span clipped to the tallest cloud on the ray
+      (still grainy at the edges). None is clean at an affordable cost.
+- [ ] Temporal accumulation of the cloud pass: a history target, reprojected
+      by direction, blended with each frame's jittered march. Written up
+      before it is built.
 
 ## 3. Pace
-- [ ] `cloud_pace` in `AtmosphereSettings` and `atmosphere.ron`, validated,
+- [x] `cloud_pace` in `AtmosphereSettings` and `atmosphere.ron`, validated,
       scaling the cloud's steering flux in `carry` only.
-- [ ] The wind map is the cloud's own carrying wind.
-- [ ] Test: with the pace at a half, cloud moves half as far in a step while
+- [x] The wind map is the cloud's own carrying wind.
+- [x] Test: with the pace at a half, cloud moves half as far in a step while
       vapour and heat move as before.
-- [ ] Re-run `cloud_pace`; numbers in the proposal.
+- [x] Re-run `cloud_pace`; numbers in the proposal. Requirement moved into
+      `openspec/specs/world/weather/spec.md`.

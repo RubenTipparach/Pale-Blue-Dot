@@ -62,6 +62,43 @@ slides across its own cloud at half as fast again.
 The pace's default is chosen from the instrument: a mean overhead drift near
 0.8 deg/s, a cloud crossing the sky in minutes rather than seconds.
 
+## Measured after the pace
+
+`cloud_pace` at the shipped default of 0.2:
+
+| | Before | After |
+| --- | ---: | ---: |
+| Wind the GPU drifts cloud detail with | 33.9 m/s (the jet) | 4.7 m/s (the carrying wind) |
+| Overhead drift at the base, mean | 6.5 deg/s | **0.91 deg/s** |
+| Cover texels changing > 0.05 in 5 s | 13.5% | 7.6% |
+| Cover texels changing > 0.05 in 30 s | 30.1% | 26.6% |
+
+The drift is seven times slower. The churn over half a minute barely moves:
+most of it is cloud forming and raining out in place, which is the
+atmosphere's condensation and rain timescales and is not what this change
+touches. If it still reads as too busy, those are the next knobs.
+
+## The smoothing, measured
+
+Captures of the same view (`--view surface --pitch 20 --time 11`, 600 frames,
+1440 x 900), frame time from the capture's `FRAME_WALL_MS`:
+
+| March | Picture | p50 |
+| --- | --- | ---: |
+| 16 steps, interleaved gradient noise (shipped) | diagonal halftone | 9.2 ms |
+| 16 steps, white noise | no pattern, heavy grain | 8.9 ms |
+| 64 steps, white noise | nearly clean, grain at the edges | 22.7 ms |
+| 64 steps, light held over 4 samples | the same | 22.4 ms |
+| 32 steps, light held over 2 | grainy | 16.7 ms |
+| span clipped to the tallest cloud, 16 to 24 steps | grainy at the edges | 16.7 ms |
+
+Two of those land on 16.7 ms, which is a 60 Hz frame and may be the
+presentation rate rather than the work; they are not trusted as costs. What is
+clear is that no step count is clean at an affordable price: a thin cloud
+sampled at random depths is noisy until something averages the noise, and the
+thing built for that is temporal accumulation, which this renderer lacks.
+That is the next step of this change, written up before it is built.
+
 ## What this is not
 
 - No temporal anti-aliasing: that is the real cure for a noisy march and a

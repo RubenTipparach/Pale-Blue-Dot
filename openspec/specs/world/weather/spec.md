@@ -57,3 +57,15 @@ grazing view crosses more of it than a vertical one.
 - **WHEN** a player stands under full cover and looks up and then at the horizon
 - **THEN** the horizon is more opaque than the zenith
 - **AND** the underside of the cover is darker than its sunlit top
+
+### Requirement: Cloud drifts at a pace the eye reads as weather
+The simulation SHALL carry cloud with its steering wind scaled by a validated
+`cloud_pace` in `0..1`, and SHALL carry vapour, heat, charge and the wind
+itself unscaled. The wind map the renderer drifts cloud detail with SHALL be
+that same carrying wind, so the texture moves with its cloud.
+
+#### Scenario: The pace scales cloud and nothing else
+- **WHEN** one carry is taken at a pace of one, of one half and of nought
+- **THEN** the half-pace cloud moves half as far, the nought-pace cloud not at
+  all, and vapour, heat, charge and wind are identical
+  (`atmosphere::tests::the_cloud_pace_slows_the_cloud_and_nothing_else`)

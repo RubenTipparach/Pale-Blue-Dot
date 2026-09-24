@@ -409,3 +409,43 @@ fn the_rain_preset_rains() {
     let (without, _) = rain(0.0);
     assert!(without < raining, "rain {without} with no updraft");
 }
+
+/// The cloud pace slows the cloud and nothing else: one carry at half pace
+/// moves cloud half as far as at full pace (the upwind flux is linear in the
+/// wind), at nought not at all, and vapour, heat, charge and the wind itself
+/// are carried identically whatever the pace (`calm-clouds`).
+#[test]
+fn the_cloud_pace_slows_the_cloud_and_nothing_else() {
+    let mut spun = air(quiet());
+    for _ in 0..120 {
+        spun.step(SUN, &[]);
+    }
+    let carried = |pace: f32| {
+        let mut a = spun.clone();
+        a.settings.cloud_pace = pace;
+        a.carry(1.0);
+        a
+    };
+    let full = carried(1.0);
+    let half = carried(0.5);
+    let none = carried(0.0);
+    assert_eq!(full.vapour, half.vapour);
+    assert_eq!(full.air_k, half.air_k);
+    assert_eq!(full.charge, half.charge);
+    assert_eq!(full.wind, half.wind);
+    assert_eq!(none.cloud, spun.cloud, "at nought the cloud stays put");
+    let moved = |a: &Atmosphere| -> f64 {
+        a.cloud
+            .iter()
+            .zip(&spun.cloud)
+            .map(|(x, y)| (x - y).abs() as f64)
+            .sum()
+    };
+    let (full_moved, half_moved) = (moved(&full), moved(&half));
+    assert!(full_moved > 0.0, "the cloud has to move at full pace");
+    let ratio = half_moved / full_moved;
+    assert!(
+        (ratio - 0.5).abs() < 0.01,
+        "half pace moved the cloud {ratio:.3} as far as full pace"
+    );
+}

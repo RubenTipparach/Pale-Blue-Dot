@@ -139,13 +139,13 @@ impl Atmosphere {
     /// Stage 5: everything the air carries moves with it. Vapour and cloud
     /// move in the conserving form, so moving water neither makes nor loses
     /// any; the cloud rides the steering wind, the rest the surface wind.
-    fn carry(&mut self, dt: f32) {
+    pub(super) fn carry(&mut self, dt: f32) {
         let s = self.settings;
         let steering: Vec<Vec3> = self
             .wind
             .iter()
             .zip(&self.upper)
-            .map(|(w, u)| w.lerp(*u, s.cloud_steering))
+            .map(|(w, u)| w.lerp(*u, s.cloud_steering) * s.cloud_pace)
             .collect();
         let surface = self.grid.fluxes(&self.wind, |_| false);
         let aloft = self.grid.fluxes(&steering, |_| false);

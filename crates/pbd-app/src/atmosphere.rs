@@ -155,6 +155,7 @@ pub fn cube_direction(face: usize, row: usize, column: usize, size: usize) -> Ve
 /// Resample the atmosphere onto the two weather maps.
 pub fn weather_maps(atmosphere: &Atmosphere) -> WeatherMaps {
     let texels = 6 * MAP_SIZE * MAP_SIZE;
+    let settings = atmosphere.settings;
     let mut maps = WeatherMaps {
         cloud: Vec::with_capacity(texels),
         wind: Vec::with_capacity(texels),
@@ -166,7 +167,12 @@ pub fn weather_maps(atmosphere: &Atmosphere) -> WeatherMaps {
                 let rain_mmh = s.rain_rate * 3600.0 * if s.snow { -1.0 } else { 1.0 };
                 maps.cloud
                     .push([s.cover, s.cloud_top, rain_mmh, s.optical_depth]);
-                maps.wind.push([s.upper.x, s.upper.y, s.upper.z, 0.0]);
+                // The wind that CARRIES the cloud, which is what its detail has
+                // to drift with: the steering blend at the cloud's pace. The
+                // full upper wind, which this was, slid the texture across its
+                // own cloud faster than the cloud moved (`calm-clouds`).
+                let carried = s.wind.lerp(s.upper, settings.cloud_steering) * settings.cloud_pace;
+                maps.wind.push([carried.x, carried.y, carried.z, 0.0]);
             }
         }
     }
@@ -332,7 +338,7 @@ mod tests {
         let p90 = sorted[sorted.len() * 9 / 10];
         let base_m = crate::sky::CLOUD_RADIUS - crate::planet::terrain::PLANET_RADIUS;
         eprintln!(
-            "wind at cloud height: mean {mean:.1} m/s, 90th percentile {p90:.1} m/s; \
+            "wind the cloud detail drifts with: mean {mean:.1} m/s, 90th percentile {p90:.1} m/s; \
              overhead at the {base_m:.0} m base that is {:.2} deg/s mean, {:.2} deg/s p90",
             (mean / base_m).to_degrees(),
             (p90 / base_m).to_degrees()
@@ -341,7 +347,7 @@ mod tests {
             .wind
             .iter()
             .zip(&atmosphere.upper)
-            .map(|(w, u)| w.lerp(*u, settings.cloud_steering).length())
+            .map(|(w, u)| (w.lerp(*u, settings.cloud_steering) * settings.cloud_pace).length())
             .collect();
         let surface: f32 =
             atmosphere.wind.iter().map(|w| w.length()).sum::<f32>() / atmosphere.wind.len() as f32;

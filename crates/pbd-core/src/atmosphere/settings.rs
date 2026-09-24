@@ -55,6 +55,12 @@ pub struct AtmosphereSettings {
     /// Share of the cloud-level wind (the rest is the surface wind) that
     /// carries the cloud.
     pub cloud_steering: f32,
+    /// Share of the steering wind that actually carries CLOUD, 0..1. The winds
+    /// are a real planet's and the cloud base is 300 m up, so cloud carried at
+    /// the full steering wind crossed the whole sky in under half a minute
+    /// (`calm-clouds`). Only cloud is slowed: vapour, heat, charge and the wind
+    /// itself are carried as before, so the circulation is the same model.
+    pub cloud_pace: f32,
 
     // --- Sun and heat ---
     /// Sunlight on a surface facing the sun, W/m^2.
@@ -216,6 +222,7 @@ impl Default for AtmosphereSettings {
             thermal_wind: 70.0,
             jet_max_mps: 45.0,
             cloud_steering: 0.7,
+            cloud_pace: 0.2,
             solar_wm2: 1000.0,
             cloud_albedo: 0.6,
             ocean_albedo: 0.06,
@@ -305,6 +312,7 @@ impl AtmosphereSettings {
             ("saturation_kg", self.saturation_kg),
             ("evaporation_wind_mps", self.evaporation_wind_mps),
             ("jet_max_mps", self.jet_max_mps),
+            ("cloud_pace", self.cloud_pace),
         ];
         for (name, value) in positive {
             if !(value.is_finite() && value > 0.0) {
@@ -371,6 +379,7 @@ impl AtmosphereSettings {
             ("snow_albedo", self.snow_albedo),
             ("belt_follow_sun", self.belt_follow_sun),
             ("cloud_steering", self.cloud_steering),
+            ("cloud_pace", self.cloud_pace),
             ("strike_chance", self.strike_chance),
             ("strike_rain_share", self.strike_rain_share),
             ("smoothing", self.smoothing),
