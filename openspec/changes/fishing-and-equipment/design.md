@@ -290,15 +290,15 @@ the draw.
   boats use.
 - Each species has a cap on resident schools (`max_schools`, section 7),
   and a school is dropped beyond 90 m.
-- A candidate cell also has to be in one of the species' **water zones**
-  (section 7).
+- A candidate cell also has to match one of the species' **water classes**,
+  with the water temperature inside its window (section 7).
 - **Gate:** a body whose `fauna.ron` roster is empty spawns nothing, and the
   rod's aim line says "nothing lives in this water". That covers the airless,
   frozen and asteroid catalog worlds.
 
 The roster and each species' entry are section 7.
 
-## 7. Species, water zones and the field guide
+## 7. Species, where they live, and the field guide
 
 **The owner's addition:** "one more thing to add to the design, is different
 species of fish, you may reuse fish from tenebris, but make sure each fish has
@@ -312,20 +312,20 @@ and a turtle. The turtle stays behind: Tenebris itself marks it as not on the
 hook (`is_fish`, `fauna.rs:283-293`), and a creature you cannot catch belongs
 in a change about wildlife rather than one about fishing.
 
-| Species | From | Waters | Depth, m | Found | Strength | Hook window, s | Tenebris speed, m/s |
-| --- | --- | --- | --- | --- | ---: | ---: | ---: |
-| Minnow | Tenebris `Fish` | tropical, temperate | 0.3-1.8 | schools of 24-36 | 1 | 0.90 | 1.6 |
-| Silverfin | new | temperate, cold | 0.4-2.5 | schools of 18-30 | 1 | 0.90 | - |
-| Banded perch | new | temperate | 1.0-4.0 | schools of 8-14 | 2 | 0.78 | - |
-| Ray | Tenebris `FlatFish` | tropical, temperate | on the bed, 1.5-6.0 | alone or in pairs | 2 | 0.78 | 1.0 |
-| Eel | Tenebris `LongFish` | tropical, temperate | on the bed, 1.0-5.0 | alone or in pairs | 3 | 0.67 | 1.9 |
-| Reef fish | Tenebris `LargeFish` | tropical | 0.8-3.0 | schools of 6-12 | 5 | 0.43 | 1.2 |
-| Deepback | new | cold | 2.5-6.0 | schools of 4-7 | 4 | 0.55 | - |
-| Sea serpent | Tenebris `SerpentFish` | tropical, cold | 3.5-6.0 | alone, one per water | 4 | 0.55 | 2.2 |
+| Species | From | Water | Window, °C | Swims at, m | Found | Strength | Hook window, s | Tenebris speed, m/s |
+| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: |
+| Minnow | Tenebris `Fish` | rivers, shallows | 10 to 30 | 0.3-1.8 | schools of 24-36 | 1 | 0.90 | 1.6 |
+| Silverfin | new | shallows, shelf | −1.8 to 17 | 0.4-2.5 | schools of 18-30 | 1 | 0.90 | - |
+| Banded perch | new | rivers | −1.8 to 24 | 1.0-4.0 | schools of 8-14 | 2 | 0.78 | - |
+| Ray | Tenebris `FlatFish` | shallows, shelf | 16 to 32 | on the bed, 1.5-6.0 | alone or in pairs | 2 | 0.78 | 1.0 |
+| Eel | Tenebris `LongFish` | rivers, shallows | 6 to 28 | on the bed, 1.0-5.0 | alone or in pairs | 3 | 0.67 | 1.9 |
+| Reef fish | Tenebris `LargeFish` | shallows | 23 to 32 | 0.8-3.0 | schools of 6-12 | 5 | 0.43 | 1.2 |
+| Deepback | new | shelf, deep | −1.5 to 9 | 2.5-6.0 | schools of 4-7 | 4 | 0.55 | - |
+| Sea serpent | Tenebris `SerpentFish` | deep | −1.8 to 32 | 3.5-6.0 | alone, one per region | 4 | 0.55 | 2.2 |
 
 - **Taken from Tenebris as is:** the strengths (`fish_strength`), the hook
   window formula, and each species' 16×16 icon. Each Tenebris speed is the top
-  of our speed band. Schooling, depth bands and water zones are new, because
+  of our speed band. Schooling, depth bands and habitats are new, because
   Tenebris has none of the three.
 - **The three new species are placeholders** from the first mockup. Their
   names and looks are the owner's to change.
@@ -337,26 +337,148 @@ in a change about wildlife rather than one about fishing.
   with one or two fish per school: separation and alignment do nothing,
   cohesion keeps a pair together, and the goal walk does the rest.
 - **Behaviour the table does not show:** the sea serpent's bite factor is 0.12
-  against the minnow's 0.6, and there is at most one serpent in a zone at a
-  time. That is Tenebris's "rarest on the line" expressed as a spawn cap
+  against the minnow's 0.6, and there is at most one serpent in a region at
+  a time. That is Tenebris's "rarest on the line" expressed as a spawn cap
   rather than a table weight.
 
-### Water zones
+### Where each species spawns: a water class and a temperature window
 
-A species lives in the waters it lists: **tropical**, **temperate** or
-**cold**. A spawn candidate's zone is classified from the surface temperature
-`Atmosphere::sample(dir).temperature` already gives:
-- cold below 8 °C;
-- tropical above 22 °C;
-- temperate otherwise.
+The owner asked for spawning planned from the climate: "based on climate
+conditions, plan out where the fish should spawn". The rule has two parts, and
+both are read off the world rather than authored per place.
 
-Both thresholds are in `fauna.ron`. The zone is read once, when a school
-spawns, and the school keeps it until it despawns. Because the temperature
-moves with the 100-day year (orbit-and-seasons), warm-water fish reach further
-from the equator in summer. That falls out of the rule and needs no code.
+1. **The water class**, from the terrain generator:
 
-The rule "no species on two bodies" is about bodies: zones divide one body's
-roster, they do not copy it.
+   | Class | What it is |
+   | --- | --- |
+   | river | water that is there only because of the river cut. The same generator run with the cut switched off calls it land |
+   | shallows | sea 6 m deep or less: what a cast from the shore reaches |
+   | shelf | sea 6 to 40 m deep |
+   | deep | sea over 40 m deep; the deepest point on the planet is 125 m |
+
+   Both depth limits live in `fauna.ron`.
+
+2. **The water temperature now**, `Atmosphere::sample(dir).temperature`. The
+   atmosphere documents this as the sea surface over the sea, and as the
+   ground at sea level on land, which is the water standing in a river
+   channel. Water under −1.8 °C is frozen, and nothing spawns in it.
+
+A species lists the classes it lives in and a temperature window. A school
+can spawn at a candidate cell only when the class matches and the temperature
+is inside the window. **Because the spawner reads the temperature now,
+ranges follow the climate by construction**: when the seasons or the weather
+move the water, the fish move with it, and no code says so. This replaces the
+three fixed zones the previous revision proposed. Tropical, temperate and
+cold survive only as words in the field guide.
+
+### The ranges, measured: the Fish Range Atlas
+
+<https://claude.ai/artifact/DwruVvwvPRm71T5tnuNN9s> (`docs/wiki/fish-ranges/`). It has:
+- one greyscale range map per species, in the style of a field guide: land
+  grey, water paler with depth, frozen water hatched, the species' range in
+  red, and the part of its range it holds only some of the year in orange;
+- overview maps of the species count, the water temperature and the water
+  classes.
+
+The maps are drawn by a **measurement instrument**, which changes nothing in
+the game:
+- `crates/pbd-core/examples/fish_ranges.rs` samples the terrain at 1440 × 720
+  points and runs the world's own atmosphere and ocean forward, recording
+  each cell's daily-mean water temperature.
+- `tools/fish_ranges.py` applies the rules above and draws the maps.
+
+The rules live in that script only for this proposal. When the change is
+built they move to `fauna.ron`, and the script reads them from there.
+
+**The water, measured** (share of all water, by true area):
+
+| River | Shallows | Shelf | Deep | Frozen on day one |
+| ---: | ---: | ---: | ---: | ---: |
+| 6.1% | 7.6% | 47.3% | 39.0% | 9.6% |
+
+**The ranges on day one of a new world**, the climate the world is built to
+have (share of all water):
+
+| Species | Range | Latitudes |
+| --- | ---: | --- |
+| Minnow | 6.8% | 39°S to 40°N |
+| Silverfin | 23.7% | 55°S to 56°N |
+| Banded perch | 4.5% | 52°S to 57°N |
+| Ray | 25.9% | 31°S to 31°N |
+| Eel | 8.2% | 44°S to 44°N |
+| Reef fish | 0.8% | 17°S to 16°N |
+| Deepback | 15.4% | 54°S to 55°N |
+| Sea serpent | 37.3% | 55°S to 55°N |
+
+What the maps show:
+- **The coasts are layered by temperature.** Reef fish hold the tropical
+  shallows. Minnow and eel take the warm and temperate coasts and river
+  mouths. Silverfin takes the cool coasts up to the ice.
+- **The shelf is split between ray and silverfin.** Ray holds warm shelf and
+  silverfin cool shelf; their windows overlap between 16 and 17 °C.
+- **Deepback and serpent** hold the deep.
+- **Perch alone has the cold rivers.**
+
+**Every point of open water has at least one species on day one.** The first
+draft of the windows left 4.6% of all water empty: shelf between 14 and 18 °C,
+where silverfin stopped and ray had not started. Cold rivers and water just
+above freezing were also empty. The windows were widened to overlap, and a
+test pins the coverage (below).
+
+Rivers exist only in lowland under 40 m (`river_max_elev_m`), so a river
+range is a lacework along low coasts rather than lines across continents.
+That is the terrain's rule, and the maps show it rather than hide it.
+
+### A finding the fish depend on: the sea does not hold its climate
+
+The instrument was built to measure seasons. What it measured instead is a
+slide. Mean sea-surface temperature, from a new world, under the shipped
+settings:
+
+| Day | 10 | 20 | 30 | 40 | 60 | 80 | 100 | 130 | 160 | 200 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Mean sea surface, °C | 7.7 | 2.0 | −2.8 | −6.5 | −13.0 | −16.9 | −19.0 | −22.6 | −23.3 | −23.5 |
+
+It levels off at about −23.5 °C from day 130. In the second 100 days **every
+point of water on the planet is below −1.8 °C for the whole period**,
+tropics included, so the spawn rule puts no fish anywhere: every species'
+year-2 map is empty.
+
+A world starts at the latitude climatology `28 − 45·sin²(lat)`, which averages
++13 °C, and drains from there. At 48 minutes a day, 20 days is 16 hours of
+play, so **a player's own world freezes over its first few days of play**. The
+spawn rule does exactly what it should with that: the maps for days 1-100 and
+101-200 show the warm species' ranges retreating toward the equator and then
+vanishing under ice.
+
+The budget, from `atmosphere.ron`:
+- Absorbed: `solar_wm2 · cosZ · (1 − 0.6 · cover) · (1 − albedo)`.
+- Outgoing: `203 + 2.09 T − 40 · cover`.
+
+Two terms are out of balance:
+
+1. **`solar_wm2` is 1000**, a clear-sky surface value. Budyko's constants
+   (203, 2.09) are calibrated against a top-of-atmosphere sun of about 1360.
+2. **The clouds are a net cooler about ten times Earth's.** In the tropics,
+   at 0.9 or more cover, the cloud albedo reflects about 230 W/m² at the
+   equator while cloud greenhouse returns a flat 40 W/m². That is about
+   −190 W/m² net, against about −20 W/m² for Earth's clouds.
+
+The first term alone is not the fix, and that is measured, not argued. The
+same world with `solar_wm2: 1360` (the instrument takes the `ATMOSPHERE`
+override the climate report takes) slides a little more slowly:
+
+| Day | 10 | 20 | 30 | 70 | 100 | 140 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Mean sea surface, °C | 8.7 | 3.8 | 0.0 | −9.4 | −11.3 | −13.7 |
+
+It was still falling when the run was stopped at day 140. Both runs' logs are
+committed beside the atlas.
+
+**This belongs to `atmospheric-circulation`, not to fishing, and nothing here
+changes it.** The fish plan assumes a sea that holds roughly the climate it
+starts with. Until the atmosphere does, the day-one maps are the plan, and the
+drift maps are the reason to fix the atmosphere first. It is owner question 8.
 
 ### The roster, in data
 
@@ -364,10 +486,11 @@ roster, they do not copy it.
 and the field-guide text, side by side, for one species at a time:
 
 ```ron
-(zones: (cold_below_c: 8.0, tropical_above_c: 22.0),
+(water: (shallows_max_m: 6.0, shelf_max_m: 40.0, freezes_c: -1.8),
  bodies: { "pale-blue-dot": (species: [
     (id: "minnow", name: "Minnow", from: Tenebris("Fish"),
-     zones: [Tropical, Temperate], length_m: 0.14, speed_mps: (1.0, 2.6),
+     water: [River, Shallows], temp_c: (10.0, 30.0),
+     length_m: 0.14, speed_mps: (1.0, 2.6),
      depth_m: (0.3, 1.8), bed: false, school: (24, 36), max_schools: 2,
      sense_m: 8.0, bite: 0.6, pull: 0.4, strength: 1,
      colour: (0.47, 0.59, 0.71), shape: (0.5, 0.5, 1.0), icon: "fish/minnow",
@@ -430,8 +553,10 @@ length.
   the manifest;
 - no species id appears on two bodies;
 - the lifeless bodies' rosters are empty;
-- every species has at least one zone;
-- every zone on a living body has at least one species;
+- every species lists at least one water class and a window inside
+  −1.8 to 40 °C;
+- on day one of the reference world, every point of open water is inside at
+  least one species' range (the atlas measured 0.000% uncovered);
 - the generated wiki page equals the committed one.
 
 The last three are new. The rest extend the rule Tenebris's CLAUDE.md set
@@ -532,7 +657,8 @@ five copied fish match their recorded hashes.
   - `tree_at` agrees with the WGSL over 10,000 IDs on a headless adapter;
   - equipment round-trips through the save format;
   - `fauna.ron` equals the code defaults;
-  - the roster tests of section 7: entries, icons, disjoint bodies, zones
+  - the roster tests of section 7: entries, icons, disjoint bodies, water classes and
+    windows, day-one coverage
     covered, and the generated wiki page equals the committed one;
   - the copied Tenebris icons match their recorded hashes.
 - **App tests:**

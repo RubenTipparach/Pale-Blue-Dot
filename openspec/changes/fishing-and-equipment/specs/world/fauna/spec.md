@@ -66,16 +66,30 @@ checkout.
 - **WHEN** a copied Tenebris icon is edited in place
 - **THEN** the provenance test fails until the record is updated with it
 
-### Requirement: A species lives in the water zones it lists
-Each species SHALL list the water zones it lives in: tropical, temperate or
-cold. A school SHALL spawn only in a cell whose zone, classified from the
-sea's surface temperature at spawn against thresholds in data, is one it
-lists. Every zone on a living body SHALL have at least one species.
+### Requirement: A species spawns only in its water, at its temperature
+Each species SHALL list the water classes it lives in (river, shallows, shelf,
+deep: from the terrain generator, with the depth limits in data) and a
+temperature window. A school SHALL spawn only in a cell whose class it lists
+and whose water temperature at that moment, read from the atmosphere, is
+inside its window. Nothing SHALL spawn in water below its freezing point. On
+day one of the reference world, every point of open water SHALL be inside at
+least one species' range.
 
-#### Scenario: Reef fish in cold water
-- **WHEN** a spawn candidate's surface temperature is below the cold
-  threshold
-- **THEN** no reef fish school spawns there
+#### Scenario: Reef fish in cool water
+- **WHEN** a spawn candidate in the shallows reads 20 °C
+- **THEN** no reef fish school spawns there, since its window starts at 23 °C
+
+#### Scenario: A river is not the sea
+- **WHEN** a spawn candidate is a river channel at 12 °C
+- **THEN** perch, minnow or eel can spawn there, and ray or silverfin cannot
+
+#### Scenario: The water cools
+- **WHEN** the water at a place falls below a species' window
+- **THEN** no new school of it spawns there until the water warms again
+
+#### Scenario: Frozen water
+- **WHEN** the water temperature at a candidate is below −1.8 °C
+- **THEN** no school spawns there
 
 ### Requirement: The catch record is saved with the catch
 Each catch SHALL add to a per-species record of the count caught and the best

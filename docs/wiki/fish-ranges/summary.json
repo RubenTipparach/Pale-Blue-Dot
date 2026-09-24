@@ -1,0 +1,657 @@
+[
+ {
+  "id": "day1",
+  "label": "New world, day 1",
+  "years": [
+   {
+    "year": 1,
+    "years": 1,
+    "species": [
+     {
+      "id": "minnow",
+      "name": "Minnow",
+      "water": [
+       "river",
+       "shallows"
+      ],
+      "temp": [
+       10,
+       30
+      ],
+      "resident": 6.822516580315269,
+      "seasonal": 0.0,
+      "latitudes": [
+       -38.875,
+       39.625
+      ],
+      "river_only": false
+     },
+     {
+      "id": "silverfin",
+      "name": "Silverfin",
+      "water": [
+       "shallows",
+       "shelf"
+      ],
+      "temp": [
+       -1.8,
+       17
+      ],
+      "resident": 23.66938816234688,
+      "seasonal": 0.0,
+      "latitudes": [
+       -54.62500000000001,
+       55.875
+      ],
+      "river_only": false
+     },
+     {
+      "id": "perch",
+      "name": "Banded perch",
+      "water": [
+       "river"
+      ],
+      "temp": [
+       -1.8,
+       24
+      ],
+      "resident": 4.534840936641576,
+      "seasonal": 0.0,
+      "latitudes": [
+       -51.87499999999999,
+       56.625
+      ],
+      "river_only": true
+     },
+     {
+      "id": "ray",
+      "name": "Ray",
+      "water": [
+       "shallows",
+       "shelf"
+      ],
+      "temp": [
+       16,
+       32
+      ],
+      "resident": 25.883880988192793,
+      "seasonal": 0.0,
+      "latitudes": [
+       -31.375000000000007,
+       30.625
+      ],
+      "river_only": false
+     },
+     {
+      "id": "eel",
+      "name": "Eel",
+      "water": [
+       "river",
+       "shallows"
+      ],
+      "temp": [
+       6,
+       28
+      ],
+      "resident": 8.183492760835072,
+      "seasonal": 0.0,
+      "latitudes": [
+       -43.87500000000001,
+       43.87500000000001
+      ],
+      "river_only": false
+     },
+     {
+      "id": "reef",
+      "name": "Reef fish",
+      "water": [
+       "shallows"
+      ],
+      "temp": [
+       23,
+       32
+      ],
+      "resident": 0.798597210075225,
+      "seasonal": 0.0,
+      "latitudes": [
+       -16.625,
+       15.875000000000004
+      ],
+      "river_only": false
+     },
+     {
+      "id": "deepback",
+      "name": "Deepback",
+      "water": [
+       "shelf",
+       "deep"
+      ],
+      "temp": [
+       -1.5,
+       9
+      ],
+      "resident": 15.44501741696663,
+      "seasonal": 0.0,
+      "latitudes": [
+       -54.37500000000001,
+       55.375
+      ],
+      "river_only": false
+     },
+     {
+      "id": "serpent",
+      "name": "Sea serpent",
+      "water": [
+       "deep"
+      ],
+      "temp": [
+       -1.8,
+       32
+      ],
+      "resident": 37.33635384967488,
+      "seasonal": 0.0,
+      "latitudes": [
+       -54.62500000000001,
+       55.375
+      ],
+      "river_only": false
+     }
+    ],
+    "classes": {
+     "river": 6.142161615386429,
+     "shallows": 7.556226833972265,
+     "shelf": 47.27437140926888,
+     "deep": 39.02724014137242
+    },
+    "frozen_all_year": 9.620457521124875,
+    "frozen_part_year": 0.0,
+    "richness_max": 4,
+    "swing_c": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "mean_c": [
+     0.4805166512727738,
+     17.376007080078125,
+     27.106194305419923
+    ],
+    "water_mean_c": 14.615778575637657
+   }
+  ],
+  "sea": []
+ },
+ {
+  "id": "current",
+  "label": "Shipped settings, left running",
+  "years": [
+   {
+    "year": 1,
+    "years": 2,
+    "species": [
+     {
+      "id": "minnow",
+      "name": "Minnow",
+      "water": [
+       "river",
+       "shallows"
+      ],
+      "temp": [
+       10,
+       30
+      ],
+      "resident": 0.0,
+      "seasonal": 6.844716411372942,
+      "latitudes": [
+       -38.875,
+       39.625
+      ],
+      "river_only": false
+     },
+     {
+      "id": "silverfin",
+      "name": "Silverfin",
+      "water": [
+       "shallows",
+       "shelf"
+      ],
+      "temp": [
+       -1.8,
+       17
+      ],
+      "resident": 0.0,
+      "seasonal": 49.7195529957355,
+      "latitudes": [
+       -54.62500000000001,
+       63.87499999999999
+      ],
+      "river_only": false
+     },
+     {
+      "id": "perch",
+      "name": "Banded perch",
+      "water": [
+       "river"
+      ],
+      "temp": [
+       -1.8,
+       24
+      ],
+      "resident": 0.0,
+      "seasonal": 4.857043642119864,
+      "latitudes": [
+       -51.87499999999999,
+       63.62499999999999
+      ],
+      "river_only": true
+     },
+     {
+      "id": "ray",
+      "name": "Ray",
+      "water": [
+       "shallows",
+       "shelf"
+      ],
+      "temp": [
+       16,
+       32
+      ],
+      "resident": 0.0,
+      "seasonal": 25.883880988192793,
+      "latitudes": [
+       -31.375000000000007,
+       30.625
+      ],
+      "river_only": false
+     },
+     {
+      "id": "eel",
+      "name": "Eel",
+      "water": [
+       "river",
+       "shallows"
+      ],
+      "temp": [
+       6,
+       28
+      ],
+      "resident": 0.0,
+      "seasonal": 8.276908846095363,
+      "latitudes": [
+       -43.87500000000001,
+       44.125
+      ],
+      "river_only": false
+     },
+     {
+      "id": "reef",
+      "name": "Reef fish",
+      "water": [
+       "shallows"
+      ],
+      "temp": [
+       23,
+       32
+      ],
+      "resident": 0.0,
+      "seasonal": 0.8984060244370274,
+      "latitudes": [
+       -16.625,
+       15.875000000000004
+      ],
+      "river_only": false
+     },
+     {
+      "id": "deepback",
+      "name": "Deepback",
+      "water": [
+       "shelf",
+       "deep"
+      ],
+      "temp": [
+       -1.5,
+       9
+      ],
+      "resident": 0.0,
+      "seasonal": 81.22087161308696,
+      "latitudes": [
+       -54.37500000000001,
+       63.37499999999999
+      ],
+      "river_only": false
+     },
+     {
+      "id": "serpent",
+      "name": "Sea serpent",
+      "water": [
+       "deep"
+      ],
+      "temp": [
+       -1.8,
+       32
+      ],
+      "resident": 0.0,
+      "seasonal": 38.26297782650437,
+      "latitudes": [
+       -54.62500000000001,
+       62.875
+      ],
+      "river_only": false
+     }
+    ],
+    "classes": {
+     "river": 6.142161615386429,
+     "shallows": 7.556226833972265,
+     "shelf": 47.27437140926888,
+     "deep": 39.02724014137242
+    },
+    "frozen_all_year": 7.160425535640265,
+    "frozen_part_year": 92.83957446435973,
+    "richness_max": 5,
+    "swing_c": [
+     31.998946762084962,
+     37.078460693359375,
+     40.86155128479004
+    ],
+    "mean_c": [
+     -17.5424843788147,
+     -5.828660249710083,
+     1.0740034461021377
+    ],
+    "water_mean_c": -7.44418488592906
+   },
+   {
+    "year": 2,
+    "years": 2,
+    "species": [
+     {
+      "id": "minnow",
+      "name": "Minnow",
+      "water": [
+       "river",
+       "shallows"
+      ],
+      "temp": [
+       10,
+       30
+      ],
+      "resident": 0.0,
+      "seasonal": 0.0,
+      "latitudes": null,
+      "river_only": false
+     },
+     {
+      "id": "silverfin",
+      "name": "Silverfin",
+      "water": [
+       "shallows",
+       "shelf"
+      ],
+      "temp": [
+       -1.8,
+       17
+      ],
+      "resident": 0.0,
+      "seasonal": 0.0,
+      "latitudes": null,
+      "river_only": false
+     },
+     {
+      "id": "perch",
+      "name": "Banded perch",
+      "water": [
+       "river"
+      ],
+      "temp": [
+       -1.8,
+       24
+      ],
+      "resident": 0.0,
+      "seasonal": 0.0,
+      "latitudes": null,
+      "river_only": true
+     },
+     {
+      "id": "ray",
+      "name": "Ray",
+      "water": [
+       "shallows",
+       "shelf"
+      ],
+      "temp": [
+       16,
+       32
+      ],
+      "resident": 0.0,
+      "seasonal": 0.0,
+      "latitudes": null,
+      "river_only": false
+     },
+     {
+      "id": "eel",
+      "name": "Eel",
+      "water": [
+       "river",
+       "shallows"
+      ],
+      "temp": [
+       6,
+       28
+      ],
+      "resident": 0.0,
+      "seasonal": 0.0,
+      "latitudes": null,
+      "river_only": false
+     },
+     {
+      "id": "reef",
+      "name": "Reef fish",
+      "water": [
+       "shallows"
+      ],
+      "temp": [
+       23,
+       32
+      ],
+      "resident": 0.0,
+      "seasonal": 0.0,
+      "latitudes": null,
+      "river_only": false
+     },
+     {
+      "id": "deepback",
+      "name": "Deepback",
+      "water": [
+       "shelf",
+       "deep"
+      ],
+      "temp": [
+       -1.5,
+       9
+      ],
+      "resident": 0.0,
+      "seasonal": 0.0,
+      "latitudes": null,
+      "river_only": false
+     },
+     {
+      "id": "serpent",
+      "name": "Sea serpent",
+      "water": [
+       "deep"
+      ],
+      "temp": [
+       -1.8,
+       32
+      ],
+      "resident": 0.0,
+      "seasonal": 0.0,
+      "latitudes": null,
+      "river_only": false
+     }
+    ],
+    "classes": {
+     "river": 6.142161615386429,
+     "shallows": 7.556226833972265,
+     "shelf": 47.27437140926888,
+     "deep": 39.02724014137242
+    },
+    "frozen_all_year": 100.0,
+    "frozen_part_year": 0.0,
+    "richness_max": 0,
+    "swing_c": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "mean_c": null,
+    "water_mean_c": -22.53377005440305
+   }
+  ],
+  "sea": [
+   [
+    10,
+    7.68
+   ],
+   [
+    20,
+    1.98
+   ],
+   [
+    30,
+    -2.81
+   ],
+   [
+    40,
+    -6.45
+   ],
+   [
+    50,
+    -9.78
+   ],
+   [
+    60,
+    -12.97
+   ],
+   [
+    70,
+    -15.54
+   ],
+   [
+    80,
+    -16.85
+   ],
+   [
+    90,
+    -17.7
+   ],
+   [
+    100,
+    -18.95
+   ],
+   [
+    110,
+    -20.46
+   ],
+   [
+    120,
+    -21.95
+   ],
+   [
+    130,
+    -22.59
+   ],
+   [
+    140,
+    -22.63
+   ],
+   [
+    150,
+    -22.7
+   ],
+   [
+    160,
+    -23.27
+   ],
+   [
+    170,
+    -23.86
+   ],
+   [
+    180,
+    -23.72
+   ],
+   [
+    190,
+    -23.35
+   ],
+   [
+    200,
+    -23.5
+   ]
+  ]
+ },
+ {
+  "id": "sun1360",
+  "label": "Sun at 1360 W/m\u00b2 (stopped at day 140)",
+  "years": [],
+  "sea": [
+   [
+    10,
+    8.66
+   ],
+   [
+    20,
+    3.79
+   ],
+   [
+    30,
+    0.02
+   ],
+   [
+    40,
+    -2.61
+   ],
+   [
+    50,
+    -5.14
+   ],
+   [
+    60,
+    -7.61
+   ],
+   [
+    70,
+    -9.4
+   ],
+   [
+    80,
+    -9.89
+   ],
+   [
+    90,
+    -10.23
+   ],
+   [
+    100,
+    -11.31
+   ],
+   [
+    110,
+    -12.79
+   ],
+   [
+    120,
+    -14.02
+   ],
+   [
+    130,
+    -14.12
+   ],
+   [
+    140,
+    -13.7
+   ]
+  ]
+ }
+]

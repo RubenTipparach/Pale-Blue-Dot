@@ -70,3 +70,19 @@
 - [ ] Owner's in-game check; then the requirements move to `openspec/specs`,
       and `storm`'s "decided by the field alone" lightning clause is retired
       with them.
+
+## 7. Energy balance (found by `fishing-and-equipment`, not yet worked)
+- [ ] The sea does not hold its climate. From a new world the mean sea surface
+      falls from 7.7 °C at day 10 to −23.5 °C by day 130 and stays there, and
+      in the second 100 days every point of water is below −1.8 °C. It was
+      measured by `examples/fish_ranges.rs`, and the logs are in
+      `docs/wiki/fish-ranges/`. Two terms are out of balance, per
+      `fishing-and-equipment` design section 7:
+      - `solar_wm2` is 1000, a surface value, against Budyko constants
+        calibrated for about 1360;
+      - cloud albedo `0.6 × cover` against a flat 40 W/m² greenhouse, which is
+        about −190 W/m² net in the tropics.
+      Raising the sun alone was measured and is not enough: −13.7 °C at day
+      140 and still falling. Retune both, then prove it with the same
+      instrument: a sea that holds within a few degrees of its day-one
+      climate over 200 days.

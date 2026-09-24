@@ -1,0 +1,333 @@
+<title>Fish Range Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* One deliberate look: the project's dark field-kit pages, with the maps as
+   pale plates laid on it, the way a field guide's maps sit on its page. */
+:root{
+  color-scheme: dark;
+  --ground:#0b141a;
+  --panel:#111d24;
+  --plate:#1a2830;
+  --line:rgba(160,210,205,.16);
+  --ink:#dfe9e6;
+  --muted:#8ea6a2;
+  --amber:#f0b43c;
+  --resident:#d7301f;
+  --seasonal:#fdae6b;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--ground)}
+body{color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;padding-inline:16px}
+.wrap{max-width:1320px;margin:0 auto;padding-block:28px 56px;display:grid;gap:32px}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.16em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+h1{margin:6px 0 10px;font-family:var(--display);font-weight:700;font-size:clamp(34px,5vw,54px);line-height:.95;letter-spacing:.01em;text-wrap:balance}
+h2{margin:0;font-family:var(--display);font-weight:700;font-size:26px;letter-spacing:.02em;text-wrap:balance}
+.lede{max-width:68ch;color:#b9cbc8;margin:0}
+.meta{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+.bar{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:#c7d6d3}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:16px;height:12px;border-radius:2px;border:1px solid rgba(0,0,0,.35);display:inline-block}
+.hatch{background:repeating-linear-gradient(135deg,#fafafa 0 3px,#c8c8c8 3px 4px)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;font-family:var(--display);font-size:14px;letter-spacing:.08em;text-transform:uppercase;padding:6px 12px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:rgba(240,180,60,.14);color:var(--amber)}
+.seg button:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.plate{margin:0;background:var(--plate);border:1px solid var(--line);border-radius:6px;padding:10px;display:grid;gap:8px}
+.plate img{width:100%;height:auto;display:block;image-rendering:pixelated;border-radius:2px;background:#d8d8d8;aspect-ratio:2/1}
+.plate figcaption{font-size:13px;color:var(--muted);max-width:90ch}
+.plate figcaption b{color:var(--ink);font-weight:500}
+.overview{display:grid;gap:14px}
+.overview .tabs{justify-self:start}
+.ramp{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.ramp i{display:block;width:160px;height:10px;border-radius:2px}
+.species{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,560px),1fr));gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:12px;align-content:start}
+.card header{display:grid;grid-template-columns:48px 1fr;gap:12px;align-items:center}
+.card header canvas{width:48px;height:48px;image-rendering:pixelated;background:var(--plate);border:1px solid var(--line);border-radius:4px}
+.card h3{margin:0;font-family:var(--display);font-size:24px;font-weight:700;letter-spacing:.02em;line-height:1}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.chip{font-family:var(--display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:1px 6px;border-radius:3px;border:1px solid var(--line);color:var(--muted)}
+.chip.src{border-color:#63d2dc;color:#63d2dc}
+.card .plate{padding:6px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0}
+.stats div{background:var(--plate);border-radius:4px;padding:6px 8px;min-width:0}
+.stats dt{font-family:var(--display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stats dd{margin:2px 0 0;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card p{margin:0;font-size:14px;color:#c7d6d3;max-width:70ch}
+.card p b{color:var(--ink);font-weight:600}
+.method{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:18px}
+.method section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.method h3{margin:0 0 6px;font-family:var(--display);font-size:18px;font-weight:600;letter-spacing:.04em}
+.method p,.method li{font-size:14px;color:#c0d0cd;max-width:68ch}
+.method ul{margin:6px 0 0;padding-left:18px}
+.method code{font-family:var(--mono);font-size:12px;color:var(--ink)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}
+th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--muted);font-weight:600}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.scroll{overflow-x:auto}
+.drift{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px;align-items:start}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 12px 8px;position:relative}
+.chart svg{width:100%;height:auto;display:block;overflow:visible}
+.chart .key{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:#c7d6d3;margin:0 0 6px}
+.chart .key i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:6px}
+.tip{position:absolute;pointer-events:none;background:#0b141a;border:1px solid var(--line);border-radius:4px;padding:6px 8px;font-family:var(--mono);font-size:12px;color:var(--ink);white-space:nowrap}
+.scen{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:8px}
+.scen p{margin:0;font-size:14px;color:#c0d0cd;max-width:68ch}
+.scen b{color:var(--ink);font-weight:600}
+.controls{display:flex;flex-wrap:wrap;gap:10px}
+@media (max-width:900px){.drift{grid-template-columns:1fr}}
+@media (max-width:620px){
+  .seg button{padding:6px 8px;font-size:13px;letter-spacing:.04em}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ramp i{width:100px}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Pale Blue Dot · field guide · proposal</div>
+    <h1>Fish Range Atlas</h1>
+    <p class="lede">Where each fish of the home planet lives, drawn from the world itself. Depth and rivers come from its terrain
+      generator. Water temperature comes from its own atmosphere and ocean simulation, run forward from a new world. Each map
+      shows where a species lives all year and where it lives for only part of it, the way a field guide shows a range.</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="bar">
+    <div class="legend" aria-label="Map key">
+      <span><i class="sw" style="background:var(--resident)"></i>All year</span>
+      <span><i class="sw" style="background:var(--seasonal)"></i>Part of the year</span>
+      <span><i class="sw hatch"></i>Frozen all year</span>
+      <span><i class="sw" style="background:#b2b2b2"></i>Land</span>
+      <span><i class="sw" style="background:#f4f4f4"></i>Shallows ≤ 6 m</span>
+      <span><i class="sw" style="background:#e8e8e8"></i>Shelf 6–40 m</span>
+      <span><i class="sw" style="background:#d8d8d8"></i>Deep &gt; 40 m</span>
+    </div>
+    <div class="controls"><div class="seg" id="scenarios" role="group" aria-label="Climate"></div><div class="seg" id="years" role="group" aria-label="Simulated year"></div></div>
+  </div>
+
+  <section aria-labelledby="dr" style="display:grid;gap:14px">
+    <h2 id="dr">The sea the fish live in</h2>
+    <p class="lede">A new world starts from its latitude climate, and the plan is drawn on that. Left to run, today's atmosphere does not hold it: the sea drains toward freezing within days of play. The line below is that drift, measured; the second line is the same world with the sun raised to the value its outgoing-heat constants assume, which slows the slide but does not stop it.</p>
+    <div class="drift">
+      <div class="chart" id="chart" role="img" aria-label="Mean sea-surface temperature over 200 simulated days, per climate."></div>
+      <div class="scen" id="scen"></div>
+    </div>
+  </section>
+
+  <section class="overview" aria-labelledby="ov">
+    <h2 id="ov">The planet's water</h2>
+    <div class="seg tabs" id="tabs" role="group" aria-label="Overview map">
+      <button type="button" data-map="richness" aria-pressed="true">Species count</button>
+      <button type="button" data-map="temperature" aria-pressed="false">Water temperature</button>
+      <button type="button" data-map="classes" aria-pressed="false">Water classes</button>
+    </div>
+    <figure class="plate">
+      <img id="overview" alt="" width="1440" height="720">
+      <figcaption id="ovcap"></figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="sp" style="display:grid;gap:14px">
+    <h2 id="sp">Species</h2>
+    <div class="species" id="species"></div>
+  </section>
+
+  <section aria-labelledby="tb" style="display:grid;gap:10px">
+    <h2 id="tb">The rules, and what they cover</h2>
+    <div class="scroll"><table id="table"></table></div>
+  </section>
+
+  <section class="method" aria-label="Method">
+    <section>
+      <h3>How it was measured</h3>
+      <ul id="how"></ul>
+    </section>
+    <section>
+      <h3>How the game would use it</h3>
+      <p>The rule a map shows is the rule the spawner would run. When a school spawns, the spawner reads three things
+        at the candidate cell: its water class (river, shallows, shelf or deep, from the terrain), the water temperature
+        now (<code>Atmosphere::sample(dir).temperature</code>), and whether the water is frozen. A species can spawn only
+        where its class matches and the temperature is inside its window. The maps apply the same rule to the year's
+        coldest and warmest daily means, so "part of the year" is where the rule passes in some seasons and not others.</p>
+    </section>
+    <section>
+      <h3>What to read with care</h3>
+      <ul id="care"></ul>
+    </section>
+  </section>
+</div>
+
+<script>
+"use strict";
+const SUMMARY = [{"id": "day1", "label": "New world, day 1", "years": [{"year": 1, "years": 1, "species": [{"id": "minnow", "name": "Minnow", "water": ["river", "shallows"], "temp": [10, 30], "resident": 6.822516580315269, "seasonal": 0.0, "latitudes": [-38.875, 39.625], "river_only": false}, {"id": "silverfin", "name": "Silverfin", "water": ["shallows", "shelf"], "temp": [-1.8, 17], "resident": 23.66938816234688, "seasonal": 0.0, "latitudes": [-54.62500000000001, 55.875], "river_only": false}, {"id": "perch", "name": "Banded perch", "water": ["river"], "temp": [-1.8, 24], "resident": 4.534840936641576, "seasonal": 0.0, "latitudes": [-51.87499999999999, 56.625], "river_only": true}, {"id": "ray", "name": "Ray", "water": ["shallows", "shelf"], "temp": [16, 32], "resident": 25.883880988192793, "seasonal": 0.0, "latitudes": [-31.375000000000007, 30.625], "river_only": false}, {"id": "eel", "name": "Eel", "water": ["river", "shallows"], "temp": [6, 28], "resident": 8.183492760835072, "seasonal": 0.0, "latitudes": [-43.87500000000001, 43.87500000000001], "river_only": false}, {"id": "reef", "name": "Reef fish", "water": ["shallows"], "temp": [23, 32], "resident": 0.798597210075225, "seasonal": 0.0, "latitudes": [-16.625, 15.875000000000004], "river_only": false}, {"id": "deepback", "name": "Deepback", "water": ["shelf", "deep"], "temp": [-1.5, 9], "resident": 15.44501741696663, "seasonal": 0.0, "latitudes": [-54.37500000000001, 55.375], "river_only": false}, {"id": "serpent", "name": "Sea serpent", "water": ["deep"], "temp": [-1.8, 32], "resident": 37.33635384967488, "seasonal": 0.0, "latitudes": [-54.62500000000001, 55.375], "river_only": false}], "classes": {"river": 6.142161615386429, "shallows": 7.556226833972265, "shelf": 47.27437140926888, "deep": 39.02724014137242}, "frozen_all_year": 9.620457521124875, "frozen_part_year": 0.0, "richness_max": 4, "swing_c": [0.0, 0.0, 0.0], "mean_c": [0.4805166512727738, 17.376007080078125, 27.106194305419923], "water_mean_c": 14.615778575637657}], "sea": []}, {"id": "current", "label": "Shipped settings, left running", "years": [{"year": 1, "years": 2, "species": [{"id": "minnow", "name": "Minnow", "water": ["river", "shallows"], "temp": [10, 30], "resident": 0.0, "seasonal": 6.844716411372942, "latitudes": [-38.875, 39.625], "river_only": false}, {"id": "silverfin", "name": "Silverfin", "water": ["shallows", "shelf"], "temp": [-1.8, 17], "resident": 0.0, "seasonal": 49.7195529957355, "latitudes": [-54.62500000000001, 63.87499999999999], "river_only": false}, {"id": "perch", "name": "Banded perch", "water": ["river"], "temp": [-1.8, 24], "resident": 0.0, "seasonal": 4.857043642119864, "latitudes": [-51.87499999999999, 63.62499999999999], "river_only": true}, {"id": "ray", "name": "Ray", "water": ["shallows", "shelf"], "temp": [16, 32], "resident": 0.0, "seasonal": 25.883880988192793, "latitudes": [-31.375000000000007, 30.625], "river_only": false}, {"id": "eel", "name": "Eel", "water": ["river", "shallows"], "temp": [6, 28], "resident": 0.0, "seasonal": 8.276908846095363, "latitudes": [-43.87500000000001, 44.125], "river_only": false}, {"id": "reef", "name": "Reef fish", "water": ["shallows"], "temp": [23, 32], "resident": 0.0, "seasonal": 0.8984060244370274, "latitudes": [-16.625, 15.875000000000004], "river_only": false}, {"id": "deepback", "name": "Deepback", "water": ["shelf", "deep"], "temp": [-1.5, 9], "resident": 0.0, "seasonal": 81.22087161308696, "latitudes": [-54.37500000000001, 63.37499999999999], "river_only": false}, {"id": "serpent", "name": "Sea serpent", "water": ["deep"], "temp": [-1.8, 32], "resident": 0.0, "seasonal": 38.26297782650437, "latitudes": [-54.62500000000001, 62.875], "river_only": false}], "classes": {"river": 6.142161615386429, "shallows": 7.556226833972265, "shelf": 47.27437140926888, "deep": 39.02724014137242}, "frozen_all_year": 7.160425535640265, "frozen_part_year": 92.83957446435973, "richness_max": 5, "swing_c": [31.998946762084962, 37.078460693359375, 40.86155128479004], "mean_c": [-17.5424843788147, -5.828660249710083, 1.0740034461021377], "water_mean_c": -7.44418488592906}, {"year": 2, "years": 2, "species": [{"id": "minnow", "name": "Minnow", "water": ["river", "shallows"], "temp": [10, 30], "resident": 0.0, "seasonal": 0.0, "latitudes": null, "river_only": false}, {"id": "silverfin", "name": "Silverfin", "water": ["shallows", "shelf"], "temp": [-1.8, 17], "resident": 0.0, "seasonal": 0.0, "latitudes": null, "river_only": false}, {"id": "perch", "name": "Banded perch", "water": ["river"], "temp": [-1.8, 24], "resident": 0.0, "seasonal": 0.0, "latitudes": null, "river_only": true}, {"id": "ray", "name": "Ray", "water": ["shallows", "shelf"], "temp": [16, 32], "resident": 0.0, "seasonal": 0.0, "latitudes": null, "river_only": false}, {"id": "eel", "name": "Eel", "water": ["river", "shallows"], "temp": [6, 28], "resident": 0.0, "seasonal": 0.0, "latitudes": null, "river_only": false}, {"id": "reef", "name": "Reef fish", "water": ["shallows"], "temp": [23, 32], "resident": 0.0, "seasonal": 0.0, "latitudes": null, "river_only": false}, {"id": "deepback", "name": "Deepback", "water": ["shelf", "deep"], "temp": [-1.5, 9], "resident": 0.0, "seasonal": 0.0, "latitudes": null, "river_only": false}, {"id": "serpent", "name": "Sea serpent", "water": ["deep"], "temp": [-1.8, 32], "resident": 0.0, "seasonal": 0.0, "latitudes": null, "river_only": false}], "classes": {"river": 6.142161615386429, "shallows": 7.556226833972265, "shelf": 47.27437140926888, "deep": 39.02724014137242}, "frozen_all_year": 100.0, "frozen_part_year": 0.0, "richness_max": 0, "swing_c": [0.0, 0.0, 0.0], "mean_c": null, "water_mean_c": -22.53377005440305}], "sea": [[10, 7.68], [20, 1.98], [30, -2.81], [40, -6.45], [50, -9.78], [60, -12.97], [70, -15.54], [80, -16.85], [90, -17.7], [100, -18.95], [110, -20.46], [120, -21.95], [130, -22.59], [140, -22.63], [150, -22.7], [160, -23.27], [170, -23.86], [180, -23.72], [190, -23.35], [200, -23.5]]}, {"id": "sun1360", "label": "Sun at 1360 W/m\u00b2 (stopped at day 140)", "years": [], "sea": [[10, 8.66], [20, 3.79], [30, 0.02], [40, -2.61], [50, -5.14], [60, -7.61], [70, -9.4], [80, -9.89], [90, -10.23], [100, -11.31], [110, -12.79], [120, -14.02], [130, -14.12], [140, -13.7]]}];
+// The species' own look, as the mockup draws them: Tenebris's icons byte for
+// byte, and the three new ones on the same 16x16 grid.
+const TENEBRIS_PNG = {
+  minnow:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAASklEQVR42mNgGN4gJLPuPzLGqQiXxoppW1AwVoPQBbFpRMYiYlK4DcGnEd0lWL1CtgGkuADDC4TCYM+FJ2CMMyApjgWK08EoYAAAItTeRAzBgk8AAAAASUVORK5CYII=",
+  reef:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAVUlEQVR42mNgoCVQSUj5D8Jka7aZNg2M8RqCTRJZM0FD0J2JTTOyIVgNgkng0kjQJcRqBmERMSlMQwaHAeiGTLt2DYwJhgHFsUBxOqA4JdIsL9ANAAB6Xfby+uMlDAAAAABJRU5ErkJggg==",
+  eel:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAS0lEQVR42mNgGFLAJ0zvPwyTpbmiyQOO8RqCbBMMI2sGYRExKUxDcClGx1i9gU8jumuI9iNJAYbNBWQZQoxXSIpvigzCF7UMowAOAMzyo1KMQhqzAAAAAElFTkSuQmCC",
+  ray:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAS0lEQVR42mNgGNSgpyriPwiTrXnn0lowJtkQZM0kGQJzMrpmZEOwGkRII16D8GkUEZMCY3wGUe4CqoQBIYOI0ghThKyQJBsZRi4AAO2S5yl4uXlmAAAAAElFTkSuQmCC",
+  serpent:"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAYUlEQVR42mNgoCeQC3D6D8NkaTaoSINjETEp3AZhswndAKwugQliUwhib7uwCS6G04kwRTAaGYPE8DobWREuTDCQ8NpCbEgju4IiQ3CGNqmGkGUQtuijmkFkhw1FeYFmAADfWLL3hn8T9QAAAABJRU5ErkJggg==",
+};
+const GRIDS = {
+  silverfin:[["................","................","................","................","..........s.....","....ssssssss..t.","..sssssssssssst.",".seSsssssssssstt","..sssssssssssst.","....ssssssss..t.","..........s.....","................","................","................","................","................"],{s:"#cfe3ea",S:"#9fb9c2",e:"#1b1b1b",t:"#9fb9c2"}],
+  perch:[["................","................","......d.d.......",".....ddddd......","...pbpbpbpbp..t.","..pbpbpbpbpbp.t.",".epbpbpbpbpbpttt","..pbpbpbpbpbp.t.","...pbpbpbpbp..t.",".....ppppp......","................","................","................","................","................","................"],{p:"#d8a13a",b:"#6b4a18",d:"#c8612b",e:"#1b1b1b",t:"#c8612b"}],
+  deepback:[["................","................","........dd......","......dddd......","..ddddddddddd...",".dddddddddddddtt","eddddddddddddttt",".lllllllllllddtt","..lllllllllll...","................","................","................","................","................","................","................"],{d:"#4f6f8f",l:"#9fb6c9",e:"#e8e8e8",t:"#4f6f8f"}],
+};
+// What the maps cannot say by themselves: where to go, and why it is there.
+const NOTES = {
+  minnow:"The coastal fish of the warm and temperate world. It is in <b>every river mouth and shallow</b> between the cold bands, so a new player's first cast almost anywhere meets it.",
+  silverfin:"The cold coasts' fish, over shallows and shelf alike, from <b>the edge of the ice</b> up to 17 °C. At its warm edge it overlaps the ray, so no stretch of shelf between them is empty.",
+  perch:"<b>Rivers only</b>, in every channel that does not freeze, up to 24 °C. Rivers exist only in lowland below 40 m, so its range is a lacework along low coasts. It is the only fish of the coldest rivers.",
+  ray:"A warm-water bottom fish of the shallows and the shelf from 16 °C up, <b>across the tropics and subtropics</b>. It is alone or in pairs, so a range this wide still means few fish at any one spot.",
+  eel:"Rivers and shallows, <b>tropics to the temperate belt</b>. It shares the minnow's water but tolerates colder rivers, so it reaches further toward the poles up the channels.",
+  reef:"The narrowest range on the planet: <b>tropical shallows only</b>, where the water never falls below 23 °C. It is the prize because it is rare, not just because it is strong.",
+  deepback:"The cold deep. It lives <b>over the shelf and the deep</b> where the water stays under 9 °C, and it only reaches the shallows by way of the shelf. From the shore, fish where the shelf drops close in.",
+  serpent:"Every open, deep sea that does not freeze. The range is the <b>largest on the map</b>, but the species is capped at one per region, and deep water is rarely within a cast of the shore. It is the boat's fish (owner question 6).",
+};
+const META = {
+  minnow:{from:"Tenebris"}, silverfin:{from:"new"}, perch:{from:"new"}, ray:{from:"Tenebris", bed:true},
+  eel:{from:"Tenebris", bed:true}, reef:{from:"Tenebris"}, deepback:{from:"new"}, serpent:{from:"Tenebris"},
+};
+const MAP_CAPTIONS = {
+  richness:"<b>Species count.</b> How many of the eight could spawn at each point in the period, from pale (one) to dark (four, the most anywhere). The richest water is warm-temperate shallows at river mouths, where river, shallows and shelf species overlap. On day one no open water has none.",
+  temperature:"<b>Water temperature</b>, the year's mean of the daily means, from −20 °C (blue) through 5 °C (white) to 30 °C (red). Hatched water is frozen all year.",
+  classes:"<b>Water classes.</b> Darker grey is shallower: shallows (6 m or less, reachable with a cast from the shore), then shelf (6 to 40 m), then deep (over 40 m, lightest). Rivers are dark lines: channels the terrain cuts below the sea across lowland.",
+};
+
+function icon(canvas, id){
+  const x = canvas.getContext("2d"); x.imageSmoothingEnabled = false;
+  if (TENEBRIS_PNG[id]){ const img = new Image(); img.onload = () => x.drawImage(img, 0, 0); img.src = "data:image/png;base64," + TENEBRIS_PNG[id]; return; }
+  const [rows, pal] = GRIDS[id];
+  rows.forEach((row, y) => [...row].forEach((ch, i) => { if (pal[ch]){ x.fillStyle = pal[ch]; x.fillRect(i, y, 1, 1); } }));
+}
+const pct = v => v < 0.05 && v > 0 ? "<0.1%" : v.toFixed(1) + "%";
+const lat = b => b ? `${Math.abs(b[0]).toFixed(0)}°${b[0] < 0 ? "S" : "N"} – ${Math.abs(b[1]).toFixed(0)}°${b[1] < 0 ? "S" : "N"}` : "none";
+const waterName = { river:"rivers", shallows:"shallows", shelf:"shelf", deep:"deep" };
+
+const SCEN_NOTES = {
+  sun1360: "<b>The proposed sun.</b> The same world with <code>solar_wm2</code> at 1360 W/m², the top-of-atmosphere value that Budyko's outgoing-longwave constants (203 + 2.09 T) are calibrated against. This is a retune the atmosphere change would have to make, measured here before anyone makes it.",
+  current: "<b>The shipped settings, left running.</b> The sea gives up more heat than it gets and drains toward freezing, and the spawn rule follows it. Warm-water ranges retreat to the equator and then go under the ice. Orange is water a species held for only part of the year, which here means until it froze out. This is the reason to fix the atmosphere before fish ship (design section 7, owner question 8).",
+  day1: "<b>A new world, day one.</b> The climate the world is built to have: the latitude climatology <code>28 − 45·sin²(lat)</code> °C the atmosphere starts from, after its spin-up and one simulated day. <b>This is the plan.</b> One day carries no seasons, so nothing is orange here.",
+};
+let scen = 0, year = 1, overview = "richness";
+function S(){ const sc = SUMMARY[scen]; return sc.years[Math.min(year, sc.years.length) - 1]; }
+function base(){ return `${SUMMARY[scen].id}/y${Math.min(year, SUMMARY[scen].years.length)}`; }
+function render(){
+  const sc = SUMMARY[scen], s = S(), y = Math.min(year, sc.years.length);
+  document.getElementById("meta").innerHTML =
+    `<span>world <b>0x5eed2026</b></span><span>radius <b>4,800 m</b></span><span>climate <b>${sc.label}</b></span>` +
+    `<span>${sc.id === "day1" ? "day <b>1</b>" : `year <b>${y}</b> of <b>${sc.years.length}</b> (100 days each)`}</span>` +
+    `<span>mean water <b>${s.water_mean_c.toFixed(1)} °C</b></span><span>frozen all year <b>${pct(s.frozen_all_year)}</b></span>`;
+  document.getElementById("scen").innerHTML = `<div class="eyebrow">Showing</div><p>${SCEN_NOTES[sc.id] || sc.label}</p>` +
+    `<p>Water that never freezes over the period averages <b>${s.mean_c ? s.mean_c[1].toFixed(1) + " °C" : "nothing: it is all ice"}</b> at the median${s.mean_c ? `, 5th to 95th percentile ${s.mean_c[0].toFixed(1)} to ${s.mean_c[2].toFixed(1)} °C` : ""}. ` +
+    `The median gap between a point's coldest and warmest day is <b>${s.swing_c[1].toFixed(2)} °C</b>.</p>`;
+  const img = document.getElementById("overview");
+  img.src = `${base()}/${overview}.png`; img.alt = MAP_CAPTIONS[overview].replace(/<[^>]+>/g, "");
+  document.getElementById("ovcap").innerHTML = MAP_CAPTIONS[overview] + (overview === "temperature"
+    ? `<span class="ramp" style="margin-top:6px"><span>−20 °C</span><i style="background:linear-gradient(90deg,#313695,#f5f5f5,#a50026)"></i><span>30 °C</span></span>` : "");
+  const box = document.getElementById("species"); box.innerHTML = "";
+  for (const sp of s.species){
+    const m = META[sp.id];
+    const card = document.createElement("article"); card.className = "card"; card.id = sp.id;
+    card.innerHTML = `
+      <header><canvas width="16" height="16" aria-hidden="true"></canvas><div>
+        <h3>${sp.name}</h3>
+        <div class="chips"><span class="chip src">${m.from === "Tenebris" ? "From Tenebris" : "New"}</span>${sp.water.map(w => `<span class="chip">${waterName[w]}</span>`).join("")}${m.bed ? `<span class="chip">bottom</span>` : ""}</div>
+      </div></header>
+      <figure class="plate"><img src="${base()}/${sp.id}.png" alt="Range map of the ${sp.name}: ${pct(sp.resident)} of the planet's water all year, ${pct(sp.seasonal)} part of the year, ${lat(sp.latitudes)}." width="1440" height="720" loading="lazy"></figure>
+      <dl class="stats">
+        <div><dt>Window</dt><dd>${sp.temp[0]} to ${sp.temp[1]} °C</dd></div>
+        <div><dt>All year</dt><dd>${pct(sp.resident)}</dd></div>
+        <div><dt>Part-year</dt><dd>${pct(sp.seasonal)}</dd></div>
+        <div><dt>Latitudes</dt><dd>${lat(sp.latitudes)}</dd></div>
+      </dl>
+      <p>${NOTES[sp.id]}</p>`;
+    icon(card.querySelector("canvas"), sp.id);
+    box.appendChild(card);
+  }
+  const rows = s.species.map(sp => `<tr><td>${sp.name}</td><td>${sp.water.map(w => waterName[w]).join(", ")}</td><td class="n">${sp.temp[0]} to ${sp.temp[1]}</td><td class="n">${pct(sp.resident)}</td><td class="n">${pct(sp.seasonal)}</td><td>${lat(sp.latitudes)}</td></tr>`).join("");
+  document.getElementById("table").innerHTML = `<thead><tr><th>Species</th><th>Water</th><th>Window, °C</th><th>All year, % of water</th><th>Part of the year</th><th>Latitudes</th></tr></thead><tbody>${rows}</tbody>`;
+  const c = s.classes;
+  document.getElementById("how").innerHTML = [
+    `Terrain: the world's own generator (<code>planet_gen::surface_altitude</code>) sampled at 1440 × 720 points. Water is <b>${pct(c.river)}</b> rivers, <b>${pct(c.shallows)}</b> shallows, <b>${pct(c.shelf)}</b> shelf and <b>${pct(c.deep)}</b> deep. A river is water that is there only because of the river cut: the same generator run with the cut switched off calls it land.`,
+    `Temperature: the world's atmosphere and ocean (<code>pbd_core::atmosphere</code>, 10,242 cells, 1 s steps) run forward from a new world. The water temperature of every cell is averaged over each day (8 samples), and each year's coldest, warmest and mean daily values are kept.`,
+    `Instrument: <code>cargo run --release -p pbd-core --example fish_ranges</code>, then <code>python3 tools/fish_ranges.py</code>, which applies the rules and draws these maps.`,
+  ].map(t => `<li>${t}</li>`).join("");
+  document.getElementById("care").innerHTML = [
+    `"Part of the year" is thin because the ocean is a slow flywheel. Its heat capacity is 3.0e6 J/m²K against a 100-day year, and the median gap between a point's coldest and warmest day here is ${s.swing_c[1].toFixed(2)} °C. Real migrations would need a shallower mixed layer, which is a decision about the atmosphere, not about fish.`,
+    `Rivers are drawn one pixel wider on the species maps than they are, so a range along a channel can be seen at all. Their areas in the table are not widened.`,
+    `The projection stretches the poles. The areas quoted are true areas, weighted by the cosine of the latitude.`,
+  ].map(t => `<li>${t}</li>`).join("");
+  drawChart();
+}
+const SERIES_COLOUR = { current:"#d95926", sun1360:"#3987e5" };
+function drawChart(){
+  const el = document.getElementById("chart");
+  const runs = SUMMARY.filter(r => r.sea.length && SERIES_COLOUR[r.id]);
+  if (!runs.length){ el.innerHTML = "<p>No run log was given.</p>"; return; }
+  const W = 640, H = 300, L = 44, R = 12, T = 10, B = 30;
+  const days = Math.max(...runs.flatMap(r => r.sea.map(p => p[0])));
+  const vals = runs.flatMap(r => r.sea.map(p => p[1])).concat([-1.8]);
+  const lo = Math.floor(Math.min(...vals) / 5) * 5, hi = Math.ceil(Math.max(...vals) / 5) * 5;
+  const x = d => L + (d / days) * (W - L - R), y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  let g = "";
+  for (let v = lo; v <= hi; v += 5){ g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(160,210,205,.12)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" fill="#8ea6a2" font-size="11" font-family="JetBrains Mono,monospace">${v}</text>`; }
+  for (let d = 0; d <= days; d += 50){ g += `<text x="${x(d)}" y="${H - 8}" text-anchor="middle" fill="#8ea6a2" font-size="11" font-family="JetBrains Mono,monospace">${d}</text>`; }
+  g += `<text x="${W - R}" y="${H - 8}" text-anchor="end" fill="#8ea6a2" font-size="11" font-family="Barlow,sans-serif" dy="-14">simulated day</text>`;
+  g += `<line x1="${L}" x2="${W - R}" y1="${y(-1.8)}" y2="${y(-1.8)}" stroke="#8ea6a2" stroke-dasharray="4 4"/><text x="${L + 6}" y="${y(-1.8) - 5}" fill="#8ea6a2" font-size="11" font-family="Barlow,sans-serif">sea water freezes, −1.8 °C</text>`;
+  for (const r of runs){
+    const pts = r.sea.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
+    const last = r.sea[r.sea.length - 1];
+    g += `<polyline points="${pts}" fill="none" stroke="${SERIES_COLOUR[r.id]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    g += `<circle cx="${x(last[0])}" cy="${y(last[1])}" r="4" fill="${SERIES_COLOUR[r.id]}" stroke="#111d24" stroke-width="2"/>`;
+    g += `<text x="${x(last[0]) - 6}" y="${y(last[1]) - 9}" text-anchor="end" fill="#dfe9e6" font-size="12" font-family="JetBrains Mono,monospace">${last[1].toFixed(1)} °C</text>`;
+  }
+  g += `<line id="cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="#8ea6a2" visibility="hidden"/>`;
+  el.innerHTML = `<div class="key">${runs.map(r => `<span><i style="background:${SERIES_COLOUR[r.id]}"></i>${r.label}</span>`).join("")}</div>
+    <div class="eyebrow" style="margin-bottom:4px">Mean sea-surface temperature, °C</div>
+    <svg viewBox="0 0 ${W} ${H}">${g}<rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="hit"/></svg>
+    <div class="tip" id="tip" hidden></div>`;
+  const svg = el.querySelector("svg"), tip = el.querySelector("#tip"), cross = el.querySelector("#cross");
+  svg.addEventListener("pointermove", e => {
+    const b = svg.getBoundingClientRect(), px = (e.clientX - b.left) / b.width * W;
+    const d = Math.max(0, Math.min(days, (px - L) / (W - L - R) * days));
+    const rows = runs.map(r => { const p = r.sea.reduce((a, q) => Math.abs(q[0] - d) < Math.abs(a[0] - d) ? q : a); return [r, p]; });
+    const day = rows[0][1][0];
+    cross.setAttribute("x1", x(day)); cross.setAttribute("x2", x(day)); cross.setAttribute("visibility", "visible");
+    tip.hidden = false; tip.innerHTML = `day ${day}<br>` + rows.map(([r, p]) => `<span style="color:${SERIES_COLOUR[r.id]}">■</span> ${p[1].toFixed(1)} °C`).join("<br>");
+    const cb = el.getBoundingClientRect();
+    tip.style.left = Math.min(e.clientX - cb.left + 12, cb.width - 120) + "px"; tip.style.top = (e.clientY - cb.top - 10) + "px";
+  });
+  svg.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+}
+function seg(id, items, current, onpick){
+  const el = document.getElementById(id); el.innerHTML = "";
+  items.forEach((label, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.setAttribute("aria-pressed", String(i === current));
+    b.addEventListener("click", () => { [...el.children].forEach((x, j) => x.setAttribute("aria-pressed", String(j === i))); onpick(i); });
+    el.appendChild(b);
+  });
+  el.hidden = items.length < 2;
+}
+function buildYears(){
+  const n = SUMMARY[scen].years.length; year = Math.min(year, n);
+  seg("years", Array.from({length:n}, (_, i) => `Year ${i + 1}`), year - 1, i => { year = i + 1; render(); });
+}
+const MAPPED = SUMMARY.filter(r => r.years.length);
+seg("scenarios", MAPPED.map(r => r.label), scen, i => { scen = SUMMARY.indexOf(MAPPED[i]); buildYears(); render(); });
+scen = SUMMARY.indexOf(MAPPED[0]);
+document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => {
+  overview = b.dataset.map; document.querySelectorAll("#tabs button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render();
+}));
+buildYears(); render();
+</script>

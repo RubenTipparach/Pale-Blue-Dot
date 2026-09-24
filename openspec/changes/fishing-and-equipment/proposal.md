@@ -73,8 +73,15 @@ Today:
     bring Tenebris's strengths, its hook window, and its own 16×16 icons,
     copied with provenance.
   - Three are new: silverfin, banded perch and deepback.
-  - They live in three water zones (tropical, temperate and cold), classified
-    from the sea's surface temperature.
+  - Each lives in some kinds of water (rivers, shallows, shelf or deep, from
+    the terrain) at a temperature window, read live from the climate
+    simulation. Their ranges therefore follow the climate. A measured range
+    atlas maps them all on the real planet (design section 7).
+  - Measuring them found that **the simulated sea does not hold its climate**.
+    It starts from a climatology averaging +13 °C and falls to −17 °C within
+    80 days (about 64 hours of play), then settles at −23.5 °C with every
+    point of water frozen. That is an atmosphere problem, and the plan
+    depends on it being fixed there.
   - Each species' entry is its own record in `fauna.ron`: its numbers, its
     text and a tip. It opens in game with J or a click on a caught fish, and a
     `docs/wiki/fish.md` page is generated from the same data.
@@ -116,6 +123,12 @@ These come with defaults, and the mockup already shows each default.
    generated `docs/wiki/fish.md`, from one source. If "wiki" means a web page
    like Tenebris's `wiki.html` linked from the menu, the generator writes HTML
    instead. The data does not change.
+
+8. **The sea's drift.** The spawn plan assumes the sea holds roughly the
+   climate a world starts with, and today it freezes within days of play
+   (design section 7). The fix belongs in `atmospheric-circulation` (the sun
+   value and the clouds' energy balance). Should that come before fishing is
+   built?
 
 ## Non-goals
 

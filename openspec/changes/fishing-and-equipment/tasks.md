@@ -13,7 +13,11 @@
 - [x] Eight species (five from Tenebris with their icons, three new), three
       water zones and a field guide with one entry per species, added to the
       mockup and driven headless.
-- [ ] The owner's answers to the seven questions in the proposal.
+- [x] Spawning planned from the climate: water classes and temperature
+      windows, measured on the real planet by a measurement instrument
+      (`examples/fish_ranges.rs`, `tools/fish_ranges.py`), with range maps
+      published as the Fish Range Atlas. Found and wrote up the sea's drift.
+- [ ] The owner's answers to the eight questions in the proposal.
 
 ## 1. Equipment in the core
 - [ ] `Tool { Rod, Shovel, Pickaxe, Axe }` replaces the `Pick` placeholder;
@@ -51,9 +55,13 @@
 - [ ] `pbd_core::fauna::School`: packed arrays, the boid terms of design
       section 6, bounds from the sea and ground queries, a seeded goal walk.
 - [ ] `assets/config/fauna.ron`: the eight species of design section 7 with
-      their field-guide entries and tips; zone thresholds; tests for entries,
-      icons, disjoint bodies, zone coverage and empty lifeless rosters.
-- [ ] Water zones from `Atmosphere::sample(dir).temperature` at spawn.
+      their field-guide entries and tips, water classes and windows; tests for
+      entries, icons, disjoint bodies, day-one coverage and empty lifeless
+      rosters.
+- [ ] Spawn gate: water class from the terrain, temperature now from
+      `Atmosphere::sample(dir).temperature`, nothing in frozen water.
+- [ ] `tools/fish_ranges.py` reads its rules from `fauna.ron`, and the atlas is
+      regenerated from the built roster.
 - [ ] Bottom dwellers: the goal off the bed and the vertical hold.
 - [ ] App: spawn ring, caps, despawn, a fixed 30 Hz step, and one instanced
       draw per species.
