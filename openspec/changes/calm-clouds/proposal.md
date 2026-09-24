@@ -92,12 +92,20 @@ Captures of the same view (`--view surface --pitch 20 --time 11`, 600 frames,
 | 32 steps, light held over 2 | grainy | 16.7 ms |
 | span clipped to the tallest cloud, 16 to 24 steps | grainy at the edges | 16.7 ms |
 
-Two of those land on 16.7 ms, which is a 60 Hz frame and may be the
+| **accumulated over frames (design.md), span clipped, 16 steps** | **soft; faint texture, no pattern** | **8.9 ms** |
+| accumulated, span clipped, up to 24 steps | softer still | 11.9 ms |
+| accumulated, the shipped 16-step march unclipped | soft, finer speckle | 7.7 ms |
+
+Two of the brute-force rows land on 16.7 ms, which is a 60 Hz frame and may be the
 presentation rate rather than the work; they are not trusted as costs. What is
 clear is that no step count is clean at an affordable price: a thin cloud
 sampled at random depths is noisy until something averages the noise, and the
 thing built for that is temporal accumulation, which this renderer lacks.
-That is the next step of this change, written up before it is built.
+That is the next step of this change: written up in `design.md`, then built,
+and the bold row is what ships. The accumulated rows were captured after the
+pace landed, so their sky is a different, sparser one than the brute-force
+rows'; their costs are compared against each other, and the orbit view against
+a baseline build, in `design.md`.
 
 ## What this is not
 

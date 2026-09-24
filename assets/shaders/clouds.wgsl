@@ -335,19 +335,63 @@ fn cloud_flash_at(p: vec3<f32>, layer: CloudLayer) -> f32 {
 // light, PREMULTIPLIED by its coverage, and the coverage in w: composite as
 // `under * (1 - w) + rgb`.
 // `jitter` (0..1) offsets this ray's samples by that fraction of a step. It
-// has to differ from one pixel to the next: the caller hashes the pixel's own
-// position. Hashed off the ray's direction, as it first was, neighbouring rays
+// has to differ from one pixel to the next and one frame to the next: the
+// caller hashes both, and blends frames into a history (`calm-clouds`). Hashed off the ray's direction, as it first was, neighbouring rays
 // got nearly the same offset, and the steps' banding survived as smooth
 // contour lines across every dense cloud.
-fn cloud_march(camera: vec3<f32>, direction: vec3<f32>, near: f32, far: f32, layer: CloudLayer,
+// The march's step, metres, and its floor and cap in steps; and how many
+// cloudy samples share one light march. See `cloud_march`.
+const CLOUD_STEP_M: f32 = 16.0;
+const CLOUD_MIN_STEPS: f32 = 16.0;
+const CLOUD_MAX_STEPS: f32 = 16.0;
+const CLOUD_LIGHT_EVERY: u32 = 2u;
+const CLOUD_TOP_PROBES: f32 = 6.0;
+
+fn cloud_march(camera: vec3<f32>, direction: vec3<f32>, span_near: f32, span_far: f32, layer: CloudLayer,
         sun: vec3<f32>, cloud_map: texture_cube<f32>, wind_map: texture_cube<f32>,
         map_sampler: sampler, jitter: f32, pixel_angle: f32) -> vec4<f32> {
+    if (span_far <= span_near) { return vec4<f32>(0.0); }
+    // Clip the span to the tallest cloud this ray can meet. The layer is
+    // CLOUD_THICKNESS tall but a fair-weather cloud stands a fifth of that,
+    // and the steps spread over the empty rest were steps not spent in the
+    // cloud: read the cloud top at a few points along the ray and march only
+    // up to the tallest (`calm-clouds`).
+    var tallest = 0.0;
+    for (var k = 0.0; k < CLOUD_TOP_PROBES; k += 1.0) {
+        let probe = camera+direction*mix(span_near, span_far, (k+0.5)/CLOUD_TOP_PROBES);
+        let seen = cloud_local(cloud_lookup(probe), cloud_map, map_sampler);
+        if (seen.x > 0.01) { tallest = max(tallest, clamp(seen.y, 0.2, 1.0)); }
+    }
+    if (tallest <= 0.0) { return vec4<f32>(0.0); }
+    let roof = cloud_sphere_hit(camera, direction, layer.clouds.x + layer.slab.x*min(tallest + 0.1, 1.0));
+    var far = span_far;
+    var near = span_near;
+    if (length(camera) < layer.clouds.x + layer.slab.x*min(tallest + 0.1, 1.0)) {
+        far = min(far, roof.y);
+    } else if (roof.x > 0.0) {
+        near = max(near, roof.x);
+    } else {
+        return vec4<f32>(0.0);
+    }
     if (far <= near) { return vec4<f32>(0.0); }
-    let steps = 16.0;
+    // Steps follow the span: one every CLOUD_STEP_M metres, between a floor and
+    // a cap. Sixteen for every ray, as this was, is a step of sixty metres
+    // looking up and hundreds at a slant, and a fair-weather cloud is tens of
+    // metres thick: rays stepped over it or into it by the luck of their
+    // jitter, which drew every cloud as a halftone (`calm-clouds`).
+    let steps = clamp(ceil((far-near)/CLOUD_STEP_M), CLOUD_MIN_STEPS, CLOUD_MAX_STEPS);
     let step_size = (far-near)/steps;
     let cos_theta = dot(direction, sun);
     var transmittance = 1.0;
     var luminance = vec3<f32>(0.0);
+    // The LIGHT is marched on one cloudy sample in CLOUD_LIGHT_EVERY and held
+    // for the ones between. Light changes slowly through a cloud and density
+    // does not: this is what lets the density be sampled four times as finely
+    // for not much more than the old cost, when the light marches were most
+    // of it.
+    var cloudy = 0u;
+    var sunlit = 0.0;
+    var tau_up = 0.0;
     for (var i=0.0; i<steps; i+=1.0) {
         let p = camera+direction*(near+step_size*(i+jitter));
         let at = cloud_lookup(p);
@@ -364,26 +408,29 @@ fn cloud_march(camera: vec3<f32>, direction: vec3<f32>, near: f32, far: f32, lay
         // three octaves (Wrenninge 2013) so light reaches into a thick cloud.
         let elevation = dot(radial, sun);
         let day = smoothstep(-0.10, 0.15, elevation);
-        var sunlit = 0.0;
-        if (day > 0.0) {
-            let tau_sun = cloud_light_depth(p, sun, layer, local, wind, extinction, 6u);
-            var a = 1.0;
-            var b = 1.0;
-            var c = 1.0;
-            for (var o = 0u; o < 3u; o++) {
-                sunlit += b*cloud_phase(layer, c, cos_theta)*exp(-a*tau_sun);
-                a *= layer.light.y;
-                b *= layer.light.z;
-                c *= layer.light.w;
+        if (cloudy % CLOUD_LIGHT_EVERY == 0u) {
+            sunlit = 0.0;
+            if (day > 0.0) {
+                let tau_sun = cloud_light_depth(p, sun, layer, local, wind, extinction, 6u);
+                var a = 1.0;
+                var b = 1.0;
+                var c = 1.0;
+                for (var o = 0u; o < 3u; o++) {
+                    sunlit += b*cloud_phase(layer, c, cos_theta)*exp(-a*tau_sun);
+                    a *= layer.light.y;
+                    b *= layer.light.z;
+                    c *= layer.light.w;
+                }
             }
+            // Sky light from above through the cloud over this sample.
+            tau_up = cloud_light_depth(p, radial, layer, local, wind, extinction, 3u);
         }
+        cloudy += 1u;
         let low_sun = smoothstep(0.0, 0.35, elevation);
         let sun_colour = mix(vec3<f32>(1.0,0.62,0.36), vec3<f32>(1.0,0.97,0.92), low_sun);
-        // Sky light from above through the cloud over this sample, and light
-        // bounced off the ground from below: the cloud standing over a base is
-        // what makes it dark, so a thick storm goes slate and a thin cumulus
-        // stays grey.
-        let tau_up = cloud_light_depth(p, radial, layer, local, wind, extinction, 3u);
+        // Sky light from above and light bounced off the ground from below:
+        // the cloud standing over a base is what makes it dark, so a thick
+        // storm goes slate and a thin cumulus stays grey.
         let sky = mix(vec3<f32>(0.03,0.04,0.07), vec3<f32>(0.55,0.68,0.92), day);
         let top = layer.clouds.x + layer.slab.x*clamp(local.y, 0.2, 1.0);
         let height = clamp((length(p)-layer.clouds.x)/max(top-layer.clouds.x, 1.0), 0.0, 1.0);

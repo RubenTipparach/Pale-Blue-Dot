@@ -19,6 +19,8 @@ struct Cell {
 struct WaterView {
     clip_from_local: mat4x4<f32>,
     local_from_clip: mat4x4<f32>,
+    // The previous frame's clip_from_local: where the clouds' history is.
+    prev_clip_from_local: mat4x4<f32>,
     camera_time: vec4<f32>,   // xyz camera in the local frame, w seconds * time_scale
     planet_center: vec4<f32>, // xyz body centre in the local frame, w sea radius m
     sun: vec4<f32>,           // xyz toward the sun, w specular intensity
@@ -72,6 +74,9 @@ struct WaterView {
     // the top of the range crawls, z streak brightness, w flags: 1 the
     // overlay flows (draw streaks), 2 it fades out toward zero.
     overlay_flow: vec4<f32>,
+    // The clouds' accumulation (`calm-clouds`): x the new frame's share of
+    // the blend, y one when the history is usable, z the frame number.
+    cloud_history: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -91,6 +96,9 @@ struct WaterView {
 @group(2) @binding(1) var weather_wind: texture_cube<f32>;
 @group(2) @binding(2) var weather_overlay: texture_cube<f32>;
 @group(2) @binding(3) var weather_sampler: sampler;
+// The clouds pass only: the previous frame's history of the cloud march.
+@group(3) @binding(0) var cloud_history: texture_2d<f32>;
+@group(3) @binding(1) var cloud_history_sampler: sampler;
 fn cloud_layer() -> CloudLayer {
     return CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash,view.cloud_light,
         view.cloud_shape,view.cloud_cells);
@@ -683,8 +691,16 @@ fn rain_map_at(p: vec3<f32>) -> f32 {
 // `pbd::clouds` marched along each pixel's ray from the eye to the nearest of
 // the scene's depth and the sea, and composited over what is there: the sky,
 // the sea and the land alike. A cloud in front of a hill is in front of it.
+// The clouds pass writes two targets: the scene with the clouds over it, and
+// the clouds alone (light premultiplied by coverage, and the coverage), which
+// is the next frame's history.
+struct CloudsOut {
+    @location(0) color: vec4<f32>,
+    @location(1) history: vec4<f32>,
+}
+
 @fragment
-fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+fn clouds(in: FullscreenVertexOutput) -> CloudsOut {
     let uv = in.uv;
     let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
     // The angle one pixel spans, off the ray's own screen derivative: what
@@ -692,8 +708,11 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // any branch, where a derivative is defined.
     let ray = view_ray(uv);
     let pixel_angle = length(fwidth(ray.direction));
+    var out: CloudsOut;
+    out.color = vec4<f32>(scene,1.0);
+    out.history = vec4<f32>(0.0);
     // Under the sea the surface is the sky; the compose pass drew it.
-    if (view.fx.y > 0.75) { return vec4<f32>(scene,1.0); }
+    if (view.fx.y > 0.75) { return out; }
     let eye = ray.origin-view.planet_center.xyz;
     let layer = cloud_layer();
     var far = 1.0e9;
@@ -704,14 +723,38 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let sea = cloud_sphere_hit(eye,ray.direction,view.planet_center.w);
     if (sea.x > 0.0) { far = min(far,sea.x); }
     let span = cloud_span(eye,ray.direction,0.0,far,layer);
-    if (span.y <= span.x) { return vec4<f32>(scene,1.0); }
-    // Interleaved gradient noise (Jimenez 2014) on the pixel: a different step
-    // offset for every pixel, so the march's banding becomes fine grain.
-    let pixel = floor(in.position.xy);
-    let jitter = fract(52.9829189*fract(dot(pixel,vec2<f32>(0.06711056,0.00583715))));
-    let cloud = cloud_march(eye,ray.direction,span.x,span.y,layer,safe_normal(view.sun.xyz),
+    // No cloud to march: nothing drawn and an empty history, so a cloud
+    // never ghosts over a hill that has moved in front of it.
+    if (span.y <= span.x) { return out; }
+    // A different step offset for every pixel AND every frame: white noise,
+    // an integer hash of both. Each frame then samples the cloud at new
+    // depths and the history averages them; interleaved gradient noise, which
+    // this was, drew a fixed diagonal halftone with no history to average it.
+    let pixel = vec2<u32>(in.position.xy);
+    var h = pixel.x*1973u + pixel.y*9277u + u32(view.cloud_history.z)*26699u + 1u;
+    h = h*747796405u + 2891336453u;
+    h = ((h >> ((h >> 28u) + 4u)) ^ h)*277803737u;
+    h = (h >> 22u) ^ h;
+    let jitter = f32(h & 0xffffffu)/16777216.0;
+    var cloud = cloud_march(eye,ray.direction,span.x,span.y,layer,safe_normal(view.sun.xyz),
         weather_cloud,weather_wind,weather_sampler,jitter,pixel_angle);
-    return vec4<f32>(scene*(1.0-cloud.w)+cloud.rgb,1.0);
+    // Blend into the history where this pixel's cloud was on the previous
+    // frame: the middle of the span, projected by the previous camera.
+    if (view.cloud_history.y > 0.5) {
+        let point = ray.origin + ray.direction*(0.5*(span.x+span.y));
+        let before = view.prev_clip_from_local*vec4<f32>(point,1.0);
+        if (before.w > 0.0) {
+            let ndc = before.xy/before.w;
+            let was = vec2<f32>(ndc.x*0.5+0.5, 0.5-ndc.y*0.5);
+            if (all(was >= vec2<f32>(0.0)) && all(was <= vec2<f32>(1.0))) {
+                let previous = textureSampleLevel(cloud_history,cloud_history_sampler,was,0.0);
+                cloud = mix(previous, cloud, view.cloud_history.x);
+            }
+        }
+    }
+    out.history = cloud;
+    out.color = vec4<f32>(scene*(1.0-cloud.w)+cloud.rgb,1.0);
+    return out;
 }
 
 @fragment

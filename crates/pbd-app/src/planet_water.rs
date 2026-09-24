@@ -55,6 +55,9 @@ const WATER_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 pub(super) struct WaterView {
     clip_from_local: Mat4,
     local_from_clip: Mat4,
+    /// Last frame's `clip_from_local`: where the clouds pass finds its history
+    /// (`calm-clouds`).
+    prev_clip_from_local: Mat4,
     camera_time: Vec4,
     planet_center: Vec4,
     sun: Vec4,
@@ -103,7 +106,23 @@ pub(super) struct WaterView {
     /// The overlay (`overlay::overlay_lanes`); zero when none is showing.
     overlay: Vec4,
     overlay_flow: Vec4,
+    /// The clouds' accumulation: x the share of the new frame in the blend,
+    /// y one when the previous history can be used, z the frame number the
+    /// jitter hashes, w spare.
+    cloud_history: Vec4,
 }
+
+/// The format of the clouds' history: the pass's own result, light
+/// premultiplied by coverage and the coverage, before it is composited.
+const CLOUD_HISTORY_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+
+/// The share of each new frame in the clouds' history: about sixteen frames of
+/// samples in every pixel (`calm-clouds` design).
+const CLOUD_BLEND: f32 = 0.06;
+
+/// A camera that moves further than this between frames has jumped (a
+/// teleport, a load) and the history is dropped, metres.
+const CLOUD_HISTORY_JUMP_M: f32 = 50.0;
 
 /// The largest precipitation map the rain buffer holds, cells on a side; the
 /// config validates `rain_map_size` against it.
@@ -245,7 +264,22 @@ struct WaterPipelines {
     data_layout: BindGroupLayoutDescriptor,
     scene_layout: BindGroupLayoutDescriptor,
     scene_layout_multisampled: BindGroupLayoutDescriptor,
+    /// The clouds pass's fourth group: the previous history and a sampler.
+    history_layout: BindGroupLayoutDescriptor,
     sampler: Sampler,
+}
+
+fn history_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "clouds history",
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::FRAGMENT,
+            (
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
+            ),
+        ),
+    )
 }
 
 fn data_layout() -> BindGroupLayoutDescriptor {
@@ -295,6 +329,7 @@ fn initialize_pipelines(
         data_layout: data_layout(),
         scene_layout: scene_layout(false),
         scene_layout_multisampled: scene_layout(true),
+        history_layout: history_layout(),
         sampler: device.create_sampler(&SamplerDescriptor {
             label: Some("water scene sampler"),
             mag_filter: FilterMode::Linear,
@@ -394,21 +429,41 @@ impl SpecializedRenderPipeline for WaterPipelines {
         };
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed(label)),
-            layout: vec![
-                self.data_layout.clone(),
-                scene,
-                super::weather_maps::layout(),
-            ],
+            layout: if key.pass == Pass::Clouds {
+                vec![
+                    self.data_layout.clone(),
+                    scene,
+                    super::weather_maps::layout(),
+                    self.history_layout.clone(),
+                ]
+            } else {
+                vec![
+                    self.data_layout.clone(),
+                    scene,
+                    super::weather_maps::layout(),
+                ]
+            },
             vertex,
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
                 shader_defs: defs,
                 entry_point: Some(Cow::Borrowed(entry)),
-                targets: vec![Some(ColorTargetState {
-                    format: key.format,
-                    blend: None,
-                    write_mask: ColorWrites::ALL,
-                })],
+                targets: {
+                    let mut targets = vec![Some(ColorTargetState {
+                        format: key.format,
+                        blend: None,
+                        write_mask: ColorWrites::ALL,
+                    })];
+                    // The clouds pass also writes this frame's history.
+                    if key.pass == Pass::Clouds {
+                        targets.push(Some(ColorTargetState {
+                            format: CLOUD_HISTORY_FORMAT,
+                            blend: None,
+                            write_mask: ColorWrites::ALL,
+                        }));
+                    }
+                    targets
+                },
             }),
             primitive: PrimitiveState {
                 // Back faces are the underwater view; nothing is culled.
@@ -448,6 +503,18 @@ pub(super) struct WaterViewGpu {
     lens_needed: bool,
     was_under: bool,
     emerge_until: f32,
+    /// The clouds' history pair. This frame reads `history[history_read]` and
+    /// writes the other; the index flips every frame.
+    history: [TextureView; 2],
+    history_read: usize,
+    /// The previous frame's camera and projection, for reprojecting the
+    /// history and for telling a jump from a step.
+    prev_clip: Mat4,
+    prev_camera: Vec3,
+    /// Whether the clouds pass ran on the previous frame, so its history is
+    /// current.
+    clouds_ran: bool,
+    frame: u32,
 }
 
 /// What the sky is doing, as the water pass reads it: the weather, its
@@ -546,6 +613,9 @@ fn prepare_water_views(
         let params = WaterView {
             clip_from_local: clip_from_body,
             local_from_clip: clip_from_body.as_dmat4().inverse().as_mat4(),
+            prev_clip_from_local: existing
+                .as_ref()
+                .map_or(clip_from_body, |gpu| gpu.prev_clip),
             camera_time: camera.extend(clock.0 * s.time_scale),
             planet_center: Vec3::ZERO.extend(sea_radius),
             sun: sun.direction().extend(s.specular_intensity * sun_dim),
@@ -620,6 +690,7 @@ fn prepare_water_views(
             snow_tint: linear(weather_settings.snow_color).extend(clock.0),
             overlay,
             overlay_flow,
+            cloud_history: Vec4::ZERO,
         };
         let lens_needed = lens_rain > 0.001 || drips > 0.001;
         let map = rain_map.as_deref().filter(|map| {
@@ -630,6 +701,28 @@ fn prepare_water_views(
             && weather_settings.rain_volume_range_m > 0.0;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
         if let Some(mut gpu) = existing {
+            let resized = gpu.depth_size != size;
+            if resized {
+                gpu.history = cloud_history(&device, size);
+            }
+            // The history is usable when the pass wrote it on the previous
+            // frame, the view kept its size and the camera stepped rather
+            // than jumped.
+            let valid = gpu.clouds_ran
+                && !resized
+                && camera.distance(gpu.prev_camera) < CLOUD_HISTORY_JUMP_M;
+            gpu.history_read = 1 - gpu.history_read;
+            gpu.frame = gpu.frame.wrapping_add(1);
+            let mut params = params;
+            params.cloud_history = Vec4::new(
+                CLOUD_BLEND,
+                if valid { 1.0 } else { 0.0 },
+                (gpu.frame % 65_536) as f32,
+                0.0,
+            );
+            gpu.prev_clip = clip_from_body;
+            gpu.prev_camera = camera;
+            gpu.clouds_ran = !overlay_needed;
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
             gpu.lens_needed = lens_needed;
@@ -712,8 +805,37 @@ fn prepare_water_views(
             lens_needed,
             was_under,
             emerge_until,
+            history: cloud_history(&device, size),
+            history_read: 0,
+            prev_clip: clip_from_body,
+            prev_camera: camera,
+            clouds_ran: !overlay_needed,
+            frame: 0,
         });
     }
+}
+
+/// The clouds' history pair for a view of this size, cleared by the first
+/// pass that writes it.
+fn cloud_history(device: &RenderDevice, size: UVec2) -> [TextureView; 2] {
+    std::array::from_fn(|_| {
+        device
+            .create_texture(&TextureDescriptor {
+                label: Some("clouds history"),
+                size: Extent3d {
+                    width: size.x,
+                    height: size.y,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: CLOUD_HISTORY_FORMAT,
+                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
+            .create_view(&TextureViewDescriptor::default())
+    })
 }
 
 fn water_depth(device: &RenderDevice, size: UVec2) -> TextureView {
@@ -828,6 +950,13 @@ impl ViewNode for WaterCompositeNode {
             pass.set_render_pipeline(cap);
             pass.draw_indirect(&planet_view.indirect, 32);
         }
+        // The clouds pass reads last frame's history and writes this frame's.
+        let history_bind_group = device.create_bind_group(
+            Some("clouds history"),
+            &cache.get_bind_group_layout(&pipelines.history_layout),
+            &BindGroupEntries::sequential((&water.history[water.history_read], &pipelines.sampler)),
+        );
+        let history_write = &water.history[1 - water.history_read];
         for (needed, pipeline, label) in [
             // An overlay is a map: the clouds would hide the data under them,
             // and the cloud overlay is where cloud is shown then.
@@ -843,17 +972,35 @@ impl ViewNode for WaterCompositeNode {
             }
             let post = target.post_process_write();
             let scene = scene_bind_group(post.source);
+            let is_clouds = label == "Clouds";
+            let composite = Some(RenderPassColorAttachment {
+                view: post.destination,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Load,
+                    store: StoreOp::Store,
+                },
+            });
+            // The clouds pass writes every pixel of its history, so nothing
+            // there needs keeping.
+            let history = Some(RenderPassColorAttachment {
+                view: history_write,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(LinearRgba::NONE.into()),
+                    store: StoreOp::Store,
+                },
+            });
+            let attachments = [composite, history];
             let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some(label),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: post.destination,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Load,
-                        store: StoreOp::Store,
-                    },
-                })],
+                color_attachments: if is_clouds {
+                    &attachments[..]
+                } else {
+                    &attachments[..1]
+                },
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
@@ -861,6 +1008,9 @@ impl ViewNode for WaterCompositeNode {
             pass.set_bind_group(0, &water.data_bind_group, &[]);
             pass.set_bind_group(1, &scene, &[]);
             pass.set_bind_group(2, &maps.bind_group, &[]);
+            if is_clouds {
+                pass.set_bind_group(3, &history_bind_group, &[]);
+            }
             pass.set_render_pipeline(pipeline);
             pass.draw(0..3, 0..1);
         }
@@ -895,14 +1045,14 @@ mod tests {
 
     #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
-        // Two mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
+        // Three mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
         let shader = include_str!("../../../assets/shaders/water.wgsl");
         let start = shader.find("struct WaterView {").unwrap();
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (2, 39));
+        assert_eq!((mat4, vec4), (3, 40));
         assert_eq!(
             WaterView::min_size().get() as usize,
             mat4 * 64 + vec4 * 16,
