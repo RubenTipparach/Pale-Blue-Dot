@@ -85,27 +85,43 @@ fn a_new_world_places_each_craft_where_it_can_work() {
         "all three, in ID order"
     );
     let player = walker(&mut app);
-    let contact = app.world().resource::<PlanetContact>();
-    let sea = app.world().resource::<Sea>().radius;
+    let sea = app.world().resource::<Sea>().clone();
     for (_, craft) in &all {
         let at = craft.reference_position().as_vec3();
-        let floor = contact.sample(at).floor_radius;
+        let depth = sea.depth_at(at.normalize());
         match craft.kind {
             Kind::Kestrel => {
-                assert!(floor > sea, "on dry ground");
+                assert_eq!(depth, 0.0, "on dry ground");
                 assert!(at.distance(player) < 50.0, "and near the player");
                 assert!(craft.mooring.is_none());
             }
             Kind::Tern | Kind::Loon => {
                 let need = if craft.kind == Kind::Tern { 3.0 } else { 1.2 };
-                assert!(
-                    sea - floor >= need,
-                    "{} in {} m",
-                    craft.kind.name(),
-                    sea - floor
-                );
+                assert!(depth >= need, "{} in {depth} m", craft.kind.name());
                 assert!(craft.mooring.is_some_and(|m| m.anchored), "and at anchor");
             }
+        }
+    }
+    // And they stay afloat and upright: a berth judged on a coarser seabed
+    // than the one the hull meets runs the keel aground on the first tick.
+    for _ in 0..180 {
+        app.update();
+    }
+    for (_, craft) in crafts(&mut app) {
+        let up = craft.body.position.normalize();
+        let upright = (craft.body.orientation * pbd_core::DVec3::Y).dot(up);
+        assert!(
+            upright > 0.97,
+            "{} is heeled: {upright:.3}",
+            craft.kind.name()
+        );
+        if craft.kind != Kind::Kestrel {
+            let lift = craft.reference_position().length() - sea.radius as f64;
+            assert!(
+                lift.abs() < 0.5,
+                "{} floats at the sea: {lift:.2} m",
+                craft.kind.name()
+            );
         }
     }
     // The new fleet is written, not left owed.

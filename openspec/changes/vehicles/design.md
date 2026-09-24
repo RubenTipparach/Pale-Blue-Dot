@@ -427,9 +427,22 @@ The departures, each for a reason found while building:
    wave runs vertically. That is 61 components, not 31. The GPU check runs
    the shipped WGSL on a headless adapter and agrees with the core to 1 mm at
    360 points.
-3. **The ground query takes a point, not a direction.** It is
+3. **The ground query takes a point, not a direction, and it is one rule:**
+   `vehicles::ground_under`. Where the fine column tier is resident it is
    `PlanetContact::stand`, so a craft over a cave mouth or under an overhang
-   gets the column tier's answer, as the walker does.
+   gets the tier's answer, as the walker does. Elsewhere it is the exact
+   height field the tier is generated from, not the coarse level `stand`
+   falls back to. The berths, the anchor check and the physics all ask it. The
+   first build asked the coarse level for berths, and that level is metres
+   off. Measured on the default world:
+   - The Tern was berthed in 3.52 m of coarse water that was 1.50 m deep once
+     the tier arrived.
+   - Its keel contact was buried, it was thrown up at 4.6 m/s, and it came to
+     rest aground, heeled 30 to 49 degrees.
+   - With the coarse floor under the physics as well, a boat left far from
+     the player sat on a seabed above its own waterline and rolled over.
+   A test now steps the new fleet three seconds and requires both boats
+   upright and afloat.
 4. **The shader's sea state is the active camera's.** The water pass draws
    the table at the sea state under the camera. A hull floats on the state
    under the hull. They differ only by how much the weather changes between

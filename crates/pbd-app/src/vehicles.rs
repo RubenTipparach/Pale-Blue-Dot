@@ -164,10 +164,7 @@ fn step_vehicles(
         clock.0 + dt
     };
     let contact = world.contact.as_deref();
-    let ground = |p: DVec3| match contact {
-        Some(contact) => contact.stand(p.as_vec3()).floor_radius as f64,
-        None => sea.radius as f64 - 100.0,
-    };
+    let ground = |p: DVec3| ground_under(contact, p);
     for (entity, mut vehicle) in &mut vehicles {
         let craft = &vehicle.craft;
         let up = craft.body.position.normalize_or(DVec3::Y);
@@ -230,6 +227,27 @@ fn step_vehicles(
                 position.0 = at + up * crate::walking::HALF_HEIGHT;
                 transform.translation = position.0;
             }
+        }
+    }
+}
+
+/// The solid ground under a body-local point, m from the centre: the one
+/// answer every craft, its berth and its anchor use. Where the fine column
+/// tier is resident it is the tier's (`PlanetContact::stand`, caves and edits
+/// included), exactly as the walker gets. Elsewhere it is the exact height
+/// field the tier is generated from, NOT the coarse level `stand` falls back
+/// to: that is metres off, and a boat left a kilometre from the player sat on
+/// a coarse seabed above its own waterline and rolled over.
+pub fn ground_under(contact: Option<&PlanetContact>, point: DVec3) -> f64 {
+    let at = point.as_vec3();
+    let direction = at.normalize_or(Vec3::Y);
+    match contact {
+        Some(contact) if contact.finest_cell(direction).is_some() => {
+            contact.stand(at).floor_radius as f64
+        }
+        _ => {
+            (crate::planet::terrain::PLANET_RADIUS
+                + crate::planet::terrain::surface_height(direction)) as f64
         }
     }
 }
@@ -470,11 +488,6 @@ pub fn leave(world: &mut World, entity: Entity) {
 
 /// A boat: drop anchor where the water is shallow enough, or weigh it.
 fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
-    let contact_floor = |world: &World, direction: Vec3| {
-        world
-            .get_resource::<PlanetContact>()
-            .map(|c| c.sample(direction).floor_radius as f64)
-    };
     let Some(vehicle) = world.get::<Vehicle>(entity) else {
         return;
     };
@@ -493,9 +506,10 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
     }
     let bow = vehicle.craft.bow();
     let direction = bow.normalize();
-    let Some(floor) = contact_floor(world, direction.as_vec3()) else {
-        return;
-    };
+    let floor = ground_under(
+        world.get_resource::<PlanetContact>(),
+        direction * bow.length(),
+    );
     let sea = world.resource::<Sea>().radius as f64;
     let depth = sea - floor;
     if !(0.0..=ANCHOR_DEPTH_M).contains(&depth) {

@@ -5,6 +5,7 @@
 
 use super::{Fleet, Vehicle, draw};
 use crate::planet::PlanetContact;
+use crate::planet::terrain::PLANET_RADIUS;
 use crate::sea::Sea;
 use crate::walking::Walker;
 use avian3d::prelude::Position;
@@ -80,7 +81,10 @@ pub fn spawn_fleet(world: &mut World) {
 /// The craft this world should have: its save's, or a new placement round
 /// the walker. `None` until the planet and the sea are ready to ask.
 fn gather(world: &World, walker: Vec3) -> Option<(Vec<Craft>, u64, bool)> {
-    let (Some(contact), Some(sea)) = (
+    // The contact field has to exist (it is how the walker stands, and it
+    // says the planet is built) but the berths are judged on the height
+    // field below, not on it.
+    let (Some(_), Some(sea)) = (
         world.get_resource::<PlanetContact>(),
         world.get_resource::<Sea>(),
     ) else {
@@ -108,7 +112,7 @@ fn gather(world: &World, walker: Vec3) -> Option<(Vec<Craft>, u64, bool)> {
             }
         }
         None => {
-            let berths = Berths::find(contact, sea, walker.normalize_or(Vec3::Y));
+            let berths = Berths::find(sea, walker.normalize_or(Vec3::Y));
             for (kind, berth) in berths.0 {
                 let Some(berth) = berth else {
                     warn!("no berth for the {} near the spawn", kind.name());
@@ -154,14 +158,13 @@ impl Berths {
     /// nearest water deep enough for it; and the Tern in the nearest water
     /// deep enough for IT round the Loon, so both boats lie off one shore
     /// rather than wherever each happened to find water first.
-    fn find(contact: &PlanetContact, sea: &Sea, up: Vec3) -> Self {
+    fn find(sea: &Sea, up: Vec3) -> Self {
         let radius = sea.radius;
-        let floor = |direction: Vec3| contact.sample(direction).floor_radius;
         let depth = |direction: Vec3| radius - floor(direction);
         let pad = rings(radius, up, |direction, distance| {
             (PAD_M[0]..=PAD_M[1]).contains(&distance)
                 && depth(direction) < -0.3
-                && level(contact, direction, floor(direction))
+                && level(direction, floor(direction))
         });
         let loon = rings(radius, up, |direction, _| depth(direction) >= LOON_DEPTH_M);
         let tern = loon.and_then(|(from, _)| {
@@ -213,14 +216,26 @@ fn rings(radius: f32, centre: Vec3, good: impl Fn(Vec3, f32) -> bool) -> Option<
     None
 }
 
+/// The solid ground under a direction, m from the centre, as a craft will meet
+/// it (`ground_under`) away from the tier: the exact height field. NOT
+/// `PlanetContact::sample`: far from the player that answers from the coarse
+/// level, which put the Tern's berth in 3.5 m of water that was 1.5 m deep once
+/// the tier arrived, and ran it aground on its first tick.
+fn floor(direction: Vec3) -> f32 {
+    super::ground_under(
+        None,
+        direction.normalize_or(Vec3::Y).as_dvec3() * PLANET_RADIUS as f64,
+    ) as f32
+}
+
 /// Whether the ground round `direction` is level enough to land a gear on.
-fn level(contact: &PlanetContact, direction: Vec3, ground: f32) -> bool {
+fn level(direction: Vec3, ground: f32) -> bool {
     let east = Vec3::Y.cross(direction).normalize_or(Vec3::X);
     let north = direction.cross(east);
     let r = ground.max(1.0);
     [east, -east, north, -north].iter().all(|tangent| {
         let probe = (direction + *tangent * (PAD_HALF_M / r)).normalize();
-        (contact.sample(probe).floor_radius - ground).abs() <= PAD_LEVEL_M
+        (floor(probe) - ground).abs() <= PAD_LEVEL_M
     })
 }
 
