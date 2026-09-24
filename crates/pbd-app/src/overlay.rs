@@ -213,7 +213,10 @@ mod tests {
         let start = shader
             .find("const OVERLAY_RAMPS")
             .expect("water.wgsl declares OVERLAY_RAMPS");
-        let body = &shader[start..start + shader[start..].find(");\n").unwrap()];
+        // The table closes on a line of its own. Matched on the newline before
+        // it rather than after, so a CRLF checkout (Windows, `autocrlf`) reads
+        // the same table as an LF one.
+        let body = &shader[start..start + shader[start..].find("\n);").unwrap()];
         let stops: Vec<[f32; 3]> = body
             .split("vec3<f32>(")
             .skip(1) // what comes before the first stop
