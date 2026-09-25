@@ -111,6 +111,11 @@ impl Air {
         self.publish(stepped);
     }
 
+    /// Whether a step is running on the pool.
+    pub fn stepping(&self) -> bool {
+        self.task.is_some()
+    }
+
     fn publish(&mut self, stepped: Stepped) {
         self.now = Arc::new(stepped.atmosphere);
         self.maps = Arc::new(stepped.maps);
@@ -227,6 +232,7 @@ pub fn advance_air(
     sun: Res<Sun>,
     forcing: Res<crate::weather::StormForcing>,
     weather: Res<crate::weather::Weather>,
+    lod: Option<Res<crate::planet::LodRefresh>>,
 ) {
     if let Some(task) = air.task.as_mut() {
         match block_on(future::poll_once(task)) {
@@ -247,6 +253,13 @@ pub fn advance_air(
     }
     let behind = ((now - air.at_seconds) / dt).floor() as u32;
     if behind == 0 {
+        return;
+    }
+    // Never step while the fine set is being rebuilt: each is harmless alone,
+    // but the two at once left the frame no core, and a hitch landed every
+    // second of a low flight (`far-side-flight`: 11 frames over 16.7 ms on the
+    // route, 2 with the air frozen). The step waits and catches up in one go.
+    if !air.in_place && lod.is_some_and(|lod| lod.in_flight_s().is_some()) {
         return;
     }
     let steps = behind.min(MAX_STEPS);

@@ -153,7 +153,10 @@ class ObsSession:
             clear_stale_crash_markers()
             # A normal window, not --minimize-to-tray: a tray-only OBS cannot be
             # closed cleanly, and an unclean exit brings the Safe Mode prompt.
-            subprocess.Popen([str(exe), "--disable-shutdown-check"], cwd=str(exe.parent))
+            # --multi: an OBS that exited uncleanly can linger in the process
+            # list holding its single-instance lock, and a new one then stops at
+            # "OBS is already running". No running OBS was found above.
+            subprocess.Popen([str(exe), "--disable-shutdown-check", "--multi"], cwd=str(exe.parent))
             self.started_obs = True
         for _ in range(180):
             try:
@@ -167,6 +170,17 @@ class ObsSession:
             self.__exit__(None, None, None)
             sys.exit("could not connect to OBS's WebSocket server within 90 s "
                      "(is OBS waiting on a dialog?)")
+        # The server accepts connections before OBS has finished loading, and
+        # answers "not ready" (code 207) until it has.
+        for _ in range(120):
+            try:
+                self.client.get_video_settings()
+                break
+            except Exception:
+                time.sleep(0.5)
+        else:
+            self.__exit__(None, None, None)
+            sys.exit("OBS never became ready to take requests")
         return self.client
 
     def _restore_config(self):
@@ -181,6 +195,33 @@ class ObsSession:
             close_obs()
         self._restore_config()
         return False
+
+
+def report_cadence(ff: str, video: str, fps: int) -> list[int]:
+    """New frames in each second of `video`: a frame that is essentially the
+    previous one again (OBS repeating it because the program did not deliver a
+    new one in time) is not new. Frames are compared at 160x100 grey; after
+    encoding, a repeat differs by under 0.03 of a level on average and real
+    motion by more than 0.1 (measured on this project's captures). Prints a
+    summary and returns the per-second counts."""
+    w, h = 160, 100
+    raw = subprocess.run([ff, "-v", "error", "-i", video, "-vf", f"scale={w}:{h},format=gray",
+                          "-f", "rawvideo", "-"], capture_output=True).stdout
+    n = w * h
+    frames = [raw[i * n:(i + 1) * n] for i in range(len(raw) // n)]
+    new = [True]
+    for prev, cur in zip(frames, frames[1:]):
+        diff = sum(abs(a - b) for a, b in zip(cur[::5], prev[::5])) / len(cur[::5])
+        new.append(diff > 0.05)
+    per_second = [sum(new[s:s + fps]) for s in range(0, len(new) - fps + 1, fps)]
+    if per_second:
+        full = sum(1 for c in per_second if c >= fps - 1)
+        print(f"cadence: {len(per_second)} s, new frames per second min {min(per_second)} "
+              f"median {sorted(per_second)[len(per_second) // 2]} of {fps}; "
+              f"{full} of {len(per_second)} seconds at {fps - 1}+")
+        worst = sorted(range(len(per_second)), key=lambda s: per_second[s])[:5]
+        print("  slowest seconds: " + ", ".join(f"{s}s={per_second[s]}" for s in sorted(worst)))
+    return per_second
 
 
 def blank_lead(ff: str, video: str, look_s: float = 60.0) -> float:
@@ -241,6 +282,8 @@ def main():
     out.add_argument("--keep-blank-lead", action="store_true",
                      help="keep flat-colour frames at the start (a loading screen) instead of cutting them")
     out.add_argument("--contact-sheet", action="store_true", help="also write <out>_frames.png, six frames across the video")
+    out.add_argument("--check-cadence", action="store_true",
+                     help="report how many new frames each second of the MP4 carries (60/60 is perfect at 60 fps)")
     p.add_argument("--obs", type=Path, help="path to the OBS executable")
     a = p.parse_args()
 
@@ -299,6 +342,9 @@ def main():
             c.set_input_settings(SOURCE, {"window": window, "method": 2, "cursor": False}, True)
             item = c.get_scene_item_id(SCENE, SOURCE).scene_item_id
             print(f"found window {window}")
+            # On program first: OBS renders only what is showing, and a window
+            # capture reports no size until it has rendered.
+            c.set_current_program_scene(SCENE)
             # The canvas takes the window's own size; the output is scaled.
             w = h = 0
             for _ in range(240):
@@ -316,7 +362,6 @@ def main():
             c.set_scene_item_transform(SCENE, item, {
                 "positionX": 0, "positionY": 0, "boundsType": "OBS_BOUNDS_SCALE_INNER",
                 "boundsWidth": w, "boundsHeight": h})
-            c.set_current_program_scene(SCENE)
             print(f"capturing {window} at {w}x{h}, output {ow}x{oh} @ {a.fps} fps")
 
             # Recording starts at once; a loading screen at the start is cut
@@ -371,6 +416,9 @@ def main():
         Path(mkv).unlink(missing_ok=True)
     print(f"MP4: {out_path} ({out_path.stat().st_size / 1e6:.1f} MB)")
 
+    if a.check_cadence:
+        report_cadence(ff, str(out_path), a.fps)
+
     if a.contact_sheet:
         sheet = out_path.with_name(out_path.stem + "_frames.png")
         probe = subprocess.run([ff, "-i", str(out_path)], capture_output=True, text=True).stderr
@@ -378,7 +426,9 @@ def main():
         dur = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3]) if m else 0
         if dur > 0:
             times = [dur * (i + 0.5) / 6 for i in range(6)]
-            vf = "select='" + "+".join(f"between(t,{t:.2f},{t + 0.05:.2f})" for t in times) + "',tile=3x2"
+            # A window shorter than one frame, so each tile is its own moment.
+            win = 0.5 / max(a.fps, 1)
+            vf = "select='" + "+".join(f"between(t,{t:.3f},{t + win:.3f})" for t in times) + "',tile=3x2"
             subprocess.run([ff, "-y", "-v", "error", "-i", str(out_path), "-vf", vf,
                             "-frames:v", "1", "-vsync", "0", str(sheet)], capture_output=True)
             if sheet.exists():

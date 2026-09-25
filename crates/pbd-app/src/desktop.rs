@@ -48,6 +48,9 @@ pub struct Launch {
     pub view: String,
     pub frames: u32,
     pub tour: bool,
+    /// `--route far-side`: take off, climb, cruise round the planet and land
+    /// on the far side (`far-side-flight`). Implies the tour's scripted setup.
+    pub route: bool,
     pub fixed: bool,
     pub fly: bool,
     pub walk: bool,
@@ -136,6 +139,7 @@ impl Launch {
             dig: 0,
             place: 0,
             tour: false,
+            route: false,
             fixed: false,
             fly: false,
             walk: false,
@@ -265,6 +269,13 @@ impl Launch {
                         .expect("invalid frame count");
                 }
                 "--tour" => result.tour = true,
+                "--route" => {
+                    i += 1;
+                    let name = args.get(i).expect("--route requires a route name");
+                    assert!(name == "far-side", "--route knows far-side");
+                    result.route = true;
+                    result.tour = true;
+                }
                 "--fly" => result.fly = true,
                 "--walk" => result.walk = true,
                 "--swim" => {
@@ -342,6 +353,9 @@ impl Launch {
                     result.weather_at = seconds;
                 }
                 "--verify-flight" => {}
+                "--verify-route" => {
+                    i += 1;
+                }
                 unknown => panic!("unknown argument {unknown}; use --help"),
             }
             i += 1;
@@ -421,6 +435,10 @@ pub struct FrameStats {
 }
 
 pub fn run(args: &[String]) {
+    if args.iter().any(|s| s == "--verify-route") {
+        verify_route();
+        return;
+    }
     if args.iter().any(|s| s == "--verify-flight") {
         verify_flight(args.windows(2).any(|w| w[0] == "--view" && w[1] == "pole"));
         return;
@@ -497,16 +515,32 @@ pub fn run(args: &[String]) {
     .insert_resource(Time::<Fixed>::from_duration(step))
     .insert_resource(SubstepCount(4))
     .insert_resource(FlightViewConfig {
-        mode: if launch.tour {
+        mode: if launch.route {
+            FlyMode::Route
+        } else if launch.tour {
             FlyMode::Tour
         } else {
             FlyMode::Manual
         },
-        spawn_direction: restored
-            .map(|pose| pose.position.normalize_or(Vec3::Y))
-            .unwrap_or_else(|| spawn_direction(&launch)),
+        // The route always starts from the walker's dry-land spawn, not
+        // wherever the world's last flight ended.
+        spawn_direction: if launch.route {
+            spawn_direction(&launch)
+        } else {
+            restored
+                .map(|pose| pose.position.normalize_or(Vec3::Y))
+                .unwrap_or_else(|| spawn_direction(&launch))
+        },
         spawn_altitude: 240.0,
-        minimum_clearance: if launch.tour { 45.0 } else { 1.6 },
+        // The tour keeps 45 m above the ground; the route lands, so it keeps
+        // only the walker's eye height.
+        minimum_clearance: if launch.route {
+            1.6
+        } else if launch.tour {
+            45.0
+        } else {
+            1.6
+        },
         startup_camera: !photo,
         ..default()
     })
@@ -1618,6 +1652,67 @@ fn measure_frames(mut stats: ResMut<FrameStats>) {
     if stats.samples.len() < 100_000 {
         stats.samples.push(ms);
     }
+}
+
+/// `--verify-route far-side`: fly the whole route headless and report what the
+/// window would show: that it completes and lands where it meant to, its peak
+/// height, its clearance while airborne, and the camera rig's fastest turn.
+fn verify_route() {
+    let mut app = pbd_app::headless_app();
+    app.add_plugins(FlightViewPlugin)
+        .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
+        .insert_resource(FlightViewConfig {
+            mode: FlyMode::Route,
+            spawn_direction: Vec3::new(0.8776, 0.4794, 0.0).normalize(),
+            minimum_clearance: 1.6,
+            startup_camera: false,
+            ..default()
+        });
+    app.finish();
+    app.cleanup();
+    app.update();
+    for _ in 0..60_000 {
+        app.update();
+        if app
+            .world()
+            .resource::<pbd_app::flight_view::RouteState>()
+            .completed
+        {
+            break;
+        }
+    }
+    let config = *app.world().resource::<FlightViewConfig>();
+    let r = *app.world().resource::<pbd_app::flight_view::RouteState>();
+    let t = *app.world().resource::<TourProgress>();
+    let report = format!(
+        "ROUTE far-side completed={} seconds={:.1} destination_deg={:.2} touchdown_error_m={:.1} peak_height_m={:.0} min_airborne_clearance_m={:.1} max_speed_m_s={:.1} max_camera_rate_rad_s={:.3} protection_events={}\n",
+        r.completed,
+        r.elapsed_s,
+        r.destination_rad.to_degrees(),
+        r.touchdown_error_m,
+        r.peak_height_m,
+        r.min_airborne_clearance_m,
+        r.max_speed_mps,
+        r.max_camera_rate_rad_s,
+        t.protection_events,
+    );
+    print!("{report}");
+    std::fs::create_dir_all("output/captures").unwrap();
+    std::fs::write("output/captures/route-far-side.txt", report).unwrap();
+    assert!(r.completed, "the route did not land and settle");
+    assert!(
+        r.touchdown_error_m < 30.0,
+        "landed away from the destination"
+    );
+    assert!(
+        r.peak_height_m > config.route_cruise_height_m * 0.95,
+        "never reached cruise height"
+    );
+    assert!(
+        r.max_speed_mps <= config.route_speed + 0.5,
+        "route speed exceeded"
+    );
+    assert!(r.max_camera_rate_rad_s < 1.0, "the camera turned too fast");
 }
 
 fn verify_flight(polar: bool) {

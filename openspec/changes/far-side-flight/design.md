@@ -48,6 +48,38 @@ camera's peak angular speed and acceleration, so "dynamic" never becomes
 nauseating. The accessibility rule on reduced camera motion (`game-design.md`)
 applies: it is a setting that damps the roll and the swings.
 
+## The scenic route
+
+The owner's next recording: "flying through the clouds and showcasing some cool
+and interesting land features". The far-side route punches straight up through
+the cloud layer, 300-750 m above sea level, to cruise at 3 km, so it shows
+neither. A second route, `--route scenic`, flies low instead.
+
+- **Chosen, not guessed.** Waypoints are picked by scoring the terrain
+  generator around the spawn, within about 6 km:
+  - relief, the height range within 300 m;
+  - coast, land and sea within 300 m of each other;
+  - how rare the biome is among the candidates.
+
+  A greedy pick takes the highest scores at least 1.5 km apart and orders
+  them into a path from the spawn. The picks are logged with their scores, so a
+  run says why it went where it went.
+- **Through the clouds.** The first leg crosses the cloud layer at mid-slab
+  (about 500 m above sea level), where the weather map has cover. The pick
+  prefers the direction with the most cover and says so when there is none.
+- **Over the land.** Past the clouds the route descends to a terrain-following
+  height, about 90 m above the ground ahead. It is read a few seconds ahead
+  along the path and smoothed, so it rises over a ridge before reaching it.
+- **Speed:** 150 m/s along the path, slow enough for detail near the ground to
+  keep up and for the land to read.
+- **The camera** looks along the path, turns toward each feature as the ship
+  passes it (the look target leads to the feature's point, then releases), and
+  keeps the route rig's ease, rate cap, sway and reduced-motion setting.
+- **It lifts off from the ground and lands at the last feature,** with the
+  far-side route's lift-off, touchdown and complete lines, so the same recording
+  recipe applies. `--verify-route scenic` checks it headless, as the far-side
+  route is checked.
+
 ## Frame pacing
 
 - **Bands measured from the player's true position, height included.** The

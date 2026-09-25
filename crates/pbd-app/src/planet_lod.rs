@@ -844,6 +844,7 @@ pub fn refresh_lod(
     mut contact: ResMut<super::PlanetContact>,
     edits: Res<crate::saves::WorldSave>,
     mut near: ResMut<NearField>,
+    air: Option<Res<crate::atmosphere::Air>>,
 ) {
     let player = player_position(&cameras, frame.center.as_vec3());
     let direction = player.and_then(|p| p.try_normalize());
@@ -894,7 +895,10 @@ pub fn refresh_lod(
     // swap an empty set in and out.
     let clear_of_all = player.length() - ground > BAND_M[0] * 1.05;
     let moved = fine.set.metres_from_anchor(direction);
-    if refresh.force || fine.set.outrun(&live, moved, clear_of_all) {
+    // A rebuild the player is not waiting on waits for the atmosphere's step
+    // to finish; see `advance_air`.
+    let air_busy = air.is_some_and(|air| air.stepping());
+    if refresh.force || (!air_busy && fine.set.outrun(&live, moved, clear_of_all)) {
         let threads = if refresh.force {
             build_threads()
         } else {
