@@ -108,3 +108,29 @@ the other:
   binary give the floor, and before-versus-after must sit on it;
 - **turning** (`--turn 90`, the shovel held, sky in view): the ghost is the
   difference, and it must lie along silhouettes.
+
+## What it measured
+
+Headless on lavapipe, 1440x900, 150 fixed steps, the shovel held, pitch 14°,
+11:00, rain 0.25. The share is of pixels moved by more than 8 of 255.
+
+| Pair | Changed | Moved more than 24 |
+| --- | ---: | ---: |
+| Still, before vs before (the floor) | 0.000% | 0.000% |
+| Still, before vs after | 0.007% | 0.001% |
+| Turning 90°/s, before vs after | **2.200%** | 0.000% |
+
+The floor is zero: this scene is byte-identical run to run. At rest, the fix
+moves 0.007% of the picture, on the edges of the swaying tool. Turning, the
+2.2% that moves is **one band**
+(`docs/screenshots/cloud-ghosting-turn-diff.png`). It runs from the left edge
+of the screen to the shovel's blade, at the blade's height, and its top edge
+is the blade's own hex-stepped outline. It is the sky the blade swept across
+as the view turned. Before the fix that band was darker, a cloudless print of
+the tool, and the tree crown on the right carries one along its outline too.
+After the fix both are gone
+(`docs/screenshots/cloud-ghosting-turn-before-after.png`).
+
+Not measured here: frame cost on hardware (`--frame-log`, windowed). The
+change adds eight texel loads and one `Rg16Float` target to a pass that
+samples dozens of noise texels a texel.

@@ -78,6 +78,9 @@ struct WaterView {
     // The clouds' accumulation (`calm-clouds`): x the new frame's share of
     // the blend, y one when the history is usable, z the frame number.
     cloud_history: vec4<f32>,
+    // xyz the previous frame's eye, body-local: where the previous frame's
+    // cloud distances were measured from (`cloud-ghosting`); w spare.
+    cloud_prev_eye: vec4<f32>,
     // The sea's table (`pbd::sea`), the same one the hulls float on.
     sea: SeaView,
     // x how far the sheet sits below sea level (`depth_offset_m`), yzw spare.
@@ -108,7 +111,9 @@ struct WaterView {
 @group(3) @binding(1) var cloud_history_sampler: sampler;
 @group(3) @binding(2) var cloud_cells_tex: texture_3d<f32>;
 @group(3) @binding(3) var cloud_cells_sampler: sampler;
-// The composite only: how far along its ray each march texel's cloud is.
+// How far along its ray each march texel's cloud is, and where its march
+// stopped: the composite reads this frame's, the march the previous frame's
+// (`cloud-ghosting`).
 @group(3) @binding(4) var cloud_depth: texture_2d<f32>;
 fn cloud_layer() -> CloudLayer {
     return CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash,view.cloud_light,
@@ -730,6 +735,53 @@ fn cloud_far(ray: Ray, uv: vec2<f32>, half_texel: vec2<f32>, eye: vec3<f32>) -> 
     return far;
 }
 
+// Whether a march texel saw what a ray stopping at `far` sees: its cloud lies
+// no further than `far`, and its march went at least as far. Both fail across
+// a silhouette: a texel on the far side of an edge either stopped on the near
+// object or holds cloud beyond it. The composite's upsample asks it within a
+// frame, the history read across frames (`cloud-budget`, `cloud-ghosting`).
+fn cloud_texel_sees(texel: vec2<f32>, far: f32) -> bool {
+    let near_enough = texel.x <= far*1.03 + 10.0;
+    let far_enough = texel.y >= min(far, CLOUD_FAR_CAP_M)*0.97 - 10.0;
+    return near_enough && far_enough;
+}
+
+// The previous frame's cloud at `was` on its screen, for a ray this frame
+// stopping at `stop`: the four history texels round it, bilinearly, each kept only when
+// its march saw what this ray sees, measured from the previous eye. w of the
+// result is the kept weight; zero means no texel qualifies and this frame
+// stands alone. A plain bilinear read carried cloud across every silhouette:
+// sky revealed from behind a hill or the held tool faded its cloud back in
+// from the empty texel it had been, and cloud beyond a new occluder was drawn
+// over it (`cloud-ghosting`).
+struct CloudPrevious {
+    cloud: vec4<f32>,
+    weight: f32,
+}
+
+fn cloud_previous(was: vec2<f32>, stop: vec3<f32>) -> CloudPrevious {
+    var out: CloudPrevious;
+    out.cloud = vec4<f32>(0.0);
+    out.weight = 0.0;
+    let size = vec2<i32>(textureDimensions(cloud_history));
+    let at = was*vec2<f32>(size) - 0.5;
+    let base = vec2<i32>(floor(at));
+    let f = at - floor(at);
+    let far = distance(view.cloud_prev_eye.xyz, stop);
+    var sum = vec4<f32>(0.0);
+    for (var k = 0u; k < 4u; k++) {
+        let o = vec2<i32>(i32(k & 1u), i32((k >> 1u) & 1u));
+        let texel = base + o;
+        if (any(texel < vec2<i32>(0)) || any(texel >= size)) { continue; }
+        let w = select(1.0-f.x, f.x, o.x == 1)*select(1.0-f.y, f.y, o.y == 1);
+        if (!cloud_texel_sees(textureLoad(cloud_depth, texel, 0).rg, far)) { continue; }
+        sum += textureLoad(cloud_history, texel, 0)*w;
+        out.weight += w;
+    }
+    if (out.weight > 1e-3) { out.cloud = sum/out.weight; }
+    return out;
+}
+
 struct CloudMarchOut {
     // The history: the cloud's light premultiplied by coverage, and coverage.
     @location(0) cloud: vec4<f32>,
@@ -776,6 +828,8 @@ fn cloud_march_pass(in: FullscreenVertexOutput) -> CloudMarchOut {
     var cloud = marched.cloud;
     // Blend into the history where this pixel's cloud was on the previous
     // frame: the cloud's own point, projected by the previous camera.
+    // Only a texel whose march saw what this one sees is blended: the
+    // history never carries cloud across a silhouette (`cloud-ghosting`).
     if (view.cloud_history.y > 0.5) {
         let point = ray.origin + ray.direction*marched.depth;
         let before = view.prev_clip_from_local*vec4<f32>(point,1.0);
@@ -783,8 +837,11 @@ fn cloud_march_pass(in: FullscreenVertexOutput) -> CloudMarchOut {
             let ndc = before.xy/before.w;
             let was = vec2<f32>(ndc.x*0.5+0.5, 0.5-ndc.y*0.5);
             if (all(was >= vec2<f32>(0.0)) && all(was <= vec2<f32>(1.0))) {
-                let previous = textureSampleLevel(cloud_history,cloud_history_sampler,was,0.0);
-                cloud = mix(previous, cloud, view.cloud_history.x);
+                let stop = ray.origin + ray.direction*min(far, CLOUD_FAR_CAP_M);
+                let previous = cloud_previous(was, stop);
+                if (previous.weight > 1e-3) {
+                    cloud = mix(previous.cloud, cloud, view.cloud_history.x);
+                }
             }
         }
     }
@@ -814,10 +871,7 @@ fn cloud_upsampled(uv: vec2<f32>, far: f32) -> vec4<f32> {
         let o = vec2<i32>(i32(k & 1u), i32((k >> 1u) & 1u));
         let texel = clamp(base + o, vec2<i32>(0), size - 1);
         let w = select(1.0-f.x, f.x, o.x == 1)*select(1.0-f.y, f.y, o.y == 1);
-        let depth = textureLoad(cloud_depth, texel, 0).rg;
-        let near_enough = depth.x <= far*1.03 + 10.0;
-        let far_enough = depth.y >= min(far, CLOUD_FAR_CAP_M)*0.97 - 10.0;
-        let kept = select(1e-3, 1.0, near_enough && far_enough);
+        let kept = select(1e-3, 1.0, cloud_texel_sees(textureLoad(cloud_depth, texel, 0).rg, far));
         sum += textureLoad(cloud_history, texel, 0)*w*kept;
         weight += w*kept;
     }

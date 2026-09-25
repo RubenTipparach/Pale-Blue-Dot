@@ -110,6 +110,9 @@ pub(super) struct WaterView {
     /// y one when the previous history can be used, z the frame number the
     /// jitter hashes, w spare.
     cloud_history: Vec4,
+    /// xyz the previous frame's eye, body-local: where the previous frame's
+    /// cloud distances were measured from (`cloud-ghosting`); w spare.
+    cloud_prev_eye: Vec4,
     /// The sea's table (`pbd::sea` in `sea.wgsl`), the one the hulls float on.
     sea: SeaView,
     /// x how far the sheet sits below sea level, m; yzw spare.
@@ -307,8 +310,9 @@ struct WaterPipelines {
     data_layout: BindGroupLayoutDescriptor,
     scene_layout: BindGroupLayoutDescriptor,
     scene_layout_multisampled: BindGroupLayoutDescriptor,
-    /// The clouds passes' fourth group: a march target and a sampler, and the
-    /// baked cellular noise and its repeating sampler.
+    /// The march's fourth group: the previous history and a sampler, the
+    /// baked cellular noise and its repeating sampler, and the previous
+    /// frame's cloud distances.
     history_layout: BindGroupLayoutDescriptor,
     /// The composite's fourth group: this frame's march, its sampler and its
     /// cloud distances.
@@ -328,6 +332,8 @@ fn history_layout() -> BindGroupLayoutDescriptor {
                 sampler(SamplerBindingType::Filtering),
                 texture_3d(TextureSampleType::Float { filterable: true }),
                 sampler(SamplerBindingType::Filtering),
+                // The previous frame's cloud distances (`cloud-ghosting`).
+                texture_2d(TextureSampleType::Float { filterable: false }),
             ),
         ),
     )
@@ -646,8 +652,10 @@ pub(super) struct WaterViewGpu {
     history: [TextureView; 2],
     history_read: usize,
     history_size: UVec2,
-    /// This frame's cloud distances, the history's size.
-    cloud_depth: TextureView,
+    /// The cloud distances, the history's size, a pair indexed as the history
+    /// is: the march writes this frame's and reads the previous frame's, to
+    /// test each history texel against what it saw (`cloud-ghosting`).
+    cloud_depth: [TextureView; 2],
     /// The previous frame's camera and projection, for reprojecting the
     /// history and for telling a jump from a step.
     prev_clip: Mat4,
@@ -829,6 +837,10 @@ fn prepare_water_views(
             overlay,
             overlay_flow,
             cloud_history: Vec4::ZERO,
+            cloud_prev_eye: existing
+                .as_ref()
+                .map_or(camera, |gpu| gpu.prev_camera)
+                .extend(0.0),
             sea: SeaView::from(&sea_now.gpu),
             sea_frame: Vec4::new(s.depth_offset_m, 0.0, 0.0, 0.0),
         };
@@ -848,7 +860,7 @@ fn prepare_water_views(
             let resized = gpu.history_size != history_size;
             if resized {
                 gpu.history = cloud_history(&device, history_size);
-                gpu.cloud_depth = cloud_target(&device, history_size, CLOUD_DEPTH_FORMAT);
+                gpu.cloud_depth = cloud_distances(&device, history_size);
                 gpu.history_size = history_size;
             }
             // The history is usable when the pass wrote it on the previous
@@ -955,7 +967,7 @@ fn prepare_water_views(
             history: cloud_history(&device, history_size),
             history_read: 0,
             history_size,
-            cloud_depth: cloud_target(&device, history_size, CLOUD_DEPTH_FORMAT),
+            cloud_depth: cloud_distances(&device, history_size),
             prev_clip: clip_from_body,
             prev_camera: camera,
             clouds_ran: !overlay_needed,
@@ -968,6 +980,11 @@ fn prepare_water_views(
 /// pass that writes it.
 fn cloud_history(device: &RenderDevice, size: UVec2) -> [TextureView; 2] {
     std::array::from_fn(|_| cloud_target(device, size, CLOUD_HISTORY_FORMAT))
+}
+
+/// The clouds' distances pair, the history's size.
+fn cloud_distances(device: &RenderDevice, size: UVec2) -> [TextureView; 2] {
+    std::array::from_fn(|_| cloud_target(device, size, CLOUD_DEPTH_FORMAT))
 }
 
 /// One of the clouds' march targets, drawn to and then read.
@@ -1107,13 +1124,14 @@ impl ViewNode for WaterCompositeNode {
         // The march reads last frame's history and writes this frame's, and
         // the cloud's distances; the composite reads both.
         let history_write = &water.history[1 - water.history_read];
+        let depth_write = &water.cloud_depth[1 - water.history_read];
         let composite_group = device.create_bind_group(
             Some("clouds march and its distances"),
             &cache.get_bind_group_layout(&pipelines.composite_layout),
             &BindGroupEntries::with_indices((
                 (0, history_write),
                 (1, &pipelines.sampler),
-                (4, &water.cloud_depth),
+                (4, depth_write),
             )),
         );
         if !water.overlay_needed {
@@ -1125,6 +1143,7 @@ impl ViewNode for WaterCompositeNode {
                     &pipelines.sampler,
                     &pipelines.cells,
                     &pipelines.cells_sampler,
+                    &water.cloud_depth[water.history_read],
                 )),
             );
             // The march reads only the scene's depth; the colour bound beside
@@ -1134,7 +1153,7 @@ impl ViewNode for WaterCompositeNode {
             // needs keeping.
             let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("Cloud march"),
-                color_attachments: &[history_write, &water.cloud_depth].map(|view| {
+                color_attachments: &[history_write, depth_write].map(|view| {
                     Some(RenderPassColorAttachment {
                         view,
                         depth_slice: None,
@@ -1302,7 +1321,7 @@ mod tests {
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (3, 41));
+        assert_eq!((mat4, vec4), (3, 42));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");
