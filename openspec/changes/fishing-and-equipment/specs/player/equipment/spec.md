@@ -2,26 +2,6 @@
 
 ## ADDED Requirements
 
-### Requirement: The tool in hand is drawn as a hex-pixel model of its icon
-The tool in hand SHALL be drawn in first person as a model built from its own
-16 px icon: each opaque pixel a hexagonal prism one pixel deep on an offset
-hex grid, in that pixel's colour, with no face drawn between two hexels. The
-model SHALL be built from the icon file itself, so the two cannot differ. It
-SHALL swing while a block is being broken. The fishing line SHALL leave from
-the rod model's tip.
-
-#### Scenario: Changing tools
-- **WHEN** the player equips the pickaxe
-- **THEN** the pickaxe's hex model is in hand and no other tool's is
-
-#### Scenario: A thin handle
-- **WHEN** an icon has a one-pixel diagonal handle
-- **THEN** its model's handle is one connected piece
-
-#### Scenario: The line and the rod
-- **WHEN** a line is cast
-- **THEN** it starts at the tip of the rod model being drawn
-
 ### Requirement: The axe fells a tree, and the tree stays felled
 Whether a cell carries a tree SHALL be decided by one rule in the core, and
 the shader's selection SHALL be validated against it rather than written

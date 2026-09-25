@@ -97,7 +97,8 @@ pub struct Launch {
     /// for that long, with `--tool` in hand (the shovel if none), so a capture
     /// can photograph the cracks at a chosen stage. Implies `--walk`.
     pub break_s: Option<f32>,
-    /// `--tool rod|shovel|pickaxe|axe`: the tool in hand for `--break`.
+    /// `--tool rod|shovel|pickaxe|axe`: the tool in hand for a capture, with
+    /// or without `--break`. Implies nothing else.
     pub tool: Option<pbd_core::inventory::Tool>,
     /// `--place N` stacks N stones on the last hole, so a tower somebody built
     /// can be photographed wearing the stone it is made of.
@@ -215,15 +216,18 @@ impl Launch {
                 }
                 "--tool" => {
                     i += 1;
+                    result.walk = true;
                     let name = args.get(i).expect("--tool requires a tool").to_lowercase();
-                    result.tool = Some(
-                        pbd_core::inventory::Tool::ALL
-                            .into_iter()
-                            .find(|t| t.name().to_lowercase().contains(&name))
-                            .unwrap_or_else(|| {
-                                panic!("--tool {name}: rod, shovel, pickaxe or axe")
-                            }),
-                    );
+                    // Named exactly: "axe" is inside "pickaxe", and a
+                    // match on containing picked the pickaxe for it.
+                    use pbd_core::inventory::Tool;
+                    result.tool = Some(match name.as_str() {
+                        "rod" => Tool::Rod,
+                        "shovel" => Tool::Shovel,
+                        "pickaxe" => Tool::Pickaxe,
+                        "axe" => Tool::Axe,
+                        _ => panic!("--tool {name}: rod, shovel, pickaxe or axe"),
+                    });
                 }
                 "--dig" => {
                     i += 1;
@@ -751,12 +755,13 @@ pub fn run(args: &[String]) {
             WalkingPlugin,
             pbd_app::vehicles::VehiclePlugin,
             pbd_app::fish::FishPlugin,
+            pbd_app::held::HeldPlugin,
         ))
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
             seat: launch.seat,
         });
-        if launch.break_s.is_some() {
+        if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
         }
         if launch.fish {
@@ -1762,16 +1767,16 @@ fn break_script(
     mut frame: Local<u32>,
     mut held_s: Local<f32>,
 ) {
-    let Some(hold) = launch.break_s else {
-        return;
-    };
     *frame += 1;
     if *frame < 90 || !state.active {
         return;
     }
+    tools.hold(launch.tool.unwrap_or(pbd_core::inventory::Tool::Shovel));
+    let Some(hold) = launch.break_s else {
+        return;
+    };
     state.captured = true;
     state.scripted = true;
-    tools.hold(launch.tool.unwrap_or(pbd_core::inventory::Tool::Shovel));
     if *held_s < hold {
         buttons.press(MouseButton::Left);
         *held_s += time.delta_secs();

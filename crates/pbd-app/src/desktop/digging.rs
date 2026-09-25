@@ -359,8 +359,21 @@ pub fn dig_and_place(
     near: Res<NearField>,
     tools: Res<pbd_app::fish::ToolSlot>,
     fishery: Option<Res<pbd_app::fish::Fishery>>,
-    (mut mining, dig, time): (ResMut<Mining>, Res<pbd_app::config::DigConfig>, Res<Time>),
+    (mut mining, dig, time, swinging): (
+        ResMut<Mining>,
+        Res<pbd_app::config::DigConfig>,
+        Res<Time>,
+        Option<ResMut<pbd_app::held::Swinging>>,
+    ),
 ) {
+    // The tool in hand chops while a block is being broken: last frame's
+    // answer, a frame behind, which nobody can see.
+    let breaking = mining.progress().is_some();
+    if let Some(mut swinging) = swinging
+        && swinging.0 != breaking
+    {
+        swinging.0 = breaking;
+    }
     let dt = time.delta_secs();
     let between = dig.0.between_s;
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {

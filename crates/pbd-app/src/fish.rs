@@ -198,6 +198,7 @@ struct Surroundings<'w, 's> {
     key: Option<Res<'w, crate::controls::PickerKey>>,
     buttons: Option<Res<'w, ButtonInput<MouseButton>>>,
     time: Res<'w, Time>,
+    held: Res<'w, crate::config::HeldConfig>,
     walkers: Query<'w, 's, &'static Position, With<Walker>>,
     cameras: Query<'w, 's, &'static GlobalTransform, With<WalkingCamera>>,
 }
@@ -266,7 +267,11 @@ fn fish(
             reel_in: pressed(MouseButton::Right),
         };
         let angler = Angler {
-            tip: eye + right * ROD_TIP.x + cam_up * ROD_TIP.y - look * ROD_TIP.z,
+            // The rod model's own tip (`held.rs`): eye space, -z ahead.
+            tip: {
+                let t = world.held.0.rod_tip();
+                eye + right * t.x + cam_up * t.y - look * t.z
+            },
             look,
             feet,
         };
@@ -340,12 +345,6 @@ fn fish(
         }
     }
 }
-
-/// Where the rod tip is off the eye, m: right, up, and forward (Tenebris's
-/// `client fishing.rs:85-91`).
-const ROD_TIP: Vec3 = Vec3::new(0.26, 0.05, -0.95);
-/// And the grip.
-const ROD_GRIP: Vec3 = Vec3::new(0.18, -0.30, -0.22);
 
 /// Drop the schools that have gone too far or been fished out, keeping the
 /// line's target pointing at the same school.
@@ -618,9 +617,6 @@ mod draw {
     pub struct SchoolMesh(pub usize);
 
     #[derive(Component)]
-    pub struct Rod;
-
-    #[derive(Component)]
     pub struct Float;
 
     #[derive(Component)]
@@ -851,7 +847,6 @@ mod draw {
     /// HUD line.
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     pub fn tackle(
-        mut commands: Commands,
         fishery: Res<Fishery>,
         tools: Res<ToolSlot>,
         status: Res<FishingStatus>,
@@ -859,59 +854,22 @@ mod draw {
         frame: Res<crate::planet::PlanetRenderFrame>,
         sea: Option<Res<Sea>>,
         cameras: Query<(Entity, &GlobalTransform), With<WalkingCamera>>,
-        mut rods: Query<(Entity, &mut Visibility), (With<Rod>, Without<Float>, Without<LineMesh>)>,
-        mut floats: Query<
-            (&mut Transform, &mut Visibility),
-            (With<Float>, Without<LineMesh>, Without<Rod>),
-        >,
+        held: Res<crate::config::HeldConfig>,
+        mut floats: Query<(&mut Transform, &mut Visibility), (With<Float>, Without<LineMesh>)>,
         mut lines: Query<
             (&Mesh3d, &mut Transform, &mut Visibility),
-            (With<LineMesh>, Without<Float>, Without<Rod>),
+            (With<LineMesh>, Without<Float>),
         >,
         mut texts: Query<&mut Text, With<StatusText>>,
         mut meter: Query<&mut Node, (With<Meter>, Without<MeterFill>)>,
         mut fill: Query<(&mut Node, &mut BackgroundColor), (With<MeterFill>, Without<Meter>)>,
         mut meshes: ResMut<Assets<Mesh>>,
-        mut materials: ResMut<Assets<StandardMaterial>>,
     ) {
         let walking = walking.is_some_and(|w| w.active);
         let rod_out = walking && tools.held() == Tool::Rod;
         let camera = cameras.iter().next();
-        if rods.is_empty()
-            && let Some((camera, _)) = camera
-        {
-            // Tenebris's rod: a tapered stick from the grip to the tip, in
-            // the eye's own frame so it moves with the look and nothing else.
-            let along = ROD_TIP - ROD_GRIP;
-            let span = along.length();
-            let rod = commands
-                .spawn((
-                    Name::new("Fishing rod"),
-                    Rod,
-                    Mesh3d(meshes.add(ConicalFrustum {
-                        radius_top: 0.006,
-                        radius_bottom: 0.016,
-                        height: span,
-                    })),
-                    MeshMaterial3d(materials.add(StandardMaterial {
-                        base_color: Color::srgb(0.54, 0.35, 0.17),
-                        perceptual_roughness: 0.7,
-                        ..default()
-                    })),
-                    Transform::from_translation(ROD_GRIP + along * 0.5)
-                        .with_rotation(Quat::from_rotation_arc(Vec3::Y, along / span)),
-                    Visibility::Hidden,
-                ))
-                .id();
-            commands.entity(camera).add_child(rod);
-        }
-        for (_, mut visibility) in &mut rods {
-            *visibility = if rod_out {
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
-            };
-        }
+        // The rod itself is the held tool's model (`held.rs`); this draws
+        // what leaves it.
         let line = &fishery.line;
         let out = rod_out && line.is_out();
         let float_at = (frame.center + line.float.as_dvec3()).as_vec3();
@@ -936,7 +894,7 @@ mod draw {
             if !out {
                 continue;
             }
-            let tip = eye.transform_point(ROD_TIP);
+            let tip = eye.transform_point(held.0.rod_tip());
             transform.translation = tip;
             let slack = match line.phase {
                 Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),

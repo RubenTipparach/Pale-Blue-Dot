@@ -57,19 +57,20 @@
       a test that each row's fastest tool is the one the design bolds.
 
 ## 3b. The tool in hand
-- [ ] `pbd_core::hexel`: an RGBA image to hexels on the offset hex grid, and
+- [x] `pbd_core::hexel`: an RGBA image to hexels on the offset hex grid, and
       their mesh (front, back, and sides only where a neighbour is empty),
       with baked directional shade; tests for coverage, closedness and a
       connected diagonal.
-- [ ] `assets/config/held.ron`: the anchor, the rod's grip and tip, each
+- [x] `assets/config/held.ron`: the anchor, the rod's grip and tip, each
       tool's icon grip and head, the twist, sway and swing, validated, with a
       shipped-equals-default test.
-- [ ] The held tool: one model per tool built from its icon at startup, a
+- [x] The held tool: one model per tool built from its icon at startup, a
       child of the walking camera, the one in hand shown, the sway, and the
       chop arc while a block is being broken. It replaces the rod's frustum.
-- [ ] The fishing line leaves from the rod model's tip, read from the same
+- [x] The fishing line leaves from the rod model's tip, read from the same
       data; a test that the two agree.
-- [ ] A capture of each tool in hand.
+- [x] A capture of each tool in hand (`docs/screenshots/held-*.png`; the
+      pickaxe mid-chop on a cracking block).
 
 ## 4. Trees
 - [ ] `pbd_core::flora::tree_at`; the WGSL reads its density table from a

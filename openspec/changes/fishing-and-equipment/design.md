@@ -760,10 +760,18 @@ Here every opaque pixel becomes a small hexagonal prism, a **hexel**.
   a second time.
 - **The hex grid.** Pointy-top hexagons in horizontal rows, every other row
   offset by half a hexel, one pixel flat to flat, so the rows are `sqrt(3)/2`
-  of a pixel apart and a 16 px icon is 19 rows of up to 16 hexels. Each hexel
-  takes the colour of the pixel under its centre, and exists if that pixel is
-  opaque. A 1 px diagonal line in the icon stays connected on the hex grid,
-  because each row's offset puts a hexel under the step.
+  of a pixel apart and a 16 px icon is 19 rows of up to 16 hexels.
+- **Sampled over its area, not at its centre: a finding.** The first plan was
+  that each hexel takes the pixel under its centre and that a 1 px diagonal
+  stays connected because the row offset puts a hexel under each step. It
+  does not: rows are 0.87 px apart, so the centres skip pixel rows, and a
+  preview of the four shipped icons broke every diagonal handle into
+  separate pairs of hexels. Each hexel now samples its centre and six points
+  0.3 px out toward its corners, exists if any of them is opaque, and takes
+  the colour most of them cover (the centre's on a tie). At 0.3 px every
+  handle is one piece and as thin as the icon draws it; at 0.4 px the handles
+  came out a hexel thicker. A core test holds a one-pixel diagonal to one
+  piece, and an app test holds every shipped tool's model to one piece.
 - **One pixel deep**, as Minecraft's are. The front and back are hexagons and
   a side face is built only where the neighbouring hexel is empty, so a
   handle is a closed strip rather than a stack of prisms with their insides
@@ -782,16 +790,20 @@ grip at `(0.26, -0.26, -0.48)` m in eye space, low and to the right, with the
 head leaning in toward the middle of the screen, a slow idle sway of a few
 millimetres, and a chop arc while the mine button is held on a block
 (9 rad/s, down 6 cm and pitched 0.85 rad at the bottom). Those are taken as
-they are. Each tool's icon names two points, its grip and its head, in pixel
+they are. The lean is ours: the head sits 0.2 m up, 6 cm in toward the middle
+and 10 cm further out than the grip, so the tool crosses the lower right of
+the view the way Minecraft's does. Each tool's icon names two points, its grip and its head, in pixel
 coordinates (the shovel's grip is top right in its icon and the pickaxe's
 bottom left), and the model is placed so the grip lands on the anchor and the
 head on the eye-space point above it; the icon's plane faces the camera,
 turned 0.5 rad about the handle so its thickness shows.
 
-**The rod is held where the line leaves it.** The rod keeps Tenebris's grip
-and tip (`(0.18, -0.30, -0.22)` to `(0.26, 0.05, -0.95)` m), which the
-fishing line already starts from, and its icon's handle and tip pixels are
-mapped onto them. So the line comes out of the tip of the rod you can see,
+**The rod is held where the line leaves it.** The rod keeps Tenebris's tip
+(`(0.26, 0.05, -0.95)` m), which the fishing line already starts from, and is
+gripped at the same anchor as the other tools. Tenebris's own rod grip,
+`(0.18, -0.30, -0.22)`, is 0.22 m from the eye, and the first capture there
+drew the rod's hexels so large that it filled a third of the screen. Its
+icon's handle and tip pixels are mapped onto the anchor and the tip. So the line comes out of the tip of the rod you can see,
 and there is one tip rather than a tip constant and a model that has to be
 kept next to it. The rod's icon has its line and float hanging from the tip,
 and the model keeps them: Minecraft's rod shows its string too. When the

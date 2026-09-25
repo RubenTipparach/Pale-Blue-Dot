@@ -5,7 +5,8 @@ The tool in hand: one of the fishing rod, shovel, pickaxe and axe, in a tool
 slot beside the ten item slots, changed by holding G and turning the wheel. What
 the left button does is the tool's: the rod fishes and never digs, and every
 other tool breaks a block over a time read from a matrix of material by tool, with
-cracks on the block showing how far along it is.
+cracks on the block showing how far along it is. The tool in hand is drawn
+as a model of its own icon, made of hex pixels.
 
 ## Requirements
 
@@ -107,6 +108,30 @@ broken.
 - **WHEN** the overlay is built for a cell and a layer
 - **THEN** it is a closed prism around exactly that layer with every face
   turned out (`desktop::cracks::tests::the_prism_wraps_the_layer_and_faces_out`)
+
+### Requirement: The tool in hand is drawn as a hex-pixel model of its icon
+The tool in hand SHALL be drawn in first person as a model built from its own
+16 px icon: each opaque pixel a hexagonal prism one pixel deep on an offset
+hex grid, in that pixel's colour, with no face drawn between two hexels. The
+model SHALL be built from the icon file itself, so the two cannot differ. It
+SHALL swing while a block is being broken. The fishing line SHALL leave from
+the rod model's tip.
+
+#### Scenario: Changing tools
+- **WHEN** the player equips the pickaxe
+- **THEN** the pickaxe's hex model is in hand and no other tool's is
+  (`held::tests::only_the_tool_in_hand_is_shown`)
+
+#### Scenario: A thin handle
+- **WHEN** an icon has a one-pixel diagonal handle
+- **THEN** its model's handle is one connected piece
+  (`hexel::tests::a_thin_diagonal_stays_connected`,
+  `held::tests::every_tool_is_one_piece_of_hexels`)
+
+#### Scenario: The line and the rod
+- **WHEN** a line is cast
+- **THEN** it starts at the tip of the rod model being drawn
+  (`held::tests::the_line_leaves_the_rod_model_tip`)
 
 ### Requirement: A tool change is saved at once
 Changing the tool in hand SHALL be written to the durable save on the frame

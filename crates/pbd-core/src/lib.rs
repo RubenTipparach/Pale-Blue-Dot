@@ -13,6 +13,7 @@ pub mod flight;
 pub mod frame;
 pub mod gravity;
 pub mod hex;
+pub mod hexel;
 pub mod inventory;
 pub mod light;
 pub mod orbit;
