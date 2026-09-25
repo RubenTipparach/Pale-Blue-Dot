@@ -746,6 +746,68 @@ five copied fish match their recorded hashes.
   accumulated motion, but the fix is noted here for the vehicle seat and the
   picker.
 
+## 12. The tool in hand, built from hex pixels
+
+The owner asked for a model of each tool, made of small hex blocks the way
+Minecraft makes an item's model out of square ones. Minecraft's held item is
+its 16 px sprite extruded one pixel deep: every opaque pixel becomes a cube.
+Here every opaque pixel becomes a small hexagonal prism, a **hexel**.
+
+- **The icon is the source.** A tool's model is built from the same 16 px PNG
+  its slot and picker already show (`assets/items/tools/*.png`, drawn by
+  `tools/gen_item_icons.py`), so the icon and the model cannot disagree, and
+  redrawing an icon redraws the model. Nothing about a tool's shape is written
+  a second time.
+- **The hex grid.** Pointy-top hexagons in horizontal rows, every other row
+  offset by half a hexel, one pixel flat to flat, so the rows are `sqrt(3)/2`
+  of a pixel apart and a 16 px icon is 19 rows of up to 16 hexels. Each hexel
+  takes the colour of the pixel under its centre, and exists if that pixel is
+  opaque. A 1 px diagonal line in the icon stays connected on the hex grid,
+  because each row's offset puts a hexel under the step.
+- **One pixel deep**, as Minecraft's are. The front and back are hexagons and
+  a side face is built only where the neighbouring hexel is empty, so a
+  handle is a closed strip rather than a stack of prisms with their insides
+  drawn.
+- **Shaded like Minecraft's items, and unlit.** Each face's colour is its
+  pixel's colour times a fixed shade by the face's direction (the front
+  brightest, sides by how much they face up), baked into vertex colours and
+  drawn unlit. Tenebris draws its held tool unlit for the same reason: a tool
+  in your hand should read at night and in a cave.
+- **The mesh is the core's** (`pbd_core::hexel`): pixels in, positions,
+  normals and colours out, engine-free and tested. The app decodes the PNG
+  and hands the pixels over.
+
+**Held where Tenebris holds it.** `tenebris-client/src/viewmodel.rs` puts the
+grip at `(0.26, -0.26, -0.48)` m in eye space, low and to the right, with the
+head leaning in toward the middle of the screen, a slow idle sway of a few
+millimetres, and a chop arc while the mine button is held on a block
+(9 rad/s, down 6 cm and pitched 0.85 rad at the bottom). Those are taken as
+they are. Each tool's icon names two points, its grip and its head, in pixel
+coordinates (the shovel's grip is top right in its icon and the pickaxe's
+bottom left), and the model is placed so the grip lands on the anchor and the
+head on the eye-space point above it; the icon's plane faces the camera,
+turned 0.5 rad about the handle so its thickness shows.
+
+**The rod is held where the line leaves it.** The rod keeps Tenebris's grip
+and tip (`(0.18, -0.30, -0.22)` to `(0.26, 0.05, -0.95)` m), which the
+fishing line already starts from, and its icon's handle and tip pixels are
+mapped onto them. So the line comes out of the tip of the rod you can see,
+and there is one tip rather than a tip constant and a model that has to be
+kept next to it. The rod's icon has its line and float hanging from the tip,
+and the model keeps them: Minecraft's rod shows its string too. When the
+line is cast, the real line leaves from the same tip.
+
+**All of it is data.** The anchor, the rod's grip and tip, the two icon
+points per tool, the twist, the scale of the sway and the swing are in
+`assets/config/held.ron`, validated with units, with a test that the shipped
+file equals the code defaults.
+
+**A limitation, stated.** The model is a child of the walking camera, drawn
+in the same pass as the world, so a wall closer than half a metre can cut
+into it. Tenebris draws its tool in a pass of its own over the finished frame
+to prevent exactly that; doing so here needs a second camera over the custom
+render graph, and is left until it is seen to matter.
+
 ## 11. Proof, when it is built
 
 - **Core tests:**
