@@ -294,6 +294,17 @@ def main():
     if (a.start_on or a.stop_on) and not a.launch:
         p.error("--start-on/--stop-on read the output of a program started with --launch")
 
+    # A window is picked by title and executable, and two copies of one
+    # program look alike: with another copy already open, the capture can
+    # film that one instead (it happened: a player's own game, not the flight
+    # launched). Refuse rather than guess.
+    if a.launch and a.window_exe and sys.platform == "win32":
+        running = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {a.window_exe}",
+                                  "/FI", "STATUS ne UNKNOWN"],
+                                 capture_output=True, text=True).stdout
+        if a.window_exe.lower() in running.lower():
+            sys.exit(f"{a.window_exe} is already running; close it first, or the capture may "
+                     "film that copy instead of the one launched")
     out_path = Path(a.out).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     log_path = out_path.with_suffix(".log")
@@ -386,14 +397,44 @@ def main():
                     mkv = c.stop_record().output_path
             except Exception:
                 pass
-            c.set_current_program_scene(orig_scene)
-            if created:
-                c.remove_scene(SCENE)
-            c.set_video_settings(orig_video.fps_numerator, orig_video.fps_denominator,
-                                 orig_video.base_width, orig_video.base_height,
-                                 orig_video.output_width, orig_video.output_height)
-            c.set_profile_parameter("SimpleOutput", "RecFormat2", orig_format)
-            print("OBS settings restored")
+            # Stopping returns before the output has finished writing, and OBS
+            # refuses to change video settings while an output is active.
+            for _ in range(60):
+                try:
+                    if not c.get_record_status().output_active:
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.5)
+            # Each step on its own, so one failure does not leave the rest
+            # undone: the scene, its input (removing a scene does not remove
+            # its inputs, and an orphan is saved with the collection), the
+            # video settings and the recording format.
+            steps = [
+                ("scene", lambda: c.set_current_program_scene(orig_scene)),
+                ("temporary scene", lambda: created and c.remove_scene(SCENE)),
+                ("temporary input", lambda: created and c.remove_input(SOURCE)),
+                ("video settings", lambda: c.set_video_settings(
+                    orig_video.fps_numerator, orig_video.fps_denominator,
+                    orig_video.base_width, orig_video.base_height,
+                    orig_video.output_width, orig_video.output_height)),
+                ("recording format",
+                 lambda: c.set_profile_parameter("SimpleOutput", "RecFormat2", orig_format)),
+            ]
+            failed = []
+            for name, step in steps:
+                for attempt in range(3):
+                    try:
+                        step()
+                        break
+                    except Exception as error:
+                        if attempt == 2:
+                            failed.append(f"{name}: {error}")
+                        time.sleep(1.0)
+            if failed:
+                print("OBS NOT fully restored: " + "; ".join(failed))
+            else:
+                print("OBS settings restored")
 
     time.sleep(1.5)
     ff = imageio_ffmpeg.get_ffmpeg_exe()
