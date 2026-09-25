@@ -597,6 +597,7 @@ fn upload_fine(
     if planet.uploaded == fine.version {
         return;
     }
+    let timer = std::time::Instant::now();
     let stride = size_of::<GpuCell>() as u64;
     for (k, level) in fine.set.levels.iter().enumerate() {
         let offset = (planet.base_count as u64 + k as u64 * lod::FINE_CAPACITY as u64) * stride;
@@ -624,6 +625,7 @@ fn upload_fine(
     }
     planet.uploaded = fine.version;
     planet.lod = lod::LodParams::of(&fine.set);
+    lod::spent("render: fine-set upload", timer);
     // The other half of an edit's own log line: the version it made is the
     // version the GPU now draws. An edit whose version never appears here is
     // an edit nobody can see.

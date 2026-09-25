@@ -262,6 +262,7 @@ fn eye_water(
     };
     let Some(column) = contact
         .finest_cell(direction)
+        .filter(|_| contact.serves(&fine.set))
         .and_then(|record| fine.set.columns.column(record))
     else {
         return EyeWater::Unknown;

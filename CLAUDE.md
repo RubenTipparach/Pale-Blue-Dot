@@ -66,6 +66,27 @@ it.
 Specifically, do not: rename or rescale a tuning constant, change a shader term,
 alter a default, or refactor toward a plan, before the plan is written down.
 
+## Current priorities (owner, 2026-09-25)
+
+In this order. Each is written up in `openspec/` before code, like everything
+else here, and taken off this list when it lands.
+
+1. **Cloud ghosting.** Clouds smear and ghost around objects in front of
+   them. The history blend must never carry cloud across a silhouette.
+2. **Clouds up close and flying through them.** They must look right near the
+   camera and from inside a cloud, not only from a distance.
+3. **Clouds blending with the atmosphere**, both at ground level and seen from
+   space.
+4. **The ground-to-space transition.** The planet fog and atmosphere change
+   between the surface and space must not be jarring.
+5. **Water:**
+   - it looks foggy when it is dark out;
+   - it should be a darker blue where it is deep.
+
+Standing measurement practice: frame time is judged with `--frame-log` and
+`tools/frame_graph.py` (plus the `F3` in-game graph), in real-time windowed
+runs, not in `--capture`, which steps the simulation in fixed steps.
+
 ## Hex size is fixed across every planet: the Tenebris gold standard
 
 **Standing instruction from the user.** A cell is the same size on every body.

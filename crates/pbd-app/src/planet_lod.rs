@@ -786,7 +786,8 @@ impl NearField {
 
 #[derive(Resource, Default)]
 pub struct LodRefresh {
-    task: Option<Task<FineSet>>,
+    /// The set and its contact tier, both built on the pool.
+    task: Option<Task<(Arc<FineSet>, super::contact::PreparedFine)>>,
     /// When the in-flight task was spawned.
     started: Option<std::time::Instant>,
     /// Rebuild the tier whatever the player has or has not walked.
@@ -864,22 +865,23 @@ pub fn refresh_lod(
         }
     }
     if let Some(task) = refresh.task.as_mut() {
-        if let Some(set) = block_on(poll_once(task)) {
+        if let Some((set, prepared)) = block_on(poll_once(task)) {
             let took = refresh.in_flight_s().unwrap_or(0.0);
             refresh.task = None;
             refresh.started = None;
-            let set = Arc::new(set);
             let behind = direction.map_or(0.0, |d| set.metres_from_anchor(d));
             info!(
                 "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor",
                 fine.version + 1,
                 set.columns.columns.len()
             );
-            contact.set_fine(&set);
+            let timer = std::time::Instant::now();
+            contact.set_prepared(prepared);
             commands.insert_resource(PlanetFine {
                 set,
                 version: fine.version + 1,
             });
+            spent("landing: contact tier", timer);
         }
         return;
     }
@@ -909,11 +911,31 @@ pub fn refresh_lod(
         // The edits travel WITH the task: the tier is rebuilt off the pool and
         // a set built without them would quietly undig every hole the moment
         // the player walked far enough.
+        let timer = std::time::Instant::now();
         let made = edits.edits.clone();
+        spent("request: cloning the edits", timer);
+        info!(
+            "fine set requested: {:.0} m above the ground, live bands {:.0?} m, {moved:.0} m from the anchor, {threads} threads",
+            player.length() - ground,
+            live
+        );
         refresh.started = Some(std::time::Instant::now());
         refresh.task = Some(AsyncComputeTaskPool::get().spawn(async move {
-            generate_fine_live(direction, live, regen, &settings, &made, threads)
+            let set = Arc::new(generate_fine_live(
+                direction, live, regen, &settings, &made, threads,
+            ));
+            let prepared = super::PlanetContact::prepare_fine(&set);
+            (set, prepared)
         }));
+    }
+}
+
+/// MEASUREMENT (`far-side-flight`, the walk's spikes): log a main-thread step
+/// that took over 2 ms, with what it was.
+pub(crate) fn spent(what: &str, since: std::time::Instant) {
+    let ms = since.elapsed().as_secs_f64() * 1000.0;
+    if ms > 2.0 {
+        info!("SPENT {ms:.1} ms {what}");
     }
 }
 

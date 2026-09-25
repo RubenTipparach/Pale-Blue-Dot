@@ -178,6 +178,7 @@ impl Key {
                 KeyCode::ControlLeft | KeyCode::ControlRight => "CTRL",
                 KeyCode::Escape => "ESC",
                 KeyCode::F12 => "F12",
+                KeyCode::F3 => "F3",
                 KeyCode::Digit0 => "0",
                 KeyCode::Digit1 => "1",
                 // A key with no label would print as nothing at all, which is
@@ -336,9 +337,10 @@ const WORLD: [Binding; 3] = [
     row(&[Key::Board(KeyCode::KeyP)], " ", "cycle the weather"),
 ];
 
-const SCREEN: [Binding; 2] = [
+const SCREEN: [Binding; 3] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
     row(&[Key::Board(KeyCode::F12)], " ", "screenshot"),
+    row(&[Key::Board(KeyCode::F3)], " ", "frame graph"),
 ];
 
 /// Every control in the game, once.

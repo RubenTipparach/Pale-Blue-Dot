@@ -151,6 +151,9 @@ struct FineTier {
     grid: HashMap<(i32, i32), u32>,
 }
 
+/// A fine tier built ahead of its landing (`PlanetContact::prepare_fine`).
+pub struct PreparedFine(FineTier);
+
 impl FineTier {
     fn new(set: &Arc<FineSet>) -> Self {
         let tier = Tier {
@@ -255,6 +258,29 @@ impl PlanetContact {
     }
 
     /// Swap in the finest level of a fine set as the tier a walker stands on.
+    /// Whether the fine tier was built from `set`: a record index from
+    /// `finest_cell` indexes that set's records and no other. A new set lands
+    /// here the moment it is ready and in `PlanetFine` a frame later (a
+    /// command), and for that frame an index from one indexed the other: past
+    /// its end, once sets began to differ in size with the player's height.
+    pub fn serves(&self, set: &Arc<FineSet>) -> bool {
+        self.fine
+            .as_ref()
+            .is_some_and(|fine| Arc::ptr_eq(&fine.set, set))
+    }
+
+    /// Build the fine tier for `set` anywhere, off the main thread: it copies
+    /// the finest records and grids them, about 6 ms at ground level, which
+    /// was a hitch on every landing while walking (`far-side-flight`).
+    pub fn prepare_fine(set: &Arc<FineSet>) -> PreparedFine {
+        PreparedFine(FineTier::new(set))
+    }
+
+    /// Swap in a tier built by `prepare_fine`.
+    pub fn set_prepared(&mut self, prepared: PreparedFine) {
+        self.fine = Some(prepared.0);
+    }
+
     pub fn set_fine(&mut self, set: &Arc<FineSet>) {
         self.fine = Some(FineTier::new(set));
     }

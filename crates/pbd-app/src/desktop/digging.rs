@@ -41,10 +41,15 @@ pub struct Aim {
 /// into the hill as if it were sky.
 fn sample_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Sample> {
     let direction = point.try_normalize()?;
+    // Only while the contact and `PlanetFine` hold the same set: for the frame
+    // between a set landing in one and the other, the index is the wrong set's.
+    if !contact.serves(&fine.set) {
+        return None;
+    }
     let record = contact.finest_cell(direction)?;
     let altitude = point.length() - PLANET_RADIUS;
     let layer = column::layer_at(altitude)?;
-    let cell = &fine.set.finest_records()[record];
+    let cell = fine.set.finest_records().get(record)?;
     let solid = match fine.set.columns.column(record) {
         Some(column) => column.solid(layer),
         None => column::layer_altitude(layer) + 0.5 < cell.direction_height[3],

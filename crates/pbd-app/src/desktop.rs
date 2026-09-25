@@ -1,5 +1,6 @@
 mod digging;
 mod equipment;
+mod frame_graph;
 mod guide;
 mod hud;
 mod menu;
@@ -47,6 +48,16 @@ pub struct Launch {
     /// written as CSV with the fine set's state on the same clock, so a hitch
     /// can be attributed rather than guessed at (`far-side-flight`).
     pub frame_log: Option<PathBuf>,
+    /// `--walk-distance METRES`: a measurement instrument. The walker sprints
+    /// forward in real time, hopping when it stalls, logs `WALK_DONE` and quits
+    /// once it has walked that far: a repeatable stretch of streaming for the
+    /// frame log to measure.
+    pub walk_distance: Option<f32>,
+    /// `--frame-graph`: start with the frame graph shown (`F3` toggles it).
+    pub frame_graph: bool,
+    /// `--no-vsync`: present unpaced, a measurement instrument, so a frame's
+    /// time is its work and not the display's refresh.
+    pub no_vsync: bool,
     pub view: String,
     pub frames: u32,
     pub tour: bool,
@@ -143,6 +154,9 @@ impl Launch {
         let mut result = Self {
             capture: None,
             frame_log: None,
+            walk_distance: None,
+            frame_graph: false,
+            no_vsync: false,
             view: "coast".into(),
             frames: 180,
             dig: 0,
@@ -264,6 +278,22 @@ impl Launch {
                         "--spawn knows mouth and snow"
                     );
                     result.spawn = Some(spawn);
+                }
+                "--frame-graph" => result.frame_graph = true,
+                "--no-vsync" => result.no_vsync = true,
+                "--walk-distance" => {
+                    i += 1;
+                    let metres: f32 = args
+                        .get(i)
+                        .expect("--walk-distance requires metres")
+                        .parse()
+                        .expect("invalid walk distance");
+                    assert!(
+                        metres.is_finite() && metres > 0.0,
+                        "walk distance must be positive"
+                    );
+                    result.walk_distance = Some(metres);
+                    result.walk = true;
                 }
                 "--frame-log" => {
                     i += 1;
@@ -496,7 +526,7 @@ pub fn run(args: &[String]) {
                 primary_window: Some(Window {
                     title: "Pale Blue Dot | Planet Explorer".into(),
                     resolution: (1440, 900).into(),
-                    present_mode: if launch.capture.is_some() {
+                    present_mode: if launch.capture.is_some() || launch.no_vsync {
                         PresentMode::AutoNoVsync
                     } else {
                         PresentMode::AutoVsync
@@ -608,7 +638,13 @@ pub fn run(args: &[String]) {
     .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
     .add_systems(
         Startup,
-        (scene::setup, hud::setup, photo_camera, overlay_ui::spawn),
+        (
+            scene::setup,
+            hud::setup,
+            frame_graph::setup,
+            photo_camera,
+            overlay_ui::spawn,
+        ),
     )
     // The column tier is built by a startup system and its records land when
     // that schedule's commands apply, so a camera that wants to stand inside a
@@ -645,6 +681,7 @@ pub fn run(args: &[String]) {
             guide::press,
             guide::paint,
             hud::near_field,
+            (frame_graph::toggle, frame_graph::update).chain(),
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
             overlay_ui::show,
@@ -691,6 +728,11 @@ pub fn run(args: &[String]) {
                     .chain()
                     .after(bevy::input::InputSystems),
             );
+        }
+        if launch.walk_distance.is_some() {
+            // Where the swim's keys go, for the same reason (below).
+            app.init_resource::<WalkProgress>()
+                .add_systems(PreUpdate, walk_script.after(bevy::input::InputSystems));
         }
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
@@ -1497,6 +1539,109 @@ fn photo_camera(
     commands.spawn((Camera3d::default(), transform));
 }
 
+/// How far the `--walk-distance` walk has come, for the frame log.
+#[derive(Resource, Default)]
+struct WalkProgress {
+    walked_m: f32,
+    started: Option<Instant>,
+    last: Option<Vec3>,
+    /// Where the walker was when the stall clock last reset, and when.
+    anchor: Option<(Vec3, Instant)>,
+    turns: u32,
+    done: bool,
+}
+
+/// The `--walk-distance` instrument: sprint forward, measure the path actually
+/// walked, jump when stalled, dig ahead after 2.5 s, turn 45 degrees after 7, and
+/// quit at the distance.
+// Eight parameters: the instrument drives keys, mouse and tool, reads the
+// walker, and quits; a struct of them would be a struct with one caller.
+#[allow(clippy::too_many_arguments)]
+fn walk_script(
+    launch: Res<Launch>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    mut progress: ResMut<WalkProgress>,
+    walkers: Query<&Position, With<pbd_app::walking::Walker>>,
+    mut mouse: ResMut<ButtonInput<MouseButton>>,
+    mut tools: ResMut<pbd_app::fish::ToolSlot>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    let Some(goal) = launch.walk_distance else {
+        return;
+    };
+    if !state.active || progress.done {
+        return;
+    }
+    let Ok(position) = walkers.single() else {
+        return;
+    };
+    let here = position.0;
+    let now = Instant::now();
+    state.captured = true;
+    state.scripted = true;
+    let started = *progress.started.get_or_insert_with(|| {
+        info!("WALK_START {goal:.0} m");
+        now
+    });
+    // The pickaxe in hand, so a stall can dig its way out.
+    tools.hold(pbd_core::inventory::Tool::Pickaxe);
+    if let Some(last) = progress.last {
+        // Ground covered: the great-circle distance between the two points'
+        // directions, so a fall or a jump is not walking. A teleport (a rebase
+        // or a respawn) is not walking either.
+        let step = here
+            .normalize_or(Vec3::Y)
+            .angle_between(last.normalize_or(Vec3::Y))
+            * pbd_app::planet::PLANET_RADIUS;
+        if step < 5.0 {
+            progress.walked_m += step;
+        }
+    }
+    progress.last = Some(here);
+    keys.press(KeyCode::KeyW);
+    keys.press(KeyCode::ShiftLeft);
+    let (anchor, since) = *progress.anchor.get_or_insert((here, now));
+    if here.distance(anchor) > 4.0 {
+        progress.anchor = Some((here, now));
+    } else {
+        let stalled = now.duration_since(since).as_secs_f32();
+        // Stuck, as a player gets unstuck: jump (a tap every 0.7 s, released
+        // between so each counts), then dig through what is in front with the
+        // pickaxe, and only then turn. (Fly is F, not the jump key.)
+        let pulse = |period: f32| (stalled % period) < 0.05;
+        if stalled > 0.6 && pulse(0.7) {
+            keys.press(KeyCode::Space);
+        } else {
+            keys.release(KeyCode::Space);
+        }
+        if stalled > 2.5 && pulse(0.4) {
+            mouse.press(MouseButton::Left);
+        } else {
+            mouse.release(MouseButton::Left);
+        }
+        if stalled > 7.0 {
+            let up = here.normalize_or(Vec3::Y);
+            let ahead = state.view().0;
+            let turned = Quat::from_axis_angle(up, std::f32::consts::FRAC_PI_4) * ahead;
+            state.face(up, turned);
+            progress.turns += 1;
+            progress.anchor = Some((here, now));
+            info!("WALK_TURN stalled 7 s at {:.0} m walked", progress.walked_m);
+        }
+    }
+    if progress.walked_m >= goal {
+        progress.done = true;
+        info!(
+            "WALK_DONE {:.0} m in {:.1} s, {} turns",
+            progress.walked_m,
+            now.duration_since(started).as_secs_f32(),
+            progress.turns
+        );
+        exit.write(AppExit::Success);
+    }
+}
+
 /// The scripted swim: put the walker at the last dry cell of the `shore` walk
 /// and hold forward. It is the only way a headless capture can photograph the
 /// water being entered, since a walker with no input stands still, and it is
@@ -1718,7 +1863,7 @@ impl FrameLog {
             let mut out = std::io::BufWriter::new(file);
             writeln!(
                 out,
-                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps"
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m"
             )
             .expect("frame log header");
             out
@@ -1735,6 +1880,7 @@ fn write_frame_log(
     fine: Res<pbd_app::planet::PlanetFine>,
     near: Res<pbd_app::planet::NearField>,
     readout: Option<Res<pbd_app::flight_view::FlightReadout>>,
+    walk: Option<Res<WalkProgress>>,
 ) {
     use std::io::Write;
     let Some(out) = log.0.as_mut() else {
@@ -1747,10 +1893,11 @@ fn write_frame_log(
     let (clearance, speed) = readout.map_or((f32::NAN, f32::NAN), |r| (r.clearance, r.speed));
     let _ = writeln!(
         out,
-        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1}",
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1}",
         stats.samples.len(),
         stats.started.elapsed().as_secs_f64(),
-        fine.version
+        fine.version,
+        walk.map_or(f32::NAN, |walk| walk.walked_m)
     );
 }
 
