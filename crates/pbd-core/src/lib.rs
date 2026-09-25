@@ -5,6 +5,7 @@ pub mod aim;
 pub mod atmosphere;
 pub mod column;
 pub mod daylight;
+pub mod dig;
 pub mod edits;
 pub mod fauna;
 pub mod fishing;

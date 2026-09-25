@@ -39,18 +39,18 @@
       wheel leaves the item slot alone while the picker is open.
 
 ## 3. Digging by tool
-- [ ] `pbd_core::dig`: the material classes, `right_tool`, `secs`, and the
+- [x] `pbd_core::dig`: the material classes, `right_tool`, `secs`, and the
       `Breaking` state machine (start, hold, reset on release or a new target,
       finish, the pause between blocks); `assets/config/dig.ron` with units
       and a shipped-equals-default test.
-- [ ] `dig_and_place` becomes a hold on the `Breaking` state; the edit path is
+- [x] `dig_and_place` becomes a hold on the `Breaking` state; the edit path is
       unchanged; the rod never breaks anything.
-- [ ] `tools/gen_break_stages.py` writes ten 32 px crack stages with
+- [x] `tools/gen_break_stages.py` writes ten 32 px crack stages with
       `--check`, and a test that each stage contains the one before.
-- [ ] The crack overlay: a prism over the targeted cell from its record, the
+- [x] The crack overlay: a prism over the targeted cell from its record, the
       terrain's UV mapping, unlit and blended, one entity, stage by progress.
-- [ ] `--break SECONDS` for a capture of the cracks; `--dig` stays instant.
-- [ ] Tests: the times by class and tool; the wrong-tool multiple; reset on
+- [x] `--break SECONDS` for a capture of the cracks (`docs/screenshots/breaking-cracks.png`, the pickaxe held 1 s on grass: stage 5); `--dig` stays instant.
+- [x] Tests: the times by class and tool; the wrong-tool multiple; reset on
       release and on a new target; the rod never; the stage by progress.
 
 ## 4. Trees

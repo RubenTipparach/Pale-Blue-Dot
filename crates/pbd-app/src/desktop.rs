@@ -1,3 +1,4 @@
+mod cracks;
 mod digging;
 mod equipment;
 mod frame_graph;
@@ -92,6 +93,12 @@ pub struct Launch {
     /// hole. A headless run has no mouse, and a picture of a hole is the only
     /// thing that says the verb works end to end.
     pub dig: u32,
+    /// `--break SECONDS` holds the use button on the block under the reticle
+    /// for that long, with `--tool` in hand (the shovel if none), so a capture
+    /// can photograph the cracks at a chosen stage. Implies `--walk`.
+    pub break_s: Option<f32>,
+    /// `--tool rod|shovel|pickaxe|axe`: the tool in hand for `--break`.
+    pub tool: Option<pbd_core::inventory::Tool>,
     /// `--place N` stacks N stones on the last hole, so a tower somebody built
     /// can be photographed wearing the stone it is made of.
     pub place: u32,
@@ -160,6 +167,8 @@ impl Launch {
             view: "coast".into(),
             frames: 180,
             dig: 0,
+            break_s: None,
+            tool: None,
             place: 0,
             tour: false,
             route: false,
@@ -193,6 +202,28 @@ impl Launch {
                     i += 1;
                     result.capture =
                         Some(args.get(i).expect("--capture requires a PNG path").into());
+                }
+                "--break" => {
+                    i += 1;
+                    result.break_s = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .filter(|s: &f32| s.is_finite() && *s >= 0.0)
+                            .expect("--break requires seconds"),
+                    );
+                    result.walk = true;
+                }
+                "--tool" => {
+                    i += 1;
+                    let name = args.get(i).expect("--tool requires a tool").to_lowercase();
+                    result.tool = Some(
+                        pbd_core::inventory::Tool::ALL
+                            .into_iter()
+                            .find(|t| t.name().to_lowercase().contains(&name))
+                            .unwrap_or_else(|| {
+                                panic!("--tool {name}: rod, shovel, pickaxe or axe")
+                            }),
+                    );
                 }
                 "--dig" => {
                     i += 1;
@@ -615,6 +646,7 @@ pub fn run(args: &[String]) {
         running: launch.time.is_none() && launch.day.is_none() && launch.capture.is_none(),
     })
     .init_resource::<digging::Aim>()
+    .init_resource::<digging::Mining>()
     .insert_resource(ClearColor(if std::env::var("PBD_NO_SKY").is_ok() {
         // The hole detector's background: nothing in the palette is near it,
         // so a magenta pixel is a pixel with no world behind it.
@@ -644,6 +676,7 @@ pub fn run(args: &[String]) {
             frame_graph::setup,
             photo_camera,
             overlay_ui::spawn,
+            cracks::spawn,
         ),
     )
     // The column tier is built by a startup system and its records land when
@@ -687,7 +720,9 @@ pub fn run(args: &[String]) {
             overlay_ui::show,
             autosave,
             save_weather,
-            digging::dig_and_place.before(pbd_app::fish::FishSet),
+            (digging::dig_and_place, cracks::show)
+                .chain()
+                .before(pbd_app::fish::FishSet),
             digging::scripted_dig,
             capture,
         ),
@@ -721,6 +756,9 @@ pub fn run(args: &[String]) {
             board: launch.aboard,
             seat: launch.seat,
         });
+        if launch.break_s.is_some() {
+            app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
+        }
         if launch.fish {
             app.add_systems(
                 PreUpdate,
@@ -1708,6 +1746,40 @@ fn swim_script(
     }
     if launch.swim {
         keys.press(KeyCode::KeyW);
+    }
+}
+
+/// `--break SECONDS`: from frame 90, hold the use button on whatever is under
+/// the reticle for that long with `--tool` in hand, so the cracks can be
+/// photographed at a chosen stage. A capture instrument: a headless run has
+/// no hand on the mouse.
+fn break_script(
+    launch: Res<Launch>,
+    time: Res<Time>,
+    mut buttons: ResMut<ButtonInput<MouseButton>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    mut tools: ResMut<pbd_app::fish::ToolSlot>,
+    mut frame: Local<u32>,
+    mut held_s: Local<f32>,
+) {
+    let Some(hold) = launch.break_s else {
+        return;
+    };
+    *frame += 1;
+    if *frame < 90 || !state.active {
+        return;
+    }
+    state.captured = true;
+    state.scripted = true;
+    tools.hold(launch.tool.unwrap_or(pbd_core::inventory::Tool::Shovel));
+    if *held_s < hold {
+        buttons.press(MouseButton::Left);
+        *held_s += time.delta_secs();
+        if *held_s >= hold {
+            info!("break script: held the use button {hold:.2} s");
+        }
+    } else {
+        buttons.release(MouseButton::Left);
     }
 }
 

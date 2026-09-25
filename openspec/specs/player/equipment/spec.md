@@ -3,7 +3,9 @@
 ## Purpose
 The tool in hand: one of the fishing rod, shovel, pickaxe and axe, in a tool
 slot beside the ten item slots, changed by holding G and turning the wheel. What
-the left button does is the tool's: the rod fishes and never digs.
+the left button does is the tool's: the rod fishes and never digs, and every
+other tool breaks a block over a time set by the material and the tool, with
+cracks on the block showing how far along it is.
 
 ## Requirements
 
@@ -44,6 +46,61 @@ picker without equipping. G SHALL NOT board a craft: that is F.
 - **THEN** the highlight moves to the next owned tool and the selected item
   slot does not change
   (`desktop::equipment::tests::the_open_picker_takes_the_wheel`)
+
+### Requirement: Breaking a block takes time, set by the tool in hand
+Taking a layer SHALL require holding the use button on the same layer for the
+break time of its material. That time SHALL be the material's base time with
+the right tool (the shovel for soft ground, the pickaxe for stone, rock and
+ore), and a fixed multiple of it with any other tool. The fishing rod SHALL
+NOT break any layer. Releasing the button or moving the aim SHALL reset the
+progress. With the button still held, the next layer SHALL start after a
+short pause. The times, the multiple and the pause SHALL be validated data
+with units (`assets/config/dig.ron`).
+
+#### Scenario: Dirt with the shovel and with the pickaxe
+- **WHEN** the player holds the use button on dirt with the shovel, then on
+  dirt with the pickaxe
+- **THEN** the first takes 0.5 s and the second four times as long
+  (`dig::tests::the_right_tool_takes_the_base_time_and_any_other_takes_four`)
+
+#### Scenario: Letting go early
+- **WHEN** the button is released, or the aim leaves the layer, before the
+  break time
+- **THEN** nothing is taken and the progress starts again from nought
+  (`dig::tests::letting_go_or_looking_away_starts_again`)
+
+#### Scenario: The rod
+- **WHEN** the rod is in hand and the use button is held on stone
+- **THEN** no layer changes
+  (`dig::tests::the_rod_breaks_nothing_and_nothing_breaks_air_or_water`)
+
+#### Scenario: Holding on
+- **WHEN** a layer breaks with the button still held
+- **THEN** the next one starts after the pause, and a fresh press starts at
+  once (`dig::tests::the_next_block_waits_a_moment`)
+
+### Requirement: The block being broken shows cracks that grow with progress
+While a layer is being broken, its faces SHALL show a crack overlay chosen
+from ten stages by the fraction of the break time elapsed. Each stage SHALL
+contain every crack pixel of the stage before it. The overlay's pixels SHALL
+use the terrain's own face UV mapping and its 32 px texel, so a crack pixel
+covers exactly one block pixel. Nothing SHALL be drawn when nothing is being
+broken.
+
+#### Scenario: Halfway through
+- **WHEN** a layer has been held for half its break time
+- **THEN** stage 5 of 0 to 9 is drawn over it
+  (`dig::tests::the_stage_follows_progress_in_tenths`)
+
+#### Scenario: The stages grow
+- **WHEN** the shipped stage images are compared in order
+- **THEN** every crack pixel of stage `k` is a crack pixel of stage `k + 1`
+  (`desktop::cracks::tests::the_stages_grow_and_match_the_atlas_texel`)
+
+#### Scenario: The overlay wraps the layer
+- **WHEN** the overlay is built for a cell and a layer
+- **THEN** it is a closed prism around exactly that layer with every face
+  turned out (`desktop::cracks::tests::the_prism_wraps_the_layer_and_faces_out`)
 
 ### Requirement: A tool change is saved at once
 Changing the tool in hand SHALL be written to the durable save on the frame

@@ -17,8 +17,9 @@ use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
 use pbd_core::aim::{self, Sample};
 use pbd_core::column::{self, LAYERS};
+use pbd_core::dig::Step;
 use pbd_core::edits::Edit;
-use pbd_core::inventory::Item;
+use pbd_core::inventory::{Item, Tool};
 use pbd_core::terrain::Material;
 use std::sync::Arc;
 
@@ -26,6 +27,62 @@ use std::sync::Arc;
 #[derive(Resource, Default)]
 pub struct Aim {
     pub target: Option<aim::Target>,
+}
+
+/// A block, as the digging rule names it: its cell's stable ID and its layer.
+pub type Block = (u32, usize);
+
+/// The block being broken and how far along it is (`pbd_core::dig`), kept
+/// between frames because breaking is a hold. The crack overlay reads
+/// `progress`.
+#[derive(Resource, Default)]
+pub struct Mining {
+    breaking: pbd_core::dig::Breaking<Block>,
+    /// The last break time looked up: for which block, tool and fine set
+    /// version. A lookup finds the record and may build its column, so it is
+    /// done once per target rather than every frame of a hold.
+    lookup: Option<(Block, Tool, u64, Option<f32>)>,
+}
+
+impl Mining {
+    /// The block being broken and its progress, 0 to 1.
+    pub fn progress(&self) -> Option<(Block, f32)> {
+        self.breaking.progress()
+    }
+
+    /// How long `block` takes with `tool`, remembered until either changes.
+    fn secs(
+        &mut self,
+        block: Block,
+        tool: Tool,
+        fine: &PlanetFine,
+        save: &WorldSave,
+        dig: &pbd_core::dig::DigSettings,
+    ) -> Option<f32> {
+        if let Some((b, t, v, secs)) = self.lookup
+            && b == block
+            && t == tool
+            && v == fine.version
+        {
+            return secs;
+        }
+        let secs = material_of(fine, save, block).and_then(|material| dig.secs(material, tool));
+        self.lookup = Some((block, tool, fine.version, secs));
+        secs
+    }
+}
+
+/// What a block is made of: its column's answer, or the column the edit path
+/// would adopt for it off the tier's edge.
+fn material_of(fine: &PlanetFine, save: &WorldSave, (cell, layer): Block) -> Option<Material> {
+    let record = record_of(fine, cell)?;
+    match fine.set.columns.column(record) {
+        Some(column) => Some(column.material(layer)),
+        None => fine
+            .set
+            .adoptable(record, &save.edits)
+            .map(|column| column.material(layer)),
+    }
 }
 
 /// Which cell and layer a world point is in, and whether it is solid.
@@ -302,8 +359,12 @@ pub fn dig_and_place(
     near: Res<NearField>,
     tools: Res<pbd_app::fish::ToolSlot>,
     fishery: Option<Res<pbd_app::fish::Fishery>>,
+    (mut mining, dig, time): (ResMut<Mining>, Res<pbd_app::config::DigConfig>, Res<Time>),
 ) {
+    let dt = time.delta_secs();
+    let between = dig.0.between_s;
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
+        mining.breaking.step(dt, false, None, between);
         return;
     };
     // Only on foot, and only while the walker has the pointer. A ship's guns
@@ -313,6 +374,7 @@ pub fn dig_and_place(
     // at whatever is behind it.
     if !walking.is_some_and(|readout| readout.active && readout.captured) {
         aimed.target = None;
+        mining.breaking.step(dt, false, None, between);
         return;
     }
     let eye = transform.translation();
@@ -332,6 +394,7 @@ pub fn dig_and_place(
     let clicked =
         buttons.just_pressed(MouseButton::Left) || buttons.just_pressed(MouseButton::Right);
     let Some(target) = target else {
+        mining.breaking.step(dt, false, None, between);
         if clicked && let Some(why) = unsampled {
             error!(
                 "edit BLOCKED: the eye ray entered ground the world cannot answer for: {why:?}; \
@@ -342,12 +405,22 @@ pub fn dig_and_place(
         return;
     };
 
-    // The left button is the tool in hand's. A rod casts rather than digs, and
-    // the fishing system has that click; every other tool digs.
-    if buttons.just_pressed(MouseButton::Left) {
-        if !tools.held().digs() {
-            return;
-        }
+    // The left button is the tool in hand's, and breaking is a HOLD: the
+    // block goes when the button has been down on it for its break time
+    // (`pbd_core::dig`). A rod casts rather than digs, and the fishing system
+    // has that button; every other tool digs, the right one fastest.
+    let tool = tools.held();
+    let block = (target.dig.cell, target.dig.layer);
+    let held = buttons.pressed(MouseButton::Left) && tool.digs();
+    let secs = if held {
+        mining.secs(block, tool, &fine, &edits, &dig.0)
+    } else {
+        None
+    };
+    let step = mining
+        .breaking
+        .step(dt, held, secs.map(|secs| (block, secs)), between);
+    if let Step::Broken((cell, layer)) = step {
         if let Some(taken) = apply_edit(
             &mut Edited {
                 fine: &mut fine,
@@ -356,15 +429,21 @@ pub fn dig_and_place(
                 slots: &mut slots,
             },
             Hands::Take,
-            target.dig.cell,
-            target.dig.layer,
+            cell,
+            layer,
             Material::Air,
         ) {
             info!(
-                "dug {taken:?} from cell {} layer {}, fine set version {}",
-                target.dig.cell, target.dig.layer, fine.version
+                "dug {taken:?} from cell {cell} layer {layer} with the {} in {:.2} s, \
+                 fine set version {}",
+                tool.name(),
+                secs.unwrap_or(0.0),
+                fine.version
             );
         }
+        return;
+    }
+    if held {
         return;
     }
 
