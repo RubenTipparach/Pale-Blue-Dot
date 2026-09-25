@@ -20,23 +20,26 @@
 - [ ] The owner's answers to the eight questions in the proposal.
 
 ## 1. Equipment in the core
-- [ ] `Tool { Rod, Shovel, Pickaxe, Axe }` replaces the `Pick` placeholder;
-      `Equipment { owned, held }` beside `Slots`.
+- [x] `Tool { Rod, Shovel, Pickaxe, Axe }` replaces the `Pick` placeholder;
+      `Equipment { owned, held }` beside `Slots`; `Tool::digs` is false for
+      the rod only.
 - [ ] `tools.rs`: `right_tool(material)`, `base(material)`,
       `secs(material, tool)`; `assets/config/tools.ron` with units; test that
       the shipped file equals the code defaults.
 - [ ] Tests: `secs` for every material and tool; the rod breaks nothing.
 
 ## 2. Input and HUD
-- [ ] One G arbiter: tap versus hold at the threshold in `tools.ron`;
-      `board_or_leave` reads the tap. Update `vehicles/tests.rs::tap` to run
-      the release update.
-- [ ] Tool slot left of the ten; picker column over it; the wheel drives the
-      highlight while it is open and is drained either way; Esc closes it;
-      closed with `Display::None`.
-- [ ] The binding table gains "hold G: tools".
-- [ ] Tests: a tap boards, a hold opens the picker, the wheel leaves the item
-      slot alone while the picker is open.
+- [x] One G arbiter (`controls::read_interact_key`): tap versus hold at
+      `PICKER_HOLD_S` (0.18 s, a constant for now, not yet in `tools.ron`);
+      `board_or_leave` reads the tap. The vehicle tests board on the release
+      and hold the walker on the deck for both frames (`board_from`).
+- [x] Tool slot left of the ten; picker column over it; the wheel drives the
+      highlight while it is open (`PickerWheel`, the one wheel reader hands it
+      over) and is drained either way; closed with `Display::None`. An open
+      menu forgets the key, so Escape closes it without equipping.
+- [x] The binding table gains "hold G: tools" and "J: the field guide".
+- [x] Tests: a tap boards, a hold opens the picker and boards nothing, the
+      wheel leaves the item slot alone while the picker is open.
 
 ## 3. Digging by tool
 - [ ] `dig_and_place` becomes a hold with a `Breaking` state and a reticle
@@ -52,52 +55,64 @@
 - [ ] Test: felled after a tier rebuild and after a reload.
 
 ## 5. Fauna
-- [ ] `pbd_core::fauna::School`: packed arrays, the boid terms of design
+- [x] `pbd_core::fauna::School`: packed arrays, the boid terms of design
       section 6, bounds from the sea and ground queries, a seeded goal walk.
-- [ ] `assets/config/fauna.ron`: the eight species of design section 7 with
+- [x] `assets/config/fauna.ron`: the eight species of design section 7 with
       their field-guide entries and tips, water classes and windows; tests for
       entries, icons, disjoint bodies, day-one coverage and empty lifeless
-      rosters.
-- [ ] Spawn gate: water class from the terrain, temperature now from
+      rosters, and that the shipped file equals the code defaults.
+- [x] Spawn gate: water class from the terrain, temperature now from
       `Atmosphere::sample(dir).temperature`, nothing in frozen water.
 - [ ] `tools/fish_ranges.py` reads its rules from `fauna.ron`, and the atlas is
       regenerated from the built roster.
-- [ ] Bottom dwellers: the goal off the bed and the vertical hold.
-- [ ] App: spawn ring, caps, despawn, a fixed 30 Hz step, and one instanced
-      draw per species.
-- [ ] Tests: in the band and in the sea; deterministic over two runs; no
+- [x] Bottom dwellers: the goal off the bed and the vertical hold.
+- [x] App: spawn ring, caps, despawn, a fixed 30 Hz step. Drawn as one mesh
+      per school rebuilt from its arrays rather than an instanced draw per
+      species: a handful of schools of at most forty fish did not need one.
+- [x] Tests: in the sea and off the bed; deterministic over two runs; no
       spawn on an empty roster.
 
 ## 6. Fishing
-- [ ] `pbd_core::fishing`: the state machine of design section 4, the hook
+- [x] `pbd_core::fishing`: the state machine of design section 4, the hook
       window formula, tension, and the weather bite factor from
       `Atmosphere::sample`.
-- [ ] App: rod model at Tenebris's grip and tip, a line clamped to the sea,
-      the bobber on `LocalSea`, and the tension meter.
-- [ ] Tests: the window over strengths 1 to 5; a patient reel lands the fish
-      and a held one snaps; the bobber rides the sea.
+- [x] App: rod model at Tenebris's grip and tip, a line clamped to the sea,
+      the float on `LocalSea`, and the cast and tension meter. Digging is
+      gated on `Tool::digs`, and right click winds a line in rather than
+      placing.
+- [x] Tests: the window over strengths 1 to 5; a patient reel lands the fish
+      and a held one snaps; the float rides the sea.
 
 ## 7. The field guide
-- [ ] In-game panel on J and on a click on a caught fish: the list, the entry
-      with a 96 px nearest-sampled icon, numbers read from the species record,
-      and the player's catch record.
+- [x] In-game panel on J, opening on the fish in the selected slot: the list,
+      the entry with a 96 px nearest-sampled icon, numbers read from the
+      species record (`fish::guide_facts`), and the player's catch record.
+      A click on a slot does not open it: the pointer is captured while
+      playing, so there is no cursor over the slots to click with.
 - [ ] `tools/gen_fish_wiki.py` writes `docs/wiki/fish.md`; a test that the
       committed page equals the generator's output.
-- [ ] Tests: J opens the guide; a catch raises the count and best length, and
+- [x] Tests: J opens the guide; a catch raises the count and best length, and
       both survive a reload.
 
 ## 8. Saves and icons
-- [ ] `catch`, `hand` and `fell` lines; the catch record folded on load; `f{species},{n}` and `t0..t3` codes;
-      `KIT_GRANTS` widened to grants of tools; round-trip tests.
-- [ ] Copy Tenebris's five fish PNGs into `assets/items/fish/` with
+- [x] `catch` and `hand` lines; the catch record folded on load;
+      `f{species},{n}` and `t0..t3` codes; round-trip tests. The tools are not
+      a kit grant: a world with no `hand` line is dealt the default
+      `Equipment` (all four, rod in hand), which is the same once-only answer
+      without a grant to version.
+- [ ] The `fell` line, with the trees.
+- [x] Copy Tenebris's five fish PNGs into `assets/items/fish/` with
       `PROVENANCE.md` and recorded hashes; a test checks them.
-- [ ] `tools/gen_item_icons.py` writes 16x16 PNGs for the tools and the three
-      new fish, with a manifest; tests that every tool and species has one.
+- [x] `tools/gen_item_icons.py` writes 16x16 PNGs for the tools and the three
+      new fish (`--check` holds them); tests that every tool and species has one.
 
 ## 9. Prove it
-- [ ] Captures: the picker open, a school under a floating bobber, a felled
-      tree, the field guide open.
-- [ ] `openspec validate --all`, fmt, clippy and tests.
-- [ ] Move the requirements into `openspec/specs` in the commits that make
-      them true.
+- [x] Capture: `--fish` stands on a warm shore and scripts one cast, logging
+      the schools (`docs/screenshots/fishing-cast.png`).
+- [ ] Captures: the picker open, the field guide open, a felled tree.
+- [x] `openspec validate --all`, fmt, clippy and tests.
+- [x] Moved into `openspec/specs`: `world/fauna`, `player/fishing`, the tool
+      slot, picker and saved tool change of `player/equipment`, and the tap
+      rule of `player/vehicles`. Timed breaking, felling, and the generated
+      wiki page stay here.
 - [ ] The owner's in-game check of the feel of the bite and reel.

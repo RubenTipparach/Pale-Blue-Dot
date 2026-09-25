@@ -313,7 +313,7 @@ fn read_controls(
     controls.0 = input;
 }
 
-/// G boards the craft in reach and leaves the one you are in; T makes a boat
+/// A tap of G boards the craft in reach and leaves the one you are in; T makes a boat
 /// fast or casts it off; the Kestrel's X and B are its assist and its brake;
 /// V swaps the vehicle camera between the seat and the chase view.
 fn board_or_leave(world: &mut World) {
@@ -327,8 +327,13 @@ fn board_or_leave(world: &mut World) {
         return;
     };
     let pressed = |k| keys.just_pressed(k);
+    // G is read once, by `controls::read_interact_key`, which tells a tap
+    // (board or leave) from a hold (the tool picker).
+    let tapped = world
+        .get_resource::<crate::controls::InteractKey>()
+        .is_some_and(|key| key.tapped);
     let (g, t, x, b, v) = (
-        pressed(KeyCode::KeyG),
+        tapped,
         pressed(KeyCode::KeyT),
         pressed(KeyCode::KeyX),
         pressed(KeyCode::KeyB),

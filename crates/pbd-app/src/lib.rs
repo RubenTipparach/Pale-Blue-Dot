@@ -8,7 +8,11 @@ pub mod config;
 #[cfg(feature = "desktop")]
 pub mod controls;
 #[cfg(feature = "desktop")]
+pub mod fish;
+#[cfg(feature = "desktop")]
 pub mod flight_view;
+#[cfg(feature = "desktop")]
+pub mod hotbar;
 #[cfg(feature = "desktop")]
 pub mod overlay;
 #[cfg(feature = "desktop")]
@@ -163,7 +167,12 @@ pub struct PaleBlueDotPlugin;
 impl Plugin for PaleBlueDotPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "desktop")]
-        app.init_resource::<controls::MenuOpen>();
+        app.init_resource::<controls::MenuOpen>()
+            .init_resource::<controls::InteractKey>()
+            .add_systems(
+                PreUpdate,
+                controls::read_interact_key.after(bevy::input::InputSystems),
+            );
         app.init_resource::<SimulationClock>()
             .init_resource::<PhysicsFrame>()
             .init_resource::<FlightTelemetry>()

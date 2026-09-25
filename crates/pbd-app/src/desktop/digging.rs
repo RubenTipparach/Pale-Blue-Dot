@@ -295,6 +295,8 @@ pub fn dig_and_place(
     mut aimed: ResMut<Aim>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
     near: Res<NearField>,
+    tools: Res<pbd_app::fish::ToolSlot>,
+    fishery: Option<Res<pbd_app::fish::Fishery>>,
 ) {
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return;
@@ -335,7 +337,12 @@ pub fn dig_and_place(
         return;
     };
 
+    // The left button is the tool in hand's. A rod casts rather than digs, and
+    // the fishing system has that click; every other tool digs.
     if buttons.just_pressed(MouseButton::Left) {
+        if !tools.held().digs() {
+            return;
+        }
         if let Some(taken) = apply_edit(
             &mut Edited {
                 fine: &mut fine,
@@ -356,7 +363,11 @@ pub fn dig_and_place(
         return;
     }
 
-    if buttons.just_pressed(MouseButton::Right) {
+    // With a line out, the right button winds it in and places nothing. This
+    // runs before the fishing system, so it sees the line as it was when the
+    // button went down.
+    let line_out = fishery.is_some_and(|f| f.line.phase != pbd_core::fishing::Phase::Ready);
+    if buttons.just_pressed(MouseButton::Right) && !line_out {
         let Some(place) = target.place else {
             info!("edit refused: no air along the ray to place into");
             return;

@@ -6,6 +6,8 @@ pub mod atmosphere;
 pub mod column;
 pub mod daylight;
 pub mod edits;
+pub mod fauna;
+pub mod fishing;
 pub mod flight;
 pub mod frame;
 pub mod gravity;

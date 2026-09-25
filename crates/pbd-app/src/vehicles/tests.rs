@@ -44,14 +44,20 @@ fn app(save: crate::saves::WorldSave) -> App {
     app
 }
 
+/// A tap: down for one update and up on the next, which is when G acts, since
+/// a hold of it is the tool picker (`controls::InteractKey`).
 fn tap(app: &mut App, key: KeyCode) {
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(key);
     app.update();
     let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-    keys.release(key);
     keys.clear();
+    keys.release(key);
+    app.update();
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .clear();
 }
 
 fn crafts(app: &mut App) -> Vec<(Entity, Craft)> {
@@ -146,8 +152,7 @@ fn a_craft_left_behind_stays_boardable_and_comes_back_from_its_save() {
         .find(|(_, c)| c.kind == Kind::Kestrel)
         .unwrap();
     // Walk up to it and board.
-    stand_at(&mut app, kestrel.exit().as_vec3());
-    tap(&mut app, KeyCode::KeyG);
+    board_from(&mut app, kestrel.exit().as_vec3());
     assert_eq!(app.world().resource::<Aboard>().0, Some(entity), "G boards");
     assert!(!app.world().resource::<WalkingState>().active);
     let mut cameras = app
@@ -217,13 +222,32 @@ fn a_craft_left_behind_stays_boardable_and_comes_back_from_its_save() {
     assert!(app.world().resource::<Fleet>().next_id > kestrel.id);
     // And G boards it where it was left.
     let (entity, craft) = back.into_iter().find(|(_, c)| c.id == kestrel.id).unwrap();
-    stand_at(&mut app, craft.exit().as_vec3());
-    tap(&mut app, KeyCode::KeyG);
+    board_from(&mut app, craft.exit().as_vec3());
     assert_eq!(
         app.world().resource::<Aboard>().0,
         Some(entity),
         "boardable again"
     );
+}
+
+/// Stand at `at` and tap G. Boarding happens on the RELEASE, since a hold of
+/// G is the tool picker, so the walker is put back on the spot for both
+/// frames: a walker set down beside a rocking boat has had a frame to slide
+/// off it by the time the key comes up.
+fn board_from(app: &mut App, at: Vec3) {
+    stand_at(app, at);
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::KeyG);
+    app.update();
+    stand_at(app, at);
+    let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+    keys.clear();
+    keys.release(KeyCode::KeyG);
+    app.update();
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .clear();
 }
 
 fn stand_at(app: &mut App, at: Vec3) {
@@ -245,8 +269,7 @@ fn anchoring_and_casting_off_are_saved_at_once() {
         .into_iter()
         .find(|(_, c)| c.kind == Kind::Loon)
         .unwrap();
-    stand_at(&mut app, loon.exit().as_vec3());
-    tap(&mut app, KeyCode::KeyG);
+    board_from(&mut app, loon.exit().as_vec3());
     assert_eq!(
         app.world().resource::<Aboard>().0,
         Some(entity),
@@ -269,4 +292,44 @@ fn anchoring_and_casting_off_are_saved_at_once() {
     tap(&mut app, KeyCode::KeyT);
     let anchor = saved(&app).mooring.expect("anchored again, and saved");
     assert!(anchor.2, "an anchor, not a line to a bollard");
+}
+
+/// Holding G beside a craft is the tool picker, not a boarding: the craft
+/// reads only a tap.
+#[test]
+fn holding_g_beside_a_craft_boards_nothing() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let (_, loon) = crafts(&mut app)
+        .into_iter()
+        .find(|(_, c)| c.kind == Kind::Loon)
+        .unwrap();
+    let at = loon.exit().as_vec3();
+    stand_at(&mut app, at);
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::KeyG);
+    let frames = (crate::controls::PICKER_HOLD_S * crate::FIXED_HZ as f32).ceil() as usize + 2;
+    for _ in 0..frames {
+        stand_at(&mut app, at);
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .clear();
+    }
+    assert!(
+        app.world()
+            .resource::<crate::controls::InteractKey>()
+            .holding,
+        "the picker is open"
+    );
+    let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+    keys.release(KeyCode::KeyG);
+    stand_at(&mut app, at);
+    app.update();
+    assert_eq!(
+        app.world().resource::<Aboard>().0,
+        None,
+        "a hold boards nothing"
+    );
 }

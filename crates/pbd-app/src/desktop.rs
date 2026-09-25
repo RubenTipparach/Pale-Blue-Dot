@@ -1,4 +1,6 @@
 mod digging;
+mod equipment;
+mod guide;
 mod hud;
 mod menu;
 mod overlay_ui;
@@ -50,6 +52,11 @@ pub struct Launch {
     /// Walk mode, placed at the shoreline and holding forward, so a capture can
     /// photograph the water being entered. A walker with no input never moves.
     pub swim: bool,
+    /// `--fish`: stand on a warm shore facing the sea with the rod, and cast
+    /// once, scripted, so the float, the line and the schools can be
+    /// photographed and the fishery's numbers logged. A capture instrument,
+    /// like `--swim`: a headless run has no hand on the mouse.
+    pub fish: bool,
     /// `--aboard KIND` boards the Kestrel, Tern or Loon once the fleet is in,
     /// and `--seat` takes the seat rather than the chase view: a headless run
     /// has nobody to walk up to a craft and press G. Implies `--walk`.
@@ -135,6 +142,7 @@ impl Launch {
             fly: false,
             walk: false,
             swim: false,
+            fish: false,
             aboard: None,
             seat: false,
             render_offset: Vec3::ZERO,
@@ -259,6 +267,10 @@ impl Launch {
                 "--swim" => {
                     result.walk = true;
                     result.swim = true;
+                }
+                "--fish" => {
+                    result.walk = true;
+                    result.fish = true;
                 }
                 "--aboard" => {
                     i += 1;
@@ -425,6 +437,7 @@ pub fn run(args: &[String]) {
     let mut world = open_world(&launch);
     let saved_seconds = world.world_seconds;
     let hotbar = slots::Hotbar::restore(&mut world);
+    let tools = pbd_app::fish::ToolSlot::restore(&world);
     // The saves page is the front door of a plain launch: a player picks the
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
@@ -500,6 +513,13 @@ pub fn run(args: &[String]) {
     // rides the edit log rather than a timer, so what comes back is what was
     // held when the last block moved.
     .insert_resource(hotbar)
+    // And the tool in hand, which the save records whenever it changes.
+    .insert_resource(tools)
+    .init_resource::<equipment::Picker>()
+    // Whose roster the guide and the icons read, in every mode; the fish
+    // themselves come with the walker.
+    .init_resource::<pbd_app::fish::Body>()
+    .init_resource::<guide::GuidePage>()
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -543,12 +563,18 @@ pub fn run(args: &[String]) {
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
     .add_systems(Startup, menu::spawn)
-    .add_systems(PostStartup, slots::spawn)
+    .add_systems(
+        PostStartup,
+        (
+            slots::spawn,
+            (slots::load_icons, (equipment::spawn, guide::spawn)).chain(),
+        ),
+    )
     // Escape is read before either of the world's input readers, which live in
     // `RunFixedMainLoop`, and is cleared there so neither ever sees it.
     .add_systems(
         PreUpdate,
-        (menu::name_input, menu::toggle)
+        (menu::name_input, menu::toggle, guide::open)
             .chain()
             .after(bevy::input::InputSystems),
     )
@@ -559,15 +585,17 @@ pub fn run(args: &[String]) {
             scene::move_moon,
             scene::turn_stars,
             scene::follow_sun,
-            slots::input,
+            (equipment::pick, slots::input, equipment::paint).chain(),
             slots::update,
+            guide::press,
+            guide::paint,
             hud::near_field,
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
             overlay_ui::show,
             autosave,
             save_weather,
-            digging::dig_and_place,
+            digging::dig_and_place.before(pbd_app::fish::FishSet),
             digging::scripted_dig,
             capture,
         ),
@@ -588,11 +616,23 @@ pub fn run(args: &[String]) {
             yaw: launch.yaw.unwrap_or(0.0).to_radians(),
             ..default()
         })
-        .add_plugins((WalkingPlugin, pbd_app::vehicles::VehiclePlugin))
+        .add_plugins((
+            WalkingPlugin,
+            pbd_app::vehicles::VehiclePlugin,
+            pbd_app::fish::FishPlugin,
+        ))
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
             seat: launch.seat,
         });
+        if launch.fish {
+            app.add_systems(
+                PreUpdate,
+                (swim_script, fish_script)
+                    .chain()
+                    .after(bevy::input::InputSystems),
+            );
+        }
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
             // after the input clear and before the walking input reads them,
@@ -683,6 +723,7 @@ fn load_world(world: &mut World) {
     };
     let mut opened = WorldSave::open(root, slot);
     let hotbar = slots::Hotbar::restore(&mut opened);
+    let tools = pbd_app::fish::ToolSlot::restore(&opened);
     let pose = opened.pose;
     // The world resumes in its season and at its hour; one never played
     // keeps the clock it had.
@@ -705,6 +746,11 @@ fn load_world(world: &mut World) {
     world.insert_resource(air);
     world.insert_resource(opened);
     world.insert_resource(hotbar);
+    world.insert_resource(tools);
+    // The water of the world being left is not this world's water.
+    if let Some(mut fishery) = world.get_resource_mut::<pbd_app::fish::Fishery>() {
+        *fishery = pbd_app::fish::Fishery::default();
+    }
     // The tier is standing where the last world left it with the last world's
     // holes in it. The distance rule cannot know that, so the load says so.
     if let Some(mut refresh) = world.get_resource_mut::<pbd_app::planet::LodRefresh>() {
@@ -1397,6 +1443,7 @@ fn photo_camera(
 /// water being entered, since a walker with no input stands still, and it is
 /// the same shoreline the `shore`, `wade` and `dive` camera presets frame.
 fn swim_script(
+    launch: Res<Launch>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
     mut state: ResMut<pbd_app::walking::WalkingState>,
     mut placed: Local<bool>,
@@ -1414,7 +1461,9 @@ fn swim_script(
         return;
     }
     if !*placed {
-        let lat = 72_f32.to_radians();
+        // The swim's shore is a cold one; a fishing shore is warm enough
+        // for the schools' windows on day one.
+        let lat = if launch.fish { 24_f32 } else { 72_f32 }.to_radians();
         let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
         let step = 2.0 * tile_width_m(FINEST_LEVEL) / PLANET_RADIUS;
         let mut lon = 0.0_f32;
@@ -1424,8 +1473,21 @@ fn swim_script(
         while surface_height(at(lon)) >= 0.0 && lon < 2.0 * std::f32::consts::TAU {
             lon += step;
         }
+        // A fishing shore is the edge of open water: a river channel is also
+        // below the datum, and the first one found at 24 degrees was a dry
+        // canyon the float landed in. Twenty wet cells in a row is a sea.
+        if launch.fish {
+            let open = |lon: f32| (0..20).all(|k| surface_height(at(lon + k as f32 * step)) < -1.0);
+            while !(surface_height(at(lon - step)) >= 0.0 && open(lon))
+                && lon < 3.0 * std::f32::consts::TAU
+            {
+                lon += step;
+            }
+        }
         // The last dry cell, a few cells back from the water, facing the sea.
-        let land = at(lon - 4.0 * step);
+        // An angler stands at the water's edge rather than up the bank: a
+        // cast carries ten to twenty metres.
+        let land = at(lon - if launch.fish { 1.0 } else { 4.0 } * step);
         let sea = at(lon);
         let Ok((mut position, mut ground, mut transform)) = walkers.single_mut() else {
             return;
@@ -1440,7 +1502,51 @@ fn swim_script(
         state.face(land, (sea - land).normalize_or_zero());
         *placed = true;
     }
-    keys.press(KeyCode::KeyW);
+    if launch.swim {
+        keys.press(KeyCode::KeyW);
+    }
+}
+
+/// One scripted cast for `--fish`: the left button held for most of a second
+/// from frame 90, and the fishery's state logged every second, so a run says
+/// what the water held as well as showing it.
+fn fish_script(
+    mut buttons: ResMut<ButtonInput<MouseButton>>,
+    fishery: Option<Res<pbd_app::fish::Fishery>>,
+    status: Option<Res<pbd_app::fish::FishingStatus>>,
+    fauna: Res<pbd_app::config::FaunaConfig>,
+    mut frame: Local<u32>,
+) {
+    *frame += 1;
+    match *frame {
+        90 => buttons.press(MouseButton::Left),
+        91..=149 => {}
+        150 => buttons.release(MouseButton::Left),
+        _ => {}
+    }
+    if frame.is_multiple_of(60)
+        && let (Some(fishery), Some(status)) = (fishery, status)
+    {
+        let roster = fauna.0.roster(pbd_core::fauna::HOME_BODY);
+        let schools: Vec<String> = fishery
+            .schools
+            .iter()
+            .map(|s| {
+                let name = roster
+                    .get(s.species as usize)
+                    .map_or("?", |sp| sp.id.as_str());
+                format!("{name} x{}", s.len())
+            })
+            .collect();
+        info!(
+            "fish script frame {}: line {:?}, {} schools [{}], status {:?}",
+            *frame,
+            fishery.line.phase,
+            schools.len(),
+            schools.join(", "),
+            status.text
+        );
+    }
 }
 
 fn capture(

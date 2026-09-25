@@ -16,8 +16,9 @@ pub mod writer;
 use bevy::prelude::*;
 use format::{Record, WorldFile};
 use pbd_core::edits::{Edit, Edits};
-use pbd_core::inventory::Slots;
+use pbd_core::inventory::{Equipment, Slots};
 use pbd_core::vehicle::record::VehicleFile;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use writer::SaveWriter;
@@ -162,6 +163,31 @@ pub struct Pose {
     pub selected: usize,
 }
 
+/// How many of a species were caught, and the longest, cm.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CatchRecord {
+    pub count: u32,
+    pub best_cm: u32,
+}
+
+impl CatchRecord {
+    fn add(&mut self, length_cm: u32) {
+        self.count += 1;
+        self.best_cm = self.best_cm.max(length_cm);
+    }
+}
+
+/// What replaying a log gives back.
+#[derive(Default)]
+struct Replayed {
+    edits: Edits,
+    carried: Option<Slots>,
+    kit: u32,
+    catches: BTreeMap<u16, CatchRecord>,
+    equipment: Option<Equipment>,
+    damaged: usize,
+}
+
 /// This world, in memory and on disk.
 #[derive(Resource)]
 pub struct WorldSave {
@@ -181,6 +207,12 @@ pub struct WorldSave {
     pub weather: Option<Vec<u8>>,
     /// The craft as last written, for the load to put back.
     pub vehicles: Option<VehicleFile>,
+    /// The field guide's record, by species: folded from the log's catch
+    /// lines, so there is no second store to keep in step with them.
+    pub catches: BTreeMap<u16, CatchRecord>,
+    /// The tool slot as the log last recorded it; `None` in a world that
+    /// never changed tool, which opens with the new world's kit.
+    pub equipment: Option<Equipment>,
     slot: Option<Slot>,
     root: PathBuf,
     writer: SaveWriter,
@@ -196,6 +228,8 @@ impl Default for WorldSave {
             world_seconds: None,
             weather: None,
             vehicles: None,
+            catches: BTreeMap::new(),
+            equipment: None,
             slot: None,
             root: PathBuf::from(ROOT),
             writer: SaveWriter::none(),
@@ -207,7 +241,14 @@ impl WorldSave {
     /// Open a slot: replay its log, read its pose, and start the writer on it.
     pub fn open(root: PathBuf, slot: Slot) -> Self {
         let directory = root.join(&slot.id);
-        let (edits, carried, kit, damaged) = replay(&directory.join(LOG));
+        let Replayed {
+            edits,
+            carried,
+            kit,
+            catches,
+            equipment,
+            damaged,
+        } = replay(&directory.join(LOG));
         if damaged > 0 {
             warn!("{damaged} damaged lines skipped in {}", slot.id);
         }
@@ -234,6 +275,8 @@ impl WorldSave {
             world_seconds,
             weather,
             vehicles,
+            catches,
+            equipment,
             slot: Some(slot),
             writer: SaveWriter::new(&directory),
             root,
@@ -292,6 +335,30 @@ impl WorldSave {
         self.kit = version;
         self.carried = Some(carried.clone());
         self.writer.append(format::kit_line_of(version, carried));
+        true
+    }
+
+    /// Record a catch: the fish went into `carried`, which the line carries
+    /// whole, and the field guide's record grows. The same durable path as an
+    /// edit, on the frame of the catch.
+    pub fn record_catch(&mut self, species: u16, length_cm: u32, carried: &Slots) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        self.catches.entry(species).or_default().add(length_cm);
+        self.carried = Some(carried.clone());
+        self.writer
+            .append(format::catch_line_of(species, length_cm, carried));
+        true
+    }
+
+    /// Record the tool slot after a change of tool, on the frame of it.
+    pub fn record_hand(&mut self, equipment: &Equipment) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        self.equipment = Some(*equipment);
+        self.writer.append(format::hand_line_of(equipment));
         true
     }
 
@@ -372,14 +439,12 @@ fn read_vehicles(path: &Path) -> Option<VehicleFile> {
 }
 
 /// Replay a log: the edits, the hotbar as the last line that carried one left
-/// it, the highest kit version dealt, and how many lines were damaged.
-fn replay(path: &Path) -> (Edits, Option<Slots>, u32, usize) {
-    let mut edits = Edits::new();
-    let mut carried = None;
-    let mut kit = 0;
-    let mut damaged = 0;
+/// it, the highest kit version dealt, the catches, the last tool slot, and how
+/// many lines were damaged.
+fn replay(path: &Path) -> Replayed {
+    let mut out = Replayed::default();
     let Ok(text) = std::fs::read_to_string(path) else {
-        return (edits, carried, kit, damaged);
+        return out;
     };
     for line in text.lines() {
         if line.trim().is_empty() {
@@ -387,19 +452,28 @@ fn replay(path: &Path) -> (Edits, Option<Slots>, u32, usize) {
         }
         match format::parse_line(line) {
             Some(Record::Edit { edit, slots }) => {
-                edits.set(edit);
+                out.edits.set(edit);
                 if let Some(slots) = slots {
-                    carried = Some(slots);
+                    out.carried = Some(slots);
                 }
             }
             Some(Record::Kit { version, slots }) => {
-                kit = kit.max(version);
-                carried = Some(slots);
+                out.kit = out.kit.max(version);
+                out.carried = Some(slots);
             }
-            None => damaged += 1,
+            Some(Record::Catch {
+                species,
+                length_cm,
+                slots,
+            }) => {
+                out.catches.entry(species).or_default().add(length_cm);
+                out.carried = Some(slots);
+            }
+            Some(Record::Hand { equipment }) => out.equipment = Some(equipment),
+            None => out.damaged += 1,
         }
     }
-    (edits, carried, kit, damaged)
+    out
 }
 
 #[cfg(test)]
@@ -579,6 +653,41 @@ mod tests {
         assert_eq!(reopened.kit, 3);
         assert_eq!(reopened.carried.as_ref(), Some(&carried));
         assert_eq!(reopened.edits.for_cell(77), &[(200, Material::Air)]);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A catch and a change of tool come back from the disk: the fish in the
+    /// hotbar, the field guide's count and best, and the tool in hand.
+    #[test]
+    fn catches_and_the_tool_in_hand_come_back() {
+        use pbd_core::inventory::Tool;
+        let root = temporary("catch");
+        let slot = create(&root, "Catch", 11).unwrap();
+        let mut carried = Slots::new();
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            carried.give(Item::Fish(5), 1);
+            assert!(save.record_catch(5, 44, &carried));
+            carried.give(Item::Fish(5), 1);
+            assert!(save.record_catch(5, 39, &carried));
+            carried.give(Item::Fish(0), 1);
+            assert!(save.record_catch(0, 15, &carried));
+            let mut hand = Equipment::default();
+            hand.hold(Tool::Shovel);
+            assert!(save.record_hand(&hand));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        assert_eq!(reopened.carried.as_ref(), Some(&carried));
+        assert_eq!(
+            reopened.catches.get(&5),
+            Some(&CatchRecord {
+                count: 2,
+                best_cm: 44
+            })
+        );
+        assert_eq!(reopened.catches.get(&0).map(|r| r.count), Some(1));
+        assert_eq!(reopened.equipment.map(|e| e.held()), Some(Tool::Shovel));
         let _ = std::fs::remove_dir_all(&root);
     }
 

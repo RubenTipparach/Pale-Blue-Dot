@@ -72,6 +72,72 @@ impl Pointer<'_, '_> {
     }
 }
 
+/// Holding the interaction key this long opens the tool picker rather than
+/// boarding, s. Above a deliberate tap (about 0.08 to 0.12 s) and well under a
+/// hold anyone would notice waiting for; the mockup's figure.
+pub const PICKER_HOLD_S: f32 = 0.18;
+
+/// The interaction key, `G`, read once and told apart: a TAP boards or leaves
+/// a craft, a HOLD on foot opens the tool picker beside the tool slot.
+///
+/// One reader, because two systems each reading `just_pressed(KeyG)` would both
+/// act on the same press: the craft would board as the picker opened. The
+/// craft read `tapped`, the picker reads `holding` and `let_go`. The cost is
+/// that boarding happens when the key comes UP, which is a tap's length later.
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct InteractKey {
+    down_at: Option<f32>,
+    /// Released this frame before the hold threshold: board or leave.
+    pub tapped: bool,
+    /// Held past the threshold on foot: the picker is open.
+    pub holding: bool,
+    /// Released this frame after a hold: the picker commits its choice.
+    pub let_go: bool,
+}
+
+/// Read `G` into [`InteractKey`]. Aboard, every release is a tap: the picker
+/// never opens in a seat.
+pub fn read_interact_key(
+    keys: Option<Res<ButtonInput<KeyCode>>>,
+    time: Res<Time>,
+    menu: Option<Res<MenuOpen>>,
+    walking: Option<Res<crate::walking::WalkingReadout>>,
+    aboard: Option<Res<crate::vehicles::Aboard>>,
+    mut key: ResMut<InteractKey>,
+) {
+    key.tapped = false;
+    key.let_go = false;
+    let Some(keys) = keys else {
+        return;
+    };
+    if menu.is_some_and(|m| m.0) {
+        *key = InteractKey::default();
+        return;
+    }
+    let now = time.elapsed_secs();
+    let seated = aboard.is_some_and(|a| a.0.is_some());
+    let on_foot = walking.is_some_and(|w| w.active) && !seated;
+    if keys.just_pressed(KeyCode::KeyG) {
+        key.down_at = Some(now);
+    }
+    if keys.pressed(KeyCode::KeyG)
+        && !key.holding
+        && on_foot
+        && key.down_at.is_some_and(|at| now - at >= PICKER_HOLD_S)
+    {
+        key.holding = true;
+    }
+    if keys.just_released(KeyCode::KeyG) {
+        if key.holding {
+            key.let_go = true;
+        } else if key.down_at.is_some() {
+            key.tapped = true;
+        }
+        key.holding = false;
+        key.down_at = None;
+    }
+}
+
 /// A control, as the game reads it.
 ///
 /// The variants carry Bevy's own types rather than a printed name, for the one
@@ -97,6 +163,7 @@ impl Key {
                 KeyCode::KeyC => "C",
                 KeyCode::KeyF => "F",
                 KeyCode::KeyG => "G",
+                KeyCode::KeyJ => "J",
                 KeyCode::KeyP => "P",
                 KeyCode::KeyQ => "Q",
                 KeyCode::KeyR => "R",
@@ -164,7 +231,7 @@ const WASD: [Key; 4] = [
     Key::Board(KeyCode::KeyD),
 ];
 
-const ON_FOOT: [Binding; 7] = [
+const ON_FOOT: [Binding; 9] = [
     row(&WASD, " ", "move"),
     row(
         &[Key::Board(KeyCode::Space)],
@@ -172,11 +239,15 @@ const ON_FOOT: [Binding; 7] = [
         "jump, and rise in water",
     ),
     row(&[Key::Board(KeyCode::ShiftLeft)], " ", "sprint"),
-    row(&[Key::Mouse(MouseButton::Left)], " ", "dig the block ahead"),
+    row(
+        &[Key::Mouse(MouseButton::Left)],
+        " ",
+        "use the tool in hand: dig, or cast, hook and reel",
+    ),
     row(
         &[Key::Mouse(MouseButton::Right)],
         " ",
-        "place the held block",
+        "place the held block, or wind the line in",
     ),
     row(
         &[Key::Board(KeyCode::Digit1), Key::Board(KeyCode::Digit0)],
@@ -184,6 +255,12 @@ const ON_FOOT: [Binding; 7] = [
         "select a slot",
     ),
     row(&[Key::Wheel], " ", "step through the slots"),
+    row(
+        &[Key::Board(KeyCode::KeyG)],
+        " ",
+        "hold for the tools; the wheel picks one",
+    ),
+    row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
 ];
 
 const FLYING: [Binding; 6] = [
@@ -208,7 +285,11 @@ const A_D: [Key; 2] = [Key::Board(KeyCode::KeyA), Key::Board(KeyCode::KeyD)];
 const Q_E: [Key; 2] = [Key::Board(KeyCode::KeyQ), Key::Board(KeyCode::KeyE)];
 
 const VEHICLES: [Binding; 3] = [
-    row(&[Key::Board(KeyCode::KeyG)], " ", "board, or step off"),
+    row(
+        &[Key::Board(KeyCode::KeyG)],
+        " ",
+        "tap to board, or step off",
+    ),
     row(&[Key::Board(KeyCode::KeyV)], " ", "seat or chase view"),
     row(
         &[Key::Board(KeyCode::KeyT)],
@@ -341,10 +422,103 @@ pub fn help_text() -> String {
 mod tests {
     use super::*;
 
+    /// G on foot: a quick release is a tap, a hold past the threshold opens
+    /// the picker and its release commits; aboard, every release is a tap;
+    /// an open menu forgets the key.
+    #[test]
+    fn g_is_a_tap_or_a_hold_and_never_both() {
+        use bevy::time::TimeUpdateStrategy;
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f64(1.0 / 60.0),
+            ))
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<InteractKey>()
+            .insert_resource(MenuOpen(false))
+            .insert_resource(crate::walking::WalkingReadout {
+                active: true,
+                ..default()
+            })
+            .add_systems(Update, read_interact_key);
+        app.update();
+        let key = |app: &App| *app.world().resource::<InteractKey>();
+        let press = |app: &mut App| {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::KeyG);
+            app.update();
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .clear();
+        };
+        let release = |app: &mut App| {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .release(KeyCode::KeyG);
+            app.update();
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .clear();
+        };
+
+        press(&mut app);
+        release(&mut app);
+        assert!(
+            key(&app).tapped && !key(&app).let_go,
+            "a quick release is a tap"
+        );
+
+        press(&mut app);
+        let frames = (PICKER_HOLD_S * 60.0).ceil() as usize + 1;
+        for _ in 0..frames {
+            app.update();
+        }
+        assert!(
+            key(&app).holding,
+            "held past the threshold, the picker is open"
+        );
+        release(&mut app);
+        let k = key(&app);
+        assert!(
+            k.let_go && !k.tapped && !k.holding,
+            "a hold's release commits, it does not board"
+        );
+
+        // In a menu the key is forgotten.
+        press(&mut app);
+        app.world_mut().resource_mut::<MenuOpen>().0 = true;
+        for _ in 0..frames {
+            app.update();
+        }
+        assert!(!key(&app).holding);
+        app.world_mut().resource_mut::<MenuOpen>().0 = false;
+        release(&mut app);
+        assert!(
+            !key(&app).tapped && !key(&app).let_go,
+            "a key pressed before the menu is not a tap"
+        );
+
+        // Not on foot (aboard, or flying): holding never opens the picker.
+        app.world_mut()
+            .resource_mut::<crate::walking::WalkingReadout>()
+            .active = false;
+        press(&mut app);
+        for _ in 0..frames {
+            app.update();
+        }
+        assert!(!key(&app).holding, "no picker unless on foot");
+        release(&mut app);
+        assert!(key(&app).tapped, "so the release is a tap: leave the craft");
+    }
+
     /// Every file that presses the keyboard or the mouse. The test reads their
     /// SOURCE rather than a second list in here, which is this repository's
     /// rule for a representation it cannot collapse: check the real artifact.
-    const READERS: [(&str, &str); 8] = [
+    const READERS: [(&str, &str); 11] = [
+        ("controls.rs", include_str!("controls.rs")),
+        ("fish.rs", include_str!("fish.rs")),
+        ("desktop/guide.rs", include_str!("desktop/guide.rs")),
         ("vehicles.rs", include_str!("vehicles.rs")),
         ("walking.rs", include_str!("walking.rs")),
         ("flight_view/input.rs", include_str!("flight_view/input.rs")),

@@ -2,43 +2,6 @@
 
 ## ADDED Requirements
 
-### Requirement: One tool is in hand, in its own slot
-The player SHALL hold exactly one tool (fishing rod, shovel, pickaxe or axe)
-in a tool slot that is separate from the ten item slots. The tool slot SHALL
-be drawn beside the item slots, with the held tool's own icon. A new world
-SHALL start with all four tools owned and the fishing rod in hand.
-
-#### Scenario: A new world
-- **WHEN** a world is created
-- **THEN** the tool slot holds the fishing rod
-- **AND** the four tools are owned, and none of them occupies an item slot
-
-#### Scenario: A saved world from before tools
-- **WHEN** a world saved before this change is loaded
-- **THEN** it is dealt the four tools with the rod in hand, exactly once
-
-### Requirement: Holding G opens the tool picker; a tap still boards
-On foot, holding G past the hold threshold SHALL open a picker beside the tool
-slot that lists every owned tool by icon and name, with the held tool
-highlighted. While it is open, the mouse wheel SHALL move the highlight and
-SHALL NOT change the item slot or the camera zoom. Releasing G SHALL equip the
-highlighted tool. A release of G before the threshold SHALL be a tap, and a
-tap SHALL board or leave a craft as before.
-
-#### Scenario: Changing to the shovel
-- **WHEN** the player holds G for longer than the threshold, turns the wheel
-  one step and releases G
-- **THEN** the tool after the rod in the picker's order is in hand
-- **AND** the selected item slot is the one selected before
-
-#### Scenario: A tap beside the Loon
-- **WHEN** the player taps G within reach of a craft
-- **THEN** the player boards it and no picker opens
-
-#### Scenario: Aboard
-- **WHEN** the player is aboard a craft and holds G
-- **THEN** no picker opens
-
 ### Requirement: Breaking a block takes time, set by the tool in hand
 Taking a layer SHALL require holding the use button on the same layer for the
 break time of its material. That time SHALL be the material's base time with
@@ -74,11 +37,3 @@ written to the save on the frame it happens.
 - **WHEN** the core rule and the shader's selection are evaluated over the
   same cell IDs, top materials and biomes
 - **THEN** they agree on every cell
-
-### Requirement: A tool change is saved at once
-Changing the tool in hand SHALL be written to the durable save on the frame
-it happens.
-
-#### Scenario: Equip and quit
-- **WHEN** the axe is equipped and the process ends before any other event
-- **THEN** the axe is in hand when the world is loaded

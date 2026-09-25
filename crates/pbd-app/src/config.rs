@@ -960,6 +960,17 @@ impl Validated for pbd_core::vehicle::spec::VehicleSpecs {
 #[derive(Resource, Clone, Debug, PartialEq, Default)]
 pub struct VehiclesConfig(pub pbd_core::vehicle::spec::VehicleSpecs);
 
+/// What lives in the water (`pbd_core::fauna`), from `fauna.ron`.
+impl Validated for pbd_core::fauna::FaunaSettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::fauna::FaunaSettings::validate(self)
+    }
+}
+
+/// Every body's species, how they school and how the rod works, loaded once.
+#[derive(Resource, Clone, Debug, PartialEq, Default)]
+pub struct FaunaConfig(pub pbd_core::fauna::FaunaSettings);
+
 pub struct ConfigPlugin;
 
 impl Plugin for ConfigPlugin {
@@ -970,6 +981,7 @@ impl Plugin for ConfigPlugin {
             .insert_resource(load::<ColumnSettings>("column"))
             .insert_resource(AtmosphereConfig(load("atmosphere")))
             .insert_resource(VehiclesConfig(load("vehicles")))
+            .insert_resource(FaunaConfig(load("fauna")))
             .add_plugins((
                 bevy::render::extract_resource::ExtractResourcePlugin::<WaterSettings>::default(),
                 bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
@@ -987,6 +999,7 @@ mod tests {
     const WEATHER_RON: &str = include_str!("../../../assets/config/weather.ron");
     const ATMOSPHERE_RON: &str = include_str!("../../../assets/config/atmosphere.ron");
     const VEHICLES_RON: &str = include_str!("../../../assets/config/vehicles.ron");
+    const FAUNA_RON: &str = include_str!("../../../assets/config/fauna.ron");
 
     /// The shipped files are the defaults written out. If either drifts from
     /// the code, one of them is describing a different ocean, and this is the
@@ -1006,6 +1019,9 @@ mod tests {
         let vehicles: pbd_core::vehicle::spec::VehicleSpecs = ron::from_str(VEHICLES_RON).unwrap();
         Validated::validate(&vehicles).unwrap();
         assert_eq!(vehicles, Default::default());
+        let fauna: pbd_core::fauna::FaunaSettings = ron::from_str(FAUNA_RON).unwrap();
+        Validated::validate(&fauna).unwrap();
+        assert_eq!(fauna, Default::default());
     }
 
     #[test]
