@@ -106,39 +106,108 @@ is the length of a tap later.
 `dig_and_place` changes from a click to a hold.
 
 - **Starting.** On the first frame the left button is down with a target, a
-  `Breaking { cell, layer, since }` starts.
+  `Breaking { cell, layer, elapsed }` starts, and the time it needs is looked
+  up once from the material and the tool in hand.
 - **Progress.** It advances while the button stays down and the aim stays on
-  the same layer. A ring round the reticle shows the progress. Letting go, or
-  moving the aim, resets it.
+  the same cell and layer. Letting go, or moving the aim, resets it to nought:
+  Minecraft's rule and Tenebris's (`tenebris-client/src/interact.rs:578-596`).
 - **Finishing.** At `secs(material, tool)` it takes the layer through the
   existing `apply_edit(Hands::Take, ...)`. The durable path, the GPU update and
   the slot give are all unchanged.
+- **Holding on.** With the button still down, the next block starts after a
+  short pause (`between_s`, 0.15 s), so a player tunnelling holds the button
+  rather than clicking once per block. Minecraft pauses five ticks (0.25 s)
+  for the same reason: without it the next block, usually the one behind,
+  starts on the frame the first one goes and reads as the tool skipping it.
+
+The rule is a pure state machine in the core (`pbd_core::dig::Breaking`), so
+it is tested without an engine; the app hands it the target, the button and
+the frame's time.
 
 ```text
-secs = base(material) * (tool == right_tool(material) ? 1 : wrong_tool)
-rod  -> never: "a rod digs nothing" on the aim line
+secs = base(class(material)) * (tool == right_tool(material) ? 1 : wrong_tool)
+rod  -> never: the rod casts, and the left button is the fishing line's
 ```
 
-| Class | Materials | Right tool | Base, s (tunable) |
-| --- | --- | --- | ---: |
-| soft | Grass, DryGrass, JungleGrass, Soil, Dirt, Sand, Snow | Shovel | 0.25 |
-| stone | Stone | Pickaxe | 0.6 |
-| rock | Rock | Pickaxe | 0.8 |
-| ore | Ore | Pickaxe | 1.0 |
-| wood | Wood (new, section 5) | Axe | 1.0 |
-| placed | Torch | any tool but the rod | 0.1 |
+**Tuned against Minecraft rather than taken from the first table.** The first
+draft had soft ground at 0.25 s, which is too fast to see a crack at all: at
+60 fps it is fifteen frames across ten stages. Minecraft's own times with the
+right tool are 0.4 to 0.75 s for dirt and 0.4 to 1.15 s for stone, and
+Tenebris's are slower still (2.5 s soft, 5 s rock with a wooden pick,
+`tenebris-rs/assets/config/mining.yaml`) because it has tool tiers to buy the
+time back with. There are no tiers here yet, so the times sit at Minecraft's
+middle:
 
-`wrong_tool` is 4. `right_tool` and `base` live in `pbd_core` (a new
-`tools.rs`), with the numbers in `assets/config/tools.ron` and a test that the
-shipped file equals the code defaults. That is the same pattern as
-`vehicles.ron`.
+| Class | Materials | Right tool | Base, s | Wrong tool, s |
+| --- | --- | --- | ---: | ---: |
+| soft | Grass, DryGrass, JungleGrass, Soil, Dirt, Sand, Snow | Shovel | 0.5 | 2.0 |
+| stone | Stone | Pickaxe | 1.2 | 4.8 |
+| rock | Rock | Pickaxe | 1.6 | 6.4 |
+| ore | Ore | Pickaxe | 2.0 | 8.0 |
+| wood | Wood (section 5, not built) | Axe | 1.0 | 4.0 |
+| placed | Torch | any tool but the rod | 0.1 | 0.1 |
+
+`wrong_tool` is 4, Minecraft's hand penalty on a block that wants a tool is
+about the same (dirt 0.75 s by hand against 0.15 to 0.4 s with a shovel) and
+Tenebris's is 2. Until trees are built the axe has no right material, so it
+digs everything at the wrong-tool time, which is honest: an axe is a poor
+shovel. Water and air are never a target, since the aim ray passes through
+both.
+
+`right_tool`, the classes and `secs` live in `pbd_core::dig`, with the numbers
+in `assets/config/dig.ron` and a test that the shipped file equals the code
+defaults. That is the same pattern as `vehicles.ron`.
+
+### The crack overlay: the block shows how far along it is
+
+The owner asked for Minecraft's breaking effect: dark cracks drawn over every
+face of the block being mined, growing as it is mined. Tenebris does the same
+thing (`break_stages.png`, six 32 px stages, blended at 0.9 over the mined
+cell by a crack channel in its hex shader).
+
+- **Ten stages**, Minecraft's `destroy_stage_0` to `_9`. Stage `k` is shown
+  while progress is in `[k/10, (k+1)/10)`. Tenebris has six, and its jump from
+  stage 1 to stage 2 is visibly the biggest; ten even steps read as a crack
+  growing.
+- **One set of fractures, revealed.** A generator
+  (`tools/gen_break_stages.py`, stdlib and zlib, `--check`) walks a fixed set
+  of jagged fracture lines out from the middle of a 32 px square and gives
+  every crack pixel an order. Stage `k` draws the first `(k+1)/10` of them,
+  so each stage contains the one before it and the block reads as one block
+  cracking, never as ten different pictures. Crack pixels are near black at
+  0.85 alpha with a lighter pixel beside some of them, which is what gives
+  Minecraft's cracks their chipped edge. It writes
+  `assets/textures/break/stage_0.png` to `stage_9.png`.
+- **Its own mesh, not a terrain shader term.** The overlay is a small prism
+  built on the CPU from the targeted cell's record (its degree, its six or
+  five corner rays) between the layer's bottom and top, pushed out 1 cm so it
+  sits on the block's faces rather than fighting them for depth. It is drawn
+  unlit and alpha blended, one entity, rebuilt only when the target changes and
+  given a new stage's material when progress crosses a stage. Tenebris put its
+  crack in the terrain shader, and the cost there is a uniform and a branch on
+  every terrain fragment for a decal that covers one block; here it touches
+  nothing the terrain pass does, and the overlay is a few dozen triangles.
+- **Its pixels land on the block's pixels.** The overlay uses the terrain
+  shader's own UV mapping (`planet_surface.wgsl`): a side face runs `u` 0 to 1
+  along its edge and one tile per metre of height, and a top is the
+  tangent-plane projection at `1.5 * tile` about the cell's axis, with the
+  same reference vector. The crack texture is 32 px like the atlas tiles and
+  sampled nearest, so a crack pixel is exactly a block pixel.
+- **Nothing is drawn when nothing is being broken**, and nothing while the
+  rod is in hand.
+
+The progress ring round the reticle that the first draft had is dropped: the
+cracks are the progress, on the block itself, where the player is looking.
 
 **Placing does not change.** Right click puts the selected slot's block
 wherever it goes today, whatever tool is in hand. The one exception is while a
 line is out: then right click reels in and places nothing.
 
-The scripted `--dig` capture keeps working because it runs through the same
-path with the shovel held.
+The scripted `--dig` capture is a measurement instrument that digs N blocks in
+one frame, and stays that way: a picture of a hole needs the hole, not the
+time it took. A new `--break SECONDS` holds the button on the block under the
+reticle for that long, so a capture can photograph the cracks at a chosen
+stage.
 
 ## 4. Fishing
 
