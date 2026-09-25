@@ -387,7 +387,7 @@ pub fn set_view(world: &mut World, view: View) {
         }
     }
     // Bevy's automatic UI camera selection includes inactive cameras. Keep an
-    // explicit default on the active view so F also hands the HUD across.
+    // explicit default on the active view so R also hands the HUD across.
     for (entity, active) in camera_modes {
         if active {
             world.entity_mut(entity).insert(bevy::ui::IsDefaultUiCamera);
@@ -409,7 +409,7 @@ fn switch_mode(world: &mut World) {
     {
         return;
     }
-    // Aboard a vehicle, F is not the way out: G is, and it is the vehicle's.
+    // Aboard a vehicle, R is not the way out: F is, and it is the vehicle's.
     if world
         .get_resource::<crate::vehicles::Aboard>()
         .is_some_and(|aboard| aboard.0.is_some())
@@ -419,8 +419,8 @@ fn switch_mode(world: &mut World) {
     let Some(keys) = world.get_resource::<ButtonInput<KeyCode>>() else {
         return;
     };
-    let toggle = keys.just_pressed(KeyCode::KeyF);
-    let reset = keys.just_pressed(KeyCode::KeyR);
+    let toggle = keys.just_pressed(KeyCode::KeyR);
+    let reset = keys.just_pressed(KeyCode::KeyH);
     let active = world.resource::<WalkingState>().active;
     if active && reset {
         let up = world.resource::<WalkingState>().spawn_direction;
@@ -1096,12 +1096,12 @@ mod tests {
             .floor_radius;
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         assert!(!app.world().resource::<WalkingState>().active);
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         app.update();
@@ -1114,10 +1114,10 @@ mod tests {
         }
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         let state = app.world().resource::<WalkingState>();
-        assert!(state.active, "the second F should walk");
+        assert!(state.active, "the second R should walk");
         let body = state.body;
         let eye =
             app.world().get::<Position>(body).unwrap().0.length() + (EYE_HEIGHT - HALF_HEIGHT);
@@ -1132,7 +1132,7 @@ mod tests {
         );
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         let mut lowest = f32::MAX;
@@ -1162,26 +1162,26 @@ mod tests {
                 .resource::<crate::config::WaterSettings>()
                 .depth_offset_m;
         let direction = deep_water(app.world().resource::<PlanetContact>(), 4.0);
-        // Fly first, then park the ship over deep water and press F.
+        // Fly first, then park the ship over deep water and press R.
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         assert!(
             !app.world().resource::<WalkingState>().active,
-            "the first F should fly"
+            "the first R should fly"
         );
         {
             // The harness has no input clear system: a press stays "just
             // pressed" until it is cleared by hand.
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         app.update();
         assert!(
             !app.world().resource::<WalkingState>().active,
-            "a cleared F must not toggle again"
+            "a cleared R must not toggle again"
         );
         let ship_at = direction * (sheet + 30.0);
         let mut ships = app
@@ -1192,10 +1192,10 @@ mod tests {
         }
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         let state = app.world().resource::<WalkingState>();
-        assert!(state.active, "the second F should walk");
+        assert!(state.active, "the second R should walk");
         let body = app.world().entity(state.body);
         let position = body.get::<Position>().unwrap().0;
         let drift = position.normalize().dot(direction).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
@@ -1213,7 +1213,7 @@ mod tests {
         let body = state.body;
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         for _ in 0..600 {
@@ -1629,7 +1629,7 @@ mod tests {
         let ship = ships.single(app.world()).unwrap();
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         assert!(!app.world().resource::<WalkingState>().active);
         assert!(app.world().resource::<FlightInputState>().is_enabled());
@@ -1637,13 +1637,13 @@ mod tests {
         assert_active_ui_camera(&mut app);
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         app.update();
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         assert!(app.world().resource::<WalkingState>().active);
         assert_eq!(ships.single(app.world()).unwrap(), ship);

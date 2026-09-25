@@ -813,7 +813,7 @@ mod tests {
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
             keys.release(KeyCode::KeyW);
-            keys.press(KeyCode::KeyR);
+            keys.press(KeyCode::KeyH);
         }
         app.update();
         let (position, rotation, velocity) = ships.single(app.world()).unwrap();

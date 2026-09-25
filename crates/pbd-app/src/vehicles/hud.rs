@@ -62,7 +62,7 @@ pub fn show(
                     .map(|v| (v, v.craft.body.position.distance(at)))
                     .filter(|(v, d)| *d <= v.craft.seat().reach_m as f64)
                     .min_by(|a, b| a.1.total_cmp(&b.1))
-                    .map(|(v, _)| format!("[G] board the {}", v.craft.kind.name()))
+                    .map(|(v, _)| format!("[F] board the {}", v.craft.kind.name()))
             })
             .unwrap_or_default(),
     };

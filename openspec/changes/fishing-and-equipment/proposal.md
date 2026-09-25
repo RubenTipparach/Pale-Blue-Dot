@@ -43,9 +43,9 @@ Today:
   slots and holds the one tool in hand. The ten slots stay for items: blocks,
   and now fish.
 - **Holding G opens the tool picker beside that slot.** The mouse wheel moves
-  the highlight, and releasing G equips the highlighted tool. A tap of G, under
-  0.18 s, still boards or leaves a craft. On foot the two are told apart by how
-  long the key is held; aboard, G only boards and leaves.
+  the highlight, and releasing G equips the highlighted tool. Boarding and
+  leaving a craft moved to F, so G is only the picker (the design's revision
+  note has why).
 - **Four tools: fishing rod, shovel, pickaxe and axe.** A new world starts with
   all four owned and the rod in hand.
 - **Digging asks what is in hand.** Breaking a block becomes a hold: a time per

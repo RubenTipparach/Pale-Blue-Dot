@@ -316,7 +316,7 @@ fn read_controls(
     controls.0 = input;
 }
 
-/// A tap of G boards the craft in reach and leaves the one you are in; T makes a boat
+/// F boards the craft in reach and leaves the one you are in; T makes a boat
 /// fast or casts it off; the Kestrel's X and B are its assist and its brake;
 /// V swaps the vehicle camera between the seat and the chase view.
 fn board_or_leave(world: &mut World) {
@@ -330,13 +330,10 @@ fn board_or_leave(world: &mut World) {
         return;
     };
     let pressed = |k| keys.just_pressed(k);
-    // G is read once, by `controls::read_interact_key`, which tells a tap
-    // (board or leave) from a hold (the tool picker).
-    let tapped = world
-        .get_resource::<crate::controls::InteractKey>()
-        .is_some_and(|key| key.tapped);
+    // F is the interaction key: E is a craft's own control (yaw, hiking, the
+    // blade as a rudder), and G is the tool picker.
     let (g, t, x, b, v) = (
-        tapped,
+        pressed(KeyCode::KeyF),
         pressed(KeyCode::KeyT),
         pressed(KeyCode::KeyX),
         pressed(KeyCode::KeyB),
@@ -414,7 +411,7 @@ fn board(world: &mut World) {
 }
 
 /// Hand the player to `entity`: its controls, its camera. The one path by
-/// which anything boards, the G key and a capture script alike.
+/// which anything boards, the F key and a capture script alike.
 fn take_seat(world: &mut World, entity: Entity, captured: bool) {
     let name = {
         let mut vehicle = world
@@ -431,7 +428,7 @@ fn take_seat(world: &mut World, entity: Entity, captured: bool) {
 }
 
 /// A capture script's request: board this kind as soon as the fleet is in,
-/// since a headless run has no player to walk up to it and press G.
+/// since a headless run has no player to walk up to it and press F.
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct VehicleScript {
     pub board: Option<Kind>,

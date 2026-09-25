@@ -29,10 +29,10 @@
 - [ ] Tests: `secs` for every material and tool; the rod breaks nothing.
 
 ## 2. Input and HUD
-- [x] One G arbiter (`controls::read_interact_key`): tap versus hold at
-      `PICKER_HOLD_S` (0.18 s, a constant for now, not yet in `tools.ron`);
-      `board_or_leave` reads the tap. The vehicle tests board on the release
-      and hold the walker on the deck for both frames (`board_from`).
+- [x] One G reader (`controls::read_picker_key`). First built as a tap/hold
+      split with boarding on the tap; revised by the owner: F boards and
+      leaves, R is walk/fly, H returns to the spawn, and G only holds the
+      picker open, from the press.
 - [x] Tool slot left of the ten; picker column over it; the wheel drives the
       highlight while it is open (`PickerWheel`, the one wheel reader hands it
       over) and is drained either way; closed with `Display::None`. An open

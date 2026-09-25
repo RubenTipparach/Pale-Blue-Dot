@@ -2,7 +2,7 @@
 
 ## Purpose
 The tool in hand: one of the fishing rod, shovel, pickaxe and axe, in a tool
-slot beside the ten item slots, changed with a hold of G and the wheel. What
+slot beside the ten item slots, changed by holding G and turning the wheel. What
 the left button does is the tool's: the rod fishes and never digs.
 
 ## Requirements
@@ -25,18 +25,19 @@ fishing rod SHALL NOT dig.
 - **THEN** it is the one tool that does not dig, and the left button casts
   (`inventory::tests::the_tool_slot_starts_on_the_rod_and_changes_only_for_real`)
 
-### Requirement: Holding G opens the tool picker; a tap still boards
-On foot, holding G past the hold threshold SHALL open a picker beside the tool
-slot that lists every owned tool by icon and name, with the held tool
-highlighted. While it is open, the mouse wheel SHALL move the highlight and
-SHALL NOT change the item slot or the camera zoom. Releasing G SHALL equip the
-highlighted tool. A release of G before the threshold SHALL be a tap. Aboard
-a craft, no picker SHALL open.
+### Requirement: Holding G opens the tool picker
+On foot, holding G SHALL open a picker beside the tool slot that lists every
+owned tool by icon and name, with the held tool highlighted. While it is
+open, the mouse wheel SHALL move the highlight and SHALL NOT change the item
+slot or the camera zoom. Releasing G SHALL equip the highlighted tool. Aboard
+a craft or flying, G SHALL do nothing, and a menu opening SHALL close the
+picker without equipping. G SHALL NOT board a craft: that is F.
 
-#### Scenario: Tap, hold and aboard
-- **WHEN** G is tapped, held past the threshold, or held while not on foot
-- **THEN** it is a tap, the picker opening and committing on release, or a tap
-  (`controls::tests::g_is_a_tap_or_a_hold_and_never_both`)
+#### Scenario: Hold, release, and not on foot
+- **WHEN** G is held and released on foot, or pressed while not on foot
+- **THEN** the picker opens on the press and commits on the release, or
+  nothing happens
+  (`controls::tests::g_holds_the_picker_open_only_on_foot`)
 
 #### Scenario: The wheel while the picker is open
 - **WHEN** the wheel turns one step with the picker open

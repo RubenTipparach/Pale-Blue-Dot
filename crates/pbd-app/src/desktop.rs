@@ -79,7 +79,7 @@ pub struct Launch {
     pub fish: bool,
     /// `--aboard KIND` boards the Kestrel, Tern or Loon once the fleet is in,
     /// and `--seat` takes the seat rather than the chase view: a headless run
-    /// has nobody to walk up to a craft and press G. Implies `--walk`.
+    /// has nobody to walk up to a craft and press F. Implies `--walk`.
     pub aboard: Option<pbd_core::vehicle::Kind>,
     pub seat: bool,
     /// Static capture instrument: translate the scene within the local frame.

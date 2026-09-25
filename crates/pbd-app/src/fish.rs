@@ -195,7 +195,7 @@ struct Surroundings<'w, 's> {
     sun: Option<Res<'w, crate::sky::Sun>>,
     walking: Option<Res<'w, WalkingReadout>>,
     menu: Option<Res<'w, crate::controls::MenuOpen>>,
-    key: Option<Res<'w, crate::controls::InteractKey>>,
+    key: Option<Res<'w, crate::controls::PickerKey>>,
     buttons: Option<Res<'w, ButtonInput<MouseButton>>>,
     time: Res<'w, Time>,
     walkers: Query<'w, 's, &'static Position, With<Walker>>,

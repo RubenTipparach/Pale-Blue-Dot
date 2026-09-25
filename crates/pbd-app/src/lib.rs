@@ -168,10 +168,10 @@ impl Plugin for PaleBlueDotPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "desktop")]
         app.init_resource::<controls::MenuOpen>()
-            .init_resource::<controls::InteractKey>()
+            .init_resource::<controls::PickerKey>()
             .add_systems(
                 PreUpdate,
-                controls::read_interact_key.after(bevy::input::InputSystems),
+                controls::read_picker_key.after(bevy::input::InputSystems),
             );
         app.init_resource::<SimulationClock>()
             .init_resource::<PhysicsFrame>()

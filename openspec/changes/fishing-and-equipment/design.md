@@ -55,7 +55,16 @@ pub struct Equipment { owned: ToolSet, held: Tool }   // ToolSet: one bit per to
   constructed, so no save contains it (section 8).
 - `Item::Tool` stays, because a future dropped tool or a chest is still an item.
 
-**Input**, on foot only:
+**Revised by the owner after the first build (2026-09-25): boarding is F, not
+a tap of G.** E, the owner's first choice, is taken aboard (Q and E are the
+Kestrel's yaw, the Tern's hiking and the Loon's blade), so interaction is F,
+as Tenebris binds it. F was the walk/fly switch, which moved to R (Tenebris's
+key for it), and return-to-spawn moved from R to H. G is therefore only the
+tool picker: it opens on the press, with no threshold, and boarding is back on
+the press of F. The table below is the first build's design and is kept for
+the record.
+
+**Input**, on foot only (first build, superseded above):
 
 | Event | Result |
 | --- | --- |

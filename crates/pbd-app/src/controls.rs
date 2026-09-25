@@ -72,69 +72,47 @@ impl Pointer<'_, '_> {
     }
 }
 
-/// Holding the interaction key this long opens the tool picker rather than
-/// boarding, s. Above a deliberate tap (about 0.08 to 0.12 s) and well under a
-/// hold anyone would notice waiting for; the mockup's figure.
-pub const PICKER_HOLD_S: f32 = 0.18;
-
-/// The interaction key, `G`, read once and told apart: a TAP boards or leaves
-/// a craft, a HOLD on foot opens the tool picker beside the tool slot.
+/// `G`, the tool picker's key, read once: held on foot it opens the picker
+/// beside the tool slot, and the release that ends the hold equips the
+/// highlighted tool.
 ///
-/// One reader, because two systems each reading `just_pressed(KeyG)` would both
-/// act on the same press: the craft would board as the picker opened. The
-/// craft read `tapped`, the picker reads `holding` and `let_go`. The cost is
-/// that boarding happens when the key comes UP, which is a tap's length later.
+/// It no longer shares a key with boarding (that is `F`), so there is no tap
+/// to tell from a hold and the picker opens on the press. One reader still,
+/// because the picker's systems and the wheel's both ask whether it is open.
 #[derive(Resource, Default, Debug, Clone, Copy)]
-pub struct InteractKey {
-    down_at: Option<f32>,
-    /// Released this frame before the hold threshold: board or leave.
-    pub tapped: bool,
-    /// Held past the threshold on foot: the picker is open.
+pub struct PickerKey {
+    /// Held on foot: the picker is open.
     pub holding: bool,
     /// Released this frame after a hold: the picker commits its choice.
     pub let_go: bool,
 }
 
-/// Read `G` into [`InteractKey`]. Aboard, every release is a tap: the picker
-/// never opens in a seat.
-pub fn read_interact_key(
+/// Read `G` into [`PickerKey`]. Only on foot: aboard or flying, G does
+/// nothing, and a menu forgets the key so Escape closes the picker without
+/// equipping anything.
+pub fn read_picker_key(
     keys: Option<Res<ButtonInput<KeyCode>>>,
-    time: Res<Time>,
     menu: Option<Res<MenuOpen>>,
     walking: Option<Res<crate::walking::WalkingReadout>>,
     aboard: Option<Res<crate::vehicles::Aboard>>,
-    mut key: ResMut<InteractKey>,
+    mut key: ResMut<PickerKey>,
 ) {
-    key.tapped = false;
     key.let_go = false;
     let Some(keys) = keys else {
         return;
     };
     if menu.is_some_and(|m| m.0) {
-        *key = InteractKey::default();
+        *key = PickerKey::default();
         return;
     }
-    let now = time.elapsed_secs();
     let seated = aboard.is_some_and(|a| a.0.is_some());
     let on_foot = walking.is_some_and(|w| w.active) && !seated;
-    if keys.just_pressed(KeyCode::KeyG) {
-        key.down_at = Some(now);
-    }
-    if keys.pressed(KeyCode::KeyG)
-        && !key.holding
-        && on_foot
-        && key.down_at.is_some_and(|at| now - at >= PICKER_HOLD_S)
-    {
+    if keys.just_pressed(KeyCode::KeyG) && on_foot {
         key.holding = true;
     }
-    if keys.just_released(KeyCode::KeyG) {
-        if key.holding {
-            key.let_go = true;
-        } else if key.down_at.is_some() {
-            key.tapped = true;
-        }
+    if key.holding && (!keys.pressed(KeyCode::KeyG) || !on_foot) {
         key.holding = false;
-        key.down_at = None;
+        key.let_go = on_foot;
     }
 }
 
@@ -163,6 +141,7 @@ impl Key {
                 KeyCode::KeyC => "C",
                 KeyCode::KeyF => "F",
                 KeyCode::KeyG => "G",
+                KeyCode::KeyH => "H",
                 KeyCode::KeyJ => "J",
                 KeyCode::KeyP => "P",
                 KeyCode::KeyQ => "Q",
@@ -286,11 +265,7 @@ const A_D: [Key; 2] = [Key::Board(KeyCode::KeyA), Key::Board(KeyCode::KeyD)];
 const Q_E: [Key; 2] = [Key::Board(KeyCode::KeyQ), Key::Board(KeyCode::KeyE)];
 
 const VEHICLES: [Binding; 3] = [
-    row(
-        &[Key::Board(KeyCode::KeyG)],
-        " ",
-        "tap to board, or step off",
-    ),
+    row(&[Key::Board(KeyCode::KeyF)], " ", "board, or step off"),
     row(&[Key::Board(KeyCode::KeyV)], " ", "seat or chase view"),
     row(
         &[Key::Board(KeyCode::KeyT)],
@@ -332,8 +307,8 @@ const LOON: [Binding; 4] = [
 ];
 
 const WORLD: [Binding; 3] = [
-    row(&[Key::Board(KeyCode::KeyF)], " ", "walk or fly"),
-    row(&[Key::Board(KeyCode::KeyR)], " ", "return to the spawn"),
+    row(&[Key::Board(KeyCode::KeyR)], " ", "walk or fly"),
+    row(&[Key::Board(KeyCode::KeyH)], " ", "return to the spawn"),
     row(&[Key::Board(KeyCode::KeyP)], " ", "cycle the weather"),
 ];
 
@@ -424,27 +399,22 @@ pub fn help_text() -> String {
 mod tests {
     use super::*;
 
-    /// G on foot: a quick release is a tap, a hold past the threshold opens
-    /// the picker and its release commits; aboard, every release is a tap;
-    /// an open menu forgets the key.
+    /// G on foot opens the picker on the press and commits on the release;
+    /// not on foot it does nothing; an open menu forgets the key.
     #[test]
-    fn g_is_a_tap_or_a_hold_and_never_both() {
-        use bevy::time::TimeUpdateStrategy;
+    fn g_holds_the_picker_open_only_on_foot() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
-            .insert_resource(TimeUpdateStrategy::ManualDuration(
-                std::time::Duration::from_secs_f64(1.0 / 60.0),
-            ))
             .init_resource::<ButtonInput<KeyCode>>()
-            .init_resource::<InteractKey>()
+            .init_resource::<PickerKey>()
             .insert_resource(MenuOpen(false))
             .insert_resource(crate::walking::WalkingReadout {
                 active: true,
                 ..default()
             })
-            .add_systems(Update, read_interact_key);
+            .add_systems(Update, read_picker_key);
         app.update();
-        let key = |app: &App| *app.world().resource::<InteractKey>();
+        let key = |app: &App| *app.world().resource::<PickerKey>();
         let press = |app: &mut App| {
             app.world_mut()
                 .resource_mut::<ButtonInput<KeyCode>>()
@@ -465,53 +435,40 @@ mod tests {
         };
 
         press(&mut app);
-        release(&mut app);
+        assert!(key(&app).holding, "the picker opens on the press");
+        app.update();
         assert!(
-            key(&app).tapped && !key(&app).let_go,
-            "a quick release is a tap"
-        );
-
-        press(&mut app);
-        let frames = (PICKER_HOLD_S * 60.0).ceil() as usize + 1;
-        for _ in 0..frames {
-            app.update();
-        }
-        assert!(
-            key(&app).holding,
-            "held past the threshold, the picker is open"
+            key(&app).holding && !key(&app).let_go,
+            "and stays open while held"
         );
         release(&mut app);
-        let k = key(&app);
         assert!(
-            k.let_go && !k.tapped && !k.holding,
-            "a hold's release commits, it does not board"
+            key(&app).let_go && !key(&app).holding,
+            "the release commits"
         );
+        app.update();
+        assert!(!key(&app).let_go, "once");
 
-        // In a menu the key is forgotten.
+        // In a menu the key is forgotten, and nothing is committed.
         press(&mut app);
         app.world_mut().resource_mut::<MenuOpen>().0 = true;
-        for _ in 0..frames {
-            app.update();
-        }
+        app.update();
         assert!(!key(&app).holding);
         app.world_mut().resource_mut::<MenuOpen>().0 = false;
         release(&mut app);
         assert!(
-            !key(&app).tapped && !key(&app).let_go,
-            "a key pressed before the menu is not a tap"
+            !key(&app).let_go,
+            "a key pressed before the menu commits nothing"
         );
 
-        // Not on foot (aboard, or flying): holding never opens the picker.
+        // Not on foot (aboard, or flying), G does nothing.
         app.world_mut()
             .resource_mut::<crate::walking::WalkingReadout>()
             .active = false;
         press(&mut app);
-        for _ in 0..frames {
-            app.update();
-        }
         assert!(!key(&app).holding, "no picker unless on foot");
         release(&mut app);
-        assert!(key(&app).tapped, "so the release is a tap: leave the craft");
+        assert!(!key(&app).let_go);
     }
 
     /// Every file that presses the keyboard or the mouse. The test reads their
@@ -537,7 +494,7 @@ mod tests {
     ///
     /// What this proves is narrow and worth stating: that the table's KEYS are
     /// real. It cannot prove the prose beside them, because no grep
-    /// establishes that `F` swaps to flying. Staleness is the failure that
+    /// establishes that `R` swaps to flying. Staleness is the failure that
     /// actually happened, and staleness is what it catches.
     #[test]
     fn a_named_key_is_a_key_something_reads() {

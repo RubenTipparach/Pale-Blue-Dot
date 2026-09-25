@@ -1,10 +1,10 @@
 //! The tool slot: one square left of the hotbar holding the tool in hand, and
 //! the picker that opens beside it while G is held.
 //!
-//! A tap of G still boards a craft; holding it on foot opens the picker, the
-//! wheel moves its highlight, and letting go puts the highlighted tool in hand.
-//! What G is doing is decided once, in `controls::read_interact_key`, and read
-//! here: the picker never looks at the key itself.
+//! Holding G on foot opens the picker, the wheel moves its highlight, and
+//! letting go puts the highlighted tool in hand. G is read once, in
+//! `controls::read_picker_key`, and read here: the picker never looks at the
+//! key itself. Boarding a craft is F, a key of its own.
 //!
 //! The tool slot is not one of the ten hotbar slots. Those carry what the
 //! player gathers; this one carries the tool the left button uses, which is
@@ -13,7 +13,7 @@
 use super::slots::ItemIcons;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use pbd_app::controls::InteractKey;
+use pbd_app::controls::PickerKey;
 use pbd_app::fish::ToolSlot;
 use pbd_app::saves::WorldSave;
 use pbd_core::inventory::Tool;
@@ -36,7 +36,7 @@ impl Default for Picker {
 /// The picker's claim on the wheel, for the one system that reads the wheel.
 #[derive(SystemParam)]
 pub struct PickerWheel<'w> {
-    key: Option<Res<'w, InteractKey>>,
+    key: Option<Res<'w, PickerKey>>,
     tools: Res<'w, ToolSlot>,
     picker: ResMut<'w, Picker>,
 }
@@ -207,7 +207,7 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), 
 /// and hands the step to the picker while G is held: two readers of one
 /// message stream would each see every notch.
 pub fn pick(
-    key: Res<InteractKey>,
+    key: Res<PickerKey>,
     mut tools: ResMut<ToolSlot>,
     mut picker: ResMut<Picker>,
     mut save: Option<ResMut<WorldSave>>,
@@ -231,7 +231,7 @@ pub fn pick(
 
 /// Paint the tool slot and the picker from the resources.
 pub fn paint(
-    key: Res<InteractKey>,
+    key: Res<PickerKey>,
     tools: Res<ToolSlot>,
     picker: Res<Picker>,
     icons: Res<ItemIcons>,
@@ -297,10 +297,9 @@ mod tests {
                 ..default()
             })
             .insert_resource(pbd_app::controls::MenuOpen(false))
-            .insert_resource({
-                let mut key = InteractKey::default();
-                key.holding = true;
-                key
+            .insert_resource(PickerKey {
+                holding: true,
+                ..default()
             })
             .init_resource::<ToolSlot>()
             .init_resource::<Picker>()
@@ -319,7 +318,7 @@ mod tests {
         notch(&mut app);
         assert_eq!(app.world().resource::<Picker>().highlight, Tool::Shovel);
         assert_eq!(app.world().resource::<Hotbar>().selected(), before);
-        app.world_mut().resource_mut::<InteractKey>().holding = false;
+        app.world_mut().resource_mut::<PickerKey>().holding = false;
         notch(&mut app);
         assert_eq!(app.world().resource::<Picker>().highlight, Tool::Shovel);
         assert_ne!(app.world().resource::<Hotbar>().selected(), before);
