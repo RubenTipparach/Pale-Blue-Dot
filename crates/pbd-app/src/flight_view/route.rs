@@ -18,13 +18,67 @@
 
 use bevy::prelude::*;
 
+use std::sync::Arc;
+
+use pbd_core::atmosphere::Atmosphere;
+
 use super::FlightViewConfig;
 use crate::planet::{self, PLANET_RADIUS};
 
+/// Which route is flown.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RouteKind {
+    /// Take off, climb at 60 degrees to 3 km, cruise round, land on the far side.
+    #[default]
+    FarSide,
+    /// Low and slow: through the cloud layer, then over the most interesting
+    /// ground within reach, following the terrain (`far-side-flight` design,
+    /// "The scenic route").
+    Scenic,
+}
+
+impl RouteKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            RouteKind::FarSide => "far-side",
+            RouteKind::Scenic => "scenic",
+        }
+    }
+}
+
+/// The scenic route's target height along its path: the planet-centre radius
+/// to fly at, every `step_m` metres of arc from the start.
+#[derive(Debug)]
+pub struct HeightProfile {
+    pub step_m: f32,
+    pub radius: Vec<f32>,
+    /// The ground's radius at the same samples.
+    pub ground: Vec<f32>,
+}
+
+impl HeightProfile {
+    /// Height above the ground to fly at, `s` metres along the path,
+    /// interpolated between samples.
+    fn above_ground(&self, s: f32) -> f32 {
+        let at = (s / self.step_m).clamp(0.0, (self.radius.len() - 1) as f32);
+        let i = at.floor() as usize;
+        let j = (i + 1).min(self.radius.len() - 1);
+        let f = at - i as f32;
+        let r = self.radius[i] + (self.radius[j] - self.radius[i]) * f;
+        let g = self.ground[i] + (self.ground[j] - self.ground[i]) * f;
+        r - g
+    }
+}
+
 /// The route's state: where it started, which way it flies, where it lands,
 /// and how far it has come. Written once per physics step.
-#[derive(Resource, Clone, Copy, Debug)]
+#[derive(Resource, Clone, Debug)]
 pub struct RouteState {
+    pub kind: RouteKind,
+    /// Whether the route is laid out: the scenic route waits for the weather.
+    pub planned: bool,
+    /// The scenic route's height profile; none for the far side.
+    pub profile: Option<Arc<HeightProfile>>,
     /// The start's direction from the centre.
     pub start: Vec3,
     /// The great circle's normal: travel is `normal x up`.
@@ -45,6 +99,8 @@ pub struct RouteState {
     /// Instruments for `--verify-route`.
     pub peak_height_m: f32,
     pub min_airborne_clearance_m: f32,
+    /// Where along the path, metres, the airborne clearance was least.
+    pub min_airborne_at_m: f32,
     pub max_speed_mps: f32,
     pub max_camera_rate_rad_s: f32,
     pub touchdown_error_m: f32,
@@ -53,6 +109,9 @@ pub struct RouteState {
 impl Default for RouteState {
     fn default() -> Self {
         Self {
+            kind: RouteKind::FarSide,
+            planned: true,
+            profile: None,
             start: Vec3::Y,
             normal: Vec3::Z,
             destination_rad: std::f32::consts::PI,
@@ -65,6 +124,7 @@ impl Default for RouteState {
             camera_ready: false,
             peak_height_m: 0.0,
             min_airborne_clearance_m: f32::INFINITY,
+            min_airborne_at_m: 0.0,
             max_speed_mps: 0.0,
             max_camera_rate_rad_s: 0.0,
             touchdown_error_m: f32::INFINITY,
@@ -76,6 +136,21 @@ impl Default for RouteState {
 /// vertical field of view, 11 degrees puts the horizon about a third of the
 /// way down the frame.
 const HORIZON_BELOW_CENTRE_RAD: f32 = 0.20;
+
+/// How far the scenic route looks for interesting ground, metres of arc.
+/// 5 km is 60 degrees of arc on this 4.8 km world; 9 km was over a quarter of
+/// the way round, and the first recording flew into the night over open sea.
+pub const SCENIC_REACH_M: f32 = 5_000.0;
+/// The sun's least height over the path, as the dot of the local up with the
+/// sun: the scenic route stays in daylight.
+const SCENIC_MIN_SUN: f32 = 0.2;
+/// The scenic route's cloud leg: its height above sea level (the middle of the
+/// cloud layer, 300-750 m up) and the share of the path it covers.
+/// Cover that counts as a cloud to fly into, and how much a metre of it is
+/// worth against the land's interest when picking the heading: enough that a
+/// heading with cloud always wins over one without.
+const SCENIC_CLOUD_COVER: f32 = 0.55;
+const SCENIC_CLOUD_WEIGHT: f32 = 12.0;
 
 /// Seconds the ship holds still on the ground before it lifts.
 pub const HOLD_S: f32 = 1.5;
@@ -107,6 +182,220 @@ impl RouteState {
         }
     }
 
+    /// A scenic route waiting to be planned: it plans once the weather is in
+    /// hand (`plan_scenic`), and holds the ship on the ground until then.
+    pub fn scenic_pending(start: Vec3) -> Self {
+        Self {
+            kind: RouteKind::Scenic,
+            planned: false,
+            start: start.normalize_or(Vec3::Y),
+            previous_direction: start.normalize_or(Vec3::Y),
+            ..Default::default()
+        }
+    }
+
+    /// The scenic route: from `start`, along the heading that flies INTO the
+    /// most cloud and then over the most interesting ground within
+    /// `SCENIC_REACH_M`, to the flattest dry ground near its end. Scored from
+    /// the weather (`atmosphere`, when there is one) and the terrain
+    /// generator, and logged.
+    pub fn scenic(
+        start: Vec3,
+        config: &FlightViewConfig,
+        atmosphere: Option<&Atmosphere>,
+        sun: Option<Vec3>,
+    ) -> Self {
+        let start = start.normalize_or(Vec3::Y);
+        let east = Vec3::Y.cross(start).normalize_or(Vec3::X);
+        let at = |normal: Vec3, s: f32| Quat::from_axis_angle(normal, s / PLANET_RADIUS) * start;
+        struct Pick {
+            score: f32,
+            normal: Vec3,
+            landing: f32,
+            cloud: Option<(f32, f32, f32)>,
+            parts: [f32; 3],
+        }
+        let mut best: Option<Pick> = None;
+        for step in 0..36 {
+            let heading = Quat::from_axis_angle(start, step as f32 * 10f32.to_radians()) * east;
+            // Travel along `heading` from `start` is `normal x up` for this normal.
+            let normal = start.cross(heading).normalize_or(Vec3::Z);
+            let samples: Vec<(f32, f32, pbd_core::planet_gen::Biome)> =
+                (0..=((SCENIC_REACH_M - 800.0) / 50.0) as usize)
+                    .map(|i| {
+                        let s = 800.0 + i as f32 * 50.0;
+                        let d = at(normal, s);
+                        (
+                            s,
+                            planet::surface_height(d),
+                            pbd_core::planet_gen::biome(&planet::TERRAIN, d),
+                        )
+                    })
+                    .collect();
+            // The land: relief, coastline crossings, how many kinds of ground.
+            let relief: f32 = samples.windows(2).map(|w| (w[1].1 - w[0].1).abs()).sum();
+            let coast = samples
+                .windows(2)
+                .filter(|w| (w[0].1 > 0.5) != (w[1].1 > 0.5))
+                .count() as f32;
+            let mut kinds: Vec<_> = samples.iter().map(|x| x.2).collect();
+            kinds.sort();
+            kinds.dedup();
+            // In daylight all the way, or not at all.
+            if let Some(sun) = sun
+                && samples
+                    .iter()
+                    .any(|x| at(normal, x.0).dot(sun) < SCENIC_MIN_SUN)
+            {
+                continue;
+            }
+            // Open sea is a flat, dark picture: the share of the path over it
+            // costs as much as a whole coastline gains.
+            let sea = samples.iter().filter(|x| x.1 <= 0.5).count() as f32 / samples.len() as f32;
+            let land = relief + coast * 80.0 + kinds.len() as f32 * 150.0 - sea * 1_500.0;
+            // The cloud: the longest unbroken stretch of solid cover in the
+            // first half of the path, which the ship will fly through.
+            let mut cloud = None;
+            if let Some(air) = atmosphere {
+                let (mut run_start, mut longest) = (None, (0.0f32, 0.0f32, 0.0f32));
+                let mut tops = 0.0f32;
+                for &(s, _, _) in samples.iter().filter(|x| x.0 < SCENIC_REACH_M * 0.6) {
+                    let sample = air.sample(at(normal, s));
+                    if sample.cover >= SCENIC_CLOUD_COVER {
+                        let from = *run_start.get_or_insert(s);
+                        tops = tops.max(sample.cloud_top);
+                        if s - from > longest.1 - longest.0 {
+                            longest = (from, s, tops);
+                        }
+                    } else {
+                        run_start = None;
+                        tops = 0.0;
+                    }
+                }
+                if longest.1 - longest.0 >= 200.0 {
+                    cloud = Some(longest);
+                }
+            }
+            let cloud_m = cloud.map_or(0.0, |c| c.1 - c.0);
+            // A landing: the flattest dry ground in the last third of the reach.
+            let landing = samples
+                .windows(3)
+                .filter(|w| w[1].0 >= SCENIC_REACH_M * 0.65 && w[1].1 > 2.0)
+                .min_by(|a, b| {
+                    let slope = |w: &[(f32, f32, _)]| (w[2].1 - w[0].1).abs();
+                    slope(a).total_cmp(&slope(b))
+                })
+                .map(|w| w[1].0);
+            let Some(landing) = landing else { continue };
+            let score = cloud_m * SCENIC_CLOUD_WEIGHT + land;
+            if best.as_ref().is_none_or(|b| score > b.score) {
+                best = Some(Pick {
+                    score,
+                    normal,
+                    landing,
+                    cloud,
+                    parts: [cloud_m, land, kinds.len() as f32],
+                });
+            }
+        }
+        let pick = best.unwrap_or(Pick {
+            score: 0.0,
+            normal: start.cross(east),
+            landing: SCENIC_REACH_M,
+            cloud: None,
+            parts: [0.0; 3],
+        });
+        let step_m = 25.0;
+        let count = (pick.landing / step_m).ceil() as usize + 1;
+        let ground: Vec<f32> = (0..count)
+            .map(|i| planet::terrain_radius(at(pick.normal, i as f32 * step_m)))
+            .collect();
+        // Follow the terrain: the highest ground from a little behind to well
+        // ahead, plus the flying height, so the ship rises before a ridge; then
+        // smoothed, so it does not bob over every block. Through the cloud
+        // stretch it holds the cloud's own middle height instead, with a
+        // lead-in and lead-out, so it flies into the cloud and out of it.
+        let behind = (100.0 / step_m) as usize;
+        let ahead = (600.0 / step_m) as usize;
+        let raw: Vec<f32> = (0..count)
+            .map(|i| {
+                let s = i as f32 * step_m;
+                let lo = i.saturating_sub(behind);
+                let hi = (i + ahead).min(count - 1);
+                let high = ground[lo..=hi].iter().copied().fold(0.0f32, f32::max);
+                let follow = high + config.route_scenic_height_m;
+                match pick.cloud {
+                    Some((from, to, top)) if s > from - 700.0 && s < to + 400.0 => {
+                        let base = crate::sky::CLOUD_RADIUS;
+                        let thickness = crate::sky::CLOUD_THICKNESS * top.clamp(0.2, 1.0);
+                        follow.max(base + thickness * 0.4)
+                    }
+                    _ => follow,
+                }
+            })
+            .collect();
+        let smooth = (200.0 / step_m) as usize;
+        let radius: Vec<f32> = (0..count)
+            .map(|i| {
+                let lo = i.saturating_sub(smooth);
+                let hi = (i + smooth).min(count - 1);
+                let mean = raw[lo..=hi].iter().sum::<f32>() / (hi - lo + 1) as f32;
+                mean.max(ground[i] + config.route_scenic_height_m * 0.6)
+            })
+            .collect();
+        match pick.cloud {
+            Some((from, to, top)) => info!(
+                "scenic route: into {:.0} m of cloud (cover >= {SCENIC_CLOUD_COVER}, top {top:.2}) from {from:.0} m, then {:.0} of land interest over {:.0} kinds of ground, landing on flat ground {:.0} m out; score {:.0}",
+                to - from,
+                pick.parts[1],
+                pick.parts[2],
+                pick.landing,
+                pick.score
+            ),
+            None => info!(
+                "scenic route: no cloud found on any heading{}; {:.0} of land interest, landing {:.0} m out",
+                if atmosphere.is_none() {
+                    " (no weather)"
+                } else {
+                    ""
+                },
+                pick.parts[1],
+                pick.landing
+            ),
+        }
+        Self {
+            kind: RouteKind::Scenic,
+            planned: true,
+            profile: Some(Arc::new(HeightProfile {
+                step_m,
+                radius,
+                ground,
+            })),
+            start,
+            normal: pick.normal,
+            destination_rad: pick.landing / PLANET_RADIUS,
+            previous_direction: start,
+            ..Default::default()
+        }
+    }
+
+    /// The climb and glide angle, the level speed and the steep-leg speed for
+    /// this route.
+    fn legs(&self, config: &FlightViewConfig) -> (f32, f32, f32) {
+        match self.kind {
+            RouteKind::FarSide => (
+                config.route_climb_angle_deg,
+                config.route_speed,
+                config.route_climb_speed,
+            ),
+            RouteKind::Scenic => (
+                config.route_scenic_climb_deg,
+                config.route_scenic_speed,
+                config.route_scenic_speed * 0.8,
+            ),
+        }
+    }
+
     /// Metres of arc flown and left, on the sphere the bands and the tour
     /// measure on.
     pub fn arcs_m(&self) -> (f32, f32) {
@@ -122,6 +411,12 @@ impl RouteState {
 
     /// Advance the arc flown and the clock, after a physics step.
     pub fn advance(&mut self, direction: Vec3, dt: f32) {
+        // Unplanned, the clock does not start: the hold before lift-off
+        // counts from when the route is laid out.
+        if !self.planned {
+            self.previous_direction = direction;
+            return;
+        }
         let sine = self.normal.dot(self.previous_direction.cross(direction));
         let cosine = self.previous_direction.dot(direction).clamp(-1.0, 1.0);
         self.flown_rad += sine.atan2(cosine) as f64;
@@ -162,24 +457,25 @@ pub(super) fn route_command(
     let tangent = route.normal.cross(up).normalize_or(Vec3::X);
     let height = radius - planet::terrain_radius(up);
     let (flown, left) = route.arcs_m();
-    let slope = config.route_climb_angle_deg.to_radians().tan();
+    let (angle, level_speed, steep_speed) = route.legs(config);
+    let slope = angle.to_radians().tan();
     let tangential_speed = velocity.dot(tangent);
 
-    let desired = if route.elapsed_s < HOLD_S || route.landed_at_s.is_some() {
+    let desired = if !route.planned || route.elapsed_s < HOLD_S || route.landed_at_s.is_some() {
         // Standing on the ground, before the lift and after the landing.
         Vec3::ZERO
     } else {
         // The height line and its slope along the ground here, from the
         // numerical derivative of the same line so the two cannot disagree.
-        let target = height_line(flown, left, slope, config);
-        let gradient = (height_line(flown + 1.0, left - 1.0, slope, config)
-            - height_line(flown - 1.0, left + 1.0, slope, config))
+        let target = height_line(route, flown, left, slope, config);
+        let gradient = (height_line(route, flown + 1.0, left - 1.0, slope, config)
+            - height_line(route, flown - 1.0, left + 1.0, slope, config))
             / 2.0;
         // Speed along the path: the climb speed on the steep legs, the cruise
         // speed on the level, eased up from the start and down to the
         // destination at the route's ground acceleration.
         let steep = (gradient.abs() / slope).clamp(0.0, 1.0);
-        let path = config.route_speed + (config.route_climb_speed - config.route_speed) * steep;
+        let path = level_speed + (steep_speed - level_speed) * steep;
         let a = config.route_ground_accel;
         let along = path
             .min((4.0f32.powi(2) + 2.0 * a * flown).sqrt())
@@ -188,7 +484,15 @@ pub(super) fn route_command(
         if left < 0.5 {
             ground = 0.0;
         }
-        let mut vertical = gradient * ground + (target - height) * 0.8;
+        // The ground's own slope along the path, fed forward: the height line
+        // is a height ABOVE the ground, so over rising ground the ship has to
+        // climb with it. Left to the error term, it sank 50 m and more toward
+        // every hillside at 150 m/s (`--verify-route scenic`).
+        let along = |metres: f32| {
+            planet::terrain_radius(Quat::from_axis_angle(route.normal, metres / PLANET_RADIUS) * up)
+        };
+        let terrain_slope = (along(25.0) - along(-25.0)) / 50.0;
+        let mut vertical = (gradient + terrain_slope) * ground + (target - height) * 0.8;
         // The flare: slower the nearer the ground, easing to a stop just above
         // the terrain guard's height. Descending at the touchdown speed all
         // the way, the guard caught the ship at touchdown instead.
@@ -227,15 +531,29 @@ pub(super) fn route_command(
 /// descent, its corners rounded by `route_corner_m` (a polynomial smooth
 /// minimum) so the ship is never asked to turn faster than it can at speed.
 /// The climb is offset a few metres so the lift begins at once.
-fn height_line(flown: f32, left: f32, slope: f32, config: &FlightViewConfig) -> f32 {
-    let climb = (flown + 6.0) * slope;
+fn height_line(
+    route: &RouteState,
+    flown: f32,
+    left: f32,
+    slope: f32,
+    config: &FlightViewConfig,
+) -> f32 {
+    // The lift: the line starts a few metres up so the ship rises at once; the
+    // low scenic route lifts 30 m straight up first, clear of the hills round
+    // the spawn, before it moves off (it scraped them at 30 degrees).
+    let lift = match route.kind {
+        RouteKind::FarSide => 6.0 * slope,
+        RouteKind::Scenic => 30.0,
+    };
+    let climb = flown * slope + lift;
     let descend = left.max(0.0) * slope;
-    let k = config.route_corner_m;
-    let line = smooth_min(
-        smooth_min(climb, config.route_cruise_height_m, k),
-        descend,
-        k,
-    );
+    // The level part: the far side's cruise height, or the scenic route's
+    // profile, both as a height above the ground.
+    let (cruise, k) = match &route.profile {
+        Some(profile) => (profile.above_ground(flown), config.route_corner_m * 0.3),
+        None => (config.route_cruise_height_m, config.route_corner_m),
+    };
+    let line = smooth_min(smooth_min(climb, cruise, k), descend, k);
     // The rounding lifts the ends a little off the ground; never below zero,
     // and exactly the descent line in the last metres, so it lands.
     line.min(descend.max(0.0) + (left * 0.02).min(8.0)).max(0.0)
@@ -283,8 +601,12 @@ pub fn camera_target(
     let mut look = tangent * pitch.cos() - up * pitch.sin();
 
     // On the way down, turn to the landing site and keep it framed.
-    let slope = config.route_climb_angle_deg.to_radians().tan();
-    let descent_start = config.route_cruise_height_m / slope;
+    let (angle, _, _) = route.legs(config);
+    let slope = angle.to_radians().tan();
+    let descent_start = match route.kind {
+        RouteKind::FarSide => config.route_cruise_height_m / slope,
+        RouteKind::Scenic => 600.0,
+    };
     let approach = 1.0 - smoothstep(descent_start * 0.4, descent_start * 1.6, left);
     if approach > 0.0 {
         // Aim a little past the touchdown point, along the way the ship is

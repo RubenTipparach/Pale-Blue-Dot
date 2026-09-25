@@ -44,12 +44,23 @@
       rate reported by `--verify-route`.
 
 ## 3b. The scenic route
-- [ ] Waypoints scored from the generator (relief, coast, biome rarity), a
-      greedy spaced pick, the scores logged.
-- [ ] A cloud leg at mid-slab where the weather map has cover; then
-      terrain-following at about 90 m with a smoothed look-ahead.
-- [ ] A camera that turns to each feature as the ship passes it.
-- [ ] `--verify-route scenic`; record it and upload it like the far-side route.
+- [x] Planned at lift-off from the weather and the terrain generator: 36
+      headings scored on the longest stretch of solid cloud (cover >= 0.55) in
+      the first 60% of the path (weighted to win), then relief, coast and biome
+      variety less a penalty for open sea; daylight all the way (sun >= 0.2);
+      5 km reach (9 km was a quarter of this world and flew into the night);
+      landing on the flattest dry ground in the last third. Logged.
+- [x] A cloud leg at the cloud's own middle height, with lead-in and out; then
+      terrain-following at 90 m (highest ground 100 m behind to 600 m ahead,
+      smoothed), with the ground's slope fed forward; a 30 m vertical lift-off
+      and 45 degree climb.
+- [ ] A camera that turns to each feature as it passes: not built; the route
+      rig's pitch-from-dip camera is used.
+- [x] `--verify-route scenic` (no weather headless): lands 22.5 m from the site
+      in 43 s, never under 61 m airborne.
+- [ ] Record it: parked. A run planned 1.8 km of cloud from 1 km and landed
+      25 m from its site, but the footage caught another open game window;
+      the skill now refuses while another copy is running.
 
 ## 4. Record
 - [x] The cadence check in the `obs-record` skill (a repeat differs by under

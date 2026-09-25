@@ -5,7 +5,7 @@ mod input;
 pub mod route;
 mod tour;
 
-pub use route::RouteState;
+pub use route::{RouteKind, RouteState};
 
 use avian3d::prelude::*;
 use bevy::{
@@ -69,6 +69,13 @@ pub struct FlightViewConfig {
     pub route_camera_max_rate: f32,
     /// Reduced camera motion: the sway and bank at a third.
     pub route_reduced_motion: bool,
+    /// Which route `FlyMode::Route` flies.
+    pub route_kind: RouteKind,
+    /// The scenic route: its height above the ground ahead, metres; its speed
+    /// along the path, m/s; its climb and glide angle, degrees.
+    pub route_scenic_height_m: f32,
+    pub route_scenic_speed: f32,
+    pub route_scenic_climb_deg: f32,
 }
 
 impl Default for FlightViewConfig {
@@ -96,6 +103,10 @@ impl Default for FlightViewConfig {
             route_camera_ease_s: 0.9,
             route_camera_max_rate: 0.6,
             route_reduced_motion: false,
+            route_kind: RouteKind::FarSide,
+            route_scenic_height_m: 90.0,
+            route_scenic_speed: 150.0,
+            route_scenic_climb_deg: 45.0,
         }
     }
 }
@@ -272,6 +283,7 @@ impl Plugin for FlightViewPlugin {
                     .in_set(PhysicsStepSystems::Last)
                     .before(crate::enforce_safety_envelope),
             )
+            .add_systems(Update, plan_scenic)
             .add_systems(
                 PostUpdate,
                 (update_route_camera, follow_flight_camera)
@@ -319,7 +331,10 @@ fn setup_flight(world: &mut World) {
     assert!(config.route_corner_m >= 0.0);
     let (position, orientation, normal) = spawn_pose(config);
     if config.mode == FlyMode::Route {
-        *world.resource_mut::<RouteState>() = RouteState::new(position.normalize(), normal);
+        *world.resource_mut::<RouteState>() = match config.route_kind {
+            RouteKind::FarSide => RouteState::new(position.normalize(), normal),
+            RouteKind::Scenic => RouteState::scenic_pending(position.normalize()),
+        };
     }
     let controller = ShipController {
         limits: FlightLimits {
@@ -625,7 +640,8 @@ fn publish_flight_readout(
             // reader can time the flight from.
             if before < route::HOLD_S && route.elapsed_s >= route::HOLD_S {
                 info!(
-                    "ROUTE_LIFTOFF far-side: {:.1} degrees to the far side",
+                    "ROUTE_LIFTOFF {}: {:.1} degrees round",
+                    route.kind.name(),
                     route.destination_rad.to_degrees()
                 );
             }
@@ -634,8 +650,12 @@ fn publish_flight_readout(
             route.peak_height_m = route.peak_height_m.max(clearance);
             route.max_speed_mps = route.max_speed_mps.max(speed);
             // Airborne: after the lift, before the final approach.
-            if route.elapsed_s > route::HOLD_S + 5.0 && left > 300.0 {
-                route.min_airborne_clearance_m = route.min_airborne_clearance_m.min(clearance);
+            if route.elapsed_s > route::HOLD_S + 5.0
+                && left > 300.0
+                && clearance < route.min_airborne_clearance_m
+            {
+                route.min_airborne_clearance_m = clearance;
+                route.min_airborne_at_m = route.arcs_m().0;
             }
             if route.landed_at_s.is_none()
                 && left < route::LANDED_WITHIN_M
@@ -647,14 +667,16 @@ fn publish_flight_readout(
                 route.touchdown_error_m =
                     direction.dot(site).clamp(-1.0, 1.0).acos() * planet::PLANET_RADIUS;
                 info!(
-                    "ROUTE_TOUCHDOWN far-side: {:.1} s after the start, {:.1} m from the site",
-                    route.elapsed_s, route.touchdown_error_m
+                    "ROUTE_TOUCHDOWN {}: {:.1} s after the start, {:.1} m from the site",
+                    route.kind.name(),
+                    route.elapsed_s,
+                    route.touchdown_error_m
                 );
             }
             if let Some(landed) = route.landed_at_s {
                 route.completed = route.elapsed_s - landed >= route::SETTLE_S;
                 if route.completed {
-                    info!("ROUTE_COMPLETE far-side");
+                    info!("ROUTE_COMPLETE {}", route.kind.name());
                 }
             }
         }
@@ -677,6 +699,30 @@ fn publish_flight_readout(
             progress.completed = progress.angular_distance_rad >= std::f64::consts::TAU;
         }
     }
+}
+
+/// Lay out a pending scenic route once the weather is in hand, so it can fly
+/// into the clouds that are actually there. A headless run (no camera, no
+/// weather) plans on the land alone.
+fn plan_scenic(
+    config: Res<FlightViewConfig>,
+    air: Option<Res<crate::atmosphere::Air>>,
+    sun: Option<Res<crate::sky::Sun>>,
+    mut route: ResMut<RouteState>,
+) {
+    if config.mode != FlyMode::Route || route.kind != RouteKind::Scenic || route.planned {
+        return;
+    }
+    if air.is_none() && config.startup_camera {
+        return;
+    }
+    let start = route.start;
+    *route = RouteState::scenic(
+        start,
+        &config,
+        air.as_deref().map(|air| &*air.now),
+        sun.map(|sun| sun.direction()),
+    );
 }
 
 /// The route's camera rig, eased toward its target once a frame. Runs whether
