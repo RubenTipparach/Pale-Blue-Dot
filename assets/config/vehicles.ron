@@ -49,8 +49,8 @@
             edgewise_drag: 55.0,
             tilt_rate: 0.26,
             roll_mix: 0.12,
-            pitch_torque: 9000.0,
-            yaw_torque: 7000.0,
+            pitch_torque: 12600.0,
+            yaw_torque: 9800.0,
         ),
         assist: (
             hover_bank: 0.44,

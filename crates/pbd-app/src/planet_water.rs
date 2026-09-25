@@ -218,6 +218,14 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye:
 }
 
 /// Publish what the tier says is at the active camera's eye.
+pub(super) fn install_eye_water(app: &mut App) {
+    app.init_resource::<EyeWaterState>().add_systems(
+        PostUpdate,
+        publish_eye_water.after(bevy::transform::TransformSystems::Propagate),
+    );
+}
+
+/// Publish what the tier says is at the active camera's eye.
 ///
 /// In the MAIN world, because that is where the authoritative columns live;
 /// the render world reads the extracted answer. The camera rather than the
@@ -248,7 +256,7 @@ fn eye_water(
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return EyeWater::Unknown;
     };
-    let body = transform.translation() - frame.center.as_vec3();
+    let body = (transform.translation().as_dvec3() - frame.center).as_vec3();
     let Some(direction) = body.try_normalize() else {
         return EyeWater::Unknown;
     };
@@ -1215,6 +1223,74 @@ pub(super) fn build(render_app: &mut SubApp) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn occupied_camera_water_state_uses_this_frames_translated_eye() {
+        use std::sync::Arc;
+        let ocean = super::super::topology::dual_sphere(3)
+            .into_iter()
+            .find(|c| terrain::surface_height(c.direction) < -8.0)
+            .unwrap()
+            .direction;
+        let set = Arc::new(super::super::lod::generate_fine(
+            ocean,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        ));
+        let mut contact = crate::planet::PlanetContact::test_planet(5);
+        contact.set_fine(&set);
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, TransformPlugin));
+        install_eye_water(&mut app);
+        let offset = bevy::math::DVec3::new(8192.0, -4096.0, 2048.0);
+        app.insert_resource(PlanetRenderFrame { center: offset })
+            .insert_resource(contact)
+            .insert_resource(crate::planet::PlanetFine { set, version: 1 });
+        let above = (offset + (ocean * (terrain::PLANET_RADIUS + 3.0)).as_dvec3()).as_vec3();
+        let below = (offset + (ocean * (terrain::PLANET_RADIUS - 2.0)).as_dvec3()).as_vec3();
+        let parked = app
+            .world_mut()
+            .spawn((
+                Camera3d::default(),
+                Camera {
+                    is_active: false,
+                    ..default()
+                },
+                Transform::from_translation(above),
+            ))
+            .id();
+        let occupied = app
+            .world_mut()
+            .spawn((
+                Camera3d::default(),
+                Camera::default(),
+                crate::vehicles::VehicleCamera,
+                Transform::from_translation(above),
+            ))
+            .id();
+        app.update();
+        assert_eq!(app.world().resource::<EyeWaterState>().0, EyeWater::Air);
+        // Vehicle following runs here, after Update but before propagation.
+        app.add_systems(
+            PostUpdate,
+            (move |mut camera: Query<&mut Transform, With<crate::vehicles::VehicleCamera>>| {
+                camera.single_mut().unwrap().translation = below;
+            })
+            .before(bevy::transform::TransformSystems::Propagate),
+        );
+        app.update();
+        assert!(matches!(
+            app.world().resource::<EyeWaterState>().0,
+            EyeWater::Water { .. }
+        ));
+        app.world_mut()
+            .get_mut::<Camera>(occupied)
+            .unwrap()
+            .is_active = false;
+        app.world_mut().get_mut::<Camera>(parked).unwrap().is_active = true;
+        app.update();
+        assert_eq!(app.world().resource::<EyeWaterState>().0, EyeWater::Air);
+    }
 
     #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {

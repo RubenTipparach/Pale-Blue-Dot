@@ -9,13 +9,13 @@
 //! attitude and climb held in the hover, drift over the ground cancelled with
 //! the stick centred, rates held in wingborne flight.
 
-use super::foil::{self, FoilSpec};
+use super::foil;
 use super::{
     AIR_DENSITY, Context, Craft, CraftState, FORWARD, Input, RIGHT, SEA_DENSITY, Telemetry,
     contact, v3,
 };
 use crate::vehicle::foil::smoothstep;
-use glam::{DQuat, DVec3};
+use glam::DVec3;
 use std::f64::consts::FRAC_PI_2;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -73,33 +73,18 @@ pub struct KestrelTelemetry {
     pub wet_loss: f64,
     /// The vertical speed at the last touchdown, m/s.
     pub touchdown: f64,
-}
-
-/// The two wing panels' foils, from the wing's incidence and dihedral.
-fn wing_panel(craft: &Craft, side: f64) -> FoilSpec {
-    let w = craft.specs().kestrel.wing;
-    let inc = (w.incidence_deg as f64).to_radians();
-    let dihedral = (w.dihedral_deg as f64).to_radians() * side;
-    let turn = DQuat::from_rotation_z(dihedral);
-    let chord = turn * DVec3::new(0.0, inc.sin(), -inc.cos());
-    let normal = turn * DVec3::new(0.0, inc.cos(), inc.sin());
-    let [x, y, z] = w.panel_at;
-    FoilSpec {
-        at: [x * side as f32, y, z],
-        chord: chord.as_vec3().to_array(),
-        normal: normal.as_vec3().to_array(),
-        area_m2: w.panel_area_m2,
-        aspect: w.aspect,
-        cl_max: w.cl_max,
-        cd0: w.cd0,
-    }
+    /// Collective currently commands vertical speed rather than moving the power lever.
+    pub climb_hold: bool,
+    /// Actual foil deflections, rad: left wing, right wing, elevator, rudder.
+    /// Renderers consume these instead of reproducing the assist controller.
+    pub surface_deflections: [f64; 4],
 }
 
 pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let specs = craft.specs.clone();
     let s = &specs.kestrel;
     let a = &s.assist;
-    let panels = [wing_panel(craft, -1.0), wing_panel(craft, 1.0)];
+    let panels = s.wing.panels();
     let occupied = craft.occupied;
     let com = craft.com;
     let Craft {
@@ -143,7 +128,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         let drift = body.velocity - up * body.velocity.dot(up);
         let centred = roll == 0.0 && pitch == 0.0;
         let hold = |component: f64| {
-            if centred {
+            if centred && g > 1e-6 {
                 (a.drift_gain as f64 * component / g)
                     .clamp(-a.drift_tilt as f64, a.drift_tilt as f64)
             } else {
@@ -171,7 +156,8 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     // Power: a climb hold in the hover, a lever otherwise.
     let vertical_speed = body.velocity.dot(up);
     let axis = body.axis(DVec3::new(0.0, sb, -st.nacelle.cos()));
-    if st.assist && hover > 0.5 {
+    let climb_hold = st.assist && hover > 0.5;
+    if climb_hold {
         let want = if occupied {
             climb * a.climb_mps as f64
         } else {
@@ -202,6 +188,10 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     // The rotors.
     let mut thrust_total = DVec3::ZERO;
     let mut rotor_up = 0.0;
+    // Differential thrust redistributes available collective; it cannot
+    // start a stopped rotor or demand power beyond either rotor's range.
+    let headroom = st.throttle.min(1.0 - st.throttle);
+    let differential = (cr * s.rotor.roll_mix as f64 * hover).clamp(-headroom, headroom);
     for side in [-1.0, 1.0] {
         let [x, y, z] = s.rotor.at;
         let at = body.point(DVec3::new(x as f64 * side, y as f64, z as f64) - com);
@@ -214,7 +204,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         let ratio = s.rotor.radius_m as f64 / (4.0 * clearance);
         let ground_effect =
             (1.0 / (1.0 - ratio * ratio)).clamp(1.0, s.rotor.ground_effect_max as f64);
-        let power = (st.throttle - side * cr * s.rotor.roll_mix as f64 * hover).clamp(0.0, 1.0);
+        let power = st.throttle - side * differential;
         let thrust = s.rotor.thrust_n as f64 * power * lost * (1.0 + (ground_effect - 1.0) * sb);
         let across = air_here - axis * air_here.dot(axis);
         let force = axis * thrust + across * (s.rotor.edgewise_drag as f64 * power);
@@ -222,7 +212,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         thrust_total += axis * thrust;
         rotor_up += force.dot(up);
     }
-    let authority = hover * (0.25 + st.throttle);
+    let authority = hover * thrust_total.length() / (2.0 * s.rotor.thrust_n as f64);
     body.twist(body.axis(DVec3::new(
         cp * s.rotor.pitch_torque as f64 * authority,
         -cy * s.rotor.yaw_torque as f64 * authority,
@@ -235,11 +225,14 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let drag_scale = 1.0 + s.wet_cd_gain as f64 * wet;
     let flap = s.wing.flap_rad as f64 * sb;
     let aileron = s.wing.aileron_rad as f64 * cr;
+    let surface_deflections = [
+        flap + aileron,
+        flap - aileron,
+        -(s.elevator_rad as f64) * cp,
+        -(s.rudder_rad as f64) * cy,
+    ];
     let mut wing = [foil::FoilForce::default(); 2];
-    for (i, (panel, deflect)) in [(panels[0], flap + aileron), (panels[1], flap - aileron)]
-        .into_iter()
-        .enumerate()
-    {
+    for (i, (panel, deflect)) in panels.into_iter().zip(surface_deflections).enumerate() {
         let fluid = cx.wind(body.point(v3(panel.at) - com));
         wing[i] = foil::apply(
             body,
@@ -259,7 +252,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         com,
         tail_wind,
         AIR_DENSITY,
-        -(s.elevator_rad as f64) * cp,
+        surface_deflections[2],
         1.0,
         1.0,
     );
@@ -270,7 +263,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         com,
         fin_wind,
         AIR_DENSITY,
-        -(s.rudder_rad as f64) * cy,
+        surface_deflections[3],
         1.0,
         1.0,
     );
@@ -338,5 +331,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         } else {
             previous
         },
+        climb_hold,
+        surface_deflections,
     });
 }

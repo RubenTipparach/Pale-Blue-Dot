@@ -3570,10 +3570,12 @@ dependencies = [
  "avian3d",
  "bevy",
  "bytemuck",
+ "gltf",
  "naga",
  "pbd-core",
  "ron",
  "serde",
+ "serde_json",
  "wgpu",
 ]
 
@@ -3584,6 +3586,7 @@ dependencies = [
  "glam 0.30.10",
  "ron",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

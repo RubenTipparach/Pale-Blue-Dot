@@ -4,7 +4,7 @@
 //! canoe cannot outrun its own blade. Rain and waves over the gunwale fill it,
 //! and the water sloshes to the low side, which is what swamps a canoe.
 
-use super::foil::{self, FoilForce};
+use super::foil::FoilForce;
 use super::hull::{bilge_flow, float, resist};
 use super::{
     Context, Craft, CraftState, FORWARD, Input, RIGHT, SEA_DENSITY, Telemetry, contact, v3, windage,
@@ -43,15 +43,21 @@ impl Default for LoonState {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LoonTelemetry {
-    /// Speed ahead, and sideways drift (starboard positive), m/s.
+    /// Speed ahead and sideways drift over ground (starboard positive), m/s.
     pub speed: f64,
     pub drift: f64,
+    /// Forward and sideways motion through local water, m/s.
+    pub water_speed: f64,
+    pub water_drift: f64,
     /// Heel, rad, starboard down positive.
     pub heel: f64,
     /// The lowest the gunwale stands over the sea, m.
     pub freeboard: f64,
     /// The blade's force and where it pulled.
     pub blade: FoilForce,
+    /// Active stern-rudder blade centre in the craft reference frame, m.
+    /// Present even at zero relative water speed; absent during a power stroke.
+    pub rudder_at: Option<DVec3>,
     pub strokes_per_minute: f64,
     pub displaced_m3: f64,
     pub stroke: Option<Stroke>,
@@ -125,6 +131,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     // the stern as a rudder.
     let blade_at = |x: f64, z: f64| DVec3::new(x, p.depth_m as f64, z) - com;
     let mut blade = FoilForce::default();
+    let mut rudder_at = None;
     let pull = |body: &mut super::body::RigidBody, local: DVec3, stroke_speed: f64, area: f64| {
         let at = body.point(local);
         let (height, _) = cx.water(at, 0.0);
@@ -166,22 +173,14 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         );
     } else if occupied && input.rudder != 0.0 {
         let side = -(input.rudder as f64).signum();
-        blade = pull(
-            body,
-            blade_at(side * p.rudder_at[0] as f64, p.rudder_at[1] as f64),
-            0.0,
-            p.rudder_m2 as f64,
-        );
+        let local = blade_at(side * p.rudder_at[0] as f64, p.rudder_at[1] as f64);
+        rudder_at = Some(local + com);
+        blade = pull(body, local, 0.0, p.rudder_m2 as f64);
     }
 
     // The hull's own grip on the water, and its resistance.
-    let lateral_at = body.point(v3(s.lateral.at) - com);
-    let (height, _) = cx.water(lateral_at, 0.0);
-    if height - (lateral_at.length() - cx.env.sea_radius) > -0.05 {
-        let (_, water) = cx.water(lateral_at, 0.05);
-        foil::apply(body, &s.lateral, com, water, SEA_DENSITY, 0.0, 1.0, 1.0);
-        foil::apply(body, &s.skeg, com, water, SEA_DENSITY, 0.0, 1.0, 1.0);
-    }
+    cx.wet_foil(body, &s.lateral, com, 0.0);
+    cx.wet_foil(body, &s.skeg, com, 0.0);
     let (_, surface_water) = cx.water(body.position, 0.1);
     resist(
         body,
@@ -229,12 +228,16 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let forward = body.axis(FORWARD);
     let flat = |v: DVec3| v - up * v.dot(up);
     let over_ground = flat(body.velocity);
+    let through_water = flat(body.velocity - surface_water);
     *telemetry = Telemetry::Loon(LoonTelemetry {
         speed: over_ground.dot(flat(forward).normalize_or_zero()),
         drift: over_ground.dot(flat(right).normalize_or_zero()),
+        water_speed: through_water.dot(flat(forward).normalize_or_zero()),
+        water_drift: through_water.dot(flat(right).normalize_or_zero()),
         heel,
         freeboard,
         blade,
+        rudder_at,
         strokes_per_minute: st.strokes.len() as f64 * 10.0,
         displaced_m3: displaced,
         stroke: st.stroke,

@@ -13,6 +13,36 @@ const RADIUS: f64 = 4799.5;
 const G: f64 = 25.0;
 const TICK: f64 = 1.0 / 60.0;
 
+#[test]
+fn kestrel_reports_the_deflections_used_by_its_foils() {
+    let mut craft = at_pole(Kind::Kestrel, 100.0, 0.0);
+    craft.occupied = true;
+    let CraftState::Kestrel(state) = &mut craft.state else {
+        unreachable!()
+    };
+    state.assist = false;
+    let input = Input {
+        roll: 0.5,
+        pitch: -0.25,
+        yaw: 0.75,
+        ..Default::default()
+    };
+    World::new(RADIUS - 100.0).run(&mut craft, TICK, |_| input);
+    let Telemetry::Kestrel(t) = &craft.telemetry else {
+        unreachable!()
+    };
+    let s = &craft.specs().kestrel;
+    let expected = [
+        s.wing.flap_rad as f64 + 0.5 * s.wing.aileron_rad as f64,
+        s.wing.flap_rad as f64 - 0.5 * s.wing.aileron_rad as f64,
+        0.25 * s.elevator_rad as f64,
+        -0.75 * s.rudder_rad as f64,
+    ];
+    for (actual, expected) in t.surface_deflections.into_iter().zip(expected) {
+        assert!((actual - expected).abs() < 1e-10);
+    }
+}
+
 struct World {
     sea: SeaTable,
     gusts: GustSettings,
@@ -20,6 +50,8 @@ struct World {
     wind: Vec3,
     sea_wind: f32,
     rain: f32,
+    gravity: f64,
+    current: DVec3,
     seconds: f64,
 }
 
@@ -35,6 +67,8 @@ impl World {
             wind: Vec3::ZERO,
             sea_wind: 0.0,
             rain: 0.0,
+            gravity: G,
+            current: DVec3::ZERO,
             seconds: 1000.0,
         }
     }
@@ -56,8 +90,8 @@ impl World {
                     over_land: self.ground > RADIUS,
                 },
                 gusts: &self.gusts,
-                gravity: -up * G,
-                current: DVec3::ZERO,
+                gravity: -up * self.gravity,
+                current: self.current,
                 ground: &ground_at,
                 seconds: self.seconds,
             };
@@ -99,6 +133,368 @@ fn tern_telemetry(craft: &Craft) -> TernTelemetry {
         Telemetry::Tern(t) => t.clone(),
         _ => panic!("not a Tern"),
     }
+}
+
+#[test]
+fn kestrel_assist_stays_finite_as_gravity_fades_to_zero() {
+    for gravity in [0.0, 1e-12, 1e-5] {
+        let mut world = World::new(RADIUS - 40.0);
+        world.gravity = gravity;
+        let mut craft = at_pole(Kind::Kestrel, 100.0, 0.0);
+        craft.board();
+        world.run(&mut craft, 1.0, |_| Input::default());
+        let CraftState::Kestrel(state) = &craft.state else {
+            unreachable!()
+        };
+        assert!(state.throttle.is_finite() && state.lever.is_finite());
+    }
+}
+
+#[test]
+fn kestrel_rotor_controls_need_power_and_preserve_their_signs() {
+    for power in [0.0, 0.5] {
+        let mut world = World::new(RADIUS - 40.0);
+        world.gravity = 0.0;
+        let mut craft = at_pole(Kind::Kestrel, 100.0, 0.0);
+        craft.board();
+        if let CraftState::Kestrel(state) = &mut craft.state {
+            state.assist = false;
+            state.throttle = power;
+            state.lever = power;
+        }
+        world.run(&mut craft, TICK, |_| Input {
+            pitch: 1.0,
+            roll: 1.0,
+            yaw: 1.0,
+            ..Default::default()
+        });
+        if power == 0.0 {
+            assert!(
+                craft.body.angular_velocity.length() < 1e-12,
+                "unpowered rotation {:?}",
+                craft.body.angular_velocity
+            );
+            assert!(craft.body.velocity.length() < 1e-12, "unpowered thrust");
+        } else {
+            let spin = craft.body.local(craft.body.angular_velocity);
+            assert!(
+                spin.x > 0.0 && spin.y < 0.0 && spin.z < 0.0,
+                "powered signs {spin:?}"
+            );
+            assert!(craft.body.velocity.y > 0.0);
+        }
+    }
+}
+
+#[test]
+fn tern_leeway_does_not_confuse_a_cross_current_with_sliding_through_water() {
+    let mut world = World::new(RADIUS - 40.0);
+    world.sea = SeaTable::new(
+        SeaSettings {
+            swell_height_m: 0.0,
+            ..Default::default()
+        },
+        G as f32,
+    );
+    world.current = DVec3::X * 2.0;
+    let mut craft = at_pole(Kind::Tern, 0.2, 0.0);
+    craft.board();
+    craft.body.velocity = world.current;
+    world.run(&mut craft, TICK, |_| Input::default());
+    let t = tern_telemetry(&craft);
+    assert!(t.speed > 1.9);
+    assert!(t.water_speed < 0.005, "water speed {}", t.water_speed);
+    assert!(
+        // Windage has already begun moving it relative to the water during
+        // this tick; that small physical slip is under one degree, not 89.
+        t.leeway.abs() < 1.0_f64.to_radians(),
+        "leeway {} degrees while moving with the water",
+        t.leeway.to_degrees()
+    );
+}
+
+#[test]
+fn loon_instruments_separate_water_motion_from_ground_motion() {
+    let mut world = World::new(RADIUS - 40.0);
+    world.sea = SeaTable::new(
+        SeaSettings {
+            swell_height_m: 0.0,
+            ..Default::default()
+        },
+        G as f32,
+    );
+    world.current = DVec3::new(2.0, 0.0, -1.0);
+    let mut craft = at_pole(Kind::Loon, 0.1, 0.0);
+    craft.board();
+    craft.body.velocity = world.current;
+    world.run(&mut craft, TICK, |_| Input::default());
+    let Telemetry::Loon(t) = &craft.telemetry else {
+        unreachable!()
+    };
+    assert!((t.speed - 1.0).abs() < 0.005 && (t.drift - 2.0).abs() < 0.005);
+    assert!(t.water_speed.abs() < 0.005 && t.water_drift.abs() < 0.005);
+}
+
+#[test]
+fn kestrel_can_convert_to_wing_support_with_pilot_control_of_the_nacelles() {
+    let mut world = World::new(RADIUS - 40.0);
+    let mut craft = at_pole(Kind::Kestrel, 100.0, 0.0);
+    craft.board();
+    world.run(&mut craft, 5.0, |_| Input::default());
+    let Telemetry::Kestrel(hover) = &craft.telemetry else {
+        unreachable!()
+    };
+    assert!(hover.climb_hold);
+    let mut lowest = 100.0_f64;
+    let mut pitch = 0.0_f64;
+    world.run(&mut craft, 6.1, |c| {
+        lowest = lowest.min(c.body.position.length() - RADIUS);
+        pitch = pitch.max(
+            c.body
+                .axis(FORWARD)
+                .dot(c.body.position.normalize())
+                .asin()
+                .abs(),
+        );
+        Input {
+            tilt: -1.0,
+            ..Default::default()
+        }
+    });
+    let Telemetry::Kestrel(t) = &craft.telemetry else {
+        unreachable!()
+    };
+    assert!(t.airspeed > 60.0 && t.wing_share > 0.8, "conversion {t:?}");
+    assert!(!t.climb_hold && t.nacelle < 0.01);
+    assert!(lowest > 80.0, "lost too much height: {lowest}");
+    assert!(
+        pitch < 12.0_f64.to_radians(),
+        "pitched {} degrees",
+        pitch.to_degrees()
+    );
+}
+
+#[test]
+fn loon_stern_rudder_turns_toward_the_selected_side_underway() {
+    for rudder in [-1.0, 1.0] {
+        let mut world = World::new(RADIUS - 40.0);
+        world.sea = SeaTable::new(
+            SeaSettings {
+                swell_height_m: 0.0,
+                ..Default::default()
+            },
+            G as f32,
+        );
+        let mut craft = at_pole(Kind::Loon, 0.1, 0.0);
+        craft.board();
+        world.run(&mut craft, 5.0, |_| Input::default());
+        craft.body.velocity = FORWARD * 2.0;
+        world.run(&mut craft, 1.0, |_| Input {
+            rudder,
+            ..Default::default()
+        });
+        assert!(heading(&craft) * rudder as f64 > 0.05);
+    }
+}
+
+#[test]
+fn loon_skeg_immersion_is_independent_of_the_lateral_plane() {
+    let mut world = World::new(RADIUS - 40.0);
+    world.sea = SeaTable::new(
+        SeaSettings {
+            swell_height_m: 0.0,
+            ..Default::default()
+        },
+        G as f32,
+    );
+    for (pitch, height, wet) in [(0.5, 0.2, true), (-0.5, -0.2, false)] {
+        let mut craft = at_pole(Kind::Loon, height, 0.0);
+        craft.board();
+        craft.set_reference_pose(DVec3::Y * (RADIUS + height), DQuat::from_rotation_x(pitch));
+        craft.body.velocity = DVec3::new(0.4, 0.0, -2.0);
+        let mut without_skeg = craft.clone();
+        // Remove this surface only to isolate its contribution to the total wrench.
+        Arc::make_mut(&mut without_skeg.specs).loon.skeg.area_m2 = 0.0;
+        let ground = |_: DVec3| RADIUS - 40.0;
+        let env = Surroundings {
+            sea: &world.sea,
+            sea_state: world.sea.state(0.0, Vec3::ZERO),
+            sea_radius: RADIUS,
+            depth: 40.0,
+            air: AirHere {
+                wind: Vec3::ZERO,
+                upper: Vec3::ZERO,
+                rain_mmh: 0.0,
+                over_land: false,
+            },
+            gusts: &world.gusts,
+            gravity: DVec3::NEG_Y * G,
+            current: DVec3::ZERO,
+            ground: &ground,
+            seconds: 1000.0,
+        };
+        let cx = Context {
+            env: &env,
+            sea: world.sea.local(&env.sea_state, Vec3::Y, 40.0, env.seconds),
+            up: DVec3::Y,
+            ground: RADIUS - 40.0,
+            seconds: env.seconds,
+            dt: TICK / 4.0,
+        };
+        let skeg_depth = -cx.above_sea(craft.reference_point(craft.specs.loon.skeg.at));
+        let lateral_depth = -cx.above_sea(craft.reference_point(craft.specs.loon.lateral.at));
+        assert_eq!(skeg_depth > 0.0, wet);
+        assert_eq!(lateral_depth > 0.0, !wet);
+        loon::forces(&mut craft, &Input::default(), &cx);
+        loon::forces(&mut without_skeg, &Input::default(), &cx);
+        let force = craft.body.gathered().0 - without_skeg.body.gathered().0;
+        if wet {
+            assert!(force.length() > 1.0, "wet skeg has no force");
+        } else {
+            assert!(force.length() < 1e-9, "dry skeg force {force:?}");
+        }
+    }
+}
+
+#[test]
+fn loon_reports_a_working_rudder_at_rest_and_during_recovery() {
+    let mut world = World::new(RADIUS - 40.0);
+    world.sea = SeaTable::new(
+        SeaSettings {
+            swell_height_m: 0.0,
+            ..Default::default()
+        },
+        G as f32,
+    );
+    let ground = |_: DVec3| RADIUS - 40.0;
+    let env = Surroundings {
+        sea: &world.sea,
+        sea_state: world.sea.state(0.0, Vec3::ZERO),
+        sea_radius: RADIUS,
+        depth: 40.0,
+        air: AirHere {
+            wind: Vec3::ZERO,
+            upper: Vec3::ZERO,
+            rain_mmh: 0.0,
+            over_land: false,
+        },
+        gusts: &world.gusts,
+        gravity: DVec3::NEG_Y * G,
+        current: DVec3::ZERO,
+        ground: &ground,
+        seconds: 1000.0,
+    };
+    let cx = Context {
+        env: &env,
+        sea: world.sea.local(&env.sea_state, Vec3::Y, 40.0, env.seconds),
+        up: DVec3::Y,
+        ground: RADIUS - 40.0,
+        seconds: env.seconds,
+        dt: 0.0,
+    };
+    for phase in [None, Some(1.5), Some(0.5)] {
+        for rudder in [-1.0, 1.0] {
+            let mut craft = at_pole(Kind::Loon, 0.1, 0.0);
+            craft.board();
+            let CraftState::Loon(st) = &mut craft.state else {
+                unreachable!()
+            };
+            st.stroke = phase.map(|phase| Stroke {
+                side: 1.0,
+                direction: 1.0,
+                phase,
+            });
+            loon::forces(
+                &mut craft,
+                &Input {
+                    rudder,
+                    ..Default::default()
+                },
+                &cx,
+            );
+            let Telemetry::Loon(t) = &craft.telemetry else {
+                unreachable!()
+            };
+            if phase.is_some_and(|p| p < 1.0) {
+                assert_eq!(t.rudder_at, None, "the power stroke has priority");
+            } else {
+                let p = craft.specs.loon.paddle;
+                let at = t.rudder_at.expect("working even at rest");
+                assert_eq!(
+                    at,
+                    DVec3::new(
+                        -rudder as f64 * p.rudder_at[0] as f64,
+                        p.depth_m as f64,
+                        p.rudder_at[1] as f64
+                    )
+                );
+                assert_eq!(t.blade.force, DVec3::ZERO);
+                assert!(
+                    t.blade
+                        .at
+                        .distance(craft.reference_point(at.as_vec3().to_array()))
+                        < 1e-6
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_wet_foil_uses_orbital_velocity_and_current_at_its_own_depth() {
+    let world = World::new(RADIUS - 40.0);
+    let mut craft = at_pole(Kind::Tern, -1.0, 0.0);
+    craft.body.velocity = DVec3::new(0.4, 0.0, -2.0);
+    craft.body.angular_velocity = DVec3::Z * 0.2;
+    let ground = |_: DVec3| RADIUS - 40.0;
+    let env = Surroundings {
+        sea: &world.sea,
+        sea_state: world.sea.state(12.0, Vec3::X * 12.0),
+        sea_radius: RADIUS,
+        depth: 40.0,
+        air: AirHere {
+            wind: Vec3::ZERO,
+            upper: Vec3::ZERO,
+            rain_mmh: 0.0,
+            over_land: false,
+        },
+        gusts: &world.gusts,
+        gravity: DVec3::NEG_Y * G,
+        current: DVec3::new(0.3, 0.0, 0.1),
+        ground: &ground,
+        seconds: 1000.0,
+    };
+    let cx = Context {
+        env: &env,
+        sea: world.sea.local(&env.sea_state, Vec3::Y, 40.0, env.seconds),
+        up: DVec3::Y,
+        ground: RADIUS - 40.0,
+        seconds: env.seconds,
+        dt: TICK / 4.0,
+    };
+    let spec = craft.specs.tern.keel;
+    let at = craft.reference_point(spec.at);
+    let depth = -cx.above_sea(at);
+    assert!(depth > 0.0);
+    let (_, water) = cx.water(at, depth);
+    assert!(
+        (water - cx.water(at, 0.0).1).length() > 1e-4,
+        "orbital flow varies with depth"
+    );
+    let mut expected_body = craft.body;
+    let expected = foil::apply(
+        &mut expected_body,
+        &spec,
+        craft.com,
+        water,
+        SEA_DENSITY,
+        0.2,
+        1.0,
+        1.0,
+    );
+    let actual = cx.wet_foil(&mut craft.body, &spec, craft.com, 0.2);
+    assert!((actual.force - expected.force).length() < 1e-9);
+    assert_eq!(actual.at, at);
 }
 
 #[test]

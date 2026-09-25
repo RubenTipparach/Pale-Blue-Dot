@@ -215,6 +215,7 @@ pub struct PlanetPlugin;
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(crate::sea::SeaPlugin);
+        water::install_eye_water(app);
         app.add_plugins((
             ExtractResourcePlugin::<PlanetBase>::default(),
             ExtractResourcePlugin::<lod::PlanetFine>::default(),
@@ -231,9 +232,8 @@ impl Plugin for PlanetPlugin {
         .init_resource::<PlanetRenderFrame>()
         .init_resource::<lod::LodRefresh>()
         .init_resource::<lod::NearField>()
-        .init_resource::<water::EyeWaterState>()
         .add_systems(Startup, create_planet)
-        .add_systems(Update, (lod::refresh_lod, water::publish_eye_water))
+        .add_systems(Update, lod::refresh_lod)
         .add_systems(
             PostUpdate,
             update_planet_frame.before(TransformSystems::Propagate),

@@ -136,7 +136,10 @@ pub fn apply_oriented(
         spec.cl_max as f64 * lift_scale,
         spec.cd0 as f64 * drag_scale,
     );
-    let lift_dir = (n - d * d.dot(n)).normalize_or_zero();
+    // Keep the span's handedness through reverse flow. Projecting the fixed
+    // positive normal instead flips this basis at 90 degrees and makes a
+    // foil meeting reverse flow from below push down.
+    let lift_dir = d.cross(span).normalize_or_zero();
     let pressure = 0.5 * density * v2;
     let q = pressure * spec.area_m2 as f64;
     let force = lift_dir * (cl * q) + d * (cd * q);
@@ -158,6 +161,74 @@ pub(crate) fn smoothstep(lo: f64, hi: f64, x: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forward_and_reverse_flow_from_below_both_lift_without_adding_energy() {
+        let spec = crate::vehicle::spec::VehicleSpecs::default().kestrel.tail;
+        for z in [-20.0, 20.0] {
+            for y in [-2.0, 2.0] {
+                let mut body = RigidBody::new(100.0, DVec3::ONE);
+                body.velocity = DVec3::new(0.0, y, z);
+                let f = apply(
+                    &mut body,
+                    &spec,
+                    DVec3::ZERO,
+                    DVec3::ZERO,
+                    1.225,
+                    0.0,
+                    1.0,
+                    1.0,
+                );
+                assert!(
+                    f.force.y * y < 0.0,
+                    "flow {:?}: force {:?}",
+                    body.velocity,
+                    f.force
+                );
+                assert!(f.force.dot(body.velocity) < 0.0, "drag dissipates energy");
+                let flow = -body.velocity.normalize();
+                let (_, cd, _) = coefficients(
+                    f.alpha,
+                    spec.aspect as f64,
+                    spec.cl_max as f64,
+                    spec.cd0 as f64,
+                );
+                let lift = f.force - flow * cd * f.pressure * spec.area_m2 as f64;
+                assert!(lift.dot(flow).abs() < 1e-9, "lift is perpendicular to flow");
+            }
+        }
+    }
+
+    #[test]
+    fn lift_turns_continuously_through_normal_incidence() {
+        let spec = crate::vehicle::spec::VehicleSpecs::default().kestrel.tail;
+        let force = |z: f64| {
+            let mut body = RigidBody::new(100.0, DVec3::ONE);
+            body.velocity = DVec3::new(0.0, -20.0, z);
+            let f = apply(
+                &mut body,
+                &spec,
+                DVec3::ZERO,
+                DVec3::ZERO,
+                1.225,
+                0.0,
+                1.0,
+                1.0,
+            );
+            let flow = -body.velocity.normalize();
+            let (_, cd, _) = coefficients(
+                f.alpha,
+                spec.aspect as f64,
+                spec.cl_max as f64,
+                spec.cd0 as f64,
+            );
+            f.force - flow * cd * f.pressure * spec.area_m2 as f64
+        };
+        let (ahead, astern) = (force(-0.001), force(0.001));
+        assert!(ahead.z < 0.0 && astern.z > 0.0, "{ahead:?}, {astern:?}");
+        assert!((ahead + astern).length() < 1e-4);
+        assert!(force(0.0).length() < 1e-9);
+    }
 
     #[test]
     fn the_slope_is_thin_aerofoil_theory_for_the_aspect_ratio() {

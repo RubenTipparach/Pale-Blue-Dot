@@ -43,9 +43,16 @@ use std::{
 #[derive(Resource, Clone)]
 pub struct Launch {
     pub capture: Option<PathBuf>,
+    /// `--frame-log PATH`: a measurement instrument. Every frame's wall time,
+    /// written as CSV with the fine set's state on the same clock, so a hitch
+    /// can be attributed rather than guessed at (`far-side-flight`).
+    pub frame_log: Option<PathBuf>,
     pub view: String,
     pub frames: u32,
     pub tour: bool,
+    /// `--route far-side`: take off, climb, cruise round the planet and land
+    /// on the far side (`far-side-flight`). Implies the tour's scripted setup.
+    pub route: bool,
     pub fixed: bool,
     pub fly: bool,
     pub walk: bool,
@@ -133,11 +140,13 @@ impl Launch {
     fn parse(args: &[String]) -> Self {
         let mut result = Self {
             capture: None,
+            frame_log: None,
             view: "coast".into(),
             frames: 180,
             dig: 0,
             place: 0,
             tour: false,
+            route: false,
             fixed: false,
             fly: false,
             walk: false,
@@ -253,6 +262,12 @@ impl Launch {
                     );
                     result.spawn = Some(spawn);
                 }
+                "--frame-log" => {
+                    i += 1;
+                    result.frame_log = Some(PathBuf::from(
+                        args.get(i).expect("--frame-log requires a path"),
+                    ));
+                }
                 "--frames" => {
                     i += 1;
                     result.frames = args
@@ -262,6 +277,13 @@ impl Launch {
                         .expect("invalid frame count");
                 }
                 "--tour" => result.tour = true,
+                "--route" => {
+                    i += 1;
+                    let name = args.get(i).expect("--route requires a route name");
+                    assert!(name == "far-side", "--route knows far-side");
+                    result.route = true;
+                    result.tour = true;
+                }
                 "--fly" => result.fly = true,
                 "--walk" => result.walk = true,
                 "--swim" => {
@@ -343,6 +365,9 @@ impl Launch {
                     result.weather_at = seconds;
                 }
                 "--verify-flight" => {}
+                "--verify-route" => {
+                    i += 1;
+                }
                 unknown => panic!("unknown argument {unknown}; use --help"),
             }
             i += 1;
@@ -416,9 +441,16 @@ pub struct FrameStats {
     pub frame_ms: f32,
     pub samples: Vec<f64>,
     previous: Instant,
+    /// When the app started: the frame log's clock, to line a slow frame up
+    /// with what the log says happened then.
+    started: Instant,
 }
 
 pub fn run(args: &[String]) {
+    if args.iter().any(|s| s == "--verify-route") {
+        verify_route();
+        return;
+    }
     if args.iter().any(|s| s == "--verify-flight") {
         verify_flight(args.windows(2).any(|w| w[0] == "--view" && w[1] == "pole"));
         return;
@@ -496,16 +528,32 @@ pub fn run(args: &[String]) {
     .insert_resource(Time::<Fixed>::from_duration(step))
     .insert_resource(SubstepCount(4))
     .insert_resource(FlightViewConfig {
-        mode: if launch.tour {
+        mode: if launch.route {
+            FlyMode::Route
+        } else if launch.tour {
             FlyMode::Tour
         } else {
             FlyMode::Manual
         },
-        spawn_direction: restored
-            .map(|pose| pose.position.normalize_or(Vec3::Y))
-            .unwrap_or_else(|| spawn_direction(&launch)),
+        // The route always starts from the walker's dry-land spawn, not
+        // wherever the world's last flight ended.
+        spawn_direction: if launch.route {
+            spawn_direction(&launch)
+        } else {
+            restored
+                .map(|pose| pose.position.normalize_or(Vec3::Y))
+                .unwrap_or_else(|| spawn_direction(&launch))
+        },
         spawn_altitude: 240.0,
-        minimum_clearance: if launch.tour { 45.0 } else { 1.6 },
+        // The tour keeps 45 m above the ground; the route lands, so it keeps
+        // only the walker's eye height.
+        minimum_clearance: if launch.route {
+            1.6
+        } else if launch.tour {
+            45.0
+        } else {
+            1.6
+        },
         startup_camera: !photo,
         ..default()
     })
@@ -548,6 +596,7 @@ pub fn run(args: &[String]) {
         frame_ms: 0.0,
         samples: Vec::new(),
         previous: Instant::now(),
+        started: Instant::now(),
     })
     .insert_resource(launch.clone())
     .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
@@ -603,7 +652,11 @@ pub fn run(args: &[String]) {
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
     .add_systems(PreUpdate, load_world.after(menu::toggle))
-    .add_systems(Last, (measure_frames, drain_saves));
+    .insert_resource(FrameLog::open(launch.frame_log.as_deref()))
+    .add_systems(
+        Last,
+        ((measure_frames, write_frame_log).chain(), drain_saves),
+    );
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
@@ -1646,6 +1699,55 @@ fn capture(
     }
 }
 
+/// The `--frame-log` CSV, open for the run when asked for.
+#[derive(Resource)]
+struct FrameLog(Option<std::io::BufWriter<std::fs::File>>);
+
+impl FrameLog {
+    fn open(path: Option<&std::path::Path>) -> Self {
+        Self(path.map(|path| {
+            use std::io::Write;
+            let file = std::fs::File::create(path)
+                .unwrap_or_else(|error| panic!("--frame-log {}: {error}", path.display()));
+            let mut out = std::io::BufWriter::new(file);
+            writeln!(
+                out,
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps"
+            )
+            .expect("frame log header");
+            out
+        }))
+    }
+}
+
+/// One row per frame: the frame's wall time, the fine set drawn, the age of
+/// the rebuild in flight (empty when none), and how high and fast the player
+/// is, so an over-budget frame lines up with what the streaming was doing.
+fn write_frame_log(
+    mut log: ResMut<FrameLog>,
+    stats: Res<FrameStats>,
+    fine: Res<pbd_app::planet::PlanetFine>,
+    near: Res<pbd_app::planet::NearField>,
+    readout: Option<Res<pbd_app::flight_view::FlightReadout>>,
+) {
+    use std::io::Write;
+    let Some(out) = log.0.as_mut() else {
+        return;
+    };
+    let Some(ms) = stats.samples.last() else {
+        return;
+    };
+    let rebuild = near.rebuild_s.map_or(String::new(), |s| format!("{s:.3}"));
+    let (clearance, speed) = readout.map_or((f32::NAN, f32::NAN), |r| (r.clearance, r.speed));
+    let _ = writeln!(
+        out,
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1}",
+        stats.samples.len(),
+        stats.started.elapsed().as_secs_f64(),
+        fine.version
+    );
+}
+
 fn measure_frames(mut stats: ResMut<FrameStats>) {
     // Presentation handles interactive pacing. A second main-thread sleep
     // delayed freshly sampled mouse input without improving displayed motion.
@@ -1656,6 +1758,67 @@ fn measure_frames(mut stats: ResMut<FrameStats>) {
     if stats.samples.len() < 100_000 {
         stats.samples.push(ms);
     }
+}
+
+/// `--verify-route far-side`: fly the whole route headless and report what the
+/// window would show: that it completes and lands where it meant to, its peak
+/// height, its clearance while airborne, and the camera rig's fastest turn.
+fn verify_route() {
+    let mut app = pbd_app::headless_app();
+    app.add_plugins(FlightViewPlugin)
+        .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
+        .insert_resource(FlightViewConfig {
+            mode: FlyMode::Route,
+            spawn_direction: Vec3::new(0.8776, 0.4794, 0.0).normalize(),
+            minimum_clearance: 1.6,
+            startup_camera: false,
+            ..default()
+        });
+    app.finish();
+    app.cleanup();
+    app.update();
+    for _ in 0..60_000 {
+        app.update();
+        if app
+            .world()
+            .resource::<pbd_app::flight_view::RouteState>()
+            .completed
+        {
+            break;
+        }
+    }
+    let config = *app.world().resource::<FlightViewConfig>();
+    let r = *app.world().resource::<pbd_app::flight_view::RouteState>();
+    let t = *app.world().resource::<TourProgress>();
+    let report = format!(
+        "ROUTE far-side completed={} seconds={:.1} destination_deg={:.2} touchdown_error_m={:.1} peak_height_m={:.0} min_airborne_clearance_m={:.1} max_speed_m_s={:.1} max_camera_rate_rad_s={:.3} protection_events={}\n",
+        r.completed,
+        r.elapsed_s,
+        r.destination_rad.to_degrees(),
+        r.touchdown_error_m,
+        r.peak_height_m,
+        r.min_airborne_clearance_m,
+        r.max_speed_mps,
+        r.max_camera_rate_rad_s,
+        t.protection_events,
+    );
+    print!("{report}");
+    std::fs::create_dir_all("output/captures").unwrap();
+    std::fs::write("output/captures/route-far-side.txt", report).unwrap();
+    assert!(r.completed, "the route did not land and settle");
+    assert!(
+        r.touchdown_error_m < 30.0,
+        "landed away from the destination"
+    );
+    assert!(
+        r.peak_height_m > config.route_cruise_height_m * 0.95,
+        "never reached cruise height"
+    );
+    assert!(
+        r.max_speed_mps <= config.route_speed + 0.5,
+        "route speed exceeded"
+    );
+    assert!(r.max_camera_rate_rad_s < 1.0, "the camera turned too fast");
 }
 
 fn verify_flight(polar: bool) {

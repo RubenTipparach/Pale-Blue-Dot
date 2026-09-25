@@ -8,8 +8,10 @@
 //! the craft, the sea table and its state, the planet's gravity, and the
 //! walker's own ground query for anything a craft touches.
 
+mod chase;
 mod draw;
 mod hud;
+mod model;
 mod place;
 mod view;
 
@@ -132,6 +134,7 @@ impl Plugin for VehiclePlugin {
                 PostUpdate,
                 (draw::place, view::follow)
                     .chain()
+                    .after(crate::planet::update_planet_frame)
                     .before(bevy::transform::TransformSystems::Propagate),
             )
             .add_systems(Update, (hud::show, save_vehicles, view::look));

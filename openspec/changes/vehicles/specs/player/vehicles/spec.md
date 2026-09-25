@@ -14,13 +14,3 @@ toward the low side.
 #### Scenario: Swamping
 - **WHEN** the Loon's rim is held under the sea
 - **THEN** water floods in until the canoe floats awash
-
-### Requirement: The vehicle camera is the active camera
-While a craft is occupied its camera SHALL be the active camera, so every
-system that reads the active camera (water state, weather, LOD anchor)
-follows it, and its seat view SHALL use the frame's raw mouse displacement.
-
-#### Scenario: Water state from a boat
-- **WHEN** the player sits in the Loon at sea
-- **THEN** the water state is computed at the vehicle camera, not at the
-  parked walker

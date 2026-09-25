@@ -17,6 +17,7 @@ fn app(save: crate::saves::WorldSave) -> App {
     app.add_plugins(bevy::asset::AssetPlugin::default())
         .init_asset::<Mesh>()
         .init_asset::<StandardMaterial>()
+        .init_asset::<Image>()
         .insert_resource(PlanetContact::test_planet(5))
         .insert_resource(Sea::new(&water))
         .insert_resource(water)
@@ -253,10 +254,186 @@ fn board_from(app: &mut App, at: Vec3) {
 fn stand_at(app: &mut App, at: Vec3) {
     let mut query = app.world_mut().query_filtered::<Entity, With<Walker>>();
     let body = query.single(app.world()).unwrap();
+    let center = app
+        .world()
+        .resource::<crate::planet::PlanetRenderFrame>()
+        .center;
+    let up = (at.as_dvec3() - center).normalize().as_vec3();
     app.world_mut().entity_mut(body).insert((
-        Position(at + at.normalize() * crate::walking::HALF_HEIGHT),
+        Position(at + up * crate::walking::HALF_HEIGHT),
         Transform::from_translation(at),
     ));
+}
+
+fn stop_clock(app: &mut App) {
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::ZERO,
+    ));
+}
+
+fn camera_pose(app: &mut App) -> Transform {
+    *app.world_mut()
+        .query_filtered::<&Transform, With<VehicleCamera>>()
+        .single(app.world())
+        .unwrap()
+}
+
+#[test]
+fn translated_boarding_and_camera_follow_use_the_current_frame() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    stop_clock(&mut app);
+    app.add_systems(
+        PostUpdate,
+        crate::planet::update_planet_frame.before(bevy::transform::TransformSystems::Propagate),
+    );
+    let offset = DVec3::new(8192.0, -4096.0, 2048.0);
+    app.world_mut()
+        .resource_mut::<crate::PhysicsFrame>()
+        .0
+        .origin = -offset;
+    app.world_mut()
+        .resource_mut::<crate::planet::PlanetRenderFrame>()
+        .center = offset;
+    let (entity, craft) = crafts(&mut app)
+        .into_iter()
+        .find(|(_, c)| c.kind == Kind::Loon)
+        .unwrap();
+    stand_at(&mut app, (offset + craft.exit()).as_vec3());
+    app.world_mut().resource_mut::<view::VehicleView>().seat = true;
+    tap(&mut app, KeyCode::KeyG);
+    assert_eq!(app.world().resource::<Aboard>().0, Some(entity));
+    assert!(
+        camera_pose(&mut app)
+            .translation
+            .distance((offset + craft.eye()).as_vec3())
+            < 0.002
+    );
+    // Change only the authoritative origin: follow must see the newly published centre.
+    let next = offset + DVec3::new(512.0, -256.0, 128.0);
+    app.world_mut()
+        .resource_mut::<crate::PhysicsFrame>()
+        .0
+        .origin = -next;
+    app.update();
+    assert!(
+        camera_pose(&mut app)
+            .translation
+            .distance((next + craft.eye()).as_vec3())
+            < 0.002
+    );
+}
+
+#[test]
+fn mouse_look_is_immediate_without_a_physics_tick_and_v_switches_views() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    stop_clock(&mut app);
+    let (entity, craft) = crafts(&mut app).remove(0);
+    app.world_mut().resource_mut::<view::VehicleView>().seat = true;
+    take_seat(app.world_mut(), entity, true);
+    let delta = Vec2::new(37.0, -19.0);
+    app.world_mut()
+        .resource_mut::<AccumulatedMouseMotion>()
+        .delta = delta;
+    app.update();
+    let sensitivity = crate::flight_view::MOUSE_LOOK_SENSITIVITY;
+    let want = craft.body.orientation.as_quat()
+        * Quat::from_rotation_y(-delta.x * sensitivity)
+        * Quat::from_rotation_x(-delta.y * sensitivity);
+    assert!(camera_pose(&mut app).rotation.angle_between(want) < 0.001);
+    assert_eq!(
+        app.world()
+            .get::<Vehicle>(entity)
+            .unwrap()
+            .craft
+            .body
+            .orientation,
+        craft.body.orientation
+    );
+    let seat = camera_pose(&mut app).translation;
+    app.world_mut()
+        .resource_mut::<AccumulatedMouseMotion>()
+        .delta = Vec2::ZERO;
+    tap(&mut app, KeyCode::KeyV);
+    assert!(!app.world().resource::<view::VehicleView>().seat);
+    assert!(camera_pose(&mut app).translation.distance(seat) > 5.0);
+    tap(&mut app, KeyCode::KeyV);
+    assert!(app.world().resource::<view::VehicleView>().seat);
+    assert!(camera_pose(&mut app).translation.distance(seat) < 0.001);
+}
+
+#[test]
+fn each_craft_maps_its_controls_and_menus_suppress_keys_and_look() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    stop_clock(&mut app);
+    for (entity, craft) in crafts(&mut app) {
+        take_seat(app.world_mut(), entity, true);
+        let held = [
+            KeyCode::KeyW,
+            KeyCode::KeyA,
+            KeyCode::KeyQ,
+            KeyCode::Space,
+            KeyCode::KeyZ,
+            KeyCode::KeyB,
+        ];
+        for key in held {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(key);
+        }
+        app.update();
+        let input = app.world().resource::<VehicleControls>().0;
+        match craft.kind {
+            Kind::Kestrel => {
+                assert_eq!(
+                    (
+                        input.pitch,
+                        input.roll,
+                        input.yaw,
+                        input.collective,
+                        input.tilt
+                    ),
+                    (-1.0, -1.0, -1.0, 1.0, -1.0)
+                );
+                assert!(!input.bail);
+            }
+            Kind::Tern => assert_eq!(
+                (input.steer, input.sheet, input.crew, input.bail),
+                (1.0, 1.0, -1.0, true)
+            ),
+            Kind::Loon => assert_eq!(
+                (input.forward, input.steer, input.rudder, input.bail),
+                (1.0, 1.0, 1.0, true)
+            ),
+        }
+        let before = camera_pose(&mut app);
+        let seat = app.world().resource::<view::VehicleView>().seat;
+        app.insert_resource(crate::controls::MenuOpen(true));
+        app.world_mut()
+            .resource_mut::<AccumulatedMouseMotion>()
+            .delta = Vec2::splat(100.0);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyV);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyG);
+        app.update();
+        let input = app.world().resource::<VehicleControls>().0;
+        assert_eq!(input, Input::default());
+        assert_eq!(app.world().resource::<Aboard>().0, Some(entity));
+        assert_eq!(app.world().resource::<view::VehicleView>().seat, seat);
+        assert_eq!(camera_pose(&mut app), before);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .reset_all();
+        app.world_mut()
+            .resource_mut::<AccumulatedMouseMotion>()
+            .delta = Vec2::ZERO;
+        app.insert_resource(crate::controls::MenuOpen(false));
+    }
 }
 
 /// Casting off and anchoring are written the frame they happen, not on a
