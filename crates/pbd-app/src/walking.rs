@@ -44,6 +44,10 @@ pub struct WalkingConfig {
     /// The turn to the right of the default heading a walker starts with when
     /// nothing is restored, radians. The default heading is the pole's east.
     pub yaw: f32,
+    /// A steady turn to the right, radians a second: a MEASUREMENT instrument
+    /// (`cloud-ghosting`), so a capture can photograph what a turning view
+    /// leaves behind a silhouette. Zero, the default, is no turn.
+    pub turn: f32,
     pub walk_speed: f32,
     pub sprint_speed: f32,
     pub jump_speed: f32,
@@ -79,6 +83,7 @@ impl Default for WalkingConfig {
             restored: None,
             pitch: 0.0,
             yaw: 0.0,
+            turn: 0.0,
             walk_speed: 8.0,
             sprint_speed: 14.0,
             jump_speed: 12.0,
@@ -207,7 +212,7 @@ impl Plugin for WalkingPlugin {
             .add_systems(PostStartup, setup_walking)
             .add_systems(
                 RunFixedMainLoop,
-                (switch_mode, read_walking_input)
+                (switch_mode, read_walking_input, turn_for_capture)
                     .chain()
                     .before(FlightViewInput)
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
@@ -571,6 +576,17 @@ fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
     state.jump = false;
     if let Some(view) = view {
         state.look_along(view, up);
+    }
+}
+
+/// The capture's steady turn (`WalkingConfig::turn`), about the walker's up.
+fn turn_for_capture(config: Res<WalkingConfig>, time: Res<Time>, mut state: ResMut<WalkingState>) {
+    if !state.active || config.turn == 0.0 {
+        return;
+    }
+    let angle = config.turn * time.delta_secs();
+    if angle.is_finite() {
+        state.heading = Quat::from_axis_angle(state.up, -angle) * state.heading;
     }
 }
 

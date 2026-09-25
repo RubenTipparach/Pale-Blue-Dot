@@ -132,6 +132,9 @@ pub struct Launch {
     /// stands from the spawn, as the yaw and pitch that would centre it, so a
     /// sky capture is aimed off the clock rather than guessed.
     pub yaw: Option<f32>,
+    /// `--turn DEG_PER_S`: the walker's view turns right at this rate, a
+    /// measurement instrument for the clouds' history (`cloud-ghosting`).
+    pub turn: f32,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -194,6 +197,7 @@ impl Launch {
             dig_ahead: false,
             pitch: None,
             yaw: None,
+            turn: 0.0,
             menu: None,
         };
         let mut i = 0;
@@ -300,6 +304,15 @@ impl Launch {
                         "--menu takes pause, settings or saves"
                     );
                     result.menu = Some(screen.clone());
+                }
+                "--turn" => {
+                    i += 1;
+                    let degrees: f32 = args
+                        .get(i)
+                        .and_then(|d| d.parse().ok())
+                        .expect("--turn requires degrees a second");
+                    assert!(degrees.is_finite(), "--turn takes finite degrees");
+                    result.turn = degrees;
                 }
                 "--view" => {
                     i += 1;
@@ -749,6 +762,7 @@ pub fn run(args: &[String]) {
             }),
             pitch: launch.pitch.unwrap_or(0.0).to_radians(),
             yaw: launch.yaw.unwrap_or(0.0).to_radians(),
+            turn: launch.turn.to_radians(),
             ..default()
         })
         .add_plugins((
