@@ -66,7 +66,7 @@ impl Tool {
             Tool::Rod => "cast, hook, reel",
             Tool::Shovel => "digs soil, sand, snow",
             Tool::Pickaxe => "breaks stone, rock, ore",
-            Tool::Axe => "fells trees",
+            Tool::Axe => "chops wood; fair on turf",
         }
     }
 

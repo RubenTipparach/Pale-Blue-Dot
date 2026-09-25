@@ -52,7 +52,7 @@
 - [x] `--break SECONDS` for a capture of the cracks (`docs/screenshots/breaking-cracks.png`, the pickaxe held 1 s on grass: stage 5); `--dig` stays instant.
 - [x] Tests: the times by class and tool; the wrong-tool multiple; reset on
       release and on a new target; the rod never; the stage by progress.
-- [ ] The owner's revision: a matrix of one time per tool for each class
+- [x] The owner's revision: a matrix of one time per tool for each class
       (dirt, stone, rock, ore, wood, placed) replaces right tool times four;
       a test that each row's fastest tool is the one the design bolds.
 

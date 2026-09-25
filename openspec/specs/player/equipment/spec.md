@@ -4,7 +4,7 @@
 The tool in hand: one of the fishing rod, shovel, pickaxe and axe, in a tool
 slot beside the ten item slots, changed by holding G and turning the wheel. What
 the left button does is the tool's: the rod fishes and never digs, and every
-other tool breaks a block over a time set by the material and the tool, with
+other tool breaks a block over a time read from a matrix of material by tool, with
 cracks on the block showing how far along it is.
 
 ## Requirements
@@ -49,19 +49,25 @@ picker without equipping. G SHALL NOT board a craft: that is F.
 
 ### Requirement: Breaking a block takes time, set by the tool in hand
 Taking a layer SHALL require holding the use button on the same layer for the
-break time of its material. That time SHALL be the material's base time with
-the right tool (the shovel for soft ground, the pickaxe for stone, rock and
-ore), and a fixed multiple of it with any other tool. The fishing rod SHALL
-NOT break any layer. Releasing the button or moving the aim SHALL reset the
-progress. With the button still held, the next layer SHALL start after a
-short pause. The times, the multiple and the pause SHALL be validated data
+break time of its material with the tool in hand. The break times SHALL be a
+matrix of one time per tool (shovel, pickaxe, axe) for each class of material
+(dirt, stone, rock, ore, wood, placed), and the fastest tool for dirt SHALL be
+the shovel, for stone, rock and ore the pickaxe, and for wood the axe. The
+fishing rod SHALL NOT break any layer. Releasing the button or moving the aim
+SHALL reset the progress. With the button still held, the next layer SHALL
+start after a short pause. The matrix and the pause SHALL be validated data
 with units (`assets/config/dig.ron`).
 
 #### Scenario: Dirt with the shovel and with the pickaxe
-- **WHEN** the player holds the use button on dirt with the shovel, then on
-  dirt with the pickaxe
-- **THEN** the first takes 0.5 s and the second four times as long
-  (`dig::tests::the_right_tool_takes_the_base_time_and_any_other_takes_four`)
+- **WHEN** the player holds the use button on dirt with the shovel, then with
+  the pickaxe, then with the axe
+- **THEN** each takes that tool's time from the dirt row, and the shovel's is
+  the shortest (`dig::tests::each_tool_takes_its_own_time_from_the_row`)
+
+#### Scenario: Each row's best tool
+- **WHEN** the shipped matrix is read
+- **THEN** the shovel is fastest on dirt, the pickaxe on stone, rock and ore,
+  and the axe on wood (`dig::tests::each_row_has_the_best_tool_the_design_names`)
 
 #### Scenario: Letting go early
 - **WHEN** the button is released, or the aim leaves the layer, before the

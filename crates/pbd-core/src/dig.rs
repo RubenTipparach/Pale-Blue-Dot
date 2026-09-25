@@ -1,13 +1,13 @@
 //! Breaking a block: how long a material takes with the tool in hand, and the
 //! hold that counts toward it.
 //!
-//! The rule is Minecraft's and Tenebris's (`tenebris-core/src/mining.rs`
-//! `break_time`, `tenebris-client/src/interact.rs:578-596`): a material wants
-//! one kind of tool, the right tool breaks it in its base time and any other
-//! in a multiple of it, and the time counts only while the button is held on
-//! the same block. The numbers are tuned against Minecraft's own
-//! (`openspec/changes/fishing-and-equipment/design.md` section 3) and live in
-//! `assets/config/dig.ron`.
+//! The times are a MATRIX, one per tool for each class of material, so every
+//! tool has its own character against dirt, rock and wood rather than one
+//! right tool and a flat penalty for the rest. The time counts only while the
+//! button is held on the same block, which is Minecraft's rule and Tenebris's
+//! (`tenebris-client/src/interact.rs:578-596`). The numbers are tuned against
+//! Minecraft's own (`openspec/changes/fishing-and-equipment/design.md`
+//! section 3) and live in `assets/config/dig.ron`.
 //!
 //! Engine-free: the app hands [`Breaking::step`] the target, the button and
 //! the frame's time, and takes the block when it says so.
@@ -16,22 +16,35 @@ use crate::inventory::Tool;
 use crate::terrain::Material;
 use serde::{Deserialize, Serialize};
 
-/// What a material is, as far as breaking it goes.
+/// What a material is, as far as breaking it goes: a row of the matrix.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Class {
-    /// Grass, soil, dirt, sand and snow: the shovel's.
-    Soft,
-    /// Stone: the pickaxe's.
+    /// Grass, soil, dirt, sand and snow.
+    Dirt,
+    /// Stone.
     Stone,
-    /// Rock outcrops: the pickaxe's, slower.
+    /// Rock outcrops, harder than stone.
     Rock,
-    /// Ore: the pickaxe's, slowest.
+    /// Ore, the hardest.
     Ore,
-    /// Something placed on the ground, a torch: any tool but the rod.
+    /// Wood. No material is wood until trees can be felled
+    /// (`fishing-and-equipment` design section 5); the row is ready for it.
+    Wood,
+    /// Something placed on the ground, a torch.
     Placed,
 }
 
 impl Class {
+    /// Every row, in the order `dig.ron` lists them.
+    pub const ALL: [Class; 6] = [
+        Class::Dirt,
+        Class::Stone,
+        Class::Rock,
+        Class::Ore,
+        Class::Wood,
+        Class::Placed,
+    ];
+
     /// The class of a material, or `None` for what is never broken: air and
     /// water, which the aim ray passes through. The match is exhaustive, so a
     /// new material cannot compile without being given a class or refused one.
@@ -43,7 +56,7 @@ impl Class {
             | Material::Soil
             | Material::Dirt
             | Material::Sand
-            | Material::Snow => Class::Soft,
+            | Material::Snow => Class::Dirt,
             Material::Stone => Class::Stone,
             Material::Rock => Class::Rock,
             Material::Ore => Class::Ore,
@@ -52,33 +65,65 @@ impl Class {
         })
     }
 
-    /// The tool that breaks it at its base time. `None` for a class every
-    /// tool breaks alike.
-    pub fn right_tool(self) -> Option<Tool> {
+    pub fn name(self) -> &'static str {
         match self {
-            Class::Soft => Some(Tool::Shovel),
-            Class::Stone | Class::Rock | Class::Ore => Some(Tool::Pickaxe),
-            Class::Placed => None,
+            Class::Dirt => "dirt",
+            Class::Stone => "stone",
+            Class::Rock => "rock",
+            Class::Ore => "ore",
+            Class::Wood => "wood",
+            Class::Placed => "placed",
         }
     }
 }
 
-/// The break times, in `dig.ron`.
+/// One row of the matrix: how long each digging tool takes, s.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolTimes {
+    pub shovel: f32,
+    pub pickaxe: f32,
+    pub axe: f32,
+}
+
+impl ToolTimes {
+    const fn new(shovel: f32, pickaxe: f32, axe: f32) -> Self {
+        Self {
+            shovel,
+            pickaxe,
+            axe,
+        }
+    }
+
+    /// This tool's time, or `None` for a tool that does not dig: the rod.
+    pub fn of(&self, tool: Tool) -> Option<f32> {
+        match tool {
+            Tool::Shovel => Some(self.shovel),
+            Tool::Pickaxe => Some(self.pickaxe),
+            Tool::Axe => Some(self.axe),
+            Tool::Rod => None,
+        }
+    }
+
+    /// The tool that breaks this row fastest.
+    pub fn best(&self) -> Tool {
+        [Tool::Shovel, Tool::Pickaxe, Tool::Axe]
+            .into_iter()
+            .min_by(|a, b| self.of(*a).unwrap().total_cmp(&self.of(*b).unwrap()))
+            .expect("three digging tools")
+    }
+}
+
+/// The break-time matrix and the pause between blocks, in `dig.ron`.
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct DigSettings {
-    /// Soft ground with the shovel, s.
-    pub soft_s: f32,
-    /// Stone with the pickaxe, s.
-    pub stone_s: f32,
-    /// Rock with the pickaxe, s.
-    pub rock_s: f32,
-    /// Ore with the pickaxe, s.
-    pub ore_s: f32,
-    /// A placed thing with any tool, s.
-    pub placed_s: f32,
-    /// Any tool but the right one takes this many times as long.
-    pub wrong_tool: f32,
+    pub dirt: ToolTimes,
+    pub stone: ToolTimes,
+    pub rock: ToolTimes,
+    pub ore: ToolTimes,
+    pub wood: ToolTimes,
+    pub placed: ToolTimes,
     /// With the button still held, the next block starts this long after the
     /// last one broke, s.
     pub between_s: f32,
@@ -87,36 +132,45 @@ pub struct DigSettings {
 impl Default for DigSettings {
     fn default() -> Self {
         Self {
-            soft_s: 0.5,
-            stone_s: 1.2,
-            rock_s: 1.6,
-            ore_s: 2.0,
-            placed_s: 0.1,
-            wrong_tool: 4.0,
+            dirt: ToolTimes::new(0.5, 1.5, 1.2),
+            stone: ToolTimes::new(4.0, 1.2, 3.0),
+            rock: ToolTimes::new(5.0, 1.6, 4.0),
+            ore: ToolTimes::new(6.5, 2.0, 5.5),
+            wood: ToolTimes::new(2.5, 2.0, 0.6),
+            placed: ToolTimes::new(0.1, 0.1, 0.1),
             between_s: 0.15,
         }
     }
 }
 
 impl DigSettings {
-    pub fn validate(&self) -> Result<(), String> {
-        let times = [
-            ("soft_s", self.soft_s),
-            ("stone_s", self.stone_s),
-            ("rock_s", self.rock_s),
-            ("ore_s", self.ore_s),
-            ("placed_s", self.placed_s),
-        ];
-        for (name, value) in times {
-            if !(value.is_finite() && value > 0.0 && value <= 60.0) {
-                return Err(format!("dig.{name} must be in (0, 60] s, got {value}"));
-            }
+    /// A row of the matrix.
+    pub fn row(&self, class: Class) -> &ToolTimes {
+        match class {
+            Class::Dirt => &self.dirt,
+            Class::Stone => &self.stone,
+            Class::Rock => &self.rock,
+            Class::Ore => &self.ore,
+            Class::Wood => &self.wood,
+            Class::Placed => &self.placed,
         }
-        if !(self.wrong_tool.is_finite() && self.wrong_tool >= 1.0 && self.wrong_tool <= 20.0) {
-            return Err(format!(
-                "dig.wrong_tool must be in [1, 20], got {}",
-                self.wrong_tool
-            ));
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        for class in Class::ALL {
+            let row = self.row(class);
+            for (tool, value) in [
+                ("shovel", row.shovel),
+                ("pickaxe", row.pickaxe),
+                ("axe", row.axe),
+            ] {
+                if !(value.is_finite() && value > 0.0 && value <= 60.0) {
+                    return Err(format!(
+                        "dig.{}.{tool} must be in (0, 60] s, got {value}",
+                        class.name()
+                    ));
+                }
+            }
         }
         if !(self.between_s.is_finite() && (0.0..=2.0).contains(&self.between_s)) {
             return Err(format!(
@@ -127,29 +181,11 @@ impl DigSettings {
         Ok(())
     }
 
-    fn base(&self, class: Class) -> f32 {
-        match class {
-            Class::Soft => self.soft_s,
-            Class::Stone => self.stone_s,
-            Class::Rock => self.rock_s,
-            Class::Ore => self.ore_s,
-            Class::Placed => self.placed_s,
-        }
-    }
-
     /// How long `material` takes to break with `tool`, s. `None` when it
     /// never breaks: the rod breaks nothing, and air and water are not
     /// blocks.
     pub fn secs(&self, material: Material, tool: Tool) -> Option<f32> {
-        if !tool.digs() {
-            return None;
-        }
-        let class = Class::of(material)?;
-        let base = self.base(class);
-        Some(match class.right_tool() {
-            Some(right) if right != tool => base * self.wrong_tool,
-            _ => base,
-        })
+        self.row(Class::of(material)?).of(tool)
     }
 }
 
@@ -247,18 +283,44 @@ impl<C: Copy + PartialEq> Breaking<C> {
 mod tests {
     use super::*;
 
+    /// Each tool takes its own time from the material's row.
     #[test]
-    fn the_right_tool_takes_the_base_time_and_any_other_takes_four() {
+    fn each_tool_takes_its_own_time_from_the_row() {
         let s = DigSettings::default();
         assert_eq!(s.secs(Material::Dirt, Tool::Shovel), Some(0.5));
-        assert_eq!(s.secs(Material::Dirt, Tool::Pickaxe), Some(2.0));
-        assert_eq!(s.secs(Material::Dirt, Tool::Axe), Some(2.0));
+        assert_eq!(s.secs(Material::Dirt, Tool::Pickaxe), Some(1.5));
+        assert_eq!(s.secs(Material::Dirt, Tool::Axe), Some(1.2));
+        assert_eq!(s.secs(Material::Grass, Tool::Shovel), Some(0.5));
+        assert_eq!(s.secs(Material::Snow, Tool::Axe), Some(1.2));
         assert_eq!(s.secs(Material::Stone, Tool::Pickaxe), Some(1.2));
-        assert_eq!(s.secs(Material::Stone, Tool::Shovel), Some(4.8));
+        assert_eq!(s.secs(Material::Stone, Tool::Shovel), Some(4.0));
+        assert_eq!(s.secs(Material::Stone, Tool::Axe), Some(3.0));
         assert_eq!(s.secs(Material::Rock, Tool::Pickaxe), Some(1.6));
         assert_eq!(s.secs(Material::Ore, Tool::Pickaxe), Some(2.0));
+        assert_eq!(s.secs(Material::Ore, Tool::Shovel), Some(6.5));
         assert_eq!(s.secs(Material::Torch, Tool::Axe), Some(0.1));
-        assert_eq!(s.secs(Material::Torch, Tool::Shovel), Some(0.1));
+        assert_eq!(s.row(Class::Wood).of(Tool::Axe), Some(0.6));
+    }
+
+    /// The design's bolded cells: the shovel for dirt, the pickaxe for stone,
+    /// rock and ore, the axe for wood. A retune that made the pickaxe the
+    /// best shovel fails here rather than in somebody's hands.
+    #[test]
+    fn each_row_has_the_best_tool_the_design_names() {
+        let s = DigSettings::default();
+        assert_eq!(s.row(Class::Dirt).best(), Tool::Shovel);
+        for class in [Class::Stone, Class::Rock, Class::Ore] {
+            assert_eq!(s.row(class).best(), Tool::Pickaxe, "{}", class.name());
+        }
+        assert_eq!(s.row(Class::Wood).best(), Tool::Axe);
+        // And every tool is worse than the best somewhere, or it is not a
+        // choice worth making.
+        for tool in [Tool::Shovel, Tool::Pickaxe, Tool::Axe] {
+            assert!(
+                Class::ALL.iter().any(|c| s.row(*c).best() == tool),
+                "{tool:?} is never the best"
+            );
+        }
     }
 
     #[test]
@@ -370,12 +432,12 @@ mod tests {
     fn the_defaults_validate_and_nonsense_does_not() {
         DigSettings::default().validate().unwrap();
         let bad = DigSettings {
-            wrong_tool: 0.5,
+            between_s: -1.0,
             ..Default::default()
         };
         assert!(bad.validate().is_err());
         let bad = DigSettings {
-            stone_s: 0.0,
+            stone: ToolTimes::new(4.0, 0.0, 3.0),
             ..Default::default()
         };
         assert!(bad.validate().is_err());
