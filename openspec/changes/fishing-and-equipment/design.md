@@ -125,38 +125,60 @@ it is tested without an engine; the app hands it the target, the button and
 the frame's time.
 
 ```text
-secs = base(class(material)) * (tool == right_tool(material) ? 1 : wrong_tool)
+secs = matrix[class(material)][tool]
 rod  -> never: the rod casts, and the left button is the fishing line's
 ```
 
-**Tuned against Minecraft rather than taken from the first table.** The first
-draft had soft ground at 0.25 s, which is too fast to see a crack at all: at
-60 fps it is fifteen frames across ten stages. Minecraft's own times with the
-right tool are 0.4 to 0.75 s for dirt and 0.4 to 1.15 s for stone, and
-Tenebris's are slower still (2.5 s soft, 5 s rock with a wooden pick,
-`tenebris-rs/assets/config/mining.yaml`) because it has tool tiers to buy the
-time back with. There are no tiers here yet, so the times sit at Minecraft's
-middle:
+**A matrix, not a right tool and a penalty.** The first build gave every
+material one right tool and charged any other four times as much, which
+makes every wrong tool equally bad: a pickaxe was as poor at dirt as a shovel
+at stone, and the axe, with no trees to fell, was simply a slow everything.
+The owner asked for a matrix instead, one time per tool for each kind of
+material, so each tool has its own character against dirt, rock and wood.
 
-| Class | Materials | Right tool | Base, s | Wrong tool, s |
-| --- | --- | --- | ---: | ---: |
-| soft | Grass, DryGrass, JungleGrass, Soil, Dirt, Sand, Snow | Shovel | 0.5 | 2.0 |
-| stone | Stone | Pickaxe | 1.2 | 4.8 |
-| rock | Rock | Pickaxe | 1.6 | 6.4 |
-| ore | Ore | Pickaxe | 2.0 | 8.0 |
-| wood | Wood (section 5, not built) | Axe | 1.0 | 4.0 |
-| placed | Torch | any tool but the rod | 0.1 | 0.1 |
+The times with the best tool are tuned against Minecraft (0.4 to 0.75 s for
+dirt, 0.4 to 1.15 s for stone with the right tool) and are slower than
+Tenebris's own (2.5 s soft, 5 s rock with a wooden pick,
+`tenebris-rs/assets/config/mining.yaml`) only where Tenebris has tool tiers
+to buy the time back with, which this has not. The first draft's 0.25 s for
+soft ground is too fast to see a crack: fifteen frames across ten stages.
 
-`wrong_tool` is 4, Minecraft's hand penalty on a block that wants a tool is
-about the same (dirt 0.75 s by hand against 0.15 to 0.4 s with a shovel) and
-Tenebris's is 2. Until trees are built the axe has no right material, so it
-digs everything at the wrong-tool time, which is honest: an axe is a poor
-shovel. Water and air are never a target, since the aim ray passes through
-both.
+| Class | Materials | Shovel, s | Pickaxe, s | Axe, s |
+| --- | --- | ---: | ---: | ---: |
+| dirt | Grass, DryGrass, JungleGrass, Soil, Dirt, Sand, Snow | **0.5** | 1.5 | 1.2 |
+| stone | Stone | 4.0 | **1.2** | 3.0 |
+| rock | Rock | 5.0 | **1.6** | 4.0 |
+| ore | Ore | 6.5 | **2.0** | 5.5 |
+| wood | Wood (section 5, not built) | 2.5 | 2.0 | **0.6** |
+| placed | Torch | 0.1 | 0.1 | 0.1 |
 
-`right_tool`, the classes and `secs` live in `pbd_core::dig`, with the numbers
-in `assets/config/dig.ron` and a test that the shipped file equals the code
-defaults. That is the same pattern as `vehicles.ron`.
+The reasoning behind the off-diagonal cells, so they can be argued with:
+
+- **Dirt.** A pickaxe breaks it but lifts none of it: three times the shovel.
+  An axe chops through roots and turf a little better than a pick: 2.4 times.
+- **Stone, rock, ore.** A shovel blade only scrapes: a little over three times
+  the pickaxe. An axe chips stone with its edge: two and a half times.
+- **Wood.** A pickaxe splits a log faster than a shovel does, and neither is
+  close to the axe.
+- **Placed things**, a torch, come away with any tool at once.
+- **The rod** breaks nothing, whatever the row. Water and air are never a
+  target, since the aim ray passes through both.
+
+The best tool in each row is the one the table bolds, and a test holds the
+shipped defaults to that, so a retune that made the pickaxe the best shovel
+would fail loudly rather than quietly.
+
+The classes and `secs` live in `pbd_core::dig`, with the matrix in
+`assets/config/dig.ron` as one row per class and one field per tool, and a
+test that the shipped file equals the code defaults. That is the same
+pattern as `vehicles.ron`.
+
+**The wood row is ready before the wood is.** There is no wood block yet:
+the trees are drawn on the GPU alone (section 5), and a new material needs a
+shader code (the column pass packs materials in 4 bits, and 15 of the 16
+codes are spent), an atlas tile, a save code and a slot thumbnail. Until
+trees can be felled the row is data a test reads, and the axe's column is
+what it does to dirt and stone.
 
 ### The crack overlay: the block shows how far along it is
 
