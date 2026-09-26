@@ -3,7 +3,10 @@
 ## Purpose
 The tool in hand: one of the fishing rod, shovel, pickaxe and axe, in a tool
 slot beside the ten item slots, changed by holding G and turning the wheel. What
-the left button does is the tool's: the rod fishes and never digs.
+the left button does is the tool's: the rod fishes and never digs, and every
+other tool breaks a block over a time read from a matrix of material by tool, with
+cracks on the block showing how far along it is. The tool in hand is drawn
+as a model of its own icon, made of hex pixels.
 
 ## Requirements
 
@@ -44,6 +47,91 @@ picker without equipping. G SHALL NOT board a craft: that is F.
 - **THEN** the highlight moves to the next owned tool and the selected item
   slot does not change
   (`desktop::equipment::tests::the_open_picker_takes_the_wheel`)
+
+### Requirement: Breaking a block takes time, set by the tool in hand
+Taking a layer SHALL require holding the use button on the same layer for the
+break time of its material with the tool in hand. The break times SHALL be a
+matrix of one time per tool (shovel, pickaxe, axe) for each class of material
+(dirt, stone, rock, ore, wood, placed), and the fastest tool for dirt SHALL be
+the shovel, for stone, rock and ore the pickaxe, and for wood the axe. The
+fishing rod SHALL NOT break any layer. Releasing the button or moving the aim
+SHALL reset the progress. With the button still held, the next layer SHALL
+start after a short pause. The matrix and the pause SHALL be validated data
+with units (`assets/config/dig.ron`).
+
+#### Scenario: Dirt with the shovel and with the pickaxe
+- **WHEN** the player holds the use button on dirt with the shovel, then with
+  the pickaxe, then with the axe
+- **THEN** each takes that tool's time from the dirt row, and the shovel's is
+  the shortest (`dig::tests::each_tool_takes_its_own_time_from_the_row`)
+
+#### Scenario: Each row's best tool
+- **WHEN** the shipped matrix is read
+- **THEN** the shovel is fastest on dirt, the pickaxe on stone, rock and ore,
+  and the axe on wood (`dig::tests::each_row_has_the_best_tool_the_design_names`)
+
+#### Scenario: Letting go early
+- **WHEN** the button is released, or the aim leaves the layer, before the
+  break time
+- **THEN** nothing is taken and the progress starts again from nought
+  (`dig::tests::letting_go_or_looking_away_starts_again`)
+
+#### Scenario: The rod
+- **WHEN** the rod is in hand and the use button is held on stone
+- **THEN** no layer changes
+  (`dig::tests::the_rod_breaks_nothing_and_nothing_breaks_air_or_water`)
+
+#### Scenario: Holding on
+- **WHEN** a layer breaks with the button still held
+- **THEN** the next one starts after the pause, and a fresh press starts at
+  once (`dig::tests::the_next_block_waits_a_moment`)
+
+### Requirement: The block being broken shows cracks that grow with progress
+While a layer is being broken, its faces SHALL show a crack overlay chosen
+from ten stages by the fraction of the break time elapsed. Each stage SHALL
+contain every crack pixel of the stage before it. The overlay's pixels SHALL
+use the terrain's own face UV mapping and its 32 px texel, so a crack pixel
+covers exactly one block pixel. Nothing SHALL be drawn when nothing is being
+broken.
+
+#### Scenario: Halfway through
+- **WHEN** a layer has been held for half its break time
+- **THEN** stage 5 of 0 to 9 is drawn over it
+  (`dig::tests::the_stage_follows_progress_in_tenths`)
+
+#### Scenario: The stages grow
+- **WHEN** the shipped stage images are compared in order
+- **THEN** every crack pixel of stage `k` is a crack pixel of stage `k + 1`
+  (`desktop::cracks::tests::the_stages_grow_and_match_the_atlas_texel`)
+
+#### Scenario: The overlay wraps the layer
+- **WHEN** the overlay is built for a cell and a layer
+- **THEN** it is a closed prism around exactly that layer with every face
+  turned out (`desktop::cracks::tests::the_prism_wraps_the_layer_and_faces_out`)
+
+### Requirement: The tool in hand is drawn as a hex-pixel model of its icon
+The tool in hand SHALL be drawn in first person as a model built from its own
+16 px icon: each opaque pixel a hexagonal prism one pixel deep on an offset
+hex grid, in that pixel's colour, with no face drawn between two hexels. The
+model SHALL be built from the icon file itself, so the two cannot differ. It
+SHALL swing while a block is being broken. The fishing line SHALL leave from
+the rod model's tip.
+
+#### Scenario: Changing tools
+- **WHEN** the player equips the pickaxe
+- **THEN** the pickaxe's hex model is in hand and no other tool's is
+  (`held::tests::only_the_tool_in_hand_is_shown`)
+
+#### Scenario: A thin handle
+- **WHEN** an icon has a one-pixel diagonal handle
+- **THEN** its model's handle is one connected piece
+  (`hexel::tests::a_thin_diagonal_stays_connected`,
+  `held::tests::every_tool_is_one_piece_of_hexels`)
+
+#### Scenario: The line and the rod
+- **WHEN** a line is cast
+- **THEN** it starts at the tip of the rod model being drawn
+  (`held::tests::the_line_leaves_the_rod_model_tip`)
 
 ### Requirement: A tool change is saved at once
 Changing the tool in hand SHALL be written to the durable save on the frame

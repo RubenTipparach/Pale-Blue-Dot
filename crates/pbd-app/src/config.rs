@@ -997,6 +997,30 @@ impl Validated for pbd_core::fauna::FaunaSettings {
 #[derive(Resource, Clone, Debug, PartialEq, Default)]
 pub struct FaunaConfig(pub pbd_core::fauna::FaunaSettings);
 
+/// How long each material takes to break with each tool (`pbd_core::dig`).
+impl Validated for pbd_core::dig::DigSettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::dig::DigSettings::validate(self)
+    }
+}
+
+/// The break times, loaded once.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+pub struct DigConfig(pub pbd_core::dig::DigSettings);
+
+/// Where the tool in hand sits and how it moves (`held.rs`).
+#[cfg(feature = "desktop")]
+impl Validated for crate::held::HeldSettings {
+    fn validate(&self) -> Result<(), String> {
+        crate::held::HeldSettings::validate(self)
+    }
+}
+
+/// The held tools' placement, loaded once.
+#[cfg(feature = "desktop")]
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+pub struct HeldConfig(pub crate::held::HeldSettings);
+
 pub struct ConfigPlugin;
 
 impl Plugin for ConfigPlugin {
@@ -1008,12 +1032,15 @@ impl Plugin for ConfigPlugin {
             .insert_resource(AtmosphereConfig(load("atmosphere")))
             .insert_resource(VehiclesConfig(load("vehicles")))
             .insert_resource(FaunaConfig(load("fauna")))
-            .add_plugins((
-                bevy::render::extract_resource::ExtractResourcePlugin::<WaterSettings>::default(),
-                bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
-                bevy::render::extract_resource::ExtractResourcePlugin::<ScatterSettings>::default(),
-                bevy::render::extract_resource::ExtractResourcePlugin::<ColumnSettings>::default(),
-            ));
+            .insert_resource(DigConfig(load("dig")));
+        #[cfg(feature = "desktop")]
+        app.insert_resource(HeldConfig(load("held")));
+        app.add_plugins((
+            bevy::render::extract_resource::ExtractResourcePlugin::<WaterSettings>::default(),
+            bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
+            bevy::render::extract_resource::ExtractResourcePlugin::<ScatterSettings>::default(),
+            bevy::render::extract_resource::ExtractResourcePlugin::<ColumnSettings>::default(),
+        ));
     }
 }
 
@@ -1026,6 +1053,9 @@ mod tests {
     const ATMOSPHERE_RON: &str = include_str!("../../../assets/config/atmosphere.ron");
     const VEHICLES_RON: &str = include_str!("../../../assets/config/vehicles.ron");
     const FAUNA_RON: &str = include_str!("../../../assets/config/fauna.ron");
+    const DIG_RON: &str = include_str!("../../../assets/config/dig.ron");
+    #[cfg(feature = "desktop")]
+    const HELD_RON: &str = include_str!("../../../assets/config/held.ron");
 
     /// The shipped files are the defaults written out. If either drifts from
     /// the code, one of them is describing a different ocean, and this is the
@@ -1048,6 +1078,15 @@ mod tests {
         let fauna: pbd_core::fauna::FaunaSettings = ron::from_str(FAUNA_RON).unwrap();
         Validated::validate(&fauna).unwrap();
         assert_eq!(fauna, Default::default());
+        let dig: pbd_core::dig::DigSettings = ron::from_str(DIG_RON).unwrap();
+        Validated::validate(&dig).unwrap();
+        assert_eq!(dig, Default::default());
+        #[cfg(feature = "desktop")]
+        {
+            let held: crate::held::HeldSettings = ron::from_str(HELD_RON).unwrap();
+            Validated::validate(&held).unwrap();
+            assert_eq!(held, Default::default());
+        }
     }
 
     #[test]

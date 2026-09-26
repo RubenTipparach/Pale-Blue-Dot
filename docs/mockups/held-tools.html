@@ -1,0 +1,655 @@
+<title>Hex Tool Bench</title>
+<meta name="description" content="Mockup: the four held tools drawn on a fine hex grid, handles as straight rows, held in a stubby hex hand.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #12161a;
+    --panel: #1a2026;
+    --panel-2: #212930;
+    --line: #2d3740;
+    --text: #e4e8ea;
+    --muted: #8d99a2;
+    --brass: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--ground); color: var(--text); }
+  body {
+    font: 15px/1.55 "IBM Plex Sans", system-ui, sans-serif;
+    padding-inline: 16px;
+    padding-block: 20px 48px;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 22px; }
+  header { display: grid; gap: 6px; }
+  h1 { font: 700 30px/1.1 "Pixelify Sans", "IBM Plex Mono", monospace; margin: 0; letter-spacing: 0.02em; text-wrap: balance; }
+  h2 { font: 500 13px/1.2 "IBM Plex Mono", monospace; margin: 0; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+  p { margin: 0; max-width: 70ch; color: var(--muted); }
+  p strong, li strong { color: var(--text); font-weight: 600; }
+  code { font-family: "IBM Plex Mono", monospace; font-size: 0.92em; color: var(--text); }
+  .top { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 18px; }
+  @media (max-width: 900px) { .top { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; display: grid; gap: 12px; align-content: start; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .held { position: relative; aspect-ratio: 16 / 10; width: 100%; max-width: 100%; border-radius: 4px; overflow: hidden; background: #6f93b8; }
+  .held canvas, .turn canvas { display: block; width: 100%; height: 100%; }
+  .crosshair { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%); pointer-events: none; }
+  .crosshair::before, .crosshair::after { content: ""; position: absolute; background: #fff; opacity: 0.8; }
+  .crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
+  .crosshair::after { top: 6px; left: 0; height: 2px; width: 14px; }
+  .tabs, .seg { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  button {
+    font: 500 13px/1 "IBM Plex Mono", monospace; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px;
+    padding: 8px 11px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  button[aria-pressed="true"] { border-color: var(--brass); color: var(--brass); }
+  .checks { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font: 13px "IBM Plex Mono", monospace; color: var(--muted); }
+  .checks label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  .editor { width: 100%; max-width: 100%; aspect-ratio: 22 / 13; background: #0e1215; border-radius: 4px; touch-action: none; cursor: crosshair; }
+  .palette { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .swatch { width: 28px; height: 28px; padding: 0; border-radius: 4px; }
+  .swatch[aria-pressed="true"] { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .skin { width: 22px; height: 22px; padding: 0; border-radius: 50%; }
+  .skin[aria-pressed="true"] { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .label { font: 12px "IBM Plex Mono", monospace; color: var(--muted); min-width: 52px; }
+  .stat { font: 12px "IBM Plex Mono", monospace; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 900px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .turn { aspect-ratio: 1; width: 100%; max-width: 100%; background: radial-gradient(circle at 50% 40%, #26303a, #151a1f 70%); border-radius: 4px; cursor: grab; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; display: grid; gap: 8px; grid-template-rows: auto auto 1fr; cursor: pointer; }
+  .card[aria-current="true"] { border-color: var(--brass); }
+  .card h3 { margin: 0; font: 700 16px "Pixelify Sans", monospace; letter-spacing: 0.02em; }
+  textarea { width: 100%; max-width: 100%; min-height: 64px; resize: vertical; font: 12px/1.4 "IBM Plex Mono", monospace; color: var(--text); background: #0e1215; border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
+  ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  li { color: var(--muted); max-width: 74ch; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Hex Tool Bench</h1>
+    <p>A mockup of the four held tools, <strong>drawn on the hex grid</strong>, and <strong>held in a stubby hex hand</strong>. The grid is <strong>4× finer</strong> than the first draft: a hex is a quarter as wide, so a tool is sixteen times as many hexes. Each handle lies exactly on row&nbsp;0, so it is straight at any density. Each hex also has its own depth, so a handle is thick and round and a blade is thin. Nothing here is in the game yet.</p>
+  </header>
+
+  <section class="top">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>In hand</h2>
+        <div class="tabs" id="tabs"></div>
+      </div>
+      <div class="held"><canvas id="held"></canvas><div class="crosshair"></div></div>
+      <div class="checks">
+        <label><input type="checkbox" id="chop"> Chop</label>
+        <label><input type="checkbox" id="sway" checked> Idle sway</label>
+        <label><input type="checkbox" id="hand" checked> Hand</label>
+        <span class="row"><span class="label">Size</span><span class="seg" id="size"></span></span>
+        <span class="row"><span class="label">Skin</span><span class="seg" id="skins"></span></span>
+      </div>
+      <p class="stat">The grip sits where Tenebris puts it, (0.26, −0.26, −0.48)&nbsp;m in eye space, with the face turned 0.5&nbsp;rad about the handle. At 2×, every tool is twice as long and twice as thick as the in-game size today, and the grip moves a few centimetres down and right so the head sits beside the crosshair.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Hex grid: <span id="edit-name">Pickaxe</span></h2>
+        <span class="stat" id="edit-stat"></span>
+      </div>
+      <div class="row"><span class="label">Density</span><span class="seg" id="density"></span></div>
+      <canvas class="editor" id="editor" aria-label="Hex editor: click or drag to paint hexes"></canvas>
+      <div class="palette" id="palette"></div>
+      <div class="row">
+        <span class="label">Brush</span><span class="seg" id="brush"></span>
+        <span class="label">Depth</span><span class="seg" id="depth"></span>
+      </div>
+      <div class="row">
+        <button id="reset">Reset this tool</button>
+        <button id="copy">Copy tool data</button>
+        <span class="stat" id="copied" aria-live="polite"></span>
+      </div>
+      <textarea id="data" readonly aria-label="Tool data"></textarea>
+      <p class="stat">Paint with a colour, or pick Erase. The ring is the grip and the brighter row is row&nbsp;0, the handle's line. Each tool's edits are kept per density, in this browser only.</p>
+    </div>
+  </section>
+
+  <section class="grid4" id="cards"></section>
+
+  <section class="panel">
+    <h2>How this would go into the game</h2>
+    <ul>
+      <li><strong>The hexes become the source.</strong> Each tool is stored in a RON file as a list of hexes, one colour and one depth each. The mesh is built from that list the way <code>pbd_core::hexel</code> builds it now, and each side wall covers only the height by which a hex stands above its neighbour.</li>
+      <li><strong>The slot icons are drawn from the same hexes</strong>, so the icon and the model cannot disagree. Today it is the other way round: the model is sampled from the icon, and that sampling is what made the handles zigzag.</li>
+      <li><strong>The hand is a model of its own, not part of the tool.</strong> It is a hex-prism fist around the grip, four knuckles, a thumb over the handle, and a forearm with a sleeve cuff running off the bottom right of the screen. It swings with the tool.</li>
+      <li><strong>2× size</strong>: the reach from grip to head doubles, from 0.23&nbsp;m to 0.46&nbsp;m. The grip moves from (0.26,&nbsp;−0.26,&nbsp;−0.48) to (0.34,&nbsp;−0.36,&nbsp;−0.50) so the head does not cover the crosshair.</li>
+      <li>The rod has no line or float, because the game draws the real line from the rod tip.</li>
+    </ul>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  const COL = {
+    wood: "#8a5a2b", woodDark: "#72471f", grip: "#5e3a18", wrap: "#7a4d22",
+    iron: "#c9d3d6", ironDark: "#7d8a8f", edge: "#eef3f4",
+    cork: "#b9a27a", corkDark: "#9c865e", reel: "#9aa6ab", red: "#e35d4a",
+  };
+  const PALETTE = Object.values(COL);
+  const SKINS = ["#e3b089", "#c98f64", "#8f5d3d", "#5c3b27"];
+  const SLEEVE = "#4d6a8c", CUFF = "#3a526e";
+  const S3 = Math.sqrt(3);
+
+  // ---- Shapes, in tool units (one unit = one hex of the first draft), x
+  // along the handle from the grip, y up. The hex grid is laid with row 0 on
+  // y = 0, so a handle |y| <= w is whole rows: straight.
+  const inCircle = (x, y, cx, cy, r) => (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
+  const inEllipse = (x, y, cx, cy, rx, ry) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+  // Near the edge of a region: some point `w` away is outside it.
+  const rim = (inside, x, y, w) => {
+    for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (!inside(x + Math.cos(a) * w, y + Math.sin(a) * w)) return true; }
+    return false;
+  };
+  const roundDepth = (y, half, lo, hi) => lo + (hi - lo) * Math.sqrt(clamp01(1 - (y / half) ** 2));
+  const handle = (x, y, len, half, gripLen, cell) => {
+    if (x < 0 || x > len || Math.abs(y) > half) return null;
+    const d = roundDepth(y, half, 0.45, 0.95);
+    if (x < gripLen) return { c: (x % 0.9) < 0.2 ? COL.wrap : COL.grip, d: d + 0.08 };
+    // Grain: whole rows, so it runs straight along the handle.
+    const grain = (Math.abs(cell.r) % 3 === 1) && ((Math.floor(x * 1.7) * 7 + cell.r * 3) % 5 < 3);
+    return { c: grain ? COL.woodDark : COL.wood, d };
+  };
+
+  const TOOLS = [
+    {
+      id: "pickaxe", name: "Pickaxe", note: "Stone, rock and ore", len: 12.2,
+      shape(x, y, cell) {
+        const head = (px, py) => inCircle(px, py, 7.5, 0, 4.7) && !inCircle(px, py, 6.4, 0, 4.6);
+        if (x >= 10.3 && x <= 11.7 && Math.abs(y) <= 0.8) return { c: COL.ironDark, d: 1.15 };
+        if (head(x, y)) {
+          const tipThin = 0.75 - 0.35 * clamp01((Math.abs(y) - 2) / 2.6);
+          if (!inCircle(x, y, 7.5, 0, 4.45)) return { c: COL.edge, d: tipThin * 0.8 };
+          if (inCircle(x, y, 6.4, 0, 4.82)) return { c: COL.ironDark, d: tipThin };
+          return { c: COL.iron, d: tipThin };
+        }
+        if (x >= -0.25 && x < 0 && Math.abs(y) <= 0.55) return { c: COL.grip, d: 1.0 };
+        return handle(x, y, 11, 0.45, 3, cell);
+      },
+    },
+    {
+      id: "shovel", name: "Shovel", note: "Dirt, sand and snow", len: 15.6,
+      shape(x, y, cell) {
+        const blade = (px, py) => inEllipse(px, py, 12.6, 0, 2.8, 2.3) || (px >= 12.6 && px <= 15.6 && Math.abs(py) <= 2.3 * (15.6 - px) / 3.0);
+        if (blade(x, y)) {
+          if (Math.abs(y) < 0.3 && x < 14.2) return { c: COL.ironDark, d: 0.75 };
+          if (rim(blade, x, y, 0.3)) return { c: COL.edge, d: 0.3 };
+          return { c: COL.iron, d: 0.4 };
+        }
+        if (x >= 9.2 && x <= 10.8 && Math.abs(y) <= 0.55 + (x - 9.2) * 0.3) return { c: COL.ironDark, d: 0.95 };
+        // A D-grip crossbar at the butt.
+        if (x >= -0.9 && x <= -0.1 && Math.abs(y) <= 1.4) return { c: (Math.abs(y) > 1.1 ? COL.wrap : COL.grip), d: 0.9 };
+        return handle(x, y, 9.6, 0.42, 2.4, cell);
+      },
+    },
+    {
+      id: "axe", name: "Axe", note: "Wood", len: 12.4,
+      shape(x, y, cell) {
+        const top = (px) => 4.3 + 0.6 * (1 - ((px - 10.6) / 2.8) ** 2);
+        const blade = (px, py) => py >= 1.0 && py <= top(px) && px >= 9.7 - (py - 1) * 0.48 && px <= 11.5 + (py - 1) * 0.5;
+        if (blade(x, y)) {
+          const d = 0.85 - 0.5 * clamp01((y - 1) / 3.6);
+          if (y > top(x) - 0.4) return { c: COL.edge, d: 0.3 };
+          if (rim(blade, x, y, 0.25) && y < top(x) - 0.4) return { c: COL.ironDark, d };
+          return { c: COL.iron, d };
+        }
+        if (x >= 9.4 && x <= 11.8 && y >= -1.0 && y <= 1.0) return { c: COL.ironDark, d: 1.15 };
+        if (x >= 9.7 && x <= 11.5 && y >= -1.8 && y < -1.0) return { c: COL.ironDark, d: 0.9 };
+        return handle(x, y, 12.4, 0.45, 3, cell);
+      },
+    },
+    {
+      id: "rod", name: "Rod", note: "Fishing", len: 18.3,
+      shape(x, y, cell) {
+        if (x >= 17.7 && x <= 18.3 && Math.abs(y) <= 0.22) return { c: COL.red, d: 0.4 };
+        // The reel hangs under the seat.
+        if (inCircle(x, y, 1.9, -1.45, 1.0)) {
+          if (inCircle(x, y, 1.9, -1.45, 0.35)) return { c: COL.ironDark, d: 1.1 };
+          return { c: rim((px, py) => inCircle(px, py, 1.9, -1.45, 1.0), x, y, 0.2) ? COL.ironDark : COL.reel, d: 0.9 };
+        }
+        if (x >= 1.7 && x <= 2.1 && y >= -0.8 && y < -0.4) return { c: COL.ironDark, d: 0.6 };
+        // Line guides: small rings on stems under the blank.
+        for (const gx of [7, 11, 14.5, 16.8]) {
+          const r2 = (x - gx) ** 2 + (y + 0.78) ** 2;
+          if (r2 <= 0.34 ** 2 && r2 >= 0.14 ** 2) return { c: COL.ironDark, d: 0.3 };
+          if (Math.abs(x - gx) <= 0.08 && y >= -0.5 && y <= -0.3) return { c: COL.ironDark, d: 0.3 };
+        }
+        if (x >= 1.2 && x <= 2.6 && Math.abs(y) <= 0.6) return { c: COL.ironDark, d: 0.95 };
+        if (x >= 0 && x <= 3.8 && Math.abs(y) <= 0.55) return { c: (x % 0.6) < 0.12 ? COL.corkDark : COL.cork, d: roundDepth(y, 0.55, 0.5, 1.0) };
+        if (x > 3.8 && x <= 4.1 && Math.abs(y) <= 0.42) return { c: COL.ironDark, d: 0.8 };
+        const half = 0.4 - 0.24 * clamp01(x / 18);
+        if (x > 4.1 && x <= 17.7 && Math.abs(y) <= half) return { c: COL.grip, d: roundDepth(y, half, 0.25, 0.75) };
+        return null;
+      },
+    },
+  ];
+  const TOOL = Object.fromEntries(TOOLS.map(t => [t.id, t]));
+
+  // ---- The grid: axial (q, r), pointy-top, r down; spacing s = 1 / density.
+  const key = (q, r) => q + "," + r;
+  const X0 = -2.2, X1 = 19, Y1 = 6.2;
+  const pos = (q, r, s) => [s * (q + r / 2), -s * r * S3 / 2]; // tool units, y up
+  function generate(tool, density) {
+    const s = 1 / density, m = new Map();
+    const rMax = Math.ceil(Y1 / (s * S3 / 2));
+    for (let r = -rMax; r <= rMax; r++) {
+      const qMin = Math.floor(X0 / s - r / 2) - 1, qMax = Math.ceil(X1 / s - r / 2) + 1;
+      for (let q = qMin; q <= qMax; q++) {
+        const [x, y] = pos(q, r, s);
+        const h = tool.shape(x, y, { q, r });
+        if (h) m.set(key(q, r), { q, r, c: h.c, d: +h.d.toFixed(2) });
+      }
+    }
+    return m;
+  }
+
+  // Per-viewer edits, per tool and density; a convenience only.
+  const STORE = "hex-tool-bench-v2";
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORE) || "{}") || {}; } catch (_) { saved = {}; }
+  const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (_) {} };
+  let density = 4;
+  const models = {};
+  function load(id) {
+    const list = saved[id + "@" + density];
+    if (Array.isArray(list)) {
+      const m = new Map();
+      for (const [q, r, c, d] of list) m.set(key(q, r), { q, r, c, d });
+      models[id] = m;
+    } else models[id] = generate(TOOL[id], density);
+  }
+  const save = (id) => { saved[id + "@" + density] = [...models[id].values()].map(h => [h.q, h.r, h.c, h.d]); persist(); };
+
+  // ---- The mesh: hexagon front and back at the hex's own depth; a side wall
+  // wherever a neighbour is missing or thinner, only over the difference.
+  // Faces shaded by direction, as Minecraft's items are (hexel.rs).
+  const shade = (n) => n.z > 0.5 ? 1.0 : n.z < -0.5 ? 0.72 : 0.78 + 0.18 * n.y;
+  const NEIGHBOUR = [[1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1], [1, 0]]; // edge k faces 60 + 60k degrees, y up
+  const lin = new THREE.Color();
+  function buildGeometry(m, s) {
+    const R = s / S3, P = [], C = [];
+    const va = new THREE.Vector3(), vb = new THREE.Vector3();
+    const push = (tri, n, hex) => {
+      lin.set(hex).convertSRGBToLinear();
+      const k = shade(n);
+      va.subVectors(tri[1], tri[0]); vb.subVectors(tri[2], tri[0]);
+      if (va.cross(vb).dot(n) < 0) tri = [tri[0], tri[2], tri[1]];
+      for (const p of tri) { P.push(p.x, p.y, p.z); C.push(lin.r * k, lin.g * k, lin.b * k); }
+    };
+    const Zp = new THREE.Vector3(0, 0, 1), Zn = new THREE.Vector3(0, 0, -1);
+    for (const h of m.values()) {
+      const [cx, cy] = pos(h.q, h.r, s);
+      const half = h.d / 2;
+      const corner = (k, z) => { const a = (30 + 60 * k) * Math.PI / 180; return new THREE.Vector3(cx + Math.cos(a) * R, cy + Math.sin(a) * R, z); };
+      const f = new THREE.Vector3(cx, cy, half), b = new THREE.Vector3(cx, cy, -half);
+      for (let k = 0; k < 6; k++) {
+        const k1 = (k + 1) % 6;
+        push([f, corner(k, half), corner(k1, half)], Zp, h.c);
+        push([b, corner(k, -half), corner(k1, -half)], Zn, h.c);
+        const nb = m.get(key(h.q + NEIGHBOUR[k][0], h.r + NEIGHBOUR[k][1]));
+        const nHalf = nb ? nb.d / 2 : -1;
+        if (nHalf >= half) continue;
+        const a = (60 + 60 * k) * Math.PI / 180;
+        const n = new THREE.Vector3(Math.cos(a), Math.sin(a), 0);
+        const spans = nHalf < 0 ? [[-half, half]] : [[nHalf, half], [-half, -nHalf]];
+        for (const [z0, z1] of spans) {
+          push([corner(k, z0), corner(k1, z0), corner(k1, z1)], n, h.c);
+          push([corner(k, z0), corner(k1, z1), corner(k, z1)], n, h.c);
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(C, 3));
+    return g;
+  }
+  const material = new THREE.MeshBasicMaterial({ vertexColors: true });
+
+  // ---- In hand: held.rs's rest pose, grip (0, 0) on the anchor, the head
+  // (len, 0) on the anchor plus the reach, the face toward the eye turned
+  // about the handle.
+  const ANCHOR = new THREE.Vector3(0.26, -0.26, -0.48);
+  // At 2x the grip drops a little and moves right, so the head sits beside
+  // the crosshair rather than on it.
+  const ANCHOR_2X = new THREE.Vector3(0.34, -0.36, -0.5);
+  const REACH = new THREE.Vector3(-0.06, 0.2, -0.1);
+  const ROD_TIP = new THREE.Vector3(0.26, 0.05, -0.95);
+  const TWIST = 0.5;
+  let size = 2;
+  function restPose(tool) {
+    const reach = (tool.id === "rod" ? ROD_TIP.clone().sub(ANCHOR) : REACH.clone()).multiplyScalar(size);
+    const scale = reach.length() / tool.len;
+    const a1 = new THREE.Vector3(1, 0, 0), a3 = new THREE.Vector3(0, 0, 1), a2 = a3.clone().cross(a1);
+    const b1 = reach.clone().normalize();
+    const Z = new THREE.Vector3(0, 0, 1);
+    const b3 = Z.clone().sub(b1.clone().multiplyScalar(Z.dot(b1))).normalize().applyAxisAngle(b1, TWIST);
+    const b2 = b3.clone().cross(b1);
+    const rot = new THREE.Matrix4().makeBasis(b1, b2, b3).multiply(new THREE.Matrix4().makeBasis(a1, a2, a3).transpose());
+    return { grip: (size === 2 ? ANCHOR_2X : ANCHOR).clone(), q: new THREE.Quaternion().setFromRotationMatrix(rot), scale };
+  }
+
+  // ---- The hand: stubby hex prisms in tool units, a child of the tool so it
+  // swings with it. Shaded in eye space at the rest pose.
+  const LIGHT = new THREE.Vector3(0.3, 0.8, 0.55).normalize();
+  function hexPrism(radius, length, colour, place, eyeRot) {
+    const g = new THREE.CylinderGeometry(radius, radius, length, 6, 1).toNonIndexed();
+    g.applyMatrix4(place);
+    g.computeVertexNormals();
+    const n = g.getAttribute("normal"), cols = [];
+    lin.set(colour).convertSRGBToLinear();
+    const v = new THREE.Vector3();
+    for (let i = 0; i < n.count; i++) {
+      v.fromBufferAttribute(n, i).applyQuaternion(eyeRot);
+      const k = 0.62 + 0.38 * Math.max(0, v.dot(LIGHT));
+      cols.push(lin.r * k, lin.g * k, lin.b * k);
+    }
+    g.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
+    return g;
+  }
+  // A prism along `axis` (tool units) centred at `at`, turned `roll` about it.
+  function along(axis, at, roll = 0) {
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().normalize());
+    q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), roll));
+    return new THREE.Matrix4().compose(at, q, new THREE.Vector3(1, 1, 1));
+  }
+  function buildHand(tool, pose, skin) {
+    const group = new THREE.Group();
+    const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1), Y = new THREE.Vector3(0, 1, 0);
+    const grip = tool.id === "rod" ? 2.6 : 1.5; // where along the handle the fist closes
+    const parts = [];
+    // The fist: a fat hex prism around the handle.
+    parts.push(hexPrism(1.05, 2.0, skin, along(X, new THREE.Vector3(grip, 0, 0), Math.PI / 6), pose.q));
+    // Four knuckles on the side toward the eye.
+    const knuckle = "#" + new THREE.Color(skin).multiplyScalar(0.84).getHexString();
+    for (let i = 0; i < 4; i++) {
+      parts.push(hexPrism(0.34, 0.6, knuckle, along(Z, new THREE.Vector3(grip - 0.72 + i * 0.48, 0.38, 1.12)), pose.q));
+    }
+    // The thumb, over the handle toward the head.
+    parts.push(hexPrism(0.36, 1.1, skin, along(X, new THREE.Vector3(grip + 1.25, 0.55, 0.45), Math.PI / 6), pose.q));
+    // The forearm: off the bottom right of the screen, toward the eye.
+    const eyeDir = new THREE.Vector3(0.32, -0.72, 0.62).normalize();
+    const d = eyeDir.applyQuaternion(pose.q.clone().invert());
+    const wrist = new THREE.Vector3(grip, 0, 0).addScaledVector(d, 1.0);
+    parts.push(hexPrism(0.8, 1.2, skin, along(d, wrist.clone().addScaledVector(d, 0.6)), pose.q));
+    parts.push(hexPrism(1.02, 0.5, CUFF, along(d, wrist.clone().addScaledVector(d, 1.35)), pose.q));
+    parts.push(hexPrism(0.96, 14, SLEEVE, along(d, wrist.clone().addScaledVector(d, 8.6)), pose.q));
+    for (const g of parts) group.add(new THREE.Mesh(g, material));
+    return group;
+  }
+
+  const heldCanvas = document.getElementById("held");
+  const heldRenderer = new THREE.WebGLRenderer({ canvas: heldCanvas, antialias: true });
+  heldRenderer.outputEncoding = THREE.sRGBEncoding;
+  const heldScene = new THREE.Scene();
+  const heldCam = new THREE.PerspectiveCamera(70, 16 / 10, 0.02, 500);
+  {
+    heldScene.add(new THREE.Mesh(new THREE.SphereGeometry(200, 32, 16), new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false,
+      uniforms: { top: { value: new THREE.Color("#5f86ad") }, low: { value: new THREE.Color("#c3d3dd") } },
+      vertexShader: "varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }",
+      fragmentShader: "uniform vec3 top; uniform vec3 low; varying vec3 p; void main(){ float t = clamp(normalize(p).y*2.2, 0.0, 1.0); gl_FragColor = vec4(mix(low, top, t), 1.0); }",
+    })));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: new THREE.Color("#4a6f31").convertSRGBToLinear() }));
+    ground.rotation.x = -Math.PI / 2; ground.position.y = -1.7;
+    heldScene.add(ground);
+    const hillMat = new THREE.MeshBasicMaterial({ color: new THREE.Color("#3d5d29").convertSRGBToLinear() });
+    for (let i = 0; i < 9; i++) {
+      const h = new THREE.Mesh(new THREE.CylinderGeometry(6 + (i % 3) * 3, 9 + (i % 4) * 3, 5 + (i % 3) * 3, 6), hillMat);
+      const a = -0.9 + i * 0.22;
+      h.position.set(Math.sin(a) * 60, -1.5, -Math.cos(a) * 60);
+      heldScene.add(h);
+    }
+  }
+  const heldRoot = new THREE.Group();
+  heldCam.add(heldRoot);
+  heldScene.add(heldCam);
+  let pose = null, skin = SKINS[0];
+
+  // ---- Turntables.
+  const turns = [];
+  const cards = document.getElementById("cards");
+  for (const t of TOOLS) {
+    const card = document.createElement("article");
+    card.className = "card";
+    card.innerHTML = `<h3>${t.name}</h3><div class="turn"><canvas aria-label="${t.name} in 3D, drag to turn"></canvas></div><div class="stat" data-stat></div>`;
+    cards.appendChild(card);
+    const canvas = card.querySelector("canvas");
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(32, 1, 0.1, 400), pivot = new THREE.Group();
+    scene.add(pivot);
+    const turn = { t, card, canvas, renderer, scene, cam, pivot, mesh: null, yaw: 0.5, pitch: 0.25, drag: null, span: 10 };
+    canvas.addEventListener("pointerdown", e => { turn.drag = [e.clientX, e.clientY, turn.yaw, turn.pitch]; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener("pointermove", e => {
+      if (!turn.drag) return;
+      turn.yaw = turn.drag[2] + (e.clientX - turn.drag[0]) * 0.01;
+      turn.pitch = Math.max(-1.3, Math.min(1.3, turn.drag[3] + (e.clientY - turn.drag[1]) * 0.01));
+    });
+    canvas.addEventListener("pointerup", () => { turn.drag = null; });
+    card.addEventListener("click", () => select(t.id));
+    turns.push(turn);
+  }
+
+  function rebuild(id) {
+    const m = models[id], s = 1 / density;
+    const turn = turns.find(x => x.t.id === id);
+    if (turn.mesh) { turn.pivot.remove(turn.mesh); turn.mesh.geometry.dispose(); }
+    const g = buildGeometry(m, s);
+    g.computeBoundingBox();
+    const c = new THREE.Vector3(), sz = new THREE.Vector3();
+    g.boundingBox.getCenter(c); g.boundingBox.getSize(sz);
+    turn.mesh = new THREE.Mesh(g, material);
+    turn.mesh.position.copy(c).multiplyScalar(-1);
+    turn.pivot.add(turn.mesh);
+    turn.span = Math.max(sz.x, sz.y, 4);
+    turn.card.querySelector("[data-stat]").textContent = `${m.size.toLocaleString()} hexes · ${TOOL[id].note}`;
+    if (id === current) rebuildHeld();
+  }
+  function rebuildHeld() {
+    while (heldRoot.children.length) {
+      const c = heldRoot.children.pop();
+      c.traverse(o => o.geometry && o.geometry.dispose());
+    }
+    const tool = TOOL[current];
+    pose = restPose(tool);
+    const holder = new THREE.Group();
+    holder.add(new THREE.Mesh(buildGeometry(models[current], 1 / density), material));
+    if (handBox.checked) holder.add(buildHand(tool, pose, skin));
+    heldRoot.add(holder);
+  }
+
+  // ---- Editor.
+  const editor = document.getElementById("editor"), ectx = editor.getContext("2d");
+  let paint = COL.iron, brush = 1, paintDepth = 0.6, view = { k: 20, ox: 0, oy: 0, dpr: 1 };
+  const makeSeg = (el, items, initial, onPick) => {
+    const buttons = items.map(([label, value]) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.setAttribute("aria-pressed", String(value === initial));
+      b.addEventListener("click", () => { buttons.forEach(x => x.setAttribute("aria-pressed", String(x === b))); onPick(value); });
+      el.appendChild(b);
+      return b;
+    });
+  };
+  const palette = document.getElementById("palette"), swatches = [];
+  for (const c of [...PALETTE, null]) {
+    const b = document.createElement("button");
+    if (c) { b.className = "swatch"; b.style.background = c; b.setAttribute("aria-label", "Paint " + c); } else b.textContent = "Erase";
+    b.setAttribute("aria-pressed", String(c === paint));
+    b.addEventListener("click", () => { paint = c; swatches.forEach(s => s.setAttribute("aria-pressed", String(s === b))); });
+    palette.appendChild(b); swatches.push(b);
+  }
+  makeSeg(document.getElementById("brush"), [["1", 0], ["7", 1], ["19", 2]], 1, v => { brush = v; });
+  makeSeg(document.getElementById("depth"), [["Thin", 0.3], ["Mid", 0.6], ["Thick", 1.0]], 0.6, v => { paintDepth = v; });
+  makeSeg(document.getElementById("density"), [["1×", 1], ["2×", 2], ["4×", 4]], 4, v => {
+    density = v; for (const t of TOOLS) { load(t.id); rebuild(t.id); } layoutEditor();
+  });
+  makeSeg(document.getElementById("size"), [["1×", 1], ["2×", 2]], 2, v => { size = v; rebuildHeld(); });
+  const skins = document.getElementById("skins"), skinButtons = SKINS.map(c => {
+    const b = document.createElement("button");
+    b.className = "skin"; b.style.background = c; b.setAttribute("aria-label", "Skin " + c);
+    b.setAttribute("aria-pressed", String(c === skin));
+    b.addEventListener("click", () => { skin = c; skinButtons.forEach(x => x.setAttribute("aria-pressed", String(x === b))); rebuildHeld(); });
+    skins.appendChild(b); return b;
+  });
+  const handBox = document.getElementById("hand");
+  handBox.addEventListener("change", rebuildHeld);
+
+  function layoutEditor() {
+    const w = editor.clientWidth, h = editor.clientHeight, dpr = window.devicePixelRatio || 1;
+    editor.width = Math.round(w * dpr); editor.height = Math.round(h * dpr);
+    const k = Math.min(w / (X1 - X0 + 0.5), h / (2 * Y1 + 0.5));
+    view = { k, ox: w / 2 - (X0 + X1) / 2 * k, oy: h / 2, dpr };
+    drawEditor();
+  }
+  const toScreen = (x, y) => [view.ox + x * view.k, view.oy - y * view.k];
+  function fromScreen(px, py) {
+    const s = 1 / density;
+    const x = (px - view.ox) / view.k / s, yDown = (py - view.oy) / view.k / s;
+    const r = yDown / (S3 / 2), q = x - r / 2;
+    let rx = Math.round(q), rz = Math.round(r); const ry = Math.round(-q - r);
+    const dx = Math.abs(rx - q), dz = Math.abs(rz - r), dy = Math.abs(ry + q + r);
+    if (dx > dy && dx > dz) rx = -ry - rz; else if (dz > dy) rz = -rx - ry;
+    return [rx, rz];
+  }
+  function drawEditor() {
+    const m = models[current], s = 1 / density, rad = view.k * s / S3;
+    ectx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    ectx.clearRect(0, 0, editor.clientWidth, editor.clientHeight);
+    const rMax = Math.ceil(Y1 / (s * S3 / 2));
+    const hex = (cx, cy, rr) => {
+      ectx.beginPath();
+      for (let k = 0; k < 6; k++) { const a = (30 + 60 * k) * Math.PI / 180; const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr; k ? ectx.lineTo(x, y) : ectx.moveTo(x, y); }
+      ectx.closePath();
+    };
+    for (let r = -rMax; r <= rMax; r++) {
+      const qMin = Math.floor(X0 / s - r / 2) - 1, qMax = Math.ceil(X1 / s - r / 2) + 1;
+      for (let q = qMin; q <= qMax; q++) {
+        const [x, y] = pos(q, r, s), [sx, sy] = toScreen(x, y);
+        const h = m.get(key(q, r));
+        hex(sx, sy, rad * 0.98);
+        if (h) {
+          // Deeper hexes read brighter, so the relief shows in plan.
+          const c = new THREE.Color(h.c).multiplyScalar(0.75 + 0.3 * Math.min(1, h.d));
+          ectx.fillStyle = "#" + c.getHexString(); ectx.fill();
+        } else if (density < 4) {
+          ectx.strokeStyle = r === 0 ? "#3a4652" : "#222a31"; ectx.lineWidth = 1; ectx.stroke();
+        } else if (r === 0) {
+          ectx.fillStyle = "#1f2830"; ectx.fill();
+        }
+      }
+    }
+    const [gx, gy] = toScreen(0, 0);
+    ectx.beginPath(); ectx.arc(gx, gy, Math.max(5, view.k * 0.35), 0, Math.PI * 2);
+    ectx.strokeStyle = "#d9a441"; ectx.lineWidth = 2; ectx.stroke();
+    document.getElementById("edit-stat").textContent = `${m.size.toLocaleString()} hexes at ${density}×`;
+    document.getElementById("data").value = dataText(current);
+  }
+  const dataText = (id) => {
+    const rows = [...models[id].values()].sort((a, b) => a.r - b.r || a.q - b.q).map(h => `(${h.q}, ${h.r}, "${h.c}", ${h.d})`);
+    return `${id}: (density: ${density}, hexes: [\n  ${rows.join(",\n  ")},\n])`;
+  };
+  let painting = false, last = "";
+  function paintAt(e) {
+    const rect = editor.getBoundingClientRect();
+    const [q0, r0] = fromScreen(e.clientX - rect.left, e.clientY - rect.top);
+    if (q0 + "," + r0 === last) return;
+    last = q0 + "," + r0;
+    const m = models[current];
+    for (let dq = -brush; dq <= brush; dq++) for (let dr = -brush; dr <= brush; dr++) {
+      if ((Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2 > brush) continue;
+      const q = q0 + dq, r = r0 + dr, k = key(q, r);
+      if (paint) m.set(k, { q, r, c: paint, d: paintDepth }); else m.delete(k);
+    }
+    save(current); rebuild(current); drawEditor();
+  }
+  editor.addEventListener("pointerdown", e => { painting = true; last = ""; editor.setPointerCapture(e.pointerId); paintAt(e); });
+  editor.addEventListener("pointermove", e => { if (painting) paintAt(e); });
+  editor.addEventListener("pointerup", () => { painting = false; });
+  document.getElementById("reset").addEventListener("click", () => {
+    delete saved[current + "@" + density]; persist(); load(current); rebuild(current); drawEditor();
+  });
+  document.getElementById("copy").addEventListener("click", () => {
+    const text = dataText(current), note = document.getElementById("copied");
+    const fallback = () => { const ta = document.getElementById("data"); ta.focus(); ta.select(); note.textContent = "Selected: press Ctrl+C"; };
+    try { navigator.clipboard.writeText(text).then(() => { note.textContent = "Copied"; }, fallback); } catch (_) { fallback(); }
+  });
+
+  // ---- Selection.
+  const tabs = document.getElementById("tabs");
+  const tabButtons = TOOLS.map(t => {
+    const b = document.createElement("button");
+    b.textContent = t.name;
+    b.addEventListener("click", () => select(t.id));
+    tabs.appendChild(b);
+    return b;
+  });
+  let current = "pickaxe";
+  function select(id) {
+    current = id;
+    TOOLS.forEach((t, i) => {
+      tabButtons[i].setAttribute("aria-pressed", String(t.id === id));
+      turns[i].card.setAttribute("aria-current", String(t.id === id));
+    });
+    document.getElementById("edit-name").textContent = TOOL[id].name;
+    rebuildHeld(); drawEditor();
+  }
+
+  // ---- Frames.
+  const chop = document.getElementById("chop"), sway = document.getElementById("sway");
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduced) sway.checked = false;
+  function fit(renderer, cam, canvas) {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (canvas.width !== Math.round(w * devicePixelRatio) || canvas.height !== Math.round(h * devicePixelRatio)) {
+      renderer.setPixelRatio(devicePixelRatio); renderer.setSize(w, h, false);
+      cam.aspect = w / Math.max(h, 1); cam.updateProjectionMatrix();
+    }
+  }
+  let phase = 0, then = performance.now();
+  const X = new THREE.Vector3(1, 0, 0);
+  function frame(now) {
+    const dt = Math.min(0.05, (now - then) / 1000); then = now;
+    const t = now / 1000;
+    fit(heldRenderer, heldCam, heldCanvas);
+    const holder = heldRoot.children[0];
+    if (holder && pose) {
+      // Tenebris's viewmodel: a few millimetres of sway; the chop pitches the
+      // tool about its grip at 9 rad/s, 0.85 rad and 6 cm down at the bottom.
+      const sw = sway.checked ? new THREE.Vector3(Math.sin(t * 1.3) * 0.006, Math.cos(t * 1.7) * 0.005, 0) : new THREE.Vector3();
+      phase = chop.checked ? phase + dt * 9 : 0;
+      const c = chop.checked ? Math.max(0, Math.sin(phase)) : 0;
+      holder.scale.setScalar(pose.scale);
+      holder.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(X, -0.85 * c)).multiply(pose.q);
+      holder.position.copy(pose.grip).add(sw).add(new THREE.Vector3(0, -0.06 * c, 0));
+    }
+    heldRenderer.render(heldScene, heldCam);
+    for (const tt of turns) {
+      fit(tt.renderer, tt.cam, tt.canvas);
+      if (!tt.drag && !reduced) tt.yaw += dt * 0.4;
+      const d = tt.span * 2.1;
+      tt.cam.position.set(Math.sin(tt.yaw) * Math.cos(tt.pitch) * d, Math.sin(tt.pitch) * d, Math.cos(tt.yaw) * Math.cos(tt.pitch) * d);
+      tt.cam.lookAt(0, 0, 0);
+      tt.renderer.render(tt.scene, tt.cam);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  for (const t of TOOLS) load(t.id);
+  for (const t of TOOLS) rebuild(t.id);
+  select("pickaxe");
+  layoutEditor();
+  window.addEventListener("resize", layoutEditor);
+  requestAnimationFrame(frame);
+})();
+</script>

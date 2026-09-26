@@ -106,39 +106,130 @@ is the length of a tap later.
 `dig_and_place` changes from a click to a hold.
 
 - **Starting.** On the first frame the left button is down with a target, a
-  `Breaking { cell, layer, since }` starts.
+  `Breaking { cell, layer, elapsed }` starts, and the time it needs is looked
+  up once from the material and the tool in hand.
 - **Progress.** It advances while the button stays down and the aim stays on
-  the same layer. A ring round the reticle shows the progress. Letting go, or
-  moving the aim, resets it.
+  the same cell and layer. Letting go, or moving the aim, resets it to nought:
+  Minecraft's rule and Tenebris's (`tenebris-client/src/interact.rs:578-596`).
 - **Finishing.** At `secs(material, tool)` it takes the layer through the
   existing `apply_edit(Hands::Take, ...)`. The durable path, the GPU update and
   the slot give are all unchanged.
+- **Holding on.** With the button still down, the next block starts after a
+  short pause (`between_s`, 0.15 s), so a player tunnelling holds the button
+  rather than clicking once per block. Minecraft pauses five ticks (0.25 s)
+  for the same reason: without it the next block, usually the one behind,
+  starts on the frame the first one goes and reads as the tool skipping it.
+
+The rule is a pure state machine in the core (`pbd_core::dig::Breaking`), so
+it is tested without an engine; the app hands it the target, the button and
+the frame's time.
 
 ```text
-secs = base(material) * (tool == right_tool(material) ? 1 : wrong_tool)
-rod  -> never: "a rod digs nothing" on the aim line
+secs = matrix[class(material)][tool]
+rod  -> never: the rod casts, and the left button is the fishing line's
 ```
 
-| Class | Materials | Right tool | Base, s (tunable) |
-| --- | --- | --- | ---: |
-| soft | Grass, DryGrass, JungleGrass, Soil, Dirt, Sand, Snow | Shovel | 0.25 |
-| stone | Stone | Pickaxe | 0.6 |
-| rock | Rock | Pickaxe | 0.8 |
-| ore | Ore | Pickaxe | 1.0 |
-| wood | Wood (new, section 5) | Axe | 1.0 |
-| placed | Torch | any tool but the rod | 0.1 |
+**A matrix, not a right tool and a penalty.** The first build gave every
+material one right tool and charged any other four times as much, which
+makes every wrong tool equally bad: a pickaxe was as poor at dirt as a shovel
+at stone, and the axe, with no trees to fell, was simply a slow everything.
+The owner asked for a matrix instead, one time per tool for each kind of
+material, so each tool has its own character against dirt, rock and wood.
 
-`wrong_tool` is 4. `right_tool` and `base` live in `pbd_core` (a new
-`tools.rs`), with the numbers in `assets/config/tools.ron` and a test that the
-shipped file equals the code defaults. That is the same pattern as
-`vehicles.ron`.
+The times with the best tool are tuned against Minecraft (0.4 to 0.75 s for
+dirt, 0.4 to 1.15 s for stone with the right tool) and are slower than
+Tenebris's own (2.5 s soft, 5 s rock with a wooden pick,
+`tenebris-rs/assets/config/mining.yaml`) only where Tenebris has tool tiers
+to buy the time back with, which this has not. The first draft's 0.25 s for
+soft ground is too fast to see a crack: fifteen frames across ten stages.
+
+| Class | Materials | Shovel, s | Pickaxe, s | Axe, s |
+| --- | --- | ---: | ---: | ---: |
+| dirt | Grass, DryGrass, JungleGrass, Soil, Dirt, Sand, Snow | **0.5** | 1.5 | 1.2 |
+| stone | Stone | 4.0 | **1.2** | 3.0 |
+| rock | Rock | 5.0 | **1.6** | 4.0 |
+| ore | Ore | 6.5 | **2.0** | 5.5 |
+| wood | Wood (section 5, not built) | 2.5 | 2.0 | **0.6** |
+| placed | Torch | 0.1 | 0.1 | 0.1 |
+
+The reasoning behind the off-diagonal cells, so they can be argued with:
+
+- **Dirt.** A pickaxe breaks it but lifts none of it: three times the shovel.
+  An axe chops through roots and turf a little better than a pick: 2.4 times.
+- **Stone, rock, ore.** A shovel blade only scrapes: a little over three times
+  the pickaxe. An axe chips stone with its edge: two and a half times.
+- **Wood.** A pickaxe splits a log faster than a shovel does, and neither is
+  close to the axe.
+- **Placed things**, a torch, come away with any tool at once.
+- **The rod** breaks nothing, whatever the row. Water and air are never a
+  target, since the aim ray passes through both.
+
+The best tool in each row is the one the table bolds, and a test holds the
+shipped defaults to that, so a retune that made the pickaxe the best shovel
+would fail loudly rather than quietly.
+
+The classes and `secs` live in `pbd_core::dig`, with the matrix in
+`assets/config/dig.ron` as one row per class and one field per tool, and a
+test that the shipped file equals the code defaults. That is the same
+pattern as `vehicles.ron`.
+
+**The wood row is ready before the wood is.** There is no wood block yet:
+the trees are drawn on the GPU alone (section 5), and a new material needs a
+shader code (the column pass packs materials in 4 bits, and 15 of the 16
+codes are spent), an atlas tile, a save code and a slot thumbnail. Until
+trees can be felled the row is data a test reads, and the axe's column is
+what it does to dirt and stone.
+
+### The crack overlay: the block shows how far along it is
+
+The owner asked for Minecraft's breaking effect: dark cracks drawn over every
+face of the block being mined, growing as it is mined. Tenebris does the same
+thing (`break_stages.png`, six 32 px stages, blended at 0.9 over the mined
+cell by a crack channel in its hex shader).
+
+- **Ten stages**, Minecraft's `destroy_stage_0` to `_9`. Stage `k` is shown
+  while progress is in `[k/10, (k+1)/10)`. Tenebris has six, and its jump from
+  stage 1 to stage 2 is visibly the biggest; ten even steps read as a crack
+  growing.
+- **One set of fractures, revealed.** A generator
+  (`tools/gen_break_stages.py`, stdlib and zlib, `--check`) walks a fixed set
+  of jagged fracture lines out from the middle of a 32 px square and gives
+  every crack pixel an order. Stage `k` draws the first `(k+1)/10` of them,
+  so each stage contains the one before it and the block reads as one block
+  cracking, never as ten different pictures. Crack pixels are near black at
+  0.85 alpha with a lighter pixel beside some of them, which is what gives
+  Minecraft's cracks their chipped edge. It writes
+  `assets/textures/break/stage_0.png` to `stage_9.png`.
+- **Its own mesh, not a terrain shader term.** The overlay is a small prism
+  built on the CPU from the targeted cell's record (its degree, its six or
+  five corner rays) between the layer's bottom and top, pushed out 1 cm so it
+  sits on the block's faces rather than fighting them for depth. It is drawn
+  unlit and alpha blended, one entity, rebuilt only when the target changes and
+  given a new stage's material when progress crosses a stage. Tenebris put its
+  crack in the terrain shader, and the cost there is a uniform and a branch on
+  every terrain fragment for a decal that covers one block; here it touches
+  nothing the terrain pass does, and the overlay is a few dozen triangles.
+- **Its pixels land on the block's pixels.** The overlay uses the terrain
+  shader's own UV mapping (`planet_surface.wgsl`): a side face runs `u` 0 to 1
+  along its edge and one tile per metre of height, and a top is the
+  tangent-plane projection at `1.5 * tile` about the cell's axis, with the
+  same reference vector. The crack texture is 32 px like the atlas tiles and
+  sampled nearest, so a crack pixel is exactly a block pixel.
+- **Nothing is drawn when nothing is being broken**, and nothing while the
+  rod is in hand.
+
+The progress ring round the reticle that the first draft had is dropped: the
+cracks are the progress, on the block itself, where the player is looking.
 
 **Placing does not change.** Right click puts the selected slot's block
 wherever it goes today, whatever tool is in hand. The one exception is while a
 line is out: then right click reels in and places nothing.
 
-The scripted `--dig` capture keeps working because it runs through the same
-path with the shovel held.
+The scripted `--dig` capture is a measurement instrument that digs N blocks in
+one frame, and stays that way: a picture of a hole needs the hole, not the
+time it took. A new `--break SECONDS` holds the button on the block under the
+reticle for that long, so a capture can photograph the cracks at a chosen
+stage.
 
 ## 4. Fishing
 
@@ -654,6 +745,80 @@ five copied fish match their recorded hashes.
   sky. Clamping each event's delta fixed it. The walker already reads Bevy's
   accumulated motion, but the fix is noted here for the vehicle seat and the
   picker.
+
+## 12. The tool in hand, built from hex pixels
+
+The owner asked for a model of each tool, made of small hex blocks the way
+Minecraft makes an item's model out of square ones. Minecraft's held item is
+its 16 px sprite extruded one pixel deep: every opaque pixel becomes a cube.
+Here every opaque pixel becomes a small hexagonal prism, a **hexel**.
+
+- **The icon is the source.** A tool's model is built from the same 16 px PNG
+  its slot and picker already show (`assets/items/tools/*.png`, drawn by
+  `tools/gen_item_icons.py`), so the icon and the model cannot disagree, and
+  redrawing an icon redraws the model. Nothing about a tool's shape is written
+  a second time.
+- **The hex grid.** Pointy-top hexagons in horizontal rows, every other row
+  offset by half a hexel, one pixel flat to flat, so the rows are `sqrt(3)/2`
+  of a pixel apart and a 16 px icon is 19 rows of up to 16 hexels.
+- **Sampled over its area, not at its centre: a finding.** The first plan was
+  that each hexel takes the pixel under its centre and that a 1 px diagonal
+  stays connected because the row offset puts a hexel under each step. It
+  does not: rows are 0.87 px apart, so the centres skip pixel rows, and a
+  preview of the four shipped icons broke every diagonal handle into
+  separate pairs of hexels. Each hexel now samples its centre and six points
+  0.3 px out toward its corners, exists if any of them is opaque, and takes
+  the colour most of them cover (the centre's on a tie). At 0.3 px every
+  handle is one piece and as thin as the icon draws it; at 0.4 px the handles
+  came out a hexel thicker. A core test holds a one-pixel diagonal to one
+  piece, and an app test holds every shipped tool's model to one piece.
+- **One pixel deep**, as Minecraft's are. The front and back are hexagons and
+  a side face is built only where the neighbouring hexel is empty, so a
+  handle is a closed strip rather than a stack of prisms with their insides
+  drawn.
+- **Shaded like Minecraft's items, and unlit.** Each face's colour is its
+  pixel's colour times a fixed shade by the face's direction (the front
+  brightest, sides by how much they face up), baked into vertex colours and
+  drawn unlit. Tenebris draws its held tool unlit for the same reason: a tool
+  in your hand should read at night and in a cave.
+- **The mesh is the core's** (`pbd_core::hexel`): pixels in, positions,
+  normals and colours out, engine-free and tested. The app decodes the PNG
+  and hands the pixels over.
+
+**Held where Tenebris holds it.** `tenebris-client/src/viewmodel.rs` puts the
+grip at `(0.26, -0.26, -0.48)` m in eye space, low and to the right, with the
+head leaning in toward the middle of the screen, a slow idle sway of a few
+millimetres, and a chop arc while the mine button is held on a block
+(9 rad/s, down 6 cm and pitched 0.85 rad at the bottom). Those are taken as
+they are. The lean is ours: the head sits 0.2 m up, 6 cm in toward the middle
+and 10 cm further out than the grip, so the tool crosses the lower right of
+the view the way Minecraft's does. Each tool's icon names two points, its grip and its head, in pixel
+coordinates (the shovel's grip is top right in its icon and the pickaxe's
+bottom left), and the model is placed so the grip lands on the anchor and the
+head on the eye-space point above it; the icon's plane faces the camera,
+turned 0.5 rad about the handle so its thickness shows.
+
+**The rod is held where the line leaves it.** The rod keeps Tenebris's tip
+(`(0.26, 0.05, -0.95)` m), which the fishing line already starts from, and is
+gripped at the same anchor as the other tools. Tenebris's own rod grip,
+`(0.18, -0.30, -0.22)`, is 0.22 m from the eye, and the first capture there
+drew the rod's hexels so large that it filled a third of the screen. Its
+icon's handle and tip pixels are mapped onto the anchor and the tip. So the line comes out of the tip of the rod you can see,
+and there is one tip rather than a tip constant and a model that has to be
+kept next to it. The rod's icon has its line and float hanging from the tip,
+and the model keeps them: Minecraft's rod shows its string too. When the
+line is cast, the real line leaves from the same tip.
+
+**All of it is data.** The anchor, the rod's grip and tip, the two icon
+points per tool, the twist, the scale of the sway and the swing are in
+`assets/config/held.ron`, validated with units, with a test that the shipped
+file equals the code defaults.
+
+**A limitation, stated.** The model is a child of the walking camera, drawn
+in the same pass as the world, so a wall closer than half a metre can cut
+into it. Tenebris draws its tool in a pass of its own over the finished frame
+to prevent exactly that; doing so here needs a second camera over the custom
+render graph, and is left until it is seen to matter.
 
 ## 11. Proof, when it is built
 

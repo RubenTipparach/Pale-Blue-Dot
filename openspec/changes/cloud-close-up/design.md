@@ -17,7 +17,24 @@ ground (about 230 m) and gains the same scale up and down. The flat base and
 the billowing top stay the height profile's job, and the convective cells and
 fine octaves follow `q` as before.
 
-## 2. The resolve
+## 2. The resolve (superseded on merge by `cloud-ghosting`)
+
+**Merged away (2026-09-25).** While this change was built on its branch,
+`main` landed `openspec/changes/cloud-ghosting`: the march keeps last frame's
+distances and eye and blends a history texel only when it saw what this frame
+sees. Both fixed the same fault, and both edited the same march; the merge
+kept `cloud-ghosting`'s, measured on its own before-and-after captures, and
+dropped the resolve pass below (with it the `current` target, the resolve
+layout and `CLOUD_BLEND` = 0.1: `main` keeps 0.06). The composite's fallback
+(section 1's "no cloud when every texel is rejected") and the haze (section 3)
+are laid over `cloud-ghosting`'s march unchanged. The resolve stays written
+here as the next step if ghosting remains: `cloud-ghosting`'s test rejects a
+history texel across a silhouette but does not clip one that passes to this
+frame's neighbourhood. The before-and-after report in
+`docs/benchmarks/2026-09-25-cloud-close-up` measured THIS branch's resolve
+and must be re-run on the merged build.
+
+What was built on the branch:
 
 Targets at the march's resolution (`cloud_render_scale`):
 

@@ -12,6 +12,8 @@ pub mod fish;
 #[cfg(feature = "desktop")]
 pub mod flight_view;
 #[cfg(feature = "desktop")]
+pub mod held;
+#[cfg(feature = "desktop")]
 pub mod hotbar;
 #[cfg(feature = "desktop")]
 pub mod overlay;

@@ -23,10 +23,7 @@
 - [x] `Tool { Rod, Shovel, Pickaxe, Axe }` replaces the `Pick` placeholder;
       `Equipment { owned, held }` beside `Slots`; `Tool::digs` is false for
       the rod only.
-- [ ] `tools.rs`: `right_tool(material)`, `base(material)`,
-      `secs(material, tool)`; `assets/config/tools.ron` with units; test that
-      the shipped file equals the code defaults.
-- [ ] Tests: `secs` for every material and tool; the rod breaks nothing.
+- The break-time rule moved to section 3 (`pbd_core::dig`, `dig.ron`).
 
 ## 2. Input and HUD
 - [x] One G reader (`controls::read_picker_key`). First built as a tap/hold
@@ -42,9 +39,38 @@
       wheel leaves the item slot alone while the picker is open.
 
 ## 3. Digging by tool
-- [ ] `dig_and_place` becomes a hold with a `Breaking` state and a reticle
-      ring; the edit path is unchanged.
-- [ ] The scripted `--dig` capture holds the shovel.
+- [x] `pbd_core::dig`: the material classes, `right_tool`, `secs`, and the
+      `Breaking` state machine (start, hold, reset on release or a new target,
+      finish, the pause between blocks); `assets/config/dig.ron` with units
+      and a shipped-equals-default test.
+- [x] `dig_and_place` becomes a hold on the `Breaking` state; the edit path is
+      unchanged; the rod never breaks anything.
+- [x] `tools/gen_break_stages.py` writes ten 32 px crack stages with
+      `--check`, and a test that each stage contains the one before.
+- [x] The crack overlay: a prism over the targeted cell from its record, the
+      terrain's UV mapping, unlit and blended, one entity, stage by progress.
+- [x] `--break SECONDS` for a capture of the cracks (`docs/screenshots/breaking-cracks.png`, the pickaxe held 1 s on grass: stage 5); `--dig` stays instant.
+- [x] Tests: the times by class and tool; the wrong-tool multiple; reset on
+      release and on a new target; the rod never; the stage by progress.
+- [x] The owner's revision: a matrix of one time per tool for each class
+      (dirt, stone, rock, ore, wood, placed) replaces right tool times four;
+      a test that each row's fastest tool is the one the design bolds.
+
+## 3b. The tool in hand
+- [x] `pbd_core::hexel`: an RGBA image to hexels on the offset hex grid, and
+      their mesh (front, back, and sides only where a neighbour is empty),
+      with baked directional shade; tests for coverage, closedness and a
+      connected diagonal.
+- [x] `assets/config/held.ron`: the anchor, the rod's grip and tip, each
+      tool's icon grip and head, the twist, sway and swing, validated, with a
+      shipped-equals-default test.
+- [x] The held tool: one model per tool built from its icon at startup, a
+      child of the walking camera, the one in hand shown, the sway, and the
+      chop arc while a block is being broken. It replaces the rod's frustum.
+- [x] The fishing line leaves from the rod model's tip, read from the same
+      data; a test that the two agree.
+- [x] A capture of each tool in hand (`docs/screenshots/held-*.png`; the
+      pickaxe mid-chop on a cracking block).
 
 ## 4. Trees
 - [ ] `pbd_core::flora::tree_at`; the WGSL reads its density table from a
