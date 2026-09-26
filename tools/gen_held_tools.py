@@ -32,7 +32,7 @@ SIZES = (1, 2)
 COL = {
     "wood": "#8a5a2b", "woodDark": "#72471f", "grip": "#5e3a18", "wrap": "#7a4d22",
     "iron": "#c9d3d6", "ironDark": "#7d8a8f", "edge": "#eef3f4",
-    "cork": "#b9a27a", "corkDark": "#9c865e", "reel": "#9aa6ab", "red": "#e35d4a",
+    "cork": "#b9a27a", "corkDark": "#9c865e", "reel": "#9aa6ab", "red": "#e35d4a", "accent": "#e07b2a",
 }
 SKINS = ["#e3b089", "#c98f64", "#8f5d3d", "#5c3b27"]
 SLEEVE, CUFF = "#4d6a8c", "#3a526e"
@@ -126,21 +126,46 @@ def pickaxe(x, y, r):
     return handle(x, y, 18, 0.45, 3, r)
 
 
+# The spade, drawn from the owner's reference: a long straight shaft with a
+# grip cap on its end, a socket running down into the blade, square
+# shoulders, near-straight sides, and a rounded nose that comes to a point.
+SPADE_TOP, SPADE_LEN, SPADE_HALF = 18.0, 6.4, 2.4
+SPADE_SHOULDER = 0.5  # the share of the blade's length before the sides turn in
+
+
+def spade_half_width(x):
+    """The blade's half-width at x: full from the shoulders, then curving in
+    to a point at the nose."""
+    t = (x - SPADE_TOP) / SPADE_LEN
+    if t < 0 or t > 1:
+        return -1.0
+    if t <= SPADE_SHOULDER:
+        return SPADE_HALF
+    u = (t - SPADE_SHOULDER) / (1 - SPADE_SHOULDER)
+    # A round nose with a blunt point: fuller than a circle's quarter near the
+    # sides, closing to a point only at the very end.
+    return SPADE_HALF * max(0.0, 1 - u ** 2.0) ** 0.62
+
+
 def shovel(x, y, r):
-    def blade(px, py):
-        return in_ellipse(px, py, 19.0, 0, 2.8, 2.3) or (19.0 <= px <= 22.0 and abs(py) <= 2.3 * (22.0 - px) / 3.0)
+    def blade(px, py): return abs(py) <= spade_half_width(px)
     if blade(x, y):
-        if abs(y) < 0.3 and x < 20.6:
-            return ("ironDark", 0.75)
-        if rim(blade, x, y, 0.3):
-            return ("edge", 0.3)
-        return ("iron", 0.4)
-    if 15.6 <= x <= 17.2 and abs(y) <= 0.62 + (x - 15.6) * 0.3:
-        return ("ironDark", 0.95)
-    # A D-grip crossbar at the butt.
-    if -0.9 <= x <= -0.1 and abs(y) <= 1.4:
-        return ("wrap" if abs(y) > 1.1 else "grip", 0.9)
-    return handle(x, y, 16.0, 0.51, 2.4, r)
+        # The socket runs a third of the way down the blade as a raised spine.
+        if abs(y) < 0.42 - 0.2 * (x - SPADE_TOP) / (SPADE_LEN * 0.55) and x < SPADE_TOP + SPADE_LEN * 0.55:
+            return ("ironDark", 0.8)
+        # The shoulders are folded over into a flat tread along the top.
+        if x < SPADE_TOP + 0.4:
+            return ("ironDark", 0.5)
+        if rim(blade, x, y, 0.3) and x > SPADE_TOP + 0.4:
+            return ("edge", 0.26)
+        return ("iron", 0.36)
+    # The socket where the shaft enters the blade, a little wider than it.
+    if SPADE_TOP - 1.2 <= x < SPADE_TOP and abs(y) <= 0.62:
+        return ("ironDark", 0.9)
+    # A grip cap on the end of the shaft.
+    if 0 <= x <= 2.6 and abs(y) <= 0.51:
+        return ("accent" if x > 0.25 else "grip", round_depth(y, 0.51, 0.5, 1.0))
+    return handle(x, y, SPADE_TOP - 1.2, 0.51, 0, r)
 
 
 def axe(x, y, r):
@@ -219,8 +244,8 @@ TOOLS = [
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.365, "work": (0, -1, 0), "toward": AHEAD, "back": BACK_RIGHT},
     # The same setup as the pickaxe and the axe: upright, gripped a quarter of
     # the way up, the head (the blade) pointing ahead.
-    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 22.0, "fist": 5.0,
-     "grip_r": 0.51, "along": UPRIGHT, "length": 0.367, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
+    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 24.4, "fist": 5.0,
+     "grip_r": 0.51, "along": UPRIGHT, "length": 0.4074, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
     # The blade ahead, its edge facing away.
     {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 19.4, "fist": 5.0,
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.363, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
@@ -233,7 +258,7 @@ TOOLS = [
 # Where the FIST sits in eye space at each size, so a longer handle runs on
 # past the hand rather than moving it.
 FIST_AT = {1: (0.26, -0.22, -0.5), 2: (0.29, -0.30, -0.58)}
-X0, X1, Y1 = -2.2, 23.0, 6.2
+X0, X1, Y1 = -2.2, 25.0, 6.2
 
 
 def pos(q, r, s):
