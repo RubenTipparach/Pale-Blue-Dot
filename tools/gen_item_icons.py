@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Draw the item icons this repository makes itself: the three fish new to
-Pale Blue Dot and the four tools, as 16x16 RGBA PNGs under assets/items/.
+Pale Blue Dot, as 16x16 RGBA PNGs under assets/items/. The four tool icons are
+drawn from the tools' own hexes by tools/gen_held_tools.py, which uses this
+file's PNG writer.
 
 The pixel grids are the fishing mockup's (docs/mockups/fishing.html), which is
 what was shown and approved; a grid letter names a palette colour and "." is
@@ -20,34 +22,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent / "assets" / "items"
 
-WOOD, WOOD2 = "#8a5a2b", "#5e3a18"
-IRON, IRON2 = "#c9d3d6", "#7d8a8f"
 
 ICONS = {
-    "tools/rod": ([
-        "..............ww", "............ww.l", "...........w...l", "..........w....l",
-        ".........w.....l", "........w......l", ".......w.......l", "......w........l",
-        ".....w.........l", "....w.........bb", "...h..........bb", "..hh............",
-        ".hh.............", "hh..............", "h...............", "................",
-    ], {"w": "#b9a27a", "h": WOOD2, "l": "#dfe8ea", "b": "#e35d4a"}),
-    "tools/shovel": ([
-        "............hh..", "...........hwwh.", "..........hwwh..", ".........w.hh...",
-        "........w.......", ".......w........", "......w.........", "....ii..........",
-        "...iiii.........", "..iiiiii........", ".iiiiii.........", ".iiiii..........",
-        ".iiii...........", "..ii............", "................", "................",
-    ], {"h": WOOD2, "w": WOOD, "i": IRON}),
-    "tools/pickaxe": ([
-        "...iiiii........", "..i.....iii.....", ".i.......wIi....", ".........w..i...",
-        "........w....i..", ".......w......i.", "......w.......i.", ".....w..........",
-        "....w...........", "...w............", "..w.............", ".w..............",
-        "w...............", "................", "................", "................",
-    ], {"i": IRON, "I": IRON2, "w": WOOD}),
-    "tools/axe": ([
-        ".......iii......", "......iiiii.....", ".....iiiiIw.....", "......iiIw......",
-        ".......Iw.......", "......w.........", ".....w..........", "....w...........",
-        "...w............", "..w.............", ".w..............", "w...............",
-        "................", "................", "................", "................",
-    ], {"i": IRON, "I": IRON2, "w": WOOD}),
     "fish/silverfin": ([
         "................", "................", "................", "................",
         "..........s.....", "....ssssssss..t.", "..sssssssssssst.", ".seSsssssssssstt",
