@@ -1,9 +1,6 @@
 # Tasks
 
-- [ ] 0. The owner's decisions (proposal): the haze strength on clouds once they take the air's colour; how high the air reaches
-- [ ] 1. `pbd::air`: `air_depth` and `air_colour` from one Rust source, with the dusk tint
-- [ ] 2. Clouds take the air's colour in the composite
-- [ ] 3. The sky lays the same air over its own colour
-- [ ] 4. Terrain and the water sheet take the same air; the terrain's literals into the uniform (`preview-scale-and-shader-parity` task 2)
-- [ ] 5. Stills before and after (ring frame, 1500 m, orbit, dusk deck, ground under cloud, noon); `cloud_haze` at 1, 2 and 3
-- [ ] 6. The layout test; the perf suite, old against new
+- [x] 0. The first plan (one flat haze colour for clouds and the sky) built and captured, then withdrawn: it greys the sky and the clouds (proposal, "What was tried"); experiment B, the sky's own air deeper in its shell, is better in every view
+- [ ] 1. Stills of the scale height at 0.35, 0.5 and 0.7 with the zenith held; the owner picks
+- [ ] 2. The chosen scale height, and `CLEAR_RAYLEIGH` and `CLEAR_MIE` divided by `D(H) / D(0.22)`, with the test
+- [ ] 3. `cloud_haze` at 1, 2 and 3 on the chosen sky, for the owner

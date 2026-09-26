@@ -1,26 +1,20 @@
-# Weather: the air between the eye and a cloud
+# Weather: the sky behind distant cloud
 
 ## ADDED Requirements
 
-### Requirement: Distant cloud takes the colour of the air in front of it
+### Requirement: The sky is lit air up to the shell's top
 
-The air between the eye and a cloud SHALL both dim the cloud and add its own
-colour over the cloud's coverage. The ground, the water sheet, the clouds and
-the sky SHALL haze with one air model (one density, one scale height, one
-colour, with the sky's dusk tint), so that at the same distance they haze
-alike.
+The sky's air SHALL be deep enough inside its shell that, seen from inside
+the cloud layer, the sky just over the horizon is lit air, so a distant cloud
+fading into it fades into the sky's colour. The air SHALL still end at the
+shell's top, and the sky straight up from the ground SHALL keep its colour.
 
 #### Scenario: Looking at the far cloud deck from inside the cloud layer
 
 - **WHEN** the eye is inside the cloud layer and looks toward the horizon over broken cloud
-- **THEN** the far deck reads as pale haze of the sky's colour, not as a grey film over dark sky
+- **THEN** the far deck fades into a blue sky, not into a near-black one under a grey film
 
-#### Scenario: A cloud near the limb from over the tops
+#### Scenario: The sky from the ground
 
-- **WHEN** a cloud lies near the planet's limb seen from 1.5 km up
-- **THEN** it fades into the sky's horizon glow, with no step in colour where it meets the sky behind it
-
-#### Scenario: A deck at dusk
-
-- **WHEN** the sun is within a few degrees of the horizon and the eye looks toward it over a cloud deck
-- **THEN** the haze on the deck, on the ground and in the sky at the horizon share the dusk tint
+- **WHEN** the eye is on the ground at noon under a clear sky
+- **THEN** the sky straight up is the colour it was before the change

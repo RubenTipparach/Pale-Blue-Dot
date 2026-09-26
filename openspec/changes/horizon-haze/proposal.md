@@ -1,4 +1,4 @@
-# Proposal: clouds take the colour of the air, and the sky has a horizon
+# Proposal: the sky behind distant cloud is lit air
 
 ## Why
 
@@ -66,44 +66,75 @@ terrain's `ground_sky` and the water's fog colour have no dusk term, so the
 haze and the sky disagree exactly when the owner's "sunset over a deck" would
 show it.
 
-## What changes
+## What was tried (2026-09-26): a haze colour laid over the sky fails
 
-1. **One air.** A single function in one shared WGSL module gives the air
-   between the eye and a point: its optical depth along the path (the
-   clouds' five-point Simpson rule, one density and one scale height), and
-   its colour. The colour is the day/night haze blue by the sun's elevation,
-   greyed by cover, and tinted at dusk with the sky's own tint.
-2. **Clouds take the air's colour.** A cloud's light is dimmed by the air in
-   front of it, and that air adds its own colour over the cloud's coverage:
-   `scene * (1 - a) + T * cloud + a * (1 - T) * air`. At present the whole
-   cloud is scaled by `T`, so it turns transparent instead of hazy. A far
-   deck then reads as pale haze, not as dark sky through a grey film.
-3. **The sky has a horizon.** The sky shader lays the same air over its own
-   colour along its ray, out to the shell or the ground. Where a ray runs
-   through deep air (low down, near the horizon), the sky becomes the haze
-   colour. So a hazed cloud or ridge meets a sky of its own colour, from
-   the ground, from inside the layer and from above it.
-4. **Terrain and water take the same function**, in place of their
-   eye-altitude-only formula. The ground, the sheet, the clouds and the sky
-   then haze alike at the same distance. The terrain's literals move into
-   the uniform as this does, which is task 2 of
-   `preview-scale-and-shader-parity`.
+The first plan (the write-up at `5b21118`) gave clouds and the sky one air
+model: a density, a scale height and a flat colour, the terrain's haze blue
+greyed by cover. Clouds took that colour in front of them rather than
+turning transparent, and the sky laid it over its own scattering. The
+owner decided: judge the haze strength from stills, and keep space at about
+1 km. The air ended at the shell's top.
+
+Built and captured at the same frames
+(`docs/screenshots/horizon-haze-experiments.png`, columns: today, A, B):
+
+- **Haze over the sky, with clouds taking its colour: worse everywhere.**
+  From orbit a thick grey halo rings the planet. At 1500 m the limb's blue
+  glow turns to a grey band. From the ground the whole sky goes a dull
+  grey-blue. The flat colour is not the sky's own: it is the "second,
+  disagreeing sky colour" `cloud-close-up` warned about.
+- **A: clouds take the colour, the sky untouched: worse.** Far and limb
+  clouds become flat grey patches: from inside the layer the far deck turns
+  into an opaque grey sheet, and at 1500 m clouds near the limb go grey. A
+  cloud fading into what is behind it, `cloud-close-up`'s rule, is right.
+  What is behind it is the problem.
+- **B: the sky's own air deeper inside its shell (normalised scale height
+  0.5, not 0.22), clouds as today: better everywhere.** From inside the layer
+  the far deck fades into a bluer sky. The horizon glows at 1500 m. From
+  orbit the halo is thicker and blue, not grey. The shell and its taper are
+  unchanged, so space still starts at 960 m, as the owner decided.
+
+B, measured (sRGB, same pixels):
+
+| View | Today | B |
+| --- | --- | --- |
+| 421 m, clouds off, just over the limb | (40, 70, 104) | (56, 93, 133) |
+| 421 m, clouds off, higher | (19, 37, 58) | (40, 68, 101) |
+| Ground, just over the horizon | (111, 162, 209) | (132, 181, 218) |
+| Ground, near the zenith | (31, 58, 90) | (68, 111, 158) |
+| 1500 m, the limb's glow | (100, 150, 198) | (128, 177, 214) |
+
+The cost is the ground's zenith: with the same scattering, twice the air
+overhead (0.410 against 0.215 in shell units) also pales the sky straight up
+from the ground.
+
+## What changes (revised)
+
+1. **The sky's air is deeper inside its shell.** Its normalised scale height
+   goes from 0.22 (211 m) to about 0.5 (480 m), chosen from stills of 0.35,
+   0.5 and 0.7. The shell (1.2 R, 960 m up) and its top taper are unchanged,
+   so the air still ends there. From 421 m the air overhead is 4.6 times
+   today's, and along the horizon more.
+2. **The zenith from the ground holds.** The clear sky's Rayleigh and Mie
+   scales (`CLEAR_RAYLEIGH`, `CLEAR_MIE`) come down by the ratio of the air
+   overhead from the sea (1.9 at 0.5), so the ground's sky straight up stays
+   today's blue. The horizon, and the sky seen from the cloud layer and above
+   it, keep what the deeper air gives them.
+3. **Clouds keep fading into what is behind them** (`cloud_air`,
+   unchanged): the sky behind is now lit air.
+4. `cloud_haze` is judged again on stills of 1, 2 and 3 once 1-2 land, as
+   the owner asked.
 
 ## Decisions for the owner
 
-- **Haze strength.** With the air adding its colour, a hazed cloud goes pale
-  instead of transparent. The reason for `cloud_haze` 3 (at 1 the deck stood
-  as a grey band) may then be gone, and 1 would haze clouds exactly like the
-  ground. The handoff says to ask before changing it; stills at 1, 2 and 3
-  come with the change.
-- **How high the air reaches.** With the haze's 1050 m scale height, the
-  horizon still glows 2-3 km up. Today the sky is space-dark by about 1 km.
-  That moves the ground-to-space transition, which is priority 5, so it is
-  the owner's call. It can be held where it is by thinning the air in the
-  sky pass above the shell, at the cost of the horizon glow over the tops.
+- **B's look, and its depth.** Stills at 0.35, 0.5 and 0.7 with the zenith
+  held, in the views above, before one is chosen. From orbit the halo
+  thickens with it.
 
 ## Out of scope
 
-- The sky's single-scattering model and its constants.
+- The terrain and water haze (1050 m scale height, eye-altitude form): they
+  now differ from the sky's air in depth as well as form. That is the
+  ground-to-space transition, priority 5.
 - Lighting the clouds themselves (`cloud_light`).
-- Night: the haze colour at night is today's `FOG_NIGHT_SKY`.
+- A dusk tint in the ground's haze.
