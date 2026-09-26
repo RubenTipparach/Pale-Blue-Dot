@@ -111,41 +111,41 @@ def handle(x, y, length, half, grip_len, r):
 
 
 def pickaxe(x, y, r):
-    def head(px, py): return in_circle(px, py, 7.5, 0, 4.7) and not in_circle(px, py, 6.4, 0, 4.6)
-    if 10.3 <= x <= 11.7 and abs(y) <= 0.8:
+    def head(px, py): return in_circle(px, py, 14.5, 0, 4.7) and not in_circle(px, py, 13.4, 0, 4.6)
+    if 17.3 <= x <= 18.7 and abs(y) <= 0.8:
         return ("ironDark", 1.15)
     if head(x, y):
         thin = 0.75 - 0.35 * clamp01((abs(y) - 2) / 2.6)
-        if not in_circle(x, y, 7.5, 0, 4.45):
+        if not in_circle(x, y, 14.5, 0, 4.45):
             return ("edge", thin * 0.8)
-        if in_circle(x, y, 6.4, 0, 4.82):
+        if in_circle(x, y, 13.4, 0, 4.82):
             return ("ironDark", thin)
         return ("iron", thin)
     if -0.25 <= x < 0 and abs(y) <= 0.55:
         return ("grip", 1.0)
-    return handle(x, y, 11, 0.45, 3, r)
+    return handle(x, y, 18, 0.45, 3, r)
 
 
 def shovel(x, y, r):
     def blade(px, py):
-        return in_ellipse(px, py, 12.6, 0, 2.8, 2.3) or (12.6 <= px <= 15.6 and abs(py) <= 2.3 * (15.6 - px) / 3.0)
+        return in_ellipse(px, py, 19.0, 0, 2.8, 2.3) or (19.0 <= px <= 22.0 and abs(py) <= 2.3 * (22.0 - px) / 3.0)
     if blade(x, y):
-        if abs(y) < 0.3 and x < 14.2:
+        if abs(y) < 0.3 and x < 20.6:
             return ("ironDark", 0.75)
         if rim(blade, x, y, 0.3):
             return ("edge", 0.3)
         return ("iron", 0.4)
-    if 9.2 <= x <= 10.8 and abs(y) <= 0.62 + (x - 9.2) * 0.3:
+    if 15.6 <= x <= 17.2 and abs(y) <= 0.62 + (x - 15.6) * 0.3:
         return ("ironDark", 0.95)
     # A D-grip crossbar at the butt.
     if -0.9 <= x <= -0.1 and abs(y) <= 1.4:
         return ("wrap" if abs(y) > 1.1 else "grip", 0.9)
-    return handle(x, y, 9.6, 0.51, 2.4, r)
+    return handle(x, y, 16.0, 0.51, 2.4, r)
 
 
 def axe(x, y, r):
-    def top(px): return 4.3 + 0.6 * (1 - ((px - 10.6) / 2.8) ** 2)
-    def blade(px, py): return 1.0 <= py <= top(px) and 9.7 - (py - 1) * 0.48 <= px <= 11.5 + (py - 1) * 0.5
+    def top(px): return 4.3 + 0.6 * (1 - ((px - 17.6) / 2.8) ** 2)
+    def blade(px, py): return 1.0 <= py <= top(px) and 16.7 - (py - 1) * 0.48 <= px <= 18.5 + (py - 1) * 0.5
     if blade(x, y):
         d = 0.85 - 0.5 * clamp01((y - 1) / 3.6)
         if y > top(x) - 0.4:
@@ -153,11 +153,11 @@ def axe(x, y, r):
         if rim(blade, x, y, 0.25):
             return ("ironDark", d)
         return ("iron", d)
-    if 9.4 <= x <= 11.8 and -1.0 <= y <= 1.0:
+    if 16.4 <= x <= 18.8 and -1.0 <= y <= 1.0:
         return ("ironDark", 1.15)
-    if 9.7 <= x <= 11.5 and -1.8 <= y < -1.0:
+    if 16.7 <= x <= 18.5 and -1.8 <= y < -1.0:
         return ("ironDark", 0.9)
-    return handle(x, y, 12.4, 0.45, 3, r)
+    return handle(x, y, 19.4, 0.45, 3, r)
 
 
 def rod(x, y, r):
@@ -195,33 +195,39 @@ def rod(x, y, r):
 # end, a direction in the tool's plane (tool space); the tool is turned about
 # its handle so `work` points as nearly as it can at `toward` (eye space).
 # Held as the owner's reference photo holds a pick: the handle nearly upright
-# and a little away, gripped a third of the way up; the head across the top
-# facing the eye, so the pick's tips curve down either side; the back of the
+# and a little away, gripped a third of the way up; the head pointing ahead;
+# the back of the
 # hand to the right and toward the eye, the fingers and thumb curled round on
 # the left, the forearm up from the bottom right.
 UPRIGHT = (-0.05, 1.0, -0.25)
 FACE_EYE = (0.0, 0.0, 1.0)
+# The head points AHEAD, away from the eye: the pick's forward tip and the
+# axe's edge lead, and the head is seen end-on, not broadside. (Turning it to
+# face the eye was a mistake the owner caught.)
+AHEAD = (0.0, 0.0, -1.0)
 BACK_RIGHT = norm((0.8, 0.1, 0.55))
 TOOLS = [
-    {"id": "pickaxe", "name": "Pickaxe", "note": "Stone, rock and ore", "shape": pickaxe, "len": 12.2, "fist": 3.2,
-     "grip_r": 0.45, "along": UPRIGHT, "length": 0.232, "work": (0, 0, 1), "toward": FACE_EYE, "back": BACK_RIGHT},
+    {"id": "pickaxe", "name": "Pickaxe", "note": "Stone, rock and ore", "shape": pickaxe, "len": 19.2, "fist": 5.0,
+     "grip_r": 0.45, "along": UPRIGHT, "length": 0.365, "work": (0, -1, 0), "toward": AHEAD, "back": BACK_RIGHT},
     # The shovel as the owner's photo carries it: gripped near the top, the
     # shaft running down and ahead to the blade, the blade's face up, the back
     # of the hand outward.
-    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 15.6, "fist": 1.7,
-     "grip_r": 0.51, "along": (-0.7, 0.12, -0.7), "length": 0.26, "work": (0, 0, 1), "toward": norm((0, 1, 0.35)),
-     "arm": (0.45, -0.75, 0.5), "lift": (0.0, 0.14, 0.0)},
-    # Blade to the left, facing the eye; the edge is the blade's far side.
-    {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 12.4, "fist": 3.2,
-     "grip_r": 0.45, "along": UPRIGHT, "length": 0.232, "work": (0, 0, 1), "toward": FACE_EYE, "back": BACK_RIGHT},
+    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 22.0, "fist": 1.7,
+     "grip_r": 0.51, "along": (-0.7, 0.12, -0.7), "length": 0.367, "work": (0, 0, 1), "toward": norm((0, 1, 0.35)),
+     "arm": (0.45, -0.75, 0.5)},
+    # The blade ahead, its edge facing away.
+    {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 19.4, "fist": 5.0,
+     "grip_r": 0.45, "along": UPRIGHT, "length": 0.363, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
     {"id": "rod", "name": "Rod", "note": "Fishing", "shape": rod, "len": 18.3, "fist": 2.4,
      # Up and to the left from the fist, as in the owner's photos; the reel
      # hangs under the rod.
      "grip_r": 0.28, "along": (-0.35, 0.6, -0.7), "length": 0.563, "work": (0, -1, 0), "toward": (0.0, -1.0, 0.0),
      "back": BACK_RIGHT},
 ]
-ANCHOR = {1: (0.26, -0.26, -0.48), 2: (0.30, -0.42, -0.55)}
-X0, X1, Y1 = -2.2, 19.0, 6.2
+# Where the FIST sits in eye space at each size, so a longer handle runs on
+# past the hand rather than moving it.
+FIST_AT = {1: (0.26, -0.22, -0.5), 2: (0.29, -0.30, -0.58)}
+X0, X1, Y1 = -2.2, 23.0, 6.2
 
 
 def pos(q, r, s):
@@ -251,9 +257,11 @@ def pose(tool, size):
     a = mat_cols(a1, aw, cross(a1, aw))
     b = mat_cols(b1, bw, cross(b1, bw))
     rot = mat_mul(b, mat_t(a))
-    # A tool held low (the shovel) is lifted, or its hand is off the screen.
-    grip = add(ANCHOR[size], mul(tool.get("lift", (0.0, 0.0, 0.0)), size / 2))
-    return rot, tool["length"] * size / tool["len"], grip
+    scale = tool["length"] * size / tool["len"]
+    # The butt, from where the fist sits: back down the handle by the fist's
+    # distance from the butt.
+    grip = sub(FIST_AT[size], mul(b1, tool["fist"] * scale))
+    return rot, scale, grip
 
 
 # ---- the hand -----------------------------------------------------------------
