@@ -19,3 +19,13 @@ opt-level = 1
 [profile.release]
 strip = true
 lto = "thin"
+
+# Everyday runs (`run.bat`): release optimisation without link-time
+# optimisation, so a one-line change relinks in seconds rather than minutes.
+# Frame times are close to release but not identical: measure performance,
+# record footage and judge regressions with `--release` (`run.bat --full`).
+[profile.fast]
+inherits = "release"
+lto = false
+incremental = true
+codegen-units = 256

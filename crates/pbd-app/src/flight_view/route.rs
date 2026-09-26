@@ -151,6 +151,11 @@ const SCENIC_MIN_SUN: f32 = 0.2;
 /// heading with cloud always wins over one without.
 const SCENIC_CLOUD_COVER: f32 = 0.55;
 const SCENIC_CLOUD_WEIGHT: f32 = 12.0;
+/// `--route clouds` (`perf-rig` design): the band of cover the shader draws
+/// as separate puffs (above it they merge into a deck), and the height it
+/// flies at as a share of the layer's thickness above the base.
+const BROKEN_COVER: std::ops::RangeInclusive<f32> = 0.3..=0.75;
+const BROKEN_HEIGHT: f32 = 0.25;
 
 /// Seconds the ship holds still on the ground before it lifts.
 pub const HOLD_S: f32 = 1.5;
@@ -257,11 +262,21 @@ impl RouteState {
             // first half of the path, which the ship will fly through.
             let mut cloud = None;
             if let Some(air) = atmosphere {
+                let (reach, solid) = if config.route_scenic_broken {
+                    (0.8, false)
+                } else {
+                    (0.6, true)
+                };
                 let (mut run_start, mut longest) = (None, (0.0f32, 0.0f32, 0.0f32));
                 let mut tops = 0.0f32;
-                for &(s, _, _) in samples.iter().filter(|x| x.0 < SCENIC_REACH_M * 0.6) {
+                for &(s, _, _) in samples.iter().filter(|x| x.0 < SCENIC_REACH_M * reach) {
                     let sample = air.sample(at(normal, s));
-                    if sample.cover >= SCENIC_CLOUD_COVER {
+                    let counts = if solid {
+                        sample.cover >= SCENIC_CLOUD_COVER
+                    } else {
+                        BROKEN_COVER.contains(&sample.cover)
+                    };
+                    if counts {
                         let from = *run_start.get_or_insert(s);
                         tops = tops.max(sample.cloud_top);
                         if s - from > longest.1 - longest.0 {
@@ -328,7 +343,12 @@ impl RouteState {
                     Some((from, to, top)) if s > from - 700.0 && s < to + 400.0 => {
                         let base = crate::sky::CLOUD_RADIUS;
                         let thickness = crate::sky::CLOUD_THICKNESS * top.clamp(0.2, 1.0);
-                        follow.max(base + thickness * 0.4)
+                        let share = if config.route_scenic_broken {
+                            BROKEN_HEIGHT
+                        } else {
+                            0.4
+                        };
+                        follow.max(base + thickness * share)
                     }
                     _ => follow,
                 }
@@ -345,8 +365,17 @@ impl RouteState {
             .collect();
         match pick.cloud {
             Some((from, to, top)) => info!(
-                "scenic route: into {:.0} m of cloud (cover >= {SCENIC_CLOUD_COVER}, top {top:.2}) from {from:.0} m, then {:.0} of land interest over {:.0} kinds of ground, landing on flat ground {:.0} m out; score {:.0}",
+                "scenic route: into {:.0} m of cloud ({}, top {top:.2}) from {from:.0} m, then {:.0} of land interest over {:.0} kinds of ground, landing on flat ground {:.0} m out; score {:.0}",
                 to - from,
+                if config.route_scenic_broken {
+                    format!(
+                        "broken, cover {}-{}",
+                        BROKEN_COVER.start(),
+                        BROKEN_COVER.end()
+                    )
+                } else {
+                    format!("cover >= {SCENIC_CLOUD_COVER}")
+                },
                 pick.parts[1],
                 pick.parts[2],
                 pick.landing,

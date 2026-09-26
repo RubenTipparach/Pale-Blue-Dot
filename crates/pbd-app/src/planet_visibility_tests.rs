@@ -92,7 +92,9 @@ impl VisibilityGpu {
     }
 
     fn run(&self, cells: &[GpuCell], params: PlanetParams) -> VisibleCells {
-        self.run_with_capacities(cells, params, [cells.len(); 2])
+        // The terrain and foliage lists hold two entries a cell while a landing
+        // cross-fades (`detail-fade`), and the pass refuses smaller ones.
+        self.run_with_capacities(cells, params, [2 * cells.len(); 2])
     }
 
     fn run_with_capacities(
@@ -224,7 +226,12 @@ impl VisibilityGpu {
         let collect = |start: usize, count: u32, capacity: usize| {
             assert!(count as usize <= capacity, "draw exceeds ID capacity");
             let mut ids = words[start..start + count as usize].to_vec();
-            assert!(ids.iter().all(|id| (*id as usize) < cells.len()));
+            // An entry is a cell index with the partition it is drawn for in
+            // its top two bits (`detail-fade`).
+            assert!(
+                ids.iter()
+                    .all(|id| ((*id & PART_MASK) as usize) < cells.len())
+            );
             ids.sort_unstable();
             assert!(ids.windows(2).all(|pair| pair[0] != pair[1]));
             // The shader must never publish IDs after the indirect draw count.
@@ -280,6 +287,10 @@ fn column(position: Vec3, degree: u32, width: f32, wall_depth: f32) -> GpuCell {
 
 /// The base level the synthetic params declare; the finest is four above it.
 const TEST_BASE_LEVEL: u32 = 0;
+/// The partition marks in a list entry's top bits (`planet_visibility.wgsl`).
+const PART_MASK: u32 = 0x3fff_ffff;
+const PART_NEW: u32 = 1 << 30;
+const PART_OLD: u32 = 2 << 30;
 const TEST_FINEST_LEVEL: u32 = TEST_BASE_LEVEL + 4;
 
 fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
@@ -324,6 +335,11 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
             0.,
         ),
         tilesets: [UVec4::splat(4), UVec4::splat(4)],
+        // No cross-fade running (`detail-fade`): the previous partition is the
+        // current one and the progress is complete.
+        fade: Vec4::new(0., 1., 0., 0.),
+        lod_prev: Vec3::Z.extend(TEST_BASE_LEVEL as f32),
+        bands_prev: Vec4::splat(-2.),
     }
 }
 
@@ -568,7 +584,7 @@ fn the_partition_lists_each_tile_at_its_bands_level_on_the_real_records() {
         params.lod_counts = UVec4::from_array(fine.levels.each_ref().map(|l| l.len() as u32));
         params.lod = anchor.extend(lod::BASE_LEVEL as f32);
         params.bands = lod_params.bands;
-        let listed = gpu.run_with_capacities(&records, params, [slots; 2]);
+        let listed = gpu.run_with_capacities(&records, params, [2 * slots; 2]);
         assert!(!listed.terrain.is_empty());
         per_level = [0usize; 5];
         for &id in &listed.terrain {
@@ -685,4 +701,29 @@ fn actual_gpu_clutter_lists_a_cell_by_its_ground_its_level_and_its_range() {
         Vec::<u32>::new(),
         "only the finest tier grows clutter"
     );
+}
+
+/// The landing's cross-fade (`detail-fade`) on the real visibility pass: while
+/// it runs, a cell only the new partition draws is listed as NEW, one only the
+/// old partition draws as OLD, one both draw alike once and unmarked; and
+/// with no fade running the old partition is not consulted at all.
+#[test]
+#[ignore = "requires a GPU; run cargo test -p pbd-app --lib actual_gpu_cross_fade -- --ignored --nocapture"]
+fn actual_gpu_cross_fade_lists_each_partition_it_draws() {
+    let gpu = VisibilityGpu::new();
+    let cells = [column(Vec3::new(0., 0., RADIUS), 6, 2., 0.)];
+    // The fixture's tile is at the finest level: bands of -2 draw it, bands
+    // of 2 (a band no dot product reaches) do not.
+    let fading = |now: f32, before: f32, running: f32| {
+        let mut p = params(1, 100., 10.);
+        p.bands = Vec4::splat(now);
+        p.bands_prev = Vec4::splat(before);
+        p.fade = Vec4::new(0., 0.5, running, 0.);
+        p
+    };
+    expect(&gpu, &cells, fading(-2., 2., 1.), &[PART_NEW], &[]);
+    expect(&gpu, &cells, fading(2., -2., 1.), &[PART_OLD], &[]);
+    expect(&gpu, &cells, fading(-2., -2., 1.), &[0], &[]);
+    expect(&gpu, &cells, fading(-2., 2., 0.), &[0], &[]);
+    expect(&gpu, &cells, fading(2., -2., 0.), &[], &[]);
 }

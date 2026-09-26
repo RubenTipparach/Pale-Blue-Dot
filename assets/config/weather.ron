@@ -119,6 +119,10 @@
     cloud_render_scale: 0.4,
     cloud_step_m: 12.0,
     cloud_max_steps: 48,
+    // How strongly the air in front of a cloud fades it, as a multiple of the
+    // ground haze's density (cloud-close-up): 1 matches the ground, 0 is off;
+    // 3 dissolves the layer at the horizon (stills in the change's design).
+    cloud_haze: 3.0,
 
     // Rain near: every raining cell inside the detail range draws shafts of
     // streaks, thinning to the far fraction and fading out over the blend

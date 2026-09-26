@@ -221,14 +221,19 @@ fn cloud_density(p: vec3<f32>, layer: CloudLayer, local: vec4<f32>, wind: vec3<f
     if (radius < inner || radius > top) { return 0.0; }
     let height = (radius-inner)/max(top-inner, 1.0);
     let profile = smoothstep(0.0, 0.08, height) * (1.0-smoothstep(0.45, 1.0, height));
-    let radial = p/radius;
     let per_metre = 22.0/inner;
     let period = 120.0;
     let seconds = layer.slab.z;
     let phase_a = fract(seconds/period);
     let phase_b = fract(seconds/period + 0.5);
     let drift = wind*(per_metre*period);
-    let q = cloud_sheared(radial*22.0, wind, layer) + vec3<f32>(height*1.7);
+    // The point itself in noise cells, at the scale the point's direction
+    // times 22 had at the base (a lump about 230 m across), so the shape
+    // varies up and down as it does across. Read on the direction plus a
+    // shift with height, every lump was the same shape at every height, a
+    // slanted prism from base to top, and from inside the layer the clouds
+    // hung down in columns (`cloud-close-up`).
+    let q = cloud_sheared(p*per_metre, wind, layer);
     let blend = abs(phase_a*2.0-1.0);
     let qa = q - drift*phase_a;
     let qb = q - drift*phase_b;

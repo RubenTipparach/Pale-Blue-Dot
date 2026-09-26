@@ -76,16 +76,50 @@ else here, and taken off this list when it lands.
 2. **Clouds up close and flying through them.** They must look right near the
    camera and from inside a cloud, not only from a distance.
 3. **Clouds blending with the atmosphere**, both at ground level and seen from
-   space.
+   space. Distant cloud must fade into the sky's haze at the horizon, taking
+   the colour of the air between (the owner's reference photos: an ocean
+   horizon, cumulus from an airliner, a sunset over a deck), not stand as a
+   flat grey shell with a hard edge.
 4. **The ground-to-space transition.** The planet fog and atmosphere change
    between the surface and space must not be jarring.
 5. **Water:**
    - it looks foggy when it is dark out;
    - it should be a darker blue where it is deep.
 
+Queued after those (owner, 2026-09-25):
+
+6. **Entering a cloud looks glitchy.** Goes with priority 2.
+7. **A live tuning page.** A local HTML page with sliders (the wet look first)
+   that changes the running game. The config is a startup read today
+   (`config.rs`), so this needs the game to reload `assets/config/*.ron` while
+   running, plus a small local server that writes the file.
+8. **No pop-in.** Trees and LOD blocks dither-fade in and out instead of
+   popping.
+
 Standing measurement practice: frame time is judged with `--frame-log` and
 `tools/frame_graph.py` (plus the `F3` in-game graph), in real-time windowed
 runs, not in `--capture`, which steps the simulation in fixed steps.
+
+**A change that can move frame time runs `tools/perf_suite.py` before it is
+pushed**, on the `--release` build, with nothing else running (the suite
+refuses while `cargo` or `rustc` runs). It flies and walks fixed scenarios
+(`clouds`, `storm`, `far-side`, `walk`), and a comparison runs the old exe and
+the new one interleaved in the same sitting (`--variant "before|<old exe>"
+--variant after`), never against a number from another day. The report goes in
+`docs/benchmarks/<date>-<name>/` in the same push; a regression past the
+spread between repeat runs is fixed or argued in the write-up, not shipped
+silently. The current baseline is `docs/benchmarks/2026-09-25-baseline/`.
+
+**Keep the HTML report current (owner, 2026-09-25).** Every so often when a
+benchmark is run - and always when a result changes the picture (a new
+baseline, a regression, a cost that moved) - regenerate the page with
+`tools/perf_report_html.py <run dir> --notes <report.md> --out
+docs/benchmarks/<date>-<name>/report.html`, check it in, and republish the
+artifact so the owner's link shows the latest: the baseline page is
+https://claude.ai/artifact/CbuRh6C4kZZvULnQyrtor1 (update it with that URL;
+a new baseline may get its own page, linked from here). The `cloud-close-up`
+before-and-after page is https://claude.ai/artifact/SSeb4wCF2B7xCgYsExSRKx.
+The `detail-fade` one is https://claude.ai/artifact/P1WypbYauGUsPrC1NpSuzQ.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 

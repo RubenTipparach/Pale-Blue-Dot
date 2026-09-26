@@ -28,6 +28,9 @@ struct Params {
     column: vec4<f32>,         // tier reach m, cave dark floor, cave dark depth m, cos(2 x reach / R)
     ground: vec4<f32>,         // sod depth m, soil depth m, snow tileset slot, spare
     tilesets: array<vec4<u32>,2>, // atlas slot per biome, in Biome order
+    fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs, spare
+    lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
+    bands_prev: vec4<f32>,     // and its band cosines
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -53,23 +56,49 @@ fn cloud_sun(p: vec3<f32>, sun: vec3<f32>) -> f32 {
     return 1.0 - strength * blocked;
 }
 
+// Over a cell's half-width: a tree has faded out before its cell's centre
+// reaches the foliage range (`detail-fade`).
+const TREE_FADE_MARGIN_M: f32 = 4.0;
+
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
-fn band_cos(level: u32) -> f32 {
-    let k = level - base_level() - 1u;
-    if k == 0u { return params.bands.x; }
-    if k == 1u { return params.bands.y; }
-    if k == 2u { return params.bands.z; }
-    return params.bands.w;
+// A partition of the ground into detail levels: the anchor the bands are
+// measured from and the cosine of each fine level's band. The current one is
+// `lod`/`bands`; while a landing cross-fades (`detail-fade`) the one it
+// replaced is `lod_prev`/`bands_prev`, and an instance drawn for it carries
+// PART_OLD in the top bits of its list entry.
+struct Partition { anchor: vec3<f32>, bands: vec4<f32> }
+const PART_BOTH: u32 = 0u;
+const PART_NEW: u32 = 1u;
+const PART_OLD: u32 = 2u;
+const PART_SHIFT: u32 = 30u;
+const PART_MASK: u32 = 0x3fffffffu;
+fn partition_of(mark: u32) -> Partition {
+    if mark == PART_OLD { return Partition(params.lod_prev.xyz, params.bands_prev); }
+    return Partition(params.lod.xyz, params.bands);
 }
+fn band_cos_in(bands: vec4<f32>, level: u32) -> f32 {
+    let k = level - base_level() - 1u;
+    if k == 0u { return bands.x; }
+    if k == 1u { return bands.y; }
+    if k == 2u { return bands.z; }
+    return bands.w;
+}
+fn band_cos(level: u32) -> f32 { return band_cos_in(params.bands, level); }
 // Whether the level below's cell a tile belongs to is drawn at this tile's
-// level: the partition rule, one dot product against the player direction.
+// level: the partition rule, one dot product against the partition's anchor.
+fn owner_fine_in(owner: vec3<f32>, level: u32, part: Partition) -> bool {
+    return dot(owner, part.anchor) > band_cos_in(part.bands, level);
+}
 fn owner_fine(owner: vec3<f32>, level: u32) -> bool {
-    return dot(owner, params.lod.xyz) > band_cos(level);
+    return owner_fine_in(owner, level, partition_of(PART_NEW));
 }
 // Whether a tile at this level is covered by the next finer band.
+fn covered_by_finer_in(direction: vec3<f32>, level: u32, part: Partition) -> bool {
+    return level < finest_level() && dot(direction, part.anchor) > band_cos_in(part.bands, level + 1u);
+}
 fn covered_by_finer(direction: vec3<f32>, level: u32) -> bool {
-    return level < finest_level() && dot(direction, params.lod.xyz) > band_cos(level + 1u);
+    return covered_by_finer_in(direction, level, partition_of(PART_NEW));
 }
 fn floor_of(cell: Cell, side: u32) -> f32 {
     if side == 0u { return cell.owner_a.w; }
@@ -454,6 +483,9 @@ struct VertexOut {
     // solid layer of its column above it, zero under rock. Per face, from the
     // column's own runs; `pbd_core::column::Column::open_to_sky` is the rule.
     @location(14) @interpolate(flat) rain_open: f32,
+    // Which partition this instance is drawn for (`detail-fade`): PART_BOTH,
+    // PART_NEW or PART_OLD.
+    @location(15) @interpolate(flat) part_mark: u32,
 }
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
@@ -531,7 +563,10 @@ fn bare(material: u32) -> bool { return material==1u || material==4u || material
 
 @vertex
 fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> VertexOut {
-    let cell = cells[visible[instance]];
+    let listed = visible[instance];
+    let mark = listed >> PART_SHIFT;
+    let part = partition_of(mark);
+    let cell = cells[listed & PART_MASK];
     let degree = cell.metadata.x & 0xffu;
     let level = cell.metadata.x >> 8u;
     let axis = cell.direction_height.xyz;
@@ -617,7 +652,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             if level < finest_level() {
                 let mid = normalized(cell.corners[side].xyz + cell.corners[(side+1u)%degree].xyz);
                 let neighbor = normalized(2.0*mid - axis);
-                if covered_by_finer(neighbor, level) {
+                if covered_by_finer_in(neighbor, level, part) {
                     lower_height = min(lower_height, floor_of(cell, side));
                 }
             }
@@ -641,8 +676,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // owner's, this quad closes the step along that diagonal.
         kind = 1u;
         let i = vertex-54u;
-        let a_fine = level > base_level() && owner_fine(cell.owner_a.xyz, level);
-        let b_fine = level > base_level() && owner_fine(cell.owner_b.xyz, level);
+        let a_fine = level > base_level() && owner_fine_in(cell.owner_a.xyz, level, part);
+        let b_fine = level > base_level() && owner_fine_in(cell.owner_b.xyz, level, part);
         if a_fine != b_fine {
             let coarse = select(cell.owner_a.xyz, cell.owner_b.xyz, a_fine);
             // The two corners equidistant from the owners lie on the diagonal.
@@ -1144,6 +1179,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.skylight = f32(cell.metadata.z & 0xffffu)/65535.;
     out.seed = cell.metadata.w;
     out.kind = kind;
+    out.part_mark = mark;
     out.level = level;
     out.owner_a = cell.owner_a.xyz;
     out.owner_b = cell.owner_b.xyz;
@@ -1293,14 +1329,50 @@ fn puddle_noise(p: vec2<f32>) -> f32 {
 const PUDDLE_MASK_MEAN: f32 = 0.5003;
 const PUDDLE_MASK_SPREAD: f32 = 0.1587;
 
+// An ordered 4 x 4 Bayer threshold for a pixel, 0..1: the screen-door mask a
+// fading piece is drawn through (`detail-fade`). Fixed to the screen, so a
+// piece that stands still at one fade holds one still pattern.
+fn bayer4(pixel: vec2<f32>) -> f32 {
+    let p = vec2<u32>(pixel) & vec2<u32>(3u);
+    let m = array<u32,16>(0u,8u,2u,10u, 12u,4u,14u,6u, 3u,11u,1u,9u, 15u,7u,13u,5u);
+    return (f32(m[p.y*4u + p.x]) + 0.5)/16.0;
+}
+
 @fragment
 fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let radial = normalized(input.position);
+    let part = partition_of(input.part_mark);
+    let mask = bayer4(input.clip.xy);
+    // A landing's cross-fade (`detail-fade`): each pixel shows the new
+    // partition where the mask is under the fade's progress and the old one
+    // elsewhere, so the blocks dissolve from one to the other.
+    if input.part_mark != PART_BOTH && ((input.part_mark == PART_NEW) != (mask < params.fade.y)) {
+        discard;
+    }
+    // A tree thins out through the same mask over the last `tree_fade_m`
+    // before the edge of the trees' outermost band (they stand on the three
+    // finest levels) or the foliage range, whichever is nearer, and is gone
+    // TREE_FADE_MARGIN_M before it, before its cell stops being drawn: a
+    // forest's edge is no longer a hard line of whole trees.
+    if input.kind == 2u && params.fade.x > 0.0 {
+        var edge = params.settings.w;
+        for (var level = finest_level() - 2u; level <= finest_level(); level++) {
+            let c = band_cos_in(part.bands, level);
+            if c <= 1.0 {
+                edge = min(edge, acos(clamp(c, -1.0, 1.0))*params.settings.x);
+                break;
+            }
+        }
+        let from_anchor = acos(clamp(dot(radial, part.anchor), -1.0, 1.0))*params.settings.x;
+        let left = min(edge - from_anchor, params.settings.w - distance(input.position, params.camera.xyz))
+            - TREE_FADE_MARGIN_M;
+        if mask >= clamp(left/params.fade.x, 0.0, 1.0) { discard; }
+    }
     // The partition: a midpoint cell split between a fine and a coarse owner
     // draws only the half nearer the fine one; the coarse cap draws the rest.
     if input.level > base_level() && input.kind != 2u {
-        let a_fine = owner_fine(input.owner_a, input.level);
-        let b_fine = owner_fine(input.owner_b, input.level);
+        let a_fine = owner_fine_in(input.owner_a, input.level, part);
+        let b_fine = owner_fine_in(input.owner_b, input.level, part);
         if a_fine != b_fine {
             let nearer_a = dot(radial, input.owner_a) >= dot(radial, input.owner_b);
             if (nearer_a && !a_fine) || (!nearer_a && !b_fine) { discard; }

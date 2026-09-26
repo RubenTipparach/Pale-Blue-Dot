@@ -66,6 +66,8 @@ pub struct Launch {
     pub route: bool,
     /// Which route `--route` named.
     pub route_kind: pbd_app::flight_view::RouteKind,
+    /// `--route clouds`: the scenic route through several separate clouds.
+    pub route_broken: bool,
     pub fixed: bool,
     pub fly: bool,
     pub walk: bool,
@@ -164,6 +166,7 @@ impl Launch {
             tour: false,
             route: false,
             route_kind: pbd_app::flight_view::RouteKind::FarSide,
+            route_broken: false,
             fixed: false,
             fly: false,
             walk: false,
@@ -314,6 +317,7 @@ impl Launch {
                     i += 1;
                     let name = args.get(i).expect("--route requires a route name");
                     result.route_kind = route_kind(name);
+                    result.route_broken = name == "clouds";
                     result.route = true;
                     result.tour = true;
                 }
@@ -564,6 +568,7 @@ pub fn run(args: &[String]) {
     .insert_resource(SubstepCount(4))
     .insert_resource(FlightViewConfig {
         route_kind: launch.route_kind,
+        route_scenic_broken: launch.route_broken,
         mode: if launch.route {
             FlyMode::Route
         } else if launch.tour {
@@ -700,6 +705,12 @@ pub fn run(args: &[String]) {
         Last,
         ((measure_frames, write_frame_log).chain(), drain_saves),
     );
+    if launch.frame_log.is_some() {
+        // GPU time per render pass for the frame log (`perf-rig`), and a
+        // route that ends the run when it lands, like `--walk-distance`.
+        app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin)
+            .add_systems(Last, quit_after_route);
+    }
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
@@ -1863,7 +1874,7 @@ impl FrameLog {
             let mut out = std::io::BufWriter::new(file);
             writeln!(
                 out,
-                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m"
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m"
             )
             .expect("frame log header");
             out
@@ -1874,6 +1885,11 @@ impl FrameLog {
 /// One row per frame: the frame's wall time, the fine set drawn, the age of
 /// the rebuild in flight (empty when none), and how high and fast the player
 /// is, so an over-budget frame lines up with what the streaming was doing.
+/// Plus the GPU time of the clouds and of the frame, and the route's distance.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one read-only input per column of the log"
+)]
 fn write_frame_log(
     mut log: ResMut<FrameLog>,
     stats: Res<FrameStats>,
@@ -1881,11 +1897,14 @@ fn write_frame_log(
     near: Res<pbd_app::planet::NearField>,
     readout: Option<Res<pbd_app::flight_view::FlightReadout>>,
     walk: Option<Res<WalkProgress>>,
+    diagnostics: Option<Res<bevy::diagnostic::DiagnosticsStore>>,
+    route: Option<Res<pbd_app::flight_view::RouteState>>,
 ) {
     use std::io::Write;
     let Some(out) = log.0.as_mut() else {
         return;
     };
+    let (gpu_clouds, gpu_total) = diagnostics.map_or((f64::NAN, f64::NAN), |d| gpu_times(&d));
     let Some(ms) = stats.samples.last() else {
         return;
     };
@@ -1893,12 +1912,61 @@ fn write_frame_log(
     let (clearance, speed) = readout.map_or((f32::NAN, f32::NAN), |r| (r.clearance, r.speed));
     let _ = writeln!(
         out,
-        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1}",
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}",
         stats.samples.len(),
         stats.started.elapsed().as_secs_f64(),
         fine.version,
-        walk.map_or(f32::NAN, |walk| walk.walked_m)
+        walk.map_or(f32::NAN, |walk| walk.walked_m),
+        // Ground distance along the route, in the units the scenic plan's
+        // `into N m of cloud ... from M m` line uses.
+        route.map_or(f64::NAN, |route| route.flown_rad
+            * f64::from(pbd_app::planet::PLANET_RADIUS))
     );
+}
+
+/// The clouds' GPU time and the whole instrumented frame's, in ms, from the
+/// newest batch of render-diagnostic spans. A pass that did not run in that
+/// batch (the clouds under `PBD_NO_CLOUDS`) keeps an older measurement in the
+/// store, so only the spans stamped with the newest batch's time count. The
+/// total sums top-level spans only (`render/<pass>/elapsed_gpu`), so a nested
+/// span is not counted twice. The values trail the frame by the few frames a
+/// timestamp query takes to read back.
+fn gpu_times(store: &bevy::diagnostic::DiagnosticsStore) -> (f64, f64) {
+    let spans: Vec<(String, f64, Instant)> = store
+        .iter()
+        .filter_map(|d| {
+            let path = d.path().as_str();
+            let parts: Vec<&str> = path.split('/').collect();
+            if parts.len() != 3 || parts[0] != "render" || parts[2] != "elapsed_gpu" {
+                return None;
+            }
+            let m = d.measurement()?;
+            Some((parts[1].to_owned(), m.value, m.time))
+        })
+        .collect();
+    let Some(newest) = spans.iter().map(|s| s.2).max() else {
+        return (f64::NAN, f64::NAN);
+    };
+    let current = spans.iter().filter(|s| s.2 == newest);
+    let clouds = current
+        .clone()
+        .filter(|s| matches!(s.0.as_str(), "cloud_march" | "cloud_resolve" | "clouds"))
+        .map(|s| s.1)
+        .sum();
+    (clouds, current.map(|s| s.1).sum())
+}
+
+/// With `--frame-log`, a route run ends itself once the route is complete.
+fn quit_after_route(
+    route: Option<Res<pbd_app::flight_view::RouteState>>,
+    mut exit: MessageWriter<AppExit>,
+    mut done: Local<bool>,
+) {
+    if !*done && route.is_some_and(|route| route.completed) {
+        *done = true;
+        info!("ROUTE_QUIT the frame log is complete");
+        exit.write(AppExit::Success);
+    }
 }
 
 fn measure_frames(mut stats: ResMut<FrameStats>) {
@@ -1920,8 +1988,10 @@ fn measure_frames(mut stats: ResMut<FrameStats>) {
 fn route_kind(name: &str) -> pbd_app::flight_view::RouteKind {
     match name {
         "far-side" => pbd_app::flight_view::RouteKind::FarSide,
-        "scenic" => pbd_app::flight_view::RouteKind::Scenic,
-        other => panic!("--route knows far-side and scenic, not {other}"),
+        // `clouds` is the scenic route with its broken-cloud plan
+        // (`FlightViewConfig::route_scenic_broken`).
+        "scenic" | "clouds" => pbd_app::flight_view::RouteKind::Scenic,
+        other => panic!("--route knows far-side, scenic and clouds, not {other}"),
     }
 }
 

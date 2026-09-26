@@ -417,6 +417,11 @@ pub struct WeatherSettings {
     pub cloud_step_m: f32,
     /// The most steps a ray takes through the layer, 8..=256.
     pub cloud_max_steps: u32,
+    /// How strongly the air between the eye and a cloud fades it
+    /// (`cloud-close-up`), as a multiple of the ground haze's own density
+    /// through the same exponential atmosphere: 1 is the ground's haze, 0
+    /// turns the fade off. A distant cloud dissolves into what is behind it.
+    pub cloud_haze: f32,
 
     // ---- Rain near: Tenebris's shafts of streaks over every raining cell of
     // a lattice fixed to the body, inside the detail range. Beyond it the rain
@@ -548,6 +553,7 @@ impl Default for WeatherSettings {
             cloud_render_scale: 0.4,
             cloud_step_m: 12.0,
             cloud_max_steps: 48,
+            cloud_haze: 3.0,
             rain_cell_m: 60.0,
             rain_detail_range_m: 150.0,
             rain_lod_blend_m: 60.0,
@@ -677,6 +683,9 @@ impl Validated for WeatherSettings {
             .contains(&s.cloud_max_steps)
             .then_some(())
             .ok_or("cloud_max_steps must be within 8..=256")?;
+        (s.cloud_haze.is_finite() && s.cloud_haze >= 0.0)
+            .then_some(())
+            .ok_or("cloud_haze must be finite and not negative")?;
         (s.cloud_shear >= 1.0)
             .then_some(())
             .ok_or("cloud_shear must be at least 1 (1 draws no shear)")?;
@@ -767,6 +776,14 @@ pub struct ScatterSettings {
     pub shrub_chance: f32,
     /// Dead-shrub twig length, metres.
     pub shrub_size_m: f32,
+    /// The last stretch of the trees' draw range (the finest band, 1200 m),
+    /// metres, over which a tree dithers out rather than popping
+    /// (`detail-fade`). 0 draws the hard line.
+    pub tree_fade_m: f32,
+    /// Seconds a landing of new ground detail dissolves from the old blocks to
+    /// the new through a screen-door mask, rather than switching in one frame
+    /// (`detail-fade`). 0 switches at once.
+    pub lod_fade_s: f32,
 }
 
 impl Default for ScatterSettings {
@@ -787,6 +804,8 @@ impl Default for ScatterSettings {
             bush_size_m: 0.34,
             shrub_chance: 0.14,
             shrub_size_m: 0.38,
+            tree_fade_m: 150.,
+            lod_fade_s: 0.6,
         }
     }
 }
@@ -805,6 +824,13 @@ impl Validated for ScatterSettings {
         (self.clutter_radius_m == 0. || self.clutter_fade_m <= self.clutter_radius_m)
             .then_some(())
             .ok_or("clutter_fade_m cannot exceed clutter_radius_m")?;
+        (self.tree_fade_m.is_finite()
+            && (0.0..=crate::planet::BAND_M[1]).contains(&self.tree_fade_m))
+        .then_some(())
+        .ok_or("tree_fade_m must lie within 0 and the trees' 1200 m range")?;
+        (self.lod_fade_s.is_finite() && (0.0..=5.0).contains(&self.lod_fade_s))
+            .then_some(())
+            .ok_or("lod_fade_s must lie within 0 and 5 seconds")?;
         unit("grass_chance", self.grass_chance)?;
         unit("flower_chance", self.flower_chance)?;
         unit("rock_chance", self.rock_chance)?;

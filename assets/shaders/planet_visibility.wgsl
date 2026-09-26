@@ -23,24 +23,49 @@ struct Params {
     column: vec4<f32>,         // tier reach m, cave dark floor, cave dark depth m, cos(2 x reach / R)
     ground: vec4<f32>,         // sod depth m, soil depth m, snow tileset slot, spare
     tilesets: array<vec4<u32>,2>, // atlas slot per biome, in Biome order
+    fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs, spare
+    lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
+    bands_prev: vec4<f32>,     // and its band cosines
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
-fn band_cos(level: u32) -> f32 {
-    let k = level - base_level() - 1u;
-    if k == 0u { return params.bands.x; }
-    if k == 1u { return params.bands.y; }
-    if k == 2u { return params.bands.z; }
-    return params.bands.w;
+// A partition of the ground into detail levels: the anchor the bands are
+// measured from and the cosine of each fine level's band. The current one is
+// `lod`/`bands`; while a landing cross-fades (`detail-fade`) the one it
+// replaced is `lod_prev`/`bands_prev`, and an instance drawn for it carries
+// PART_OLD in the top bits of its list entry.
+struct Partition { anchor: vec3<f32>, bands: vec4<f32> }
+const PART_BOTH: u32 = 0u;
+const PART_NEW: u32 = 1u;
+const PART_OLD: u32 = 2u;
+const PART_SHIFT: u32 = 30u;
+const PART_MASK: u32 = 0x3fffffffu;
+fn partition_of(mark: u32) -> Partition {
+    if mark == PART_OLD { return Partition(params.lod_prev.xyz, params.bands_prev); }
+    return Partition(params.lod.xyz, params.bands);
 }
+fn band_cos_in(bands: vec4<f32>, level: u32) -> f32 {
+    let k = level - base_level() - 1u;
+    if k == 0u { return bands.x; }
+    if k == 1u { return bands.y; }
+    if k == 2u { return bands.z; }
+    return bands.w;
+}
+fn band_cos(level: u32) -> f32 { return band_cos_in(params.bands, level); }
 // Whether the level below's cell a tile belongs to is drawn at this tile's
-// level: the partition rule, one dot product against the player direction.
+// level: the partition rule, one dot product against the partition's anchor.
+fn owner_fine_in(owner: vec3<f32>, level: u32, part: Partition) -> bool {
+    return dot(owner, part.anchor) > band_cos_in(part.bands, level);
+}
 fn owner_fine(owner: vec3<f32>, level: u32) -> bool {
-    return dot(owner, params.lod.xyz) > band_cos(level);
+    return owner_fine_in(owner, level, partition_of(PART_NEW));
 }
 // Whether a tile at this level is covered by the next finer band.
+fn covered_by_finer_in(direction: vec3<f32>, level: u32, part: Partition) -> bool {
+    return level < finest_level() && dot(direction, part.anchor) > band_cos_in(part.bands, level + 1u);
+}
 fn covered_by_finer(direction: vec3<f32>, level: u32) -> bool {
-    return level < finest_level() && dot(direction, params.lod.xyz) > band_cos(level + 1u);
+    return covered_by_finer_in(direction, level, partition_of(PART_NEW));
 }
 fn floor_of(cell: Cell, side: u32) -> f32 {
     if side == 0u { return cell.owner_a.w; }
@@ -169,10 +194,10 @@ fn has_clutter(cell: Cell, center: vec3<f32>) -> bool {
 // split between a fine and a coarse owner, since its centre is the cut, and
 // a coarser cell carries the chance of the finest cells it covers so the
 // cover per area is the same at every distance they are drawn at.
-fn has_nearby_foliage(cell: Cell, center: vec3<f32>) -> bool {
+fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     let level = cell.metadata.x >> 8u;
     if level + 2u < finest_level() || level > finest_level() { return false; }
-    if !(owner_fine(cell.owner_a.xyz, level) && owner_fine(cell.owner_b.xyz, level)) { return false; }
+    if !(owner_fine_in(cell.owner_a.xyz, level, part) && owner_fine_in(cell.owner_b.xyz, level, part)) { return false; }
     // The Tenebris scatter rule at its own rates. Eligibility is the top
     // block, as it is there: a grass of any kind, or the one tree that grows
     // on a non-grass top, the tundra pine standing in snow. Density is per
@@ -235,14 +260,44 @@ fn slot_live(slot: u32) -> bool {
 // The partition rule: a tile draws at its level when the next finer band does
 // not cover it and its owner at the level below is drawn at this level. A
 // midpoint cell with one fine owner draws and is split per fragment.
-fn drawn(cell: Cell) -> bool {
+fn drawn(cell: Cell, part: Partition) -> bool {
     let level = cell.metadata.x >> 8u;
     let direction = cell.direction_height.xyz;
-    if covered_by_finer(direction, level) { return false; }
+    if covered_by_finer_in(direction, level, part) { return false; }
     if level > base_level() {
-        return owner_fine(cell.owner_a.xyz, level) || owner_fine(cell.owner_b.xyz, level);
+        return owner_fine_in(cell.owner_a.xyz, level, part) || owner_fine_in(cell.owner_b.xyz, level, part);
     }
     return true;
+}
+
+// Whether a cell both partitions draw is drawn the SAME by both: its owners'
+// test (the split midpoint cell and its cut wall) and every side's test of
+// the finer band (the wall down to a fine floor) agree. Such a cell is listed
+// once for both; any other is listed once per partition that draws it
+// (`detail-fade`). The neighbour is found as the vertex shader finds it.
+fn same_in_both(cell: Cell, a: Partition, b: Partition) -> bool {
+    let level = cell.metadata.x >> 8u;
+    if level > base_level() {
+        if owner_fine_in(cell.owner_a.xyz, level, a) != owner_fine_in(cell.owner_a.xyz, level, b) { return false; }
+        if owner_fine_in(cell.owner_b.xyz, level, a) != owner_fine_in(cell.owner_b.xyz, level, b) { return false; }
+    }
+    if level < finest_level() {
+        let degree = cell.metadata.x & 0xffu;
+        let axis = cell.direction_height.xyz;
+        for (var side = 0u; side < degree; side++) {
+            let mid = normalize(cell.corners[side].xyz + cell.corners[(side+1u)%degree].xyz);
+            let neighbor = normalize(2.0*mid - axis);
+            if covered_by_finer_in(neighbor, level, a) != covered_by_finer_in(neighbor, level, b) { return false; }
+        }
+    }
+    return true;
+}
+
+// The list entry for a cell: its index, and which partition it is drawn for
+// in the top bits. Outside a cross-fade every entry is PART_BOTH.
+fn entry(index: u32, now: bool, before: bool, same: bool) -> u32 {
+    if now && before && same { return index; }
+    return index | (select(PART_OLD, PART_NEW, now) << PART_SHIFT);
 }
 
 fn in_frustum(center: vec3<f32>, radius: f32) -> bool {
@@ -281,13 +336,21 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // Capacities cover the whole dispatch before any counts can be published;
     // malformed bindings must not create partial generations or invalid IDs.
     let count = u32(params.settings.y);
-    if arrayLength(&cells)<count || arrayLength(&visible)<count || arrayLength(&foliage)<count || arrayLength(&water)<count || arrayLength(&clutter)<count || arrayLength(&column)<count { return; }
+    // The terrain and foliage lists take a cell twice while a landing
+    // cross-fades, once per partition (`detail-fade`), so they hold two.
+    if arrayLength(&cells)<count || arrayLength(&visible)<2u*count || arrayLength(&foliage)<2u*count || arrayLength(&water)<count || arrayLength(&clutter)<count || arrayLength(&column)<count { return; }
     if id.x >= count { return; }
     if !slot_live(id.x) { return; }
     let cell = cells[id.x];
     let degree = cell.metadata.x & 0xffu;
     if degree<5u || degree>6u { return; }
-    if !drawn(cell) { return; }
+    let now_part = partition_of(PART_NEW);
+    let before_part = partition_of(PART_OLD);
+    let fading = params.fade.z > 0.5;
+    let now = drawn(cell, now_part);
+    let before = fading && drawn(cell, before_part);
+    if !now && !before { return; }
+    let same = !fading || (now && before && same_in_both(cell, now_part, before_part));
     let radius = params.settings.x;
     let camera_radius = length(params.camera.xyz);
     // The angular horizons of camera and raised terrain overlap. Include a
@@ -313,10 +376,23 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     let surface_radius = radius + cell.direction_height.w;
     let center = cell.direction_height.xyz*surface_radius;
     if in_frustum(center,terrain_bound(cell,center,surface_radius)) {
-        let slot = atomicAdd(&args[0].instance_count,1u);
-        visible[slot] = id.x;
+        if same {
+            let slot = atomicAdd(&args[0].instance_count,1u);
+            visible[slot] = id.x;
+        } else {
+            if now {
+                let slot = atomicAdd(&args[0].instance_count,1u);
+                visible[slot] = entry(id.x, true, false, false);
+            }
+            if before {
+                let slot = atomicAdd(&args[0].instance_count,1u);
+                visible[slot] = entry(id.x, false, true, false);
+            }
+        }
     }
-    if cell.direction_height.w < 0.0 {
+    // The sea sheet, the clutter and the columns are drawn for the current
+    // partition only; the foliage below is drawn for both.
+    if now && cell.direction_height.w < 0.0 {
         let sea = params.water_absorption.w;
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;
@@ -331,13 +407,20 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     // The largest authored tree fits inside 15 m of its base. Keep a tree
     // whose crown enters the frustum even when its terrain cap is outside.
-    if has_nearby_foliage(cell,center) && in_frustum(center,15.) {
-        let slot = atomicAdd(&args[1].instance_count,1u);
-        foliage[slot] = id.x;
+    let tree_now = has_nearby_foliage(cell,center,now_part);
+    let tree_before = fading && before && has_nearby_foliage(cell,center,before_part);
+    if (tree_now || tree_before) && in_frustum(center,15.) {
+        if tree_now && (tree_before || !fading) {
+            let slot = atomicAdd(&args[1].instance_count,1u);
+            foliage[slot] = id.x;
+        } else {
+            let slot = atomicAdd(&args[1].instance_count,1u);
+            foliage[slot] = entry(id.x, tree_now, tree_before, false);
+        }
     }
     // A clutter bound is the cell's own hexagon and the tallest piece standing
     // on it, which is a couple of metres rather than a tree's fifteen.
-    if has_clutter(cell,center) && in_frustum(center,4.) {
+    if now && has_clutter(cell,center) && in_frustum(center,4.) {
         let slot = atomicAdd(&args[3].instance_count,1u);
         clutter[slot] = id.x;
     }
@@ -346,7 +429,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // purpose: the tier is a few thousand cells inside ninety metres, so the
     // tight bound - which would mean binding the runs to this pass as well -
     // buys nothing a profile could see.
-    if has_column(cell,center) {
+    if now && has_column(cell,center) {
         let span = cell.direction_height.w - COLUMN_BASE_M;
         if in_frustum(center,terrain_bound(cell,center,surface_radius)+span) {
             let slot = atomicAdd(&args[4].instance_count,1u);

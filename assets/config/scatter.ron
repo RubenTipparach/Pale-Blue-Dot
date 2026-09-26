@@ -18,6 +18,12 @@
 (
     clutter_radius_m: 60.0,
     clutter_fade_m: 15.0,
+    // Trees reach 1200 m (the finest band); over this last stretch, metres,
+    // they dither out rather than popping (detail-fade). 0 is the hard line.
+    tree_fade_m: 150.0,
+    // Seconds new ground detail takes to dissolve in over the old when a new
+    // fine set lands, rather than switching in one frame (detail-fade).
+    lod_fade_s: 0.6,
 
     grass_chance: 0.8,
     grass_blades: 18.0,

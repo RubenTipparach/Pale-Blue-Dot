@@ -76,6 +76,9 @@ pub struct FlightViewConfig {
     pub route_scenic_height_m: f32,
     pub route_scenic_speed: f32,
     pub route_scenic_climb_deg: f32,
+    /// `--route clouds`: the scenic route through as many separate clouds as
+    /// it can find, low in the layer, instead of one long run of solid cover.
+    pub route_scenic_broken: bool,
 }
 
 impl Default for FlightViewConfig {
@@ -107,6 +110,7 @@ impl Default for FlightViewConfig {
             route_scenic_height_m: 90.0,
             route_scenic_speed: 150.0,
             route_scenic_climb_deg: 45.0,
+            route_scenic_broken: false,
         }
     }
 }

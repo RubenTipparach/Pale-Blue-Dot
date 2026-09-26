@@ -11,10 +11,13 @@ use rocket orbital mechanics.
 
 ## Run
 
-On Windows, double-click [run.bat](run.bat). It builds the release executable,
-opens the explorer and preserves the console afterward. Rust and the native
-C/C++ linker tools must be installed. The first graphics release build took
-23 minutes on the validation machine; unchanged launches reuse that build.
+On Windows, double-click [run.bat](run.bat). It builds the optimised `fast`
+profile (release without link-time optimisation, linked with the toolchain's
+`rust-lld`), opens the explorer and preserves the console afterward, so a small
+change rebuilds in seconds rather than minutes. `run.bat --full` builds the real
+release executable instead: use it for performance numbers, recordings and
+regression checks. Rust and the native C/C++ linker tools must be installed.
+The first graphics build takes many minutes; unchanged launches reuse it.
 
 **The game starts walking on dry land.** Click the window to capture the mouse;
 use WASD to walk, Shift to sprint, and Space to jump. Mouse look is immediate
@@ -27,6 +30,7 @@ selects cruise. X toggles inertial dampeners/hover assistance and B brakes. See
 
 ```bat
 run.bat
+run.bat --full
 run.bat --walk
 run.bat --fly
 run.bat --tour

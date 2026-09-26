@@ -45,6 +45,7 @@ use bevy::{
     prelude::*,
     render::{
         Render, RenderApp, RenderStartup, RenderSystems,
+        diagnostic::RecordDiagnostics,
         extract_component::{ExtractComponent, ExtractComponentPlugin},
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::RenderAssets,
@@ -454,6 +455,14 @@ struct PlanetParams {
     // reads the biome off the cell it is already given, so a sheet per biome
     // costs one lookup and no second binding.
     tilesets: [UVec4; 2],
+    // `detail-fade`: how far a tree dithers out before the edge of its band
+    // or the foliage range, metres; the landing cross-fade's progress 0..1;
+    // one while it runs; spare.
+    fade: Vec4,
+    // The partition the cross-fade dissolves from: its anchor (w spare) and
+    // band cosines, as `lod` and `bands`.
+    lod_prev: Vec4,
+    bands_prev: Vec4,
 }
 
 /// The eight biome slots, in `Biome` order, packed two vec4s wide for the
@@ -504,6 +513,10 @@ struct PlanetGpu {
     /// written here, beside the buffer, so the rule that decides what to HIDE
     /// and the records that REPLACE it can never come from different frames.
     lod: lod::LodParams,
+    /// The partition the last landing replaced and when it landed, while its
+    /// cross-fade runs (`detail-fade`); none when the landing could not fade
+    /// (`lod::fade_covered`) or changed no partition.
+    lod_prev: Option<(lod::LodParams, std::time::Instant)>,
 }
 
 #[derive(Component)]
@@ -581,6 +594,7 @@ fn upload_planet(
         counts: [0; 4],
         uploaded: 0,
         lod: lod::LodParams::base_only(),
+        lod_prev: None,
     });
 }
 
@@ -624,7 +638,25 @@ fn upload_fine(
         queue.write_buffer(&planet.materials, 0, bytemuck::cast_slice(&materials));
     }
     planet.uploaded = fine.version;
-    planet.lod = lod::LodParams::of(&fine.set);
+    let old = planet.lod;
+    let new = lod::LodParams::of(&fine.set);
+    // Cross-fade from the partition drawn until now (`detail-fade`), where it
+    // moved (an edit's new version keeps the anchor and draws at once) and
+    // the new records still hold every cell it draws.
+    let moved = old.player != new.player || old.bands != new.bands;
+    let first = old.bands == lod::LodParams::base_only().bands;
+    planet.lod_prev = if moved && !first {
+        match lod::fade_covered(&old, &fine.set) {
+            Ok(()) => Some((old, std::time::Instant::now())),
+            Err(why) => {
+                info!("LOD_FADE skipped: {why}");
+                None
+            }
+        }
+    } else {
+        None
+    };
+    planet.lod = new;
     lod::spent("render: fine-set upload", timer);
     // The other half of an edit's own log line: the version it made is the
     // version the GPU now draws. An edit whose version never appears here is
@@ -813,6 +845,18 @@ fn prepare_views(
             };
         let w = &weather_settings;
         let lod = &planet.lod;
+        // The landing's cross-fade (`detail-fade`): how far through it is.
+        let (prev, fade_progress, fading) = match planet.lod_prev {
+            Some((prev, landed)) if scatter.lod_fade_s > 0.0 => {
+                let t = landed.elapsed().as_secs_f32() / scatter.lod_fade_s;
+                if t < 1.0 {
+                    (prev, t, 1.0)
+                } else {
+                    (*lod, 1.0, 0.0)
+                }
+            }
+            _ => (*lod, 1.0, 0.0),
+        };
         trace!(
             "planet view {entity}: camera {camera_position:?}, lod player {:?}, base {} fine {:?}",
             lod.player, planet.base_count, planet.counts
@@ -932,6 +976,9 @@ fn prepare_views(
                 },
             ),
             tilesets: tileset_slots(),
+            fade: Vec4::new(scatter.tree_fade_m, fade_progress, fading, 0.0),
+            lod_prev: prev.player.extend(0.0),
+            bands_prev: prev.bands,
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
@@ -940,9 +987,11 @@ fn prepare_views(
         }
         let mut uniform = UniformBuffer::from(params);
         uniform.write_buffer(&device, &queue);
+        // The terrain and foliage lists hold a cell twice while a landing
+        // cross-fades, once per partition (`detail-fade`).
         let visible = device.create_buffer(&BufferDescriptor {
             label: Some("GPU visible planet column IDs"),
-            size: planet.slots as u64 * 4,
+            size: planet.slots as u64 * 8,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -954,7 +1003,7 @@ fn prepare_views(
         });
         let foliage = device.create_buffer(&BufferDescriptor {
             label: Some("GPU nearby foliage column IDs"),
-            size: planet.slots as u64 * 4,
+            size: planet.slots as u64 * 8,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -1216,6 +1265,7 @@ impl render_graph::Node for PlanetComputeNode {
         ) else {
             return Ok(());
         };
+        let diagnostics = ctx.diagnostic_recorder();
         for entity in &self.views {
             let Some(view) = world.get::<PlanetViewGpu>(*entity) else {
                 continue;
@@ -1226,11 +1276,13 @@ impl render_graph::Node for PlanetComputeNode {
                     label: Some("Cull hex columns and publish complete indirect draw"),
                     ..default()
                 });
+            let span = diagnostics.pass_span(&mut pass, "planet_cull");
             pass.set_bind_group(0, &view.compute_bind_group, &[]);
             pass.set_pipeline(clear);
             pass.dispatch_workgroups(1, 1, 1);
             pass.set_pipeline(compact);
             pass.dispatch_workgroups(planet.slots.div_ceil(128), 1, 1);
+            span.end(&mut pass);
         }
         Ok(())
     }
