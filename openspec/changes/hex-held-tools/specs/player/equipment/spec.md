@@ -15,12 +15,21 @@ tip.
 #### Scenario: Changing tools
 - **WHEN** the player equips the pickaxe
 - **THEN** the pickaxe's hex model and the hand are in hand, and no other
-  tool's model is
+  tool's model is (`held::tests::only_the_tool_in_hand_is_shown_with_its_hand`)
 
 #### Scenario: A thin handle
 - **WHEN** any tool's model is built
 - **THEN** it is one connected piece, and its handle is whole rows of hexes
+  (`held::tests::every_tool_is_one_piece_with_a_hand`,
+  `held::tests::a_handle_is_whole_rows`,
+  `hexel::tests::a_round_handle_is_closed_and_one_piece`)
 
 #### Scenario: The line and the rod
 - **WHEN** a line is cast
 - **THEN** it starts at the tip of the rod model being drawn
+  (`held::tests::the_line_leaves_the_rod_model_tip`)
+
+#### Scenario: The icon and the model
+- **WHEN** a tool's shape changes
+- **THEN** its slot icon and its model change together, both drawn from its
+  hexes (`tools/gen_held_tools.py --check`)
