@@ -119,6 +119,14 @@ the new one interleaved in the same sitting (`--variant "before|<old exe>"
 spread between repeat runs is fixed or argued in the write-up, not shipped
 silently. The current baseline is `docs/benchmarks/2026-09-25-baseline/`.
 
+**In a Claude Code cloud session, skip the full performance regression
+(owner, 2026-09-26).** The cloud container has no GPU and renders on lavapipe,
+so its frame times say nothing about the game's. Don't run `perf_suite.py`
+there; say in the write-up and the PR that the frame cost was not measured.
+The owner runs it on real hardware. **Do render the change in the game**:
+headless `--capture` shots of what changed are what the owner wants from a
+cloud session, and they go in `docs/screenshots/` with the change.
+
 **Keep the HTML report current (owner, 2026-09-25).** Every so often when a
 benchmark is run - and always when a result changes the picture (a new
 baseline, a regression, a cost that moved) - regenerate the page with
