@@ -206,22 +206,28 @@ FACE_EYE = (0.0, 0.0, 1.0)
 # face the eye was a mistake the owner caught.)
 AHEAD = (0.0, 0.0, -1.0)
 BACK_RIGHT = norm((0.8, 0.1, 0.55))
+def rod_along(elevation_deg):
+    """The rod's direction: `elevation_deg` above level, its level part
+    leaning left and away (-x, -z) two parts away to one left."""
+    e = math.radians(elevation_deg)
+    lean = norm((-1.0, 0.0, -2.0))
+    return (lean[0] * math.cos(e), math.sin(e), lean[2] * math.cos(e))
+
+
 TOOLS = [
     {"id": "pickaxe", "name": "Pickaxe", "note": "Stone, rock and ore", "shape": pickaxe, "len": 19.2, "fist": 5.0,
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.365, "work": (0, -1, 0), "toward": AHEAD, "back": BACK_RIGHT},
-    # The shovel as the owner's photo carries it: gripped near the top, the
-    # shaft running down and ahead to the blade, the blade's face up, the back
-    # of the hand outward.
-    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 22.0, "fist": 1.7,
-     "grip_r": 0.51, "along": (-0.7, 0.12, -0.7), "length": 0.367, "work": (0, 0, 1), "toward": norm((0, 1, 0.35)),
-     "arm": (0.45, -0.75, 0.5)},
+    # The same setup as the pickaxe and the axe: upright, gripped a quarter of
+    # the way up, the head (the blade) pointing ahead.
+    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 22.0, "fist": 5.0,
+     "grip_r": 0.51, "along": UPRIGHT, "length": 0.367, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
     # The blade ahead, its edge facing away.
     {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 19.4, "fist": 5.0,
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.363, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
     {"id": "rod", "name": "Rod", "note": "Fishing", "shape": rod, "len": 18.3, "fist": 2.4,
-     # Up and to the left from the fist, as in the owner's photos; the reel
-     # hangs under the rod.
-     "grip_r": 0.28, "along": (-0.35, 0.6, -0.7), "length": 0.563, "work": (0, -1, 0), "toward": (0.0, -1.0, 0.0),
+     # Steeply up, 80 degrees above level, leaning a little left and away as
+     # in the owner's photos; the reel hangs under the rod.
+     "grip_r": 0.28, "along": rod_along(80.0), "length": 0.563, "work": (0, -1, 0), "toward": (0.0, -1.0, 0.0),
      "back": BACK_RIGHT},
 ]
 # Where the FIST sits in eye space at each size, so a longer handle runs on
