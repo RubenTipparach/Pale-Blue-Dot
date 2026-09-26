@@ -113,9 +113,13 @@ struct WaterView {
 @group(3) @binding(2) var cloud_cells_tex: texture_3d<f32>;
 @group(3) @binding(3) var cloud_cells_sampler: sampler;
 // How far along its ray each march texel's cloud is, and where its march
-// stopped: the composite reads this frame's, the march the previous frame's
+// stopped: the composite reads this frame's, the resolve the previous frame's
 // (`cloud-ghosting`).
 @group(3) @binding(4) var cloud_depth: texture_2d<f32>;
+// The resolve only (`cloud-history-clip`): this frame's march, and this
+// frame's distances.
+@group(3) @binding(5) var cloud_current: texture_2d<f32>;
+@group(3) @binding(6) var cloud_depth_now: texture_2d<f32>;
 fn cloud_layer() -> CloudLayer {
     return CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash,view.cloud_light,
         view.cloud_shape,view.cloud_cells);
@@ -826,29 +830,58 @@ fn cloud_march_pass(in: FullscreenVertexOutput) -> CloudMarchOut {
     let marched = cloud_march(eye,ray.direction,span.x,span.y,layer,safe_normal(view.sun.xyz),
         weather_cloud,weather_wind,weather_sampler,cloud_cells_tex,cloud_cells_sampler,
         jitter,pixel_angle);
-    var cloud = marched.cloud;
-    // Blend into the history where this pixel's cloud was on the previous
-    // frame: the cloud's own point, projected by the previous camera.
-    // Only a texel whose march saw what this one sees is blended: the
-    // history never carries cloud across a silhouette (`cloud-ghosting`).
-    if (view.cloud_history.y > 0.5) {
-        let point = ray.origin + ray.direction*marched.depth;
-        let before = view.prev_clip_from_local*vec4<f32>(point,1.0);
-        if (before.w > 0.0) {
-            let ndc = before.xy/before.w;
-            let was = vec2<f32>(ndc.x*0.5+0.5, 0.5-ndc.y*0.5);
-            if (all(was >= vec2<f32>(0.0)) && all(was <= vec2<f32>(1.0))) {
-                let stop = ray.origin + ray.direction*min(far, CLOUD_FAR_CAP_M);
-                let previous = cloud_previous(was, stop);
-                if (previous.weight > 1e-3) {
-                    cloud = mix(previous.cloud, cloud, view.cloud_history.x);
-                }
-            }
-        }
-    }
-    out.cloud = cloud;
+    // This frame's cloud alone: the resolve folds it into the history
+    // (`cloud-history-clip`).
+    out.cloud = marched.cloud;
     out.depth.x = select(0.0, marched.depth, marched.cloud.w > 1e-3);
     return out;
+}
+
+// The history's resolve (`cloud-history-clip`): what the march's blend did,
+// plus a clip. The previous history is read where this texel's cloud was a
+// frame ago through `cloud-ghosting`'s test (`cloud_previous`: only texels
+// whose march saw what this ray sees), then held inside the range this
+// frame's march shows round the texel: the mean plus or minus 1.25 standard
+// deviations of the 3 x 3 neighbourhood (Salvi 2016), widened to include this
+// texel. The test catches a silhouette; the clip catches a history that saw
+// the same depths and is still wrong: a cloud spread along the whole ray,
+// which one depth cannot reproject, or a cloud that has changed. A converged
+// history lies inside a single noisy sample's neighbourhood, so still cloud
+// is left as calm as before.
+const CLOUD_CLIP_SIGMA: f32 = 1.25;
+@fragment
+fn cloud_resolve(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let size = vec2<i32>(textureDimensions(cloud_current));
+    let texel = clamp(vec2<i32>(in.position.xy), vec2<i32>(0), size - 1);
+    let current = textureLoad(cloud_current, texel, 0);
+    if (view.cloud_history.y < 0.5) { return current; }
+    var m1 = vec4<f32>(0.0);
+    var m2 = vec4<f32>(0.0);
+    for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+            let s = textureLoad(cloud_current, clamp(texel + vec2<i32>(dx, dy), vec2<i32>(0), size - 1), 0);
+            m1 += s;
+            m2 += s*s;
+        }
+    }
+    let mean = m1/9.0;
+    let sigma = sqrt(max(m2/9.0 - mean*mean, vec4<f32>(0.0)));
+    let lo = min(mean - CLOUD_CLIP_SIGMA*sigma, current);
+    let hi = max(mean + CLOUD_CLIP_SIGMA*sigma, current);
+    // The cloud's own point, or where the march stopped where it has none,
+    // projected by the previous camera: where this texel's cloud was.
+    let now = textureLoad(cloud_depth_now, texel, 0).rg;
+    let ray = view_ray(in.uv);
+    let reach = select(now.y, now.x, now.x > 0.0);
+    let before = view.prev_clip_from_local*vec4<f32>(ray.origin + ray.direction*reach, 1.0);
+    if (before.w <= 0.0) { return current; }
+    let ndc = before.xy/before.w;
+    let was = vec2<f32>(ndc.x*0.5+0.5, 0.5-ndc.y*0.5);
+    if (any(was < vec2<f32>(0.0)) || any(was > vec2<f32>(1.0))) { return current; }
+    let stop = ray.origin + ray.direction*min(now.y, CLOUD_FAR_CAP_M);
+    let previous = cloud_previous(was, stop);
+    if (previous.weight <= 1e-3) { return current; }
+    return mix(clamp(previous.cloud, lo, hi), current, view.cloud_history.x);
 }
 
 // Where the march stops for a ray that meets nothing, metres: a half float's

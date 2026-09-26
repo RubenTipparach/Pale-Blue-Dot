@@ -318,6 +318,10 @@ struct WaterPipelines {
     /// The composite's fourth group: this frame's march, its sampler and its
     /// cloud distances.
     composite_layout: BindGroupLayoutDescriptor,
+    /// The resolve's fourth group (`cloud-history-clip`): the previous
+    /// history, its sampler and its distances, and this frame's march and
+    /// distances.
+    resolve_layout: BindGroupLayoutDescriptor,
     sampler: Sampler,
     cells: TextureView,
     cells_sampler: Sampler,
@@ -335,6 +339,31 @@ fn history_layout() -> BindGroupLayoutDescriptor {
                 sampler(SamplerBindingType::Filtering),
                 // The previous frame's cloud distances (`cloud-ghosting`).
                 texture_2d(TextureSampleType::Float { filterable: false }),
+            ),
+        ),
+    )
+}
+
+fn resolve_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "clouds resolve: history, march, distances",
+        &BindGroupLayoutEntries::with_indices(
+            ShaderStages::FRAGMENT,
+            (
+                (0, texture_2d(TextureSampleType::Float { filterable: true })),
+                (1, sampler(SamplerBindingType::Filtering)),
+                (
+                    4,
+                    texture_2d(TextureSampleType::Float { filterable: false }),
+                ),
+                (
+                    5,
+                    texture_2d(TextureSampleType::Float { filterable: false }),
+                ),
+                (
+                    6,
+                    texture_2d(TextureSampleType::Float { filterable: false }),
+                ),
             ),
         ),
     )
@@ -461,6 +490,7 @@ fn initialize_pipelines(
         scene_layout_multisampled: scene_layout(true),
         history_layout: history_layout(),
         composite_layout: composite_layout(),
+        resolve_layout: resolve_layout(),
         sampler: device.create_sampler(&SamplerDescriptor {
             label: Some("water scene sampler"),
             mag_filter: FilterMode::Linear,
@@ -477,6 +507,7 @@ enum Pass {
     Cap,
     Compose,
     CloudMarch,
+    CloudResolve,
     Clouds,
     Rain,
     Overlay,
@@ -518,6 +549,11 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 self.fullscreen.to_vertex_state(),
                 "compose",
             ),
+            Pass::CloudResolve => (
+                "Cloud history resolve: reprojected, tested, clipped, blended",
+                self.fullscreen.to_vertex_state(),
+                "cloud_resolve",
+            ),
             Pass::CloudMarch => (
                 "Cloud march at the clouds' resolution, into the history",
                 self.fullscreen.to_vertex_state(),
@@ -551,7 +587,12 @@ impl SpecializedRenderPipeline for WaterPipelines {
         // the scene's own occlusion is the shader's discard against the
         // sampled main-pass depth, which may be multisampled.
         let depth_stencil = match key.pass {
-            Pass::Lens | Pass::Rain | Pass::CloudMarch | Pass::Clouds | Pass::Overlay => None,
+            Pass::Lens
+            | Pass::Rain
+            | Pass::CloudMarch
+            | Pass::CloudResolve
+            | Pass::Clouds
+            | Pass::Overlay => None,
             pass => Some(DepthStencilState {
                 format: WATER_DEPTH_FORMAT,
                 depth_write_enabled: pass == Pass::Cap,
@@ -566,15 +607,18 @@ impl SpecializedRenderPipeline for WaterPipelines {
         };
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed(label)),
-            layout: if matches!(key.pass, Pass::Clouds | Pass::CloudMarch) {
+            layout: if matches!(
+                key.pass,
+                Pass::Clouds | Pass::CloudMarch | Pass::CloudResolve
+            ) {
                 vec![
                     self.data_layout.clone(),
                     scene,
                     super::weather_maps::layout(),
-                    if key.pass == Pass::CloudMarch {
-                        self.history_layout.clone()
-                    } else {
-                        self.composite_layout.clone()
+                    match key.pass {
+                        Pass::CloudMarch => self.history_layout.clone(),
+                        Pass::CloudResolve => self.resolve_layout.clone(),
+                        _ => self.composite_layout.clone(),
                     },
                 ]
             } else {
@@ -589,8 +633,15 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 shader: self.shader.clone(),
                 shader_defs: defs,
                 entry_point: Some(Cow::Borrowed(entry)),
-                // The march writes the clouds' history and their distances.
-                targets: if key.pass == Pass::CloudMarch {
+                // The march writes this frame's clouds and their distances;
+                // the resolve writes the history (`cloud-history-clip`).
+                targets: if key.pass == Pass::CloudResolve {
+                    vec![Some(ColorTargetState {
+                        format: CLOUD_HISTORY_FORMAT,
+                        blend: None,
+                        write_mask: ColorWrites::ALL,
+                    })]
+                } else if key.pass == Pass::CloudMarch {
                     [CLOUD_HISTORY_FORMAT, CLOUD_DEPTH_FORMAT]
                         .map(|format| {
                             Some(ColorTargetState {
@@ -632,6 +683,7 @@ pub(super) struct WaterViewGpu {
     cap: CachedRenderPipelineId,
     compose: CachedRenderPipelineId,
     cloud_march: CachedRenderPipelineId,
+    cloud_resolve: CachedRenderPipelineId,
     clouds: CachedRenderPipelineId,
     lens: CachedRenderPipelineId,
     rain: CachedRenderPipelineId,
@@ -657,6 +709,9 @@ pub(super) struct WaterViewGpu {
     /// is: the march writes this frame's and reads the previous frame's, to
     /// test each history texel against what it saw (`cloud-ghosting`).
     cloud_depth: [TextureView; 2],
+    /// This frame's march alone, before the resolve folds it into the
+    /// history, the history's size (`cloud-history-clip`).
+    current: TextureView,
     /// The previous frame's camera and projection, for reprojecting the
     /// history and for telling a jump from a step.
     prev_clip: Mat4,
@@ -862,6 +917,7 @@ fn prepare_water_views(
             if resized {
                 gpu.history = cloud_history(&device, history_size);
                 gpu.cloud_depth = cloud_distances(&device, history_size);
+                gpu.current = cloud_target(&device, history_size, CLOUD_HISTORY_FORMAT);
                 gpu.history_size = history_size;
             }
             // The history is usable when the pass wrote it on the previous
@@ -949,6 +1005,7 @@ fn prepare_water_views(
             cap: pipeline(Pass::Cap),
             compose: pipeline(Pass::Compose),
             cloud_march: pipeline(Pass::CloudMarch),
+            cloud_resolve: pipeline(Pass::CloudResolve),
             clouds: pipeline(Pass::Clouds),
             lens: pipeline(Pass::Lens),
             rain: pipeline(Pass::Rain),
@@ -969,6 +1026,7 @@ fn prepare_water_views(
             history_read: 0,
             history_size,
             cloud_depth: cloud_distances(&device, history_size),
+            current: cloud_target(&device, history_size, CLOUD_HISTORY_FORMAT),
             prev_clip: clip_from_body,
             prev_camera: camera,
             clouds_ran: !overlay_needed,
@@ -1066,6 +1124,7 @@ impl ViewNode for WaterCompositeNode {
             Some(cap),
             Some(compose),
             Some(cloud_march),
+            Some(cloud_resolve),
             Some(clouds),
             Some(lens),
             Some(rain),
@@ -1075,6 +1134,7 @@ impl ViewNode for WaterCompositeNode {
             cache.get_render_pipeline(water.cap),
             cache.get_render_pipeline(water.compose),
             cache.get_render_pipeline(water.cloud_march),
+            cache.get_render_pipeline(water.cloud_resolve),
             cache.get_render_pipeline(water.clouds),
             cache.get_render_pipeline(water.lens),
             cache.get_render_pipeline(water.rain),
@@ -1172,7 +1232,7 @@ impl ViewNode for WaterCompositeNode {
             // needs keeping.
             let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("Cloud march"),
-                color_attachments: &[history_write, depth_write].map(|view| {
+                color_attachments: &[&water.current, depth_write].map(|view| {
                     Some(RenderPassColorAttachment {
                         view,
                         depth_slice: None,
@@ -1193,6 +1253,46 @@ impl ViewNode for WaterCompositeNode {
             pass.set_bind_group(3, &march_group, &[]);
             let span = diagnostics.pass_span(&mut pass, "cloud_march");
             pass.set_render_pipeline(cloud_march);
+            pass.draw(0..3, 0..1);
+            span.end(&mut pass);
+            drop(pass);
+            // The resolve folds this frame's march into the history
+            // (`cloud-history-clip`): it reads the previous history and
+            // distances and this frame's march and distances, and writes the
+            // history the composite reads.
+            let read = water.history_read;
+            let resolve_group = device.create_bind_group(
+                Some("clouds resolve"),
+                &cache.get_bind_group_layout(&pipelines.resolve_layout),
+                &BindGroupEntries::with_indices((
+                    (0, &water.history[read]),
+                    (1, &pipelines.sampler),
+                    (4, &water.cloud_depth[read]),
+                    (5, &water.current),
+                    (6, depth_write),
+                )),
+            );
+            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("Cloud resolve"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: history_write,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(LinearRgba::NONE.into()),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_bind_group(0, &water.data_bind_group, &[]);
+            pass.set_bind_group(1, &scene, &[]);
+            pass.set_bind_group(2, &maps.bind_group, &[]);
+            pass.set_bind_group(3, &resolve_group, &[]);
+            let span = diagnostics.pass_span(&mut pass, "cloud_resolve");
+            pass.set_render_pipeline(cloud_resolve);
             pass.draw(0..3, 0..1);
             span.end(&mut pass);
         }
