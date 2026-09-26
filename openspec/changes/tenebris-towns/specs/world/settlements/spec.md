@@ -94,10 +94,33 @@ SHALL NOT borrow another biome's.
 - **THEN** its buildings are of sandstone, mud brick and salt plaster
 - **AND** its plants are the desert's cactus
 
+#### Scenario: A harbour where the beach meets the fields
+- **WHEN** a settlement is laid out across the beach and the fields behind it
+- **THEN** its buildings are of driftwood and shell-lime whitewash, and of the
+  fields' fieldstone and timber
+- **AND** its plants are beach grass on the dunes and the fields' trees, and
+  nothing comes from a third biome
+
+### Requirement: Boats are obstacles and a moored ship is boarded like a building
+A moored boat SHALL be a solid hull up to its gunwale that the walker goes
+round, and its collision SHALL NOT follow the few centimetres it bobs on the
+swell. A moored ship's deck, castles and stairs SHALL answer the stand query as
+floors, and its rail SHALL block the walker everywhere but a gangway, where a
+gangplank from the pier meets the deck with no step over 0.1 m.
+
+#### Scenario: Up the gangplank
+- **WHEN** the walker walks up the gangplank from a pier at 1.0 m
+- **THEN** it stands on the ship's deck at 1.9 m
+- **AND** no tick is airborne and no eye jump is over 0.1 m
+
+#### Scenario: Wading at a moored rowboat
+- **WHEN** the walker wades into a moored rowboat from the sea
+- **THEN** it stops at the boat's side
+
 ### Requirement: Decks, walkways and outdoor stairs collide like floors
 A raised deck, a walkway between two points (a rope bridge, a boardwalk, a
-jetty) and an outdoor stair SHALL answer the stand query with the top of their
-planks, and their rails SHALL block the walker.
+jetty, a pier, a gangplank) and an outdoor stair SHALL answer the stand query
+with the top of their planks, and their rails SHALL block the walker.
 
 #### Scenario: Across a rope bridge
 - **WHEN** the walker crosses a rope bridge with 0.8 m of sag between two

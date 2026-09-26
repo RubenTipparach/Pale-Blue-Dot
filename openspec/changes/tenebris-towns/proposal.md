@@ -12,7 +12,9 @@ clay." And on the kits: "I would think different biomes would have different
 building materials. Do you have sets like igloos, ice castles? What about
 deserts? Jungles with big tree houses and wooden bridges? I also want to see
 what a small town by itself would look like as well. Also a swamp would have
-like houses easier on wooden platforms like the bayou."
+like houses [raised] on wooden platforms like the bayou." And last: "I need
+like a coastal town/fishing hamlet where there's lots of [docks] and boats."
+(Bracketed words are the owner's own corrections or plain typos fixed.)
 
 The world has terrain, trees, water and weather, and nothing anyone built.
 Three things stand between the engine and a town you can walk into:
@@ -75,18 +77,32 @@ Three things stand between the engine and a town you can walk into:
   cells and the stairs are the same for all of them. Huts are the one exception
   to the storey: one storey of two layers, 1.9 m doors, a cone or turf roof.
   The town mixes the house kits; a hamlet of huts stands outside the east wall.
-- **A settlement per biome, from that biome's materials.** Six, switched in
+- **A settlement per biome, from that biome's materials.** Seven, switched in
   the mockup: the walled town and a village standing by itself in the fields,
   a desert town round an oasis (sandstone houses with roof stairs, mud-brick
   domes, a domed caravan hall), a tundra camp (igloos, a granite longhouse under
   turf and snow, a castle of ice), a jungle village on platforms in three kapok
-  giants joined by rope bridges, and a swamp village of alder stilt houses on
-  boardwalks. Each takes its materials and plants from the biome catalogue in
-  `docs/game-design.md`, so no settlement borrows another biome's.
+  giants joined by rope bridges, a swamp village of alder stilt houses on
+  boardwalks, and a fishing harbour where the beach meets the fields. Each
+  takes its materials and plants from the biome catalogue in
+  `docs/game-design.md`, so no settlement borrows another biome's; the harbour
+  stands on two, and takes from those two only.
+- **The harbour: docks and boats, as asked.** Four piers a metre over the
+  water, six finger piers and a pier head; twenty-three small boats
+  (rowboats, sailing boats, canoes) moored along them, one in each boathouse
+  and two upturned on the beach; a 15 m cog alongside the main pier that you board over a
+  gangplank; two boathouses open to the sea, a shipyard with a hull in frame
+  and a slip, fish huts on stilts off their own pier, a light on the mole, a
+  fish market along the quay, nets and fish drying on the beach, and fourteen
+  houses on three terraces behind. Driftwood and whitewash are the two new
+  kits.
 - **Four new pieces carry them:** a dome (its underside the ceiling), a raised
   deck on piles, a walkway between two points (a rope bridge that sags, a
   boardwalk, a jetty), and an outdoor stair between two points. All four
-  collide as floors, ceilings and rails the way the rest do.
+  collide as floors, ceilings and rails the way the rest do. The harbour adds
+  **boats and a ship**: a moored boat is a solid hull the walker goes round,
+  and a ship's deck, castles and stair are floors behind a rail with a gangway
+  in it.
 - **Roofs never cut into each other.** The first mockup's clipping was two
   houses in touching columns: on the hex grid their plans interlock by half a
   cell, and the eaves overlapped. Every roof's plan, eaves included, is now
@@ -123,8 +139,13 @@ Three things stand between the engine and a town you can walk into:
 6. **Roofs:** should they be walkable? The mockup lets you stand on them.
 7. **Kits:** which should be in the game, and which belong to which places
    (huts outside the walls, brick and marble for the rich)?
-8. **Biomes:** are these the right settlements for each? Mountains, beach and
-   ocean have none yet, and the other planets' biomes are not Tenebris's.
+8. **Biomes:** are these the right settlements for each? Mountains and the
+   redwood forest have none yet, and the other planets' biomes are not
+   Tenebris's.
+9. **Boats:** should the player row or sail them? In the mockup they are
+   moored and bob on the swell, and the cog can be boarded but does not move.
+   A boat that moves is a vehicle, with its own rules beside the ship
+   dampeners CLAUDE.md sets for spacecraft.
 
 ## Status
 

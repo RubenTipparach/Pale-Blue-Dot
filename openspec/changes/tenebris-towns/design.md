@@ -255,6 +255,8 @@ door is placed the same way in a brick house as in a timber one.
 | ashlar | cut stone, 0.5 m | stone | slate | flagstones |
 | clay | clay render, 0.5 m | clay | flat, parapet, beam ends | clay tile |
 | marble | marble blocks, 0.5 m | a column at every corner | clay tile (29°) | chequered marble |
+| whitewash (coast) | lime-washed rubble, 0.5 m | whitewash | slate (42°) | flagstones |
+| driftwood (coast) | silver-grey lap boards, 0.25 m | timber | thatch | planks |
 
 Bricks are drawn 0.5 by 0.25 m, eight by four pixels, twice a real brick: at
 16 pixels a metre a true-size brick is three pixels long and reads as noise.
@@ -280,6 +282,7 @@ the same rule CLAUDE.md sets for life and textures across planets.
 | tundra camp | thin snow, cold granite, dwarf willow | igloos, a granite longhouse under turf and snow, a keep, curtain wall and towers of ice | dome (the igloo) |
 | jungle village | red loam, kapok, basalt | platforms on seven cells round three kapok trunks at 8 m, huts on them, a stair tower of poles | deck, rope bridge |
 | swamp village | wet peat, olive moss, alder, reeds | alder stilt houses 2 m over the water with decks and porch stairs | deck, boardwalk, jetty, outdoor stair |
+| fishing harbour | beach: ivory sand, shell beds, driftwood, beach grass; the fields behind it | driftwood and whitewash houses (lime burnt from the shell beds) beside the fields' fieldstone and timber, boathouses, fish huts on stilts, a light on a mole | pier, gangplank, boats, a ship |
 
 **The new pieces are floors, ceilings and rails like the rest.** A deck is
 whole-cell slabs on piles. A walkway between two points is a surface whose top
@@ -305,5 +308,70 @@ jungle's pole tower to 9 m, onto the platform and across a rope bridge (the
 feet dip to 8.2 m); up a swamp porch stair to a 2.3 m deck and into the house;
 in through an igloo's tunnel; up an ice tower to the 6 m wall walk and through
 the gate into the keep; up a desert roof stair from 2 m to the 5.3 m roof; into
-a domed house and the village inn. The six settlements have no roof overlaps.
+a domed house and the village inn. The seven settlements have no roof
+overlaps.
+
+### The harbour
+
+The owner asked for "a coastal town/fishing hamlet where there's lots of
+[docks] and boats". It stands where the beach meets the fields, so it takes
+from those two catalogue entries and no third: driftwood and shell-lime
+whitewash from the beach, fieldstone and timber from the fields.
+
+**Laid out from the sea up.** Twelve rows of water over a sand bed that shelves
+from 4 m deep to 0.35 m, three rows of beach at 0.25, 0.5 and 0.75 m, a stone
+quay at 1 m, then three terraces a layer apart with a lane along each and an
+up street climbing both terraces by street steps. The sand shows through the
+turquoise water, as the ocean biome's palette asks.
+
+**Piers are walkways at the quay's height.** Planks on piles 1 m over the water,
+so you walk off the quay onto them without a step: a main pier of 33 m with
+two finger piers and a pier head, a west pier with two fingers, an east pier
+with two, and a hut pier out to the fish huts. They are the jungle's walkway
+piece with no sag and no rails; bollards stand along the main pier's edges.
+
+**A boat is a lofted hull and a solid.** Its hull is lofted from U-shaped
+sections, half-beam `B/2 · f^0.55` and depth `D (0.35 + 0.65 f^0.4)` with
+`f = 1 − |2t − 1|^2.4` along the length, and a sheer that rises to the ends.
+Twenty-three are moored: rowboats (4.2 m), sailing boats with a lateen sail
+(6.6 m) and canoes (5 m) by the huts. A moored boat bobs a few centimetres on
+the swell, drawn only: its collision is a fixed six-sided hull up to the
+gunwale, so a walker wading at one stops at its side (0.99 m from its centre
+line, half its beam plus the body's radius), and one stepping off a pier can
+drop into it, as you would. One more sits in each boathouse, two lie keel-up
+on trestles on the beach, and
+the shipyard has a hull in frame on keel blocks, half planked, the ribs of its
+upper half bare, over a slip into the water.
+
+**The cog is boarded like a building.** 15 m by 5 m, moored along the main pier.
+Its deck is a floor at 1.9 m that follows the hull's plan, 0.1 m over the
+gunwale, with a rail round it and a 1.4 m gangway in the rail on the pier side.
+The gangplank from the pier (1.0 m) lands on the deck's edge (1.9 m) over
+2.3 m, 21°, a walkway surface like a pier's. An aftcastle and a forecastle
+stand 1.6 m over the deck, the aftcastle up an open stair of eight 0.2 m
+risers; one mast carries a yard with its sail furled.
+
+The mockup found one thing to fix: the deck as a wall solid refused the
+gangplank. The plank met the deck 0.07 m under its top, and a wall blocks
+unless the feet are within 3 cm of its top, so the walker stopped at the
+gangway. The deck is a step solid instead, which the walker steps onto as it
+does a floor; nothing else reaches it, because the rail stands everywhere but
+the gangway and the hull's side is 2 m from the pier.
+
+Walked in the mockup (people moved out of the way, as in section 5):
+
+| route | feet | airborne ticks | eye jumps over 0.1 m |
+| --- | --- | ---: | ---: |
+| quay down the main pier to its head | 1.0 throughout | 0 | 0 |
+| up the gangplank, through the gangway, onto the cog's deck | 1.0 to 1.9 | 0 | 0 |
+| across the deck and up the stair to the aftcastle | 1.9 to 3.5 | 0 | 0 |
+| down again and back over the gangplank to the pier | 3.5 to 1.0 | 0 | 0 |
+| hut pier, porch stair, deck, into a fish hut | 1.0 to 2.2 | 0 | 0 |
+| beach, quay, both street steps, the top lane | 0.5 to 3.0 | 0 | 2 |
+| out of a boathouse's open side into the sea | 0.25 to −0.7 | 26 | 1 |
+
+The two jumps up to the top lane are the beach's own 0.25 m rises from sand to
+quay, terrain steps rather than stairs (on the engine's 1 m layers the beach
+would be one layer). Walking into the sea drops off the shelf, 0.6 m and then
+0.35 m, and the walker wades at half speed.
 

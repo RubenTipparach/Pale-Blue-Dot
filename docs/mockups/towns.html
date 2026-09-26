@@ -135,6 +135,7 @@ body.coarse .keys,body.coarse .hint{display:none}
         <option value="tundra">Tundra, igloos and an ice castle</option>
         <option value="jungle">Jungle, tree houses</option>
         <option value="swamp">Swamp, stilt village</option>
+        <option value="coast">Coast, fishing harbour</option>
       </select></div>
     <div class="seg" role="group" aria-label="View">
       <button id="vWalk" aria-pressed="true">Walk <span class="src">V</span></button>
@@ -170,7 +171,8 @@ body.coarse .keys,body.coarse .hint{display:none}
         <li><b>Walls sit on edges, floors in cells.</b> A wall is a 0.3 m (timber) or 0.5 m (stone) slab on a cell's shared edge, so a one-cell room is 2.5 m across inside, not a solid block. The town wall and keep are whole masonry cells.</li>
         <li><b>A storey is three layers</b>, 3 m floor to floor, 2.8 m clear under the boards.</li>
         <li><b>Eleven kits</b> change what a building is made of, not how it is cut: straw and mud huts, timber boards, half-timber, red, buff and clinker brick, fieldstone, ashlar, clay with a flat roof, and marble with columns. A hut is the one exception to the storey: one storey of two layers, with 1.9 m doors.</li>
-        <li><b>Six settlements, one per biome</b>, built from the materials the biome catalogue gives each: a walled town and a village in the fields (limestone, oak), a desert town round an oasis (rust sandstone, mud brick, salt plaster, cactus), a tundra camp of igloos with a granite longhouse and a castle of ice (snow, cold granite, dwarf willow), a jungle village on platforms in three kapok giants joined by rope bridges (kapok, red loam, basalt), and a swamp village of alder stilt houses on boardwalks (peat, moss, alder, reeds). Water is waded at half speed, as walking.rs has it.</li>
+        <li><b>Seven settlements, one per biome</b>, built from the materials the biome catalogue gives each: a walled town and a village in the fields (limestone, oak), a desert town round an oasis (rust sandstone, mud brick, salt plaster, cactus), a tundra camp of igloos with a granite longhouse and a castle of ice (snow, cold granite, dwarf willow), a jungle village on platforms in three kapok giants joined by rope bridges (kapok, red loam, basalt), a swamp village of alder stilt houses on boardwalks (peat, moss, alder, reeds), and a fishing harbour where the beach meets the fields (ivory sand, shell beds, driftwood, beach grass, and whitewash from lime burnt out of the shells). Water is waded at half speed, as walking.rs has it.</li>
+        <li><b>Boats are solid, and the cog can be boarded.</b> Moored boats bob on the swell but collide as a fixed hull to the gunwale, so you wade round them or step down into one from a pier. The cog's deck, castles and stair are floors, its rail blocks you except at the gangway, and the gangplank from the pier meets the deck with no step. Piers are walkways a metre over the water at the quay's height.</li>
         <li><b>Roofs never cut into each other.</b> Every roof's plan, eaves included, is checked against every other when the town is laid out, and the keep and towers count as roofs.</li>
         <li><b>Three stairs, all landing on layer lines.</b> A straight flight crosses two cells and climbs a storey in 16 risers of 0.1875 m on 0.354 m treads (28&deg;). A newel stair turns once per storey in one cell: 15 winders of 0.2 m, and 120&deg; per metre, so a door at any layer is always in the middle of an edge. Street steps climb one terrace in one cell: 6 risers of 0.167 m.</li>
         <li><b>The walker is walking.rs</b>: a 0.3 m radius body 1.8 m tall, eye at 1.6 m, 8 m/s (14 sprinting), a 12 m/s jump under 25 m/s&sup2;, a 1.05 m step for terraces, a floor from the highest of several footprint points and a ceiling from the lowest.</li>
@@ -377,10 +379,12 @@ function bricks(px, rnd, w, h, cols, mortar, flemish) {
 }
 const REP = { grass: 2, dirt: 2, sand: 2, cobble: 2, flag: 2.5, stone: 2, rubble: 2, plank: 2, timber: 1, plaster: 2, halftimber: 0, thatch: 2, shingle: 2, slate: 2, barrel: 0, iron: 1, cloth: 0, cloth2: 0, wool: 1, linen: 1, leaves: 2, bark: 1, banner: 0, brick: 2, brickbuff: 2, brickdark: 2, marble: 2, marblefloor: 2, clay: 2, claytile: 2, tile: 2, cob: 2, reed: 2, boards: 2, turf: 2, fieldstone: 2 };
 const TEX = {};
+const CUSTOM = {};           // textures drawn by hand (with transparency), by name
+const ALPHA = new Set();      // materials cut out by their texture's alpha
 function texture(name) {
   if (TEX[name]) return TEX[name];
   const h = name === "halftimber" ? 64 : 32;
-  const t = new THREE.CanvasTexture(paint(32, h, PAINT[name], 1 + Object.keys(PAINT).indexOf(name) * 977));
+  const t = new THREE.CanvasTexture(CUSTOM[name] ? CUSTOM[name]() : paint(32, h, PAINT[name], 1 + Object.keys(PAINT).indexOf(name) * 977));
   t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 4;
   return (TEX[name] = t);
 }
@@ -399,7 +403,8 @@ function skyPatch(mat) {
 const MAT = {};
 function material(name) {
   if (MAT[name]) return MAT[name];
-  return (MAT[name] = skyPatch(new THREE.MeshStandardMaterial({ map: texture(name), vertexColors: true, roughness: 0.93, metalness: 0 })));
+  const cut = ALPHA.has(name) ? { alphaTest: 0.5, side: THREE.DoubleSide } : {};
+  return (MAT[name] = skyPatch(new THREE.MeshStandardMaterial({ map: texture(name), vertexColors: true, roughness: 0.93, metalness: 0, ...cut })));
 }
 
 // =====================================================================
@@ -1016,6 +1021,7 @@ function building(o) {
   }
   for (const [c, r] of cells) for (let d = 0; d < 6; d++) {
     const [c2, r2] = nb(c, r, d); if (inB(c2, r2)) continue;
+    if (o.skipWall && o.skipWall(c, r, d)) continue;
     for (let s = 0; s < storeys; s++) {
       const y0 = base + s * sh, y1 = y0 + sh, openings = [], w = kit.walls[Math.min(s, kit.walls.length - 1)];
       const door = (o.doors || []).find(e => e[0] === c && e[1] === r && e[2] === d && (e[3] || 0) === s);
@@ -1352,6 +1358,7 @@ const SCENES = {};
 let SCENE = "town";
 const DRESS = [];            // meshes the dressing adds, removed on a switch
 const SPINNERS = [];         // things that turn: windmill sails
+const BOBBERS = [];          // things that float: moored boats
 const INDOOR_SHAPES = [];    // round rooms (igloos) the per-cell sky test cannot see
 
 function resetWorld() {
@@ -1364,7 +1371,7 @@ function resetWorld() {
   for (const n of NPCS) scene.remove(n.g); NPCS.length = 0;
   for (const k of Object.keys(GOTO)) delete GOTO[k];
   for (const k of Object.keys(KIT_SPOT)) delete KIT_SPOT[k];
-  HUT_SPOTS.length = 0; STEPCELL.clear(); NO_TREE.clear(); INDOOR_SHAPES.length = 0; SPINNERS.length = 0;
+  HUT_SPOTS.length = 0; STEPCELL.clear(); NO_TREE.clear(); INDOOR_SHAPES.length = 0; SPINNERS.length = 0; BOBBERS.length = 0;
   for (const m of STATIC) { scene.remove(m); m.geometry.dispose(); } STATIC.length = 0;
   for (const m of DRESS) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } DRESS.length = 0;
   FIREMESH.length = 0;
@@ -1520,7 +1527,12 @@ function bridge(A, B, o = {}) {
   const w = o.width ?? 1.2, sag = o.sag ?? 0, dx = B[0] - A[0], dz = B[2] - A[2], L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L, ang = Math.atan2(uz, ux);
   const h = t => A[1] + (B[1] - A[1]) * t - 4 * sag * t * (1 - t);
   const n = Math.max(2, Math.round(L / 0.34));
-  for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; box(o.deck || "plank", A[0] + dx * t, h(t) - 0.08, A[2] + dz * t, L / n - 0.04, 0.08, w, ang); }
+  if (o.ramp) { // one sloped plank with cleats across it: a gangplank, a slip
+    const m = o.deck || "plank", P = (t, s, dy) => [A[0] + dx * t - uz * s * w / 2, h(t) + dy, A[2] + dz * t + ux * s * w / 2];
+    face(m, [P(0, -1, 0), P(1, -1, 0), P(1, 1, 0), P(0, 1, 0)], [0, 1, 0]); face(m, [P(0, -1, -0.1), P(1, -1, -0.1), P(1, 1, -0.1), P(0, 1, -0.1)], [0, -1, 0]);
+    for (const s of [-1, 1]) face(m, [P(0, s, -0.1), P(1, s, -0.1), P(1, s, 0), P(0, s, 0)], [-uz * s, 0, ux * s]);
+    const nc = Math.max(1, Math.floor(L / 0.45)); for (let k = 1; k < nc; k++) { const t = k / nc; box("timber", A[0] + dx * t, h(t) - 0.01, A[2] + dz * t, 0.05, 0.05, w * 0.9, ang); }
+  } else for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; box(o.deck || "plank", A[0] + dx * t, h(t) - 0.08, A[2] + dz * t, L / n - 0.04, 0.08, w, ang); }
   addSurface({
     pts: rectPts((A[0] + B[0]) / 2, (A[2] + B[2]) / 2, L, w, ang), y0: Math.min(A[1], B[1]) - sag - 0.2, y1: Math.max(A[1], B[1]), label: o.label || "Rope bridge", detail: o.detail || `${L.toFixed(1)} m, ${sag.toFixed(1)} m of sag`,
     iv(px, pz, out) { const rx = px - A[0], rz = pz - A[2], u = rx * ux + rz * uz, v = -rx * uz + rz * ux; if (u < 0 || u > L || Math.abs(v) > w / 2) return; const y = h(u / L); out.push([y - 0.12, y, this]); },
@@ -1653,13 +1665,13 @@ function dirToward(c, r, x, z) { let best = 0, bd = -2; const dx = x - cx(c, r),
 function ground(fn) { for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) { const i = idx(c, r), g = fn(c, r); TOP[i] = g.h; TOPMAT[i] = g.top; SIDEMAT[i] = g.side || g.top; AREA[i] = g.area || ""; } }
 function freeCell(c, r) { const i = idx(c, r); return inMap(c, r) && !INDOOR[i].length && !RUNS[i].length && !NO_TREE.has(i) && !STEPCELL.has(i); }
 function scatter(prob, fn, seed = 5) { const rn = rng(seed); for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) { if (!freeCell(c, r)) continue; let near = false; for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (inMap(a, b) && (INDOOR[idx(a, b)].length || RUNS[idx(a, b)].length)) near = true; } if (near) continue; const p = typeof prob === "function" ? prob(c, r) : prob; if (rn() < p) fn(cx(c, r) + (rn() - 0.5), TOP[idx(c, r)], cz(c, r) + (rn() - 0.5), rn); } }
-function marketStall(c, r, cloth, y) {
+function marketStall(c, r, cloth, y, goods = ["leaves", "sand"]) {
   const x = cx(c, r), z = cz(c, r);
   for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) solidCyl("timber", x + a * 0.9, y, z + b * 0.55, 0.06, b > 0 ? 2.4 : 2.1, { n: 6 });
   solidBox("plank", x, y, z - 0.3, 1.9, 0.9, 0.7, 0);
   for (const want of [[0, 1, 0], [0, -1, 0]]) face(cloth, [[x - 1.05, y + 2.45, z + 0.7], [x + 1.05, y + 2.45, z + 0.7], [x + 1.05, y + 2.05, z - 0.8], [x - 1.05, y + 2.05, z - 0.8]], want, p => [(p[0] - x + 1.05) / 2.1, (p[2] - z + 0.8) / 1.5]);
   const rn = rng(c * 7 + r);
-  for (let k = 0; k < 5; k++) box(rn() < 0.5 ? "leaves" : "sand", x - 0.75 + k * 0.37, y + 0.9, z - 0.3 + (rn() - 0.5) * 0.3, 0.22, 0.14, 0.22);
+  for (let k = 0; k < 5; k++) box(goods[rn() < 0.5 ? 0 : 1], x - 0.75 + k * 0.37, y + 0.9, z - 0.3 + (rn() - 0.5) * 0.3, 0.22, 0.14, 0.22);
   NO_TREE.add(idx(c, r));
 }
 function smithyShed(c0, r0, y, name) { // two cells by three, open on its long sides, a forge at one end
@@ -1989,6 +2001,304 @@ Object.assign(SCENES, {
 });
 
 // =====================================================================
+// The coast: a fishing harbour on the beach biome (ivory sand, shell beds,
+// driftwood, beach grass) at the edge of the ocean's turquoise water.
+// =====================================================================
+Object.assign(PAINT, {
+  ivorysand(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xe3d7b8), 0.06); for (let i = 0; i < 22; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(rnd() < 0.5 ? 0xf4ede0 : 0xc2b08c)); for (let i = 0; i < 6; i++) { const x = rnd() * w | 0, y = rnd() * h | 0; px(x, y, hex2rgb(0xf8f2ea)); px(x + 1, y, hex2rgb(0xd9c7b0)); } },
+  whitewash(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xeae6dc), 0.04); for (let b = 0; b < 6; b++) { const bx = rnd() * w, by = rnd() * h; for (let k = 0; k < 5; k++) px((bx + k) | 0, (by + (k % 2)) | 0, hex2rgb(0xd8d2c4)); } for (let i = 0; i < 8; i++) px(rnd() * w | 0, 30 + (rnd() * 2 | 0), hex2rgb(0xb8b0a0)); },
+  driftwood(px, rnd, w, h) { // weathered lap boards, silver-grey, grain running along them
+    for (let row = 0; row < 4; row++) { const y0 = row * 8, f = 0.82 + rnd() * 0.22, ph = rnd() * 6;
+      for (let y = y0; y < y0 + 8; y++) for (let x = 0; x < w; x++) { const lap = y === y0 + 7 ? 0.5 : y === y0 + 6 ? 0.75 : y === y0 ? 1.12 : 1; px(x, y, hex2rgb(0x8e8a80), lap * f * (1 + 0.09 * Math.sin(x * 0.35 + ph + (y - y0) * 1.3) + (rnd() - 0.5) * 0.08)); }
+      for (let k = 0; k < 3; k++) { const gx = rnd() * w | 0, gy = y0 + 1 + (rnd() * 5 | 0); for (let x = gx; x < gx + 6 + (rnd() * 6 | 0); x++) px(x % w, gy, hex2rgb(0x6c685f)); } }
+  },
+  fish(px, rnd, w, h) { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, hex2rgb(y < 12 ? 0x5d7282 : 0xb9c6cc), 1 + 0.12 * Math.sin((x + y * 2) * 0.9) + (rnd() - 0.5) * 0.08); },
+});
+Object.assign(REP, { ivorysand: 2, whitewash: 2, driftwood: 2, fish: 0.5 });
+CUSTOM.net = () => { // a knotted net, see-through between the cords
+  const cv = document.createElement("canvas"); cv.width = cv.height = 32; const g = cv.getContext("2d");
+  g.clearRect(0, 0, 32, 32); g.fillStyle = "#6d5a3c";
+  for (let k = 0; k < 32; k += 5) { g.fillRect(k, 0, 1, 32); g.fillRect(0, k, 32, 1); }
+  return cv;
+};
+ALPHA.add("net"); REP.net = 1;
+Object.assign(KITS, {
+  whitewash: { label: "Whitewash", walls: [{ out: "whitewash", in: "plaster", edge: "whitewash", t: 0.5 }], roof: "slate", pitch: 0.9, gable: "whitewash", floor: "flag", chimney: "whitewash" },
+  driftwood: { label: "Driftwood", walls: [{ out: "driftwood", in: "driftwood", edge: "timber", t: 0.25 }], roof: "thatch", gable: "driftwood", floor: "plank" },
+});
+
+// ---- boats ------------------------------------------------------------------
+// A hull lofted from U-shaped sections: length along local x, beam across z,
+// keel at -D, gunwale at 0 amidships rising by `sheer` at the ends.
+const HULLS = {};
+// `part` < 1 lofts only the lower part of each section: a hull half planked.
+const hullSection = (L, B, D, sheer, t) => { const e = Math.abs(2 * t - 1), f = Math.max(0, 1 - Math.pow(e, 2.4)); return { x: (t - 0.5) * L, b: B / 2 * Math.pow(f, 0.55), d: D * (0.35 + 0.65 * Math.pow(f, 0.4)), top: sheer * e * e }; };
+function hullGeometry(L, B, D, sheer, part = 1) {
+  const key = [L, B, D, sheer, part].join(":"); if (HULLS[key]) return HULLS[key];
+  const S = 18, K = 8, pos = [], uv = [], index = [];
+  for (let i = 0; i <= S; i++) {
+    const t = i / S, { b, d, top } = hullSection(L, B, D, sheer, t);
+    for (let k = 0; k <= 2 * K; k++) { const th = (k / (2 * K) - 0.5) * Math.PI * part; pos.push((t - 0.5) * L, top - d * Math.cos(th), b * Math.sin(th)); uv.push(((t - 0.5) * L) / 1.5, k / (2 * K) * 2.5); }
+  }
+  for (let i = 0; i < S; i++) for (let k = 0; k < 2 * K; k++) { const a = i * (2 * K + 1) + k, c = a + 2 * K + 1; index.push(a, c, a + 1, a + 1, c, c + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(index); g.computeVertexNormals();
+  return (HULLS[key] = g);
+}
+const BOATS = {
+  rowboat: { L: 4.2, B: 1.45, D: 0.6, sheer: 0.22, draft: 0.25, wood: "boards" },
+  sail:    { L: 6.6, B: 2.2, D: 0.9, sheer: 0.3, draft: 0.45, wood: "boards" },
+  canoe:   { L: 5.0, B: 0.85, D: 0.42, sheer: 0.12, draft: 0.18, wood: "driftwood" },
+};
+// A boat at (x, z) heading `ang`, floating on the water at `wl` (or on land,
+// upside down on trestles, with `beached`). It is a solid the walker goes round.
+function boat(type, x, z, ang, o = {}) {
+  const s = BOATS[type], wl = o.wl ?? 0, g = new THREE.Group(), tint = o.tint || 0xffffff;
+  const woodMat = new THREE.MeshStandardMaterial({ map: texture(s.wood), color: lin(tint), roughness: 0.9, side: THREE.DoubleSide });
+  const hull = new THREE.Mesh(hullGeometry(s.L, s.B, s.D, s.sheer), woodMat); hull.castShadow = hull.receiveShadow = true; g.add(hull);
+  const part = (w, h, d, px, py, pz, m = woodMat) => { const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); p.position.set(px, py, pz); p.castShadow = true; g.add(p); return p; };
+  if (!o.bare) {
+    if (type !== "canoe") for (const tx of type === "sail" ? [-1.2, 0.6] : [-0.7, 0.7]) part(0.22, 0.05, s.B * 0.82, tx, -s.D * 0.35, 0);
+    if (type === "rowboat") { part(2.6, 0.04, 0.08, 0.1, -s.D * 0.3, -0.2); part(2.6, 0.04, 0.08, 0.1, -s.D * 0.3, 0.2); }
+    if (type === "canoe") part(1.8, 0.04, 0.07, 0.3, -s.D * 0.4, 0.1);
+    if (type === "sail") {
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 7.4, 7), woodMat); mast.position.set(1.6, 3.7 - s.D * 0.5, 0); mast.castShadow = true; g.add(mast);
+      part(4.2, 0.1, 0.1, -0.5, 0.9 - s.D * 0.5 + 0.2, 0);
+      const sail = new THREE.BufferGeometry(); sail.setAttribute("position", new THREE.Float32BufferAttribute([1.55, 1.2, 0, 1.55, 7.0, 0, -2.5, 1.2, 0], 3)); sail.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 0, 1, 1, 0], 2)); sail.computeVertexNormals();
+      const sm = new THREE.Mesh(sail, new THREE.MeshStandardMaterial({ map: texture("linen"), color: lin(o.sailTint || 0xf2ead8), side: THREE.DoubleSide, roughness: 1 })); sm.position.y = -s.D * 0.5; sm.castShadow = true; g.add(sm);
+    }
+  }
+  if (o.beached) { // keel up on two trestles
+    g.rotation.set(Math.PI, -ang, 0, "YXZ"); g.position.set(x, (o.y ?? 0) + s.D + 0.45, z);
+    for (const k of [-1, 1]) box("timber", x + Math.cos(ang) * k * s.L * 0.28, o.y ?? 0, z + Math.sin(ang) * k * s.L * 0.28, 0.2, 0.45, s.B * 1.1, ang + Math.PI / 2);
+  } else {
+    g.rotation.y = -ang; g.position.set(x, wl - s.draft + s.D, z);
+    if (!o.still) BOBBERS.push({ obj: g, y: g.position.y, ph: (x * 0.37 + z * 0.61) % 6.28, amp: o.amp ?? (type === "canoe" ? 0.05 : 0.04) });
+  }
+  scene.add(g); DRESS.push(g);
+  const ca = Math.cos(ang), sa = Math.sin(ang), hw = s.B / 2 * 0.95, hl = s.L / 2 * 0.97;
+  const pts = [[hl, 0], [hl * 0.45, hw], [-hl * 0.45, hw], [-hl, 0], [-hl * 0.45, -hw], [hl * 0.45, -hw]].map(([a, b]) => [x + a * ca - b * sa, z + a * sa + b * ca]);
+  addSolid({ type: "poly", pts, y0: -8, y1: o.beached ? (o.y ?? 0) + s.D + 0.45 : wl + s.D - s.draft, cls: "wall", label: type === "sail" ? "Sailing boat" : type === "canoe" ? "Canoe" : "Rowboat" });
+  return g;
+}
+// A cog: a one-masted ship with castles fore and aft, moored and boardable.
+// Its hull is a solid whose top is the deck (flush with the gunwale); a
+// gangway gap in the rail takes a gangplank from the pier; an open stair
+// climbs the aftcastle. `gangSide` is +1 or -1, the side the gap is on.
+function cog(x, z, ang, gangSide, o = {}) {
+  const L = 15, B = 5, D = 3.2, draft = 1.2, wl = o.wl ?? 0, deckY = wl + D - draft - 0.1;
+  const ca = Math.cos(ang), sa = Math.sin(ang), tw = (lx, lz) => [x + lx * ca - lz * sa, z + lx * sa + lz * ca];
+  const g = new THREE.Group(), mat = new THREE.MeshStandardMaterial({ map: texture("boards"), color: lin(0x9a7a5a), roughness: 0.9, side: THREE.DoubleSide });
+  const hull = new THREE.Mesh(hullGeometry(L, B, D, 1.0), mat); hull.castShadow = hull.receiveShadow = true; g.add(hull);
+  // the gunwale sits just under the deck, so a gangplank from the pier clears it
+  g.rotation.y = -ang; g.position.set(x, deckY - 0.1, z); scene.add(g); DRESS.push(g);
+  // the deck follows the hull's plan (the same curve hullGeometry lofts), a little inside it
+  const wAt = lx => { const e = Math.abs(2 * (lx / L + 0.5) - 1); return B / 2 * Math.pow(Math.max(0, 1 - Math.pow(e, 2.4)), 0.55) * 0.96; };
+  const hl = L / 2 * 0.94, S = 14, side = [];
+  for (let i = 0; i <= S; i++) { const lx = -hl + 2 * hl * i / S; side.push([lx, wAt(lx)]); }
+  const deck = [...side.map(([a, b]) => [a, -b]), ...side.slice().reverse().map(([a, b]) => [a, b])].filter((p, i, arr) => i === 0 || Math.hypot(p[0] - arr[i - 1][0], p[1] - arr[i - 1][1]) > 1e-3);
+  const wdeck = deck.map(([a, b]) => tw(a, b));
+  face("plank", wdeck.map(p => [p[0], deckY, p[1]]), [0, 1, 0]);
+  addSolid({ type: "poly", pts: wdeck.map(p => p.slice()), y0: -8, y1: deckY, cls: "step", label: "The cog's deck" }); // a step: the gangplank lands a hair under it
+  place(...cellAt(x, z), deckY - 0.5, deckY + 3, "The cog");
+  // the rail round the deck, with the gangway gap amidships on `gangSide`
+  const gap = 0.7;
+  for (let i = 0; i < deck.length; i++) {
+    const [a, b] = deck[i], [c, d] = deck[(i + 1) % deck.length];
+    if (Math.sign(b + d) === gangSide && Math.min(a, c) < gap && Math.max(a, c) > -gap) {
+      const lo = Math.min(a, c), hi = Math.max(a, c), at = u => { const k = (u - a) / (c - a); return tw(u, b + (d - b) * k); };
+      if (lo < -gap) { const p = at(lo), q = at(-gap); railSeg(p[0], p[1], deckY, q[0], q[1], deckY, "boards"); }
+      if (hi > gap) { const p = at(gap), q = at(hi); railSeg(p[0], p[1], deckY, q[0], q[1], deckY, "boards"); }
+      continue;
+    }
+    const p = tw(a, b), q = tw(c, d); railSeg(p[0], p[1], deckY, q[0], q[1], deckY, "boards");
+  }
+  // castles: solid decks 1.6 m up over the ends, the aftcastle reached by a stair
+  const castle = (x0, x1, name) => {
+    const n = 4, lxs = []; for (let k = 0; k <= n; k++) lxs.push(x0 + (x1 - x0) * k / n);
+    const pts = [...lxs.map(lx => [lx, -wAt(lx) * 0.97]), ...lxs.slice().reverse().map(lx => [lx, wAt(lx) * 0.97])].map(([a, b]) => tw(a, b));
+    prism("plank", "boards", pts, deckY, deckY + 1.6); addSolid({ type: "poly", pts, y0: deckY, y1: deckY + 1.6, cls: "wall", label: name });
+    return pts;
+  };
+  const aftX = -hl * 0.36, aft = castle(-hl * 0.97, aftX, "Aftcastle"), fore = castle(hl * 0.42, hl * 0.97, "Forecastle");
+  for (const [pts, face0] of [[aft, 4], [fore, 9]]) for (let i = 0; i < pts.length; i++) { if (i === face0) continue; const p = pts[i], q = pts[(i + 1) % pts.length]; railSeg(p[0], p[1], deckY + 1.6, q[0], q[1], deckY + 1.6, "boards"); }
+  const sA = tw(aftX + 2.55, 0), sB = tw(aftX, 0);
+  stairRun([sA[0], deckY, sA[1]], [sB[0], deckY + 1.6, sB[1]], { width: 1.0, open: true, m: "plank", label: "Stair to the aftcastle" });
+  // mast, yard with its sail furled, shrouds to the rail
+  const mp = tw(1.5, 0); solidCyl("timber", mp[0], deckY, mp[1], 0.28, 13, { n: 8, label: "Mast" });
+  box("timber", mp[0], deckY + 11, mp[1], 0.25, 0.25, 9.5, ang); box("linen", mp[0] + 0.2 * ca, deckY + 10.55, mp[1] + 0.2 * sa, 0.45, 0.45, 8.8, ang);
+  for (const k of [-1, 1]) for (const f of [-0.6, 0.6]) { const p = tw(1.5 + f, k * wAt(1.5 + f)); for (const s of [1, -1]) face("rope", [[mp[0], deckY + 12.6, mp[1]], [mp[0] + 0.06 * ca, deckY + 12.6, mp[1] + 0.06 * sa], [p[0], deckY + 0.95, p[1]]], [-sa * k * s, 0, ca * k * s]); }
+  { const p = tw(-1.0, -1.3), q = tw(2.1, -1.5); barrel(p[0], deckY, p[1]); crate(q[0], deckY, q[1], ang, 0.6); }
+  const sl = tw(-0.8, 1.2); person(sl[0], deckY, sl[1], ang + Math.PI / 2, 0x4a4a6a, { role: "Sailor", work: "idle" });
+  return { deckY, gang: tw(0, gangSide * wAt(0)), tw, hl };
+}
+function netRack(x, y, z, ang) {
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  for (const k of [-1, 0, 1]) solidCyl("timber", x + ca * k * 1.5, y, z + sa * k * 1.5, 0.07, 2.2, { n: 6 });
+  box("timber", x, y + 2.1, z, 3.1, 0.07, 0.07, ang);
+  const a = [x - ca * 1.5, z - sa * 1.5], b = [x + ca * 1.5, z + sa * 1.5];
+  for (const want of [[-sa, 0, ca], [sa, 0, -ca]]) face("net", [[a[0], y + 0.35, a[1]], [b[0], y + 0.35, b[1]], [b[0], y + 2.05, b[1]], [a[0], y + 2.05, a[1]]], want, p => [((p[0] - x) * ca + (p[2] - z) * sa), p[1] - y]);
+  addSolid({ type: "poly", pts: rectPts(x, z, 3.0, 0.1, ang), y0: y, y1: y + 2.1, cls: "wall", label: "Nets drying" });
+}
+function fishRack(x, y, z, ang) {
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  for (const k of [-1, 1]) solidCyl("timber", x + ca * k * 1.2, y, z + sa * k * 1.2, 0.06, 1.9, { n: 5 });
+  box("timber", x, y + 1.85, z, 2.5, 0.06, 0.06, ang);
+  for (let k = 0; k < 7; k++) { const t = (k - 3) * 0.32; box("fish", x + ca * t, y + 1.25, z + sa * t, 0.08, 0.5, 0.16, ang); }
+  addSolid({ type: "poly", pts: rectPts(x, z, 2.5, 0.2, ang), y0: y + 0.9, y1: y + 1.9, cls: "wall", label: "Fish drying" });
+}
+function lobsterPots(x, y, z, n) { for (let k = 0; k < n; k++) solidBox("wool", x + (k % 3) * 0.55, y + Math.floor(k / 3) * 0.42, z, 0.5, 0.4, 0.5, 0.1 * k, { label: "Lobster pots" }); }
+
+// ---- the harbour --------------------------------------------------------------
+// Rows run along x; the sea is to the north (low z). Rows 0-11 are water over a
+// sand bed shelving from 4 m to 0.7 m, 12-14 the beach, 15 the stone quay, then
+// the village on three terraces a layer apart and the hills behind.
+function makeCoast() {
+  const gy = (x, z) => { const [c, r] = cellAt(x, z); return TOP[idx(c, r)]; };
+  ground((c, r) => {
+    if (c >= 37 && r >= 3 && r <= 18) return { h: 2, top: r <= 12 ? "fieldstone" : "grass", side: "fieldstone", area: "The headland" };
+    if (r === 4 && c >= 29) return { h: 1.2, top: "flag", side: "rubble", area: "The mole" };
+    if (r <= 11) return { h: r <= 8 ? -4 + r * 0.3 : [-1.05, -0.7, -0.35][r - 9], top: "sand", side: "sand", area: r >= 5 && c >= 10 && c <= 36 ? "The harbour" : "The sea" };
+    if (r <= 14) return { h: [0.25, 0.5, 0.75][r - 12], top: "ivorysand", side: "ivorysand", area: "The beach" };
+    if (r === 15) return c >= 10 && c <= 36 ? { h: 1.0, top: "flag", side: "stone", area: "The quay" } : { h: 0.9, top: "ivorysand", side: "ivorysand", area: "The dunes" };
+    const h = r <= 20 ? 1 : r <= 26 ? 2 : r <= 32 ? 3 : 4 + Math.floor(vnoise(c * 0.3, r * 0.3) * 2);
+    return { h, top: "grass", side: r <= 32 ? "stone" : "dirt", area: "The village" };
+  });
+  const lane = (c, r, name) => { if (!inMap(c, r)) return; TOPMAT[idx(c, r)] = "cobble"; AREA[idx(c, r)] = name; NO_TREE.add(idx(c, r)); };
+  for (let c = 8; c <= 36; c++) { lane(c, 16, "Harbour street"); lane(c, 21, "Middle lane"); lane(c, 27, "Top lane"); }
+  for (let r = 16; r <= 32; r++) { lane(22, r, "Up street"); lane(23, r, "Up street"); }
+  for (const [c, r] of [[22, 21], [23, 21], [22, 27], [23, 27]]) {
+    const low = TOP[idx(c, r)] - 1; TOP[idx(c, r)] = low; STEPCELL.add(idx(c, r));
+    let up = 1; for (const d of [1, 2]) { const [c2, r2] = nb(c, r, d); if (TOPMAT[idx(c2, r2)] === "cobble" && TOP[idx(c2, r2)] === low + 1) { up = d; break; } }
+    streetSteps(c, r, up, low);
+  }
+  // houses on the three terraces, whitewash and driftwood among the others
+  const homes = [
+    { kit: "whitewash", c0: 9, c1: 11, r0: 17, r1: 18, front: 17, newel: [9, 18], trade: "hearth" },
+    { kit: "driftwood", c0: 13, c1: 15, r0: 17, r1: 18, front: 17, newel: [15, 18], trade: "cooper" },
+    { kit: "whitewash", c0: 17, c1: 20, r0: 17, r1: 18, front: 17, flight: true, trade: "hearth", name: "The Gull inn" },
+    { kit: "stone", c0: 25, c1: 27, r0: 17, r1: 18, front: 17, newel: [27, 18], trade: "hearth" },
+    { kit: "driftwood", c0: 29, c1: 31, r0: 17, r1: 18, front: 17, newel: [29, 18], trade: "weaver" },
+    { kit: "whitewash", c0: 33, c1: 35, r0: 17, r1: 18, front: 17, newel: [35, 18], trade: "hearth" },
+    { kit: "driftwood", c0: 9, c1: 12, r0: 22, r1: 23, front: 22, flight: true, trade: "hearth" },
+    { kit: "whitewash", c0: 14, c1: 16, r0: 22, r1: 23, front: 22, newel: [14, 23], trade: "baker" },
+    { kit: "timber", c0: 18, c1: 20, r0: 22, r1: 23, front: 22, newel: [20, 23], trade: "hearth" },
+    { kit: "whitewash", c0: 25, c1: 28, r0: 22, r1: 23, front: 22, flight: true, trade: "hearth" },
+    { kit: "stone", c0: 30, c1: 32, r0: 22, r1: 23, front: 22, newel: [32, 23], trade: "cooper" },
+    { kit: "whitewash", c0: 12, c1: 14, r0: 28, r1: 29, front: 28, newel: [12, 29], trade: "hearth" },
+    { kit: "driftwood", c0: 17, c1: 19, r0: 28, r1: 29, front: 28, newel: [19, 29], trade: "hearth" },
+    { kit: "whitewash", c0: 25, c1: 27, r0: 28, r1: 29, front: 28, newel: [25, 29], trade: "weaver" },
+  ];
+  homes.forEach((hm, n) => { const out = townHouse(hm, n); if (n === 2) GOTO.inn = out; });
+  // piers: planks on piles a metre over the water, fingers off them for the boats
+  const PY = 1.0, zq = cz(0, 15) - 0.4;
+  const bedAt = z => Math.min(-0.35, -4 + (z / ROW) * 0.3);
+  const pier = (A, B, w, label) => bridge(A, B, { width: w, rails: false, piles: Math.min(bedAt(A[2]), bedAt(B[2])) - 0.3, label, detail: "planks on piles, a metre over the water" });
+  const x1 = cx(22, 15), x2 = cx(13, 15), x3 = cx(31, 15), x4 = cx(6, 13);
+  pier([x1, PY, zq], [x1, PY, cz(0, 2) - 1.3], 2.6, "Main pier");
+  for (const r of [10, 7]) pier([x1 - 1.3, PY, cz(0, r)], [x1 - 10, PY, cz(0, r)], 1.6, "Finger pier");
+  pier([x1 - 8, PY, cz(0, 2)], [x1 + 3, PY, cz(0, 2)], 2.6, "Pier head");
+  pier([x2, PY, zq], [x2, PY, cz(0, 5)], 2.0, "West pier");
+  pier([x2 + 1.0, PY, cz(0, 9)], [x2 + 8, PY, cz(0, 9)], 1.6, "Finger pier"); pier([x2 - 1.0, PY, cz(0, 7)], [x2 - 7, PY, cz(0, 7)], 1.6, "Finger pier");
+  pier([x3, PY, zq], [x3, PY, cz(0, 7)], 2.0, "East pier");
+  for (const s of [-1, 1]) pier([x3 + s * 1.0, PY, cz(0, 10)], [x3 + s * 7.5, PY, cz(0, 10)], 1.6, "Finger pier");
+  pier([x4, PY, cz(0, 13) + 1.0], [x4, PY, cz(0, 5)], 2.0, "Hut pier");
+  for (const [x, z] of [[x1 + 0.4, cz(0, 2) + 0.3], [x2, cz(0, 5) + 0.4], [x3, cz(0, 7) + 0.4]]) { barrel(x + 0.6, PY, z); crate(x - 0.5, PY, z + 0.2, 0.3, 0.6); }
+  // bollards along the piers' edges
+  for (let r = 3; r <= 13; r += 2) for (const s of [-1, 1]) solidCyl("timber", x1 + s * 1.15, PY, cz(0, r), 0.12, 0.45, { n: 6, label: "Bollard" });
+  // the cog, moored along the main pier's east side, and its gangplank
+  const cgx = x1 + 1.3 + 2.0 + 2.5, cgz = cz(0, 6);
+  const cg = cog(cgx, cgz, -Math.PI / 2, -1);
+  bridge([x1 + 1.1, PY, cgz], [cg.gang[0] + 0.02, cg.deckY, cgz], { width: 1.0, rails: false, ramp: true, deck: "boards", label: "Gangplank", detail: "a plank from the pier up to the cog's deck" });
+  const on = (lx, lz) => cg.tw(lx, lz);
+  GOTO.cog = { x: on(2.3, 1.3)[0], z: on(2.3, 1.3)[1], y: cg.deckY, look: on(-6, -0.5) };
+  GOTO.castle = { x: on(-cg.hl * 0.65, 0)[0], z: on(-cg.hl * 0.65, 0)[1], y: cg.deckY + 1.6, look: on(8, -1.5) };
+  GOTO.gangplank = { x: x1 + 0.2, z: cgz, y: PY, look: [cgx, cgz] };
+  // small boats at every pier: rowboats, a few sailing boats, canoes by the huts
+  const moor = [
+    ["rowboat", x1 - 4, cz(0, 10) + 1.8, 0], ["rowboat", x1 - 8.5, cz(0, 10) + 1.8, 0, 0xc9b8a0], ["rowboat", x1 - 6, cz(0, 10) - 1.8, Math.PI],
+    ["sail", x1 - 5.8, cz(0, 7) - 2.4, Math.PI], ["rowboat", x1 - 4, cz(0, 7) + 1.8, 0, 0xa8c0d0], ["rowboat", x1 - 8.5, cz(0, 7) + 1.8, 0],
+    ["sail", x1 - 4.5, cz(0, 2) - 2.6, 0, 0xd8c8b0], ["sail", x1 + 0.5, cz(0, 2) - 5.2, Math.PI, 0xa8c0d0],
+    ["rowboat", x2 + 4, cz(0, 9) + 1.8, 0], ["sail", x2 + 4.5, cz(0, 9) - 2.4, 0], ["rowboat", x2 - 4, cz(0, 7) + 1.8, Math.PI, 0xc9b8a0], ["rowboat", x2 - 4.5, cz(0, 7) - 1.8, 0],
+    ["rowboat", x2 + 1.9, cz(0, 6), Math.PI / 2],
+    ["rowboat", x3 - 4, cz(0, 10) - 1.8, 0, 0xa8c0d0], ["rowboat", x3 + 4, cz(0, 10) - 1.8, Math.PI], ["sail", x3 + 4.5, cz(0, 10) + 2.4, 0, 0xc9b8a0], ["rowboat", x3 - 1.9, cz(0, 8), Math.PI / 2],
+    ["canoe", x4 + 1.6, cz(0, 11), Math.PI / 2], ["canoe", x4 - 1.6, cz(0, 11.4), Math.PI / 2], ["canoe", x4 + 1.6, cz(0, 6.2), Math.PI / 2],
+    ["rowboat", cx(29, 8), cz(0, 8), 0.4], ["rowboat", cx(18, 3), cz(0, 3), -0.3], ["sail", cx(8, 2), cz(0, 1), 0.9, 0xd8c8b0],
+  ];
+  for (const [t, x, z, a, tint] of moor) boat(t, x, z, a, { tint, sailTint: tint === 0xa8c0d0 ? 0xc8a878 : undefined });
+  for (const [c, r, a] of [[15, 13, 0.2], [17, 13, -0.15]]) boat("rowboat", cx(c, r), cz(c, r), a, { beached: true, y: TOP[idx(c, r)], bare: true });
+  // boathouses open to the sea, a boat on the sand inside each
+  for (const c0 of [8, 33]) {
+    building({ kit: "driftwood", c0, c1: c0 + 2, r0: 12, r1: 13, base: 0.25, storeys: 1, name: "Boathouse", doors: [[c0 + 1, 13, 1, 0, "open"]], skipWall: (c, r, d) => r === 12 && (d === 4 || d === 5), window: () => false });
+    boat("rowboat", cx(c0 + 1, 12) + 0.4, cz(0, 12) + 0.2, 0.05, { wl: 0.5, still: true });
+    for (let k = 0; k < 3; k++) box("timber", cx(c0 + 2, 13) + 0.3 + k * 0.25, 0.25, cz(0, 13) + 0.7, 0.07, 2.6, 0.07, 0);
+    lobsterPots(cx(c0, 13) - 0.4, 0.25, cz(0, 13) + 0.6, 4);
+  }
+  GOTO.boathouse = { x: cx(9, 13) + 0.3, z: cz(0, 13) + 0.4, y: 0.25, look: [cx(8, 12), cz(0, 9)] };
+  // the shipyard: a hull in frame on the beach, a slip down into the water
+  { const x = cx(27, 13), z = cz(0, 13) - 0.3;
+    const HL = 9.6, HB = 3.3, HD = 1.9, HS = 0.6, g = new THREE.Group(), wood = new THREE.MeshStandardMaterial({ map: texture("timber"), color: lin(0xc8a27a), roughness: 0.9, side: THREE.DoubleSide });
+    const skin = new THREE.Mesh(hullGeometry(HL, HB, HD, HS, 0.45), wood); skin.castShadow = skin.receiveShadow = true; g.add(skin); // the garboard strakes are on
+    for (let i = 1; i < 12; i++) { // and the ribs stand bare above them
+      const { x: rx, b, d, top } = hullSection(HL, HB, HD, HS, i / 12), pts = [];
+      for (let k = 0; k <= 10; k++) { const th = (k / 10 - 0.5) * Math.PI; pts.push(new THREE.Vector3(rx, top - d * Math.cos(th), b * Math.sin(th))); }
+      const rib = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 12, 0.07, 4, false), wood); rib.castShadow = true; g.add(rib);
+    }
+    for (const s of [-1, 1]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, HD + HS + 0.2, 0.2), wood); post.position.set(s * HL / 2, HS - HD / 2 + 0.1, 0); post.castShadow = true; g.add(post); }
+    g.position.set(x, 0.85 + HD, z); scene.add(g); DRESS.push(g); // the keel on its blocks
+    box("timber", x, 0.5, z, 9.8, 0.35, 0.4, 0);
+    for (let k = -3; k <= 3; k++) for (const s of [-1, 1]) box("timber", x + k * 1.3, 0.5, z + s * 1.3, 0.12, 1.0 - Math.abs(k) * 0.08, 0.12, 0);
+    addSolid({ type: "poly", pts: rectPts(x, z, 10.2, 3.4, 0), y0: 0, y1: 3.4, cls: "wall", label: "A hull in frame" });
+    bridge([x, 0.3, cz(0, 12)], [x, -1.4, cz(0, 8)], { width: 4, rails: false, ramp: true, label: "The slip", detail: "planks down into the water" });
+    for (let k = 0; k < 3; k++) box("timber", cx(24, 14) + 0.5, 0.75 + k * 0.3, cz(0, 14) + 0.3, 3.2, 0.3, 0.5, 0);
+    addSolid({ type: "poly", pts: rectPts(cx(24, 14) + 0.5, cz(0, 14) + 0.3, 3.2, 0.5, 0), y0: 0.75, y1: 1.65, cls: "wall", label: "Planks" });
+    person(x + 1.5, 0.75, cz(0, 14) + 0.2, Math.PI, 0x7a5a3a, { role: "Boatwright", work: "hammer" });
+    GOTO.shipyard = { x: x - 7, z: cz(0, 14) + 0.9, y: 0.75, look: [x, z], pitch: 0.05 }; }
+  // stilt fish huts off the hut pier
+  const hut = stiltHouse({ kit: "driftwood", cells: [[4, 9]], deckCells: [[5, 9]], base: 2.2, bed: -2.4, name: "Fish hut", door: [4, 9, 0, 0], stairEdge: [5, 9, 0], footY: PY });
+  stiltHouse({ kit: "driftwood", cells: [[8, 7]], deckCells: [[7, 7]], base: 2.2, bed: -2.4, name: "Fish hut", door: [8, 7, 3, 0], stairEdge: [7, 7, 3], footY: PY });
+  GOTO.stilts = { x: x4, z: cz(0, 10), y: PY, look: [cx(4, 9), cz(0, 9)], hut };
+  // the mole and its light
+  { const x = cx(29, 4), z = cz(0, 4);
+    cyl("stone", x, 1.2, z, 1.35, 8.3, 12, "flag"); addSolid({ type: "circ", x, z, r: 1.35, y0: 1.2, y1: 9.5, cls: "wall", label: "The light" });
+    for (let k = 0; k < 6; k++) { const a = k / 6 * 2 * Math.PI; cyl("iron", x + Math.cos(a) * 1.0, 9.5, z + Math.sin(a) * 1.0, 0.06, 1.6, 5); }
+    cyl("slate", x, 11.1, z, 1.3, 0.25, 10); cyl("slate", x, 11.35, z, 0.8, 0.4, 10); addFire(x, 9.6, z, 1.4, "lamp");
+    person(cx(31, 4), 1.2, cz(0, 4), 0, 0x5a5a4a, { role: "Keeper", work: "idle" });
+    GOTO.lighthouse = { x: cx(33, 4), z: cz(0, 4), y: 1.2, look: [x, z] }; }
+  // the fish market along the quay; nets, fish and pots on the beach
+  [[12, "cloth2"], [17, "cloth"], [27, "cloth2"], [33, "cloth"]].forEach(([c, cl], n) => {
+    marketStall(c, 15, cl, PY, ["fish", "wool"]);
+    person(cx(c, 15), PY, cz(0, 15) + 0.35, -Math.PI / 2, [0x7a4e2a, 0x4c5a78, 0x8a3a3a, 0x3a5a4a][n], { role: "Fishwife", work: "idle" });
+  });
+  netRack(cx(20, 14), 0.75, cz(0, 14), 0); netRack(cx(31, 13) - 0.5, 0.5, cz(0, 13), 0); netRack(cx(4, 14), 0.75, cz(0, 14), 0.4);
+  fishRack(cx(15, 14) + 0.5, 0.75, cz(0, 14), 0); fishRack(cx(36, 14) - 0.4, 0.75, cz(0, 14), 0);
+  lobsterPots(cx(11, 14), 0.75, cz(0, 14) - 0.3, 5); lobsterPots(cx(24, 13), 0.5, cz(0, 13) - 0.3, 3);
+  for (let k = 0; k < 3; k++) crate(cx(24 + k, 15) + 0.4, PY, cz(0, 15) + 0.9, k * 0.4, 0.55);
+  for (const c of [20, 21]) barrel(cx(c, 15), PY, cz(0, 15) + 0.8);
+  for (const c of [15, 20, 25, 30, 35]) lantern(cx(c, 15) + 0.9, PY, cz(0, 15) + 0.95);
+  person(cx(20, 14) + 0.8, 0.75, cz(0, 14) + 0.9, Math.PI / 2, 0x6a5a3a, { role: "Net mender", work: "idle" });
+  person(cx(22, 16), 1, cz(0, 16), 0, 0x5a6a7a, { role: "Fisher", path: [[cx(10, 16), cz(0, 16)], [cx(35, 16), cz(0, 16)]], speed: 1.1 });
+  person(x1 - 0.7, PY, cz(0, 2) + 0.4, -Math.PI / 2, 0x3a4a5a, { role: "Fisher", work: "idle" });
+  person(x1 - 0.5, PY, cz(0, 12), 0, 0x6a4a3a, { role: "Porter", path: [[x1 - 0.5, cz(0, 14)], [x1 - 0.5, cz(0, 3)]], speed: 1.0 });
+  person(x3 + 0.3, PY, cz(0, 10), Math.PI, 0x4c5a78, { role: "Fisher", work: "idle" });
+  // beach grass on the dunes and the headland, trees up the hill
+  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) { const i = idx(c, r); if (((TOPMAT[i] === "ivorysand" && r >= 14 && (c < 8 || c > 36)) || (AREA[i] === "The headland" && TOPMAT[i] === "grass")) && (c * 7 + r * 3) % 4 === 0) reeds(cx(c, r), TOP[i], cz(c, r), 6); }
+  scatter((c, r) => r >= 19 && TOPMAT[idx(c, r)] === "grass" ? 0.06 : 0, (x, y, z, rn) => tree(x, y, z, 0.8 + rn() * 0.5), 23);
+  GOTO.quay = { x: x1 + 2.2, z: cz(0, 15) + 0.4, y: PY, look: [x1, cz(0, 4)] };
+  GOTO.pier = { x: x1 - 0.3, z: cz(0, 8.5), y: PY, look: [cgx, cgz - 3] };
+  GOTO.pierhead = { x: x1, z: cz(0, 2) + 0.2, y: PY, look: [x1 - 20, -30] };
+  GOTO.market = { x: cx(17, 16), z: cz(0, 16), y: 1, look: [cx(17, 15), cz(0, 15)] };
+  GOTO.beach = { x: cx(24, 13) - 1, z: cz(0, 13), y: 0.5, look: [cx(22, 8), cz(0, 8)] };
+  GOTO.lane = { x: cx(22, 30), z: cz(0, 30), y: 3, look: [cx(22, 3), cz(0, 3)], pitch: -0.12 };
+  KIT_SPOT.pier = { ...GOTO.pier, center: [x1 - 4, cz(0, 8), 1] };
+  KIT_SPOT.cog = { ...GOTO.gangplank, center: [cgx, cgz, 4] };
+  void gy;
+  buildTerrain(); buildPosts();
+}
+SCENES.coast = { label: "Coast, fishing harbour", build: makeCoast, start: "quay", orbit: { tx: W * 22, tz: ROW * 12, dist: 88, yaw: 1.3, pitch: 0.42 },
+  places: [["quay", "Quay"], ["pier", "Main pier"], ["gangplank", "Gangplank"], ["cog", "The cog"], ["castle", "Aftcastle"], ["pierhead", "Pier head"], ["market", "Fish market"], ["boathouse", "Boathouse"], ["shipyard", "Shipyard"], ["stilts", "Fish huts"], ["lighthouse", "The light"], ["beach", "Beach"], ["inn", "The Gull"], ["lane", "Top lane"]],
+  env: { fog: [90, 420], tint: 0xbfe0ea, tintAmt: 0.12, water: { level: 0, color: 0x2a8a94, opacity: 0.82, rough: 0.35 }, far: { color: 0x6f8f4a, y: 3.9, zMin: ROW * 33 + R } } };
+
+// =====================================================================
 // The walker. walking.rs's rules, with the three proposed changes behind
 // MODE.proposed: a stair answers its pitch line, a grounded walker is held
 // to a floor up to SNAP below, and thin geometry pushes the body out along
@@ -2156,7 +2466,7 @@ function finalize() {
     g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2));
     g.setAttribute("color", new THREE.Float32BufferAttribute(b.c, 3));
     g.setAttribute("sky", new THREE.BufferAttribute(sky, 1));
-    const mesh = new THREE.Mesh(g, material(m)); mesh.castShadow = mesh.receiveShadow = true; mesh.matrixAutoUpdate = false;
+    const mesh = new THREE.Mesh(g, material(m)); mesh.castShadow = !ALPHA.has(m); mesh.receiveShadow = true; mesh.matrixAutoUpdate = false;
     scene.add(mesh); STATIC.push(mesh);
   }
 }
@@ -2239,7 +2549,8 @@ const KIT_LIST = [["straw", "Straw hut", "reed, thatch"], ["mud", "Mud hut", "co
   ["brick", "Red brick", "tile roof"], ["brickbuff", "Buff brick", "slate roof"], ["brickdark", "Clinker brick", "Flemish bond"], ["stone", "Fieldstone", "thatch roof"],
   ["ashlar", "Ashlar", "cut stone"], ["clay", "Clay", "flat roof"], ["marble", "Marble", "columns"],
   ["sandstone", "Sandstone", "roof stair"], ["adobe", "Adobe dome", "mud brick"], ["igloo", "Igloo", "snow blocks"], ["granite", "Longhouse", "granite, turf"], ["ice", "Ice castle", "ice blocks"],
-  ["treehouse", "Tree house", "kapok platform"], ["junglehut", "Kapok hut", "poles, leaves"], ["bridge", "Walkway", "planks, rope"], ["alder", "Stilt house", "alder, reed"]];
+  ["treehouse", "Tree house", "kapok platform"], ["junglehut", "Kapok hut", "poles, leaves"], ["bridge", "Walkway", "planks, rope"], ["alder", "Stilt house", "alder, reed"],
+  ["whitewash", "Whitewash", "slate roof"], ["driftwood", "Driftwood", "grey boards"], ["pier", "Pier", "piles, planks"], ["cog", "Cog", "a ship to board"]];
 const narrow = () => matchMedia("(max-width:860px)").matches;
 function setTownOpen(open) { const t = document.querySelector(".town"); t.dataset.open = open; $("townToggle").textContent = open ? "Hide" : "Places"; $("townToggle").setAttribute("aria-expanded", open); }
 function fillList(which) {
@@ -2460,6 +2771,7 @@ function frame(now) {
   for (const n of NPCS) animateNpc(n, dt);
   for (const d of DOORS) { d.a += clamp((d.open ? 1 : 0) - d.a, -dt * 3, dt * 3); d.pivot.rotation.y = -d.base + d.swing * smooth(d.a) * Math.PI / 2 * 0.95; }
   for (const s of SPINNERS) s.obj.rotation[s.axis] += s.speed * dt;
+  for (const b of BOBBERS) { b.obj.position.y = b.y + Math.sin(T * 1.3 + b.ph) * b.amp; b.obj.rotation.x = Math.sin(T * 0.9 + b.ph) * b.amp * 0.5; b.obj.rotation.z = Math.sin(T * 1.1 + b.ph * 1.7) * b.amp * 0.8; }
   for (const f of FIREMESH) { const s = f.f.lamp ? 1 : 0.8 + 0.3 * Math.sin(T * 9 + f.ph) * Math.sin(T * 5.3 + f.ph * 2); f.m.scale.set(1, s, 1); }
   if ((lightT -= dt) <= 0) { assignLights(); lightT = 0.3; }
   for (const pl of POOL) pl.intensity = pl.userData.base ? pl.userData.base * (0.88 + 0.12 * Math.sin(T * 11 + pl.position.x)) : 0;

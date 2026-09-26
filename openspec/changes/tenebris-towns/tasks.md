@@ -18,7 +18,11 @@
       swamp) from each biome's catalogue materials, with domes, decks, rope
       bridges, boardwalks and outdoor stairs; every new route walked
       (design section 10).
-- [ ] The owner's verdict, and answers to the eight questions in the proposal.
+- [x] Fourth round: a fishing harbour with piers, finger piers, 23 moored
+      boats, a boardable cog, boathouses, a shipyard, fish huts on stilts and
+      a light; driftwood and whitewash kits; every route walked, including up
+      the gangplank and onto the aftcastle (design section 10, the harbour).
+- [ ] The owner's verdict, and answers to the nine questions in the proposal.
 
 ## 1. Contact (`pbd-core`, `planet_contact.rs`)
 - [ ] Thin solids: a convex outline, a height range and a step class, indexed
@@ -62,10 +66,21 @@
 - [ ] Tests: across a sagging bridge grounded every tick; up a porch stair
       with no eye jump; into an igloo through its tunnel.
 
+## 3d. The harbour
+- [ ] Boat hulls lofted from sections as a mesh piece (drawn), each with a
+      fixed hull solid up to its gunwale that does not follow the bobbing.
+- [ ] A ship as a piece: its deck a step solid following the hull's plan, its
+      rail with a gangway, castles and their stair; a gangplank as a sloped
+      walkway from the pier to the deck's edge.
+- [ ] Tests: up the gangplank onto the deck and up to the aftcastle with no
+      eye jump over 0.1 m and no airborne tick; wading at a moored boat stops
+      at its side.
+
 ## 4. Drawing
 - [ ] Piece meshes with the pixel textures (stone, rubble, half-timber,
       plaster, planks, thatch, shingle, slate, three bricks, marble, clay,
-      cob, reed, boards, turf, fieldstone, clay tile), nearest magnification.
+      cob, reed, boards, turf, fieldstone, clay tile, driftwood, whitewash,
+      ivory sand, and a net with transparency), nearest magnification.
 - [ ] Interior sky light from the voxel-light skylight; hearths, forge and
       lamps as block light.
 
