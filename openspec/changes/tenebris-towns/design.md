@@ -267,3 +267,43 @@ the door, below the walker's head, so they are drawn but do not collide past the
 walls; the roof-overlap check keeps anything tall away from them. The mockup
 walks into all ten huts and every kit's house through its door.
 
+## 10. A settlement per biome
+
+Each settlement takes its materials and plants from the biome catalogue
+(`docs/game-design.md` section 7), so none borrows another biome's, which is
+the same rule CLAUDE.md sets for life and textures across planets.
+
+| settlement | biome's materials | buildings | new pieces |
+| --- | --- | --- | --- |
+| walled town, village | olive pasture, limestone, oak | the eleven kits; a windmill in the village | none |
+| desert town | ochre sand, rust sandstone, salt, cactus | sandstone houses with flat roofs, mud-brick domes, a domed caravan hall on seven cells | dome, outdoor stair |
+| tundra camp | thin snow, cold granite, dwarf willow | igloos, a granite longhouse under turf and snow, a keep, curtain wall and towers of ice | dome (the igloo) |
+| jungle village | red loam, kapok, basalt | platforms on seven cells round three kapok trunks at 8 m, huts on them, a stair tower of poles | deck, rope bridge |
+| swamp village | wet peat, olive moss, alder, reeds | alder stilt houses 2 m over the water with decks and porch stairs | deck, boardwalk, jetty, outdoor stair |
+
+**The new pieces are floors, ceilings and rails like the rest.** A deck is
+whole-cell slabs on piles. A walkway between two points is a surface whose top
+follows the planks: a straight line for a boardwalk or jetty, a parabola for a
+rope bridge (0.8 m of sag over 22 m is at most 8° at the ends), with rails as
+thin solids along both sides. An outdoor stair is the straight flight's rule
+between two points: risers near 0.19 m, walked on the pitch line. A dome's
+underside is its ceiling, with the doorway cut out.
+
+**An igloo is not cut to the cell.** It is a dome 4.6 m across and 2.5 m high
+centred on one cell and spilling over its ring, because a dome that fits in one
+cell is 1.4 m high inside. You can stand wherever the dome is over 1.83 m,
+which is 1.57 m from the middle; a ring of wall at that radius makes the walker
+slide round the inside instead of stopping on the headroom check. Its tunnel is
+2.0 m high at the crown.
+
+**Water is waded.** The mockup slows a walker whose feet are 0.3 m under the
+water to half speed, `walking.rs`'s `water_movement_mult`; it does not model
+swimming.
+
+Walked in the mockup, with no airborne tick and no eye jump over 0.1 m: up the
+jungle's pole tower to 9 m, onto the platform and across a rope bridge (the
+feet dip to 8.2 m); up a swamp porch stair to a 2.3 m deck and into the house;
+in through an igloo's tunnel; up an ice tower to the 6 m wall walk and through
+the gate into the keep; up a desert roof stair from 2 m to the 5.3 m roof; into
+a domed house and the village inn. The six settlements have no roof overlaps.
+

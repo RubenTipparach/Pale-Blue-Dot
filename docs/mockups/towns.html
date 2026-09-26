@@ -39,6 +39,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .townhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
 #townToggle{display:none;font-size:13px;padding:4px 10px}
 .tabs button{font-size:13px;padding:4px 8px}
+.scenefield select{font-size:14px}
+.town[data-open="false"] .scenefield{display:none}
 .town[data-open="false"] .tabs,.town[data-open="false"] .goto,.town[data-open="false"] .status,.town[data-open="false"] .eyebrow{display:none}
 .goto button small{display:block;font-family:var(--body);font-size:10.5px;color:var(--muted);letter-spacing:0}
 .goto button{font-size:12.5px;padding:5px 4px;letter-spacing:.04em}
@@ -125,6 +127,15 @@ body.coarse .keys,body.coarse .hint{display:none}
 
   <section class="panel town" aria-label="Town">
     <div class="townhead"><h1>Tenebris towns<span>PROTOTYPE</span></h1><button class="small" id="townToggle" aria-expanded="true" aria-controls="goto">Hide</button></div>
+    <div class="field scenefield"><label for="scene">Settlement</label>
+      <select id="scene">
+        <option value="town">Walled town, fields</option>
+        <option value="village">Village, fields</option>
+        <option value="desert">Desert, oasis town</option>
+        <option value="tundra">Tundra, igloos and an ice castle</option>
+        <option value="jungle">Jungle, tree houses</option>
+        <option value="swamp">Swamp, stilt village</option>
+      </select></div>
     <div class="seg" role="group" aria-label="View">
       <button id="vWalk" aria-pressed="true">Walk <span class="src">V</span></button>
       <button id="vOver" aria-pressed="false">Overview <span class="src">V</span></button>
@@ -159,6 +170,7 @@ body.coarse .keys,body.coarse .hint{display:none}
         <li><b>Walls sit on edges, floors in cells.</b> A wall is a 0.3 m (timber) or 0.5 m (stone) slab on a cell's shared edge, so a one-cell room is 2.5 m across inside, not a solid block. The town wall and keep are whole masonry cells.</li>
         <li><b>A storey is three layers</b>, 3 m floor to floor, 2.8 m clear under the boards.</li>
         <li><b>Eleven kits</b> change what a building is made of, not how it is cut: straw and mud huts, timber boards, half-timber, red, buff and clinker brick, fieldstone, ashlar, clay with a flat roof, and marble with columns. A hut is the one exception to the storey: one storey of two layers, with 1.9 m doors.</li>
+        <li><b>Six settlements, one per biome</b>, built from the materials the biome catalogue gives each: a walled town and a village in the fields (limestone, oak), a desert town round an oasis (rust sandstone, mud brick, salt plaster, cactus), a tundra camp of igloos with a granite longhouse and a castle of ice (snow, cold granite, dwarf willow), a jungle village on platforms in three kapok giants joined by rope bridges (kapok, red loam, basalt), and a swamp village of alder stilt houses on boardwalks (peat, moss, alder, reeds). Water is waded at half speed, as walking.rs has it.</li>
         <li><b>Roofs never cut into each other.</b> Every roof's plan, eaves included, is checked against every other when the town is laid out, and the keep and towers count as roofs.</li>
         <li><b>Three stairs, all landing on layer lines.</b> A straight flight crosses two cells and climbs a storey in 16 risers of 0.1875 m on 0.354 m treads (28&deg;). A newel stair turns once per storey in one cell: 15 winders of 0.2 m, and 120&deg; per metre, so a door at any layer is always in the middle of an edge. Street steps climb one terrace in one cell: 6 risers of 0.167 m.</li>
         <li><b>The walker is walking.rs</b>: a 0.3 m radius body 1.8 m tall, eye at 1.6 m, 8 m/s (14 sprinting), a 12 m/s jump under 25 m/s&sup2;, a 1.05 m step for terraces, a floor from the highest of several footprint points and a ceiling from the lowest.</li>
@@ -540,6 +552,7 @@ function place(c, r, y0, y1, name) { if (inMap(c, r)) PLACES[idx(c, r)].push([y0
 function skyAt(x, y, z) {
   const [c, r] = cellAt(x, z); if (!inMap(c, r)) return 1;
   for (const [a, b] of INDOOR[idx(c, r)]) if (y > a && y < b) return 0.26;
+  for (const s of INDOOR_SHAPES) if (y > s.y0 && y < s.y1 && (x - s.x) ** 2 + (z - s.z) ** 2 < s.r * s.r) return 0.3;
   return 1;
 }
 
@@ -777,13 +790,13 @@ function pyramidRoof(c, r, yW, h, m = "slate", oh = 0.35, o = {}) {
 }
 // A flat roof: a slab over the cells, a parapet on the outer edges, and the
 // ends of the roof beams through the wall below it, as adobe is built.
-function flatRoof(cells, yW, m, wall) {
+function flatRoof(cells, yW, m, wall, gaps = []) {
   const inB = (c, r) => cells.some(([a, b]) => a === c && b === r);
   for (const [c, r] of cells) {
     prism(m, wall, hexPts(c, r), yW, yW + 0.3, { bottom: false });
     for (let d = 0; d < 6; d++) {
       const [c2, r2] = nb(c, r, d); if (inB(c2, r2)) continue;
-      edgeWall(c, r, d, yW + 0.3, yW + 0.95, { t: 0.4, mOut: wall, mIn: wall, mEdge: wall });
+      if (!gaps.some(([a, b, e]) => a === c && b === r && e === d)) edgeWall(c, r, d, yW + 0.3, yW + 0.95, { t: 0.4, mOut: wall, mIn: wall, mEdge: wall });
       const [A, B] = edgeEnds(c, r, d), [nx, nz] = dvec(d), tx = (B[0] - A[0]) / R, tz = (B[1] - A[1]) / R;
       for (const f of [0.3, 0.7]) box("timber", A[0] + tx * R * f + nx * 0.3, yW - 0.32, A[1] + tz * R * f + nz * 0.3, 0.6, 0.16, 0.16, Math.atan2(nz, nx));
     }
@@ -882,13 +895,14 @@ function buildWalls() {
 }
 
 // A stair tower against the wall: a newel from the street to the wall walk.
-function wallTower(c, r, wallDir, name) {
-  const base = TOP[idx(c, r)], dy = WALL_TOP - base, entry = ((wallDir - 2 * dy) % 6 + 6) % 6;
+function wallTower(c, r, wallDir, name, o = {}) {
+  const wt = o.top ?? WALL_TOP, m = o.mat || "stone";
+  const base = TOP[idx(c, r)], dy = wt - base, entry = ((wallDir - 2 * dy) % 6 + 6) % 6;
   const [ec, er] = nb(c, r, entry);
   if (!inMap(ec, er) || TOP[idx(ec, er)] !== base) console.warn("tower door does not open onto the street", c, r);
-  const top = WALL_TOP + 3;
-  newelStair(c, r, entry, base, WALL_TOP, { t: STONE_T, exits: [{ d: wallDir, y: WALL_TOP }], wallTop: top, slits: [{ d: (entry + 3) % 6, y: base + 3.5 }, { d: (entry + 2) % 6, y: base + 5.5 }] });
-  pyramidRoof(c, r, top, 3.2, "slate", 0.35, { name });
+  const top = wt + 3;
+  newelStair(c, r, entry, base, wt, { t: STONE_T, exits: [{ d: wallDir, y: wt }], wallTop: top, tread: m, newel: m, mOut: m, mIn: m, mEdge: m, slits: [{ d: (entry + 3) % 6, y: base + 2.5 }, { d: (entry + 2) % 6, y: base + 4.5 }] });
+  pyramidRoof(c, r, top, o.roofH ?? 3.2, o.roofMat || "slate", 0.35, { name });
   place(c, r, base - 0.5, top, name);
   AREA[idx(c, r)] = name;
   return { entry, ec, er };
@@ -941,7 +955,7 @@ function tree(x, y, z, s = 1) {
   for (let k = 0; k < 5; k++) { const a = rn() * 6.28, d = k ? 0.9 * s : 0; box("leaves", x + Math.cos(a) * d, y + 2.2 * s + rn() * 0.9 * s, z + Math.sin(a) * d, 1.7 * s, 1.5 * s, 1.7 * s, rn()); }
 }
 function person(x, y, z, facing, tunic, opts = {}) {
-  const g = new THREE.Group(), mk = (w, h, d, col, px, py, pz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: col, roughness: 0.9 })); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
+  const g = new THREE.Group(), mk = (w, h, d, col, px, py, pz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: new THREE.Color(col).convertSRGBToLinear(), roughness: 0.9 })); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
   const skin = opts.skin || 0xc99a74, legs = opts.legs || 0x4a3b2c;
   mk(0.18, 0.8, 0.2, legs, -0.11, 0.4, 0); mk(0.18, 0.8, 0.2, legs, 0.11, 0.4, 0);
   const body = mk(0.5, 0.72, 0.28, tunic, 0, 1.16, 0);
@@ -993,7 +1007,8 @@ function building(o) {
   let minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
   for (const [c, r] of cells) {
     for (const p of hexPts(c, r)) { minx = Math.min(minx, p[0]); maxx = Math.max(maxx, p[0]); minz = Math.min(minz, p[1]); maxz = Math.max(maxz, p[1]); }
-    const i = idx(c, r); TOP[i] = base; TOPMAT[i] = o.floor || kit.floor; indoor(c, r, base - 0.05, top + roofH); AREA[i] = o.name;
+    const i = idx(c, r); AREA[i] = o.name; indoor(c, r, base - 0.05, top + roofH);
+    if (o.raised) slabHex(c, r, base, o.floor || kit.floor, "plank"); else { TOP[i] = base; TOPMAT[i] = o.floor || kit.floor; }
     for (let s = 0; s < storeys; s++) place(c, r, base + s * sh - 0.5, base + (s + 1) * sh, o.name + (storeys > 1 ? (s === 0 ? ", ground floor" : s === 1 ? ", upstairs" : ", floor " + (s + 1)) : ""));
     if (!cone) RUNS[i].push([top, top + 0.3, "ceiling"]);
     if (storeys > 1 && !o.tall) for (let s = 1; s < storeys; s++) if (!stairCells.has(c + ":" + r)) slabHex(c, r, base + s * STOREY, kit.floor === "marblefloor" ? "marblefloor" : "plank");
@@ -1014,8 +1029,20 @@ function building(o) {
     }
   }
   const oh = kit.hut ? 0.55 : 0.45;
-  if (cone) { const [c, r] = cells[0]; pyramidRoof(c, r, top, roofH, kit.roofMat, oh, { open: true, under: kit.roofMat, name: o.name }); }
-  else if (roofKind === "flat") { flatRoof(cells, top, kit.flatTop, kit.walls[0].out); noteRoof(minx, maxx, minz, maxz, o.name); }
+  if (o.stilts !== undefined) { // piles from the bed to the floor, at every outside corner
+    const seen = new Set();
+    for (const [c, r] of cells) for (let d = 0; d < 6; d++) { const [c2, r2] = nb(c, r, d); if (inB(c2, r2)) continue; for (const p of edgeEnds(c, r, d)) { const k = Math.round(p[0] * 10) + ":" + Math.round(p[1] * 10); if (seen.has(k)) continue; seen.add(k); solidCyl("timber", p[0], o.stilts, p[1], 0.14, base - SLAB - o.stilts, { n: 6 }); } }
+  }
+  if (roofKind === "dome") { // a cap over the walls and a dome on the most central cell
+    for (const [c, r] of cells) prism(kit.roofMat, kit.walls[0].out, hexPts(c, r), top, top + 0.25);
+    let best = cells[0], bd = 1e9; const mx = (minx + maxx) / 2, mz = (minz + maxz) / 2;
+    for (const [c, r] of cells) { const d2 = (cx(c, r) - mx) ** 2 + (cz(c, r) - mz) ** 2; if (d2 < bd) { bd = d2; best = [c, r]; } }
+    const rad = cells.length >= 7 ? W * 1.35 : W * 0.46;
+    domeCap(cells.length >= 7 ? mx : cx(...best), cells.length >= 7 ? mz : cz(...best), top + 0.25, rad, rad * 1.05, kit.roofMat);
+    noteRoof(minx, maxx, minz, maxz, o.name);
+  }
+  else if (cone) { const [c, r] = cells[0]; pyramidRoof(c, r, top, roofH, kit.roofMat, oh, { open: true, under: kit.roofMat, name: o.name }); }
+  else if (roofKind === "flat") { flatRoof(cells, top, kit.flatTop, kit.walls[0].out, o.parapetGaps || []); noteRoof(minx, maxx, minz, maxz, o.name); }
   else gableRoof(minx, maxx, minz, maxz, top, { m: roofKind === "cone" ? "thatch" : roofKind, pitch: o.pitch ?? kit.pitch ?? 1, gable: kit.gable, oh, name: o.name, softEaves: !!kit.hut, under: kit.hut ? (kit.roof === "turf" ? "plank" : "thatch") : "plank" });
   if (o.chimney) { const [c, r] = o.chimney, x = cx(c, r), z = cz(c, r); solidBox(kit.chimney || "stone", x, top, z, 0.8, (maxz - minz) / 2 + 1.2, 0.8); }
   if (kit.columns) { // marble: a column at every outside corner, with a base and a capital
@@ -1317,6 +1344,651 @@ function makeTown() {
 const STEPCELL = new Set(), NO_TREE = new Set();
 
 // =====================================================================
+// Settlements. Each is a scene built into the same grid; switching one
+// resets every store and builds the next. Materials follow the biome
+// catalogue in docs/game-design.md section 7.
+// =====================================================================
+const SCENES = {};
+let SCENE = "town";
+const DRESS = [];            // meshes the dressing adds, removed on a switch
+const SPINNERS = [];         // things that turn: windmill sails
+const INDOOR_SHAPES = [];    // round rooms (igloos) the per-cell sky test cannot see
+
+function resetWorld() {
+  for (const k of Object.keys(BUF)) delete BUF[k];
+  TOP.fill(0); TOPMAT.fill("grass"); SIDEMAT.fill("dirt"); AREA.fill("");
+  for (let i = 0; i < NC * NR; i++) { RUNS[i] = []; INDOOR[i] = []; PLACES[i] = []; }
+  HASH.clear(); SOLIDS.length = 0; CORNERS.clear();
+  DOORS.length = 0; while (DOOR_GROUP.children.length) DOOR_GROUP.remove(DOOR_GROUP.children[0]);
+  ROOFS.length = 0; ROOF_CLASHES.length = 0; LIGHTS.length = 0; FIRES.length = 0;
+  for (const n of NPCS) scene.remove(n.g); NPCS.length = 0;
+  for (const k of Object.keys(GOTO)) delete GOTO[k];
+  for (const k of Object.keys(KIT_SPOT)) delete KIT_SPOT[k];
+  HUT_SPOTS.length = 0; STEPCELL.clear(); NO_TREE.clear(); INDOOR_SHAPES.length = 0; SPINNERS.length = 0;
+  for (const m of STATIC) { scene.remove(m); m.geometry.dispose(); } STATIC.length = 0;
+  for (const m of DRESS) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } DRESS.length = 0;
+  FIREMESH.length = 0;
+}
+function indoorShape(x, z, r, y0, y1) { INDOOR_SHAPES.push({ x, z, r, y0, y1 }); }
+
+// ---- biome materials ----------------------------------------------------
+Object.assign(PAINT, {
+  sandstone(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x8a5234), 0.06);
+    for (let row = 0; row < 4; row++) { const off = (row % 2) * 6; let x = off; while (x < w + 12) { const len = 10 + (rnd() * 6 | 0), col = hex2rgb([0xb86f45, 0xc98a55, 0xa9603c][rnd() * 3 | 0]), f = 0.9 + rnd() * 0.2; for (let y = row * 8 + 1; y < row * 8 + 8; y++) for (let xx = x + 1; xx < x + len; xx++) px(xx, y, col, f * ((y + row) % 3 === 0 ? 0.93 : 1) * (1 + (rnd() - 0.5) * 0.06)); x += len; } }
+  },
+  salt(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xece5d6), 0.035); for (let i = 0; i < 10; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0xd6ccb8)); },
+  snow(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xcfd8e0), 0.045); for (let i = 0; i < 18; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0xd4dfe8)); for (let i = 0; i < 6; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0xffffff)); },
+  snowblock(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0xe9eef2), 0.04);
+    for (let row = 0; row < 4; row++) { const off = (row % 2) * 6; for (let x = 0; x < w; x++) px(x, row * 8, hex2rgb(0x9fb2c4)); for (let k = 0; k < 3; k++) for (let y = row * 8; y < row * 8 + 8; y++) px(off + k * 12, y, hex2rgb(0xa9bbcb)); }
+  },
+  ice(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x9fcde2), 0.07);
+    for (let s = 0; s < 5; s++) { let x = rnd() * w, y = rnd() * h; const dx = rnd() - 0.5; for (let k = 0; k < 24; k++) { px(x | 0, y | 0, hex2rgb(0xe3f4fb)); x += dx + (rnd() - 0.5); y += 0.8; } }
+    for (let x = 0; x < w; x++) { px(x, 0, hex2rgb(0x7fb2cb)); px(x, 16, hex2rgb(0x7fb2cb)); } for (let y = 0; y < 16; y++) px(8, y, hex2rgb(0x7fb2cb)); for (let y = 16; y < 32; y++) px(24, y, hex2rgb(0x7fb2cb));
+  },
+  granite(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x7d8286), 0.1); for (let i = 0; i < 70; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(rnd() < 0.5 ? 0x5a5e62 : 0xa8acae)); for (let row = 0; row < 3; row++) for (let x = 0; x < w; x++) px(x, row * 11, hex2rgb(0x55595c)); },
+  sage(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x7a8a6a), 0.14); for (let b = 0; b < 5; b++) { const bx = rnd() * w, by = rnd() * h, br = 2 + rnd() * 4; for (let y = -5; y <= 5; y++) for (let x = -5; x <= 5; x++) if (x * x + y * y < br * br) px((bx + x) | 0, (by + y) | 0, hex2rgb(0xd3dbe2)); } },
+  peat(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x3f3024), 0.2); for (let i = 0; i < 25; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x5d4d3a)); },
+  moss(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x6b7a3a), 0.2); for (let i = 0; i < 40; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(rnd() < 0.5 ? 0x86944a : 0x4d5a2a)); },
+  redloam(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x8a4126), 0.16); for (let i = 0; i < 30; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x6a2f1c)); },
+  litter(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x2f6a33), 0.22); for (let i = 0; i < 50; i++) { const x = rnd() * w | 0, y = rnd() * h | 0; px(x, y, hex2rgb([0x4f8a3a, 0x8a6a2a, 0x3d7a3a][rnd() * 3 | 0])); px(x + 1, y, hex2rgb(0x4f8a3a)); } },
+  basalt(px, rnd, w, h) { for (let x = 0; x < w; x++) { const col = (x / 6) | 0, f = 0.85 + ((col * 7) % 5) * 0.05; for (let y = 0; y < h; y++) px(x, y, hex2rgb(0x3a3b40), x % 6 === 0 ? 0.6 : f * (1 + (rnd() - 0.5) * 0.12)); } },
+  kapok(px, rnd, w, h) { for (let x = 0; x < w; x++) { const f = 0.85 + 0.15 * Math.sin(x * 0.9) + rnd() * 0.06; for (let y = 0; y < h; y++) px(x, y, hex2rgb(0x9b917c), f * (x % 5 === 0 ? 0.75 : 1) * (1 + (rnd() - 0.5) * 0.1)); } for (let i = 0; i < 8; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x6a6252)); },
+  poles(px, rnd, w, h) { for (let x = 0; x < w; x++) { const k = x % 4, f = [0.7, 1.05, 1.1, 0.9][k]; for (let y = 0; y < h; y++) { const band = (y % 16) < 2; px(x, y, band ? hex2rgb(0xa89060) : hex2rgb(0x8a6d45), band ? 1 : f * (1 + (rnd() - 0.5) * 0.08)); } } },
+  alder(px, rnd, w, h) { for (let x = 0; x < w; x++) { const board = (x / 8) | 0, f = 0.85 + ((board * 3) % 4) * 0.06; for (let y = 0; y < h; y++) px(x, y, hex2rgb(0x7a7060), x % 8 === 0 ? 0.55 : f * (1 + 0.08 * Math.sin(y * 0.5 + board) + (rnd() - 0.5) * 0.1)); } },
+  rope(px, rnd, w, h) { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, hex2rgb(0xb09a6a), ((x + y) % 4 < 2) ? 1.1 : 0.8); },
+  leafthatch(px, rnd, w, h) { for (let row = 0; row < 4; row++) for (let y = row * 8; y < row * 8 + 8; y++) for (let x = 0; x < w; x++) { const tip = y - row * 8, col = ((x + row * 3) / 5 | 0) % 2 ? 0x6f7d3a : 0x86883f; px(x, y, hex2rgb(col), (tip > 6 ? 0.55 : 0.9 + tip * 0.03) * (1 + (rnd() - 0.5) * 0.12)); } },
+  cactus(px, rnd, w, h) { for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) px(x, y, hex2rgb(0x4f7a3a), (x % 4 === 0 ? 0.72 : 1) * (1 + (rnd() - 0.5) * 0.08)); for (let i = 0; i < 20; i++) px((rnd() * 8 | 0) * 4 + 2, rnd() * h | 0, hex2rgb(0xe8e0b0)); },
+  sand2(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xc9a468), 0.1); for (let y = 0; y < h; y += 5) for (let x = 0; x < w; x++) if (Math.sin(x * 0.4 + y) > 0.6) px(x, y, hex2rgb(0xb08a52)); },
+});
+Object.assign(REP, { sandstone: 2, salt: 2, snow: 2, snowblock: 2, ice: 2, granite: 2, sage: 2, peat: 2, moss: 2, redloam: 2, litter: 2, basalt: 2, kapok: 2, poles: 2, alder: 2, rope: 1, leafthatch: 2, cactus: 1, sand2: 2 });
+
+// ---- biome kits ---------------------------------------------------------
+Object.assign(KITS, {
+  sandstone:  { label: "Sandstone", walls: [{ out: "sandstone", in: "salt", edge: "sandstone", t: 0.5 }], roof: "flat", flatTop: "claytile", floor: "claytile", window: [0.6, 0.8] },
+  adobe:      { label: "Adobe dome", walls: [{ out: "clay", in: "salt", edge: "clay", t: 0.5 }], roof: "dome", roofMat: "salt", floor: "sand2", window: [0.5, 0.6] },
+  granite:    { label: "Granite longhouse", walls: [{ out: "granite", in: "plank", edge: "granite", t: 0.6 }], roof: "sage", pitch: 0.5, gable: "granite", floor: "plank" },
+  ice:        { label: "Ice", walls: [{ out: "ice", in: "ice", edge: "ice", t: 0.6 }], roof: "flat", flatTop: "snow", floor: "snow" },
+  alder:      { label: "Alder stilt house", walls: [{ out: "alder", in: "alder", edge: "timber", t: 0.25 }], roof: "thatch", pitch: 1, gable: "alder", floor: "plank" },
+  junglehut:  { label: "Kapok hut", walls: [{ out: "poles", in: "poles", edge: "timber", t: 0.25 }], roof: "leafthatch", pitch: 1.2, gable: "poles", floor: "plank", hut: true, door: [0.9, 1.9], window: [0.7, 0.6] },
+});
+
+// =====================================================================
+// Biome pieces: domes, igloos, decks on piles, rope bridges, boardwalks,
+// outdoor stairs, giant trees, and the ring keep and curtain wall that the
+// ice castle shares with the town.
+// =====================================================================
+const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+
+// A half-ellipsoid dome: base radius r at y0, height h. `ceiling` makes its
+// underside the collision ceiling inside it; `hole(x, z)` exempts a doorway.
+function domeCap(x, z, y0, r, h, m, o = {}) {
+  const seg = o.seg || 20, rings = o.rings || 7;
+  const P = (i, j) => { const a = i / seg * 2 * Math.PI, t = j / rings * Math.PI / 2; return [x + r * Math.cos(t) * Math.cos(a), y0 + h * Math.sin(t), z + r * Math.cos(t) * Math.sin(a)]; };
+  for (let j = 0; j < rings; j++) for (let i = 0; i < seg; i++) {
+    const am = (i + 0.5) / seg * 2 * Math.PI;
+    if (o.skip && o.skip(am, y0 + h * Math.sin((j + 0.5) / rings * Math.PI / 2))) continue;
+    const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1);
+    const pts = j === rings - 1 ? [a, b, c] : [a, b, c, d];
+    let mx = 0, my = 0, mz = 0; for (const p of pts) { mx += p[0]; my += p[1]; mz += p[2]; } mx /= pts.length; my /= pts.length; mz /= pts.length;
+    const out = [mx - x, my - y0 + 0.001, mz - z];
+    const uvf = p => { let an = Math.atan2(p[2] - z, p[0] - x); an = am + angDiff(an, am); return [an * r / 2, (p[1] - y0) / 1.6]; };
+    face(m, pts, out, uvf);
+    if (o.inner) face(o.inner, pts, V.mul(out, -1), uvf);
+  }
+  if (o.ceiling) addSurface({
+    pts: rectPts(x, z, 2 * r, 2 * r, 0), y0, y1: y0 + h, label: o.label || "Dome", detail: o.detail || "",
+    iv(px, pz, out) { const q = ((px - x) ** 2 + (pz - z) ** 2) / (r * r); if (q >= 1 || (o.hole && o.hole(px, pz))) return; const under = y0 + h * Math.sqrt(1 - q); out.push([under, under + 0.3, this]); },
+  });
+}
+
+// An igloo: a snow-block dome 4.6 m across and 2.5 m high on one cell, spilling
+// over its ring, with a vaulted tunnel along direction `door`. You can stand
+// wherever the dome is over 1.83 m, which is 1.57 m from the middle; a ring of
+// wall inside the low edge makes the walker slide round it.
+function igloo(c, r, door, name = "Igloo") {
+  const x = cx(c, r), z = cz(c, r), base = TOP[idx(c, r)], A = 2.3, H = 2.5, [dx, dz] = dvec(door), da = Math.atan2(dz, dx);
+  for (let d = -1; d < 6; d++) { const [a, b] = d < 0 ? [c, r] : nb(c, r, d); if (!inMap(a, b)) continue; TOP[idx(a, b)] = base; TOPMAT[idx(a, b)] = "snow"; NO_TREE.add(idx(a, b)); if (d < 0) AREA[idx(a, b)] = name; }
+  const along = (px, pz) => (px - x) * dx + (pz - z) * dz, across = (px, pz) => -(px - x) * dz + (pz - z) * dx;
+  const inTunnel = (px, pz) => along(px, pz) > 1.2 && Math.abs(across(px, pz)) < 0.72;
+  domeCap(x, z, base, A, H, "snowblock", { inner: "snowblock", seg: 24, rings: 8, ceiling: true, hole: inTunnel, label: "Igloo", detail: "snow blocks, 2.5 m high", skip: (a, y) => y < base + 2.05 && Math.abs(angDiff(a, da)) < 0.2 });
+  // the inner ring the body slides on, open at the tunnel
+  for (let k = 0; k < 16; k++) {
+    const a = k / 16 * 2 * Math.PI; if (Math.abs(angDiff(a, da)) < 0.45) continue;
+    addSolid({ type: "poly", pts: rectPts(x + Math.cos(a) * 1.69, z + Math.sin(a) * 1.69, 0.72, 0.2, a + Math.PI / 2), y0: base, y1: base + 1.95, cls: "wall", label: "igloo wall" });
+  }
+  // the tunnel: walls to 1.3 m, a barrel vault to 2.0 m
+  const u0 = 1.2, u1 = A + 1.6, um = (u0 + u1) / 2, len = u1 - u0;
+  for (const s of [-1, 1]) {
+    const wx = x + dx * um - dz * s * 0.82, wz = z + dz * um + dx * s * 0.82;
+    box("snowblock", wx, base, wz, len, 1.3, 0.2, da);
+    addSolid({ type: "poly", pts: rectPts(wx, wz, len, 0.2, da), y0: base, y1: base + 2.2, cls: "wall", label: "tunnel wall" });
+  }
+  for (let k = 0; k < 6; k++) {
+    const a0 = k / 6 * Math.PI, a1 = (k + 1) / 6 * Math.PI, R0 = 0.82, yc = base + 1.3;
+    const q = (a, u) => [x + dx * u - dz * Math.cos(a) * R0, yc + Math.sin(a) * 0.7, z + dz * u + dx * Math.cos(a) * R0];
+    const pts = [q(a0, u0), q(a0, u1), q(a1, u1), q(a1, u0)];
+    face("snowblock", pts, [0, 1, 0]); face("snowblock", pts, [0, -1, 0]);
+  }
+  addSolid({ type: "poly", pts: rectPts(x + dx * um, z + dz * um, len, 1.64, da), y0: base + 1.98, y1: base + 2.3, cls: "wall", label: "tunnel roof" });
+  // a sleeping bench of snow at the back, furs, a lamp
+  const back = da + Math.PI, bench = [];
+  for (let k = 0; k <= 6; k++) { const a = back - 1.1 + k / 6 * 2.2; bench.push([x + Math.cos(a) * 1.55, z + Math.sin(a) * 1.55]); }
+  prism("snowblock", "snowblock", bench, base, base + 0.45);
+  addSolid({ type: "poly", pts: bench.map(p => p.slice()), y0: base, y1: base + 0.45, cls: "wall", label: "snow bench" });
+  box("wool", x + Math.cos(back) * 1.1, base + 0.45, z + Math.sin(back) * 1.1, 1.6, 0.08, 0.7, back + Math.PI / 2);
+  box("linen", x + Math.cos(back) * 1.1 + Math.cos(back + 1.2) * 0.5, base + 0.45, z + Math.sin(back) * 1.1 + Math.sin(back + 1.2) * 0.5, 1.0, 0.1, 0.6, back);
+  const lx = x + Math.cos(da + 1.9) * 1.1, lz = z + Math.sin(da + 1.9) * 1.1;
+  box("granite", lx, base, lz, 0.4, 0.3, 0.4); addFire(lx, base + 0.3, lz, 0.3);
+  indoorShape(x, z, A, base - 0.1, base + H + 0.1);
+  noteRoof(x - A, x + A, z - A, z + A, name);
+  place(c, r, base - 0.5, base + H, name);
+  return { x: x + dx * (A + 3), z: z + dz * (A + 3), y: base, look: [x, z] };
+}
+
+// A rail along a segment at height y (or y0 to y1 along it): solid to 1 m.
+function railSeg(ax, az, ay, bx, bz, by, m = "timber") {
+  const mx = (ax + bx) / 2, mz = (az + bz) / 2, L = Math.hypot(bx - ax, bz - az), a = Math.atan2(bz - az, bx - ax);
+  if (L < 0.05) return;
+  for (const hgt of [0.95, 0.5]) for (const want of [[0, 1, 0], [0, -1, 0]]) face(m, [[ax, ay + hgt, az], [bx, by + hgt, bz], [bx, by + hgt + 0.07, bz], [ax, ay + hgt + 0.07, az]], [-(bz - az), 0, bx - ax].map((v, i) => i === 1 ? 0 : v * (want[1] > 0 ? 1 : -1)));
+  cyl("timber", ax, ay, az, 0.05, 1.02, 5);
+  addSolid({ type: "poly", pts: rectPts(mx, mz, L, 0.1, a), y0: Math.min(ay, by) - 0.2, y1: Math.max(ay, by) + 1.0, cls: "wall", label: "rail" });
+}
+// A deck of plank cells at y on piles down to `bed`, railed on its outer edges
+// except the edges in `gaps` ([c, r, d]) where a stair, bridge or door meets it.
+function deck(cells, y, o = {}) {
+  const inB = (c, r) => cells.some(([a, b]) => a === c && b === r), seen = new Set();
+  for (const [c, r] of cells) {
+    slabHex(c, r, y, o.top || "plank", "plank");
+    if (o.name && !AREA[idx(c, r)]) AREA[idx(c, r)] = o.name;
+    if (o.name) place(c, r, y - 0.5, y + 2.5, o.name);
+    for (let d = 0; d < 6; d++) {
+      const [A, B] = edgeEnds(c, r, d);
+      if (o.bed !== undefined) for (const p of [A, B]) { const k = Math.round(p[0] * 10) + ":" + Math.round(p[1] * 10); if (!seen.has(k)) { seen.add(k); solidCyl("timber", p[0], o.bed, p[1], 0.13, y - SLAB - o.bed, { n: 6 }); } }
+      const [c2, r2] = nb(c, r, d); if (inB(c2, r2) || o.rails === false) continue;
+      if ((o.gaps || []).some(([a, b, e]) => a === c && b === r && e === d)) continue;
+      if (o.skip && o.skip(c, r, d)) continue;
+      railSeg(A[0], A[1], y, B[0], B[1], y);
+    }
+  }
+}
+// A walkway from A to B ([x, y, z]), `sag` metres low in the middle: a rope
+// bridge (rails of rope), a boardwalk (piles, no rails) or a jetty.
+function bridge(A, B, o = {}) {
+  const w = o.width ?? 1.2, sag = o.sag ?? 0, dx = B[0] - A[0], dz = B[2] - A[2], L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L, ang = Math.atan2(uz, ux);
+  const h = t => A[1] + (B[1] - A[1]) * t - 4 * sag * t * (1 - t);
+  const n = Math.max(2, Math.round(L / 0.34));
+  for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; box(o.deck || "plank", A[0] + dx * t, h(t) - 0.08, A[2] + dz * t, L / n - 0.04, 0.08, w, ang); }
+  addSurface({
+    pts: rectPts((A[0] + B[0]) / 2, (A[2] + B[2]) / 2, L, w, ang), y0: Math.min(A[1], B[1]) - sag - 0.2, y1: Math.max(A[1], B[1]), label: o.label || "Rope bridge", detail: o.detail || `${L.toFixed(1)} m, ${sag.toFixed(1)} m of sag`,
+    iv(px, pz, out) { const rx = px - A[0], rz = pz - A[2], u = rx * ux + rz * uz, v = -rx * uz + rz * ux; if (u < 0 || u > L || Math.abs(v) > w / 2) return; const y = h(u / L); out.push([y - 0.12, y, this]); },
+  });
+  const nx = -uz, nz = ux;
+  if (o.rails !== false) {
+    const m = Math.max(2, Math.round(L / 1.4));
+    for (const s of [-1, 1]) for (let k = 0; k < m; k++) {
+      const t0 = k / m, t1 = (k + 1) / m, off = s * (w / 2 + 0.05);
+      railSeg(A[0] + dx * t0 + nx * off, A[2] + dz * t0 + nz * off, h(t0), A[0] + dx * t1 + nx * off, A[2] + dz * t1 + nz * off, h(t1), o.railMat || "rope");
+    }
+  }
+  if (o.piles !== undefined) {
+    const m = Math.max(1, Math.round(L / 2.2));
+    for (let k = 0; k <= m; k++) for (const s of [-1, 1]) { const t = k / m, px = A[0] + dx * t + nx * s * (w / 2 - 0.08), pz = A[2] + dz * t + nz * s * (w / 2 - 0.08); solidCyl("timber", px, o.piles, pz, 0.1, h(t) - 0.08 - o.piles, { n: 6 }); }
+  }
+}
+// A straight outdoor flight from A up to B, risers near 0.19 m; the walking
+// surface is the pitch line (or the treads, today's rule), like the others.
+function stairRun(A, B, o = {}) {
+  const w = o.width ?? 1.1, dx = B[0] - A[0], dz = B[2] - A[2], L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L, ang = Math.atan2(uz, ux);
+  const Hh = B[1] - A[1], n = Math.max(2, Math.round(Hh / 0.19)), rise = Hh / n, run = L / n;
+  for (let k = 0; k < n; k++) {
+    const top = A[1] + (k + 1) * rise, u = (k + 0.5) * run;
+    if (o.open) box(o.m || "plank", A[0] + ux * u, top - 0.07, A[2] + uz * u, run + 0.02, 0.07, w, ang);
+    else box(o.m || "stone", A[0] + ux * u, o.from ?? A[1], A[2] + uz * u, run + 0.01, top - (o.from ?? A[1]), w, ang);
+  }
+  addSurface({
+    pts: rectPts((A[0] + B[0]) / 2, (A[2] + B[2]) / 2, L, w, ang), y0: A[1], y1: B[1], label: o.label || "Outdoor stair", detail: `${n} risers of ${rise.toFixed(3)} m on ${run.toFixed(2)} m treads`,
+    iv(px, pz, out) { const rx = px - A[0], rz = pz - A[2], u = rx * ux + rz * uz, v = -rx * uz + rz * ux; if (u < 0 || u > L || Math.abs(v) > w / 2) return; out.push([o.open ? A[1] + stairTop(u, n, rise, run, MODE.proposed) - 0.1 : (o.from ?? A[1]) - 0.01, A[1] + stairTop(u, n, rise, run, MODE.proposed), this]); },
+  });
+  if (o.open) for (const s of [-1, 1]) { const nx = -uz * s * (w / 2 + 0.04), nz = ux * s * (w / 2 + 0.04); face("timber", [[A[0] + nx, A[1] - 0.25, A[2] + nz], [B[0] + nx, B[1] - 0.25, B[2] + nz], [B[0] + nx, B[1], B[2] + nz], [A[0] + nx, A[1], A[2] + nz]], [nx, 0, nz]); }
+  if (o.rails) for (const s of [-1, 1]) { const nx = -uz * s * (w / 2 + 0.05), nz = ux * s * (w / 2 + 0.05); railSeg(A[0] + nx, A[2] + nz, A[1], B[0] + nx, B[2] + nz, B[1], "timber"); }
+}
+
+// ---- plants ---------------------------------------------------------------
+// A Tenebris kapok: a trunk 2.3 m across, buttress roots, a crown overhead.
+function kapok(x, y, z, h, s = 1) {
+  cyl("kapok", x, y, z, 1.15 * s, h, 12, "kapok");
+  addSolid({ type: "circ", x, z, r: 1.15 * s, y0: y, y1: y + h, cls: "wall", label: "Kapok trunk" });
+  const rn = rng((x * 13 + z * 7) | 0);
+  for (let k = 0; k < 6; k++) { const a = k / 6 * 2 * Math.PI + rn() * 0.4, rr = 1.15 * s + 0.6; box("kapok", x + Math.cos(a) * rr, y, z + Math.sin(a) * rr, 1.5, 2.6 - rn(), 0.26, a); addSolid({ type: "poly", pts: rectPts(x + Math.cos(a) * rr, z + Math.sin(a) * rr, 1.5, 0.26, a), y0: y, y1: y + 2.2, cls: "wall", label: "buttress root" }); }
+  for (let k = 0; k < 5; k++) { const a = k / 5 * 2 * Math.PI + rn(), l = 4 + rn() * 3; box("kapok", x + Math.cos(a) * l / 2, y + h - 0.5 + rn(), z + Math.sin(a) * l / 2, l, 0.5, 0.5, a); }
+  for (let k = 0; k < 14; k++) { const a = rn() * 2 * Math.PI, d = rn() * 6.5, sz = 3 + rn() * 2.5; box("leaves", x + Math.cos(a) * d, y + h + rn() * 3.5, z + Math.sin(a) * d, sz, 1.8 + rn(), sz, rn() * 3); }
+  for (let k = 0; k < 8; k++) { const a = rn() * 2 * Math.PI, d = 3 + rn() * 3.5, l = 3 + rn() * 5; box("leaves", x + Math.cos(a) * d, y + h - l, z + Math.sin(a) * d, 0.08, l, 0.08); }
+}
+function cactus(x, y, z, s = 1) {
+  cyl("cactus", x, y, z, 0.26 * s, 2.4 * s, 8, "cactus");
+  addSolid({ type: "circ", x, z, r: 0.3 * s, y0: y, y1: y + 2.4 * s, cls: "wall", label: "Cactus" });
+  const rn = rng((x * 17 + z) | 0);
+  for (let k = 0; k < 2; k++) { if (rn() < 0.3) continue; const a = rn() * 6.28, ay = y + (0.9 + rn() * 0.7) * s, ax = x + Math.cos(a) * 0.55 * s, az = z + Math.sin(a) * 0.55 * s; box("cactus", (x + ax) / 2, ay, (z + az) / 2, 0.55 * s, 0.3 * s, 0.3 * s, a); cyl("cactus", ax, ay, az, 0.17 * s, 0.9 * s, 6, "cactus"); }
+}
+function reeds(x, y, z, n = 7) { const rn = rng((x * 31 + z * 3) | 0); for (let k = 0; k < n; k++) box(rn() < 0.5 ? "moss" : "leaves", x + (rn() - 0.5) * 1.2, y, z + (rn() - 0.5) * 1.2, 0.06, 1.1 + rn() * 1.0, 0.06, rn() * 3); }
+function shrub(x, y, z, s = 0.5, m = "sage") { const rn = rng((x * 7 + z * 11) | 0); cyl("bark", x, y, z, 0.08, 0.5 * s + 0.2, 5); for (let k = 0; k < 4; k++) box(m === "sage" ? "moss" : "leaves", x + (rn() - 0.5) * s, y + 0.3, z + (rn() - 0.5) * s, 0.8 * s + 0.3, 0.5, 0.8 * s + 0.3, rn()); }
+
+// ---- a post mill: the body turns on its post, the sails turn in the wind ----
+function windmill(x, y, z, facing = 0) {
+  for (let k = 0; k < 4; k++) { const a = k / 4 * 2 * Math.PI + Math.PI / 4; box("timber", x + Math.cos(a) * 1.1, y, z + Math.sin(a) * 1.1, 2.6, 0.3, 0.3, a); }
+  solidCyl("timber", x, y, z, 0.35, 5.2, { n: 8 });
+  box("boards", x, y + 5.2, z, 3.2, 3.6, 3.6, facing);
+  const [fx, fz] = [Math.cos(facing), Math.sin(facing)];
+  for (const s of [-1, 1]) face("shingle", [[x - fz * 1.9 * s - fx * 1.9, y + 8.8, z + fx * 1.9 * s - fz * 1.9], [x - fz * 1.9 * s + fx * 1.9, y + 8.8, z + fx * 1.9 * s + fz * 1.9], [x + fx * 1.9, y + 10.2, z + fz * 1.9], [x - fx * 1.9, y + 10.2, z - fz * 1.9]], [-fz * s, 1, fx * s]);
+  const hub = new THREE.Group(); hub.position.set(x + fx * 1.75, y + 7.4, z + fz * 1.75); hub.rotation.y = -facing;
+  const wood = new THREE.MeshStandardMaterial({ map: texture("timber"), roughness: 0.9 }), cloth = new THREE.MeshStandardMaterial({ map: texture("linen"), roughness: 1, side: THREE.DoubleSide });
+  const sails = new THREE.Group(); hub.add(sails);
+  for (let k = 0; k < 4; k++) {
+    const arm = new THREE.Group(); arm.rotation.x = k * Math.PI / 2;
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 5.4, 0.14), wood); stock.position.y = 2.7; arm.add(stock);
+    const sail = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 4.2), cloth); sail.rotation.y = Math.PI / 2; sail.position.set(0, 3.1, 0.6); arm.add(sail);
+    for (const m of [stock, sail]) m.castShadow = true;
+    sails.add(arm);
+  }
+  sails.rotation.order = "YXZ";
+  scene.add(hub); DRESS.push(hub); SPINNERS.push({ obj: sails, axis: "x", speed: 0.9 });
+}
+
+// ---- masonry: a ring keep and a curtain wall, for any stone (or ice) -------
+function ringKeep(kc, kr, o) {
+  const kb = TOP[idx(kc, kr)], ring = []; for (let d = 0; d < 6; d++) ring.push([...nb(kc, kr, d), d]);
+  const S = o.storeys || 2, kTop = kb + S * STOREY, name = o.name || "Keep";
+  noteRoof(cx(kc, kr) - 1.5 * W, cx(kc, kr) + 1.5 * W, cz(kc, kr) - 2.5 * R, cz(kc, kr) + 2.5 * R, name);
+  TOP[idx(kc, kr)] = kb;
+  for (const [c, r] of ring) {
+    const i = idx(c, r); TOP[i] = kb; TOPMAT[i] = o.floor || "flag"; indoor(c, r, kb - 0.05, kTop); AREA[i] = name;
+    for (let s = 1; s <= S; s++) { if (s < S) slabHex(c, r, kb + s * STOREY, o.floor || "plank", o.floor || "plank"); else { prism(o.roofTop || "flag", o.out, hexPts(c, r), kTop - SLAB, kTop, { bottom: true, bottomMat: o.floor || "plank" }); RUNS[i].push([kTop - SLAB, kTop, "roof"]); } }
+    for (let s = 0; s < S; s++) place(c, r, kb + s * STOREY - 0.5, kb + (s + 1) * STOREY, name + (s === 0 ? ", ground floor" : ", floor " + (s + 1)));
+    place(c, r, kTop - 0.5, kTop + 3, name + ", roof");
+    for (let d = 0; d < 6; d++) {
+      const [c2, r2] = nb(c, r, d); if ((c2 === kc && r2 === kr) || ring.some(([a, b]) => a === c2 && b === r2)) continue;
+      for (let s = 0; s < S; s++) {
+        const y0 = kb + s * STOREY, openings = [];
+        if (s === 0 && ring[o.doorRing][0] === c && ring[o.doorRing][1] === r && d === o.doorDir) openings.push({ yb: y0, ye: y0 + DOOR_H + 0.3, w: 1.2, door: true, name, open: true });
+        else if (s > 0 && (d + s) % 2 === 0) openings.push({ yb: y0 + 0.9, ye: y0 + 2.1, w: 0.4 });
+        edgeWall(c, r, d, y0, y0 + STOREY, { t: KEEP_T, mOut: o.out, mIn: o.in, mEdge: o.out, openings });
+      }
+      merlons(c, r, d, kTop, KEEP_T, o.out);
+    }
+  }
+  newelStair(kc, kr, 3, kb, kTop, { t: 0.4, exits: Array.from({ length: S }, (_, s) => ({ d: 3, y: kb + (s + 1) * STOREY })), wallTop: kTop + 2.6, tread: o.in, newel: o.in, mOut: o.out, mIn: o.in, mEdge: o.out });
+  pyramidRoof(kc, kr, kTop + 2.6, o.spire || 2.4, o.spireMat || "slate", 0.35, { name: name + "'s turret", partOf: name });
+  place(kc, kr, kb - 0.5, kTop + 3, name + ", stair");
+  const [dc, dr] = nb(ring[o.doorRing][0], ring[o.doorRing][1], o.doorDir);
+  return { ring, kb, kTop, door: outsideDoor(ring[o.doorRing][0], ring[o.doorRing][1], o.doorDir, kb, 2.2), roof: { x: cx(ring[3][0], ring[3][1]) - 0.3, z: cz(ring[3][0], ring[3][1]), y: kTop, look: [cx(dc, dr), cz(dc, dr)] } };
+}
+function curtainWall(cells, top, gates, mat, topMat, isOutside) {
+  const inSet = (c, r) => cells.some(([a, b]) => a === c && b === r);
+  for (const [c, r] of cells) {
+    const i = idx(c, r), base = TOP[i], pts = hexPts(c, r), gate = gates.some(([a, b]) => a === c && b === r);
+    AREA[i] = "The curtain wall";
+    if (gate) { RUNS[i].push([base + 3.6, top, "wall"]); prism(topMat, mat, pts, base + 3.6, top, { bottom: true, bottomMat: mat }); place(c, r, base, base + 3.6, "The gate"); }
+    else { RUNS[i].push([base, top, "wall"]); prism(topMat, mat, pts, base, top); }
+    place(c, r, top - 0.5, top + 3, "Wall walk");
+    for (let d = 0; d < 6; d++) { const [c2, r2] = nb(c, r, d); if (!inSet(c2, r2) && isOutside(c2, r2)) merlons(c, r, d, top, STONE_T, mat); }
+  }
+}
+
+// =====================================================================
+// The settlements: a village in the fields, a desert town, a tundra camp,
+// a jungle in the trees and a swamp on stilts. Each fills the same grid.
+// =====================================================================
+function hexDist(c1, r1, c2, r2) { const [q1] = toAx(c1, r1), [q2] = toAx(c2, r2), dq = q2 - q1, dr = r2 - r1; return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr)); }
+function hexRing(c, r, k) { // the cells at hex distance k, walked in order
+  if (k === 0) return [[c, r]];
+  let [q, rr] = toAx(c, r); q += DIRS[4][0] * k; rr += DIRS[4][1] * k;
+  const out = [];
+  for (let side = 0; side < 6; side++) for (let s = 0; s < k; s++) { out.push(toOff(q, rr)); q += DIRS[side][0]; rr += DIRS[side][1]; }
+  return out.filter(([a, b]) => inMap(a, b));
+}
+function dirToward(c, r, x, z) { let best = 0, bd = -2; const dx = x - cx(c, r), dz = z - cz(c, r), l = Math.hypot(dx, dz) || 1; for (let d = 0; d < 6; d++) { const [ux, uz] = dvec(d), s = (dx * ux + dz * uz) / l; if (s > bd) { bd = s; best = d; } } return best; }
+function ground(fn) { for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) { const i = idx(c, r), g = fn(c, r); TOP[i] = g.h; TOPMAT[i] = g.top; SIDEMAT[i] = g.side || g.top; AREA[i] = g.area || ""; } }
+function freeCell(c, r) { const i = idx(c, r); return inMap(c, r) && !INDOOR[i].length && !RUNS[i].length && !NO_TREE.has(i) && !STEPCELL.has(i); }
+function scatter(prob, fn, seed = 5) { const rn = rng(seed); for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) { if (!freeCell(c, r)) continue; let near = false; for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (inMap(a, b) && (INDOOR[idx(a, b)].length || RUNS[idx(a, b)].length)) near = true; } if (near) continue; const p = typeof prob === "function" ? prob(c, r) : prob; if (rn() < p) fn(cx(c, r) + (rn() - 0.5), TOP[idx(c, r)], cz(c, r) + (rn() - 0.5), rn); } }
+function marketStall(c, r, cloth, y) {
+  const x = cx(c, r), z = cz(c, r);
+  for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) solidCyl("timber", x + a * 0.9, y, z + b * 0.55, 0.06, b > 0 ? 2.4 : 2.1, { n: 6 });
+  solidBox("plank", x, y, z - 0.3, 1.9, 0.9, 0.7, 0);
+  for (const want of [[0, 1, 0], [0, -1, 0]]) face(cloth, [[x - 1.05, y + 2.45, z + 0.7], [x + 1.05, y + 2.45, z + 0.7], [x + 1.05, y + 2.05, z - 0.8], [x - 1.05, y + 2.05, z - 0.8]], want, p => [(p[0] - x + 1.05) / 2.1, (p[2] - z + 0.8) / 1.5]);
+  const rn = rng(c * 7 + r);
+  for (let k = 0; k < 5; k++) box(rn() < 0.5 ? "leaves" : "sand", x - 0.75 + k * 0.37, y + 0.9, z - 0.3 + (rn() - 0.5) * 0.3, 0.22, 0.14, 0.22);
+  NO_TREE.add(idx(c, r));
+}
+function smithyShed(c0, r0, y, name) { // two cells by three, open on its long sides, a forge at one end
+  const x0 = cx(c0, r0) - W / 2, x1 = cx(c0 + 2, r0 + 1) + W / 2, z0 = cz(c0, r0) - R, z1 = cz(c0 + 2, r0 + 1) + R;
+  for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1], [(x0 + x1) / 2, z0], [(x0 + x1) / 2, z1]]) solidCyl("timber", x, y, z, 0.15, 3.2, { n: 6 });
+  gableRoof(x0, x1, z0, z1, y + 3.2, { m: "shingle", pitch: 0.7, gable: "timber", name });
+  for (let r = r0; r <= r0 + 1; r++) for (let c = c0; c <= c0 + 2; c++) { indoor(c, r, y - 0.1, y + 3.2); AREA[idx(c, r)] = name; TOPMAT[idx(c, r)] = "dirt"; RUNS[idx(c, r)].push([y + 3.2, y + 3.4, "ceiling"]); NO_TREE.add(idx(c, r)); }
+  const fx = cx(c0 + 2, r0 + 1) + 0.3, fz = cz(c0 + 2, r0 + 1) + 0.6;
+  solidBox("stone", fx, y, fz, 1.6, 0.9, 1.3, 0); box("dirt", fx, y + 0.9, fz, 1.2, 0.05, 0.9); box("stone", fx, y + 1.4, fz, 1.3, 1.8, 1.0, 0);
+  addFire(fx, y + 0.95, fz, 0.9, "forge");
+  solidBox("iron", cx(c0 + 1, r0 + 1), y, cz(c0 + 1, r0 + 1), 0.5, 0.55, 0.4, 0.3); box("iron", cx(c0 + 1, r0 + 1), y + 0.55, cz(c0 + 1, r0 + 1), 0.9, 0.22, 0.3, 0.3);
+  person(cx(c0 + 1, r0 + 1) - 0.6, y, cz(c0 + 1, r0 + 1) - 0.1, 0.3, 0x2f2f33, { role: "Smith", work: "hammer" });
+  return { x: cx(c0 + 1, r0 - 1), z: cz(c0 + 1, r0 - 1), y, look: [cx(c0 + 1, r0 + 1), cz(c0 + 1, r0 + 1)] };
+}
+function crops(c, r, y) { TOPMAT[idx(c, r)] = "dirt"; NO_TREE.add(idx(c, r)); AREA[idx(c, r)] = AREA[idx(c, r)] || "A field"; for (let k = -1; k <= 1; k++) box("leaves", cx(c, r), y, cz(c, r) + k * 0.8, 2.2, 0.28, 0.22); }
+function fenceEdge(c, r, d, y) { const [A, B] = edgeEnds(c, r, d), mx = (A[0] + B[0]) / 2, mz = (A[1] + B[1]) / 2, a = Math.atan2(B[1] - A[1], B[0] - A[0]); box("timber", mx, y + 1.05, mz, R, 0.1, 0.08, a); box("timber", mx, y + 0.55, mz, R, 0.1, 0.08, a); cyl("timber", A[0], y, A[1], 0.07, 1.25, 6); addSolid({ type: "poly", pts: rectPts(mx, mz, R, 0.12, a), y0: y, y1: y + 1.15, cls: "wall", label: "fence" }); }
+
+// ---- a village in the fields, standing by itself ---------------------------
+function makeVillage() {
+  const hill = (c, r) => Math.max(0, 5 - Math.hypot(c - 41, (r - 26) * 0.87));
+  ground((c, r) => {
+    const pond = Math.hypot(c - 7, (r - 24) * 0.87) < 2.6, h = pond ? 0 : 1 + Math.floor(hill(c, r) / 1.8) + (c < 3 || c > 46 || r > 31 ? 1 : 0);
+    return { h, top: pond ? "sand" : "grass", side: "dirt", area: pond ? "The pond" : "Fields" };
+  });
+  const lane = (c, r) => { if (!inMap(c, r) || TOP[idx(c, r)] !== 1) return; TOPMAT[idx(c, r)] = "dirt"; AREA[idx(c, r)] = "The lane"; NO_TREE.add(idx(c, r)); };
+  for (let c = 6; c <= 43; c++) lane(c, 17);
+  for (let r = 4; r <= 30; r++) lane(25, r);
+  for (let r = 13; r <= 21; r++) for (let c = 21; c <= 29; c++) if (TOPMAT[idx(c, r)] !== "dirt") { AREA[idx(c, r)] = "The green"; }
+  const homes = [
+    { kit: "stone", c0: 11, c1: 13, r0: 15, r1: 16, front: 16, newel: [11, 15], trade: "hearth" },
+    { kit: "halftimber", c0: 15, c1: 18, r0: 15, r1: 16, front: 16, flight: true, trade: "weaver" },
+    { kit: "timber", c0: 31, c1: 33, r0: 15, r1: 16, front: 16, newel: [33, 15], trade: "cooper" },
+    { kit: "halftimber", c0: 35, c1: 38, r0: 15, r1: 16, front: 16, flight: true, trade: "hearth" },
+    { kit: "timber", c0: 11, c1: 14, r0: 18, r1: 19, front: 18, flight: true, trade: "baker" },
+    { kit: "stone", c0: 16, c1: 18, r0: 18, r1: 19, front: 18, newel: [16, 19], trade: "hearth" },
+    { kit: "halftimber", c0: 31, c1: 34, r0: 18, r1: 19, front: 18, flight: true, trade: "hearth" },
+    { kit: "timber", c0: 36, c1: 38, r0: 18, r1: 19, front: 18, newel: [38, 19], trade: "potter" },
+    { kit: "halftimber", c0: 21, c1: 24, r0: 22, r1: 23, front: 22, flight: true, trade: "hearth", name: "The Plough inn" },
+  ];
+  homes.forEach((hm, n) => { const out = townHouse(hm, n); if (n === 1) GOTO.house = out; if (n === 0) GOTO.newel = out; if (n === 8) GOTO.inn = out; });
+  GOTO.smithy = smithyShed(26, 22, 1, "The smithy");
+  const hall = building({ kit: "ashlar", c0: 22, c1: 26, r0: 10, r1: 11, base: 1, storeys: 1, tall: 2, name: "The village hall", pitch: 0.85, doors: [[24, 11, 1, 0, "open"]], window: (c, r, d) => d === 1 || d === 2 || d === 4 || d === 5 });
+  for (let row = 0; row < 2; row++) for (const c of [23, 25]) bench(cx(c, 10) + 0.2, 1, cz(10, 10) + row * 1.1 - 0.3, 0, 2.2);
+  GOTO.hall = outsideDoor(24, 11, 1, 1);
+  hut("straw", [[9, 21]], "Cottage"); hut("straw", [[12, 23]], "Cottage");
+  windmill(cx(41, 26), TOP[idx(41, 26)], cz(41, 26), -2.2);
+  GOTO.mill = { x: cx(39, 23), z: cz(39, 23), y: TOP[idx(39, 23)], look: [cx(41, 26), cz(41, 26)], pitch: 0.35 };
+  { const x = cx(23, 15), z = cz(23, 15); solidCyl("stone", x, 1, z, 0.95, 0.85, { n: 12, cap: "stone" }); for (const s of [-1, 1]) solidCyl("timber", x + s * 0.8, 1.85, z, 0.08, 1.6, { n: 6 }); box("timber", x, 3.4, z, 1.9, 0.12, 0.12); box("shingle", x, 3.5, z, 2.2, 0.08, 1.5); NO_TREE.add(idx(23, 15)); }
+  tree(cx(27, 19), 1, cz(27, 19), 1.7); NO_TREE.add(idx(27, 19));
+  for (let r = 4; r <= 8; r++) for (let c = 8; c <= 43; c++) if (c !== 25 && TOP[idx(c, r)] === 1) crops(c, r, 1);
+  for (let c = 8; c <= 43; c++) if (c !== 25) { fenceEdge(c, 8, 1, 1); fenceEdge(c, 8, 2, 1); }
+  lantern(cx(24, 17) + 0.8, 1, cz(24, 17) + 0.9); lantern(cx(22, 21), 1, cz(22, 21) - 0.6);
+  person(cx(25, 14), 1, cz(25, 14), 0, 0x7a5a3a, { role: "Villager", path: [[cx(25, 9), cz(25, 9)], [cx(25, 27), cz(25, 27)]], speed: 1.1 });
+  person(cx(12, 17), 1, cz(12, 17), 0, 0x8a3a3a, { role: "Villager", path: [[cx(8, 17), cz(8, 17)], [cx(20, 17), cz(20, 17)]], speed: 1.0 });
+  person(cx(26, 17), 1, cz(26, 17), 0, 0x3a6a5a, { role: "Villager", path: [[cx(30, 17), cz(30, 17)], [cx(42, 17), cz(42, 17)]], speed: 1.2 });
+  person(cx(20, 6), 1, cz(20, 6), 0, 0x6e5a3a, { role: "Farmer", path: [[cx(12, 6), cz(12, 6)], [cx(22, 6), cz(22, 6)]], speed: 0.6 });
+  GOTO.green = { x: cx(25, 16), z: cz(25, 16), y: 1, look: [cx(23, 15), cz(23, 15)] };
+  GOTO.pond = { x: cx(10, 24), z: cz(10, 24), y: 1, look: [cx(7, 24), cz(7, 24)] };
+  GOTO.fields = { x: cx(25, 9), z: cz(25, 9), y: 1, look: [cx(18, 6), cz(18, 6)] };
+  scatter((c, r) => (c < 5 || c > 44 || r < 3 || r > 28) ? 0.3 : 0.07, (x, y, z, rn) => tree(x, y, z, 0.8 + rn() * 0.6), 9);
+  buildTerrain(); buildPosts();
+}
+
+// ---- a desert town round an oasis -----------------------------------------
+function makeDesert() {
+  const oasis = [25, 17];
+  ground((c, r) => {
+    const plateau = c >= 11 && c <= 39 && r >= 7 && r <= 27, d = hexDist(c, r, ...oasis);
+    if (plateau && d <= 1) return { h: 1, top: "sand", side: "sandstone", area: "The oasis" };
+    if (plateau) return { h: 2, top: d === 2 ? "sand" : d <= 4 ? "flag" : "sand2", side: "sandstone", area: d <= 4 ? "The plaza" : "The town" };
+    return { h: 2 + Math.floor(vnoise(c * 0.25, r * 0.3) * 3), top: "sand2", side: "sandstone", area: "The dunes" };
+  });
+  // flat-roofed sandstone houses, a stair up the east end to the roof
+  const houses = [[13, 9, 10, 1], [20, 9, 10, 2], [29, 9, 10, 1], [13, 24, 24, 4], [29, 24, 24, 5]];
+  houses.forEach(([c0, r0, front, dd], n) => {
+    const cells = []; for (let r = r0; r <= r0 + 1; r++) for (let c = c0; c <= c0 + 2; c++) cells.push([c, r]);
+    const name = "Sandstone house", base = 2, c1 = c0 + 2;
+    building({ kit: "sandstone", cells, base, storeys: 1, name, doors: [[c0 + 1, front, dd, 0]], window: (c, r, d) => (c + d) % 2 === 0, parapetGaps: [[c1, front, 0]] });
+    const xe = cx(c1, front) + W / 2, z = cz(c1, front);
+    stairRun([xe + 5.4, base, z], [xe, base + STOREY + 0.3, z], { width: 1.1, m: "sandstone", label: "Stair to the roof" });
+    for (let k = 0; k < 2; k++) NO_TREE.add(idx(c1 + 1 + k, front));
+    const [x, zc] = [cx(c0, front), cz(c0, front)];
+    box("cloth", x + 0.4, base, zc, 1.6, 0.03, 1.0, 0); for (let k = 0; k < 3; k++) solidCyl("clay", cx(c1, front) - 0.4 + k * 0.4, base, cz(c1, front) + (front === r0 ? -0.8 : 0.8), 0.18, 0.5, { n: 8, cap: "clay" });
+    table(cx(c0 + 1, r0 + (front === r0 ? 1 : 0)), base, cz(c0 + 1, r0 + (front === r0 ? 1 : 0)), 0, 1.4);
+    const out = outsideDoor(c0 + 1, front, dd, base); if (!KIT_SPOT.sandstone) KIT_SPOT.sandstone = Object.assign(out, { center: [cx(c0 + 1, r0), cz(c0 + 1, r0) + 1.2, base + 3] });
+    if (n === 1) { GOTO.roof = { x: cx(c0 + 1, r0), z: cz(c0 + 1, r0) + 1.2, y: base + STOREY + 0.3, look: [cx(25, 17), cz(25, 17)] }; GOTO.roofStair = { x: xe + 6.4, z, y: base, look: [xe - 1, z] }; }
+  });
+  // domed houses of mud brick, one cell each, and a domed hall of seven
+  for (const [c, r] of [[14, 14], [14, 19], [36, 14], [36, 19], [19, 22]]) {
+    const d = dirToward(c, r, ...[cx(25, 17), cz(25, 17)]);
+    building({ kit: "adobe", cells: [[c, r]], base: 2, storeys: 1, name: "Domed house", doors: [[c, r, d, 0]], window: (cc, rr, dd) => dd === (d + 3) % 6 });
+    const [bx, bz, ba] = spot(c, r, (d + 2) % 6, 0.8); box("wool", bx, 2, bz, 1.6, 0.12, 0.7, ba + Math.PI / 2);
+    solidCyl("clay", ...spot(c, r, (d + 4) % 6, 0.9).slice(0, 1), 2, spot(c, r, (d + 4) % 6, 0.9)[1], 0.2, 0.55, { n: 8, cap: "clay" });
+    const out = outsideDoor(c, r, d, 2); if (!KIT_SPOT.adobe) KIT_SPOT.adobe = Object.assign(out, { center: [cx(c, r), cz(c, r), 5] });
+  }
+  const hallC = [35, 23], ring = [hallC, ...hexRing(...hallC, 1)];
+  const hb = building({ kit: "adobe", cells: ring, base: 2, storeys: 1, tall: 2, name: "The caravan hall", doors: [[34, 23, 3, 0, "open"]], window: (c, r, d) => d % 2 === 0 });
+  for (let k = 0; k < 3; k++) crate(cx(36, 22) + (k - 1) * 0.8, 2, cz(36, 22) + 0.3, 0.2 * k, 0.7);
+  for (const [c, r] of [[35, 24], [36, 23]]) { box("cloth2", cx(c, r), 2, cz(c, r), 2.0, 0.03, 1.4, 0.4); bench(cx(c, r), 2, cz(c, r) - 0.9, 0.4, 1.6); }
+  person(cx(35, 23), 2, cz(35, 23), 0, 0x8a5a2a, { role: "Caravan master", work: "idle" });
+  GOTO.hall = outsideDoor(34, 23, 3, 2);
+  for (const [c, r, cl] of [[21, 14, "cloth"], [29, 14, "cloth2"], [21, 20, "cloth2"], [29, 20, "cloth"]]) { marketStall(c, r, cl, 2); person(cx(c, r), 2, cz(c, r) + 0.35, -Math.PI / 2, 0x9a6a3a, { role: "Trader", work: "idle" }); }
+  for (const [c, r] of hexRing(...oasis, 2)) if ((c + r) % 2) cactus(cx(c, r) + 0.4, 2, cz(c, r) - 0.3, 0.9);
+  person(cx(25, 13), 2, cz(25, 13), 0, 0xd8cfb8, { role: "Water carrier", path: [[cx(25, 11), cz(25, 11)], [cx(25, 14), cz(25, 14)]], speed: 0.8 });
+  lantern(cx(23, 13), 2, cz(23, 13)); lantern(cx(27, 21), 2, cz(27, 21));
+  GOTO.plaza = { x: cx(25, 13), z: cz(25, 13), y: 2, look: [cx(25, 17), cz(25, 17)] };
+  GOTO.dunes = { x: cx(6, 17), z: cz(6, 17), y: 2, look: [cx(25, 17), cz(25, 17)] };
+  scatter((c, r) => AREA[idx(c, r)] === "The dunes" ? 0.05 : 0, (x, y, z, rn) => cactus(x, y, z, 0.7 + rn() * 0.6), 11);
+  buildTerrain(); buildPosts();
+}
+
+// A house on stilts with a deck at its door and an open stair down to `footY`.
+function stiltHouse(o) {
+  const { kit, cells, deckCells, base, name, door, stairEdge, footY } = o, bedY = o.bed;
+  building({ kit, cells, base, raised: true, stilts: bedY, storeys: 1, name, doors: [door], window: (c, r, d) => (c + d) % 2 === 0 });
+  const inHouse = (c, r) => cells.some(([a, b]) => a === c && b === r);
+  deck(deckCells, base, { bed: bedY, gaps: [stairEdge], name: name + ", deck", skip: (c, r, d) => { const [a, b] = nb(c, r, d); return inHouse(a, b); } });
+  const [sc, sr, sd] = stairEdge, [A, B] = edgeEnds(sc, sr, sd), [nx, nz] = dvec(sd), mx = (A[0] + B[0]) / 2, mz = (A[1] + B[1]) / 2;
+  const run = Math.round((base - footY) / 0.19) * 0.3, foot = [mx + nx * run, footY, mz + nz * run];
+  stairRun(foot, [mx, base, mz], { width: 1.1, open: true, rails: true, m: "plank", label: "Porch stair" });
+  const [c0, r0] = cells[0];
+  bed(cx(c0, r0), base, cz(c0, r0), 0);
+  if (cells.length > 2) { const [c1, r1] = cells[cells.length - 1]; table(cx(c1, r1), base, cz(c1, r1), 0, 1.4); }
+  const [dc, dr] = nb(door[0], door[1], door[2]);
+  return { foot, n: [nx, nz], stairTop: [mx, base, mz], deckSpot: { x: cx(dc, dr), z: cz(dc, dr), y: base, look: [cx(door[0], door[1]), cz(door[0], door[1])] }, inside: { x: cx(door[0], door[1]), z: cz(door[0], door[1]), y: base, look: [cx(c0, r0), cz(c0, r0)] }, out: { x: foot[0] + nx * 1.2, z: foot[2] + nz * 1.2, y: footY, look: [mx, mz], center: [cx(c0, r0), cz(c0, r0), base + 2] } };
+}
+
+// ---- a tundra camp: igloos, a granite longhouse, and a castle of ice --------
+function makeTundra() {
+  const K = [35, 16], lake = [12, 27];
+  ground((c, r) => {
+    const edge = Math.max(4 - c, c - 45, 3 - r, r - 30, 0), dl = Math.hypot(c - lake[0], (r - lake[1]) * 0.87);
+    if (dl < 4) return { h: 0.6, top: "ice", side: "granite", area: "The frozen lake" };
+    if (hexDist(c, r, ...K) <= 4) return { h: 1, top: "snow", side: "granite", area: "The ice castle" };
+    return { h: 1 + Math.floor(edge * 0.8 + (edge ? vnoise(c * 0.4, r * 0.4) * 2 : 0)), top: vnoise(c * 0.35 + 7, r * 0.35) > 0.45 ? "snow" : "sage", side: "granite", area: "The tundra" };
+  });
+  // the castle: a keep of ice, a curtain wall with a gate, two towers with spires
+  const top = 1 + 5, keep = ringKeep(K[0], K[1], { storeys: 2, out: "ice", in: "ice", floor: "snow", roofTop: "snow", spire: 5, spireMat: "ice", name: "The ice keep", doorRing: 3, doorDir: 3 });
+  const curtain = hexRing(...K, 4), [gq, gr] = toAx(...K), gate = toOff(gq + DIRS[3][0] * 4, gr + DIRS[3][1] * 4);
+  curtainWall(curtain, top, [gate], "ice", "snow", (c, r) => hexDist(c, r, ...K) > 4);
+  const towers = [];
+  for (const [c, r] of hexRing(...K, 3)) {
+    if (towers.length === 2 || towers.some(([a, b]) => hexDist(a, b, c, r) < 5)) continue;
+    for (let d = 0; d < 6; d++) {
+      const [wc, wr] = nb(c, r, d); if (hexDist(wc, wr, ...K) !== 4 || (wc === gate[0] && wr === gate[1])) continue;
+      const entry = ((d - 2 * (top - 1)) % 6 + 6) % 6, [ec, er] = nb(c, r, entry), de = hexDist(ec, er, ...K);
+      if (de < 2 || de > 3 || hexDist(c, r, gate[0], gate[1]) < 3) continue;
+      towers.push([c, r]);
+      const t = wallTower(c, r, d, "Ice tower", { top, mat: "ice", roofMat: "ice", roofH: 5 });
+      if (towers.length === 1) GOTO.tower = { x: (cx(t.ec, t.er) + cx(c, r)) / 2, z: (cz(t.ec, t.er) + cz(c, r)) / 2, y: 1, look: [cx(c, r), cz(c, r)] };
+      break;
+    }
+  }
+  for (const [c, r] of keep.ring.slice(0, 2)) { bench(cx(c, r), 1 + STOREY, cz(c, r), 0, 1.6); }
+  box("wool", cx(keep.ring[4][0], keep.ring[4][1]), 1 + STOREY, cz(keep.ring[4][0], keep.ring[4][1]), 2, 0.1, 1.2, 0.5);
+  person(cx(keep.ring[2][0], keep.ring[2][1]), 1 + 2 * STOREY, cz(keep.ring[2][0], keep.ring[2][1]), 0, 0x3d4a5e, { role: "Watcher", work: "idle", spear: true });
+  const [gxs, gzs] = [cx(...gate), cz(...gate)];
+  GOTO.gate = { x: gxs - 4.5, z: gzs, y: 1, look: [cx(...K), cz(...K)] };
+  GOTO.keepRoof = keep.roof;
+  KIT_SPOT.ice = Object.assign({ x: gxs - 4.5, z: gzs, y: 1, look: [gxs, gzs] }, { center: [cx(...K), cz(...K), 7] });
+  // igloos round a fire, each door facing it
+  const camp = [13, 12], campX = cx(...camp), campZ = cz(...camp);
+  [[9, 9], [16, 8], [13, 16], [7, 14], [19, 17]].forEach(([c, r], n) => { const sp = igloo(c, r, dirToward(c, r, campX, campZ), "Igloo"); if (n === 0) { KIT_SPOT.igloo = Object.assign(sp, { center: [cx(c, r), cz(c, r), 2.5] }); GOTO.igloo = sp; } });
+  firePit(campX, 1, campZ); NO_TREE.add(idx(...camp));
+  for (let k = 0; k < 2; k++) { const x = campX + 3 + k * 1.6, z = campZ - 2.4; for (const s of [-1, 1]) cyl("timber", x + s * 0.7, 1, z, 0.06, 1.9, 5); box("timber", x, 2.8, z, 1.6, 0.06, 0.06); box("wool", x, 1.7, z, 1.3, 1.0, 0.04); }
+  // the longhouse: granite walls, a turf roof under snow
+  building({ kit: "granite", c0: 20, c1: 24, r0: 11, r1: 12, base: 1, storeys: 1, name: "The longhouse", doors: [[22, 12, 1, 0]], window: (c, r, d) => d === 4 || d === 5 });
+  addFire(cx(22, 11), 1.05, cz(22, 11) + 0.9, 0.8); for (const k of [-1, 1]) box("fieldstone", cx(22, 11) + k * 0.9, 1, cz(22, 11) + 0.9, 0.3, 0.2, 0.9);
+  for (const c of [21, 23]) { bench(cx(c, 11), 1, cz(c, 11) - 0.6, 0, 1.8); bed(cx(c, 12), 1, cz(c, 12) + 0.5, 0); }
+  GOTO.longhouse = outsideDoor(22, 12, 1, 1);
+  KIT_SPOT.granite = Object.assign(outsideDoor(22, 12, 1, 1), { center: [cx(22, 11), cz(22, 11) + 1.2, 4] });
+  person(campX + 1.6, 1, campZ + 0.6, Math.PI, 0x4a3a2e, { role: "Hunter", work: "idle" });
+  person(campX - 1.5, 1, campZ - 0.4, 0, 0x5a4232, { role: "Hunter", work: "idle" });
+  { const [gc, gr2] = curtain[Math.floor(curtain.length / 3)]; person(cx(gc, gr2), top, cz(gc, gr2), 0, 0x3d4a5e, { role: "Wall guard", work: "idle", spear: true }); }
+  GOTO.camp = { x: campX - 2, z: campZ + 2.5, y: 1, look: [campX, campZ] };
+  GOTO.lake = { x: cx(lake[0], lake[1] - 5), z: cz(lake[0], lake[1] - 5), y: 1, look: [cx(...lake), cz(...lake)] };
+  scatter((c, r) => TOPMAT[idx(c, r)] === "sage" ? 0.18 : 0.03, (x, y, z, rn) => rn() < 0.75 ? shrub(x, y, z, 0.6 + rn() * 0.5) : solidBox("granite", x, y, z, 0.8 + rn(), 0.5 + rn() * 0.8, 0.8 + rn(), rn() * 3), 13);
+  buildTerrain(); buildPosts();
+}
+
+// ---- a jungle village in three kapok giants, joined by rope bridges ---------
+function makeJungle() {
+  const trees = [[16, 18], [25, 13], [27, 23]], PY = 9;
+  const stream = (c, r) => Math.abs(r - (7.5 + 2.2 * Math.sin(c * 0.33))) < 1.1;
+  ground((c, r) => {
+    const edge = Math.max(3 - c, c - 46, 2 - r, r - 31, 0);
+    if (stream(c, r) && !edge) return { h: 0, top: "redloam", side: "redloam", area: "The stream" };
+    return { h: 1 + Math.floor(edge * 0.9 + (edge ? vnoise(c * 0.4, r * 0.4) * 2 : 0)), top: vnoise(c * 0.3, r * 0.3) > 0.62 ? "redloam" : "litter", side: edge ? "basalt" : "redloam", area: "The jungle floor" };
+  });
+  const plat = trees.map(t => [t, ...hexRing(...t, 1)]);
+  const inPlat = (k, c, r) => plat[k].some(([a, b]) => a === c && b === r);
+  for (const cells of plat) for (const [c, r] of cells) { TOP[idx(c, r)] = 1; NO_TREE.add(idx(c, r)); }
+  // bridges between the platforms: from the ring cell nearest the other tree, through its facing edge
+  const gaps = [[], [], []], ends = [];
+  const endAt = (k, other) => {
+    const [ox, oz] = [cx(...trees[other]), cz(...trees[other])];
+    let best = null, bd = 1e9; for (const [c, r] of plat[k].slice(1)) { const d2 = (cx(c, r) - ox) ** 2 + (cz(c, r) - oz) ** 2; if (d2 < bd) { bd = d2; best = [c, r]; } }
+    let d = dirToward(best[0], best[1], ox, oz); if (inPlat(k, ...nb(best[0], best[1], d))) d = (d + 1) % 6;
+    gaps[k].push([best[0], best[1], d]);
+    const [A, B] = edgeEnds(best[0], best[1], d); return [(A[0] + B[0]) / 2, PY, (A[1] + B[1]) / 2];
+  };
+  for (const [a, b] of [[0, 1], [1, 2], [0, 2]]) { const pa = endAt(a, b), pb = endAt(b, a); ends.push([pa, pb]); bridge(pa, pb, { sag: 0.8, width: 1.2, label: "Rope bridge" }); }
+  // a stair tower of poles up to the first platform, on the side away from the bridges
+  const [t0c, t0r] = trees[0]; let tower = null;
+  for (const [c, r] of plat[0].slice(1)) {
+    if (tower || gaps[0].some(([a, b]) => a === c && b === r)) continue;
+    for (let d = 0; d < 6 && !tower; d++) {
+      const [ec, er] = nb(c, r, d); if (inPlat(0, ec, er) || !inMap(ec, er) || stream(ec, er)) continue;
+      const wallDir = (d + 3) % 6, entry = ((wallDir - 2 * (PY - 1)) % 6 + 6) % 6, [nc2, nr2] = nb(ec, er, entry);
+      if (!inMap(nc2, nr2) || TOP[idx(nc2, nr2)] !== 1 || inPlat(0, nc2, nr2)) continue;
+      tower = [ec, er, c, r, d];
+      const t = wallTower(ec, er, wallDir, "Stair tower", { top: PY, mat: "poles", roofMat: "leafthatch", roofH: 2.6 });
+      GOTO.tower = { x: (cx(t.ec, t.er) + cx(ec, er)) / 2, z: (cz(t.ec, t.er) + cz(ec, er)) / 2, y: 1, look: [cx(ec, er), cz(ec, er)] };
+      gaps[0].push([c, r, d]); NO_TREE.add(idx(ec, er)); NO_TREE.add(idx(nc2, nr2));
+    }
+  }
+  // huts on the platforms, on ring cells that no bridge or stair uses
+  const used = k => new Set(gaps[k].map(([c, r]) => c + ":" + r));
+  const hutCells = [];
+  plat.forEach((cells, k) => {
+    const u = used(k), free = cells.slice(1).filter(([c, r]) => !u.has(c + ":" + r));
+    const want = k === 0 ? 2 : 1, pick = [];
+    for (const cc of free) { if (pick.length === want) break; if (!pick.length || pick.some(([a, b]) => hexDist(a, b, ...cc) === 1)) pick.push(cc); }
+    const door = (() => { for (const [c, r] of pick) for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (inPlat(k, a, b) && !pick.some(([x, y]) => x === a && y === b) && !(a === trees[k][0] && b === trees[k][1])) return [c, r, d, 0]; } })();
+    if (!door) { hutCells.push([]); return; }
+    building({ kit: "junglehut", cells: pick, base: PY, raised: true, storeys: 1, name: k === 2 ? "Lookout hut" : "Tree hut", doors: [door], window: (c, r, d) => d % 2 === 1 });
+    hutCells.push(pick);
+    const [pc, pr] = pick[0]; const [bx, bz, ba] = spot(pc, pr, door[2] + 3, 0.7); solidBox("leafthatch", bx, PY, bz, 1.6, 0.3, 0.7, ba + Math.PI / 2);
+    const [dc, dr] = nb(door[0], door[1], door[2]); const sp = { x: cx(dc, dr), z: cz(dc, dr), y: PY, look: [cx(door[0], door[1]), cz(door[0], door[1])] };
+    if (k === 1) { GOTO.treehut = sp; KIT_SPOT.junglehut = Object.assign({ ...sp }, { center: [cx(pc, pr), cz(pc, pr), PY + 2] }); }
+    if (k === 2) GOTO.lookout = sp;
+  });
+  trees.forEach((t, k) => {
+    const [x, z] = [cx(...t), cz(...t)];
+    kapok(x, 1, z, 15);
+    const isHut = (c, r) => hutCells[k].some(([a, b]) => a === c && b === r);
+    deck(plat[k].filter(([c, r]) => !isHut(c, r)), PY, { gaps: gaps[k], name: "Platform", skip: (c, r, d) => isHut(...nb(c, r, d)) });
+    for (const [c, r] of plat[k].slice(1)) { const a = Math.atan2(cz(c, r) - z, cx(c, r) - x); box("kapok", (x + cx(c, r)) / 2, PY - 2.4, (z + cz(c, r)) / 2, 2.6, 0.25, 0.25, a); }
+  });
+  addFire(cx(...plat[1][2]), PY + 0.05, cz(...plat[1][2]), 0.5);
+  GOTO.platform = { x: cx(...plat[0][1]), z: cz(...plat[0][1]), y: PY, look: [cx(...trees[1]), cz(...trees[1])] };
+  const [e0a, e0b] = ends[0]; GOTO.bridge = { x: e0a[0] + (e0b[0] - e0a[0]) * 0.1, z: e0a[2] + (e0b[2] - e0a[2]) * 0.1, y: PY, look: [e0b[0], e0b[2]] };
+  KIT_SPOT.treehouse = Object.assign({ x: cx(...trees[0]) - 9, z: cz(...trees[0]) + 3, y: 1, look: [cx(...trees[0]), cz(...trees[0])] }, { center: [cx(...trees[0]), cz(...trees[0]), PY + 2] });
+  KIT_SPOT.bridge = Object.assign({ ...GOTO.bridge }, { center: [(e0a[0] + e0b[0]) / 2, (e0a[2] + e0b[2]) / 2, PY] });
+  // two huts on the ground, on short stilts, and a clearing with a fire
+  const g1 = stiltHouse({ kit: "junglehut", cells: [[33, 16], [34, 16]], deckCells: [[33, 17]], base: 2.2, bed: 1, name: "Stilt hut", door: [33, 16, 1, 0], stairEdge: [33, 17, 1], footY: 1 });
+  const g2 = stiltHouse({ kit: "junglehut", cells: [[9, 23]], deckCells: [[10, 23]], base: 2.2, bed: 1, name: "Stilt hut", door: [9, 23, 0, 0], stairEdge: [10, 23, 0], footY: 1 });
+  firePit(cx(21, 20), 1, cz(21, 20)); NO_TREE.add(idx(21, 20));
+  for (const [c, r] of [[20, 19], [22, 21], [21, 18]]) NO_TREE.add(idx(c, r));
+  person(cx(21, 20) + 1.4, 1, cz(21, 20), Math.PI, 0x5a7a3a, { role: "Forager", work: "idle" });
+  person(cx(...plat[0][2]), PY, cz(...plat[0][2]), 0, 0x7a4a2a, { role: "Tree dweller", work: "idle" });
+  person(cx(...plat[2][3]), PY, cz(...plat[2][3]), 0, 0x6a5a2a, { role: "Lookout", work: "idle" });
+  GOTO.clearing = { x: cx(21, 20) - 2.5, z: cz(21, 20) - 1.5, y: 1, look: [cx(...trees[0]), cz(...trees[0])], pitch: 0.4 };
+  scatter((c, r) => stream(c, r) ? 0 : hexDist(c, r, 21, 18) < 9 ? 0.12 : 0.35, (x, y, z, rn) => rn() < 0.8 ? tree(x, y, z, 1.0 + rn() * 0.7) : solidBox("basalt", x, y, z, 1 + rn(), 0.8 + rn(), 1 + rn(), rn() * 3), 17);
+  buildTerrain(); buildPosts();
+}
+
+// ---- a swamp village on stilts, joined by boardwalks ------------------------
+function makeSwamp() {
+  const WL = 0.3, BW = 1.0, BED = -0.5;
+  ground((c, r) => {
+    if (c <= 8 && r >= 12 && r <= 21) return { h: 0.8, top: "moss", side: "peat", area: "The landing" };
+    if (c >= 41 && r >= 11 && r <= 20) return { h: 0.8, top: "moss", side: "peat", area: "The east island" };
+    if (vnoise(c * 0.3 + 3, r * 0.3) > 0.72) return { h: 0.6, top: "moss", side: "peat", area: "A hummock" };
+    return { h: BED, top: "peat", side: "peat", area: "The bayou" };
+  });
+  const zs = cz(0, 17), spineA = [cx(8, 17) - 1, BW, zs], spineB = [cx(41, 17) + 1, BW, zs];
+  bridge(spineA, spineB, { width: 1.5, rails: false, piles: BED, label: "Boardwalk", detail: "0.7 m over the water, on piles" });
+  const houses = [
+    { cells: [[13, 10], [14, 10], [15, 10], [13, 11], [14, 11], [15, 11]], deck: [[13, 12], [14, 12], [15, 12]], door: [14, 11, 2, 0], stair: [14, 12, 1] },
+    { cells: [[23, 10], [24, 10], [25, 10], [23, 11], [24, 11], [25, 11]], deck: [[23, 12], [24, 12], [25, 12]], door: [24, 11, 2, 0], stair: [24, 12, 2] },
+    { cells: [[32, 10], [33, 10], [34, 10], [32, 11], [33, 11], [34, 11]], deck: [[32, 12], [33, 12], [34, 12]], door: [33, 11, 2, 0], stair: [33, 12, 1] },
+    { cells: [[17, 23], [18, 23], [19, 23], [17, 24], [18, 24], [19, 24]], deck: [[17, 22], [18, 22], [19, 22]], door: [18, 23, 4, 0], stair: [18, 22, 4] },
+    { cells: [[28, 23], [29, 23], [30, 23], [28, 24], [29, 24], [30, 24]], deck: [[28, 22], [29, 22], [30, 22]], door: [29, 23, 4, 0], stair: [29, 22, 5] },
+  ];
+  houses.forEach((h, n) => {
+    for (const [c, r] of [...h.cells, ...h.deck]) NO_TREE.add(idx(c, r));
+    const s = stiltHouse({ kit: "alder", cells: h.cells, deckCells: h.deck, base: 2.3, bed: BED, name: "Stilt house", door: h.door, stairEdge: h.stair, footY: BW });
+    const t = (zs - s.foot[2]) / s.n[1], S = [s.foot[0] + s.n[0] * t, BW, zs];
+    bridge(S, s.foot, { width: 1.2, rails: false, piles: BED, label: "Boardwalk" });
+    if (n === 1) { GOTO.deck = s.deckSpot; GOTO.inside = s.inside; }
+    if (n === 0) KIT_SPOT.alder = s.out;
+    person(s.deckSpot.x + 0.6, 2.3, s.deckSpot.z, 0, [0x5a6a4a, 0x6a4a3a, 0x4a5a6a, 0x7a6a4a, 0x5a4a5a][n], { role: "Stilt dweller", work: "idle" });
+  });
+  for (let x = spineA[0] + 4; x < spineB[0] - 2; x += 9) lantern(x, BW, zs + 0.66);
+  // the east island: a fishing shack and a jetty with a boat
+  building({ kit: "alder", c0: 43, c1: 44, r0: 13, r1: 14, base: 0.8, storeys: 1, name: "Fishing shack", doors: [[43, 14, 4, 0]], window: (c, r, d) => d === 0 });
+  GOTO.shack = outsideDoor(43, 14, 4, 0.8);
+  for (let k = 0; k < 3; k++) barrel(cx(44, 13) + (k - 1) * 0.6, 0.8, cz(44, 13) + 0.5);
+  const jA = [cx(44, 20), 1.0, cz(44, 20)], jB = [cx(44, 25), 1.0, cz(44, 25)];
+  bridge(jA, jB, { width: 1.8, rails: false, piles: BED, label: "Jetty" });
+  for (let k = -3; k <= 3; k++) { const w = 0.9 * Math.cos(k / 3.6 * 1.5); box("alder", jB[0] + 1.6, WL - 0.25, cz(44, 23) + k * 0.5, Math.max(0.3, w * 2), 0.45, 0.52, 0); }
+  person(jB[0] - 0.3, 1.0, jB[2] - 0.8, Math.PI / 2, 0x4a5a3a, { role: "Fisher", work: "idle" });
+  GOTO.dock = { x: jA[0], z: jA[2] - 1, y: 1.0, look: [jB[0], jB[2]] };
+  GOTO.landing = { x: cx(5, 17), z: cz(5, 17), y: 0.8, look: [cx(20, 17), cz(20, 17)] };
+  GOTO.boardwalk = { x: cx(20, 17), z: zs, y: BW, look: [cx(30, 17), zs] };
+  KIT_SPOT.bridge = Object.assign({ ...GOTO.boardwalk }, { center: [cx(24, 17), zs, 1] });
+  person(cx(6, 16), 0.8, cz(6, 16), 0, 0x6a5a3a, { role: "Poler", work: "idle" });
+  // reeds at the water's edge, alders on the hummocks and standing in the water
+  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+    const i = idx(c, r); if (TOP[i] < 0 || NO_TREE.has(i)) continue;
+    for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (inMap(a, b) && TOP[idx(a, b)] < 0) { const [A, B] = edgeEnds(c, r, d); reeds((A[0] + B[0]) / 2, BED, (A[1] + B[1]) / 2, 5); break; } }
+  }
+  scatter((c, r) => TOP[idx(c, r)] > 0 ? 0.25 : 0.03, (x, y, z, rn) => tree(x, y, z, 0.9 + rn() * 0.6), 21);
+  buildTerrain(); buildPosts();
+}
+
+// ---- the registry ------------------------------------------------------------
+Object.assign(SCENES, {
+  town: { label: "Walled town, fields", build: makeTown, start: "gate", get places() { return PLACES_LIST; }, orbit: { tx: W * 25, tz: ROW * 16, dist: 150 },
+    env: { fog: [70, 330], water: { level: -0.5, color: 0x2d5f70, opacity: 0.86, zMax: ROW * 5 + R }, far: { color: 0x4f6d38, y: 0.7, zMin: ROW * 5 + R } } },
+  village: { label: "Village, fields", build: makeVillage, start: "green", orbit: { tx: W * 25, tz: ROW * 16, dist: 120 },
+    places: [["green", "The green"], ["inn", "The Plough"], ["smithy", "Smithy"], ["hall", "Village hall"], ["house", "House, flight"], ["newel", "House, newel"], ["mill", "Windmill"], ["pond", "Pond"], ["fields", "Fields"]],
+    env: { fog: [70, 330], water: { level: 0.6, color: 0x3a6a70, opacity: 0.88 }, far: { color: 0x55743c, y: 0.9 } } },
+  desert: { label: "Desert, oasis town", build: makeDesert, start: "plaza", orbit: { tx: W * 25, tz: ROW * 17, dist: 115 },
+    places: [["plaza", "Plaza"], ["roofStair", "Roof stair"], ["roof", "Roof terrace"], ["hall", "Caravan hall"], ["dunes", "Dunes"]],
+    env: { fog: [90, 420], tint: 0xd9b88a, tintAmt: 0.18, water: { level: 1.6, color: 0x2f7f86, opacity: 0.88 }, far: { color: 0xb89660, y: 1.9 } } },
+  tundra: { label: "Tundra, ice castle", build: makeTundra, start: "camp", orbit: { tx: W * 24, tz: ROW * 16, dist: 125 },
+    places: [["camp", "Camp"], ["igloo", "Igloo"], ["longhouse", "Longhouse"], ["gate", "Castle gate"], ["keepRoof", "Keep roof"], ["tower", "Ice tower"], ["lake", "Frozen lake"]],
+    env: { fog: [55, 280], tint: 0xc9d6e2, tintAmt: 0.3, water: null, far: { color: 0xc4ced6, y: 0.9 } } },
+  jungle: { label: "Jungle, tree houses", build: makeJungle, start: "clearing", orbit: { tx: W * 22, tz: ROW * 18, dist: 90 },
+    places: [["clearing", "Clearing"], ["tower", "Stair tower"], ["platform", "Platform"], ["bridge", "Rope bridge"], ["treehut", "Tree hut"], ["lookout", "Lookout"]],
+    env: { fog: [30, 210], tint: 0x9fc29a, tintAmt: 0.3, water: { level: 0.55, color: 0x4a6a4a, opacity: 0.85 }, far: { color: 0x2f5a2f, y: 0.9 } } },
+  swamp: { label: "Swamp, stilt village", build: makeSwamp, start: "landing", orbit: { tx: W * 25, tz: ROW * 17, dist: 110 },
+    places: [["landing", "Landing"], ["boardwalk", "Boardwalk"], ["deck", "Stilt house deck"], ["inside", "Inside a stilt house"], ["dock", "Jetty"], ["shack", "Fishing shack"]],
+    env: { fog: [14, 150], tint: 0xa9b39a, tintAmt: 0.45, water: { level: 0.3, color: 0x3f4a2c, opacity: 0.93, rough: 0.85 }, far: { color: 0x4d5a36, y: 0.25 } } },
+});
+
+// =====================================================================
 // The walker. walking.rs's rules, with the three proposed changes behind
 // MODE.proposed: a stair answers its pitch line, a grounded walker is held
 // to a floor up to SNAP below, and thin geometry pushes the body out along
@@ -1400,7 +2072,9 @@ function tick(dt, inp) {
   const fx = Math.cos(P.yaw), fz = Math.sin(P.yaw), rx = -fz, rz = fx;
   let mx = inp.fwd * fx + inp.side * rx, mz = inp.fwd * fz + inp.side * rz;
   const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
-  const speed = inp.sprint ? SPRINT : WALK;
+  const env = SCENES[SCENE] && SCENES[SCENE].env, wading = env && env.water && P.feet < env.water.level - 0.3 && !MODE.noclip;
+  P.wading = !!wading;
+  const speed = (inp.sprint ? SPRINT : WALK) * (wading ? 0.5 : 1); // walking.rs water_movement_mult
   if (MODE.noclip) {
     const cp = Math.cos(P.pitch), sp = Math.sin(P.pitch);
     P.x += (inp.fwd * fx * cp + inp.side * rx) * speed * dt; P.z += (inp.fwd * fz * cp + inp.side * rz) * speed * dt; P.feet += (inp.fwd * sp + (inp.jump ? 1 : 0) - (inp.down ? 1 : 0)) * speed * dt;
@@ -1471,6 +2145,8 @@ scene.add(sun, sun.target);
 const POOL = []; for (let i = 0; i < 8; i++) { const l = new THREE.PointLight(0xff9a4a, 0, 11, 2); scene.add(l); POOL.push(l); }
 scene.add(DOOR_GROUP);
 
+// three r128 takes a material's colour as linear light; the hex values here are sRGB.
+const lin = hex => new THREE.Color(hex).convertSRGBToLinear();
 function finalize() {
   for (const [m, b] of Object.entries(BUF)) {
     const g = new THREE.BufferGeometry(), nv = b.p.length / 3, sky = new Float32Array(nv);
@@ -1491,15 +2167,23 @@ function buildDressing() {
   for (const f of FIRES) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.28 * f.s, 0.4 * f.s, 0.28 * f.s), f.lamp ? lampMat : fireMat);
     m.position.set(f.x, f.y + 0.2 * f.s, f.z); scene.add(m); FIREMESH.push({ m, f, ph: Math.random() * 6 });
-    if (f.lamp) { const cage = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), new THREE.MeshStandardMaterial({ color: 0x2b2b2e, wireframe: true })); cage.position.copy(m.position); scene.add(cage); }
+    if (f.lamp) { const cage = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), new THREE.MeshStandardMaterial({ color: 0x2b2b2e, wireframe: true })); cage.position.copy(m.position); scene.add(cage); DRESS.push(cage); }
   }
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(900, 420), new THREE.MeshStandardMaterial({ color: 0x2d5f70, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.86 }));
-  water.rotation.x = -Math.PI / 2; water.position.set(W * NC / 2, -0.5, cz(0, 5) + R - 210); scene.add(water);
-  // far land at the map's edge, so the hills do not end in a cliff over nothing
-  const far = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshStandardMaterial({ color: 0x4f6d38, roughness: 1 }));
-  far.rotation.x = -Math.PI / 2; far.position.set(W * NC / 2, 0.7, cz(0, 5) + R + 450); scene.add(far);
+  const env = SCENES[SCENE].env, add = m => { scene.add(m); DRESS.push(m); return m; };
+  for (const fm of FIREMESH) DRESS.push(fm.m);
+  if (env.water) { // one sheet at the water level; ground above it hides it
+    const wv = env.water, depth = wv.zMax !== undefined ? wv.zMax + 450 : 900, zc = wv.zMax !== undefined ? wv.zMax - depth / 2 : ROW * NR / 2;
+    // fog is worked out per vertex, so a sheet of two triangles 900 m across is
+    // fogged as if every point were 450 m away: tile it at 7.5 m
+    const water = add(new THREE.Mesh(new THREE.PlaneGeometry(900, depth, 120, Math.max(1, Math.round(depth / 7.5))), new THREE.MeshStandardMaterial({ color: lin(wv.color), roughness: wv.rough ?? 0.5, metalness: 0, transparent: true, opacity: wv.opacity })));
+    water.rotation.x = -Math.PI / 2; water.position.set(W * NC / 2, wv.level, zc);
+  }
+  // far ground past the map's edge, so the land does not end in a cliff over nothing
+  const fv = env.far;
+  const far = add(new THREE.Mesh(new THREE.PlaneGeometry(900, 900, 120, 120), new THREE.MeshStandardMaterial({ color: lin(fv.color), roughness: 1 })));
+  far.rotation.x = -Math.PI / 2; far.position.set(W * NC / 2, fv.y, fv.zMin !== undefined ? fv.zMin + 450 : ROW * NR / 2);
   for (const n of NPCS) scene.add(n.g);
-  marker.visible = false; scene.add(marker);
+  if (!marker.parent) scene.add(marker); marker.visible = STATE.view === "overview";
 }
 const marker = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.8, 12), new THREE.MeshStandardMaterial({ color: 0xf0b43c, emissive: 0x6a4a10 }));
 
@@ -1514,6 +2198,9 @@ function setTime(h) {
   STATE.sunDir = sunDir;
   const noon = new THREE.Color(0x9fc6e2), eve = new THREE.Color(0xe0a27a), night = new THREE.Color(0x0e1424);
   cA.copy(night).lerp(noon, day); cA.lerp(eve, dusk * 0.55);
+  const env = SCENES[SCENE] ? SCENES[SCENE].env : {};
+  if (env.tint) cA.lerp(new THREE.Color(env.tint).multiplyScalar(0.25 + 0.75 * day), env.tintAmt);
+  if (env.fog) { scene.fog.near = env.fog[0]; scene.fog.far = env.fog[1]; }
   scene.background = cA.clone(); scene.fog.color.copy(cA);
   sun.color.setHSL(0.09 - 0.03 * dusk, 0.5 + 0.4 * dusk, 0.85 - 0.15 * dusk);
   sun.intensity = el > 0 ? 2.6 * clamp(el * 3, 0, 1) : 0.28;
@@ -1550,7 +2237,9 @@ function updateHint() { const h = $("hint"); h.hidden = !(STATE.view === "walk" 
 const PLACES_LIST = [["gate", "Lake gate"], ["market", "Market"], ["inn", "The Lantern"], ["innStair", "Inn stair"], ["smithy", "Smithy"], ["house", "House, flight"], ["newel", "House, newel"], ["moot", "Moot hall"], ["keep", "Keep"], ["keepRoof", "Keep roof"], ["tower", "Wall tower"], ["wall", "Wall walk"], ["hamlet", "Hamlet"]];
 const KIT_LIST = [["straw", "Straw hut", "reed, thatch"], ["mud", "Mud hut", "cob, turf"], ["timber", "Timber", "boards, shingle"], ["halftimber", "Half-timber", "stone, daub"],
   ["brick", "Red brick", "tile roof"], ["brickbuff", "Buff brick", "slate roof"], ["brickdark", "Clinker brick", "Flemish bond"], ["stone", "Fieldstone", "thatch roof"],
-  ["ashlar", "Ashlar", "cut stone"], ["clay", "Clay", "flat roof"], ["marble", "Marble", "columns"]];
+  ["ashlar", "Ashlar", "cut stone"], ["clay", "Clay", "flat roof"], ["marble", "Marble", "columns"],
+  ["sandstone", "Sandstone", "roof stair"], ["adobe", "Adobe dome", "mud brick"], ["igloo", "Igloo", "snow blocks"], ["granite", "Longhouse", "granite, turf"], ["ice", "Ice castle", "ice blocks"],
+  ["treehouse", "Tree house", "kapok platform"], ["junglehut", "Kapok hut", "poles, leaves"], ["bridge", "Walkway", "planks, rope"], ["alder", "Stilt house", "alder, reed"]];
 const narrow = () => matchMedia("(max-width:860px)").matches;
 function setTownOpen(open) { const t = document.querySelector(".town"); t.dataset.open = open; $("townToggle").textContent = open ? "Hide" : "Places"; $("townToggle").setAttribute("aria-expanded", open); }
 function fillList(which) {
@@ -1559,7 +2248,7 @@ function fillList(which) {
   const go = (spot, label) => { teleport(spot); setView("walk"); canvas.focus(); toast(label); if (narrow()) setTownOpen(false); };
   // In the overview a kit is framed from its door side; walking, you are put at its door.
   const frame = (sp, label) => { const [x, z, top] = sp.center; ORB.tx = x; ORB.tz = z; ORB.ty = (sp.y + top) / 2; ORB.dist = 21; ORB.pitch = 0.5; ORB.yaw = Math.atan2(sp.look[1] - sp.z, sp.look[0] - sp.x) + 0.35; toast(label); if (narrow()) setTownOpen(false); };
-  if (which === "places") for (const [k, label] of PLACES_LIST) { const b = document.createElement("button"); b.textContent = label; b.onclick = () => go(GOTO[k], label); g.appendChild(b); }
+  if (which === "places") for (const [k, label] of SCENES[SCENE].places) { if (!GOTO[k]) continue; const b = document.createElement("button"); b.textContent = label; b.onclick = () => go(GOTO[k], label); g.appendChild(b); }
   else for (const [k, label, hint] of KIT_LIST) { if (!KIT_SPOT[k]) continue; const b = document.createElement("button"); b.innerHTML = `${label}<small>${hint}</small>`; b.onclick = () => STATE.view === "overview" ? frame(KIT_SPOT[k], label) : go(KIT_SPOT[k], label); g.appendChild(b); }
 }
 function buildUI() {
@@ -1567,6 +2256,7 @@ function buildUI() {
   $("tabPlaces").onclick = () => fillList("places");
   $("tabKits").onclick = () => fillList("kits");
   $("townToggle").onclick = () => setTownOpen(document.querySelector(".town").dataset.open === "false");
+  $("scene").onchange = e => { $("loading").hidden = false; $("loading").textContent = "Building " + SCENES[e.target.value].label.toLowerCase() + "..."; setTimeout(() => { loadScene(e.target.value); $("loading").hidden = true; }, 30); };
   setTownOpen(!narrow());
   const keys = [["W A S D", "Walk"], ["Mouse", "Look (click first)"], ["Shift", "Sprint"], ["Space", "Jump"], ["E", "Open or close a door"], ["V", "Walk / overview"], ["C", "Show collision"], ["T", "Proposed / today's walker"], ["N", "Fly through walls"], ["Esc", "Let go of the mouse"]];
   $("keys").innerHTML = keys.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
@@ -1705,7 +2395,7 @@ function placeName() {
 function ro(k, v, u) { return `<div class="ro"><span class="k">${k}</span><span class="v">${v}${u ? `<small>${u}</small>` : ""}</span></div>`; }
 function hud() {
   if (STATE.view === "overview") {
-    $("where").innerHTML = `Overview <small>a walled town on three terraces and a hamlet, ${NC} x ${NR} cells, ${Math.round(NC * W)} m x ${Math.round(NR * ROW)} m</small>`;
+    $("where").innerHTML = `Overview <small>${SCENES[SCENE].label}, ${NC} x ${NR} cells, ${Math.round(NC * W)} m x ${Math.round(NR * ROW)} m</small>`;
     $("readouts").innerHTML = ro("Cell", "2.833", "m") + ro("Layer", "1.000", "m") + ro("Storey", "3", "layers") + ro("Doors", DOORS.length) + ro("Colliders", SOLIDS.length);
     $("chips").innerHTML = `<span class="chip on">${MODE.proposed ? "Proposed walker" : "Today's walker"}</span>`;
     return;
@@ -1719,6 +2409,7 @@ function hud() {
   const chips = [[MODE.proposed ? "Proposed" : "Today's walker", "on"], [MODE.noclip ? "Flying" : P.grounded ? "On the ground" : "In the air", MODE.noclip ? "on" : P.grounded ? "good" : "bad"]];
   if (now - P.lastStepT < 0.5 && Math.abs(P.lastStep) > 0.04) chips.push([(P.lastStep > 0 ? "Stepped up " : "Held down ") + Math.abs(P.lastStep).toFixed(2) + " m", ""]);
   if (P.blocked) chips.push(["Blocked", "bad"]);
+  if (P.wading) chips.push(["Wading, half speed", ""]);
   if (P.airOnStair) chips.push([`Left the stair ${P.airOnStair}x`, "bad"]);
   $("chips").innerHTML = chips.map(([t, k]) => `<span class="chip ${k}">${t}</span>`).join("");
 }
@@ -1768,10 +2459,15 @@ function frame(now) {
   if (steps === 14) acc = 0;
   for (const n of NPCS) animateNpc(n, dt);
   for (const d of DOORS) { d.a += clamp((d.open ? 1 : 0) - d.a, -dt * 3, dt * 3); d.pivot.rotation.y = -d.base + d.swing * smooth(d.a) * Math.PI / 2 * 0.95; }
+  for (const s of SPINNERS) s.obj.rotation[s.axis] += s.speed * dt;
   for (const f of FIREMESH) { const s = f.f.lamp ? 1 : 0.8 + 0.3 * Math.sin(T * 9 + f.ph) * Math.sin(T * 5.3 + f.ph * 2); f.m.scale.set(1, s, 1); }
   if ((lightT -= dt) <= 0) { assignLights(); lightT = 0.3; }
   for (const pl of POOL) pl.intensity = pl.userData.base ? pl.userData.base * (0.88 + 0.12 * Math.sin(T * 11 + pl.position.x)) : 0;
   let focus;
+  { // fog is set for walking; seen from above it would hide the settlement
+    const f = (SCENES[SCENE] && SCENES[SCENE].env.fog) || [70, 330], o = STATE.view === "overview";
+    scene.fog.near = o ? f[0] + ORB.dist * 0.9 : f[0]; scene.fog.far = o ? f[1] + ORB.dist * 1.8 : f[1];
+  }
   if (STATE.view === "walk") {
     camera.fov = 75; camera.near = 0.05;
     camera.position.set(P.x, P.feet + EYE, P.z);
@@ -1815,19 +2511,29 @@ function animateNpc(n, dt) {
 // =====================================================================
 // Boot
 // =====================================================================
-function boot() {
-  makeTown();
+function loadScene(key) {
+  if (!SCENES[key]) key = "town";
+  SCENE = key; $("scene").value = key;
+  resetWorld();
+  SCENES[key].build();
   finalize();
   buildDressing();
+  fillList("places");
+  Object.assign(ORB, { ty: 2, yaw: -1.9, pitch: 0.72 }, SCENES[key].orbit);
+  teleport(GOTO[SCENES[key].start]);
+  setTime(+$("tod").value); assignLights();
+  $("status").innerHTML = `<strong>${SOLIDS.length.toLocaleString()}</strong> colliders, <strong>${DOORS.length}</strong> doors, <strong>${NPCS.length}</strong> people. Pick a place, or double-click to walk there.`;
+  try { history.replaceState(null, "", "#" + key); } catch (e) {}
+}
+function boot() {
   buildUI();
   setWalker("proposed");
-  setTime(+$("tod").value);
-  teleport(GOTO.gate);
+  let first = "town"; try { const h = location.hash.slice(1); if (SCENES[h]) first = h; } catch (e) {}
+  loadScene(first);
   resize(); setView("overview");
   $("loading").hidden = true;
-  $("status").innerHTML = `<strong>${SOLIDS.length.toLocaleString()}</strong> colliders, <strong>${DOORS.length}</strong> doors, <strong>${NPCS.length}</strong> townsfolk. Pick a place, or double-click the town.`;
   requestAnimationFrame(t => { last = t; frame(t); });
 }
-window.__town = { P, MODE, DOORS, GOTO, tick, teleport, standAt, setWalker, useDoor, setView, setTime, cellAt, TOP, idx, nb, intervalsAt, nearSolids, pushOut, SOLIDS, RUNS, POOL, LIGHTS, ROOFS, ROOF_CLASHES, KIT_SPOT, HUT_SPOTS, TOUCH, ORB };
+window.__town = { P, MODE, DOORS, GOTO, tick, teleport, standAt, setWalker, useDoor, setView, setTime, cellAt, TOP, idx, nb, intervalsAt, nearSolids, pushOut, SOLIDS, RUNS, POOL, LIGHTS, ROOFS, ROOF_CLASHES, KIT_SPOT, HUT_SPOTS, TOUCH, ORB, loadScene, SCENES, NPCS, three: scene, DRESS, get scene() { return SCENE; } };
 setTimeout(boot, 30);
 </script>

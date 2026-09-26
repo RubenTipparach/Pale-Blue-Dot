@@ -85,6 +85,30 @@ the keep's.
 - **WHEN** a town is laid out
 - **THEN** every pair of roofs is checked and none overlap
 
+### Requirement: A settlement is built from its biome's materials
+A settlement's kits and plants SHALL come from its biome's catalogue entry, and
+SHALL NOT borrow another biome's.
+
+#### Scenario: A desert town
+- **WHEN** a settlement is laid out in the desert biome
+- **THEN** its buildings are of sandstone, mud brick and salt plaster
+- **AND** its plants are the desert's cactus
+
+### Requirement: Decks, walkways and outdoor stairs collide like floors
+A raised deck, a walkway between two points (a rope bridge, a boardwalk, a
+jetty) and an outdoor stair SHALL answer the stand query with the top of their
+planks, and their rails SHALL block the walker.
+
+#### Scenario: Across a rope bridge
+- **WHEN** the walker crosses a rope bridge with 0.8 m of sag between two
+  platforms at 9 m
+- **THEN** its feet follow the planks down to 8.2 m and up again
+- **AND** it is grounded on every tick
+
+#### Scenario: Up a porch stair
+- **WHEN** the walker climbs a stilt house's porch stair from the boardwalk
+- **THEN** it reaches the deck with no eye jump over 0.1 m
+
 ### Requirement: Doors are world state
 Opening or closing a door SHALL be a world mutation that enters the durable
 transaction path when it happens. A closed door SHALL block the walker and an

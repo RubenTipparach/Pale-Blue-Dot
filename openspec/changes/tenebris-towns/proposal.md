@@ -8,7 +8,11 @@ their stuff is not super advanced."** Then, on the first mockup: "Roof is
 clipping here and the move stick isn't working when I tap on my phone. Can you
 make a couple of different kits? Like a small straw huts or dirt huts or wooden
 houses, or brick houses. Try to mix with different brick types, stone, marble,
-clay."
+clay." And on the kits: "I would think different biomes would have different
+building materials. Do you have sets like igloos, ice castles? What about
+deserts? Jungles with big tree houses and wooden bridges? I also want to see
+what a small town by itself would look like as well. Also a swamp would have
+like houses easier on wooden platforms like the bayou."
 
 The world has terrain, trees, water and weather, and nothing anyone built.
 Three things stand between the engine and a town you can walk into:
@@ -71,6 +75,18 @@ Three things stand between the engine and a town you can walk into:
   cells and the stairs are the same for all of them. Huts are the one exception
   to the storey: one storey of two layers, 1.9 m doors, a cone or turf roof.
   The town mixes the house kits; a hamlet of huts stands outside the east wall.
+- **A settlement per biome, from that biome's materials.** Six, switched in
+  the mockup: the walled town and a village standing by itself in the fields,
+  a desert town round an oasis (sandstone houses with roof stairs, mud-brick
+  domes, a domed caravan hall), a tundra camp (igloos, a granite longhouse under
+  turf and snow, a castle of ice), a jungle village on platforms in three kapok
+  giants joined by rope bridges, and a swamp village of alder stilt houses on
+  boardwalks. Each takes its materials and plants from the biome catalogue in
+  `docs/game-design.md`, so no settlement borrows another biome's.
+- **Four new pieces carry them:** a dome (its underside the ceiling), a raised
+  deck on piles, a walkway between two points (a rope bridge that sags, a
+  boardwalk, a jetty), and an outdoor stair between two points. All four
+  collide as floors, ceilings and rails the way the rest do.
 - **Roofs never cut into each other.** The first mockup's clipping was two
   houses in touching columns: on the hex grid their plans interlock by half a
   cell, and the eaves overlapped. Every roof's plan, eaves included, is now
@@ -107,6 +123,8 @@ Three things stand between the engine and a town you can walk into:
 6. **Roofs:** should they be walkable? The mockup lets you stand on them.
 7. **Kits:** which should be in the game, and which belong to which places
    (huts outside the walls, brick and marble for the rich)?
+8. **Biomes:** are these the right settlements for each? Mountains, beach and
+   ocean have none yet, and the other planets' biomes are not Tenebris's.
 
 ## Status
 

@@ -14,7 +14,11 @@
       stick was cancelled by the page's own touch gestures (now touch-action
       none, tested with touch events: 3.66 m walked); eleven kits and a hamlet
       of huts added, and every hut and kit house walked into through its door.
-- [ ] The owner's verdict, and answers to the seven questions in the proposal.
+- [x] Third round: a settlement per biome (village, desert, tundra, jungle,
+      swamp) from each biome's catalogue materials, with domes, decks, rope
+      bridges, boardwalks and outdoor stairs; every new route walked
+      (design section 10).
+- [ ] The owner's verdict, and answers to the eight questions in the proposal.
 
 ## 1. Contact (`pbd-core`, `planet_contact.rs`)
 - [ ] Thin solids: a convex outline, a height range and a step class, indexed
@@ -49,6 +53,14 @@
       storey. Validated: a kit never changes the cut.
 - [ ] Roof kinds: gable over the footprint's box, six-sided cone, flat with a
       parapet; each registered for the overlap check.
+
+## 3c. Settlements per biome
+- [ ] Settlement templates as data per biome, with the biome's kits and plants
+      and nothing from another biome.
+- [ ] Pieces: dome, deck on piles, walkway between two points (with sag),
+      outdoor stair between two points; each answering `stand` and rails.
+- [ ] Tests: across a sagging bridge grounded every tick; up a porch stair
+      with no eye jump; into an igloo through its tunnel.
 
 ## 4. Drawing
 - [ ] Piece meshes with the pixel textures (stone, rubble, half-timber,
