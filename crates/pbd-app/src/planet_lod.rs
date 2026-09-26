@@ -681,12 +681,20 @@ fn floor_rule(
 /// cross-fade ring still held by the records (`distance-lod-fade`): level `k`
 /// is drawn out to its band and in to the finer band's ring, so the centre
 /// may move by the least slack of either against the records' rings.
-fn fit_of(complete: &[f32; 4], rings: &[[f32; 2]; 4], width: f32) -> f32 {
+///
+/// Each level's slack is capped at its own margin (`regen` and three of its
+/// tiles). Records widened to hold a replaced partition hold THAT partition;
+/// counted as slack for the new centre, the fit carried the last set's into
+/// the next set's widening, and the rings grew landing by landing until
+/// capacity cut them: builds four times as long, and the finest level late
+/// wherever the camera went (`distance-lod-fade`, "A runaway fit").
+fn fit_of(complete: &[f32; 4], rings: &[[f32; 2]; 4], width: f32, regen: f32) -> f32 {
     let mut fit = f32::INFINITY;
-    for k in 0..FINE_LEVELS.len() {
+    for (k, &level) in FINE_LEVELS.iter().enumerate() {
         if complete[k] <= 0.0 {
             continue;
         }
+        fit = fit.min(regen + 3.0 * tile_width_m(level));
         fit = fit.min(rings[k][1] - complete[k]);
         if k + 1 < FINE_LEVELS.len() && complete[k + 1] > 0.0 && rings[k][0] > 0.0 {
             fit = fit.min(complete[k + 1] * (1.0 - width) - rings[k][0]);
@@ -713,15 +721,20 @@ pub struct Replaced {
 /// two anchors. A metre over `fade_covered`'s rounding slack, so a set laid
 /// to it passes that check by construction. `None` where `old` does not draw
 /// level `k`.
-fn cover_ring(k: usize, anchor: Vec3, old: &Replaced) -> Option<[f32; 2]> {
+fn cover_ring(k: usize, anchor: Vec3, old: &Replaced, regen: f32) -> Option<[f32; 2]> {
     const OVER_SLACK_M: f32 = 1.0;
     let outer = old.complete[k];
     if outer <= 0.0 {
         return None;
     }
     // Round its fade centre, which stood up to its fit from its anchor, and
-    // inward to its finer band's cross-fade ring (`distance-lod-fade`).
-    let d = old.anchor.dot(anchor).clamp(-1.0, 1.0).acos() * PLANET_RADIUS + old.fit_m;
+    // inward to its finer band's cross-fade ring (`distance-lod-fade`); but no
+    // further than the level's own margin. Uncapped, a slow build moved the
+    // anchor further, which widened the next set, which built slower still;
+    // past the margin section 4's fallback draws the new partition whole.
+    let margin = regen + 3.0 * tile_width_m(FINE_LEVELS[k]);
+    let d =
+        (old.anchor.dot(anchor).clamp(-1.0, 1.0).acos() * PLANET_RADIUS + old.fit_m).min(margin);
     let inner = if k + 1 < FINE_LEVELS.len() {
         old.complete[k + 1] * (1.0 - old.width)
     } else {
@@ -901,7 +914,7 @@ pub(crate) fn generate_fine_live_on(
     let cover = |k: usize| {
         replacing
             .as_ref()
-            .and_then(|old| cover_ring(k, anchor, old))
+            .and_then(|old| cover_ring(k, anchor, old, regen))
     };
     let bands: Vec<Band> = if threads > 1 {
         std::thread::scope(|scope| {
@@ -923,7 +936,7 @@ pub(crate) fn generate_fine_live_on(
     };
     let complete: [f32; 4] = std::array::from_fn(|k| bands[k].complete_m);
     let rings: [[f32; 2]; 4] = std::array::from_fn(|k| bands[k].ring);
-    let fit_m = fit_of(&complete, &rings, width);
+    let fit_m = fit_of(&complete, &rings, width, regen);
     let finest_radius = bands[3].radius;
     // Then the records, cut into chunks the threads take in turn. Each chunk
     // has its own height memo, which costs some sharing across chunk edges
@@ -1528,10 +1541,11 @@ mod near_field_tests {
         let old_set = set_with_bands(anchor, old_complete);
         let old = LodParams::of(&old_set);
         let replacing = old_set.replaced();
+        // The bands resized with height, the anchor moved within the walk's
+        // margin: the cover holds what the bare margin cannot.
         for (moved, live) in [
-            (60.0, BAND_M),
             (40.0, [2000.0, 1000.0, 500.0, 250.0]),
-            (60.0, [2600.0, 1300.0, 650.0, 320.0]),
+            (40.0, [2600.0, 1300.0, 650.0, 320.0]),
         ] {
             let new_anchor = metres_away(anchor, moved);
             let rings = std::array::from_fn(|k| {
@@ -1540,7 +1554,7 @@ mod near_field_tests {
                     new_anchor,
                     &live,
                     REGEN_DISTANCE_M,
-                    cover_ring(k, new_anchor, &replacing),
+                    cover_ring(k, new_anchor, &replacing, REGEN_DISTANCE_M),
                     0.0,
                 )
                 .ring
@@ -1563,6 +1577,18 @@ mod near_field_tests {
                 "moved {moved} m with bands {live:?} fits the bare margin"
             );
         }
+        // Past the margin the cover stops at it (`distance-lod-fade`, "A
+        // second loop"): a far move widens no level by more than its margin,
+        // and section 4's fallback draws the new partition whole beyond.
+        let far = metres_away(anchor, 400.0);
+        for k in 0..FINE_LEVELS.len() {
+            let [_, outer] = cover_ring(k, far, &replacing, REGEN_DISTANCE_M).expect("laid");
+            let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(FINE_LEVELS[k]);
+            assert!(
+                outer <= old_complete[k] + margin + 1.5,
+                "level {k}: {outer}"
+            );
+        }
     }
 
     /// The fade centre may stand anywhere within the fit of the anchor and
@@ -1579,7 +1605,7 @@ mod near_field_tests {
                 .collect();
             let complete: [f32; 4] = std::array::from_fn(|k| bands[k].complete_m);
             let rings: [[f32; 2]; 4] = std::array::from_fn(|k| bands[k].ring);
-            let fit = fit_of(&complete, &rings, width);
+            let fit = fit_of(&complete, &rings, width, REGEN_DISTANCE_M);
             assert!(
                 fit >= REGEN_DISTANCE_M,
                 "width {width}: fit {fit} m under the walk"
@@ -1598,6 +1624,76 @@ mod near_field_tests {
                 }
             }
         }
+    }
+
+    /// A chain of landings, each set laid to cover the one it replaces, keeps
+    /// its fit and its rings steady (`distance-lod-fade`, "A runaway fit"):
+    /// the fit never exceeds a level's own margin, so the cover cannot feed
+    /// the next set's widening, and the finest level's records stay inside
+    /// the band, the margin and the one move.
+    #[test]
+    fn a_chain_of_landings_does_not_widen_the_records() {
+        let width = 0.3;
+        let mut anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let first: Vec<Band> = (0..FINE_LEVELS.len())
+            .map(|k| lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M, None, width))
+            .collect();
+        let mut old = Replaced {
+            anchor,
+            complete: std::array::from_fn(|k| first[k].complete_m),
+            width,
+            fit_m: 0.0,
+        };
+        old.fit_m = fit_of(
+            &old.complete,
+            &std::array::from_fn(|k| first[k].ring),
+            width,
+            REGEN_DISTANCE_M,
+        );
+        let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(11);
+        let mut finest_outer = Vec::new();
+        for _ in 0..6 {
+            // A step of the walk's margin, the way a set is requested.
+            let axis = anchor.any_orthonormal_vector();
+            anchor = Quat::from_axis_angle(axis, REGEN_DISTANCE_M / PLANET_RADIUS) * anchor;
+            let bands: Vec<Band> = (0..FINE_LEVELS.len())
+                .map(|k| {
+                    lay_band(
+                        k,
+                        anchor,
+                        &BAND_M,
+                        REGEN_DISTANCE_M,
+                        cover_ring(k, anchor, &old, REGEN_DISTANCE_M),
+                        width,
+                    )
+                })
+                .collect();
+            let complete: [f32; 4] = std::array::from_fn(|k| bands[k].complete_m);
+            let rings: [[f32; 2]; 4] = std::array::from_fn(|k| bands[k].ring);
+            let fit = fit_of(&complete, &rings, width, REGEN_DISTANCE_M);
+            assert!(
+                fit <= margin + 1e-3,
+                "the fit {fit} m past the finest margin {margin}"
+            );
+            finest_outer.push(rings[3][1]);
+            old = Replaced {
+                anchor,
+                complete,
+                width,
+                fit_m: fit,
+            };
+        }
+        let spread = finest_outer.iter().cloned().fold(0.0f32, f32::max)
+            - finest_outer.iter().cloned().fold(f32::INFINITY, f32::min);
+        assert!(
+            spread < 1.0,
+            "the finest records grew landing by landing: {finest_outer:?}"
+        );
+        assert!(
+            finest_outer[0] <= BAND_M[3] + 2.0 * margin + REGEN_DISTANCE_M + 1.0,
+            "the finest records reach {} m",
+            finest_outer[0]
+        );
     }
 
     /// The records' rings as the visibility pass tests them: a tile inside at

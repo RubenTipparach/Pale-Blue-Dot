@@ -843,7 +843,7 @@ impl Default for ScatterSettings {
             shrub_chance: 0.14,
             shrub_size_m: 0.38,
             tree_fade_m: 150.,
-            lod_fade_s: 0.6,
+            lod_fade_s: 1.0,
             lod_fade_width: 0.3,
         }
     }

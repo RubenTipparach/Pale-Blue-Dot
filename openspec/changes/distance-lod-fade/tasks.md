@@ -7,3 +7,5 @@
 - [x] 5. Trees: a record carries the finest cell's id at its centre (`GpuCell::spare[0]`, an integer lane); a coarse cell stands that cell's tree at the plain density, so the tree a coarse level keeps is the fine tree that stood there; its width grows by half a level's across each ring at its own centre, the same in every level's copy; the siblings fade with their cells
 - [x] 6. Trees on levels 8 to 11, the foliage range out to level 8's band (2.4 km); they fade out with level 8's cells across its ring. `tree_shown` is retired; the foliage range's own fade stays
 - [x] 7. The perf suite, old against new (`docs/benchmarks/2026-09-26-distance-fade`): walking +0.27 ms at the median (the rings' double draw and the longer tree range), flying within the spread
+- [x] 8. The fit and the cover capped at each level's own margin (design, "A runaway fit", "A second loop"); a chain-of-landings test; cloud-hop builds 2.8 s -> 1.35 s median, the finest level under the camera at touchdown (`docs/benchmarks/2026-09-26-fit-and-cover`)
+- [x] 9. The landing's dissolve at 1 s (`lod_fade_s`), the owner's word

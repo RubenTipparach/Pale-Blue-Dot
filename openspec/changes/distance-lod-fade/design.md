@@ -119,4 +119,31 @@ turn forces `c` to jump, logged as `LOD_FIT jump`.
   trees are exactly as before; a coarse cell stands the tree of the finest
   cell at its centre, so the forest thins by keeping one tree in four, each
   wider, rather than rolling new trees in new places at every ring.
+- **A runaway fit (found on the owner's cloud-hop recording, 2026-09-26:
+  "nearest LOD doesnt seem to be loading in when landed").** A set's records
+  are widened to hold the partition they replace, round its centre, which
+  stood up to that set's fit from its anchor; and the fit was taken from the
+  rings as laid, widening included. So each landing's fit carried the last
+  one's, the rings grew landing by landing until capacity cut them (level 9's
+  records reached 1,511 m where they end near 1,270 m), and every build laid
+  and baked several times the cells: 4.2-4.9 s a set against 1.0 s before,
+  so in flight the camera ran 600 m past the anchor, the centre could not
+  follow, and at touchdown the finest level had not landed when the route
+  ended. **Fix:** a level's fit is capped at its own margin (the rebuild
+  distance and three of its tiles); the widening holds the old partition and
+  gives the new centre nothing. A test runs a chain of landings and holds the
+  fit and the rings steady.
+- **The landing's dissolve is 1 s** (`lod_fade_s`, the owner: "the cross fade
+  should be 1s long for terrain"), from 0.6 s: when a set lands with resized
+  bands or a clamped centre, the blocks dissolve over a second.
+- **A second loop: the cover.** With the fit capped, flights still built in
+  2.4-4.5 s (median 2.7). Measured on the ground with no set replaced, one
+  build is 0.61 s at a width of 0, 0.75 at 0.15 and 0.89 at 0.3 (four
+  threads, release): the rings cost a little. In flight the rest was the
+  cover (`detail-fade` section 3), which widens a set's records by however far
+  the anchor moved: a slower build moved it further, which widened the next
+  set, which built slower still (the anchor 300-600 m behind at landing).
+  With the centre following the camera the old and new partitions are the
+  same at nearly every landing, so the cover is capped at a level's own
+  margin; past it, section 4's fallback draws the new partition whole.
 
