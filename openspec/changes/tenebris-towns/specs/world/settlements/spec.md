@@ -159,6 +159,16 @@ light SHALL NOT light through a wall or a floor into another room.
 - **THEN** its light reaches the room's floor, walls and ceiling
 - **AND** not the outside of the house's walls or the storey above
 
+### Requirement: No two pieces draw in one plane
+Two visible faces of different pieces SHALL NOT lie in one plane over the same
+area. Trim, such as a sill, a threshold, or a floor over a wall top, SHALL stand
+proud of the faces it meets.
+
+#### Scenario: A window sill
+- **WHEN** a window is cut in a wall
+- **THEN** its sill's top stands above the wall top under the window, and the
+  two never flicker against each other
+
 ### Requirement: Doors are world state
 Opening or closing a door SHALL be a world mutation that enters the durable
 transaction path when it happens. A closed door SHALL block the walker and an

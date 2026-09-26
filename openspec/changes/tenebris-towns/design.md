@@ -450,3 +450,35 @@ quay, terrain steps rather than stairs (on the engine's 1 m layers the beach
 would be one layer). Walking into the sea drops off the shelf, 0.6 m and then
 0.35 m, and the walker wades at half speed.
 
+## 11. No two faces in one plane
+
+The owner found a window sill flickering against the wall under it. A sill ran
+from 6 cm below the window's bottom edge up to that edge, which is also the top
+of the wall below, so the two top faces shared a plane and the depth test chose
+between them pixel by pixel. The mockup scanned every settlement for faces of
+different pieces that face the same way, lie in the same plane and overlap by
+more than 30 cm². Before the fix there were 2,232 upward ones:
+
+- **Sills** against the wall below every window, in every kit. A sill now
+  stands 3 cm proud of the wall top.
+- **Floors against wall tops** where the wall above is thinner (half-timber
+  over stone), and **roofs against wall tops** between merlons (the keep, the
+  ice keep). A floor or flat roof is now drawn 1 cm above its layer line.
+  Collision stays on the line, so no stair or walk changes.
+- **A doorway above a lower storey's wall,** such as a tower's door onto the
+  wall walk. Every doorway now has a 2.5 cm threshold board.
+- **The harbour piers' first planks** over the quay's flagstones, lifted 1 cm
+  like the floors. **The town landing's post tops**, raised 3 cm.
+
+536 overlaps remain, all hidden:
+- the tops of beams and hearths under the floor above;
+- wall tops under the storey above;
+- faces under a sill or behind a doorway's jambs.
+
+The overview camera's near plane now grows with its distance (2% of it,
+0.5 to 4 m), so depth precision holds where the camera is far off.
+
+For the engine: the piece mesher builds trim (sills, thresholds, floors over
+wall tops) proud of the faces it meets, never in their plane, and a test runs
+the same scan over a built settlement's meshes.
+

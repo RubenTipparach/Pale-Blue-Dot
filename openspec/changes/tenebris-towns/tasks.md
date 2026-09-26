@@ -30,6 +30,12 @@
       walled town; about half the windows lit, with a candle in the room and
       light on the street; small lanterns on the jungle's rope bridges; every
       walk rerun unchanged (design section 7).
+- [x] Seventh round, on the owner's review: window sills flickered against
+      the wall below. Every coplanar overlap was scanned and fixed (design
+      section 11). The overview's floating hint is now part of the controls
+      list. Day and Night buttons and the L key were added. Overview panning
+      (right-drag, WASD, two fingers) now follows the camera's heading, and
+      drag grabs the ground.
 - [ ] The owner's verdict, and answers to the nine questions in the proposal.
 
 ## 1. Contact (`pbd-core`, `planet_contact.rs`)
@@ -97,6 +103,9 @@
       lit windows, lanterns on its bridges, and its biome's own.
 - [ ] Tests: a hearth lights its room and not the outside of its wall; a lamp
       lights its street at any camera distance.
+- [ ] Trim built proud of what it meets (sills, thresholds, floors over wall
+      tops). Test: no two visible faces of different pieces share a plane over
+      the same area in a built settlement.
 
 ## 5. Doors and saves
 - [ ] E opens and closes the door in reach; the state change goes through the
