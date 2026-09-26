@@ -9,7 +9,12 @@
 - [x] Scripted walks in both walkers (design section 5); two layout bugs found
       and fixed in the design (an eave over a tower, a landing that stole
       headroom).
-- [ ] The owner's verdict, and answers to the six questions in the proposal.
+- [x] Second round, on the owner's review: roofs of neighbouring houses
+      overlapped (now checked at layout, 34 roofs, none overlap); the phone
+      stick was cancelled by the page's own touch gestures (now touch-action
+      none, tested with touch events: 3.66 m walked); eleven kits and a hamlet
+      of huts added, and every hut and kit house walked into through its door.
+- [ ] The owner's verdict, and answers to the seven questions in the proposal.
 
 ## 1. Contact (`pbd-core`, `planet_contact.rs`)
 - [ ] Thin solids: a convex outline, a height range and a step class, indexed
@@ -38,9 +43,17 @@
       and landing cells, headroom at every walkable point, no pentagons.
 - [ ] A town layout as versioned data, part of the saved world ID.
 
+## 3b. Kits
+- [ ] Kits as data (`assets/config/kits.ron`): wall faces per storey, posts,
+      roof kind and material, gable, floor, door and window sizes, the hut
+      storey. Validated: a kit never changes the cut.
+- [ ] Roof kinds: gable over the footprint's box, six-sided cone, flat with a
+      parapet; each registered for the overlap check.
+
 ## 4. Drawing
 - [ ] Piece meshes with the pixel textures (stone, rubble, half-timber,
-      plaster, planks, thatch, shingle, slate), nearest magnification.
+      plaster, planks, thatch, shingle, slate, three bricks, marble, clay,
+      cob, reed, boards, turf, fieldstone, clay tile), nearest magnification.
 - [ ] Interior sky light from the voxel-light skylight; hearths, forge and
       lamps as block light.
 

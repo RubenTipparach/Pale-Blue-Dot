@@ -39,7 +39,8 @@ cell (beside a stairwell, the moot hall's dais) is a thin solid (section 4).
 **A storey is three layers.** 3 m floor to floor, 2.8 m clear under the boards,
 1 m more than the walker. Two layers (1.8 m clear) would not fit the walker;
 four would make the stair run 2.7 cells. Door openings are 1.0 by 2.2 m;
-windows 0.8 by 1.0 m on a 1 m sill.
+windows 0.8 by 1.0 m on a 1 m sill. Huts are the one exception (section 9):
+a single storey with no boards over it, so two layers leave 2.0 m.
 
 **Masonry is still cells** where the real thing is that thick: the town wall
 (one cell, 2.833 m, a real curtain wall's thickness), its gate passages
@@ -57,6 +58,15 @@ underside read as a ceiling 1.2 m over the stair, which stopped the climb at
 4.4 m. A town layout SHALL therefore keep every walkable point's headroom, not
 only every cell's: a roof may not overhang a cell whose walkable surface is
 within a body height of the eave.
+
+**Found in the second mockup: two roofs can cut into each other.** On the hex
+grid a building's odd rows stand half a cell east of its even rows, so two
+houses in touching columns interlock by half a cell and, with 0.45 m eaves each
+side, their roofs overlapped (the owner's "roof is clipping"). A layout SHALL
+keep every roof's plan, eaves included, clear of every other roof and of the
+keep and towers. One empty column between two-row houses is enough: it leaves
+0.5 cell, 1.42 m, for two 0.45 m eaves. The mockup checks every pair when the
+town is laid out; 34 roofs, no overlaps.
 
 ## 3. The three stairs
 
@@ -184,7 +194,7 @@ set climbs 0.097 m in one.
 | keep newel, down: ticks in the air | 0 | 199 (1.7 s) |
 | tower newel, 7 m up: eye jumps | 0 | 34 |
 | out of the top door, not square to it: ticks stuck | 0 | 77 to 86 |
-| brushing a wall at 8.6° for a second | slides 7.09 m | 0.73 m, then stops |
+| brushing a wall at 8.6° for a second | slides 7.35 m | 0.73 m, then stops |
 | a closed door | stops | stops |
 | the same door, opened | walks in 2.67 m | walks in 2.67 m |
 | a jump in the inn's hall | head stops at the boards: feet 1.985 m | same |
@@ -223,3 +233,37 @@ to the camera; the engine's propagated block light has no such limit.
   save that has changed it.
 - Townsfolk in the mockup walk fixed paths or work in place and are solid to
   the walker. What they do beyond that is a separate change.
+
+## 9. Kits
+
+A kit is what a building is made of. It sets the wall faces per storey (the
+last repeats), the corner posts, the roof and its gable end, and the ground
+floor. It does not change how a building is cut: walls on edges, floors in
+cells, the storey and the stairs are the same for every kit, so a stair or a
+door is placed the same way in a brick house as in a timber one.
+
+| kit | walls, thickness | corners | roof | floor |
+| --- | --- | --- | --- | --- |
+| straw hut | bundled reed, 0.3 m | timber | six-sided thatch cone | earth |
+| mud hut | cob, 0.5 m | cob | low turf gable (24°) | earth |
+| timber | lapped boards, 0.25 m | timber | shingle | planks |
+| half-timber | stone below, framed daub above | stone, timber | thatch or shingle | flagstones |
+| red brick | running bond, 0.4 m | stone quoins | clay tile | planks |
+| buff brick | running bond, 0.4 m | brick | slate | planks |
+| clinker brick | Flemish bond, 0.4 m | stone quoins | clay tile | clay tile |
+| fieldstone | rubble, 0.5 m | fieldstone | thatch | flagstones |
+| ashlar | cut stone, 0.5 m | stone | slate | flagstones |
+| clay | clay render, 0.5 m | clay | flat, parapet, beam ends | clay tile |
+| marble | marble blocks, 0.5 m | a column at every corner | clay tile (29°) | chequered marble |
+
+Bricks are drawn 0.5 by 0.25 m, eight by four pixels, twice a real brick: at
+16 pixels a metre a true-size brick is three pixels long and reads as noise.
+
+**Huts** are one storey of two layers under an open roof. Their doors are 0.9
+by 1.9 m, 8.5 cm over the walker. A cone's collision is its own underside,
+2.0 m at the wall line rising to the apex, so the inside of the roof is what
+you see and what your head meets. A hut's eaves hang to between 1.45 and 1.75 m outside
+the door, below the walker's head, so they are drawn but do not collide past the
+walls; the roof-overlap check keeps anything tall away from them. The mockup
+walks into all ten huts and every kit's house through its door.
+

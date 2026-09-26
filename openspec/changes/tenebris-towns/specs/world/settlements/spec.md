@@ -4,7 +4,9 @@
 
 ### Requirement: Buildings are cut to the cell
 A building SHALL be made of pieces placed on the cell grid at the gold-standard
-cell size: walls on cell edges, floors in cells, and storeys three layers tall.
+cell size: walls on cell edges, floors in cells, and storeys three layers tall,
+except a hut, which is one storey of two layers with nothing over it but its
+roof.
 A shared edge SHALL carry at most one wall, owned by one of its two cells.
 
 #### Scenario: A one-cell room
@@ -56,6 +58,32 @@ roof overhangs, stair turns and landings.
 #### Scenario: The top of a newel stair
 - **WHEN** a walker climbs the last turn under the top landing
 - **THEN** the headroom check passes at every footprint point
+
+### Requirement: A kit changes the materials, not the cut
+A building's kit SHALL set its wall faces per storey, corner posts, roof, gable
+and floor, and SHALL NOT change where its walls, floors, doors or stairs go.
+
+#### Scenario: The same house in two kits
+- **WHEN** one footprint is built as red brick and as timber
+- **THEN** both have the same walls on the same edges, the same doors and the
+  same stair
+- **AND** only their faces, posts and roof differ
+
+#### Scenario: A hut
+- **WHEN** a straw hut is built on one cell
+- **THEN** its door is at least 1.9 m tall and a walker can walk in through it
+
+### Requirement: Roofs never overlap
+No roof's plan, eaves included, SHALL overlap another roof's or a tower's or
+the keep's.
+
+#### Scenario: Two houses in touching columns
+- **WHEN** two two-row houses would stand in neighbouring columns
+- **THEN** the layout is rejected, because their plans interlock by half a cell
+
+#### Scenario: A town laid out
+- **WHEN** a town is laid out
+- **THEN** every pair of roofs is checked and none overlap
 
 ### Requirement: Doors are world state
 Opening or closing a door SHALL be a world mutation that enters the durable

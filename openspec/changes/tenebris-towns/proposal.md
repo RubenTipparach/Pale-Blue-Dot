@@ -4,7 +4,11 @@
 
 **The owner's request: "Make html mock up of cities. I want interiors, proper
 stairs and collisions. The tenebris people have sort of medieval level tech so
-their stuff is not super advanced."**
+their stuff is not super advanced."** Then, on the first mockup: "Roof is
+clipping here and the move stick isn't working when I tap on my phone. Can you
+make a couple of different kits? Like a small straw huts or dirt huts or wooden
+houses, or brick houses. Try to mix with different brick types, stone, marble,
+clay."
 
 The world has terrain, trees, water and weather, and nothing anyone built.
 Three things stand between the engine and a town you can walk into:
@@ -59,6 +63,19 @@ Three things stand between the engine and a town you can walk into:
     and only the motion into the face is lost.
 - **Doors are world state.** E opens and closes one. Open or shut, it is a
   world mutation and goes through the durable save path.
+- **Kits: what a building is made of, not how it is cut.** Eleven: straw hut,
+  mud hut, timber boards, half-timber, red brick, buff brick, clinker brick
+  (Flemish bond), fieldstone, ashlar, clay (a flat roof with beam ends) and
+  marble (columns at every corner). A kit sets the wall faces per storey, the
+  corner posts, the roof and gable, and the floor; walls on edges, floors in
+  cells and the stairs are the same for all of them. Huts are the one exception
+  to the storey: one storey of two layers, 1.9 m doors, a cone or turf roof.
+  The town mixes the house kits; a hamlet of huts stands outside the east wall.
+- **Roofs never cut into each other.** The first mockup's clipping was two
+  houses in touching columns: on the hex grid their plans interlock by half a
+  cell, and the eaves overlapped. Every roof's plan, eaves included, is now
+  checked against every other when a town is laid out, and the keep and towers
+  count as roofs.
 
 ## Impact
 
@@ -88,6 +105,8 @@ Three things stand between the engine and a town you can walk into:
 5. **Stairs:** is the pitch line the feel you want, or do you want to feel each
    tread? The mockup's T key compares them on the same flight.
 6. **Roofs:** should they be walkable? The mockup lets you stand on them.
+7. **Kits:** which should be in the game, and which belong to which places
+   (huts outside the walls, brick and marble for the rich)?
 
 ## Status
 
