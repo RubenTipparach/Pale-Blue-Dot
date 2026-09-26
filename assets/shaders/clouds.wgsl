@@ -469,6 +469,11 @@ const CLOUD_TOP_PROBES: f32 = 6.0;
 // The least a sample's footprint is, in steps: detail finer than this share
 // of the step is faded (`cloud-entry`).
 const CLOUD_FOOTPRINT_STEPS: f32 = 0.5;
+// Steps past the budget that stretch to reach the span's end (`cloud-reach`).
+// From inside the layer 48 steps through cover reach about 800 m, and the
+// ray runs on 1.5-4 km: past the budget the far deck was dropped above the
+// base's horizon and drawn below it, where the gap is jumped, a hard arc.
+const CLOUD_TAIL_STEPS: f32 = 16.0;
 
 fn cloud_march(camera: vec3<f32>, direction: vec3<f32>, span_near: f32, span_far: f32, layer: CloudLayer,
         sun: vec3<f32>, cloud_map: texture_cube<f32>, wind_map: texture_cube<f32>,
@@ -518,10 +523,17 @@ fn cloud_march(camera: vec3<f32>, direction: vec3<f32>, span_near: f32, span_far
     let under = cloud_sphere_hit(camera, direction, layer.clouds.x);
     let gap = select(vec2<f32>(-1.0), under, length(camera) >= layer.clouds.x && under.x > 0.0);
     var t = near;
-    for (var i = 0.0; i < max_steps; i += 1.0) {
+    for (var i = 0.0; i < max_steps + CLOUD_TAIL_STEPS; i += 1.0) {
         if (t > gap.x && t < gap.y) { t = gap.y; }
         if (t >= far) { break; }
         var step_size = clamp(t*CLOUD_STEP_GROWTH, step_near, CLOUD_STEP_MAX_M);
+        // Past the budget the last steps share what is left of the span,
+        // less the gap still ahead; the steps before are the eye's distance
+        // alone, so no cloud nearer is sampled differently (`cloud-reach`).
+        if (i >= max_steps) {
+            let skipped = max(min(gap.y, far) - max(gap.x, t), 0.0);
+            step_size = max(step_size, (far - t - skipped)/(max_steps + CLOUD_TAIL_STEPS - i));
+        }
         let at_t = min(t + step_size*jitter, far);
         let p = camera+direction*at_t;
         let at = cloud_lookup(p);

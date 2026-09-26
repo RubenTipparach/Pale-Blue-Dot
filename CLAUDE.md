@@ -89,7 +89,9 @@ else here, and taken off this list when it lands.
    horizon, cumulus from an airliner, a sunset over a deck), not stand as a
    flat grey shell with a hard edge. Seen from high up, a cloud near the limb
    must not show a hard outline: on the merged build it is ringed with bright
-   speckle.
+   speckle. The hard edge seen from inside the layer (the owner's "ring",
+   2026-09-26) was the march running out of steps, and is gone
+   (`cloud-reach`); the far deck is still grey rather than the air's colour.
 5. **The ground-to-space transition.** The planet fog and atmosphere change
    between the surface and space must not be jarring.
 6. **Water:**
