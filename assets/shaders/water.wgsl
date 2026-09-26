@@ -746,8 +746,18 @@ fn cloud_far(ray: Ray, uv: vec2<f32>, half_texel: vec2<f32>, eye: vec3<f32>) -> 
 // object or holds cloud beyond it. The composite's upsample asks it within a
 // frame, the history read across frames (`cloud-budget`, `cloud-ghosting`).
 fn cloud_texel_sees(texel: vec2<f32>, far: f32) -> bool {
+    return cloud_texel_sees_to(texel, far, far);
+}
+
+// The history's form of the test (`cloud-edges`): its cloud lies no further
+// than this ray's stop `far`, and its march reached `reach`, where the cloud
+// being read is. Asking it to reach this ray's ground instead refused a near
+// cloud's history for the parallax of the ground far behind it: entering a
+// cloud, every texel over land and sea fell back to one raw sample. An
+// occluder in front of the cloud still stopped the march short of `reach`.
+fn cloud_texel_sees_to(texel: vec2<f32>, far: f32, reach: f32) -> bool {
     let near_enough = texel.x <= far*1.03 + 10.0;
-    let far_enough = texel.y >= min(far, CLOUD_FAR_CAP_M)*0.97 - 10.0;
+    let far_enough = texel.y >= min(min(reach, far), CLOUD_FAR_CAP_M)*0.97 - 10.0;
     return near_enough && far_enough;
 }
 
@@ -762,29 +772,55 @@ fn cloud_texel_sees(texel: vec2<f32>, far: f32) -> bool {
 struct CloudPrevious {
     cloud: vec4<f32>,
     weight: f32,
+    // Where the kept texels' cloud is along their rays, weighted by the cloud
+    // each holds; zero where none holds a distance (`cloud-edges`).
+    distance: f32,
 }
 
-fn cloud_previous(was: vec2<f32>, stop: vec3<f32>) -> CloudPrevious {
+// `point` is where along this ray the history is read (the cloud's point),
+// which the previous march must have reached (`cloud_texel_sees_to`).
+fn cloud_previous(was: vec2<f32>, stop: vec3<f32>, point: vec3<f32>) -> CloudPrevious {
     var out: CloudPrevious;
     out.cloud = vec4<f32>(0.0);
     out.weight = 0.0;
+    out.distance = 0.0;
     let size = vec2<i32>(textureDimensions(cloud_history));
     let at = was*vec2<f32>(size) - 0.5;
     let base = vec2<i32>(floor(at));
     let f = at - floor(at);
     let far = distance(view.cloud_prev_eye.xyz, stop);
+    let reach = distance(view.cloud_prev_eye.xyz, point);
     var sum = vec4<f32>(0.0);
+    var at_sum = 0.0;
+    var at_weight = 0.0;
     for (var k = 0u; k < 4u; k++) {
         let o = vec2<i32>(i32(k & 1u), i32((k >> 1u) & 1u));
         let texel = base + o;
         if (any(texel < vec2<i32>(0)) || any(texel >= size)) { continue; }
         let w = select(1.0-f.x, f.x, o.x == 1)*select(1.0-f.y, f.y, o.y == 1);
-        if (!cloud_texel_sees(textureLoad(cloud_depth, texel, 0).rg, far)) { continue; }
-        sum += textureLoad(cloud_history, texel, 0)*w;
+        let depth = textureLoad(cloud_depth, texel, 0).rg;
+        if (!cloud_texel_sees_to(depth, far, reach)) { continue; }
+        let cloud = textureLoad(cloud_history, texel, 0);
+        sum += cloud*w;
         out.weight += w;
+        let holds = w*cloud.w*select(0.0, 1.0, depth.x > 0.0);
+        at_sum += depth.x*holds;
+        at_weight += holds;
     }
     if (out.weight > 1e-3) { out.cloud = sum/out.weight; }
+    if (at_weight > 1e-6) { out.distance = at_sum/at_weight; }
     return out;
+}
+
+// The previous screen position of a point, or a negative x where it was
+// behind the previous camera or off its screen.
+fn cloud_was(point: vec3<f32>) -> vec2<f32> {
+    let before = view.prev_clip_from_local*vec4<f32>(point,1.0);
+    if (before.w <= 0.0) { return vec2<f32>(-1.0); }
+    let ndc = before.xy/before.w;
+    let was = vec2<f32>(ndc.x*0.5+0.5, 0.5-ndc.y*0.5);
+    if (any(was < vec2<f32>(0.0)) || any(was > vec2<f32>(1.0))) { return vec2<f32>(-1.0); }
+    return was;
 }
 
 struct CloudMarchOut {
@@ -872,14 +908,25 @@ fn cloud_resolve(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // projected by the previous camera: where this texel's cloud was.
     let now = textureLoad(cloud_depth_now, texel, 0).rg;
     let ray = view_ray(in.uv);
-    let reach = select(now.y, now.x, now.x > 0.0);
-    let before = view.prev_clip_from_local*vec4<f32>(ray.origin + ray.direction*reach, 1.0);
-    if (before.w <= 0.0) { return current; }
-    let ndc = before.xy/before.w;
-    let was = vec2<f32>(ndc.x*0.5+0.5, 0.5-ndc.y*0.5);
-    if (any(was < vec2<f32>(0.0)) || any(was > vec2<f32>(1.0))) { return current; }
-    let stop = ray.origin + ray.direction*min(now.y, CLOUD_FAR_CAP_M);
-    let previous = cloud_previous(was, stop);
+    let stop_m = min(now.y, CLOUD_FAR_CAP_M);
+    var point = ray.origin + ray.direction*select(stop_m, now.x, now.x > 0.0);
+    var was = cloud_was(point);
+    // No cloud this frame: the stop is a guess at where the history's cloud
+    // is, and read there the history slid with the ground's parallax, not the
+    // cloud's. Look up the distance the history holds there and read it again
+    // at that distance (`cloud-edges`).
+    if (now.x <= 0.0 && was.x >= 0.0) {
+        let held_size = vec2<i32>(textureDimensions(cloud_depth));
+        let held_at = clamp(vec2<i32>(was*vec2<f32>(held_size)), vec2<i32>(0), held_size - 1);
+        let held = textureLoad(cloud_depth, held_at, 0).r;
+        if (held > 0.0) {
+            point = ray.origin + ray.direction*min(held, stop_m);
+            was = cloud_was(point);
+        }
+    }
+    if (was.x < 0.0) { return current; }
+    let stop = ray.origin + ray.direction*stop_m;
+    let previous = cloud_previous(was, stop, point);
     if (previous.weight <= 1e-3) { return current; }
     return mix(clamp(previous.cloud, lo, hi), current, view.cloud_history.x);
 }
@@ -965,8 +1012,13 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // The air in front of the cloud fades it into what is behind, its light
     // and its cover alike, measured to where the texels it came from hold
     // their cloud (`cloud-close-up`).
+    // Where no texel it keeps holds a distance (cloud from the history alone),
+    // this pixel's own entry into the layer: measured to zero, the haze was
+    // none, and every such texel at a cloud's edge stood out unhazed, a bright
+    // rim round a limb cloud seen through thick air (`cloud-edges`).
     var at = 0.0;
-    let cloud = cloud_upsampled(uv, far, &at)*cloud_air(eye, ray.direction, min(at, far));
+    let upsampled = cloud_upsampled(uv, far, &at);
+    let cloud = upsampled*cloud_air(eye, ray.direction, min(select(span.x, at, at > 0.0), far));
     return vec4<f32>(scene*(1.0-cloud.w)+cloud.rgb,1.0);
 }
 

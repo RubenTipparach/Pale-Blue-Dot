@@ -1338,6 +1338,24 @@ fn bayer4(pixel: vec2<f32>) -> f32 {
     return (f32(m[p.y*4u + p.x]) + 0.5)/16.0;
 }
 
+// How much of a tree at `position` is drawn under partition `part`, 0..1:
+// the room left before the edge of the trees' outermost band or the foliage
+// range, over `tree_fade_m` (`detail-fade`).
+fn tree_shown(radial: vec3<f32>, position: vec3<f32>, part: Partition) -> f32 {
+    var edge = params.settings.w;
+    for (var level = finest_level() - 2u; level <= finest_level(); level++) {
+        let c = band_cos_in(part.bands, level);
+        if c <= 1.0 {
+            edge = min(edge, acos(clamp(c, -1.0, 1.0))*params.settings.x);
+            break;
+        }
+    }
+    let from_anchor = acos(clamp(dot(radial, part.anchor), -1.0, 1.0))*params.settings.x;
+    let left = min(edge - from_anchor, params.settings.w - distance(position, params.camera.xyz))
+        - TREE_FADE_MARGIN_M;
+    return clamp(left/params.fade.x, 0.0, 1.0);
+}
+
 @fragment
 fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let radial = normalized(input.position);
@@ -1355,18 +1373,17 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // TREE_FADE_MARGIN_M before it, before its cell stops being drawn: a
     // forest's edge is no longer a hard line of whole trees.
     if input.kind == 2u && params.fade.x > 0.0 {
-        var edge = params.settings.w;
-        for (var level = finest_level() - 2u; level <= finest_level(); level++) {
-            let c = band_cos_in(part.bands, level);
-            if c <= 1.0 {
-                edge = min(edge, acos(clamp(c, -1.0, 1.0))*params.settings.x);
-                break;
-            }
+        var shown = tree_shown(radial, input.position, part);
+        // A tree both partitions draw eases from the fade the old one gave
+        // it to the new one's over the cross-fade. Measured from the new
+        // anchor alone, it jumped at every landing by the distance the anchor
+        // moved, which in flight is more than the whole fade (design section
+        // 3). Outside a fade the old partition is the new one.
+        if input.part_mark == PART_BOTH {
+            let before = tree_shown(radial, input.position, partition_of(PART_OLD));
+            shown = mix(before, shown, params.fade.y);
         }
-        let from_anchor = acos(clamp(dot(radial, part.anchor), -1.0, 1.0))*params.settings.x;
-        let left = min(edge - from_anchor, params.settings.w - distance(input.position, params.camera.xyz))
-            - TREE_FADE_MARGIN_M;
-        if mask >= clamp(left/params.fade.x, 0.0, 1.0) { discard; }
+        if mask >= shown { discard; }
     }
     // The partition: a midpoint cell split between a fine and a coarse owner
     // draws only the half nearer the fine one; the coarse cap draws the rest.

@@ -24,3 +24,10 @@ the band edges change shape gradually.
 
 - **WHEN** a new fine set lands while the player walks
 - **THEN** the blocks at the band edges dissolve from the old shape to the new over the fade
+
+#### Scenario: Flying, while the bands resize with height
+
+- **WHEN** a new fine set lands during a flight, the anchor having moved past the rebuild margin or the bands having changed size with height
+- **THEN** the landing still cross-fades, because the new set's records were laid to hold the partition it replaces
+- **AND** only a set truncated at capacity, or the first set after startup, switches at once, and the log says why
+

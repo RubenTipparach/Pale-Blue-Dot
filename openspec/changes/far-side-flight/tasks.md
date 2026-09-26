@@ -58,9 +58,14 @@
       rig's pitch-from-dip camera is used.
 - [x] `--verify-route scenic` (no weather headless): lands 22.5 m from the site
       in 43 s, never under 61 m airborne.
-- [ ] Record it: parked. A run planned 1.8 km of cloud from 1 km and landed
-      25 m from its site, but the footage caught another open game window;
-      the skill now refuses while another copy is running.
+- [ ] Record it at full size. 2026-09-25, second machine (RTX 3060 Laptop,
+      1440x900 window): planned 1.8 km of cloud from 1,050 m, touchdown 25.2 m
+      from the site 48.9 s after the start; recorded at 720x450, 31 of 50
+      seconds at 59+ (the ground before lift-off and seconds 27-31 around the
+      cloud exit). Uploaded as
+      `dungeon-crawler-2026/pale-blue-dot-scenic-cloud-flythrough-450p60.mp4`.
+      The owner wants it at the window's full size, re-recorded once the haze
+      work is on `main`.
 
 ## 4. Record
 - [x] The cadence check in the `obs-record` skill (a repeat differs by under
@@ -71,3 +76,24 @@
 - [x] Real-time pacing on the route: 11-19 frames over 16.7 ms came from the
       atmosphere's step and a fine-set rebuild running at once (2 with the air
       frozen); they now never overlap: 3 per flight, p99.9 11.4 ms.
+- [x] `obs-record` fixes found recording on a second machine:
+  - [x] A relative `--launch` program path failed (`WinError 2`): the child
+        runs in the program's own folder, where the relative path no longer
+        points at it. Resolve the program against the caller's folder (or
+        `PATH`) before launching, and before OBS is started, so a bad path
+        costs nothing.
+  - [x] That failure then reported "OBS NOT fully restored: temporary input"
+        for an input that was never created. Remove only what was created.
+  - [x] The contact sheet drew 3 of its 6 tiles: each tile selected a window
+        half a frame wide by time, which misses the frame about half the time.
+        Select each tile by frame number instead.
+  - [x] The owner wants recordings at the window's full size: `--scale`
+        defaults to 1.0, and the skill's recipes say so.
+  - [x] The recipes say to pause any heavy build on the machine (another
+        session's cargo build) before recording, because it skews the cadence.
+  - [x] Record Pale Blue Dot with `--no-vsync`. Measured on the RTX 3060
+        Laptop, cloud-hop on the merged build: with vsync the game averages
+        60 frames a second but 23% of its frames run over 17.5 ms (p95 30 ms,
+        GPU 5.5 ms), and the video carried a median of 56 new frames a second
+        (12 of 43 seconds at 59+); without vsync, 59 (28 of 43). The uneven
+        vsync pacing with a 5.5 ms GPU is its own finding for frame pacing.

@@ -497,7 +497,17 @@ pub(crate) struct Band {
 /// the live bands stay resident as the player walks. The radii are the live
 /// ones (`live_bands_m`); a band that is not live is not laid at all. Over
 /// capacity, the farthest cells are dropped, never the nearest.
-pub(crate) fn lay_band(k: usize, anchor: Vec3, live: &[f32; 4], regen: f32) -> Band {
+///
+/// `cover` is a ring, metres round `anchor`, the records must also span: the
+/// part of this level the partition being replaced draws (`cover_ring`), so a
+/// landing can cross-fade from it (`detail-fade`).
+pub(crate) fn lay_band(
+    k: usize,
+    anchor: Vec3,
+    live: &[f32; 4],
+    regen: f32,
+    cover: Option<[f32; 2]>,
+) -> Band {
     if live[k] <= 0.0 {
         return Band {
             cells: Vec::new(),
@@ -509,12 +519,16 @@ pub(crate) fn lay_band(k: usize, anchor: Vec3, live: &[f32; 4], regen: f32) -> B
     let level = FINE_LEVELS[k];
     let mut lattice = Lattice::default();
     let margin = regen + 3.0 * tile_width_m(level);
-    let inner = if k + 1 < FINE_LEVELS.len() {
+    let mut inner = if k + 1 < FINE_LEVELS.len() {
         (live[k + 1] - margin).max(0.0)
     } else {
         0.0
     };
-    let outer = live[k] + margin;
+    let mut outer = live[k] + margin;
+    if let Some([cover_inner, cover_outer]) = cover {
+        inner = inner.min(cover_inner);
+        outer = outer.max(cover_outer);
+    }
     let mut cells =
         lattice.cells_in_band(level, anchor, inner / PLANET_RADIUS, outer / PLANET_RADIUS);
     let mut complete_m = live[k];
@@ -558,9 +572,11 @@ pub(crate) fn lay_band(k: usize, anchor: Vec3, live: &[f32; 4], regen: f32) -> B
         let farthest = cells.last().map_or(0.0, |c| {
             c.cell.direction.dot(anchor).clamp(-1.0, 1.0).acos()
         });
-        complete_m =
-            complete_m.min((farthest * PLANET_RADIUS - 2.0 * tile_width_m(level)).max(0.0));
-        ring[1] = ring[1].min(complete_m);
+        let reach = (farthest * PLANET_RADIUS - 2.0 * tile_width_m(level)).max(0.0);
+        complete_m = complete_m.min(reach);
+        // The records reach this far whatever the band: a ring widened to
+        // cover a replaced partition may lose only its widening.
+        ring[1] = ring[1].min(reach);
         radius = radius
             .min(farthest - 2.0 * tile_width_m(level) / PLANET_RADIUS)
             .max(0.0);
@@ -608,6 +624,30 @@ fn floor_rule(
 pub struct Replaced {
     pub anchor: Vec3,
     pub complete: [f32; 4],
+}
+
+/// The ring, metres round `anchor`, that level `k`'s records must span for
+/// a landing to cross-fade from `old`: where `old` draws level `k` (between
+/// its complete radii of `k + 1` and `k`), moved by the distance between the
+/// two anchors. A metre over `fade_covered`'s rounding slack, so a set laid
+/// to it passes that check by construction. `None` where `old` does not draw
+/// level `k`.
+fn cover_ring(k: usize, anchor: Vec3, old: &Replaced) -> Option<[f32; 2]> {
+    const OVER_SLACK_M: f32 = 1.0;
+    let outer = old.complete[k];
+    if outer <= 0.0 {
+        return None;
+    }
+    let d = old.anchor.dot(anchor).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
+    let inner = if k + 1 < FINE_LEVELS.len() {
+        old.complete[k + 1]
+    } else {
+        0.0
+    };
+    Some([
+        (inner - d - OVER_SLACK_M).max(0.0),
+        outer + d + OVER_SLACK_M,
+    ])
 }
 
 /// Whether a landing can cross-fade from the partition `old` (the one the
@@ -739,10 +779,20 @@ pub(crate) fn generate_fine_live_on(
     // The bands first, all four, because a coarse level's floors depend on
     // how far the next finer level is complete to, and truncation decides
     // that.
+    // Each ring also spans what the replaced partition draws, so the landing
+    // can cross-fade from it (`detail-fade` design section 3).
+    let cover = |k: usize| {
+        replacing
+            .as_ref()
+            .and_then(|old| cover_ring(k, anchor, old))
+    };
     let bands: Vec<Band> = if threads > 1 {
         std::thread::scope(|scope| {
             let handles: Vec<_> = (0..FINE_LEVELS.len())
-                .map(|k| scope.spawn(move || lay_band(k, anchor, &live, regen)))
+                .map(|k| {
+                    let cover = cover(k);
+                    scope.spawn(move || lay_band(k, anchor, &live, regen, cover))
+                })
                 .collect();
             handles
                 .into_iter()
@@ -751,7 +801,7 @@ pub(crate) fn generate_fine_live_on(
         })
     } else {
         (0..FINE_LEVELS.len())
-            .map(|k| lay_band(k, anchor, &live, regen))
+            .map(|k| lay_band(k, anchor, &live, regen, cover(k)))
             .collect()
     };
     let complete: [f32; 4] = std::array::from_fn(|k| bands[k].complete_m);
@@ -1331,6 +1381,56 @@ mod near_field_tests {
         );
     }
 
+    /// A set laid to replace another holds every cell the other draws, so its
+    /// landing cross-fades (`detail-fade` design section 3): in flight, where
+    /// the anchor has moved well past the rebuild margin by the time the set
+    /// is requested, and where the bands have resized with height. Before
+    /// this, a third to a half of a flight's landings missed by 1 to 14 m and
+    /// popped. The moves stay within what the finest level's capacity can lay
+    /// (about 380 m round the anchor); past it the landing pops and logs why.
+    #[test]
+    fn a_set_laid_to_replace_another_covers_it_for_the_fade() {
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let old_complete = [2400.0, 1200.0, 600.0, 300.0];
+        let old_set = set_with_bands(anchor, old_complete);
+        let old = LodParams::of(&old_set);
+        let replacing = old_set.replaced();
+        for (moved, live) in [
+            (60.0, BAND_M),
+            (40.0, [2000.0, 1000.0, 500.0, 250.0]),
+            (60.0, [2600.0, 1300.0, 650.0, 320.0]),
+        ] {
+            let new_anchor = metres_away(anchor, moved);
+            let rings = std::array::from_fn(|k| {
+                lay_band(
+                    k,
+                    new_anchor,
+                    &live,
+                    REGEN_DISTANCE_M,
+                    cover_ring(k, new_anchor, &replacing),
+                )
+                .ring
+            });
+            let mut new = set_with_bands(new_anchor, live);
+            new.rings = rings;
+            assert!(
+                fade_covered(&old, &new).is_ok(),
+                "moved {moved} m with bands {live:?}: {:?}",
+                fade_covered(&old, &new)
+            );
+            // Without the cover, the same landing is refused: this is the
+            // pop the owner saw.
+            let bare: [[f32; 2]; 4] = std::array::from_fn(|k| {
+                lay_band(k, new_anchor, &live, REGEN_DISTANCE_M, None).ring
+            });
+            new.rings = bare;
+            assert!(
+                fade_covered(&old, &new).is_err(),
+                "moved {moved} m with bands {live:?} fits the bare margin"
+            );
+        }
+    }
+
     #[test]
     fn the_level_underfoot_is_the_finest_complete_band_that_reaches_it() {
         let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
@@ -1394,7 +1494,7 @@ mod streaming_cost {
         let edits = Edits::default();
         for (k, level) in FINE_LEVELS.iter().enumerate() {
             let started = Instant::now();
-            let band = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M);
+            let band = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M, None);
             eprintln!(
                 "level {level}: {} cells laid in {:.0} ms",
                 band.cells.len(),
@@ -1507,7 +1607,7 @@ mod fast_build_tests {
         let mut read = 0usize;
         let mut sides = 0usize;
         for k in 0..FINE_LEVELS.len() - 1 {
-            let laid = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M);
+            let laid = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M, None);
             assert_eq!(laid.cells.len(), set.levels[k].len());
             for (local, cell) in laid.cells.iter().zip(&set.levels[k]) {
                 let axis = Vec3::from_slice(&cell.direction_height[..3]);
