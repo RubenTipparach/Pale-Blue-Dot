@@ -2041,7 +2041,7 @@ fn gpu_times(store: &bevy::diagnostic::DiagnosticsStore) -> (f64, f64) {
     let current = spans.iter().filter(|s| s.2 == newest);
     let clouds = current
         .clone()
-        .filter(|s| matches!(s.0.as_str(), "cloud_march" | "clouds"))
+        .filter(|s| matches!(s.0.as_str(), "cloud_march" | "cloud_resolve" | "clouds"))
         .map(|s| s.1)
         .sum();
     (clouds, current.map(|s| s.1).sum())

@@ -26,7 +26,7 @@ rm -rf target/release/saves/scenic-rec
 python .claude/skills/obs-record/scripts/obs_record.py \
   --launch "target/release/pbd-app.exe --route scenic --world scenic-rec" \
   --window-exe pbd-app.exe --start-on ROUTE_LIFTOFF --stop-on ROUTE_COMPLETE \
-  --duration 90 --scale 0.5 --fps 60 --out output/scenic.mp4 \
+  --duration 90 --fps 60 --out output/scenic.mp4 \
   --contact-sheet --check-cadence
 rm -rf target/release/saves/scenic-rec
 ```

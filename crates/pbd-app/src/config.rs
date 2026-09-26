@@ -315,6 +315,24 @@ pub struct WeatherSettings {
     pub rain_lens_speed: f32,
     /// Lens droplet grid frequency: higher is smaller drops.
     pub rain_lens_size: f32,
+    /// How many times smaller than Tenebris's the drops on the lens are, with
+    /// their trails, beads and refraction (`lens-weather`): 1 is Tenebris's
+    /// drop space; at 1440x900 its big drop was about 55 px across.
+    pub rain_lens_scale: f32,
+    /// How strongly the lens mists in cloud (`lens-weather`), 0..1; 0 is off.
+    pub lens_mist_strength: f32,
+    /// Seconds the lens takes to mist over in cloud, standing still; 0 at once.
+    pub lens_mist_fog_s: f32,
+    /// Seconds the lens takes to clear after, standing still; 0 at once.
+    pub lens_mist_clear_s: f32,
+    /// How much faster both run per metre a second of airspeed.
+    pub lens_mist_per_mps: f32,
+    /// Mist beads per screen height.
+    pub lens_mist_beads: f32,
+    /// How far the mist blurs, in screen heights.
+    pub lens_mist_blur: f32,
+    /// How far the mist lifts the image toward its own brightness, 0..1.
+    pub lens_mist_whiten: f32,
     /// Terrain impact-ring cells per metre.
     pub rain_ripple_scale: f32,
     pub rain_ripple_strength: f32,
@@ -509,6 +527,14 @@ impl Default for WeatherSettings {
             rain_lens_refract: 1.7,
             rain_lens_speed: 1.0,
             rain_lens_size: 0.7,
+            rain_lens_scale: 2.0,
+            lens_mist_strength: 0.8,
+            lens_mist_fog_s: 2.0,
+            lens_mist_clear_s: 6.0,
+            lens_mist_per_mps: 0.02,
+            lens_mist_beads: 220.0,
+            lens_mist_blur: 0.008,
+            lens_mist_whiten: 0.35,
             rain_ripple_scale: 5.0,
             rain_ripple_strength: 2.0,
             rain_flow_across: 128.0,
@@ -596,6 +622,11 @@ impl Validated for WeatherSettings {
                 s.rain_lens_refract,
                 s.rain_lens_speed,
                 s.rain_lens_size,
+                s.lens_mist_fog_s,
+                s.lens_mist_clear_s,
+                s.lens_mist_per_mps,
+                s.lens_mist_beads,
+                s.lens_mist_blur,
                 s.rain_ripple_scale,
                 s.rain_ripple_strength,
                 s.rain_flow_across,
@@ -686,6 +717,9 @@ impl Validated for WeatherSettings {
         (s.cloud_haze.is_finite() && s.cloud_haze >= 0.0)
             .then_some(())
             .ok_or("cloud_haze must be finite and not negative")?;
+        positive("rain_lens_scale", &[s.rain_lens_scale])?;
+        unit("lens_mist_strength", s.lens_mist_strength)?;
+        unit("lens_mist_whiten", s.lens_mist_whiten)?;
         (s.cloud_shear >= 1.0)
             .then_some(())
             .ok_or("cloud_shear must be at least 1 (1 draws no shear)")?;
@@ -784,6 +818,10 @@ pub struct ScatterSettings {
     /// the new through a screen-door mask, rather than switching in one frame
     /// (`detail-fade`). 0 switches at once.
     pub lod_fade_s: f32,
+    /// The share of each fine band, inward from its edge, across which the two
+    /// levels cross-fade with distance through complementary dither masks
+    /// (`distance-lod-fade`, Unity's LOD cross-fade width). 0 draws hard edges.
+    pub lod_fade_width: f32,
 }
 
 impl Default for ScatterSettings {
@@ -805,7 +843,8 @@ impl Default for ScatterSettings {
             shrub_chance: 0.14,
             shrub_size_m: 0.38,
             tree_fade_m: 150.,
-            lod_fade_s: 0.6,
+            lod_fade_s: 1.0,
+            lod_fade_width: 0.3,
         }
     }
 }
@@ -831,6 +870,9 @@ impl Validated for ScatterSettings {
         (self.lod_fade_s.is_finite() && (0.0..=5.0).contains(&self.lod_fade_s))
             .then_some(())
             .ok_or("lod_fade_s must lie within 0 and 5 seconds")?;
+        (self.lod_fade_width.is_finite() && (0.0..=0.5).contains(&self.lod_fade_width))
+            .then_some(())
+            .ok_or("lod_fade_width must lie within 0 and 0.5 of a band")?;
         unit("grass_chance", self.grass_chance)?;
         unit("flower_chance", self.flower_chance)?;
         unit("rock_chance", self.rock_chance)?;

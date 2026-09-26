@@ -10,7 +10,7 @@
 
 use super::GpuCell;
 use super::column::{self, ColumnTier};
-use super::lattice::{Lattice, LocalCell};
+use super::lattice::{Lattice, LatticePoint, LocalCell};
 use super::terrain::{PLANET_RADIUS, surface_code, surface_height};
 use super::topology::{DualCell, midpoint};
 use crate::config::ColumnSettings;
@@ -109,6 +109,8 @@ struct CellSource<'a> {
     level: u8,
     owners: [Vec3; 2],
     id: u32,
+    /// The tree it stands: the finest cell's id at its centre.
+    tree: u32,
 }
 
 /// One height per direction, memoised: neighbours and edge midpoints are
@@ -240,7 +242,7 @@ fn record(source: CellSource, heights: &mut Heights, rule: FloorRule) -> GpuCell
         owner_a: [a.x, a.y, a.z, floors[0]],
         owner_b: [b.x, b.y, b.z, floors[1]],
         floors: [floors[2], floors[3], floors[4], floors[5]],
-        spare: [0.; 4],
+        spare: [source.tree, 0, 0, 0],
     }
 }
 
@@ -267,6 +269,7 @@ pub fn base_records(cells: &[DualCell]) -> Vec<GpuCell> {
                         level: BASE_LEVEL,
                         owners: [cell.direction; 2],
                         id: index as u32,
+                        tree: 0,
                     },
                     &mut heights,
                     FloorRule::Every,
@@ -314,6 +317,12 @@ pub struct FineSet {
     /// and outer (`lay_band`). What a landing's cross-fade checks the old
     /// partition against (`fade_covered`).
     rings: [[f32; 2]; 4],
+    /// The share of each band its cross-fade ring spans inward from the band's
+    /// edge (`distance-lod-fade`): the records hold both levels across it.
+    width: f32,
+    /// How far, metres, the fade centre may stand from the anchor with every
+    /// level's ring still inside the records (`distance-lod-fade`).
+    fit_m: f32,
     /// The voxel columns for the innermost part of the finest level: what makes
     /// a cave, an overhang and a block to remove expressible at all. Built on
     /// this same task, because the records carry their own slots.
@@ -321,12 +330,25 @@ pub struct FineSet {
 }
 
 impl FineSet {
+    /// Per fine level, the ring its records span round the anchor, metres.
+    pub fn rings(&self) -> [[f32; 2]; 4] {
+        self.rings
+    }
+
     /// This set as the partition its successor replaces (`detail-fade`).
     pub fn replaced(&self) -> Replaced {
         Replaced {
             anchor: self.anchor,
             complete: self.complete,
+            width: self.width,
+            fit_m: self.fit_m,
         }
+    }
+
+    /// How far the fade centre may stand from the anchor, metres
+    /// (`distance-lod-fade`).
+    pub fn fit_m(&self) -> f32 {
+        self.fit_m
     }
 
     /// The angular radius the finest level is complete to, which is where the
@@ -442,17 +464,26 @@ impl LodParams {
     /// stale level of detail, which nobody can see, rather than a hole, which
     /// everybody can.
     pub fn of(set: &FineSet) -> Self {
+        // A band the set did not lay is 2.0, which no dot product exceeds:
+        // cos(0) would still admit a tile exactly at the anchor.
+        let cos = |m: f32| {
+            if m > 0.0 {
+                (m / PLANET_RADIUS).cos()
+            } else {
+                2.0
+            }
+        };
         Self {
             player: set.anchor,
-            // A band the set did not lay is 2.0, which no dot product exceeds:
-            // cos(0) would still admit a tile exactly at the anchor.
-            bands: Vec4::from_array(set.complete.map(|m| {
+            bands: Vec4::from_array(set.complete.map(cos)),
+            bands_in: Vec4::from_array(set.complete.map(|m| {
                 if m > 0.0 {
-                    (m / PLANET_RADIUS).cos()
+                    cos(m * (1.0 - set.width))
                 } else {
                     2.0
                 }
             })),
+            fit_m: set.fit_m,
         }
     }
 
@@ -462,6 +493,8 @@ impl LodParams {
         Self {
             player: Vec3::Y,
             bands: Vec4::splat(2.0),
+            bands_in: Vec4::splat(2.0),
+            fit_m: 0.0,
         }
     }
 }
@@ -469,7 +502,26 @@ impl LodParams {
 /// A stable identity for a fine cell across regenerations, so its tree and
 /// its texture variation do not reshuffle when the set is rebuilt.
 fn stable_id(cell: &LocalCell) -> u32 {
+    point_id(cell.point)
+}
+
+/// The tree a cell stands (`distance-lod-fade`): the stable id of the finest
+/// cell at its centre. A coarse cell's centre is a cell centre at every finer
+/// level, at its lattice coordinates doubled per level, so the coarse cell's
+/// tree is the fine tree that stands there: the same point, the same roll.
+fn tree_id(cell: &LocalCell) -> u32 {
+    let finest = *FINE_LEVELS.last().expect("fine levels");
     let p = cell.point;
+    let shift = u32::from(finest.saturating_sub(p.level));
+    point_id(LatticePoint {
+        face: p.face,
+        level: finest,
+        i: p.i << shift,
+        j: p.j << shift,
+    })
+}
+
+fn point_id(p: LatticePoint) -> u32 {
     let mut h = (p.face as u32).wrapping_mul(0x9e37_79b9)
         ^ p.i.wrapping_mul(0x85eb_ca6b)
         ^ p.j.wrapping_mul(0xc2b2_ae35)
@@ -497,7 +549,18 @@ pub(crate) struct Band {
 /// the live bands stay resident as the player walks. The radii are the live
 /// ones (`live_bands_m`); a band that is not live is not laid at all. Over
 /// capacity, the farthest cells are dropped, never the nearest.
-pub(crate) fn lay_band(k: usize, anchor: Vec3, live: &[f32; 4], regen: f32) -> Band {
+///
+/// `cover` is a ring, metres round `anchor`, the records must also span: the
+/// part of this level the partition being replaced draws (`cover_ring`), so a
+/// landing can cross-fade from it (`detail-fade`).
+pub(crate) fn lay_band(
+    k: usize,
+    anchor: Vec3,
+    live: &[f32; 4],
+    regen: f32,
+    cover: Option<[f32; 2]>,
+    width: f32,
+) -> Band {
     if live[k] <= 0.0 {
         return Band {
             cells: Vec::new(),
@@ -509,12 +572,19 @@ pub(crate) fn lay_band(k: usize, anchor: Vec3, live: &[f32; 4], regen: f32) -> B
     let level = FINE_LEVELS[k];
     let mut lattice = Lattice::default();
     let margin = regen + 3.0 * tile_width_m(level);
-    let inner = if k + 1 < FINE_LEVELS.len() {
-        (live[k + 1] - margin).max(0.0)
+    // The coarser level is drawn inward to the finer band's cross-fade ring
+    // (`distance-lod-fade`): from the ring's inner edge, `width` of the band
+    // inside its outer one.
+    let mut inner = if k + 1 < FINE_LEVELS.len() {
+        (live[k + 1] * (1.0 - width) - margin).max(0.0)
     } else {
         0.0
     };
-    let outer = live[k] + margin;
+    let mut outer = live[k] + margin;
+    if let Some([cover_inner, cover_outer]) = cover {
+        inner = inner.min(cover_inner);
+        outer = outer.max(cover_outer);
+    }
     let mut cells =
         lattice.cells_in_band(level, anchor, inner / PLANET_RADIUS, outer / PLANET_RADIUS);
     let mut complete_m = live[k];
@@ -558,9 +628,11 @@ pub(crate) fn lay_band(k: usize, anchor: Vec3, live: &[f32; 4], regen: f32) -> B
         let farthest = cells.last().map_or(0.0, |c| {
             c.cell.direction.dot(anchor).clamp(-1.0, 1.0).acos()
         });
-        complete_m =
-            complete_m.min((farthest * PLANET_RADIUS - 2.0 * tile_width_m(level)).max(0.0));
-        ring[1] = ring[1].min(complete_m);
+        let reach = (farthest * PLANET_RADIUS - 2.0 * tile_width_m(level)).max(0.0);
+        complete_m = complete_m.min(reach);
+        // The records reach this far whatever the band: a ring widened to
+        // cover a replaced partition may lose only its widening.
+        ring[1] = ring[1].min(reach);
         radius = radius
             .min(farthest - 2.0 * tile_width_m(level) / PLANET_RADIUS)
             .max(0.0);
@@ -578,10 +650,13 @@ pub(crate) fn lay_band(k: usize, anchor: Vec3, live: &[f32; 4], regen: f32) -> B
 /// next finer level's complete radius, and two of this level's tiles past it
 /// cover the one approximation, which is that the shader finds the neighbour
 /// by reflecting the centre through the edge midpoint rather than knowing it.
+/// A wall reads the fine floor wherever its neighbour may be drawn finer
+/// round a fade centre up to `fit` from the anchor (`distance-lod-fade`).
 fn floor_rule(
     k: usize,
     anchor: Vec3,
     complete: &[f32; 4],
+    fit: f32,
     replacing: Option<&Replaced>,
 ) -> FloorRule {
     if k + 1 >= FINE_LEVELS.len() {
@@ -590,16 +665,42 @@ fn floor_rule(
     let guard = 2.0 * tile_width_m(FINE_LEVELS[k]);
     FloorRule::Within {
         anchor,
-        cos: ((complete[k + 1] + guard) / PLANET_RADIUS).cos(),
+        cos: ((complete[k + 1] + fit + guard) / PLANET_RADIUS).cos(),
         also: replacing
             .filter(|old| old.complete[k + 1] > 0.0)
             .map(|old| {
                 (
                     old.anchor,
-                    ((old.complete[k + 1] + guard) / PLANET_RADIUS).cos(),
+                    ((old.complete[k + 1] + old.fit_m + guard) / PLANET_RADIUS).cos(),
                 )
             }),
     }
+}
+
+/// How far the fade centre may stand from the anchor with every level's
+/// cross-fade ring still held by the records (`distance-lod-fade`): level `k`
+/// is drawn out to its band and in to the finer band's ring, so the centre
+/// may move by the least slack of either against the records' rings.
+///
+/// Each level's slack is capped at its own margin (`regen` and three of its
+/// tiles). Records widened to hold a replaced partition hold THAT partition;
+/// counted as slack for the new centre, the fit carried the last set's into
+/// the next set's widening, and the rings grew landing by landing until
+/// capacity cut them: builds four times as long, and the finest level late
+/// wherever the camera went (`distance-lod-fade`, "A runaway fit").
+fn fit_of(complete: &[f32; 4], rings: &[[f32; 2]; 4], width: f32, regen: f32) -> f32 {
+    let mut fit = f32::INFINITY;
+    for (k, &level) in FINE_LEVELS.iter().enumerate() {
+        if complete[k] <= 0.0 {
+            continue;
+        }
+        fit = fit.min(regen + 3.0 * tile_width_m(level));
+        fit = fit.min(rings[k][1] - complete[k]);
+        if k + 1 < FINE_LEVELS.len() && complete[k + 1] > 0.0 && rings[k][0] > 0.0 {
+            fit = fit.min(complete[k + 1] * (1.0 - width) - rings[k][0]);
+        }
+    }
+    if fit.is_finite() { fit.max(0.0) } else { 0.0 }
 }
 
 /// The partition a new set replaces, which its landing cross-fades from
@@ -608,11 +709,69 @@ fn floor_rule(
 pub struct Replaced {
     pub anchor: Vec3,
     pub complete: [f32; 4],
+    /// Its cross-fade ring's share of each band, and how far its fade centre
+    /// could stand from its anchor (`distance-lod-fade`).
+    pub width: f32,
+    pub fit_m: f32,
 }
 
-/// Whether a landing can cross-fade from the partition `old` (the one the
-/// render world draws now) to the set `new`: every cell `old` draws must be
-/// among `new`'s records, or the fade would draw holes. Level `k` of `old` is
+/// The ring, metres round `anchor`, that level `k`'s records must span for
+/// a landing to cross-fade from `old`: where `old` draws level `k` (between
+/// its complete radii of `k + 1` and `k`), moved by the distance between the
+/// two anchors. A metre over `fade_covered`'s rounding slack, so a set laid
+/// to it passes that check by construction. `None` where `old` does not draw
+/// level `k`.
+fn cover_ring(k: usize, anchor: Vec3, old: &Replaced, regen: f32) -> Option<[f32; 2]> {
+    const OVER_SLACK_M: f32 = 1.0;
+    let outer = old.complete[k];
+    if outer <= 0.0 {
+        return None;
+    }
+    // Round its fade centre, which stood up to its fit from its anchor, and
+    // inward to its finer band's cross-fade ring (`distance-lod-fade`); but no
+    // further than the level's own margin. Uncapped, a slow build moved the
+    // anchor further, which widened the next set, which built slower still;
+    // past the margin section 4's fallback draws the new partition whole.
+    let margin = regen + 3.0 * tile_width_m(FINE_LEVELS[k]);
+    let d =
+        (old.anchor.dot(anchor).clamp(-1.0, 1.0).acos() * PLANET_RADIUS + old.fit_m).min(margin);
+    let inner = if k + 1 < FINE_LEVELS.len() {
+        old.complete[k + 1] * (1.0 - old.width)
+    } else {
+        0.0
+    };
+    Some([
+        (inner - d - OVER_SLACK_M).max(0.0),
+        outer + d + OVER_SLACK_M,
+    ])
+}
+
+/// The records' ring per fine level as the visibility pass tests it during a
+/// fade (`detail-fade` design section 4): cosines round the new anchor, inner
+/// and outer, each shrunk by one of that level's tiles, so a cell centre that
+/// passes is a cell the records hold. A level with no ring holds nothing
+/// (an outer cosine of 2, which no dot product reaches).
+pub fn records_cosines(rings: &[[f32; 2]; 4]) -> (Vec4, Vec4) {
+    let mut inner = [1.0f32; 4];
+    let mut outer = [2.0f32; 4];
+    for (k, &level) in FINE_LEVELS.iter().enumerate() {
+        let tile = tile_width_m(level);
+        let [from, to] = rings[k];
+        let from = if from > 0.0 { from + tile } else { 0.0 };
+        let to = to - tile;
+        if to > from {
+            inner[k] = (from / PLANET_RADIUS).cos();
+            outer[k] = (to / PLANET_RADIUS).cos();
+        }
+    }
+    (Vec4::from_array(inner), Vec4::from_array(outer))
+}
+
+/// Whether the set `new` holds every cell the partition `old` (the one the
+/// render world draws now) draws. Where it does not, the landing still
+/// cross-fades, and the visibility pass draws the new partition whole in the
+/// ring the records lack (`records_cosines`), so that ring switches at once
+/// and says so in the log. Level `k` of `old` is
 /// drawn between the complete radii of `k + 1` and `k` round its anchor; the
 /// new records of level `k` are a ring round the new anchor (`FineSet::rings`).
 /// With the anchors `d` apart, the old ring must lie inside the new. Returns
@@ -675,6 +834,9 @@ fn background_threads() -> usize {
 }
 
 /// Generate every fine level for an anchor on the ground, on every core.
+/// Its bands have no cross-fade ring (a width of 0); the game's own sets take
+/// `lod_fade_width` through `generate_fine_live`.
+#[cfg(test)]
 pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings, edits: &Edits) -> FineSet {
     generate_fine_live(
         anchor,
@@ -684,12 +846,14 @@ pub fn generate_fine(anchor: Vec3, columns: &ColumnSettings, edits: &Edits) -> F
         edits,
         build_threads(),
         None,
+        0.0,
     )
 }
 
 /// Generate the fine levels live at `live` (`live_bands_m` for the player's
 /// height) around an anchor, on `threads` threads. A band that is not live is
 /// not built.
+#[allow(clippy::too_many_arguments)]
 pub fn generate_fine_live(
     anchor: Vec3,
     live: [f32; 4],
@@ -698,8 +862,11 @@ pub fn generate_fine_live(
     edits: &Edits,
     threads: usize,
     replacing: Option<Replaced>,
+    width: f32,
 ) -> FineSet {
-    generate_fine_live_on(anchor, live, regen, columns, edits, threads, replacing)
+    generate_fine_live_on(
+        anchor, live, regen, columns, edits, threads, replacing, width,
+    )
 }
 
 /// Generate every fine level for an anchor on the ground on `threads` threads.
@@ -718,6 +885,7 @@ pub(crate) fn generate_fine_on(
         edits,
         threads,
         None,
+        0.0,
     )
 }
 
@@ -725,6 +893,7 @@ pub(crate) fn generate_fine_on(
 /// depend on the count: a band is laid by its own lattice, and a record is a
 /// pure function of its cell whichever memo it was built with, so the parallel
 /// set is the serial one byte for byte, and a test holds it to that.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn generate_fine_live_on(
     anchor: Vec3,
     live: [f32; 4],
@@ -733,16 +902,27 @@ pub(crate) fn generate_fine_live_on(
     edits: &Edits,
     threads: usize,
     replacing: Option<Replaced>,
+    width: f32,
 ) -> FineSet {
     let anchor = anchor.normalize_or(Vec3::Y);
     let threads = threads.max(1);
     // The bands first, all four, because a coarse level's floors depend on
     // how far the next finer level is complete to, and truncation decides
     // that.
+    // Each ring also spans what the replaced partition draws, so the landing
+    // can cross-fade from it (`detail-fade` design section 3).
+    let cover = |k: usize| {
+        replacing
+            .as_ref()
+            .and_then(|old| cover_ring(k, anchor, old, regen))
+    };
     let bands: Vec<Band> = if threads > 1 {
         std::thread::scope(|scope| {
             let handles: Vec<_> = (0..FINE_LEVELS.len())
-                .map(|k| scope.spawn(move || lay_band(k, anchor, &live, regen)))
+                .map(|k| {
+                    let cover = cover(k);
+                    scope.spawn(move || lay_band(k, anchor, &live, regen, cover, width))
+                })
                 .collect();
             handles
                 .into_iter()
@@ -751,11 +931,12 @@ pub(crate) fn generate_fine_live_on(
         })
     } else {
         (0..FINE_LEVELS.len())
-            .map(|k| lay_band(k, anchor, &live, regen))
+            .map(|k| lay_band(k, anchor, &live, regen, cover(k), width))
             .collect()
     };
     let complete: [f32; 4] = std::array::from_fn(|k| bands[k].complete_m);
     let rings: [[f32; 2]; 4] = std::array::from_fn(|k| bands[k].ring);
+    let fit_m = fit_of(&complete, &rings, width, regen);
     let finest_radius = bands[3].radius;
     // Then the records, cut into chunks the threads take in turn. Each chunk
     // has its own height memo, which costs some sharing across chunk edges
@@ -774,7 +955,7 @@ pub(crate) fn generate_fine_live_on(
         .collect();
     let build = |(k, range): &(usize, Range<usize>)| -> Vec<GpuCell> {
         let level = FINE_LEVELS[*k];
-        let rule = floor_rule(*k, anchor, &complete, replacing.as_ref());
+        let rule = floor_rule(*k, anchor, &complete, fit_m, replacing.as_ref());
         let mut heights = Heights::default();
         bands[*k].cells[range.clone()]
             .iter()
@@ -787,6 +968,7 @@ pub(crate) fn generate_fine_live_on(
                         level,
                         owners: local.owners,
                         id: stable_id(local),
+                        tree: tree_id(local),
                     },
                     &mut heights,
                     rule,
@@ -844,6 +1026,8 @@ pub(crate) fn generate_fine_live_on(
         live,
         regen,
         rings,
+        width,
+        fit_m,
         columns,
     }
 }
@@ -949,6 +1133,7 @@ pub fn refresh_lod(
     frame: Res<super::PlanetRenderFrame>,
     fine: Res<PlanetFine>,
     settings: Res<ColumnSettings>,
+    scatter: Res<crate::config::ScatterSettings>,
     mut refresh: ResMut<LodRefresh>,
     mut contact: ResMut<super::PlanetContact>,
     edits: Res<crate::saves::WorldSave>,
@@ -1023,6 +1208,7 @@ pub fn refresh_lod(
         let made = edits.edits.clone();
         spent("request: cloning the edits", timer);
         let replacing = fine.set.replaced();
+        let width = scatter.lod_fade_width;
         info!(
             "fine set requested: {:.0} m above the ground, live bands {:.0?} m, {moved:.0} m from the anchor, {threads} threads",
             player.length() - ground,
@@ -1038,6 +1224,7 @@ pub fn refresh_lod(
                 &made,
                 threads,
                 Some(replacing),
+                width,
             ));
             let prepared = super::PlanetContact::prepare_fine(&set);
             (set, prepared)
@@ -1059,6 +1246,12 @@ pub(crate) fn spent(what: &str, since: std::time::Instant) {
 pub struct LodParams {
     pub player: Vec3,
     pub bands: Vec4,
+    /// The cosine of each band's cross-fade ring's inner edge, `width` of the
+    /// band inside its outer one (`distance-lod-fade`); as `bands` where the
+    /// width is 0, and 2 for a band not laid.
+    pub bands_in: Vec4,
+    /// How far, metres, the fade centre may stand from `player` (the anchor).
+    pub fit_m: f32,
 }
 
 #[cfg(test)]
@@ -1145,6 +1338,7 @@ mod tests {
             &Edits::default(),
             2,
             None,
+            0.0,
         );
         assert!(set.levels[3].is_empty() && set.levels[2].is_empty());
         assert!(!set.levels[0].is_empty(), "level 8 is live from 800 m");
@@ -1292,6 +1486,8 @@ mod near_field_tests {
             live: complete,
             regen: REGEN_DISTANCE_M,
             rings: std::array::from_fn(|k| [0.0, complete[k]]),
+            width: 0.0,
+            fit_m: 0.0,
             columns: ColumnTier::empty(),
         }
     }
@@ -1329,6 +1525,192 @@ mod near_field_tests {
             fade_covered(&old, &new).is_err(),
             "the new set lost the finest level"
         );
+    }
+
+    /// A set laid to replace another holds every cell the other draws, so its
+    /// landing cross-fades (`detail-fade` design section 3): in flight, where
+    /// the anchor has moved well past the rebuild margin by the time the set
+    /// is requested, and where the bands have resized with height. Before
+    /// this, a third to a half of a flight's landings missed by 1 to 14 m and
+    /// popped. The moves stay within what the finest level's capacity can lay
+    /// (about 380 m round the anchor); past it the landing pops and logs why.
+    #[test]
+    fn a_set_laid_to_replace_another_covers_it_for_the_fade() {
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let old_complete = [2400.0, 1200.0, 600.0, 300.0];
+        let old_set = set_with_bands(anchor, old_complete);
+        let old = LodParams::of(&old_set);
+        let replacing = old_set.replaced();
+        // The bands resized with height, the anchor moved within the walk's
+        // margin: the cover holds what the bare margin cannot.
+        for (moved, live) in [
+            (40.0, [2000.0, 1000.0, 500.0, 250.0]),
+            (40.0, [2600.0, 1300.0, 650.0, 320.0]),
+        ] {
+            let new_anchor = metres_away(anchor, moved);
+            let rings = std::array::from_fn(|k| {
+                lay_band(
+                    k,
+                    new_anchor,
+                    &live,
+                    REGEN_DISTANCE_M,
+                    cover_ring(k, new_anchor, &replacing, REGEN_DISTANCE_M),
+                    0.0,
+                )
+                .ring
+            });
+            let mut new = set_with_bands(new_anchor, live);
+            new.rings = rings;
+            assert!(
+                fade_covered(&old, &new).is_ok(),
+                "moved {moved} m with bands {live:?}: {:?}",
+                fade_covered(&old, &new)
+            );
+            // Without the cover, the same landing is refused: this is the
+            // pop the owner saw.
+            let bare: [[f32; 2]; 4] = std::array::from_fn(|k| {
+                lay_band(k, new_anchor, &live, REGEN_DISTANCE_M, None, 0.0).ring
+            });
+            new.rings = bare;
+            assert!(
+                fade_covered(&old, &new).is_err(),
+                "moved {moved} m with bands {live:?} fits the bare margin"
+            );
+        }
+        // Past the margin the cover stops at it (`distance-lod-fade`, "A
+        // second loop"): a far move widens no level by more than its margin,
+        // and section 4's fallback draws the new partition whole beyond.
+        let far = metres_away(anchor, 400.0);
+        for k in 0..FINE_LEVELS.len() {
+            let [_, outer] = cover_ring(k, far, &replacing, REGEN_DISTANCE_M).expect("laid");
+            let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(FINE_LEVELS[k]);
+            assert!(
+                outer <= old_complete[k] + margin + 1.5,
+                "level {k}: {outer}"
+            );
+        }
+    }
+
+    /// The fade centre may stand anywhere within the fit of the anchor and
+    /// every level is still held across its cross-fade ring
+    /// (`distance-lod-fade`): out to its band's edge, and in to the finer
+    /// band's ring's inner edge. The ring does not eat the walk: the fit is at
+    /// least the rebuild margin.
+    #[test]
+    fn the_fade_centre_keeps_every_ring_inside_the_records() {
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        for width in [0.0, 0.15, 0.3, 0.5] {
+            let bands: Vec<Band> = (0..FINE_LEVELS.len())
+                .map(|k| lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M, None, width))
+                .collect();
+            let complete: [f32; 4] = std::array::from_fn(|k| bands[k].complete_m);
+            let rings: [[f32; 2]; 4] = std::array::from_fn(|k| bands[k].ring);
+            let fit = fit_of(&complete, &rings, width, REGEN_DISTANCE_M);
+            assert!(
+                fit >= REGEN_DISTANCE_M,
+                "width {width}: fit {fit} m under the walk"
+            );
+            for k in 0..FINE_LEVELS.len() {
+                assert!(
+                    complete[k] + fit <= rings[k][1] + 1e-3,
+                    "width {width}, level {k} outer"
+                );
+                if k + 1 < FINE_LEVELS.len() && rings[k][0] > 0.0 {
+                    let inner = complete[k + 1] * (1.0 - width) - fit;
+                    assert!(
+                        inner >= rings[k][0] - 1e-3,
+                        "width {width}, level {k} inner"
+                    );
+                }
+            }
+        }
+    }
+
+    /// A chain of landings, each set laid to cover the one it replaces, keeps
+    /// its fit and its rings steady (`distance-lod-fade`, "A runaway fit"):
+    /// the fit never exceeds a level's own margin, so the cover cannot feed
+    /// the next set's widening, and the finest level's records stay inside
+    /// the band, the margin and the one move.
+    #[test]
+    fn a_chain_of_landings_does_not_widen_the_records() {
+        let width = 0.3;
+        let mut anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let first: Vec<Band> = (0..FINE_LEVELS.len())
+            .map(|k| lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M, None, width))
+            .collect();
+        let mut old = Replaced {
+            anchor,
+            complete: std::array::from_fn(|k| first[k].complete_m),
+            width,
+            fit_m: 0.0,
+        };
+        old.fit_m = fit_of(
+            &old.complete,
+            &std::array::from_fn(|k| first[k].ring),
+            width,
+            REGEN_DISTANCE_M,
+        );
+        let margin = REGEN_DISTANCE_M + 3.0 * tile_width_m(11);
+        let mut finest_outer = Vec::new();
+        for _ in 0..6 {
+            // A step of the walk's margin, the way a set is requested.
+            let axis = anchor.any_orthonormal_vector();
+            anchor = Quat::from_axis_angle(axis, REGEN_DISTANCE_M / PLANET_RADIUS) * anchor;
+            let bands: Vec<Band> = (0..FINE_LEVELS.len())
+                .map(|k| {
+                    lay_band(
+                        k,
+                        anchor,
+                        &BAND_M,
+                        REGEN_DISTANCE_M,
+                        cover_ring(k, anchor, &old, REGEN_DISTANCE_M),
+                        width,
+                    )
+                })
+                .collect();
+            let complete: [f32; 4] = std::array::from_fn(|k| bands[k].complete_m);
+            let rings: [[f32; 2]; 4] = std::array::from_fn(|k| bands[k].ring);
+            let fit = fit_of(&complete, &rings, width, REGEN_DISTANCE_M);
+            assert!(
+                fit <= margin + 1e-3,
+                "the fit {fit} m past the finest margin {margin}"
+            );
+            finest_outer.push(rings[3][1]);
+            old = Replaced {
+                anchor,
+                complete,
+                width,
+                fit_m: fit,
+            };
+        }
+        let spread = finest_outer.iter().cloned().fold(0.0f32, f32::max)
+            - finest_outer.iter().cloned().fold(f32::INFINITY, f32::min);
+        assert!(
+            spread < 1.0,
+            "the finest records grew landing by landing: {finest_outer:?}"
+        );
+        assert!(
+            finest_outer[0] <= BAND_M[3] + 2.0 * margin + REGEN_DISTANCE_M + 1.0,
+            "the finest records reach {} m",
+            finest_outer[0]
+        );
+    }
+
+    /// The records' rings as the visibility pass tests them: a tile inside at
+    /// both edges, the finest level from the anchor out, and a level with no
+    /// ring holding nothing (`detail-fade` design section 4).
+    #[test]
+    fn the_records_rings_are_tested_a_tile_inside() {
+        let cos = |m: f32| (m / PLANET_RADIUS).cos();
+        let (inner, outer) =
+            records_cosines(&[[1100.0, 2500.0], [500.0, 1300.0], [0.0, 0.0], [0.0, 350.0]]);
+        let t = |k: usize| tile_width_m(FINE_LEVELS[k]);
+        assert!((inner.x - cos(1100.0 + t(0))).abs() < 1e-6);
+        assert!((outer.x - cos(2500.0 - t(0))).abs() < 1e-6);
+        assert!((inner.y - cos(500.0 + t(1))).abs() < 1e-6);
+        assert_eq!(inner.w, 1.0, "the finest level starts at the anchor");
+        assert!((outer.w - cos(350.0 - t(3))).abs() < 1e-6);
+        assert_eq!(outer.z, 2.0, "a level not laid holds nothing");
     }
 
     #[test]
@@ -1394,7 +1776,7 @@ mod streaming_cost {
         let edits = Edits::default();
         for (k, level) in FINE_LEVELS.iter().enumerate() {
             let started = Instant::now();
-            let band = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M);
+            let band = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M, None, 0.0);
             eprintln!(
                 "level {level}: {} cells laid in {:.0} ms",
                 band.cells.len(),
@@ -1507,7 +1889,7 @@ mod fast_build_tests {
         let mut read = 0usize;
         let mut sides = 0usize;
         for k in 0..FINE_LEVELS.len() - 1 {
-            let laid = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M);
+            let laid = lay_band(k, anchor, &BAND_M, REGEN_DISTANCE_M, None, 0.0);
             assert_eq!(laid.cells.len(), set.levels[k].len());
             for (local, cell) in laid.cells.iter().zip(&set.levels[k]) {
                 let axis = Vec3::from_slice(&cell.direction_height[..3]);

@@ -72,7 +72,9 @@ use std::{borrow::Cow, num::NonZeroU64, sync::Arc};
 // Trees live on the finest tier, so they reach exactly as far as it does.
 // Above the band's radius plus the highest summit and a tree, no tree can be
 // in range, and the foliage draw is disabled outright.
-const FOLIAGE_DRAW_DISTANCE: f32 = lod::BAND_M[1];
+// Trees stand on every fine level out to the coarsest band's edge, fading
+// out across its ring (`distance-lod-fade`).
+const FOLIAGE_DRAW_DISTANCE: f32 = lod::BAND_M[0];
 const FOLIAGE_DRAW_CUTOFF_ALTITUDE: f32 = FOLIAGE_DRAW_DISTANCE + 600.;
 
 /// Blades the clutter vertex budget covers. An indirect draw has ONE vertex
@@ -181,7 +183,11 @@ pub struct GpuCell {
     pub owner_b: [f32; 4],
     // Fine floors of sides 2 to 5.
     pub floors: [f32; 4],
-    pub spare: [f32; 4],
+    // x: the tree this cell stands, the stable id of the finest cell at its
+    // centre (`distance-lod-fade`): a coarse cell's tree is the fine tree
+    // standing where it stood. An integer lane, never float bits, which a GPU
+    // may flush as denormals. yzw spare.
+    pub spare: [u32; 4],
 }
 
 impl GpuCell {
@@ -270,6 +276,7 @@ fn create_planet(
     assets: Res<AssetServer>,
     flight: Res<crate::flight_view::FlightViewConfig>,
     columns: Res<crate::config::ColumnSettings>,
+    scatter: Res<crate::config::ScatterSettings>,
     edits: Res<crate::saves::WorldSave>,
 ) {
     let started = std::time::Instant::now();
@@ -287,7 +294,18 @@ fn create_planet(
             edits.edits.cells()
         );
     }
-    let fine = Arc::new(lod::generate_fine(anchor, &columns, &edits.edits));
+    // With the configured cross-fade ring, like every set after it
+    // (`distance-lod-fade`).
+    let fine = Arc::new(lod::generate_fine_live(
+        anchor,
+        lod::BAND_M,
+        lod::REGEN_DISTANCE_M,
+        &columns,
+        &edits.edits,
+        std::thread::available_parallelism().map_or(1, |n| n.get()),
+        None,
+        scatter.lod_fade_width,
+    ));
     contacts.set_fine(&fine);
     let fine_count: usize = fine.levels.iter().map(Vec::len).sum();
     info!(
@@ -463,6 +481,18 @@ struct PlanetParams {
     // band cosines, as `lod` and `bands`.
     lod_prev: Vec4,
     bands_prev: Vec4,
+    // The records' ring per fine level round `lod`'s anchor, cosines, inner
+    // and outer, each a tile inside (`lod::records_cosines`): where a fade's
+    // old partition is not held, the new one is drawn whole.
+    records_in: Vec4,
+    records_out: Vec4,
+    // `distance-lod-fade`: the fine set's anchor (what the records' rings are
+    // measured from; `lod` is now the fade centre), and the inner edges of the
+    // bands' cross-fade rings, cosines, for the partition and the one a
+    // landing dissolves from.
+    anchor: Vec4,
+    bands_in: Vec4,
+    bands_prev_in: Vec4,
 }
 
 /// The eight biome slots, in `Biome` order, packed two vec4s wide for the
@@ -514,9 +544,13 @@ struct PlanetGpu {
     /// and the records that REPLACE it can never come from different frames.
     lod: lod::LodParams,
     /// The partition the last landing replaced and when it landed, while its
-    /// cross-fade runs (`detail-fade`); none when the landing could not fade
-    /// (`lod::fade_covered`) or changed no partition.
+    /// cross-fade runs (`detail-fade`); none when the landing changed no
+    /// partition, or was the first.
     lod_prev: Option<(lod::LodParams, std::time::Instant)>,
+    /// The uploaded records' ring per fine level round `lod`'s anchor,
+    /// metres: where the old partition's cells can be drawn from during a
+    /// fade (`lod::records_cosines`).
+    records: [[f32; 2]; 4],
 }
 
 #[derive(Component)]
@@ -535,6 +569,32 @@ struct PlanetViewGpu {
     clutter_bind_group: BindGroup,
     column_bind_group: BindGroup,
     compute_bind_group: BindGroup,
+    /// The fade centre (`distance-lod-fade`): the camera's ground point, held
+    /// within the fine set's fit of its anchor and caught up at a bounded
+    /// speed after a landing; the version it was last fitted to; and where it
+    /// stood when that set landed, which the landing's dissolve starts from.
+    centre: Vec3,
+    fitted: u64,
+    fade_from: Vec3,
+    last: std::time::Instant,
+    last_camera: Vec3,
+}
+
+/// The slowest the fade centre catches up with the camera after a landing,
+/// m/s; it goes at twice the camera's own speed when that is faster.
+const CENTRE_CATCH_UP_MPS: f32 = 30.0;
+
+/// `from` turned toward `to` by at most `angle` radians, on the unit sphere.
+fn toward(from: Vec3, to: Vec3, angle: f32) -> Vec3 {
+    let between = from.dot(to).clamp(-1.0, 1.0).acos();
+    if between <= angle || between < 1e-7 {
+        return to;
+    }
+    let axis = from.cross(to).normalize_or_zero();
+    if axis == Vec3::ZERO {
+        return from;
+    }
+    Quat::from_axis_angle(axis, angle.max(0.0)) * from
 }
 
 fn upload_planet(
@@ -595,6 +655,7 @@ fn upload_planet(
         uploaded: 0,
         lod: lod::LodParams::base_only(),
         lod_prev: None,
+        records: [[0.0; 2]; 4],
     });
 }
 
@@ -646,16 +707,18 @@ fn upload_fine(
     let moved = old.player != new.player || old.bands != new.bands;
     let first = old.bands == lod::LodParams::base_only().bands;
     planet.lod_prev = if moved && !first {
-        match lod::fade_covered(&old, &fine.set) {
-            Ok(()) => Some((old, std::time::Instant::now())),
-            Err(why) => {
-                info!("LOD_FADE skipped: {why}");
-                None
-            }
+        // Every landing fades (`detail-fade` design section 4). Where the new
+        // records do not hold what the old partition draws, the visibility
+        // pass draws the new partition there whole, so only that ring
+        // switches at once; before, the whole landing did.
+        if let Err(why) = lod::fade_covered(&old, &fine.set) {
+            info!("LOD_FADE partial: {why}; that ring switches at once");
         }
+        Some((old, std::time::Instant::now()))
     } else {
         None
     };
+    planet.records = fine.set.rings();
     planet.lod = new;
     lod::spent("render: fine-set upload", timer);
     // The other half of an edit's own log line: the version it made is the
@@ -845,17 +908,38 @@ fn prepare_views(
             };
         let w = &weather_settings;
         let lod = &planet.lod;
+        let (records_in, records_out) = lod::records_cosines(&planet.records);
+        // The fade centre (`distance-lod-fade`): the ground under the camera,
+        // held within what the records hold round the anchor, and caught up
+        // after a landing at twice the camera's speed rather than jumping.
+        let now = std::time::Instant::now();
+        let anchor = lod.player;
+        let fit = lod.fit_m / PLANET_RADIUS;
+        let target = toward(anchor, camera_position.normalize_or(anchor), fit);
+        let (centre, fade_from) = match existing.as_ref() {
+            Some(gpu) => {
+                let dt = now.duration_since(gpu.last).as_secs_f32().min(0.5);
+                let speed = gpu.last_camera.distance(camera_position) / dt.max(1e-3);
+                let reach = (2.0 * speed).max(CENTRE_CATCH_UP_MPS) * dt / PLANET_RADIUS;
+                let centre = toward(anchor, toward(gpu.centre, target, reach), fit);
+                let landed = gpu.fitted != planet.uploaded;
+                (centre, if landed { gpu.centre } else { gpu.fade_from })
+            }
+            None => (target, target),
+        };
         // The landing's cross-fade (`detail-fade`): how far through it is.
-        let (prev, fade_progress, fading) = match planet.lod_prev {
+        // The partition it dissolves from stood round the fade centre as it was
+        // when the set landed (`distance-lod-fade`).
+        let (prev, prev_centre, fade_progress, fading) = match planet.lod_prev {
             Some((prev, landed)) if scatter.lod_fade_s > 0.0 => {
                 let t = landed.elapsed().as_secs_f32() / scatter.lod_fade_s;
                 if t < 1.0 {
-                    (prev, t, 1.0)
+                    (prev, fade_from, t, 1.0)
                 } else {
-                    (*lod, 1.0, 0.0)
+                    (*lod, centre, 1.0, 0.0)
                 }
             }
-            _ => (*lod, 1.0, 0.0),
+            _ => (*lod, centre, 1.0, 0.0),
         };
         trace!(
             "planet view {entity}: camera {camera_position:?}, lod player {:?}, base {} fine {:?}",
@@ -914,7 +998,7 @@ fn prepare_views(
             ],
             lod_offsets: UVec4::new(planet.base_count, lod::FINE_CAPACITY, 0, 0),
             lod_counts: UVec4::from_array(planet.counts),
-            lod: lod.player.extend(lod::BASE_LEVEL as f32),
+            lod: centre.extend(lod::BASE_LEVEL as f32),
             bands: lod.bands,
             clutter: Vec4::new(
                 // Clutter rides the foliage cutoff: above it no cell of the
@@ -977,12 +1061,22 @@ fn prepare_views(
             ),
             tilesets: tileset_slots(),
             fade: Vec4::new(scatter.tree_fade_m, fade_progress, fading, 0.0),
-            lod_prev: prev.player.extend(0.0),
+            lod_prev: prev_centre.extend(0.0),
             bands_prev: prev.bands,
+            records_in,
+            records_out,
+            anchor: anchor.extend(0.0),
+            bands_in: lod.bands_in,
+            bands_prev_in: prev.bands_in,
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
+            gpu.centre = centre;
+            gpu.fitted = planet.uploaded;
+            gpu.fade_from = fade_from;
+            gpu.last = now;
+            gpu.last_camera = camera_position;
             continue;
         }
         let mut uniform = UniformBuffer::from(params);
@@ -1073,6 +1167,11 @@ fn prepare_views(
             clutter_bind_group,
             column_bind_group,
             compute_bind_group,
+            centre,
+            fitted: planet.uploaded,
+            fade_from,
+            last: now,
+            last_camera: camera_position,
         });
     }
 }

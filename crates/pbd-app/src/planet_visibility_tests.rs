@@ -281,7 +281,7 @@ fn column(position: Vec3, degree: u32, width: f32, wall_depth: f32) -> GpuCell {
         owner_a: axis.extend(height).to_array(),
         owner_b: axis.extend(height).to_array(),
         floors: [height; 4],
-        spare: [0.; 4],
+        spare: [0; 4],
     }
 }
 
@@ -340,6 +340,14 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         fade: Vec4::new(0., 1., 0., 0.),
         lod_prev: Vec3::Z.extend(TEST_BASE_LEVEL as f32),
         bands_prev: Vec4::splat(-2.),
+        // The records hold every level everywhere (`detail-fade` section 4).
+        records_in: Vec4::ONE,
+        records_out: Vec4::splat(-2.),
+        // No cross-fade rings (`distance-lod-fade`): each ring's inner edge is
+        // its band's own edge, and the records are measured from the centre.
+        anchor: Vec3::Z.extend(0.),
+        bands_in: Vec4::splat(-2.),
+        bands_prev_in: Vec4::splat(-2.),
     }
 }
 
@@ -447,6 +455,8 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
         let mut cell = at(0., 0., RADIUS + 500., 6, 2., 0.);
         cell.metadata[1] = surface;
         cell.metadata[3] = seed;
+        // A finest cell stands its own tree (`distance-lod-fade`).
+        cell.spare[0] = seed;
         cell
     })
     .collect();
@@ -454,6 +464,7 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
         let mut cell = at(0., 0., RADIUS + height, 5, 2., 0.);
         cell.metadata[1] = JUNGLE;
         cell.metadata[3] = 1;
+        cell.spare[0] = 1;
         cells.push(cell);
     }
     expect(
@@ -475,6 +486,7 @@ fn actual_gpu_visibility_preserves_geometry_and_selects_foliage() {
     let mut tree = at(20., 0., RADIUS, 6, 2., 0.);
     tree.metadata[1] = JUNGLE;
     tree.metadata[3] = 1;
+    tree.spare[0] = 1;
     let rock = at(20., 0., RADIUS, 6, 2., 0.);
     let cells = [tree, rock];
     expect(&gpu, &cells, params(2, 100., 10.), &[], &[0]);
@@ -550,7 +562,7 @@ fn the_partition_lists_each_tile_at_its_bands_level_on_the_real_records() {
         owner_a: [0.; 4],
         owner_b: [0.; 4],
         floors: [0.; 4],
-        spare: [0.; 4],
+        spare: [0; 4],
     };
     let mut records = base.clone();
     for level in &fine.levels {
@@ -726,4 +738,20 @@ fn actual_gpu_cross_fade_lists_each_partition_it_draws() {
     expect(&gpu, &cells, fading(-2., -2., 1.), &[0], &[]);
     expect(&gpu, &cells, fading(-2., 2., 0.), &[0], &[]);
     expect(&gpu, &cells, fading(2., -2., 0.), &[], &[]);
+
+    // Where the old partition's cells are not among the records, the new
+    // partition is drawn whole (`detail-fade` design section 4). The old
+    // partition here stops a level short of the tile, so its level at the
+    // tile is 10 and it does not draw the tile; the new one does.
+    let short = |held: bool| {
+        let mut p = fading(-2., -2., 1.);
+        p.bands_prev = Vec4::new(-2., -2., -2., 2.);
+        if !held {
+            // Level 10's ring holds nothing: an outer cosine of 2.
+            p.records_out.z = 2.;
+        }
+        p
+    };
+    expect(&gpu, &cells, short(true), &[PART_NEW], &[]);
+    expect(&gpu, &cells, short(false), &[0], &[]);
 }

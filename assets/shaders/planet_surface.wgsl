@@ -11,7 +11,7 @@ struct Cell {
     owner_a: vec4<f32>,
     owner_b: vec4<f32>,
     floors: vec4<f32>,
-    spare: vec4<f32>,
+    spare: vec4<u32>,  // x the tree it stands (`distance-lod-fade`)
 }
 struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
@@ -31,6 +31,11 @@ struct Params {
     fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs, spare
     lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
     bands_prev: vec4<f32>,     // and its band cosines
+    records_in: vec4<f32>,     // the records' ring per fine level (`detail-fade` section 4);
+    records_out: vec4<f32>,    // read by the visibility pass, laid out here to match
+    anchor: vec4<f32>,         // `distance-lod-fade`: the fine set's anchor (`lod` is the fade centre),
+    bands_in: vec4<f32>,       // the bands' cross-fade rings' inner edges, cosines,
+    bands_prev_in: vec4<f32>,  // and those of the partition a landing dissolves from
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -67,15 +72,32 @@ fn finest_level() -> u32 { return base_level() + 4u; }
 // `lod`/`bands`; while a landing cross-fades (`detail-fade`) the one it
 // replaced is `lod_prev`/`bands_prev`, and an instance drawn for it carries
 // PART_OLD in the top bits of its list entry.
-struct Partition { anchor: vec3<f32>, bands: vec4<f32> }
+struct Partition { anchor: vec3<f32>, bands: vec4<f32>, bands_in: vec4<f32> }
 const PART_BOTH: u32 = 0u;
 const PART_NEW: u32 = 1u;
 const PART_OLD: u32 = 2u;
 const PART_SHIFT: u32 = 30u;
 const PART_MASK: u32 = 0x3fffffffu;
 fn partition_of(mark: u32) -> Partition {
-    if mark == PART_OLD { return Partition(params.lod_prev.xyz, params.bands_prev); }
-    return Partition(params.lod.xyz, params.bands);
+    if mark == PART_OLD { return Partition(params.lod_prev.xyz, params.bands_prev, params.bands_prev_in); }
+    return Partition(params.lod.xyz, params.bands, params.bands_in);
+}
+// How far a direction is into fine level `level`'s band, 0..1, across the
+// band's cross-fade ring (`distance-lod-fade`): 0 outside its edge, 1 inside
+// its ring. A pixel whose dither value is `m` draws the level where this
+// exceeds `m`, so across the ring the two levels share the pixels between
+// them in proportion, as Unity's LOD cross-fade does. A band not laid is 0;
+// a ring of no width is the band's hard edge.
+fn band_t(direction: vec3<f32>, level: u32, part: Partition) -> f32 {
+    if level <= base_level() { return 1.0; }
+    if level > finest_level() { return 0.0; }
+    let out_cos = band_cos_in(part.bands, level);
+    if out_cos > 1.0 { return 0.0; }
+    let in_cos = band_cos_in(part.bands_in, level);
+    let d = dot(direction, part.anchor);
+    let span = in_cos - out_cos;
+    if span <= 1e-9 { return select(0.0, 1.0, d > out_cos); }
+    return clamp((d - out_cos)/span, 0.0, 1.0);
 }
 fn band_cos_in(bands: vec4<f32>, level: u32) -> f32 {
     let k = level - base_level() - 1u;
@@ -469,8 +491,8 @@ struct VertexOut {
     @location(6) @interpolate(flat) seed: u32,
     @location(7) @interpolate(flat) kind: u32,
     @location(8) @interpolate(flat) level: u32,
-    @location(9) @interpolate(flat) owner_a: vec3<f32>,
-    @location(10) @interpolate(flat) owner_b: vec3<f32>,
+    @location(9) @interpolate(flat) split: vec3<f32>,
+    @location(10) @interpolate(flat) fade_t: vec3<f32>,
     // How brightly this vertex takes its own albedo. One everywhere except
     // down a grass blade, where the root is darker than the tip.
     @location(11) shade: f32,
@@ -582,6 +604,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     var normal = axis;
     var uv = vec2(0.5);
     var kind = 0u;
+    var cut_wall = false;
     var material = cell.metadata.y & 0xffu;
     // One everywhere but down a grass blade, whose root is darker than its tip.
     var out_shade = 1.;
@@ -676,10 +699,15 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // owner's, this quad closes the step along that diagonal.
         kind = 1u;
         let i = vertex-54u;
-        let a_fine = level > base_level() && owner_fine_in(cell.owner_a.xyz, level, part);
-        let b_fine = level > base_level() && owner_fine_in(cell.owner_b.xyz, level, part);
-        if a_fine != b_fine {
-            let coarse = select(cell.owner_a.xyz, cell.owner_b.xyz, a_fine);
+        // Built wherever the owners' fades differ (`distance-lod-fade`): in
+        // the pixels whose dither value falls between them one owner is fine
+        // and the other coarse, and the fragment keeps it only there. It
+        // faces the owner further out of the fine band.
+        let a_t = band_t(cell.owner_a.xyz, level, part);
+        let b_t = band_t(cell.owner_b.xyz, level, part);
+        if level > base_level() && abs(a_t - b_t) > 1e-6 {
+            cut_wall = true;
+            let coarse = select(cell.owner_a.xyz, cell.owner_b.xyz, a_t > b_t);
             // The two corners equidistant from the owners lie on the diagonal.
             var c1 = 0u; var c2 = 1u;
             var best1 = 1e9; var best2 = 1e9;
@@ -887,7 +915,10 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // are what a prism needs, and `shrink_corner` in the reference is the
         // same lerp toward the centre. The compute pass selects the cells; no
         // tree vertex is invoked for a cell without one.
-        let id = cell.metadata.w;
+        // The tree is the finest cell's at this cell's centre
+        // (`distance-lod-fade`): its trunk and leaves roll on that id, so a
+        // coarse level draws the same tree the fine one did.
+        let id = cell.spare.x;
         let roll = hash(id);
         let biome = (cell.metadata.y >> 8u) & 0xffu;
         // Trunk metres: the reference's 3 + a hash bit + the biome's extra,
@@ -921,9 +952,21 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // part: the trunk, then a leaf layer's sides, floor and ceiling.
         let v = vertex-60u;
         var lo = 0.; var hi = trunk_top; var wa = 0.20; var wb = 0.20;
+        // Its width, in the finest cell's, grows by half a level's across each
+        // ring it stands in, measured at its own centre: every level's copy of
+        // one tree reckons the same width, so the dither between them never
+        // shows, and past the ring it has the coarse cell's width, a quarter
+        // of the trees at four times the area (`distance-lod-fade`).
+        var grown = 1.0;
+        for (var l = finest_level(); l > finest_level() - 3u; l--) {
+            grown = mix(2.0*grown, grown, band_t(axis, l, part));
+        }
+        let shrink = grown/f32(1u << (finest_level() - level));
         material = 8u;
         if v >= 54u && v < 126u { lo = lo0; hi = hi0; wa = w0a; wb = w0b; material = 9u; }
         if v >= 126u { lo = lo1; hi = hi1; wa = w1a; wb = w1b; material = 9u; }
+        wa *= shrink;
+        wb *= shrink;
         let lower = radius+lo;
         let upper = radius+hi;
         let part = select(v-54u, v, v < 54u) % 72u;
@@ -1181,8 +1224,14 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.kind = kind;
     out.part_mark = mark;
     out.level = level;
-    out.owner_a = cell.owner_a.xyz;
-    out.owner_b = cell.owner_b.xyz;
+    // The partition's per-pixel test (`distance-lod-fade`): the plane between
+    // the owners (which owner a fragment of a split midpoint cell belongs to),
+    // and the owners' fades and the finer level's fade at the centre. A cut
+    // wall's finer fade is carried negative, less one, to mark it.
+    out.split = cell.owner_a.xyz - cell.owner_b.xyz;
+    let next_t = select(0.0, band_t(axis, level + 1u, part), level < finest_level());
+    out.fade_t = vec3<f32>(band_t(cell.owner_a.xyz, level, part), band_t(cell.owner_b.xyz, level, part),
+        select(next_t, -1.0 - next_t, cut_wall));
     out.shade = out_shade;
     out.voxel = out_voxel;
     out.slot = lit_slot;
@@ -1338,16 +1387,55 @@ fn bayer4(pixel: vec2<f32>) -> f32 {
     return (f32(m[p.y*4u + p.x]) + 0.5)/16.0;
 }
 
+// How much of a tree at `position` is drawn under partition `part`, 0..1:
+// the room left before the edge of the trees' outermost band or the foliage
+// range, over `tree_fade_m` (`detail-fade`).
+fn tree_shown(radial: vec3<f32>, position: vec3<f32>, part: Partition) -> f32 {
+    var edge = params.settings.w;
+    for (var level = finest_level() - 2u; level <= finest_level(); level++) {
+        let c = band_cos_in(part.bands, level);
+        if c <= 1.0 {
+            edge = min(edge, acos(clamp(c, -1.0, 1.0))*params.settings.x);
+            break;
+        }
+    }
+    let from_anchor = acos(clamp(dot(radial, part.anchor), -1.0, 1.0))*params.settings.x;
+    let left = min(edge - from_anchor, params.settings.w - distance(position, params.camera.xyz))
+        - TREE_FADE_MARGIN_M;
+    return clamp(left/params.fade.x, 0.0, 1.0);
+}
+
 @fragment
 fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let radial = normalized(input.position);
     let part = partition_of(input.part_mark);
     let mask = bayer4(input.clip.xy);
-    // A landing's cross-fade (`detail-fade`): each pixel shows the new
-    // partition where the mask is under the fade's progress and the old one
-    // elsewhere, so the blocks dissolve from one to the other.
-    if input.part_mark != PART_BOTH && ((input.part_mark == PART_NEW) != (mask < params.fade.y)) {
+    // A landing's dissolve (`detail-fade`): each pixel shows the new
+    // partition where its mask is under the dissolve's progress and the old
+    // one elsewhere. Its own mask, interleaved gradient noise, so it does not
+    // run in step with the distance cross-fade's.
+    let dissolve = fract(52.9829189*fract(dot(input.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
+    if input.part_mark != PART_BOTH && ((input.part_mark == PART_NEW) != (dissolve < params.fade.y)) {
         discard;
+    }
+    // The partition in this pixel's dither class (`distance-lod-fade`): the
+    // cell is drawn where its owner is in its band (the nearer owner, for a
+    // split midpoint cell) and the finer band has not taken its centre. Across
+    // a ring the pixels divide between the two levels by distance; outside
+    // one, this is the hard partition as before. A cut wall stands where the
+    // owners fall on different sides.
+    let cut = input.fade_t.z < 0.0;
+    let next_t = select(input.fade_t.z, -1.0 - input.fade_t.z, cut);
+    if next_t > mask { discard; }
+    if input.level > base_level() {
+        if cut {
+            if (input.fade_t.x > mask) == (input.fade_t.y > mask) { discard; }
+        } else if input.kind == 2u {
+            if min(input.fade_t.x, input.fade_t.y) <= mask { discard; }
+        } else {
+            let owner_t = select(input.fade_t.y, input.fade_t.x, dot(radial, input.split) >= 0.0);
+            if owner_t <= mask { discard; }
+        }
     }
     // A tree thins out through the same mask over the last `tree_fade_m`
     // before the edge of the trees' outermost band (they stand on the three
@@ -1355,29 +1443,12 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // TREE_FADE_MARGIN_M before it, before its cell stops being drawn: a
     // forest's edge is no longer a hard line of whole trees.
     if input.kind == 2u && params.fade.x > 0.0 {
-        var edge = params.settings.w;
-        for (var level = finest_level() - 2u; level <= finest_level(); level++) {
-            let c = band_cos_in(part.bands, level);
-            if c <= 1.0 {
-                edge = min(edge, acos(clamp(c, -1.0, 1.0))*params.settings.x);
-                break;
-            }
-        }
-        let from_anchor = acos(clamp(dot(radial, part.anchor), -1.0, 1.0))*params.settings.x;
-        let left = min(edge - from_anchor, params.settings.w - distance(input.position, params.camera.xyz))
-            - TREE_FADE_MARGIN_M;
+        // Only the foliage range now: at a band's edge a tree fades with its
+        // cell, across the ring (`distance-lod-fade`).
+        let left = params.settings.w - distance(input.position, params.camera.xyz) - TREE_FADE_MARGIN_M;
         if mask >= clamp(left/params.fade.x, 0.0, 1.0) { discard; }
     }
-    // The partition: a midpoint cell split between a fine and a coarse owner
-    // draws only the half nearer the fine one; the coarse cap draws the rest.
-    if input.level > base_level() && input.kind != 2u {
-        let a_fine = owner_fine_in(input.owner_a, input.level, part);
-        let b_fine = owner_fine_in(input.owner_b, input.level, part);
-        if a_fine != b_fine {
-            let nearer_a = dot(radial, input.owner_a) >= dot(radial, input.owner_b);
-            if (nearer_a && !a_fine) || (!nearer_a && !b_fine) { discard; }
-        }
-    }
+
     let n = normalized(input.normal);
     let sun = params.sun.xyz;
     let toward_camera = normalized(params.camera.xyz-input.position);

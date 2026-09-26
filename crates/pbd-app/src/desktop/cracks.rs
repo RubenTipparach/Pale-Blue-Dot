@@ -276,7 +276,7 @@ mod tests {
             owner_a: [0.0; 4],
             owner_b: [0.0; 4],
             floors: [0.0; 4],
-            spare: [0.0; 4],
+            spare: [0; 4],
         };
         let spread = 1.4 / PLANET_RADIUS;
         for (i, corner) in cell.corners.iter_mut().enumerate() {

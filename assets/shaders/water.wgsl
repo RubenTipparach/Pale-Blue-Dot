@@ -6,7 +6,7 @@
 // Reverse-Z depth (near=1, sky=0), linear scene colour, the resolved
 // single-sample scene textures. Positions are body-local; `planet_center` is
 // where that frame sits in the render frame (zero today).
-#import pbd::clouds::{CloudLayer, CloudSample, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at, cloud_map_smooth, cloud_hash}
+#import pbd::clouds::{CloudLayer, CloudSample, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at, cloud_map_smooth, cloud_hash, cloud_near_m, cloud_near_fog, cloud_density, cloud_lookup, cloud_local, cloud_wind, cloud_noise}
 #import pbd::sea::{SeaView, sea_surface}
 struct Cell {
     direction_height: vec4<f32>,
@@ -15,7 +15,7 @@ struct Cell {
     owner_a: vec4<f32>,
     owner_b: vec4<f32>,
     floors: vec4<f32>,
-    spare: vec4<f32>,
+    spare: vec4<u32>,  // x the tree it stands (`distance-lod-fade`)
 }
 struct WaterView {
     clip_from_local: mat4x4<f32>,
@@ -45,6 +45,7 @@ struct WaterView {
     screen: vec4<f32>,        // aspect, surface band m, wet blur, detail fade
     lod: vec4<f32>,           // xyz player direction, w base level
     bands: vec4<f32>,         // cos(band radius / R) per fine level, coarsest first
+    bands_in: vec4<f32>,      // the bands' cross-fade rings' inner edges (`distance-lod-fade`)
     rain: vec4<f32>,          // x the rain on the LENS (zero under a roof), yzw spare
     // The cloud layer, `pbd::clouds::CloudLayer`'s four lanes as the sky has
     // them this frame, so the sheet can put the same clouds over itself.
@@ -86,6 +87,12 @@ struct WaterView {
     sea: SeaView,
     // x how far the sheet sits below sea level (`depth_offset_m`), yzw spare.
     sea_frame: vec4<f32>,
+    // The lens mist (`lens-weather`): seconds to mist over and to clear
+    // standing still, how much faster per m/s of airspeed, its strength; then
+    // its beads per screen height, its blur in screen heights, how far it lifts
+    // the image toward its own brightness, and the drops' scale.
+    mist: vec4<f32>,
+    mist_look: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -113,9 +120,19 @@ struct WaterView {
 @group(3) @binding(2) var cloud_cells_tex: texture_3d<f32>;
 @group(3) @binding(3) var cloud_cells_sampler: sampler;
 // How far along its ray each march texel's cloud is, and where its march
-// stopped: the composite reads this frame's, the march the previous frame's
+// stopped: the composite reads this frame's, the resolve the previous frame's
 // (`cloud-ghosting`).
 @group(3) @binding(4) var cloud_depth: texture_2d<f32>;
+// The resolve only (`cloud-history-clip`): this frame's march, and this
+// frame's distances.
+@group(3) @binding(5) var cloud_current: texture_2d<f32>;
+@group(3) @binding(6) var cloud_depth_now: texture_2d<f32>;
+// The composite's: the near field's fog, lit colour and extinction per metre.
+@group(3) @binding(7) var cloud_near: texture_2d<f32>;
+// The lens mist (`lens-weather`), one texel: the probe reads the previous
+// frame's and writes this frame's, which the lens reads.
+@group(3) @binding(8) var lens_mist_prev: texture_2d<f32>;
+@group(3) @binding(9) var lens_mist: texture_2d<f32>;
 fn cloud_layer() -> CloudLayer {
     return CloudLayer(view.cloud_clouds,view.cloud_slab,view.cloud_storm,view.cloud_flash,view.cloud_light,
         view.cloud_shape,view.cloud_cells);
@@ -133,6 +150,9 @@ struct VertexOut {
     @location(7) @interpolate(flat) owner_b: vec3<f32>,
     // The swell's slope along the sphere, for the normal.
     @location(8) sea_slope: vec3<f32>,
+    // The owners' fades and the finer band's fade at the centre, as the
+    // terrain carries them (`distance-lod-fade`).
+    @location(9) @interpolate(flat) fade_t: vec3<f32>,
 }
 fn safe_normal(v: vec3<f32>) -> vec3<f32> { return v * inverseSqrt(max(dot(v,v),1e-12)); }
 
@@ -248,14 +268,41 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.level = level;
     out.owner_a = cell.owner_a.xyz;
     out.owner_b = cell.owner_b.xyz;
+    let finest = u32(view.lod.w) + 4u;
+    out.fade_t = vec3<f32>(water_band_t(cell.owner_a.xyz, level), water_band_t(cell.owner_b.xyz, level),
+        select(0.0, water_band_t(cell.direction_height.xyz, level + 1u), level < finest));
     return out;
 }
 fn water_band_cos(level: u32) -> f32 {
+    return water_lane(view.bands, level);
+}
+fn water_lane(lanes: vec4<f32>, level: u32) -> f32 {
     let k = level - u32(view.lod.w) - 1u;
-    if (k == 0u) { return view.bands.x; }
-    if (k == 1u) { return view.bands.y; }
-    if (k == 2u) { return view.bands.z; }
-    return view.bands.w;
+    if (k == 0u) { return lanes.x; }
+    if (k == 1u) { return lanes.y; }
+    if (k == 2u) { return lanes.z; }
+    return lanes.w;
+}
+// How far into fine level `level`'s band, across its cross-fade ring: the
+// terrain's `band_t` (`distance-lod-fade`).
+fn water_band_t(direction: vec3<f32>, level: u32) -> f32 {
+    if (level <= u32(view.lod.w)) { return 1.0; }
+    if (level > u32(view.lod.w) + 4u) { return 0.0; }
+    let out_cos = water_lane(view.bands, level);
+    if (out_cos > 1.0) { return 0.0; }
+    let in_cos = water_lane(view.bands_in, level);
+    let d = dot(direction, view.lod.xyz);
+    let span = in_cos - out_cos;
+    if (span <= 1e-9) { return select(0.0, 1.0, d > out_cos); }
+    return clamp((d - out_cos)/span, 0.0, 1.0);
+}
+// The terrain's 4 x 4 screen-door threshold for a pixel, 0..1 (`bayer4` in
+// `planet_surface.wgsl`): the sheet takes the same share of the pixels across
+// a ring as the ground does.
+fn water_bayer4(pixel: vec2<f32>) -> f32 {
+    let p = vec2<u32>(pixel) & vec2<u32>(3u);
+    let m = array<u32,16>(0u,8u,2u,10u, 12u,4u,14u,6u, 3u,11u,1u,9u, 15u,7u,13u,5u);
+    return (f32(m[p.y*4u + p.x]) + 0.5)/16.0;
 }
 
 fn load_depth(uv: vec2<f32>) -> f32 {
@@ -329,15 +376,15 @@ fn distance_fog(local_position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>) ->
 @fragment
 fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
     let radial = safe_normal(in.body_position);
-    // The same partition the terrain applies: a midpoint sheet split between
-    // a fine and a coarse owner draws only the fine half.
+    // The same partition the terrain applies, in the same pixel's dither
+    // class (`distance-lod-fade`): the sheet is drawn where its owner (the
+    // nearer, for a split midpoint cell) is in its band and the finer band
+    // has not taken its centre.
+    let m = water_bayer4(in.clip.xy);
+    if (in.fade_t.z > m) { discard; }
     if (in.level > u32(view.lod.w)) {
-        let a_fine = dot(in.owner_a, view.lod.xyz) > water_band_cos(in.level);
-        let b_fine = dot(in.owner_b, view.lod.xyz) > water_band_cos(in.level);
-        if (a_fine != b_fine) {
-            let nearer_a = dot(radial, in.owner_a) >= dot(radial, in.owner_b);
-            if ((nearer_a && !a_fine) || (!nearer_a && !b_fine)) { discard; }
-        }
+        let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
+        if (owner_t <= m) { discard; }
     }
     let face = safe_normal(in.normal);
     let sun_direction = safe_normal(view.sun.xyz);
@@ -628,15 +675,64 @@ fn rd_drops(uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32) -> vec2<f32> {
     c = smoothstep(0.3,1.0,c);
     return vec2<f32>(c,max(m1.y*l0,m2.y*l1));
 }
-fn refract_through_drops(uv: vec2<f32>, drop_uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32) -> vec4<f32> {
+// `wipe` receives how much of the glass the drops and their trails have run
+// over here: what clears the mist (`lens-weather`).
+fn refract_through_drops(uv: vec2<f32>, drop_uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32,
+        wipe: ptr<function, f32>) -> vec4<f32> {
     let c = rd_drops(drop_uv,t,l0,l1,l2);
     let e = vec2<f32>(0.001,0.0);
     let cx = rd_drops(drop_uv+e,t,l0,l1,l2).x;
     let cy = rd_drops(drop_uv+e.yx,t,l0,l1,l2).x;
     // A gradient in the y-up drop frame, negated in y for the y-down sample.
+    // Divided by the drops' scale, so each drop still bends the same share
+    // of its own width however small it is drawn (`lens-weather`).
     let n = vec2<f32>(cx-c.x,-(cy-c.x));
-    let refracted = textureSampleLevel(scene_color,scene_sampler,clamp(uv-n*view.lens.y,vec2(0.),vec2(1.)),0.0).rgb;
+    let bend = view.lens.y/max(view.mist_look.w, 0.05);
+    let refracted = textureSampleLevel(scene_color,scene_sampler,clamp(uv-n*bend,vec2(0.),vec2(1.)),0.0).rgb;
+    *wipe = max(*wipe, clamp(max(c.x, c.y), 0.0, 1.0));
     return vec4<f32>(refracted, clamp(c.x,0.0,1.0));
+}
+
+// The mist's beads: a field of tiny drops, `mist_look.x` per screen height,
+// each a round bead where its cell keeps one (`lens-weather`).
+fn mist_beads(drop_uv: vec2<f32>) -> f32 {
+    let g = drop_uv*max(view.mist_look.x, 1.0);
+    let id = floor(g);
+    let f = fract(g)-0.5;
+    let n = rd_n13(id.x*57.13+id.y*913.71);
+    let d = length(f-(n.xy-0.5)*0.6);
+    return smoothstep(0.35,0.0,d)*step(0.35,n.z);
+}
+
+// The lens mist, per frame, one pixel (`lens-weather`): the one cloud density
+// at the eye, the march's own, eased toward over `fog_s` as it rises and
+// `clear_s` as it falls, both faster with airspeed. None under water, and none
+// after a jump. The lens draws it.
+// The cloud densities at which the lens starts to mist and is fully misted.
+const LENS_MIST_THIN: vec2<f32> = vec2<f32>(0.01, 0.12);
+
+@fragment
+fn lens_mist_pass(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let previous = textureLoad(lens_mist_prev, vec2<i32>(0), 0).r;
+    if (view.fx.y > 0.75 || view.cloud_history.y < 0.5) { return vec4<f32>(0.0); }
+    let eye = view_ray(vec2<f32>(0.5)).origin-view.planet_center.xyz;
+    let layer = cloud_layer();
+    let at = cloud_lookup(eye);
+    let local = cloud_local(at, weather_cloud, weather_sampler);
+    var target_mist = 0.0;
+    if (local.x > 0.01) {
+        let wind = cloud_wind(at, weather_wind, weather_sampler);
+        // Any cloud mists a lens: the target saturates at a thin cloud's
+        // density. Taken as the density itself, the lens barely misted in the
+        // middle of a storm deck, whose density at the eye was 0.1-0.4.
+        let density = cloud_density(eye, layer, local, wind, 0.25*max(layer.cells.y, 0.5),
+            cloud_cells_tex, cloud_cells_sampler);
+        target_mist = smoothstep(LENS_MIST_THIN.x, LENS_MIST_THIN.y, density);
+    }
+    let seconds = select(view.mist.y, view.mist.x, target_mist > previous);
+    let rate = (1.0 + max(view.rain.z, 0.0)*view.mist.z)/max(seconds, 1e-3);
+    let mist = target_mist + (previous-target_mist)*exp(-max(view.rain.y, 0.0)*rate);
+    return vec4<f32>(clamp(mist, 0.0, 1.0), 0.0, 0.0, 1.0);
 }
 
 @fragment
@@ -657,19 +753,47 @@ fn lens(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // monotonic fall climbed. The lens works in the reference's frame.
     var drop_uv = vec2<f32>(uv.x-0.5, 0.5-uv.y);
     drop_uv.x *= max(view.screen.x,0.1);
+    // The drops `rain_lens_scale` times smaller than Tenebris's, trails and
+    // beads with them (`lens-weather`).
+    let tenebris_uv = drop_uv;
+    drop_uv *= max(view.mist_look.w, 0.05);
     let t = view.camera_time.w*0.2*view.lens.z;
     // The rain on the camera, not on the sea: under a roof it is none.
     let rain = clamp(view.rain.x,0.0,1.0);
+    var wipe = 0.0;
+    var drops = vec4<f32>(0.0);
     if (rain > 0.001) {
         let s = smoothstep(-0.5,1.0,rain)*2.0;
         let l1 = smoothstep(0.25,0.75,rain);
         let l2 = smoothstep(0.0,0.5,rain);
-        let r = refract_through_drops(uv,drop_uv,t,s,l1,l2);
-        color = mix(color,r.rgb,r.a*rain*above_water);
+        drops = refract_through_drops(uv,drop_uv,t,s,l1,l2,&wipe);
+        wipe *= rain;
+    }
+    // Condensation (`lens-weather`): a film of fine beads over a softened,
+    // lifted image, where the probe's mist is thick enough; it clears from
+    // the screen's edges inward, in patches, and the drops and their trails
+    // cut clear runs through it. Under the drops, which draw over it.
+    let mist = textureLoad(lens_mist, vec2<i32>(0), 0).r*view.mist.w;
+    if (mist > 0.001) {
+        let aspect = max(view.screen.x,0.1);
+        let centred = vec2<f32>(tenebris_uv.x/aspect, tenebris_uv.y)*2.0;
+        let edge = clamp(length(centred)/1.4142, 0.0, 1.0);
+        let blotch = cloud_noise(vec3<f32>(tenebris_uv*5.0, 3.7));
+        let threshold = 0.08 + 0.55*edge + 0.25*(blotch-0.5);
+        let cover = smoothstep(threshold-0.1, threshold+0.1, mist);
+        let film = blur(uv, view.mist_look.y/0.0016);
+        let bright = dot(film, vec3<f32>(0.2126,0.7152,0.0722));
+        let lifted = mix(film, vec3<f32>(bright)*1.15, view.mist_look.z);
+        let beaded = lifted*(1.0 + 0.45*mist_beads(tenebris_uv));
+        color = mix(color, beaded, cover*min(mist*1.5, 1.0)*above_water*(1.0-wipe));
+    }
+    if (rain > 0.001) {
+        color = mix(color,drops.rgb,drops.a*rain*above_water);
     }
     let emerge = clamp(view.fx.w,0.0,1.0);
     if (emerge > 0.001) {
-        let r = refract_through_drops(uv,drop_uv,t,0.0,1.0,0.6);
+        var dry = 0.0;
+        let r = refract_through_drops(uv,drop_uv,t,0.0,1.0,0.6,&dry);
         color = mix(color,r.rgb,r.a*emerge*above_water);
     }
     return vec4<f32>(color,1.0);
@@ -721,18 +845,24 @@ fn rain_map_at(p: vec3<f32>) -> f32 {
 // smallest depth, and zero is the sky. A march texel on a hill's silhouette
 // then holds the cloud its sky side sees, and the composite's own span test
 // keeps it off the hill.
+// The sea's hit is taken over the same four corners, the farthest stop
+// winning: taken on the centre ray alone, a texel on the sea's horizon flipped
+// between stopping at the sea and seeing the sky as the eye moved, and failed
+// the history's test each time it flipped (`cloud-entry`).
 fn cloud_far(ray: Ray, uv: vec2<f32>, half_texel: vec2<f32>, eye: vec3<f32>) -> f32 {
-    var depth = 1.0;
+    var far = 0.0;
     for (var k = 0u; k < 4u; k++) {
         let corner = vec2<f32>(select(-1.0, 1.0, (k & 1u) == 1u), select(-1.0, 1.0, (k & 2u) == 2u));
-        depth = min(depth, load_depth(clamp(uv + corner*half_texel, vec2<f32>(0.0), vec2<f32>(1.0))));
+        let at = clamp(uv + corner*half_texel, vec2<f32>(0.0), vec2<f32>(1.0));
+        let depth = load_depth(at);
+        var stop = 1.0e9;
+        if (depth > 1e-7) {
+            stop = length(reconstruct_local(at,depth)-ray.origin);
+        }
+        let sea = cloud_sphere_hit(eye,view_ray(at).direction,view.planet_center.w);
+        if (sea.x > 0.0) { stop = min(stop,sea.x); }
+        far = max(far, stop);
     }
-    var far = 1.0e9;
-    if (depth > 1e-7) {
-        far = length(reconstruct_local(uv,depth)-ray.origin);
-    }
-    let sea = cloud_sphere_hit(eye,ray.direction,view.planet_center.w);
-    if (sea.x > 0.0) { far = min(far,sea.x); }
     return far;
 }
 
@@ -742,8 +872,18 @@ fn cloud_far(ray: Ray, uv: vec2<f32>, half_texel: vec2<f32>, eye: vec3<f32>) -> 
 // object or holds cloud beyond it. The composite's upsample asks it within a
 // frame, the history read across frames (`cloud-budget`, `cloud-ghosting`).
 fn cloud_texel_sees(texel: vec2<f32>, far: f32) -> bool {
+    return cloud_texel_sees_to(texel, far, far);
+}
+
+// The history's form of the test (`cloud-edges`): its cloud lies no further
+// than this ray's stop `far`, and its march reached `reach`, where the cloud
+// being read is. Asking it to reach this ray's ground instead refused a near
+// cloud's history for the parallax of the ground far behind it: entering a
+// cloud, every texel over land and sea fell back to one raw sample. An
+// occluder in front of the cloud still stopped the march short of `reach`.
+fn cloud_texel_sees_to(texel: vec2<f32>, far: f32, reach: f32) -> bool {
     let near_enough = texel.x <= far*1.03 + 10.0;
-    let far_enough = texel.y >= min(far, CLOUD_FAR_CAP_M)*0.97 - 10.0;
+    let far_enough = texel.y >= min(min(reach, far), CLOUD_FAR_CAP_M)*0.97 - 10.0;
     return near_enough && far_enough;
 }
 
@@ -758,38 +898,68 @@ fn cloud_texel_sees(texel: vec2<f32>, far: f32) -> bool {
 struct CloudPrevious {
     cloud: vec4<f32>,
     weight: f32,
+    // Where the kept texels' cloud is along their rays, weighted by the cloud
+    // each holds; zero where none holds a distance (`cloud-edges`).
+    distance: f32,
 }
 
-fn cloud_previous(was: vec2<f32>, stop: vec3<f32>) -> CloudPrevious {
+// `point` is where along this ray the history is read (the cloud's point),
+// which the previous march must have reached (`cloud_texel_sees_to`).
+fn cloud_previous(was: vec2<f32>, stop: vec3<f32>, point: vec3<f32>) -> CloudPrevious {
     var out: CloudPrevious;
     out.cloud = vec4<f32>(0.0);
     out.weight = 0.0;
+    out.distance = 0.0;
     let size = vec2<i32>(textureDimensions(cloud_history));
     let at = was*vec2<f32>(size) - 0.5;
     let base = vec2<i32>(floor(at));
     let f = at - floor(at);
     let far = distance(view.cloud_prev_eye.xyz, stop);
+    let reach = distance(view.cloud_prev_eye.xyz, point);
     var sum = vec4<f32>(0.0);
+    var at_sum = 0.0;
+    var at_weight = 0.0;
     for (var k = 0u; k < 4u; k++) {
         let o = vec2<i32>(i32(k & 1u), i32((k >> 1u) & 1u));
         let texel = base + o;
         if (any(texel < vec2<i32>(0)) || any(texel >= size)) { continue; }
         let w = select(1.0-f.x, f.x, o.x == 1)*select(1.0-f.y, f.y, o.y == 1);
-        if (!cloud_texel_sees(textureLoad(cloud_depth, texel, 0).rg, far)) { continue; }
-        sum += textureLoad(cloud_history, texel, 0)*w;
+        let depth = textureLoad(cloud_depth, texel, 0).rg;
+        if (!cloud_texel_sees_to(depth, far, reach)) { continue; }
+        let cloud = textureLoad(cloud_history, texel, 0);
+        sum += cloud*w;
         out.weight += w;
+        let holds = w*cloud.w*select(0.0, 1.0, depth.x > 0.0);
+        at_sum += depth.x*holds;
+        at_weight += holds;
     }
     if (out.weight > 1e-3) { out.cloud = sum/out.weight; }
+    if (at_weight > 1e-6) { out.distance = at_sum/at_weight; }
     return out;
 }
 
+// The previous screen position of a point, or a negative x where it was
+// behind the previous camera or off its screen.
+fn cloud_was(point: vec3<f32>) -> vec2<f32> {
+    let before = view.prev_clip_from_local*vec4<f32>(point,1.0);
+    if (before.w <= 0.0) { return vec2<f32>(-1.0); }
+    let ndc = before.xy/before.w;
+    let was = vec2<f32>(ndc.x*0.5+0.5, 0.5-ndc.y*0.5);
+    if (any(was < vec2<f32>(0.0)) || any(was > vec2<f32>(1.0))) { return vec2<f32>(-1.0); }
+    return was;
+}
+
 struct CloudMarchOut {
-    // The history: the cloud's light premultiplied by coverage, and coverage.
+    // This frame's cloud alone: its light premultiplied by coverage, and
+    // coverage. The resolve folds it into the history.
     @location(0) cloud: vec4<f32>,
     // How far along the ray this frame's cloud is, metres, zero for none; and
     // how far the march could see (the scene, the sea), capped to stay a
     // finite half float.
     @location(1) depth: vec2<f32>,
+    // The near field's fog: its lit colour, and its extinction per metre
+    // (`cloud-entry`).
+    @location(2) near: vec4<f32>,
 }
 
 @fragment
@@ -804,6 +974,7 @@ fn cloud_march_pass(in: FullscreenVertexOutput) -> CloudMarchOut {
     var out: CloudMarchOut;
     out.cloud = vec4<f32>(0.0);
     out.depth = vec2<f32>(0.0, CLOUD_FAR_CAP_M);
+    out.near = vec4<f32>(0.0);
     // Under the sea the surface is the sky; the compose pass drew it.
     if (view.fx.y > 0.75) { return out; }
     let eye = ray.origin-view.planet_center.xyz;
@@ -814,40 +985,103 @@ fn cloud_march_pass(in: FullscreenVertexOutput) -> CloudMarchOut {
     // No cloud to march: an empty history, so a cloud never ghosts over a
     // hill that has moved in front of it.
     if (span.y <= span.x) { return out; }
-    // A different step offset for every pixel AND every frame: white noise,
-    // an integer hash of both. Each frame then samples the cloud at new
-    // depths and the history averages them.
-    let pixel = vec2<u32>(in.position.xy);
-    var h = pixel.x*1973u + pixel.y*9277u + u32(view.cloud_history.z)*26699u + 1u;
-    h = h*747796405u + 2891336453u;
-    h = ((h >> ((h >> 28u) + 4u)) ^ h)*277803737u;
-    h = (h >> 22u) ^ h;
-    let jitter = f32(h & 0xffffffu)/16777216.0;
-    let marched = cloud_march(eye,ray.direction,span.x,span.y,layer,safe_normal(view.sun.xyz),
+    let sun = safe_normal(view.sun.xyz);
+    // The first metres from the eye are the cloud's own fog, unjittered and
+    // outside the history; the march takes the rest (`cloud-entry`).
+    let slab_end = min(cloud_near_m(layer), span.y);
+    if (slab_end > span.x) {
+        out.near = cloud_near_fog(eye,ray.direction,span.x,slab_end,layer,sun,
+            weather_cloud,weather_wind,weather_sampler,cloud_cells_tex,cloud_cells_sampler);
+    }
+    // A different step offset for every pixel AND every frame, so the
+    // history averages samples at new depths: interleaved gradient noise,
+    // moved each frame. White noise left a 3x3 block short of the range the
+    // resolve clips the history to, and the clip then held noise
+    // (`cloud-entry`).
+    let q = in.position.xy + 5.588238*f32(u32(view.cloud_history.z) % 64u);
+    let jitter = fract(52.9829189*fract(dot(q, vec2<f32>(0.06711056, 0.00583715))));
+    let marched = cloud_march(eye,ray.direction,max(span.x, slab_end),span.y,layer,sun,
         weather_cloud,weather_wind,weather_sampler,cloud_cells_tex,cloud_cells_sampler,
         jitter,pixel_angle);
-    var cloud = marched.cloud;
-    // Blend into the history where this pixel's cloud was on the previous
-    // frame: the cloud's own point, projected by the previous camera.
-    // Only a texel whose march saw what this one sees is blended: the
-    // history never carries cloud across a silhouette (`cloud-ghosting`).
-    if (view.cloud_history.y > 0.5) {
-        let point = ray.origin + ray.direction*marched.depth;
-        let before = view.prev_clip_from_local*vec4<f32>(point,1.0);
-        if (before.w > 0.0) {
-            let ndc = before.xy/before.w;
-            let was = vec2<f32>(ndc.x*0.5+0.5, 0.5-ndc.y*0.5);
-            if (all(was >= vec2<f32>(0.0)) && all(was <= vec2<f32>(1.0))) {
-                let stop = ray.origin + ray.direction*min(far, CLOUD_FAR_CAP_M);
-                let previous = cloud_previous(was, stop);
-                if (previous.weight > 1e-3) {
-                    cloud = mix(previous.cloud, cloud, view.cloud_history.x);
-                }
-            }
+    // This frame's cloud alone: the resolve folds it into the history
+    // (`cloud-history-clip`).
+    out.cloud = marched.cloud;
+    out.depth.x = select(0.0, marched.depth, marched.cloud.w > 1e-3);
+    return out;
+}
+
+// The history's resolve (`cloud-history-clip`): what the march's blend did,
+// plus a clip. The previous history is read where this texel's cloud was a
+// frame ago through `cloud-ghosting`'s test (`cloud_previous`: only texels
+// whose march saw what this ray sees), then held inside the range this
+// frame's march shows round the texel: the mean plus or minus 1.25 standard
+// deviations of the 3 x 3 neighbourhood (Salvi 2016), widened to include this
+// texel. The test catches a silhouette; the clip catches a history that saw
+// the same depths and is still wrong: a cloud spread along the whole ray,
+// which one depth cannot reproject, or a cloud that has changed. A converged
+// history lies inside a single noisy sample's neighbourhood, so still cloud
+// is left as calm as before.
+const CLOUD_CLIP_SIGMA: f32 = 1.25;
+struct CloudResolveOut {
+    // The history.
+    @location(0) cloud: vec4<f32>,
+    // Its distances, as the march writes them; a texel whose cloud is the
+    // history's alone keeps the history's (`cloud-entry`, `cloud-edges`).
+    @location(1) depth: vec2<f32>,
+}
+@fragment
+fn cloud_resolve(in: FullscreenVertexOutput) -> CloudResolveOut {
+    let size = vec2<i32>(textureDimensions(cloud_current));
+    let texel = clamp(vec2<i32>(in.position.xy), vec2<i32>(0), size - 1);
+    let current = textureLoad(cloud_current, texel, 0);
+    let now = textureLoad(cloud_depth_now, texel, 0).rg;
+    var out: CloudResolveOut;
+    out.cloud = current;
+    out.depth = now;
+    if (view.cloud_history.y < 0.5) { return out; }
+    var m1 = vec4<f32>(0.0);
+    var m2 = vec4<f32>(0.0);
+    for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+            let s = textureLoad(cloud_current, clamp(texel + vec2<i32>(dx, dy), vec2<i32>(0), size - 1), 0);
+            m1 += s;
+            m2 += s*s;
         }
     }
-    out.cloud = cloud;
-    out.depth.x = select(0.0, marched.depth, marched.cloud.w > 1e-3);
+    let mean = m1/9.0;
+    let sigma = sqrt(max(m2/9.0 - mean*mean, vec4<f32>(0.0)));
+    let lo = min(mean - CLOUD_CLIP_SIGMA*sigma, current);
+    let hi = max(mean + CLOUD_CLIP_SIGMA*sigma, current);
+    // The cloud's own point, or where the march stopped where it has none,
+    // projected by the previous camera: where this texel's cloud was.
+    let ray = view_ray(in.uv);
+    let stop_m = min(now.y, CLOUD_FAR_CAP_M);
+    var point = ray.origin + ray.direction*select(stop_m, now.x, now.x > 0.0);
+    var was = cloud_was(point);
+    // No cloud this frame: the stop is a guess at where the history's cloud
+    // is, and read there the history slid with the ground's parallax, not the
+    // cloud's. Look up the distance the history holds there and read it again
+    // at that distance (`cloud-edges`).
+    if (now.x <= 0.0 && was.x >= 0.0) {
+        let held_size = vec2<i32>(textureDimensions(cloud_depth));
+        let held_at = clamp(vec2<i32>(was*vec2<f32>(held_size)), vec2<i32>(0), held_size - 1);
+        let held = textureLoad(cloud_depth, held_at, 0).r;
+        if (held > 0.0) {
+            point = ray.origin + ray.direction*min(held, stop_m);
+            was = cloud_was(point);
+        }
+    }
+    if (was.x < 0.0) { return out; }
+    let stop = ray.origin + ray.direction*stop_m;
+    let previous = cloud_previous(was, stop, point);
+    if (previous.weight <= 1e-3) { return out; }
+    out.cloud = mix(clamp(previous.cloud, lo, hi), current, view.cloud_history.x);
+    // A texel whose cloud is the history's alone keeps that cloud's distance,
+    // so the composite hazes it like its neighbours (`cloud-edges`); one the
+    // clip emptied has no cloud and no distance.
+    if (now.x <= 0.0 && out.cloud.w > 1e-3) {
+        out.depth.x = select(distance(ray.origin, point), previous.distance, previous.distance > 0.0);
+    }
     return out;
 }
 
@@ -932,9 +1166,23 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // The air in front of the cloud fades it into what is behind, its light
     // and its cover alike, measured to where the texels it came from hold
     // their cloud (`cloud-close-up`).
+    // Where no texel it keeps holds a distance (cloud from the history alone),
+    // this pixel's own entry into the layer: measured to zero, the haze was
+    // none, and every such texel at a cloud's edge stood out unhazed, a bright
+    // rim round a limb cloud seen through thick air (`cloud-edges`).
     var at = 0.0;
-    let cloud = cloud_upsampled(uv, far, &at)*cloud_air(eye, ray.direction, min(at, far));
-    return vec4<f32>(scene*(1.0-cloud.w)+cloud.rgb,1.0);
+    let upsampled = cloud_upsampled(uv, far, &at);
+    let cloud = upsampled*cloud_air(eye, ray.direction, min(select(span.x, at, at > 0.0), far));
+    let behind = scene*(1.0-cloud.w)+cloud.rgb;
+    // The first metres from the eye, to this pixel's own stop, are the
+    // cloud's fog seen in front of everything else: it thickens as the eye
+    // enters a cloud and thins as it leaves, with nothing to flicker
+    // (`cloud-entry`).
+    let near_m = cloud_near_m(cloud_layer());
+    let slab = clamp(min(far, near_m) - span.x, 0.0, near_m);
+    if (slab <= 0.0) { return vec4<f32>(behind,1.0); }
+    let fog = textureSampleLevel(cloud_near, cloud_history_sampler, uv, 0.0);
+    return vec4<f32>(mix(behind, fog.rgb, 1.0 - exp(-max(fog.a, 0.0)*slab)),1.0);
 }
 
 // The streaks' two widths, metres, and the distance from the eye over which

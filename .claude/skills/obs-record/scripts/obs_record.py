@@ -9,9 +9,9 @@ running, it is started for the recording and closed afterwards.
 Requires: OBS Studio 28+, Python 3.9+, `pip install obsws-python imageio-ffmpeg`.
 
 Examples:
-  # Launch a program, record 40 s after it prints "ready", half resolution.
+  # Launch a program, record 40 s after it prints "ready", at the window's size.
   python obs_record.py --launch "C:/game/game.exe --demo" --window-exe game.exe \
-      --start-on "ready" --duration 40 --scale 0.5 --out flight.mp4
+      --start-on "ready" --duration 40 --out flight.mp4
 
   # Record an already-open window for 20 s and drop it into Google Drive.
   python obs_record.py --window-title "My App" --duration 20 \
@@ -273,7 +273,8 @@ def main():
     timing.add_argument("--stop-on", help="regex on the launched program's output that ends the recording")
     timing.add_argument("--max-seconds", type=float, default=600, help="hard cap (default 600)")
     video = p.add_argument_group("video")
-    video.add_argument("--scale", type=float, default=0.5, help="output size as a share of the window (default 0.5)")
+    video.add_argument("--scale", type=float, default=1.0,
+                       help="output size as a share of the window (default 1.0, the window's full size)")
     video.add_argument("--fps", type=int, default=60)
     out = p.add_argument_group("output")
     out.add_argument("--out", required=True, help="MP4 path to write")
@@ -305,6 +306,16 @@ def main():
         if a.window_exe.lower() in running.lower():
             sys.exit(f"{a.window_exe} is already running; close it first, or the capture may "
                      "film that copy instead of the one launched")
+    # The program runs in its own folder (--cwd aside), where a path relative
+    # to here no longer points at it: resolve it now, before OBS is started.
+    argv = None
+    if a.launch:
+        argv = shlex.split(a.launch, posix=(sys.platform != "win32"))
+        argv = [s.strip('"') for s in argv]
+        found = shutil.which(argv[0])
+        if not found:
+            sys.exit(f"--launch: no program at {argv[0]}")
+        argv[0] = str(Path(found).resolve())
     out_path = Path(a.out).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     log_path = out_path.with_suffix(".log")
@@ -314,6 +325,7 @@ def main():
         orig_scene = c.get_current_program_scene().current_program_scene_name
         orig_format = c.get_profile_parameter("SimpleOutput", "RecFormat2").parameter_value
         created = False
+        input_created = False
         proc = None
         mkv = None
         try:
@@ -325,10 +337,8 @@ def main():
             c.set_profile_parameter("SimpleOutput", "RecFormat2", "mkv")
 
             start_evt, stop_evt = threading.Event(), threading.Event()
-            if a.launch:
-                argv = shlex.split(a.launch, posix=(sys.platform != "win32"))
-                argv = [s.strip('"') for s in argv]
-                cwd = a.cwd or str(Path(argv[0]).resolve().parent)
+            if argv:
+                cwd = a.cwd or str(Path(argv[0]).parent)
                 proc = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, text=True,
                                         encoding="utf-8", errors="replace")
@@ -349,6 +359,7 @@ def main():
                 start_evt.set()
 
             c.create_input(SCENE, SOURCE, "window_capture", {"method": 2, "cursor": False}, True)
+            input_created = True
             window = find_window(c, a.window_exe, a.window_title, 120)
             c.set_input_settings(SOURCE, {"window": window, "method": 2, "cursor": False}, True)
             item = c.get_scene_item_id(SCENE, SOURCE).scene_item_id
@@ -413,7 +424,7 @@ def main():
             steps = [
                 ("scene", lambda: c.set_current_program_scene(orig_scene)),
                 ("temporary scene", lambda: created and c.remove_scene(SCENE)),
-                ("temporary input", lambda: created and c.remove_input(SOURCE)),
+                ("temporary input", lambda: input_created and c.remove_input(SOURCE)),
                 ("video settings", lambda: c.set_video_settings(
                     orig_video.fps_numerator, orig_video.fps_denominator,
                     orig_video.base_width, orig_video.base_height,
@@ -466,10 +477,11 @@ def main():
         m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", probe)
         dur = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3]) if m else 0
         if dur > 0:
-            times = [dur * (i + 0.5) / 6 for i in range(6)]
-            # A window shorter than one frame, so each tile is its own moment.
-            win = 0.5 / max(a.fps, 1)
-            vf = "select='" + "+".join(f"between(t,{t:.3f},{t + win:.3f})" for t in times) + "',tile=3x2"
+            # By frame number: a window in time narrower than a frame misses
+            # the frame about half the time (timestamps are rounded to the
+            # millisecond), and a wider one can take two.
+            frames = [int(dur * a.fps * (i + 0.5) / 6) for i in range(6)]
+            vf = "select='" + "+".join(f"eq(n,{n})" for n in frames) + "',tile=3x2"
             subprocess.run([ff, "-y", "-v", "error", "-i", str(out_path), "-vf", vf,
                             "-frames:v", "1", "-vsync", "0", str(sheet)], capture_output=True)
             if sheet.exists():

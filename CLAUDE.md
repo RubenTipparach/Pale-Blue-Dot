@@ -71,30 +71,39 @@ alter a default, or refactor toward a plan, before the plan is written down.
 In this order. Each is written up in `openspec/` before code, like everything
 else here, and taken off this list when it lands.
 
-1. **Cloud ghosting.** Clouds smear and ghost around objects in front of
+1. **No pop-in (made a priority 2026-09-25).** Trees and terrain blocks
+   dither-fade in and out; they never appear or vanish in one frame. The owner,
+   on the merged build's recordings: "tree and terrain fade in / fade out
+   dithering is not done, there's a hard cut transition". `detail-fade` is
+   built, but in flight a third to a half of the detail landings skip their
+   fade and pop.
+2. **Cloud ghosting.** Clouds smear and ghost around objects in front of
    them. The history blend must never carry cloud across a silhouette.
-2. **Clouds up close and flying through them.** They must look right near the
-   camera and from inside a cloud, not only from a distance.
-3. **Clouds blending with the atmosphere**, both at ground level and seen from
+3. **Clouds up close and flying through them.** They must look right near the
+   camera and from inside a cloud, not only from a distance. Entering a cloud
+   must not look glitchy: on the merged build the frame fills with white
+   speckle and streaks at the moment of entry.
+4. **Clouds blending with the atmosphere**, both at ground level and seen from
    space. Distant cloud must fade into the sky's haze at the horizon, taking
    the colour of the air between (the owner's reference photos: an ocean
    horizon, cumulus from an airliner, a sunset over a deck), not stand as a
-   flat grey shell with a hard edge.
-4. **The ground-to-space transition.** The planet fog and atmosphere change
+   flat grey shell with a hard edge. Seen from high up, a cloud near the limb
+   must not show a hard outline: on the merged build it is ringed with bright
+   speckle. The hard edge seen from inside the layer (the owner's "ring",
+   2026-09-26) was the march running out of steps, and is gone
+   (`cloud-reach`); the far deck is still grey rather than the air's colour.
+5. **The ground-to-space transition.** The planet fog and atmosphere change
    between the surface and space must not be jarring.
-5. **Water:**
+6. **Water:**
    - it looks foggy when it is dark out;
    - it should be a darker blue where it is deep.
 
 Queued after those (owner, 2026-09-25):
 
-6. **Entering a cloud looks glitchy.** Goes with priority 2.
 7. **A live tuning page.** A local HTML page with sliders (the wet look first)
    that changes the running game. The config is a startup read today
    (`config.rs`), so this needs the game to reload `assets/config/*.ron` while
    running, plus a small local server that writes the file.
-8. **No pop-in.** Trees and LOD blocks dither-fade in and out instead of
-   popping.
 
 Standing measurement practice: frame time is judged with `--frame-log` and
 `tools/frame_graph.py` (plus the `F3` in-game graph), in real-time windowed
