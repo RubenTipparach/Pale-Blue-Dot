@@ -135,12 +135,12 @@ def shovel(x, y, r):
         if rim(blade, x, y, 0.3):
             return ("edge", 0.3)
         return ("iron", 0.4)
-    if 9.2 <= x <= 10.8 and abs(y) <= 0.55 + (x - 9.2) * 0.3:
+    if 9.2 <= x <= 10.8 and abs(y) <= 0.62 + (x - 9.2) * 0.3:
         return ("ironDark", 0.95)
     # A D-grip crossbar at the butt.
     if -0.9 <= x <= -0.1 and abs(y) <= 1.4:
         return ("wrap" if abs(y) > 1.1 else "grip", 0.9)
-    return handle(x, y, 9.6, 0.42, 2.4, r)
+    return handle(x, y, 9.6, 0.51, 2.4, r)
 
 
 def axe(x, y, r):
@@ -168,24 +168,24 @@ def rod(x, y, r):
         if in_circle(x, y, 1.9, -1.45, 0.35):
             return ("ironDark", 1.1)
         return ("ironDark" if rim(lambda px, py: in_circle(px, py, 1.9, -1.45, 1.0), x, y, 0.2) else "reel", 0.9)
-    if 1.7 <= x <= 2.1 and -0.8 <= y < -0.4:
+    if 1.7 <= x <= 2.1 and -0.8 <= y < -0.25:
         return ("ironDark", 0.6)
     # Line guides: small rings on stems under the blank.
     for gx in (7, 11, 14.5, 16.8):
         r2 = (x - gx) ** 2 + (y + 0.78) ** 2
         if 0.14 ** 2 <= r2 <= 0.34 ** 2:
             return ("ironDark", 0.3)
-        if abs(x - gx) <= 0.08 and -0.5 <= y <= -0.3:
+        if abs(x - gx) <= 0.08 and -0.5 <= y <= -0.15:
             return ("ironDark", 0.3)
-    if 1.2 <= x <= 2.6 and abs(y) <= 0.6:
-        return ("ironDark", 0.95)
-    if 0 <= x <= 3.8 and abs(y) <= 0.55:
-        return ("corkDark" if (x % 0.6) < 0.12 else "cork", round_depth(y, 0.55, 0.5, 1.0))
-    if 3.8 < x <= 4.1 and abs(y) <= 0.42:
-        return ("ironDark", 0.8)
-    half = 0.4 - 0.24 * clamp01(x / 18)
+    if 1.2 <= x <= 2.6 and abs(y) <= 0.34:
+        return ("ironDark", 0.62)
+    if 0 <= x <= 3.8 and abs(y) <= 0.28:
+        return ("corkDark" if (x % 0.6) < 0.12 else "cork", round_depth(y, 0.28, 0.3, 0.56))
+    if 3.8 < x <= 4.1 and abs(y) <= 0.26:
+        return ("ironDark", 0.5)
+    half = 0.22 - 0.12 * clamp01(x / 18)
     if 4.1 < x <= 17.7 and abs(y) <= half:
-        return ("grip", round_depth(y, half, 0.25, 0.75))
+        return ("grip", round_depth(y, half, 0.2, 0.44))
     return None
 
 
@@ -196,16 +196,16 @@ def rod(x, y, r):
 # its handle so `work` points as nearly as it can at `toward` (eye space).
 DOWN_AHEAD = norm((0.0, -1.0, -0.45))
 TOOLS = [
-    {"id": "pickaxe", "name": "Pickaxe", "note": "Stone, rock and ore", "shape": pickaxe, "len": 12.2, "fist": 1.5,
+    {"id": "pickaxe", "name": "Pickaxe", "note": "Stone, rock and ore", "shape": pickaxe, "len": 12.2, "fist": 1.9, "grip_r": 0.45,
      "along": (-0.2, 0.45, -0.5), "length": 0.232, "work": (0, -1, 0), "toward": DOWN_AHEAD},
-    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 15.6, "fist": 1.2,
+    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 15.6, "fist": 1.7, "grip_r": 0.51,
      "along": (-0.75, -0.2, -0.55), "length": 0.26, "work": (0, 0, 1), "toward": norm((0, 1, 0.35))},
-    {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 12.4, "fist": 1.5,
+    {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 12.4, "fist": 1.9, "grip_r": 0.45,
      "along": (-0.2, 0.45, -0.5), "length": 0.232, "work": (0, 1, 0), "toward": DOWN_AHEAD},
-    {"id": "rod", "name": "Rod", "note": "Fishing", "shape": rod, "len": 18.3, "fist": 3.0,
+    {"id": "rod", "name": "Rod", "note": "Fishing", "shape": rod, "len": 18.3, "fist": 2.4, "grip_r": 0.28,
      "along": (0.0, 0.31, -0.47), "length": 0.563, "work": (0, -1, 0), "toward": (0.0, -1.0, 0.0)},
 ]
-ANCHOR = {1: (0.26, -0.26, -0.48), 2: (0.34, -0.36, -0.5)}
+ANCHOR = {1: (0.26, -0.26, -0.48), 2: (0.31, -0.30, -0.52)}
 X0, X1, Y1 = -2.2, 19.0, 6.2
 
 
@@ -240,49 +240,43 @@ def pose(tool, size):
 
 
 # ---- the hand -----------------------------------------------------------------
-# In metres, in a frame on the grip: x along the handle toward the head, f
-# toward the elbow (square to the handle), k = the third axis, turned to face
-# the eye. Each part is a hexagonal prism: its axis in that frame, its centre,
-# its corner radius and length, and a colour role.
+# Posed from Blender's Rigify human metarig by tools/gen_held_hand.py, which
+# closes the right hand round a handle of `handle_r` and writes its bones as
+# hexagonal prisms in metres, in a frame on the handle: x along it toward the
+# tool's head, f toward the elbow, k = x cross f.
+HAND = json.load(open(os.path.join(ROOT, "tools", "held_hand.json"), encoding="utf-8"))
 FOREARM_EYE = norm((0.45, -0.75, 0.5))
 # How much of the forearm's lie along the handle is taken out: all of it makes
 # the arm square to the handle (a hammer grip, which from the eye runs the arm
 # out sideways), none lets the arm continue the handle's line. Part of it is a
 # cocked wrist, with the arm coming up from the bottom right of the view.
 FOREARM_SQUARE = 0.6
-HAND = [
-    # The fist: a fat prism around the handle, carrying the back of the hand.
-    {"axis": "x", "at": (0.0, 0.006, 0.0), "r": 0.040, "len": 0.074, "c": "skin"},
-    # Four knuckles along the fist's far edge, on the side toward the eye.
-    *[{"axis": "k", "at": (-0.027 + i * 0.018, -0.026, 0.020), "r": 0.0135, "len": 0.034, "c": "knuckle"} for i in range(4)],
-    # The fingers' middle joints, wrapped round the far side of the handle.
-    *[{"axis": "k", "at": (-0.027 + i * 0.018, -0.040, -0.004), "r": 0.0125, "len": 0.044, "c": "skin"} for i in range(4)],
-    # The thumb: its base on the back of the hand, its tip along the handle.
-    {"axis": "x", "at": (0.036, 0.004, 0.032), "r": 0.0155, "len": 0.030, "c": "skin"},
-    {"axis": "x", "at": (0.060, -0.010, 0.026), "r": 0.0125, "len": 0.028, "c": "knuckle"},
-    # The wrist, the cuff and the sleeve, toward the elbow.
-    {"axis": "f", "at": (0.0, 0.050, 0.0), "r": 0.030, "len": 0.044, "c": "skin"},
-    {"axis": "f", "at": (0.0, 0.078, 0.0), "r": 0.0385, "len": 0.020, "c": "cuff"},
-    {"axis": "f", "at": (0.0, 0.318, 0.0), "r": 0.036, "len": 0.46, "c": "sleeve"},
-]
 
 
 def hand_parts(tool, size):
-    """The hand's prisms in the tool's own units, for this tool and size."""
-    rot, scale, _ = pose(tool, size)
+    """The hand's prisms in the tool's own units, for this tool and size. The
+    hand is scaled so it closes round this tool's grip as it closed round the
+    rig's handle."""
+    rot, _, _ = pose(tool, size)
     x = (1.0, 0.0, 0.0)
     d = mat_vec(mat_t(rot), FOREARM_EYE)
     f = norm(sub(d, mul(x, FOREARM_SQUARE * dot(d, x))))
-    k = norm(cross(x, f))
-    if mat_vec(rot, k)[2] < 0:
-        k = mul(k, -1)
-    axes = {"x": x, "f": f, "k": k}
+    k = cross(x, f)
     grip = (tool["fist"], 0.0, 0.0)
+    # Rig metres to tool units: the rig's handle radius onto this tool's grip.
+    unit = tool["grip_r"] / HAND["handle_r"]
     out = []
-    for p in HAND:
-        at = add(grip, mul(add(add(mul(x, p["at"][0]), mul(f, p["at"][1])), mul(k, p["at"][2])), 1.0 / scale))
-        out.append({"axis": [round(v, 4) for v in axes[p["axis"]]], "at": [round(v, 4) for v in at],
-                    "r": round(p["r"] / scale, 4), "len": round(p["len"] / scale, 4), "c": p["c"]})
+    for p in HAND["parts"]:
+        a, at = p["axis"], p["at"]
+        axis = norm(add(add(mul(x, a[0]), mul(f, a[1])), mul(k, a[2])))
+        centre = add(grip, mul(add(add(mul(x, at[0]), mul(f, at[1])), mul(k, at[2])), unit))
+        part = {"axis": [round(v, 4) for v in axis], "at": [round(v, 4) for v in centre],
+                "r": round(p["r"] * unit, 4), "len": round(p["len"] * unit, 4), "c": p["c"]}
+        if "across" in p:
+            c = p["across"]
+            part["across"] = [round(v, 4) for v in norm(add(add(mul(x, c[0]), mul(f, c[1])), mul(k, c[2])))]
+            part["w"] = round(p["w"] * unit, 4)
+        out.append(part)
     return out
 
 
@@ -415,12 +409,14 @@ def render(out_dir):
 
     def prism(p):
         axis = Vector(p["axis"]).normalized()
-        q = Vector((0, 0, 1)).rotation_difference(axis)
+        u = Vector(p.get("across") or axis.orthogonal()).normalized()
+        v_ = axis.cross(u)
+        w = p.get("w", p["r"])
         verts, faces = [], []
         for zi, z in enumerate((-p["len"] / 2, p["len"] / 2)):
             for k in range(6):
                 a = math.radians(60 * k)
-                v = q @ Vector((math.cos(a) * p["r"], math.sin(a) * p["r"], z)) + Vector(p["at"])
+                v = u * (math.cos(a) * w) + v_ * (math.sin(a) * p["r"]) + axis * z + Vector(p["at"])
                 verts.append(tuple(v))
         faces.append((list(range(0, 6))[::-1], p["c"]))
         faces.append((list(range(6, 12)), p["c"]))
@@ -475,8 +471,8 @@ def render(out_dir):
         if t["id"] == "pickaxe":
             # Round the hand: the fist's centre in eye space, from four sides.
             fist = Vector(pz["grip"]) + (ob.rotation_quaternion @ (Vector((next(x for x in TOOLS if x["id"] == "pickaxe")["fist"], 0, 0)) * pz["scale"]))
-            for name, off in {"front": (0, 0, 0.32), "right": (0.32, 0.02, 0), "top": (0, 0.32, 0.02),
-                              "left": (-0.3, 0.05, -0.08), "three-quarter": (0.2, 0.16, 0.2)}.items():
+            for name, off in {"front": (0, 0, 0.5), "right": (0.5, 0.03, 0), "top": (0, 0.5, 0.03),
+                              "left": (-0.46, 0.08, -0.12), "three-quarter": (0.3, 0.25, 0.3)}.items():
                 look(fist, tuple(Vector(fist) + Vector(off)))
                 cam.data.angle_y = math.radians(40)
                 shoot(os.path.join(out_dir, f"hand-{name}.png"), 600, 600)
