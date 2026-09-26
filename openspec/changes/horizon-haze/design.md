@@ -1,5 +1,9 @@
 # Design: horizon-haze
 
+**On hold (2026-09-26).** This is the deeper-air plan as it stood before the
+second measurement (proposal, "Measured again"). It is not the next step:
+the owner judges the far deck on the `cloud-reach` build first.
+
 ## 1. The sky's air
 
 `sky_atmosphere.wgsl`'s `air_density` is

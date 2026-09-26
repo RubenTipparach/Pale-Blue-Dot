@@ -91,7 +91,10 @@ else here, and taken off this list when it lands.
    must not show a hard outline: on the merged build it is ringed with bright
    speckle. The hard edge seen from inside the layer (the owner's "ring",
    2026-09-26) was the march running out of steps, and is gone
-   (`cloud-reach`); the far deck is still grey rather than the air's colour.
+   (`cloud-reach`). The grey far deck left in that frame is measured in
+   `horizon-haze`: the horizon is as bright from the layer as from the
+   ground, a flat haze colour greys everything, and the owner judges the
+   deck on the cloud-hop flight next.
 5. **The ground-to-space transition.** The planet fog and atmosphere change
    between the surface and space must not be jarring.
 6. **Water:**

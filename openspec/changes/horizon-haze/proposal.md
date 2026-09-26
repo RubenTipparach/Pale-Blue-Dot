@@ -36,7 +36,9 @@ The sky just above the limb, sRGB, at the same column:
 | 1500 m (over the tops) | (100, 150, 198), the limb's glow band below the eye | black |
 
 From inside the layer, the sky just over the horizon is a third as bright as
-from the ground.
+from the ground. **Corrected below ("Measured again"): these two stills face
+different ways under different suns; at one heading the horizon is as bright
+from the layer as from the ground.**
 
 ### The haze assumes air five times deeper, and has no colour for a cloud
 
@@ -107,6 +109,51 @@ B, measured (sRGB, same pixels):
 The cost is the ground's zenith: with the same scattering, twice the air
 overhead (0.410 against 0.215 in shell units) also pales the sky straight up
 from the ground.
+
+## Measured again: the horizon is not dark from the layer
+
+The table under "The sky is space-dark by the top of the cloud layer"
+compares stills that face different ways under different suns: the owner's
+ring frame is kilometres along the cloud-hop route, and the ground still is
+at the spawn. Held to one heading (`--view column --height H --pitch` at the
+limb's dip, clouds off, `--time 10`, `output/captures/heights/`), the sky
+over the limb is bright at every height:
+
+| Eye height | 6 px over the limb | 80 px over | 200 px over |
+| ---: | --- | --- | --- |
+| 450 m | (120, 170, 216) | (84, 133, 184) | (51, 86, 129) |
+| 600 m | (123, 174, 218) | (82, 131, 181) | (44, 77, 117) |
+| 1200 m | (128, 177, 215) | (71, 115, 165) | (13, 30, 50) |
+
+What darkens with height is the sky well above the horizon, which is the
+day veil fading into space, and that is as the owner decided it should be.
+The ring frame's sky is 2.5 times darker than this at the same height and
+the same distance above the limb, so its darkness belongs to its place and
+its heading, not to the layer's height.
+
+And with the zenith held (the scattering divided by the extra air overhead,
+design section 2), a deeper air barely changes the ring frame: over its limb
+it is (41, 71, 106) at 0.35, 0.5 and 0.7 alike, against (40, 70, 104) today;
+higher up it goes from (19, 37, 58) to (28, 50, 77) at 0.5. The limb's glow at
+1500 m thickens, and so does the halo from orbit (the stills are in
+`output/captures/depth/`). Experiment B looked better because it was a
+brighter sky everywhere, the ground's included.
+
+## Where this leaves priority 4
+
+- The hard edge, which was what the owner reported, was the march's reach:
+  `cloud-reach`, landed.
+- The grey far deck in the ring frame is cloud lit and seen at that place's
+  light, fading into that place's sky. Neither measured lever (a haze colour,
+  a deeper air) fixes it without greying or brightening the whole sky.
+- **Next**: the owner looks at the cloud-hop flight on the `cloud-reach`
+  build. The deck is judged there, in motion and across the route's changing
+  light, before anything else changes. If it still reads as a shell, the
+  candidates are a brighter sky (B, without holding the zenith) and the
+  clouds' own light at a low sun (`cloud_light`), which this change did not
+  measure.
+
+## The plan as it stood before the second measurement
 
 ## What changes (revised)
 
