@@ -1,9 +1,9 @@
 # Tasks
 
-- [ ] 1. `lod_fade_width` in `scatter.ron`; the rings and the centre's fit on the CPU; the records' inner margins and floors widened; the fit instrument
-- [ ] 2. The per-pixel partition: visibility lists each ring cell once; `t` to the fragment; the kept test; walls and the cut wall
-- [ ] 3. Tests: the kept test covers every point once for all 16 classes; the fit stays inside the records; the GPU listing
-- [ ] 4. `PBD_NO_SKY` stills; recordings (a slow low flight, the scenic and cloud-hop flights, a walk toward a forest); retire the timed fade for terrain
-- [ ] 5. Trees: coarse cells stand their centre cell's tree; siblings dither out across a ring
-- [ ] 6. Trees on level 8, fading out across its outer ring; retire `tree_shown`
-- [ ] 7. The perf suite, old against new
+- [x] 1. `lod_fade_width` in `scatter.ron` (0.3); the rings (`LodParams::bands_in`) and the centre's fit (`fit_of`, `FineSet::fit_m`); the coarse levels' records laid inward to the finer ring, the floors out to the fit; the centre per view follows the camera within the fit and catches up at twice its speed after a landing
+- [x] 2. The per-pixel partition: `band_t` in the visibility, surface and water shaders; a cell listed when any dither class draws it; the owners' and the finer band's fades to the fragment (`split`, `fade_t`); the kept test; walls to the fine floor wherever the neighbour may be fine; the cut wall where the owners' fades differ; the water sheet split the same way round the same centre
+- [ ] 3. Tests: the fit keeps every ring inside the records (`the_fade_centre_keeps_every_ring_inside_the_records`, done); the kept test covering every point once for all 16 classes and a GPU listing test for a ring cell (not yet)
+- [x] 4. `PBD_NO_SKY` stills at the 300 m seam with the width at 0 and 0.5: no hole in the ground (the only magenta off the sky is along the far ridge, where stippled trees and tops show the sky through); the scenic and cloud-hop recordings (Drive, `fix3`). The timed dissolve is kept for landings whose bands resize or whose centre is clamped; with the centre following the camera it otherwise dissolves between identical partitions
+- [x] 5. Trees: a record carries the finest cell's id at its centre (`GpuCell::spare[0]`, an integer lane); a coarse cell stands that cell's tree at the plain density, so the tree a coarse level keeps is the fine tree that stood there; its width grows by half a level's across each ring at its own centre, the same in every level's copy; the siblings fade with their cells
+- [x] 6. Trees on levels 8 to 11, the foliage range out to level 8's band (2.4 km); they fade out with level 8's cells across its ring. `tree_shown` is retired; the foliage range's own fade stays
+- [x] 7. The perf suite, old against new (`docs/benchmarks/2026-09-26-distance-fade`): walking +0.27 ms at the median (the rings' double draw and the longer tree range), flying within the spread

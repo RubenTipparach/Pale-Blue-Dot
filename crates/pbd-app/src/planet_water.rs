@@ -83,6 +83,9 @@ pub(super) struct WaterView {
     screen: Vec4,
     lod: Vec4,
     bands: Vec4,
+    /// The bands' cross-fade rings' inner edges, cosines, round `lod`, which
+    /// is the terrain's fade centre (`distance-lod-fade`).
+    bands_in: Vec4,
     /// The rain on the LENS; then the frame's seconds and the eye's airspeed,
     /// m/s, which the lens mist runs on (`lens-weather`); w spare. Its own
     /// lane rather than `fx.z`, which is the rain on the SEA: a camera in a
@@ -1003,8 +1006,11 @@ fn prepare_water_views(
             // The partition the uploaded records can serve, read off the same
             // place the surface pass reads it, so a sheet and the terrain
             // under it can never be split on different anchors.
-            lod: planet.lod.player.extend(super::lod::BASE_LEVEL as f32),
+            // The terrain's fade centre and rings, so the sheet is split
+            // exactly as the ground under it is (`distance-lod-fade`).
+            lod: planet_view.centre.extend(super::lod::BASE_LEVEL as f32),
             bands: planet.lod.bands,
+            bands_in: planet.lod.bands_in,
             rain: Vec4::new(lens_rain, frame_s, airspeed, 0.0),
             cloud_clouds: clouds.clouds,
             cloud_slab: clouds.slab,
@@ -1696,7 +1702,7 @@ mod tests {
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (3, 44));
+        assert_eq!((mat4, vec4), (3, 45));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");

@@ -6,7 +6,7 @@ struct Cell {
     owner_a: vec4<f32>,
     owner_b: vec4<f32>,
     floors: vec4<f32>,
-    spare: vec4<f32>,
+    spare: vec4<u32>,  // x the tree it stands (`distance-lod-fade`)
 }
 struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
@@ -26,8 +26,11 @@ struct Params {
     fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs, spare
     lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
     bands_prev: vec4<f32>,     // and its band cosines
-    records_in: vec4<f32>,     // the records' ring per fine level round `lod`, cosines, a tile inside:
+    records_in: vec4<f32>,     // the records' ring per fine level round `anchor`, cosines, a tile inside:
     records_out: vec4<f32>,    // inner and outer (`detail-fade` section 4)
+    anchor: vec4<f32>,         // `distance-lod-fade`: the fine set's anchor (`lod` is the fade centre),
+    bands_in: vec4<f32>,       // the bands' cross-fade rings' inner edges, cosines,
+    bands_prev_in: vec4<f32>,  // and those of the partition a landing dissolves from
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
@@ -36,15 +39,28 @@ fn finest_level() -> u32 { return base_level() + 4u; }
 // `lod`/`bands`; while a landing cross-fades (`detail-fade`) the one it
 // replaced is `lod_prev`/`bands_prev`, and an instance drawn for it carries
 // PART_OLD in the top bits of its list entry.
-struct Partition { anchor: vec3<f32>, bands: vec4<f32> }
+struct Partition { anchor: vec3<f32>, bands: vec4<f32>, bands_in: vec4<f32> }
 const PART_BOTH: u32 = 0u;
 const PART_NEW: u32 = 1u;
 const PART_OLD: u32 = 2u;
 const PART_SHIFT: u32 = 30u;
 const PART_MASK: u32 = 0x3fffffffu;
 fn partition_of(mark: u32) -> Partition {
-    if mark == PART_OLD { return Partition(params.lod_prev.xyz, params.bands_prev); }
-    return Partition(params.lod.xyz, params.bands);
+    if mark == PART_OLD { return Partition(params.lod_prev.xyz, params.bands_prev, params.bands_prev_in); }
+    return Partition(params.lod.xyz, params.bands, params.bands_in);
+}
+// How far a direction is into fine level `level`'s band, 0..1, across its
+// cross-fade ring (`distance-lod-fade`), as the surface pass measures it.
+fn band_t(direction: vec3<f32>, level: u32, part: Partition) -> f32 {
+    if level <= base_level() { return 1.0; }
+    if level > finest_level() { return 0.0; }
+    let out_cos = band_cos_in(part.bands, level);
+    if out_cos > 1.0 { return 0.0; }
+    let in_cos = band_cos_in(part.bands_in, level);
+    let d = dot(direction, part.anchor);
+    let span = in_cos - out_cos;
+    if span <= 1e-9 { return select(0.0, 1.0, d > out_cos); }
+    return clamp((d - out_cos)/span, 0.0, 1.0);
 }
 fn band_cos_in(bands: vec4<f32>, level: u32) -> f32 {
     let k = level - base_level() - 1u;
@@ -198,17 +214,21 @@ fn has_clutter(cell: Cell, center: vec3<f32>) -> bool {
 // cover per area is the same at every distance they are drawn at.
 fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     let level = cell.metadata.x >> 8u;
-    if level + 2u < finest_level() || level > finest_level() { return false; }
+    // Trees stand on every fine level, the coarsest fading them out across
+    // its ring (`distance-lod-fade`).
+    if level + 3u < finest_level() || level > finest_level() { return false; }
     if !(owner_fine_in(cell.owner_a.xyz, level, part) && owner_fine_in(cell.owner_b.xyz, level, part)) { return false; }
     // The Tenebris scatter rule at its own rates. Eligibility is the top
     // block, as it is there: a grass of any kind, or the one tree that grows
     // on a non-grass top, the tundra pine standing in snow. Density is per
     // BIOME out of 256 - jungles pack a closed canopy, swamps grow scattered
     // groves, fields keep the classic 5%, tundra scatters lone pines, and
-    // desert and mountain rock grow nothing. Times four per level above the
-    // finest, so the cover per area is the same at every distance.
-    let cover = 1u << (2u*(finest_level()-level));
-    let roll = hash(cell.metadata.w) & 0xffu;
+    // desert and mountain rock grow nothing. A coarse cell stands the tree
+    // of the finest cell at its centre (`distance-lod-fade`): the same roll
+    // on the same id, so the tree a coarse level keeps is the fine tree that
+    // stood there, never one of its own at another place. A quarter of the
+    // trees per level out, each wider (the surface pass), so the cover holds.
+    let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
     let biome = (cell.metadata.y >> 8u) & 0xffu;
     let grass = material==2u || material==3u || material==7u;
@@ -218,7 +238,7 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     if biome==5u { density = 34u; }
     if biome==2u || biome==1u { density = 13u; }
     if biome==7u { density = 2u; }
-    let tree = (grass||pine) && roll < density*cover;
+    let tree = (grass||pine) && roll < density;
     return tree && distance(params.camera.xyz,center)<params.settings.w;
 }
 
@@ -261,11 +281,15 @@ fn slot_live(slot: u32) -> bool {
 
 // The partition rule: a tile draws at its level when the next finer band does
 // not cover it and its owner at the level below is drawn at this level. A
-// midpoint cell with one fine owner draws and is split per fragment.
+// midpoint cell with one fine owner draws and is split per fragment. Across a
+// band's cross-fade ring a tile is drawn in some pixels and not others
+// (`distance-lod-fade`): it is listed when any pixel draws it, which is when
+// its owner is inside the band's edge and its centre is not inside the finer
+// band's ring, and the surface pass keeps its share of the pixels.
 fn drawn(cell: Cell, part: Partition) -> bool {
     let level = cell.metadata.x >> 8u;
     let direction = cell.direction_height.xyz;
-    if covered_by_finer_in(direction, level, part) { return false; }
+    if level < finest_level() && band_t(direction, level + 1u, part) >= 1.0 { return false; }
     if level > base_level() {
         return owner_fine_in(cell.owner_a.xyz, level, part) || owner_fine_in(cell.owner_b.xyz, level, part);
     }
@@ -279,13 +303,16 @@ fn drawn(cell: Cell, part: Partition) -> bool {
 // (`detail-fade`). The neighbour is found as the vertex shader finds it.
 fn same_in_both(cell: Cell, a: Partition, b: Partition) -> bool {
     let level = cell.metadata.x >> 8u;
+    // Every pixel draws it the same under both: the owners' fades, the finer
+    // band's fade at its centre (`distance-lod-fade`), and every side's wall.
     if level > base_level() {
-        if owner_fine_in(cell.owner_a.xyz, level, a) != owner_fine_in(cell.owner_a.xyz, level, b) { return false; }
-        if owner_fine_in(cell.owner_b.xyz, level, a) != owner_fine_in(cell.owner_b.xyz, level, b) { return false; }
+        if abs(band_t(cell.owner_a.xyz, level, a) - band_t(cell.owner_a.xyz, level, b)) > 1e-6 { return false; }
+        if abs(band_t(cell.owner_b.xyz, level, a) - band_t(cell.owner_b.xyz, level, b)) > 1e-6 { return false; }
     }
     if level < finest_level() {
-        let degree = cell.metadata.x & 0xffu;
         let axis = cell.direction_height.xyz;
+        if abs(band_t(axis, level + 1u, a) - band_t(axis, level + 1u, b)) > 1e-6 { return false; }
+        let degree = cell.metadata.x & 0xffu;
         for (var side = 0u; side < degree; side++) {
             let mid = normalize(cell.corners[side].xyz + cell.corners[(side+1u)%degree].xyz);
             let neighbor = normalize(2.0*mid - axis);
@@ -302,7 +329,7 @@ fn same_in_both(cell: Cell, a: Partition, b: Partition) -> bool {
 // not held, the old half of the dither would be a hole.
 fn old_held(direction: vec3<f32>) -> bool {
     let old = partition_of(PART_OLD);
-    let along = dot(direction, params.lod.xyz);
+    let along = dot(direction, params.anchor.xyz);
     for (var level = finest_level(); level > base_level(); level--) {
         if dot(direction, old.anchor) > band_cos_in(old.bands, level) {
             let k = level - base_level() - 1u;

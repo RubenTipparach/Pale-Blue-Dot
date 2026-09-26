@@ -15,7 +15,7 @@ struct Cell {
     owner_a: vec4<f32>,
     owner_b: vec4<f32>,
     floors: vec4<f32>,
-    spare: vec4<f32>,
+    spare: vec4<u32>,  // x the tree it stands (`distance-lod-fade`)
 }
 struct WaterView {
     clip_from_local: mat4x4<f32>,
@@ -45,6 +45,7 @@ struct WaterView {
     screen: vec4<f32>,        // aspect, surface band m, wet blur, detail fade
     lod: vec4<f32>,           // xyz player direction, w base level
     bands: vec4<f32>,         // cos(band radius / R) per fine level, coarsest first
+    bands_in: vec4<f32>,      // the bands' cross-fade rings' inner edges (`distance-lod-fade`)
     rain: vec4<f32>,          // x the rain on the LENS (zero under a roof), yzw spare
     // The cloud layer, `pbd::clouds::CloudLayer`'s four lanes as the sky has
     // them this frame, so the sheet can put the same clouds over itself.
@@ -149,6 +150,9 @@ struct VertexOut {
     @location(7) @interpolate(flat) owner_b: vec3<f32>,
     // The swell's slope along the sphere, for the normal.
     @location(8) sea_slope: vec3<f32>,
+    // The owners' fades and the finer band's fade at the centre, as the
+    // terrain carries them (`distance-lod-fade`).
+    @location(9) @interpolate(flat) fade_t: vec3<f32>,
 }
 fn safe_normal(v: vec3<f32>) -> vec3<f32> { return v * inverseSqrt(max(dot(v,v),1e-12)); }
 
@@ -264,14 +268,41 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.level = level;
     out.owner_a = cell.owner_a.xyz;
     out.owner_b = cell.owner_b.xyz;
+    let finest = u32(view.lod.w) + 4u;
+    out.fade_t = vec3<f32>(water_band_t(cell.owner_a.xyz, level), water_band_t(cell.owner_b.xyz, level),
+        select(0.0, water_band_t(cell.direction_height.xyz, level + 1u), level < finest));
     return out;
 }
 fn water_band_cos(level: u32) -> f32 {
+    return water_lane(view.bands, level);
+}
+fn water_lane(lanes: vec4<f32>, level: u32) -> f32 {
     let k = level - u32(view.lod.w) - 1u;
-    if (k == 0u) { return view.bands.x; }
-    if (k == 1u) { return view.bands.y; }
-    if (k == 2u) { return view.bands.z; }
-    return view.bands.w;
+    if (k == 0u) { return lanes.x; }
+    if (k == 1u) { return lanes.y; }
+    if (k == 2u) { return lanes.z; }
+    return lanes.w;
+}
+// How far into fine level `level`'s band, across its cross-fade ring: the
+// terrain's `band_t` (`distance-lod-fade`).
+fn water_band_t(direction: vec3<f32>, level: u32) -> f32 {
+    if (level <= u32(view.lod.w)) { return 1.0; }
+    if (level > u32(view.lod.w) + 4u) { return 0.0; }
+    let out_cos = water_lane(view.bands, level);
+    if (out_cos > 1.0) { return 0.0; }
+    let in_cos = water_lane(view.bands_in, level);
+    let d = dot(direction, view.lod.xyz);
+    let span = in_cos - out_cos;
+    if (span <= 1e-9) { return select(0.0, 1.0, d > out_cos); }
+    return clamp((d - out_cos)/span, 0.0, 1.0);
+}
+// The terrain's 4 x 4 screen-door threshold for a pixel, 0..1 (`bayer4` in
+// `planet_surface.wgsl`): the sheet takes the same share of the pixels across
+// a ring as the ground does.
+fn water_bayer4(pixel: vec2<f32>) -> f32 {
+    let p = vec2<u32>(pixel) & vec2<u32>(3u);
+    let m = array<u32,16>(0u,8u,2u,10u, 12u,4u,14u,6u, 3u,11u,1u,9u, 15u,7u,13u,5u);
+    return (f32(m[p.y*4u + p.x]) + 0.5)/16.0;
 }
 
 fn load_depth(uv: vec2<f32>) -> f32 {
@@ -345,15 +376,15 @@ fn distance_fog(local_position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>) ->
 @fragment
 fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
     let radial = safe_normal(in.body_position);
-    // The same partition the terrain applies: a midpoint sheet split between
-    // a fine and a coarse owner draws only the fine half.
+    // The same partition the terrain applies, in the same pixel's dither
+    // class (`distance-lod-fade`): the sheet is drawn where its owner (the
+    // nearer, for a split midpoint cell) is in its band and the finer band
+    // has not taken its centre.
+    let m = water_bayer4(in.clip.xy);
+    if (in.fade_t.z > m) { discard; }
     if (in.level > u32(view.lod.w)) {
-        let a_fine = dot(in.owner_a, view.lod.xyz) > water_band_cos(in.level);
-        let b_fine = dot(in.owner_b, view.lod.xyz) > water_band_cos(in.level);
-        if (a_fine != b_fine) {
-            let nearer_a = dot(radial, in.owner_a) >= dot(radial, in.owner_b);
-            if ((nearer_a && !a_fine) || (!nearer_a && !b_fine)) { discard; }
-        }
+        let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
+        if (owner_t <= m) { discard; }
     }
     let face = safe_normal(in.normal);
     let sun_direction = safe_normal(view.sun.xyz);

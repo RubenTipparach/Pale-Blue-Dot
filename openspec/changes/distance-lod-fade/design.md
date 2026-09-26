@@ -96,3 +96,27 @@ turn forces `c` to jump, logged as `LOD_FIT jump`.
   one frame.
 - The perf suite, old against new (the floors per rebuild are the main cost:
   roughly twice the sides baked).
+
+## What building it found
+
+- **The width.** At 0.15 the finest ring is 45 m deep at 300 m out, too
+  narrow to read as a fade in flight; the default is 0.3 (rings of 90, 180,
+  360 and 720 m on the ground), about Unity's 0.5 on this band ladder.
+- **No holes.** `PBD_NO_SKY` at the 300 m seam, widths 0 and 0.5: magenta
+  only in the sky and, at 0.5, along the far ridge where the stippled trees
+  and the two levels' tops meet the sky, which is the cross-fade itself.
+- **The water sheet** takes the same centre and rings and splits per pixel
+  the same way; left on the anchor, it would have holed where the terrain's
+  ring ran ahead of the anchor's band.
+- **The dissolve's own mask.** A landing's dissolve now uses interleaved
+  gradient noise, so it does not run in step with the Bayer mask the
+  distance cross-fade divides the pixels by.
+- **Capture frames.** The terrain's pipelines, grown by the per-pixel tests,
+  compile later than before: a still at frame 120 caught the planet before
+  its terrain pipeline was ready (only the sky's planet disc). Stills of the
+  terrain are taken at frame 600.
+- **Trees keep their place.** A finest cell stands its own tree, so near
+  trees are exactly as before; a coarse cell stands the tree of the finest
+  cell at its centre, so the forest thins by keeping one tree in four, each
+  wider, rather than rolling new trees in new places at every ring.
+

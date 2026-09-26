@@ -818,6 +818,10 @@ pub struct ScatterSettings {
     /// the new through a screen-door mask, rather than switching in one frame
     /// (`detail-fade`). 0 switches at once.
     pub lod_fade_s: f32,
+    /// The share of each fine band, inward from its edge, across which the two
+    /// levels cross-fade with distance through complementary dither masks
+    /// (`distance-lod-fade`, Unity's LOD cross-fade width). 0 draws hard edges.
+    pub lod_fade_width: f32,
 }
 
 impl Default for ScatterSettings {
@@ -840,6 +844,7 @@ impl Default for ScatterSettings {
             shrub_size_m: 0.38,
             tree_fade_m: 150.,
             lod_fade_s: 0.6,
+            lod_fade_width: 0.3,
         }
     }
 }
@@ -865,6 +870,9 @@ impl Validated for ScatterSettings {
         (self.lod_fade_s.is_finite() && (0.0..=5.0).contains(&self.lod_fade_s))
             .then_some(())
             .ok_or("lod_fade_s must lie within 0 and 5 seconds")?;
+        (self.lod_fade_width.is_finite() && (0.0..=0.5).contains(&self.lod_fade_width))
+            .then_some(())
+            .ok_or("lod_fade_width must lie within 0 and 0.5 of a band")?;
         unit("grass_chance", self.grass_chance)?;
         unit("flower_chance", self.flower_chance)?;
         unit("rock_chance", self.rock_chance)?;
