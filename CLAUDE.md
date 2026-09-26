@@ -66,6 +66,16 @@ it.
 Specifically, do not: rename or rescale a tuning constant, change a shader term,
 alter a default, or refactor toward a plan, before the plan is written down.
 
+## Mockups are lit at night (owner, 2026-09-26)
+
+**Standing instruction from the user:** "All your mockups should have lighting
+at night." A mockup of a place has a time of day, and at night it is lit by its
+own lamps, fires and windows. Every light lights what is near it wherever the
+camera is, not only the few nearest the camera, and the moon stays dim enough
+that the lamps read. `docs/mockups/towns.html` does this (the `tenebris-towns`
+design, section 7). `fishing.html` and `vehicles.html` predate this rule and
+have a fixed daylight.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything

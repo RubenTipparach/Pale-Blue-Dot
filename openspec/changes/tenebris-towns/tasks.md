@@ -22,6 +22,10 @@
       boats, a boardable cog, boathouses, a shipyard, fish huts on stilts and
       a light; driftwood and whitewash kits; every route walked, including up
       the gangplank and onto the aftcastle (design section 10, the harbour).
+- [x] Fifth round, on the owner's word that every mockup is lit at night:
+      block light baked from every lamp and fire, kept to its room; a lantern
+      by every house door, street lanterns, and each settlement's own torches,
+      braziers and hearths (design section 7); every walk rerun unchanged.
 - [ ] The owner's verdict, and answers to the nine questions in the proposal.
 
 ## 1. Contact (`pbd-core`, `planet_contact.rs`)
@@ -81,8 +85,13 @@
       plaster, planks, thatch, shingle, slate, three bricks, marble, clay,
       cob, reed, boards, turf, fieldstone, clay tile, driftwood, whitewash,
       ivory sand, and a net with transparency), nearest magnification.
-- [ ] Interior sky light from the voxel-light skylight; hearths, forge and
-      lamps as block light.
+- [ ] Interior sky light from the voxel-light skylight; hearths, forge,
+      lamps, torches and braziers as block light, the night lights lit after
+      dusk.
+- [ ] Each settlement template carries its lights: a lantern by every house
+      door that opens outdoors, street lanterns, and its biome's own.
+- [ ] Tests: a hearth lights its room and not the outside of its wall; a lamp
+      lights its street at any camera distance.
 
 ## 5. Doors and saves
 - [ ] E opens and closes the door in reach; the state change goes through the

@@ -132,6 +132,22 @@ with the top of their planks, and their rails SHALL block the walker.
 - **WHEN** the walker climbs a stilt house's porch stair from the boardwalk
 - **THEN** it reaches the deck with no eye jump over 0.1 m
 
+### Requirement: A settlement is lit at night
+Every settlement SHALL carry its own lights: hearths, and the lamps, torches or
+braziers of its biome. At night every light SHALL light the surfaces within its
+reach wherever the camera is, not only the lights nearest the camera, and a
+light SHALL NOT light through a wall or a floor into another room.
+
+#### Scenario: A town from above at night
+- **WHEN** a settlement is seen from above at 22:30
+- **THEN** every lamp lights the street round it, however far it is from the
+  camera
+
+#### Scenario: A hearth behind a wall
+- **WHEN** a house's hearth burns
+- **THEN** its light reaches the room's floor, walls and ceiling
+- **AND** not the outside of the house's walls or the storey above
+
 ### Requirement: Doors are world state
 Opening or closing a door SHALL be a world mutation that enters the durable
 transaction path when it happens. A closed door SHALL block the walker and an

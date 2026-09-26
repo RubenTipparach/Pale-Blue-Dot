@@ -221,8 +221,56 @@ whose cells vary about ±9% and which has twelve pentagons. So:
 Interiors are lit by their openings and their hearths. The mockup dims the sky
 term on every face under a roof to 0.26; in the engine that is the baked
 skylight of the voxel-light work, and the hearths, forge and lamps are block
-light. At night the town has 8 moving point lights in the mockup, the nearest
-to the camera; the engine's propagated block light has no such limit.
+light.
+
+**Every light lights what is near it, wherever the camera is.** The owner, on
+the harbour at dusk: "All your mockups should have lighting at night". The
+first mockups lit a settlement with the 8 point lights nearest the camera, so
+from the overview a town was dark but for one or two pools, and four of the
+seven settlements had almost no lamps. The mockup now bakes block light into
+the vertices when a settlement is built, the way the voxel-light change carries
+it:
+
+- Each hearth, forge, lamp, torch, brazier and the harbour's beacon adds its
+  colour to the vertices within its reach: 7 m for a hearth, 9 for a forge or
+  a lamp, 10 for a torch, 11 for a brazier, 18 for the beacon. It falls off as
+  `(1 − (d/R)²)²`, weighted by how squarely the face turns to it, and softened
+  within half a metre so a wall beside a lamp is not burnt white. A fire's
+  strength follows its size, so an igloo's lamp does not light it like a
+  hall's hearth.
+- A light reaches only faces in its own room (indoor cells joined to their
+  neighbours of the same name), or only outdoor faces if it is outdoors, and
+  indoors only within its own storey. A hearth does not shine through its wall
+  or up through the floor.
+- Fires burn all day. Lamps, torches, braziers and the beacon are lit after
+  dusk.
+- The 8 point lights nearest the camera stay, dimmer, for the flicker and to
+  light the people, boats and doors, which the bake does not reach. The moon
+  is dimmed from 0.28 to 0.16, and the night sky light from 0.2 to 0.13, so
+  the lamps read.
+
+**Every settlement carries its own lights, of its own kind.** A lantern on a
+bracket beside every house door that opens outdoors (huts have none);
+lanterns on posts along the streets, placed once a settlement is built where no
+door, step, solid or named place is in the way; and per settlement, braziers
+round the desert's plaza, torches at the ice castle's gate and on the tundra
+path, torches at the jungle platforms' rails and the stilt huts' stairs, a
+hearth in every swamp stilt house and a lantern on its jetty, lanterns at the
+harbour's pier ends and on the cog's stern, and the light on the mole.
+
+| settlement | lights before | lights now |
+| --- | --- | --- |
+| walled town | 31 fires, 7 lamps | 31 fires, 41 lamps |
+| village | 13 fires, 2 lamps | 13 fires, 18 lamps |
+| desert town | 2 lamps | 13 lamps, 5 braziers |
+| tundra camp | 7 fires | 7 fires, 2 lamps, 4 torches |
+| jungle village | 2 fires | 2 fires, 7 torches |
+| swamp village | 10 lamps | 5 fires, 17 lamps |
+| fishing harbour | 15 fires, 6 lamps | 15 fires, 37 lamps, the beacon |
+
+The engine's propagated block light has neither the 8-light limit nor the room
+rule: its occlusion is the voxels themselves. None of the scripted walks
+changed: no lantern, torch or brazier stands on a route.
 
 ## 8. State and saves
 
