@@ -26,6 +26,10 @@
       block light baked from every lamp and fire, kept to its room; a lantern
       by every house door, street lanterns, and each settlement's own torches,
       braziers and hearths (design section 7); every walk rerun unchanged.
+- [x] Sixth round: street lanterns on the house fronts, densest in the
+      walled town; about half the windows lit, with a candle in the room and
+      light on the street; small lanterns on the jungle's rope bridges; every
+      walk rerun unchanged (design section 7).
 - [ ] The owner's verdict, and answers to the nine questions in the proposal.
 
 ## 1. Contact (`pbd-core`, `planet_contact.rs`)
@@ -89,7 +93,8 @@
       lamps, torches and braziers as block light, the night lights lit after
       dusk.
 - [ ] Each settlement template carries its lights: a lantern by every house
-      door that opens outdoors, street lanterns, and its biome's own.
+      door that opens outdoors, street lanterns at a spacing set by its size,
+      lit windows, lanterns on its bridges, and its biome's own.
 - [ ] Tests: a hearth lights its room and not the outside of its wall; a lamp
       lights its street at any camera distance.
 

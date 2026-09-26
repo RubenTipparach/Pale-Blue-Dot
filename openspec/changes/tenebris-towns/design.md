@@ -258,15 +258,42 @@ path, torches at the jungle platforms' rails and the stilt huts' stairs, a
 hearth in every swamp stilt house and a lantern on its jetty, lanterns at the
 harbour's pier ends and on the cog's stern, and the light on the mole.
 
-| settlement | lights before | lights now |
-| --- | --- | --- |
-| walled town | 31 fires, 7 lamps | 31 fires, 41 lamps |
-| village | 13 fires, 2 lamps | 13 fires, 18 lamps |
-| desert town | 2 lamps | 13 lamps, 5 braziers |
-| tundra camp | 7 fires | 7 fires, 2 lamps, 4 torches |
-| jungle village | 2 fires | 2 fires, 7 torches |
-| swamp village | 10 lamps | 5 fires, 17 lamps |
-| fishing harbour | 15 fires, 6 lamps | 15 fires, 37 lamps, the beacon |
+**The bigger the town, the better lit its streets.** The owner, on the lit
+settlements: "I expect bigger cities to have well lit streets and partially lit
+windows. The forest bridges should have lighting too. Maybe smaller lights."
+
+- **Street lanterns on the house fronts.** Every house front that faces a
+  street (cobble, flagstone, a lane, the desert's packed sand) at its own level
+  may carry a lantern on a bracket at 2.6 m, and does unless another night
+  light is nearer than the settlement's spacing: 3.4 m in the walled town,
+  4.2 m in the harbour, 5.5 m in the desert town, 7.5 m in the village, none in
+  the camps and stilt villages, which have their torches and boardwalk
+  lanterns. The door lanterns count, so the fronts fill in between them. A
+  bracket lamp stands on nothing, so no route is blocked.
+- **Some windows are lit.** Each window is lit or dark by a hash of where it is,
+  so a settlement is lit the same way every time: 55% in the walled town, 50%
+  in the harbour, 45% elsewhere. A lit window is a warm pane set in the middle
+  of the wall's thickness, facing out, of a brightness between 55% and 100%,
+  shown only after dusk; from inside you look through it. Behind it a candle
+  lights the room (5 m reach), and a little of its light falls on the street
+  outside (4.5 m). These two are baked only, never one of the point lights.
+- **Small lanterns on the jungle's rope bridges,** hung outside the rope rails
+  on alternate sides every 5.5 m or so, 5.5 m of reach at 40% of a lamp. The
+  planks between them are lit, and the bridge reads as a line of lights from
+  the platforms.
+
+| settlement | lights before | lights now | windows lit |
+| --- | --- | --- | ---: |
+| walled town | 31 fires, 7 lamps | 31 fires, 61 lamps | 276 of 491 |
+| village | 13 fires, 2 lamps | 13 fires, 19 lamps | 110 of 251 |
+| desert town | 2 lamps | 24 lamps, 5 braziers | 31 of 58 |
+| tundra camp | 7 fires | 7 fires, 2 lamps, 4 torches | 9 of 11 |
+| jungle village | 2 fires | 2 fires, 9 bridge lanterns, 7 torches | 7 of 15 |
+| swamp village | 10 lamps | 5 fires, 17 lamps | 21 of 44 |
+| fishing harbour | 15 fires, 6 lamps | 15 fires, 48 lamps, the beacon | 174 of 356 |
+
+The bake takes a settlement from about 0.2-0.3 s to build to about 0.3-0.6 s
+in headless Chromium; each frame costs the same bar two more vertex attributes.
 
 The engine's propagated block light has neither the 8-light limit nor the room
 rule: its occlusion is the voxels themselves. None of the scripted walks

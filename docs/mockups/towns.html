@@ -173,7 +173,7 @@ body.coarse .keys,body.coarse .hint{display:none}
         <li><b>Eleven kits</b> change what a building is made of, not how it is cut: straw and mud huts, timber boards, half-timber, red, buff and clinker brick, fieldstone, ashlar, clay with a flat roof, and marble with columns. A hut is the one exception to the storey: one storey of two layers, with 1.9 m doors.</li>
         <li><b>Seven settlements, one per biome</b>, built from the materials the biome catalogue gives each: a walled town and a village in the fields (limestone, oak), a desert town round an oasis (rust sandstone, mud brick, salt plaster, cactus), a tundra camp of igloos with a granite longhouse and a castle of ice (snow, cold granite, dwarf willow), a jungle village on platforms in three kapok giants joined by rope bridges (kapok, red loam, basalt), a swamp village of alder stilt houses on boardwalks (peat, moss, alder, reeds), and a fishing harbour where the beach meets the fields (ivory sand, shell beds, driftwood, beach grass, and whitewash from lime burnt out of the shells). Water is waded at half speed, as walking.rs has it.</li>
         <li><b>Boats are solid, and the cog can be boarded.</b> Moored boats bob on the swell but collide as a fixed hull to the gunwale, so you wade round them or step down into one from a pier. The cog's deck, castles and stair are floors, its rail blocks you except at the gangway, and the gangplank from the pier meets the deck with no step. Piers are walkways a metre over the water at the quay's height.</li>
-        <li><b>Lit at night.</b> Slide the time of day past dusk. Every hearth, lamp, torch and brazier lights what is near it wherever you are, baked into the faces the way the engine's block light will be, and kept to its own room: a hearth does not shine through its wall. Every house door has a lantern, the streets have lanterns, and each settlement has its own: braziers in the desert, torches in the jungle and at the ice castle, the light on the harbour's mole.</li>
+        <li><b>Lit at night.</b> Slide the time of day past dusk. Every hearth, lamp, torch and brazier lights what is near it wherever you are, baked into the faces the way the engine's block light will be, and kept to its own room: a hearth does not shine through its wall. Every house door has a lantern, and house fronts carry street lanterns, closest together in the walled town. About half the windows are lit, with a candle in the room behind. Each settlement has its own lights too: braziers in the desert, torches in the jungle and at the ice castle, small lanterns along the rope bridges, the light on the harbour's mole.</li>
         <li><b>Roofs never cut into each other.</b> Every roof's plan, eaves included, is checked against every other when the town is laid out, and the keep and towers count as roofs.</li>
         <li><b>Three stairs, all landing on layer lines.</b> A straight flight crosses two cells and climbs a storey in 16 risers of 0.1875 m on 0.354 m treads (28&deg;). A newel stair turns once per storey in one cell: 15 winders of 0.2 m, and 120&deg; per metre, so a door at any layer is always in the middle of an edge. Street steps climb one terrace in one cell: 6 risers of 0.167 m.</li>
         <li><b>The walker is walking.rs</b>: a 0.3 m radius body 1.8 m tall, eye at 1.6 m, 8 m/s (14 sprinting), a 12 m/s jump under 25 m/s&sup2;, a 1.05 m step for terraces, a floor from the highest of several footprint points and a ceiling from the lowest.</li>
@@ -583,6 +583,7 @@ function buildPosts() {
   }
 }
 const DOORS = [];
+const WINDOWS = [], FACADES = [];   // for the night: which windows glow, which house fronts carry a street lamp
 // A wall on edge d of cell (c, r), centred on the shared edge, from y0 to y1,
 // cut by openings [{yb, ye, w, door, shutters}]. mOut faces the neighbour.
 function edgeWall(c, r, d, y0, y1, o) {
@@ -601,6 +602,7 @@ function edgeWall(c, r, d, y0, y1, o) {
     seg(0, L, y, yb);
     seg(-(w / 2 + jl / 2), jl, yb, ye); seg(w / 2 + jl / 2, jl, yb, ye);
     if (op.door) addDoor(mx, mz, tx, tz, nx, nz, w, yb, Math.min(ye, yb + DOOR_H), t, op);
+    if (op.win) WINDOWS.push({ x: mx, z: mz, nx, nz, tx, tz, w, yb, ye, t });
     if (op.shutters) for (const sgn of [-1, 1]) {
       const hx = mx + tx * sgn * w / 2 + nx * (t / 2 + 0.03), hz = mz + tz * sgn * w / 2 + nz * (t / 2 + 0.03), a2 = ang + sgn * 1.9;
       box("timber", hx + Math.cos(a2) * w / 4 * sgn, yb, hz + Math.sin(a2) * w / 4 * sgn, w / 2, ye - yb, 0.05, a2);
@@ -1031,11 +1033,12 @@ function building(o) {
       const door = (o.doors || []).find(e => e[0] === c && e[1] === r && e[2] === d && (e[3] || 0) === s);
       if (door) openings.push({ yb: y0, ye: y0 + doorH, w: doorW, door: true, open: door[4] === "open", name: o.name, hut: !!kit.hut });
       else if (o.window && o.window(c, r, d, s)) {
-        if (o.tall) openings.push({ yb: y0 + 1.6, ye: y0 + 4.4, w: 0.9, sill: true });
-        else if (kit.window) openings.push({ yb: y0 + 1.0, ye: y0 + 1.0 + kit.window[1], w: kit.window[0], sill: !kit.hut });
-        else if (!kit.hut) openings.push({ yb: y0 + 1.0, ye: y0 + 2.0, w: 0.8, shutters: true, sill: true });
+        if (o.tall) openings.push({ yb: y0 + 1.6, ye: y0 + 4.4, w: 0.9, sill: true, win: true });
+        else if (kit.window) openings.push({ yb: y0 + 1.0, ye: y0 + 1.0 + kit.window[1], w: kit.window[0], sill: !kit.hut, win: true });
+        else if (!kit.hut) openings.push({ yb: y0 + 1.0, ye: y0 + 2.0, w: 0.8, shutters: true, sill: true, win: true });
       }
       edgeWall(c, r, d, y0, y1, { t: w.t, mOut: w.out, mIn: w.in, mEdge: w.edge, piece: !!w.piece, base: y0, openings });
+      if (s === 0 && !door && !kit.hut) { const [A, B] = edgeEnds(c, r, d), [nx, nz] = dvec(d), win = openings.find(p => p.win); FACADES.push({ x: (A[0] + B[0]) / 2, z: (A[1] + B[1]) / 2, nx, nz, t: w.t, y: y0, c2, r2, winTop: win ? win.ye - y0 : 0 }); }
     }
   }
   const oh = kit.hut ? 0.55 : 0.45;
@@ -1298,7 +1301,7 @@ function makeTown() {
       for (let s = 0; s < 3; s++) {
         const y0 = kb + s * STOREY, openings = [];
         if (s === 0 && c === 28 && r === 27 && d === 4) openings.push({ yb: y0, ye: y0 + DOOR_H + 0.3, w: 1.2, door: true, name: "The keep" });
-        else if (s > 0 && (d + s) % 2 === 0) openings.push({ yb: y0 + 0.9, ye: y0 + 2.1, w: 0.35 });
+        else if (s > 0 && (d + s) % 2 === 0) openings.push({ yb: y0 + 0.9, ye: y0 + 2.1, w: 0.35, win: true });
         edgeWall(c, r, d, y0, y0 + STOREY, { t: KEEP_T, mOut: "rubble", mIn: "stone", mEdge: "rubble", openings });
       }
       merlons(c, r, d, kTop, KEEP_T);
@@ -1381,7 +1384,7 @@ function resetWorld() {
   for (const n of NPCS) scene.remove(n.g); NPCS.length = 0;
   for (const k of Object.keys(GOTO)) delete GOTO[k];
   for (const k of Object.keys(KIT_SPOT)) delete KIT_SPOT[k];
-  HUT_SPOTS.length = 0; STREET_LAMPS.length = 0; STEPCELL.clear(); NO_TREE.clear(); INDOOR_SHAPES.length = 0; SPINNERS.length = 0; BOBBERS.length = 0;
+  HUT_SPOTS.length = 0; STREET_LAMPS.length = 0; WINDOWS.length = 0; FACADES.length = 0; GLOW.mesh = null; STEPCELL.clear(); NO_TREE.clear(); INDOOR_SHAPES.length = 0; SPINNERS.length = 0; BOBBERS.length = 0;
   for (const m of STATIC) { scene.remove(m); m.geometry.dispose(); } STATIC.length = 0;
   for (const m of DRESS) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } DRESS.length = 0;
   FIREMESH.length = 0;
@@ -1890,7 +1893,7 @@ function makeJungle() {
     gaps[k].push([best[0], best[1], d]);
     const [A, B] = edgeEnds(best[0], best[1], d); return [(A[0] + B[0]) / 2, PY, (A[1] + B[1]) / 2];
   };
-  for (const [a, b] of [[0, 1], [1, 2], [0, 2]]) { const pa = endAt(a, b), pb = endAt(b, a); ends.push([pa, pb]); bridge(pa, pb, { sag: 0.8, width: 1.2, label: "Rope bridge" }); }
+  for (const [a, b] of [[0, 1], [1, 2], [0, 2]]) { const pa = endAt(a, b), pb = endAt(b, a); ends.push([pa, pb]); bridge(pa, pb, { sag: 0.8, width: 1.2, label: "Rope bridge" }); bridgeLamps(pa, pb, { sag: 0.8, width: 1.2 }); }
   // a stair tower of poles up to the first platform, on the side away from the bridges
   const [t0c, t0r] = trees[0]; let tower = null;
   for (const [c, r] of plat[0].slice(1)) {
@@ -2339,8 +2342,10 @@ SCENES.coast = { label: "Coast, fishing harbour", build: makeCoast, start: "quay
 // settlement is built, the way the voxel-light change carries block light,
 // and the few point lights nearest the eye only add the flicker.
 // =====================================================================
-const NIGHT_KINDS = new Set(["lamp", "torch", "brazier", "beacon"]);   // lit after dusk; hearths and forges burn all day
-const LIGHT_REACH = { hearth: 7, forge: 9, lamp: 9, torch: 10, brazier: 11, beacon: 18 };
+const NIGHT_KINDS = new Set(["lamp", "torch", "brazier", "beacon", "window", "candle"]);   // lit after dusk; hearths and forges burn all day
+const BAKED_ONLY = new Set(["window", "candle"]);   // too many and too dim for the few point lights
+const LIGHT_REACH = { hearth: 7, forge: 9, lamp: 9, torch: 10, brazier: 11, beacon: 18, window: 4.5, candle: 5 };
+const GLOW = { mesh: null };
 
 // A torch on a pole, lit at night.
 function torch(x, y, z, h = 2.2) {
@@ -2358,17 +2363,67 @@ function brazier(x, y, z) {
   LIGHTS.push({ x, y: y + 1.3, z, color: 0xff9040, kind: "brazier", power: 1.2 });
 }
 // A lantern on an iron bracket out from a wall whose outward normal is (nx, nz).
-function wallLamp(x, y, z, nx, nz) {
+function wallLamp(x, y, z, nx, nz, power = 0.5) {
   box("iron", x + nx * 0.2, y, z + nz * 0.2, 0.05, 0.05, 0.4, Math.atan2(nz, nx) + Math.PI / 2);
   FIRES.push({ x: x + nx * 0.38, y: y - 0.45, z: z + nz * 0.38, s: 0.32, lamp: true });
-  LIGHTS.push({ x: x + nx * 0.38, y: y - 0.3, z: z + nz * 0.38, color: 0xffc070, kind: "lamp", power: 0.5 });
+  LIGHTS.push({ x: x + nx * 0.38, y: y - 0.3, z: z + nz * 0.38, color: 0xffc070, kind: "lamp", power });
 }
 // Lanterns on posts in street cells. A settlement names the cells; they are
 // placed once it is built, where no door, step, solid or named place is in the way.
 const STREET_LAMPS = [];
 function streetLamps(cells) { STREET_LAMPS.push(...cells); }
+// Lanterns on brackets along the house fronts that face a street, no closer
+// to another night light than `spacing` metres: the bigger the town, the closer.
+const STREET_MATS = new Set(["cobble", "flag", "dirt", "sand2"]);
+function facadeLamps(spacing) {
+  const lit = LIGHTS.filter(l => l.kind === "lamp" || l.kind === "torch" || l.kind === "brazier").map(l => [l.x, l.z]);
+  for (const f of FACADES) {
+    if (!inMap(f.c2, f.r2)) continue;
+    const i = idx(f.c2, f.r2);
+    if (INDOOR[i].length || !STREET_MATS.has(TOPMAT[i]) || Math.abs(TOP[i] - f.y) > 0.35 || f.winTop > 2.2) continue;
+    const x = f.x + f.nx * f.t / 2, z = f.z + f.nz * f.t / 2;
+    if (lit.some(([a, b]) => Math.hypot(a - x, b - z) < spacing)) continue;
+    wallLamp(x, f.y + 2.6, z, f.nx, f.nz, 0.6); lit.push([x, z]);
+  }
+}
+// Some windows are lit: a warm pane seen from outside, a candle in the room
+// behind it, a little light out onto the street. Which ones is a hash of where
+// the window is, so a settlement is lit the same way every time.
+function windowGlow(share) {
+  const pos = [], col = [];
+  for (const wi of WINDOWS) {
+    const h = Math.abs(Math.sin(wi.x * 12.9898 + wi.z * 78.233 + wi.yb * 3.17) * 43758.5453) % 1;
+    if (h > share) continue;
+    const k = 0.55 + 0.45 * ((h * 7.31) % 1), c = lin(0xffb45a).multiplyScalar(k), hw = wi.w / 2 - 0.02;
+    const P = (u, y) => [wi.x + wi.tx * u, y, wi.z + wi.tz * u];
+    let q = [P(-hw, wi.yb), P(hw, wi.yb), P(hw, wi.ye), P(-hw, wi.yb), P(hw, wi.ye), P(-hw, wi.ye)];
+    const e1 = V.sub(q[1], q[0]), e2 = V.sub(q[2], q[0]), n = V.cross(e1, e2);
+    if (n[0] * wi.nx + n[2] * wi.nz < 0) q = [q[0], q[2], q[1], q[3], q[5], q[4]];
+    for (const p of q) { pos.push(...p); col.push(c.r, c.g, c.b); }
+    const my = (wi.yb + wi.ye) / 2;
+    LIGHTS.push({ x: wi.x - wi.nx * 0.8, y: wi.yb + 0.2, z: wi.z - wi.nz * 0.8, color: 0xffb060, kind: "candle", power: 0.45 * k });
+    LIGHTS.push({ x: wi.x + wi.nx * 0.6, y: my, z: wi.z + wi.nz * 0.6, color: 0xffb060, kind: "window", power: 0.3 * k });
+  }
+  if (!pos.length) return;
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  GLOW.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true }));
+  scene.add(GLOW.mesh); DRESS.push(GLOW.mesh);
+}
+// Small lanterns hung on alternate sides of a walkway's rails, every few metres.
+function bridgeLamps(A, B, o = {}) {
+  const sag = o.sag ?? 0, w = o.width ?? 1.2, dx = B[0] - A[0], dz = B[2] - A[2], L = Math.hypot(dx, dz), nx = -dz / L, nz = dx / L, n = Math.max(2, Math.round(L / (o.every || 5.5)));
+  for (let k = 1; k < n; k++) {
+    const t = k / n, s = k % 2 ? 1 : -1, y = A[1] + (B[1] - A[1]) * t - 4 * sag * t * (1 - t), x = A[0] + dx * t + nx * s * (w / 2 + 0.14), z = A[2] + dz * t + nz * s * (w / 2 + 0.14);
+    box("rope", x, y + 0.86, z, 0.02, 0.16, 0.02);
+    FIRES.push({ x, y: y + 0.7, z, s: 0.22, lamp: true });
+    LIGHTS.push({ x, y: y + 0.8, z, color: 0xffc070, kind: "lamp", power: 0.4, reach: 5.5 });
+  }
+}
 function nightLamps() {
   doorLamps();
+  const sc = SCENES[SCENE];
+  if (sc.streetLight) facadeLamps(sc.streetLight);
+  windowGlow(sc.litWindows ?? 0.45);
   const near = [], spots = [...Object.values(GOTO), ...Object.values(KIT_SPOT)].filter(s => s && s.x !== undefined);
   for (const [c, r] of STREET_LAMPS.splice(0)) {
     if (!inMap(c, r) || STEPCELL.has(idx(c, r)) || INDOOR[idx(c, r)].length) continue;
@@ -2417,7 +2472,7 @@ function roomAt(x, y, z, ROOM) {
 function blockLighter() {
   const ROOM = roomsOf(), G = 10, grid = new Map();
   const Ls = LIGHTS.map(l => {
-    const c = lin(l.color), R = LIGHT_REACH[l.kind] || 7;
+    const c = lin(l.color), R = l.reach || LIGHT_REACH[l.kind] || 7;
     return { x: l.x, y: l.y, z: l.z, R, room: roomAt(l.x, l.y, l.z, ROOM), night: NIGHT_KINDS.has(l.kind), p: l.power || 1, cr: c.r, cg: c.g, cb: c.b };
   });
   for (const L of Ls) for (let gx = Math.floor((L.x - L.R) / G); gx <= Math.floor((L.x + L.R) / G); gx++) for (let gz = Math.floor((L.z - L.R) / G); gz <= Math.floor((L.z + L.R) / G); gz++) { const k = gx + ":" + gz; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(L); }
@@ -2443,6 +2498,12 @@ function blockLighter() {
     return { fire, lamp };
   };
 }
+
+// How brightly each settlement's streets are lit, and how many windows: the town most.
+Object.assign(SCENES.town, { streetLight: 3.4, litWindows: 0.55 });
+Object.assign(SCENES.coast, { streetLight: 4.2, litWindows: 0.5 });
+Object.assign(SCENES.desert, { streetLight: 5.5 });
+Object.assign(SCENES.village, { streetLight: 7.5 });
 
 // =====================================================================
 // The walker. walking.rs's rules, with the three proposed changes behind
@@ -2625,7 +2686,7 @@ function buildDressing() {
   for (const f of FIRES) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.28 * f.s, 0.4 * f.s, 0.28 * f.s), f.lamp ? lampMat : f.torch ? torchMat : fireMat);
     m.position.set(f.x, f.y + 0.2 * f.s, f.z); scene.add(m); FIREMESH.push({ m, f, ph: Math.random() * 6 });
-    if (f.lamp) { const cage = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), new THREE.MeshStandardMaterial({ color: 0x2b2b2e, wireframe: true })); cage.position.copy(m.position); scene.add(cage); DRESS.push(cage); }
+    if (f.lamp) { const k = Math.min(1, f.s / 0.32), cage = new THREE.Mesh(new THREE.BoxGeometry(0.34 * k, 0.5 * k, 0.34 * k), new THREE.MeshStandardMaterial({ color: 0x2b2b2e, wireframe: true })); cage.position.copy(m.position); scene.add(cage); DRESS.push(cage); }
   }
   const env = SCENES[SCENE].env, add = m => { scene.add(m); DRESS.push(m); return m; };
   for (const fm of FIREMESH) DRESS.push(fm.m);
@@ -2666,14 +2727,14 @@ function setTime(h) {
   hemi.intensity = 0.13 + 0.82 * day; hemi.color.copy(cA).lerp(new THREE.Color(0xffffff), 0.35);
   hemi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
   STATE.night = 1 - day;
-  lampMat.color.set(STATE.night > 0.3 ? 0xffd9a0 : 0x6a655a); torchMat.color.set(STATE.night > 0.3 ? 0xff8a3a : 0x2e2620);
+  lampMat.color.set(STATE.night > 0.3 ? 0xffd9a0 : 0x6a655a); if (GLOW.mesh) GLOW.mesh.visible = STATE.night > 0.3; torchMat.color.set(STATE.night > 0.3 ? 0xff8a3a : 0x2e2620);
   BLOCK.fire.value = 0.9 + 0.3 * STATE.night; BLOCK.lamp.value = 1.8 * clamp((STATE.night - 0.25) / 0.35, 0, 1);
   const hh = Math.floor(h) % 24, mm = Math.round((h % 1) * 60);
   document.getElementById("todO").textContent = String(hh).padStart(2, "0") + ":" + String(mm % 60).padStart(2, "0");
 }
 function assignLights() {
   const ex = STATE.view === "walk" ? P.x : ORB.tx, ez = STATE.view === "walk" ? P.z : ORB.tz;
-  const cands = LIGHTS.filter(l => !NIGHT_KINDS.has(l.kind) || STATE.night > 0.3).map(l => [(l.x - ex) ** 2 + (l.z - ez) ** 2, l]).sort((a, b) => a[0] - b[0]);
+  const cands = LIGHTS.filter(l => !BAKED_ONLY.has(l.kind) && (!NIGHT_KINDS.has(l.kind) || STATE.night > 0.3)).map(l => [(l.x - ex) ** 2 + (l.z - ez) ** 2, l]).sort((a, b) => a[0] - b[0]);
   POOL.forEach((pl, i) => { const c = cands[i]; if (c && c[0] < 45 * 45) { pl.position.set(c[1].x, c[1].y, c[1].z); pl.color.set(c[1].color); pl.userData.base = (c[1].kind === "lamp" ? 1.2 : 1.6) * c[1].power; /* the baked light does the rest */ } else pl.userData.base = 0; });
 }
 
@@ -2996,6 +3057,6 @@ function boot() {
   $("loading").hidden = true;
   requestAnimationFrame(t => { last = t; frame(t); });
 }
-window.__town = { P, MODE, DOORS, GOTO, tick, teleport, standAt, setWalker, useDoor, setView, setTime, cellAt, TOP, idx, nb, intervalsAt, nearSolids, pushOut, SOLIDS, RUNS, POOL, LIGHTS, ROOFS, ROOF_CLASHES, KIT_SPOT, HUT_SPOTS, TOUCH, ORB, loadScene, SCENES, NPCS, three: scene, DRESS, get scene() { return SCENE; } };
+window.__town = { TOPMAT, WINDOWS, FACADES, P, MODE, DOORS, GOTO, tick, teleport, standAt, setWalker, useDoor, setView, setTime, cellAt, TOP, idx, nb, intervalsAt, nearSolids, pushOut, SOLIDS, RUNS, POOL, LIGHTS, ROOFS, ROOF_CLASHES, KIT_SPOT, HUT_SPOTS, TOUCH, ORB, loadScene, SCENES, NPCS, three: scene, DRESS, get scene() { return SCENE; } };
 setTimeout(boot, 30);
 </script>

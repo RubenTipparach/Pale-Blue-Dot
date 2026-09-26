@@ -143,6 +143,17 @@ light SHALL NOT light through a wall or a floor into another room.
 - **THEN** every lamp lights the street round it, however far it is from the
   camera
 
+#### Scenario: A town's streets at night
+- **WHEN** night falls on a town
+- **THEN** its streets are lit along their length, the more densely the
+  bigger the town
+- **AND** some of its windows glow and the rest are dark, and the room behind
+  a lit window is lit
+
+#### Scenario: A rope bridge at night
+- **WHEN** the walker crosses a jungle rope bridge at night
+- **THEN** small lanterns along its rails light the planks
+
 #### Scenario: A hearth behind a wall
 - **WHEN** a house's hearth burns
 - **THEN** its light reaches the room's floor, walls and ceiling

@@ -15,7 +15,9 @@ what a small town by itself would look like as well. Also a swamp would have
 like houses [raised] on wooden platforms like the bayou." And last: "I need
 like a coastal town/fishing hamlet where there's lots of [docks] and boats."
 (Bracketed words are the owner's own corrections or plain typos fixed.) And
-on the harbour at dusk: "All your mockups should have lighting at night."
+on the harbour at dusk: "All your mockups should have lighting at night." And
+then: "I expect bigger cities to have well lit streets and partially lit
+windows. The forest bridges should have lighting too. Maybe smaller lights."
 
 The world has terrain, trees, water and weather, and nothing anyone built.
 Three things stand between the engine and a town you can walk into:
@@ -105,8 +107,9 @@ Three things stand between the engine and a town you can walk into:
   and a ship's deck, castles and stair are floors behind a rail with a gangway
   in it.
 - **Every settlement is lit at night by its own lights.** Hearths, a lantern
-  by every house door, street lanterns, and each biome's own torches and
-  braziers. Every light lights what is near it wherever the camera is (block
+  by every house door, street lanterns (densest in the walled town), about
+  half the windows lit, small lanterns on the jungle's rope bridges, and each
+  biome's own torches and braziers. Every light lights what is near it wherever the camera is (block
   light baked into the vertices, kept to its room), where before only the 8
   nearest the camera did.
 - **Roofs never cut into each other.** The first mockup's clipping was two
