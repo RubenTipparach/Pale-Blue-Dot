@@ -36,6 +36,9 @@
       list. Day and Night buttons and the L key were added. Overview panning
       (right-drag, WASD, two fingers) now follows the camera's heading, and
       drag grabs the ground.
+- [x] Eighth round: furniture pushed clear of walls, doors, posts and hearths
+      at placement; 55 of 342 pieces were in a wall, now none (design section
+      11).
 - [ ] The owner's verdict, and answers to the nine questions in the proposal.
 
 ## 1. Contact (`pbd-core`, `planet_contact.rs`)
@@ -103,6 +106,8 @@
       lit windows, lanterns on its bridges, and its biome's own.
 - [ ] Tests: a hearth lights its room and not the outside of its wall; a lamp
       lights its street at any camera distance.
+- [ ] Furniture placed with the least move clear of walls, posts, doors and
+      hearths. Test: no furniture overlaps them in any settlement template.
 - [ ] Trim built proud of what it meets (sills, thresholds, floors over wall
       tops). Test: no two visible faces of different pieces share a plane over
       the same area in a built settlement.

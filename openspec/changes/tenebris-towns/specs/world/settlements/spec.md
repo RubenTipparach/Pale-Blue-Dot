@@ -169,6 +169,16 @@ proud of the faces it meets.
 - **THEN** its sill's top stands above the wall top under the window, and the
   two never flicker against each other
 
+### Requirement: Furniture stands clear of the walls
+No piece of furniture SHALL overlap a wall, a corner post, a door or a hearth.
+A piece placed where it would SHALL be moved clear by the least move that
+frees it.
+
+#### Scenario: A chest in a corner
+- **WHEN** a chest is placed near a corner of a hex room, where the angled wall
+  would cut through it
+- **THEN** it stands against the wall, not in it
+
 ### Requirement: Doors are world state
 Opening or closing a door SHALL be a world mutation that enters the durable
 transaction path when it happens. A closed door SHALL block the walker and an

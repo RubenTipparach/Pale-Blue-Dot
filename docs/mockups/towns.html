@@ -583,8 +583,48 @@ function buildPosts() {
   for (const p of CORNERS.values()) {
     const pts = []; for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; pts.push([p.x + p.t * 0.6 * Math.cos(a), p.z + p.t * 0.6 * Math.sin(a)]); }
     prism(p.m, p.m, pts, p.y0, p.y1);
-    addSolid({ type: "circ", x: p.x, z: p.z, r: p.t * 0.55, y0: p.y0, y1: p.y1, cls: "wall" });
+    addSolid({ type: "circ", x: p.x, z: p.z, r: p.t * 0.55, y0: p.y0, y1: p.y1, cls: "wall" }).wall = true;
   }
+}
+// Furniture is placed from a cell's centre plus an offset, and a hex room
+// narrows toward its corners, so a piece can reach into a wall. fitOut moves
+// a footprint clear of the walls, doors, corner posts and hearths already
+// built, by the least move that frees it: {sx, sz, ang} a box, {r} a round one.
+let FIT_ON = true;
+const FIT_NEAR = [];
+function fitOut(x, z, y0, y1, shape) {
+  if (!FIT_ON) return [x, z];
+  for (let it = 0; it < 12; it++) {
+    const foot = shape.r ? null : rectPts(x, z, shape.sx, shape.sz, shape.ang || 0);
+    nearSolids(x, z, 3.5, FIT_NEAR);
+    const obs = FIT_NEAR.filter(s => s.wall && s.y1 > y0 + 0.02 && s.y0 < y1 - 0.02);
+    for (const p of CORNERS.values()) if (p.y1 > y0 + 0.02 && p.y0 < y1 - 0.02 && Math.hypot(p.x - x, p.z - z) < 3.5) obs.push({ type: "circ", x: p.x, z: p.z, r: p.t * 0.6 });
+    let best = null;
+    for (const s of obs) { const m = overlapMove(foot, shape.r, x, z, s); if (m && (!best || m[2] > best[2])) best = m; }
+    if (!best) break;
+    x += best[0]; z += best[1];
+  }
+  return [x, z];
+}
+// The move [dx, dz, depth] that takes a footprint (a convex polygon, or a circle
+// of radius r at x, z) out of solid s, or null when they do not overlap.
+function overlapMove(foot, r, x, z, s) {
+  const out = (dx, dz, d) => { const l = Math.hypot(dx, dz) || 1; return [dx / l * (d + 0.01), dz / l * (d + 0.01), d]; };
+  if (!foot) {
+    if (s.type === "circ") { const dx = x - s.x, dz = z - s.z, d = r + s.r - Math.hypot(dx, dz); return d > 0.005 ? out(dx || 1e-3, dz, d) : null; }
+    const q = { x, z }; if (!pushPoly(q, s.pts, r)) return null; return out(q.x - x, q.z - z, Math.hypot(q.x - x, q.z - z));
+  }
+  if (s.type === "circ") { const q = { x: s.x, z: s.z }; if (!pushPoly(q, foot, s.r)) return null; return out(s.x - q.x, s.z - q.z, Math.hypot(q.x - s.x, q.z - s.z)); }
+  let best = null;
+  for (const P of [foot, s.pts]) for (let i = 0; i < P.length; i++) {
+    const a = P[i], b = P[(i + 1) % P.length]; let nx = a[1] - b[1], nz = b[0] - a[0]; const l = Math.hypot(nx, nz); if (l < 1e-9) continue; nx /= l; nz /= l;
+    let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
+    for (const p of foot) { const v = p[0] * nx + p[1] * nz; a0 = Math.min(a0, v); a1 = Math.max(a1, v); }
+    for (const p of s.pts) { const v = p[0] * nx + p[1] * nz; b0 = Math.min(b0, v); b1 = Math.max(b1, v); }
+    const o = Math.min(a1, b1) - Math.max(a0, b0); if (o <= 0.005) return null;
+    if (!best || o < best[2]) { const sg = a0 + a1 < b0 + b1 ? -1 : 1; best = [nx * sg, nz * sg, o]; }
+  }
+  return out(best[0], best[1], best[2]);
 }
 const DOORS = [];
 const WINDOWS = [], FACADES = [];   // for the night: which windows glow, which house fronts carry a street lamp
@@ -598,7 +638,7 @@ function edgeWall(c, r, d, y0, y1, o) {
   const pick = n => { const s = n[0] * nx + n[2] * nz; return s > 0.5 ? (typeof mOut === "function" ? mOut() : mOut) : s < -0.5 ? mIn : mEdge; };
   const pieceUV = (p, n) => [((p[0] - A[0]) * tx + (p[2] - A[1]) * tz) / L * (n[0] * nx + n[2] * nz > 0 ? 1 : -1), (((p[1] - (o.base ?? y0)) % STOREY) + STOREY) % STOREY / STOREY];
   const uvf = o.piece ? (p, n) => (Math.abs(n[1]) < 0.5 && Math.abs(n[0] * nx + n[2] * nz) > 0.5 && (n[0] * nx + n[2] * nz > 0) ? pieceUV(p, n) : uvWorld(p, n, REP[pick(n)] || 2)) : undefined;
-  const seg = (along, len, a, b) => { if (b - a < 0.005 || len < 0.005) return; solidBox(pick, mx + tx * along, a, mz + tz * along, len, b - a, t, ang, { uvf }); };
+  const seg = (along, len, a, b) => { if (b - a < 0.005 || len < 0.005) return; solidBox(pick, mx + tx * along, a, mz + tz * along, len, b - a, t, ang, { uvf }).wall = true; };
   const ops = (o.openings || []).slice().sort((p, q) => p.yb - q.yb);
   let y = y0;
   for (const op of ops) {
@@ -628,7 +668,7 @@ function addDoor(mx, mz, tx, tz, nx, nz, w, yb, ye, t, op) {
   for (const f of [0.22, 0.78]) { const b = iron.clone(); b.position.set(w / 2, (ye - yb) * f, 0); pivot.add(b); }
   const base = Math.atan2(tz, tx);
   pivot.rotation.y = -base;
-  const solid = addSolid({ type: "poly", pts: rectPts(mx, mz, w, 0.12, base), y0: yb, y1: ye, cls: "wall", label: "door" });
+  const solid = addSolid({ type: "poly", pts: rectPts(mx, mz, w, 0.12, base), y0: yb, y1: ye, cls: "wall", label: "door" }); solid.wall = true;
   const door = { pivot, solid, base, open: !!op.open, a: op.open ? 1 : 0, x: mx, z: mz, y: yb, swing: -(op.swing || 1), name: op.name || "door", nx, nz, tx, tz, w, t, hut: !!op.hut };
   solid.off = door.open; DOORS.push(door); DOOR_GROUP.add(pivot);
 }
@@ -931,20 +971,23 @@ function wallTower(c, r, wallDir, name, o = {}) {
 // Positions are cell centres plus an offset along an edge direction.
 function spot(c, r, d, dist, side = 0) { const [ux, uz] = dvec(d), [vx, vz] = [-uz, ux]; return [cx(c, r) + ux * dist + vx * side, cz(c, r) + uz * dist + vz * side, Math.atan2(uz, ux)]; }
 function table(x, y, z, ang, len = 1.8) {
-  solidBox("plank", x, y + 0.7, z, len, 0.06, 0.8, ang, { cls: "wall" }).y0 = y;
+  [x, z] = fitOut(x, z, y, y + 0.76, { sx: len, sz: 0.8, ang });
+  const s = solidBox("plank", x, y + 0.7, z, len, 0.06, 0.8, ang, { cls: "wall" }); s.y0 = y; s.furn = true;
   for (const a of [-1, 1]) for (const b of [-1, 1]) box("timber", x + Math.cos(ang) * a * (len / 2 - 0.1) - Math.sin(ang) * b * 0.3, y, z + Math.sin(ang) * a * (len / 2 - 0.1) + Math.cos(ang) * b * 0.3, 0.08, 0.7, 0.08, ang);
 }
-function bench(x, y, z, ang, len = 1.6) { solidBox("timber", x, y + 0.38, z, len, 0.07, 0.32, ang).y0 = y; for (const a of [-1, 1]) box("timber", x + Math.cos(ang) * a * (len / 2 - 0.12), y, z + Math.sin(ang) * a * (len / 2 - 0.12), 0.07, 0.38, 0.28, ang); }
-function barrel(x, y, z) { solidCyl("barrel", x, y, z, 0.34, 0.9, { n: 10, cap: "timber" }); }
-function crate(x, y, z, ang = 0, s = 0.7) { solidBox("timber", x, y, z, s, s, s, ang); }
+function bench(x, y, z, ang, len = 1.6) { [x, z] = fitOut(x, z, y, y + 0.45, { sx: len, sz: 0.32, ang }); const s = solidBox("timber", x, y + 0.38, z, len, 0.07, 0.32, ang); s.y0 = y; s.furn = true; for (const a of [-1, 1]) box("timber", x + Math.cos(ang) * a * (len / 2 - 0.12), y, z + Math.sin(ang) * a * (len / 2 - 0.12), 0.07, 0.38, 0.28, ang); }
+function barrel(x, y, z) { [x, z] = fitOut(x, z, y, y + 0.9, { r: 0.34 }); solidCyl("barrel", x, y, z, 0.34, 0.9, { n: 10, cap: "timber" }).furn = true; }
+function crate(x, y, z, ang = 0, s = 0.7) { [x, z] = fitOut(x, z, y, y + s, { sx: s, sz: s, ang }); solidBox("timber", x, y, z, s, s, s, ang).furn = true; }
 function bed(x, y, z, ang) {
-  solidBox("timber", x, y, z, 2.0, 0.42, 1.0, ang);
+  [x, z] = fitOut(x, z, y, y + 0.56, { sx: 2.0, sz: 1.0, ang });
+  solidBox("timber", x, y, z, 2.0, 0.42, 1.0, ang).furn = true;
   box("wool", x + Math.cos(ang) * 0.15, y + 0.42, z + Math.sin(ang) * 0.15, 1.6, 0.1, 0.96, ang);
   box("linen", x - Math.cos(ang) * 0.75, y + 0.42, z - Math.sin(ang) * 0.75, 0.4, 0.14, 0.7, ang);
 }
-function chest(x, y, z, ang) { solidBox("timber", x, y, z, 0.9, 0.5, 0.5, ang); box("iron", x, y + 0.48, z, 0.92, 0.04, 0.52, ang); }
+function chest(x, y, z, ang) { [x, z] = fitOut(x, z, y, y + 0.52, { sx: 0.92, sz: 0.52, ang }); solidBox("timber", x, y, z, 0.9, 0.5, 0.5, ang).furn = true; box("iron", x, y + 0.48, z, 0.92, 0.04, 0.52, ang); }
 function shelf(x, y, z, ang) {
-  solidBox(null, x, y, z, 1.3, 1.8, 0.35, ang);
+  [x, z] = fitOut(x, z, y, y + 1.8, { sx: 1.3, sz: 0.35, ang });
+  solidBox(null, x, y, z, 1.3, 1.8, 0.35, ang).furn = true;
   for (const h of [0, 0.6, 1.2, 1.76]) box("timber", x, y + h, z, 1.3, 0.05, 0.35, ang);
   for (const a of [-1, 1]) box("timber", x + Math.cos(ang) * a * 0.62, y, z + Math.sin(ang) * a * 0.62, 0.05, 1.8, 0.35, ang);
   const rn = rng((x * 100 + z) | 0);
@@ -952,9 +995,10 @@ function shelf(x, y, z, ang) {
 }
 function hearth(c, r, d, y, big = false) {
   // against edge d, inside the cell: a stone hearth, a hood to the ceiling, a fire
-  const [x, z, a] = spot(c, r, d, W / 2 - 0.55, 0), w = big ? 1.5 : 1.2;
-  solidBox("stone", x, y, z, 0.7, 0.35, w + 0.2, a);
-  for (const s of [-1, 1]) solidBox("stone", x - Math.sin(a) * s * (w / 2), y + 0.35, z + Math.cos(a) * s * (w / 2), 0.7, 1.05, 0.2, a);
+  let [x, z, a] = spot(c, r, d, W / 2 - 0.55, 0); const w = big ? 1.5 : 1.2;
+  [x, z] = fitOut(x, z, y, y + 1.4, { sx: 0.7, sz: w + 0.2, ang: a });
+  const hb = solidBox("stone", x, y, z, 0.7, 0.35, w + 0.2, a); hb.wall = hb.furn = true;
+  for (const s of [-1, 1]) { const ch = solidBox("stone", x - Math.sin(a) * s * (w / 2), y + 0.35, z + Math.cos(a) * s * (w / 2), 0.7, 1.05, 0.2, a); ch.wall = ch.furn = true; }
   box("stone", x + Math.cos(a) * 0.1, y + 1.4, z + Math.sin(a) * 0.1, 0.5, STOREY - SLAB - 1.4, w + 0.2, a);
   for (let k = -1; k <= 1; k++) box("bark", x - Math.sin(a) * k * 0.2, y + 0.35, z + Math.cos(a) * k * 0.2, 0.5, 0.1, 0.1, a + 0.4 * k);
   addFire(x - Math.cos(a) * 0.05, y + 0.5, z - Math.sin(a) * 0.05, 1);
@@ -1146,9 +1190,9 @@ function townHouse(hm, n) {
   table(tx, base, tz, 0, 1.6); bench(tx, base, tz - 0.75 * (hm.front === hm.r0 ? -1 : 1), 0, 1.4);
   const [kx, kz] = [cx(hm.c0, hm.front), cz(hm.c0, hm.front)];
   if (hm.trade === "cooper") { barrel(kx - 0.4, base, kz); barrel(kx + 0.4, base, kz + 0.5); crate(kx + 0.2, base, kz - 0.6, 0.3); }
-  if (hm.trade === "weaver") { solidBox("timber", kx, base, kz, 1.4, 1.6, 0.9, 0); box("linen", kx, base + 0.9, kz, 1.3, 0.5, 0.92, 0); }
-  if (hm.trade === "baker") { solidCyl("stone", kx, base, kz, 0.9, 1.2, { n: 10, cap: "stone" }); addFire(kx, base + 0.3, kz - 0.7, 0.5); }
-  if (hm.trade === "potter") { for (let k = 0; k < 4; k++) solidCyl("clay", kx - 0.6 + k * 0.4, base, kz + 0.5, 0.17, 0.35 + (k % 2) * 0.2, { n: 8, cap: "clay" }); }
+  if (hm.trade === "weaver") { const [lx, lz] = fitOut(kx, kz, base, base + 1.6, { sx: 1.4, sz: 0.9 }); solidBox("timber", lx, base, lz, 1.4, 1.6, 0.9, 0).furn = true; box("linen", lx, base + 0.9, lz, 1.3, 0.5, 0.92, 0); }
+  if (hm.trade === "baker") { const [ox, oz] = fitOut(kx, kz, base, base + 1.2, { r: 0.9 }); solidCyl("stone", ox, base, oz, 0.9, 1.2, { n: 10, cap: "stone" }).furn = true; addFire(ox, base + 0.3, oz - 0.7, 0.5); }
+  if (hm.trade === "potter") { for (let k = 0; k < 4; k++) { const h = 0.35 + (k % 2) * 0.2, [px, pz] = fitOut(kx - 0.6 + k * 0.4, kz + 0.5, base, base + h, { r: 0.17 }); solidCyl("clay", px, base, pz, 0.17, h, { n: 8, cap: "clay" }).furn = true; } }
   for (let s = 1; s < storeys; s++) {
     const up = base + s * STOREY;
     bed(cx(hm.c1 - 1, hm.front), up, cz(hm.c1 - 1, hm.front), 0); chest(cx(hm.c1, hm.front) + 0.3, up, cz(hm.c1, hm.front) + (hm.front === hm.r0 ? -0.9 : 0.9), 0);
@@ -1779,7 +1823,8 @@ function makeDesert() {
     stairRun([xe + 5.4, base, z], [xe, base + STOREY + 0.3, z], { width: 1.1, m: "sandstone", label: "Stair to the roof" });
     for (let k = 0; k < 2; k++) NO_TREE.add(idx(c1 + 1 + k, front));
     const [x, zc] = [cx(c0, front), cz(c0, front)];
-    box("cloth", x + 0.4, base, zc, 1.6, 0.03, 1.0, 0); for (let k = 0; k < 3; k++) solidCyl("clay", cx(c1, front) - 0.4 + k * 0.4, base, cz(c1, front) + (front === r0 ? -0.8 : 0.8), 0.18, 0.5, { n: 8, cap: "clay" });
+    { const [rx, rz] = fitOut(x + 0.4, zc, base, base + 0.03, { sx: 1.6, sz: 1.0 }); box("cloth", rx, base, rz, 1.6, 0.03, 1.0, 0); }
+    for (let k = 0; k < 3; k++) { const [px, pz] = fitOut(cx(c1, front) - 0.4 + k * 0.4, cz(c1, front) + (front === r0 ? -0.8 : 0.8), base, base + 0.5, { r: 0.18 }); solidCyl("clay", px, base, pz, 0.18, 0.5, { n: 8, cap: "clay" }).furn = true; }
     table(cx(c0 + 1, r0 + (front === r0 ? 1 : 0)), base, cz(c0 + 1, r0 + (front === r0 ? 1 : 0)), 0, 1.4);
     const out = outsideDoor(c0 + 1, front, dd, base); if (!KIT_SPOT.sandstone) KIT_SPOT.sandstone = Object.assign(out, { center: [cx(c0 + 1, r0), cz(c0 + 1, r0) + 1.2, base + 3] });
     if (n === 1) { GOTO.roof = { x: cx(c0 + 1, r0), z: cz(c0 + 1, r0) + 1.2, y: base + STOREY + 0.3, look: [cx(25, 17), cz(25, 17)] }; GOTO.roofStair = { x: xe + 6.4, z, y: base, look: [xe - 1, z] }; }
@@ -1788,14 +1833,14 @@ function makeDesert() {
   for (const [c, r] of [[14, 14], [14, 19], [36, 14], [36, 19], [19, 22]]) {
     const d = dirToward(c, r, ...[cx(25, 17), cz(25, 17)]);
     building({ kit: "adobe", cells: [[c, r]], base: 2, storeys: 1, name: "Domed house", doors: [[c, r, d, 0]], window: (cc, rr, dd) => dd === (d + 3) % 6 });
-    const [bx, bz, ba] = spot(c, r, (d + 2) % 6, 0.8); box("wool", bx, 2, bz, 1.6, 0.12, 0.7, ba + Math.PI / 2);
-    solidCyl("clay", ...spot(c, r, (d + 4) % 6, 0.9).slice(0, 1), 2, spot(c, r, (d + 4) % 6, 0.9)[1], 0.2, 0.55, { n: 8, cap: "clay" });
+    { const [bx0, bz0, ba] = spot(c, r, (d + 2) % 6, 0.8), [bx, bz] = fitOut(bx0, bz0, 2, 2.12, { sx: 1.6, sz: 0.7, ang: ba + Math.PI / 2 }); box("wool", bx, 2, bz, 1.6, 0.12, 0.7, ba + Math.PI / 2); }
+    { const [jx0, jz0] = spot(c, r, (d + 4) % 6, 0.9), [jx, jz] = fitOut(jx0, jz0, 2, 2.55, { r: 0.2 }); solidCyl("clay", jx, 2, jz, 0.2, 0.55, { n: 8, cap: "clay" }).furn = true; }
     const out = outsideDoor(c, r, d, 2); if (!KIT_SPOT.adobe) KIT_SPOT.adobe = Object.assign(out, { center: [cx(c, r), cz(c, r), 5] });
   }
   const hallC = [35, 23], ring = [hallC, ...hexRing(...hallC, 1)];
   const hb = building({ kit: "adobe", cells: ring, base: 2, storeys: 1, tall: 2, name: "The caravan hall", doors: [[34, 23, 3, 0, "open"]], window: (c, r, d) => d % 2 === 0 });
   for (let k = 0; k < 3; k++) crate(cx(36, 22) + (k - 1) * 0.8, 2, cz(36, 22) + 0.3, 0.2 * k, 0.7);
-  for (const [c, r] of [[35, 24], [36, 23]]) { box("cloth2", cx(c, r), 2, cz(c, r), 2.0, 0.03, 1.4, 0.4); bench(cx(c, r), 2, cz(c, r) - 0.9, 0.4, 1.6); }
+  for (const [c, r] of [[35, 24], [36, 23]]) { const [rx, rz] = fitOut(cx(c, r), cz(c, r), 2, 2.03, { sx: 2.0, sz: 1.4, ang: 0.4 }); box("cloth2", rx, 2, rz, 2.0, 0.03, 1.4, 0.4); bench(cx(c, r), 2, cz(c, r) - 0.9, 0.4, 1.6); }
   person(cx(35, 23), 2, cz(35, 23), 0, 0x8a5a2a, { role: "Caravan master", work: "idle" });
   GOTO.hall = outsideDoor(34, 23, 3, 2);
   for (const [c, r, cl] of [[21, 14, "cloth"], [29, 14, "cloth2"], [21, 20, "cloth2"], [29, 20, "cloth"]]) { marketStall(c, r, cl, 2); person(cx(c, r), 2, cz(c, r) + 0.35, -Math.PI / 2, 0x9a6a3a, { role: "Trader", work: "idle" }); }
@@ -1927,7 +1972,7 @@ function makeJungle() {
     if (!door) { hutCells.push([]); return; }
     building({ kit: "junglehut", cells: pick, base: PY, raised: true, storeys: 1, name: k === 2 ? "Lookout hut" : "Tree hut", doors: [door], window: (c, r, d) => d % 2 === 1 });
     hutCells.push(pick);
-    const [pc, pr] = pick[0]; const [bx, bz, ba] = spot(pc, pr, door[2] + 3, 0.7); solidBox("leafthatch", bx, PY, bz, 1.6, 0.3, 0.7, ba + Math.PI / 2);
+    const [pc, pr] = pick[0]; const [bx0, bz0, ba] = spot(pc, pr, door[2] + 3, 0.7), [bx, bz] = fitOut(bx0, bz0, PY, PY + 0.3, { sx: 1.6, sz: 0.7, ang: ba + Math.PI / 2 }); solidBox("leafthatch", bx, PY, bz, 1.6, 0.3, 0.7, ba + Math.PI / 2).furn = true;
     const [dc, dr] = nb(door[0], door[1], door[2]); const sp = { x: cx(dc, dr), z: cz(dc, dr), y: PY, look: [cx(door[0], door[1]), cz(door[0], door[1])] };
     if (k === 1) { GOTO.treehut = sp; KIT_SPOT.junglehut = Object.assign({ ...sp }, { center: [cx(pc, pr), cz(pc, pr), PY + 2] }); }
     if (k === 2) GOTO.lookout = sp;
@@ -2186,7 +2231,7 @@ function fishRack(x, y, z, ang) {
   for (let k = 0; k < 7; k++) { const t = (k - 3) * 0.32; box("fish", x + ca * t, y + 1.25, z + sa * t, 0.08, 0.5, 0.16, ang); }
   addSolid({ type: "poly", pts: rectPts(x, z, 2.5, 0.2, ang), y0: y + 0.9, y1: y + 1.9, cls: "wall", label: "Fish drying" });
 }
-function lobsterPots(x, y, z, n) { for (let k = 0; k < n; k++) solidBox("wool", x + (k % 3) * 0.55, y + Math.floor(k / 3) * 0.42, z, 0.5, 0.4, 0.5, 0.1 * k, { label: "Lobster pots" }); }
+function lobsterPots(x, y, z, n) { for (let k = 0; k < n; k++) { const py = y + Math.floor(k / 3) * 0.42, [px, pz] = fitOut(x + (k % 3) * 0.55, z, py, py + 0.4, { sx: 0.5, sz: 0.5, ang: 0.1 * k }); solidBox("wool", px, py, pz, 0.5, 0.4, 0.5, 0.1 * k, { label: "Lobster pots" }).furn = true; } }
 
 // ---- the harbour --------------------------------------------------------------
 // Rows run along x; the sea is to the north (low z). Rows 0-11 are water over a
@@ -2270,7 +2315,7 @@ function makeCoast() {
   for (const c0 of [8, 33]) {
     building({ kit: "driftwood", c0, c1: c0 + 2, r0: 12, r1: 13, base: 0.25, storeys: 1, name: "Boathouse", doors: [[c0 + 1, 13, 1, 0, "open"]], skipWall: (c, r, d) => r === 12 && (d === 4 || d === 5), window: () => false });
     boat("rowboat", cx(c0 + 1, 12) + 0.4, cz(0, 12) + 0.2, 0.05, { wl: 0.5, still: true });
-    for (let k = 0; k < 3; k++) box("timber", cx(c0 + 2, 13) + 0.3 + k * 0.25, 0.25, cz(0, 13) + 0.7, 0.07, 2.6, 0.07, 0);
+    for (let k = 0; k < 3; k++) { const [ox, oz] = fitOut(cx(c0 + 2, 13) + 0.3 + k * 0.25, cz(0, 13) + 0.7, 0.25, 2.85, { r: 0.05 }); box("timber", ox, 0.25, oz, 0.07, 2.6, 0.07, 0); } // oars stood on end
     lobsterPots(cx(c0, 13) - 0.4, 0.25, cz(0, 13) + 0.6, 4);
   }
   GOTO.boathouse = { x: cx(9, 13) + 0.3, z: cz(0, 13) + 0.4, y: 0.25, look: [cx(8, 12), cz(0, 9)] };

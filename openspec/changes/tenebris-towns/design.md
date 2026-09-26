@@ -482,3 +482,18 @@ For the engine: the piece mesher builds trim (sills, thresholds, floors over
 wall tops) proud of the faces it meets, never in their plane, and a test runs
 the same scan over a built settlement's meshes.
 
+**Furniture stands clear of the walls.** The owner found a chest sunk into a
+wall. Furniture is placed from a cell's centre plus an offset, and a hex room
+narrows toward its corners, so a chest or a bed near a corner reached through
+the angled wall. Each piece is now pushed clear of the walls, doors, corner
+posts and hearths already built, by the least move that frees it. The move
+comes from a separating-axis test for boxes, or the nearest-edge push for
+round pieces, repeated until nothing overlaps.
+
+This covers tables, benches, beds, chests, shelves, barrels, crates, hearths,
+the loom, the oven, pots, rugs, bedrolls, the jungle huts' leaf beds, and the
+boathouse pots and oars. With the push off, 55 of 342 pieces reached into a
+wall, up to 0.35 m deep; with it on, none do. No walk changed. For the engine:
+a settlement template places furniture with the same push, and a test checks
+that no piece overlaps a wall, post or door.
+
