@@ -31,6 +31,9 @@ OUT = os.path.join(ROOT, "tools", "held_hand.json")
 # what makes the hand in view big and stubby rather than realistically small.
 HANDLE_R = 0.011
 FINGERS = ("f_index", "f_middle", "f_ring", "f_pinky")
+# The wrist is cocked: the forearm leaves the hand this far off square to the
+# handle, back toward its butt, as a hand holding a pick upright does.
+WRIST_COCK_DEG = 40.0
 # Finger thickness, metres: the prisms' corner radius. A third thicker than a
 # real finger, which is what makes the hand stubby rather than realistic.
 FINGER_R = {"f_index": 0.0118, "f_middle": 0.0124, "f_ring": 0.0117, "f_pinky": 0.0102, "thumb": 0.0135}
@@ -226,10 +229,11 @@ def parts(rig):
     for i in (1, 2, 3):
         h, t = seg(rig, f"thumb.0{i}.R")
         prism(h, t, FINGER_R["thumb"] * (1.1 if i == 1 else 0.95 if i == 2 else 0.85), "skin" if i != 2 else "knuckle", 0.004)
-    # The heel of the hand, then the wrist, cuff and sleeve running straight
-    # toward the elbow (+f), square to the handle.
+    # The heel of the hand, then the wrist, cuff and sleeve running toward the
+    # elbow: +f, turned back toward the butt (-x) by the wrist's cock.
     h, t = seg(rig, "hand.R")
-    elbow_dir = to_frame.transposed() @ Vector((0.0, 1.0, 0.0))
+    cock = math.radians(WRIST_COCK_DEG)
+    elbow_dir = to_frame.transposed() @ Vector((-math.sin(cock), math.cos(cock), 0.0))
     wrist = h + elbow_dir * 0.035
     prism(h, wrist, 0.025, "skin")
     cuff = wrist + elbow_dir * 0.018

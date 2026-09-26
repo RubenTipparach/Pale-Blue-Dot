@@ -194,18 +194,33 @@ def rod(x, y, r):
 # grip in eye space and `length` its reach at 1x, metres. `work` is the working
 # end, a direction in the tool's plane (tool space); the tool is turned about
 # its handle so `work` points as nearly as it can at `toward` (eye space).
-DOWN_AHEAD = norm((0.0, -1.0, -0.45))
+# Held as the owner's reference photo holds a pick: the handle nearly upright
+# and a little away, gripped a third of the way up; the head across the top
+# facing the eye, so the pick's tips curve down either side; the back of the
+# hand to the right and toward the eye, the fingers and thumb curled round on
+# the left, the forearm up from the bottom right.
+UPRIGHT = (-0.05, 1.0, -0.25)
+FACE_EYE = (0.0, 0.0, 1.0)
+BACK_RIGHT = norm((0.8, 0.1, 0.55))
 TOOLS = [
-    {"id": "pickaxe", "name": "Pickaxe", "note": "Stone, rock and ore", "shape": pickaxe, "len": 12.2, "fist": 1.9, "grip_r": 0.45,
-     "along": (-0.2, 0.45, -0.5), "length": 0.232, "work": (0, -1, 0), "toward": DOWN_AHEAD},
-    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 15.6, "fist": 1.7, "grip_r": 0.51,
-     "along": (-0.75, -0.2, -0.55), "length": 0.26, "work": (0, 0, 1), "toward": norm((0, 1, 0.35))},
-    {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 12.4, "fist": 1.9, "grip_r": 0.45,
-     "along": (-0.2, 0.45, -0.5), "length": 0.232, "work": (0, 1, 0), "toward": DOWN_AHEAD},
-    {"id": "rod", "name": "Rod", "note": "Fishing", "shape": rod, "len": 18.3, "fist": 2.4, "grip_r": 0.28,
-     "along": (0.0, 0.31, -0.47), "length": 0.563, "work": (0, -1, 0), "toward": (0.0, -1.0, 0.0)},
+    {"id": "pickaxe", "name": "Pickaxe", "note": "Stone, rock and ore", "shape": pickaxe, "len": 12.2, "fist": 3.2,
+     "grip_r": 0.45, "along": UPRIGHT, "length": 0.232, "work": (0, 0, 1), "toward": FACE_EYE, "back": BACK_RIGHT},
+    # The shovel as the owner's photo carries it: gripped near the top, the
+    # shaft running down and ahead to the blade, the blade's face up, the back
+    # of the hand outward.
+    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 15.6, "fist": 1.7,
+     "grip_r": 0.51, "along": (-0.7, 0.12, -0.7), "length": 0.26, "work": (0, 0, 1), "toward": norm((0, 1, 0.35)),
+     "arm": (0.45, -0.75, 0.5), "lift": (0.0, 0.14, 0.0)},
+    # Blade to the left, facing the eye; the edge is the blade's far side.
+    {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 12.4, "fist": 3.2,
+     "grip_r": 0.45, "along": UPRIGHT, "length": 0.232, "work": (0, 0, 1), "toward": FACE_EYE, "back": BACK_RIGHT},
+    {"id": "rod", "name": "Rod", "note": "Fishing", "shape": rod, "len": 18.3, "fist": 2.4,
+     # Up and to the left from the fist, as in the owner's photos; the reel
+     # hangs under the rod.
+     "grip_r": 0.28, "along": (-0.35, 0.6, -0.7), "length": 0.563, "work": (0, -1, 0), "toward": (0.0, -1.0, 0.0),
+     "back": BACK_RIGHT},
 ]
-ANCHOR = {1: (0.26, -0.26, -0.48), 2: (0.31, -0.30, -0.52)}
+ANCHOR = {1: (0.26, -0.26, -0.48), 2: (0.30, -0.42, -0.55)}
 X0, X1, Y1 = -2.2, 19.0, 6.2
 
 
@@ -236,7 +251,9 @@ def pose(tool, size):
     a = mat_cols(a1, aw, cross(a1, aw))
     b = mat_cols(b1, bw, cross(b1, bw))
     rot = mat_mul(b, mat_t(a))
-    return rot, tool["length"] * size / tool["len"], ANCHOR[size]
+    # A tool held low (the shovel) is lifted, or its hand is off the screen.
+    grip = add(ANCHOR[size], mul(tool.get("lift", (0.0, 0.0, 0.0)), size / 2))
+    return rot, tool["length"] * size / tool["len"], grip
 
 
 # ---- the hand -----------------------------------------------------------------
@@ -245,22 +262,41 @@ def pose(tool, size):
 # hexagonal prisms in metres, in a frame on the handle: x along it toward the
 # tool's head, f toward the elbow, k = x cross f.
 HAND = json.load(open(os.path.join(ROOT, "tools", "held_hand.json"), encoding="utf-8"))
-FOREARM_EYE = norm((0.45, -0.75, 0.5))
-# How much of the forearm's lie along the handle is taken out: all of it makes
-# the arm square to the handle (a hammer grip, which from the eye runs the arm
-# out sideways), none lets the arm continue the handle's line. Part of it is a
-# cocked wrist, with the arm coming up from the bottom right of the view.
-FOREARM_SQUARE = 0.6
+# The hand is turned about the handle until the back of it faces each tool's
+# `back`, in eye space, and the forearm follows; or, for a tool held low and
+# across the body (the shovel), until the forearm runs toward its `arm`, and
+# the back of the hand follows.
+
+
+def back_of_hand():
+    """Which way the back of the rig's hand faces from the handle, in the
+    hand's frame: out from the handle through the back-of-hand block."""
+    palm = next(p for p in HAND["parts"] if "across" in p)
+    b = palm["at"]
+    return norm((0.0, b[1], b[2]))
 
 
 def hand_parts(tool, size):
     """The hand's prisms in the tool's own units, for this tool and size. The
-    hand is scaled so it closes round this tool's grip as it closed round the
-    rig's handle."""
+    hand is turned about the handle for an overhand grip and scaled so it
+    closes round this tool's grip as it closed round the rig's handle."""
     rot, _, _ = pose(tool, size)
     x = (1.0, 0.0, 0.0)
-    d = mat_vec(mat_t(rot), FOREARM_EYE)
-    f = norm(sub(d, mul(x, FOREARM_SQUARE * dot(d, x))))
+    # The back of the hand's wanted direction, in tool space, square to the
+    # handle.
+    if "arm" in tool:
+        want = mat_vec(mat_t(rot), norm(tool["arm"]))
+        f = norm(sub(want, mul(x, dot(want, x))))
+    else:
+        want = mat_vec(mat_t(rot), tool["back"])
+        B = norm(sub(want, mul(x, dot(want, x))))
+        # Turn the hand's (f, k) about x so its back, (bf, bk) in that frame,
+        # lands on B: f = cos(-beta) B + sin(-beta) (x cross B), beta its angle
+        # from f.
+        _, bf, bk = back_of_hand()
+        beta = math.atan2(bk, bf)
+        xb = cross(x, B)
+        f = add(mul(B, math.cos(-beta)), mul(xb, math.sin(-beta)))
     k = cross(x, f)
     grip = (tool["fist"], 0.0, 0.0)
     # Rig metres to tool units: the rig's handle radius onto this tool's grip.
