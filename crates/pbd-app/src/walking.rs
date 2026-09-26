@@ -22,7 +22,7 @@ use crate::{
 };
 
 pub const EYE_HEIGHT: f32 = 1.6;
-const HALF_HEIGHT: f32 = 0.9;
+pub const HALF_HEIGHT: f32 = 0.9;
 const BODY_RADIUS: f32 = 0.3;
 const CONTACT_SKIN: f32 = 0.015;
 const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
@@ -44,6 +44,10 @@ pub struct WalkingConfig {
     /// The turn to the right of the default heading a walker starts with when
     /// nothing is restored, radians. The default heading is the pole's east.
     pub yaw: f32,
+    /// A steady turn to the right, radians a second: a MEASUREMENT instrument
+    /// (`cloud-ghosting`), so a capture can photograph what a turning view
+    /// leaves behind a silhouette. Zero, the default, is no turn.
+    pub turn: f32,
     pub walk_speed: f32,
     pub sprint_speed: f32,
     pub jump_speed: f32,
@@ -79,6 +83,7 @@ impl Default for WalkingConfig {
             restored: None,
             pitch: 0.0,
             yaw: 0.0,
+            turn: 0.0,
             walk_speed: 8.0,
             sprint_speed: 14.0,
             jump_speed: 12.0,
@@ -207,7 +212,7 @@ impl Plugin for WalkingPlugin {
             .add_systems(PostStartup, setup_walking)
             .add_systems(
                 RunFixedMainLoop,
-                (switch_mode, read_walking_input)
+                (switch_mode, read_walking_input, turn_for_capture)
                     .chain()
                     .before(FlightViewInput)
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
@@ -318,13 +323,30 @@ fn setup_walking(world: &mut World) {
     set_active_mode(world, config.start_walking);
 }
 
+/// Who the player is being: on foot, in the skiff, or aboard a vehicle.
+/// Exactly one camera is active and it is the view's; every system that reads
+/// "the camera" reads that one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum View {
+    Walking,
+    Flying,
+    Vehicle,
+}
+
 fn set_active_mode(world: &mut World, walking: bool) {
+    set_view(world, if walking { View::Walking } else { View::Flying });
+}
+
+/// Hand the player to a view: its body, its input and its camera, and nothing
+/// else's.
+pub fn set_view(world: &mut World, view: View) {
+    let walking = view == View::Walking;
     let body = world.resource::<WalkingState>().body;
     world.resource_mut::<WalkingState>().active = walking;
     world.resource_mut::<WalkingReadout>().active = walking;
     world
         .resource_mut::<FlightInputState>()
-        .set_enabled(!walking);
+        .set_enabled(view == View::Flying);
     if walking {
         world
             .entity_mut(body)
@@ -339,29 +361,38 @@ fn set_active_mode(world: &mut World, walking: bool) {
         .iter(world)
         .collect();
     for ship in ships {
-        if walking {
+        if view != View::Flying {
             world.entity_mut(ship).insert(ColliderDisabled);
         } else {
             world.entity_mut(ship).remove::<ColliderDisabled>();
         }
     }
     let mut camera_modes = Vec::new();
-    for (entity, mut camera, walker, flight) in world
-        .query::<(Entity, &mut Camera, Has<WalkingCamera>, Has<FlightCamera>)>()
+    for (entity, mut camera, walker, flight, vehicle) in world
+        .query::<(
+            Entity,
+            &mut Camera,
+            Has<WalkingCamera>,
+            Has<FlightCamera>,
+            Has<crate::vehicles::VehicleCamera>,
+        )>()
         .iter_mut(world)
     {
         if walker {
             camera.is_active = walking;
         }
         if flight {
-            camera.is_active = !walking;
+            camera.is_active = view == View::Flying;
         }
-        if walker || flight {
+        if vehicle {
+            camera.is_active = view == View::Vehicle;
+        }
+        if walker || flight || vehicle {
             camera_modes.push((entity, camera.is_active));
         }
     }
     // Bevy's automatic UI camera selection includes inactive cameras. Keep an
-    // explicit default on the active view so F also hands the HUD across.
+    // explicit default on the active view so R also hands the HUD across.
     for (entity, active) in camera_modes {
         if active {
             world.entity_mut(entity).insert(bevy::ui::IsDefaultUiCamera);
@@ -383,11 +414,18 @@ fn switch_mode(world: &mut World) {
     {
         return;
     }
+    // Aboard a vehicle, R is not the way out: F is, and it is the vehicle's.
+    if world
+        .get_resource::<crate::vehicles::Aboard>()
+        .is_some_and(|aboard| aboard.0.is_some())
+    {
+        return;
+    }
     let Some(keys) = world.get_resource::<ButtonInput<KeyCode>>() else {
         return;
     };
-    let toggle = keys.just_pressed(KeyCode::KeyF);
-    let reset = keys.just_pressed(KeyCode::KeyR);
+    let toggle = keys.just_pressed(KeyCode::KeyR);
+    let reset = keys.just_pressed(KeyCode::KeyH);
     let active = world.resource::<WalkingState>().active;
     if active && reset {
         let up = world.resource::<WalkingState>().spawn_direction;
@@ -439,7 +477,7 @@ fn switch_mode(world: &mut World) {
 /// looking along `view`, and not grounded: what leaving flight is. The body's
 /// centre is the eye less the eye height, which is the inverse of where the
 /// walk-to-fly handoff puts the ship.
-fn drop_walker(world: &mut World, eye: Vec3, velocity: Vec3, view: Quat) {
+pub fn drop_walker(world: &mut World, eye: Vec3, velocity: Vec3, view: Quat) {
     let up = eye.normalize_or(Vec3::Y);
     let position = eye - up * (EYE_HEIGHT - HALF_HEIGHT);
     let body = world.resource::<WalkingState>().body;
@@ -538,6 +576,17 @@ fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
     state.jump = false;
     if let Some(view) = view {
         state.look_along(view, up);
+    }
+}
+
+/// The capture's steady turn (`WalkingConfig::turn`), about the walker's up.
+fn turn_for_capture(config: Res<WalkingConfig>, time: Res<Time>, mut state: ResMut<WalkingState>) {
+    if !state.active || config.turn == 0.0 {
+        return;
+    }
+    let angle = config.turn * time.delta_secs();
+    if angle.is_finite() {
+        state.heading = Quat::from_axis_angle(state.up, -angle) * state.heading;
     }
 }
 
@@ -1063,12 +1112,12 @@ mod tests {
             .floor_radius;
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         assert!(!app.world().resource::<WalkingState>().active);
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         app.update();
@@ -1081,10 +1130,10 @@ mod tests {
         }
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         let state = app.world().resource::<WalkingState>();
-        assert!(state.active, "the second F should walk");
+        assert!(state.active, "the second R should walk");
         let body = state.body;
         let eye =
             app.world().get::<Position>(body).unwrap().0.length() + (EYE_HEIGHT - HALF_HEIGHT);
@@ -1099,7 +1148,7 @@ mod tests {
         );
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         let mut lowest = f32::MAX;
@@ -1129,26 +1178,26 @@ mod tests {
                 .resource::<crate::config::WaterSettings>()
                 .depth_offset_m;
         let direction = deep_water(app.world().resource::<PlanetContact>(), 4.0);
-        // Fly first, then park the ship over deep water and press F.
+        // Fly first, then park the ship over deep water and press R.
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         assert!(
             !app.world().resource::<WalkingState>().active,
-            "the first F should fly"
+            "the first R should fly"
         );
         {
             // The harness has no input clear system: a press stays "just
             // pressed" until it is cleared by hand.
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         app.update();
         assert!(
             !app.world().resource::<WalkingState>().active,
-            "a cleared F must not toggle again"
+            "a cleared R must not toggle again"
         );
         let ship_at = direction * (sheet + 30.0);
         let mut ships = app
@@ -1159,10 +1208,10 @@ mod tests {
         }
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         let state = app.world().resource::<WalkingState>();
-        assert!(state.active, "the second F should walk");
+        assert!(state.active, "the second R should walk");
         let body = app.world().entity(state.body);
         let position = body.get::<Position>().unwrap().0;
         let drift = position.normalize().dot(direction).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
@@ -1180,7 +1229,7 @@ mod tests {
         let body = state.body;
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         for _ in 0..600 {
@@ -1596,7 +1645,7 @@ mod tests {
         let ship = ships.single(app.world()).unwrap();
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         assert!(!app.world().resource::<WalkingState>().active);
         assert!(app.world().resource::<FlightInputState>().is_enabled());
@@ -1604,13 +1653,13 @@ mod tests {
         assert_active_ui_camera(&mut app);
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            keys.release(KeyCode::KeyF);
+            keys.release(KeyCode::KeyR);
             keys.clear();
         }
         app.update();
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyF);
+            .press(KeyCode::KeyR);
         app.update();
         assert!(app.world().resource::<WalkingState>().active);
         assert_eq!(ships.single(app.world()).unwrap(), ship);

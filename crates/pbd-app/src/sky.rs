@@ -179,7 +179,12 @@ impl CloudNow {
                 settings.cloud_shear,
                 settings.cloud_shear_mps,
             ),
-            cells: Vec4::new(settings.cloud_cells, 0.0, 0.0, 0.0),
+            cells: Vec4::new(
+                settings.cloud_cells,
+                settings.cloud_step_m,
+                settings.cloud_max_steps as f32,
+                0.0,
+            ),
         }
     }
 }

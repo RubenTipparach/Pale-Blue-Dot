@@ -5,6 +5,8 @@
 //! walls, and decorative trees. No expanded terrain vertex buffer is uploaded.
 //! This is a surface-column prototype, not the editable volumetric chunk engine.
 
+#[path = "planet_cloud_noise.rs"]
+mod cloud_noise;
 #[path = "planet_column.rs"]
 pub mod column;
 pub use column::mouth_of;
@@ -212,6 +214,8 @@ pub struct PlanetPlugin;
 
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(crate::sea::SeaPlugin);
+        water::install_eye_water(app);
         app.add_plugins((
             ExtractResourcePlugin::<PlanetBase>::default(),
             ExtractResourcePlugin::<lod::PlanetFine>::default(),
@@ -228,9 +232,8 @@ impl Plugin for PlanetPlugin {
         .init_resource::<PlanetRenderFrame>()
         .init_resource::<lod::LodRefresh>()
         .init_resource::<lod::NearField>()
-        .init_resource::<water::EyeWaterState>()
         .add_systems(Startup, create_planet)
-        .add_systems(Update, (lod::refresh_lod, water::publish_eye_water))
+        .add_systems(Update, lod::refresh_lod)
         .add_systems(
             PostUpdate,
             update_planet_frame.before(TransformSystems::Propagate),
@@ -594,6 +597,7 @@ fn upload_fine(
     if planet.uploaded == fine.version {
         return;
     }
+    let timer = std::time::Instant::now();
     let stride = size_of::<GpuCell>() as u64;
     for (k, level) in fine.set.levels.iter().enumerate() {
         let offset = (planet.base_count as u64 + k as u64 * lod::FINE_CAPACITY as u64) * stride;
@@ -621,6 +625,7 @@ fn upload_fine(
     }
     planet.uploaded = fine.version;
     planet.lod = lod::LodParams::of(&fine.set);
+    lod::spent("render: fine-set upload", timer);
     // The other half of an edit's own log line: the version it made is the
     // version the GPU now draws. An edit whose version never appears here is
     // an edit nobody can see.

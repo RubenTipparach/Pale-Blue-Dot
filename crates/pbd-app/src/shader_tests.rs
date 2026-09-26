@@ -48,6 +48,21 @@ pub(crate) fn planet_surface_source() -> String {
     surface.replacen(import, &clouds, 1)
 }
 
+/// `sea.wgsl` as naga reads it: its import path is Bevy's composer's, not
+/// WGSL.
+pub(crate) fn sea_source() -> String {
+    include_str!("../../../assets/shaders/sea.wgsl")
+        .lines()
+        .filter(|line| !line.starts_with("#define_import_path"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn the_sea_module_compiles() {
+    validated_entry_points("sea.wgsl", &sea_source());
+}
+
 #[test]
 fn the_planet_surface_shader_compiles_with_the_entry_points_its_pipeline_names() {
     let entries = validated_entry_points("planet_surface.wgsl", &planet_surface_source());
@@ -89,4 +104,30 @@ pub(crate) fn wgsl_struct_size(label: &str, source: &str, name: &str) -> u32 {
         .find(|(_, ty)| ty.name.as_deref() == Some(name))
         .unwrap_or_else(|| panic!("{label} declares no struct `{name}`"));
     layouter[handle].size
+}
+
+/// The drawn sea is the table the hulls float on, read from the uniform: the
+/// water pass's vertex stage displaces by `sea_surface(view.sea, ...)` and
+/// writes no wave of its own. A literal sine left in it would be a second sea
+/// the physics knows nothing about.
+#[test]
+fn the_water_vertex_draws_the_sea_table_and_no_literal_waves() {
+    // Line endings as committed, whatever the checkout made of them.
+    let source = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let start = source
+        .find("@vertex")
+        .expect("water.wgsl has a vertex stage");
+    let body = &source[start..];
+    let end = body.find("\n}\n").expect("the vertex stage ends");
+    let body = &body[..end];
+    assert!(
+        body.contains("sea_surface(view.sea,"),
+        "the displacement reads the table from the view uniform"
+    );
+    for literal in ["sin(", "cos("] {
+        assert!(
+            !body.contains(literal),
+            "the vertex stage computes a wave of its own: {literal}"
+        );
+    }
 }

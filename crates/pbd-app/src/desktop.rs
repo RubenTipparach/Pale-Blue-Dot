@@ -1,4 +1,8 @@
+mod cracks;
 mod digging;
+mod equipment;
+mod frame_graph;
+mod guide;
 mod hud;
 mod menu;
 mod overlay_ui;
@@ -41,15 +45,44 @@ use std::{
 #[derive(Resource, Clone)]
 pub struct Launch {
     pub capture: Option<PathBuf>,
+    /// `--frame-log PATH`: a measurement instrument. Every frame's wall time,
+    /// written as CSV with the fine set's state on the same clock, so a hitch
+    /// can be attributed rather than guessed at (`far-side-flight`).
+    pub frame_log: Option<PathBuf>,
+    /// `--walk-distance METRES`: a measurement instrument. The walker sprints
+    /// forward in real time, hopping when it stalls, logs `WALK_DONE` and quits
+    /// once it has walked that far: a repeatable stretch of streaming for the
+    /// frame log to measure.
+    pub walk_distance: Option<f32>,
+    /// `--frame-graph`: start with the frame graph shown (`F3` toggles it).
+    pub frame_graph: bool,
+    /// `--no-vsync`: present unpaced, a measurement instrument, so a frame's
+    /// time is its work and not the display's refresh.
+    pub no_vsync: bool,
     pub view: String,
     pub frames: u32,
     pub tour: bool,
+    /// `--route far-side`: take off, climb, cruise round the planet and land
+    /// on the far side (`far-side-flight`). Implies the tour's scripted setup.
+    pub route: bool,
+    /// Which route `--route` named.
+    pub route_kind: pbd_app::flight_view::RouteKind,
     pub fixed: bool,
     pub fly: bool,
     pub walk: bool,
     /// Walk mode, placed at the shoreline and holding forward, so a capture can
     /// photograph the water being entered. A walker with no input never moves.
     pub swim: bool,
+    /// `--fish`: stand on a warm shore facing the sea with the rod, and cast
+    /// once, scripted, so the float, the line and the schools can be
+    /// photographed and the fishery's numbers logged. A capture instrument,
+    /// like `--swim`: a headless run has no hand on the mouse.
+    pub fish: bool,
+    /// `--aboard KIND` boards the Kestrel, Tern or Loon once the fleet is in,
+    /// and `--seat` takes the seat rather than the chase view: a headless run
+    /// has nobody to walk up to a craft and press F. Implies `--walk`.
+    pub aboard: Option<pbd_core::vehicle::Kind>,
+    pub seat: bool,
     /// Static capture instrument: translate the scene within the local frame.
     pub render_offset: Vec3,
     /// Capture instrument for the `shore` view: camera height above the last
@@ -60,6 +93,13 @@ pub struct Launch {
     /// hole. A headless run has no mouse, and a picture of a hole is the only
     /// thing that says the verb works end to end.
     pub dig: u32,
+    /// `--break SECONDS` holds the use button on the block under the reticle
+    /// for that long, with `--tool` in hand (the shovel if none), so a capture
+    /// can photograph the cracks at a chosen stage. Implies `--walk`.
+    pub break_s: Option<f32>,
+    /// `--tool rod|shovel|pickaxe|axe`: the tool in hand for a capture, with
+    /// or without `--break`. Implies nothing else.
+    pub tool: Option<pbd_core::inventory::Tool>,
     /// `--place N` stacks N stones on the last hole, so a tower somebody built
     /// can be photographed wearing the stone it is made of.
     pub place: u32,
@@ -92,6 +132,9 @@ pub struct Launch {
     /// stands from the spawn, as the yaw and pitch that would centre it, so a
     /// sky capture is aimed off the clock rather than guessed.
     pub yaw: Option<f32>,
+    /// `--turn DEG_PER_S`: the walker's view turns right at this rate, a
+    /// measurement instrument for the clouds' history (`cloud-ghosting`).
+    pub turn: f32,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -121,15 +164,26 @@ impl Launch {
     fn parse(args: &[String]) -> Self {
         let mut result = Self {
             capture: None,
+            frame_log: None,
+            walk_distance: None,
+            frame_graph: false,
+            no_vsync: false,
             view: "coast".into(),
             frames: 180,
             dig: 0,
+            break_s: None,
+            tool: None,
             place: 0,
             tour: false,
+            route: false,
+            route_kind: pbd_app::flight_view::RouteKind::FarSide,
             fixed: false,
             fly: false,
             walk: false,
             swim: false,
+            fish: false,
+            aboard: None,
+            seat: false,
             render_offset: Vec3::ZERO,
             height: None,
             spawn: None,
@@ -143,6 +197,7 @@ impl Launch {
             dig_ahead: false,
             pitch: None,
             yaw: None,
+            turn: 0.0,
             menu: None,
         };
         let mut i = 0;
@@ -152,6 +207,31 @@ impl Launch {
                     i += 1;
                     result.capture =
                         Some(args.get(i).expect("--capture requires a PNG path").into());
+                }
+                "--break" => {
+                    i += 1;
+                    result.break_s = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .filter(|s: &f32| s.is_finite() && *s >= 0.0)
+                            .expect("--break requires seconds"),
+                    );
+                    result.walk = true;
+                }
+                "--tool" => {
+                    i += 1;
+                    result.walk = true;
+                    let name = args.get(i).expect("--tool requires a tool").to_lowercase();
+                    // Named exactly: "axe" is inside "pickaxe", and a
+                    // match on containing picked the pickaxe for it.
+                    use pbd_core::inventory::Tool;
+                    result.tool = Some(match name.as_str() {
+                        "rod" => Tool::Rod,
+                        "shovel" => Tool::Shovel,
+                        "pickaxe" => Tool::Pickaxe,
+                        "axe" => Tool::Axe,
+                        _ => panic!("--tool {name}: rod, shovel, pickaxe or axe"),
+                    });
                 }
                 "--dig" => {
                     i += 1;
@@ -225,6 +305,15 @@ impl Launch {
                     );
                     result.menu = Some(screen.clone());
                 }
+                "--turn" => {
+                    i += 1;
+                    let degrees: f32 = args
+                        .get(i)
+                        .and_then(|d| d.parse().ok())
+                        .expect("--turn requires degrees a second");
+                    assert!(degrees.is_finite(), "--turn takes finite degrees");
+                    result.turn = degrees;
+                }
                 "--view" => {
                     i += 1;
                     result.view = args.get(i).expect("--view requires a view name").clone();
@@ -238,6 +327,28 @@ impl Launch {
                     );
                     result.spawn = Some(spawn);
                 }
+                "--frame-graph" => result.frame_graph = true,
+                "--no-vsync" => result.no_vsync = true,
+                "--walk-distance" => {
+                    i += 1;
+                    let metres: f32 = args
+                        .get(i)
+                        .expect("--walk-distance requires metres")
+                        .parse()
+                        .expect("invalid walk distance");
+                    assert!(
+                        metres.is_finite() && metres > 0.0,
+                        "walk distance must be positive"
+                    );
+                    result.walk_distance = Some(metres);
+                    result.walk = true;
+                }
+                "--frame-log" => {
+                    i += 1;
+                    result.frame_log = Some(PathBuf::from(
+                        args.get(i).expect("--frame-log requires a path"),
+                    ));
+                }
                 "--frames" => {
                     i += 1;
                     result.frames = args
@@ -247,12 +358,33 @@ impl Launch {
                         .expect("invalid frame count");
                 }
                 "--tour" => result.tour = true,
+                "--route" => {
+                    i += 1;
+                    let name = args.get(i).expect("--route requires a route name");
+                    result.route_kind = route_kind(name);
+                    result.route = true;
+                    result.tour = true;
+                }
                 "--fly" => result.fly = true,
                 "--walk" => result.walk = true,
                 "--swim" => {
                     result.walk = true;
                     result.swim = true;
                 }
+                "--fish" => {
+                    result.walk = true;
+                    result.fish = true;
+                }
+                "--aboard" => {
+                    i += 1;
+                    let key = args.get(i).expect("--aboard requires a craft");
+                    result.aboard = Some(
+                        pbd_core::vehicle::Kind::from_key(key)
+                            .expect("--aboard knows kestrel, tern and loon"),
+                    );
+                    result.walk = true;
+                }
+                "--seat" => result.seat = true,
                 "--fixed-dt" => result.fixed = true,
                 "--render-offset" => {
                     let mut components = [0.0; 3];
@@ -314,6 +446,9 @@ impl Launch {
                     result.weather_at = seconds;
                 }
                 "--verify-flight" => {}
+                "--verify-route" => {
+                    i += 1;
+                }
                 unknown => panic!("unknown argument {unknown}; use --help"),
             }
             i += 1;
@@ -387,9 +522,18 @@ pub struct FrameStats {
     pub frame_ms: f32,
     pub samples: Vec<f64>,
     previous: Instant,
+    /// When the app started: the frame log's clock, to line a slow frame up
+    /// with what the log says happened then.
+    started: Instant,
 }
 
 pub fn run(args: &[String]) {
+    if let Some(i) = args.iter().position(|s| s == "--verify-route") {
+        verify_route(route_kind(
+            args.get(i + 1).map_or("far-side", String::as_str),
+        ));
+        return;
+    }
     if args.iter().any(|s| s == "--verify-flight") {
         verify_flight(args.windows(2).any(|w| w[0] == "--view" && w[1] == "pole"));
         return;
@@ -408,6 +552,7 @@ pub fn run(args: &[String]) {
     let mut world = open_world(&launch);
     let saved_seconds = world.world_seconds;
     let hotbar = slots::Hotbar::restore(&mut world);
+    let tools = pbd_app::fish::ToolSlot::restore(&world);
     // The saves page is the front door of a plain launch: a player picks the
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
@@ -429,7 +574,7 @@ pub fn run(args: &[String]) {
                 primary_window: Some(Window {
                     title: "Pale Blue Dot | Planet Explorer".into(),
                     resolution: (1440, 900).into(),
-                    present_mode: if launch.capture.is_some() {
+                    present_mode: if launch.capture.is_some() || launch.no_vsync {
                         PresentMode::AutoNoVsync
                     } else {
                         PresentMode::AutoVsync
@@ -466,16 +611,33 @@ pub fn run(args: &[String]) {
     .insert_resource(Time::<Fixed>::from_duration(step))
     .insert_resource(SubstepCount(4))
     .insert_resource(FlightViewConfig {
-        mode: if launch.tour {
+        route_kind: launch.route_kind,
+        mode: if launch.route {
+            FlyMode::Route
+        } else if launch.tour {
             FlyMode::Tour
         } else {
             FlyMode::Manual
         },
-        spawn_direction: restored
-            .map(|pose| pose.position.normalize_or(Vec3::Y))
-            .unwrap_or_else(|| spawn_direction(&launch)),
+        // The route always starts from the walker's dry-land spawn, not
+        // wherever the world's last flight ended.
+        spawn_direction: if launch.route {
+            spawn_direction(&launch)
+        } else {
+            restored
+                .map(|pose| pose.position.normalize_or(Vec3::Y))
+                .unwrap_or_else(|| spawn_direction(&launch))
+        },
         spawn_altitude: 240.0,
-        minimum_clearance: if launch.tour { 45.0 } else { 1.6 },
+        // The tour keeps 45 m above the ground; the route lands, so it keeps
+        // only the walker's eye height.
+        minimum_clearance: if launch.route {
+            1.6
+        } else if launch.tour {
+            45.0
+        } else {
+            1.6
+        },
         startup_camera: !photo,
         ..default()
     })
@@ -483,6 +645,13 @@ pub fn run(args: &[String]) {
     // rides the edit log rather than a timer, so what comes back is what was
     // held when the last block moved.
     .insert_resource(hotbar)
+    // And the tool in hand, which the save records whenever it changes.
+    .insert_resource(tools)
+    .init_resource::<equipment::Picker>()
+    // Whose roster the guide and the icons read, in every mode; the fish
+    // themselves come with the walker.
+    .init_resource::<pbd_app::fish::Body>()
+    .init_resource::<guide::GuidePage>()
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -494,6 +663,7 @@ pub fn run(args: &[String]) {
         running: launch.time.is_none() && launch.day.is_none() && launch.capture.is_none(),
     })
     .init_resource::<digging::Aim>()
+    .init_resource::<digging::Mining>()
     .insert_resource(ClearColor(if std::env::var("PBD_NO_SKY").is_ok() {
         // The hole detector's background: nothing in the palette is near it,
         // so a magenta pixel is a pixel with no world behind it.
@@ -511,12 +681,20 @@ pub fn run(args: &[String]) {
         frame_ms: 0.0,
         samples: Vec::new(),
         previous: Instant::now(),
+        started: Instant::now(),
     })
     .insert_resource(launch.clone())
     .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
     .add_systems(
         Startup,
-        (scene::setup, hud::setup, photo_camera, overlay_ui::spawn),
+        (
+            scene::setup,
+            hud::setup,
+            frame_graph::setup,
+            photo_camera,
+            overlay_ui::spawn,
+            cracks::spawn,
+        ),
     )
     // The column tier is built by a startup system and its records land when
     // that schedule's commands apply, so a camera that wants to stand inside a
@@ -526,12 +704,18 @@ pub fn run(args: &[String]) {
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
     .add_systems(Startup, menu::spawn)
-    .add_systems(PostStartup, slots::spawn)
+    .add_systems(
+        PostStartup,
+        (
+            slots::spawn,
+            (slots::load_icons, (equipment::spawn, guide::spawn)).chain(),
+        ),
+    )
     // Escape is read before either of the world's input readers, which live in
     // `RunFixedMainLoop`, and is cleared there so neither ever sees it.
     .add_systems(
         PreUpdate,
-        (menu::name_input, menu::toggle)
+        (menu::name_input, menu::toggle, guide::open)
             .chain()
             .after(bevy::input::InputSystems),
     )
@@ -542,15 +726,20 @@ pub fn run(args: &[String]) {
             scene::move_moon,
             scene::turn_stars,
             scene::follow_sun,
-            slots::input,
+            (equipment::pick, slots::input, equipment::paint).chain(),
             slots::update,
+            guide::press,
+            guide::paint,
             hud::near_field,
+            (frame_graph::toggle, frame_graph::update).chain(),
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
             overlay_ui::show,
             autosave,
             save_weather,
-            digging::dig_and_place,
+            (digging::dig_and_place, cracks::show)
+                .chain()
+                .before(pbd_app::fish::FishSet),
             digging::scripted_dig,
             capture,
         ),
@@ -558,7 +747,11 @@ pub fn run(args: &[String]) {
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
     .add_systems(PreUpdate, load_world.after(menu::toggle))
-    .add_systems(Last, (measure_frames, drain_saves));
+    .insert_resource(FrameLog::open(launch.frame_log.as_deref()))
+    .add_systems(
+        Last,
+        ((measure_frames, write_frame_log).chain(), drain_saves),
+    );
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
@@ -569,9 +762,35 @@ pub fn run(args: &[String]) {
             }),
             pitch: launch.pitch.unwrap_or(0.0).to_radians(),
             yaw: launch.yaw.unwrap_or(0.0).to_radians(),
+            turn: launch.turn.to_radians(),
             ..default()
         })
-        .add_plugins(WalkingPlugin);
+        .add_plugins((
+            WalkingPlugin,
+            pbd_app::vehicles::VehiclePlugin,
+            pbd_app::fish::FishPlugin,
+            pbd_app::held::HeldPlugin,
+        ))
+        .insert_resource(pbd_app::vehicles::VehicleScript {
+            board: launch.aboard,
+            seat: launch.seat,
+        });
+        if launch.break_s.is_some() || launch.tool.is_some() {
+            app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
+        }
+        if launch.fish {
+            app.add_systems(
+                PreUpdate,
+                (swim_script, fish_script)
+                    .chain()
+                    .after(bevy::input::InputSystems),
+            );
+        }
+        if launch.walk_distance.is_some() {
+            // Where the swim's keys go, for the same reason (below).
+            app.init_resource::<WalkProgress>()
+                .add_systems(PreUpdate, walk_script.after(bevy::input::InputSystems));
+        }
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
             // after the input clear and before the walking input reads them,
@@ -647,6 +866,11 @@ fn load_world(world: &mut World) {
         return;
     };
     let name = slot.file.name.clone();
+    // The craft of the world being left are written into it before the queue
+    // is drained, and are gone from the scene before the next world's arrive.
+    if let Some(file) = pbd_app::vehicles::put_away(world) {
+        world.resource_mut::<WorldSave>().snapshot_vehicles(&file);
+    }
     let root = {
         let open = world.resource::<WorldSave>();
         // Everything queued for the world being left goes down before the
@@ -657,6 +881,7 @@ fn load_world(world: &mut World) {
     };
     let mut opened = WorldSave::open(root, slot);
     let hotbar = slots::Hotbar::restore(&mut opened);
+    let tools = pbd_app::fish::ToolSlot::restore(&opened);
     let pose = opened.pose;
     // The world resumes in its season and at its hour; one never played
     // keeps the clock it had.
@@ -679,6 +904,11 @@ fn load_world(world: &mut World) {
     world.insert_resource(air);
     world.insert_resource(opened);
     world.insert_resource(hotbar);
+    world.insert_resource(tools);
+    // The water of the world being left is not this world's water.
+    if let Some(mut fishery) = world.get_resource_mut::<pbd_app::fish::Fishery>() {
+        *fishery = pbd_app::fish::Fishery::default();
+    }
     // The tier is standing where the last world left it with the last world's
     // holes in it. The distance rule cannot know that, so the load says so.
     if let Some(mut refresh) = world.get_resource_mut::<pbd_app::planet::LodRefresh>() {
@@ -755,11 +985,16 @@ fn autosave(
 fn drain_saves(
     exits: MessageReader<AppExit>,
     air: Option<Res<pbd_app::atmosphere::Air>>,
+    fleet: Option<Res<pbd_app::vehicles::Fleet>>,
+    vehicles: Query<&pbd_app::vehicles::Vehicle>,
     mut save: ResMut<WorldSave>,
 ) {
     if !exits.is_empty() {
         if let Some(air) = air {
             save.snapshot_weather(air.now.to_bytes());
+        }
+        if let Some(file) = fleet.and_then(|f| pbd_app::vehicles::fleet_file(&f, &vehicles)) {
+            save.snapshot_vehicles(&file);
         }
         save.drain();
     }
@@ -1361,11 +1596,115 @@ fn photo_camera(
     commands.spawn((Camera3d::default(), transform));
 }
 
+/// How far the `--walk-distance` walk has come, for the frame log.
+#[derive(Resource, Default)]
+struct WalkProgress {
+    walked_m: f32,
+    started: Option<Instant>,
+    last: Option<Vec3>,
+    /// Where the walker was when the stall clock last reset, and when.
+    anchor: Option<(Vec3, Instant)>,
+    turns: u32,
+    done: bool,
+}
+
+/// The `--walk-distance` instrument: sprint forward, measure the path actually
+/// walked, jump when stalled, dig ahead after 2.5 s, turn 45 degrees after 7, and
+/// quit at the distance.
+// Eight parameters: the instrument drives keys, mouse and tool, reads the
+// walker, and quits; a struct of them would be a struct with one caller.
+#[allow(clippy::too_many_arguments)]
+fn walk_script(
+    launch: Res<Launch>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    mut progress: ResMut<WalkProgress>,
+    walkers: Query<&Position, With<pbd_app::walking::Walker>>,
+    mut mouse: ResMut<ButtonInput<MouseButton>>,
+    mut tools: ResMut<pbd_app::fish::ToolSlot>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    let Some(goal) = launch.walk_distance else {
+        return;
+    };
+    if !state.active || progress.done {
+        return;
+    }
+    let Ok(position) = walkers.single() else {
+        return;
+    };
+    let here = position.0;
+    let now = Instant::now();
+    state.captured = true;
+    state.scripted = true;
+    let started = *progress.started.get_or_insert_with(|| {
+        info!("WALK_START {goal:.0} m");
+        now
+    });
+    // The pickaxe in hand, so a stall can dig its way out.
+    tools.hold(pbd_core::inventory::Tool::Pickaxe);
+    if let Some(last) = progress.last {
+        // Ground covered: the great-circle distance between the two points'
+        // directions, so a fall or a jump is not walking. A teleport (a rebase
+        // or a respawn) is not walking either.
+        let step = here
+            .normalize_or(Vec3::Y)
+            .angle_between(last.normalize_or(Vec3::Y))
+            * pbd_app::planet::PLANET_RADIUS;
+        if step < 5.0 {
+            progress.walked_m += step;
+        }
+    }
+    progress.last = Some(here);
+    keys.press(KeyCode::KeyW);
+    keys.press(KeyCode::ShiftLeft);
+    let (anchor, since) = *progress.anchor.get_or_insert((here, now));
+    if here.distance(anchor) > 4.0 {
+        progress.anchor = Some((here, now));
+    } else {
+        let stalled = now.duration_since(since).as_secs_f32();
+        // Stuck, as a player gets unstuck: jump (a tap every 0.7 s, released
+        // between so each counts), then dig through what is in front with the
+        // pickaxe, and only then turn. (Fly is F, not the jump key.)
+        let pulse = |period: f32| (stalled % period) < 0.05;
+        if stalled > 0.6 && pulse(0.7) {
+            keys.press(KeyCode::Space);
+        } else {
+            keys.release(KeyCode::Space);
+        }
+        if stalled > 2.5 && pulse(0.4) {
+            mouse.press(MouseButton::Left);
+        } else {
+            mouse.release(MouseButton::Left);
+        }
+        if stalled > 7.0 {
+            let up = here.normalize_or(Vec3::Y);
+            let ahead = state.view().0;
+            let turned = Quat::from_axis_angle(up, std::f32::consts::FRAC_PI_4) * ahead;
+            state.face(up, turned);
+            progress.turns += 1;
+            progress.anchor = Some((here, now));
+            info!("WALK_TURN stalled 7 s at {:.0} m walked", progress.walked_m);
+        }
+    }
+    if progress.walked_m >= goal {
+        progress.done = true;
+        info!(
+            "WALK_DONE {:.0} m in {:.1} s, {} turns",
+            progress.walked_m,
+            now.duration_since(started).as_secs_f32(),
+            progress.turns
+        );
+        exit.write(AppExit::Success);
+    }
+}
+
 /// The scripted swim: put the walker at the last dry cell of the `shore` walk
 /// and hold forward. It is the only way a headless capture can photograph the
 /// water being entered, since a walker with no input stands still, and it is
 /// the same shoreline the `shore`, `wade` and `dive` camera presets frame.
 fn swim_script(
+    launch: Res<Launch>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
     mut state: ResMut<pbd_app::walking::WalkingState>,
     mut placed: Local<bool>,
@@ -1383,7 +1722,9 @@ fn swim_script(
         return;
     }
     if !*placed {
-        let lat = 72_f32.to_radians();
+        // The swim's shore is a cold one; a fishing shore is warm enough
+        // for the schools' windows on day one.
+        let lat = if launch.fish { 24_f32 } else { 72_f32 }.to_radians();
         let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
         let step = 2.0 * tile_width_m(FINEST_LEVEL) / PLANET_RADIUS;
         let mut lon = 0.0_f32;
@@ -1393,8 +1734,21 @@ fn swim_script(
         while surface_height(at(lon)) >= 0.0 && lon < 2.0 * std::f32::consts::TAU {
             lon += step;
         }
+        // A fishing shore is the edge of open water: a river channel is also
+        // below the datum, and the first one found at 24 degrees was a dry
+        // canyon the float landed in. Twenty wet cells in a row is a sea.
+        if launch.fish {
+            let open = |lon: f32| (0..20).all(|k| surface_height(at(lon + k as f32 * step)) < -1.0);
+            while !(surface_height(at(lon - step)) >= 0.0 && open(lon))
+                && lon < 3.0 * std::f32::consts::TAU
+            {
+                lon += step;
+            }
+        }
         // The last dry cell, a few cells back from the water, facing the sea.
-        let land = at(lon - 4.0 * step);
+        // An angler stands at the water's edge rather than up the bank: a
+        // cast carries ten to twenty metres.
+        let land = at(lon - if launch.fish { 1.0 } else { 4.0 } * step);
         let sea = at(lon);
         let Ok((mut position, mut ground, mut transform)) = walkers.single_mut() else {
             return;
@@ -1409,7 +1763,85 @@ fn swim_script(
         state.face(land, (sea - land).normalize_or_zero());
         *placed = true;
     }
-    keys.press(KeyCode::KeyW);
+    if launch.swim {
+        keys.press(KeyCode::KeyW);
+    }
+}
+
+/// `--break SECONDS`: from frame 90, hold the use button on whatever is under
+/// the reticle for that long with `--tool` in hand, so the cracks can be
+/// photographed at a chosen stage. A capture instrument: a headless run has
+/// no hand on the mouse.
+fn break_script(
+    launch: Res<Launch>,
+    time: Res<Time>,
+    mut buttons: ResMut<ButtonInput<MouseButton>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    mut tools: ResMut<pbd_app::fish::ToolSlot>,
+    mut frame: Local<u32>,
+    mut held_s: Local<f32>,
+) {
+    *frame += 1;
+    if *frame < 90 || !state.active {
+        return;
+    }
+    tools.hold(launch.tool.unwrap_or(pbd_core::inventory::Tool::Shovel));
+    let Some(hold) = launch.break_s else {
+        return;
+    };
+    state.captured = true;
+    state.scripted = true;
+    if *held_s < hold {
+        buttons.press(MouseButton::Left);
+        *held_s += time.delta_secs();
+        if *held_s >= hold {
+            info!("break script: held the use button {hold:.2} s");
+        }
+    } else {
+        buttons.release(MouseButton::Left);
+    }
+}
+
+/// One scripted cast for `--fish`: the left button held for most of a second
+/// from frame 90, and the fishery's state logged every second, so a run says
+/// what the water held as well as showing it.
+fn fish_script(
+    mut buttons: ResMut<ButtonInput<MouseButton>>,
+    fishery: Option<Res<pbd_app::fish::Fishery>>,
+    status: Option<Res<pbd_app::fish::FishingStatus>>,
+    fauna: Res<pbd_app::config::FaunaConfig>,
+    mut frame: Local<u32>,
+) {
+    *frame += 1;
+    match *frame {
+        90 => buttons.press(MouseButton::Left),
+        91..=149 => {}
+        150 => buttons.release(MouseButton::Left),
+        _ => {}
+    }
+    if frame.is_multiple_of(60)
+        && let (Some(fishery), Some(status)) = (fishery, status)
+    {
+        let roster = fauna.0.roster(pbd_core::fauna::HOME_BODY);
+        let schools: Vec<String> = fishery
+            .schools
+            .iter()
+            .map(|s| {
+                let name = roster
+                    .get(s.species as usize)
+                    .map_or("?", |sp| sp.id.as_str());
+                format!("{name} x{}", s.len())
+            })
+            .collect();
+        info!(
+            "fish script frame {}: line {:?}, {} schools [{}], status {:?}",
+            *frame,
+            fishery.line.phase,
+            schools.len(),
+            schools.join(", "),
+            status.text
+        );
+    }
 }
 
 fn capture(
@@ -1509,6 +1941,57 @@ fn capture(
     }
 }
 
+/// The `--frame-log` CSV, open for the run when asked for.
+#[derive(Resource)]
+struct FrameLog(Option<std::io::BufWriter<std::fs::File>>);
+
+impl FrameLog {
+    fn open(path: Option<&std::path::Path>) -> Self {
+        Self(path.map(|path| {
+            use std::io::Write;
+            let file = std::fs::File::create(path)
+                .unwrap_or_else(|error| panic!("--frame-log {}: {error}", path.display()));
+            let mut out = std::io::BufWriter::new(file);
+            writeln!(
+                out,
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m"
+            )
+            .expect("frame log header");
+            out
+        }))
+    }
+}
+
+/// One row per frame: the frame's wall time, the fine set drawn, the age of
+/// the rebuild in flight (empty when none), and how high and fast the player
+/// is, so an over-budget frame lines up with what the streaming was doing.
+fn write_frame_log(
+    mut log: ResMut<FrameLog>,
+    stats: Res<FrameStats>,
+    fine: Res<pbd_app::planet::PlanetFine>,
+    near: Res<pbd_app::planet::NearField>,
+    readout: Option<Res<pbd_app::flight_view::FlightReadout>>,
+    walk: Option<Res<WalkProgress>>,
+) {
+    use std::io::Write;
+    let Some(out) = log.0.as_mut() else {
+        return;
+    };
+    let Some(ms) = stats.samples.last() else {
+        return;
+    };
+    let rebuild = near.rebuild_s.map_or(String::new(), |s| format!("{s:.3}"));
+    let (clearance, speed) = readout.map_or((f32::NAN, f32::NAN), |r| (r.clearance, r.speed));
+    let _ = writeln!(
+        out,
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1}",
+        stats.samples.len(),
+        stats.started.elapsed().as_secs_f64(),
+        fine.version,
+        walk.map_or(f32::NAN, |walk| walk.walked_m)
+    );
+}
+
 fn measure_frames(mut stats: ResMut<FrameStats>) {
     // Presentation handles interactive pacing. A second main-thread sleep
     // delayed freshly sampled mouse input without improving displayed motion.
@@ -1519,6 +2002,89 @@ fn measure_frames(mut stats: ResMut<FrameStats>) {
     if stats.samples.len() < 100_000 {
         stats.samples.push(ms);
     }
+}
+
+/// `--verify-route far-side`: fly the whole route headless and report what the
+/// window would show: that it completes and lands where it meant to, its peak
+/// height, its clearance while airborne, and the camera rig's fastest turn.
+/// A route's name as `--route` and `--verify-route` take it.
+fn route_kind(name: &str) -> pbd_app::flight_view::RouteKind {
+    match name {
+        "far-side" => pbd_app::flight_view::RouteKind::FarSide,
+        "scenic" => pbd_app::flight_view::RouteKind::Scenic,
+        other => panic!("--route knows far-side and scenic, not {other}"),
+    }
+}
+
+fn verify_route(kind: pbd_app::flight_view::RouteKind) {
+    let mut app = pbd_app::headless_app();
+    app.add_plugins(FlightViewPlugin)
+        .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
+        .insert_resource(FlightViewConfig {
+            mode: FlyMode::Route,
+            route_kind: kind,
+            spawn_direction: Vec3::new(0.8776, 0.4794, 0.0).normalize(),
+            minimum_clearance: 1.6,
+            startup_camera: false,
+            ..default()
+        });
+    app.finish();
+    app.cleanup();
+    app.update();
+    for _ in 0..60_000 {
+        app.update();
+        if app
+            .world()
+            .resource::<pbd_app::flight_view::RouteState>()
+            .completed
+        {
+            break;
+        }
+    }
+    let config = *app.world().resource::<FlightViewConfig>();
+    let r = app
+        .world()
+        .resource::<pbd_app::flight_view::RouteState>()
+        .clone();
+    let t = *app.world().resource::<TourProgress>();
+    let report = format!(
+        "ROUTE {} completed={} seconds={:.1} destination_deg={:.2} touchdown_error_m={:.1} peak_height_m={:.0} min_airborne_clearance_m={:.1} at_m={:.0} max_speed_m_s={:.1} max_camera_rate_rad_s={:.3} protection_events={}\n",
+        kind.name(),
+        r.completed,
+        r.elapsed_s,
+        r.destination_rad.to_degrees(),
+        r.touchdown_error_m,
+        r.peak_height_m,
+        r.min_airborne_clearance_m,
+        r.min_airborne_at_m,
+        r.max_speed_mps,
+        r.max_camera_rate_rad_s,
+        t.protection_events,
+    );
+    print!("{report}");
+    std::fs::create_dir_all("output/captures").unwrap();
+    std::fs::write(format!("output/captures/route-{}.txt", kind.name()), report).unwrap();
+    assert!(r.completed, "the route did not land and settle");
+    assert!(
+        r.touchdown_error_m < 30.0,
+        "landed away from the destination"
+    );
+    match kind {
+        pbd_app::flight_view::RouteKind::FarSide => assert!(
+            r.peak_height_m > config.route_cruise_height_m * 0.95,
+            "never reached cruise height"
+        ),
+        // Low over the land, never into it.
+        pbd_app::flight_view::RouteKind::Scenic => assert!(
+            r.min_airborne_clearance_m > 30.0,
+            "the scenic route came within 30 m of the ground"
+        ),
+    }
+    assert!(
+        r.max_speed_mps <= config.route_speed + 0.5,
+        "route speed exceeded"
+    );
+    assert!(r.max_camera_rate_rad_s < 1.0, "the camera turned too fast");
 }
 
 fn verify_flight(polar: bool) {

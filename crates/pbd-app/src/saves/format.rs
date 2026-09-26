@@ -19,7 +19,7 @@
 //! missing is a file with nothing in it.
 
 use pbd_core::edits::Edit;
-use pbd_core::inventory::{Item, SLOTS, Slots, Stack, Tool};
+use pbd_core::inventory::{Equipment, Item, SLOTS, Slots, Stack, Tool};
 use pbd_core::terrain::Material;
 use serde::{Deserialize, Serialize};
 
@@ -39,10 +39,45 @@ pub enum Record {
     /// is dealt what it missed, and this is what says it was, so it is never
     /// dealt twice.
     Kit { version: u32, slots: Slots },
+    /// A fish was caught and went into the hotbar, which this line carries
+    /// whole: the fish, and the field guide's record of it, reach the disk in
+    /// one line.
+    Catch {
+        species: u16,
+        length_cm: u32,
+        slots: Slots,
+    },
+    /// The tool in hand changed, and which tools are owned.
+    Hand { equipment: Equipment },
 }
 
 /// The kit line's leading token, which no cell number can be.
 const KIT: &str = "kit";
+/// A catch's.
+const CATCH: &str = "catch";
+/// A change of tool's.
+const HAND: &str = "hand";
+
+/// A tool's saved code. `t0` was the pick placeholder, which nothing ever
+/// constructed, so the pickaxe keeps it.
+pub fn tool_code(tool: Tool) -> u8 {
+    match tool {
+        Tool::Pickaxe => 0,
+        Tool::Shovel => 1,
+        Tool::Axe => 2,
+        Tool::Rod => 3,
+    }
+}
+
+pub fn tool_of(code: u8) -> Option<Tool> {
+    Some(match code {
+        0 => Tool::Pickaxe,
+        1 => Tool::Shovel,
+        2 => Tool::Axe,
+        3 => Tool::Rod,
+        _ => return None,
+    })
+}
 
 /// The material a saved code names, and the code it is saved as.
 ///
@@ -94,9 +129,13 @@ fn stack_text(stack: Option<Stack>) -> String {
             count,
         }) => format!("b{},{count}", material_code(material)),
         Some(Stack {
-            item: Item::Tool(Tool::Pick),
+            item: Item::Tool(tool),
             count,
-        }) => format!("t0,{count}"),
+        }) => format!("t{},{count}", tool_code(tool)),
+        Some(Stack {
+            item: Item::Fish(species),
+            count,
+        }) => format!("f{species},{count}"),
     }
 }
 
@@ -109,10 +148,8 @@ fn stack_of(text: &str) -> Option<Option<Stack>> {
     let count: u16 = count.parse().ok()?;
     let item = match kind {
         "b" => Item::Block(material_of(code.parse().ok()?)?),
-        "t" => match code {
-            "0" => Item::Tool(Tool::Pick),
-            _ => return None,
-        },
+        "t" => Item::Tool(tool_of(code.parse().ok()?)?),
+        "f" => Item::Fish(code.parse().ok()?),
         _ => return None,
     };
     Some(Some(Stack::new(item, count)))
@@ -145,6 +182,24 @@ fn push_slots(line: &mut String, slots: &Slots) {
     line.push('\n');
 }
 
+/// `catch species length_cm s0 s1 .. s9`, one line.
+pub fn catch_line_of(species: u16, length_cm: u32, slots: &Slots) -> String {
+    let mut line = format!("{CATCH} {species} {length_cm}");
+    push_slots(&mut line, slots);
+    line
+}
+
+/// `hand tool owned`, one line: the tool's code and one bit per tool owned,
+/// in `Tool::ALL` order.
+pub fn hand_line_of(equipment: &Equipment) -> String {
+    let owned = equipment
+        .owned()
+        .iter()
+        .enumerate()
+        .fold(0u8, |bits, (i, owns)| bits | (u8::from(*owns) << i));
+    format!("{HAND} {} {owned}\n", tool_code(equipment.held()))
+}
+
 /// The ten slot fields of a line, or `None` where there are not exactly ten.
 fn slots_of(carried: &[&str]) -> Option<Slots> {
     if carried.len() != SLOTS {
@@ -160,6 +215,30 @@ fn slots_of(carried: &[&str]) -> Option<Slots> {
 pub fn parse_line(line: &str) -> Option<Record> {
     let mut parts = line.split_whitespace();
     let head = parts.next()?;
+    if head == CATCH {
+        let species = parts.next()?.parse().ok()?;
+        let length_cm = parts.next()?.parse().ok()?;
+        let carried: Vec<&str> = parts.collect();
+        return Some(Record::Catch {
+            species,
+            length_cm,
+            slots: slots_of(&carried)?,
+        });
+    }
+    if head == HAND {
+        let held = tool_of(parts.next()?.parse().ok()?)?;
+        let bits: u8 = parts.next()?.parse().ok()?;
+        if parts.next().is_some() || bits >= 1 << Tool::ALL.len() {
+            return None;
+        }
+        let mut owned = [false; 4];
+        for (i, owns) in owned.iter_mut().enumerate() {
+            *owns = bits & (1 << i) != 0;
+        }
+        return Some(Record::Hand {
+            equipment: Equipment::from_parts(owned, held),
+        });
+    }
     if head == KIT {
         let version = parts.next()?.parse().ok()?;
         let carried: Vec<&str> = parts.collect();
@@ -255,8 +334,56 @@ mod tests {
         let mut slots = Slots::new();
         slots.give(Item::Block(Material::Grass), 64);
         slots.give(Item::Block(Material::Stone), 7);
-        slots.give(Item::Tool(Tool::Pick), 1);
+        slots.give(Item::Tool(Tool::Pickaxe), 1);
+        slots.give(Item::Fish(6), 3);
         slots
+    }
+
+    /// Every tool code comes back as the tool it was, and the pickaxe keeps
+    /// the placeholder's `t0`.
+    #[test]
+    fn every_tool_has_one_code_and_the_pickaxe_keeps_t0() {
+        assert_eq!(tool_code(Tool::Pickaxe), 0);
+        for tool in Tool::ALL {
+            assert_eq!(tool_of(tool_code(tool)), Some(tool));
+        }
+        assert_eq!(tool_of(9), None);
+    }
+
+    /// A catch line carries the species, the length and the hotbar the fish
+    /// went into; a change of tool carries the tool and what is owned.
+    #[test]
+    fn a_catch_and_a_change_of_tool_survive_the_round_trip() {
+        assert_eq!(
+            parse_line(&catch_line_of(5, 44, &kit())),
+            Some(Record::Catch {
+                species: 5,
+                length_cm: 44,
+                slots: kit()
+            })
+        );
+        let mut hand = Equipment::default();
+        hand.hold(Tool::Axe);
+        assert_eq!(
+            parse_line(&hand_line_of(&hand)),
+            Some(Record::Hand { equipment: hand })
+        );
+        let partial = Equipment::from_parts([true, false, true, false], Tool::Pickaxe);
+        assert_eq!(
+            parse_line(&hand_line_of(&partial)),
+            Some(Record::Hand { equipment: partial })
+        );
+        for bad in [
+            "catch 5",
+            "catch 5 44 b3,1",
+            "hand",
+            "hand 3",
+            "hand 9 15",
+            "hand 3 16",
+            "hand 3 15 x",
+        ] {
+            assert!(parse_line(bad).is_none(), "{bad:?} parsed");
+        }
     }
 
     /// The save is the only thing that carries a world between two runs, so

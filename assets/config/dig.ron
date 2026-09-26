@@ -1,0 +1,22 @@
+// How long a block takes to break (pbd_core::dig), in seconds: a matrix of
+// one time per digging tool for each class of material. The fastest tool in
+// each row is the one that material wants: the shovel for dirt (grass, soil,
+// dirt, sand, snow), the pickaxe for stone, rock and ore, the axe for wood.
+// A test holds the shipped rows to that. The rod breaks nothing. With the
+// button held, the next block starts between_s after the last one broke.
+//
+// The wood row waits on trees: no material is wood until they can be felled.
+//
+// The code defaults written out; a test holds the two together. Why these
+// numbers, cell by cell: openspec/changes/fishing-and-equipment/design.md
+// section 3.
+(
+    //        shovel        pickaxe        axe
+    dirt:   (shovel: 0.5, pickaxe: 1.5, axe: 1.2),
+    stone:  (shovel: 4.0, pickaxe: 1.2, axe: 3.0),
+    rock:   (shovel: 5.0, pickaxe: 1.6, axe: 4.0),
+    ore:    (shovel: 6.5, pickaxe: 2.0, axe: 5.5),
+    wood:   (shovel: 2.5, pickaxe: 2.0, axe: 0.6),
+    placed: (shovel: 0.1, pickaxe: 0.1, axe: 0.1),
+    between_s: 0.15,
+)

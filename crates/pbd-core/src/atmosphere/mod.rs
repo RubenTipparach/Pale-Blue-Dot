@@ -93,6 +93,9 @@ pub struct Sample {
     pub temperature: f32,
     /// Optical depth of the column's cloud, for lighting it.
     pub optical_depth: f32,
+    /// The wind the sea state has caught up with, m/s: the speed that sets
+    /// the waves' height, lagging the wind by `sea_build_s`. Zero over land.
+    pub sea: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -124,6 +127,8 @@ pub struct Atmosphere {
     pub eta: Vec<f32>,
     /// Surface current, m/s; zero on land.
     pub current: Vec<Vec3>,
+    /// The wind speed the waves have caught up with, m/s; zero on land.
+    pub sea: Vec<f32>,
     // --- What the last step worked out, for sampling and drawing ---
     /// Precipitation, kg/m^2/s.
     pub rain_rate: Vec<f32>,
@@ -163,6 +168,7 @@ impl Atmosphere {
             charge: vec![0.0; n],
             eta: vec![0.0; n],
             current: vec![Vec3::ZERO; n],
+            sea: vec![0.0; n],
             rain_rate: vec![0.0; n],
             lift: vec![0.0; n],
             upper: vec![Vec3::ZERO; n],
@@ -297,6 +303,11 @@ impl Atmosphere {
             sunlight: weighted(&self.sunlight, cells, w).max(0.0),
             temperature: ground,
             optical_depth: cloud.max(self.water_for_cover(humid)) * 20.0,
+            sea: if ocean_share > 0.5 {
+                weighted(&self.sea, cells, w).max(0.0)
+            } else {
+                0.0
+            },
         }
     }
 
@@ -341,8 +352,15 @@ impl Atmosphere {
     /// world and level. Refuses anything else, whole, leaving `self` as it was.
     pub fn restore(&mut self, bytes: &[u8]) -> Result<(), String> {
         let n = self.grid.len();
-        let want = MAGIC.len() + 16 + n * 4 * (SCALARS + 6);
-        if bytes.len() != want || &bytes[..MAGIC.len()] != MAGIC {
+        // A save from before the sea state (`PBDATM01`) has one scalar field
+        // fewer; its sea is taken to have caught up with its wind.
+        let scalars_saved = match &bytes[..MAGIC.len().min(bytes.len())] {
+            m if m == MAGIC => SCALARS,
+            m if m == MAGIC_V1 => SCALARS - 1,
+            _ => return Err("weather state has an unknown header".into()),
+        };
+        let want = MAGIC.len() + 16 + n * 4 * (scalars_saved + 6);
+        if bytes.len() != want {
             return Err(format!(
                 "weather state is {} bytes, expected {want}",
                 bytes.len()
@@ -363,7 +381,7 @@ impl Atmosphere {
             .chunks_exact(4)
             .map(|b| f32::from_le_bytes(b.try_into().expect("four bytes")));
         let mut read = |len: usize| -> Vec<f32> { (&mut floats).take(len).collect() };
-        let scalars: Vec<Vec<f32>> = (0..SCALARS).map(|_| read(n)).collect();
+        let scalars: Vec<Vec<f32>> = (0..scalars_saved).map(|_| read(n)).collect();
         let vectors: Vec<Vec<Vec3>> = (0..2)
             .map(|_| read(n * 3).chunks_exact(3).map(Vec3::from_slice).collect())
             .collect();
@@ -387,6 +405,10 @@ impl Atmosphere {
         let mut vectors = vectors.into_iter();
         self.wind = vectors.next().expect("wind");
         self.current = vectors.next().expect("current");
+        self.sea = match scalars.next() {
+            Some(sea) => sea,
+            None => self.settled_sea(),
+        };
         // The mesoscale noise is not saved: it is a function of the step it
         // was last refreshed at, so it is refreshed again as of that step.
         // The step refreshes it when it begins on a multiple of the period;
@@ -410,12 +432,28 @@ impl Atmosphere {
             &self.cloud,
             &self.charge,
             &self.eta,
+            &self.sea,
         ]
+    }
+
+    /// The sea state a wind that has blown a long time raises: the wind's own
+    /// speed over the sea, nothing over land.
+    pub fn settled_sea(&self) -> Vec<f32> {
+        (0..self.grid.len())
+            .map(|i| {
+                if self.surface.ocean[i] {
+                    self.wind[i].length()
+                } else {
+                    0.0
+                }
+            })
+            .collect()
     }
 }
 
-const MAGIC: &[u8; 8] = b"PBDATM01";
-const SCALARS: usize = 7;
+const MAGIC: &[u8; 8] = b"PBDATM02";
+const MAGIC_V1: &[u8; 8] = b"PBDATM01";
+const SCALARS: usize = 8;
 
 /// A latitude's rough year-round temperature at sea level, deg C, from the
 /// sine of the latitude: where a new world's weather starts.

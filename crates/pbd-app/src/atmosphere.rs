@@ -111,6 +111,11 @@ impl Air {
         self.publish(stepped);
     }
 
+    /// Whether a step is running on the pool.
+    pub fn stepping(&self) -> bool {
+        self.task.is_some()
+    }
+
     fn publish(&mut self, stepped: Stepped) {
         self.now = Arc::new(stepped.atmosphere);
         self.maps = Arc::new(stepped.maps);
@@ -155,6 +160,7 @@ pub fn cube_direction(face: usize, row: usize, column: usize, size: usize) -> Ve
 /// Resample the atmosphere onto the two weather maps.
 pub fn weather_maps(atmosphere: &Atmosphere) -> WeatherMaps {
     let texels = 6 * MAP_SIZE * MAP_SIZE;
+    let settings = atmosphere.settings;
     let mut maps = WeatherMaps {
         cloud: Vec::with_capacity(texels),
         wind: Vec::with_capacity(texels),
@@ -166,7 +172,12 @@ pub fn weather_maps(atmosphere: &Atmosphere) -> WeatherMaps {
                 let rain_mmh = s.rain_rate * 3600.0 * if s.snow { -1.0 } else { 1.0 };
                 maps.cloud
                     .push([s.cover, s.cloud_top, rain_mmh, s.optical_depth]);
-                maps.wind.push([s.upper.x, s.upper.y, s.upper.z, 0.0]);
+                // The wind that CARRIES the cloud, which is what its detail has
+                // to drift with: the steering blend at the cloud's pace. The
+                // full upper wind, which this was, slid the texture across its
+                // own cloud faster than the cloud moved (`calm-clouds`).
+                let carried = s.wind.lerp(s.upper, settings.cloud_steering) * settings.cloud_pace;
+                maps.wind.push([carried.x, carried.y, carried.z, 0.0]);
             }
         }
     }
@@ -221,6 +232,7 @@ pub fn advance_air(
     sun: Res<Sun>,
     forcing: Res<crate::weather::StormForcing>,
     weather: Res<crate::weather::Weather>,
+    lod: Option<Res<crate::planet::LodRefresh>>,
 ) {
     if let Some(task) = air.task.as_mut() {
         match block_on(future::poll_once(task)) {
@@ -241,6 +253,13 @@ pub fn advance_air(
     }
     let behind = ((now - air.at_seconds) / dt).floor() as u32;
     if behind == 0 {
+        return;
+    }
+    // Never step while the fine set is being rebuilt: each is harmless alone,
+    // but the two at once left the frame no core, and a hitch landed every
+    // second of a low flight (`far-side-flight`: 11 frames over 16.7 ms on the
+    // route, 2 with the air frozen). The step waits and catches up in one go.
+    if !air.in_place && lod.is_some_and(|lod| lod.in_flight_s().is_some()) {
         return;
     }
     let steps = behind.min(MAX_STEPS);
@@ -305,5 +324,74 @@ mod tests {
         assert!(cube_direction(0, 32, 0, 64).z > 0.5);
         assert!(cube_direction(0, 0, 32, 64).y > 0.5);
         assert!(cube_direction(4, 32, 0, 64).x < -0.5);
+    }
+
+    /// A measurement instrument for the `calm-clouds` change: how fast the
+    /// cloud the player sees moves and changes, off the shipped atmosphere.
+    /// The wind at cloud height (what drifts the detail), what that is as an
+    /// angle a second overhead at the cloud base, and how much of the cover
+    /// map changes between one published map and the next. Run with
+    /// `cargo test -p pbd-app --release --lib cloud_pace -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn cloud_pace() {
+        let settings = pbd_core::atmosphere::AtmosphereSettings::default();
+        let start = 0.4 * pbd_core::daylight::DAY_S as f64;
+        let air = Air::open(settings, TERRAIN.seed, None, start);
+        let mut atmosphere = (*air.now).clone();
+        let mut before = weather_maps(&atmosphere);
+        let speeds: Vec<f32> = before
+            .wind
+            .iter()
+            .map(|w| Vec3::new(w[0], w[1], w[2]).length())
+            .collect();
+        let mut sorted = speeds.clone();
+        sorted.sort_by(f32::total_cmp);
+        let mean = speeds.iter().sum::<f32>() / speeds.len() as f32;
+        let p90 = sorted[sorted.len() * 9 / 10];
+        let base_m = crate::sky::CLOUD_RADIUS - crate::planet::terrain::PLANET_RADIUS;
+        eprintln!(
+            "wind the cloud detail drifts with: mean {mean:.1} m/s, 90th percentile {p90:.1} m/s; \
+             overhead at the {base_m:.0} m base that is {:.2} deg/s mean, {:.2} deg/s p90",
+            (mean / base_m).to_degrees(),
+            (p90 / base_m).to_degrees()
+        );
+        let steering: Vec<f32> = atmosphere
+            .wind
+            .iter()
+            .zip(&atmosphere.upper)
+            .map(|(w, u)| (w.lerp(*u, settings.cloud_steering) * settings.cloud_pace).length())
+            .collect();
+        let surface: f32 =
+            atmosphere.wind.iter().map(|w| w.length()).sum::<f32>() / atmosphere.wind.len() as f32;
+        let steer = steering.iter().sum::<f32>() / steering.len() as f32;
+        eprintln!(
+            "per cell: surface wind {surface:.1} m/s, the steering wind that carries the \
+             cloud {steer:.1} m/s ({:.2} deg/s overhead)",
+            (steer / base_m).to_degrees()
+        );
+        let mut t = start;
+        for steps in [1u32, 1, 1, 5, 30] {
+            for _ in 0..steps {
+                t += settings.dt_s as f64;
+                atmosphere.step(Clock { seconds: t }.sun(), &[]);
+            }
+            let after = weather_maps(&atmosphere);
+            let deltas: Vec<f32> = before
+                .cloud
+                .iter()
+                .zip(&after.cloud)
+                .map(|(a, b)| (a[0] - b[0]).abs())
+                .collect();
+            let mean = deltas.iter().sum::<f32>() / deltas.len() as f32;
+            let moved = deltas.iter().filter(|d| **d > 0.05).count();
+            eprintln!(
+                "cover after {steps} step(s) of {} s: mean change {mean:.4}, {:.1}% of texels \
+                 change by more than 0.05",
+                settings.dt_s,
+                100.0 * moved as f32 / deltas.len() as f32
+            );
+            before = after;
+        }
     }
 }

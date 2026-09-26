@@ -2,7 +2,10 @@
 //! The radial terrain guard is prototype flight protection, not voxel collision.
 
 mod input;
+pub mod route;
 mod tour;
+
+pub use route::{RouteKind, RouteState};
 
 use avian3d::prelude::*;
 use bevy::{
@@ -19,6 +22,8 @@ pub enum FlyMode {
     #[default]
     Manual,
     Tour,
+    /// The far-side route: take off, climb, cruise round, land on the far side.
+    Route,
 }
 
 /// Both the windowed demo and the headless tour use this configuration.
@@ -37,6 +42,40 @@ pub struct FlightViewConfig {
     /// Camera/ship pitch below the local tangent at spawn, in radians.
     pub view_pitch_down: f32,
     pub startup_camera: bool,
+    // ---- The far-side route (`route.rs`, `far-side-flight`).
+    /// Cruise height above the ground, metres: above the atmosphere (960 m
+    /// above sea level), high enough that the planet's disc fills the view.
+    pub route_cruise_height_m: f32,
+    /// The climb's and the glide's angle above the local horizon, degrees.
+    pub route_climb_angle_deg: f32,
+    /// Speed along the path at cruise, m/s; at most the ship's safety speed.
+    pub route_speed: f32,
+    /// Speed along the path on the climb and the descent, m/s: slow enough
+    /// to round the corners into and out of the cruise.
+    pub route_climb_speed: f32,
+    /// The radius the height line's corners are rounded to, metres.
+    pub route_corner_m: f32,
+    /// How fast ground speed builds from the start and bleeds off before the
+    /// destination, m/s^2.
+    pub route_ground_accel: f32,
+    /// Vertical speed at touchdown, m/s.
+    pub route_touchdown_mps: f32,
+    /// The camera's slow sway to each side, degrees, and its bank into it.
+    pub route_sway_deg: f32,
+    pub route_bank_deg: f32,
+    /// The camera's ease time constant toward its target, seconds.
+    pub route_camera_ease_s: f32,
+    /// The fastest the route camera may turn, radians a second.
+    pub route_camera_max_rate: f32,
+    /// Reduced camera motion: the sway and bank at a third.
+    pub route_reduced_motion: bool,
+    /// Which route `FlyMode::Route` flies.
+    pub route_kind: RouteKind,
+    /// The scenic route: its height above the ground ahead, metres; its speed
+    /// along the path, m/s; its climb and glide angle, degrees.
+    pub route_scenic_height_m: f32,
+    pub route_scenic_speed: f32,
+    pub route_scenic_climb_deg: f32,
 }
 
 impl Default for FlightViewConfig {
@@ -52,6 +91,22 @@ impl Default for FlightViewConfig {
             minimum_clearance: 45.0,
             view_pitch_down: 0.31,
             startup_camera: true,
+            route_cruise_height_m: 3_000.0,
+            route_climb_angle_deg: 60.0,
+            route_speed: 550.0,
+            route_climb_speed: 260.0,
+            route_corner_m: 900.0,
+            route_ground_accel: 25.0,
+            route_touchdown_mps: 2.0,
+            route_sway_deg: 10.0,
+            route_bank_deg: 7.0,
+            route_camera_ease_s: 0.9,
+            route_camera_max_rate: 0.6,
+            route_reduced_motion: false,
+            route_kind: RouteKind::FarSide,
+            route_scenic_height_m: 90.0,
+            route_scenic_speed: 150.0,
+            route_scenic_climb_deg: 45.0,
         }
     }
 }
@@ -205,6 +260,7 @@ impl Plugin for FlightViewPlugin {
             .init_resource::<FlightReadout>()
             .init_resource::<TourProgress>()
             .init_resource::<FlightInputState>()
+            .init_resource::<RouteState>()
             .add_systems(Startup, setup_flight.in_set(FlightViewStartup))
             .add_systems(
                 RunFixedMainLoop,
@@ -227,9 +283,12 @@ impl Plugin for FlightViewPlugin {
                     .in_set(PhysicsStepSystems::Last)
                     .before(crate::enforce_safety_envelope),
             )
+            .add_systems(Update, plan_scenic)
             .add_systems(
                 PostUpdate,
-                follow_flight_camera.before(TransformSystems::Propagate),
+                (update_route_camera, follow_flight_camera)
+                    .chain()
+                    .before(TransformSystems::Propagate),
             );
     }
 }
@@ -240,6 +299,9 @@ fn spawn_pose(config: FlightViewConfig) -> (Vec3, Quat, Vec3) {
     let normal = up.cross(east).normalize();
     let radius = if config.mode == FlyMode::Tour {
         planet::PLANET_RADIUS + config.tour_altitude
+    } else if config.mode == FlyMode::Route {
+        // Standing on the ground, as far up as the terrain guard keeps it.
+        planet::terrain_radius(up) + config.minimum_clearance + 0.5
     } else {
         planet::terrain_radius(up) + config.spawn_altitude.max(config.minimum_clearance)
     };
@@ -257,7 +319,23 @@ fn setup_flight(world: &mut World) {
     assert!(config.cruise_speed > 0.0 && config.cruise_speed <= crate::SAFETY_SPEED);
     assert!(config.surface_speed > 0.0 && config.surface_speed <= config.cruise_speed);
     assert!(config.minimum_clearance.is_finite() && config.minimum_clearance >= 1.0);
+    assert!(
+        config.route_cruise_height_m > 1_000.0,
+        "the route cruises above the atmosphere"
+    );
+    assert!((10.0..=85.0).contains(&config.route_climb_angle_deg));
+    assert!(config.route_speed > 0.0 && config.route_speed <= crate::SAFETY_SPEED);
+    assert!(config.route_ground_accel > 0.0 && config.route_touchdown_mps > 0.0);
+    assert!(config.route_camera_ease_s > 0.0 && config.route_camera_max_rate > 0.0);
+    assert!(config.route_climb_speed > 0.0 && config.route_climb_speed <= config.route_speed);
+    assert!(config.route_corner_m >= 0.0);
     let (position, orientation, normal) = spawn_pose(config);
+    if config.mode == FlyMode::Route {
+        *world.resource_mut::<RouteState>() = match config.route_kind {
+            RouteKind::FarSide => RouteState::new(position.normalize(), normal),
+            RouteKind::Scenic => RouteState::scenic_pending(position.normalize()),
+        };
+    }
     let controller = ShipController {
         limits: FlightLimits {
             acceleration: config.acceleration as f64,
@@ -411,6 +489,7 @@ fn update_flight_command(
     frame: Res<PhysicsFrame>,
     mut intent: ResMut<FlightInputState>,
     progress: Res<TourProgress>,
+    route: Res<RouteState>,
     mut ships: Query<
         (
             &Position,
@@ -428,12 +507,21 @@ fn update_flight_command(
             .acceleration()
             .as_vec3();
         controller.limits.acceleration = config.acceleration as f64;
-        controller.limits.speed = if intent.cruise || config.mode == FlyMode::Tour {
+        controller.limits.speed = if config.mode == FlyMode::Route {
+            config.route_speed as f64
+        } else if intent.cruise || config.mode == FlyMode::Tour {
             config.cruise_speed as f64
         } else {
             config.surface_speed as f64
         };
-        if config.mode == FlyMode::Tour {
+        if config.mode == FlyMode::Route {
+            let (acceleration, target_rotation) =
+                route::route_command(position.0, velocity.0, &route, &config);
+            intent.target_rotation = target_rotation;
+            controller.input.thrust =
+                (rotation.0.inverse() * (acceleration - gravity) / config.acceleration).as_dvec3();
+            controller.input.inertial_dampeners = false;
+        } else if config.mode == FlyMode::Tour {
             let (acceleration, target_rotation) =
                 tour::tour_command(position.0, velocity.0, progress.normal, *config);
             intent.target_rotation = target_rotation;
@@ -513,6 +601,7 @@ fn publish_flight_readout(
     terrain: Option<Res<planet::PlanetContact>>,
     mut readout: ResMut<FlightReadout>,
     mut progress: ResMut<TourProgress>,
+    mut route: ResMut<RouteState>,
     ships: Query<
         (
             &Position,
@@ -537,13 +626,60 @@ fn publish_flight_readout(
             dampeners: intent.dampeners
                 || intent.brake
                 || !intent.captured
-                || config.mode == FlyMode::Tour,
-            cruise: intent.cruise || config.mode == FlyMode::Tour,
+                || config.mode != FlyMode::Manual,
+            cruise: intent.cruise || config.mode != FlyMode::Manual,
             protection_events: progress.protection_events,
             is_in_space: scene
                 .gravity_at(frame.0.origin + position.0.as_dvec3())
                 .is_in_space(),
         };
+        if config.mode == FlyMode::Route && !route.completed {
+            let before = route.elapsed_s;
+            route.advance(direction, time.delta_secs());
+            // Lines a recording (the obs-record skill's --start-on) or a log
+            // reader can time the flight from.
+            if before < route::HOLD_S && route.elapsed_s >= route::HOLD_S {
+                info!(
+                    "ROUTE_LIFTOFF {}: {:.1} degrees round",
+                    route.kind.name(),
+                    route.destination_rad.to_degrees()
+                );
+            }
+            let (_, left) = route.arcs_m();
+            let speed = velocity.0.length();
+            route.peak_height_m = route.peak_height_m.max(clearance);
+            route.max_speed_mps = route.max_speed_mps.max(speed);
+            // Airborne: after the lift, before the final approach.
+            if route.elapsed_s > route::HOLD_S + 5.0
+                && left > 300.0
+                && clearance < route.min_airborne_clearance_m
+            {
+                route.min_airborne_clearance_m = clearance;
+                route.min_airborne_at_m = route.arcs_m().0;
+            }
+            if route.landed_at_s.is_none()
+                && left < route::LANDED_WITHIN_M
+                && clearance < route::LANDED_BELOW_M
+                && speed < 3.0
+            {
+                route.landed_at_s = Some(route.elapsed_s);
+                let site = route.destination();
+                route.touchdown_error_m =
+                    direction.dot(site).clamp(-1.0, 1.0).acos() * planet::PLANET_RADIUS;
+                info!(
+                    "ROUTE_TOUCHDOWN {}: {:.1} s after the start, {:.1} m from the site",
+                    route.kind.name(),
+                    route.elapsed_s,
+                    route.touchdown_error_m
+                );
+            }
+            if let Some(landed) = route.landed_at_s {
+                route.completed = route.elapsed_s - landed >= route::SETTLE_S;
+                if route.completed {
+                    info!("ROUTE_COMPLETE {}", route.kind.name());
+                }
+            }
+        }
         if config.mode == FlyMode::Tour && !progress.completed {
             let sine = progress
                 .normal
@@ -565,9 +701,59 @@ fn publish_flight_readout(
     }
 }
 
+/// Lay out a pending scenic route once the weather is in hand, so it can fly
+/// into the clouds that are actually there. A headless run (no camera, no
+/// weather) plans on the land alone.
+fn plan_scenic(
+    config: Res<FlightViewConfig>,
+    air: Option<Res<crate::atmosphere::Air>>,
+    sun: Option<Res<crate::sky::Sun>>,
+    mut route: ResMut<RouteState>,
+) {
+    if config.mode != FlyMode::Route || route.kind != RouteKind::Scenic || route.planned {
+        return;
+    }
+    if air.is_none() && config.startup_camera {
+        return;
+    }
+    let start = route.start;
+    *route = RouteState::scenic(
+        start,
+        &config,
+        air.as_deref().map(|air| &*air.now),
+        sun.map(|sun| sun.direction()),
+    );
+}
+
+/// The route's camera rig, eased toward its target once a frame. Runs whether
+/// or not a camera entity exists, so the headless route check measures the
+/// same rig the window draws.
+fn update_route_camera(
+    config: Res<FlightViewConfig>,
+    time: Res<Time>,
+    mut route: ResMut<RouteState>,
+    ships: Query<&Position, With<PilotShip>>,
+) {
+    if config.mode != FlyMode::Route {
+        return;
+    }
+    let Ok(position) = ships.single() else {
+        return;
+    };
+    let target = route::camera_target(position.0, &route, &config, route.elapsed_s);
+    route::ease_camera(
+        &mut route,
+        target,
+        time.delta_secs(),
+        config.route_camera_ease_s,
+        config.route_camera_max_rate,
+    );
+}
+
 fn follow_flight_camera(
     config: Res<FlightViewConfig>,
     intent: Res<FlightInputState>,
+    route: Option<Res<RouteState>>,
     ships: Query<(&Position, &Rotation), With<PilotShip>>,
     mut cameras: Query<&mut Transform, (With<FlightCamera>, Without<PilotShip>)>,
 ) {
@@ -579,10 +765,10 @@ fn follow_flight_camera(
     };
     for mut transform in &mut cameras {
         transform.translation = position.0;
-        transform.rotation = if config.mode == FlyMode::Manual {
-            intent.target_rotation
-        } else {
-            rotation.0
+        transform.rotation = match config.mode {
+            FlyMode::Manual => intent.target_rotation,
+            FlyMode::Route => route.as_ref().map_or(rotation.0, |route| route.camera),
+            FlyMode::Tour => rotation.0,
         };
     }
 }
@@ -627,7 +813,7 @@ mod tests {
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
             keys.release(KeyCode::KeyW);
-            keys.press(KeyCode::KeyR);
+            keys.press(KeyCode::KeyH);
         }
         app.update();
         let (position, rotation, velocity) = ships.single(app.world()).unwrap();

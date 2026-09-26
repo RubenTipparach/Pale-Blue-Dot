@@ -31,6 +31,8 @@ pub enum Screen {
     Pause,
     Settings,
     Saves,
+    /// The field guide, opened with J.
+    Guide,
 }
 
 impl Screen {
@@ -51,7 +53,7 @@ impl Screen {
         }
         match self {
             Screen::Playing => Screen::Pause,
-            Screen::Pause => Screen::Playing,
+            Screen::Pause | Screen::Guide => Screen::Playing,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }
@@ -82,6 +84,8 @@ pub enum MenuAction {
     Weather(u8),
     /// Show this overlay: 0 is off, then `Overlay::ALL` in order.
     Overlay(u8),
+    /// Open this species' entry in the field guide (`guide::press` acts).
+    Species(u16),
 }
 
 /// Whether the saves page is the screen the game opened on and no world has
@@ -226,7 +230,7 @@ type TouchedRows<'w, 's> = Query<
 
 /// Marks a panel with the screen it belongs to.
 #[derive(Component)]
-pub struct Panel(Screen);
+pub struct Panel(pub(super) Screen);
 
 pub(super) const INK: Color = Color::srgb(0.88, 0.94, 0.91);
 pub(super) const MINT: Color = Color::srgb(0.48, 0.8, 0.77);
@@ -250,7 +254,7 @@ fn pressed() -> Color {
 /// time a binding is added, and a magic offset would be wrong the day it does.
 /// The first cut used `top: 50%` and the input list ran off the bottom of the
 /// window.
-fn layer() -> Node {
+pub(super) fn layer() -> Node {
     Node {
         position_type: PositionType::Absolute,
         left: px(0),
@@ -264,7 +268,7 @@ fn layer() -> Node {
     }
 }
 
-fn panel_node(width: f32) -> Node {
+pub(super) fn panel_node(width: f32) -> Node {
     Node {
         width: px(width),
         padding: UiRect::all(px(22)),
@@ -275,7 +279,7 @@ fn panel_node(width: f32) -> Node {
     }
 }
 
-fn title(text: &str) -> impl Bundle {
+pub(super) fn title(text: &str) -> impl Bundle {
     (
         Text::new(text.to_string()),
         TextFont {
@@ -294,7 +298,7 @@ fn title(text: &str) -> impl Bundle {
 /// hover and press states: a control that only responds to a key is a control
 /// nobody can find, which is why the bindings were on screen in the first
 /// place.
-fn button(parent: &mut ChildSpawnerCommands, label: &str, action: MenuAction) {
+pub(super) fn button(parent: &mut ChildSpawnerCommands, label: &str, action: MenuAction) {
     parent
         .spawn((
             Button,
@@ -821,6 +825,8 @@ pub fn press(
                 }
                 index.slots = saves::list(&root);
             }
+            // The guide's own system turns the page.
+            MenuAction::Species(_) => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {
                     continue;
@@ -901,6 +907,7 @@ mod tests {
         assert_eq!(Screen::Settings.back(false, true), Screen::Pause);
         assert_eq!(Screen::Pause.back(false, true), Screen::Playing);
         assert_eq!(Screen::Saves.back(false, true), Screen::Pause);
+        assert_eq!(Screen::Guide.back(false, true), Screen::Playing);
     }
 
     /// The saves page as the front door: back goes into the open world, and

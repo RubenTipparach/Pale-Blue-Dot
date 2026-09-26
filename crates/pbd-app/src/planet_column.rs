@@ -179,6 +179,74 @@ impl ColumnTier {
         }
     }
 
+    /// Take a column into the tier for a finest record that has none, which
+    /// is what an edit past the tier's edge does rather than wait for the next
+    /// rebuild (`openspec/changes/fine-set-in-a-second/design.md`).
+    ///
+    /// The column is the caller's, generated SOLID with the cell's edits: a
+    /// cell outside the tier's disc has a neighbour off it, which makes it rim
+    /// by the rule `build` applies, and the rim is solid. It takes the next
+    /// slot, names its resident neighbours, and each of them names it back, so
+    /// both flanks clip against the real columns. The light is extended dark;
+    /// the edit's whole-tier relight, which follows, is what lights it.
+    ///
+    /// `false`, changing nothing, where the record is not a finest record,
+    /// already has a column, or the tier is full.
+    pub fn adopt(
+        &mut self,
+        finest: &mut [GpuCell],
+        neighbors: &[[u32; 6]],
+        index: usize,
+        column: Column,
+    ) -> bool {
+        if self.slots.get(index) != Some(&usize::MAX)
+            || self.columns.len() >= COLUMN_CAPACITY as usize
+        {
+            return false;
+        }
+        let slot = self.columns.len();
+        let degree = finest[index].degree();
+        let table = neighbors.get(index).copied().unwrap_or([u32::MAX; 6]);
+        let mut sides = [NO_NEIGHBOR; 6];
+        for side in 0..degree {
+            let neighbor = table[side] as usize;
+            let Some(&there) = self.slots.get(neighbor) else {
+                continue;
+            };
+            if there == usize::MAX {
+                continue;
+            }
+            sides[side] = there as u32;
+            let back = neighbors[neighbor]
+                .iter()
+                .take(finest[neighbor].degree())
+                .position(|&id| id as usize == index);
+            if let (Some(back), Some(record)) = (back, self.records.get_mut(there)) {
+                if back < 4 {
+                    record.neighbors[back] = slot as u32;
+                } else {
+                    record.more[back - 4] = slot as u32;
+                }
+            }
+        }
+        self.slots[index] = slot;
+        finest[index].metadata[2] =
+            (finest[index].metadata[2] & SKYLIGHT_MASK) | (slot as u32 + 1) << SLOT_SHIFT;
+        self.records.push(GpuColumn {
+            runs: column.packed_runs(render_code),
+            neighbors: [sides[0], sides[1], sides[2], sides[3]],
+            more: [
+                sides[4],
+                sides[5],
+                degree as u32,
+                RIM_BIT | state_word(&column),
+            ],
+        });
+        self.columns.push(column);
+        self.light.push([light::Light::DARK; LAYERS]);
+        true
+    }
+
     /// What the vertex shader reads, one record per slot.
     pub(crate) fn gpu_records(&self) -> &[GpuColumn] {
         &self.records
@@ -410,6 +478,11 @@ pub fn build(
     edits: &Edits,
 ) -> ColumnTier {
     let anchor = anchor.normalize_or(Vec3::Y);
+    // No finest level (the player is too high for it to be live): no column
+    // to build, and no worms to gather for them.
+    if finest.is_empty() {
+        return ColumnTier::empty();
+    }
     // The region's worms, gathered ONCE: every worm that could reach any
     // column of the tier, so each column's carve is complete whatever tier
     // built it. This is the regional pre-pass the design said worms need,
@@ -1355,6 +1428,77 @@ mod tests {
         // Then one on top of the neighbour, standing proud of the meadow.
         edit(&mut set, side_cell, side_top + 1, Material::Stone);
         audit(&set, "a block placed on the meadow");
+    }
+
+    /// A dig past the tier's edge lands: the cell just outside the rim is
+    /// adopted, the layer is taken, its resident neighbours name it and it
+    /// names them, and every side of it and of them draws what is exposed.
+    #[test]
+    fn a_dig_past_the_tiers_edge_adopts_the_column_and_lands() {
+        let anchor = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let before = set.columns.columns.len();
+        let index = (0..set.finest_records().len())
+            .find(|&index| {
+                set.columns.column(index).is_none()
+                    && set.finest_records()[index].direction_height[3] > 5.0
+                    && set.finest_neighbors[index]
+                        .iter()
+                        .take(set.finest_records()[index].degree())
+                        .any(|&n| n != u32::MAX && set.columns.column(n as usize).is_some())
+            })
+            .expect("a dry cell just outside the tier");
+        let column = set.adoptable(index, &Edits::new()).unwrap();
+        let top = column.surface().unwrap();
+        assert_eq!(
+            layer_altitude(top) + 1.0,
+            set.finest_records()[index].direction_height[3],
+            "the adopted column's top is the cap the player aimed at"
+        );
+        assert!(set.adopt(index, column));
+        assert!(
+            !set.adopt(index, Column::bedrock()),
+            "a column is adopted once"
+        );
+        assert_eq!(set.columns.columns.len(), before + 1);
+        assert_eq!(slot_of(&set.finest_records()[index]), Some(before as u32));
+        edit(&mut set, index, top, Material::Air);
+        assert!(!set.columns.column(index).unwrap().solid(top));
+        let slot = set.columns.slots[index];
+        let mut named = 0;
+        for (side, &neighbor) in set.finest_neighbors[index]
+            .iter()
+            .enumerate()
+            .take(set.finest_records()[index].degree())
+        {
+            let Some(&there) = set.columns.slots.get(neighbor as usize) else {
+                continue;
+            };
+            if there == usize::MAX {
+                continue;
+            }
+            assert_eq!(column_side(&set.columns.records[slot], side), there as u32);
+            let back = set.finest_neighbors[neighbor as usize]
+                .iter()
+                .position(|&id| id as usize == index)
+                .unwrap();
+            assert_eq!(
+                column_side(&set.columns.records[there], back),
+                slot as u32,
+                "the neighbour names the adopted column back"
+            );
+            audit_cell(&set, neighbor as usize, "a neighbour of an adopted column");
+            named += 1;
+        }
+        assert!(named > 0);
+        audit_cell(&set, index, "an adopted column");
+        set.columns.relight();
+        assert_eq!(set.columns.gpu_light().len(), (before + 1) * LIGHT_WORDS);
+        assert_eq!(
+            set.columns.sky(slot, top),
+            light::MAX,
+            "the pit is open to the sky"
+        );
     }
 
     /// The material buffer says what every layer is, and a stone placed in a

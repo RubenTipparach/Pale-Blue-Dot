@@ -55,6 +55,12 @@ pub struct AtmosphereSettings {
     /// Share of the cloud-level wind (the rest is the surface wind) that
     /// carries the cloud.
     pub cloud_steering: f32,
+    /// Share of the steering wind that actually carries CLOUD, 0..1. The winds
+    /// are a real planet's and the cloud base is 300 m up, so cloud carried at
+    /// the full steering wind crossed the whole sky in under half a minute
+    /// (`calm-clouds`). Only cloud is slowed: vapour, heat, charge and the wind
+    /// itself are carried as before, so the circulation is the same model.
+    pub cloud_pace: f32,
 
     // --- Sun and heat ---
     /// Sunlight on a surface facing the sun, W/m^2.
@@ -185,6 +191,9 @@ pub struct AtmosphereSettings {
     pub ocean_drag_s: f32,
     /// How fast the sea-surface height settles, s.
     pub ocean_relax_s: f32,
+    /// How long the waves take to follow the wind, s: the sea state's lag. A
+    /// squall's sea builds over this and outlasts it by as much.
+    pub sea_build_s: f32,
 
     // --- Forcing (the weather slider) ---
     /// Radius round the player the slider brews a storm in, m.
@@ -216,6 +225,7 @@ impl Default for AtmosphereSettings {
             thermal_wind: 70.0,
             jet_max_mps: 45.0,
             cloud_steering: 0.7,
+            cloud_pace: 0.2,
             solar_wm2: 1000.0,
             cloud_albedo: 0.6,
             ocean_albedo: 0.06,
@@ -269,6 +279,7 @@ impl Default for AtmosphereSettings {
             current_per_wind: 0.08,
             ocean_drag_s: 3000.0,
             ocean_relax_s: 20000.0,
+            sea_build_s: 180.0,
             forcing_radius_m: 700.0,
             forcing_s: 5.0,
             forcing_cloud_kg: 1.2,
@@ -299,12 +310,14 @@ impl AtmosphereSettings {
             ("charge_decay_s", self.charge_decay_s),
             ("ocean_drag_s", self.ocean_drag_s),
             ("ocean_relax_s", self.ocean_relax_s),
+            ("sea_build_s", self.sea_build_s),
             ("forcing_s", self.forcing_s),
             ("storm_radius_m", self.storm_radius_m),
             ("mesoscale_every_s", self.mesoscale_every_s),
             ("saturation_kg", self.saturation_kg),
             ("evaporation_wind_mps", self.evaporation_wind_mps),
             ("jet_max_mps", self.jet_max_mps),
+            ("cloud_pace", self.cloud_pace),
         ];
         for (name, value) in positive {
             if !(value.is_finite() && value > 0.0) {
@@ -371,6 +384,7 @@ impl AtmosphereSettings {
             ("snow_albedo", self.snow_albedo),
             ("belt_follow_sun", self.belt_follow_sun),
             ("cloud_steering", self.cloud_steering),
+            ("cloud_pace", self.cloud_pace),
             ("strike_chance", self.strike_chance),
             ("strike_rain_share", self.strike_rain_share),
             ("smoothing", self.smoothing),

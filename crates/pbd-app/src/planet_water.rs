@@ -26,7 +26,7 @@ use bevy::{
         },
         render_resource::{
             binding_types::{
-                sampler, storage_buffer_read_only_sized, texture_2d, texture_depth_2d,
+                sampler, storage_buffer_read_only_sized, texture_2d, texture_3d, texture_depth_2d,
                 texture_depth_2d_multisampled, uniform_buffer,
             },
             *,
@@ -55,6 +55,9 @@ const WATER_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 pub(super) struct WaterView {
     clip_from_local: Mat4,
     local_from_clip: Mat4,
+    /// Last frame's `clip_from_local`: where the clouds pass finds its history
+    /// (`calm-clouds`).
+    prev_clip_from_local: Mat4,
     camera_time: Vec4,
     planet_center: Vec4,
     sun: Vec4,
@@ -103,7 +106,57 @@ pub(super) struct WaterView {
     /// The overlay (`overlay::overlay_lanes`); zero when none is showing.
     overlay: Vec4,
     overlay_flow: Vec4,
+    /// The clouds' accumulation: x the share of the new frame in the blend,
+    /// y one when the previous history can be used, z the frame number the
+    /// jitter hashes, w spare.
+    cloud_history: Vec4,
+    /// xyz the previous frame's eye, body-local: where the previous frame's
+    /// cloud distances were measured from (`cloud-ghosting`); w spare.
+    cloud_prev_eye: Vec4,
+    /// The sea's table (`pbd::sea` in `sea.wgsl`), the one the hulls float on.
+    sea: SeaView,
+    /// x how far the sheet sits below sea level, m; yzw spare.
+    sea_frame: Vec4,
 }
+
+/// `SeaView` in `sea.wgsl`: `pbd_core::sea::SeaGpu` laid out for the GPU.
+#[derive(Clone, ShaderType)]
+pub(crate) struct SeaView {
+    directions: [Vec4; pbd_core::sea::DIRECTIONS],
+    bands: [Vec4; pbd_core::sea::BANDS + 1],
+    phase: [Vec4; pbd_core::sea::COMPONENTS / 4],
+    heading: Vec4,
+    limits: Vec4,
+}
+
+impl From<&pbd_core::sea::SeaGpu> for SeaView {
+    fn from(sea: &pbd_core::sea::SeaGpu) -> Self {
+        Self {
+            directions: sea.directions,
+            bands: sea.bands,
+            phase: sea.phase,
+            heading: sea.heading,
+            limits: sea.limits,
+        }
+    }
+}
+
+/// The format of the clouds' history: the pass's own result, light
+/// premultiplied by coverage and the coverage, before it is composited.
+const CLOUD_HISTORY_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+
+/// The format of the march's distances, metres along the ray: r where its
+/// cloud is, g where the march stopped (the scene or the sea). What the
+/// composite's depth-aware upsample compares with each pixel's own.
+const CLOUD_DEPTH_FORMAT: TextureFormat = TextureFormat::Rg16Float;
+
+/// The share of each new frame in the clouds' history: about sixteen frames of
+/// samples in every pixel (`calm-clouds` design).
+const CLOUD_BLEND: f32 = 0.06;
+
+/// A camera that moves further than this between frames has jumped (a
+/// teleport, a load) and the history is dropped, metres.
+const CLOUD_HISTORY_JUMP_M: f32 = 50.0;
 
 /// The largest precipitation map the rain buffer holds, cells on a side; the
 /// config validates `rain_map_size` against it.
@@ -138,7 +191,7 @@ pub struct EyeWaterState(pub EyeWater);
 /// question a height field can answer is "is the camera under sea level over
 /// a cell whose ground is", which drowns a camera standing in a dry cave
 /// carved below sea level.
-pub fn submersion(camera_body: Vec3, sea_radius: f32, band: f32, eye: EyeWater) -> f32 {
+pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye: EyeWater) -> f32 {
     if camera_body.length_squared() < 1e-6 {
         return 0.0;
     }
@@ -154,6 +207,9 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, band: f32, eye: EyeWater) 
             sea_radius
         }
     };
+    // The band stands about the surface as it is under the camera now: a
+    // trough passing under a camera just over the sea leaves it dry.
+    let surface = surface + wave;
     let radius = camera_body.length();
     if radius < surface - band {
         1.0
@@ -162,6 +218,14 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, band: f32, eye: EyeWater) 
     } else {
         0.0
     }
+}
+
+/// Publish what the tier says is at the active camera's eye.
+pub(super) fn install_eye_water(app: &mut App) {
+    app.init_resource::<EyeWaterState>().add_systems(
+        PostUpdate,
+        publish_eye_water.after(bevy::transform::TransformSystems::Propagate),
+    );
 }
 
 /// Publish what the tier says is at the active camera's eye.
@@ -195,12 +259,13 @@ fn eye_water(
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         return EyeWater::Unknown;
     };
-    let body = transform.translation() - frame.center.as_vec3();
+    let body = (transform.translation().as_dvec3() - frame.center).as_vec3();
     let Some(direction) = body.try_normalize() else {
         return EyeWater::Unknown;
     };
     let Some(column) = contact
         .finest_cell(direction)
+        .filter(|_| contact.serves(&fine.set))
         .and_then(|record| fine.set.columns.column(record))
     else {
         return EyeWater::Unknown;
@@ -245,7 +310,94 @@ struct WaterPipelines {
     data_layout: BindGroupLayoutDescriptor,
     scene_layout: BindGroupLayoutDescriptor,
     scene_layout_multisampled: BindGroupLayoutDescriptor,
+    /// The march's fourth group: the previous history and a sampler, the
+    /// baked cellular noise and its repeating sampler, and the previous
+    /// frame's cloud distances.
+    history_layout: BindGroupLayoutDescriptor,
+    /// The composite's fourth group: this frame's march, its sampler and its
+    /// cloud distances.
+    composite_layout: BindGroupLayoutDescriptor,
     sampler: Sampler,
+    cells: TextureView,
+    cells_sampler: Sampler,
+}
+
+fn history_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "clouds history and cells",
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::FRAGMENT,
+            (
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
+                texture_3d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
+                // The previous frame's cloud distances (`cloud-ghosting`).
+                texture_2d(TextureSampleType::Float { filterable: false }),
+            ),
+        ),
+    )
+}
+
+fn composite_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "clouds march and its distances",
+        &BindGroupLayoutEntries::with_indices(
+            ShaderStages::FRAGMENT,
+            (
+                (0, texture_2d(TextureSampleType::Float { filterable: true })),
+                (1, sampler(SamplerBindingType::Filtering)),
+                (
+                    4,
+                    texture_2d(TextureSampleType::Float { filterable: false }),
+                ),
+            ),
+        ),
+    )
+}
+
+/// The clouds' cellular noise on the GPU (`planet_cloud_noise.rs`), baked and
+/// uploaded once.
+fn cloud_cells(device: &RenderDevice, queue: &RenderQueue) -> TextureView {
+    let started = std::time::Instant::now();
+    let size = super::cloud_noise::SIZE;
+    let bytes = super::cloud_noise::bake(size, super::cloud_noise::PERIOD);
+    let extent = Extent3d {
+        width: size,
+        height: size,
+        depth_or_array_layers: size,
+    };
+    let texture = device.create_texture(&TextureDescriptor {
+        label: Some("clouds cellular noise"),
+        size: extent,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D3,
+        format: TextureFormat::R8Unorm,
+        usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect: TextureAspect::All,
+        },
+        &bytes,
+        TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(size),
+            rows_per_image: Some(size),
+        },
+        extent,
+    );
+    info!(
+        "clouds cellular noise: {size}^3 texels over {} cells, baked in {:.1} ms",
+        super::cloud_noise::PERIOD,
+        started.elapsed().as_secs_f64() * 1e3
+    );
+    texture.create_view(&TextureViewDescriptor::default())
 }
 
 fn data_layout() -> BindGroupLayoutDescriptor {
@@ -287,14 +439,27 @@ fn initialize_pipelines(
     mut commands: Commands,
     assets: Res<AssetServer>,
     device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
     fullscreen: Res<FullscreenShader>,
 ) {
     commands.insert_resource(WaterPipelines {
+        cells: cloud_cells(&device, &queue),
+        cells_sampler: device.create_sampler(&SamplerDescriptor {
+            label: Some("clouds cellular noise sampler"),
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            address_mode_u: AddressMode::Repeat,
+            address_mode_v: AddressMode::Repeat,
+            address_mode_w: AddressMode::Repeat,
+            ..default()
+        }),
         shader: assets.load("shaders/water.wgsl"),
         fullscreen: fullscreen.clone(),
         data_layout: data_layout(),
         scene_layout: scene_layout(false),
         scene_layout_multisampled: scene_layout(true),
+        history_layout: history_layout(),
+        composite_layout: composite_layout(),
         sampler: device.create_sampler(&SamplerDescriptor {
             label: Some("water scene sampler"),
             mag_filter: FilterMode::Linear,
@@ -310,6 +475,7 @@ fn initialize_pipelines(
 enum Pass {
     Cap,
     Compose,
+    CloudMarch,
     Clouds,
     Rain,
     Overlay,
@@ -351,6 +517,11 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 self.fullscreen.to_vertex_state(),
                 "compose",
             ),
+            Pass::CloudMarch => (
+                "Cloud march at the clouds' resolution, into the history",
+                self.fullscreen.to_vertex_state(),
+                "cloud_march_pass",
+            ),
             Pass::Clouds => (
                 "Clouds over the whole scene, against its depth",
                 self.fullscreen.to_vertex_state(),
@@ -379,7 +550,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
         // the scene's own occlusion is the shader's discard against the
         // sampled main-pass depth, which may be multisampled.
         let depth_stencil = match key.pass {
-            Pass::Lens | Pass::Rain | Pass::Clouds | Pass::Overlay => None,
+            Pass::Lens | Pass::Rain | Pass::CloudMarch | Pass::Clouds | Pass::Overlay => None,
             pass => Some(DepthStencilState {
                 format: WATER_DEPTH_FORMAT,
                 depth_write_enabled: pass == Pass::Cap,
@@ -394,21 +565,47 @@ impl SpecializedRenderPipeline for WaterPipelines {
         };
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed(label)),
-            layout: vec![
-                self.data_layout.clone(),
-                scene,
-                super::weather_maps::layout(),
-            ],
+            layout: if matches!(key.pass, Pass::Clouds | Pass::CloudMarch) {
+                vec![
+                    self.data_layout.clone(),
+                    scene,
+                    super::weather_maps::layout(),
+                    if key.pass == Pass::CloudMarch {
+                        self.history_layout.clone()
+                    } else {
+                        self.composite_layout.clone()
+                    },
+                ]
+            } else {
+                vec![
+                    self.data_layout.clone(),
+                    scene,
+                    super::weather_maps::layout(),
+                ]
+            },
             vertex,
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
                 shader_defs: defs,
                 entry_point: Some(Cow::Borrowed(entry)),
-                targets: vec![Some(ColorTargetState {
-                    format: key.format,
-                    blend: None,
-                    write_mask: ColorWrites::ALL,
-                })],
+                // The march writes the clouds' history and their distances.
+                targets: if key.pass == Pass::CloudMarch {
+                    [CLOUD_HISTORY_FORMAT, CLOUD_DEPTH_FORMAT]
+                        .map(|format| {
+                            Some(ColorTargetState {
+                                format,
+                                blend: None,
+                                write_mask: ColorWrites::ALL,
+                            })
+                        })
+                        .to_vec()
+                } else {
+                    vec![Some(ColorTargetState {
+                        format: key.format,
+                        blend: None,
+                        write_mask: ColorWrites::ALL,
+                    })]
+                },
             }),
             primitive: PrimitiveState {
                 // Back faces are the underwater view; nothing is culled.
@@ -433,6 +630,7 @@ pub(super) struct WaterViewGpu {
     data_bind_group: BindGroup,
     cap: CachedRenderPipelineId,
     compose: CachedRenderPipelineId,
+    cloud_march: CachedRenderPipelineId,
     clouds: CachedRenderPipelineId,
     lens: CachedRenderPipelineId,
     rain: CachedRenderPipelineId,
@@ -448,6 +646,24 @@ pub(super) struct WaterViewGpu {
     lens_needed: bool,
     was_under: bool,
     emerge_until: f32,
+    /// The clouds' history pair, at `cloud_render_scale` of the view. This
+    /// frame reads `history[history_read]` and writes the other; the index
+    /// flips every frame.
+    history: [TextureView; 2],
+    history_read: usize,
+    history_size: UVec2,
+    /// The cloud distances, the history's size, a pair indexed as the history
+    /// is: the march writes this frame's and reads the previous frame's, to
+    /// test each history texel against what it saw (`cloud-ghosting`).
+    cloud_depth: [TextureView; 2],
+    /// The previous frame's camera and projection, for reprojecting the
+    /// history and for telling a jump from a step.
+    prev_clip: Mat4,
+    prev_camera: Vec3,
+    /// Whether the clouds pass ran on the previous frame, so its history is
+    /// current.
+    clouds_ran: bool,
+    frame: u32,
 }
 
 /// What the sky is doing, as the water pass reads it: the weather, its
@@ -461,6 +677,7 @@ pub(super) struct WaterSky<'w> {
     clouds: Res<'w, crate::sky::CloudNow>,
     rain_map: Option<Res<'w, crate::weather::RainMap>>,
     maps: Res<'w, super::weather_maps::WeatherMapsNow>,
+    sea: Res<'w, crate::sea::SeaNow>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -495,6 +712,7 @@ fn prepare_water_views(
         clouds,
         rain_map,
         maps,
+        sea: sea_now,
     } = sky;
     let (overlay, overlay_flow) =
         crate::overlay::overlay_lanes(maps.overlay_kind, &weather_settings);
@@ -506,8 +724,8 @@ fn prepare_water_views(
             view.clip_from_world,
         );
         let sea_radius = terrain::PLANET_RADIUS - settings.depth_offset_m;
-        let band = settings.swell_amplitude_m + settings.partial_band_m;
-        let state = submersion(camera, sea_radius, band, eye.0);
+        let band = settings.partial_band_m;
+        let state = submersion(camera, sea_radius, sea_now.camera_height, band, eye.0);
         let (mut was_under, mut emerge_until) = existing
             .as_ref()
             .map(|gpu| (gpu.was_under, gpu.emerge_until))
@@ -546,15 +764,13 @@ fn prepare_water_views(
         let params = WaterView {
             clip_from_local: clip_from_body,
             local_from_clip: clip_from_body.as_dmat4().inverse().as_mat4(),
+            prev_clip_from_local: existing
+                .as_ref()
+                .map_or(clip_from_body, |gpu| gpu.prev_clip),
             camera_time: camera.extend(clock.0 * s.time_scale),
             planet_center: Vec3::ZERO.extend(sea_radius),
             sun: sun.direction().extend(s.specular_intensity * sun_dim),
-            waves: Vec4::new(
-                s.swell_amplitude_m,
-                s.swell_frequency,
-                s.swell_speed,
-                s.wave_steepness,
-            ),
+            waves: Vec4::new(0.0, 0.0, 0.0, s.wave_steepness),
             ripple: Vec4::new(
                 s.ripple_scale,
                 s.ripple_speed,
@@ -620,6 +836,13 @@ fn prepare_water_views(
             snow_tint: linear(weather_settings.snow_color).extend(clock.0),
             overlay,
             overlay_flow,
+            cloud_history: Vec4::ZERO,
+            cloud_prev_eye: existing
+                .as_ref()
+                .map_or(camera, |gpu| gpu.prev_camera)
+                .extend(0.0),
+            sea: SeaView::from(&sea_now.gpu),
+            sea_frame: Vec4::new(s.depth_offset_m, 0.0, 0.0, 0.0),
         };
         let lens_needed = lens_rain > 0.001 || drips > 0.001;
         let map = rain_map.as_deref().filter(|map| {
@@ -629,7 +852,35 @@ fn prepare_water_views(
             && camera.length() < clouds.clouds.x
             && weather_settings.rain_volume_range_m > 0.0;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
+        let history_size = (size.as_vec2() * weather_settings.cloud_render_scale)
+            .ceil()
+            .as_uvec2()
+            .max(UVec2::ONE);
         if let Some(mut gpu) = existing {
+            let resized = gpu.history_size != history_size;
+            if resized {
+                gpu.history = cloud_history(&device, history_size);
+                gpu.cloud_depth = cloud_distances(&device, history_size);
+                gpu.history_size = history_size;
+            }
+            // The history is usable when the pass wrote it on the previous
+            // frame, the view kept its size and the camera stepped rather
+            // than jumped.
+            let valid = gpu.clouds_ran
+                && !resized
+                && camera.distance(gpu.prev_camera) < CLOUD_HISTORY_JUMP_M;
+            gpu.history_read = 1 - gpu.history_read;
+            gpu.frame = gpu.frame.wrapping_add(1);
+            let mut params = params;
+            params.cloud_history = Vec4::new(
+                CLOUD_BLEND,
+                if valid { 1.0 } else { 0.0 },
+                (gpu.frame % 65_536) as f32,
+                0.0,
+            );
+            gpu.prev_clip = clip_from_body;
+            gpu.prev_camera = camera;
+            gpu.clouds_ran = !overlay_needed;
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
             gpu.lens_needed = lens_needed;
@@ -696,6 +947,7 @@ fn prepare_water_views(
         commands.entity(entity).insert(WaterViewGpu {
             cap: pipeline(Pass::Cap),
             compose: pipeline(Pass::Compose),
+            cloud_march: pipeline(Pass::CloudMarch),
             clouds: pipeline(Pass::Clouds),
             lens: pipeline(Pass::Lens),
             rain: pipeline(Pass::Rain),
@@ -712,8 +964,47 @@ fn prepare_water_views(
             lens_needed,
             was_under,
             emerge_until,
+            history: cloud_history(&device, history_size),
+            history_read: 0,
+            history_size,
+            cloud_depth: cloud_distances(&device, history_size),
+            prev_clip: clip_from_body,
+            prev_camera: camera,
+            clouds_ran: !overlay_needed,
+            frame: 0,
         });
     }
+}
+
+/// The clouds' history pair for a view of this size, cleared by the first
+/// pass that writes it.
+fn cloud_history(device: &RenderDevice, size: UVec2) -> [TextureView; 2] {
+    std::array::from_fn(|_| cloud_target(device, size, CLOUD_HISTORY_FORMAT))
+}
+
+/// The clouds' distances pair, the history's size.
+fn cloud_distances(device: &RenderDevice, size: UVec2) -> [TextureView; 2] {
+    std::array::from_fn(|_| cloud_target(device, size, CLOUD_DEPTH_FORMAT))
+}
+
+/// One of the clouds' march targets, drawn to and then read.
+fn cloud_target(device: &RenderDevice, size: UVec2, format: TextureFormat) -> TextureView {
+    device
+        .create_texture(&TextureDescriptor {
+            label: Some("clouds march target"),
+            size: Extent3d {
+                width: size.x,
+                height: size.y,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        })
+        .create_view(&TextureViewDescriptor::default())
 }
 
 fn water_depth(device: &RenderDevice, size: UVec2) -> TextureView {
@@ -761,6 +1052,7 @@ impl ViewNode for WaterCompositeNode {
         let (
             Some(cap),
             Some(compose),
+            Some(cloud_march),
             Some(clouds),
             Some(lens),
             Some(rain),
@@ -769,6 +1061,7 @@ impl ViewNode for WaterCompositeNode {
         ) = (
             cache.get_render_pipeline(water.cap),
             cache.get_render_pipeline(water.compose),
+            cache.get_render_pipeline(water.cloud_march),
             cache.get_render_pipeline(water.clouds),
             cache.get_render_pipeline(water.lens),
             cache.get_render_pipeline(water.rain),
@@ -828,6 +1121,60 @@ impl ViewNode for WaterCompositeNode {
             pass.set_render_pipeline(cap);
             pass.draw_indirect(&planet_view.indirect, 32);
         }
+        // The march reads last frame's history and writes this frame's, and
+        // the cloud's distances; the composite reads both.
+        let history_write = &water.history[1 - water.history_read];
+        let depth_write = &water.cloud_depth[1 - water.history_read];
+        let composite_group = device.create_bind_group(
+            Some("clouds march and its distances"),
+            &cache.get_bind_group_layout(&pipelines.composite_layout),
+            &BindGroupEntries::with_indices((
+                (0, history_write),
+                (1, &pipelines.sampler),
+                (4, depth_write),
+            )),
+        );
+        if !water.overlay_needed {
+            let march_group = device.create_bind_group(
+                Some("clouds history and cells"),
+                &cache.get_bind_group_layout(&pipelines.history_layout),
+                &BindGroupEntries::sequential((
+                    &water.history[water.history_read],
+                    &pipelines.sampler,
+                    &pipelines.cells,
+                    &pipelines.cells_sampler,
+                    &water.cloud_depth[water.history_read],
+                )),
+            );
+            // The march reads only the scene's depth; the colour bound beside
+            // it is whichever main texture is current.
+            let scene = scene_bind_group(target.main_texture_view());
+            // The march writes every texel of its history, so nothing there
+            // needs keeping.
+            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("Cloud march"),
+                color_attachments: &[history_write, depth_write].map(|view| {
+                    Some(RenderPassColorAttachment {
+                        view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(LinearRgba::NONE.into()),
+                            store: StoreOp::Store,
+                        },
+                    })
+                }),
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_bind_group(0, &water.data_bind_group, &[]);
+            pass.set_bind_group(1, &scene, &[]);
+            pass.set_bind_group(2, &maps.bind_group, &[]);
+            pass.set_bind_group(3, &march_group, &[]);
+            pass.set_render_pipeline(cloud_march);
+            pass.draw(0..3, 0..1);
+        }
         for (needed, pipeline, label) in [
             // An overlay is a map: the clouds would hide the data under them,
             // and the cloud overlay is where cloud is shown then.
@@ -843,6 +1190,7 @@ impl ViewNode for WaterCompositeNode {
             }
             let post = target.post_process_write();
             let scene = scene_bind_group(post.source);
+            let is_clouds = label == "Clouds";
             let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some(label),
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -861,6 +1209,9 @@ impl ViewNode for WaterCompositeNode {
             pass.set_bind_group(0, &water.data_bind_group, &[]);
             pass.set_bind_group(1, &scene, &[]);
             pass.set_bind_group(2, &maps.bind_group, &[]);
+            if is_clouds {
+                pass.set_bind_group(3, &composite_group, &[]);
+            }
             pass.set_render_pipeline(pipeline);
             pass.draw(0..3, 0..1);
         }
@@ -894,18 +1245,90 @@ mod tests {
     use super::*;
 
     #[test]
+    fn occupied_camera_water_state_uses_this_frames_translated_eye() {
+        use std::sync::Arc;
+        let ocean = super::super::topology::dual_sphere(3)
+            .into_iter()
+            .find(|c| terrain::surface_height(c.direction) < -8.0)
+            .unwrap()
+            .direction;
+        let set = Arc::new(super::super::lod::generate_fine(
+            ocean,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        ));
+        let mut contact = crate::planet::PlanetContact::test_planet(5);
+        contact.set_fine(&set);
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, TransformPlugin));
+        install_eye_water(&mut app);
+        let offset = bevy::math::DVec3::new(8192.0, -4096.0, 2048.0);
+        app.insert_resource(PlanetRenderFrame { center: offset })
+            .insert_resource(contact)
+            .insert_resource(crate::planet::PlanetFine { set, version: 1 });
+        let above = (offset + (ocean * (terrain::PLANET_RADIUS + 3.0)).as_dvec3()).as_vec3();
+        let below = (offset + (ocean * (terrain::PLANET_RADIUS - 2.0)).as_dvec3()).as_vec3();
+        let parked = app
+            .world_mut()
+            .spawn((
+                Camera3d::default(),
+                Camera {
+                    is_active: false,
+                    ..default()
+                },
+                Transform::from_translation(above),
+            ))
+            .id();
+        let occupied = app
+            .world_mut()
+            .spawn((
+                Camera3d::default(),
+                Camera::default(),
+                crate::vehicles::VehicleCamera,
+                Transform::from_translation(above),
+            ))
+            .id();
+        app.update();
+        assert_eq!(app.world().resource::<EyeWaterState>().0, EyeWater::Air);
+        // Vehicle following runs here, after Update but before propagation.
+        app.add_systems(
+            PostUpdate,
+            (move |mut camera: Query<&mut Transform, With<crate::vehicles::VehicleCamera>>| {
+                camera.single_mut().unwrap().translation = below;
+            })
+            .before(bevy::transform::TransformSystems::Propagate),
+        );
+        app.update();
+        assert!(matches!(
+            app.world().resource::<EyeWaterState>().0,
+            EyeWater::Water { .. }
+        ));
+        app.world_mut()
+            .get_mut::<Camera>(occupied)
+            .unwrap()
+            .is_active = false;
+        app.world_mut().get_mut::<Camera>(parked).unwrap().is_active = true;
+        app.update();
+        assert_eq!(app.world().resource::<EyeWaterState>().0, EyeWater::Air);
+    }
+
+    #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
-        // Two mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
+        // Three mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
         let shader = include_str!("../../../assets/shaders/water.wgsl");
         let start = shader.find("struct WaterView {").unwrap();
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
         let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (2, 39));
+        assert_eq!((mat4, vec4), (3, 42));
+        assert!(block.contains("sea: SeaView,"));
+        let sea = crate::shader_tests::sea_source();
+        let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");
+        assert_eq!(SeaView::min_size().get() as u32, sea_size);
         assert_eq!(
             WaterView::min_size().get() as usize,
-            mat4 * 64 + vec4 * 16,
+            mat4 * 64 + vec4 * 16 + sea_size as usize,
             "the Rust uniform must be the WGSL struct's size"
         );
     }
@@ -927,16 +1350,16 @@ mod tests {
         // Twenty metres under the sea's own surface, over a cell whose ground
         // is under it: the height field drowns it and the column does not.
         let deep = ocean * (sea - 20.0);
-        assert_eq!(submersion(deep, sea, band, EyeWater::Unknown), 1.0);
-        assert_eq!(submersion(deep, sea, band, EyeWater::Air), 0.0);
+        assert_eq!(submersion(deep, sea, 0.0, band, EyeWater::Unknown), 1.0);
+        assert_eq!(submersion(deep, sea, 0.0, band, EyeWater::Air), 0.0);
         // A pool whose surface is ten metres down: over it is dry, in it is
         // under, and the band straddles its own surface rather than the sea's.
         let pool = EyeWater::Water {
             surface_radius: sea - 10.0,
         };
-        assert_eq!(submersion(ocean * (sea - 5.0), sea, band, pool), 0.0);
-        assert_eq!(submersion(ocean * (sea - 10.5), sea, band, pool), 0.5);
-        assert_eq!(submersion(deep, sea, band, pool), 1.0);
+        assert_eq!(submersion(ocean * (sea - 5.0), sea, 0.0, band, pool), 0.0);
+        assert_eq!(submersion(ocean * (sea - 10.5), sea, 0.0, band, pool), 0.5);
+        assert_eq!(submersion(deep, sea, 0.0, band, pool), 1.0);
     }
 
     #[test]
@@ -956,26 +1379,47 @@ mod tests {
             .unwrap()
             .direction;
         assert_eq!(
-            submersion(land * (sea - 10.0), sea, band, EyeWater::Unknown),
+            submersion(land * (sea - 10.0), sea, 0.0, band, EyeWater::Unknown),
             0.0
         );
         assert_eq!(
-            submersion(ocean * (sea + 10.0), sea, band, EyeWater::Unknown),
+            submersion(ocean * (sea + 10.0), sea, 0.0, band, EyeWater::Unknown),
             0.0
         );
         assert_eq!(
-            submersion(ocean * (sea + 1.0), sea, band, EyeWater::Unknown),
+            submersion(ocean * (sea + 1.0), sea, 0.0, band, EyeWater::Unknown),
             0.5
         );
         assert_eq!(
-            submersion(ocean * (sea - 1.0), sea, band, EyeWater::Unknown),
+            submersion(ocean * (sea - 1.0), sea, 0.0, band, EyeWater::Unknown),
             0.5
         );
         assert_eq!(
-            submersion(ocean * (sea - 3.0), sea, band, EyeWater::Unknown),
+            submersion(ocean * (sea - 3.0), sea, 0.0, band, EyeWater::Unknown),
             1.0
         );
-        assert_eq!(submersion(Vec3::ZERO, sea, band, EyeWater::Unknown), 0.0);
+        assert_eq!(
+            submersion(Vec3::ZERO, sea, 0.0, band, EyeWater::Unknown),
+            0.0
+        );
+    }
+
+    /// The band stands about the surface under the camera as it is now, not
+    /// about the mean sea: a trough passing under a camera just over the sea
+    /// leaves it dry, and a crest over it puts it in the water.
+    #[test]
+    fn in_a_trough_the_camera_is_dry() {
+        let sea = terrain::PLANET_RADIUS - 0.5;
+        let band = 0.8;
+        let cells = super::super::topology::dual_sphere(3);
+        let ocean = cells
+            .iter()
+            .find(|c| terrain::surface_height(c.direction) < 0.0)
+            .unwrap()
+            .direction;
+        let eye = ocean * (sea + 0.3);
+        assert_eq!(submersion(eye, sea, -1.0, band, EyeWater::Unknown), 0.0);
+        assert_eq!(submersion(eye, sea, 2.0, band, EyeWater::Unknown), 1.0);
     }
 
     #[test]

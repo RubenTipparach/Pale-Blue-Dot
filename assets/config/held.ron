@@ -1,0 +1,33 @@
+// The tool in hand (crates/pbd-app/src/held.rs): each tool's 16 px icon built
+// into a model of hex pixels, held in first person. Metres and radians in eye
+// space: x right, y up, -z ahead of the eye.
+//
+// A digging tool's grip sits at anchor_m (Tenebris's viewmodel anchor) and
+// its head at anchor_m + reach_m. The rod is gripped at the same anchor (at
+// Tenebris's rod grip, 0.22 m from the eye, its hexels filled a third of the
+// screen) and its tip is Tenebris's rod tip; the fishing line leaves from
+// rod_tip_m, which is where the rod model's tip is put: one tip, not two. For each tool, grip and head are two pixels
+// of its icon (x right, y DOWN, as the PNG stores them), so the icon names
+// which end is held. twist_rad turns the icon's face about the handle so its
+// thickness shows; depth_px is how deep the model is, in icon pixels.
+// The sway and the chop while breaking a block are Tenebris's.
+//
+// The code defaults written out; a test holds the two together. Why:
+// openspec/changes/fishing-and-equipment/design.md section 12.
+(
+    anchor_m: (0.26, -0.26, -0.48),
+    reach_m: (-0.06, 0.2, -0.1),
+    rod_grip_m: (0.26, -0.26, -0.48),
+    rod_tip_m: (0.26, 0.05, -0.95),
+    twist_rad: 0.5,
+    depth_px: 1.0,
+    rod: (grip: (0.5, 14.5), head: (15.5, 0.5)),
+    shovel: (grip: (12.5, 1.5), head: (2.5, 11.5)),
+    pickaxe: (grip: (0.5, 12.5), head: (9.5, 2.5)),
+    axe: (grip: (0.5, 11.5), head: (10.5, 2.5)),
+    sway_m: (0.006, 0.005),
+    sway_rate: (1.3, 1.7),
+    swing_rate: 9.0,
+    swing_drop_m: 0.06,
+    swing_pitch_rad: 0.85,
+)

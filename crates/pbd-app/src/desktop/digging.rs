@@ -17,8 +17,9 @@ use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
 use pbd_core::aim::{self, Sample};
 use pbd_core::column::{self, LAYERS};
+use pbd_core::dig::Step;
 use pbd_core::edits::Edit;
-use pbd_core::inventory::Item;
+use pbd_core::inventory::{Item, Tool};
 use pbd_core::terrain::Material;
 use std::sync::Arc;
 
@@ -28,55 +29,120 @@ pub struct Aim {
     pub target: Option<aim::Target>,
 }
 
+/// A block, as the digging rule names it: its cell's stable ID and its layer.
+pub type Block = (u32, usize);
+
+/// The block being broken and how far along it is (`pbd_core::dig`), kept
+/// between frames because breaking is a hold. The crack overlay reads
+/// `progress`.
+#[derive(Resource, Default)]
+pub struct Mining {
+    breaking: pbd_core::dig::Breaking<Block>,
+    /// The last break time looked up: for which block, tool and fine set
+    /// version. A lookup finds the record and may build its column, so it is
+    /// done once per target rather than every frame of a hold.
+    lookup: Option<(Block, Tool, u64, Option<f32>)>,
+}
+
+impl Mining {
+    /// The block being broken and its progress, 0 to 1.
+    pub fn progress(&self) -> Option<(Block, f32)> {
+        self.breaking.progress()
+    }
+
+    /// How long `block` takes with `tool`, remembered until either changes.
+    fn secs(
+        &mut self,
+        block: Block,
+        tool: Tool,
+        fine: &PlanetFine,
+        save: &WorldSave,
+        dig: &pbd_core::dig::DigSettings,
+    ) -> Option<f32> {
+        if let Some((b, t, v, secs)) = self.lookup
+            && b == block
+            && t == tool
+            && v == fine.version
+        {
+            return secs;
+        }
+        let secs = material_of(fine, save, block).and_then(|material| dig.secs(material, tool));
+        self.lookup = Some((block, tool, fine.version, secs));
+        secs
+    }
+}
+
+/// What a block is made of: its column's answer, or the column the edit path
+/// would adopt for it off the tier's edge.
+fn material_of(fine: &PlanetFine, save: &WorldSave, (cell, layer): Block) -> Option<Material> {
+    let record = record_of(fine, cell)?;
+    match fine.set.columns.column(record) {
+        Some(column) => Some(column.material(layer)),
+        None => fine
+            .set
+            .adoptable(record, &save.edits)
+            .map(|column| column.material(layer)),
+    }
+}
+
 /// Which cell and layer a world point is in, and whether it is solid.
 ///
 /// The walk is `PlanetContact`'s, which steps cell to cell across whichever
 /// edge the ray falls outside of, so a march's samples cost a step from the
 /// last rather than a search.
+///
+/// A finest record with no column answers from its own cap: solid below it.
+/// That is the ground the heightfield draws there and exactly what the tier
+/// would generate for it as rim, so the ray stops on the cap the player sees
+/// and the edit adopts the column (`apply_edit`) instead of the click passing
+/// into the hill as if it were sky.
 fn sample_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Sample> {
     let direction = point.try_normalize()?;
+    // Only while the contact and `PlanetFine` hold the same set: for the frame
+    // between a set landing in one and the other, the index is the wrong set's.
+    if !contact.serves(&fine.set) {
+        return None;
+    }
     let record = contact.finest_cell(direction)?;
     let altitude = point.length() - PLANET_RADIUS;
     let layer = column::layer_at(altitude)?;
-    let tier = &fine.set.columns;
-    let slot = *tier.slots.get(record)?;
-    let column = tier.columns.get(slot)?;
+    let cell = fine.set.finest_records().get(record)?;
+    let solid = match fine.set.columns.column(record) {
+        Some(column) => column.solid(layer),
+        None => column::layer_altitude(layer) + 0.5 < cell.direction_height[3],
+    };
     Some(Sample {
-        cell: fine.set.finest_records()[record].metadata[3],
+        cell: cell.metadata[3],
         layer,
-        solid: column.solid(layer),
+        solid,
     })
 }
 
 /// Why a point along the eye ray could not be sampled although it is inside
-/// the ground: the streaming has not put a column there. The march reads air
-/// where the sampler answers nothing, so without this a click into a hill
-/// the tier has not reached looks exactly like a click at the sky.
+/// the ground: the finest level is not resident there at all. The march reads
+/// air where the sampler answers nothing, so without this a click into a hill
+/// the fine set has not reached looks exactly like a click at the sky. A
+/// record with no column is not in this list: the sampler answers it from the
+/// cap and the edit adopts the column.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Unsampled {
     /// The point is under the heightfield surface but no finest record covers
     /// its direction: outside the resident fine set.
     OffTheFineSet { depth_m: f32 },
-    /// A finest record covers it but the record has no column: outside the
-    /// tier, or the tier is still being built here.
-    NoColumn { cell: u32, depth_m: f32 },
 }
 
 /// What kept `sample_at` from answering at `point`, if the point is inside
 /// the ground and so should have had an answer.
-fn why_unsampled(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Unsampled> {
+fn why_unsampled(contact: &PlanetContact, point: Vec3) -> Option<Unsampled> {
     let direction = point.try_normalize()?;
     let depth_m = surface_height(direction) - (point.length() - PLANET_RADIUS);
     if depth_m <= 0.0 {
         return None;
     }
-    match contact.finest_cell(direction) {
-        None => Some(Unsampled::OffTheFineSet { depth_m }),
-        Some(record) => (fine.set.columns.column(record).is_none()).then(|| Unsampled::NoColumn {
-            cell: fine.set.finest_records()[record].metadata[3],
-            depth_m,
-        }),
-    }
+    contact
+        .finest_cell(direction)
+        .is_none()
+        .then_some(Unsampled::OffTheFineSet { depth_m })
 }
 
 /// The record index of a cell by its stable ID. The march answers in stable
@@ -152,14 +218,20 @@ pub fn apply_edit(
         );
         return None;
     };
-    let Some(was) = fine
-        .set
-        .columns
-        .column(record)
+    // A record past the tier's edge is given its column NOW rather than when
+    // the next rebuild reaches it: generated solid with the save's edits, as
+    // the rim is, and adopted below once the save has taken the edit.
+    let adopting = match fine.set.columns.column(record) {
+        Some(_) => None,
+        None => fine.set.adoptable(record, &save.edits),
+    };
+    let Some(was) = adopting
+        .as_ref()
+        .or_else(|| fine.set.columns.column(record))
         .map(|column| column.material(layer))
     else {
         error!(
-            "edit BLOCKED: cell {cell} has no column in the tier (version {}, {} columns)",
+            "edit BLOCKED: cell {cell} has no column and none could be made (version {}, {} columns)",
             fine.version,
             fine.set.columns.columns.len()
         );
@@ -177,10 +249,20 @@ pub fn apply_edit(
     // one would light a cell nothing was drawn in. Refusing is better than
     // drawing the wrong one.
     if material == Material::Torch
-        && let Some(column) = fine.set.columns.column(record)
+        && let Some(column) = adopting
+            .as_ref()
+            .or_else(|| fine.set.columns.column(record))
         && pbd_app::planet::column::has_torch(column)
     {
         info!("edit refused: cell {cell} already carries a torch");
+        return None;
+    }
+    // Adopting takes a slot, so a full tier refuses here, BEFORE the save:
+    // an edit that saved and could not be shown is the worse failure.
+    if adopting.is_some()
+        && fine.set.columns.columns.len() >= pbd_app::planet::column::COLUMN_CAPACITY as usize
+    {
+        error!("edit BLOCKED: cell {cell} needs a column and the tier is full");
         return None;
     }
     let mut moved = slots.0.clone();
@@ -214,6 +296,12 @@ pub fn apply_edit(
     let started = std::time::Instant::now();
     let mut set = (*fine.set).clone();
     let cloned = started.elapsed();
+    if let Some(column) = adopting {
+        // Checked before the save took the edit, so this cannot refuse.
+        let adopted = set.adopt(record, column);
+        debug_assert!(adopted, "adoption was checked before the save");
+        info!("adopted cell {cell} into the tier ahead of the streaming");
+    }
     set.columns.set_layer(record, layer, material);
     set.columns.repack(record);
     for &neighbor in set.finest_neighbors[record].iter() {
@@ -269,8 +357,27 @@ pub fn dig_and_place(
     mut aimed: ResMut<Aim>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
     near: Res<NearField>,
+    tools: Res<pbd_app::fish::ToolSlot>,
+    fishery: Option<Res<pbd_app::fish::Fishery>>,
+    (mut mining, dig, time, swinging): (
+        ResMut<Mining>,
+        Res<pbd_app::config::DigConfig>,
+        Res<Time>,
+        Option<ResMut<pbd_app::held::Swinging>>,
+    ),
 ) {
+    // The tool in hand chops while a block is being broken: last frame's
+    // answer, a frame behind, which nobody can see.
+    let breaking = mining.progress().is_some();
+    if let Some(mut swinging) = swinging
+        && swinging.0 != breaking
+    {
+        swinging.0 = breaking;
+    }
+    let dt = time.delta_secs();
+    let between = dig.0.between_s;
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
+        mining.breaking.step(dt, false, None, between);
         return;
     };
     // Only on foot, and only while the walker has the pointer. A ship's guns
@@ -280,6 +387,7 @@ pub fn dig_and_place(
     // at whatever is behind it.
     if !walking.is_some_and(|readout| readout.active && readout.captured) {
         aimed.target = None;
+        mining.breaking.step(dt, false, None, between);
         return;
     }
     let eye = transform.translation();
@@ -291,7 +399,7 @@ pub fn dig_and_place(
     let target = aim::march(eye, look, |point| {
         let sample = sample_at(&fine, &contact, point);
         if sample.is_none() && unsampled.is_none() {
-            unsampled = why_unsampled(&fine, &contact, point);
+            unsampled = why_unsampled(&contact, point);
         }
         sample
     });
@@ -299,6 +407,7 @@ pub fn dig_and_place(
     let clicked =
         buttons.just_pressed(MouseButton::Left) || buttons.just_pressed(MouseButton::Right);
     let Some(target) = target else {
+        mining.breaking.step(dt, false, None, between);
         if clicked && let Some(why) = unsampled {
             error!(
                 "edit BLOCKED: the eye ray entered ground the world cannot answer for: {why:?}; \
@@ -309,7 +418,22 @@ pub fn dig_and_place(
         return;
     };
 
-    if buttons.just_pressed(MouseButton::Left) {
+    // The left button is the tool in hand's, and breaking is a HOLD: the
+    // block goes when the button has been down on it for its break time
+    // (`pbd_core::dig`). A rod casts rather than digs, and the fishing system
+    // has that button; every other tool digs, the right one fastest.
+    let tool = tools.held();
+    let block = (target.dig.cell, target.dig.layer);
+    let held = buttons.pressed(MouseButton::Left) && tool.digs();
+    let secs = if held {
+        mining.secs(block, tool, &fine, &edits, &dig.0)
+    } else {
+        None
+    };
+    let step = mining
+        .breaking
+        .step(dt, held, secs.map(|secs| (block, secs)), between);
+    if let Step::Broken((cell, layer)) = step {
         if let Some(taken) = apply_edit(
             &mut Edited {
                 fine: &mut fine,
@@ -318,19 +442,29 @@ pub fn dig_and_place(
                 slots: &mut slots,
             },
             Hands::Take,
-            target.dig.cell,
-            target.dig.layer,
+            cell,
+            layer,
             Material::Air,
         ) {
             info!(
-                "dug {taken:?} from cell {} layer {}, fine set version {}",
-                target.dig.cell, target.dig.layer, fine.version
+                "dug {taken:?} from cell {cell} layer {layer} with the {} in {:.2} s, \
+                 fine set version {}",
+                tool.name(),
+                secs.unwrap_or(0.0),
+                fine.version
             );
         }
         return;
     }
+    if held {
+        return;
+    }
 
-    if buttons.just_pressed(MouseButton::Right) {
+    // With a line out, the right button winds it in and places nothing. This
+    // runs before the fishing system, so it sees the line as it was when the
+    // button went down.
+    let line_out = fishery.is_some_and(|f| f.line.phase != pbd_core::fishing::Phase::Ready);
+    if buttons.just_pressed(MouseButton::Right) && !line_out {
         let Some(place) = target.place else {
             info!("edit refused: no air along the ray to place into");
             return;

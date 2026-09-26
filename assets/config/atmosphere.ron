@@ -31,6 +31,9 @@
     thermal_wind: 70.0,
     jet_max_mps: 45.0,
     cloud_steering: 0.7,
+    // The share of that steering wind cloud is actually carried at: the base
+    // is 300 m up, so at the full wind a cloud crossed the sky in half a minute.
+    cloud_pace: 0.2,
 
     // Sun and heat. Heat capacities are small because a day is 48 minutes.
     solar_wm2: 1000.0,
@@ -106,6 +109,8 @@
     current_per_wind: 0.08,
     ocean_drag_s: 3000.0,
     ocean_relax_s: 20000.0,
+    // The waves take this long to follow the wind, s.
+    sea_build_s: 180.0,
 
     // The weather slider brews a storm round the player.
     forcing_radius_m: 700.0,

@@ -2,7 +2,7 @@
 
 The explorer starts on dry land in **first-person walking mode**. Left-click
 the window to capture the cursor, use the mouse to look, and use WASD to walk.
-Press F to switch between walking and assisted flight. The planet is 8 km in
+Press R to switch between walking and assisted flight. The planet is 8 km in
 diameter, with a closed spherical hex surface including twelve pentagons.
 
 ```powershell
@@ -33,10 +33,10 @@ timings remain uncapped; the queue setting is not a measured latency guarantee.
 | Space | Jump | Thrust along view up |
 | Either Ctrl | No walking action | Thrust along view down |
 | Q / E | No walking action | Roll left / right |
-| F | Switch to flight | Switch to walking |
+| R | Switch to flight | Switch to walking |
 | X | No walking action | Toggle inertial damping and gravity compensation |
 | Hold B | No walking action | Brake and compensate gravity |
-| R | Reset the active mode to its starting pose | Reset the active mode to its starting pose |
+| H | Reset the active mode to its starting pose | Reset the active mode to its starting pose |
 | Esc | Release cursor and stop walking input | Release cursor and apply protective braking/hover assistance |
 | F12 | Save a screenshot under `output/captures/` | Save a screenshot under `output/captures/` |
 
@@ -47,11 +47,11 @@ into the air or ground. Flying movement follows the immediate view, including
 its roll. X affects translational assistance; physical rotational stabilization
 remains enabled.
 
-F is a **creative movement-mode switch**, not boarding or exiting a modeled
-vehicle. Switching from flight to walking places the player on the dry ground
-below, or nearby dry land when over water. Switching modes retains the ship
-entity. Inventory, ownership, a ship interior, and an interaction-based boarding
-system remain future work.
+R is a **creative movement-mode switch**, not boarding or exiting a modeled
+vehicle: F boards and leaves a craft. Switching from flight to walking places
+the player on the dry ground below, or nearby dry land when over water.
+Switching modes retains the ship entity. Ownership and a ship interior remain
+future work.
 
 ## Walking and ground contact
 
@@ -66,7 +66,7 @@ system remain future work.
 
 At 9 m/s^2, a 12 m/s jump reaches approximately 8 m above its launch point on
 level ground. The current terrain has roughly 19 m cell spacing and 6 m height
-steps: large terraces require a jump, or F to fly. A walking character cannot
+steps: large terraces require a jump, or R to fly. A walking character cannot
 automatically step up an entire terrace.
 
 Ground contact queries the exact current rendered cell caps across the capsule
@@ -122,13 +122,16 @@ not a guarantee for arbitrary teleports or unbounded simulation steps.
 .\run.bat --capture output/captures/walk.png --walk --frames 180
 .\run.bat --capture output/captures/orbit.png --view orbit --frames 180
 .\run.bat --tour --fixed-dt --capture output/captures/tour.png --frames 1800
+.\run.bat --capture output/captures/tern.png --aboard tern --frames 240
 ```
 
 `--walk` explicitly selects the default walking mode and captures its ground
 spawn when combined with `--capture`. `--fly` starts manual flight and captures
 its flight spawn when combined with `--capture`. Without `--walk`, `--fly`, or
 `--tour`, a capture uses a static photograph; its available `--view` values are
-`orbit`, `coast`, `surface`, `night`, and `pole`.
+`orbit`, `coast`, `surface`, `night`, and `pole`. `--aboard kestrel`, `tern` or
+`loon` walks, then boards that craft as soon as the world's craft are placed and
+captures its chase view; add `--seat` for the view from the seat.
 
 The ordinary flight tour follows a great circle reaching approximately
 28.6 degrees north and south. The polar tour follows a meridian through both

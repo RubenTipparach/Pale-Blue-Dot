@@ -133,6 +133,29 @@ cells it covers agree.
   finest level only inside the radius that stayed complete, and nothing is
   written past the region
 
+### Requirement: The fine set does not depend on the thread count
+A fine-set build SHALL produce the same records, byte for byte, whatever the
+number of threads it is built on. A height is a pure function of its
+direction, so a record is the same whichever thread and memo built it.
+
+#### Scenario: One thread and six
+- **WHEN** the same anchor is built on one thread and on six
+- **THEN** every level's records, the finest neighbour table, the complete
+  radii and the column records are identical
+  (`fast_build_tests::the_parallel_build_is_the_serial_build`)
+
+### Requirement: A fine floor is present wherever the shader reads one
+Every side of a coarse fine record on which the wall branch of
+`planet_surface.wgsl` reads a fine floor (a level coarser than the finest,
+the neighbour found by reflecting the centre through the edge midpoint inside
+the next finer level's complete radius) SHALL carry the full fine floor for
+that edge. Sides the shader never reads MAY carry the neighbour's height.
+
+#### Scenario: The shader's own test at the spawn
+- **WHEN** the shader's `covered_by_finer` holds for a side
+- **THEN** the record's floor equals `fine_floor` for that edge
+  (`fast_build_tests::a_floor_is_computed_wherever_the_shader_reads_one`)
+
 ### Requirement: Level selection and culling never return to the CPU
 The level of detail for a tile, the visibility cull and the draw arguments SHALL
 be computed on the GPU and consumed by an indirect draw. No per-tile LOD or
@@ -155,12 +178,21 @@ NOT be treated as a violation of the standard.
   and 1 m tall
 
 ### Requirement: Level is quantised from distance to the player
-A tile's level of detail SHALL be a function of its great-circle distance from
-the player, quantised into bands of 2,400, 1,200, 600 and 300 m for levels 8 to
-11, decided by the level below's cell the tile belongs to (its owner) against
-one published player direction. Midpoint cells with one fine owner SHALL be
-drawn and split per fragment along the owner boundary. It SHALL NOT be anchored
-to the camera, so that looking around does not change any tile's level.
+A tile's level of detail SHALL be a function of its distance from the player,
+quantised into bands of 2,400, 1,200, 600 and 300 m for levels 8 to 11.
+
+- **Distance** is the slant distance, which counts the player's height above
+  the ground. A band of radius `B` seen from height `h` SHALL cover the ground
+  out to `sqrt(B^2 - h^2)`, and SHALL be empty when `h >= B`.
+- **One table:** the band thresholds SHALL be computed once per frame from the
+  player's position and published, and the GPU's level selection and the
+  fine-set builder SHALL both read that one table.
+- **Owner:** the level SHALL be decided by the level below's cell the tile
+  belongs to (its owner), against one published player position. Midpoint
+  cells with one fine owner SHALL be drawn and split per fragment along the
+  owner boundary.
+- **Not the camera:** the level SHALL NOT be anchored to the camera, so that
+  looking around does not change any tile's level.
 
 #### Scenario: The player stands still and looks around
 - **WHEN** the camera turns or pulls back while the player does not move
@@ -169,6 +201,11 @@ to the camera, so that looking around does not change any tile's level.
 #### Scenario: Two adjacent tiles away from a threshold
 - **WHEN** two neighbouring tiles are both well inside one band
 - **THEN** both are assigned the same level, without consulting each other
+
+#### Scenario: The player climbs
+- **WHEN** the player is 300 m or more above the ground
+- **THEN** no tile is drawn at level 11
+- **AND** when the player is 2,400 m or more above the ground, no fine set is built at all
 
 ### Requirement: Ground clutter is derived, procedural and short-range
 Decorative ground clutter SHALL be built in the vertex shader from the cell's

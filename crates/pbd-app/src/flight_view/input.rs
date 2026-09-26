@@ -33,7 +33,7 @@ pub(super) fn read_pilot_input(
     // menu's key now and is consumed before this system runs, so there is no
     // arm for it here.
     let menu_open = menu.menu_holds(&mut intent.captured);
-    if !menu_open && keys.just_pressed(KeyCode::KeyR) {
+    if !menu_open && keys.just_pressed(KeyCode::KeyH) {
         intent.reset = true;
     }
     if config.mode == FlyMode::Tour {
@@ -193,7 +193,7 @@ mod tests {
             .0 = true;
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-            for key in [KeyCode::KeyB, KeyCode::KeyX, KeyCode::KeyR] {
+            for key in [KeyCode::KeyB, KeyCode::KeyX, KeyCode::KeyH] {
                 keys.press(key);
             }
         }
@@ -256,7 +256,7 @@ mod tests {
         {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
             keys.press(KeyCode::KeyW);
-            keys.press(KeyCode::KeyR);
+            keys.press(KeyCode::KeyH);
         }
         app.world_mut()
             .resource_mut::<AccumulatedMouseMotion>()

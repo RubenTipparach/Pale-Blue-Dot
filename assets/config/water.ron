@@ -5,9 +5,19 @@
 (
     time_scale: 0.75,
     depth_offset_m: 0.5,
-    swell_amplitude_m: 0.5,
-    swell_frequency: 2.0,
-    swell_speed: 1.0,
+    // The sea's surface (pbd_core::sea): the table the water cap draws and
+    // the hulls float on. Wavelengths in metres, shortest first; the shortest
+    // must be at least filter_spacings x the cap's 1.64 m vertex spacing.
+    sea: (
+        wavelengths_m: (7.0, 14.0, 28.0, 56.0, 112.0),
+        swell_wavelength_m: 70.0,
+        swell_height_m: 0.34,
+        max_steepness: 0.1,
+        max_hs_m: None,
+        depth_limit: 0.6,
+        filter_spacings: 2.5,
+        tangent_fade: (0.75, 0.9),
+    ),
     ripple_scale: 1.5,
     ripple_speed: 1.0,
     wave_steepness: 0.45,

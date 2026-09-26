@@ -11,26 +11,145 @@ use crate::terrain::Material;
 pub const SLOTS: usize = 10;
 
 /// One thing a slot can hold.
-///
-/// `Tool` exists because the slots were asked for to hold "blocks and
-/// equipment", and a store that can only hold one of those would have to be
-/// widened later by everything that touches it. No tool is CONSTRUCTED yet: a
-/// pickaxe that cannot dig is a control for a mechanic that does not exist, and
-/// digging waits on the volumetric columns. The first real tool lands with it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Item {
     /// A block of terrain material, placeable once there is a block to place.
     Block(Material),
-    /// A piece of equipment.
+    /// A piece of equipment. The tools a player works with ride the tool slot
+    /// (`Equipment`) rather than these ten; a tool as an ITEM is what a chest
+    /// or a drop would hold, and the variant is kept so neither has to widen
+    /// everything that touches a slot.
     Tool(Tool),
+    /// A caught fish, by its species' index in the body's roster
+    /// (`fauna::Roster`). An index rather than a name because a slot is `Copy`
+    /// and saved as a short code; the roster is append-only for that reason.
+    Fish(u16),
 }
 
-/// Equipment kinds. Empty of anything usable until digging lands.
+/// The four tools, in the order the picker lists them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Tool {
-    /// Breaks blocks. Placeholder: nothing constructs one until the columns
-    /// change gives it something to break.
-    Pick,
+    /// Casts, hooks and reels. Breaks nothing.
+    Rod,
+    /// Digs soil, sand and snow.
+    Shovel,
+    /// Breaks stone, rock and ore.
+    Pickaxe,
+    /// Fells trees.
+    Axe,
+}
+
+impl Tool {
+    /// Every tool, in the picker's order.
+    pub const ALL: [Tool; 4] = [Tool::Rod, Tool::Shovel, Tool::Pickaxe, Tool::Axe];
+
+    /// Where in `ALL` this tool stands.
+    pub fn index(self) -> usize {
+        Tool::ALL
+            .iter()
+            .position(|t| *t == self)
+            .expect("every tool is in ALL")
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Tool::Rod => "Fishing rod",
+            Tool::Shovel => "Shovel",
+            Tool::Pickaxe => "Pickaxe",
+            Tool::Axe => "Axe",
+        }
+    }
+
+    /// What it is for, in the picker's second line.
+    pub fn purpose(self) -> &'static str {
+        match self {
+            Tool::Rod => "cast, hook, reel",
+            Tool::Shovel => "digs soil, sand, snow",
+            Tool::Pickaxe => "breaks stone, rock, ore",
+            Tool::Axe => "chops wood; fair on turf",
+        }
+    }
+
+    /// Whether the tool breaks blocks at all. A rod does not: a player
+    /// holding it and clicking means to cast, never to dig.
+    pub fn digs(self) -> bool {
+        !matches!(self, Tool::Rod)
+    }
+}
+
+/// The tool slot: which tools the player owns and which one is in hand.
+///
+/// Its own store beside the ten slots, because a tool is not a stack and a
+/// tool held in a slot would compete with blocks and fish for room.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Equipment {
+    owned: [bool; 4],
+    held: Tool,
+}
+
+impl Default for Equipment {
+    /// A new world's kit: all four owned, the rod in hand.
+    fn default() -> Self {
+        Self {
+            owned: [true; 4],
+            held: Tool::Rod,
+        }
+    }
+}
+
+impl Equipment {
+    /// Rebuild from a save's record; a held tool that is not owned falls back
+    /// to the first owned one rather than handing the player something they
+    /// do not have.
+    pub fn from_parts(owned: [bool; 4], held: Tool) -> Self {
+        let mut equipment = Self { owned, held };
+        if !equipment.owns(held) {
+            equipment.held = Tool::ALL
+                .into_iter()
+                .find(|t| equipment.owns(*t))
+                .unwrap_or(Tool::Rod);
+        }
+        equipment
+    }
+
+    pub fn held(&self) -> Tool {
+        self.held
+    }
+
+    pub fn owned(&self) -> [bool; 4] {
+        self.owned
+    }
+
+    pub fn owns(&self, tool: Tool) -> bool {
+        self.owned[tool.index()]
+    }
+
+    /// The owned tools, in order.
+    pub fn tools(&self) -> Vec<Tool> {
+        Tool::ALL.into_iter().filter(|t| self.owns(*t)).collect()
+    }
+
+    /// Put a tool in hand. Refused, and `false`, when it is not owned or is
+    /// already held: only a real change is a change worth saving.
+    pub fn hold(&mut self, tool: Tool) -> bool {
+        if !self.owns(tool) || self.held == tool {
+            return false;
+        }
+        self.held = tool;
+        true
+    }
+
+    /// The owned tool `by` steps from `from`, wrapping: what the picker's
+    /// wheel moves through.
+    pub fn step_from(&self, from: Tool, by: i32) -> Tool {
+        let tools = self.tools();
+        if tools.is_empty() {
+            return from;
+        }
+        let at = tools.iter().position(|t| *t == from).unwrap_or(0) as i32;
+        let n = tools.len() as i32;
+        tools[(((at + by) % n + n) % n) as usize]
+    }
 }
 
 impl Item {
@@ -40,6 +159,8 @@ impl Item {
             // The reference's own block stack. A tool is a single thing.
             Item::Block(_) => 99,
             Item::Tool(_) => 1,
+            // A creel's worth: a fish is a thing you carry a few of.
+            Item::Fish(_) => 16,
         }
     }
 
@@ -49,7 +170,10 @@ impl Item {
     pub fn name(self) -> &'static str {
         match self {
             Item::Block(material) => material_name(material),
-            Item::Tool(Tool::Pick) => "pick",
+            Item::Tool(tool) => tool.name(),
+            // The species' own name is the roster's; the item alone only
+            // knows it is a fish.
+            Item::Fish(_) => "fish",
         }
     }
 }
@@ -348,7 +472,7 @@ mod tests {
 
     #[test]
     fn a_tool_takes_a_whole_slot_each() {
-        let pick = Item::Tool(Tool::Pick);
+        let pick = Item::Tool(Tool::Pickaxe);
         assert_eq!(pick.stack_limit(), 1);
         let mut slots = Slots::new();
         // Three picks take three slots, one each: they do not stack, and there
@@ -365,11 +489,55 @@ mod tests {
 
     #[test]
     fn tools_run_out_of_slots_where_blocks_would_not() {
-        let pick = Item::Tool(Tool::Pick);
+        let pick = Item::Tool(Tool::Pickaxe);
         let mut slots = Slots::new();
         // One slot each means the store holds exactly SLOTS of them, against
         // 99 * SLOTS blocks. Eleven is one too many.
         assert_eq!(slots.give(pick, SLOTS as u16), 0);
         assert_eq!(slots.give(pick, 1), 1);
+    }
+
+    #[test]
+    fn fish_stack_to_a_creel() {
+        let fish = Item::Fish(3);
+        assert_eq!(fish.stack_limit(), 16);
+        let mut slots = Slots::new();
+        assert_eq!(slots.give(fish, 20), 0);
+        assert_eq!(slots.get(0).unwrap().count, 16);
+        assert_eq!(slots.get(1).unwrap().count, 4);
+        assert_ne!(Item::Fish(3), Item::Fish(4), "a species is its own stack");
+    }
+
+    /// A new world's tool slot holds the rod and owns all four; holding what
+    /// is already held, or what is not owned, is not a change.
+    #[test]
+    fn the_tool_slot_starts_on_the_rod_and_changes_only_for_real() {
+        let mut kit = Equipment::default();
+        assert_eq!(kit.held(), Tool::Rod);
+        assert_eq!(kit.tools(), Tool::ALL.to_vec());
+        assert!(!kit.hold(Tool::Rod), "already in hand");
+        assert!(kit.hold(Tool::Shovel));
+        assert_eq!(kit.held(), Tool::Shovel);
+        let partial = Equipment::from_parts([true, false, true, false], Tool::Shovel);
+        assert_eq!(
+            partial.held(),
+            Tool::Rod,
+            "not owned falls back to the first owned"
+        );
+        let mut partial = partial;
+        assert!(!partial.hold(Tool::Axe), "not owned");
+        assert!(!Tool::Rod.digs() && Tool::Shovel.digs());
+    }
+
+    /// The picker's wheel walks the owned tools and wraps both ways.
+    #[test]
+    fn the_picker_steps_through_owned_tools_and_wraps() {
+        let kit = Equipment::default();
+        assert_eq!(kit.step_from(Tool::Rod, 1), Tool::Shovel);
+        assert_eq!(kit.step_from(Tool::Rod, -1), Tool::Axe);
+        assert_eq!(kit.step_from(Tool::Axe, 1), Tool::Rod);
+        let partial = Equipment::from_parts([true, false, true, false], Tool::Rod);
+        assert_eq!(partial.step_from(Tool::Rod, 1), Tool::Pickaxe);
+        assert_eq!(partial.step_from(Tool::Pickaxe, 1), Tool::Rod);
     }
 }

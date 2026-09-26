@@ -8,7 +8,13 @@ pub mod config;
 #[cfg(feature = "desktop")]
 pub mod controls;
 #[cfg(feature = "desktop")]
+pub mod fish;
+#[cfg(feature = "desktop")]
 pub mod flight_view;
+#[cfg(feature = "desktop")]
+pub mod held;
+#[cfg(feature = "desktop")]
+pub mod hotbar;
 #[cfg(feature = "desktop")]
 pub mod overlay;
 #[cfg(feature = "desktop")]
@@ -16,12 +22,18 @@ pub mod planet;
 #[cfg(feature = "desktop")]
 pub mod saves;
 #[cfg(feature = "desktop")]
+pub mod sea;
+#[cfg(feature = "desktop")]
 pub mod sky;
+#[cfg(feature = "desktop")]
+pub mod vehicles;
 #[cfg(feature = "desktop")]
 pub mod walking;
 #[cfg(feature = "desktop")]
 pub mod weather;
 
+#[cfg(all(test, feature = "desktop"))]
+mod sea_gpu_tests;
 #[cfg(test)]
 mod shader_tests;
 
@@ -157,7 +169,12 @@ pub struct PaleBlueDotPlugin;
 impl Plugin for PaleBlueDotPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "desktop")]
-        app.init_resource::<controls::MenuOpen>();
+        app.init_resource::<controls::MenuOpen>()
+            .init_resource::<controls::PickerKey>()
+            .add_systems(
+                PreUpdate,
+                controls::read_picker_key.after(bevy::input::InputSystems),
+            );
         app.init_resource::<SimulationClock>()
             .init_resource::<PhysicsFrame>()
             .init_resource::<FlightTelemetry>()

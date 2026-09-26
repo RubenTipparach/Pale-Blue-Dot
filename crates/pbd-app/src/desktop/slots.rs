@@ -13,90 +13,10 @@
 //! tile they stand on - asked for a second time.
 
 use bevy::prelude::*;
-use pbd_app::saves::WorldSave;
-use pbd_core::inventory::{Item, SLOTS, Slots};
+use pbd_core::inventory::{Item, SLOTS};
 use pbd_core::terrain::Material;
 
-/// The starting kit's version: the number of grants in [`KIT_GRANTS`]. A save
-/// records the version it was dealt, so a kit that grows deals a saved world
-/// what it missed, once.
-pub const KIT_VERSION: u32 = KIT_GRANTS.len() as u32;
-
-/// What the kit was before it was versioned: every save from then carries it.
-const KIT_BASE: [(Material, u16); 7] = [
-    (Material::Grass, 64),
-    (Material::Dirt, 64),
-    (Material::Stone, 48),
-    (Material::Sand, 32),
-    (Material::Snow, 16),
-    (Material::Rock, 12),
-    (Material::Ore, 3),
-];
-
-/// What each kit version added, in order; version N is entry N - 1. A new
-/// world is dealt the base and all of these; a saved world is dealt the ones
-/// past the version its log records. Append, never reorder: a saved version
-/// names a prefix of this table.
-const KIT_GRANTS: [(Material, u16); 1] = [
-    // Something to see with. A kit that could dig into the dark and not light
-    // it was a kit that could only dig in daylight.
-    (Material::Torch, 16),
-];
-
-/// The player's slots as a Bevy resource.
-///
-/// A newtype rather than a `Resource` derive on the core type: the core owns
-/// what a slot holds and depends on nothing but `std`, which is the rule that
-/// keeps engine APIs out of it. Everything here derefs straight through.
-#[derive(Resource, Default, Deref, DerefMut)]
-pub struct Hotbar(pub Slots);
-
-impl Hotbar {
-    /// What the player starts carrying.
-    ///
-    /// A kit rather than an empty row, and that is a preview decision worth
-    /// naming: there is nothing to dig yet, so an empty hotbar would draw ten
-    /// blank squares and prove nothing about the thumbnails. It goes when
-    /// mining lands and the world can fill the slots itself.
-    pub fn starting_kit() -> Self {
-        let mut slots = Slots::new();
-        for (material, count) in KIT_BASE {
-            slots.give(Item::Block(material), count);
-        }
-        grant_since(&mut slots, 0);
-        Self(slots)
-    }
-
-    /// The hotbar a world opens with: the kit for a new world, the saved
-    /// hotbar for a saved one, dealt whatever the kit has gained since the
-    /// save last saw it. A grant is recorded through the save's own durable
-    /// path on the frame it is dealt, so it is dealt exactly once.
-    pub fn restore(save: &mut WorldSave) -> Self {
-        let Some(mut slots) = save.carried.clone() else {
-            return Self::starting_kit();
-        };
-        let dealt = save.kit;
-        if dealt < KIT_VERSION {
-            let given = grant_since(&mut slots, dealt);
-            if save.deal_kit(KIT_VERSION, &slots) {
-                info!("starting kit v{dealt} -> v{KIT_VERSION}: dealt {given:?}");
-            }
-        }
-        Self(slots)
-    }
-}
-
-/// Deal every grant past `dealt` into `slots`; what was given.
-fn grant_since(slots: &mut Slots, dealt: u32) -> Vec<(Material, u16)> {
-    KIT_GRANTS
-        .iter()
-        .skip(dealt as usize)
-        .map(|&(material, count)| {
-            slots.give(Item::Block(material), count);
-            (material, count)
-        })
-        .collect()
-}
+pub use pbd_app::hotbar::Hotbar;
 
 /// Sheets across the atlas, and tiles across a sheet.
 const ATLAS_SHEETS: f32 = 4.0;
@@ -154,6 +74,50 @@ pub fn thumbnail(material: Material) -> Option<(u32, Vec2, Color)> {
         Vec2::new(tile.0, tile.1),
         Color::srgb(lift(rgb.0), lift(rgb.1), lift(rgb.2)),
     ))
+}
+
+/// Every item picture that is not a block: a tool's and a fish's own 16x16
+/// icon, loaded once, beside the atlas the blocks are cropped from. The
+/// field guide and the tool slot draw from here too, so an item has one
+/// picture everywhere it appears.
+#[derive(Resource, Clone)]
+pub struct ItemIcons {
+    pub atlas: Handle<Image>,
+    /// By roster index.
+    pub fish: Vec<Handle<Image>>,
+    /// In `Tool::ALL` order.
+    pub tools: Vec<Handle<Image>>,
+}
+
+impl ItemIcons {
+    pub fn tool(&self, tool: pbd_core::inventory::Tool) -> Handle<Image> {
+        self.tools[tool.index()].clone()
+    }
+}
+
+/// Load the icons. `PostStartup`, beside the slot row, for the atlas's sake.
+pub fn load_icons(
+    mut commands: Commands,
+    assets: Res<AssetServer>,
+    atlas: Res<pbd_app::planet::PlanetArt>,
+    fauna: Res<pbd_app::config::FaunaConfig>,
+    body: Res<pbd_app::fish::Body>,
+) {
+    let fish = fauna
+        .0
+        .roster(&body.0)
+        .iter()
+        .map(|species| assets.load(pbd_app::fish::species_icon(species)))
+        .collect();
+    let tools = pbd_core::inventory::Tool::ALL
+        .iter()
+        .map(|tool| assets.load(pbd_app::fish::tool_icon(*tool)))
+        .collect();
+    commands.insert_resource(ItemIcons {
+        atlas: atlas.0.clone(),
+        fish,
+        tools,
+    });
 }
 
 /// Marks the slot at this index, so the update can find it without a lookup.
@@ -268,9 +232,10 @@ pub fn spawn(
 #[allow(clippy::type_complexity)]
 pub fn update(
     slots: Res<Hotbar>,
+    icons: Option<Res<ItemIcons>>,
     images: Res<Assets<Image>>,
     mut cells: Query<(&SlotCell, &mut BorderColor, &mut BackgroundColor)>,
-    mut icons: Query<(&SlotIcon, &mut ImageNode)>,
+    icons_query: Query<(&SlotIcon, &mut ImageNode)>,
     mut counts: Query<(&SlotCount, &mut Text)>,
     mut art_ready: Local<bool>,
 ) {
@@ -283,28 +248,42 @@ pub fn update(
     // empty squares for ever. The stack counts were right the whole time,
     // because a number needs no asset, which is exactly what made it look like
     // a texture problem rather than a scheduling one.
-    let ready = !icons.is_empty()
-        && icons
+    let Some(items) = icons else {
+        return;
+    };
+    let ready = images.contains(&items.atlas)
+        && items
+            .fish
             .iter()
-            .next()
-            .is_some_and(|(_, node)| images.contains(&node.image));
+            .chain(&items.tools)
+            .all(|h| images.contains(h));
     if !slots.is_changed() && *art_ready {
         return;
     }
     *art_ready = ready;
+    let mut icons = icons_query;
     for (cell, mut border, mut background) in &mut cells {
         let selected = cell.0 == slots.selected();
         *border = BorderColor::all(border_of(selected));
         background.0 = fill_of(selected);
     }
     for (icon, mut node) in &mut icons {
+        // A fish or a tool is its own picture, whole, untinted.
+        let own = slots.get(icon.0).and_then(|stack| match stack.item {
+            Item::Fish(species) => items.fish.get(species as usize).cloned(),
+            Item::Tool(tool) => Some(items.tool(tool)),
+            Item::Block(_) => None,
+        });
+        if let Some(image) = own {
+            node.image = image;
+            node.rect = None;
+            node.color = Color::WHITE;
+            continue;
+        }
+        node.image = items.atlas.clone();
         let art = slots.get(icon.0).and_then(|stack| match stack.item {
             Item::Block(material) => thumbnail(material),
-            // A tool has no block texture. None of them is constructed yet, so
-            // this cannot be hit; when the first one lands it needs an icon of
-            // its own in the same change, which is the rule about no item
-            // shipping without a visual.
-            Item::Tool(_) => None,
+            Item::Tool(_) | Item::Fish(_) => None,
         });
         match art {
             Some((slot, tile, tint)) => {
@@ -349,6 +328,7 @@ pub fn input(
     mut wheel: MessageReader<bevy::input::mouse::MouseWheel>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
     menu: Option<Res<pbd_app::controls::MenuOpen>>,
+    mut picker: super::equipment::PickerWheel,
     mut slots: ResMut<Hotbar>,
 ) {
     // A menu holds the keyboard, so the number row does not change what you
@@ -389,6 +369,11 @@ pub fn input(
         } else {
             0
         };
+    }
+    // While G is held the picker has the wheel, and the slots and the zoom
+    // do not see it.
+    if picker.take(step) {
+        return;
     }
     if walking && step != 0 && !held {
         slots.step(step);
@@ -445,68 +430,5 @@ mod tests {
         assert!(value(Material::Snow) > value(Material::Stone));
         assert!(value(Material::Stone) > value(Material::Grass));
         assert!(value(Material::Sand) > value(Material::JungleGrass));
-    }
-}
-
-#[cfg(test)]
-mod kit_tests {
-    use super::*;
-
-    fn count(slots: &Slots, material: Material) -> u32 {
-        slots
-            .iter()
-            .flatten()
-            .filter(|stack| stack.item == Item::Block(material))
-            .map(|stack| u32::from(stack.count))
-            .sum()
-    }
-
-    /// A new world is dealt the base and every grant: the kit is one table
-    /// and the version is its length, so a grant cannot be in one and not the
-    /// other.
-    #[test]
-    fn a_new_world_is_dealt_the_base_and_every_grant() {
-        let kit = Hotbar::starting_kit();
-        for (material, expected) in KIT_BASE.iter().chain(&KIT_GRANTS) {
-            assert_eq!(count(&kit, *material), u32::from(*expected), "{material:?}");
-        }
-        assert_eq!(KIT_VERSION, 1);
-    }
-
-    /// The owner's report: a world saved before torches joined the kit had
-    /// none and never would. It is dealt them once, the log says so, and a
-    /// second open deals nothing.
-    #[test]
-    fn a_save_from_before_the_torches_is_dealt_them_once() {
-        let mut save = WorldSave::memory_only();
-        let mut old = Slots::new();
-        old.give(Item::Block(Material::Grass), 12);
-        old.give(Item::Block(Material::Dirt), 53);
-        save.carried = Some(old.clone());
-        assert_eq!(save.kit, 0);
-
-        let restored = Hotbar::restore(&mut save);
-        assert_eq!(count(&restored, Material::Torch), 16, "dealt the torches");
-        assert_eq!(count(&restored, Material::Grass), 12, "and kept its own");
-        assert_eq!(save.kit, KIT_VERSION, "the save records the deal");
-        assert_eq!(
-            save.carried.as_ref(),
-            Some(&restored.0),
-            "and the hotbar it was dealt into"
-        );
-
-        let again = Hotbar::restore(&mut save);
-        assert_eq!(count(&again, Material::Torch), 16, "not dealt twice");
-    }
-
-    /// A save that spent its torches is not refilled: the deal is by version,
-    /// never by what is missing.
-    #[test]
-    fn a_spent_grant_is_not_refilled() {
-        let mut save = WorldSave::memory_only();
-        save.carried = Some(Slots::new());
-        save.kit = KIT_VERSION;
-        let restored = Hotbar::restore(&mut save);
-        assert_eq!(count(&restored, Material::Torch), 0);
     }
 }

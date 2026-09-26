@@ -9,7 +9,7 @@ default = ["desktop"]
 desktop = [
     "bevy/default_app", "bevy/3d_bevy_render", "bevy/ui_bevy_render",
     "bevy/default_font", "bevy/bevy_winit", "bevy/x11", "bevy/keyboard",
-    "bevy/mouse", "dep:bytemuck",
+    "bevy/mouse", "dep:bytemuck", "dep:gltf", "dep:serde_json",
 ]
 
 [dependencies]
@@ -19,9 +19,14 @@ pbd-core = { path = "../pbd-core" }
 bytemuck = { version = "1", features = ["derive"], optional = true }
 ron = "0.12"
 serde = { version = "1", features = ["derive"] }
+gltf = { version = "1.4.1", default-features = false, features = ["names", "utils"], optional = true }
+serde_json = { version = "1", optional = true }
 
 [dev-dependencies]
 # The shipped WGSL is parsed and validated on the CPU in tests, so a shader
 # that would fail in the pipeline cache fails the suite first. The same naga
 # wgpu already carries; a test-only dependency.
 naga = { version = "27", features = ["wgsl-in"] }
+# The sea's WGSL is RUN on a GPU adapter in a test and compared with the Rust it
+# transcribes (lavapipe in a container). The same wgpu Bevy already carries.
+wgpu = { version = "27", default-features = false, features = ["vulkan", "wgsl"] }
