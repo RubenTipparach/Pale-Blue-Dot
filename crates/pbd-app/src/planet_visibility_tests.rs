@@ -340,6 +340,9 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         fade: Vec4::new(0., 1., 0., 0.),
         lod_prev: Vec3::Z.extend(TEST_BASE_LEVEL as f32),
         bands_prev: Vec4::splat(-2.),
+        // The records hold every level everywhere (`detail-fade` section 4).
+        records_in: Vec4::ONE,
+        records_out: Vec4::splat(-2.),
     }
 }
 
@@ -726,4 +729,20 @@ fn actual_gpu_cross_fade_lists_each_partition_it_draws() {
     expect(&gpu, &cells, fading(-2., -2., 1.), &[0], &[]);
     expect(&gpu, &cells, fading(-2., 2., 0.), &[0], &[]);
     expect(&gpu, &cells, fading(2., -2., 0.), &[], &[]);
+
+    // Where the old partition's cells are not among the records, the new
+    // partition is drawn whole (`detail-fade` design section 4). The old
+    // partition here stops a level short of the tile, so its level at the
+    // tile is 10 and it does not draw the tile; the new one does.
+    let short = |held: bool| {
+        let mut p = fading(-2., -2., 1.);
+        p.bands_prev = Vec4::new(-2., -2., -2., 2.);
+        if !held {
+            // Level 10's ring holds nothing: an outer cosine of 2.
+            p.records_out.z = 2.;
+        }
+        p
+    };
+    expect(&gpu, &cells, short(true), &[PART_NEW], &[]);
+    expect(&gpu, &cells, short(false), &[0], &[]);
 }

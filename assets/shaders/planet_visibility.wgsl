@@ -26,6 +26,8 @@ struct Params {
     fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs, spare
     lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
     bands_prev: vec4<f32>,     // and its band cosines
+    records_in: vec4<f32>,     // the records' ring per fine level round `lod`, cosines, a tile inside:
+    records_out: vec4<f32>,    // inner and outer (`detail-fade` section 4)
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
@@ -293,6 +295,23 @@ fn same_in_both(cell: Cell, a: Partition, b: Partition) -> bool {
     return true;
 }
 
+// Whether the records hold the old partition's cells at `direction` while a
+// fade runs (`detail-fade` design section 4): the old partition's level there
+// (the finest of its bands that covers the point) lies inside that level's
+// ring of the records, a tile inside. The base is always held. Where it is
+// not held, the old half of the dither would be a hole.
+fn old_held(direction: vec3<f32>) -> bool {
+    let old = partition_of(PART_OLD);
+    let along = dot(direction, params.lod.xyz);
+    for (var level = finest_level(); level > base_level(); level--) {
+        if dot(direction, old.anchor) > band_cos_in(old.bands, level) {
+            let k = level - base_level() - 1u;
+            return along <= params.records_in[k] && along >= params.records_out[k];
+        }
+    }
+    return true;
+}
+
 // The list entry for a cell: its index, and which partition it is drawn for
 // in the top bits. Outside a cross-fade every entry is PART_BOTH.
 fn entry(index: u32, now: bool, before: bool, same: bool) -> u32 {
@@ -350,7 +369,11 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     let now = drawn(cell, now_part);
     let before = fading && drawn(cell, before_part);
     if !now && !before { return; }
-    let same = !fading || (now && before && same_in_both(cell, now_part, before_part));
+    // A cell only the new partition draws, where the old partition's cells
+    // are not among the records, is drawn whole: that ring switches at the
+    // landing and the rest of it fades (`detail-fade` design section 4).
+    let whole = fading && now && !before && !old_held(cell.direction_height.xyz);
+    let same = !fading || whole || (now && before && same_in_both(cell, now_part, before_part));
     let radius = params.settings.x;
     let camera_radius = length(params.camera.xyz);
     // The angular horizons of camera and raised terrain overlap. Include a
@@ -410,7 +433,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     let tree_now = has_nearby_foliage(cell,center,now_part);
     let tree_before = fading && before && has_nearby_foliage(cell,center,before_part);
     if (tree_now || tree_before) && in_frustum(center,15.) {
-        if tree_now && (tree_before || !fading) {
+        if tree_now && (tree_before || !fading || whole) {
             let slot = atomicAdd(&args[1].instance_count,1u);
             foliage[slot] = id.x;
         } else {

@@ -321,6 +321,11 @@ pub struct FineSet {
 }
 
 impl FineSet {
+    /// Per fine level, the ring its records span round the anchor, metres.
+    pub fn rings(&self) -> [[f32; 2]; 4] {
+        self.rings
+    }
+
     /// This set as the partition its successor replaces (`detail-fade`).
     pub fn replaced(&self) -> Replaced {
         Replaced {
@@ -650,9 +655,32 @@ fn cover_ring(k: usize, anchor: Vec3, old: &Replaced) -> Option<[f32; 2]> {
     ])
 }
 
-/// Whether a landing can cross-fade from the partition `old` (the one the
-/// render world draws now) to the set `new`: every cell `old` draws must be
-/// among `new`'s records, or the fade would draw holes. Level `k` of `old` is
+/// The records' ring per fine level as the visibility pass tests it during a
+/// fade (`detail-fade` design section 4): cosines round the new anchor, inner
+/// and outer, each shrunk by one of that level's tiles, so a cell centre that
+/// passes is a cell the records hold. A level with no ring holds nothing
+/// (an outer cosine of 2, which no dot product reaches).
+pub fn records_cosines(rings: &[[f32; 2]; 4]) -> (Vec4, Vec4) {
+    let mut inner = [1.0f32; 4];
+    let mut outer = [2.0f32; 4];
+    for (k, &level) in FINE_LEVELS.iter().enumerate() {
+        let tile = tile_width_m(level);
+        let [from, to] = rings[k];
+        let from = if from > 0.0 { from + tile } else { 0.0 };
+        let to = to - tile;
+        if to > from {
+            inner[k] = (from / PLANET_RADIUS).cos();
+            outer[k] = (to / PLANET_RADIUS).cos();
+        }
+    }
+    (Vec4::from_array(inner), Vec4::from_array(outer))
+}
+
+/// Whether the set `new` holds every cell the partition `old` (the one the
+/// render world draws now) draws. Where it does not, the landing still
+/// cross-fades, and the visibility pass draws the new partition whole in the
+/// ring the records lack (`records_cosines`), so that ring switches at once
+/// and says so in the log. Level `k` of `old` is
 /// drawn between the complete radii of `k + 1` and `k` round its anchor; the
 /// new records of level `k` are a ring round the new anchor (`FineSet::rings`).
 /// With the anchors `d` apart, the old ring must lie inside the new. Returns
@@ -1429,6 +1457,23 @@ mod near_field_tests {
                 "moved {moved} m with bands {live:?} fits the bare margin"
             );
         }
+    }
+
+    /// The records' rings as the visibility pass tests them: a tile inside at
+    /// both edges, the finest level from the anchor out, and a level with no
+    /// ring holding nothing (`detail-fade` design section 4).
+    #[test]
+    fn the_records_rings_are_tested_a_tile_inside() {
+        let cos = |m: f32| (m / PLANET_RADIUS).cos();
+        let (inner, outer) =
+            records_cosines(&[[1100.0, 2500.0], [500.0, 1300.0], [0.0, 0.0], [0.0, 350.0]]);
+        let t = |k: usize| tile_width_m(FINE_LEVELS[k]);
+        assert!((inner.x - cos(1100.0 + t(0))).abs() < 1e-6);
+        assert!((outer.x - cos(2500.0 - t(0))).abs() < 1e-6);
+        assert!((inner.y - cos(500.0 + t(1))).abs() < 1e-6);
+        assert_eq!(inner.w, 1.0, "the finest level starts at the anchor");
+        assert!((outer.w - cos(350.0 - t(3))).abs() < 1e-6);
+        assert_eq!(outer.z, 2.0, "a level not laid holds nothing");
     }
 
     #[test]

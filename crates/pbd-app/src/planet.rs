@@ -463,6 +463,11 @@ struct PlanetParams {
     // band cosines, as `lod` and `bands`.
     lod_prev: Vec4,
     bands_prev: Vec4,
+    // The records' ring per fine level round `lod`'s anchor, cosines, inner
+    // and outer, each a tile inside (`lod::records_cosines`): where a fade's
+    // old partition is not held, the new one is drawn whole.
+    records_in: Vec4,
+    records_out: Vec4,
 }
 
 /// The eight biome slots, in `Biome` order, packed two vec4s wide for the
@@ -514,9 +519,13 @@ struct PlanetGpu {
     /// and the records that REPLACE it can never come from different frames.
     lod: lod::LodParams,
     /// The partition the last landing replaced and when it landed, while its
-    /// cross-fade runs (`detail-fade`); none when the landing could not fade
-    /// (`lod::fade_covered`) or changed no partition.
+    /// cross-fade runs (`detail-fade`); none when the landing changed no
+    /// partition, or was the first.
     lod_prev: Option<(lod::LodParams, std::time::Instant)>,
+    /// The uploaded records' ring per fine level round `lod`'s anchor,
+    /// metres: where the old partition's cells can be drawn from during a
+    /// fade (`lod::records_cosines`).
+    records: [[f32; 2]; 4],
 }
 
 #[derive(Component)]
@@ -595,6 +604,7 @@ fn upload_planet(
         uploaded: 0,
         lod: lod::LodParams::base_only(),
         lod_prev: None,
+        records: [[0.0; 2]; 4],
     });
 }
 
@@ -646,16 +656,18 @@ fn upload_fine(
     let moved = old.player != new.player || old.bands != new.bands;
     let first = old.bands == lod::LodParams::base_only().bands;
     planet.lod_prev = if moved && !first {
-        match lod::fade_covered(&old, &fine.set) {
-            Ok(()) => Some((old, std::time::Instant::now())),
-            Err(why) => {
-                info!("LOD_FADE skipped: {why}");
-                None
-            }
+        // Every landing fades (`detail-fade` design section 4). Where the new
+        // records do not hold what the old partition draws, the visibility
+        // pass draws the new partition there whole, so only that ring
+        // switches at once; before, the whole landing did.
+        if let Err(why) = lod::fade_covered(&old, &fine.set) {
+            info!("LOD_FADE partial: {why}; that ring switches at once");
         }
+        Some((old, std::time::Instant::now()))
     } else {
         None
     };
+    planet.records = fine.set.rings();
     planet.lod = new;
     lod::spent("render: fine-set upload", timer);
     // The other half of an edit's own log line: the version it made is the
@@ -845,6 +857,7 @@ fn prepare_views(
             };
         let w = &weather_settings;
         let lod = &planet.lod;
+        let (records_in, records_out) = lod::records_cosines(&planet.records);
         // The landing's cross-fade (`detail-fade`): how far through it is.
         let (prev, fade_progress, fading) = match planet.lod_prev {
             Some((prev, landed)) if scatter.lod_fade_s > 0.0 => {
@@ -979,6 +992,8 @@ fn prepare_views(
             fade: Vec4::new(scatter.tree_fade_m, fade_progress, fading, 0.0),
             lod_prev: prev.player.extend(0.0),
             bands_prev: prev.bands,
+            records_in,
+            records_out,
         };
         if let Some(mut gpu) = existing {
             gpu.uniform.set(params);

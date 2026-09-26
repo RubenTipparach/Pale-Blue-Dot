@@ -17,12 +17,15 @@ mist amount lives in a 1x1 R32Float pair on `WaterViewGpu`, read one frame
 and written the other, like the clouds' history:
 
 ```text
-target = density at the eye (0 outside cloud)
+target = smoothstep(0.01, 0.12, density at the eye)   (0 outside cloud)
 rate   = (1 + v * lens_mist_per_mps) / (target > F ? lens_mist_fog_s : lens_mist_clear_s)
 F      = target + (F - target) * exp(-dt * rate)
 ```
 
-F is zero under water, with the clouds pass off, or when the history resets
+Any cloud mists a lens, so the target saturates at a thin cloud's density:
+taken as the density itself, the first build barely misted in the middle of a
+storm deck (the density at the eye was 0.1-0.4; 7% of the frame changed, by
+at most 16 of 255). F is zero under water, with the clouds pass off, or when the history resets
 (a jump). The CPU sends `dt` and the airspeed `v` (the eye's step over `dt`).
 
 **When the lens runs.** The lens pass already runs only when needed. The CPU

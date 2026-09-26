@@ -31,6 +31,8 @@ struct Params {
     fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs, spare
     lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
     bands_prev: vec4<f32>,     // and its band cosines
+    records_in: vec4<f32>,     // the records' ring per fine level (`detail-fade` section 4);
+    records_out: vec4<f32>,    // read by the visibility pass, laid out here to match
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -1378,8 +1380,9 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         // it to the new one's over the cross-fade. Measured from the new
         // anchor alone, it jumped at every landing by the distance the anchor
         // moved, which in flight is more than the whole fade (design section
-        // 3). Outside a fade the old partition is the new one.
-        if input.part_mark == PART_BOTH {
+        // 3). Outside a fade the old partition is the new one, and the second
+        // measure is skipped.
+        if input.part_mark == PART_BOTH && params.fade.z > 0.5 {
             let before = tree_shown(radial, input.position, partition_of(PART_OLD));
             shown = mix(before, shown, params.fade.y);
         }

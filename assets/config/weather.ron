@@ -44,6 +44,22 @@
     rain_lens_refract: 1.7,
     rain_lens_speed: 1.0,
     rain_lens_size: 0.7,
+    // The drops on the lens this many times smaller than Tenebris's, trails,
+    // beads and refraction with them (lens-weather): at 1440x900 its big drop
+    // was about 55 px across, at 2 about 27.
+    rain_lens_scale: 2.0,
+    // Condensation on the lens in cloud (lens-weather), driven by the cloud's
+    // own density at the eye: how strong (0 off), seconds to mist over and to
+    // clear standing still (0 at once), how much faster per metre a second of
+    // airspeed, beads per screen height, blur in screen heights, and how far it
+    // lifts the image toward its own brightness.
+    lens_mist_strength: 0.8,
+    lens_mist_fog_s: 2.0,
+    lens_mist_clear_s: 6.0,
+    lens_mist_per_mps: 0.02,
+    lens_mist_beads: 220.0,
+    lens_mist_blur: 0.008,
+    lens_mist_whiten: 0.35,
     rain_ripple_scale: 5.0,
     rain_ripple_strength: 2.0,
     rain_flow_across: 128.0,
