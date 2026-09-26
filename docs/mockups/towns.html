@@ -1,0 +1,1577 @@
+<title>Tenebris Towns</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  color-scheme: dark;
+  --ground:#0d0f0c;
+  --panel:rgba(18,17,13,.86);
+  --panel-solid:#17150f;
+  --line:rgba(226,206,160,.17);
+  --ink:#ece4d2;
+  --muted:#a89d86;
+  --amber:#f0b43c;
+  --ember:#ff8a3d;
+  --sky:#8fc3d8;
+  --warn:#ff6b57;
+  --ok:#8fdc9a;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html,body{height:100%}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);overflow:hidden}
+#app{position:fixed;inset:0}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;outline:none;touch-action:none}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:11px;color:var(--muted)}
+button{font:inherit}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+.town{top:calc(16px + env(safe-area-inset-top,0px));left:16px;padding:12px;display:grid;gap:10px;width:min(318px,calc(100vw - 32px))}
+.town h1{margin:0;font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.02em;line-height:1}
+.town h1 span{color:var(--muted);font-weight:500;font-size:14px;letter-spacing:.08em;margin-left:6px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg button,.goto button,.small{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:6px 8px;font-family:var(--display);font-size:14px;letter-spacing:.05em;text-align:center}
+.seg button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.seg button:focus-visible,.goto button:focus-visible,.small:focus-visible{outline:2px solid var(--amber)}
+.goto{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.goto button{font-size:12.5px;padding:5px 4px;letter-spacing:.04em}
+.goto button:hover,.seg button:hover,.small:hover{border-color:rgba(240,180,60,.55)}
+.status{font-size:12px;color:var(--muted);line-height:1.45}
+.status strong{color:var(--ink);font-weight:500}
+
+.opts{top:calc(16px + env(safe-area-inset-top,0px));right:16px;width:300px;max-height:calc(100% - 200px);overflow:auto;padding:12px;display:grid;gap:12px}
+.opts header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.opts h2{margin:0;font-family:var(--display);font-weight:600;font-size:17px;letter-spacing:.04em}
+.field{display:grid;grid-template-columns:1fr auto;gap:3px 8px;align-items:center}
+.field label{font-size:12px;color:var(--muted)}
+.field output{font-family:var(--mono);font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
+.field input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--amber);margin:0}
+.field select{grid-column:1/-1;background:var(--panel-solid);color:var(--ink);border:1px solid var(--line);border-radius:3px;padding:5px;font-family:var(--body)}
+.check{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.check input{accent-color:var(--amber)}
+.note{font-size:12px;line-height:1.5;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.note b{color:var(--ink);font-weight:500}
+details summary{cursor:pointer;font-family:var(--display);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+details ul{margin:6px 0 0;padding-left:16px}
+details li{margin:4px 0}
+.src{font-family:var(--mono);font-size:10px;color:var(--sky);opacity:.85}
+
+.inst{left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));padding:10px 14px;display:grid;gap:8px;max-width:calc(100vw - 32px);width:640px}
+.where{font-family:var(--display);font-size:18px;font-weight:600;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.where small{font-family:var(--body);font-size:12px;font-weight:400;color:var(--muted);margin-left:8px;letter-spacing:0}
+.readouts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px 14px}
+.ro{display:grid;gap:1px;min-width:0}
+.ro .k{font-family:var(--display);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ro .v{font-family:var(--mono);font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ro .v small{font-size:11px;font-weight:400;color:var(--muted);margin-left:3px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-family:var(--display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:2px;border:1px solid var(--line);color:var(--muted)}
+.chip.on{color:var(--ground);background:var(--amber);border-color:var(--amber)}
+.chip.good{color:var(--ground);background:var(--ok);border-color:var(--ok)}
+.chip.bad{color:#fff;background:var(--warn);border-color:var(--warn)}
+
+.keys{left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));padding:10px 12px;font-size:12px;line-height:1.45;width:236px}
+.keys table{border-collapse:collapse;width:100%}
+.keys td{padding:1px 0;vertical-align:top}
+.keys td:first-child{font-family:var(--mono);font-size:11px;color:var(--amber);white-space:nowrap;padding-right:10px}
+.cross{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none}
+.cross::before,.cross::after{content:"";position:absolute;background:rgba(255,248,230,.8)}
+.cross::before{left:6px;top:0;width:2px;height:14px}
+.cross::after{top:6px;left:0;height:2px;width:14px}
+.hint{left:50%;top:50%;transform:translate(-50%,calc(-50% + 46px));padding:6px 12px;font-family:var(--display);letter-spacing:.06em;font-size:15px;pointer-events:none;white-space:nowrap}
+.toast{left:50%;top:calc(18px + env(safe-area-inset-top,0px));transform:translateX(-50%);padding:6px 12px;font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:14px;transition:opacity .4s;opacity:0;pointer-events:none}
+.loading{left:50%;top:50%;transform:translate(-50%,-50%);padding:12px 16px;font-family:var(--display);letter-spacing:.08em;font-size:16px}
+#optsToggle{display:none}
+
+.touch{display:none;position:absolute;inset:auto 0 0 0;height:0}
+.stick{position:absolute;left:24px;bottom:calc(244px + env(safe-area-inset-bottom,0px));width:120px;height:120px;border-radius:50%;border:1px solid var(--line);background:rgba(18,17,13,.35)}
+.stick i{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(240,180,60,.35);border:1px solid var(--amber)}
+.tbtn{position:absolute;right:24px;width:64px;height:64px;border-radius:50%;border:1px solid var(--line);background:rgba(18,17,13,.55);color:var(--ink);font-family:var(--display);letter-spacing:.06em}
+#tJump{bottom:calc(250px + env(safe-area-inset-bottom,0px))}
+#tUse{bottom:calc(326px + env(safe-area-inset-bottom,0px))}
+body.coarse.walking .touch{display:block}
+body.coarse .keys,body.coarse .hint{display:none}
+
+@media (max-width:1180px){ .keys{display:none} }
+@media (max-width:860px){
+  .readouts{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .opts{width:auto;left:16px;top:auto;bottom:calc(172px + env(safe-area-inset-bottom,0px));max-height:42%}
+  .opts[data-open="false"] > :not(header){display:none}
+  #optsToggle{display:inline-block}
+  .town{padding:10px}
+  .goto{grid-template-columns:repeat(4,1fr)}
+}
+@media (max-width:520px){
+  .readouts{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ro .v{font-size:14px}
+  .where{font-size:16px}
+  .goto button{font-size:11.5px}
+}
+@media (prefers-reduced-motion: reduce){ .toast{transition:none} }
+</style>
+
+<div id="app">
+  <canvas id="view" tabindex="0" aria-label="A walled Tenebris market town on a hex grid. Walk it in first person or look over it from above."></canvas>
+  <div class="cross" id="cross" aria-hidden="true"></div>
+
+  <section class="panel town" aria-label="Town">
+    <h1>Tenebris towns<span>PROTOTYPE</span></h1>
+    <div class="seg" role="group" aria-label="View">
+      <button id="vWalk" aria-pressed="true">Walk <span class="src">V</span></button>
+      <button id="vOver" aria-pressed="false">Overview <span class="src">V</span></button>
+    </div>
+    <div class="eyebrow">Go to</div>
+    <div class="goto" id="goto"></div>
+    <div class="status" id="status">Building the town...</div>
+  </section>
+
+  <aside class="panel opts" id="opts" data-open="true" aria-label="Options">
+    <header>
+      <h2>Stairs and collision</h2>
+      <button class="small" id="optsToggle" aria-expanded="true">Hide</button>
+    </header>
+    <div class="field"><label for="walker">Walker</label><output id="walkerO"></output>
+      <select id="walker">
+        <option value="proposed">Proposed: pitch line, snap down, slide</option>
+        <option value="today">Today's walker.rs: treads, no snap, stop dead</option>
+      </select></div>
+    <label class="check"><input type="checkbox" id="colliders"> Show collision near you <span class="src">C</span></label>
+    <label class="check"><input type="checkbox" id="noclip"> Fly through walls <span class="src">N</span></label>
+    <div class="field"><label for="tod">Time of day</label><output id="todO"></output><input type="range" id="tod" min="0" max="24" step="0.25" value="15.5"></div>
+    <div class="field" id="cutField"><label for="cut">Cutaway height (overview)</label><output id="cutO"></output><input type="range" id="cut" min="1" max="20" step="0.5" value="20"></div>
+    <div class="note" id="stairNote"></div>
+    <details class="note">
+      <summary>What is modelled</summary>
+      <ul>
+        <li><b>The engine's cell.</b> Every hex is 2.833 m flat to flat and every layer 1.000 m, the gold standard in CLAUDE.md. Walls, floors, stairs and doors are cut to it; nothing is scaled to fit.</li>
+        <li><b>Walls sit on edges, floors in cells.</b> A wall is a 0.3 m (timber) or 0.5 m (stone) slab on a cell's shared edge, so a one-cell room is 2.5 m across inside, not a solid block. The town wall and keep are whole masonry cells.</li>
+        <li><b>A storey is three layers</b>, 3 m floor to floor, 2.8 m clear under the boards.</li>
+        <li><b>Three stairs, all landing on layer lines.</b> A straight flight crosses two cells and climbs a storey in 16 risers of 0.1875 m on 0.354 m treads (28&deg;). A newel stair turns once per storey in one cell: 15 winders of 0.2 m, and 120&deg; per metre, so a door at any layer is always in the middle of an edge. Street steps climb one terrace in one cell: 6 risers of 0.167 m.</li>
+        <li><b>The walker is walking.rs</b>: a 0.3 m radius body 1.8 m tall, eye at 1.6 m, 8 m/s (14 sprinting), a 12 m/s jump under 25 m/s&sup2;, a 1.05 m step for terraces, a floor from the highest of several footprint points and a ceiling from the lowest.</li>
+        <li><b>Proposed:</b> a stair's walking surface is its pitch line, a grounded walker is held to a floor up to 0.35 m below, and thin geometry (walls, jambs, furniture, posts, people) pushes the body out along its face so it slides instead of stopping.</li>
+        <li><b>A newel stair ends in a 30&deg; landing and a rail</b>, so a walker who keeps turning meets the rail, not the well. A wider landing would take headroom from the turn below.</li>
+        <li><b>Light.</b> Sky light is dimmed on faces under a roof, standing in for the baked skylight of the voxel-light change. Hearths and the forge are the only lights indoors.</li>
+      </ul>
+    </details>
+  </aside>
+
+  <section class="panel inst" aria-label="Where you are">
+    <div class="where" id="where">-</div>
+    <div class="readouts" id="readouts"></div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="panel keys" aria-label="Controls"><div class="eyebrow" style="margin-bottom:6px">Controls</div><table id="keys"></table></section>
+  <div class="panel hint" id="hint">Click to walk</div>
+  <div class="panel toast" id="toast" role="status"></div>
+  <div class="panel loading" id="loading">Laying out the town...</div>
+
+  <div class="touch" id="touch" aria-hidden="true">
+    <div class="stick" id="stick"><i id="knob"></i></div>
+    <button class="tbtn" id="tJump">Jump</button>
+    <button class="tbtn" id="tUse">Door</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// =====================================================================
+// Scale. The engine's cell, CLAUDE.md's gold standard: 2.833 m flat to
+// flat, 1.000 m a layer. Everything below is cut to these numbers.
+// =====================================================================
+const W = 2.833;                 // tile width, flat to flat
+const R = W / Math.sqrt(3);      // circumradius = edge length, 1.6356 m
+const ROW = 1.5 * R;             // centre-to-centre between rows, 2.4535 m
+const STOREY = 3;                // layers per storey: 3 m floor to floor
+const SLAB = 0.2;                // floor boards and joists
+const WALL_T = 0.3, STONE_T = 0.5, KEEP_T = 0.6;
+const DOOR_W = 1.0, DOOR_H = 2.2;
+
+// The walker, as walking.rs has it.
+const EYE = 1.6, HALF = 0.9, BODY = 2 * HALF, BODY_R = 0.3, SKIN = 0.015;
+const STEP = 1.05;               // one terrace plus 5 cm: planet_column::STEP_M
+const WALK = 8, SPRINT = 14, JUMP = 12, GRAV = 25;
+const TOL = 0.03;                // walking.rs's 3 cm "already on it" band
+const SNAP = 0.35;               // proposed: hold a grounded walker to a floor this far below
+const TICK = 1 / 120;
+
+// Stairs, all landing on layer lines.
+const FLIGHT = { risers: 16, rise: STOREY / 16, run: 2 * W / 16 };     // 0.1875 m on 0.354 m
+const NEWEL = { perTurn: 15, rise: STOREY / 15, newelR: 0.2 };          // 0.2 m winders, 24 deg
+const STREET = { risers: 6, rise: 1 / 6, run: W / 6 };                  // 0.167 m on 0.472 m
+
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = t => t * t * (3 - 2 * t);
+function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
+function hash2(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = smooth(x - xi), yf = smooth(y - yi);
+  return lerp(lerp(hash2(xi, yi), hash2(xi + 1, yi), xf), lerp(hash2(xi, yi + 1), hash2(xi + 1, yi + 1), xf), yf);
+}
+
+// =====================================================================
+// Hex grid. Pointy-top cells; rows run along x. Offset coordinates (c, r)
+// with odd rows shifted half a cell east. Direction d has its edge normal at
+// 60*d degrees from +x; edge d runs between corners at 60d-30 and 60d+30.
+// =====================================================================
+const NC = 40, NR = 34;
+const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];   // axial
+const par = r => ((r % 2) + 2) % 2;
+const toAx = (c, r) => [c - (r - par(r)) / 2, r];
+const toOff = (q, r) => [q + (r - par(r)) / 2, r];
+function nb(c, r, d) { const [q] = toAx(c, r); return toOff(q + DIRS[d][0], r + DIRS[d][1]); }
+const cx = (c, r) => W * (c + 0.5 * par(r));
+const cz = (c, r) => ROW * r;
+const inMap = (c, r) => c >= 0 && r >= 0 && c < NC && r < NR;
+const idx = (c, r) => c + r * NC;
+const dvec = d => [Math.cos(d * Math.PI / 3), Math.sin(d * Math.PI / 3)];
+function corner(c, r, k) { const a = (60 * k - 30) * Math.PI / 180; return [cx(c, r) + R * Math.cos(a), cz(c, r) + R * Math.sin(a)]; }
+function edgeEnds(c, r, d) { return [corner(c, r, d), corner(c, r, d + 1)]; }
+function hexPts(c, r) { const p = []; for (let k = 0; k < 6; k++) p.push(corner(c, r, k)); return p; }
+function cellAt(x, z) {
+  const qf = (Math.sqrt(3) / 3 * x - z / 3) / R, rf = (2 / 3 * z) / R, sf = -qf - rf;
+  let q = Math.round(qf), r = Math.round(rf), s = Math.round(sf);
+  const dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s - sf);
+  if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
+  return toOff(q, r);
+}
+function dirTo(c, r, c2, r2) { for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (a === c2 && b === r2) return d; } return -1; }
+
+// =====================================================================
+// Pixel textures. 32 px repeats, 16 px to the metre, nearest magnification,
+// as the engine samples terrain.
+// =====================================================================
+function hex2rgb(h) { return [(h >> 16) & 255, (h >> 8) & 255, h & 255]; }
+function paint(w, h, fn, seed) {
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+  const g = cv.getContext("2d"), img = g.createImageData(w, h), rnd = rng(seed);
+  const px = (x, y, col, f = 1) => {
+    x = ((x % w) + w) % w; y = ((y % h) + h) % h; const i = (y * w + x) * 4;
+    img.data[i] = clamp(col[0] * f, 0, 255); img.data[i + 1] = clamp(col[1] * f, 0, 255); img.data[i + 2] = clamp(col[2] * f, 0, 255); img.data[i + 3] = 255;
+  };
+  fn(px, rnd, w, h);
+  g.putImageData(img, 0, 0); return cv;
+}
+const fill = (px, rnd, w, h, col, v) => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, col, 1 + (rnd() - 0.5) * v); };
+const PAINT = {
+  grass(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x5f7f3b), 0.16); for (let i = 0; i < 90; i++) { const x = rnd() * w | 0, y = rnd() * h | 0; px(x, y, hex2rgb(0x7b9b47)); px(x, y + 1, hex2rgb(0x6c8c40)); } for (let i = 0; i < 30; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x4a672e)); },
+  dirt(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x7a5b3c), 0.18); for (let i = 0; i < 26; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x9a8468)); },
+  sand(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xb9a47c), 0.12); for (let i = 0; i < 30; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x9c8a66)); },
+  cobble(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x4f4a42), 0.1);
+    for (let gy = 0; gy < 4; gy++) for (let gx = 0; gx < 4; gx++) {
+      const ox = gx * 8 + (gy % 2) * 4 + (rnd() * 2 | 0), oy = gy * 8 + (rnd() * 2 | 0), base = 0.85 + rnd() * 0.3, col = rnd() < 0.5 ? hex2rgb(0x8e877a) : hex2rgb(0x9a8d78);
+      for (let y = 1; y < 7; y++) for (let x = 1; x < 7; x++) { if ((x === 1 || x === 6) && (y === 1 || y === 6)) continue; px(ox + x, oy + y, col, base * (y < 3 ? 1.12 : y > 5 ? 0.85 : 1) * (1 + (rnd() - 0.5) * 0.1)); }
+    }
+  },
+  flag(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x6d665a), 0.08);
+    const rows = [[0, 12], [12, 10], [22, 10]];
+    for (const [y0, hh] of rows) { let x = (rnd() * 8) | 0; while (x < w + 8) { const ww = 9 + (rnd() * 8 | 0), f = 0.9 + rnd() * 0.2; for (let y = y0 + 1; y < y0 + hh; y++) for (let xx = x + 1; xx < x + ww; xx++) px(xx, y, hex2rgb(0xa89f8b), f * (1 + (rnd() - 0.5) * 0.08)); x += ww; } }
+  },
+  stone(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x776b58), 0.06);
+    for (let row = 0; row < 4; row++) { const off = (row % 2) * 8; for (let b = 0; b < 3; b++) { const x0 = off + b * 16, f = 0.9 + rnd() * 0.2; for (let y = row * 8 + 1; y < row * 8 + 8; y++) for (let x = x0 + 1; x < x0 + 16; x++) px(x, y, hex2rgb(0xb4a78e), f * (y === row * 8 + 1 ? 1.1 : 1) * (1 + (rnd() - 0.5) * 0.1)); } }
+  },
+  rubble(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x5a5750), 0.06);
+    let y = 0; while (y < h) { const hh = 5 + (rnd() * 4 | 0); let x = (rnd() * 6) | 0; while (x < w + 6) { const ww = 6 + (rnd() * 8 | 0), f = 0.85 + rnd() * 0.3, col = rnd() < 0.3 ? hex2rgb(0x9b9483) : hex2rgb(0x8a877f); for (let yy = y + 1; yy < Math.min(h, y + hh); yy++) for (let xx = x + 1; xx < x + ww; xx++) px(xx, yy, col, f * (1 + (rnd() - 0.5) * 0.12)); x += ww; } y += hh; }
+  },
+  plank(px, rnd, w, h) {
+    for (let b = 0; b < 5; b++) { const y0 = Math.round(b * 6.4), f = 0.85 + rnd() * 0.25, cut = rnd() * w | 0; for (let y = y0; y < y0 + 6; y++) for (let x = 0; x < w; x++) { const edge = y === y0 || x === cut; px(x, y, hex2rgb(0x8a6239), edge ? 0.55 : f * (1 + 0.1 * Math.sin((x + b * 7) * 0.9 + y) + (rnd() - 0.5) * 0.08)); } }
+  },
+  timber(px, rnd, w, h) { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px(x, y, hex2rgb(0x5a3a22), 1 + 0.12 * Math.sin(x * 1.3 + Math.sin(y * 0.4) * 2) + (rnd() - 0.5) * 0.1); },
+  plaster(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xdcd0b4), 0.06); for (let i = 0; i < 16; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0xc4b596)); },
+  halftimber(px, rnd, w, h) {
+    // One wall piece: one edge (1.64 m) by one storey (3 m).
+    fill(px, rnd, w, h, hex2rgb(0xdfd3b6), 0.06);
+    const beam = (x, y) => px(x, y, hex2rgb(0x4b301c), 0.9 + rnd() * 0.2);
+    for (let y = 0; y < h; y++) for (let x = 0; x < 3; x++) { beam(x, y); beam(w - 1 - x, y); }
+    for (let x = 0; x < w; x++) for (let y = 0; y < 3; y++) { beam(x, y); beam(x, h - 1 - y); beam(x, 30 + y); }
+    for (let t = 0; t < 30; t++) { const x = Math.round(3 + t * (w - 6) / 30), y = Math.round(h - 3 - t * 0.9); for (let k = 0; k < 3; k++) beam(x, y - k); }
+  },
+  thatch(px, rnd, w, h) { for (let x = 0; x < w; x++) { const f = 0.85 + rnd() * 0.3; for (let y = 0; y < h; y++) px(x, y, hex2rgb(0xa9874a), f * (1 + (rnd() - 0.5) * 0.25) * ((y % 8) < 1 ? 0.7 : 1)); } },
+  shingle(px, rnd, w, h) { for (let row = 0; row < 4; row++) { const off = (row % 2) * 4; for (let y = row * 8; y < row * 8 + 8; y++) for (let x = 0; x < w; x++) { const j = (x + off) % 8 === 0 || y === row * 8 + 7; px(x, y, hex2rgb(0x6e4b31), j ? 0.55 : (0.9 + 0.1 * Math.sin(x * 2.1 + row)) * (1 + (rnd() - 0.5) * 0.12)); } } },
+  slate(px, rnd, w, h) { for (let row = 0; row < 5; row++) { const off = (row % 2) * 5, y0 = Math.round(row * 6.4); for (let y = y0; y < y0 + 7; y++) for (let x = 0; x < w; x++) { const j = (x + off) % 10 === 0 || y === y0; px(x, y, hex2rgb(0x59626b), j ? 0.6 : 1 + (rnd() - 0.5) * 0.14); } } },
+  barrel(px, rnd, w, h) { for (let x = 0; x < w; x++) { const f = 0.85 + ((x / 4 | 0) % 2) * 0.12; for (let y = 0; y < h; y++) { const hoop = (y > 4 && y < 7) || (y > 24 && y < 27); px(x, y, hoop ? hex2rgb(0x3b3b3e) : hex2rgb(0x8c5f35), hoop ? 1 : f * (x % 4 === 0 ? 0.7 : 1)); } } },
+  iron(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x3f3f44), 0.2); },
+  cloth(px, rnd, w, h) { for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) px(x, y, ((x / 8 | 0) % 2) ? hex2rgb(0xe8dcc0) : hex2rgb(0xa8372b), 1 + (rnd() - 0.5) * 0.06); },
+  cloth2(px, rnd, w, h) { for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) px(x, y, ((x / 8 | 0) % 2) ? hex2rgb(0xe8dcc0) : hex2rgb(0x335f8c), 1 + (rnd() - 0.5) * 0.06); },
+  wool(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x8e3f2c), 0.12); for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x++) px(x, y, hex2rgb(0x6e2f22)); },
+  linen(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0xe9e1cf), 0.05); },
+  leaves(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x3f6a2c), 0.25); for (let i = 0; i < 60; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x5d8a3a)); },
+  bark(px, rnd, w, h) { for (let x = 0; x < w; x++) { const f = 0.8 + rnd() * 0.35; for (let y = 0; y < h; y++) px(x, y, hex2rgb(0x5a4330), f * (1 + (rnd() - 0.5) * 0.15)); } },
+  banner(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x2f4f7a), 0.05); for (let y = 8; y < 24; y++) for (let x = 12; x < 20; x++) if (Math.abs(x - 15.5) + Math.abs(y - 16) < 8) px(x, y, hex2rgb(0xe0b64a)); },
+};
+// Metres per texture repeat (32 px at 16 px/m = 2 m), or 0 for a piece-mapped texture.
+const REP = { grass: 2, dirt: 2, sand: 2, cobble: 2, flag: 2.5, stone: 2, rubble: 2, plank: 2, timber: 1, plaster: 2, halftimber: 0, thatch: 2, shingle: 2, slate: 2, barrel: 0, iron: 1, cloth: 0, cloth2: 0, wool: 1, linen: 1, leaves: 2, bark: 1, banner: 0 };
+const TEX = {};
+function texture(name) {
+  if (TEX[name]) return TEX[name];
+  const h = name === "halftimber" ? 64 : 32;
+  const t = new THREE.CanvasTexture(paint(32, h, PAINT[name], 1 + Object.keys(PAINT).indexOf(name) * 977));
+  t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 4;
+  return (TEX[name] = t);
+}
+
+// Sky light on a face: 1 in the open, dimmed under a roof. Stands in for the
+// baked skylight the voxel-light change carries; only the ambient term reads it.
+function skyPatch(mat) {
+  mat.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute float sky;\nvarying float vSky;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSky = sky;");
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vSky;")
+      .replace("#include <aomap_fragment>", "#include <aomap_fragment>\nreflectedLight.indirectDiffuse *= vSky;");
+  };
+  return mat;
+}
+const MAT = {};
+function material(name) {
+  if (MAT[name]) return MAT[name];
+  return (MAT[name] = skyPatch(new THREE.MeshStandardMaterial({ map: texture(name), vertexColors: true, roughness: 0.93, metalness: 0 })));
+}
+
+// =====================================================================
+// Geometry: every static face goes into one buffer per material.
+// =====================================================================
+const BUF = {};
+const buf = m => BUF[m] || (BUF[m] = { p: [], n: [], uv: [], c: [], faces: [] });
+let TINT = [1, 1, 1];
+const V = {
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s], dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  norm: a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
+};
+function uvWorld(p, n, rep) {
+  const s = 1 / rep;
+  if (Math.abs(n[1]) > 0.7) return [p[0] * s, p[2] * s];
+  const l = Math.hypot(n[0], n[2]) || 1;
+  return [(p[0] * -n[2] + p[2] * n[0]) / l * s, p[1] * s];
+}
+// A convex planar polygon. `want` orients it: the face is flipped to face it.
+function face(m, pts, want, uvf) {
+  let n = V.norm(V.cross(V.sub(pts[1], pts[0]), V.sub(pts[2], pts[0])));
+  if (want && V.dot(n, want) < 0) { pts = pts.slice().reverse(); n = V.mul(n, -1); }
+  const b = buf(m), rep = REP[m] || 1;
+  const uvs = pts.map(p => uvf ? uvf(p, n) : uvWorld(p, n, rep));
+  let c = [0, 0, 0]; for (const p of pts) c = V.add(c, p); c = V.mul(c, 1 / pts.length);
+  const start = b.p.length / 3;
+  for (let i = 1; i + 1 < pts.length; i++) for (const k of [0, i, i + 1]) {
+    b.p.push(...pts[k]); b.n.push(...n); b.uv.push(...uvs[k]); b.c.push(...TINT);
+  }
+  b.faces.push([c[0] + n[0] * 0.06, c[1] + n[1] * 0.06, c[2] + n[2] * 0.06, start, b.p.length / 3 - start]);
+}
+// An oriented box: centre (x, z), floor y0, size (sx along the heading, sy, sz across), heading `ang`.
+function box(m, x, y0, z, sx, sy, sz, ang = 0, uvf) {
+  const ca = Math.cos(ang), sa = Math.sin(ang), ex = [ca, 0, sa], ez = [-sa, 0, ca], ey = [0, 1, 0];
+  const hx = sx / 2, hz = sz / 2, c = [x, y0, z];
+  const P = (a, b, h) => V.add(V.add(V.add(c, V.mul(ex, a)), V.mul(ez, b)), [0, h, 0]);
+  const mm = typeof m === "function" ? m : () => m;
+  const q = (nrm, pts) => face(mm(nrm), pts, nrm, uvf);
+  q(ex, [P(hx, hz, 0), P(hx, -hz, 0), P(hx, -hz, sy), P(hx, hz, sy)]);
+  q(V.mul(ex, -1), [P(-hx, -hz, 0), P(-hx, hz, 0), P(-hx, hz, sy), P(-hx, -hz, sy)]);
+  q(ez, [P(-hx, hz, 0), P(hx, hz, 0), P(hx, hz, sy), P(-hx, hz, sy)]);
+  q(V.mul(ez, -1), [P(hx, -hz, 0), P(-hx, -hz, 0), P(-hx, -hz, sy), P(hx, -hz, sy)]);
+  q(ey, [P(-hx, -hz, sy), P(hx, -hz, sy), P(hx, hz, sy), P(-hx, hz, sy)]);
+  q([0, -1, 0], [P(-hx, -hz, 0), P(hx, -hz, 0), P(hx, hz, 0), P(-hx, hz, 0)]);
+}
+// A prism over a convex polygon [[x,z],...]; `sides` false skips the walls.
+function prism(mTop, mSide, pts, y0, y1, opt = {}) {
+  let cxm = 0, czm = 0; for (const p of pts) { cxm += p[0]; czm += p[1]; } cxm /= pts.length; czm /= pts.length;
+  if (opt.top !== false) face(mTop, pts.map(p => [p[0], y1, p[1]]), [0, 1, 0], opt.uvTop);
+  if (opt.bottom) face(opt.bottomMat || mTop, pts.map(p => [p[0], y0, p[1]]), [0, -1, 0]);
+  if (opt.sides === false) return;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    if (opt.sideMask && !opt.sideMask(i)) continue;
+    const mx = (a[0] + b[0]) / 2 - cxm, mz = (a[1] + b[1]) / 2 - czm;
+    face(mSide, [[a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]], [mx, 0, mz], opt.uvSide);
+  }
+}
+function cyl(m, x, y0, z, r, h, n = 10, mCap) {
+  const pts = []; for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; pts.push([x + r * Math.cos(a), z + r * Math.sin(a)]); }
+  const circ = 2 * Math.PI * r;
+  prism(mCap || m, m, pts, y0, y0 + h, { bottom: false, uvSide: REP[m] === 0 ? (p, nn) => [(Math.atan2(p[2] - z, p[0] - x) / (2 * Math.PI) + 0.5), (p[1] - y0) / h] : (p, nn) => [(Math.atan2(p[2] - z, p[0] - x) / (2 * Math.PI) + 0.5) * circ / (REP[m] || 1), p[1] / (REP[m] || 1)] });
+}
+
+// =====================================================================
+// Collision store. Two primitives, as the write-up proposes:
+//  - COLUMNS: solid runs per hex cell (terrain, masonry, full-cell slabs),
+//    what the engine's column tier already answers;
+//  - SOLIDS: thin geometry, each a convex outline in plan extruded over
+//    [y0, y1] (walls, jambs, rails, furniture, posts), plus SURFACES whose
+//    top is a function of position (stairs, roofs).
+// =====================================================================
+const MODE = { proposed: true, noclip: false };
+const TOP = new Float32Array(NC * NR);
+const TOPMAT = new Array(NC * NR).fill("grass");
+const SIDEMAT = new Array(NC * NR).fill("dirt");
+const RUNS = Array.from({ length: NC * NR }, () => []);
+const INDOOR = Array.from({ length: NC * NR }, () => []);
+const PLACES = Array.from({ length: NC * NR }, () => []);
+const AREA = new Array(NC * NR).fill("");
+const HG = 2, HASH = new Map(), SOLIDS = [];
+const hk = (gx, gz) => (gx + 512) * 4096 + (gz + 512);
+
+function aabbOf(s) {
+  if (s.type === "circ") { s.minx = s.x - s.r; s.maxx = s.x + s.r; s.minz = s.z - s.r; s.maxz = s.z + s.r; return; }
+  s.minx = s.minz = 1e9; s.maxx = s.maxz = -1e9;
+  for (const p of s.pts) { s.minx = Math.min(s.minx, p[0]); s.maxx = Math.max(s.maxx, p[0]); s.minz = Math.min(s.minz, p[1]); s.maxz = Math.max(s.maxz, p[1]); }
+}
+function addSolid(s) {
+  s.off = false; aabbOf(s);
+  if (s.type === "poly") { // orient counter-clockwise in (x, z)
+    let a = 0; for (let i = 0; i < s.pts.length; i++) { const p = s.pts[i], q = s.pts[(i + 1) % s.pts.length]; a += p[0] * q[1] - q[0] * p[1]; }
+    if (a < 0) s.pts.reverse();
+  }
+  for (let gx = Math.floor(s.minx / HG); gx <= Math.floor(s.maxx / HG); gx++)
+    for (let gz = Math.floor(s.minz / HG); gz <= Math.floor(s.maxz / HG); gz++) {
+      const k = hk(gx, gz); if (!HASH.has(k)) HASH.set(k, []); HASH.get(k).push(s);
+    }
+  SOLIDS.push(s); return s;
+}
+function rectPts(x, z, sx, sz, ang) {
+  const ca = Math.cos(ang), sa = Math.sin(ang), hx = sx / 2, hz = sz / 2;
+  return [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]].map(([a, b]) => [x + a * ca - b * sa, z + a * sa + b * ca]);
+}
+function inPoly(pts, x, z) {
+  for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; if ((q[0] - p[0]) * (z - p[1]) - (q[1] - p[1]) * (x - p[0]) < 0) return false; }
+  return true;
+}
+// A box that is drawn and collides. cls "wall" blocks unless the feet are already over it.
+function solidBox(m, x, y0, z, sx, sy, sz, ang = 0, opt = {}) {
+  if (m) box(m, x, y0, z, sx, sy, sz, ang, opt.uvf);
+  return addSolid({ type: "poly", pts: rectPts(x, z, sx, sz, ang), y0, y1: y0 + sy, cls: opt.cls || "wall", label: opt.label });
+}
+function solidCyl(m, x, y0, z, r, h, opt = {}) {
+  if (m) cyl(m, x, y0, z, r, h, opt.n || 10, opt.cap);
+  return addSolid({ type: "circ", x, z, r, y0, y1: y0 + h, cls: opt.cls || "wall", label: opt.label });
+}
+function addSurface(s) { s.type = "surf"; return addSolid(s); }
+function nearSolids(x, z, rad, out) {
+  out.length = 0; const seen = nearSolids.seen || (nearSolids.seen = new Set()); seen.clear();
+  for (let gx = Math.floor((x - rad) / HG); gx <= Math.floor((x + rad) / HG); gx++)
+    for (let gz = Math.floor((z - rad) / HG); gz <= Math.floor((z + rad) / HG); gz++) {
+      const l = HASH.get(hk(gx, gz)); if (!l) continue;
+      for (const s of l) if (!seen.has(s) && !s.off) { seen.add(s); out.push(s); }
+    }
+  return out;
+}
+// Every solid interval [bottom, top] over the point (x, z).
+function intervalsAt(x, z, out, near) {
+  out.length = 0;
+  const [c, r] = cellAt(x, z);
+  if (!inMap(c, r)) { out.push([-40, 99, "edge"]); return out; }
+  const i = idx(c, r);
+  out.push([-40, TOP[i], "ground"]);
+  for (const run of RUNS[i]) out.push(run);
+  for (const s of near) {
+    if (x < s.minx || x > s.maxx || z < s.minz || z > s.maxz) continue;
+    if (s.type === "poly") { if (inPoly(s.pts, x, z)) out.push([s.y0, s.y1, s]); }
+    else if (s.type === "circ") { if ((x - s.x) ** 2 + (z - s.z) ** 2 <= s.r * s.r) out.push([s.y0, s.y1, s]); }
+    else s.iv(x, z, out);
+  }
+  return out;
+}
+
+// Sky light and place names.
+function indoor(c, r, y0, y1) { if (inMap(c, r)) INDOOR[idx(c, r)].push([y0, y1]); }
+function place(c, r, y0, y1, name) { if (inMap(c, r)) PLACES[idx(c, r)].push([y0, y1, name]); }
+function skyAt(x, y, z) {
+  const [c, r] = cellAt(x, z); if (!inMap(c, r)) return 1;
+  for (const [a, b] of INDOOR[idx(c, r)]) if (y > a && y < b) return 0.26;
+  return 1;
+}
+
+// =====================================================================
+// Pieces
+// =====================================================================
+const CORNERS = new Map();
+function notePost(x, z, y0, y1, t, m) {
+  const k = Math.round(x * 20) + ":" + Math.round(z * 20);
+  const p = CORNERS.get(k);
+  if (p) { p.y0 = Math.min(p.y0, y0); p.y1 = Math.max(p.y1, y1); p.t = Math.max(p.t, t); }
+  else CORNERS.set(k, { x, z, y0, y1, t, m });
+}
+function buildPosts() {
+  for (const p of CORNERS.values()) {
+    const pts = []; for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; pts.push([p.x + p.t * 0.6 * Math.cos(a), p.z + p.t * 0.6 * Math.sin(a)]); }
+    prism(p.m, p.m, pts, p.y0, p.y1);
+    addSolid({ type: "circ", x: p.x, z: p.z, r: p.t * 0.55, y0: p.y0, y1: p.y1, cls: "wall" });
+  }
+}
+const DOORS = [];
+// A wall on edge d of cell (c, r), centred on the shared edge, from y0 to y1,
+// cut by openings [{yb, ye, w, door, shutters}]. mOut faces the neighbour.
+function edgeWall(c, r, d, y0, y1, o) {
+  const t = o.t || WALL_T, [A, B] = edgeEnds(c, r, d);
+  const L = Math.hypot(B[0] - A[0], B[1] - A[1]), tx = (B[0] - A[0]) / L, tz = (B[1] - A[1]) / L;
+  const [nx, nz] = dvec(d), mx = (A[0] + B[0]) / 2, mz = (A[1] + B[1]) / 2, ang = Math.atan2(tz, tx);
+  const mOut = o.mOut || "plaster", mIn = o.mIn || "plaster", mEdge = o.mEdge || "timber";
+  const pick = n => { const s = n[0] * nx + n[2] * nz; return s > 0.5 ? (typeof mOut === "function" ? mOut() : mOut) : s < -0.5 ? mIn : mEdge; };
+  const pieceUV = (p, n) => [((p[0] - A[0]) * tx + (p[2] - A[1]) * tz) / L * (n[0] * nx + n[2] * nz > 0 ? 1 : -1), (((p[1] - (o.base ?? y0)) % STOREY) + STOREY) % STOREY / STOREY];
+  const uvf = o.piece ? (p, n) => (Math.abs(n[1]) < 0.5 && Math.abs(n[0] * nx + n[2] * nz) > 0.5 && (n[0] * nx + n[2] * nz > 0) ? pieceUV(p, n) : uvWorld(p, n, REP[pick(n)] || 2)) : undefined;
+  const seg = (along, len, a, b) => { if (b - a < 0.005 || len < 0.005) return; solidBox(pick, mx + tx * along, a, mz + tz * along, len, b - a, t, ang, { uvf }); };
+  const ops = (o.openings || []).slice().sort((p, q) => p.yb - q.yb);
+  let y = y0;
+  for (const op of ops) {
+    const yb = Math.max(op.yb, y0), ye = Math.min(op.ye, y1), w = Math.min(op.w, L - 0.2), jl = (L - w) / 2;
+    seg(0, L, y, yb);
+    seg(-(w / 2 + jl / 2), jl, yb, ye); seg(w / 2 + jl / 2, jl, yb, ye);
+    if (op.door) addDoor(mx, mz, tx, tz, nx, nz, w, yb, Math.min(ye, yb + DOOR_H), t, op);
+    if (op.shutters) for (const sgn of [-1, 1]) {
+      const hx = mx + tx * sgn * w / 2 + nx * (t / 2 + 0.03), hz = mz + tz * sgn * w / 2 + nz * (t / 2 + 0.03), a2 = ang + sgn * 1.9;
+      box("timber", hx + Math.cos(a2) * w / 4 * sgn, yb, hz + Math.sin(a2) * w / 4 * sgn, w / 2, ye - yb, 0.05, a2);
+    }
+    if (op.sill) box("timber", mx + nx * 0.02, yb - 0.06, mz + nz * 0.02, w + 0.1, 0.06, t + 0.12, ang);
+    y = ye;
+  }
+  seg(0, L, y, y1);
+  if (!o.noPosts) { notePost(A[0], A[1], y0, y1, t, mEdge); notePost(B[0], B[1], y0, y1, t, mEdge); }
+}
+function addDoor(mx, mz, tx, tz, nx, nz, w, yb, ye, t, op) {
+  const hx = mx - tx * w / 2, hz = mz - tz * w / 2;
+  const pivot = new THREE.Group(); pivot.position.set(hx, yb, hz);
+  const leafMat = new THREE.MeshStandardMaterial({ map: texture("timber"), roughness: 0.9 });
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(w - 0.04, ye - yb - 0.02, 0.07), leafMat);
+  leaf.position.set(w / 2, (ye - yb) / 2, 0); leaf.castShadow = leaf.receiveShadow = true; pivot.add(leaf);
+  const iron = new THREE.Mesh(new THREE.BoxGeometry(w * 0.8, 0.06, 0.09), new THREE.MeshStandardMaterial({ color: 0x2e2e31, roughness: 0.6 }));
+  for (const f of [0.22, 0.78]) { const b = iron.clone(); b.position.set(w / 2, (ye - yb) * f, 0); pivot.add(b); }
+  const base = Math.atan2(tz, tx);
+  pivot.rotation.y = -base;
+  const solid = addSolid({ type: "poly", pts: rectPts(mx, mz, w, 0.12, base), y0: yb, y1: ye, cls: "wall", label: "door" });
+  const door = { pivot, solid, base, open: !!op.open, a: op.open ? 1 : 0, x: mx, z: mz, y: yb, swing: -(op.swing || 1), name: op.name || "door" };
+  solid.off = door.open; DOORS.push(door); DOOR_GROUP.add(pivot);
+}
+// A full-cell floor: boards on joists; the collision is a column run.
+function slabHex(c, r, y, m = "plank", under = "plank") {
+  prism(m, "timber", hexPts(c, r), y - SLAB, y, { bottom: true, bottomMat: under });
+  RUNS[idx(c, r)].push([y - SLAB, y, "floor"]);
+}
+function slabPoly(pts, y, m = "plank") {
+  prism(m, "timber", pts, y - SLAB, y, { bottom: true });
+  addSolid({ type: "poly", pts: pts.map(p => p.slice()), y0: y - SLAB, y1: y, cls: "step", label: "floor" });
+}
+function clipPoly(pts, nx, nz, d) { // keep n.p <= d
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length], dp = p[0] * nx + p[1] * nz - d, dq = q[0] * nx + q[1] * nz - d;
+    if (dp <= 0) out.push(p);
+    if ((dp < 0) !== (dq < 0) && Math.abs(dp - dq) > 1e-9) { const t = dp / (dp - dq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); }
+  }
+  return out;
+}
+function merlons(c, r, d, y, t = STONE_T, m = "rubble") {
+  const [A, B] = edgeEnds(c, r, d), [nx, nz] = dvec(d), L = R, tx = (B[0] - A[0]) / L, tz = (B[1] - A[1]) / L, ang = Math.atan2(tz, tx);
+  for (const f of [0.19, 0.81]) solidBox(m, A[0] + tx * L * f - nx * t / 2, y, A[1] + tz * L * f - nz * t / 2, 0.62, 1.2, t, ang);
+}
+
+// ---- stairs --------------------------------------------------------------
+function stairTop(u, n, rise, run, proposed) {
+  // u: distance from the foot of the first riser. n risers; the last tread is the landing.
+  if (proposed) return clamp(u / ((n - 1) * run), 0, 1) * n * rise;
+  return clamp(Math.floor(u / run) + 1, 0, n) * rise;
+}
+// A straight flight over cells (c, r) and its east (+1) or west (-1) neighbour,
+// rising one storey. The strip between the two cells' flats is R wide.
+function straightFlight(c, r, sgn, base, o = {}) {
+  const x0 = cx(c, r) - sgn * W / 2, z0 = cz(c, r), hw = R / 2, len = 2 * W, xm = x0 + sgn * W;
+  const { risers: n, rise, run } = FLIGHT;
+  for (let k = 0; k < n; k++) {
+    const top = base + (k + 1) * rise, u0 = k * run;
+    box(k === n - 1 ? "plank" : "timber", x0 + sgn * (u0 + run / 2), base, z0, run, top - base, R - 0.02);
+  }
+  addSurface({
+    pts: rectPts(xm, z0, len, R, 0), y0: base, y1: base + STOREY, label: "Straight flight",
+    detail: "16 risers of 0.1875 m on 0.354 m treads, 28°",
+    iv(x, z, out) { if (Math.abs(z - z0) > hw || (x - x0) * sgn < 0 || (x - x0) * sgn > len) return; out.push([base - 0.01, base + stairTop((x - x0) * sgn, n, rise, run, MODE.proposed), this]); },
+  });
+  // enclosed below: plastered walls either side, and the landing block's end
+  for (const s of [-1, 1]) solidBox("plaster", xm, base, z0 + s * (hw + 0.07), len, STOREY - SLAB, 0.14, 0);
+  solidBox(null, x0 + sgn * (len - run / 2), base, z0, run, STOREY - SLAB, R, 0);
+  // up top: rails round the well, open at the landing
+  const yt = base + STOREY, rail = (x, z, lx, lz) => {
+    solidBox("timber", x, yt + 0.95, z, lx, 0.08, lz, 0, { cls: "wall" });
+    addSolid({ type: "poly", pts: rectPts(x, z, lx, lz, 0), y0: yt, y1: yt + 1.0, cls: "wall", label: "rail" });
+    const nposts = Math.max(2, Math.round(Math.max(lx, lz) / 0.7));
+    for (let i = 0; i <= nposts; i++) { const f = i / nposts - 0.5; box("timber", x + f * (lx > lz ? lx - 0.06 : 0), yt, z + f * (lz > lx ? lz - 0.06 : 0), 0.07, 0.95, 0.07); }
+  };
+  for (const s of [-1, 1]) rail(x0 + sgn * (len - run) / 2, z0 + s * hw, len - run, 0.08);
+  rail(x0, z0, 0.08, R);
+  for (const cc of [c, c + sgn]) for (const s of [-1, 1]) {
+    const x = cx(cc, r);
+    slabPoly(s > 0 ? [[x - W / 2, z0 + hw], [x + W / 2, z0 + hw], [x, z0 + R]] : [[x - W / 2, z0 - hw], [x, z0 - R], [x + W / 2, z0 - hw]], yt);
+  }
+}
+// A newel stair in one cell: one turn per storey, 15 winders a turn. It climbs
+// counter-clockwise from the entry edge; a metre of rise turns 120 degrees, so
+// every doorway at a layer line is centred on an edge.
+function newelStair(c, r, entry, y0, yTop, o = {}) {
+  const x = cx(c, r), z = cz(c, r), t = o.t || WALL_T, th0 = entry * Math.PI / 3;
+  const N = Math.round((yTop - y0) / NEWEL.rise), phiEnd = (yTop - y0) / STOREY * 2 * Math.PI, dphi = 2 * Math.PI / NEWEL.perTurn;
+  const rin = W / 2 - t / 2, rOut = a => { const k = Math.round(a / (Math.PI / 3)); return rin / Math.cos(a - k * Math.PI / 3); };
+  const wedge = (a0, a1) => {
+    const pts = [[x + NEWEL.newelR * 0.9 * Math.cos(a0), z + NEWEL.newelR * 0.9 * Math.sin(a0)], [x + rOut(a0) * Math.cos(a0), z + rOut(a0) * Math.sin(a0)]];
+    for (let k = Math.ceil((a0 - Math.PI / 6) / (Math.PI / 3)); ; k++) { const ca = k * Math.PI / 3 + Math.PI / 6; if (ca >= a1) break; if (ca > a0) { const rc = rin / Math.cos(Math.PI / 6); pts.push([x + rc * Math.cos(ca), z + rc * Math.sin(ca)]); } }
+    pts.push([x + rOut(a1) * Math.cos(a1), z + rOut(a1) * Math.sin(a1)], [x + NEWEL.newelR * 0.9 * Math.cos(a1), z + NEWEL.newelR * 0.9 * Math.sin(a1)]);
+    return pts;
+  };
+  for (let i = 1; i <= N; i++) {
+    const top = y0 + i * NEWEL.rise, a0 = th0 + (i - 0.5) * dphi, a1 = a0 + dphi;
+    prism(o.tread || "stone", o.tread || "stone", wedge(a0, a1), top - 0.26, top, { bottom: true });
+  }
+  solidCyl(o.newel || "stone", x, y0, z, NEWEL.newelR, (o.wallTop || yTop + 2.6) - y0, { n: 8 });
+  const margin = dphi * 0.5, landing = o.landing === false ? margin : Math.PI * 30 / 180;
+  // The top: 30 degrees of floor past the last winder, then a rail, so a walker
+  // who keeps turning meets the rail instead of the well. Wider costs headroom:
+  // the footprint's highest floor and lowest ceiling can be 72 degrees apart.
+  if (o.landing !== false) {
+    for (let k = 0; k < 4; k++) { const a0 = th0 + phiEnd + dphi * 0.5 + k * (landing - dphi * 0.5) / 4; prism(o.tread || "stone", o.tread || "stone", wedge(a0, a0 + (landing - dphi * 0.5) / 4), yTop - 0.26, yTop, { bottom: true }); }
+    const ar = th0 + phiEnd + landing, len = rOut(ar) - NEWEL.newelR, rm = NEWEL.newelR + len / 2;
+    solidBox("timber", x + Math.cos(ar) * rm, yTop + 0.95, z + Math.sin(ar) * rm, len, 0.07, 0.08, ar);
+    addSolid({ type: "poly", pts: rectPts(x + Math.cos(ar) * rm, z + Math.sin(ar) * rm, len, 0.1, ar), y0: yTop, y1: yTop + 1.0, cls: "wall", label: "rail" });
+    for (let i = 1; i < 4; i++) { const rr = NEWEL.newelR + len * i / 4; box("timber", x + Math.cos(ar) * rr, yTop, z + Math.sin(ar) * rr, 0.06, 0.95, 0.06, ar); }
+  }
+  addSurface({
+    pts: hexPts(c, r), y0, y1: yTop, label: "Newel stair", detail: "15 winders a turn, 0.2 m risers, 3 m a turn",
+    iv(px, pz, out) {
+      if (!inPoly(this.pts, px, pz)) return;
+      const dx = px - x, dz = pz - z; if (dx * dx + dz * dz < NEWEL.newelR ** 2) return;
+      let a = Math.atan2(dz, dx) - th0; a -= Math.floor(a / (2 * Math.PI)) * 2 * Math.PI;
+      for (let k = -1; k * 2 * Math.PI + a <= phiEnd + landing; k++) {
+        const phi = a + k * 2 * Math.PI; if (phi < -margin) continue;
+        const top = MODE.proposed ? y0 + clamp(phi, 0, phiEnd) / (2 * Math.PI) * STOREY : y0 + clamp(Math.round(phi / dphi), 0, N) * NEWEL.rise;
+        out.push([top - 0.26, top, this]);
+      }
+    },
+  });
+  // walls all round, a doorway at the foot and at every exit
+  const exits = [{ d: entry, y: y0 }, ...(o.exits || [])];
+  for (const e of exits) { const want = ((entry + 2 * Math.round(e.y - y0)) % 6 + 6) % 6; if (want !== e.d) console.warn("newel exit off its edge", c, r, e, want); }
+  for (let d = 0; d < 6; d++) {
+    if (o.skip && o.skip.includes(d)) continue;
+    const openings = exits.filter(e => e.d === d).map(e => ({ yb: e.y, ye: e.y + DOOR_H, w: 0.95, door: e.door, name: e.name }));
+    if (o.slits) for (const s of o.slits) if (s.d === d) openings.push({ yb: s.y, ye: s.y + 1.1, w: 0.3 });
+    edgeWall(c, r, d, o.wallBase ?? y0, o.wallTop || yTop + 2.6, { t, mOut: o.mOut || "stone", mIn: o.mIn || "stone", mEdge: o.mEdge || "stone", openings });
+  }
+  indoor(c, r, y0, (o.wallTop || yTop + 2.6) + 0.1);
+}
+// Street steps: one terrace in one cell, climbing toward direction `up`.
+function streetSteps(c, r, up, low) {
+  const x = cx(c, r), z = cz(c, r), [ux, uz] = dvec(up), { risers: n, rise, run } = STREET;
+  const hex = hexPts(c, r);
+  for (let k = 0; k < n; k++) {
+    let p = clipPoly(hex, ux, uz, ux * x + uz * z - W / 2 + (k + 1) * run + (k === n - 1 ? 1 : 0));
+    p = clipPoly(p, -ux, -uz, -(ux * x + uz * z - W / 2 + k * run));
+    if (p.length >= 3) prism("stone", "stone", p, low, low + (k + 1) * rise);
+  }
+  addSurface({
+    pts: hex, y0: low, y1: low + 1, label: "Street steps", detail: "6 risers of 0.167 m on 0.472 m treads",
+    iv(px, pz, out) { if (!inPoly(this.pts, px, pz)) return; const u = (px - x) * ux + (pz - z) * uz + W / 2; out.push([low - 1, low + stairTop(u, n, rise, run, MODE.proposed), this]); },
+  });
+}
+
+// ---- roofs ---------------------------------------------------------------
+// A gable along x over the box [x0, x1] x [z0, z1] whose wall top is yW.
+function gableRoof(x0, x1, z0, z1, yW, o = {}) {
+  const pitch = o.pitch ?? 1, oh = o.oh ?? 0.45, m = o.m || "thatch", zc = (z0 + z1) / 2, hw = (z1 - z0) / 2, yR = yW + hw * pitch;
+  const eY = yW - oh * pitch, th = 0.18;
+  for (const s of [-1, 1]) {
+    const ze = zc + s * (hw + oh), slope = Math.hypot(hw + oh, (hw + oh) * pitch);
+    const uv = (p) => [p[0] / 2, (Math.hypot(p[2] - zc, 0) * Math.sqrt(1 + pitch * pitch)) / 2];
+    face(m, [[x0 - oh, eY + th, ze], [x1 + oh, eY + th, ze], [x1 + oh, yR + th, zc], [x0 - oh, yR + th, zc]], [0, 1, s * 0.01], uv);
+    face(o.under || "plank", [[x0 - oh, eY, ze], [x1 + oh, eY, ze], [x1 + oh, yR, zc], [x0 - oh, yR, zc]], [0, -1, 0]);
+    face(m, [[x0 - oh, eY, ze], [x1 + oh, eY, ze], [x1 + oh, eY + th, ze], [x0 - oh, eY + th, ze]], [0, 0, s]);
+    for (const xe of [x0 - oh, x1 + oh]) face(m, [[xe, eY, ze], [xe, eY + th, ze], [xe, yR + th, zc], [xe, yR, zc]], [xe < x0 ? -1 : 1, 0, 0]);
+  }
+  for (const xe of [x0, x1]) for (const sgn of [-1, 1]) face(sgn * (xe - (x0 + x1) / 2) > 0 ? (o.gable || "plaster") : "plaster", [[xe, yW, z0], [xe, yW, z1], [xe, yR, zc]], [sgn, 0, 0], o.gable === "halftimber" ? p => [(p[2] - z0) / (z1 - z0) * 2, (p[1] - yW) / 3] : undefined);
+  face(o.soffit || "plank", [[x0, yW, z0], [x1, yW, z0], [x1, yW, z1], [x0, yW, z1]], [0, -1, 0]);
+  box("timber", (x0 + x1) / 2, yR + th - 0.05, zc, x1 - x0 + 2 * oh + 0.1, 0.16, 0.22);
+  addSurface({
+    pts: [[x0 - oh, z0 - oh], [x1 + oh, z0 - oh], [x1 + oh, z1 + oh], [x0 - oh, z1 + oh]], y0: eY, y1: yR + th, label: "Roof", detail: "45° " + m,
+    iv(px, pz, out) { const top = yW + (hw - Math.abs(pz - zc)) * pitch + th; out.push([top - 0.4, top, this]); },
+  });
+  return yR;
+}
+function pyramidRoof(c, r, yW, h, m = "slate", oh = 0.35) {
+  const x = cx(c, r), z = cz(c, r), apex = [x, yW + h, z], rr = R + oh / Math.cos(Math.PI / 6);
+  const pts = []; for (let k = 0; k < 6; k++) { const a = (60 * k - 30) * Math.PI / 180; pts.push([x + rr * Math.cos(a), yW - oh * h / R, z + rr * Math.sin(a)]); }
+  for (let k = 0; k < 6; k++) { const a = pts[k], b = pts[(k + 1) % 6]; face(m, [a, b, apex], V.sub(V.mul(V.add(a, b), 0.5), [x, yW, z]), p => [(p[0] + p[2]) / 2, p[1] / 2]); face("plank", [a, b, apex], [0, -1, 0]); }
+  face("plank", hexPts(c, r).map(p => [p[0], yW, p[1]]), [0, -1, 0]);
+  RUNS[idx(c, r)].push([yW, yW + 0.3, "roof"]);
+}
+
+// =====================================================================
+// The town. Offset cells (c, r); rows run along x. A lake to the south, a
+// stone quay, a walled town on three terraces, a keep at the top.
+// =====================================================================
+const DOOR_GROUP = new THREE.Group();
+const LIGHTS = [];          // {x, y, z, color, kind}
+const FIRES = [];           // flickering glow meshes
+const NPCS = [];
+const GOTO = {};
+const WALL_TOP = 9;
+const levelOf = r => r <= 3 ? -3 : r <= 5 ? 0 : r <= 15 ? 1 : r <= 22 ? 2 : 3;
+const isWall = (c, r) => (r === 6 || r === 31) && c >= 3 && c <= 36 || (c === 3 || c === 36) && r >= 6 && r <= 31;
+const inTown = (c, r) => c >= 4 && c <= 35 && r >= 7 && r <= 30;
+const gate = (c, r) => (c === 19 || c === 20) && (r === 6 || r === 31);
+
+function setTerrain() {
+  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+    const i = idx(c, r);
+    let h = levelOf(r);
+    if (!inTown(c, r) && !isWall(c, r) && r >= 6) {
+      const d = Math.max(3 - c, c - 36, r - 31, 0);
+      h = Math.max(levelOf(Math.min(r, 30)), 1 + Math.floor(vnoise(c * 0.35, r * 0.35) * 3 + d * 0.9));
+      TOPMAT[i] = "grass"; SIDEMAT[i] = "dirt"; AREA[i] = "Outside the walls";
+    } else if (r <= 3) { TOPMAT[i] = "sand"; SIDEMAT[i] = "sand"; AREA[i] = "The lake"; }
+    else if (r <= 5) { TOPMAT[i] = "flag"; SIDEMAT[i] = "stone"; AREA[i] = "The quay"; }
+    else { TOPMAT[i] = "grass"; SIDEMAT[i] = "stone"; AREA[i] = "Town"; }
+    TOP[i] = h;
+  }
+  const street = (c, r, name) => { if (!inMap(c, r)) return; TOPMAT[idx(c, r)] = "cobble"; AREA[idx(c, r)] = name; };
+  for (let r = 6; r <= 33; r++) { street(19, r, "Gate street"); street(20, r, "Gate street"); }
+  for (let c = 4; c <= 35; c++) { street(c, 7, "Wall lane"); street(c, 30, "Wall lane"); street(c, 11, "Low street"); street(c, 19, "Middle street"); street(c, 26, "High street"); }
+  for (let r = 7; r <= 30; r++) { street(4, r, "Wall lane"); street(35, r, "Wall lane"); }
+  for (let c = 8; c <= 17; c++) for (let r = 8; r <= 10; r++) street(c, r, "Market square");
+  for (let r = 8; r <= 10; r++) street(21, r, "Inn yard");
+  for (let c = 18; c <= 21; c++) { TOP[idx(c, 1)] = TOP[idx(c, 2)] = TOP[idx(c, 3)] = -3; }
+  // the road out of the north gate stays level
+  for (let r = 31; r < NR; r++) for (const c of [18, 19, 20, 21]) { TOP[idx(c, r)] = 3; TOPMAT[idx(c, r)] = c === 19 || c === 20 ? "cobble" : "grass"; }
+  for (let c = 0; c < NC; c++) for (const r of [4, 5]) { TOP[idx(c, r)] = 0; TOPMAT[idx(c, r)] = "flag"; AREA[idx(c, r)] = "The quay"; }
+  for (const c of [19, 20]) TOP[idx(c, 6)] = 0;
+}
+
+function buildTerrain() {
+  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+    const i = idx(c, r), h = TOP[i], pts = hexPts(c, r);
+    if (!STEPCELL.has(i)) face(TOPMAT[i], pts.map(p => [p[0], h, p[1]]), [0, 1, 0]);
+    for (let d = 0; d < 6; d++) {
+      const [c2, r2] = nb(c, r, d), h2 = inMap(c2, r2) ? TOP[idx(c2, r2)] : -8;
+      if (h2 >= h) continue;
+      const [A, B] = edgeEnds(c, r, d), m = TOPMAT[i] === "grass" && SIDEMAT[i] === "dirt" ? "dirt" : SIDEMAT[i];
+      face(m, [[A[0], h2, A[1]], [B[0], h2, B[1]], [B[0], h, B[1]], [A[0], h, A[1]]], [...dvec(d).flatMap((v, k) => k === 0 ? [v, 0] : [v])]);
+    }
+  }
+}
+
+function buildWalls() {
+  for (let r = 6; r <= 31; r++) for (let c = 3; c <= 36; c++) {
+    if (!isWall(c, r)) continue;
+    const i = idx(c, r), base = TOP[i], pts = hexPts(c, r);
+    AREA[i] = "Town wall";
+    if (gate(c, r)) {
+      const archTop = base + 4;
+      RUNS[i].push([archTop, WALL_TOP, "wall"]);
+      prism("flag", "rubble", pts, archTop, WALL_TOP, { bottom: true, bottomMat: "stone" });
+      place(c, r, base, archTop, r === 6 ? "Lake gate" : "North gate");
+    } else {
+      RUNS[i].push([base, WALL_TOP, "wall"]);
+      prism("flag", "rubble", pts, base, WALL_TOP);
+    }
+    place(c, r, WALL_TOP - 0.5, WALL_TOP + 3, "Wall walk");
+    for (let d = 0; d < 6; d++) {
+      const [c2, r2] = nb(c, r, d);
+      if (isWall(c2, r2) || inTown(c2, r2)) continue;
+      merlons(c, r, d, WALL_TOP);
+    }
+  }
+  // portcullis grilles, raised
+  for (const r of [6, 31]) for (const c of [19, 20]) {
+    const x = cx(c, r), z = cz(c, r) + (r === 6 ? -1 : 1) * 1.1, y = TOP[idx(c, r)] + 3.2;
+    for (let k = -3; k <= 3; k++) box("iron", x + k * 0.4, y, z, 0.06, 0.8, 0.06);
+    box("iron", x, y + 0.3, z, 2.8, 0.06, 0.06);
+  }
+}
+
+// A stair tower against the wall: a newel from the street to the wall walk.
+function wallTower(c, r, wallDir, name) {
+  const base = TOP[idx(c, r)], dy = WALL_TOP - base, entry = ((wallDir - 2 * dy) % 6 + 6) % 6;
+  const [ec, er] = nb(c, r, entry);
+  if (!inMap(ec, er) || TOP[idx(ec, er)] !== base) console.warn("tower door does not open onto the street", c, r);
+  const top = WALL_TOP + 3;
+  newelStair(c, r, entry, base, WALL_TOP, { t: STONE_T, exits: [{ d: wallDir, y: WALL_TOP }], wallTop: top, slits: [{ d: (entry + 3) % 6, y: base + 3.5 }, { d: (entry + 2) % 6, y: base + 5.5 }] });
+  pyramidRoof(c, r, top, 3.2, "slate");
+  place(c, r, base - 0.5, top, name);
+  AREA[idx(c, r)] = name;
+  return { entry, ec, er };
+}
+
+// ---- furniture -----------------------------------------------------------
+// Positions are cell centres plus an offset along an edge direction.
+function spot(c, r, d, dist, side = 0) { const [ux, uz] = dvec(d), [vx, vz] = [-uz, ux]; return [cx(c, r) + ux * dist + vx * side, cz(c, r) + uz * dist + vz * side, Math.atan2(uz, ux)]; }
+function table(x, y, z, ang, len = 1.8) {
+  solidBox("plank", x, y + 0.7, z, len, 0.06, 0.8, ang, { cls: "wall" }).y0 = y;
+  for (const a of [-1, 1]) for (const b of [-1, 1]) box("timber", x + Math.cos(ang) * a * (len / 2 - 0.1) - Math.sin(ang) * b * 0.3, y, z + Math.sin(ang) * a * (len / 2 - 0.1) + Math.cos(ang) * b * 0.3, 0.08, 0.7, 0.08, ang);
+}
+function bench(x, y, z, ang, len = 1.6) { solidBox("timber", x, y + 0.38, z, len, 0.07, 0.32, ang).y0 = y; for (const a of [-1, 1]) box("timber", x + Math.cos(ang) * a * (len / 2 - 0.12), y, z + Math.sin(ang) * a * (len / 2 - 0.12), 0.07, 0.38, 0.28, ang); }
+function barrel(x, y, z) { solidCyl("barrel", x, y, z, 0.34, 0.9, { n: 10, cap: "timber" }); }
+function crate(x, y, z, ang = 0, s = 0.7) { solidBox("timber", x, y, z, s, s, s, ang); }
+function bed(x, y, z, ang) {
+  solidBox("timber", x, y, z, 2.0, 0.42, 1.0, ang);
+  box("wool", x + Math.cos(ang) * 0.15, y + 0.42, z + Math.sin(ang) * 0.15, 1.6, 0.1, 0.96, ang);
+  box("linen", x - Math.cos(ang) * 0.75, y + 0.42, z - Math.sin(ang) * 0.75, 0.4, 0.14, 0.7, ang);
+}
+function chest(x, y, z, ang) { solidBox("timber", x, y, z, 0.9, 0.5, 0.5, ang); box("iron", x, y + 0.48, z, 0.92, 0.04, 0.52, ang); }
+function shelf(x, y, z, ang) {
+  solidBox(null, x, y, z, 1.3, 1.8, 0.35, ang);
+  for (const h of [0, 0.6, 1.2, 1.76]) box("timber", x, y + h, z, 1.3, 0.05, 0.35, ang);
+  for (const a of [-1, 1]) box("timber", x + Math.cos(ang) * a * 0.62, y, z + Math.sin(ang) * a * 0.62, 0.05, 1.8, 0.35, ang);
+  const rn = rng((x * 100 + z) | 0);
+  for (const h of [0.05, 0.65, 1.25]) for (let k = 0; k < 4; k++) if (rn() < 0.7) { const t = (k - 1.5) * 0.28; cyl(rn() < 0.5 ? "dirt" : "sand", x + Math.cos(ang) * t, y + h, z + Math.sin(ang) * t, 0.08 + rn() * 0.04, 0.18 + rn() * 0.15, 6); }
+}
+function hearth(c, r, d, y, big = false) {
+  // against edge d, inside the cell: a stone hearth, a hood to the ceiling, a fire
+  const [x, z, a] = spot(c, r, d, W / 2 - 0.55, 0), w = big ? 1.5 : 1.2;
+  solidBox("stone", x, y, z, 0.7, 0.35, w + 0.2, a);
+  for (const s of [-1, 1]) solidBox("stone", x - Math.sin(a) * s * (w / 2), y + 0.35, z + Math.cos(a) * s * (w / 2), 0.7, 1.05, 0.2, a);
+  box("stone", x + Math.cos(a) * 0.1, y + 1.4, z + Math.sin(a) * 0.1, 0.5, STOREY - SLAB - 1.4, w + 0.2, a);
+  for (let k = -1; k <= 1; k++) box("bark", x - Math.sin(a) * k * 0.2, y + 0.35, z + Math.cos(a) * k * 0.2, 0.5, 0.1, 0.1, a + 0.4 * k);
+  addFire(x - Math.cos(a) * 0.05, y + 0.5, z - Math.sin(a) * 0.05, 1);
+}
+function addFire(x, y, z, s = 1, kind = "hearth") {
+  FIRES.push({ x, y, z, s });
+  LIGHTS.push({ x: x, y: y + 0.4, z: z, color: 0xff9a4a, kind, power: kind === "forge" ? 1.3 : 1 });
+}
+function lantern(x, y, z, post = true) {
+  if (post) { solidCyl("timber", x, y, z, 0.08, 2.6, { n: 6 }); box("timber", x + 0.25, y + 2.55, z, 0.5, 0.06, 0.06); }
+  FIRES.push({ x: x + (post ? 0.45 : 0), y: y + (post ? 2.3 : 0), z, s: 0.35, lamp: true });
+  LIGHTS.push({ x: x + (post ? 0.45 : 0), y: y + (post ? 2.25 : 0), z, color: 0xffc070, kind: "lamp", power: 0.7 });
+}
+function tree(x, y, z, s = 1) {
+  solidCyl("bark", x, y, z, 0.22 * s, 2.6 * s, { n: 7 });
+  const rn = rng((x * 31 + z * 17) | 0);
+  for (let k = 0; k < 5; k++) { const a = rn() * 6.28, d = k ? 0.9 * s : 0; box("leaves", x + Math.cos(a) * d, y + 2.2 * s + rn() * 0.9 * s, z + Math.sin(a) * d, 1.7 * s, 1.5 * s, 1.7 * s, rn()); }
+}
+function person(x, y, z, facing, tunic, opts = {}) {
+  const g = new THREE.Group(), mk = (w, h, d, col, px, py, pz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: col, roughness: 0.9 })); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; };
+  const skin = opts.skin || 0xc99a74, legs = opts.legs || 0x4a3b2c;
+  mk(0.18, 0.8, 0.2, legs, -0.11, 0.4, 0); mk(0.18, 0.8, 0.2, legs, 0.11, 0.4, 0);
+  const body = mk(0.5, 0.72, 0.28, tunic, 0, 1.16, 0);
+  mk(0.52, 0.12, 0.3, 0x3a2a1c, 0, 0.86, 0);
+  const head = mk(0.3, 0.32, 0.3, skin, 0, 1.7, 0);
+  mk(0.32, 0.1, 0.32, opts.hair || 0x3b2a1e, 0, 1.87, 0);
+  const armL = new THREE.Group(), armR = new THREE.Group(); armL.position.set(-0.33, 1.48, 0); armR.position.set(0.33, 1.48, 0);
+  const aL = mk(0.14, 0.66, 0.16, tunic, 0, 0, 0); g.remove(aL); aL.position.set(0, -0.3, 0); armL.add(aL);
+  const aR = mk(0.14, 0.66, 0.16, tunic, 0, 0, 0); g.remove(aR); aR.position.set(0, -0.3, 0); armR.add(aR);
+  g.add(armL, armR);
+  if (opts.spear) { const sp = mk(0.05, 2.3, 0.05, 0x6b4a2e, 0, 0, 0); g.remove(sp); sp.position.set(0, -0.2, 0.1); armR.add(sp); }
+  g.position.set(x, y, z); g.rotation.y = -facing + Math.PI / 2;
+  const solid = { type: "circ", x, z, r: 0.28, y0: y, y1: y + 1.9, cls: "wall", label: opts.role || "Townsperson", off: false };
+  const npc = { g, head, armL, armR, solid, role: opts.role || "Townsperson", path: opts.path, speed: opts.speed || 1.2, t: Math.random() * 10, work: opts.work, y };
+  NPCS.push(npc); return npc;
+}
+
+// ---- buildings -----------------------------------------------------------
+// A footprint of cells gets walls on every edge it shares with the outside,
+// floor slabs per storey, a ceiling, and a gable roof along x.
+function building(o) {
+  const cells = []; for (let r = o.r0; r <= o.r1; r++) for (let c = o.c0; c <= o.c1; c++) cells.push([c, r]);
+  const inB = (c, r) => cells.some(([a, b]) => a === c && b === r);
+  const base = o.base, storeys = o.storeys || 2, H = storeys * STOREY * (o.tall || 1), top = base + H;
+  const stairCells = new Set((o.stairCells || []).map(([c, r]) => c + ":" + r));
+  let minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
+  for (const [c, r] of cells) {
+    for (const p of hexPts(c, r)) { minx = Math.min(minx, p[0]); maxx = Math.max(maxx, p[0]); minz = Math.min(minz, p[1]); maxz = Math.max(maxz, p[1]); }
+    const i = idx(c, r); TOPMAT[i] = o.groundFloor || "flag"; indoor(c, r, base - 0.05, top); AREA[i] = o.name;
+    for (let s = 0; s < storeys; s++) place(c, r, base + s * STOREY * (o.tall || 1) - 0.5, base + (s + 1) * STOREY * (o.tall || 1), o.name + (storeys > 1 ? (s === 0 ? ", ground floor" : s === 1 ? ", upstairs" : ", floor " + (s + 1)) : ""));
+    RUNS[i].push([top, top + 0.3, "ceiling"]);
+    if (storeys > 1 && !o.tall) for (let s = 1; s < storeys; s++) if (!stairCells.has(c + ":" + r) && !(o.noSlab && o.noSlab(c, r, s))) slabHex(c, r, base + s * STOREY);
+    // ceiling joists, visible from inside
+    for (let s = 1; s <= storeys; s++) if (s === storeys || !stairCells.has(c + ":" + r)) box("timber", cx(c, r), base + s * STOREY * (o.tall || 1) - SLAB - 0.14, cz(c, r), W, 0.14, 0.16);
+  }
+  for (const [c, r] of cells) for (let d = 0; d < 6; d++) {
+    const [c2, r2] = nb(c, r, d); if (inB(c2, r2)) continue;
+    if (o.skipWall && o.skipWall(c, r, d)) continue;
+    for (let s = 0; s < storeys; s++) {
+      const sh = STOREY * (o.tall || 1), y0 = base + s * sh, y1 = y0 + sh, openings = [];
+      const door = (o.doors || []).find(e => e[0] === c && e[1] === r && e[2] === d && (e[3] || 0) === s);
+      if (door) openings.push({ yb: y0, ye: y0 + DOOR_H, w: DOOR_W, door: true, open: door[4] === "open", name: o.name });
+      else if (o.window && o.window(c, r, d, s)) openings.push(o.tall ? { yb: y0 + 1.6, ye: y0 + 4.4, w: 0.9, sill: true } : { yb: y0 + 1.0, ye: y0 + 2.0, w: 0.8, shutters: true, sill: true });
+      const stone = s === 0 || o.allStone;
+      edgeWall(c, r, d, y0, y1, { t: stone ? STONE_T : WALL_T, mOut: stone ? (o.stoneMat || "stone") : "halftimber", mIn: "plaster", mEdge: stone ? (o.stoneMat || "stone") : "timber", piece: !stone, base: y0, openings });
+    }
+  }
+  const gable = o.allStone ? (o.stoneMat || "stone") : "halftimber";
+  gableRoof(minx, maxx, minz, maxz, top, { m: o.roof || "thatch", pitch: o.pitch ?? 1, gable: storeys > 1 || o.tall ? gable : gable });
+  if (o.chimney) { const [c, r] = o.chimney; const x = cx(c, r), z = cz(c, r) + (o.chimneyDz || 0); solidBox("stone", x, top, z, 0.8, (maxz - minz) / 2 + 1.2, 0.8); }
+  return { cells, base, top, minx, maxx, minz, maxz };
+}
+
+function furnishHome(h, kind, cells, base) {
+  const [[c0, r0]] = cells;
+  const y = base;
+  if (kind === "hearth") {
+    const [x, z, a] = spot(c0, r0, 3, 0.2, 0.3);
+    table(x + 1.2, y, z, 0, 1.6); bench(x + 1.2, y, z - 0.75, 0, 1.5); bench(x + 1.2, y, z + 0.75, 0, 1.5);
+  }
+}
+
+function makeTown() {
+  setTerrain();
+
+  // street steps where streets cross a terrace
+  for (const [c, r] of [[19, 16], [20, 16], [19, 23], [20, 23], [4, 16], [4, 23], [35, 16], [35, 23], [19, 7], [20, 7]]) {
+    const low = TOP[idx(c, r)] - 1; TOP[idx(c, r)] = low; STEPCELL.add(idx(c, r));
+    let up = -1; for (const d of [1, 2]) { const [c2, r2] = nb(c, r, d); if (TOPMAT[idx(c2, r2)] === "cobble" && TOP[idx(c2, r2)] === low + 1) { up = d; break; } }
+    if (up < 0) up = 1;
+    streetSteps(c, r, up, low);
+    AREA[idx(c, r)] = AREA[idx(c, r)] + ", steps";
+  }
+
+  buildWalls();
+  const tw = wallTower(4, 21, 3, "West stair tower");
+  const te = wallTower(35, 19, 0, "East stair tower");
+  NO_TREE.add(idx(tw.ec, tw.er)); NO_TREE.add(idx(te.ec, te.er));
+  GOTO.tower = { x: (cx(tw.ec, tw.er) + cx(4, 21)) / 2, z: (cz(tw.ec, tw.er) + cz(4, 21)) / 2, y: TOP[idx(4, 21)], look: [cx(4, 21), cz(4, 21)] };
+
+  // ---- The Lantern: an inn on the market, a hall below and rooms above
+  const inn = building({ c0: 22, c1: 25, r0: 8, r1: 10, base: 1, name: "The Lantern inn", roof: "shingle", stairCells: [[23, 10], [24, 10]],
+    doors: [[22, 9, 3, 0, "open"], [22, 8, 3, 0]], window: (c, r, d, s) => (c + r + d) % 2 === 0, chimney: [25, 9] });
+  straightFlight(23, 10, +1, 1);
+  hearth(25, 9, 0, 1, true);
+  solidBox("plank", cx(24, 8), 1, cz(24, 8) + 0.2, 0.6, 1.05, 3.0, 0); // bar counter
+  for (const dz of [-1.1, 0, 1.1]) barrel(cx(25, 8) + 0.6, 1, cz(25, 8) + dz * 0.8);
+  for (const [c, r] of [[23, 8], [23, 9]]) { const x = cx(c, r), z = cz(c, r); table(x - 0.3, 1, z, 0, 2.0); bench(x - 0.3, 1, z - 0.75, 0, 1.9); bench(x - 0.3, 1, z + 0.75, 0, 1.9); }
+  shelf(cx(24, 8) + 0.75, 1, cz(24, 8) - 1.15, 0);
+  lantern(cx(21, 9) - 0.6, 1, cz(21, 9) + 0.9);
+  // upstairs: two rooms off the gallery
+  const ROOM = [[22, 8], [23, 8], [22, 9], [22, 10]], DORM = [[24, 8], [25, 8], [23, 9], [24, 9], [25, 9], [25, 10], [23, 10], [24, 10]];
+  const part = (P, Q, doorAt) => { for (const [c, r] of P) for (let d = 0; d < 6; d++) { const [c2, r2] = nb(c, r, d); if (!Q.some(([a, b]) => a === c2 && b === r2)) continue; const dr = doorAt.find(e => e[0] === c && e[1] === r && e[2] === d); edgeWall(c, r, d, 4, 7, { t: 0.2, mOut: "plaster", mIn: "plaster", mEdge: "timber", openings: dr ? [{ yb: 4, ye: 4 + DOOR_H, w: 0.95, door: true, name: "a room at the inn" }] : [] }); } };
+  part(ROOM, DORM, [[22, 9, 0]]);
+  bed(cx(22, 8), 4, cz(22, 8) - 0.2, 0); chest(cx(23, 8) + 0.2, 4, cz(23, 8) - 1.0, 0);
+  bed(cx(25, 8), 4, cz(25, 8) - 0.2, 0); bed(cx(24, 8) - 0.2, 4, cz(24, 8) - 0.2, 0); bed(cx(24, 9), 4, cz(24, 9) + 0.2, 0); chest(cx(25, 9) + 0.3, 4, cz(25, 9) + 0.2, Math.PI / 2);
+  GOTO.inn = { x: cx(21, 9) - 0.5, z: cz(21, 9), y: 1, look: [cx(23, 9), cz(23, 9)] };
+  GOTO.innStair = { x: cx(22, 10) - 0.4, z: cz(22, 10), y: 1, look: [cx(24, 10), cz(24, 10)] };
+  person(cx(24, 8) + 0.55, 1, cz(24, 8) + 0.2, Math.PI, 0x6b3b2a, { role: "Innkeeper", work: "wipe" });
+  person(cx(23, 9) - 0.3, 1, cz(23, 9) + 0.75, -Math.PI / 2, 0x3f5a3a, { role: "Drinker", work: "sit" });
+
+  // ---- Smithy: an open shed with a forge
+  const sx0 = cx(28, 8) - W / 2, sx1 = cx(30, 9) + W / 2, sz0 = cz(28, 8) - R, sz1 = cz(30, 9) + R;
+  for (const [x, z] of [[sx0, sz0], [sx1, sz0], [sx0, sz1], [sx1, sz1], [(sx0 + sx1) / 2, sz0], [(sx0 + sx1) / 2, sz1]]) solidCyl("timber", x, 1, z, 0.15, 3.2, { n: 6 });
+  gableRoof(sx0, sx1, sz0, sz1, 4.2, { m: "shingle", pitch: 0.7, gable: "timber" });
+  for (const [c, r] of [[28, 8], [29, 8], [30, 8], [28, 9], [29, 9], [30, 9]]) { indoor(c, r, 0.9, 4.2); AREA[idx(c, r)] = "The smithy"; TOPMAT[idx(c, r)] = "dirt"; RUNS[idx(c, r)].push([4.2, 4.4, "ceiling"]); }
+  const fx = cx(30, 9) + 0.3, fz = cz(30, 9) + 0.6;
+  solidBox("stone", fx, 1, fz, 1.6, 0.9, 1.3, 0); box("dirt", fx, 1.9, fz, 1.2, 0.05, 0.9); box("stone", fx, 2.4, fz, 1.3, 1.8, 1.0, 0);
+  addFire(fx, 1.95, fz, 0.9, "forge");
+  solidBox("iron", cx(29, 9), 1, cz(29, 9), 0.5, 0.55, 0.4, 0.3); box("iron", cx(29, 9), 1.55, cz(29, 9), 0.9, 0.22, 0.3, 0.3);
+  solidBox("timber", cx(28, 9), 1, cz(28, 9) + 0.5, 1.4, 0.6, 0.6, 0); box("sand", cx(28, 9), 1.55, cz(28, 9) + 0.5, 1.3, 0.04, 0.5);
+  person(cx(29, 9) - 0.6, 1, cz(29, 9) - 0.1, 0.3, 0x2f2f33, { role: "Smith", work: "hammer" });
+  GOTO.smithy = { x: cx(29, 7), z: cz(29, 7), y: 1, look: [cx(29, 9), cz(29, 9)] };
+
+  // ---- Market square: stalls, a well
+  const well = [cx(12, 9), cz(12, 9)];
+  solidCyl("stone", well[0], 1, well[1], 0.95, 0.85, { n: 12, cap: "stone" }); cyl("dirt", well[0], 1.84, well[1], 0.7, 0.02, 12);
+  for (const s of [-1, 1]) solidCyl("timber", well[0] + s * 0.8, 1.85, well[1], 0.08, 1.6, { n: 6 });
+  box("timber", well[0], 3.4, well[1], 1.9, 0.12, 0.12); box("shingle", well[0], 3.5, well[1], 2.2, 0.08, 1.5);
+  const stall = (c, r, cloth) => {
+    const x = cx(c, r), z = cz(c, r);
+    for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) solidCyl("timber", x + a * 0.9, 1, z + b * 0.55, 0.06, b > 0 ? 2.4 : 2.1, { n: 6 });
+    solidBox("plank", x, 1, z - 0.3, 1.9, 0.9, 0.7, 0);
+    face(cloth, [[x - 1.05, 3.45, z + 0.7], [x + 1.05, 3.45, z + 0.7], [x + 1.05, 3.05, z - 0.8], [x - 1.05, 3.05, z - 0.8]], [0, 1, 0], p => [(p[0] - x + 1.05) / 2.1, (p[2] - z + 0.8) / 1.5]);
+    face(cloth, [[x - 1.05, 3.45, z + 0.7], [x + 1.05, 3.45, z + 0.7], [x + 1.05, 3.05, z - 0.8], [x - 1.05, 3.05, z - 0.8]], [0, -1, 0], p => [(p[0] - x + 1.05) / 2.1, (p[2] - z + 0.8) / 1.5]);
+    const rn = rng(c * 7 + r);
+    for (let k = 0; k < 5; k++) box(rn() < 0.5 ? "leaves" : "sand", x - 0.75 + k * 0.37, 1.9, z - 0.3 + (rn() - 0.5) * 0.3, 0.22, 0.14, 0.22);
+    person(x, 1, z + 0.35, -Math.PI / 2, rn() < 0.5 ? 0x7a4e2a : 0x4c5a78, { role: "Stallholder", work: "idle" });
+  };
+  stall(9, 8, "cloth"); stall(15, 8, "cloth2"); stall(9, 10, "cloth2"); stall(15, 10, "cloth");
+  lantern(cx(11, 11), 1, cz(11, 11) - 0.8); lantern(cx(18, 18), 2, cz(18, 18));
+  GOTO.market = { x: cx(12, 11), z: cz(12, 11), y: 1, look: well };
+
+  // ---- Moot hall: one tall stone room
+  const moot = building({ c0: 13, c1: 17, r0: 12, r1: 14, base: 1, storeys: 1, tall: 2, allStone: true, stoneMat: "stone", name: "The moot hall", roof: "slate", pitch: 0.85,
+    doors: [[15, 12, 4, 0, "open"]], window: (c, r, d, s) => d === 1 || d === 2 || d === 4 || d === 5 });
+  for (let row = 0; row < 3; row++) for (const c of [14, 16]) bench(cx(c, 13) - 0.3, 1, cz(13, 13) + row * 1.0 - 1.2, 0, 2.2);
+  { const dais = clipPoly(hexPts(15, 14), 0, -1, -(cz(15, 14) - 0.4)); prism("plank", "timber", dais, 1, 1.4); addSolid({ type: "poly", pts: dais, y0: 1, y1: 1.4, cls: "step", label: "dais" }); }
+  table(cx(15, 14), 1.4, cz(15, 14) + 0.4, 0, 2.2);
+  for (const c of [13, 17]) { const s = c === 13 ? 1 : -1, x = cx(c, 13) - s * (W / 2 - 0.3), z = cz(c, 13); box("banner", x, 3.0, z, 0.04, 2.2, 0.9, 0, (p, n) => [(p[2] - z + 0.45) / 0.9, (p[1] - 3.0) / 2.2]); }
+  person(cx(15, 14), 1.4, cz(15, 14) + 1.1, -Math.PI / 2, 0x5b2f5b, { role: "Reeve", work: "idle" });
+  GOTO.moot = { x: cx(15, 11), z: cz(15, 11), y: 1, look: [cx(15, 13), cz(15, 13)] };
+
+  // ---- Houses
+  const homes = [
+    { c0: 5, c1: 8, r0: 12, r1: 13, front: 12, flight: true, kind: "hearth", roof: "thatch" },
+    { c0: 9, c1: 11, r0: 12, r1: 13, front: 12, newel: [9, 13], kind: "weaver", roof: "shingle" },
+    { c0: 22, c1: 24, r0: 12, r1: 13, front: 12, newel: [24, 13], kind: "cooper", roof: "thatch" },
+    { c0: 26, c1: 29, r0: 12, r1: 13, front: 12, flight: true, kind: "hearth", roof: "shingle" },
+    { c0: 31, c1: 33, r0: 12, r1: 13, front: 12, newel: [33, 13], kind: "hearth", roof: "thatch" },
+    { c0: 5, c1: 8, r0: 17, r1: 18, front: 18, flight: true, kind: "hearth", roof: "shingle" },
+    { c0: 22, c1: 24, r0: 17, r1: 18, front: 18, newel: [22, 17], kind: "baker", roof: "thatch" },
+    { c0: 26, c1: 29, r0: 17, r1: 18, front: 18, flight: true, kind: "cooper", roof: "thatch" },
+    { c0: 9, c1: 11, r0: 20, r1: 21, front: 20, newel: [11, 21], kind: "hearth", roof: "shingle" },
+    { c0: 22, c1: 25, r0: 20, r1: 21, front: 20, flight: true, kind: "weaver", roof: "thatch" },
+    { c0: 7, c1: 10, r0: 24, r1: 25, front: 25, flight: true, kind: "hearth", roof: "shingle" },
+    { c0: 12, c1: 14, r0: 24, r1: 25, front: 25, newel: [12, 24], kind: "baker", roof: "thatch" },
+  ];
+  homes.forEach((hm, n) => {
+    const base = TOP[idx(hm.c0, hm.r0)], back = hm.front === hm.r0 ? hm.r1 : hm.r0, fdirs = hm.front === hm.r0 ? [4, 5] : [1, 2];
+    const doorC = hm.c0 + 1, doorD = fdirs[n % 2];
+    const stairCells = hm.flight ? [[hm.c0 + 1, back], [hm.c0 + 2, back]] : [hm.newel];
+    const name = ["Hearth house", "Weaver's house", "Cooper's house", "Hearth house", "Hearth house", "Hearth house", "Bakehouse", "Cooper's house", "Hearth house", "Weaver's house", "Hearth house", "Bakehouse"][n];
+    const b = building({ c0: hm.c0, c1: hm.c1, r0: hm.r0, r1: hm.r1, base, name, roof: hm.roof, stairCells,
+      doors: [[doorC, hm.front, doorD, 0]], window: (c, r, d, s) => (c * 3 + r + d + s) % 3 !== 0, chimney: [hm.c1, hm.front], chimneyDz: 0,
+      skipWall: hm.newel ? (c, r, d) => false : undefined });
+    if (hm.flight) straightFlight(hm.c0 + 1, back, +1, base);
+    else {
+      const [nc, nr] = hm.newel; let entry = -1;
+      for (let d = 0; d < 6; d++) { const [a, bb] = nb(nc, nr, d); if (a >= hm.c0 && a <= hm.c1 && bb >= hm.r0 && bb <= hm.r1 && !(a === doorC && bb === hm.front)) { entry = d; break; } }
+      const own = []; for (let d = 0; d < 6; d++) { const [a, bb] = nb(nc, nr, d); if (!(a >= hm.c0 && a <= hm.c1 && bb >= hm.r0 && bb <= hm.r1)) own.push(d); }
+      newelStair(nc, nr, entry, base, base + STOREY, { t: 0.2, tread: "timber", newel: "timber", mOut: "plaster", mIn: "plaster", mEdge: "timber", exits: [{ d: entry, y: base + STOREY }], wallTop: base + 2 * STOREY, skip: own });
+    }
+    // ground floor: hearth on the gable end, a table; upstairs: beds
+    const hc = hm.c1, hr = hm.front;
+    hearth(hc, hr, 0, base);
+    const tc = hm.flight ? hm.c0 + 2 : hm.c1, tr = hm.front, tx = cx(tc, tr) - (hm.flight ? 0 : 0.6), tz = cz(tc, tr);
+    table(tx, base, tz, 0, 1.6); bench(tx, base, tz - 0.75 * (hm.front === hm.r0 ? -1 : 1), 0, 1.4);
+    if (hm.kind === "cooper") { barrel(cx(hm.c0, hm.front) - 0.4, base, cz(hm.c0, hm.front)); barrel(cx(hm.c0, hm.front) + 0.4, base, cz(hm.c0, hm.front) + 0.5); crate(cx(hm.c0, hm.front) + 0.2, base, cz(hm.c0, hm.front) - 0.6, 0.3); }
+    if (hm.kind === "weaver") { const [x, z] = [cx(hm.c0, hm.front), cz(hm.c0, hm.front)]; solidBox("timber", x, base, z, 1.4, 1.6, 0.9, 0, { uvf: undefined }); box("linen", x, base + 0.9, z, 1.3, 0.5, 0.92, 0); }
+    if (hm.kind === "baker") { const [x, z] = [cx(hm.c0, hm.front), cz(hm.c0, hm.front)]; solidCyl("stone", x, base, z, 0.9, 1.2, { n: 10, cap: "stone" }); addFire(x, base + 0.3, z - 0.7, 0.5); crate(x + 1.0, base, z + 0.6, 0.2, 0.55); }
+    const up = base + STOREY;
+    const bc = hm.front, bedC = hm.c1 - 1;
+    bed(cx(bedC, bc), up, cz(bedC, bc), 0); chest(cx(hm.c1, bc) + 0.3, up, cz(hm.c1, bc) + (hm.front === hm.r0 ? -0.9 : 0.9), 0);
+    if (n % 2 === 0) bed(cx(hm.c0, bc), up, cz(hm.c0, bc), 0);
+    const [dA, dB] = edgeEnds(doorC, hm.front, doorD), [dnx, dnz] = dvec(doorD), dmx = (dA[0] + dB[0]) / 2, dmz = (dA[1] + dB[1]) / 2;
+    const outside = { x: dmx + dnx * 1.8, z: dmz + dnz * 1.8, y: base, look: [dmx, dmz] };
+    if (n === 0) GOTO.house = outside;
+    if (n === 1) GOTO.newel = outside;
+  });
+
+  // ---- The keep: a ring of six cells round a newel stair, three storeys and a roof
+  const kc = 28, kr = 28, kb = TOP[idx(kc, kr)], ring = []; for (let d = 0; d < 6; d++) ring.push([...nb(kc, kr, d), d]);
+  const kTop = kb + 3 * STOREY;
+  for (const [c, r] of ring) {
+    const i = idx(c, r); TOPMAT[i] = "flag"; indoor(c, r, kb - 0.05, kTop); AREA[i] = "The keep";
+    for (let s = 1; s <= 3; s++) { if (s < 3) slabHex(c, r, kb + s * STOREY); else { prism("flag", "stone", hexPts(c, r), kTop - SLAB, kTop, { bottom: true, bottomMat: "plank" }); RUNS[i].push([kTop - SLAB, kTop, "roof"]); } }
+    for (let s = 0; s < 3; s++) place(c, r, kb + s * STOREY - 0.5, kb + (s + 1) * STOREY, ["The keep, store", "The keep, hall", "The keep, chamber"][s]);
+    place(c, r, kTop - 0.5, kTop + 3, "The keep, roof");
+    for (let d = 0; d < 6; d++) {
+      const [c2, r2] = nb(c, r, d); if ((c2 === kc && r2 === kr) || ring.some(([a, b]) => a === c2 && b === r2)) continue;
+      for (let s = 0; s < 3; s++) {
+        const y0 = kb + s * STOREY, openings = [];
+        if (s === 0 && c === 28 && r === 27 && d === 4) openings.push({ yb: y0, ye: y0 + DOOR_H + 0.3, w: 1.2, door: true, name: "The keep" });
+        else if (s > 0 && (d + s) % 2 === 0) openings.push({ yb: y0 + 0.9, ye: y0 + 2.1, w: 0.35 });
+        edgeWall(c, r, d, y0, y0 + STOREY, { t: KEEP_T, mOut: "rubble", mIn: "stone", mEdge: "rubble", openings });
+      }
+      merlons(c, r, d, kTop, KEEP_T);
+    }
+  }
+  newelStair(kc, kr, 3, kb, kTop, { t: 0.4, exits: [{ d: 3, y: kb + 3 }, { d: 3, y: kb + 6 }, { d: 3, y: kTop }], wallTop: kTop + 2.6, slits: [{ d: 0, y: kTop + 0.2 }] });
+  pyramidRoof(kc, kr, kTop + 2.6, 2.4, "slate");
+  place(kc, kr, kb - 0.5, kTop + 3, "The keep, stair");
+  // store
+  const [s0c, s0r] = ring[0]; for (let k = 0; k < 3; k++) barrel(cx(s0c, s0r) + 0.6 - k * 0.5, kb, cz(s0c, s0r) + (k % 2) * 0.6 - 0.3);
+  crate(cx(ring[1][0], ring[1][1]), kb, cz(ring[1][0], ring[1][1]) + 0.4, 0.4, 0.8); crate(cx(ring[5][0], ring[5][1]) + 0.3, kb, cz(ring[5][0], ring[5][1]) - 0.2, 0.1, 0.8);
+  // hall
+  hearth(ring[0][0], ring[0][1], 0, kb + 3, true);
+  const [hc2, hr2] = ring[1]; table(cx(hc2, hr2), kb + 3, cz(hc2, hr2) + 0.2, 0, 1.8); bench(cx(hc2, hr2), kb + 3, cz(hc2, hr2) + 0.95, 0, 1.6);
+  const [bc2, br2] = ring[2]; box("banner", cx(bc2, br2) - 0.9, kb + 4, cz(bc2, br2) + 0.9, 0.04, 1.8, 0.8, Math.PI / 3, (p, n) => [(p[0] + p[2]) % 1, (p[1] - kb - 4) / 1.8]);
+  // chamber
+  bed(cx(ring[1][0], ring[1][1]), kb + 6, cz(ring[1][0], ring[1][1]) + 0.2, 0); chest(cx(ring[2][0], ring[2][1]) + 0.2, kb + 6, cz(ring[2][0], ring[2][1]) + 0.4, Math.PI / 3);
+  person(cx(ring[4][0], ring[4][1]), kb, cz(ring[4][0], ring[4][1]), Math.PI / 2, 0x6b6f78, { role: "Guard", work: "idle", spear: true });
+  person(cx(ring[2][0], ring[2][1]) + 0.6, kTop, cz(ring[2][0], ring[2][1]), 0, 0x6b6f78, { role: "Lookout", work: "idle", spear: true });
+  GOTO.keep = { x: cx(28, 26), z: cz(28, 26), y: kb, look: [cx(28, 27), cz(28, 27)] };
+  GOTO.keepRoof = { x: cx(ring[3][0], ring[3][1]) - 0.3, z: cz(ring[3][0], ring[3][1]), y: kTop, look: [cx(20, 10), cz(20, 10)] };
+
+  // ---- the quay: a jetty, a boat, lamps
+  for (let r = 1; r <= 3; r++) for (const c of [19, 20]) { slabPoly(hexPts(c, r), 0, "plank"); for (let k = 0; k < 6; k += 2) { const p = corner(c, r, k); cyl("timber", p[0], -3, p[1], 0.12, 3, 6); } }
+  lantern(cx(18, 5), 0, cz(18, 5)); lantern(cx(21, 5), 0, cz(21, 5));
+  const boatX = cx(22, 2), boatZ = cz(22, 2);
+  for (let k = -3; k <= 3; k++) { const w = 1.1 * Math.cos(k / 3.6 * 1.5); box("timber", boatX + k * 0.55, -0.9, boatZ, 0.56, 0.7, Math.max(0.3, w * 2), 0); }
+  person(cx(20, 4) + 0.5, 0, cz(20, 4), Math.PI / 2, 0x5a6b7a, { role: "Boatman", path: [[cx(16, 4), cz(16, 4)], [cx(24, 4), cz(24, 4)]], speed: 1.1 });
+
+  // ---- walkers in the streets and on the wall
+  person(cx(19, 12), 1, cz(19, 12), 0, 0x7a5a3a, { role: "Carter", path: [[cx(19, 8), cz(19, 8)], [cx(19, 14), cz(19, 14)]], speed: 1.3 });
+  person(cx(8, 11), 1, cz(8, 11), 0, 0x8a3a3a, { role: "Townswoman", path: [[cx(6, 11), cz(6, 11)], [cx(17, 11), cz(17, 11)]], speed: 1.0 });
+  person(cx(10, 19), 2, cz(10, 19), 0, 0x3a6a5a, { role: "Townsman", path: [[cx(6, 19), cz(6, 19)], [cx(16, 19), cz(16, 19)]], speed: 1.2 });
+  person(cx(10, 31), WALL_TOP, cz(10, 31), 0, 0x6b6f78, { role: "Wall guard", path: [[cx(6, 31), cz(6, 31)], [cx(17, 31), cz(17, 31)]], speed: 0.9, spear: true });
+  person(cx(36, 12), WALL_TOP, cz(36, 12), 0, 0x6b6f78, { role: "Wall guard", path: [[36.25 * W, cz(36, 9)], [36.25 * W, cz(36, 27)]], speed: 0.9, spear: true });
+  lantern(cx(18, 30), 3, cz(18, 30)); lantern(cx(21, 7), 1, cz(21, 7) + 0.6);
+
+  // ---- gardens and trees
+  const rn = rng(42);
+  for (let r = 6; r < NR; r++) for (let c = 0; c < NC; c++) {
+    const i = idx(c, r);
+    if (TOPMAT[i] !== "grass" || RUNS[i].length || STEPCELL.has(i) || NO_TREE.has(i) || INDOOR[i].length) continue;
+    let near = false; for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (inMap(a, b) && (INDOOR[idx(a, b)].length || RUNS[idx(a, b)].length)) near = true; }
+    if (near && AREA[i] !== "Outside the walls") continue;
+    const outside = AREA[i] === "Outside the walls";
+    if (rn() < (outside ? 0.22 : 0.12)) tree(cx(c, r) + (rn() - 0.5), TOP[i], cz(c, r) + (rn() - 0.5), 0.8 + rn() * 0.5);
+  }
+  GOTO.gate = { x: cx(19, 5) + W / 2, z: cz(19, 5) - 1, y: 0, look: [cx(19, 12) + W / 2, cz(19, 12)] };
+  GOTO.wall = { x: cx(12, 31), z: cz(12, 31), y: WALL_TOP, look: [cx(20, 10), cz(20, 10)] };
+  buildTerrain();
+  buildPosts();
+}
+const STEPCELL = new Set(), NO_TREE = new Set();
+
+// =====================================================================
+// The walker. walking.rs's rules, with the three proposed changes behind
+// MODE.proposed: a stair answers its pitch line, a grounded walker is held
+// to a floor up to SNAP below, and thin geometry pushes the body out along
+// its face (a slide) instead of stopping it dead.
+// =====================================================================
+const P = { x: 0, z: 0, feet: 0, vy: 0, grounded: true, yaw: 0, pitch: 0, jumpHeld: false, speed: 0, lastStep: 0, lastStepT: -9, jolts: [], airOnStair: 0, surface: null, floor: 0, ceil: 99, blocked: false };
+const NEAR = [], IV = [], HEXC = new Map();
+const hexCached = (c, r) => { const k = idx(c, r); let h = HEXC.get(k); if (!h) { h = hexPts(c, r); HEXC.set(k, h); } return h; };
+const FOOT = [[0, 0]]; for (let k = 0; k < 8; k++) FOOT.push([Math.cos(k * Math.PI / 4) * (BODY_R - 0.02), Math.sin(k * Math.PI / 4) * (BODY_R - 0.02)]);
+
+function standAt(x, z, feet, lim) {
+  nearSolids(x, z, 0.8, NEAR);
+  let floor = -1e9, ceil = 1e9, src = null;
+  for (const [ox, oz] of FOOT) {
+    intervalsAt(x + ox, z + oz, IV, NEAR);
+    let f = -1e9, c = 1e9, s = null;
+    for (const [b, t, o] of IV) {
+      if (t <= feet + lim) { if (t > f) { f = t; s = o; } }
+      else if (b < c) c = b;
+    }
+    if (f > floor) { floor = f; src = s; }
+    if (c < ceil) ceil = c;
+  }
+  return { floor, ceil, src };
+}
+const blocksBody = (y0, y1, feet, lim) => y1 > feet + lim && y0 < feet + BODY - 0.02;
+function pushPoly(p, pts, r) {
+  let inside = true, best = 1e18, bx = 0, bz = 0, ex0 = 0, ez0 = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], ex = b[0] - a[0], ez = b[1] - a[1];
+    if (ex * (p.z - a[1]) - ez * (p.x - a[0]) < 0) inside = false;
+    const t = clamp(((p.x - a[0]) * ex + (p.z - a[1]) * ez) / (ex * ex + ez * ez), 0, 1), qx = a[0] + ex * t, qz = a[1] + ez * t, d2 = (p.x - qx) ** 2 + (p.z - qz) ** 2;
+    if (d2 < best) { best = d2; bx = qx; bz = qz; ex0 = ex; ez0 = ez; }
+  }
+  const d = Math.sqrt(best);
+  if (inside) {
+    let nx = bx - p.x, nz = bz - p.z, l = Math.hypot(nx, nz);
+    if (l < 1e-6) { l = Math.hypot(ex0, ez0); nx = ez0 / l; nz = -ex0 / l; l = 1; }
+    p.x = bx + nx / l * (r + 0.001); p.z = bz + nz / l * (r + 0.001); return true;
+  }
+  if (d < r) { p.x = bx + (p.x - bx) / d * (r + 0.001); p.z = bz + (p.z - bz) / d * (r + 0.001); return true; }
+  return false;
+}
+function pushCirc(p, x, z, rr) {
+  const dx = p.x - x, dz = p.z - z, d = Math.hypot(dx, dz);
+  if (d >= rr) return false;
+  if (d < 1e-6) { p.x = x + rr; return true; }
+  p.x = x + dx / d * (rr + 0.001); p.z = z + dz / d * (rr + 0.001); return true;
+}
+function hexBlocks(c, r, feet, lim) {
+  if (!inMap(c, r)) return true;
+  const i = idx(c, r);
+  if (blocksBody(-40, TOP[i], feet, lim)) return true;
+  for (const [b, t] of RUNS[i]) if (blocksBody(b, t, feet, lim)) return true;
+  return false;
+}
+function pushOut(p, feet, lim) {
+  let any = false;
+  for (let it = 0; it < 4; it++) {
+    let moved = false;
+    const [c, r] = cellAt(p.x, p.z);
+    for (let d = -1; d < 6; d++) { const [cc, rr] = d < 0 ? [c, r] : nb(c, r, d); if (hexBlocks(cc, rr, feet, lim)) moved = pushPoly(p, hexCached(cc, rr), BODY_R) || moved; }
+    nearSolids(p.x, p.z, 1.0, NEAR);
+    for (const s of NEAR) {
+      if (s.type === "surf" || !blocksBody(s.y0, s.y1, feet, s.cls === "step" ? lim : TOL)) continue;
+      moved = (s.type === "poly" ? pushPoly(p, s.pts, BODY_R) : pushCirc(p, s.x, s.z, s.r + BODY_R)) || moved;
+    }
+    for (const n of NPCS) if (blocksBody(n.solid.y0, n.solid.y1, feet, TOL)) moved = pushCirc(p, n.solid.x, n.solid.z, n.solid.r + BODY_R) || moved;
+    any = any || moved;
+    if (!moved) break;
+  }
+  return any;
+}
+// A jump of the eye: more than 0.1 m inside one 0.1 m piece of the sweep. The
+// steepest pitch line (the newel's inner edge, 44 deg) climbs 0.097 m in one.
+function jolt(dy, t) { if (Math.abs(dy) > 0.1) { P.jolts.push(t); P.lastStep = dy; P.lastStepT = t; } }
+
+let SIMT = 0;
+function tick(dt, inp) {
+  SIMT += dt;
+  const fx = Math.cos(P.yaw), fz = Math.sin(P.yaw), rx = -fz, rz = fx;
+  let mx = inp.fwd * fx + inp.side * rx, mz = inp.fwd * fz + inp.side * rz;
+  const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
+  const speed = inp.sprint ? SPRINT : WALK;
+  if (MODE.noclip) {
+    const cp = Math.cos(P.pitch), sp = Math.sin(P.pitch);
+    P.x += (inp.fwd * fx * cp + inp.side * rx) * speed * dt; P.z += (inp.fwd * fz * cp + inp.side * rz) * speed * dt; P.feet += (inp.fwd * sp + (inp.jump ? 1 : 0) - (inp.down ? 1 : 0)) * speed * dt;
+    P.vy = 0; P.grounded = false; P.speed = speed * Math.min(1, Math.hypot(inp.fwd, inp.side)); return;
+  }
+  // jump: a fresh press from the ground
+  if (inp.jump && !P.jumpHeld && P.grounded) { P.vy = JUMP; P.grounded = false; }
+  P.jumpHeld = inp.jump;
+  // vertical first: gravity, the floor, the head against a ceiling
+  const x0 = P.x, z0 = P.z;
+  if (!P.grounded) {
+    P.vy -= GRAV * dt;
+    const st = standAt(P.x, P.z, P.feet, TOL);
+    let feet = P.feet + P.vy * dt;
+    if (feet <= st.floor && P.vy <= 0) { feet = st.floor; P.vy = 0; P.grounded = true; }
+    if (feet + BODY > st.ceil - SKIN) { feet = Math.max(st.floor, st.ceil - SKIN - BODY); P.vy = Math.min(P.vy, 0); }
+    P.feet = feet;
+  }
+  // horizontal: swept in 0.1 m pieces
+  const dx = mx * speed * dt, dz = mz * speed * dt, n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.1));
+  P.blocked = false;
+  for (let i = 0; i < n; i++) {
+    const lim = P.grounded ? STEP : TOL, cand = { x: P.x + dx / n, z: P.z + dz / n };
+    const hit = pushOut(cand, P.feet, lim);
+    if (hit && !MODE.proposed) { P.blocked = true; break; }          // walking.rs: tangential motion dropped
+    const st = standAt(cand.x, cand.z, P.feet, lim);
+    if (st.ceil - st.floor < BODY + SKIN || st.floor > P.feet + lim) { P.blocked = true; break; }
+    P.x = cand.x; P.z = cand.z;
+    if (st.floor > P.feet + 1e-4) { if (P.grounded) { jolt(st.floor - P.feet, SIMT); P.feet = st.floor; } }
+    else if (P.grounded) {
+      const drop = P.feet - st.floor;
+      if (drop <= TOL) P.feet = st.floor;
+      else if (MODE.proposed && drop <= SNAP) { jolt(-drop, SIMT); P.feet = st.floor; }
+      else { P.grounded = false; if (P.surface && /stair|steps/i.test(P.surface.label || "")) P.airOnStair++; }
+    }
+  }
+  if (P.grounded) { // standing still over a floor that went away (a door opened, a snap missed)
+    const st = standAt(P.x, P.z, P.feet, TOL);
+    if (P.feet - st.floor > TOL) { if (MODE.proposed && P.feet - st.floor <= SNAP) P.feet = st.floor; else P.grounded = false; }
+  }
+  const st = standAt(P.x, P.z, P.feet + 0.01, TOL);
+  P.floor = st.floor; P.ceil = st.ceil; P.surface = st.src && typeof st.src === "object" ? st.src : null;
+  P.speed = Math.hypot(P.x - x0, P.z - z0) / dt;
+}
+function teleport(g) {
+  P.x = g.x; P.z = g.z; P.vy = 0; P.grounded = true;
+  const st = standAt(P.x, P.z, g.y + 0.5, TOL); P.feet = st.floor > -100 ? st.floor : g.y;
+  if (g.look) P.yaw = Math.atan2(g.look[1] - P.z, g.look[0] - P.x);
+  P.pitch = g.pitch || 0;
+}
+
+// =====================================================================
+// Scene
+// =====================================================================
+const canvas = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x9fc0d8, 70, 330);
+const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 900);
+camera.rotation.order = "YXZ";
+const hemi = new THREE.HemisphereLight(0xc8dcf0, 0x5a5040, 0.9); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+scene.add(sun, sun.target);
+const POOL = []; for (let i = 0; i < 8; i++) { const l = new THREE.PointLight(0xff9a4a, 0, 11, 2); scene.add(l); POOL.push(l); }
+scene.add(DOOR_GROUP);
+
+function finalize() {
+  for (const [m, b] of Object.entries(BUF)) {
+    const g = new THREE.BufferGeometry(), nv = b.p.length / 3, sky = new Float32Array(nv);
+    for (const [x, y, z, s, cnt] of b.faces) { const v = skyAt(x, y, z); for (let k = s; k < s + cnt; k++) sky[k] = v; }
+    g.setAttribute("position", new THREE.Float32BufferAttribute(b.p, 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(b.n, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(b.c, 3));
+    g.setAttribute("sky", new THREE.BufferAttribute(sky, 1));
+    const mesh = new THREE.Mesh(g, material(m)); mesh.castShadow = mesh.receiveShadow = true; mesh.matrixAutoUpdate = false;
+    scene.add(mesh); STATIC.push(mesh);
+  }
+}
+const STATIC = [];
+const fireMat = new THREE.MeshBasicMaterial({ color: 0xffa040 }), lampMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
+const FIREMESH = [];
+function buildDressing() {
+  for (const f of FIRES) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.28 * f.s, 0.4 * f.s, 0.28 * f.s), f.lamp ? lampMat : fireMat);
+    m.position.set(f.x, f.y + 0.2 * f.s, f.z); scene.add(m); FIREMESH.push({ m, f, ph: Math.random() * 6 });
+    if (f.lamp) { const cage = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), new THREE.MeshStandardMaterial({ color: 0x2b2b2e, wireframe: true })); cage.position.copy(m.position); scene.add(cage); }
+  }
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(900, 420), new THREE.MeshStandardMaterial({ color: 0x2d5f70, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.86 }));
+  water.rotation.x = -Math.PI / 2; water.position.set(W * NC / 2, -0.5, cz(0, 5) + R - 210); scene.add(water);
+  // far land at the map's edge, so the hills do not end in a cliff over nothing
+  const far = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshStandardMaterial({ color: 0x4f6d38, roughness: 1 }));
+  far.rotation.x = -Math.PI / 2; far.position.set(W * NC / 2, 0.7, cz(0, 5) + R + 450); scene.add(far);
+  for (const n of NPCS) scene.add(n.g);
+  marker.visible = false; scene.add(marker);
+}
+const marker = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.8, 12), new THREE.MeshStandardMaterial({ color: 0xf0b43c, emissive: 0x6a4a10 }));
+
+// =====================================================================
+// Time of day
+// =====================================================================
+const cA = new THREE.Color(), cB = new THREE.Color();
+function setTime(h) {
+  const ang = (h - 6) / 12 * Math.PI, el = Math.sin(ang), day = clamp((el + 0.08) / 0.3, 0, 1), dusk = clamp(1 - Math.abs(el) / 0.35, 0, 1) * (h > 3 && h < 21 ? 1 : 0);
+  const sunDir = new THREE.Vector3(Math.cos(ang) * 0.8, Math.max(0.12, el) * (el > 0 ? 1 : 0.6), 0.45 - 0.2 * Math.cos(ang)).normalize();
+  if (el <= 0) sunDir.set(-0.4, 0.7, 0.55).normalize();
+  STATE.sunDir = sunDir;
+  const noon = new THREE.Color(0x9fc6e2), eve = new THREE.Color(0xe0a27a), night = new THREE.Color(0x0e1424);
+  cA.copy(night).lerp(noon, day); cA.lerp(eve, dusk * 0.55);
+  scene.background = cA.clone(); scene.fog.color.copy(cA);
+  sun.color.setHSL(0.09 - 0.03 * dusk, 0.5 + 0.4 * dusk, 0.85 - 0.15 * dusk);
+  sun.intensity = el > 0 ? 2.6 * clamp(el * 3, 0, 1) : 0.28;
+  if (el <= 0) sun.color.set(0x8fa6d8);
+  hemi.intensity = 0.2 + 0.75 * day; hemi.color.copy(cA).lerp(new THREE.Color(0xffffff), 0.35);
+  hemi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
+  STATE.night = 1 - day;
+  lampMat.color.set(STATE.night > 0.3 ? 0xffd9a0 : 0x6a655a);
+  const hh = Math.floor(h) % 24, mm = Math.round((h % 1) * 60);
+  document.getElementById("todO").textContent = String(hh).padStart(2, "0") + ":" + String(mm % 60).padStart(2, "0");
+}
+function assignLights() {
+  const ex = STATE.view === "walk" ? P.x : ORB.tx, ez = STATE.view === "walk" ? P.z : ORB.tz;
+  const cands = LIGHTS.filter(l => l.kind !== "lamp" || STATE.night > 0.3).map(l => [(l.x - ex) ** 2 + (l.z - ez) ** 2, l]).sort((a, b) => a[0] - b[0]);
+  POOL.forEach((pl, i) => { const c = cands[i]; if (c && c[0] < 45 * 45) { pl.position.set(c[1].x, c[1].y, c[1].z); pl.color.set(c[1].color); pl.userData.base = (c[1].kind === "lamp" ? 3 : 5) * c[1].power; } else pl.userData.base = 0; });
+}
+
+// =====================================================================
+// Input, views, HUD
+// =====================================================================
+const STATE = { view: "overview", locked: false, keys: {}, colliders: false, sunDir: new THREE.Vector3(0, 1, 0), night: 0, toast: 0 };
+const ORB = { tx: W * 20, tz: ROW * 17, ty: 2, dist: 118, yaw: -1.9, pitch: 0.72 };
+const $ = id => document.getElementById(id);
+function toast(t) { const el = $("toast"); el.textContent = t; el.style.opacity = 1; clearTimeout(STATE.toast); STATE.toast = setTimeout(() => el.style.opacity = 0, 1600); }
+function setView(v) {
+  STATE.view = v; $("vWalk").setAttribute("aria-pressed", v === "walk"); $("vOver").setAttribute("aria-pressed", v === "overview");
+  $("cross").hidden = v !== "walk"; marker.visible = v === "overview"; document.body.classList.toggle("walking", v === "walk");
+  $("cutField").style.opacity = v === "overview" ? 1 : 0.45;
+  if (v !== "walk" && document.pointerLockElement) document.exitPointerLock();
+  renderer.clippingPlanes = v === "overview" && +$("cut").value < 20 ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), +$("cut").value)] : [];
+  updateHint();
+}
+function updateHint() { const h = $("hint"); h.hidden = !(STATE.view === "walk" && !STATE.locked && !document.body.classList.contains("coarse")); h.textContent = "Click to walk"; if (STATE.view === "overview") { h.hidden = document.body.classList.contains("coarse"); h.textContent = "Drag to turn, wheel to zoom, double-click to walk there"; } }
+const PLACES_LIST = [["gate", "Lake gate"], ["market", "Market"], ["inn", "The Lantern"], ["innStair", "Inn stair"], ["smithy", "Smithy"], ["house", "House, flight"], ["newel", "House, newel"], ["moot", "Moot hall"], ["keep", "Keep"], ["keepRoof", "Keep roof"], ["tower", "Wall tower"], ["wall", "Wall walk"]];
+function buildUI() {
+  const g = $("goto");
+  for (const [k, label] of PLACES_LIST) { const b = document.createElement("button"); b.textContent = label; b.onclick = () => { teleport(GOTO[k]); setView("walk"); canvas.focus(); toast(label); }; g.appendChild(b); }
+  const keys = [["W A S D", "Walk"], ["Mouse", "Look (click first)"], ["Shift", "Sprint"], ["Space", "Jump"], ["E", "Open or close a door"], ["V", "Walk / overview"], ["C", "Show collision"], ["T", "Proposed / today's walker"], ["N", "Fly through walls"], ["Esc", "Let go of the mouse"]];
+  $("keys").innerHTML = keys.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
+  $("vWalk").onclick = () => { setView("walk"); canvas.focus(); };
+  $("vOver").onclick = () => setView("overview");
+  $("walker").onchange = e => setWalker(e.target.value);
+  $("colliders").onchange = e => { STATE.colliders = e.target.checked; };
+  $("noclip").onchange = e => { MODE.noclip = e.target.checked; };
+  $("tod").oninput = e => setTime(+e.target.value);
+  $("cut").oninput = e => { $("cutO").textContent = +e.target.value >= 20 ? "off" : e.target.value + " m"; setView(STATE.view); };
+  $("cutO").textContent = "off";
+  $("optsToggle").onclick = () => { const o = $("opts"), open = o.dataset.open !== "true"; o.dataset.open = open; $("optsToggle").textContent = open ? "Hide" : "Show"; $("optsToggle").setAttribute("aria-expanded", open); };
+  if (matchMedia("(max-width:860px)").matches) $("optsToggle").click();
+}
+function setWalker(v) {
+  MODE.proposed = v === "proposed"; $("walker").value = v; P.jolts.length = 0; P.airOnStair = 0;
+  $("walkerO").textContent = MODE.proposed ? "proposed" : "today";
+  $("stairNote").innerHTML = MODE.proposed
+    ? "<b>Proposed.</b> Stairs are drawn as treads and walked as their pitch line, so the eye climbs smoothly with no camera easing. Going down, a grounded walker is held to the stair. Walls, jambs and furniture push you out along their face, so you slide through doorways."
+    : "<b>Today's walker.</b> Each tread is a step up; at 8 m/s that is 22 eye jumps a second on a flight. Going down, every riser is a fall. Brushing a wall or a door jamb stops you dead, as walking.rs drops all tangential motion when a move is refused.";
+}
+addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  STATE.keys[e.code] = true;
+  if (e.code === "KeyV") setView(STATE.view === "walk" ? "overview" : "walk");
+  if (e.code === "KeyC") { $("colliders").checked = STATE.colliders = !STATE.colliders; }
+  if (e.code === "KeyN") { $("noclip").checked = MODE.noclip = !MODE.noclip; toast(MODE.noclip ? "Flying" : "Walking"); }
+  if (e.code === "KeyT") { setWalker(MODE.proposed ? "today" : "proposed"); toast(MODE.proposed ? "Proposed walker" : "Today's walker"); }
+  if (e.code === "KeyE") useDoor();
+  if (["Space", "ArrowUp", "ArrowDown"].includes(e.code) && STATE.view === "walk") e.preventDefault();
+});
+addEventListener("keyup", e => { STATE.keys[e.code] = false; });
+addEventListener("blur", () => { STATE.keys = {}; });
+function useDoor() {
+  let best = null, bd = 2.6;
+  const lx = Math.cos(P.yaw), lz = Math.sin(P.yaw);
+  for (const d of DOORS) {
+    const dx = d.x - P.x, dz = d.z - P.z, dist = Math.hypot(dx, dz), dy = d.y + 1 - (P.feet + EYE);
+    if (Math.abs(dy) > 1.6 || dist > bd) continue;
+    if (dist > 0.6 && (dx * lx + dz * lz) / dist < 0.2) continue;
+    best = d; bd = dist;
+  }
+  if (!best) { toast("No door in reach"); return; }
+  best.open = !best.open; best.solid.off = best.open; toast(best.open ? "Door opened" : "Door closed");
+}
+canvas.addEventListener("click", () => { if (STATE.view === "walk" && !document.body.classList.contains("coarse") && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} } });
+document.addEventListener("pointerlockchange", () => { STATE.locked = document.pointerLockElement === canvas; updateHint(); });
+let drag = null;
+canvas.addEventListener("mousemove", e => {
+  if (STATE.view === "walk" && STATE.locked) { P.yaw += e.movementX * 0.0022; P.pitch = clamp(P.pitch - e.movementY * 0.0022, -1.55, 1.55); }
+});
+canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, b: e.button, id: e.pointerId, touch: e.pointerType === "touch" }; });
+addEventListener("pointerup", () => { drag = null; });
+canvas.addEventListener("pointermove", e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+  if (STATE.view === "overview") {
+    if (drag.b === 2 || e.shiftKey) { const s = ORB.dist * 0.0016; ORB.tx -= (Math.cos(ORB.yaw + Math.PI / 2) * dx + Math.cos(ORB.yaw) * dy) * s; ORB.tz -= (Math.sin(ORB.yaw + Math.PI / 2) * dx + Math.sin(ORB.yaw) * dy) * s; }
+    else { ORB.yaw += dx * 0.005; ORB.pitch = clamp(ORB.pitch + dy * 0.004, 0.08, 1.5); }
+  } else if (!STATE.locked) { P.yaw += dx * 0.004; P.pitch = clamp(P.pitch - dy * 0.004, -1.55, 1.55); }
+});
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+canvas.addEventListener("wheel", e => { if (STATE.view === "overview") { ORB.dist = clamp(ORB.dist * Math.exp(e.deltaY * 0.001), 8, 260); e.preventDefault(); } }, { passive: false });
+const ray = new THREE.Raycaster();
+canvas.addEventListener("dblclick", e => {
+  if (STATE.view !== "overview") return;
+  const r = canvas.getBoundingClientRect();
+  ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, camera);
+  const cut = renderer.clippingPlanes.length ? +$("cut").value : 1e9;
+  const hit = ray.intersectObjects(STATIC, false).find(h => h.point.y <= cut + 0.01);
+  if (!hit) return;
+  const yaw = P.yaw;
+  teleport({ x: hit.point.x, z: hit.point.z, y: hit.point.y + 0.05 }); P.yaw = ORB.yaw + Math.PI;
+  setView("walk"); toast("Walking from here");
+});
+// touch: a stick on the left, look anywhere else
+const TOUCH = { fwd: 0, side: 0, jump: false, id: null };
+(function touchSetup() {
+  const coarse = matchMedia("(pointer: coarse)").matches; if (coarse) document.body.classList.add("coarse");
+  const stick = $("stick"), knob = $("knob");
+  const move = e => { const r = stick.getBoundingClientRect(), x = (e.clientX - r.left - r.width / 2) / (r.width / 2), y = (e.clientY - r.top - r.height / 2) / (r.height / 2), l = Math.max(1, Math.hypot(x, y)); TOUCH.side = x / l; TOUCH.fwd = -y / l; knob.style.transform = `translate(${x / l * 38}px,${y / l * 38}px)`; };
+  stick.addEventListener("pointerdown", e => { TOUCH.id = e.pointerId; stick.setPointerCapture(e.pointerId); move(e); e.stopPropagation(); });
+  stick.addEventListener("pointermove", e => { if (e.pointerId === TOUCH.id) move(e); });
+  const end = () => { TOUCH.id = null; TOUCH.fwd = TOUCH.side = 0; knob.style.transform = ""; };
+  stick.addEventListener("pointerup", end); stick.addEventListener("pointercancel", end);
+  $("tJump").addEventListener("pointerdown", e => { TOUCH.jump = true; e.stopPropagation(); });
+  $("tJump").addEventListener("pointerup", () => { TOUCH.jump = false; });
+  $("tUse").addEventListener("click", useDoor);
+})();
+function input() {
+  const k = STATE.keys, on = STATE.view === "walk";
+  return {
+    fwd: on ? ((k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0) + TOUCH.fwd) : 0,
+    side: on ? ((k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0) + TOUCH.side) : 0,
+    jump: on && (!!k.Space || TOUCH.jump), sprint: !!(k.ShiftLeft || k.ShiftRight), down: !!(k.ControlLeft || k.KeyQ),
+  };
+}
+function placeName() {
+  const [c, r] = cellAt(P.x, P.z); if (!inMap(c, r)) return "Beyond the map";
+  const y = P.feet + 0.1;
+  for (const [a, b, n] of PLACES[idx(c, r)]) if (y >= a && y < b) return n;
+  return AREA[idx(c, r)] || "Town";
+}
+function ro(k, v, u) { return `<div class="ro"><span class="k">${k}</span><span class="v">${v}${u ? `<small>${u}</small>` : ""}</span></div>`; }
+function hud() {
+  if (STATE.view === "overview") {
+    $("where").innerHTML = "Overview <small>a walled town on three terraces, 40 x 34 cells, 113 m x 81 m</small>";
+    $("readouts").innerHTML = ro("Cell", "2.833", "m") + ro("Layer", "1.000", "m") + ro("Storey", "3", "layers") + ro("Doors", DOORS.length) + ro("Colliders", SOLIDS.length);
+    $("chips").innerHTML = `<span class="chip on">${MODE.proposed ? "Proposed walker" : "Today's walker"}</span>`;
+    return;
+  }
+  const [c, r] = cellAt(P.x, P.z), now = SIMT;
+  P.jolts = P.jolts.filter(t => now - t < 1);
+  const surf = P.surface && P.surface.type === "surf" ? P.surface : null;
+  $("where").innerHTML = `${placeName()} <small>${surf ? surf.label + ": " + surf.detail : ""}</small>`;
+  const head = P.ceil > 1e8 ? "open" : (P.ceil - P.floor).toFixed(2);
+  $("readouts").innerHTML = ro("Feet", P.feet.toFixed(2), "m") + ro("Cell", `${c},${r}`, `L${Math.floor(P.feet + 1e-3)}`) + ro("Headroom", head, head === "open" ? "" : "m") + ro("Speed", P.speed.toFixed(1), "m/s") + ro("Eye jumps", P.jolts.length, "/s");
+  const chips = [[MODE.proposed ? "Proposed" : "Today's walker", "on"], [MODE.noclip ? "Flying" : P.grounded ? "On the ground" : "In the air", MODE.noclip ? "on" : P.grounded ? "good" : "bad"]];
+  if (now - P.lastStepT < 0.5 && Math.abs(P.lastStep) > 0.04) chips.push([(P.lastStep > 0 ? "Stepped up " : "Held down ") + Math.abs(P.lastStep).toFixed(2) + " m", ""]);
+  if (P.blocked) chips.push(["Blocked", "bad"]);
+  if (P.airOnStair) chips.push([`Left the stair ${P.airOnStair}x`, "bad"]);
+  $("chips").innerHTML = chips.map(([t, k]) => `<span class="chip ${k}">${t}</span>`).join("");
+}
+
+// ---- collision overlay ---------------------------------------------------
+const dbgGeo = new THREE.BufferGeometry(), dbgPos = new Float32Array(60000 * 3), dbgCol = new Float32Array(60000 * 3);
+dbgGeo.setAttribute("position", new THREE.BufferAttribute(dbgPos, 3)); dbgGeo.setAttribute("color", new THREE.BufferAttribute(dbgCol, 3));
+const dbg = new THREE.LineSegments(dbgGeo, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true, opacity: 0.85 }));
+dbg.renderOrder = 10; dbg.frustumCulled = false; scene.add(dbg);
+function drawColliders() {
+  let n = 0;
+  const L = (a, b, col) => { if (n >= 59998) return; dbgPos.set(a, n * 3); dbgPos.set(b, n * 3 + 3); dbgCol.set(col, n * 3); dbgCol.set(col, n * 3 + 3); n += 2; };
+  const RED = [1, 0.35, 0.3], GREEN = [0.45, 1, 0.5], AMBER = [1, 0.75, 0.2], BLUE = [0.5, 0.8, 1];
+  if (STATE.colliders && STATE.view === "walk") {
+    const lo = P.feet - 1.5, hi = P.feet + 3.2;
+    const prismL = (pts, y0, y1, col) => { const a = Math.max(y0, lo), b = Math.min(y1, hi); if (b < a) return; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; L([p[0], a, p[1]], [q[0], a, q[1]], col); L([p[0], b, p[1]], [q[0], b, q[1]], col); L([p[0], a, p[1]], [p[0], b, p[1]], col); } };
+    nearSolids(P.x, P.z, 5, NEAR);
+    for (const s of NEAR) {
+      if (s.type === "poly") prismL(s.pts, s.y0, s.y1, s.cls === "step" ? GREEN : RED);
+      else if (s.type === "circ") { const pts = []; for (let k = 0; k < 10; k++) pts.push([s.x + s.r * Math.cos(k / 10 * 6.283), s.z + s.r * Math.sin(k / 10 * 6.283)]); prismL(pts, s.y0, s.y1, RED); }
+    }
+    for (let gx = -8; gx <= 8; gx++) for (let gz = -8; gz <= 8; gz++) {
+      const x = P.x + gx * 0.2, z = P.z + gz * 0.2; if (gx * gx + gz * gz > 64) continue;
+      nearSolids(x, z, 0.1, NEAR); IV.length = 0;
+      for (const s of NEAR) if (s.type === "surf" && x >= s.minx && x <= s.maxx && z >= s.minz && z <= s.maxz) s.iv(x, z, IV);
+      for (const [, t] of IV) if (t > lo && t < hi) { L([x - 0.05, t, z], [x + 0.05, t, z], AMBER); L([x, t, z - 0.05], [x, t, z + 0.05], AMBER); }
+    }
+    const [c, r] = cellAt(P.x, P.z);
+    for (let d = -1; d < 6; d++) { const [cc, rr] = d < 0 ? [c, r] : nb(c, r, d); if (!inMap(cc, rr)) continue; const h = TOP[idx(cc, rr)]; if (h > lo && h < hi) prismL(hexCached(cc, rr), h, h, BLUE); for (const [b, t] of RUNS[idx(cc, rr)]) prismL(hexCached(cc, rr), b, t, BLUE); }
+    const ring = []; for (let k = 0; k < 16; k++) ring.push([P.x + BODY_R * Math.cos(k / 16 * 6.283), P.z + BODY_R * Math.sin(k / 16 * 6.283)]);
+    prismL(ring, P.feet, P.feet + 0.001, [1, 1, 1]);
+    for (const [ox, oz] of FOOT) L([P.x + ox, P.floor, P.z + oz], [P.x + ox, P.floor + 0.12, P.z + oz], [1, 1, 1]);
+  }
+  dbgGeo.setDrawRange(0, n); dbgGeo.attributes.position.needsUpdate = true; dbgGeo.attributes.color.needsUpdate = true;
+}
+
+// =====================================================================
+// Loop
+// =====================================================================
+function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize);
+let last = performance.now(), acc = 0, hudT = 0, lightT = 0, T = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now; T += dt;
+  acc += dt; let steps = 0; const inp = input();
+  while (acc >= TICK && steps < 14) { tick(TICK, inp); acc -= TICK; steps++; }
+  if (steps === 14) acc = 0;
+  for (const n of NPCS) animateNpc(n, dt);
+  for (const d of DOORS) { d.a += clamp((d.open ? 1 : 0) - d.a, -dt * 3, dt * 3); d.pivot.rotation.y = -d.base + d.swing * smooth(d.a) * Math.PI / 2 * 0.95; }
+  for (const f of FIREMESH) { const s = f.f.lamp ? 1 : 0.8 + 0.3 * Math.sin(T * 9 + f.ph) * Math.sin(T * 5.3 + f.ph * 2); f.m.scale.set(1, s, 1); }
+  if ((lightT -= dt) <= 0) { assignLights(); lightT = 0.3; }
+  for (const pl of POOL) pl.intensity = pl.userData.base ? pl.userData.base * (0.88 + 0.12 * Math.sin(T * 11 + pl.position.x)) : 0;
+  let focus;
+  if (STATE.view === "walk") {
+    camera.fov = 75; camera.near = 0.05;
+    camera.position.set(P.x, P.feet + EYE, P.z);
+    camera.rotation.set(P.pitch, -P.yaw - Math.PI / 2, 0);
+    focus = new THREE.Vector3(P.x, P.feet, P.z);
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -38; sun.shadow.camera.right = sun.shadow.camera.top = 38;
+  } else {
+    camera.fov = 50; camera.near = 0.5;
+    const cp = Math.cos(ORB.pitch);
+    camera.position.set(ORB.tx - Math.cos(ORB.yaw) * cp * ORB.dist, ORB.ty + Math.sin(ORB.pitch) * ORB.dist, ORB.tz - Math.sin(ORB.yaw) * cp * ORB.dist);
+    camera.lookAt(ORB.tx, ORB.ty, ORB.tz);
+    focus = new THREE.Vector3(ORB.tx, 0, ORB.tz);
+    marker.position.set(P.x, P.feet + 0.9, P.z);
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -85; sun.shadow.camera.right = sun.shadow.camera.top = 85;
+  }
+  camera.updateProjectionMatrix();
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(STATE.sunDir, 120);
+  sun.shadow.camera.far = 300;
+  drawColliders();
+  if ((hudT -= dt) <= 0) { hud(); hudT = 0.1; }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+function animateNpc(n, dt) {
+  n.t += dt;
+  const g = n.g;
+  if (n.path) {
+    const [a, b] = n.path, len = Math.hypot(b[0] - a[0], b[1] - a[1]), period = 2 * len / n.speed;
+    const ph = (n.t % period) / period, f = ph < 0.5 ? ph * 2 : 2 - ph * 2, dir = ph < 0.5 ? 1 : -1;
+    g.position.set(a[0] + (b[0] - a[0]) * f, n.y, a[1] + (b[1] - a[1]) * f);
+    g.rotation.y = -Math.atan2((b[1] - a[1]) * dir, (b[0] - a[0]) * dir) + Math.PI / 2;
+    const sw = Math.sin(n.t * 7) * 0.5; n.armL.rotation.x = sw; n.armR.rotation.x = -sw;
+    g.children[0].rotation.x = -sw * 0.8; g.children[1].rotation.x = sw * 0.8;
+  } else if (n.work === "hammer") { n.armR.rotation.x = -1.2 + Math.abs(Math.sin(n.t * 4)) * 1.4; }
+  else if (n.work === "wipe") { n.armR.rotation.x = -0.9 + Math.sin(n.t * 3) * 0.2; n.armR.rotation.z = Math.sin(n.t * 3) * 0.3; }
+  else { n.head.rotation.y = Math.sin(n.t * 0.5) * 0.5; n.armL.rotation.x = Math.sin(n.t * 1.1) * 0.05; }
+  n.solid.x = g.position.x; n.solid.z = g.position.z;
+}
+
+// =====================================================================
+// Boot
+// =====================================================================
+function boot() {
+  makeTown();
+  finalize();
+  buildDressing();
+  buildUI();
+  setWalker("proposed");
+  setTime(+$("tod").value);
+  teleport(GOTO.gate);
+  resize(); setView("overview");
+  $("loading").hidden = true;
+  $("status").innerHTML = `<strong>${SOLIDS.length.toLocaleString()}</strong> colliders, <strong>${DOORS.length}</strong> doors, <strong>${NPCS.length}</strong> townsfolk. Pick a place, or double-click the town.`;
+  requestAnimationFrame(t => { last = t; frame(t); });
+}
+window.__town = { P, MODE, DOORS, GOTO, tick, teleport, standAt, setWalker, useDoor, setView, setTime, cellAt, TOP, idx, nb, intervalsAt, nearSolids, pushOut, SOLIDS, RUNS, POOL, LIGHTS };
+setTimeout(boot, 30);
+</script>
