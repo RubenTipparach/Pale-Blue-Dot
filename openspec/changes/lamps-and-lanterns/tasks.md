@@ -37,7 +37,7 @@ the lights (group 7) before `world-map` starts.
 - [ ] 5.2d Trees and ground clutter take the field at their own cell (decision 9). Verify: a night capture beside the lamps in which the grass by a lamp is lit and the grass away from them is not.
 - [x] 5.3 Icons for the torch and for each new light, as committed PNG sources with a manifest entry. Verify: the hotbar shows each light's own icon in a capture, and the art checks (palette, transparency) pass.
 - [ ] 5.4 A kit grant, version N+1, that deals a few of each new light once. Verify: the existing kit tests extended with an old save gaining them once and a new world's kit holding them.
-- [ ] 5.5 A synthetic "city" of 300 lanterns, baked and timed in a test. Verify: its bake time is recorded in the design's risk note. If it is over 12 ms, open a follow-up before `cities-in-the-world`.
+- [x] 5.5 A synthetic "city" of 300 lanterns, baked and timed in a test. Verify: its bake time is recorded in the design's risk note. If it is over 12 ms, open a follow-up before `cities-in-the-world`.
 
 ## 6. Glowing flowers
 

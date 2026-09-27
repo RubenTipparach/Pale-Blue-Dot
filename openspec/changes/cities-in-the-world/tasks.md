@@ -23,6 +23,7 @@ the map, the sites, and the climate and fish layers, in that order.
 
 ## 4. In the world
 
+- [ ] 4.0 The tier's relight with a city in it (follow-up from `lamps-and-lanterns` task 5.5). A synthetic 300-lantern city baked at 19.6 to 38.5 ms (median about 21 ms) in the cloud container, over the 12 ms that task set; the lanterns are 1 to 3 ms of it and the sky flood the rest. The owner measures the same test on real hardware, where the tier bake was 6 ms. If a city's bake is still over 12 ms there, the relight moves off the main thread or becomes incremental before a town is placed. Verify: the timing on the owner's machine, recorded here, and the decision it led to.
 - [ ] 4.1 A settlement becomes an active chunk entity in range, with its pieces, contact index and meshes built on the pool and published whole. Verify: an app test walking from the spawn to a village site and in through a door, and `--capture` shots in `docs/screenshots/cities-in-the-world/`.
 - [ ] 4.2 The far form and the night points, drawn by the planet pass. Verify: captures of a town from a kilometre by day, and of the night side from orbit.
 - [ ] 4.2a The night lights light the coarse LOD hexes under each settlement (survey C3). Verify: a capture of the night side from orbit before and after, and a test that a hex under a lit town reads a glow and one outside its margin reads none.

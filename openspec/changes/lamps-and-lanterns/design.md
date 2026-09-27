@@ -267,7 +267,21 @@ three different ways.
   capture. Decision 7 makes a sideways step cost three levels.
 - [Hundreds of emitters in a city make the bake slower] → The flood's cost
   follows the lit volume, not the number of emitters. A synthetic city of 300
-  lanterns is baked and timed in the tests before any city exists.
+  lanterns is baked and timed in the tests before any city exists
+  (`a_city_of_three_hundred_lanterns_bakes_every_lantern_and_nothing_past_its_reach`).
+  Measured 2026-09-27 in the cloud container (a 4-core Xeon at 2.8 GHz,
+  release build, nothing else running, five runs), on a 3,136-column patch:
+
+  | bake | median | range |
+  | --- | ---: | ---: |
+  | with 300 street lanterns | 21 ms | 19.6 to 38.5 ms |
+  | with no lanterns | 18.6 ms | 18.2 to 23.4 ms |
+
+  The lanterns cost 1 to 3 ms; the sky flood is the rest. That is over the
+  12 ms this note set, so the follow-up is `cities-in-the-world` task 4.0:
+  the owner times the same test on real hardware, where a tier bake was 6 ms,
+  and the relight moves off the main thread or goes incremental if a city
+  is still over 12 ms there.
 - [Sampling every moving thing each frame] → Eight cell reads and a blend per
   thing, for fewer than ten things. It cannot be measured in a cloud session
   (see CLAUDE.md), so the owner runs the performance suite on real hardware.

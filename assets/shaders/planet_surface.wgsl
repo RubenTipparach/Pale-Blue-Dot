@@ -1807,7 +1807,10 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     } else if input.kind == KIND_LAMP && lamp > LAMP_PANES - 0.5 {
         if lamp > LAMP_FLAME - 0.5 {
             let height = clamp((lamp - LAMP_FLAME)/FLAME_RISE, 0.0, 1.0);
-            color = mix(vec3(1.0, 0.86, 0.48), vec3(0.95, 0.36, 0.07), height)*(0.78 + 0.44*grain);
+            // Kept under the tonemapper's shoulder, which washes anything
+            // brighter toward white: a fire should read as orange, not as a
+            // lit block.
+            color = mix(vec3(0.98, 0.66, 0.22), vec3(0.86, 0.28, 0.05), height)*(0.80 + 0.30*grain);
         } else if lantern_frame(input.uv, up) {
             color = vec3(0.16, 0.15, 0.14)*TORCH_TINT*TORCH_GAIN*(0.75 + 0.5*grain);
         } else {
