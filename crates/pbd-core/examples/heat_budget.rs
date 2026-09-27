@@ -112,9 +112,11 @@ fn main() {
             // The air's temperature as `carry` moves it, in the advective form.
             let winds = air.grid.fluxes(&air.wind, |_| false);
             let air_carried = air.grid.upwind(&air.air_k, &winds, s.dt_s, false);
-            let conducted =
-                air.grid
-                    .conduct(&air.ground_k, &air.surface.heat_capacity, s.heat_spread);
+            let conducted = air.grid.conduct(
+                &air.ground_k,
+                &air.surface.heat_capacity,
+                s.spread_per_s(air.grid.mean_span),
+            );
             for i in 0..n {
                 let a = air.grid.area[i] as f64;
                 let t_c = air.ground_k[i] as f64;

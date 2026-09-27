@@ -66,7 +66,9 @@
     ocean_heat_capacity: 3.0e6,
     air_relax_s: 3000.0,
     sensible_wm2k: 15.0,
-    heat_spread: 0.002,
+    // m^2/s: 0.002 a second at level 5's 181.29 m spacing, the same at every
+    // level (`climate-balance` decision 7).
+    heat_diffusivity_m2s: 65.73,
     lapse_k_per_m: 0.08,
 
     // Water.

@@ -537,6 +537,21 @@ area-weighted over the second year, from `fish_ranges`' fields, and a
   anyone plays in. Decision 7 makes the spread the same at every level.
   Survey R1 is withdrawn, since a measurement answered it.
 
+**Finding 9: a new world starts below the target, most on a coarse grid
+(2026-09-27, on decision 7).** With the spread the same at every level, the
+level-3 run gives the reef its water, as level 5 does: the equatorial sea
+averages 22.5 °C and 33% of the shallows reach 23 °C. But its whole surface
+reads 13.4 to 13.7 °C for the first sixty days, reaches 14 °C on day 100 and
+15 °C on day 180, so the fish test fails its day-30 check at 13.6 °C. Level 4
+reads 13.8 °C on day 10. Level 5, the game's, reads 14.2 °C, inside the mark
+but under the target for a hundred days. The start's climatology averages
+the target, but its land cools to its own balance in days while the sea,
+two degrees colder than it will settle, warms over hundreds. The balance
+trim aims at a planet in equilibrium, which one still filling its sea is
+not, and the integral that would close the gap is held while the error is
+over `sun_trim_band_k`, 1 K. A sweep of the band and the nudge at level 3
+is measuring the fix; its result goes here before any setting changes.
+
 **7. The heat spread is a diffusivity, the same at every level (2026-09-27,
 finding 8).** `heat_spread` (per second) is replaced by
 `heat_diffusivity_m2s` (m²/s), and the step's rate is that over the square

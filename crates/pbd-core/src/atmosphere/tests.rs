@@ -610,7 +610,11 @@ fn the_trim_stops_at_its_limits_and_does_not_wind_up() {
 /// and once settled, its sun is steady.
 #[test]
 fn a_planet_with_a_slow_sea_settles_without_ringing() {
+    // The toy was tuned on the spread every level had before decision 7,
+    // 0.002 a second, which this diffusivity gives on its level-3 grid.
+    let span = Grid::new(quiet().level, TerrainConfig::TENEBRIS.radius_m).mean_span;
     let mut a = air(AtmosphereSettings {
+        heat_diffusivity_m2s: 0.002 * span * span,
         solar_wm2: 1100.0,
         land_heat_capacity: 2.0e4,
         ocean_heat_capacity: 6.0e5,
@@ -848,4 +852,26 @@ fn the_winds_carry_keeps_the_airs_heat() {
         .sum();
     let drift = (a.grid.total(&a.air_k) - start).abs() / size;
     assert!(drift < 1e-5, "{drift:e}");
+}
+
+/// The heat spread is one diffusivity at every level (`climate-balance`
+/// decision 7): level 5, the game's, steps at the 0.002 a second it shipped
+/// with, and each coarser level at a quarter of the next finer one's rate,
+/// since its cells are twice as far apart. Before, every level stepped at
+/// 0.002, so the level-3 instruments spread heat sixteen times harder than
+/// the game.
+#[test]
+fn the_heat_spread_is_the_same_diffusivity_at_every_level() {
+    let settings = AtmosphereSettings::default();
+    let rate = |level| settings.spread_per_s(Grid::new(level, 4_800.0).mean_span);
+    let game = rate(5);
+    assert!((game / 0.002 - 1.0).abs() < 1e-3, "level 5 steps at {game}");
+    for level in 3..5 {
+        let ratio = rate(level) / rate(level + 1);
+        assert!(
+            (ratio - 0.25).abs() < 0.0025,
+            "level {} steps at {ratio} of level {level}'s rate",
+            level + 1
+        );
+    }
 }

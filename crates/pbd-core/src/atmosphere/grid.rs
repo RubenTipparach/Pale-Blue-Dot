@@ -34,6 +34,11 @@ pub struct Grid {
     pub span: Vec<[f32; SIDES]>,
     /// Cell area, square metres.
     pub area: Vec<f32>,
+    /// The mean distance between neighbouring centres over every real side,
+    /// metres: the grid's own length scale, which a diffusivity is divided by
+    /// the square of to give a rate per second at this level
+    /// (`climate-balance` decision 7).
+    pub mean_span: f32,
     /// For each side, which side of the neighbour faces back: so an edge's
     /// flux is worked out once and its neighbour takes exactly the negative.
     pub opposite: Vec<[u8; SIDES]>,
@@ -62,6 +67,7 @@ impl Grid {
             normal: Vec::with_capacity(n),
             span: Vec::with_capacity(n),
             area: Vec::with_capacity(n),
+            mean_span: 0.0,
             slope: Vec::with_capacity(n),
             opposite: Vec::with_capacity(n),
             lookup: Vec::new(),
@@ -80,6 +86,12 @@ impl Grid {
             grid.opposite.push(back);
         }
         grid.lookup = grid.build_lookup();
+        let (total, sides) = (0..n).fold((0.0f64, 0u32), |(total, count), i| {
+            let real = grid.sides[i] as usize;
+            let sum: f64 = grid.span[i][..real].iter().map(|&d| f64::from(d)).sum();
+            (total + sum, count + real as u32)
+        });
+        grid.mean_span = (total / f64::from(sides)) as f32;
         grid
     }
 

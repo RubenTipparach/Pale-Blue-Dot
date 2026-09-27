@@ -97,6 +97,17 @@ pub fn gather(
     };
     let chest = chest(walker.translation);
     let dt = time.delta_secs();
+    if let Some(nearest) = drops
+        .live
+        .iter()
+        .map(|d| (d.position - chest).length())
+        .reduce(f32::min)
+    {
+        trace!(
+            "{} drops, nearest {nearest:.2} m from the chest",
+            drops.live.len()
+        );
+    }
     let mut gone = Vec::new();
     for (index, drop) in drops.live.iter_mut().enumerate() {
         let mut moved = *drop;

@@ -53,9 +53,11 @@ impl Atmosphere {
         let s = self.settings;
         let n = self.grid.len();
         let before = self.ground_k.clone();
-        let spread = self
-            .grid
-            .conduct(&before, &self.surface.heat_capacity, s.heat_spread);
+        let spread = self.grid.conduct(
+            &before,
+            &self.surface.heat_capacity,
+            s.spread_per_s(self.grid.mean_span),
+        );
         let cover: Vec<f32> = (0..n).map(|i| self.cover(i)).collect();
         // The planet's budget as it stands, for the thermostat: what the
         // ground would absorb at a trim of 1, and what the clouds give back.

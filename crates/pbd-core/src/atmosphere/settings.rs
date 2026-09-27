@@ -112,9 +112,14 @@ pub struct AtmosphereSettings {
     pub air_relax_s: f32,
     /// Sensible heat from ground to air, W/m^2/K.
     pub sensible_wm2k: f32,
-    /// Heat spreading between neighbouring cells of ground and sea, per second:
-    /// what carries the tropics' heat poleward where the model's winds do not.
-    pub heat_spread: f32,
+    /// Heat spreading between neighbouring cells of ground and sea, as a
+    /// diffusivity, m^2/s: what carries the tropics' heat poleward where the
+    /// model's winds do not. The step's rate per second is this over the
+    /// square of the grid's mean spacing ([`Self::spread_per_s`]), so every
+    /// level spreads heat alike (`climate-balance` decision 7). 65.73 is the
+    /// shipped 0.002 a second at level 5's 181.29 m, so the game's own level
+    /// steps as it did before the change.
+    pub heat_diffusivity_m2s: f32,
     /// Kelvin colder per metre of height, for snow and saturation: 0.08 makes
     /// a 150 m summit 12 K colder than the shore, which is the world's own
     /// snow line.
@@ -271,7 +276,7 @@ impl Default for AtmosphereSettings {
             ocean_heat_capacity: 3.0e6,
             air_relax_s: 3000.0,
             sensible_wm2k: 15.0,
-            heat_spread: 0.002,
+            heat_diffusivity_m2s: 65.73,
             lapse_k_per_m: 0.08,
             evaporation: 3.0e-4,
             evaporation_wind_mps: 10.0,
@@ -321,6 +326,13 @@ impl Default for AtmosphereSettings {
 }
 
 impl AtmosphereSettings {
+    /// The heat spread's rate per second on a grid whose neighbouring centres
+    /// are `mean_span_m` apart on average (`Grid::mean_span`): the
+    /// diffusivity over the spacing squared.
+    pub fn spread_per_s(&self, mean_span_m: f32) -> f32 {
+        self.heat_diffusivity_m2s / (mean_span_m * mean_span_m)
+    }
+
     /// The heat a kelvin of the air holds over a square metre, J/m^2/K. Not a
     /// knob of its own: the air relaxes to the ground at `1 / air_relax_s`
     /// while the ground gives it `sensible_wm2k` per kelvin between them, and
@@ -394,7 +406,7 @@ impl AtmosphereSettings {
             self.olr_b,
             self.cloud_greenhouse,
             self.sensible_wm2k,
-            self.heat_spread,
+            self.heat_diffusivity_m2s,
             self.lapse_k_per_m,
             self.evaporation,
             self.saturation_per_k,
