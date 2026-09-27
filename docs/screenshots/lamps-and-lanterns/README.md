@@ -85,3 +85,15 @@ when that happens. The held-tool pair uses the lamp row instead.
 | file | what it shows |
 | --- | --- |
 | `midnight-view.jpg` | `--view midnight --time 0`, now aimed from the sun where the clock puts it rather than from the deleted `sky::SUN_DIRECTION`. It finds the antisolar point: a black sky over the night-side sea. |
+
+## Daylight falls like lamplight (decision 11, survey L1)
+
+| file | flags | what it shows |
+| --- | --- | --- |
+| `mouth-noon-before.jpg`, `mouth-noon-after.jpg` | `--view mouth --spawn mouth --time 12` | A tunnel mouth at noon. Before, daylight lost one level a cell and lit the tunnel to its back wall. After, it loses three a cell, as a lamp's light does, and the tunnel darkens a few metres in. |
+| `cave-noon-before.jpg`, `cave-noon-after.jpg` | `--view cave --time 12` | Deep in a cave at noon, the control: dark before and after, with the far opening lit. |
+
+"Before" is the build at `463854b`, the lights as the owner approved them.
+"After" is the same build with `light::ACROSS` for both channels and kit
+grant 2, so its hotbar shows the new kit: grass, dirt, stone, sand, the
+torches and the five lights.

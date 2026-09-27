@@ -31,12 +31,16 @@
 ## 5. Prove it
 - [x] Captures: the cave, the mouth and the meadow, with frame means.
 - [x] Measured: the bake, the buffer, and the meadow unchanged as the control.
-- [ ] The owner's in-game confirmation, which is the only thing that counts
+- [x] (Survey L3, the owner 2026-09-27: "its good for now".) The owner's in-game confirmation, which is the only thing that counts
       for feel: whether a cave is dark enough to want a light in, whether the
       crease where a block meets the ground reads as contact, and whether the
       falloff at a mouth is the right length.
 
 ## 6. Held, with the reasons in the design
+
+Archived 2026-09-27 with these open. The block channel was built by
+`night-and-lamps` and `lamps-and-lanterns`; the other two are
+`lamps-and-lanterns`' non-goals.
 - [ ] Torches and the block channel, on the reference's proximity model rather
       than its abandoned BFS one.
 - [ ] An incremental relight, if six milliseconds ever stops being affordable.

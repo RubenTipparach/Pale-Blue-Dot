@@ -2,6 +2,11 @@
 
 ## Why
 
+**The owner approved the lights on the screenshots (2026-09-27): "survey
+completed, quick glans at stuff and I'm happy with it, move on to next
+stage".** The gate video stays open for the owner's batch (CLAUDE.md,
+2026-09-27), so this change is archived after task 7.1.
+
 **The owner's plan (2026-09-27): "step 1 implement lights, step 2 implement
 cities, step 3 implement ways for me to make cities."** Lights come first
 because a city at night is lamps, lanterns and lit windows. The towns mockup

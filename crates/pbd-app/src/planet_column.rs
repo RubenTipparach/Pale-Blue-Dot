@@ -1834,7 +1834,7 @@ mod tests {
         );
         assert_eq!(
             tier.light_at(1, 41).block(),
-            13 - light::BLOCK_ACROSS,
+            13 - light::ACROSS,
             "and lights its street"
         );
         assert_eq!(

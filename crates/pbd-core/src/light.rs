@@ -7,9 +7,10 @@
 //! colors" - and they do different jobs:
 //!
 //! - **[`bake`] is the FIELD.** Daylight is seeded down every column and
-//!   flooded outward, one level per step, stopping at anything solid. A cave
-//!   is dark because nothing reached it, not because a depth term was
-//!   subtracted, which is why a cave MOUTH stays bright.
+//!   flooded outward, a level a metre (one a layer, three a cell), stopping
+//!   at anything solid. A cave is dark because nothing reached it, not
+//!   because a depth term was subtracted, which is why a cave MOUTH stays
+//!   bright.
 //! - **[`corner`] is the CONTACT.** A vertex takes the mean of the field over
 //!   the cells that meet at its own corner, and darkens it by how many of the
 //!   neighbours there are solid. That is the crease where one block sits on
@@ -31,24 +32,24 @@ use crate::column::{Column, LAYERS};
 /// Tenebris's `voxel_sky_max`, shipped at 15.
 pub const MAX: u8 = 15;
 
-/// What one step between neighbouring cells costs, in levels.
+/// What a step UP or DOWN, to the layer above or below, costs, in levels.
 ///
-/// The reference's `voxel_sky_lateral_loss`, shipped at 1, and its vertical
-/// step is 1 too - the comment beside it says "Vertical neighbours stay at 1
-/// per step so daylight shafts remain at full strength". One cost for every
-/// direction for the SKY, so the falloff from a cave mouth is 15 cells
-/// whichever way the tunnel runs. A lamp's step up or down costs this too.
+/// The reference's vertical step, shipped at 1 - the comment beside it says
+/// "Vertical neighbours stay at 1 per step so daylight shafts remain at full
+/// strength". A layer is a metre, so a level is a metre upward.
 pub const STEP: u8 = 1;
 
-/// What a step ACROSS, to a neighbouring column, costs a lamp's light.
+/// What a step ACROSS, to a neighbouring column, costs, in levels.
 ///
-/// Three levels: one cell's 2.833 m, rounded, so a lamp's level is about a
-/// metre whichever way its light goes. At one level per cell, as the sky
-/// has, a brazier lit forty metres of meadow at night nearly as bright as
-/// noon, where the owner's towns mockup gives it eleven
-/// (`lamps-and-lanterns` decision 7). The sky keeps [`STEP`] until the owner
-/// has judged the caves it lights.
-pub const BLOCK_ACROSS: u8 = 3;
+/// Three levels: one cell's 2.833 m, rounded, so a level is about a metre
+/// whichever way light goes, for the sky and for a lamp alike. At one level
+/// per cell (the reference's `voxel_sky_lateral_loss`) a brazier lit forty
+/// metres of meadow at night nearly as bright as noon, where the owner's
+/// towns mockup gives it eleven (`lamps-and-lanterns` decision 7), and
+/// twilight reached forty metres into a tunnel. The owner chose one rule for
+/// all light (survey L1, decision 11): a tunnel's mouth now lights four cells
+/// in, about eleven metres.
+pub const ACROSS: u8 = 3;
 
 /// The colour a lamp's light lays over what it lights, and how strongly, in
 /// the terrain shader's `albedo * TORCH_TINT * strength * TORCH_GAIN`. Warm,
@@ -190,8 +191,9 @@ impl Region<'_> {
 ///    layer, setting every cell above it to [`MAX`]. That is
 ///    `sky_seed_one_column`, and it is what gives a daylight shaft its full
 ///    strength all the way down.
-/// 2. **Flood**, breadth first: pop a cell, hand `level - STEP` to every
-///    neighbour that is not solid and not already at least that bright.
+/// 2. **Flood**, breadth first: pop a cell, hand `level - STEP` to the cells
+///    above and below it and `level - ACROSS` to the columns beside it, where
+///    they are not solid and not already at least that bright.
 ///
 /// **Every seeded cell goes on the queue, not just the lowest.** That looks
 /// like an easy saving and is a bug: a column open to the sky is adjacent to
@@ -245,14 +247,6 @@ enum Channel {
 }
 
 impl Channel {
-    /// What a step to a neighbouring column costs this channel.
-    fn across(self) -> u8 {
-        match self {
-            Channel::Sky => STEP,
-            Channel::Block => BLOCK_ACROSS,
-        }
-    }
-
     fn of(self, light: Light) -> u8 {
         match self {
             Channel::Sky => light.sky(),
@@ -272,8 +266,8 @@ impl Channel {
 ///
 /// ONE implementation for both channels: two floods written apart would be
 /// two answers to how light travels, and a player would learn one of them.
-/// The one thing the channels differ in is what a step across costs
-/// ([`BLOCK_ACROSS`]). With a step up cheaper than a step across, a cell can
+/// They differ only in which nibble they fill and where they are seeded.
+/// With a step up ([`STEP`]) cheaper than a step across ([`ACROSS`]), a cell can
 /// be reached first by a dimmer path and later by a brighter one; `give`
 /// takes the brighter and queues the cell again, so the answer is still the
 /// brightest path, whatever order the queue ran in.
@@ -306,8 +300,7 @@ fn flood(
         if layer > 0 {
             give(light, &mut queue, column, layer - 1, level - STEP);
         }
-        let across = channel.across();
-        if level <= across {
+        if level <= ACROSS {
             continue;
         }
         for side in 0..6 {
@@ -319,7 +312,7 @@ fn flood(
                 continue;
             };
             if neighbor != OFF_REGION && (neighbor as usize) < region.columns.len() {
-                give(light, &mut queue, neighbor, layer, level - across);
+                give(light, &mut queue, neighbor, layer, level - ACROSS);
             }
         }
     }
@@ -600,9 +593,13 @@ mod tests {
         }
         let (_, _, light) = baked(columns);
         assert_eq!(light[0][51].sky(), MAX, "the mouth is open to the sky");
-        assert_eq!(light[1][51].sky(), MAX - 1, "one step in costs one level");
-        assert_eq!(light[2][51].sky(), MAX - 2);
-        assert_eq!(light[6][51].sky(), MAX - 6, "and it keeps falling off");
+        // Three levels a cell, a metre a level (decision 11, survey L1).
+        assert_eq!(light[1][51].sky(), 12, "one cell in costs three levels");
+        assert_eq!(light[2][51].sky(), 9);
+        assert_eq!(light[3][51].sky(), 6);
+        assert_eq!(light[4][51].sky(), 3, "and it keeps falling off");
+        assert_eq!(light[5][51].sky(), 0, "until, 14 m in, it is dark");
+        assert_eq!(light[6][51].sky(), 0);
     }
 
     /// Past the range it is BLACK rather than dim, which is what makes a deep
@@ -628,7 +625,11 @@ mod tests {
         let cave = roofed(59, 60, 100);
         let (_, _, light) = baked(vec![open, cave]);
         assert_eq!(light[0][60].sky(), MAX, "the open column at that height");
-        assert_eq!(light[1][60].sky(), MAX - 1, "and the cave beside it");
+        assert_eq!(
+            light[1][60].sky(),
+            MAX - ACROSS,
+            "and the cave beside it, one cell across"
+        );
     }
 
     /// Off the region is solid, never open: a tier boundary must not become
@@ -717,8 +718,8 @@ mod tests {
         );
         assert_eq!(
             roofed[0][51].sky(),
-            MAX - 1,
-            "now lit only from the open column beside it, one step away"
+            MAX - ACROSS,
+            "now lit only from the open column beside it, one cell away"
         );
         assert_eq!(roofed[0][60].sky(), 0, "and the rock itself holds none");
     }
@@ -750,7 +751,7 @@ mod tests {
         assert_eq!(lit[0][51].block(), 14, "the lamp's own cell");
         assert_eq!(
             lit[1][51].block(),
-            14 - BLOCK_ACROSS,
+            14 - ACROSS,
             "a step across costs a cell's width, three levels"
         );
         assert_eq!(lit[4][51].block(), 2, "and it keeps falling off");
@@ -1138,7 +1139,7 @@ mod tests {
     }
 
     /// Up a shaft a lamp's light still falls one level a layer, as the sky's
-    /// does: only the step across got dearer. A brazier at the foot of a
+    /// does: only the step across is dearer. A brazier at the foot of a
     /// sealed shaft lights all fifteen layers of it, and the sky, across a
     /// region with no open column, is never touched.
     #[test]
@@ -1170,8 +1171,8 @@ mod tests {
             );
         }
         assert_eq!(lit[0][66].block(), 0, "fifteen layers up it is out");
-        // The sky's step across is still one level: a tunnel off an open
-        // column falls one level a cell, as `voxel-light` built it.
-        const { assert!(STEP == 1 && BLOCK_ACROSS > STEP) };
+        // A level is a metre both ways: a one-metre layer costs one, a
+        // 2.833 m cell three.
+        const { assert!(STEP == 1 && ACROSS == 3) };
     }
 }

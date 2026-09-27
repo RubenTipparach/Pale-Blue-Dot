@@ -8,7 +8,7 @@
 
 /// How bright a glowing flower is on the field's 0..15 scale: enough to light
 /// its own cell and, faintly, the ones beside it, which with a step across
-/// costing three levels ([`crate::light::BLOCK_ACROSS`]) is about a cell and a
+/// costing three levels ([`crate::light::ACROSS`]) is about a cell and a
 /// half of meadow.
 pub const GLOW_FLOWER_LEVEL: u8 = 6;
 

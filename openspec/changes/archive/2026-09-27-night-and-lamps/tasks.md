@@ -1,5 +1,10 @@
 # Tasks
 
+Archived 2026-09-27 (survey L3). The open items below were built by
+`lamps-and-lanterns` (the icons, the glowing flowers and the sampler, tasks
+5.3, 6.x and 3.x) or are its non-goals (coloured light, a moon, seasons,
+fuel). Its two built requirements are in `openspec/specs/planet/light`.
+
 Two of the five pieces are built and pushed; three are not. The split is stated
 here rather than in prose, because this change is the one place a reader can see
 which is which.

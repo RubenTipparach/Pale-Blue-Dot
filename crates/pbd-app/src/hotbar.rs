@@ -16,25 +16,35 @@ use pbd_core::terrain::Material;
 /// what it missed, once.
 pub const KIT_VERSION: u32 = KIT_GRANTS.len() as u32;
 
-/// What the kit was before it was versioned: every save from then carries it.
-const KIT_BASE: [(Material, u16); 7] = [
+/// What a new world is dealt before the grants. Only a new world reads it: a
+/// saved world carries its own slots, whatever the base was when it began.
+///
+/// Snow, rock and ore were in it until the lights needed their slots
+/// (`lamps-and-lanterns` decision 12, the owner in survey L2: "dont need
+/// those blocks in the inventory really"). Digging gives them back.
+const KIT_BASE: [(Material, u16); 4] = [
     (Material::Grass, 64),
     (Material::Dirt, 64),
     (Material::Stone, 48),
     (Material::Sand, 32),
-    (Material::Snow, 16),
-    (Material::Rock, 12),
-    (Material::Ore, 3),
 ];
 
 /// What each kit version added, in order; version N is entry N - 1. A new
 /// world is dealt the base and all of these; a saved world is dealt the ones
 /// past the version its log records. Append, never reorder: a saved version
 /// names a prefix of this table.
-const KIT_GRANTS: [(Material, u16); 1] = [
+const KIT_GRANTS: [&[(Material, u16)]; 2] = [
     // Something to see with. A kit that could dig into the dark and not light
     // it was a kit that could only dig in daylight.
-    (Material::Torch, 16),
+    &[(Material::Torch, 16)],
+    // The city's lights (`lamps-and-lanterns` task 5.4).
+    &[
+        (Material::LanternPost, 8),
+        (Material::LanternWall, 8),
+        (Material::LanternHanging, 8),
+        (Material::Brazier, 4),
+        (Material::Candle, 16),
+    ],
 ];
 
 /// A light's own icon, as an asset path, or `None` for a block that is not
@@ -73,7 +83,8 @@ impl Hotbar {
         for (material, count) in KIT_BASE {
             slots.give(Item::Block(material), count);
         }
-        grant_since(&mut slots, 0);
+        let dealt = grant_since(&mut slots, 0);
+        debug_assert!(dealt.no_room.is_empty(), "a new world's kit fits");
         Self(slots)
     }
 
@@ -87,25 +98,47 @@ impl Hotbar {
         };
         let dealt = save.kit;
         if dealt < KIT_VERSION {
-            let given = grant_since(&mut slots, dealt);
+            let grant = grant_since(&mut slots, dealt);
             if save.deal_kit(KIT_VERSION, &slots) {
-                info!("starting kit v{dealt} -> v{KIT_VERSION}: dealt {given:?}");
+                info!(
+                    "starting kit v{dealt} -> v{KIT_VERSION}: dealt {:?}",
+                    grant.given
+                );
+                if !grant.no_room.is_empty() {
+                    // There is nowhere else to put them until the pack
+                    // (`inventory-grid`), and the deal is by version, so
+                    // these are not dealt later either.
+                    warn!(
+                        "starting kit v{KIT_VERSION}: no room in the hotbar for {:?}",
+                        grant.no_room
+                    );
+                }
             }
         }
         Self(slots)
     }
 }
 
-/// Deal every grant past `dealt` into `slots`; what was given.
-fn grant_since(slots: &mut Slots, dealt: u32) -> Vec<(Material, u16)> {
-    KIT_GRANTS
-        .iter()
-        .skip(dealt as usize)
-        .map(|&(material, count)| {
-            slots.give(Item::Block(material), count);
-            (material, count)
-        })
-        .collect()
+/// What a deal gave, and what it had no room for.
+#[derive(Debug, Default, PartialEq)]
+struct Grant {
+    given: Vec<(Material, u16)>,
+    no_room: Vec<(Material, u16)>,
+}
+
+/// Deal every grant past `dealt` into `slots`, into whatever room they have.
+fn grant_since(slots: &mut Slots, dealt: u32) -> Grant {
+    let mut grant = Grant::default();
+    for &(material, count) in KIT_GRANTS.iter().skip(dealt as usize).copied().flatten() {
+        let left = slots.give(Item::Block(material), count);
+        if left < count {
+            grant.given.push((material, count - left));
+        }
+        if left > 0 {
+            grant.no_room.push((material, left));
+        }
+    }
+    grant
 }
 
 #[cfg(test)]
@@ -123,14 +156,90 @@ mod kit_tests {
 
     /// A new world is dealt the base and every grant: the kit is one table
     /// and the version is its length, so a grant cannot be in one and not the
-    /// other.
+    /// other. It fills the ten slots exactly, and holds every light but not
+    /// the blocks digging gives back (decision 12).
     #[test]
     fn a_new_world_is_dealt_the_base_and_every_grant() {
         let kit = Hotbar::starting_kit();
-        for (material, expected) in KIT_BASE.iter().chain(&KIT_GRANTS) {
+        for (material, expected) in KIT_BASE.iter().chain(KIT_GRANTS.iter().copied().flatten()) {
             assert_eq!(count(&kit, *material), u32::from(*expected), "{material:?}");
         }
-        assert_eq!(KIT_VERSION, 1);
+        assert_eq!(KIT_VERSION, 2);
+        assert!(kit.iter().all(|slot| slot.is_some()), "ten slots, all full");
+        for light in Material::LAMPS {
+            assert!(count(&kit, light) > 0, "{light:?} is in the kit");
+        }
+        for dug in [Material::Snow, Material::Rock, Material::Ore] {
+            assert_eq!(count(&kit, dug), 0, "{dug:?} is dug, not dealt");
+        }
+    }
+
+    /// The kit as it was dealt at version 1: seven blocks and the torches.
+    fn the_old_kit() -> Slots {
+        let mut slots = Slots::new();
+        for (material, count) in [
+            (Material::Grass, 64),
+            (Material::Dirt, 64),
+            (Material::Stone, 48),
+            (Material::Sand, 32),
+            (Material::Snow, 16),
+            (Material::Rock, 12),
+            (Material::Ore, 3),
+            (Material::Torch, 16),
+        ] {
+            slots.give(Item::Block(material), count);
+        }
+        slots
+    }
+
+    /// A save dealt the old kit has two slots free. The lights go into them
+    /// in the grant's order, once, and the rest are named as having no room
+    /// rather than dealt later (decision 12).
+    #[test]
+    fn an_old_save_is_dealt_the_lights_that_fit_once() {
+        let mut save = WorldSave::memory_only();
+        save.carried = Some(the_old_kit());
+        save.kit = 1;
+        let mut slots = the_old_kit();
+        let grant = grant_since(&mut slots, 1);
+        assert_eq!(
+            grant.given,
+            vec![(Material::LanternPost, 8), (Material::LanternWall, 8)]
+        );
+        assert_eq!(
+            grant.no_room,
+            vec![
+                (Material::LanternHanging, 8),
+                (Material::Brazier, 4),
+                (Material::Candle, 16)
+            ]
+        );
+
+        let restored = Hotbar::restore(&mut save);
+        assert_eq!(restored.0, slots, "restore deals the same");
+        assert_eq!(count(&restored, Material::Ore), 3, "and keeps its own");
+        assert_eq!(save.kit, KIT_VERSION, "the save records the deal");
+        let again = Hotbar::restore(&mut save);
+        assert_eq!(again.0, slots, "not dealt twice");
+    }
+
+    /// A full hotbar is dealt nothing, and the deal is still recorded, so it
+    /// is not tried again on every open.
+    #[test]
+    fn a_full_hotbar_is_dealt_nothing_and_says_so() {
+        let mut full = the_old_kit();
+        full.give(Item::Block(Material::DryGrass), 1);
+        full.give(Item::Block(Material::JungleGrass), 1);
+        let mut save = WorldSave::memory_only();
+        save.carried = Some(full.clone());
+        save.kit = 1;
+        let mut slots = full.clone();
+        let grant = grant_since(&mut slots, 1);
+        assert!(grant.given.is_empty());
+        assert_eq!(grant.no_room.len(), 5, "every light is named");
+        let restored = Hotbar::restore(&mut save);
+        assert_eq!(restored.0, full, "nothing moved");
+        assert_eq!(save.kit, KIT_VERSION);
     }
 
     /// The owner's report: a world saved before torches joined the kit had

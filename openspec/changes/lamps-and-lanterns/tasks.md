@@ -8,7 +8,7 @@ the lights (group 7) before `world-map` starts.
 - [x] 1.1 Move the delta specs of `voxel-light` and `night-and-lamps` from `specs/planet/spec.md` to `specs/planet/light/spec.md`. Verify: `openspec validate voxel-light night-and-lamps --strict` passes.
 - [x] 1.2 Take `night-and-lamps`' unbuilt requirements out of its delta: the torch's icon clause, the flowers and the sampler. They are carried by this change's delta. Verify: its delta holds only "The sun moves, and there is one of it" and "A cell can emit light of its own", each with a passing test named in its scenarios.
 - [x] 1.3 Sync both into `openspec/specs/planet/light/spec.md` with `/opsx:sync`, and name each requirement's test in its scenarios. Verify: `openspec validate --all` passes, and every requirement in the new spec names a test that passes.
-- [ ] 1.4 (Asked 2026-09-27 as survey L3.) Ask the owner for `voxel-light`'s in-game check (caves dark enough, the crease reads, the mouth's falloff), then archive both changes, moving their held items into this change's non-goals. Verify: neither appears in `openspec list`.
+- [x] 1.4 (Survey L3, the owner 2026-09-27: "its good for now".) Ask the owner for `voxel-light`'s in-game check (caves dark enough, the crease reads, the mouth's falloff), then archive both changes, moving their held items into this change's non-goals. Verify: neither appears in `openspec list`.
 
 ## 2. One sun, one set of light constants
 
@@ -35,8 +35,9 @@ the lights (group 7) before `world-map` starts.
 - [x] 5.2b A level is a metre (decision 7): the block channel's sideways step costs three levels, and the sky's stays one. Verify: core tests that a brazier lights four cells across and fifteen layers up, a candle two across, and the sky's falloff is unchanged.
 - [x] 5.2c The shader adds `(f (2 - f))^2` of the lamp colour, the mockup's curve. Verify: the same captures at midnight, beside the ones before the change.
 - [x] 5.2d Trees and ground clutter take the field at their own cell (decision 9). Verify: a night capture beside the lamps in which the grass by a lamp is lit and the grass away from them is not.
+- [x] 5.2e Daylight crosses a cell as a lamp does (decision 11, survey L1): one `light::ACROSS` of three levels for both channels, and "Light is what reached a cell" modified in the main spec in the same commit. Verify: core tests that a level tunnel reads 12, 9, 6, 3 from its mouth and is dark at the fifth cell, that a shaft still loses one level a layer, and that open ground is unchanged; a `--spawn mouth` capture at noon before and after.
 - [x] 5.3 Icons for the torch and for each new light, as committed PNG sources with a manifest entry. Verify: the hotbar shows each light's own icon in a capture, and the art checks (palette, transparency) pass.
-- [ ] 5.4 A kit grant, version N+1, that deals a few of each new light once. Verify: the existing kit tests extended with an old save gaining them once and a new world's kit holding them.
+- [x] 5.4 Kit grant 2 (decision 12, survey L2): a new world's kit drops snow, rock and ore and holds the five lights; an old save is dealt them once into whatever room it has, and the log names what did not fit. Verify: the kit tests extended with a new world's ten slots, an old save gaining them once, and a full save gaining nothing and saying so.
 - [x] 5.5 A synthetic "city" of 300 lanterns, baked and timed in a test. Verify: its bake time is recorded in the design's risk note. If it is over 12 ms, open a follow-up before `cities-in-the-world`.
 
 ## 6. Glowing flowers
@@ -58,4 +59,4 @@ the lights (group 7) before `world-map` starts.
 
   It is published on the gate page with a before-and-after set of stills. Verify: the page exists and is linked from the PR.
 - [ ] 7.2 Record that frame cost was not measured in the cloud session (CLAUDE.md), and ask the owner to run `tools/perf_suite.py` on real hardware. Verify: the note is in the PR.
-- [ ] 7.3 The owner watches the video and approves the lights. Verify: the owner's words are quoted in `proposal.md` under Why. Then archive this change.
+- [x] 7.3 The owner approves the lights. (On the screenshots, 2026-09-27; the video is 7.1's, in the owner's batch.) Verify: the owner's words are quoted in `proposal.md` under Why. Archive this change once 7.1 is done.

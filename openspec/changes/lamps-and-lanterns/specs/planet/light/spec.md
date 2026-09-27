@@ -102,3 +102,32 @@ in the cell record, never rolled independently by the shader.
 
 - **WHEN** the shader draws a glowing flower head
 - **THEN** it is on a cell the bake treated as an emitter
+
+## MODIFIED Requirements
+
+### Requirement: Light is what reached a cell, not how deep it is
+Every cell of the column tier SHALL carry a sky level derived by propagation
+from the open sky, losing one level per layer up or down and three levels per
+cell across, about a metre a level either way, and stopping at anything solid.
+
+#### Scenario: An enclosed cave is dark
+- **WHEN** a cell is enclosed by solid material beyond the propagation range
+- **THEN** its faces are lit only by the ambient floor
+  (`light::tests::a_tunnel_longer_than_the_range_goes_out`)
+
+#### Scenario: A cave mouth is bright although it is deep
+- **WHEN** a cell is open to the sky
+- **THEN** it is at full sky level whatever its depth below the surrounding
+  ground
+  (`light::tests::an_open_column_lights_a_cave_beside_it_at_the_caves_own_height`)
+
+#### Scenario: Twilight reaches about eleven metres into a tunnel
+- **WHEN** a level tunnel runs in from an open mouth
+- **THEN** its first four cells read 12, 9, 6 and 3, and it is dark from the
+  fifth, whatever the tunnel's depth
+  (`light::tests::a_tunnel_darkens_with_distance_from_its_mouth_not_with_depth`)
+
+#### Scenario: The open surface is unchanged
+- **WHEN** a cell's column is open to the sky
+- **THEN** the light term is the same as before the field existed
+  (`light::tests::open_ground_is_full_daylight_and_the_rock_under_it_is_not_lit`)

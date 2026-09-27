@@ -47,7 +47,8 @@ See `proposal.md` for why. What the design has to work with, observed on
 - **Lit windows as a surface glow.** A window glow belongs to the city's
   buildings in `cities-in-the-world`. This change gives it the candle that
   lights the room behind it.
-- **A moon, stars, fuel or fire spread**, as `night-and-lamps` held them.
+- **A moon, stars, seasons, fuel or fire spread**, as `night-and-lamps` held
+  them. That change is archived with this one's group 1 (survey L3).
 
 ## Decisions
 
@@ -154,7 +155,7 @@ the dark night it should be (`docs/screenshots/lamps-and-lanterns/`).
   light it is brighter than linear (0.92 at one cell from a brazier, against
   0.8), and at the edge it falls smoothly to nothing (0.13 at four cells,
   against 0.2).
-- **The sky channel keeps one level per step.** Daylight into a cave is
+- **The sky channel keeps one level per step (until decision 11).** Daylight into a cave is
   `voxel-light`'s, and the owner has not yet judged its caves (task 1.4). The
   same rule for the sky would take a tunnel's twilight from about 42 m to
   15 m. That is a change to the look of every cave mouth, so it is a survey
@@ -260,6 +261,44 @@ three different ways.
 - *Alternative:* dim the directional sun with the clock. Rejected: the same
   light lights the moon, which is in space and in sunlight at midnight.
 
+**11. Daylight crosses a cell as a lamp's light does: three levels (the
+owner, survey L1, 2026-09-27: "sounds good, makes sense").** Decision 7 left
+the sky at one level per cell and asked the owner whether daylight should
+follow the lamps' rule.
+- **What changes.** A step to a neighbouring column costs every channel three
+  levels. A step up or down still costs one, so a shaft stays at full
+  strength for 14 layers, as the reference's comment wants. The flood keeps
+  one implementation, and the per-channel cost goes: `light::ACROSS` replaces
+  `BLOCK_ACROSS` and `Channel::across`.
+- **What it does to a tunnel.** From a mouth at 15, a level tunnel reads 12,
+  9, 6 and 3 in its first four cells, and is dark from the fifth, 14 m in.
+  At one level per cell it was lit for 14 cells, about 40 m. A cell under an
+  overhang beside open ground reads 12, not 14. Open ground is unchanged,
+  because an open column is seeded at 15 all the way down to its floor.
+- **What it does not change.** The corner darkening (voxel-light's crease)
+  reads solid neighbours, not the field. The shader's curve on the sky level
+  is unchanged. Only the level that reaches a cell under cover is lower.
+- **How it is checked.** The tunnel tests pin 12, 9, 6, 3 and dark. A
+  `--spawn mouth` capture at noon is taken before and after, in
+  `docs/screenshots/lamps-and-lanterns/`.
+
+**12. The kit makes room for the lights, and the rest waits for an inventory
+(the owner, survey L2, 2026-09-27: "need to give the player an inventory
+grid, just drop something, dont need those blocks in the inventory really").**
+The hotbar has ten slots and the kit filled eight.
+- **A new world** is no longer dealt snow, rock or ore: digging gives those
+  back. It is dealt grass, dirt, stone and sand, the torches, and grant 2:
+  8 street lanterns, 8 wall lanterns, 8 hanging lanterns, 4 braziers and 16
+  candles. That is ten slots, all full.
+- **An old save** is dealt grant 2 once, into whatever room it has. Anything
+  that does not fit is named in the log and not dealt, because there is no
+  inventory to put it in. A save whose hotbar is full gets nothing, and the
+  log says so.
+- **The inventory grid** the owner asked for is its own change,
+  `inventory-grid`: a written plan now, built when the owner schedules it
+  (survey I1). Once it exists, a grant that does not fit the hotbar lands in
+  the grid.
+
 ## Risks / Trade-offs
 
 - [A level-13 lantern floods about 13 cells, over 30 m across 2.833 m cells,
@@ -302,8 +341,8 @@ three different ways.
 
 - New materials take new ids after `Torch = 12`, so an old save's edit log
   reads unchanged.
-- The kit gains grant version N+1, which deals a few of each new light once to
-  an existing save, as the torch grant did.
+- The kit gains grant 2, which deals the five new lights once to an existing
+  save, into whatever room its hotbar has (decision 12).
 - Rollback is the previous build. A save that holds the new materials cannot
   be opened by an older build, which is the same as for any material added
   before.

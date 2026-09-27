@@ -11,8 +11,8 @@ nothing reads it back. Synced from `voxel-light`, `night-and-lamps` and
 
 ### Requirement: Light is what reached a cell, not how deep it is
 Every cell of the column tier SHALL carry a sky level derived by propagation
-from the open sky, losing one level per cell in every direction and stopping at
-anything solid.
+from the open sky, losing one level per layer up or down and three levels per
+cell across, about a metre a level either way, and stopping at anything solid.
 
 #### Scenario: An enclosed cave is dark
 - **WHEN** a cell is enclosed by solid material beyond the propagation range
@@ -23,8 +23,13 @@ anything solid.
 - **WHEN** a cell is open to the sky
 - **THEN** it is at full sky level whatever its depth below the surrounding
   ground
-  (`light::tests::a_tunnel_darkens_with_distance_from_its_mouth_not_with_depth`,
-  `light::tests::an_open_column_lights_a_cave_beside_it_at_the_caves_own_height`)
+  (`light::tests::an_open_column_lights_a_cave_beside_it_at_the_caves_own_height`)
+
+#### Scenario: Twilight reaches about eleven metres into a tunnel
+- **WHEN** a level tunnel runs in from an open mouth
+- **THEN** its first four cells read 12, 9, 6 and 3, and it is dark from the
+  fifth, whatever the tunnel's depth
+  (`light::tests::a_tunnel_darkens_with_distance_from_its_mouth_not_with_depth`)
 
 #### Scenario: The open surface is unchanged
 - **WHEN** a cell's column is open to the sky
