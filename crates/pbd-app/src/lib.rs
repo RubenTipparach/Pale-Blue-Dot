@@ -34,6 +34,7 @@ pub mod vehicles;
 pub mod walking;
 #[cfg(feature = "desktop")]
 pub mod weather;
+pub mod world_map;
 
 #[cfg(all(test, feature = "desktop"))]
 mod sea_gpu_tests;

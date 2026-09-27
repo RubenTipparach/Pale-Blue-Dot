@@ -29,8 +29,8 @@ gate for everything after it, in this change and in `bigger-biomes`,
 
 ## 2. Latitude and longitude in one place
 
-- [ ] 2.1 `pbd_core::geo`: `lat_lon`, `direction`, `north_east`, and the equirectangular projection with its inverse (survey M2: flat at every zoom). Verify: core round-trip tests at the poles, on the antimeridian and at the equator, and on an offset planet (CLAUDE.md).
-- [ ] 2.2 The inline copies in `walking.rs` and `flight_view.rs` call `geo`. Verify: the readout tests are unchanged, and `git grep "atan2(direction.x)\|atan2(up.x)"` finds nothing outside `geo`.
+- [x] 2.1 (`crates/pbd-core/src/geo.rs`, four tests. Latitude is `atan2` of the height over the distance from the axis, since `asin` of an `f32` loses the last hundredth of a degree by the poles; `examples/world_map.rs` projects through it too.) `pbd_core::geo`: `lat_lon`, `direction`, `north_east`, and the equirectangular projection with its inverse (survey M2: flat at every zoom). Verify: core round-trip tests at the poles, on the antimeridian and at the equator, and on an offset planet (CLAUDE.md).
+- [x] 2.2 (The readout tests pass unchanged; the grep finds nothing.) The inline copies in `walking.rs` and `flight_view.rs` call `geo`. Verify: the readout tests are unchanged, and `git grep "atan2(direction.x)\|atan2(up.x)"` finds nothing outside `geo`.
 
 ## 3. The map screen
 

@@ -201,6 +201,49 @@ blocky pixels, canwe have a more detailed layer whenI zoom in?").**
 - *Alternative:* one bigger image. 8,192 across is 33 million pixels, too
   much to load at once for a page that shows a few tiles of it.
 
+**10. Building the game's map: the levels land on the cell, the cache holds
+texels, and the map keeps its own small weather cubes (2026-09-27, before
+task group 3).** Three things the decisions above leave open or get wrong
+once the game has to draw them:
+- **The finest level is a cell a pixel.** Task 3.3 asks for 2.833 m a pixel
+  under the player, and the spec for a cell at least a pixel. Levels that
+  double from 2,048 (decision 3) or run 4,096 and 8,192 (decision 9, the
+  mockup) cannot land there: 8,192 is 3.68 m, a cell and a third, and 16,384
+  is 1.84 m. So the pyramid is counted down from the cell: 10,656 × 5,328
+  (2.830 m a pixel at the equator, 0.1% under 2.833 m), 5,328 × 2,664, and
+  the base 2,664 × 1,332 (11.3 m). Tiles are 333 pixels square, which makes
+  every level a whole number of them: 32 × 16, 16 × 8, 8 × 4. The base is
+  built whole on the pool (3.5 M texels, about 4.4 s on one thread at the
+  measured 1.24 us a texel, about 1.2 s on four) and the two finer levels as
+  tiles on demand, kept in an LRU. The mockup's levels stay as they are;
+  the approval was of what the map shows, and this only makes it finer.
+- **The cache holds texels, not colours.** Keyed by the seed and
+  `GENERATOR_VERSION`, it stores what `base_texel` returns: the altitude in
+  16 bits, the top block and the biome, as one PNG (the `image` crate is
+  already in the tree through Bevy). Colours are made at load from the
+  tilesets, so repainting a tile never leaves a stale map behind a key that
+  did not change.
+- **The colouring moves into Rust.** The mockup coloured the ground in
+  `tools/world_map.py`: each top block from its biome's tile means, relief
+  shading from the north-west exaggerated three times, the sea by depth
+  through the fish classes' 6 m and 40 m. The game's map does the same in
+  `pbd_app::map`, which becomes the one authority; the Python copy was the
+  prototype's.
+- **The base is image nodes; the live layers are one material over it.**
+  Decision 4's material cannot bind the weather cube maps: they are raw
+  render-world textures, not assets. So the base and its tiles are
+  `ImageNode`s, sampled linearly (decision 9), placed by the view, and one
+  `UiMaterial` node over them draws the night, the clouds and rain and the
+  chosen weather overlay, greying the base beneath an overlay as the mockup
+  does. It samples two small cube `Image`s of the map's own (6 × 64 × 64,
+  8 bits a channel): the cover, the precipitation and snow from the same
+  `WeatherMaps` the globe uploads, and the overlay's value on its ramp from
+  the same `overlay_texels`. They are filled only while the map is open.
+- **Not in the first build:** the moving streaks on the flow overlays (the
+  mockup's; the spec asks for the layer and its scale), and the towns' lights
+  on the night side, which come with the sites (`city-sites`). Task 5.4, a
+  site's places, waits for `city-sites` too: the game has no sites to list.
+
 ## Risks / Trade-offs
 
 - [The base raster takes too long to build] → Timed by the instrument

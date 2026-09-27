@@ -452,12 +452,13 @@ pub fn teleport_pilot(world: &mut World, position: Vec3, orientation: Quat) -> b
         .resource::<CelestialScene>()
         .gravity_at(frame.origin + position.as_dvec3())
         .is_in_space();
+    let (latitude_deg, longitude_deg) = pbd_core::geo::lat_lon(direction).degrees();
     *world.resource_mut::<FlightReadout>() = FlightReadout {
         position,
         altitude: position.length() - planet::PLANET_RADIUS,
         clearance: position.length() - surface_radius,
-        latitude_deg: direction.y.clamp(-1.0, 1.0).asin().to_degrees(),
-        longitude_deg: direction.z.atan2(direction.x).to_degrees(),
+        latitude_deg,
+        longitude_deg,
         dampeners,
         is_in_space,
         ..Default::default()
@@ -620,13 +621,14 @@ fn publish_flight_readout(
         let direction = position.0.normalize_or(Vec3::Y);
         let clearance =
             position.0.length() - flight_surface_radius(direction, config.mode, terrain.as_deref());
+        let (latitude_deg, longitude_deg) = pbd_core::geo::lat_lon(direction).degrees();
         *readout = FlightReadout {
             position: position.0,
             speed: velocity.0.length(),
             altitude: position.0.length() - planet::PLANET_RADIUS,
             clearance,
-            latitude_deg: direction.y.clamp(-1.0, 1.0).asin().to_degrees(),
-            longitude_deg: direction.z.atan2(direction.x).to_degrees(),
+            latitude_deg,
+            longitude_deg,
             dampeners: intent.dampeners
                 || intent.brake
                 || !intent.captured

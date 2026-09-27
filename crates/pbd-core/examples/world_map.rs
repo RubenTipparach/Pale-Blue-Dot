@@ -27,7 +27,6 @@
 use glam::Vec3;
 use pbd_core::map::base_texel;
 use pbd_core::planet_gen::{Biome, TerrainConfig, biome_at, moisture};
-use std::f32::consts::{PI, TAU};
 use std::io::Write;
 use std::time::Instant;
 
@@ -148,11 +147,10 @@ fn main() {
     println!("wrote {out}: {} planes", planes.len());
 }
 
-/// The direction through the centre of a pixel, as `fish_ranges` has it.
+/// The direction through the centre of a pixel: the map's own projection,
+/// as the game's map draws it.
 fn pixel(col: usize, row: usize, width: usize, height: usize) -> Vec3 {
-    let lat = (0.5 - (row as f32 + 0.5) / height as f32) * PI;
-    let lon = ((col as f32 + 0.5) / width as f32 - 0.5) * TAU;
-    Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin())
+    pbd_core::geo::pixel_direction(col, row, width, height)
 }
 
 /// A pixel's share of the sphere, up to a constant.

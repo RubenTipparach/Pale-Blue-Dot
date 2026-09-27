@@ -18,6 +18,10 @@ bevy.workspace = true
 pbd-core = { path = "../pbd-core" }
 bytemuck = { version = "1", features = ["derive"], optional = true }
 ron = "0.12"
+# The world map's base raster is cached on disk as a PNG (`world-map`
+# decision 10), and its colours are read from the tileset PNGs. The same
+# `image` Bevy already carries.
+image = { version = "0.25", default-features = false, features = ["png"] }
 serde = { version = "1", features = ["derive"] }
 gltf = { version = "1.4.1", default-features = false, features = ["names", "utils"], optional = true }
 serde_json = { version = "1", optional = true }
