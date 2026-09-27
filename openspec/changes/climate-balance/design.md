@@ -96,10 +96,13 @@ code of tasks 1.3 and 1.3b).**
   per square metre: an energy fixer, as climate models use one. The heat that
   converging air carries away aloft comes down everywhere, which is roughly
   what the missing upper branch of the circulation would do with it.
+- **A lightning strike's cold pool keeps its heat too (finding 7).** The
+  pool chills the struck cell's air by `pool_k`, which is what lifts the air
+  around it into the next storm, and it stays. The heat it took is given
+  back to the air evenly, as the carry's is.
 - **What still makes or loses heat, on purpose:** the sun and the outgoing
-  longwave; a lightning strike's cold pool, which is local and rare; the
-  weather slider's forcing; and the guard that resets a non-finite cell.
-  The heat budget reports the pool with the rest.
+  longwave; the weather slider's forcing; and the guard that resets a
+  non-finite cell.
 
 **2. Then fix the two terms, then add the thermostat.** The owner's words ask for
 the sun to maintain the average, and both parts serve that.
@@ -126,7 +129,39 @@ measurement.**
   untrimmed mean as close to 15 °C as the pair allows. The sweep's table goes
   in this design.
 
-**4. The thermostat is a slow proportional-integral controller on one
+**4, revised (2026-09-27, measured on the second pass): the thermostat sets
+the sun from the planet's energy balance, and only nudges it.** The first
+version below rang against the sea (runs X and Y). The books now close
+(decision 1a), and the outgoing longwave is linear in the temperature, so a
+planet that has settled satisfies, averaged over its surface:
+
+```latex
+\bar{A}_1 \, t + \bar{G} = a + b \, T
+```
+
+where `A₁` is the sunlight the ground would absorb at a trim of 1, `G` the
+clouds' returned longwave, `a` and `b` are `olr_a` and `olr_b`, and `T` the
+mean. So the trim that settles the planet at the target is
+`(a + b · target − G) / A₁`, read straight off the budget.
+- **The balance trim.** `A₁` and `G` are averaged over `sun_balance_s` (25 game
+  days to start), long enough that a day's weather and a season's swing
+  barely move it, which is K1's constant sun. The trim is that ratio.
+- **The nudge.** A proportional term, `sun_trim_per_k` of trim per kelvin off,
+  hastens the approach while the sea is still far from settled, and fades
+  to nothing as it arrives.
+- **The integral** is kept, slow (`sun_trim_s`, 50 game days), for what the
+  books still leak (finding 6's last few W/m²), which would otherwise hold
+  the planet a kelvin or so off. It only runs within `sun_trim_band_k` (1 K)
+  of the target. A toy planet with a slow sea, started 10 K cold, showed why
+  (`a_planet_with_a_slow_sea_settles_without_ringing`): the integral built up
+  a fifth of the sun during the long approach and the planet overshot to
+  18.7 °C, although the balance trim alone was right to within a percent.
+- The averages and the integral are saved with the weather.
+- *Alternative:* a slower integral alone. Rejected: it is slow in both
+  directions, so a frozen save would take years of game time to warm, and it
+  would still ring against the sea, only more slowly.
+
+**4, as first written. The thermostat is a slow proportional-integral controller on one
 scalar.** The owner (survey K1): "well the world has different gradients, the
 sun just has a constant solar output. do recommendation I guess". So the sun
 has to read as constant. Once the two terms are fixed, the trim settles, and a
@@ -304,6 +339,15 @@ to 4, in W/m²:
   loss, about a quarter of the absorbed sunlight.
 - Decision 1a closes it with an energy fixer.
 
+**Finding 7: the lightning's cold pools are a fourth leak (2026-09-27, on
+pair V).** Under the balance thermostat, pair V held steady but cold: 12.8 °C
+at a nudge of 0.01 a kelvin, 13.9 °C at 0.04, with the balance trim near
+0.9. The heat budget, now counting the pools, found the planet losing 10 to
+12 W/m² beyond its radiation, and the pools taking 14 to 15 W/m² of it (level
+4, days 1 to 3). Decision 1a said a pool was "local and rare"; with this
+much convection it strikes somewhere every few steps. Decision 1a now gives
+the pool's heat back.
+
 **The next measurement: the planet without either leak.** The override
 closes both, using only the shipped code:
 - `heat_spread` 0;
@@ -353,6 +397,56 @@ These bracket the fix; they are not it:
 - A latent cycle that conserves gives each kilogram's heat back where it
   condenses. Here the ground is charged what a column that rains in place
   gets back, so a kilogram that rains out elsewhere moves heat only roughly.
+
+## Measured: the sweep on the fixed step (2026-09-27, task 1.4)
+
+With the three leaks closed (tasks 1.3 to 1.3c), the clouds were swept again
+at level 4 for 200 days, `solar_wm2` 1360, the trim held at 1
+(`target_mean_c: None`), with `examples/fish_ranges.rs` and its new columns.
+The year-2 figures are area-weighted over days 101 to 200 from the fields; the
+net cloud effect is the instrument's, averaged over the last ten days.
+
+| run | `cloud_albedo` | `cloud_greenhouse` | net cloud, W/m² | whole surface, day 100 | whole surface, day 200 | whole surface, year 2 | sea, year 2 | range, year 2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Q | 0.6 | 40 | −75 | 9.9 °C | 7.9 °C | 8.8 °C | 11.1 °C | −26 to 16 °C |
+| R | 0.45 | 40 | −51 | 12.7 °C | 12.4 °C | 12.6 °C | 14.6 °C | −24 to 20 °C |
+| S | 0.35 | 40 | −36 | 14.4 °C | 15.2 °C | 15.0 °C | 16.8 °C | −22 to 24 °C |
+| T | 0.25 | 50 | −17 | 16.9 °C | 19.1 °C | 18.3 °C | 19.7 °C | −19 to 30 °C |
+
+- **No cell runs away** on the fixed step, at any of the four: every range sits
+  well inside the risk note's −80 to +60 °C. Run E's blow-up is not repeated.
+- **No water is frozen all year** in any run. On the old step, year 2 froze
+  every point of water.
+- **The shipped clouds (Q) still cool**, 2 K over the 200 days, because they
+  take 75 W/m², more than twice Earth's.
+- **S lands on 15 °C untrimmed**, but its clouds take 36 W/m², just outside
+  decision 3's −10 to −30. **T is in Earth's range and runs warm**, still
+  climbing 1 K every 50 days at day 200.
+
+**The second pass**, the same way: two pairs between S and T, and T under
+the thermostat as decision 4 first wrote it.
+
+| run | `cloud_albedo` | `cloud_greenhouse` | thermostat | net cloud, W/m² | whole surface, day 100 | day 200 | year 2 | trim, days 100 to 200 |
+| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |
+| U | 0.3 | 45 | off | −26 | 15.6 °C | 17.2 °C | 16.6 °C | 1 |
+| **V** | **0.3** | **40** | off | **−29** | 15.3 °C | 16.6 °C | **16.2 °C** | 1 |
+| X | 0.25 | 50 | 0.01 a kelvin, 5 days | −8 | 16.3 °C | 14.1 °C | 15.1 °C | 0.81 to 0.87 |
+| Y | 0.25 | 50 | 0.02 a kelvin, 20 days | −10 | 16.5 °C | 15.1 °C | 16.0 °C | 0.85 to 0.92 |
+
+- **V is the pair** (decision 3): its clouds take 29 W/m², inside Earth's
+  range, and it is the closest of those to 15 °C untrimmed. It is still
+  warming, half a kelvin every 50 days at day 200, which is the thermostat's
+  to hold.
+- **The thermostat as first written rings.** X rose to 16.7 °C on day 80 and
+  fell to 14.1 °C by day 200, and its trim swung from 1.06 to 0.81 and back
+  toward 0.87. Y, slower, still peaked at 16.6 °C. Both break the ±1 °C pass
+  mark from day 30 and the owner's "the sun just has a constant solar output"
+  (K1): the trim moved 7% over year 2.
+- **Why it rings.** The land answers a change of sun in days; the sea, with
+  sixty times the heat capacity, in hundreds (`C_sea / olr_b` is 1.4 million
+  seconds, 500 game days). An integral quick enough to catch the land keeps
+  pushing long after the sea has been set on its way, and overshoots.
+  Decision 4 is revised below.
 
 ## Risks / Trade-offs
 

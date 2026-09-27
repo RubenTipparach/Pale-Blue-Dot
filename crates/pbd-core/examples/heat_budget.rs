@@ -57,7 +57,7 @@ fn main() {
         s.solar_wm2, s.cloud_albedo, s.cloud_greenhouse
     );
     println!(
-        "{:>4} {:>7} {:>7} {:>6} | {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} | {:>8} {:>8} {:>8} {:>9}",
+        "{:>4} {:>7} {:>7} {:>6} | {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} | {:>8} {:>8} {:>8} {:>9} {:>8}",
         "day",
         "mean C",
         "sea C",
@@ -74,7 +74,8 @@ fn main() {
         "air",
         "latent",
         "leak",
-        "air carry"
+        "air carry",
+        "pools"
     );
     let steps_per_day = (DAY_S / s.dt_s) as u64;
     let sample_dt = EVERY as f64 * s.dt_s as f64;
@@ -90,9 +91,17 @@ fn main() {
         // stored, temp, sea temp, cover, spread, carry, air, latent
         let mut acc = [0.0f64; 14];
         let mut samples = 0u32;
+        // The heat the lightning's cold pools take from the air, J.
+        let mut pools = 0.0f64;
         for step in 0..steps_per_day {
             let t = (day * steps_per_day + step) as f64 * s.dt_s as f64;
             air.step(Clock { seconds: t }.sun(), &[]);
+            let struck = air
+                .strikes
+                .iter()
+                .filter(|k| k.step + 1 == air.step)
+                .count();
+            pools += struck as f64 * s.pool_k as f64 * air_capacity * total_area / n as f64;
             if step % EVERY != 0 {
                 continue;
             }
@@ -149,7 +158,7 @@ fn main() {
         let evap = m[0] - (m[2] - m[3]) - m[4] - m[5] + m[9] + m[10];
         let leak = m[0] - (m[2] - m[3]) - m[5] - m[11] - m[12];
         println!(
-            "{:>4} {:>7.2} {:>7.2} {:>6.3} | {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} | {:>8.1} {:>8.1} {:>8.1} {:>9.1}",
+            "{:>4} {:>7.2} {:>7.2} {:>6.3} | {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} {:>8.1} | {:>8.1} {:>8.1} {:>8.1} {:>9.1} {:>8.1}",
             day + 1,
             m[6],
             m[7],
@@ -166,7 +175,8 @@ fn main() {
             m[11],
             m[12],
             leak,
-            m[13]
+            m[13],
+            -pools / (steps_per_day as f64 * s.dt_s as f64) / total_area
         );
     }
 }

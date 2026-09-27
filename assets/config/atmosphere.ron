@@ -39,12 +39,16 @@
     solar_wm2: 1000.0,
     // The thermostat: the sun's strength is trimmed to hold the planet's
     // mean surface temperature, land and sea, at the target (the owner: "the
-    // sun should maintain average temperature of the planet to 15 c"). A
-    // proportional-integral controller: trim per kelvin off, and the integral
-    // time, s. The trim stays between its limits, and says so when it hits one.
+    // sun should maintain average temperature of the planet to 15 c"). The
+    // trim is read off the planet's energy budget averaged over
+    // sun_balance_s, nudged by sun_trim_per_k a kelvin off, and an integral
+    // over sun_trim_s, s, runs within sun_trim_band_k of the target. It stays
+    // between its limits, and says so when it hits one.
     target_mean_c: Some(15.0),
-    sun_trim_s: 14400.0,
+    sun_balance_s: 72000.0,
+    sun_trim_s: 144000.0,
     sun_trim_per_k: 0.01,
+    sun_trim_band_k: 1.0,
     sun_trim_min: 0.7,
     sun_trim_max: 1.4,
     cloud_albedo: 0.6,

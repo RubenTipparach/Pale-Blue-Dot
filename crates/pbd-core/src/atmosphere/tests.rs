@@ -489,7 +489,7 @@ fn a_save_from_before_the_sea_state_still_loads() {
     old.extend_from_slice(&current[MAGIC.len()..header]);
     old.extend_from_slice(&current[header..header + n * 4 * (SCALARS - 1)]);
     // And no thermostat, which came after.
-    old.extend_from_slice(&current[header + n * 4 * SCALARS..current.len() - 4]);
+    old.extend_from_slice(&current[header + n * 4 * SCALARS..current.len() - 12]);
     let mut b = air(quiet());
     b.restore(&old).expect("an old save");
     assert_eq!(b.wind, a.wind);
@@ -505,9 +505,11 @@ fn a_save_from_before_the_thermostat_loads_with_no_trim() {
         a.step(SUN, &[]);
     }
     a.trim_integral = 0.1;
+    a.balance_absorbed = 230.0;
+    a.balance_greenhouse = 20.0;
     let current = a.to_bytes();
     let mut old = b"PBDATM02".to_vec();
-    old.extend_from_slice(&current[MAGIC.len()..current.len() - 4]);
+    old.extend_from_slice(&current[MAGIC.len()..current.len() - 12]);
     let mut b = air(quiet());
     b.restore(&old).expect("a save from before the thermostat");
     assert_eq!(b.trim_integral, 0.0);
@@ -516,6 +518,14 @@ fn a_save_from_before_the_thermostat_loads_with_no_trim() {
     let mut c = air(quiet());
     c.restore(&current).expect("its own bytes");
     assert_eq!(c.trim_integral, 0.1, "and the new layout keeps the trim");
+    assert_eq!((c.balance_absorbed, c.balance_greenhouse), (230.0, 20.0));
+    // One from before the balance keeps its integral and starts its averages.
+    let mut v3 = b"PBDATM03".to_vec();
+    v3.extend_from_slice(&current[MAGIC.len()..current.len() - 8]);
+    let mut d = air(quiet());
+    d.restore(&v3).expect("a save from before the balance");
+    assert_eq!(d.trim_integral, 0.1);
+    assert_eq!(d.balance_absorbed, 0.0);
 }
 
 /// A planet whose heat answers in hours, lit by a sun that stands still: the
@@ -525,6 +535,7 @@ fn quick_planet(start_c: f32) -> Atmosphere {
         solar_wm2: 1100.0,
         land_heat_capacity: 2.0e4,
         ocean_heat_capacity: 2.0e4,
+        sun_balance_s: 2_000.0,
         sun_trim_s: 2_000.0,
         sun_trim_per_k: 0.02,
         ..quiet()
@@ -558,27 +569,108 @@ fn the_thermostat_warms_a_cold_planet_and_cools_a_warm_one_to_its_target() {
 }
 
 /// The trim stops at its limits, says so, and does not wind up while it is
-/// held there: back at the target, the sun comes straight back to normal.
+/// held there: back at the target, the sun comes straight back to its
+/// balance.
 #[test]
 fn the_trim_stops_at_its_limits_and_does_not_wind_up() {
     let mut a = quick_planet(-50.0);
+    // A budget that balances at the target with a trim of exactly 1.
+    let s = a.settings;
+    let (absorbed, greenhouse) = (s.olr_a + s.olr_b * 15.0 - 20.0, 20.0);
     for _ in 0..20_000 {
-        a.sun_trim = a.thermostat(1.0);
+        a.sun_trim = a.thermostat(absorbed, greenhouse, 1.0);
     }
     assert_eq!(a.sun_trim, a.settings.sun_trim_max);
     assert!(a.sun_trim_at_limit());
     a.ground_k.fill(15.0);
-    a.sun_trim = a.thermostat(1.0);
-    assert!((a.sun_trim - 1.0).abs() < 0.05, "back at {}", a.sun_trim);
+    a.sun_trim = a.thermostat(absorbed, greenhouse, 1.0);
+    assert!((a.sun_trim - 1.0).abs() < 0.02, "back at {}", a.sun_trim);
     a.ground_k.fill(80.0);
     for _ in 0..20_000 {
-        a.sun_trim = a.thermostat(1.0);
+        a.sun_trim = a.thermostat(absorbed, greenhouse, 1.0);
     }
     assert_eq!(a.sun_trim, a.settings.sun_trim_min);
+    a.ground_k.fill(15.0);
+    a.sun_trim = a.thermostat(absorbed, greenhouse, 1.0);
+    assert!((a.sun_trim - 1.0).abs() < 0.02, "back at {}", a.sun_trim);
     let mut off = quick_planet(-50.0);
     off.settings.target_mean_c = None;
-    assert_eq!(off.thermostat(1.0), 1.0, "no target, no trim");
+    assert_eq!(
+        off.thermostat(absorbed, greenhouse, 1.0),
+        1.0,
+        "no target, no trim"
+    );
     assert!(!off.sun_trim_at_limit());
+}
+
+/// Runs X and Y rang: a sea much slower than the land kept an integral
+/// pushing long after the planet was on its way. A planet with a sea thirty
+/// times slower than its land, started three kelvin cold, settles at the
+/// target by its energy balance and does not overshoot it by half a kelvin;
+/// and once settled, its sun is steady.
+#[test]
+fn a_planet_with_a_slow_sea_settles_without_ringing() {
+    let mut a = air(AtmosphereSettings {
+        solar_wm2: 1100.0,
+        land_heat_capacity: 2.0e4,
+        ocean_heat_capacity: 6.0e5,
+        sun_balance_s: 4_000.0,
+        sun_trim_s: 40_000.0,
+        sun_trim_per_k: 0.03,
+        ..quiet()
+    });
+    a.ground_k.fill(12.0);
+    a.air_k.fill(12.0);
+    let (mut highest, mut trims) = (f64::MIN, Vec::<f32>::new());
+    for k in 0..250_000 {
+        a.heat(SUN, a.settings.dt_s);
+        if k % 1000 == 0 {
+            highest = highest.max(a.mean_surface_c());
+            if k >= 150_000 {
+                trims.push(a.sun_trim);
+            }
+        }
+    }
+    let mean = a.mean_surface_c();
+    assert!((mean - 15.0).abs() < 1.0, "settled at {mean:.2} C");
+    assert!(highest < 15.5, "overshot to {highest:.2} C");
+    // Settling, the trim only comes down onto the balance, never across it
+    // and back: no ringing.
+    let s = a.settings;
+    let balance = (s.olr_a + s.olr_b * 15.0 - a.balance_greenhouse) / a.balance_absorbed;
+    assert!(
+        trims.windows(2).all(|w| w[1] <= w[0] + 1e-3),
+        "the trim turned back: {trims:?}"
+    );
+    assert!(
+        (a.sun_trim - balance).abs() < 0.02,
+        "the trim {} is near the balance {balance}",
+        a.sun_trim
+    );
+}
+
+/// Finding 7: every strike's cold pool took a kelvin and a half from its
+/// cell's air, and on a stormy planet that was 15 W/m^2. The pool stays cold
+/// where it struck, and the air as a whole keeps its heat.
+#[test]
+fn a_strikes_cold_pool_stays_cold_and_the_air_keeps_its_heat() {
+    let mut a = air(AtmosphereSettings {
+        strike_chance: 1.0,
+        ..quiet()
+    });
+    let struck = 7;
+    a.charge.fill(0.0);
+    a.charge[struck] = 3.0;
+    a.air_k.fill(20.0);
+    let before = a.grid.total(&a.air_k);
+    a.lightning(a.settings.dt_s);
+    assert_eq!(a.strikes.len(), 1, "one strike");
+    assert!(
+        a.air_k[struck] < 20.0 - a.settings.pool_k * 0.9,
+        "the pool is cold"
+    );
+    let drift = (a.grid.total(&a.air_k) - before).abs() / before.abs();
+    assert!(drift < 1e-6, "{drift:e}");
 }
 
 /// The planet's heat, J: the ground's and the air's, `sum(C T A)`, plus the

@@ -71,13 +71,24 @@ pub struct AtmosphereSettings {
     /// average temperature of the planet to 15 c"). `None` holds the trim at
     /// 1, which is how the instruments measure the untrimmed planet.
     pub target_mean_c: Option<f32>,
+    /// How long the thermostat averages the planet's energy budget over, s:
+    /// the sunlight the ground would absorb at a trim of 1 and the clouds'
+    /// returned longwave, from which it reads the trim that settles the
+    /// planet at the target (`climate-balance` decision 4, revised). Long
+    /// enough that a day's weather and a season barely move it.
+    pub sun_balance_s: f32,
     /// The thermostat's integral time, s: how long a steady error takes to
-    /// move the trim by its proportional share again. Long next to a day, so
-    /// the day never feeds it (`climate-balance` decision 4).
+    /// move the trim by its proportional share again. Slow, for what the heat
+    /// books still leak; the balance does the rest.
     pub sun_trim_s: f32,
     /// The thermostat's proportional gain: trim per kelvin the planet's mean
     /// is off the target.
     pub sun_trim_per_k: f32,
+    /// How near the target, K, the integral runs. Further off, the balance
+    /// and the nudge bring the planet in; an integral running through that
+    /// long approach builds up and overshoots it (`climate-balance`
+    /// decision 4, revised).
+    pub sun_trim_band_k: f32,
     /// The trim's limits. A trim at a limit is logged, because it means the
     /// heat terms are badly off again.
     pub sun_trim_min: f32,
@@ -243,8 +254,10 @@ impl Default for AtmosphereSettings {
             cloud_pace: 0.2,
             solar_wm2: 1000.0,
             target_mean_c: Some(15.0),
-            sun_trim_s: 14_400.0,
+            sun_balance_s: 72_000.0,
+            sun_trim_s: 144_000.0,
             sun_trim_per_k: 0.01,
+            sun_trim_band_k: 1.0,
             sun_trim_min: 0.7,
             sun_trim_max: 1.4,
             cloud_albedo: 0.6,
@@ -440,6 +453,12 @@ impl AtmosphereSettings {
         }
         if !(self.sun_trim_s.is_finite() && self.sun_trim_s > 0.0) {
             return Err("sun_trim_s must be positive".into());
+        }
+        if !(self.sun_balance_s.is_finite() && self.sun_balance_s > 0.0) {
+            return Err("sun_balance_s must be positive".into());
+        }
+        if !(self.sun_trim_band_k.is_finite() && self.sun_trim_band_k >= 0.0) {
+            return Err("sun_trim_band_k must be finite and not negative".into());
         }
         if !(self.sun_trim_per_k.is_finite() && self.sun_trim_per_k >= 0.0) {
             return Err("sun_trim_per_k must be finite and not negative".into());

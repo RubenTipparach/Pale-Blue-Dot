@@ -56,10 +56,22 @@ impl Atmosphere {
         let spread = self
             .grid
             .conduct(&before, &self.surface.heat_capacity, s.heat_spread);
-        self.sun_trim = self.thermostat(dt);
+        let cover: Vec<f32> = (0..n).map(|i| self.cover(i)).collect();
+        // The planet's budget as it stands, for the thermostat: what the
+        // ground would absorb at a trim of 1, and what the clouds give back.
+        let (mut absorbed, mut greenhouse) = (0.0f64, 0.0f64);
+        for (i, &cover) in cover.iter().enumerate() {
+            let clear = s.solar_wm2 * self.grid.centre[i].dot(sun).max(0.0);
+            let kept = (1.0 - s.cloud_albedo * cover) * (1.0 - self.surface.albedo[i]);
+            let area = self.grid.area[i] as f64;
+            absorbed += (clear * kept) as f64 * area;
+            greenhouse += (s.cloud_greenhouse * cover) as f64 * area;
+        }
+        let area = self.grid.total_area();
+        self.sun_trim = self.thermostat((absorbed / area) as f32, (greenhouse / area) as f32, dt);
         for i in 0..n {
             let c = self.grid.centre[i];
-            let cover = self.cover(i);
+            let cover = cover[i];
             let sunlight =
                 s.solar_wm2 * self.sun_trim * c.dot(sun).max(0.0) * (1.0 - s.cloud_albedo * cover);
             self.sunlight[i] = sunlight;
@@ -75,15 +87,34 @@ impl Atmosphere {
         }
     }
 
-    /// The sun's trim this step: a slow proportional-integral controller that
-    /// holds the planet's mean surface temperature at `target_mean_c`
-    /// (`climate-balance` decision 4). It moves the sun's strength everywhere
-    /// at once, so where it is warm or cold stays the simulation's own. With
-    /// no target it is 1.
-    pub(super) fn thermostat(&mut self, dt: f32) -> f32 {
+    /// The sun's trim this step, which holds the planet's mean surface
+    /// temperature at `target_mean_c` (`climate-balance` decision 4, revised).
+    /// It moves the sun's strength everywhere at once, so where it is warm or
+    /// cold stays the simulation's own. With no target it is 1.
+    ///
+    /// `absorbed` is the planet's mean sunlight the ground would absorb at a
+    /// trim of 1, and `greenhouse` the clouds' mean returned longwave, W/m^2.
+    /// A settled planet absorbs, with what its clouds return, exactly what it
+    /// radiates, `olr_a + olr_b * mean`, because the books close and the
+    /// longwave is linear. So the trim that settles it at the target is read
+    /// off their averages; a proportional nudge hastens the approach, and a
+    /// slow integral takes up what the books still leak.
+    pub(super) fn thermostat(&mut self, absorbed: f32, greenhouse: f32, dt: f32) -> f32 {
         let s = self.settings;
         let Some(target) = s.target_mean_c else {
             return 1.0;
+        };
+        if self.balance_absorbed <= 0.0 {
+            (self.balance_absorbed, self.balance_greenhouse) = (absorbed, greenhouse);
+        } else {
+            let w = (dt / s.sun_balance_s).min(1.0);
+            self.balance_absorbed += (absorbed - self.balance_absorbed) * w;
+            self.balance_greenhouse += (greenhouse - self.balance_greenhouse) * w;
+        }
+        let balance = if self.balance_absorbed > 1.0 {
+            (s.olr_a + s.olr_b * target - self.balance_greenhouse) / self.balance_absorbed
+        } else {
+            1.0
         };
         let error = target - self.mean_surface_c() as f32;
         let proportional = s.sun_trim_per_k * error;
@@ -91,14 +122,15 @@ impl Atmosphere {
         // The integral does not grow while the trim is held at a limit in the
         // direction it would grow, so a long stretch at a limit does not wind
         // it up past recovering; and it never holds more than a limit could.
-        let wanted = 1.0 + proportional + self.trim_integral + step;
-        let held =
-            (wanted > s.sun_trim_max && step > 0.0) || (wanted < s.sun_trim_min && step < 0.0);
+        let wanted = balance + proportional + self.trim_integral + step;
+        let held = error.abs() > s.sun_trim_band_k
+            || (wanted > s.sun_trim_max && step > 0.0)
+            || (wanted < s.sun_trim_min && step < 0.0);
+        let span = s.sun_trim_max - s.sun_trim_min;
         if !held {
-            self.trim_integral =
-                (self.trim_integral + step).clamp(s.sun_trim_min - 1.0, s.sun_trim_max - 1.0);
+            self.trim_integral = (self.trim_integral + step).clamp(-span, span);
         }
-        (1.0 + proportional + self.trim_integral).clamp(s.sun_trim_min, s.sun_trim_max)
+        (balance + proportional + self.trim_integral).clamp(s.sun_trim_min, s.sun_trim_max)
     }
 
     /// Stage 3: pressure falls where the air is warm and in the belts' lows,
@@ -270,12 +302,17 @@ impl Atmosphere {
 
     /// Stage 7: a charged storm strikes. The strike rains out much of its
     /// cloud and drops a cold pool whose outflow lifts the air round it.
-    fn lightning(&mut self, dt: f32) {
+    pub(super) fn lightning(&mut self, dt: f32) {
         let s = self.settings;
         let keep = (s.strike_keep_s / dt).ceil() as u64;
         let now = self.step;
         self.strikes
             .retain(|strike| now.saturating_sub(strike.step) <= keep);
+        // The heat the pools take, per square metre of the planet, given back
+        // evenly: the pool stays cold where it struck, which is what lifts
+        // the next storm, and the planet keeps the heat (`climate-balance`
+        // decision 1a, finding 7).
+        let mut pooled = 0.0f64;
         for i in 0..self.grid.len() {
             if self.charge[i] < s.strike_charge || chance(self.seed(), i, now) >= s.strike_chance {
                 continue;
@@ -288,11 +325,18 @@ impl Atmosphere {
             self.rain_rate[i] += rained / dt;
             self.phi[i] += s.pool_pressure;
             self.air_k[i] -= s.pool_k;
+            pooled += s.pool_k as f64 * self.grid.area[i] as f64;
             self.strikes.push(Strike {
                 direction: self.grid.centre[i],
                 step: now,
                 strength,
             });
+        }
+        if pooled > 0.0 {
+            let back = (pooled / self.grid.total_area()) as f32;
+            for t in &mut self.air_k {
+                *t += back;
+            }
         }
     }
 

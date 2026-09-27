@@ -132,6 +132,11 @@ pub struct Atmosphere {
     /// The thermostat's integral: the part of the sun's trim a steady error
     /// has built up (`climate-balance` decision 4). Saved with the weather.
     pub trim_integral: f32,
+    /// The thermostat's running averages of the planet's budget, W/m^2: the
+    /// sunlight the ground would absorb at a trim of 1, and the clouds'
+    /// returned longwave. Zero until the first step has set them. Saved.
+    pub balance_absorbed: f32,
+    pub balance_greenhouse: f32,
     // --- What the last step worked out, for sampling and drawing ---
     /// The trim the last step's sunlight was scaled by.
     pub sun_trim: f32,
@@ -175,6 +180,8 @@ impl Atmosphere {
             current: vec![Vec3::ZERO; n],
             sea: vec![0.0; n],
             trim_integral: 0.0,
+            balance_absorbed: 0.0,
+            balance_greenhouse: 0.0,
             sun_trim: 1.0,
             rain_rate: vec![0.0; n],
             lift: vec![0.0; n],
@@ -389,7 +396,13 @@ impl Atmosphere {
                 }
             }
         }
-        out.extend_from_slice(&self.trim_integral.to_le_bytes());
+        for v in [
+            self.trim_integral,
+            self.balance_absorbed,
+            self.balance_greenhouse,
+        ] {
+            out.extend_from_slice(&v.to_le_bytes());
+        }
         out
     }
 
@@ -400,14 +413,16 @@ impl Atmosphere {
         // A save from before the sea state (`PBDATM01`) has one scalar field
         // fewer; its sea is taken to have caught up with its wind. One from
         // before the thermostat (`PBDATM01` and `PBDATM02`) has no trim, and
-        // starts with none built up.
-        let (scalars_saved, trim_saved) = match &bytes[..MAGIC.len().min(bytes.len())] {
-            m if m == MAGIC => (SCALARS, true),
-            m if m == MAGIC_V2 => (SCALARS, false),
-            m if m == MAGIC_V1 => (SCALARS - 1, false),
+        // starts with none built up; one from before its balance
+        // (`PBDATM03`) has the integral alone, and its averages start afresh.
+        let (scalars_saved, thermostat_saved) = match &bytes[..MAGIC.len().min(bytes.len())] {
+            m if m == MAGIC => (SCALARS, 3),
+            m if m == MAGIC_V3 => (SCALARS, 1),
+            m if m == MAGIC_V2 => (SCALARS, 0),
+            m if m == MAGIC_V1 => (SCALARS - 1, 0),
             _ => return Err("weather state has an unknown header".into()),
         };
-        let want = MAGIC.len() + 16 + n * 4 * (scalars_saved + 6) + if trim_saved { 4 } else { 0 };
+        let want = MAGIC.len() + 16 + n * 4 * (scalars_saved + 6) + 4 * thermostat_saved;
         if bytes.len() != want {
             return Err(format!(
                 "weather state is {} bytes, expected {want}",
@@ -433,10 +448,11 @@ impl Atmosphere {
         let vectors: Vec<Vec<Vec3>> = (0..2)
             .map(|_| read(n * 3).chunks_exact(3).map(Vec3::from_slice).collect())
             .collect();
-        let trim_integral = if trim_saved { read(1)[0] } else { 0.0 };
+        let mut thermostat = read(thermostat_saved);
+        thermostat.resize(3, 0.0);
         if scalars.iter().flatten().any(|v| !v.is_finite())
             || vectors.iter().flatten().any(|v| !v.is_finite())
-            || !trim_integral.is_finite()
+            || thermostat.iter().any(|v| !v.is_finite())
         {
             return Err("weather state holds a non-finite value".into());
         }
@@ -459,7 +475,11 @@ impl Atmosphere {
             Some(sea) => sea,
             None => self.settled_sea(),
         };
-        self.trim_integral = trim_integral;
+        [
+            self.trim_integral,
+            self.balance_absorbed,
+            self.balance_greenhouse,
+        ] = [thermostat[0], thermostat[1], thermostat[2]];
         // The mesoscale noise is not saved: it is a function of the step it
         // was last refreshed at, so it is refreshed again as of that step.
         // The step refreshes it when it begins on a multiple of the period;
@@ -502,7 +522,8 @@ impl Atmosphere {
     }
 }
 
-const MAGIC: &[u8; 8] = b"PBDATM03";
+const MAGIC: &[u8; 8] = b"PBDATM04";
+const MAGIC_V3: &[u8; 8] = b"PBDATM03";
 const MAGIC_V2: &[u8; 8] = b"PBDATM02";
 const MAGIC_V1: &[u8; 8] = b"PBDATM01";
 const SCALARS: usize = 8;
