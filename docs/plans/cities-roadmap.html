@@ -185,16 +185,16 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 <header>
   <div class="eyebrow">Pale Blue Dot &middot; OpenSpec plan &middot; 27 September 2026</div>
   <h1>The road to Tenebris cities</h1>
-  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Thirteen OpenSpec changes, each written up and waiting for <span class="mono">/opsx:apply</span>. Every step ends in a video you watch before the next one starts.</p>
+  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Thirteen OpenSpec changes, each written up. The first, exact cell keys, is built and waits on your gate. Every step ends in a video you watch before the next one starts.</p>
   <blockquote>
     step 1 implement lights, step 2 implement cities, step 3 implement ways for me to make cities. as a player I want to be able to put together these buildings myself &hellip; So map with cities first mocked up, then I will approve.
     <cite>the owner, 27 September 2026</cite>
   </blockquote>
   <div class="facts">
     <div><b>13</b><span>changes written</span></div>
-    <div><b>227</b><span>tasks open</span></div>
+    <div><b>218</b><span>tasks open</span></div>
     <div><b>11</b><span>video gates, each beside the prototype</span></div>
-    <div><b>0</b><span>lines of game code changed</span></div>
+    <div><b>1</b><span>step built, waiting on your gate</span></div>
   </div>
   <div class="links">
     <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/pull/16">Pull request #16</a>
@@ -303,7 +303,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">0a</div>
         <div class="mono">exact-cell-keys</div>
-        <div class="tasks">10 tasks</div>
+        <div class="tasks">built; 1 task left, your gate</div>
         <div class="with">first, on your word</div>
       </div>
       <div class="step-main">
@@ -316,12 +316,12 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>Old saves migrated once, each edit put on the cell it was made on, with the old log kept untouched.</li>
           </ul></div>
           <div class="col"><h4>Decided</h4><ul>
-            <li>The shaders unpack the key and apply the old mix, so the look cannot change. A test holds Rust and WGSL together.</li>
+            <li>The key rides a spare lane of each cell's record, and the old hash stays the shaders' seed, so no shader changes and the look cannot change. The meadow and surface views match the old build to the pixel.</li>
             <li>An ambiguous old edit is settled by the ground height, then by where you were. Only a true tie goes to both cells, as today.</li>
             <li>The migrated log is a new file, so an older build never misreads it.</li>
           </ul></div>
         </div>
-        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video.</b> One cell of a colliding pair dug, its twin far away dug on the old build and untouched on the new, a reload, and the unchanged ground. It is hand-made from captures, since the video tools come next.</div></div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video, ready to watch.</b> One cell of a colliding pair dug, its twin far away dug on the old build and untouched on the new, a reload, and the unchanged ground. <a href="https://claude.ai/artifact/UkLbLNDm3mfS17Wu3K6uWe">Watch it on the gate page</a>.</div></div>
         <div class="foot"><div class="chips"><span class="chip new">world/persistence (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/exact-cell-keys">Read the change</a></div>
       </div>
     </article>
