@@ -1,131 +1,64 @@
-//! Hex pixels: a small RGBA picture turned into a model made of hexagonal
-//! prisms, the way Minecraft turns an item's sprite into a model of cubes.
+//! Hex pixels: a model made of hexagonal prisms, the way Minecraft makes an
+//! item's model out of cubes, and the stubby prisms of the hand that holds it.
 //!
-//! The hexels sit on an offset hex grid laid over the picture: pointy-top
-//! hexagons one pixel flat to flat, in rows `sqrt(3)/2` of a pixel apart,
-//! every other row shifted half a hexel. A hexel exists where the picture is
-//! opaque under it, and wears the colour most of it covers. The mesh is one
-//! pixel deep, with a hexagon front and back and a side only where the
-//! neighbouring hexel is empty, so a handle is a closed strip rather than a
-//! stack of prisms with their insides drawn.
+//! A model is hexes on a pointy-top grid of any spacing, in axial
+//! coordinates: row `r` runs along x, so a row is a straight line and a
+//! tool's handle is whole rows (`openspec/changes/hex-held-tools`). Each hex
+//! has its own colour and depth. Its front and back sit at plus and minus
+//! half its depth, and a side wall is built toward a neighbour only over the
+//! part of the hex that stands above that neighbour: a round handle is closed
+//! and has no faces inside it.
 //!
-//! Engine-free: pixels in, triangles out. The app decodes the picture and
-//! draws the result (`openspec/changes/fishing-and-equipment/design.md`
-//! section 12).
+//! Engine-free: hexes in, triangles out. The shapes come from
+//! `tools/gen_held_tools.py`; the app draws the result.
 
 use glam::{Vec2, Vec3};
-use std::collections::{BTreeMap, HashSet};
+use serde::Deserialize;
+use std::collections::{BTreeMap, HashMap};
 
-/// Rows are this many pixels apart.
-pub const ROW_PITCH: f32 = 0.866_025_4;
-/// A hexel's corner radius, in pixels: one pixel flat to flat.
-pub const RADIUS: f32 = 0.577_350_3;
-/// How far from a hexel's centre its six outer samples sit, in pixels.
-///
-/// Sampling the centre alone drops rows: the rows are 0.87 px apart, so a
-/// one-pixel 45 degree line in the picture came out as separate pieces
-/// (measured on the shipped tool icons, design section 12). Six more samples
-/// at 0.3 px keep every such line connected without fattening it; at 0.4 px
-/// the handles read a hexel thicker than the icon draws them.
-pub const SAMPLE_RADIUS: f32 = 0.3;
+const SQRT_3: f32 = 1.732_050_8;
 
-/// One hex pixel.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Hexel {
-    pub row: i32,
-    pub col: i32,
-    /// Its centre, in picture pixels with y DOWN, as the picture is stored.
-    pub centre: Vec2,
-    /// Straight sRGB and alpha, as the picture has them.
-    pub colour: [u8; 4],
+/// One hex of a model: axial position, straight sRGB colour, and depth in the
+/// model's units.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(from = "(i32, i32, [u8; 3], f32)")]
+pub struct Hex {
+    pub q: i32,
+    pub r: i32,
+    pub colour: [u8; 3],
+    pub depth: f32,
 }
 
-/// A hexel's centre in picture pixels (y down).
-pub fn centre(row: i32, col: i32) -> Vec2 {
-    let shift = if row.rem_euclid(2) == 1 { 0.5 } else { 0.0 };
-    Vec2::new(col as f32 + 0.5 + shift, 0.5 + row as f32 * ROW_PITCH)
-}
-
-/// The hexel whose centre is nearest `point` (picture pixels, y down).
-pub fn at(point: Vec2) -> (i32, i32) {
-    let row = ((point.y - 0.5) / ROW_PITCH).round() as i32;
-    let shift = if row.rem_euclid(2) == 1 { 0.5 } else { 0.0 };
-    let col = (point.x - 0.5 - shift).round() as i32;
-    (row, col)
-}
-
-/// The hexels of a `width` by `height` RGBA picture, row by row. A pixel is
-/// opaque at alpha above half.
-pub fn hexels(width: u32, height: u32, rgba: &[u8]) -> Vec<Hexel> {
-    let (w, h) = (width as i32, height as i32);
-    assert_eq!(
-        rgba.len(),
-        (width * height * 4) as usize,
-        "RGBA, row by row"
-    );
-    let pixel = |p: Vec2| -> Option<[u8; 4]> {
-        if p.x < 0.0 || p.y < 0.0 {
-            return None;
-        }
-        let (x, y) = (p.x as i32, p.y as i32);
-        if x >= w || y >= h {
-            return None;
-        }
-        let i = ((y * w + x) * 4) as usize;
-        let px = [rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3]];
-        (px[3] > 127).then_some(px)
-    };
-    let rows = ((h as f32 - 0.5 + RADIUS) / ROW_PITCH).ceil() as i32 + 1;
-    let mut out = Vec::new();
-    for row in 0..rows {
-        for col in -1..=w {
-            let c = centre(row, col);
-            let samples = std::iter::once(c).chain((0..6).map(|k| {
-                let a = (90.0 + 60.0 * k as f32).to_radians();
-                c + Vec2::new(a.cos(), a.sin()) * SAMPLE_RADIUS
-            }));
-            // The colour most of the hexel covers; the centre's on a tie, so
-            // an outline pixel does not win over the body it outlines.
-            let mut counts: Vec<([u8; 4], u32)> = Vec::new();
-            for px in samples.filter_map(pixel) {
-                match counts.iter_mut().find(|(c, _)| *c == px) {
-                    Some((_, n)) => *n += 1,
-                    None => counts.push((px, 1)),
-                }
-            }
-            let Some(&(first, _)) = counts.first() else {
-                continue;
-            };
-            let best = counts.iter().map(|(_, n)| *n).max().unwrap_or(0);
-            let colour = pixel(c)
-                .filter(|px| counts.iter().any(|(k, n)| k == px && *n == best))
-                .or_else(|| counts.iter().find(|(_, n)| *n == best).map(|(k, _)| *k))
-                .unwrap_or(first);
-            out.push(Hexel {
-                row,
-                col,
-                centre: c,
-                colour,
-            });
+impl From<(i32, i32, [u8; 3], f32)> for Hex {
+    fn from((q, r, colour, depth): (i32, i32, [u8; 3], f32)) -> Self {
+        Self {
+            q,
+            r,
+            colour,
+            depth,
         }
     }
-    out
 }
 
-/// Whether two hexels share an edge.
-pub fn neighbours(a: (i32, i32), b: (i32, i32)) -> bool {
-    let d = centre(a.0, a.1) - centre(b.0, b.1);
-    (d.length() - 1.0).abs() < 1e-3
+/// A hex's centre on a grid of `spacing` (centre to centre), y up.
+pub fn centre(q: i32, r: i32, spacing: f32) -> Vec2 {
+    Vec2::new(
+        spacing * (q as f32 + r as f32 / 2.0),
+        -spacing * r as f32 * SQRT_3 / 2.0,
+    )
 }
 
-/// A model of hexels: a triangle list, not indexed, each triangle wound to
-/// face out. Model space is in picture pixels, x right, y UP, z toward the
-/// viewer, the picture's plane at z = 0.
+/// The neighbour across each edge, in order: edge `k` runs from corner `k`
+/// (at 30 + 60k degrees) to corner `k + 1` and faces 60 + 60k degrees, y up.
+pub const NEIGHBOURS: [(i32, i32); 6] = [(1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1), (1, 0)];
+
+/// A model as triangles: a list, not indexed, each triangle wound to face
+/// out.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HexelMesh {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
-    /// Linear RGBA, the pixel's colour times the face's shade.
+    /// Linear RGBA, the colour times the face's shade.
     pub colours: Vec<[f32; 4]>,
 }
 
@@ -133,9 +66,31 @@ impl HexelMesh {
     pub fn triangles(&self) -> usize {
         self.positions.len() / 3
     }
+
+    fn push(&mut self, mut tri: [Vec3; 3], outward: Vec3, colour: [u8; 3], shade: f32) {
+        if (tri[1] - tri[0]).cross(tri[2] - tri[0]).dot(outward) < 0.0 {
+            tri.swap(1, 2);
+        }
+        let c = [
+            linear(colour[0]) * shade,
+            linear(colour[1]) * shade,
+            linear(colour[2]) * shade,
+            1.0,
+        ];
+        for p in tri {
+            self.positions.push(p.to_array());
+            self.normals.push(outward.to_array());
+            self.colours.push(c);
+        }
+    }
+
+    fn quad(&mut self, q: [Vec3; 4], outward: Vec3, colour: [u8; 3], shade: f32) {
+        self.push([q[0], q[1], q[2]], outward, colour, shade);
+        self.push([q[0], q[2], q[3]], outward, colour, shade);
+    }
 }
 
-/// The shade a face takes by the way it faces, as Minecraft's item models
+/// The shade a hex face takes by the way it faces, as Minecraft's item models
 /// do: the front brightest, the back and the downward sides darkest.
 pub fn shade(normal: Vec3) -> f32 {
     if normal.z > 0.5 {
@@ -156,86 +111,65 @@ fn linear(c: u8) -> f32 {
     }
 }
 
-/// A picture `height` pixels tall, as hexels `depth` pixels deep.
-pub fn mesh(hexels: &[Hexel], height: u32, depth: f32) -> HexelMesh {
-    let filled: HashSet<(i32, i32)> = hexels.iter().map(|x| (x.row, x.col)).collect();
-    let half = depth * 0.5;
-    let to_model = |p: Vec2| Vec2::new(p.x, height as f32 - p.y);
+/// A model's hexes on a grid of `spacing`, as triangles.
+pub fn mesh(hexes: &[Hex], spacing: f32) -> HexelMesh {
+    let depth: HashMap<(i32, i32), f32> = hexes.iter().map(|h| ((h.q, h.r), h.depth)).collect();
+    let radius = spacing / SQRT_3;
     let mut out = HexelMesh::default();
-    let mut push = |mut tri: [Vec3; 3], outward: Vec3, colour: [u8; 4]| {
-        let normal = (tri[1] - tri[0]).cross(tri[2] - tri[0]);
-        if normal.dot(outward) < 0.0 {
-            tri.swap(1, 2);
-        }
-        let s = shade(outward);
-        let c = [
-            linear(colour[0]) * s,
-            linear(colour[1]) * s,
-            linear(colour[2]) * s,
-            1.0,
-        ];
-        for p in tri {
-            out.positions.push(p.to_array());
-            out.normals.push(outward.to_array());
-            out.colours.push(c);
-        }
-    };
-    for hexel in hexels {
-        let c = to_model(hexel.centre);
-        // Corners at 30, 90, ... 330 degrees in model space: pointy top.
-        let corner = |k: usize| {
+    for h in hexes {
+        let c = centre(h.q, h.r, spacing);
+        let half = h.depth * 0.5;
+        let corner = |k: usize, z: f32| {
             let a = (30.0 + 60.0 * k as f32).to_radians();
-            c + Vec2::new(a.cos(), a.sin()) * RADIUS
+            (c + Vec2::new(a.cos(), a.sin()) * radius).extend(z)
         };
-        let front = c.extend(half);
-        let back = c.extend(-half);
-        for k in 0..6 {
-            let (a, b) = (corner(k), corner((k + 1) % 6));
-            push(
-                [front, a.extend(half), b.extend(half)],
+        for (k, (dq, dr)) in NEIGHBOURS.into_iter().enumerate() {
+            let k1 = (k + 1) % 6;
+            out.push(
+                [c.extend(half), corner(k, half), corner(k1, half)],
                 Vec3::Z,
-                hexel.colour,
+                h.colour,
+                shade(Vec3::Z),
             );
-            push(
-                [back, a.extend(-half), b.extend(-half)],
+            out.push(
+                [c.extend(-half), corner(k, -half), corner(k1, -half)],
                 -Vec3::Z,
-                hexel.colour,
+                h.colour,
+                shade(-Vec3::Z),
             );
-            // The edge from corner k to k+1 faces 60 + 60k degrees; a side is
-            // built only where no hexel lies that way.
+            // The wall toward this neighbour covers only what stands above
+            // it, front and back: all of the hex where there is none.
+            let spans: &[(f32, f32)] = match depth.get(&(h.q + dq, h.r + dr)) {
+                None => &[(-half, half)],
+                Some(d) if d * 0.5 < half => &[(d * 0.5, half), (-half, -d * 0.5)],
+                Some(_) => &[],
+            };
             let facing = (60.0 + 60.0 * k as f32).to_radians();
-            let outward = Vec2::new(facing.cos(), facing.sin());
-            let beyond = hexel.centre + Vec2::new(outward.x, -outward.y);
-            if filled.contains(&at(beyond)) {
-                continue;
+            let outward = Vec3::new(facing.cos(), facing.sin(), 0.0);
+            for &(z0, z1) in spans {
+                out.quad(
+                    [corner(k, z0), corner(k1, z0), corner(k1, z1), corner(k, z1)],
+                    outward,
+                    h.colour,
+                    shade(outward),
+                );
             }
-            let side = outward.extend(0.0);
-            push(
-                [a.extend(-half), b.extend(-half), b.extend(half)],
-                side,
-                hexel.colour,
-            );
-            push(
-                [a.extend(-half), b.extend(half), a.extend(half)],
-                side,
-                hexel.colour,
-            );
         }
     }
     out
 }
 
-/// The hexels grouped into pieces that share edges, largest first: one piece
+/// The hexes grouped into pieces that share edges, largest first: one piece
 /// is a model with nothing floating.
-pub fn pieces(hexels: &[Hexel]) -> Vec<usize> {
-    let index: BTreeMap<(i32, i32), usize> = hexels
+pub fn pieces(hexes: &[Hex]) -> Vec<usize> {
+    let index: BTreeMap<(i32, i32), usize> = hexes
         .iter()
         .enumerate()
-        .map(|(i, x)| ((x.row, x.col), i))
+        .map(|(i, h)| ((h.q, h.r), i))
         .collect();
-    let mut seen = vec![false; hexels.len()];
+    let mut seen = vec![false; hexes.len()];
     let mut sizes = Vec::new();
-    for start in 0..hexels.len() {
+    for start in 0..hexes.len() {
         if seen[start] {
             continue;
         }
@@ -244,10 +178,8 @@ pub fn pieces(hexels: &[Hexel]) -> Vec<usize> {
         let mut size = 0;
         while let Some(i) = stack.pop() {
             size += 1;
-            let c = hexels[i].centre;
-            for k in 0..6 {
-                let a = (60.0 * k as f32).to_radians();
-                if let Some(&j) = index.get(&at(c + Vec2::new(a.cos(), a.sin())))
+            for (dq, dr) in NEIGHBOURS {
+                if let Some(&j) = index.get(&(hexes[i].q + dq, hexes[i].r + dr))
                     && !seen[j]
                 {
                     seen[j] = true;
@@ -261,79 +193,143 @@ pub fn pieces(hexels: &[Hexel]) -> Vec<usize> {
     sizes
 }
 
+/// One part of the hand: a hexagonal prism along `axis`, centred at `at`,
+/// `radius` to a corner and `length` long, in the model's units. With
+/// `across` and `width` it is flattened: `width` to a corner along `across`
+/// and `radius` across that (the back of the hand).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Prism {
+    pub axis: [f32; 3],
+    pub at: [f32; 3],
+    pub radius: f32,
+    pub length: f32,
+    #[serde(default)]
+    pub across: Option<[f32; 3]>,
+    #[serde(default)]
+    pub width: Option<f32>,
+    /// Straight sRGB.
+    pub colour: [u8; 3],
+}
+
+impl Prism {
+    /// Whether every number is finite and every size positive.
+    pub fn is_sound(&self) -> bool {
+        let finite = self
+            .axis
+            .iter()
+            .chain(&self.at)
+            .chain(self.across.iter().flatten())
+            .chain(self.width.iter())
+            .all(|v| v.is_finite());
+        finite
+            && Vec3::from(self.axis).length() > 1e-3
+            && self.radius > 0.0
+            && self.length > 0.0
+            && self.width.is_none_or(|w| w > 0.0)
+    }
+}
+
+/// A prism's triangles, added to `out`, each face shaded by how it faces
+/// `light` (a unit vector in the model's frame): from 0.62 facing away to one
+/// facing it. The hand is shaded this way, against a light given as the eye
+/// sees it, so it reads as lit from above whatever the tool's pose.
+pub fn prism(part: &Prism, light: Vec3, out: &mut HexelMesh) {
+    let axis = Vec3::from(part.axis).normalize();
+    let first = part
+        .across
+        .map(Vec3::from)
+        .unwrap_or_else(|| if axis.x.abs() < 0.9 { Vec3::X } else { Vec3::Y });
+    let u = (first - axis * first.dot(axis)).normalize();
+    let v = axis.cross(u);
+    let at = Vec3::from(part.at);
+    let w = part.width.unwrap_or(part.radius);
+    let ring = |z: f32| -> [Vec3; 6] {
+        std::array::from_fn(|k| {
+            let a = (60.0 * k as f32).to_radians();
+            at + u * (a.cos() * w) + v * (a.sin() * part.radius) + axis * z
+        })
+    };
+    let (lo, hi) = (ring(-part.length / 2.0), ring(part.length / 2.0));
+    let lit = |n: Vec3| 0.62 + 0.38 * n.dot(light).max(0.0);
+    let (bottom, top) = (at - axis * part.length / 2.0, at + axis * part.length / 2.0);
+    for k in 0..6 {
+        let k1 = (k + 1) % 6;
+        out.push([bottom, lo[k], lo[k1]], -axis, part.colour, lit(-axis));
+        out.push([top, hi[k], hi[k1]], axis, part.colour, lit(axis));
+        let mid = (lo[k] + lo[k1]) * 0.5 - (at - axis * part.length / 2.0);
+        let side = (mid - axis * mid.dot(axis)).normalize_or(u);
+        out.quad([lo[k], lo[k1], hi[k1], hi[k]], side, part.colour, lit(side));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn picture(w: u32, h: u32, opaque: impl Fn(u32, u32) -> bool) -> Vec<u8> {
-        let mut rgba = Vec::new();
-        for y in 0..h {
-            for x in 0..w {
-                let on = opaque(x, y);
-                rgba.extend_from_slice(&[200, 120, 40, if on { 255 } else { 0 }]);
-            }
-        }
-        rgba
-    }
-
-    #[test]
-    fn the_grid_is_one_pixel_flat_to_flat() {
-        assert!(neighbours((0, 0), (0, 1)));
-        assert!(neighbours((0, 0), (1, 0)), "row 1 is shifted right");
-        assert!(neighbours((1, 0), (2, 0)));
-        assert!(neighbours((1, 0), (2, 1)), "and row 2 is not");
-        assert!(!neighbours((0, 0), (2, 0)));
-        for (r, c) in [(0, 0), (3, 7), (8, 2)] {
-            assert_eq!(at(centre(r, c)), (r, c));
+    fn hex(q: i32, r: i32, depth: f32) -> Hex {
+        Hex {
+            q,
+            r,
+            colour: [200, 120, 40],
+            depth,
         }
     }
 
-    /// One pixel is one hexel: a hexagon front and back and six sides.
+    /// Neighbours are one spacing apart, and a row is a straight line.
     #[test]
-    fn one_pixel_is_one_closed_prism() {
-        let rgba = picture(1, 1, |_, _| true);
-        let hx = hexels(1, 1, &rgba);
-        assert_eq!(hx.len(), 1);
-        let m = mesh(&hx, 1, 1.0);
+    fn neighbours_are_one_spacing_apart_and_a_row_is_straight() {
+        for (dq, dr) in NEIGHBOURS {
+            let d = centre(dq, dr, 0.25).length();
+            assert!((d - 0.25).abs() < 1e-6, "({dq}, {dr}) is {d} away");
+        }
+        for q in -5..5 {
+            assert_eq!(centre(q, 0, 0.25).y, 0.0);
+        }
+    }
+
+    /// One hex is one closed prism: a hexagon front and back and six sides.
+    #[test]
+    fn one_hex_is_one_closed_prism() {
+        let m = mesh(&[hex(0, 0, 1.0)], 1.0);
         assert_eq!(m.triangles(), 6 + 6 + 12);
         assert_closed(&m);
     }
 
-    /// Two hexels side by side share no wall.
+    /// Two hexes of one depth side by side share no wall.
     #[test]
-    fn neighbours_share_no_wall() {
-        let rgba = picture(2, 1, |_, _| true);
-        let hx = hexels(2, 1, &rgba);
-        assert_eq!(hx.len(), 2);
-        assert_eq!(mesh(&hx, 1, 1.0).triangles(), 2 * 24 - 4);
-        assert_closed(&mesh(&hx, 1, 1.0));
+    fn equal_neighbours_share_no_wall() {
+        let m = mesh(&[hex(0, 0, 1.0), hex(1, 0, 1.0)], 1.0);
+        assert_eq!(m.triangles(), 2 * 24 - 4);
+        assert_closed(&m);
     }
 
-    /// A one-pixel 45 degree line, the icons' handles, stays one piece.
+    /// A deeper hex beside a shallower one gets a wall only over what stands
+    /// above it, front and back, and the two are still one closed surface.
     #[test]
-    fn a_thin_diagonal_stays_connected() {
-        for flip in [false, true] {
-            let rgba = picture(16, 16, |x, y| if flip { x + y == 15 } else { x == y });
-            let hx = hexels(16, 16, &rgba);
-            assert_eq!(pieces(&hx).len(), 1, "flip {flip}: {:?}", pieces(&hx));
-            // And not fattened into a band. The line is 16 * sqrt(2) = 22.6 px
-            // long and a hexel row is 0.87 px, so a single file of hexels
-            // stepping along it is about 1.6 per unit length, 36 here; a band
-            // two hexels wide would pass 45.
-            assert!(hx.len() <= 40, "{} hexels for 16 pixels", hx.len());
+    fn a_depth_step_walls_only_the_difference() {
+        let m = mesh(&[hex(0, 0, 1.0), hex(1, 0, 0.5)], 1.0);
+        // The shared edge: the shallow hex builds nothing there, and the deep
+        // one two strips (front and back) instead of one full wall.
+        assert_eq!(m.triangles(), 2 * 24);
+        // The full wall beside a strip meets it in a T at the corner, so the
+        // edges do not pair one to one; the volume says it is still sealed
+        // and wound outward: a hexagon of area sqrt(3)/2, 1 and 0.5 deep.
+        assert_volume(&m, 3.0f32.sqrt() / 2.0 * 1.5);
+    }
+
+    /// A round handle (rows of shrinking depth) is closed and one piece.
+    #[test]
+    fn a_round_handle_is_closed_and_one_piece() {
+        let mut hs = Vec::new();
+        for q in 0..12 {
+            for (r, d) in [(-1, 0.5), (0, 1.0), (1, 0.5)] {
+                hs.push(hex(q, r, d));
+            }
         }
-    }
-
-    /// A blob is watertight: every edge of the mesh is shared by exactly two
-    /// triangles, so no face is missing and none is doubled.
-    #[test]
-    fn a_blob_is_watertight() {
-        let rgba = picture(9, 7, |x, y| {
-            (x as i32 - 4).pow(2) + (y as i32 - 3).pow(2) < 9
-        });
-        let hx = hexels(9, 7, &rgba);
-        assert!(hx.len() > 20);
-        assert_closed(&mesh(&hx, 7, 1.0));
+        assert_eq!(pieces(&hs), vec![36]);
+        let area = 3.0f32.sqrt() / 2.0 * 0.25 * 0.25;
+        assert_volume(&mesh(&hs, 0.25), area * 12.0 * (0.5 + 1.0 + 0.5));
     }
 
     #[test]
@@ -344,9 +340,69 @@ mod tests {
         assert!(shade(-Vec3::Z) < 1.0);
     }
 
-    /// A mesh corner, rounded to a tenth of a millimetre in pixels.
+    /// A prism, round or flattened, is closed, lit from the light's side,
+    /// and as long and wide as asked.
+    #[test]
+    fn a_prism_is_closed_and_lit_from_the_light() {
+        for (across, width) in [(None, None), (Some([0.0, 0.0, 1.0]), Some(2.0))] {
+            let part = Prism {
+                axis: [1.0, 0.0, 0.0],
+                at: [1.0, 2.0, 3.0],
+                radius: 0.5,
+                length: 4.0,
+                across,
+                width,
+                colour: [200, 150, 120],
+            };
+            assert!(part.is_sound());
+            let mut m = HexelMesh::default();
+            prism(&part, Vec3::Y, &mut m);
+            assert_eq!(m.triangles(), 24);
+            assert_closed(&m);
+            let xs = m.positions.iter().map(|p| p[0]);
+            let (lo, hi) = xs.fold((f32::MAX, f32::MIN), |(a, b), x| (a.min(x), b.max(x)));
+            assert!((hi - lo - 4.0).abs() < 1e-5);
+            // Its farthest corner from the axis is the width, or the radius.
+            let off = |p: &[f32; 3]| Vec2::new(p[1] - 2.0, p[2] - 3.0).length();
+            let reach = m.positions.iter().map(off).fold(0.0f32, f32::max);
+            assert!((reach - width.unwrap_or(0.5)).abs() < 1e-5, "{reach}");
+            // The face turned most toward the light is brighter than the one
+            // turned most away.
+            let facing = |i: usize| Vec3::from(m.normals[i]).dot(Vec3::Y);
+            let most = (0..m.normals.len()).max_by(|a, b| facing(*a).total_cmp(&facing(*b)));
+            let least = (0..m.normals.len()).min_by(|a, b| facing(*a).total_cmp(&facing(*b)));
+            let (most, least) = (most.unwrap(), least.unwrap());
+            assert!(m.colours[most][0] > m.colours[least][0]);
+        }
+        let bad = Prism {
+            axis: [0.0, 0.0, 0.0],
+            at: [0.0; 3],
+            radius: 1.0,
+            length: 1.0,
+            across: None,
+            width: None,
+            colour: [0; 3],
+        };
+        assert!(!bad.is_sound());
+    }
+
+    /// The volume a mesh encloses, from its triangles (the divergence
+    /// theorem): right only if it is sealed and wound outward, and blind to
+    /// T-junctions, which leave no gap.
+    fn assert_volume(m: &HexelMesh, want: f32) {
+        let v: f32 = m
+            .positions
+            .chunks(3)
+            .map(|t| Vec3::from(t[0]).dot(Vec3::from(t[1]).cross(Vec3::from(t[2]))) / 6.0)
+            .sum();
+        assert!((v - want).abs() < want * 1e-4, "volume {v}, want {want}");
+    }
+
+    /// A mesh corner, rounded to a ten-thousandth of a unit.
     type Corner = (i64, i64, i64);
 
+    /// Every edge of the mesh is walked once each way, so no face is missing
+    /// and none is doubled.
     fn assert_closed(m: &HexelMesh) {
         let key = |p: [f32; 3]| {
             (
@@ -359,8 +415,6 @@ mod tests {
         for tri in m.positions.chunks(3) {
             for (a, b) in [(0, 1), (1, 2), (2, 0)] {
                 let (p, q) = (key(tri[a]), key(tri[b]));
-                // Directed: in a closed, consistently wound mesh each edge is
-                // walked once each way.
                 *edges.entry((p, q)).or_default() += 1;
                 *edges.entry((q, p)).or_default() -= 1;
             }

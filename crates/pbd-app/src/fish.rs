@@ -198,7 +198,6 @@ struct Surroundings<'w, 's> {
     key: Option<Res<'w, crate::controls::PickerKey>>,
     buttons: Option<Res<'w, ButtonInput<MouseButton>>>,
     time: Res<'w, Time>,
-    held: Res<'w, crate::config::HeldConfig>,
     walkers: Query<'w, 's, &'static Position, With<Walker>>,
     cameras: Query<'w, 's, &'static GlobalTransform, With<WalkingCamera>>,
 }
@@ -269,7 +268,7 @@ fn fish(
         let angler = Angler {
             // The rod model's own tip (`held.rs`): eye space, -z ahead.
             tip: {
-                let t = world.held.0.rod_tip();
+                let t = crate::held::rod_tip();
                 eye + right * t.x + cam_up * t.y - look * t.z
             },
             look,
@@ -854,7 +853,6 @@ mod draw {
         frame: Res<crate::planet::PlanetRenderFrame>,
         sea: Option<Res<Sea>>,
         cameras: Query<(Entity, &GlobalTransform), With<WalkingCamera>>,
-        held: Res<crate::config::HeldConfig>,
         mut floats: Query<(&mut Transform, &mut Visibility), (With<Float>, Without<LineMesh>)>,
         mut lines: Query<
             (&Mesh3d, &mut Transform, &mut Visibility),
@@ -894,7 +892,7 @@ mod draw {
             if !out {
                 continue;
             }
-            let tip = eye.transform_point(held.0.rod_tip());
+            let tip = eye.transform_point(crate::held::rod_tip());
             transform.translation = tip;
             let slack = match line.phase {
                 Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),

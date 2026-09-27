@@ -10,8 +10,9 @@ colour and a depth. The held pose puts the grip on an anchor in eye space
 about its handle so its working end points where it should. The hand is hex
 prisms in metres, laid out in a frame built on the grip.
 
-    python3 tools/gen_held_tools.py                 # write the data into the mockup
-    python3 tools/gen_held_tools.py --check         # fail if the mockup's data is stale
+    python3 tools/gen_held_tools.py                 # write the mockup's data, the game's
+                                                    # model file and the four tool icons
+    python3 tools/gen_held_tools.py --check         # fail if any of the three is stale
     <python with bpy> tools/gen_held_tools.py --render DIR   # Blender views of it
 
 No third-party dependencies for the data; `--render` needs Blender's `bpy`.
@@ -24,6 +25,14 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MOCKUP = os.path.join(ROOT, "docs", "mockups", "held-tools.html")
+MODEL = os.path.join(ROOT, "assets", "models", "held_tools.ron")
+ICONS = os.path.join(ROOT, "assets", "items", "tools")
+# What the game draws: the approved grid and size. The mockup also offers the
+# others, to compare.
+GAME_DENSITY, GAME_SIZE = 4, 2
+# The walking camera's vertical field of view (desktop.rs), degrees: the
+# Blender first-person views use it so they show what the game shows.
+GAME_FOV_DEG = 60.0
 BEGIN, END = "/*HELD-DATA*/", "/*END-HELD-DATA*/"
 S3 = math.sqrt(3.0)
 DENSITIES = (1, 2, 4)
@@ -32,7 +41,7 @@ SIZES = (1, 2)
 COL = {
     "wood": "#8a5a2b", "woodDark": "#72471f", "grip": "#5e3a18", "wrap": "#7a4d22",
     "iron": "#c9d3d6", "ironDark": "#7d8a8f", "edge": "#eef3f4",
-    "cork": "#b9a27a", "corkDark": "#9c865e", "reel": "#9aa6ab", "red": "#e35d4a",
+    "cork": "#b9a27a", "corkDark": "#9c865e", "reel": "#9aa6ab", "red": "#e35d4a", "accent": "#e07b2a",
 }
 SKINS = ["#e3b089", "#c98f64", "#8f5d3d", "#5c3b27"]
 SLEEVE, CUFF = "#4d6a8c", "#3a526e"
@@ -126,21 +135,46 @@ def pickaxe(x, y, r):
     return handle(x, y, 18, 0.45, 3, r)
 
 
+# The spade, drawn from the owner's reference: a long straight shaft with a
+# grip cap on its end, a socket running down into the blade, square
+# shoulders, near-straight sides, and a rounded nose that comes to a point.
+SPADE_TOP, SPADE_LEN, SPADE_HALF = 18.0, 6.4, 2.4
+SPADE_SHOULDER = 0.5  # the share of the blade's length before the sides turn in
+
+
+def spade_half_width(x):
+    """The blade's half-width at x: full from the shoulders, then curving in
+    to a point at the nose."""
+    t = (x - SPADE_TOP) / SPADE_LEN
+    if t < 0 or t > 1:
+        return -1.0
+    if t <= SPADE_SHOULDER:
+        return SPADE_HALF
+    u = (t - SPADE_SHOULDER) / (1 - SPADE_SHOULDER)
+    # A round nose with a blunt point: fuller than a circle's quarter near the
+    # sides, closing to a point only at the very end.
+    return SPADE_HALF * max(0.0, 1 - u ** 2.0) ** 0.62
+
+
 def shovel(x, y, r):
-    def blade(px, py):
-        return in_ellipse(px, py, 19.0, 0, 2.8, 2.3) or (19.0 <= px <= 22.0 and abs(py) <= 2.3 * (22.0 - px) / 3.0)
+    def blade(px, py): return abs(py) <= spade_half_width(px)
     if blade(x, y):
-        if abs(y) < 0.3 and x < 20.6:
-            return ("ironDark", 0.75)
-        if rim(blade, x, y, 0.3):
-            return ("edge", 0.3)
-        return ("iron", 0.4)
-    if 15.6 <= x <= 17.2 and abs(y) <= 0.62 + (x - 15.6) * 0.3:
-        return ("ironDark", 0.95)
-    # A D-grip crossbar at the butt.
-    if -0.9 <= x <= -0.1 and abs(y) <= 1.4:
-        return ("wrap" if abs(y) > 1.1 else "grip", 0.9)
-    return handle(x, y, 16.0, 0.51, 2.4, r)
+        # The socket runs a third of the way down the blade as a raised spine.
+        if abs(y) < 0.42 - 0.2 * (x - SPADE_TOP) / (SPADE_LEN * 0.55) and x < SPADE_TOP + SPADE_LEN * 0.55:
+            return ("ironDark", 0.8)
+        # The shoulders are folded over into a flat tread along the top.
+        if x < SPADE_TOP + 0.4:
+            return ("ironDark", 0.5)
+        if rim(blade, x, y, 0.3) and x > SPADE_TOP + 0.4:
+            return ("edge", 0.26)
+        return ("iron", 0.36)
+    # The socket where the shaft enters the blade, a little wider than it.
+    if SPADE_TOP - 1.2 <= x < SPADE_TOP and abs(y) <= 0.62:
+        return ("ironDark", 0.9)
+    # A grip cap on the end of the shaft.
+    if 0 <= x <= 2.6 and abs(y) <= 0.51:
+        return ("accent" if x > 0.25 else "grip", round_depth(y, 0.51, 0.5, 1.0))
+    return handle(x, y, SPADE_TOP - 1.2, 0.51, 0, r)
 
 
 def axe(x, y, r):
@@ -175,7 +209,9 @@ def rod(x, y, r):
         r2 = (x - gx) ** 2 + (y + 0.78) ** 2
         if 0.14 ** 2 <= r2 <= 0.34 ** 2:
             return ("ironDark", 0.3)
-        if abs(x - gx) <= 0.08 and -0.5 <= y <= -0.15:
+        # A stem a hex wide, or on alternate rows no hex lands on it and the
+        # ring floats free of the rod.
+        if abs(x - gx) <= 0.14 and -0.5 <= y <= -0.1:
             return ("ironDark", 0.3)
     if 1.2 <= x <= 2.6 and abs(y) <= 0.34:
         return ("ironDark", 0.62)
@@ -219,8 +255,8 @@ TOOLS = [
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.365, "work": (0, -1, 0), "toward": AHEAD, "back": BACK_RIGHT},
     # The same setup as the pickaxe and the axe: upright, gripped a quarter of
     # the way up, the head (the blade) pointing ahead.
-    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 22.0, "fist": 5.0,
-     "grip_r": 0.51, "along": UPRIGHT, "length": 0.367, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
+    {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 24.4, "fist": 5.0,
+     "grip_r": 0.51, "along": UPRIGHT, "length": 0.4074, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
     # The blade ahead, its edge facing away.
     {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 19.4, "fist": 5.0,
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.363, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
@@ -233,7 +269,7 @@ TOOLS = [
 # Where the FIST sits in eye space at each size, so a longer handle runs on
 # past the hand rather than moving it.
 FIST_AT = {1: (0.26, -0.22, -0.5), 2: (0.29, -0.30, -0.58)}
-X0, X1, Y1 = -2.2, 23.0, 6.2
+X0, X1, Y1 = -2.2, 25.0, 6.2
 
 
 def pos(q, r, s):
@@ -341,6 +377,121 @@ def data():
         tools.append({"id": t["id"], "name": t["name"], "note": t["note"], "len": t["len"],
                       "hexes": {str(d): generate(t, d) for d in DENSITIES}, "poses": poses})
     return {"colours": COL, "skins": SKINS, "sleeve": SLEEVE, "cuff": CUFF, "tools": tools}
+
+
+def srgb_bytes(hex_colour, k=1.0):
+    return tuple(min(255, int(round(int(hex_colour[i:i + 2], 16) * k))) for i in (1, 3, 5))
+
+
+def hand_colours():
+    """The hand's straight sRGB colours by role: the first skin tone, its
+    knuckles a shade darker, the cuff and the sleeve."""
+    return {"skin": srgb_bytes(SKINS[0]), "knuckle": srgb_bytes(SKINS[0], 0.86),
+            "cuff": srgb_bytes(CUFF), "sleeve": srgb_bytes(SLEEVE)}
+
+
+def fmt(v):
+    return "(" + ", ".join(f"{x:.6g}" for x in v) + ")"
+
+
+def model_ron():
+    """The game's model file (`assets/models/held_tools.ron`): each tool's
+    hexes at the game's density and its held pose at the game's size, the
+    hand's prisms placed on it, in the tool's units."""
+    roles = hand_colours()
+    out = ["// Generated by tools/gen_held_tools.py from the approved Hex Tool Bench",
+           "// mockup; do not edit. openspec/changes/hex-held-tools/design.md says what",
+           "// each field is. Tool units: x along the handle from the butt, y up the",
+           "// drawing, z out of it. Eye space: metres, x right, y up, -z ahead.",
+           "(", f"    spacing: {1.0 / GAME_DENSITY},", "    tools: ["]
+    for t in TOOLS:
+        rot, scale, butt = pose(t, GAME_SIZE)
+        tip = add(butt, mul(mat_vec(rot, (t["len"], 0.0, 0.0)), scale))
+        out += ["        (", f'            tool: "{t["id"]}",', f"            butt: {fmt(butt)},",
+                f"            rotation: {fmt(quat(rot))},", f"            scale: {scale:.6g},",
+                f"            fist: {fmt(FIST_AT[GAME_SIZE])},", f"            tip: {fmt(tip)},",
+                "            hexes: ["]
+        for q, r, c, d in generate(t, GAME_DENSITY):
+            out.append(f"                ({q}, {r}, {fmt(srgb_bytes(COL[c]))}, {d:.6g}),")
+        out += ["            ],", "            hand: ["]
+        for p in hand_parts(t, GAME_SIZE):
+            extra = ""
+            if "across" in p:
+                extra = f" across: Some({fmt(p['across'])}), width: Some({p['w']:.6g}),"
+            out.append(f"                (axis: {fmt(p['axis'])}, at: {fmt(p['at'])}, radius: {p['r']:.6g},"
+                       f" length: {p['len']:.6g},{extra} colour: {fmt(roles[p['c']])}),")
+        out += ["            ],", "        ),"]
+    out += ["    ],", ")", ""]
+    return "\n".join(out)
+
+
+def icon(tool):
+    """A tool's 16 px slot icon, drawn from its hexes: flat, the handle on the
+    diagonal from bottom left to top right, scaled to fit. A pixel takes the
+    colour of the hex under its centre, or, for thin parts, under one of four
+    points a fifth of a pixel out; nothing there, transparent."""
+    s = 1.0 / GAME_DENSITY
+    cells = {(q, r): c for q, r, c, _ in generate(tool, GAME_DENSITY)}
+    along = (1 / 2 ** 0.5, -1 / 2 ** 0.5)       # image: right and up
+    up = (-1 / 2 ** 0.5, -1 / 2 ** 0.5)         # the drawing's +y: up and left
+    pts = [pos(q, r, s) for q, r in cells]
+    img = [(x * along[0] + y * up[0], x * along[1] + y * up[1]) for x, y in pts]
+    lo = (min(p[0] for p in img), min(p[1] for p in img))
+    hi = (max(p[0] for p in img), max(p[1] for p in img))
+    k = 15.0 / max(hi[0] - lo[0], hi[1] - lo[1])
+    mid = ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)
+
+    def hex_at(u, v):
+        # Image to tool: inverse of the rotation above, which is orthonormal.
+        du, dv = (u - 8.0) / k + mid[0], (v - 8.0) / k + mid[1]
+        x = du * along[0] + dv * along[1]
+        y = du * up[0] + dv * up[1]
+        # The nearest hex: axial rounding.
+        rq = y / (-s * S3 / 2)
+        qq = x / s - rq / 2
+        cx, cz = round(qq), round(rq)
+        cy = round(-qq - rq)
+        if abs(cx - qq) > abs(cy + qq + rq) and abs(cx - qq) > abs(cz - rq):
+            cx = -cy - cz
+        elif abs(cz - rq) > abs(cy + qq + rq):
+            cz = -cx - cy
+        return cells.get((cx, cz))
+
+    keys = sorted(COL)
+    chars = {c: chr(ord("a") + i) for i, c in enumerate(keys)}
+    rows = []
+    for py in range(16):
+        row = ""
+        for px in range(16):
+            hit = None
+            for du, dv in ((0, 0), (0.2, 0), (-0.2, 0), (0, 0.2), (0, -0.2)):
+                hit = hex_at(px + 0.5 + du, py + 0.5 + dv)
+                if hit:
+                    break
+            row += chars[hit] if hit else "."
+        rows.append(row)
+    return rows, {chars[c]: COL[c] for c in keys}
+
+
+def write_outputs(check):
+    """The game's model file and the four tool icons, or check them."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from gen_item_icons import png
+    want = {MODEL: model_ron().encode("utf-8")}
+    for t in TOOLS:
+        want[os.path.join(ICONS, f"{t['id']}.png")] = png(*icon(t))
+    stale = []
+    for path, data in want.items():
+        if check:
+            if not os.path.exists(path) or open(path, "rb").read() != data:
+                stale.append(os.path.relpath(path, ROOT))
+        else:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(data)
+    if stale:
+        sys.exit("stale (run tools/gen_held_tools.py): " + ", ".join(stale))
+    print(("checked " if check else "wrote ") + "the held-tool model file and the four tool icons")
 
 
 def write_mockup(check):
@@ -494,7 +645,7 @@ def render(out_dir):
 
     cam = bpy.data.objects.new("eye", bpy.data.cameras.new("eye"))
     cam.data.sensor_fit = "VERTICAL"
-    cam.data.angle_y = math.radians(70)
+    cam.data.angle_y = math.radians(GAME_FOV_DEG)
     cam.data.clip_start = 0.01
     scene.collection.objects.link(cam)
     scene.camera = cam
@@ -526,7 +677,7 @@ def render(out_dir):
                 look(fist, tuple(Vector(fist) + Vector(off)))
                 cam.data.angle_y = math.radians(40)
                 shoot(os.path.join(out_dir, f"hand-{name}.png"), 600, 600)
-            cam.data.angle_y = math.radians(70)
+            cam.data.angle_y = math.radians(GAME_FOV_DEG)
         bpy.data.objects.remove(ob)
 
 
@@ -535,3 +686,4 @@ if __name__ == "__main__":
         render(os.path.abspath(sys.argv[sys.argv.index("--render") + 1]))
     else:
         write_mockup("--check" in sys.argv)
+        write_outputs("--check" in sys.argv)
