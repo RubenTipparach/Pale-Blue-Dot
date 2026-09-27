@@ -44,5 +44,4 @@ the ground's darkening in rain, which a drop's material does not have; it was
 there before this change too, and is not yet looked into.
 
 Dry grass and soil draw exactly like the kit's grass and dirt, in the world as
-in a slot, and do not stack with them: whether they dig up as grass and dirt
-is asked in the survey (I5).
+in a slot, and stay their own items: blocks do not merge (survey I5).

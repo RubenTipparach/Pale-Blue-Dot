@@ -134,10 +134,11 @@ thumbnail is the side. `drops::prism` takes a UV rectangle per face, and each
 block kind gets its own prism mesh once, all of them on one untinted atlas
 material.
 
-Grass and dry grass still look alike, because they are alike: the ground
-draws either with the art of the biome the cell is in, so a placed block of
-one cannot be told from the other. Whether they become one item is a
-separate question for the owner.
+Every block stays its own item, and nothing merges (survey I5, 2026-09-27:
+"I just told you we have grass-> dirt transition blocks, these have a
+different image on the side thant he pure dirt block. and SHOULD NOT
+MERGE"). The question was already settled by I4 and should not have been
+asked again.
 
 ## Risks / Trade-offs
 
@@ -155,9 +156,8 @@ separate question for the owner.
 
 - [Dug meadow gives dry grass and soil, which draw exactly like the kit's
   grass and dirt in a slot and do not stack with them] → Seen in the
-  pull-in capture: two identical-looking stacks. The ground draws each pair
-  alike, so no look of their own would be true to the block (decision 7).
-  Whether they dig up as grass and dirt is asked of the owner.
+  pull-in capture: two identical-looking stacks. They stay separate items,
+  as the owner decided (survey I5, decision 7).
 
 ## Migration Plan
 

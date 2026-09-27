@@ -253,3 +253,10 @@ blocky pixels, canwe have a more detailed layer whenI zoom in?").**
   toggle in the legend. It opens at the spawn's noon. The towns still light
   up on the night side once it is turned on, which is how the mockup keeps
   CLAUDE.md's rule that mockups are lit at night.
+- **M5, "id also like it to have linear interpolation, instead of blocky
+  pixels, canwe have a more detailed layer whenI zoom in?":** decision 9,
+  built in the mockup as task 1.3c.
+- **M6, the gate: "good approve".** The owner approves the map on the
+  mockup's version 3. Under CLAUDE.md's standing screenshot rule the
+  walkthrough video (task 1.3a) waits for the owner's batch, and the code
+  below starts.
