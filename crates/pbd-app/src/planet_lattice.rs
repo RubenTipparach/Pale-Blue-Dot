@@ -25,6 +25,17 @@ pub struct LatticePoint {
     pub j: u32,
 }
 
+impl From<LatticePoint> for pbd_core::cell_key::Address {
+    fn from(p: LatticePoint) -> Self {
+        Self {
+            face: p.face,
+            level: p.level,
+            i: p.i,
+            j: p.j,
+        }
+    }
+}
+
 /// A cell of the local dual with its lattice identity and its owners at the
 /// level below: the coarse cell it is centred on when `(i, j)` are both even,
 /// otherwise the two coarse cells whose edge it bisects.

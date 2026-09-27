@@ -3,6 +3,7 @@
 
 pub mod aim;
 pub mod atmosphere;
+pub mod cell_key;
 pub mod column;
 pub mod daylight;
 pub mod dig;

@@ -103,7 +103,7 @@ pub fn show(
             .set
             .finest_records()
             .iter()
-            .find(|record| record.metadata[3] == block.0);
+            .find(|record| record.key() == block.0);
         let Some(record) = record else {
             *visibility = Visibility::Hidden;
             return;

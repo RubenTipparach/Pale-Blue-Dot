@@ -1,7 +1,7 @@
 //! What a save looks like on disk.
 //!
 //! Two files per slot and two shapes, because the two halves change on
-//! different clocks. `edits.log` is append-only and carries a line per accepted
+//! different clocks. `edits.v1.log` is append-only and carries a line per accepted
 //! edit; `world.ron` is replaced whole and carries what a timer can afford to
 //! write.
 //!

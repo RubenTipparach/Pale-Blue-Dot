@@ -6,7 +6,8 @@
 //! into a generated column would therefore live exactly as long as the player
 //! stood still.
 //!
-//! So an edit is a sparse override, keyed by the cell's stable ID and holding
+//! So an edit is a sparse override, keyed by the cell's exact key
+//! ([`cell_key`](crate::cell_key), unique to the cell) and holding
 //! only the layers that differ from what the generator produces. `generate`
 //! applies them last, which keeps the property the whole tier rests on: a
 //! column is a pure function of its direction, the worm field and these
@@ -18,9 +19,10 @@ use std::collections::HashMap;
 /// One layer of one cell, changed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Edit {
-    /// The cell's stable ID, which the LOD record has carried since it was
-    /// built. Stable is the whole point: a tier rebuilt at a different anchor
-    /// gives a cell a different slot and the same ID.
+    /// The cell's exact key ([`cell_key`](crate::cell_key)), which the LOD
+    /// record carries. Stable is the whole point: a tier rebuilt at a
+    /// different anchor gives a cell a different slot and the same key. And
+    /// unique: no other cell has it, so an edit lands on this cell alone.
     pub cell: u32,
     /// The layer, as `column::layer_altitude` indexes them.
     pub layer: u16,

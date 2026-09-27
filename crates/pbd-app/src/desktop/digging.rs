@@ -112,7 +112,7 @@ fn sample_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<
         None => column::layer_altitude(layer) + 0.5 < cell.direction_height[3],
     };
     Some(Sample {
-        cell: cell.metadata[3],
+        cell: cell.key(),
         layer,
         solid,
     })
@@ -145,13 +145,13 @@ fn why_unsampled(contact: &PlanetContact, point: Vec3) -> Option<Unsampled> {
         .then_some(Unsampled::OffTheFineSet { depth_m })
 }
 
-/// The record index of a cell by its stable ID. The march answers in stable
-/// IDs because that is what an edit is keyed by; applying one needs the slot.
+/// The record index of a cell by its key. The march answers in keys because
+/// that is what an edit is saved by; applying one needs the slot.
 fn record_of(fine: &PlanetFine, cell: u32) -> Option<usize> {
     fine.set
         .finest_records()
         .iter()
-        .position(|record| record.metadata[3] == cell)
+        .position(|record| record.key() == cell)
 }
 
 /// What the player's hands do as part of an edit.

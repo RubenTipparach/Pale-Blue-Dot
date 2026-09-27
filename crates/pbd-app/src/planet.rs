@@ -186,11 +186,25 @@ pub struct GpuCell {
     // x: the tree this cell stands, the stable id of the finest cell at its
     // centre (`distance-lod-fade`): a coarse cell's tree is the fine tree
     // standing where it stood. An integer lane, never float bits, which a GPU
-    // may flush as denormals. yzw spare.
+    // may flush as denormals. y: the cell's exact key (`pbd_core::cell_key`),
+    // which an edit is saved and found by; `NO_KEY` on the base level. zw
+    // spare.
     pub spare: [u32; 4],
 }
 
+/// The key lane of a record that has no key: a base-level cell, which no
+/// edit is ever made on. Bit 31 is set, which no key has.
+pub const NO_KEY: u32 = u32::MAX;
+
 impl GpuCell {
+    /// The cell's exact key (`pbd_core::cell_key`): what its edits are saved
+    /// and found by. `metadata[3]` is the old hash, kept only as the seed the
+    /// shaders roll clutter and texture from; it collides, so nothing is
+    /// looked up by it.
+    pub fn key(&self) -> u32 {
+        self.spare[1]
+    }
+
     pub fn degree(&self) -> usize {
         (self.metadata[0] & 0xff) as usize
     }

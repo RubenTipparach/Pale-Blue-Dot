@@ -66,6 +66,62 @@ it.
 Specifically, do not: rename or rescale a tuning constant, change a shader term,
 alter a default, or refactor toward a plan, before the plan is written down.
 
+## Mockups are lit at night (owner, 2026-09-26)
+
+**Standing instruction from the user:** "All your mockups should have lighting
+at night." A mockup of a place has a time of day, and at night it is lit by its
+own lamps, fires and windows. Every light lights what is near it wherever the
+camera is, not only the few nearest the camera, and the moon stays dim enough
+that the lamps read. `docs/mockups/towns.html` does this (the `tenebris-towns`
+design, section 7). `fishing.html` and `vehicles.html` predate this rule and
+have a fixed daylight.
+
+## Every major step ends in a video (owner, 2026-09-27)
+
+**Standing instruction from the user:** "each major step needs a video
+recording showcasing this stuff so I can verify they are done correctly,
+before moving on to the next step." A step's gate is passed on a video the
+owner has watched, not on stills or a written claim. The next step does not
+start until then. The video's shots name what each one shows and which
+requirement it demonstrates. "When you do the videos, post the prototype too
+so I can compare/contrast stuff": every shot of something a mockup shows plays
+beside the same shot in the prototype, and the gate page links the live
+prototype. A cloud recording is rendered at a fixed step
+without a GPU and says so: it shows what things look like, never how smoothly
+they run. Where smoothness is the point, the owner records the same showcase
+in real time with `obs-record`. The tooling is planned in
+`openspec/changes/step-videos`; until it is built, a gate's video is made by
+hand from a mockup or a capture sequence.
+
+## Ask the owner with a survey (owner, 2026-09-27)
+
+**Standing instruction from the user:** "you need some sort of survey form
+for me to fill out ... that claude doc thing was good for that, maybe that
+should be a skill." Open questions for the owner go into a survey Claude Doc,
+never a list in chat. Each question gets its options, a recommendation and
+an answer column, and answers are folded back into the OpenSpec changes they
+shape. The `owner-survey` skill (`.claude/skills/owner-survey`) says how. The
+current survey is https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn. Keep
+editing it rather than starting another.
+
+Whenever work turns up something only the owner can decide, add it to the
+survey and give the link. Do not wait to be asked. One quick yes-or-no can
+still go in chat. If a session has no Claude Docs connector, say so, and
+publish the same tables as an artifact page with an answer field per
+question, linked from the survey's "Already decided" section once the
+connector is back.
+
+## End every reply with the artifact links (owner, 2026-09-27)
+
+**Standing instruction from the user:** "always give me links to artifacts
+generated or updated since last prompt at end of messages". Every reply ends
+with a short list of links. It names each claude.ai artifact published,
+republished or edited since the owner's last message, including pages,
+mockups, benchmark reports, the survey doc and any other Claude Doc. Give the
+link, and one line on what is new in it. If nothing was published or edited,
+say so in one line, so that a missing list is never mistaken for a forgotten
+one.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
@@ -234,6 +290,15 @@ a test pins it. When the scale moves, both move in the same commit.
 - Every accepted world mutation enters the durable transaction path immediately.
   A queued write alone is not a durable save; acknowledge commitment only after
   the storage backend succeeds. Do not rely on save-on-exit or an autosave timer.
+- The player is not the only author of change (owner, 2026-09-27): towns will
+  grow and buildings will be abandoned on their own. Whoever makes a change, it
+  takes the same durable path and names its author, and a change the world
+  makes never overwrites the player's. What the seed and the rules decide
+  (terrain, habitat) is derived and never saved. What is generated once and
+  must then persist or change (sites, towns, landmarks, named zones) is a
+  stored record. World time passes only while the world is played, not while
+  the game is closed (owner, 2026-09-27). The design is
+  `openspec/changes/world-persistence`, which is not built yet.
 
 ## Implementation and verification
 
