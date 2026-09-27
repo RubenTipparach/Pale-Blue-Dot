@@ -564,15 +564,43 @@ The dip is set in the first ten days, before any of these acts, and a wider
 band only overshoots later and makes the sun less steady. The fix is where a
 new world starts (decision 8).
 
-**8, proposed. A new world starts from a settled climate.** Not built. The
-start today is a climatology by latitude; the settled planet has warmer seas
-and colder land than that, and the sea takes hundreds of days to get there.
-`climate-and-fish-maps` already bakes a simulated year of the balanced
-planet for its maps. A new world would start from that bake's last state,
-per level, so its first day is its settled one and the sun needs no
-catching up. Until then the second-year fish test stays ignored and failing
-on its day-30 check, and the game's own level passes task 3.1 with 0.75 K to
-spare. The owner decides the order (survey K6).
+**8. A new world starts from a settled climate (the owner, survey K6,
+2026-09-27: "why not start at 15c? why climb it back up?").** It did start at
+15 °C on average, but as a climatology by latitude: land too warm, sea too
+cold. The land cools to its balance in days, while the sea takes hundreds to
+warm. So a new world starts from the settled planet instead, and its first
+day is its settled one:
+- `examples/settle_climate.rs` runs a new world forward and writes the
+  atmosphere's saved state (`Atmosphere::to_bytes`, the weather save a world
+  already keeps). It speeds the sea up tenfold for the first years (its
+  heat capacity cut to a tenth, so its timescale is weeks, not a year and a
+  half), then runs the last year at the true capacity so the seasons come
+  back to their true size. The year's mean does not depend on how much heat
+  the sea holds, only on how fast it gets there. This is the accelerated
+  spin-up climate models use.
+- It stops at a whole number of years, at the hour a new world's clock
+  starts (`START_HOUR` of day 0), so the season it ships is the season a
+  new world opens in.
+- The state ships as `assets/climate/settled-l<level>.bin`, beside the RON of
+  the settings it was made with. `Air::open` restores it for a world with no
+  weather of its own, and falls back to today's spin-up where the file is
+  missing or was made with other settings, saying so in the log. A test
+  fails when the shipped settings and `atmosphere.ron` differ, so a retune
+  cannot ship with a stale climate.
+- Level 3's state ships too, for the second-year fish test, which starts
+  from it as a new world does.
+
+As built (2026-09-27): two fast years and one true one. At level 3 the fast
+years swing between 13.4 and 16.5 °C with the light sea; after the switch
+the true year reads 14.7 to 15.2 °C, and a new world's first sixty days from
+the shipped state read 14.69 to 14.97 °C, the trim steady at 0.90 to 0.91.
+Where a world's clock opens later than the state stands (a capture's
+`--time`, a `--day`), `Air::open` steps the state to the clock when it is
+within `spinup_s` of it, and otherwise runs the usual spin-up from the
+settled state instead of from rest, so the air and ground come round to the
+hour and the sea keeps its heat. The app's tests pin both: a new world at
+the default clock opens on the shipped bytes exactly, and at noon it is
+stepped there and still reads 15 ± 0.5 °C.
 
 **7. The heat spread is a diffusivity, the same at every level (2026-09-27,
 finding 8).** `heat_spread` (per second) is replaced by

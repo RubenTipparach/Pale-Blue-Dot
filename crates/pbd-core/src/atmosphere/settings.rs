@@ -7,9 +7,9 @@
 //! `climate` example, so the planet gets trade winds, a jet, desert belts and
 //! storms on a world 4.8 km round with a 48-minute day.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AtmosphereSettings {
     /// Subdivision level of the atmosphere's cells: 4 is 2,562 cells 363 m
