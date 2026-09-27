@@ -22,59 +22,72 @@ pub use pbd_app::hotbar::Hotbar;
 pub const ATLAS_SHEETS: f32 = 4.0;
 pub const ATLAS_TILES: f32 = 4.0;
 
-/// Which tile of the atlas a material draws with, and the colour the terrain
-/// shader lays over it. Both halves come from `planet_surface.wgsl`'s own
-/// table, so a slot and the ground cannot disagree about what dirt looks like.
-///
-/// Several materials share a tile, which is honest: they share it on the ground
-/// too, and what tells grass from swamp grass there is the tint, here as well.
-pub fn thumbnail(material: Material) -> Option<(u32, Vec2, Color)> {
+/// The tiles a block is drawn with, as the ground draws it
+/// (`planet_surface.wgsl`, after Tenebris's `face_tile`): its top, its sides
+/// and its underside, all on one sheet. A grassy block wears the sheet's
+/// ground on top, the ground-over-earth transition on its sides and earth
+/// underneath; every other block is one tile all round (`inventory-grid`
+/// decision 7, survey I4).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BlockArt {
+    pub sheet: u32,
+    pub top: Vec2,
+    pub side: Vec2,
+    pub under: Vec2,
+}
+
+/// A block's art, or `None` for air and for a light, which is its own
+/// picture (`hotbar::light_icon`, `lamps-and-lanterns` task 5.3).
+pub fn block_art(material: Material) -> Option<BlockArt> {
     use pbd_app::planet::{snow_slot, tileset_slot};
     use pbd_core::planet_gen::Biome;
     // Which SHEET a block comes from, which is the biome it is found in: sand
     // is a beach's, snow is the tundra's, and the rest are the home meadow's.
-    // The ground asks the same two functions for the same answer.
+    // The ground asks the same two functions for the same answer. The tiles
+    // are each sheet's layout: #0 its ground, #1 that ground over the earth,
+    // #2 the earth, #3 the stone.
     let home = |biome| tileset_slot(biome);
-    let (slot, tile, rgb): (u32, (f32, f32), (f32, f32, f32)) = match material {
+    let one = |sheet: u32, x: f32, y: f32| BlockArt {
+        sheet,
+        top: Vec2::new(x, y),
+        side: Vec2::new(x, y),
+        under: Vec2::new(x, y),
+    };
+    let grassy = |sheet: u32| BlockArt {
+        sheet,
+        top: Vec2::new(0., 0.),
+        side: Vec2::new(1., 0.),
+        under: Vec2::new(2., 0.),
+    };
+    Some(match material {
         Material::Air => return None,
-        Material::Grass | Material::DryGrass => {
-            (home(Biome::Fields), (0., 0.), (0.12, 0.32, 0.075))
-        }
-        Material::JungleGrass => (home(Biome::Jungle), (0., 0.), (0.07, 0.25, 0.105)),
-        // Earth has its own picture at last, which is the tile a wall shows
-        // under the sod rather than the beach it used to borrow.
-        Material::Soil | Material::Dirt => (home(Biome::Fields), (2., 0.), (0.61, 0.48, 0.25)),
-        Material::Sand => (home(Biome::Beach), (0., 0.), (0.72, 0.62, 0.42)),
-        Material::Stone => (home(Biome::Fields), (3., 0.), (0.31, 0.34, 0.33)),
-        Material::Rock => (home(Biome::Mountains), (3., 0.), (0.37, 0.33, 0.29)),
-        Material::Snow => (snow_slot(), (0., 0.), (0.80, 0.90, 0.91)),
-        Material::Ore => (home(Biome::Fields), (0., 1.), (0.72, 0.62, 0.34)),
-        Material::Water => (home(Biome::Ocean), (2., 2.), (0.13, 0.40, 0.56)),
-        // A light is its own picture (`hotbar::light_icon`), not a tinted
-        // tile of a material it is not (`lamps-and-lanterns` task 5.3).
+        // Grass and dry grass are one render code: the ground draws them alike.
+        Material::Grass | Material::DryGrass => grassy(home(Biome::Fields)),
+        Material::JungleGrass => grassy(home(Biome::Jungle)),
+        Material::Soil | Material::Dirt => one(home(Biome::Fields), 2., 0.),
+        Material::Sand => one(home(Biome::Beach), 0., 0.),
+        Material::Stone => one(home(Biome::Fields), 3., 0.),
+        Material::Rock => one(home(Biome::Mountains), 3., 0.),
+        Material::Snow => one(snow_slot(), 0., 0.),
+        Material::Ore => one(home(Biome::Fields), 0., 1.),
+        Material::Water => one(home(Biome::Ocean), 2., 2.),
         Material::Torch
         | Material::LanternPost
         | Material::LanternWall
         | Material::LanternHanging
         | Material::Brazier
         | Material::Candle => return None,
-    };
-    // The shader's albedo is a fraction of full brightness because the ground
-    // is then LIT by a sun, and a slot is lit by nothing. Lifting it by a
-    // GAMMA raises the dark materials without flattening the bright ones,
-    // which is what keeps snow whiter than stone and stone paler than soil.
-    //
-    // Normalising each material to its own brightest channel was the first
-    // attempt and it is the wrong shape: it throws away exactly the relative
-    // brightness that tells the materials apart, so snow came out the same
-    // grey as stone and sand came out brick red. Preserve the order, lift the
-    // floor.
-    let lift = |c: f32| c.clamp(0.0, 1.0).powf(0.6);
-    Some((
-        slot,
-        Vec2::new(tile.0, tile.1),
-        Color::srgb(lift(rgb.0), lift(rgb.1), lift(rgb.2)),
-    ))
+    })
+}
+
+/// Which tile a block's slot shows, and the colour laid over it: its SIDE,
+/// as a block is seen standing in the world, for grass the sward over earth
+/// (the owner, survey I4: "should use the side of the block, there is a grad
+/// transtion to dirt block"). Untinted, since the ground draws its tiles in
+/// their own colours.
+pub fn thumbnail(material: Material) -> Option<(u32, Vec2, Color)> {
+    let art = block_art(material)?;
+    Some((art.sheet, art.side, Color::WHITE))
 }
 
 /// Every item picture that is not a block: a tool's and a fish's own 16x16
@@ -453,18 +466,24 @@ mod tests {
         assert!(thumbnail(Material::Air).is_none(), "air is not a block");
     }
 
-    /// Snow is brighter than stone and stone brighter than soil, which is the
-    /// whole reason the lift is a gamma rather than a per-material normalise:
-    /// normalising threw this ordering away and made snow look like stone.
+    /// A grassy block shows its side in a slot, the sward over earth, and
+    /// wears its top, side and underside on a drop, as the ground draws it
+    /// (survey I4); earth and stone are one tile all round; and a slot is not
+    /// tinted, since the ground draws its tiles in their own colours.
     #[test]
-    fn the_thumbnails_keep_their_relative_brightness() {
-        let value = |material| {
-            let (_, _, colour) = thumbnail(material).unwrap();
-            let rgb = colour.to_srgba();
-            rgb.red + rgb.green + rgb.blue
-        };
-        assert!(value(Material::Snow) > value(Material::Stone));
-        assert!(value(Material::Stone) > value(Material::Grass));
-        assert!(value(Material::Sand) > value(Material::JungleGrass));
+    fn a_block_is_shown_as_the_ground_draws_it() {
+        let grass = block_art(Material::Grass).unwrap();
+        assert_eq!(grass.top, Vec2::new(0., 0.));
+        assert_eq!(grass.side, Vec2::new(1., 0.), "the transition tile");
+        assert_eq!(grass.under, Vec2::new(2., 0.), "earth underneath");
+        assert_eq!(thumbnail(Material::Grass).unwrap().1, grass.side);
+        assert_eq!(
+            block_art(Material::DryGrass),
+            Some(grass),
+            "one render code"
+        );
+        let stone = block_art(Material::Stone).unwrap();
+        assert_eq!((stone.top, stone.side), (stone.under, stone.under));
+        assert_eq!(thumbnail(Material::Dirt).unwrap().2, Color::WHITE);
     }
 }

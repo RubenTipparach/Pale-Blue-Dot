@@ -134,13 +134,36 @@ pub fn gather(
     }
 }
 
-/// What each item's drop looks like: a block's prism wears its ground tile,
-/// and a light's card its icon. An item with no look is not drawn, which is
-/// a missing picture rather than a wrong one.
+/// What each item's drop looks like: a block's prism, its faces' tiles in
+/// its mesh, and the material they are drawn with; a light's card wears its
+/// icon. An item with no look is not drawn, which is a missing picture rather
+/// than a wrong one.
 #[derive(Resource, Default)]
 pub struct DropLooks {
-    pub prisms: HashMap<Item, Handle<StandardMaterial>>,
+    pub prisms: HashMap<Item, (Handle<Mesh>, Handle<StandardMaterial>)>,
     pub cards: HashMap<Item, Handle<StandardMaterial>>,
+}
+
+/// Where in a texture each face of a prism is drawn from, as UV rectangles:
+/// its top cap, its six sides and its lower cap, as the ground draws a block
+/// (`inventory-grid` decision 7).
+#[derive(Clone, Copy, Debug)]
+pub struct PrismFaces {
+    pub top: Rect,
+    pub side: Rect,
+    pub under: Rect,
+}
+
+impl Default for PrismFaces {
+    /// The whole texture on every face.
+    fn default() -> Self {
+        let whole = Rect::new(0.0, 0.0, 1.0, 1.0);
+        Self {
+            top: whole,
+            side: whole,
+            under: whole,
+        }
+    }
 }
 
 /// The drawn drop with this id.
@@ -149,9 +172,16 @@ pub struct DropView(pub u64);
 
 /// A hex prism, [`drops::PRISM_RADIUS_M`] to its corners and
 /// [`drops::PRISM_HALF_HEIGHT_M`] each way from its middle, standing on its
-/// local Y. Each face is a whole tile: the caps fit the tile's square round
-/// the hexagon, and each side is the tile stretched along its edge.
-pub fn prism() -> Mesh {
+/// local Y. Each face takes its own rectangle of the texture: the caps fit it
+/// round the hexagon, and each side is it stretched along its edge, its top
+/// row at the top.
+pub fn prism(faces: PrismFaces) -> Mesh {
+    let at = |rect: Rect, u: f32, v: f32| {
+        [
+            rect.min.x + u * rect.width(),
+            rect.min.y + v * rect.height(),
+        ]
+    };
     let (r, h) = (drops::PRISM_RADIUS_M, drops::PRISM_HALF_HEIGHT_M);
     let corner = |k: usize| {
         let a = k as f32 * std::f32::consts::TAU / 6.0;
@@ -159,16 +189,16 @@ pub fn prism() -> Mesh {
     };
     let (mut positions, mut normals, mut uvs, mut indices) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::<u32>::new());
-    for (y, up) in [(h, 1.0f32), (-h, -1.0)] {
+    for (y, up, rect) in [(h, 1.0f32, faces.top), (-h, -1.0, faces.under)] {
         let base = positions.len() as u32;
         positions.push([0.0, y, 0.0]);
         normals.push([0.0, up, 0.0]);
-        uvs.push([0.5, 0.5]);
+        uvs.push(at(rect, 0.5, 0.5));
         for k in 0..6 {
             let c = corner(k);
             positions.push([c.x * r, y, c.y * r]);
             normals.push([0.0, up, 0.0]);
-            uvs.push([0.5 + 0.5 * c.x, 0.5 + 0.5 * c.y]);
+            uvs.push(at(rect, 0.5 + 0.5 * c.x, 0.5 + 0.5 * c.y));
         }
         for k in 0..6u32 {
             let (a, b) = (base + 1 + k, base + 1 + (k + 1) % 6);
@@ -184,15 +214,15 @@ pub fn prism() -> Mesh {
         let (a, b) = (corner(k), corner(k + 1));
         let normal = (a + b).normalize();
         let base = positions.len() as u32;
-        for (c, y, uv) in [
-            (a, h, [0.0, 0.0]),
-            (b, h, [1.0, 0.0]),
-            (b, -h, [1.0, 1.0]),
-            (a, -h, [0.0, 1.0]),
+        for (c, y, u, v) in [
+            (a, h, 0.0, 0.0),
+            (b, h, 1.0, 0.0),
+            (b, -h, 1.0, 1.0),
+            (a, -h, 0.0, 1.0),
         ] {
             positions.push([c.x * r, y, c.y * r]);
             normals.push([normal.x, 0.0, normal.y]);
-            uvs.push(uv);
+            uvs.push(at(faces.side, u, v));
         }
         indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
     }
@@ -243,15 +273,15 @@ fn draw(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut views: Query<(Entity, &DropView, &mut Transform)>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut shapes: Local<Option<(Handle<Mesh>, Handle<Mesh>)>>,
+    mut card_shape: Local<Option<Handle<Mesh>>>,
 ) {
     let Some(looks) = looks else {
         return;
     };
-    let (prism_mesh, card_mesh) = shapes
+    let card_mesh = card_shape
         .get_or_insert_with(|| {
             let side = 2.0 * drops::ICON_HALF_M;
-            (meshes.add(prism()), meshes.add(Rectangle::new(side, side)))
+            meshes.add(Rectangle::new(side, side))
         })
         .clone();
     let centre = frame.center.as_vec3();
@@ -279,7 +309,7 @@ fn draw(
         let (mesh, material, card) =
             match (looks.cards.get(&drop.item), looks.prisms.get(&drop.item)) {
                 (Some(card), _) => (card_mesh.clone(), card.clone(), true),
-                (None, Some(prism)) => (prism_mesh.clone(), prism.clone(), false),
+                (None, Some((mesh, material))) => (mesh.clone(), material.clone(), false),
                 (None, None) => continue,
             };
         commands.spawn((
@@ -389,7 +419,7 @@ mod tests {
     /// winding agrees with its normal, and its corners reach the radius.
     #[test]
     fn the_prism_is_closed_and_faces_out() {
-        let mesh = prism();
+        let mesh = prism(PrismFaces::default());
         let Some(bevy::mesh::VertexAttributeValues::Float32x3(p)) =
             mesh.attribute(Mesh::ATTRIBUTE_POSITION)
         else {

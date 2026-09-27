@@ -117,6 +117,28 @@ would displace.
 `BINDINGS` for on foot. The pack does not open in a ship's seat, where the
 hotbar is not drawn either.
 
+**7. A block is shown as the ground draws it: its top, its side and its
+underside (survey I4, 2026-09-27: "should use the side of the block, there is
+a grad transtion to dirt block. this is the obvious").** The terrain draws a
+grassy block with the sheet's ground on top, the ground-over-earth transition
+on its sides and earth underneath (Tenebris's `face_tile`, in
+`planet_surface.wgsl`), in the tile's own colours. A slot's picture becomes
+the block's side: for grass, the sward over earth, which reads as a block of
+turf rather than a green square. A drop's prism wears the top on its upper
+cap, the side on its flanks and the underside on its lower cap. The tint
+laid over a slot's tile goes, since the ground no longer tints its tiles.
+
+As built: `slots::block_art` names each block's sheet and its three tiles,
+from the same `tileset_slot` and `snow_slot` the ground asks; the slot
+thumbnail is the side. `drops::prism` takes a UV rectangle per face, and each
+block kind gets its own prism mesh once, all of them on one untinted atlas
+material.
+
+Grass and dry grass still look alike, because they are alike: the ground
+draws either with the art of the biome the cell is in, so a placed block of
+one cannot be told from the other. Whether they become one item is a
+separate question for the owner.
+
 ## Risks / Trade-offs
 
 - [A 40-field log line is longer to write on every dig] → A dig writes about
@@ -124,17 +146,18 @@ hotbar is not drawn either.
   already; it is not measured in the cloud session (CLAUDE.md), and the owner
   runs the performance suite on real hardware.
 - [Hundreds of drops left floating after a long dig with a full pack] →
-  Each is one small mesh on one shared material, and each goes after 300 s.
-  A dig makes at most one. Not measured in the cloud session.
+  Each draws one small mesh, shared by every drop of its kind, on one
+  material shared by every block, and each goes after 300 s. A dig makes at
+  most one. Not measured in the cloud session.
 - [A pickup line per block doubles the log's lines while digging] → A pickup
   line is short (the slots, about 400 bytes with a full pack) and the log is
   appended per edit already.
 
 - [Dug meadow gives dry grass and soil, which draw exactly like the kit's
   grass and dirt in a slot and do not stack with them] → Seen in the
-  pull-in capture: two identical-looking stacks. The slot thumbnail shares
-  one tile and tint per pair. The owner decides (survey I4) whether they
-  get their own look or dig up as grass and dirt.
+  pull-in capture: two identical-looking stacks. The ground draws each pair
+  alike, so no look of their own would be true to the block (decision 7).
+  Whether they dig up as grass and dirt is asked of the owner.
 
 ## Migration Plan
 

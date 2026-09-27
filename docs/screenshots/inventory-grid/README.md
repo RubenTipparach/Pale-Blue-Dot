@@ -24,5 +24,25 @@ at the spawn.
 | `pack-kit.jpg` | `--menu pack --time 12` | The pack open: thirty empty pack slots, the kit's hotbar under them, and the three mouse moves. |
 | `pack-after-dig.jpg` | `--dig 4 --pitch -70 --time 12 --menu pack` | Four blocks dug under the walker, who falls into the pit. The dry grass and soil the dig cut were pulled in by the magnet and, with the hotbar full, landed in the pack's first two slots. The log says so: `picked up 1 of Block(DryGrass) (drop 0)`, `picked up 1 of Block(Soil) (drop 1)`. The two stone drops came to rest 4 m away and float. |
 
-Dry grass and soil draw exactly like the kit's grass and dirt and do not stack
-with them: survey I4.
+
+## A block as the ground draws it (task 4.4, survey I4)
+
+The owner, on the shots above: "should use the side of the block, there is a
+grad transtion to dirt block. this is the obvious". The same three runs on
+the build with `inventory-grid` decision 7, made before the settled climate
+(`climate-balance` decision 8) was shipped, so the weather is the spin-up
+from rest as above.
+
+| file | flags | what it shows |
+| --- | --- | --- |
+| `block-sides-drop.jpg` | `--dig 6 --pitch -30 --time 12` | The dug grass floating in its hole with the sward on its top cap and the sward's edge over earth round its sides, as the ground draws the block beside it. The hotbar's grass slot shows the same side tile, and the dirt, stone and sand slots their own tiles, untinted. |
+| `block-sides-drops.jpg` | `--dig 2 --pitch -45 --time 12` | Two drops in the pit, grass and soil, each drawn as its block is. Without `--lamps 4` this time, so the lamp row's warm light is not on the ground as it is in `drops-noon.jpg`. |
+| `block-sides-pack.jpg` | `--dig 4 --pitch -70 --time 12 --menu pack` | The pack after the pull-in, its slots drawn with the side tiles. |
+
+The drops read paler than the wet ground round them. The likely difference is
+the ground's darkening in rain, which a drop's material does not have; it was
+there before this change too, and is not yet looked into.
+
+Dry grass and soil draw exactly like the kit's grass and dirt, in the world as
+in a slot, and do not stack with them: whether they dig up as grass and dirt
+is asked in the survey (I5).

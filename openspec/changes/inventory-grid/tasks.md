@@ -25,6 +25,10 @@ the block into the world as a floating block.
 - [x] 4.2 (`pack::click` and `Slots::shift`: a stack stays in its slot until the second click, which is the whole move and one `pack` line, so closing with a stack in hand moves nothing.) Click, shift-click and right-click moves (decision 5), each through the durable path. Verify: app tests of each move and of a held stack going home when the pack closes.
 - [x] 4.3 (`pack-kit.jpg`, and `pack-after-dig.jpg`, which shows a dig pulled into the pack rather than a mouse move: a capture has no pointer.) Captures: the pack open with the kit in it, and after a few moves. Verify: in `docs/screenshots/inventory-grid/`.
 
+## 4b. Blocks as the ground draws them (decision 7, survey I4)
+
+- [x] 4.4 (`slots::block_art`, `drops::PrismFaces`, one prism mesh per block kind on one untinted atlas material; `a_block_is_shown_as_the_ground_draws_it` and `a_grass_drop_wears_its_top_side_and_underside`; `block-sides-*.jpg`.) A slot's picture is the block's side tile, untinted; a drop's prism wears top, side and underside tiles. Verify: an app test that grass's slot tile is the sheet's transition tile, and captures of the hotbar and a drop.
+
 ## 5. The owner's check
 
 - [ ] 5.1 The gate video (`step-videos`, in the owner's batch): the pack opened, stacks moved, a dig pulled into the pack, and a dig with everything full left floating.
