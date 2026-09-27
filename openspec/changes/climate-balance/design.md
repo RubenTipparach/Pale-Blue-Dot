@@ -118,7 +118,7 @@ atmosphere for 200 days, at level 3 so it fits in a test run. It asserts
 every species has water in its window for part of the second year. It is
 ignored by default, and run with the instrument, because it takes minutes.
 
-## Measured: the sweep (2026-09-27, in progress)
+## Measured: the sweep (2026-09-27)
 
 Task 1.2's first passes run at level 4 (2,562 cells), 200 days a candidate,
 with no trim, since there is none yet. The sea column is the plain mean of the
@@ -257,14 +257,36 @@ closes both, using only the shipped code:
 | M | 1000 | 0.6 | 40 |
 | N | 1360 | 0.25 | 50 |
 
-The first 20 days, sea surface (the full runs follow):
+The full runs, 200 days. The whole-surface means are area-weighted, over the
+second year (days 101 to 200), from `tools/temperature_map.py`:
 
-| run | day 10 | day 20 |
-| --- | ---: | ---: |
-| K | 15.2 °C | 14.8 °C |
-| L | 15.7 °C | 15.6 °C |
-| M | 14.6 °C | 13.6 °C |
-| N | 15.9 °C | 16.2 °C |
+| run | sea, day 10 | sea, day 100 | sea, day 200 | whole surface, year 2 | sea, year 2 | range, year 2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| K | 15.2 °C | 12.0 °C (day 90) | 9.4 °C | 5.6 °C | 10.0 °C | −28.8 to 21.2 °C |
+| **L** | 15.7 °C | 15.8 °C | 16.3 °C | **12.1 °C** | 15.8 °C | −21.0 to 29.0 °C |
+| M | 14.6 °C | 6.2 °C | −0.3 °C | −2.6 °C | 2.2 °C | −36.1 to 13.5 °C |
+| N | 15.9 °C | 18.1 °C | 20.4 °C | 16.3 °C | 19.2 °C | −12.7 to 33.9 °C |
+
+What the runs show:
+- **L holds.** Its sea is within 0.6 °C from day 10 to day 200, and no cell
+  runs away: the range stays between −21 and +29 °C. Its whole surface
+  averages 12.1 °C. That leaves the thermostat about 3 °C, which is the
+  small, steady trim decision 2 wants.
+- **N is still warming** at day 200, by about 0.25 °C every ten days.
+- **The shipped sun and clouds are too cold even without the leaks** (M).
+  The retune of decision 3 is still needed.
+- **The year-2 map of L** is `docs/wiki/temperature/preview-leaks-closed-year2.png`,
+  and beside today's in `before-after-year2.png`:
+  - tropical sea at 25 to 30 °C;
+  - mid-latitudes at 10 to 20 °C;
+  - the poles near −20 °C;
+  - the freezing line near 60° north and south.
+
+  Today's year 2 runs from −48 °C at the poles to −16 °C at the equator.
+- The net cloud effect of L's pair (0.35 and 40) is not yet computed from
+  the budget. Decision 3 wants it between −10 and −30 W/m². A pair between L
+  and N may meet that and land nearer 15 °C untrimmed, and is task 1.4's
+  first run on the fixed step.
 
 These bracket the fix; they are not it:
 - A spread that trades joules still moves heat between cells. Here none
