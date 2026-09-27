@@ -160,3 +160,20 @@ unless its kind is dusk-lit.
 - **THEN** the dusk-lit lanterns no longer light the ground, and an
   always-lit torch beside them still does
   (`planet::column::tests::a_dusk_lit_lantern_lights_only_at_night_and_a_torch_always`)
+
+### Requirement: Some flowers glow at night, and the CPU decides which
+A share of flowers SHALL be a bioluminescent species that is a dusk-lit
+emitter. Which cells carry one SHALL be decided once on the CPU and carried
+in the cell record, never rolled independently by the shader.
+
+#### Scenario: A meadow glows at night
+- **WHEN** night falls over a meadow carrying the glowing species
+- **THEN** the ground near those cells is lit, and by day it is not
+  (`planet::column::tests::a_glowing_flower_lights_its_sod_at_night_and_is_put_out_by_digging_it`,
+  `flora::tests::the_share_that_glows_is_the_chance`)
+
+#### Scenario: The shader and the bake agree
+- **WHEN** the shader draws a glowing flower head
+- **THEN** it is on a cell the bake treated as an emitter
+  (`planet::column::tests::a_tiers_glowing_flowers_agree_between_record_bake_and_bit`,
+  `planet::terrain::tests::the_shader_carries_the_reference_light_constants`)

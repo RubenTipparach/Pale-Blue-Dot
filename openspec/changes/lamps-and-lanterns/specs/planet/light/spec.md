@@ -66,10 +66,10 @@ unless its kind is dusk-lit.
 ### Requirement: What moves takes the field's light
 
 A public sampler SHALL answer both channels at an arbitrary point in the lit
-tier. The player's body and held tool, the ship, and any other drawn thing
-that is not baked terrain SHALL be lit by that sampler every frame. Beyond
-the lit tier the sampler SHALL answer the open sky's light and no block
-light.
+tier. The held tool and hand, the ship, the fish, the float and any other
+drawn thing that is not baked terrain SHALL be lit by that sampler every
+frame. Beyond the lit tier the sampler SHALL answer the open sky's light and
+no block light.
 
 #### Scenario: A ship in a cave is dark
 
@@ -78,8 +78,8 @@ light.
 
 #### Scenario: A player by a torch is lit
 
-- **WHEN** the player stands beside a torch in a dark tunnel
-- **THEN** the side of the body facing the torch is lit by it
+- **WHEN** the player stands beside a torch in the dark
+- **THEN** the tool and hand they hold take the torch's warm light
 
 #### Scenario: One field, not two
 
