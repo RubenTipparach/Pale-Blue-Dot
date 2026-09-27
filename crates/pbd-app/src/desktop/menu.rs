@@ -33,6 +33,8 @@ pub enum Screen {
     Saves,
     /// The field guide, opened with J.
     Guide,
+    /// The pack, opened with I (`inventory-grid`).
+    Pack,
 }
 
 impl Screen {
@@ -53,7 +55,7 @@ impl Screen {
         }
         match self {
             Screen::Playing => Screen::Pause,
-            Screen::Pause | Screen::Guide => Screen::Playing,
+            Screen::Pause | Screen::Guide | Screen::Pack => Screen::Playing,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }
@@ -104,6 +106,7 @@ pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> S
         Some("pause") => Screen::Pause,
         Some("settings") => Screen::Settings,
         Some("saves") => Screen::Saves,
+        Some("pack") => Screen::Pack,
         _ if !world_named && !capture => Screen::Saves,
         _ => Screen::Playing,
     }
@@ -913,6 +916,7 @@ mod tests {
         assert_eq!(Screen::Pause.back(false, true), Screen::Playing);
         assert_eq!(Screen::Saves.back(false, true), Screen::Pause);
         assert_eq!(Screen::Guide.back(false, true), Screen::Playing);
+        assert_eq!(Screen::Pack.back(false, true), Screen::Playing);
     }
 
     /// The saves page as the front door: back goes into the open world, and

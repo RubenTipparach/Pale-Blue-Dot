@@ -418,6 +418,38 @@ impl Slots {
         self.slots[index] = (left > 0).then(|| Stack::new(stack.item, left));
     }
 
+    /// Move `count` of one slot's stack onto another, as the pack's second
+    /// click does (`inventory-grid` decision 5): into an empty slot; onto the
+    /// same item as far as it has room, the rest staying behind; and in place
+    /// of a different item, which swaps, but only for the whole stack, since
+    /// half a stack has nowhere to put what it would displace. Nothing ever
+    /// leaves the slots, so no move can lose a stack.
+    pub fn shift(&mut self, from: usize, to: usize, count: u16) {
+        if from == to || from >= CARRIED || to >= CARRIED {
+            return;
+        }
+        let Some(stack) = self.get(from) else { return };
+        let count = count.min(stack.count);
+        if count == 0 {
+            return;
+        }
+        match self.get(to) {
+            Some(there) if there.item != stack.item => {
+                if count == stack.count {
+                    self.slots.swap(from, to);
+                }
+            }
+            _ => {
+                let taken = self.take(from, count);
+                if let Some(back) = self.put(to, Stack::new(stack.item, taken)) {
+                    // Room in `from` for what did not fit: it came from there.
+                    let left = self.put(from, back);
+                    debug_assert!(left.is_none(), "a shift lost {left:?}");
+                }
+            }
+        }
+    }
+
     /// Take one from the selected slot: what placing a block will ask for.
     pub fn take_held(&mut self) -> Option<Item> {
         let item = self.held()?.item;
@@ -727,6 +759,58 @@ mod tests {
         let mut partial = partial;
         assert!(!partial.hold(Tool::Axe), "not owned");
         assert!(!Tool::Rod.digs() && Tool::Shovel.digs());
+    }
+
+    /// The pack's second click: a whole stack moves, merges or swaps; half a
+    /// stack moves or merges and never swaps; what does not fit stays where
+    /// it was; and the total carried never changes.
+    #[test]
+    fn a_shift_moves_merges_or_swaps_and_never_loses_a_stack() {
+        let dirt = Item::Block(Material::Dirt);
+        let sand = Item::Block(Material::Sand);
+        let total = |s: &Slots| s.iter().flatten().map(|s| u32::from(s.count)).sum::<u32>();
+        let mut slots = Slots::new();
+        slots.set(0, Some(Stack::new(dirt, 60)));
+        slots.set(12, Some(Stack::new(dirt, 70)));
+        slots.set(3, Some(Stack::new(sand, 5)));
+        let before = total(&slots);
+
+        slots.shift(0, 20, 60);
+        assert_eq!(
+            slots.get(20),
+            Some(Stack::new(dirt, 60)),
+            "into an empty slot"
+        );
+        assert_eq!(slots.get(0), None);
+
+        slots.shift(20, 12, 60);
+        assert_eq!(
+            slots.get(12),
+            Some(Stack::new(dirt, 99)),
+            "merged to the limit"
+        );
+        assert_eq!(slots.get(20), Some(Stack::new(dirt, 31)), "the rest stays");
+
+        slots.shift(3, 12, 5);
+        assert_eq!(
+            slots.get(12),
+            Some(Stack::new(sand, 5)),
+            "a whole stack swaps"
+        );
+        assert_eq!(slots.get(3), Some(Stack::new(dirt, 99)));
+
+        slots.shift(3, 12, 50);
+        assert_eq!(slots.get(12), Some(Stack::new(sand, 5)), "half never swaps");
+        assert_eq!(slots.get(3), Some(Stack::new(dirt, 99)));
+
+        slots.shift(20, 21, 16);
+        assert_eq!(slots.get(21), Some(Stack::new(dirt, 16)), "half moves");
+        assert_eq!(slots.get(20), Some(Stack::new(dirt, 15)));
+
+        for (from, to) in [(0, 1), (5, 5), (3, CARRIED), (CARRIED, 3)] {
+            slots.shift(from, to, 1);
+        }
+        assert_eq!(total(&slots), before, "nothing gained or lost");
     }
 
     /// The picker's wheel walks the owned tools and wraps both ways.

@@ -1,4 +1,4 @@
-//! The ten slots, drawn.
+//! The ten slots, drawn, and the squares the pack's grid is built from.
 //!
 //! A slot carries its item's own THUMBNAIL rather than its name, which is the
 //! inherited UI rule: an inventory presented as a list of names is the failure
@@ -19,8 +19,8 @@ use pbd_core::terrain::Material;
 pub use pbd_app::hotbar::Hotbar;
 
 /// Sheets across the atlas, and tiles across a sheet.
-const ATLAS_SHEETS: f32 = 4.0;
-const ATLAS_TILES: f32 = 4.0;
+pub const ATLAS_SHEETS: f32 = 4.0;
+pub const ATLAS_TILES: f32 = 4.0;
 
 /// Which tile of the atlas a material draws with, and the colour the terrain
 /// shader lays over it. Both halves come from `planet_surface.wgsl`'s own
@@ -142,7 +142,7 @@ pub struct SlotCount(pub usize);
 const SLOT: f32 = 44.0;
 const GAP: f32 = 4.0;
 
-fn border_of(selected: bool) -> Color {
+pub fn border_of(selected: bool) -> Color {
     if selected {
         Color::srgb(0.92, 0.97, 0.95)
     } else {
@@ -189,51 +189,118 @@ pub fn spawn(
         })
         .with_children(|row| {
             for index in 0..SLOTS {
-                row.spawn((
-                    Node {
-                        width: px(SLOT),
-                        height: px(SLOT),
-                        border: UiRect::all(px(1)),
-                        padding: UiRect::all(px(4)),
-                        ..default()
-                    },
-                    BorderColor::all(border_of(index == 0)),
-                    BackgroundColor(fill_of(index == 0)),
-                    SlotCell(index),
-                ))
-                .with_children(|cell| {
-                    cell.spawn((
-                        ImageNode {
-                            image: atlas.clone(),
-                            color: Color::NONE,
-                            ..default()
-                        },
-                        Node {
-                            width: percent(100.0),
-                            height: percent(100.0),
-                            ..default()
-                        },
-                        SlotIcon(index),
-                    ));
-                    cell.spawn((
-                        Text::new(""),
-                        TextFont {
-                            font_size: 10.0,
-                            ..default()
-                        },
-                        TextColor(Color::srgb(0.92, 0.97, 0.95)),
-                        TextShadow::default(),
-                        Node {
-                            position_type: PositionType::Absolute,
-                            bottom: px(1),
-                            right: px(3),
-                            ..default()
-                        },
-                        SlotCount(index),
-                    ));
-                });
+                cell(row, index, &atlas, ());
             }
         });
+}
+
+/// One slot's square: a bordered cell holding an icon and a count, marked
+/// with its index so [`update`] paints it. The hotbar row and the pack's grid
+/// are built from these, with `extra` on the square (the pack's are buttons).
+pub fn cell(
+    row: &mut ChildSpawnerCommands,
+    index: usize,
+    atlas: &Handle<Image>,
+    extra: impl Bundle,
+) {
+    row.spawn((
+        Node {
+            width: px(SLOT),
+            height: px(SLOT),
+            border: UiRect::all(px(1)),
+            padding: UiRect::all(px(4)),
+            ..default()
+        },
+        BorderColor::all(border_of(index == 0)),
+        BackgroundColor(fill_of(index == 0)),
+        SlotCell(index),
+        extra,
+    ))
+    .with_children(|cell| {
+        cell.spawn((
+            ImageNode {
+                image: atlas.clone(),
+                color: Color::NONE,
+                ..default()
+            },
+            Node {
+                width: percent(100.0),
+                height: percent(100.0),
+                ..default()
+            },
+            SlotIcon(index),
+        ));
+        cell.spawn((
+            Text::new(""),
+            TextFont {
+                font_size: 10.0,
+                ..default()
+            },
+            TextColor(Color::srgb(0.92, 0.97, 0.95)),
+            TextShadow::default(),
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: px(1),
+                right: px(3),
+                ..default()
+            },
+            SlotCount(index),
+        ));
+    });
+}
+
+/// Paint one icon with a stack's picture: a fish's, a tool's or a light's
+/// own, whole and untinted, or a block's tile cropped from the atlas at its
+/// tint. Nothing, or art not loaded yet, paints it clear.
+pub fn paint_icon(
+    node: &mut ImageNode,
+    stack: Option<pbd_core::inventory::Stack>,
+    items: &ItemIcons,
+    images: &Assets<Image>,
+) {
+    let own = stack.and_then(|stack| match stack.item {
+        Item::Fish(species) => items.fish.get(species as usize).cloned(),
+        Item::Tool(tool) => Some(items.tool(tool)),
+        Item::Block(material) => Material::LAMPS
+            .iter()
+            .position(|&light| light == material)
+            .and_then(|index| items.lights.get(index).cloned()),
+    });
+    if let Some(image) = own {
+        node.image = image;
+        node.rect = None;
+        node.color = Color::WHITE;
+        return;
+    }
+    node.image = items.atlas.clone();
+    let art = stack.and_then(|stack| match stack.item {
+        Item::Block(material) => thumbnail(material),
+        Item::Tool(_) | Item::Fish(_) => None,
+    });
+    let Some((slot, tile, tint)) = art else {
+        node.color = Color::NONE;
+        return;
+    };
+    // The rect is in the image's own pixels, so it needs the loaded size.
+    // Until the atlas has loaded there is nothing to crop to, and a
+    // full-image icon would be sixteen tiles at once.
+    let Some(size) = images.get(&node.image).map(|image| image.size_f32()) else {
+        node.color = Color::NONE;
+        return;
+    };
+    let sheet = size / ATLAS_SHEETS;
+    let step = sheet / ATLAS_TILES;
+    let origin = Vec2::new(
+        (slot % ATLAS_SHEETS as u32) as f32 * sheet.x,
+        (slot / ATLAS_SHEETS as u32) as f32 * sheet.y,
+    );
+    let min = origin + Vec2::new(tile.x * step.x, tile.y * step.y);
+    // Half a texel, which is all the bake leaves to guard: a tile is exactly
+    // 32 texels in the atlas with nothing bleeding into it, where the source
+    // sheets had soft edges to keep clear of.
+    let inset = step / 64.;
+    node.rect = Some(Rect::from_corners(min + inset, min + step - inset));
+    node.color = tint;
 }
 
 /// Repaint the row from the store. Everything a slot shows is derived here, so
@@ -278,51 +345,7 @@ pub fn update(
         background.0 = fill_of(selected);
     }
     for (icon, mut node) in &mut icons {
-        // A fish, a tool or a light is its own picture, whole, untinted.
-        let own = slots.get(icon.0).and_then(|stack| match stack.item {
-            Item::Fish(species) => items.fish.get(species as usize).cloned(),
-            Item::Tool(tool) => Some(items.tool(tool)),
-            Item::Block(material) => Material::LAMPS
-                .iter()
-                .position(|&light| light == material)
-                .and_then(|index| items.lights.get(index).cloned()),
-        });
-        if let Some(image) = own {
-            node.image = image;
-            node.rect = None;
-            node.color = Color::WHITE;
-            continue;
-        }
-        node.image = items.atlas.clone();
-        let art = slots.get(icon.0).and_then(|stack| match stack.item {
-            Item::Block(material) => thumbnail(material),
-            Item::Tool(_) | Item::Fish(_) => None,
-        });
-        match art {
-            Some((slot, tile, tint)) => {
-                // The rect is in the image's own pixels, so it needs the loaded
-                // size. Until the atlas has loaded there is nothing to crop to,
-                // and a full-image icon would be sixteen tiles at once.
-                let Some(size) = images.get(&node.image).map(|image| image.size_f32()) else {
-                    node.color = Color::NONE;
-                    continue;
-                };
-                let sheet = size / ATLAS_SHEETS;
-                let step = sheet / ATLAS_TILES;
-                let origin = Vec2::new(
-                    (slot % ATLAS_SHEETS as u32) as f32 * sheet.x,
-                    (slot / ATLAS_SHEETS as u32) as f32 * sheet.y,
-                );
-                let min = origin + Vec2::new(tile.x * step.x, tile.y * step.y);
-                // Half a texel, which is all the bake leaves to guard: a tile
-                // is exactly 32 texels in the atlas with nothing bleeding into
-                // it, where the source sheets had soft edges to keep clear of.
-                let inset = step / 64.;
-                node.rect = Some(Rect::from_corners(min + inset, min + step - inset));
-                node.color = tint;
-            }
-            None => node.color = Color::NONE,
-        }
+        paint_icon(&mut node, slots.get(icon.0), &items, &images);
     }
     for (count, mut text) in &mut counts {
         let label = match slots.get(count.0) {

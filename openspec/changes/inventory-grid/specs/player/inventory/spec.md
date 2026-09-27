@@ -25,10 +25,12 @@ empty hotbar slot, then the first empty pack slot.
 ## ADDED Requirements
 
 ### Requirement: The pack opens as a grid
-The pack SHALL open and close with I, and close with Escape. It SHALL be
-drawn as a grid of the same bordered squares as the hotbar, ten wide, under
-the hotbar. While it is open, the pointer SHALL be free and walking input
-SHALL be ignored, and the world SHALL keep running.
+The pack SHALL open and close with I on foot, and close with Escape. It
+SHALL be drawn as a grid of the same bordered squares as the hotbar, three
+rows of ten, with the hotbar's ten under them. While it is open, the pointer
+SHALL be free and walking input SHALL be ignored, and the world SHALL keep
+running. A stack picked up SHALL stay in its slot until it is put down, and
+each completed move SHALL enter the durable log as one record.
 
 #### Scenario: Moving a stack
 - **WHEN** a stack is clicked in the pack and then an empty hotbar slot is
@@ -39,6 +41,12 @@ SHALL be ignored, and the world SHALL keep running.
 #### Scenario: Closing with a stack in hand
 - **WHEN** the pack is closed while a stack is held on the pointer
 - **THEN** the stack goes back to the slot it came from
+
+#### Scenario: Taking half, and sending across
+- **WHEN** a stack is right-clicked and then an empty slot is clicked
+- **THEN** the larger half is in the empty slot and the rest where it was
+- **WHEN** a hotbar stack is shift-clicked
+- **THEN** it goes into the pack, onto matching stacks first
 
 ### Requirement: A dug block drops into the world and is picked up
 A dug block SHALL drop into the world as a floating block of its material at

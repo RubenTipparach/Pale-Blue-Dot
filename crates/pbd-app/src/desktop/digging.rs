@@ -11,6 +11,7 @@
 //! reached the disk is the failure `CLAUDE.md` names.
 
 use bevy::prelude::*;
+use pbd_app::drops::Drops;
 use pbd_app::planet::NearField;
 use pbd_app::planet::surface_height;
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
@@ -171,8 +172,9 @@ pub enum Hands {
     Empty,
 }
 
-/// Everything one edit touches, which is what says these four travel
-/// together: the geometry, what the walker stands on, the save, and the hands.
+/// Everything one edit touches, which is what says these travel together: the
+/// geometry, what the walker stands on, the save, the hands, and the world a
+/// dug block floats in (`inventory-grid` decision 4).
 /// A shorter argument list is the symptom; the reason is that an edit is a
 /// transaction over exactly these.
 pub struct Edited<'a> {
@@ -180,6 +182,9 @@ pub struct Edited<'a> {
     pub contact: &'a mut PlanetContact,
     pub save: &'a mut WorldSave,
     pub slots: &'a mut super::slots::Hotbar,
+    pub drops: &'a mut Drops,
+    /// The world's time, s: when a drop is made.
+    pub now_s: f64,
 }
 
 /// Accept a dig or a place, and put the world back together.
@@ -201,6 +206,8 @@ pub fn apply_edit(
         contact,
         save,
         slots,
+        drops,
+        now_s,
     } = world;
     if layer == 0 || layer >= LAYERS {
         info!("edit refused: layer {layer} is bedrock or above the world");
@@ -266,9 +273,22 @@ pub fn apply_edit(
         return None;
     }
     let mut moved = slots.0.clone();
+    let mut dropped = None;
     match hands {
+        // The dug block floats where it was cut, at the cell's centre, and
+        // the magnet brings it in (`inventory-grid` decision 4). The hands do
+        // not change here; the pickup is its own line.
         Hands::Take => {
-            moved.give(Item::Block(was), 1);
+            let direction = fine
+                .set
+                .finest_records()
+                .get(record)
+                .map(|cell| Vec3::from_slice(&cell.direction_height[..3]))
+                .and_then(Vec3::try_normalize);
+            if let Some(direction) = direction {
+                let centre = direction * (PLANET_RADIUS + column::layer_altitude(layer) + 0.5);
+                dropped = Some(Drops::make(save, Item::Block(was), centre, *now_s));
+            }
         }
         Hands::Spend => {
             let index = moved.selected();
@@ -285,7 +305,7 @@ pub fn apply_edit(
             layer: layer as u16,
             material,
         },
-        None,
+        dropped.as_ref(),
         &moved,
     ) {
         // The durable path refused it, so the world must not change either:
@@ -294,6 +314,7 @@ pub fn apply_edit(
         return None;
     }
     slots.0 = moved;
+    drops.live.extend(dropped);
     let started = std::time::Instant::now();
     let mut set = (*fine.set).clone();
     let cloned = started.elapsed();
@@ -347,7 +368,7 @@ pub fn apply_edit(
 }
 
 /// The eye ray, the click, and the two verbs.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn dig_and_place(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     buttons: Res<ButtonInput<MouseButton>>,
@@ -360,11 +381,13 @@ pub fn dig_and_place(
     near: Res<NearField>,
     tools: Res<pbd_app::fish::ToolSlot>,
     fishery: Option<Res<pbd_app::fish::Fishery>>,
-    (mut mining, dig, time, swinging): (
+    (mut mining, dig, time, swinging, mut drops, sun): (
         ResMut<Mining>,
         Res<pbd_app::config::DigConfig>,
         Res<Time>,
         Option<ResMut<pbd_app::held::Swinging>>,
+        ResMut<Drops>,
+        Res<pbd_app::sky::Sun>,
     ),
 ) {
     // The tool in hand chops while a block is being broken: last frame's
@@ -441,6 +464,8 @@ pub fn dig_and_place(
                 contact: &mut contact,
                 save: &mut edits,
                 slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
             },
             Hands::Take,
             cell,
@@ -487,6 +512,8 @@ pub fn dig_and_place(
                 contact: &mut contact,
                 save: &mut edits,
                 slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
             },
             Hands::Spend,
             place.cell,
@@ -601,6 +628,7 @@ const LAMP_SPACING_M: f32 = 2.9;
 /// certainly in reach of a standing player is the ground under them. Then
 /// `--place` puts one block back on top of the hole, so a frame shows both
 /// verbs: a pit, and a block standing in it.
+#[allow(clippy::too_many_arguments)]
 pub fn scripted_dig(
     launch: Res<super::Launch>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
@@ -608,6 +636,7 @@ pub fn scripted_dig(
     mut contact: ResMut<PlanetContact>,
     mut edits: ResMut<WorldSave>,
     mut slots: ResMut<super::slots::Hotbar>,
+    (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
     mut done: Local<bool>,
 ) {
     if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch && !launch.lamps) {
@@ -635,6 +664,8 @@ pub fn scripted_dig(
                 contact: &mut contact,
                 save: &mut edits,
                 slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
             },
             Hands::Take,
             target.dig.cell,
@@ -671,6 +702,8 @@ pub fn scripted_dig(
                     contact: &mut contact,
                     save: &mut edits,
                     slots: &mut slots,
+                    drops: &mut drops,
+                    now_s: sun.clock.seconds,
                 },
                 Hands::Empty,
                 bottom.cell,
@@ -692,6 +725,8 @@ pub fn scripted_dig(
                 contact: &mut contact,
                 save: &mut edits,
                 slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
             },
             Hands::Empty,
             place.cell,
@@ -715,6 +750,8 @@ pub fn scripted_dig(
                 contact: &mut contact,
                 save: &mut edits,
                 slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
             },
             eye,
             forward,

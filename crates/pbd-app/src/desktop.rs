@@ -1,11 +1,13 @@
 mod cracks;
 mod digging;
+mod drops_view;
 mod equipment;
 mod frame_graph;
 mod guide;
 mod hud;
 mod menu;
 mod overlay_ui;
+mod pack;
 mod scene;
 mod slots;
 mod time_ui;
@@ -166,7 +168,7 @@ pub struct Launch {
     /// Absent, an interactive run opens the one played most recently and a
     /// capture writes to no world at all.
     pub world: Option<String>,
-    /// `--menu pause|settings|saves` opens that screen at startup. A headless run has
+    /// `--menu pause|settings|saves|pack` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
     pub menu: Option<String>,
@@ -333,10 +335,10 @@ impl Launch {
                     i += 1;
                     let screen = args
                         .get(i)
-                        .expect("--menu requires pause, settings or saves");
+                        .expect("--menu requires pause, settings, saves or pack");
                     assert!(
-                        matches!(screen.as_str(), "pause" | "settings" | "saves"),
-                        "--menu takes pause, settings or saves"
+                        matches!(screen.as_str(), "pause" | "settings" | "saves" | "pack"),
+                        "--menu takes pause, settings, saves or pack"
                     );
                     result.menu = Some(screen.clone());
                 }
@@ -589,6 +591,7 @@ pub fn run(args: &[String]) {
     let saved_seconds = world.world_seconds;
     let hotbar = slots::Hotbar::restore(&mut world);
     let tools = pbd_app::fish::ToolSlot::restore(&world);
+    let drops = pbd_app::drops::Drops::restore(&world);
     // The saves page is the front door of a plain launch: a player picks the
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
@@ -684,11 +687,19 @@ pub fn run(args: &[String]) {
     .insert_resource(hotbar)
     // And the tool in hand, which the save records whenever it changes.
     .insert_resource(tools)
+    // And the dug blocks still floating where they were cut.
+    .add_plugins(pbd_app::drops::DropsPlugin)
+    .insert_resource(drops)
+    .configure_sets(
+        Update,
+        pbd_app::drops::DropsSet.after(digging::dig_and_place),
+    )
     .init_resource::<equipment::Picker>()
     // Whose roster the guide and the icons read, in every mode; the fish
     // themselves come with the walker.
     .init_resource::<pbd_app::fish::Body>()
     .init_resource::<guide::GuidePage>()
+    .init_resource::<pack::PackHand>()
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -745,14 +756,23 @@ pub fn run(args: &[String]) {
         PostStartup,
         (
             slots::spawn,
-            (slots::load_icons, (equipment::spawn, guide::spawn)).chain(),
+            (
+                slots::load_icons,
+                (
+                    equipment::spawn,
+                    guide::spawn,
+                    drops_view::dress,
+                    pack::spawn,
+                ),
+            )
+                .chain(),
         ),
     )
     // Escape is read before either of the world's input readers, which live in
     // `RunFixedMainLoop`, and is cleared there so neither ever sees it.
     .add_systems(
         PreUpdate,
-        (menu::name_input, menu::toggle, guide::open)
+        (menu::name_input, menu::toggle, guide::open, pack::open)
             .chain()
             .after(bevy::input::InputSystems),
     )
@@ -764,7 +784,7 @@ pub fn run(args: &[String]) {
             scene::turn_stars,
             scene::follow_sun,
             (equipment::pick, slots::input, equipment::paint).chain(),
-            slots::update,
+            (pack::press, slots::update, pack::paint).chain(),
             guide::press,
             guide::paint,
             hud::near_field,
@@ -927,6 +947,7 @@ fn load_world(world: &mut World) {
     let mut opened = WorldSave::open(root, slot);
     let hotbar = slots::Hotbar::restore(&mut opened);
     let tools = pbd_app::fish::ToolSlot::restore(&opened);
+    let drops = pbd_app::drops::Drops::restore(&opened);
     let pose = opened.pose;
     // The world resumes in its season and at its hour; one never played
     // keeps the clock it had.
@@ -950,6 +971,7 @@ fn load_world(world: &mut World) {
     world.insert_resource(opened);
     world.insert_resource(hotbar);
     world.insert_resource(tools);
+    world.insert_resource(drops);
     // The water of the world being left is not this world's water.
     if let Some(mut fishery) = world.get_resource_mut::<pbd_app::fish::Fishery>() {
         *fishery = pbd_app::fish::Fishery::default();

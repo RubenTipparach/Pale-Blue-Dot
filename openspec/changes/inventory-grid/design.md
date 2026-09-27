@@ -105,6 +105,14 @@ puts down or swaps, shift-click sends between the hotbar and the pack,
 right-click takes half. While a stack is held on the pointer and the pack is
 closed, it goes back where it came from, so closing never loses a stack.
 
+*As built (2026-09-27):* a stack picked up stays in its slot until the second
+click, drawn at the pointer with its slot outlined, and the second click is
+the whole move (`Slots::shift`), one `pack` line. So "goes back where it came
+from" is simply never having left: a close, a crash or a refused save cannot
+strand a stack on the pointer, and no line is needed for picking up. Half a
+stack moves or merges and never swaps, since it has nowhere to put what it
+would displace.
+
 **6. I opens it.** I is free on foot and in flight. It is added to
 `BINDINGS` for on foot. The pack does not open in a ship's seat, where the
 hotbar is not drawn either.
