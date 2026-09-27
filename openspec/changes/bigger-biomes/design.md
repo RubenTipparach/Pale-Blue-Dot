@@ -84,8 +84,10 @@ distribution.**
   `None` for anything else.
 - Version 4 is today's values, kept verbatim as `TENEBRIS_V4`. Version 5 is
   the new moisture scale and thresholds.
-- `WorldFile.generator: Option<u32>` is absent in an old save and read as 4.
-  A new world writes `GENERATOR_VERSION`.
+- The version is recorded in the world's identity file, which
+  `world-persistence` introduces. An old save's identity reads as 4, and a
+  new world writes `GENERATOR_VERSION`. This change only adds version 5 to
+  the table the identity is checked against.
 - The app refuses a save with an unknown version and does not generate
   version 5 under it. That is the spec's "not silently treated as the same
   world".
@@ -127,7 +129,8 @@ distribution.**
 
 ## Migration Plan
 
-- A new optional field in the save needs no conversion.
+- There is no save field of its own. The version rides the identity that
+  `world-persistence` adds, and an old save's identity reads as 4.
 - Old saves keep their biomes. New worlds get version 5.
 - Rollback is the previous build. A version-5 save opened by it shows version
   4's biomes on the same land. Nothing is lost, and nothing is corrupted.

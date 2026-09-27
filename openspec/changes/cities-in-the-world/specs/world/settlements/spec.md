@@ -55,13 +55,13 @@ landings and furniture clearance.
 
 ### Requirement: A settlement never overwrites the player's work
 
-A site whose footprint or margin holds a world edit made before its
-settlement existed SHALL NOT be built. The map SHALL mark it as unsettled.
+A site whose footprint or margin holds a player edit made before its
+settlement record SHALL NOT be built. The map SHALL mark it as unsettled.
 
 #### Scenario: A player dug there first
 
-- **WHEN** a world has an edit inside a site's footprint from before the
-  settlement template version was recorded
+- **WHEN** a world has a player edit inside a site's footprint from before its
+  settlement record was made
 - **THEN** no settlement is built on that site, and the edit is as the player
   left it
 
@@ -94,14 +94,23 @@ one frame.
 - **THEN** no frame shows a piece that was absent in the frame before at full
   opacity
 
-### Requirement: A settlement is kept with its world
+### Requirement: A settlement is a stored record
 
-A world SHALL record the settlement template version it was built with. A
-settlement in that world SHALL be generated from that version for as long as
-the world is played. A door's state and every other change to a settlement
-SHALL be a world edit.
+Every settlement SHALL be generated with its buildings when the world is made,
+and written to the save before it is shown. Each building SHALL be stored as
+its own definition (plot, walls and openings, stairs, storeys, kit, roof and
+state), not as a reference to a template, and its pieces SHALL be derived from
+that definition. Every later change to a settlement, by the player or by the
+world, SHALL be an authored journal entry. A building whose state is abandoned
+SHALL give no light from its windows or hearth.
 
 #### Scenario: Templates change
 
-- **WHEN** the shipped templates are revised and their version bumped
-- **THEN** a world saved under the old version still has its old towns
+- **WHEN** the shipped templates are revised after a world was made
+- **THEN** that world's towns are exactly as their records were stored, and a
+  new world's towns use the revised templates
+
+#### Scenario: A house is abandoned
+
+- **WHEN** an authored entry sets a building's state to abandoned
+- **THEN** after dusk its windows and hearth are dark, and a reload keeps it so

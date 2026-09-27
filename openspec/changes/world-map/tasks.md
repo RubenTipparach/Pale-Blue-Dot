@@ -19,8 +19,9 @@ gate for everything after it, in this change and in `bigger-biomes`,
   - a day/night toggle, with the lit settlements glowing on the night side (CLAUDE.md: mockups are lit at night).
 
   Verify: the page loads with no console errors in a headless browser, and a screenshot of each layer is checked in.
+- [ ] 1.3a A walkthrough video of the mockup (`step-videos`' `mockup_video.js`): the whole planet, zooming to the player, each layer in turn, the biome scales side by side, the sites, and the night side with the towns' lights. Verify: it is on the gate page.
 - [ ] 1.4 Publish the mockup as an Artifact and link it from the roadmap page and the PR. Verify: the link opens.
-- [ ] 1.5 **Gate:** the owner approves the map. Record their words and their answers to the open questions in `design.md`, and change the decisions they overrule before any code below starts. Verify: the quote is in `design.md`.
+- [ ] 1.5 **Gate:** the owner watches the video, tries the mockup, and approves the map. Record their words and their answers to the open questions in `design.md`, and change the decisions they overrule before any code below starts. Verify: the quote is in `design.md`.
 
 ## 2. Latitude and longitude in one place
 
@@ -48,5 +49,14 @@ gate for everything after it, in this change and in `bigger-biomes`,
 
 ## 6. The owner's check
 
-- [ ] 6.1 Captures of the built map beside the approved mockup: whole planet, zoomed on the player, at a pole, and at night. Verify: the page is published and linked from the PR, with a note that frame cost was not measured in the cloud session.
-- [ ] 6.2 The owner accepts the map. Verify: the quote is in `proposal.md`. Then sync `player/map` into `openspec/specs` with each requirement's test named, and archive.
+- [ ] 6.1 The gate video (showcase `map`):
+  - M opened on foot;
+  - a zoom from the whole planet down to the player;
+  - a walk away from a parked ship with its marker staying put;
+  - the night side moving through dusk;
+  - clouds and rain beside the globe's overlay;
+  - the legend's layers;
+  - a pole.
+
+  It is published with stills beside the approved mockup, and a note that frame cost was not measured in the cloud session. Verify: the page is linked from the PR.
+- [ ] 6.2 The owner watches the video and accepts the map. Verify: the quote is in `proposal.md`. Then sync `player/map` into `openspec/specs` with each requirement's test named, and archive.

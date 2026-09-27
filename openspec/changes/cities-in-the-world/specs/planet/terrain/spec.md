@@ -2,7 +2,7 @@
 
 ### Requirement: Generation is deterministic and order-independent
 Terrain SHALL be a function of integer coordinates, the seed, the generator
-version, and the world's saved site list and settlement template version.
+version, and the world's stored settlement records.
 Visiting cells in a different order, or generating a chunk before or after its
 neighbour, SHALL produce identical results. Changing the seed SHALL change the
 world.

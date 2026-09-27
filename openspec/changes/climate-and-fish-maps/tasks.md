@@ -8,7 +8,8 @@ mockup. The Rust starts after the map screen and its layer registry exist
 
 - [ ] 1.1 The mockup's fish layer from the `fish_ranges` fields and the `fauna.ron` rules: a species picker, "now" at a chosen day, and the all-year and part-year ranges. Verify: a headless screenshot per species, and the ranges match `docs/wiki/fish-ranges/` for the same run.
 - [ ] 1.2 The mockup's climate layer: mean temperature, rain, sea ice and class, with a season slider, from the same run's fields. Verify: a headless screenshot per view.
-- [ ] 1.3 **Gate:** the owner approves the two layers, and answers the open questions, the planet's cooling first. Record the words in `proposal.md`. Verify: the quote is present.
+- [ ] 1.2a A walkthrough video of the two layers in the mockup: each species now and through the year, and the climate views across the seasons. Verify: it is on the gate page.
+- [ ] 1.3 **Gate:** the owner watches the video, approves the two layers, and answers the open questions, the planet's cooling first. Record the words in `proposal.md`. Verify: the quote is present.
 
 ## 2. One rule for the spawner and the map
 
@@ -31,4 +32,11 @@ mockup. The Rust starts after the map screen and its layer registry exist
 ## 5. The owner's check
 
 - [ ] 5.1 Sync `world/climate` and the `player/map` additions into `openspec/specs`, naming each test. Verify: `openspec validate --all`.
-- [ ] 5.2 The owner accepts the layers against the mockup. Verify: the quote is in `proposal.md`. Archive.
+- [ ] 5.1a The gate video (showcase `fish-and-climate`). Its shots are:
+  - the fish layer for three species, now and through the year;
+  - the field guide's "show on map";
+  - a walk to a shore the map marks for a species, and a cast that catches it there;
+  - the climate layer through the seasons, with the sea ice.
+
+  Verify: the gate page is linked from the PR.
+- [ ] 5.2 The owner watches the video and accepts the layers against the mockup. Verify: the quote is in `proposal.md`. Archive.

@@ -68,10 +68,10 @@ silently alter an existing world, so it closes that gap first.
   - `terrain.rs`: `GENERATOR_VERSION` becomes 5.
   - The biome tests change, and a new shares test is added.
 - **`pbd-app`:**
-  - `saves/format.rs`: `WorldFile` gains an optional `generator`. It is absent
-    in an old save and read as 4.
+  - no save format change of its own: the generator version is recorded in
+    the identity `world-persistence` adds, and that change lands first;
   - `planet_terrain.rs`: this is the one app call site that picks the config,
-    so it asks the save for its version.
+    so it asks the world's identity for its version.
 - **Captures:** where the spawn stands may change biome. The `surface`, `seam`
   and `coast` captures are re-framed if their views change.
 - **Performance:** more jungle means more trees on screen. Jungle scatters 115

@@ -75,7 +75,8 @@ needs a list of places. That list must be:
 - **`pbd-app`:**
   - a sites resource, built once per world on the async pool;
   - a `player/map` marker layer;
-  - `WorldFile.sites`, the resolved list and its version, written once.
+  - the resolved list stored as `site` records in `world-persistence`'s
+    record store, written once.
 - **Docs:** the `world-map` mockup gains the site editor.
 - **No terrain change.** A site is a place on the map; nothing is built on it
   until `cities-in-the-world`.

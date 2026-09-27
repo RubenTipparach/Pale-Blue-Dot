@@ -8,7 +8,8 @@ has built them into the engine.
 
 - [ ] 1.1 `docs/mockups/build.html` from the towns mockup's pieces, kits, walker and checks. It has build mode, the palette, the aim-snapped ghost with its reason, the roof tool and blueprints, on an empty plot and beside the walled town, with day and night. Verify: a headless test builds a two-storey house piece by piece and walks up its stair with no eye jump over 0.1 m, and a refused placement shows its reason.
 - [ ] 1.2 Publish it and link it from the roadmap page and the PR. Verify: the link opens.
-- [ ] 1.3 **Gate:** the owner builds with it, approves the feel, and answers the open questions. Record the words in `proposal.md`. Verify: the quote is present.
+- [ ] 1.2a A walkthrough video of the build mockup: a two-storey house built piece by piece, a refused placement and its reason, the roof tool, and a blueprint. Verify: it is on the gate page.
+- [ ] 1.3 **Gate:** the owner watches the video, builds with it, approves the feel, and answers the open questions. Record the words in `proposal.md`. Verify: the quote is present.
 
 ## 2. One set of checks
 
@@ -30,4 +31,14 @@ has built them into the engine.
 ## 5. The owner's check
 
 - [ ] 5.1 Record that frame cost was not measured in the cloud session, and time `can_place` in a core test on the walled town's densest street. Verify: the time is in the risk note, and the note is in the PR.
-- [ ] 5.2 The owner builds in the game and accepts. Verify: the quote is in `proposal.md`. Sync `player/building`, and archive.
+- [ ] 5.1a The gate video (showcase `building`). Its shots are:
+  - build mode opened;
+  - a two-storey house built piece by piece;
+  - a refused placement with its reason;
+  - the roof tool;
+  - a blueprint filled;
+  - walking up the new stair;
+  - a quit and reload showing the house piece for piece.
+
+  Verify: the gate page is linked from the PR.
+- [ ] 5.2 The owner watches the video, builds in the game, and accepts. Verify: the quote is in `proposal.md`. Sync `player/building`, and archive.

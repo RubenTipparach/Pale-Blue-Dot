@@ -94,11 +94,13 @@ piece.**
   through the placement check. Both are accepted, which proves the two
   callers agree.
 
-**4. Piece edits join the edit log.**
+**4. Piece edits join the journal, authored by the player.**
 - A piece edit is either add (kind, kit, cell or edge, layer range, rotation)
   or remove (piece id). A piece id is its slot in the cut plus its kind, so
   the same place and kind is the same id. Like cell edits, it enters the
-  durable path at once.
+  durable path at once, as an entry authored by the player
+  (`world-persistence`). So a later world process, such as a town growing,
+  yields to it.
 - Removal is refused when another piece depends on the removed one: a table
   on a floor, a roof on a wall, a door in a wall. The refusal names the
   dependant.

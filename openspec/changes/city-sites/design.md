@@ -135,10 +135,12 @@ kept.**
 - The mockup's site editor writes the same RON, so the owner's hand-placed
   cities go straight into the file.
 
-**6. A world stores its resolved list.**
-- The first time a world is opened with sites, the list (id, kind, anchor,
-  name) and the sites version are written to the save through the durable
-  path, before any site is shown. That is about 50 sites of around 40 bytes.
+**6. A world stores its resolved list, as records.**
+- Sites are `site` records in `world-persistence`'s store: its "facts are
+  stored" rule, as the owner asked for towns and landmarks. When a world is
+  made, or an older world is first opened, the list (id, kind, anchor, name)
+  is generated for the whole planet. It is written through the durable path
+  before any site is shown. That is about 50 sites of around 40 bytes.
 - After that the world reads the list from its save. Keeping every old rule
   set alive to regenerate old lists is not needed.
 - An old save that predates sites gets them on its next open, like a new world.
@@ -170,9 +172,8 @@ kept.**
 
 ## Migration Plan
 
-- `WorldFile.sites` is a new optional field. An old save gets its list on the
-  next open.
-- Rollback is the previous build: the field is ignored, and no terrain has
+- Sites are new records. An old save gets its list on the next open.
+- Rollback is the previous build: the records are ignored, and no terrain has
   changed.
 
 ## Open Questions

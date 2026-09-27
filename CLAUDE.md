@@ -76,6 +76,20 @@ that the lamps read. `docs/mockups/towns.html` does this (the `tenebris-towns`
 design, section 7). `fishing.html` and `vehicles.html` predate this rule and
 have a fixed daylight.
 
+## Every major step ends in a video (owner, 2026-09-27)
+
+**Standing instruction from the user:** "each major step needs a video
+recording showcasing this stuff so I can verify they are done correctly,
+before moving on to the next step." A step's gate is passed on a video the
+owner has watched, not on stills or a written claim. The next step does not
+start until then. The video's shots name what each one shows and which
+requirement it demonstrates. A cloud recording is rendered at a fixed step
+without a GPU and says so: it shows what things look like, never how smoothly
+they run. Where smoothness is the point, the owner records the same showcase
+in real time with `obs-record`. The tooling is planned in
+`openspec/changes/step-videos`; until it is built, a gate's video is made by
+hand from a mockup or a capture sequence.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
@@ -244,6 +258,14 @@ a test pins it. When the scale moves, both move in the same commit.
 - Every accepted world mutation enters the durable transaction path immediately.
   A queued write alone is not a durable save; acknowledge commitment only after
   the storage backend succeeds. Do not rely on save-on-exit or an autosave timer.
+- The player is not the only author of change (owner, 2026-09-27): towns will
+  grow and buildings will be abandoned on their own. Whoever makes a change, it
+  takes the same durable path and names its author, and a change the world
+  makes never overwrites the player's. What the seed and the rules decide
+  (terrain, habitat) is derived and never saved. What is generated once and
+  must then persist or change (sites, towns, landmarks, named zones) is a
+  stored record. The design is `openspec/changes/world-persistence`, which is
+  not built yet.
 
 ## Implementation and verification
 

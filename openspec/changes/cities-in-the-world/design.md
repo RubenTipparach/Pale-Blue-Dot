@@ -90,8 +90,8 @@ places it.**
 
 **3. The ground is generated, not edited.**
 - The column generator asks the world's settlement ground, a pure function of
-  the saved site list and the template version, whether a column lies in a
-  footprint or margin:
+  the stored settlement records, whether a column lies in a footprint or
+  margin:
   - in a footprint, the surface is the layout's terrace layer;
   - in the margin (a band of cells set per kind), the surface eases from
     the terrace to the natural height, one layer a cell at most;
@@ -100,7 +100,8 @@ places it.**
   the terrace meets the sea.
 - *Alternative:* stamp the town as a batch of edits in the durable log.
   Rejected: that is about ten thousand cell edits per town, written the first
-  time a player comes near, for something the seed already determines.
+  time a player comes near, for something the stored record already
+  determines.
 
 **4. Variation is a seeded choice among layouts that pass the checks.**
 - A site's seed picks the rotation (one of six), the mirror, each building's
@@ -142,12 +143,28 @@ places it.**
   from `lamps-and-lanterns` task 5.5 decides whether the tier needs splitting
   before this lands.
 
-**8. A town is part of the world's identity.**
-- The save records the settlement template version. Templates are data, kept
-  per version (`assets/settlements/v<N>/`) as generator configs are, so an old
-  world rebuilds its old towns exactly.
-- A site is left unsettled if the edit log holds an edit within its footprint
-  or margin from before the version was first recorded in this world.
+**8. A town is a stored record, and its buildings are definitions, not
+pieces** (the owner's save model, `world-persistence` decisions 1 and 2).
+- When a world is made, every site's settlement is generated: the chart, the
+  variation, and each building. The result is written to the record store
+  before anything is shown.
+- A building is stored as its own definition: plot cells, walls and their
+  openings, stairs, storeys, kit, roof and state. It is not a reference to a
+  template. A revised template changes new worlds only, and a town already
+  made keeps what it was built as.
+- Pieces are derived from the definitions by the cut rules each time a town
+  is built into the world, so a fix to a stair or a sill reaches every town.
+- A building's state is standing, abandoned or ruined. Only standing is
+  generated. An abandoned building keeps its window candles and hearth dark.
+  This is the one piece of the owner's "towns can grow, buildings can be
+  abandoned" built here, and it is exercised by `world-persistence`'s
+  test-only process.
+- A site is left unsettled if the journal holds a player-authored entry
+  within its footprint or margin from before its settlement record was made.
+- *Alternative:* keep every template version forever and regenerate towns
+  from the version recorded in the save. Rejected: a town that can grow or
+  lose a house cannot be a pure function of a template, and the owner has said
+  towns will change over time.
 
 ## Risks / Trade-offs
 
@@ -162,17 +179,18 @@ places it.**
 - [Frame cost of towns: draw calls, thin-solid queries, light] → It cannot be
   measured in a cloud session. The owner runs `tools/perf_suite.py`, and a
   `town` scenario is added to the suite in this change.
-- [The template versions accumulate] → Each is a few kilobytes of RON. A
-  version no world uses can be dropped with a migration, but not silently.
+- [Records grow as towns do] → A building definition is a few hundred bytes,
+  which puts about 50 towns of 20 buildings near 500 KB. Growth adds
+  buildings to plots, so a town's record is bounded by its plots.
 - [The far form pops even though the pieces fade] → The fade covers the far
   form's own entrance too, and the night points fade in at dusk rather than
   switching on.
 
 ## Migration Plan
 
-- `WorldFile` gains the template version. An old save records it the first
-  time it is opened with towns, and its sites are checked for earlier edits
-  at that moment.
+- An old save gets its settlement records the first time it is opened with
+  towns, written through the durable path before anything is shown. Its sites
+  are checked for earlier player edits at that moment.
 - Rollback is the previous build. The towns vanish and the terraces return to
   natural ground. Door edits are ignored. No player edit is lost.
 

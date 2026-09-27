@@ -136,6 +136,17 @@ data.**
   when the guide opens, using the two-range convention.
 - The action opens the map on the fish layer with that species chosen.
 
+**8. Habitat is derived, and a zone is stored only when it must be
+remembered.** This is `world-persistence` decision 1, which answers the
+owner's "certain zones of species" question.
+- Where a species can live is a law. It is read from the live climate and the
+  species rules, both tuned often, so it is derived and never saved.
+- A zone becomes a stored record only when it has a name or a state: a named
+  fishing ground, a stock that can be fished down, a legendary creature's
+  lair.
+- This change creates no zone records. The record store can hold them when a
+  change designs one.
+
 ## Risks / Trade-offs
 
 - [A 22-minute bake whenever the weather is retuned] → Staleness is shown, not

@@ -26,7 +26,7 @@ the map, the sites, and the climate and fish layers, in that order.
 - [ ] 4.2 The far form and the night points, drawn by the planet pass. Verify: captures of a town from a kilometre by day, and of the night side from orbit.
 - [ ] 4.3 The fade between the three forms. Verify: the frame-by-frame no-pop check on a scripted fly-in at cruise speed.
 - [ ] 4.4 Unsettled sites: a site with earlier edits is skipped and marked on the map. Verify: an app test with an old save holding an edit in a footprint.
-- [ ] 4.5 `WorldFile` records the template version. Templates are loaded per version. Verify: format tests, and a test that a world on v1 still builds v1 after a v2 exists.
+- [ ] 4.5 Settlements and their building definitions as records in `world-persistence`'s store, generated for the whole planet at creation or on an old world's first open. Pieces are derived from the definitions, and abandoned buildings stay dark. Verify: tests that a revised template leaves a made world's towns unchanged, that the test process's abandonment darkens a house and survives a reload, and that an old save gains its records once.
 
 ## 5. Light
 
@@ -36,5 +36,15 @@ the map, the sites, and the climate and fish layers, in that order.
 ## 6. The owner's check
 
 - [ ] 6.1 A `town` scenario in `tools/perf_suite.py`, and a note that frame cost was not measured in the cloud session. Verify: the scenario runs in a smoke test, and the note is in the PR.
-- [ ] 6.2 A capture page of every kind of settlement in the world, by day and at night, beside the mockup's views. Verify: published and linked from the PR.
-- [ ] 6.3 The owner accepts. Verify: the quote is in `proposal.md`. Sync `world/settlements`, and archive.
+- [ ] 6.2 The gate video (`step-videos`, showcase `towns`). Its shots are:
+  - a walk from the fields into each kind of settlement;
+  - up an inn's stair and a keep's newel;
+  - a door opened;
+  - dusk falling on the walled town, with its lanterns and windows coming on;
+  - a flight in from a kilometre, showing the fade;
+  - the night side from orbit;
+  - a house abandoned by the test process, going dark.
+
+  It is published with stills beside the mockup's views. Verify: the gate page is linked from the PR.
+- [ ] 6.2a Ask the owner to record the fly-in and the dusk shots in real time with `obs-record`, since a fixed-step video cannot show pop-in or hitches. Verify: the request is in the PR.
+- [ ] 6.3 The owner watches both videos and accepts. Verify: the quote is in `proposal.md`. Sync `world/settlements`, and archive.

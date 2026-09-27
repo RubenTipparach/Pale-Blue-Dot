@@ -59,9 +59,17 @@ than on the mockup's flat grid.
 - **The player's work comes first.** A site whose footprint already holds
   edits made before its town existed is not built. The map shows it as
   unsettled.
-- **A town is part of the world's identity.** The settlement template version
-  is recorded in the save beside the generator and site versions. A town is
-  never regenerated under a world that has played it.
+- **A town is a stored record** (`world-persistence`).
+  - Every settlement is generated with its buildings when the world is made,
+    and written to the save.
+  - Each building is stored as its own definition: plot, walls and openings,
+    stairs, storeys, kit, roof, and a state (standing, abandoned, ruined).
+  - Pieces are derived from those definitions, so a fix to the cut reaches
+    every town, and a retuned template never changes a town already made.
+  - Every later change, by the player or by the world, is an authored journal
+    entry. That is what lets towns grow and houses be abandoned later.
+  - The one part of that future built here: an abandoned building's lights
+    stay dark.
 - **Out of scope:** townsfolk (a separate change), trade, and roads between
   towns.
 
@@ -76,8 +84,8 @@ than on the mockup's flat grid.
   site, fitting it to the ground, varying it, drawing it far off and at night,
   fading it in, and keeping it with the world.
 - `planet/terrain`: "Generation is deterministic and order-independent". The
-  terrain becomes a function of the world's site list and template version as
-  well as the seed, so a town's terraces are generated the same way in any
+  terrain becomes a function of the world's stored settlement records as well
+  as the seed, so a town's terraces are generated the same way in any
   order.
 
 ## Impact
@@ -100,8 +108,8 @@ than on the mockup's flat grid.
   - `assets/config/kits.ron`;
   - the piece textures, as committed PNGs with manifests (CLAUDE.md's art
     rules).
-- **Saves:** `WorldFile` gains the template version. Doors' states are
-  edits.
+- **Saves:** settlements are records in `world-persistence`'s store. Doors,
+  and every later change to a town, are authored journal entries.
 - **Performance:** this is the heaviest step of the plan. There are more draw
   calls, a light bake with hundreds of emitters, and contact queries against
   thin solids. None of it can be measured in a cloud session. The owner runs

@@ -41,6 +41,16 @@ the lights (group 7) before `world-map` starts.
 
 ## 7. The owner's gate
 
-- [ ] 7.1 A before-and-after set of in-game captures: a cave, a torch-lit tunnel with the player in it, a lantern row at dusk and at midnight, a candle-lit room, and the glowing meadow. Publish it as one page and give the owner the link. Verify: the page exists and is linked from the PR.
+- [ ] 7.1 The gate video (`step-videos`, showcase `lights`). Each shot is captioned with the requirement it shows:
+  - a sealed cave;
+  - a torch-lit tunnel with the player walking through it;
+  - the ship parked in a cave;
+  - each light placed and taken back;
+  - a lantern row as dusk passes and on to midnight, then dawn;
+  - a candle-lit room;
+  - a brazier in a square;
+  - the glowing meadow.
+
+  It is published on the gate page with a before-and-after set of stills. Verify: the page exists and is linked from the PR.
 - [ ] 7.2 Record that frame cost was not measured in the cloud session (CLAUDE.md), and ask the owner to run `tools/perf_suite.py` on real hardware. Verify: the note is in the PR.
-- [ ] 7.3 The owner approves the lights. Verify: the owner's words are quoted in `proposal.md` under Why. Then archive this change.
+- [ ] 7.3 The owner watches the video and approves the lights. Verify: the owner's words are quoted in `proposal.md` under Why. Then archive this change.
