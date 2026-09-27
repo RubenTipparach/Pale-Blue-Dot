@@ -30,6 +30,12 @@ the `docs` skill, or call the connector's `guide`, before the first docs
 call, and follow the connector's own instructions: create the outline first,
 open it, then fill one section per call.
 
+If the session has no Claude Docs connector, say so in one line. Then
+publish the same tables as an artifact page with an answer field per
+question. Load `artifact-capabilities`, so the answers are saved where you
+can read them back. Fold them in the same way, and move them into the Claude
+Doc the next time the connector is available.
+
 - **One survey per round of questions.** Keep editing the current one rather
   than starting a new doc each time. Its link is in `CLAUDE.md`, under "Ask
   the owner with a survey".

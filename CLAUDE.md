@@ -101,6 +101,13 @@ shape. The `owner-survey` skill (`.claude/skills/owner-survey`) says how. The
 current survey is https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn. Keep
 editing it rather than starting another.
 
+Whenever work turns up something only the owner can decide, add it to the
+survey and give the link. Do not wait to be asked. One quick yes-or-no can
+still go in chat. If a session has no Claude Docs connector, say so, and
+publish the same tables as an artifact page with an answer field per
+question, linked from the survey's "Already decided" section once the
+connector is back.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
