@@ -17,7 +17,23 @@ loads (`openspec/changes/world-map` task 1.2):
   high byte and low byte. Blue is today's biome in the low nibble and the
   four-times biome in the high one.
 
-    python3 tools/world_map.py WORLD_MAP.bin OUT_DIR
+    python3 tools/world_map.py WORLD_MAP.bin OUT_DIR \
+        [--fish FISH_FIELDS.bin] [--weather MAP_WEATHER.bin]
+
+With `--fish` (what `examples/fish_ranges.rs` writes) it also draws the
+climate and fish overlays of the last simulated year, by the rules in
+`tools/fish_ranges.py`, imported rather than copied:
+
+- temperature.png: the year's mean surface temperature, land and sea, in the
+  fish maps' cold-to-hot ramp;
+- sea-ice.png: water frozen all year, and water frozen for part of it;
+- fish.png: each species' range packed two bits a species (0 none, 1 part
+  of the year, 2 all year), species 0 to 3 in red and 4 to 7 in green, and
+  the count of species in blue, for the page to unpack.
+
+With `--weather` (what `examples/map_weather.rs` writes) it draws the live
+layer's frames, clouds-NN.png: white cloud with its cover as alpha, blue
+where it rains.
 
 It writes the same bytes from the same input, so a regenerated map diffs to
 nothing.
@@ -134,8 +150,81 @@ def save(image, path):
     image.save(path, optimize=False)
 
 
+def ramp(t):
+    """The fish maps' temperature ramp, t in 0..1: blue, white, red."""
+    cold = np.array([49, 54, 149]); mid = np.array([245, 245, 245]); hot = np.array([165, 0, 38])
+    t = t[..., None]
+    return np.where(t < 0.5, cold + (mid - cold) * (t / 0.5), mid + (hot - mid) * ((t - 0.5) / 0.5))
+
+
+def climate_and_fish(fields, out):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import fish_ranges as fr
+    data = fr.load(fields)
+    years = (data.shape[0] - 2) // 3
+    alt, alt0 = data[0], data[1]
+    t_mean, t_cold, t_warm = data[2 + 3 * (years - 1): 5 + 3 * (years - 1)]
+    cls, water = fr.classes(alt, alt0)
+    h, w = alt.shape
+
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    rgba[..., :3] = ramp(np.clip((t_mean + 20.0) / 50.0, 0.0, 1.0)).astype(np.uint8)
+    rgba[..., 3] = 255
+    Image.fromarray(rgba, "RGBA").save(os.path.join(out, "temperature.png"))
+
+    frozen = water & (t_warm < fr.FREEZE_C)
+    part = water & (t_cold < fr.FREEZE_C) & ~frozen
+    ice = np.zeros((h, w, 4), dtype=np.uint8)
+    ice[part] = (170, 215, 240, 255)
+    ice[frozen] = (245, 250, 255, 255)
+    Image.fromarray(ice, "RGBA").save(os.path.join(out, "sea-ice.png"))
+
+    packed = np.zeros((h, w, 3), dtype=np.uint8)
+    for k, sp in enumerate(fr.SPECIES):
+        lo, hi = sp["temp"]
+        home = np.zeros_like(water)
+        for name in sp["water"]:
+            home |= cls[name]
+        home &= ~frozen
+        resident = home & (t_cold >= lo) & (t_warm <= hi) & (t_cold >= fr.FREEZE_C)
+        seasonal = home & (t_warm >= lo) & (t_cold <= hi) & ~resident
+        code = np.where(resident, 2, np.where(seasonal, 1, 0)).astype(np.uint8)
+        channel, shift = (0, 2 * k) if k < 4 else (1, 2 * (k - 4))
+        packed[..., channel] |= code << shift
+        packed[..., 2] += (code > 0).astype(np.uint8)
+    Image.fromarray(packed, "RGB").save(os.path.join(out, "fish.png"))
+
+    area = np.cos((0.5 - (np.arange(h) + 0.5) / h) * np.pi)[:, None] * np.ones((1, w))
+    return {
+        "climate_year": years,
+        "species": [dict(id=sp["id"], name=sp["name"], water=sp["water"], temp=sp["temp"]) for sp in fr.SPECIES],
+        "surface_mean_c": round(float((area * t_mean).sum() / area.sum()), 2),
+        "water_mean_c": round(float((area * t_mean)[water].sum() / (area * water).sum()), 2),
+        "frozen_all_year_share_of_water": round(float((area * frozen).sum() / (area * water).sum()), 4),
+    }
+
+
+def weather_frames(path, out):
+    with open(path, "rb") as f:
+        data = f.read()
+    assert data[:8] == b"PBDWTHR1", "not a map_weather raster"
+    width, height, frames = struct.unpack_from("<III", data, 8)
+    body = np.frombuffer(data, dtype="<f4", offset=20).reshape(frames, 3, height, width)
+    for k in range(frames):
+        cover, rain = body[k, 0], body[k, 1]
+        rgba = np.zeros((height, width, 4), dtype=np.uint8)
+        wet = rain > 2.0e-4
+        rgba[..., :3] = 250
+        rgba[wet, 0], rgba[wet, 1], rgba[wet, 2] = 120, 160, 225
+        rgba[..., 3] = np.clip(cover * 235, 0, 255).astype(np.uint8)
+        rgba[wet, 3] = np.maximum(rgba[wet, 3], 200)
+        Image.fromarray(rgba, "RGBA").save(os.path.join(out, f"clouds-{k:02}.png"))
+    return {"weather_frames": int(frames), "weather_frame_hours": 24.0 / frames}
+
+
 def main():
     source, out = sys.argv[1], sys.argv[2]
+    options = dict(zip(sys.argv[3::2], sys.argv[4::2]))
     os.makedirs(out, exist_ok=True)
     width, height, planes = read(source)
     altitude, top, today = planes[0], planes[1].astype(int), planes[2].astype(int)
@@ -173,6 +262,10 @@ def main():
         "altitude_m": [float(altitude.min()), float(altitude.max())],
         "biome_shares_of_land": shares,
     }
+    if "--fish" in options:
+        summary.update(climate_and_fish(options["--fish"], out))
+    if "--weather" in options:
+        summary.update(weather_frames(options["--weather"], out))
     with open(os.path.join(out, "summary.json"), "w") as f:
         json.dump(summary, f, indent=1, sort_keys=True)
         f.write("\n")

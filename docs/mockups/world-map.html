@@ -1,0 +1,792 @@
+<title>Tenebris World Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=Spectral+SC:wght@500;600&display=swap">
+<style>
+  /* One look on purpose: this is a screen inside the game, drawn over the
+     world, and it keeps the game's dark HUD whatever the viewer's theme. */
+  :root {
+    color-scheme: dark;
+    --ground: #0b1115;
+    --panel: rgba(13, 20, 25, 0.94);
+    --panel-solid: #0f171c;
+    --line: #2a3d43;
+    --line-strong: #44616a;
+    --text: #dde6e3;
+    --muted: #8fa4a0;
+    --lamp: #f0b44c;
+    --lamp-soft: rgba(240, 180, 76, 0.16);
+    --water: #6cc3cf;
+    --danger: #e0735c;
+    --ui: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --map: "Spectral SC", "Palatino Linotype", Georgia, serif;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font: 14px/1.4 var(--ui);
+    overflow: hidden;
+  }
+  .app { position: relative; height: 100%; }
+  .game-view {
+    position: absolute; inset: 0;
+    background: #05080a center / cover no-repeat;
+  }
+  .game-hint {
+    position: absolute; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    padding: 8px 14px; border: 1px solid var(--line-strong); background: var(--panel);
+    font: 500 13px var(--mono); letter-spacing: 0.02em;
+  }
+  .map {
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    background: var(--ground);
+  }
+  .map[hidden] { display: none !important; }
+
+  /* The bar: the world's name, its clock and the map's own keys. */
+  .bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-solid);
+  }
+  .bar h1 {
+    margin: 0; font: 600 20px/1 var(--map); letter-spacing: 0.06em;
+    color: var(--lamp);
+  }
+  .bar .sub { color: var(--muted); font-size: 12px; }
+  .clock { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .clock output { font: 500 13px var(--mono); min-width: 12ch; font-variant-numeric: tabular-nums; }
+  .clock input[type="range"] { width: min(260px, 40vw); accent-color: var(--lamp); }
+  .spacer { flex: 1 1 auto; }
+  button {
+    font: 500 13px var(--ui); color: var(--text);
+    background: #16232a; border: 1px solid var(--line-strong);
+    padding: 5px 10px; cursor: pointer;
+  }
+  button:hover { border-color: var(--lamp); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--lamp); outline-offset: 1px; }
+  button[aria-pressed="true"] { background: var(--lamp-soft); border-color: var(--lamp); color: #fff3dc; }
+  kbd {
+    font: 500 11px var(--mono); padding: 1px 5px; border: 1px solid var(--line-strong);
+    border-bottom-width: 2px; color: var(--muted);
+  }
+
+  .stage { position: relative; min-height: 0; }
+  canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  canvas#view.dragging { cursor: grabbing; }
+
+  /* The legend: one button per overlay (survey M4), then the marks. */
+  .legend {
+    position: absolute; top: 12px; left: 12px; bottom: 12px;
+    width: 272px; max-width: calc(100% - 24px);
+    overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 12px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .legend.closed { bottom: auto; }
+  .legend.closed .body { display: none; }
+  .legend header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .legend h2 { margin: 0; font: 600 12px var(--ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .legend .body { display: flex; flex-direction: column; gap: 14px; }
+  .group { display: flex; flex-direction: column; gap: 6px; }
+  .group h3 { margin: 0; font: 600 11px var(--ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+  .buttons button { flex: 1 1 auto; }
+  .note { margin: 0; color: var(--muted); font-size: 12px; }
+  .toggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .toggles input { accent-color: var(--lamp); }
+  .key { display: grid; grid-template-columns: 14px 1fr auto; gap: 4px 8px; align-items: center; font-size: 12px; }
+  .key i { width: 14px; height: 10px; display: block; border: 1px solid rgba(0,0,0,0.4); }
+  .key span:last-child { color: var(--muted); font: 12px var(--mono); font-variant-numeric: tabular-nums; }
+  .ramp { height: 10px; border: 1px solid var(--line); }
+  .ramp-labels { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--muted); }
+  select { font: 13px var(--ui); color: var(--text); background: #16232a; border: 1px solid var(--line-strong); padding: 4px; width: 100%; }
+  .places { max-height: 180px; overflow-y: auto; border-top: 1px solid var(--line); padding-top: 6px; }
+  .places button {
+    display: grid; grid-template-columns: 1fr auto; width: 100%; text-align: left;
+    background: none; border: none; padding: 3px 2px; font-size: 13px;
+  }
+  .places button:hover { color: var(--lamp); }
+  .places button span:last-child { color: var(--muted); font-size: 11px; }
+  details.about summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  details.about p { font-size: 12px; color: var(--muted); margin: 6px 0 0; max-width: 60ch; }
+
+  /* The readout: what is under the pointer. */
+  .readout {
+    position: absolute; right: 12px; bottom: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 10px; font: 12px/1.5 var(--mono); font-variant-numeric: tabular-nums;
+    min-width: 210px; max-width: calc(100% - 24px);
+  }
+  .readout div { display: flex; justify-content: space-between; gap: 12px; }
+  .readout b { font-weight: 500; color: var(--muted); }
+  .scale { margin-top: 6px; }
+  .scale i { display: block; height: 5px; border: 1px solid var(--text); border-top: none; }
+  .zoom { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .zoom button { width: 34px; height: 34px; padding: 0; font: 600 16px var(--mono); }
+
+  @media (max-width: 640px) {
+    .legend { width: auto; right: 12px; bottom: auto; max-height: 45%; }
+    .readout { left: 12px; right: 12px; min-width: 0; }
+    .bar h1 { font-size: 17px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="app">
+  <div class="game-view" id="gameView" aria-label="The game, with the map closed">
+    <div class="game-hint">Press <kbd>M</kbd> for the map</div>
+  </div>
+
+  <section class="map" id="map" aria-label="World map">
+    <div class="bar">
+      <div>
+        <h1>Tenebris</h1>
+        <div class="sub">The map mockup · <span id="projection">flat, equirectangular (survey M2)</span></div>
+      </div>
+      <div class="clock">
+        <label for="hour">World clock</label>
+        <input id="hour" type="range" min="0" max="24" step="0.05" value="19.5">
+        <output id="clockText" for="hour">day 150, 19:30</output>
+        <button id="play" type="button" aria-pressed="false">Play the day</button>
+        <button id="dayNight" type="button" title="L">Noon</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="sub"><kbd>M</kbd> close · <kbd>Esc</kbd> close · <kbd>L</kbd> noon or midnight · <kbd>Home</kbd> find me · wheel to zoom, drag to pan</div>
+    </div>
+
+    <div class="stage" id="stage">
+      <canvas id="view" aria-label="The planet, flat"></canvas>
+
+      <aside class="legend" id="legend">
+        <header>
+          <h2>Layers</h2>
+          <button type="button" id="legendToggle" aria-expanded="true">Hide</button>
+        </header>
+        <div class="body">
+          <div class="group">
+            <h3>Overlay</h3>
+            <div class="buttons" id="overlays" role="group" aria-label="Overlay">
+              <button type="button" data-overlay="none" aria-pressed="true">The planet</button>
+              <button type="button" data-overlay="biomes" aria-pressed="false">Biomes</button>
+              <button type="button" data-overlay="temperature" aria-pressed="false">Temperature</button>
+              <button type="button" data-overlay="ice" aria-pressed="false">Sea ice</button>
+              <button type="button" data-overlay="fish" aria-pressed="false">Fish</button>
+            </div>
+            <p class="note" id="overlayNote">The planet as it looks: each pixel is its ground's top block, shaded by relief, and the sea by its depth. An overlay greys it out (survey M3).</p>
+          </div>
+
+          <div class="group" id="biomeGroup" hidden>
+            <h3>Biome size</h3>
+            <div class="buttons" id="scales" role="group" aria-label="Biome size">
+              <button type="button" data-scale="today" aria-pressed="false">As shipped</button>
+              <button type="button" data-scale="188" aria-pressed="false">188 m</button>
+              <button type="button" data-scale="375" aria-pressed="false">375 m</button>
+              <button type="button" data-scale="750" aria-pressed="true">750 m</button>
+            </div>
+            <p class="note" id="scaleNote"></p>
+            <div class="key" id="biomeKey"></div>
+          </div>
+
+          <div class="group" id="tempGroup" hidden>
+            <h3>Mean surface temperature, °C</h3>
+            <div class="ramp" style="background: linear-gradient(90deg, rgb(49,54,149), rgb(245,245,245), rgb(165,0,38));"></div>
+            <div class="ramp-labels"><span>−20</span><span>5</span><span>30</span></div>
+            <p class="note" id="tempNote"></p>
+          </div>
+
+          <div class="group" id="iceGroup" hidden>
+            <h3>Sea ice</h3>
+            <div class="key">
+              <i style="background: rgb(245,250,255)"></i><span>Frozen all year</span><span></span>
+              <i style="background: rgb(170,215,240)"></i><span>Frozen for part of the year</span><span></span>
+            </div>
+            <p class="note" id="iceNote"></p>
+          </div>
+
+          <div class="group" id="fishGroup" hidden>
+            <h3>Fish</h3>
+            <label class="note" for="species">Species</label>
+            <select id="species"></select>
+            <div class="key" id="fishKey"></div>
+          </div>
+
+          <div class="group toggles">
+            <h3>On the map</h3>
+            <label><input type="checkbox" id="showSites" checked> Settlements</label>
+            <label><input type="checkbox" id="showNight" checked> Night side</label>
+            <label><input type="checkbox" id="showClouds" checked> Clouds and rain, live</label>
+            <label><input type="checkbox" id="showMe" checked> You and your ship</label>
+            <label><input type="checkbox" id="showGrid"> Latitude and longitude</label>
+          </div>
+
+          <div class="group">
+            <h3>Places <span id="placeCount"></span></h3>
+            <div class="places" id="places"></div>
+          </div>
+
+          <details class="about">
+            <summary>What is real here</summary>
+            <p>The planet, its biomes at each size, the temperature, the sea ice and the fish ranges are drawn from rasters the game's own functions made (<code>pbd_core::map::base_texel</code>, the atmosphere run 200 days, and the fish rules in <code>tools/fish_ranges.py</code>). The clouds and rain are the simulated atmosphere sampled every two game hours through one day.</p>
+            <p>The settlements are placeholders: the <code>city-sites</code> rules run here, in the page, on 14.7 m pixels, and their names come from made-up syllables. Step 2b places them for real.</p>
+          </details>
+        </div>
+      </aside>
+
+      <div class="zoom">
+        <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+        <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+        <button type="button" id="home" aria-label="Find me" title="Home">⌂</button>
+      </div>
+
+      <div class="readout" id="readout" aria-live="polite">
+        <div><b>where</b><span id="rWhere">—</span></div>
+        <div><b>ground</b><span id="rGround">—</span></div>
+        <div><b>biome</b><span id="rBiome">—</span></div>
+        <div id="rOverlayRow"><b id="rOverlayName">layer</b><span id="rOverlay">—</span></div>
+        <div class="scale"><div><b>scale</b><span id="rScale">—</span></div><i id="scaleBar" style="width: 80px"></i></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  // ---- The world: Tenebris's numbers, as the engine has them ------------
+  const RADIUS = 4800;                  // m (planet_gen TENEBRIS)
+  const DAY_S = 2880, YEAR_DAYS = 100;  // daylight.rs
+  const TILT = 0.41, SUN_FIXED = [0.807, 0.398, 0.435];
+  const SPAWN = norm([0.8776, 0.4794, 0.0]); // flight_view.rs spawn_direction
+  const W = 2048, H = 1024;              // the base raster
+  const M_PER_PX = 2 * Math.PI * RADIUS / W; // at the equator
+  const BIOMES = ["ocean", "beach", "fields", "desert", "jungle", "swamp", "mountains", "tundra"];
+  // tools/world_map.py OVERLAY, so the key matches the picture.
+  const BIOME_COLOUR = {
+    beach: [232, 214, 150], fields: [150, 190, 80], desert: [222, 150, 60], jungle: [30, 120, 60],
+    swamp: [90, 130, 110], mountains: [140, 130, 125], tundra: [225, 235, 245],
+  };
+
+  function norm(v) { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }
+  function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  function dirOf(lat, lon) { return [Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)]; }
+  function latLonOf(d) { return [Math.asin(Math.max(-1, Math.min(1, d[1]))), Math.atan2(d[2], d[0])]; }
+  // Raster pixel <-> direction, as examples/world_map.rs lays it out.
+  function worldOf(d) { const [lat, lon] = latLonOf(d); return [(lon / (2 * Math.PI) + 0.5) * W, (0.5 - lat / Math.PI) * H]; }
+  function dirAtWorld(x, y) { return dirOf((0.5 - y / H) * Math.PI, (x / W - 0.5) * 2 * Math.PI); }
+  function smoothstep(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+
+  // daylight.rs Clock::sun, line for line.
+  function sunAt(seconds) {
+    const yf = ((seconds / (DAY_S * YEAR_DAYS)) % 1 + 1) % 1;
+    const frac = ((seconds / DAY_S) % 1 + 1) % 1;
+    const L = 2 * Math.PI * yf + Math.PI / 2;
+    const v = [Math.cos(L), Math.sin(TILT) * Math.sin(L), Math.cos(TILT) * Math.sin(L)];
+    const ra = Math.atan2(v[2], v[0]), noon = Math.atan2(SUN_FIXED[2], SUN_FIXED[0]);
+    const a = ((((frac - 0.5) * 2 * Math.PI + ra - noon) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const c = Math.cos(a), s = Math.sin(a);
+    return norm([v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c]);
+  }
+  // The terrain shader's dusk: smoothstep(-0.13, 0.20, elevation).
+  const daylight = (sun, up) => smoothstep(-0.13, 0.20, dot(sun, up));
+
+  // ---- State ---------------------------------------------------------------
+  const DAY = 150;
+  const state = {
+    open: true, overlay: "none", scale: "750", species: "all",
+    hour: 19.5, playing: false,
+    sites: true, night: true, clouds: true, me: true, grid: false,
+    cx: W / 2, cy: H / 2, s: 1, // view centre in raster px, screen px per raster px
+    pointer: null,
+  };
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("view"), ctx = canvas.getContext("2d");
+  let summary = null, heightData = null, fishData = null;
+  const images = {};
+
+  function loadImage(name) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = "world-map/" + name;
+    });
+  }
+  function pixels(img) {
+    const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+    const g = c.getContext("2d"); g.drawImage(img, 0, 0);
+    return g.getImageData(0, 0, img.width, img.height);
+  }
+
+  // ---- The height and biome lookups (height.png) -----------------------
+  function sampleWorld(x, y) {
+    if (!heightData) return null;
+    const px = ((Math.floor(x) % W) + W) % W, py = Math.max(0, Math.min(H - 1, Math.floor(y)));
+    const i = (py * W + px) * 4, d = heightData.data;
+    return { alt: d[i] * 256 + d[i + 1] - 32768, today: d[i + 2] & 15, four: d[i + 2] >> 4 };
+  }
+  const sampleDir = (d) => { const [x, y] = worldOf(d); return sampleWorld(x, y); };
+  function offset(d, bearing, metres) {
+    // Walk `metres` from d along a bearing (0 north, clockwise).
+    const up = d, east = norm([-d[2], 0, d[0]]);
+    const north = [up[1] * east[2] - up[2] * east[1], up[2] * east[0] - up[0] * east[2], up[0] * east[1] - up[1] * east[0]];
+    const a = metres / RADIUS, t = [
+      Math.cos(bearing) * north[0] + Math.sin(bearing) * east[0],
+      Math.cos(bearing) * north[1] + Math.sin(bearing) * east[1],
+      Math.cos(bearing) * north[2] + Math.sin(bearing) * east[2]];
+    return norm([d[0] * Math.cos(a) + t[0] * Math.sin(a), d[1] * Math.cos(a) + t[1] * Math.sin(a), d[2] * Math.cos(a) + t[2] * Math.sin(a)]);
+  }
+  const arc = (a, b) => Math.acos(Math.max(-1, Math.min(1, dot(a, b)))) * RADIUS;
+
+  // ---- The settlements: city-sites' rules, run here as placeholders ------
+  // design.md decision 1's table: radius m, flatness m, spacing m, count.
+  const KINDS = [
+    { id: "walled", name: "walled town", biome: "fields", r: 75, flat: 8, spacing: 2500, count: 6, people: "fields" },
+    { id: "village", name: "village", biome: "fields", r: 35, flat: 4, spacing: 700, count: 20, people: "fields" },
+    { id: "desert", name: "desert town", biome: "desert", r: 60, flat: 6, spacing: 2000, count: 4, people: "desert" },
+    { id: "tundra", name: "tundra camp", biome: "tundra", r: 30, flat: 4, spacing: 700, count: 4, people: "tundra" },
+    { id: "jungle", name: "jungle village", biome: "jungle", r: 35, flat: 10, spacing: 700, count: 6, people: "jungle" },
+    { id: "swamp", name: "swamp village", biome: "swamp", r: 35, flat: 3, spacing: 700, count: 3, people: "swamp" },
+    { id: "harbour", name: "harbour", biome: "beach", r: 60, flat: 12, spacing: 1500, count: 6, people: "fields" },
+    { id: "cliff", name: "cliff village", biome: "mountains", r: 50, flat: 25, spacing: 1500, count: 4, people: "mountain" },
+    { id: "cave", name: "cave town", biome: "mountains", r: 50, flat: 40, spacing: 2500, count: 2, people: "mountain" },
+  ];
+  // Placeholder syllables for the six peoples (design decision 4 puts the
+  // real tables in sites.ron).
+  const PEOPLES = {
+    fields: { on: ["Ash", "Bram", "Cor", "Dun", "Hol", "Lin", "Mar", "Wick", "Ther", "Sel"], mid: ["", "e", "en", "ow", "ing"], end: ["ford", "ham", "stead", "wick", "ton", "leigh"], haven: "haven" },
+    desert: { on: ["Qa", "Sar", "Zem", "Ta", "Ras", "Al", "Mir"], mid: ["ha", "ri", "za", "du", "sa"], end: ["n", "d", "r", "sh", "l"] },
+    tundra: { on: ["Kel", "Ulv", "Siv", "Tor", "Hrim", "Vas"], mid: ["a", "e", "i"], end: ["mark", "fjell", "vik", "hold"] },
+    jungle: { on: ["Tla", "Ixa", "Co", "Ma", "Ya", "Hua"], mid: ["pa", "lo", "tzi", "ca", "na"], end: ["tl", "n", "co", "ya"] },
+    swamp: { on: ["Bog", "Fen", "Mire", "Reed", "Sedge"], mid: ["", "e"], end: ["wade", "moss", "pool", "holm"] },
+    mountain: { on: ["Kar", "Dol", "Grim", "Bar", "Sto", "Durn"], mid: ["", "a", "e"], end: ["crag", "gard", "hald", "berg"] },
+  };
+  function hash(n) { // a small integer mix, the seed folded in
+    n = (n ^ 0x5eed2026) >>> 0;
+    n = Math.imul(n ^ (n >>> 16), 0x85ebca6b) >>> 0;
+    n = Math.imul(n ^ (n >>> 13), 0xc2b2ae35) >>> 0;
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+  function nameFor(site, taken) {
+    const p = PEOPLES[site.kind.people];
+    for (let k = 0; k < 50; k++) {
+      const h = (i) => hash(site.id * 131 + k * 17 + i);
+      let n = p.on[Math.floor(h(1) * p.on.length)] + p.mid[Math.floor(h(2) * p.mid.length)];
+      n += site.kind.id === "harbour" ? p.haven : p.end[Math.floor(h(3) * p.end.length)];
+      n = n.charAt(0) + n.slice(1).toLowerCase();
+      if (!taken.has(n)) { taken.add(n); return n; }
+    }
+    return "Site " + site.id;
+  }
+  function pentagons() {
+    const t = (1 + Math.sqrt(5)) / 2, out = [];
+    for (const a of [-1, 1]) for (const b of [-t, t]) out.push(norm([0, a, b]), norm([a, b, 0]), norm([b, 0, a]));
+    return out;
+  }
+  function placeSites() {
+    const biomeOf = (s) => BIOMES[state.scale === "today" ? s.today : s.four];
+    // Candidates: an even spread of 60,000 points (the game uses the
+    // 163,842 level-7 cell centres).
+    const N = 60000, golden = Math.PI * (3 - Math.sqrt(5)), cands = [];
+    const pents = pentagons();
+    for (let i = 0; i < N; i++) {
+      const y = 1 - 2 * (i + 0.5) / N, r = Math.sqrt(1 - y * y), th = golden * i;
+      const d = [Math.cos(th) * r, y, Math.sin(th) * r];
+      const c = sampleDir(d);
+      if (!c || c.alt < 0) continue;
+      const biome = biomeOf(c);
+      for (const kind of KINDS) {
+        if (kind.biome !== biome) continue;
+        if (pents.some((p) => arc(p, d) < kind.r + 90)) continue;
+        const ring = [0, 1, 2, 3, 4, 5].map((k) => sampleDir(offset(d, k * Math.PI / 3, kind.r)));
+        const alts = [c.alt, ...ring.map((s) => s.alt)];
+        const lo = Math.min(...alts), hi = Math.max(...alts), range = hi - lo;
+        let ok;
+        if (kind.id === "harbour") {
+          // From the water: shelf water (6 to 40 m deep) within 60 m.
+          const sea = [0, 1, 2, 3, 4, 5, 6, 7].some((k) => { const s = sampleDir(offset(d, k * Math.PI / 4, 60)); return s.alt <= -6 && s.alt >= -40; });
+          ok = sea && ring.some((s) => biomeOf(s) === "fields");
+        } else if (kind.id === "cliff") {
+          ok = lo >= 0 && range >= 9 && range <= 25;
+        } else if (kind.id === "cave") {
+          ok = lo >= 0 && c.alt - lo >= 16; // rock over a chamber, roughly
+        } else {
+          ok = lo >= 0 && range <= kind.flat;
+        }
+        if (!ok) continue;
+        const score = (1 - range / Math.max(kind.flat, 1)) + 0.4 * hash(i);
+        cands.push({ id: i, d, kind, score, alt: c.alt });
+      }
+    }
+    cands.sort((a, b) => b.score - a.score || a.id - b.id);
+    const kept = [], counts = {};
+    // Clear of every site kept: a kind's own spacing from its own kind, and
+    // half the smaller spacing from any other.
+    const clear = (c) => kept.every((k) => arc(k.d, c.d) >= (k.kind === c.kind ? c.kind.spacing : 0.5 * Math.min(k.kind.spacing, c.kind.spacing)));
+    // Survey C2: a village or small town within about 500 m of the spawn.
+    const home = cands.filter((c) => (c.kind.id === "village" || c.kind.id === "walled") && arc(c.d, SPAWN) < 500)
+      .sort((a, b) => arc(a.d, SPAWN) - arc(b.d, SPAWN))[0];
+    if (home) { kept.push(home); counts[home.kind.id] = 1; home.home = true; }
+    for (const c of cands) {
+      if ((counts[c.kind.id] || 0) >= c.kind.count || !clear(c)) continue;
+      kept.push(c); counts[c.kind.id] = (counts[c.kind.id] || 0) + 1;
+    }
+    // Survey C3: the capital is the walled town farthest from the spawn.
+    const towns = kept.filter((s) => s.kind.id === "walled");
+    if (towns.length) towns.sort((a, b) => arc(b.d, SPAWN) - arc(a.d, SPAWN))[0].capital = true;
+    const taken = new Set();
+    for (const s of kept) { s.name = nameFor(s, taken); [s.x, s.y] = worldOf(s.d); }
+    return kept;
+  }
+  let sites = [];
+
+  // ---- Offscreen layers ----------------------------------------------------
+  const nightCanvas = document.createElement("canvas"); nightCanvas.width = 512; nightCanvas.height = 256;
+  let nightFor = null;
+  function drawNight(sun) {
+    const key = sun.map((v) => v.toFixed(4)).join();
+    if (key === nightFor) return; nightFor = key;
+    const g = nightCanvas.getContext("2d"), img = g.createImageData(512, 256), d = img.data;
+    for (let y = 0; y < 256; y++) for (let x = 0; x < 512; x++) {
+      const up = dirAtWorld((x + 0.5) * W / 512, (y + 0.5) * H / 256);
+      const dark = 1 - daylight(sun, up);
+      const i = (y * 512 + x) * 4;
+      // The moon keeps the land legible; the lamps are what read.
+      d[i] = 6; d[i + 1] = 12; d[i + 2] = 28; d[i + 3] = Math.round(dark * 0.74 * 255);
+    }
+    g.putImageData(img, 0, 0);
+  }
+  const fishCanvas = document.createElement("canvas");
+  function drawFish() {
+    if (!fishData) return;
+    const { width, height, data } = fishData;
+    fishCanvas.width = width; fishCanvas.height = height;
+    const g = fishCanvas.getContext("2d"), img = g.createImageData(width, height), o = img.data;
+    const ramp = [null, [254, 229, 217], [252, 187, 161], [252, 146, 114], [251, 106, 74], [222, 45, 38], [165, 15, 21], [103, 0, 13], [60, 0, 8]];
+    const k = state.species === "all" ? -1 : Number(state.species);
+    for (let i = 0; i < width * height; i++) {
+      const r = data[i * 4], gg = data[i * 4 + 1], count = data[i * 4 + 2];
+      let c = null;
+      if (k < 0) { if (count > 0) c = ramp[Math.min(count, 8)]; }
+      else {
+        const code = k < 4 ? (r >> (2 * k)) & 3 : (gg >> (2 * (k - 4))) & 3;
+        if (code === 2) c = [215, 48, 31]; else if (code === 1) c = [253, 174, 107];
+      }
+      if (c) { o[i * 4] = c[0]; o[i * 4 + 1] = c[1]; o[i * 4 + 2] = c[2]; o[i * 4 + 3] = 255; }
+    }
+    g.putImageData(img, 0, 0);
+  }
+
+  // ---- Drawing ---------------------------------------------------------------
+  let dpr = 1;
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(1, Math.round(r.width * dpr)); canvas.height = Math.max(1, Math.round(r.height * dpr));
+    clampView(); draw();
+  }
+  const cssW = () => canvas.width / dpr, cssH = () => canvas.height / dpr;
+  const minScale = () => Math.min(cssW() / W, cssH() / H);
+  function clampView() {
+    state.s = Math.max(minScale(), Math.min(16, state.s));
+    const half = cssH() / 2 / state.s;
+    state.cy = H <= 2 * half ? H / 2 : Math.max(half, Math.min(H - half, state.cy));
+    state.cx = ((state.cx % W) + W) % W;
+  }
+  const toScreen = (x, y) => [(x - state.cx) * state.s + cssW() / 2, (y - state.cy) * state.s + cssH() / 2];
+  const toWorld = (sx, sy) => [(sx - cssW() / 2) / state.s + state.cx, (sy - cssH() / 2) / state.s + state.cy];
+
+  function eachCopy(fn) { // the map wraps east and west
+    const span = W * state.s, x0 = toScreen(0, 0)[0];
+    for (let k = -2; k <= 2; k++) { const x = x0 + k * span; if (x + span > 0 && x < cssW()) fn(k); }
+  }
+  function blit(img, alpha) {
+    if (!img) return;
+    ctx.globalAlpha = alpha;
+    const [, y0] = toScreen(0, 0);
+    eachCopy((k) => ctx.drawImage(img, toScreen(k * W, 0)[0], y0, W * state.s, H * state.s));
+    ctx.globalAlpha = 1;
+  }
+
+  function currentSeconds() { return (DAY + state.hour / 24) * DAY_S; }
+
+  function draw() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "#081015"; ctx.fillRect(0, 0, cssW(), cssH());
+    if (!images.base) return;
+    // Pixel art stays pixels when zoomed in; the whole planet is smoothed.
+    ctx.imageSmoothingEnabled = state.s < 1.5;
+    blit(images.base, 1);
+    if (state.overlay !== "none") {
+      // Grey the planet out beneath the overlay (survey M3).
+      ctx.save(); ctx.globalCompositeOperation = "saturation"; ctx.fillStyle = "#808080"; ctx.fillRect(0, 0, cssW(), cssH()); ctx.restore();
+      ctx.fillStyle = "rgba(10,16,20,0.45)"; ctx.fillRect(0, 0, cssW(), cssH());
+      ctx.imageSmoothingEnabled = state.overlay === "temperature";
+      if (state.overlay === "biomes") blit(images["biomes-" + state.scale], 0.88);
+      if (state.overlay === "temperature") blit(images.temperature, 0.82);
+      if (state.overlay === "ice") blit(images["sea-ice"], 0.9);
+      if (state.overlay === "fish") blit(fishCanvas.width ? fishCanvas : null, 0.95);
+    }
+    const sun = sunAt(currentSeconds());
+    if (state.clouds && images.clouds.length) {
+      // Two frames two game hours apart, faded one into the next.
+      const n = images.clouds.length, f = state.hour / 24 * n, a = Math.floor(f) % n, b = (a + 1) % n, t = f - Math.floor(f);
+      ctx.imageSmoothingEnabled = true;
+      blit(images.clouds[a], 0.8 * (1 - t)); blit(images.clouds[b], 0.8 * t);
+    }
+    if (state.night) {
+      drawNight(sun);
+      ctx.imageSmoothingEnabled = true;
+      blit(nightCanvas, 1);
+    }
+    if (state.grid) drawGrid();
+    if (state.sites) drawSites(sun);
+    if (state.me) drawMe();
+    readScale();
+  }
+
+  function drawGrid() {
+    ctx.strokeStyle = "rgba(223,231,228,0.18)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let lat = -60; lat <= 60; lat += 30) { const y = toScreen(0, (0.5 - lat / 180) * H)[1]; ctx.moveTo(0, y); ctx.lineTo(cssW(), y); }
+    eachCopy((k) => { for (let lon = -180; lon < 180; lon += 30) { const x = toScreen(k * W + (lon / 360 + 0.5) * W, 0)[0]; ctx.moveTo(x, 0); ctx.lineTo(x, cssH()); } });
+    ctx.stroke();
+  }
+
+  function drawSites(sun) {
+    const labels = state.s >= 0.9;
+    for (const site of sites) {
+      eachCopy((k) => {
+        const [x, y] = toScreen(site.x + k * W, site.y);
+        if (x < -80 || x > cssW() + 80 || y < -40 || y > cssH() + 40) return;
+        const night = state.night ? 1 - daylight(sun, site.d) : 0;
+        const big = site.kind.id === "walled" || site.kind.id === "desert" || site.kind.id === "cave" || site.capital;
+        if (night > 0.02) {
+          // The town's own lamps light the ground round it: a pool sized to
+          // the town, whatever the zoom (CLAUDE.md: mockups are lit at night).
+          const reach = Math.max(10, (big ? 260 : 140) / M_PER_PX * state.s);
+          const g = ctx.createRadialGradient(x, y, 0, x, y, reach);
+          g.addColorStop(0, `rgba(255,196,110,${0.75 * night})`);
+          g.addColorStop(0.35, `rgba(240,160,70,${0.32 * night})`);
+          g.addColorStop(1, "rgba(240,160,70,0)");
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, reach, 0, 2 * Math.PI); ctx.fill();
+        }
+        const size = big ? 5 : 3.5;
+        ctx.fillStyle = night > 0.5 ? "#ffe2a8" : "#1b1510";
+        ctx.strokeStyle = night > 0.5 ? "rgba(255,200,120,0.9)" : "#f0e6d0";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (big) { ctx.rect(x - size, y - size, size * 2, size * 2); } else { ctx.arc(x, y, size, 0, 2 * Math.PI); }
+        ctx.fill(); ctx.stroke();
+        if (site.capital) { ctx.strokeStyle = "#f0b44c"; ctx.beginPath(); ctx.arc(x, y, size + 4, 0, 2 * Math.PI); ctx.stroke(); }
+        if (labels || site.capital || site.home) {
+          ctx.font = `${big ? 600 : 500} ${big ? 14 : 12}px "Spectral SC", Georgia, serif`;
+          ctx.textAlign = "left"; ctx.textBaseline = "middle";
+          ctx.lineWidth = 3; ctx.strokeStyle = "rgba(8,14,18,0.85)";
+          ctx.strokeText(site.name, x + size + 5, y);
+          ctx.fillStyle = night > 0.5 ? "#ffe6b8" : "#f4efe4";
+          ctx.fillText(site.name, x + size + 5, y);
+        }
+      });
+    }
+  }
+
+  function drawMe() {
+    const [px, py] = worldOf(SPAWN);
+    const ship = worldOf(offset(SPAWN, Math.PI / 2, 22));
+    eachCopy((k) => {
+      const [sx, sy] = toScreen(ship[0] + k * W, ship[1]);
+      ctx.fillStyle = "#6cc3cf"; ctx.strokeStyle = "#081015"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(sx, sy - 6); ctx.lineTo(sx + 5, sy + 5); ctx.lineTo(sx, sy + 2); ctx.lineTo(sx - 5, sy + 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+      const [x, y] = toScreen(px + k * W, py);
+      const heading = (state.hour / 24) * 2 * Math.PI * 3; // turning, as a walker does
+      ctx.save(); ctx.translate(x, y); ctx.rotate(heading);
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = "#081015"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(6, 6); ctx.lineTo(0, 3); ctx.lineTo(-6, 6); ctx.closePath(); ctx.stroke(); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  function readScale() {
+    // A round number of metres near 80 px, at the view centre's latitude.
+    const lat = (0.5 - state.cy / H) * Math.PI;
+    const mPerPx = M_PER_PX / state.s * Math.max(Math.cos(lat), 0.05);
+    const target = 80 * mPerPx, step = Math.pow(10, Math.floor(Math.log10(target)));
+    const nice = [1, 2, 5, 10].map((k) => k * step).reduce((a, b) => Math.abs(b - target) < Math.abs(a - target) ? b : a);
+    $("scaleBar").style.width = Math.round(nice / mPerPx) + "px";
+    $("rScale").textContent = nice >= 1000 ? `${nice / 1000} km` : `${nice} m`;
+  }
+
+  // ---- The readout under the pointer ----------------------------------------
+  function readPointer() {
+    if (!state.pointer) return;
+    const [x, y] = toWorld(state.pointer[0], state.pointer[1]);
+    if (y < 0 || y >= H) return;
+    const lat = (0.5 - y / H) * 180, lon = ((x / W) % 1 + 1) % 1 * 360 - 180;
+    $("rWhere").textContent = `${Math.abs(lat).toFixed(1)}°${lat >= 0 ? "N" : "S"} ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? "E" : "W"}`;
+    const s = sampleWorld(x, y);
+    if (!s) return;
+    $("rGround").textContent = s.alt < 0 ? `sea, ${-s.alt} m deep${-s.alt <= 6 ? " (shallows)" : -s.alt <= 40 ? " (shelf)" : ""}` : `${s.alt} m up`;
+    const b = BIOMES[state.scale === "today" ? s.today : s.four];
+    $("rBiome").textContent = s.alt < 0 ? "ocean" : `${b}${state.scale === "today" ? "" : `, as shipped ${BIOMES[s.today]}`}`;
+    const site = sites.find((t) => Math.hypot((t.x - x) * state.s, (t.y - y) * state.s) < 10 || Math.hypot((t.x - x - W) * state.s, (t.y - y) * state.s) < 10);
+    $("rOverlayName").textContent = site ? "place" : "layer";
+    $("rOverlay").textContent = site ? `${site.name}, ${site.capital ? "the capital" : site.kind.name}` : ({ none: "the planet", biomes: `biomes at ${state.scale === "today" ? "as shipped" : state.scale + " m"}`, temperature: "mean surface temperature", ice: "sea ice", fish: "fish ranges" })[state.overlay];
+  }
+
+  // ---- The legend ----------------------------------------------------------------
+  function setOverlay(name) {
+    state.overlay = name;
+    for (const b of document.querySelectorAll("#overlays button")) b.setAttribute("aria-pressed", String(b.dataset.overlay === name));
+    $("biomeGroup").hidden = name !== "biomes";
+    $("tempGroup").hidden = name !== "temperature";
+    $("iceGroup").hidden = name !== "ice";
+    $("fishGroup").hidden = name !== "fish";
+    $("overlayNote").hidden = name !== "none";
+    draw(); readPointer();
+  }
+  function setScale(scale) {
+    state.scale = scale;
+    for (const b of document.querySelectorAll("#scales button")) b.setAttribute("aria-pressed", String(b.dataset.scale === scale));
+    const shares = summary && summary.biome_shares_of_land[scale];
+    const key = $("biomeKey"); key.textContent = "";
+    for (const name of BIOMES.slice(1)) {
+      const i = document.createElement("i"); i.style.background = `rgb(${BIOME_COLOUR[name]})`;
+      const n = document.createElement("span"); n.textContent = name;
+      const v = document.createElement("span"); v.textContent = shares ? `${Math.round(shares[name] * 100)}%` : "";
+      key.append(i, n, v);
+    }
+    $("scaleNote").textContent = scale === "today"
+      ? "The planet as shipped: moisture varies every 188 m and the thresholds sit far out, so fields cover most of the temperate land."
+      : `Moisture varies every ${scale} m, with thresholds retuned so fields, desert and jungle with swamp take a third each${scale === "750" ? ". This is your choice (survey B1)." : "."} Shares are of the land.`;
+    sites = placeSites(); listPlaces(); draw(); readPointer();
+  }
+  function listPlaces() {
+    const box = $("places"); box.textContent = "";
+    const first = (s) => (s.capital ? 2 : 0) + (s.home ? 1 : 0);
+    const ordered = [...sites].sort((a, b) => first(b) - first(a) || KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || a.name.localeCompare(b.name));
+    for (const s of ordered) {
+      const b = document.createElement("button"); b.type = "button";
+      const n = document.createElement("span"); n.textContent = s.name + (s.home ? " (near you)" : "");
+      const k = document.createElement("span"); k.textContent = s.capital ? "capital" : s.kind.name;
+      b.append(n, k);
+      b.addEventListener("click", () => { state.cx = s.x; state.cy = s.y; state.s = Math.max(state.s, 6); clampView(); draw(); });
+      box.append(b);
+    }
+    $("placeCount").textContent = `(${sites.length})`;
+  }
+  function setHour(h) {
+    state.hour = ((h % 24) + 24) % 24;
+    $("hour").value = state.hour.toFixed(2);
+    const hh = Math.floor(state.hour), mm = Math.floor((state.hour - hh) * 60);
+    $("clockText").textContent = `day ${DAY}, ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    const sun = sunAt(currentSeconds());
+    $("dayNight").textContent = daylight(sun, SPAWN) > 0.5 ? "Midnight" : "Noon";
+    draw();
+  }
+  function toggleMap(open) {
+    state.open = open ?? !state.open;
+    $("map").hidden = !state.open;
+    if (state.open) resize();
+  }
+  function findMe() { const [x, y] = worldOf(SPAWN); state.cx = x; state.cy = y; state.s = 8; clampView(); draw(); }
+  function zoomAt(factor, sx, sy) {
+    const [wx, wy] = toWorld(sx, sy);
+    state.s *= factor; clampView();
+    const [nx, ny] = toWorld(sx, sy);
+    state.cx += wx - nx; state.cy += wy - ny; clampView(); draw(); readPointer();
+  }
+
+  // ---- Input --------------------------------------------------------------------
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, cx: state.cx, cy: state.cy }; canvas.setPointerCapture(e.pointerId); canvas.classList.add("dragging"); });
+  canvas.addEventListener("pointermove", (e) => {
+    const r = canvas.getBoundingClientRect(); state.pointer = [e.clientX - r.left, e.clientY - r.top];
+    if (drag) { state.cx = drag.cx - (e.clientX - drag.x) / state.s; state.cy = drag.cy - (e.clientY - drag.y) / state.s; clampView(); draw(); }
+    readPointer();
+  });
+  canvas.addEventListener("pointerup", () => { drag = null; canvas.classList.remove("dragging"); });
+  canvas.addEventListener("wheel", (e) => { e.preventDefault(); const r = canvas.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  $("zoomIn").addEventListener("click", () => zoomAt(1.6, cssW() / 2, cssH() / 2));
+  $("zoomOut").addEventListener("click", () => zoomAt(1 / 1.6, cssW() / 2, cssH() / 2));
+  $("home").addEventListener("click", findMe);
+  for (const b of document.querySelectorAll("#overlays button")) b.addEventListener("click", () => setOverlay(b.dataset.overlay));
+  for (const b of document.querySelectorAll("#scales button")) b.addEventListener("click", () => setScale(b.dataset.scale));
+  $("species").addEventListener("change", (e) => { state.species = e.target.value; drawFish(); fishKey(); draw(); });
+  $("hour").addEventListener("input", (e) => setHour(Number(e.target.value)));
+  $("dayNight").addEventListener("click", () => setHour(daylight(sunAt(currentSeconds()), SPAWN) > 0.5 ? solveHour(false) : solveHour(true)));
+  $("play").addEventListener("click", () => { state.playing = !state.playing; $("play").setAttribute("aria-pressed", String(state.playing)); if (state.playing) tick(); });
+  $("legendToggle").addEventListener("click", () => { const c = $("legend").classList.toggle("closed"); $("legendToggle").textContent = c ? "Show" : "Hide"; $("legendToggle").setAttribute("aria-expanded", String(!c)); });
+  for (const [id, key] of [["showSites", "sites"], ["showNight", "night"], ["showClouds", "clouds"], ["showMe", "me"], ["showGrid", "grid"]]) {
+    $(id).addEventListener("change", (e) => { state[key] = e.target.checked; draw(); });
+  }
+  window.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" && e.target.type !== "checkbox" && e.target.type !== "range") return;
+    if (e.key === "m" || e.key === "M") { toggleMap(); e.preventDefault(); }
+    else if (e.key === "Escape" && state.open) { toggleMap(false); }
+    else if ((e.key === "l" || e.key === "L") && state.open) { $("dayNight").click(); }
+    else if (e.key === "Home" && state.open) { findMe(); e.preventDefault(); }
+  });
+  window.addEventListener("resize", () => { if (state.open) resize(); });
+  // Noon or midnight at the spawn: the hour the sun is highest or lowest.
+  function solveHour(noon) {
+    let best = 0, bestV = noon ? -2 : 2;
+    for (let h = 0; h < 24; h += 0.25) { const v = dot(sunAt((DAY + h / 24) * DAY_S), SPAWN); if (noon ? v > bestV : v < bestV) { bestV = v; best = h; } }
+    return best;
+  }
+  let last = 0;
+  function tick(t) {
+    if (!state.playing) return;
+    if (t && last) setHour(state.hour + (t - last) / 1000); // a game hour a second
+    last = t || 0;
+    requestAnimationFrame(tick);
+  }
+  function fishKey() {
+    const key = $("fishKey"); key.textContent = "";
+    const rows = state.species === "all"
+      ? [[[252, 187, 161], "one or two species"], [[222, 45, 38], "five"], [[60, 0, 8], "eight"]]
+      : [[[215, 48, 31], "lives here all year"], [[253, 174, 107], "here part of the year"]];
+    for (const [c, label] of rows) {
+      const i = document.createElement("i"); i.style.background = `rgb(${c})`;
+      const n = document.createElement("span"); n.textContent = label;
+      key.append(i, n, document.createElement("span"));
+    }
+  }
+
+  // ---- Start --------------------------------------------------------------------
+  async function start() {
+    const names = ["base.png", "height.png", "biomes-today.png", "biomes-188.png", "biomes-375.png", "biomes-750.png", "temperature.png", "sea-ice.png", "fish.png", "game-view.jpg"];
+    const loaded = await Promise.all(names.map(loadImage));
+    names.forEach((n, i) => { images[n.replace(/\.(png|jpg)$/, "")] = loaded[i]; });
+    try { summary = await (await fetch("world-map/summary.json")).json(); } catch (e) { summary = null; }
+    const frames = summary && summary.weather_frames ? summary.weather_frames : 0;
+    images.clouds = (await Promise.all(Array.from({ length: frames }, (_, k) => loadImage(`clouds-${String(k).padStart(2, "0")}.png`)))).filter(Boolean);
+    if (images["game-view"]) $("gameView").style.backgroundImage = `url(${images["game-view"].src})`;
+    if (images.height) heightData = pixels(images.height);
+    if (images.fish) fishData = pixels(images.fish);
+    const select = $("species");
+    select.append(new Option("Every species: how many live here", "all"));
+    (summary && summary.species || []).forEach((sp, k) => select.append(new Option(`${sp.name}: ${sp.water.join(", ")}, ${sp.temp[0]} to ${sp.temp[1]} °C`, String(k))));
+    if (summary && summary.surface_mean_c !== undefined) {
+      $("tempNote").textContent = `Year ${summary.climate_year}'s mean, land and sea: the planet averages ${summary.surface_mean_c.toFixed(1)} °C over its whole surface, and its water ${summary.water_mean_c.toFixed(1)} °C.`;
+      $("iceNote").textContent = `${(summary.frozen_all_year_share_of_water * 100).toFixed(1)}% of the water is frozen all year.`;
+    }
+    drawFish(); fishKey();
+    resize();
+    setScale("750");
+    setHour(19.5);
+    // Open on the spawn's continent at dusk: the night side is coming in
+    // from the east, and the towns are lighting up.
+    const [x, y] = worldOf(SPAWN); state.cx = x - 60; state.cy = y + 20; state.s = minScale() * 1.9; clampView();
+    draw();
+  }
+  start();
+})();
+</script>
