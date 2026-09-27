@@ -49,23 +49,56 @@ impl Atmosphere {
 
     /// Stages 1 and 2: sunlight heats the ground, the ground radiates, spreads
     /// its heat and warms the air.
-    fn heat(&mut self, sun: Vec3, dt: f32) {
+    pub(super) fn heat(&mut self, sun: Vec3, dt: f32) {
         let s = self.settings;
         let n = self.grid.len();
         let before = self.ground_k.clone();
+        let spread = self
+            .grid
+            .conduct(&before, &self.surface.heat_capacity, s.heat_spread);
+        self.sun_trim = self.thermostat(dt);
         for i in 0..n {
             let c = self.grid.centre[i];
             let cover = self.cover(i);
-            let sunlight = s.solar_wm2 * c.dot(sun).max(0.0) * (1.0 - s.cloud_albedo * cover);
+            let sunlight =
+                s.solar_wm2 * self.sun_trim * c.dot(sun).max(0.0) * (1.0 - s.cloud_albedo * cover);
             self.sunlight[i] = sunlight;
             let absorbed = sunlight * (1.0 - self.surface.albedo[i]);
             let outgoing = s.olr_a + s.olr_b * before[i] - s.cloud_greenhouse * cover;
             let sensible = s.sensible_wm2k * (before[i] - self.air_k[i]);
-            let spread = self.grid.neighbour_excess(&before, i, |_| false) * s.heat_spread;
             self.ground_k[i] +=
-                dt * ((absorbed - outgoing - sensible) / self.surface.heat_capacity[i] + spread);
-            self.air_k[i] += dt * (self.ground_k[i] - self.air_k[i]) / s.air_relax_s;
+                dt * ((absorbed - outgoing - sensible) / self.surface.heat_capacity[i] + spread[i]);
+            // The air takes exactly the heat the ground gave it: relaxing at
+            // `1 / air_relax_s` is the exchange of a layer holding
+            // `sensible_wm2k * air_relax_s` per kelvin, fed the same `sensible`.
+            self.air_k[i] += dt * sensible / s.air_heat_capacity();
         }
+    }
+
+    /// The sun's trim this step: a slow proportional-integral controller that
+    /// holds the planet's mean surface temperature at `target_mean_c`
+    /// (`climate-balance` decision 4). It moves the sun's strength everywhere
+    /// at once, so where it is warm or cold stays the simulation's own. With
+    /// no target it is 1.
+    pub(super) fn thermostat(&mut self, dt: f32) -> f32 {
+        let s = self.settings;
+        let Some(target) = s.target_mean_c else {
+            return 1.0;
+        };
+        let error = target - self.mean_surface_c() as f32;
+        let proportional = s.sun_trim_per_k * error;
+        let step = proportional * dt / s.sun_trim_s;
+        // The integral does not grow while the trim is held at a limit in the
+        // direction it would grow, so a long stretch at a limit does not wind
+        // it up past recovering; and it never holds more than a limit could.
+        let wanted = 1.0 + proportional + self.trim_integral + step;
+        let held =
+            (wanted > s.sun_trim_max && step > 0.0) || (wanted < s.sun_trim_min && step < 0.0);
+        if !held {
+            self.trim_integral =
+                (self.trim_integral + step).clamp(s.sun_trim_min - 1.0, s.sun_trim_max - 1.0);
+        }
+        (1.0 + proportional + self.trim_integral).clamp(s.sun_trim_min, s.sun_trim_max)
     }
 
     /// Stage 3: pressure falls where the air is warm and in the belts' lows,
@@ -150,7 +183,16 @@ impl Atmosphere {
             .collect();
         let surface = self.grid.fluxes(&self.wind, |_| false);
         let aloft = self.grid.fluxes(&steering, |_| false);
+        // The air's temperature is carried as a property of the air, so
+        // converging air does not pile warmth up; over the planet that form
+        // gains or loses heat, and what it does is given back evenly
+        // (`climate-balance` decision 1a, finding 6).
+        let before = self.grid.total(&self.air_k);
         self.air_k = self.grid.upwind(&self.air_k, &surface, dt, false);
+        let fix = ((before - self.grid.total(&self.air_k)) / self.grid.total_area()) as f32;
+        for t in &mut self.air_k {
+            *t += fix;
+        }
         self.charge = self.grid.upwind(&self.charge, &surface, dt, false);
         self.vapour = self.grid.upwind(&self.vapour, &surface, dt, true);
         self.cloud = self.grid.upwind(&self.cloud, &aloft, dt, true);
@@ -159,7 +201,7 @@ impl Atmosphere {
 
     /// Stage 6: the sea and wet ground evaporate, rising air condenses its
     /// vapour into cloud and is warmed by it, thick cloud rains.
-    fn water(&mut self, divergence: &[f32], dt: f32) {
+    pub(super) fn water(&mut self, divergence: &[f32], dt: f32) {
         let s = self.settings;
         for (i, &divergence) in divergence.iter().enumerate() {
             let wind = self.wind[i];
@@ -192,7 +234,9 @@ impl Atmosphere {
                 * self.surface.wetness[i]
                 * dt;
             self.vapour[i] += evaporated;
-            self.ground_k[i] -= evaporated * s.evaporation_cooling / self.surface.heat_capacity[i];
+            // The joules condensing will give back to the air, and no more: the
+            // same kilogram's latent heat both ways (`climate-balance` 1a).
+            self.ground_k[i] -= evaporated * s.latent_j_per_kg() / self.surface.heat_capacity[i];
             let saturated = self.saturation(air)
                 * (-s.lift_saturation * rising).clamp(-3.0, 2.0).exp()
                 * (1.0 + s.mesoscale * self.mesoscale[i]);
@@ -207,6 +251,8 @@ impl Atmosphere {
                     .min(self.cloud[i]);
                 self.cloud[i] -= dried;
                 self.vapour[i] += dried;
+                // Evaporating takes back the heat condensing gave.
+                self.air_k[i] -= s.latent_k_per_kg * dried;
             }
             // Cold cloud rains (snows) out of less water: ice grows at the
             // droplets' expense. So the threshold falls with what the air can

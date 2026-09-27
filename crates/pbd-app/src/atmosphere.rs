@@ -117,6 +117,26 @@ impl Air {
     }
 
     fn publish(&mut self, stepped: Stepped) {
+        // A trim held at its limit means the heat terms are badly off again
+        // (`climate-balance` decision 4), so it is said once when it starts
+        // and once when it ends.
+        let (was, now) = (
+            self.now.sun_trim_at_limit(),
+            stepped.atmosphere.sun_trim_at_limit(),
+        );
+        if now && !was {
+            warn!(
+                "the sun's trim is held at its limit, {:.2}: the planet's mean is {:.1} C against a target of {:?}",
+                stepped.atmosphere.sun_trim,
+                stepped.atmosphere.mean_surface_c(),
+                stepped.atmosphere.settings.target_mean_c
+            );
+        } else if was && !now {
+            info!(
+                "the sun's trim is back inside its limits, at {:.2}",
+                stepped.atmosphere.sun_trim
+            );
+        }
         self.now = Arc::new(stepped.atmosphere);
         self.maps = Arc::new(stepped.maps);
         self.at_seconds = stepped.at_seconds;

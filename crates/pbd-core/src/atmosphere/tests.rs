@@ -488,9 +488,272 @@ fn a_save_from_before_the_sea_state_still_loads() {
     let mut old = b"PBDATM01".to_vec();
     old.extend_from_slice(&current[MAGIC.len()..header]);
     old.extend_from_slice(&current[header..header + n * 4 * (SCALARS - 1)]);
-    old.extend_from_slice(&current[header + n * 4 * SCALARS..]);
+    // And no thermostat, which came after.
+    old.extend_from_slice(&current[header + n * 4 * SCALARS..current.len() - 4]);
     let mut b = air(quiet());
     b.restore(&old).expect("an old save");
     assert_eq!(b.wind, a.wind);
     assert_eq!(b.sea, b.settled_sea());
+}
+
+/// A save from before the thermostat (`PBDATM02`) loads with no trim built up,
+/// and is saved again in the new layout.
+#[test]
+fn a_save_from_before_the_thermostat_loads_with_no_trim() {
+    let mut a = air(quiet());
+    for _ in 0..20 {
+        a.step(SUN, &[]);
+    }
+    a.trim_integral = 0.1;
+    let current = a.to_bytes();
+    let mut old = b"PBDATM02".to_vec();
+    old.extend_from_slice(&current[MAGIC.len()..current.len() - 4]);
+    let mut b = air(quiet());
+    b.restore(&old).expect("a save from before the thermostat");
+    assert_eq!(b.trim_integral, 0.0);
+    assert_eq!(b.ground_k, a.ground_k);
+    assert_eq!(&b.to_bytes()[..MAGIC.len()], MAGIC, "saved again as new");
+    let mut c = air(quiet());
+    c.restore(&current).expect("its own bytes");
+    assert_eq!(c.trim_integral, 0.1, "and the new layout keeps the trim");
+}
+
+/// A planet whose heat answers in hours, lit by a sun that stands still: the
+/// thermostat alone decides where its mean settles.
+fn quick_planet(start_c: f32) -> Atmosphere {
+    let mut a = air(AtmosphereSettings {
+        solar_wm2: 1100.0,
+        land_heat_capacity: 2.0e4,
+        ocean_heat_capacity: 2.0e4,
+        sun_trim_s: 2_000.0,
+        sun_trim_per_k: 0.02,
+        ..quiet()
+    });
+    a.ground_k.fill(start_c);
+    a.air_k.fill(start_c);
+    a
+}
+
+/// `climate-balance` task 2.2: held too cold, the planet warms to the
+/// target; too warm, it cools to it. Its local climate is its own.
+#[test]
+fn the_thermostat_warms_a_cold_planet_and_cools_a_warm_one_to_its_target() {
+    for start in [-10.0, 40.0] {
+        let mut a = quick_planet(start);
+        for _ in 0..100_000 {
+            a.heat(SUN, a.settings.dt_s);
+        }
+        let mean = a.mean_surface_c();
+        assert!(
+            (mean - 15.0).abs() < 0.5,
+            "from {start} C it settled at {mean:.2} C"
+        );
+        let (cold, warm) = a
+            .ground_k
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(lo, hi), &t| (lo.min(t), hi.max(t)));
+        assert!(warm - cold > 20.0, "one side of it is still the warm side");
+        assert!(!a.sun_trim_at_limit(), "trim {}", a.sun_trim);
+    }
+}
+
+/// The trim stops at its limits, says so, and does not wind up while it is
+/// held there: back at the target, the sun comes straight back to normal.
+#[test]
+fn the_trim_stops_at_its_limits_and_does_not_wind_up() {
+    let mut a = quick_planet(-50.0);
+    for _ in 0..20_000 {
+        a.sun_trim = a.thermostat(1.0);
+    }
+    assert_eq!(a.sun_trim, a.settings.sun_trim_max);
+    assert!(a.sun_trim_at_limit());
+    a.ground_k.fill(15.0);
+    a.sun_trim = a.thermostat(1.0);
+    assert!((a.sun_trim - 1.0).abs() < 0.05, "back at {}", a.sun_trim);
+    a.ground_k.fill(80.0);
+    for _ in 0..20_000 {
+        a.sun_trim = a.thermostat(1.0);
+    }
+    assert_eq!(a.sun_trim, a.settings.sun_trim_min);
+    let mut off = quick_planet(-50.0);
+    off.settings.target_mean_c = None;
+    assert_eq!(off.thermostat(1.0), 1.0, "no target, no trim");
+    assert!(!off.sun_trim_at_limit());
+}
+
+/// The planet's heat, J: the ground's and the air's, `sum(C T A)`, plus the
+/// latent heat the vapour carries, which is what condensing will give back.
+fn heat_j(a: &Atmosphere) -> f64 {
+    let s = a.settings;
+    (0..a.grid.len())
+        .map(|i| {
+            let area = a.grid.area[i] as f64;
+            (a.surface.heat_capacity[i] as f64 * a.ground_k[i] as f64
+                + s.air_heat_capacity() as f64 * a.air_k[i] as f64
+                + s.latent_j_per_kg() as f64 * a.vapour[i] as f64)
+                * area
+        })
+        .sum()
+}
+
+/// A sun and a sky that neither heat nor cool, so what is left of the heat
+/// step is the spread and the air's exchange with the ground.
+fn no_radiation() -> AtmosphereSettings {
+    AtmosphereSettings {
+        solar_wm2: 0.0,
+        olr_a: 0.0,
+        olr_b: 0.0,
+        cloud_greenhouse: 0.0,
+        ..quiet()
+    }
+}
+
+/// The leak that froze the planet (`climate-balance` finding 2): the spread
+/// moved temperature, so a coastal sea cell lost sixty times the heat its land
+/// neighbour gained. Now each edge carries one flux of heat, and a grid of
+/// land and sea keeps its heat to rounding while its temperatures even out.
+#[test]
+fn the_spread_moves_heat_between_land_and_sea_and_keeps_it() {
+    let grid = Grid::new(3, 4_800.0);
+    let n = grid.len();
+    // Every third cell is sea, sixty times the land's capacity, and the
+    // temperatures run from -30 to +30 C.
+    let capacity: Vec<f32> = (0..n)
+        .map(|i| if i % 3 == 0 { 3.0e6 } else { 5.0e4 })
+        .collect();
+    let mut t: Vec<f32> = (0..n).map(|i| ((i * 37) % 61) as f32 - 30.0).collect();
+    let heat = |t: &[f32]| -> f64 {
+        (0..n)
+            .map(|i| (capacity[i] * t[i] * grid.area[i]) as f64)
+            .sum()
+    };
+    // Measured against the heat's size, not its sum, which the signs cancel.
+    let size: f64 = (0..n)
+        .map(|i| (capacity[i] * t[i].abs() * grid.area[i]) as f64)
+        .sum();
+    let start = heat(&t);
+    // The old spread, in kelvin, on the same grid: it makes or loses heat
+    // wherever land meets sea.
+    let mut old = t.clone();
+    for _ in 0..2_000 {
+        let rate: Vec<f32> = (0..n)
+            .map(|i| grid.neighbour_excess(&old, i, |_| false) * 0.002)
+            .collect();
+        for i in 0..n {
+            old[i] += rate[i] * 10.0;
+        }
+    }
+    let leaked = (heat(&old) - start).abs() / size;
+    assert!(
+        leaked > 1e-4,
+        "the old spread leaked {leaked:e} of the heat"
+    );
+    let spread = |t: &[f32]| -> f32 {
+        let mean = t.iter().sum::<f32>() / n as f32;
+        t.iter().map(|v| (v - mean).abs()).sum::<f32>() / n as f32
+    };
+    let spread_before = spread(&t);
+    for _ in 0..2_000 {
+        let rate = grid.conduct(&t, &capacity, 0.002);
+        for i in 0..n {
+            t[i] += rate[i] * 10.0;
+        }
+    }
+    let drift = (heat(&t) - start).abs() / size;
+    assert!(drift < 1e-5, "heat drifted by {drift:e} of itself");
+    assert!(spread(&t) < spread_before * 0.8, "and it did spread");
+
+    // Two land cells move as the old spread moved them; across a coast the
+    // sea moves a sixtieth of what the land does.
+    let (land, sea) = (1, 0);
+    let k = grid.neighbour[land][0] as usize;
+    let flat = vec![5.0e4; n];
+    let mut hot = vec![0.0f32; n];
+    hot[k] = 1.0;
+    let rate = grid.conduct(&hot, &flat, 0.002);
+    let old = grid.neighbour_excess(&hot, land, |_| false) * 0.002;
+    assert!(
+        (rate[land] - old).abs() < old * 0.15,
+        "{} against {old}",
+        rate[land]
+    );
+    // A cold sea cell in warm land, against the same cell as land: the land
+    // beside it moves exactly as it would beside land, and the sea moves by
+    // the land's capacity over its own.
+    let mut coast = vec![5.0e4; n];
+    coast[sea] = 3.0e6;
+    let mut cold_sea = vec![1.0f32; n];
+    cold_sea[sea] = 0.0;
+    let as_sea = grid.conduct(&cold_sea, &coast, 0.002);
+    let as_land = grid.conduct(&cold_sea, &flat, 0.002);
+    let k = grid.neighbour[sea][0] as usize;
+    assert_eq!(as_sea[k], as_land[k], "the land moves as it did");
+    let ratio = as_sea[sea] / as_land[sea];
+    assert!((ratio - 5.0e4 / 3.0e6).abs() < 1e-6, "{ratio}");
+}
+
+/// The heat step with no sun and no sky: the spread and the air's exchange
+/// with the ground only move heat, so a planet's heat is kept to rounding.
+#[test]
+fn the_heat_step_without_radiation_keeps_the_planets_heat() {
+    let mut a = air(no_radiation());
+    let start = heat_j(&a);
+    for _ in 0..600 {
+        a.heat(SUN, a.settings.dt_s);
+    }
+    let drift = (heat_j(&a) - start).abs() / start.abs();
+    assert!(drift < 1e-5, "{drift:e}");
+}
+
+/// The second leak (`climate-balance` finding 5): evaporation took 8.0e4 J
+/// a kilogram from the ground and condensing gave back 15,750. Now the water
+/// step takes and gives one number, and cloud that evaporates again takes
+/// back what it gave, so the ground's and the air's heat plus the vapour's
+/// latent heat is kept while water evaporates, condenses and rains.
+#[test]
+fn the_water_cycle_moves_heat_and_neither_makes_nor_loses_it() {
+    let mut a = air(no_radiation());
+    // Wet and lifted, so everything happens: evaporation over the sea,
+    // condensation in the rising air, rain, and cloud drying at the edges.
+    let lift: Vec<f32> = (0..a.grid.len())
+        .map(|i| if i % 2 == 0 { -2e-3 } else { 1e-3 })
+        .collect();
+    let start = heat_j(&a);
+    let (mut condensed, mut rained) = (0.0f64, 0.0f64);
+    for _ in 0..600 {
+        let cloud = total(&a.grid.area, &a.cloud);
+        a.water(&lift, a.settings.dt_s);
+        rained += total(&a.grid.area, &a.rain_rate) * a.settings.dt_s as f64;
+        condensed += (total(&a.grid.area, &a.cloud) - cloud).max(0.0);
+    }
+    assert!(rained > 0.0 && condensed > 0.0, "the cycle ran");
+    let drift = (heat_j(&a) - start).abs() / start.abs();
+    assert!(drift < 1e-5, "{drift:e}");
+}
+
+/// Finding 6: carrying the air's temperature in the advective form lost a
+/// quarter of the absorbed sunlight where warm air converged. The carry now
+/// gives back what the form gains or loses, so the air's heat is kept to
+/// rounding under a wind that converges on one side of the planet.
+#[test]
+fn the_winds_carry_keeps_the_airs_heat() {
+    let mut a = air(quiet());
+    for i in 0..a.grid.len() {
+        let c = a.grid.centre[i];
+        // Converging on the +X side, warm there and cold elsewhere.
+        a.wind[i] = (Vec3::X - c * c.x) * -8.0;
+        a.air_k[i] = 10.0 + 20.0 * c.x;
+    }
+    let start = a.grid.total(&a.air_k);
+    for _ in 0..200 {
+        a.carry(a.settings.dt_s);
+    }
+    let size: f64 = a
+        .air_k
+        .iter()
+        .zip(&a.grid.area)
+        .map(|(&t, &area)| (t.abs() * area) as f64)
+        .sum();
+    let drift = (a.grid.total(&a.air_k) - start).abs() / size;
+    assert!(drift < 1e-5, "{drift:e}");
 }

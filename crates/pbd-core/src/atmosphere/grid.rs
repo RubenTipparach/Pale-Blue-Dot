@@ -258,6 +258,57 @@ impl Grid {
             .collect()
     }
 
+    /// The area-weighted sum of a per-cell field, summed in cell order in
+    /// `f64` so it is the same on every run.
+    pub fn total(&self, field: &[f32]) -> f64 {
+        field
+            .iter()
+            .zip(&self.area)
+            .map(|(&v, &a)| v as f64 * a as f64)
+            .sum()
+    }
+
+    /// The planet's area, square metres, summed as [`Grid::total`] sums.
+    pub fn total_area(&self) -> f64 {
+        self.area.iter().map(|&a| a as f64).sum()
+    }
+
+    /// Heat conducted between neighbouring cells, as the rate each cell's
+    /// temperature changes, K/s.
+    ///
+    /// Each edge carries ONE flux of heat, `g (T_k - T_i)` watts, and each side
+    /// moves by it over its own heat capacity (`capacity`, J/m^2/K) times its
+    /// area, so the planet's `sum(C A T)` is kept to rounding: heat moves, and
+    /// is never made or lost (`climate-balance` decision 1). The conductance is
+    /// `rate` times the lesser of the two capacities, times the mean of the two
+    /// cells' area per side. Between two cells of one capacity that is `rate`
+    /// times the difference from the neighbours' mean, per second, which is
+    /// what `neighbour_excess` gave; across a coast the land moves at that rate
+    /// and the sea by the land's capacity over its own, a sixtieth.
+    pub fn conduct(&self, temperature: &[f32], capacity: &[f32], rate: f32) -> Vec<f32> {
+        let n = self.len();
+        let mut watts = vec![0.0f32; n];
+        for i in 0..n {
+            let per_side_i = self.area[i] / f32::from(self.sides[i]);
+            for side in 0..self.sides[i] as usize {
+                let k = self.neighbour[i][side] as usize;
+                // Each edge once, from its lower-numbered cell; the other
+                // takes the exact negative.
+                if k <= i {
+                    continue;
+                }
+                let per_side_k = self.area[k] / f32::from(self.sides[k]);
+                let g = rate * capacity[i].min(capacity[k]) * 0.5 * (per_side_i + per_side_k);
+                let flow = g * (temperature[k] - temperature[i]);
+                watts[i] += flow;
+                watts[k] -= flow;
+            }
+        }
+        (0..n)
+            .map(|i| watts[i] / (capacity[i] * self.area[i]))
+            .collect()
+    }
+
     /// Mean of a scalar over a cell's open neighbours minus the cell's own
     /// value: a Laplacian in units of the field, which is what smoothing wants.
     pub fn neighbour_excess(

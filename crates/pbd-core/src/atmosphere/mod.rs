@@ -129,7 +129,12 @@ pub struct Atmosphere {
     pub current: Vec<Vec3>,
     /// The wind speed the waves have caught up with, m/s; zero on land.
     pub sea: Vec<f32>,
+    /// The thermostat's integral: the part of the sun's trim a steady error
+    /// has built up (`climate-balance` decision 4). Saved with the weather.
+    pub trim_integral: f32,
     // --- What the last step worked out, for sampling and drawing ---
+    /// The trim the last step's sunlight was scaled by.
+    pub sun_trim: f32,
     /// Precipitation, kg/m^2/s.
     pub rain_rate: Vec<f32>,
     /// Ascent out of the boundary layer, m/s.
@@ -169,6 +174,8 @@ impl Atmosphere {
             eta: vec![0.0; n],
             current: vec![Vec3::ZERO; n],
             sea: vec![0.0; n],
+            trim_integral: 0.0,
+            sun_trim: 1.0,
             rain_rate: vec![0.0; n],
             lift: vec![0.0; n],
             upper: vec![Vec3::ZERO; n],
@@ -318,6 +325,43 @@ impl Atmosphere {
         0.3 + 0.7 * convective
     }
 
+    /// The planet's mean surface temperature, deg C: the ground's, which is
+    /// the sea surface over the sea, weighted by each cell's area over the
+    /// whole surface, land and sea. Summed in cell order in `f64`, so it is the
+    /// same on every run. What the thermostat holds.
+    pub fn mean_surface_c(&self) -> f64 {
+        self.grid.total(&self.ground_k) / self.grid.total_area()
+    }
+
+    /// Whether the last step's trim was held at one of its limits: the sign
+    /// that the heat terms are badly off again, which the game logs.
+    pub fn sun_trim_at_limit(&self) -> bool {
+        self.settings.target_mean_c.is_some()
+            && (self.sun_trim <= self.settings.sun_trim_min
+                || self.sun_trim >= self.settings.sun_trim_max)
+    }
+
+    /// The clouds' net effect on the surface, W/m^2, averaged over the planet
+    /// as the last step left it: the longwave they return less the sunlight
+    /// they reflect that the ground would have absorbed. Earth's is about
+    /// -20 (`climate-balance` decision 3).
+    pub fn net_cloud_wm2(&self) -> f64 {
+        let s = self.settings;
+        let mut sum = 0.0f64;
+        for i in 0..self.grid.len() {
+            let cover = self.cover(i);
+            let kept = 1.0 - s.cloud_albedo * cover;
+            let clear = if kept > 1e-6 {
+                self.sunlight[i] / kept
+            } else {
+                0.0
+            };
+            let reflected = clear * s.cloud_albedo * cover * (1.0 - self.surface.albedo[i]);
+            sum += ((s.cloud_greenhouse * cover - reflected) * self.grid.area[i]) as f64;
+        }
+        sum / self.grid.total_area()
+    }
+
     /// Total water in the air (vapour and cloud), kg, area-weighted.
     pub fn water_kg(&self) -> f64 {
         (0..self.grid.len())
@@ -345,6 +389,7 @@ impl Atmosphere {
                 }
             }
         }
+        out.extend_from_slice(&self.trim_integral.to_le_bytes());
         out
     }
 
@@ -353,13 +398,16 @@ impl Atmosphere {
     pub fn restore(&mut self, bytes: &[u8]) -> Result<(), String> {
         let n = self.grid.len();
         // A save from before the sea state (`PBDATM01`) has one scalar field
-        // fewer; its sea is taken to have caught up with its wind.
-        let scalars_saved = match &bytes[..MAGIC.len().min(bytes.len())] {
-            m if m == MAGIC => SCALARS,
-            m if m == MAGIC_V1 => SCALARS - 1,
+        // fewer; its sea is taken to have caught up with its wind. One from
+        // before the thermostat (`PBDATM01` and `PBDATM02`) has no trim, and
+        // starts with none built up.
+        let (scalars_saved, trim_saved) = match &bytes[..MAGIC.len().min(bytes.len())] {
+            m if m == MAGIC => (SCALARS, true),
+            m if m == MAGIC_V2 => (SCALARS, false),
+            m if m == MAGIC_V1 => (SCALARS - 1, false),
             _ => return Err("weather state has an unknown header".into()),
         };
-        let want = MAGIC.len() + 16 + n * 4 * (scalars_saved + 6);
+        let want = MAGIC.len() + 16 + n * 4 * (scalars_saved + 6) + if trim_saved { 4 } else { 0 };
         if bytes.len() != want {
             return Err(format!(
                 "weather state is {} bytes, expected {want}",
@@ -385,8 +433,10 @@ impl Atmosphere {
         let vectors: Vec<Vec<Vec3>> = (0..2)
             .map(|_| read(n * 3).chunks_exact(3).map(Vec3::from_slice).collect())
             .collect();
+        let trim_integral = if trim_saved { read(1)[0] } else { 0.0 };
         if scalars.iter().flatten().any(|v| !v.is_finite())
             || vectors.iter().flatten().any(|v| !v.is_finite())
+            || !trim_integral.is_finite()
         {
             return Err("weather state holds a non-finite value".into());
         }
@@ -409,6 +459,7 @@ impl Atmosphere {
             Some(sea) => sea,
             None => self.settled_sea(),
         };
+        self.trim_integral = trim_integral;
         // The mesoscale noise is not saved: it is a function of the step it
         // was last refreshed at, so it is refreshed again as of that step.
         // The step refreshes it when it begins on a multiple of the period;
@@ -451,7 +502,8 @@ impl Atmosphere {
     }
 }
 
-const MAGIC: &[u8; 8] = b"PBDATM02";
+const MAGIC: &[u8; 8] = b"PBDATM03";
+const MAGIC_V2: &[u8; 8] = b"PBDATM02";
 const MAGIC_V1: &[u8; 8] = b"PBDATM01";
 const SCALARS: usize = 8;
 

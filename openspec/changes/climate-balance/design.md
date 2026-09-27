@@ -63,6 +63,44 @@ findings 2 and 5). The leaks froze the planet, not the sun or the clouds.
     that balanced them one season drifts the next.
   - Run E shows what happens when the spread's sign flips: cells blew up.
 
+**1a. How the books close, term by term (written 2026-09-27, before the
+code of tasks 1.3 and 1.3b).**
+- **The spread** is `Grid::conduct`. Each edge carries a heat flux,
+  `g · (T_k − T_i)`, in watts. The conductance `g` is symmetric: `heat_spread
+  · min(C_i, C_k)` times the mean of the two cells' area per side. Cell `i`
+  moves by the sum of its edges' fluxes over `C_i · A_i`. Between two land
+  cells, or two sea cells, that is today's rate in kelvin to within the
+  grid's area spread. Across a coast the land moves at today's rate and the
+  sea by `C_land / C_sea` of it, a sixtieth. The sum of `C · A · ΔT` over the
+  planet is zero to rounding.
+- **The air holds heat.** The air relaxes to the ground at `1 / air_relax_s`
+  while the ground gives it `sensible_wm2k · (T_g − T_a)`. That is exactly
+  the exchange of an air layer with heat capacity `C_air = sensible_wm2k ·
+  air_relax_s`, 45,000 J/m²K on the shipped settings, so the air is counted
+  as a store of that size. The air's update reads the ground's temperature
+  from before the step, as the ground's sensible term does, so the two sides
+  of the exchange are the same joules.
+- **Latent heat is one number.** A kilogram that condenses warms the air by
+  `latent_k_per_kg`, which is `C_air · latent_k_per_kg` joules: 15,750 J/kg on
+  the shipped settings. Evaporation takes the same joules from the ground,
+  so `evaporation_cooling` is no longer a setting. It is
+  `AtmosphereSettings::latent_j_per_kg()`, derived.
+- **Cloud that evaporates back to vapour cools the air** by the same
+  `latent_k_per_kg`. Without it, a kilogram that condensed, re-evaporated and
+  condensed again would warm the air twice for one evaporation.
+- **The air's carry keeps its heat (found on the fixed step, finding 6).**
+  The wind carries the air's temperature in the advective form, because a
+  single layer must not pile warmth up where air converges; in the real
+  atmosphere that air rises and its heat leaves aloft. The form is kept. What
+  it gains or loses over the planet each step is given back to the air evenly,
+  per square metre: an energy fixer, as climate models use one. The heat that
+  converging air carries away aloft comes down everywhere, which is roughly
+  what the missing upper branch of the circulation would do with it.
+- **What still makes or loses heat, on purpose:** the sun and the outgoing
+  longwave; a lightning strike's cold pool, which is local and rare; the
+  weather slider's forcing; and the guard that resets a non-finite cell.
+  The heat budget reports the pool with the rest.
+
 **2. Then fix the two terms, then add the thermostat.** The owner's words ask for
 the sun to maintain the average, and both parts serve that.
 - The fixed terms put the natural balance near 15 °C, so the thermostat's
@@ -244,6 +282,27 @@ With both leaks closed, Budyko's balance is `absorbed + greenhouse = 203 +
 | shipped (0.6, 40), sun 1360 | 175 | 25 | about −1 °C |
 | 0.35 and 40 | about 210 | 25 | about 15 °C |
 | 0.25 and 50 | about 230 | 30 | about 27 °C |
+
+**Finding 6: the air's carry is a third leak (2026-09-27, on the fixed
+step).** With the spread and the latent cycle closed (tasks 1.3 and 1.3b),
+the heat budget counts the air and the vapour as stores and reports what
+radiation does not account for. At level 4 on the shipped settings, days 2
+to 4, in W/m²:
+
+| day | absorbed | emitted less cloud+ | ground stored | air | latent | spread | leak | air's carry |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2 | 129.7 | 201.8 | −99.6 | −5.6 | 1.7 | 0.0 | 31.5 | −30.6 |
+| 3 | 126.3 | 199.6 | −102.5 | −4.8 | −1.8 | 0.0 | 35.8 | −31.5 |
+| 4 | 124.9 | 199.2 | −100.5 | −3.8 | −2.8 | 0.0 | 32.8 | −31.9 |
+
+- The spread now reads 0.0: task 1.3's check.
+- The leak is the heat the planet lost beyond its radiation. The air's carry,
+  computed from the sampled state with the step's own `upwind`, is nearly all
+  of it.
+- The advective form loses heat where warm air converges, at the thermal
+  equator, and gains it where cold air diverges. Over the planet that is a
+  loss, about a quarter of the absorbed sunlight.
+- Decision 1a closes it with an energy fixer.
 
 **The next measurement: the planet without either leak.** The override
 closes both, using only the shipped code:
