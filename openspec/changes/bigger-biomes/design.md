@@ -108,10 +108,47 @@ distribution.**
   biome and its share.
 - If the owner picks the 375 m scale, the walks become 2 km and 500 m.
 
+## Measured: the candidates (2026-09-27)
+
+`world-map`'s instrument (`examples/world_map.rs`, task 1.1) classified a
+2,048 x 1,024 equirectangular raster of the shipped planet through
+`pbd_core::map::base_texel`, each pixel weighted by its share of the sphere.
+Land is 40% of the surface.
+
+**Today, as shipped (188 m, 0.36 / 0.64), 91% of the temperate land is
+fields**: the owner's "the majority is just grass", measured. Of all the land:
+
+| beach | fields | desert | jungle | swamp | mountains | tundra |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10% | 59% | 3% | 3% | 0.2% | 2% | 23% |
+
+**The moisture's quantiles over the temperate land, and the thresholds that
+give a third each** (task 1.1):
+
+| `moisture_m` | q10 | q33 | q50 | q67 | q90 | `desert_below` | `wet_above` | fields | desert | jungle | swamp |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 188 | 0.392 | 0.463 | 0.500 | 0.537 | 0.607 | 0.463 | 0.537 | 33% | 33% | 32% | 2% |
+| 375 | 0.392 | 0.464 | 0.501 | 0.537 | 0.607 | 0.464 | 0.537 | 33% | 33% | 32% | 2% |
+| 750 | 0.394 | 0.468 | 0.506 | 0.544 | 0.614 | 0.468 | 0.544 | 33% | 33% | 32% | 2% |
+
+What it shows:
+- **The thresholds, not the scale, are what made it all grass.** The noise
+  is clustered about 0.5 at every scale, so 0.36 and 0.64 sit out past the
+  10th and 90th percentiles. The scale changes how big a region is, and the
+  thresholds how much of each there is.
+- **The shares barely move with the scale**, so the thresholds found at one
+  scale serve all three. At 750 m (B1) they are 0.468 and 0.544.
+- **Swamp stays small (2%)**: it is the wet share below `swamp_max_elev_m`
+  (5 m), which little temperate land is. Jungle and swamp together are the
+  third that B2 asks for.
+- Of all the land, 750 m retuned gives beach 10%, fields 22%, desert 22%,
+  jungle 21%, swamp 1%, mountains 2% and tundra 23%.
+- The rasters are `docs/mockups/world-map/biomes-{today,188,375,750}.png`.
+
 ## Risks / Trade-offs
 
-- [More jungle means more trees drawn] → Jungle goes from about 2% of the
-  sphere to perhaps a sixth of the land. That can move frame time. It cannot
+- [More jungle means more trees drawn] → Jungle goes from 3% of the land to
+  21% (measured above). That can move frame time. It cannot
   be measured in a cloud session (CLAUDE.md). The owner runs
   `tools/perf_suite.py` with the old build against the new, and the report
   goes in `docs/benchmarks/`. If it regresses, the tree scatter's jungle

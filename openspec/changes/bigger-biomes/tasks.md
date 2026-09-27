@@ -5,7 +5,7 @@ It goes with step 2a. The owner's choice is made on the `world-map` mockup
 
 ## 1. Measure the candidates (instrument only)
 
-- [ ] 1.1 In the `world-map` instrument, a mode that sweeps `moisture_m` over 188, 375 and 750 m. For each scale it reports the moisture's quantiles over the temperate land, and the `desert_below` and `wet_above` that give a third each. Verify: the table is printed and copied into this design.
+- [x] 1.1 In the `world-map` instrument, a mode that sweeps `moisture_m` over 188, 375 and 750 m. For each scale it reports the moisture's quantiles over the temperate land, and the `desert_below` and `wet_above` that give a third each. Verify: the table is printed and copied into this design.
 - [ ] 1.2 Biome rasters for each candidate at its tuned thresholds, into the map mockup's biome layer. Verify: the mockup switches between them and shows each one's shares in its legend.
 - [ ] 1.3 **Gate:** the owner picks a scale and confirms the shares on the mockup. Record the words in `proposal.md`, and put the chosen numbers in this design. Verify: the quote and the numbers are present.
 

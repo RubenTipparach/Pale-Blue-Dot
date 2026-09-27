@@ -1,0 +1,47 @@
+{
+ "altitude_m": [
+  -126.0,
+  160.0
+ ],
+ "biome_shares_of_land": {
+  "188": {
+   "beach": 0.1024,
+   "desert": 0.2175,
+   "fields": 0.2175,
+   "jungle": 0.2059,
+   "mountains": 0.017,
+   "swamp": 0.0115,
+   "tundra": 0.2282
+  },
+  "375": {
+   "beach": 0.1024,
+   "desert": 0.2175,
+   "fields": 0.2175,
+   "jungle": 0.2059,
+   "mountains": 0.017,
+   "swamp": 0.0115,
+   "tundra": 0.2282
+  },
+  "750": {
+   "beach": 0.1024,
+   "desert": 0.2175,
+   "fields": 0.2175,
+   "jungle": 0.2056,
+   "mountains": 0.017,
+   "swamp": 0.0118,
+   "tundra": 0.2282
+  },
+  "today": {
+   "beach": 0.1024,
+   "desert": 0.0295,
+   "fields": 0.5939,
+   "jungle": 0.0275,
+   "mountains": 0.017,
+   "swamp": 0.0015,
+   "tundra": 0.2282
+  }
+ },
+ "height": 1024,
+ "land_share": 0.3962,
+ "width": 2048
+}

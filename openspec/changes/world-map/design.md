@@ -103,9 +103,10 @@ zoom, like the fish maps. See "Decided by the owner" below.*
 - Closer zooms are drawn from 256 × 256 tiles in a quadtree. They are built on
   demand from the same `base_texel` and kept in an in-memory LRU. The finest
   level is 2.833 m a pixel.
-- The build cost is not measured. It is `surface_altitude` plus `biome_at`
-  per pixel, about 2 million calls for the whole raster. Task 1.1 times it as
-  part of the instrument, before the game depends on it.
+- The build cost is measured (task 1.1, 2026-09-27): `base_texel` over the
+  whole 2,048 x 1,024 raster took 2.6 s on one thread of the cloud box, a
+  release build, 1.24 us a texel. On the async pool that is well under a
+  second on four threads, and it runs once a world, before the cache.
 - *Alternative:* one full-resolution raster, 10,650 × 5,325 pixels. Rejected:
   it is 57 million texels, and most of them are never looked at.
 
@@ -165,9 +166,10 @@ zoom, like the fish maps. See "Decided by the owner" below.*
 
 ## Risks / Trade-offs
 
-- [The base raster takes too long to build] → It is timed by the instrument
-  first (task 1.1). It runs off the frame and is cached. If it is slow the
-  world view is built at half resolution first and refined.
+- [The base raster takes too long to build] → Timed by the instrument
+  (task 1.1): 2.6 s on one thread for the whole planet. It runs off the frame
+  and is cached. A close-zoom 256 x 256 tile is 65,536 texels, about 80 ms on
+  one thread.
 - [Two projections confuse the player] → The blend is shown in the mockup, and
   the owner decides whether it stays. The fallback is equirectangular only,
   with the poles drawn in two small azimuthal insets.

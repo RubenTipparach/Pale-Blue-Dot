@@ -7,8 +7,8 @@ gate for everything after it, in this change and in `bigger-biomes`,
 
 ## 1. The map mockup, for the owner's approval
 
-- [ ] 1.1 `pbd_core::map::base_texel(cfg, direction)` (altitude, top block, biome, land or sea; the base map is coloured by the top block, survey M3) and the instrument `examples/world_map.rs`. It writes a 2,048 × 1,024 equirectangular raster of the shipped generator, and one for each biome scale `bigger-biomes` proposes, and prints how long each took. Verify: a core test that `base_texel` and `biome_at(surface_altitude(...))` agree on 10,000 seeded directions, and the build time is recorded in this design's risk note.
-- [ ] 1.2 The rasters exported as PNGs into `docs/mockups/world-map/`, with a small script next to `tools/fish_ranges.py`. Verify: the PNGs are committed, and the script regenerates them byte for byte.
+- [x] 1.1 (2.6 s for the whole raster on one thread; the test compares with the floored altitude the column and the terrain's surface code use, not `surface_altitude` raw, which differs at a threshold.) `pbd_core::map::base_texel(cfg, direction)` (altitude, top block, biome, land or sea; the base map is coloured by the top block, survey M3) and the instrument `examples/world_map.rs`. It writes a 2,048 × 1,024 equirectangular raster of the shipped generator, and one for each biome scale `bigger-biomes` proposes, and prints how long each took. Verify: a core test that `base_texel` and `biome_at(surface_altitude(...))` agree on 10,000 seeded directions, and the build time is recorded in this design's risk note.
+- [x] 1.2 The rasters exported as PNGs into `docs/mockups/world-map/`, with a small script next to `tools/fish_ranges.py` (`tools/world_map.py`). Verify: the PNGs are committed, and the script regenerates them byte for byte.
 - [ ] 1.3 `docs/mockups/world-map.html`. It has:
   - the planet flat and zoomable;
   - the flat, equirectangular projection at every zoom, as the fish range maps have (survey M2);
