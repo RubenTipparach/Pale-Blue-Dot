@@ -32,8 +32,8 @@ climate and fish overlays of the last simulated year, by the rules in
   the count of species in blue, for the page to unpack.
 
 With `--weather` (what `examples/map_weather.rs` writes) it draws the live
-layer's frames, clouds-NN.png: white cloud with its cover as alpha, blue
-where it rains.
+layer's frames, clouds-NN.png: white cloud with its cover as alpha, tinted
+blue by how hard it rains.
 
 It writes the same bytes from the same input, so a regenerated map diffs to
 nothing.
@@ -210,14 +210,16 @@ def weather_frames(path, out):
     assert data[:8] == b"PBDWTHR1", "not a map_weather raster"
     width, height, frames = struct.unpack_from("<III", data, 8)
     body = np.frombuffer(data, dtype="<f4", offset=20).reshape(frames, 3, height, width)
+    white, rainy = np.array([250.0, 250.0, 250.0]), np.array([105.0, 145.0, 212.0])
     for k in range(frames):
         cover, rain = body[k, 0], body[k, 1]
+        # Rain tints the cloud by how hard it rains: nothing below the
+        # atmosphere's raining rate (2e-4 kg/m^2/s), full at four times it.
+        wet = np.clip((rain - 2.0e-4) / 6.0e-4, 0.0, 1.0)[..., None]
         rgba = np.zeros((height, width, 4), dtype=np.uint8)
-        wet = rain > 2.0e-4
-        rgba[..., :3] = 250
-        rgba[wet, 0], rgba[wet, 1], rgba[wet, 2] = 120, 160, 225
-        rgba[..., 3] = np.clip(cover * 235, 0, 255).astype(np.uint8)
-        rgba[wet, 3] = np.maximum(rgba[wet, 3], 200)
+        rgba[..., :3] = (white * (1 - wet) + rainy * wet).astype(np.uint8)
+        alpha = np.clip(cover, 0, 1) * 215
+        rgba[..., 3] = alpha.astype(np.uint8)
         Image.fromarray(rgba, "RGBA").save(os.path.join(out, f"clouds-{k:02}.png"))
     return {"weather_frames": int(frames), "weather_frame_hours": 24.0 / frames}
 

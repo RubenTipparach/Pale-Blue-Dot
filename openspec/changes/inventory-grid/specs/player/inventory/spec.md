@@ -40,12 +40,23 @@ SHALL be ignored, and the world SHALL keep running.
 - **WHEN** the pack is closed while a stack is held on the pointer
 - **THEN** the stack goes back to the slot it came from
 
-### Requirement: Nothing dug is lost to a full pack
-A dig SHALL be refused, before it is saved, when the block it yields cannot
-be carried, and the HUD SHALL say why.
+### Requirement: A dug block drops into the world and is picked up
+A dug block SHALL drop into the world as a floating block of its material at
+the dug cell, and SHALL be drawn to the player and picked up when the player
+comes near it. A drop that does not fit SHALL stay floating in the world. A
+drop SHALL last 300 s of world time and SHALL survive a save and a load
+within that time.
+
+#### Scenario: Digging beside the player
+- **WHEN** a block is dug within reach and the pack has room
+- **THEN** it drops, is pulled in, and lands in the hotbar or the pack
 
 #### Scenario: Digging with everything full
 - **WHEN** the hotbar and the pack are full and hold no stack of the dug block
   with room
-- **THEN** the cell is not dug, nothing is written to the log, and the HUD
-  says the pack is full
+- **THEN** the cell is dug, and the block floats where it was cut until there
+  is room or its time runs out
+
+#### Scenario: A drop outlives a quit
+- **WHEN** the world is saved and loaded with a drop floating in it
+- **THEN** the drop is where it was, with the time it had left

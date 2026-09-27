@@ -27,8 +27,10 @@ Observed on the branch, 2026-09-27:
   changes.
 
 **Non-Goals:**
-- **Dropped items on the ground**, and throwing a stack away. There is no
-  item entity yet. A stack can be moved, never destroyed, until one exists.
+- **Throwing a stack away** from the pack. Drops come from digging only.
+- **Drops from anything but a dig**: a catch that does not fit still goes
+  where `give` puts it, and a mob or a chest drops nothing, because there is
+  neither yet.
 - **Chests and other containers.** Those are `cities-in-the-world`'s and
   `player-building`'s, and they would reuse `Carried`'s stack moves.
 - **Re-dealing the lights an old save could not fit** in kit grant 2. That
@@ -42,9 +44,11 @@ lines up with the hotbar and its number keys. Thirty plus ten is forty kinds
 of thing, which covers every block, every light and a creel of fish with room
 over. A bigger pack is a constant.
 
-**2. `Carried` in the core, and the give order is one function.** The hotbar
-and the pack are two arrays in one struct, because the order a give fills
-them in is a rule a future multiplayer must agree on. The order:
+**2. The core's `Slots` grows to forty, and the give order is one function.**
+The hotbar is the first ten slots and the pack the next thirty, in one
+struct, because the order a give fills them in is a rule a future
+multiplayer must agree on. `SLOTS` stays the hotbar's ten, which the number
+keys and the selection know; `PACK` is thirty. The order:
 1. matching stacks with room, hotbar first;
 2. the first empty hotbar slot;
 3. the first empty pack slot.
@@ -61,11 +65,40 @@ written when the pack changes. Rejected: a dig that fills the pack would then
 be two lines, and a crash between them is the torn state the log exists to
 prevent.
 
-**4. A full pack refuses the dig (survey I3).** The edit is refused before
-it is saved, as a full tier refuses one today, and the HUD says "your pack is
-full". *Alternative:* dig anyway and lose the block, as today. Rejected by the
-inventory spec's own rule. *Alternative:* drop it on the ground. There is no
-item entity (non-goal).
+**4. A dug block drops into the world, as Tenebris drops it (survey I3).**
+The owner: "they can dig, but see how tenebris drops blocks into the world
+like minecraft!", and "if pack is full, stuff just gets mined into the world
+as floating blocks". Tenebris's drops (`tenebris-client/src/drops.rs`, read
+at the pinned commit) are the reference:
+- **Every dug block drops**, at the dug cell's centre, scattered 0.22 m so a
+  pile does not stack in one spot. There is no gravity: a drop hovers where
+  it was cut.
+- **It looks like the block**: a small hex prism of its material, 0.16 m
+  across the corners and 0.2 m tall, bobbing 5 cm at 2.2 rad/s and turning
+  at 1.5 rad/s, each drop at its own phase. A light (a lantern, a candle)
+  drops as its own icon on a card that faces the camera, as Tenebris draws
+  non-block items.
+- **A magnet brings it in.** Within 2.6 m of the player's chest (0.8 m over
+  the feet) it is pulled at `7 (1 + 2.6 − d)` m/s. Within 1.2 m it is picked
+  up by the give order of decision 2. What does not fit stays on the drop,
+  floating, and is tried again every frame: a full pack is the owner's
+  "floating blocks".
+- **It lasts 300 s of world time**, as Tenebris's does, then goes. World
+  time passes only while the world is played (CLAUDE.md), so a drop left at
+  a quit is still there, with the same time left, at the next load.
+- **It is durable, which Tenebris's are not.** Tenebris keeps drops in
+  memory and loses them at a quit or a crash. Here every accepted change to
+  the world reaches the disk at once (CLAUDE.md), and a floating block is
+  the player's property lying in the world. So the dig's log line records
+  the drop it made (its item, count and world time), and a pickup is a line
+  of its own carrying the slots after it. A drop past its 300 s is not
+  restored at load, so a despawn writes nothing.
+- *Alternative:* drop only when the pack is full, and give straight to the
+  pack otherwise. The owner pointed at Tenebris, which drops every block and
+  lets the magnet bring it in; the magnet makes a dig beside the player
+  feel instant anyway. Asked once in chat to be sure.
+- *Alternative:* refuse the dig when the pack is full. The owner said to
+  dig.
 
 **5. Mouse moves, the way every block game does it.** Click picks up, click
 puts down or swaps, shift-click sends between the hotbar and the pack,
@@ -82,8 +115,12 @@ hotbar is not drawn either.
   400 bytes, where it wrote 100. The log is appended and flushed per edit
   already; it is not measured in the cloud session (CLAUDE.md), and the owner
   runs the performance suite on real hardware.
-- [Refusing a dig with a full pack could surprise a player] → The HUD says
-  why, and the pack is forty kinds of thing. It is survey I3.
+- [Hundreds of drops left floating after a long dig with a full pack] →
+  Each is one small mesh on one shared material, and each goes after 300 s.
+  A dig makes at most one. Not measured in the cloud session.
+- [A pickup line per block doubles the log's lines while digging] → A pickup
+  line is short (the slots, about 400 bytes with a full pack) and the log is
+  appended per edit already.
 
 ## Migration Plan
 
