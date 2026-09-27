@@ -39,7 +39,17 @@
 - [x] Eighth round: furniture pushed clear of walls, doors, posts and hearths
       at placement; 55 of 342 pieces were in a wall, now none (design section
       11).
-- [ ] The owner's verdict, and answers to the nine questions in the proposal.
+- [x] The owner's answers to the proposal's questions (survey, 2026-09-27),
+      recorded in the proposal.
+- [ ] Ninth round, on the owner's word (T6): mountain dwellings cut into a
+      slope, cave dwellers in a cave system, and mound houses dug into the
+      ground under turf, each from its own biome's materials. All are lit at
+      night and every route is walked, as in the rounds before. Verify: each
+      new settlement loads with no page errors and no roof overlaps, and every
+      new route has no airborne tick and no eye jump over 0.1 m.
+- [ ] A parity list of everything in the mockup and where the game builds it
+      (`docs/plans/towns-mockup-parity.md`). Verify: every row names a change
+      and a task, or an exclusion the owner has agreed to.
 
 ## 1. Contact (`pbd-core`, `planet_contact.rs`)
 - [ ] Thin solids: a convex outline, a height range and a step class, indexed
@@ -56,6 +66,9 @@
 - [ ] The body is pushed out of thin solids and too-tall column faces along
       the face, keeping the tangential motion; headroom stays a hard stop.
 - [ ] Hold a grounded walker to a floor up to 0.35 m below.
+- [ ] Walking and running (the owner, T1): walk at 2.5 m/s under a roof or
+      while Shift is held, and run at 8 m/s otherwise. Sprint is settled by
+      survey question T8.
 - [ ] Tests mirroring design section 5: up and down each stair with no eye
       jump over 0.1 m and no airborne tick; a shallow wall brush slides; a
       closed door stops; a table is not stepped onto; a jump indoors stops at
@@ -111,6 +124,17 @@
 - [ ] Trim built proud of what it meets (sills, thresholds, floors over wall
       tops). Test: no two visible faces of different pieces share a plane over
       the same area in a built settlement.
+
+- [ ] Moving parts, as the mockup has them: windmill sails that turn, moored
+      boats that bob on the swell while their collision stays fixed, and
+      hearths, torches and braziers whose flames flicker. Verify: captures
+      over a few seconds show each moving, and the boat's collision test
+      passes while it bobs.
+- [ ] The mockup's inspection tools as debug keys in the game: a collision
+      view (C in the mockup), flying through walls (N), and a readout of
+      feet height, cell, headroom, speed and eye jumps. Verify: each is
+      listed in the controls under debug, and a capture of the collision view
+      in the walled town.
 
 ## 5. Doors and saves
 - [ ] E opens and closes the door in reach; the state change goes through the

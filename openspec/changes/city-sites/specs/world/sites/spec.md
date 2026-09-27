@@ -140,3 +140,16 @@ rename or remove a site in a world that already has its list.
 - **WHEN** a new world is made
 - **THEN** its sites are generated from the current rules and overrides, and
   the save records them and the sites version before any is shown
+
+### Requirement: A new player starts near a small town, and the capital is elsewhere
+
+The site list SHALL hold a small settlement (a village or a small walled town)
+within about 500 m of the spawn. It SHALL mark one walled town as the capital,
+placed away from the spawn and on another land mass where one can hold it. The
+override list SHALL be able to move the capital.
+
+#### Scenario: A new world
+
+- **WHEN** a new world's site list is made
+- **THEN** a village or small walled town stands within 500 m of the spawn, and
+  the capital is on another land mass

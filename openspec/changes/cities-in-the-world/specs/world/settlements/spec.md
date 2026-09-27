@@ -80,7 +80,8 @@ surface is drawn, orbit included.
 #### Scenario: From orbit at night
 
 - **WHEN** the night side is seen from orbit
-- **THEN** every settlement on it shows as a cluster of lights
+- **THEN** every settlement on it shows as a cluster of lights, and the coarse
+  hexes of ground under it are lit warm by them
 
 ### Requirement: A settlement fades in and out
 
@@ -114,3 +115,16 @@ SHALL give no light from its windows or hearth.
 
 - **WHEN** an authored entry sets a building's state to abandoned
 - **THEN** after dusk its windows and hearth are dark, and a reload keeps it so
+
+### Requirement: Everything in the approved towns mockup is in the game
+
+Every feature listed in `docs/plans/towns-mockup-parity.md` SHALL be built by
+the change its row names, or SHALL be marked "mockup only" with the owner's
+agreement. The settlements step SHALL NOT be accepted while any row is still
+planned or waiting on an answer.
+
+#### Scenario: The settlements gate
+
+- **WHEN** the owner reviews the settlements step
+- **THEN** every row of the parity list is built or agreed mockup-only, and each
+  built row has a video shot beside the same shot in the prototype

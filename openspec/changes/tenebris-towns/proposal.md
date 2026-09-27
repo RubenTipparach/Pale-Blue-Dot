@@ -134,27 +134,22 @@ Three things stand between the engine and a town you can walk into:
   more than walk a path or work in place, trade, and where towns go on the
   planet.
 
-## Questions for the owner
+## Questions for the owner, answered
 
-1. **Walking speed indoors.** The engine walks at 8 m/s, which crosses a
-   2.5 m room in a third of a second. Keep it, or add a slower walk?
-2. **What Tenebris people look like.** The mockup's figures are blocky
-   placeholders in tunics.
-3. **Towns hand-made, generated, or both**, and in which biomes?
-4. **Should the player be able to build with these pieces** (walls on edges,
-   floors, the three stairs) through dig and place?
-5. **Stairs:** is the pitch line the feel you want, or do you want to feel each
-   tread? The mockup's T key compares them on the same flight.
-6. **Roofs:** should they be walkable? The mockup lets you stand on them.
-7. **Kits:** which should be in the game, and which belong to which places
-   (huts outside the walls, brick and marble for the rich)?
-8. **Biomes:** are these the right settlements for each? Mountains and the
-   redwood forest have none yet, and the other planets' biomes are not
-   Tenebris's.
-9. **Boats:** should the player row or sail them? In the mockup they are
-   moored and bob on the swell, and the cog can be boarded but does not move.
-   A boat that moves is a vehicle, with its own rules beside the ship
-   dampeners CLAUDE.md sets for spacecraft.
+The owner answered in the survey (2026-09-27), and the cities roadmap
+answered two more (questions 3 and 4 of the original nine):
+
+| # | Question | The owner's answer | What it changes |
+| --- | --- | --- | --- |
+| T1 | Walking speed indoors | "yea 8 is running, 2.5 is walking. slow automatically when indoors or if I hold shift, then run" | Walking is 2.5 m/s and running 8 m/s. The walker walks under a roof or while Shift is held, and runs otherwise (task 2). How this sits with the 14 m/s sprint on Shift today is asked again in the survey (T8) |
+| T2 | What Tenebris people look like | "this is fine, instead of cubes I prefer hexagonal blocks that look like cubes, keeps the spirit of the game" | Townsfolk are built from hexagonal prisms of the terrain's pixel style (`townsfolk`) |
+| T3 | Pitch line or treads | "prefer glide, it feels nice" | The pitch line, as proposed |
+| T4 | Walkable roofs | "yea" | All roofs are walkable |
+| T5 | Which kits, where | "all, and yes you can steal from people lol, but there will be consequences." | All kits, placed by wealth. Stealing from townsfolk, and their reaction, is a later change after the roadmap |
+| T6 | Settlements per biome | "ooh mountain or cave settlements need to be there too, no other planets for now, revise mockups with mountain dwellings please, and cave dwellers too! hobbit ground based houses or mounds would be cool too!" | A ninth mockup round adds mountain dwellings, cave dwellers and mound houses (task 0). Tenebris only |
+| T7 | Boats | "Yup, you can use any boat you find." | Every harbour boat is a usable craft (`cities-in-the-world` task 4.2b) |
+| 3 | Hand-made or generated | the roadmap: both | `city-sites` generates them, and the owner's overrides pin and strike |
+| 4 | Can the player build with the pieces | the roadmap: yes | `player-building` |
 
 ## Status
 

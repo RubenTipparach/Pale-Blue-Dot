@@ -32,9 +32,11 @@ already be read on the CPU:
 - **A map screen in the game.** M opens and closes it. It is a flat 2D map of
   the whole planet, with pan and zoom from the whole globe down to a few cells
   a pixel.
-- **The base map:** shaded relief, the coast and the biomes, drawn from the
-  same generator functions as the terrain, so the map cannot disagree with the
-  ground.
+- **The base map:** the planet as it looks, with each pixel the colour of its
+  ground's top block, shaded by relief, and the towns drawn on it. It is drawn
+  from the same generator functions as the terrain, so the map cannot
+  disagree with the ground. Biomes and the other layers are overlays that
+  grey the base map out while they are shown (the owner, survey M3).
 - **The live layer:** the player, with their heading; the ship, and every
   parked vehicle; the night side of the terminator; and the clouds and rain,
   moving as the weather moves.

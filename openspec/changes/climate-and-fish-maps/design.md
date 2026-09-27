@@ -173,12 +173,11 @@ owner's "certain zones of species" question.
   unchanged. The wiki is regenerated to prove it.
 - Rollback is the previous build.
 
-## Open Questions
+## Decided by the owner (survey, 2026-09-27)
 
-In the owner survey (K4 and K5), and at the mockup:
-- The climate classes' thresholds, and whether five is the right number.
-- Should the fish layer show only species the player has caught (a
-  discovered-species rule), or every species from the start?
-
-The planet's cooling is answered: `climate-balance` holds the average at
-15 °C.
+- **K4, "sure":** five climate classes: polar, cold, temperate, dry and
+  tropical. Their thresholds are set on the mockup.
+- **K5, "for now, all species":** the fish layer shows every species from the
+  start. A discovered-species rule can come later.
+- **The planet's cooling:** `climate-balance` holds the average at 15 °C,
+  and lands before the map mockup (K3).

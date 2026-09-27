@@ -29,8 +29,8 @@ it: the clock, the weather and the vehicles do not pause.
 ### Requirement: The map shows the whole planet and zooms to the ground
 
 The map SHALL show the whole planet at its widest zoom and SHALL zoom in until
-one cell is at least a pixel. Pan and zoom SHALL follow the pointer. The
-projection SHALL keep every latitude readable, poles included.
+one cell is at least a pixel. Pan and zoom SHALL follow the pointer. The map
+SHALL be equirectangular at every zoom, as the fish range maps are.
 
 #### Scenario: The whole planet
 
@@ -44,15 +44,18 @@ projection SHALL keep every latitude readable, poles included.
 
 ### Requirement: The map is drawn from the world's own functions
 
-The base map's coast, relief and biomes SHALL be computed from the same
-generator functions the terrain uses, for the same seed and generator version.
+The base map SHALL show the planet as it looks: each place in the colour of
+its ground's top block, shaded by relief, with its towns. It SHALL be computed
+from the same generator functions the terrain uses, for the same seed and
+generator version.
 It SHALL NOT be a separately authored picture.
 
 #### Scenario: The map agrees with the ground
 
 - **WHEN** a point is sampled on the map and on the terrain at the same
   latitude and longitude
-- **THEN** both give the same biome and the same land or sea
+- **THEN** both give the same top block, the same biome and the same land or
+  sea
 
 ### Requirement: The live layer shows what is happening now
 
@@ -90,6 +93,12 @@ the 3D globe from the legend.
 
 - **WHEN** the player turns on the rain layer in the legend
 - **THEN** the map shows where it is raining now, with a scale in the legend
+
+#### Scenario: An overlay greys the base map
+
+- **WHEN** the player turns on the biome overlay
+- **THEN** the base map beneath it is shown greyed out, and the overlay's colours
+  are drawn over it
 
 #### Scenario: Painting a layer on the globe
 

@@ -102,7 +102,21 @@ See `proposal.md` for why. What the design has to work with (2026-09-27):
 - The contact sheet and the shot list are committed under
   `docs/screenshots/<change>/`. The video is not.
 
-**6. Which recording is the gate's.**
+**6. The prototype beside the game.** The owner: "when you do the videos,
+post the prototype too so I can compare/contrast stuff".
+- A shot list names each shot's place by the names the mockup uses (the inn
+  stair, the keep's newel, the harbour gangplank), with a heading and a time
+  of day. The mockup's walk file for the same shot uses the same name, which
+  is the mockup's `GOTO` list, so the two start in the same spot.
+- The mockup is on a flat grid and the game is on the sphere, so the shots
+  match by place and heading, not by coordinates.
+- `tools/make_video.py --beside <prototype frames>` composes the two
+  sequences into one frame, prototype left and game right, each labelled
+  across the top. Where one is shorter, its last frame holds.
+- A shot with no counterpart in a mockup (the map's live layer, a flight
+  from orbit) plays alone and is marked "no prototype".
+
+**7. Which recording is the gate's.**
 - In a cloud session, the fixed-step recording is made and published, and
   labelled "rendered at a fixed step without a GPU".
 - Where smoothness is the point (the no-pop-in fade, a flight into a town),

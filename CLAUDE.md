@@ -83,7 +83,10 @@ recording showcasing this stuff so I can verify they are done correctly,
 before moving on to the next step." A step's gate is passed on a video the
 owner has watched, not on stills or a written claim. The next step does not
 start until then. The video's shots name what each one shows and which
-requirement it demonstrates. A cloud recording is rendered at a fixed step
+requirement it demonstrates. "When you do the videos, post the prototype too
+so I can compare/contrast stuff": every shot of something a mockup shows plays
+beside the same shot in the prototype, and the gate page links the live
+prototype. A cloud recording is rendered at a fixed step
 without a GPU and says so: it shows what things look like, never how smoothly
 they run. Where smoothness is the point, the owner records the same showcase
 in real time with `obs-record`. The tooling is planned in

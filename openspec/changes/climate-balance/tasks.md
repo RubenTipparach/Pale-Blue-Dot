@@ -18,6 +18,8 @@ owner answers otherwise.
 ## 3. Balanced
 
 - [ ] 3.1 Ship the swept `cloud_albedo` and `cloud_greenhouse`, `solar_wm2` 1360 and the thermostat. Verify: the 200-day instrument run holds the mean within 15 ± 1 °C from day 30 on, and its log is committed beside the old ones.
+- [ ] 3.1a The trim reads as a constant sun (survey K1). Verify: over the second game year of the 200-day run, the trim varies by under 1%.
+- [ ] 3.1b Temperature maps before and after, drawn by `tools/temperature_map.py` (survey K2: "We have a temperature gradient map of the surface don't we???? make one"). Verify: day 1, day 100 and the second year's maps are in `docs/wiki/temperature/`, for the shipped and the balanced settings.
 - [ ] 3.2 The second-year fish test, ignored by default. Verify: it passes on the balanced settings and fails on the old ones.
 - [ ] 3.3 Regenerate `docs/wiki/fish-ranges/` from the balanced run, and answer `fishing-and-equipment`'s question 8 with the owner's words. Verify: every species' year-2 map has range.
 - [ ] 3.4 Sync the `world/weather` requirement, naming each test. Verify: `openspec validate --all`.

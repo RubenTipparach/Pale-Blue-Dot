@@ -3,7 +3,9 @@
 ## Why
 
 **The owner (2026-09-27): "so the sun should maintain average temperature of
-the planet to 15 c".**
+the planet to 15 c".** In the survey: fix the terms and add the thermostat
+("do recommendation I guess", K1), averaged over "the whole surface, poles and
+stuff are still cooler" (K2), and landed "before map mockup" (K3).
 
 The planet freezes. `fishing-and-equipment`'s design (section 7) measured it
 with `examples/fish_ranges.rs`, and the logs are committed in

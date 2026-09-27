@@ -28,6 +28,9 @@ has built them into the engine.
 - [ ] 4.3 The roof tool's flood fill and fit. Verify: a test roofing a two-by-four house, and a capture.
 - [ ] 4.4 The blueprint picker and fill, both at once and piece by piece. Verify: an app test places a cottage blueprint, fills it, and walks in through its door.
 
+- [ ] 4.5 The build camera, from the towns mockup's overview: orbit by drag, pan along its heading (right-drag, WASD), zoom by the wheel, double-click to walk there, and a cutaway height that hides everything above a chosen layer. Verify: an app test for each, and a capture with the cutaway through a two-storey house.
+- [ ] 4.6 The palette's kit picker shows every kit side by side, as the mockup's Kits tab does. Verify: a capture of the picker with all 19 kits.
+
 ## 5. The owner's check
 
 - [ ] 5.1 Record that frame cost was not measured in the cloud session, and time `can_place` in a core test on the walled town's densest street. Verify: the time is in the risk note, and the note is in the PR.

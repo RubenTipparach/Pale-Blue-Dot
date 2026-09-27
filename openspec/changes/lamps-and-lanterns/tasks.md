@@ -26,6 +26,8 @@ the lights (group 7) before `world-map` starts.
 - [ ] 4.1 `daylight::is_dusk_lit(clock)` from the sun's elevation, with hysteresis. Verify: core tests that it is true at midnight and false at noon, and that it does not flip back and forth at dusk.
 - [ ] 4.2 Split emitters into always lit and dusk-lit, and re-bake the tier on the worker when the answer changes. Verify: an app test that a dusk-lit emitter lights nothing at noon and lights its cells at midnight, and that a torch lights them at both.
 
+- [ ] 4.3 A time-of-day control on the pause panel, as the towns mockup has (a slider, Day and Night buttons, and L). It moves the world clock through the same path the clock uses, so the dusk re-bake runs. Verify: an app test that the control sets the clock and that the dusk-lit lanterns come on when it is moved past dusk. It is in the controls list.
+
 ## 5. The lantern family, the brazier and the candle
 
 - [ ] 5.1 Add the materials `LanternPost`, `LanternWall`, `LanternHanging`, `Brazier` and `Candle`, with emission levels, dusk-lit flags, not solid and not opaque. Verify: core tests of each emission level, that none of them is solid, and that the candle's reach is shorter than the brazier's.

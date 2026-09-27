@@ -131,7 +131,8 @@ places it.**
 - The night point list is drawn by the planet pass. Orbit sees it without
   the settlement being loaded.
 
-**7. Light.**
+**7. Light.** The owner (survey C3): "I also hope to see the lights on
+cities contribute to LOD hexes on the night side of the world too".
 - Street and wall lanterns are `lamps-and-lanterns`' dusk-lit materials,
   placed by the template at the spacing its kind sets (the mockup's rule:
   densest in the walled town).
@@ -139,6 +140,12 @@ places it.**
   about half the windows, chosen by the site's seed. It lights the room, and
   the room's light shows through the pane.
 - Hearths are always lit.
+- **Far off, the lights light the ground, not only themselves.** Each
+  settlement's lit windows and lanterns add a warm term to the coarse LOD
+  hexes within its footprint and margin. The term is baked per settlement
+  into a small per-hex glow value, from the same emitter list, so the night
+  side from orbit shows lit patches of ground under each town as well as its
+  points of light.
 - The field bakes all of them as any other emitter. The bake-time measurement
   from `lamps-and-lanterns` task 5.5 decides whether the tier needs splitting
   before this lands.

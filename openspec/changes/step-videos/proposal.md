@@ -56,8 +56,17 @@ The repository can already record, in two ways that do not meet:
   - the shot list, with each shot's time, what to look for, and the
     requirement it demonstrates;
   - where it was rendered.
+- **The prototype beside the game.** The owner, 2026-09-27: "when you do the
+  videos, post the prototype too so I can compare/contrast stuff".
+  - Every shot of something a mockup shows is recorded twice, in the game and
+    in the prototype.
+  - The two are put side by side in one frame, prototype on the left and game
+    on the right, each labelled.
+  - The gate page links the live prototype, so the owner can try it
+    themselves.
 - **CLAUDE.md records the rule** beside "Mockups are lit at night": every
-  major step ends in a video the owner watches before the next step starts.
+  major step ends in a video the owner watches before the next step starts,
+  with the prototype beside it.
 
 ## Capabilities
 

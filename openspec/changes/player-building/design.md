@@ -48,9 +48,9 @@ after the changes this one follows (2026-09-27):
   own.
 - **Placing whole cells differently.** Right-click placing of blocks stays as
   it is. Build mode is a separate mode for pieces.
-- **Editing a town's pieces.** A player may remove pieces they placed. Whether
-  they may take a town's house apart is the owner's call (Open Questions).
-  Until then, town pieces are protected, and the ghost says so.
+- **Consequences for taking a town apart.** The owner allows it (survey P2),
+  "but people will be upset". Townsfolk reacting to it is a later change. This
+  one only allows the removal and records it as the player's edit.
 - **Free-form placement** off the cut, at any angle or any height. The cut is
   what makes a building walkable, and it is what the checks are written
   against.
@@ -151,11 +151,14 @@ piece.**
   vanish, and the terrain and cell edits are untouched. The format comment
   says so.
 
-## Open Questions
+## Decided by the owner (survey, 2026-09-27)
 
-For the owner, at the build mockup:
-- What should building cost, and where do the materials come from? Wood from
-  felling, thatch from grass, stone and clay from digging, and brick and slate
-  from a kiln or a quarry are the obvious candidates.
-- May a player take a town's buildings apart, or add to them?
-- Should build mode stay on B?
+- **P1, "lets save this for after all the other work is done":** building is
+  free. What it costs is decided after the rest of the roadmap.
+- **P2, "yes, but people will be upset":** a player may take a town's
+  buildings apart. Townsfolk reacting to it is later work (the owner, T5:
+  "you can steal from people lol, but there will be consequences"). Until then
+  the removal is allowed and recorded as a player edit, so a later change can
+  read it.
+- **P3, "lets save this for after all the other work is done":** build mode is
+  on B provisionally. The key is settled at the end.

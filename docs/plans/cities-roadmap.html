@@ -86,7 +86,7 @@ blockquote cite{display:block;margin-top:6px;font-style:normal;font-family:var(-
 
 /* the route */
 .route-box{overflow-x:auto;padding-bottom:6px}
-.route{display:flex;align-items:flex-start;min-width:1440px}
+.route{display:flex;align-items:flex-start;min-width:1560px}
 .stop{display:grid;justify-items:center;gap:6px;text-align:center;width:98px;flex:none}
 .stop .dot{
   width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
@@ -185,20 +185,21 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 <header>
   <div class="eyebrow">Pale Blue Dot &middot; OpenSpec plan &middot; 27 September 2026</div>
   <h1>The road to Tenebris cities</h1>
-  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Eleven OpenSpec changes, each written up and waiting for <span class="mono">/opsx:apply</span>. Every step ends in a video you watch before the next one starts.</p>
+  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Twelve OpenSpec changes, each written up and waiting for <span class="mono">/opsx:apply</span>. Every step ends in a video you watch before the next one starts.</p>
   <blockquote>
     step 1 implement lights, step 2 implement cities, step 3 implement ways for me to make cities. as a player I want to be able to put together these buildings myself &hellip; So map with cities first mocked up, then I will approve.
     <cite>the owner, 27 September 2026</cite>
   </blockquote>
   <div class="facts">
-    <div><b>11</b><span>changes written</span></div>
-    <div><b>162</b><span>tasks open</span></div>
-    <div><b>9</b><span>video gates</span></div>
+    <div><b>12</b><span>changes written</span></div>
+    <div><b>181</b><span>tasks open</span></div>
+    <div><b>10</b><span>video gates, each beside the prototype</span></div>
     <div><b>0</b><span>lines of game code changed</span></div>
   </div>
   <div class="links">
     <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/pull/16">Pull request #16</a>
-    <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">Your survey: the open questions</a>
+    <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">Your survey: round 2 is open</a>
+    <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/blob/claude/medieval-city-html-mockup-8692xs/docs/plans/towns-mockup-parity.md">Towns mockup parity list</a>
     <a href="https://claude.ai/artifact/59zS9ERBTkrVrzPedfoUL2">The towns mockup</a>
     <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes">The change folders</a>
   </div>
@@ -240,12 +241,16 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">towns accepted</div></div>
       <div class="leg"></div>
+      <div class="stop" role="listitem"><div class="dot">2e</div><div class="name">Townsfolk</div><div class="id">townsfolk</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">people accepted</div></div>
+      <div class="leg"></div>
       <div class="stop" role="listitem"><div class="dot">3</div><div class="name">You build them</div><div class="id">player-building</div></div>
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">building accepted</div></div>
     </div>
   </div>
-  <div class="key"><span><i class="k-stop"></i>a step: one change, or several built together</span><span><i class="k-gate"></i>a gate: you watch its video and approve before the next step starts</span><span>A step with a mockup also stops at the mockup's video, before any code.</span></div>
+  <div class="key"><span><i class="k-stop"></i>a step: one change, or several built together</span><span><i class="k-gate"></i>a gate: you watch its video and approve before the next step starts</span><span>A step with a mockup also stops at the mockup's video, before any code. Every gate video plays the prototype beside the game.</span></div>
 </section>
 
 <section aria-labelledby="save-h">
@@ -389,11 +394,11 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
           </ul></div>
           <div class="col"><h4>Decided</h4><ul>
             <li>First the two broken terms: the sun becomes the 1,360 W/m&sup2; the heat-loss law assumes, and clouds are retuned from about &minus;190 W/m&sup2; of net cooling to Earth's range.</li>
-            <li>Then a slow thermostat on the sun's strength holds 15 &deg;C, whatever is retuned later.</li>
+            <li>Then a slow thermostat on the sun holds 15 &deg;C over the whole surface. It settles, so the sun reads as constant (K1, K2).</li>
             <li>A frozen save warms back over the following game days.</li>
           </ul></div>
         </div>
-        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video.</b> A time-lapse of the sea over 200 game days, before and after; the average against the day; the temperature overlay from orbit; and a fish caught in the second year.</div></div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video.</b> Temperature maps like the one already made (docs/wiki/temperature), before and after; a time-lapse of the sea over 200 game days; the average against the day; the temperature overlay from orbit; and a fish caught in the second year.</div></div>
         <div class="foot"><div class="chips"><span class="chip">world/weather</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/climate-balance">Read the change</a></div>
       </div>
     </article>
@@ -409,13 +414,13 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
         <p>The game has no map today. M cycles eight weather overlays painted on the 3D globe. This step gives it a flat map of the whole planet that the later steps add their layers to.</p>
         <div class="cols">
           <div class="col"><h4>What you get</h4><ul>
-            <li>M opens a map of the whole planet that zooms in to one cell a pixel.</li>
-            <li>The coast, relief and biomes drawn by the terrain's own functions, so the map cannot disagree with the ground.</li>
+            <li>M opens and closes a map of the whole planet, zooming to one cell a pixel, with a button for each overlay (M4).</li>
+            <li>The base map looks like the world: each place in its ground's colour, with its towns. Biomes and the rest are overlays that grey it out (M3).</li>
             <li>Live: you and your heading, your ship and parked vehicles, the night side, and the clouds and rain as they move.</li>
             <li>The eight weather overlays become map layers, and can still be painted on the globe from the legend.</li>
           </ul></div>
           <div class="col"><h4>Decided</h4><ul>
-            <li>Equirectangular for the whole planet, turning azimuthal when zoomed in, so the poles read.</li>
+            <li>You chose: flat, like the fish range maps, at every zoom (M2). The whole map is known from the start (M1).</li>
             <li>A 2,048 &times; 1,024 base raster built off the frame and cached per world, with tiles closer in.</li>
             <li>One UI shader draws the night, the clouds and the overlays from data the GPU already holds.</li>
           </ul></div>
@@ -437,9 +442,9 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
         <p>The field that splits the temperate land has a 188 m feature size, and its thresholds rarely reach desert or jungle. Fields are about 59% of the land. A bigger field alone keeps the same shares, so the thresholds move too.</p>
         <div class="cols">
           <div class="col"><h4>What you get</h4><ul>
-            <li>A moisture field of about 375 m or about 750 m, whichever you pick on the map.</li>
+            <li>You chose 4x as wide, about 750 m (B1), with fields, desert, and jungle with swamp about a third each (B2).</li>
             <li>Fields, desert, and jungle with swamp each holding between a fifth and a half of the temperate land.</li>
-            <li>Your current world keeps its biomes, because its generator version is in its saved identity.</li>
+            <li>Old worlds keep their biomes; you start new worlds to get the new ones (B3).</li>
           </ul></div>
           <div class="col"><h4>Decided</h4><ul>
             <li>"4&times; bigger" could mean the width or the area. You pick from real rasters at 188, 375 and 750 m.</li>
@@ -498,6 +503,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>Every site on flat, dry ground, away from the twelve pentagons, and spaced apart.</li>
             <li>A name for each, from its people's syllables.</li>
             <li>Your pins, strikes and names in <span class="mono">assets/config/sites.ron</span>.</li>
+            <li>A small town near where you start, and the capital on another land mass (C2, C3).</li>
           </ul></div>
           <div class="col"><h4>Decided</h4><ul>
             <li>Candidates are the 163,842 level-7 cells, screened coarsely, scored, then checked in full as each is kept.</li>
@@ -528,7 +534,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
           <div class="col"><h4>Decided</h4><ul>
             <li>One <span class="mono">can_spawn</span> function serves the spawner, the map and the guide, so they cannot disagree.</li>
             <li>The climate is baked from one simulated year, about 22 minutes, on the atmosphere's own 10,242-cell grid. The file is about 0.5 MB and records what it was made from.</li>
-            <li>Habitat is derived, never saved. A zone becomes a record only when it has a name or a state.</li>
+            <li>Every species on the fish map for now (K5), and five climate classes (K4).</li>
           </ul></div>
         </div>
         <div class="gatebox"><div class="diamond"></div><div><b>Your gate: two videos.</b> The mockup's layers; then the game's, including a walk to a shore the map marks for a species and a cast that catches it there. The climate is baked from the balanced, 15 &deg;C planet.</div></div>
@@ -552,6 +558,8 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>Street lanterns and about half the windows lit at dusk. From orbit at night, every town is a cluster of lights.</li>
             <li>No pop-in: towns fade in and out as terrain detail does.</li>
             <li>An abandoned house goes dark: the first piece of towns that change over time.</li>
+            <li>Any boat in a harbour can be used (T7), and at night city lights light the far terrain under them (C3).</li>
+            <li>Mountain dwellings, cave dwellers and mound houses, once the mockup has them (T6).</li>
           </ul></div>
           <div class="col"><h4>Decided</h4><ul>
             <li>A layout is charted onto the planet through the neighbour tables. Sites avoid pentagons, so the grid is a true hex grid there.</li>
@@ -560,8 +568,33 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>A site you had already dug into is left unsettled.</li>
           </ul></div>
         </div>
-        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video, and one you record.</b> Walks into each kind of settlement, up the stairs, a door, dusk over the walled town, a fly-in from a kilometre, the night side from orbit, and a house going dark. You record the fly-in and the dusk in real time with <span class="mono">obs-record</span>, since pop-in only shows in real time. Before the work starts, the towns mockup's open questions: walking speed indoors, what the Tenebris people look like, stairs, walkable roofs, kits, settlements per biome, and boats.</div></div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video, and one you record.</b> Walks into each kind of settlement, up the stairs, a door, dusk over the walled town, a fly-in from a kilometre, the night side from orbit, and a house going dark. You record the fly-in and the dusk in real time with <span class="mono">obs-record</span>, since pop-in only shows in real time. The gate needs every row of the towns mockup parity list built, or agreed as mockup-only.</div></div>
         <div class="foot"><div class="chips"><span class="chip">world/settlements</span><span class="chip">planet/terrain</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/cities-in-the-world">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="townsfolk">
+      <div class="step-side">
+        <div class="step-no">2e</div>
+        <div class="mono">townsfolk</div>
+        <div class="tasks">8 tasks</div>
+        <div class="with">mockup parity</div>
+      </div>
+      <div class="step-main">
+        <h3>The people of the towns</h3>
+        <p>The mockup's towns have people: 16 in the walled town, walking paths, working at the forge and the bar, and a guard at the gate. You asked for everything in the mockup, so they get a step of their own.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>Walkers, workers, idlers and guards in every settlement, as the mockup has them.</li>
+            <li>People built from hexagonal blocks that look like cubes (T2).</li>
+            <li>Solid to you, and lit by the same light as everything else.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>People follow from the town and the seed, so they are not saved. They become records when they gain memory: your "there will be consequences" change, after the roadmap.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video beside the prototype.</b> Each settlement's people, a walk through a crowd, and the smith at the forge at night, each beside the same shot in the towns mockup.</div></div>
+        <div class="foot"><div class="chips"><span class="chip new">world/townsfolk (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/townsfolk">Read the change</a></div>
       </div>
     </article>
 
@@ -579,7 +612,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>Build mode on B while on foot. The hotbar becomes the kit's pieces: walls with doors and windows, floors, stairs, posts, decks, furniture and lights.</li>
             <li>Pieces snap to cell edges, cells and layer lines. A storey is three layers.</li>
             <li>A ghost that turns red and names the rule it breaks.</li>
-            <li>A roof tool, and blueprints of any house from the towns.</li>
+            <li>A roof tool, blueprints of any house from the towns, and the mockup's overview camera with its cutaway as the build camera.</li>
             <li>Every piece saved the moment it is placed, as your edit, which the world will never overwrite.</li>
           </ul></div>
           <div class="col"><h4>Decided</h4><ul>
@@ -587,12 +620,17 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>Building is free at first. The game has no timber, thatch or brick items yet, and the axe fells nothing that drops wood.</li>
           </ul></div>
         </div>
-        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: two videos.</b> First, <span class="mono">docs/mockups/build.html</span> with its walkthrough; you build a house in it before any Rust is written. Then the game: a two-storey house built piece by piece, a refusal and its reason, the roof tool, a blueprint, and a reload. You'll be asked what building should cost, and whether you may take a town's buildings apart.</div></div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: two videos.</b> First, <span class="mono">docs/mockups/build.html</span> with its walkthrough; you build a house in it before any Rust is written. Then the game: a two-storey house built piece by piece, a refusal and its reason, the roof tool, a blueprint, and a reload. Decided: building is free until the rest is done (P1), you may take a town's buildings apart (P2), and the key is settled at the end (P3).</div></div>
         <div class="foot"><div class="chips"><span class="chip new">player/building (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/player-building">Read the change</a></div>
       </div>
     </article>
 
   </div>
+</section>
+
+<section aria-labelledby="parity-h">
+  <h2 id="parity-h">Everything in the towns mockup</h2>
+  <p>Every feature of the towns mockup has a row in the <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/blob/claude/medieval-city-html-mockup-8692xs/docs/plans/towns-mockup-parity.md">parity list</a>, naming the change and task that builds it. Of 56 rows, 3 are already in the game (wading, jumping and the walk view), 50 are planned, and 3 wait on survey round 2: the cog sailing, the touch controls and the walker toggle. The towns gate is not passed while any row is planned or waiting on an answer, and each row is closed by a video shot beside the same shot in the prototype.</p>
 </section>
 
 <section aria-labelledby="found-h">
@@ -619,7 +657,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
   <h2 id="rules-h">At every step</h2>
   <div class="rules">
     <div class="rule"><b>Written up before code</b><p>Each change is a proposal, a design, spec changes and tasks. A requirement moves into <span class="mono">openspec/specs</span> only with the code and the test that make it true.</p></div>
-    <div class="rule"><b>Every gate is a video</b><p>You watch it before the next step starts. Each shot names what it shows. A cloud video shows looks; your real-time recording shows smoothness.</p></div>
+    <div class="rule"><b>Every gate is a video</b><p>You watch it before the next step starts, with the prototype playing beside the game. Each shot names what it shows. A cloud video shows looks; your real-time recording shows smoothness.</p></div>
     <div class="rule"><b>Mockups are lit at night</b><p>The map mockup's night side shows the towns' lights. The build mockup has day and night.</p></div>
     <div class="rule"><b>Frame cost is measured by you</b><p>This cloud session cannot measure frame time. Before a change that could move it merges, you run <span class="mono">tools/perf_suite.py</span> on the release build.</p></div>
     <div class="rule"><b>Laws derived, facts stored</b><p>The seed and the rules decide the land. Towns and named places are records. Every change after that is an authored entry, and the world yields to yours.</p></div>
@@ -630,7 +668,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 </section>
 
 <footer>
-  Planned on branch <span class="mono">claude/medieval-city-html-mockup-8692xs</span>. <span class="mono">openspec validate --all</span>: 85 passed, 0 failed. To start: <span class="mono">/opsx:apply exact-cell-keys</span>. Open questions are in <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">your survey</a>.
+  Planned on branch <span class="mono">claude/medieval-city-html-mockup-8692xs</span>. <span class="mono">openspec validate --all</span>: 86 passed, 0 failed. To start: <span class="mono">/opsx:apply exact-cell-keys</span>. Open questions are in <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">your survey</a>.
 </footer>
 
 </div>

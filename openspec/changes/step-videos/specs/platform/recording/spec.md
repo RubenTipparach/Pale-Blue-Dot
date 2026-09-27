@@ -67,3 +67,16 @@ frame rate.
 - **WHEN** a gate's video was rendered in a cloud session
 - **THEN** its page says it was rendered at a fixed step without a GPU, and
   shows what things look like, not how smoothly they run
+
+### Requirement: The prototype is shown beside the game
+
+Every shot of a feature that a mockup also shows SHALL be recorded in the
+prototype as well as in the game, at the same named place and time of day. The
+two SHALL be shown side by side, prototype on the left and game on the right,
+each labelled. The gate page SHALL link the live prototype.
+
+#### Scenario: The inn stair
+
+- **WHEN** a gate video shows the walker climbing the walled town's inn stair
+- **THEN** the same climb in the towns mockup plays beside it, from the same
+  place and heading, and the page links the mockup

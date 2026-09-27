@@ -77,7 +77,8 @@ See `proposal.md` for why. What the design has to work with, observed on
   the game does not have, and approval of it would not carry over.
 
 **2. The projection is equirectangular for the whole planet, and azimuthal
-close in.**
+close in.** *Overruled by the owner (M2): flat and equirectangular at every
+zoom, like the fish maps. See "Decided by the owner" below.*
 - Zoomed out, the map is equirectangular:
   - latitude and longitude are straight lines;
   - it matches `fish_ranges` and the atmosphere reports;
@@ -186,10 +187,22 @@ close in.**
 - M's cycling goes, and the controls list gains M, "the map".
 - Rollback is the previous build.
 
-## Open Questions
+## Decided by the owner (survey, 2026-09-27)
 
-For the owner, at the mockup:
-- Should exploring reveal the map, or is it all known from the start?
-- The zoom at which the projection turns azimuthal.
-- Should the base map be the biome palette, or relief and water only with the
-  biomes as a layer?
+- **M1, "all is known":** the whole planet is drawn from the start. No reveal
+  by exploring.
+- **M2, "the way you did the fish map is good?":** the map is flat and
+  equirectangular at every zoom, like the fish range maps. Decision 2's
+  azimuthal close-in view is dropped. The poles stretch, as they do on the fish
+  maps. If that reads badly on the mockup, two small pole insets are the
+  fallback, and the owner is asked again then.
+- **M3, "normal planet terrain like what it looks like on the world, and the
+  towns. biomes and stuff are different overlays (which grey out the
+  basemap)":** the base map is the planet as it looks: each pixel takes the
+  colour of the ground's top block as the terrain draws it, shaded by relief,
+  with the sea by depth and the towns drawn on it. Biomes, climate, fish and
+  weather are overlays. While one is shown, the base map is greyed out beneath
+  it.
+- **M4, "need to add buttons for these instead of m to cycle. <M opens and
+  closes maps":** M opens and closes the map. Each overlay has its own button
+  in the legend, and M no longer cycles overlays.

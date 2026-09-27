@@ -68,7 +68,11 @@ measurement.**
   in this design.
 
 **3. The thermostat is a slow proportional-integral controller on one
-scalar.**
+scalar.** The owner (survey K1): "well the world has different gradients, the
+sun just has a constant solar output. do recommendation I guess". So the sun
+has to read as constant. Once the two terms are fixed, the trim settles, and a
+test pins its variation after spin-up under 1% over a game year. The
+gradients from equator to pole are the simulation's, untouched.
 - `sun_trim` multiplies `solar_wm2` everywhere.
 - Each step it reads `M`, the area-weighted mean of the surface temperature
   over all cells, summed in cell order in `f64` so it is deterministic.

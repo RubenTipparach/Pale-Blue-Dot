@@ -24,6 +24,8 @@ the map, the sites, and the climate and fish layers, in that order.
 
 - [ ] 4.1 A settlement becomes an active chunk entity in range, with its pieces, contact index and meshes built on the pool and published whole. Verify: an app test walking from the spawn to a village site and in through a door, and `--capture` shots in `docs/screenshots/cities-in-the-world/`.
 - [ ] 4.2 The far form and the night points, drawn by the planet pass. Verify: captures of a town from a kilometre by day, and of the night side from orbit.
+- [ ] 4.2a The night lights light the coarse LOD hexes under each settlement (survey C3). Verify: a capture of the night side from orbit before and after, and a test that a hex under a lit town reads a glow and one outside its margin reads none.
+- [ ] 4.2b Every harbour boat is usable (survey T7, "you can use any boat you find"). The small boats are the game's existing sailing and paddle craft, parked as vehicle records at their moorings. Verify: an app test boards a moored boat from the pier and paddles it away, and a reload finds it where it was left.
 - [ ] 4.3 The fade between the three forms. Verify: the frame-by-frame no-pop check on a scripted fly-in at cruise speed.
 - [ ] 4.4 Unsettled sites: a site with earlier edits is skipped and marked on the map. Verify: an app test with an old save holding an edit in a footprint.
 - [ ] 4.5 Settlements and their building definitions as records in `world-persistence`'s store, generated for the whole planet at creation or on an old world's first open. Pieces are derived from the definitions, and abandoned buildings stay dark. Verify: tests that a revised template leaves a made world's towns unchanged, that the test process's abandonment darkens a house and survives a reload, and that an old save gains its records once.
@@ -47,4 +49,5 @@ the map, the sites, and the climate and fish layers, in that order.
 
   It is published with stills beside the mockup's views. Verify: the gate page is linked from the PR.
 - [ ] 6.2a Ask the owner to record the fly-in and the dusk shots in real time with `obs-record`, since a fixed-step video cannot show pop-in or hitches. Verify: the request is in the PR.
+- [ ] 6.2b Walk `docs/plans/towns-mockup-parity.md`: every row is built, or agreed mockup-only in the survey. Each built row has a shot in a gate video beside the same shot in the prototype. Verify: no row reads planned or ask.
 - [ ] 6.3 The owner watches both videos and accepts. Verify: the quote is in `proposal.md`. Sync `world/settlements`, and archive.

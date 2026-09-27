@@ -51,8 +51,8 @@ See `proposal.md` for why. What the design has to work with, observed on
 - **Mountain settlements** (a monastery, a mine), and **Ocean settlements** (a
   stilt town on the shelf). There is no designed settlement for either.
   `tenebris-towns` would design one first.
-- **A spawn beside a village.** Whether a new player should start in sight of
-  a settlement is a question for the owner (Open Questions), not a default.
+- **Moving the spawn.** The spawn stays where it is. A small town is placed
+  near it instead (survey C2 and C3).
 
 ## Decisions
 
@@ -176,12 +176,20 @@ kept.**
 - Rollback is the previous build: the records are ignored, and no terrain has
   changed.
 
-## Open Questions
+## Decided by the owner (survey, 2026-09-27)
 
-For the owner, at the mockup:
-- The counts and spacings, and whether ~50 sites is the right population for a
-  30 km planet.
-- Whether a new world should start the player within walking distance of a
-  village.
-- Whether any site should be pinned by hand from the start (the owner's own
-  capital, say).
+- **C1 (recommendation accepted):** about 50 sites, as the table in decision
+  1 lists, tuned on the mockup.
+- **C2, "yes":** a new player starts within walking distance, about 500 m, of
+  a settlement.
+- **C3, "small town nearby, place capital somewhere else. I also hope to see
+  the lights on cities contribute to LOD hexes on the night side of the world
+  too":**
+  - the settlement near the spawn is a small town (a village or a small
+    walled town), chosen by the rules and kept in the site list like any
+    other;
+  - one walled town is marked the capital. It is placed away from the spawn,
+    on a different land mass where one can hold it. The rules choose it, and
+    the owner can move it on the mockup;
+  - the lights are `cities-in-the-world`'s: its night lights also light the
+    coarse hexes of the far terrain.

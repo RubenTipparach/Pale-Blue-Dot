@@ -18,7 +18,8 @@ gate is the first to need a video.
 
 - [ ] 3.1 `tools/make_video.py`: frames to WebM with Playwright's ffmpeg or MP4 elsewhere, a contact sheet, and a refusal on a short recording. Verify: a test encodes 30 synthetic frames and reads back the frame count, and refuses 29.
 - [ ] 3.2 `tools/mockup_video.js` with walk files. The towns mockup's inn stair, the harbour gangplank and a night overview are the first. Verify: the three videos play, and their contact sheets show the walks.
-- [ ] 3.3 `tools/gate_page.py`: video, contact sheet, the shot list with times, requirements and what to look for, and the render label. Verify: the page for 2.3's showcase is built and published, and it is linked from the PR.
+- [ ] 3.2a Side by side: `make_video.py --beside` composes a prototype sequence and a game sequence into one labelled frame. Shot lists and mockup walk files share place names from the mockup's `GOTO` list. Verify: a composed test video of the inn stair, prototype left and game right, both labelled, with the shorter side holding its last frame.
+- [ ] 3.3 `tools/gate_page.py`: video, contact sheet, the shot list with times, requirements and what to look for, the render label, and a link to the live prototype. Verify: the page for 2.3's showcase is built and published, and it is linked from the PR.
 
 ## 4. The rule and the owner's check
 

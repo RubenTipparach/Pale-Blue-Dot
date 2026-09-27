@@ -51,8 +51,8 @@ See `proposal.md` for why. What the design has to work with, observed on
   simulation rather than on one pure function of direction.
 - **Moving the cold band or the mountain line.** Tundra and Mountains stay as
   they are.
-- **Moving an old world to the new biomes.** An old save keeps version 4
-  unless the owner asks otherwise (see Open Questions).
+- **Moving an old world to the new biomes.** An old save keeps version 4. The
+  owner starts new worlds to get version 5 (survey B3).
 
 ## Decisions
 
@@ -135,10 +135,12 @@ distribution.**
 - Rollback is the previous build. A version-5 save opened by it shows version
   4's biomes on the same land. Nothing is lost, and nothing is corrupted.
 
-## Open Questions
+## Decided by the owner (survey, 2026-09-27)
 
-For the owner, at the map mockup:
-- The scale: twice or four times the width.
-- The target shares, if a third each is not right.
-- Whether the current test world should move to version 5 (a menu choice,
-  "update this world's biomes"), or new worlds only.
+- **B1 (recommendation accepted):** four times the width, about 750 m, which
+  is sixteen times the area. The walk tests stay at 4 km and 1 km.
+- **B2 (recommendation accepted):** fields, desert, and jungle with swamp
+  about a third each of the temperate land, and none over half.
+- **B3, "I'll start worlds over to pick up the new biomes.":** no
+  "update biomes" option is built. Old worlds keep version 4, and the owner
+  starts new worlds on version 5.
