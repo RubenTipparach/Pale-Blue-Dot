@@ -535,7 +535,10 @@
       if (state.overlay === "fish") blit(fishCanvas.width ? fishCanvas : null, 0.95);
     }
     const sun = sunAt(currentSeconds());
-    if (state.clouds && images.clouds.length) {
+    // An overlay is a year's average or a range, which has no hour: the live
+    // clouds are the planet view's, and the night side is only a hint over it.
+    const data = state.overlay !== "none";
+    if (state.clouds && images.clouds.length && !data) {
       // Two frames two game hours apart, faded one into the next.
       const n = images.clouds.length, f = state.hour / 24 * n, a = Math.floor(f) % n, b = (a + 1) % n, t = f - Math.floor(f);
       ctx.imageSmoothingEnabled = true;
@@ -544,7 +547,7 @@
     if (state.night) {
       drawNight(sun);
       ctx.imageSmoothingEnabled = true;
-      blit(nightCanvas, 1);
+      blit(nightCanvas, data ? 0.3 : 1);
     }
     if (state.grid) drawGrid();
     if (state.sites) drawSites(sun);

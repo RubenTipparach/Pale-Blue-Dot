@@ -41,7 +41,108 @@
    "tundra": 0.2282
   }
  },
+ "climate_year": 2,
+ "frozen_all_year_share_of_water": 0.0,
  "height": 1024,
  "land_share": 0.3962,
+ "species": [
+  {
+   "id": "minnow",
+   "name": "Minnow",
+   "temp": [
+    10,
+    30
+   ],
+   "water": [
+    "river",
+    "shallows"
+   ]
+  },
+  {
+   "id": "silverfin",
+   "name": "Silverfin",
+   "temp": [
+    -1.8,
+    17
+   ],
+   "water": [
+    "shallows",
+    "shelf"
+   ]
+  },
+  {
+   "id": "perch",
+   "name": "Banded perch",
+   "temp": [
+    -1.8,
+    24
+   ],
+   "water": [
+    "river"
+   ]
+  },
+  {
+   "id": "ray",
+   "name": "Ray",
+   "temp": [
+    16,
+    32
+   ],
+   "water": [
+    "shallows",
+    "shelf"
+   ]
+  },
+  {
+   "id": "eel",
+   "name": "Eel",
+   "temp": [
+    6,
+    28
+   ],
+   "water": [
+    "river",
+    "shallows"
+   ]
+  },
+  {
+   "id": "reef",
+   "name": "Reef fish",
+   "temp": [
+    23,
+    32
+   ],
+   "water": [
+    "shallows"
+   ]
+  },
+  {
+   "id": "deepback",
+   "name": "Deepback",
+   "temp": [
+    -1.5,
+    9
+   ],
+   "water": [
+    "shelf",
+    "deep"
+   ]
+  },
+  {
+   "id": "serpent",
+   "name": "Sea serpent",
+   "temp": [
+    -1.8,
+    32
+   ],
+   "water": [
+    "deep"
+   ]
+  }
+ ],
+ "surface_mean_c": 15.2,
+ "water_mean_c": 17.32,
+ "weather_frame_hours": 2.0,
+ "weather_frames": 12,
  "width": 2048
 }

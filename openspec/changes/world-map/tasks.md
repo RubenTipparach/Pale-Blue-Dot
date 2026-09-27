@@ -9,7 +9,7 @@ gate for everything after it, in this change and in `bigger-biomes`,
 
 - [x] 1.1 (2.6 s for the whole raster on one thread; the test compares with the floored altitude the column and the terrain's surface code use, not `surface_altitude` raw, which differs at a threshold.) `pbd_core::map::base_texel(cfg, direction)` (altitude, top block, biome, land or sea; the base map is coloured by the top block, survey M3) and the instrument `examples/world_map.rs`. It writes a 2,048 × 1,024 equirectangular raster of the shipped generator, and one for each biome scale `bigger-biomes` proposes, and prints how long each took. Verify: a core test that `base_texel` and `biome_at(surface_altitude(...))` agree on 10,000 seeded directions, and the build time is recorded in this design's risk note.
 - [x] 1.2 The rasters exported as PNGs into `docs/mockups/world-map/`, with a small script next to `tools/fish_ranges.py` (`tools/world_map.py`). Verify: the PNGs are committed, and the script regenerates them byte for byte.
-- [ ] 1.3 `docs/mockups/world-map.html`. It has:
+- [x] 1.3 (Layers from the level-5, 200-day balanced run and a day of `map_weather` frames; the only console error is the Google Fonts request the sandbox cannot reach. An overlay hides the live clouds and fades the night side, since a year's mean has no hour. Screenshots in `docs/screenshots/world-map/`.) `docs/mockups/world-map.html`. It has:
   - the planet flat and zoomable;
   - the flat, equirectangular projection at every zoom, as the fish range maps have (survey M2);
   - the base map as the planet looks, with its towns, and each overlay greying it out (survey M3);
@@ -22,7 +22,7 @@ gate for everything after it, in this change and in `bigger-biomes`,
 
   Verify: the page loads with no console errors in a headless browser, and a screenshot of each layer is checked in.
 - [ ] 1.3a A walkthrough video of the mockup (`step-videos`' `mockup_video.js`): the whole planet, zooming to the player, each layer in turn, the biome scales side by side, the sites, and the night side with the towns' lights. Verify: it is on the gate page.
-- [ ] 1.4 Publish the mockup as an Artifact and link it from the roadmap page and the PR. Verify: the link opens.
+- [x] 1.4 (https://claude.ai/artifact/G7QY9BYXYMH8tgaEv8E7az, linked from the roadmap page and the PR.) Publish the mockup as an Artifact and link it from the roadmap page and the PR. Verify: the link opens.
 - [ ] 1.5 **Gate:** the owner watches the video, tries the mockup, and approves the map. Record their words and their answers to the open questions in `design.md`, and change the decisions they overrule before any code below starts. Verify: the quote is in `design.md`.
 
 ## 2. Latitude and longitude in one place

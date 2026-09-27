@@ -480,6 +480,24 @@ level 4, 200 days, `solar_wm2` 1360:
   within 15 ± 0.3 °C from day 20, with no overshoot. The nudge's strength
   barely matters once the start is right; 0.02 is shipped, the gentler.
 
+**The shipped settings at level 5, 200 days (task 3.1, 2026-09-27).** Pair V
+under the balance thermostat, at the level the game runs, from a new world:
+
+| day | 10 | 30 | 60 | 100 | 150 | 200 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| whole surface | 14.19 °C | 14.25 °C | 14.32 °C | 14.66 °C | 15.21 °C | 15.43 °C |
+| sea surface | 16.99 °C | 16.79 °C | 16.64 °C | 16.99 °C | 17.36 °C | 17.63 °C |
+| trim | 0.851 | 0.878 | 0.915 | 0.926 | 0.926 | 0.917 |
+| net cloud, W/m² | −25.4 | −26.7 | −26.8 | −26.9 | −26.8 | −27.1 |
+
+- **The mean holds within 15 ± 1 °C from day 30** (14.25 to 15.45 °C), which is
+  task 3.1's pass mark. The clouds take 25 to 29 W/m², inside Earth's range.
+- **The trim varies 1.3% over the second year** (0.917 to 0.929), over K1's
+  1% mark (task 3.1a). The sea is still warming, 0.6 K across year 2, and
+  the balance trim follows it down as it does. At level 4 the same settings
+  held 0.7%. A 400-day run at level 5 is measuring whether it settles once
+  the sea has; the mark is judged on that run's last year.
+
 **Finding 8: balanced, the tropics are too cool for the reef (2026-09-27).**
 The second-year fish test (task 3.2) fails on one species: the reef fish,
 whose water is shallows that reach 23 °C. With the mean held at 15 °C, the
@@ -495,6 +513,7 @@ area-weighted over the second year, from `fish_ranges`' fields, and a
 | check4 | 0.002 (shipped) | 15.2 °C | 18.9 °C | 6.0 °C | 0.5% | 0.4% | 24.3 °C |
 | H1 | 0.001 | 15.4 °C | 20.7 °C | 2.6 °C | 11.6% | 1.6% | 27.9 °C |
 | H05 | 0.0005 | 15.2 °C | 22.1 °C | −0.8 °C | 25.5% | 2.4% | 30.7 °C |
+| **balanced, level 5** | 0.002 (shipped) | 15.4 °C | 21.7 °C | | 18.0% | | 28.8 °C |
 
 - **The thermostat holds the mean whatever the spread**: all three sit at
   15.2 to 15.4 °C on day 200, with the trim between 0.905 and 0.914.
@@ -504,9 +523,35 @@ area-weighted over the second year, from `fish_ranges`' fields, and a
 - **The alternative is the fish's window.** The reef's 23 °C floor could
   drop to 19 °C and leave the gradient as it is. That keeps the climate
   mild everywhere, and a mild world has less to tell its biomes apart by.
-- This is the owner's to choose (survey R1). The recommendation is the
-  quarter spread: it gives the reef fish water without bending the fish to
-  fit, and the colder poles give `bigger-biomes` a tundra to draw.
+- ~~This is the owner's to choose (survey R1).~~ **Withdrawn the same day,
+  on the level-5 run (the last row).** At the level the game runs, the
+  shipped spread already gives the reef water: 18% of the shallows reach
+  23 °C and the equatorial sea averages 21.7 °C, within half a kelvin of H05.
+  That is no coincidence. `Grid::conduct` pulls each cell toward its
+  neighbours at `heat_spread` per second, whatever their distance, so its
+  real strength, a diffusivity, is `heat_spread` times the square of the
+  cell spacing. Each finer level halves the spacing and quarters the
+  spread: level 5 at the shipped rate IS a quarter spread at level 4. The
+  second-year fish test runs at level 3, where the same number spreads heat
+  sixteen times harder than in the game, so it tests a flatter world than
+  anyone plays in. Decision 7 makes the spread the same at every level.
+  Survey R1 is withdrawn, since a measurement answered it.
+
+**7. The heat spread is a diffusivity, the same at every level (2026-09-27,
+finding 8).** `heat_spread` (per second) is replaced by
+`heat_diffusivity_m2s` (m²/s), and the step's rate is that over the square
+of the grid's mean centre spacing, measured off `Grid::span`. Its default is
+the shipped rate times the square of level 5's mean spacing (about 180 m,
+so about 65 m²/s; the exact figure is measured and pinned by a test), so
+the game at level 5 steps exactly as it does today. A coarser grid, which
+the instruments and the tests run on, spreads heat as the game does rather
+than four or sixteen times harder.
+- *Alternative:* run the fish test at level 5. It takes about an hour, where
+  level 3 takes a few minutes, and any other instrument at another level
+  would stay wrong.
+- *Alternative:* divide each edge by its own span squared. That is the
+  finite-volume form, but it changes level 5 by the grid's ±9% distortion,
+  and this change is not meant to move the game's climate at all.
 
 ## Risks / Trade-offs
 
