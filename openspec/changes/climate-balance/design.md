@@ -42,7 +42,28 @@ has to work with, observed on `main` (2026-09-27):
 
 ## Decisions
 
-**1. Fix the two terms, then add the thermostat.** The owner's words ask for
+**1. First close the two leaks: heat is moved inside the planet, never made
+or lost.** The sweep found that the step loses heat in two places (Measured,
+findings 2 and 5). The leaks froze the planet, not the sun or the clouds.
+- **The spread becomes a flux of heat across each edge.**
+  - Its conductance keeps today's rate in kelvin between two land cells, or
+    two sea cells.
+  - Across a coast, each side moves by the heat that crosses, over its own
+    heat capacity. The land moves toward the sea's temperature, and the sea
+    hardly moves, which gives coasts their mild climate.
+- **The heat evaporation takes from the ground comes back where the water
+  condenses.** The air's latent warming is the same joules, and it reaches
+  the ground. `evaporation_cooling` and `latent_k_per_kg` stop being two
+  numbers tuned apart: one follows from the other.
+- A test pins each: a toy grid's heat total under the spread alone, and a
+  column that evaporates and rains in place.
+- *Alternative:* keep the leaks and tune the clouds and sun around them.
+  Rejected, for two reasons:
+  - Each leak's size follows the land-sea contrast and the rain, so a tuning
+    that balanced them one season drifts the next.
+  - Run E shows what happens when the spread's sign flips: cells blew up.
+
+**2. Then fix the two terms, then add the thermostat.** The owner's words ask for
 the sun to maintain the average, and both parts serve that.
 - The fixed terms put the natural balance near 15 °C, so the thermostat's
   trim stays near 1.0. The sun is then not propping up a broken cloud term.
@@ -55,7 +76,7 @@ the sun to maintain the average, and both parts serve that.
   retune from sliding the planet again, and the drift took 130 game days to
   show.
 
-**2. The sun becomes a top-of-atmosphere value, and the clouds are tuned by
+**3. The sun becomes a top-of-atmosphere value, and the clouds are tuned by
 measurement.**
 - `solar_wm2` goes to 1360, which is what Budyko's `olr_a` and `olr_b` are
   calibrated against.
@@ -67,7 +88,7 @@ measurement.**
   untrimmed mean as close to 15 °C as the pair allows. The sweep's table goes
   in this design.
 
-**3. The thermostat is a slow proportional-integral controller on one
+**4. The thermostat is a slow proportional-integral controller on one
 scalar.** The owner (survey K1): "well the world has different gradients, the
 sun just has a constant solar output. do recommendation I guess". So the sun
 has to read as constant. Once the two terms are fixed, the trim settles, and a
@@ -86,13 +107,13 @@ gradients from equator to pole are the simulation's, untouched.
   swings with the seasons. Local seasons are untouched: the northern winter is
   still cold, balanced by the southern summer.
 
-**4. The trim is saved and versioned with the weather.**
+**5. The trim is saved and versioned with the weather.**
 - `to_bytes` appends `sun_trim`, and the magic tag's version goes up by one.
 - An old `weather.bin` reads with `sun_trim` 1.0 and is re-saved in the new
   format.
 - The resume test covers the trim.
 
-**5. The fish plan's tests get a second year.** A new test runs the balanced
+**6. The fish plan's tests get a second year.** A new test runs the balanced
 atmosphere for 200 days, at level 3 so it fits in a test run. It asserts
 every species has water in its window for part of the second year. It is
 ignored by default, and run with the instrument, because it takes minutes.
@@ -115,10 +136,10 @@ sea cells, as `fish_ranges` logs it:
 Every run has `solar_wm2` at 1360. A and B were stopped once C and D showed
 the trend.
 
-**1. Clouds alone do not fix it.** D has the weakest clouds, and its whole
+**Finding 1: clouds alone do not fix it.** D has the weakest clouds, and its whole
 surface still averages −9.7 °C in year 2.
 
-**2. The spread between cells is the freeze.** It moves temperature, not
+**Finding 2: the spread between cells is the freeze.** It moves temperature, not
 heat.
 - In `heat`, each cell moves toward its neighbours' mean at `heat_spread` per
   second, in kelvin.
@@ -152,7 +173,7 @@ The heat budget measures it (below). The planet's mean, in W/m², at level 4:
   - in E the land is warmer (day 46: whole surface 19.7 °C, sea 19.5 °C), and
     the planet warmed 0.37 °C a day.
 
-**3. With the leak running the other way, E blew up.**
+**Finding 3: with the leak running the other way, E blew up.**
 - E's sea mean reached 35 °C by day 80, then fell to 14 °C by day 90.
 - Its maps hold cells at −10^19 °C: some cells ran away, and the step's guard
   (`step.rs`, `guard`) reset them to their climatology once they went
@@ -184,23 +205,86 @@ the planet's area-weighted mean surface budget, in W/m², once a game day:
 
 It takes the same `ATMOSPHERE` override as the other instruments.
 
-**The next measurement: the planet without the leak.** `heat_spread` is a
-setting, and zero is legal. So the override can preview a planet with no
-leak, using only the shipped code:
+**Finding 4: with no spread, the planet still cools, more slowly.** Runs G to J set
+`heat_spread` to zero through the override, using only the shipped code, and
+were stopped at day 50 once the trend was plain:
 
-| run | `heat_spread` | `solar_wm2` | `cloud_albedo` | `cloud_greenhouse` |
-| --- | ---: | ---: | ---: | ---: |
-| G | 0 | 1000 (shipped) | 0.6 | 40 |
-| H | 0 | 1360 | 0.6 | 40 |
-| I | 0 | 1360 | 0.35 | 40 |
-| J | 0 | 1360 | 0.25 | 50 |
+| run | `solar_wm2` | `cloud_albedo` | `cloud_greenhouse` | sea, day 10 | sea, day 50 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| shipped (spread on) | 1000 | 0.6 | 40 | 7.7 °C | about −10 °C |
+| G | 1000 | 0.6 | 40 | 12.9 °C | 4.7 °C |
+| H | 1360 | 0.6 | 40 | 13.4 °C | 6.9 °C |
+| I | 1360 | 0.35 | 40 | 13.5 °C | 7.7 °C |
+| J | 1360 | 0.25 | 50 | 13.6 °C | 8.3 °C |
 
-A spread that trades joules would move heat between cells without making any.
-With no spread, heat moves only by the air and the sea's current, so these
-runs bracket that fix rather than being it.
+The heat budget on H names the second drain. Days 1 to 12, in W/m²:
+- absorbed: 175;
+- emitted, less the cloud's returned longwave: 195;
+- sensible heat back from the air: 26;
+- evaporation: 130 to 200;
+- stored: −123 to −190.
+
+**Finding 5: evaporation is the second leak.**
+- The outgoing longwave `203 + 2.09 T` is Budyko's law for the top of the
+  atmosphere. It already counts everything the air does between the ground
+  and space, the latent heat included.
+- In such a model, evaporation moves heat from where water evaporates to
+  where it condenses. It does not take it out of the planet.
+- The step takes `evaporation_cooling` (8.0e4 J/kg) from the ground. It gives
+  back only what `latent_k_per_kg` warms the air by, returned as sensible
+  heat: about `sensible_wm2k · air_relax_s · latent_k_per_kg` = 15 × 3000 ×
+  0.35 = 15,750 J/kg.
+- So about four fifths of every kilogram's heat is lost.
+
+With both leaks closed, Budyko's balance is `absorbed + greenhouse = 203 +
+2.09 T`. On H's budget:
+
+| clouds | absorbed | greenhouse | balance |
+| --- | ---: | ---: | ---: |
+| shipped (0.6, 40), sun 1360 | 175 | 25 | about −1 °C |
+| 0.35 and 40 | about 210 | 25 | about 15 °C |
+| 0.25 and 50 | about 230 | 30 | about 27 °C |
+
+**The next measurement: the planet without either leak.** The override
+closes both, using only the shipped code:
+- `heat_spread` 0;
+- `evaporation_cooling` 15,750 J/kg, what the air column gives back.
+
+| run | `solar_wm2` | `cloud_albedo` | `cloud_greenhouse` |
+| --- | ---: | ---: | ---: |
+| K | 1360 | 0.6 | 40 |
+| L | 1360 | 0.35 | 40 |
+| M | 1000 | 0.6 | 40 |
+| N | 1360 | 0.25 | 50 |
+
+The first 20 days, sea surface (the full runs follow):
+
+| run | day 10 | day 20 |
+| --- | ---: | ---: |
+| K | 15.2 °C | 14.8 °C |
+| L | 15.7 °C | 15.6 °C |
+| M | 14.6 °C | 13.6 °C |
+| N | 15.9 °C | 16.2 °C |
+
+These bracket the fix; they are not it:
+- A spread that trades joules still moves heat between cells. Here none
+  moves.
+- A latent cycle that conserves gives each kilogram's heat back where it
+  condenses. Here the ground is charged what a column that rains in place
+  gets back, so a kilogram that rains out elsewhere moves heat only roughly.
 
 ## Risks / Trade-offs
 
+- [Closing the leaks changes more than the average] → Coastal land becomes
+  milder, since the sea now holds it. Inland stays extreme. Rain may shift
+  where latent heat comes back. The climate report's cover and rain figures
+  and the temperature maps are compared before and after, and any figure
+  that moves past its spread is argued here.
+- [A heat-conserving step exposes a runaway the leaks were hiding] → Run E
+  blew up with the spread's sign reversed. The fixed step is run 200 days at
+  level 5 and checked for any cell outside −80 to +60 °C. The `guard` resets
+  only non-finite cells, so a runaway that stays finite would go unseen
+  without that check.
 - [The controller oscillates against the ocean's heat capacity] → It is
   tuned on the 200-day run, and the scenario's ±1 °C band from day 30 is the
   pass mark. If it rings, the integral term is slowed.

@@ -39,6 +39,21 @@ The same design names the two terms out of balance, from
 Fixing the sun alone was measured, and it is not enough: with 1360 W/m² the
 sea is still at −13.7 °C on day 140, and still falling.
 
+**The sweep found a third term, and it is the biggest (2026-09-27).** The
+clouds retuned as far as Earth's range still left the planet near −10 °C.
+So a heat budget was measured, term by term (`examples/heat_budget.rs`,
+design, "Measured").
+- The heat step's spread between neighbouring cells moves temperature, not
+  heat.
+- A sea cell holds 60 times the heat of a land cell per kelvin. At every
+  coast, the sea is pulled toward the colder land as fast as the land is
+  pulled toward the sea.
+- On the shipped settings this drains 600 to 1,000 W/m² from the planet: four
+  to seven times all the sunlight the ground absorbs (134 W/m²).
+
+The sun and the clouds are small next to it. So the change fixes the spread
+first, and the sweep of the other two runs on a step that keeps its books.
+
 It matters beyond fishing:
 - the climate map (`climate-and-fish-maps`) would bake a frozen planet;
 - the map mockup's climate layer would show one;

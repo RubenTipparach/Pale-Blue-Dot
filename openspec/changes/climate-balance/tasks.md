@@ -9,6 +9,12 @@ owner answers otherwise.
 - [ ] 1.1 The instruments print the area-weighted mean surface temperature, the mean net cloud effect and the trim every ten days. Verify: a 20-day run on the shipped settings reproduces the committed log's mean sea surface on day 10 and day 20, and adds the new columns.
 - [ ] 1.2 Sweep `cloud_albedo` and `cloud_greenhouse` at `solar_wm2` 1360, first at level 4, then the chosen pair at level 5 for 200 days, with the trim held at 1.0. Verify: the table (pair, net cloud effect, mean on day 100 and day 200, median cover, share raining) is in the design.
 
+## 1b. The leak
+
+- [ ] 1.3 The spread between cells trades heat, not kelvin. Each edge carries one flux of heat, set by the difference in temperature, and each side of the edge moves by that heat over its own heat capacity. Verify: a core test that a toy grid of land and sea keeps its area-weighted heat total to rounding under the spread alone; and the heat budget's `spread` column reads within ±1 W/m² of zero on the shipped settings.
+- [ ] 1.3b The heat water takes to evaporate is given back where it condenses: the latent heat that condensing puts into the air reaches the ground as exactly the joules evaporation took, rather than `evaporation_cooling` and `latent_k_per_kg` being two numbers tuned apart. Verify: a core test that a column which evaporates and rains in place ends a day with the heat it started with, less the radiation; and the heat budget's evaporation and its return differ by under 1 W/m² over the planet.
+- [ ] 1.4 The clouds and the sun swept again on the fixed step, as task 1.2 says. Verify: the design's table is replaced with the new runs, and its earlier rows are kept, marked as measured on the leaking step.
+
 ## 2. The thermostat
 
 - [ ] 2.1 `target_mean_c`, `sun_trim_s` and the trim's limits in `AtmosphereSettings` and `atmosphere.ron`, validated with units. Verify: settings tests refuse a zero time constant and limits in the wrong order.
