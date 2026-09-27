@@ -3,7 +3,10 @@
 //! `openspec/changes/world-map` task 1.1 and `bigger-biomes` task 1.1: the
 //! map mockup is drawn from what it writes, and nothing in the game reads it.
 //!
-//!     cargo run --release -p pbd-core --example world_map -- [out.bin] [width]
+//!     cargo run --release -p pbd-core --example world_map -- [out.bin] [width] [base]
+//!
+//! `base` writes the first three planes alone: what the map's finer levels
+//! need (`world-map` decision 9), without the biome scales and their report.
 //!
 //! It writes an equirectangular raster, 2,048 x 1,024 by default, of
 //! little-endian f32 planes after a header (`PBDMAP01`, width, height, plane
@@ -61,7 +64,10 @@ fn main() {
         texels.iter().map(|t| t.top as u16 as f32).collect(),
         texels.iter().map(|t| t.biome as u32 as f32).collect(),
     ];
-    report("today, 188 m at 0.36 / 0.64", &planes[2], &directions);
+    let base_only = args.get(3).is_some_and(|a| a == "base");
+    if !base_only {
+        report("today, 188 m at 0.36 / 0.64", &planes[2], &directions);
+    }
 
     // The land that reaches the moisture split: the ocean, the beach, the
     // tundra and the mountains are decided before moisture is read, and do
@@ -75,14 +81,17 @@ fn main() {
             )
         })
         .collect();
-    println!();
-    println!(
-        "| moisture_m | q10 | q33 | q50 | q67 | q90 | desert_below | wet_above | fields | desert | jungle | swamp |"
-    );
-    println!(
-        "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
-    );
-    for scale in SCALES {
+    let scales: &[f32] = if base_only { &[] } else { &SCALES };
+    if !base_only {
+        println!();
+        println!(
+            "| moisture_m | q10 | q33 | q50 | q67 | q90 | desert_below | wet_above | fields | desert | jungle | swamp |"
+        );
+        println!(
+            "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+        );
+    }
+    for &scale in scales {
         let at_scale = TerrainConfig {
             moisture_m: scale,
             ..cfg

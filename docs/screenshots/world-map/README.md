@@ -14,7 +14,7 @@ Spectral SC. That font request is the only error in the console.
 | --- | --- |
 | `dusk.jpg` | The page as it opens: the spawn's continent at 19:30 on day 150, the night side coming in from the east, the settlements' lamps lighting the ground round them, and the live cloud layer (`examples/map_weather.rs`, twelve frames two game hours apart, faded one into the next). |
 | `noon.jpg` | The same view at noon (`L`). |
-| `close.jpg` | `Home`: zoomed to the player, where each raster pixel (14.7 m) shows as a block of the top block's colour. |
+| `close.jpg` | Before task 1.3c: `Home`, zoomed to the player, where each raster pixel (14.7 m) shows as a block of the top block's colour. |
 | `biomes-750.jpg` | The biome overlay at four times the width (survey B1), greying the planet out beneath it (survey M3), with each biome's share of the land. |
 | `biomes-today.jpg` | The same, as shipped: the temperate land is 91% fields. |
 | `temperature.jpg` | The second year's mean surface temperature from the balanced atmosphere at the game's level 5 (`climate-balance` task 3.1): 15.2 °C over the whole surface, 17.3 °C over the water. An overlay hides the live clouds and fades the night side to a hint, since a year's mean has no hour. |
@@ -32,3 +32,5 @@ Spectral SC. That font request is the only error in the console.
 | `night-and-clouds-on.jpg` | Both toggles turned on, at midnight (`L`): the night side and the towns' lights, with the live clouds. |
 | `closed.jpg` | `M` again: the map closed over the game. |
 | `phone.jpg` | The page at phone width. |
+| `close-smooth.jpg` | After task 1.3c (survey M5), at the 100 m scale: the map drawn with linear filtering, and the 7.4 m tiles loaded for the view in place of the 14.7 m base. |
+| `closest-detail.jpg` | The finest zoom, at the 50 m scale, on the 3.7 m tiles. Filtered, not blocky. The pale stripes across the sand are in the raster itself, not the drawing. They are most likely moire: a 3.7 m pixel sampling cells 2.83 m across, where sand and grass alternate cell by cell, so the rows of pixels and the rows of cells beat. Not yet measured. |

@@ -537,14 +537,17 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = "#081015"; ctx.fillRect(0, 0, cssW(), cssH());
     if (!images.base) return;
-    // Pixel art stays pixels when zoomed in; the whole planet is smoothed.
-    ctx.imageSmoothingEnabled = state.s < 1.5;
+    // Smooth at every zoom (the owner, survey M5), and the finer levels'
+    // tiles over the base once zoomed past it (decision 9).
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     blit(images.base, 1);
+    drawTiles();
     if (state.overlay !== "none") {
       // Grey the planet out beneath the overlay (survey M3).
       ctx.save(); ctx.globalCompositeOperation = "saturation"; ctx.fillStyle = "#808080"; ctx.fillRect(0, 0, cssW(), cssH()); ctx.restore();
       ctx.fillStyle = "rgba(10,16,20,0.45)"; ctx.fillRect(0, 0, cssW(), cssH());
-      ctx.imageSmoothingEnabled = state.overlay === "temperature";
+      ctx.imageSmoothingEnabled = true;
       if (state.overlay === "biomes") blit(images["biomes-" + state.scale], 0.88);
       if (state.overlay === "temperature") blit(images.temperature, 0.82);
       if (state.overlay === "ice") blit(images["sea-ice"], 0.9);
@@ -666,6 +669,43 @@
     const site = sites.find((t) => Math.hypot((t.x - x) * state.s, (t.y - y) * state.s) < 10 || Math.hypot((t.x - x - W) * state.s, (t.y - y) * state.s) < 10);
     $("rOverlayName").textContent = site ? "place" : "layer";
     $("rOverlay").textContent = site ? `${site.name}, ${site.capital ? "the capital" : site.kind.name}` : ({ none: "the planet", biomes: `biomes at ${state.scale === "today" ? "as shipped" : state.scale + " m"}`, temperature: "mean surface temperature", ice: "sea ice", fish: "fish ranges" })[state.overlay] || (weatherOn() ? `${weatherOn().meta.name.toLowerCase()}, now` : "");
+  }
+
+  // ---- The base map's finer levels (decision 9) -------------------------------------
+  // Each level is the same map at twice the last one's width, cut into tiles.
+  // The finest level whose pixels are no smaller than the screen's is drawn,
+  // tile by tile as each arrives, over the level below it.
+  const tileCache = new Map();
+  function tileImage(level, row, col) {
+    const key = `${level}/${row}-${col}`;
+    if (!tileCache.has(key)) {
+      const entry = { img: null };
+      tileCache.set(key, entry);
+      loadImage(`tiles/${key}.png`).then((img) => { entry.img = img; if (img) draw(); });
+    }
+    return tileCache.get(key).img;
+  }
+  function drawTiles() {
+    const levels = (summary && summary.tile_levels) || [];
+    const shown = levels.filter((l) => state.s * W / l.width >= 1).pop();
+    if (!shown) return;
+    for (const l of levels) {
+      if (l.level > shown.level) break;
+      const per = W / l.width;             // base pixels per level pixel
+      const span = l.tile * per;            // a tile, in base pixels
+      const [x0, y0] = toWorld(0, 0), [x1, y1] = toWorld(cssW(), cssH());
+      const rows = l.height / l.tile, cols = l.width / l.tile;
+      for (let r = Math.max(0, Math.floor(y0 / span)); r <= Math.min(rows - 1, Math.floor(y1 / span)); r++) {
+        for (let c = Math.floor(x0 / span); c <= Math.floor(x1 / span); c++) {
+          const wrapped = ((c % cols) + cols) % cols;
+          const img = tileImage(l.level, r, wrapped);
+          if (!img) continue;
+          const [sx, sy] = toScreen(c * span, r * span);
+          // A hair of overlap, so smoothing leaves no seam between tiles.
+          ctx.drawImage(img, sx - 0.5, sy - 0.5, span * state.s + 1, span * state.s + 1);
+        }
+      }
+    }
   }
 
   // ---- The weather overlays (decision 8) ------------------------------------------

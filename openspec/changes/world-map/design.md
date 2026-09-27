@@ -185,6 +185,22 @@ the game's own definitions:
   streamlines, at a speed that reads on screen rather than to scale.
 - They load when first chosen, so the page opens as fast as it did.
 
+**9. Smooth at every zoom, and more detail as you zoom in (the owner, survey
+M5, 2026-09-27: "id also like it to have linear interpolation, instead of
+blocky pixels, canwe have a more detailed layer whenI zoom in?").**
+- Every layer is drawn with linear filtering at every zoom. The mockup kept
+  pixels square when zoomed in, as pixel art; the owner asked for smooth. The
+  terrain's own nearest-point rule (CLAUDE.md) is for the ground's textures,
+  not the map.
+- The base map gains two finer levels, drawn by the same `base_texel` and
+  the same colouring: 4,096 across (7.4 m a pixel) and 8,192 across (3.7 m,
+  about a cell a pixel), cut into 512-pixel tiles. The page draws the finest
+  level whose pixels are no bigger than the screen's, loading only the
+  tiles in view, over the coarser level while they load. This is decision
+  3's quadtree, shown in the mockup at the depth the game will have.
+- *Alternative:* one bigger image. 8,192 across is 33 million pixels, too
+  much to load at once for a page that shows a few tiles of it.
+
 ## Risks / Trade-offs
 
 - [The base raster takes too long to build] → Timed by the instrument

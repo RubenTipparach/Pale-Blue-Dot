@@ -19,6 +19,7 @@ loads (`openspec/changes/world-map` task 1.2):
 
     python3 tools/world_map.py WORLD_MAP.bin OUT_DIR \
         [--fish FISH_FIELDS.bin] [--weather MAP_WEATHER.bin]
+    python3 tools/world_map.py tiles FINER.bin OUT_DIR LEVEL
 
 With `--fish` (what `examples/fish_ranges.rs` writes) it also draws the
 climate and fish overlays of the last simulated year, by the rules in
@@ -336,7 +337,43 @@ def weather_frames(path, out, altitude=None):
             "weather_overlays": overlays}
 
 
+def tiles(source, out, level, tile=512):
+    """The base map's finer levels (`world-map` decision 9): a finer raster
+    from `world_map ... <width> base`, coloured as base.png is, cut into
+    512-pixel tiles, tiles/<level>/<row>-<col>.png. Every tile takes
+    base.png's own palette, so no seam shows between tiles or levels. The
+    level's size goes into summary.json for the page."""
+    width, height, planes = read(source)
+    altitude, top, biome = planes[0], planes[1].astype(int), planes[2].astype(int)
+    sea = altitude < 0.0
+    colour = ground_colours(altitude, top, biome) * relief(altitude, width)[..., None]
+    colour[sea] = sea_colours(-altitude)[sea]
+    rgb = Image.fromarray(np.clip(colour, 0, 255).astype(np.uint8), "RGB")
+    del colour
+    palette = Image.open(os.path.join(out, "base.png"))
+    folder = os.path.join(out, "tiles", str(level))
+    os.makedirs(folder, exist_ok=True)
+    for row in range(height // tile):
+        for col in range(width // tile):
+            piece = rgb.crop((col * tile, row * tile, (col + 1) * tile, (row + 1) * tile))
+            save(piece.quantize(palette=palette, dither=Image.Dither.NONE),
+                 os.path.join(folder, f"{row}-{col}.png"))
+    path = os.path.join(out, "summary.json")
+    with open(path) as f:
+        summary = json.load(f)
+    levels = [entry for entry in summary.get("tile_levels", []) if entry["level"] != level]
+    levels.append({"level": level, "width": width, "height": height, "tile": tile})
+    summary["tile_levels"] = sorted(levels, key=lambda entry: entry["level"])
+    with open(path, "w") as f:
+        json.dump(summary, f, indent=1, sort_keys=True)
+        f.write("\n")
+    print(f"level {level}: {width} x {height} in {(width // tile) * (height // tile)} tiles")
+
+
 def main():
+    if sys.argv[1] == "tiles":
+        tiles(sys.argv[2], sys.argv[3], int(sys.argv[4]))
+        return
     source, out = sys.argv[1], sys.argv[2]
     options = dict(zip(sys.argv[3::2], sys.argv[4::2]))
     os.makedirs(out, exist_ok=True)
@@ -380,6 +417,13 @@ def main():
         summary.update(climate_and_fish(options["--fish"], out))
     if "--weather" in options:
         summary.update(weather_frames(options["--weather"], out, altitude))
+    try:
+        with open(os.path.join(out, "summary.json")) as f:
+            kept = json.load(f).get("tile_levels")
+        if kept:
+            summary["tile_levels"] = kept
+    except (OSError, ValueError):
+        pass
     with open(os.path.join(out, "summary.json"), "w") as f:
         json.dump(summary, f, indent=1, sort_keys=True)
         f.write("\n")

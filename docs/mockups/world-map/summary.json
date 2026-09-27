@@ -141,6 +141,20 @@
   }
  ],
  "surface_mean_c": 15.2,
+ "tile_levels": [
+  {
+   "height": 2048,
+   "level": 1,
+   "tile": 512,
+   "width": 4096
+  },
+  {
+   "height": 4096,
+   "level": 2,
+   "tile": 512,
+   "width": 8192
+  }
+ ],
  "water_mean_c": 17.32,
  "weather_frame_hours": 2.0,
  "weather_frames": 12,
