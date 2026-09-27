@@ -68,13 +68,14 @@
 - [ ] The body is pushed out of thin solids and too-tall column faces along
       the face, keeping the tangential motion; headroom stays a hard stop.
 - [ ] Hold a grounded walker to a floor up to 0.35 m below.
-- [ ] Speeds, sprint and crouch (the owner, T1 and T8): run at 5 m/s by
-      default, sprint at 8 m/s while Shift is held, walk at 3 m/s, crouch at
-      1 m/s while Ctrl is held, with the body 1.2 m tall. What Caps Lock
-      toggles waits on survey T8b, and whether the walker still walks under
-      a roof waits on T8c. Verify: a test of each speed on flat ground, and
-      that a crouched walker passes under a 1.5 m beam a standing one cannot,
-      and stays crouched under it when Ctrl is let go.
+- [ ] Speeds, sprint and crouch (the owner, T1, T8, T8b and T8c): run at
+      5 m/s by default; Caps Lock switches between run and walk at 3 m/s;
+      Shift sprints at 8 m/s over either; Ctrl crouches at 1 m/s with the
+      body 1.2 m tall; and under a roof the walker walks unless Shift is
+      held. Verify: a test of each gait on flat ground, of Caps Lock toggling
+      and Shift over both, of the walk under a roof and the gait restored
+      outside, and that a crouched walker passes under a 1.5 m beam a
+      standing one cannot and stays crouched under it when Ctrl is let go.
 - [ ] Tests mirroring design section 5: up and down each stair with no eye
       jump over 0.1 m and no airborne tick; a shallow wall brush slides; a
       closed door stops; a table is not stepped onto; a jump indoors stops at

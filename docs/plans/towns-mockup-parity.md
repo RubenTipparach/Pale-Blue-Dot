@@ -97,7 +97,7 @@ ask.
 | A grounded walker held to a floor up to 0.35 m below | `tenebris-towns` 2 | planned |
 | A refused move slides along the wall | `tenebris-towns` 2 | planned |
 | Thin geometry blocks the body | `tenebris-towns` 1 | planned |
-| Walking and running speeds (the owner, T1 and T8): run 5 m/s, sprint 8 on Shift, walk 3, crouch 1 on Ctrl | `tenebris-towns` 2 | planned; Caps Lock in survey T8b, walking under a roof in T8c |
+| Walking and running speeds (the owner, T1, T8, T8b, T8c): run 5 m/s; Caps Lock switches to a walk at 3; Shift sprints at 8 over either; Ctrl crouches at 1; walk under a roof | `tenebris-towns` 2 | planned |
 | Wading at half speed in water over 0.3 m | `walking.rs` `water_movement_mult` | built |
 | Walkable roofs (the owner, T4) | `tenebris-towns` 3 | planned |
 | Jump | the game's jump | built |

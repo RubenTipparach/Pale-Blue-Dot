@@ -56,14 +56,26 @@ step height.
 - **THEN** the head stops at the boards
 
 ### Requirement: The walker runs, sprints and crouches at the owner's speeds
-The walker SHALL run at 5 m/s by default, sprint at 8 m/s while Shift is held,
-walk at 3 m/s, and crouch at 1 m/s while Ctrl is held. A crouched walker's
-body SHALL be 1.2 m tall, and it SHALL stay crouched while the ceiling over it
-is lower than a standing body.
+The walker SHALL run at 5 m/s by default. Caps Lock SHALL switch it between
+run and walk at 3 m/s, and it SHALL walk under a roof. Shift held SHALL sprint
+at 8 m/s over either gait, and Ctrl held SHALL crouch at 1 m/s. A crouched
+walker's body SHALL be 1.2 m tall, and it SHALL stay crouched while the
+ceiling over it is lower than a standing body.
 
 #### Scenario: Each gait on flat ground
 - **WHEN** the walker runs, sprints, walks and crouches across flat ground
 - **THEN** its speed is 5, 8, 3 and 1 m/s
+
+#### Scenario: Caps Lock and Shift
+- **WHEN** Caps Lock is pressed once, then again, and the walker crosses flat
+  open ground after each press, with and without Shift held
+- **THEN** it walks at 3 m/s after the first press and runs at 5 m/s after
+  the second, and sprints at 8 m/s whenever Shift is held
+
+#### Scenario: Under a roof
+- **WHEN** a running walker goes through a door into a house and out again
+- **THEN** it walks at 3 m/s under the roof, or sprints at 8 m/s there while
+  Shift is held, and runs at 5 m/s again outside
 
 #### Scenario: Crouching under a beam
 - **WHEN** a crouched walker moves under a beam 1.5 m up and Ctrl is let go
