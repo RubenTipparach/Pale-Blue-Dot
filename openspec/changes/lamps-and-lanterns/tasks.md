@@ -26,6 +26,7 @@ the lights (group 7) before `world-map` starts.
 - [x] 4.1 `daylight::is_dusk_lit(clock)` from the sun's elevation, with hysteresis. Verify: core tests that it is true at midnight and false at noon, and that it does not flip back and forth at dusk.
 - [x] 4.2 Split emitters into always lit and dusk-lit, and re-bake the tier on the worker when the answer changes. (Built: the switch re-bakes on the main thread as an edit does, and a tier built on the streaming worker is baked there at its dusk state; the design's risk note says why.) Verify: an app test that a dusk-lit emitter lights nothing at noon and lights its cells at midnight, and that a torch lights them at both.
 
+- [x] 4.4 (`PlanetContact::relit`; `a_relit_set_is_still_served`; `docs/screenshots/inventory-grid/drops-midnight.jpg` digs where `midnight-dig-before-fix.jpg` could not.) The dusk re-bake re-points the contact at the relit set (decision 13). Verify: an app test that after `switch_dusk_lamps` relights the set, the contact serves the new set and answers the same cells; and a capture pinned at midnight digs.
 - [x] 4.3 A time-of-day control on the pause panel, as the towns mockup has (a slider, Day and Night buttons, and L). It moves the world clock through the same path the clock uses, so the dusk re-bake runs. Verify: an app test that the control sets the clock and that the dusk-lit lanterns come on when it is moved past dusk. It is in the controls list.
 
 ## 5. The lantern family, the brazier and the candle

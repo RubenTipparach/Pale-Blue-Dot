@@ -299,6 +299,28 @@ The hotbar has ten slots and the kit filled eight.
   (survey I1). Once it exists, a grant that does not fit the hotbar lands in
   the grid.
 
+**13. The dusk re-bake takes the contact with it (found 2026-09-27, on the
+inventory captures).** Every capture pinned at midnight dug nothing: the
+scripted dig's ray found no ground, frame after frame, while the same flags at
+noon dug four blocks. `switch_dusk_lamps` replaces `PlanetFine`'s set with a
+relit copy, and nothing told `PlanetContact`, whose fine tier still holds the
+set it was built from. Everything that asks `contact.serves(&fine.set)`
+before trusting an index into the set stops answering until the streaming
+next lands a set:
+- digging and placing find no ground (the edit would otherwise be made
+  against the wrong set's records);
+- everything lit by the field (decision 10: the fish, the float, the ship,
+  a drop) falls back to open sky and no lamp, so a lantern stops lighting
+  the things beside it just as it comes on.
+
+A player standing still at dusk hits it; one walking far enough to land a new
+set does not, which is why the lights' captures, all walks or relit by a
+landing, never showed it. The fix: a relight changes the light field and
+nothing else, and the contact holds the set only for its columns, so at a
+relight the contact takes the relit set in place of the old one
+(`PlanetContact::relit`), with no rebuild. It refuses where its tier was
+built from some other set, which a landing is about to replace anyway.
+
 ## Risks / Trade-offs
 
 - [A level-13 lantern floods about 13 cells, over 30 m across 2.833 m cells,

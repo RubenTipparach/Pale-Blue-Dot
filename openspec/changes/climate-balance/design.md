@@ -549,8 +549,30 @@ the target, but its land cools to its own balance in days while the sea,
 two degrees colder than it will settle, warms over hundreds. The balance
 trim aims at a planet in equilibrium, which one still filling its sea is
 not, and the integral that would close the gap is held while the error is
-over `sun_trim_band_k`, 1 K. A sweep of the band and the nudge at level 3
-is measuring the fix; its result goes here before any setting changes.
+over `sun_trim_band_k`, 1 K.
+
+The thermostat is not the lever. Swept at level 3, 200 days, on decision 7:
+
+| run | change | day 10 | day 30 | day 100 | day 200 | from day 30 | trim, year 2 |
+| --- | --- | ---: | ---: | ---: | ---: | --- | --- |
+| l3 | none | 13.47 °C | 13.37 °C | 14.05 °C | 15.01 °C | 13.37 to 15.05 °C | 1.0% |
+| B2 | band 2 K | 13.48 °C | 13.49 °C | 14.70 °C | 15.62 °C | 13.49 to 16.08 °C | 2.8% |
+| B3 | band 3 K | 13.48 °C | 13.49 °C | 14.70 °C | 15.62 °C | 13.49 to 16.08 °C | 2.8% |
+| P5 | nudge 0.05 a kelvin | 13.69 °C | 13.79 °C | 14.85 °C | 15.17 °C | 13.79 to 15.56 °C | 3.3% |
+
+The dip is set in the first ten days, before any of these acts, and a wider
+band only overshoots later and makes the sun less steady. The fix is where a
+new world starts (decision 8).
+
+**8, proposed. A new world starts from a settled climate.** Not built. The
+start today is a climatology by latitude; the settled planet has warmer seas
+and colder land than that, and the sea takes hundreds of days to get there.
+`climate-and-fish-maps` already bakes a simulated year of the balanced
+planet for its maps. A new world would start from that bake's last state,
+per level, so its first day is its settled one and the sun needs no
+catching up. Until then the second-year fish test stays ignored and failing
+on its day-30 check, and the game's own level passes task 3.1 with 0.75 K to
+spare. The owner decides the order (survey K6).
 
 **7. The heat spread is a diffusivity, the same at every level (2026-09-27,
 finding 8).** `heat_spread` (per second) is replaced by

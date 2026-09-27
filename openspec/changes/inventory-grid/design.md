@@ -130,6 +130,12 @@ hotbar is not drawn either.
   line is short (the slots, about 400 bytes with a full pack) and the log is
   appended per edit already.
 
+- [Dug meadow gives dry grass and soil, which draw exactly like the kit's
+  grass and dirt in a slot and do not stack with them] → Seen in the
+  pull-in capture: two identical-looking stacks. The slot thumbnail shares
+  one tile and tint per pair. The owner decides (survey I4) whether they
+  get their own look or dig up as grass and dirt.
+
 ## Migration Plan
 
 - An old log reads unchanged: ten slot fields mean an empty pack.

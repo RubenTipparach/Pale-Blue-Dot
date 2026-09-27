@@ -1062,6 +1062,7 @@ pub fn switch_dusk_lamps(
     sun: Option<Res<crate::sky::Sun>>,
     mut lamps: ResMut<DuskLamps>,
     fine: Option<ResMut<PlanetFine>>,
+    contact: Option<ResMut<crate::planet::PlanetContact>>,
 ) {
     let (Some(sun), Some(mut fine)) = (sun, fine) else {
         return;
@@ -1079,7 +1080,14 @@ pub fn switch_dusk_lamps(
         let started = std::time::Instant::now();
         let mut set = (*fine.set).clone();
         set.columns.set_dusk(lit);
-        fine.set = Arc::new(set);
+        let relit = Arc::new(set);
+        // The contact answers for the set it was built from, and a relight
+        // changes only the light: without this, digging and everything lit
+        // by the field stop at dusk until the next landing (decision 13).
+        if let Some(mut contact) = contact {
+            contact.relit(&fine.set, &relit);
+        }
+        fine.set = relit;
         fine.version += 1;
         spent("dusk lamps: re-baking the field", started);
     }

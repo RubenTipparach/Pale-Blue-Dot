@@ -285,6 +285,21 @@ impl PlanetContact {
         self.fine = Some(FineTier::new(set));
     }
 
+    /// Take `relit`, a copy of `from` with its light field re-baked
+    /// (`switch_dusk_lamps`), as the set this tier answers for. A relight
+    /// changes the light and nothing the tier was built from, so no rebuild
+    /// is needed (`lamps-and-lanterns` decision 13). Refused, `false`, where
+    /// the tier was built from another set: a landing replaces it anyway.
+    pub fn relit(&mut self, from: &Arc<FineSet>, relit: &Arc<FineSet>) -> bool {
+        match self.fine.as_mut() {
+            Some(fine) if Arc::ptr_eq(&fine.set, from) => {
+                fine.set = relit.clone();
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// What a body whose FEET are at `feet` stands between. One function
     /// decides column tier or heightfield, which is the whole of how the
     /// walker gets a ceiling without learning where ceilings come from.
@@ -675,6 +690,39 @@ mod tests {
         for bin in 0..INDEX_LEN {
             assert!(contact.sample(bin_direction(bin)).radius.is_finite());
         }
+    }
+
+    /// A relight keeps the contact serving (`lamps-and-lanterns` decision
+    /// 13): after the dusk re-bake swaps the set for a relit copy, the
+    /// contact serves the copy and answers the same cells, and it refuses a
+    /// relight of a set it was not built from.
+    #[test]
+    fn a_relit_set_is_still_served() {
+        let mut contact = PlanetContact::test_planet(5);
+        let anchor = contact.find_land_near(Vec3::new(0.8776, 0.4794, 0.0));
+        let set = Arc::new(super::super::lod::generate_fine(
+            anchor,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        ));
+        contact.set_fine(&set);
+        let before = contact.finest_cell(anchor);
+        let mut copy = (*set).clone();
+        copy.columns.set_dusk(!set.columns.dusk());
+        let relit = Arc::new(copy);
+        assert!(
+            !contact.serves(&relit),
+            "the bug: a relit copy is not served"
+        );
+        assert!(contact.relit(&set, &relit));
+        assert!(contact.serves(&relit));
+        assert_eq!(contact.finest_cell(anchor), before, "the same cells");
+        let stranger = Arc::new((*set).clone());
+        assert!(
+            !contact.relit(&stranger, &set),
+            "not a set it was built from"
+        );
+        assert!(contact.serves(&relit));
     }
 
     /// Inside the fine band a query lands on a finest-level cell, which is a
