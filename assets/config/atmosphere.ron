@@ -36,7 +36,11 @@
     cloud_pace: 0.2,
 
     // Sun and heat. Heat capacities are small because a day is 48 minutes.
-    solar_wm2: 1000.0,
+    // The sun is a top-of-atmosphere value, what Budyko's olr_a and olr_b are
+    // calibrated against; the clouds reflect 0.3 of it under full cover and
+    // return 40 W/m^2, a net cloud effect of about -29 W/m^2, inside Earth's
+    // range (openspec/changes/climate-balance, the sweep on the fixed step).
+    solar_wm2: 1360.0,
     // The thermostat: the sun's strength is trimmed to hold the planet's
     // mean surface temperature, land and sea, at the target (the owner: "the
     // sun should maintain average temperature of the planet to 15 c"). The
@@ -45,13 +49,13 @@
     // over sun_trim_s, s, runs within sun_trim_band_k of the target. It stays
     // between its limits, and says so when it hits one.
     target_mean_c: Some(15.0),
-    sun_balance_s: 72000.0,
+    sun_balance_s: 144000.0,
     sun_trim_s: 144000.0,
-    sun_trim_per_k: 0.01,
+    sun_trim_per_k: 0.02,
     sun_trim_band_k: 1.0,
     sun_trim_min: 0.7,
     sun_trim_max: 1.4,
-    cloud_albedo: 0.6,
+    cloud_albedo: 0.3,
     ocean_albedo: 0.06,
     land_albedo: 0.25,
     snow_albedo: 0.7,

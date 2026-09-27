@@ -143,9 +143,10 @@ where `A₁` is the sunlight the ground would absorb at a trim of 1, `G` the
 clouds' returned longwave, `a` and `b` are `olr_a` and `olr_b`, and `T` the
 mean. So the trim that settles the planet at the target is
 `(a + b · target − G) / A₁`, read straight off the budget.
-- **The balance trim.** `A₁` and `G` are averaged over `sun_balance_s` (25 game
-  days to start), long enough that a day's weather and a season's swing
-  barely move it, which is K1's constant sun. The trim is that ratio.
+- **The balance trim.** `A₁` and `G` are averaged over `sun_balance_s`, 50
+  game days, long enough that a day's weather and a season's swing barely
+  move it, which is K1's constant sun: at 25 days the seasons' clouds still
+  moved the trim 1.2% over year 2 (VC2). The trim is that ratio.
 - **The nudge.** A proportional term, `sun_trim_per_k` of trim per kelvin off,
   hastens the approach while the sea is still far from settled, and fades
   to nothing as it arrives.
@@ -157,6 +158,18 @@ mean. So the trim that settles the planet at the target is
   a fifth of the sun during the long approach and the planet overshot to
   18.7 °C, although the balance trim alone was right to within a percent.
 - The averages and the integral are saved with the weather.
+- **A new world starts at the target.** The balance trim is right once the
+  sea has caught up, and the sea takes hundreds of days. Pair V under it,
+  started from the old climatology (`28 − 45 sin²(lat)`, 13 °C averaged over
+  the sphere), was still at 13.6 °C on day 60. So the climatology a new world
+  starts from averages the target over the sphere: `28 − 3 (28 − target)
+  sin²(lat)`, 28 °C at the equator and −11 °C at the poles for a target of
+  15. It keeps the old equator because the fish's temperature windows were
+  set on it: moving the whole climatology up two kelvin put a day-one
+  equatorial river at 30.1 °C, past every river species' window
+  (`on_day_one_no_open_water_is_without_a_species`). The thermostat then
+  holds a planet at 15 °C, rather than having to warm one there. With no
+  target, the old climatology stands.
 - *Alternative:* a slower integral alone. Rejected: it is slow in both
   directions, so a frozen save would take years of game time to warm, and it
   would still ring against the sea, only more slowly.
@@ -447,6 +460,25 @@ the thermostat as decision 4 first wrote it.
   seconds, 500 game days). An integral quick enough to catch the land keeps
   pushing long after the sea has been set on its way, and overshoots.
   Decision 4 is revised below.
+
+**The last two passes (2026-09-27), with the pools' heat kept (finding 7)**,
+level 4, 200 days, `solar_wm2` 1360:
+
+| run | pair | thermostat | start | whole surface, day 30 | day 100 | day 200 | trim |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- |
+| V0 | 0.3 / 40 | off | old climatology | 14.5 °C | 17.2 °C | 19.9 °C | 1 |
+| S0 | 0.35 / 40 | off | old climatology | 14.1 °C | 16.1 °C | 18.0 °C | 1 |
+| VB1 | 0.3 / 40 | balance, 0.01 a kelvin | old climatology | 13.2 °C | stopped at day 60, 13.6 °C | | 0.87 to 0.91 |
+| VC2 | 0.3 / 40 | balance, 0.02 a kelvin | at the target | 14.9 °C | 15.1 °C | see below | 0.85 to 0.90 |
+| VC4 | 0.3 / 40 | balance, 0.04 a kelvin | at the target | 14.9 °C | 15.1 °C | see below | 0.86 to 0.90 |
+
+- **With the books closed, the in-range pairs run warm.** V untrimmed climbs
+  past 19 °C and is still climbing. So the natural balance is not near 15 °C,
+  as decision 2 hoped: the thermostat settles the sun at about 0.89 of 1360,
+  a steady 1,210 W/m². K1 asks that it read as constant, and it does (below).
+- **Started at the target, the balance thermostat holds.** VC2 and VC4 are
+  within 15 ± 0.3 °C from day 20, with no overshoot. The nudge's strength
+  barely matters once the start is right; 0.02 is shipped, the gentler.
 
 ## Risks / Trade-offs
 

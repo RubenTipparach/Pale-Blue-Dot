@@ -197,7 +197,7 @@ impl Atmosphere {
         let field = crate::weather::WeatherField::DEFAULT;
         for cell in 0..n {
             let c = atmosphere.grid.centre[cell];
-            let climate = climate_k(c.y);
+            let climate = climate_k(&atmosphere.settings, c.y);
             // The old field's warm pockets, as a few kelvin of disturbance.
             let pocket = crate::weather::solar(&field, seed, c, 0.0) - 0.5;
             atmosphere.ground_k[cell] = climate + pocket * 4.0;
@@ -529,9 +529,22 @@ const MAGIC_V1: &[u8; 8] = b"PBDATM01";
 const SCALARS: usize = 8;
 
 /// A latitude's rough year-round temperature at sea level, deg C, from the
-/// sine of the latitude: where a new world's weather starts.
-fn climate_k(sin_latitude: f32) -> f32 {
-    28.0 - 45.0 * sin_latitude * sin_latitude
+/// sine of the latitude: where a new world's weather starts, and where a cell
+/// the guard resets goes back to. With no thermostat it is the old
+/// `28 - 45 sin^2`. With one, it keeps that equator, 28 C, which the fish's
+/// temperature windows were set on, and averages the target over the sphere
+/// (the mean of `sin^2` over a sphere is a third), so a new world starts at
+/// the temperature the sun will hold it at: for 15 C its poles are -11 C
+/// (`climate-balance` decision 4, revised).
+fn climate_k(settings: &AtmosphereSettings, sin_latitude: f32) -> f32 {
+    const EQUATOR_C: f32 = 28.0;
+    let Some(mean) = settings.target_mean_c else {
+        return EQUATOR_C - 45.0 * sin_latitude * sin_latitude;
+    };
+    // The drop from the equator to the pole that puts the sphere's mean at
+    // the target, never a pole warmer than the equator.
+    let drop = (3.0 * (EQUATOR_C - mean)).max(0.0);
+    EQUATOR_C - drop * sin_latitude * sin_latitude
 }
 
 fn surface_of(grid: &Grid, terrain: &TerrainConfig, settings: &AtmosphereSettings) -> Surface {

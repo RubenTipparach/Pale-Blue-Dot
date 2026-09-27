@@ -400,7 +400,7 @@ impl Atmosphere {
                 && self.current[i].is_finite()
                 && self.sea[i].is_finite();
             if !fine {
-                let climate = super::climate_k(self.grid.centre[i].y);
+                let climate = super::climate_k(&self.settings, self.grid.centre[i].y);
                 self.phi[i] = 0.0;
                 self.wind[i] = Vec3::ZERO;
                 self.air_k[i] = climate;
