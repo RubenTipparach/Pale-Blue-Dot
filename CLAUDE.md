@@ -111,6 +111,17 @@ publish the same tables as an artifact page with an answer field per
 question, linked from the survey's "Already decided" section once the
 connector is back.
 
+## End every reply with the artifact links (owner, 2026-09-27)
+
+**Standing instruction from the user:** "always give me links to artifacts
+generated or updated since last prompt at end of messages". Every reply ends
+with a short list of links. It names each claude.ai artifact published,
+republished or edited since the owner's last message, including pages,
+mockups, benchmark reports, the survey doc and any other Claude Doc. Give the
+link, and one line on what is new in it. If nothing was published or edited,
+say so in one line, so that a missing list is never mistaken for a forgotten
+one.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
