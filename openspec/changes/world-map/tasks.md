@@ -21,6 +21,7 @@ gate for everything after it, in this change and in `bigger-biomes`,
   - a day/night toggle, with the lit settlements glowing on the night side (CLAUDE.md: mockups are lit at night).
 
   Verify: the page loads with no console errors in a headless browser, and a screenshot of each layer is checked in.
+- [x] 1.3b (`map_weather` writes `PBDWTHR2`; `tools/world_map.py` reads the ramps from `pbd_app::overlay::RAMPS` and the fade from the shader; the currents leave land clear. The night side and live clouds are off by default, as the owner asked.) The eight weather overlays in the mockup (decision 8): wind, jet, currents, cloud, rain, humidity, sunlight and temperature, through a day, in the game's ramps, the flows as moving streaks. Verify: a screenshot of each in `docs/screenshots/world-map/`, and the mockup republished.
 - [ ] 1.3a A walkthrough video of the mockup (`step-videos`' `mockup_video.js`): the whole planet, zooming to the player, each layer in turn, the biome scales side by side, the sites, and the night side with the towns' lights. Verify: it is on the gate page.
 - [x] 1.4 (https://claude.ai/artifact/G7QY9BYXYMH8tgaEv8E7az, linked from the roadmap page and the PR.) Publish the mockup as an Artifact and link it from the roadmap page and the PR. Verify: the link opens.
 - [ ] 1.5 **Gate:** the owner watches the video, tries the mockup, and approves the map. Record their words and their answers to the open questions in `design.md`, and change the decisions they overrule before any code below starts. Verify: the quote is in `design.md`.

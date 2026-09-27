@@ -81,6 +81,7 @@
   .stage { position: relative; min-height: 0; }
   canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
   canvas#view.dragging { cursor: grabbing; }
+  canvas#streaks { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
 
   /* The legend: one button per overlay (survey M4), then the marks. */
   .legend {
@@ -164,6 +165,7 @@
 
     <div class="stage" id="stage">
       <canvas id="view" aria-label="The planet, flat"></canvas>
+      <canvas id="streaks" aria-hidden="true"></canvas>
 
       <aside class="legend" id="legend">
         <header>
@@ -181,6 +183,18 @@
               <button type="button" data-overlay="fish" aria-pressed="false">Fish</button>
             </div>
             <p class="note" id="overlayNote">The planet as it looks: each pixel is its ground's top block, shaded by relief, and the sea by its depth. An overlay greys it out (survey M3).</p>
+          </div>
+
+          <div class="group">
+            <h3>Weather, at the hour on the clock</h3>
+            <div class="buttons" id="weatherButtons" role="group" aria-label="Weather overlay"></div>
+          </div>
+
+          <div class="group" id="weatherGroup" hidden>
+            <h3 id="weatherTitle"></h3>
+            <div class="ramp" id="weatherRamp"></div>
+            <div class="ramp-labels" id="weatherLabels"></div>
+            <p class="note" id="weatherNote"></p>
           </div>
 
           <div class="group" id="biomeGroup" hidden>
@@ -221,8 +235,8 @@
           <div class="group toggles">
             <h3>On the map</h3>
             <label><input type="checkbox" id="showSites" checked> Settlements</label>
-            <label><input type="checkbox" id="showNight" checked> Night side</label>
-            <label><input type="checkbox" id="showClouds" checked> Clouds and rain, live</label>
+            <label><input type="checkbox" id="showNight"> Night side</label>
+            <label><input type="checkbox" id="showClouds"> Clouds and rain, live</label>
             <label><input type="checkbox" id="showMe" checked> You and your ship</label>
             <label><input type="checkbox" id="showGrid"> Latitude and longitude</label>
           </div>
@@ -302,7 +316,8 @@
   const state = {
     open: true, overlay: "none", scale: "750", species: "all",
     hour: 19.5, playing: false,
-    sites: true, night: true, clouds: true, me: true, grid: false,
+    // Night side, clouds and rain start off (the owner, 2026-09-27).
+    sites: true, night: false, clouds: false, me: true, grid: false,
     cx: W / 2, cy: H / 2, s: 1, // view centre in raster px, screen px per raster px
     pointer: null,
   };
@@ -490,6 +505,7 @@
     const r = canvas.getBoundingClientRect();
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.max(1, Math.round(r.width * dpr)); canvas.height = Math.max(1, Math.round(r.height * dpr));
+    sizeStreaks();
     clampView(); draw();
   }
   const cssW = () => canvas.width / dpr, cssH = () => canvas.height / dpr;
@@ -533,7 +549,15 @@
       if (state.overlay === "temperature") blit(images.temperature, 0.82);
       if (state.overlay === "ice") blit(images["sea-ice"], 0.9);
       if (state.overlay === "fish") blit(fishCanvas.width ? fishCanvas : null, 0.95);
+      const w = weatherOn();
+      if (w && w.frames.length) {
+        // Two frames two game hours apart, faded one into the next.
+        const [a, b, t] = framesAt(w.frames.length);
+        ctx.imageSmoothingEnabled = true;
+        blit(w.frames[a], 0.9); blit(w.frames[b], 0.9 * t);
+      }
     }
+    clearStreaks();
     const sun = sunAt(currentSeconds());
     // An overlay is a year's average or a range, which has no hour: the live
     // clouds are the planet view's, and the night side is only a hint over it.
@@ -641,13 +665,112 @@
     $("rBiome").textContent = s.alt < 0 ? "ocean" : `${b}${state.scale === "today" ? "" : `, as shipped ${BIOMES[s.today]}`}`;
     const site = sites.find((t) => Math.hypot((t.x - x) * state.s, (t.y - y) * state.s) < 10 || Math.hypot((t.x - x - W) * state.s, (t.y - y) * state.s) < 10);
     $("rOverlayName").textContent = site ? "place" : "layer";
-    $("rOverlay").textContent = site ? `${site.name}, ${site.capital ? "the capital" : site.kind.name}` : ({ none: "the planet", biomes: `biomes at ${state.scale === "today" ? "as shipped" : state.scale + " m"}`, temperature: "mean surface temperature", ice: "sea ice", fish: "fish ranges" })[state.overlay];
+    $("rOverlay").textContent = site ? `${site.name}, ${site.capital ? "the capital" : site.kind.name}` : ({ none: "the planet", biomes: `biomes at ${state.scale === "today" ? "as shipped" : state.scale + " m"}`, temperature: "mean surface temperature", ice: "sea ice", fish: "fish ranges" })[state.overlay] || (weatherOn() ? `${weatherOn().meta.name.toLowerCase()}, now` : "");
+  }
+
+  // ---- The weather overlays (decision 8) ------------------------------------------
+  // Each is the game's own overlay (`Overlay::texel`) through a day in twelve
+  // frames, coloured in the game's ramp. They load when first chosen.
+  const WEATHER_NOTES = {
+    wind: "The wind at the surface. The streaks run with it, faster where it blows harder.",
+    jet: "The wind at cloud height, which carries the cloud.",
+    currents: "The sea's surface current: slow, a few centimetres a second, so the streaks are sped up the most.",
+    cloud: "Cloud cover. Clear sky is left clear, as a weather radar leaves it.",
+    rain: "Rain, and snow in violet. Dry ground is left clear.",
+    humidity: "Relative humidity at the surface.",
+    sunlight: "Sunlight reaching the ground, after the cloud. The night side is dark.",
+    temperature: "The surface temperature now, at the ground's own height. The Temperature overlay above is the year's mean.",
+  };
+  const weather = {};
+  const weatherOn = () => (state.overlay.startsWith("w:") ? weather[state.overlay.slice(2)] || null : null);
+  function framesAt(n) {
+    const f = state.hour / 24 * n, a = Math.floor(f) % n;
+    return [a, (a + 1) % n, f - Math.floor(f)];
+  }
+  async function loadWeather(key) {
+    const w = weather[key];
+    if (w.frames.length) return w;
+    const frames = summary.weather_frames;
+    const name = (k, flow) => `weather/${key}${flow ? "-flow" : ""}-${String(k).padStart(2, "0")}.png`;
+    w.frames = (await Promise.all(Array.from({ length: frames }, (_, k) => loadImage(name(k, false))))).filter(Boolean);
+    if (w.meta.flows) {
+      const flows = await Promise.all(Array.from({ length: frames }, (_, k) => loadImage(name(k, true))));
+      w.flows = flows.filter(Boolean).map(pixels);
+    }
+    return w;
+  }
+  async function showWeather(key) {
+    const w = await loadWeather(key);
+    const m = w.meta;
+    const unit = ({ C: "°C", "W/m2": "W/m²" })[m.unit] || m.unit;
+    $("weatherTitle").textContent = `${m.name.toLowerCase()}, ${unit}`;
+    $("weatherRamp").style.background = `linear-gradient(90deg, ${m.stops.map((c) => `rgb(${c})`).join(", ")})`;
+    const mid = (m.lo + m.hi) / 2, fmt = (v) => (Math.abs(v) < 1 && v !== 0 ? v.toFixed(2) : String(Math.round(v)));
+    $("weatherLabels").innerHTML = "";
+    for (const v of [m.lo, mid, m.hi]) { const span = document.createElement("span"); span.textContent = key === "rain" && v < 0 ? `${fmt(-v)} snow` : fmt(v); $("weatherLabels").append(span); }
+    $("weatherNote").textContent = WEATHER_NOTES[key] || "";
+    resetStreaks(); draw();
+  }
+  function flowAt(w, x, y) {
+    const [a, b, t] = framesAt(w.flows.length);
+    const A = w.flows[a], B = w.flows[b], fw = A.width, fh = A.height;
+    const px = ((Math.floor(x / W * fw) % fw) + fw) % fw, py = Math.max(0, Math.min(fh - 1, Math.floor(y / H * fh)));
+    const i = (py * fw + px) * 4;
+    const east = ((A.data[i] - 128) * (1 - t) + (B.data[i] - 128) * t) / 127;
+    const north = ((A.data[i + 1] - 128) * (1 - t) + (B.data[i + 1] - 128) * t) / 127;
+    return [east, north]; // as a share of the ramp's top speed
+  }
+
+  // Streaks along a flow, as the globe draws streamlines: particles carried
+  // by the field, each leaving a fading trail. They move at a speed that reads
+  // on screen, a full-scale flow crossing 90 px a second at any zoom.
+  const streaks = $("streaks"), sctx = streaks.getContext("2d");
+  let particles = [], streaking = false;
+  function sizeStreaks() {
+    streaks.width = canvas.width; streaks.height = canvas.height;
+    sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function clearStreaks() { sctx.clearRect(0, 0, cssW(), cssH()); }
+  function spawn() {
+    const [x, y] = toWorld(Math.random() * cssW(), Math.random() * cssH());
+    return { x, y, age: Math.floor(Math.random() * 80) };
+  }
+  function resetStreaks() {
+    const w = weatherOn();
+    particles = w && w.flows ? Array.from({ length: Math.round(cssW() * cssH() / 700) }, spawn) : [];
+    clearStreaks();
+    if (particles.length && !streaking) { streaking = true; requestAnimationFrame(stepStreaks); }
+  }
+  function stepStreaks() {
+    const w = weatherOn();
+    if (!w || !w.flows || !state.open) { streaking = false; clearStreaks(); return; }
+    sctx.save();
+    sctx.globalCompositeOperation = "destination-out";
+    sctx.fillStyle = "rgba(0,0,0,0.08)"; sctx.fillRect(0, 0, cssW(), cssH());
+    sctx.restore();
+    sctx.strokeStyle = "rgba(255,255,255,0.8)"; sctx.lineWidth = 1.1;
+    sctx.beginPath();
+    const step = 90 / 60 / state.s;
+    for (let k = 0; k < particles.length; k++) {
+      let p = particles[k];
+      const [east, north] = flowAt(w, p.x, p.y);
+      const lat = (0.5 - p.y / H) * Math.PI;
+      const nx = p.x + east / Math.max(Math.cos(lat), 0.1) * step, ny = p.y - north * step;
+      const [ax, ay] = toScreen(p.x, p.y), [bx, by] = toScreen(nx, ny);
+      p.x = nx; p.y = ny; p.age++;
+      if (p.age > 90 || bx < 0 || by < 0 || bx > cssW() || by > cssH() || Math.hypot(east, north) < 0.01) { particles[k] = spawn(); continue; }
+      sctx.moveTo(ax, ay); sctx.lineTo(bx, by);
+    }
+    sctx.stroke();
+    requestAnimationFrame(stepStreaks);
   }
 
   // ---- The legend ----------------------------------------------------------------
-  function setOverlay(name) {
+  async function setOverlay(name) {
     state.overlay = name;
-    for (const b of document.querySelectorAll("#overlays button")) b.setAttribute("aria-pressed", String(b.dataset.overlay === name));
+    for (const b of document.querySelectorAll("[data-overlay]")) b.setAttribute("aria-pressed", String(b.dataset.overlay === name));
+    $("weatherGroup").hidden = !name.startsWith("w:");
+    if (name.startsWith("w:")) await showWeather(name.slice(2));
     $("biomeGroup").hidden = name !== "biomes";
     $("tempGroup").hidden = name !== "temperature";
     $("iceGroup").hidden = name !== "ice";
@@ -781,12 +904,22 @@
       $("tempNote").textContent = `Year ${summary.climate_year}'s mean, land and sea: the planet averages ${summary.surface_mean_c.toFixed(1)} °C over its whole surface, and its water ${summary.water_mean_c.toFixed(1)} °C.`;
       $("iceNote").textContent = `${(summary.frozen_all_year_share_of_water * 100).toFixed(1)}% of the water is frozen all year.`;
     }
+    for (const meta of (summary && summary.weather_overlays) || []) {
+      const key = meta.name.toLowerCase();
+      weather[key] = { meta, frames: [], flows: null };
+      const b = document.createElement("button"); b.type = "button";
+      b.dataset.overlay = "w:" + key; b.setAttribute("aria-pressed", "false");
+      b.textContent = key === "sunlight" ? "Sunlight" : key[0].toUpperCase() + key.slice(1);
+      b.addEventListener("click", () => setOverlay(b.dataset.overlay));
+      $("weatherButtons").append(b);
+    }
     drawFish(); fishKey();
     resize();
     setScale("750");
-    setHour(19.5);
-    // Open on the spawn's continent at dusk: the night side is coming in
-    // from the east, and the towns are lighting up.
+    // Open at the spawn's noon on its continent. The night side, and the
+    // clouds and rain, are off until asked for (the owner, 2026-09-27); with
+    // the night side on, the towns light up at dusk.
+    setHour(solveHour(true));
     const [x, y] = worldOf(SPAWN); state.cx = x - 60; state.cy = y + 20; state.s = minScale() * 1.9; clampView();
     draw();
   }

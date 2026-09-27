@@ -164,6 +164,27 @@ zoom, like the fish maps. See "Decided by the owner" below.*
 - `city-sites` and `climate-and-fish-maps` add layers through that registry,
   and the map's code does not change for them.
 
+**8. The mockup shows the eight weather overlays too (the owner, 2026-09-27,
+on the published mockup: "what about all the other overlays like cloud
+cover, solar, wind, currents etc").** Decision 6 already makes them map
+layers in the game (task 5.2); the mockup showed only the live clouds, so the
+owner had nothing to judge them by. They go in as the game draws them, from
+the game's own definitions:
+- `examples/map_weather.rs` writes each overlay's value with
+  `Overlay::texel`, the one reading the globe's overlay uses, over a day in
+  twelve frames, and writes each overlay's name, unit, range, ramp and
+  whether it flows or fades from `pbd_core::overlay`, so nothing about an
+  overlay is restated.
+- `tools/world_map.py` colours each frame with the ramp table the game's
+  legend and shader share (`pbd_app::overlay::RAMPS`), parsed from its
+  source as the shader's copy is checked against it. Cloud and rain fade
+  toward nothing as the globe's do.
+- The page groups them apart from the year's climate: the weather is at the
+  hour on the world clock, and moves with it. Wind, the jet and the
+  currents draw moving streaks along the flow, where the globe draws
+  streamlines, at a speed that reads on screen rather than to scale.
+- They load when first chosen, so the page opens as fast as it did.
+
 ## Risks / Trade-offs
 
 - [The base raster takes too long to build] → Timed by the instrument
@@ -208,3 +229,11 @@ zoom, like the fish maps. See "Decided by the owner" below.*
 - **M4, "need to add buttons for these instead of m to cycle. <M opens and
   closes maps":** M opens and closes the map. Each overlay has its own button
   in the legend, and M no longer cycles overlays.
+- **On the published mockup (chat, 2026-09-27), "what about all the other
+  overlays like cloud cover, solar, wind, currents etc":** the eight weather
+  overlays join the mockup (decision 8).
+- **The same day, "nigth side, clouds and rain should be off e dfault":** the
+  map opens with the night side and the live clouds and rain off, each a
+  toggle in the legend. It opens at the spawn's noon. The towns still light
+  up on the night side once it is turned on, which is how the mockup keeps
+  CLAUDE.md's rule that mockups are lit at night.
