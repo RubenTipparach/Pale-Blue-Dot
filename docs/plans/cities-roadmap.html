@@ -86,7 +86,7 @@ blockquote cite{display:block;margin-top:6px;font-style:normal;font-family:var(-
 
 /* the route */
 .route-box{overflow-x:auto;padding-bottom:6px}
-.route{display:flex;align-items:flex-start;min-width:1120px}
+.route{display:flex;align-items:flex-start;min-width:1440px}
 .stop{display:grid;justify-items:center;gap:6px;text-align:center;width:98px;flex:none}
 .stop .dot{
   width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
@@ -185,19 +185,20 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 <header>
   <div class="eyebrow">Pale Blue Dot &middot; OpenSpec plan &middot; 27 September 2026</div>
   <h1>The road to Tenebris cities</h1>
-  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Nine OpenSpec changes, each written up and waiting for <span class="mono">/opsx:apply</span>. Every step ends in a video you watch before the next one starts.</p>
+  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Eleven OpenSpec changes, each written up and waiting for <span class="mono">/opsx:apply</span>. Every step ends in a video you watch before the next one starts.</p>
   <blockquote>
     step 1 implement lights, step 2 implement cities, step 3 implement ways for me to make cities. as a player I want to be able to put together these buildings myself &hellip; So map with cities first mocked up, then I will approve.
     <cite>the owner, 27 September 2026</cite>
   </blockquote>
   <div class="facts">
-    <div><b>9</b><span>changes written</span></div>
-    <div><b>143</b><span>tasks open</span></div>
-    <div><b>7</b><span>video gates</span></div>
+    <div><b>11</b><span>changes written</span></div>
+    <div><b>162</b><span>tasks open</span></div>
+    <div><b>9</b><span>video gates</span></div>
     <div><b>0</b><span>lines of game code changed</span></div>
   </div>
   <div class="links">
     <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/pull/16">Pull request #16</a>
+    <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">Your survey: the open questions</a>
     <a href="https://claude.ai/artifact/59zS9ERBTkrVrzPedfoUL2">The towns mockup</a>
     <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes">The change folders</a>
   </div>
@@ -207,13 +208,21 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
   <h2 id="route-h">The order</h2>
   <div class="route-box">
     <div class="route" role="list">
-      <div class="stop" role="listitem"><div class="dot">0</div><div class="name">Videos</div><div class="id">step-videos</div></div>
+      <div class="stop" role="listitem"><div class="dot">0a</div><div class="name">Exact cell keys</div><div class="id">exact-cell-keys</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">fix approved</div></div>
+      <div class="leg"></div>
+      <div class="stop" role="listitem"><div class="dot">0b</div><div class="name">Videos</div><div class="id">step-videos</div></div>
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">format approved</div></div>
       <div class="leg"></div>
       <div class="stop" role="listitem"><div class="dot">1</div><div class="name">Lights</div><div class="id">lamps-and-lanterns</div></div>
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">lights approved</div></div>
+      <div class="leg"></div>
+      <div class="stop" role="listitem"><div class="dot">1b</div><div class="name">A 15 &deg;C planet</div><div class="id">climate-balance</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">climate approved</div></div>
       <div class="leg"></div>
       <div class="stop" role="listitem"><div class="dot">2a</div><div class="name">Map, biomes, saves</div><div class="id">world-map &middot; bigger-biomes &middot; world-persistence</div></div>
       <div class="leg"></div>
@@ -281,9 +290,36 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
   <h2 id="steps-h">Step by step</h2>
   <div class="steps">
 
+    <article class="step" id="keys">
+      <div class="step-side">
+        <div class="step-no">0a</div>
+        <div class="mono">exact-cell-keys</div>
+        <div class="tasks">10 tasks</div>
+        <div class="with">first, on your word</div>
+      </div>
+      <div class="step-main">
+        <h3>Every edit lands on its own cell</h3>
+        <p>A saved dig names its cell by a 32-bit hash, and 202,571 of the 41.9 million finest cells share a hash with another cell. Digging one digs its twin somewhere else on the planet. You said to fix it first.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>An exact key for every cell: face, level and position packed into 31 bits.</li>
+            <li>The same ground: every flower, pebble and texture variation rolls exactly as before.</li>
+            <li>Old saves migrated once, each edit put on the cell it was made on, with the old log kept untouched.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>The shaders unpack the key and apply the old mix, so the look cannot change. A test holds Rust and WGSL together.</li>
+            <li>An ambiguous old edit is settled by the ground height, then by where you were. Only a true tie goes to both cells, as today.</li>
+            <li>The migrated log is a new file, so an older build never misreads it.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video.</b> One cell of a colliding pair dug, its twin far away dug on the old build and untouched on the new, a reload, and the unchanged ground. It is hand-made from captures, since the video tools come next.</div></div>
+        <div class="foot"><div class="chips"><span class="chip new">world/persistence (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/exact-cell-keys">Read the change</a></div>
+      </div>
+    </article>
+
     <article class="step" id="videos">
       <div class="step-side">
-        <div class="step-no">0</div>
+        <div class="step-no">0b</div>
         <div class="mono">step-videos</div>
         <div class="tasks">9 tasks</div>
       </div>
@@ -332,6 +368,33 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
         </div>
         <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video.</b> A sealed cave, a torch-lit tunnel with the player in it, the ship in a cave, each light placed and taken back, a lantern row from dusk to midnight to dawn, a candle-lit room, a brazier and a glowing meadow. Also owed: your in-game check of <span class="mono">voxel-light</span>, covering how dark caves are, the crease, and the falloff at a cave mouth.</div></div>
         <div class="foot"><div class="chips"><span class="chip new">planet/light (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/lamps-and-lanterns">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="climate">
+      <div class="step-side">
+        <div class="step-no">1b</div>
+        <div class="mono">climate-balance</div>
+        <div class="tasks">11 tasks</div>
+        <div class="with">placement: survey K3</div>
+      </div>
+      <div class="step-main">
+        <h3>The sun holds the planet at 15 &deg;C</h3>
+        <p>Today the planet freezes. It starts near +13 &deg;C, the sea is below freezing after about 24 hours of play, and it settles near &minus;23.5 &deg;C, with no water warm enough for any fish in the second year. You asked for the sun to hold the average at 15 &deg;C.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>A planet whose average surface temperature, land and sea, holds at 15 &deg;C.</li>
+            <li>Warm tropics, cold poles, seasons and weather, all still the simulation's own.</li>
+            <li>Fish in every year, and a climate map of a living planet.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>First the two broken terms: the sun becomes the 1,360 W/m&sup2; the heat-loss law assumes, and clouds are retuned from about &minus;190 W/m&sup2; of net cooling to Earth's range.</li>
+            <li>Then a slow thermostat on the sun's strength holds 15 &deg;C, whatever is retuned later.</li>
+            <li>A frozen save warms back over the following game days.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video.</b> A time-lapse of the sea over 200 game days, before and after; the average against the day; the temperature overlay from orbit; and a fish caught in the second year.</div></div>
+        <div class="foot"><div class="chips"><span class="chip">world/weather</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/climate-balance">Read the change</a></div>
       </div>
     </article>
 
@@ -412,10 +475,10 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>Laws are derived and facts are stored. Fish habitat is a law. A zone is stored only once it has a name or a state.</li>
             <li>Towns are generated for the whole planet when the world is made, so they can change while you are away.</li>
             <li>A building is stored as its own definition. Its pieces are derived, so a fix to a stair reaches every town.</li>
-            <li>Every save key becomes an exact, reversible cell address, fixing the collision below.</li>
+            <li>World time passes only while you play, so towns change while you are in the game, not while it is closed.</li>
           </ul></div>
         </div>
-        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video.</b> A dig on one cell of a colliding pair, before and after the fix, with its twin far away; a quit and reload; and the save inspector on a large save. Two questions: should the world's clock run while the game is closed, and should the key fix ship before the lights?</div></div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video.</b> A dig on one cell of a colliding pair, before and after the fix, with its twin far away; a quit and reload; and the save inspector on a large save. Decided: world time passes only while you play, and the key fix ships first as its own change.</div></div>
         <div class="foot"><div class="chips"><span class="chip new">world/persistence (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/world-persistence">Read the change</a></div>
       </div>
     </article>
@@ -468,7 +531,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>Habitat is derived, never saved. A zone becomes a record only when it has a name or a state.</li>
           </ul></div>
         </div>
-        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: two videos.</b> The mockup's layers; then the game's, including a walk to a shore the map marks for a species and a cast that catches it there. First question: in the shipped settings the sea cools to a mean of about &minus;23 &deg;C within two years. Is that intended?</div></div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: two videos.</b> The mockup's layers; then the game's, including a walk to a shore the map marks for a species and a cast that catches it there. The climate is baked from the balanced, 15 &deg;C planet.</div></div>
         <div class="foot"><div class="chips"><span class="chip new">world/climate (new)</span><span class="chip">player/map</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/climate-and-fish-maps">Read the change</a></div>
       </div>
     </article>
@@ -539,14 +602,14 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
     <table>
       <thead><tr><th>Finding</th><th>Where</th><th>Picked up by</th></tr></thead>
       <tbody>
-        <tr><td><strong>About one finest cell in two hundred shares its save key with another cell elsewhere on the planet.</strong> 202,571 of 41.9 million at level 11: the key is a 32-bit hash. Digging one digs its twin when that area is generated.</td><td>planet_lod.rs point_id</td><td>world-persistence, group 1; could ship before the lights</td></tr>
+        <tr><td><strong>About one finest cell in two hundred shares its save key with another cell elsewhere on the planet.</strong> 202,571 of 41.9 million at level 11: the key is a 32-bit hash. Digging one digs its twin when that area is generated.</td><td>planet_lod.rs point_id</td><td>exact-cell-keys, first in the plan</td></tr>
         <tr><td>A save records no versions at all: not the generator's, and there is no topology version to record. The main spec says the generator version is part of the world's identity.</td><td>saves/format.rs</td><td>world-persistence, then bigger-biomes</td></tr>
         <tr><td>The player, the held tool and the ship are not lit by the light field. A ship in a cave is lit like daylight.</td><td>pbd-app materials</td><td>lamps-and-lanterns</td></tr>
         <tr><td>The torch's tint and gain exist only in the shader, with no copy the tests can check.</td><td>planet_surface.wgsl</td><td>lamps-and-lanterns</td></tr>
         <tr><td>A fixed noon sun still frames two captures.</td><td>desktop.rs:1491</td><td>lamps-and-lanterns</td></tr>
         <tr><td>No lighting requirement is in the main specs, and two lighting changes are half open.</td><td>openspec/</td><td>lamps-and-lanterns, first group</td></tr>
         <tr><td>Fields are about 59% of the land. Desert, jungle and swamp are a few percent each.</td><td>distribution_report</td><td>bigger-biomes</td></tr>
-        <tr><td>The shipped atmosphere cools the sea to a mean of &minus;23.5 &deg;C by day 200.</td><td>fish_ranges log</td><td>shown on the climate map; your call</td></tr>
+        <tr><td>The shipped atmosphere cools the sea to a mean of &minus;23.5 &deg;C by day 200.</td><td>fish_ranges log</td><td>climate-balance: the sun holds 15 &deg;C</td></tr>
       </tbody>
     </table>
   </div>
@@ -560,12 +623,14 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
     <div class="rule"><b>Mockups are lit at night</b><p>The map mockup's night side shows the towns' lights. The build mockup has day and night.</p></div>
     <div class="rule"><b>Frame cost is measured by you</b><p>This cloud session cannot measure frame time. Before a change that could move it merges, you run <span class="mono">tools/perf_suite.py</span> on the release build.</p></div>
     <div class="rule"><b>Laws derived, facts stored</b><p>The seed and the rules decide the land. Towns and named places are records. Every change after that is an authored entry, and the world yields to yours.</p></div>
+    <div class="rule"><b>World time is game time</b><p>The world's clock, and everything that changes on it, runs only while you play. Towns never grow while the game is closed.</p></div>
+    <div class="rule"><b>Questions go in a survey</b><p>Open questions for you live in one survey doc with options and a recommendation each, never a list in chat.</p></div>
     <div class="rule"><b>One rule, one place</b><p>The map, the spawner and the field guide share one fish rule. The towns and the player share one set of building checks.</p></div>
   </div>
 </section>
 
 <footer>
-  Planned on branch <span class="mono">claude/medieval-city-html-mockup-8692xs</span>. <span class="mono">openspec validate --all</span>: 83 passed, 0 failed. To start: <span class="mono">/opsx:apply step-videos</span>, then <span class="mono">/opsx:apply lamps-and-lanterns</span>.
+  Planned on branch <span class="mono">claude/medieval-city-html-mockup-8692xs</span>. <span class="mono">openspec validate --all</span>: 85 passed, 0 failed. To start: <span class="mono">/opsx:apply exact-cell-keys</span>. Open questions are in <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">your survey</a>.
 </footer>
 
 </div>

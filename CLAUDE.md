@@ -90,6 +90,17 @@ in real time with `obs-record`. The tooling is planned in
 `openspec/changes/step-videos`; until it is built, a gate's video is made by
 hand from a mockup or a capture sequence.
 
+## Ask the owner with a survey (owner, 2026-09-27)
+
+**Standing instruction from the user:** "you need some sort of survey form
+for me to fill out ... that claude doc thing was good for that, maybe that
+should be a skill." Open questions for the owner go into a survey Claude Doc,
+never a list in chat. Each question gets its options, a recommendation and
+an answer column, and answers are folded back into the OpenSpec changes they
+shape. The `owner-survey` skill (`.claude/skills/owner-survey`) says how. The
+current survey is https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn. Keep
+editing it rather than starting another.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
@@ -264,8 +275,9 @@ a test pins it. When the scale moves, both move in the same commit.
   makes never overwrites the player's. What the seed and the rules decide
   (terrain, habitat) is derived and never saved. What is generated once and
   must then persist or change (sites, towns, landmarks, named zones) is a
-  stored record. The design is `openspec/changes/world-persistence`, which is
-  not built yet.
+  stored record. World time passes only while the world is played, not while
+  the game is closed (owner, 2026-09-27). The design is
+  `openspec/changes/world-persistence`, which is not built yet.
 
 ## Implementation and verification
 

@@ -1,18 +1,17 @@
 # Tasks
 
 This comes with step 2a, before any change writes new kinds of state
-(`bigger-biomes`' version, `city-sites`' records). Group 1 fixes a bug in the
-current game, and the owner may pull it ahead of the lights (Open Questions).
+(`bigger-biomes`' version, `city-sites`' records). The exact cell keys that
+were group 1 here are their own change, `exact-cell-keys`, which ships first
+(the owner, 2026-09-27: "fix cell number yes").
 
 ## 1. Exact cell keys
 
-- [ ] 1.1 A core test that counts `point_id` collisions over every finest cell. It pins the measured 202,571 before the fix, then asserts zero with the new key. Verify: the test fails on the old key and passes on the new.
-- [ ] 1.2 The packed finest-level key (face, i, j in 29 bits), with face-edge points on their lowest face, carried in `metadata[3]`. Verify: tests that every finest cell has a unique key, that the same cell gets the same key from two anchors, and that a key unpacks to its own cell.
-- [ ] 1.3 Migration of hashed keys, resolved by surface and position, with the ambiguous remainder applied to both and listed. Verify: a test save with a colliding pair migrates to the right cell, and a truly ambiguous one is applied to both and logged.
+Moved to `openspec/changes/exact-cell-keys`, which lands before this change.
 
 ## 2. Identity
 
-- [ ] 2.1 `TOPOLOGY_VERSION`, and `identity.ron` written with a barrier at creation; an old slot gains one as generator 4, topology 1, key 0. Verify: format tests for both, and a test that a build refuses an unknown version with the version named.
+- [ ] 2.1 `TOPOLOGY_VERSION`, and `identity.ron` written with a barrier at creation; an old slot gains one as generator 4, topology 1, and key version 1 once `exact-cell-keys` has migrated it. Verify: format tests for both, and a test that a build refuses an unknown version with the version named.
 - [ ] 2.2 The world's config is chosen from the identity, so `bigger-biomes` can add version 5 without touching the save. Verify: an app test that an old slot generates version 4's terrain.
 
 ## 3. Records and the authored journal
@@ -25,6 +24,7 @@ current game, and the owner may pull it ahead of the lights (Open Questions).
 
 - [ ] 4.1 The process interface, the steward, `evaluated_through`, and a test-only process. Verify: the catch-up test (ten periods stepwise equals ten at once), and a test that loading runs no process.
 - [ ] 4.2 `--age-world <days>`. Verify: an app test that aging a world with the test process journals its entries under the process's author.
+- [ ] 4.3 World time passes only while the world is played (the owner, 2026-09-27). Verify: a test that a world saved, left closed and reopened has the same clock and runs no process on opening.
 
 ## 5. Regions and checkpoints
 
@@ -35,5 +35,5 @@ current game, and the owner may pull it ahead of the lights (Open Questions).
 ## 6. Tools and the owner's check
 
 - [ ] 6.1 `tools/save_inspect.py`. Verify: it prints a test save's identity, records, authors and regions, and a test runs it.
-- [ ] 6.2 The video (`step-videos`): digging one cell of a colliding pair before and after the fix, with the twin shown far away; a quit and reload; and `save_inspect` on a large save. Published on the gate page and linked from the PR, with a note that frame cost was not measured in the cloud session. Verify: the page is linked.
+- [ ] 6.2 The video (`step-videos`): a large synthetic save loading near the player, a flight across it with regions loading ahead, a quit and reload, and `save_inspect` showing the identity, the records and the journal's authors. Published on the gate page and linked from the PR, with a note that frame cost was not measured in the cloud session. Verify: the page is linked.
 - [ ] 6.3 The owner watches the video and approves. Verify: the quote is in `proposal.md`. Sync `world/persistence` with each requirement's test named, and archive.

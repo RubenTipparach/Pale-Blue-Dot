@@ -59,8 +59,9 @@ See `proposal.md` for why. What the design has to work with, observed on
 **Non-Goals:**
 - **Climate simulated in the game.** Twenty-two minutes of simulation is not a
   loading screen.
-- **Fixing the planet's cooling.** The atmosphere's energy balance is its own
-  change. This one makes it visible.
+- **Fixing the planet's cooling.** That is `climate-balance`, which lands
+  first. The owner: "the sun should maintain average temperature of the
+  planet to 15 c". The climate asset is baked from the balanced atmosphere.
 - **Fish population, depletion or migration.** The layer shows where a species
   can spawn, not how many there are.
 - **A weather forecast.** The live overlays show now, and the climate shows
@@ -157,9 +158,9 @@ owner's "certain zones of species" question.
   deterministic field. If `--check` finds otherwise, that is a bug in the
   atmosphere reported on its own, and the check compares within a tolerance
   until it is fixed.
-- [A frozen planet makes most fish layers nearly empty] → The map shows the
-  truth. The owner decides on the mockup whether the cooling is fixed first
-  (Open Questions).
+- [A frozen planet makes most fish layers nearly empty] → Answered by the
+  owner: `climate-balance` holds the planet's average at 15 °C, and lands
+  before the map mockup and before the asset is baked.
 - [The fish raster is slow to build per pixel] → It is measured first. If
   needed, the temperature is sampled at 512 × 256 and the class at full
   resolution, and the spawner-agreement test runs at the temperature raster's
@@ -174,10 +175,10 @@ owner's "certain zones of species" question.
 
 ## Open Questions
 
-For the owner, at the mockup:
-- The shipped atmosphere cools the sea to a mean of about -23 °C within two
-  years. Is that intended, or is the energy balance fixed before the climate
-  map is baked?
+In the owner survey (K4 and K5), and at the mockup:
 - The climate classes' thresholds, and whether five is the right number.
 - Should the fish layer show only species the player has caught (a
   discovered-species rule), or every species from the start?
+
+The planet's cooling is answered: `climate-balance` holds the average at
+15 °C.

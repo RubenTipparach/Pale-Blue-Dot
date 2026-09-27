@@ -89,8 +89,9 @@ a result the process sees, never a partial write.
 A world process SHALL decide its changes from the seed, the period of the
 world clock being evaluated, and the stored state alone. Its changes SHALL be
 journaled like a player's. Loading a save SHALL replay the journal and SHALL
-NOT run a process again. A world left alone for many periods SHALL catch up to
-the same state as one watched throughout.
+NOT run a process again. World time SHALL pass only while the world is played. A world
+evaluated over many periods at once SHALL reach the same state as one
+evaluated a period at a time.
 
 #### Scenario: Catching up
 
@@ -103,6 +104,12 @@ the same state as one watched throughout.
 - **WHEN** a save whose journal holds process entries is loaded
 - **THEN** no process runs during the load, and the world equals the one that
   was saved
+
+#### Scenario: A world left closed
+
+- **WHEN** a world is saved, left closed for a week, and opened again
+- **THEN** its clock reads what it was saved with, and no process has anything
+  due
 
 ### Requirement: Records survive builds that do not know them
 
