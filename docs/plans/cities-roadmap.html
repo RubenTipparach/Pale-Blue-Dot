@@ -1,0 +1,462 @@
+<title>Tenebris Cities Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#e9eeec;
+  --card:#f8faf9;
+  --ink:#15202a;
+  --muted:#56636e;
+  --line:#c9d3d2;
+  --line-soft:#dbe3e1;
+  --lamp:#a9620a;
+  --lamp-soft:#f6e3c2;
+  --sea:#1b6670;
+  --sea-soft:#d5e9ea;
+  --chip:#e3eae9;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#0c1319;
+    --card:#131c24;
+    --ink:#e2e8eb;
+    --muted:#95a3ad;
+    --line:#2a3843;
+    --line-soft:#1f2b35;
+    --lamp:#f0b43c;
+    --lamp-soft:#3a2c12;
+    --sea:#67bcc6;
+    --sea-soft:#15323a;
+    --chip:#1b2731;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0c1319;
+  --card:#131c24;
+  --ink:#e2e8eb;
+  --muted:#95a3ad;
+  --line:#2a3843;
+  --line-soft:#1f2b35;
+  --lamp:#f0b43c;
+  --lamp-soft:#3a2c12;
+  --sea:#67bcc6;
+  --sea-soft:#15323a;
+  --chip:#1b2731;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.55;
+  padding-inline:16px;
+  padding-block:0;
+}
+.wrap{max-width:1080px;margin:0 auto;padding-block:40px 64px;display:grid;gap:48px}
+a{color:var(--sea);text-underline-offset:3px}
+a:focus-visible{outline:2px solid var(--lamp);outline-offset:2px;border-radius:2px}
+h1,h2,h3{font-family:var(--display);font-weight:700;line-height:1.05;margin:0;text-wrap:balance;letter-spacing:.005em}
+h1{font-size:clamp(40px,7vw,68px)}
+h2{font-size:clamp(28px,4vw,36px)}
+h3{font-size:26px}
+p{margin:0}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.86em}
+
+/* header */
+header{display:grid;gap:18px}
+.lede{max-width:64ch;color:var(--muted);font-size:18px}
+blockquote{
+  margin:0;max-width:70ch;padding:14px 18px;border-left:3px solid var(--lamp);
+  background:var(--card);font-style:italic;color:var(--ink);font-size:16px
+}
+blockquote cite{display:block;margin-top:6px;font-style:normal;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.facts{display:flex;flex-wrap:wrap;gap:10px 28px;font-variant-numeric:tabular-nums}
+.facts div{display:grid;gap:0}
+.facts b{font-family:var(--display);font-size:30px;line-height:1}
+.facts span{font-size:13px;color:var(--muted)}
+.links{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:15px}
+
+/* the route */
+.route-box{overflow-x:auto;padding-bottom:6px}
+.route{display:flex;align-items:flex-start;min-width:1000px}
+.stop{display:grid;justify-items:center;gap:6px;text-align:center;width:98px;flex:none}
+.stop .dot{
+  width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+  font-family:var(--display);font-weight:700;font-size:20px;
+  background:var(--card);border:2px solid var(--sea);color:var(--sea)
+}
+.stop .name{font-size:13px;line-height:1.25}
+.stop .id{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.leg{height:44px;display:flex;align-items:center;flex:1 1 14px;min-width:10px}
+.leg::before{content:"";flex:1;border-top:2px solid var(--line)}
+.gate{display:grid;justify-items:center;gap:6px;width:56px;flex:none;text-align:center}
+.gate .diamond{
+  margin-top:13px;width:18px;height:18px;transform:rotate(45deg);
+  background:var(--lamp);box-shadow:0 0 0 4px var(--lamp-soft)
+}
+.gate .lbl{font-size:10.5px;font-family:var(--mono);color:var(--lamp);line-height:1.2}
+.key{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:13px;color:var(--muted);margin-top:10px}
+.key i{display:inline-block;vertical-align:-2px;margin-right:6px}
+.key .k-stop{width:14px;height:14px;border-radius:50%;border:2px solid var(--sea)}
+.key .k-gate{width:11px;height:11px;transform:rotate(45deg);background:var(--lamp)}
+
+/* steps */
+.steps{display:grid;gap:22px}
+.step{
+  display:grid;grid-template-columns:150px 1fr;gap:0;
+  background:var(--card);border:1px solid var(--line-soft);border-radius:6px;overflow:hidden
+}
+.step-side{
+  padding:22px 18px;border-right:1px solid var(--line-soft);display:grid;align-content:start;gap:10px
+}
+.step-no{font-family:var(--display);font-weight:700;font-size:54px;line-height:.9;color:var(--sea)}
+.step-side .mono{color:var(--muted);word-break:break-word}
+.tasks{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.step-main{padding:22px 24px;display:grid;gap:16px}
+.step-main > p{max-width:70ch}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px 28px}
+.col h4{
+  margin:0 0 6px;font-family:var(--mono);font-size:11.5px;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted)
+}
+.col ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.col li{max-width:62ch}
+.gatebox{
+  display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;
+  background:var(--lamp-soft);border-radius:4px;padding:12px 14px
+}
+.gatebox .diamond{width:12px;height:12px;transform:rotate(45deg);background:var(--lamp);margin-top:6px}
+.gatebox b{font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  font-family:var(--mono);font-size:11.5px;padding:3px 8px;border-radius:3px;
+  background:var(--chip);color:var(--ink)
+}
+.chip.new{background:var(--sea-soft);color:var(--sea)}
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 18px;align-items:center;font-size:14px}
+.with{
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--lamp)
+}
+
+/* findings */
+section{display:grid;gap:16px}
+section > p{max-width:70ch;color:var(--muted)}
+.table-box{overflow-x:auto;border:1px solid var(--line-soft);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:15px}
+th,td{text-align:left;vertical-align:top;padding:11px 14px;border-bottom:1px solid var(--line-soft)}
+th{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+td:nth-child(2){font-family:var(--mono);font-size:12.5px;color:var(--muted);white-space:nowrap}
+
+.rules{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.rule{padding:14px 16px;border-top:2px solid var(--line)}
+.rule b{display:block;font-family:var(--display);font-size:20px;margin-bottom:4px}
+.rule p{color:var(--muted);font-size:15px}
+
+footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+
+@media (max-width:760px){
+  .step{grid-template-columns:1fr}
+  .step-side{border-right:0;border-bottom:1px solid var(--line-soft);grid-template-columns:auto 1fr;align-items:center;column-gap:14px}
+  .step-no{font-size:40px;grid-row:span 3}
+  .cols,.rules{grid-template-columns:1fr}
+  .step-main{padding:18px}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Pale Blue Dot &middot; OpenSpec plan &middot; 27 September 2026</div>
+  <h1>The road to Tenebris cities</h1>
+  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Seven OpenSpec changes, each written up and waiting for <span class="mono">/opsx:apply</span>. Every step opens with something you can see, a mockup or in-game captures, and nothing after it starts until you approve it.</p>
+  <blockquote>
+    step 1 implement lights, step 2 implement cities, step 3 implement ways for me to make cities. as a player I want to be able to put together these buildings myself &hellip; So map with cities first mocked up, then I will approve.
+    <cite>the owner, 27 September 2026</cite>
+  </blockquote>
+  <div class="facts">
+    <div><b>7</b><span>changes written</span></div>
+    <div><b>109</b><span>tasks, none started</span></div>
+    <div><b>6</b><span>approval gates</span></div>
+    <div><b>0</b><span>lines of game code changed</span></div>
+  </div>
+  <div class="links">
+    <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/pull/16">Pull request #16</a>
+    <a href="https://claude.ai/artifact/59zS9ERBTkrVrzPedfoUL2">The towns mockup</a>
+    <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes">The change folders</a>
+  </div>
+</header>
+
+<section aria-labelledby="route-h">
+  <h2 id="route-h">The order</h2>
+  <div class="route-box">
+    <div class="route" role="list">
+      <div class="stop" role="listitem"><div class="dot">1</div><div class="name">Lights</div><div class="id">lamps-and-lanterns</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">lights approved</div></div>
+      <div class="leg"></div>
+      <div class="stop" role="listitem"><div class="dot">2a</div><div class="name">Map, live map, bigger biomes</div><div class="id">world-map &middot; bigger-biomes</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">map approved</div></div>
+      <div class="leg"></div>
+      <div class="stop" role="listitem"><div class="dot">2b</div><div class="name">City sites on the map</div><div class="id">city-sites</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">sites approved</div></div>
+      <div class="leg"></div>
+      <div class="stop" role="listitem"><div class="dot">2c</div><div class="name">Climate and fish maps</div><div class="id">climate-and-fish-maps</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">layers approved</div></div>
+      <div class="leg"></div>
+      <div class="stop" role="listitem"><div class="dot">2d</div><div class="name">Cities in the world</div><div class="id">cities-in-the-world</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">towns accepted</div></div>
+      <div class="leg"></div>
+      <div class="stop" role="listitem"><div class="dot">3</div><div class="name">You build them</div><div class="id">player-building</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">building accepted</div></div>
+    </div>
+  </div>
+  <div class="key"><span><i class="k-stop"></i>a step: one change, or two built together</span><span><i class="k-gate"></i>a gate: you approve before the next step starts</span><span>A step with a mockup also stops at the mockup, before any code.</span></div>
+</section>
+
+<section aria-labelledby="steps-h">
+  <h2 id="steps-h">Step by step</h2>
+  <div class="steps">
+
+    <article class="step" id="lights">
+      <div class="step-side">
+        <div class="step-no">1</div>
+        <div class="mono">lamps-and-lanterns</div>
+        <div class="tasks">21 tasks</div>
+      </div>
+      <div class="step-main">
+        <h3>Lights you place, and lights that come on at dusk</h3>
+        <p>The engine already bakes a light field: one byte per cell, sky light and block light, with the torch as its only lamp. This step fills out a city's worth of lights and closes the two lighting changes left half open.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>A lantern on a post, on a wall and hanging; a brazier and a candle. Each is a block with its own icon.</li>
+            <li>Street and wall lanterns that light at dusk and go out at dawn.</li>
+            <li>The player, the held tool and the ship lit by the same field as the ground, so a ship parked in a cave is dark.</li>
+            <li>Some flowers that glow at night.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>Dusk-lit lamps re-bake the field at dusk and dawn, two 6 ms bakes a day, rather than a third light channel.</li>
+            <li>Moving things sample the field at the eight corners of their bounds each frame.</li>
+            <li>Light levels: brazier 15, torch 14, post and wall lanterns 13, hanging lantern 12, candle 8.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate.</b> In-game captures: a cave, a torch-lit tunnel with the player in it, a lantern row at dusk and at midnight, a candle-lit room and a glowing meadow. Also the in-game check still owed on <span class="mono">voxel-light</span>: caves dark enough, the crease, the falloff at a cave mouth.</div></div>
+        <div class="foot"><div class="chips"><span class="chip new">planet/light (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/lamps-and-lanterns">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="map">
+      <div class="step-side">
+        <div class="step-no">2a</div>
+        <div class="mono">world-map</div>
+        <div class="tasks">19 tasks</div>
+      </div>
+      <div class="step-main">
+        <h3>A 2D map on M, with a live layer</h3>
+        <p>The game has no map today. M cycles eight weather overlays painted on the 3D globe. This step gives it a flat map of the whole planet that the later steps add their layers to.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>M opens a map of the whole planet that zooms in to one cell a pixel.</li>
+            <li>The coast, relief and biomes drawn by the terrain's own functions, so the map cannot disagree with the ground.</li>
+            <li>Live: you and your heading, your ship and parked vehicles, the night side, and the clouds and rain as they move.</li>
+            <li>The eight weather overlays become map layers, and can still be painted on the globe from the legend.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>Equirectangular for the whole planet, turning azimuthal when zoomed in, so the poles read.</li>
+            <li>A 2,048 &times; 1,024 base raster built off the frame and cached per world, with tiles closer in.</li>
+            <li>One UI shader draws the night, the clouds and the overlays from data the GPU already holds.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate, and the one you asked for first.</b> <span class="mono">docs/mockups/world-map.html</span>, drawn from real rasters of the planet: the biomes at today's size and the bigger sizes, the city sites, the climate and fish layers, and the live layer, lit at night. No map code starts until you approve it. You'll be asked whether exploring should reveal the map, and where the projection should switch.</div></div>
+        <div class="foot"><div class="chips"><span class="chip new">player/map (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/world-map">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="biomes">
+      <div class="step-side">
+        <div class="step-no">2a</div>
+        <div class="mono">bigger-biomes</div>
+        <div class="tasks">12 tasks</div>
+        <div class="with">with the map</div>
+      </div>
+      <div class="step-main">
+        <h3>Biomes about four times bigger, with less grass</h3>
+        <p>The field that splits the temperate land has a 188 m feature size, and its thresholds rarely reach desert or jungle. Fields are about 59% of the land. A bigger field alone keeps the same shares, so the thresholds move too.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>A moisture field of about 375 m or about 750 m, whichever you pick on the map.</li>
+            <li>Fields, desert, and jungle with swamp each holding between a fifth and a half of the temperate land.</li>
+            <li>The generator version saved with the world, so the world you play now keeps its biomes.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>"4&times; bigger" could mean the width or the area. You pick from real rasters at 188, 375 and 750 m.</li>
+            <li>The thresholds are tuned from the measured distribution on five seeds.</li>
+            <li>Each generator version is a set of config values. A save with no version reads as version 4.</li>
+            <li>The land, sea, rivers and mountains do not move. Only dry land's biome changes.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate.</b> Pick the scale and the shares on the map mockup. More jungle means more trees on screen, so you run <span class="mono">tools/perf_suite.py</span> before it merges. You'll also be asked whether your current world should move to the new biomes.</div></div>
+        <div class="foot"><div class="chips"><span class="chip">world/terrain</span><span class="chip">planet/terrain</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/bigger-biomes">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="sites">
+      <div class="step-side">
+        <div class="step-no">2b</div>
+        <div class="mono">city-sites</div>
+        <div class="tasks">12 tasks</div>
+      </div>
+      <div class="step-main">
+        <h3>Where the towns go</h3>
+        <p>The seven settlements from the towns mockup, placed on the planet by rules every machine agrees on, with your own pins on top.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>About fifty sites to start with. Fields get walled towns and villages; desert, tundra, jungle and swamp each get their own settlement; harbours go where beach meets fields.</li>
+            <li>Every site on flat, dry ground, away from the twelve pentagons, and spaced apart.</li>
+            <li>A name for each, from its people's syllables.</li>
+            <li>Your pins, strikes and names in <span class="mono">assets/config/sites.ron</span>.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>Candidates are the 163,842 level-7 cells, screened coarsely, scored, then checked in full as each is kept.</li>
+            <li>A harbour needs water shelving to 6-40 m within 60 m of its shore.</li>
+            <li>A world keeps its resolved list in its save, so a retune never moves a town you've been to.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate.</b> The rules run in the map mockup. You drag, add, strike and rename sites there, then copy the result out as RON. You'll be asked about the counts, and whether a new player should start within walking distance of a village.</div></div>
+        <div class="foot"><div class="chips"><span class="chip new">world/sites (new)</span><span class="chip">player/map</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/city-sites">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="climate-fish">
+      <div class="step-side">
+        <div class="step-no">2c</div>
+        <div class="mono">climate-and-fish-maps</div>
+        <div class="tasks">14 tasks</div>
+      </div>
+      <div class="step-main">
+        <h3>Where the fish are, and what the year is like</h3>
+        <p>The fish ranges were measured when fishing was planned, but only as wiki pages. This step brings them into the game, with the year's climate beside them.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>A fish layer: pick a species and see where a school can spawn right now, plus its all-year and part-year range.</li>
+            <li>"Show on map" from each species in the field guide.</li>
+            <li>A climate layer: mean temperature, yearly rain, sea ice and climate class, with a season slider.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>One <span class="mono">can_spawn</span> function serves the spawner, the map and the guide, so they cannot disagree.</li>
+            <li>The climate is baked from one simulated year, about 22 minutes, on the atmosphere's own 10,242-cell grid. The file is about 0.5 MB and records what it was made from.</li>
+            <li>If the weather is retuned after the bake, the map says so.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate.</b> Both layers in the map mockup, from the real fish-range fields. First question: in the shipped settings the sea cools to a mean of about &minus;23 &deg;C within two years. Is that intended, or is it fixed before the climate is baked?</div></div>
+        <div class="foot"><div class="chips"><span class="chip new">world/climate (new)</span><span class="chip">player/map</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/climate-and-fish-maps">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="cities">
+      <div class="step-side">
+        <div class="step-no">2d</div>
+        <div class="mono">cities-in-the-world</div>
+        <div class="tasks">18 tasks, plus 27 in tenebris-towns</div>
+      </div>
+      <div class="step-main">
+        <h3>Towns you can walk into</h3>
+        <p>First the pieces <span class="mono">tenebris-towns</span> designed: proper stairs, thin-wall collision, kits and doors. Then a settlement at every site.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>Each settlement laid onto the real cells around its site, on terraced ground with edges you can walk up.</li>
+            <li>No two towns alike: each site rotates and mirrors its layout, picks each house's kit and leaves some plots empty.</li>
+            <li>Street lanterns and about half the windows lit at dusk. From orbit at night, every town is a cluster of lights.</li>
+            <li>No pop-in: towns fade in and out as terrain detail does.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>A layout is charted onto the planet through the neighbour tables. Sites avoid pentagons, so the grid is a true hex grid there.</li>
+            <li>The terraces are generated with the terrain, not stamped as about 10,000 edits per town.</li>
+            <li>A site you had already dug into is left unsettled.</li>
+            <li>The template version is saved with the world, so its towns never change under it.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate.</b> Captures of every kind of settlement in the world, by day and at night, beside the mockup's views. Before the work starts, the towns mockup's open questions: walking speed indoors, what the Tenebris people look like, how stairs should feel, walkable roofs, which kits, which settlements per biome, and boats.</div></div>
+        <div class="foot"><div class="chips"><span class="chip">world/settlements</span><span class="chip">planet/terrain</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/cities-in-the-world">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="build">
+      <div class="step-side">
+        <div class="step-no">3</div>
+        <div class="mono">player-building</div>
+        <div class="tasks">13 tasks</div>
+      </div>
+      <div class="step-main">
+        <h3>You build them</h3>
+        <p>The towns' own pieces in your hands, held to the same rules that keep a town walkable.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>Build mode on B while on foot. The hotbar becomes the kit's pieces: walls with doors and windows, floors, stairs, posts, decks, furniture and lights.</li>
+            <li>Pieces snap to cell edges, cells and layer lines. A storey is three layers.</li>
+            <li>A ghost that turns red and names the rule it breaks.</li>
+            <li>A roof tool, and blueprints of any house from the towns.</li>
+            <li>Every piece saved the moment it is placed.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>The towns' layout checks are split into per-rule functions that both town layouts and your placements call.</li>
+            <li>Building is free at first. The game has no timber, thatch or brick items yet, and the axe fells nothing that drops wood.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate.</b> <span class="mono">docs/mockups/build.html</span>, grown from the towns mockup. You build a house in it before any Rust is written. You'll be asked what building should cost, and whether you may take a town's buildings apart.</div></div>
+        <div class="foot"><div class="chips"><span class="chip new">player/building (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/player-building">Read the change</a></div>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<section aria-labelledby="found-h">
+  <h2 id="found-h">Found while planning</h2>
+  <p>Reading the code for this plan turned up gaps between what the specs say and what the game does. Each is picked up by the step that needs it.</p>
+  <div class="table-box">
+    <table>
+      <thead><tr><th>Finding</th><th>Where</th><th>Picked up by</th></tr></thead>
+      <tbody>
+        <tr><td>A save stores the seed but not the generator version, although the main spec says the version is part of the world's identity.</td><td>saves/format.rs</td><td>bigger-biomes, before it changes any biome</td></tr>
+        <tr><td>The player, the held tool and the ship are not lit by the light field. A ship in a cave is lit like daylight.</td><td>pbd-app materials</td><td>lamps-and-lanterns</td></tr>
+        <tr><td>The torch's tint and gain exist only in the shader, with no copy the tests can check.</td><td>planet_surface.wgsl</td><td>lamps-and-lanterns</td></tr>
+        <tr><td>A fixed noon sun still frames two captures.</td><td>desktop.rs:1491</td><td>lamps-and-lanterns</td></tr>
+        <tr><td>No lighting requirement is in the main specs, and two lighting changes are half open.</td><td>openspec/</td><td>lamps-and-lanterns, first group</td></tr>
+        <tr><td>Fields are about 59% of the land. Desert, jungle and swamp are a few percent each.</td><td>distribution_report</td><td>bigger-biomes</td></tr>
+        <tr><td>The shipped atmosphere cools the sea to a mean of &minus;23.5 &deg;C by day 200.</td><td>fish_ranges log</td><td>shown on the climate map; your call</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="rules-h">
+  <h2 id="rules-h">At every step</h2>
+  <div class="rules">
+    <div class="rule"><b>Written up before code</b><p>Each change is a proposal, a design, spec changes and tasks. A requirement moves into <span class="mono">openspec/specs</span> only with the code and the test that make it true.</p></div>
+    <div class="rule"><b>Mockups are lit at night</b><p>The map mockup's night side shows the towns' lights. The build mockup has day and night.</p></div>
+    <div class="rule"><b>Frame cost is measured by you</b><p>This cloud session cannot measure frame time. Before a change that could move it merges, you run <span class="mono">tools/perf_suite.py</span> on the release build.</p></div>
+    <div class="rule"><b>One rule, one place</b><p>The map, the spawner and the field guide share one fish rule. The towns and the player share one set of building checks.</p></div>
+  </div>
+</section>
+
+<footer>
+  Planned on branch <span class="mono">claude/medieval-city-html-mockup-8692xs</span>. <span class="mono">openspec validate --all</span>: 81 passed, 0 failed. To start step 1, run <span class="mono">/opsx:apply lamps-and-lanterns</span>.
+</footer>
+
+</div>
