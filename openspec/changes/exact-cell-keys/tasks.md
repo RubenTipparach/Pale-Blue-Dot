@@ -11,11 +11,11 @@ It ships before `step-videos` and the lights, so its video is made by hand.
 ## 2. The key
 
 - [ ] 2.1 Pack and unpack (face, level, i, j) in 31 bits, with edge points re-addressed on their lowest face. Verify: tests that every finest key is unique (the collision test now asserts zero), that every key unpacks to its own cell, and that every icosahedron edge's points get one key from either side.
-- [ ] 2.2 `planet_lod.rs` writes the key into `metadata[3]`. Verify: an app test that the same cell gets the same key from anchors on two different faces, and the existing dig, crack and adopt tests pass unchanged.
+- [ ] 2.2 `planet_lod.rs` writes the key into the record's `spare[1]` (design decision 2, revised), and every Rust reader takes it through `GpuCell::key()`. Verify: an app test that the same cell gets the same key from anchors on two different faces, and the existing dig, crack and adopt tests pass unchanged.
 
 ## 3. The same look
 
-- [ ] 3.1 The shaders unpack the key and apply the mix to get the old seed, and the shader-constant test checks the WGSL mix against the core on sample keys. Verify: the test fails when either copy changes.
+- [ ] 3.1 The seed lane, `metadata[3]`, keeps the old hash, so no shader changes. Verify: an app test that every record of a spawn tier carries `cell_key::old_hash` of its address in `metadata[3]` and its exact key in `spare[1]`, and `git diff` shows no `.wgsl` file changed.
 - [ ] 3.2 Captures of the `meadow` and `surface` views on the old build and the new. Verify: the two are pixel-identical, and both are in `docs/screenshots/exact-cell-keys/`.
 
 ## 4. Old saves

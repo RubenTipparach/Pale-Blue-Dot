@@ -542,7 +542,7 @@ pub fn build(
         // direction, the worms and what somebody did to it. The rim is solid
         // by the rule above and takes its edits too - a wall you dug in is
         // still a wall you dug in when the tier moves and it becomes the rim.
-        let made = &edits.for_cell(cell.metadata[3]);
+        let made = &edits.for_cell(cell.key());
         let column = if rim {
             column::generate_edited_solid(&TERRAIN, direction, made)
         } else {
@@ -1576,8 +1576,8 @@ mod tests {
             let top = column.surface().map(|t| layer_altitude(t) + 1.0);
             let walls: Vec<f32> = (0..cell.degree()).map(|s| cell.corners[s][3]).collect();
             println!(
-                "cell {index} id {} at {m:.1} m: height {:.2}, column top {top:?}, runs {:?}, gen {:.2}, walls {walls:?}",
-                cell.metadata[3],
+                "cell {index} key {} at {m:.1} m: height {:.2}, column top {top:?}, runs {:?}, gen {:.2}, walls {walls:?}",
+                cell.key(),
                 cell.direction_height[3],
                 column
                     .drawn_runs()

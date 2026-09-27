@@ -37,11 +37,11 @@ was group 1) and made its own change, first in the plan.
   A point on a face's edge takes its lowest-numbered face's address, so a
   shared point has one key. The key is unique, and it can be unpacked back to
   its cell, which the region store in `world-persistence` needs.
-- **The ground looks the same.** The shaders use the same lane as the random
-  seed for clutter rolls and texture variation. They unpack the key and apply
-  `point_id`'s mix to it, so every cell gets exactly the seed it had. A test
-  holds the Rust and WGSL mixes together. Trees keep their own `tree_id`,
-  which does not change.
+- **The ground looks the same.** The shaders take the random seed for clutter
+  rolls and texture variation from `metadata[3]`, which keeps the old hash.
+  The key rides the record's spare lane (design decision 2, revised at
+  implementation). No shader changes, so every cell rolls exactly as it did.
+  Trees keep their own `tree_id`, which does not change.
 - **Old saves are migrated once.**
   - A hashed key that names one finest cell maps to it.
   - A key that names two is resolved by the edit: its layer's altitude against
@@ -71,15 +71,16 @@ was group 1) and made its own change, first in the plan.
   canonical face for edge points, and `point_id`'s mix. The mix moves here
   from `planet_lod.rs` so the migration and the tests can use it.
 - **`pbd-app`:**
-  - `planet_lod.rs` writes the key into `metadata[3]`;
-  - `planet_column.rs`, `digging.rs` and `cracks.rs` are unchanged, because
-    they compare and look up by whatever the lane holds;
+  - `planet_lod.rs` writes the key into the record's spare lane, and the
+    readers below take it from there through one accessor;
+  - `planet_column.rs`, `digging.rs` and `cracks.rs` change only which lane
+    they read, since they compare and look up by the key and do no
+    arithmetic on it;
   - `saves/` gains the migration and the `edits.v1.log` name.
-- **Shaders:** `planet_surface.wgsl` and `planet_visibility.wgsl` derive the
-  seed from the key. The shader-constant test gains the mix.
+- **Shaders:** unchanged. The seed lane keeps the old hash.
 - **Saves:** one-way. After migration, an older build sees the world as it was
   at the moment of migration.
-- **Performance:** one unpack and one mix per cell in two shaders, which is
-  cheap but not measured in a cloud session (CLAUDE.md). Loading an old save
+- **Performance:** no shader cost and no larger record. The key is computed
+  once per record on the CPU, where the hash already was. Loading an old save
   once builds a reverse table of 42 million hashes. That is timed in a test,
   and only the hashes the log uses are kept.

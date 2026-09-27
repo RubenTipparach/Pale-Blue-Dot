@@ -10,7 +10,7 @@
 
 use super::GpuCell;
 use super::column::{self, ColumnTier};
-use super::lattice::{Lattice, LatticePoint, LocalCell};
+use super::lattice::{Lattice, LocalCell};
 use super::terrain::{PLANET_RADIUS, surface_code, surface_height};
 use super::topology::{DualCell, midpoint};
 use crate::config::ColumnSettings;
@@ -19,6 +19,7 @@ use bevy::{
     render::extract_resource::ExtractResource,
     tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
 };
+use pbd_core::cell_key;
 use pbd_core::edits::Edits;
 use std::{
     collections::HashMap,
@@ -108,9 +109,12 @@ struct CellSource<'a> {
     neighbor_directions: &'a [Vec3],
     level: u8,
     owners: [Vec3; 2],
+    /// The seed the shaders roll from: the old hash of its address.
     id: u32,
     /// The tree it stands: the finest cell's id at its centre.
     tree: u32,
+    /// The exact key its edits are saved by, or `NO_KEY` on the base.
+    key: u32,
 }
 
 /// One height per direction, memoised: neighbours and edge midpoints are
@@ -242,7 +246,7 @@ fn record(source: CellSource, heights: &mut Heights, rule: FloorRule) -> GpuCell
         owner_a: [a.x, a.y, a.z, floors[0]],
         owner_b: [b.x, b.y, b.z, floors[1]],
         floors: [floors[2], floors[3], floors[4], floors[5]],
-        spare: [source.tree, 0, 0, 0],
+        spare: [source.tree, source.key, 0, 0],
     }
 }
 
@@ -270,6 +274,7 @@ pub fn base_records(cells: &[DualCell]) -> Vec<GpuCell> {
                         owners: [cell.direction; 2],
                         id: index as u32,
                         tree: 0,
+                        key: crate::planet::NO_KEY,
                     },
                     &mut heights,
                     FloorRule::Every,
@@ -437,7 +442,7 @@ impl FineSet {
         Some(pbd_core::column::generate_edited_solid(
             &super::terrain::TERRAIN,
             Vec3::from_slice(&cell.direction_height[..3]),
-            edits.for_cell(cell.metadata[3]),
+            edits.for_cell(cell.key()),
         ))
     }
 
@@ -500,9 +505,16 @@ impl LodParams {
 }
 
 /// A stable identity for a fine cell across regenerations, so its tree and
-/// its texture variation do not reshuffle when the set is rebuilt.
+/// its texture variation do not reshuffle when the set is rebuilt. It is the
+/// shaders' seed and nothing else: it collides, so edits go by `exact_key`.
 fn stable_id(cell: &LocalCell) -> u32 {
-    point_id(cell.point)
+    cell_key::old_hash(cell.point.into())
+}
+
+/// The key a fine cell's edits are saved and found by (`exact-cell-keys`):
+/// its address packed, the same from whichever face's triangle met it.
+fn exact_key(cell: &LocalCell) -> u32 {
+    cell_key::key(cell.point.into()).expect("the fine levels carry keys")
 }
 
 /// The tree a cell stands (`distance-lod-fade`): the stable id of the finest
@@ -513,22 +525,12 @@ fn tree_id(cell: &LocalCell) -> u32 {
     let finest = *FINE_LEVELS.last().expect("fine levels");
     let p = cell.point;
     let shift = u32::from(finest.saturating_sub(p.level));
-    point_id(LatticePoint {
+    cell_key::old_hash(cell_key::Address {
         face: p.face,
         level: finest,
         i: p.i << shift,
         j: p.j << shift,
     })
-}
-
-fn point_id(p: LatticePoint) -> u32 {
-    let mut h = (p.face as u32).wrapping_mul(0x9e37_79b9)
-        ^ p.i.wrapping_mul(0x85eb_ca6b)
-        ^ p.j.wrapping_mul(0xc2b2_ae35)
-        ^ (p.level as u32) << 27;
-    h ^= h >> 15;
-    h = h.wrapping_mul(0x2c1b_3c6d);
-    h ^ (h >> 12)
 }
 
 /// One fine level laid around an anchor: its cells, truncated to capacity
@@ -969,6 +971,7 @@ pub(crate) fn generate_fine_live_on(
                         owners: local.owners,
                         id: stable_id(local),
                         tree: tree_id(local),
+                        key: exact_key(local),
                     },
                     &mut heights,
                     rule,
@@ -1818,7 +1821,7 @@ mod streaming_cost {
                 &field,
                 &TERRAIN,
                 direction,
-                edits.for_cell(cell.metadata[3]),
+                edits.for_cell(cell.key()),
             ));
         }
         eprintln!(
@@ -1998,5 +2001,121 @@ mod seam_report {
             over_a_metre,
             100.0 * over_a_metre as f32 / edges.max(1) as f32
         );
+    }
+}
+
+#[cfg(test)]
+mod key_tests {
+    //! `exact-cell-keys`: every record carries its cell's exact key beside
+    //! the old hash, which stays the shaders' seed.
+    use super::*;
+    use crate::planet::NO_KEY;
+    use pbd_core::topology::icosahedron;
+    use std::collections::HashMap;
+
+    /// Every fine record of a set built at the spawn carries the key of the
+    /// lattice point at its own centre, and, as its seed, the hash that point
+    /// was given before keys (task 3.1). The keys of a level are all
+    /// different, and the base is not asked.
+    #[test]
+    fn every_record_carries_its_own_key_and_its_old_seed() {
+        let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let set = generate_fine(spawn, &ColumnSettings::default(), &Edits::new());
+        let mut lattice = Lattice::default();
+        for (k, records) in set.levels.iter().enumerate() {
+            assert!(!records.is_empty(), "level {} laid", FINE_LEVELS[k]);
+            let mut keys = Vec::with_capacity(records.len());
+            for record in records {
+                let key = record.key();
+                assert_ne!(key, NO_KEY);
+                let address = cell_key::unpack(key).expect("a key unpacks");
+                assert_eq!(address.level, FINE_LEVELS[k]);
+                let at = lattice.position(LatticePointOf(address).into());
+                assert_eq!(
+                    at.to_array(),
+                    record.direction_height[..3],
+                    "the key names the cell's own point"
+                );
+                assert!(
+                    cell_key::addresses(address)
+                        .into_iter()
+                        .any(|a| cell_key::old_hash(a) == record.metadata[3]),
+                    "the seed is the point's old hash"
+                );
+                keys.push(key);
+            }
+            let laid = keys.len();
+            keys.sort_unstable();
+            keys.dedup();
+            assert_eq!(keys.len(), laid, "level {} keys unique", FINE_LEVELS[k]);
+        }
+    }
+
+    /// The same cell gets the same key from anchors on two different faces
+    /// (task 2.2): the finest bands laid either side of the edge between
+    /// faces 0 and 4 share cells on and around the seam, and every shared
+    /// cell has one key in both.
+    #[test]
+    fn a_seam_cell_gets_one_key_from_either_side() {
+        let (vertices, faces) = icosahedron();
+        let [a, b, c] = faces[0];
+        let [d, e, f] = faces[4];
+        // The edge the two faces share, and a step toward each face's middle.
+        let shared: Vec<usize> = [a, b, c]
+            .into_iter()
+            .filter(|v| [d, e, f].contains(v))
+            .collect();
+        assert_eq!(shared.len(), 2);
+        let seam = (vertices[shared[0]] + vertices[shared[1]]).normalize();
+        let middle = |face: [usize; 3]| {
+            (vertices[face[0]] + vertices[face[1]] + vertices[face[2]]).normalize()
+        };
+        let toward = |target: Vec3, metres: f32| {
+            let axis = seam.cross(target).normalize();
+            Quat::from_axis_angle(axis, metres / PLANET_RADIUS) * seam
+        };
+        let lay = |anchor: Vec3| {
+            let band = lay_band(3, anchor, &BAND_M, REGEN_DISTANCE_M, None, 0.0);
+            band.cells
+                .iter()
+                .map(|local| (local.cell.direction.to_array().map(f32::to_bits), local))
+                .map(|(at, local)| (at, (exact_key(local), local.point)))
+                .collect::<HashMap<_, _>>()
+        };
+        let one = lay(toward(middle(faces[0]), 80.0));
+        let other = lay(toward(middle(faces[4]), 80.0));
+        let (mut shared_cells, mut on_the_seam, mut met_differently) = (0, 0, 0);
+        for (at, (key, point)) in &one {
+            let Some((other_key, other_point)) = other.get(at) else {
+                continue;
+            };
+            shared_cells += 1;
+            assert_eq!(key, other_key, "one key for the cell at {at:?}");
+            if cell_key::addresses((*point).into()).len() > 1 {
+                on_the_seam += 1;
+            }
+            if point != other_point {
+                met_differently += 1;
+            }
+        }
+        eprintln!(
+            "{shared_cells} cells in both bands, {on_the_seam} on the seam, {met_differently} met by different addresses"
+        );
+        assert!(shared_cells > 1_000, "the bands overlap");
+        assert!(on_the_seam > 100, "the overlap straddles the seam");
+    }
+
+    /// A `cell_key::Address` as the lattice's own point type.
+    struct LatticePointOf(cell_key::Address);
+
+    impl From<LatticePointOf> for super::super::lattice::LatticePoint {
+        fn from(LatticePointOf(a): LatticePointOf) -> Self {
+            Self {
+                face: a.face,
+                level: a.level,
+                i: a.i,
+                j: a.j,
+            }
+        }
     }
 }

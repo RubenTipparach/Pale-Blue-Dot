@@ -64,13 +64,23 @@ design has to work with, observed on `main` (2026-09-27):
 - So the key does not depend on which triangle the cap met first. A test asks
   for the same cell from two anchors on different faces and gets one key.
 
-**2. The seed is the old hash, recomputed from the key.**
-- The shaders unpack `(face, level, i, j)` from the key and apply
-  `point_id`'s mix. The result is the exact value `metadata[3]` used to hold.
-  `roll` and `random` are then unchanged.
-- The mix moves into `pbd_core::cell_key`, and the WGSL copy is checked
-  against it on sample keys by the shader-constant test family. The test
-  fails if either copy changes (CLAUDE.md: validate the actual artifacts).
+**2. The key rides the record's spare lane, and the seed stays where it is.**
+Revised at implementation (2026-09-27), before any code:
+- The record already carries a lane nothing uses: `spare.y` (`GpuCell`,
+  `planet.rs`, "yzw spare"). The key goes there.
+- `metadata[3]` keeps the old hash, which the shaders read as the seed for
+  the clutter rolls and the texture variation. So no shader changes, and
+  every flower, pebble and variation is the value it was, by construction.
+- The Rust readers (`planet_column.rs`, `planet_lod.rs`, `digging.rs`,
+  `cracks.rs`) read the key through one accessor, `GpuCell::key()`.
+- `point_id`'s mix moves into `pbd_core::cell_key`, where the collision test
+  and the migration use it. `planet_lod.rs` calls it from there.
+- The record's size is unchanged, since the spare lane is already uploaded.
+- *The design as first written* put the key in `metadata[3]` and had both
+  shaders unpack it and re-apply the mix. That gives the same seeds, but it
+  changes two shaders and needs a Rust-WGSL agreement test for the mix. It
+  also has to treat the base level's records, whose lane holds a plain index,
+  differently from the fine levels'. The spare lane needs none of that.
 - *Alternative:* feed the key straight into `hash`. Rejected: every flower,
   pebble and variation would move once, and the owner would see a change this
   fix should not make.
@@ -103,6 +113,37 @@ design has to work with, observed on `main` (2026-09-27):
   - the same on the new build, with B untouched;
   - a reload;
   - a still of the same view on both builds, showing the ground unchanged.
+
+## Implementation notes (2026-09-27)
+
+Measured on the 4-core cloud container, in the workspace's test profile
+(`opt-level` 1):
+- **The collision test** (task 1.1) hashes every interior finest cell and
+  counts the repeats. It gives 202,571 of 41,881,620, which is the scratch
+  measurement exactly. It runs in 2.05 s.
+- **The uniqueness test** (task 2.1) keys every address of every finest
+  point, 42,004,500 addresses. It finds exactly 41,943,042 distinct keys,
+  which is `10 · 4^11 + 2`, the number of points. So no two points share a
+  key, and a seam point gets one key from every face it lies on. It runs in
+  2.40 s.
+- **Two anchors across a seam** (task 2.2): the finest bands laid 80 m either
+  side of the edge between faces 0 and 4 share 39,635 cells, 261 of them on
+  the seam, and every shared cell has one key in both.
+- **The migration** (task 4.1) of a synthetic 100,000-edit log takes 1.97 s,
+  most of it the one pass over the 42 million points that builds the reverse
+  table. Of the 100,000 edits:
+  - 98,953 had a hash naming one cell;
+  - 193 were settled by the ground;
+  - 854 were settled by the saved position;
+  - none was left ambiguous.
+
+  The release build is faster, and was not measured.
+- **The barrier.** The migrated log goes through the save thread as a
+  whole-file replacement, which is written beside the file, synced and
+  renamed. `WorldSave::open` waits for it with the thread's `drain` before it
+  returns, and so before the world is shown. A failed write is the writer's
+  reported failure, so `accept` refuses edits from then on, as it does for
+  any failed write.
 
 ## Risks / Trade-offs
 

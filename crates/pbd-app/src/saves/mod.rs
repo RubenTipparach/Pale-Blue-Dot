@@ -1,6 +1,6 @@
 //! Save slots: what a world is on disk, and the one resource that owns it.
 //!
-//! A slot is a directory under `saves/` holding two files: `edits.log`, the
+//! A slot is a directory under `saves/` holding two files: `edits.v1.log`, the
 //! transaction log of everything the player changed, and `world.ron`, the
 //! metadata and the pose. [`format`] says what is in them and why; [`writer`]
 //! is the thread that puts them there without ever touching a frame.
@@ -11,6 +11,7 @@
 //! the only thing in the process that queues a write.
 
 pub mod format;
+pub mod migrate;
 pub mod writer;
 
 use bevy::prelude::*;
@@ -23,8 +24,10 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use writer::SaveWriter;
 
-/// The log of everything changed, appended to per edit.
-pub const LOG: &str = "edits.log";
+/// The log of everything changed, appended to per edit. Version 1 keys each
+/// edit by its cell's exact key (`pbd_core::cell_key`); a save with only the
+/// old `edits.log` is migrated into it once, on open ([`migrate`]).
+pub const LOG: &str = "edits.v1.log";
 /// The metadata and the pose, replaced whole on a timer.
 pub const WORLD: &str = "world.ron";
 /// The simulated atmosphere's state (`pbd_core::atmosphere`), replaced whole
@@ -241,6 +244,8 @@ impl WorldSave {
     /// Open a slot: replay its log, read its pose, and start the writer on it.
     pub fn open(root: PathBuf, slot: Slot) -> Self {
         let directory = root.join(&slot.id);
+        let mut writer = SaveWriter::new(&directory);
+        let text = log_text(&directory, &slot, &mut writer);
         let Replayed {
             edits,
             carried,
@@ -248,7 +253,7 @@ impl WorldSave {
             catches,
             equipment,
             damaged,
-        } = replay(&directory.join(LOG));
+        } = replay(&text);
         if damaged > 0 {
             warn!("{damaged} damaged lines skipped in {}", slot.id);
         }
@@ -278,7 +283,7 @@ impl WorldSave {
             catches,
             equipment,
             slot: Some(slot),
-            writer: SaveWriter::new(&directory),
+            writer,
             root,
         }
     }
@@ -438,14 +443,46 @@ fn read_vehicles(path: &Path) -> Option<VehicleFile> {
     }
 }
 
+/// The slot's log, as text: `edits.v1.log` where it exists; otherwise the old
+/// `edits.log` migrated to exact keys, written as `edits.v1.log` through the
+/// save thread and waited for before the world is shown; otherwise nothing,
+/// which is a new world.
+fn log_text(directory: &Path, slot: &Slot, writer: &mut SaveWriter) -> String {
+    if let Ok(text) = std::fs::read_to_string(directory.join(LOG)) {
+        return text;
+    }
+    let Ok(old) = std::fs::read_to_string(directory.join(migrate::LEGACY_LOG)) else {
+        return String::new();
+    };
+    let started = std::time::Instant::now();
+    let position = slot.file.position.map(Vec3::from);
+    let (text, report) = migrate::convert(&old, position);
+    writer.replace(directory.join(LOG), text.clone());
+    writer.drain();
+    info!(
+        "'{}' migrated to exact cell keys in {:.2} s: {} edits, {} by one cell, {} by the ground, {} by position, {} kept on every candidate {:?}, {} dropped {:?}",
+        slot.id,
+        started.elapsed().as_secs_f64(),
+        report.edits,
+        report.unique,
+        report.by_surface,
+        report.by_position,
+        report.ambiguous.len(),
+        report.ambiguous,
+        report.unknown.len(),
+        report.unknown,
+    );
+    if let Some(failure) = writer.failure() {
+        error!("'{}': the migrated log was not written: {failure}", slot.id);
+    }
+    text
+}
+
 /// Replay a log: the edits, the hotbar as the last line that carried one left
 /// it, the highest kit version dealt, the catches, the last tool slot, and how
 /// many lines were damaged.
-fn replay(path: &Path) -> Replayed {
+fn replay(text: &str) -> Replayed {
     let mut out = Replayed::default();
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return out;
-    };
     for line in text.lines() {
         if line.trim().is_empty() {
             continue;
@@ -707,5 +744,72 @@ mod tests {
         assert_eq!(save.edits.len(), 1);
         assert_eq!(save.pending(), 0);
         assert!(save.slot().is_none());
+    }
+
+    /// An old save's `edits.log` is migrated once to `edits.v1.log`
+    /// (`exact-cell-keys` 4.1, 4.2): its edit lands on the exact key and its
+    /// other lines come along; `edits.log` is left byte for byte; a second
+    /// open reads the new log and does not migrate again; and new edits go to
+    /// the new log alone.
+    #[test]
+    fn an_old_save_is_migrated_once_and_its_old_log_is_left_alone() {
+        use pbd_core::cell_key::{self, Address};
+        let root = temporary("migrate");
+        let slot = create(&root, "Old World", 4242).unwrap();
+        let directory = root.join(&slot.id);
+        let cell = Address {
+            face: 7,
+            level: 11,
+            i: 300,
+            j: 400,
+        };
+        let (hash, key) = (cell_key::old_hash(cell), cell_key::key(cell).unwrap());
+        let kit = "kit 3 - - - - - - - - - -";
+        let old = format!("{hash} 150 0\n{kit}\n");
+        let legacy = directory.join(migrate::LEGACY_LOG);
+        std::fs::write(&legacy, &old).unwrap();
+        {
+            let save = WorldSave::open(root.clone(), slot.clone());
+            assert_eq!(save.edits.for_cell(key), &[(150, Material::Air)]);
+            assert!(save.edits.for_cell(hash).is_empty(), "nothing by the hash");
+            assert_eq!(save.kit, 3, "the other lines came along");
+        }
+        assert_eq!(
+            std::fs::read_to_string(directory.join(LOG)).unwrap(),
+            format!("{key} 150 0\n{kit}\n")
+        );
+        assert_eq!(std::fs::read_to_string(&legacy).unwrap(), old, "untouched");
+
+        // A line added to the old log now is never read: the second open
+        // takes the new log and does not migrate again.
+        let grown = format!("{old}{hash} 149 0\n");
+        std::fs::write(&legacy, &grown).unwrap();
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            assert_eq!(save.edits.for_cell(key), &[(150, Material::Air)]);
+            assert!(save.accept(
+                Edit {
+                    cell: key,
+                    layer: 151,
+                    material: Material::Stone,
+                },
+                &Slots::new()
+            ));
+            save.drain();
+        }
+        let v1 = std::fs::read_to_string(directory.join(LOG)).unwrap();
+        assert_eq!(v1.lines().count(), 3);
+        assert!(
+            v1.lines()
+                .last()
+                .unwrap()
+                .starts_with(&format!("{key} 151 1 "))
+        );
+        assert_eq!(
+            std::fs::read_to_string(&legacy).unwrap(),
+            grown,
+            "never written"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

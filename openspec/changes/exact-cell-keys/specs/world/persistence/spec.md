@@ -13,8 +13,8 @@ stored records, the authored journal, and loading by region.
 
 Every cell SHALL have a key that no other cell has, from which its lattice
 address can be recovered. An edit SHALL be saved and applied by that key. A
-cell SHALL roll the same clutter and texture variation from its key as it did
-from the hash it replaces. A save made with hashed keys SHALL be migrated once
+cell SHALL roll the same clutter and texture variation as it did before it had
+a key. A save made with hashed keys SHALL be migrated once
 to exact keys, and SHALL keep its old log unchanged beside the new one.
 
 #### Scenario: Every finest cell is its own
@@ -29,9 +29,9 @@ to exact keys, and SHALL keep its old log unchanged beside the new one.
 
 #### Scenario: The ground looks the same
 
-- **WHEN** the clutter and texture seeds are computed from the new keys and from
-  the old hashes, for every finest cell of a spawn tier
-- **THEN** every cell's seed is the same
+- **WHEN** the records of a spawn tier are built with exact keys
+- **THEN** every record's seed is the hash its address had before, and its
+  key is its own
 
 #### Scenario: An old save
 
