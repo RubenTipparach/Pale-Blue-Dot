@@ -14,6 +14,11 @@ with `examples/fish_ranges.rs`, and the logs are committed in
   averages about +13 °C.
 - The mean sea surface is 7.7 °C on day 10, −2.8 °C on day 30 and −19.0 °C on
   day 100. It settles near −23.5 °C from day 130.
+- The maps in `docs/wiki/temperature/` (drawn by `tools/temperature_map.py`,
+  2026-09-27) show it. Day 1 averages about +13 °C. The first year's mean
+  is −10.5 °C over the whole surface. The second year's is −24.5 °C,
+  from −48 °C at the poles to −16 °C at the equator, with no water
+  anywhere above freezing.
 - In the second game year every point of water is below −1.8 °C for the whole
   year, so the spawn rule puts no fish anywhere.
 - A game day is 48 minutes, so the sea's mean is below freezing after about

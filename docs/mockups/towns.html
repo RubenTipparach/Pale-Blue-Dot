@@ -136,6 +136,9 @@ body.coarse .keys,body.coarse .hint{display:none}
         <option value="jungle">Jungle, tree houses</option>
         <option value="swamp">Swamp, stilt village</option>
         <option value="coast">Coast, fishing harbour</option>
+        <option value="mounds">Fields, mound houses</option>
+        <option value="mountain">Mountains, cliff village</option>
+        <option value="caves">Mountains, cave dwellers</option>
       </select></div>
     <div class="seg" role="group" aria-label="View">
       <button id="vWalk" aria-pressed="true">Walk <span class="src">V</span></button>
@@ -560,12 +563,14 @@ function intervalsAt(x, z, out, near) {
 }
 
 // Sky light and place names.
-function indoor(c, r, y0, y1) { if (inMap(c, r)) INDOOR[idx(c, r)].push([y0, y1]); }
+function indoor(c, r, y0, y1, sky) { if (inMap(c, r)) INDOOR[idx(c, r)].push(sky === undefined ? [y0, y1] : [y0, y1, sky]); }
+// A round room (an igloo) is a cylinder; a dome cut by a front, or a tunnel, brings its own test.
+function inShape(s, x, y, z) { return s.test ? s.test(x, y, z) : y > s.y0 && y < s.y1 && (x - s.x) ** 2 + (z - s.z) ** 2 < s.r * s.r; }
 function place(c, r, y0, y1, name) { if (inMap(c, r)) PLACES[idx(c, r)].push([y0, y1, name]); }
 function skyAt(x, y, z) {
   const [c, r] = cellAt(x, z); if (!inMap(c, r)) return 1;
-  for (const [a, b] of INDOOR[idx(c, r)]) if (y > a && y < b) return 0.26;
-  for (const s of INDOOR_SHAPES) if (y > s.y0 && y < s.y1 && (x - s.x) ** 2 + (z - s.z) ** 2 < s.r * s.r) return 0.3;
+  for (const iv of INDOOR[idx(c, r)]) if (y > iv[0] && y < iv[1]) return iv[2] ?? 0.26;
+  for (const s of INDOOR_SHAPES) if (inShape(s, x, y, z)) return s.sky ?? 0.3;
   return 1;
 }
 
@@ -662,11 +667,22 @@ function addDoor(mx, mz, tx, tz, nx, nz, w, yb, ye, t, op) {
   const hx = mx - tx * w / 2, hz = mz - tz * w / 2;
   const pivot = new THREE.Group(); pivot.position.set(hx, yb, hz);
   const leafMat = new THREE.MeshStandardMaterial({ map: texture("timber"), roughness: 0.9 });
-  const leaf = new THREE.Mesh(new THREE.BoxGeometry(w - 0.04, ye - yb - 0.02, 0.07), leafMat);
-  leaf.position.set(w / 2, (ye - yb) / 2, 0); leaf.castShadow = leaf.receiveShadow = true; pivot.add(leaf);
-  const iron = new THREE.Mesh(new THREE.BoxGeometry(w * 0.8, 0.06, 0.09), new THREE.MeshStandardMaterial({ color: 0x2e2e31, roughness: 0.6 }));
-  for (const f of [0.22, 0.78]) { const b = iron.clone(); b.position.set(w / 2, (ye - yb) * f, 0); pivot.add(b); }
   const base = Math.atan2(tz, tx);
+  if (op.round) { // a round door: a disc cut off by the floor, hung at its left edge; it collides as the rectangle w by ye - yb inside it
+    const { rho, yc } = op.round, a0 = Math.asin(clamp(-yc / rho, -1, 1)), sh = new THREE.Shape();
+    sh.moveTo(rho + rho * Math.cos(a0), 0);
+    for (let k = 1; k <= 28; k++) { const a = a0 + (Math.PI - 2 * a0) * k / 28; sh.lineTo(rho + rho * Math.cos(a), yc + rho * Math.sin(a)); }
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.07, bevelEnabled: false }); g.translate(0, 0, -0.035);
+    leafMat.map = texture("alder"); leafMat.color.set(op.round.color || 0x7fa06a).multiplyScalar(1.5);   // painted boards
+    const leaf = new THREE.Mesh(g, leafMat); leaf.castShadow = leaf.receiveShadow = true; pivot.add(leaf);
+    const knob = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.2), new THREE.MeshStandardMaterial({ color: 0xc9a24a, roughness: 0.4, metalness: 0.6 })); knob.position.set(rho, yc, 0); pivot.add(knob);
+    pivot.position.set(mx - tx * rho, yb, mz - tz * rho);
+  } else {
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(w - 0.04, ye - yb - 0.02, 0.07), leafMat);
+    leaf.position.set(w / 2, (ye - yb) / 2, 0); leaf.castShadow = leaf.receiveShadow = true; pivot.add(leaf);
+    const iron = new THREE.Mesh(new THREE.BoxGeometry(w * 0.8, 0.06, 0.09), new THREE.MeshStandardMaterial({ color: 0x2e2e31, roughness: 0.6 }));
+    for (const f of [0.22, 0.78]) { const b = iron.clone(); b.position.set(w / 2, (ye - yb) * f, 0); pivot.add(b); }
+  }
   pivot.rotation.y = -base;
   const solid = addSolid({ type: "poly", pts: rectPts(mx, mz, w, 0.12, base), y0: yb, y1: ye, cls: "wall", label: "door" }); solid.wall = true;
   const door = { pivot, solid, base, open: !!op.open, a: op.open ? 1 : 0, x: mx, z: mz, y: yb, swing: -(op.swing || 1), name: op.name || "door", nx, nz, tx, tz, w, t, hut: !!op.hut };
@@ -911,7 +927,7 @@ function setTerrain() {
   for (const c of [19, 20]) TOP[idx(c, 6)] = 0;
 }
 
-function buildTerrain() {
+function buildTerrain(band = 0) {
   for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
     const i = idx(c, r), h = TOP[i], pts = hexPts(c, r);
     if (!STEPCELL.has(i)) face(TOPMAT[i], pts.map(p => [p[0], h, p[1]]), [0, 1, 0]);
@@ -919,7 +935,9 @@ function buildTerrain() {
       const [c2, r2] = nb(c, r, d), h2 = inMap(c2, r2) ? TOP[idx(c2, r2)] : -8;
       if (h2 >= h) continue;
       const [A, B] = edgeEnds(c, r, d), m = TOPMAT[i] === "grass" && SIDEMAT[i] === "dirt" ? "dirt" : SIDEMAT[i];
-      face(m, [[A[0], h2, A[1]], [B[0], h2, B[1]], [B[0], h, B[1]], [A[0], h, A[1]]], [...dvec(d).flatMap((v, k) => k === 0 ? [v, 0] : [v])]);
+      const want = [...dvec(d).flatMap((v, k) => k === 0 ? [v, 0] : [v])];
+      if (!band) face(m, [[A[0], h2, A[1]], [B[0], h2, B[1]], [B[0], h, B[1]], [A[0], h, A[1]]], want);
+      else for (let y = h2; y < h - 1e-3; y += band) { const y2 = Math.min(h, y + band); face(m, [[A[0], y, A[1]], [B[0], y, B[1]], [B[0], y2, B[1]], [A[0], y2, A[1]]], want); }
     }
   }
 }
@@ -1173,7 +1191,7 @@ function townHouse(hm, n) {
   const stairCells = hm.flight ? [[hm.c0 + 1, back], [hm.c0 + 2, back]] : [hm.newel];
   const name = hm.name || (kit.label + " house");
   const hb = building({ kit: hm.kit, c0: hm.c0, c1: hm.c1, r0: hm.r0, r1: hm.r1, base, name, storeys, stairCells,
-    doors: [[doorC, hm.front, doorD, 0]], window: (c, r, d, s) => (c * 3 + r + d + s) % 3 !== 0, chimney: kit.roof === "flat" ? null : [hm.c1, hm.front] });
+    doors: [[doorC, hm.front, doorD, 0], ...(hm.doors || [])], window: (c, r, d, s) => (c * 3 + r + d + s) % 3 !== 0 && !(hm.noWindow && hm.noWindow(c, r, d, s)), chimney: kit.roof === "flat" ? null : [hm.c1, hm.front] });
   const tread = kit.floor === "marblefloor" ? "marble" : ["stone", "fieldstone", "ashlar", "clay"].includes(hm.kit) ? "stone" : "timber";
   if (hm.flight) straightFlight(hm.c0 + 1, back, +1, base);
   else {
@@ -1436,7 +1454,7 @@ function resetWorld() {
   for (const n of NPCS) scene.remove(n.g); NPCS.length = 0;
   for (const k of Object.keys(GOTO)) delete GOTO[k];
   for (const k of Object.keys(KIT_SPOT)) delete KIT_SPOT[k];
-  HUT_SPOTS.length = 0; STREET_LAMPS.length = 0; WINDOWS.length = 0; FACADES.length = 0; GLOW.mesh = null; STEPCELL.clear(); NO_TREE.clear(); INDOOR_SHAPES.length = 0; SPINNERS.length = 0; BOBBERS.length = 0;
+  HUT_SPOTS.length = 0; STREET_LAMPS.length = 0; WINDOWS.length = 0; FACADES.length = 0; GLOW.mesh = GLOW.always = null; STEPCELL.clear(); NO_TREE.clear(); INDOOR_SHAPES.length = 0; SPINNERS.length = 0; BOBBERS.length = 0;
   for (const m of STATIC) { scene.remove(m); m.geometry.dispose(); } STATIC.length = 0;
   for (const m of DRESS) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } DRESS.length = 0;
   FIREMESH.length = 0;
@@ -2390,6 +2408,654 @@ SCENES.coast = { label: "Coast, fishing harbour", build: makeCoast, start: "quay
   env: { fog: [90, 420], tint: 0xbfe0ea, tintAmt: 0.12, water: { level: 0, color: 0x2a8a94, opacity: 0.82, rough: 0.35 }, far: { color: 0x6f8f4a, y: 3.9, zMin: ROW * 33 + R } } };
 
 // =====================================================================
+// The ninth round (owner, survey T6): "revise mockups with mountain
+// dwellings please, and cave dwellers too! hobbit ground based houses or
+// mounds would be cool too!" Mound houses in the fields, a cliff village
+// in the mountains, and a town inside a mountain. Each is lit by its own
+// fires at night; the cave is lit by nothing else, day or night.
+// =====================================================================
+
+// ---- materials: the fields' limestone and meadow, the mountains' scree,
+// lichen and blue slate (docs/game-design.md section 7) ----------------------
+Object.assign(PAINT, {
+  limestone(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0xd6ccae), 0.05);
+    for (let row = 0; row < 4; row++) {
+      const off = (row % 2) * 8;
+      for (let x = 0; x < w; x++) px(x, row * 8, hex2rgb(0xa99f83));
+      for (let k = 0; k < 2; k++) for (let y = row * 8; y < row * 8 + 8; y++) px((off + k * 16) % w, y, hex2rgb(0xb1a789));
+    }
+    for (let i = 0; i < 26; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0xe4dcc4));
+  },
+  meadow(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x587232), 0.15);
+    for (let i = 0; i < 70; i++) { const x = rnd() * w | 0, y = rnd() * h | 0; px(x, y, hex2rgb(0x6f8a3c)); px(x, y + 1, hex2rgb(0x64803a)); }
+    for (let i = 0; i < 9; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb([0xf2eee0, 0xe8c64a, 0xb58ad0, 0xe07a5a][rnd() * 4 | 0]));
+  },
+  scree(px, rnd, w, h) {
+    fill(px, rnd, w, h, hex2rgb(0x6c6e70), 0.1);
+    for (let i = 0; i < 40; i++) { const x = rnd() * w | 0, y = rnd() * h | 0, c = hex2rgb([0x8d9092, 0x55585b, 0x9a9c9c, 0x6f7478][rnd() * 4 | 0]); px(x, y, c); px(x + 1, y, c); px(x, y + 1, c, 0.85); }
+  },
+  lichen(px, rnd, w, h) {
+    PAINT.granite(px, rnd, w, h);
+    for (let b = 0; b < 7; b++) {
+      const bx = rnd() * w, by = rnd() * h, br = 1 + rnd() * 2.2, col = hex2rgb([0xc9a13a, 0x9aa55a, 0xd2c27a][rnd() * 3 | 0]);
+      for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) if (x * x + y * y <= br * br && rnd() < 0.8) px(((bx + x + w) % w) | 0, ((by + y + h) % h) | 0, col);
+    }
+  },
+  slaterock(px, rnd, w, h) {
+    for (let y = 0; y < h; y++) { const band = (y / 5) | 0, f = 0.85 + ((band * 5) % 4) * 0.06; for (let x = 0; x < w; x++) px(x, y, hex2rgb(0x56606c), (y % 5 === 0 ? 0.7 : f) * (1 + (rnd() - 0.5) * 0.1)); }
+    for (let i = 0; i < 12; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x7a8594));
+  },
+  needles(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x2f4a2e), 0.18); for (let i = 0; i < 40; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(rnd() < 0.5 ? 0x3f5f3a : 0x223a24)); },
+  cavewater(px, rnd, w, h) { fill(px, rnd, w, h, hex2rgb(0x1d3a44), 0.06); for (let k = 0; k < 6; k++) { const y = rnd() * h | 0, x0 = rnd() * w | 0; for (let x = 0; x < 6; x++) px((x0 + x) % w, y, hex2rgb(0x4f7f8a)); } },
+  // a cave's roof has its own buffers, so the overview can cut it away
+  roofrock(px, rnd, w, h) { PAINT.lichen(px, rnd, w, h); },
+  roofsnow(px, rnd, w, h) { PAINT.snow(px, rnd, w, h); },
+  caveceil(px, rnd, w, h) { PAINT.slaterock(px, rnd, w, h); for (let i = 0; i < 30; i++) px(rnd() * w | 0, rnd() * h | 0, hex2rgb(0x3a4048)); },
+  rockface(px, rnd, w, h) { PAINT.slaterock(px, rnd, w, h); },
+});
+Object.assign(REP, { limestone: 2, meadow: 2, scree: 2, lichen: 2, slaterock: 2, needles: 1, cavewater: 2, roofrock: 2, roofsnow: 2, caveceil: 2, rockface: 2 });
+Object.assign(KITS, {
+  alpine: { label: "Mountain house", walls: [{ out: "granite", in: "plaster", edge: "granite", t: 0.5 }], roof: "slate", pitch: 0.8, gable: "granite", floor: "plank", chimney: "granite" },
+});
+const ROUTE = {};   // the walks the tests take, by name: [x, z] waypoints
+const SUNBEAMS = [];   // shafts of daylight, faded out at night
+
+// ---- rock overhead ---------------------------------------------------------
+// A cell can carry rock from yb up to yt: a cave's roof, the rock over a room
+// cut into a terrace. It collides as a column run and is drawn wherever a
+// neighbour does not cover it: its underside, its top, and the rock face
+// over a house front, round a shaft, above a tunnel's mouth.
+const ROCK = [];
+function rockCeil(c, r, yb, yt, o = {}) {
+  if (!inMap(c, r)) return;
+  RUNS[idx(c, r)].push([yb, yt, "rock"]);
+  ROCK.push({ c, r, yb, yt, top: o.top === undefined ? "roofrock" : o.top, under: o.under || "caveceil", side: o.side || "rockface" });
+}
+function buildRock(band = 1.5) {
+  for (const k of ROCK.splice(0)) {
+    const { c, r, yb, yt } = k, pts = hexPts(c, r);
+    if (k.top) face(k.top, pts.map(p => [p[0], yt, p[1]]), [0, 1, 0]);
+    face(k.under, pts.map(p => [p[0], yb, p[1]]), [0, -1, 0]);
+    for (let d = 0; d < 6; d++) {
+      const [c2, r2] = nb(c, r, d), j = inMap(c2, r2) ? idx(c2, r2) : -1;
+      const cov = j < 0 ? [[-40, -8]] : [[-40, TOP[j]], ...RUNS[j].map(v => [v[0], v[1]])];
+      let segs = [[yb, yt]];
+      for (const [a, b] of cov) segs = segs.flatMap(([s, e]) => b <= s || a >= e ? [[s, e]] : [...(a > s ? [[s, a]] : []), ...(b < e ? [[b, e]] : [])]);
+      const [A, B] = edgeEnds(c, r, d), [nx, nz] = dvec(d);
+      for (const [s, e] of segs) for (let y = s; y < e - 1e-3; y += band) { const y2 = Math.min(e, y + band); face(k.side, [[A[0], y, A[1]], [B[0], y, B[1]], [B[0], y2, B[1]], [A[0], y2, A[1]]], [nx, 0, nz]); }
+    }
+  }
+}
+// Keep the part of a 3D polygon with n.p <= d (n horizontal).
+function clip3(pts, nx, nz, d) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length], dp = p[0] * nx + p[2] * nz - d, dq = q[0] * nx + q[2] * nz - d;
+    if (dp <= 0) out.push(p);
+    if ((dp < 0) !== (dq < 0) && Math.abs(dp - dq) > 1e-9) { const t = dp / (dp - dq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t]); }
+  }
+  return out.filter((p, i, a) => { const q = a[(i + 1) % a.length]; return Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) > 1e-6; });
+}
+
+// ---- mound houses ------------------------------------------------------------
+// A turf dome 6.4 m across and 3 m high, cut by a limestone front facing `ang`:
+// a round door, round windows, a chimney through the turf at the back. You can
+// stand wherever the turf is over 1.9 m, which is within 2.45 m of the middle;
+// a ring of wall there makes the walker slide round the inside.
+const MOUND = { A: 3.2, H: 3.0, uF: 1.7, t: 0.4, ring: 2.55, door: { rho: 1.1, yc: 0.9, w: 1.2, h: 1.95 }, win: { rho: 0.33, yc: 1.25, v: 1.75 } };
+function moundDome(x, z, y0, ang, o = {}) {
+  const { A, H } = MOUND, seg = 28, rings = 8, ux = Math.cos(ang), uz = Math.sin(ang), dCut = x * ux + z * uz + MOUND.uF + MOUND.t / 2;
+  const P = (i, j) => { const a = i / seg * 2 * Math.PI, t = j / rings * Math.PI / 2; return [x + A * Math.cos(t) * Math.cos(a), y0 + H * Math.sin(t), z + A * Math.cos(t) * Math.sin(a)]; };
+  for (let j = 0; j < rings; j++) for (let i = 0; i < seg; i++) {
+    const am = (i + 0.5) / seg * 2 * Math.PI, ym = y0 + H * Math.sin((j + 0.5) / rings * Math.PI / 2);
+    if ((o.holes || []).some(hl => Math.abs(angDiff(am, hl)) < 0.2) && ym < y0 + 2.05) continue;   // where a tunnel goes through
+    let pts = j === rings - 1 ? [P(i, j), P(i + 1, j), P(i + 1, j + 1)] : [P(i, j), P(i + 1, j), P(i + 1, j + 1), P(i, j + 1)];
+    pts = clip3(pts, ux, uz, dCut); if (pts.length < 3) continue;
+    let mx = 0, my = 0, mz = 0; for (const p of pts) { mx += p[0]; my += p[1]; mz += p[2]; } mx /= pts.length; my /= pts.length; mz /= pts.length;
+    const out = [mx - x, (my - y0) * A / H + 0.001, mz - z];
+    const uvf = p => { let an = Math.atan2(p[2] - z, p[0] - x); an = am + angDiff(an, am); return [an * A / 2, (p[1] - y0) / 1.6]; };
+    face("turf", pts, out, uvf); face("alder", pts, V.mul(out, -1), uvf);   // a board-lined vault inside
+  }
+  addSurface({   // the turf's underside is the ceiling; its top can be walked on
+    pts: rectPts(x, z, 2 * A, 2 * A, 0), y0, y1: y0 + H, label: "Turf roof", detail: "6.4 m across, 3 m high",
+    iv(px, pz, out) { const q = ((px - x) ** 2 + (pz - z) ** 2) / (A * A); if (q >= 1 || px * ux + pz * uz > dCut || (o.hole && o.hole(px, pz))) return; const under = y0 + H * Math.sqrt(1 - q); out.push([under, under + 0.3, this]); },
+  });
+  // the ring the body slides on, open where a tunnel leaves
+  for (let k = 0; k < 20; k++) {
+    const a = k / 20 * 2 * Math.PI, rx = x + Math.cos(a) * MOUND.ring, rz = z + Math.sin(a) * MOUND.ring;
+    if ((o.holes || []).some(hl => Math.abs(angDiff(a, hl)) < 0.45)) continue;
+    if ((rx - x) * ux + (rz - z) * uz > MOUND.uF - MOUND.t / 2) continue;   // the front wall is the wall there
+    addSolid({ type: "poly", pts: rectPts(rx, rz, 0.85, 0.2, a + Math.PI / 2), y0, y1: y0 + 1.95, cls: "wall", label: "mound wall" });
+  }
+  // a plank floor, in sectors so each takes its own light
+  const fl = []; for (let k = 0; k < seg; k++) fl.push([x + A * Math.cos(k / seg * 2 * Math.PI), z + A * Math.sin(k / seg * 2 * Math.PI)]);
+  for (let k = 0; k < seg; k++) { const p = clip3([[x, y0 + 0.03, z], [fl[k][0], y0 + 0.03, fl[k][1]], [fl[(k + 1) % seg][0], y0 + 0.03, fl[(k + 1) % seg][1]]], ux, uz, dCut); if (p.length >= 3) face("plank", p, [0, 1, 0]); }
+  const test = (px, py, pz) => { const dx = px - x, dz = pz - z; if (dx * ux + dz * uz > MOUND.uF || py < y0 + 0.075) return false; return (dx * dx + dz * dz) / (A * A) + ((py - y0) / H) ** 2 < 1; };
+  INDOOR_SHAPES.push({ test, sky: 0.3, room: o.room });
+  noteRoof(x - A, x + A, z - A, z + A, o.name || "Mound house");
+}
+// The limestone front: strips across it, each cut round the door and windows.
+function moundFront(x, z, y0, ang, o = {}) {
+  const { A, H, uF, t } = MOUND, ux = Math.cos(ang), uz = Math.sin(ang), vx = -uz, vz = ux, uIn = uF - t / 2, uOut = uF + t / 2;
+  const vmax = Math.sqrt(A * A - uIn * uIn), hTop = v => H * Math.sqrt(Math.max(0, 1 - (uIn * uIn + v * v) / (A * A)));
+  const D = MOUND.door, Wn = MOUND.win;
+  const holes = [...(o.door ? [{ v: 0, yc: D.yc, rho: D.rho }] : []), { v: -Wn.v, yc: Wn.yc, rho: Wn.rho }, { v: Wn.v, yc: Wn.yc, rho: Wn.rho }];
+  const at = (u, v, y) => [x + ux * u + vx * v, y0 + y, z + uz * u + vz * v];
+  const bps = new Set([-vmax, vmax]);
+  for (const h of holes) for (let k = 0; k <= 14; k++) bps.add(h.v - h.rho + 2 * h.rho * k / 14);
+  for (let k = 1; k < 18; k++) bps.add(-vmax + 2 * vmax * k / 18);
+  const vs = [...bps].filter(v => v >= -vmax && v <= vmax).sort((a, b) => a - b);
+  const quad = (m, pts, want) => { const q = pts.filter((p, i, a) => { const n = a[(i + 1) % a.length]; return Math.abs(p[0] - n[0]) + Math.abs(p[1] - n[1]) + Math.abs(p[2] - n[2]) > 1e-6; }); if (q.length >= 3) face(m, q, want); };
+  for (let i = 0; i + 1 < vs.length; i++) {
+    const va = vs[i], vb = vs[i + 1]; if (vb - va < 1e-4) continue;
+    const vm = (va + vb) / 2, act = holes.filter(h => Math.abs(vm - h.v) < h.rho).sort((p, q) => p.yc - q.yc);
+    const cuts = v => { const top = hTop(v), ys = [0]; for (const h of act) { const s = Math.sqrt(Math.max(0, h.rho ** 2 - (v - h.v) ** 2)); ys.push(clamp(h.yc - s, 0, top), clamp(h.yc + s, 0, top)); } ys.push(top); return ys; };
+    const ya = cuts(va), yb = cuts(vb);
+    for (let k = 0; k < ya.length; k += 2) {
+      const a0 = ya[k], a1 = ya[k + 1], b0 = yb[k], b1 = yb[k + 1];
+      if (a1 - a0 < 1e-4 && b1 - b0 < 1e-4) continue;
+      quad("limestone", [at(uOut, va, a0), at(uOut, vb, b0), at(uOut, vb, b1), at(uOut, va, a1)], [ux, 0, uz]);
+      quad("plaster", [at(uIn, va, a0), at(uIn, vb, b0), at(uIn, vb, b1), at(uIn, va, a1)], [-ux, 0, -uz]);
+      if (k > 0) { const h = act[k / 2 - 1]; quad("limestone", [at(uIn, va, a0), at(uOut, va, a0), at(uOut, vb, b0), at(uIn, vb, b0)], [vx * (h.v - vm), 1, vz * (h.v - vm)]); }            // over a hole: its reveal faces down into it
+      if (k + 2 < ya.length) { const h = act[k / 2]; quad("limestone", [at(uIn, va, a1), at(uOut, va, a1), at(uOut, vb, b1), at(uIn, vb, b1)], [vx * (h.v - vm), -1, vz * (h.v - vm)]); } // under a hole: faces up into it
+      else quad("limestone", [at(uIn, va, a1), at(uOut, va, a1), at(uOut, vb, b1), at(uIn, vb, b1)], [0, 1, 0]);   // the wall top, under the turf
+    }
+  }
+  // it collides as two jambs stepping down with the dome, and a lintel over the door
+  const box2 = (v0, v1, yb, ye, label) => addSolid({ type: "poly", pts: [at(uIn, v0, 0), at(uOut, v0, 0), at(uOut, v1, 0), at(uIn, v1, 0)].map(p => [p[0], p[2]]), y0: y0 + yb, y1: y0 + ye, cls: "wall", label });
+  const j0 = o.door ? D.w / 2 : 0;
+  for (const s of [-1, 1]) for (let k = 0; k < 4; k++) { const v0 = j0 + (vmax - j0) * k / 4, v1 = j0 + (vmax - j0) * (k + 1) / 4; box2(s < 0 ? -v1 : v0, s < 0 ? -v0 : v1, 0, hTop(v0), "Limestone front"); }
+  if (o.door) {
+    box2(-j0, j0, D.h, hTop(0), "Limestone front");
+    const mx = x + ux * uF, mz = z + uz * uF;
+    addDoor(mx, mz, vx, vz, ux, uz, D.w, y0, y0 + D.h, t, { name: o.name, round: { rho: D.rho, yc: D.yc, color: o.color } });
+  }
+  for (const s of [-1, 1]) { // round windows: a cross of glazing bars, a pane that glows at night
+    const wx = x + ux * uF + vx * Wn.v * s, wz = z + uz * uF + vz * Wn.v * s;
+    box("timber", wx, y0 + Wn.yc - Wn.rho, wz, 0.05, 2 * Wn.rho, 0.05, ang);
+    box("timber", wx, y0 + Wn.yc - 0.025, wz, 0.05, 0.05, 2 * Wn.rho, ang);
+    WINDOWS.push({ x: wx, z: wz, nx: ux, nz: uz, tx: vx, tz: vz, w: 2 * Wn.rho, yb: y0 + Wn.yc - Wn.rho, ye: y0 + Wn.yc + Wn.rho, t });
+  }
+}
+// A vaulted tunnel from A to B ([x, z]) at floor y0: walls to 1.3 m, a barrel
+// vault to 2.0 m, turf outside and plaster in. `floor` is where planks show.
+function vaultTunnel(A, B, y0, o = {}) {
+  const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L, da = Math.atan2(uz, ux), R0 = 0.82;
+  const mx = (A[0] + B[0]) / 2, mz = (A[1] + B[1]) / 2;
+  for (const s of [-1, 1]) {
+    const wx = mx - uz * s * R0, wz = mz + ux * s * R0;
+    box(n => (-uz * n[0] + ux * n[2]) * s > 0.5 ? (o.out || "turf") : (o.in || "plaster"), wx, y0, wz, L, 1.3, 0.2, da);
+    addSolid({ type: "poly", pts: rectPts(wx, wz, L, 0.2, da), y0, y1: y0 + 2.2, cls: "wall", label: "tunnel wall" });
+  }
+  for (let k = 0; k < 6; k++) {
+    const a0 = k / 6 * Math.PI, a1 = (k + 1) / 6 * Math.PI, yc = y0 + 1.3;
+    const q = (a, u) => [A[0] + ux * u - uz * Math.cos(a) * R0, yc + Math.sin(a) * 0.7, A[1] + uz * u + ux * Math.cos(a) * R0];
+    const pts = [q(a0, 0), q(a0, L), q(a1, L), q(a1, 0)], am = (a0 + a1) / 2, n = [-uz * Math.cos(am), Math.sin(am), ux * Math.cos(am)];
+    face(o.out || "turf", pts, n); face(o.in || "plaster", pts, V.mul(n, -1));
+  }
+  addSolid({ type: "poly", pts: rectPts(mx, mz, L, 1.64, da), y0: y0 + 1.98, y1: y0 + 2.3, cls: "wall", label: "tunnel roof" });
+  if (o.floor) { const [f0, f1] = o.floor; for (let u = f0; u < f1 - 1e-3; u += 1) { const u2 = Math.min(f1, u + 1), P = (uu, s) => [A[0] + ux * uu - uz * s * R0, y0 + 0.03, A[1] + uz * uu + ux * s * R0]; face("plank", [P(u, -1), P(u2, -1), P(u2, 1), P(u, 1)], [0, 1, 0]); } }
+  const inT = (px, pz) => { const rx = px - A[0], rz = pz - A[1], u = rx * ux + rz * uz, v = -rx * uz + rz * ux; return u > 0 && u < L && Math.abs(v) < R0; };
+  INDOOR_SHAPES.push({ test: (px, py, pz) => py > y0 + 0.075 && py < y0 + 2.0 && inT(px, pz), sky: 0.3, room: o.room });
+  return inT;
+}
+// A hearth at the back of a dome, its chimney up through the turf.
+function moundHearth(x, z, y0, ang) {
+  const a = ang + Math.PI, ux = Math.cos(a), uz = Math.sin(a);
+  let [hx, hz] = [x + ux * 1.95, z + uz * 1.95];
+  [hx, hz] = fitOut(hx, hz, y0, y0 + 1.2, { sx: 0.8, sz: 1.6, ang: a });
+  const b = solidBox("limestone", hx, y0, hz, 0.8, 0.3, 1.5, a); b.wall = b.furn = true;
+  for (const s of [-1, 1]) { const ch = solidBox("limestone", hx - uz * s * 0.65, y0 + 0.3, hz + ux * s * 0.65, 0.8, 0.9, 0.2, a); ch.wall = ch.furn = true; }
+  box("limestone", hx + ux * 0.1, y0 + 1.2, hz + uz * 0.1, 0.65, 0.95, 1.5, a);
+  box("limestone", x + ux * 2.35, y0 + 1.9, z + uz * 2.35, 0.7, 2.0, 0.7, a);
+  box("brick", x + ux * 2.35, y0 + 3.9, z + uz * 2.35, 0.8, 0.15, 0.8, a);
+  for (let k = -1; k <= 1; k++) box("bark", hx - uz * k * 0.2, y0 + 0.3, hz + ux * k * 0.2, 0.5, 0.1, 0.1, a + 0.4 * k);
+  addFire(hx - ux * 0.05, y0 + 0.4, hz - uz * 0.05, 0.55);
+}
+// A mound house on cell (c, r) facing `ang`: its pad, dome, front, hearth and
+// furniture. `second` adds a room through a tunnel to cell second.cell.
+function moundHouse(c, r, ang, name, o = {}) {
+  const x = cx(c, r), z = cz(c, r), base = TOP[idx(c, r)], ux = Math.cos(ang), uz = Math.sin(ang), room = 500 + c * 64 + r;
+  const holes = [], tunnels = [];
+  let other = null;
+  if (o.second) {
+    const [c2, r2] = o.second, x2 = cx(c2, r2), z2 = cz(c2, r2), ta = Math.atan2(z2 - z, x2 - x), L = Math.hypot(x2 - x, z2 - z);
+    const A = [x + Math.cos(ta) * 1.5, z + Math.sin(ta) * 1.5], B = [x2 - Math.cos(ta) * 1.5, z2 - Math.sin(ta) * 1.5];
+    const inT = vaultTunnel(A, B, base, { room, floor: [MOUND.A - 1.5, L - MOUND.A - 1.5] });
+    tunnels.push(inT); holes.push(ta); other = { x: x2, z: z2, holes: [ta + Math.PI], L };
+  }
+  const hole = (px, pz) => tunnels.some(f => f(px, pz));
+  moundDome(x, z, base, ang, { holes, hole, room, name });
+  moundFront(x, z, base, ang, { door: true, name, color: o.color });
+  moundHearth(x, z, base, ang);
+  place(c, r, base - 0.5, base + MOUND.H, name);
+  for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d), dx = cx(a, b) - x, dz = cz(a, b) - z; if (inMap(a, b) && dx * ux + dz * uz < MOUND.uF) place(a, b, base - 0.5, base + MOUND.H, name); }
+  // furniture, kept out of the walls
+  // furniture in the room's frame: u towards the door, v across; clear of the middle and of a tunnel's mouth
+  const at = (u, v) => [x + ux * u - uz * v, z + uz * u + ux * v], fy = base + 0.03, s = o.second ? -1 : o.flip ? -1 : 1;
+  const F = o.second   // the great smial keeps its east side clear for the tunnel
+    ? { table: [0.7, -1.0], bench: [0.7, -1.65], bed: [-1.0, -1.35], shelf: [1.15, 1.2], barrel: [-1.5, 1.3] }
+    : { table: [0.45, 1.0 * s], bench: [0.45, 1.65 * s], bed: [-0.95, -1.35 * s], shelf: [1.2, -1.0 * s], barrel: [-1.5, 1.25 * s], chest: [-0.6, 1.9 * s] };
+  { const [tx, tz] = at(...F.table); table(tx, fy, tz, ang, 1.3); const [bx, bz] = at(...F.bench); bench(bx, fy, bz, ang, 1.2); }
+  { const [bx, bz] = at(...F.bed); bed(bx, fy, bz, ang); }
+  { const [sx, sz] = at(...F.shelf); shelf(sx, fy, sz, ang + Math.PI / 2); }
+  { const [kx, kz] = at(...F.barrel); barrel(kx, fy, kz); if (F.chest) { const [ex, ez] = at(...F.chest); chest(ex, fy, ez, ang + Math.PI / 2); } }
+  if (other) { // the back room: a dome with windows and no door, a pantry and a hearth of its own
+    const bR = 500 + c * 64 + r;
+    moundDome(other.x, other.z, base, ang, { holes: other.holes, hole, room: bR, name: name + ", back room" });
+    moundFront(other.x, other.z, base, ang, { door: false, name });
+    moundHearth(other.x, other.z, base, ang);
+    const [c2, r2] = o.second; place(c2, r2, base - 0.5, base + MOUND.H, name + ", back room");
+    const at2 = (u, v) => [other.x + ux * u - uz * v, other.z + uz * u + ux * v];
+    for (let k = 0; k < 3; k++) { const [bx, bz] = at2(-0.9 + k * 0.1, -1.5 + k * 0.6); barrel(bx, fy, bz); }
+    { const [sx, sz] = at2(1.1, 1.1); shelf(sx, fy, sz, ang); const [cx2, cz2] = at2(-0.4, 1.4); crate(cx2, fy, cz2, 0.3); }
+  }
+  const D = MOUND.door, out = { x: x + ux * (MOUND.uF + 2.0), z: z + uz * (MOUND.uF + 2.0), y: base, look: [x, z] };
+  out.center = [x, z, base + MOUND.H];
+  out.inside = { x: x + ux * 1.15, z: z + uz * 1.15, y: base, look: [x - ux * 2, z - uz * 2] };
+  out.loop = [at(-0.9, 0.2), at(-0.5, -0.5 * s), at(0.3, -0.3 * s), at(0.2, 0)];
+  if (other) out.mouth = at(0, 1.7 * -s);
+  if (other) out.back = { x: other.x, z: other.z, y: base, look: [other.x + ux, other.z + uz] };
+  out.door = [x + ux * MOUND.uF, z + uz * MOUND.uF];
+  return out;
+}
+// A mound house needs its pad level: its cell and the ring round it, and
+// banks of the hill behind it so it sits dug in.
+function moundPad(c, r, ang, level) {
+  const x = cx(c, r), z = cz(c, r), ux = Math.cos(ang), uz = Math.sin(ang);
+  for (let k = 0; k <= 3; k++) for (const [a, b] of hexRing(c, r, k)) {
+    const i = idx(a, b), u = ((cx(a, b) - x) * ux + (cz(a, b) - z) * uz) / (k || 1) / W;
+    if (k <= 1) { TOP[i] = level; TOPMAT[i] = "meadow"; NO_TREE.add(i); }
+    else if (k === 2) { NO_TREE.add(i); if (u < -0.3) TOP[i] = Math.max(TOP[i], level + 1); else if (u > 0.3) TOP[i] = level; }
+    else if (u < -0.3) TOP[i] = Math.max(TOP[i], level + 2);
+  }
+}
+
+// ---- mountain pieces -------------------------------------------------------------
+function pine(x, y, z, s = 1) {
+  solidCyl("bark", x, y, z, 0.16 * s, 1.4 * s, { n: 6 });
+  const rn = rng((x * 13 + z * 7) | 0), a = rn() * 1.5;
+  [[2.2, 0.9, 1.0], [1.7, 0.85, 1.8], [1.2, 0.8, 2.55], [0.7, 0.7, 3.25]].forEach(([w, hh, y1], k) => box("needles", x, y + y1 * s, z, w * s, hh * s, w * s, a + k * 0.4));
+}
+function beacon(x, y, z) {
+  solidCyl("stone", x, y, z, 1.5, 0.9, { n: 12, cap: "stone", label: "Beacon" });
+  for (let k = 0; k < 4; k++) { const a = k / 4 * 2 * Math.PI + 0.4; box("iron", x + Math.cos(a) * 0.55, y + 0.9, z + Math.sin(a) * 0.55, 0.09, 1.1, 0.09, a); }
+  cyl("iron", x, y + 1.8, z, 0.8, 0.35, 10);
+  for (let k = -1; k <= 1; k++) box("bark", x, y + 1.95, z, 1.1, 0.14, 0.14, k * 1.05);
+  FIRES.push({ x, y: y + 2.0, z, s: 1.7, torch: true });
+  LIGHTS.push({ x, y: y + 2.8, z, color: 0xff9040, kind: "beacon", power: 1.7 });
+}
+// A straight outdoor flight up a terrace face: from the lower terrace, foot A,
+// to the bottom corner of the upper cell (c, rU), which is where the walker
+// steps off it onto the terrace at the same height.
+function cliffStair(c, rU, low, high, o = {}) {
+  const bx = cx(c, rU), bz = cz(c, rU) - R, L = (high - low) / 3 * 4.9;
+  const A = [bx, low, bz - L], B = [bx, high, bz];
+  stairRun(A, B, { width: 1.3, from: low, m: o.m || "stone", rails: o.rails, label: o.label || "Stair up the terrace" });
+  for (let z = A[2]; z <= B[2] + 1e-3; z += ROW / 2) { const [a, b] = cellAt(bx, z); if (inMap(a, b)) { NO_TREE.add(idx(a, b)); STAIR_CELLS.add(idx(a, b)); } }
+  return { A, B };
+}
+const STAIR_CELLS = new Set();
+
+// ---- a mound village in the fields ------------------------------------------------
+function makeMounds() {
+  STAIR_CELLS.clear();
+  const hill = r => r <= 16 ? 1 : 1 + Math.floor((r - 15) / 2);
+  const pond = (c, r) => hexDist(c, r, 8, 4) <= 2;
+  ground((c, r) => {
+    if (pond(c, r)) return { h: 0, top: "dirt", side: "dirt", area: "The pond" };
+    if (r === 9 || r === 10) return { h: 1, top: "dirt", side: "dirt", area: "The lane" };
+    if (r <= 8) return { h: 1, top: "meadow", side: "dirt", area: "The fields" };
+    return { h: hill(r), top: "meadow", side: "dirt", area: r >= 17 ? "The hill" : "The green" };
+  });
+  SUNBEAMS.length = 0;
+  const S = -Math.PI / 2;   // every door faces the lane, to the south
+  // the hill lane at the second row of mounds, and the paths up to it
+  for (let c = 5; c <= 41; c++) { const i = idx(c, 20); TOP[i] = 4; TOPMAT[i] = "dirt"; AREA[i] = "The hill lane"; NO_TREE.add(i); }
+  const row1 = [[5, 14], [13, 14], [33, 14], [41, 14]], row2 = [[9, 22], [17, 22], [29, 22], [37, 22]];
+  for (const [c, r] of [...row1, [22, 14], [25, 14]]) moundPad(c, r, S, 1);
+  for (const [c, r] of row2) moundPad(c, r, S, 4);
+  for (let c = 5; c <= 41; c++) { const i = idx(c, 20); TOP[i] = 4; }
+  const path = (c, r0, r1) => { for (let r = r0; r <= r1; r++) { const i = idx(c, r); if (TOPMAT[i] !== "dirt") TOPMAT[i] = "dirt"; NO_TREE.add(i); if (!AREA[i].startsWith("The hill lane")) AREA[i] = "The path"; } };
+  const hillStairs = [];
+  for (const c of [17, 29]) { // a path from the lane, and steps cut into the hill up to the hill lane
+    path(c, 11, 16);
+    const s = cliffStair(c, 20, 1, 4, { m: "limestone", label: "Steps up the hill" });
+    for (let zz = s.A[2] - 0.4; zz <= s.B[2]; zz += ROW / 3) for (const dx of [-0.8, 0, 0.8]) { const [a, b] = cellAt(s.A[0] + dx, zz); if (inMap(a, b) && b < 20) { const i = idx(a, b); TOP[i] = 1; TOPMAT[i] = "dirt"; AREA[i] = "The steps"; NO_TREE.add(i); } }
+    hillStairs.push(s);
+  }
+  for (const [c, r] of [...row1, [22, 14]]) path(c, 11, 12);
+  for (const [c, r] of row2) path(c, 21, 21);
+  // the houses: the great smial has a back room through a tunnel
+  const doors = ["#6f9a5a", "#b5543c", "#d2a64a", "#4f7aa8", "#7fa06a", "#8a5a8a", "#5a8a7a", "#c07a3a", "#6a7ab0"].map(s => parseInt(s.slice(1), 16));
+  const homes = [];
+  homes.push(moundHouse(22, 14, S, "The great smial", { second: [25, 14], color: doors[0] }));
+  row1.forEach(([c, r], n) => homes.push(moundHouse(c, r, S, "Mound house", { color: doors[n + 1], flip: n % 2 })));
+  row2.forEach(([c, r], n) => homes.push(moundHouse(c, r, S, "Hill house", { color: doors[n + 5], flip: n % 2 })));
+  KIT_SPOT.mound = homes[0];
+  GOTO.smial = homes[0]; GOTO.inside = homes[0].inside; GOTO.backroom = homes[0].back; GOTO.hillhouse = homes[6];
+  ROUTE.smial = { door: homes[0].door, inside: [homes[0].inside.x, homes[0].inside.z], loop: homes[0].loop, mouth: homes[0].mouth, back: [homes[0].back.x, homes[0].back.z] };
+  { const s = hillStairs[0]; ROUTE.hill = { way: [[s.A[0], cz(0, 11)], [s.A[0], s.A[2] - 0.6], [s.B[0], s.B[2] + 0.9], [homes[6].x, homes[6].z]], house: homes[6] }; }
+  // the pond, with reeds round it
+  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+    if (pond(c, r)) continue;
+    for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (inMap(a, b) && pond(a, b)) { const [P0, P1] = edgeEnds(c, r, d); reeds((P0[0] + P1[0]) / 2, 0.6, (P0[1] + P1[1]) / 2, 4); NO_TREE.add(idx(c, r)); break; } }
+  }
+  GOTO.pond = { x: cx(12, 5), z: cz(0, 5), y: 1, look: [cx(8, 4), cz(0, 4)] };
+  // gardens: vegetable rows behind fences, south of the lane
+  const gardens = [[15, 3, 19, 6], [24, 2, 28, 5], [33, 3, 37, 6]];
+  for (const [c0, r0, c1, r1] of gardens) {
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { crops(c, r, 1); AREA[idx(c, r)] = "A garden"; }
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) for (let d = 0; d < 6; d++) { const [a, b] = nb(c, r, d); if (a < c0 || a > c1 || b < r0 || b > r1) { if (d === 1 && c === c0 + 2 && r === r1) continue; fenceEdge(c, r, d, 1); } }
+  }
+  GOTO.gardens = { x: cx(17, 8), z: cz(0, 8), y: 1, look: [cx(17, 4), cz(0, 4)] };
+  // the party oak on the green, lanterns hung in it, a table under it
+  const ox = cx(30, 11) + 1, oz = cz(0, 11) + 0.6;
+  solidCyl("bark", ox, 1, oz, 0.55, 3.6, { n: 9, label: "The party oak" });
+  const rn = rng(77);
+  for (let k = 0; k < 9; k++) { const a = rn() * 6.28, d = k ? 1.8 + rn() * 1.2 : 0; box("leaves", ox + Math.cos(a) * d, 1 + 3.2 + rn() * 1.6, oz + Math.sin(a) * d, 2.6, 2.0, 2.6, rn()); }
+  for (let k = 0; k < 5; k++) { const a = k / 5 * 6.28 + 0.3, lx = ox + Math.cos(a) * 3.1, lz = oz + Math.sin(a) * 3.1; box("rope", lx, 1 + 3.1, lz, 0.02, 0.5, 0.02); lantern(lx, 1 + 2.75, lz, false); }
+  table(ox + 2.6, 1, oz - 2.2, 0.2, 2.2); bench(ox + 2.6, 1, oz - 2.95, 0.2, 2.0);
+  GOTO.oak = { x: ox - 4.5, z: oz - 3.5, y: 1, look: [ox, oz], pitch: 0.25 };
+  GOTO.lane = { x: cx(20, 10), z: cz(0, 10), y: 1, look: [cx(22, 14), cz(0, 14)] };
+  GOTO.hill = { x: cx(23, 20), z: cz(0, 20), y: 4, look: [cx(17, 22), cz(0, 22)] };
+  streetLamps([[8, 9], [14, 10], [20, 9], [27, 10], [36, 9], [44, 10], [10, 20], [25, 20], [34, 20]]);
+  // people
+  person(cx(19, 10), 1, cz(0, 10) + 0.3, 0.2, 0x7a6a3a, { role: "Walker", path: [[cx(10, 10), cz(0, 10)], [cx(30, 10), cz(0, 10)]], speed: 1.0 });
+  person(cx(16, 5), 1, cz(0, 5), 1.2, 0x5a7a3a, { role: "Gardener", work: "wipe" });
+  person(ox + 2.6, 1, oz - 3.5, Math.PI / 2, 0x8a5a3a, { role: "Neighbour", work: "idle" });
+  person(homes[0].x + 0.8, 1, homes[0].z, Math.PI / 2, 0x4f6a8a, { role: "Smial keeper", work: "idle" });
+  // oaks and bushes in the hedgerows and up the hill
+  scatter((c, r) => pond(c, r) ? 0 : r >= 17 ? 0.14 : r <= 8 ? 0.05 : 0.02, (x, y, z, rnd) => rnd() < 0.55 ? tree(x, y, z, 1.1 + rnd() * 0.5) : shrub(x, y, z, 0.8, "leaves"), 31);
+  buildTerrain(); buildPosts();
+}
+
+// ---- a cliff village in the mountains -------------------------------------------------
+function makeMountain() {
+  STAIR_CELLS.clear();
+  const terrace = r => r <= 4 ? 0 : r <= 9 ? 3 : r <= 14 ? 6 : r <= 19 ? 9 : r <= 24 ? 12 : 15;
+  const gorge = c => c >= 36 && c <= 38;
+  const TNAME = ["The valley", "The low terrace", "The second terrace", "The third terrace", "The high terrace", "The summit"];
+  ground((c, r) => {
+    if (gorge(c)) return { h: -6, top: "scree", side: "slaterock", area: "The gorge" };
+    const t = terrace(r), k = t / 3;
+    if (t === 0) return { h: 0, top: "meadow", side: "dirt", area: TNAME[0] };
+    let h = t, top = "scree";
+    if (t === 15) { const n = vnoise(c * 0.3 + 5, r * 0.3); h = 15 + (c > 18 || r > 30 ? Math.floor(n * 4) : 0); }
+    const snow = hash2(c * 3 + 1, r * 7 + 2);
+    if (t >= 12 && snow < (t >= 15 ? 0.3 : 0.12)) top = "snow";
+    else if (t <= 6 && snow < 0.45) top = "meadow";
+    return { h, top, side: "lichen", area: c > 38 ? "The east slope" : TNAME[k] };
+  });
+  const lane = (c, r) => { const i = idx(c, r); TOPMAT[i] = "flag"; NO_TREE.add(i); };
+  for (let c = 0; c <= 35; c++) for (const r0 of [5, 10, 15, 20]) for (let r = r0; r <= r0 + 2; r++) lane(c, r);
+  for (let c = 4; c <= 18; c++) for (let r = 25; r <= 30; r++) { const i = idx(c, r); TOP[i] = 15; TOPMAT[i] = hexDist(c, r, 12, 28) <= 2 ? "flag" : TOPMAT[i]; NO_TREE.add(i); }
+  // switchbacks: a stair up each terrace face, alternately at the west and east ends
+  const stairs = [cliffStair(4, 5, 0, 3), cliffStair(31, 10, 3, 6), cliffStair(4, 15, 6, 9), cliffStair(31, 20, 9, 12), cliffStair(4, 25, 12, 15)];
+  // houses on the back of each terrace, two with a room cut into the rock behind
+  const homes = [
+    { kit: "alpine", c0: 7, c1: 9, r0: 8, r1: 9, front: 8, newel: [9, 9] },
+    { kit: "alpine", c0: 12, c1: 14, r0: 8, r1: 9, front: 8, newel: [12, 9], rock: [13, 9, 2], name: "Quarryman's house" },
+    { kit: "alpine", c0: 17, c1: 19, r0: 8, r1: 9, front: 8, newel: [19, 9] },
+    { kit: "alpine", c0: 22, c1: 24, r0: 8, r1: 9, front: 8, newel: [22, 9] },
+    { kit: "alpine", c0: 8, c1: 10, r0: 13, r1: 14, front: 13, newel: [8, 14] },
+    { kit: "alpine", c0: 14, c1: 16, r0: 13, r1: 14, front: 13, newel: [16, 14], rock: [15, 14, 2], name: "Cheesemaker's house" },
+    { kit: "alpine", c0: 20, c1: 22, r0: 13, r1: 14, front: 13, newel: [22, 14] },
+    { kit: "alpine", c0: 25, c1: 27, r0: 13, r1: 14, front: 13, newel: [25, 14] },
+    { kit: "alpine", c0: 9, c1: 11, r0: 18, r1: 19, front: 18, newel: [11, 19] },
+    { kit: "alpine", c0: 16, c1: 18, r0: 18, r1: 19, front: 18, newel: [16, 19] },
+    { kit: "alpine", c0: 23, c1: 25, r0: 18, r1: 19, front: 18, newel: [25, 19] },
+    { kit: "alpine", c0: 10, c1: 12, r0: 23, r1: 24, front: 23, newel: [12, 24] },
+    { kit: "alpine", c0: 18, c1: 20, r0: 23, r1: 24, front: 23, newel: [18, 24] },
+  ];
+  const rockRooms = [];
+  homes.forEach((hm, n) => {
+    hm.noWindow = (c, r, d, s) => s === 0 && r === hm.r1 && (d === 1 || d === 2);   // the ground floor's back is against the rock
+    for (let r = hm.r0; r <= hm.r1; r++) for (let c = hm.c0; c <= hm.c1; c++) TOPMAT[idx(c, r)] = "plank";
+    if (hm.rock) { // the rock-cut room: the two upper-terrace cells behind the door, dug out to the house's floor
+      const [c, r, d] = hm.rock, base = TOP[idx(hm.c0, hm.r0)], cells = [nb(c, r, d), nb(c, r, d === 2 ? 1 : 2)];
+      hm.doors = [[c, r, d, 0, "open"]];
+      for (const [a, b] of cells) for (let d2 = 0; d2 < 6; d2++) { const [e, f] = nb(a, b, d2); if (inMap(e, f)) SIDEMAT[idx(e, f)] = "granite"; }   // bare rock round it, no lichen
+      for (const [a, b] of cells) {
+        const i = idx(a, b), top = TOPMAT[i];
+        TOP[i] = base; TOPMAT[i] = "flag";
+        rockCeil(a, b, base + 2.6, base + 3, { top, under: "granite", side: "granite" });
+        indoor(a, b, base - 0.05, base + 2.6, 0.12); AREA[i] = (hm.name || "House") + ", rock-cut room"; NO_TREE.add(i);
+        place(a, b, base - 0.5, base + 2.6, "Rock-cut room");
+      }
+      rockRooms.push({ hm, cells, base, door: [c, r, d] });
+    }
+    const out = townHouse(hm, n);
+    if (hm.rock && !GOTO.house) GOTO.house = out;
+  });
+  for (const { hm, cells, base, door } of rockRooms) { // barrels, a rack of cheeses or tools, a small fire in a niche
+    const [[a0, b0], [a1, b1]] = cells;
+    for (let k = 0; k < 3; k++) barrel(cx(a1, b1) - 0.7 + k * 0.7, base, cz(a1, b1) + 0.6);
+    const [sx, sz] = [cx(a0, b0), cz(a0, b0) + 0.7]; shelf(sx, base, sz, 0);
+    crate(cx(a0, b0) - 0.6, base, cz(a0, b0) - 0.2, 0.2);
+    addFire(cx(a1, b1) + 0.9, base + 0.05, cz(a1, b1) - 0.3, 0.35);
+    const rc = { x: (cx(a0, b0) + cx(a1, b1)) / 2 + 0.6, z: (cz(a0, b0) + cz(a1, b1)) / 2 + 0.7, y: base, look: [cx(door[0], door[1]) - 0.4, cz(0, door[1])] };
+    rc.center = [rc.x, rc.z, base + 3];
+    if (!GOTO.rockroom) {
+      const [A, B] = edgeEnds(...door), [nx, nz] = dvec(door[2]), mx = (A[0] + B[0]) / 2, mz = (A[1] + B[1]) / 2;
+      GOTO.rockroom = rc; KIT_SPOT.rockroom = Object.assign({}, GOTO.house, { center: GOTO.house.center });
+      ROUTE.rockroom = { through: [[mx - nx * 1.0, mz - nz * 1.0], [mx + nx * 0.9, mz + nz * 0.9]], room: [rc.x - 0.6, rc.z - 0.7] };
+      GOTO.rockView = { x: mx - nx * 2.3 + 0.3, z: mz - nz * 2.3, y: base, look: [rc.x, rc.z], pitch: -0.08 };
+    }
+  }
+  // the rope bridge over the gorge on the second terrace, and the hermit's hut beyond
+  const bA = [cx(35, 12) + W / 2, 6, cz(0, 12)], bB = [cx(39, 12) - W / 2, 6, cz(0, 12)];
+  bridge(bA, bB, { width: 1.2, sag: 0.9, label: "Rope bridge", detail: "over the gorge, 12 m down to the water" });
+  bridgeLamps(bA, bB, { sag: 0.9 });
+  for (const [c, r] of [[35, 12], [39, 12]]) NO_TREE.add(idx(c, r));
+  GOTO.bridge = { x: bA[0] - 2.5, z: bA[2], y: 6, look: [bB[0], bB[2]] };
+  ROUTE.bridge = [[bA[0] - 2.2, bA[2]], [bB[0] + 1.5, bB[2]]];
+  building({ kit: "alpine", c0: 42, c1: 43, r0: 12, r1: 13, base: 6, storeys: 1, name: "Hermit's hut", doors: [[42, 12, 3, 0]], window: (c, r, d) => d === 0 || d === 5 });
+  for (const [c, r] of [[42, 12], [43, 12], [42, 13], [43, 13]]) TOPMAT[idx(c, r)] = "plank";
+  { const [c, r] = [43, 13]; firePit(cx(c, r), 6, cz(0, r)); bed(cx(42, 13), 6, cz(0, 13), 0); }
+  GOTO.hermit = outsideDoor(42, 12, 3, 6);
+  torch(cx(40, 11), 6, cz(0, 11) - 0.5); torch(cx(40, 13), 6, cz(0, 13) + 0.5);
+  // the beacon on the summit
+  const bx = cx(12, 28), bz = cz(0, 28);
+  beacon(bx, 15, bz);
+  GOTO.beacon = { x: bx - 2.5, z: bz - 6.5, y: 15, look: [bx, bz], pitch: 0.12 };
+  person(bx + 2.2, 15, bz - 0.6, Math.PI, 0x5a5a6a, { role: "Beacon keeper", work: "idle" });
+  // the walk up every switchback to the beacon
+  const via = [];
+  stairs.forEach((s, k) => {
+    via.push([s.A[0], s.A[2] - 0.6], [s.B[0], s.B[2] + 0.9]);
+    const next = stairs[k + 1];
+    if (next) { const zl = s.B[2] + 1.6; via.push([s.B[0], zl], [next.A[0], zl], [next.A[0], next.A[2] - 0.6]); }
+  });
+  via.push([bx, bz - 3.2]);
+  ROUTE.switchbacks = [[stairs[0].A[0] + 3, stairs[0].A[2] - 1.2], ...via];
+  GOTO.valley = { x: stairs[0].A[0] + 3, z: stairs[0].A[2] - 1.2, y: 0, look: [cx(20, 12), cz(0, 12)], pitch: 0.25 };
+  GOTO.terrace = { x: cx(18, 11), z: cz(0, 11), y: 6, look: [cx(18, 13), cz(0, 13)] };
+  // lamps along the lanes, people on them
+  const lampCells = [];
+  for (const r of [5, 10, 15, 20]) for (let c = 2; c <= 34; c += 5) if (!STAIR_CELLS.has(idx(c, r))) lampCells.push([c, r]);
+  streetLamps(lampCells);
+  person(cx(15, 6), 3, cz(0, 6), 0, 0x6a4a3a, { role: "Carter", path: [[cx(8, 6), cz(0, 6)], [cx(26, 6), cz(0, 6)]], speed: 1.1 });
+  person(cx(20, 11), 6, cz(0, 11), 0, 0x3a5a6a, { role: "Shepherd", work: "idle" });
+  person(cx(12, 16), 9, cz(0, 16), 0, 0x7a3a3a, { role: "Quarryman", work: "hammer" });
+  for (let k = 0; k < 5; k++) { const x = cx(8 + k * 3, 2), z = cz(0, 2) + (k % 2) * 1.2; box("salt", x, 0.35, z, 1.0, 0.55, 0.5, k); box("slate", x + 0.55, 0.6, z, 0.3, 0.3, 0.3, k); }   // sheep in the valley
+  // pines in the valley and on the slopes, boulders on the terraces
+  scatter((c, r) => gorge(c) || STAIR_CELLS.has(idx(c, r)) ? 0 : r <= 4 ? 0.18 : terrace(r) >= 12 ? 0.05 : c > 38 ? 0.2 : 0.06,
+    (x, y, z, rnd) => rnd() < 0.7 ? pine(x, y, z, 0.9 + rnd() * 0.6) : solidBox("granite", x, y, z, 0.8 + rnd(), 0.5 + rnd() * 0.6, 0.8 + rnd(), rnd() * 3), 41);
+  buildTerrain(1.5); buildRock(); buildPosts();
+}
+
+// ---- a town inside a mountain ---------------------------------------------------------------
+// The mountain is high columns; the chamber is low ones with rock over them at
+// 12 m. A tunnel leads in from a cliff; a shaft lets one beam of daylight down.
+const CAVE = new Set();
+function makeCaves() {
+  STAIR_CELLS.clear(); CAVE.clear();
+  SUNBEAMS.length = 0;
+  const M = (c, r) => 16 + Math.floor(vnoise(c * 0.22 + 7, r * 0.22 + 3) * 5) + Math.max(0, (r - 18) >> 2);
+  const span = r => [9 + Math.floor(Math.abs(r - 20) * 0.8), 41 - Math.floor(Math.abs(r - 20) * 0.8)];
+  const inChamber = (c, r) => r >= 13 && r <= 27 && c >= span(r)[0] && c <= span(r)[1];
+  const tunnel = (c, r) => (c === 24 || c === 25) && r >= 8 && r <= 12;
+  const ledge = (c, r) => inChamber(c, r) && r >= 25 && c <= 22;
+  const chasm = (c, r) => inChamber(c, r) && (c === 33 || c === 34);
+  const pool = (c, r) => hexDist(c, r, 29, 17) <= 1;
+  const SHAFT = [29, 17];
+  const rooms = [ // carved rooms: cells, floor, the chamber cell each front faces, and which front edge has the door
+    { name: "Stonecutter's house", cells: [[7, 20], [8, 20]], door: [8, 20, 0] },
+    { name: "Cave house", cells: [[9, 17], [10, 17]], door: [10, 17, 0] },
+    { name: "Brewer's house", cells: [[18, 12], [19, 12]], door: [18, 12, 1] },
+    { name: "Mushroom grower's house", cells: [[29, 12], [30, 12]], door: [30, 12, 1] },
+    { name: "Carved hall", cells: [[27, 28], [28, 28]], door: [27, 28, 5] },
+    { name: "Lamp maker's house", cells: [[42, 20], [43, 20]], door: [42, 20, 3] },
+    { name: "Gallery house", cells: [[15, 28], [16, 28]], door: [15, 28, 5], floor: 5 },
+    { name: "Gallery workshop", cells: [[19, 28], [20, 28]], door: [20, 28, 4], floor: 5 },
+  ];
+  const roomOf = new Map(); rooms.forEach((rm, n) => rm.cells.forEach(([c, r]) => roomOf.set(idx(c, r), n)));
+  ground((c, r) => {
+    if (r <= 7) return { h: 2, top: hash2(c, r) < 0.35 ? "scree" : "meadow", side: "lichen", area: "The mountainside" };
+    if (tunnel(c, r)) return { h: 2, top: "flag", side: "slaterock", area: "The tunnel" };
+    if (roomOf.has(idx(c, r))) { const rm = rooms[roomOf.get(idx(c, r))]; return { h: rm.floor || 2, top: "flag", side: "slaterock", area: rm.name }; }
+    if (inChamber(c, r)) {
+      if (chasm(c, r)) return { h: -14, top: "basalt", side: "slaterock", area: "The cave" };
+      if (pool(c, r)) return { h: 0.8, top: "scree", side: "slaterock", area: "The cave" };
+      return { h: ledge(c, r) ? 5 : 2, top: hash2(c * 5, r * 3) < 0.3 ? "scree" : "flag", side: "slaterock", area: "The cave" };
+    }
+    const h = M(c, r);
+    return { h, top: h >= 21 ? "snow" : "lichen", side: "slaterock", area: "The mountain" };
+  });
+  // the rock over every hollow, and how much sky reaches in
+  const skyC = (c, r) => { const d = hexDist(c, r, ...SHAFT); return d === 0 ? 1 : d === 1 ? 0.4 : d === 2 ? 0.2 : 0.1; };
+  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+    const i = idx(c, r), m = M(c, r), top = m >= 21 ? "roofsnow" : "roofrock";
+    if (tunnel(c, r)) { rockCeil(c, r, 5, m, { top }); indoor(c, r, 1.95, 5, r <= 9 ? 0.35 : 0.15); CAVE.add(i); }
+    else if (roomOf.has(i)) { const f = TOP[i]; rockCeil(c, r, f + 3, m, { top }); indoor(c, r, f - 0.05, f + 3, 0.08); CAVE.add(i); }
+    else if (inChamber(c, r)) {
+      if (!(c === SHAFT[0] && r === SHAFT[1])) rockCeil(c, r, 12, m, { top });
+      indoor(c, r, TOP[i] - 0.05, 12, skyC(c, r)); CAVE.add(i);
+      if (ledge(c, r)) place(c, r, 4.5, 12, "The gallery");
+      if (chasm(c, r)) place(c, r, -14, 12, "The chasm");
+      if (pool(c, r)) place(c, r, 0, 12, "The pool");
+    }
+  }
+  // the shaft of daylight: rock round it all the way up, the pool under it
+  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) if (pool(c, r)) face("cavewater", hexPts(c, r).map(p => [p[0], 1.6, p[1]]), [0, 1, 0]);
+  { // a beam of dusty daylight down the shaft, by day only
+    const g = new THREE.CylinderGeometry(R * 0.93, R * 0.93, 12 - 1.6, 6, 1, true); g.rotateY(Math.PI / 6);
+    const m = new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.1, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    const beam = new THREE.Mesh(g, m); beam.position.set(cx(...SHAFT), (12 + 1.6) / 2, cz(...SHAFT)); beam.userData.o = 0.1;
+    scene.add(beam); DRESS.push(beam); SUNBEAMS.push(beam);
+  }
+  // the tunnel's mouth: dressed stone round it, torches either side
+  const mz = cz(0, 7) + 0.7, mx0 = cx(24, 8) - W * 0.5 - 0.3, mx1 = cx(25, 8) + W * 0.5 + 0.3;
+  for (const x of [mx0, mx1]) solidBox("stone", x, 2, mz, 0.8, 3.3, 0.9, 0, { label: "Portal" });
+  box("stone", (mx0 + mx1) / 2, 5.0, mz, mx1 - mx0 + 0.8, 0.7, 0.9, 0);
+  torch(mx0 - 1.0, 2, mz - 0.9); torch(mx1 + 1.0, 2, mz - 0.9);
+  for (const r of [9, 11]) { box("rope", cx(24, r) + 1.4, 4.45, cz(0, r), 0.02, 0.55, 0.02); lantern(cx(24, r) + 1.4, 4.15, cz(0, r), false); }
+  // the stone house fronts along the chamber's walls, and the rooms behind them
+  rooms.forEach((rm, n) => {
+    const f = rm.floor || 2, inR = (c, r) => rm.cells.some(([a, b]) => a === c && b === r);
+    for (const [c, r] of rm.cells) {
+      AREA[idx(c, r)] = rm.name; place(c, r, f - 0.5, f + 3, rm.name); NO_TREE.add(idx(c, r));
+      for (let d = 0; d < 6; d++) {
+        const [a, b] = nb(c, r, d); if (!inMap(a, b) || inR(a, b)) continue;
+        const j = idx(a, b); if (!inChamber(a, b) && !tunnel(a, b)) continue;   // rock on that side
+        const isDoor = rm.door[0] === c && rm.door[1] === r && rm.door[2] === d, openings = [];
+        if (isDoor) openings.push({ yb: f, ye: f + DOOR_H, w: DOOR_W, door: true, name: rm.name });
+        else openings.push({ yb: f + 1.0, ye: f + 2.0, w: 0.8, sill: true, win: true, shutters: true });
+        edgeWall(c, r, d, f, f + 3, { t: 0.5, mOut: "stone", mIn: "plaster", mEdge: "stone", base: f, openings });
+        if (isDoor) { const [A, B] = edgeEnds(c, r, d), [nx, nz] = dvec(d); for (const s of [-1, 1]) { const tx = (B[0] - A[0]) / R, tz = (B[1] - A[1]) / R; torch((A[0] + B[0]) / 2 + nx * 0.6 + tx * s * 1.05, f, (A[1] + B[1]) / 2 + nz * 0.6 + tz * s * 1.05, 2.0); } }
+      }
+    }
+    const [c0, r0] = rm.cells[0], [c1, r1] = rm.cells[1];
+    // a hearth against the rock, a table, a bed, a shelf
+    let hd = -1; for (let d = 0; d < 6; d++) { const [a, b] = nb(c1, r1, d); if (inMap(a, b) && !inR(a, b) && !inChamber(a, b) && !tunnel(a, b) && !roomOf.has(idx(a, b))) { hd = d; break; } }
+    if (hd >= 0) hearth(c1, r1, hd, f);
+    table(cx(c1, r1), f, cz(0, r1), 0.4, 1.4);
+    let bd = -1; for (let d = 0; d < 6; d++) { const [a, b] = nb(c0, r0, d); if (inMap(a, b) && !inR(a, b) && !inChamber(a, b) && !tunnel(a, b)) { bd = d; break; } }
+    if (bd >= 0) { const [x, z, a] = spot(c0, r0, bd, 0.75); bed(x, f, z, a + Math.PI / 2); }
+    if (n === 4) { bench(cx(c0, r0), f, cz(0, r0) + 0.4, 0.4, 1.6); barrel(cx(c0, r0) - 0.8, f, cz(0, r0) - 0.6); }
+    const [dc, dr, dd] = rm.door, out = outsideDoor(dc, dr, dd, f);
+    out.center = [(cx(c0, r0) + cx(c1, r1)) / 2, (cz(0, r0) + cz(0, r1)) / 2, f + 3];
+    rm.out = out;
+  });
+  GOTO.carved = rooms[1].out; KIT_SPOT.carved = rooms[1].out;
+  { const o1 = rooms[1].out, dx = o1.x - o1.look[0], dz = o1.z - o1.look[1]; GOTO.carvedView = { x: o1.x + dx * 2.2, z: o1.z + dz * 2.2 - 1.5, y: 2, look: o1.look, pitch: 0.12 }; }
+  GOTO.gallery = rooms[6].out; GOTO.east = rooms[5].out;
+  // the gallery: a ledge one storey up along the north wall, railed, with a stair up to it
+  const st = cliffStair(18, 25, 2, 5, { label: "Stair to the gallery" });
+  for (let r = 25; r <= 27; r++) for (let c = 0; c < NC; c++) {
+    if (!ledge(c, r)) continue;
+    for (let d = 0; d < 6; d++) {
+      const [a, b] = nb(c, r, d); if (!inMap(a, b) || !inChamber(a, b) || ledge(a, b)) continue;
+      if (c === 18 && r === 25 && (d === 4 || d === 5)) continue;   // the stair comes up here
+      const [A, B] = edgeEnds(c, r, d); railSeg(A[0], A[1], 5, B[0], B[1], 5);
+    }
+  }
+  // the rope bridge over the chasm, lanterns on its rails
+  const bA = [cx(32, 20) + W / 2, 2, cz(0, 20)], bB = [cx(35, 20) - W / 2, 2, cz(0, 20)];
+  bridge(bA, bB, { width: 1.2, sag: 0.5, label: "Rope bridge", detail: "over the chasm, 16 m down" });
+  bridgeLamps(bA, bB, { sag: 0.5, every: 3 });
+  GOTO.bridge = { x: bA[0] - 2.2, z: bA[2], y: 2, look: [bB[0], bB[2]] };
+  // the plaza: a great fire, stalls, braziers along the paths
+  const fx = cx(24, 18), fz = cz(0, 18);
+  for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; box("fieldstone", fx + Math.cos(a) * 0.9, 2, fz + Math.sin(a) * 0.9, 0.36, 0.3, 0.3, a); }
+  addSolid({ type: "circ", x: fx, z: fz, r: 1.1, y0: 2, y1: 2.3, cls: "wall", label: "The great fire" });
+  for (let k = 0; k < 4; k++) box("bark", fx, 2.05, fz, 1.3, 0.14, 0.14, k * 0.8);
+  FIRES.push({ x: fx, y: 2.1, z: fz, s: 1.6 });
+  LIGHTS.push({ x: fx, y: 3.0, z: fz, color: 0xff9a4a, kind: "hearth", power: 1.6, reach: 14 });
+  marketStall(21, 16, "linen", 2, ["moss", "clay"]); marketStall(26, 23, "wool", 2, ["iron", "bark"]);
+  for (const [c, r] of [[24, 13], [24, 15], [20, 19], [28, 19], [16, 21], [31, 18], [31, 22], [13, 18], [19, 23], [36, 21], [39, 19], [25, 25], [22, 13], [27, 13]]) { if (!inChamber(c, r) || chasm(c, r) || pool(c, r)) continue; brazier(cx(c, r) + 0.6, TOP[idx(c, r)], cz(0, r) + 0.5); NO_TREE.add(idx(c, r)); }
+  for (const [c, r] of [[15, 26], [20, 26], [17, 27]]) brazier(cx(c, r), 5, cz(0, r) - 0.3);
+  // stalagmites and rubble in the corners, mushrooms by the pool
+  const rn = rng(91);
+  for (let r = 13; r <= 27; r++) for (let c = 0; c < NC; c++) {
+    if (!inChamber(c, r) || chasm(c, r) || pool(c, r) || ledge(c, r) || NO_TREE.has(idx(c, r))) continue;
+    const [a, b] = span(r); if (c - a > 1 && b - c > 1 && r > 13 && r < 27) continue;
+    if (rn() < 0.45) { const x = cx(c, r) + (rn() - 0.5) * 1.4, z = cz(0, r) + (rn() - 0.5) * 1.4, h = 0.8 + rn() * 1.8; solidCyl("slaterock", x, 2, z, 0.25 + rn() * 0.2, h, { n: 6, cap: "slaterock", label: "Stalagmite" }); }
+  }
+  for (const [c, r] of hexRing(29, 17, 2)) { if (!inChamber(c, r) || chasm(c, r)) continue; for (let k = 0; k < 3; k++) { const x = cx(c, r) + (rn() - 0.5) * 1.6, z = cz(0, r) + (rn() - 0.5) * 1.6; cyl("linen", x, 2, z, 0.04, 0.25, 5); cyl("clay", x, 2.25, z, 0.16, 0.08, 7); } }
+  // people
+  person(fx + 1.8, 2, fz + 0.4, Math.PI, 0x6a4a3a, { role: "Fire keeper", work: "idle" });
+  person(cx(21, 16), 2, cz(0, 16) - 0.9, Math.PI / 2, 0x4a5a6a, { role: "Trader", work: "idle" });
+  person(cx(24, 10), 2, cz(0, 10), 0, 0x5a5a5a, { role: "Gate warden", work: "idle", spear: true });
+  person(cx(26, 18), 2, cz(0, 18), 0, 0x7a5a3a, { role: "Cave dweller", path: [[cx(20, 18), cz(0, 18)], [cx(31, 18), cz(0, 18)]], speed: 1.0 });
+  person(cx(17, 26), 5, cz(0, 26), 0, 0x3a6a5a, { role: "Weaver", work: "idle" });
+  // outside: the path up to the mouth, pines and scree on the mountainside
+  for (let r = 0; r <= 7; r++) for (const c of [24, 25]) { TOPMAT[idx(c, r)] = "flag"; NO_TREE.add(idx(c, r)); AREA[idx(c, r)] = "The path"; }
+  GOTO.outside = { x: cx(24, 4) + 1.4, z: cz(0, 4), y: 2, look: [(mx0 + mx1) / 2, mz], pitch: 0.2 };
+  GOTO.tunnel = { x: cx(24, 9) + 1.4, z: cz(0, 9), y: 2, look: [cx(24, 14), cz(0, 14)] };
+  GOTO.plaza = { x: fx - 3.5, z: fz - 4.5, y: 2, look: [fx, fz], pitch: 0.12 };
+  GOTO.pool = { x: cx(27, 19), z: cz(0, 19), y: 2, look: [cx(29, 17), cz(0, 17)], pitch: 0.1 };
+  GOTO.stair = { x: st.A[0], z: st.A[2] - 1.5, y: 2, look: [st.B[0], st.B[2]] };
+  ROUTE.cave = { mouth: [cx(24, 7) + 1.4, cz(0, 7)], tunnel: [cx(24, 12) + 1.4, cz(0, 12)], stairFoot: [st.A[0], st.A[2] - 0.8], stairTop: [st.B[0], st.B[2] + 1.0], galleryDoor: [rooms[6].out.x, rooms[6].out.z],
+    bridgeWest: [bA[0] - 1.8, bA[2]], bridgeEast: [bB[0] + 1.6, bB[2]], eastDoor: rooms[5].out, start: [GOTO.outside.x, GOTO.outside.z] };
+  scatter((c, r) => r <= 7 && !(c >= 22 && c <= 27) ? 0.2 : 0, (x, y, z, rnd) => rnd() < 0.75 ? pine(x, y, z, 0.9 + rnd() * 0.5) : solidBox("granite", x, y, z, 0.8 + rnd(), 0.5 + rnd() * 0.6, 0.8 + rnd(), rnd() * 3), 53);
+  buildTerrain(1.5); buildRock(); buildPosts();
+}
+
+// ---- the registry ------------------------------------------------------------------
+Object.assign(SCENES, {
+  mounds: { label: "Fields, mound houses", build: makeMounds, start: "lane", orbit: { tx: W * 23, tz: ROW * 15, dist: 100, yaw: 1.3, pitch: 0.58 },
+    places: [["lane", "The lane"], ["smial", "The great smial"], ["inside", "Inside the smial"], ["backroom", "The back room"], ["hill", "The hill lane"], ["hillhouse", "A hill house"], ["oak", "The party oak"], ["gardens", "Gardens"], ["pond", "Pond"]],
+    litWindows: 0.7,
+    env: { fog: [70, 330], water: { level: 0.6, color: 0x3a6a70, opacity: 0.88 }, far: { color: 0x66763a, y: 0.9 } } },
+  mountain: { label: "Mountains, cliff village", build: makeMountain, start: "valley", orbit: { tx: W * 21, tz: ROW * 14, dist: 120, yaw: 1.25, pitch: 0.5 },
+    places: [["valley", "The valley"], ["terrace", "Second terrace"], ["house", "Quarryman's house"], ["rockroom", "Rock-cut room"], ["bridge", "Rope bridge"], ["hermit", "Hermit's hut"], ["beacon", "The beacon"]],
+    streetLight: 6, litWindows: 0.5,
+    env: { fog: [90, 420], tint: 0xc8d2dc, tintAmt: 0.15, water: { level: -5, color: 0x3a6a7a, opacity: 0.9 }, far: { color: 0x5e6a4a, y: -0.1 } } },
+  caves: { label: "Mountains, cave dwellers", build: makeCaves, start: "plaza", orbit: { tx: W * 25, tz: ROW * 19, dist: 105, yaw: 1.4, pitch: 0.95 },
+    places: [["outside", "Outside the mouth"], ["tunnel", "The tunnel"], ["plaza", "The great fire"], ["pool", "The pool and the shaft"], ["stair", "Stair to the gallery"], ["gallery", "The gallery"], ["bridge", "Rope bridge"], ["carved", "A carved house"], ["east", "Across the chasm"]],
+    litWindows: 0.8,
+    hideOver: ["roofrock", "roofsnow", "caveceil", "rockface"],
+    alwaysLit(x, y, z) { const [c, r] = cellAt(x, z); return inMap(c, r) && CAVE.has(idx(c, r)) && y < 12.5; },
+    darkFog(x, y, z) { const [c, r] = cellAt(x, z); return inMap(c, r) && CAVE.has(idx(c, r)) && y < 12; },
+    env: { fog: [30, 220], tint: 0xb4bcc4, tintAmt: 0.15, water: null, shadow: 95,
+      far: [{ color: 0x5f6a48, y: 1.9, zMax: ROW * 7.5 }, { color: 0x6a7078, y: 17, zMin: ROW * 7.5, xMax: 0 }, { color: 0x6a7078, y: 17, zMin: ROW * 7.5, xMin: W * NC }, { color: 0x6a7078, y: 18, zMin: ROW * NR, xMin: 0, xMax: W * NC }] } },
+});
+
+// =====================================================================
 // Night. Every lamp, torch, brazier and fire lights what is near it,
 // wherever the camera is: its light is baked into the vertices when a
 // settlement is built, the way the voxel-light change carries block light,
@@ -2398,7 +3064,7 @@ SCENES.coast = { label: "Coast, fishing harbour", build: makeCoast, start: "quay
 const NIGHT_KINDS = new Set(["lamp", "torch", "brazier", "beacon", "window", "candle"]);   // lit after dusk; hearths and forges burn all day
 const BAKED_ONLY = new Set(["window", "candle"]);   // too many and too dim for the few point lights
 const LIGHT_REACH = { hearth: 7, forge: 9, lamp: 9, torch: 10, brazier: 11, beacon: 18, window: 4.5, candle: 5 };
-const GLOW = { mesh: null };
+const GLOW = { mesh: null, always: null };   // lit windows: by night, and all day in a cave
 
 // A torch on a pole, lit at night.
 function torch(x, y, z, h = 2.2) {
@@ -2443,8 +3109,9 @@ function facadeLamps(spacing) {
 // behind it, a little light out onto the street. Which ones is a hash of where
 // the window is, so a settlement is lit the same way every time.
 function windowGlow(share) {
-  const pos = [], col = [];
+  const AL = SCENES[SCENE].alwaysLit, sets = { mesh: [[], []], always: [[], []] };
   for (const wi of WINDOWS) {
+    const [pos, col] = sets[AL && AL(wi.x, wi.yb, wi.z) ? "always" : "mesh"];
     const h = Math.abs(Math.sin(wi.x * 12.9898 + wi.z * 78.233 + wi.yb * 3.17) * 43758.5453) % 1;
     if (h > share) continue;
     const k = 0.55 + 0.45 * ((h * 7.31) % 1), c = lin(0xffb45a).multiplyScalar(k), hw = wi.w / 2 - 0.02;
@@ -2457,10 +3124,12 @@ function windowGlow(share) {
     LIGHTS.push({ x: wi.x - wi.nx * 0.8, y: wi.yb + 0.2, z: wi.z - wi.nz * 0.8, color: 0xffb060, kind: "candle", power: 0.45 * k });
     LIGHTS.push({ x: wi.x + wi.nx * 0.6, y: my, z: wi.z + wi.nz * 0.6, color: 0xffb060, kind: "window", power: 0.3 * k });
   }
-  if (!pos.length) return;
-  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-  GLOW.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true }));
-  scene.add(GLOW.mesh); DRESS.push(GLOW.mesh);
+  for (const [k, [pos, col]] of Object.entries(sets)) {
+    if (!pos.length) continue;
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    GLOW[k] = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true }));
+    scene.add(GLOW[k]); DRESS.push(GLOW[k]);
+  }
 }
 // Small lanterns hung on alternate sides of a walkway's rails, every few metres.
 function bridgeLamps(A, B, o = {}) {
@@ -2485,6 +3154,8 @@ function nightLamps() {
     nearSolids(x, z, 1.2, near); if (near.some(s => s.type !== "surf" && s.y1 > y + 0.1 && s.y0 < y + 2.6)) continue;
     lantern(x, y, z);
   }
+  const AL = sc.alwaysLit;   // in a cave every light burns all day, and reaches the whole height of the chamber
+  if (AL) { for (const l of LIGHTS) if (AL(l.x, l.y, l.z)) l.always = l.tall = true; for (const f of FIRES) if (AL(f.x, f.y, f.z)) f.always = true; }
 }
 // A lantern by every house door that opens outdoors (huts have none).
 function doorLamps() {
@@ -2515,7 +3186,7 @@ function roomsOf() {
 function roomAt(x, y, z, ROOM) {
   const [c, r] = cellAt(x, z);
   if (inMap(c, r)) { const i = idx(c, r); for (const [a, b] of INDOOR[i]) if (y > a && y < b) return 1 + ROOM[i]; }
-  for (let k = 0; k < INDOOR_SHAPES.length; k++) { const s = INDOOR_SHAPES[k]; if (y > s.y0 && y < s.y1 && (x - s.x) ** 2 + (z - s.z) ** 2 < s.r * s.r) return 1e6 + k; }
+  for (let k = 0; k < INDOOR_SHAPES.length; k++) { const s = INDOOR_SHAPES[k]; if (inShape(s, x, y, z)) return 1e6 + (s.room ?? k); }
   return 0;
 }
 // Block light for one buffer: two colours per vertex, the fires' (always
@@ -2526,7 +3197,7 @@ function blockLighter() {
   const ROOM = roomsOf(), G = 10, grid = new Map();
   const Ls = LIGHTS.map(l => {
     const c = lin(l.color), R = l.reach || LIGHT_REACH[l.kind] || 7;
-    return { x: l.x, y: l.y, z: l.z, R, room: roomAt(l.x, l.y, l.z, ROOM), night: NIGHT_KINDS.has(l.kind), p: l.power || 1, cr: c.r, cg: c.g, cb: c.b };
+    return { x: l.x, y: l.y, z: l.z, R, room: roomAt(l.x, l.y, l.z, ROOM), night: NIGHT_KINDS.has(l.kind) && !l.always, tall: !!l.tall, p: l.power || 1, cr: c.r, cg: c.g, cb: c.b };
   });
   for (const L of Ls) for (let gx = Math.floor((L.x - L.R) / G); gx <= Math.floor((L.x + L.R) / G); gx++) for (let gz = Math.floor((L.z - L.R) / G); gz <= Math.floor((L.z + L.R) / G); gz++) { const k = gx + ":" + gz; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(L); }
   return b => {
@@ -2536,7 +3207,7 @@ function blockLighter() {
       const room = roomAt(fx, fy, fz, ROOM);
       for (const L of cand) {
         if (L.room !== room) continue;
-        if (room && (fy < L.y - 1.2 || fy > L.y + 2.8)) continue;
+        if (room && !L.tall && (fy < L.y - 1.2 || fy > L.y + 2.8)) continue;   // a storey, except in a cave's one tall room
         const out = L.night ? lamp : fire;
         for (let k = s; k < s + cnt; k++) {
           const dx = L.x - P[3 * k], dy = L.y - P[3 * k + 1], dz = L.z - P[3 * k + 2], d = Math.hypot(dx, dy, dz);
@@ -2728,16 +3399,17 @@ function finalize() {
     g.setAttribute("color", new THREE.Float32BufferAttribute(b.c, 3));
     g.setAttribute("sky", new THREE.BufferAttribute(sky, 1));
     g.setAttribute("fire", new THREE.BufferAttribute(fire, 3)); g.setAttribute("lamp", new THREE.BufferAttribute(lamp, 3));
-    const mesh = new THREE.Mesh(g, material(m)); mesh.castShadow = !ALPHA.has(m); mesh.receiveShadow = true; mesh.matrixAutoUpdate = false;
+    const mesh = new THREE.Mesh(g, material(m)); mesh.castShadow = !ALPHA.has(m); mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.userData.m = m;
     scene.add(mesh); STATIC.push(mesh);
   }
 }
 const STATIC = [];
 const fireMat = new THREE.MeshBasicMaterial({ color: 0xffa040 }), lampMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), torchMat = new THREE.MeshBasicMaterial({ color: 0xff8a3a });
+const lampOnMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), torchOnMat = new THREE.MeshBasicMaterial({ color: 0xff8a3a });   // in a cave: lit all day
 const FIREMESH = [];
 function buildDressing() {
   for (const f of FIRES) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.28 * f.s, 0.4 * f.s, 0.28 * f.s), f.lamp ? lampMat : f.torch ? torchMat : fireMat);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.28 * f.s, 0.4 * f.s, 0.28 * f.s), f.lamp ? (f.always ? lampOnMat : lampMat) : f.torch ? (f.always ? torchOnMat : torchMat) : fireMat);
     m.position.set(f.x, f.y + 0.2 * f.s, f.z); scene.add(m); FIREMESH.push({ m, f, ph: Math.random() * 6 });
     if (f.lamp) { const k = Math.min(1, f.s / 0.32), cage = new THREE.Mesh(new THREE.BoxGeometry(0.34 * k, 0.5 * k, 0.34 * k), new THREE.MeshStandardMaterial({ color: 0x2b2b2e, wireframe: true })); cage.position.copy(m.position); scene.add(cage); DRESS.push(cage); }
   }
@@ -2751,9 +3423,11 @@ function buildDressing() {
     water.rotation.x = -Math.PI / 2; water.position.set(W * NC / 2, wv.level, zc);
   }
   // far ground past the map's edge, so the land does not end in a cliff over nothing
-  const fv = env.far;
-  const far = add(new THREE.Mesh(new THREE.PlaneGeometry(900, 900, 120, 120), new THREE.MeshStandardMaterial({ color: lin(fv.color), roughness: 1 })));
-  far.rotation.x = -Math.PI / 2; far.position.set(W * NC / 2, fv.y, fv.zMin !== undefined ? fv.zMin + 450 : ROW * NR / 2);
+  for (const fv of [].concat(env.far)) { // one plane, or several bounded ones (a valley below, a range of peaks round a massif)
+    const x0 = fv.xMin ?? W * NC / 2 - 450, x1 = fv.xMax ?? W * NC / 2 + 450, z0 = fv.zMin ?? ROW * NR / 2 - 450, z1 = fv.zMax ?? (fv.zMin !== undefined ? fv.zMin + 900 : ROW * NR / 2 + 450);
+    const far = add(new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0, Math.max(1, Math.round((x1 - x0) / 7.5)), Math.max(1, Math.round((z1 - z0) / 7.5))), new THREE.MeshStandardMaterial({ color: lin(fv.color), roughness: 1 })));
+    far.rotation.x = -Math.PI / 2; far.position.set((x0 + x1) / 2, fv.y, (z0 + z1) / 2);
+  }
   for (const n of NPCS) scene.add(n.g);
   if (!marker.parent) scene.add(marker); marker.visible = STATE.view === "overview";
 }
@@ -2780,6 +3454,7 @@ function setTime(h) {
   hemi.intensity = 0.13 + 0.82 * day; hemi.color.copy(cA).lerp(new THREE.Color(0xffffff), 0.35);
   hemi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
   STATE.night = 1 - day;
+  for (const b of SUNBEAMS) b.material.opacity = b.userData.o * (1 - STATE.night);
   lampMat.color.set(STATE.night > 0.3 ? 0xffd9a0 : 0x6a655a); if (GLOW.mesh) GLOW.mesh.visible = STATE.night > 0.3;
   $("vDay").setAttribute("aria-pressed", STATE.night <= 0.5); $("vNight").setAttribute("aria-pressed", STATE.night > 0.5); torchMat.color.set(STATE.night > 0.3 ? 0xff8a3a : 0x2e2620);
   BLOCK.fire.value = 0.9 + 0.3 * STATE.night; BLOCK.lamp.value = 1.8 * clamp((STATE.night - 0.25) / 0.35, 0, 1);
@@ -2788,7 +3463,7 @@ function setTime(h) {
 }
 function assignLights() {
   const ex = STATE.view === "walk" ? P.x : ORB.tx, ez = STATE.view === "walk" ? P.z : ORB.tz;
-  const cands = LIGHTS.filter(l => !BAKED_ONLY.has(l.kind) && (!NIGHT_KINDS.has(l.kind) || STATE.night > 0.3)).map(l => [(l.x - ex) ** 2 + (l.z - ez) ** 2, l]).sort((a, b) => a[0] - b[0]);
+  const cands = LIGHTS.filter(l => !BAKED_ONLY.has(l.kind) && (!NIGHT_KINDS.has(l.kind) || l.always || STATE.night > 0.3)).map(l => [(l.x - ex) ** 2 + (l.z - ez) ** 2, l]).sort((a, b) => a[0] - b[0]);
   POOL.forEach((pl, i) => { const c = cands[i]; if (c && c[0] < 45 * 45) { pl.position.set(c[1].x, c[1].y, c[1].z); pl.color.set(c[1].color); pl.userData.base = (c[1].kind === "lamp" ? 1.2 : 1.6) * c[1].power; /* the baked light does the rest */ } else pl.userData.base = 0; });
 }
 
@@ -2829,7 +3504,8 @@ const KIT_LIST = [["straw", "Straw hut", "reed, thatch"], ["mud", "Mud hut", "co
   ["ashlar", "Ashlar", "cut stone"], ["clay", "Clay", "flat roof"], ["marble", "Marble", "columns"],
   ["sandstone", "Sandstone", "roof stair"], ["adobe", "Adobe dome", "mud brick"], ["igloo", "Igloo", "snow blocks"], ["granite", "Longhouse", "granite, turf"], ["ice", "Ice castle", "ice blocks"],
   ["treehouse", "Tree house", "kapok platform"], ["junglehut", "Kapok hut", "poles, leaves"], ["bridge", "Walkway", "planks, rope"], ["alder", "Stilt house", "alder, reed"],
-  ["whitewash", "Whitewash", "slate roof"], ["driftwood", "Driftwood", "grey boards"], ["pier", "Pier", "piles, planks"], ["cog", "Cog", "a ship to board"]];
+  ["whitewash", "Whitewash", "slate roof"], ["driftwood", "Driftwood", "grey boards"], ["pier", "Pier", "piles, planks"], ["cog", "Cog", "a ship to board"],
+  ["mound", "Mound house", "turf, limestone"], ["alpine", "Mountain house", "granite, slate"], ["rockroom", "Rock-cut room", "under a terrace"], ["carved", "Carved room", "in a cave wall"]];
 const narrow = () => matchMedia("(max-width:860px)").matches;
 function setTownOpen(open) { const t = document.querySelector(".town"); t.dataset.open = open; $("townToggle").textContent = open ? "Hide" : "Places"; $("townToggle").setAttribute("aria-expanded", open); }
 function fillList(which) {
@@ -3074,13 +3750,18 @@ function frame(now) {
   { // fog is set for walking; seen from above it would hide the settlement
     const f = (SCENES[SCENE] && SCENES[SCENE].env.fog) || [70, 330], o = STATE.view === "overview";
     scene.fog.near = o ? f[0] + ORB.dist * 0.9 : f[0]; scene.fog.far = o ? f[1] + ORB.dist * 1.8 : f[1];
+    const hide = SCENES[SCENE] && SCENES[SCENE].hideOver; // seen from above, a cave's roof is cut away
+    if (hide) for (const m of STATIC) m.visible = !(o && hide.includes(m.userData.m));
+    const dark = SCENES[SCENE] && SCENES[SCENE].darkFog; // inside a cave the air is dark, not the sky's colour
+    if (dark) { if (!o && dark(P.x, P.feet + EYE, P.z)) scene.fog.color.setHex(0x0b0c0f); else scene.fog.color.copy(scene.background); }
   }
   if (STATE.view === "walk") {
     camera.fov = 75; camera.near = 0.05;
     camera.position.set(P.x, P.feet + EYE, P.z);
     camera.rotation.set(P.pitch, -P.yaw - Math.PI / 2, 0);
     focus = new THREE.Vector3(P.x, P.feet, P.z);
-    sun.shadow.camera.left = sun.shadow.camera.bottom = -38; sun.shadow.camera.right = sun.shadow.camera.top = 38;
+    const sr = (SCENES[SCENE] && SCENES[SCENE].env.shadow) || 38;   // a cave's roof must shade all of it, or the sun lights its far end
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -sr; sun.shadow.camera.right = sun.shadow.camera.top = sr;
   } else {
     camera.fov = 50; camera.near = clamp(ORB.dist * 0.02, 0.5, 4); // depth precision where it is needed: far off
     const cp = Math.cos(ORB.pitch);

@@ -450,6 +450,111 @@ quay, terrain steps rather than stairs (on the engine's 1 m layers the beach
 would be one layer). Walking into the sea drops off the shelf, 0.6 m and then
 0.35 m, and the walker wades at half speed.
 
+### Mountain, cave and mound dwellings (ninth round)
+
+The owner, in the survey (T6): "ooh mountain or cave settlements need to be
+there too, no other planets for now, revise mockups with mountain dwellings
+please, and cave dwellers too! hobbit ground based houses or mounds would be
+cool too!" Three more settlements, each from its own biome's catalogue
+entry. None uses Sequoia's luminous sporewood caves, which belong to another
+planet.
+
+| settlement | biome's materials | buildings | new pieces |
+| --- | --- | --- | --- |
+| mountain village | mountains: blue slate, granite, scree, sparse snow, alpine lichen | granite houses under slate on terraces three layers apart, some with a back room cut into the rock behind; a switchback of outdoor stairs; a rope bridge over a gorge; a beacon brazier on the top terrace | a rock-cut room: cells under the upper terrace, with a rock ceiling one storey up |
+| cave dwellers | under the mountains: granite, basalt, slate | a chamber inside the mountain, entered by a tunnel from a cliff. Stone house fronts along its walls, rooms carved into the rock behind them, a gallery one storey up reached by an outdoor stair, a rope bridge over a chasm, an underground pool, and a shaft of daylight through one hole in the roof | a cave roof: a rock slab over the chamber at 12 m, with the mountain above it; it is the chamber's ceiling and dims its sky light |
+| mound houses | fields: olive pasture, warm dirt, limestone, oak, meadow flowers | houses dug into a green hillside: a turf dome 6.4 m across and 3 m high behind a limestone front with a round oak door and round windows, and a chimney through the turf. The largest has a second room through a short tunnel. Gardens and fences, a pond, and an oak with lanterns in it | a turf dome: the igloo's dome with its underside as the ceiling. You can stand wherever it is over 1.9 m, which is within 2.45 m of its middle. A ring of wall there makes the walker slide round the inside |
+
+**Lit like the rest.** The cave is lit only by its own fires: braziers along
+its paths, torches at doors, hearths in rooms and a fire pit in the chamber.
+The daylight shaft is its one opening. The mountain village has street
+lanterns on its terraces and the beacon. The mound houses have a lantern at
+every round door and lanterns hung in the oak.
+
+**Built (2026-09-27).** Three settlements join the menu: *Fields, mound
+houses*, *Mountains, cliff village* and *Mountains, cave dwellers*.
+
+- **Mound houses.** Nine houses under ten turf domes, each 3.2 m in radius and 3 m high. Each has a
+  limestone front 1.7 m from its middle, which is cut round a round door
+  2.2 m across and two round windows 0.66 m across with glazing bars.
+  - Inside is a board-lined vault on a plank floor. There is a limestone
+    hearth at the back, and its chimney comes up through the turf.
+  - The walker stands anywhere within 2.45 m of the middle, where the vault is
+    over 1.93 m. A ring of wall at 2.55 m makes it slide round the inside.
+  - The great smial has a back room 8.5 m east, through a vaulted tunnel 5.5 m
+    long, with walls to 1.3 m and the vault to 2.0 m.
+  - The houses sit in two rows. The second row stands 3 m up the hill, reached
+    by two flights of 16 risers cut into it. Each dome is dug in: the ground
+    behind it is raised one and two layers.
+  - Round the houses: gardens with fences, a pond with reeds, and the party oak
+    with five lanterns hung in it.
+- **Cliff village.** Five terraces 3 m apart, from the valley to a summit at
+  15 m, joined by five flights of 16 risers that alternate ends: the
+  switchback.
+  - Thirteen two-storey granite houses under slate stand against each
+    terrace's back.
+  - Two houses have a room cut into the rock behind them. It is two cells
+    under the terrace above, 2.6 m high under 0.4 m of rock, and the lane
+    above runs over it. An open door leads in from the house.
+  - A rope bridge 8.5 m long with 0.9 m of sag, lanterns on its rails, crosses
+    the gorge from rim to rim to the hermit's hut.
+  - The beacon stands on the summit.
+- **Cave town.** The chamber, up to 33 cells across and 15 rows deep (about 93 m by 37 m), is
+  under rock from 12 m up to the mountain's top at 16 to 23 m.
+  - The way in is a tunnel two cells wide and 3 m high, through a dressed
+    stone portal in a cliff 14 m high.
+  - Eight rooms are carved into the walls behind stone fronts, each with a
+    door, shuttered windows and a hearth. Two of them open off a gallery one
+    storey up, which is railed and reached by a flight of 16 risers.
+  - A rope bridge 5.7 m long crosses a chasm 16 m deep.
+  - A pool lies under a shaft that lets in a beam of daylight. Around it are a
+    plaza with a great fire, stalls and stalagmites.
+
+**What the mockup gained to do it:**
+- **Rock overhead.** A cell can carry rock from one height to another, such as
+  a cave roof or the rock over a rock-cut room. It collides as a column run and
+  is drawn wherever no neighbour covers it: its underside, the rock face over a
+  house front, round the shaft, above the tunnel's mouth.
+- **Rooms of any shape.** A room may be a dome cut by its front, or a tunnel,
+  and still dim its sky light and keep its block light in. Rooms joined by a
+  tunnel share one light.
+- **Lights that burn all day in a cave.** The game already has this rule:
+  `lamps-and-lanterns` decision 4 keeps torches, braziers, hanging lanterns and
+  candles always lit, and only post and wall lanterns dusk-lit. The mockup
+  follows it inside the cave. The cave's lights also reach the chamber's whole
+  height, not one storey.
+- **A cut-away overview.** The cave's roof is hidden in the overview, so the
+  town shows from above. The air inside is dark, not the sky's colour. The sun's
+  shadow covers the whole chamber, so no daylight reaches its far end through
+  the rock.
+
+**Walked the same way.** Every new route was scripted and measured with
+the proposed walker. Each has no airborne tick and no eye jump over 0.1 m,
+and ends within 0.3 m of its goal:
+
+| route | height climbed | airborne ticks | eye jumps |
+| --- | ---: | ---: | ---: |
+| The lane, through the smial's round door, round the room, through the tunnel into the back room | 0 | 0 | 0 |
+| The lane, up the steps cut into the hill, through a hill house's round door | 3 m | 0 | 0 |
+| The valley, up all five switchbacks, to the beacon | 15 m | 0 | 0 |
+| A house's front door, through its open back door, into the rock-cut room | 0 | 0 | 0 |
+| Over the gorge on the rope bridge | 0.9 m down and up | 0 | 0 |
+| Outside, through the portal and the tunnel, up the gallery stair, into a gallery house | 3 m | 0 | 0 |
+| The gallery, down the stair, over the chasm on the rope bridge, into a carved house | 3 m down | 0 | 0 |
+
+Two layout bugs were found by these walks and fixed:
+- **The bridges sagged into steps.** Both rope bridges first ran from cell
+  middle to cell middle, so the sag left each far end 0.39 m below the ground.
+  They now run rim to rim.
+- **The door was out of reach.** A mound house's "go to" spot was 2.4 m from
+  its door, beyond the 2.6 m the door can be reached from once the walker
+  stops. It is now 2.0 m.
+
+The seven earlier settlements' scripted walks (the walled town, the village
+and the harbour) return identical results on the old and new pages in the same
+sitting. Their screenshots differ from the old page by less than the old page
+differs from itself.
+
 ## 11. No two faces in one plane
 
 The owner found a window sill flickering against the wall under it. A sill ran

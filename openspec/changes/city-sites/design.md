@@ -48,9 +48,11 @@ See `proposal.md` for why. What the design has to work with, observed on
   sites. The list keeps each site's id stable so one can.
 - **Settlements on other bodies.** The airless bodies are lifeless
   (CLAUDE.md), and no other body has terrain that would hold one.
-- **Mountain settlements** (a monastery, a mine), and **Ocean settlements** (a
-  stilt town on the shelf). There is no designed settlement for either.
-  `tenebris-towns` would design one first.
+- **Mountain settlements**, and **Ocean settlements** (a stilt town on the
+  shelf). `tenebris-towns` has now designed two mountain settlements in its
+  ninth mockup round, a cliff village and a cave town. Whether this change
+  places them waits on the owner's answer to survey T12, and a cave town's
+  chamber on T13. Until then they stay out. No ocean settlement is designed.
 - **Moving the spawn.** The spawn stays where it is. A small town is placed
   near it instead (survey C2 and C3).
 

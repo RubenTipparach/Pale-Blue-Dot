@@ -41,12 +41,14 @@
       11).
 - [x] The owner's answers to the proposal's questions (survey, 2026-09-27),
       recorded in the proposal.
-- [ ] Ninth round, on the owner's word (T6): mountain dwellings cut into a
-      slope, cave dwellers in a cave system, and mound houses dug into the
-      ground under turf, each from its own biome's materials. All are lit at
-      night and every route is walked, as in the rounds before. Verify: each
-      new settlement loads with no page errors and no roof overlaps, and every
-      new route has no airborne tick and no eye jump over 0.1 m.
+- [x] Ninth round, on the owner's word (T6): mound houses dug into a hill
+      under turf, a cliff village on five terraces with rooms cut into the
+      rock, and a town in a chamber inside a mountain, each from its own
+      biome's materials and lit at night (the cave lit only by its own fires,
+      day and night). All three load with no page errors and no roof
+      overlaps. Seven new routes were walked with no airborne tick and no eye
+      jump over 0.1 m, and every earlier walk reruns unchanged (design
+      section 10, the ninth round).
 - [ ] A parity list of everything in the mockup and where the game builds it
       (`docs/plans/towns-mockup-parity.md`). Verify: every row names a change
       and a task, or an exclusion the owner has agreed to.

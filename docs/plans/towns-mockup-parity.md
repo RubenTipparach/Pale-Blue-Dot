@@ -32,7 +32,9 @@ ask.
 | Jungle: platforms in three kapok trunks at 8 m, a stair tower of poles, rope bridges, kapok huts, buttress roots | `tenebris-towns` 3c | planned |
 | Swamp: alder stilt houses with decks and porch stairs, boardwalks on piles, a jetty, reeds | `tenebris-towns` 3c | planned |
 | Fishing harbour: piers, finger piers, pier head, mole with a light, boathouses, shipyard slip, fish huts on stilts, fish market, terraces with street steps | `tenebris-towns` 3c, 3d | planned |
-| Mountain dwellings, cave dwellers and mound houses (the owner, T6) | `tenebris-towns` task 0, ninth mockup round, then 3c | planned |
+| Mound houses in the fields (the owner, T6): nine houses under turf domes dug into a hill, the great smial with a back room through a tunnel, gardens, a pond, the party oak | `tenebris-towns` 3c; placed as a fields settlement by `cities-in-the-world` | planned |
+| Cliff village (T6): five terraces 3 m apart joined by a switchback of stairs, granite houses under slate, rooms cut into the rock, a rope bridge over a gorge, a beacon | `tenebris-towns` 3c; on the map only if survey T12 says so | ask |
+| Cave town (T6): a chamber inside a mountain entered by a tunnel, carved houses, a gallery, a chasm bridge, a pool under a daylight shaft | `tenebris-towns` 3c; on the map per survey T12, its chamber per survey T13 | ask |
 | Each settlement from its own biome's materials and plants | `tenebris-towns` 3c | planned |
 
 ## Buildings and pieces
@@ -45,7 +47,9 @@ ask.
 | Windows with sills proud of the wall, and thresholds in every doorway | `tenebris-towns` 4 (trim) | planned |
 | Straight flight, newel stair, street steps, porch stair, outdoor roof stair | `tenebris-towns` 3 | planned |
 | Gable, pyramid, cone, flat with parapet, turf, dome roofs; chimneys; marble columns | `tenebris-towns` 3, 3b | planned |
-| 19 kits: straw, mud, timber, half-timber, three bricks, fieldstone, ashlar, clay, marble, whitewash, driftwood, sandstone, adobe dome, granite longhouse, ice, alder stilt house, kapok hut | `tenebris-towns` 3b | planned |
+| Turf dome cut by a limestone front, with a round door, round windows and a chimney through the turf; a vaulted tunnel between two domes | `tenebris-towns` 3b, built as the igloo and adobe domes are | planned |
+| Rock overhead: a room cut under a terrace, a cave roof, a shaft to the sky | `tenebris-towns` 3c; a cave's chamber per survey T13 | ask |
+| 21 kits: straw, mud, timber, half-timber, three bricks, fieldstone, ashlar, clay, marble, whitewash, driftwood, sandstone, adobe dome, granite longhouse, ice, alder stilt house, kapok hut, mound house, mountain house (granite under slate) | `tenebris-towns` 3b | planned |
 | Decks on piles, rope bridges with sag, boardwalks, jetties, piers, gangplanks, rails, fences | `tenebris-towns` 3c | planned |
 | Furniture: tables, benches, beds, chests, shelves, barrels, crates, hearths, anvil; stood clear of walls | `tenebris-towns` 4 | planned |
 | Market stalls, smithy shed, net and fish racks, lobster pots, crops, fire pits | `tenebris-towns` 3c | planned |
@@ -70,7 +74,9 @@ ask.
 | Lanterns by every outside door, facade lanterns spaced by settlement size, street lanterns | `lamps-and-lanterns` 5; `cities-in-the-world` 5.2 | planned |
 | About half the windows lit, a candle in the room behind each | `cities-in-the-world` 5.1 | planned |
 | Small lanterns on the jungle's rope bridges | `lamps-and-lanterns` 5; `cities-in-the-world` 5.2 | planned |
-| Torches, braziers, forge, fire pits, per biome | `lamps-and-lanterns` 5 | planned |
+| Torches, braziers, forge, fire pits, per biome; a beacon on the mountain summit | `lamps-and-lanterns` 5 | planned |
+| In a cave every light burns all day and reaches the chamber's full height | `lamps-and-lanterns` decision 4 already keeps torches, braziers and hanging lanterns always lit. Outdoors the mockup lights them at dusk instead; the game's rule wins | planned |
+| A beam of daylight down a cave's shaft | the game's sky light through the open cell; the beam itself is `tenebris-towns` 4 (trim) | planned |
 | Flames that flicker | `tenebris-towns` 4 (moving parts) | planned |
 | A dim moon, so the lamps read | the game's ambient floor, kept dim by `lamps-and-lanterns` | planned |
 | Day and night: a time-of-day slider, Day and Night buttons, L | `lamps-and-lanterns` 4.3: a time control on the pause panel | planned |
@@ -102,7 +108,7 @@ ask.
 | --- | --- | --- |
 | Walk view (V) | the game's first-person walking | built |
 | Overview camera: orbit by drag, pan along its heading (right-drag, WASD, two fingers), zoom, double-click to walk there | `player-building` 4.5: the build camera | planned |
-| Cutaway height in the overview | `player-building` 4.5 | planned |
+| Cutaway height in the overview; a cave's roof cut away in the overview | `player-building` 4.5 | planned |
 | Places list: go to a named place | `world-map` 5.4: a site's named places on the map, and "go there" in debug | planned |
 | Kits tab: every kit side by side | `player-building` 4.1: the palette's kit picker | planned |
 | Collision view (C) | `tenebris-towns` 4 (debug keys) | planned |
