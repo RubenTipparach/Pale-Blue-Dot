@@ -148,6 +148,12 @@ answered two more (questions 3 and 4 of the original nine):
 | T5 | Which kits, where | "all, and yes you can steal from people lol, but there will be consequences." | All kits, placed by wealth. Stealing from townsfolk, and their reaction, is a later change after the roadmap |
 | T6 | Settlements per biome | "ooh mountain or cave settlements need to be there too, no other planets for now, revise mockups with mountain dwellings please, and cave dwellers too! hobbit ground based houses or mounds would be cool too!" | A ninth mockup round adds mountain dwellings, cave dwellers and mound houses (task 0). Tenebris only |
 | T7 | Boats | "Yup, you can use any boat you find." | Every harbour boat is a usable craft (`cities-in-the-world` task 4.2b) |
+| T8 | Sprint and Shift | "caps to toggle sprint off, shift to sprint, run at 5 ms, sprint at 8ms, walk at 3 ms, ctrl is crouch 1 ms" | Run 5 m/s, sprint 8 on Shift, walk 3, crouch 1 on Ctrl (design section 4, task 2). What Caps Lock toggles is survey T8b; whether the walker still walks under a roof is T8c |
+| T9 | Can the cog be sailed | "YES" | The cog sails with you walking on its deck, as its own change after the roadmap (`sail-the-cog`), which was the recommended timing |
+| T10 | Touch controls | "this isnt even a question, we're building a desktop game, no need for this nonsense." | Mockup only. The game has no touch controls |
+| T11 | The T walker toggle | "drop" | Not in the game. The mockup keeps it for comparing, and the videos show the difference |
+| T12 | Mountain settlements on the map | "recommended" | `city-sites` places cliff villages and cave towns |
+| T13 | Where a cave town's chamber comes from | "recommended" | The town's stored record holds its hollows, and the ground is generated from it (`cities-in-the-world` decision 3) |
 | 3 | Hand-made or generated | the roadmap: both | `city-sites` generates them, and the owner's overrides pin and strike |
 | 4 | Can the player build with the pieces | the roadmap: yes | `player-building` |
 

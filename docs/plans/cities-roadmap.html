@@ -185,15 +185,15 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 <header>
   <div class="eyebrow">Pale Blue Dot &middot; OpenSpec plan &middot; 27 September 2026</div>
   <h1>The road to Tenebris cities</h1>
-  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Twelve OpenSpec changes, each written up and waiting for <span class="mono">/opsx:apply</span>. Every step ends in a video you watch before the next one starts.</p>
+  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Thirteen OpenSpec changes, each written up and waiting for <span class="mono">/opsx:apply</span>. Every step ends in a video you watch before the next one starts.</p>
   <blockquote>
     step 1 implement lights, step 2 implement cities, step 3 implement ways for me to make cities. as a player I want to be able to put together these buildings myself &hellip; So map with cities first mocked up, then I will approve.
     <cite>the owner, 27 September 2026</cite>
   </blockquote>
   <div class="facts">
-    <div><b>12</b><span>changes written</span></div>
-    <div><b>181</b><span>tasks open</span></div>
-    <div><b>10</b><span>video gates, each beside the prototype</span></div>
+    <div><b>13</b><span>changes written</span></div>
+    <div><b>224</b><span>tasks open</span></div>
+    <div><b>11</b><span>video gates, each beside the prototype</span></div>
     <div><b>0</b><span>lines of game code changed</span></div>
   </div>
   <div class="links">
@@ -248,6 +248,10 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="stop" role="listitem"><div class="dot">3</div><div class="name">You build them</div><div class="id">player-building</div></div>
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">building accepted</div></div>
+      <div class="leg"></div>
+      <div class="stop" role="listitem"><div class="dot">4</div><div class="name">Sail the cog</div><div class="id">sail-the-cog</div></div>
+      <div class="leg"></div>
+      <div class="gate"><div class="diamond"></div><div class="lbl">cog accepted</div></div>
     </div>
   </div>
   <div class="key"><span><i class="k-stop"></i>a step: one change, or several built together</span><span><i class="k-gate"></i>a gate: you watch its video and approve before the next step starts</span><span>A step with a mockup also stops at the mockup's video, before any code. Every gate video plays the prototype beside the game.</span></div>
@@ -326,7 +330,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">0b</div>
         <div class="mono">step-videos</div>
-        <div class="tasks">9 tasks</div>
+        <div class="tasks">10 tasks</div>
       </div>
       <div class="step-main">
         <h3>A video at every gate</h3>
@@ -353,7 +357,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">1</div>
         <div class="mono">lamps-and-lanterns</div>
-        <div class="tasks">21 tasks</div>
+        <div class="tasks">22 tasks</div>
       </div>
       <div class="step-main">
         <h3>Lights you place, and lights that come on at dusk</h3>
@@ -380,7 +384,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">1b</div>
         <div class="mono">climate-balance</div>
-        <div class="tasks">11 tasks</div>
+        <div class="tasks">13 tasks</div>
         <div class="with">placement: survey K3</div>
       </div>
       <div class="step-main">
@@ -407,7 +411,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2a</div>
         <div class="mono">world-map</div>
-        <div class="tasks">20 tasks</div>
+        <div class="tasks">21 tasks</div>
       </div>
       <div class="step-main">
         <h3>A 2D map on M, with a live layer</h3>
@@ -462,7 +466,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2a</div>
         <div class="mono">world-persistence</div>
-        <div class="tasks">16 tasks</div>
+        <div class="tasks">14 tasks</div>
         <div class="with">before anything stores new state</div>
       </div>
       <div class="step-main">
@@ -492,15 +496,15 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2b</div>
         <div class="mono">city-sites</div>
-        <div class="tasks">14 tasks</div>
+        <div class="tasks">15 tasks</div>
       </div>
       <div class="step-main">
         <h3>Where the towns go</h3>
-        <p>The seven settlements from the towns mockup, placed on the planet by rules every machine agrees on, with your own pins on top.</p>
+        <p>The settlements from the towns mockup, placed on the planet by rules every machine agrees on, with your own pins on top.</p>
         <div class="cols">
           <div class="col"><h4>What you get</h4><ul>
-            <li>About fifty sites to start with. Fields get walled towns and villages; desert, tundra, jungle and swamp each get their own settlement; harbours go where beach meets fields.</li>
-            <li>Every site on flat, dry ground, away from the twelve pentagons, and spaced apart.</li>
+            <li>About fifty sites to start with. Fields get walled towns and villages; desert, tundra, jungle and swamp each get their own settlement; harbours go where beach meets fields; the mountains get cliff villages and cave towns (T12).</li>
+            <li>Every site on flat, dry ground, away from the twelve pentagons, and spaced apart. The two mountain kinds are found by their rock instead: a rise of 9 to 25 m for a cliff village, and 16 m of rock over a cave town&rsquo;s chamber.</li>
             <li>A name for each, from its people's syllables.</li>
             <li>Your pins, strikes and names in <span class="mono">assets/config/sites.ron</span>.</li>
             <li>A small town near where you start, and the capital on another land mass (C2, C3).</li>
@@ -546,7 +550,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2d</div>
         <div class="mono">cities-in-the-world</div>
-        <div class="tasks">19 tasks, plus 27 in tenebris-towns</div>
+        <div class="tasks">23 tasks, plus 30 in tenebris-towns</div>
       </div>
       <div class="step-main">
         <h3>Towns you can walk into</h3>
@@ -558,8 +562,8 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>Street lanterns and about half the windows lit at dusk. From orbit at night, every town is a cluster of lights.</li>
             <li>No pop-in: towns fade in and out as terrain detail does.</li>
             <li>An abandoned house goes dark: the first piece of towns that change over time.</li>
-            <li>Any boat in a harbour can be used (T7), and at night city lights light the far terrain under them (C3).</li>
-            <li>Mound houses in the fields, now in the mockup (T6). The cliff village and the cave town are in the mockup too; whether the map places them, and how a cave town gets its chamber, are survey questions T12 and T13.</li>
+            <li>Any boat in a harbour can be used (T7), and at night city lights light the far terrain under them (C3). The cog sails in its own change after the roadmap (T9).</li>
+            <li>Mound houses in the fields, a cliff village and a town inside a mountain, all in the mockup (T6). The map places the mountain two (T12), and a cave town digs its own chamber when it is made, saved with the town, so the rock never grows back (T13).</li>
           </ul></div>
           <div class="col"><h4>Decided</h4><ul>
             <li>A layout is charted onto the planet through the neighbour tables. Sites avoid pentagons, so the grid is a true hex grid there.</li>
@@ -602,7 +606,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">3</div>
         <div class="mono">player-building</div>
-        <div class="tasks">15 tasks</div>
+        <div class="tasks">17 tasks</div>
       </div>
       <div class="step-main">
         <h3>You build them</h3>
@@ -625,12 +629,39 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       </div>
     </article>
 
+    <article class="step" id="cog">
+      <div class="step-side">
+        <div class="step-no">4</div>
+        <div class="mono">sail-the-cog</div>
+        <div class="tasks">12 tasks</div>
+        <div class="with">after the roadmap: T9</div>
+      </div>
+      <div class="step-main">
+        <h3>Sail the cog, and walk its deck while it sails</h3>
+        <p>You said yes to sailing the big ship (T9). Today nothing that moves can be stood on: the walker stands only on terrain, a passenger is parked at the seat, and a local frame can move but not turn.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>The harbour's cog as a craft: a square sail on a yard, a keel and a stern rudder, floating by the same hull model as the Tern.</li>
+            <li>F at the tiller takes the helm; F again lets go, and the ship sails on while you walk the deck, climb to the aftcastle, or go over the side.</li>
+            <li>Quit on the deck and you load on the deck.</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>A walker on the deck lives in the ship&rsquo;s own frame, which can now turn, so the ship&rsquo;s turn carries you and you do not slide.</li>
+            <li>The deck is the ship piece from <span class="mono">tenebris-towns</span>, asked in the ship&rsquo;s frame by the same ground query the towns use.</li>
+            <li>No other players aboard, crew, cannon or cargo in this change.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video beside the prototype.</b> Up the gangplank, casting off and taking the helm, a reach, then letting go and walking to the aftcastle while the ship turns, and over the side, each beside the mockup&rsquo;s cog.</div></div>
+        <div class="foot"><div class="chips"><span class="chip">player/vehicles</span><span class="chip">player/walking</span><span class="chip">world/frames</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/sail-the-cog">Read the change</a></div>
+      </div>
+    </article>
+
   </div>
 </section>
 
 <section aria-labelledby="parity-h">
   <h2 id="parity-h">Everything in the towns mockup</h2>
-  <p>Every feature of the towns mockup has a row in the <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/blob/claude/medieval-city-html-mockup-8692xs/docs/plans/towns-mockup-parity.md">parity list</a>, naming the change and task that builds it. Of 62 rows, 3 are already in the game (wading, jumping and the walk view), 53 are planned, and 6 wait on survey round 2: the cog sailing, the touch controls, the walker toggle, and the cliff village, cave town and rock overhead (T12, T13). The towns gate is not passed while any row is planned or waiting on an answer, and each row is closed by a video shot beside the same shot in the prototype.</p>
+  <p>Every feature of the towns mockup has a row in the <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/blob/claude/medieval-city-html-mockup-8692xs/docs/plans/towns-mockup-parity.md">parity list</a>, naming the change and task that builds it. Of 62 rows, 3 are already in the game (wading, jumping and the walk view), 57 are planned, and 2 stay in the mockup with your agreement: the touch controls (T10) and the key that swaps in today&rsquo;s walker (T11). The cog sailing is planned in its own change after the roadmap (T9). The towns gate is not passed while any row is planned or waiting on an answer, and each row is closed by a video shot beside the same shot in the prototype.</p>
 </section>
 
 <section aria-labelledby="found-h">
@@ -648,6 +679,8 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
         <tr><td>No lighting requirement is in the main specs, and two lighting changes are half open.</td><td>openspec/</td><td>lamps-and-lanterns, first group</td></tr>
         <tr><td>Fields are about 59% of the land. Desert, jungle and swamp are a few percent each.</td><td>distribution_report</td><td>bigger-biomes</td></tr>
         <tr><td>The shipped atmosphere cools the sea to a mean of &minus;23.5 &deg;C by day 200.</td><td>fish_ranges log</td><td>climate-balance: the sun holds 15 &deg;C</td></tr>
+        <tr><td><strong>The freeze is a leak at every coast.</strong> The heat spread between cells moves temperature, not heat, and a sea cell holds 60 times the heat of a land cell. With the land colder than the sea, the planet loses 600 to 1,000 W/m&sup2; this way, four to seven times all the sunlight it absorbs. With the clouds alone retuned, it still settles near &minus;10 &deg;C.</td><td>heat_budget, the sweep</td><td>climate-balance: the spread trades heat</td></tr>
+        <tr><td>Nothing that moves can be stood on. The walker stands only on terrain, and a local frame can move but not turn.</td><td>walking.rs, frame.rs</td><td>sail-the-cog</td></tr>
       </tbody>
     </table>
   </div>

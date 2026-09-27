@@ -5,9 +5,12 @@
 **The owner (2026-09-27): "step 2 is big, we'll first need to designate
 cities on a map ... So map with cities first mocked up, then I will approve."**
 
-`tenebris-towns` designed seven settlements: the walled town, the village, and
-the desert, tundra, jungle, swamp and harbour settlements. Each is built from
-its own biome's materials. None of them has anywhere to stand yet: the engine
+`tenebris-towns` designed nine settlements: the walled town, the village, the
+desert, tundra, jungle, swamp and harbour settlements, and two in the mountains,
+a cliff village and a town inside a mountain. Each is built from its own
+biome's materials. The owner, on whether the map places the mountain two
+(survey T12, 2026-09-27): **"recommended"**, which is "add both as site kinds
+now". None of them has anywhere to stand yet: the engine
 has no settlements and no notion of where one could go.
 
 Before a town is built into the ground (`cities-in-the-world`), the planet
@@ -27,16 +30,17 @@ needs a list of places. That list must be:
   - flat enough for the settlement's footprint;
   - no pentagon under or beside it;
   - a harbour on a shelving coast.
-- **A site has a kind, chosen by its biome.** Its kind is one of the seven
+- **A site has a kind, chosen by its biome.** Its kind is one of the nine
   settlements of `tenebris-towns`:
   - fields: walled town or village;
   - desert: desert town;
   - tundra: tundra camp;
   - jungle: jungle village;
   - swamp: swamp village;
-  - the beach where it meets fields: harbour.
+  - the beach where it meets fields: harbour;
+  - mountains: cliff village or cave town (T12).
 
-  Mountains and open ocean get none.
+  Open ocean gets none.
 - **A site has a name**, drawn from name tables for its biome's people. It is
   stable for the life of the world and unique on the planet.
 - **An authored list the owner controls.** `assets/config/sites.ron` holds the

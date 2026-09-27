@@ -54,3 +54,18 @@ step height.
 #### Scenario: Jumping indoors
 - **WHEN** the walker jumps under a 2.8 m ceiling
 - **THEN** the head stops at the boards
+
+### Requirement: The walker runs, sprints and crouches at the owner's speeds
+The walker SHALL run at 5 m/s by default, sprint at 8 m/s while Shift is held,
+walk at 3 m/s, and crouch at 1 m/s while Ctrl is held. A crouched walker's
+body SHALL be 1.2 m tall, and it SHALL stay crouched while the ceiling over it
+is lower than a standing body.
+
+#### Scenario: Each gait on flat ground
+- **WHEN** the walker runs, sprints, walks and crouches across flat ground
+- **THEN** its speed is 5, 8, 3 and 1 m/s
+
+#### Scenario: Crouching under a beam
+- **WHEN** a crouched walker moves under a beam 1.5 m up and Ctrl is let go
+- **THEN** it passes under, where a standing walker is stopped, and stays
+  crouched until there is room to stand

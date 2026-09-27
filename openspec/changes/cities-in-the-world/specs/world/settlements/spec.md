@@ -21,7 +21,9 @@ every piece SHALL be cut from its own cell's corners.
 ### Requirement: A settlement is fitted to its ground
 
 Inside a settlement's footprint, the ground SHALL stand at the layout's
-terrace layers. Between the footprint and the natural ground, a margin SHALL
+terrace layers. Where the layout has a hollow (a cave town's chamber, tunnel
+and rooms, a cliff village's rock-cut rooms), the column SHALL be empty
+between the hollow's floor and roof, and solid above and below it. Between the footprint and the natural ground, a margin SHALL
 ease the surface so no step up or down is more than one layer from cell to
 cell. The trees and ground clutter inside the footprint SHALL be cleared,
 except the layout's own plants.
@@ -35,6 +37,15 @@ except the layout's own plants.
 
 - **WHEN** the cells of a town's streets and plots are checked
 - **THEN** none carries a generated tree or a clutter blade
+
+#### Scenario: A cave town's chamber
+
+- **WHEN** the columns under a cave town's chamber are generated
+- **THEN** each is solid below the chamber's floor, empty up to its roof, and
+  solid from the roof to the mountain's own surface, except the shaft's one
+  cell, which is open to the sky
+- **AND** the chamber is read from the town's stored record, with no edit
+  written for it
 
 ### Requirement: Two settlements of a kind are different towns
 

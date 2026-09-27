@@ -68,9 +68,13 @@
 - [ ] The body is pushed out of thin solids and too-tall column faces along
       the face, keeping the tangential motion; headroom stays a hard stop.
 - [ ] Hold a grounded walker to a floor up to 0.35 m below.
-- [ ] Walking and running (the owner, T1): walk at 2.5 m/s under a roof or
-      while Shift is held, and run at 8 m/s otherwise. Sprint is settled by
-      survey question T8.
+- [ ] Speeds, sprint and crouch (the owner, T1 and T8): run at 5 m/s by
+      default, sprint at 8 m/s while Shift is held, walk at 3 m/s, crouch at
+      1 m/s while Ctrl is held, with the body 1.2 m tall. What Caps Lock
+      toggles waits on survey T8b, and whether the walker still walks under
+      a roof waits on T8c. Verify: a test of each speed on flat ground, and
+      that a crouched walker passes under a 1.5 m beam a standing one cannot,
+      and stays crouched under it when Ctrl is let go.
 - [ ] Tests mirroring design section 5: up and down each stair with no eye
       jump over 0.1 m and no airborne tick; a shallow wall brush slides; a
       closed door stops; a table is not stepped onto; a jump indoors stops at
@@ -134,7 +138,9 @@
       passes while it bobs.
 - [ ] The mockup's inspection tools as debug keys in the game: a collision
       view (C in the mockup), flying through walls (N), and a readout of
-      feet height, cell, headroom, speed and eye jumps. Verify: each is
+      feet height, cell, headroom, speed and eye jumps. Not the T key, which
+      swaps in today's walker: the owner dropped it (T11), since the
+      side-by-side videos show the difference. Verify: each is
       listed in the controls under debug, and a capture of the collision view
       in the walled town.
 

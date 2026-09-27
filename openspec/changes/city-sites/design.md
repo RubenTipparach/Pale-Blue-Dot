@@ -6,14 +6,16 @@ See `proposal.md` for why. What the design has to work with, observed on
 `main` and in the planned changes (2026-09-27):
 
 - **The settlements are designed, not built.** `tenebris-towns` (its design
-  section 10 and the `docs/mockups/towns.html` prototype) has seven kinds. Each
+  section 10 and the `docs/mockups/towns.html` prototype) has nine kinds. Each
   takes its materials from one biome and no other:
   - walled town and village (fields);
   - desert town;
   - tundra camp;
   - jungle village;
   - swamp village;
-  - fishing harbour (beach, with the fields behind).
+  - fishing harbour (beach, with the fields behind);
+  - cliff village and cave town (mountains; the ninth mockup round, placed
+    on the map at the owner's word, survey T12).
 
   The walled town is laid out on 50 × 34 cells, about 142 × 83 m. The harbour
   is laid out from the sea up: twelve rows of water shelving from 4 m to
@@ -48,11 +50,8 @@ See `proposal.md` for why. What the design has to work with, observed on
   sites. The list keeps each site's id stable so one can.
 - **Settlements on other bodies.** The airless bodies are lifeless
   (CLAUDE.md), and no other body has terrain that would hold one.
-- **Mountain settlements**, and **Ocean settlements** (a stilt town on the
-  shelf). `tenebris-towns` has now designed two mountain settlements in its
-  ninth mockup round, a cliff village and a cave town. Whether this change
-  places them waits on the owner's answer to survey T12, and a cave town's
-  chamber on T13. Until then they stay out. No ocean settlement is designed.
+- **Ocean settlements** (a stilt town on the shelf). None is designed. The
+  mountains' two are in (survey T12).
 - **Moving the spawn.** The spawn stays where it is. A small town is placed
   near it instead (survey C2 and C3).
 
@@ -79,9 +78,12 @@ See `proposal.md` for why. What the design has to work with, observed on
   | jungle village | 35 m | 10 m | 700 m | 6 |
   | swamp village | 35 m | 3 m | 700 m | 3 |
   | harbour | 60 m | beach to 12 m | 1,500 m | 6 |
+  | cliff village | 50 m | a rise of 9 to 25 m | 1,500 m | 4 |
+  | cave town | 50 m | rock 16 m or more over the chamber | 2,500 m | 2 |
 
   The jungle's limit is loose because it is built on platforms. The swamp's
-  is tight because its houses stand on stilts over the water.
+  is tight because its houses stand on stilts over the water. The mountain
+  two are the opposite of flat, and decision 5 screens them by their rock.
 
 **2. The rules screen coarsely, and each site is checked fully when it is
 kept.**
@@ -114,12 +116,13 @@ kept.**
   stands where the fish maps show the inshore fish.
 
 **4. Names come from tables per people, seeded by the id.**
-- `sites.ron` holds syllable tables for five peoples:
+- `sites.ron` holds syllable tables for six peoples:
   - the fields and harbour folk;
   - the desert people;
   - the tundra people;
   - the jungle people;
-  - the swamp people.
+  - the swamp people;
+  - the mountain people (survey T12).
 
   Each has onsets, nuclei, codas and kind-specific suffixes (a "-ford" for a
   village on a river, a "-haven" for a harbour).
@@ -155,6 +158,25 @@ kept.**
   footprint outline is drawn as a circle through `geo`'s projection.
 - The site list is built on the async pool and is ready before the map can be
   opened. Until it is, the legend shows the layer as "surveying".
+
+**5. The mountain kinds are found by their rock, not their flatness** (the
+owner, survey T12: add both now).
+- **A cliff village** needs ground that climbs through its terraces. The
+  mockup's village climbs 15 m in five terraces 3 m apart over about 70 m. Its
+  screen samples the footprint along the downhill direction at the centre.
+  The surface must rise between 9 and 25 m across the footprint, and never
+  by more than 6 m between two samples 10 m apart (a sheer drop cannot be
+  terraced). The downhill side must be dry: it is where its lanes face.
+- **A cave town** needs a mass of rock over its chamber, and a face to enter
+  it from. The mockup's chamber is up to 93 by 37 m, 10 m high, under rock 4 m
+  thick or more. Its screen needs the surface at least 16 m above the
+  entrance's level over the whole chamber. Within 30 m of the chamber's edge,
+  the ground must fall to the entrance's level, which is where the tunnel's
+  mouth goes. The chamber itself is not in the terrain. The town makes it
+  (`cities-in-the-world` decision 3, survey T13), so the screen asks only
+  that there be rock to make it in.
+- Both are in the Mountains biome, and no other kind may stand there.
+- A sixth name table, for the mountain people, joins the other five.
 
 ## Risks / Trade-offs
 

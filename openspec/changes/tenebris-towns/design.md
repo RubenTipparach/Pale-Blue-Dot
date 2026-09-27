@@ -178,6 +178,35 @@ Unchanged: the 1.05 m step for terraces, which walls and furniture do not get
 (a walker does not step onto a table), and the MAX floor / MIN ceiling
 footprint.
 
+### Speeds, sprint and crouch (the owner, T1 and T8)
+
+The owner, first (T1): "8 is running, 2.5 is walking. slow automatically when
+indoors or if I hold shift". Then, asked how that sits with today's sprint
+(T8): **"caps to toggle sprint off, shift to sprint, run at 5 ms, sprint at
+8ms, walk at 3 ms, ctrl is crouch 1 ms"**.
+
+| gait | speed | key |
+| --- | ---: | --- |
+| run | 5 m/s | the default |
+| sprint | 8 m/s | Shift, held |
+| walk | 3 m/s | see below |
+| crouch | 1 m/s | Ctrl, held |
+
+- **Crouch** also lowers the body, so it fits where a standing walker does
+  not. Proposed, to be tried in the mockup first:
+  - the body 1.2 m tall and the eye at 1.0 m, from 1.8 m and 1.6 m;
+  - letting go of Ctrl under a ceiling lower than 1.8 m keeps the walker
+    crouched until there is room.
+- **Two things are not settled, and are asked again:**
+  - which gait Caps Lock toggles (survey T8b). The recommendation reads
+    "toggle sprint off" as turning the run down to a walk, with Shift
+    sprinting over either. The other readings are a sprint lock-out and a
+    sprint lock-on;
+  - whether the walker still slows to a walk under a roof (T1), now that
+    Caps Lock chooses (survey T8c).
+- The pitch-line and snap rules (above) are unchanged by speed. Sprint at
+  8 m/s is today's running speed, the one section 5 measured.
+
 ## 5. Measured in the mockup
 
 The same scripted walks, run in the page at the engine's 8 m/s on a 120 Hz tick,

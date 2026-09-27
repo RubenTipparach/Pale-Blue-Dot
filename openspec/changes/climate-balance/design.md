@@ -97,6 +97,108 @@ atmosphere for 200 days, at level 3 so it fits in a test run. It asserts
 every species has water in its window for part of the second year. It is
 ignored by default, and run with the instrument, because it takes minutes.
 
+## Measured: the sweep (2026-09-27, in progress)
+
+Task 1.2's first passes run at level 4 (2,562 cells), 200 days a candidate,
+with no trim, since there is none yet. The sea column is the plain mean of the
+sea cells, as `fish_ranges` logs it:
+
+| run | `cloud_albedo` | `cloud_greenhouse` | `evaporation_cooling`, J/kg | sea, day 50 | sea, last logged |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A (sun only) | 0.6 | 40 | 8.0e4 (shipped) | −12.5 °C | −15.6 °C, day 100 |
+| B | 0.35 | 40 | 8.0e4 | −9.4 °C | −13.7 °C, day 110 |
+| C | 0.25 | 50 | 8.0e4 | −7.2 °C | −9.9 °C, day 200 |
+| D | 0.15 | 60 | 8.0e4 | −4.9 °C | −7.4 °C, day 200 |
+| E | 0.25 | 50 | 1.0e4 | 21.1 °C | 15.5 °C, day 200, but cells blew up (finding 3) |
+| F | 0.35 | 40 | 1.0e4 | 5.8 °C | −1.5 °C, day 200 |
+
+Every run has `solar_wm2` at 1360. A and B were stopped once C and D showed
+the trend.
+
+**1. Clouds alone do not fix it.** D has the weakest clouds, and its whole
+surface still averages −9.7 °C in year 2.
+
+**2. The spread between cells is the freeze.** It moves temperature, not
+heat.
+- In `heat`, each cell moves toward its neighbours' mean at `heat_spread` per
+  second, in kelvin.
+- At a coast, the sea cell holds 60 times the heat of its land neighbour per
+  kelvin (3.0e6 against 5.0e4 J/m²K), yet both move by the same kelvins.
+- So where the land is colder than the sea beside it, the sea loses 60 times
+  the heat the land gains. A coastal sea cell next to land 1 K colder loses
+  about 0.002 × 1/6 × 3.0e6 ≈ 1,000 W/m².
+
+The heat budget measures it (below). The planet's mean, in W/m², at level 4:
+
+| run, day | absorbed | spread | sea's carry | evaporation | stored | mean |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| shipped, day 1 | 154 | −974 | −0.1 | 161 | −1,164 | 10.2 °C |
+| shipped, day 7 | 135 | −600 | −0.6 | 67 | −686 | 3.5 °C |
+| E, day 1 | 245 | −269 | 0.7 | 33 | −251 | 12.4 °C |
+| E, day 7 | 242 | −101 | 0.7 | 29 | −63 | 12.5 °C |
+
+- On the shipped settings the spread takes four to seven times all the
+  sunlight the ground absorbs. Nothing else in the budget comes close.
+- Evaporation is 67 to 161 W/m², about Earth's 80.
+- An earlier reading of 662 W/m² for evaporation was this leak. It was hiding
+  in the residual before the spread was measured.
+- The sea's carry by the current is within ±2 W/m² of zero, so the advective
+  form it uses does not leak.
+- Days 1 to 7 are shown because the leak is largest while the land cools from
+  the climatology the world starts with.
+- The sign follows the land-sea contrast, which matches every run:
+  - on the shipped settings, and in F, the land is colder than the sea, and
+    the planet cools;
+  - in E the land is warmer (day 46: whole surface 19.7 °C, sea 19.5 °C), and
+    the planet warmed 0.37 °C a day.
+
+**3. With the leak running the other way, E blew up.**
+- E's sea mean reached 35 °C by day 80, then fell to 14 °C by day 90.
+- Its maps hold cells at −10^19 °C: some cells ran away, and the step's guard
+  (`step.rs`, `guard`) reset them to their climatology once they went
+  non-finite.
+- Which term ran away is not measured. The likely candidate is the
+  evaporation's cooling in a hot, wet land cell. It is explicit, and it grows
+  about 7% per kelvin, so past some temperature one step overshoots. A
+  wet column that rains in place can also heat its own ground:
+  - each kilogram that condenses warms the air by `latent_k_per_kg`;
+  - the air gives that back as sensible heat, about `sensible_wm2k ·
+    air_relax_s · latent_k_per_kg` = 15,750 J/kg;
+  - E's evaporation cools the ground by only 1.0e4 J/kg.
+
+  The shipped 8.0e4 is well above that return. With the leak fixed there is
+  no reason to lower it, so E's setting is dropped.
+
+**The instrument.** `examples/heat_budget.rs` measures where the heat goes,
+and nothing in the game reads it. It runs the atmosphere forward and prints
+the planet's area-weighted mean surface budget, in W/m², once a game day:
+- absorbed sunlight, and the sunlight the cloud reflected;
+- emitted longwave, and the cloud's returned longwave;
+- sensible heat to the air;
+- the change in the ground's and sea's stored heat;
+- the heat the spread adds and the heat the sea's carry adds, each computed
+  from the state with the step's own functions (`Grid::neighbour_excess`,
+  `Grid::fluxes`, `Grid::upwind`);
+- evaporation, as the residual;
+- the mean temperature, the sea's mean temperature, and the mean cloud cover.
+
+It takes the same `ATMOSPHERE` override as the other instruments.
+
+**The next measurement: the planet without the leak.** `heat_spread` is a
+setting, and zero is legal. So the override can preview a planet with no
+leak, using only the shipped code:
+
+| run | `heat_spread` | `solar_wm2` | `cloud_albedo` | `cloud_greenhouse` |
+| --- | ---: | ---: | ---: | ---: |
+| G | 0 | 1000 (shipped) | 0.6 | 40 |
+| H | 0 | 1360 | 0.6 | 40 |
+| I | 0 | 1360 | 0.35 | 40 |
+| J | 0 | 1360 | 0.25 | 50 |
+
+A spread that trades joules would move heat between cells without making any.
+With no spread, heat moves only by the air and the sea's current, so these
+runs bracket that fix rather than being it.
+
 ## Risks / Trade-offs
 
 - [The controller oscillates against the ocean's heat capacity] → It is

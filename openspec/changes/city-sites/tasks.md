@@ -15,9 +15,9 @@ the biome.
 ## 2. The site list in the core
 
 - [ ] 2.1 `assets/config/sites.ron` and its validated struct: per-kind radius, flatness, spacing and count in metres, the name tables, and the overrides. Verify: tests that a zero spacing, an unknown kind and a pin at sea are each refused with the field named.
-- [ ] 2.2 `pbd_core::sites::generate(cfg, terrain, overrides)` with the screen, score, greedy pass and full check. Verify: the spec's tests (identical on one thread and many; fewer towns keep the same sites; flat, dry ground; no pentagons; a harbour on the water; the kind matches the biome; every kind occurs; spacing on every pair).
+- [ ] 2.2 `pbd_core::sites::generate(cfg, terrain, overrides)` with the screen, score, greedy pass and full check. Verify: the spec's tests (identical on one thread and many; fewer towns keep the same sites; flat, dry ground; no pentagons; a harbour on the water; a cliff village climbs; a cave town has rock over it; the kind matches the biome; every kind occurs; spacing on every pair).
 - [ ] 2.2a The small town near the spawn and the capital elsewhere (survey C2, C3). Verify: a test on the shipped seed that a village or small walled town is within 500 m of the spawn and the capital is on another land mass.
-- [ ] 2.3 Names from the tables. Verify: tests for unique names on the shipped seed, a pinned name kept and reserved, and a name unchanged across two runs.
+- [ ] 2.3 Names from the tables, six peoples with the mountain people's (survey T12). Verify: tests for unique names on the shipped seed, a pinned name kept and reserved, and a name unchanged across two runs.
 - [ ] 2.4 The same list from the instrument and the core. Verify: the instrument calls `generate`, and its JSON matches the core test's list byte for byte.
 
 ## 3. The world keeps its list

@@ -34,7 +34,11 @@ A generated site SHALL have its whole footprint on dry land, with its surface
 range inside its kind's flatness limit. It SHALL have no pentagon cell, and no
 neighbour of a pentagon, under the footprint. A harbour SHALL touch the sea,
 with shallows within its footprint and a shelf within reach of its quay. No
-site SHALL stand in Mountains or in the Ocean biome.
+site SHALL stand in the Ocean biome, and only a cliff village or a cave town
+SHALL stand in Mountains. A cliff village's ground SHALL rise between 9 and
+25 m across its footprint with no sheer drop, and a cave town SHALL have at
+least 16 m of rock over its chamber, above the level of the face its tunnel
+enters from.
 
 #### Scenario: Flat, dry ground
 
@@ -53,6 +57,18 @@ site SHALL stand in Mountains or in the Ocean biome.
 - **WHEN** a harbour's footprint is sampled
 - **THEN** part of it is shallows and a shelf lies within its reach
 
+#### Scenario: A cliff village climbs
+
+- **WHEN** a cliff village's footprint is sampled along its downhill direction
+- **THEN** the surface rises between 9 and 25 m across it, and no 10 m step
+  rises more than 6 m
+
+#### Scenario: A cave town has rock over it
+
+- **WHEN** a cave town's chamber outline is sampled
+- **THEN** the surface is at least 16 m above its entrance's level everywhere
+  over it, and the ground falls to that level within 30 m of its edge
+
 ### Requirement: A site's kind is chosen by its biome
 
 A site's kind SHALL be one of the settlements `tenebris-towns` designs, chosen
@@ -62,7 +78,8 @@ by the biome at its anchor:
 - tundra camp in tundra;
 - jungle village in jungle;
 - swamp village in swamp;
-- harbour where beach meets fields.
+- harbour where beach meets fields;
+- cliff village or cave town in mountains.
 
 A site SHALL NOT take a kind whose biome it does not stand in.
 

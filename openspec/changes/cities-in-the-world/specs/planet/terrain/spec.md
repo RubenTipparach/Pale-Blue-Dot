@@ -22,3 +22,8 @@ world.
 - **WHEN** the columns of a settlement's footprint and margin are generated
   from inside the town outward, and again from outside in
 - **THEN** every column matches exactly
+
+#### Scenario: A cave town's hollow
+- **WHEN** the columns under a cave town's chamber are generated in two
+  different orders
+- **THEN** every column matches exactly, with the same floor and roof

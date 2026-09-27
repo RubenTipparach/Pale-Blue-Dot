@@ -98,6 +98,23 @@ places it.**
   - trees and clutter read a "cleared" bit in the same answer.
 - Water rows in a harbour keep the real sea. The layout places its quay where
   the terrace meets the sea.
+- **Hollows are part of the answer too.** The owner (survey T13, 2026-09-27),
+  on where a cave town's chamber comes from: **"recommended"**, which is "the
+  town digs its own chamber when it is placed, saved with the town".
+  - A settlement record can hold hollows: cells whose column is solid below a
+    floor layer and above a roof layer, and empty between.
+  - A cave town's hollows are its chamber (up to 93 by 37 m, a 10 m roof),
+    its tunnel (3 m high) and its carved rooms. They also include the one cell
+    of its daylight shaft, open to the sky.
+  - A cliff village's hollows are its rock-cut rooms under the terrace above,
+    2.6 m high under 0.4 m of rock.
+  - The column generator gives such a column two solid runs, the ground below
+    the floor and the rock from the roof up to the natural surface. Nothing
+    is edited or written to the journal. The rock over the chamber is the
+    mountain's own, so the roof is as high as the site's rock
+    (`city-sites` decision 5 checks there is 16 m of it).
+  - Because the hollow is in the stored record, it never moves or refills,
+    and a changed template does not reshape a cave town already made.
 - *Alternative:* stamp the town as a batch of edits in the durable log.
   Rejected: that is about ten thousand cell edits per town, written the first
   time a player comes near, for something the stored record already
@@ -156,7 +173,9 @@ pieces** (the owner's save model, `world-persistence` decisions 1 and 2).
   variation, and each building. The result is written to the record store
   before anything is shown.
 - A building is stored as its own definition: plot cells, walls and their
-  openings, stairs, storeys, kit, roof and state. It is not a reference to a
+  openings, stairs, storeys, kit, roof and state. A cave town's or cliff
+  village's hollows (decision 3) are stored with the settlement, cell by cell
+  with their floor and roof layers. It is not a reference to a
   template. A revised template changes new worlds only, and a town already
   made keeps what it was built as.
 - Pieces are derived from the definitions by the cut rules each time a town

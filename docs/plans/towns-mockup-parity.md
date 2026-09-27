@@ -33,8 +33,8 @@ ask.
 | Swamp: alder stilt houses with decks and porch stairs, boardwalks on piles, a jetty, reeds | `tenebris-towns` 3c | planned |
 | Fishing harbour: piers, finger piers, pier head, mole with a light, boathouses, shipyard slip, fish huts on stilts, fish market, terraces with street steps | `tenebris-towns` 3c, 3d | planned |
 | Mound houses in the fields (the owner, T6): nine houses under turf domes dug into a hill, the great smial with a back room through a tunnel, gardens, a pond, the party oak | `tenebris-towns` 3c; placed as a fields settlement by `cities-in-the-world` | planned |
-| Cliff village (T6): five terraces 3 m apart joined by a switchback of stairs, granite houses under slate, rooms cut into the rock, a rope bridge over a gorge, a beacon | `tenebris-towns` 3c; on the map only if survey T12 says so | ask |
-| Cave town (T6): a chamber inside a mountain entered by a tunnel, carved houses, a gallery, a chasm bridge, a pool under a daylight shaft | `tenebris-towns` 3c; on the map per survey T12, its chamber per survey T13 | ask |
+| Cliff village (T6): five terraces 3 m apart joined by a switchback of stairs, granite houses under slate, rooms cut into the rock, a rope bridge over a gorge, a beacon | `tenebris-towns` 3c; placed by `city-sites` (T12) | planned |
+| Cave town (T6): a chamber inside a mountain entered by a tunnel, carved houses, a gallery, a chasm bridge, a pool under a daylight shaft | `tenebris-towns` 3c; placed by `city-sites` (T12); its chamber from its stored record, `cities-in-the-world` 3.1a (T13) | planned |
 | Each settlement from its own biome's materials and plants | `tenebris-towns` 3c | planned |
 
 ## Buildings and pieces
@@ -48,7 +48,7 @@ ask.
 | Straight flight, newel stair, street steps, porch stair, outdoor roof stair | `tenebris-towns` 3 | planned |
 | Gable, pyramid, cone, flat with parapet, turf, dome roofs; chimneys; marble columns | `tenebris-towns` 3, 3b | planned |
 | Turf dome cut by a limestone front, with a round door, round windows and a chimney through the turf; a vaulted tunnel between two domes | `tenebris-towns` 3b, built as the igloo and adobe domes are | planned |
-| Rock overhead: a room cut under a terrace, a cave roof, a shaft to the sky | `tenebris-towns` 3c; a cave's chamber per survey T13 | ask |
+| Rock overhead: a room cut under a terrace, a cave roof, a shaft to the sky | `cities-in-the-world` 3.1a: hollows in the settlement record (T13) | planned |
 | 21 kits: straw, mud, timber, half-timber, three bricks, fieldstone, ashlar, clay, marble, whitewash, driftwood, sandstone, adobe dome, granite longhouse, ice, alder stilt house, kapok hut, mound house, mountain house (granite under slate) | `tenebris-towns` 3b | planned |
 | Decks on piles, rope bridges with sag, boardwalks, jetties, piers, gangplanks, rails, fences | `tenebris-towns` 3c | planned |
 | Furniture: tables, benches, beds, chests, shelves, barrels, crates, hearths, anvil; stood clear of walls | `tenebris-towns` 4 | planned |
@@ -64,7 +64,7 @@ ask.
 | 23 moored boats that bob on the swell, with a hull solid that does not move | `tenebris-towns` 3d, 4 (moving parts) | planned |
 | Any boat can be used (the owner, T7) | `cities-in-the-world` 4.2b: the small boats are the game's sailing and paddle craft | planned |
 | The cog: boarded over a gangplank, walked onto its deck, castles and stair | `tenebris-towns` 3d | planned |
-| The cog sailing, with you walking on its deck | survey T9 | ask |
+| The cog sailing, with you walking on its deck (T9: "YES") | `sail-the-cog`, its own change after the roadmap | planned |
 
 ## Light
 
@@ -97,7 +97,7 @@ ask.
 | A grounded walker held to a floor up to 0.35 m below | `tenebris-towns` 2 | planned |
 | A refused move slides along the wall | `tenebris-towns` 2 | planned |
 | Thin geometry blocks the body | `tenebris-towns` 1 | planned |
-| Walking and running speeds (the owner, T1) | `tenebris-towns` 2 | planned; Shift in survey T8 |
+| Walking and running speeds (the owner, T1 and T8): run 5 m/s, sprint 8 on Shift, walk 3, crouch 1 on Ctrl | `tenebris-towns` 2 | planned; Caps Lock in survey T8b, walking under a roof in T8c |
 | Wading at half speed in water over 0.3 m | `walking.rs` `water_movement_mult` | built |
 | Walkable roofs (the owner, T4) | `tenebris-towns` 3 | planned |
 | Jump | the game's jump | built |
@@ -114,5 +114,5 @@ ask.
 | Collision view (C) | `tenebris-towns` 4 (debug keys) | planned |
 | Fly through walls (N) | `tenebris-towns` 4 (debug keys) | planned |
 | Readouts: feet, cell, headroom, speed, eye jumps | `tenebris-towns` 4 (debug keys) | planned |
-| T: today's walker against the proposed one | survey T11 | ask |
-| Touch controls: move stick, Jump and Door buttons | survey T10 | ask |
+| T: today's walker against the proposed one | dropped from the game (T11) | mockup only |
+| Touch controls: move stick, Jump and Door buttons | none: "we're building a desktop game" (T10) | mockup only |

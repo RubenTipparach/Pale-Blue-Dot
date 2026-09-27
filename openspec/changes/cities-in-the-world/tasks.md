@@ -18,6 +18,7 @@ the map, the sites, and the climate and fish layers, in that order.
 ## 3. The ground
 
 - [ ] 3.1 The settlement ground function (footprint, margin and cleared bit) and the column generator reading it. Verify: tests that terraces come out equal from inside-out and outside-in generation; that no step in the margin is over one layer; and that no tree or clutter is in a street or plot.
+- [ ] 3.1a Hollows (survey T13): the ground function answers a hollow's floor and roof from the settlement record, and the column generator gives such a column its two solid runs. A cave town's chamber, tunnel, rooms and shaft and a cliff village's rock-cut rooms are hollows. Verify: tests that a cave town's chamber columns come out equal from inside-out and outside-in generation; that the chamber is empty between floor and roof with the mountain's rock above; that the shaft cell is open to the sky; and that reloading the world finds the same hollow with no journal entry written for it.
 - [ ] 3.2 Sync the modified `planet/terrain` requirement with its new test. Verify: `openspec validate --all`.
 
 ## 4. In the world
