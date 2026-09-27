@@ -25,6 +25,7 @@ use bevy::prelude::Vec3;
 use bytemuck::{Pod, Zeroable};
 use pbd_core::column::{self, Column, LAYERS, MAX_RUNS};
 use pbd_core::edits::Edits;
+use pbd_core::flora;
 use pbd_core::light;
 use pbd_core::terrain::Material;
 use pbd_core::worms;
@@ -37,9 +38,22 @@ use pbd_core::worms;
 /// cell record's skylight word.
 pub const COLUMN_CAPACITY: u32 = 16_384;
 
-/// Where a column record carries its torch layer, plus one: the high half of
-/// `more[3]`, whose low bit is the rim flag.
+/// Where a column record carries its lamp's layer, plus one: the high half of
+/// `more[3]`, whose low bit is the rim flag. Nine bits, as the water's.
 pub const TORCH_SHIFT: u32 = 16;
+/// The lamp layer's width in the word.
+pub const LAMP_LAYER_MASK: u32 = 0x1ff;
+/// Where the record carries WHICH lamp it is, as its index in
+/// `Material::LAMPS`: three bits above the layer. The torch is nought, so a
+/// record packed before there were other lamps reads as a torch.
+pub const LAMP_KIND_SHIFT: u32 = 25;
+const _: () = assert!(TORCH_SHIFT + 9 <= LAMP_KIND_SHIFT);
+/// Set where the record's lamp is burning: always for a torch, a hanging
+/// lantern, a brazier and a candle, and from dusk to dawn for a street or wall
+/// lantern. The shader draws a lantern's glass alight only then, so the
+/// lantern drawn and the light the field holds agree.
+pub const LAMP_LIT_BIT: u32 = 1 << 28;
+const _: () = assert!(Material::LAMPS.len() <= 8);
 
 /// Where a column record carries the top of its water, as a layer plus one:
 /// the middle of `more[3]`, between the rim flag and the torch. Nought is a
@@ -122,6 +136,18 @@ pub struct ColumnTier {
     /// face's corner samples; the contact darkening is the shader's, because
     /// there is no CPU mesh here to bake a vertex colour into.
     light: light::Baked,
+    /// Whether the lamps that burn from dusk to dawn are lit in the field
+    /// (`lamps-and-lanterns` decision 1). A tier is built with them out;
+    /// `set_dusk` re-bakes when the clock says otherwise.
+    dusk: bool,
+    /// Whether each slot's cell grows a glowing flower: the record's
+    /// `GLOW_FLOWER_BIT`, kept per slot so the bake need not look the record
+    /// up (`lamps-and-lanterns` decision 8).
+    glow: Vec<bool>,
+    /// Each slot's unit direction, and the neighbour table the last bake
+    /// joined on: what `sample` blends a point across (decision 10).
+    centres: Vec<Vec3>,
+    sides: Vec<[u32; 6]>,
 }
 
 impl ColumnTier {
@@ -132,6 +158,33 @@ impl ColumnTier {
             slots: Vec::new(),
             records: Vec::new(),
             light: Vec::new(),
+            dusk: false,
+            glow: Vec::new(),
+            centres: Vec::new(),
+            sides: Vec::new(),
+        }
+    }
+
+    /// Whether the dusk-lit lamps are lit in this tier's field.
+    pub fn dusk(&self) -> bool {
+        self.dusk
+    }
+
+    /// Light or put out the dusk-lit lamps, re-baking the field when that
+    /// changes it. Nothing else changes: the columns, the runs and what is
+    /// solid are the same by day and by night.
+    pub fn set_dusk(&mut self, lit: bool) {
+        if self.dusk != lit {
+            self.dusk = lit;
+            self.relight();
+            // And every lantern's glass and glowing flower, which the record
+            // carries.
+            for (slot, (column, record)) in
+                self.columns.iter().zip(self.records.iter_mut()).enumerate()
+            {
+                let glow = self.glow.get(slot).copied().unwrap_or(false);
+                record.more[3] = (record.more[3] & RIM_BIT) | state_word(column, lit, glow);
+            }
         }
     }
 
@@ -169,7 +222,8 @@ impl ColumnTier {
             return;
         };
         let runs = column.packed_runs(render_code);
-        let state = state_word(column);
+        let glow = self.glow.get(slot).copied().unwrap_or(false);
+        let state = state_word(column, self.dusk, glow);
         if let Some(entry) = self.records.get_mut(slot) {
             entry.runs = runs;
             // The rim flag is the tier's to know and everything else in the
@@ -239,9 +293,12 @@ impl ColumnTier {
                 sides[4],
                 sides[5],
                 degree as u32,
-                RIM_BIT | state_word(&column),
+                RIM_BIT | state_word(&column, self.dusk, glows(&finest[index])),
             ],
         });
+        self.glow.push(glows(&finest[index]));
+        self.centres
+            .push(Vec3::from_slice(&finest[index].direction_height[..3]).normalize_or(Vec3::Y));
         self.columns.push(column);
         self.light.push([light::Light::DARK; LAYERS]);
         true
@@ -313,15 +370,37 @@ impl ColumnTier {
     /// pass is where the reference records its own scar - a dug cell that
     /// "stayed dark forever".
     pub fn relight(&mut self) {
-        let sides = self.neighbor_slots();
+        self.sides = self.neighbor_slots();
         let emitters = self.emitters();
         self.light = light::bake(
             &light::Region {
                 columns: &self.columns,
-                neighbors: &sides,
+                neighbors: &self.sides,
             },
             &emitters,
         );
+    }
+
+    /// Both channels at a point, 0..1 `(sky, block)`: what lights the things
+    /// the terrain pass does not draw (`lamps-and-lanterns` decision 10).
+    /// `record` is the finest record the point is over, `direction` its unit
+    /// direction and `altitude` its metres above the planet's radius. Off the
+    /// tier it answers the open sky and no lamp.
+    pub fn sample(&self, record: Option<usize>, direction: Vec3, altitude: f32) -> (f32, f32) {
+        let slot = record
+            .and_then(|record| self.slots.get(record).copied())
+            .filter(|&slot| slot != usize::MAX && slot < self.sides.len());
+        light::sample(
+            &light::Region {
+                columns: &self.columns,
+                neighbors: &self.sides,
+            },
+            &self.light,
+            &self.centres,
+            slot.map(|slot| slot as u32),
+            direction.normalize_or(Vec3::Y),
+            altitude - column::BASE_M as f32,
+        )
     }
 
     /// Every cell in the tier that gives out light.
@@ -336,14 +415,27 @@ impl ColumnTier {
         let mut found = Vec::new();
         for (slot, column) in self.columns.iter().enumerate() {
             for layer in 0..LAYERS {
-                let level = column.material(layer).emission();
-                if level > 0 {
+                let material = column.material(layer);
+                let level = material.emission();
+                // A street lantern by day is an unlit lantern.
+                if level > 0 && (self.dusk || !material.dusk_lit()) {
                     found.push(light::Emitter {
                         column: slot as u32,
                         layer: layer as u16,
                         level,
                     });
                 }
+            }
+            // A glowing flower, from dusk to dawn, while its ground is sod.
+            if self.dusk
+                && self.glow.get(slot).copied().unwrap_or(false)
+                && let Some(layer) = flower_layer(column)
+            {
+                found.push(light::Emitter {
+                    column: slot as u32,
+                    layer: layer as u16,
+                    level: flora::GLOW_FLOWER_LEVEL,
+                });
             }
         }
         found
@@ -417,24 +509,30 @@ pub fn reconcile_surface(
     }
 }
 
-/// The torch word of a column: the topmost torch layer plus one, shifted, or
-/// zero where there is none.
+/// The lamp word of a column: the topmost lamp's layer plus one and its kind,
+/// shifted, or zero where there is none.
 ///
 /// The TOPMOST, and placement refuses a second in the same column, so the one
-/// drawn and the one lighting are the same torch. A record that could hold one
+/// drawn and the one lighting are the same lamp. A record that could hold one
 /// while the field lit two would be a lamp burning in an empty cell.
-fn torch_word(column: &Column) -> u32 {
+fn lamp_word(column: &Column, dusk: bool) -> u32 {
     for layer in (1..LAYERS).rev() {
-        if column.material(layer) == Material::Torch {
-            return (layer as u32 + 1) << TORCH_SHIFT;
+        let material = column.material(layer);
+        if let Some(kind) = Material::LAMPS.iter().position(|&lamp| lamp == material) {
+            let lit = if dusk || !material.dusk_lit() {
+                LAMP_LIT_BIT
+            } else {
+                0
+            };
+            return (layer as u32 + 1) << TORCH_SHIFT | (kind as u32) << LAMP_KIND_SHIFT | lit;
         }
     }
     0
 }
 
-/// Whether this column already holds a torch.
-pub fn has_torch(column: &Column) -> bool {
-    torch_word(column) != 0
+/// Whether this column already holds a lamp of any kind.
+pub fn has_lamp(column: &Column) -> bool {
+    lamp_word(column, false) != 0
 }
 
 /// The rim flag's bit in `more[3]`.
@@ -453,11 +551,49 @@ fn water_word(column: &Column) -> u32 {
 }
 
 /// Everything in `more[3]` that is the COLUMN's rather than the tier's: where
-/// its water tops out and where its torch is. One function, because a record
-/// packed at build and a record repacked by an edit that disagreed would be a
-/// column whose lamp or waterline depended on when it was last touched.
-fn state_word(column: &Column) -> u32 {
-    water_word(column) | torch_word(column)
+/// its water tops out, where its torch is, and whether its glowing flower
+/// burns. One function, because a record packed at build and a record
+/// repacked by an edit that disagreed would be a column whose lamp or
+/// waterline depended on when it was last touched.
+fn state_word(column: &Column, dusk: bool, glow: bool) -> u32 {
+    let flower = if dusk && glow && flower_layer(column).is_some() {
+        GLOW_LIT_BIT
+    } else {
+        0
+    };
+    water_word(column) | lamp_word(column, dusk) | flower
+}
+
+/// Set in `more[3]` while this column's glowing flower burns: the cell grows
+/// one, its ground is sod, and it is night. The shader draws the flower's head
+/// lit where this is set (`lamps-and-lanterns` decision 8).
+pub const GLOW_LIT_BIT: u32 = 1 << 29;
+const _: () = assert!(GLOW_LIT_BIT > LAMP_LIT_BIT);
+
+/// Set in a finest record's `spare[2]` where its cell grows a glowing flower,
+/// chosen once from the cell's exact key (`pbd_core::flora::glows`).
+pub const GLOW_FLOWER_BIT: u32 = 1;
+
+/// Whether a record's cell grows a glowing flower.
+fn glows(cell: &GpuCell) -> bool {
+    cell.spare[2] & GLOW_FLOWER_BIT != 0
+}
+
+/// The render codes the shader grows flowers on: its `grassy`. A test reads
+/// the shader's function and holds the two to one list.
+pub const GRASSY_CODES: [u32; 3] = [2, 3, 7];
+
+/// The air layer a flower stands in, over sod: where a glowing flower's light
+/// comes from. `None` where the ground is not grassy or something stands on
+/// it, which is how digging the sod out or building over it puts the flower
+/// out with no bookkeeping.
+fn flower_layer(column: &Column) -> Option<usize> {
+    let top = column.surface()?;
+    let above = top + 1;
+    (above < LAYERS
+        && column.material(above) == Material::Air
+        && GRASSY_CODES.contains(&render_code(column.material(top))))
+    .then_some(above)
 }
 
 /// The topmost water layer of a column, if it holds any: what `more[3]` packs.
@@ -493,6 +629,13 @@ pub fn build(
     let mut slots = vec![usize::MAX; finest.len()];
     let mut members = Vec::new();
     for (index, cell) in finest.iter_mut().enumerate() {
+        // Whether the cell grows a glowing flower, decided here once from its
+        // key, for every finest cell: the shader grows the flower wherever
+        // the bit is, and the bake lights the ones in the tier.
+        let key = cell.key();
+        let glowing =
+            key != crate::planet::NO_KEY && flora::glows(key, settings.glow_flower_chance);
+        cell.spare[2] = (cell.spare[2] & !GLOW_FLOWER_BIT) | glowing as u32;
         let direction = Vec3::from_slice(&cell.direction_height[..3]);
         if direction.dot(anchor) <= reach || members.len() >= COLUMN_CAPACITY as usize {
             cell.metadata[2] &= SKYLIGHT_MASK;
@@ -507,6 +650,8 @@ pub fn build(
     }
     let mut columns = Vec::with_capacity(members.len());
     let mut records = Vec::with_capacity(members.len());
+    let mut glow = Vec::with_capacity(members.len());
+    let mut centres = Vec::with_capacity(members.len());
     for &index in &members {
         let cell = &finest[index];
         let direction = Vec3::from_slice(&cell.direction_height[..3]);
@@ -555,9 +700,11 @@ pub fn build(
                 sides[4],
                 sides[5],
                 degree as u32,
-                rim as u32 | state_word(&column),
+                rim as u32 | state_word(&column, false, glows(cell)),
             ],
         });
+        glow.push(glows(cell));
+        centres.push(direction);
         columns.push(column);
     }
     // A MOUTH lowers the ground. Where the carve broke the surface, the
@@ -589,6 +736,10 @@ pub fn build(
         slots,
         records,
         light: Vec::new(),
+        dusk: false,
+        glow,
+        centres,
+        sides: Vec::new(),
     };
     // The light comes last, because it is a function of the finished columns:
     // the rim's solid ring and every edit are already in them, and lighting
@@ -660,7 +811,7 @@ mod water_word_tests {
     fn a_columns_water_top_rides_its_record_and_dry_is_nought() {
         let wet = flooded(20, 40);
         assert_eq!(water_top_layer(&wet), Some(40));
-        let packed = (state_word(&wet) >> WATER_SHIFT) & WATER_MASK;
+        let packed = (state_word(&wet, false, false) >> WATER_SHIFT) & WATER_MASK;
         assert_eq!(packed, 41, "the layer plus one, as the shader reads it");
         // The shader turns the packed word into the water's SURFACE, which is
         // the altitude of the top layer plus one.
@@ -671,14 +822,45 @@ mod water_word_tests {
 
         let dry = flooded(20, 20);
         assert_eq!(water_top_layer(&dry), None);
-        assert_eq!(state_word(&dry) >> WATER_SHIFT & WATER_MASK, 0);
+        assert_eq!(
+            state_word(&dry, false, false) >> WATER_SHIFT & WATER_MASK,
+            0
+        );
 
         // The torch shares the word and must survive beside it.
         let mut lit = wet;
         lit.set(45, Material::Torch);
-        assert_eq!((state_word(&lit) >> TORCH_SHIFT), 46);
-        assert_eq!((state_word(&lit) >> WATER_SHIFT) & WATER_MASK, 41);
-        assert_eq!(state_word(&lit) & RIM_BIT, 0, "the rim is the tier's");
+        assert_eq!(
+            (state_word(&lit, false, false) >> TORCH_SHIFT) & LAMP_LAYER_MASK,
+            46
+        );
+        assert_ne!(
+            state_word(&lit, false, false) & LAMP_LIT_BIT,
+            0,
+            "a torch always burns"
+        );
+        let mut candle = Column::bedrock();
+        candle.set(60, Material::Candle);
+        let word = state_word(&candle, false, false);
+        assert_eq!(
+            (word >> TORCH_SHIFT) & LAMP_LAYER_MASK,
+            61,
+            "the candle's layer"
+        );
+        assert_eq!(
+            Material::LAMPS[((word >> LAMP_KIND_SHIFT) & 7) as usize],
+            Material::Candle,
+            "and which lamp it is"
+        );
+        assert_eq!(
+            (state_word(&lit, false, false) >> WATER_SHIFT) & WATER_MASK,
+            41
+        );
+        assert_eq!(
+            state_word(&lit, false, false) & RIM_BIT,
+            0,
+            "the rim is the tier's"
+        );
     }
 }
 
@@ -1587,5 +1769,314 @@ mod tests {
                 crate::planet::surface_height(direction),
             );
         }
+    }
+
+    /// A street lantern is dark by day and lit at night, and a torch beside
+    /// it burns at both (`lamps-and-lanterns` task 4.2).
+    #[test]
+    fn a_dusk_lit_lantern_lights_only_at_night_and_a_torch_always() {
+        // A line of twenty columns of flat ground, a street lantern standing
+        // in the first and a torch in the last, out of each other's reach.
+        const N: u32 = 20;
+        let mut columns: Vec<Column> = (0..N)
+            .map(|_| {
+                let mut column = Column::bedrock();
+                for layer in 1..=40 {
+                    column.set(layer, Material::Stone);
+                }
+                column
+            })
+            .collect();
+        columns[0].set(41, Material::LanternPost);
+        columns[N as usize - 1].set(41, Material::Torch);
+        let records = (0..N)
+            .map(|i| GpuColumn {
+                runs: columns[i as usize].packed_runs(render_code),
+                neighbors: [
+                    if i + 1 < N { i + 1 } else { NO_NEIGHBOR },
+                    if i > 0 { i - 1 } else { NO_NEIGHBOR },
+                    NO_NEIGHBOR,
+                    NO_NEIGHBOR,
+                ],
+                more: [
+                    NO_NEIGHBOR,
+                    NO_NEIGHBOR,
+                    6,
+                    state_word(&columns[i as usize], false, false),
+                ],
+            })
+            .collect();
+        let mut tier = ColumnTier {
+            columns,
+            slots: (0..N as usize).collect(),
+            records,
+            light: Vec::new(),
+            dusk: false,
+            glow: vec![false; N as usize],
+            centres: vec![Vec3::Y; N as usize],
+            sides: Vec::new(),
+        };
+        tier.relight();
+        assert_eq!(tier.light_at(0, 41).block(), 0, "the lantern is out by day");
+        assert_eq!(
+            tier.light_at(N as usize - 1, 41).block(),
+            14,
+            "the torch burns"
+        );
+        assert_eq!(tier.records[0].more[3] & LAMP_LIT_BIT, 0, "its glass dark");
+        assert_ne!(tier.records[N as usize - 1].more[3] & LAMP_LIT_BIT, 0);
+        tier.set_dusk(true);
+        assert_eq!(tier.light_at(0, 41).block(), 13, "lit at night");
+        assert_ne!(
+            tier.records[0].more[3] & LAMP_LIT_BIT,
+            0,
+            "its glass alight"
+        );
+        assert_eq!(
+            tier.light_at(1, 41).block(),
+            13 - light::BLOCK_ACROSS,
+            "and lights its street"
+        );
+        assert_eq!(
+            tier.light_at(N as usize - 1, 41).block(),
+            14,
+            "the torch burns still"
+        );
+        tier.set_dusk(false);
+        assert_eq!(tier.light_at(0, 41).block(), 0, "out again at dawn");
+    }
+
+    /// Over every cell of a real tier the three answers about a glowing
+    /// flower agree (`lamps-and-lanterns` task 6.1): the record's bit is the
+    /// key's choice, the tier's flag is the record's bit, and at night a slot
+    /// is an emitter exactly where its column record says the flower burns.
+    #[test]
+    fn a_tiers_glowing_flowers_agree_between_record_bake_and_bit() {
+        // The desktop's spawn: a meadow, where flowers grow.
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        let mut set = lod::generate_fine(anchor, &settings, &Edits::new());
+        set.columns.set_dusk(true);
+        let emitting: std::collections::HashSet<u32> = set
+            .columns
+            .emitters()
+            .iter()
+            .filter(|emitter| emitter.level == flora::GLOW_FLOWER_LEVEL)
+            .map(|emitter| emitter.column)
+            .collect();
+        let (mut chosen, mut burning) = (0, 0);
+        for (index, cell) in set.finest_records().iter().enumerate() {
+            let key = cell.key();
+            let bit = glows(cell);
+            assert_eq!(
+                bit,
+                key != crate::planet::NO_KEY && flora::glows(key, settings.glow_flower_chance),
+                "record {index}: the bit is the key's choice"
+            );
+            chosen += bit as usize;
+            let slot = set.columns.slots[index];
+            if slot == usize::MAX {
+                continue;
+            }
+            assert_eq!(
+                set.columns.glow[slot], bit,
+                "slot {slot}: the tier keeps the bit"
+            );
+            let lit = set.columns.records[slot].more[3] & GLOW_LIT_BIT != 0;
+            assert_eq!(
+                lit,
+                emitting.contains(&(slot as u32)),
+                "slot {slot}: the record burns exactly where the bake lights"
+            );
+            burning += lit as usize;
+        }
+        assert!(chosen > 50, "only {chosen} cells chose a glowing flower");
+        assert!(burning > 0, "and none of the tier's burned at night");
+    }
+
+    /// The tier's sampler (`lamps-and-lanterns` task 3.2): the eight corners
+    /// of a box buried in the rock under the spawn meadow read dark, the
+    /// same box lifted into the open air reads the sky, and a point off the
+    /// tier reads the open sky.
+    #[test]
+    fn a_sealed_cave_gives_eight_dark_corners_and_the_open_air_the_sky() {
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let tier = &set.columns;
+        let record = (0..set.finest_records().len())
+            .find(|&index| {
+                tier.slots[index] != usize::MAX
+                    && Vec3::from_slice(&set.finest_records()[index].direction_height[..3])
+                        .dot(anchor)
+                        > 0.999_999
+            })
+            .expect("a column at the anchor");
+        let cell = &set.finest_records()[record];
+        let centre = Vec3::from_slice(&cell.direction_height[..3]);
+        let ground = column::layer_altitude(tier.column(record).unwrap().surface().unwrap()) + 1.0;
+        let corners = |altitude: f32| -> Vec<(f32, f32)> {
+            let east = centre.cross(Vec3::Y).normalize_or(Vec3::X);
+            let north = east.cross(centre);
+            [-0.4_f32, 0.4]
+                .iter()
+                .flat_map(|&a| [-0.4_f32, 0.4].map(move |b| (a, b)))
+                .flat_map(|(a, b)| [altitude, altitude + 0.8].map(move |h| (a, b, h)))
+                .map(|(a, b, h)| {
+                    let direction = (centre + (east * a + north * b) / PLANET_RADIUS).normalize();
+                    tier.sample(Some(record), direction, h)
+                })
+                .collect()
+        };
+        let buried = corners(ground - 20.0);
+        assert_eq!(buried.len(), 8);
+        assert!(
+            buried
+                .iter()
+                .all(|&(sky, block)| sky == 0.0 && block == 0.0),
+            "twenty metres under the meadow: {buried:?}"
+        );
+        let open = corners(ground + 2.0);
+        assert!(
+            open.iter().all(|&(sky, block)| sky > 0.99 && block == 0.0),
+            "two metres over it: {open:?}"
+        );
+        assert_eq!(
+            tier.sample(None, centre, ground + 2.0),
+            (1.0, 0.0),
+            "off the tier"
+        );
+    }
+
+    /// A light placed in the tier lights at once, and taken back leaves the
+    /// field exactly as it was (`lamps-and-lanterns`, "A light is placed and
+    /// lights at once" and "A light is taken back"). The same three steps the
+    /// edit path takes: write the layer, repack the record, relight the tier.
+    #[test]
+    fn a_lantern_placed_lights_at_once_and_taken_back_leaves_the_field_as_it_was() {
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let tier = &mut set.columns;
+        tier.set_dusk(true);
+        let record = (0..tier.slots.len())
+            .find(|&index| tier.slots[index] != usize::MAX && tier.column(index).is_some())
+            .expect("a column");
+        let slot = tier.slots[record];
+        let top = tier.column(record).unwrap().surface().unwrap() + 1;
+        let before: Vec<light::Light> = (0..tier.columns.len())
+            .flat_map(|s| (0..LAYERS).map(move |l| (s, l)))
+            .map(|(s, l)| tier.light_at(s, l))
+            .collect();
+        for lamp in Material::LAMPS {
+            assert!(tier.set_layer(record, top, lamp), "{lamp:?} placed");
+            tier.repack(record);
+            tier.relight();
+            assert_eq!(
+                tier.light_at(slot, top).block(),
+                lamp.emission(),
+                "{lamp:?} lights its own cell at once"
+            );
+            assert_ne!(
+                tier.records[slot].more[3] >> TORCH_SHIFT & LAMP_LAYER_MASK,
+                0
+            );
+            assert!(
+                tier.set_layer(record, top, Material::Air),
+                "{lamp:?} taken back"
+            );
+            tier.repack(record);
+            tier.relight();
+            let after: Vec<light::Light> = (0..tier.columns.len())
+                .flat_map(|s| (0..LAYERS).map(move |l| (s, l)))
+                .map(|(s, l)| tier.light_at(s, l))
+                .collect();
+            assert!(before == after, "{lamp:?}: the field is as it was");
+            assert_eq!(
+                tier.records[slot].more[3] >> TORCH_SHIFT & LAMP_LAYER_MASK,
+                0
+            );
+        }
+    }
+
+    /// A glowing flower (`lamps-and-lanterns` task 6.1): a cell the key chose
+    /// lights the air over its sod from dusk to dawn, its record says it
+    /// burns exactly while the field has it as an emitter, and digging the
+    /// sod out puts it out. A cell the key did not choose never lights.
+    #[test]
+    fn a_glowing_flower_lights_its_sod_at_night_and_is_put_out_by_digging_it() {
+        const N: usize = 3;
+        let columns: Vec<Column> = (0..N)
+            .map(|_| {
+                let mut column = Column::bedrock();
+                for layer in 1..40 {
+                    column.set(layer, Material::Stone);
+                }
+                column.set(40, Material::Grass);
+                column
+            })
+            .collect();
+        let glow = vec![true, false, false];
+        let records = (0..N)
+            .map(|i| GpuColumn {
+                runs: columns[i].packed_runs(render_code),
+                neighbors: [
+                    if i + 1 < N { i as u32 + 1 } else { NO_NEIGHBOR },
+                    if i > 0 { i as u32 - 1 } else { NO_NEIGHBOR },
+                    NO_NEIGHBOR,
+                    NO_NEIGHBOR,
+                ],
+                more: [
+                    NO_NEIGHBOR,
+                    NO_NEIGHBOR,
+                    6,
+                    state_word(&columns[i], false, glow[i]),
+                ],
+            })
+            .collect();
+        let mut tier = ColumnTier {
+            columns,
+            slots: (0..N).collect(),
+            records,
+            light: Vec::new(),
+            dusk: false,
+            glow,
+            centres: vec![Vec3::Y; N],
+            sides: Vec::new(),
+        };
+        tier.relight();
+        let emits = |tier: &ColumnTier, slot: u32| {
+            tier.emitters().iter().any(|emitter| emitter.column == slot)
+        };
+        assert!(!emits(&tier, 0), "by day it is a flower");
+        assert_eq!(tier.light_at(0, 41).block(), 0);
+        assert_eq!(tier.records[0].more[3] & GLOW_LIT_BIT, 0);
+
+        tier.set_dusk(true);
+        assert!(emits(&tier, 0), "at night it is a light");
+        assert_eq!(
+            tier.light_at(0, 41).block(),
+            flora::GLOW_FLOWER_LEVEL,
+            "in the air over its sod"
+        );
+        assert_ne!(tier.records[0].more[3] & GLOW_LIT_BIT, 0, "and says so");
+        for slot in 1..N {
+            assert!(!emits(&tier, slot as u32), "a cell it was not chosen for");
+            assert_eq!(tier.records[slot].more[3] & GLOW_LIT_BIT, 0);
+        }
+        // The record and the emitters agree for every slot.
+        for slot in 0..N {
+            assert_eq!(
+                tier.records[slot].more[3] & GLOW_LIT_BIT != 0,
+                emits(&tier, slot as u32),
+                "slot {slot}"
+            );
+        }
+
+        // Dig the sod out: no ground for it, so no flower and no light.
+        tier.set_layer(0, 40, Material::Air);
+        tier.repack(0);
+        tier.relight();
+        assert!(!emits(&tier, 0), "dug up with its sod");
+        assert_eq!(tier.records[0].more[3] & GLOW_LIT_BIT, 0);
+        assert_eq!(tier.light_at(0, 41).block(), 0);
     }
 }

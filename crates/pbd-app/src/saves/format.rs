@@ -99,6 +99,11 @@ pub fn material_code(material: Material) -> u8 {
         Material::Rock => 10,
         Material::Dirt => 11,
         Material::Torch => 12,
+        Material::LanternPost => 13,
+        Material::LanternWall => 14,
+        Material::LanternHanging => 15,
+        Material::Brazier => 16,
+        Material::Candle => 17,
     }
 }
 
@@ -117,6 +122,11 @@ pub fn material_of(code: u8) -> Option<Material> {
         10 => Material::Rock,
         11 => Material::Dirt,
         12 => Material::Torch,
+        13 => Material::LanternPost,
+        14 => Material::LanternWall,
+        15 => Material::LanternHanging,
+        16 => Material::Brazier,
+        17 => Material::Candle,
         _ => return None,
     })
 }

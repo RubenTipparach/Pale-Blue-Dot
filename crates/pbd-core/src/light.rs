@@ -36,9 +36,65 @@ pub const MAX: u8 = 15;
 /// The reference's `voxel_sky_lateral_loss`, shipped at 1, and its vertical
 /// step is 1 too - the comment beside it says "Vertical neighbours stay at 1
 /// per step so daylight shafts remain at full strength". One cost for every
-/// direction, so the falloff from a cave mouth is 15 cells whichever way the
-/// tunnel runs.
+/// direction for the SKY, so the falloff from a cave mouth is 15 cells
+/// whichever way the tunnel runs. A lamp's step up or down costs this too.
 pub const STEP: u8 = 1;
+
+/// What a step ACROSS, to a neighbouring column, costs a lamp's light.
+///
+/// Three levels: one cell's 2.833 m, rounded, so a lamp's level is about a
+/// metre whichever way its light goes. At one level per cell, as the sky
+/// has, a brazier lit forty metres of meadow at night nearly as bright as
+/// noon, where the owner's towns mockup gives it eleven
+/// (`lamps-and-lanterns` decision 7). The sky keeps [`STEP`] until the owner
+/// has judged the caves it lights.
+pub const BLOCK_ACROSS: u8 = 3;
+
+/// The colour a lamp's light lays over what it lights, and how strongly, in
+/// the terrain shader's `albedo * TORCH_TINT * strength * TORCH_GAIN`. Warm,
+/// because everything that burns is. Here so the held tool and the ship,
+/// which the terrain pass does not draw, are lit by the same numbers
+/// (`lamps-and-lanterns` decisions 5 and 10); a test holds the shader's copy
+/// to these.
+pub const TORCH_TINT: [f32; 3] = [1.00, 0.70, 0.30];
+pub const TORCH_GAIN: f32 = 1.25;
+
+/// The floor under the sky's fill: what a surface the sun and sky never reach
+/// still shows, so a cave is a dark room and not a black screen. The terrain
+/// shader's `AMBIENT_FLOOR`.
+pub const AMBIENT_FLOOR: f32 = 0.05;
+
+/// The sky's fill at night, as a share of the day's: the terrain shader's
+/// `night` for a cap.
+pub const NIGHT_FILL: f32 = 0.12;
+
+/// How much of the day's light a surface takes from the sky, given what of
+/// the sky reaches it (`sky`, 0..1) and how much it is day where it is
+/// (`daylight`, 0..1): the terrain shader's
+/// `max(AMBIENT_FLOOR, mix(night, 1, daylight) * skylight)`. What moves is lit
+/// by it (`lamps-and-lanterns` decision 10), so a tool in a cave is as dark as
+/// the cave.
+pub fn sky_fill(sky: f32, daylight: f32) -> f32 {
+    let day = daylight.clamp(0.0, 1.0);
+    ((NIGHT_FILL + (1.0 - NIGHT_FILL) * day) * sky.clamp(0.0, 1.0)).max(AMBIENT_FLOOR)
+}
+
+/// What a block level (0..1) adds, as linear RGB over a white surface: the
+/// terrain shader's `TORCH_TINT * lamp_strength(lamp) * TORCH_GAIN`.
+pub fn lamp_light(block: f32) -> [f32; 3] {
+    let k = lamp_strength(block) * TORCH_GAIN;
+    [TORCH_TINT[0] * k, TORCH_TINT[1] * k, TORCH_TINT[2] * k]
+}
+
+/// How much of the lamp colour a block level adds, from its share `f` of
+/// [`MAX`] (`lamps-and-lanterns` decision 7): the towns mockup's
+/// `(1 - (d/R)^2)^2` written in the level. The shader's `lamp_strength` is the
+/// same arithmetic, and a test holds its text to this.
+pub fn lamp_strength(f: f32) -> f32 {
+    let f = f.clamp(0.0, 1.0);
+    let g = f * (2.0 - f);
+    g * g
+}
 
 /// How much a corner is darkened by the neighbours it is wedged between.
 ///
@@ -189,6 +245,14 @@ enum Channel {
 }
 
 impl Channel {
+    /// What a step to a neighbouring column costs this channel.
+    fn across(self) -> u8 {
+        match self {
+            Channel::Sky => STEP,
+            Channel::Block => BLOCK_ACROSS,
+        }
+    }
+
     fn of(self, light: Light) -> u8 {
         match self {
             Channel::Sky => light.sky(),
@@ -206,9 +270,13 @@ impl Channel {
 
 /// The flood. Every cell already at its seeded level is on the queue.
 ///
-/// ONE implementation for both channels, which is what keeps a lamp's falloff
-/// and daylight's the same falloff: two floods written apart would be two
-/// answers to how far light travels, and a player would learn one of them.
+/// ONE implementation for both channels: two floods written apart would be
+/// two answers to how light travels, and a player would learn one of them.
+/// The one thing the channels differ in is what a step across costs
+/// ([`BLOCK_ACROSS`]). With a step up cheaper than a step across, a cell can
+/// be reached first by a dimmer path and later by a brighter one; `give`
+/// takes the brighter and queues the cell again, so the answer is still the
+/// brightest path, whatever order the queue ran in.
 fn flood(
     region: &Region,
     light: &mut Baked,
@@ -220,21 +288,27 @@ fn flood(
         if level <= STEP {
             continue;
         }
-        let next = level - STEP;
-        let give =
-            |light: &mut Baked, queue: &mut std::collections::VecDeque<_>, to: u32, at: usize| {
-                if region.opaque(to, at) || channel.of(light[to as usize][at]) >= next {
-                    return;
-                }
-                light[to as usize][at] = channel.set(light[to as usize][at], next);
-                queue.push_back((to, at as u16));
-            };
+        let give = |light: &mut Baked,
+                    queue: &mut std::collections::VecDeque<_>,
+                    to: u32,
+                    at: usize,
+                    next: u8| {
+            if region.opaque(to, at) || channel.of(light[to as usize][at]) >= next {
+                return;
+            }
+            light[to as usize][at] = channel.set(light[to as usize][at], next);
+            queue.push_back((to, at as u16));
+        };
         let layer = layer as usize;
         if layer + 1 < LAYERS {
-            give(light, &mut queue, column, layer + 1);
+            give(light, &mut queue, column, layer + 1, level - STEP);
         }
         if layer > 0 {
-            give(light, &mut queue, column, layer - 1);
+            give(light, &mut queue, column, layer - 1, level - STEP);
+        }
+        let across = channel.across();
+        if level <= across {
+            continue;
         }
         for side in 0..6 {
             let Some(&neighbor) = region
@@ -245,10 +319,116 @@ fn flood(
                 continue;
             };
             if neighbor != OFF_REGION && (neighbor as usize) < region.columns.len() {
-                give(light, &mut queue, neighbor, layer);
+                give(light, &mut queue, neighbor, layer, level - across);
             }
         }
     }
+}
+
+/// Both channels at a point, each in 0..1: `(sky, block)`. What lights
+/// anything the terrain pass does not draw - the held tool, the ship, a fish
+/// (`lamps-and-lanterns` decision 10).
+///
+/// `column` is the column the point is in, `direction` the point's unit
+/// direction from the planet's centre, `layer` its height in layers (a whole
+/// number is a layer's floor), and `centres` every column's unit direction.
+///
+/// It blends two ways, so a thing moving through the field changes smoothly:
+///
+/// - **Across**, over the column and its neighbours, each weighted by how
+///   near the point is to its centre, out to one neighbour's spacing. A
+///   neighbour solid at that layer is left out: a point beside a wall reads
+///   the air it is in, not the rock.
+/// - **Up**, between the two layers the point sits between, taking each at
+///   its middle.
+///
+/// With no column, or with the point off the column's span, it answers the
+/// open sky and no lamp, which is what the far terrain is drawn with.
+pub fn sample(
+    region: &Region,
+    light: &Baked,
+    centres: &[glam::Vec3],
+    column: Option<u32>,
+    direction: glam::Vec3,
+    layer: f32,
+) -> (f32, f32) {
+    const OPEN: (f32, f32) = (1.0, 0.0);
+    let Some(column) = column else {
+        return OPEN;
+    };
+    let (Some(centre), Some(_)) = (centres.get(column as usize), light.get(column as usize)) else {
+        return OPEN;
+    };
+    if !layer.is_finite() || layer < 0.0 || layer >= LAYERS as f32 {
+        return OPEN;
+    }
+    // The two layers the point sits between, each taken at its middle.
+    let below = (layer - 0.5).floor().clamp(0.0, (LAYERS - 1) as f32);
+    let above = (below + 1.0).min((LAYERS - 1) as f32);
+    let up = ((layer - 0.5) - below).clamp(0.0, 1.0);
+    let at = |cell: u32, level: usize| -> Option<(f32, f32)> {
+        if region.opaque(cell, level) {
+            return None;
+        }
+        let value = light.get(cell as usize)?.get(level)?;
+        Some((value.sky() as f32, value.block() as f32))
+    };
+    let angle = |a: glam::Vec3, b: glam::Vec3| a.dot(b).clamp(-1.0, 1.0).acos();
+    let neighbours: Vec<u32> = region
+        .neighbors
+        .get(column as usize)
+        .map(|sides| {
+            sides
+                .iter()
+                .copied()
+                .filter(|&n| n != OFF_REGION && (n as usize) < centres.len())
+                .collect()
+        })
+        .unwrap_or_default();
+    // One neighbour's spacing: how far a centre's weight reaches.
+    let spacing = neighbours
+        .iter()
+        .map(|&n| angle(*centre, centres[n as usize]))
+        .fold(0.0_f32, f32::max)
+        .max(1e-9);
+    let weigh = |cell: u32| -> f32 {
+        let d = angle(direction, centres[cell as usize]) / spacing;
+        let w = (1.0 - d).max(0.0);
+        w * w
+    };
+    let mut sum = (0.0_f32, 0.0_f32);
+    let mut total = 0.0_f32;
+    for cell in std::iter::once(column).chain(neighbours.iter().copied()) {
+        // The home column always counts a little, so a point on its far
+        // edge still reads its own cell rather than nothing.
+        let w = if cell == column {
+            weigh(cell).max(1e-3)
+        } else {
+            weigh(cell)
+        };
+        if w <= 0.0 {
+            continue;
+        }
+        let low = at(cell, below as usize);
+        let high = at(cell, above as usize);
+        let value = match (low, high) {
+            (Some(a), Some(b)) => (a.0 + (b.0 - a.0) * up, a.1 + (b.1 - a.1) * up),
+            (Some(a), None) | (None, Some(a)) => a,
+            (None, None) => continue,
+        };
+        sum.0 += value.0 * w;
+        sum.1 += value.1 * w;
+        total += w;
+    }
+    if total <= 0.0 {
+        // Inside rock: nothing reaches it.
+        return (0.0, 0.0);
+    }
+    let max = MAX as f32;
+    (
+        (sum.0 / total / max).clamp(0.0, 1.0),
+        (sum.1 / total / max).clamp(0.0, 1.0),
+    )
 }
 
 /// What one corner of a face is lit to, in 0..1.
@@ -543,7 +723,7 @@ mod tests {
         assert_eq!(roofed[0][60].sky(), 0, "and the rock itself holds none");
     }
 
-    /// A lamp fills the dark, on the same falloff daylight uses.
+    /// A lamp fills the dark: three levels a cell across, one a layer up.
     #[test]
     fn a_lamp_lights_a_buried_tunnel_and_the_sky_does_not_notice() {
         let mut columns = vec![roofed(50, 51, 100)];
@@ -568,8 +748,13 @@ mod tests {
             }],
         );
         assert_eq!(lit[0][51].block(), 14, "the lamp's own cell");
-        assert_eq!(lit[1][51].block(), 13, "one step costs one level");
-        assert_eq!(lit[6][51].block(), 8, "and it keeps falling off");
+        assert_eq!(
+            lit[1][51].block(),
+            14 - BLOCK_ACROSS,
+            "a step across costs a cell's width, three levels"
+        );
+        assert_eq!(lit[4][51].block(), 2, "and it keeps falling off");
+        assert_eq!(lit[5][51].block(), 0, "out before the fifth cell");
         assert_eq!(lit[0][51].sky(), 0, "the sky channel is untouched");
     }
 
@@ -719,5 +904,274 @@ mod tests {
             corner(&region, &light, [0, OFF_REGION, OFF_REGION], 50),
             0.0
         );
+    }
+
+    /// Every light the city needs, at the level the design gave it, and none
+    /// of them a wall (`lamps-and-lanterns` task 5.1).
+    #[test]
+    fn each_light_has_its_level_and_none_is_solid() {
+        let levels = [
+            (Material::Torch, 14),
+            (Material::LanternPost, 13),
+            (Material::LanternWall, 13),
+            (Material::LanternHanging, 12),
+            (Material::Brazier, 15),
+            (Material::Candle, 8),
+        ];
+        assert_eq!(levels.len(), Material::LAMPS.len());
+        for (material, level) in levels {
+            assert_eq!(material.emission(), level, "{material:?}");
+            assert!(material.is_lamp());
+            let mut column = ground(40);
+            column.set(41, material);
+            assert!(!column.solid(41), "{material:?} is walked through");
+            assert_eq!(column.surface(), Some(40), "and is not the ground");
+        }
+        assert!(Material::LanternPost.dusk_lit() && Material::LanternWall.dusk_lit());
+        for always in [
+            Material::Torch,
+            Material::LanternHanging,
+            Material::Brazier,
+            Material::Candle,
+        ] {
+            assert!(!always.dusk_lit(), "{always:?} burns all day");
+        }
+        assert!(!Material::Stone.is_lamp() && !Material::Air.is_lamp());
+    }
+
+    /// A candle lights a room and a brazier a square: alone in the same dark
+    /// tunnel, the brazier's light reaches further. Across, each lights about
+    /// a metre a level, which is the towns mockup's reach for each
+    /// (`lamps-and-lanterns` decision 7).
+    #[test]
+    fn a_brazier_reaches_further_than_a_candle() {
+        let reach = |material: Material| {
+            let columns: Vec<Column> = (0..24).map(|_| roofed(50, 51, 100)).collect();
+            let (columns, neighbors) = line(columns);
+            let light = bake(
+                &Region {
+                    columns: &columns,
+                    neighbors: &neighbors,
+                },
+                &[Emitter {
+                    column: 0,
+                    layer: 51,
+                    level: material.emission(),
+                }],
+            );
+            (0..columns.len())
+                .filter(|&c| light[c][51].block() > 0)
+                .count()
+        };
+        let (candle, brazier) = (reach(Material::Candle), reach(Material::Brazier));
+        assert_eq!(candle, 3, "a candle of 8 lights its own cell and two more");
+        assert_eq!(brazier, 5, "a brazier of 15, its own and four more");
+        assert!(brazier > candle);
+        for (material, cells) in [
+            (Material::Torch, 5),
+            (Material::LanternPost, 5),
+            (Material::LanternWall, 5),
+            (Material::LanternHanging, 4),
+        ] {
+            assert_eq!(reach(material), cells, "{material:?}");
+        }
+    }
+
+    /// A tier-sized patch of hex ground, `side` by `side` columns in offset
+    /// rows, flat at layer `top`: the shape the column tier bakes, without
+    /// the planet under it.
+    fn field(side: usize, top: usize) -> (Vec<Column>, Vec<[u32; 6]>) {
+        let columns = vec![ground(top); side * side];
+        let at = |c: isize, r: isize| {
+            if c < 0 || r < 0 || c >= side as isize || r >= side as isize {
+                OFF_REGION
+            } else {
+                (r as usize * side + c as usize) as u32
+            }
+        };
+        let neighbors = (0..side * side)
+            .map(|i| {
+                let (c, r) = ((i % side) as isize, (i / side) as isize);
+                let shift = r & 1;
+                [
+                    at(c + 1, r),
+                    at(c - 1, r),
+                    at(c - 1 + shift, r - 1),
+                    at(c + shift, r - 1),
+                    at(c - 1 + shift, r + 1),
+                    at(c + shift, r + 1),
+                ]
+            })
+            .collect();
+        (columns, neighbors)
+    }
+
+    /// Centres for a `line`: one cell's 2.833 m apart along a great circle
+    /// of a 4.8 km planet, which is the finest cells' spacing.
+    fn centres(count: usize) -> Vec<glam::Vec3> {
+        let step = 2.833 / 4800.0;
+        (0..count)
+            .map(|i| glam::Vec3::new((i as f32 * step).cos(), (i as f32 * step).sin(), 0.0))
+            .collect()
+    }
+
+    /// The sampler (`lamps-and-lanterns` task 3.1): a point in a sealed cave
+    /// reads dark, a point beside a lamp reads the lamp and less further off,
+    /// a point with no column or off the span reads the open sky, and a point
+    /// in open ground reads the sky.
+    #[test]
+    fn the_sampler_reads_a_cave_dark_a_lamp_bright_and_off_the_tier_open() {
+        let (columns, neighbors) = line((0..8).map(|_| roofed(50, 51, 100)).collect());
+        let region = Region {
+            columns: &columns,
+            neighbors: &neighbors,
+        };
+        let at = centres(columns.len());
+        let dark = bake(&region, &[]);
+        let (sky, block) = sample(&region, &dark, &at, Some(3), at[3], 51.5);
+        assert_eq!((sky, block), (0.0, 0.0), "a sealed cave, unlit");
+
+        let lit = bake(
+            &region,
+            &[Emitter {
+                column: 0,
+                layer: 51,
+                level: Material::Torch.emission(),
+            }],
+        );
+        let (_, beside) = sample(&region, &lit, &at, Some(0), at[0], 51.5);
+        assert!(
+            (beside - 14.0 / 15.0).abs() < 1e-5,
+            "in the torch's cell: {beside}"
+        );
+        let (_, near) = sample(&region, &lit, &at, Some(1), at[1], 51.5);
+        let (_, far) = sample(&region, &lit, &at, Some(3), at[3], 51.5);
+        assert!(beside > near && near > far, "{beside} > {near} > {far}");
+        // Halfway between two centres it is between their two values.
+        let half = (at[0] + at[1]).normalize();
+        let (_, between) = sample(&region, &lit, &at, Some(0), half, 51.5);
+        assert!(
+            near < between && between < beside,
+            "{near} < {between} < {beside}"
+        );
+
+        assert_eq!(
+            sample(&region, &lit, &at, None, at[0], 51.5),
+            (1.0, 0.0),
+            "no column"
+        );
+        assert_eq!(
+            sample(&region, &lit, &at, Some(0), at[0], LAYERS as f32 + 3.0),
+            (1.0, 0.0),
+            "over the span"
+        );
+
+        let (open, neighbors) = line((0..3).map(|_| ground(50)).collect());
+        let region = Region {
+            columns: &open,
+            neighbors: &neighbors,
+        };
+        let day = bake(&region, &[]);
+        let (sky, _) = sample(&region, &day, &centres(3), Some(1), centres(3)[1], 52.0);
+        assert_eq!(sky, 1.0, "open ground reads the whole sky");
+    }
+
+    /// **A city of three hundred lanterns** (`lamps-and-lanterns` task 5.5),
+    /// before any city exists: a street lantern every third cell of every
+    /// third row, over a patch the size of the column tier. Each lantern's
+    /// own cell holds its level, and ground more than four cells from every
+    /// lantern holds none. `cargo test --release -p pbd-core city -- --nocapture`
+    /// prints what the bake cost; the design's risk note records it.
+    #[test]
+    fn a_city_of_three_hundred_lanterns_bakes_every_lantern_and_nothing_past_its_reach() {
+        let (columns, neighbors) = field(56, 100);
+        let region = Region {
+            columns: &columns,
+            neighbors: &neighbors,
+        };
+        let side = 56;
+        let lanterns: Vec<Emitter> = (0..side * side)
+            .filter(|i| (i % side) % 3 == 1 && (i / side) % 3 == 1)
+            .take(300)
+            .map(|i| Emitter {
+                column: i as u32,
+                layer: 101,
+                level: Material::LanternPost.emission(),
+            })
+            .collect();
+        assert_eq!(lanterns.len(), 300);
+        let started = std::time::Instant::now();
+        let lit = bake(&region, &lanterns);
+        let with = started.elapsed();
+        let started = std::time::Instant::now();
+        let dark = bake(&region, &[]);
+        let bare = started.elapsed();
+        eprintln!(
+            "city bake: {} columns, {} lanterns: {:.2} ms, {:.2} ms without them",
+            columns.len(),
+            lanterns.len(),
+            with.as_secs_f64() * 1000.0,
+            bare.as_secs_f64() * 1000.0
+        );
+        for lantern in &lanterns {
+            assert_eq!(
+                lit[lantern.column as usize][101].block(),
+                13,
+                "a lantern's own cell"
+            );
+        }
+        // The last lantern stands at column 1 + 3k of row 1 + 3j; the patch's
+        // far corner is well over four cells from every one of them.
+        let last = lanterns.last().unwrap().column as usize;
+        let beyond = (side - 1) * side + (side - 1);
+        assert!(
+            beyond / side >= last / side + 5,
+            "the corner is past the city"
+        );
+        assert_eq!(
+            lit[beyond][101].block(),
+            0,
+            "nothing past a lantern's reach"
+        );
+        assert_eq!(dark[beyond][101].block(), 0);
+        assert_eq!(lit[beyond][101].sky(), MAX, "and the sky is the sky's");
+    }
+
+    /// Up a shaft a lamp's light still falls one level a layer, as the sky's
+    /// does: only the step across got dearer. A brazier at the foot of a
+    /// sealed shaft lights all fifteen layers of it, and the sky, across a
+    /// region with no open column, is never touched.
+    #[test]
+    fn a_lamp_lights_a_shaft_a_level_a_layer_and_the_sky_steps_as_before() {
+        let mut shaft = ground(50);
+        for layer in 51..70 {
+            shaft.set(layer, Material::Air);
+        }
+        for layer in 70..100 {
+            shaft.set(layer, Material::Stone);
+        }
+        let (columns, neighbors) = line(vec![shaft]);
+        let lit = bake(
+            &Region {
+                columns: &columns,
+                neighbors: &neighbors,
+            },
+            &[Emitter {
+                column: 0,
+                layer: 51,
+                level: Material::Brazier.emission(),
+            }],
+        );
+        for up in 0..15 {
+            assert_eq!(
+                lit[0][51 + up].block(),
+                15 - up as u8,
+                "{up} layers up the shaft"
+            );
+        }
+        assert_eq!(lit[0][66].block(), 0, "fifteen layers up it is out");
+        // The sky's step across is still one level: a tunnel off an open
+        // column falls one level a cell, as `voxel-light` built it.
+        const { assert!(STEP == 1 && BLOCK_ACROSS > STEP) };
     }
 }

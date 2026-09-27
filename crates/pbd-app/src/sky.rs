@@ -29,11 +29,6 @@ pub const CLOUD_RADIUS: f32 = PLANET_RADIUS + 300.0;
 /// towers to the full 450 m and a stratus deck lies in the bottom third. The
 /// tops stay under the atmosphere shell (960 m up) with room to spare.
 pub const CLOUD_THICKNESS: f32 = 450.0;
-/// Where the sun is in the system frame: the core's fixed sun, which the
-/// planet turns under. Noon is exactly this, so every capture framed against
-/// the old constant still reads.
-pub const SUN_DIRECTION: Vec3 = pbd_core::daylight::SUN_FIXED;
-
 /// The world's clock and the one sun direction derived from it.
 ///
 /// It was a `const` that six call sites each normalised their own copy of -

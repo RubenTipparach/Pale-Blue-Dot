@@ -935,6 +935,12 @@ pub struct ColumnSettings {
     pub worm_steer_scale_m: f32,
     /// Layers of solid a worm keeps above the bedrock floor.
     pub cave_floor_layers: u32,
+    /// Share of cells, 0..1, that grow a glowing flower: one that lights the
+    /// ground around it from dusk to dawn wherever its cell is grassy
+    /// (`lamps-and-lanterns` decision 8). Here beside the tier that bakes its
+    /// light rather than with the clutter that draws it, because the tier is
+    /// where the choice is made.
+    pub glow_flower_chance: f32,
 }
 
 impl Default for ColumnSettings {
@@ -953,6 +959,7 @@ impl Default for ColumnSettings {
             worm_start_depth_m: worms.start_depth_m,
             worm_steer_scale_m: worms.steer_scale_m,
             cave_floor_layers: worms.floor_layers as u32,
+            glow_flower_chance: 0.04,
         }
     }
 }
@@ -996,6 +1003,7 @@ impl Validated for ColumnSettings {
         positive("worm_step_m", &[self.worm_step_m, self.worm_steer_scale_m])?;
         non_negative("worm_turn", &[self.worm_turn, self.worm_pitch_max])?;
         unit("worm_surface_share", self.worm_surface_share)?;
+        unit("glow_flower_chance", self.glow_flower_chance)?;
         ((self.cave_floor_layers as usize) < pbd_core::column::LAYERS)
             .then_some(())
             .ok_or("cave_floor_layers must be inside the column span")?;

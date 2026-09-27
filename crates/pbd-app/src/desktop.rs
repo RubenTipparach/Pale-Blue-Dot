@@ -8,6 +8,7 @@ mod menu;
 mod overlay_ui;
 mod scene;
 mod slots;
+mod time_ui;
 mod weather_ui;
 
 use avian3d::prelude::*;
@@ -141,6 +142,15 @@ pub struct Launch {
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
     pub torch: bool,
+    /// `--lamps [metres [across]]`: one of every light in a row across the
+    /// view, that far ahead of the camera (5 m when no distance follows) and
+    /// centred that far to the right (0 when none follows), for the lights'
+    /// captures (`lamps-and-lanterns` task 5.2). Close up shows the lights;
+    /// further out shows how far each one's light goes; a row moved aside
+    /// brings its end into a close-up.
+    pub lamps: bool,
+    pub lamps_at: f32,
+    pub lamps_across: f32,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -197,6 +207,9 @@ impl Launch {
             day: None,
             overlay: None,
             torch: false,
+            lamps: false,
+            lamps_at: 5.0,
+            lamps_across: 0.0,
             dig_ahead: false,
             pitch: None,
             yaw: None,
@@ -251,6 +264,25 @@ impl Launch {
                         .expect("--place requires a count");
                 }
                 "--torch" => result.torch = true,
+                "--lamps" => {
+                    result.lamps = true;
+                    if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
+                    {
+                        assert!(
+                            metres.is_finite() && metres > 0.0,
+                            "--lamps takes metres ahead"
+                        );
+                        result.lamps_at = metres;
+                        i += 1;
+                        if let Some(across) =
+                            args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
+                        {
+                            assert!(across.is_finite(), "--lamps takes metres across");
+                            result.lamps_across = across;
+                            i += 1;
+                        }
+                    }
+                }
                 "--dig-ahead" => result.dig_ahead = true,
                 "--pitch" => {
                     i += 1;
@@ -739,6 +771,7 @@ pub fn run(args: &[String]) {
             (frame_graph::toggle, frame_graph::update).chain(),
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
+            (time_ui::press, time_ui::toggle, time_ui::show).chain(),
             overlay_ui::show,
             autosave,
             save_weather,
@@ -781,6 +814,7 @@ pub fn run(args: &[String]) {
             pbd_app::vehicles::VehiclePlugin,
             pbd_app::fish::FishPlugin,
             pbd_app::held::HeldPlugin,
+            pbd_app::field_light::FieldLightPlugin,
         ))
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
@@ -1374,6 +1408,7 @@ fn photo_camera(
     mut commands: Commands,
     launch: Res<Launch>,
     water_settings: Res<pbd_app::config::WaterSettings>,
+    clock: Res<pbd_app::sky::Sun>,
 ) {
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
@@ -1478,17 +1513,18 @@ fn photo_camera(
         // `--height` lifts the eye and pushes the aim point out to sea by the
         // same distance, so every height in a series looks down at about 45
         // degrees instead of straight down.
-        // `nightshore` is the same instrument on the night side. The sun is a
-        // fixed direction, so a latitude can be in permanent day: 72 N is, at
-        // every longitude. The equator is not, and its antisolar longitude is
-        // the deepest night the body has, so that is where this one starts.
-        // `midnight` is the antisolar POINT itself: the sun sits 48 degrees
-        // north, so the equator's antisolar longitude is still 132 degrees
-        // from the sun and its sky is lit by the upper atmosphere over the
-        // limb; only at the antisolar latitude is the sky black in every
-        // direction, which is the frame the owner's night report was taken in.
+        // `nightshore` is the same instrument on the night side, found from
+        // the sun where the clock puts it - the one sun, pinned by `--time` -
+        // so the night it frames is the night the sky and the lamps are
+        // drawn for. The equator's antisolar longitude is the deepest night
+        // the equator has, so that is where this one starts. `midnight` is
+        // the antisolar POINT itself: off the equator the sun's latitude
+        // leaves the equator's antisolar longitude short of the sun's
+        // opposite, its sky lit by the upper atmosphere over the limb; only
+        // at the antisolar point is the sky black in every direction, which
+        // is the frame the owner's night report was taken in.
         let night = launch.view == "nightshore" || launch.view == "midnight";
-        let sun = pbd_app::sky::SUN_DIRECTION.normalize();
+        let sun = clock.clock.sun();
         let lat = if launch.view == "midnight" {
             (-sun.y).clamp(-1.0, 1.0).asin()
         } else if night {

@@ -7,6 +7,7 @@ pub mod atmosphere;
 pub mod config;
 #[cfg(feature = "desktop")]
 pub mod controls;
+pub mod field_light;
 #[cfg(feature = "desktop")]
 pub mod fish;
 #[cfg(feature = "desktop")]

@@ -82,6 +82,8 @@ pub enum MenuAction {
     EditName,
     /// Set the storm forcing to this percentage: a weather preset.
     Weather(u8),
+    /// Set the clock to this hour: a time preset (`time_ui` acts).
+    Time(u8),
     /// Show this overlay: 0 is off, then `Overlay::ALL` in order.
     Overlay(u8),
     /// Open this species' entry in the field guide (`guide::press` acts).
@@ -340,6 +342,7 @@ pub fn spawn(mut commands: Commands) {
                 .with_children(|panel| {
                     panel.spawn(title("PAUSED"));
                     super::weather_ui::spawn(panel);
+                    super::time_ui::spawn(panel);
                     super::overlay_ui::spawn_row(panel);
                     button(panel, "RESUME", MenuAction::Resume);
                     button(panel, "SAVES", MenuAction::Saves);
@@ -760,6 +763,8 @@ pub fn press(
         match action {
             MenuAction::EditName => name.focused = true,
             MenuAction::Weather(percent) => forcing.0 = f32::from(percent.min(100)) / 100.0,
+            // The clock's own control answers it (`time_ui::press`).
+            MenuAction::Time(_) => {}
             MenuAction::Overlay(row) => overlay.0 = super::overlay_ui::mode_for(row),
             MenuAction::Resume => {
                 front.0 = false;

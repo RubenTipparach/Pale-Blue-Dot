@@ -11,6 +11,7 @@ pub mod edits;
 pub mod fauna;
 pub mod fishing;
 pub mod flight;
+pub mod flora;
 pub mod frame;
 pub mod gravity;
 pub mod hex;

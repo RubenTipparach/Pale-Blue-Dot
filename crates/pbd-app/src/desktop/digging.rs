@@ -244,17 +244,17 @@ pub fn apply_edit(
     // The move is made on a COPY first. What the log records is the hotbar
     // after the edit, and what the player keeps is that same hotbar only if
     // the record was taken.
-    // One lamp to a column. The record carries ONE torch layer, because a
-    // torch is not in a run and the runs are all the shader reads, so a second
+    // One lamp to a column. The record carries ONE lamp layer, because a
+    // lamp is not in a run and the runs are all the shader reads, so a second
     // one would light a cell nothing was drawn in. Refusing is better than
     // drawing the wrong one.
-    if material == Material::Torch
+    if material.is_lamp()
         && let Some(column) = adopting
             .as_ref()
             .or_else(|| fine.set.columns.column(record))
-        && pbd_app::planet::column::has_torch(column)
+        && pbd_app::planet::column::has_lamp(column)
     {
-        info!("edit refused: cell {cell} already carries a torch");
+        info!("edit refused: cell {cell} already carries a lamp");
         return None;
     }
     // Adopting takes a slot, so a full tier refuses here, BEFORE the save:
@@ -516,6 +516,82 @@ fn occupies(eye: Vec3, place: Sample) -> bool {
     (feet..=head).contains(&place.layer)
 }
 
+/// `--lamps`: every light in a row across the view, one cell apart, each on
+/// the ground of its own cell (`lamps-and-lanterns` task 5.2). The wall
+/// lantern gets a two-block pillar in the cell beyond it to hang on, and the
+/// hanging lantern a block over it to hang from. Returns how many lights were
+/// placed.
+fn lamp_row(world: &mut Edited, eye: Vec3, forward: Vec3, row: f32, aside: f32) -> usize {
+    let up = eye.normalize_or(Vec3::Y);
+    let ahead = (forward - up * forward.dot(up)).normalize_or(Vec3::X);
+    let right = ahead.cross(up).normalize_or(Vec3::Z);
+    // The cell `metres` ahead and `across` to the right, its key and the first
+    // layer over its ground.
+    let spot = |world: &Edited, metres: f32, across: f32| -> Option<(u32, usize)> {
+        let offset = ahead * metres + right * across;
+        let angle = offset.length() / PLANET_RADIUS;
+        let direction = (up * angle.cos() + offset.normalize_or(ahead) * angle.sin()).normalize();
+        let record = world.contact.finest_cell(direction)?;
+        let key = world.fine.set.finest_records().get(record)?.key();
+        let top = world.fine.set.columns.column(record)?.surface()?;
+        Some((key, top + 1))
+    };
+    // Before the fine set is under the camera there is no cell to put a lamp
+    // in, and the caller tries again next frame.
+    if spot(world, row, 0.0).is_none() {
+        return 0;
+    }
+    let mut placed = 0;
+    // One row across the view, so a single frame shows every light. Each
+    // light walks right from the last until it is in a cell nobody has used:
+    // a fixed step across a hex grid sometimes lands twice in one cell.
+    let mut used = Vec::new();
+    let mut across = aside - 2.5 * LAMP_SPACING_M;
+    for &lamp in Material::LAMPS.iter() {
+        let mut found = None;
+        for _ in 0..16 {
+            match spot(world, row, across) {
+                Some((cell, layer)) if !used.contains(&cell) => {
+                    found = Some((cell, layer));
+                    break;
+                }
+                _ => across += 0.5,
+            }
+        }
+        let Some((cell, layer)) = found else {
+            warn!("scripted lamps: no free cell {across:.1} m across for {lamp:?}");
+            continue;
+        };
+        used.push(cell);
+        // A wall lantern needs a wall: two stones in the next cell back.
+        if lamp == Material::LanternWall
+            && let Some((wall, base)) = spot(world, row + LAMP_SPACING_M, across)
+        {
+            used.push(wall);
+            for step in 0..2 {
+                apply_edit(world, Hands::Empty, wall, base + step, Material::Stone);
+            }
+        }
+        // A hanging lantern needs something to hang from: a stone over it.
+        let layer = if lamp == Material::LanternHanging {
+            apply_edit(world, Hands::Empty, cell, layer + 2, Material::Stone);
+            layer + 1
+        } else {
+            layer
+        };
+        if apply_edit(world, Hands::Empty, cell, layer, lamp).is_some() {
+            info!("scripted {lamp:?} in cell {cell} layer {layer}, {across:.1} m across");
+            placed += 1;
+        }
+        across += LAMP_SPACING_M;
+    }
+    placed
+}
+
+/// How far apart `--lamps` puts its lights: about one cell, so each stands in
+/// a cell of its own.
+const LAMP_SPACING_M: f32 = 2.9;
+
 /// The scripted dig: a headless run has no mouse, and a picture of a hole is
 /// the only thing that says the verb works end to end.
 ///
@@ -533,7 +609,7 @@ pub fn scripted_dig(
     mut slots: ResMut<super::slots::Hotbar>,
     mut done: Local<bool>,
 ) {
-    if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch) {
+    if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch && !launch.lamps) {
         return;
     }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
@@ -630,7 +706,36 @@ pub fn scripted_dig(
         }
         *done = true;
     }
-    if dug == 0 && !launch.torch {
+    if launch.lamps {
+        let forward = transform.forward().as_vec3();
+        let placed = lamp_row(
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut edits,
+                slots: &mut slots,
+            },
+            eye,
+            forward,
+            launch.lamps_at,
+            launch.lamps_across,
+        );
+        // Before the fine set is under the camera there is no cell to put a
+        // lamp in; the next frame tries again, as the scripted dig does.
+        if placed > 0 {
+            info!("scripted lamps: {placed} placed");
+            // And a stack of each in the hotbar, in place of the kit's
+            // blocks, so the same frame shows every light's own icon (task
+            // 5.3). A capture's save is memory-only, so nothing is kept.
+            let mut carried = pbd_core::inventory::Slots::new();
+            for light in Material::LAMPS {
+                carried.give(pbd_core::inventory::Item::Block(light), 8);
+            }
+            **slots = carried;
+            *done = true;
+        }
+    }
+    if dug == 0 && !launch.torch && !launch.lamps {
         // Say why nothing happened rather than failing silently: a scripted
         // dig that finds no ground is either out of the tier or aimed wrong,
         // and a capture with no hole in it cannot tell those apart.

@@ -37,6 +37,22 @@ const KIT_GRANTS: [(Material, u16); 1] = [
     (Material::Torch, 16),
 ];
 
+/// A light's own icon, as an asset path, or `None` for a block that is not
+/// a light. Each light is its own picture, drawn by `tools/gen_item_icons.py`
+/// (`lamps-and-lanterns` task 5.3), rather than a tinted tile of a material
+/// it is not.
+pub fn light_icon(material: Material) -> Option<&'static str> {
+    Some(match material {
+        Material::Torch => "items/lights/torch.png",
+        Material::LanternPost => "items/lights/lantern_post.png",
+        Material::LanternWall => "items/lights/lantern_wall.png",
+        Material::LanternHanging => "items/lights/lantern_hanging.png",
+        Material::Brazier => "items/lights/brazier.png",
+        Material::Candle => "items/lights/candle.png",
+        _ => return None,
+    })
+}
+
 /// The player's slots as a Bevy resource.
 ///
 /// A newtype rather than a `Resource` derive on the core type: the core owns
@@ -141,6 +157,51 @@ mod kit_tests {
 
         let again = Hotbar::restore(&mut save);
         assert_eq!(count(&again, Material::Torch), 16, "not dealt twice");
+    }
+
+    /// Every light has its own icon on disk, a 16x16 picture on a transparent
+    /// ground in the lights' one palette, and no block that is not a light
+    /// claims one (`lamps-and-lanterns` task 5.3).
+    #[test]
+    fn every_light_has_its_own_icon_and_nothing_else_does() {
+        use bevy::asset::RenderAssetUsages;
+        use bevy::image::{CompressedImageFormats, Image, ImageSampler, ImageType};
+        let assets = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets"));
+        let mut seen = std::collections::HashSet::new();
+        for light in Material::LAMPS {
+            let path = light_icon(light).unwrap_or_else(|| panic!("{light:?} has no icon"));
+            assert!(seen.insert(path), "{light:?} shares {path}");
+            let bytes = std::fs::read(assets.join(path)).expect(path);
+            let image = Image::from_buffer(
+                &bytes,
+                ImageType::Extension("png"),
+                CompressedImageFormats::NONE,
+                true,
+                ImageSampler::nearest(),
+                RenderAssetUsages::default(),
+            )
+            .expect(path);
+            assert_eq!(image.size(), UVec2::new(16, 16), "{path}");
+            let data = image.data.as_ref().expect(path);
+            let alpha = |x: usize, y: usize| data[(y * 16 + x) * 4 + 3];
+            for (x, y) in [(0, 15), (15, 0), (15, 15)] {
+                assert_eq!(alpha(x, y), 0, "{path}: a transparent ground at ({x}, {y})");
+            }
+            let opaque = (0..256).filter(|&i| data[i * 4 + 3] == 255).count();
+            assert!(opaque >= 20, "{path}: {opaque} pixels is not a picture");
+            assert!(
+                (0..256).all(|i| matches!(data[i * 4 + 3], 0 | 255)),
+                "{path}: pixel art is opaque or clear, never half"
+            );
+        }
+        for block in [
+            Material::Stone,
+            Material::Grass,
+            Material::Air,
+            Material::Water,
+        ] {
+            assert!(light_icon(block).is_none(), "{block:?} is not a light");
+        }
     }
 
     /// A save that spent its torches is not refilled: the deal is by version,

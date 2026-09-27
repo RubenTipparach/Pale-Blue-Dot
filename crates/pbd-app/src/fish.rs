@@ -651,6 +651,7 @@ mod draw {
             .spawn((
                 Name::new("Fishing float"),
                 Float,
+                crate::field_light::LitByField,
                 Transform::default(),
                 Visibility::Hidden,
             ))
@@ -789,6 +790,7 @@ mod draw {
             commands.spawn((
                 Name::new(format!("{} school", species.name)),
                 SchoolMesh(index),
+                crate::field_light::LitByField,
                 Mesh3d(meshes.add(mesh)),
                 MeshMaterial3d(material),
                 Transform::from_translation((frame.center + school.anchor.as_dvec3()).as_vec3()),

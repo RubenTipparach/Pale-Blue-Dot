@@ -118,13 +118,153 @@ look.
   from its delta before it is archived. A requirement never reaches the main
   spec ahead of its code.
 
+**7. A lamp's level is a metre: a step across a cell costs three levels, a
+step up or down one (found on the task 5.2 captures, 2026-09-27).**
+
+The risk below came true on the first capture of the six lights. At midnight a
+row of them, spaced one cell apart 5 m ahead, lit the meadow around them nearly
+as bright as noon, out past 30 m. With the lights taken away, the same view is
+the dark night it should be (`docs/screenshots/lamps-and-lanterns/`).
+
+- **Why.** The flood spends one level per step in every direction, and a step
+  across is a 2.833 m cell while a step up is a 1 m layer. A level-15 brazier
+  lit 14 cells, about 40 m, sideways and 14 m upward. The brightness is also
+  linear in the level, so 14 m from a brazier was still at two thirds.
+- **What the owner approved.** The towns mockup gives each light a reach in
+  metres, with a smooth fall to nothing: lamp 9, torch 10, brazier 11, candle
+  5 (`LIGHT_REACH`), at a strength of `(1 - (d/R)^2)^2`.
+- **The fix, part one: the block channel's sideways step costs three levels.**
+  Three levels is one cell's 2.833 m, rounded, so a level is about a metre in
+  every direction. The reaches become:
+
+  | light | level | cells across it lights | metres |
+  | --- | ---: | ---: | ---: |
+  | brazier | 15 | 4 | 11.3 |
+  | torch | 14 | 4 | 11.3 |
+  | post or wall lantern | 13 | 4 | 11.3 |
+  | hanging lantern | 12 | 3 | 8.5 |
+  | candle | 8 | 2 | 5.7 |
+
+  Those are the mockup's reaches to within a metre or two, from the levels
+  decision 3 already chose. Upward a light still climbs one level per layer,
+  so a lantern lights a ceiling 3 m over it at 10 of 13.
+- **The fix, part two: brightness follows the mockup's curve.** With `f` the
+  level over 15, the shader adds `(f (2 - f))^2` of the lamp colour rather
+  than `f`. It is the mockup's `(1 - (d/R)^2)^2` written in the level: near a
+  light it is brighter than linear (0.92 at one cell from a brazier, against
+  0.8), and at the edge it falls smoothly to nothing (0.13 at four cells,
+  against 0.2).
+- **The sky channel keeps one level per step.** Daylight into a cave is
+  `voxel-light`'s, and the owner has not yet judged its caves (task 1.4). The
+  same rule for the sky would take a tunnel's twilight from about 42 m to
+  15 m. That is a change to the look of every cave mouth, so it is a survey
+  question (L1), not part of this fix. The flood stays one implementation, and
+  its sideways cost is a parameter of the channel.
+- **Cost.** A block flood touches about a ninth of the cells it did, because
+  each light's lit disc is a third as wide. The bake timing of task 5.5 is
+  measured after this change.
+- *Alternative:* keep the flood and only steepen the shader's curve. Rejected:
+  no curve on the level can make a light reach 11 m sideways and also light a
+  ceiling 3 m up, because the level does not know which way it travelled.
+- *Alternative:* lower every level. Rejected for the same reason. A candle at
+  level 2 would light across one cell and up two layers.
+
+**8. A glowing flower is chosen on the CPU from the cell's exact key, and
+its bit makes the flower as well as the glow (written 2026-09-27, before task
+6.1).**
+- **Which cells.** `pbd_core::flora::glows(key, chance)` hashes the cell's
+  exact key (`cell_key`) and compares it with `glow_flower_chance` in
+  `scatter.ron`, a share of green cells: 0.04, a third of `flower_chance`'s
+  0.12. One glowing flower in about 25 green cells is one every 14 m or so
+  across a meadow, close enough that their pools touch.
+- **Where it is carried.** The fine set sets bit 0 of the record's
+  `spare[2]` when it builds the record, so the decision is made once, where
+  the key is made. The column tier keeps the same answer per slot and adds
+  the cell as a dusk-lit emitter at the layer over its ground, level 6, while
+  that ground is grassy and the tier is at dusk. Digging the sod out takes
+  the flower and its light with it.
+- **What the shader does with the bit.** A cell with the bit grows a flower
+  whether or not its own roll gave it one: the bit is the one decider, and
+  the shader's roll only places and turns the flower, as it does for every
+  flower now. Its head is drawn glowing while the column record's new
+  `GLOW_LIT_BIT` (bit 29 of `more[3]`) is set, which the tier sets with the
+  lanterns' lit bit at dusk. Past the column tier there is no field and no
+  bit, and the head is drawn in its day colour. The clutter's reach is well
+  inside the tier, so no flower is drawn there anyway.
+- **Colour.** The head is a pale cyan-green, the colour the owner's words
+  suggest ("some flowers illuminate the ground"). The light it puts on the
+  ground is the field's one warm tint, because the block channel carries a
+  level and not a colour. A second, cool channel would be a third nibble a
+  cell, which decision 1 already turned down for its cost.
+- *Alternative:* port the shader's flower roll to Rust and glow a share of
+  the rolled flowers. Rejected: two copies of one roll in two languages is
+  the thing CLAUDE.md asks to validate against each other, and a bit that
+  makes the flower needs no second copy.
+
+**9. Trees and ground clutter take the field at their own cell (found on the
+task 5.2 captures, 2026-09-27).**
+- **What the captures showed.** Beside a lamp at midnight the ground is lit
+  and every grass blade standing on it is black. The clutter and the trees
+  never read the field: their vertices keep the default of full sky and no
+  lamp, so a lamp cannot light them, and the night's sky term alone draws
+  them near black.
+- **The fix.** Where the cell has a column, a clutter vertex takes the field
+  at the air layer over the cap, as the cap's own centre does, and a tree
+  vertex takes it at the layer of its own height, so a canopy over a lantern
+  is lit from below and a trunk in a cave is dark. Off the tier nothing
+  changes: there is no field there, and full sky is what the far terrain is
+  drawn with.
+- *Alternative:* light clutter from the moving-thing sampler of decision 2.
+  Rejected: clutter is drawn in the terrain pass, which already reads the
+  field directly, one lookup a vertex.
+
+**10. How each moving thing takes the field, from what it is drawn with
+today (surveyed 2026-09-27, before group 3).** Decision 2 said what is
+sampled; this says what the sample does to each thing, because they are drawn
+three different ways.
+- **What is there.** There is no player body: what a player sees of
+  themselves is the held tool and the hand (`held.rs`). Those are an unlit
+  material over baked vertex shades, so they are full-bright at midnight and
+  in a sealed cave. The ship (the Kestrel's model, the Tern and the Loon), the
+  fish and the float are Bevy's lit PBR material, lit by one directional sun
+  at a fixed 15,000 lux and a constant ambient. At midnight, and in a cave at
+  noon, they are drawn as at noon.
+- **The sampler** (task 3.1) is `pbd_core::light::sample`. It takes the
+  column a point is in, the point's direction and its fractional layer, and
+  the columns' centres. It blends the column and its open neighbours by
+  distance, and the two layers the point sits between, and answers sky and
+  block in 0..1. Solid neighbours are left out, so a point by a wall reads the
+  air and not the rock. With no column, or off the column's span, it answers
+  full sky and no block, which is what the far terrain is drawn with. The
+  column tier keeps each slot's centre so the app can ask it.
+- **The held tool and hand** take ONE sample, at the eye. They are half a
+  metre across, so eight corners would be eight equal samples. Each frame
+  their shared material's colour becomes the terrain's own lighting term for
+  that sample: the sky's fill, `max(floor, mix(night, 1, daylight) * sky)`,
+  plus the lamps' `tint * strength(block) * gain`, all from the constants the
+  terrain shader uses (decision 5 moves the tint and gain into the core for
+  this). Their baked face shades stay, so they keep their form.
+- **The ship, the fish and the float keep their PBR look and are scaled by the
+  field.** Each gets an extension of its material. Its uniform carries the
+  eight corner samples of the thing's bounds in the render frame, those
+  bounds, the planet's centre and the sun. The fragment blends the eight
+  across the bounds, which is decision 2's bow-lit, stern-dark ship. It
+  multiplies Bevy's lit colour by the same sky fill as the held tool, with
+  daylight taken at the fragment, and adds the same lamp term. By day in the
+  open that is Bevy's own colour, unchanged, so the ship looks as the owner
+  has seen it. In a cave it falls to the floor, and at night to the night's
+  fill, with lamplight added on the side a lamp is.
+- *Alternative:* replace the PBR lighting with the terrain's model outright.
+  Rejected for now: it changes how the ship looks by day, which no one asked
+  for. Scaling keeps the day look and fixes the night and the cave.
+- *Alternative:* dim the directional sun with the clock. Rejected: the same
+  light lights the moon, which is in space and in sunlight at midnight.
+
 ## Risks / Trade-offs
 
 - [A level-13 lantern floods about 13 cells, over 30 m across 2.833 m cells,
-  and could light a whole street from one post] → The levels are tuned on
-  captures of a street and a room, and the owner sees them. If one step per
-  cell is too long horizontally, the flood's step becomes two levels per
-  horizontal cell, which is a single constant in `light`.
+  and could light a whole street from one post] → It did, on the first
+  capture. Decision 7 makes a sideways step cost three levels.
 - [Hundreds of emitters in a city make the bake slower] → The flood's cost
   follows the lit volume, not the number of emitters. A synthetic city of 300
   lanterns is baked and timed in the tests before any city exists.
@@ -132,8 +272,17 @@ look.
   thing, for fewer than ten things. It cannot be measured in a cloud session
   (see CLAUDE.md), so the owner runs the performance suite on real hardware.
 - [The dusk re-bake happens on the frame the clock crosses dusk, and a 6 ms
-  hitch at dusk may be visible] → The re-bake runs on the same worker the edit
-  path uses, and the new field is swapped in when it is ready.
+  hitch at dusk may be visible] → This note first said the re-bake would run
+  on "the same worker the edit path uses". The edit path has no worker: an
+  edit relights the whole tier on the main thread (`digging.rs`,
+  `apply_edit`), which is the six milliseconds the voxel-light change
+  measured. The dusk switch (`planet_lod::switch_dusk_lamps`) does the same,
+  once at dusk and once at dawn. A tier the streaming builds on its worker is
+  baked there at the dusk state it is built for, so a new tier never
+  arrives in the wrong state. In the cloud container the switch logged 30 to
+  37 ms, with lavapipe drawing on the same CPU, which says nothing about real
+  hardware. If the owner sees the hitch, the switch moves to a worker that
+  re-bakes a copy and swaps it in only if no edit landed meanwhile.
 
 ## Migration Plan
 

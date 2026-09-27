@@ -193,6 +193,11 @@ fn material_name(material: Material) -> &'static str {
         Material::Rock => "rock",
         Material::Dirt => "dirt",
         Material::Torch => "torch",
+        Material::LanternPost => "street lantern",
+        Material::LanternWall => "wall lantern",
+        Material::LanternHanging => "hanging lantern",
+        Material::Brazier => "brazier",
+        Material::Candle => "candle",
     }
 }
 

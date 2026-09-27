@@ -93,6 +93,17 @@ in real time with `obs-record`. The tooling is planned in
 `openspec/changes/step-videos`; until it is built, a gate's video is made by
 hand from a mockup or a capture sequence.
 
+**For now, screenshots stand in (owner, 2026-09-27):** "go ahead and skip
+videos for now, we'll verify them all together all in a batch and iterate
+later. screenshots are good for now, continue with implementation". Until the
+owner says otherwise:
+- a step is checked by before-and-after screenshots in `docs/screenshots/`;
+- the next step starts without waiting for a video;
+- each step's video task stays open for the batch;
+- `step-videos` waits with them.
+
+`exact-cell-keys` is the one step whose video was already made.
+
 ## Ask the owner with a survey (owner, 2026-09-27)
 
 **Standing instruction from the user:** "you need some sort of survey form

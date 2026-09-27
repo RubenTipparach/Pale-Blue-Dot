@@ -38,6 +38,21 @@ pub enum Material {
     /// goes past it - which is what stops a torch shadowing itself and what
     /// stops a corridor of them being a wall.
     Torch = 12,
+    /// The rest of a city's lights (`lamps-and-lanterns`), each a material for
+    /// the torch's reasons and, like it, neither solid nor opaque.
+    ///
+    /// A lantern on a post, standing on the floor: a street lamp. Lit from
+    /// dusk to dawn.
+    LanternPost = 13,
+    /// A lantern on a bracket, on the side of its cell that has a wall. Lit
+    /// from dusk to dawn.
+    LanternWall = 14,
+    /// A lantern hanging from the cell above. Always lit.
+    LanternHanging = 15,
+    /// A fire in an iron bowl: the brightest light there is. Always lit.
+    Brazier = 16,
+    /// A candle: enough to light a room, and no more. Always lit.
+    Candle = 17,
 }
 
 impl Material {
@@ -53,9 +68,40 @@ impl Material {
             // reads. One below full, so a torch is plainly a lamp and plainly
             // not the sun.
             Material::Torch => 14,
+            // The design's levels (`lamps-and-lanterns` decision 3), on the
+            // field's 0-15 scale where a level is how many cells the light
+            // survives: a street lantern reaches the next one, a brazier
+            // fills a square, a candle lights a room of about two cells.
+            Material::LanternPost | Material::LanternWall => 13,
+            Material::LanternHanging => 12,
+            Material::Brazier => 15,
+            Material::Candle => 8,
             _ => 0,
         }
     }
+
+    /// Whether this is a light: something that gives out light and is walked
+    /// through rather than stood on.
+    pub fn is_lamp(self) -> bool {
+        self.emission() > 0
+    }
+
+    /// Whether this light burns only from dusk to dawn. A property of the
+    /// kind of light, not of where it stands (`lamps-and-lanterns` decision
+    /// 4): a street lantern the player places behaves like a city's.
+    pub fn dusk_lit(self) -> bool {
+        matches!(self, Material::LanternPost | Material::LanternWall)
+    }
+
+    /// Every light, in material order.
+    pub const LAMPS: [Material; 6] = [
+        Material::Torch,
+        Material::LanternPost,
+        Material::LanternWall,
+        Material::LanternHanging,
+        Material::Brazier,
+        Material::Candle,
+    ];
 }
 
 #[derive(Clone, Copy, Debug)]

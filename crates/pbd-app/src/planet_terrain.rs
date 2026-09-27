@@ -253,10 +253,75 @@ mod tests {
                 crate::planet::column::WATER_SHIFT
             ),
             format!(
+                "const TORCH_SHIFT: u32 = {}u;",
+                crate::planet::column::TORCH_SHIFT
+            ),
+            format!(
+                "const LAMP_LAYER_MASK: u32 = {:#x}u;",
+                crate::planet::column::LAMP_LAYER_MASK
+            ),
+            format!(
+                "const LAMP_KIND_SHIFT: u32 = {}u;",
+                crate::planet::column::LAMP_KIND_SHIFT
+            ),
+            format!(
+                "const LAMP_LIT_BIT: u32 = {:#010x}u;",
+                crate::planet::column::LAMP_LIT_BIT
+            ),
+            format!(
                 "const COLUMN_WATER_MASK: u32 = {:#x}u;",
                 crate::planet::column::WATER_MASK
             ),
+            format!(
+                "const TORCH_TINT: vec3<f32> = vec3<f32>({:.2}, {:.2}, {:.2});",
+                light::TORCH_TINT[0],
+                light::TORCH_TINT[1],
+                light::TORCH_TINT[2]
+            ),
+            format!("const TORCH_GAIN: f32 = {:.2};", light::TORCH_GAIN),
+            format!("const AMBIENT_FLOOR: f32 = {:.2};", light::AMBIENT_FLOOR),
+            format!("    var night = {:.2};", light::NIGHT_FILL),
+            // The day's edge, which `Clock::daylight` writes out in Rust.
+            "let daylight = smoothstep(-0.13,0.20,sun_elevation);".to_string(),
+            // The lamp curve, written out the same way on both sides.
+            "    let g = f * (2.0 - f);\n    return g * g;".to_string(),
+            format!(
+                "const GLOW_LIT_BIT: u32 = {:#010x}u;",
+                crate::planet::column::GLOW_LIT_BIT
+            ),
+            format!(
+                "const GLOW_FLOWER_BIT: u32 = {}u;",
+                crate::planet::column::GLOW_FLOWER_BIT
+            ),
+            // The shader's `grassy`, which is where it grows flowers, is the
+            // list the bake lights a glowing flower's ground by.
+            format!(
+                "fn grassy(material: u32) -> bool {{ return {}; }}",
+                crate::planet::column::GRASSY_CODES
+                    .iter()
+                    .map(|code| format!("material=={code}u"))
+                    .collect::<Vec<_>>()
+                    .join(" || ")
+            ),
         ] {
+            assert!(
+                shader.contains(&line),
+                "planet_surface.wgsl should declare `{line}`"
+            );
+        }
+        // Which lamp a record's kind names: the shader's numbers are the
+        // core's order, so a candle is drawn as a candle.
+        use pbd_core::terrain::Material;
+        for (name, lamp) in [
+            ("LAMP_TORCH", Material::Torch),
+            ("LAMP_POST", Material::LanternPost),
+            ("LAMP_WALL", Material::LanternWall),
+            ("LAMP_HANGING", Material::LanternHanging),
+            ("LAMP_BRAZIER", Material::Brazier),
+            ("LAMP_CANDLE", Material::Candle),
+        ] {
+            let index = Material::LAMPS.iter().position(|&m| m == lamp).unwrap();
+            let line = format!("const {name}: u32 = {index}u;");
             assert!(
                 shader.contains(&line),
                 "planet_surface.wgsl should declare `{line}`"

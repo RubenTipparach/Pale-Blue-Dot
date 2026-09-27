@@ -35,3 +35,4 @@ It ships before `step-videos` and the lights, so its video is made by hand.
   It is published on a gate page, with a note that frame cost was not measured in the cloud session. Verify: the page is linked from the PR.
   Done: the gate page is https://claude.ai/artifact/UkLbLNDm3mfS17Wu3K6uWe, and the video and stills are in `docs/screenshots/exact-cell-keys/`.
 - [ ] 5.2 The owner watches it and accepts. Verify: the quote is in `proposal.md`. Sync `world/persistence`, and archive.
+  Deferred to the batch (the owner, 2026-09-27: "skip videos for now, we'll verify them all together all in a batch"). The change is merged and stays open until then.

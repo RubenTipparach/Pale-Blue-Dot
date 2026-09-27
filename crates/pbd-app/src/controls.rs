@@ -143,6 +143,7 @@ impl Key {
                 KeyCode::KeyG => "G",
                 KeyCode::KeyH => "H",
                 KeyCode::KeyJ => "J",
+                KeyCode::KeyL => "L",
                 KeyCode::KeyP => "P",
                 KeyCode::KeyQ => "Q",
                 KeyCode::KeyR => "R",
@@ -306,10 +307,11 @@ const LOON: [Binding; 4] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
-const WORLD: [Binding; 3] = [
+const WORLD: [Binding; 4] = [
     row(&[Key::Board(KeyCode::KeyR)], " ", "walk or fly"),
     row(&[Key::Board(KeyCode::KeyH)], " ", "return to the spawn"),
     row(&[Key::Board(KeyCode::KeyP)], " ", "cycle the weather"),
+    row(&[Key::Board(KeyCode::KeyL)], " ", "noon or midnight"),
 ];
 
 const SCREEN: [Binding; 3] = [

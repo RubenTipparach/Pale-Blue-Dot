@@ -178,14 +178,109 @@ const COLUMN_FIRST_VERTEX: u32 = 690u;
 const COLUMN_CAP_VERTICES: u32 = COLUMN_RUNS * 36u;
 // Per side, per run, per neighbouring air gap, one quad.
 const COLUMN_SIDE_VERTICES: u32 = COLUMN_RUNS * COLUMN_GAPS * 6u;
-// One torch: a slim four-sided post and a bright cap. A column holds at most
-// one, which placement enforces, so the torch drawn and the torch lighting are
-// the same torch.
-const COLUMN_TORCH_VERTICES: u32 = 30u;
-// Where a column record carries its torch layer, plus one. `planet_column.rs`
-// packs it; `the_shader_carries_the_reference_light_constants` pins the shift.
+// One lamp: a torch's slim post and bright cap, or two boxes for every other
+// light (`lamps-and-lanterns` task 5.2). A column holds at most one, which
+// placement enforces, so the lamp drawn and the lamp lighting are the same one.
+const COLUMN_LAMP_VERTICES: u32 = 72u;
+// Where a column record carries its lamp's layer, plus one, and which lamp it
+// is, as its index in `Material::LAMPS`. `planet_column.rs` packs both;
+// `the_shader_carries_the_reference_light_constants` pins the shifts.
 const TORCH_SHIFT: u32 = 16u;
-fn torch_layer(rec: ColumnRec) -> u32 { return rec.more[3] >> TORCH_SHIFT; }
+const LAMP_LAYER_MASK: u32 = 0x1ffu;
+const LAMP_KIND_SHIFT: u32 = 25u;
+fn lamp_layer(rec: ColumnRec) -> u32 { return (rec.more[3] >> TORCH_SHIFT) & LAMP_LAYER_MASK; }
+fn lamp_kind(rec: ColumnRec) -> u32 { return (rec.more[3] >> LAMP_KIND_SHIFT) & 7u; }
+// Whether the lamp burns now: a street lantern's glass is dark by day.
+const LAMP_LIT_BIT: u32 = 0x10000000u;
+fn lamp_lit(rec: ColumnRec) -> bool { return (rec.more[3] & LAMP_LIT_BIT) != 0u; }
+// `Material::LAMPS` in order.
+const LAMP_TORCH: u32 = 0u;
+const LAMP_POST: u32 = 1u;
+const LAMP_WALL: u32 = 2u;
+const LAMP_HANGING: u32 = 3u;
+const LAMP_BRAZIER: u32 = 4u;
+const LAMP_CANDLE: u32 = 5u;
+// The column pass's lamps are their own draw kind, so the fragment colours
+// them from the part (iron, wax, glass, flame) rather than from the layer's
+// material, which for a lamp's cell is nothing that looks like a lamp.
+const KIND_LAMP: u32 = 5u;
+// A lamp part's code, in the material byte, above every terrain code.
+const LAMP_IRON_CODE: u32 = 240u;
+const LAMP_WAX_CODE: u32 = 241u;
+const LAMP_WOOD_CODE: u32 = 243u;
+// A lantern's glass while it is out: dark panes in the iron frame.
+const LAMP_GLASS_CODE: u32 = 242u;
+// What a lit part carries in the block channel instead of a level, so the
+// fragment draws it as the light it is: a lantern's lit panes, or a bare
+// flame.
+const LAMP_PANES: f32 = 2.0;
+const LAMP_FLAME: f32 = 3.0;
+// A glowing flower's head while it burns: drawn as its own cool light
+// (`lamps-and-lanterns` decision 8).
+const LAMP_BLOOM: f32 = 4.0;
+// The record bit that says a cell grows a glowing flower (`spare.z`), and the
+// column bit that says it burns (`more[3]`). `planet_column.rs` sets both;
+// `the_shader_carries_the_reference_light_constants` pins them.
+const GLOW_FLOWER_BIT: u32 = 1u;
+const GLOW_LIT_BIT: u32 = 0x20000000u;
+// A glowing flower's head by day: pale, and cooler than the white and warm
+// blooms, so the species is known before dark.
+const BLOOM_CODE: u32 = 244u;
+// A flame also carries how far up it is, 0 at its root and 1 at its tip, as
+// `LAMP_FLAME + FLAME_RISE * rise`, so it shades from root to tip without a
+// varying of its own.
+const FLAME_RISE: f32 = 0.5;
+
+// Whether a lantern's pixel is its iron frame: the rim of each side, and all
+// of its top and bottom.
+fn lantern_frame(uv: vec2<f32>, up: f32) -> bool {
+    let edge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+    return edge < 0.16 || abs(up) > 0.5;
+}
+
+// How much of a lamp's colour a level `f` (0..1 of the brightest) adds: the
+// towns mockup's `(1 - (d/R)^2)^2`, written in the level, which falls about
+// a metre a step (`lamps-and-lanterns` decision 7). Brighter than linear
+// near the light, and down smoothly to nothing at the edge of its reach.
+fn lamp_strength(level: f32) -> f32 {
+    let f = clamp(level, 0.0, 1.0);
+    let g = f * (2.0 - f);
+    return g * g;
+}
+
+// One vertex of a lamp.
+struct LampVertex {
+    position: vec3<f32>,
+    normal: vec3<f32>,
+    uv: vec2<f32>,
+    // How far up the box, 0 at its foot and 1 at its top: what a flame
+    // shades by, from root to tip, on its sides and its top alike.
+    rise: f32,
+}
+
+// Vertex `i` (0..36) of a box: centre `c`, a right-handed frame `x`, `y`, `z`,
+// half extents `e` along them. Faces wind counter-clockwise from outside,
+// which is what back-face culling keeps. On each of the four sides `uv.y`
+// runs down `z`, from 0 at the top to 1 at the foot, so a flame shades from
+// root to tip and a lantern's frame is the same on every side.
+fn lamp_box(i: u32, c: vec3<f32>, x: vec3<f32>, y: vec3<f32>, z: vec3<f32>, e: vec3<f32>) -> LampVertex {
+    let face = i / 6u;
+    var n = x; var u = y; var w = z; var hn = e.x; var hu = e.y; var hw = e.z;
+    if face == 2u || face == 3u { n = y; u = -x; w = z; hn = e.y; hu = e.x; hw = e.z; }
+    if face == 4u || face == 5u { n = z; u = x; w = y; hn = e.z; hu = e.x; hw = e.y; }
+    let s = select(-1.0, 1.0, face % 2u == 0u);
+    let corners = array<vec2<f32>,4>(vec2(-1.,-1.),vec2(1.,-1.),vec2(1.,1.),vec2(-1.,1.));
+    let order = array<u32,6>(0u,1u,2u,0u,2u,3u);
+    let q = corners[order[i % 6u]];
+    var out: LampVertex;
+    out.position = c + n*(hn*s) + u*(q.x*hu*s) + w*(q.y*hw);
+    out.normal = n*s;
+    out.uv = vec2(q.x*0.5+0.5, 0.5-q.y*0.5);
+    out.rise = q.y*0.5+0.5;
+    if face == 4u { out.rise = 1.0; }
+    if face == 5u { out.rise = 0.0; }
+    return out;
+}
 // Where the record carries the top of this column's water, as a layer plus
 // one; `planet_column.rs` packs it and a test holds the two shifts together.
 const COLUMN_WATER_SHIFT: u32 = 4u;
@@ -616,6 +711,9 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // is the whole of what "baked vertex colours" means here: a face grades
     // across itself because its corners were sampled apart.
     var out_voxel = vec2(1., 0.);
+    // Set for a glowing flower's head while it burns, and applied last, over
+    // the field the clutter takes (`lamps-and-lanterns` decision 8).
+    var bloom = false;
     // Open to the rain unless the column pass says otherwise: the terrain
     // pass's cap IS its column's top, its height-field walls stand only off
     // the tier where nothing overhangs, and trees and clutter stand on the cap.
@@ -806,17 +904,20 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     }
                 }
             } else if v >= COLUMN_CAP_VERTICES + 6u*COLUMN_SIDE_VERTICES {
-                // ---- A torch: a slim post standing on the floor with a lit
-                // head on it.
+                // ---- A lamp: a torch, a slim post standing on the floor
+                // with a lit head on it, or two boxes for every other light
+                // (`lamps-and-lanterns` task 5.2).
                 //
                 // Drawn HERE rather than in the clutter, because a torch is at
                 // a layer rather than on the surface: one can stand on a cave
                 // floor forty metres down, which is the whole reason to carry
                 // one.
                 let t = v-(COLUMN_CAP_VERTICES+6u*COLUMN_SIDE_VERTICES);
-                let layer = torch_layer(rec);
-                if layer != 0u {
+                let layer = lamp_layer(rec);
+                let which = lamp_kind(rec);
+                if layer != 0u && which == LAMP_TORCH && t < 30u {
                     let foot = params.settings.x+COLUMN_BASE_M+f32(layer-1u);
+                    kind = KIND_LAMP;
                     let up = axis;
                     let post = 0.55;
                     let rad = 0.06;
@@ -836,7 +937,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                         normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
                         let post_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
                         uv = post_uv[indices[i]];
-                        material = 7u;
+                        material = LAMP_WOOD_CODE | (cell.metadata.y & 0xff00u);
                         out_voxel = vec2(sky_at(lit_slot,layer-1u),1.0);
                     } else {
                         // The head, at full lamp: it IS the light, so it is
@@ -853,9 +954,72 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                         position = select(select(tip,p1,c==1u),p0,c==0u);
                         uv = select(select(vec2(0.5,0.1),vec2(0.9,0.9),c==1u),vec2(0.1,0.9),c==0u);
                         normal = up;
-                        material = 7u;
-                        out_voxel = vec2(0.0,1.0);
+                        material = LAMP_WOOD_CODE | (cell.metadata.y & 0xff00u);
+                        out_voxel = vec2(0.0, LAMP_FLAME + FLAME_RISE*select(0.0, 1.0, c == 2u));
                     }
+                } else if layer != 0u && which != LAMP_TORCH {
+                    let foot = params.settings.x+COLUMN_BASE_M+f32(layer-1u);
+                    kind = KIND_LAMP;
+                    // The frame: across the cell, and up. A wall lantern turns
+                    // to face the side of its cell that has a wall at its
+                    // layer, found here from the neighbours' runs, so nothing
+                    // is stored and a lantern follows its wall.
+                    var x = tangent;
+                    var y = bitangent;
+                    var reach = 0.0;
+                    if which == LAMP_WALL {
+                        for (var side = 0u; side < degree; side++) {
+                            let there = column_side(rec, side);
+                            let solid = there == NO_NEIGHBOR || solid_at(there + 1u, layer - 1u);
+                            if solid && reach == 0.0 {
+                                let mid = normalized(cell.corners[side].xyz + cell.corners[(side+1u)%degree].xyz);
+                                let across = mid - axis*dot(mid, axis);
+                                x = normalized(across);
+                                y = normalized(cross(axis, x));
+                                reach = length(across)*foot;
+                            }
+                        }
+                        if reach == 0.0 { reach = 0.6; }
+                    }
+                    let box = t/36u;
+                    let i = t%36u;
+                    // Two boxes: the frame (post, bracket, chain, stand, wax)
+                    // and the light (lantern, fire, flame).
+                    var centre = vec3(0.);
+                    var half = vec3(0.);
+                    // A brazier's and a candle's light is a bare flame; the
+                    // three lanterns' is lit glass in an iron frame.
+                    let flame = which == LAMP_BRAZIER || which == LAMP_CANDLE;
+                    var code = LAMP_IRON_CODE;
+                    if box == 1u && !flame { code = LAMP_GLASS_CODE; }
+                    let glow = box == 1u && lamp_lit(rec);
+                    if which == LAMP_POST {
+                        if box == 0u { centre = axis*(foot+0.75); half = vec3(0.05,0.05,0.75); }
+                        else { centre = axis*(foot+1.68); half = vec3(0.15,0.15,0.18); }
+                    } else if which == LAMP_WALL {
+                        if box == 0u { centre = axis*(foot+0.95)+x*(reach-0.2); half = vec3(0.2,0.03,0.03); }
+                        else { centre = axis*(foot+0.72)+x*(reach-0.36); half = vec3(0.13,0.13,0.15); }
+                    } else if which == LAMP_HANGING {
+                        if box == 0u { centre = axis*(foot+0.8); half = vec3(0.02,0.02,0.2); }
+                        else { centre = axis*(foot+0.45); half = vec3(0.13,0.13,0.15); }
+                    } else if which == LAMP_BRAZIER {
+                        // An iron basket on its stand, and the fire in it.
+                        if box == 0u { centre = axis*(foot+0.3); half = vec3(0.26,0.26,0.3); }
+                        else { centre = axis*(foot+0.82); half = vec3(0.17,0.17,0.22); }
+                    } else {
+                        if box == 0u { centre = axis*(foot+0.12); half = vec3(0.045,0.045,0.12); code = LAMP_WAX_CODE; }
+                        else { centre = axis*(foot+0.29); half = vec3(0.022,0.022,0.05); }
+                    }
+                    let part = lamp_box(i, centre, x, y, axis, half);
+                    position = part.position;
+                    normal = part.normal;
+                    uv = part.uv;
+                    // The light's own box, while it burns, is drawn as the
+                    // light it is; everything else takes what the field has
+                    // in its cell, which is mostly its own lamp.
+                    material = code | (cell.metadata.y & 0xff00u);
+                    let burning = select(LAMP_PANES, LAMP_FLAME + FLAME_RISE*part.rise, flame);
+                    out_voxel = select(light_at(lit_slot, layer-1u), vec2(0.0, burning), glow);
                 }
             } else {
                 // A flank: this run's rock against one stretch of the
@@ -1092,7 +1256,11 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         } else if v < 234u {
             // ---- flower: a slim stem and a bright four-triangle head.
             let i = v-216u;
-            if green && roll(id,SALT_FLOWER) < params.clutter_chance.y {
+            // A cell the CPU chose for a glowing flower grows one whatever
+            // its own roll said: the record's bit is the one decider, and the
+            // rolls below only place and turn it (decision 8).
+            let glowing = (cell.spare.z & GLOW_FLOWER_BIT) != 0u;
+            if green && (glowing || roll(id,SALT_FLOWER) < params.clutter_chance.y) {
                 let k = u32(roll(id,SALT_FLOWER+1u)*f32(degree));
                 let f0 = 0.15+0.60*roll(id,SALT_FLOWER+2u);
                 let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
@@ -1110,6 +1278,11 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     // The head takes its own colour: a white bloom or a warm
                     // one, which is the reference's snow/crag pair.
                     material = select(4u,6u,roll(id,SALT_FLOWER+4u) < 0.5);
+                    if glowing {
+                        material = BLOOM_CODE;
+                        bloom = lit_slot != 0u
+                            && (columns[lit_slot-1u].more[3] & GLOW_LIT_BIT) != 0u;
+                    }
                     let t = (i-6u)/3u;
                     let c = (i-6u)%3u;
                     let tip = bottom+axis*h;
@@ -1208,6 +1381,17 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         }
         if !grown { position = axis*radius; }
     }
+    // Trees and ground clutter take the field at their own cell
+    // (`lamps-and-lanterns` decision 9): clutter at the air over the cap, as
+    // the cap's own centre does, and a tree at the layer of its own height,
+    // so a canopy over a lantern is lit from below. Off the tier there is no
+    // field, and they keep the open sky the far terrain is drawn with.
+    if (kind == 2u || kind == 3u) && lit_slot != 0u {
+        let ground = air_above(lit_slot, height);
+        let own = light_layer(length(position) - params.settings.x);
+        out_voxel = light_at(lit_slot, select(ground, max(own, ground), kind == 2u));
+    }
+    if bloom { out_voxel = vec2(0.0, LAMP_BLOOM); }
     var out: VertexOut;
     out.position = position;
     out.clip = params.clip_from_body*vec4(position,1.);
@@ -1552,7 +1736,8 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // `grass.png` on the top, `dirt_grass.png` on the side and `dirt.png`
     // underneath: three pictures, none of them a tint.
     var far = base;
-    if code>=DIRT_CODE {
+    if code>=LAMP_IRON_CODE { tile = vec2(3.,0.); }
+    if code>=DIRT_CODE && code<LAMP_IRON_CODE {
         tile = vec2(2.,0.);
         if code>=GRASS_SIDE_CODE { tile = vec2(1.,0.); }
         far = GROUND_MEAN;
@@ -1563,6 +1748,18 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // is what makes a sward read as lush rather than as flat green paper.
     var albedo = mix(art,far,smoothstep(180.,1400.,distance_to_camera))
         *cell_variation*input.shade;
+    // A lamp's parts: iron, wax, and a lantern's glass while it is out, with
+    // the stone tile's grain left in so they are pixel art and not paint.
+    let grain = dot(art, vec3(0.299, 0.587, 0.114));
+    let up = dot(n, radial);
+    if cap == BLOOM_CODE { albedo = vec3(0.55, 0.90, 0.82)*(0.75 + 0.5*grain); }
+    if input.kind == KIND_LAMP {
+        var part = vec3(0.16, 0.15, 0.14);
+        if cap == LAMP_WAX_CODE { part = vec3(0.86, 0.80, 0.66); }
+        if cap == LAMP_WOOD_CODE { part = vec3(0.36, 0.22, 0.12); }
+        if cap == LAMP_GLASS_CODE && !lantern_frame(input.uv, up) { part = vec3(0.20, 0.25, 0.27); }
+        albedo = part*(0.75 + 0.5*grain);
+    }
     // A tiny cap-edge darkening makes the actual hex-column silhouette legible
     // while the atlas supplies the committed source pixel art at close range.
     // What sky a face takes. A cap takes the cool overhead tone; a WALL - a
@@ -1578,7 +1775,7 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     var fill = vec3(0.16,0.21,0.27);
     var night = 0.12;
     var gain = 1.;
-    if input.kind==1u || input.kind==4u {
+    if input.kind==1u || input.kind==4u || input.kind==KIND_LAMP {
         fill = vec3(0.30,0.32,0.34);
         night = 0.20;
         gain = 0.95;
@@ -1598,7 +1795,25 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // albedo so a torch lights the ground it stands on rather than painting a
     // flat orange patch over it. This is the term that makes a night worth
     // carrying a light through.
-    color += albedo*TORCH_TINT*(lamp*TORCH_GAIN);
+    color += albedo*TORCH_TINT*(lamp_strength(lamp)*TORCH_GAIN);
+    // A lamp's own light is drawn as the light it is, whatever lights the
+    // cell around it. A lantern is lit panes in its iron frame; a brazier's
+    // fire and a candle's flame are white-gold at the root and orange at the
+    // tip. The tile's grain is left in both.
+    // A glowing flower's head at night: its own cool light, whatever the
+    // field around it holds.
+    if lamp > LAMP_BLOOM - 0.25 {
+        color = vec3(0.62, 1.0, 0.88)*(0.85 + 0.3*grain);
+    } else if input.kind == KIND_LAMP && lamp > LAMP_PANES - 0.5 {
+        if lamp > LAMP_FLAME - 0.5 {
+            let height = clamp((lamp - LAMP_FLAME)/FLAME_RISE, 0.0, 1.0);
+            color = mix(vec3(1.0, 0.86, 0.48), vec3(0.95, 0.36, 0.07), height)*(0.78 + 0.44*grain);
+        } else if lantern_frame(input.uv, up) {
+            color = vec3(0.16, 0.15, 0.14)*TORCH_TINT*TORCH_GAIN*(0.75 + 0.5*grain);
+        } else {
+            color = vec3(1.0, 0.80, 0.46)*(0.82 + 0.35*grain);
+        }
+    }
     // Lightning: the storm's cloud lit from inside, which lights everything
     // under open sky a cool white for the length of a flicker. Gated by the
     // sky light, so a cave does not flash with the storm over it.
