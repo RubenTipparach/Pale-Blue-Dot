@@ -5,10 +5,10 @@ the lights (group 7) before `world-map` starts.
 
 ## 1. Close the two half-open lighting changes
 
-- [ ] 1.1 Move the delta specs of `voxel-light` and `night-and-lamps` from `specs/planet/spec.md` to `specs/planet/light/spec.md`. Verify: `openspec validate voxel-light night-and-lamps --strict` passes.
-- [ ] 1.2 Take `night-and-lamps`' unbuilt requirements out of its delta: the torch's icon clause, the flowers and the sampler. They are carried by this change's delta. Verify: its delta holds only "The sun moves, and there is one of it" and "A cell can emit light of its own", each with a passing test named in its scenarios.
-- [ ] 1.3 Sync both into `openspec/specs/planet/light/spec.md` with `/opsx:sync`, and name each requirement's test in its scenarios. Verify: `openspec validate --all` passes, and every requirement in the new spec names a test that passes.
-- [ ] 1.4 Ask the owner for `voxel-light`'s in-game check (caves dark enough, the crease reads, the mouth's falloff), then archive both changes, moving their held items into this change's non-goals. Verify: neither appears in `openspec list`.
+- [x] 1.1 Move the delta specs of `voxel-light` and `night-and-lamps` from `specs/planet/spec.md` to `specs/planet/light/spec.md`. Verify: `openspec validate voxel-light night-and-lamps --strict` passes.
+- [x] 1.2 Take `night-and-lamps`' unbuilt requirements out of its delta: the torch's icon clause, the flowers and the sampler. They are carried by this change's delta. Verify: its delta holds only "The sun moves, and there is one of it" and "A cell can emit light of its own", each with a passing test named in its scenarios.
+- [x] 1.3 Sync both into `openspec/specs/planet/light/spec.md` with `/opsx:sync`, and name each requirement's test in its scenarios. Verify: `openspec validate --all` passes, and every requirement in the new spec names a test that passes.
+- [ ] 1.4 (Asked 2026-09-27 as survey L3.) Ask the owner for `voxel-light`'s in-game check (caves dark enough, the crease reads, the mouth's falloff), then archive both changes, moving their held items into this change's non-goals. Verify: neither appears in `openspec list`.
 
 ## 2. One sun, one set of light constants
 
