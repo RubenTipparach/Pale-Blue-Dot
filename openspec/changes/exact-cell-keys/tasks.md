@@ -6,7 +6,7 @@ It ships before `step-videos` and the lights, so its video is made by hand.
 ## 1. The measurement, as a test
 
 - [x] 1.1 `pbd_core::cell_key` with `point_id`'s mix moved into it, and a test that counts collisions over every finest cell. It pins 202,571 for the hash. Verify: it reproduces the scratch measurement exactly, and its run time is recorded in the design.
-- [ ] 1.2 A tool mode that lists the colliding pairs nearest a point. Verify: it names the pair nearest the spawn, which is used for the video.
+- [x] 1.2 A tool mode that lists the colliding pairs nearest a point. Verify: it names the pair nearest the spawn, which is used for the video. Done: `pbd-app --colliding-pairs [count]`. The nearest pair to the spawn (25 m) has its cells' ground 31 m apart, so an edit at one surface is air at the other, and the video uses the nearest pair on one ground layer instead (303 m; `docs/screenshots/exact-cell-keys/README.md`).
 
 ## 2. The key
 
@@ -16,7 +16,7 @@ It ships before `step-videos` and the lights, so its video is made by hand.
 ## 3. The same look
 
 - [x] 3.1 The seed lane, `metadata[3]`, keeps the old hash, so no shader changes. Verify: an app test that every record of a spawn tier carries `cell_key::old_hash` of its address in `metadata[3]` and its exact key in `spare[1]`, and `git diff` shows no `.wgsl` file changed.
-- [ ] 3.2 Captures of the `meadow` and `surface` views on the old build and the new. Verify: the two are pixel-identical, and both are in `docs/screenshots/exact-cell-keys/`.
+- [x] 3.2 Captures of the `meadow` and `surface` views on the old build and the new. Verify: the two are pixel-identical, and both are in `docs/screenshots/exact-cell-keys/`. Done: 0 of 1,296,000 pixels differ in either view.
 
 ## 4. Old saves
 
@@ -25,7 +25,7 @@ It ships before `step-videos` and the lights, so its video is made by hand.
 
 ## 5. The owner's check
 
-- [ ] 5.1 The gate video, hand-made from a capture sequence stitched with Playwright's ffmpeg. Its shots are:
+- [x] 5.1 The gate video, hand-made from a capture sequence stitched with Playwright's ffmpeg. Its shots are:
   - the colliding pair's cell A dug;
   - B dug on the old build;
   - B untouched on the new build;
@@ -33,4 +33,5 @@ It ships before `step-videos` and the lights, so its video is made by hand.
   - the unchanged ground.
 
   It is published on a gate page, with a note that frame cost was not measured in the cloud session. Verify: the page is linked from the PR.
+  Done: the gate page is https://claude.ai/artifact/UkLbLNDm3mfS17Wu3K6uWe, and the video and stills are in `docs/screenshots/exact-cell-keys/`.
 - [ ] 5.2 The owner watches it and accepts. Verify: the quote is in `proposal.md`. Sync `world/persistence`, and archive.

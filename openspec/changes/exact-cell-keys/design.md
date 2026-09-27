@@ -145,6 +145,19 @@ Measured on the 4-core cloud container, in the workspace's test profile
   reported failure, so `accept` refuses edits from then on, as it does for
   any failed write.
 
+**The gate video** (task 5.1) was made by hand from captures, as decision 4
+says:
+- The pair is not the one nearest the spawn. That pair's two cells stand on
+  ground 31 m apart, so an edit at one's surface is in open air at the
+  other's, and the old build shows nothing at the twin. The video uses the
+  nearest pair on one ground layer: cell A 303 m from the spawn, cell B
+  1,359 m, both on ground at 98 m.
+- Each shot opens the world with the saved pose moved beside the cell. The
+  old build is `ecabf4f`.
+- `--dig 1 --place 3` digs A and stacks three stones. The old build shows
+  them on B as well, and the new build does not.
+- The meadow and surface views match the old build to the pixel.
+
 ## Risks / Trade-offs
 
 - [The edge canonicalisation is wrong for some edge, and a cell gets two keys
