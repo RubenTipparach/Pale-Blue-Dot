@@ -25,12 +25,12 @@ fn a_catch_lands_in_the_hotbar_and_the_save_at_once() {
     );
 }
 
-/// A full hotbar lets the fish go and says so, rather than losing it
+/// A full hotbar and pack let the fish go and say so, rather than losing it
 /// silently or recording a catch the player does not have.
 #[test]
-fn a_full_hotbar_lets_the_fish_go() {
+fn a_full_pack_lets_the_fish_go() {
     let mut hotbar = Hotbar::default();
-    for i in 0..pbd_core::inventory::SLOTS {
+    for i in 0..pbd_core::inventory::CARRIED {
         hotbar.give(Item::Fish(100 + i as u16), 16);
     }
     let mut save = WorldSave::memory_only();

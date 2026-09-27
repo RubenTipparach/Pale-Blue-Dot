@@ -31,6 +31,7 @@ owner answers otherwise.
 - [ ] 3.1a The trim reads as a constant sun (survey K1). Verify: over the second game year of the 200-day run, the trim varies by under 1%.
 - [ ] 3.1b Temperature maps before and after, drawn by `tools/temperature_map.py` (survey K2: "We have a temperature gradient map of the surface don't we???? make one"). Verify: day 1, day 100 and the second year's maps are in `docs/wiki/temperature/`, for the shipped and the balanced settings.
 - [ ] 3.2 The second-year fish test, ignored by default. Verify: it passes on the balanced settings and fails on the old ones.
+- [ ] 3.2a The reef fish's water (finding 8, survey R1): a quarter of `heat_spread`, or the reef's window widened, as the owner answers. Verify: the second-year fish test passes at level 3, and the finding's table gains the shipped run at level 5.
 - [ ] 3.3 Regenerate `docs/wiki/fish-ranges/` from the balanced run, and answer `fishing-and-equipment`'s question 8 with the owner's words. Verify: every species' year-2 map has range.
 - [ ] 3.4 Sync the `world/weather` requirement, naming each test. Verify: `openspec validate --all`.
 

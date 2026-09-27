@@ -480,6 +480,34 @@ level 4, 200 days, `solar_wm2` 1360:
   within 15 ± 0.3 °C from day 20, with no overshoot. The nudge's strength
   barely matters once the start is right; 0.02 is shipped, the gentler.
 
+**Finding 8: balanced, the tropics are too cool for the reef (2026-09-27).**
+The second-year fish test (task 3.2) fails on one species: the reef fish,
+whose water is shallows that reach 23 °C. With the mean held at 15 °C, the
+shipped `heat_spread` of 0.002 carries so much heat poleward that the
+equatorial sea averages 19 °C, where Earth's is about 27 °C. Measured on the
+shipped settings at level 4 (`check4`), and at a half and a quarter of the
+spread (`H1`, `H05`), 200 days, all under the thermostat. The figures are
+area-weighted over the second year, from `fish_ranges`' fields, and a
+"shallow" pixel is sea within 3 m of the surface:
+
+| run | `heat_spread` | whole surface, day 200 | sea 0-10°, mean | sea 70-80°, mean | shallows reaching 23 °C | sea that freezes some day | warmest shallows |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| check4 | 0.002 (shipped) | 15.2 °C | 18.9 °C | 6.0 °C | 0.5% | 0.4% | 24.3 °C |
+| H1 | 0.001 | 15.4 °C | 20.7 °C | 2.6 °C | 11.6% | 1.6% | 27.9 °C |
+| H05 | 0.0005 | 15.2 °C | 22.1 °C | −0.8 °C | 25.5% | 2.4% | 30.7 °C |
+
+- **The thermostat holds the mean whatever the spread**: all three sit at
+  15.2 to 15.4 °C on day 200, with the trim between 0.905 and 0.914.
+- **A smaller spread makes a steeper world**, warmer tropics and colder
+  poles, which is nearer Earth's. At a quarter of the spread, a quarter of
+  the shallows can hold reef fish, and the polar seas freeze in winter.
+- **The alternative is the fish's window.** The reef's 23 °C floor could
+  drop to 19 °C and leave the gradient as it is. That keeps the climate
+  mild everywhere, and a mild world has less to tell its biomes apart by.
+- This is the owner's to choose (survey R1). The recommendation is the
+  quarter spread: it gives the reef fish water without bending the fish to
+  fit, and the colder poles give `bigger-biomes` a tundra to draw.
+
 ## Risks / Trade-offs
 
 - [Closing the leaks changes more than the average] → Coastal land becomes

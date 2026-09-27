@@ -7,6 +7,7 @@ pub mod cell_key;
 pub mod column;
 pub mod daylight;
 pub mod dig;
+pub mod drops;
 pub mod edits;
 pub mod fauna;
 pub mod fishing;

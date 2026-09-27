@@ -105,11 +105,10 @@ impl Hotbar {
                     grant.given
                 );
                 if !grant.no_room.is_empty() {
-                    // There is nowhere else to put them until the pack
-                    // (`inventory-grid`), and the deal is by version, so
-                    // these are not dealt later either.
+                    // The hotbar and the pack are both full, and the deal is
+                    // by version, so these are not dealt later either.
                     warn!(
-                        "starting kit v{KIT_VERSION}: no room in the hotbar for {:?}",
+                        "starting kit v{KIT_VERSION}: no room in the hotbar or the pack for {:?}",
                         grant.no_room
                     );
                 }
@@ -165,7 +164,10 @@ mod kit_tests {
             assert_eq!(count(&kit, *material), u32::from(*expected), "{material:?}");
         }
         assert_eq!(KIT_VERSION, 2);
-        assert!(kit.iter().all(|slot| slot.is_some()), "ten slots, all full");
+        assert!(
+            kit.hotbar().all(|slot| slot.is_some()),
+            "ten slots, all full"
+        );
         for light in Material::LAMPS {
             assert!(count(&kit, light) > 0, "{light:?} is in the kit");
         }
@@ -192,27 +194,26 @@ mod kit_tests {
         slots
     }
 
-    /// A save dealt the old kit has two slots free. The lights go into them
-    /// in the grant's order, once, and the rest are named as having no room
-    /// rather than dealt later (decision 12).
+    /// A save dealt the old kit has two hotbar slots free. The lights go
+    /// into them in the grant's order, the rest into the pack
+    /// (`inventory-grid` task 2.2), once.
     #[test]
-    fn an_old_save_is_dealt_the_lights_that_fit_once() {
+    fn an_old_save_is_dealt_the_lights_into_the_hotbar_then_the_pack_once() {
         let mut save = WorldSave::memory_only();
         save.carried = Some(the_old_kit());
         save.kit = 1;
         let mut slots = the_old_kit();
         let grant = grant_since(&mut slots, 1);
+        assert_eq!(grant.given.len(), 5, "every light is dealt");
+        assert!(grant.no_room.is_empty());
         assert_eq!(
-            grant.given,
-            vec![(Material::LanternPost, 8), (Material::LanternWall, 8)]
+            slots.get(8).map(|s| s.item),
+            Some(Item::Block(Material::LanternPost))
         );
         assert_eq!(
-            grant.no_room,
-            vec![
-                (Material::LanternHanging, 8),
-                (Material::Brazier, 4),
-                (Material::Candle, 16)
-            ]
+            slots.get(10).map(|s| s.item),
+            Some(Item::Block(Material::LanternHanging)),
+            "the first that does not fit the hotbar is the pack's first"
         );
 
         let restored = Hotbar::restore(&mut save);
@@ -223,13 +224,16 @@ mod kit_tests {
         assert_eq!(again.0, slots, "not dealt twice");
     }
 
-    /// A full hotbar is dealt nothing, and the deal is still recorded, so it
-    /// is not tried again on every open.
+    /// A full hotbar and pack are dealt nothing, and the deal is still
+    /// recorded, so it is not tried again on every open.
     #[test]
-    fn a_full_hotbar_is_dealt_nothing_and_says_so() {
+    fn a_full_hotbar_and_pack_are_dealt_nothing_and_say_so() {
         let mut full = the_old_kit();
         full.give(Item::Block(Material::DryGrass), 1);
         full.give(Item::Block(Material::JungleGrass), 1);
+        for k in 0..pbd_core::inventory::PACK as u16 {
+            full.give(Item::Fish(k), 1);
+        }
         let mut save = WorldSave::memory_only();
         save.carried = Some(full.clone());
         save.kit = 1;

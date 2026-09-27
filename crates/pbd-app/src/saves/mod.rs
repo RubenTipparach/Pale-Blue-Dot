@@ -16,6 +16,7 @@ pub mod writer;
 
 use bevy::prelude::*;
 use format::{Record, WorldFile};
+use pbd_core::drops::ItemDrop;
 use pbd_core::edits::{Edit, Edits};
 use pbd_core::inventory::{Equipment, Slots};
 use pbd_core::vehicle::record::VehicleFile;
@@ -188,6 +189,8 @@ struct Replayed {
     kit: u32,
     catches: BTreeMap<u16, CatchRecord>,
     equipment: Option<Equipment>,
+    drops: BTreeMap<u64, ItemDrop>,
+    next_drop: u64,
     damaged: usize,
 }
 
@@ -216,6 +219,12 @@ pub struct WorldSave {
     /// The tool slot as the log last recorded it; `None` in a world that
     /// never changed tool, which opens with the new world's kit.
     pub equipment: Option<Equipment>,
+    /// The drops the log says are still floating, in the order they were
+    /// made, for the load to put back. Their time is judged by the world's
+    /// clock once it is running, so one past its life is simply not shown.
+    pub drops: Vec<ItemDrop>,
+    /// The id the next drop is given: one past the highest the log names.
+    next_drop: u64,
     slot: Option<Slot>,
     root: PathBuf,
     writer: SaveWriter,
@@ -233,6 +242,8 @@ impl Default for WorldSave {
             vehicles: None,
             catches: BTreeMap::new(),
             equipment: None,
+            drops: Vec::new(),
+            next_drop: 0,
             slot: None,
             root: PathBuf::from(ROOT),
             writer: SaveWriter::none(),
@@ -252,6 +263,8 @@ impl WorldSave {
             kit,
             catches,
             equipment,
+            drops,
+            next_drop,
             damaged,
         } = replay(&text);
         if damaged > 0 {
@@ -282,6 +295,8 @@ impl WorldSave {
             vehicles,
             catches,
             equipment,
+            drops: drops.into_values().collect(),
+            next_drop,
             slot: Some(slot),
             writer,
             root,
@@ -320,12 +335,47 @@ impl WorldSave {
     /// durability rule's teeth in an async writer: the first failed write is
     /// the last accepted edit, so the world in front of the player cannot go
     /// on drifting away from the world on disk.
-    pub fn accept(&mut self, edit: Edit, carried: &Slots) -> bool {
+    ///
+    /// A dig's line carries the drop it made (`inventory-grid` decision 4),
+    /// so the hole and the block floating beside it reach the disk together.
+    pub fn accept(&mut self, edit: Edit, drop: Option<&ItemDrop>, carried: &Slots) -> bool {
         if self.writer.failure().is_some() {
             return false;
         }
         self.edits.set(edit);
-        self.writer.append(format::line_of(edit, carried));
+        if let Some(drop) = drop {
+            self.next_drop = self.next_drop.max(drop.id + 1);
+        }
+        self.writer.append(format::line_of(edit, drop, carried));
+        true
+    }
+
+    /// The id for the next drop. Ids are never reused, so a pickup line names
+    /// one drop for the life of the world.
+    pub fn next_drop_id(&self) -> u64 {
+        self.next_drop
+    }
+
+    /// Record a pickup: `left` remain on drop `id` (none: it is gone), and
+    /// the rest went into `carried`, which the line carries whole.
+    pub fn record_pick(&mut self, id: u64, left: u16, carried: &Slots) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        self.carried = Some(carried.clone());
+        self.writer.append(format::pick_line_of(id, left, carried));
+        true
+    }
+
+    /// Record the slots after a move in the pack. The same durable path as an
+    /// edit: a stack moved and not saved would be back where it was at the
+    /// next load, or in two places.
+    pub fn record_pack(&mut self, carried: &Slots) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        self.carried = Some(carried.clone());
+        self.writer.append(format::pack_line_of(carried));
         true
     }
 
@@ -488,12 +538,25 @@ fn replay(text: &str) -> Replayed {
             continue;
         }
         match format::parse_line(line) {
-            Some(Record::Edit { edit, slots }) => {
+            Some(Record::Edit { edit, drop, slots }) => {
                 out.edits.set(edit);
+                if let Some(drop) = drop {
+                    out.next_drop = out.next_drop.max(drop.id + 1);
+                    out.drops.insert(drop.id, drop);
+                }
                 if let Some(slots) = slots {
                     out.carried = Some(slots);
                 }
             }
+            Some(Record::Pick { id, left, slots }) => {
+                if left == 0 {
+                    out.drops.remove(&id);
+                } else if let Some(drop) = out.drops.get_mut(&id) {
+                    drop.count = left;
+                }
+                out.carried = Some(slots);
+            }
+            Some(Record::Pack { slots }) => out.carried = Some(slots),
             Some(Record::Kit { version, slots }) => {
                 out.kit = out.kit.max(version);
                 out.carried = Some(slots);
@@ -623,6 +686,7 @@ mod tests {
                         layer,
                         material: Material::Air,
                     },
+                    None,
                     &carried
                 ));
             }
@@ -679,6 +743,7 @@ mod tests {
                     layer: 200,
                     material: Material::Air,
                 },
+                None,
                 &carried
             ));
             carried.give(Item::Block(Material::Torch), 16);
@@ -728,6 +793,52 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// A dig's drop floats on across a reopen with what is left on it; a
+    /// drop picked up whole does not; a pack move's slots come back; and the
+    /// next drop's id is past every id the log names, so a pickup line never
+    /// names two drops.
+    #[test]
+    fn drops_pickups_and_pack_moves_come_back() {
+        use pbd_core::drops::ItemDrop;
+        let root = temporary("drops");
+        let slot = create(&root, "Drops", 12).unwrap();
+        let drop = |id: u64, material| ItemDrop {
+            id,
+            item: Item::Block(material),
+            count: 1,
+            position: Vec3::new(1.25, 300.5, -2.0),
+            made_s: 1000.0 + id as f64,
+        };
+        let dig = |layer| Edit {
+            cell: 55,
+            layer,
+            material: Material::Air,
+        };
+        let mut carried = Slots::new();
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            assert_eq!(save.next_drop_id(), 0);
+            assert!(save.accept(dig(200), Some(&drop(0, Material::Dirt)), &carried));
+            assert!(save.accept(dig(199), Some(&drop(1, Material::Stone)), &carried));
+            assert_eq!(save.next_drop_id(), 2);
+            carried.give(Item::Block(Material::Dirt), 1);
+            assert!(save.record_pick(0, 0, &carried));
+            carried.send(0);
+            assert!(save.record_pack(&carried));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        assert_eq!(reopened.drops, vec![drop(1, Material::Stone)]);
+        assert_eq!(reopened.next_drop_id(), 2);
+        assert_eq!(reopened.carried.as_ref(), Some(&carried));
+        assert!(
+            reopened.carried.unwrap().get(10).is_some(),
+            "sent to the pack"
+        );
+        assert_eq!(reopened.edits.for_cell(55).len(), 2);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// The memory-only world is what a capture and a test run on: everything
     /// works, nothing is written, and nothing claims to have been.
     #[test]
@@ -739,6 +850,7 @@ mod tests {
                 layer: 2,
                 material: Material::Air
             },
+            None,
             &Slots::new()
         ));
         assert_eq!(save.edits.len(), 1);
@@ -793,6 +905,7 @@ mod tests {
                     layer: 151,
                     material: Material::Stone,
                 },
+                None,
                 &Slots::new()
             ));
             save.drain();

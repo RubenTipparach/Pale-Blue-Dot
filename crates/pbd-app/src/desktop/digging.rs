@@ -285,6 +285,7 @@ pub fn apply_edit(
             layer: layer as u16,
             material,
         },
+        None,
         &moved,
     ) {
         // The durable path refused it, so the world must not change either:
