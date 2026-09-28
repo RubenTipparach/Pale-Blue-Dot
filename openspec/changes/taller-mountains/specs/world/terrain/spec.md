@@ -21,8 +21,8 @@ raise the lowland.
 #### Scenario: The budget holds
 - **WHEN** the sphere is sampled
 - **THEN** the summit is in the band the owner chose (survey H1; provisionally
-  260 to 340 m), the floor between 60 and 145 m down, and land is between 30
-  and 45 percent of it
+  250 to 290 m) and under the cloud base, the floor between 60 and 145 m
+  down, and land is between 30 and 45 percent of it
 
 #### Scenario: The lowland stays where it was
 - **WHEN** the land is sampled on the version that raises the ranges and on
@@ -36,6 +36,20 @@ raise the lowland.
   is under seven cells
 
 ## ADDED Requirements
+
+### Requirement: The column tier holds the tallest ground
+The column tier's span SHALL reach above the highest summit, so the ground
+near the player is never cut off and a player can dig and build on the
+summit. The shaders' copies of the span SHALL be held to the tier's by a
+test.
+
+#### Scenario: The summit is inside the span
+- **WHEN** the sphere is sampled for its highest ground
+- **THEN** it is below the tier's top, with room to build above it
+
+#### Scenario: The shaders agree about the span
+- **WHEN** the shaders' column base and top are read from their files
+- **THEN** they equal the tier's base and top
 
 ### Requirement: Tall ground can be walked
 Ground above the lowland SHALL rise in steps a walker can climb, not in

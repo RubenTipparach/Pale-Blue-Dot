@@ -36,18 +36,21 @@ From the spawn, the ranges read as grey patches a little above the fields.
 
 ### Modified Capabilities
 
-- `world/terrain`: the relief budget's summit band moves up, and a requirement
-  is added that tall ground stays walkable (no more than a set share of cells
-  steps more than a block to its neighbour).
+- `world/terrain`: the relief budget's summit band moves up (and under the
+  cloud base), the lowland is held where it was, and two requirements are
+  added: tall ground stays walkable, and the column tier holds the tallest
+  ground.
+- `planet/scale`: "Relief is authored for a walker" moves its summit band with
+  the one above, and its floor band back to what its test pins.
 
 ## Impact
 
 - `pbd_core::planet_gen`: `TENEBRIS_V6`, the range term in
   `surface_altitude`, and the version table.
 - `pbd_core::terrain::GENERATOR_VERSION` to 6.
-- Anything that bounds terrain height (the column tier, culling, the
-  atmosphere and clouds, flight clearance), listed in the design with what
-  each needs.
+- The column tier (`column::LAYERS` 320 to 504, top 175 to 359 m) and the
+  shaders' copies of its span, which a new test pins. Saves stay valid.
+- The summit stays under the 300 m cloud base, which the design explains.
 - `assets/climate/settled-g6-l{3,5}`.
 - Frame cost: taller ground is more visible faces and a longer LOD reach.
   Not measurable in a cloud session; the owner runs `tools/perf_suite.py`.

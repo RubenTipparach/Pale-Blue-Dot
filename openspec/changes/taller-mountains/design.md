@@ -64,6 +64,53 @@ What the table says:
   leaves the median land within 3.4 m of today's, and keeps the high ground
   as walkable as today's (0.2% of high cells step 3 m or more).
 
+## Surveyed: what bounds terrain height (2026-09-28)
+
+Read from the code (task 1.2). Everything not listed scales without a cap.
+
+**Hard limits:**
+- **The column tier stops at 175 m.** `column::BASE_M` is -145 and
+  `LAYERS` 320, so the top layer is 174 to 175 m. A summit above it, inside
+  the 90 m tier round the player, is flattened to a 175 m plateau by
+  `reconcile_surface` and pops back up outside the tier. Aiming, digging and
+  placing refuse anything above 175 m ("above the world"), and worms carve
+  nothing above it. Today's 160 m summit clears it by 15 m.
+- **The tier's layer fields are 9 bits**: the run word (`from`, `to`), the
+  water level and the lamp layer, so no layer index can pass 511 (a top of
+  +366 m). `LAYERS` must also be a multiple of 8 (`MATERIAL_WORDS`). The
+  largest that fits without widening the fields is 504, a top of +359 m.
+  Past that, every field and its copies in `planet_surface.wgsl` widen to 10
+  bits, and the lamp kind and lit bits move up one.
+- **The cloud base is 300 m above the sea** (`sky::CLOUD_RADIUS`). Ground
+  above it breaks four things written for ground below the cloud: rain
+  shafts are skipped within 2 m of the base, the lightning bolt runs upward,
+  the rain volume is missing for an eye above the base, and the map's
+  overlay rejects ground above the base as if it were the moon.
+
+**Soft effects (they change how things look, not whether they work):**
+- The haze and the dusk glow are keyed on the camera's height above the sea,
+  so a summit sees less haze (0.84 at 180 m, 0.76 at 290 m).
+- The lapse rate is 0.08 K a metre, so a 290 m summit is 23 K colder than
+  the shore and snowy most of the year. Steeper ground lifts the wind harder,
+  so more cloud and rain form on the ranges.
+- The map's hillshade exaggerates slope three times and saturates on steep
+  ground. The temperature overlay clips at -30 °C.
+- `--route clouds` flies over the ranges rather than low in the cloud where
+  a range is taller than its cloud leg.
+- The sky bake seeds every air layer above the ground, so a taller tier bakes
+  more layers (task 3.3's frame cost).
+
+**Pins that move with the summit:** `planet_gen::relief_holds_the_budget_and_the_land_fraction`
+(130 to 180 m), `planet::terrain::tests` (120 to 180 m),
+`column::the_span_covers_the_measured_relief`, and the relief requirements
+in `openspec/specs/world/terrain` and `openspec/specs/planet/scale`. Both
+specs have drifted from their tests on the floor and the land band, and the
+delta brings them back.
+
+**Found on the way:** the shaders' `COLUMN_BASE_M` and `COLUMN_TOP_M` are
+not pinned by any test, though both files' comments say one pins them.
+Raising the tier changes them, so the test is added first (decision 7).
+
 ## Decisions (provisional until the owner answers H1 to H3)
 
 **1. A range term in regions of their own.** Version 6 adds to the altitude a
@@ -90,15 +137,35 @@ stays a few percent of the land rather than taking a fifth of it. The exact
 values are measured when the candidate is chosen.
 
 **4. The climate is settled again**, levels 3 and 5, on version 6's ground.
-The atmosphere's lapse rate is 0.08 K a metre, so a 300 m summit is 24 K
+The atmosphere's lapse rate is 0.08 K a metre, so a 290 m summit is 23 K
 colder than the shore.
+
+**5. The column tier grows to 504 layers**, a top of +359 m, with `BASE_M`
+unchanged. A saved edit is indexed from `BASE_M`, so every save stays valid,
+and worlds of versions 4 and 5 only gain air above them. 504 is the most the
+9-bit fields hold. It leaves 68 m of building room over a 291 m summit. The
+tier's GPU buffers grow from 7.8 to 12.3 MB, and the sky bake does 57% more
+layers (task 3.3).
+- *Alternative:* grow the tier only on version 6 worlds. It is one more
+  thing a world's version would decide, for 4.5 MB.
+
+**6. The summit stays under the cloud base.** The recommended ranges reach
+291 m, under the 300 m base. A taller choice (H1's third option) needs
+either the cloud layer raised, which is a cloud change inside the owner's
+priorities 2 to 4, or the four cloud-base cases fixed for ground above the
+cloud, and past 359 m the tier's fields widened. So the budget's band is
+250 to 290 m, and a test holds the summit under the cloud base.
+
+**7. The shaders' column span is pinned by a test** before the tier grows:
+`COLUMN_BASE_M` and `COLUMN_TOP_M` in `planet_surface.wgsl` and
+`planet_visibility.wgsl`, read from the real files and held to
+`column::BASE_M` and the top of `column::LAYERS`.
 
 ## Risks
 
-- [Something bounds terrain height] → The engine's height limits (the
-  column tier's layers, culling, the atmosphere and the clouds, flight) are
-  being surveyed now, and each one either holds for the chosen summit or
-  becomes a task here.
+- [A limit the survey missed] → The tier and the cloud base are the two
+  found. The captures in task 1.3 are taken on the scratch config with the
+  tier raised, at a summit, so a third shows up before the owner chooses.
 - [Frame cost] → Taller ground shows more faces at distance. Not measurable
   in a cloud session; the owner runs `tools/perf_suite.py`.
 - [The owner wants jagged peaks] → The peaks candidate is measured and
