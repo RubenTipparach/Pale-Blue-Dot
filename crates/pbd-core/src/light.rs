@@ -69,6 +69,13 @@ pub const AMBIENT_FLOOR: f32 = 0.05;
 /// `night` for a cap.
 pub const NIGHT_FILL: f32 = 0.12;
 
+/// The colour of the sky's fill on a cap, linear: the terrain shader's
+/// `fill`. What a surface shows where only the fill reaches it is its albedo
+/// times this times the fill's share, so a thing the terrain pass does not
+/// draw sits at the ground's level in a cave and at night (`lamps-and-
+/// lanterns` decision 14); a test holds both shaders' copies to it.
+pub const SKY_FILL: [f32; 3] = [0.16, 0.21, 0.27];
+
 /// How much of the day's light a surface takes from the sky, given what of
 /// the sky reaches it (`sky`, 0..1) and how much it is day where it is
 /// (`daylight`, 0..1): the terrain shader's

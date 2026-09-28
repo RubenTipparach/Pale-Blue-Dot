@@ -19,7 +19,7 @@ the lights (group 7) before `world-map` starts.
 
 - [x] 3.1 `light::sample` in `pbd_core` (decision 10), blending the hex neighbours and the two layers, and answering full sky and no block light outside the region. Verify: core tests that a point in a sealed cave reads dark, a point beside a lamp reads the lamp, and a point off the region reads the open sky.
 - [x] 3.2 Sample the eye for the held tool and hand, and the eight corners of the ship's, each fish school's and the float's bounds, once a frame, and hand them to their materials (decision 10: there is no player body). Verify: an app test that a sealed cave gives eight dark corners.
-- [ ] 3.3 (Built; the ship at midnight, the ship beside lamps and the hand beside lamps are captured. Open for the ship parked in a cave, which needs a rig that parks it in one.) Blend the eight samples in the moving-thing shaders, and extend the shader-constant test to the new uniform's layout. Verify: `--capture` shots of the ship parked in a cave at night and of the player beside a torch, checked into `docs/screenshots/lamps-and-lanterns/`.
+- [x] 3.3 (Built and captured. The ship parked in a cave, rigged by `--walk --ship-in-cave`, found the sun lighting the ship through the planet, which decision 14 fixes: the cave shots are dark at midnight and noon and warm beside a torch, and noon in the open is unchanged to the byte.) Blend the eight samples in the moving-thing shaders, and extend the shader-constant test to the new uniform's layout. Verify: `--capture` shots of the ship parked in a cave at night and of the player beside a torch, checked into `docs/screenshots/lamps-and-lanterns/`.
 
 ## 4. Lamps that come on at dusk
 

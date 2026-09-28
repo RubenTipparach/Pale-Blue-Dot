@@ -71,14 +71,39 @@ decision 10 was wired: the same lights, flowers and lit grass, with the held
 tool full-bright and the ship on Bevy's own lighting. `held-lamps-before.jpg`
 also has the earlier, paler flame colour.
 
-Not captured yet: the ship parked in a cave. There is no capture rig that
-parks it in one, so task 3.3 stays open for that shot. A sealed cave reading
-dark at the eight corners is pinned by
-`planet::column::tests::a_sealed_cave_gives_eight_dark_corners_and_the_open_air_the_sky`.
+## The ship parked in a cave (task 3.3, decision 14)
 
-`--torch`, which should put a torch on the ground under the camera, placed
-nothing in this batch: its placement ray found no spot, and it says nothing
-when that happens. The held-tool pair uses the lamp row instead.
+Captured 2026-09-28, same container and settings. `--walk --ship-in-cave`
+starts the walker in a cave chamber (the same search `--view cave` uses) and
+holds the Kestrel 9 m down the tunnel at half the chamber's height, nose away
+from the camera (`CraftHold`, pinned by
+`vehicles::tests::a_held_kestrel_stays_where_the_capture_put_it`). The log
+says where: "the walker starts in a 4 m cave chamber and the Kestrel is parked
+9 m down it, 2.0 m above the floor".
+
+The first midnight shot found a fault, now decision 14. At midnight in a
+sealed cave the Kestrel's belly came out white, because Bevy's sun, which has
+no shadows, lit it from under the horizon through the rock. The fix keeps
+Bevy's lighting only where the sun is up and the sky reaches, and gives
+everything else the albedo in the terrain's own fill. "Before" and "after"
+below are the same binary, with only `field_lit.wgsl` swapped.
+
+| file | flags | what it shows |
+| --- | --- | --- |
+| `cave-ship-midnight-before.jpg`, `cave-ship-midnight-after.jpg` | `--time 0` | Before, the hull's right side reads 106 (sRGB, 0 to 255) against the stone's 18: the sun through the planet. After, 20 to 28, a dark shape at the walls' level. |
+| `cave-ship-noon-before.jpg`, `cave-ship-noon-after.jpg` | `--time 12` | At noon the lit face was the top, out of sight, so before looked right: 14 to 22 against 19. After, 24 to 32: the same fill as the night, since no sky reaches either. |
+| `cave-ship-torch-before.jpg`, `cave-ship-torch-after.jpg` | `--time 0 --torch` | A torch on the floor under the camera. The chamber, the hull and the hand all take its warm light. Before, the hull's right side had the sun on top of the torch (155 against 130 on the left). After, both sides are even (131, 134). |
+| `open-ship-night-before.jpg`, `open-ship-night-after.jpg` | `--aboard kestrel --time 0` | Midnight in the open, from the chase view. Before, the wings' tops were near black (14) and the hull had a warm panel from the sun below the ground. After, the wings and hull take the night's cool fill (34 to 47), the level of the grass around them (36). |
+| `open-ship-noon.jpg` | `--aboard kestrel --time 12` | Noon in the open, after. It is byte-for-byte the before frame, which is decision 10's promise kept: by day in the open the ship is Bevy's own. |
+
+`--torch` puts a torch on the ground under the camera. In the first attempt it
+was placed and then undone, and the frame was byte-for-byte the frame without
+it. The torch went in while a fine set was being rebuilt, and that set had
+copied the edits before the torch existed, so when it landed the torch was
+gone. The same thing happens to a player who digs while a rebuild is in
+flight: the hole fills back in until the next rebuild. It is written up in
+`openspec/changes/edit-pipeline` ("undone when it lands") and not yet fixed.
+Until it is, the capture rig waits for the landing before it places anything.
 
 ## The night captures frame from the clock's sun (task 2.1)
 

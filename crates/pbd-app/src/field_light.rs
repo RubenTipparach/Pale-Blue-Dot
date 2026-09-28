@@ -225,6 +225,17 @@ mod tests {
             format!("const TORCH_GAIN: f32 = {:.2};", light::TORCH_GAIN),
             "    let g = f * (2.0 - f);\n    return g * g;".to_string(),
             "let daylight = smoothstep(-0.13, 0.20, dot(up, field.sun.xyz));".to_string(),
+            // Decision 14: Bevy's sun only where it is up and the sky
+            // reaches, the floor on the albedo and never on the sun.
+            "let sun_up = daylight * sky;".to_string(),
+            format!(
+                "const SKY_FILL: vec3<f32> = vec3<f32>({:.2}, {:.2}, {:.2});",
+                light::SKY_FILL[0],
+                light::SKY_FILL[1],
+                light::SKY_FILL[2]
+            ),
+            "let ambient = base * SKY_FILL * max(AMBIENT_FLOOR, NIGHT_FILL * sky);".to_string(),
+            "out.color.rgb * sun_up + ambient * (1.0 - sun_up) + lamp".to_string(),
             "@binding(100) var<uniform> field: Field;".to_string(),
         ] {
             assert!(
@@ -232,6 +243,19 @@ mod tests {
                 "field_lit.wgsl should carry `{line}`"
             );
         }
+        // The fill's colour is the terrain's cap fill, which that shader
+        // writes without spaces.
+        let terrain = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        let fill = format!(
+            "var fill = vec3({:.2},{:.2},{:.2});",
+            light::SKY_FILL[0],
+            light::SKY_FILL[1],
+            light::SKY_FILL[2]
+        );
+        assert!(
+            terrain.contains(&fill),
+            "planet_surface.wgsl should carry `{fill}`"
+        );
     }
 
     /// A box's bounds in the render frame hold all eight of its corners,

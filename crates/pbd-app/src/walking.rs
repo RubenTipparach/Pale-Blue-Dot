@@ -205,11 +205,16 @@ impl WalkingState {
 
 pub struct WalkingPlugin;
 
+/// The walker's setup, which reads `WalkingConfig` once in `PostStartup`: a
+/// rig that places the walker orders itself before it.
+#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct WalkingSetup;
+
 impl Plugin for WalkingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WalkingConfig>()
             .init_resource::<WalkingReadout>()
-            .add_systems(PostStartup, setup_walking)
+            .add_systems(PostStartup, setup_walking.in_set(WalkingSetup))
             .add_systems(
                 RunFixedMainLoop,
                 (switch_mode, read_walking_input, turn_for_capture)

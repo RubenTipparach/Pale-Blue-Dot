@@ -321,6 +321,60 @@ relight the contact takes the relit set in place of the old one
 (`PlanetContact::relit`), with no rebuild. It refuses where its tier was
 built from some other set, which a landing is about to replace anyway.
 
+**14. The field-lit things take the sun only where the sky reaches and only
+while the sun is up (found 2026-09-28, on the task 3.3 cave capture).** Parked
+four metres into a sealed cave at midnight (`--walk --ship-in-cave --time 0`),
+the Kestrel's belly came out pale grey-white. At noon in the same cave it was
+dark. The sun was lighting it through the planet.
+
+Decision 10 multiplies Bevy's lit colour by the sky's fill. Bevy's lit colour
+includes the one directional sun at 15,000 lux, with no shadows, and it
+lights every face that points toward the sun wherever the sun is: below the
+horizon at midnight, and through the rock over a cave. Decision 10's scale
+then keeps that light at the fill: at `NIGHT_FILL` (12%) in the open at
+night, and at `AMBIENT_FLOOR` (5%) in a cave, by day or night. At noon the
+lit face is the top, which a walker in a cave does not see. At midnight it is
+the belly, which they do. `ship-night-after.jpg` shows the same thing in the
+open: a pale panel on the hull's lower side.
+
+The terrain gives the sun no such way in. Its direct term is
+`max(n · sun, 0) * daylight * skylight`, and only the ambient fill carries the
+floor. The fix gives the field-lit things the same split:
+
+```text
+sun_up  = daylight * sky
+ambient = base_colour * SKY_FILL * max(AMBIENT_FLOOR, NIGHT_FILL * sky)
+colour  = bevy_lit * sun_up + ambient * (1 - sun_up) + lamp
+```
+
+- By day in the open, `sun_up` is 1 and the colour is Bevy's, unchanged, as
+  decision 10 promised.
+- By day in a cave it is the albedo in the terrain's fill at the floor, 5%.
+  Before, it was Bevy's sunlit colour at 5%, which is the sun through the
+  rock.
+- At night in the open it is the albedo in the fill at the night's 12%, as
+  the terrain's own caps are. Before, it was the sun from under the ground at
+  12%.
+- Dusk and a cave mouth blend between the two by `sun_up`.
+- `SKY_FILL` is the terrain's cap fill, `(0.16, 0.21, 0.27)`, moved into
+  `pbd_core::light` beside `AMBIENT_FLOOR` and `NIGHT_FILL`. The shader test
+  holds both shaders' copies to it. The first build left it out, and the
+  capture measured the result: the hull in the cave at noon read 58 (sRGB,
+  0 to 255) against the stone walls' 19, three times brighter, where the old
+  build had it at 20. Bevy's own ambient happened to sit near the terrain's
+  fill, so leaving the fill out made the ship brighter in the cave at noon
+  than it was before the fix.
+
+*Alternative:* dim the directional sun with the clock. Rejected again, for
+decision 10's reason: it also lights the moon, which is in sunlight at
+midnight.
+
+*Alternative:* take the sun's own term out of Bevy's sum with Bevy's
+`directional_light` function. Rejected: it means rebuilding Bevy's
+`LightingInput` in our shader, which is about forty lines copied from Bevy
+0.18 that break on the next upgrade. The split above gives the same answer
+at the three ends that matter (day, night, cave) with none of that.
+
 ## Risks / Trade-offs
 
 - [A level-13 lantern floods about 13 cells, over 30 m across 2.833 m cells,

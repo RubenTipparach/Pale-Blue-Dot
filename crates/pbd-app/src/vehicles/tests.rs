@@ -487,3 +487,40 @@ fn holding_g_beside_a_craft_boards_nothing() {
     app.update();
     assert_eq!(app.world().resource::<Aboard>().0, None, "G boards nothing");
 }
+
+/// A capture's hold keeps the Kestrel where it was put, 20 m up where it could
+/// not stay by itself, at rest; let go, it falls (`lamps-and-lanterns` task
+/// 3.3's cave rig).
+#[test]
+fn a_held_kestrel_stays_where_the_capture_put_it() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let kestrel = |app: &mut App| {
+        crafts(app)
+            .into_iter()
+            .find(|(_, c)| c.kind == Kind::Kestrel)
+            .map(|(_, c)| c)
+            .expect("the fleet has a Kestrel")
+    };
+    let parked = kestrel(&mut app);
+    let at = parked.body.position + parked.body.position.normalize() * 20.0;
+    let facing = parked.body.orientation;
+    app.insert_resource(CraftHold(Some((at, facing))));
+    for _ in 0..120 {
+        app.update();
+    }
+    let held = kestrel(&mut app);
+    assert!(
+        held.body.position.distance(at) < 1e-6,
+        "held at {at}, found at {}",
+        held.body.position
+    );
+    assert_eq!(held.body.velocity, DVec3::ZERO);
+    assert!(held.body.orientation.abs_diff_eq(facing, 1e-9));
+    app.insert_resource(CraftHold(None));
+    for _ in 0..120 {
+        app.update();
+    }
+    let fell = at.length() - kestrel(&mut app).body.position.length();
+    assert!(fell > 1.0, "let go, it falls: {fell:.2} m");
+}

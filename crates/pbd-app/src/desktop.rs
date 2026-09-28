@@ -141,6 +141,12 @@ pub struct Launch {
     /// `--turn DEG_PER_S`: the walker's view turns right at this rate, a
     /// measurement instrument for the clouds' history (`cloud-ghosting`).
     pub turn: f32,
+    /// `--walk --ship-in-cave` starts the walker in a cave chamber (the one
+    /// `--view cave` photographs), looking down the tunnel, and parks the
+    /// Kestrel nine metres ahead, nose away: the moving things' light in a
+    /// cave (`lamps-and-lanterns` task 3.3). Vehicles and the light field are
+    /// the walker's, so the rig is too.
+    pub ship_in_cave: bool,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -217,6 +223,7 @@ impl Launch {
             overlay: None,
             map: map_screen::MapLaunch::default(),
             torch: false,
+            ship_in_cave: false,
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
@@ -274,6 +281,7 @@ impl Launch {
                         .expect("--place requires a count");
                 }
                 "--torch" => result.torch = true,
+                "--ship-in-cave" => result.ship_in_cave = true,
                 "--lamps" => {
                     result.lamps = true;
                     if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
@@ -799,6 +807,10 @@ pub fn run(args: &[String]) {
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
+    .add_systems(
+        PostStartup,
+        park_in_cave.before(pbd_app::walking::WalkingSetup),
+    )
     .insert_resource(opening)
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
@@ -1297,23 +1309,14 @@ fn placed_off_the_tier(view: &str) -> bool {
     ["cave", "overhang", "mouth", "seacave"].contains(&view)
 }
 
-fn cave_camera(
-    mut commands: Commands,
-    launch: Res<Launch>,
-    fine: Res<pbd_app::planet::PlanetFine>,
-) {
-    if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
-        return;
-    }
-    if !placed_off_the_tier(&launch.view) {
-        return;
-    }
-    // The volumetric-water case is a chamber below sea level UNDER LAND: the
-    // column holds no water at all, so the pocket is air, and only a height
-    // field would call it sea. A pocket under the SEA is not it - the column
-    // there really does hold water over the rock - and the first cut of this
-    // pick took one, which came out as a frame of open ocean.
-    let dry_cave_below_the_sea = launch.view == "seacave";
+/// The chamber a cave capture looks down: open air two and a half to twelve
+/// metres tall, four to forty metres under the ground, and of those the one
+/// with the longest open tunnel ahead of it. Its cell's direction, floor and
+/// roof altitudes and the tunnel's heading, with how many cells it runs.
+fn cave_chamber(
+    fine: &pbd_app::planet::PlanetFine,
+    dry_cave_below_the_sea: bool,
+) -> Option<(usize, Vec3, f32, f32, Vec3)> {
     use pbd_core::column::{layer_altitude, layer_at};
     let tier = &fine.set.columns;
     let records = fine.set.finest_records();
@@ -1402,6 +1405,69 @@ fn cave_camera(
             }
         }
     }
+    best
+}
+
+/// `--walk --ship-in-cave`: the walker starts in the capture cave's chamber
+/// looking down its tunnel, and the Kestrel is held nine metres ahead,
+/// halfway up the chamber, nose down the tunnel.
+fn park_in_cave(
+    mut commands: Commands,
+    launch: Res<Launch>,
+    fine: Res<pbd_app::planet::PlanetFine>,
+    config: Option<ResMut<WalkingConfig>>,
+) {
+    if !launch.ship_in_cave || !launch.walk {
+        return;
+    }
+    let Some(mut config) = config else {
+        return;
+    };
+    let Some((_, here, floor, roof, along)) = cave_chamber(&fine, false) else {
+        panic!("no chamber in the column tier to park the Kestrel in")
+    };
+    let gap = roof - floor;
+    config.restored = Some(RestoredPose {
+        position: here * (PLANET_RADIUS + floor + 1.0),
+        heading: along,
+        pitch: 0.0,
+    });
+    // Nose down the tunnel, seen from behind as the chase view sees it: side
+    // on, its length would run into both walls of a tunnel four metres wide.
+    let at_dir = (here + along * (9.0 / PLANET_RADIUS)).normalize();
+    let at = at_dir * (PLANET_RADIUS + floor + gap * 0.5);
+    let facing = Transform::from_translation(at)
+        .looking_to(along, at_dir)
+        .rotation;
+    info!(
+        "the walker starts in a {gap:.0} m cave chamber and the Kestrel is parked 9 m down it, {:.1} m above the floor",
+        gap * 0.5
+    );
+    commands.insert_resource(pbd_app::vehicles::CraftHold(Some((
+        at.as_dvec3(),
+        facing.as_dquat(),
+    ))));
+}
+
+fn cave_camera(
+    mut commands: Commands,
+    launch: Res<Launch>,
+    fine: Res<pbd_app::planet::PlanetFine>,
+) {
+    if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
+        return;
+    }
+    if !placed_off_the_tier(&launch.view) {
+        return;
+    }
+    // The volumetric-water case is a chamber below sea level UNDER LAND: the
+    // column holds no water at all, so the pocket is air, and only a height
+    // field would call it sea. A pocket under the SEA is not it - the column
+    // there really does hold water over the rock - and the first cut of this
+    // pick took one, which came out as a frame of open ocean.
+    let best = cave_chamber(&fine, launch.view == "seacave");
+    let tier = &fine.set.columns;
+    let records = fine.set.finest_records();
     if launch.view == "mouth" {
         // Stand on the ground outside a tunnel opening and look into it. What
         // counts as an opening is `planet_column::mouth_of`, the same function

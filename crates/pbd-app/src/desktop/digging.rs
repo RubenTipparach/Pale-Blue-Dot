@@ -637,9 +637,17 @@ pub fn scripted_dig(
     mut edits: ResMut<WorldSave>,
     mut slots: ResMut<super::slots::Hotbar>,
     (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
+    refresh: Res<pbd_app::planet::LodRefresh>,
     mut done: Local<bool>,
 ) {
     if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch && !launch.lamps) {
+        return;
+    }
+    // A set in flight was built from the edits as they stood when it was
+    // asked for, and landing it would undo anything scripted since
+    // (`edit-pipeline` design, "undone when it lands"). Until that is fixed,
+    // the rig waits for the landing so the picture shows its edits.
+    if refresh.in_flight_s().is_some() {
         return;
     }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {

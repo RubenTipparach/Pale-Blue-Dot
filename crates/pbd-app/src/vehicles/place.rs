@@ -41,11 +41,18 @@ pub fn spawn_fleet(world: &mut World) {
     if world.get_resource::<Fleet>().is_none_or(|f| f.spawned) {
         return;
     }
+    // The craft are placed round the walker; a capture with no walker that
+    // holds the Kestrel somewhere (`--ship-in-cave`) places them there.
+    let held = world
+        .get_resource::<super::CraftHold>()
+        .and_then(|hold| hold.0)
+        .map(|(at, _)| at.as_vec3());
     let Some(walker) = world
         .query_filtered::<&Position, With<Walker>>()
         .iter(world)
         .next()
         .map(|p| p.0)
+        .or(held)
     else {
         return;
     };

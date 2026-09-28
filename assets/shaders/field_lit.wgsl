@@ -1,13 +1,14 @@
 // A lit thing the terrain pass does not draw - the ship, a fish school, the
 // float - taking the terrain's light field (`lamps-and-lanterns` decision 10).
 //
-// Bevy's own PBR lighting runs first and is kept: by day in the open the
-// colour is Bevy's, unchanged. It is then scaled by the sky's fill where the
-// fragment is, and the lamps' warm light is added, both read off the field
-// at the eight corners of the mesh's bounds and blended across them, so a
-// ship half out of a cave mouth is lit at its bow and dark at its stern. The
-// constants are the terrain shader's, and `the_field_lit_shader_carries_the_
-// terrain_light_constants` holds both copies to `pbd_core::light`.
+// Bevy's own PBR lighting runs first and is kept where the sun reaches: by
+// day in the open the colour is Bevy's, unchanged. Where the sky does not
+// reach, or the sun is down, it gives way to the albedo at the terrain's
+// fill, and the lamps' warm light is added, both read off the field at the
+// eight corners of the mesh's bounds and blended across them, so a ship half
+// out of a cave mouth is lit at its bow and dark at its stern. The constants
+// are the terrain shader's, and `the_field_lit_shader_carries_the_terrain_
+// light_constants` holds both copies to `pbd_core::light`.
 
 #import bevy_pbr::{
     pbr_functions::alpha_discard,
@@ -43,6 +44,7 @@ struct Field {
 
 const AMBIENT_FLOOR: f32 = 0.05;
 const NIGHT_FILL: f32 = 0.12;
+const SKY_FILL: vec3<f32> = vec3<f32>(0.16, 0.21, 0.27);
 const TORCH_TINT: vec3<f32> = vec3<f32>(1.00, 0.70, 0.30);
 const TORCH_GAIN: f32 = 1.25;
 
@@ -76,9 +78,16 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     let block = blend(field.block, t);
     let up = normalize(in.world_position.xyz - field.centre.xyz);
     let daylight = smoothstep(-0.13, 0.20, dot(up, field.sun.xyz));
-    let fill = max(AMBIENT_FLOOR, mix(NIGHT_FILL, 1.0, daylight) * sky);
-    let lamp = pbr_input.material.base_color.rgb * TORCH_TINT * (lamp_strength(block) * TORCH_GAIN);
-    out.color = vec4<f32>(out.color.rgb * fill + lamp, out.color.a);
+    // Bevy's sun has no shadows and lights whatever faces it, from under the
+    // horizon at night and through the rock over a cave. So its picture is
+    // kept only as far as the sun is up AND the sky reaches, as the terrain's
+    // direct term is, and the rest is the albedo in the terrain's fill, whose
+    // floor keeps a cave legible (`lamps-and-lanterns` decision 14).
+    let sun_up = daylight * sky;
+    let base = pbr_input.material.base_color.rgb;
+    let ambient = base * SKY_FILL * max(AMBIENT_FLOOR, NIGHT_FILL * sky);
+    let lamp = base * TORCH_TINT * (lamp_strength(block) * TORCH_GAIN);
+    out.color = vec4<f32>(out.color.rgb * sun_up + ambient * (1.0 - sun_up) + lamp, out.color.a);
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
     return out;

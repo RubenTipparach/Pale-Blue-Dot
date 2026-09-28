@@ -76,6 +76,13 @@ no block light.
 - **WHEN** the ship is parked in an unlit cave at night
 - **THEN** it is drawn at the ambient floor, not as if it stood under the sky
 
+#### Scenario: The sun does not shine through the planet
+
+- **WHEN** the sun is below a moving thing's horizon, or the sky does not
+  reach where it is
+- **THEN** none of the sun's direct light reaches it: it shows the sky's fill
+  (at the floor, in a cave) and any lamp's light, as the ground beside it does
+
 #### Scenario: A player by a torch is lit
 
 - **WHEN** the player stands beside a torch in the dark
