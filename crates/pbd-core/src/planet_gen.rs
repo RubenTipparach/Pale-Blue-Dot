@@ -686,6 +686,21 @@ mod tests {
     /// The digest of version 4's top blocks on 10,000 directions.
     const VERSION_4_TOP_DIGEST: u64 = 3_219_747_905_282_479_865;
 
+    /// Version 5's ground, biomes and top blocks, as every world made on it
+    /// was: taken before version 6 landed (CLAUDE.md, "Saved games survive
+    /// every change"), and this fails if anything moves them.
+    #[test]
+    fn version_5_makes_the_ground_its_worlds_were_made_on() {
+        let v5 = TerrainConfig::for_version(5).expect("version 5 is carried");
+        assert_eq!(v5, TerrainConfig::TENEBRIS_V5);
+        assert_eq!(digest(&v5, 10_000), VERSION_5_DIGEST);
+        assert_eq!(top_digest(&v5, 10_000), VERSION_5_TOP_DIGEST);
+    }
+
+    /// The digests of version 5's ground and top blocks on 10,000 directions.
+    const VERSION_5_DIGEST: u64 = 17_903_191_863_826_077_473;
+    const VERSION_5_TOP_DIGEST: u64 = 13_661_571_992_430_582_298;
+
     /// A desert's rock follows the contours (survey G1): every desert cell at
     /// one height has the same top block, where the latitude bands gave one
     /// height both; and the rock is still about `desert_rock_frac` of it.

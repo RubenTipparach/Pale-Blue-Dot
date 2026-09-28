@@ -54,6 +54,14 @@ the shipped generator moves on.
   cell (`saves::tests::a_world_from_before_identities_gains_one_when_opened`,
   `planet_gen::tests::version_4_makes_the_ground_every_old_world_was_made_on`)
 
+#### Scenario: Every carried version keeps its ground
+- **WHEN** a version this build carries is asked for its ground
+- **THEN** its heights, biomes and top blocks are the ones its worlds were
+  made on, pinned by a digest taken before the next version landed
+  (`planet_gen::tests::version_4_makes_the_ground_every_old_world_was_made_on`,
+  `planet_gen::tests::version_4_keeps_its_top_blocks`,
+  `planet_gen::tests::version_5_makes_the_ground_its_worlds_were_made_on`)
+
 #### Scenario: A new world
 - **WHEN** a new world is made
 - **THEN** its save records the current generator version
