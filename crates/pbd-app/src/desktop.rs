@@ -1274,9 +1274,10 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
     }
     if let Some(wanted) = launch.spawn.as_deref().and_then(spawn_biome) {
         // The nearest dry land inside the named biome, with the same biome
-        // 40 m round it on four sides, so a capture photographs the biome
-        // from inside it rather than from its edge (`bigger-biomes` 4.1). A
-        // measurement instrument, like `--spawn snow`.
+        // 40 m round it on four sides where there is such a place, so a
+        // capture photographs the biome from inside it rather than from its
+        // edge (`bigger-biomes` 4.1). A measurement instrument, like
+        // `--spawn snow`.
         let config = pbd_app::planet::terrain_config();
         let inside = |d: Vec3| {
             pbd_app::planet::surface_height(d) > 1.0
@@ -1289,9 +1290,14 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
                 .into_iter()
                 .all(|t| inside((d + t * step).normalize()))
         };
-        let found = fibonacci_sphere(20_000)
-            .filter(|d| inside(*d) && around(*d))
-            .max_by(|a, b| a.dot(default).total_cmp(&b.dot(default)));
+        // A swamp is a strip of low wet ground, rarely 80 m across, so when
+        // no place has room round it the nearest one of any size will do.
+        let nearest = |roomy: bool| {
+            fibonacci_sphere(20_000)
+                .filter(|d| inside(*d) && (!roomy || around(*d)))
+                .max_by(|a, b| a.dot(default).total_cmp(&b.dot(default)))
+        };
+        let found = nearest(true).or_else(|| nearest(false));
         if let Some(place) = found {
             info!(
                 "spawn moved {:.0} m into the nearest {wanted:?}",
