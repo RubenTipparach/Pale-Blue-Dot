@@ -1279,8 +1279,10 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
         // edge (`bigger-biomes` 4.1). A measurement instrument, like
         // `--spawn snow`.
         let config = pbd_app::planet::terrain_config();
+        // At or above the water, not a metre over it as `snow` asks: a beach
+        // is the sand within two metres of the sea.
         let inside = |d: Vec3| {
-            pbd_app::planet::surface_height(d) > 1.0
+            pbd_app::planet::surface_height(d) >= 0.0
                 && pbd_core::planet_gen::biome(config, d) == wanted
         };
         let around = |d: Vec3| {
