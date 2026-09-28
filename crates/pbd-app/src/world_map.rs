@@ -319,13 +319,82 @@ pub fn load_base(dir: &Path, seed: u64, cfg: &TerrainConfig) -> Option<Vec<Texel
     image.pixels().map(|p| unpack(p.0, cfg)).collect()
 }
 
-/// The whole base level's texels, row by row, without a border.
+/// The whole base level's texels, row by row, without a border: the rows
+/// split between the machine's threads, since it is 3.5 million texels.
 pub fn build_base(cfg: &TerrainConfig) -> Vec<Texel> {
     let (width, height) = level_size(BASE);
-    (0..height)
-        .flat_map(|y| (0..width).map(move |x| (x, y)))
-        .map(|(x, y)| base_texel(cfg, geo::pixel_direction(x, y, width, height)))
-        .collect()
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let rows_each = height.div_ceil(threads);
+    let mut texels = Vec::with_capacity(width * height);
+    std::thread::scope(|scope| {
+        let parts: Vec<_> = (0..height)
+            .step_by(rows_each)
+            .map(|first| {
+                scope.spawn(move || {
+                    let last = (first + rows_each).min(height);
+                    (first..last)
+                        .flat_map(|y| (0..width).map(move |x| (x, y)))
+                        .map(|(x, y)| base_texel(cfg, geo::pixel_direction(x, y, width, height)))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        for part in parts {
+            texels.extend(part.join().expect("a base row thread"));
+        }
+    });
+    texels
+}
+
+/// A map layer drawn from the base's texels: a colour, with its alpha, for
+/// each place, or clear (`world-map` decision 7). `city-sites` and
+/// `climate-and-fish-maps` add theirs here, and the map's code does not
+/// change for them.
+#[derive(Clone, Copy, Debug)]
+pub struct RasterLayer {
+    /// Its button in the legend.
+    pub name: &'static str,
+    /// One line under the legend saying what it shows.
+    pub note: &'static str,
+    pub paint: fn(&Texel) -> [u8; 4],
+}
+
+/// Every layer the legend lists, in the order they were added.
+#[derive(bevy::prelude::Resource, Default)]
+pub struct MapLayers {
+    pub rasters: Vec<RasterLayer>,
+}
+
+impl MapLayers {
+    /// Add a layer, and return its index in the legend's list.
+    pub fn add(&mut self, layer: RasterLayer) -> usize {
+        self.rasters.push(layer);
+        self.rasters.len() - 1
+    }
+}
+
+/// A layer's picture over the whole base level, RGBA, from its texels.
+pub fn paint_layer(layer: &RasterLayer, texels: &[Texel]) -> Vec<u8> {
+    texels.iter().flat_map(|t| (layer.paint)(t)).collect()
+}
+
+/// The biome layer's colours, as the mockup's overlay drew them (survey M3:
+/// biomes are an overlay over the greyed base). The sea is left clear.
+pub fn biome_colour(texel: &Texel) -> [u8; 4] {
+    if texel.sea {
+        return [0; 4];
+    }
+    let [r, g, b] = match texel.biome {
+        Biome::Ocean => return [0; 4],
+        Biome::Beach => [232, 214, 150],
+        Biome::Fields => [150, 190, 80],
+        Biome::Desert => [222, 150, 60],
+        Biome::Jungle => [30, 120, 60],
+        Biome::Swamp => [90, 130, 110],
+        Biome::Mountains => [140, 130, 125],
+        Biome::Tundra => [225, 235, 245],
+    };
+    [r, g, b, 200]
 }
 
 /// The base level's texels with the one-pixel border `colour_block` reads,

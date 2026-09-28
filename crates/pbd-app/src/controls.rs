@@ -145,6 +145,7 @@ impl Key {
                 KeyCode::KeyI => "I",
                 KeyCode::KeyJ => "J",
                 KeyCode::KeyL => "L",
+                KeyCode::KeyM => "M",
                 KeyCode::KeyP => "P",
                 KeyCode::KeyQ => "Q",
                 KeyCode::KeyR => "R",
@@ -313,7 +314,8 @@ const LOON: [Binding; 4] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
-const WORLD: [Binding; 4] = [
+const WORLD: [Binding; 5] = [
+    row(&[Key::Board(KeyCode::KeyM)], " ", "the map"),
     row(&[Key::Board(KeyCode::KeyR)], " ", "walk or fly"),
     row(&[Key::Board(KeyCode::KeyH)], " ", "return to the spawn"),
     row(&[Key::Board(KeyCode::KeyP)], " ", "cycle the weather"),
@@ -482,11 +484,15 @@ mod tests {
     /// Every file that presses the keyboard or the mouse. The test reads their
     /// SOURCE rather than a second list in here, which is this repository's
     /// rule for a representation it cannot collapse: check the real artifact.
-    const READERS: [(&str, &str); 12] = [
+    const READERS: [(&str, &str); 13] = [
         ("controls.rs", include_str!("controls.rs")),
         ("fish.rs", include_str!("fish.rs")),
         ("desktop/guide.rs", include_str!("desktop/guide.rs")),
         ("desktop/pack.rs", include_str!("desktop/pack.rs")),
+        (
+            "desktop/map_screen.rs",
+            include_str!("desktop/map_screen.rs"),
+        ),
         ("vehicles.rs", include_str!("vehicles.rs")),
         ("walking.rs", include_str!("walking.rs")),
         ("flight_view/input.rs", include_str!("flight_view/input.rs")),

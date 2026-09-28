@@ -79,6 +79,28 @@ pub fn ramp_colour(ramp: Ramp, t: f32) -> [f32; 3] {
     std::array::from_fn(|c| stops[i][c] + (stops[i + 1][c] - stops[i][c]) * f)
 }
 
+/// Where a fading overlay (cloud, rain) is fully drawn, as a share of the top
+/// of its range: less than that fades toward nothing, so a dry place shows the
+/// ground rather than the ramp's first colour. The globe's shader carries the
+/// same number (`OVERLAY_FADE_FULL` in `water.wgsl`), and
+/// `the_map_and_the_globe_fade_an_overlay_alike` holds the two together.
+pub const OVERLAY_FADE_FULL: f32 = 0.15;
+
+/// One overlay texel as the map draws it (`world-map` task 5.2): its value
+/// placed on the overlay's range and coloured by its ramp, as sRGB bytes, and
+/// how much of it to draw in alpha: `opacity`, faded toward nothing for an
+/// overlay that fades, as the globe's shader does.
+pub fn overlay_rgba(overlay: Overlay, texel: [f32; 4], opacity: f32) -> [u8; 4] {
+    let (low, high) = overlay.range();
+    let t = (texel[0] - low) / (high - low).max(1e-6);
+    let [r, g, b] = ramp_colour(overlay.ramp(), t);
+    let mut alpha = opacity.clamp(0.0, 1.0);
+    if overlay.fades() {
+        alpha *= (texel[0].abs() / (high * OVERLAY_FADE_FULL).max(1e-6)).clamp(0.0, 1.0);
+    }
+    [r, g, b, alpha].map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8)
+}
+
 /// The overlay map: one overlay's texel at every texel of the cube, faces and
 /// rows as the weather maps lay them out.
 pub fn overlay_texels(atmosphere: &Atmosphere, overlay: Overlay) -> Vec<[f32; 4]> {
@@ -161,17 +183,6 @@ pub fn fill_overlay(
     );
 }
 
-/// M steps to the next overlay, and past the last one back to the plain view.
-pub fn cycle_overlay(keys: Res<ButtonInput<KeyCode>>, mut mode: ResMut<OverlayMode>) {
-    if keys.just_pressed(KeyCode::KeyM) {
-        mode.0 = Overlay::next(mode.0);
-        match mode.0 {
-            Some(overlay) => info!("overlay: {}", overlay.name()),
-            None => info!("overlay: off"),
-        }
-    }
-}
-
 /// The overlay's lanes of the water pass's uniform: the ramp's row plus one
 /// (zero when nothing is showing), the range, the opacity; then the streak
 /// step, scroll and strength, and the flags (1 flows, 2 fades toward zero).
@@ -232,6 +243,30 @@ mod tests {
         let ours: Vec<[f32; 3]> = RAMPS.iter().flatten().copied().collect();
         assert_eq!(stops, ours);
         assert_eq!(RAMPS.len(), Ramp::ALL.len());
+    }
+
+    /// The map colours an overlay with the globe's fade: the shader's
+    /// `OVERLAY_FADE_FULL` is this one, a dry place is clear, and a wet one
+    /// at the full share is drawn at the opacity.
+    #[test]
+    fn the_map_and_the_globe_fade_an_overlay_alike() {
+        let shader = include_str!("../../../assets/shaders/water.wgsl");
+        let line = shader
+            .lines()
+            .find(|l| l.contains("const OVERLAY_FADE_FULL"))
+            .expect("water.wgsl declares OVERLAY_FADE_FULL");
+        let value: f32 = line
+            .split('=')
+            .nth(1)
+            .and_then(|v| v.trim().trim_end_matches(';').parse().ok())
+            .expect("a number");
+        assert_eq!(value, OVERLAY_FADE_FULL);
+        let (_, top) = Overlay::Rain.range();
+        assert_eq!(overlay_rgba(Overlay::Rain, [0.0; 4], 0.7)[3], 0);
+        let wet = overlay_rgba(Overlay::Rain, [top * OVERLAY_FADE_FULL, 0.0, 0.0, 0.0], 0.7);
+        assert_eq!(wet[3], (0.7f32 * 255.0).round() as u8);
+        // An overlay that does not fade is drawn at the opacity everywhere.
+        assert_eq!(overlay_rgba(Overlay::Wind, [0.0; 4], 0.7)[3], wet[3]);
     }
 
     #[test]

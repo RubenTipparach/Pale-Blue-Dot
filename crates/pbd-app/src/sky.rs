@@ -75,7 +75,7 @@ impl Sun {
 
 /// Advance the clock. One writer, so the hour cannot differ between systems
 /// inside a frame.
-fn run_clock(time: Res<Time>, mut sun: ResMut<Sun>) {
+pub fn run_clock(time: Res<Time>, mut sun: ResMut<Sun>) {
     if sun.running {
         let step = time.delta_secs();
         sun.clock.advance(step);

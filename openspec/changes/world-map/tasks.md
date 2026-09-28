@@ -34,24 +34,24 @@ gate for everything after it, in this change and in `bigger-biomes`,
 
 ## 3. The map screen
 
-- [ ] 3.1 Spike: a `UiMaterial` that draws the night side from the sun's direction on an equirectangular quad. Verify: a `--capture` at a pinned `--time` whose terminator crosses the equator at the longitudes the clock gives.
-- [ ] 3.2 The base raster built on the async pool, cached in the save folder under the seed and generator version, and loaded on the next start. Verify: an app test that a changed generator version discards the cache, and that a second start does not rebuild.
-- [ ] 3.3 The quadtree of tiles and the LRU for close zoom. Verify: a test that the tile under the player at the finest zoom is 2.833 m a pixel, give or take the geodesic spread CLAUDE.md gives.
-- [ ] 3.4 The shader's inverse projection, checked against `geo` on the same sample points. Verify: the check is in the shader-constant test's family, and it fails when either copy is changed.
-- [ ] 3.5 M, Escape, the wheel, dragging and Home. `MenuOpen` holds the pointer, and the world keeps running. Verify: app tests that M opens and closes, that walking input is ignored while the map is open, and that the clock advances while it is open.
+- [x] 3.1 (`map_live.wgsl`, one `UiMaterial` over the base. At `--time 12` on day 0 the night crosses the equator at -60.6 and 116.2 degrees east in the capture, against -59.5 and 116.1 from `Clock::daylight` (`examples/terminator.rs`); a pixel is 0.25 degrees there.) Spike: a `UiMaterial` that draws the night side from the sun's direction on an equirectangular quad. Verify: a `--capture` at a pinned `--time` whose terminator crosses the equator at the longitudes the clock gives.
+- [x] 3.2 (`world_map::{build_base, save_base, load_base}`: texels, not colours, as a PNG named by the seed and `GENERATOR_VERSION` (decision 10); `the_cache_is_keyed_by_seed_and_generator` reads a written cache back, reads nothing for another seed, and deletes and ignores another generator's. Built on the pool in play and in place in a capture.) The base raster built on the async pool, cached in the save folder under the seed and generator version, and loaded on the next start. Verify: an app test that a changed generator version discards the cache, and that a second start does not rebuild.
+- [x] 3.3 (Levels 2,664 / 5,328 / 10,656 of 333-pixel tiles, decision 10. `the_finest_level_is_a_cell_a_pixel`: 2.830 m against 2.833 m; `tiles_meet_without_a_seam`, the antimeridian included; `the_lru_drops_the_least_recently_drawn`.) The quadtree of tiles and the LRU for close zoom. Verify: a test that the tile under the player at the finest zoom is 2.833 m a pixel, give or take the geodesic spread CLAUDE.md gives.
+- [x] 3.4 (`map_gpu_tests.rs` runs the shader's `unproject` and `daylight` on a Vulkan adapter against `geo::unproject` and `Clock::daylight` at 320 points; it fails when the shader's longitude or its dusk band is changed, both tried.) The shader's inverse projection, checked against `geo` on the same sample points. Verify: the check is in the shader-constant test's family, and it fails when either copy is changed.
+- [x] 3.5 (`m_opens_and_closes_the_map_and_the_world_runs_behind_it`: M opens it centred on the player and closes it, `MenuOpen` is held while it is open, which is what the walker and the pilot take no input by, and the clock runs.) M, Escape, the wheel, dragging and Home. `MenuOpen` holds the pointer, and the world keeps running. Verify: app tests that M opens and closes, that walking input is ignored while the map is open, and that the clock advances while it is open.
 
 ## 4. The live layer
 
-- [ ] 4.1 The player's marker and heading, and a marker for each owned vehicle, placed with `geo`. Verify: an app test that a parked ship's marker stays put while the player walks away.
+- [x] 4.1 (`a_parked_ships_marker_stays_put_while_the_player_walks_away`. The player is the walker on foot and the ship at the controls, read off their positions rather than the readouts, which start at zero.) The player's marker and heading, and a marker for each owned vehicle, placed with `geo`. Verify: an app test that a parked ship's marker stays put while the player walks away.
 - [ ] 4.2 Clouds and rain sampled from `Air`'s cube maps in the map's shader. Verify: a capture of the map beside the globe's cloud overlay at the same time, in `docs/screenshots/world-map/`.
 
 ## 5. Layers and the legend
 
-- [ ] 5.1 The layer registry (raster or markers, legend entry, default visibility). Verify: a test layer added from outside the `map` module appears in the legend.
-- [ ] 5.2 The eight weather overlays as one radio group in the legend, with "show on globe" setting `OverlayMode`. M's cycling is removed. Verify: `the_legend_and_the_shader_share_one_ramp_table` still passes, and an app test that the legend's switch sets `OverlayMode`.
-- [ ] 5.3 M added to `BINDINGS`. Verify: the controls-list test finds it.
+- [x] 5.1 (`world_map::MapLayers` of `RasterLayer`s painted from the base's texels; the biomes are the first, added through it. `a_registered_layer_appears_in_the_legend`.) The layer registry (raster or markers, legend entry, default visibility). Verify: a test layer added from outside the `map` module appears in the legend.
+- [x] 5.2 (The map colours an overlay from `overlay_texels` with `overlay_rgba`, whose fade `the_map_and_the_globe_fade_an_overlay_alike` pins to the shader's. `the_legend_sets_the_globes_overlay`; `cycle_overlay` is gone.) The eight weather overlays as one radio group in the legend, with "show on globe" setting `OverlayMode`. M's cycling is removed. Verify: `the_legend_and_the_shader_share_one_ramp_table` still passes, and an app test that the legend's switch sets `OverlayMode`.
+- [x] 5.3 (In the WORLD group, "the map"; `map_screen.rs` is one of the files the test reads.) M added to `BINDINGS`. Verify: the controls-list test finds it.
 
-- [ ] 5.4 A site's named places on the map, as the towns mockup's Places list has them (the inn, the keep, the market). Choosing one shows it on the map, and in a debug build moves the player there. Verify: an app test that choosing a place in a debug build puts the walker at its door.
+- [ ] 5.4 (Waits for `city-sites`: the game has no sites, so no places to list. Decision 10.) A site's named places on the map, as the towns mockup's Places list has them (the inn, the keep, the market). Choosing one shows it on the map, and in a debug build moves the player there. Verify: an app test that choosing a place in a debug build puts the walker at its door.
 
 ## 6. The owner's check
 

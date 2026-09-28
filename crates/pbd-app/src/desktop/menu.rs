@@ -35,6 +35,8 @@ pub enum Screen {
     Guide,
     /// The pack, opened with I (`inventory-grid`).
     Pack,
+    /// The world map, opened with M (`world-map`).
+    Map,
 }
 
 impl Screen {
@@ -55,7 +57,7 @@ impl Screen {
         }
         match self {
             Screen::Playing => Screen::Pause,
-            Screen::Pause | Screen::Guide | Screen::Pack => Screen::Playing,
+            Screen::Pause | Screen::Guide | Screen::Pack | Screen::Map => Screen::Playing,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }
@@ -107,6 +109,7 @@ pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> S
         Some("settings") => Screen::Settings,
         Some("saves") => Screen::Saves,
         Some("pack") => Screen::Pack,
+        Some("map") => Screen::Map,
         _ if !world_named && !capture => Screen::Saves,
         _ => Screen::Playing,
     }

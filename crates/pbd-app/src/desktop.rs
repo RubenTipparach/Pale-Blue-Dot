@@ -5,6 +5,7 @@ mod equipment;
 mod frame_graph;
 mod guide;
 mod hud;
+mod map_screen;
 mod menu;
 mod overlay_ui;
 mod pack;
@@ -168,10 +169,16 @@ pub struct Launch {
     /// Absent, an interactive run opens the one played most recently and a
     /// capture writes to no world at all.
     pub world: Option<String>,
-    /// `--menu pause|settings|saves|pack` opens that screen at startup. A headless run has
+    /// `--menu pause|settings|saves|pack|map` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
     pub menu: Option<String>,
+    /// How the map opens, for its captures: `--map-mpp <metres>` is its zoom
+    /// as metres a screen pixel at the centre, `--map-overlay <name>` a
+    /// weather overlay, `--map-layer <name>` a raster layer such as
+    /// `biomes`, `--map-night` and `--map-clouds` those live layers, and
+    /// `--map-at <lat> <lon>` the centre in degrees (the player otherwise).
+    pub map: map_screen::MapLaunch,
 }
 
 impl Launch {
@@ -208,6 +215,7 @@ impl Launch {
             time: None,
             day: None,
             overlay: None,
+            map: map_screen::MapLaunch::default(),
             torch: false,
             lamps: false,
             lamps_at: 5.0,
@@ -335,12 +343,52 @@ impl Launch {
                     i += 1;
                     let screen = args
                         .get(i)
-                        .expect("--menu requires pause, settings, saves or pack");
+                        .expect("--menu requires pause, settings, saves, pack or map");
                     assert!(
-                        matches!(screen.as_str(), "pause" | "settings" | "saves" | "pack"),
-                        "--menu takes pause, settings, saves or pack"
+                        matches!(
+                            screen.as_str(),
+                            "pause" | "settings" | "saves" | "pack" | "map"
+                        ),
+                        "--menu takes pause, settings, saves, pack or map"
                     );
                     result.menu = Some(screen.clone());
+                }
+                "--map-mpp" => {
+                    i += 1;
+                    result.map.metres_per_pixel = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--map-mpp requires metres a pixel"),
+                    );
+                }
+                "--map-overlay" => {
+                    i += 1;
+                    let name = args.get(i).expect("--map-overlay requires a name");
+                    result.map.overlay = Some(
+                        pbd_core::overlay::Overlay::ALL
+                            .into_iter()
+                            .find(|o| o.name().eq_ignore_ascii_case(name))
+                            .unwrap_or_else(|| panic!("no overlay called {name}")),
+                    );
+                }
+                "--map-layer" => {
+                    i += 1;
+                    result.map.layer =
+                        Some(args.get(i).expect("--map-layer requires a name").clone());
+                }
+                "--map-night" => result.map.night = true,
+                "--map-clouds" => result.map.clouds = true,
+                "--map-at" => {
+                    let lat: f32 = args
+                        .get(i + 1)
+                        .and_then(|v| v.parse().ok())
+                        .expect("--map-at requires a latitude");
+                    let lon: f32 = args
+                        .get(i + 2)
+                        .and_then(|v| v.parse().ok())
+                        .expect("--map-at requires a longitude");
+                    i += 2;
+                    result.map.at = Some((lat, lon));
                 }
                 "--turn" => {
                     i += 1;
@@ -689,6 +737,9 @@ pub fn run(args: &[String]) {
     .insert_resource(tools)
     // And the dug blocks still floating where they were cut.
     .add_plugins(pbd_app::drops::DropsPlugin)
+    // The world map on M (`world-map`), and how a capture asks it to open.
+    .add_plugins(map_screen::MapScreenPlugin)
+    .insert_resource(launch.map.clone())
     .insert_resource(drops)
     .configure_sets(
         Update,
@@ -772,7 +823,13 @@ pub fn run(args: &[String]) {
     // `RunFixedMainLoop`, and is cleared there so neither ever sees it.
     .add_systems(
         PreUpdate,
-        (menu::name_input, menu::toggle, guide::open, pack::open)
+        (
+            menu::name_input,
+            menu::toggle,
+            guide::open,
+            pack::open,
+            map_screen::open,
+        )
             .chain()
             .after(bevy::input::InputSystems),
     )
