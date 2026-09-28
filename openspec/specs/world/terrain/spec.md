@@ -68,6 +68,14 @@ biome SHALL hold the majority of the temperate land.
   generator with the 188 m moisture field does at the same thresholds
   (`planet_gen::tests::the_biomes_are_about_four_times_wider`)
 
+#### Scenario: Rock follows the contours
+- **WHEN** a version 5 desert is sampled
+- **THEN** every cell at one height has the same top block, so the rock lies
+  in bands along the contours rather than along the latitude
+- **AND** version 4's desert keeps the top blocks it had
+  (`planet_gen::tests::a_deserts_rock_follows_the_contours`,
+  `planet_gen::tests::version_4_keeps_its_top_blocks`)
+
 #### Scenario: Grass is not the majority
 - **WHEN** the temperate land (outside the cold band and below the mountain
   elevation) is sampled on the shipped seed and on four other seeds

@@ -24,7 +24,7 @@ What moves is which biome the land is.
 | `map-planet-v4.jpg`, `map-planet-v5.jpg` | `--walk --menu map --map-layer biomes --map-mpp 40` | The whole planet's biome layer, with each biome's share of the land in the key. Version 4: fields 63%, desert 3%, jungle 3%, swamp 0%. Version 5: fields 23%, desert 23%, jungle 22%, swamp 1%. Beach (5%), mountains (2%) and tundra (24%) are the same in both, being set by height and latitude. The version 5 map matches the 750 m mockup the owner chose (`docs/screenshots/world-map/biomes-750.jpg`), within a point on each share. |
 | `map-v4.jpg`, `map-v5.jpg` | the same at `--map-mpp 12` | The spawn's continent, the player's marker in the middle. Version 4's fields hold scattered specks of desert and jungle a few hundred metres across; version 5's biomes are regions kilometres across, desert inland and jungle round the coasts. |
 | `orbit-v4.jpg`, `orbit-v5.jpg` | `--view orbit` | The planet from 7,800 m. At noon on day 0 both settled climates put one large cloud mass over the spawn's continent; the land at the rim shows version 5's desert as orange ground where version 4's is green. |
-| `surface-v4.jpg`, `surface-v5.jpg` | `--view surface` | 90 m over the spawn, looking east. Version 4: fields and scattered trees up to grey stone. Version 5: a desert runs from the spawn's field to the same grey stone, with the east-west rock bands of survey G1 across it. |
+| `surface-v4.jpg`, `surface-v5.jpg` | `--view surface` | 90 m over the spawn, looking west (the view's "tangent" is `Y x up`). Version 4: fields and scattered trees up to grey stone. Version 5: a desert runs from the spawn's field to the same grey stone, its rock along the contours (G1, below); `surface-v5-latitude.jpg` is the same view with the rock in east-west bands, as version 5 was first built. |
 | `spawn-v4.jpg`, `spawn-v5.jpg` | `--walk` | Eye level at the spawn: the same field (73 m up, dry grass, `tests::an_old_worlds_spawn_column_is_the_ground_it_was`), with desert on the hills behind it in version 5. |
 
 ## Version 5's biomes from inside
@@ -37,7 +37,7 @@ column view standing over the spawn are capture instruments added for these
 
 | file | nearest | what it shows |
 | --- | ---: | --- |
-| `biome-desert.jpg` | 128 m | Sand with the rock bands of survey G1 running east-west, bare stone beyond. |
+| `biome-desert.jpg` | 128 m | Sand with its rock along the contours, one metre in every seven of height wrapping each terrace (G1, below), bare stone beyond. `biome-desert-latitude.jpg` is the same view before, the rock in straight east-west bands. |
 | `biome-jungle.jpg` | 853 m | Dense jungle trees to the horizon, desert past its edge. |
 | `biome-fields.jpg` | 108 m | Grass and scattered trees, desert on the rise behind. |
 | `biome-swamp.jpg` | 1,288 m | Low wet ground under jungle trees, with swamp water. |
@@ -53,9 +53,14 @@ column view standing over the spawn are capture instruments added for these
   4's has full cover and no rain. The weather replays from the shipped state,
   so every new world opens the same way. It is not a fault, but it is the
   first thing a player sees; the owner is told.
-- **The desert's rock stripes show far more** now that deserts are regions:
-  the bands run straight east-west across the whole desert east of the spawn.
-  Version 5 does not change them; survey G1 asks whether they go.
+- **The desert's rock stripes showed far more** once deserts were regions:
+  straight east-west bands across the whole desert beside the spawn
+  (`biome-desert-latitude.jpg`, `surface-v5-latitude.jpg`). The owner:
+  "rock stripes should follow contour lines which are by height", so version
+  5 lays one metre of rock in every seven of height (`bigger-biomes` decision
+  7, survey G1). `map-close-contours.jpg` is the spawn's continent at 4 m a
+  pixel on the planet layer: the rock reads as contour lines round every
+  hill. Version 4 keeps its bands.
 - **The straight line where the tundra begins** is the cold band, a line of
   latitude. It was there in version 4 and in the approved mockup.
 - **Beach reads 5% of the land in the game and 10% in the mockup**, in both
