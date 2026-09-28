@@ -55,7 +55,7 @@ gate for everything after it, in this change and in `bigger-biomes`,
 
 ## 6. The owner's check
 
-- [ ] 6.1 The gate video (showcase `map`):
+- [ ] 6.1 (Screenshots stand in until the owner's batch: the gate page https://claude.ai/artifact/2Vs2e3h3rQS1EPKQSKA1gF puts each game view beside the approved mockup's.) The gate video (showcase `map`):
   - M opened on foot;
   - a zoom from the whole planet down to the player;
   - a walk away from a parked ship with its marker staying put;
