@@ -437,6 +437,7 @@ mod settled_tests {
             shipped.push(level);
         }
         assert!(shipped.contains(&3), "level 3 ships, for the fish test");
+        assert!(shipped.contains(&5), "level 5 ships, the game's own level");
     }
 
     /// A new world opens on the settled state, exactly, when its clock opens

@@ -644,6 +644,26 @@ also writes a checkpoint every ten days and picks up from it, since a level-5
 settle is three or four hours and the container has twice restarted under a
 run shorter than that.
 
+As built at level 5 (2026-09-28): two fast years, then two true years. The
+run was relaunched from its day-10 checkpoint after a container restart, and
+ran 100 minutes from there.
+
+| days | phase | whole surface | sea |
+| --- | --- | ---: | ---: |
+| 10 to 190 | fast, light sea | 13.2 to 17.6 °C | 15.5 to 18.9 °C |
+| 200 to 300 | true year 1, the sea set to its fast-year mean | averaged 15.95 °C, +0.95 K | 18.25 to 18.35 °C |
+| 300 to 400 | true year 2, the sea shifted by -0.95 K | averaged 14.84 °C, -0.16 K: landed | 16.93 to 17.10 °C |
+| new world, days 1 to 30 | from the shipped state | 14.78 to 14.99 °C | |
+
+One shift of the miss was enough, as the gain of 1 predicted: a kelvin of sea
+moved the year by 1.1 K. The trim over the new world's thirty days reads 0.905
+to 0.910. Over the landed year it reads 0.902 to 0.908 after its first ten
+days, which follow the shift. `settled-l5.bin` ships beside its settings, the
+shipped-state test requires level 5 as well as level 3, and the game at
+level 5 now logs "the settled climate for level 5, 14.95 C over the whole
+surface" where it used to spin up from rest
+(`docs/screenshots/climate-balance/`).
+
 **7. The heat spread is a diffusivity, the same at every level (2026-09-27,
 finding 8).** `heat_spread` (per second) is replaced by
 `heat_diffusivity_m2s` (m²/s), and the step's rate is that over the square
