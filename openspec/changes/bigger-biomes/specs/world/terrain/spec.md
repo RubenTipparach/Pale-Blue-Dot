@@ -26,6 +26,12 @@ biome SHALL hold the majority of the temperate land.
 - **THEN** they cross at most a third as many biome edges as the same
   generator with the 188 m moisture field does at the same thresholds
 
+#### Scenario: Rock follows the contours
+- **WHEN** a version 5 desert is sampled
+- **THEN** every cell at one height has the same top block, so the rock lies
+  in bands along the contours rather than along the latitude
+- **AND** version 4's desert keeps the top blocks it had
+
 #### Scenario: Grass is not the majority
 - **WHEN** the temperate land (outside the cold band and below the mountain
   elevation) is sampled on the shipped seed and on four other seeds

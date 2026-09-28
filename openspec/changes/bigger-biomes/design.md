@@ -211,9 +211,33 @@ As built (2026-09-28):
   a new world's 30 days 14.76 to 14.98 °C.
 - The map's cached base is named for the generator too, so a world of one
   version never shows another's picture.
-- Version 5 does not carry survey G1 (the desert's east-west rock stripes
-  scattered into patches), which is unanswered. If the owner takes it, it is
-  version 6, with B4 if the biomes are to be wider still.
+- Version 5 carries survey G1 as the owner answered it (decision 7), since
+  it changed before PR #18 merged and no world outside the cloud container
+  was made on version 5.
+
+**7. Rock follows the contours (survey G1, 2026-09-28).** The owner, on the
+orange streaks across the version 5 desert: "rock stripes should follow
+contour lines which are by height". Version 4's `top_material` breaks a
+desert's sand with rock where `(|latitude| * 977).fract()` falls under
+`desert_rock_frac` (0.14), a latitude-only dither from the reference, so the
+rock runs in straight east-west bands; a swamp's dirt, grass and water are
+picked by the same latitude value. With deserts a fifth of the land those
+bands cross whole regions.
+- Version 5 picks by height: `strata_m`, `Some(7.0)`, lays one metre of rock
+  every 7 m (`(surface_m / strata_m).fract() < desert_rock_frac`, so the
+  share stays 1 in 7). A terrace's top is one height, so the rock is whole
+  terraces at those heights: bands that trace each hill's contours, broad on
+  flat ground and thin on slopes, as strata show in a cut bank. A swamp's
+  water lies in its lowest layer, its dirt one above, grass higher, so the
+  water sits in the hollows.
+- Version 4 keeps the latitude dither (`strata_m: None`), since an old world
+  keeps its ground; a digest of version 4's top blocks on 10,000 directions,
+  taken before the change, pins it.
+- The climate reads the biome, never the top block, so the settled climates
+  stand. The map's cached base, named for the generator, is rebuilt only in
+  this container, which is the one place a version 5 world was made.
+- *Alternative:* strata that dip, their height eased by a slow noise, as
+  real beds tilt. More natural, but not what was asked, and it can follow.
 
 ## Measured: the candidates (2026-09-27)
 
