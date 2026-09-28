@@ -64,6 +64,15 @@ What the table says:
   leaves the median land within 3.4 m of today's, and keeps the high ground
   as walkable as today's (0.2% of high cells step 3 m or more).
 
+## Rendered: the candidates in the game (2026-09-28)
+
+From a scratch build (task 1.3), each candidate's tallest summit within 55
+degrees of the equator: the wide ranges reach **249 m** there (the probe's
+291 m is at a higher latitude), and the peaks **310 m**, on today's tallest
+ridge (157 m). The wide ranges read as a massif about 2 km across with long
+grey slopes; the peaks as a spire of cliffs. With the snow line at today's
+150 m the ranges are white from their flanks, which is decision 3's reason.
+
 ## Surveyed: what bounds terrain height (2026-09-28)
 
 Read from the code (task 1.2). Everything not listed scales without a cap.
