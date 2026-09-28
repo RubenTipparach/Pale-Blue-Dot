@@ -100,10 +100,16 @@ pub struct TerrainConfig {
 }
 
 impl TerrainConfig {
-    /// The main body's generator: the reference's scales and thresholds, the
-    /// heights re-authored for a 4,800 m body (summits near 150 m, the floor
-    /// near 90 m, about half the sphere land, measured).
-    pub const TENEBRIS: Self = Self {
+    /// The main body's generator as the running build makes a new world:
+    /// the newest version [`Self::for_version`] carries.
+    pub const TENEBRIS: Self = Self::TENEBRIS_V4;
+
+    /// Generator version 4, verbatim, as every world made before
+    /// `bigger-biomes` was: the reference's scales and thresholds, the heights
+    /// re-authored for a 4,800 m body (summits near 150 m, the floor near
+    /// 90 m, about half the sphere land, measured). An old world keeps it
+    /// (survey B3), so it is never edited: a later version is a new constant.
+    pub const TENEBRIS_V4: Self = Self {
         seed: 0x5eed_2026,
         radius_m: 4_800.0,
         continent_scale: 1.6,
@@ -144,6 +150,18 @@ impl TerrainConfig {
         polar_latitude: 0.95,
         desert_rock_frac: 0.14,
     };
+}
+
+impl TerrainConfig {
+    /// The config a generator version names, or `None` for a version this
+    /// build does not carry, which a save naming it is refused over rather
+    /// than opened as something else (`bigger-biomes` decision 3).
+    pub fn for_version(version: u32) -> Option<Self> {
+        match version {
+            4 => Some(Self::TENEBRIS_V4),
+            _ => None,
+        }
+    }
 }
 
 impl Default for TerrainConfig {
@@ -550,6 +568,49 @@ mod tests {
             Vec3::new(r * t.cos(), y, r * t.sin())
         })
     }
+
+    /// A digest of what a config makes of the sphere: every altitude, bit for
+    /// bit, and every biome, over `n` spread directions.
+    fn digest(cfg: &TerrainConfig, n: usize) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        let mut fold = |value: u64| {
+            for byte in value.to_le_bytes() {
+                hash = (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        };
+        for d in sphere(n) {
+            let h = surface_altitude(cfg, d);
+            fold(u64::from(h.to_bits()));
+            fold(biome_at(cfg, d, h) as u64);
+        }
+        hash
+    }
+
+    /// Generator version 4 makes the land and the biomes every world before
+    /// `bigger-biomes` was made with, altitude for altitude and biome for
+    /// biome on 10,000 directions: the digest was taken when the table was
+    /// added, with version 4 the one config there had been, copied verbatim.
+    /// A save of version 4 opens on this ground whatever the newest version
+    /// is (survey B3), and this fails if anything moves it.
+    #[test]
+    fn version_4_makes_the_ground_every_old_world_was_made_on() {
+        let v4 = TerrainConfig::for_version(4).expect("version 4 is carried");
+        assert_eq!(v4, TerrainConfig::TENEBRIS_V4);
+        assert_eq!(digest(&v4, 10_000), VERSION_4_DIGEST);
+    }
+
+    /// A version the build does not carry has no config, so a save naming it
+    /// is refused rather than opened on some other ground.
+    #[test]
+    fn an_unknown_generator_version_has_no_config() {
+        for version in [0, 1, 2, 3, 99, u32::MAX] {
+            assert_eq!(TerrainConfig::for_version(version), None, "{version}");
+        }
+        assert!(TerrainConfig::for_version(crate::terrain::GENERATOR_VERSION).is_some());
+    }
+
+    /// The digest of version 4's ground on 10,000 directions.
+    const VERSION_4_DIGEST: u64 = 12_573_173_393_310_104_260;
 
     /// The primitive is the reference's `gnoise3d_seed` bit for bit: these
     /// values were computed by that function on these inputs.

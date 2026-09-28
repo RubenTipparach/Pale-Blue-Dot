@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Draw the item icons this repository makes itself: the three fish new to
-Pale Blue Dot, as 16x16 RGBA PNGs under assets/items/. The four tool icons are
-drawn from the tools' own hexes by tools/gen_held_tools.py, which uses this
-file's PNG writer.
+Pale Blue Dot and the six lights, as 16x16 RGBA PNGs under assets/items/. The
+four tool icons are drawn from the tools' own hexes by tools/gen_held_tools.py,
+which uses this file's PNG writer.
+
+The lights (`lamps-and-lanterns` task 5.3) are drawn as the game draws them:
+iron frames round lit glass in the towns mockup's lamp colour, and flames
+white-gold at the root and orange at the tip. One palette serves all six, so
+a lantern's glass is the same colour in every slot.
 
 The pixel grids are the fishing mockup's (docs/mockups/fishing.html), which is
 what was shown and approved; a grid letter names a palette colour and "." is
@@ -43,6 +48,56 @@ ICONS = {
         "................", "................", "................", "................",
     ], {"d": "#4f6f8f", "l": "#9fb6c9", "e": "#e8e8e8", "t": "#4f6f8f"}),
 }
+
+
+# The lights' one palette: iron dark to light, lit glass, flame root to tip,
+# wood and wax.
+LIGHT = {
+    "k": "#1e1e22", "i": "#3c3c44", "I": "#5d5d68",
+    "g": "#ffd9a0", "G": "#fff2cc",
+    "y": "#fff0b0", "F": "#ffc050", "f": "#ff8a3a",
+    "w": "#5a3a1e", "W": "#8a5a30",
+    "x": "#efe6d0", "X": "#cbbf9f",
+}
+
+ICONS.update({
+    "lights/torch": ([
+        "................", "........y.......", ".......yF.......", "......fFyf......",
+        "......FyyF......", ".....fFyyFf.....", "......fFFf......", "......kkkk......",
+        "......wWWw......", ".......Ww.......", ".......Ww.......", ".......Ww.......",
+        ".......Ww.......", ".......Ww.......", ".......ww.......", "................",
+    ], LIGHT),
+    "lights/lantern_post": ([
+        "......kkkk......", ".....kIiiIk.....", ".....kgGGgk.....", ".....kgGGgk.....",
+        ".....kggggk.....", ".....kkkkkk.....", ".......ki.......", ".......ki.......",
+        ".......ki.......", ".......ki.......", ".......ki.......", ".......ki.......",
+        ".......ki.......", "......kiik......", ".....kiiiik.....", "................",
+    ], LIGHT),
+    "lights/lantern_wall": ([
+        "................", "kk..............", "kIkkkkkkk.......", "kIiiiiiik.......",
+        "kI.....k........", "kI....kkkk......", "kI...kIiiIk.....", "kk...kgGGgk.....",
+        ".....kgGGgk.....", ".....kgGGgk.....", ".....kggggk.....", ".....kkkkkk.....",
+        "......kiik......", "................", "................", "................",
+    ], LIGHT),
+    "lights/lantern_hanging": ([
+        ".......k........", ".......I........", ".......k........", ".......I........",
+        ".......k........", "......kkkk......", ".....kIiiIk.....", ".....kgGGgk.....",
+        ".....kgGGgk.....", ".....kgGGgk.....", ".....kggggk.....", ".....kkkkkk.....",
+        "......kiik......", "................", "................", "................",
+    ], LIGHT),
+    "lights/brazier": ([
+        "................", "................", ".......y........", "......yFy.......",
+        ".....fFyFf......", "....fFFyFFf.....", "...fFFFFFFFf....", "..kiiiiiiiiik...",
+        "..kIiiiiiiiIk...", "...kiiiiiiik....", "....kkkkkkk.....", ".......ki.......",
+        ".......ki.......", "......kiik......", "....kki..ikk....", "................",
+    ], LIGHT),
+    "lights/candle": ([
+        "................", "................", "................", ".......y........",
+        "......yFy.......", "......fFf.......", ".......k........", "......xxX.......",
+        "......xxX.......", "......xxX.......", "......xxX.......", "......xxX.......",
+        "......xxX.......", "....kIiiiIk.....", ".....kkkkk......", "................",
+    ], LIGHT),
+})
 
 
 def rgba(hex_colour):

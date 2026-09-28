@@ -57,6 +57,18 @@ fn main() {
         if step % 60 == 0 {
             report.take(&air, clock.sun());
         }
+        // Every ten days, the planet's mean, the clouds' net effect and the
+        // sun's trim (`climate-balance` task 1.1).
+        let ten_days = (10.0 * DAY_S / settings.dt_s) as u64;
+        if step % ten_days == ten_days - 1 {
+            println!(
+                "day {:>4.0}: whole surface {:.2} C, net cloud {:.1} W/m^2, trim {:.3}",
+                (step + 1) as f64 * settings.dt_s as f64 / DAY_S as f64,
+                air.mean_surface_c(),
+                air.net_cloud_wm2(),
+                air.sun_trim
+            );
+        }
         report.strikes += air
             .strikes
             .iter()

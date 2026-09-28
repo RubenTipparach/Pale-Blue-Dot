@@ -29,11 +29,6 @@ pub const CLOUD_RADIUS: f32 = PLANET_RADIUS + 300.0;
 /// towers to the full 450 m and a stratus deck lies in the bottom third. The
 /// tops stay under the atmosphere shell (960 m up) with room to spare.
 pub const CLOUD_THICKNESS: f32 = 450.0;
-/// Where the sun is in the system frame: the core's fixed sun, which the
-/// planet turns under. Noon is exactly this, so every capture framed against
-/// the old constant still reads.
-pub const SUN_DIRECTION: Vec3 = pbd_core::daylight::SUN_FIXED;
-
 /// The world's clock and the one sun direction derived from it.
 ///
 /// It was a `const` that six call sites each normalised their own copy of -
@@ -80,7 +75,7 @@ impl Sun {
 
 /// Advance the clock. One writer, so the hour cannot differ between systems
 /// inside a frame.
-fn run_clock(time: Res<Time>, mut sun: ResMut<Sun>) {
+pub fn run_clock(time: Res<Time>, mut sun: ResMut<Sun>) {
     if sun.running {
         let step = time.delta_secs();
         sun.clock.advance(step);
@@ -370,6 +365,57 @@ mod tests {
     use super::*;
     use crate::{CelestialScene, PhysicsFrame};
     use bevy::math::DVec3;
+
+    /// There is one sun: nothing in the app names the core's fixed sun or
+    /// keeps a constant of its own, so every consumer reads `Sun::direction`
+    /// (`planet/light`, "No second copy of the sun").
+    #[test]
+    fn the_app_keeps_no_sun_of_its_own() {
+        fn walk(dir: &std::path::Path, found: &mut Vec<String>) {
+            for entry in std::fs::read_dir(dir).expect("the source tree") {
+                let path = entry.expect("an entry").path();
+                if path.is_dir() {
+                    walk(&path, found);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    let text = std::fs::read_to_string(&path).expect("a source file");
+                    // Split so this file's own needles do not match.
+                    for needle in [["SUN_", "FIXED"], ["SUN_", "DIRECTION"]] {
+                        if text.contains(&needle.concat()) {
+                            found.push(format!("{} names {}", path.display(), needle.concat()));
+                        }
+                    }
+                }
+            }
+        }
+        let mut found = Vec::new();
+        walk(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut found,
+        );
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    /// A capture pins the clock and it holds; a running clock moves with time.
+    /// That is what makes a capture a function of its flags
+    /// (`planet/light`, "A capture can stop the clock").
+    #[test]
+    fn a_pinned_clock_holds_and_a_running_one_moves() {
+        use bevy::ecs::system::RunSystemOnce;
+        for running in [false, true] {
+            let mut world = World::new();
+            let mut time = Time::<()>::default();
+            time.advance_by(std::time::Duration::from_secs(30));
+            world.insert_resource(time);
+            let start = pbd_core::daylight::Clock::at(3, 12.0);
+            world.insert_resource(Sun {
+                clock: start,
+                running,
+            });
+            world.run_system_once(run_clock).expect("the clock runs");
+            let moved = world.resource::<Sun>().clock.seconds != start.seconds;
+            assert_eq!(moved, running, "running: {running}");
+        }
+    }
 
     /// The light march and the view march take one extinction, the layer's,
     /// mixed by the cover: a numeric extinction in the light march is a cloud

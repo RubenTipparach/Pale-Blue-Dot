@@ -18,8 +18,9 @@ use crate::planet::terrain::TERRAIN;
 use crate::sky::Sun;
 use bevy::prelude::*;
 use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future};
-use pbd_core::atmosphere::{Atmosphere, Forcing};
-use pbd_core::daylight::Clock;
+use pbd_core::atmosphere::{Atmosphere, AtmosphereSettings, Forcing};
+use pbd_core::daylight::{Clock, DAY_S, START_HOUR, YEAR_DAYS};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Texels along a weather map's cube face.
@@ -66,11 +67,66 @@ struct Stepped {
     at_seconds: f64,
 }
 
+/// The shipped settled climates, `assets/climate`, resolved as the config
+/// directory is.
+fn climate_dir() -> PathBuf {
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/climate"))
+}
+
+/// Where in the year a shipped settled state stands, seconds: `START_HOUR` of
+/// day 0, where `Clock::default` opens (`examples/settle_climate.rs` stops at a
+/// whole number of years plus that).
+pub fn settled_at_s() -> f64 {
+    f64::from(START_HOUR) / 24.0 * f64::from(DAY_S)
+}
+
+/// The settled climate shipped for these settings, as `Atmosphere::to_bytes`
+/// wrote it: `assets/climate/settled-l<level>.bin`, made by
+/// `examples/settle_climate.rs` with the settings in the `.ron` beside it
+/// (`climate-balance` decision 8). `None`, with a warning, when none is
+/// shipped for this level or it was made with other settings: a state settled
+/// under other physics is not this world's climate, and the world spins up
+/// from rest instead, starting below its mean (finding 9) until it is remade.
+pub fn shipped_settled(settings: &AtmosphereSettings) -> Option<Vec<u8>> {
+    let name = climate_dir().join(format!("settled-l{}", settings.level));
+    let ron = name.with_extension("ron");
+    let made_with: AtmosphereSettings = match std::fs::read_to_string(&ron) {
+        Ok(text) => match ron::from_str(&text) {
+            Ok(made_with) => made_with,
+            Err(error) => {
+                warn!("{}: {error}", ron.display());
+                return None;
+            }
+        },
+        Err(_) => {
+            warn!(
+                "no settled climate is shipped for level {} ({}); spinning up from rest",
+                settings.level,
+                ron.display()
+            );
+            return None;
+        }
+    };
+    if made_with != *settings {
+        warn!(
+            "{} was made with other atmosphere settings; spinning up from rest. Remake it with \
+             `cargo run --release -p pbd-core --example settle_climate -- {}`",
+            ron.display(),
+            settings.level
+        );
+        return None;
+    }
+    std::fs::read(name.with_extension("bin")).ok()
+}
+
 impl Air {
-    /// A world's atmosphere: its saved state if it has one that fits, or a new
-    /// one spun up to `seconds`. The spin-up runs here, before the first frame.
+    /// A world's atmosphere: its saved state if it has one that fits; for a
+    /// world with none, the settled climate shipped for these settings
+    /// (`climate-balance` decision 8), brought to `seconds`; and only when
+    /// neither fits, a new one spun up from rest to `seconds`. Any stepping
+    /// runs here, before the first frame.
     pub fn open(
-        settings: pbd_core::atmosphere::AtmosphereSettings,
+        settings: AtmosphereSettings,
         seed: u64,
         saved: Option<&[u8]>,
         seconds: f64,
@@ -83,7 +139,39 @@ impl Air {
                 false
             }
         });
-        if !restored {
+        let settled = !restored
+            && shipped_settled(&settings).is_some_and(|bytes| match atmosphere.restore(&bytes) {
+                Ok(()) => true,
+                Err(error) => {
+                    warn!("the shipped settled climate could not be used ({error})");
+                    false
+                }
+            });
+        if settled {
+            // The settled state stands at `START_HOUR` on a year's first day,
+            // where a new world's clock opens. A clock a little past that is
+            // stepped to exactly; one elsewhere in the year gets the usual
+            // spin-up, from the settled state rather than from rest, so its
+            // air and ground come round to the hour and its sea keeps its heat.
+            let year_s = YEAR_DAYS * f64::from(DAY_S);
+            let gap = (seconds - settled_at_s()).rem_euclid(year_s);
+            let span = if gap <= f64::from(settings.spinup_s) {
+                gap
+            } else {
+                f64::from(settings.spinup_s)
+            };
+            let steps = (span / f64::from(settings.dt_s)).round() as u64;
+            for i in 0..steps {
+                let t = seconds - (steps - i) as f64 * f64::from(settings.dt_s);
+                atmosphere.step(Clock { seconds: t }.sun(), &[]);
+            }
+            info!(
+                "weather: the settled climate for level {}, {:.2} C over the whole surface, \
+                 {steps} steps to the clock",
+                settings.level,
+                atmosphere.mean_surface_c()
+            );
+        } else if !restored {
             let started = std::time::Instant::now();
             atmosphere.spin_up(|t| Clock { seconds: t }.sun(), seconds);
             info!(
@@ -117,6 +205,26 @@ impl Air {
     }
 
     fn publish(&mut self, stepped: Stepped) {
+        // A trim held at its limit means the heat terms are badly off again
+        // (`climate-balance` decision 4), so it is said once when it starts
+        // and once when it ends.
+        let (was, now) = (
+            self.now.sun_trim_at_limit(),
+            stepped.atmosphere.sun_trim_at_limit(),
+        );
+        if now && !was {
+            warn!(
+                "the sun's trim is held at its limit, {:.2}: the planet's mean is {:.1} C against a target of {:?}",
+                stepped.atmosphere.sun_trim,
+                stepped.atmosphere.mean_surface_c(),
+                stepped.atmosphere.settings.target_mean_c
+            );
+        } else if was && !now {
+            info!(
+                "the sun's trim is back inside its limits, at {:.2}",
+                stepped.atmosphere.sun_trim
+            );
+        }
         self.now = Arc::new(stepped.atmosphere);
         self.maps = Arc::new(stepped.maps);
         self.at_seconds = stepped.at_seconds;
@@ -294,6 +402,83 @@ pub fn warm_capture(
         let steps = (config.0.forcing_s * 8.0 / config.0.dt_s).ceil() as u32;
         let brew = forcing_here(&weather, forcing.0);
         air.run(steps, &brew);
+    }
+}
+
+#[cfg(test)]
+mod settled_tests {
+    use super::*;
+
+    /// Every shipped settled state was made with the settings the game runs:
+    /// the code defaults, which `atmosphere.ron` is held equal to, at its
+    /// level (`climate-balance` task 3.2b). A knob turned without remaking
+    /// the states fails here rather than quietly starting worlds cold.
+    #[test]
+    fn the_shipped_settled_climates_are_made_with_the_running_settings() {
+        let mut shipped = Vec::new();
+        for entry in std::fs::read_dir(climate_dir()).expect("assets/climate") {
+            let name = entry.expect("an entry").file_name();
+            let name = name.to_string_lossy();
+            let Some(level) = name
+                .strip_prefix("settled-l")
+                .and_then(|rest| rest.strip_suffix(".ron"))
+            else {
+                continue;
+            };
+            let level: u32 = level.parse().expect("a level");
+            let settings = AtmosphereSettings {
+                level,
+                ..Default::default()
+            };
+            assert!(
+                shipped_settled(&settings).is_some(),
+                "{name} was not made with the running settings, or has no state beside it"
+            );
+            shipped.push(level);
+        }
+        assert!(shipped.contains(&3), "level 3 ships, for the fish test");
+        assert!(shipped.contains(&5), "level 5 ships, the game's own level");
+    }
+
+    /// A new world opens on the settled state, exactly, when its clock opens
+    /// where the state stands; a little later, it is stepped there and still
+    /// holds 15 +/- 0.5 C; and with other settings it spins up from rest.
+    #[test]
+    fn a_new_world_opens_on_the_settled_climate() {
+        let settings = AtmosphereSettings {
+            level: 3,
+            ..Default::default()
+        };
+        let shipped = shipped_settled(&settings).expect("level 3 is shipped");
+        let opening = Clock::default().seconds;
+        assert!((opening.rem_euclid(YEAR_DAYS * f64::from(DAY_S)) - settled_at_s()).abs() < 1e-6);
+        let air = Air::open(settings, TERRAIN.seed, None, opening);
+        assert_eq!(
+            air.now.to_bytes(),
+            shipped,
+            "opened on the shipped state as it is"
+        );
+        let mean = air.now.mean_surface_c();
+        assert!(
+            (mean - 15.0).abs() < 0.5,
+            "a new world opens at {mean:.2} C"
+        );
+        let noon = Clock::at_hour(12.0).seconds;
+        let later = Air::open(settings, TERRAIN.seed, None, noon);
+        let mean = later.now.mean_surface_c();
+        assert!(
+            (mean - 15.0).abs() < 0.5,
+            "at noon a new world is at {mean:.2} C"
+        );
+        assert_ne!(later.now.to_bytes(), shipped, "stepped on to noon");
+        let other = AtmosphereSettings {
+            target_mean_c: Some(20.0),
+            ..settings
+        };
+        assert!(
+            shipped_settled(&other).is_none(),
+            "other settings are not settled"
+        );
     }
 }
 

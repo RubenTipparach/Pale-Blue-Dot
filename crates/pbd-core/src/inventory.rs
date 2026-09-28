@@ -1,4 +1,5 @@
-//! What the player carries: ten slots, each holding a stack of one item kind.
+//! What the player carries: ten hotbar slots and a pack of thirty more, each
+//! holding a stack of one item kind.
 //!
 //! It lives in the core because what a slot holds, how a stack merges and when
 //! a give is refused are rules a future multiplayer has to agree about, and
@@ -7,8 +8,16 @@
 
 use crate::terrain::Material;
 
-/// How many slots the player carries. Ten, selected with the number row.
+/// How many hotbar slots the player carries. Ten, selected with the number
+/// row. They are the first ten of [`CARRIED`].
 pub const SLOTS: usize = 10;
+
+/// The pack's slots, three rows of ten under the hotbar (`inventory-grid`,
+/// survey I2). They follow the hotbar's ten.
+pub const PACK: usize = 30;
+
+/// Every slot the player carries: the hotbar, then the pack.
+pub const CARRIED: usize = SLOTS + PACK;
 
 /// One thing a slot can hold.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -193,6 +202,11 @@ fn material_name(material: Material) -> &'static str {
         Material::Rock => "rock",
         Material::Dirt => "dirt",
         Material::Torch => "torch",
+        Material::LanternPost => "street lantern",
+        Material::LanternWall => "wall lantern",
+        Material::LanternHanging => "hanging lantern",
+        Material::Brazier => "brazier",
+        Material::Candle => "candle",
     }
 }
 
@@ -217,17 +231,19 @@ impl Stack {
     }
 }
 
-/// The ten slots and which one is selected.
+/// The hotbar and the pack, and which hotbar slot is selected. Index 0..10 is
+/// the hotbar and 10..40 the pack, one array, so the order a give fills them
+/// in is the index order (`inventory-grid` decision 2).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Slots {
-    slots: [Option<Stack>; SLOTS],
+    slots: [Option<Stack>; CARRIED],
     selected: usize,
 }
 
 impl Default for Slots {
     fn default() -> Self {
         Self {
-            slots: [None; SLOTS],
+            slots: [None; CARRIED],
             selected: 0,
         }
     }
@@ -242,8 +258,19 @@ impl Slots {
         self.slots.get(index).copied().flatten()
     }
 
+    /// Every slot, the hotbar's then the pack's.
     pub fn iter(&self) -> impl Iterator<Item = Option<Stack>> + '_ {
         self.slots.iter().copied()
+    }
+
+    /// The hotbar's ten slots.
+    pub fn hotbar(&self) -> impl Iterator<Item = Option<Stack>> + '_ {
+        self.slots[..SLOTS].iter().copied()
+    }
+
+    /// Whether a slot index is a hotbar slot, rather than a pack slot.
+    pub fn is_hotbar(index: usize) -> bool {
+        index < SLOTS
     }
 
     pub fn selected(&self) -> usize {
@@ -270,9 +297,10 @@ impl Slots {
         self.selected = (((self.selected as i32 + by) % n + n) % n) as usize;
     }
 
-    /// Put items in: matching stacks with room first, then the first empty
-    /// slot. Returns how many did not fit, so a caller that cannot drop the
-    /// remainder on the ground knows not to take it off the world.
+    /// Put items in: matching stacks with room first, the hotbar's before the
+    /// pack's, then the first empty hotbar slot, then the first empty pack
+    /// slot. Returns how many did not fit, which a dig leaves floating in the
+    /// world (`inventory-grid` decision 4).
     pub fn give(&mut self, item: Item, mut count: u16) -> u16 {
         for slot in self.slots.iter_mut() {
             if count == 0 {
@@ -313,6 +341,113 @@ impl Slots {
             *slot = None;
         }
         moved
+    }
+
+    /// Put a stack into a slot, as a click with a stack on the pointer does:
+    /// into an empty slot whole; onto the same item as far as it has room;
+    /// and in place of anything else, which comes back to the pointer. Returns
+    /// what the pointer holds afterwards. Nothing is ever lost: whatever does
+    /// not go in comes back.
+    pub fn put(&mut self, index: usize, stack: Stack) -> Option<Stack> {
+        let Some(slot) = self.slots.get_mut(index) else {
+            return Some(stack);
+        };
+        match slot {
+            None => {
+                *slot = Some(Stack::new(stack.item, stack.count));
+                (stack.count > stack.item.stack_limit())
+                    .then(|| Stack::new(stack.item, stack.count - stack.item.stack_limit()))
+            }
+            Some(here) if here.item == stack.item => {
+                let moved = stack.count.min(here.room());
+                here.count += moved;
+                (stack.count > moved).then(|| Stack::new(stack.item, stack.count - moved))
+            }
+            Some(here) => Some(std::mem::replace(here, stack)),
+        }
+    }
+
+    /// Take a slot's whole stack, as a click with nothing on the pointer does.
+    pub fn take_all(&mut self, index: usize) -> Option<Stack> {
+        self.slots.get_mut(index)?.take()
+    }
+
+    /// Take the larger half of a slot's stack, as a right-click does. A
+    /// stack of one comes up whole.
+    pub fn take_half(&mut self, index: usize) -> Option<Stack> {
+        let stack = self.get(index)?;
+        let half = stack.count.div_ceil(2);
+        let taken = self.take(index, half);
+        (taken > 0).then(|| Stack::new(stack.item, taken))
+    }
+
+    /// Send a slot's stack across, as a shift-click does: from the hotbar
+    /// into the pack, or from the pack into the hotbar, onto matching stacks
+    /// first and then into empty slots. What does not fit stays where it was.
+    pub fn send(&mut self, index: usize) {
+        let Some(stack) = self.get(index) else {
+            return;
+        };
+        let other = if Self::is_hotbar(index) {
+            SLOTS..CARRIED
+        } else {
+            0..SLOTS
+        };
+        let mut left = stack.count;
+        for pass in 0..2 {
+            for k in other.clone() {
+                if left == 0 {
+                    break;
+                }
+                let slot = &mut self.slots[k];
+                match slot {
+                    Some(there) if pass == 0 && there.item == stack.item => {
+                        let moved = left.min(there.room());
+                        there.count += moved;
+                        left -= moved;
+                    }
+                    None if pass == 1 => {
+                        let moved = left.min(stack.item.stack_limit());
+                        *slot = Some(Stack::new(stack.item, moved));
+                        left -= moved;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.slots[index] = (left > 0).then(|| Stack::new(stack.item, left));
+    }
+
+    /// Move `count` of one slot's stack onto another, as the pack's second
+    /// click does (`inventory-grid` decision 5): into an empty slot; onto the
+    /// same item as far as it has room, the rest staying behind; and in place
+    /// of a different item, which swaps, but only for the whole stack, since
+    /// half a stack has nowhere to put what it would displace. Nothing ever
+    /// leaves the slots, so no move can lose a stack.
+    pub fn shift(&mut self, from: usize, to: usize, count: u16) {
+        if from == to || from >= CARRIED || to >= CARRIED {
+            return;
+        }
+        let Some(stack) = self.get(from) else { return };
+        let count = count.min(stack.count);
+        if count == 0 {
+            return;
+        }
+        match self.get(to) {
+            Some(there) if there.item != stack.item => {
+                if count == stack.count {
+                    self.slots.swap(from, to);
+                }
+            }
+            _ => {
+                let taken = self.take(from, count);
+                if let Some(back) = self.put(to, Stack::new(stack.item, taken)) {
+                    // Room in `from` for what did not fit: it came from there.
+                    let left = self.put(from, back);
+                    debug_assert!(left.is_none(), "a shift lost {left:?}");
+                }
+            }
+        }
     }
 
     /// Take one from the selected slot: what placing a block will ask for.
@@ -401,7 +536,7 @@ mod tests {
     fn a_full_store_refuses_the_remainder_rather_than_dropping_it() {
         let mut slots = Slots::new();
         let limit = DIRT.stack_limit();
-        for _ in 0..SLOTS {
+        for _ in 0..CARRIED {
             slots.give(DIRT, limit);
         }
         // Every slot is a full stack, so nothing fits and the caller is told
@@ -491,10 +626,107 @@ mod tests {
     fn tools_run_out_of_slots_where_blocks_would_not() {
         let pick = Item::Tool(Tool::Pickaxe);
         let mut slots = Slots::new();
-        // One slot each means the store holds exactly SLOTS of them, against
-        // 99 * SLOTS blocks. Eleven is one too many.
-        assert_eq!(slots.give(pick, SLOTS as u16), 0);
+        // One slot each means the store holds exactly CARRIED of them,
+        // against 99 * CARRIED blocks. Forty-one is one too many.
+        assert_eq!(slots.give(pick, CARRIED as u16), 0);
         assert_eq!(slots.give(pick, 1), 1);
+    }
+
+    /// `inventory-grid` decision 2: matching stacks with room first, the
+    /// hotbar's before the pack's; then the first empty hotbar slot; then the
+    /// first empty pack slot.
+    #[test]
+    fn a_give_fills_the_hotbar_before_the_pack() {
+        let mut slots = Slots::new();
+        // A pack stack of dirt with room, and one empty hotbar slot left.
+        slots.set(SLOTS + 4, Some(Stack::new(DIRT, 10)));
+        for k in 0..SLOTS - 1 {
+            slots.set(k, Some(Stack::new(Item::Tool(Tool::Rod), 1)));
+        }
+        slots.give(DIRT, 5);
+        assert_eq!(
+            slots.get(SLOTS + 4).unwrap().count,
+            15,
+            "the matching stack first"
+        );
+        slots.give(STONE, 3);
+        assert_eq!(
+            slots.get(SLOTS - 1).unwrap().item,
+            STONE,
+            "then the hotbar's empty slot"
+        );
+        slots.give(Item::Fish(2), 1);
+        assert_eq!(
+            slots.get(SLOTS).unwrap().item,
+            Item::Fish(2),
+            "then the pack's first"
+        );
+        assert_eq!(slots.hotbar().count(), SLOTS);
+    }
+
+    /// A click with a stack on the pointer: into an empty slot, onto the same
+    /// item up to its limit, or in place of another, which comes back.
+    #[test]
+    fn putting_a_stack_fills_merges_or_swaps_and_never_loses_any() {
+        let mut slots = Slots::new();
+        assert_eq!(slots.put(12, Stack::new(DIRT, 40)), None);
+        assert_eq!(slots.get(12), Some(Stack::new(DIRT, 40)));
+        let back = slots.put(12, Stack::new(DIRT, 70));
+        assert_eq!(slots.get(12).unwrap().count, 99);
+        assert_eq!(
+            back,
+            Some(Stack::new(DIRT, 11)),
+            "what did not fit comes back"
+        );
+        let swapped = slots.put(12, Stack::new(STONE, 3));
+        assert_eq!(swapped, Some(Stack::new(DIRT, 99)));
+        assert_eq!(slots.get(12), Some(Stack::new(STONE, 3)));
+        assert_eq!(
+            slots.put(CARRIED, Stack::new(STONE, 1)),
+            Some(Stack::new(STONE, 1))
+        );
+    }
+
+    #[test]
+    fn a_right_click_takes_the_larger_half() {
+        let mut slots = Slots::new();
+        slots.set(3, Some(Stack::new(DIRT, 7)));
+        assert_eq!(slots.take_half(3), Some(Stack::new(DIRT, 4)));
+        assert_eq!(slots.get(3).unwrap().count, 3);
+        slots.set(4, Some(Stack::new(DIRT, 1)));
+        assert_eq!(slots.take_half(4), Some(Stack::new(DIRT, 1)));
+        assert_eq!(slots.get(4), None);
+        assert_eq!(slots.take_all(3), Some(Stack::new(DIRT, 3)));
+        assert_eq!(slots.get(3), None);
+    }
+
+    /// A shift-click sends a stack across, onto matching stacks first, and
+    /// leaves behind only what did not fit.
+    #[test]
+    fn a_shift_click_sends_a_stack_between_the_hotbar_and_the_pack() {
+        let mut slots = Slots::new();
+        slots.set(2, Some(Stack::new(DIRT, 60)));
+        slots.set(SLOTS + 7, Some(Stack::new(DIRT, 90)));
+        slots.send(2);
+        assert_eq!(
+            slots.get(SLOTS + 7).unwrap().count,
+            99,
+            "onto the matching stack"
+        );
+        assert_eq!(
+            slots.get(SLOTS).unwrap(),
+            Stack::new(DIRT, 51),
+            "then the first empty"
+        );
+        assert_eq!(slots.get(2), None);
+        slots.send(SLOTS);
+        assert_eq!(slots.get(0), Some(Stack::new(DIRT, 51)), "and back");
+        // A full hotbar keeps the stack where it was.
+        for k in 0..SLOTS {
+            slots.set(k, Some(Stack::new(Item::Tool(Tool::Axe), 1)));
+        }
+        slots.send(SLOTS + 7);
+        assert_eq!(slots.get(SLOTS + 7).unwrap().count, 99);
     }
 
     #[test]
@@ -527,6 +759,58 @@ mod tests {
         let mut partial = partial;
         assert!(!partial.hold(Tool::Axe), "not owned");
         assert!(!Tool::Rod.digs() && Tool::Shovel.digs());
+    }
+
+    /// The pack's second click: a whole stack moves, merges or swaps; half a
+    /// stack moves or merges and never swaps; what does not fit stays where
+    /// it was; and the total carried never changes.
+    #[test]
+    fn a_shift_moves_merges_or_swaps_and_never_loses_a_stack() {
+        let dirt = Item::Block(Material::Dirt);
+        let sand = Item::Block(Material::Sand);
+        let total = |s: &Slots| s.iter().flatten().map(|s| u32::from(s.count)).sum::<u32>();
+        let mut slots = Slots::new();
+        slots.set(0, Some(Stack::new(dirt, 60)));
+        slots.set(12, Some(Stack::new(dirt, 70)));
+        slots.set(3, Some(Stack::new(sand, 5)));
+        let before = total(&slots);
+
+        slots.shift(0, 20, 60);
+        assert_eq!(
+            slots.get(20),
+            Some(Stack::new(dirt, 60)),
+            "into an empty slot"
+        );
+        assert_eq!(slots.get(0), None);
+
+        slots.shift(20, 12, 60);
+        assert_eq!(
+            slots.get(12),
+            Some(Stack::new(dirt, 99)),
+            "merged to the limit"
+        );
+        assert_eq!(slots.get(20), Some(Stack::new(dirt, 31)), "the rest stays");
+
+        slots.shift(3, 12, 5);
+        assert_eq!(
+            slots.get(12),
+            Some(Stack::new(sand, 5)),
+            "a whole stack swaps"
+        );
+        assert_eq!(slots.get(3), Some(Stack::new(dirt, 99)));
+
+        slots.shift(3, 12, 50);
+        assert_eq!(slots.get(12), Some(Stack::new(sand, 5)), "half never swaps");
+        assert_eq!(slots.get(3), Some(Stack::new(dirt, 99)));
+
+        slots.shift(20, 21, 16);
+        assert_eq!(slots.get(21), Some(Stack::new(dirt, 16)), "half moves");
+        assert_eq!(slots.get(20), Some(Stack::new(dirt, 15)));
+
+        for (from, to) in [(0, 1), (5, 5), (3, CARRIED), (CARRIED, 3)] {
+            slots.shift(from, to, 1);
+        }
+        assert_eq!(total(&slots), before, "nothing gained or lost");
     }
 
     /// The picker's wheel walks the owned tools and wraps both ways.

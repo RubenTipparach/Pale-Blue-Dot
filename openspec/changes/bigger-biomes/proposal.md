@@ -27,6 +27,12 @@ already says it does ("The generator is versioned"), and it does not: a save
 stores only the seed. Changing the biomes is the first change that would
 silently alter an existing world, so it closes that gap first.
 
+**Chosen (survey B1 and B2, 2026-09-27, recommendations accepted):** four
+times the width, about 750 m, with fields, desert, and jungle with swamp about
+a third each of the temperate land. **The owner, 2026-09-28, after the map
+mockup's 750 m preview: "did you do large biomes too? I see you had preview
+with map stuff".**
+
 ## What Changes
 
 - **The moisture field's feature size grows.** "About 4x bigger" could mean

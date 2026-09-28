@@ -202,6 +202,21 @@ fn replace_file(path: &Path, body: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&temporary, path)
 }
 
+/// Replace a file whole with a barrier: [`replace_file`], then a sync of the
+/// directory so the rename itself is on disk before this returns. For the
+/// file a world is identified by (`identity.ron`), which is written once, on
+/// the calling thread, before anything else in the slot.
+pub(crate) fn replace_durably(path: &Path, body: &[u8]) -> std::io::Result<()> {
+    replace_file(path, body)?;
+    // A directory cannot be opened to sync on every platform; where it can,
+    // the rename is not durable until it is.
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        File::open(parent)?.sync_all()?;
+    }
+    Ok(())
+}
+
 fn run(
     inbox: Receiver<Job>,
     mut slot: PathBuf,

@@ -7,9 +7,9 @@
 //! `climate` example, so the planet gets trade winds, a jet, desert belts and
 //! storms on a world 4.8 km round with a 48-minute day.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AtmosphereSettings {
     /// Subdivision level of the atmosphere's cells: 4 is 2,562 cells 363 m
@@ -63,8 +63,36 @@ pub struct AtmosphereSettings {
     pub cloud_pace: f32,
 
     // --- Sun and heat ---
-    /// Sunlight on a surface facing the sun, W/m^2.
+    /// Sunlight on a surface facing the sun, W/m^2, before the thermostat's
+    /// trim.
     pub solar_wm2: f32,
+    /// The planet's average surface temperature the sun holds, deg C, over
+    /// the whole surface, land and sea (the owner: "the sun should maintain
+    /// average temperature of the planet to 15 c"). `None` holds the trim at
+    /// 1, which is how the instruments measure the untrimmed planet.
+    pub target_mean_c: Option<f32>,
+    /// How long the thermostat averages the planet's energy budget over, s:
+    /// the sunlight the ground would absorb at a trim of 1 and the clouds'
+    /// returned longwave, from which it reads the trim that settles the
+    /// planet at the target (`climate-balance` decision 4, revised). Long
+    /// enough that a day's weather and a season barely move it.
+    pub sun_balance_s: f32,
+    /// The thermostat's integral time, s: how long a steady error takes to
+    /// move the trim by its proportional share again. Slow, for what the heat
+    /// books still leak; the balance does the rest.
+    pub sun_trim_s: f32,
+    /// The thermostat's proportional gain: trim per kelvin the planet's mean
+    /// is off the target.
+    pub sun_trim_per_k: f32,
+    /// How near the target, K, the integral runs. Further off, the balance
+    /// and the nudge bring the planet in; an integral running through that
+    /// long approach builds up and overshoots it (`climate-balance`
+    /// decision 4, revised).
+    pub sun_trim_band_k: f32,
+    /// The trim's limits. A trim at a limit is logged, because it means the
+    /// heat terms are badly off again.
+    pub sun_trim_min: f32,
+    pub sun_trim_max: f32,
     /// Share of sunlight a full cloud reflects.
     pub cloud_albedo: f32,
     /// Share of sunlight reflected by sea, by land, by snow and ice.
@@ -84,9 +112,14 @@ pub struct AtmosphereSettings {
     pub air_relax_s: f32,
     /// Sensible heat from ground to air, W/m^2/K.
     pub sensible_wm2k: f32,
-    /// Heat spreading between neighbouring cells of ground and sea, per second:
-    /// what carries the tropics' heat poleward where the model's winds do not.
-    pub heat_spread: f32,
+    /// Heat spreading between neighbouring cells of ground and sea, as a
+    /// diffusivity, m^2/s: what carries the tropics' heat poleward where the
+    /// model's winds do not. The step's rate per second is this over the
+    /// square of the grid's mean spacing ([`Self::spread_per_s`]), so every
+    /// level spreads heat alike (`climate-balance` decision 7). 65.73 is the
+    /// shipped 0.002 a second at level 5's 181.29 m, so the game's own level
+    /// steps as it did before the change.
+    pub heat_diffusivity_m2s: f32,
     /// Kelvin colder per metre of height, for snow and saturation: 0.08 makes
     /// a 150 m summit 12 K colder than the shore, which is the world's own
     /// snow line.
@@ -97,8 +130,6 @@ pub struct AtmosphereSettings {
     pub evaporation: f32,
     /// Wind speed that doubles evaporation, m/s.
     pub evaporation_wind_mps: f32,
-    /// Heat evaporation takes from the ground, J per kg.
-    pub evaporation_cooling: f32,
     /// A column's saturated water at 15 deg C, kg/m^2, and how fast that grows
     /// with temperature, per K (Clausius-Clapeyron, about 7%).
     pub saturation_kg: f32,
@@ -226,8 +257,15 @@ impl Default for AtmosphereSettings {
             jet_max_mps: 45.0,
             cloud_steering: 0.7,
             cloud_pace: 0.2,
-            solar_wm2: 1000.0,
-            cloud_albedo: 0.6,
+            solar_wm2: 1360.0,
+            target_mean_c: Some(15.0),
+            sun_balance_s: 144_000.0,
+            sun_trim_s: 144_000.0,
+            sun_trim_per_k: 0.02,
+            sun_trim_band_k: 1.0,
+            sun_trim_min: 0.7,
+            sun_trim_max: 1.4,
+            cloud_albedo: 0.3,
             ocean_albedo: 0.06,
             land_albedo: 0.25,
             snow_albedo: 0.7,
@@ -238,11 +276,10 @@ impl Default for AtmosphereSettings {
             ocean_heat_capacity: 3.0e6,
             air_relax_s: 3000.0,
             sensible_wm2k: 15.0,
-            heat_spread: 0.002,
+            heat_diffusivity_m2s: 65.73,
             lapse_k_per_m: 0.08,
             evaporation: 3.0e-4,
             evaporation_wind_mps: 10.0,
-            evaporation_cooling: 8.0e4,
             saturation_kg: 30.0,
             saturation_per_k: 0.068,
             lift_saturation: 0.35,
@@ -289,6 +326,32 @@ impl Default for AtmosphereSettings {
 }
 
 impl AtmosphereSettings {
+    /// The heat spread's rate per second on a grid whose neighbouring centres
+    /// are `mean_span_m` apart on average (`Grid::mean_span`): the
+    /// diffusivity over the spacing squared.
+    pub fn spread_per_s(&self, mean_span_m: f32) -> f32 {
+        self.heat_diffusivity_m2s / (mean_span_m * mean_span_m)
+    }
+
+    /// The heat a kelvin of the air holds over a square metre, J/m^2/K. Not a
+    /// knob of its own: the air relaxes to the ground at `1 / air_relax_s`
+    /// while the ground gives it `sensible_wm2k` per kelvin between them, and
+    /// that is exactly the exchange of a layer this size (`climate-balance`
+    /// decision 1a).
+    pub fn air_heat_capacity(&self) -> f32 {
+        self.sensible_wm2k * self.air_relax_s
+    }
+
+    /// The heat a kilogram of water takes to evaporate and gives back when it
+    /// condenses, J/kg: what `latent_k_per_kg` warms the air by, in joules. One
+    /// number both ways, so the water cycle moves heat and never makes or
+    /// loses it. It was a knob of its own (`evaporation_cooling`, 8.0e4) that
+    /// took five times what condensing gave back, and that leak was half of
+    /// why the planet froze (`climate-balance`, finding 5).
+    pub fn latent_j_per_kg(&self) -> f32 {
+        self.air_heat_capacity() * self.latent_k_per_kg
+    }
+
     /// What a legal set is. The step divides by every time here and assumes
     /// the rest in range; a file that breaks one is refused at load.
     pub fn validate(&self) -> Result<(), String> {
@@ -343,10 +406,9 @@ impl AtmosphereSettings {
             self.olr_b,
             self.cloud_greenhouse,
             self.sensible_wm2k,
-            self.heat_spread,
+            self.heat_diffusivity_m2s,
             self.lapse_k_per_m,
             self.evaporation,
-            self.evaporation_cooling,
             self.saturation_per_k,
             self.lift_saturation,
             self.lift_depth_m,
@@ -401,6 +463,28 @@ impl AtmosphereSettings {
                 return Err(format!("{name} must be within 0..1"));
             }
         }
+        if !(self.sun_trim_s.is_finite() && self.sun_trim_s > 0.0) {
+            return Err("sun_trim_s must be positive".into());
+        }
+        if !(self.sun_balance_s.is_finite() && self.sun_balance_s > 0.0) {
+            return Err("sun_balance_s must be positive".into());
+        }
+        if !(self.sun_trim_band_k.is_finite() && self.sun_trim_band_k >= 0.0) {
+            return Err("sun_trim_band_k must be finite and not negative".into());
+        }
+        if !(self.sun_trim_per_k.is_finite() && self.sun_trim_per_k >= 0.0) {
+            return Err("sun_trim_per_k must be finite and not negative".into());
+        }
+        let trim_limits_hold_one = self.sun_trim_min > 0.0
+            && self.sun_trim_min <= 1.0
+            && self.sun_trim_max >= 1.0
+            && self.sun_trim_max.is_finite();
+        if !trim_limits_hold_one {
+            return Err("the sun's trim limits must hold 1 between them, above 0".into());
+        }
+        if self.target_mean_c.is_some_and(|t| !t.is_finite()) {
+            return Err("target_mean_c must be finite".into());
+        }
         if self.cover_full_kg <= self.cover_min_kg {
             return Err("cover_full_kg must be above cover_min_kg".into());
         }
@@ -425,6 +509,46 @@ mod tests {
     #[test]
     fn the_defaults_are_legal() {
         AtmosphereSettings::default().validate().unwrap();
+    }
+
+    /// The thermostat's knobs are checked like the rest: a zero integral
+    /// time would divide by nothing, and limits that leave out 1 could not
+    /// hold a planet that needs no trim.
+    #[test]
+    fn a_thermostat_that_cannot_work_is_refused() {
+        for bad in [
+            AtmosphereSettings {
+                sun_trim_s: 0.0,
+                ..Default::default()
+            },
+            AtmosphereSettings {
+                sun_trim_min: 1.2,
+                sun_trim_max: 1.4,
+                ..Default::default()
+            },
+            AtmosphereSettings {
+                sun_trim_min: 0.7,
+                sun_trim_max: 0.9,
+                ..Default::default()
+            },
+            AtmosphereSettings {
+                sun_trim_min: 1.4,
+                sun_trim_max: 0.7,
+                ..Default::default()
+            },
+            AtmosphereSettings {
+                target_mean_c: Some(f32::NAN),
+                ..Default::default()
+            },
+        ] {
+            assert!(bad.validate().is_err(), "{bad:?}");
+        }
+        AtmosphereSettings {
+            target_mean_c: None,
+            ..Default::default()
+        }
+        .validate()
+        .unwrap();
     }
 
     #[test]

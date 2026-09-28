@@ -205,11 +205,16 @@ impl WalkingState {
 
 pub struct WalkingPlugin;
 
+/// The walker's setup, which reads `WalkingConfig` once in `PostStartup`: a
+/// rig that places the walker orders itself before it.
+#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct WalkingSetup;
+
 impl Plugin for WalkingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WalkingConfig>()
             .init_resource::<WalkingReadout>()
-            .add_systems(PostStartup, setup_walking)
+            .add_systems(PostStartup, setup_walking.in_set(WalkingSetup))
             .add_systems(
                 RunFixedMainLoop,
                 (switch_mode, read_walking_input, turn_for_capture)
@@ -951,6 +956,7 @@ fn follow_walker(
         camera.translation = position.0 + up * (EYE_HEIGHT - HALF_HEIGHT);
         camera.rotation = state.rotation();
     }
+    let (latitude_deg, longitude_deg) = pbd_core::geo::lat_lon(up).degrees();
     *readout = WalkingReadout {
         active: true,
         captured: state.captured,
@@ -958,8 +964,8 @@ fn follow_walker(
         sprinting: state.sprinting,
         speed: velocity.0.length(),
         altitude: position.0.length() - HALF_HEIGHT - PLANET_RADIUS,
-        latitude_deg: up.y.clamp(-1.0, 1.0).asin().to_degrees(),
-        longitude_deg: up.z.atan2(up.x).to_degrees(),
+        latitude_deg,
+        longitude_deg,
     };
 }
 

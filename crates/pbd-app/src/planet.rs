@@ -118,8 +118,8 @@ const INDIRECT_BYTES: u64 = 5 * 16;
 #[cfg(test)]
 pub(crate) fn column_vertices() -> u32 {
     let runs = pbd_core::column::MAX_RUNS as u32;
-    // ...and a torch: a four-sided post and a two-triangle head.
-    runs * (18 + 18) + 6 * runs * (runs + 1) * 6 + 30
+    // ...and a lamp: a torch's post and head, or two boxes of 36.
+    runs * (18 + 18) + 6 * runs * (runs + 1) * 6 + 72
 }
 /// Where the column branch starts: after the clutter.
 #[cfg(test)]
@@ -253,8 +253,9 @@ impl Plugin for PlanetPlugin {
         .init_resource::<PlanetRenderFrame>()
         .init_resource::<lod::LodRefresh>()
         .init_resource::<lod::NearField>()
+        .init_resource::<lod::DuskLamps>()
         .add_systems(Startup, create_planet)
-        .add_systems(Update, lod::refresh_lod)
+        .add_systems(Update, (lod::switch_dusk_lamps, lod::refresh_lod).chain())
         .add_systems(
             PostUpdate,
             update_planet_frame.before(TransformSystems::Propagate),

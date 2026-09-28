@@ -1,13 +1,17 @@
 mod cracks;
 mod digging;
+mod drops_view;
 mod equipment;
 mod frame_graph;
 mod guide;
 mod hud;
+mod map_screen;
 mod menu;
 mod overlay_ui;
+mod pack;
 mod scene;
 mod slots;
+mod time_ui;
 mod weather_ui;
 
 use avian3d::prelude::*;
@@ -137,10 +141,25 @@ pub struct Launch {
     /// `--turn DEG_PER_S`: the walker's view turns right at this rate, a
     /// measurement instrument for the clouds' history (`cloud-ghosting`).
     pub turn: f32,
+    /// `--walk --ship-in-cave` starts the walker in a cave chamber (the one
+    /// `--view cave` photographs), looking down the tunnel, and parks the
+    /// Kestrel nine metres ahead, nose away: the moving things' light in a
+    /// cave (`lamps-and-lanterns` task 3.3). Vehicles and the light field are
+    /// the walker's, so the rig is too.
+    pub ship_in_cave: bool,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
     pub torch: bool,
+    /// `--lamps [metres [across]]`: one of every light in a row across the
+    /// view, that far ahead of the camera (5 m when no distance follows) and
+    /// centred that far to the right (0 when none follows), for the lights'
+    /// captures (`lamps-and-lanterns` task 5.2). Close up shows the lights;
+    /// further out shows how far each one's light goes; a row moved aside
+    /// brings its end into a close-up.
+    pub lamps: bool,
+    pub lamps_at: f32,
+    pub lamps_across: f32,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -156,10 +175,16 @@ pub struct Launch {
     /// Absent, an interactive run opens the one played most recently and a
     /// capture writes to no world at all.
     pub world: Option<String>,
-    /// `--menu pause|settings|saves` opens that screen at startup. A headless run has
+    /// `--menu pause|settings|saves|pack|map` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
     pub menu: Option<String>,
+    /// How the map opens, for its captures: `--map-mpp <metres>` is its zoom
+    /// as metres a screen pixel at the centre, `--map-overlay <name>` a
+    /// weather overlay, `--map-layer <name>` a raster layer such as
+    /// `biomes`, `--map-night` and `--map-clouds` those live layers, and
+    /// `--map-at <lat> <lon>` the centre in degrees (the player otherwise).
+    pub map: map_screen::MapLaunch,
 }
 
 impl Launch {
@@ -196,7 +221,12 @@ impl Launch {
             time: None,
             day: None,
             overlay: None,
+            map: map_screen::MapLaunch::default(),
             torch: false,
+            ship_in_cave: false,
+            lamps: false,
+            lamps_at: 5.0,
+            lamps_across: 0.0,
             dig_ahead: false,
             pitch: None,
             yaw: None,
@@ -251,6 +281,26 @@ impl Launch {
                         .expect("--place requires a count");
                 }
                 "--torch" => result.torch = true,
+                "--ship-in-cave" => result.ship_in_cave = true,
+                "--lamps" => {
+                    result.lamps = true;
+                    if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
+                    {
+                        assert!(
+                            metres.is_finite() && metres > 0.0,
+                            "--lamps takes metres ahead"
+                        );
+                        result.lamps_at = metres;
+                        i += 1;
+                        if let Some(across) =
+                            args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
+                        {
+                            assert!(across.is_finite(), "--lamps takes metres across");
+                            result.lamps_across = across;
+                            i += 1;
+                        }
+                    }
+                }
                 "--dig-ahead" => result.dig_ahead = true,
                 "--pitch" => {
                     i += 1;
@@ -301,12 +351,52 @@ impl Launch {
                     i += 1;
                     let screen = args
                         .get(i)
-                        .expect("--menu requires pause, settings or saves");
+                        .expect("--menu requires pause, settings, saves, pack or map");
                     assert!(
-                        matches!(screen.as_str(), "pause" | "settings" | "saves"),
-                        "--menu takes pause, settings or saves"
+                        matches!(
+                            screen.as_str(),
+                            "pause" | "settings" | "saves" | "pack" | "map"
+                        ),
+                        "--menu takes pause, settings, saves, pack or map"
                     );
                     result.menu = Some(screen.clone());
+                }
+                "--map-mpp" => {
+                    i += 1;
+                    result.map.metres_per_pixel = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--map-mpp requires metres a pixel"),
+                    );
+                }
+                "--map-overlay" => {
+                    i += 1;
+                    let name = args.get(i).expect("--map-overlay requires a name");
+                    result.map.overlay = Some(
+                        pbd_core::overlay::Overlay::ALL
+                            .into_iter()
+                            .find(|o| o.name().eq_ignore_ascii_case(name))
+                            .unwrap_or_else(|| panic!("no overlay called {name}")),
+                    );
+                }
+                "--map-layer" => {
+                    i += 1;
+                    result.map.layer =
+                        Some(args.get(i).expect("--map-layer requires a name").clone());
+                }
+                "--map-night" => result.map.night = true,
+                "--map-clouds" => result.map.clouds = true,
+                "--map-at" => {
+                    let lat: f32 = args
+                        .get(i + 1)
+                        .and_then(|v| v.parse().ok())
+                        .expect("--map-at requires a latitude");
+                    let lon: f32 = args
+                        .get(i + 2)
+                        .and_then(|v| v.parse().ok())
+                        .expect("--map-at requires a longitude");
+                    i += 2;
+                    result.map.at = Some((lat, lon));
                 }
                 "--turn" => {
                     i += 1;
@@ -557,6 +647,7 @@ pub fn run(args: &[String]) {
     let saved_seconds = world.world_seconds;
     let hotbar = slots::Hotbar::restore(&mut world);
     let tools = pbd_app::fish::ToolSlot::restore(&world);
+    let drops = pbd_app::drops::Drops::restore(&world);
     // The saves page is the front door of a plain launch: a player picks the
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
@@ -652,11 +743,22 @@ pub fn run(args: &[String]) {
     .insert_resource(hotbar)
     // And the tool in hand, which the save records whenever it changes.
     .insert_resource(tools)
+    // And the dug blocks still floating where they were cut.
+    .add_plugins(pbd_app::drops::DropsPlugin)
+    // The world map on M (`world-map`), and how a capture asks it to open.
+    .add_plugins(map_screen::MapScreenPlugin)
+    .insert_resource(launch.map.clone())
+    .insert_resource(drops)
+    .configure_sets(
+        Update,
+        pbd_app::drops::DropsSet.after(digging::dig_and_place),
+    )
     .init_resource::<equipment::Picker>()
     // Whose roster the guide and the icons read, in every mode; the fish
     // themselves come with the walker.
     .init_resource::<pbd_app::fish::Body>()
     .init_resource::<guide::GuidePage>()
+    .init_resource::<pack::PackHand>()
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -705,6 +807,10 @@ pub fn run(args: &[String]) {
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
+    .add_systems(
+        PostStartup,
+        park_in_cave.before(pbd_app::walking::WalkingSetup),
+    )
     .insert_resource(opening)
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
@@ -713,14 +819,29 @@ pub fn run(args: &[String]) {
         PostStartup,
         (
             slots::spawn,
-            (slots::load_icons, (equipment::spawn, guide::spawn)).chain(),
+            (
+                slots::load_icons,
+                (
+                    equipment::spawn,
+                    guide::spawn,
+                    drops_view::dress,
+                    pack::spawn,
+                ),
+            )
+                .chain(),
         ),
     )
     // Escape is read before either of the world's input readers, which live in
     // `RunFixedMainLoop`, and is cleared there so neither ever sees it.
     .add_systems(
         PreUpdate,
-        (menu::name_input, menu::toggle, guide::open)
+        (
+            menu::name_input,
+            menu::toggle,
+            guide::open,
+            pack::open,
+            map_screen::open,
+        )
             .chain()
             .after(bevy::input::InputSystems),
     )
@@ -732,13 +853,14 @@ pub fn run(args: &[String]) {
             scene::turn_stars,
             scene::follow_sun,
             (equipment::pick, slots::input, equipment::paint).chain(),
-            slots::update,
+            (pack::press, slots::update, pack::paint).chain(),
             guide::press,
             guide::paint,
             hud::near_field,
             (frame_graph::toggle, frame_graph::update).chain(),
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
+            (time_ui::press, time_ui::toggle, time_ui::show).chain(),
             overlay_ui::show,
             autosave,
             save_weather,
@@ -781,6 +903,7 @@ pub fn run(args: &[String]) {
             pbd_app::vehicles::VehiclePlugin,
             pbd_app::fish::FishPlugin,
             pbd_app::held::HeldPlugin,
+            pbd_app::field_light::FieldLightPlugin,
         ))
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
@@ -863,6 +986,13 @@ fn open_world(launch: &Launch) -> WorldSave {
         );
         return WorldSave::memory_only();
     }
+    if let Some(why) = saves::refusal(&slot) {
+        warn!(
+            "world '{}' was made with {why}; it will not be loaded",
+            slot.file.name
+        );
+        return WorldSave::memory_only();
+    }
     WorldSave::open(root, slot)
 }
 
@@ -893,6 +1023,7 @@ fn load_world(world: &mut World) {
     let mut opened = WorldSave::open(root, slot);
     let hotbar = slots::Hotbar::restore(&mut opened);
     let tools = pbd_app::fish::ToolSlot::restore(&opened);
+    let drops = pbd_app::drops::Drops::restore(&opened);
     let pose = opened.pose;
     // The world resumes in its season and at its hour; one never played
     // keeps the clock it had.
@@ -916,6 +1047,7 @@ fn load_world(world: &mut World) {
     world.insert_resource(opened);
     world.insert_resource(hotbar);
     world.insert_resource(tools);
+    world.insert_resource(drops);
     // The water of the world being left is not this world's water.
     if let Some(mut fishery) = world.get_resource_mut::<pbd_app::fish::Fishery>() {
         *fishery = pbd_app::fish::Fishery::default();
@@ -1184,23 +1316,14 @@ fn placed_off_the_tier(view: &str) -> bool {
     ["cave", "overhang", "mouth", "seacave"].contains(&view)
 }
 
-fn cave_camera(
-    mut commands: Commands,
-    launch: Res<Launch>,
-    fine: Res<pbd_app::planet::PlanetFine>,
-) {
-    if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
-        return;
-    }
-    if !placed_off_the_tier(&launch.view) {
-        return;
-    }
-    // The volumetric-water case is a chamber below sea level UNDER LAND: the
-    // column holds no water at all, so the pocket is air, and only a height
-    // field would call it sea. A pocket under the SEA is not it - the column
-    // there really does hold water over the rock - and the first cut of this
-    // pick took one, which came out as a frame of open ocean.
-    let dry_cave_below_the_sea = launch.view == "seacave";
+/// The chamber a cave capture looks down: open air two and a half to twelve
+/// metres tall, four to forty metres under the ground, and of those the one
+/// with the longest open tunnel ahead of it. Its cell's direction, floor and
+/// roof altitudes and the tunnel's heading, with how many cells it runs.
+fn cave_chamber(
+    fine: &pbd_app::planet::PlanetFine,
+    dry_cave_below_the_sea: bool,
+) -> Option<(usize, Vec3, f32, f32, Vec3)> {
     use pbd_core::column::{layer_altitude, layer_at};
     let tier = &fine.set.columns;
     let records = fine.set.finest_records();
@@ -1289,6 +1412,69 @@ fn cave_camera(
             }
         }
     }
+    best
+}
+
+/// `--walk --ship-in-cave`: the walker starts in the capture cave's chamber
+/// looking down its tunnel, and the Kestrel is held nine metres ahead,
+/// halfway up the chamber, nose down the tunnel.
+fn park_in_cave(
+    mut commands: Commands,
+    launch: Res<Launch>,
+    fine: Res<pbd_app::planet::PlanetFine>,
+    config: Option<ResMut<WalkingConfig>>,
+) {
+    if !launch.ship_in_cave || !launch.walk {
+        return;
+    }
+    let Some(mut config) = config else {
+        return;
+    };
+    let Some((_, here, floor, roof, along)) = cave_chamber(&fine, false) else {
+        panic!("no chamber in the column tier to park the Kestrel in")
+    };
+    let gap = roof - floor;
+    config.restored = Some(RestoredPose {
+        position: here * (PLANET_RADIUS + floor + 1.0),
+        heading: along,
+        pitch: 0.0,
+    });
+    // Nose down the tunnel, seen from behind as the chase view sees it: side
+    // on, its length would run into both walls of a tunnel four metres wide.
+    let at_dir = (here + along * (9.0 / PLANET_RADIUS)).normalize();
+    let at = at_dir * (PLANET_RADIUS + floor + gap * 0.5);
+    let facing = Transform::from_translation(at)
+        .looking_to(along, at_dir)
+        .rotation;
+    info!(
+        "the walker starts in a {gap:.0} m cave chamber and the Kestrel is parked 9 m down it, {:.1} m above the floor",
+        gap * 0.5
+    );
+    commands.insert_resource(pbd_app::vehicles::CraftHold(Some((
+        at.as_dvec3(),
+        facing.as_dquat(),
+    ))));
+}
+
+fn cave_camera(
+    mut commands: Commands,
+    launch: Res<Launch>,
+    fine: Res<pbd_app::planet::PlanetFine>,
+) {
+    if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
+        return;
+    }
+    if !placed_off_the_tier(&launch.view) {
+        return;
+    }
+    // The volumetric-water case is a chamber below sea level UNDER LAND: the
+    // column holds no water at all, so the pocket is air, and only a height
+    // field would call it sea. A pocket under the SEA is not it - the column
+    // there really does hold water over the rock - and the first cut of this
+    // pick took one, which came out as a frame of open ocean.
+    let best = cave_chamber(&fine, launch.view == "seacave");
+    let tier = &fine.set.columns;
+    let records = fine.set.finest_records();
     if launch.view == "mouth" {
         // Stand on the ground outside a tunnel opening and look into it. What
         // counts as an opening is `planet_column::mouth_of`, the same function
@@ -1374,6 +1560,7 @@ fn photo_camera(
     mut commands: Commands,
     launch: Res<Launch>,
     water_settings: Res<pbd_app::config::WaterSettings>,
+    clock: Res<pbd_app::sky::Sun>,
 ) {
     if launch.capture.is_none() || launch.tour || launch.walk || launch.fly {
         return;
@@ -1478,17 +1665,18 @@ fn photo_camera(
         // `--height` lifts the eye and pushes the aim point out to sea by the
         // same distance, so every height in a series looks down at about 45
         // degrees instead of straight down.
-        // `nightshore` is the same instrument on the night side. The sun is a
-        // fixed direction, so a latitude can be in permanent day: 72 N is, at
-        // every longitude. The equator is not, and its antisolar longitude is
-        // the deepest night the body has, so that is where this one starts.
-        // `midnight` is the antisolar POINT itself: the sun sits 48 degrees
-        // north, so the equator's antisolar longitude is still 132 degrees
-        // from the sun and its sky is lit by the upper atmosphere over the
-        // limb; only at the antisolar latitude is the sky black in every
-        // direction, which is the frame the owner's night report was taken in.
+        // `nightshore` is the same instrument on the night side, found from
+        // the sun where the clock puts it - the one sun, pinned by `--time` -
+        // so the night it frames is the night the sky and the lamps are
+        // drawn for. The equator's antisolar longitude is the deepest night
+        // the equator has, so that is where this one starts. `midnight` is
+        // the antisolar POINT itself: off the equator the sun's latitude
+        // leaves the equator's antisolar longitude short of the sun's
+        // opposite, its sky lit by the upper atmosphere over the limb; only
+        // at the antisolar point is the sky black in every direction, which
+        // is the frame the owner's night report was taken in.
         let night = launch.view == "nightshore" || launch.view == "midnight";
-        let sun = pbd_app::sky::SUN_DIRECTION.normalize();
+        let sun = clock.clock.sun();
         let lat = if launch.view == "midnight" {
             (-sun.y).clamp(-1.0, 1.0).asin()
         } else if night {

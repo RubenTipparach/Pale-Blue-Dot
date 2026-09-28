@@ -65,6 +65,10 @@ fn main() {
     let steps_per_day = (DAY_S / settings.dt_s) as u64;
     let every = steps_per_day / SAMPLES_PER_DAY;
     let mut day_sum = vec![0.0f64; cells];
+    // The planet's mean surface temperature and the clouds' net effect,
+    // sampled with the rest and averaged over each ten days
+    // (`climate-balance` task 1.1).
+    let (mut mean_sum, mut cloud_sum, mut sampled) = (0.0f64, 0.0f64, 0u32);
     let run = Instant::now();
     for day in 0..days as u64 {
         day_sum.iter_mut().for_each(|s| *s = 0.0);
@@ -75,6 +79,9 @@ fn main() {
                 for (s, k) in day_sum.iter_mut().zip(&air.ground_k) {
                     *s += *k as f64;
                 }
+                mean_sum += air.mean_surface_c();
+                cloud_sum += air.net_cloud_wm2();
+                sampled += 1;
             }
         }
         let year = (day as f64 / YEAR_DAYS) as usize;
@@ -89,10 +96,19 @@ fn main() {
             let sea: Vec<usize> = (0..cells).filter(|&i| air.surface.ocean[i]).collect();
             let mean = sea.iter().map(|&i| air.ground_k[i] as f64).sum::<f64>() / sea.len() as f64;
             println!(
-                "day {:>3}: mean sea surface {mean:.2} C, {:.0} s so far",
+                "day {:>3}: mean sea surface {mean:.2} C, whole surface {:.2} C, net cloud {:.1} W/m^2, trim {:.3}{}, {:.0} s so far",
                 day + 1,
+                mean_sum / sampled as f64,
+                cloud_sum / sampled as f64,
+                air.sun_trim,
+                if air.sun_trim_at_limit() {
+                    " (at its limit)"
+                } else {
+                    ""
+                },
                 run.elapsed().as_secs_f64()
             );
+            (mean_sum, cloud_sum, sampled) = (0.0, 0.0, 0);
         }
     }
 

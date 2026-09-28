@@ -66,20 +66,27 @@ unless its kind is dusk-lit.
 ### Requirement: What moves takes the field's light
 
 A public sampler SHALL answer both channels at an arbitrary point in the lit
-tier. The player's body and held tool, the ship, and any other drawn thing
-that is not baked terrain SHALL be lit by that sampler every frame. Beyond
-the lit tier the sampler SHALL answer the open sky's light and no block
-light.
+tier. The held tool and hand, the ship, the fish, the float and any other
+drawn thing that is not baked terrain SHALL be lit by that sampler every
+frame. Beyond the lit tier the sampler SHALL answer the open sky's light and
+no block light.
 
 #### Scenario: A ship in a cave is dark
 
 - **WHEN** the ship is parked in an unlit cave at night
 - **THEN** it is drawn at the ambient floor, not as if it stood under the sky
 
+#### Scenario: The sun does not shine through the planet
+
+- **WHEN** the sun is below a moving thing's horizon, or the sky does not
+  reach where it is
+- **THEN** none of the sun's direct light reaches it: it shows the sky's fill
+  (at the floor, in a cave) and any lamp's light, as the ground beside it does
+
 #### Scenario: A player by a torch is lit
 
-- **WHEN** the player stands beside a torch in a dark tunnel
-- **THEN** the side of the body facing the torch is lit by it
+- **WHEN** the player stands beside a torch in the dark
+- **THEN** the tool and hand they hold take the torch's warm light
 
 #### Scenario: One field, not two
 
@@ -102,3 +109,32 @@ in the cell record, never rolled independently by the shader.
 
 - **WHEN** the shader draws a glowing flower head
 - **THEN** it is on a cell the bake treated as an emitter
+
+## MODIFIED Requirements
+
+### Requirement: Light is what reached a cell, not how deep it is
+Every cell of the column tier SHALL carry a sky level derived by propagation
+from the open sky, losing one level per layer up or down and three levels per
+cell across, about a metre a level either way, and stopping at anything solid.
+
+#### Scenario: An enclosed cave is dark
+- **WHEN** a cell is enclosed by solid material beyond the propagation range
+- **THEN** its faces are lit only by the ambient floor
+  (`light::tests::a_tunnel_longer_than_the_range_goes_out`)
+
+#### Scenario: A cave mouth is bright although it is deep
+- **WHEN** a cell is open to the sky
+- **THEN** it is at full sky level whatever its depth below the surrounding
+  ground
+  (`light::tests::an_open_column_lights_a_cave_beside_it_at_the_caves_own_height`)
+
+#### Scenario: Twilight reaches about eleven metres into a tunnel
+- **WHEN** a level tunnel runs in from an open mouth
+- **THEN** its first four cells read 12, 9, 6 and 3, and it is dark from the
+  fifth, whatever the tunnel's depth
+  (`light::tests::a_tunnel_darkens_with_distance_from_its_mouth_not_with_depth`)
+
+#### Scenario: The open surface is unchanged
+- **WHEN** a cell's column is open to the sky
+- **THEN** the light term is the same as before the field existed
+  (`light::tests::open_ground_is_full_daylight_and_the_rock_under_it_is_not_lit`)

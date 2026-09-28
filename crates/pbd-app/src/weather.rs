@@ -814,7 +814,6 @@ impl Plugin for WeatherPlugin {
                 sample_field,
                 crate::atmosphere::warm_capture,
                 crate::atmosphere::advance_air,
-                crate::overlay::cycle_overlay,
                 crate::overlay::fill_overlay,
                 follow_rain,
                 cycle_rain,

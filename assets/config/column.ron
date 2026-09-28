@@ -25,4 +25,9 @@
     worm_start_depth_m: (8.0, 50.0),
     worm_steer_scale_m: 30.0,
     cave_floor_layers: 3,
+
+    // The share of cells that grow a glowing flower, lit from dusk to dawn
+    // where the cell is grassy: a third of `flower_chance` in scatter.ron, so
+    // about one in 25 green cells, every 14 m or so across a meadow.
+    glow_flower_chance: 0.04,
 )

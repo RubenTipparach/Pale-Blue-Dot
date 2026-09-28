@@ -1043,6 +1043,56 @@ pub struct PlanetFine {
     pub version: u64,
 }
 
+/// Whether the lamps that burn from dusk to dawn are lit where the player is
+/// (`lamps-and-lanterns` decision 1): what the field is baked with, and what
+/// a fine set built now is baked with.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DuskLamps {
+    pub lit: bool,
+}
+
+/// Light the street lamps at dusk and put them out at dawn, where the fine
+/// set is anchored.
+///
+/// The field is re-baked when the answer changes, which is twice a day, and
+/// when a fine set lands baked for the other answer, which is a set requested
+/// just before the clock crossed. Nothing else about the tier changes by
+/// night, so this is a relight and not a rebuild.
+pub fn switch_dusk_lamps(
+    sun: Option<Res<crate::sky::Sun>>,
+    mut lamps: ResMut<DuskLamps>,
+    fine: Option<ResMut<PlanetFine>>,
+    contact: Option<ResMut<crate::planet::PlanetContact>>,
+) {
+    let (Some(sun), Some(mut fine)) = (sun, fine) else {
+        return;
+    };
+    let lit = sun.clock.is_dusk_lit(fine.set.anchor, lamps.lit);
+    if lit != lamps.lit {
+        info!(
+            "dusk lamps {} at hour {:.2}",
+            if lit { "lit" } else { "out" },
+            sun.clock.hour()
+        );
+        lamps.lit = lit;
+    }
+    if fine.set.columns.dusk() != lit {
+        let started = std::time::Instant::now();
+        let mut set = (*fine.set).clone();
+        set.columns.set_dusk(lit);
+        let relit = Arc::new(set);
+        // The contact answers for the set it was built from, and a relight
+        // changes only the light: without this, digging and everything lit
+        // by the field stop at dusk until the next landing (decision 13).
+        if let Some(mut contact) = contact {
+            contact.relit(&fine.set, &relit);
+        }
+        fine.set = relit;
+        fine.version += 1;
+        spent("dusk lamps: re-baking the field", started);
+    }
+}
+
 /// What the streaming is doing under the player, for the HUD and for the
 /// error an edit logs when it finds nothing to edit. A player who has outrun
 /// the fine set reads it off the screen instead of inferring it from a wall
@@ -1142,6 +1192,7 @@ pub fn refresh_lod(
     edits: Res<crate::saves::WorldSave>,
     mut near: ResMut<NearField>,
     air: Option<Res<crate::atmosphere::Air>>,
+    lamps: Res<DuskLamps>,
 ) {
     let player = player_position(&cameras, frame.center.as_vec3());
     let direction = player.and_then(|p| p.try_normalize());
@@ -1218,8 +1269,11 @@ pub fn refresh_lod(
             live
         );
         refresh.started = Some(std::time::Instant::now());
+        // Baked for the lamps as they are now, off the frame; a set that lands
+        // after the clock crossed is re-baked by `switch_dusk_lamps`.
+        let dusk = lamps.lit;
         refresh.task = Some(AsyncComputeTaskPool::get().spawn(async move {
-            let set = Arc::new(generate_fine_live(
+            let mut set = generate_fine_live(
                 direction,
                 live,
                 regen,
@@ -1228,7 +1282,9 @@ pub fn refresh_lod(
                 threads,
                 Some(replacing),
                 width,
-            ));
+            );
+            set.columns.set_dusk(dusk);
+            let set = Arc::new(set);
             let prepared = super::PlanetContact::prepare_fine(&set);
             (set, prepared)
         }));

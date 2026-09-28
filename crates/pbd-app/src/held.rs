@@ -217,7 +217,54 @@ pub struct HeldPlugin;
 impl Plugin for HeldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Swinging>()
-            .add_systems(Update, (spawn, hold).chain());
+            .add_systems(Update, (spawn, hold, light_held).chain());
+    }
+}
+
+/// The one material every held tool and the hand share.
+#[derive(Resource, Clone)]
+struct HeldMaterial(Handle<StandardMaterial>);
+
+/// Light the tool in hand from the field at the eye, each frame
+/// (`lamps-and-lanterns` decision 10). The material stays unlit, so each
+/// face keeps the shade baked into it; its colour is the light the terrain
+/// would lay over a white surface where the eye is. At noon in the open
+/// that is white, which is exactly how it was drawn before; in a cave it is
+/// the cave's floor, and beside a torch it is warm.
+#[allow(clippy::too_many_arguments)]
+fn light_held(
+    material: Option<Res<HeldMaterial>>,
+    fine: Option<Res<crate::planet::PlanetFine>>,
+    contact: Option<Res<crate::planet::PlanetContact>>,
+    sun: Option<Res<crate::sky::Sun>>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    cameras: Query<&GlobalTransform, With<WalkingCamera>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let (Some(material), Some(fine), Some(contact), Some(sun)) = (material, fine, contact, sun)
+    else {
+        return;
+    };
+    let Some(eye) = cameras.iter().next() else {
+        return;
+    };
+    let centre = frame
+        .map(|frame| frame.center.as_vec3())
+        .unwrap_or(Vec3::ZERO);
+    let point = eye.translation() - centre;
+    let sample = crate::field_light::field_at(&fine, &contact, point);
+    let daylight = sun.clock.daylight(point.normalize_or(Vec3::Y));
+    let light = crate::field_light::light_of(sample, daylight);
+    let colour = Color::linear_rgb(light.x, light.y, light.z);
+    // Only on a change the eye could see: a write re-uploads the material.
+    let Some(current) = materials.get(&material.0).map(|m| m.base_color) else {
+        return;
+    };
+    let was = current.to_linear();
+    if (was.red - light.x).abs() + (was.green - light.y).abs() + (was.blue - light.z).abs() > 1e-3
+        && let Some(held) = materials.get_mut(&material.0)
+    {
+        held.base_color = colour;
     }
 }
 
@@ -255,6 +302,8 @@ fn spawn(
         fog_enabled: false,
         ..default()
     });
+    // Lit from the field each frame by `light_held`.
+    commands.insert_resource(HeldMaterial(material.clone()));
     let all = models();
     for tool in Tool::ALL {
         let model = all.get(tool);

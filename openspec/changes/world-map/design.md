@@ -103,9 +103,10 @@ zoom, like the fish maps. See "Decided by the owner" below.*
 - Closer zooms are drawn from 256 × 256 tiles in a quadtree. They are built on
   demand from the same `base_texel` and kept in an in-memory LRU. The finest
   level is 2.833 m a pixel.
-- The build cost is not measured. It is `surface_altitude` plus `biome_at`
-  per pixel, about 2 million calls for the whole raster. Task 1.1 times it as
-  part of the instrument, before the game depends on it.
+- The build cost is measured (task 1.1, 2026-09-27): `base_texel` over the
+  whole 2,048 x 1,024 raster took 2.6 s on one thread of the cloud box, a
+  release build, 1.24 us a texel. On the async pool that is well under a
+  second on four threads, and it runs once a world, before the cache.
 - *Alternative:* one full-resolution raster, 10,650 × 5,325 pixels. Rejected:
   it is 57 million texels, and most of them are never looked at.
 
@@ -163,11 +164,92 @@ zoom, like the fish maps. See "Decided by the owner" below.*
 - `city-sites` and `climate-and-fish-maps` add layers through that registry,
   and the map's code does not change for them.
 
+**8. The mockup shows the eight weather overlays too (the owner, 2026-09-27,
+on the published mockup: "what about all the other overlays like cloud
+cover, solar, wind, currents etc").** Decision 6 already makes them map
+layers in the game (task 5.2); the mockup showed only the live clouds, so the
+owner had nothing to judge them by. They go in as the game draws them, from
+the game's own definitions:
+- `examples/map_weather.rs` writes each overlay's value with
+  `Overlay::texel`, the one reading the globe's overlay uses, over a day in
+  twelve frames, and writes each overlay's name, unit, range, ramp and
+  whether it flows or fades from `pbd_core::overlay`, so nothing about an
+  overlay is restated.
+- `tools/world_map.py` colours each frame with the ramp table the game's
+  legend and shader share (`pbd_app::overlay::RAMPS`), parsed from its
+  source as the shader's copy is checked against it. Cloud and rain fade
+  toward nothing as the globe's do.
+- The page groups them apart from the year's climate: the weather is at the
+  hour on the world clock, and moves with it. Wind, the jet and the
+  currents draw moving streaks along the flow, where the globe draws
+  streamlines, at a speed that reads on screen rather than to scale.
+- They load when first chosen, so the page opens as fast as it did.
+
+**9. Smooth at every zoom, and more detail as you zoom in (the owner, survey
+M5, 2026-09-27: "id also like it to have linear interpolation, instead of
+blocky pixels, canwe have a more detailed layer whenI zoom in?").**
+- Every layer is drawn with linear filtering at every zoom. The mockup kept
+  pixels square when zoomed in, as pixel art; the owner asked for smooth. The
+  terrain's own nearest-point rule (CLAUDE.md) is for the ground's textures,
+  not the map.
+- The base map gains two finer levels, drawn by the same `base_texel` and
+  the same colouring: 4,096 across (7.4 m a pixel) and 8,192 across (3.7 m,
+  about a cell a pixel), cut into 512-pixel tiles. The page draws the finest
+  level whose pixels are no bigger than the screen's, loading only the
+  tiles in view, over the coarser level while they load. This is decision
+  3's quadtree, shown in the mockup at the depth the game will have.
+- *Alternative:* one bigger image. 8,192 across is 33 million pixels, too
+  much to load at once for a page that shows a few tiles of it.
+
+**10. Building the game's map: the levels land on the cell, the cache holds
+texels, and the map keeps its own small weather cubes (2026-09-27, before
+task group 3).** Three things the decisions above leave open or get wrong
+once the game has to draw them:
+- **The finest level is a cell a pixel.** Task 3.3 asks for 2.833 m a pixel
+  under the player, and the spec for a cell at least a pixel. Levels that
+  double from 2,048 (decision 3) or run 4,096 and 8,192 (decision 9, the
+  mockup) cannot land there: 8,192 is 3.68 m, a cell and a third, and 16,384
+  is 1.84 m. So the pyramid is counted down from the cell: 10,656 × 5,328
+  (2.830 m a pixel at the equator, 0.1% under 2.833 m), 5,328 × 2,664, and
+  the base 2,664 × 1,332 (11.3 m). Tiles are 333 pixels square, which makes
+  every level a whole number of them: 32 × 16, 16 × 8, 8 × 4. The base is
+  built whole on the pool (3.5 M texels, about 4.4 s on one thread at the
+  measured 1.24 us a texel, about 1.2 s on four) and the two finer levels as
+  tiles on demand, kept in an LRU. The mockup's levels stay as they are;
+  the approval was of what the map shows, and this only makes it finer.
+- **The cache holds texels, not colours.** Keyed by the seed and
+  `GENERATOR_VERSION`, it stores what `base_texel` returns: the altitude in
+  16 bits, the top block and the biome, as one PNG (the `image` crate is
+  already in the tree through Bevy). Colours are made at load from the
+  tilesets, so repainting a tile never leaves a stale map behind a key that
+  did not change.
+- **The colouring moves into Rust.** The mockup coloured the ground in
+  `tools/world_map.py`: each top block from its biome's tile means, relief
+  shading from the north-west exaggerated three times, the sea by depth
+  through the fish classes' 6 m and 40 m. The game's map does the same in
+  `pbd_app::map`, which becomes the one authority; the Python copy was the
+  prototype's.
+- **The base is image nodes; the live layers are one material over it.**
+  Decision 4's material cannot bind the weather cube maps: they are raw
+  render-world textures, not assets. So the base and its tiles are
+  `ImageNode`s, sampled linearly (decision 9), placed by the view, and one
+  `UiMaterial` node over them draws the night, the clouds and rain and the
+  chosen weather overlay, greying the base beneath an overlay as the mockup
+  does. It samples two small cube `Image`s of the map's own (6 × 64 × 64,
+  8 bits a channel): the cover, the precipitation and snow from the same
+  `WeatherMaps` the globe uploads, and the overlay's value on its ramp from
+  the same `overlay_texels`. They are filled only while the map is open.
+- **Not in the first build:** the moving streaks on the flow overlays (the
+  mockup's; the spec asks for the layer and its scale), and the towns' lights
+  on the night side, which come with the sites (`city-sites`). Task 5.4, a
+  site's places, waits for `city-sites` too: the game has no sites to list.
+
 ## Risks / Trade-offs
 
-- [The base raster takes too long to build] → It is timed by the instrument
-  first (task 1.1). It runs off the frame and is cached. If it is slow the
-  world view is built at half resolution first and refined.
+- [The base raster takes too long to build] → Timed by the instrument
+  (task 1.1): 2.6 s on one thread for the whole planet. It runs off the frame
+  and is cached. A close-zoom 256 x 256 tile is 65,536 texels, about 80 ms on
+  one thread.
 - [Two projections confuse the player] → The blend is shown in the mockup, and
   the owner decides whether it stays. The fallback is equirectangular only,
   with the poles drawn in two small azimuthal insets.
@@ -206,3 +288,18 @@ zoom, like the fish maps. See "Decided by the owner" below.*
 - **M4, "need to add buttons for these instead of m to cycle. <M opens and
   closes maps":** M opens and closes the map. Each overlay has its own button
   in the legend, and M no longer cycles overlays.
+- **On the published mockup (chat, 2026-09-27), "what about all the other
+  overlays like cloud cover, solar, wind, currents etc":** the eight weather
+  overlays join the mockup (decision 8).
+- **The same day, "nigth side, clouds and rain should be off e dfault":** the
+  map opens with the night side and the live clouds and rain off, each a
+  toggle in the legend. It opens at the spawn's noon. The towns still light
+  up on the night side once it is turned on, which is how the mockup keeps
+  CLAUDE.md's rule that mockups are lit at night.
+- **M5, "id also like it to have linear interpolation, instead of blocky
+  pixels, canwe have a more detailed layer whenI zoom in?":** decision 9,
+  built in the mockup as task 1.3c.
+- **M6, the gate: "good approve".** The owner approves the map on the
+  mockup's version 3. Under CLAUDE.md's standing screenshot rule the
+  walkthrough video (task 1.3a) waits for the owner's batch, and the code
+  below starts.

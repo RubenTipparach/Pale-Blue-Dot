@@ -163,6 +163,10 @@ impl Builder<'_> {
 
 /// Hang a craft's meshes under its entity.
 pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
+    // Lit by the field wherever it stands (`lamps-and-lanterns` decision 10).
+    world
+        .entity_mut(entity)
+        .insert(crate::field_light::LitByField);
     if super::model::AUTHORED.contains(&craft.kind) {
         super::model::build(world, entity, craft)
             .expect("vehicle model: regenerate and export from Blender");

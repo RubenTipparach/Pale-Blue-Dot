@@ -129,7 +129,17 @@ pub struct Atmosphere {
     pub current: Vec<Vec3>,
     /// The wind speed the waves have caught up with, m/s; zero on land.
     pub sea: Vec<f32>,
+    /// The thermostat's integral: the part of the sun's trim a steady error
+    /// has built up (`climate-balance` decision 4). Saved with the weather.
+    pub trim_integral: f32,
+    /// The thermostat's running averages of the planet's budget, W/m^2: the
+    /// sunlight the ground would absorb at a trim of 1, and the clouds'
+    /// returned longwave. Zero until the first step has set them. Saved.
+    pub balance_absorbed: f32,
+    pub balance_greenhouse: f32,
     // --- What the last step worked out, for sampling and drawing ---
+    /// The trim the last step's sunlight was scaled by.
+    pub sun_trim: f32,
     /// Precipitation, kg/m^2/s.
     pub rain_rate: Vec<f32>,
     /// Ascent out of the boundary layer, m/s.
@@ -169,6 +179,10 @@ impl Atmosphere {
             eta: vec![0.0; n],
             current: vec![Vec3::ZERO; n],
             sea: vec![0.0; n],
+            trim_integral: 0.0,
+            balance_absorbed: 0.0,
+            balance_greenhouse: 0.0,
+            sun_trim: 1.0,
             rain_rate: vec![0.0; n],
             lift: vec![0.0; n],
             upper: vec![Vec3::ZERO; n],
@@ -183,7 +197,7 @@ impl Atmosphere {
         let field = crate::weather::WeatherField::DEFAULT;
         for cell in 0..n {
             let c = atmosphere.grid.centre[cell];
-            let climate = climate_k(c.y);
+            let climate = climate_k(&atmosphere.settings, c.y);
             // The old field's warm pockets, as a few kelvin of disturbance.
             let pocket = crate::weather::solar(&field, seed, c, 0.0) - 0.5;
             atmosphere.ground_k[cell] = climate + pocket * 4.0;
@@ -318,6 +332,43 @@ impl Atmosphere {
         0.3 + 0.7 * convective
     }
 
+    /// The planet's mean surface temperature, deg C: the ground's, which is
+    /// the sea surface over the sea, weighted by each cell's area over the
+    /// whole surface, land and sea. Summed in cell order in `f64`, so it is the
+    /// same on every run. What the thermostat holds.
+    pub fn mean_surface_c(&self) -> f64 {
+        self.grid.total(&self.ground_k) / self.grid.total_area()
+    }
+
+    /// Whether the last step's trim was held at one of its limits: the sign
+    /// that the heat terms are badly off again, which the game logs.
+    pub fn sun_trim_at_limit(&self) -> bool {
+        self.settings.target_mean_c.is_some()
+            && (self.sun_trim <= self.settings.sun_trim_min
+                || self.sun_trim >= self.settings.sun_trim_max)
+    }
+
+    /// The clouds' net effect on the surface, W/m^2, averaged over the planet
+    /// as the last step left it: the longwave they return less the sunlight
+    /// they reflect that the ground would have absorbed. Earth's is about
+    /// -20 (`climate-balance` decision 3).
+    pub fn net_cloud_wm2(&self) -> f64 {
+        let s = self.settings;
+        let mut sum = 0.0f64;
+        for i in 0..self.grid.len() {
+            let cover = self.cover(i);
+            let kept = 1.0 - s.cloud_albedo * cover;
+            let clear = if kept > 1e-6 {
+                self.sunlight[i] / kept
+            } else {
+                0.0
+            };
+            let reflected = clear * s.cloud_albedo * cover * (1.0 - self.surface.albedo[i]);
+            sum += ((s.cloud_greenhouse * cover - reflected) * self.grid.area[i]) as f64;
+        }
+        sum / self.grid.total_area()
+    }
+
     /// Total water in the air (vapour and cloud), kg, area-weighted.
     pub fn water_kg(&self) -> f64 {
         (0..self.grid.len())
@@ -345,6 +396,13 @@ impl Atmosphere {
                 }
             }
         }
+        for v in [
+            self.trim_integral,
+            self.balance_absorbed,
+            self.balance_greenhouse,
+        ] {
+            out.extend_from_slice(&v.to_le_bytes());
+        }
         out
     }
 
@@ -353,13 +411,18 @@ impl Atmosphere {
     pub fn restore(&mut self, bytes: &[u8]) -> Result<(), String> {
         let n = self.grid.len();
         // A save from before the sea state (`PBDATM01`) has one scalar field
-        // fewer; its sea is taken to have caught up with its wind.
-        let scalars_saved = match &bytes[..MAGIC.len().min(bytes.len())] {
-            m if m == MAGIC => SCALARS,
-            m if m == MAGIC_V1 => SCALARS - 1,
+        // fewer; its sea is taken to have caught up with its wind. One from
+        // before the thermostat (`PBDATM01` and `PBDATM02`) has no trim, and
+        // starts with none built up; one from before its balance
+        // (`PBDATM03`) has the integral alone, and its averages start afresh.
+        let (scalars_saved, thermostat_saved) = match &bytes[..MAGIC.len().min(bytes.len())] {
+            m if m == MAGIC => (SCALARS, 3),
+            m if m == MAGIC_V3 => (SCALARS, 1),
+            m if m == MAGIC_V2 => (SCALARS, 0),
+            m if m == MAGIC_V1 => (SCALARS - 1, 0),
             _ => return Err("weather state has an unknown header".into()),
         };
-        let want = MAGIC.len() + 16 + n * 4 * (scalars_saved + 6);
+        let want = MAGIC.len() + 16 + n * 4 * (scalars_saved + 6) + 4 * thermostat_saved;
         if bytes.len() != want {
             return Err(format!(
                 "weather state is {} bytes, expected {want}",
@@ -385,8 +448,11 @@ impl Atmosphere {
         let vectors: Vec<Vec<Vec3>> = (0..2)
             .map(|_| read(n * 3).chunks_exact(3).map(Vec3::from_slice).collect())
             .collect();
+        let mut thermostat = read(thermostat_saved);
+        thermostat.resize(3, 0.0);
         if scalars.iter().flatten().any(|v| !v.is_finite())
             || vectors.iter().flatten().any(|v| !v.is_finite())
+            || thermostat.iter().any(|v| !v.is_finite())
         {
             return Err("weather state holds a non-finite value".into());
         }
@@ -409,6 +475,11 @@ impl Atmosphere {
             Some(sea) => sea,
             None => self.settled_sea(),
         };
+        [
+            self.trim_integral,
+            self.balance_absorbed,
+            self.balance_greenhouse,
+        ] = [thermostat[0], thermostat[1], thermostat[2]];
         // The mesoscale noise is not saved: it is a function of the step it
         // was last refreshed at, so it is refreshed again as of that step.
         // The step refreshes it when it begins on a multiple of the period;
@@ -451,14 +522,29 @@ impl Atmosphere {
     }
 }
 
-const MAGIC: &[u8; 8] = b"PBDATM02";
+const MAGIC: &[u8; 8] = b"PBDATM04";
+const MAGIC_V3: &[u8; 8] = b"PBDATM03";
+const MAGIC_V2: &[u8; 8] = b"PBDATM02";
 const MAGIC_V1: &[u8; 8] = b"PBDATM01";
 const SCALARS: usize = 8;
 
 /// A latitude's rough year-round temperature at sea level, deg C, from the
-/// sine of the latitude: where a new world's weather starts.
-fn climate_k(sin_latitude: f32) -> f32 {
-    28.0 - 45.0 * sin_latitude * sin_latitude
+/// sine of the latitude: where a new world's weather starts, and where a cell
+/// the guard resets goes back to. With no thermostat it is the old
+/// `28 - 45 sin^2`. With one, it keeps that equator, 28 C, which the fish's
+/// temperature windows were set on, and averages the target over the sphere
+/// (the mean of `sin^2` over a sphere is a third), so a new world starts at
+/// the temperature the sun will hold it at: for 15 C its poles are -11 C
+/// (`climate-balance` decision 4, revised).
+fn climate_k(settings: &AtmosphereSettings, sin_latitude: f32) -> f32 {
+    const EQUATOR_C: f32 = 28.0;
+    let Some(mean) = settings.target_mean_c else {
+        return EQUATOR_C - 45.0 * sin_latitude * sin_latitude;
+    };
+    // The drop from the equator to the pole that puts the sphere's mean at
+    // the target, never a pole warmer than the equator.
+    let drop = (3.0 * (EQUATOR_C - mean)).max(0.0);
+    EQUATOR_C - drop * sin_latitude * sin_latitude
 }
 
 fn surface_of(grid: &Grid, terrain: &TerrainConfig, settings: &AtmosphereSettings) -> Surface {

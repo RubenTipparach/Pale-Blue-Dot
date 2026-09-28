@@ -1,4 +1,4 @@
-//! The ten slots, drawn.
+//! The ten slots, drawn, and the squares the pack's grid is built from.
 //!
 //! A slot carries its item's own THUMBNAIL rather than its name, which is the
 //! inherited UI rule: an inventory presented as a list of names is the failure
@@ -19,61 +19,75 @@ use pbd_core::terrain::Material;
 pub use pbd_app::hotbar::Hotbar;
 
 /// Sheets across the atlas, and tiles across a sheet.
-const ATLAS_SHEETS: f32 = 4.0;
-const ATLAS_TILES: f32 = 4.0;
+pub const ATLAS_SHEETS: f32 = 4.0;
+pub const ATLAS_TILES: f32 = 4.0;
 
-/// Which tile of the atlas a material draws with, and the colour the terrain
-/// shader lays over it. Both halves come from `planet_surface.wgsl`'s own
-/// table, so a slot and the ground cannot disagree about what dirt looks like.
-///
-/// Several materials share a tile, which is honest: they share it on the ground
-/// too, and what tells grass from swamp grass there is the tint, here as well.
-pub fn thumbnail(material: Material) -> Option<(u32, Vec2, Color)> {
+/// The tiles a block is drawn with, as the ground draws it
+/// (`planet_surface.wgsl`, after Tenebris's `face_tile`): its top, its sides
+/// and its underside, all on one sheet. A grassy block wears the sheet's
+/// ground on top, the ground-over-earth transition on its sides and earth
+/// underneath; every other block is one tile all round (`inventory-grid`
+/// decision 7, survey I4).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BlockArt {
+    pub sheet: u32,
+    pub top: Vec2,
+    pub side: Vec2,
+    pub under: Vec2,
+}
+
+/// A block's art, or `None` for air and for a light, which is its own
+/// picture (`hotbar::light_icon`, `lamps-and-lanterns` task 5.3).
+pub fn block_art(material: Material) -> Option<BlockArt> {
     use pbd_app::planet::{snow_slot, tileset_slot};
     use pbd_core::planet_gen::Biome;
     // Which SHEET a block comes from, which is the biome it is found in: sand
     // is a beach's, snow is the tundra's, and the rest are the home meadow's.
-    // The ground asks the same two functions for the same answer.
+    // The ground asks the same two functions for the same answer. The tiles
+    // are each sheet's layout: #0 its ground, #1 that ground over the earth,
+    // #2 the earth, #3 the stone.
     let home = |biome| tileset_slot(biome);
-    let (slot, tile, rgb): (u32, (f32, f32), (f32, f32, f32)) = match material {
-        Material::Air => return None,
-        Material::Grass | Material::DryGrass => {
-            (home(Biome::Fields), (0., 0.), (0.12, 0.32, 0.075))
-        }
-        Material::JungleGrass => (home(Biome::Jungle), (0., 0.), (0.07, 0.25, 0.105)),
-        // Earth has its own picture at last, which is the tile a wall shows
-        // under the sod rather than the beach it used to borrow.
-        Material::Soil | Material::Dirt => (home(Biome::Fields), (2., 0.), (0.61, 0.48, 0.25)),
-        Material::Sand => (home(Biome::Beach), (0., 0.), (0.72, 0.62, 0.42)),
-        Material::Stone => (home(Biome::Fields), (3., 0.), (0.31, 0.34, 0.33)),
-        Material::Rock => (home(Biome::Mountains), (3., 0.), (0.37, 0.33, 0.29)),
-        Material::Snow => (snow_slot(), (0., 0.), (0.80, 0.90, 0.91)),
-        Material::Ore => (home(Biome::Fields), (0., 1.), (0.72, 0.62, 0.34)),
-        Material::Water => (home(Biome::Ocean), (2., 2.), (0.13, 0.40, 0.56)),
-        // A torch: the wood tile, lit. The grain is what a torch is made of
-        // and the tint is the flame on it, which at a 44 px slot reads as a
-        // burning brand. It is a STAND-IN for art a torch has not been drawn
-        // yet - said here rather than left for a reader to notice, because
-        // this repository's rule is that an item ships with a visual and a
-        // borrowed tile is the weakest version of keeping it.
-        Material::Torch => (home(Biome::Fields), (2., 1.), (1.0, 0.62, 0.22)),
+    let one = |sheet: u32, x: f32, y: f32| BlockArt {
+        sheet,
+        top: Vec2::new(x, y),
+        side: Vec2::new(x, y),
+        under: Vec2::new(x, y),
     };
-    // The shader's albedo is a fraction of full brightness because the ground
-    // is then LIT by a sun, and a slot is lit by nothing. Lifting it by a
-    // GAMMA raises the dark materials without flattening the bright ones,
-    // which is what keeps snow whiter than stone and stone paler than soil.
-    //
-    // Normalising each material to its own brightest channel was the first
-    // attempt and it is the wrong shape: it throws away exactly the relative
-    // brightness that tells the materials apart, so snow came out the same
-    // grey as stone and sand came out brick red. Preserve the order, lift the
-    // floor.
-    let lift = |c: f32| c.clamp(0.0, 1.0).powf(0.6);
-    Some((
-        slot,
-        Vec2::new(tile.0, tile.1),
-        Color::srgb(lift(rgb.0), lift(rgb.1), lift(rgb.2)),
-    ))
+    let grassy = |sheet: u32| BlockArt {
+        sheet,
+        top: Vec2::new(0., 0.),
+        side: Vec2::new(1., 0.),
+        under: Vec2::new(2., 0.),
+    };
+    Some(match material {
+        Material::Air => return None,
+        // Grass and dry grass are one render code: the ground draws them alike.
+        Material::Grass | Material::DryGrass => grassy(home(Biome::Fields)),
+        Material::JungleGrass => grassy(home(Biome::Jungle)),
+        Material::Soil | Material::Dirt => one(home(Biome::Fields), 2., 0.),
+        Material::Sand => one(home(Biome::Beach), 0., 0.),
+        Material::Stone => one(home(Biome::Fields), 3., 0.),
+        Material::Rock => one(home(Biome::Mountains), 3., 0.),
+        Material::Snow => one(snow_slot(), 0., 0.),
+        Material::Ore => one(home(Biome::Fields), 0., 1.),
+        Material::Water => one(home(Biome::Ocean), 2., 2.),
+        Material::Torch
+        | Material::LanternPost
+        | Material::LanternWall
+        | Material::LanternHanging
+        | Material::Brazier
+        | Material::Candle => return None,
+    })
+}
+
+/// Which tile a block's slot shows, and the colour laid over it: its SIDE,
+/// as a block is seen standing in the world, for grass the sward over earth
+/// (the owner, survey I4: "should use the side of the block, there is a grad
+/// transtion to dirt block"). Untinted, since the ground draws its tiles in
+/// their own colours.
+pub fn thumbnail(material: Material) -> Option<(u32, Vec2, Color)> {
+    let art = block_art(material)?;
+    Some((art.sheet, art.side, Color::WHITE))
 }
 
 /// Every item picture that is not a block: a tool's and a fish's own 16x16
@@ -87,6 +101,8 @@ pub struct ItemIcons {
     pub fish: Vec<Handle<Image>>,
     /// In `Tool::ALL` order.
     pub tools: Vec<Handle<Image>>,
+    /// In `Material::LAMPS` order.
+    pub lights: Vec<Handle<Image>>,
 }
 
 impl ItemIcons {
@@ -113,10 +129,16 @@ pub fn load_icons(
         .iter()
         .map(|tool| assets.load(pbd_app::fish::tool_icon(*tool)))
         .collect();
+    let lights = Material::LAMPS
+        .iter()
+        .filter_map(|&light| pbd_app::hotbar::light_icon(light))
+        .map(|path| assets.load(path))
+        .collect();
     commands.insert_resource(ItemIcons {
         atlas: atlas.0.clone(),
         fish,
         tools,
+        lights,
     });
 }
 
@@ -133,7 +155,7 @@ pub struct SlotCount(pub usize);
 const SLOT: f32 = 44.0;
 const GAP: f32 = 4.0;
 
-fn border_of(selected: bool) -> Color {
+pub fn border_of(selected: bool) -> Color {
     if selected {
         Color::srgb(0.92, 0.97, 0.95)
     } else {
@@ -180,51 +202,118 @@ pub fn spawn(
         })
         .with_children(|row| {
             for index in 0..SLOTS {
-                row.spawn((
-                    Node {
-                        width: px(SLOT),
-                        height: px(SLOT),
-                        border: UiRect::all(px(1)),
-                        padding: UiRect::all(px(4)),
-                        ..default()
-                    },
-                    BorderColor::all(border_of(index == 0)),
-                    BackgroundColor(fill_of(index == 0)),
-                    SlotCell(index),
-                ))
-                .with_children(|cell| {
-                    cell.spawn((
-                        ImageNode {
-                            image: atlas.clone(),
-                            color: Color::NONE,
-                            ..default()
-                        },
-                        Node {
-                            width: percent(100.0),
-                            height: percent(100.0),
-                            ..default()
-                        },
-                        SlotIcon(index),
-                    ));
-                    cell.spawn((
-                        Text::new(""),
-                        TextFont {
-                            font_size: 10.0,
-                            ..default()
-                        },
-                        TextColor(Color::srgb(0.92, 0.97, 0.95)),
-                        TextShadow::default(),
-                        Node {
-                            position_type: PositionType::Absolute,
-                            bottom: px(1),
-                            right: px(3),
-                            ..default()
-                        },
-                        SlotCount(index),
-                    ));
-                });
+                cell(row, index, &atlas, ());
             }
         });
+}
+
+/// One slot's square: a bordered cell holding an icon and a count, marked
+/// with its index so [`update`] paints it. The hotbar row and the pack's grid
+/// are built from these, with `extra` on the square (the pack's are buttons).
+pub fn cell(
+    row: &mut ChildSpawnerCommands,
+    index: usize,
+    atlas: &Handle<Image>,
+    extra: impl Bundle,
+) {
+    row.spawn((
+        Node {
+            width: px(SLOT),
+            height: px(SLOT),
+            border: UiRect::all(px(1)),
+            padding: UiRect::all(px(4)),
+            ..default()
+        },
+        BorderColor::all(border_of(index == 0)),
+        BackgroundColor(fill_of(index == 0)),
+        SlotCell(index),
+        extra,
+    ))
+    .with_children(|cell| {
+        cell.spawn((
+            ImageNode {
+                image: atlas.clone(),
+                color: Color::NONE,
+                ..default()
+            },
+            Node {
+                width: percent(100.0),
+                height: percent(100.0),
+                ..default()
+            },
+            SlotIcon(index),
+        ));
+        cell.spawn((
+            Text::new(""),
+            TextFont {
+                font_size: 10.0,
+                ..default()
+            },
+            TextColor(Color::srgb(0.92, 0.97, 0.95)),
+            TextShadow::default(),
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: px(1),
+                right: px(3),
+                ..default()
+            },
+            SlotCount(index),
+        ));
+    });
+}
+
+/// Paint one icon with a stack's picture: a fish's, a tool's or a light's
+/// own, whole and untinted, or a block's tile cropped from the atlas at its
+/// tint. Nothing, or art not loaded yet, paints it clear.
+pub fn paint_icon(
+    node: &mut ImageNode,
+    stack: Option<pbd_core::inventory::Stack>,
+    items: &ItemIcons,
+    images: &Assets<Image>,
+) {
+    let own = stack.and_then(|stack| match stack.item {
+        Item::Fish(species) => items.fish.get(species as usize).cloned(),
+        Item::Tool(tool) => Some(items.tool(tool)),
+        Item::Block(material) => Material::LAMPS
+            .iter()
+            .position(|&light| light == material)
+            .and_then(|index| items.lights.get(index).cloned()),
+    });
+    if let Some(image) = own {
+        node.image = image;
+        node.rect = None;
+        node.color = Color::WHITE;
+        return;
+    }
+    node.image = items.atlas.clone();
+    let art = stack.and_then(|stack| match stack.item {
+        Item::Block(material) => thumbnail(material),
+        Item::Tool(_) | Item::Fish(_) => None,
+    });
+    let Some((slot, tile, tint)) = art else {
+        node.color = Color::NONE;
+        return;
+    };
+    // The rect is in the image's own pixels, so it needs the loaded size.
+    // Until the atlas has loaded there is nothing to crop to, and a
+    // full-image icon would be sixteen tiles at once.
+    let Some(size) = images.get(&node.image).map(|image| image.size_f32()) else {
+        node.color = Color::NONE;
+        return;
+    };
+    let sheet = size / ATLAS_SHEETS;
+    let step = sheet / ATLAS_TILES;
+    let origin = Vec2::new(
+        (slot % ATLAS_SHEETS as u32) as f32 * sheet.x,
+        (slot / ATLAS_SHEETS as u32) as f32 * sheet.y,
+    );
+    let min = origin + Vec2::new(tile.x * step.x, tile.y * step.y);
+    // Half a texel, which is all the bake leaves to guard: a tile is exactly
+    // 32 texels in the atlas with nothing bleeding into it, where the source
+    // sheets had soft edges to keep clear of.
+    let inset = step / 64.;
+    node.rect = Some(Rect::from_corners(min + inset, min + step - inset));
+    node.color = tint;
 }
 
 /// Repaint the row from the store. Everything a slot shows is derived here, so
@@ -256,6 +345,7 @@ pub fn update(
             .fish
             .iter()
             .chain(&items.tools)
+            .chain(&items.lights)
             .all(|h| images.contains(h));
     if !slots.is_changed() && *art_ready {
         return;
@@ -268,48 +358,7 @@ pub fn update(
         background.0 = fill_of(selected);
     }
     for (icon, mut node) in &mut icons {
-        // A fish or a tool is its own picture, whole, untinted.
-        let own = slots.get(icon.0).and_then(|stack| match stack.item {
-            Item::Fish(species) => items.fish.get(species as usize).cloned(),
-            Item::Tool(tool) => Some(items.tool(tool)),
-            Item::Block(_) => None,
-        });
-        if let Some(image) = own {
-            node.image = image;
-            node.rect = None;
-            node.color = Color::WHITE;
-            continue;
-        }
-        node.image = items.atlas.clone();
-        let art = slots.get(icon.0).and_then(|stack| match stack.item {
-            Item::Block(material) => thumbnail(material),
-            Item::Tool(_) | Item::Fish(_) => None,
-        });
-        match art {
-            Some((slot, tile, tint)) => {
-                // The rect is in the image's own pixels, so it needs the loaded
-                // size. Until the atlas has loaded there is nothing to crop to,
-                // and a full-image icon would be sixteen tiles at once.
-                let Some(size) = images.get(&node.image).map(|image| image.size_f32()) else {
-                    node.color = Color::NONE;
-                    continue;
-                };
-                let sheet = size / ATLAS_SHEETS;
-                let step = sheet / ATLAS_TILES;
-                let origin = Vec2::new(
-                    (slot % ATLAS_SHEETS as u32) as f32 * sheet.x,
-                    (slot / ATLAS_SHEETS as u32) as f32 * sheet.y,
-                );
-                let min = origin + Vec2::new(tile.x * step.x, tile.y * step.y);
-                // Half a texel, which is all the bake leaves to guard: a tile
-                // is exactly 32 texels in the atlas with nothing bleeding into
-                // it, where the source sheets had soft edges to keep clear of.
-                let inset = step / 64.;
-                node.rect = Some(Rect::from_corners(min + inset, min + step - inset));
-                node.color = tint;
-            }
-            None => node.color = Color::NONE,
-        }
+        paint_icon(&mut node, slots.get(icon.0), &items, &images);
     }
     for (count, mut text) in &mut counts {
         let label = match slots.get(count.0) {
@@ -417,18 +466,24 @@ mod tests {
         assert!(thumbnail(Material::Air).is_none(), "air is not a block");
     }
 
-    /// Snow is brighter than stone and stone brighter than soil, which is the
-    /// whole reason the lift is a gamma rather than a per-material normalise:
-    /// normalising threw this ordering away and made snow look like stone.
+    /// A grassy block shows its side in a slot, the sward over earth, and
+    /// wears its top, side and underside on a drop, as the ground draws it
+    /// (survey I4); earth and stone are one tile all round; and a slot is not
+    /// tinted, since the ground draws its tiles in their own colours.
     #[test]
-    fn the_thumbnails_keep_their_relative_brightness() {
-        let value = |material| {
-            let (_, _, colour) = thumbnail(material).unwrap();
-            let rgb = colour.to_srgba();
-            rgb.red + rgb.green + rgb.blue
-        };
-        assert!(value(Material::Snow) > value(Material::Stone));
-        assert!(value(Material::Stone) > value(Material::Grass));
-        assert!(value(Material::Sand) > value(Material::JungleGrass));
+    fn a_block_is_shown_as_the_ground_draws_it() {
+        let grass = block_art(Material::Grass).unwrap();
+        assert_eq!(grass.top, Vec2::new(0., 0.));
+        assert_eq!(grass.side, Vec2::new(1., 0.), "the transition tile");
+        assert_eq!(grass.under, Vec2::new(2., 0.), "earth underneath");
+        assert_eq!(thumbnail(Material::Grass).unwrap().1, grass.side);
+        assert_eq!(
+            block_art(Material::DryGrass),
+            Some(grass),
+            "one render code"
+        );
+        let stone = block_art(Material::Stone).unwrap();
+        assert_eq!((stone.top, stone.side), (stone.under, stone.under));
+        assert_eq!(thumbnail(Material::Dirt).unwrap().2, Color::WHITE);
     }
 }

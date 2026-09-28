@@ -163,6 +163,42 @@ it is acknowledged, and `SaveWriter` already answers that with a committed mark
 rather than a queued one. A remote edit is accepted by whoever owns the log; a
 client applying one has nothing to acknowledge.
 
+## An edit made while the tier is being rebuilt is undone when it lands (found 2026-09-28)
+
+**Found, not fixed.** `refresh_lod` clones the save's edits when it REQUESTS a
+fine set, builds the set off the frame with that copy, and swaps it in whole
+when it LANDS, about 4 s later on the cloud container. An edit accepted between
+the two is in the save and in the set that is standing, and missing from the set
+that replaces it. On screen the hole fills back in, or the torch goes out, until
+the next rebuild, which comes only when the player walks far enough to need one.
+The save is right the whole time. Only the derived tier is wrong, and it stays
+wrong for as long as the player stays put.
+
+It was found by a capture. `--walk --ship-in-cave --time 0 --torch` logged the
+set requested at 03:12:28.667, `scripted torch in cell 1327748000 layer 186` at
+03:12:28.711, and `fine set 4 landed after 4.0 s` at 03:12:32.705. The frame
+that followed was byte-for-byte the frame without `--torch`.
+
+A player meets it on the first dig after a long walk, or after flying and
+landing, which is when a rebuild is most likely to be in flight. The
+`rebuild_s` readout in the F3 graph shows when one is.
+
+**The fix is to replay what the copy missed, not to drop the set.** Throwing
+the landed set away when the log has moved and asking again is simpler and
+also correct, but a player who keeps digging would keep a rebuild from ever
+landing, and they would walk off the edge of a tier that never follows them.
+Instead, the request notes which cells were edited after it, and the landing
+rebuilds those columns from the save's CURRENT edits before the set goes in,
+the way `FineSet::adoptable` already builds a rim column with the save's edits
+for its cell. Then it relights them, as an edit does. This is section 5's
+sequence rule applied to the tier instead of to a re-bake. Once section 5
+gives the log a sequence, the note becomes "the sequence this set was built at".
+
+The scripted capture rig (`scripted_dig`) now waits until no rebuild is in
+flight before it digs or places, so that a capture shows the edit. That
+changes when a capture places its blocks and nothing else. It is the
+workaround that let lamps-and-lanterns 3.3 be captured, and it is not the fix.
+
 ## What is deliberately not decided here
 
 - **The protocol.** No sockets, no wire format, no server. The seam above is

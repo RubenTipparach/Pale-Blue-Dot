@@ -142,7 +142,10 @@ impl Key {
                 KeyCode::KeyF => "F",
                 KeyCode::KeyG => "G",
                 KeyCode::KeyH => "H",
+                KeyCode::KeyI => "I",
                 KeyCode::KeyJ => "J",
+                KeyCode::KeyL => "L",
+                KeyCode::KeyM => "M",
                 KeyCode::KeyP => "P",
                 KeyCode::KeyQ => "Q",
                 KeyCode::KeyR => "R",
@@ -211,7 +214,7 @@ const WASD: [Key; 4] = [
     Key::Board(KeyCode::KeyD),
 ];
 
-const ON_FOOT: [Binding; 9] = [
+const ON_FOOT: [Binding; 10] = [
     row(&WASD, " ", "move"),
     row(
         &[Key::Board(KeyCode::Space)],
@@ -241,6 +244,11 @@ const ON_FOOT: [Binding; 9] = [
         "hold for the tools; the wheel picks one",
     ),
     row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
+    row(
+        &[Key::Board(KeyCode::KeyI)],
+        " ",
+        "the pack: thirty more slots",
+    ),
 ];
 
 const FLYING: [Binding; 6] = [
@@ -306,10 +314,12 @@ const LOON: [Binding; 4] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
-const WORLD: [Binding; 3] = [
+const WORLD: [Binding; 5] = [
+    row(&[Key::Board(KeyCode::KeyM)], " ", "the map"),
     row(&[Key::Board(KeyCode::KeyR)], " ", "walk or fly"),
     row(&[Key::Board(KeyCode::KeyH)], " ", "return to the spawn"),
     row(&[Key::Board(KeyCode::KeyP)], " ", "cycle the weather"),
+    row(&[Key::Board(KeyCode::KeyL)], " ", "noon or midnight"),
 ];
 
 const SCREEN: [Binding; 3] = [
@@ -474,10 +484,15 @@ mod tests {
     /// Every file that presses the keyboard or the mouse. The test reads their
     /// SOURCE rather than a second list in here, which is this repository's
     /// rule for a representation it cannot collapse: check the real artifact.
-    const READERS: [(&str, &str); 11] = [
+    const READERS: [(&str, &str); 13] = [
         ("controls.rs", include_str!("controls.rs")),
         ("fish.rs", include_str!("fish.rs")),
         ("desktop/guide.rs", include_str!("desktop/guide.rs")),
+        ("desktop/pack.rs", include_str!("desktop/pack.rs")),
+        (
+            "desktop/map_screen.rs",
+            include_str!("desktop/map_screen.rs"),
+        ),
         ("vehicles.rs", include_str!("vehicles.rs")),
         ("walking.rs", include_str!("walking.rs")),
         ("flight_view/input.rs", include_str!("flight_view/input.rs")),

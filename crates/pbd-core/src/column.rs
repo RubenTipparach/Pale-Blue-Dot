@@ -56,12 +56,10 @@ impl Column {
     }
 
     /// Whether a layer stops a player. Air and water do not; water is swum,
-    /// and a torch is walked through.
+    /// and a torch or any other light is walked through.
     pub fn solid(&self, index: usize) -> bool {
-        !matches!(
-            self.material(index),
-            Material::Air | Material::Water | Material::Torch
-        )
+        let material = self.material(index);
+        !(matches!(material, Material::Air | Material::Water) || material.is_lamp())
     }
 
     /// The topmost solid layer, which is the surface the heightfield tiers draw.

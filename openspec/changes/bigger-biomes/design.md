@@ -108,10 +108,95 @@ distribution.**
   biome and its share.
 - If the owner picks the 375 m scale, the walks become 2 km and 500 m.
 
+**6. Three things the plan above missed (found 2026-09-28, reading the code
+before building it).**
+
+- **The climate reads the biome.** `Atmosphere::new` gives every land cell a
+  wetness and an albedo from `biome_at`: desert 0.1 and 1.4 times the land
+  albedo, fields 0.6 and 1.0, jungle 0.9 and 0.8. Version 5 turns about a
+  fifth of the land from fields to desert and a fifth to jungle. From the
+  measured shares and those coefficients (arithmetic, not a run), the land's
+  mean albedo rises by about 0.01 and its mean wetness falls by about 0.04.
+  The thermostat trims the sun for the albedo, but the settled states that a
+  new world opens on (`climate-balance` decision 8) were made on version 4.
+  A version-5 world opened on them would start off balance, which is what
+  survey K6 asked to be rid of.
+  - So the settled states are re-made on version 5's terrain, levels 3 and 5.
+    That is two to three hours of settle, as the level-5 one was.
+  - The shipped `.ron` records the generator it was made on. `shipped_settled`
+    falls back to the spin-up, with a warning, where the world's generator is
+    not the state's, as it already does for other settings.
+- **The version number also salts the planar sampler.** `terrain.rs`'s
+  `TerrainGenerator`, the planar hex-patch reference that `headless.rs` runs,
+  mixes `GENERATOR_VERSION` into every hash. Bumping it to 5 would move that
+  sampler's every voxel for a change that is only the spherical generator's
+  moisture. Its salt becomes its own constant, fixed at 4, the version it was
+  written under.
+- **The planet is built once, at launch, from one constant.** `TERRAIN` in
+  `planet_terrain.rs` is a `const` read at 47 places. `create_planet` runs
+  once at `Startup`. Loading a world from the saves screen swaps its edits
+  and rebuilds the fine tier, but never the planet. That is also why a save
+  made on another seed is refused rather than opened. So "build the terrain
+  from the save's version" has two parts:
+  - The config becomes the world's, chosen once when the app starts from the
+    world it opens. The 47 reads go through one accessor rather than a
+    constant.
+  - A world of the other version, chosen from the saves screen, needs the
+    planet rebuilt. Rebuilding it in place means tearing down and remaking
+    every planet resource (the base records and their GPU buffers, the fine
+    and contact tiers, the atmosphere and the map cache), which the code has
+    never done.
+  - **Recommendation, provisional until the owner answers:** the game
+    restarts itself into the other version, the same as quitting and
+    launching with `--world <id>`, and says so on screen. The reload costs a
+    launch (about 12 s in the cloud, less on the owner's machine). The owner
+    starts new worlds for the new biomes (survey B3), so it happens when an
+    old world is opened, and once when the first new world is made.
+  - *Alternative:* rebuild the planet in place. It is right eventually, since
+    visiting another planet will need it. It is the larger change, and not
+    this one.
+
+## Measured: the candidates (2026-09-27)
+
+`world-map`'s instrument (`examples/world_map.rs`, task 1.1) classified a
+2,048 x 1,024 equirectangular raster of the shipped planet through
+`pbd_core::map::base_texel`, each pixel weighted by its share of the sphere.
+Land is 40% of the surface.
+
+**Today, as shipped (188 m, 0.36 / 0.64), 91% of the temperate land is
+fields**: the owner's "the majority is just grass", measured. Of all the land:
+
+| beach | fields | desert | jungle | swamp | mountains | tundra |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10% | 59% | 3% | 3% | 0.2% | 2% | 23% |
+
+**The moisture's quantiles over the temperate land, and the thresholds that
+give a third each** (task 1.1):
+
+| `moisture_m` | q10 | q33 | q50 | q67 | q90 | `desert_below` | `wet_above` | fields | desert | jungle | swamp |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 188 | 0.392 | 0.463 | 0.500 | 0.537 | 0.607 | 0.463 | 0.537 | 33% | 33% | 32% | 2% |
+| 375 | 0.392 | 0.464 | 0.501 | 0.537 | 0.607 | 0.464 | 0.537 | 33% | 33% | 32% | 2% |
+| 750 | 0.394 | 0.468 | 0.506 | 0.544 | 0.614 | 0.468 | 0.544 | 33% | 33% | 32% | 2% |
+
+What it shows:
+- **The thresholds, not the scale, are what made it all grass.** The noise
+  is clustered about 0.5 at every scale, so 0.36 and 0.64 sit out past the
+  10th and 90th percentiles. The scale changes how big a region is, and the
+  thresholds how much of each there is.
+- **The shares barely move with the scale**, so the thresholds found at one
+  scale serve all three. At 750 m (B1) they are 0.468 and 0.544.
+- **Swamp stays small (2%)**: it is the wet share below `swamp_max_elev_m`
+  (5 m), which little temperate land is. Jungle and swamp together are the
+  third that B2 asks for.
+- Of all the land, 750 m retuned gives beach 10%, fields 22%, desert 22%,
+  jungle 21%, swamp 1%, mountains 2% and tundra 23%.
+- The rasters are `docs/mockups/world-map/biomes-{today,188,375,750}.png`.
+
 ## Risks / Trade-offs
 
-- [More jungle means more trees drawn] → Jungle goes from about 2% of the
-  sphere to perhaps a sixth of the land. That can move frame time. It cannot
+- [More jungle means more trees drawn] → Jungle goes from 3% of the land to
+  21% (measured above). That can move frame time. It cannot
   be measured in a cloud session (CLAUDE.md). The owner runs
   `tools/perf_suite.py` with the old build against the new, and the report
   goes in `docs/benchmarks/`. If it regresses, the tree scatter's jungle

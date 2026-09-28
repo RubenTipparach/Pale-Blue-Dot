@@ -1,7 +1,8 @@
 //! The overlay's legend and its row on the pause panel. The legend names the
 //! overlay, draws its colour bar from the same ramp table the shader draws the
 //! map with, gives the range in its unit, the day and season, and the key. The
-//! row sets `OverlayMode` exactly as M does: one mode, two hands on it.
+//! row sets `OverlayMode` as the map's "Show on globe" does: one mode, two
+//! hands on it. M opens the map (`world-map` task 5.2) rather than cycling.
 
 use super::menu::{EDGE, INK, MINT, MenuAction, PANEL_FILL, small};
 use bevy::{
@@ -111,7 +112,7 @@ pub fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                 });
             text(panel, LegendText::Date, 11.0, INK);
             panel.spawn((
-                Text::new("[M] NEXT"),
+                Text::new("[M] THE MAP CHOOSES IT"),
                 TextFont {
                     font_size: 10.0,
                     ..default()
@@ -183,7 +184,7 @@ pub fn show(
 /// The pause panel's overlay row: off, then one button per overlay.
 pub fn spawn_row(panel: &mut ChildSpawnerCommands) {
     panel.spawn((
-        Text::new("MAP  [M]"),
+        Text::new("GLOBE OVERLAY"),
         TextFont {
             font_size: 11.0,
             ..default()

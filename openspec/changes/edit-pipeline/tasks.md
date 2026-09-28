@@ -20,6 +20,15 @@ the only code this change has produced so far.
 - [ ] A test that an edit does not allocate a copy of the set - the honest form
       is a measurement, so the shape is a bound on the phase, not a mock.
 
+## 1b. Keep an edit made while the tier is being rebuilt (design: "undone when it lands")
+- [ ] `LodRefresh` notes the cells edited after its request. The landing
+      rebuilds those columns from the save's current edits and relights them
+      before the set goes in.
+- [ ] An app test: request a set, apply a dig and a torch before it lands, and
+      the landed set has the hole and the lit torch. It fails on today's code.
+- [ ] Take the wait out of `scripted_dig` once this holds. `--torch` then
+      captures the same frame without it.
+
 ## 2. Tell the GPU only what changed
 - [ ] `PlanetFine` carries a dirty list of finest-level slots beside its
       version: the edited record, its six neighbours, the surface record.

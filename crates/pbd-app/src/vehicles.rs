@@ -98,6 +98,12 @@ impl Vehicle {
     }
 }
 
+/// A pose the Kestrel is held at, for a capture that needs it somewhere it
+/// cannot be flown and landed by a script: in a cave (`lamps-and-lanterns`
+/// task 3.3). Held after every step, at rest, body-local.
+#[derive(Resource, Default, Clone, Copy, Debug)]
+pub struct CraftHold(pub Option<(DVec3, pbd_core::DQuat)>);
+
 /// The craft the player is aboard, if any.
 #[derive(Resource, Default, Debug)]
 pub struct Aboard(pub Option<Entity>);
@@ -120,6 +126,7 @@ impl Plugin for VehiclePlugin {
             .init_resource::<Aboard>()
             .init_resource::<VehicleControls>()
             .init_resource::<VehicleClock>()
+            .init_resource::<CraftHold>()
             .init_resource::<view::VehicleView>()
             .add_systems(Startup, (view::spawn_camera, hud::spawn))
             .add_systems(Update, (place::spawn_fleet, scripted_board).chain())
@@ -129,7 +136,7 @@ impl Plugin for VehiclePlugin {
                     .chain()
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
             )
-            .add_systems(FixedUpdate, step_vehicles)
+            .add_systems(FixedUpdate, (step_vehicles, hold_craft).chain())
             .add_systems(
                 PostUpdate,
                 (draw::place, view::follow)
@@ -138,6 +145,23 @@ impl Plugin for VehiclePlugin {
                     .before(bevy::transform::TransformSystems::Propagate),
             )
             .add_systems(Update, (hud::show, save_vehicles, view::look));
+    }
+}
+
+/// Hold the Kestrel where a capture put it.
+fn hold_craft(hold: Res<CraftHold>, mut vehicles: Query<&mut Vehicle>) {
+    let Some((at, facing)) = hold.0 else {
+        return;
+    };
+    if let Some(mut vehicle) = vehicles
+        .iter_mut()
+        .find(|v| v.craft.kind == pbd_core::vehicle::Kind::Kestrel)
+    {
+        let body = &mut vehicle.craft.body;
+        body.position = at;
+        body.orientation = facing;
+        body.velocity = DVec3::ZERO;
+        body.angular_velocity = DVec3::ZERO;
     }
 }
 

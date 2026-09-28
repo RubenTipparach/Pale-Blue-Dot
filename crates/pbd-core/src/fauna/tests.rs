@@ -220,6 +220,108 @@ fn on_day_one_no_open_water_is_without_a_species() {
     );
 }
 
+/// `climate-balance` tasks 3.1, 3.2 and 3.2b: a new world starts from the
+/// shipped settled climate (decision 8, survey K6), and the atmosphere holds
+/// the planet's mean at 15 +/- 0.5 C from its first day, its clouds' net
+/// effect stays inside Earth's range, and in the second game year every
+/// species has water it can live in, for part of the year at least. On the
+/// leaking step the whole sea was below freezing all of year 2 and no species
+/// had any (`docs/wiki/fish-ranges/current`); from rest the mean started
+/// below the target and took a year to come up (finding 9). It runs 200 game
+/// days at level 3, which takes minutes, so it is ignored by default:
+///
+///     cargo test --release -p pbd-core -- --ignored second_year_is_held
+#[test]
+#[ignore]
+fn a_new_worlds_second_year_is_held_at_fifteen_and_every_species_has_water() {
+    use crate::atmosphere::{Atmosphere, AtmosphereSettings};
+    use crate::daylight::{Clock, DAY_S, START_HOUR, YEAR_DAYS};
+    let terrain = TerrainConfig::TENEBRIS;
+    let settings = AtmosphereSettings {
+        level: 3,
+        ..Default::default()
+    };
+    let mut air = Atmosphere::new(&terrain, settings, terrain.seed);
+    // The state the game opens a new world on, made with these settings.
+    let shipped = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/climate/settled-l3"
+    );
+    let made_with: AtmosphereSettings =
+        ron::from_str(&std::fs::read_to_string(format!("{shipped}.ron")).expect("shipped"))
+            .expect("settings");
+    assert_eq!(
+        made_with, settings,
+        "the shipped state is for these settings"
+    );
+    air.restore(&std::fs::read(format!("{shipped}.bin")).expect("shipped"))
+        .expect("the shipped state fits");
+    // It stands at `START_HOUR` of a year's first day.
+    let opening = f64::from(START_HOUR) / 24.0 * f64::from(DAY_S);
+    let fauna = FaunaSettings::default();
+    let limits = fauna.water;
+    let roster = fauna.roster(HOME_BODY);
+    // The water points, their class, and the year's coldest and warmest
+    // daily mean at each.
+    let water: Vec<(Vec3, WaterClass)> = (0..6000)
+        .map(|i| fibonacci(i, 6000))
+        .filter_map(|d| {
+            let depth = terrain.sea_level_m - surface_altitude(&terrain, d);
+            water_class(&terrain, d, depth, &limits).map(|class| (d, class))
+        })
+        .collect();
+    let mut cold = vec![f32::MAX; water.len()];
+    let mut warm = vec![f32::MIN; water.len()];
+    let steps_per_day = (DAY_S / settings.dt_s) as u64;
+    let days = 2 * YEAR_DAYS as u64;
+    let (mut cloud_sum, mut cloud_n) = (0.0f64, 0u32);
+    for day in 0..days {
+        let mut mean = vec![0.0f32; water.len()];
+        for k in 0..4 {
+            for step in 0..steps_per_day / 4 {
+                let t = opening
+                    + (day * steps_per_day + k * steps_per_day / 4 + step) as f64
+                        * settings.dt_s as f64;
+                air.step(Clock { seconds: t }.sun(), &[]);
+            }
+            for (m, (d, _)) in mean.iter_mut().zip(&water) {
+                *m += air.sample(*d).temperature / 4.0;
+            }
+        }
+        let planet = air.mean_surface_c();
+        assert!(
+            (planet - 15.0).abs() < 0.5,
+            "day {day}: the planet is at {planet:.2} C"
+        );
+        if day >= YEAR_DAYS as u64 {
+            cloud_sum += air.net_cloud_wm2();
+            cloud_n += 1;
+            for i in 0..water.len() {
+                cold[i] = cold[i].min(mean[i]);
+                warm[i] = warm[i].max(mean[i]);
+            }
+        }
+    }
+    let cloud = cloud_sum / cloud_n as f64;
+    assert!(
+        (-30.0..=-10.0).contains(&cloud),
+        "the clouds' net effect is {cloud:.1} W/m^2"
+    );
+    for sp in roster {
+        let homes = water
+            .iter()
+            .enumerate()
+            .filter(|(i, (_, class))| {
+                sp.water.contains(class)
+                    && warm[*i] >= limits.freezes_c
+                    && warm[*i] >= sp.temp_c.0
+                    && cold[*i] <= sp.temp_c.1
+            })
+            .count();
+        assert!(homes > 0, "{} has no water in year 2", sp.id);
+    }
+}
+
 fn fibonacci(i: usize, n: usize) -> Vec3 {
     let y = 1.0 - 2.0 * (i as f32 + 0.5) / n as f32;
     let r = (1.0 - y * y).sqrt();

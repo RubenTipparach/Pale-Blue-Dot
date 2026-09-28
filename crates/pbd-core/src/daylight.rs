@@ -165,7 +165,37 @@ impl Clock {
     pub fn elevation(self, up: Vec3) -> f32 {
         self.sun().dot(up.normalize_or(Vec3::Y))
     }
+    /// How much it is day at a point, 0..1, from the sun's elevation there:
+    /// the terrain shader's `smoothstep(-0.13, 0.20, sun_elevation)`, so a
+    /// thing the terrain pass does not draw sees the same dusk the ground
+    /// does.
+    pub fn daylight(self, up: Vec3) -> f32 {
+        let t = ((self.elevation(up) + 0.13) / 0.33).clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    }
+
+    /// Whether the lights that burn from dusk to dawn are lit at a point,
+    /// given whether they were (`lamps-and-lanterns` decision 1).
+    ///
+    /// They come on when the sun sinks below [`DUSK_ON`] and go out only when
+    /// it climbs past [`DUSK_OFF`]. The gap is the hysteresis: a clock held at
+    /// dusk, or a player standing on the line, does not flicker the lamps and
+    /// re-bake the field every frame.
+    pub fn is_dusk_lit(self, up: Vec3, was: bool) -> bool {
+        let elevation = self.elevation(up);
+        if was {
+            elevation < DUSK_OFF
+        } else {
+            elevation < DUSK_ON
+        }
+    }
 }
+
+/// The sun's elevation, as a cosine, below which dusk-lit lamps come on:
+/// about three degrees above the horizon, as the sky starts to redden.
+pub const DUSK_ON: f32 = 0.05;
+/// And above which they go out again: about six degrees, well after sunrise.
+pub const DUSK_OFF: f32 = 0.10;
 
 #[cfg(test)]
 mod tests {
@@ -186,6 +216,32 @@ mod tests {
         let before = clock;
         clock.advance(f32::NAN);
         assert_eq!(clock, before, "a bad step changes nothing");
+    }
+
+    /// Street lamps are lit at midnight and out at noon, and a clock stepped
+    /// slowly through dusk and back through dawn switches them once each way.
+    #[test]
+    fn dusk_lit_lamps_switch_once_at_dusk_and_once_at_dawn() {
+        let noon = Clock::at_hour(12.0);
+        let here = noon.sun();
+        assert!(!noon.is_dusk_lit(here, false), "out at noon");
+        assert!(!noon.is_dusk_lit(here, true), "and stay out once out");
+        let midnight = Clock::at_hour(0.0);
+        assert!(midnight.is_dusk_lit(here, false), "lit at midnight");
+        let mut lit = false;
+        let mut switches = 0;
+        let mut clock = Clock::at_hour(12.0);
+        // A day in half-minute steps, with a wobble back and forth each step:
+        // a clock dithering on the line.
+        for _ in 0..(DAY_S / 30.0) as u32 {
+            for step in [30.0, -10.0, 10.0] {
+                clock.advance(step);
+                let now = clock.is_dusk_lit(here, lit);
+                switches += usize::from(now != lit);
+                lit = now;
+            }
+        }
+        assert_eq!(switches, 2, "on once at dusk, off once at dawn");
     }
 
     /// The sun is a unit vector at every hour, which every consumer assumes

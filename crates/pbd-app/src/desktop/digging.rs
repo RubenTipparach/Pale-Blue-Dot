@@ -11,6 +11,7 @@
 //! reached the disk is the failure `CLAUDE.md` names.
 
 use bevy::prelude::*;
+use pbd_app::drops::Drops;
 use pbd_app::planet::NearField;
 use pbd_app::planet::surface_height;
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
@@ -171,8 +172,9 @@ pub enum Hands {
     Empty,
 }
 
-/// Everything one edit touches, which is what says these four travel
-/// together: the geometry, what the walker stands on, the save, and the hands.
+/// Everything one edit touches, which is what says these travel together: the
+/// geometry, what the walker stands on, the save, the hands, and the world a
+/// dug block floats in (`inventory-grid` decision 4).
 /// A shorter argument list is the symptom; the reason is that an edit is a
 /// transaction over exactly these.
 pub struct Edited<'a> {
@@ -180,6 +182,9 @@ pub struct Edited<'a> {
     pub contact: &'a mut PlanetContact,
     pub save: &'a mut WorldSave,
     pub slots: &'a mut super::slots::Hotbar,
+    pub drops: &'a mut Drops,
+    /// The world's time, s: when a drop is made.
+    pub now_s: f64,
 }
 
 /// Accept a dig or a place, and put the world back together.
@@ -201,6 +206,8 @@ pub fn apply_edit(
         contact,
         save,
         slots,
+        drops,
+        now_s,
     } = world;
     if layer == 0 || layer >= LAYERS {
         info!("edit refused: layer {layer} is bedrock or above the world");
@@ -244,17 +251,17 @@ pub fn apply_edit(
     // The move is made on a COPY first. What the log records is the hotbar
     // after the edit, and what the player keeps is that same hotbar only if
     // the record was taken.
-    // One lamp to a column. The record carries ONE torch layer, because a
-    // torch is not in a run and the runs are all the shader reads, so a second
+    // One lamp to a column. The record carries ONE lamp layer, because a
+    // lamp is not in a run and the runs are all the shader reads, so a second
     // one would light a cell nothing was drawn in. Refusing is better than
     // drawing the wrong one.
-    if material == Material::Torch
+    if material.is_lamp()
         && let Some(column) = adopting
             .as_ref()
             .or_else(|| fine.set.columns.column(record))
-        && pbd_app::planet::column::has_torch(column)
+        && pbd_app::planet::column::has_lamp(column)
     {
-        info!("edit refused: cell {cell} already carries a torch");
+        info!("edit refused: cell {cell} already carries a lamp");
         return None;
     }
     // Adopting takes a slot, so a full tier refuses here, BEFORE the save:
@@ -266,9 +273,22 @@ pub fn apply_edit(
         return None;
     }
     let mut moved = slots.0.clone();
+    let mut dropped = None;
     match hands {
+        // The dug block floats where it was cut, at the cell's centre, and
+        // the magnet brings it in (`inventory-grid` decision 4). The hands do
+        // not change here; the pickup is its own line.
         Hands::Take => {
-            moved.give(Item::Block(was), 1);
+            let direction = fine
+                .set
+                .finest_records()
+                .get(record)
+                .map(|cell| Vec3::from_slice(&cell.direction_height[..3]))
+                .and_then(Vec3::try_normalize);
+            if let Some(direction) = direction {
+                let centre = direction * (PLANET_RADIUS + column::layer_altitude(layer) + 0.5);
+                dropped = Some(Drops::make(save, Item::Block(was), centre, *now_s));
+            }
         }
         Hands::Spend => {
             let index = moved.selected();
@@ -285,6 +305,7 @@ pub fn apply_edit(
             layer: layer as u16,
             material,
         },
+        dropped.as_ref(),
         &moved,
     ) {
         // The durable path refused it, so the world must not change either:
@@ -293,6 +314,7 @@ pub fn apply_edit(
         return None;
     }
     slots.0 = moved;
+    drops.live.extend(dropped);
     let started = std::time::Instant::now();
     let mut set = (*fine.set).clone();
     let cloned = started.elapsed();
@@ -346,7 +368,7 @@ pub fn apply_edit(
 }
 
 /// The eye ray, the click, and the two verbs.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn dig_and_place(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     buttons: Res<ButtonInput<MouseButton>>,
@@ -359,11 +381,13 @@ pub fn dig_and_place(
     near: Res<NearField>,
     tools: Res<pbd_app::fish::ToolSlot>,
     fishery: Option<Res<pbd_app::fish::Fishery>>,
-    (mut mining, dig, time, swinging): (
+    (mut mining, dig, time, swinging, mut drops, sun): (
         ResMut<Mining>,
         Res<pbd_app::config::DigConfig>,
         Res<Time>,
         Option<ResMut<pbd_app::held::Swinging>>,
+        ResMut<Drops>,
+        Res<pbd_app::sky::Sun>,
     ),
 ) {
     // The tool in hand chops while a block is being broken: last frame's
@@ -440,6 +464,8 @@ pub fn dig_and_place(
                 contact: &mut contact,
                 save: &mut edits,
                 slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
             },
             Hands::Take,
             cell,
@@ -486,6 +512,8 @@ pub fn dig_and_place(
                 contact: &mut contact,
                 save: &mut edits,
                 slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
             },
             Hands::Spend,
             place.cell,
@@ -516,6 +544,82 @@ fn occupies(eye: Vec3, place: Sample) -> bool {
     (feet..=head).contains(&place.layer)
 }
 
+/// `--lamps`: every light in a row across the view, one cell apart, each on
+/// the ground of its own cell (`lamps-and-lanterns` task 5.2). The wall
+/// lantern gets a two-block pillar in the cell beyond it to hang on, and the
+/// hanging lantern a block over it to hang from. Returns how many lights were
+/// placed.
+fn lamp_row(world: &mut Edited, eye: Vec3, forward: Vec3, row: f32, aside: f32) -> usize {
+    let up = eye.normalize_or(Vec3::Y);
+    let ahead = (forward - up * forward.dot(up)).normalize_or(Vec3::X);
+    let right = ahead.cross(up).normalize_or(Vec3::Z);
+    // The cell `metres` ahead and `across` to the right, its key and the first
+    // layer over its ground.
+    let spot = |world: &Edited, metres: f32, across: f32| -> Option<(u32, usize)> {
+        let offset = ahead * metres + right * across;
+        let angle = offset.length() / PLANET_RADIUS;
+        let direction = (up * angle.cos() + offset.normalize_or(ahead) * angle.sin()).normalize();
+        let record = world.contact.finest_cell(direction)?;
+        let key = world.fine.set.finest_records().get(record)?.key();
+        let top = world.fine.set.columns.column(record)?.surface()?;
+        Some((key, top + 1))
+    };
+    // Before the fine set is under the camera there is no cell to put a lamp
+    // in, and the caller tries again next frame.
+    if spot(world, row, 0.0).is_none() {
+        return 0;
+    }
+    let mut placed = 0;
+    // One row across the view, so a single frame shows every light. Each
+    // light walks right from the last until it is in a cell nobody has used:
+    // a fixed step across a hex grid sometimes lands twice in one cell.
+    let mut used = Vec::new();
+    let mut across = aside - 2.5 * LAMP_SPACING_M;
+    for &lamp in Material::LAMPS.iter() {
+        let mut found = None;
+        for _ in 0..16 {
+            match spot(world, row, across) {
+                Some((cell, layer)) if !used.contains(&cell) => {
+                    found = Some((cell, layer));
+                    break;
+                }
+                _ => across += 0.5,
+            }
+        }
+        let Some((cell, layer)) = found else {
+            warn!("scripted lamps: no free cell {across:.1} m across for {lamp:?}");
+            continue;
+        };
+        used.push(cell);
+        // A wall lantern needs a wall: two stones in the next cell back.
+        if lamp == Material::LanternWall
+            && let Some((wall, base)) = spot(world, row + LAMP_SPACING_M, across)
+        {
+            used.push(wall);
+            for step in 0..2 {
+                apply_edit(world, Hands::Empty, wall, base + step, Material::Stone);
+            }
+        }
+        // A hanging lantern needs something to hang from: a stone over it.
+        let layer = if lamp == Material::LanternHanging {
+            apply_edit(world, Hands::Empty, cell, layer + 2, Material::Stone);
+            layer + 1
+        } else {
+            layer
+        };
+        if apply_edit(world, Hands::Empty, cell, layer, lamp).is_some() {
+            info!("scripted {lamp:?} in cell {cell} layer {layer}, {across:.1} m across");
+            placed += 1;
+        }
+        across += LAMP_SPACING_M;
+    }
+    placed
+}
+
+/// How far apart `--lamps` puts its lights: about one cell, so each stands in
+/// a cell of its own.
+const LAMP_SPACING_M: f32 = 2.9;
+
 /// The scripted dig: a headless run has no mouse, and a picture of a hole is
 /// the only thing that says the verb works end to end.
 ///
@@ -524,6 +628,7 @@ fn occupies(eye: Vec3, place: Sample) -> bool {
 /// certainly in reach of a standing player is the ground under them. Then
 /// `--place` puts one block back on top of the hole, so a frame shows both
 /// verbs: a pit, and a block standing in it.
+#[allow(clippy::too_many_arguments)]
 pub fn scripted_dig(
     launch: Res<super::Launch>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
@@ -531,9 +636,18 @@ pub fn scripted_dig(
     mut contact: ResMut<PlanetContact>,
     mut edits: ResMut<WorldSave>,
     mut slots: ResMut<super::slots::Hotbar>,
+    (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
+    refresh: Res<pbd_app::planet::LodRefresh>,
     mut done: Local<bool>,
 ) {
-    if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch) {
+    if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch && !launch.lamps) {
+        return;
+    }
+    // A set in flight was built from the edits as they stood when it was
+    // asked for, and landing it would undo anything scripted since
+    // (`edit-pipeline` design, "undone when it lands"). Until that is fixed,
+    // the rig waits for the landing so the picture shows its edits.
+    if refresh.in_flight_s().is_some() {
         return;
     }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
@@ -558,6 +672,8 @@ pub fn scripted_dig(
                 contact: &mut contact,
                 save: &mut edits,
                 slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
             },
             Hands::Take,
             target.dig.cell,
@@ -594,6 +710,8 @@ pub fn scripted_dig(
                     contact: &mut contact,
                     save: &mut edits,
                     slots: &mut slots,
+                    drops: &mut drops,
+                    now_s: sun.clock.seconds,
                 },
                 Hands::Empty,
                 bottom.cell,
@@ -615,6 +733,8 @@ pub fn scripted_dig(
                 contact: &mut contact,
                 save: &mut edits,
                 slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
             },
             Hands::Empty,
             place.cell,
@@ -630,7 +750,38 @@ pub fn scripted_dig(
         }
         *done = true;
     }
-    if dug == 0 && !launch.torch {
+    if launch.lamps {
+        let forward = transform.forward().as_vec3();
+        let placed = lamp_row(
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut edits,
+                slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
+            },
+            eye,
+            forward,
+            launch.lamps_at,
+            launch.lamps_across,
+        );
+        // Before the fine set is under the camera there is no cell to put a
+        // lamp in; the next frame tries again, as the scripted dig does.
+        if placed > 0 {
+            info!("scripted lamps: {placed} placed");
+            // And a stack of each in the hotbar, in place of the kit's
+            // blocks, so the same frame shows every light's own icon (task
+            // 5.3). A capture's save is memory-only, so nothing is kept.
+            let mut carried = pbd_core::inventory::Slots::new();
+            for light in Material::LAMPS {
+                carried.give(pbd_core::inventory::Item::Block(light), 8);
+            }
+            **slots = carried;
+            *done = true;
+        }
+    }
+    if dug == 0 && !launch.torch && !launch.lamps {
         // Say why nothing happened rather than failing silently: a scripted
         // dig that finds no ground is either out of the tier or aimed wrong,
         // and a capture with no hole in it cannot tell those apart.

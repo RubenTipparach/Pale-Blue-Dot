@@ -1,5 +1,12 @@
 # Proposal: a world map (step 2a of the cities plan)
 
+## Accepted
+
+**The owner (2026-09-28), on the in-game map's screenshots beside the
+mockup: "map looks good".** The map is accepted on the screenshots, as
+CLAUDE.md lets them stand in. The gate video stays open for the owner's batch
+(task 6.1), and the sites on the map wait for `city-sites` (task 5.4).
+
 ## Why
 
 **The owner (2026-09-27): "we'll first need to designate cities on a map ...

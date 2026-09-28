@@ -1,0 +1,452 @@
+{
+ "altitude_m": [
+  -126.0,
+  160.0
+ ],
+ "biome_shares_of_land": {
+  "188": {
+   "beach": 0.1024,
+   "desert": 0.2175,
+   "fields": 0.2175,
+   "jungle": 0.2059,
+   "mountains": 0.017,
+   "swamp": 0.0115,
+   "tundra": 0.2282
+  },
+  "375": {
+   "beach": 0.1024,
+   "desert": 0.2175,
+   "fields": 0.2175,
+   "jungle": 0.2059,
+   "mountains": 0.017,
+   "swamp": 0.0115,
+   "tundra": 0.2282
+  },
+  "750": {
+   "beach": 0.1024,
+   "desert": 0.2175,
+   "fields": 0.2175,
+   "jungle": 0.2056,
+   "mountains": 0.017,
+   "swamp": 0.0118,
+   "tundra": 0.2282
+  },
+  "today": {
+   "beach": 0.1024,
+   "desert": 0.0295,
+   "fields": 0.5939,
+   "jungle": 0.0275,
+   "mountains": 0.017,
+   "swamp": 0.0015,
+   "tundra": 0.2282
+  }
+ },
+ "climate_year": 2,
+ "frozen_all_year_share_of_water": 0.0,
+ "height": 1024,
+ "land_share": 0.3962,
+ "species": [
+  {
+   "id": "minnow",
+   "name": "Minnow",
+   "temp": [
+    10,
+    30
+   ],
+   "water": [
+    "river",
+    "shallows"
+   ]
+  },
+  {
+   "id": "silverfin",
+   "name": "Silverfin",
+   "temp": [
+    -1.8,
+    17
+   ],
+   "water": [
+    "shallows",
+    "shelf"
+   ]
+  },
+  {
+   "id": "perch",
+   "name": "Banded perch",
+   "temp": [
+    -1.8,
+    24
+   ],
+   "water": [
+    "river"
+   ]
+  },
+  {
+   "id": "ray",
+   "name": "Ray",
+   "temp": [
+    16,
+    32
+   ],
+   "water": [
+    "shallows",
+    "shelf"
+   ]
+  },
+  {
+   "id": "eel",
+   "name": "Eel",
+   "temp": [
+    6,
+    28
+   ],
+   "water": [
+    "river",
+    "shallows"
+   ]
+  },
+  {
+   "id": "reef",
+   "name": "Reef fish",
+   "temp": [
+    23,
+    32
+   ],
+   "water": [
+    "shallows"
+   ]
+  },
+  {
+   "id": "deepback",
+   "name": "Deepback",
+   "temp": [
+    -1.5,
+    9
+   ],
+   "water": [
+    "shelf",
+    "deep"
+   ]
+  },
+  {
+   "id": "serpent",
+   "name": "Sea serpent",
+   "temp": [
+    -1.8,
+    32
+   ],
+   "water": [
+    "deep"
+   ]
+  }
+ ],
+ "surface_mean_c": 15.2,
+ "tile_levels": [
+  {
+   "height": 2048,
+   "level": 1,
+   "tile": 512,
+   "width": 4096
+  },
+  {
+   "height": 4096,
+   "level": 2,
+   "tile": 512,
+   "width": 8192
+  }
+ ],
+ "water_mean_c": 17.32,
+ "weather_frame_hours": 2.0,
+ "weather_frames": 12,
+ "weather_overlays": [
+  {
+   "fades": false,
+   "flows": true,
+   "hi": 8.0,
+   "lo": 0.0,
+   "name": "WIND",
+   "ramp": 0,
+   "stops": [
+    [
+     36,
+     51,
+     140
+    ],
+    [
+     26,
+     140,
+     191
+    ],
+    [
+     64,
+     191,
+     89
+    ],
+    [
+     242,
+     217,
+     64
+    ],
+    [
+     217,
+     51,
+     38
+    ]
+   ],
+   "unit": "m/s"
+  },
+  {
+   "fades": false,
+   "flows": true,
+   "hi": 45.0,
+   "lo": 0.0,
+   "name": "JET",
+   "ramp": 0,
+   "stops": [
+    [
+     36,
+     51,
+     140
+    ],
+    [
+     26,
+     140,
+     191
+    ],
+    [
+     64,
+     191,
+     89
+    ],
+    [
+     242,
+     217,
+     64
+    ],
+    [
+     217,
+     51,
+     38
+    ]
+   ],
+   "unit": "m/s"
+  },
+  {
+   "fades": false,
+   "flows": true,
+   "hi": 0.07999999821186066,
+   "lo": 0.0,
+   "name": "CURRENTS",
+   "ramp": 0,
+   "stops": [
+    [
+     36,
+     51,
+     140
+    ],
+    [
+     26,
+     140,
+     191
+    ],
+    [
+     64,
+     191,
+     89
+    ],
+    [
+     242,
+     217,
+     64
+    ],
+    [
+     217,
+     51,
+     38
+    ]
+   ],
+   "unit": "m/s"
+  },
+  {
+   "fades": true,
+   "flows": false,
+   "hi": 100.0,
+   "lo": 0.0,
+   "name": "CLOUD",
+   "ramp": 1,
+   "stops": [
+    [
+     13,
+     26,
+     51
+    ],
+    [
+     64,
+     82,
+     115
+    ],
+    [
+     140,
+     153,
+     173
+    ],
+    [
+     204,
+     212,
+     224
+    ],
+    [
+     255,
+     255,
+     255
+    ]
+   ],
+   "unit": "%"
+  },
+  {
+   "fades": true,
+   "flows": false,
+   "hi": 10.0,
+   "lo": -10.0,
+   "name": "RAIN",
+   "ramp": 2,
+   "stops": [
+    [
+     140,
+     64,
+     204
+    ],
+    [
+     204,
+     178,
+     242
+    ],
+    [
+     235,
+     235,
+     235
+    ],
+    [
+     102,
+     166,
+     242
+    ],
+    [
+     20,
+     51,
+     178
+    ]
+   ],
+   "unit": "mm/h"
+  },
+  {
+   "fades": false,
+   "flows": false,
+   "hi": 100.0,
+   "lo": 0.0,
+   "name": "HUMIDITY",
+   "ramp": 3,
+   "stops": [
+    [
+     140,
+     102,
+     51
+    ],
+    [
+     204,
+     178,
+     115
+    ],
+    [
+     217,
+     224,
+     191
+    ],
+    [
+     102,
+     191,
+     178
+    ],
+    [
+     26,
+     115,
+     140
+    ]
+   ],
+   "unit": "%"
+  },
+  {
+   "fades": false,
+   "flows": false,
+   "hi": 1000.0,
+   "lo": 0.0,
+   "name": "SUNLIGHT",
+   "ramp": 4,
+   "stops": [
+    [
+     13,
+     8,
+     5
+    ],
+    [
+     115,
+     38,
+     8
+    ],
+    [
+     217,
+     102,
+     13
+    ],
+    [
+     250,
+     191,
+     64
+    ],
+    [
+     255,
+     247,
+     191
+    ]
+   ],
+   "unit": "W/m2"
+  },
+  {
+   "fades": false,
+   "flows": false,
+   "hi": 40.0,
+   "lo": -30.0,
+   "name": "TEMPERATURE",
+   "ramp": 5,
+   "stops": [
+    [
+     38,
+     64,
+     191
+    ],
+    [
+     115,
+     178,
+     242
+    ],
+    [
+     242,
+     242,
+     242
+    ],
+    [
+     250,
+     166,
+     76
+    ],
+    [
+     204,
+     31,
+     26
+    ]
+   ],
+   "unit": "C"
+  }
+ ],
+ "width": 2048
+}

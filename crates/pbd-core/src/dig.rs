@@ -60,7 +60,12 @@ impl Class {
             Material::Stone => Class::Stone,
             Material::Rock => Class::Rock,
             Material::Ore => Class::Ore,
-            Material::Torch => Class::Placed,
+            Material::Torch
+            | Material::LanternPost
+            | Material::LanternWall
+            | Material::LanternHanging
+            | Material::Brazier
+            | Material::Candle => Class::Placed,
             Material::Air | Material::Water => return None,
         })
     }

@@ -3571,6 +3571,7 @@ dependencies = [
  "bevy",
  "bytemuck",
  "gltf",
+ "image",
  "naga",
  "pbd-core",
  "ron",

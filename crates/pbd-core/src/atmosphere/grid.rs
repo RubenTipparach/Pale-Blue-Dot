@@ -34,6 +34,11 @@ pub struct Grid {
     pub span: Vec<[f32; SIDES]>,
     /// Cell area, square metres.
     pub area: Vec<f32>,
+    /// The mean distance between neighbouring centres over every real side,
+    /// metres: the grid's own length scale, which a diffusivity is divided by
+    /// the square of to give a rate per second at this level
+    /// (`climate-balance` decision 7).
+    pub mean_span: f32,
     /// For each side, which side of the neighbour faces back: so an edge's
     /// flux is worked out once and its neighbour takes exactly the negative.
     pub opposite: Vec<[u8; SIDES]>,
@@ -62,6 +67,7 @@ impl Grid {
             normal: Vec::with_capacity(n),
             span: Vec::with_capacity(n),
             area: Vec::with_capacity(n),
+            mean_span: 0.0,
             slope: Vec::with_capacity(n),
             opposite: Vec::with_capacity(n),
             lookup: Vec::new(),
@@ -80,6 +86,12 @@ impl Grid {
             grid.opposite.push(back);
         }
         grid.lookup = grid.build_lookup();
+        let (total, sides) = (0..n).fold((0.0f64, 0u32), |(total, count), i| {
+            let real = grid.sides[i] as usize;
+            let sum: f64 = grid.span[i][..real].iter().map(|&d| f64::from(d)).sum();
+            (total + sum, count + real as u32)
+        });
+        grid.mean_span = (total / f64::from(sides)) as f32;
         grid
     }
 
@@ -255,6 +267,57 @@ impl Grid {
                 let c = self.centre[i];
                 v - c * c.dot(v)
             })
+            .collect()
+    }
+
+    /// The area-weighted sum of a per-cell field, summed in cell order in
+    /// `f64` so it is the same on every run.
+    pub fn total(&self, field: &[f32]) -> f64 {
+        field
+            .iter()
+            .zip(&self.area)
+            .map(|(&v, &a)| v as f64 * a as f64)
+            .sum()
+    }
+
+    /// The planet's area, square metres, summed as [`Grid::total`] sums.
+    pub fn total_area(&self) -> f64 {
+        self.area.iter().map(|&a| a as f64).sum()
+    }
+
+    /// Heat conducted between neighbouring cells, as the rate each cell's
+    /// temperature changes, K/s.
+    ///
+    /// Each edge carries ONE flux of heat, `g (T_k - T_i)` watts, and each side
+    /// moves by it over its own heat capacity (`capacity`, J/m^2/K) times its
+    /// area, so the planet's `sum(C A T)` is kept to rounding: heat moves, and
+    /// is never made or lost (`climate-balance` decision 1). The conductance is
+    /// `rate` times the lesser of the two capacities, times the mean of the two
+    /// cells' area per side. Between two cells of one capacity that is `rate`
+    /// times the difference from the neighbours' mean, per second, which is
+    /// what `neighbour_excess` gave; across a coast the land moves at that rate
+    /// and the sea by the land's capacity over its own, a sixtieth.
+    pub fn conduct(&self, temperature: &[f32], capacity: &[f32], rate: f32) -> Vec<f32> {
+        let n = self.len();
+        let mut watts = vec![0.0f32; n];
+        for i in 0..n {
+            let per_side_i = self.area[i] / f32::from(self.sides[i]);
+            for side in 0..self.sides[i] as usize {
+                let k = self.neighbour[i][side] as usize;
+                // Each edge once, from its lower-numbered cell; the other
+                // takes the exact negative.
+                if k <= i {
+                    continue;
+                }
+                let per_side_k = self.area[k] / f32::from(self.sides[k]);
+                let g = rate * capacity[i].min(capacity[k]) * 0.5 * (per_side_i + per_side_k);
+                let flow = g * (temperature[k] - temperature[i]);
+                watts[i] += flow;
+                watts[k] -= flow;
+            }
+        }
+        (0..n)
+            .map(|i| watts[i] / (capacity[i] * self.area[i]))
             .collect()
     }
 

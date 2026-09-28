@@ -8,6 +8,9 @@ pub mod config;
 #[cfg(feature = "desktop")]
 pub mod controls;
 #[cfg(feature = "desktop")]
+pub mod drops;
+pub mod field_light;
+#[cfg(feature = "desktop")]
 pub mod fish;
 #[cfg(feature = "desktop")]
 pub mod flight_view;
@@ -31,7 +34,10 @@ pub mod vehicles;
 pub mod walking;
 #[cfg(feature = "desktop")]
 pub mod weather;
+pub mod world_map;
 
+#[cfg(all(test, feature = "desktop"))]
+mod map_gpu_tests;
 #[cfg(all(test, feature = "desktop"))]
 mod sea_gpu_tests;
 #[cfg(test)]
