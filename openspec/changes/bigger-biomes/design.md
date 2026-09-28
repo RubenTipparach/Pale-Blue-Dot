@@ -283,6 +283,51 @@ What it shows:
   jungle 21%, swamp 1%, mountains 2% and tundra 23%.
 - The rasters are `docs/mockups/world-map/biomes-{today,188,375,750}.png`.
 
+**8. The planet switches in place (survey B5, 2026-09-28).** The owner:
+"leave saved games alone. Should not restart." Opening a world of another
+generator from the saves page swaps the planet under it, in the one
+exclusive system that already swaps everything else a world owns
+(`desktop::load_world`), and no process is launched. Surveyed (the planet's
+build and the load path, read from the code):
+- Only `create_planet` builds the planet: the base records (163,842 cells,
+  every core), the contact tier's coarse level over them, and the first fine
+  set. The render world writes the base into `PlanetGpu.cells` once and never
+  again, and every view's bind group holds that buffer.
+- A load already reopens the atmosphere (`Air::open`, which builds its
+  surface from the biomes), resets the fishery, puts the craft away and
+  places them again, and forces a fine rebuild. It never touches the base,
+  the contact tier's coarse level, the map's raster, or the two cached spawn
+  directions.
+- Nothing ever tears the planet down, and a dozen systems take its
+  resources unconditionally, so the switch replaces them in one step and
+  never removes them.
+
+The switch, in `load_world`, after the save opens and before the air does,
+when the world's generator is not the planet's:
+- The config becomes switchable while no world is played: an atomic
+  version picking among the `const` configs, so `terrain_config()` keeps
+  returning `&'static`, and an epoch that moves with every switch.
+- The base records and the contact tier's coarse level are rebuilt for the
+  new version, and the fine set around the world's pose, with its edits, as
+  at startup. `PlanetFine.version` moves on from the old one, never back to
+  1, or the upload would skip it.
+- The render world rewrites the base region of the existing `cells` buffer
+  when the base's generation moves, so the views' bind groups stay valid.
+- A fine set or a map tile built on the old epoch is discarded when it lands:
+  dropping a task cannot stop the threads already building it.
+- The map's raster and its key's shares are dropped and rebuilt for the new
+  generator, and a world never played gets its spawn found on the new
+  ground.
+- The save-key migration of a world from before identities reads that
+  world's own generator (4) rather than the newest, which is right today
+  only because version 5 kept version 4's heights.
+
+Cost: the base and the first fine set took about 4.4 s at startup on the
+owner's desktop (`fine-set-in-a-second`), so a switch is a pause of that
+order on the saves page, against a relaunch's 12 s. Done synchronously
+first; a switching screen that keeps drawing can follow.
+- *Alternative:* keep the relaunch. It is what the owner said no to.
+
 ## Risks / Trade-offs
 
 - [More jungle means more trees drawn] → Jungle goes from 3% of the land to
