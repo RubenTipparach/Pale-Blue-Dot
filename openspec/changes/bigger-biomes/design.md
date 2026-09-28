@@ -140,7 +140,8 @@ kilometre walks that stay on it:
     existing test, still holds.
   - `grass_is_not_the_majority_on_five_seeds`.
 - Whether 750 m is big enough on foot is the owner's to judge, walking it.
-  That is survey B4. A wider field later is a new generator version, as this
+  That was survey B4: "Accept everything as recommended" (2026-09-28), so
+  750 m stands for now. A wider field later is a new generator version, as this
   one was, and worlds made on version 5 keep it.
 
 **6. Three things the plan above missed (found 2026-09-28, reading the code
@@ -197,8 +198,14 @@ As built (2026-09-28):
   identity of the world the launch opens (4 for a slot with none). Anything
   that reads it first, a test included, gets the current generator, and a
   second choice of another version is refused.
-- The restart is built as recommended, since the owner has not answered
-  (now survey B5).
+- The restart was built as recommended while B5 was open. **The owner
+  answered it otherwise, 2026-09-28:** "leave saved games alone. Should not
+  restart. I don't want games to be reset if players make progress on future
+  games and we decide to change biome stuff ... Making [it] backwards
+  compatible with saves is ideal, add to Claude md too". So opening a world
+  of another generator switches the planet in place, and the restart goes
+  (task 2.2c; the design of the switch is decision 8). The standing rule is
+  in CLAUDE.md, "Saved games survive every change".
   The saves page's Load, and New while an old world is open, launch the game
   again with `--world <name>` and close this one, whose save drains on the way
   out as any quit's does. The saves page says so: "<name> is made with the

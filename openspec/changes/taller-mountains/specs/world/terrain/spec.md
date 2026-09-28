@@ -20,8 +20,7 @@ raise the lowland.
 
 #### Scenario: The budget holds
 - **WHEN** the sphere is sampled
-- **THEN** the summit is in the band the owner chose (survey H1; provisionally
-  250 to 290 m) and under the cloud base, the floor between 60 and 145 m
+- **THEN** the summit is in the band the owner chose (survey H1: 250 to 290 m) and under the cloud base, the floor between 60 and 145 m
   down, and land is between 30 and 45 percent of it
 
 #### Scenario: The lowland stays where it was
@@ -57,5 +56,4 @@ walls. The share of steep steps is the owner's choice (survey H3).
 
 #### Scenario: A mountainside is a slope, not a cliff
 - **WHEN** adjacent cells are compared over land above 120 m
-- **THEN** no more than 1% of them differ by 3 m or more (provisional, survey
-  H3)
+- **THEN** no more than 1% of them differ by 3 m or more (survey H3)

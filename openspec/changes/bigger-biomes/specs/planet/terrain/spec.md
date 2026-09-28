@@ -30,5 +30,6 @@ the shipped generator moves on.
 #### Scenario: A world is opened on its own generator
 - **WHEN** a world made on another generator version than the running
   planet's is opened from the saves page
-- **THEN** the game restarts into that world, and the planet is built from
-  that world's version, chosen once at launch
+- **THEN** the planet switches to that world's version in place, without
+  relaunching the game, and the world opens on its own ground with
+  everything done in it

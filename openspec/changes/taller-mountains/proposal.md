@@ -8,6 +8,15 @@ the highest summit on the planet is 160 m, the median land is 44 m, and only
 1.3% of the land stands above 120 m. The Mountains biome is 2% of the land.
 From the spawn, the ranges read as grey patches a little above the fields.
 
+**Answered 2026-09-28** (survey H1 to H3, after the candidates in the game,
+https://claude.ai/artifact/BXtLUoFSif3oVt1eutiuEr): "Accept everything as
+recommended". Wide ranges to about 290 m, walkable, with snowy tops, as
+version 6 in its own step after the bigger biomes. And, for every version
+from now on: "leave saved games alone ... I don't want games to be reset if
+players make progress on future games and we decide to change biome stuff"
+(CLAUDE.md, "Saved games survive every change"): worlds made on version 5
+keep their ground.
+
 ## What Changes
 
 - A new generator version, 6, whose mountain ranges are taller and wider. The

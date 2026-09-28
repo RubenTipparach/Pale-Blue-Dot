@@ -120,7 +120,7 @@ delta brings them back.
 not pinned by any test, though both files' comments say one pins them.
 Raising the tier changes them, so the test is added first (decision 7).
 
-## Decisions (provisional until the owner answers H1 to H3)
+## Decisions (the owner accepted them as recommended, 2026-09-28)
 
 **1. A range term in regions of their own.** Version 6 adds to the altitude a
 ridge field `range_widen` times as wide as the mountain field, weighted
