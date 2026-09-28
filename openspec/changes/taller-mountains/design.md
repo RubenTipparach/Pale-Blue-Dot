@@ -134,7 +134,12 @@ made. Version 6 lands in its own PR; worlds made on 5 keep their ground
 threshold, the snowcap, the snow line and the stone line move up with the
 ranges, so the tall ground reads as rock and snow, and the Mountains biome
 stays a few percent of the land rather than taking a fifth of it. The exact
-values are measured when the candidate is chosen.
+values are measured when the candidate is chosen. The owner, 2026-09-28, on
+today's grey mountains: "Shouldn't top of mountains be like snowy". Today's
+snowcap starts at 150 m and the highest summit is 160 m, so almost no
+mountain reaches it. With the ranges it has to move up, or the whole massif
+turns white from its flanks (the first scratch render, at 150 m): provisionally
+200 m, so a 250 to 290 m summit wears a cap of 50 to 90 m over bare rock.
 
 **4. The climate is settled again**, levels 3 and 5, on version 6's ground.
 The atmosphere's lapse rate is 0.08 K a metre, so a 290 m summit is 23 K
