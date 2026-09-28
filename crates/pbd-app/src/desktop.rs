@@ -415,8 +415,9 @@ impl Launch {
                     i += 1;
                     let spawn = args.get(i).expect("--spawn requires a place").clone();
                     assert!(
-                        spawn == "mouth" || spawn == "snow",
-                        "--spawn knows mouth and snow"
+                        spawn == "mouth" || spawn == "snow" || spawn_biome(&spawn).is_some(),
+                        "--spawn knows mouth, snow and the biomes (beach, fields, desert, \
+                         jungle, swamp, mountains, tundra)"
                     );
                     result.spawn = Some(spawn);
                 }
@@ -1202,6 +1203,32 @@ fn sun_clock(launch: &Launch, saved_seconds: Option<f64>) -> pbd_core::daylight:
     clock
 }
 
+/// The biome a `--spawn` name asks for, if it names one.
+fn spawn_biome(name: &str) -> Option<pbd_core::planet_gen::Biome> {
+    use pbd_core::planet_gen::Biome;
+    Some(match name {
+        "beach" => Biome::Beach,
+        "fields" => Biome::Fields,
+        "desert" => Biome::Desert,
+        "jungle" => Biome::Jungle,
+        "swamp" => Biome::Swamp,
+        "mountains" => Biome::Mountains,
+        "tundra" => Biome::Tundra,
+        _ => return None,
+    })
+}
+
+/// `count` directions spread evenly over the sphere: a Fibonacci sweep.
+fn fibonacci_sphere(count: usize) -> impl Iterator<Item = Vec3> {
+    let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+    (0..count).map(move |i| {
+        let y = 1.0 - 2.0 * (i as f32 + 0.5) / count as f32;
+        let r = (1.0 - y * y).max(0.0).sqrt();
+        let a = golden * i as f32;
+        Vec3::new(a.cos() * r, y, a.sin() * r)
+    })
+}
+
 /// Where the walker, and with it the column tier, is anchored.
 fn spawn_direction(launch: &Launch) -> Vec3 {
     let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
@@ -1226,15 +1253,7 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
         // The nearest dry land where the field's precipitation is snow, so a
         // capture can photograph a snowfall: a Fibonacci sweep of the sphere,
         // nearest first. A measurement instrument, like `--weather-at`.
-        let count = 20_000;
-        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
-        let found = (0..count)
-            .map(|i| {
-                let y = 1.0 - 2.0 * (i as f32 + 0.5) / count as f32;
-                let r = (1.0 - y * y).max(0.0).sqrt();
-                let a = golden * i as f32;
-                Vec3::new(a.cos() * r, y, a.sin() * r)
-            })
+        let found = fibonacci_sphere(20_000)
             .filter(|d| {
                 pbd_app::planet::surface_height(*d) > 1.0
                     && matches!(
@@ -1252,6 +1271,35 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
             return snow;
         }
         warn!("no snowfield found; spawning at the default");
+    }
+    if let Some(wanted) = launch.spawn.as_deref().and_then(spawn_biome) {
+        // The nearest dry land inside the named biome, with the same biome
+        // 40 m round it on four sides, so a capture photographs the biome
+        // from inside it rather than from its edge (`bigger-biomes` 4.1). A
+        // measurement instrument, like `--spawn snow`.
+        let config = pbd_app::planet::terrain_config();
+        let inside = |d: Vec3| {
+            pbd_app::planet::surface_height(d) > 1.0
+                && pbd_core::planet_gen::biome(config, d) == wanted
+        };
+        let around = |d: Vec3| {
+            let (a, b) = d.any_orthonormal_pair();
+            let step = 40.0 / PLANET_RADIUS;
+            [a, -a, b, -b]
+                .into_iter()
+                .all(|t| inside((d + t * step).normalize()))
+        };
+        let found = fibonacci_sphere(20_000)
+            .filter(|d| inside(*d) && around(*d))
+            .max_by(|a, b| a.dot(default).total_cmp(&b.dot(default)));
+        if let Some(place) = found {
+            info!(
+                "spawn moved {:.0} m into the nearest {wanted:?}",
+                place.dot(default).clamp(-1., 1.).acos() * PLANET_RADIUS
+            );
+            return place;
+        }
+        warn!("no {wanted:?} found; spawning at the default");
     }
     if launch.spawn.as_deref() == Some("mouth") || launch.view == "mouth" {
         // The nearest worm that starts at the surface within a kilometre.
@@ -1766,7 +1814,9 @@ fn photo_camera(
         // straight down): a descent through the weather is this view at a
         // run of heights. The weather's "here" is the camera's own direction,
         // so a forced storm (`--rain`) brews directly under it at any height.
-        let direction = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        // The spawn is `spawn_direction`'s, so `--spawn desert` stands it over
+        // a desert (`bigger-biomes` 4.1); without `--spawn` it is the default.
+        let direction = spawn_direction(&launch);
         let height = launch.height.unwrap_or(EYE_HEIGHT);
         let position = direction * (terrain_radius(direction) + height);
         let east = Vec3::Y.cross(direction).normalize_or_zero();
