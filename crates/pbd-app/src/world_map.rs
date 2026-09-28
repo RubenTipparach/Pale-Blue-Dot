@@ -18,12 +18,12 @@
 //! The cache holds texels, not colours, so a repainted tile shows on the next
 //! start without a key that has to know about it.
 
-use crate::planet::{PLANET_RADIUS, TERRAIN};
+use crate::planet::{PLANET_RADIUS, terrain_config};
 use crate::saves::format::{material_code, material_of};
 use pbd_core::geo;
 use pbd_core::map::{Texel, base_texel};
 use pbd_core::planet_gen::{Biome, TerrainConfig};
-use pbd_core::terrain::{GENERATOR_VERSION, Material};
+use pbd_core::terrain::Material;
 use std::path::{Path, PathBuf};
 
 /// A tile's side, pixels.
@@ -229,7 +229,7 @@ pub fn colour_block(
         for col in 1..=w {
             let t = at(col, row);
             let colour = if t.sea {
-                sea_colour(TERRAIN.sea_level_m - t.altitude_m)
+                sea_colour(terrain_config().sea_level_m - t.altitude_m)
             } else {
                 let (north, south) = if pole {
                     (t.altitude_m, t.altitude_m)
@@ -253,10 +253,13 @@ pub fn colour_block(
     out
 }
 
-/// The base level's cache file for a seed: the generator version is in the
-/// name, so a new generator reads nothing of the old one's.
+/// The base level's cache file for a seed: the world's generator version is
+/// in the name, so a new generator reads nothing of the old one's.
 pub fn cache_name(seed: u64) -> String {
-    format!("map-base-g{GENERATOR_VERSION}-{seed:016x}.png")
+    format!(
+        "map-base-g{}-{seed:016x}.png",
+        crate::planet::generator_version()
+    )
 }
 
 /// Pack a texel for the cache: its altitude in 16 bits (floored metres, the
@@ -610,7 +613,7 @@ mod tests {
     /// side of a seam, and the antimeridian included.
     #[test]
     fn tiles_meet_without_a_seam() {
-        let cfg = TERRAIN;
+        let cfg = *terrain_config();
         let palette = Palette::load(&tileset_dir()).expect("the tilesets");
         let level = 1;
         let (width, _) = level_size(level);
@@ -659,7 +662,7 @@ mod tests {
     fn the_cache_is_keyed_by_seed_and_generator() {
         let dir = std::env::temp_dir().join(format!("pbd-map-cache-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let cfg = TERRAIN;
+        let cfg = *terrain_config();
         let (width, height) = level_size(BASE);
         // A cheap stand-in for the base: every row the same line of places.
         let line: Vec<Texel> = (0..width)
@@ -676,7 +679,7 @@ mod tests {
         // A cache from another generator is not read, and goes.
         let stale = dir.join(format!(
             "map-base-g{}-{:016x}.png",
-            GENERATOR_VERSION + 1,
+            crate::planet::generator_version() + 1,
             7
         ));
         std::fs::copy(dir.join(cache_name(7)), &stale).expect("copied");

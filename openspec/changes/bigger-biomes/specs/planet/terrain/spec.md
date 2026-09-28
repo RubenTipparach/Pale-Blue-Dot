@@ -26,3 +26,9 @@ the shipped generator moves on.
 - **WHEN** the configuration for each shipped version is asked for
 - **THEN** each version answers one configuration, and an unknown version is
   refused rather than read as the current one
+
+#### Scenario: A world is opened on its own generator
+- **WHEN** a world made on another generator version than the running
+  planet's is opened from the saves page
+- **THEN** the game restarts into that world, and the planet is built from
+  that world's version, chosen once at launch

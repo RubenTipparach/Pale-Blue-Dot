@@ -31,9 +31,9 @@ pub mod weather_maps;
 pub use contact::{PlanetContact, SurfaceContact};
 pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m};
 pub use terrain::{
-    DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, TERRAIN, WATER,
-    nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, terrain_radius,
-    tileset_slot,
+    DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, WATER, choose_generator,
+    generator_version, nearest_ground_near, river_channel, snow_slot, surface_code, surface_height,
+    terrain_config, terrain_radius, tileset_slot,
 };
 pub use water::{EyeWater, EyeWaterState, emerge, submersion};
 

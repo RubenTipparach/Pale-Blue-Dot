@@ -65,6 +65,14 @@ the shipped generator moves on.
   refused rather than read as the current one
   (`planet_gen::tests::an_unknown_generator_version_has_no_config`)
 
+#### Scenario: A world is opened on its own generator
+- **WHEN** a world made on another generator version than the running
+  planet's is opened from the saves page
+- **THEN** the game restarts into that world, and the planet is built from
+  that world's version, chosen once at launch
+  (`menu::tests::only_a_world_of_another_generator_restarts_the_game`,
+  `planet::terrain::tests::the_generator_is_chosen_once_from_the_versions_this_build_carries`)
+
 ### Requirement: A world has both land and ocean
 The shipped generator SHALL produce substantial continents and substantial
 oceans rather than degenerating to one or the other.

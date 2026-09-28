@@ -233,7 +233,7 @@ impl RouteState {
                         (
                             s,
                             planet::surface_height(d),
-                            pbd_core::planet_gen::biome(&planet::TERRAIN, d),
+                            pbd_core::planet_gen::biome(planet::terrain_config(), d),
                         )
                     })
                     .collect();

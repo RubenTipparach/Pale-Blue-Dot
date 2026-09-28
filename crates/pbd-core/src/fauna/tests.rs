@@ -242,10 +242,12 @@ fn a_new_worlds_second_year_is_held_at_fifteen_and_every_species_has_water() {
         ..Default::default()
     };
     let mut air = Atmosphere::new(&terrain, settings, terrain.seed);
-    // The state the game opens a new world on, made with these settings.
-    let shipped = concat!(
+    // The state the game opens a new world on, made with these settings on
+    // this generator's ground.
+    let shipped = format!(
+        "{}/../../assets/climate/settled-g{}-l3",
         env!("CARGO_MANIFEST_DIR"),
-        "/../../assets/climate/settled-l3"
+        crate::terrain::GENERATOR_VERSION
     );
     let made_with: AtmosphereSettings =
         ron::from_str(&std::fs::read_to_string(format!("{shipped}.ron")).expect("shipped"))

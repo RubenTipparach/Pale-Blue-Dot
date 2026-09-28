@@ -11,7 +11,7 @@
 
 use crate::atmosphere::Air;
 use crate::config::WeatherSettings;
-use crate::planet::terrain::TERRAIN;
+use crate::planet::terrain::terrain_config;
 use crate::planet::{PLANET_RADIUS, PlanetContact, PlanetRenderFrame, surface_height};
 use bevy::{
     asset::RenderAssetUsages,
@@ -764,7 +764,12 @@ fn open_air(
     save: Option<Res<crate::saves::WorldSave>>,
 ) {
     let saved = save.as_ref().and_then(|save| save.weather.clone());
-    let mut air = Air::open(config.0, TERRAIN.seed, saved.as_deref(), sun.clock.seconds);
+    let mut air = Air::open(
+        config.0,
+        terrain_config().seed,
+        saved.as_deref(),
+        sun.clock.seconds,
+    );
     air.in_place = !sun.running;
     if epoch.0 > 0.0 {
         let steps = (epoch.0 / config.0.dt_s).ceil() as u32;

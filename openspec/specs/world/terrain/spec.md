@@ -39,23 +39,41 @@ budget, so the summit and the roughness underfoot move independently.
   is under seven cells
 
 ### Requirement: The biome is a classification the surface reads
-A cell's biome SHALL be one pure function of its direction (ocean, beach,
-tundra, mountains, desert, swamp, jungle, fields), and the top block and the
-tree density SHALL both read it. The moisture field that separates the
-temperate biomes SHALL be land-scale, so a walk of a few hundred metres
-crosses more than one of them.
+A cell's biome SHALL be one pure function of its direction and the world's
+generator version (ocean, beach, tundra, mountains, desert, swamp, jungle,
+fields), and the top block and the tree density SHALL both read it. The
+moisture field that separates the temperate biomes SHALL be land-scale, with
+a feature size the owner chose on the world map, so a biome is a region a
+player can travel across and not a patch they pass through. No one temperate
+biome SHALL hold the majority of the temperate land.
 
 #### Scenario: A beach is sand
 - **WHEN** a cell classifies as beach
 - **THEN** its top block is sand
+  (`planet_gen::tests::every_biome_and_material_occurs_and_the_beach_is_sand`)
 
 #### Scenario: Every biome occurs
 - **WHEN** the sphere is sampled
 - **THEN** every biome and at least six top materials occur on it
+  (`planet_gen::tests::every_biome_and_material_occurs_and_the_beach_is_sand`)
 
 #### Scenario: A walk crosses biomes
 - **WHEN** a kilometre of land is walked in a straight line
 - **THEN** it passes through more than one biome
+  (`planet_gen::tests::a_kilometre_of_land_crosses_more_than_one_biome`)
+
+#### Scenario: The biomes are about four times wider
+- **WHEN** kilometres of temperate land are walked in straight lines
+- **THEN** they cross at most a third as many biome edges as the same
+  generator with the 188 m moisture field does at the same thresholds
+  (`planet_gen::tests::the_biomes_are_about_four_times_wider`)
+
+#### Scenario: Grass is not the majority
+- **WHEN** the temperate land (outside the cold band and below the mountain
+  elevation) is sampled on the shipped seed and on four other seeds
+- **THEN** fields, desert, and jungle with swamp each hold at least a fifth of
+  it, and none holds more than half
+  (`planet_gen::tests::grass_is_not_the_majority_on_five_seeds`)
 
 ### Requirement: The land is several masses, not one
 The continent field SHALL produce a body whose land is divided into multiple

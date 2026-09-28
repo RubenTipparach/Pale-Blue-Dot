@@ -35,7 +35,7 @@ use bevy::window::PrimaryWindow;
 use pbd_app::atmosphere::{Air, MAP_SIZE};
 use pbd_app::flight_view::PilotShip;
 use pbd_app::overlay::{OverlayMode, RAMPS, overlay_rgba, overlay_texels};
-use pbd_app::planet::{PLANET_RADIUS, TERRAIN};
+use pbd_app::planet::{PLANET_RADIUS, terrain_config};
 use pbd_app::saves::WorldSave;
 use pbd_app::sky::Sun;
 use pbd_app::vehicles::Vehicle;
@@ -1119,7 +1119,7 @@ pub fn keep_raster(
                 .and_then(|s| s.slot().map(|slot| s.root().join(&slot.id)));
             let palette = palette.clone();
             let job = move || {
-                let cfg = TERRAIN;
+                let cfg = *terrain_config();
                 let cached = dir
                     .as_ref()
                     .and_then(|d| raster::load_base(d, cfg.seed, &cfg));
@@ -1193,7 +1193,7 @@ pub fn keep_raster(
             continue;
         }
         if in_place {
-            let rgba = key.build(&TERRAIN, &palette);
+            let rgba = key.build(terrain_config(), &palette);
             let image = images.add(map_image(TILE, TILE, rgba));
             for (_, gone) in raster.tiles.insert(key, image) {
                 images.remove(&gone);
@@ -1203,7 +1203,7 @@ pub fn keep_raster(
             raster.pending.insert(
                 key,
                 AsyncComputeTaskPool::get()
-                    .spawn(async move { (key, key.build(&TERRAIN, &palette)) }),
+                    .spawn(async move { (key, key.build(terrain_config(), &palette)) }),
             );
         }
     }

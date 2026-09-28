@@ -101,12 +101,47 @@ distribution.**
 - An edit's cell and material mean the same thing under either version.
 
 **5. The tests follow the scale.**
-- The 1 km walk becomes a 4 km walk: at least three in four cross a biome.
-- A 1 km walk is added in the other direction: at least a third stay in one
-  biome. This is what "bigger" means as a test.
+- ~~The 1 km walk becomes a 4 km walk: at least three in four cross a
+  biome.~~
+- ~~A 1 km walk is added in the other direction: at least a third stay in
+  one biome. This is what "bigger" means as a test.~~
 - A shares test runs on the shipped seed and four others. It fails naming the
   biome and its share.
 - If the owner picks the 375 m scale, the walks become 2 km and 500 m.
+
+**5a. What the walk tests found, and what "bigger" is tested as (measured
+2026-09-28, building version 5).** The two walk tests above were written
+before anything was measured, and version 5 failed both. Measured on
+temperate land, each field with its thresholds retuned to thirds, over 88
+kilometre walks that stay on it:
+
+| moisture field | biome edges a kilometre | kilometre walks in one biome |
+| --- | ---: | ---: |
+| 188 m (version 4's width) | 13.6 | 0% |
+| **750 m (version 5, survey B1)** | **3.3** | **3%** |
+| 750 m, two octaves | 2.5 | 6% |
+| 1,500 m | 1.5 | 22% |
+| 3,000 m | 1.0 | 33% |
+| 3,000 m, two octaves | 0.8 | 40% |
+
+- `moisture_m` is the noise's wavelength, not a patch's width. Cut into
+  thirds, a patch is a fraction of it, and the finer octaves fray its edges.
+  A walk that stays in one biome for a kilometre a third of the time takes a
+  3,000 m field, four times the owner's choice. Four-kilometre walks could not
+  be judged at all: at this body's size almost none stay on temperate land
+  that long.
+- So the owner's 750 m does what was asked. It is four times wider, and a
+  kilometre crosses about a quarter of the edges it did, 3.3 against 13.6.
+  The tests say that, not the walk counts the owner never asked for:
+  - `the_biomes_are_about_four_times_wider`: a kilometre of temperate land
+    crosses at most a third as many edges as the same generator with the old
+    188 m field, at the same thresholds. Version 4 fails it (4.1 against 4.1).
+  - `a_kilometre_of_land_crosses_more_than_one_biome`, the main spec's
+    existing test, still holds.
+  - `grass_is_not_the_majority_on_five_seeds`.
+- Whether 750 m is big enough on foot is the owner's to judge, walking it.
+  That is survey B4. A wider field later is a new generator version, as this
+  one was, and worlds made on version 5 keep it.
 
 **6. Three things the plan above missed (found 2026-09-28, reading the code
 before building it).**
@@ -155,6 +190,28 @@ before building it).**
   - *Alternative:* rebuild the planet in place. It is right eventually, since
     visiting another planet will need it. It is the larger change, and not
     this one.
+
+As built (2026-09-28):
+- The accessor is `planet::terrain_config()`, with `generator_version()`
+  beside it. `choose_generator` sets it once, in `desktop::run`, from the
+  identity of the world the launch opens (4 for a slot with none). Anything
+  that reads it first, a test included, gets the current generator, and a
+  second choice of another version is refused.
+- The restart is built as recommended, since the owner has not answered
+  (now survey B5).
+  The saves page's Load, and New while an old world is open, launch the game
+  again with `--world <name>` and close this one, whose save drains on the way
+  out as any quit's does. The saves page says so: "<name> is made with the
+  older biomes: restarting the game into it".
+- The settled states are `settled-g<generator>-l<level>`. Version 4's were
+  renamed, not remade. Version 5's level 3 landed on its second true year at
+  14.98 °C, and its new world's first 60 days read 14.87 to 15.25 °C. Its
+  level 5 is a three-hour settle and ships when it lands.
+- The map's cached base is named for the generator too, so a world of one
+  version never shows another's picture.
+- Version 5 does not carry survey G1 (the desert's east-west rock stripes
+  scattered into patches), which is unanswered. If the owner takes it, it is
+  version 6, with B4 if the biomes are to be wider still.
 
 ## Measured: the candidates (2026-09-27)
 

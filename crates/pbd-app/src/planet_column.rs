@@ -19,7 +19,7 @@
 //! already assumes.
 
 use super::GpuCell;
-use super::terrain::{PLANET_RADIUS, TERRAIN, render_code};
+use super::terrain::{PLANET_RADIUS, render_code, terrain_config};
 use crate::config::ColumnSettings;
 use bevy::prelude::Vec3;
 use bytemuck::{Pod, Zeroable};
@@ -624,7 +624,7 @@ pub fn build(
     // built it. This is the regional pre-pass the design said worms need,
     // done at the one place columns are built in bulk.
     let field = settings.worms();
-    let region = worms::gather(&field, &TERRAIN, anchor, settings.reach_m.max(0.));
+    let region = worms::gather(&field, terrain_config(), anchor, settings.reach_m.max(0.));
     let reach = (settings.reach_m.max(0.) / PLANET_RADIUS).cos();
     let mut slots = vec![usize::MAX; finest.len()];
     let mut members = Vec::new();
@@ -689,9 +689,9 @@ pub fn build(
         // still a wall you dug in when the tier moves and it becomes the rim.
         let made = &edits.for_cell(cell.key());
         let column = if rim {
-            column::generate_edited_solid(&TERRAIN, direction, made)
+            column::generate_edited_solid(terrain_config(), direction, made)
         } else {
-            column::generate_edited(&region, &field, &TERRAIN, direction, made)
+            column::generate_edited(&region, &field, terrain_config(), direction, made)
         };
         records.push(GpuColumn {
             runs: column.packed_runs(render_code),
@@ -880,7 +880,7 @@ mod water_below_sea {
     fn report(label: &str, anchor: Vec3) {
         let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::default());
         let tier = &set.columns;
-        let sea = TERRAIN.sea_level_m;
+        let sea = terrain_config().sea_level_m;
         let (mut dry_cave_columns, mut dry_cave_layers) = (0usize, 0usize);
         let (mut dry_tube_columns, mut dry_tube_layers) = (0usize, 0usize);
         let (mut water_columns, mut water_layers) = (0usize, 0usize);

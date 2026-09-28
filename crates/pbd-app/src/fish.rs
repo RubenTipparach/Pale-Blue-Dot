@@ -394,9 +394,12 @@ fn try_spawn(
     let direction =
         (feet + (east * bearing.cos() + north * bearing.sin()) * distance).normalize_or(up);
     let depth = sea.depth_at(direction);
-    let Some(class) =
-        fauna::water_class(&crate::planet::TERRAIN, direction, depth, &settings.water)
-    else {
+    let Some(class) = fauna::water_class(
+        crate::planet::terrain_config(),
+        direction,
+        depth,
+        &settings.water,
+    ) else {
         return;
     };
     let temperature = air.now.sample(direction).temperature;
@@ -603,7 +606,7 @@ pub fn water_here(
 ) -> (Option<WaterClass>, Option<f32>) {
     let depth = sea.depth_at(direction);
     (
-        fauna::water_class(&crate::planet::TERRAIN, direction, depth, limits),
+        fauna::water_class(crate::planet::terrain_config(), direction, depth, limits),
         air.map(|air| air.now.sample(direction).temperature),
     )
 }

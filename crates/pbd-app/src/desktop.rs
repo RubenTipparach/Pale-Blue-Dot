@@ -33,8 +33,8 @@ use pbd_app::{
     config::ConfigPlugin,
     flight_view::{FlightViewConfig, FlightViewPlugin, FlyMode, TourProgress},
     planet::{
-        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, TERRAIN, river_channel, surface_code,
-        surface_height, terrain_radius, tile_width_m,
+        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, river_channel, surface_code, surface_height,
+        terrain_config, terrain_radius, tile_width_m,
     },
     saves::{self, Pose, WorldSave},
     sky::SkyPlugin,
@@ -644,6 +644,12 @@ pub fn run(args: &[String]) {
     // anchored. Restoring the pose afterwards would build the world around the
     // spawn and then teleport away from it.
     let mut world = open_world(&launch);
+    // The planet is made by the generator the world was made by (an old
+    // world keeps its biomes, survey B3), chosen here, before anything builds
+    // it (`bigger-biomes` decision 6). The logger is not up yet.
+    if let Err(why) = pbd_app::planet::choose_generator(world.identity.generator) {
+        eprintln!("terrain generator: {why}");
+    }
     let saved_seconds = world.world_seconds;
     let hotbar = slots::Hotbar::restore(&mut world);
     let tools = pbd_app::fish::ToolSlot::restore(&world);
@@ -950,7 +956,10 @@ pub fn run(args: &[String]) {
 /// to write says which world.
 fn open_world(launch: &Launch) -> WorldSave {
     let root = std::path::PathBuf::from(saves::ROOT);
-    let seed = TERRAIN.seed;
+    // The world's seed, which every generator version shares. Not read off
+    // `terrain_config()`, which would fix this run's generator before the
+    // world that chooses it is open.
+    let seed = pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed;
     let asked = launch.world.clone();
     if asked.is_none() && launch.capture.is_some() {
         return WorldSave::memory_only();
@@ -1036,7 +1045,7 @@ fn load_world(world: &mut World) {
         let sun = *world.resource::<pbd_app::sky::Sun>();
         let mut air = pbd_app::atmosphere::Air::open(
             config,
-            pbd_app::planet::TERRAIN.seed,
+            pbd_app::planet::terrain_config().seed,
             opened.weather.as_deref(),
             sun.clock.seconds,
         );
@@ -1229,7 +1238,7 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
             .filter(|d| {
                 pbd_app::planet::surface_height(*d) > 1.0
                     && matches!(
-                        pbd_core::planet_gen::biome(&pbd_app::planet::TERRAIN, *d),
+                        pbd_core::planet_gen::biome(pbd_app::planet::terrain_config(), *d),
                         pbd_core::planet_gen::Biome::Tundra
                             | pbd_core::planet_gen::Biome::Mountains
                     )
@@ -1249,7 +1258,7 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
         let columns = pbd_app::config::ColumnSettings::default();
         let found = pbd_core::worms::gather(
             &columns.worms(),
-            &pbd_app::planet::TERRAIN,
+            pbd_app::planet::terrain_config(),
             default,
             1_000.0,
         )
@@ -1597,7 +1606,7 @@ fn photo_camera(
             if toward < 0.85 || !(-4.0..0.0).contains(&depth) {
                 continue;
             }
-            if river_channel(&TERRAIN, here) <= TERRAIN.river_threshold {
+            if river_channel(terrain_config(), here) <= terrain_config().river_threshold {
                 continue;
             }
             let (a, b) = here.any_orthonormal_pair();
@@ -2414,4 +2423,46 @@ fn verify_flight(polar: bool) {
         p.protection_events, 0,
         "tour needed emergency terrain projection"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pbd_core::planet_gen::{self, Biome, TerrainConfig};
+    use pbd_core::terrain::Material;
+
+    /// A world made before identities is made by version 4, and the spawn a
+    /// player of it logs back into is the ground it always was: 73 m up, on
+    /// fields, dry grass on top (`bigger-biomes` task 2.3, `world-persistence`
+    /// task 2.2). Version 4's config is the ground from before version 5
+    /// existed, pinned on 10,000 directions by
+    /// `planet_gen::tests::version_4_makes_the_ground_every_old_world_was_made_on`.
+    /// Version 5 moves the moisture, not the heights, and the spawn is on
+    /// fields there too.
+    #[test]
+    fn an_old_worlds_spawn_column_is_the_ground_it_was() {
+        let old = pbd_app::saves::Slot {
+            id: "old".into(),
+            file: pbd_app::saves::format::WorldFile::new("Old".into(), 4242, 0),
+            identity: None,
+        };
+        let spawn = spawn_direction(&Launch::parse(&[]));
+        for (version, what) in [
+            (saves::generator_of(&old), "an old world"),
+            (5, "a new one"),
+        ] {
+            let cfg = TerrainConfig::for_version(version).expect("carried");
+            let surface = pbd_core::column::surface_m(&cfg, spawn);
+            assert_eq!(
+                (
+                    surface,
+                    planet_gen::biome(&cfg, spawn),
+                    planet_gen::top_material(&cfg, spawn, surface)
+                ),
+                (73.0, Biome::Fields, Material::DryGrass),
+                "{what}, version {version}"
+            );
+        }
+        assert_eq!(saves::generator_of(&old), 4);
+    }
 }

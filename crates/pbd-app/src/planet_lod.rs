@@ -440,7 +440,7 @@ impl FineSet {
     pub fn adoptable(&self, record: usize, edits: &Edits) -> Option<pbd_core::column::Column> {
         let cell = self.levels[3].get(record)?;
         Some(pbd_core::column::generate_edited_solid(
-            &super::terrain::TERRAIN,
+            super::terrain::terrain_config(),
             Vec3::from_slice(&cell.direction_height[..3]),
             edits.for_cell(cell.key()),
         ))
@@ -1824,7 +1824,7 @@ mod streaming_cost {
     //! Ignored because it takes seconds; run it with
     //! `cargo test -p pbd-app --release --lib streaming_cost -- --ignored --nocapture`.
     use super::*;
-    use crate::planet::terrain::TERRAIN;
+    use crate::planet::terrain::terrain_config;
     use std::time::Instant;
 
     #[test]
@@ -1844,7 +1844,7 @@ mod streaming_cost {
         }
         let field = settings.worms();
         let started = Instant::now();
-        let region = pbd_core::worms::gather(&field, &TERRAIN, anchor, settings.reach_m);
+        let region = pbd_core::worms::gather(&field, terrain_config(), anchor, settings.reach_m);
         let gathered = started.elapsed().as_secs_f64() * 1000.;
         let whole = |threads: usize| {
             let started = Instant::now();
@@ -1875,7 +1875,7 @@ mod streaming_cost {
             std::hint::black_box(pbd_core::column::generate_edited(
                 &region,
                 &field,
-                &TERRAIN,
+                terrain_config(),
                 direction,
                 edits.for_cell(cell.key()),
             ));
@@ -1988,7 +1988,7 @@ mod fast_build_tests {
 #[cfg(test)]
 mod seam_report {
     use super::*;
-    use crate::planet::terrain::{PLANET_RADIUS, TERRAIN};
+    use crate::planet::terrain::{PLANET_RADIUS, terrain_config};
 
     /// How far a coarse cell's wall can stop ABOVE the finer caps it meets.
     ///
@@ -2025,7 +2025,9 @@ mod seam_report {
             let (a, b) = anchor.any_orthonormal_pair();
             let here = (anchor + a * (r * t.cos()) + b * (r * t.sin())).normalize();
             let there = (here + a * span).normalize();
-            if heights.at(here) < TERRAIN.sea_level_m || heights.at(there) < TERRAIN.sea_level_m {
+            if heights.at(here) < terrain_config().sea_level_m
+                || heights.at(there) < terrain_config().sea_level_m
+            {
                 continue;
             }
             edges += 1;

@@ -1,7 +1,10 @@
 //! A settled climate for a new world to start from (`climate-balance`
 //! decisions 8 and 8a, survey K6). The measurement instrument that makes
-//! `assets/climate/settled-l<level>.bin`: the game restores it for a world
-//! with no weather of its own, so a new world's first day is its settled one.
+//! `assets/climate/settled-g<generator>-l<level>.bin`: the game restores it
+//! for a world with no weather of its own, so a new world's first day is its
+//! settled one. It settles on the current generator's terrain, whose biomes
+//! the climate reads (wetness and albedo), so a state is only for worlds of
+//! the generator in its name (`bigger-biomes` decision 6).
 //!
 //!     cargo run --release -p pbd-core --example settle_climate -- \
 //!         [level] [fast years] [check days] [out dir]
@@ -155,7 +158,8 @@ fn main() {
         .get(4)
         .cloned()
         .unwrap_or_else(|| "assets/climate".into());
-    let terrain = TerrainConfig::TENEBRIS;
+    let generator = pbd_core::terrain::GENERATOR_VERSION;
+    let terrain = TerrainConfig::for_version(generator).expect("the current generator");
     let settings = AtmosphereSettings {
         level,
         ..Default::default()
@@ -165,7 +169,7 @@ fn main() {
     let ron = ron::ser::to_string_pretty(&settings, ron::ser::PrettyConfig::default())
         .expect("settings are plain data");
     std::fs::create_dir_all(&out).expect("the output directory");
-    let name = format!("{out}/settled-l{level}");
+    let name = format!("{out}/settled-g{generator}-l{level}");
     let checkpoint = Path::new(&name).with_extension("partial");
     let started = std::time::Instant::now();
     let mut air = Atmosphere::new(&terrain, settings, terrain.seed);

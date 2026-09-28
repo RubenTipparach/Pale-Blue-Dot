@@ -102,7 +102,20 @@ pub struct TerrainConfig {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V4;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V5;
+
+    /// Generator version 5 (`bigger-biomes`, survey B1 and B2): version 4's
+    /// land, with the moisture that divides the temperate land four times as
+    /// wide (750 m, sixteen times the area) and its thresholds moved to where
+    /// the measured field gives fields, desert, and jungle with swamp about a
+    /// third each (the design's measured table). Only which biome dry land is
+    /// changes: every altitude is version 4's.
+    pub const TENEBRIS_V5: Self = Self {
+        moisture_m: 750.0,
+        desert_below: 0.468,
+        wet_above: 0.544,
+        ..Self::TENEBRIS_V4
+    };
 
     /// Generator version 4, verbatim, as every world made before
     /// `bigger-biomes` was: the reference's scales and thresholds, the heights
@@ -159,6 +172,7 @@ impl TerrainConfig {
     pub fn for_version(version: u32) -> Option<Self> {
         match version {
             4 => Some(Self::TENEBRIS_V4),
+            5 => Some(Self::TENEBRIS_V5),
             _ => None,
         }
     }
@@ -768,46 +782,104 @@ mod tests {
         );
     }
 
-    #[test]
-    #[ignore = "a probe: cargo test -p pbd-core single_biome_walks -- --ignored --nocapture"]
-    fn single_biome_walks() {
+    /// How many times a kilometre's walk on temperate land crosses from one
+    /// moisture third to another, on average over spread starts: the
+    /// moisture field's grain as a walker meets it. Walks that leave the
+    /// temperate land are not counted.
+    fn edges_per_kilometre(cfg: &TerrainConfig) -> f32 {
         const TILE: f32 = 2.833;
-        let cfg = TerrainConfig::default();
         let step = TILE / cfg.radius_m;
-        let mut counts: std::collections::BTreeMap<String, usize> = Default::default();
-        let (mut walks, mut single) = (0, 0);
-        for start in sphere(400) {
-            if surface_altitude(&cfg, start) < cfg.sea_level_m + 4.0 {
+        let temperate = |d: Vec3| {
+            let h = surface_altitude(cfg, d);
+            matches!(
+                biome_at(cfg, d, h),
+                Biome::Fields | Biome::Desert | Biome::Jungle | Biome::Swamp
+            )
+        };
+        let third = |d: Vec3| {
+            let m = moisture(cfg, d);
+            usize::from(m >= cfg.desert_below) + usize::from(m > cfg.wet_above)
+        };
+        let (mut walks, mut edges) = (0usize, 0usize);
+        for start in sphere(2_000) {
+            if !temperate(start) {
                 continue;
             }
             let (heading, _) = start.any_orthonormal_pair();
-            let mut seen = std::collections::BTreeSet::new();
             let mut here = start;
-            let mut dry = true;
+            let mut last = third(here);
+            let (mut crossed, mut stayed) = (0, true);
             for _ in 0..(1_000.0 / TILE) as usize {
                 here = (here + heading * step).normalize();
-                let h = surface_altitude(&cfg, here);
-                if h < cfg.sea_level_m {
-                    dry = false;
+                if !temperate(here) {
+                    stayed = false;
                     break;
                 }
-                seen.insert(biome_at(&cfg, here, h));
+                let now = third(here);
+                crossed += usize::from(now != last);
+                last = now;
             }
-            if !dry {
-                continue;
-            }
-            walks += 1;
-            if seen.len() < 2 {
-                single += 1;
-                *counts
-                    .entry(format!("{:?}", seen.iter().next().unwrap()))
-                    .or_default() += 1;
+            if stayed {
+                walks += 1;
+                edges += crossed;
             }
         }
-        println!("{single} of {walks} walks stayed in one biome");
-        for (biome, n) in counts {
-            println!("  {biome}: {n}");
+        assert!(walks > 20, "only {walks} temperate walks to judge");
+        edges as f32 / walks as f32
+    }
+
+    /// The biomes are about four times the width they were (the owner:
+    /// "about 4x bigger", survey B1): a kilometre of temperate land crosses
+    /// at most a third as many biome edges as the same generator does with
+    /// the old 188 m field, at the same thresholds, so only the width is
+    /// compared. Measured when version 5 landed: 3.3 against 13.6
+    /// (`bigger-biomes` decision 5a). Version 4 fails it, being the 188 m field.
+    #[test]
+    fn the_biomes_are_about_four_times_wider() {
+        let now = TerrainConfig::default();
+        let narrow_field = TerrainConfig {
+            moisture_m: 188.0,
+            ..now
+        };
+        let (wide, narrow) = (
+            edges_per_kilometre(&now),
+            edges_per_kilometre(&narrow_field),
+        );
+        assert!(
+            wide * 3.0 <= narrow,
+            "{wide:.1} biome edges a kilometre against the 188 m field's {narrow:.1}"
+        );
+    }
+
+    /// Grass is not the majority: on the shipped seed and four others, the
+    /// temperate land the moisture divides (fields, desert, jungle, swamp)
+    /// is at least a fifth each fields, desert, and jungle with swamp, and
+    /// none holds more than half (survey B2).
+    #[test]
+    fn grass_is_not_the_majority_on_five_seeds() {
+        let shipped = TerrainConfig::default();
+        let mut failures = Vec::new();
+        for seed in [shipped.seed, 1, 2, 0xB10E_5EED, 0x0dd_ba11] {
+            let cfg = TerrainConfig { seed, ..shipped };
+            let mut count = [0usize; 3];
+            for d in sphere(60_000) {
+                let h = surface_altitude(&cfg, d);
+                match biome_at(&cfg, d, h) {
+                    Biome::Fields => count[0] += 1,
+                    Biome::Desert => count[1] += 1,
+                    Biome::Jungle | Biome::Swamp => count[2] += 1,
+                    _ => {}
+                }
+            }
+            let total = count.iter().sum::<usize>().max(1) as f32;
+            for (name, n) in ["fields", "desert", "jungle and swamp"].iter().zip(count) {
+                let share = n as f32 / total;
+                if !(0.2..=0.5).contains(&share) {
+                    failures.push(format!("seed {seed:#x}: {name} {:.0}%", share * 100.0));
+                }
+            }
         }
+        assert!(failures.is_empty(), "{}", failures.join("; "));
     }
 
     /// Mountains stand on land: the ridges are multiplied by the continent,

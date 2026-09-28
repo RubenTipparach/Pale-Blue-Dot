@@ -12,7 +12,7 @@ Moved to `openspec/changes/exact-cell-keys`, which lands before this change.
 ## 2. Identity
 
 - [x] 2.1 (Built 2026-09-28: `pbd_core::terrain::TOPOLOGY_VERSION`, `saves::format::Identity`, `identity.ron` written first with `writer::replace_durably`, an old slot's written on open and upgraded to exact keys after its migration, and the saves screen and the launch refusing an unknown version by name. The identity requirement is synced into `openspec/specs/world/persistence`.) `TOPOLOGY_VERSION`, and `identity.ron` written with a barrier at creation; an old slot gains one as generator 4, topology 1, and key version 1 once `exact-cell-keys` has migrated it. Verify: format tests for both, and a test that a build refuses an unknown version with the version named.
-- [ ] 2.2 The world's config is chosen from the identity, so `bigger-biomes` can add version 5 without touching the save. Verify: an app test that an old slot generates version 4's terrain.
+- [x] 2.2 (Built with `bigger-biomes` 2.2b, 2026-09-28: `saves::generator_of` reads the identity, 4 for a slot with none, and the launch chooses the planet's config from it. `tests::an_old_worlds_spawn_column_is_the_ground_it_was` reads an old slot's version to version 4's config and its spawn column.) The world's config is chosen from the identity, so `bigger-biomes` can add version 5 without touching the save. Verify: an app test that an old slot generates version 4's terrain.
 
 ## 3. Records and the authored journal
 
