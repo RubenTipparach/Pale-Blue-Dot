@@ -986,6 +986,13 @@ fn open_world(launch: &Launch) -> WorldSave {
         );
         return WorldSave::memory_only();
     }
+    if let Some(why) = saves::refusal(&slot) {
+        warn!(
+            "world '{}' was made with {why}; it will not be loaded",
+            slot.file.name
+        );
+        return WorldSave::memory_only();
+    }
     WorldSave::open(root, slot)
 }
 

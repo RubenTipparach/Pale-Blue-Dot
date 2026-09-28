@@ -65,4 +65,4 @@ gate for everything after it, in this change and in `bigger-biomes`,
   - a pole.
 
   It is published with stills beside the approved mockup, and a note that frame cost was not measured in the cloud session. Verify: the page is linked from the PR.
-- [ ] 6.2 The owner watches the video and accepts the map. Verify: the quote is in `proposal.md`. Then sync `player/map` into `openspec/specs` with each requirement's test named, and archive.
+- [ ] 6.2 (Accepted on the screenshots, the owner 2026-09-28: "map looks good", quoted in `proposal.md`. Open for the video in the batch; the sync and the archive follow it and 5.4.) The owner watches the video and accepts the map. Verify: the quote is in `proposal.md`. Then sync `player/map` into `openspec/specs` with each requirement's test named, and archive.

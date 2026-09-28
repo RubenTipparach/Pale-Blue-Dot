@@ -10,6 +10,18 @@ use crate::hex::{Hex, Voxel};
 /// height on the body.
 pub const GENERATOR_VERSION: u32 = 4;
 
+/// The topology a world's cells are cut from: the Goldberg levels and the
+/// finest cell keys (`pbd_core::cell_key`). A save records it beside the
+/// generator (`world-persistence` decision 3); it moves only when the cells
+/// themselves do.
+pub const TOPOLOGY_VERSION: u32 = 1;
+
+/// The planar sampler's hash salt: the generator version it was written
+/// under. It is its own constant so that a spherical generator version which
+/// changes nothing here (`bigger-biomes` 5 changes only the moisture) does
+/// not move every voxel of the planar reference (`bigger-biomes` decision 6).
+const PLANAR_SALT: u64 = 4;
+
 #[repr(u16)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum Material {
@@ -120,7 +132,7 @@ fn mix(mut value: u64) -> u64 {
 
 impl TerrainGenerator {
     fn hash(self, q: i32, r: i32, layer: i32, channel: u64) -> u64 {
-        let mut value = mix(self.seed ^ channel ^ GENERATOR_VERSION as u64);
+        let mut value = mix(self.seed ^ channel ^ PLANAR_SALT);
         for coordinate in [q, r, layer] {
             value = mix(value ^ (coordinate as i64 as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15));
         }
@@ -174,6 +186,34 @@ impl TerrainGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The planar reference makes the voxels it made when its salt was the
+    /// generator version (4): the digest was taken then. The spherical
+    /// generator's version can move without moving it (`bigger-biomes`
+    /// decision 6).
+    #[test]
+    fn the_planar_sampler_is_fixed_whatever_the_generator_version() {
+        let generator = TerrainGenerator {
+            seed: 42,
+            sea_level: 0,
+        };
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for q in -40..40 {
+            for r in -40..40 {
+                for layer in -8..40 {
+                    let voxel = Voxel {
+                        hex: Hex { q, r },
+                        layer,
+                    };
+                    hash =
+                        (hash ^ generator.sample(voxel) as u64).wrapping_mul(0x0000_0100_0000_01b3);
+                }
+            }
+        }
+        assert_eq!(hash, PLANAR_DIGEST);
+    }
+
+    const PLANAR_DIGEST: u64 = 17_835_469_625_199_367_657;
 
     #[test]
     fn terrain_is_independent_of_visit_order_and_changes_with_seed() {

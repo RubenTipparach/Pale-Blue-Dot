@@ -240,6 +240,17 @@ summary stays here, because the region store depends on it.
 
 It is how the owner, and the video, see what a world holds.
 
+**10. What group 2 found when it was built (2026-09-28).** Checked in the
+game with `--world` launches: a new world, the same world with its identity
+removed, and the same world with its generator set to 99. The first two
+opened and wrote the identity, and the third was refused. The refusal shows
+only on the saves screen, though. `open_world` runs before Bevy's log plugin
+is installed, so everything it says at launch, including the existing seed
+refusal and the "world loaded" line, goes nowhere. A world refused at launch
+opens a fresh unsaved world with no word said. Found, not fixed: the fix is
+to carry the refusal into the running app (a resource the saves screen shows
+on its first frame) rather than to log it.
+
 ## Risks / Trade-offs
 
 - [Migrating hashed keys guesses wrong for an ambiguous edit] → Ambiguity is

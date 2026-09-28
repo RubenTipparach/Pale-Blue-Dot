@@ -37,13 +37,33 @@ once, beside the body radius, rather than inline in the generator.
 ### Requirement: The generator is versioned
 The generator SHALL carry a version that forms part of a saved world's
 identity. Changing the algorithm for an existing save without bumping that
-version SHALL NOT be done.
+version SHALL NOT be done. Each version SHALL name the configuration that
+generates it, so a world keeps generating the terrain it was made with after
+the shipped generator moves on.
 
 #### Scenario: Reading a saved world
 - **WHEN** a world was saved under one generator version
 - **THEN** its identity records that version
 - **AND** terrain produced under a different version is not silently treated as
   the same world
+  (`saves::tests::a_world_of_a_version_this_build_lacks_is_refused_by_name`)
+
+#### Scenario: A save from before the version was recorded
+- **WHEN** a save with no recorded generator version is opened
+- **THEN** it is read as version 4, and its terrain is version 4's, cell for
+  cell (`saves::tests::a_world_from_before_identities_gains_one_when_opened`,
+  `planet_gen::tests::version_4_makes_the_ground_every_old_world_was_made_on`)
+
+#### Scenario: A new world
+- **WHEN** a new world is made
+- **THEN** its save records the current generator version
+  (`saves::tests::a_new_world_is_made_with_its_identity`)
+
+#### Scenario: A version names its config
+- **WHEN** the configuration for each shipped version is asked for
+- **THEN** each version answers one configuration, and an unknown version is
+  refused rather than read as the current one
+  (`planet_gen::tests::an_unknown_generator_version_has_no_config`)
 
 ### Requirement: A world has both land and ocean
 The shipped generator SHALL produce substantial continents and substantial

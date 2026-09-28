@@ -1,9 +1,11 @@
 //! Save slots: what a world is on disk, and the one resource that owns it.
 //!
-//! A slot is a directory under `saves/` holding two files: `edits.v1.log`, the
-//! transaction log of everything the player changed, and `world.ron`, the
-//! metadata and the pose. [`format`] says what is in them and why; [`writer`]
-//! is the thread that puts them there without ever touching a frame.
+//! A slot is a directory under `saves/` holding `identity.ron`, what the world
+//! IS (its seed and every version that shapes it, written once);
+//! `edits.v1.log`, the transaction log of everything the player changed; and
+//! `world.ron`, the metadata and the pose. [`format`] says what is in them and
+//! why; [`writer`] is the thread that puts them there without ever touching a
+//! frame.
 //!
 //! [`WorldSave`] is the resource. It holds the edits in memory - the LOD
 //! rebuild reads them, because a fine set built without them would undig every
@@ -15,7 +17,7 @@ pub mod migrate;
 pub mod writer;
 
 use bevy::prelude::*;
-use format::{Record, WorldFile};
+use format::{Identity, KEY_VERSION, Record, WorldFile};
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::{Edit, Edits};
 use pbd_core::inventory::{Equipment, Slots};
@@ -25,6 +27,9 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use writer::SaveWriter;
 
+/// What the world is (`world-persistence` decision 3): written once, with a
+/// barrier, before anything else in the slot.
+pub const IDENTITY: &str = "identity.ron";
 /// The log of everything changed, appended to per edit. Version 1 keys each
 /// edit by its cell's exact key (`pbd_core::cell_key`); a save with only the
 /// old `edits.log` is migrated into it once, on open ([`migrate`]).
@@ -67,6 +72,9 @@ pub struct Slot {
     /// itself, because a name is text and a directory is a path.
     pub id: String,
     pub file: WorldFile,
+    /// What the world is, or `None` for a slot made before identities, which
+    /// gains one when it is opened.
+    pub identity: Option<Identity>,
 }
 
 /// A directory name for a player's name: lower case, letters and digits, and a
@@ -113,6 +121,7 @@ pub fn list(root: &Path) -> Vec<Slot> {
             let text = std::fs::read_to_string(entry.path().join(WORLD)).ok()?;
             Some(Slot {
                 file: WorldFile::from_ron(&text)?,
+                identity: read_identity(&entry.path()),
                 id,
             })
         })
@@ -139,9 +148,38 @@ pub fn create(root: &Path, name: &str, seed: u64) -> std::io::Result<Slot> {
         suffix += 1;
     }
     let file = WorldFile::new(name.to_string(), seed, now_unix_s());
+    let identity = Identity::new(seed);
     std::fs::create_dir_all(root.join(&id))?;
+    // The identity first and with a barrier, so a slot in the list always
+    // says what it is.
+    write_identity(&root.join(&id), &identity)?;
     std::fs::write(root.join(&id).join(WORLD), file.to_ron())?;
-    Ok(Slot { id, file })
+    Ok(Slot {
+        id,
+        file,
+        identity: Some(identity),
+    })
+}
+
+/// A slot's identity, where it has one.
+pub fn read_identity(directory: &Path) -> Option<Identity> {
+    let text = std::fs::read_to_string(directory.join(IDENTITY)).ok()?;
+    let identity = Identity::from_ron(&text);
+    if identity.is_none() {
+        warn!("{}: identity.ron could not be read", directory.display());
+    }
+    identity
+}
+
+fn write_identity(directory: &Path, identity: &Identity) -> std::io::Result<()> {
+    writer::replace_durably(&directory.join(IDENTITY), identity.to_ron().as_bytes())
+}
+
+/// Why this build will not open a slot, naming the version it lacks, or
+/// `None` when it will. A slot with no identity yet predates them, and was
+/// made under versions every build since carries.
+pub fn refusal(slot: &Slot) -> Option<String> {
+    slot.identity.as_ref().and_then(Identity::refusal)
 }
 
 /// Remove a slot and everything in it. The caller is responsible for having
@@ -223,6 +261,8 @@ pub struct WorldSave {
     /// made, for the load to put back. Their time is judged by the world's
     /// clock once it is running, so one past its life is simply not shown.
     pub drops: Vec<ItemDrop>,
+    /// What this world is: its seed and the versions that make it.
+    pub identity: Identity,
     /// The id the next drop is given: one past the highest the log names.
     next_drop: u64,
     slot: Option<Slot>,
@@ -243,6 +283,7 @@ impl Default for WorldSave {
             catches: BTreeMap::new(),
             equipment: None,
             drops: Vec::new(),
+            identity: Identity::new(crate::planet::terrain::TERRAIN.seed),
             next_drop: 0,
             slot: None,
             root: PathBuf::from(ROOT),
@@ -255,8 +296,23 @@ impl WorldSave {
     /// Open a slot: replay its log, read its pose, and start the writer on it.
     pub fn open(root: PathBuf, slot: Slot) -> Self {
         let directory = root.join(&slot.id);
+        let identity = ensure_identity(&directory, &slot);
         let mut writer = SaveWriter::new(&directory);
         let text = log_text(&directory, &slot, &mut writer);
+        // The key migration is the one deliberate upgrade there is: a log it
+        // moved to exact keys is recorded as keyed so, once it has.
+        let identity = if identity.keys < KEY_VERSION && directory.join(LOG).exists() {
+            let upgraded = Identity {
+                keys: KEY_VERSION,
+                ..identity
+            };
+            if let Err(error) = write_identity(&directory, &upgraded) {
+                error!("'{}': identity not upgraded: {error}", slot.id);
+            }
+            upgraded
+        } else {
+            identity
+        };
         let Replayed {
             edits,
             carried,
@@ -296,6 +352,7 @@ impl WorldSave {
             catches,
             equipment,
             drops: drops.into_values().collect(),
+            identity,
             next_drop,
             slot: Some(slot),
             writer,
@@ -491,6 +548,30 @@ fn read_vehicles(path: &Path) -> Option<VehicleFile> {
             None
         }
     }
+}
+
+/// The slot's identity, written before anything else is done to a slot that
+/// predates identities (`world/persistence`: "A save from before
+/// identities"): generator 4 and topology 1, keyed exactly if its log already
+/// is or it has none, by the old hash if only `edits.log` is there.
+fn ensure_identity(directory: &Path, slot: &Slot) -> Identity {
+    if let Some(identity) = read_identity(directory) {
+        return identity;
+    }
+    let keys = if directory.join(LOG).exists() || !directory.join(migrate::LEGACY_LOG).exists() {
+        KEY_VERSION
+    } else {
+        0
+    };
+    let identity = Identity::legacy(slot.file.seed, keys);
+    match write_identity(directory, &identity) {
+        Ok(()) => info!(
+            "'{}' predates identities: recorded as generator {}, topology {}, keys {}",
+            slot.id, identity.generator, identity.topology, identity.keys
+        ),
+        Err(error) => error!("'{}': identity not written: {error}", slot.id),
+    }
+    identity
 }
 
 /// The slot's log, as text: `edits.v1.log` where it exists; otherwise the old
@@ -923,6 +1004,75 @@ mod tests {
             grown,
             "never written"
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A new world is made with its identity, written before its world file,
+    /// naming this build's versions; the list reads it back
+    /// (`world-persistence` 2.1).
+    #[test]
+    fn a_new_world_is_made_with_its_identity() {
+        let root = temporary("identity");
+        let slot = create(&root, "Named", 4242).unwrap();
+        assert_eq!(slot.identity, Some(Identity::new(4242)));
+        let listed = list(&root);
+        assert_eq!(listed[0].identity, Some(Identity::new(4242)));
+        assert_eq!(refusal(&listed[0]), None);
+        let save = WorldSave::open(root.clone(), listed[0].clone());
+        assert_eq!(save.identity, Identity::new(4242));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A slot from before identities gains one the first time it is opened:
+    /// generator 4, topology 1. One with only the old hash-keyed log is
+    /// recorded as keyed by the hash first, and as exactly keyed once the
+    /// open has migrated it (`world/persistence`: "A save from before
+    /// identities").
+    #[test]
+    fn a_world_from_before_identities_gains_one_when_opened() {
+        use pbd_core::cell_key::{self, Address};
+        let root = temporary("legacy-identity");
+        let slot = create(&root, "Before", 4242).unwrap();
+        let directory = root.join(&slot.id);
+        std::fs::remove_file(directory.join(IDENTITY)).unwrap();
+        let cell = Address {
+            face: 3,
+            level: 11,
+            i: 12,
+            j: 34,
+        };
+        std::fs::write(
+            directory.join(migrate::LEGACY_LOG),
+            format!("{} 150 0\n", cell_key::old_hash(cell)),
+        )
+        .unwrap();
+        let listed = list(&root);
+        assert_eq!(listed[0].identity, None, "none yet");
+        assert_eq!(refusal(&listed[0]), None, "and it opens");
+        let save = WorldSave::open(root.clone(), listed[0].clone());
+        let written = read_identity(&directory).expect("written on open");
+        assert_eq!(written, Identity::legacy(4242, KEY_VERSION));
+        assert_eq!(save.identity, written);
+        assert_eq!(written.generator, 4);
+        assert_eq!(written.topology, 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A world whose identity names a version this build lacks is refused
+    /// with the version named, and is never opened: its identity file is
+    /// left as it was.
+    #[test]
+    fn a_world_of_a_version_this_build_lacks_is_refused_by_name() {
+        let root = temporary("future");
+        let slot = create(&root, "Future", 4242).unwrap();
+        let directory = root.join(&slot.id);
+        let mut future = Identity::new(4242);
+        future.generator = 99;
+        std::fs::write(directory.join(IDENTITY), future.to_ron()).unwrap();
+        let listed = list(&root);
+        let why = refusal(&listed[0]).expect("refused");
+        assert!(why.contains("generator version 99"), "{why}");
+        assert_eq!(read_identity(&directory), Some(future));
         let _ = std::fs::remove_dir_all(&root);
     }
 }
