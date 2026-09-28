@@ -357,6 +357,34 @@ pub struct RasterLayer {
     /// One line under the legend saying what it shows.
     pub note: &'static str,
     pub paint: fn(&Texel) -> [u8; 4],
+    /// Its colour key, as the legend shows it: a name and a colour a row
+    /// (`world-map` decision 11).
+    pub key: &'static [(&'static str, [u8; 3])],
+    /// Which row of the key a texel counts toward, or `None` where the layer
+    /// draws nothing: what each row's share of the ground is counted from.
+    pub class: fn(&Texel) -> Option<usize>,
+}
+
+/// Each row of a layer's key's share of the texels it counts, weighted by
+/// the area a texel covers (the cosine of its latitude), as the mockup's
+/// legend gives each biome's share of the land.
+pub fn layer_shares(layer: &RasterLayer, texels: &[Texel], width: usize) -> Vec<f32> {
+    let height = texels.len() / width.max(1);
+    let mut weight = vec![0.0_f64; layer.key.len()];
+    for (row, line) in texels.chunks(width).enumerate() {
+        let latitude = (0.5 - (row as f64 + 0.5) / height as f64) * std::f64::consts::PI;
+        let area = latitude.cos();
+        for texel in line {
+            if let Some(class) = (layer.class)(texel).filter(|&c| c < weight.len()) {
+                weight[class] += area;
+            }
+        }
+    }
+    let total: f64 = weight.iter().sum();
+    weight
+        .iter()
+        .map(|w| if total > 0.0 { (w / total) as f32 } else { 0.0 })
+        .collect()
 }
 
 /// Every layer the legend lists, in the order they were added.
@@ -379,23 +407,48 @@ pub fn paint_layer(layer: &RasterLayer, texels: &[Texel]) -> Vec<u8> {
 }
 
 /// The biome layer's colours, as the mockup's overlay drew them (survey M3:
-/// biomes are an overlay over the greyed base). The sea is left clear.
+/// biomes are an overlay over the greyed base), at the mockup's 0.88
+/// (`world-map` decision 11). The sea is left clear.
 pub fn biome_colour(texel: &Texel) -> [u8; 4] {
-    if texel.sea {
-        return [0; 4];
+    match biome_class(texel) {
+        Some(class) => {
+            let [r, g, b] = BIOME_KEY[class].1;
+            [r, g, b, BIOME_ALPHA]
+        }
+        None => [0; 4],
     }
-    let [r, g, b] = match texel.biome {
-        Biome::Ocean => return [0; 4],
-        Biome::Beach => [232, 214, 150],
-        Biome::Fields => [150, 190, 80],
-        Biome::Desert => [222, 150, 60],
-        Biome::Jungle => [30, 120, 60],
-        Biome::Swamp => [90, 130, 110],
-        Biome::Mountains => [140, 130, 125],
-        Biome::Tundra => [225, 235, 245],
-    };
-    [r, g, b, 200]
 }
+
+/// The biome key, in the mockup's order and colours.
+pub const BIOME_KEY: &[(&str, [u8; 3])] = &[
+    ("beach", [232, 214, 150]),
+    ("fields", [150, 190, 80]),
+    ("desert", [222, 150, 60]),
+    ("jungle", [30, 120, 60]),
+    ("swamp", [90, 130, 110]),
+    ("mountains", [140, 130, 125]),
+    ("tundra", [225, 235, 245]),
+];
+
+/// A texel's row in [`BIOME_KEY`]; the sea has none.
+pub fn biome_class(texel: &Texel) -> Option<usize> {
+    if texel.sea {
+        return None;
+    }
+    match texel.biome {
+        Biome::Ocean => None,
+        Biome::Beach => Some(0),
+        Biome::Fields => Some(1),
+        Biome::Desert => Some(2),
+        Biome::Jungle => Some(3),
+        Biome::Swamp => Some(4),
+        Biome::Mountains => Some(5),
+        Biome::Tundra => Some(6),
+    }
+}
+
+/// How opaque the biome layer is: the mockup blits it at 0.88.
+pub const BIOME_ALPHA: u8 = 224;
 
 /// The base level's texels with the one-pixel border `colour_block` reads,
 /// made from the borderless ones by wrapping the columns and repeating the

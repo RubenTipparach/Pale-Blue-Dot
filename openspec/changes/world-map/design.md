@@ -244,6 +244,40 @@ once the game has to draw them:
   on the night side, which come with the sites (`city-sites`). Task 5.4, a
   site's places, waits for `city-sites` too: the game has no sites to list.
 
+**11. The layers are composed as the mockup composes them (the owner,
+2026-09-28: "rain and biome maps colors dont match with the spec").** The
+colours themselves agree: the mockup's weather frames were coloured by
+`tools/world_map.py` from `pbd_app::overlay::RAMPS` and `OVERLAY_FADE_FULL`,
+read from the game's source, and its biome colours are `biome_colour`'s. What
+differed is how the layers were laid down. Worked through on a deep-sea
+pixel of the base, sRGB (35, 90, 150):
+
+| | mockup (approved) | game, before |
+| --- | --- | --- |
+| under an overlay | greyscale by luminosity, then 45% of (10, 16, 20) over it: (49, 51, 53), charcoal | a 62% veil of (115, 117, 120): (84, 107, 131), blue-grey |
+| biome layer | 0.88 | 0.78 (alpha 200) |
+| weather layer | 0.9 | 0.7, the globe's `overlay_opacity` |
+| live clouds under an overlay | never drawn | drawn when switched on |
+| night under an overlay | 0.3 of itself | full |
+| colour key | biome swatches with shares; the weather's ramp with its range | none |
+
+Every overlay colour sat on a lighter, bluer ground at a lower opacity, so it
+read washed out, and the rain capture had cloud over it besides.
+
+So the game does what the mockup does:
+- The base and its tiles are drawn by one small UI material that can grey
+  them: luminosity greyscale and the 45% darkening, in sRGB as the canvas
+  did, switched on while an overlay shows. The veil node goes.
+- The biome layer at 0.88 and the map's weather overlay at 0.9, as the map's
+  own constants; the globe keeps its `overlay_opacity`.
+- The live clouds are not drawn under an overlay, and the night is drawn at
+  0.3 of itself, as the mockup's `draw()` does.
+- The legend gains the mockup's key: a swatch per biome, and the chosen
+  weather's ramp as a bar with its two ends and its middle.
+
+Checked by `--capture` shots of the biome and rain overlays beside the
+mockup's, with the sea pixel's colour measured in each.
+
 ## Risks / Trade-offs
 
 - [The base raster takes too long to build] → Timed by the instrument
