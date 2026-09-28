@@ -31,9 +31,9 @@ pub mod weather_maps;
 pub use contact::{PlanetContact, SurfaceContact};
 pub use lod::{BAND_M, BASE_LEVEL, FINEST_LEVEL, LodRefresh, NearField, PlanetFine, tile_width_m};
 pub use terrain::{
-    DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, WATER, choose_generator,
-    generator_version, nearest_ground_near, river_channel, snow_slot, surface_code, surface_height,
-    terrain_config, terrain_radius, tileset_slot,
+    DIRT, ELEVATION_STEP, GRASS_SIDE, PLANET_RADIUS, SNOW_SIDE, WATER, generator_version,
+    nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, switch_generator,
+    terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
 pub use water::{EyeWater, EyeWaterState, emerge, submersion};
 
@@ -218,8 +218,14 @@ const _: [(); 112] = [(); std::mem::offset_of!(GpuCell, metadata)];
 const _: [(); 128] = [(); std::mem::offset_of!(GpuCell, owner_a)];
 const _: [(); 160] = [(); std::mem::offset_of!(GpuCell, floors)];
 
+/// The base records, and which build of them: a switch of generator builds
+/// new ones, and the render world rewrites its buffer when the generation
+/// moves (`bigger-biomes` decision 8).
 #[derive(Resource, Clone, ExtractResource)]
-struct PlanetBase(Arc<Vec<GpuCell>>);
+struct PlanetBase {
+    cells: Arc<Vec<GpuCell>>,
+    generation: u64,
+}
 
 #[derive(Resource, Clone, Default, ExtractResource)]
 pub(crate) struct PlanetClock(f32);
@@ -286,6 +292,88 @@ impl Plugin for PlanetPlugin {
     }
 }
 
+/// What the generator makes of the planet round a place: its base records,
+/// the contact tier over them, and the fine set there with the world's
+/// edits, built synchronously on every core so the walker has a tile to
+/// stand on before its first tick. At launch, and when a load switches the
+/// generator (`bigger-biomes` decision 8).
+struct BuiltPlanet {
+    cells: Vec<topology::DualCell>,
+    base: Arc<Vec<GpuCell>>,
+    contacts: PlanetContact,
+    fine: Arc<lod::FineSet>,
+    anchor: Vec3,
+}
+
+fn build_planet(
+    near: Vec3,
+    columns: &crate::config::ColumnSettings,
+    scatter: &crate::config::ScatterSettings,
+    edits: &pbd_core::edits::Edits,
+) -> BuiltPlanet {
+    let cells = topology::dual_sphere(lod::BASE_LEVEL as u32);
+    let base = Arc::new(lod::base_records(&cells));
+    let mut contacts = PlanetContact::new(base.clone(), &cells);
+    let anchor = contacts.find_land_near(near);
+    // With the configured cross-fade ring, like every set after it
+    // (`distance-lod-fade`).
+    let fine = Arc::new(lod::generate_fine_live(
+        anchor,
+        lod::BAND_M,
+        lod::REGEN_DISTANCE_M,
+        columns,
+        edits,
+        std::thread::available_parallelism().map_or(1, |n| n.get()),
+        None,
+        scatter.lod_fade_width,
+    ));
+    contacts.set_fine(&fine);
+    BuiltPlanet {
+        cells,
+        base,
+        contacts,
+        fine,
+        anchor,
+    }
+}
+
+/// Rebuild the planet for the generator a load just switched to, round
+/// `near`, with the opened world's edits, and put it in place of the old one
+/// in one step: nothing is ever removed, since a dozen systems take the
+/// planet's resources as given. The fine set's version moves on from the old
+/// one, and the base's generation too, so the render world uploads both; the
+/// refresh in flight, begun on the old planet, is let go.
+pub fn rebuild_planet(world: &mut World, near: Vec3) {
+    let started = std::time::Instant::now();
+    let columns = world.resource::<crate::config::ColumnSettings>().clone();
+    let scatter = world.resource::<crate::config::ScatterSettings>().clone();
+    let dusk = world.resource::<lod::DuskLamps>().lit;
+    let built = {
+        let edits = &world.resource::<crate::saves::WorldSave>().edits;
+        build_planet(near, &columns, &scatter, edits)
+    };
+    let mut fine = Arc::unwrap_or_clone(built.fine);
+    fine.columns.set_dusk(dusk);
+    let fine = Arc::new(fine);
+    let mut contacts = built.contacts;
+    contacts.set_fine(&fine);
+    let generation = world.resource::<PlanetBase>().generation + 1;
+    let version = world.resource::<lod::PlanetFine>().version + 1;
+    world.insert_resource(PlanetBase {
+        cells: built.base,
+        generation,
+    });
+    world.insert_resource(contacts);
+    world.insert_resource(lod::PlanetFine { set: fine, version });
+    world.resource_mut::<lod::LodRefresh>().abandon();
+    info!(
+        "planet rebuilt for generator {} round {:?} in {:.2}s",
+        terrain::generator_version(),
+        built.anchor,
+        started.elapsed().as_secs_f64()
+    );
+}
+
 fn create_planet(
     mut commands: Commands,
     assets: Res<AssetServer>,
@@ -295,13 +383,14 @@ fn create_planet(
     edits: Res<crate::saves::WorldSave>,
 ) {
     let started = std::time::Instant::now();
-    let cells = topology::dual_sphere(lod::BASE_LEVEL as u32);
-    let base = Arc::new(lod::base_records(&cells));
-    let mut contacts = PlanetContact::new(base.clone(), &cells);
+    let BuiltPlanet {
+        cells,
+        base,
+        contacts,
+        fine,
+        anchor,
+    } = build_planet(flight.spawn_direction, &columns, &scatter, &edits.edits);
     let (narrowest, mean_width, widest) = tile_widths(&cells);
-    // The fine bands around the spawn, synchronously, so the walker has its
-    // tile to stand on before its first tick.
-    let anchor = contacts.find_land_near(flight.spawn_direction);
     if !edits.edits.is_empty() {
         info!(
             "{} edits across {} cells loaded from the save",
@@ -309,19 +398,6 @@ fn create_planet(
             edits.edits.cells()
         );
     }
-    // With the configured cross-fade ring, like every set after it
-    // (`distance-lod-fade`).
-    let fine = Arc::new(lod::generate_fine_live(
-        anchor,
-        lod::BAND_M,
-        lod::REGEN_DISTANCE_M,
-        &columns,
-        &edits.edits,
-        std::thread::available_parallelism().map_or(1, |n| n.get()),
-        None,
-        scatter.lod_fade_width,
-    ));
-    contacts.set_fine(&fine);
     let fine_count: usize = fine.levels.iter().map(Vec::len).sum();
     info!(
         "Planet ready: base L{} {} columns, fine L{}-L{} {} columns around the spawn, \
@@ -395,7 +471,10 @@ fn create_planet(
         crate::walking::EYE_HEIGHT,
     );
     commands.insert_resource(contacts);
-    commands.insert_resource(PlanetBase(base));
+    commands.insert_resource(PlanetBase {
+        cells: base,
+        generation: 1,
+    });
     commands.insert_resource(lod::PlanetFine {
         set: fine,
         version: 1,
@@ -549,6 +628,8 @@ struct PlanetGpu {
     /// Record slots in the buffer: the base then four fine regions.
     slots: u32,
     base_count: u32,
+    /// Which build of the base the buffer holds (`PlanetBase::generation`).
+    base_generation: u64,
     /// Live records per fine level, in `FINE_LEVELS` order.
     counts: [u32; 4],
     /// The fine set version the regions hold.
@@ -615,17 +696,30 @@ fn toward(from: Vec3, to: Vec3, angle: f32) -> Vec3 {
 fn upload_planet(
     mut commands: Commands,
     base: Option<Res<PlanetBase>>,
-    existing: Option<Res<PlanetGpu>>,
+    existing: Option<ResMut<PlanetGpu>>,
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
-    if existing.is_some() {
-        return;
-    }
     let Some(base) = base else {
         return;
     };
-    let base_count = base.0.len() as u32;
+    if let Some(mut planet) = existing {
+        // A switch of generator rebuilt the base: it is written over the old
+        // one in the SAME buffer, which every view's bind group holds, and the
+        // topology is fixed, so it is the same size (`bigger-biomes` decision
+        // 8). No cross-fade runs from the old planet's partition.
+        if planet.base_generation != base.generation {
+            queue.write_buffer(
+                &planet.cells,
+                0,
+                bytemuck::cast_slice(base.cells.as_slice()),
+            );
+            planet.base_generation = base.generation;
+            planet.lod_prev = None;
+        }
+        return;
+    }
+    let base_count = base.cells.len() as u32;
     let slots = base_count + 4 * lod::FINE_CAPACITY;
     // Zero-initialised: an empty slot has degree zero and the compute pass
     // skips it, so the fine regions are inert until their first upload.
@@ -635,7 +729,7 @@ fn upload_planet(
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&cells, 0, bytemuck::cast_slice(base.0.as_slice()));
+    queue.write_buffer(&cells, 0, bytemuck::cast_slice(base.cells.as_slice()));
     // Zero-initialised: a slot nothing has written is DARK, which is the safe
     // way round. A light buffer defaulting to full daylight would light every
     // cave in the tier on the frame before its bake arrived.
@@ -666,6 +760,7 @@ fn upload_planet(
         columns,
         slots,
         base_count,
+        base_generation: base.generation,
         counts: [0; 4],
         uploaded: 0,
         lod: lod::LodParams::base_only(),
@@ -1448,5 +1543,87 @@ mod tests {
         assert!(shipped > crate::walking::EYE_HEIGHT * 10.);
         // And the finest tier is the one the walker's eye is measured against.
         assert!(lod::tile_width_m(lod::FINEST_LEVEL) < crate::walking::EYE_HEIGHT * 2.);
+    }
+
+    /// A load that switches the generator puts a new planet in place of the
+    /// old in one step (`bigger-biomes` decision 8): every resource the
+    /// systems take as given is still there, the base and the fine set are
+    /// marked new so the render world uploads both, the lamps stay as the
+    /// clock has them, and the planet is the one a launch would have built.
+    /// The switch itself is global, so it is tested in its own process
+    /// (`tests/generator_switch.rs`); this rebuilds on the version in hand.
+    #[test]
+    fn a_rebuilt_planet_replaces_the_old_one_in_one_step() {
+        let near = Vec3::new(0.3, 0.8, 0.5).normalize();
+        let columns = crate::config::ColumnSettings::default();
+        let scatter = crate::config::ScatterSettings::default();
+        let mut save = crate::saves::WorldSave::memory_only();
+        let launch = build_planet(near, &columns, &scatter, &save.edits);
+        // One hole dug in the opened world, at the top of the first column
+        // the launch built: the rebuilt planet must carry it.
+        let (key, top) = launch
+            .fine
+            .finest_records()
+            .iter()
+            .enumerate()
+            .find_map(|(record, cell)| {
+                let top = launch.fine.columns.column(record)?.surface()?;
+                Some((cell.key(), top))
+            })
+            .expect("the launch's fine set has columns");
+        save.edits.set(pbd_core::edits::Edit {
+            cell: key,
+            layer: top as u16,
+            material: pbd_core::terrain::Material::Air,
+        });
+        let mut world = World::new();
+        world.insert_resource(columns);
+        world.insert_resource(scatter);
+        world.insert_resource(save);
+        world.insert_resource(lod::DuskLamps { lit: true });
+        world.init_resource::<lod::LodRefresh>();
+        world.insert_resource(PlanetBase {
+            cells: launch.base.clone(),
+            generation: 1,
+        });
+        world.insert_resource(lod::PlanetFine {
+            set: launch.fine.clone(),
+            version: 7,
+        });
+
+        rebuild_planet(&mut world, near);
+
+        let base = world.resource::<PlanetBase>();
+        assert_eq!(base.generation, 2, "the render world must see a new base");
+        assert!(
+            bytemuck::cast_slice::<GpuCell, u8>(&base.cells)
+                == bytemuck::cast_slice::<GpuCell, u8>(&launch.base),
+            "the same generator rebuilds the same base records"
+        );
+        let fine = world.resource::<lod::PlanetFine>();
+        assert_eq!(fine.version, 8, "the render world must see a new fine set");
+        assert!(
+            fine.set.columns.dusk(),
+            "the lamps stay lit across a rebuild"
+        );
+        assert_eq!(
+            fine.set.levels.iter().map(Vec::len).collect::<Vec<_>>(),
+            launch.fine.levels.iter().map(Vec::len).collect::<Vec<_>>(),
+            "the fine set is the one a launch round the same place builds"
+        );
+        let dug = fine
+            .set
+            .finest_records()
+            .iter()
+            .position(|cell| cell.key() == key)
+            .and_then(|record| fine.set.columns.column(record))
+            .expect("the dug cell is in the rebuilt set");
+        assert_eq!(
+            dug.material(top),
+            pbd_core::terrain::Material::Air,
+            "the rebuilt planet carries the opened world's edits"
+        );
+        assert!(world.contains_resource::<PlanetContact>());
+        assert!(world.resource::<lod::LodRefresh>().in_flight_s().is_none());
     }
 }

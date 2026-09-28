@@ -253,13 +253,12 @@ pub fn colour_block(
     out
 }
 
-/// The base level's cache file for a seed: the world's generator version is
-/// in the name, so a new generator reads nothing of the old one's.
-pub fn cache_name(seed: u64) -> String {
-    format!(
-        "map-base-g{}-{seed:016x}.png",
-        crate::planet::generator_version()
-    )
+/// The base level's cache file for a seed and the generator that made it:
+/// the version is in the name, so a new generator reads nothing of the old
+/// one's. It is passed, not read at the moment of saving, since a switch of
+/// generator can come between a build's start and its save.
+pub fn cache_name(seed: u64, generator: u32) -> String {
+    format!("map-base-g{generator}-{seed:016x}.png")
 }
 
 /// Pack a texel for the cache: its altitude in 16 bits (floored metres, the
@@ -282,7 +281,7 @@ fn unpack(p: [u8; 4], cfg: &TerrainConfig) -> Option<Texel> {
 }
 
 /// Write the base level's texels (without the border) to the world's folder.
-pub fn save_base(dir: &Path, seed: u64, texels: &[Texel]) -> Result<(), String> {
+pub fn save_base(dir: &Path, seed: u64, generator: u32, texels: &[Texel]) -> Result<(), String> {
     let (width, height) = level_size(BASE);
     if texels.len() != width * height {
         return Err(format!(
@@ -294,7 +293,7 @@ pub fn save_base(dir: &Path, seed: u64, texels: &[Texel]) -> Result<(), String> 
     let image = image::RgbaImage::from_raw(width as u32, height as u32, bytes)
         .ok_or("the base did not fit its image")?;
     std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    let path = dir.join(cache_name(seed));
+    let path = dir.join(cache_name(seed, generator));
     image
         .save(&path)
         .map_err(|error| format!("{}: {error}", path.display()))
@@ -303,8 +302,8 @@ pub fn save_base(dir: &Path, seed: u64, texels: &[Texel]) -> Result<(), String> 
 /// The base level's texels from the world's folder, if a cache for this seed
 /// and this generator is there. Another generator's cache for the same seed
 /// is deleted on the way: it can never be read again.
-pub fn load_base(dir: &Path, seed: u64, cfg: &TerrainConfig) -> Option<Vec<Texel>> {
-    let name = cache_name(seed);
+pub fn load_base(dir: &Path, seed: u64, generator: u32, cfg: &TerrainConfig) -> Option<Vec<Texel>> {
+    let name = cache_name(seed, generator);
     let this_seed = format!("-{seed:016x}.png");
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -669,23 +668,23 @@ mod tests {
             .map(|x| base_texel(&cfg, geo::pixel_direction(x, height / 3, width, height)))
             .collect();
         let texels: Vec<Texel> = (0..height).flat_map(|_| line.iter().copied()).collect();
-        save_base(&dir, 7, &texels).expect("written");
-        let back = load_base(&dir, 7, &cfg).expect("read back");
+        let generator = crate::planet::generator_version();
+        save_base(&dir, 7, generator, &texels).expect("written");
+        let back = load_base(&dir, 7, generator, &cfg).expect("read back");
         for (a, b) in texels.iter().zip(&back) {
             assert_eq!((a.top, a.biome, a.sea), (b.top, b.biome, b.sea));
             assert_eq!(a.altitude_m.floor(), b.altitude_m);
         }
-        assert!(load_base(&dir, 8, &cfg).is_none(), "another seed");
-        // A cache from another generator is not read, and goes.
-        let stale = dir.join(format!(
-            "map-base-g{}-{:016x}.png",
-            crate::planet::generator_version() + 1,
-            7
-        ));
-        std::fs::copy(dir.join(cache_name(7)), &stale).expect("copied");
-        std::fs::remove_file(dir.join(cache_name(7))).expect("removed");
         assert!(
-            load_base(&dir, 7, &cfg).is_none(),
+            load_base(&dir, 8, generator, &cfg).is_none(),
+            "another seed"
+        );
+        // A cache from another generator is not read, and goes.
+        let stale = dir.join(cache_name(7, generator + 1));
+        std::fs::copy(dir.join(cache_name(7, generator)), &stale).expect("copied");
+        std::fs::remove_file(dir.join(cache_name(7, generator))).expect("removed");
+        assert!(
+            load_base(&dir, 7, generator, &cfg).is_none(),
             "another generator's cache"
         );
         assert!(!stale.exists(), "and it is deleted");

@@ -328,6 +328,36 @@ order on the saves page, against a relaunch's 12 s. Done synchronously
 first; a switching screen that keeps drawing can follow.
 - *Alternative:* keep the relaunch. It is what the owner said no to.
 
+*As built (2026-09-28).* As designed, and:
+- `planet::switch_generator` is the one entry, at launch and in
+  `load_world`, and `planet::rebuild_planet` the one rebuild; the relaunch,
+  `menu::crosses_generator` and `restart_into`, are gone.
+- The switch is tested in a process of its own
+  (`tests/generator_switch.rs`): the heights and biomes of 2,000 directions
+  follow the version chosen, 5 to 4 and back, the epoch moves only on a
+  real switch, and a version the build lacks is refused and changes
+  nothing. The rebuild is tested on the version in hand
+  (`planet::tests::a_rebuilt_planet_replaces_the_old_one_in_one_step`): the
+  base and the fine set are marked new, the base is the launch's to the
+  byte, a hole dug in the opened world is in the rebuilt set, and the lamps
+  stay as they were.
+- Captured in the game (`docs/screenshots/bigger-biomes/load-*.jpg`, with
+  the `--load` instrument, which asks for a load a third of the way to the
+  shot as the saves page's LOAD does): a version-5 game, raining over its
+  desert hills, loads a version-4 world and stands in green fields under
+  that world's dry sky, and its map redraws with version 4's biomes and
+  shares. The rebuild took 7.6 to 8.0 s on the cloud container's CPU,
+  against 4.4 s for the same work at startup on the owner's desktop.
+- The captures found the map's key still listing version 5's shares over
+  version 4's map: in a capture the base is rebuilt within the frame the
+  load resets it, so the key never saw it uncounted. The key now remembers
+  the generator it was painted for.
+- Found, not changed: the weather overlay's job remembers the air's
+  generation it was built from, and a reopened air starts again at 1, so an
+  overlay built from the old air's first state is kept after a load until
+  the new air publishes. It is as old as loading, not the switch's, and
+  in play the air publishes within seconds.
+
 ## Risks / Trade-offs
 
 - [More jungle means more trees drawn] → Jungle goes from 3% of the land to

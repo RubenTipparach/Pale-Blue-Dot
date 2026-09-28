@@ -68,10 +68,15 @@ the shipped generator moves on.
 #### Scenario: A world is opened on its own generator
 - **WHEN** a world made on another generator version than the running
   planet's is opened from the saves page
-- **THEN** the game restarts into that world, and the planet is built from
-  that world's version, chosen once at launch
-  (`menu::tests::only_a_world_of_another_generator_restarts_the_game`,
-  `planet::terrain::tests::the_generator_is_chosen_once_from_the_versions_this_build_carries`)
+- **THEN** the planet switches to that world's version in place, without
+  relaunching the game, and the world opens on its own ground with
+  everything done in it: the config every reader asks for, the heights and
+  the biomes are that version's, work begun on the old planet is not drawn
+  on the new one, a version this build does not carry is refused, and the
+  rebuilt planet carries the world's edits
+  (`tests/generator_switch.rs::a_load_switches_the_generator_in_place_and_back`,
+  `planet::tests::a_rebuilt_planet_replaces_the_old_one_in_one_step`,
+  `planet::terrain::tests::the_generator_switches_only_to_versions_this_build_carries`)
 
 ### Requirement: A world has both land and ocean
 The shipped generator SHALL produce substantial continents and substantial

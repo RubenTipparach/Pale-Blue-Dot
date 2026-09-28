@@ -175,6 +175,11 @@ pub struct Launch {
     /// Absent, an interactive run opens the one played most recently and a
     /// capture writes to no world at all.
     pub world: Option<String>,
+    /// `--load <name>`: a capture instrument. A third of the way to the shot,
+    /// load that save as the saves page's LOAD does, so a capture shows what
+    /// a load does to a running game: an old world's planet switched in
+    /// place, say (`bigger-biomes` task 2.2c). The save must already exist.
+    pub load: Option<String>,
     /// `--menu pause|settings|saves|pack|map` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
@@ -218,6 +223,7 @@ impl Launch {
             rain: 0.0,
             weather_at: 0.0,
             world: None,
+            load: None,
             time: None,
             day: None,
             overlay: None,
@@ -346,6 +352,10 @@ impl Launch {
                 "--world" => {
                     i += 1;
                     result.world = Some(args.get(i).expect("--world requires a name").clone());
+                }
+                "--load" => {
+                    i += 1;
+                    result.load = Some(args.get(i).expect("--load requires a name").clone());
                 }
                 "--menu" => {
                     i += 1;
@@ -648,7 +658,7 @@ pub fn run(args: &[String]) {
     // The planet is made by the generator the world was made by (an old
     // world keeps its biomes, survey B3), chosen here, before anything builds
     // it (`bigger-biomes` decision 6). The logger is not up yet.
-    if let Err(why) = pbd_app::planet::choose_generator(world.identity.generator) {
+    if let Err(why) = pbd_app::planet::switch_generator(world.identity.generator) {
         eprintln!("terrain generator: {why}");
     }
     let saved_seconds = world.world_seconds;
@@ -880,7 +890,10 @@ pub fn run(args: &[String]) {
     )
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
-    .add_systems(PreUpdate, load_world.after(menu::toggle))
+    .add_systems(
+        PreUpdate,
+        (load_on_cue, load_world).chain().after(menu::toggle),
+    )
     .insert_resource(FrameLog::open(launch.frame_log.as_deref()))
     .add_systems(
         Last,
@@ -1006,6 +1019,34 @@ fn open_world(launch: &Launch) -> WorldSave {
     WorldSave::open(root, slot)
 }
 
+/// Ask for the `--load` world's load a third of the way to the shot, as the
+/// saves page's LOAD would, once.
+fn load_on_cue(
+    launch: Res<Launch>,
+    state: Res<CaptureState>,
+    mut load: ResMut<menu::LoadRequest>,
+    mut asked: Local<bool>,
+) {
+    let Some(name) = launch.load.as_deref() else {
+        return;
+    };
+    if *asked || state.frame < launch.frames / 3 {
+        return;
+    }
+    *asked = true;
+    let id = saves::slot_id(name);
+    match saves::list(std::path::Path::new(saves::ROOT))
+        .into_iter()
+        .find(|slot| slot.id == id || slot.file.name == name)
+    {
+        Some(slot) => {
+            info!("--load: loading '{name}' at frame {}", state.frame);
+            load.0 = Some(slot);
+        }
+        None => warn!("--load: there is no world '{name}'"),
+    }
+}
+
 /// Carry out a load the saves screen asked for.
 ///
 /// An exclusive system, because a load touches more of the world than one set
@@ -1031,6 +1072,18 @@ fn load_world(world: &mut World) {
         open.root().to_path_buf()
     };
     let mut opened = WorldSave::open(root, slot);
+    // A world made by another generator than the planet's: the planet is
+    // switched to it here, in place, before anything reads it, and never by
+    // relaunching (`bigger-biomes` decision 8; the owner: "Should not
+    // restart"). The saves page refuses a version this build lacks, so a
+    // refusal here keeps the planet as it is.
+    let switched = match pbd_app::planet::switch_generator(opened.identity.generator) {
+        Ok(switched) => switched,
+        Err(why) => {
+            warn!("{name}: {why}; the planet stays as it is");
+            false
+        }
+    };
     let hotbar = slots::Hotbar::restore(&mut opened);
     let tools = pbd_app::fish::ToolSlot::restore(&opened);
     let drops = pbd_app::drops::Drops::restore(&opened);
@@ -1058,6 +1111,28 @@ fn load_world(world: &mut World) {
     world.insert_resource(hotbar);
     world.insert_resource(tools);
     world.insert_resource(drops);
+    if switched {
+        // The planet itself, built for this world's generator round where
+        // the world resumes, with its edits, before the walker stands on it;
+        // and the map's picture of the other planet goes with it.
+        let near = pose.map_or(
+            world
+                .resource::<pbd_app::flight_view::FlightViewConfig>()
+                .spawn_direction,
+            |pose| pose.position.normalize_or(Vec3::Y),
+        );
+        pbd_app::planet::rebuild_planet(world, near);
+        if world.contains_resource::<map_screen::MapRaster>() {
+            world.insert_resource(map_screen::MapRaster::default());
+        }
+        if pose.is_none() {
+            pbd_app::walking::find_spawn_again(world);
+        }
+        info!(
+            "switched the planet to generator {} for '{name}'",
+            pbd_app::planet::generator_version()
+        );
+    }
     // The water of the world being left is not this world's water.
     if let Some(mut fishery) = world.get_resource_mut::<pbd_app::fish::Fishery>() {
         *fishery = pbd_app::fish::Fishery::default();

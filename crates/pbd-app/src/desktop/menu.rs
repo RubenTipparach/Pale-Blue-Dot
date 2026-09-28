@@ -728,39 +728,6 @@ pub fn name_input(
     }
 }
 
-/// Whether a slot's world is made by another generator than this run's
-/// planet. The planet is built once, at launch, so such a world is opened by
-/// restarting into it (`bigger-biomes` decision 6).
-pub fn crosses_generator(slot: &Slot) -> bool {
-    saves::generator_of(slot) != pbd_app::planet::generator_version()
-}
-
-/// Restart the game into a world of another generator: launch it again with
-/// `--world` naming that world, and close this one, whose save is drained on
-/// the way out as any quit's is. Returns what the saves screen says.
-fn restart_into(slot: &Slot, exit: &mut MessageWriter<AppExit>) -> String {
-    let started = std::env::current_exe().and_then(|exe| {
-        std::process::Command::new(exe)
-            .args(["--world", &slot.file.name])
-            .spawn()
-    });
-    match started {
-        Ok(_) => {
-            exit.write(AppExit::Success);
-            format!(
-                "{} is made with {} biomes: restarting the game into it",
-                slot.file.name,
-                if saves::generator_of(slot) < pbd_core::terrain::GENERATOR_VERSION {
-                    "the older"
-                } else {
-                    "the newer"
-                }
-            )
-        }
-        Err(error) => format!("could not restart into {}: {error}", slot.file.name),
-    }
-}
-
 /// A press does what its own `MenuAction` says.
 ///
 /// The world-changing ones (load, delete, new) go through `SaveIndex` and
@@ -853,16 +820,12 @@ pub fn press(
                 let wanted = name.name(index.slots.len());
                 index.asking = None;
                 match saves::create(&root, &wanted, seed) {
-                    Ok(slot) if crosses_generator(&slot) => {
-                        // A new world is made by the newest generator, and
-                        // this run's planet is an older world's.
-                        name.edited = false;
-                        name.focused = false;
-                        index.trouble = Some(restart_into(&slot, &mut exit));
-                    }
                     Ok(slot) => {
                         // Made, and entered: a world a player just named is
-                        // the world they want to be in.
+                        // the world they want to be in. It is made by the
+                        // newest generator, and the load switches the planet
+                        // to it in place if an older world's is up
+                        // (`bigger-biomes` decision 8).
                         index.trouble = None;
                         name.edited = false;
                         name.focused = false;
@@ -897,10 +860,9 @@ pub fn press(
                     index.trouble = Some(format!("{} was made with {why}", slot.file.name));
                     continue;
                 }
-                if crosses_generator(&slot) {
-                    index.trouble = Some(restart_into(&slot, &mut exit));
-                    continue;
-                }
+                // A world of another generator than the planet's is loaded
+                // like any other: the load switches the planet in place
+                // (`bigger-biomes` decision 8).
                 front.0 = false;
                 load.0 = Some(slot);
                 *screen = Screen::Playing;
@@ -980,24 +942,6 @@ mod tests {
         assert_eq!(Screen::Saves.back(true, true), Screen::Playing);
         assert_eq!(Screen::Saves.back(true, false), Screen::Saves);
         assert_eq!(Screen::Saves.back(false, false), Screen::Pause);
-    }
-
-    /// A world made before identities is on generator 4, and this run's
-    /// planet is the current one, so opening it restarts the game; a world
-    /// this build made does not (`bigger-biomes` decision 6).
-    #[test]
-    fn only_a_world_of_another_generator_restarts_the_game() {
-        use pbd_app::saves::format::{Identity, WorldFile};
-        let mut slot = Slot {
-            id: "a-world".into(),
-            file: WorldFile::new("A world".into(), 4242, 0),
-            identity: Some(Identity::new(4242)),
-        };
-        assert!(!crosses_generator(&slot), "this build's generator");
-        slot.identity = None;
-        assert!(crosses_generator(&slot), "made before identities");
-        slot.identity = Some(Identity::legacy(4242, 1));
-        assert!(crosses_generator(&slot), "made on version 4");
     }
 
     /// A plain launch opens on the saves page; a named world or a capture

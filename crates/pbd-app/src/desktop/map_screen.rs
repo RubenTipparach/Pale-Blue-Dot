@@ -834,11 +834,16 @@ pub fn paint_key(
     layers: Res<MapLayers>,
     raster: Res<MapRaster>,
     keys: Query<Entity, With<MapKey>>,
-    mut painted: Local<Option<(MapOverlay, bool)>>,
-    mut shares: Local<HashMap<usize, Vec<f32>>>,
+    // With the generator it was counted on: a load that switches the planet
+    // replaces the base, and a base rebuilt within the frame never shows
+    // this system an uncounted one (`bigger-biomes` decision 8).
+    mut painted: Local<Option<(MapOverlay, bool, u32)>>,
+    // By generator and layer: a world of another generator has other shares.
+    mut shares: Local<HashMap<(u32, usize), Vec<f32>>>,
 ) {
+    let generator = pbd_app::planet::generator_version();
     let counted = raster.base_texels.is_some();
-    let now = (choice.overlay, counted);
+    let now = (choice.overlay, counted, generator);
     if *painted == Some(now) {
         return;
     }
@@ -853,12 +858,12 @@ pub fn paint_key(
             let Some(layer) = layers.rasters.get(index) else {
                 return;
             };
-            let share = match (&raster.base_texels, shares.get(&index)) {
+            let share = match (&raster.base_texels, shares.get(&(generator, index))) {
                 (_, Some(done)) => Some(done.clone()),
                 (Some(texels), None) => {
                     let (width, _) = raster::level_size(BASE);
                     let done = raster::layer_shares(layer, texels, width);
-                    shares.insert(index, done.clone());
+                    shares.insert((generator, index), done.clone());
                     Some(done)
                 }
                 (None, None) => None,
@@ -1118,16 +1123,19 @@ pub fn keep_raster(
                 .as_ref()
                 .and_then(|s| s.slot().map(|slot| s.root().join(&slot.id)));
             let palette = palette.clone();
+            // The generator as the job starts, config and version together:
+            // a switch before it lands drops the raster and this job with it.
+            let cfg = *terrain_config();
+            let generator = pbd_app::planet::generator_version();
             let job = move || {
-                let cfg = *terrain_config();
                 let cached = dir
                     .as_ref()
-                    .and_then(|d| raster::load_base(d, cfg.seed, &cfg));
+                    .and_then(|d| raster::load_base(d, cfg.seed, generator, &cfg));
                 let fresh = cached.is_none();
                 let texels = cached.unwrap_or_else(|| raster::build_base(&cfg));
                 if fresh
                     && let Some(d) = &dir
-                    && let Err(error) = raster::save_base(d, cfg.seed, &texels)
+                    && let Err(error) = raster::save_base(d, cfg.seed, generator, &texels)
                 {
                     warn!("the map's base could not be cached: {error}");
                 }

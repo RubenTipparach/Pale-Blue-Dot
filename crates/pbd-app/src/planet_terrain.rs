@@ -4,6 +4,8 @@
 use bevy::prelude::*;
 use pbd_core::planet_gen::{self, Biome, TerrainConfig};
 use pbd_core::terrain::Material;
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 /// Sea-level radius in metres. It sits on the gold-standard ladder
 /// `R = 300 m * 2^(L - 7)`: level 11 underfoot gives the 2.833 m Tenebris tile
@@ -16,49 +18,64 @@ pub const PLANET_RADIUS: f32 = 4_800.0;
 /// cell height, and the walker's step is sized off it.
 pub const ELEVATION_STEP: f32 = 1.0;
 
-/// The generator this run's world is made by, and its version: Tenebris's,
-/// ported into `pbd_core::planet_gen` with the heights authored for this
-/// body, at the version the world was made with (`bigger-biomes` decision
-/// 6). The planet is built once, at launch, so it is chosen once, from the
-/// world the launch opens: an old world keeps its generator (survey B3), and
-/// a world of another is opened by restarting into it. Until it is chosen,
-/// and in a test, it is the current generator.
-static CHOSEN: std::sync::OnceLock<(u32, TerrainConfig)> = std::sync::OnceLock::new();
+/// The generator the planet is made by, and its version: Tenebris's, ported
+/// into `pbd_core::planet_gen` with the heights authored for this body, at
+/// the version the open world was made with (`bigger-biomes` decisions 6 and
+/// 8). An old world keeps its generator (survey B3, and CLAUDE.md "Saved
+/// games survive every change"), so opening a world of another version
+/// switches it, in place, while no world is being played; until then, and in
+/// a test, it is the current generator.
+static CHOSEN: AtomicU32 = AtomicU32::new(pbd_core::terrain::GENERATOR_VERSION);
 
-fn chosen() -> &'static (u32, TerrainConfig) {
-    CHOSEN.get_or_init(|| {
-        (
-            pbd_core::terrain::GENERATOR_VERSION,
-            TerrainConfig::TENEBRIS,
-        )
-    })
+/// How many times the generator has been switched: work begun on one planet
+/// and landing on another says so by it (`LodRefresh`).
+static EPOCH: AtomicU64 = AtomicU64::new(0);
+
+/// Every version this build carries, as `&'static`, so a reader holds a
+/// config that cannot change under it whatever is switched afterwards.
+fn carried(version: u32) -> Option<&'static TerrainConfig> {
+    static TABLE: OnceLock<Vec<(u32, &'static TerrainConfig)>> = OnceLock::new();
+    TABLE
+        .get_or_init(|| {
+            (0..=pbd_core::terrain::GENERATOR_VERSION)
+                .filter_map(|v| {
+                    TerrainConfig::for_version(v).map(|config| (v, &*Box::leak(Box::new(config))))
+                })
+                .collect()
+        })
+        .iter()
+        .find(|(v, _)| *v == version)
+        .map(|(_, config)| *config)
 }
 
-/// The generator config this run's world is made by.
+/// The generator config the planet is made by.
 pub fn terrain_config() -> &'static TerrainConfig {
-    &chosen().1
+    carried(generator_version()).expect("the chosen generator is one this build carries")
 }
 
-/// The generator version this run's world is made by.
+/// The generator version the planet is made by.
 pub fn generator_version() -> u32 {
-    chosen().0
+    CHOSEN.load(Ordering::Acquire)
 }
 
-/// Choose the generator for this run, from the world it opens. It can be
-/// chosen once, before the planet is built: a second choice of another
-/// version, or a version this build does not carry, is refused, and says why.
-pub fn choose_generator(version: u32) -> Result<(), String> {
-    let config = TerrainConfig::for_version(version)
+/// The count of switches so far, for work that must not land on another
+/// planet than the one it began on.
+pub fn terrain_epoch() -> u64 {
+    EPOCH.load(Ordering::Acquire)
+}
+
+/// Make the planet the given version's, for the world about to open. Called
+/// at launch and by a load, never while a world is being played. Says whether
+/// the version changed, which is whether the planet has to be rebuilt; a
+/// version this build does not carry is refused, and says why.
+pub fn switch_generator(version: u32) -> Result<bool, String> {
+    carried(version)
         .ok_or_else(|| format!("no terrain generator version {version} in this build"))?;
-    let chosen = CHOSEN.get_or_init(|| (version, config));
-    if chosen.0 == version {
-        Ok(())
-    } else {
-        Err(format!(
-            "the terrain generator is already version {}, and cannot become {version} in this run",
-            chosen.0
-        ))
+    let was = CHOSEN.swap(version, Ordering::AcqRel);
+    if was != version {
+        EPOCH.fetch_add(1, Ordering::AcqRel);
     }
+    Ok(was != version)
 }
 
 /// Quantized terrain elevation above sea level, in metres, on a unit ray.
@@ -235,23 +252,29 @@ fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    /// The planet is built once, so the generator is chosen once: the
-    /// world's own version is accepted, another is refused, and so is one
-    /// this build does not carry (`bigger-biomes` decision 6). Every test in
-    /// this binary runs on the current generator, so this settles the choice
-    /// on it first rather than race another test to it.
+    /// Every carried version answers its own config, a version this build
+    /// lacks is refused, and switching to the version already chosen changes
+    /// nothing (`bigger-biomes` decision 8). Switching to ANOTHER version is
+    /// `tests/generator_switch.rs`, in a process of its own, since the choice
+    /// is global and every test here reads it.
     #[test]
-    fn the_generator_is_chosen_once_from_the_versions_this_build_carries() {
+    fn the_generator_switches_only_to_versions_this_build_carries() {
         use pbd_core::terrain::GENERATOR_VERSION;
         assert_eq!(super::generator_version(), GENERATOR_VERSION);
-        assert_eq!(super::choose_generator(GENERATOR_VERSION), Ok(()));
+        let epoch = super::terrain_epoch();
+        assert_eq!(super::switch_generator(GENERATOR_VERSION), Ok(false));
+        assert_eq!(super::terrain_epoch(), epoch, "no switch, no new epoch");
         assert_eq!(
             super::terrain_config(),
             &super::TerrainConfig::for_version(GENERATOR_VERSION).unwrap()
         );
-        let other = super::choose_generator(4).expect_err("already chosen");
-        assert!(other.contains("cannot become 4"), "{other}");
-        let missing = super::choose_generator(99).expect_err("not carried");
+        for version in 4..=GENERATOR_VERSION {
+            assert_eq!(
+                super::carried(version),
+                super::TerrainConfig::for_version(version).as_ref()
+            );
+        }
+        let missing = super::switch_generator(99).expect_err("not carried");
         assert!(missing.contains("version 99"), "{missing}");
         assert_eq!(super::generator_version(), GENERATOR_VERSION);
     }

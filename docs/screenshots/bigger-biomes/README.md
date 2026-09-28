@@ -27,6 +27,22 @@ What moves is which biome the land is.
 | `surface-v4.jpg`, `surface-v5.jpg` | `--view surface` | 90 m over the spawn, looking west (the view's "tangent" is `Y x up`). Version 4: fields and scattered trees up to grey stone. Version 5: a desert runs from the spawn's field to the same grey stone, its rock along the contours (G1, below); `surface-v5-latitude.jpg` is the same view with the rock in east-west bands, as version 5 was first built. |
 | `spawn-v4.jpg`, `spawn-v5.jpg` | `--walk` | Eye level at the spawn: the same field (73 m up, dry grass, `tests::an_old_worlds_spawn_column_is_the_ground_it_was`), with desert on the hills behind it in version 5. |
 
+## An old world loaded into a running game
+
+`bigger-biomes` decision 8 (the owner, survey B5: "Should not restart"):
+opening a world of another generator switches the planet in place. Each
+pair is one run of a new, memory-only version-5 world, the second with
+`--load "Old biomes load"`, a copy of the version-4 slot above: a third of
+the way to the shot the load is asked for as the saves page's LOAD asks
+for it, the planet is rebuilt for version 4 round the world's pose with its
+edits (7.6 to 8.0 s on this container's CPU), and the game goes on in the
+same process. `--load` is a capture instrument added for these.
+
+| files | flags | what it shows |
+| --- | --- | --- |
+| `load-spawn-before.jpg`, `load-spawn-after.jpg` | `--walk --time 12 --frames 90` | Before: version 5's spawn, raining, desert on the hills behind the field. After the load: the same field under version 4's dry sky, the hills green with trees: the ground, the weather and the settled climate are the old world's. |
+| `load-map-before.jpg`, `load-map-after.jpg` | `--walk --menu map --map-layer biomes --map-mpp 12 --time 12 --frames 120` | The map open through the load. Before: version 5's regions, and its shares in the key. After: version 4's specks of desert and jungle in fields, and its shares (fields 63%, desert 3%, jungle 3%), as `map-v4.jpg` shows at launch. The first shot of this found the key still listing version 5's shares; the key now remembers the generator it was painted for. |
+
 ## Version 5's biomes from inside
 
 Each from `--view column --spawn <biome> --height 40 --pitch -18` (swamp and
