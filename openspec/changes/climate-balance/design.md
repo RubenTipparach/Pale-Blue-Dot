@@ -602,6 +602,48 @@ hour and the sea keeps its heat. The app's tests pin both: a new world at
 the default clock opens on the shipped bytes exactly, and at noon it is
 stepped there and still reads 15 ± 0.5 °C.
 
+**Finding 10: at level 5 the settled year lands a kelvin warm (2026-09-28).**
+The same two fast years and one true one, at the game's level:
+
+| days | phase | whole surface | sea |
+| --- | --- | ---: | ---: |
+| 10 to 190 | fast, light sea | 13.2 to 18.4 °C, about 15 °C a year | 15.5 to 18.9 °C |
+| 200 | the switch: the sea set to its fast-year mean, 18.25 °C | 16.02 °C | 18.25 °C |
+| 210 to 270 | true capacity | 16.25 falling to 15.90 °C | 18.35 falling to 18.01 °C |
+
+(The run was killed by a container restart at day 270, before it wrote a
+state. None was shipped.)
+
+The fast years hold the year's mean near 15 °C, but only as an average of a
+swing twice the true one: a sea with a tenth of its heat capacity runs warm
+enough in summer to leave its year's mean at 18.25 °C. Held at that mean with
+its true capacity the sea keeps the whole surface at 16 °C, a kelvin over the
+target, where at level 3 the same step landed on it. The thermostat does
+pull it back, but slowly: its integral is held while the error is over
+`sun_trim_band_k`, 1 K, so only the nudge acts, and 0.35 K in 70 days is a
+year's work at that rate.
+
+**8a. The settle step lands on the target before it stops (2026-09-28,
+finding 10).** After the switch the settle runs true years until one lands:
+- each true year's mean of the whole surface is measured, sampled daily;
+- if it is within 0.2 K of the target, the year's end is the state shipped;
+- if not, the sea is shifted by the miss, capped at 2 K, and another true
+  year is run; at most four. A kelvin of sea moves the surface's year by
+  about a kelvin (0.9 to 1.2, measured at level 3 on the first cut, which
+  divided the miss by the sea's share of the surface and so overshot and
+  rang for four years), since the land follows the sea.
+
+The shipped level-3 state stands: its one true year averaged 14.93 °C, inside
+the 0.2 K, so decision 8a would have stopped where the first cut did. Tested
+at level 3 from one fast year, where the true years read 14.39, 15.32 and
+15.04 °C before landing, and a run killed at day 30 picked up from its
+checkpoint and matched the uninterrupted run to the hundredth.
+
+Every year ends at `START_HOUR` of day 0, as a new world's clock does. The run
+also writes a checkpoint every ten days and picks up from it, since a level-5
+settle is three or four hours and the container has twice restarted under a
+run shorter than that.
+
 **7. The heat spread is a diffusivity, the same at every level (2026-09-27,
 finding 8).** `heat_spread` (per second) is replaced by
 `heat_diffusivity_m2s` (m²/s), and the step's rate is that over the square
