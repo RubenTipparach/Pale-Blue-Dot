@@ -18,6 +18,11 @@ the shipped generator moves on.
 - **THEN** it is read as version 4, and its terrain is version 4's, cell for
   cell
 
+#### Scenario: Every carried version keeps its ground
+- **WHEN** a version this build carries is asked for its ground
+- **THEN** its heights, biomes and top blocks are the ones its worlds were
+  made on, pinned by a digest taken before the next version landed
+
 #### Scenario: A new world
 - **WHEN** a new world is made
 - **THEN** its save records the current generator version
