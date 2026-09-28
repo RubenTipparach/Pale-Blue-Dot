@@ -206,7 +206,9 @@ As built (2026-09-28):
 - The settled states are `settled-g<generator>-l<level>`. Version 4's were
   renamed, not remade. Version 5's level 3 landed on its second true year at
   14.98 °C, and its new world's first 60 days read 14.87 to 15.25 °C. Its
-  level 5 is a three-hour settle and ships when it lands.
+  level 5 ran as version 4's did (`climate-balance` finding 10): the first
+  true year 15.97 °C, the sea shifted down 0.97 K, the second 14.82 °C, and
+  a new world's 30 days 14.76 to 14.98 °C.
 - The map's cached base is named for the generator too, so a world of one
   version never shows another's picture.
 - Version 5 does not carry survey G1 (the desert's east-west rock stripes
