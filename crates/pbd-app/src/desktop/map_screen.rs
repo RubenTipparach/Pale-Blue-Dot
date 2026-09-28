@@ -779,16 +779,24 @@ pub fn press(
 }
 
 /// "Show on globe" sets the globe's overlay to the map's: one mode, set from
-/// the legend (decision 6).
-pub fn to_globe(choice: Res<MapChoice>, mut mode: ResMut<OverlayMode>) {
-    if !choice.is_changed() {
+/// the legend (decision 6). Only a change to the switch or to the map's
+/// weather overlay writes it, so the launch's `--overlay` and the pause
+/// panel's row keep theirs until the map is asked.
+pub fn to_globe(
+    choice: Res<MapChoice>,
+    mut mode: ResMut<OverlayMode>,
+    mut last: Local<(bool, Option<Overlay>)>,
+) {
+    let now = (choice.on_globe, choice.overlay.weather());
+    if now == *last {
         return;
     }
-    let want = if choice.on_globe {
-        choice.overlay.weather()
-    } else {
-        None
-    };
+    let was_on = last.0;
+    *last = now;
+    if !now.0 && !was_on {
+        return;
+    }
+    let want = if now.0 { now.1 } else { None };
     if mode.0 != want {
         mode.0 = want;
     }
@@ -1776,6 +1784,24 @@ mod tests {
             MapOverlay::None
         );
         assert_eq!(app.world().resource::<OverlayMode>().0, None);
+    }
+
+    /// The map leaves a globe overlay set elsewhere (the launch's
+    /// `--overlay`, the pause panel's row) alone until its own switch is used.
+    #[test]
+    fn the_map_leaves_the_globes_overlay_alone_until_asked() {
+        let mut app = App::new();
+        app.insert_resource(Screen::Map)
+            .init_resource::<MapChoice>()
+            .insert_resource(OverlayMode(Some(Overlay::Cloud)))
+            .add_systems(Update, (press, to_globe).chain());
+        app.update();
+        app.world_mut().resource_mut::<MapChoice>().overlay = MapOverlay::Weather(Overlay::Wind);
+        app.update();
+        assert_eq!(
+            app.world().resource::<OverlayMode>().0,
+            Some(Overlay::Cloud)
+        );
     }
 
     /// The clouds' bytes carry the cover and split the precipitation into
