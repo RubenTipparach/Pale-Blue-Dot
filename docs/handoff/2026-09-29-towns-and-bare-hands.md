@@ -70,6 +70,34 @@ Checks run in the cloud session:
    survive every change"). Holbrook is built from the template each time,
    which is safe only while no saved world has towns.
 
+## The owner's notes on the towns mockup (2026-09-29)
+
+The owner's screenshots are in `docs/handoff/2026-09-29-owner-notes/`. Each
+note is to be written up in `openspec/` before code (CLAUDE.md). It is
+tracked as `cities-in-the-world` task 0.8.
+
+1. **Water inside the boats** (`water-in-boats.png`). The harbour's water
+   sheet shows through the hulls. Boats need to mask the water where a hull
+   is, for example with a pass that cancels the water inside the hull's
+   footprint (a stencil or depth mask).
+2. **The stair block's outside has inverted faces** (`stair-block-faces.png`).
+   Some faces of the enclosed stair, seen from outside, face the wrong way.
+3. **Windows** (`windows.png`):
+   - They should be double-sided and transparent.
+   - They should not glow. The rooms behind them are lit and have their own
+     light, which is enough.
+4. **Chimney bottoms z-fight** (`chimney-zfight.png`). Where the chimney's
+   base meets the roof or ceiling, two faces share a plane.
+5. **Doors that open into furniture** (`mound-door-into-furniture.png`).
+   Some doors, like the mound houses' big round ones, swing into the table
+   placed behind them. Doors this big, with furniture behind them, should
+   open outward. This matters for the game too: slice 2a draws every door
+   leaf swung inward.
+
+The game's `game-lane.png` was captured after the commit above and is added
+beside the mockup's. It has not been looked at yet. The other three game
+shots are still to be taken.
+
 ## Next steps (the owner's order)
 
 - Slice 2b: sliding along faces, holding the walker to floors, stairs, and
