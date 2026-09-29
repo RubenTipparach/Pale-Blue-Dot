@@ -20,7 +20,7 @@ raise the lowland.
 
 #### Scenario: The budget holds
 - **WHEN** the sphere is sampled
-- **THEN** the summit is in the band the owner chose (survey H1: 250 to 290 m) and under the cloud base, the floor between 60 and 145 m
+- **THEN** the summit is in the band the owner chose (survey H1, "about 290 m": 250 to 295 m) and under the cloud base, the floor between 60 and 145 m
   down, and land is between 30 and 45 percent of it
 
 #### Scenario: The lowland stays where it was

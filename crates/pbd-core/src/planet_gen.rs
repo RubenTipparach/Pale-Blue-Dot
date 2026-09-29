@@ -104,12 +104,52 @@ pub struct TerrainConfig {
     /// follows the contours, and a swamp's water in its lowest layer, its
     /// dirt one above (version 5, survey G1).
     pub strata_m: Option<f32>,
+    /// Mountain ranges in regions of their own (`taller-mountains` decision
+    /// 1). `None` has none (versions 4 and 5).
+    pub ranges: Option<Ranges>,
+}
+
+/// A second ridge field, wider than the mountain field and standing only in
+/// the rockiest regions, so the ranges rise tall and wide there while the
+/// lowland stays where it was (`taller-mountains` decision 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ranges {
+    /// How many times as wide as the mountain field (`mountain_m`) the
+    /// range field runs.
+    pub widen: f32,
+    /// Its weight in the normalised height, as `mountain_height` is the
+    /// mountain field's.
+    pub height: f32,
+    /// The rocky field value (`rockiness`) where the ranges begin, and how
+    /// much further they take to reach full height.
+    pub from: f32,
+    pub ease: f32,
 }
 
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V5;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V6;
+
+    /// Generator version 6 (`taller-mountains`, survey H1 to H3, "Accept
+    /// everything as recommended"): version 5 with mountain ranges three
+    /// times as wide as the mountain field and three times its weight, in
+    /// the rockiest quarter of the land, in place of the regional uplift,
+    /// which its threshold kept from ever firing. The snowcap stands at
+    /// 200 m, so a summit wears snow over bare rock (decision 3, measured:
+    /// the Mountains biome keeps its 105 m and is 4.8% of the land). The
+    /// lowland is version 5's.
+    pub const TENEBRIS_V6: Self = Self {
+        ranges: Some(Ranges {
+            widen: 3.0,
+            height: 2.4,
+            from: 0.567,
+            ease: 0.1,
+        }),
+        rocky_uplift_m: 0.0,
+        mountain_snowcap_elev_m: 200.0,
+        ..Self::TENEBRIS_V5
+    };
 
     /// Generator version 5 (`bigger-biomes`, survey B1 and B2): version 4's
     /// land, with the moisture that divides the temperate land four times as
@@ -173,6 +213,7 @@ impl TerrainConfig {
         polar_latitude: 0.95,
         desert_rock_frac: 0.14,
         strata_m: None,
+        ranges: None,
     };
 }
 
@@ -184,6 +225,7 @@ impl TerrainConfig {
         match version {
             4 => Some(Self::TENEBRIS_V4),
             5 => Some(Self::TENEBRIS_V5),
+            6 => Some(Self::TENEBRIS_V6),
             _ => None,
         }
     }
@@ -408,6 +450,25 @@ pub fn surface_altitude(cfg: &TerrainConfig, direction: Vec3) -> f32 {
         let t = (offset.abs() / cfg.shore_band_m).clamp(0.0, 1.0);
         let keep = 1.0 - cfg.shore_flatten * (1.0 - t);
         base = sea + offset * keep;
+    }
+
+    // Ranges, where the rocky field is high, above the beach only: a ridge
+    // field wider than the mountains', so a taller summit is no steeper.
+    if let Some(ranges) = cfg.ranges
+        && base > sea + cfg.beach_band_m
+    {
+        let t = smooth(((rockiness(cfg, d) - ranges.from) / ranges.ease).clamp(0.0, 1.0));
+        if t > 0.0 {
+            let wide = ridged(
+                seed,
+                d,
+                cfg.scale_of(cfg.mountain_m * ranges.widen),
+                4,
+                0.5,
+                2.2,
+            );
+            base += t * wide * land_factor * ranges.height * cfg.land_scale_m;
+        }
     }
 
     // Rocky highlands lift whole regions, above the beach only, so the
@@ -762,9 +823,10 @@ mod tests {
         }
     }
 
-    /// The generator holds this body's budget: summits near 150 m, the floor
-    /// near 80 m, and roughly half the sphere is land, as the reference's
-    /// seeded world is.
+    /// The generator holds this body's budget: summits in the band the owner
+    /// chose (survey H1, "about 290 m": 250 to 295 m, under the 300 m cloud
+    /// base), the floor near 80 m, and roughly half the sphere is land, as
+    /// the reference's seeded world is.
     #[test]
     fn relief_holds_the_budget_and_the_land_fraction() {
         let cfg = TerrainConfig::default();
@@ -784,7 +846,7 @@ mod tests {
             "summit {peak:.1} m, floor {floor:.1} m, land {:.1}%",
             land * 100.0
         );
-        assert!((130.0..=180.0).contains(&peak), "{measured}");
+        assert!((250.0..=295.0).contains(&peak), "{measured}");
         // The floor and the land band both moved with the land bias that broke
         // the supercontinent. The bias shifts the whole continent field down,
         // so the deepest basin goes with it (-125 m against -110 before), and
@@ -1143,6 +1205,132 @@ mod tests {
             "height, 20 m bins from -100: {:?}",
             hist.iter().map(pct).collect::<Vec<_>>()
         );
+    }
+
+    /// Every land altitude of `cfg` on `n` directions, sorted.
+    fn land_heights(cfg: &TerrainConfig, n: usize) -> Vec<f32> {
+        let mut land: Vec<f32> = sphere(n)
+            .map(|d| surface_altitude(cfg, d))
+            .filter(|&h| h >= cfg.sea_level_m)
+            .collect();
+        land.sort_by(f32::total_cmp);
+        land
+    }
+
+    /// Version 6 raises the ranges and not the lowland (`taller-mountains`
+    /// decision 1): its median land stands within 5 m of version 5's (47.3 m
+    /// against 43.9 m measured), where scaling the ridges or the land would
+    /// have lifted it 16 to 40 m.
+    #[test]
+    fn version_6_keeps_the_lowland() {
+        let median = |version| {
+            let land = land_heights(&TerrainConfig::for_version(version).unwrap(), 100_000);
+            land[land.len() / 2]
+        };
+        let (v5, v6) = (median(5), median(6));
+        assert!(
+            (v6 - v5).abs() < 5.0,
+            "median land {v5:.1} m on version 5 and {v6:.1} m on version 6"
+        );
+    }
+
+    /// A mountainside is a slope, not a cliff (survey H3, walkable): over
+    /// land above 120 m, no more than 1% of the steps to the next cell are
+    /// 3 m or more, which the walker cannot climb in one jump. The ranges
+    /// are wide enough that a taller summit is no steeper.
+    #[test]
+    fn version_6s_mountainsides_can_be_walked() {
+        const TILE: f32 = 2.833;
+        let cfg = TerrainConfig::for_version(6).unwrap();
+        let step = TILE / cfg.radius_m;
+        let (mut pairs, mut walls) = (0usize, 0usize);
+        for d in sphere(200_000) {
+            let h = surface_altitude(&cfg, d);
+            if h <= 120.0 {
+                continue;
+            }
+            let (a, b) = d.any_orthonormal_pair();
+            for axis in [a, b] {
+                let next = surface_altitude(&cfg, (d + axis * step).normalize());
+                pairs += 1;
+                if (next.floor() - h.floor()).abs() >= 3.0 {
+                    walls += 1;
+                }
+            }
+        }
+        assert!(pairs > 1_000, "only {pairs} steps over 120 m");
+        let share = walls as f32 / pairs as f32;
+        assert!(
+            share <= 0.01,
+            "{:.2}% of {pairs} steps over 120 m are 3 m or more",
+            share * 100.0
+        );
+    }
+
+    /// The measurement instrument behind version 6's lines (`taller-mountains`
+    /// decision 3): for versions 5 and 6, the land's height percentiles and
+    /// summit, the share of the land above each candidate Mountains
+    /// threshold, the Mountains biome's share at the version's own, and how
+    /// much of it steps 3 m or more to the next cell. Run with `--ignored
+    /// --nocapture`.
+    #[test]
+    #[ignore]
+    fn relief_report() {
+        const TILE: f32 = 2.833;
+        for version in [5, 6] {
+            let cfg = TerrainConfig::for_version(version).unwrap();
+            let step = TILE / cfg.radius_m;
+            let mut land = Vec::new();
+            let (mut mountains, mut walls) = (0usize, 0usize);
+            let (mut snowcap, mut temperate) = (0usize, 0usize);
+            for d in sphere(300_000) {
+                let h = surface_altitude(&cfg, d);
+                if h < cfg.sea_level_m {
+                    continue;
+                }
+                land.push(h);
+                if d.y.abs() <= cfg.cold_latitude {
+                    temperate += 1;
+                }
+                if biome_at(&cfg, d, h) == Biome::Mountains {
+                    mountains += 1;
+                    let (a, _) = d.any_orthonormal_pair();
+                    let next = surface_altitude(&cfg, (d + a * step).normalize());
+                    if (next.floor() - h.floor()).abs() >= 3.0 {
+                        walls += 1;
+                    }
+                    if top_material(&cfg, d, h.floor()) == Material::Snow {
+                        snowcap += 1;
+                    }
+                }
+            }
+            land.sort_by(f32::total_cmp);
+            let at = |p: f32| land[((land.len() - 1) as f32 * p) as usize];
+            let share = |c: usize| 100.0 * c as f32 / land.len() as f32;
+            println!(
+                "version {version}: median {:.1} m, p90 {:.1}, p99 {:.1}, p99.9 {:.1}, summit {:.1} m; \
+                 Mountains (over {} m) {:.1}% of land, {:.1}% of it stepping 3 m or more, \
+                 {:.1}% of it snow-capped; temperate land {:.1}%",
+                at(0.5),
+                at(0.9),
+                at(0.99),
+                at(0.999),
+                at(1.0),
+                cfg.mountain_elev_m,
+                share(mountains),
+                100.0 * walls as f32 / mountains.max(1) as f32,
+                100.0 * snowcap as f32 / mountains.max(1) as f32,
+                share(temperate),
+            );
+            let over: Vec<String> = (0..=16)
+                .map(|i| 100.0 + 10.0 * i as f32)
+                .map(|m| {
+                    let c = land.iter().filter(|&&h| h > m).count();
+                    format!("{m:.0} m {:.1}%", share(c))
+                })
+                .collect();
+            println!("  land over: {}", over.join(", "));
+        }
     }
 
     /// How BUMPY the ground is, which is the thing a walker feels and a
