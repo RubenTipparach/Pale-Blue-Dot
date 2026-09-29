@@ -600,8 +600,7 @@ mod tests {
         assert!(layer_altitude(LAYERS - 1) + 1.0 >= 293.1 + 50.0);
         // A layer index fits the tier's 9-bit fields, and the material words
         // hold whole bytes of eight layers.
-        assert!(LAYERS <= 511);
-        assert_eq!(LAYERS % 8, 0);
+        const { assert!(LAYERS <= 511 && LAYERS.is_multiple_of(8)) };
         assert_eq!(layer_at(BASE_M as f32), Some(0));
         assert_eq!(layer_at(BASE_M as f32 - 0.01), None);
         assert_eq!(layer_at(layer_altitude(LAYERS - 1) + 0.5), Some(LAYERS - 1));
