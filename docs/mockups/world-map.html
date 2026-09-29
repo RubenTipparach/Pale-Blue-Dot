@@ -182,7 +182,7 @@
               <button type="button" data-overlay="ice" aria-pressed="false">Sea ice</button>
               <button type="button" data-overlay="fish" aria-pressed="false">Fish</button>
             </div>
-            <p class="note" id="overlayNote">The planet as it looks: each pixel is its ground's top block, shaded by relief, and the sea by its depth. An overlay greys it out (survey M3).</p>
+            <p class="note" id="overlayNote">The planet as it looks: each pixel is its ground's top block, shaded by relief, and the sea by its depth. An overlay greys it out (survey M3). This is generator version 6: the taller mountain ranges, up to 293 m with snow above 200 m. The weather, temperature, sea-ice and fish layers are from the earlier climate run on version 4's ground, and the coasts are the same.</p>
           </div>
 
           <div class="group">
@@ -198,12 +198,12 @@
           </div>
 
           <div class="group" id="biomeGroup" hidden>
-            <h3>Biome size</h3>
-            <div class="buttons" id="scales" role="group" aria-label="Biome size">
-              <button type="button" data-scale="today" aria-pressed="false">As shipped</button>
-              <button type="button" data-scale="188" aria-pressed="false">188 m</button>
-              <button type="button" data-scale="375" aria-pressed="false">375 m</button>
-              <button type="button" data-scale="750" aria-pressed="true">750 m</button>
+            <h3>How much desert (survey B6)</h3>
+            <div class="buttons" id="scales" role="group" aria-label="How much desert">
+              <button type="button" data-scale="today" aria-pressed="false">A third</button>
+              <button type="button" data-scale="quarter" aria-pressed="false">A quarter</button>
+              <button type="button" data-scale="sixth" aria-pressed="true">Half as much</button>
+              <button type="button" data-scale="tenth" aria-pressed="false">A tenth</button>
             </div>
             <p class="note" id="scaleNote"></p>
             <div class="key" id="biomeKey"></div>
@@ -248,7 +248,7 @@
 
           <details class="about">
             <summary>What is real here</summary>
-            <p>The planet, its biomes at each size, the temperature, the sea ice and the fish ranges are drawn from rasters the game's own functions made (<code>pbd_core::map::base_texel</code>, the atmosphere run 200 days, and the fish rules in <code>tools/fish_ranges.py</code>). The clouds and rain are the simulated atmosphere sampled every two game hours through one day.</p>
+            <p>The planet and its biomes under each desert option are generator version 6's, drawn by the game's own function (<code>pbd_core::map::base_texel</code>, through <code>examples/world_map.rs ... deserts</code>). The temperature, the sea ice and the fish ranges come from the atmosphere run 200 days on version 4's ground and the fish rules in <code>tools/fish_ranges.py</code>. The clouds and rain are that simulated atmosphere sampled every two game hours through one day.</p>
             <p>The settlements are placeholders: the <code>city-sites</code> rules run here, in the page, on 14.7 m pixels, and their names come from made-up syllables. Step 2b places them for real.</p>
           </details>
         </div>
@@ -314,7 +314,7 @@
   // ---- State ---------------------------------------------------------------
   const DAY = 150;
   const state = {
-    open: true, overlay: "none", scale: "750", species: "all",
+    open: true, overlay: "none", scale: "sixth", species: "all",
     hour: 19.5, playing: false,
     // Night side, clouds and rain start off (the owner, 2026-09-27).
     sites: true, night: false, clouds: false, me: true, grid: false,
@@ -323,7 +323,7 @@
   };
   const $ = (id) => document.getElementById(id);
   const canvas = $("view"), ctx = canvas.getContext("2d");
-  let summary = null, heightData = null, fishData = null;
+  let summary = null, heightData = null, codesData = null, fishData = null;
   const images = {};
 
   function loadImage(name) {
@@ -345,7 +345,13 @@
     if (!heightData) return null;
     const px = ((Math.floor(x) % W) + W) % W, py = Math.max(0, Math.min(H - 1, Math.floor(y)));
     const i = (py * W + px) * 4, d = heightData.data;
-    return { alt: d[i] * 256 + d[i + 1] - 32768, today: d[i + 2] & 15, four: d[i + 2] >> 4 };
+    const s = { alt: d[i] * 256 + d[i + 1] - 32768, today: d[i + 2] & 15, four: d[i + 2] >> 4 };
+    // Every desert option's biome, two to a byte (biome-codes.png).
+    if (codesData) {
+      const c = codesData.data;
+      s.biomes = { today: c[i] & 15, quarter: c[i] >> 4, sixth: c[i + 1] & 15, tenth: c[i + 1] >> 4 };
+    }
+    return s;
   }
   const sampleDir = (d) => { const [x, y] = worldOf(d); return sampleWorld(x, y); };
   function offset(d, bearing, metres) {
@@ -406,7 +412,7 @@
     return out;
   }
   function placeSites() {
-    const biomeOf = (s) => BIOMES[state.scale === "today" ? s.today : s.four];
+    const biomeOf = (s) => BIOMES[optionBiome(s)];
     // Candidates: an even spread of 60,000 points (the game uses the
     // 163,842 level-7 cell centres).
     const N = 60000, golden = Math.PI * (3 - Math.sqrt(5)), cands = [];
@@ -664,11 +670,11 @@
     const s = sampleWorld(x, y);
     if (!s) return;
     $("rGround").textContent = s.alt < 0 ? `sea, ${-s.alt} m deep${-s.alt <= 6 ? " (shallows)" : -s.alt <= 40 ? " (shelf)" : ""}` : `${s.alt} m up`;
-    const b = BIOMES[state.scale === "today" ? s.today : s.four];
-    $("rBiome").textContent = s.alt < 0 ? "ocean" : `${b}${state.scale === "today" ? "" : `, as shipped ${BIOMES[s.today]}`}`;
+    const b = BIOMES[optionBiome(s)];
+    $("rBiome").textContent = s.alt < 0 ? "ocean" : `${b}${state.scale === "today" ? "" : `, version 5 ${BIOMES[s.today]}`}`;
     const site = sites.find((t) => Math.hypot((t.x - x) * state.s, (t.y - y) * state.s) < 10 || Math.hypot((t.x - x - W) * state.s, (t.y - y) * state.s) < 10);
     $("rOverlayName").textContent = site ? "place" : "layer";
-    $("rOverlay").textContent = site ? `${site.name}, ${site.capital ? "the capital" : site.kind.name}` : ({ none: "the planet", biomes: `biomes at ${state.scale === "today" ? "as shipped" : state.scale + " m"}`, temperature: "mean surface temperature", ice: "sea ice", fish: "fish ranges" })[state.overlay] || (weatherOn() ? `${weatherOn().meta.name.toLowerCase()}, now` : "");
+    $("rOverlay").textContent = site ? `${site.name}, ${site.capital ? "the capital" : site.kind.name}` : ({ none: "the planet", biomes: `biomes, desert ${DESERT_OPTIONS[state.scale]}`, temperature: "mean surface temperature", ice: "sea ice", fish: "fish ranges" })[state.overlay] || (weatherOn() ? `${weatherOn().meta.name.toLowerCase()}, now` : "");
   }
 
   // ---- The base map's finer levels (decision 9) -------------------------------------
@@ -818,6 +824,13 @@
     $("overlayNote").hidden = name !== "none";
     draw(); readPointer();
   }
+  // The desert options (fewer-deserts, survey B6): the desert's share of the
+  // temperate land, the rest split evenly between fields and jungle.
+  const DESERT_OPTIONS = { today: "a third (version 5)", quarter: "a quarter", sixth: "half as much", tenth: "a tenth" };
+  function optionBiome(s) {
+    if (s.biomes) return s.biomes[state.scale];
+    return state.scale === "today" ? s.today : s.four;
+  }
   function setScale(scale) {
     state.scale = scale;
     for (const b of document.querySelectorAll("#scales button")) b.setAttribute("aria-pressed", String(b.dataset.scale === scale));
@@ -830,8 +843,8 @@
       key.append(i, n, v);
     }
     $("scaleNote").textContent = scale === "today"
-      ? "The planet as shipped: moisture varies every 188 m and the thresholds sit far out, so fields cover most of the temperate land."
-      : `Moisture varies every ${scale} m, with thresholds retuned so fields, desert and jungle with swamp take a third each${scale === "750" ? ". This is your choice (survey B1)." : "."} Shares are of the land.`;
+      ? "As version 5 has it: fields, desert, and jungle with swamp take a third of the temperate land each, so a fifth of all the land is desert. Biomes vary every 750 m (your choice, survey B1). Shares are of the land."
+      : `The desert at ${DESERT_OPTIONS[scale]} of the temperate land, the rest split evenly between fields and jungle, so grass does not become the majority again.${scale === "sixth" ? " My recommendation." : ""} Biomes keep their 750 m size. Shares are of the land.`;
     sites = placeSites(); listPlaces(); draw(); readPointer();
   }
   function listPlaces() {
@@ -928,7 +941,7 @@
 
   // ---- Start --------------------------------------------------------------------
   async function start() {
-    const names = ["base.png", "height.png", "biomes-today.png", "biomes-188.png", "biomes-375.png", "biomes-750.png", "temperature.png", "sea-ice.png", "fish.png", "game-view.jpg"];
+    const names = ["base.png", "height.png", "biome-codes.png", "biomes-today.png", "biomes-quarter.png", "biomes-sixth.png", "biomes-tenth.png", "temperature.png", "sea-ice.png", "fish.png", "game-view.jpg"];
     const loaded = await Promise.all(names.map(loadImage));
     names.forEach((n, i) => { images[n.replace(/\.(png|jpg)$/, "")] = loaded[i]; });
     try { summary = await (await fetch("world-map/summary.json")).json(); } catch (e) { summary = null; }
@@ -936,6 +949,7 @@
     images.clouds = (await Promise.all(Array.from({ length: frames }, (_, k) => loadImage(`clouds-${String(k).padStart(2, "0")}.png`)))).filter(Boolean);
     if (images["game-view"]) $("gameView").style.backgroundImage = `url(${images["game-view"].src})`;
     if (images.height) heightData = pixels(images.height);
+    if (images["biome-codes"]) codesData = pixels(images["biome-codes"]);
     if (images.fish) fishData = pixels(images.fish);
     const select = $("species");
     select.append(new Option("Every species: how many live here", "all"));
@@ -955,7 +969,7 @@
     }
     drawFish(); fishKey();
     resize();
-    setScale("750");
+    setScale("sixth");
     // Open at the spawn's noon on its continent. The night side, and the
     // clouds and rain, are off until asked for (the owner, 2026-09-27); with
     // the night side on, the towns light up at dusk.

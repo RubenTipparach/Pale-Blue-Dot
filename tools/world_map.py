@@ -15,11 +15,21 @@ loads (`openspec/changes/world-map` task 1.2):
 - height.png: the altitude and two biomes packed for the page's own use (the
   site rules and the readout). Red and green are the altitude plus 32,768 m,
   high byte and low byte. Blue is today's biome in the low nibble and the
-  four-times biome in the high one.
+  packed one (`--pack`, the four-times biome by default) in the high one.
+- biome-codes.png: every biome plane, two to a byte (red: today's and the
+  first labelled plane; green: the second and the third), so the page reads
+  whichever it shows.
 
     python3 tools/world_map.py WORLD_MAP.bin OUT_DIR \
-        [--fish FISH_FIELDS.bin] [--weather MAP_WEATHER.bin]
+        [--fish FISH_FIELDS.bin] [--weather MAP_WEATHER.bin] \
+        [--labels 188,375,750] [--pack 750]
     python3 tools/world_map.py tiles FINER.bin OUT_DIR LEVEL
+
+`--labels` names the planes after today's, as the instrument wrote them: the
+moisture scales by default, `quarter,sixth,tenth` for what `world_map ...
+deserts` writes (`fewer-deserts`). A redraw without `--fish` or `--weather`
+keeps the climate, fish and weather layers the last run drew, and their
+entries in summary.json.
 
 With `--fish` (what `examples/fish_ranges.rs` writes) it also draws the
 climate and fish overlays of the last simulated year, by the rules in
@@ -379,7 +389,8 @@ def main():
     os.makedirs(out, exist_ok=True)
     width, height, planes = read(source)
     altitude, top, today = planes[0], planes[1].astype(int), planes[2].astype(int)
-    scales = {m: planes[3 + i].astype(int) for i, m in enumerate(SCALES)}
+    labels = options["--labels"].split(",") if "--labels" in options else [str(m) for m in SCALES]
+    scales = {m: planes[3 + i].astype(int) for i, m in enumerate(labels)}
 
     sea = altitude < 0.0
     colour = ground_colours(altitude, top, today) * relief(altitude, width)[..., None]
@@ -402,9 +413,15 @@ def main():
                           for b, name in enumerate(BIOMES) if b != 0}
 
     packed = np.clip(np.round(altitude) + 32768, 0, 65535).astype(np.uint32)
-    four = scales[750]
+    four = scales[options.get("--pack", labels[-1])]
     height_png = np.stack([packed >> 8, packed & 255, (four << 4) | today], axis=-1).astype(np.uint8)
     Image.fromarray(height_png, "RGB").save(os.path.join(out, "height.png"))
+    planes_in_order = [today] + [scales[m] for m in labels]
+    planes_in_order += [np.zeros_like(today)] * (4 - len(planes_in_order))
+    codes = np.stack([planes_in_order[0] | (planes_in_order[1] << 4),
+                      planes_in_order[2] | (planes_in_order[3] << 4),
+                      np.zeros_like(today)], axis=-1).astype(np.uint8)
+    Image.fromarray(codes, "RGB").save(os.path.join(out, "biome-codes.png"))
 
     summary = {
         "width": width,
@@ -419,9 +436,11 @@ def main():
         summary.update(weather_frames(options["--weather"], out, altitude))
     try:
         with open(os.path.join(out, "summary.json")) as f:
-            kept = json.load(f).get("tile_levels")
-        if kept:
-            summary["tile_levels"] = kept
+            before = json.load(f)
+        # The finer levels, and the climate, fish and weather layers this
+        # run did not redraw, stand as the last run left them.
+        for key, value in before.items():
+            summary.setdefault(key, value)
     except (OSError, ValueError):
         pass
     with open(os.path.join(out, "summary.json"), "w") as f:

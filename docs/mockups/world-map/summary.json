@@ -1,43 +1,43 @@
 {
  "altitude_m": [
   -126.0,
-  160.0
+  293.0
  ],
  "biome_shares_of_land": {
-  "188": {
+  "quarter": {
    "beach": 0.1024,
-   "desert": 0.2175,
-   "fields": 0.2175,
-   "jungle": 0.2059,
-   "mountains": 0.017,
-   "swamp": 0.0115,
+   "desert": 0.1565,
+   "fields": 0.2348,
+   "jungle": 0.2237,
+   "mountains": 0.0433,
+   "swamp": 0.0111,
    "tundra": 0.2282
   },
-  "375": {
+  "sixth": {
    "beach": 0.1024,
-   "desert": 0.2175,
-   "fields": 0.2175,
-   "jungle": 0.2059,
-   "mountains": 0.017,
-   "swamp": 0.0115,
+   "desert": 0.1044,
+   "fields": 0.2609,
+   "jungle": 0.2487,
+   "mountains": 0.0433,
+   "swamp": 0.0122,
    "tundra": 0.2282
   },
-  "750": {
+  "tenth": {
    "beach": 0.1024,
-   "desert": 0.2175,
-   "fields": 0.2175,
-   "jungle": 0.2056,
-   "mountains": 0.017,
-   "swamp": 0.0118,
+   "desert": 0.0626,
+   "fields": 0.2818,
+   "jungle": 0.2686,
+   "mountains": 0.0433,
+   "swamp": 0.0131,
    "tundra": 0.2282
   },
   "today": {
    "beach": 0.1024,
-   "desert": 0.0295,
-   "fields": 0.5939,
-   "jungle": 0.0275,
-   "mountains": 0.017,
-   "swamp": 0.0015,
+   "desert": 0.209,
+   "fields": 0.2093,
+   "jungle": 0.1979,
+   "mountains": 0.0433,
+   "swamp": 0.0099,
    "tundra": 0.2282
   }
  },
