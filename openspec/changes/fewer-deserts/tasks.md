@@ -13,4 +13,4 @@ Nothing below group 1 starts before the owner answers B6.
 - [ ] 2.2 (Level 3 remade in the cloud on the halved desert: its first true year landed at 15.05 °C, and a new world's 60 days read 14.79 to 15.08 °C; level 5 on the owner's desktop, with `tropical-upper-wind` 3.1b, or after `tropical-weather-aloft` so it is made once.) Version 6's settled climates made again, levels 3 and 5. Verify: a new world's days hold 15 ± 0.5 °C at each level.
 - [ ] 2.3 Captures of version 6's biomes beside version 5's: the whole planet's biome map with its key, and the spawn's continent. Verify: in `docs/screenshots/fewer-deserts/`.
 - [ ] 2.4 Sync the modified requirement into `openspec/specs/world/terrain`, naming the test. Verify: `openspec validate --all`.
-- [ ] 2.5 Frame cost not measured in the cloud: less desert is more jungle, so more trees. The owner runs `tools/perf_suite.py`. Verify: the note is in the PR.
+- [x] 2.5 (PR #19 says so; the owner runs the suite.) Frame cost not measured in the cloud: less desert is more jungle, so more trees. The owner runs `tools/perf_suite.py`. Verify: the note is in the PR.

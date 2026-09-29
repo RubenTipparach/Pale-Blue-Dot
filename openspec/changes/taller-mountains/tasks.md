@@ -23,5 +23,5 @@ Nothing below group 1 starts before the owner answers H1 to H3.
 
 - [x] 3.1 (Both shipped. Level 3, `settled-g6-l3`: its first true year landed at 15.02 °C, and a new world's 60 days read 14.73 to 15.08 °C. Level 5, `settled-g6-l5`: 15.74 then 14.69 °C, and the third true year landed at 15.02 °C; a new world's 30 days read 14.86 to 15.09 °C, the trim 0.901 to 0.906.) The settled climates made on version 6, levels 3 and 5. Verify: the new world's days hold 15 ± 0.5 °C.
 - [x] 3.2 (`docs/screenshots/taller-mountains/`, with a README: the map, the whole planet's biomes, over the spawn, a range from 40 m, orbit, and eye level at the spawn, which shows the finding behind H4.) Captures of version 5 beside version 6: orbit, the map, a range from 40 m, at eye level. Verify: in `docs/screenshots/taller-mountains/`.
-- [ ] 3.3 Frame cost not measured in the cloud; the owner runs `tools/perf_suite.py`. Verify: the note is in the PR.
+- [x] 3.3 (PR #19 says so; the owner runs the suite.) Frame cost not measured in the cloud; the owner runs `tools/perf_suite.py`. Verify: the note is in the PR.
 - [ ] 3.4 Sync the modified requirement into `openspec/specs/world/terrain`, naming the tests. Verify: `openspec validate --all`.
