@@ -16,9 +16,9 @@ Moved to `openspec/changes/exact-cell-keys`, which lands before this change.
 
 ## 3. Records and the authored journal
 
-- [ ] 3.1 The record type (kind, id, schema version, body) and the store, with unknown kinds kept and written back unchanged. Verify: a test that a record of an unknown kind survives a dig and a quit, byte for byte.
-- [ ] 3.2 Author tokens on every journal line, and the `rec` line; old lines read as the player's. Verify: format tests for each author, an old log's replay unchanged, and a torn last line still costing only that line.
-- [ ] 3.3 The yield set and the yield check. Verify: tests that a world proposal touching a player-edited cell, piece or record field is refused whole.
+- [x] 3.1 (Built 2026-09-29, decision 11: `pbd_core::records`, the `rec` line and `WorldSave::records`/`store`. `saves::tests::a_record_of_an_unknown_kind_survives_a_dig_and_a_quit_byte_for_byte`, `records::tests::a_record_line_round_trips_byte_for_byte`.) The record type (kind, id, schema version, body) and the store, with unknown kinds kept and written back unchanged. Verify: a test that a record of an unknown kind survives a dig and a quit, byte for byte.
+- [x] 3.2 (Built 2026-09-29: `records::Author`, `format::parse_entry` and `authored`; the player's lines still carry no token, decision 11. `format::tests::every_author_reads_back_from_their_line`, `records::tests::every_author_round_trips_through_its_token`, `saves::tests::records_come_back_and_a_torn_record_line_costs_only_itself`.) Author tokens on every journal line, and the `rec` line; old lines read as the player's. Verify: format tests for each author, an old log's replay unchanged, and a torn last line still costing only that line.
+- [x] 3.3 (Built 2026-09-29: `records::YieldSet` over cells and record fields, `WorldSave::propose`. `records::tests::a_world_proposal_touching_the_players_work_is_refused_whole`, `saves::tests::a_world_proposal_on_the_players_work_is_refused_and_writes_nothing`. Pieces join it with `cities-in-the-world`.) The yield set and the yield check. Verify: tests that a world proposal touching a player-edited cell, piece or record field is refused whole.
 
 ## 4. World processes
 

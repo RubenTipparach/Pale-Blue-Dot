@@ -21,6 +21,7 @@ use format::{Identity, KEY_VERSION, Record, WorldFile};
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::{Edit, Edits};
 use pbd_core::inventory::{Equipment, Slots};
+use pbd_core::records::{Author, Proposal, Record as StoredRecord, Records, Refusal, YieldSet};
 use pbd_core::vehicle::record::VehicleFile;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -238,6 +239,8 @@ struct Replayed {
     equipment: Option<Equipment>,
     drops: BTreeMap<u64, ItemDrop>,
     next_drop: u64,
+    records: Records,
+    yields: YieldSet,
     damaged: usize,
 }
 
@@ -272,6 +275,13 @@ pub struct WorldSave {
     pub drops: Vec<ItemDrop>,
     /// What this world is: its seed and the versions that make it.
     pub identity: Identity,
+    /// Every record the log holds, by kind and id: its last value
+    /// (`world-persistence` decision 11). Kinds this build does not know are
+    /// held as their text.
+    pub records: Records,
+    /// What the player has touched, which a world process may not change
+    /// (decision 6).
+    pub yields: YieldSet,
     /// The id the next drop is given: one past the highest the log names.
     next_drop: u64,
     slot: Option<Slot>,
@@ -292,6 +302,8 @@ impl Default for WorldSave {
             catches: BTreeMap::new(),
             equipment: None,
             drops: Vec::new(),
+            records: Records::new(),
+            yields: YieldSet::new(),
             // The seed is every generator version's (only the moisture moves), and
             // reading it here must not fix this run's generator before the
             // launch has chosen it from the world it opens.
@@ -333,6 +345,8 @@ impl WorldSave {
             equipment,
             drops,
             next_drop,
+            records,
+            yields,
             damaged,
         } = replay(&text);
         if damaged > 0 {
@@ -365,6 +379,8 @@ impl WorldSave {
             equipment,
             drops: drops.into_values().collect(),
             identity,
+            records,
+            yields,
             next_drop,
             slot: Some(slot),
             writer,
@@ -412,6 +428,8 @@ impl WorldSave {
             return false;
         }
         self.edits.set(edit);
+        // The player's: no world process may change this cell again.
+        self.yields.touch_cell(edit.cell);
         if let Some(drop) = drop {
             self.next_drop = self.next_drop.max(drop.id + 1);
         }
@@ -534,6 +552,74 @@ impl WorldSave {
         true
     }
 
+    /// The highest sequence the disk has taken: a line queued with a
+    /// sequence at or below it is saved. A world with no disk behind it
+    /// counts everything as saved, since nothing is ever queued.
+    pub fn committed(&self) -> u64 {
+        self.writer.committed()
+    }
+
+    /// Store records as `author`'s (`world-persistence` decision 11): each
+    /// is applied to [`Self::records`] and its line queued, in order. The
+    /// last line's sequence comes back; the records are saved once
+    /// [`Self::committed`] reaches it. `None`, and nothing stored, once the
+    /// writer has failed.
+    pub fn store(&mut self, author: &Author, records: Vec<StoredRecord>) -> Option<u64> {
+        if self.writer.failure().is_some() {
+            return None;
+        }
+        let mut last = 0;
+        for record in records {
+            let line = record.line(author);
+            let before = self.records.put(record.clone());
+            if author.is_player() {
+                self.yields.touch_record(before.as_ref(), &record);
+            }
+            last = self.writer.append(line);
+        }
+        Some(last)
+    }
+
+    /// A world process's changes for a period, taken whole or refused whole
+    /// (`world-persistence` decision 6): refused, with nothing written, if
+    /// any of it would change a cell or a record field the player has.
+    /// Taken, its edits and records are journaled under `author`.
+    pub fn propose(&mut self, author: &Author, proposal: Proposal) -> Result<Option<u64>, Refusal> {
+        self.yields.check(&proposal, &self.records)?;
+        if self.writer.failure().is_some() {
+            return Ok(None);
+        }
+        let mut last = 0;
+        for edit in proposal.edits {
+            self.edits.set(edit);
+            last = self
+                .writer
+                .append(format::authored(author, format::world_edit_line(edit)));
+        }
+        if !proposal.records.is_empty() {
+            last = self.store(author, proposal.records).unwrap_or(last);
+        }
+        Ok(Some(last))
+    }
+
+    /// Record in the identity that the world holds records of these kinds,
+    /// at these schema versions: a deliberate upgrade, written once, the
+    /// first time a kind is stored.
+    pub fn note_record_kinds(&mut self, kinds: &[(&str, u32)]) {
+        let mut changed = false;
+        for &(kind, schema) in kinds {
+            if self.identity.records.get(kind) != Some(&schema) {
+                self.identity.records.insert(kind.to_string(), schema);
+                changed = true;
+            }
+        }
+        let Some(slot) = self.slot.as_ref().filter(|_| changed) else {
+            return;
+        };
+        let path = self.root.join(&slot.id).join(IDENTITY);
+        self.writer.replace(path, self.identity.to_ron());
+    }
+
     /// Wait for everything queued to reach the disk. Called on the way out,
     /// which is the one place a player is already waiting.
     pub fn drain(&self) {
@@ -622,17 +708,24 @@ fn log_text(directory: &Path, slot: &Slot, writer: &mut SaveWriter) -> String {
 }
 
 /// Replay a log: the edits, the hotbar as the last line that carried one left
-/// it, the highest kit version dealt, the catches, the last tool slot, and how
-/// many lines were damaged.
+/// it, the highest kit version dealt, the catches, the last tool slot, the
+/// records and what the player touched, and how many lines were damaged.
 fn replay(text: &str) -> Replayed {
     let mut out = Replayed::default();
     for line in text.lines() {
         if line.trim().is_empty() {
             continue;
         }
-        match format::parse_line(line) {
-            Some(Record::Edit { edit, drop, slots }) => {
+        let Some((author, record)) = format::parse_entry(line) else {
+            out.damaged += 1;
+            continue;
+        };
+        match record {
+            Record::Edit { edit, drop, slots } => {
                 out.edits.set(edit);
+                if author.is_player() {
+                    out.yields.touch_cell(edit.cell);
+                }
                 if let Some(drop) = drop {
                     out.next_drop = out.next_drop.max(drop.id + 1);
                     out.drops.insert(drop.id, drop);
@@ -641,7 +734,7 @@ fn replay(text: &str) -> Replayed {
                     out.carried = Some(slots);
                 }
             }
-            Some(Record::Pick { id, left, slots }) => {
+            Record::Pick { id, left, slots } => {
                 if left == 0 {
                     out.drops.remove(&id);
                 } else if let Some(drop) = out.drops.get_mut(&id) {
@@ -649,21 +742,27 @@ fn replay(text: &str) -> Replayed {
                 }
                 out.carried = Some(slots);
             }
-            Some(Record::Pack { slots }) => out.carried = Some(slots),
-            Some(Record::Kit { version, slots }) => {
+            Record::Pack { slots } => out.carried = Some(slots),
+            Record::Kit { version, slots } => {
                 out.kit = out.kit.max(version);
                 out.carried = Some(slots);
             }
-            Some(Record::Catch {
+            Record::Catch {
                 species,
                 length_cm,
                 slots,
-            }) => {
+            } => {
                 out.catches.entry(species).or_default().add(length_cm);
                 out.carried = Some(slots);
             }
-            Some(Record::Hand { equipment }) => out.equipment = Some(equipment),
-            None => out.damaged += 1,
+            Record::Hand { equipment } => out.equipment = Some(equipment),
+            Record::Stored(record) => {
+                if author.is_player() {
+                    let before = out.records.get(&record.kind, record.id).cloned();
+                    out.yields.touch_record(before.as_ref(), &record);
+                }
+                out.records.put(record);
+            }
         }
     }
     out
@@ -1092,6 +1191,175 @@ mod tests {
         let why = refusal(&listed[0]).expect("refused");
         assert!(why.contains("generator version 99"), "{why}");
         assert_eq!(read_identity(&directory), Some(future));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// "A newer save in an older build": a record of a kind this build has
+    /// never heard of is held as its text, and after a dig and a quit it is
+    /// still in the log byte for byte, and read back the same (task 3.1).
+    #[test]
+    fn a_record_of_an_unknown_kind_survives_a_dig_and_a_quit_byte_for_byte() {
+        let root = temporary("unknown-record");
+        let slot = create(&root, "Landmarks", 21).unwrap();
+        let landmark =
+            r#"rec @c landmark 9 4 Landmark(name: "Old Tower", keeps: {"bell": [1, 2]})"#;
+        std::fs::write(root.join(&slot.id).join(LOG), format!("{landmark}\n")).unwrap();
+        let mut carried = Slots::new();
+        carried.give(Item::Block(Material::Dirt), 1);
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            let held = save
+                .records
+                .get("landmark", 9)
+                .expect("held, not understood");
+            assert_eq!(held.schema, 4);
+            assert!(save.accept(
+                Edit {
+                    cell: 77,
+                    layer: 200,
+                    material: Material::Air,
+                },
+                None,
+                &carried
+            ));
+            save.drain();
+        }
+        let text = std::fs::read_to_string(root.join(&slot.id).join(LOG)).unwrap();
+        assert_eq!(text.lines().next(), Some(landmark), "byte for byte");
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        assert_eq!(
+            reopened
+                .records
+                .get("landmark", 9)
+                .map(|r| r.line(&Author::Creation)),
+            Some(format!("{landmark}\n"))
+        );
+        assert_eq!(reopened.edits.for_cell(77), &[(200, Material::Air)]);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Records a world stores come back from the disk, the last value for
+    /// each key; a log from before authors replays as it always did and is
+    /// the player's; a torn record line at the end costs that line alone
+    /// (task 3.2).
+    #[test]
+    fn records_come_back_and_a_torn_record_line_costs_only_itself() {
+        let root = temporary("records");
+        let slot = create(&root, "Records", 22).unwrap();
+        let old = "77 200 0\n78 150 0\n";
+        std::fs::write(root.join(&slot.id).join(LOG), old).unwrap();
+        let site = |id, name: &str| StoredRecord {
+            kind: "site".into(),
+            id,
+            schema: 1,
+            body: format!("(name:\"{name}\")"),
+        };
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            assert!(
+                save.yields.has_cell(77) && save.yields.has_cell(78),
+                "the player's"
+            );
+            assert!(
+                save.store(
+                    &Author::Creation,
+                    vec![site(1, "Holbrook"), site(2, "Corford")]
+                )
+                .is_some()
+            );
+            assert!(
+                save.store(&Author::Creation, vec![site(2, "Cormouth")])
+                    .is_some()
+            );
+            save.drain();
+        }
+        let path = root.join(&slot.id).join(LOG);
+        let mut text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.starts_with(old), "the old lines are untouched");
+        text.push_str("rec @c site 3 1 (name:\"Ash");
+        std::fs::write(&path, &text).unwrap();
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        let names: Vec<String> = reopened
+            .records
+            .of_kind("site")
+            .map(|r| r.body.clone())
+            .collect();
+        assert_eq!(names, vec!["(name:\"Holbrook\")", "(name:\"Cormouth\")"]);
+        assert_eq!(reopened.edits.for_cell(78), &[(150, Material::Air)]);
+        assert!(!reopened.yields.has_cell(1), "records are not cells");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// "The world yields to the player": a proposal touching a cell the
+    /// player dug is refused whole and writes nothing; one that does not is
+    /// journaled under its process, and a reload has it, not as the
+    /// player's (task 3.3).
+    #[test]
+    fn a_world_proposal_on_the_players_work_is_refused_and_writes_nothing() {
+        let root = temporary("yield");
+        let slot = create(&root, "Yield", 23).unwrap();
+        let dig = |cell| Edit {
+            cell,
+            layer: 100,
+            material: Material::Air,
+        };
+        let process = Author::World {
+            process: "test".into(),
+            kind: "building".into(),
+            id: 40,
+        };
+        let house = |state: u8| StoredRecord {
+            kind: "building".into(),
+            id: 40,
+            schema: 1,
+            body: format!("(state:{state},door:0)"),
+        };
+        let mut carried = Slots::new();
+        carried.give(Item::Block(Material::Dirt), 1);
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            assert!(save.store(&Author::Creation, vec![house(0)]).is_some());
+            assert!(save.accept(dig(5), None, &carried));
+            save.drain();
+            let before = std::fs::read_to_string(root.join(&slot.id).join(LOG)).unwrap();
+            let refused = save.propose(
+                &process,
+                Proposal {
+                    edits: vec![dig(6), dig(5)],
+                    records: vec![house(1)],
+                },
+            );
+            assert_eq!(refused, Err(Refusal::Cell(5)));
+            save.drain();
+            let after = std::fs::read_to_string(root.join(&slot.id).join(LOG)).unwrap();
+            assert_eq!(before, after, "nothing of it written");
+            assert!(save.edits.for_cell(6).is_empty(), "nor applied");
+            let taken = save.propose(
+                &process,
+                Proposal {
+                    edits: vec![dig(6)],
+                    records: vec![house(1)],
+                },
+            );
+            assert!(matches!(taken, Ok(Some(_))), "{taken:?}");
+            save.drain();
+        }
+        let text = std::fs::read_to_string(root.join(&slot.id).join(LOG)).unwrap();
+        assert!(text.contains("@wtest:building/40 6 100 0\n"), "{text}");
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        assert_eq!(reopened.edits.for_cell(6), &[(100, Material::Air)]);
+        assert!(
+            !reopened.yields.has_cell(6),
+            "the world's dig is not the player's"
+        );
+        assert!(reopened.yields.has_cell(5));
+        assert_eq!(
+            reopened
+                .records
+                .get("building", 40)
+                .map(|r| r.body.as_str()),
+            Some("(state:1,door:0)")
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 }

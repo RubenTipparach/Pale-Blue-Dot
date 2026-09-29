@@ -308,9 +308,30 @@ The owner, 2026-09-29: "commence 2b, lets get these damn cities up to play!"
   with half the desert, so the sites stand on the ground they were placed on.
   The four desert buttons are retired, since B6 is decided.
 
-**Not yet.** Groups 3 and 4 need the save's record store first
-(`world-persistence` group 3): storing the list in a world, and the game's
-map layer. The game's spawn for a new version-6 world now moves to level
-ground (`taller-mountains` decision 8). When the game makes the list, it
-passes that start, not the default direction the instrument uses; the small
-town is within 500 m of both.
+**Group 3, as it is built (2026-09-29, written before the code).** The
+store is `world-persistence` decision 11.
+- **When:** on a world's open, if its save holds no complete list. That is
+  a new world, or an older world's first open under this build. The list is
+  made on the async pool from the world's own generator and the world's
+  start, not the player's pose, so the home town is by the start. It is
+  written as one `rec @c site <id> 1 <body>` line per site, then one
+  `rec @c site-list 0 1 <body>` line.
+- **A site's body** is its kind, name, capital, home, pinned and river
+  flags, and its direction as a unit vector, so its place does not round
+  through degrees.
+- **The `site-list` record** names the sites version, the generator and the
+  ids, in the list's order. A site record whose id the list does not name is
+  ignored. A list torn by a crash has no `site-list` line, so it is made
+  again whole on the next open.
+- **Shown only once committed:** the map draws no site until the writer's
+  mark has passed the `site-list` line.
+- **Read after:** once a world holds its list, `sites.ron` is not read for
+  it again, so a retune never moves its towns.
+- **The identity** gains the two kinds' schema versions when the list is
+  first written: a deliberate upgrade, as the key migration is.
+
+**Not yet.** Group 4, the game's map layer, reads the stored list. The
+game's spawn for a new version-6 world now moves to level ground
+(`taller-mountains` decision 8). When the game makes the list, it passes that
+start, not the default direction the instrument uses; the small town is
+within 500 m of both.
