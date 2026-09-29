@@ -10,7 +10,7 @@ the biome.
 - [x] 1.2 (`docs/screenshots/city-sites/mockup-world.png` and `mockup-close.png`.) The mockup's sites layer drawn from that JSON: a marker for each kind, names, and footprint outlines at close zoom. Verify: a headless screenshot at world zoom and at a close zoom.
 - [x] 1.3 (`tools/mockup_sites_test.js`: drags the capital; the RON pins it 0.66 degrees east and strikes id 111243.) The mockup's site editor: drag, add, strike, rename, and "copy as RON". Verify: a headless test drags a site, and the copied RON holds its new anchor.
 - [ ] 1.3a A walkthrough video of the mockup's sites: world zoom, each kind close in, and the editor dragging a pin and copying the RON. Verify: it is on the gate page.
-- [ ] 1.4 **Gate:** the owner watches the video, approves the sites on the map, and answers the open questions. Record their words in `proposal.md`, and any pins they placed in `assets/config/sites.ron`'s first draft. Verify: the quote is present.
+- [x] 1.4 (2026-09-29, on the mockup and its screenshots: "approve", for the 55 sites and the names (survey C4, C5). No pins placed; `sites.ron` ships as drawn. The walkthrough video, 1.3a, waits for the owner's batch.) **Gate:** the owner watches the video, approves the sites on the map, and answers the open questions. Record their words in `proposal.md`, and any pins they placed in `assets/config/sites.ron`'s first draft. Verify: the quote is present.
 
 ## 2. The site list in the core
 

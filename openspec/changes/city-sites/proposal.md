@@ -21,6 +21,12 @@ needs a list of places. That list must be:
 - **Open to the owner's hand**, so a place the owner wants can be pinned and a
   bad one struck out.
 
+**The gate (2026-09-29).** On the map mockup's 55 sites, drawn by the rules
+in `pbd_core::sites`, and the survey's two questions (C4, the sites; C5, the
+names): **"approve"**. The owner placed no pins, so `sites.ron` ships as
+drawn. The same message set a standing rule: "dont ask me questions unless you
+have screenshots for me to review" (CLAUDE.md).
+
 ## What Changes
 
 - **Sites are generated from the seed and the generator version.** A pure

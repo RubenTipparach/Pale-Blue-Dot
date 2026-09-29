@@ -16,12 +16,17 @@ answer.
 
 ## When
 
-- A change's proposal or design gains open questions for the owner.
-- A mockup or a gate is ready, and the owner has to choose something.
-- You are about to ask more than two questions in one message.
+The owner, 2026-09-29: "approve, dont ask me questions unless you have
+screenshots for me to review lol". So a question is asked only when there is
+something to look at:
 
-One or two quick questions can still go in chat. Anything more goes in the
-survey.
+- A gate is ready, with its screenshots or mockup.
+- A choice that is best judged by eye, with screenshots of each option.
+
+Everything else is not asked. Take your recommendation, record it in the
+change as "recommendation taken (ask only with screenshots)", and say so in
+your reply. Every question in the survey links or embeds what the owner is to
+look at.
 
 ## The survey doc
 
@@ -80,5 +85,6 @@ Doc the next time the connector is available.
 - Ask the same question in chat and in the survey.
 - Put a question in the survey that the code or a measurement can answer.
   Answer it yourself, and record the finding.
+- Ask a question with nothing to look at. Take the recommendation instead.
 - Start implementation on an unanswered question that changes behaviour.
   Planning may go on, with the recommendation marked as provisional.

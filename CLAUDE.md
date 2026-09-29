@@ -115,12 +115,18 @@ shape. The `owner-survey` skill (`.claude/skills/owner-survey`) says how. The
 current survey is https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn. Keep
 editing it rather than starting another.
 
-Whenever work turns up something only the owner can decide, add it to the
-survey and give the link. Do not wait to be asked. One quick yes-or-no can
-still go in chat. If a session has no Claude Docs connector, say so, and
-publish the same tables as an artifact page with an answer field per
-question, linked from the survey's "Already decided" section once the
-connector is back.
+If a session has no Claude Docs connector, say so, and publish the same
+tables as an artifact page with an answer field per question, linked from the
+survey's "Already decided" section once the connector is back.
+
+**Ask only with screenshots (owner, 2026-09-29):** "approve, dont ask me
+questions unless you have screenshots for me to review lol". A question goes
+to the owner only when it comes with something to look at: screenshots of the
+choice, or a mockup, beside it in the survey. Everything else, take the
+recommendation and carry on. Record it in the change as "recommendation
+taken (ask only with screenshots)", so it is never mistaken for the owner's
+own words, and say so in the reply. A gate is still the owner's, and it goes
+with its screenshots.
 
 ## Saved games survive every change (owner, 2026-09-28)
 
