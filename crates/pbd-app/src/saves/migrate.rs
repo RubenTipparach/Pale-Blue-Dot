@@ -242,7 +242,10 @@ impl Resolver {
             .iter()
             .copied()
             .filter(|&key| {
-                let surface = column::surface_m(&TerrainConfig::TENEBRIS, self.direction(key));
+                // The world's own ground: every log this reads is from before
+                // identities, so from generator 4, whatever the newest is
+                // (CLAUDE.md "Saved games survive every change").
+                let surface = column::surface_m(&TerrainConfig::TENEBRIS_V4, self.direction(key));
                 column::layer_at(surface).is_some_and(|s| s.abs_diff(layer) <= SURFACE_LAYERS)
             })
             .collect();
@@ -305,7 +308,11 @@ mod tests {
     }
 
     fn surface_layer(key: u32) -> usize {
-        column::layer_at(column::surface_m(&TerrainConfig::TENEBRIS, direction(key))).unwrap()
+        column::layer_at(column::surface_m(
+            &TerrainConfig::TENEBRIS_V4,
+            direction(key),
+        ))
+        .unwrap()
     }
 
     /// An edit line on `cell` at `layer`, with a hotbar.

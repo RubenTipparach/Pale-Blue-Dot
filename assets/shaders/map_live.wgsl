@@ -16,7 +16,8 @@ struct MapLive {
     // The view: the map position at the node's centre (u, v), and how much of
     // the map the node spans (u across, v down).
     view: vec4<f32>,
-    // The sun's body-local direction; w 1 to draw the night side.
+    // The sun's body-local direction; w how strongly to draw the night side,
+    // 0 for not at all (0.3 of itself over an overlay, decision 11).
     sun: vec4<f32>,
     // x 1 to draw the clouds and rain, y 1 to draw the overlay.
     layers: vec4<f32>,
@@ -99,8 +100,8 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         stack = over(stack, RAIN, FALL_ALPHA * weather.g);
         stack = over(stack, SNOW, FALL_ALPHA * weather.b);
     }
-    if (map.sun.w > 0.5) {
-        stack = over(stack, NIGHT, NIGHT_ALPHA * (1.0 - daylight(map.sun.xyz, up)));
+    if (map.sun.w > 0.0) {
+        stack = over(stack, NIGHT, NIGHT_ALPHA * map.sun.w * (1.0 - daylight(map.sun.xyz, up)));
     }
     let alpha = 1.0 - stack.keep;
     if (alpha < 1e-4) {

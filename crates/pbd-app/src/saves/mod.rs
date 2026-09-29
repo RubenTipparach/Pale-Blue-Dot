@@ -175,6 +175,15 @@ fn write_identity(directory: &Path, identity: &Identity) -> std::io::Result<()> 
     writer::replace_durably(&directory.join(IDENTITY), identity.to_ron().as_bytes())
 }
 
+/// The generator a slot's world is made by: its identity's, or 4 for a slot
+/// from before identities, which is the only version one could have been
+/// made under.
+pub fn generator_of(slot: &Slot) -> u32 {
+    slot.identity
+        .as_ref()
+        .map_or(4, |identity| identity.generator)
+}
+
 /// Why this build will not open a slot, naming the version it lacks, or
 /// `None` when it will. A slot with no identity yet predates them, and was
 /// made under versions every build since carries.
@@ -283,7 +292,10 @@ impl Default for WorldSave {
             catches: BTreeMap::new(),
             equipment: None,
             drops: Vec::new(),
-            identity: Identity::new(crate::planet::terrain::TERRAIN.seed),
+            // The seed is every generator version's (only the moisture moves), and
+            // reading it here must not fix this run's generator before the
+            // launch has chosen it from the world it opens.
+            identity: Identity::new(pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed),
             next_drop: 0,
             slot: None,
             root: PathBuf::from(ROOT),
@@ -1018,6 +1030,11 @@ mod tests {
         let listed = list(&root);
         assert_eq!(listed[0].identity, Some(Identity::new(4242)));
         assert_eq!(refusal(&listed[0]), None);
+        assert_eq!(
+            generator_of(&listed[0]),
+            pbd_core::terrain::GENERATOR_VERSION,
+            "made on this build's generator"
+        );
         let save = WorldSave::open(root.clone(), listed[0].clone());
         assert_eq!(save.identity, Identity::new(4242));
         let _ = std::fs::remove_dir_all(&root);
@@ -1055,6 +1072,8 @@ mod tests {
         assert_eq!(save.identity, written);
         assert_eq!(written.generator, 4);
         assert_eq!(written.topology, 1);
+        assert_eq!(generator_of(&listed[0]), 4, "made on version 4");
+        assert_eq!(generator_of(&list(&root)[0]), 4, "and it stays so");
         let _ = std::fs::remove_dir_all(&root);
     }
 

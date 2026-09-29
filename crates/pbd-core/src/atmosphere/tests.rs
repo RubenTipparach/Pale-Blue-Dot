@@ -875,3 +875,101 @@ fn the_heat_spread_is_the_same_diffusivity_at_every_level() {
         );
     }
 }
+
+/// The wind at cloud height in bands `width` degrees of latitude wide, from
+/// `reach` degrees south to `reach` north: each band's area-weighted zonal
+/// mean speed, and of its prograde part (Earth's westerly positive), m/s.
+fn aloft_bands(a: &Atmosphere, width: f32, reach: f32) -> Vec<(f32, f32)> {
+    let count = (2.0 * reach / width).round() as usize;
+    let mut bands = vec![(0.0f64, 0.0f64, 0.0f64); count];
+    for i in 0..a.grid.len() {
+        let c = a.grid.centre[i];
+        let latitude = c.y.clamp(-1.0, 1.0).asin().to_degrees();
+        if latitude.abs() >= reach {
+            continue;
+        }
+        let band = &mut bands[((latitude + reach) / width) as usize];
+        let area = f64::from(a.grid.area[i]);
+        let upper = a.upper[i];
+        band.0 += area;
+        band.1 += f64::from(upper.length()) * area;
+        band.2 += f64::from(upper.dot(super::step::prograde(c))) * area;
+    }
+    bands
+        .iter()
+        .map(|(area, speed, prograde)| ((speed / area) as f32, (prograde / area) as f32))
+        .collect()
+}
+
+/// The current generator's level-5 settled climate: a real day's temperature
+/// and wind, as a new world starts from.
+fn settled_level_5(settings: AtmosphereSettings) -> Atmosphere {
+    let generator = crate::terrain::GENERATOR_VERSION;
+    let path = format!(
+        "{}/../../assets/climate/settled-g{generator}-l5.bin",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let bytes = std::fs::read(&path).expect("the current generator's level-5 climate ships");
+    let terrain = TerrainConfig::for_version(generator).expect("the current generator");
+    let mut a = Atmosphere::new(
+        &terrain,
+        AtmosphereSettings {
+            level: 5,
+            ..settings
+        },
+        terrain.seed,
+    );
+    a.restore(&bytes).expect("a settled climate restores");
+    a
+}
+
+/// The steepest change of zonal-mean speed between neighbouring bands, m/s a
+/// degree of latitude.
+fn steepest(bands: &[(f32, f32)], width: f32) -> f32 {
+    bands
+        .windows(2)
+        .map(|pair| (pair[1].0 - pair[0].0).abs() / width)
+        .fold(0.0, f32::max)
+}
+
+/// `tropical-upper-wind` task 2.2: on a settled climate the tropics blow from
+/// the east aloft, and the jet grows out of them across a band of latitude,
+/// not at an edge. The rule it replaced left the equator calm (0.5 m/s) and
+/// changed 6.2 m/s a degree at the jet's edge.
+#[test]
+fn the_tropics_blow_easterly_aloft_and_the_jet_has_no_edge() {
+    let mut a = settled_level_5(AtmosphereSettings::default());
+    a.aloft();
+    let easterly = a.settings.tropical_easterly_mps;
+    let equator = aloft_bands(&a, 5.0, 5.0);
+    for (_, prograde) in &equator {
+        assert!(
+            *prograde <= -0.5 * easterly,
+            "the equator aloft blows {prograde:.1} m/s prograde, not from the east"
+        );
+    }
+    let edge = steepest(&aloft_bands(&a, 2.5, 35.0), 2.5);
+    assert!(edge <= 3.5, "the jet's edge changes {edge:.2} m/s a degree");
+}
+
+/// With no easterly asked for, the tropics aloft have the surface wind alone
+/// (inside 5.7 degrees the jet has wholly faded), and the fade still leaves
+/// no edge.
+#[test]
+fn with_no_easterly_the_tropics_aloft_have_the_surface_wind() {
+    let mut a = settled_level_5(AtmosphereSettings {
+        tropical_easterly_mps: 0.0,
+        ..Default::default()
+    });
+    a.aloft();
+    let mut inside = 0;
+    for i in 0..a.grid.len() {
+        if a.grid.centre[i].y.abs() < super::step::JET_FADE_SIN_LAT.0 {
+            assert_eq!(a.upper[i], a.wind[i]);
+            inside += 1;
+        }
+    }
+    assert!(inside > 0);
+    let edge = steepest(&aloft_bands(&a, 2.5, 35.0), 2.5);
+    assert!(edge <= 3.5, "the jet's edge changes {edge:.2} m/s a degree");
+}

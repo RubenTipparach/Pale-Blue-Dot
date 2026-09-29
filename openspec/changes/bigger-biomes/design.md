@@ -101,12 +101,48 @@ distribution.**
 - An edit's cell and material mean the same thing under either version.
 
 **5. The tests follow the scale.**
-- The 1 km walk becomes a 4 km walk: at least three in four cross a biome.
-- A 1 km walk is added in the other direction: at least a third stay in one
-  biome. This is what "bigger" means as a test.
+- ~~The 1 km walk becomes a 4 km walk: at least three in four cross a
+  biome.~~
+- ~~A 1 km walk is added in the other direction: at least a third stay in
+  one biome. This is what "bigger" means as a test.~~
 - A shares test runs on the shipped seed and four others. It fails naming the
   biome and its share.
 - If the owner picks the 375 m scale, the walks become 2 km and 500 m.
+
+**5a. What the walk tests found, and what "bigger" is tested as (measured
+2026-09-28, building version 5).** The two walk tests above were written
+before anything was measured, and version 5 failed both. Measured on
+temperate land, each field with its thresholds retuned to thirds, over 88
+kilometre walks that stay on it:
+
+| moisture field | biome edges a kilometre | kilometre walks in one biome |
+| --- | ---: | ---: |
+| 188 m (version 4's width) | 13.6 | 0% |
+| **750 m (version 5, survey B1)** | **3.3** | **3%** |
+| 750 m, two octaves | 2.5 | 6% |
+| 1,500 m | 1.5 | 22% |
+| 3,000 m | 1.0 | 33% |
+| 3,000 m, two octaves | 0.8 | 40% |
+
+- `moisture_m` is the noise's wavelength, not a patch's width. Cut into
+  thirds, a patch is a fraction of it, and the finer octaves fray its edges.
+  A walk that stays in one biome for a kilometre a third of the time takes a
+  3,000 m field, four times the owner's choice. Four-kilometre walks could not
+  be judged at all: at this body's size almost none stay on temperate land
+  that long.
+- So the owner's 750 m does what was asked. It is four times wider, and a
+  kilometre crosses about a quarter of the edges it did, 3.3 against 13.6.
+  The tests say that, not the walk counts the owner never asked for:
+  - `the_biomes_are_about_four_times_wider`: a kilometre of temperate land
+    crosses at most a third as many edges as the same generator with the old
+    188 m field, at the same thresholds. Version 4 fails it (4.1 against 4.1).
+  - `a_kilometre_of_land_crosses_more_than_one_biome`, the main spec's
+    existing test, still holds.
+  - `grass_is_not_the_majority_on_five_seeds`.
+- Whether 750 m is big enough on foot is the owner's to judge, walking it.
+  That was survey B4: "Accept everything as recommended" (2026-09-28), so
+  750 m stands for now. A wider field later is a new generator version, as this
+  one was, and worlds made on version 5 keep it.
 
 **6. Three things the plan above missed (found 2026-09-28, reading the code
 before building it).**
@@ -156,6 +192,60 @@ before building it).**
     visiting another planet will need it. It is the larger change, and not
     this one.
 
+As built (2026-09-28):
+- The accessor is `planet::terrain_config()`, with `generator_version()`
+  beside it. `choose_generator` sets it once, in `desktop::run`, from the
+  identity of the world the launch opens (4 for a slot with none). Anything
+  that reads it first, a test included, gets the current generator, and a
+  second choice of another version is refused.
+- The restart was built as recommended while B5 was open. **The owner
+  answered it otherwise, 2026-09-28:** "leave saved games alone. Should not
+  restart. I don't want games to be reset if players make progress on future
+  games and we decide to change biome stuff ... Making [it] backwards
+  compatible with saves is ideal, add to Claude md too". So opening a world
+  of another generator switches the planet in place, and the restart goes
+  (task 2.2c; the design of the switch is decision 8). The standing rule is
+  in CLAUDE.md, "Saved games survive every change".
+  The saves page's Load, and New while an old world is open, launch the game
+  again with `--world <name>` and close this one, whose save drains on the way
+  out as any quit's does. The saves page says so: "<name> is made with the
+  older biomes: restarting the game into it".
+- The settled states are `settled-g<generator>-l<level>`. Version 4's were
+  renamed, not remade. Version 5's level 3 landed on its second true year at
+  14.98 °C, and its new world's first 60 days read 14.87 to 15.25 °C. Its
+  level 5 ran as version 4's did (`climate-balance` finding 10): the first
+  true year 15.97 °C, the sea shifted down 0.97 K, the second 14.82 °C, and
+  a new world's 30 days 14.76 to 14.98 °C.
+- The map's cached base is named for the generator too, so a world of one
+  version never shows another's picture.
+- Version 5 carries survey G1 as the owner answered it (decision 7), since
+  it changed before PR #18 merged and no world outside the cloud container
+  was made on version 5.
+
+**7. Rock follows the contours (survey G1, 2026-09-28).** The owner, on the
+orange streaks across the version 5 desert: "rock stripes should follow
+contour lines which are by height". Version 4's `top_material` breaks a
+desert's sand with rock where `(|latitude| * 977).fract()` falls under
+`desert_rock_frac` (0.14), a latitude-only dither from the reference, so the
+rock runs in straight east-west bands; a swamp's dirt, grass and water are
+picked by the same latitude value. With deserts a fifth of the land those
+bands cross whole regions.
+- Version 5 picks by height: `strata_m`, `Some(7.0)`, lays one metre of rock
+  every 7 m (`(surface_m / strata_m).fract() < desert_rock_frac`, so the
+  share stays 1 in 7). A terrace's top is one height, so the rock is whole
+  terraces at those heights: bands that trace each hill's contours, broad on
+  flat ground and thin on slopes, as strata show in a cut bank. A swamp's
+  water lies in its lowest layer, its dirt one above, grass higher, so the
+  water sits in the hollows.
+- Version 4 keeps the latitude dither (`strata_m: None`), since an old world
+  keeps its ground; a digest of version 4's top blocks on 10,000 directions,
+  taken before the change, pins it.
+- The climate reads the biome, never the top block, so the settled climates
+  stand. The map's cached base, named for the generator, is rebuilt only in
+  this container, which is the one place a version 5 world was made.
+- *Alternative:* strata that dip, their height eased by a slow noise, as
+  real beds tilt. More natural, but not what was asked, and it can follow.
+
 ## Measured: the candidates (2026-09-27)
 
 `world-map`'s instrument (`examples/world_map.rs`, task 1.1) classified a
@@ -192,6 +282,81 @@ What it shows:
 - Of all the land, 750 m retuned gives beach 10%, fields 22%, desert 22%,
   jungle 21%, swamp 1%, mountains 2% and tundra 23%.
 - The rasters are `docs/mockups/world-map/biomes-{today,188,375,750}.png`.
+
+**8. The planet switches in place (survey B5, 2026-09-28).** The owner:
+"leave saved games alone. Should not restart." Opening a world of another
+generator from the saves page swaps the planet under it, in the one
+exclusive system that already swaps everything else a world owns
+(`desktop::load_world`), and no process is launched. Surveyed (the planet's
+build and the load path, read from the code):
+- Only `create_planet` builds the planet: the base records (163,842 cells,
+  every core), the contact tier's coarse level over them, and the first fine
+  set. The render world writes the base into `PlanetGpu.cells` once and never
+  again, and every view's bind group holds that buffer.
+- A load already reopens the atmosphere (`Air::open`, which builds its
+  surface from the biomes), resets the fishery, puts the craft away and
+  places them again, and forces a fine rebuild. It never touches the base,
+  the contact tier's coarse level, the map's raster, or the two cached spawn
+  directions.
+- Nothing ever tears the planet down, and a dozen systems take its
+  resources unconditionally, so the switch replaces them in one step and
+  never removes them.
+
+The switch, in `load_world`, after the save opens and before the air does,
+when the world's generator is not the planet's:
+- The config becomes switchable while no world is played: an atomic
+  version picking among the `const` configs, so `terrain_config()` keeps
+  returning `&'static`, and an epoch that moves with every switch.
+- The base records and the contact tier's coarse level are rebuilt for the
+  new version, and the fine set around the world's pose, with its edits, as
+  at startup. `PlanetFine.version` moves on from the old one, never back to
+  1, or the upload would skip it.
+- The render world rewrites the base region of the existing `cells` buffer
+  when the base's generation moves, so the views' bind groups stay valid.
+- A fine set or a map tile built on the old epoch is discarded when it lands:
+  dropping a task cannot stop the threads already building it.
+- The map's raster and its key's shares are dropped and rebuilt for the new
+  generator, and a world never played gets its spawn found on the new
+  ground.
+- The save-key migration of a world from before identities reads that
+  world's own generator (4) rather than the newest, which is right today
+  only because version 5 kept version 4's heights.
+
+Cost: the base and the first fine set took about 4.4 s at startup on the
+owner's desktop (`fine-set-in-a-second`), so a switch is a pause of that
+order on the saves page, against a relaunch's 12 s. Done synchronously
+first; a switching screen that keeps drawing can follow.
+- *Alternative:* keep the relaunch. It is what the owner said no to.
+
+*As built (2026-09-28).* As designed, and:
+- `planet::switch_generator` is the one entry, at launch and in
+  `load_world`, and `planet::rebuild_planet` the one rebuild; the relaunch,
+  `menu::crosses_generator` and `restart_into`, are gone.
+- The switch is tested in a process of its own
+  (`tests/generator_switch.rs`): the heights and biomes of 2,000 directions
+  follow the version chosen, 5 to 4 and back, the epoch moves only on a
+  real switch, and a version the build lacks is refused and changes
+  nothing. The rebuild is tested on the version in hand
+  (`planet::tests::a_rebuilt_planet_replaces_the_old_one_in_one_step`): the
+  base and the fine set are marked new, the base is the launch's to the
+  byte, a hole dug in the opened world is in the rebuilt set, and the lamps
+  stay as they were.
+- Captured in the game (`docs/screenshots/bigger-biomes/load-*.jpg`, with
+  the `--load` instrument, which asks for a load a third of the way to the
+  shot as the saves page's LOAD does): a version-5 game, raining over its
+  desert hills, loads a version-4 world and stands in green fields under
+  that world's dry sky, and its map redraws with version 4's biomes and
+  shares. The rebuild took 7.6 to 8.0 s on the cloud container's CPU,
+  against 4.4 s for the same work at startup on the owner's desktop.
+- The captures found the map's key still listing version 5's shares over
+  version 4's map: in a capture the base is rebuilt within the frame the
+  load resets it, so the key never saw it uncounted. The key now remembers
+  the generator it was painted for.
+- Found, not changed: the weather overlay's job remembers the air's
+  generation it was built from, and a reopened air starts again at 1, so an
+  overlay built from the old air's first state is kept after a load until
+  the new air publishes. It is as old as loading, not the switch's, and
+  in play the air publishes within seconds.
 
 ## Risks / Trade-offs
 

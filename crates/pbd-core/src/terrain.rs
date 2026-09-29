@@ -7,8 +7,12 @@ use crate::hex::{Hex, Voxel};
 
 /// Version 2 is the spherical generator in [`crate::planet_gen`]; version 3
 /// splits its fields into planet-scale and land-scale, which moves every
-/// height on the body.
-pub const GENERATOR_VERSION: u32 = 4;
+/// height on the body; version 5 (`bigger-biomes`) widens the moisture field
+/// fourfold and moves its thresholds, which changes which biome the dry land
+/// is and nothing about its shape. A new world is made with this version;
+/// a saved one keeps the version it was made with
+/// ([`crate::planet_gen::TerrainConfig::for_version`]).
+pub const GENERATOR_VERSION: u32 = 5;
 
 /// The topology a world's cells are cut from: the Goldberg levels and the
 /// finest cell keys (`pbd_core::cell_key`). A save records it beside the

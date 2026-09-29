@@ -14,7 +14,7 @@
 //! built off the main thread with the state they describe.
 
 use crate::config::AtmosphereConfig;
-use crate::planet::terrain::TERRAIN;
+use crate::planet::terrain::terrain_config;
 use crate::sky::Sun;
 use bevy::prelude::*;
 use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future};
@@ -80,15 +80,23 @@ pub fn settled_at_s() -> f64 {
     f64::from(START_HOUR) / 24.0 * f64::from(DAY_S)
 }
 
-/// The settled climate shipped for these settings, as `Atmosphere::to_bytes`
-/// wrote it: `assets/climate/settled-l<level>.bin`, made by
+/// The settled climate shipped for these settings and this world's terrain
+/// generator, as `Atmosphere::to_bytes` wrote it:
+/// `assets/climate/settled-g<generator>-l<level>.bin`, made by
 /// `examples/settle_climate.rs` with the settings in the `.ron` beside it
-/// (`climate-balance` decision 8). `None`, with a warning, when none is
-/// shipped for this level or it was made with other settings: a state settled
-/// under other physics is not this world's climate, and the world spins up
-/// from rest instead, starting below its mean (finding 9) until it is remade.
+/// (`climate-balance` decision 8). The generator is in the name because the
+/// climate reads the biomes (`bigger-biomes` decision 6). `None`, with a
+/// warning, when none is shipped for this generator and level or it was made
+/// with other settings: a state settled under other physics or on other
+/// ground is not this world's climate, and the world spins up from rest
+/// instead, starting below its mean (finding 9) until it is remade.
 pub fn shipped_settled(settings: &AtmosphereSettings) -> Option<Vec<u8>> {
-    let name = climate_dir().join(format!("settled-l{}", settings.level));
+    shipped_settled_for(crate::planet::generator_version(), settings)
+}
+
+/// [`shipped_settled`] for a given generator.
+pub fn shipped_settled_for(generator: u32, settings: &AtmosphereSettings) -> Option<Vec<u8>> {
+    let name = climate_dir().join(format!("settled-g{generator}-l{}", settings.level));
     let ron = name.with_extension("ron");
     let made_with: AtmosphereSettings = match std::fs::read_to_string(&ron) {
         Ok(text) => match ron::from_str(&text) {
@@ -100,7 +108,7 @@ pub fn shipped_settled(settings: &AtmosphereSettings) -> Option<Vec<u8>> {
         },
         Err(_) => {
             warn!(
-                "no settled climate is shipped for level {} ({}); spinning up from rest",
+                "no settled climate is shipped for generator {generator} at level {} ({}); spinning up from rest",
                 settings.level,
                 ron.display()
             );
@@ -110,9 +118,11 @@ pub fn shipped_settled(settings: &AtmosphereSettings) -> Option<Vec<u8>> {
     if made_with != *settings {
         warn!(
             "{} was made with other atmosphere settings; spinning up from rest. Remake it with \
-             `cargo run --release -p pbd-core --example settle_climate -- {}`",
+             `cargo run --release -p pbd-core --example settle_climate -- {}` (it settles on the \
+             current generator, {})",
             ron.display(),
-            settings.level
+            settings.level,
+            pbd_core::terrain::GENERATOR_VERSION
         );
         return None;
     }
@@ -131,7 +141,7 @@ impl Air {
         saved: Option<&[u8]>,
         seconds: f64,
     ) -> Self {
-        let mut atmosphere = Atmosphere::new(&TERRAIN, settings, seed);
+        let mut atmosphere = Atmosphere::new(terrain_config(), settings, seed);
         let restored = saved.is_some_and(|bytes| match atmosphere.restore(bytes) {
             Ok(()) => true,
             Err(error) => {
@@ -413,31 +423,70 @@ mod settled_tests {
     /// the code defaults, which `atmosphere.ron` is held equal to, at its
     /// level (`climate-balance` task 3.2b). A knob turned without remaking
     /// the states fails here rather than quietly starting worlds cold.
+    ///
+    /// Each is named for the generator it settled on (`bigger-biomes`
+    /// decision 6), and the current generator's ship at levels 3 and 5.
     #[test]
     fn the_shipped_settled_climates_are_made_with_the_running_settings() {
         let mut shipped = Vec::new();
         for entry in std::fs::read_dir(climate_dir()).expect("assets/climate") {
             let name = entry.expect("an entry").file_name();
             let name = name.to_string_lossy();
-            let Some(level) = name
-                .strip_prefix("settled-l")
-                .and_then(|rest| rest.strip_suffix(".ron"))
-            else {
+            // A state is its settings (`.ron`) and its bytes (`.bin`); the
+            // settings are what is checked, and the bytes must be beside them.
+            let Some((stem, extension)) = name.rsplit_once('.') else {
                 continue;
             };
+            let Some((generator, level)) = stem
+                .strip_prefix("settled-g")
+                .and_then(|rest| rest.split_once("-l"))
+            else {
+                assert!(
+                    !name.starts_with("settled-"),
+                    "{name} does not name its generator and level"
+                );
+                continue;
+            };
+            let generator: u32 = generator.parse().expect("a generator");
             let level: u32 = level.parse().expect("a level");
+            if extension != "ron" {
+                continue;
+            }
             let settings = AtmosphereSettings {
                 level,
                 ..Default::default()
             };
             assert!(
-                shipped_settled(&settings).is_some(),
+                shipped_settled_for(generator, &settings).is_some(),
                 "{name} was not made with the running settings, or has no state beside it"
             );
-            shipped.push(level);
+            shipped.push((generator, level));
         }
-        assert!(shipped.contains(&3), "level 3 ships, for the fish test");
-        assert!(shipped.contains(&5), "level 5 ships, the game's own level");
+        let current = pbd_core::terrain::GENERATOR_VERSION;
+        assert!(
+            shipped.contains(&(current, 3)),
+            "level 3 ships, for the fish test"
+        );
+        assert!(
+            shipped.contains(&(current, 5)),
+            "level 5 ships, the game's own level"
+        );
+    }
+
+    /// Each generator's worlds open on the climate settled on its own ground:
+    /// the climate reads the biomes, so a version-4 world never opens on a
+    /// state settled on version 5's, and a generator with none shipped spins
+    /// up from rest (`bigger-biomes` decision 6, task 3.1a).
+    #[test]
+    fn a_world_opens_on_its_own_generators_settled_climate() {
+        let settings = AtmosphereSettings {
+            level: 3,
+            ..Default::default()
+        };
+        let old = shipped_settled_for(4, &settings).expect("version 4 ships level 3");
+        let new = shipped_settled_for(5, &settings).expect("version 5 ships level 3");
+        assert_ne!(old, new, "two grounds, two settled climates");
+        assert_eq!(shipped_settled_for(99, &settings), None);
     }
 
     /// A new world opens on the settled state, exactly, when its clock opens
@@ -452,7 +501,7 @@ mod settled_tests {
         let shipped = shipped_settled(&settings).expect("level 3 is shipped");
         let opening = Clock::default().seconds;
         assert!((opening.rem_euclid(YEAR_DAYS * f64::from(DAY_S)) - settled_at_s()).abs() < 1e-6);
-        let air = Air::open(settings, TERRAIN.seed, None, opening);
+        let air = Air::open(settings, terrain_config().seed, None, opening);
         assert_eq!(
             air.now.to_bytes(),
             shipped,
@@ -464,7 +513,7 @@ mod settled_tests {
             "a new world opens at {mean:.2} C"
         );
         let noon = Clock::at_hour(12.0).seconds;
-        let later = Air::open(settings, TERRAIN.seed, None, noon);
+        let later = Air::open(settings, terrain_config().seed, None, noon);
         let mean = later.now.mean_surface_c();
         assert!(
             (mean - 15.0).abs() < 0.5,
@@ -522,7 +571,7 @@ mod tests {
     fn cloud_pace() {
         let settings = pbd_core::atmosphere::AtmosphereSettings::default();
         let start = 0.4 * pbd_core::daylight::DAY_S as f64;
-        let air = Air::open(settings, TERRAIN.seed, None, start);
+        let air = Air::open(settings, terrain_config().seed, None, start);
         let mut atmosphere = (*air.now).clone();
         let mut before = weather_maps(&atmosphere);
         let speeds: Vec<f32> = before

@@ -33,10 +33,9 @@ use bevy::ui::FocusPolicy;
 use bevy::ui_render::prelude::{MaterialNode, UiMaterial, UiMaterialPlugin};
 use bevy::window::PrimaryWindow;
 use pbd_app::atmosphere::{Air, MAP_SIZE};
-use pbd_app::config::WeatherSettings;
 use pbd_app::flight_view::PilotShip;
-use pbd_app::overlay::{OverlayMode, overlay_rgba, overlay_texels};
-use pbd_app::planet::{PLANET_RADIUS, TERRAIN};
+use pbd_app::overlay::{OverlayMode, RAMPS, overlay_rgba, overlay_texels};
+use pbd_app::planet::{PLANET_RADIUS, terrain_config};
 use pbd_app::saves::WorldSave;
 use pbd_app::sky::Sun;
 use pbd_app::vehicles::Vehicle;
@@ -225,6 +224,36 @@ impl UiMaterial for MapLiveMaterial {
     }
 }
 
+/// The base and a finer tile, drawn as built or greyed out beneath an
+/// overlay as the mockup greys the planet (`world-map` decision 11).
+#[derive(Asset, AsBindGroup, TypePath, Debug, Clone)]
+pub struct MapImageMaterial {
+    #[texture(0)]
+    #[sampler(1)]
+    pub image: Handle<Image>,
+    /// x 1 to grey the image out.
+    #[uniform(2)]
+    pub grey: Vec4,
+}
+
+impl UiMaterial for MapImageMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/map_image.wgsl".into()
+    }
+}
+
+/// How opaque a weather overlay is drawn over the greyed base: the mockup's
+/// 0.9 (decision 11). The globe keeps its own `overlay_opacity`.
+pub const MAP_OVERLAY_OPACITY: f32 = 0.9;
+/// How strongly the night side is drawn over an overlay, as a share of its
+/// full strength: the mockup's 0.3.
+pub const NIGHT_UNDER_OVERLAY: f32 = 0.3;
+
+/// The greying switch as the material's uniform reads it.
+fn grey_of(on: bool) -> Vec4 {
+    Vec4::new(if on { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0)
+}
+
 /// The base, the tiles and the layers as they are built.
 #[derive(Resource)]
 pub struct MapRaster {
@@ -264,6 +293,8 @@ const TILES_BUILDING: usize = 8;
 #[derive(Resource)]
 pub struct MapLive {
     pub material: Handle<MapLiveMaterial>,
+    /// The base's material, shared by its three copies.
+    pub base: Handle<MapImageMaterial>,
     cloud: Handle<Image>,
     overlay: Handle<Image>,
     cloud_generation: u64,
@@ -290,8 +321,6 @@ pub struct TileNode {
     column: i32,
 }
 #[derive(Component)]
-pub struct Veil;
-#[derive(Component)]
 pub struct LiveNode;
 #[derive(Component)]
 pub struct MarkerLayer;
@@ -314,6 +343,10 @@ pub enum MapButton {
 pub struct MapReadout;
 #[derive(Component)]
 pub struct MapNote;
+/// The legend's colour key: the chosen layer's swatches, or the chosen
+/// weather's ramp (`world-map` decision 11).
+#[derive(Component)]
+pub struct MapKey;
 
 /// The marker pictures: an arrow for the player, pointing north until turned,
 /// and a diamond for a craft.
@@ -441,6 +474,8 @@ pub fn biomes_layer() -> RasterLayer {
         name: "Biomes",
         note: "Each place's biome over the greyed base (survey M3).",
         paint: raster::biome_colour,
+        key: raster::BIOME_KEY,
+        class: raster::biome_class,
     }
 }
 
@@ -499,9 +534,14 @@ pub fn spawn(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<MapLiveMaterial>>,
+    mut bases: ResMut<Assets<MapImageMaterial>>,
     layers: Res<MapLayers>,
     launch: Option<Res<MapLaunch>>,
 ) {
+    let base = bases.add(MapImageMaterial {
+        image: Handle::default(),
+        grey: grey_of(false),
+    });
     let cloud = images.add(cube_image(TextureFormat::Rgba8Unorm));
     let overlay = images.add(cube_image(TextureFormat::Rgba8UnormSrgb));
     let material = materials.add(MapLiveMaterial {
@@ -511,6 +551,7 @@ pub fn spawn(
     });
     commands.insert_resource(MapLive {
         material: material.clone(),
+        base: base.clone(),
         cloud,
         overlay,
         cloud_generation: 0,
@@ -574,15 +615,9 @@ pub fn spawn(
             ))
             .with_children(|canvas| {
                 for copy in -1..=1 {
-                    canvas.spawn((BaseCopy(copy), ImageNode::default(), hidden(full())));
+                    canvas.spawn((BaseCopy(copy), MaterialNode(base.clone()), hidden(full())));
                 }
                 canvas.spawn((TileLayer, full(), FocusPolicy::Pass));
-                canvas.spawn((
-                    Veil,
-                    hidden(full()),
-                    BackgroundColor(Color::srgba(0.45, 0.46, 0.47, 0.62)),
-                    FocusPolicy::Pass,
-                ));
                 for copy in -1..=1 {
                     canvas.spawn((LayerCopy(copy), ImageNode::default(), hidden(full())));
                 }
@@ -747,7 +782,152 @@ fn legend(root: &mut ChildSpawnerCommands, layers: &MapLayers) {
             },
             TextColor(INK),
         ));
+        panel.spawn((
+            MapKey,
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: px(3),
+                ..default()
+            },
+        ));
     });
+}
+
+/// A line of the key's small text.
+fn key_text(text: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(text.into()),
+        TextFont {
+            font_size: 10.0,
+            ..default()
+        },
+        TextColor(INK),
+    )
+}
+
+/// The key's labels for a weather overlay's two ends and middle: the rain's
+/// negative end is snow, as the mockup labels it.
+fn ramp_labels(overlay: Overlay) -> [String; 3] {
+    let (low, high) = overlay.range();
+    let label = |v: f32| {
+        let text = if v.abs() < 1.0 && v != 0.0 {
+            format!("{v:.2}")
+        } else {
+            format!("{}", v.round())
+        };
+        if overlay == Overlay::Rain && v < 0.0 {
+            format!("{} snow", text.trim_start_matches('-'))
+        } else {
+            text
+        }
+    };
+    [label(low), label((low + high) / 2.0), label(high)]
+}
+
+/// Fill the colour key for the chosen overlay: a swatch and a share of the
+/// land for each row of a layer's key, counted off the base once it is
+/// built; a weather overlay's ramp as a bar with its range under it; nothing
+/// for the planet.
+pub fn paint_key(
+    mut commands: Commands,
+    choice: Res<MapChoice>,
+    layers: Res<MapLayers>,
+    raster: Res<MapRaster>,
+    keys: Query<Entity, With<MapKey>>,
+    // With the generator it was counted on: a load that switches the planet
+    // replaces the base, and a base rebuilt within the frame never shows
+    // this system an uncounted one (`bigger-biomes` decision 8).
+    mut painted: Local<Option<(MapOverlay, bool, u32)>>,
+    // By generator and layer: a world of another generator has other shares.
+    mut shares: Local<HashMap<(u32, usize), Vec<f32>>>,
+) {
+    let generator = pbd_app::planet::generator_version();
+    let counted = raster.base_texels.is_some();
+    let now = (choice.overlay, counted, generator);
+    if *painted == Some(now) {
+        return;
+    }
+    let Ok(key) = keys.single() else {
+        return;
+    };
+    *painted = Some(now);
+    commands.entity(key).despawn_related::<Children>();
+    match choice.overlay {
+        MapOverlay::None => {}
+        MapOverlay::Layer(index) => {
+            let Some(layer) = layers.rasters.get(index) else {
+                return;
+            };
+            let share = match (&raster.base_texels, shares.get(&(generator, index))) {
+                (_, Some(done)) => Some(done.clone()),
+                (Some(texels), None) => {
+                    let (width, _) = raster::level_size(BASE);
+                    let done = raster::layer_shares(layer, texels, width);
+                    shares.insert((generator, index), done.clone());
+                    Some(done)
+                }
+                (None, None) => None,
+            };
+            commands.entity(key).with_children(|rows| {
+                for (row, (name, [r, g, b])) in layer.key.iter().enumerate() {
+                    rows.spawn(Node {
+                        column_gap: px(6),
+                        align_items: AlignItems::Center,
+                        ..default()
+                    })
+                    .with_children(|line| {
+                        line.spawn((
+                            Node {
+                                width: px(14),
+                                height: px(10),
+                                border: UiRect::all(px(1)),
+                                ..default()
+                            },
+                            BorderColor::all(Color::srgba(0.0, 0.0, 0.0, 0.4)),
+                            BackgroundColor(Color::srgb_u8(*r, *g, *b)),
+                        ));
+                        line.spawn((
+                            key_text(*name),
+                            Node {
+                                width: px(90),
+                                ..default()
+                            },
+                        ));
+                        if let Some(share) = share.as_ref().and_then(|s| s.get(row)) {
+                            line.spawn(key_text(format!("{:.0}%", share * 100.0)));
+                        }
+                    });
+                }
+            });
+        }
+        MapOverlay::Weather(overlay) => {
+            let stops = RAMPS[overlay.ramp().index()]
+                .iter()
+                .map(|&[r, g, b]| ColorStop::auto(Color::srgb(r, g, b)))
+                .collect();
+            let [low, middle, high] = ramp_labels(overlay);
+            commands.entity(key).with_children(|rows| {
+                rows.spawn((
+                    Node {
+                        height: px(10),
+                        border: UiRect::all(px(1)),
+                        ..default()
+                    },
+                    BorderColor::all(EDGE),
+                    BackgroundGradient::from(LinearGradient::to_right(stops)),
+                ));
+                rows.spawn(Node {
+                    justify_content: JustifyContent::SpaceBetween,
+                    ..default()
+                })
+                .with_children(|line| {
+                    line.spawn(key_text(low));
+                    line.spawn(key_text(middle));
+                    line.spawn(key_text(high));
+                });
+            });
+        }
+    }
 }
 
 /// The legend's clicks.
@@ -943,16 +1123,19 @@ pub fn keep_raster(
                 .as_ref()
                 .and_then(|s| s.slot().map(|slot| s.root().join(&slot.id)));
             let palette = palette.clone();
+            // The generator as the job starts, config and version together:
+            // a switch before it lands drops the raster and this job with it.
+            let cfg = *terrain_config();
+            let generator = pbd_app::planet::generator_version();
             let job = move || {
-                let cfg = TERRAIN;
                 let cached = dir
                     .as_ref()
-                    .and_then(|d| raster::load_base(d, cfg.seed, &cfg));
+                    .and_then(|d| raster::load_base(d, cfg.seed, generator, &cfg));
                 let fresh = cached.is_none();
                 let texels = cached.unwrap_or_else(|| raster::build_base(&cfg));
                 if fresh
                     && let Some(d) = &dir
-                    && let Err(error) = raster::save_base(d, cfg.seed, &texels)
+                    && let Err(error) = raster::save_base(d, cfg.seed, generator, &texels)
                 {
                     warn!("the map's base could not be cached: {error}");
                 }
@@ -1018,7 +1201,7 @@ pub fn keep_raster(
             continue;
         }
         if in_place {
-            let rgba = key.build(&TERRAIN, &palette);
+            let rgba = key.build(terrain_config(), &palette);
             let image = images.add(map_image(TILE, TILE, rgba));
             for (_, gone) in raster.tiles.insert(key, image) {
                 images.remove(&gone);
@@ -1028,7 +1211,7 @@ pub fn keep_raster(
             raster.pending.insert(
                 key,
                 AsyncComputeTaskPool::get()
-                    .spawn(async move { (key, key.build(&TERRAIN, &palette)) }),
+                    .spawn(async move { (key, key.build(terrain_config(), &palette)) }),
             );
         }
     }
@@ -1094,18 +1277,6 @@ fn place(node: &mut Node, left: f32, top: f32, width: f32, height: f32) {
     node.position_type = PositionType::Absolute;
 }
 
-/// The veil's node, apart from every other node `lay_out` moves.
-type VeilQuery<'w, 's> = Query<
-    'w,
-    's,
-    &'static mut Node,
-    (
-        With<Veil>,
-        Without<BaseCopy>,
-        Without<LayerCopy>,
-        Without<TileNode>,
-    ),
->;
 /// The tiles on screen, apart from the base's and the layer's copies.
 type TileQuery<'w, 's> = Query<
     'w,
@@ -1113,13 +1284,31 @@ type TileQuery<'w, 's> = Query<
     (
         Entity,
         &'static TileNode,
-        &'static mut ImageNode,
+        &'static MaterialNode<MapImageMaterial>,
         &'static mut Node,
     ),
-    (Without<BaseCopy>, Without<LayerCopy>, Without<Veil>),
+    (Without<BaseCopy>, Without<LayerCopy>),
 >;
 
-/// Place the base, the tiles, the veil and the chosen layer for the view.
+/// Set a map image's picture and greying, touching the asset only when one
+/// of them changes, so an unchanged frame uploads nothing.
+fn set_image(
+    materials: &mut Assets<MapImageMaterial>,
+    handle: &Handle<MapImageMaterial>,
+    image: &Handle<Image>,
+    grey: Vec4,
+) {
+    let stale = materials
+        .get(handle)
+        .is_some_and(|m| m.image != *image || m.grey != grey);
+    if stale && let Some(material) = materials.get_mut(handle) {
+        material.image = image.clone();
+        material.grey = grey;
+    }
+}
+
+/// Place the base, the tiles and the chosen layer for the view, and grey the
+/// base and tiles out while an overlay shows (decision 11).
 #[allow(clippy::too_many_arguments)]
 pub fn lay_out(
     mut commands: Commands,
@@ -1128,9 +1317,10 @@ pub fn lay_out(
     choice: Res<MapChoice>,
     windows: Query<&Window, With<PrimaryWindow>>,
     mut raster: ResMut<MapRaster>,
-    mut bases: Query<(&BaseCopy, &mut ImageNode, &mut Node), Without<LayerCopy>>,
+    live: Res<MapLive>,
+    mut images: ResMut<Assets<MapImageMaterial>>,
+    mut bases: Query<(&BaseCopy, &mut Node), Without<LayerCopy>>,
     mut copies: Query<(&LayerCopy, &mut ImageNode, &mut Node), Without<BaseCopy>>,
-    mut veil: VeilQuery,
     tile_layer: Query<Entity, With<TileLayer>>,
     mut tiles: TileQuery,
 ) {
@@ -1147,9 +1337,10 @@ pub fn lay_out(
     // turn either side of the one under the centre is `u` plus or minus 1.
     let x_of = |u: f32| size.x / 2.0 + (u - view.centre.x) * w;
     let top = size.y / 2.0 - view.centre.y * h;
-    for (copy, mut image, mut node) in &mut bases {
-        if let Some(base) = &raster.base {
-            image.image = base.clone();
+    let grey = grey_of(choice.overlay != MapOverlay::None);
+    if let Some(base) = &raster.base {
+        set_image(&mut images, &live.base, base, grey);
+        for (copy, mut node) in &mut bases {
             node.display = Display::Flex;
             place(&mut node, x_of(copy.0 as f32), top, w, h);
         }
@@ -1167,13 +1358,6 @@ pub fn lay_out(
             }
             None => node.display = Display::None,
         }
-    }
-    for mut node in &mut veil {
-        node.display = if choice.overlay == MapOverlay::None {
-            Display::None
-        } else {
-            Display::Flex
-        };
     }
     // The finer tiles: one node for each wanted tile that is built.
     let level = view.level();
@@ -1208,8 +1392,8 @@ pub fn lay_out(
         let at_top = top + f32::from(key.y) * side_y;
         match shown.get(&(key, column)) {
             Some(&entity) => {
-                if let Ok((_, _, mut image, mut node)) = tiles.get_mut(entity) {
-                    image.image = handle;
+                if let Ok((_, _, material, mut node)) = tiles.get_mut(entity) {
+                    set_image(&mut images, &material.0, &handle, grey);
                     place(
                         &mut node,
                         at_left - 0.5,
@@ -1228,10 +1412,14 @@ pub fn lay_out(
                     side_x + 1.0,
                     side_y + 1.0,
                 );
+                let material = images.add(MapImageMaterial {
+                    image: handle,
+                    grey,
+                });
                 let child = commands
                     .spawn((
                         TileNode { key, column },
-                        ImageNode::new(handle),
+                        MaterialNode(material),
                         node,
                         FocusPolicy::Pass,
                     ))
@@ -1251,7 +1439,6 @@ pub fn live(
     choice: Res<MapChoice>,
     sun: Res<Sun>,
     air: Option<Res<Air>>,
-    settings: Res<WeatherSettings>,
     windows: Query<&Window, With<PrimaryWindow>>,
     mut live: ResMut<MapLive>,
     mut materials: ResMut<Assets<MapLiveMaterial>>,
@@ -1291,7 +1478,7 @@ pub fn live(
         {
             let atmosphere = air.now.clone();
             let generation = air.generation;
-            let opacity = settings.overlay_opacity;
+            let opacity = MAP_OVERLAY_OPACITY;
             let job = move || {
                 overlay_texels(&atmosphere, overlay)
                     .into_iter()
@@ -1313,12 +1500,21 @@ pub fn live(
     }
     let overlay_ready = want.is_some() && live.overlay_built.map(|(_, o)| o) == want;
     let sun_dir = sun.clock.sun();
+    // Under an overlay the live clouds are not drawn and the night is only a
+    // hint, as the mockup's `draw()` has it (decision 11): an overlay is data,
+    // and cloud or night laid over it would hide what it says.
+    let data = choice.overlay != MapOverlay::None;
+    let night = match (choice.night, data) {
+        (false, _) => 0.0,
+        (true, false) => 1.0,
+        (true, true) => NIGHT_UNDER_OVERLAY,
+    };
     if let Some(material) = materials.get_mut(&live.material) {
         material.params = MapLiveParams {
             view: Vec4::new(view.centre.x, view.centre.y, span.x, span.y),
-            sun: sun_dir.extend(if choice.night { 1.0 } else { 0.0 }),
+            sun: sun_dir.extend(night),
             layers: Vec4::new(
-                if choice.clouds { 1.0 } else { 0.0 },
+                if choice.clouds && !data { 1.0 } else { 0.0 },
                 if overlay_ready { 1.0 } else { 0.0 },
                 0.0,
                 0.0,
@@ -1476,6 +1672,7 @@ pub struct MapScreenPlugin;
 impl Plugin for MapScreenPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(UiMaterialPlugin::<MapLiveMaterial>::default())
+            .add_plugins(UiMaterialPlugin::<MapImageMaterial>::default())
             .init_resource::<MapView>()
             .init_resource::<MapRaster>()
             .init_resource::<MapLayers>()
@@ -1493,6 +1690,7 @@ impl Plugin for MapScreenPlugin {
                     to_globe,
                     paint_legend,
                     keep_raster,
+                    paint_key,
                     lay_out,
                     live,
                     markers,
@@ -1716,6 +1914,7 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<Assets<Image>>()
             .init_resource::<Assets<MapLiveMaterial>>()
+            .init_resource::<Assets<MapImageMaterial>>()
             .init_resource::<MapLayers>()
             .add_systems(Startup, spawn);
         app.world_mut()
@@ -1724,6 +1923,8 @@ mod tests {
                 name: "Test layer",
                 note: "added by a test",
                 paint: |_| [0; 4],
+                key: &[],
+                class: |_| None,
             });
         app.update();
         let mut buttons = app.world_mut().query::<(&MapButton, &Children)>();
@@ -1802,6 +2003,116 @@ mod tests {
             app.world().resource::<OverlayMode>().0,
             Some(Overlay::Cloud)
         );
+    }
+
+    /// A map app with the screen built and open: the systems that draw the
+    /// layers and the key, a window to measure, and no GPU.
+    fn drawn_map() -> App {
+        use pbd_core::daylight::Clock;
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<Assets<Image>>()
+            .init_resource::<Assets<MapLiveMaterial>>()
+            .init_resource::<Assets<MapImageMaterial>>()
+            .insert_resource(Screen::Map)
+            .init_resource::<MapView>()
+            .init_resource::<MapChoice>()
+            .init_resource::<MapRaster>()
+            .init_resource::<MapLayers>()
+            .insert_resource(Sun {
+                clock: Clock::at_hour(12.0),
+                running: false,
+            })
+            .add_systems(PreStartup, |mut layers: ResMut<MapLayers>| {
+                layers.add(biomes_layer());
+            })
+            .add_systems(Startup, spawn)
+            .add_systems(Update, (paint_key, live).chain());
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        app.update();
+        app
+    }
+
+    fn live_params(app: &App) -> MapLiveParams {
+        let handle = app.world().resource::<MapLive>().material.clone();
+        app.world()
+            .resource::<Assets<MapLiveMaterial>>()
+            .get(&handle)
+            .expect("the live material")
+            .params
+    }
+
+    /// Every text under an entity, depth first.
+    fn texts_under(app: &App, root: Entity) -> Vec<String> {
+        let world = app.world();
+        let mut out = Vec::new();
+        let mut stack = vec![root];
+        while let Some(entity) = stack.pop() {
+            if let Some(text) = world.get::<Text>(entity) {
+                out.push(text.0.clone());
+            }
+            if let Some(children) = world.get::<Children>(entity) {
+                stack.extend(children.iter().rev());
+            }
+        }
+        out
+    }
+
+    /// Under an overlay the live clouds are not drawn and the night side is
+    /// drawn at 0.3 of itself, as the mockup draws them (decision 11); over
+    /// the planet they are drawn in full.
+    #[test]
+    fn under_an_overlay_the_clouds_hide_and_the_night_dims() {
+        let mut app = drawn_map();
+        {
+            let mut choice = app.world_mut().resource_mut::<MapChoice>();
+            choice.night = true;
+            choice.clouds = true;
+        }
+        app.update();
+        let planet = live_params(&app);
+        assert_eq!(planet.layers.x, 1.0, "clouds over the planet");
+        assert_eq!(planet.sun.w, 1.0, "and the night in full");
+        for overlay in [MapOverlay::Weather(Overlay::Rain), MapOverlay::Layer(0)] {
+            app.world_mut().resource_mut::<MapChoice>().overlay = overlay;
+            app.update();
+            let data = live_params(&app);
+            assert_eq!(data.layers.x, 0.0, "no clouds over {overlay:?}");
+            assert_eq!(
+                data.sun.w, NIGHT_UNDER_OVERLAY,
+                "a dim night over {overlay:?}"
+            );
+        }
+    }
+
+    /// The key shows a swatch per biome for the biome layer, and the rain's
+    /// ramp with its range, snow at the negative end, as the mockup's legend
+    /// does (decision 11); nothing over the planet.
+    #[test]
+    fn the_key_shows_the_biomes_and_the_rains_range() {
+        let mut app = drawn_map();
+        let key = app
+            .world_mut()
+            .query_filtered::<Entity, With<MapKey>>()
+            .single(app.world())
+            .expect("the key");
+        assert!(texts_under(&app, key).is_empty(), "nothing over the planet");
+        app.world_mut().resource_mut::<MapChoice>().overlay = MapOverlay::Layer(0);
+        app.update();
+        let names: Vec<String> = raster::BIOME_KEY
+            .iter()
+            .map(|(n, _)| n.to_string())
+            .collect();
+        assert_eq!(texts_under(&app, key), names, "a row per biome, in order");
+        app.world_mut().resource_mut::<MapChoice>().overlay = MapOverlay::Weather(Overlay::Rain);
+        app.update();
+        assert_eq!(texts_under(&app, key), ["10 snow", "0", "10"]);
+        let bar = app
+            .world()
+            .get::<Children>(key)
+            .and_then(|c| c.first().copied())
+            .expect("the ramp bar");
+        assert!(app.world().get::<BackgroundGradient>(bar).is_some());
     }
 
     /// The clouds' bytes carry the cover and split the precipitation into

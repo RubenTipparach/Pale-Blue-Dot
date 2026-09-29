@@ -18,12 +18,19 @@ biome SHALL hold the majority of the temperate land.
 - **THEN** every biome and at least six top materials occur on it
 
 #### Scenario: A walk crosses biomes
-- **WHEN** four kilometres of temperate land are walked in a straight line
-- **THEN** at least three walks in four pass through more than one biome
+- **WHEN** a kilometre of land is walked in a straight line
+- **THEN** it passes through more than one biome
 
-#### Scenario: A biome is somewhere to be
-- **WHEN** a kilometre of temperate land is walked in a straight line
-- **THEN** at least a third of the walks stay inside one biome the whole way
+#### Scenario: The biomes are about four times wider
+- **WHEN** kilometres of temperate land are walked in straight lines
+- **THEN** they cross at most a third as many biome edges as the same
+  generator with the 188 m moisture field does at the same thresholds
+
+#### Scenario: Rock follows the contours
+- **WHEN** a version 5 desert is sampled
+- **THEN** every cell at one height has the same top block, so the rock lies
+  in bands along the contours rather than along the latitude
+- **AND** version 4's desert keeps the top blocks it had
 
 #### Scenario: Grass is not the majority
 - **WHEN** the temperate land (outside the cold band and below the mountain

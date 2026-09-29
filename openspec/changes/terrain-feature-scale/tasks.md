@@ -1,5 +1,11 @@
 # Tasks
 
+(2026-09-28) This change's biome requirement was merged into
+`openspec/specs/world/terrain` when it was built, and `bigger-biomes` has
+since modified it again (the 750 m field, generator version 5). The stale copy
+is removed from this change's delta, which keeps only the generator
+requirement it still owns.
+
 ## 1. Measure (done)
 
 - [x] The roughness instrument: over land, the share of adjacent cells whose

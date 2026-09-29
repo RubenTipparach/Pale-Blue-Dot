@@ -53,6 +53,12 @@ gate for everything after it, in this change and in `bigger-biomes`,
 
 - [ ] 5.4 (Waits for `city-sites`: the game has no sites, so no places to list. Decision 10.) A site's named places on the map, as the towns mockup's Places list has them (the inn, the keep, the market). Choosing one shows it on the map, and in a debug build moves the player there. Verify: an app test that choosing a place in a debug build puts the walker at its door.
 
+## 5b. The layers as the mockup composes them (decision 11)
+
+- [x] 5.5 (`map_image.wgsl`, `MapImageMaterial`; `the_map_greys_as_the_mockup_does` runs its `greyed` on lavapipe, within a byte of the mockup's arithmetic on ten of the base's colours, and fails with the darkening at 0.35.) The base and tiles through a greying UI material (luminosity grey, then 45% of (10, 16, 20)), switched on while an overlay shows; the veil removed. Verify: a test that the material's shared WGSL greys a colour as the mockup's canvas does, run on a GPU adapter.
+- [x] 5.6 (`BIOME_ALPHA` 224, `MAP_OVERLAY_OPACITY`, `NIGHT_UNDER_OVERLAY`; `under_an_overlay_the_clouds_hide_and_the_night_dims`.) The biome layer at 0.88 and the map's weather overlay at 0.9; no live clouds and the night at 0.3 under an overlay. Verify: an app test that choosing an overlay hides the clouds.
+- [x] 5.7 (`MapKey`, `paint_key`, `RasterLayer::key` and `class`, `layer_shares`; `the_key_shows_the_biomes_and_the_rains_range`; the shots in `docs/screenshots/world-map/`, rain's heaviest at (29, 54, 172) against the mockup's (26, 53, 168).) The legend's colour key: biome swatches, and the weather's ramp bar with its range. Verify: an app test that the key shows for the biomes and for rain, and `--capture` shots beside the mockup's with the sea pixel measured.
+
 ## 6. The owner's check
 
 - [ ] 6.1 (Screenshots stand in until the owner's batch: the gate page https://claude.ai/artifact/2Vs2e3h3rQS1EPKQSKA1gF puts each game view beside the approved mockup's.) The gate video (showcase `map`):

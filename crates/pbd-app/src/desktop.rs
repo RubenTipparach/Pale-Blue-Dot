@@ -33,8 +33,8 @@ use pbd_app::{
     config::ConfigPlugin,
     flight_view::{FlightViewConfig, FlightViewPlugin, FlyMode, TourProgress},
     planet::{
-        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, TERRAIN, river_channel, surface_code,
-        surface_height, terrain_radius, tile_width_m,
+        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, river_channel, surface_code, surface_height,
+        terrain_config, terrain_radius, tile_width_m,
     },
     saves::{self, Pose, WorldSave},
     sky::SkyPlugin,
@@ -175,6 +175,11 @@ pub struct Launch {
     /// Absent, an interactive run opens the one played most recently and a
     /// capture writes to no world at all.
     pub world: Option<String>,
+    /// `--load <name>`: a capture instrument. A third of the way to the shot,
+    /// load that save as the saves page's LOAD does, so a capture shows what
+    /// a load does to a running game: an old world's planet switched in
+    /// place, say (`bigger-biomes` task 2.2c). The save must already exist.
+    pub load: Option<String>,
     /// `--menu pause|settings|saves|pack|map` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
@@ -218,6 +223,7 @@ impl Launch {
             rain: 0.0,
             weather_at: 0.0,
             world: None,
+            load: None,
             time: None,
             day: None,
             overlay: None,
@@ -347,6 +353,10 @@ impl Launch {
                     i += 1;
                     result.world = Some(args.get(i).expect("--world requires a name").clone());
                 }
+                "--load" => {
+                    i += 1;
+                    result.load = Some(args.get(i).expect("--load requires a name").clone());
+                }
                 "--menu" => {
                     i += 1;
                     let screen = args
@@ -415,8 +425,9 @@ impl Launch {
                     i += 1;
                     let spawn = args.get(i).expect("--spawn requires a place").clone();
                     assert!(
-                        spawn == "mouth" || spawn == "snow",
-                        "--spawn knows mouth and snow"
+                        spawn == "mouth" || spawn == "snow" || spawn_biome(&spawn).is_some(),
+                        "--spawn knows mouth, snow and the biomes (beach, fields, desert, \
+                         jungle, swamp, mountains, tundra)"
                     );
                     result.spawn = Some(spawn);
                 }
@@ -644,6 +655,12 @@ pub fn run(args: &[String]) {
     // anchored. Restoring the pose afterwards would build the world around the
     // spawn and then teleport away from it.
     let mut world = open_world(&launch);
+    // The planet is made by the generator the world was made by (an old
+    // world keeps its biomes, survey B3), chosen here, before anything builds
+    // it (`bigger-biomes` decision 6). The logger is not up yet.
+    if let Err(why) = pbd_app::planet::switch_generator(world.identity.generator) {
+        eprintln!("terrain generator: {why}");
+    }
     let saved_seconds = world.world_seconds;
     let hotbar = slots::Hotbar::restore(&mut world);
     let tools = pbd_app::fish::ToolSlot::restore(&world);
@@ -873,7 +890,10 @@ pub fn run(args: &[String]) {
     )
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
-    .add_systems(PreUpdate, load_world.after(menu::toggle))
+    .add_systems(
+        PreUpdate,
+        (load_on_cue, load_world).chain().after(menu::toggle),
+    )
     .insert_resource(FrameLog::open(launch.frame_log.as_deref()))
     .add_systems(
         Last,
@@ -950,7 +970,10 @@ pub fn run(args: &[String]) {
 /// to write says which world.
 fn open_world(launch: &Launch) -> WorldSave {
     let root = std::path::PathBuf::from(saves::ROOT);
-    let seed = TERRAIN.seed;
+    // The world's seed, which every generator version shares. Not read off
+    // `terrain_config()`, which would fix this run's generator before the
+    // world that chooses it is open.
+    let seed = pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed;
     let asked = launch.world.clone();
     if asked.is_none() && launch.capture.is_some() {
         return WorldSave::memory_only();
@@ -996,6 +1019,34 @@ fn open_world(launch: &Launch) -> WorldSave {
     WorldSave::open(root, slot)
 }
 
+/// Ask for the `--load` world's load a third of the way to the shot, as the
+/// saves page's LOAD would, once.
+fn load_on_cue(
+    launch: Res<Launch>,
+    state: Res<CaptureState>,
+    mut load: ResMut<menu::LoadRequest>,
+    mut asked: Local<bool>,
+) {
+    let Some(name) = launch.load.as_deref() else {
+        return;
+    };
+    if *asked || state.frame < launch.frames / 3 {
+        return;
+    }
+    *asked = true;
+    let id = saves::slot_id(name);
+    match saves::list(std::path::Path::new(saves::ROOT))
+        .into_iter()
+        .find(|slot| slot.id == id || slot.file.name == name)
+    {
+        Some(slot) => {
+            info!("--load: loading '{name}' at frame {}", state.frame);
+            load.0 = Some(slot);
+        }
+        None => warn!("--load: there is no world '{name}'"),
+    }
+}
+
 /// Carry out a load the saves screen asked for.
 ///
 /// An exclusive system, because a load touches more of the world than one set
@@ -1021,6 +1072,18 @@ fn load_world(world: &mut World) {
         open.root().to_path_buf()
     };
     let mut opened = WorldSave::open(root, slot);
+    // A world made by another generator than the planet's: the planet is
+    // switched to it here, in place, before anything reads it, and never by
+    // relaunching (`bigger-biomes` decision 8; the owner: "Should not
+    // restart"). The saves page refuses a version this build lacks, so a
+    // refusal here keeps the planet as it is.
+    let switched = match pbd_app::planet::switch_generator(opened.identity.generator) {
+        Ok(switched) => switched,
+        Err(why) => {
+            warn!("{name}: {why}; the planet stays as it is");
+            false
+        }
+    };
     let hotbar = slots::Hotbar::restore(&mut opened);
     let tools = pbd_app::fish::ToolSlot::restore(&opened);
     let drops = pbd_app::drops::Drops::restore(&opened);
@@ -1036,7 +1099,7 @@ fn load_world(world: &mut World) {
         let sun = *world.resource::<pbd_app::sky::Sun>();
         let mut air = pbd_app::atmosphere::Air::open(
             config,
-            pbd_app::planet::TERRAIN.seed,
+            pbd_app::planet::terrain_config().seed,
             opened.weather.as_deref(),
             sun.clock.seconds,
         );
@@ -1048,6 +1111,28 @@ fn load_world(world: &mut World) {
     world.insert_resource(hotbar);
     world.insert_resource(tools);
     world.insert_resource(drops);
+    if switched {
+        // The planet itself, built for this world's generator round where
+        // the world resumes, with its edits, before the walker stands on it;
+        // and the map's picture of the other planet goes with it.
+        let near = pose.map_or(
+            world
+                .resource::<pbd_app::flight_view::FlightViewConfig>()
+                .spawn_direction,
+            |pose| pose.position.normalize_or(Vec3::Y),
+        );
+        pbd_app::planet::rebuild_planet(world, near);
+        if world.contains_resource::<map_screen::MapRaster>() {
+            world.insert_resource(map_screen::MapRaster::default());
+        }
+        if pose.is_none() {
+            pbd_app::walking::find_spawn_again(world);
+        }
+        info!(
+            "switched the planet to generator {} for '{name}'",
+            pbd_app::planet::generator_version()
+        );
+    }
     // The water of the world being left is not this world's water.
     if let Some(mut fishery) = world.get_resource_mut::<pbd_app::fish::Fishery>() {
         *fishery = pbd_app::fish::Fishery::default();
@@ -1193,6 +1278,32 @@ fn sun_clock(launch: &Launch, saved_seconds: Option<f64>) -> pbd_core::daylight:
     clock
 }
 
+/// The biome a `--spawn` name asks for, if it names one.
+fn spawn_biome(name: &str) -> Option<pbd_core::planet_gen::Biome> {
+    use pbd_core::planet_gen::Biome;
+    Some(match name {
+        "beach" => Biome::Beach,
+        "fields" => Biome::Fields,
+        "desert" => Biome::Desert,
+        "jungle" => Biome::Jungle,
+        "swamp" => Biome::Swamp,
+        "mountains" => Biome::Mountains,
+        "tundra" => Biome::Tundra,
+        _ => return None,
+    })
+}
+
+/// `count` directions spread evenly over the sphere: a Fibonacci sweep.
+fn fibonacci_sphere(count: usize) -> impl Iterator<Item = Vec3> {
+    let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+    (0..count).map(move |i| {
+        let y = 1.0 - 2.0 * (i as f32 + 0.5) / count as f32;
+        let r = (1.0 - y * y).max(0.0).sqrt();
+        let a = golden * i as f32;
+        Vec3::new(a.cos() * r, y, a.sin() * r)
+    })
+}
+
 /// Where the walker, and with it the column tier, is anchored.
 fn spawn_direction(launch: &Launch) -> Vec3 {
     let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
@@ -1217,19 +1328,11 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
         // The nearest dry land where the field's precipitation is snow, so a
         // capture can photograph a snowfall: a Fibonacci sweep of the sphere,
         // nearest first. A measurement instrument, like `--weather-at`.
-        let count = 20_000;
-        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
-        let found = (0..count)
-            .map(|i| {
-                let y = 1.0 - 2.0 * (i as f32 + 0.5) / count as f32;
-                let r = (1.0 - y * y).max(0.0).sqrt();
-                let a = golden * i as f32;
-                Vec3::new(a.cos() * r, y, a.sin() * r)
-            })
+        let found = fibonacci_sphere(20_000)
             .filter(|d| {
                 pbd_app::planet::surface_height(*d) > 1.0
                     && matches!(
-                        pbd_core::planet_gen::biome(&pbd_app::planet::TERRAIN, *d),
+                        pbd_core::planet_gen::biome(pbd_app::planet::terrain_config(), *d),
                         pbd_core::planet_gen::Biome::Tundra
                             | pbd_core::planet_gen::Biome::Mountains
                     )
@@ -1244,12 +1347,49 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
         }
         warn!("no snowfield found; spawning at the default");
     }
+    if let Some(wanted) = launch.spawn.as_deref().and_then(spawn_biome) {
+        // The nearest dry land inside the named biome, with the same biome
+        // 40 m round it on four sides where there is such a place, so a
+        // capture photographs the biome from inside it rather than from its
+        // edge (`bigger-biomes` 4.1). A measurement instrument, like
+        // `--spawn snow`.
+        let config = pbd_app::planet::terrain_config();
+        // At or above the water, not a metre over it as `snow` asks: a beach
+        // is the sand within two metres of the sea.
+        let inside = |d: Vec3| {
+            pbd_app::planet::surface_height(d) >= 0.0
+                && pbd_core::planet_gen::biome(config, d) == wanted
+        };
+        let around = |d: Vec3| {
+            let (a, b) = d.any_orthonormal_pair();
+            let step = 40.0 / PLANET_RADIUS;
+            [a, -a, b, -b]
+                .into_iter()
+                .all(|t| inside((d + t * step).normalize()))
+        };
+        // A swamp is a strip of low wet ground, rarely 80 m across, so when
+        // no place has room round it the nearest one of any size will do.
+        let nearest = |roomy: bool| {
+            fibonacci_sphere(20_000)
+                .filter(|d| inside(*d) && (!roomy || around(*d)))
+                .max_by(|a, b| a.dot(default).total_cmp(&b.dot(default)))
+        };
+        let found = nearest(true).or_else(|| nearest(false));
+        if let Some(place) = found {
+            info!(
+                "spawn moved {:.0} m into the nearest {wanted:?}",
+                place.dot(default).clamp(-1., 1.).acos() * PLANET_RADIUS
+            );
+            return place;
+        }
+        warn!("no {wanted:?} found; spawning at the default");
+    }
     if launch.spawn.as_deref() == Some("mouth") || launch.view == "mouth" {
         // The nearest worm that starts at the surface within a kilometre.
         let columns = pbd_app::config::ColumnSettings::default();
         let found = pbd_core::worms::gather(
             &columns.worms(),
-            &pbd_app::planet::TERRAIN,
+            pbd_app::planet::terrain_config(),
             default,
             1_000.0,
         )
@@ -1597,7 +1737,7 @@ fn photo_camera(
             if toward < 0.85 || !(-4.0..0.0).contains(&depth) {
                 continue;
             }
-            if river_channel(&TERRAIN, here) <= TERRAIN.river_threshold {
+            if river_channel(terrain_config(), here) <= terrain_config().river_threshold {
                 continue;
             }
             let (a, b) = here.any_orthonormal_pair();
@@ -1757,7 +1897,9 @@ fn photo_camera(
         // straight down): a descent through the weather is this view at a
         // run of heights. The weather's "here" is the camera's own direction,
         // so a forced storm (`--rain`) brews directly under it at any height.
-        let direction = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        // The spawn is `spawn_direction`'s, so `--spawn desert` stands it over
+        // a desert (`bigger-biomes` 4.1); without `--spawn` it is the default.
+        let direction = spawn_direction(&launch);
         let height = launch.height.unwrap_or(EYE_HEIGHT);
         let position = direction * (terrain_radius(direction) + height);
         let east = Vec3::Y.cross(direction).normalize_or_zero();
@@ -2414,4 +2556,46 @@ fn verify_flight(polar: bool) {
         p.protection_events, 0,
         "tour needed emergency terrain projection"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pbd_core::planet_gen::{self, Biome, TerrainConfig};
+    use pbd_core::terrain::Material;
+
+    /// A world made before identities is made by version 4, and the spawn a
+    /// player of it logs back into is the ground it always was: 73 m up, on
+    /// fields, dry grass on top (`bigger-biomes` task 2.3, `world-persistence`
+    /// task 2.2). Version 4's config is the ground from before version 5
+    /// existed, pinned on 10,000 directions by
+    /// `planet_gen::tests::version_4_makes_the_ground_every_old_world_was_made_on`.
+    /// Version 5 moves the moisture, not the heights, and the spawn is on
+    /// fields there too.
+    #[test]
+    fn an_old_worlds_spawn_column_is_the_ground_it_was() {
+        let old = pbd_app::saves::Slot {
+            id: "old".into(),
+            file: pbd_app::saves::format::WorldFile::new("Old".into(), 4242, 0),
+            identity: None,
+        };
+        let spawn = spawn_direction(&Launch::parse(&[]));
+        for (version, what) in [
+            (saves::generator_of(&old), "an old world"),
+            (5, "a new one"),
+        ] {
+            let cfg = TerrainConfig::for_version(version).expect("carried");
+            let surface = pbd_core::column::surface_m(&cfg, spawn);
+            assert_eq!(
+                (
+                    surface,
+                    planet_gen::biome(&cfg, spawn),
+                    planet_gen::top_material(&cfg, spawn, surface)
+                ),
+                (73.0, Biome::Fields, Material::DryGrass),
+                "{what}, version {version}"
+            );
+        }
+        assert_eq!(saves::generator_of(&old), 4);
+    }
 }

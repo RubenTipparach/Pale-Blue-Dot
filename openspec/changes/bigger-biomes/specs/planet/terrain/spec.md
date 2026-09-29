@@ -18,6 +18,11 @@ the shipped generator moves on.
 - **THEN** it is read as version 4, and its terrain is version 4's, cell for
   cell
 
+#### Scenario: Every carried version keeps its ground
+- **WHEN** a version this build carries is asked for its ground
+- **THEN** its heights, biomes and top blocks are the ones its worlds were
+  made on, pinned by a digest taken before the next version landed
+
 #### Scenario: A new world
 - **WHEN** a new world is made
 - **THEN** its save records the current generator version
@@ -26,3 +31,10 @@ the shipped generator moves on.
 - **WHEN** the configuration for each shipped version is asked for
 - **THEN** each version answers one configuration, and an unknown version is
   refused rather than read as the current one
+
+#### Scenario: A world is opened on its own generator
+- **WHEN** a world made on another generator version than the running
+  planet's is opened from the saves page
+- **THEN** the planet switches to that world's version in place, without
+  relaunching the game, and the world opens on its own ground with
+  everything done in it

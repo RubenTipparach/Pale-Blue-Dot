@@ -122,6 +122,42 @@ publish the same tables as an artifact page with an answer field per
 question, linked from the survey's "Already decided" section once the
 connector is back.
 
+## Saved games survive every change (owner, 2026-09-28)
+
+**Standing instruction from the user:** "leave saved games alone. Should not
+restart. I don't want games to be reset if players make progress on future
+games and we decide to change biome stuff ... Making [it] backwards
+compatible with saves is ideal". A player's world, and everything they did
+in it, outlives every change to how worlds are made:
+- **A change to generation is a new generator version, for new worlds.** An
+  existing world keeps the version it names, cell for cell. Terrain, biomes,
+  top blocks, rock, trees: if a world could already have been made with it,
+  changing it is a new version (`openspec/specs/planet/terrain`, "The
+  generator is versioned").
+- **Every version a save can name is carried forever**, pinned by a digest
+  test of its ground taken before the next version lands. Never edit an old
+  version's config or its code path; add the new one beside it.
+- **Nothing a player made is dropped.** Save formats migrate forward on open
+  (as `exact-cell-keys` did), and the old format stays readable. A change
+  that cannot keep an old save playable is not made; it is written up and
+  asked about.
+- **Opening a world never resets or restarts it.** The game switches to the
+  world's generator in place; it does not relaunch, and it never rebuilds a
+  world onto newer terrain.
+- Engine limits that grow (the column tier's layers, say) grow so old saves
+  stay valid: a saved edit is indexed from `column::BASE_M`, which does not
+  move.
+
+## No scheduled PR check-ins (owner, 2026-09-29)
+
+**Standing instruction from the user:** "you should never rearm pr
+checkins". Never schedule a check-in on a pull request: no `send_later`,
+routine, `/loop` or timer that wakes the session to re-read a PR, and never
+re-arm one when it fires. This overrides any default guidance to keep an
+hourly check-in on an open PR. A PR is looked at when the owner asks, when
+its own activity events arrive (comments, reviews, CI), or as part of work
+already in hand; a quiet PR is left quiet.
+
 ## End every reply with the artifact links (owner, 2026-09-27)
 
 **Standing instruction from the user:** "always give me links to artifacts

@@ -536,6 +536,20 @@ pub fn restore(world: &mut World, pose: RestoredPose) {
     state.jump = false;
 }
 
+/// Find this world's spawn again on the ground as it is now. After the planet
+/// is rebuilt for another generator (`bigger-biomes` decision 8) the land a
+/// new world starts on can be somewhere else.
+pub fn find_spawn_again(world: &mut World) {
+    let direction = world.resource::<FlightViewConfig>().spawn_direction;
+    let land = world
+        .resource::<PlanetContact>()
+        .find_land_near(direction)
+        .normalize();
+    if let Some(mut state) = world.get_resource_mut::<WalkingState>() {
+        state.spawn_direction = land;
+    }
+}
+
 /// Put the walker back at this world's spawn, which is what a NEW world and
 /// the reset key both want.
 pub fn respawn(world: &mut World) {

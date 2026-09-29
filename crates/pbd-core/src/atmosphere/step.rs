@@ -186,21 +186,30 @@ impl Atmosphere {
     /// The wind at cloud height: the surface wind plus the thermal wind, which
     /// blows along the lines of equal temperature, fastest where they crowd.
     /// That band of fast wind is the jet.
-    fn aloft(&mut self) {
+    ///
+    /// Near the equator the thermal wind has no balance to stand on: `f`
+    /// passes through nought there. So it fades in across the tropical cell,
+    /// from nothing inside `JET_FADE_SIN_LAT.0` to whole by `.1` (30 deg, where
+    /// the belts put the subtropical highs), and the tropics' own easterly
+    /// takes what the fade leaves. The cap comes before the fade, so the fade
+    /// shows at its full width (`tropical-upper-wind` decision 1).
+    pub(super) fn aloft(&mut self) {
         let s = self.settings;
         let n = self.grid.len();
+        let (inside, whole) = JET_FADE_SIN_LAT;
         for i in 0..n {
             let c = self.grid.centre[i];
             // Floored away from the equator, where f passes through nought.
             let f = coriolis(&s, Vec3::Y * (c.y.signum() * c.y.abs().max(0.25)));
             let gradient = self.grid.gradient(&self.air_k, i, |_| false);
-            let taper = smoothstep(0.1, 0.35, c.y.abs());
-            let mut thermal = c.cross(gradient) * (s.thermal_wind / f) * taper;
+            let mut thermal = c.cross(gradient) * (s.thermal_wind / f);
             let speed = thermal.length();
             if speed > s.jet_max_mps {
                 thermal *= s.jet_max_mps / speed;
             }
-            self.upper[i] = self.wind[i] + thermal;
+            let fade = smoothstep(inside, whole, c.y.abs());
+            let easterly = -prograde(c) * (s.tropical_easterly_mps * (1.0 - fade));
+            self.upper[i] = self.wind[i] + thermal * fade + easterly;
         }
     }
 
@@ -426,6 +435,16 @@ impl Atmosphere {
 /// increasing `atan2(z, x)` (`daylight`: the sun sets toward decreasing), which
 /// is a spin vector along -Y. So `f` is negative over the +Y hemisphere: a low
 /// there turns clockwise seen from above, the way the ground under it turns.
+/// Where the jet fades in, as the sine of the latitude: nothing inside 5.7 deg,
+/// whole from 30 deg (`tropical-upper-wind` decision 1).
+pub(super) const JET_FADE_SIN_LAT: (f32, f32) = (0.1, 0.5);
+
+/// The way the ground turns at `c`, a unit tangent (Earth's east; nought at
+/// the poles). A wind along it is prograde, Earth's westerly.
+pub(super) fn prograde(c: Vec3) -> Vec3 {
+    c.cross(Vec3::Y).normalize_or_zero()
+}
+
 pub(super) fn coriolis(s: &super::AtmosphereSettings, c: Vec3) -> f32 {
     let omega = TAU / DAY_S * s.coriolis_scale;
     -2.0 * omega * c.y

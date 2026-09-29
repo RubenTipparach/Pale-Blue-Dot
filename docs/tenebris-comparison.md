@@ -1395,7 +1395,7 @@ separates them, which is also where Earth sits at 29%.
 
 Three candidates were rendered from orbit with their numbers burned into the
 frame, the way the moisture scale was settled, and the owner chose **A**:
-`continent_scale` 1.6 with `land_bias` -0.05. `GENERATOR_VERSION` is 4.
+`continent_scale` 1.6 with `land_bias` -0.05. `GENERATOR_VERSION` was 4 then; it is 5 since `bigger-biomes`, which changes only the biomes.
 
 **Three pinned numbers moved, and all three are the choice's own consequences
 rather than drift.**
@@ -1421,6 +1421,22 @@ rather than drift.**
 The biome shares moved with the land: Ocean 49.6% to 58.2%, Fields 37.8% to
 24.8%, Tundra 3.6% to 9.5%, Jungle 1.8% to 1.1%. Swamp is still 0.1% and still
 a threshold rather than a scale.
+
+**Generator version 5 (`bigger-biomes`, 2026-09-28)** widens the moisture
+field that divides the temperate land from 188 m to 750 m (survey B1) and
+moves its thresholds from 0.36 and 0.64 to 0.468 and 0.544, where the
+measured field gives fields, desert, and jungle with swamp about a third each
+(survey B2). The land's shape is version 4's to the bit. `distribution_report`
+on version 5, of the whole sphere:
+
+| Ocean | Beach | Fields | Desert | Jungle | Swamp | Mountains | Tundra |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 58.2% | 4.2% | 9.1% | 9.1% | 8.6% | 0.5% | 0.8% | 9.5% |
+
+Fields fell from 24.8% of the sphere to 9.1%. Desert and jungle rose from a
+few percent to about the same. A kilometre of temperate land now crosses 3.3
+biome edges where the 188 m field crossed 13.6 (`bigger-biomes` decision 5a).
+Worlds made before keep version 4.
 
 **The islands here come from the continent field**, not the island field:
 `island_scale` and its neighbours only lift ground already in shallow sea, so

@@ -97,12 +97,35 @@ pub struct TerrainConfig {
     pub polar_latitude: f32,
     /// Fraction of desert tops that break into rock.
     pub desert_rock_frac: f32,
+    /// How a desert's rock and a swamp's water are laid out. `None` is the
+    /// reference's latitude dither, which puts them in straight east-west
+    /// bands (version 4). `Some(metres)` lays them by height: one band of
+    /// rock every `metres`, `desert_rock_frac` of it thick, so the rock
+    /// follows the contours, and a swamp's water in its lowest layer, its
+    /// dirt one above (version 5, survey G1).
+    pub strata_m: Option<f32>,
 }
 
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V4;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V5;
+
+    /// Generator version 5 (`bigger-biomes`, survey B1 and B2): version 4's
+    /// land, with the moisture that divides the temperate land four times as
+    /// wide (750 m, sixteen times the area) and its thresholds moved to where
+    /// the measured field gives fields, desert, and jungle with swamp about a
+    /// third each (the design's measured table), and a desert's rock and a
+    /// swamp's water laid by height, along the contours, rather than in bands
+    /// along the latitude (survey G1, decision 7). Every altitude is version
+    /// 4's.
+    pub const TENEBRIS_V5: Self = Self {
+        moisture_m: 750.0,
+        desert_below: 0.468,
+        wet_above: 0.544,
+        strata_m: Some(7.0),
+        ..Self::TENEBRIS_V4
+    };
 
     /// Generator version 4, verbatim, as every world made before
     /// `bigger-biomes` was: the reference's scales and thresholds, the heights
@@ -149,6 +172,7 @@ impl TerrainConfig {
         cold_latitude: 0.875,
         polar_latitude: 0.95,
         desert_rock_frac: 0.14,
+        strata_m: None,
     };
 }
 
@@ -159,6 +183,7 @@ impl TerrainConfig {
     pub fn for_version(version: u32) -> Option<Self> {
         match version {
             4 => Some(Self::TENEBRIS_V4),
+            5 => Some(Self::TENEBRIS_V5),
             _ => None,
         }
     }
@@ -529,18 +554,38 @@ pub fn top_material(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Mat
     if polar || (biome == Biome::Tundra && surface_m > snow_line) {
         return Material::Snow;
     }
-    // A cheap latitude dither, the reference's own, for the broken tops.
-    let dither = (latitude * 977.0).fract();
-    match biome {
-        Biome::Desert => {
-            if dither < cfg.desert_rock_frac {
+    match (biome, cfg.strata_m) {
+        // By height: a band of rock every `strata` metres, so it traces the
+        // contours as the beds of a cut bank do.
+        (Biome::Desert, Some(strata)) => {
+            if (surface_m / strata).rem_euclid(1.0) < cfg.desert_rock_frac {
                 Material::Rock
             } else {
                 Material::Sand
             }
         }
-        Biome::Swamp => {
-            if dither < 0.35 {
+        // Standing water in a swamp's lowest layer, mud one above.
+        (Biome::Swamp, Some(_)) => {
+            let above_beach = surface_m - (sea + cfg.beach_band_m);
+            if above_beach < 1.0 {
+                Material::Water
+            } else if above_beach < 2.0 {
+                Material::Dirt
+            } else {
+                Material::Grass
+            }
+        }
+        // The reference's cheap latitude dither, which lays them in straight
+        // east-west bands. Version 4 keeps it.
+        (Biome::Desert | Biome::Swamp, None) => {
+            let dither = (latitude * 977.0).fract();
+            if biome == Biome::Desert {
+                if dither < cfg.desert_rock_frac {
+                    Material::Rock
+                } else {
+                    Material::Sand
+                }
+            } else if dither < 0.35 {
                 Material::Dirt
             } else if dither > 0.80 {
                 Material::Water
@@ -548,10 +593,10 @@ pub fn top_material(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Mat
                 Material::Grass
             }
         }
-        Biome::Jungle => Material::JungleGrass,
-        Biome::Tundra => Material::Snow,
-        Biome::Fields => Material::DryGrass,
-        Biome::Ocean | Biome::Beach | Biome::Mountains => Material::Grass,
+        (Biome::Jungle, _) => Material::JungleGrass,
+        (Biome::Tundra, _) => Material::Snow,
+        (Biome::Fields, _) => Material::DryGrass,
+        (Biome::Ocean | Biome::Beach | Biome::Mountains, _) => Material::Grass,
     }
 }
 
@@ -611,6 +656,95 @@ mod tests {
 
     /// The digest of version 4's ground on 10,000 directions.
     const VERSION_4_DIGEST: u64 = 12_573_173_393_310_104_260;
+
+    /// The digest of the top block a column of `cfg` shows, on `n`
+    /// directions: the surface as the column floors it, and what it is.
+    fn top_digest(cfg: &TerrainConfig, n: usize) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for d in sphere(n) {
+            let surface = surface_altitude(cfg, d).floor();
+            let top = top_material(cfg, d, surface) as u64;
+            for byte in (u64::from(surface.to_bits()) ^ (top << 32)).to_le_bytes() {
+                hash = (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+        hash
+    }
+
+    /// Version 4's top blocks, the desert's rock bands along the latitude
+    /// included, are every old world's: taken before version 5's rock moved
+    /// onto the contours (`bigger-biomes` decision 7), and this fails if
+    /// anything moves them.
+    #[test]
+    fn version_4_keeps_its_top_blocks() {
+        assert_eq!(
+            top_digest(&TerrainConfig::TENEBRIS_V4, 10_000),
+            VERSION_4_TOP_DIGEST
+        );
+    }
+
+    /// The digest of version 4's top blocks on 10,000 directions.
+    const VERSION_4_TOP_DIGEST: u64 = 3_219_747_905_282_479_865;
+
+    /// Version 5's ground, biomes and top blocks, as every world made on it
+    /// was: taken before version 6 landed (CLAUDE.md, "Saved games survive
+    /// every change"), and this fails if anything moves them.
+    #[test]
+    fn version_5_makes_the_ground_its_worlds_were_made_on() {
+        let v5 = TerrainConfig::for_version(5).expect("version 5 is carried");
+        assert_eq!(v5, TerrainConfig::TENEBRIS_V5);
+        assert_eq!(digest(&v5, 10_000), VERSION_5_DIGEST);
+        assert_eq!(top_digest(&v5, 10_000), VERSION_5_TOP_DIGEST);
+    }
+
+    /// The digests of version 5's ground and top blocks on 10,000 directions.
+    const VERSION_5_DIGEST: u64 = 17_903_191_863_826_077_473;
+    const VERSION_5_TOP_DIGEST: u64 = 13_661_571_992_430_582_298;
+
+    /// A desert's rock follows the contours (survey G1): every desert cell at
+    /// one height has the same top block, where the latitude bands gave one
+    /// height both; and the rock is still about `desert_rock_frac` of it.
+    #[test]
+    fn a_deserts_rock_follows_the_contours() {
+        let cfg = TerrainConfig::default();
+        let mut by_height: std::collections::BTreeMap<i32, [usize; 2]> = Default::default();
+        for d in sphere(60_000) {
+            let surface = surface_altitude(&cfg, d).floor();
+            if biome_at(&cfg, d, surface) != Biome::Desert {
+                continue;
+            }
+            let rock = top_material(&cfg, d, surface) == Material::Rock;
+            by_height.entry(surface as i32).or_default()[usize::from(rock)] += 1;
+        }
+        let mixed: Vec<_> = by_height
+            .iter()
+            .filter(|(_, [sand, rock])| *sand > 0 && *rock > 0)
+            .collect();
+        assert!(
+            mixed.is_empty(),
+            "heights with both sand and rock: {mixed:?}"
+        );
+        let (sand, rock) = by_height
+            .values()
+            .fold((0, 0), |(s, r), [a, b]| (s + a, r + b));
+        let share = rock as f32 / (sand + rock) as f32;
+        assert!(
+            (0.07..=0.25).contains(&share),
+            "rock is {:.1}% of the desert",
+            share * 100.0
+        );
+        // Version 4's bands give one height both, which is what this tests.
+        let v4 = TerrainConfig::TENEBRIS_V4;
+        let mut v4_mixed = std::collections::BTreeMap::<i32, [bool; 2]>::new();
+        for d in sphere(60_000) {
+            let surface = surface_altitude(&v4, d).floor();
+            if biome_at(&v4, d, surface) == Biome::Desert {
+                let rock = top_material(&v4, d, surface) == Material::Rock;
+                v4_mixed.entry(surface as i32).or_default()[usize::from(rock)] = true;
+            }
+        }
+        assert!(v4_mixed.values().any(|[sand, rock]| *sand && *rock));
+    }
 
     /// The primitive is the reference's `gnoise3d_seed` bit for bit: these
     /// values were computed by that function on these inputs.
@@ -768,46 +902,104 @@ mod tests {
         );
     }
 
-    #[test]
-    #[ignore = "a probe: cargo test -p pbd-core single_biome_walks -- --ignored --nocapture"]
-    fn single_biome_walks() {
+    /// How many times a kilometre's walk on temperate land crosses from one
+    /// moisture third to another, on average over spread starts: the
+    /// moisture field's grain as a walker meets it. Walks that leave the
+    /// temperate land are not counted.
+    fn edges_per_kilometre(cfg: &TerrainConfig) -> f32 {
         const TILE: f32 = 2.833;
-        let cfg = TerrainConfig::default();
         let step = TILE / cfg.radius_m;
-        let mut counts: std::collections::BTreeMap<String, usize> = Default::default();
-        let (mut walks, mut single) = (0, 0);
-        for start in sphere(400) {
-            if surface_altitude(&cfg, start) < cfg.sea_level_m + 4.0 {
+        let temperate = |d: Vec3| {
+            let h = surface_altitude(cfg, d);
+            matches!(
+                biome_at(cfg, d, h),
+                Biome::Fields | Biome::Desert | Biome::Jungle | Biome::Swamp
+            )
+        };
+        let third = |d: Vec3| {
+            let m = moisture(cfg, d);
+            usize::from(m >= cfg.desert_below) + usize::from(m > cfg.wet_above)
+        };
+        let (mut walks, mut edges) = (0usize, 0usize);
+        for start in sphere(2_000) {
+            if !temperate(start) {
                 continue;
             }
             let (heading, _) = start.any_orthonormal_pair();
-            let mut seen = std::collections::BTreeSet::new();
             let mut here = start;
-            let mut dry = true;
+            let mut last = third(here);
+            let (mut crossed, mut stayed) = (0, true);
             for _ in 0..(1_000.0 / TILE) as usize {
                 here = (here + heading * step).normalize();
-                let h = surface_altitude(&cfg, here);
-                if h < cfg.sea_level_m {
-                    dry = false;
+                if !temperate(here) {
+                    stayed = false;
                     break;
                 }
-                seen.insert(biome_at(&cfg, here, h));
+                let now = third(here);
+                crossed += usize::from(now != last);
+                last = now;
             }
-            if !dry {
-                continue;
-            }
-            walks += 1;
-            if seen.len() < 2 {
-                single += 1;
-                *counts
-                    .entry(format!("{:?}", seen.iter().next().unwrap()))
-                    .or_default() += 1;
+            if stayed {
+                walks += 1;
+                edges += crossed;
             }
         }
-        println!("{single} of {walks} walks stayed in one biome");
-        for (biome, n) in counts {
-            println!("  {biome}: {n}");
+        assert!(walks > 20, "only {walks} temperate walks to judge");
+        edges as f32 / walks as f32
+    }
+
+    /// The biomes are about four times the width they were (the owner:
+    /// "about 4x bigger", survey B1): a kilometre of temperate land crosses
+    /// at most a third as many biome edges as the same generator does with
+    /// the old 188 m field, at the same thresholds, so only the width is
+    /// compared. Measured when version 5 landed: 3.3 against 13.6
+    /// (`bigger-biomes` decision 5a). Version 4 fails it, being the 188 m field.
+    #[test]
+    fn the_biomes_are_about_four_times_wider() {
+        let now = TerrainConfig::default();
+        let narrow_field = TerrainConfig {
+            moisture_m: 188.0,
+            ..now
+        };
+        let (wide, narrow) = (
+            edges_per_kilometre(&now),
+            edges_per_kilometre(&narrow_field),
+        );
+        assert!(
+            wide * 3.0 <= narrow,
+            "{wide:.1} biome edges a kilometre against the 188 m field's {narrow:.1}"
+        );
+    }
+
+    /// Grass is not the majority: on the shipped seed and four others, the
+    /// temperate land the moisture divides (fields, desert, jungle, swamp)
+    /// is at least a fifth each fields, desert, and jungle with swamp, and
+    /// none holds more than half (survey B2).
+    #[test]
+    fn grass_is_not_the_majority_on_five_seeds() {
+        let shipped = TerrainConfig::default();
+        let mut failures = Vec::new();
+        for seed in [shipped.seed, 1, 2, 0xB10E_5EED, 0x0dd_ba11] {
+            let cfg = TerrainConfig { seed, ..shipped };
+            let mut count = [0usize; 3];
+            for d in sphere(60_000) {
+                let h = surface_altitude(&cfg, d);
+                match biome_at(&cfg, d, h) {
+                    Biome::Fields => count[0] += 1,
+                    Biome::Desert => count[1] += 1,
+                    Biome::Jungle | Biome::Swamp => count[2] += 1,
+                    _ => {}
+                }
+            }
+            let total = count.iter().sum::<usize>().max(1) as f32;
+            for (name, n) in ["fields", "desert", "jungle and swamp"].iter().zip(count) {
+                let share = n as f32 / total;
+                if !(0.2..=0.5).contains(&share) {
+                    failures.push(format!("seed {seed:#x}: {name} {:.0}%", share * 100.0));
+                }
+            }
         }
+        assert!(failures.is_empty(), "{}", failures.join("; "));
     }
 
     /// Mountains stand on land: the ridges are multiplied by the continent,

@@ -52,8 +52,39 @@ climate was still being made.
 | `game-closest.jpg` | `--map-mpp 0.5` | The closest zoom, 0.7 m a screen pixel on the 2.83 m tiles: every cell four pixels across, the terraces and the forest edges cell by cell. The striped sand is the desert's rock, a latitude dither in the generator (survey G1), not the drawing. |
 | `game-night.jpg` | `--time 20 --map-night --map-mpp 12` | 20:00: the night coming in from the east, at about a third of the day's brightness. |
 | `game-clouds.jpg` | `--map-clouds --map-mpp 12` | The live clouds from the atmosphere's own maps, with the rain falling round the spawn in blue. |
-| `game-wind.jpg` | `--map-overlay wind --map-mpp 12` | The wind overlay in the game's speed ramp over the greyed base, from the same texels as the globe's. |
-| `game-rain.jpg` | `--map-overlay rain --map-clouds --map-mpp 12` | Rain, fading to clear where it is dry as the globe's does, with the clouds over it. |
-| `game-biomes.jpg` | `--map-layer biomes --map-mpp 12` | The biome layer, the first added through the layer registry, over the greyed base. |
+| `game-wind.jpg` | `--map-overlay wind --map-mpp 12` | The wind overlay in the game's speed ramp over the greyed base, from the same texels as the globe's, with its ramp in the key. |
+| `game-rain.jpg` | `--map-overlay rain --map-clouds --map-mpp 12` | Rain, fading to clear where it is dry as the globe's does. The clouds switch is on, and under an overlay they are not drawn, as in the mockup. |
+| `game-biomes.jpg` | `--map-layer biomes --map-mpp 12` | The biome layer, the first added through the layer registry, over the greyed base, with each biome's swatch and share in the key. |
+
+### The layers as the mockup composes them (decision 11)
+
+The owner, 2026-09-28: "rain and biome maps colors dont match with the
+spec". The colours were the mockup's: its frames were coloured from the
+game's own ramps. How the layers were laid down was not. The `-before`
+shots are the build before the fix, with the same flags. Measured off the
+shots (sRGB, 0 to 255, a patch's mean):
+
+| | before | after | the mockup |
+| --- | --- | --- | --- |
+| sea under the biome layer | (98, 119, 140), blue-grey | (64, 67, 67), charcoal | charcoal, greyed and darkened |
+| rain at its heaviest | (157, 172, 231), pale under cloud | (29, 54, 172) | (26, 53, 168), `weather-rain.jpg` |
+| dry land under the rain | (95, 112, 136) | (54, 56, 58) | grey |
+
+- The planet under an overlay is greyed by luminosity and darkened by 45%,
+  as the mockup's canvas does, by the base's own material rather than a
+  grey veil laid over it. A GPU test holds the shader to the mockup's
+  arithmetic.
+- The biome layer is drawn at 0.88 and a weather overlay at 0.9, the
+  mockup's opacities.
+- The live clouds are not drawn under an overlay, and the night only at 0.3.
+- The legend has the mockup's key.
+
+The key's shares are counted off the base the game draws, so a beach under
+the sea's surface is sea, as it is drawn. The mockup's summary counted it as
+beach, which is the difference between its 10% beach and the game's 5%.
+
+| file | what it shows |
+| --- | --- |
+| `game-biomes-before.jpg`, `game-rain-before.jpg`, `game-wind-before.jpg` | The same three views before decision 11. |
 | `game-cloud-beside-globe.jpg` | globe: `--view orbit --overlay cloud --time 12`; map: `--map-at 19.6 51 --map-mpp 16 --map-overlay cloud` | Task 4.2: the globe's cloud overlay from orbit (it looks down on 19.6 N 51 E) beside the map's at the same clock, drawn from the same weather maps: the same central mass, the clear gap to the south-east and the blobs to the south. The map holds its whole height on screen at this zoom, so it centres nearer the equator than the globe does. |
 | `game-clouds-live-at-51e.jpg` | the map's, with `--map-clouds` in place of the overlay | The live clouds and rain at the same place and hour. |

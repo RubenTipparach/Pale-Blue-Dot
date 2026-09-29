@@ -753,7 +753,7 @@ pub fn press(
         || std::path::PathBuf::from(saves::ROOT),
         |s| s.root().into(),
     );
-    let seed = pbd_app::planet::TERRAIN.seed;
+    let seed = pbd_app::planet::terrain_config().seed;
     // Enter in the name field is the NEW WORLD button pressed.
     let submitted = std::mem::take(&mut name.submit);
     let pressed = rows
@@ -822,7 +822,10 @@ pub fn press(
                 match saves::create(&root, &wanted, seed) {
                     Ok(slot) => {
                         // Made, and entered: a world a player just named is
-                        // the world they want to be in.
+                        // the world they want to be in. It is made by the
+                        // newest generator, and the load switches the planet
+                        // to it in place if an older world's is up
+                        // (`bigger-biomes` decision 8).
                         index.trouble = None;
                         name.edited = false;
                         name.focused = false;
@@ -857,6 +860,9 @@ pub fn press(
                     index.trouble = Some(format!("{} was made with {why}", slot.file.name));
                     continue;
                 }
+                // A world of another generator than the planet's is loaded
+                // like any other: the load switches the planet in place
+                // (`bigger-biomes` decision 8).
                 front.0 = false;
                 load.0 = Some(slot);
                 *screen = Screen::Playing;

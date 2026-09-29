@@ -440,7 +440,7 @@ impl FineSet {
     pub fn adoptable(&self, record: usize, edits: &Edits) -> Option<pbd_core::column::Column> {
         let cell = self.levels[3].get(record)?;
         Some(pbd_core::column::generate_edited_solid(
-            &super::terrain::TERRAIN,
+            super::terrain::terrain_config(),
             Vec3::from_slice(&cell.direction_height[..3]),
             edits.for_cell(cell.key()),
         ))
@@ -1144,6 +1144,11 @@ pub struct LodRefresh {
     /// keep the previous world's holes until the player walked far enough to
     /// notice.
     force: bool,
+    /// The generator epoch the in-flight task was begun on
+    /// (`planet::terrain_epoch`). A set begun on one planet and landing on
+    /// another is not drawn: dropping a task cannot stop the threads already
+    /// building it (`bigger-biomes` decision 8).
+    epoch: u64,
 }
 
 /// Where the bands are measured from: the active camera, which is at the
@@ -1162,6 +1167,20 @@ impl LodRefresh {
     /// Ask for a rebuild on the next frame, whatever the player has walked.
     pub fn force(&mut self) {
         self.force = true;
+    }
+
+    /// Let go of the in-flight rebuild, if any, and ask for a fresh one: the
+    /// planet under it is being replaced.
+    pub fn abandon(&mut self) {
+        self.task = None;
+        self.started = None;
+        self.force = true;
+    }
+
+    /// Whether a set begun on `began` may be drawn on the planet as it is
+    /// now: only if no switch came between.
+    pub fn current(began: u64, now: u64) -> bool {
+        began == now
     }
 
     /// How long the in-flight rebuild has been running, if one is.
@@ -1216,6 +1235,11 @@ pub fn refresh_lod(
             let took = refresh.in_flight_s().unwrap_or(0.0);
             refresh.task = None;
             refresh.started = None;
+            if !LodRefresh::current(refresh.epoch, super::terrain::terrain_epoch()) {
+                info!("fine set begun on another planet discarded after {took:.1} s");
+                refresh.force = true;
+                return;
+            }
             let behind = direction.map_or(0.0, |d| set.metres_from_anchor(d));
             info!(
                 "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor",
@@ -1269,6 +1293,7 @@ pub fn refresh_lod(
             live
         );
         refresh.started = Some(std::time::Instant::now());
+        refresh.epoch = super::terrain::terrain_epoch();
         // Baked for the lamps as they are now, off the frame; a set that lands
         // after the clock crossed is re-baked by `switch_dusk_lamps`.
         let dusk = lamps.lit;
@@ -1824,7 +1849,7 @@ mod streaming_cost {
     //! Ignored because it takes seconds; run it with
     //! `cargo test -p pbd-app --release --lib streaming_cost -- --ignored --nocapture`.
     use super::*;
-    use crate::planet::terrain::TERRAIN;
+    use crate::planet::terrain::terrain_config;
     use std::time::Instant;
 
     #[test]
@@ -1844,7 +1869,7 @@ mod streaming_cost {
         }
         let field = settings.worms();
         let started = Instant::now();
-        let region = pbd_core::worms::gather(&field, &TERRAIN, anchor, settings.reach_m);
+        let region = pbd_core::worms::gather(&field, terrain_config(), anchor, settings.reach_m);
         let gathered = started.elapsed().as_secs_f64() * 1000.;
         let whole = |threads: usize| {
             let started = Instant::now();
@@ -1875,7 +1900,7 @@ mod streaming_cost {
             std::hint::black_box(pbd_core::column::generate_edited(
                 &region,
                 &field,
-                &TERRAIN,
+                terrain_config(),
                 direction,
                 edits.for_cell(cell.key()),
             ));
@@ -1988,7 +2013,7 @@ mod fast_build_tests {
 #[cfg(test)]
 mod seam_report {
     use super::*;
-    use crate::planet::terrain::{PLANET_RADIUS, TERRAIN};
+    use crate::planet::terrain::{PLANET_RADIUS, terrain_config};
 
     /// How far a coarse cell's wall can stop ABOVE the finer caps it meets.
     ///
@@ -2025,7 +2050,9 @@ mod seam_report {
             let (a, b) = anchor.any_orthonormal_pair();
             let here = (anchor + a * (r * t.cos()) + b * (r * t.sin())).normalize();
             let there = (here + a * span).normalize();
-            if heights.at(here) < TERRAIN.sea_level_m || heights.at(there) < TERRAIN.sea_level_m {
+            if heights.at(here) < terrain_config().sea_level_m
+                || heights.at(there) < terrain_config().sea_level_m
+            {
                 continue;
             }
             edges += 1;

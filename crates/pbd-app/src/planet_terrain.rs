@@ -4,6 +4,8 @@
 use bevy::prelude::*;
 use pbd_core::planet_gen::{self, Biome, TerrainConfig};
 use pbd_core::terrain::Material;
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 /// Sea-level radius in metres. It sits on the gold-standard ladder
 /// `R = 300 m * 2^(L - 7)`: level 11 underfoot gives the 2.833 m Tenebris tile
@@ -16,10 +18,65 @@ pub const PLANET_RADIUS: f32 = 4_800.0;
 /// cell height, and the walker's step is sized off it.
 pub const ELEVATION_STEP: f32 = 1.0;
 
-/// The generator: Tenebris's, ported into `pbd_core::planet_gen` with the
-/// heights authored for this body. One config, one source of defaults; a
-/// second body is a second value of it.
-pub const TERRAIN: TerrainConfig = TerrainConfig::TENEBRIS;
+/// The generator the planet is made by, and its version: Tenebris's, ported
+/// into `pbd_core::planet_gen` with the heights authored for this body, at
+/// the version the open world was made with (`bigger-biomes` decisions 6 and
+/// 8). An old world keeps its generator (survey B3, and CLAUDE.md "Saved
+/// games survive every change"), so opening a world of another version
+/// switches it, in place, while no world is being played; until then, and in
+/// a test, it is the current generator.
+static CHOSEN: AtomicU32 = AtomicU32::new(pbd_core::terrain::GENERATOR_VERSION);
+
+/// How many times the generator has been switched: work begun on one planet
+/// and landing on another says so by it (`LodRefresh`).
+static EPOCH: AtomicU64 = AtomicU64::new(0);
+
+/// Every version this build carries, as `&'static`, so a reader holds a
+/// config that cannot change under it whatever is switched afterwards.
+fn carried(version: u32) -> Option<&'static TerrainConfig> {
+    static TABLE: OnceLock<Vec<(u32, &'static TerrainConfig)>> = OnceLock::new();
+    TABLE
+        .get_or_init(|| {
+            (0..=pbd_core::terrain::GENERATOR_VERSION)
+                .filter_map(|v| {
+                    TerrainConfig::for_version(v).map(|config| (v, &*Box::leak(Box::new(config))))
+                })
+                .collect()
+        })
+        .iter()
+        .find(|(v, _)| *v == version)
+        .map(|(_, config)| *config)
+}
+
+/// The generator config the planet is made by.
+pub fn terrain_config() -> &'static TerrainConfig {
+    carried(generator_version()).expect("the chosen generator is one this build carries")
+}
+
+/// The generator version the planet is made by.
+pub fn generator_version() -> u32 {
+    CHOSEN.load(Ordering::Acquire)
+}
+
+/// The count of switches so far, for work that must not land on another
+/// planet than the one it began on.
+pub fn terrain_epoch() -> u64 {
+    EPOCH.load(Ordering::Acquire)
+}
+
+/// Make the planet the given version's, for the world about to open. Called
+/// at launch and by a load, never while a world is being played. Says whether
+/// the version changed, which is whether the planet has to be rebuilt; a
+/// version this build does not carry is refused, and says why.
+pub fn switch_generator(version: u32) -> Result<bool, String> {
+    carried(version)
+        .ok_or_else(|| format!("no terrain generator version {version} in this build"))?;
+    let was = CHOSEN.swap(version, Ordering::AcqRel);
+    if was != version {
+        EPOCH.fetch_add(1, Ordering::AcqRel);
+    }
+    Ok(was != version)
+}
 
 /// Quantized terrain elevation above sea level, in metres, on a unit ray.
 /// Normalizing here also makes the collision query safe for arbitrary poses.
@@ -28,7 +85,7 @@ pub fn surface_height(direction: Vec3) -> f32 {
     // The column's own rule, so a cap and the column top under it are one
     // number: `column::surface_m` floors to the layer, and the layer is the
     // elevation step.
-    pbd_core::column::surface_m(&TERRAIN, d)
+    pbd_core::column::surface_m(terrain_config(), d)
 }
 // The record's step and the column's layer are the same metre; if the step
 // ever moves, `surface_height` has to quantise to it rather than to the layer.
@@ -54,7 +111,7 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 
 pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
-    let biome = planet_gen::biome_at(&TERRAIN, d, height);
+    let biome = planet_gen::biome_at(terrain_config(), d, height);
     material_index(d, height, biome) | (biome as u32) << 8
 }
 
@@ -182,11 +239,11 @@ pub const GRASS_SIDE: u32 = 11;
 pub const SNOW_SIDE: u32 = 12;
 
 fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
-    let material = planet_gen::top_material(&TERRAIN, direction, height);
+    let material = planet_gen::top_material(terrain_config(), direction, height);
     match (material, biome) {
         // Beach sand below the waterline is the seabed, which the water pass
         // tints; a desert dune and a swamp sward are their own tiles.
-        (Material::Sand, _) if height < TERRAIN.sea_level_m => 0,
+        (Material::Sand, _) if height < terrain_config().sea_level_m => 0,
         (Material::Sand, Biome::Desert) => 4,
         (Material::Grass, Biome::Swamp) => 7,
         _ => render_code(material),
@@ -195,6 +252,33 @@ fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    /// Every carried version answers its own config, a version this build
+    /// lacks is refused, and switching to the version already chosen changes
+    /// nothing (`bigger-biomes` decision 8). Switching to ANOTHER version is
+    /// `tests/generator_switch.rs`, in a process of its own, since the choice
+    /// is global and every test here reads it.
+    #[test]
+    fn the_generator_switches_only_to_versions_this_build_carries() {
+        use pbd_core::terrain::GENERATOR_VERSION;
+        assert_eq!(super::generator_version(), GENERATOR_VERSION);
+        let epoch = super::terrain_epoch();
+        assert_eq!(super::switch_generator(GENERATOR_VERSION), Ok(false));
+        assert_eq!(super::terrain_epoch(), epoch, "no switch, no new epoch");
+        assert_eq!(
+            super::terrain_config(),
+            &super::TerrainConfig::for_version(GENERATOR_VERSION).unwrap()
+        );
+        for version in 4..=GENERATOR_VERSION {
+            assert_eq!(
+                super::carried(version),
+                super::TerrainConfig::for_version(version).as_ref()
+            );
+        }
+        let missing = super::switch_generator(99).expect_err("not carried");
+        assert!(missing.contains("version 99"), "{missing}");
+        assert_eq!(super::generator_version(), GENERATOR_VERSION);
+    }
+
     /// The three face codes are written here AND in `planet_surface.wgsl`,
     /// which is two copies of one fact. So this reads the REAL shader and
     /// holds it to these: a code that drifts is a wall drawn as something
@@ -543,7 +627,7 @@ mod tests {
             println!(
                 "{name:8} height {h:6.1} m  material {}  biome {:?}",
                 code & 0xff,
-                planet_gen::biome_at(&TERRAIN, d, h)
+                planet_gen::biome_at(terrain_config(), d, h)
             );
         }
     }
@@ -554,7 +638,7 @@ mod tests {
     /// the radius, so a test holds them together.
     #[test]
     fn the_generator_is_authored_for_this_bodys_radius() {
-        assert_eq!(TERRAIN.radius_m, PLANET_RADIUS);
+        assert_eq!(terrain_config().radius_m, PLANET_RADIUS);
     }
 
     #[test]
@@ -599,7 +683,7 @@ mod landmass_report {
     /// reports so there is one flood fill rather than three.
     fn land_masses(level: u32) -> (f32, Vec<f32>) {
         let cells = super::super::topology::dual_sphere(level);
-        let sea = TERRAIN.sea_level_m;
+        let sea = terrain_config().sea_level_m;
         let land: Vec<bool> = cells
             .iter()
             .map(|c| surface_height(c.direction) >= sea)
@@ -677,7 +761,7 @@ mod landmass_report {
                 let cfg = TerrainConfig {
                     continent_scale: scale,
                     land_bias: bias,
-                    ..TERRAIN
+                    ..*terrain_config()
                 };
                 let sea = cfg.sea_level_m;
                 let land: Vec<bool> = cells
@@ -727,7 +811,7 @@ mod landmass_report {
     #[ignore = "a report: cargo test -p pbd-app --lib landmass_report -- --ignored --nocapture"]
     fn landmass_report() {
         let cells = super::super::topology::dual_sphere(6);
-        let sea = TERRAIN.sea_level_m;
+        let sea = terrain_config().sea_level_m;
         let land: Vec<bool> = cells
             .iter()
             .map(|c| surface_height(c.direction) >= sea)

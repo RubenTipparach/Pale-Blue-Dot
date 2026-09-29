@@ -18,12 +18,12 @@
 //! The cache holds texels, not colours, so a repainted tile shows on the next
 //! start without a key that has to know about it.
 
-use crate::planet::{PLANET_RADIUS, TERRAIN};
+use crate::planet::{PLANET_RADIUS, terrain_config};
 use crate::saves::format::{material_code, material_of};
 use pbd_core::geo;
 use pbd_core::map::{Texel, base_texel};
 use pbd_core::planet_gen::{Biome, TerrainConfig};
-use pbd_core::terrain::{GENERATOR_VERSION, Material};
+use pbd_core::terrain::Material;
 use std::path::{Path, PathBuf};
 
 /// A tile's side, pixels.
@@ -229,7 +229,7 @@ pub fn colour_block(
         for col in 1..=w {
             let t = at(col, row);
             let colour = if t.sea {
-                sea_colour(TERRAIN.sea_level_m - t.altitude_m)
+                sea_colour(terrain_config().sea_level_m - t.altitude_m)
             } else {
                 let (north, south) = if pole {
                     (t.altitude_m, t.altitude_m)
@@ -253,10 +253,12 @@ pub fn colour_block(
     out
 }
 
-/// The base level's cache file for a seed: the generator version is in the
-/// name, so a new generator reads nothing of the old one's.
-pub fn cache_name(seed: u64) -> String {
-    format!("map-base-g{GENERATOR_VERSION}-{seed:016x}.png")
+/// The base level's cache file for a seed and the generator that made it:
+/// the version is in the name, so a new generator reads nothing of the old
+/// one's. It is passed, not read at the moment of saving, since a switch of
+/// generator can come between a build's start and its save.
+pub fn cache_name(seed: u64, generator: u32) -> String {
+    format!("map-base-g{generator}-{seed:016x}.png")
 }
 
 /// Pack a texel for the cache: its altitude in 16 bits (floored metres, the
@@ -279,7 +281,7 @@ fn unpack(p: [u8; 4], cfg: &TerrainConfig) -> Option<Texel> {
 }
 
 /// Write the base level's texels (without the border) to the world's folder.
-pub fn save_base(dir: &Path, seed: u64, texels: &[Texel]) -> Result<(), String> {
+pub fn save_base(dir: &Path, seed: u64, generator: u32, texels: &[Texel]) -> Result<(), String> {
     let (width, height) = level_size(BASE);
     if texels.len() != width * height {
         return Err(format!(
@@ -291,7 +293,7 @@ pub fn save_base(dir: &Path, seed: u64, texels: &[Texel]) -> Result<(), String> 
     let image = image::RgbaImage::from_raw(width as u32, height as u32, bytes)
         .ok_or("the base did not fit its image")?;
     std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    let path = dir.join(cache_name(seed));
+    let path = dir.join(cache_name(seed, generator));
     image
         .save(&path)
         .map_err(|error| format!("{}: {error}", path.display()))
@@ -300,8 +302,8 @@ pub fn save_base(dir: &Path, seed: u64, texels: &[Texel]) -> Result<(), String> 
 /// The base level's texels from the world's folder, if a cache for this seed
 /// and this generator is there. Another generator's cache for the same seed
 /// is deleted on the way: it can never be read again.
-pub fn load_base(dir: &Path, seed: u64, cfg: &TerrainConfig) -> Option<Vec<Texel>> {
-    let name = cache_name(seed);
+pub fn load_base(dir: &Path, seed: u64, generator: u32, cfg: &TerrainConfig) -> Option<Vec<Texel>> {
+    let name = cache_name(seed, generator);
     let this_seed = format!("-{seed:016x}.png");
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -357,6 +359,34 @@ pub struct RasterLayer {
     /// One line under the legend saying what it shows.
     pub note: &'static str,
     pub paint: fn(&Texel) -> [u8; 4],
+    /// Its colour key, as the legend shows it: a name and a colour a row
+    /// (`world-map` decision 11).
+    pub key: &'static [(&'static str, [u8; 3])],
+    /// Which row of the key a texel counts toward, or `None` where the layer
+    /// draws nothing: what each row's share of the ground is counted from.
+    pub class: fn(&Texel) -> Option<usize>,
+}
+
+/// Each row of a layer's key's share of the texels it counts, weighted by
+/// the area a texel covers (the cosine of its latitude), as the mockup's
+/// legend gives each biome's share of the land.
+pub fn layer_shares(layer: &RasterLayer, texels: &[Texel], width: usize) -> Vec<f32> {
+    let height = texels.len() / width.max(1);
+    let mut weight = vec![0.0_f64; layer.key.len()];
+    for (row, line) in texels.chunks(width).enumerate() {
+        let latitude = (0.5 - (row as f64 + 0.5) / height as f64) * std::f64::consts::PI;
+        let area = latitude.cos();
+        for texel in line {
+            if let Some(class) = (layer.class)(texel).filter(|&c| c < weight.len()) {
+                weight[class] += area;
+            }
+        }
+    }
+    let total: f64 = weight.iter().sum();
+    weight
+        .iter()
+        .map(|w| if total > 0.0 { (w / total) as f32 } else { 0.0 })
+        .collect()
 }
 
 /// Every layer the legend lists, in the order they were added.
@@ -379,23 +409,48 @@ pub fn paint_layer(layer: &RasterLayer, texels: &[Texel]) -> Vec<u8> {
 }
 
 /// The biome layer's colours, as the mockup's overlay drew them (survey M3:
-/// biomes are an overlay over the greyed base). The sea is left clear.
+/// biomes are an overlay over the greyed base), at the mockup's 0.88
+/// (`world-map` decision 11). The sea is left clear.
 pub fn biome_colour(texel: &Texel) -> [u8; 4] {
-    if texel.sea {
-        return [0; 4];
+    match biome_class(texel) {
+        Some(class) => {
+            let [r, g, b] = BIOME_KEY[class].1;
+            [r, g, b, BIOME_ALPHA]
+        }
+        None => [0; 4],
     }
-    let [r, g, b] = match texel.biome {
-        Biome::Ocean => return [0; 4],
-        Biome::Beach => [232, 214, 150],
-        Biome::Fields => [150, 190, 80],
-        Biome::Desert => [222, 150, 60],
-        Biome::Jungle => [30, 120, 60],
-        Biome::Swamp => [90, 130, 110],
-        Biome::Mountains => [140, 130, 125],
-        Biome::Tundra => [225, 235, 245],
-    };
-    [r, g, b, 200]
 }
+
+/// The biome key, in the mockup's order and colours.
+pub const BIOME_KEY: &[(&str, [u8; 3])] = &[
+    ("beach", [232, 214, 150]),
+    ("fields", [150, 190, 80]),
+    ("desert", [222, 150, 60]),
+    ("jungle", [30, 120, 60]),
+    ("swamp", [90, 130, 110]),
+    ("mountains", [140, 130, 125]),
+    ("tundra", [225, 235, 245]),
+];
+
+/// A texel's row in [`BIOME_KEY`]; the sea has none.
+pub fn biome_class(texel: &Texel) -> Option<usize> {
+    if texel.sea {
+        return None;
+    }
+    match texel.biome {
+        Biome::Ocean => None,
+        Biome::Beach => Some(0),
+        Biome::Fields => Some(1),
+        Biome::Desert => Some(2),
+        Biome::Jungle => Some(3),
+        Biome::Swamp => Some(4),
+        Biome::Mountains => Some(5),
+        Biome::Tundra => Some(6),
+    }
+}
+
+/// How opaque the biome layer is: the mockup blits it at 0.88.
+pub const BIOME_ALPHA: u8 = 224;
 
 /// The base level's texels with the one-pixel border `colour_block` reads,
 /// made from the borderless ones by wrapping the columns and repeating the
@@ -557,7 +612,7 @@ mod tests {
     /// side of a seam, and the antimeridian included.
     #[test]
     fn tiles_meet_without_a_seam() {
-        let cfg = TERRAIN;
+        let cfg = *terrain_config();
         let palette = Palette::load(&tileset_dir()).expect("the tilesets");
         let level = 1;
         let (width, _) = level_size(level);
@@ -606,30 +661,30 @@ mod tests {
     fn the_cache_is_keyed_by_seed_and_generator() {
         let dir = std::env::temp_dir().join(format!("pbd-map-cache-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let cfg = TERRAIN;
+        let cfg = *terrain_config();
         let (width, height) = level_size(BASE);
         // A cheap stand-in for the base: every row the same line of places.
         let line: Vec<Texel> = (0..width)
             .map(|x| base_texel(&cfg, geo::pixel_direction(x, height / 3, width, height)))
             .collect();
         let texels: Vec<Texel> = (0..height).flat_map(|_| line.iter().copied()).collect();
-        save_base(&dir, 7, &texels).expect("written");
-        let back = load_base(&dir, 7, &cfg).expect("read back");
+        let generator = crate::planet::generator_version();
+        save_base(&dir, 7, generator, &texels).expect("written");
+        let back = load_base(&dir, 7, generator, &cfg).expect("read back");
         for (a, b) in texels.iter().zip(&back) {
             assert_eq!((a.top, a.biome, a.sea), (b.top, b.biome, b.sea));
             assert_eq!(a.altitude_m.floor(), b.altitude_m);
         }
-        assert!(load_base(&dir, 8, &cfg).is_none(), "another seed");
-        // A cache from another generator is not read, and goes.
-        let stale = dir.join(format!(
-            "map-base-g{}-{:016x}.png",
-            GENERATOR_VERSION + 1,
-            7
-        ));
-        std::fs::copy(dir.join(cache_name(7)), &stale).expect("copied");
-        std::fs::remove_file(dir.join(cache_name(7))).expect("removed");
         assert!(
-            load_base(&dir, 7, &cfg).is_none(),
+            load_base(&dir, 8, generator, &cfg).is_none(),
+            "another seed"
+        );
+        // A cache from another generator is not read, and goes.
+        let stale = dir.join(cache_name(7, generator + 1));
+        std::fs::copy(dir.join(cache_name(7, generator)), &stale).expect("copied");
+        std::fs::remove_file(dir.join(cache_name(7, generator))).expect("removed");
+        assert!(
+            load_base(&dir, 7, generator, &cfg).is_none(),
             "another generator's cache"
         );
         assert!(!stale.exists(), "and it is deleted");
