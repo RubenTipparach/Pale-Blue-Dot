@@ -95,7 +95,8 @@ B 4.3, **C 3.0**. The day-mean maps are drawn side by side in
 
 ## Decisions
 
-**1. Candidate C, provisionally (survey W1).**
+**1. Candidate C (survey W1).** The owner, 2026-09-29: "are the jets fixed?
+just do recommended".
 - It is the only candidate whose edge is gentler than 3 m/s per degree.
 - It is the only one that moves the northern jet off the equator's edge.
 - *Cost:* the northern subtropical jet is a third slower. Cloud crossing 15-25
@@ -126,6 +127,70 @@ them. A world already made keeps its own saved weather.
 worked out afresh each step. An old world opens as it was saved, and from its
 next step its tropical cloud drifts on the new wind. Nothing is reset or
 dropped.
+
+## Built (2026-09-29)
+
+- `aloft` caps the thermal wind, then fades it with
+  `smoothstep(0.1, 0.5, |sin lat|)` (`JET_FADE_SIN_LAT`), and adds
+  `tropical_easterly_mps` (8 m/s) westward, weighted by what the fade leaves.
+  The floor on `f` is unchanged.
+- On the shipped level-5 climate, one step's cloud-level wind within 5
+  degrees of the equator blows 8.0 to 8.3 m/s from the east (the rule it
+  replaced: 0.4 to 0.5). The steepest change between 2.5-degree bands within
+  35 degrees is 3.2 m/s a degree, or 2.9 with no easterly. The old rule
+  measures 6.0 on the same state. `the_tropics_blow_easterly_aloft_and_the_jet_has_no_edge`
+  and `with_no_easterly_the_tropics_aloft_have_the_surface_wind` pin both,
+  and both fail on the old rule.
+- **Climate report**, before and after, 10 days from rest at level 5 on day
+  0. Zonal means by 10-degree band, the jet prograde in m/s:
+
+  | band | before | after |
+  | --- | ---: | ---: |
+  | 30-20 N | 35.1 | 29.2 |
+  | 20-10 N | 34.3 | 7.9 |
+  | 10-0 N | -1.4 | -8.2 |
+  | 0-10 S | 1.3 | -7.8 |
+  | 10-20 S | 25.9 | 6.6 |
+  | 20-30 S | 34.3 | 28.9 |
+
+  Poleward of 30 degrees every band is within 1 m/s. The cloud barely
+  moves. Cover is 0.508 before and 0.506 after, clear sky 25.1% and 25.7%,
+  full cover 39.2% in both, rain 20.9% in both. The band spread is 0.251
+  and 0.248, and the whole surface is 14.24 °C and 14.27 °C. Rain at 10-20
+  N rises from 35.3 to 38.9 mm/h, and at 0-10 N falls from 32.5 to 29.8. The
+  `atmospheric-circulation` claims hold. The zonal-mean jet's maximum, at
+  20-30 N and 30-40 S, lies poleward of its minimum, now the equatorial
+  easterly.
+- **Old saves.** Four weather states made before the change, the settled
+  climates of generators 4 and 5 at levels 3 and 5, were checked with a
+  scratch instrument. Each restored byte for byte, and ran 600 steps on with
+  every field finite and the surface at 14.9 to 15.1 °C. Each blew 8.1 to
+  8.2 m/s aloft within 5 degrees of the equator.
+- **The settled climates, as a quick fix.** The owner, 2026-09-29, while the
+  level-5 states were being remade: "hours? no dude, I just wanted the jet
+  stream quick fix! dont need to simulate a whole day lol", then "we can run
+  this sim on my desktop later!". So decision 4 is done in part:
+  - Generators 4 and 5 at level 3 are remade under the new wind. A new
+    world's first 60 days hold 14.73-15.09 °C (generator 4) and 14.71-15.01 °C
+    (generator 5).
+  - The level-5 states, the game's own level, are kept as they were, settled
+    under the old wind. The climate report above is why that is safe for now:
+    the new wind moves the planet's mean by 0.03 °C and its cover by 0.002.
+    The owner remakes them on the desktop with
+    `cargo run --release -p pbd-core --example settle_climate -- 5 2 30 assets/climate <generator>`,
+    for generators 4 and 5.
+  - The check that a shipped state was made with the running settings cannot
+    see this. It compares the settings, and the new knob reads as its
+    default in a file that predates it. A stricter check that refused such
+    files was written and taken out again, because it would have refused the
+    kept level-5 states and started new worlds from rest. It can come back
+    once they are remade.
+- `settle_climate` takes the generator as a fifth argument, so generator 4's
+  states can be remade.
+- The map mockup's weather frames were made again (`map_weather 20`, the
+  day after 20 from rest). The Jet overlay's day mean is 8.5 m/s at the
+  equator, 4-5 m/s where the easterly turns into the jet near 10 degrees,
+  and 21-22 m/s by 20 degrees north and south.
 
 ## Risks
 

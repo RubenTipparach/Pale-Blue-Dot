@@ -2,12 +2,16 @@
 //! decisions 8 and 8a, survey K6). The measurement instrument that makes
 //! `assets/climate/settled-g<generator>-l<level>.bin`: the game restores it
 //! for a world with no weather of its own, so a new world's first day is its
-//! settled one. It settles on the current generator's terrain, whose biomes
+//! settled one. It settles on a generator's terrain, whose biomes
 //! the climate reads (wetness and albedo), so a state is only for worlds of
 //! the generator in its name (`bigger-biomes` decision 6).
 //!
 //!     cargo run --release -p pbd-core --example settle_climate -- \
-//!         [level] [fast years] [check days] [out dir]
+//!         [level] [fast years] [check days] [out dir] [generator]
+//!
+//! `generator` defaults to the current one. An older one remakes the state
+//! its worlds start from when the weather's rules change
+//! (`tropical-upper-wind` decision 4).
 //!
 //! It runs a new world forward on the shipped settings (the code defaults,
 //! which `assets/config/atmosphere.ron` is held equal to) at `level`:
@@ -158,8 +162,11 @@ fn main() {
         .get(4)
         .cloned()
         .unwrap_or_else(|| "assets/climate".into());
-    let generator = pbd_core::terrain::GENERATOR_VERSION;
-    let terrain = TerrainConfig::for_version(generator).expect("the current generator");
+    let generator: u32 = args
+        .get(5)
+        .map(|a| a.parse().expect("a generator version"))
+        .unwrap_or(pbd_core::terrain::GENERATOR_VERSION);
+    let terrain = TerrainConfig::for_version(generator).expect("a carried generator");
     let settings = AtmosphereSettings {
         level,
         ..Default::default()

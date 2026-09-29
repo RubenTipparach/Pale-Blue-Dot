@@ -26,7 +26,9 @@ jets sit at the edge of the tropical circulation, not against the equator.
 - The wind at cloud height blows everywhere. Inside the tropics it is a
   gentle easterly, against the planet's turn. It changes into the jets over
   a band of latitude, not at an edge. The candidates are measured and drawn
-  in the design, and the owner picks one (survey W1).
+  in the design. The owner, 2026-09-29, on survey W1: "are the jets fixed?
+  just do recommended". So it is candidate C: the jet fades in across the
+  tropics and is at full strength by 30 degrees.
 - The jet's fade-in comes after its cap, so the fade shows at its full width.
 - One new setting, the tropical easterly's speed in m/s, in `atmosphere.ron`.
 - The settled climates that new worlds start from are made again, because

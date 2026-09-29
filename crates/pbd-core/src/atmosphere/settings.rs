@@ -52,6 +52,11 @@ pub struct AtmosphereSettings {
     pub thermal_wind: f32,
     /// The jet's speed limit, m/s.
     pub jet_max_mps: f32,
+    /// The wind at cloud height over the equator, blowing against the planet's
+    /// turn, m/s: the tropics' own wind aloft, where the jet has faded out
+    /// (`tropical-upper-wind` decision 2). Nought leaves the tropics aloft
+    /// with the surface wind alone. At most `jet_max_mps`.
+    pub tropical_easterly_mps: f32,
     /// Share of the cloud-level wind (the rest is the surface wind) that
     /// carries the cloud.
     pub cloud_steering: f32,
@@ -255,6 +260,7 @@ impl Default for AtmosphereSettings {
             smoothing: 0.02,
             thermal_wind: 70.0,
             jet_max_mps: 45.0,
+            tropical_easterly_mps: 8.0,
             cloud_steering: 0.7,
             cloud_pace: 0.2,
             solar_wm2: 1360.0,
@@ -485,6 +491,9 @@ impl AtmosphereSettings {
         if self.target_mean_c.is_some_and(|t| !t.is_finite()) {
             return Err("target_mean_c must be finite".into());
         }
+        if !(0.0..=self.jet_max_mps).contains(&self.tropical_easterly_mps) {
+            return Err("tropical_easterly_mps must be within 0..jet_max_mps".into());
+        }
         if self.cover_full_kg <= self.cover_min_kg {
             return Err("cover_full_kg must be above cover_min_kg".into());
         }
@@ -549,6 +558,27 @@ mod tests {
         }
         .validate()
         .unwrap();
+    }
+
+    /// `tropical-upper-wind` task 2.1: the easterly is a speed the jet's cap
+    /// can hold, and nought is allowed (it leaves the tropics the surface wind).
+    #[test]
+    fn a_tropical_easterly_out_of_range_is_refused() {
+        for bad in [-1.0, f32::NAN, f32::INFINITY, 46.0] {
+            let s = AtmosphereSettings {
+                tropical_easterly_mps: bad,
+                ..Default::default()
+            };
+            assert!(s.validate().is_err(), "{bad}");
+        }
+        for good in [0.0, 8.0, 45.0] {
+            AtmosphereSettings {
+                tropical_easterly_mps: good,
+                ..Default::default()
+            }
+            .validate()
+            .unwrap();
+        }
     }
 
     #[test]
