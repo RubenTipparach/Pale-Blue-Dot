@@ -400,3 +400,43 @@ fn a_bad_config_is_refused_by_name() {
         "{error}"
     );
 }
+
+/// Group 3: a world's list goes into records and comes back exactly, place
+/// for place; a list torn by a crash (no list record, or a site it names
+/// missing) reads as no list, so it is made again whole.
+#[test]
+fn the_list_round_trips_through_its_records() {
+    use crate::records::Records;
+    let cfg = SitesConfig {
+        level: 5,
+        ..shipped()
+    };
+    let list = generate(&cfg, &TerrainConfig::TENEBRIS, spawn(), threads());
+    assert!(!list.sites.is_empty());
+    let records = to_records(&list, cfg.version, 6);
+    assert_eq!(records.len(), list.sites.len() + 1);
+    assert_eq!(
+        records.last().map(|r| r.kind.as_str()),
+        Some(LIST_RECORD),
+        "the list last"
+    );
+    let mut store = Records::new();
+    for r in &records {
+        store.put(r.clone());
+    }
+    assert_eq!(
+        from_records(&store),
+        Some(list.sites.clone()),
+        "exactly, directions and all"
+    );
+    let mut torn = Records::new();
+    for r in &records[..records.len() - 1] {
+        torn.put(r.clone());
+    }
+    assert_eq!(from_records(&torn), None, "no list record");
+    let mut missing = Records::new();
+    for r in records.iter().skip(1) {
+        missing.put(r.clone());
+    }
+    assert_eq!(from_records(&missing), None, "a named site missing");
+}

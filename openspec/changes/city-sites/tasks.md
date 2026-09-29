@@ -22,7 +22,7 @@ the biome.
 
 ## 3. The world keeps its list
 
-- [ ] 3.1 The list stored as `site` records (`world-persistence` group 3, which lands first), generated for the whole planet at creation or on an older world's first open, written through the durable path before any site is shown, and read after. Verify: format tests for the round trip and an old save gaining its list; an app test that a changed `sites.ron` does not change an opened world's list.
+- [x] 3.1 (Built 2026-09-29: `pbd_app::sites`, `pbd_core::sites::to_records`/`from_records`, on `world-persistence` group 3. `sites::tests::the_list_round_trips_through_its_records` (core); `sites::tests::an_old_save_gains_its_list_and_keeps_it_when_the_rules_change`, `the_game_shows_the_list_its_save_holds`, `a_new_worlds_list_is_the_one_the_owner_approved` (app). Made from the spawn direction, finding 6.) The list stored as `site` records (`world-persistence` group 3, which lands first), generated for the whole planet at creation or on an older world's first open, written through the durable path before any site is shown, and read after. Verify: format tests for the round trip and an old save gaining its list; an app test that a changed `sites.ron` does not change an opened world's list.
 
 ## 4. On the map
 

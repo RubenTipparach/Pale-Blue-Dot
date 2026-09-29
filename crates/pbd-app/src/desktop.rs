@@ -764,6 +764,8 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::drops::DropsPlugin)
     // The world map on M (`world-map`), and how a capture asks it to open.
     .add_plugins(map_screen::MapScreenPlugin)
+    // Each world's city sites, made once and kept in its save (`city-sites`).
+    .add_plugins(pbd_app::sites::SitesPlugin)
     .insert_resource(launch.map.clone())
     .insert_resource(drops)
     .configure_sets(

@@ -35,6 +35,7 @@
 use crate::fauna::WaterClass;
 use crate::geo::{self, LatLon};
 use crate::planet_gen::{Biome, TerrainConfig, biome_at, river_channel, surface_altitude};
+use crate::records::{Record, Records};
 use crate::topology;
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
@@ -1057,6 +1058,106 @@ fn join(a: &str, b: &str) -> String {
         }
         _ => format!("{a}{b}"),
     }
+}
+
+/// A site's record kind in a world's save (`world-persistence` decision
+/// 11), and the list's.
+pub const SITE_RECORD: &str = "site";
+pub const LIST_RECORD: &str = "site-list";
+/// The schema both are written in.
+pub const RECORD_SCHEMA: u32 = 1;
+
+/// A site as its record holds it: everything but the id, which is the
+/// record's. The direction is the unit vector itself, so the place does not
+/// round through degrees.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+struct SiteBody {
+    kind: SiteKind,
+    name: String,
+    capital: bool,
+    home: bool,
+    pinned: bool,
+    river: bool,
+    direction: (f32, f32, f32),
+}
+
+/// The list's record: which rules made it, and its sites' ids in order. A
+/// site record the list does not name is not one of the world's sites.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+struct ListBody {
+    version: u32,
+    generator: u32,
+    ids: Vec<u32>,
+}
+
+/// A world's list as the records its save stores: a record per site, then
+/// the list's, last, so a list torn by a crash has none and is made again
+/// whole (the design's group 3).
+pub fn to_records(list: &SiteList, sites_version: u32, generator: u32) -> Vec<Record> {
+    let mut records: Vec<Record> = list
+        .sites
+        .iter()
+        .map(|s| {
+            let d = s.direction;
+            Record::of(
+                SITE_RECORD,
+                u64::from(s.id),
+                RECORD_SCHEMA,
+                &SiteBody {
+                    kind: s.kind,
+                    name: s.name.clone(),
+                    capital: s.capital,
+                    home: s.home,
+                    pinned: s.pinned,
+                    river: s.river,
+                    direction: (d.x, d.y, d.z),
+                },
+            )
+        })
+        .collect();
+    records.push(Record::of(
+        LIST_RECORD,
+        0,
+        RECORD_SCHEMA,
+        &ListBody {
+            version: sites_version,
+            generator,
+            ids: list.sites.iter().map(|s| s.id).collect(),
+        },
+    ));
+    records
+}
+
+/// A world's stored list, in its order, or `None` where the save holds no
+/// complete one: no list record, a schema this build does not read, or a
+/// site the list names missing.
+pub fn from_records(records: &Records) -> Option<Vec<Site>> {
+    let list = records.get(LIST_RECORD, 0)?;
+    if list.schema != RECORD_SCHEMA {
+        return None;
+    }
+    let list: ListBody = list.read()?;
+    list.ids
+        .iter()
+        .map(|&id| {
+            let record = records.get(SITE_RECORD, u64::from(id))?;
+            if record.schema != RECORD_SCHEMA {
+                return None;
+            }
+            let body: SiteBody = record.read()?;
+            let (x, y, z) = body.direction;
+            Some(Site {
+                id,
+                kind: body.kind,
+                direction: Vec3::new(x, y, z),
+                name: body.name,
+                capital: body.capital,
+                home: body.home,
+                pinned: body.pinned,
+                river: body.river,
+            })
+        })
+        .collect()
 }
 
 /// The whole list: [`candidates`] on `threads` threads, then [`select`].

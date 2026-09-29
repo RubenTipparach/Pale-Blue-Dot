@@ -312,10 +312,10 @@ The owner, 2026-09-29: "commence 2b, lets get these damn cities up to play!"
 store is `world-persistence` decision 11.
 - **When:** on a world's open, if its save holds no complete list. That is
   a new world, or an older world's first open under this build. The list is
-  made on the async pool from the world's own generator and the world's
-  start, not the player's pose, so the home town is by the start. It is
-  written as one `rec @c site <id> 1 <body>` line per site, then one
-  `rec @c site-list 0 1 <body>` line.
+  made on the async pool from the world's own generator and the spawn
+  direction, as the mockup's instrument makes it (finding 6), never the
+  player's pose. It is written as one `rec @c site <id> 1 <body>` line per
+  site, then one `rec @c site-list 0 1 <body>` line.
 - **A site's body** is its kind, name, capital, home, pinned and river
   flags, and its direction as a unit vector, so its place does not round
   through degrees.
@@ -330,8 +330,22 @@ store is `world-persistence` decision 11.
 - **The identity** gains the two kinds' schema versions when the list is
   first written: a deliberate upgrade, as the key migration is.
 
-**Not yet.** Group 4, the game's map layer, reads the stored list. The
-game's spawn for a new version-6 world now moves to level ground
-(`taller-mountains` decision 8). When the game makes the list, it passes that
-start, not the default direction the instrument uses; the small town is
-within 500 m of both.
+6. **The level start is not where the list was approved from (measured
+   2026-09-29).** A new version-6 world's walker starts on level ground
+   (`taller-mountains` decision 8), found from the spawn direction on the
+   game's contact field. That start is 438 m from the spawn direction.
+   - Holbrook is 133 m from the spawn direction and 566 m from the level
+     start. That is 531 m to the village's edge.
+   - Made from the level start, the list has no small town at all, because
+     no village or small walled town lies within 500 m of it. A village
+     elsewhere takes Holbrook's place.
+   - So each world's list is made from the spawn direction, as the mockup's
+     was. A new world then gets exactly the 55 sites the owner approved, and
+     a new player stands about 570 m from Holbrook, a walk of under two
+     minutes. The earlier note here, "within 500 m of both", was wrong.
+   - This is the recommendation taken (ask only with screenshots). The
+     choice not taken was to move the level start toward the home town. That
+     is H4's rule, and its search runs before the list exists.
+   - `sites::tests::a_new_worlds_list_is_the_one_the_owner_approved` pins it.
+
+**Not yet.** Group 4, the game's map layer, reads the stored list.
