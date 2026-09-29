@@ -53,8 +53,9 @@ side by side in `docs/screenshots/tropical-weather-aloft/options.jpg`.
   round in the north (was 49%) and 54% in the south (was 85%). It still runs
   straight where the tropics are quiet.
 - **Not in these candidates:** the tropics' surface weather. It is the reason
-  the line survives over the quiet half. Survey W3 asks whether to write it
-  up next.
+  the line survives over the quiet half. The owner, 2026-09-29, on survey W3
+  (write it up next, after W2 is built): "recommended". It is written up as
+  its own change; nothing is built from it until the owner chooses.
 
 ## Impact
 

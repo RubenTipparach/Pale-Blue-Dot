@@ -6,6 +6,7 @@ Nothing below group 1 starts before the owner answers B6.
 
 - [x] 1.1 (2026-09-29, the design's table and the survey's four maps.) The moisture field's quantiles over version 6's temperate land, the thresholds for a desert of a third, a quarter, a sixth and a tenth of it with the rest split evenly, each biome's share of the land, and the four maps side by side. Verify: the table is in the design and the maps are in the survey.
 - [ ] 1.2 **Gate:** the owner answers B6 (how much desert). Record the words in `proposal.md` and the thresholds in the design.
+  - 2026-09-29: answered "its good now", which reads as keeping version 6's desert (21% of the land) or as the recommended half (10.5%). Asked back in the survey's comment thread; nothing below starts until the owner says which.
 
 ## 2. Version 6
 

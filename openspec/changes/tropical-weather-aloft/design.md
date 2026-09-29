@@ -123,14 +123,17 @@ these candidates touches it.
 
 ## Decisions
 
-Pending, on the survey:
+Pending or decided, on the survey:
 - **W2: which rule.** Recommended: H. Alternatives: D, the smallest change,
   which fixes the jet's edge and leaves the band flat; A, keep what is built.
 - **W3: write up the tropics' surface weather next?** This is why the trade
   winds are 1.5 m/s at most and the warmest air sits on one line of latitude.
   It is the cause under this band, and a bigger change to
-  `atmospheric-circulation`. Recommended: yes, as a write-up only, after W2 is
-  built.
+  `atmospheric-circulation`. **Decided, 2026-09-29:** "recommended". So it is
+  written up as its own change, a write-up only, after W2 is built.
+- W2's answer, "looks good now", reads two ways: build H, or keep what is
+  built. It is asked back in the survey's comment thread, and nothing here is
+  built until the owner says which.
 
 If H is chosen:
 1. **The potential is relaxed, not solved, each step.** Each step runs a few
