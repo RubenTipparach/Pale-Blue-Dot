@@ -63,3 +63,7 @@ keep their ground.
 - `assets/climate/settled-g6-l{3,5}`.
 - Frame cost: taller ground is more visible faces and a longer LOD reach.
   Not measurable in a cloud session; the owner runs `tools/perf_suite.py`.
+
+The owner, 2026-09-29, on survey H4 (where a new version-6 world starts):
+"recommended". So a new world starts on the nearest level plain, with the
+Kestrel beside the player (design decision 8).

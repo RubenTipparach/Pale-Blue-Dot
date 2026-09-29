@@ -33,11 +33,11 @@
   },
   "today": {
    "beach": 0.1024,
-   "desert": 0.209,
-   "fields": 0.2093,
-   "jungle": 0.1979,
+   "desert": 0.1047,
+   "fields": 0.2595,
+   "jungle": 0.2497,
    "mountains": 0.0433,
-   "swamp": 0.0099,
+   "swamp": 0.0123,
    "tundra": 0.2282
   }
  },

@@ -217,3 +217,84 @@ owner, survey T12: add both now).
     the owner can move it on the mockup;
   - the lights are `cities-in-the-world`'s: its night lights also light the
     coarse hexes of the far terrain.
+
+## Built (2026-09-29): the rules in the core, and the mockup's sites
+
+The owner, 2026-09-29: "commence 2b, lets get these damn cities up to play!"
+
+- **One implementation.** The rules are `pbd_core::sites`, and
+  `assets/config/sites.ron` holds the table, the names and the overrides.
+  - The mockup's instrument is `examples/sites.rs`. It calls `generate`, so
+    task 2.4's "the same list from the instrument and the core" holds by
+    construction. It writes `docs/mockups/world-map/sites.json` and prints
+    each stage's time.
+  - The page's own placeholder rules are gone.
+- **Measured on the shipped seed**, generator 6 with half the desert, on the
+  cloud container's 4 threads:
+  - the 163,842 level-7 cells take 0.29 s to build;
+  - the screen, the full checks and the scores take 5.9 s, and keep 10,468
+    candidates;
+  - the pins, the home town, the greedy pass, the capital and the names take
+    0.38 s.
+
+  The design's risk of a slow fine check does not arise.
+- **The list:** 55 sites, every kind at its target.
+  - The small town near the spawn is Holford, a village on a river, 133 m
+    from the game's default spawn direction.
+  - The capital is Ashingstead, a walled town 10.3 km away, on another land
+    mass.
+
+**Findings on the way, and what was done about each.**
+
+1. **The flatness limits were set against the coarse screen.** At the
+   terrain's own 2.833 m cells, which the spec's "flat, dry ground" samples, a
+   footprint's range reads 1.2 to 1.4 times the seven-sample screen's (median
+   1.36 for a walled town, 1.27 for a village).
+   - On the table's numbers, only 8 cells held a walled town, 3 a desert town
+     and 1 a swamp village. No village stood within 500 m of the spawn.
+   - Each limit in `sites.ron` is now the table's times 1.4: walled town
+     11 m, village 5.5, desert town 8.5, tundra camp 5.5, jungle village 14,
+     swamp village 4. That accepts, at the fine spacing, the ground the
+     table's limit accepted on the mockup's screen.
+   - The owner judges the result on the mockup (task 1.4).
+2. **One kind per cell, chosen by its own ground.** A field cell is a walled
+   town if its footprint passes the town's screen and full check, and a
+   village only if not. In the mountains, a cave town comes before a cliff
+   village.
+   - So a change of counts never turns a kept site into another kind (the
+     spec's "Fewer sites keeps the same ones").
+   - The full check, the costly part, runs on the screening threads.
+3. **The swamp is coastal lowland.** In 723 of its 851 cells the footprint
+   reaches the sea, and the swamp village's houses stand on stilts over the
+   water.
+   - Its footprint may hold water as deep as the shallows (6 m).
+   - Its flatness is its dry ground's, and its anchor is dry.
+4. **Spacing, as the mockup showed it:** a kind keeps its own spacing from its
+   own kind, and half the smaller of the two from any other, between the
+   footprints' edges.
+   - The spec said "the spacing for the larger of the two". With walled
+     towns 2,500 m apart, that would have kept every village 2.5 km from
+     every town, and cleared most of the fields.
+   - The spec delta now says what is built.
+
+**The mockup (tasks 1.2 and 1.3).**
+- `docs/mockups/world-map.html` draws the core's list, with a footprint
+  outline once it is bigger than its marker.
+- Its site editor moves, adds, strikes, renames and crowns sites, and copies
+  the edits as `sites.ron`'s pins and strikes.
+  - A generated site the owner changed becomes a pin, and its id is struck.
+  - A pin at sea or on a pentagon is refused on the page, as the game
+    refuses it.
+- `tools/mockup_sites_test.js` drives it headless: the list loads, the
+  capital is dragged, and the RON pins it at its new place and strikes its
+  old id.
+- The base map, its finer tiles and the biome layer are redrawn on version 6
+  with half the desert, so the sites stand on the ground they were placed on.
+  The four desert buttons are retired, since B6 is decided.
+
+**Not yet.** Groups 3 and 4 need the save's record store first
+(`world-persistence` group 3): storing the list in a world, and the game's
+map layer. The game's spawn for a new version-6 world now moves to level
+ground (`taller-mountains` decision 8). When the game makes the list, it
+passes that start, not the default direction the instrument uses; the small
+town is within 500 m of both.

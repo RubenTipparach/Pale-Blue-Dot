@@ -138,7 +138,10 @@ impl TerrainConfig {
     /// which its threshold kept from ever firing. The snowcap stands at
     /// 200 m, so a summit wears snow over bare rock (decision 3, measured:
     /// the Mountains biome keeps its 105 m and is 4.8% of the land). The
-    /// lowland is version 5's.
+    /// lowland is version 5's. The desert is half version 5's, a sixth of the
+    /// temperate land where it was a third, and what it gives up goes evenly
+    /// to the fields and the jungle (`fewer-deserts`, survey B6: "10.5 %
+    /// desert").
     pub const TENEBRIS_V6: Self = Self {
         ranges: Some(Ranges {
             widen: 3.0,
@@ -148,6 +151,8 @@ impl TerrainConfig {
         }),
         rocky_uplift_m: 0.0,
         mountain_snowcap_elev_m: 200.0,
+        desert_below: 0.422,
+        wet_above: 0.524,
         ..Self::TENEBRIS_V5
     };
 
@@ -1033,31 +1038,58 @@ mod tests {
         );
     }
 
-    /// Grass is not the majority: on the shipped seed and four others, the
-    /// temperate land the moisture divides (fields, desert, jungle, swamp)
-    /// is at least a fifth each fields, desert, and jungle with swamp, and
-    /// none holds more than half (survey B2).
+    /// The temperate land the moisture divides, as shares of fields, desert,
+    /// and jungle with swamp, sampled at 60,000 directions.
+    fn temperate_shares(cfg: &TerrainConfig) -> [f32; 3] {
+        let mut count = [0usize; 3];
+        for d in sphere(60_000) {
+            let h = surface_altitude(cfg, d);
+            match biome_at(cfg, d, h) {
+                Biome::Fields => count[0] += 1,
+                Biome::Desert => count[1] += 1,
+                Biome::Jungle | Biome::Swamp => count[2] += 1,
+                _ => {}
+            }
+        }
+        let total = count.iter().sum::<usize>().max(1) as f32;
+        count.map(|n| n as f32 / total)
+    }
+
+    /// Grass is not the majority: on the shipped seed and four others, no
+    /// temperate biome holds half the temperate land. Version 6's desert is
+    /// the sixth the owner chose, within a few points (survey B6: "10.5 %
+    /// desert"), and the fields and the jungle with swamp each hold more than
+    /// a third. Version 5 keeps its thirds, each at least a fifth (survey B2).
     #[test]
     fn grass_is_not_the_majority_on_five_seeds() {
-        let shipped = TerrainConfig::default();
         let mut failures = Vec::new();
-        for seed in [shipped.seed, 1, 2, 0xB10E_5EED, 0x0dd_ba11] {
-            let cfg = TerrainConfig { seed, ..shipped };
-            let mut count = [0usize; 3];
-            for d in sphere(60_000) {
-                let h = surface_altitude(&cfg, d);
-                match biome_at(&cfg, d, h) {
-                    Biome::Fields => count[0] += 1,
-                    Biome::Desert => count[1] += 1,
-                    Biome::Jungle | Biome::Swamp => count[2] += 1,
-                    _ => {}
+        for seed in [TerrainConfig::TENEBRIS.seed, 1, 2, 0xB10E_5EED, 0x0dd_ba11] {
+            let v6 = temperate_shares(&TerrainConfig {
+                seed,
+                ..TerrainConfig::TENEBRIS_V6
+            });
+            let v5 = temperate_shares(&TerrainConfig {
+                seed,
+                ..TerrainConfig::TENEBRIS_V5
+            });
+            let names = ["fields", "desert", "jungle and swamp"];
+            for (i, share) in v6.iter().enumerate() {
+                let band = if i == 1 { 0.12..=0.22 } else { 0.334..=0.5 };
+                if !band.contains(share) {
+                    failures.push(format!(
+                        "v6 seed {seed:#x}: {} {:.1}%",
+                        names[i],
+                        share * 100.0
+                    ));
                 }
             }
-            let total = count.iter().sum::<usize>().max(1) as f32;
-            for (name, n) in ["fields", "desert", "jungle and swamp"].iter().zip(count) {
-                let share = n as f32 / total;
-                if !(0.2..=0.5).contains(&share) {
-                    failures.push(format!("seed {seed:#x}: {name} {:.0}%", share * 100.0));
+            for (i, share) in v5.iter().enumerate() {
+                if !(0.2..=0.5).contains(share) {
+                    failures.push(format!(
+                        "v5 seed {seed:#x}: {} {:.1}%",
+                        names[i],
+                        share * 100.0
+                    ));
                 }
             }
         }

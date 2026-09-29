@@ -259,7 +259,10 @@ fn setup_walking(world: &mut World) {
         // the position it holds is one the player was standing at.
         Some(pose) => (pose.position, pose.position.normalize_or(direction)),
         None => {
-            let center = ground.find_land_near(direction).normalize();
+            let sea = world
+                .get_resource::<crate::sea::Sea>()
+                .map_or(crate::planet::terrain::PLANET_RADIUS, |sea| sea.radius);
+            let center = new_world_start(ground, sea, direction);
             // Cosmetic trunks occupy cell centers. Start four metres beside the
             // trunk, still safely inside this cap, so the first-person view
             // opens onto the land.
@@ -536,15 +539,51 @@ pub fn restore(world: &mut World, pose: RestoredPose) {
     state.jump = false;
 }
 
+/// Where a new world's walker starts, from the spawn direction: the nearest
+/// dry land, and on a generator with ranges (version 6 on) the nearest level
+/// ground to that, found as the Kestrel's pad is (`taller-mountains`
+/// decision 8, survey H4). Worlds of versions 4 and 5 keep the start they
+/// had (CLAUDE.md, "Saved games survive every change").
+pub fn new_world_start(ground: &PlanetContact, sea_radius: f32, direction: Vec3) -> Vec3 {
+    start_for_version(
+        crate::planet::terrain::generator_version(),
+        ground,
+        sea_radius,
+        direction,
+    )
+}
+
+/// [`new_world_start`] for a named generator version.
+fn start_for_version(
+    version: u32,
+    ground: &PlanetContact,
+    sea_radius: f32,
+    direction: Vec3,
+) -> Vec3 {
+    let land = ground.find_land_near(direction).normalize();
+    if version < 6 {
+        return land;
+    }
+    ground
+        .find_cap_near(land, START_SEARCH_CAPS, |centre| {
+            crate::vehicles::place::level_plain(sea_radius, centre)
+        })
+        .map_or(land, Vec3::normalize)
+}
+
+/// How many base caps the level-ground start searches: about a kilometre
+/// round the spawn at the game's 45 m caps.
+const START_SEARCH_CAPS: usize = 2000;
+
 /// Find this world's spawn again on the ground as it is now. After the planet
 /// is rebuilt for another generator (`bigger-biomes` decision 8) the land a
 /// new world starts on can be somewhere else.
 pub fn find_spawn_again(world: &mut World) {
     let direction = world.resource::<FlightViewConfig>().spawn_direction;
-    let land = world
-        .resource::<PlanetContact>()
-        .find_land_near(direction)
-        .normalize();
+    let sea = world
+        .get_resource::<crate::sea::Sea>()
+        .map_or(crate::planet::terrain::PLANET_RADIUS, |sea| sea.radius);
+    let land = new_world_start(world.resource::<PlanetContact>(), sea, direction);
     if let Some(mut state) = world.get_resource_mut::<WalkingState>() {
         state.spawn_direction = land;
     }
@@ -1759,6 +1798,29 @@ mod tests {
         assert!(
             (after - before).dot(-heading) > 1.0,
             "ledge trapped separating motion"
+        );
+    }
+
+    /// `taller-mountains` decision 8, survey H4: a new version-6 world starts
+    /// on a level plain near the spawn direction, and a version 4 or 5 world
+    /// never played starts where it always did, on the nearest dry land.
+    #[test]
+    fn a_new_world_starts_on_level_ground_and_old_versions_keep_their_start() {
+        let ground = PlanetContact::test_planet(5);
+        let sea = crate::sea::Sea::new(&crate::config::WaterSettings::default()).radius;
+        let spawn = FlightViewConfig::default().spawn_direction;
+        let land = ground.find_land_near(spawn).normalize();
+        for version in [4, 5] {
+            assert_eq!(start_for_version(version, &ground, sea, spawn), land);
+        }
+        let start = start_for_version(6, &ground, sea, spawn);
+        assert!(
+            crate::vehicles::place::level_plain(sea, start),
+            "the start is a level plain with the Kestrel's pad round it"
+        );
+        assert!(
+            !crate::vehicles::place::level_plain(sea, land),
+            "on version 6 the old start is not level, so this test tells the rules apart"
         );
     }
 }

@@ -44,8 +44,9 @@ enters from.
 
 - **WHEN** every generated site's footprint is sampled at the terrain's finest
   cell level
-- **THEN** no sample is below sea level (a harbour's water rows aside), and the
-  surface range is within the kind's limit
+- **THEN** no sample is below sea level (a harbour's water rows, and a swamp
+  village's water no deeper than the shallows, aside), and the surface range
+  of its dry ground is within the kind's limit
 
 #### Scenario: No pentagons
 
@@ -95,14 +96,16 @@ A site SHALL NOT take a kind whose biome it does not stand in.
 
 ### Requirement: Sites are spaced apart
 
-Two sites SHALL NOT stand closer than the configured spacing for the larger of
-the two, measured on the sphere between their footprints' edges. Towns SHALL
-be spaced further apart than villages.
+Two sites of one kind SHALL NOT stand closer than that kind's configured
+spacing, and two of different kinds SHALL NOT stand closer than half the
+smaller of their two spacings, measured on the sphere between their
+footprints' edges. Towns SHALL be spaced further apart than villages.
 
 #### Scenario: Measuring every pair
 
 - **WHEN** every pair of sites is measured
-- **THEN** no pair is closer than its configured spacing
+- **THEN** no pair of one kind is closer than that kind's spacing, and no
+  pair of two kinds is closer than half the smaller spacing
 
 ### Requirement: Every site has a name of its own
 

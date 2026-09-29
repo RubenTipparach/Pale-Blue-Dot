@@ -220,7 +220,7 @@ ground. Four vehicle tests fail on it. Measured on the columns' own ground:
 | nearest level 11 m pad | 12 m away, 76 m up | 96 m away, 63 m up |
 | nearest dry land outside the ranges | (none) | 104 m away |
 
-**8. Where a new world starts (provisional, survey H4).** Recommended: a new
+**8. Where a new world starts (survey H4, 2026-09-29: "recommended").** A new
 version-6 world starts on the level ground nearest the spawn direction (the
 Kestrel's pad, found as the pad is), 96 m from today's spot, on the fields
 below the foothill; the Kestrel's pad is then found round it as today. Where
@@ -240,3 +240,20 @@ generator: version 4 and 5 worlds never played keep the start they have.
   in a cloud session; the owner runs `tools/perf_suite.py`.
 - [The owner wants jagged peaks] → The peaks candidate is measured and
   offered (H3).
+
+## Built: where a new version-6 world starts (decision 8, 2026-09-29)
+
+- `walking::new_world_start` finds the nearest dry land as before. On
+  version 6 it then searches the base caps outward, breadth first, for the
+  first cap whose centre stands on a level plain (`vehicles::place::level_plain`).
+  - The centre itself takes the Kestrel's pad.
+  - At least 8 of the 120 samples in the ring 20 to 36 m round it take the
+    pad as well.
+- **Why a plain and not a spot.** On one-metre layers a level pad is a knife
+  edge. A start with one pad in its ring left the Kestrel with no pad from a
+  walker half a metre away.
+- **Why a cap's centre.** The walker is set down 4 m from a cap's centre, as
+  it always was, so it does not straddle two caps.
+- Versions 4 and 5 keep their start: the test checks it for both. It also
+  checks that on version 6 the old start is not level, so it tells the two
+  rules apart.

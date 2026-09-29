@@ -13,6 +13,7 @@
     smoothing: 0.02,
     thermal_wind: 70.0,
     jet_max_mps: 45.0,
+    tropical_easterly_mps: 8.0,
     cloud_steering: 0.7,
     cloud_pace: 0.2,
     solar_wm2: 1360.0,

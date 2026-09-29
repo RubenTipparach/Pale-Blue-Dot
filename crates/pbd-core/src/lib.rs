@@ -25,6 +25,7 @@ pub mod orbit;
 pub mod overlay;
 pub mod planet_gen;
 pub mod sea;
+pub mod sites;
 pub mod terrain;
 pub mod topology;
 pub mod vehicle;
