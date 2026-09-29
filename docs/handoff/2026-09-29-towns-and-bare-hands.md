@@ -93,6 +93,13 @@ tracked as `cities-in-the-world` task 0.8.
    placed behind them. Doors this big, with furniture behind them, should
    open outward. This matters for the game too: slice 2a draws every door
    leaf swung inward.
+6. **Jungle bridge posts miss the platform's corners**
+   (`jungle-bridge-posts.png`). In the jungle town, the rail posts at each
+   end of a rope bridge should stand on the edge vertices of the hex
+   platform the bridge meets, so bridge and platform rails join.
+7. **The stairwells need more light.** The enclosed stairs, the newel
+   stairs and the straight flights, are too dark. Give them a light of their
+   own, such as a candle or a lamp on the landing.
 
 The game's `game-lane.png` was captured after the commit above and is added
 beside the mockup's. It has not been looked at yet. The other three game
