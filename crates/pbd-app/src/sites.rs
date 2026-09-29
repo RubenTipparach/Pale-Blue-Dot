@@ -92,6 +92,16 @@ impl WorldSites {
         matches!(self.survey, Survey::Ready).then_some(self.sites.as_slice())
     }
 
+    /// A world whose list is on disk already: for the map's tests, which
+    /// need no save behind them.
+    pub fn ready_with(sites: Vec<Site>) -> Self {
+        Self {
+            sites,
+            survey: Survey::Ready,
+            world: None,
+        }
+    }
+
     /// Whether the list is being made or written.
     pub fn surveying(&self) -> bool {
         matches!(self.survey, Survey::Running { .. } | Survey::Writing { .. })
@@ -141,13 +151,14 @@ pub fn ensure(
     Some((list.sites, seq))
 }
 
-/// Where a world's list puts its small town: the spawn direction, as the
-/// map mockup's list was made from, so a new world's list is the one the
-/// owner approved. Not the level start a version-6 walker stands on, 438 m
-/// off, from which no small town lies within reach (the design's finding
-/// 6); and never the player's pose.
-fn list_spawn(view: &FlightViewConfig) -> Vec3 {
-    view.spawn_direction.normalize()
+/// Where a world's list puts its small town: the world's spawn direction,
+/// the default every world starts from, as the map mockup's list was made
+/// from, so a new world's list is the one the owner approved. Not the level
+/// start a version-6 walker stands on, 438 m off, from which no small town
+/// lies within reach (the design's finding 6). And never the player's pose,
+/// which is what a saved world's flight view holds.
+pub fn list_spawn() -> Vec3 {
+    FlightViewConfig::default().spawn_direction.normalize()
 }
 
 fn threads() -> usize {
@@ -160,7 +171,6 @@ pub fn keep_sites(
     mut sites: ResMut<WorldSites>,
     rules: Option<Res<SitesRules>>,
     save: Option<ResMut<WorldSave>>,
-    view: Option<Res<FlightViewConfig>>,
     sun: Option<Res<crate::sky::Sun>>,
 ) {
     let (Some(rules), Some(mut save)) = (rules, save) else {
@@ -190,10 +200,7 @@ pub fn keep_sites(
             sites.survey = Survey::Failed;
             return;
         }
-        let start = view.map_or_else(
-            || list_spawn(&FlightViewConfig::default()),
-            |v| list_spawn(&v),
-        );
+        let start = list_spawn();
         let terrain = *crate::planet::terrain_config();
         let config = rules.0.clone();
         if sun.is_some_and(|sun| !sun.running) {

@@ -147,7 +147,7 @@ fn a_new_worlds_list_is_the_one_the_owner_approved() {
     let list = sites::generate(
         &load_rules(),
         crate::planet::terrain_config(),
-        list_spawn(&view),
+        list_spawn(),
         4,
     );
     let approved: serde_json::Value = serde_json::from_str(

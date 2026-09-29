@@ -26,7 +26,7 @@ the biome.
 
 ## 4. On the map
 
-- [ ] 4.1 The sites marker layer in the `world-map` registry, with label culling and footprint outlines. Verify: an app test that every site has a marker at its anchor's projection, and a capture at world and close zoom in `docs/screenshots/city-sites/`.
+- [x] 4.1 (Built 2026-09-29: `desktop/map_sites.rs`. `map_sites::tests::every_site_has_a_marker_at_its_anchor`, `names_and_footprints_come_in_as_the_map_zooms`, `a_town_in_the_dark_lights_the_ground_round_it`; `docs/screenshots/city-sites/game-map-*.png`.) The sites marker layer in the `world-map` registry, with label culling and footprint outlines. Verify: an app test that every site has a marker at its anchor's projection, and a capture at world and close zoom in `docs/screenshots/city-sites/`.
 - [ ] 4.2 Sync `world/sites` and the `player/map` addition into `openspec/specs`, naming each test. Verify: `openspec validate --all`.
 - [ ] 4.2a The gate video (showcase `sites`): the in-game sites layer at world and close zoom, then a flight to three sites of different kinds, showing the flat, dry ground each stands on. Verify: the gate page is linked from the PR.
 - [ ] 4.3 The owner watches the video and accepts the in-game map against the approved mockup. Verify: the quote is in `proposal.md`. Archive.

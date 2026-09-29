@@ -348,4 +348,27 @@ store is `world-persistence` decision 11.
      is H4's rule, and its search runs before the list exists.
    - `sites::tests::a_new_worlds_list_is_the_one_the_owner_approved` pins it.
 
+**Group 4, as it is built (2026-09-29, written before the code).** The
+game's map draws the stored list as the approved mockup draws it (decision
+7), from `WorldSites` once the list is on disk:
+- **Markers.** A square for a walled town, a desert town, a cave town and
+  the capital; a circle for the rest. A dark fill with a pale rim. The
+  capital has an amber ring.
+- **Names** show at 12.5 m a pixel or closer (the mockup's zoom 0.9 of its
+  11.3 m base). The capital's and the home town's show at every zoom.
+- **The footprint** is drawn once its radius passes 6 pixels. It is an
+  ellipse, as wide as the map stretches that latitude.
+- **At night**, when the map's night is on, each town's lamps light a pool
+  round it: 260 m for a town and 140 m for a village, at least 10 pixels.
+  The pool is as strong as the dark is deep there. The marker and its name
+  turn lamp-coloured past half dark (CLAUDE.md: mockups are lit at night,
+  and the map follows its mockup).
+- **Off screen** a site is hidden. The map's three copies of the planet
+  across the antimeridian each draw it.
+- **The legend** says how many sites there are, or "surveying" while the
+  list is made.
+- The nodes are Bevy UI: a rounded border makes the circles and the
+  ellipse, so a line stays 1.2 pixels at every size. A radial gradient
+  makes the lamplight.
+
 **Not yet.** Group 4, the game's map layer, reads the stored list.

@@ -622,6 +622,7 @@ pub fn spawn(
                     canvas.spawn((LayerCopy(copy), ImageNode::default(), hidden(full())));
                 }
                 canvas.spawn((LiveNode, MaterialNode(material), full(), FocusPolicy::Pass));
+                canvas.spawn((super::map_sites::SiteLayer, full(), FocusPolicy::Pass));
                 canvas
                     .spawn((MarkerLayer, full(), FocusPolicy::Pass))
                     .with_children(|markers| {
@@ -775,6 +776,15 @@ fn legend(root: &mut ChildSpawnerCommands, layers: &MapLayers) {
         });
         panel.spawn((
             MapNote,
+            Text::new(""),
+            TextFont {
+                font_size: 10.0,
+                ..default()
+            },
+            TextColor(INK),
+        ));
+        panel.spawn((
+            super::map_sites::SitesNote,
             Text::new(""),
             TextFont {
                 font_size: 10.0,
@@ -1677,6 +1687,7 @@ impl Plugin for MapScreenPlugin {
             .init_resource::<MapRaster>()
             .init_resource::<MapLayers>()
             .init_resource::<MapLaunch>()
+            .init_resource::<super::map_sites::DrawnSites>()
             .add_systems(PreStartup, |mut layers: ResMut<MapLayers>| {
                 layers.add(biomes_layer());
             })
@@ -1693,6 +1704,7 @@ impl Plugin for MapScreenPlugin {
                     paint_key,
                     lay_out,
                     live,
+                    super::map_sites::draw_sites,
                     markers,
                 )
                     .chain(),

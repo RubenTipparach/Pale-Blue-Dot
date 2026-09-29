@@ -6,6 +6,7 @@ mod frame_graph;
 mod guide;
 mod hud;
 mod map_screen;
+mod map_sites;
 mod menu;
 mod overlay_ui;
 mod pack;
