@@ -30,8 +30,10 @@ Asia, while over the eastern oceans westerlies reach close to the equator.
 
 ## What Changes
 
-Proposed, not built. The owner chooses on survey W2; the candidates are drawn
-side by side in `docs/screenshots/tropical-weather-aloft/options.jpg`.
+The candidates are drawn side by side in
+`docs/screenshots/tropical-weather-aloft/options.jpg`. The owner, 2026-09-29,
+on survey W2: "H" (first written "looks good now", then made plain when asked
+back). So H is built.
 
 - **D. The jet follows the air.** Fade the jet in before the cap, not after.
   Balance it against the spin as at 30 degrees everywhere equatorward of 30

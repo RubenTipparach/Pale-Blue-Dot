@@ -170,6 +170,16 @@ td:nth-child(2){font-family:var(--mono);font-size:12.5px;color:var(--muted);whit
 
 footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
 
+.stop.done .dot{background:var(--sea);color:var(--card)}
+.stop.now .dot{border-color:var(--lamp);color:var(--lamp);box-shadow:0 0 0 4px var(--lamp-soft)}
+.stop.next .dot{border-style:dashed}
+.state{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:3px;white-space:nowrap}
+.state.done{background:var(--sea-soft);color:var(--sea)}
+.state.now{background:var(--lamp-soft);color:var(--lamp)}
+.state.next{background:var(--chip);color:var(--ink);outline:1px dashed var(--line)}
+.state.planned{background:transparent;color:var(--muted);outline:1px solid var(--line-soft)}
+.status td:nth-child(2){white-space:normal}
+
 @media (max-width:760px){
   .step{grid-template-columns:1fr}
   .step-side{border-right:0;border-bottom:1px solid var(--line-soft);grid-template-columns:auto 1fr;align-items:center;column-gap:14px}
@@ -183,22 +193,26 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 <div class="wrap">
 
 <header>
-  <div class="eyebrow">Pale Blue Dot &middot; OpenSpec plan &middot; 27 September 2026</div>
+  <div class="eyebrow">Pale Blue Dot &middot; OpenSpec plan &middot; updated 29 September 2026</div>
   <h1>The road to Tenebris cities</h1>
-  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. Thirteen OpenSpec changes, each written up. The first, exact cell keys, is built and waits on your gate. Every step ends in a video you watch before the next one starts.</p>
+  <p class="lede">Lights first, then a map to place the towns on, then the towns themselves, then the tools to build your own. The lights, the map, bigger biomes and the pack are built. Now: the tropics' wind aloft (your W2, H), then version 6's taller mountains with half the desert. Then the towns: city sites first. Screenshots stand in for the gate videos until you watch them in one batch.</p>
   <blockquote>
     step 1 implement lights, step 2 implement cities, step 3 implement ways for me to make cities. as a player I want to be able to put together these buildings myself &hellip; So map with cities first mocked up, then I will approve.
     <cite>the owner, 27 September 2026</cite>
   </blockquote>
   <div class="facts">
-    <div><b>13</b><span>changes written</span></div>
-    <div><b>218</b><span>tasks open</span></div>
-    <div><b>11</b><span>video gates, each beside the prototype</span></div>
-    <div><b>1</b><span>step built, waiting on your gate</span></div>
+    <div><b>19</b><span>changes written</span></div>
+    <div><b>198</b><span>of 325 tasks open</span></div>
+    <div><b>6</b><span>changes built, videos in your batch</span></div>
+    <div><b>0</b><span>survey questions open</span></div>
   </div>
   <div class="links">
-    <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/pull/17">Pull request #17</a>
-    <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">Your survey: round 2 is open</a>
+    <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/pull/18">Pull request #18 (open)</a>
+    <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/pull/17">#17 (merged)</a>
+    <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">Your survey: nothing open</a>
+    <a href="https://claude.ai/artifact/VXzmu3dLgZC4GYyzJJ4gVz">Lights, in the game</a>
+    <a href="https://claude.ai/artifact/2Vs2e3h3rQS1EPKQSKA1gF">The map, in the game</a>
+    <a href="https://claude.ai/artifact/BXtLUoFSif3oVt1eutiuEr">Taller mountains, in the game</a>
     <a href="https://github.com/RubenTipparach/Pale-Blue-Dot/blob/claude/medieval-city-html-mockup-8692xs/docs/plans/towns-mockup-parity.md">Towns mockup parity list</a>
     <a href="https://claude.ai/artifact/59zS9ERBTkrVrzPedfoUL2">The towns mockup</a>
     <a href="https://claude.ai/artifact/G7QY9BYXYMH8tgaEv8E7az">The world map mockup</a>
@@ -206,11 +220,35 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
   </div>
 </header>
 
+<section aria-labelledby="status-h">
+  <h2 id="status-h">Where it stands</h2>
+  <p>Built means in the game and tested, with screenshots. Every built step still owes its video in your batch.</p>
+  <div class="table-box">
+    <table class="status">
+      <thead><tr><th>Step</th><th>Change</th><th>State</th><th>What is left</th></tr></thead>
+      <tbody>
+        <tr><td>Exact cell keys</td><td>exact-cell-keys</td><td><span class="state done">built</span></td><td>You watch its video (it is made).</td></tr>
+        <tr><td>Lights</td><td>lamps-and-lanterns</td><td><span class="state done">built</span></td><td>Approved 27 September. The video, in your batch.</td></tr>
+        <tr><td>The pack</td><td>inventory-grid</td><td><span class="state done">built</span></td><td>The video, in your batch.</td></tr>
+        <tr><td>The map</td><td>world-map</td><td><span class="state done">built</span></td><td>"map looks good" (28 September). The video; a town's places wait for city sites.</td></tr>
+        <tr><td>Bigger biomes, version 5</td><td>bigger-biomes</td><td><span class="state done">built</span></td><td>In PR #18. The video; your frame-cost run.</td></tr>
+        <tr><td>No calm band at the equator</td><td>tropical-upper-wind</td><td><span class="state done">built</span></td><td>In PR #18. Level-5 starting climates on your desktop.</td></tr>
+        <tr><td>The tropics follow their storms</td><td>tropical-weather-aloft</td><td><span class="state now">building now</span></td><td>H (W2): the jet follows the air, and outflow round the storms. Then the tropics' surface weather is written up (W3).</td></tr>
+        <tr><td>A 15 &deg;C planet</td><td>climate-balance</td><td><span class="state now">half built</span></td><td>Heat no longer leaks, and new worlds start from a settled 15 &deg;C climate. Left: the clouds' retune, the fish test and maps.</td></tr>
+        <tr><td>Version 6: taller mountains, half the desert</td><td>taller-mountains &middot; fewer-deserts</td><td><span class="state next">next</span></td><td>Ranges to 249 m, a 504-layer column, snow at 200 m, desert 10.5% (B6), start on level ground (H4). Its own PR after #18.</td></tr>
+        <tr><td>The save model</td><td>world-persistence</td><td><span class="state next">started</span></td><td>The version table and save identity are built. Records, authors and regions come before towns store anything.</td></tr>
+        <tr><td>Videos</td><td>step-videos</td><td><span class="state planned">waiting</span></td><td>Screenshots stand in until your batch (27 September).</td></tr>
+        <tr><td>City sites, climate and fish maps, towns, townsfolk, building, the cog</td><td>city-sites &hellip; sail-the-cog</td><td><span class="state planned">planned</span></td><td>Written up, not started. City sites is the first.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
 <section aria-labelledby="route-h">
   <h2 id="route-h">The order</h2>
   <div class="route-box">
     <div class="route" role="list">
-      <div class="stop" role="listitem"><div class="dot">0a</div><div class="name">Exact cell keys</div><div class="id">exact-cell-keys</div></div>
+      <div class="stop done" role="listitem"><div class="dot">0a</div><div class="name">Exact cell keys</div><div class="id">exact-cell-keys</div></div>
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">fix approved</div></div>
       <div class="leg"></div>
@@ -218,17 +256,23 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">format approved</div></div>
       <div class="leg"></div>
-      <div class="stop" role="listitem"><div class="dot">1</div><div class="name">Lights</div><div class="id">lamps-and-lanterns</div></div>
+      <div class="stop done" role="listitem"><div class="dot">1</div><div class="name">Lights</div><div class="id">lamps-and-lanterns</div></div>
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">lights approved</div></div>
       <div class="leg"></div>
-      <div class="stop" role="listitem"><div class="dot">1b</div><div class="name">A 15 &deg;C planet</div><div class="id">climate-balance</div></div>
+      <div class="stop now" role="listitem"><div class="dot">1b</div><div class="name">A 15 &deg;C planet</div><div class="id">climate-balance</div></div>
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">climate approved</div></div>
       <div class="leg"></div>
-      <div class="stop" role="listitem"><div class="dot">2a</div><div class="name">Map, biomes, saves</div><div class="id">world-map &middot; bigger-biomes &middot; world-persistence</div></div>
+      <div class="stop done" role="listitem"><div class="dot">1c</div><div class="name">The pack</div><div class="id">inventory-grid</div></div>
+      <div class="leg"></div>
+      <div class="stop done" role="listitem"><div class="dot">2a</div><div class="name">Map, biomes, saves</div><div class="id">world-map &middot; bigger-biomes &middot; world-persistence</div></div>
       <div class="leg"></div>
       <div class="gate"><div class="diamond"></div><div class="lbl">map approved</div></div>
+      <div class="leg"></div>
+      <div class="stop now" role="listitem"><div class="dot">W</div><div class="name">Weather aloft</div><div class="id">tropical-upper-wind &middot; tropical-weather-aloft</div></div>
+      <div class="leg"></div>
+      <div class="stop next" role="listitem"><div class="dot">V6</div><div class="name">Taller mountains, less desert</div><div class="id">taller-mountains &middot; fewer-deserts</div></div>
       <div class="leg"></div>
       <div class="stop" role="listitem"><div class="dot">2b</div><div class="name">City sites on the map</div><div class="id">city-sites</div></div>
       <div class="leg"></div>
@@ -255,7 +299,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="gate"><div class="diamond"></div><div class="lbl">cog accepted</div></div>
     </div>
   </div>
-  <div class="key"><span><i class="k-stop"></i>a step: one change, or several built together</span><span><i class="k-gate"></i>a gate: you watch its video and approve before the next step starts</span><span>A step with a mockup also stops at the mockup's video, before any code. Every gate video plays the prototype beside the game.</span></div>
+  <div class="key"><span><i class="k-stop" style="background:var(--sea)"></i>built</span><span><i class="k-stop" style="border-color:var(--lamp)"></i>building now</span><span><i class="k-stop"></i>a step: one change, or several built together</span><span><i class="k-gate"></i>a gate: you watch its video and approve before the next step starts</span><span>A step with a mockup also stops at the mockup's video, before any code. Every gate video plays the prototype beside the game.</span></div>
 </section>
 
 <section aria-labelledby="save-h">
@@ -304,7 +348,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">0a</div>
         <div class="mono">exact-cell-keys</div>
-        <div class="tasks">built; 1 task left, your gate</div>
+        <div class="tasks"><span class="state done">built</span> your video is ready</div>
         <div class="with">first, on your word</div>
       </div>
       <div class="step-main">
@@ -331,7 +375,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">0b</div>
         <div class="mono">step-videos</div>
-        <div class="tasks">10 tasks</div>
+        <div class="tasks"><span class="state planned">waiting</span> 10 tasks; screenshots stand in until your batch</div>
       </div>
       <div class="step-main">
         <h3>A video at every gate</h3>
@@ -358,7 +402,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">1</div>
         <div class="mono">lamps-and-lanterns</div>
-        <div class="tasks">built; approved 27 September</div>
+        <div class="tasks"><span class="state done">built</span> approved 27 September</div>
       </div>
       <div class="step-main">
         <h3>Lights you place, and lights that come on at dusk</h3>
@@ -376,7 +420,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>Light levels: brazier 15, torch 14, post and wall lanterns 13, hanging lantern 12, candle 8.</li>
           </ul></div>
         </div>
-        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video.</b> A sealed cave, a torch-lit tunnel with the player in it, the ship in a cave, each light placed and taken back, a lantern row from dusk to midnight to dawn, a candle-lit room, a brazier and a glowing meadow. Also owed: your in-game check of <span class="mono">voxel-light</span>, covering how dark caves are, the crease, and the falloff at a cave mouth.</div></div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: a video, in your batch.</b> The screenshots are on <a href="https://claude.ai/artifact/VXzmu3dLgZC4GYyzJJ4gVz">the lights page</a>. A sealed cave, a torch-lit tunnel with the player in it, the ship in a cave, each light placed and taken back, a lantern row from dusk to midnight to dawn, a candle-lit room, a brazier and a glowing meadow. Also owed: your in-game check of <span class="mono">voxel-light</span>, covering how dark caves are, the crease, and the falloff at a cave mouth.</div></div>
         <div class="foot"><div class="chips"><span class="chip new">planet/light (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/lamps-and-lanterns">Read the change</a></div>
       </div>
     </article>
@@ -385,12 +429,12 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">1b</div>
         <div class="mono">climate-balance</div>
-        <div class="tasks">16 tasks</div>
+        <div class="tasks"><span class="state now">half built</span> 10 of 21 tasks</div>
         <div class="with">placement: survey K3</div>
       </div>
       <div class="step-main">
         <h3>The sun holds the planet at 15 &deg;C</h3>
-        <p>Today the planet freezes. It starts near +13 &deg;C, the sea is below freezing after about 24 hours of play, and it settles near &minus;23.5 &deg;C, with no water warm enough for any fish in the second year. You asked for the sun to hold the average at 15 &deg;C.</p>
+        <p><strong>Built so far:</strong> heat that moves between cells, into evaporating water, with the wind or with a strike is kept, never lost; a thermostat on the sun, saved with the weather; and new worlds start from a climate settled at 15 &deg;C (K6). <strong>Left:</strong> the clouds' retune, the fish test and maps, and the video. Before this: the planet froze. It started near +13 &deg;C, the sea is below freezing after about 24 hours of play, and it settles near &minus;23.5 &deg;C, with no water warm enough for any fish in the second year. You asked for the sun to hold the average at 15 &deg;C.</p>
         <div class="cols">
           <div class="col"><h4>What you get</h4><ul>
             <li>A planet whose average surface temperature, land and sea, holds at 15 &deg;C.</li>
@@ -414,7 +458,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2a</div>
         <div class="mono">world-map</div>
-        <div class="tasks">mockup ready for your gate</div>
+        <div class="tasks"><span class="state done">built</span> 22 of 26 tasks</div>
       </div>
       <div class="step-main">
         <h3>A 2D map on M, with a live layer</h3>
@@ -432,7 +476,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
             <li>One UI shader draws the night, the clouds and the overlays from data the GPU already holds.</li>
           </ul></div>
         </div>
-        <div class="gatebox"><div class="diamond"></div><div><b>Your gate, and the one you asked for first.</b> <span class="mono">docs/mockups/world-map.html</span>, drawn from real rasters of the planet. It shows the biome sizes side by side, the city sites, the climate and fish layers, and the live layer, lit at night. It comes with a walkthrough video, and no map code starts until you approve it. A second video shows the map built in the game. <a href="https://claude.ai/artifact/G7QY9BYXYMH8tgaEv8E7az">Try the mockup: it is ready.</a></div></div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Built, and accepted on screenshots:</b> "map looks good" (28 September). <a href="https://claude.ai/artifact/2Vs2e3h3rQS1EPKQSKA1gF">Each game view beside the mockup's</a>. The video is in your batch, and a town's named places wait for city sites. <b>The gate as planned:</b> <span class="mono">docs/mockups/world-map.html</span>, drawn from real rasters of the planet. It shows the biome sizes side by side, the city sites, the climate and fish layers, and the live layer, lit at night. It comes with a walkthrough video, and no map code starts until you approve it. A second video shows the map built in the game. <a href="https://claude.ai/artifact/G7QY9BYXYMH8tgaEv8E7az">Try the mockup: it is ready.</a></div></div>
         <div class="foot"><div class="chips"><span class="chip new">player/map (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/world-map">Read the change</a></div>
       </div>
     </article>
@@ -441,12 +485,12 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2a</div>
         <div class="mono">bigger-biomes</div>
-        <div class="tasks">13 tasks</div>
+        <div class="tasks"><span class="state done">built</span> generator version 5, in PR #18</div>
         <div class="with">with the map</div>
       </div>
       <div class="step-main">
         <h3>Biomes about four times bigger, with less grass</h3>
-        <p>The field that splits the temperate land has a 188 m feature size, and its thresholds rarely reach desert or jungle. Fields are about 59% of the land. A bigger field alone keeps the same shares, so the thresholds move too.</p>
+        <p><strong>Built as generator version 5:</strong> fields 23%, desert 23%, jungle 22% of the land, and a kilometre crosses 3.3 biome edges instead of 13.6. Desert rock follows the contours (G1), and an old world loads in place on its own version, with no relaunch (B5). Before this: the field that split the temperate land had a 188 m feature size, and its thresholds rarely reach desert or jungle. Fields are about 59% of the land. A bigger field alone keeps the same shares, so the thresholds move too.</p>
         <div class="cols">
           <div class="col"><h4>What you get</h4><ul>
             <li>You chose 4x as wide, about 750 m (B1), with fields, desert, and jungle with swamp about a third each (B2).</li>
@@ -469,7 +513,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2a</div>
         <div class="mono">world-persistence</div>
-        <div class="tasks">14 tasks</div>
+        <div class="tasks"><span class="state next">started</span> 2 of 14 tasks</div>
         <div class="with">before anything stores new state</div>
       </div>
       <div class="step-main">
@@ -495,11 +539,90 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       </div>
     </article>
 
+    <article class="step" id="pack">
+      <div class="step-side">
+        <div class="step-no">1c</div>
+        <div class="mono">inventory-grid</div>
+        <div class="tasks"><span class="state done">built</span> 10 of 12 tasks</div>
+        <div class="with">from survey L2</div>
+      </div>
+      <div class="step-main">
+        <h3>A pack, and things you dig float until you take them</h3>
+        <p>The kit dealt the new lights into a hotbar with no room to hold them. This gave the player a pack.</p>
+        <div class="cols">
+          <div class="col"><h4>Built</h4><ul>
+            <li>A pack on I: 40 slots, the hotbar's ten among them. Click picks up and puts down, shift-click sends a stack across, right-click takes half.</li>
+            <li>A dug block drops as a small floating block that a magnet draws to you. With the pack full it floats where it was cut, for 300 s, until there is room. Drops are saved.</li>
+            <li>Drops and slots wear the block's own top, side and underside (I4).</li>
+            <li>An older save's ten-slot line still reads.</li>
+          </ul></div>
+          <div class="col"><h4>Left</h4><ul>
+            <li>The video, in your batch, and your approval.</li>
+          </ul></div>
+        </div>
+        <div class="foot"><div class="chips"><span class="chip new">player/inventory (new)</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/inventory-grid">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="aloft">
+      <div class="step-side">
+        <div class="step-no">W</div>
+        <div class="mono">tropical-upper-wind &middot; tropical-weather-aloft</div>
+        <div class="tasks"><span class="state now">building now</span> the first built, the second next</div>
+        <div class="with">your W1, W2, W3</div>
+      </div>
+      <div class="step-main">
+        <h3>The wind at cloud height, in the tropics</h3>
+        <p>You asked why the Jet overlay had a calm band at the equator, then why a band was still there. The first fix gave the tropics a steady easterly; the band left behind is that constant meeting a jet held at its cap, both by latitude alone.</p>
+        <div class="cols">
+          <div class="col"><h4>Built (W1)</h4><ul>
+            <li>The tropics blow from the east at 8 m/s aloft, and the jet fades in across them, full by 30&deg;.</li>
+            <li>The equator reads 8.0-8.3 m/s where it read 0.5. The planet's mean moves 0.03 &deg;C.</li>
+          </ul></div>
+          <div class="col"><h4>Now (W2: H), then W3</h4><ul>
+            <li>The jet follows the air instead of sitting at its cap, and the tropics aloft follow their storms: the outflow and the wind round the high they build.</li>
+            <li>The band varies by 6.3 m/s round the planet, where it varied by 0.4. A straight line stays over the quiet half.</li>
+            <li>Then a write-up of why the tropics' surface winds are under 1.5 m/s: the cause under that line.</li>
+            <li>One desktop run of yours then remakes the level-5 starting climates for both fixes.</li>
+          </ul></div>
+        </div>
+        <div class="foot"><div class="chips"><span class="chip">world/weather</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/tropical-weather-aloft">Read the change</a></div>
+      </div>
+    </article>
+
+    <article class="step" id="v6">
+      <div class="step-side">
+        <div class="step-no">V6</div>
+        <div class="mono">taller-mountains &middot; fewer-deserts</div>
+        <div class="tasks"><span class="state next">next</span> started on its own branch</div>
+        <div class="with">your H1-H4, B6</div>
+      </div>
+      <div class="step-main">
+        <h3>Generator version 6: taller mountains, half the desert</h3>
+        <p>New worlds only. Worlds made on versions 4 and 5 keep their ground cell for cell, and load in place.</p>
+        <div class="cols">
+          <div class="col"><h4>What you get</h4><ul>
+            <li>Wide ranges reaching 249 m (H1), in a voxel column raised to 504 layers, a 359 m top, with saves staying valid (H2).</li>
+            <li>A snow line at 200 m (H3).</li>
+            <li>Desert halved to 10.5% of the land, its share going evenly to fields (26%) and jungle (25%) (B6).</li>
+            <li>A new world starts on the level ground nearest today's start, with the Kestrel beside you (H4).</li>
+          </ul></div>
+          <div class="col"><h4>Decided</h4><ul>
+            <li>Its own pull request, after #18 merges.</li>
+            <li>Its starting climates are settled on its own ground, levels 3 and 5.</li>
+            <li>More jungle means more trees, so you run the frame-cost suite before it merges.</li>
+          </ul></div>
+        </div>
+        <div class="gatebox"><div class="diamond"></div><div><b>Your gate: screenshots, then the video in your batch.</b> Version 5 beside version 6 from orbit, on the map, a range from 40 m and at eye level. <a href="https://claude.ai/artifact/BXtLUoFSif3oVt1eutiuEr">The candidates, in the game</a>.</div></div>
+        <div class="foot"><div class="chips"><span class="chip">world/terrain</span><span class="chip">planet/terrain</span></div><a href="https://github.com/RubenTipparach/Pale-Blue-Dot/tree/claude/medieval-city-html-mockup-8692xs/openspec/changes/taller-mountains">Read the change</a></div>
+      </div>
+    </article>
+
     <article class="step" id="sites">
       <div class="step-side">
         <div class="step-no">2b</div>
         <div class="mono">city-sites</div>
-        <div class="tasks">15 tasks</div>
+        <div class="tasks"><span class="state planned">planned</span> 15 tasks; first after V6</div>
       </div>
       <div class="step-main">
         <h3>Where the towns go</h3>
@@ -527,7 +650,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2c</div>
         <div class="mono">climate-and-fish-maps</div>
-        <div class="tasks">16 tasks</div>
+        <div class="tasks"><span class="state planned">planned</span> 16 tasks</div>
       </div>
       <div class="step-main">
         <h3>Where the fish are, and what the year is like</h3>
@@ -553,7 +676,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2d</div>
         <div class="mono">cities-in-the-world</div>
-        <div class="tasks">23 tasks, plus 30 in tenebris-towns</div>
+        <div class="tasks"><span class="state planned">planned</span> 24 tasks, plus 30 in tenebris-towns</div>
       </div>
       <div class="step-main">
         <h3>Towns you can walk into</h3>
@@ -584,7 +707,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">2e</div>
         <div class="mono">townsfolk</div>
-        <div class="tasks">8 tasks</div>
+        <div class="tasks"><span class="state planned">planned</span> 8 tasks</div>
         <div class="with">mockup parity</div>
       </div>
       <div class="step-main">
@@ -609,7 +732,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">3</div>
         <div class="mono">player-building</div>
-        <div class="tasks">17 tasks</div>
+        <div class="tasks"><span class="state planned">planned</span> 17 tasks</div>
       </div>
       <div class="step-main">
         <h3>You build them</h3>
@@ -636,7 +759,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="step-side">
         <div class="step-no">4</div>
         <div class="mono">sail-the-cog</div>
-        <div class="tasks">12 tasks</div>
+        <div class="tasks"><span class="state planned">planned</span> 12 tasks</div>
         <div class="with">after the roadmap: T9</div>
       </div>
       <div class="step-main">
@@ -674,15 +797,16 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
     <table>
       <thead><tr><th>Finding</th><th>Where</th><th>Picked up by</th></tr></thead>
       <tbody>
-        <tr><td><strong>About one finest cell in two hundred shares its save key with another cell elsewhere on the planet.</strong> 202,571 of 41.9 million at level 11: the key is a 32-bit hash. Digging one digs its twin when that area is generated.</td><td>planet_lod.rs point_id</td><td>exact-cell-keys, first in the plan</td></tr>
-        <tr><td>A save records no versions at all: not the generator's, and there is no topology version to record. The main spec says the generator version is part of the world's identity.</td><td>saves/format.rs</td><td>world-persistence, then bigger-biomes</td></tr>
-        <tr><td>The player, the held tool and the ship are not lit by the light field. A ship in a cave is lit like daylight.</td><td>pbd-app materials</td><td>lamps-and-lanterns</td></tr>
+        <tr><td><strong>About one finest cell in two hundred shares its save key with another cell elsewhere on the planet.</strong> 202,571 of 41.9 million at level 11: the key is a 32-bit hash. Digging one digs its twin when that area is generated.</td><td>planet_lod.rs point_id</td><td>exact-cell-keys: <span class="state done">fixed</span></td></tr>
+        <tr><td>A save records no versions at all: not the generator's, and there is no topology version to record. The main spec says the generator version is part of the world's identity.</td><td>saves/format.rs</td><td>bigger-biomes: <span class="state done">fixed</span>, saves name their generator</td></tr>
+        <tr><td>The player, the held tool and the ship are not lit by the light field. A ship in a cave is lit like daylight.</td><td>pbd-app materials</td><td>lamps-and-lanterns: <span class="state done">fixed</span></td></tr>
         <tr><td>The torch's tint and gain exist only in the shader, with no copy the tests can check.</td><td>planet_surface.wgsl</td><td>lamps-and-lanterns</td></tr>
         <tr><td>A fixed noon sun still frames two captures.</td><td>desktop.rs:1491</td><td>lamps-and-lanterns</td></tr>
         <tr><td>No lighting requirement is in the main specs, and two lighting changes are half open.</td><td>openspec/</td><td>lamps-and-lanterns, first group</td></tr>
-        <tr><td>Fields are about 59% of the land. Desert, jungle and swamp are a few percent each.</td><td>distribution_report</td><td>bigger-biomes</td></tr>
+        <tr><td>Fields are about 59% of the land. Desert, jungle and swamp are a few percent each.</td><td>distribution_report</td><td>bigger-biomes: <span class="state done">fixed</span></td></tr>
         <tr><td>The shipped atmosphere cools the sea to a mean of &minus;23.5 &deg;C by day 200.</td><td>fish_ranges log</td><td>climate-balance: the sun holds 15 &deg;C</td></tr>
-        <tr><td><strong>The freeze is a leak at every coast.</strong> The heat spread between cells moves temperature, not heat, and a sea cell holds 60 times the heat of a land cell. With the land colder than the sea, the planet loses 600 to 1,000 W/m&sup2; this way, four to seven times all the sunlight it absorbs. With the clouds alone retuned, it still settles near &minus;10 &deg;C.</td><td>heat_budget, the sweep</td><td>climate-balance: the spread trades heat</td></tr>
+        <tr><td><strong>The freeze is a leak at every coast.</strong> The heat spread between cells moves temperature, not heat, and a sea cell holds 60 times the heat of a land cell. With the land colder than the sea, the planet loses 600 to 1,000 W/m&sup2; this way, four to seven times all the sunlight it absorbs. With the clouds alone retuned, it still settles near &minus;10 &deg;C.</td><td>heat_budget, the sweep</td><td>climate-balance: <span class="state done">fixed</span></td></tr>
+        <tr><td><strong>The Jet overlay's tropics are a band of one speed, edged by straight dark lines.</strong> A constant easterly meets a jet held at its 45 m/s cap; both depend on latitude alone, so they cancel on a line of latitude. The surface winds there are under 1 m/s.</td><td>atmosphere::step::aloft</td><td>tropical-weather-aloft (H), then a write-up of the surface winds</td></tr>
         <tr><td>Nothing that moves can be stood on. The walker stands only on terrain, and a local frame can move but not turn.</td><td>walking.rs, frame.rs</td><td>sail-the-cog</td></tr>
       </tbody>
     </table>
@@ -704,7 +828,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 </section>
 
 <footer>
-  Planned on branch <span class="mono">claude/medieval-city-html-mockup-8692xs</span>. <span class="mono">openspec validate --all</span>: 86 passed, 0 failed. To start: <span class="mono">/opsx:apply exact-cell-keys</span>. Open questions are in <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">your survey</a>.
+  Branch <span class="mono">claude/medieval-city-html-mockup-8692xs</span>, pull request #18. <span class="mono">openspec validate --all</span>: 92 passed, 0 failed. Task counts are from each change's <span class="mono">tasks.md</span> on 29 September. Frame cost is never measured in a cloud session; you run <span class="mono">tools/perf_suite.py</span>. Open questions go in <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn">your survey</a>; none are open.
 </footer>
 
 </div>
