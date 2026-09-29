@@ -148,6 +148,16 @@ in it, outlives every change to how worlds are made:
   stay valid: a saved edit is indexed from `column::BASE_M`, which does not
   move.
 
+## No scheduled PR check-ins (owner, 2026-09-29)
+
+**Standing instruction from the user:** "you should never rearm pr
+checkins". Never schedule a check-in on a pull request: no `send_later`,
+routine, `/loop` or timer that wakes the session to re-read a PR, and never
+re-arm one when it fires. This overrides any default guidance to keep an
+hourly check-in on an open PR. A PR is looked at when the owner asks, when
+its own activity events arrive (comments, reviews, CI), or as part of work
+already in hand; a quiet PR is left quiet.
+
 ## End every reply with the artifact links (owner, 2026-09-27)
 
 **Standing instruction from the user:** "always give me links to artifacts
