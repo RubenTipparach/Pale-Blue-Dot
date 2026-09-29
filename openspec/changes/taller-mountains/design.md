@@ -175,6 +175,62 @@ cloud, and past 359 m the tier's fields widened. So the budget's band is
 `planet_visibility.wgsl`, read from the real files and held to
 `column::BASE_M` and the top of `column::LAYERS`.
 
+## Built (2026-09-29)
+
+- **The ranges** (task 2.1): `planet_gen::Ranges` on `TENEBRIS_V6`, three
+  times as wide and three times the weight of the mountain field, eased in
+  over 0.1 of the rocky field from 0.567, with the regional uplift set to
+  zero. `relief_report` (an ignored test, the instrument behind the numbers
+  below) on 300,000 directions: median land 47.2 m against version 5's
+  43.9 m, 99th percentile 186 m, Mountains 4.8% of the land, 0.3% of it
+  stepping 3 m or more.
+- **The summit is 293.1 m**, on four million directions: 3 m over the 290 m
+  the band was written with, 7 m under the cloud base. The owner chose
+  "about 290 m" on the rendered candidate, which these are the weights of,
+  so the band is 250 to 295 m rather than the weights trimmed to fit it.
+- **The lines** (decision 3, measured): only the snowcap moves, to 200 m.
+  The Mountains biome keeps its 105 m and is 4.8% of the land, a few
+  percent, since the ranges widened the massifs rather than lifting the
+  land; with the 150 m snowcap a quarter of the Mountains biome was white,
+  with 200 m the top 2%. The snow and stone lines only act below the
+  Mountains threshold and on the tundra, and stay. Of the whole body
+  (`distribution_report`, 200,000 directions): fields 8.8%, desert 8.7%,
+  jungle 8.3%, swamp 0.4%, mountains 1.9%, against version 5's 9.1, 9.1,
+  8.6, 0.5 and 0.8, so the balance survey B2 chose holds.
+- **The tier** (tasks 2.3, 2.4): `the_shaders_carry_the_column_span` first,
+  then `LAYERS` 504 (top +359 m) and the shaders' `MATERIAL_WORDS` 63,
+  `LIGHT_WORDS` 126, `LIGHT_LAYERS` 504 and `COLUMN_TOP_M` 359. `BASE_M` is
+  -145 as before, so a saved edit's layer is the altitude it was.
+- **Version 5 pinned** before 6 landed:
+  `version_5_makes_the_ground_its_worlds_were_made_on`.
+
+## Found building it: a new world starts on a foothill (2026-09-29)
+
+Today's spawn direction lands inside a range region: its rocky field reads
+0.591, over the ranges' 0.567, so version 6 lifts the spawn's field from
+73 m to 94 m and the ground within 40 m of it now spans 20 m where it
+spanned 11. A new version-6 world opens with the walker facing a wall of
+dirt, and "no berth for the Kestrel near the spawn": the Kestrel's pad
+(11 m across, level to 0.6 m, 16 to 40 m from the player) finds no level
+ground. Four vehicle tests fail on it. Measured on the columns' own ground:
+
+| | version 5 | version 6 |
+| --- | ---: | ---: |
+| the spawn's ground | 73 m | 94 m |
+| nearest level 11 m pad | 12 m away, 76 m up | 96 m away, 63 m up |
+| nearest dry land outside the ranges | (none) | 104 m away |
+
+**8. Where a new world starts (survey H4, 2026-09-29: "recommended").** A new
+version-6 world starts on the level ground nearest the spawn direction (the
+Kestrel's pad, found as the pad is), 96 m from today's spot, on the fields
+below the foothill; the Kestrel's pad is then found round it as today. Where
+a world starts is decided by the seed and the rules, so it is part of the
+generator: version 4 and 5 worlds never played keep the start they have.
+- *Alternative:* keep the start on the foothill and search further for the
+  Kestrel's pad. The first thing a player sees is a wall.
+- *Alternative:* keep the ranges clear of the start's region. It changes
+  the chosen candidate.
+
 ## Risks
 
 - [A limit the survey missed] → The tier and the cloud base are the two
@@ -184,3 +240,20 @@ cloud, and past 359 m the tier's fields widened. So the budget's band is
   in a cloud session; the owner runs `tools/perf_suite.py`.
 - [The owner wants jagged peaks] → The peaks candidate is measured and
   offered (H3).
+
+## Built: where a new version-6 world starts (decision 8, 2026-09-29)
+
+- `walking::new_world_start` finds the nearest dry land as before. On
+  version 6 it then searches the base caps outward, breadth first, for the
+  first cap whose centre stands on a level plain (`vehicles::place::level_plain`).
+  - The centre itself takes the Kestrel's pad.
+  - At least 8 of the 120 samples in the ring 20 to 36 m round it take the
+    pad as well.
+- **Why a plain and not a spot.** On one-metre layers a level pad is a knife
+  edge. A start with one pad in its ring left the Kestrel with no pad from a
+  walker half a metre away.
+- **Why a cap's centre.** The walker is set down 4 m from a cap's centre, as
+  it always was, so it does not straddle two caps.
+- Versions 4 and 5 keep their start: the test checks it for both. It also
+  checks that on version 6 the old start is not level, so it tells the two
+  rules apart.

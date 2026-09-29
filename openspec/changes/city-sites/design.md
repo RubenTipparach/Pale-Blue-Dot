@@ -124,8 +124,11 @@ kept.**
   - the swamp people;
   - the mountain people (survey T12).
 
-  Each has onsets, nuclei, codas and kind-specific suffixes (a "-ford" for a
-  village on a river, a "-haven" for a harbour).
+  Each has onsets, nuclei, codas and kind-specific endings: a village on a
+  river draws from its river endings ("-ford", "-bridge"), a harbour from its
+  harbour endings ("-haven", "-port"). Where two parts meet on the same
+  vowel, the vowel is written once ("Sedge" and "e" make "Sedge-", not
+  "Sedgee-"). Both are finding 5 of the Built section.
 - A name is drawn from a hash stream of the seed and the id. A collision takes
   the next draw from the same stream, resolved in list order.
 - A pinned name is reserved first, so no generated site takes it.
@@ -217,3 +220,155 @@ owner, survey T12: add both now).
     the owner can move it on the mockup;
   - the lights are `cities-in-the-world`'s: its night lights also light the
     coarse hexes of the far terrain.
+
+## Built (2026-09-29): the rules in the core, and the mockup's sites
+
+The owner, 2026-09-29: "commence 2b, lets get these damn cities up to play!"
+
+- **One implementation.** The rules are `pbd_core::sites`, and
+  `assets/config/sites.ron` holds the table, the names and the overrides.
+  - The mockup's instrument is `examples/sites.rs`. It calls `generate`, so
+    task 2.4's "the same list from the instrument and the core" holds by
+    construction. It writes `docs/mockups/world-map/sites.json` and prints
+    each stage's time.
+  - The page's own placeholder rules are gone.
+- **Measured on the shipped seed**, generator 6 with half the desert, on the
+  cloud container's 4 threads:
+  - the 163,842 level-7 cells take 0.29 s to build;
+  - the screen, the full checks and the scores take 5.9 s, and keep 10,468
+    candidates;
+  - the pins, the home town, the greedy pass, the capital and the names take
+    0.38 s.
+
+  The design's risk of a slow fine check does not arise.
+- **The list:** 55 sites, every kind at its target.
+  - The small town near the spawn is Holbrook (first drawn as Holford, finding 5), a village on a river, 133 m
+    from the game's default spawn direction.
+  - The capital is Ashingstead, a walled town 10.3 km away, on another land
+    mass.
+
+**Findings on the way, and what was done about each.**
+
+1. **The flatness limits were set against the coarse screen.** At the
+   terrain's own 2.833 m cells, which the spec's "flat, dry ground" samples, a
+   footprint's range reads 1.2 to 1.4 times the seven-sample screen's (median
+   1.36 for a walled town, 1.27 for a village).
+   - On the table's numbers, only 8 cells held a walled town, 3 a desert town
+     and 1 a swamp village. No village stood within 500 m of the spawn.
+   - Each limit in `sites.ron` is now the table's times 1.4: walled town
+     11 m, village 5.5, desert town 8.5, tundra camp 5.5, jungle village 14,
+     swamp village 4. That accepts, at the fine spacing, the ground the
+     table's limit accepted on the mockup's screen.
+   - The owner judges the result on the mockup (task 1.4).
+2. **One kind per cell, chosen by its own ground.** A field cell is a walled
+   town if its footprint passes the town's screen and full check, and a
+   village only if not. In the mountains, a cave town comes before a cliff
+   village.
+   - So a change of counts never turns a kept site into another kind (the
+     spec's "Fewer sites keeps the same ones").
+   - The full check, the costly part, runs on the screening threads.
+3. **The swamp is coastal lowland.** In 723 of its 851 cells the footprint
+   reaches the sea, and the swamp village's houses stand on stilts over the
+   water.
+   - Its footprint may hold water as deep as the shallows (6 m).
+   - Its flatness is its dry ground's, and its anchor is dry.
+4. **Spacing, as the mockup showed it:** a kind keeps its own spacing from its
+   own kind, and half the smaller of the two from any other, between the
+   footprints' edges.
+   - The spec said "the spacing for the larger of the two". With walled
+     towns 2,500 m apart, that would have kept every village 2.5 km from
+     every town, and cleared most of the fields.
+   - The spec delta now says what is built.
+5. **Every village took the same ending.** The river bonus does what it is
+   for: all 20 villages and all 6 walled towns stand within 60 m of a river.
+   But the table gave a river village one ending, so all 20 were "-ford"
+   (Holford, Bramford, Corford ...). Every harbour was "-haven" the same
+   way. And "Sedge" with the middle "e" wrote "Sedgeemoss".
+   - A people now has a list of river endings and a list of harbour endings,
+     and a name draws from the list as it draws its other parts. The fields
+     people's are "ford", "bridge", "brook" and "mouth", and "haven",
+     "port", "quay" and "strand".
+   - A doubled vowel where two parts meet is written once.
+   - Only the names change: the same 55 sites stand in the same places. No
+     world stores a list yet (group 3), so no saved name moves; the sites
+     version stays 1.
+
+**The mockup (tasks 1.2 and 1.3).**
+- `docs/mockups/world-map.html` draws the core's list, with a footprint
+  outline once it is bigger than its marker.
+- Its site editor moves, adds, strikes, renames and crowns sites, and copies
+  the edits as `sites.ron`'s pins and strikes.
+  - A generated site the owner changed becomes a pin, and its id is struck.
+  - A pin at sea or on a pentagon is refused on the page, as the game
+    refuses it.
+- `tools/mockup_sites_test.js` drives it headless: the list loads, the
+  capital is dragged, and the RON pins it at its new place and strikes its
+  old id.
+- The base map, its finer tiles and the biome layer are redrawn on version 6
+  with half the desert, so the sites stand on the ground they were placed on.
+  The four desert buttons are retired, since B6 is decided.
+
+**Group 3, as it is built (2026-09-29, written before the code).** The
+store is `world-persistence` decision 11.
+- **When:** on a world's open, if its save holds no complete list. That is
+  a new world, or an older world's first open under this build. The list is
+  made on the async pool from the world's own generator and the spawn
+  direction, as the mockup's instrument makes it (finding 6), never the
+  player's pose. It is written as one `rec @c site <id> 1 <body>` line per
+  site, then one `rec @c site-list 0 1 <body>` line.
+- **A site's body** is its kind, name, capital, home, pinned and river
+  flags, and its direction as a unit vector, so its place does not round
+  through degrees.
+- **The `site-list` record** names the sites version, the generator and the
+  ids, in the list's order. A site record whose id the list does not name is
+  ignored. A list torn by a crash has no `site-list` line, so it is made
+  again whole on the next open.
+- **Shown only once committed:** the map draws no site until the writer's
+  mark has passed the `site-list` line.
+- **Read after:** once a world holds its list, `sites.ron` is not read for
+  it again, so a retune never moves its towns.
+- **The identity** gains the two kinds' schema versions when the list is
+  first written: a deliberate upgrade, as the key migration is.
+
+6. **The level start is not where the list was approved from (measured
+   2026-09-29).** A new version-6 world's walker starts on level ground
+   (`taller-mountains` decision 8), found from the spawn direction on the
+   game's contact field. That start is 438 m from the spawn direction.
+   - Holbrook is 133 m from the spawn direction and 566 m from the level
+     start. That is 531 m to the village's edge.
+   - Made from the level start, the list has no small town at all, because
+     no village or small walled town lies within 500 m of it. A village
+     elsewhere takes Holbrook's place.
+   - So each world's list is made from the spawn direction, as the mockup's
+     was. A new world then gets exactly the 55 sites the owner approved, and
+     a new player stands about 570 m from Holbrook, a walk of under two
+     minutes. The earlier note here, "within 500 m of both", was wrong.
+   - This is the recommendation taken (ask only with screenshots). The
+     choice not taken was to move the level start toward the home town. That
+     is H4's rule, and its search runs before the list exists.
+   - `sites::tests::a_new_worlds_list_is_the_one_the_owner_approved` pins it.
+
+**Group 4, as it is built (2026-09-29, written before the code).** The
+game's map draws the stored list as the approved mockup draws it (decision
+7), from `WorldSites` once the list is on disk:
+- **Markers.** A square for a walled town, a desert town, a cave town and
+  the capital; a circle for the rest. A dark fill with a pale rim. The
+  capital has an amber ring.
+- **Names** show at 12.5 m a pixel or closer (the mockup's zoom 0.9 of its
+  11.3 m base). The capital's and the home town's show at every zoom.
+- **The footprint** is drawn once its radius passes 6 pixels. It is an
+  ellipse, as wide as the map stretches that latitude.
+- **At night**, when the map's night is on, each town's lamps light a pool
+  round it: 260 m for a town and 140 m for a village, at least 10 pixels.
+  The pool is as strong as the dark is deep there. The marker and its name
+  turn lamp-coloured past half dark (CLAUDE.md: mockups are lit at night,
+  and the map follows its mockup).
+- **Off screen** a site is hidden. The map's three copies of the planet
+  across the antimeridian each draw it.
+- **The legend** says how many sites there are, or "surveying" while the
+  list is made.
+- The nodes are Bevy UI: a rounded border makes the circles and the
+  ellipse, so a line stays 1.2 pixels at every size. A radial gradient
+  makes the lamplight.
+
+**Not yet.** Group 4, the game's map layer, reads the stored list.

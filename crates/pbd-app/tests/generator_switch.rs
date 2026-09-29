@@ -73,7 +73,7 @@ fn a_load_switches_the_generator_in_place_and_back() {
 
     // And a new world after it makes the newest planet again.
     assert_eq!(switch_generator(GENERATOR_VERSION), Ok(true));
-    assert_eq!(*terrain_config(), TerrainConfig::TENEBRIS_V5);
+    assert_eq!(*terrain_config(), TerrainConfig::TENEBRIS);
     assert_eq!(terrain_epoch(), 2);
     assert!(reads_as(GENERATOR_VERSION));
 }

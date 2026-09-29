@@ -11,8 +11,9 @@ desert: 21% on version 6's ground, as much as the fields.
 
 ## What Changes
 
-- Version 6's desert shrinks to the share the owner picks (survey B6), from
-  a third of the temperate land. The land it gives up is split evenly between
+- Version 6's desert shrinks to half, from a third of the temperate land to
+  a sixth: 10.5% of all the land. The owner, 2026-09-29, on survey B6:
+  "10.5 % desert". The land it gives up is split evenly between
   fields and jungle. The candidates are measured and drawn in the design.
 - The moisture field's size, and everything else about the biomes, stay as
   they are.

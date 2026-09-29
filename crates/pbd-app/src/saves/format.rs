@@ -30,6 +30,7 @@ use pbd_core::drops::ItemDrop;
 use pbd_core::edits::Edit;
 use pbd_core::inventory::{CARRIED, Equipment, Item, SLOTS, Slots, Stack, Tool};
 use pbd_core::planet_gen::TerrainConfig;
+use pbd_core::records::{Author, Record as StoredRecord, split_author};
 use pbd_core::terrain::{GENERATOR_VERSION, Material, TOPOLOGY_VERSION};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -69,6 +70,10 @@ pub enum Record {
     /// Some of drop `id` was picked up, leaving `left` on it (none: it is
     /// gone), into the slots this line carries whole.
     Pick { id: u64, left: u16, slots: Slots },
+    /// A record's new value, whole (`world-persistence` decision 11): a
+    /// site, and later a settlement or a landmark. Held as text, so a kind
+    /// this build does not know is kept as it came.
+    Stored(StoredRecord),
 }
 
 /// The kit line's leading token, which no cell number can be.
@@ -281,16 +286,24 @@ pub fn catch_line_of(species: u16, length_cm: u32, slots: &Slots) -> String {
     line
 }
 
-/// `hand tool owned`, one line: the tool's code and one bit per tool owned,
-/// in `Tool::ALL` order.
+/// `hand tool owned`, one line: the tool's code, or `-` for bare hands
+/// (`inventory-grid` decision 8), and one bit per tool owned, in
+/// `Tool::ALL` order.
 pub fn hand_line_of(equipment: &Equipment) -> String {
     let owned = equipment
         .owned()
         .iter()
         .enumerate()
         .fold(0u8, |bits, (i, owns)| bits | (u8::from(*owns) << i));
-    format!("{HAND} {} {owned}\n", tool_code(equipment.held()))
+    let held = equipment
+        .held()
+        .map_or_else(|| BARE.to_string(), |t| tool_code(t).to_string());
+    format!("{HAND} {held} {owned}\n")
 }
+
+/// The `hand` line's tool for bare hands. An older build reads it as a
+/// damaged line and skips it, keeping the tool it last read.
+const BARE: &str = "-";
 
 /// The slot fields of a line: forty, or ten from a line written before the
 /// pack, which is an empty pack. `None` where there are neither.
@@ -305,6 +318,41 @@ fn slots_of(carried: &[&str]) -> Option<Slots> {
     Some(slots)
 }
 
+/// A journal line and its author (`world-persistence` decision 11): a
+/// `rec` line names its own; any other line may lead with a token, and one
+/// with none is the player's, as every line before authors was. `None` for a
+/// damaged line.
+pub fn parse_entry(line: &str) -> Option<(Author, Record)> {
+    if line.starts_with(pbd_core::records::REC) {
+        let (author, record) = StoredRecord::parse_line(line)?;
+        return Some((author, Record::Stored(record)));
+    }
+    let (author, rest) = split_author(line)?;
+    Some((author, parse_line(rest)?))
+}
+
+/// A line as `author` writes it: the player's with no token, as it always
+/// was, so an older build still reads what the player did; anyone else's
+/// with theirs in front.
+pub fn authored(author: &Author, line: String) -> String {
+    match author {
+        Author::Player(0) => line,
+        other => format!("{} {line}", other.token()),
+    }
+}
+
+/// An edit a world process or the creation made: `cell layer material`,
+/// with no slots, since nobody's hands were in it.
+pub fn world_edit_line(edit: Edit) -> String {
+    format!(
+        "{} {} {}\n",
+        edit.cell,
+        edit.layer,
+        material_code(edit.material)
+    )
+}
+
+/// One line with no author token, which [`parse_entry`] has taken off.
 pub fn parse_line(line: &str) -> Option<Record> {
     let mut parts = line.split_whitespace();
     let head = parts.next()?;
@@ -319,7 +367,10 @@ pub fn parse_line(line: &str) -> Option<Record> {
         });
     }
     if head == HAND {
-        let held = tool_of(parts.next()?.parse().ok()?)?;
+        let held = match parts.next()? {
+            BARE => None,
+            code => Some(tool_of(code.parse().ok()?)?),
+        };
         let bits: u8 = parts.next()?.parse().ok()?;
         if parts.next().is_some() || bits >= 1 << Tool::ALL.len() {
             return None;
@@ -573,10 +624,24 @@ mod tests {
             parse_line(&hand_line_of(&hand)),
             Some(Record::Hand { equipment: hand })
         );
-        let partial = Equipment::from_parts([true, false, true, false], Tool::Pickaxe);
+        let partial = Equipment::from_parts([true, false, true, false], Some(Tool::Pickaxe));
         assert_eq!(
             parse_line(&hand_line_of(&partial)),
             Some(Record::Hand { equipment: partial })
+        );
+        // Bare hands write `-`, and read back bare; a tool line reads as it
+        // always did (`inventory-grid` decision 8).
+        let bare = Equipment::default();
+        assert_eq!(hand_line_of(&bare), "hand - 15\n");
+        assert_eq!(
+            parse_line("hand - 15"),
+            Some(Record::Hand { equipment: bare })
+        );
+        assert_eq!(
+            parse_line("hand 3 15"),
+            Some(Record::Hand {
+                equipment: Equipment::from_parts([true; 4], Some(Tool::Rod))
+            })
         );
         for bad in [
             "catch 5",
@@ -586,6 +651,8 @@ mod tests {
             "hand 9 15",
             "hand 3 16",
             "hand 3 15 x",
+            "hand -- 15",
+            "hand - 16",
         ] {
             assert!(parse_line(bad).is_none(), "{bad:?} parsed");
         }
@@ -768,6 +835,62 @@ mod tests {
             .is_some(),
             "and the next line still reads"
         );
+    }
+
+    /// Every author reads back from the line they wrote, a line with no
+    /// token is the player's, and a record line comes back whole (task 3.2).
+    #[test]
+    fn every_author_reads_back_from_their_line() {
+        let edit = Edit {
+            cell: 5_000_001,
+            layer: 12,
+            material: Material::Stone,
+        };
+        let process = Author::World {
+            process: "growth".into(),
+            kind: "settlement".into(),
+            id: 111_243,
+        };
+        for author in [
+            Author::Player(0),
+            Author::Player(3),
+            Author::Creation,
+            process.clone(),
+        ] {
+            let line = authored(&author, world_edit_line(edit));
+            let (who, record) = parse_entry(&line).expect("a line it just wrote");
+            assert_eq!(who, author, "{line:?}");
+            assert_eq!(
+                record,
+                Record::Edit {
+                    edit,
+                    drop: None,
+                    slots: None
+                }
+            );
+        }
+        assert!(
+            !authored(&Author::Player(0), line_of(edit, None, &kit())).starts_with('@'),
+            "the player's lines stay as older builds read them"
+        );
+        let old = line_of(edit, None, &kit());
+        assert_eq!(
+            parse_entry(&old),
+            parse_line(&old).map(|r| (Author::Player(0), r))
+        );
+        let site = StoredRecord {
+            kind: "site".into(),
+            id: 111_243,
+            schema: 1,
+            body: "(name:\"Ashingstead\",capital:true)".into(),
+        };
+        assert_eq!(
+            parse_entry(&site.line(&Author::Creation)),
+            Some((Author::Creation, Record::Stored(site)))
+        );
+        for bad in ["@zz 7 3 1", "@c", "rec @c site 1 1 (name:\"Ash"] {
+            assert_eq!(parse_entry(bad), None, "{bad:?}");
+        }
     }
 
     #[test]

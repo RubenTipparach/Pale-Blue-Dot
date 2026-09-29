@@ -237,7 +237,7 @@ fn fish(
     // The line. Only the rod fishes, only on foot, only with the pointer
     // held and no menu or picker open; put the rod away and the line comes in.
     let walking = world.walking.as_ref().is_some_and(|w| w.active);
-    let rod = tools.held() == Tool::Rod;
+    let rod = tools.held() == Some(Tool::Rod);
     if (!rod || !walking) && fishery.line.phase != Phase::Ready {
         let flock = settings.flock;
         fishery.line.wind_in(&mut fishery.schools, &flock);
@@ -533,6 +533,10 @@ fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
 }
 
 /// A tool's icon, as an asset path.
+/// Bare hands' icon in the tool slot and the picker (`inventory-grid`
+/// decision 8), drawn by `tools/gen_item_icons.py`.
+pub const HAND_ICON: &str = "items/tools/hand.png";
+
 pub fn tool_icon(tool: Tool) -> &'static str {
     match tool {
         Tool::Rod => "items/tools/rod.png",
@@ -869,7 +873,7 @@ mod draw {
         mut meshes: ResMut<Assets<Mesh>>,
     ) {
         let walking = walking.is_some_and(|w| w.active);
-        let rod_out = walking && tools.held() == Tool::Rod;
+        let rod_out = walking && tools.held() == Some(Tool::Rod);
         let camera = cameras.iter().next();
         // The rod itself is the held tool's model (`held.rs`); this draws
         // what leaves it.

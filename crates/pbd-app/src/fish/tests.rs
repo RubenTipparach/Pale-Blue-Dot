@@ -137,18 +137,19 @@ fn the_guide_reads_its_numbers_off_the_species() {
     }
 }
 
-/// A world with no tool record is dealt the four tools with the rod in hand,
-/// and one that recorded a change comes back with it.
+/// A world with no tool record is dealt the four tools with nothing in hand
+/// (`inventory-grid` decision 8), and one that recorded a change comes back
+/// with it.
 #[test]
-fn the_tool_slot_opens_on_the_rod_or_on_what_the_save_says() {
+fn the_tool_slot_opens_bare_handed_or_on_what_the_save_says() {
     let mut save = WorldSave::memory_only();
     let slot = ToolSlot::restore(&save);
-    assert_eq!(slot.held(), Tool::Rod);
+    assert_eq!(slot.held(), None);
     assert!(Tool::ALL.iter().all(|t| slot.owns(*t)));
     let mut changed = slot;
     assert!(changed.hold(Tool::Axe));
     save.equipment = Some(changed.0);
-    assert_eq!(ToolSlot::restore(&save).held(), Tool::Axe);
+    assert_eq!(ToolSlot::restore(&save).held(), Some(Tool::Axe));
 }
 
 /// The float's water is the sea table the hulls float on: its surface at a

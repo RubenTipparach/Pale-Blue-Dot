@@ -3,9 +3,9 @@
 ## 1. Measure and choose
 
 - [x] 1.1 (2026-09-29, the design's "Measured" and table; `docs/screenshots/tropical-weather-aloft/options.jpg`.) Read the mockup's Jet frames back into speeds. Take the built rule apart on generator 5's level-5 settled climate through a day, and draw and measure candidates D, F and H. Verify: the numbers are in the design and the picture is checked in.
-- [ ] 1.2 **Gate:** the owner answers W2 (which rule) and W3 (write up the tropics' surface weather). Record the words in `proposal.md`, and move the spec delta to the chosen rule.
+- [x] 1.2 (2026-09-29: W2 "H", W3 "recommended"; the spec delta already describes H.) **Gate:** the owner answers W2 (which rule) and W3 (write up the tropics' surface weather). Record the words in `proposal.md`, and move the spec delta to the chosen rule.
   - [x] 1.2a (2026-09-29: "recommended".) W3: the tropics' surface weather is written up next, after W2 is built.
-  - [ ] 1.2b W2: answered "looks good now", which reads as H or as keeping what is built. Asked back in the survey's comment thread.
+  - [x] 1.2b (2026-09-29: "H", after "looks good now" was asked back.) W2: which rule.
 
 ## 2. The wind (if D or H)
 

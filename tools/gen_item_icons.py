@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Draw the item icons this repository makes itself: the three fish new to
-Pale Blue Dot and the six lights, as 16x16 RGBA PNGs under assets/items/. The
-four tool icons are drawn from the tools' own hexes by tools/gen_held_tools.py,
-which uses this file's PNG writer.
+Pale Blue Dot, the six lights and the bare hand, as 16x16 RGBA PNGs under
+assets/items/. The four tool icons are drawn from the tools' own hexes by
+tools/gen_held_tools.py, which uses this file's PNG writer.
 
 The lights (`lamps-and-lanterns` task 5.3) are drawn as the game draws them:
 iron frames round lit glass in the towns mockup's lamp colour, and flames
@@ -98,6 +98,16 @@ ICONS.update({
         "......xxX.......", "....kIiiiIk.....", ".....kkkkk......", "................",
     ], LIGHT),
 })
+
+
+# Bare hands (`inventory-grid` decision 8): an open palm, fingers up, in the
+# held hand's two skin tones (assets/models/held_tools.ron) with a dark rim.
+ICONS["tools/hand"] = ([
+    "................", "......k.k.......", ".....kskskk.....", ".....ksksksk....",
+    ".....ksksksk....", ".....ksksksk....", "..k..ksksksk....", ".ksk.kssssssk...",
+    ".ksskssssssk....", "..kssssssssk....", "...ksssssssk....", "....kssssssk....",
+    ".....kSSSSk.....", ".....kSSSSk.....", "......kkkk......", "................",
+], {"k": "#5a3a24", "s": "#e3b089", "S": "#c39776"})
 
 
 def rgba(hex_colour):

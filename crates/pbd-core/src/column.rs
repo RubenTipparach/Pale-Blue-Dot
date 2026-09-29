@@ -20,9 +20,13 @@ use glam::Vec3;
 /// The lowest altitude a column describes, metres against sea level. The
 /// measured basin floor is -125 m, so this clears it with room for a dug one.
 pub const BASE_M: i32 = -145;
-/// Layers in a column, one metre each. -145 to +175 covers the measured relief
-/// of -125 to +158 m at both ends.
-pub const LAYERS: usize = 320;
+/// Layers in a column, one metre each. -145 to +359 covers the measured relief
+/// of -125 to +293 m (version 6's ranges) at both ends, with 66 m to build
+/// on the highest summit (`taller-mountains` decision 5). 504 is the most the
+/// tier's 9-bit layer fields hold as a multiple of 8. `BASE_M` never moves:
+/// a saved edit's layer is counted from it, so growing the top keeps every
+/// save where it was.
+pub const LAYERS: usize = 504;
 
 /// The altitude of the BOTTOM of layer `index`, metres against sea level.
 pub fn layer_altitude(index: usize) -> f32 {
@@ -393,13 +397,19 @@ pub fn material_at_depth(top: Material, depth_m: f32) -> Material {
 /// reconciled its cap UP a metre, and both wall rules had to dodge a top that
 /// stood proud of the cap. A surface is the layer boundary under the altitude,
 /// and the cap and the column's top are the same number by construction.
+///
+/// A town's ground (`crate::settlement::ground`) answers here too: its
+/// terrace in its footprint, eased back to this across its margin. This is
+/// the one place it is asked, because every height is read from here.
 pub fn surface_m(terrain: &TerrainConfig, direction: Vec3) -> f32 {
-    planet_gen::surface_altitude(terrain, direction).floor()
+    let natural = planet_gen::surface_altitude(terrain, direction).floor();
+    crate::settlement::ground::surface(terrain, direction, natural)
 }
 
 pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
     let surface_m = surface_m(terrain, direction);
-    let top = planet_gen::top_material(terrain, direction, surface_m);
+    let top = crate::settlement::ground::top(terrain, direction)
+        .unwrap_or_else(|| planet_gen::top_material(terrain, direction, surface_m));
     let mut layers = [Material::Air; LAYERS];
     for (index, layer) in layers.iter_mut().enumerate() {
         let altitude = layer_altitude(index);
@@ -591,7 +601,12 @@ mod tests {
     #[test]
     fn the_span_covers_the_measured_relief() {
         assert!(layer_altitude(0) <= -125.0);
-        assert!(layer_altitude(LAYERS - 1) + 1.0 >= 158.0);
+        // Version 6's summit, 293.1 m on four million directions
+        // (`planet_gen::tests::relief_report`), with 50 m to build above it.
+        assert!(layer_altitude(LAYERS - 1) + 1.0 >= 293.1 + 50.0);
+        // A layer index fits the tier's 9-bit fields, and the material words
+        // hold whole bytes of eight layers.
+        const { assert!(LAYERS <= 511 && LAYERS.is_multiple_of(8)) };
         assert_eq!(layer_at(BASE_M as f32), Some(0));
         assert_eq!(layer_at(BASE_M as f32 - 0.01), None);
         assert_eq!(layer_at(layer_altitude(LAYERS - 1) + 0.5), Some(LAYERS - 1));

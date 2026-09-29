@@ -140,6 +140,35 @@ different image on the side thant he pure dirt block. and SHOULD NOT
 MERGE"). The question was already settled by I4 and should not have been
 asked again.
 
+**8. Bare hands (the owner, 2026-09-29).** "hands by default shouldnt hold
+anything, the equip thingy (rollout) should have a bare hands option", and
+"by default I should not be holding anything in my hand".
+- **A new world starts with empty hands.** The four tools are still owned
+  and still in the roll-out (G). None is in hand until the player picks one.
+- **The roll-out's first entry is "Bare hands"**, before the tools, and the
+  wheel steps through it like any tool.
+- **Bare hands break nothing**, as the rod breaks nothing. The left button
+  digs only with a digging tool in hand. *Recommendation taken (ask only with
+  screenshots):* punching the ground slowly is a feel question for later,
+  asked with a capture if it comes up.
+- **Nothing is drawn in hand.** The rod and the tools are drawn only while
+  held.
+- **Saves.** The `hand` line writes `-` for bare hands (`hand - 15`).
+  - An older build meets `-` as a damaged line, skips it, and keeps the tool
+    it last read. It loses nothing else.
+  - A world saved with a tool in hand opens with that tool.
+  - A world that never changed tool has no `hand` line. It opened with the
+    rod and now opens with empty hands, which is the new default and loses
+    nothing.
+- Verify:
+  - core tests: the kit holds nothing and owns all four, and bare hands
+    step to and from the tools;
+  - a format test: `hand -` round-trips, and a tool line reads as before;
+  - a core test that bare hands dig nothing: the dig system asks
+    `Equipment::digging_tool`, the one rule, which is `None` for bare hands
+    and the rod (there is no dig-system harness to drive in an app test);
+  - a capture: the walker's view with nothing in hand.
+
 ## Risks / Trade-offs
 
 - [A 40-field log line is longer to write on every dig] → A dig writes about

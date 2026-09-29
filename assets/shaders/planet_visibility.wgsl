@@ -228,6 +228,9 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     // on the same id, so the tree a coarse level keeps is the fine tree that
     // stood there, never one of its own at another place. A quarter of the
     // trees per level out, each wider (the surface pass), so the cover holds.
+    // A town's footprint grows nothing (`cities-in-the-world` decision 3):
+    // bit 24 of the material word, `planet_terrain::CLEARED_BIT`.
+    if ((cell.metadata.y >> 24u) & 1u) == 1u { return false; }
     let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
     let biome = (cell.metadata.y >> 8u) & 0xffu;

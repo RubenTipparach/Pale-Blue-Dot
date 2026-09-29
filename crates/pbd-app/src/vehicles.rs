@@ -12,7 +12,7 @@ mod chase;
 mod draw;
 mod hud;
 mod model;
-mod place;
+pub(crate) mod place;
 mod view;
 
 pub use view::VehicleCamera;

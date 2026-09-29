@@ -24,6 +24,9 @@ const PAD_M: [f32; 2] = [16.0, 40.0];
 /// this far out from the centre.
 const PAD_LEVEL_M: f32 = 0.6;
 const PAD_HALF_M: f32 = 5.5;
+/// A new world's start is a level plain: this many of the 120 samples in the
+/// ring 20 to 36 m round it take the Kestrel's pad (`level_plain`).
+const START_PADS: usize = 8;
 /// Water a boat is put in, m under the sea surface, and how far apart the two
 /// boats lie.
 const TERN_DEPTH_M: f32 = 3.0;
@@ -175,9 +178,12 @@ mod frame_tests {
         world.insert_resource(crate::saves::WorldSave::memory_only());
         world.insert_resource(crate::planet::PlanetRenderFrame::default());
         // Integer coordinates preserve exactly the same f32 local input after translation.
-        let walker = (crate::flight_view::FlightViewConfig::default().spawn_direction
-            * PLANET_RADIUS)
-            .round();
+        let start = crate::walking::new_world_start(
+            world.resource::<PlanetContact>(),
+            world.resource::<Sea>().radius,
+            crate::flight_view::FlightViewConfig::default().spawn_direction,
+        );
+        let walker = (start * PLANET_RADIUS).round();
         let original = gather(&world, walker).unwrap().0;
         let offset = DVec3::new(8192.0, -4096.0, 2048.0);
         world
@@ -186,7 +192,12 @@ mod frame_tests {
         let translated = gather(&world, (walker.as_dvec3() + offset).as_vec3())
             .unwrap()
             .0;
-        assert_eq!(original.len(), 3);
+        assert_eq!(
+            original.len(),
+            3,
+            "{:?}",
+            original.iter().map(|c| c.kind).collect::<Vec<_>>()
+        );
         for (a, b) in original.iter().zip(&translated) {
             assert_eq!(a.kind, b.kind);
             assert!(a.body.position.distance(b.body.position) < 1e-6);
@@ -234,6 +245,46 @@ impl Berths {
             (Kind::Loon, loon.map(boat)),
         ])
     }
+}
+
+/// Whether `direction` stands on a level plain, found as the Kestrel's pad
+/// is: the ground there is over the sea and its four probes lie within the
+/// pad's level, and the ring 20 to 36 m round it holds the Kestrel's pad
+/// again and again. Where a new world on a generator with ranges starts
+/// (`taller-mountains` decision 8, survey H4: "recommended"), so a player
+/// opens facing land they can walk and the Kestrel has somewhere to stand.
+/// The ring is inside the Kestrel's own 16 to 40 m from a walker set down up
+/// to 4 m from the start.
+pub fn level_plain(sea_radius: f32, direction: Vec3) -> bool {
+    let good = |direction: Vec3| {
+        let ground = floor(direction);
+        ground - sea_radius > 0.3 && level(direction, ground)
+    };
+    let centre = direction.normalize_or(Vec3::Y);
+    if !good(centre) {
+        return false;
+    }
+    // A level pad on one-metre layers is a knife edge: a probe half a metre
+    // over can cross a layer. So the start is a level plain, not a level
+    // spot: at least `START_PADS` of the ring's samples take a pad.
+    let east = Vec3::Y.cross(centre).normalize_or(Vec3::X);
+    let north = centre.cross(east);
+    let mut pads = 0;
+    for k in 0..=4 {
+        let distance = PAD_M[0] + 4.0 + k as f32 * 4.0;
+        for i in 0..SEARCH_BEARINGS {
+            let bearing = i as f32 / SEARCH_BEARINGS as f32 * std::f32::consts::TAU;
+            let tangent = east * bearing.cos() + north * bearing.sin();
+            let angle = distance / sea_radius;
+            if good(centre * angle.cos() + tangent * angle.sin()) {
+                pads += 1;
+                if pads >= START_PADS {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 /// The nearest direction round `centre`, ring by ring outward, that `good`

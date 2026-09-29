@@ -412,6 +412,44 @@ impl PlanetContact {
         direction
     }
 
+    /// The centre of the nearest dry base cap to `direction`, breadth first
+    /// over the caps as [`Self::find_land_near`] searches, that `good`
+    /// accepts; `None` within `max_cells` caps. For spawning, not the
+    /// per-tick path.
+    pub fn find_cap_near(
+        &self,
+        direction: Vec3,
+        max_cells: usize,
+        good: impl Fn(Vec3) -> bool,
+    ) -> Option<Vec3> {
+        let direction = direction.try_normalize().unwrap_or(Vec3::Y);
+        let start = self.locate(direction);
+        let columns = &self.coarse.columns;
+        let mut seen = vec![false; columns.len()];
+        let mut pending = VecDeque::from([start]);
+        seen[start] = true;
+        let mut visited = 0;
+        while let Some(id) = pending.pop_front() {
+            visited += 1;
+            if visited > max_cells {
+                return None;
+            }
+            let cell = &columns[id];
+            let centre = Vec3::from_slice(&cell.direction_height[..3]);
+            if cell.direction_height[3] >= 0. && good(centre) {
+                return Some(centre);
+            }
+            for &neighbor in &self.coarse.neighbors[id][..cell.degree()] {
+                let neighbor = neighbor as usize;
+                if !seen[neighbor] {
+                    seen[neighbor] = true;
+                    pending.push_back(neighbor);
+                }
+            }
+        }
+        None
+    }
+
     fn locate(&self, direction: Vec3) -> usize {
         self.coarse
             .walk(self.seeds[bin_index(direction)] as usize, direction)

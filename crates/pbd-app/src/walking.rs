@@ -27,9 +27,35 @@ const BODY_RADIUS: f32 = 0.3;
 const CONTACT_SKIN: f32 = 0.015;
 const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
 
+/// What the walker cannot walk through that is not terrain: the walls,
+/// posts, chimneys and upper floors of the towns standing
+/// (`cities-in-the-world` slice 2a). Planet-local, as the walker is.
+#[derive(Resource, Default, Clone)]
+pub struct Structures(pub Vec<pbd_core::settlement::pieces::BuildingSolids>);
+
+impl Structures {
+    /// Whether the body centred at `centre` is in a solid.
+    fn holds(&self, centre: Vec3) -> bool {
+        self.0
+            .iter()
+            .any(|b| b.holds(centre, HALF_HEIGHT, BODY_RADIUS))
+    }
+
+    /// The lowest solid underside over the body, a planet-local radius.
+    fn ceiling(&self, centre: Vec3) -> Option<f32> {
+        self.0
+            .iter()
+            .filter_map(|b| b.ceiling(centre, BODY_RADIUS))
+            .min_by(f32::total_cmp)
+    }
+}
+
 #[derive(Resource, Clone, Copy)]
 pub struct WalkingConfig {
     pub start_walking: bool,
+    /// Start a new world's walker exactly at the spawn direction, not at the
+    /// ground the start search finds near it: a capture's `--at`.
+    pub exact_start: bool,
     /// Where a LOADED world puts the walker.
     ///
     /// The spawn rule finds land near a direction and steps four metres off
@@ -80,6 +106,7 @@ impl Default for WalkingConfig {
     fn default() -> Self {
         Self {
             start_walking: true,
+            exact_start: false,
             restored: None,
             pitch: 0.0,
             yaw: 0.0,
@@ -259,7 +286,14 @@ fn setup_walking(world: &mut World) {
         // the position it holds is one the player was standing at.
         Some(pose) => (pose.position, pose.position.normalize_or(direction)),
         None => {
-            let center = ground.find_land_near(direction).normalize();
+            let sea = world
+                .get_resource::<crate::sea::Sea>()
+                .map_or(crate::planet::terrain::PLANET_RADIUS, |sea| sea.radius);
+            let center = if config.exact_start {
+                direction.normalize()
+            } else {
+                new_world_start(ground, sea, direction)
+            };
             // Cosmetic trunks occupy cell centers. Start four metres beside the
             // trunk, still safely inside this cap, so the first-person view
             // opens onto the land.
@@ -536,15 +570,51 @@ pub fn restore(world: &mut World, pose: RestoredPose) {
     state.jump = false;
 }
 
+/// Where a new world's walker starts, from the spawn direction: the nearest
+/// dry land, and on a generator with ranges (version 6 on) the nearest level
+/// ground to that, found as the Kestrel's pad is (`taller-mountains`
+/// decision 8, survey H4). Worlds of versions 4 and 5 keep the start they
+/// had (CLAUDE.md, "Saved games survive every change").
+pub fn new_world_start(ground: &PlanetContact, sea_radius: f32, direction: Vec3) -> Vec3 {
+    start_for_version(
+        crate::planet::terrain::generator_version(),
+        ground,
+        sea_radius,
+        direction,
+    )
+}
+
+/// [`new_world_start`] for a named generator version.
+fn start_for_version(
+    version: u32,
+    ground: &PlanetContact,
+    sea_radius: f32,
+    direction: Vec3,
+) -> Vec3 {
+    let land = ground.find_land_near(direction).normalize();
+    if version < 6 {
+        return land;
+    }
+    ground
+        .find_cap_near(land, START_SEARCH_CAPS, |centre| {
+            crate::vehicles::place::level_plain(sea_radius, centre)
+        })
+        .map_or(land, Vec3::normalize)
+}
+
+/// How many base caps the level-ground start searches: about a kilometre
+/// round the spawn at the game's 45 m caps.
+const START_SEARCH_CAPS: usize = 2000;
+
 /// Find this world's spawn again on the ground as it is now. After the planet
 /// is rebuilt for another generator (`bigger-biomes` decision 8) the land a
 /// new world starts on can be somewhere else.
 pub fn find_spawn_again(world: &mut World) {
     let direction = world.resource::<FlightViewConfig>().spawn_direction;
-    let land = world
-        .resource::<PlanetContact>()
-        .find_land_near(direction)
-        .normalize();
+    let sea = world
+        .get_resource::<crate::sea::Sea>()
+        .map_or(crate::planet::terrain::PLANET_RADIUS, |sea| sea.radius);
+    let land = new_world_start(world.resource::<PlanetContact>(), sea, direction);
     if let Some(mut state) = world.get_resource_mut::<WalkingState>() {
         state.spawn_direction = land;
     }
@@ -866,11 +936,13 @@ fn resolve_ground(
     config: Res<WalkingConfig>,
     terrain: Res<PlanetContact>,
     sea: Sea,
+    structures: Option<Res<Structures>>,
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
 ) {
     if !state.active {
         return;
     }
+    let structures = structures.as_deref();
     for (mut position, mut velocity, mut ground) in &mut walkers {
         let start = ground.previous;
         let destination = position.0;
@@ -892,11 +964,17 @@ fn resolve_ground(
             // is: Tenebris's headroom check in `try_horizontal_step`, and what
             // stops a walker forcing their head into a low tunnel.
             let low = i > 0 && !headroom(support, ceiling);
+            // A town's wall is a wall as a rise is (slice 2a). A body already
+            // in a solid (a town built round it) is let walk out of it.
+            let walled = structures.is_some_and(|s| s.holds(candidate) && !s.holds(accepted));
             // Water used to be a wall here, which is why the sea could be
             // looked at and never entered. It is passable now: the seabed is
             // ordinary ground, and what stops a swimmer is the seabed's own
             // rise, exactly as on land.
-            if low || (rise > 0.03 && !can_step && support + CONTACT_SKIN - old_feet > 0.03) {
+            if low
+                || walled
+                || (rise > 0.03 && !can_step && support + CONTACT_SKIN - old_feet > 0.03)
+            {
                 // Keep the last accepted angular position, allowing vertical
                 // jump/fall along it to continue against a blocked wall.
                 let old_up = accepted.normalize();
@@ -929,7 +1007,12 @@ fn resolve_ground(
         // tangential motion kept. Underwater only the rise goes, so a swimmer
         // against rock stops rather than being snapped.
         let wet = sea.state(&config, accepted);
-        if let Some(ceiling) = footprint(&terrain, accepted).ceiling {
+        let roof = structures.and_then(|s| s.ceiling(accepted));
+        let ceiling = match (footprint(&terrain, accepted).ceiling, roof) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        if let Some(ceiling) = ceiling {
             let up = accepted.normalize();
             let head = accepted.length() + HALF_HEIGHT;
             if head > ceiling - CONTACT_SKIN {
@@ -1499,6 +1582,69 @@ mod tests {
         );
     }
 
+    /// Slice 2a (`cities-in-the-world`): a town's wall stops the walker the
+    /// way a rise it cannot step does, and its doorway lets the walker in.
+    #[test]
+    fn a_town_wall_stops_the_walker_and_its_doorway_lets_it_in() {
+        use pbd_core::settlement::pieces::{BuildingSolids, Frame, Solid};
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        let up = flat.normalize();
+        let heading = up.any_orthonormal_vector();
+        let frame = Frame {
+            origin: up * terrain.sample(up).floor_radius,
+            x: heading,
+            y: up,
+            z: heading.cross(up),
+        };
+        // A wall 3 m ahead, 0.2 m thick and 3 m high, across the heading,
+        // with a 1 m doorway in its middle.
+        let wall = |z0: f32, z1: f32| Solid {
+            outline: vec![
+                Vec2::new(2.9, z0),
+                Vec2::new(3.1, z0),
+                Vec2::new(3.1, z1),
+                Vec2::new(2.9, z1),
+            ],
+            y0: 0.0,
+            y1: 3.0,
+        };
+        let house = BuildingSolids {
+            frame,
+            reach_m: 8.0,
+            solids: vec![wall(-6.0, -0.5), wall(0.5, 6.0)],
+            roof_plan: Vec::new(),
+        };
+        let walk = |across: f32| {
+            let mut app = app_with_terrain_at(PlanetContact::test_flat_land(5).0, flat);
+            app.insert_resource(Structures(vec![house.clone()]));
+            let start = frame.world(Vec3::new(0.0, 0.0, across)).normalize();
+            place_walker(
+                app.world_mut(),
+                start,
+                Some(Transform::IDENTITY.looking_to(heading, start).rotation),
+            );
+            app.world_mut().resource_mut::<WalkingState>().captured = true;
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::KeyW);
+            let body = app.world().resource::<WalkingState>().body;
+            let mut furthest = f32::MIN;
+            for _ in 0..150 {
+                app.update();
+                let p = app.world().get::<Position>(body).unwrap().0;
+                furthest = furthest.max(frame.local(p).x);
+            }
+            furthest
+        };
+        let at_wall = walk(2.0);
+        assert!(
+            at_wall > 2.0 && at_wall < 2.9 - 0.3 + 0.05,
+            "stopped at {at_wall} m, the wall's face at 2.9 m"
+        );
+        let through = walk(0.0);
+        assert!(through > 4.0, "went in through the doorway to {through} m");
+    }
+
     #[test]
     fn one_metre_fall_matches_tenebris_and_reports_the_old_gravity_baseline() {
         for (acceleration, height) in [(9.0_f32, 1.0_f32), (25.0, 1.0), (9.0, 6.0), (25.0, 6.0)] {
@@ -1759,6 +1905,29 @@ mod tests {
         assert!(
             (after - before).dot(-heading) > 1.0,
             "ledge trapped separating motion"
+        );
+    }
+
+    /// `taller-mountains` decision 8, survey H4: a new version-6 world starts
+    /// on a level plain near the spawn direction, and a version 4 or 5 world
+    /// never played starts where it always did, on the nearest dry land.
+    #[test]
+    fn a_new_world_starts_on_level_ground_and_old_versions_keep_their_start() {
+        let ground = PlanetContact::test_planet(5);
+        let sea = crate::sea::Sea::new(&crate::config::WaterSettings::default()).radius;
+        let spawn = FlightViewConfig::default().spawn_direction;
+        let land = ground.find_land_near(spawn).normalize();
+        for version in [4, 5] {
+            assert_eq!(start_for_version(version, &ground, sea, spawn), land);
+        }
+        let start = start_for_version(6, &ground, sea, spawn);
+        assert!(
+            crate::vehicles::place::level_plain(sea, start),
+            "the start is a level plain with the Kestrel's pad round it"
+        );
+        assert!(
+            !crate::vehicles::place::level_plain(sea, land),
+            "on version 6 the old start is not level, so this test tells the rules apart"
         );
     }
 }

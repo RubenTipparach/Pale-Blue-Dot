@@ -29,6 +29,10 @@ the block into the world as a floating block.
 
 - [x] 4.4 (`slots::block_art`, `drops::PrismFaces`, one prism mesh per block kind on one untinted atlas material; `a_block_is_shown_as_the_ground_draws_it` and `a_grass_drop_wears_its_top_side_and_underside`; `block-sides-*.jpg`.) A slot's picture is the block's side tile, untinted; a drop's prism wears top, side and underside tiles. Verify: an app test that grass's slot tile is the sheet's transition tile, and captures of the hotbar and a drop.
 
+## 4c. Bare hands (decision 8)
+
+- [ ] 4.5 `Equipment` holds a tool or nothing; a new world's kit holds nothing; the roll-out starts with "Bare hands"; bare hands dig nothing and draw nothing in hand; the `hand` line writes `-` for them. Verify: the tests and the capture decision 8 names.
+
 ## 5. The owner's check
 
 - [ ] 5.1 The gate video (`step-videos`, in the owner's batch): the pack opened, stacks moved, a dig pulled into the pack, and a dig with everything full left floating.

@@ -37,8 +37,10 @@ one desert or none.
 
 ## Decisions
 
-**1. The desert shrinks to half, provisionally (survey B6).** Recommended: a
-sixth of the temperate land, 10.5% of all the land, half of today's.
+**1. The desert shrinks to half (survey B6).** A sixth of the temperate land,
+10.5% of all the land, half of today's: `desert_below` 0.422 and `wet_above`
+0.524. The owner, 2026-09-29: "10.5 % desert" (first written "its good now",
+then made plain when asked back).
 - Deserts stay distinct regions a player can find on most continents.
 - Fields (26%) and jungle (25%) each gain about five points, so grass does
   not become the majority again. That majority was the owner's reason for

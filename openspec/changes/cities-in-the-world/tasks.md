@@ -3,6 +3,21 @@
 Step 2d, the last of step 2. It starts after the owner approves the lights,
 the map, the sites, and the climate and fish layers, in that order.
 
+## 0. Slice 1: Holbrook stands (design decision 9)
+
+The owner, 2026-09-29: "I thought you were building cities, I wnat shots of
+the cities". Built ahead of the groups below, which it takes the first parts
+of; their own tasks stay open until each is whole.
+
+- [x] 0.1 (`tools/export_town_textures.js`, `tools/export_town_templates.js`; `assets/textures/settlement/` with `manifest.ron`, `assets/settlements/v1/village.json`, `assets/config/kits.ron`. `settlement::tests::the_kits_and_the_village_load_and_every_building_has_its_kit`.) The mockup's textures, its village layout and its kits as data, exported from the approved mockup itself, not retyped.
+- [x] 0.2 (`pbd_core::settlement::chart`. `settlement::tests::the_chart_keeps_neighbours_neighbours_and_uses_no_cell_twice`, `a_cells_sides_run_counter_clockwise_with_their_neighbours_across`.) The chart through the neighbour tables (decision 2), on a level-7 sphere at the gold standard's 2.833 m cells.
+- [x] 0.3 (`pbd_core::settlement::ground`, asked by `column::surface_m` and `generate_solid`; the cleared bit, `planet_terrain::CLEARED_BIT`, read by `planet_visibility.wgsl`'s foliage pass; the map cache named by the ground's digest. `settlement::tests::the_ground_terraces_the_footprint_and_eases_the_margin`.) The terrace under the footprint, eased over its margin, with lanes of dirt and no trees.
+- [x] 0.4 (`pbd_core::settlement::pieces`. `settlement::tests::every_village_building_cuts_into_its_pieces`, with every triangle facing out.) Walls on edges with their doors, shuttered windows and sills, corner posts, floors and beams, gable roofs with their gable ends, soffits and ridges, the huts' cones, and chimneys, cut from each cell's real corners.
+- [x] 0.5 (`pbd_app::towns`, `--at <lat> <lon>`. `towns::tests::holbrook_is_laid_out_on_its_own_ground`; `docs/screenshots/cities-in-the-world/`.) Holbrook in the game: laid out when the world's sites are on disk, its ground installed and the planet rebuilt round the player, drawn with the mockup's textures and lit by the field.
+- [ ] 0.6 The owner looks at the shots. Screenshots stand in for the video until the owner's batch.
+- [ ] 0.7 Slice 2a, walls and doorways (design decision 9): walls, posts, chimneys and upper floors are solids; the walker stops at a wall, goes in at a door, and meets the floor above as a ceiling. Verify: `settlement::tests::every_village_building_cuts_into_its_pieces` (wall, doorway, air, yard, ceilings), `walking::tests::a_town_wall_stops_the_walker_and_its_doorway_lets_it_in`, and a capture from inside a house looking out of its door.
+- [ ] 0.8 The owner's notes on the towns mockup (2026-09-29; screenshots in `docs/handoff/2026-09-29-owner-notes/`): water shows inside boat hulls; the stair block has inverted outside faces; windows should be double-sided, transparent and not glow; chimney bottoms z-fight; big doors with furniture behind them (the mound houses') should open outward. In the jungle town, the rail posts at a rope bridge's ends should stand on the platform hex's edge vertices; stairwells need more light. The igloo's geometry needs work: the tunnel's slab walls show bare faces, and its vault neither closes nor meets the dome (`igloo.png`). Write each up before code, in the mockup and the game alike. Verify: before-and-after shots of each.
+
 ## 1. The pieces: `tenebris-towns`, built
 
 - [ ] 1.1 The owner answers `tenebris-towns`' open questions. Record the answers in its proposal. Verify: each question has an answer quoted.

@@ -116,6 +116,11 @@
   }
   .places button:hover { color: var(--lamp); }
   .places button span:last-child { color: var(--muted); font-size: 11px; }
+  .editor .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .editor .row select { width: auto; flex: 1; }
+  .editor input[type="text"] { font: 13px var(--ui); color: var(--text); background: #16232a; border: 1px solid var(--line-strong); padding: 4px 6px; width: 100%; }
+  .editor textarea { width: 100%; min-height: 96px; font: 11px/1.4 var(--mono); color: var(--text); background: #0b1418; border: 1px solid var(--line-strong); padding: 6px; resize: vertical; }
+  .editor .warn { color: var(--danger); }
   details.about summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   details.about p { font-size: 12px; color: var(--muted); margin: 6px 0 0; max-width: 60ch; }
 
@@ -182,7 +187,7 @@
               <button type="button" data-overlay="ice" aria-pressed="false">Sea ice</button>
               <button type="button" data-overlay="fish" aria-pressed="false">Fish</button>
             </div>
-            <p class="note" id="overlayNote">The planet as it looks: each pixel is its ground's top block, shaded by relief, and the sea by its depth. An overlay greys it out (survey M3).</p>
+            <p class="note" id="overlayNote">The planet as it looks: each pixel is its ground's top block, shaded by relief, and the sea by its depth. An overlay greys it out (survey M3). This is generator version 6: the taller mountain ranges, up to 293 m with snow above 200 m, and half the desert (survey B6). The weather, temperature, sea-ice and fish layers are from the earlier climate run on version 4's ground, and the coasts are the same.</p>
           </div>
 
           <div class="group">
@@ -198,12 +203,9 @@
           </div>
 
           <div class="group" id="biomeGroup" hidden>
-            <h3>Biome size</h3>
-            <div class="buttons" id="scales" role="group" aria-label="Biome size">
-              <button type="button" data-scale="today" aria-pressed="false">As shipped</button>
-              <button type="button" data-scale="188" aria-pressed="false">188 m</button>
-              <button type="button" data-scale="375" aria-pressed="false">375 m</button>
-              <button type="button" data-scale="750" aria-pressed="true">750 m</button>
+            <h3>Biomes, version 6</h3>
+            <div class="buttons" id="scales" role="group" aria-label="Biomes" style="display: none">
+              <button type="button" data-scale="today" aria-pressed="true">Version 6</button>
             </div>
             <p class="note" id="scaleNote"></p>
             <div class="key" id="biomeKey"></div>
@@ -243,13 +245,31 @@
 
           <div class="group">
             <h3>Places <span id="placeCount"></span></h3>
+            <p class="note" id="sitesNote"></p>
             <div class="places" id="places"></div>
+          </div>
+
+          <div class="group editor">
+            <h3>Site editor <span id="editCount"></span></h3>
+            <label class="note"><input type="checkbox" id="editSites"> Edit the sites</label>
+            <div id="editPanel" hidden>
+              <p class="note">Drag a site to move it. Click one to rename it, strike it, or make a walled town the capital. To add one, pick its kind, press Add and click the map. Then copy your edits as RON and send them: they go into <code>assets/config/sites.ron</code> as pins and strikes.</p>
+              <div class="row"><select id="addKind" aria-label="Kind to add"></select><button type="button" id="addSite" aria-pressed="false">Add</button></div>
+              <div id="selected" hidden>
+                <input type="text" id="siteName" aria-label="Name of the chosen site">
+                <div class="row" style="margin-top:6px"><button type="button" id="makeCapital">Make it the capital</button><button type="button" id="strikeSite">Strike it</button></div>
+                <p class="note" id="selectedNote"></p>
+              </div>
+              <p class="note" id="editNote" aria-live="polite"></p>
+              <div class="row"><button type="button" id="copyRon">Copy as RON</button><button type="button" id="resetEdits">Undo every edit</button></div>
+              <textarea id="ron" readonly aria-label="Your edits as RON"></textarea>
+            </div>
           </div>
 
           <details class="about">
             <summary>What is real here</summary>
-            <p>The planet, its biomes at each size, the temperature, the sea ice and the fish ranges are drawn from rasters the game's own functions made (<code>pbd_core::map::base_texel</code>, the atmosphere run 200 days, and the fish rules in <code>tools/fish_ranges.py</code>). The clouds and rain are the simulated atmosphere sampled every two game hours through one day.</p>
-            <p>The settlements are placeholders: the <code>city-sites</code> rules run here, in the page, on 14.7 m pixels, and their names come from made-up syllables. Step 2b places them for real.</p>
+            <p>The planet and its biomes under each desert option are generator version 6's, drawn by the game's own function (<code>pbd_core::map::base_texel</code>, through <code>examples/world_map.rs ... deserts</code>). The temperature, the sea ice and the fish ranges come from the atmosphere run 200 days on version 4's ground and the fish rules in <code>tools/fish_ranges.py</code>. The clouds and rain are that simulated atmosphere sampled every two game hours through one day.</p>
+            <p>The settlements are the game's own: <code>pbd_core::sites::generate</code>, the rules the game will run, on generator version 6 with half the desert, through <code>examples/sites.rs</code>. Each footprint was checked at the terrain's own 2.8 m cells. Their names come from the first draft of each people's syllables in <code>assets/config/sites.ron</code>.</p>
           </details>
         </div>
       </aside>
@@ -314,7 +334,7 @@
   // ---- State ---------------------------------------------------------------
   const DAY = 150;
   const state = {
-    open: true, overlay: "none", scale: "750", species: "all",
+    open: true, overlay: "none", scale: "sixth", species: "all",
     hour: 19.5, playing: false,
     // Night side, clouds and rain start off (the owner, 2026-09-27).
     sites: true, night: false, clouds: false, me: true, grid: false,
@@ -323,7 +343,7 @@
   };
   const $ = (id) => document.getElementById(id);
   const canvas = $("view"), ctx = canvas.getContext("2d");
-  let summary = null, heightData = null, fishData = null;
+  let summary = null, heightData = null, codesData = null, fishData = null;
   const images = {};
 
   function loadImage(name) {
@@ -345,7 +365,13 @@
     if (!heightData) return null;
     const px = ((Math.floor(x) % W) + W) % W, py = Math.max(0, Math.min(H - 1, Math.floor(y)));
     const i = (py * W + px) * 4, d = heightData.data;
-    return { alt: d[i] * 256 + d[i + 1] - 32768, today: d[i + 2] & 15, four: d[i + 2] >> 4 };
+    const s = { alt: d[i] * 256 + d[i + 1] - 32768, today: d[i + 2] & 15, four: d[i + 2] >> 4 };
+    // Every desert option's biome, two to a byte (biome-codes.png).
+    if (codesData) {
+      const c = codesData.data;
+      s.biomes = { today: c[i] & 15, quarter: c[i] >> 4, sixth: c[i + 1] & 15, tenth: c[i + 1] >> 4 };
+    }
+    return s;
   }
   const sampleDir = (d) => { const [x, y] = worldOf(d); return sampleWorld(x, y); };
   function offset(d, bearing, metres) {
@@ -360,107 +386,127 @@
   }
   const arc = (a, b) => Math.acos(Math.max(-1, Math.min(1, dot(a, b)))) * RADIUS;
 
-  // ---- The settlements: city-sites' rules, run here as placeholders ------
-  // design.md decision 1's table: radius m, flatness m, spacing m, count.
+  // ---- The settlements: the game's own list (city-sites) ----------------
+  // examples/sites.rs writes world-map/sites.json from pbd_core::sites.
   const KINDS = [
-    { id: "walled", name: "walled town", biome: "fields", r: 75, flat: 8, spacing: 2500, count: 6, people: "fields" },
-    { id: "village", name: "village", biome: "fields", r: 35, flat: 4, spacing: 700, count: 20, people: "fields" },
-    { id: "desert", name: "desert town", biome: "desert", r: 60, flat: 6, spacing: 2000, count: 4, people: "desert" },
-    { id: "tundra", name: "tundra camp", biome: "tundra", r: 30, flat: 4, spacing: 700, count: 4, people: "tundra" },
-    { id: "jungle", name: "jungle village", biome: "jungle", r: 35, flat: 10, spacing: 700, count: 6, people: "jungle" },
-    { id: "swamp", name: "swamp village", biome: "swamp", r: 35, flat: 3, spacing: 700, count: 3, people: "swamp" },
-    { id: "harbour", name: "harbour", biome: "beach", r: 60, flat: 12, spacing: 1500, count: 6, people: "fields" },
-    { id: "cliff", name: "cliff village", biome: "mountains", r: 50, flat: 25, spacing: 1500, count: 4, people: "mountain" },
-    { id: "cave", name: "cave town", biome: "mountains", r: 50, flat: 40, spacing: 2500, count: 2, people: "mountain" },
+    { id: "walled", rust: "Walled", name: "walled town" },
+    { id: "village", rust: "Village", name: "village" },
+    { id: "desert", rust: "Desert", name: "desert town" },
+    { id: "tundra", rust: "Tundra", name: "tundra camp" },
+    { id: "jungle", rust: "Jungle", name: "jungle village" },
+    { id: "swamp", rust: "Swamp", name: "swamp village" },
+    { id: "harbour", rust: "Harbour", name: "harbour" },
+    { id: "cliff", rust: "Cliff", name: "cliff village" },
+    { id: "cave", rust: "Cave", name: "cave town" },
   ];
-  // Placeholder syllables for the six peoples (design decision 4 puts the
-  // real tables in sites.ron).
-  const PEOPLES = {
-    fields: { on: ["Ash", "Bram", "Cor", "Dun", "Hol", "Lin", "Mar", "Wick", "Ther", "Sel"], mid: ["", "e", "en", "ow", "ing"], end: ["ford", "ham", "stead", "wick", "ton", "leigh"], haven: "haven" },
-    desert: { on: ["Qa", "Sar", "Zem", "Ta", "Ras", "Al", "Mir"], mid: ["ha", "ri", "za", "du", "sa"], end: ["n", "d", "r", "sh", "l"] },
-    tundra: { on: ["Kel", "Ulv", "Siv", "Tor", "Hrim", "Vas"], mid: ["a", "e", "i"], end: ["mark", "fjell", "vik", "hold"] },
-    jungle: { on: ["Tla", "Ixa", "Co", "Ma", "Ya", "Hua"], mid: ["pa", "lo", "tzi", "ca", "na"], end: ["tl", "n", "co", "ya"] },
-    swamp: { on: ["Bog", "Fen", "Mire", "Reed", "Sedge"], mid: ["", "e"], end: ["wade", "moss", "pool", "holm"] },
-    mountain: { on: ["Kar", "Dol", "Grim", "Bar", "Sto", "Durn"], mid: ["", "a", "e"], end: ["crag", "gard", "hald", "berg"] },
-  };
-  function hash(n) { // a small integer mix, the seed folded in
-    n = (n ^ 0x5eed2026) >>> 0;
-    n = Math.imul(n ^ (n >>> 16), 0x85ebca6b) >>> 0;
-    n = Math.imul(n ^ (n >>> 13), 0xc2b2ae35) >>> 0;
-    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
-  }
-  function nameFor(site, taken) {
-    const p = PEOPLES[site.kind.people];
-    for (let k = 0; k < 50; k++) {
-      const h = (i) => hash(site.id * 131 + k * 17 + i);
-      let n = p.on[Math.floor(h(1) * p.on.length)] + p.mid[Math.floor(h(2) * p.mid.length)];
-      n += site.kind.id === "harbour" ? p.haven : p.end[Math.floor(h(3) * p.end.length)];
-      n = n.charAt(0) + n.slice(1).toLowerCase();
-      if (!taken.has(n)) { taken.add(n); return n; }
-    }
-    return "Site " + site.id;
-  }
+  const kindOf = (rust) => KINDS.find((k) => k.rust === rust) || KINDS[1];
   function pentagons() {
     const t = (1 + Math.sqrt(5)) / 2, out = [];
     for (const a of [-1, 1]) for (const b of [-t, t]) out.push(norm([0, a, b]), norm([a, b, 0]), norm([b, 0, a]));
     return out;
   }
-  function placeSites() {
-    const biomeOf = (s) => BIOMES[state.scale === "today" ? s.today : s.four];
-    // Candidates: an even spread of 60,000 points (the game uses the
-    // 163,842 level-7 cell centres).
-    const N = 60000, golden = Math.PI * (3 - Math.sqrt(5)), cands = [];
-    const pents = pentagons();
-    for (let i = 0; i < N; i++) {
-      const y = 1 - 2 * (i + 0.5) / N, r = Math.sqrt(1 - y * y), th = golden * i;
-      const d = [Math.cos(th) * r, y, Math.sin(th) * r];
-      const c = sampleDir(d);
-      if (!c || c.alt < 0) continue;
-      const biome = biomeOf(c);
-      for (const kind of KINDS) {
-        if (kind.biome !== biome) continue;
-        if (pents.some((p) => arc(p, d) < kind.r + 90)) continue;
-        const ring = [0, 1, 2, 3, 4, 5].map((k) => sampleDir(offset(d, k * Math.PI / 3, kind.r)));
-        const alts = [c.alt, ...ring.map((s) => s.alt)];
-        const lo = Math.min(...alts), hi = Math.max(...alts), range = hi - lo;
-        let ok;
-        if (kind.id === "harbour") {
-          // From the water: shelf water (6 to 40 m deep) within 60 m.
-          const sea = [0, 1, 2, 3, 4, 5, 6, 7].some((k) => { const s = sampleDir(offset(d, k * Math.PI / 4, 60)); return s.alt <= -6 && s.alt >= -40; });
-          ok = sea && ring.some((s) => biomeOf(s) === "fields");
-        } else if (kind.id === "cliff") {
-          ok = lo >= 0 && range >= 9 && range <= 25;
-        } else if (kind.id === "cave") {
-          ok = lo >= 0 && c.alt - lo >= 16; // rock over a chamber, roughly
-        } else {
-          ok = lo >= 0 && range <= kind.flat;
-        }
-        if (!ok) continue;
-        const score = (1 - range / Math.max(kind.flat, 1)) + 0.4 * hash(i);
-        cands.push({ id: i, d, kind, score, alt: c.alt });
-      }
-    }
-    cands.sort((a, b) => b.score - a.score || a.id - b.id);
-    const kept = [], counts = {};
-    // Clear of every site kept: a kind's own spacing from its own kind, and
-    // half the smaller spacing from any other.
-    const clear = (c) => kept.every((k) => arc(k.d, c.d) >= (k.kind === c.kind ? c.kind.spacing : 0.5 * Math.min(k.kind.spacing, c.kind.spacing)));
-    // Survey C2: a village or small town within about 500 m of the spawn.
-    const home = cands.filter((c) => (c.kind.id === "village" || c.kind.id === "walled") && arc(c.d, SPAWN) < 500)
-      .sort((a, b) => arc(a.d, SPAWN) - arc(b.d, SPAWN))[0];
-    if (home) { kept.push(home); counts[home.kind.id] = 1; home.home = true; }
-    for (const c of cands) {
-      if ((counts[c.kind.id] || 0) >= c.kind.count || !clear(c)) continue;
-      kept.push(c); counts[c.kind.id] = (counts[c.kind.id] || 0) + 1;
-    }
-    // Survey C3: the capital is the walled town farthest from the spawn.
-    const towns = kept.filter((s) => s.kind.id === "walled");
-    if (towns.length) towns.sort((a, b) => arc(b.d, SPAWN) - arc(a.d, SPAWN))[0].capital = true;
-    const taken = new Set();
-    for (const s of kept) { s.name = nameFor(s, taken); [s.x, s.y] = worldOf(s.d); }
-    return kept;
+  let siteData = null;        // the JSON as written
+  let allSites = [];          // every site, struck ones included
+  let sites = [];             // what the map shows
+  let selected = null, addArmed = false, nextUid = 1;
+  const DEG = Math.PI / 180;
+  function place(site, lat, lon) {
+    site.lat = lat; site.lon = lon;
+    site.d = dirOf(lat * DEG, lon * DEG);
+    [site.x, site.y] = worldOf(site.d);
   }
-  let sites = [];
+  function buildSites() {
+    allSites = (siteData ? siteData.sites : []).map((j) => {
+      const site = { id: j.id, kind: kindOf(j.kind), name: j.name, radius: j.radius_m, capital: j.capital, home: j.home,
+        pinned: j.pinned, river: j.river, orig: { lat: j.lat, lon: j.lon, name: j.name, capital: j.capital } };
+      place(site, j.lat, j.lon);
+      return site;
+    });
+    restoreEdits();
+    refreshSites();
+  }
+  function refreshSites() {
+    sites = allSites.filter((t) => !t.struck);
+    listPlaces(); writeRon(); draw(); readPointer();
+  }
+  // A site the owner changed is pinned where it now stands; a generated one
+  // it came from is struck, so the rules do not place it twice.
+  const moved = (t) => t.orig && (Math.abs(t.lat - t.orig.lat) > 1e-4 || Math.abs(t.lon - t.orig.lon) > 1e-4);
+  const changed = (t) => !t.orig || moved(t) || t.name !== t.orig.name || (t.capital && !t.orig.capital);
+  function edits() {
+    const pins = allSites.filter((t) => !t.struck && (t.pinned || changed(t)));
+    const struck = new Set((siteData && siteData.strikes) || []);
+    for (const t of allSites) if (t.orig && !t.pinned && (t.struck || changed(t))) struck.add(t.id);
+    return { pins, strikes: [...struck].sort((a, b) => a - b) };
+  }
+  function ronString(v) { return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
+  function writeRon() {
+    const { pins, strikes } = edits();
+    const lines = ["    pins: ["];
+    for (const t of pins) lines.push(`        (kind: ${t.kind.rust}, lat: ${t.lat.toFixed(4)}, lon: ${t.lon.toFixed(4)}, name: Some(${ronString(t.name)}), capital: ${t.capital ? "true" : "false"}),`);
+    lines.push("    ],", `    strikes: [${strikes.join(", ")}],`);
+    $("ron").value = lines.join("\n");
+    const n = allSites.filter((t) => t.struck || changed(t)).length;
+    $("editCount").textContent = n ? `(${n} edited)` : "";
+    saveEdits();
+  }
+  // Your edits survive a reload of this page (this browser only).
+  function saveEdits() {
+    try {
+      const edited = allSites.filter((t) => t.struck || changed(t)).map((t) => ({
+        id: t.orig ? t.id : null, kind: t.kind.rust, lat: t.lat, lon: t.lon, name: t.name, capital: t.capital, struck: !!t.struck }));
+      localStorage.setItem("world-map-site-edits", JSON.stringify(edited));
+    } catch (e) { /* storage may be off */ }
+  }
+  function restoreEdits() {
+    let edited = [];
+    try { edited = JSON.parse(localStorage.getItem("world-map-site-edits") || "[]"); } catch (e) { edited = []; }
+    for (const e of edited) {
+      let t = e.id !== null ? allSites.find((s) => s.orig && s.id === e.id) : null;
+      if (!t) {
+        if (e.id !== null) continue;
+        t = { id: "new" + nextUid++, kind: kindOf(e.kind), radius: radiusOf(kindOf(e.kind)), home: false, pinned: false, river: false, orig: null };
+        allSites.push(t);
+      }
+      place(t, e.lat, e.lon); t.name = e.name; t.struck = e.struck;
+      if (e.capital) setCapital(t, false);
+    }
+  }
+  function radiusOf(kind) {
+    const k = siteData && siteData.kinds.find((q) => q.kind === kind.rust);
+    return k ? k.radius_m : 50;
+  }
+  function setCapital(t, refresh = true) {
+    for (const s of allSites) s.capital = false;
+    t.capital = true;
+    if (refresh) refreshSites();
+  }
+  function siteAt(sx, sy) {
+    let best = null, bestD = 12;
+    for (const t of sites) for (const k of [-1, 0, 1]) {
+      const [x, y] = toScreen(t.x + k * W, t.y);
+      const d = Math.hypot(x - sx, y - sy);
+      if (d < bestD) { bestD = d; best = t; }
+    }
+    return best;
+  }
+  function select(t) {
+    selected = t;
+    $("selected").hidden = !t;
+    if (t) {
+      $("siteName").value = t.name;
+      $("makeCapital").disabled = t.kind.id !== "walled" || t.capital;
+      $("selectedNote").textContent = `${t.capital ? "The capital, a walled town" : t.kind.name}${t.orig ? `, site ${t.id}` : ", added by you"}${t.home ? ", near the spawn" : ""}.`;
+    }
+    draw();
+  }
+  // What the rules refuse outright in a pin (decision 5): the sea, and a pentagon.
+  function refusal(t) {
+    const s = sampleWorld(t.x, t.y);
+    if (s && s.alt < 0) return "stands at sea";
+    for (const p of pentagons()) if (arc(p, t.d) < t.radius + 90) return "stands on a pentagon";
+    return null;
+  }
 
   // ---- Offscreen layers ----------------------------------------------------
   const nightCanvas = document.createElement("canvas"); nightCanvas.width = 512; nightCanvas.height = 256;
@@ -608,9 +654,18 @@
           g.addColorStop(1, "rgba(240,160,70,0)");
           ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, reach, 0, 2 * Math.PI); ctx.fill();
         }
+        // The footprint, once it is bigger than the marker.
+        const lat = Math.asin(Math.max(-1, Math.min(1, site.d[1])));
+        const ry = site.radius / M_PER_PX * state.s, rx = ry / Math.max(Math.cos(lat), 0.05);
+        if (ry > 6) {
+          ctx.strokeStyle = changed(site) ? "rgba(240,180,76,0.9)" : "rgba(244,239,228,0.7)"; ctx.lineWidth = 1.2;
+          ctx.setLineDash(changed(site) ? [5, 4] : []);
+          ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
+        }
         const size = big ? 5 : 3.5;
+        if (site === selected) { ctx.strokeStyle = "#6cc3cf"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, size + 8, 0, 2 * Math.PI); ctx.stroke(); }
         ctx.fillStyle = night > 0.5 ? "#ffe2a8" : "#1b1510";
-        ctx.strokeStyle = night > 0.5 ? "rgba(255,200,120,0.9)" : "#f0e6d0";
+        ctx.strokeStyle = changed(site) ? "#f0b44c" : night > 0.5 ? "rgba(255,200,120,0.9)" : "#f0e6d0";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         if (big) { ctx.rect(x - size, y - size, size * 2, size * 2); } else { ctx.arc(x, y, size, 0, 2 * Math.PI); }
@@ -664,11 +719,11 @@
     const s = sampleWorld(x, y);
     if (!s) return;
     $("rGround").textContent = s.alt < 0 ? `sea, ${-s.alt} m deep${-s.alt <= 6 ? " (shallows)" : -s.alt <= 40 ? " (shelf)" : ""}` : `${s.alt} m up`;
-    const b = BIOMES[state.scale === "today" ? s.today : s.four];
-    $("rBiome").textContent = s.alt < 0 ? "ocean" : `${b}${state.scale === "today" ? "" : `, as shipped ${BIOMES[s.today]}`}`;
+    const b = BIOMES[optionBiome(s)];
+    $("rBiome").textContent = s.alt < 0 ? "ocean" : `${b}${state.scale === "today" ? "" : `, version 5 ${BIOMES[s.today]}`}`;
     const site = sites.find((t) => Math.hypot((t.x - x) * state.s, (t.y - y) * state.s) < 10 || Math.hypot((t.x - x - W) * state.s, (t.y - y) * state.s) < 10);
     $("rOverlayName").textContent = site ? "place" : "layer";
-    $("rOverlay").textContent = site ? `${site.name}, ${site.capital ? "the capital" : site.kind.name}` : ({ none: "the planet", biomes: `biomes at ${state.scale === "today" ? "as shipped" : state.scale + " m"}`, temperature: "mean surface temperature", ice: "sea ice", fish: "fish ranges" })[state.overlay] || (weatherOn() ? `${weatherOn().meta.name.toLowerCase()}, now` : "");
+    $("rOverlay").textContent = site ? `${site.name}, ${site.capital ? "the capital" : site.kind.name}${site.river ? ", on a river" : ""}` : ({ none: "the planet", biomes: "biomes, version 6", temperature: "mean surface temperature", ice: "sea ice", fish: "fish ranges" })[state.overlay] || (weatherOn() ? `${weatherOn().meta.name.toLowerCase()}, now` : "");
   }
 
   // ---- The base map's finer levels (decision 9) -------------------------------------
@@ -818,6 +873,13 @@
     $("overlayNote").hidden = name !== "none";
     draw(); readPointer();
   }
+  // The desert options (fewer-deserts, survey B6): the desert's share of the
+  // temperate land, the rest split evenly between fields and jungle.
+  const DESERT_OPTIONS = { today: "a third (version 5)", quarter: "a quarter", sixth: "half as much", tenth: "a tenth" };
+  function optionBiome(s) {
+    if (s.biomes) return s.biomes[state.scale];
+    return state.scale === "today" ? s.today : s.four;
+  }
   function setScale(scale) {
     state.scale = scale;
     for (const b of document.querySelectorAll("#scales button")) b.setAttribute("aria-pressed", String(b.dataset.scale === scale));
@@ -829,10 +891,8 @@
       const v = document.createElement("span"); v.textContent = shares ? `${Math.round(shares[name] * 100)}%` : "";
       key.append(i, n, v);
     }
-    $("scaleNote").textContent = scale === "today"
-      ? "The planet as shipped: moisture varies every 188 m and the thresholds sit far out, so fields cover most of the temperate land."
-      : `Moisture varies every ${scale} m, with thresholds retuned so fields, desert and jungle with swamp take a third each${scale === "750" ? ". This is your choice (survey B1)." : "."} Shares are of the land.`;
-    sites = placeSites(); listPlaces(); draw(); readPointer();
+    $("scaleNote").textContent = "Version 6 as built: the desert is half version 5's, a sixth of the temperate land (your B6, \"10.5 % desert\"), and the fields and the jungle split what it gave up. Biomes vary every 750 m (survey B1). Shares are of the land.";
+    listPlaces(); draw(); readPointer();
   }
   function listPlaces() {
     const box = $("places"); box.textContent = "";
@@ -843,10 +903,14 @@
       const n = document.createElement("span"); n.textContent = s.name + (s.home ? " (near you)" : "");
       const k = document.createElement("span"); k.textContent = s.capital ? "capital" : s.kind.name;
       b.append(n, k);
-      b.addEventListener("click", () => { state.cx = s.x; state.cy = s.y; state.s = Math.max(state.s, 6); clampView(); draw(); });
+      b.addEventListener("click", () => { state.cx = s.x; state.cy = s.y; state.s = Math.max(state.s, 6); clampView(); if (editing()) select(s); draw(); });
       box.append(b);
     }
     $("placeCount").textContent = `(${sites.length})`;
+    const short = siteData && siteData.shortfall.length ? ` Short of target: ${siteData.shortfall.map((q) => `${q.missing} ${kindOf(q.kind).name}`).join(", ")}.` : "";
+    $("sitesNote").textContent = siteData
+      ? `Placed by the game's rules on version 6 (desert at half), sites version ${siteData.sites_version}.${short}`
+      : "The site list did not load.";
   }
   function setHour(h) {
     state.hour = ((h % 24) + 24) % 24;
@@ -871,14 +935,67 @@
   }
 
   // ---- Input --------------------------------------------------------------------
-  let drag = null;
-  canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, cx: state.cx, cy: state.cy }; canvas.setPointerCapture(e.pointerId); canvas.classList.add("dragging"); });
+  let drag = null, siteDrag = null;
+  const editing = () => $("editSites").checked;
+  function worldLatLon(sx, sy) {
+    const [x, y] = toWorld(sx, sy);
+    return [Math.max(-89.9, Math.min(89.9, (0.5 - y / H) * 180)), ((x / W) % 1 + 1) % 1 * 360 - 180];
+  }
+  canvas.addEventListener("pointerdown", (e) => {
+    const r = canvas.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+    canvas.setPointerCapture(e.pointerId);
+    if (editing() && addArmed) {
+      const kind = kindOf($("addKind").value);
+      const t = { id: "new" + nextUid++, kind, radius: radiusOf(kind), home: false, pinned: false, river: false, orig: null, capital: false };
+      const [lat, lon] = worldLatLon(sx, sy); place(t, lat, lon);
+      const why = refusal(t);
+      if (why) { $("editNote").textContent = `A ${kind.name} there ${why}: the game refuses that pin.`; $("editNote").className = "note warn"; return; }
+      const taken = new Set(allSites.map((q) => q.name));
+      let n = 1; while (taken.has(`New ${kind.name} ${n}`)) n++;
+      t.name = `New ${kind.name} ${n}`;
+      allSites.push(t); addArmed = false; $("addSite").setAttribute("aria-pressed", "false");
+      $("editNote").textContent = `Added. Give it a name.`; $("editNote").className = "note";
+      refreshSites(); select(t); $("siteName").focus(); return;
+    }
+    if (editing()) {
+      const t = siteAt(sx, sy);
+      if (t) { select(t); siteDrag = { t, lat: t.lat, lon: t.lon, moved: false }; canvas.classList.add("dragging"); return; }
+    }
+    drag = { x: e.clientX, y: e.clientY, cx: state.cx, cy: state.cy }; canvas.classList.add("dragging");
+  });
   canvas.addEventListener("pointermove", (e) => {
     const r = canvas.getBoundingClientRect(); state.pointer = [e.clientX - r.left, e.clientY - r.top];
-    if (drag) { state.cx = drag.cx - (e.clientX - drag.x) / state.s; state.cy = drag.cy - (e.clientY - drag.y) / state.s; clampView(); draw(); }
+    if (siteDrag) { const [lat, lon] = worldLatLon(state.pointer[0], state.pointer[1]); place(siteDrag.t, lat, lon); siteDrag.moved = true; draw(); }
+    else if (drag) { state.cx = drag.cx - (e.clientX - drag.x) / state.s; state.cy = drag.cy - (e.clientY - drag.y) / state.s; clampView(); draw(); }
     readPointer();
   });
-  canvas.addEventListener("pointerup", () => { drag = null; canvas.classList.remove("dragging"); });
+  canvas.addEventListener("pointerup", () => {
+    if (siteDrag && siteDrag.moved) {
+      const why = refusal(siteDrag.t);
+      if (why) { place(siteDrag.t, siteDrag.lat, siteDrag.lon); $("editNote").textContent = `Put back: there it ${why}.`; $("editNote").className = "note warn"; }
+      else { $("editNote").textContent = `${siteDrag.t.name} moved.`; $("editNote").className = "note"; }
+      refreshSites(); select(siteDrag.t);
+    }
+    siteDrag = null; drag = null; canvas.classList.remove("dragging");
+  });
+  $("editSites").addEventListener("change", (e) => { $("editPanel").hidden = !e.target.checked; if (!e.target.checked) { select(null); addArmed = false; } });
+  for (const k of KINDS) $("addKind").append(new Option(k.name, k.rust));
+  $("addSite").addEventListener("click", () => { addArmed = !addArmed; $("addSite").setAttribute("aria-pressed", String(addArmed)); $("editNote").textContent = addArmed ? "Click the map where it stands." : ""; $("editNote").className = "note"; });
+  $("siteName").addEventListener("input", (e) => { if (!selected) return; selected.name = e.target.value.trim() || selected.name; listPlaces(); writeRon(); draw(); });
+  $("makeCapital").addEventListener("click", () => { if (selected && selected.kind.id === "walled") { setCapital(selected); select(selected); } });
+  $("strikeSite").addEventListener("click", () => {
+    if (!selected) return;
+    if (!selected.orig) allSites = allSites.filter((q) => q !== selected); else selected.struck = true;
+    $("editNote").textContent = `${selected.name} struck.`; $("editNote").className = "note";
+    select(null); refreshSites();
+  });
+  $("copyRon").addEventListener("click", async () => {
+    writeRon();
+    try { await navigator.clipboard.writeText($("ron").value); $("editNote").textContent = "Copied. Paste it over pins and strikes in sites.ron, or send it to me."; }
+    catch (e) { $("ron").select(); $("editNote").textContent = "Selected: copy it with Ctrl+C."; }
+    $("editNote").className = "note";
+  });
+  $("resetEdits").addEventListener("click", () => { try { localStorage.removeItem("world-map-site-edits"); } catch (e) { /* off */ } select(null); buildSites(); $("editNote").textContent = "Every edit undone."; });
   canvas.addEventListener("wheel", (e) => { e.preventDefault(); const r = canvas.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
   $("zoomIn").addEventListener("click", () => zoomAt(1.6, cssW() / 2, cssH() / 2));
   $("zoomOut").addEventListener("click", () => zoomAt(1 / 1.6, cssW() / 2, cssH() / 2));
@@ -928,14 +1045,16 @@
 
   // ---- Start --------------------------------------------------------------------
   async function start() {
-    const names = ["base.png", "height.png", "biomes-today.png", "biomes-188.png", "biomes-375.png", "biomes-750.png", "temperature.png", "sea-ice.png", "fish.png", "game-view.jpg"];
+    const names = ["base.png", "height.png", "biome-codes.png", "biomes-today.png", "biomes-quarter.png", "biomes-sixth.png", "biomes-tenth.png", "temperature.png", "sea-ice.png", "fish.png", "game-view.jpg"];
     const loaded = await Promise.all(names.map(loadImage));
     names.forEach((n, i) => { images[n.replace(/\.(png|jpg)$/, "")] = loaded[i]; });
     try { summary = await (await fetch("world-map/summary.json")).json(); } catch (e) { summary = null; }
+    try { siteData = await (await fetch("world-map/sites.json")).json(); } catch (e) { siteData = null; }
     const frames = summary && summary.weather_frames ? summary.weather_frames : 0;
     images.clouds = (await Promise.all(Array.from({ length: frames }, (_, k) => loadImage(`clouds-${String(k).padStart(2, "0")}.png`)))).filter(Boolean);
     if (images["game-view"]) $("gameView").style.backgroundImage = `url(${images["game-view"].src})`;
     if (images.height) heightData = pixels(images.height);
+    if (images["biome-codes"]) codesData = pixels(images["biome-codes"]);
     if (images.fish) fishData = pixels(images.fish);
     const select = $("species");
     select.append(new Option("Every species: how many live here", "all"));
@@ -955,7 +1074,8 @@
     }
     drawFish(); fishKey();
     resize();
-    setScale("750");
+    buildSites();
+    setScale("today");
     // Open at the spawn's noon on its continent. The night side, and the
     // clouds and rain, are off until asked for (the owner, 2026-09-27); with
     // the night side on, the towns light up at dusk.

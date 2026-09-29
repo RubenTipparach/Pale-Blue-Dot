@@ -257,8 +257,18 @@ pub fn colour_block(
 /// the version is in the name, so a new generator reads nothing of the old
 /// one's. It is passed, not read at the moment of saving, since a switch of
 /// generator can come between a build's start and its save.
+///
+/// A world with towns has their ground in its name too (`cities-in-the-world`
+/// decision 9): a map cached before the towns stood never shows the ground
+/// they were terraced over.
 pub fn cache_name(seed: u64, generator: u32) -> String {
-    format!("map-base-g{generator}-{seed:016x}.png")
+    match pbd_core::settlement::ground::installed() {
+        Some(ground) => format!(
+            "map-base-g{generator}-{seed:016x}-t{:016x}.png",
+            ground.digest()
+        ),
+        None => format!("map-base-g{generator}-{seed:016x}.png"),
+    }
 }
 
 /// Pack a texel for the cache: its altitude in 16 bits (floored metres, the

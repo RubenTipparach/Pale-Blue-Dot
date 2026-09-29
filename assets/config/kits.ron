@@ -1,0 +1,40 @@
+// What a building is made of (`tenebris-towns` section 9), read by
+// `pbd_core::settlement`. The mockup's KITS table (docs/mockups/towns.html),
+// field for field. A kit never changes how a building is cut: walls on
+// edges, floors in cells, a storey of three layers, the same stairs.
+//
+// `walls` is one entry per storey, the last repeating: its outside, inside
+// and edge (the wall's end and top) textures, and its thickness in metres.
+// Texture names are `assets/textures/settlement/<name>.png`.
+// `roof`: a gable in `roof_material` ("thatch", "shingle", "slate", "tile",
+// "turf"), a six-sided `Cone`, or `Flat` with a parapet. `pitch` is rise
+// over run (1 is 45 degrees). Doors and windows in metres, wide by high.
+(
+    kits: [
+        (name: "straw", label: "Straw hut", walls: [(outside: "reed", inside: "reed", edge: "timber", thickness_m: 0.3)],
+            roof: Cone, roof_material: "thatch", gable: "reed", floor: "dirt", hut: true, door_m: (0.9, 1.9)),
+        (name: "mud", label: "Mud hut", walls: [(outside: "cob", inside: "cob", edge: "cob", thickness_m: 0.5)],
+            roof: Gable, roof_material: "turf", pitch: 0.45, gable: "cob", floor: "dirt", hut: true, door_m: (0.9, 1.9), window_m: Some((0.4, 0.45))),
+        (name: "timber", label: "Timber", walls: [(outside: "boards", inside: "boards", edge: "timber", thickness_m: 0.25)],
+            roof: Gable, roof_material: "shingle", gable: "boards", floor: "plank"),
+        (name: "halftimber", label: "Half-timbered", walls: [
+                (outside: "stone", inside: "plaster", edge: "stone", thickness_m: 0.5),
+                (outside: "halftimber", inside: "plaster", edge: "timber", thickness_m: 0.3, per_face: true),
+            ],
+            roof: Gable, roof_material: "thatch", gable: "halftimber", floor: "flag"),
+        (name: "brick", label: "Red brick", walls: [(outside: "brick", inside: "plaster", edge: "stone", thickness_m: 0.4)],
+            roof: Gable, roof_material: "tile", gable: "brick", floor: "plank", chimney: Some("brick")),
+        (name: "brickbuff", label: "Buff brick", walls: [(outside: "brickbuff", inside: "plaster", edge: "brickbuff", thickness_m: 0.4)],
+            roof: Gable, roof_material: "slate", gable: "brickbuff", floor: "plank", chimney: Some("brickbuff")),
+        (name: "brickdark", label: "Clinker brick", walls: [(outside: "brickdark", inside: "plaster", edge: "stone", thickness_m: 0.4)],
+            roof: Gable, roof_material: "tile", gable: "brickdark", floor: "claytile", chimney: Some("brickdark")),
+        (name: "stone", label: "Fieldstone", walls: [(outside: "fieldstone", inside: "plaster", edge: "fieldstone", thickness_m: 0.5)],
+            roof: Gable, roof_material: "thatch", gable: "fieldstone", floor: "flag", chimney: Some("fieldstone")),
+        (name: "ashlar", label: "Ashlar", walls: [(outside: "stone", inside: "stone", edge: "stone", thickness_m: 0.5)],
+            roof: Gable, roof_material: "slate", gable: "stone", floor: "flag"),
+        (name: "clay", label: "Clay", walls: [(outside: "clay", inside: "clay", edge: "clay", thickness_m: 0.5)],
+            roof: Flat, roof_material: "claytile", gable: "clay", floor: "claytile", window_m: Some((0.6, 0.8)), chimney: Some("clay")),
+        (name: "marble", label: "Marble", walls: [(outside: "marble", inside: "marble", edge: "marble", thickness_m: 0.5)],
+            roof: Gable, roof_material: "tile", pitch: 0.55, gable: "marble", floor: "marblefloor", columns: true),
+    ],
+)

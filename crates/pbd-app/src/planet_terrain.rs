@@ -109,11 +109,19 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
     planet_gen::river_channel(cfg, direction.normalize_or(Vec3::Y))
 }
 
+///
+/// Bit [`CLEARED_BIT`] is set in a town's footprint (`cities-in-the-world`
+/// decision 3): the foliage pass grows no tree there.
 pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
     let biome = planet_gen::biome_at(terrain_config(), d, height);
-    material_index(d, height, biome) | (biome as u32) << 8
+    let cleared = pbd_core::settlement::ground::cleared(terrain_config(), d);
+    material_index(d, height, biome) | (biome as u32) << 8 | u32::from(cleared) << CLEARED_BIT
 }
+
+/// The bit of a record's material word that says no tree grows on it.
+/// `planet_visibility.wgsl`'s foliage pass reads it.
+pub const CLEARED_BIT: u32 = 24;
 
 /// Which of `planet_surface.wgsl`'s material codes a material is drawn in.
 ///
@@ -239,7 +247,9 @@ pub const GRASS_SIDE: u32 = 11;
 pub const SNOW_SIDE: u32 = 12;
 
 fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
-    let material = planet_gen::top_material(terrain_config(), direction, height);
+    // A town's lanes and floors are its own top (`cities-in-the-world`).
+    let material = pbd_core::settlement::ground::top(terrain_config(), direction)
+        .unwrap_or_else(|| planet_gen::top_material(terrain_config(), direction, height));
     match (material, biome) {
         // Beach sand below the waterline is the seabed, which the water pass
         // tints; a desert dune and a swamp sward are their own tiles.
@@ -297,6 +307,34 @@ mod tests {
                 "planet_surface.wgsl should declare `{line}`"
             );
         }
+    }
+
+    /// The column's span is written three times: `column::BASE_M` and
+    /// `LAYERS` in pbd-core, `COLUMN_BASE_M` and `COLUMN_TOP_M` in
+    /// `planet_surface.wgsl`, and `COLUMN_BASE_M` again in
+    /// `planet_visibility.wgsl`. Both shaders say a test holds them together;
+    /// until `taller-mountains` (decision 7) none did. This reads the real
+    /// files, so a tier that grows in one place and not the others fails
+    /// here rather than drawing a flattened summit.
+    #[test]
+    fn the_shaders_carry_the_column_span() {
+        use pbd_core::column;
+        let base = format!("const COLUMN_BASE_M: f32 = {:.1};", column::BASE_M as f32);
+        let top = format!(
+            "const COLUMN_TOP_M: f32 = {:.1};",
+            (column::BASE_M + column::LAYERS as i32) as f32
+        );
+        let surface = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        let visibility = include_str!("../../../assets/shaders/planet_visibility.wgsl");
+        assert!(
+            surface.contains(&base),
+            "planet_surface.wgsl lacks `{base}`"
+        );
+        assert!(surface.contains(&top), "planet_surface.wgsl lacks `{top}`");
+        assert!(
+            visibility.contains(&base),
+            "planet_visibility.wgsl lacks `{base}`"
+        );
     }
 
     /// The voxel light rule is written TWICE: in `pbd_core::light`, where it
@@ -567,8 +605,37 @@ mod tests {
         assert!(surface_height(Vec3::ZERO).is_finite());
     }
 
-    /// The relief is authored for a walker: summits near 150 m rather than
-    /// the +432 m the 4,000 m preview carried. The sea keeps more of its
+    /// Every version's summit stands under the cloud base
+    /// (`taller-mountains` decision 6). Ground above it breaks what was
+    /// written for ground below the cloud: rain shafts, the lightning bolt's
+    /// direction, the rain volume round an eye above the base, and the map's
+    /// overlay. Measured on each carried version's own ground, as its
+    /// columns floor it, with the top cell's metre on it.
+    #[test]
+    fn the_summit_stands_under_the_cloud_base() {
+        let base = crate::sky::CLOUD_RADIUS - PLANET_RADIUS;
+        let samples = 300_000;
+        let golden = std::f32::consts::PI * (3. - 5_f32.sqrt());
+        for version in 4..=pbd_core::terrain::GENERATOR_VERSION {
+            let cfg = TerrainConfig::for_version(version).unwrap();
+            let peak = (0..samples)
+                .map(|i| {
+                    let y = 1. - 2. * (i as f32 + 0.5) / samples as f32;
+                    let r = (1. - y * y).max(0.).sqrt();
+                    let a = golden * i as f32;
+                    pbd_core::column::surface_m(&cfg, Vec3::new(r * a.cos(), y, r * a.sin()))
+                })
+                .fold(f32::MIN, f32::max);
+            assert!(
+                peak + 1.0 < base,
+                "version {version}'s summit {peak} m reaches the cloud base at {base} m"
+            );
+        }
+    }
+
+    /// The relief is authored for a walker: summits about 290 m (version 6,
+    /// survey H1) in ranges wide enough to walk up, rather than the +432 m
+    /// cliffs the 4,000 m preview carried. The sea keeps more of its
     /// range than the land, because a shelf a walker cannot submerge in is
     /// not a sea. Measured over a Fibonacci sample of the sphere so no seam
     /// or pole is favoured.
@@ -654,7 +721,9 @@ mod tests {
             peak = peak.max(h);
             floor = floor.min(h);
         }
-        assert!((120.0..=180.0).contains(&peak), "summit {peak} m");
+        // The band the owner chose (survey H1, "about 290 m"), under the
+        // cloud base (`the_summit_stands_under_the_cloud_base`).
+        assert!((250.0..=295.0).contains(&peak), "summit {peak} m");
         // A shelf a walker cannot submerge in is not a sea: the water within
         // sight of a standing player has to be deeper than their eye.
         let shelf = shore_profile();

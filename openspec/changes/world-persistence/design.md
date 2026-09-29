@@ -251,6 +251,37 @@ opens a fresh unsaved world with no word said. Found, not fixed: the fix is
 to carry the refusal into the running app (a resource the saves screen shows
 on its first frame) rather than to log it.
 
+**11. How group 3 is built (2026-09-29, written before the code).** The
+first record kind is `city-sites`' `site`, so group 3 is built now, for it.
+- **A record** is `pbd_core::records::Record`: a kind (a word), a numeric
+  id, the kind's schema version, and a body. The body is one line of RON,
+  kept as text. A build parses the body only of the kinds it knows; every
+  other record is held as its text.
+- **The `rec` line** is `rec <author> <kind> <id> <schema> <body>`. It is
+  the record's whole new value (decision 5). The last line for a key wins.
+  The journal is append-only, so a line of a kind this build does not know is
+  never rewritten: it stays in the file byte for byte. A checkpoint (group 5)
+  writes the held text back verbatim.
+- **Author tokens** are `@p` (player 0), `@p<n>` (player n), `@c` (the
+  world's creation), and `@w<process>:<kind>/<id>` (a process, for a
+  record). A token leads the line.
+  - **Refined from decision 5:** a player's line is still written with no
+    token, as today, because no token already reads as the player's. The
+    player's digs, picks and catches then stay readable by every older build.
+  - A `rec` line always carries its author, and so does any line a process
+    or the creation writes.
+- **The yield set** is `pbd_core::records::YieldSet`. It holds:
+  - the cells a player's lines changed;
+  - the record fields a player's `rec` lines changed, where a field is a
+    top-level name in the body's RON struct.
+
+  A world proposal is a list of cell edits and records. It is checked whole
+  against the set before any of it is written, and refused whole, naming the
+  first thing it touched. Pieces join the set with `cities-in-the-world`,
+  which makes the first ones.
+- **Not yet:** processes (group 4), and regions and checkpoints (group 5).
+  The record store is rebuilt by replaying the log, as the edits are.
+
 ## Risks / Trade-offs
 
 - [Migrating hashed keys guesses wrong for an ambiguous edit] → Ambiguity is

@@ -3,10 +3,14 @@
 //! `openspec/changes/world-map` task 1.1 and `bigger-biomes` task 1.1: the
 //! map mockup is drawn from what it writes, and nothing in the game reads it.
 //!
-//!     cargo run --release -p pbd-core --example world_map -- [out.bin] [width] [base]
+//!     cargo run --release -p pbd-core --example world_map -- [out.bin] [width] [base|deserts]
 //!
 //! `base` writes the first three planes alone: what the map's finer levels
 //! need (`world-map` decision 9), without the biome scales and their report.
+//! `deserts` writes, after them, the shipped generator's biome with the
+//! desert at a quarter, a sixth and a tenth of the temperate land, the rest
+//! split evenly between fields and jungle (`fewer-deserts`, survey B6), in
+//! place of the scales.
 //!
 //! It writes an equirectangular raster, 2,048 x 1,024 by default, of
 //! little-endian f32 planes after a header (`PBDMAP01`, width, height, plane
@@ -64,8 +68,16 @@ fn main() {
         texels.iter().map(|t| t.biome as u32 as f32).collect(),
     ];
     let base_only = args.get(3).is_some_and(|a| a == "base");
+    let deserts = args.get(3).is_some_and(|a| a == "deserts");
     if !base_only {
-        report("today, 188 m at 0.36 / 0.64", &planes[2], &directions);
+        report(
+            &format!(
+                "today, {:.0} m at {:.3} / {:.3}",
+                cfg.moisture_m, cfg.desert_below, cfg.wet_above
+            ),
+            &planes[2],
+            &directions,
+        );
     }
 
     // The land that reaches the moisture split: the ocean, the beach, the
@@ -80,8 +92,10 @@ fn main() {
             )
         })
         .collect();
-    let scales: &[f32] = if base_only { &[] } else { &SCALES };
-    if !base_only {
+    let scales: &[f32] = if base_only || deserts { &[] } else { &SCALES };
+    if deserts {
+        desert_planes(&cfg, &directions, &texels, &temperate, &mut planes);
+    } else if !base_only {
         println!();
         println!(
             "| moisture_m | q10 | q33 | q50 | q67 | q90 | desert_below | wet_above | fields | desert | jungle | swamp |"
@@ -145,6 +159,54 @@ fn main() {
         }
     }
     println!("wrote {out}: {} planes", planes.len());
+}
+
+/// The desert's candidate shares of the temperate land (`fewer-deserts`).
+const DESERTS: [(&str, f32); 3] = [
+    ("a quarter", 0.25),
+    ("a sixth", 1.0 / 6.0),
+    ("a tenth", 0.1),
+];
+
+/// A biome plane for each of [`DESERTS`], on the shipped moisture field:
+/// `desert_below` at the desert's share of the temperate land and
+/// `wet_above` halfway through the rest, so fields and jungle split evenly
+/// what the desert gives up. Prints each one's thresholds and shares.
+fn desert_planes(
+    cfg: &TerrainConfig,
+    directions: &[Vec3],
+    texels: &[pbd_core::map::Texel],
+    temperate: &[bool],
+    planes: &mut Vec<Vec<f32>>,
+) {
+    let mut samples: Vec<(f32, f32)> = directions
+        .iter()
+        .zip(temperate)
+        .filter(|(_, t)| **t)
+        .map(|(&d, _)| (moisture(cfg, d), area(d)))
+        .collect();
+    samples.sort_by(|a, b| a.0.total_cmp(&b.0));
+    println!();
+    println!("| desert's share of the temperate land | desert_below | wet_above |");
+    println!("| --- | ---: | ---: |");
+    for (name, share) in DESERTS {
+        let tuned = TerrainConfig {
+            desert_below: quantile(&samples, share),
+            wet_above: quantile(&samples, share + (1.0 - share) / 2.0),
+            ..*cfg
+        };
+        println!(
+            "| {name} | {:.3} | {:.3} |",
+            tuned.desert_below, tuned.wet_above
+        );
+        let biomes: Vec<f32> = directions
+            .iter()
+            .zip(texels)
+            .map(|(&d, t)| biome_at(&tuned, d, t.altitude_m) as u32 as f32)
+            .collect();
+        report(&format!("desert {name}"), &biomes, directions);
+        planes.push(biomes);
+    }
 }
 
 /// The direction through the centre of a pixel: the map's own projection,

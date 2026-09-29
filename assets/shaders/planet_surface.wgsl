@@ -152,7 +152,7 @@ struct ColumnRec {
 // stone at whatever depth it sits. `ColumnTier::gpu_materials` packs it.
 @group(0) @binding(6) var<storage,read> materials: array<u32>;
 const MATERIAL_PER_WORD: u32 = 8u;
-const MATERIAL_WORDS: u32 = 40u;
+const MATERIAL_WORDS: u32 = 63u;
 // The render code of the layer `layer` of column slot `slot` (plus one, as
 // the record carries it). Off the tier, or past the span: air.
 fn material_at(slot: u32, layer: u32) -> u32 {
@@ -166,7 +166,7 @@ fn material_at(slot: u32, layer: u32) -> u32 {
 // `column::BASE_M` and `LAYERS` in pbd-core are the one source; the visibility
 // shader carries BASE_M too and a test holds all three together.
 const COLUMN_BASE_M: f32 = -145.0;
-const COLUMN_TOP_M: f32 = 175.0;
+const COLUMN_TOP_M: f32 = 359.0;
 const COLUMN_RUNS: u32 = 4u;
 // A column of `COLUMN_RUNS` runs has one more stretch of air than it has runs:
 // under the lowest, between each pair, and over the highest.
@@ -328,7 +328,7 @@ fn column_slot(cell: Cell) -> u32 { return cell.metadata.z >> 16u; }
 
 // Layers per packed word, and words per slot. `LAYERS / LIGHT_PER_WORD`.
 const LIGHT_PER_WORD: u32 = 4u;
-const LIGHT_WORDS: u32 = 80u;
+const LIGHT_WORDS: u32 = 126u;
 // The brightest a cell is: Tenebris's `voxel_sky_max`.
 const LIGHT_MAX: f32 = 15.0;
 // Notch's three-step ladder, which is the reference's own comment and numbers:
@@ -366,7 +366,7 @@ const TORCH_TINT: vec3<f32> = vec3<f32>(1.00, 0.70, 0.30);
 const TORCH_GAIN: f32 = 1.25;
 
 // The layer holding an altitude, or a sentinel past the top.
-const LIGHT_LAYERS: u32 = 320u;
+const LIGHT_LAYERS: u32 = 504u;
 fn light_layer(altitude: f32) -> u32 {
     let index = floor(altitude - COLUMN_BASE_M);
     if index < 0.0 { return LIGHT_LAYERS; }

@@ -27,7 +27,11 @@ pub mod saves;
 #[cfg(feature = "desktop")]
 pub mod sea;
 #[cfg(feature = "desktop")]
+pub mod sites;
+#[cfg(feature = "desktop")]
 pub mod sky;
+#[cfg(feature = "desktop")]
+pub mod towns;
 #[cfg(feature = "desktop")]
 pub mod vehicles;
 #[cfg(feature = "desktop")]

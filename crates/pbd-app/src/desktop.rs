@@ -6,6 +6,7 @@ mod frame_graph;
 mod guide;
 mod hud;
 mod map_screen;
+mod map_sites;
 mod menu;
 mod overlay_ui;
 mod pack;
@@ -114,6 +115,11 @@ pub struct Launch {
     /// the land and the default spawn has none, so without this a walker has
     /// nothing to walk into for the first few hundred metres.
     pub spawn: Option<String>,
+    /// `--at <lat> <lon>`: a new world's walker starts exactly there, in
+    /// degrees, not at the level ground the start search finds, and is set
+    /// back on the ground once the towns are built, so a capture can stand
+    /// in a town (`cities-in-the-world`).
+    pub at: Option<(f32, f32)>,
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
     /// `--weather-at SECONDS` starts the weather field that far into its own
@@ -220,6 +226,7 @@ impl Launch {
             render_offset: Vec3::ZERO,
             height: None,
             spawn: None,
+            at: None,
             rain: 0.0,
             weather_at: 0.0,
             world: None,
@@ -396,6 +403,18 @@ impl Launch {
                 }
                 "--map-night" => result.map.night = true,
                 "--map-clouds" => result.map.clouds = true,
+                "--at" => {
+                    let lat: f32 = args
+                        .get(i + 1)
+                        .and_then(|v| v.parse().ok())
+                        .expect("--at requires a latitude");
+                    let lon: f32 = args
+                        .get(i + 2)
+                        .and_then(|v| v.parse().ok())
+                        .expect("--at requires a longitude");
+                    i += 2;
+                    result.at = Some((lat, lon));
+                }
                 "--map-at" => {
                     let lat: f32 = args
                         .get(i + 1)
@@ -764,6 +783,10 @@ pub fn run(args: &[String]) {
     .add_plugins(pbd_app::drops::DropsPlugin)
     // The world map on M (`world-map`), and how a capture asks it to open.
     .add_plugins(map_screen::MapScreenPlugin)
+    // Each world's city sites, made once and kept in its save (`city-sites`).
+    .add_plugins(pbd_app::sites::SitesPlugin)
+    // The towns standing at their sites (`cities-in-the-world`).
+    .add_plugins(pbd_app::towns::TownsPlugin)
     .insert_resource(launch.map.clone())
     .insert_resource(drops)
     .configure_sets(
@@ -916,6 +939,7 @@ pub fn run(args: &[String]) {
             pitch: launch.pitch.unwrap_or(0.0).to_radians(),
             yaw: launch.yaw.unwrap_or(0.0).to_radians(),
             turn: launch.turn.to_radians(),
+            exact_start: launch.at.is_some(),
             ..default()
         })
         .add_plugins((
@@ -929,6 +953,9 @@ pub fn run(args: &[String]) {
             board: launch.aboard,
             seat: launch.seat,
         });
+        if launch.at.is_some() {
+            app.insert_resource(pbd_app::towns::RespawnInTown);
+        }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
         }
@@ -1307,6 +1334,12 @@ fn fibonacci_sphere(count: usize) -> impl Iterator<Item = Vec3> {
 /// Where the walker, and with it the column tier, is anchored.
 fn spawn_direction(launch: &Launch) -> Vec3 {
     let default = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+    if let Some((lat, lon)) = launch.at {
+        return pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: lat.to_radians(),
+            lon: lon.to_radians(),
+        });
+    }
     if launch.tour && launch.view == "pole" {
         return Vec3::Y;
     }
