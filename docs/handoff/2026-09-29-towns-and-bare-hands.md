@@ -72,7 +72,9 @@ Checks run in the cloud session:
 
 ## The owner's notes on the towns mockup (2026-09-29)
 
-The owner's screenshots are in `docs/handoff/2026-09-29-owner-notes/`. Each
+The owner's screenshots are in `docs/handoff/2026-09-29-owner-notes/`,
+one per note, named in each note below. Open them before starting: they are
+the reference for what is wrong. Each
 note is to be written up in `openspec/` before code (CLAUDE.md). It is
 tracked as `cities-in-the-world` task 0.8.
 
@@ -100,6 +102,16 @@ tracked as `cities-in-the-world` task 0.8.
 7. **The stairwells need more light.** The enclosed stairs, the newel
    stairs and the straight flights, are too dark. Give them a light of their
    own, such as a candle or a lamp on the landing.
+8. **The igloo's geometry needs work** (`igloo.png`, the tundra town at
+   dusk). What the shot shows at the tunnel:
+   - The side walls are flat slabs whose cut ends and inner faces show
+     bare and light-coloured from outside.
+   - The barrel vault sits on the walls as a separate shell, with gaps at
+     its ends, and does not meet the dome.
+   - The dome's opening over the tunnel is a jagged cut.
+
+   Make the tunnel one piece with the dome, built of the same snow blocks,
+   with closed ends and no bare faces.
 
 The game's `game-lane.png` was captured after the commit above and is added
 beside the mockup's. It has not been looked at yet. The other three game
