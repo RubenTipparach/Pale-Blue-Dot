@@ -101,6 +101,8 @@ pub struct ItemIcons {
     pub fish: Vec<Handle<Image>>,
     /// In `Tool::ALL` order.
     pub tools: Vec<Handle<Image>>,
+    /// Bare hands, in the tool slot and the picker.
+    pub hand: Handle<Image>,
     /// In `Material::LAMPS` order.
     pub lights: Vec<Handle<Image>>,
 }
@@ -108,6 +110,11 @@ pub struct ItemIcons {
 impl ItemIcons {
     pub fn tool(&self, tool: pbd_core::inventory::Tool) -> Handle<Image> {
         self.tools[tool.index()].clone()
+    }
+
+    /// What the tool slot shows for what is in hand: a tool, or bare hands.
+    pub fn in_hand(&self, held: Option<pbd_core::inventory::Tool>) -> Handle<Image> {
+        held.map_or_else(|| self.hand.clone(), |tool| self.tool(tool))
     }
 }
 
@@ -138,6 +145,7 @@ pub fn load_icons(
         atlas: atlas.0.clone(),
         fish,
         tools,
+        hand: assets.load(pbd_app::fish::HAND_ICON),
         lights,
     });
 }

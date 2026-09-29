@@ -6,6 +6,13 @@
 1. lights, 2. a) mapping system, b) city maps, c) climate map, fish map then
 finally D) implement cities".**
 
+**The owner (2026-09-29), after "commence 2b, lets get these damn cities up
+to play!" and seeing the sites on the game's map: "I thought you were
+building cities, I wnat shots of the cities".** So 2d comes next, before the
+climate and fish maps (2c). It is built in slices, each ending in shots of a
+town in the game (the design's "Slices"). The first slice is Holbrook, the
+village by a new player's start, standing in the ground.
+
 This is the last step of step 2, and the one the others lead to:
 - `tenebris-towns` designed the settlements and proved them in a mockup: their
   stairs, collision, kits and lights.

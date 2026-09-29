@@ -1783,15 +1783,18 @@ function makeVillage() {
   for (let c = 6; c <= 43; c++) lane(c, 17);
   for (let r = 4; r <= 30; r++) lane(25, r);
   for (let r = 13; r <= 21; r++) for (let c = 21; c <= 29; c++) if (TOPMAT[idx(c, r)] !== "dirt") { AREA[idx(c, r)] = "The green"; }
+  // Two empty columns between the houses of each pair (the owner,
+  // 2026-09-29: "those two buildings are too close to eachotehr"): walls
+  // 5.7 m apart, roofs 3.3 m, so the planet's cell spread cannot close them.
   const homes = [
-    { kit: "stone", c0: 11, c1: 13, r0: 15, r1: 16, front: 16, newel: [11, 15], trade: "hearth" },
+    { kit: "stone", c0: 10, c1: 12, r0: 15, r1: 16, front: 16, newel: [10, 15], trade: "hearth" },
     { kit: "halftimber", c0: 15, c1: 18, r0: 15, r1: 16, front: 16, flight: true, trade: "weaver" },
     { kit: "timber", c0: 31, c1: 33, r0: 15, r1: 16, front: 16, newel: [33, 15], trade: "cooper" },
-    { kit: "halftimber", c0: 35, c1: 38, r0: 15, r1: 16, front: 16, flight: true, trade: "hearth" },
-    { kit: "timber", c0: 11, c1: 14, r0: 18, r1: 19, front: 18, flight: true, trade: "baker" },
+    { kit: "halftimber", c0: 36, c1: 39, r0: 15, r1: 16, front: 16, flight: true, trade: "hearth" },
+    { kit: "timber", c0: 10, c1: 13, r0: 18, r1: 19, front: 18, flight: true, trade: "baker" },
     { kit: "stone", c0: 16, c1: 18, r0: 18, r1: 19, front: 18, newel: [16, 19], trade: "hearth" },
     { kit: "halftimber", c0: 31, c1: 34, r0: 18, r1: 19, front: 18, flight: true, trade: "hearth" },
-    { kit: "timber", c0: 36, c1: 38, r0: 18, r1: 19, front: 18, newel: [38, 19], trade: "potter" },
+    { kit: "timber", c0: 37, c1: 39, r0: 18, r1: 19, front: 18, newel: [39, 19], trade: "potter" },
     { kit: "halftimber", c0: 21, c1: 24, r0: 22, r1: 23, front: 22, flight: true, trade: "hearth", name: "The Plough inn" },
   ];
   homes.forEach((hm, n) => { const out = townHouse(hm, n); if (n === 1) GOTO.house = out; if (n === 0) GOTO.newel = out; if (n === 8) GOTO.inn = out; });

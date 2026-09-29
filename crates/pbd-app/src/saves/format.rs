@@ -286,16 +286,24 @@ pub fn catch_line_of(species: u16, length_cm: u32, slots: &Slots) -> String {
     line
 }
 
-/// `hand tool owned`, one line: the tool's code and one bit per tool owned,
-/// in `Tool::ALL` order.
+/// `hand tool owned`, one line: the tool's code, or `-` for bare hands
+/// (`inventory-grid` decision 8), and one bit per tool owned, in
+/// `Tool::ALL` order.
 pub fn hand_line_of(equipment: &Equipment) -> String {
     let owned = equipment
         .owned()
         .iter()
         .enumerate()
         .fold(0u8, |bits, (i, owns)| bits | (u8::from(*owns) << i));
-    format!("{HAND} {} {owned}\n", tool_code(equipment.held()))
+    let held = equipment
+        .held()
+        .map_or_else(|| BARE.to_string(), |t| tool_code(t).to_string());
+    format!("{HAND} {held} {owned}\n")
 }
+
+/// The `hand` line's tool for bare hands. An older build reads it as a
+/// damaged line and skips it, keeping the tool it last read.
+const BARE: &str = "-";
 
 /// The slot fields of a line: forty, or ten from a line written before the
 /// pack, which is an empty pack. `None` where there are neither.
@@ -359,7 +367,10 @@ pub fn parse_line(line: &str) -> Option<Record> {
         });
     }
     if head == HAND {
-        let held = tool_of(parts.next()?.parse().ok()?)?;
+        let held = match parts.next()? {
+            BARE => None,
+            code => Some(tool_of(code.parse().ok()?)?),
+        };
         let bits: u8 = parts.next()?.parse().ok()?;
         if parts.next().is_some() || bits >= 1 << Tool::ALL.len() {
             return None;
@@ -613,10 +624,24 @@ mod tests {
             parse_line(&hand_line_of(&hand)),
             Some(Record::Hand { equipment: hand })
         );
-        let partial = Equipment::from_parts([true, false, true, false], Tool::Pickaxe);
+        let partial = Equipment::from_parts([true, false, true, false], Some(Tool::Pickaxe));
         assert_eq!(
             parse_line(&hand_line_of(&partial)),
             Some(Record::Hand { equipment: partial })
+        );
+        // Bare hands write `-`, and read back bare; a tool line reads as it
+        // always did (`inventory-grid` decision 8).
+        let bare = Equipment::default();
+        assert_eq!(hand_line_of(&bare), "hand - 15\n");
+        assert_eq!(
+            parse_line("hand - 15"),
+            Some(Record::Hand { equipment: bare })
+        );
+        assert_eq!(
+            parse_line("hand 3 15"),
+            Some(Record::Hand {
+                equipment: Equipment::from_parts([true; 4], Some(Tool::Rod))
+            })
         );
         for bad in [
             "catch 5",
@@ -626,6 +651,8 @@ mod tests {
             "hand 9 15",
             "hand 3 16",
             "hand 3 15 x",
+            "hand -- 15",
+            "hand - 16",
         ] {
             assert!(parse_line(bad).is_none(), "{bad:?} parsed");
         }

@@ -397,13 +397,19 @@ pub fn material_at_depth(top: Material, depth_m: f32) -> Material {
 /// reconciled its cap UP a metre, and both wall rules had to dodge a top that
 /// stood proud of the cap. A surface is the layer boundary under the altitude,
 /// and the cap and the column's top are the same number by construction.
+///
+/// A town's ground (`crate::settlement::ground`) answers here too: its
+/// terrace in its footprint, eased back to this across its margin. This is
+/// the one place it is asked, because every height is read from here.
 pub fn surface_m(terrain: &TerrainConfig, direction: Vec3) -> f32 {
-    planet_gen::surface_altitude(terrain, direction).floor()
+    let natural = planet_gen::surface_altitude(terrain, direction).floor();
+    crate::settlement::ground::surface(terrain, direction, natural)
 }
 
 pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
     let surface_m = surface_m(terrain, direction);
-    let top = planet_gen::top_material(terrain, direction, surface_m);
+    let top = crate::settlement::ground::top(terrain, direction)
+        .unwrap_or_else(|| planet_gen::top_material(terrain, direction, surface_m));
     let mut layers = [Material::Air; LAYERS];
     for (index, layer) in layers.iter_mut().enumerate() {
         let altitude = layer_altitude(index);

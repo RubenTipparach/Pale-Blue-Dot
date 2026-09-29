@@ -109,11 +109,19 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
     planet_gen::river_channel(cfg, direction.normalize_or(Vec3::Y))
 }
 
+///
+/// Bit [`CLEARED_BIT`] is set in a town's footprint (`cities-in-the-world`
+/// decision 3): the foliage pass grows no tree there.
 pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
     let biome = planet_gen::biome_at(terrain_config(), d, height);
-    material_index(d, height, biome) | (biome as u32) << 8
+    let cleared = pbd_core::settlement::ground::cleared(terrain_config(), d);
+    material_index(d, height, biome) | (biome as u32) << 8 | u32::from(cleared) << CLEARED_BIT
 }
+
+/// The bit of a record's material word that says no tree grows on it.
+/// `planet_visibility.wgsl`'s foliage pass reads it.
+pub const CLEARED_BIT: u32 = 24;
 
 /// Which of `planet_surface.wgsl`'s material codes a material is drawn in.
 ///
@@ -239,7 +247,9 @@ pub const GRASS_SIDE: u32 = 11;
 pub const SNOW_SIDE: u32 = 12;
 
 fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
-    let material = planet_gen::top_material(terrain_config(), direction, height);
+    // A town's lanes and floors are its own top (`cities-in-the-world`).
+    let material = pbd_core::settlement::ground::top(terrain_config(), direction)
+        .unwrap_or_else(|| planet_gen::top_material(terrain_config(), direction, height));
     match (material, biome) {
         // Beach sand below the waterline is the seabed, which the water pass
         // tints; a desert dune and a swamp sward are their own tiles.

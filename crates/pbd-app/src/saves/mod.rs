@@ -981,7 +981,10 @@ mod tests {
             })
         );
         assert_eq!(reopened.catches.get(&0).map(|r| r.count), Some(1));
-        assert_eq!(reopened.equipment.map(|e| e.held()), Some(Tool::Shovel));
+        assert_eq!(
+            reopened.equipment.map(|e| e.held()),
+            Some(Some(Tool::Shovel))
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

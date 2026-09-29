@@ -45,3 +45,11 @@ there before this change too, and is not yet looked into.
 
 Dry grass and soil draw exactly like the kit's grass and dirt, in the world as
 in a slot, and stay their own items: blocks do not merge (survey I5).
+
+## Bare hands (decision 8, task 4.5)
+
+A new world starts with nothing in hand (the owner, 2026-09-29). The check is
+`../cities-in-the-world/game-lane.png`, a new world's walker in Holbrook with
+no flag that picks a tool: nothing is drawn in hand, and the tool slot left
+of the hotbar shows the open hand, the roll-out's first entry, "Bare hands".
+

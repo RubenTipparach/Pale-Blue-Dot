@@ -2,7 +2,8 @@
 //! the picker that opens beside it while G is held.
 //!
 //! Holding G on foot opens the picker, the wheel moves its highlight, and
-//! letting go puts the highlighted tool in hand. G is read once, in
+//! letting go puts the highlighted tool in hand. The picker's first entry is
+//! bare hands, which a new world starts with (`inventory-grid` decision 8). G is read once, in
 //! `controls::read_picker_key`, and read here: the picker never looks at the
 //! key itself. Boarding a craft is F, a key of its own.
 //!
@@ -18,19 +19,12 @@ use pbd_app::fish::ToolSlot;
 use pbd_app::saves::WorldSave;
 use pbd_core::inventory::Tool;
 
-/// The picker's highlight while G is held. Separate from the tool in hand, so
-/// wheeling past a tool does not put it in hand: only letting go does.
-#[derive(Resource, Clone, Copy, Debug)]
+/// The picker's highlight while G is held: a tool, or `None` for bare hands.
+/// Separate from the tool in hand, so wheeling past a tool does not put it in
+/// hand: only letting go does.
+#[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct Picker {
-    pub highlight: Tool,
-}
-
-impl Default for Picker {
-    fn default() -> Self {
-        Self {
-            highlight: Tool::Rod,
-        }
-    }
+    pub highlight: Option<Tool>,
 }
 
 /// The picker's claim on the wheel, for the one system that reads the wheel.
@@ -69,9 +63,9 @@ pub struct ToolIcon;
 #[derive(Component)]
 pub struct PickerColumn;
 
-/// A row of the picker, for the tool it names.
+/// A row of the picker, for the tool it names, or `None` for bare hands.
 #[derive(Component)]
-pub struct PickerRow(pub Tool);
+pub struct PickerRow(pub Option<Tool>);
 
 #[derive(Component)]
 pub struct PickerIcon;
@@ -109,7 +103,7 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), 
                 ))
                 .with_children(|cell| {
                     cell.spawn((
-                        ImageNode::new(icons.tool(Tool::Rod)),
+                        ImageNode::new(icons.in_hand(None)),
                         Node {
                             width: percent(100.0),
                             height: percent(100.0),
@@ -141,7 +135,11 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), 
             PickerColumn,
         ))
         .with_children(|column| {
-            for tool in Tool::ALL {
+            let entries = std::iter::once(None).chain(Tool::ALL.into_iter().map(Some));
+            for tool in entries {
+                let (name, purpose) = tool.map_or(("Bare hands", "breaks nothing"), |t| {
+                    (t.name(), t.purpose())
+                });
                 column
                     .spawn((
                         Node {
@@ -158,7 +156,7 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), 
                     ))
                     .with_children(|row| {
                         row.spawn((
-                            ImageNode::new(icons.tool(tool)),
+                            ImageNode::new(icons.in_hand(tool)),
                             Node {
                                 width: px(32),
                                 height: px(32),
@@ -172,7 +170,7 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), 
                         })
                         .with_children(|words| {
                             words.spawn((
-                                Text::new(tool.name().to_uppercase()),
+                                Text::new(name.to_uppercase()),
                                 TextFont {
                                     font_size: 13.0,
                                     ..default()
@@ -180,7 +178,7 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), 
                                 TextColor(Color::srgb(0.92, 0.97, 0.95)),
                             ));
                             words.spawn((
-                                Text::new(tool.purpose()),
+                                Text::new(purpose),
                                 TextFont {
                                     font_size: 10.0,
                                     ..default()
@@ -225,7 +223,10 @@ pub fn pick(
         if let Some(save) = save.as_deref_mut() {
             save.record_hand(&tools);
         }
-        info!("in hand: {}", tools.held().name());
+        info!(
+            "in hand: {}",
+            tools.held().map_or("bare hands", |t| t.name())
+        );
     }
 }
 
@@ -248,7 +249,7 @@ pub fn paint(
     >,
 ) {
     for mut image in &mut slot {
-        let want = icons.tool(tools.held());
+        let want = icons.in_hand(tools.held());
         if image.image != want {
             image.image = want;
         }
@@ -264,7 +265,7 @@ pub fn paint(
         return;
     }
     for (row, mut node, mut border, mut fill) in &mut rows {
-        node.display = if tools.owns(row.0) {
+        node.display = if row.0.is_none_or(|t| tools.owns(t)) {
             Display::Flex
         } else {
             Display::None
@@ -316,11 +317,15 @@ mod tests {
         };
         let before = app.world().resource::<Hotbar>().selected();
         notch(&mut app);
-        assert_eq!(app.world().resource::<Picker>().highlight, Tool::Shovel);
+        assert_eq!(
+            app.world().resource::<Picker>().highlight,
+            Some(Tool::Rod),
+            "one notch from bare hands is the first tool"
+        );
         assert_eq!(app.world().resource::<Hotbar>().selected(), before);
         app.world_mut().resource_mut::<PickerKey>().holding = false;
         notch(&mut app);
-        assert_eq!(app.world().resource::<Picker>().highlight, Tool::Shovel);
+        assert_eq!(app.world().resource::<Picker>().highlight, Some(Tool::Rod));
         assert_ne!(app.world().resource::<Hotbar>().selected(), before);
     }
 }

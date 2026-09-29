@@ -445,14 +445,14 @@ pub fn dig_and_place(
     // The left button is the tool in hand's, and breaking is a HOLD: the
     // block goes when the button has been down on it for its break time
     // (`pbd_core::dig`). A rod casts rather than digs, and the fishing system
-    // has that button; every other tool digs, the right one fastest.
-    let tool = tools.held();
+    // has that button; bare hands break nothing (`inventory-grid` decision
+    // 8); every other tool digs, the right one fastest.
+    let tool = tools.digging_tool();
     let block = (target.dig.cell, target.dig.layer);
-    let held = buttons.pressed(MouseButton::Left) && tool.digs();
-    let secs = if held {
-        mining.secs(block, tool, &fine, &edits, &dig.0)
-    } else {
-        None
+    let held = buttons.pressed(MouseButton::Left) && tool.is_some();
+    let secs = match tool {
+        Some(tool) if held => mining.secs(block, tool, &fine, &edits, &dig.0),
+        _ => None,
     };
     let step = mining
         .breaking
@@ -475,7 +475,7 @@ pub fn dig_and_place(
             info!(
                 "dug {taken:?} from cell {cell} layer {layer} with the {} in {:.2} s, \
                  fine set version {}",
-                tool.name(),
+                tool.map_or("bare hands", |t| t.name()),
                 secs.unwrap_or(0.0),
                 fine.version
             );

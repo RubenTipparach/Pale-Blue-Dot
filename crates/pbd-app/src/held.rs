@@ -368,7 +368,7 @@ fn hold(
         0.0,
     );
     for (held, mut transform, mut visibility) in &mut models {
-        let shown = on_foot && tools.held() == held.tool;
+        let shown = on_foot && tools.held() == Some(held.tool);
         let want = if shown {
             Visibility::Inherited
         } else {

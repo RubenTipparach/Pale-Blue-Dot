@@ -86,43 +86,48 @@ impl Tool {
     }
 }
 
-/// The tool slot: which tools the player owns and which one is in hand.
+/// The tool slot: which tools the player owns and which one, if any, is in
+/// hand.
 ///
 /// Its own store beside the ten slots, because a tool is not a stack and a
 /// tool held in a slot would compete with blocks and fish for room.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Equipment {
     owned: [bool; 4],
-    held: Tool,
+    /// `None` is bare hands (`inventory-grid` decision 8).
+    held: Option<Tool>,
 }
 
 impl Default for Equipment {
-    /// A new world's kit: all four owned, the rod in hand.
+    /// A new world's kit: all four owned, nothing in hand.
     fn default() -> Self {
         Self {
             owned: [true; 4],
-            held: Tool::Rod,
+            held: None,
         }
     }
 }
 
 impl Equipment {
-    /// Rebuild from a save's record; a held tool that is not owned falls back
-    /// to the first owned one rather than handing the player something they
-    /// do not have.
-    pub fn from_parts(owned: [bool; 4], held: Tool) -> Self {
+    /// Rebuild from a save's record; a held tool that is not owned leaves the
+    /// hands bare rather than handing the player something they do not have.
+    pub fn from_parts(owned: [bool; 4], held: Option<Tool>) -> Self {
         let mut equipment = Self { owned, held };
-        if !equipment.owns(held) {
-            equipment.held = Tool::ALL
-                .into_iter()
-                .find(|t| equipment.owns(*t))
-                .unwrap_or(Tool::Rod);
+        if held.is_some_and(|t| !equipment.owns(t)) {
+            equipment.held = None;
         }
         equipment
     }
 
-    pub fn held(&self) -> Tool {
+    /// The tool in hand, or `None` for bare hands.
+    pub fn held(&self) -> Option<Tool> {
         self.held
+    }
+
+    /// The tool the left button digs with: the one in hand, if it digs.
+    /// Bare hands break nothing, as the rod breaks nothing.
+    pub fn digging_tool(&self) -> Option<Tool> {
+        self.held.filter(|t| t.digs())
     }
 
     pub fn owned(&self) -> [bool; 4] {
@@ -138,26 +143,27 @@ impl Equipment {
         Tool::ALL.into_iter().filter(|t| self.owns(*t)).collect()
     }
 
-    /// Put a tool in hand. Refused, and `false`, when it is not owned or is
-    /// already held: only a real change is a change worth saving.
-    pub fn hold(&mut self, tool: Tool) -> bool {
-        if !self.owns(tool) || self.held == tool {
+    /// Put a tool in hand, or empty the hands with `None`. Refused, and
+    /// `false`, when the tool is not owned or is already held: only a real
+    /// change is a change worth saving.
+    pub fn hold(&mut self, tool: impl Into<Option<Tool>>) -> bool {
+        let tool = tool.into();
+        if tool.is_some_and(|t| !self.owns(t)) || self.held == tool {
             return false;
         }
         self.held = tool;
         true
     }
 
-    /// The owned tool `by` steps from `from`, wrapping: what the picker's
-    /// wheel moves through.
-    pub fn step_from(&self, from: Tool, by: i32) -> Tool {
-        let tools = self.tools();
-        if tools.is_empty() {
-            return from;
-        }
-        let at = tools.iter().position(|t| *t == from).unwrap_or(0) as i32;
-        let n = tools.len() as i32;
-        tools[(((at + by) % n + n) % n) as usize]
+    /// The entry `by` steps from `from` in the picker's list, bare hands and
+    /// then the owned tools, wrapping: what the picker's wheel moves through.
+    pub fn step_from(&self, from: Option<Tool>, by: i32) -> Option<Tool> {
+        let entries: Vec<Option<Tool>> = std::iter::once(None)
+            .chain(self.tools().into_iter().map(Some))
+            .collect();
+        let at = entries.iter().position(|t| *t == from).unwrap_or(0) as i32;
+        let n = entries.len() as i32;
+        entries[(((at + by) % n + n) % n) as usize]
     }
 }
 
@@ -740,24 +746,33 @@ mod tests {
         assert_ne!(Item::Fish(3), Item::Fish(4), "a species is its own stack");
     }
 
-    /// A new world's tool slot holds the rod and owns all four; holding what
-    /// is already held, or what is not owned, is not a change.
+    /// A new world's tool slot holds nothing and owns all four; holding what
+    /// is already held, or what is not owned, is not a change
+    /// (`inventory-grid` decision 8).
     #[test]
-    fn the_tool_slot_starts_on_the_rod_and_changes_only_for_real() {
+    fn the_tool_slot_starts_bare_handed_and_changes_only_for_real() {
         let mut kit = Equipment::default();
-        assert_eq!(kit.held(), Tool::Rod);
+        assert_eq!(kit.held(), None, "a new world's hands are empty");
         assert_eq!(kit.tools(), Tool::ALL.to_vec());
-        assert!(!kit.hold(Tool::Rod), "already in hand");
+        assert!(!kit.hold(None), "already empty");
         assert!(kit.hold(Tool::Shovel));
-        assert_eq!(kit.held(), Tool::Shovel);
-        let partial = Equipment::from_parts([true, false, true, false], Tool::Shovel);
-        assert_eq!(
-            partial.held(),
-            Tool::Rod,
-            "not owned falls back to the first owned"
-        );
+        assert_eq!(kit.held(), Some(Tool::Shovel));
+        assert!(!kit.hold(Tool::Shovel), "already in hand");
+        assert!(kit.hold(None), "put down");
+        assert_eq!(kit.held(), None);
+        let partial = Equipment::from_parts([true, false, true, false], Some(Tool::Shovel));
+        assert_eq!(partial.held(), None, "not owned leaves the hands bare");
         let mut partial = partial;
         assert!(!partial.hold(Tool::Axe), "not owned");
+        assert_eq!(
+            Equipment::from_parts([true; 4], Some(Tool::Axe)).held(),
+            Some(Tool::Axe)
+        );
+        // Bare hands and the rod dig nothing; the others dig.
+        let with = |held| Equipment::from_parts([true; 4], held).digging_tool();
+        assert_eq!(with(None), None, "bare hands break nothing");
+        assert_eq!(with(Some(Tool::Rod)), None);
+        assert_eq!(with(Some(Tool::Shovel)), Some(Tool::Shovel));
         assert!(!Tool::Rod.digs() && Tool::Shovel.digs());
     }
 
@@ -813,15 +828,18 @@ mod tests {
         assert_eq!(total(&slots), before, "nothing gained or lost");
     }
 
-    /// The picker's wheel walks the owned tools and wraps both ways.
+    /// The picker's wheel walks bare hands and the owned tools, and wraps
+    /// both ways.
     #[test]
-    fn the_picker_steps_through_owned_tools_and_wraps() {
+    fn the_picker_steps_through_bare_hands_and_owned_tools_and_wraps() {
         let kit = Equipment::default();
-        assert_eq!(kit.step_from(Tool::Rod, 1), Tool::Shovel);
-        assert_eq!(kit.step_from(Tool::Rod, -1), Tool::Axe);
-        assert_eq!(kit.step_from(Tool::Axe, 1), Tool::Rod);
-        let partial = Equipment::from_parts([true, false, true, false], Tool::Rod);
-        assert_eq!(partial.step_from(Tool::Rod, 1), Tool::Pickaxe);
-        assert_eq!(partial.step_from(Tool::Pickaxe, 1), Tool::Rod);
+        assert_eq!(kit.step_from(None, 1), Some(Tool::Rod));
+        assert_eq!(kit.step_from(None, -1), Some(Tool::Axe));
+        assert_eq!(kit.step_from(Some(Tool::Rod), 1), Some(Tool::Shovel));
+        assert_eq!(kit.step_from(Some(Tool::Rod), -1), None);
+        assert_eq!(kit.step_from(Some(Tool::Axe), 1), None);
+        let partial = Equipment::from_parts([true, false, true, false], Some(Tool::Rod));
+        assert_eq!(partial.step_from(Some(Tool::Rod), 1), Some(Tool::Pickaxe));
+        assert_eq!(partial.step_from(Some(Tool::Pickaxe), 1), None);
     }
 }

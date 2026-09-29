@@ -192,6 +192,183 @@ pieces** (the owner's save model, `world-persistence` decisions 1 and 2).
   lose a house cannot be a pure function of a template, and the owner has said
   towns will change over time.
 
+**9. Slices, each ending in shots of a town in the game (2026-09-29).** The
+owner: "I thought you were building cities, I wnat shots of the cities". The
+groups above stay the plan, but they are built in slices that each put
+something new on screen, not in group order. The walker and contact
+(`tenebris-towns` 1 and 2) no longer come first. They are the second slice,
+so the first can be looked at before it can be walked into.
+- **Slice 1, Holbrook stands (to look at).**
+  - The village template is the mockup's `makeVillage`: nine houses, the
+    village hall, two straw huts, the lane and the green. It is ported as
+    data: each building's cells, kit, storeys, door and windows.
+  - The template is charted onto the real finest cells round the home
+    town's anchor (decision 2).
+  - The ground is terraced under it and eased at its margin (decision 3).
+  - The pieces are cut from each cell's real corners: walls on outside edges
+    with their door and window openings, corner posts, the gable roofs and
+    the huts' cones.
+  - The mockup's own textures are used, exported as PNGs
+    (`tools/export_town_textures.js`, `assets/textures/settlement/`).
+  - Not in this slice: stairs, furniture, lanterns, collision (you can see
+    the houses and not yet enter them), the far form, and the other eight
+    kinds.
+- **Slice 1, how it hooks into the engine (measured 2026-09-29).**
+  - **One height function.** Every height the planet has comes from
+    `pbd_core::column::surface_m`:
+    - the voxel columns;
+    - every LOD record, through the app's `surface_height`;
+    - the contact field, which reads the records and columns;
+    - the map's raster.
+
+    No shader computes a height. So the settlement ground is consulted
+    there, and only there. It is a registry beside the terrain config's own
+    global: `pbd_core::settlement::ground`, set when a world's towns are
+    known, and keyed by seed and generator so it never reaches another
+    world.
+  - **The ground's answer for a direction** comes from the town's own cells
+    (the finest cells round its anchor, from the lattice's cap search):
+    - in the footprint, the terrace layer;
+    - in the margin, the natural height held within `k` layers of the
+      terrace at ring `k`;
+    - elsewhere, nothing.
+
+    A direction is matched to its cell by the nearest centre, through a
+    bucket grid in the town's tangent plane. Every other direction pays one
+    dot product per town.
+  - **The terrace** is the footprint's median natural layer, so the terrace
+    cuts as much as it fills.
+  - **The ground's top.** A lane's top is dirt, and a building's cells are
+    dirt under its floor. Every footprint cell carries a `cleared` bit in its
+    record's material word (bit 24). The foliage pass, the one place a tree
+    is chosen, grows none there.
+  - **The planet is rebuilt round the player once the ground is set**, as a
+    generator switch rebuilds it. The map's raster cache is named with the
+    ground's digest, so a cached map never shows the ground from before.
+  - **Drawing.** The town is one entity with a child mesh per texture. Each
+    texture is a `StandardMaterial` over the exported PNG, sampled nearest.
+    The root is `LitByField`, so the town takes the sun, the sky and the
+    lamps as a drop or a craft does. Positions are planet-local, offset by
+    the planet's render frame.
+  - **Captures.** `--at <lat> <lon>` puts a new world's walker there, not at
+    the level start, so a shot can stand in a town. The existing `--yaw`,
+    `--pitch` and `--height` frame it.
+- **Slice 1, found on its first shots (2026-09-29).** The owner: "hmm...they
+  dont seem to quite follow the same rules as the js prototype project", and
+  "the roof shouldnt extend pass the floor plan like that".
+  - Measured, not guessed: a fieldstone house's plan in its frame was
+    7.65 x 9.93 m, where the mockup's is 9.92 x 5.72.
+  - The frame's row direction had been taken from the building's centre
+    toward its first cell's edge, not from that cell's own centre. That
+    turned each frame up to 60 degrees off the rows. The roof, laid over the
+    plan's box in that frame, sat crossways over the house.
+  - Fixed. Every plan is now the mockup's within the cells' own spread:
+    9.40 x 6.05 m for that house. `settlement::tests::every_plan_is_the_mockups_plan`
+    holds every building of the village to within 12% of the mockup's
+    plan, both ways.
+  - The roof's plan is now the mockup's rule: its box, with a 0.45 m eave,
+    and a gable end over an odd row's half-cell. Anything past that is a
+    difference from the mockup, and is shown beside the mockup's own view of
+    the same house.
+- **Two empty columns between neighbouring houses (the owner, 2026-09-29).**
+  "also those two buildings are too close to eachotehr, yea".
+  - The village paired its houses one empty column apart:
+    - walls a cell apart (2.8 m);
+    - roofs 0.5 m apart, eaves included (`tenebris-towns` section 2's "one
+      empty column ... is enough").
+  - On the sphere the cells' spread took that half metre. Measured between
+    one pair: their centres were 1.36 cells apart, not 1.5, and their eaves
+    met (`settlement::tests::no_two_roofs_cut_into_each_other`).
+  - Every pair along the lane is now two empty columns apart: walls 5.7 m,
+    roofs 3.3 m. The outer house of each pair moves one column outward.
+  - The change is made in the mockup's own `makeVillage` and exported again,
+    so the prototype and the game stay one layout.
+- **How Holbrook differs from the mockup's village (the owner, 2026-09-29:
+  "how is this different than the js prototypes?").** Shown side by side
+  in `docs/screenshots/cities-in-the-world/`.
+  - The same: the layout (every building's cells, doors and windows,
+    exported from the mockup), the kits, the textures, the storey and wall
+    sizes, the roofs' rule, and the lanes.
+  - Different by design:
+    - The ground is the planet's own. The mockup paints a flat field with
+      a hill by the mill; the game terraces the real ground under the
+      footprint and eases it back over a margin (decision 3).
+    - The cells are the sphere's, which vary about 9% either way. Each
+      plan is within 12% of the mockup's.
+    - The light is the game's sky and field light, not the mockup's lamps.
+  - Not built yet, each in a later slice:
+    - Stairs, furniture and hearths, and doors that open and shut (2b). A
+      door is drawn open, swung in against its jamb.
+    - Lanterns, lit windows and the night (slice 3).
+    - What the mockup builds that is not a building: the smithy's shed,
+      the well, the windmill, the crops and fences, the pond, the green's
+      tree, and the people. The game's own trees grow round the town and
+      are cleared from its footprint.
+- **Slice 2, walk in.** Thin solids, the walker's rules, the stairs and
+  doors (`tenebris-towns` 1, 2 and 5). It lands in two steps.
+  - **2a, walls and doorways (written 2026-09-29, before the code).**
+    - Every wall segment, post, sill-free jamb and chimney the cutter makes
+      is also a **thin solid**: a convex outline in its building's plan with
+      a height range (`tenebris-towns` section 4's first primitive).
+    - A town's solids live beside its meshes, indexed by a bucket grid in
+      the town's tangent plane.
+    - The walker's swept step treats a solid its body overlaps as it treats
+      a rise it cannot step. A solid overlaps when:
+      - its outline, grown by the body's 0.3 m radius, holds the body's
+        centre in plan;
+      - its height range crosses the body's;
+      - and the feet are not already on top of it.
+
+      The tangential motion stops at the last clear point. Sliding along the
+      face is the design's first rule, and comes with the rest of the walker
+      rules in 2b.
+    - **Doorways are open.** A door leaf is drawn swung inward against its
+      jamb, and is no solid, until doors open and shut as world state (task
+      5 of `tenebris-towns`, with the save).
+    - The ground floor is the terrace, which the column tier already
+      answers. The upper floors' slabs are ceilings to it: 2.8 m clear, a
+      metre over the walker.
+    - Verify: a core test that a point in a wall is blocked, a doorway is
+      clear, and a point on the wall's top is not blocked. An app test
+      walks the walker at a house: it stops at the wall, and goes in
+      through the door. Then a capture from inside a house, looking out of
+      its door.
+    - **As built (2026-09-29).**
+      - Walls, posts, chimneys and the upper floors' slabs are solids
+        (`settlement::pieces`). The walker's `Structures` resource holds
+        each building's solids, and `resolve_ground` asks it at every swept
+        step.
+      - Each building is first tested against its plan's reach, and its
+        solids only when that passes. For one village of 13 buildings that
+        stands in for the bucket grid, which waits for towns large enough to
+        need it (slice 4).
+      - The slabs and the door lintels are ceilings. The walker's jump rises
+        about 2.7 m, which would carry its head through the floor above. So
+        the lowest solid underside over the body joins the terrain's
+        ceiling, and the head stops there as it does under a cave roof.
+      - A body already inside a solid, because a town was built round it,
+        is let walk out rather than held.
+      - Not yet, and left for 2b: roofs are not solids. A hut's walls are
+        2 m, so a jump from beside one lands on the wall's top and walks on
+        over it.
+  - **2b, the rest of the walker's rules:** sliding along a face, holding a
+    grounded walker to a floor below, the stairs, and doors opening and
+    shutting through the save.
+- **Slice 3, lit, stored and seen from afar.** Lanterns and candles (group
+  5), settlements as records (task 4.5), and the far form and the night
+  points (4.2, 4.3).
+- **Slice 4, every kind.** The other eight templates.
+- **Towns are stored before any of this ships.** A slice before task 4.5
+  builds the town from its template each time. That is safe only while no
+  saved world has towns, so no build with towns merges to `main` before
+  settlements are stored records (CLAUDE.md, "Saved games survive every
+  change").
+- **Each building is cut in its own tangent frame.** The frame sits at the
+  building's centre, with up along the radius there. The real cell corners
+  are projected into it. Over a house's 8 m the sphere falls away by under
+  7 mm, so walls, floors and roof meet as they do on the mockup's flat grid.
+  Each wall still stands on its own cells' corners.
+
 ## Risks / Trade-offs
 
 - [This is the largest change in the plan] → It is built in the order of the
