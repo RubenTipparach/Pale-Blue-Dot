@@ -124,8 +124,11 @@ kept.**
   - the swamp people;
   - the mountain people (survey T12).
 
-  Each has onsets, nuclei, codas and kind-specific suffixes (a "-ford" for a
-  village on a river, a "-haven" for a harbour).
+  Each has onsets, nuclei, codas and kind-specific endings: a village on a
+  river draws from its river endings ("-ford", "-bridge"), a harbour from its
+  harbour endings ("-haven", "-port"). Where two parts meet on the same
+  vowel, the vowel is written once ("Sedge" and "e" make "Sedge-", not
+  "Sedgee-"). Both are finding 5 of the Built section.
 - A name is drawn from a hash stream of the seed and the id. A collision takes
   the next draw from the same stream, resolved in list order.
 - A pinned name is reserved first, so no generated site takes it.
@@ -239,7 +242,7 @@ The owner, 2026-09-29: "commence 2b, lets get these damn cities up to play!"
 
   The design's risk of a slow fine check does not arise.
 - **The list:** 55 sites, every kind at its target.
-  - The small town near the spawn is Holford, a village on a river, 133 m
+  - The small town near the spawn is Holbrook (first drawn as Holford, finding 5), a village on a river, 133 m
     from the game's default spawn direction.
   - The capital is Ashingstead, a walled town 10.3 km away, on another land
     mass.
@@ -276,6 +279,19 @@ The owner, 2026-09-29: "commence 2b, lets get these damn cities up to play!"
      towns 2,500 m apart, that would have kept every village 2.5 km from
      every town, and cleared most of the fields.
    - The spec delta now says what is built.
+5. **Every village took the same ending.** The river bonus does what it is
+   for: all 20 villages and all 6 walled towns stand within 60 m of a river.
+   But the table gave a river village one ending, so all 20 were "-ford"
+   (Holford, Bramford, Corford ...). Every harbour was "-haven" the same
+   way. And "Sedge" with the middle "e" wrote "Sedgeemoss".
+   - A people now has a list of river endings and a list of harbour endings,
+     and a name draws from the list as it draws its other parts. The fields
+     people's are "ford", "bridge", "brook" and "mouth", and "haven",
+     "port", "quay" and "strand".
+   - A doubled vowel where two parts meet is written once.
+   - Only the names change: the same 55 sites stand in the same places. No
+     world stores a list yet (group 3), so no saved name moves; the sites
+     version stays 1.
 
 **The mockup (tasks 1.2 and 1.3).**
 - `docs/mockups/world-map.html` draws the core's list, with a footprint

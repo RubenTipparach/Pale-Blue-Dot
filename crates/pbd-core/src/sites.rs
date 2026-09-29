@@ -184,12 +184,14 @@ pub struct People {
     pub onsets: Vec<String>,
     pub middles: Vec<String>,
     pub endings: Vec<String>,
-    /// A harbour's ending in place of the drawn one ("haven").
+    /// A harbour's endings, drawn from in place of `endings` ("haven",
+    /// "port"). Empty: a harbour draws from `endings`.
     #[serde(default)]
-    pub harbour_ending: Option<String>,
-    /// A village on a river's ending in place of the drawn one ("ford").
+    pub harbour_endings: Vec<String>,
+    /// A village on a river's endings, drawn from in place of `endings`
+    /// ("ford", "bridge"). Empty: it draws from `endings`.
     #[serde(default)]
-    pub river_ending: Option<String>,
+    pub river_endings: Vec<String>,
 }
 
 /// A site the owner placed by hand (decision 5).
@@ -1016,14 +1018,18 @@ fn name_for(sites: &SitesConfig, seed: u64, site: &Site, taken: &mut BTreeSet<St
         let i = (hash01(&[seed, u64::from(site.id), k, part]) * list.len() as f32) as usize;
         list[i.min(list.len() - 1)].clone()
     };
+    let endings = match site.kind {
+        SiteKind::Harbour if !people.harbour_endings.is_empty() => &people.harbour_endings,
+        SiteKind::Village if site.river && !people.river_endings.is_empty() => {
+            &people.river_endings
+        }
+        _ => &people.endings,
+    };
     for k in 0..64u64 {
-        let mut name = pick(&people.onsets, k, 1) + &pick(&people.middles, k, 2);
-        let ending = match (site.kind, &people.harbour_ending, &people.river_ending) {
-            (SiteKind::Harbour, Some(h), _) => h.clone(),
-            (SiteKind::Village, _, Some(f)) if site.river => f.clone(),
-            _ => pick(&people.endings, k, 3),
-        };
-        name.push_str(&ending);
+        let name = join(
+            &join(&pick(&people.onsets, k, 1), &pick(&people.middles, k, 2)),
+            &pick(endings, k, 3),
+        );
         let mut letters = name.chars();
         let name: String = match letters.next() {
             Some(first) => first
@@ -1039,6 +1045,18 @@ fn name_for(sites: &SitesConfig, seed: u64, site: &Site, taken: &mut BTreeSet<St
     let fallback = format!("Site {}", site.id);
     taken.insert(fallback.clone());
     fallback
+}
+
+/// Two parts of a name, with a vowel they meet on written once ("Sedge" and
+/// "e" make "Sedge", "Mire" and "ewade" make "Mirewade"; finding 5).
+fn join(a: &str, b: &str) -> String {
+    let meet = a.chars().last().zip(b.chars().next());
+    match meet {
+        Some((x, y)) if x.eq_ignore_ascii_case(&y) && "aeiouy".contains(x.to_ascii_lowercase()) => {
+            format!("{a}{}", &b[y.len_utf8()..])
+        }
+        _ => format!("{a}{b}"),
+    }
 }
 
 /// The whole list: [`candidates`] on `threads` threads, then [`select`].

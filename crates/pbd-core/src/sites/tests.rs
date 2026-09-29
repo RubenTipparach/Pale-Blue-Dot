@@ -216,6 +216,48 @@ fn names_are_unique_and_stable() {
     assert_eq!(names(&a), names(&b));
 }
 
+/// Finding 5: river villages and harbours draw their endings from lists, so
+/// they do not all end alike, and a vowel two parts meet on is written once.
+#[test]
+fn river_villages_and_harbours_do_not_all_end_alike() {
+    let cfg = shipped();
+    let ending_of = |name: &str, endings: &[String]| {
+        endings
+            .iter()
+            .find(|e| name.to_lowercase().ends_with(e.as_str()))
+            .cloned()
+    };
+    for (kind, river) in [(SiteKind::Village, true), (SiteKind::Harbour, false)] {
+        let people = cfg.people(kind);
+        let endings = if kind == SiteKind::Harbour {
+            &people.harbour_endings
+        } else {
+            &people.river_endings
+        };
+        let sites: Vec<&Site> = planet()
+            .sites
+            .iter()
+            .filter(|s| s.kind == kind && (!river || s.river))
+            .collect();
+        assert!(sites.len() >= 4, "{kind:?}: only {} sites", sites.len());
+        let used: BTreeSet<String> = sites
+            .iter()
+            .map(|s| {
+                ending_of(&s.name, endings)
+                    .unwrap_or_else(|| panic!("{} ends in none of {endings:?}", s.name))
+            })
+            .collect();
+        assert!(
+            used.len() >= 3,
+            "{kind:?}: every name ends in one of {used:?}"
+        );
+    }
+    assert_eq!(join("Sedge", "e"), "Sedge");
+    assert_eq!(join("Mire", "ewade"), "Mirewade");
+    assert_eq!(join("Hol", "leigh"), "Holleigh");
+    assert_eq!(join("Kel", "a"), "Kela");
+}
+
 /// "Pinning a town" and "A pinned name": the town stands where it was put
 /// with the name it was given, it is the capital, no generated site takes
 /// its name, and none stands within its spacing.

@@ -53,16 +53,19 @@
     // Decision 5: the mockup's chamber is 93 by 37 m under at least 16 m of
     // rock, entered from a face within 30 m of its downhill end.
     cave: (rock_m: 16.0, chamber_length_m: 93.0, chamber_width_m: 37.0, mouth_reach_m: 30.0),
-    // Decision 4's six peoples. A name is an onset, a middle and an ending.
-    // First draft: the map mockup's placeholder syllables.
+    // Decision 4's six peoples. A name is an onset, a middle and an ending;
+    // where two parts meet on the same vowel, it is written once. First
+    // draft: the map mockup's placeholder syllables.
     peoples: [
         (
             name: "fields",
             onsets: ["Ash", "Bram", "Cor", "Dun", "Hol", "Lin", "Mar", "Wick", "Ther", "Sel"],
             middles: ["", "e", "en", "ow", "ing"],
             endings: ["ford", "ham", "stead", "wick", "ton", "leigh"],
-            harbour_ending: Some("haven"),
-            river_ending: Some("ford"),
+            // A harbour draws its ending from these, and a village on a
+            // river from these (the design's finding 5).
+            harbour_endings: ["haven", "port", "quay", "strand"],
+            river_endings: ["ford", "bridge", "brook", "mouth"],
         ),
         (
             name: "desert",
