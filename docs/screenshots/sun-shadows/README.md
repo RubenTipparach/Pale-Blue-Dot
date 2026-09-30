@@ -83,7 +83,9 @@ at that hour (`towns::tests::print_the_rain_over_holbrook`).
   | Flight, 08:00 to 17:30 | 116, 88, 60 | 134, 111, 81 |
   | Newel, 22:30 | 166, 107, 55 | 176, 121, 68 |
 
-  A larger share of the sky by day (0.45 and 0.6, `--room-sky`) is being
-  captured against it.
+  `room-sky.jpg` tries a larger share of the sky by day: 0.45 gives 127,
+  90, 65 and 0.6 gives 132, 97, 73. That is a quarter of the gap at double
+  the share, and the room turns greyer, not cream. The share stays at 0.3
+  (the design's "Tuning across the day").
 - **The flames** read pale peach rather than orange: the tonemapper takes a
   bright warm colour toward white. A flame's core is pale, so it stays.

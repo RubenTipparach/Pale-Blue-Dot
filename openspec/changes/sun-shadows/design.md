@@ -303,6 +303,19 @@ slice 2b spots, beside the towns mockup's same views
 - **The warm bounce** (`ROOM_BOUNCE`, the sun come in by the door and the
   windows) stays at 0. The fires do its work without it. It remains a
   launch knob, `--room-bounce`, beside `--room-sky`.
+- **A larger share by day does not reach the mockup's cream** (the after
+  set, `docs/screenshots/sun-shadows/room-sky.jpg`).
+  - By day the game's rooms are darker and more orange than the mockup's.
+    On the newel's wall at 11:00, in sRGB: 123, 83, 55 at 0.3 against the
+    mockup's 160, 119, 79. By night the two are close (166, 107, 55
+    against 176, 121, 68), so the fires are at the mockup's weight.
+  - `--room-sky 0.45` gives 127, 90, 65 and `0.6` gives 132, 97, 73: a
+    quarter of the gap at double the share, and the room turns a greyer,
+    pinker tan, not cream.
+  - So the shares stay at 0.3 and 0.2 (recommendation taken, ask only with
+    screenshots). What is left is the mockup's brighter picture as a
+    whole, its renderer's exposure and curve against the game's
+    tonemapper, not the rooms' light. It is recorded, not chased here.
 - **Rain on the lens indoors** (the owner, on the first night shots: "Is that
   rain indoors?") was the lens effect under a roof the column cannot see.
   A building's roof now shelters its rooms (`BuildingSolids::shelters`).
