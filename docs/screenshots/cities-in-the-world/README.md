@@ -50,3 +50,23 @@ open until they open and shut as world state.
 
 What differs from the mockup, and why, is in the design (decision 9, "How
 Holbrook differs from the mockup's village").
+
+## Slice 2b: stairs, floors and doors (2026-09-30)
+
+`tools/capture_holbrook_2b.sh` takes the game's shots at the same settings as
+above. `tools/mockup_village_2b_shots.js` takes the mockup's same views, at
+11:00. `slice-2b-2026-09-30.jpg` puts each game shot beside the mockup's.
+- **Flags.** `--up 3.2` stands the walker on the upper floor.
+  `--open-doors` opens the doors without saving it; doors start shut.
+- **Where the spots come from.**
+  `towns::tests::print_where_to_stand_for_the_mockup_shots` prints them.
+  The mockup's stairs are found by the rule the game's cutter follows.
+
+| game | mockup | flags | what it shows |
+| --- | --- | --- | --- |
+| `game-2b-newel-below.png` | `mockup-2b-newel-below.png` | `--walk --at 29.63663 0.80156 --yaw -0.4 --pitch 20 --open-doors` | The Fieldstone house's newel from the room beside it, through its doorway: the post and the winders climbing. |
+| `game-2b-newel-above.png` | `mockup-2b-newel-above.png` | the same with `--up 3.2 --pitch -35` | The same doorway from the upper floor: the landing, its rail, and the winders turning down. |
+| `game-2b-flight-foot.png` | `mockup-2b-flight-foot.png` | `--walk --at 29.63542 0.98162 --yaw 179.5 --pitch 20 --open-doors` | The half-timbered house's straight flight from before its foot, boxed between its walls. |
+| `game-2b-flight-landing.png` | `mockup-2b-flight-landing.png` | `--walk --at 29.63465 1.08097 --yaw -0.5 --pitch -28 --up 3.2 --open-doors` | Down the same flight from its landing, the well railed on both sides. |
+| `game-2b-door-shut.png` | `mockup-2b-door-shut.png` | `--walk --at 29.71981 0.82332 --yaw 59.2` | The Fieldstone house's door, shut: a new world's doors start shut, and the walker stops at them. |
+| `game-2b-door-open.png` | `mockup-2b-door-open.png` | the same with `--open-doors` | The same door open, its leaf swung in against the wall. |

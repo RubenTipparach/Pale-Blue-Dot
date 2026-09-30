@@ -478,6 +478,46 @@ so the first can be looked at before it can be walked into.
       - Captures, with the mockup's same view beside each: upstairs in a
         Fieldstone house looking down its newel; on a half-timbered
         house's flight; a shut door, and the same door open.
+    - **As built (2026-09-30).**
+      - `pbd_core::settlement::pieces`:
+        - `Surface` (floor, flight, newel) and `DoorLeaf`;
+        - `BuildingSolids::stand` and `push_normal`;
+        - the stairs cut from the stair cells;
+        - the wells left open.
+
+        `settlement::record` adds the `door` records.
+      - The walker (`walking.rs`):
+        - `footprint_in` takes the town's floors;
+        - `sweep` holds a grounded walker to a floor up to 0.35 m below;
+        - `resolve_ground` slides twice at most.
+
+        One existing test changed with the rule it pinned. Pushing straight
+        into a terrace, the walker now slides along its face at 0.62 m/s:
+        8 m/s by the sine of its 4.4 degrees off square. The test now holds
+        how far it gets *into* the terrace.
+      - Doors (`towns.rs`):
+        - `TownDoor` entities under the town's root;
+        - E through `use_doors`, which writes the save before the leaf moves;
+        - `swing_doors` swings the leaf at 5 rad/s;
+        - `door_states` reads the records when the town is built.
+      - Captures: `--open-doors` opens every door without saving it, and
+        `--up M` stands the walker on the highest town floor within M
+        metres of the ground.
+      - Tests:
+        - core: `every_stair_is_cut_and_nothing_floors_its_well`,
+          `a_flight_answers_its_pitch_line`, `a_newel_answers_a_sheet_a_turn`,
+          `a_shut_door_holds_and_an_open_one_does_not`;
+        - app: `a_walker_climbs_a_newel_and_comes_down_it_on_its_pitch_line`,
+          `a_walker_climbs_a_flight_and_comes_down_it_on_its_pitch_line`,
+          `a_walker_brushing_a_wall_slides_along_it`,
+          `a_shut_door_stops_the_walker_and_e_opens_it_into_the_save`,
+          `towns::tests::a_door_opened_is_open_when_the_world_is_opened_again`.
+
+        The stair walks use the village's own houses, cut on the flat test
+        land 25 m off its pentagon.
+      - The village's newels climb one turn, so over the foot is the 30
+        degree landing. The clearance under it is 2.65 m, not the 2.74 m
+        under a winder. Both are well over the 1.8 m body.
 - **Slice 3a, the town is a stored record (written 2026-09-30, before the
   code).** Task 4.5's storing half, taken ahead of 2b. PR #19 merged slice 1
   and 2a to `main` on 2026-09-29. Every world that build opens gets Holbrook
