@@ -419,3 +419,32 @@ pub fn from_records(records: &Records, site: u32) -> Stored {
         buildings,
     })
 }
+
+/// A door's record kind (slice 2b): whether it stands open. No record is a
+/// shut door. It is the player's, written when they open or shut it.
+pub const DOOR_RECORD: &str = "door";
+
+/// A door's record id: its building's record id over its number there.
+pub fn door_id(building: u64, index: usize) -> u64 {
+    building * 16 + (index as u64 & 15)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+struct DoorBody {
+    open: bool,
+}
+
+/// A door's state as its record.
+pub fn door_record(id: u64, open: bool) -> Record {
+    Record::of(DOOR_RECORD, id, RECORD_SCHEMA, &DoorBody { open })
+}
+
+/// Whether a save holds a door open. A record this build cannot read is a
+/// shut door, as no record is.
+pub fn door_open(records: &Records, id: u64) -> bool {
+    records
+        .get(DOOR_RECORD, id)
+        .filter(|r| r.schema == RECORD_SCHEMA)
+        .and_then(|r| r.read::<DoorBody>())
+        .is_some_and(|b| b.open)
+}

@@ -27,13 +27,45 @@ const BODY_RADIUS: f32 = 0.3;
 const CONTACT_SKIN: f32 = 0.015;
 const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
 
-/// What the walker cannot walk through that is not terrain: the walls,
-/// posts, chimneys and upper floors of the towns standing
-/// (`cities-in-the-world` slice 2a). Planet-local, as the walker is.
+/// What the walker meets that is not terrain: the walls, posts, chimneys,
+/// doors, floors and stairs of the towns standing (`cities-in-the-world`
+/// slices 2a and 2b). Planet-local, as the walker is.
 #[derive(Resource, Default, Clone)]
 pub struct Structures(pub Vec<pbd_core::settlement::pieces::BuildingSolids>);
 
+/// How far under a grounded walker a floor still holds it (`tenebris-towns`
+/// section 4): the steepest stair line at a run, and well under a terrace's
+/// one-metre layer, so a walker still steps off a ledge.
+const HOLD_M: f32 = 0.35;
+
 impl Structures {
+    /// At a foot: the highest town floor within `reach` above it, and the
+    /// lowest underside of one above that, as planet-local radii.
+    fn stand(&self, feet: Vec3, reach: f32) -> (Option<f32>, Option<f32>) {
+        let mut floor: Option<f32> = None;
+        let mut ceiling: Option<f32> = None;
+        for b in &self.0 {
+            let (f, c) = b.stand(feet, reach);
+            floor = match (floor, f) {
+                (Some(a), Some(b)) => Some(a.max(b)),
+                (a, b) => a.or(b),
+            };
+            ceiling = match (ceiling, c) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+        }
+        (floor, ceiling)
+    }
+
+    /// The way out of the solid that holds a body at `centre`, along the
+    /// ground: the face a refused move slides along.
+    fn push_normal(&self, centre: Vec3) -> Option<Vec3> {
+        self.0
+            .iter()
+            .find_map(|b| b.push_normal(centre, HALF_HEIGHT, BODY_RADIUS))
+    }
+
     /// Whether the body centred at `centre` is in a solid.
     fn holds(&self, centre: Vec3) -> bool {
         self.0
@@ -56,6 +88,10 @@ pub struct WalkingConfig {
     /// Start a new world's walker exactly at the spawn direction, not at the
     /// ground the start search finds near it: a capture's `--at`.
     pub exact_start: bool,
+    /// Metres over the ground a start may stand on a town's floor: a
+    /// capture's `--up`, so a shot can stand upstairs in a house. Zero, the
+    /// default, is the ground.
+    pub start_up_m: f32,
     /// Where a LOADED world puts the walker.
     ///
     /// The spawn rule finds land near a direction and steps four metres off
@@ -107,6 +143,7 @@ impl Default for WalkingConfig {
         Self {
             start_walking: true,
             exact_start: false,
+            start_up_m: 0.0,
             restored: None,
             pitch: 0.0,
             yaw: 0.0,
@@ -641,9 +678,14 @@ fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
     // Clear the whole footprint when a handoff lands beside a raised terrace.
     // Over water the walker arrives floating at the sheet rather than standing
     // on the seabed, and is not grounded: the swim model takes it from there.
-    let Footprint { support, water, .. } = footprint(
+    let reach = world
+        .get_resource::<WalkingConfig>()
+        .map_or(0.0, |c| c.start_up_m);
+    let Footprint { support, water, .. } = footprint_in(
         terrain,
+        world.get_resource::<Structures>(),
         up * (terrain.sample(up).floor_radius + HALF_HEIGHT),
+        reach,
     );
     let floating = water && support < sheet;
     let feet = if floating {
@@ -896,6 +938,18 @@ struct Footprint {
 }
 
 fn footprint(terrain: &PlanetContact, position: Vec3) -> Footprint {
+    footprint_in(terrain, None, position, 0.0)
+}
+
+/// The footprint with the towns' floors and stairs in it: at each point the
+/// higher of the terrain's floor and the highest town floor within `reach`
+/// of the feet, and the lower of their ceilings.
+fn footprint_in(
+    terrain: &PlanetContact,
+    structures: Option<&Structures>,
+    position: Vec3,
+    reach: f32,
+) -> Footprint {
     let up = position.normalize();
     let tangent = up.any_orthonormal_vector() * BODY_RADIUS;
     let cross = up.cross(tangent);
@@ -908,7 +962,17 @@ fn footprint(terrain: &PlanetContact, position: Vec3) -> Footprint {
     let mut water = false;
     for offset in [Vec3::ZERO, tangent, -tangent, cross, -cross] {
         let feet = (position + offset).normalize() * feet_radius;
-        let stand = terrain.stand(feet);
+        let mut stand = terrain.stand(feet);
+        if let Some(s) = structures {
+            let (floor, roof) = s.stand(feet, reach);
+            if let Some(f) = floor {
+                stand.floor_radius = stand.floor_radius.max(f);
+            }
+            stand.ceiling_radius = match (stand.ceiling_radius, roof) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+        }
         // The SOLID ground, which under a water cap is the seabed. Taking
         // the sheet put the walker on top of the sea as if it were a floor,
         // which is the other half of why water read as a wall.
@@ -934,8 +998,136 @@ fn headroom(support: f32, ceiling: Option<f32>) -> bool {
     ceiling.is_none_or(|c| c - (support + CONTACT_SKIN) >= 2.0 * HALF_HEIGHT + CONTACT_SKIN)
 }
 
-/// Swept support with a small capsule footprint. Steep rises block horizontal
-/// travel unless the jump has already lifted the feet above the ledge.
+/// One sweep of the body from `start` toward `destination`.
+struct Swept {
+    accepted: Vec3,
+    grounded: bool,
+    /// Where the sweep was refused: the face's normal along the ground,
+    /// pointing back at the body, and the tangential velocity before the
+    /// refusal took it.
+    blocked: Option<(Vec3, Vec3)>,
+}
+
+/// The support's fall across a body at `at`, along the ground: the normal
+/// of a rise too tall to step, from the terrain's columns and the towns'
+/// floors round it. None on level ground, where there is no face to slide
+/// along (a passage too low).
+fn rise_normal(
+    terrain: &PlanetContact,
+    structures: Option<&Structures>,
+    at: Vec3,
+    reach: f32,
+) -> Option<Vec3> {
+    let up = at.normalize();
+    let e1 = up.any_orthonormal_vector();
+    let e2 = up.cross(e1);
+    let probe = |d: Vec3| {
+        footprint_in(
+            terrain,
+            structures,
+            (at + d * 0.25).normalize() * at.length(),
+            reach,
+        )
+        .support
+    };
+    let g = e1 * (probe(e1) - probe(-e1)) + e2 * (probe(e2) - probe(-e2));
+    (g.length() > 1e-3).then(|| -g.normalize())
+}
+
+/// Sweep the body in 0.2 m pieces. Steep rises block horizontal travel
+/// unless the jump has already lifted the feet above the ledge; a walker
+/// that was grounded is held to a floor up to [`HOLD_M`] below
+/// (`tenebris-towns` section 4), so it comes down a stair on it.
+#[allow(clippy::too_many_arguments)]
+fn sweep(
+    start: Vec3,
+    destination: Vec3,
+    was_grounded: bool,
+    velocity: &mut Vec3,
+    config: &WalkingConfig,
+    terrain: &PlanetContact,
+    structures: Option<&Structures>,
+) -> Swept {
+    let reach = config.step_height;
+    let segments = (start.distance(destination) / 0.2).ceil().clamp(1.0, 128.0) as u32;
+    let mut accepted = start;
+    let mut grounded = false;
+    let hold = if was_grounded { HOLD_M } else { 0.03 };
+    for i in 1..=segments {
+        let candidate = start.lerp(destination, i as f32 / segments as f32);
+        let up = candidate.normalize();
+        let Footprint {
+            support, ceiling, ..
+        } = footprint_in(terrain, structures, candidate, reach);
+        let feet = candidate.length() - HALF_HEIGHT;
+        let old_feet = accepted.length() - HALF_HEIGHT;
+        let rise = support + CONTACT_SKIN - feet;
+        let can_step = was_grounded && support + CONTACT_SKIN - old_feet <= config.step_height;
+        // A passage lower than the body is a wall, exactly as a tall rise
+        // is: Tenebris's headroom check in `try_horizontal_step`, and what
+        // stops a walker forcing their head into a low tunnel.
+        let low = i > 0 && !headroom(support, ceiling);
+        // A town's wall is a wall as a rise is (slice 2a). A body already
+        // in a solid (a town built round it) is let walk out of it.
+        let walled = structures.is_some_and(|s| s.holds(candidate) && !s.holds(accepted));
+        // Water used to be a wall here, which is why the sea could be
+        // looked at and never entered. It is passable now: the seabed is
+        // ordinary ground, and what stops a swimmer is the seabed's own
+        // rise, exactly as on land.
+        if low || walled || (rise > 0.03 && !can_step && support + CONTACT_SKIN - old_feet > 0.03) {
+            let normal = if walled {
+                structures.and_then(|s| s.push_normal(candidate))
+            } else if low {
+                None
+            } else {
+                rise_normal(terrain, structures, candidate, reach)
+            };
+            // Keep the last accepted angular position, allowing vertical
+            // jump/fall along it to continue against a blocked wall.
+            let old_up = accepted.normalize();
+            let tangential = *velocity - old_up * velocity.dot(old_up);
+            // Only block tangential motion. Preserve the full fixed tick's
+            // vertical displacement, independent of the first hit fraction.
+            let floor = footprint_in(terrain, structures, accepted, reach).support
+                + HALF_HEIGHT
+                + CONTACT_SKIN;
+            accepted = old_up * destination.length().max(floor);
+            *velocity = old_up * velocity.dot(old_up);
+            grounded = accepted.length() <= floor + 0.03 && velocity.dot(old_up) <= 0.0;
+            if grounded {
+                *velocity = Vec3::ZERO;
+            }
+            return Swept {
+                accepted,
+                grounded,
+                blocked: normal.map(|n| (n, tangential)),
+            };
+        }
+        // Not rising: a slide's velocity is along the ground to within the
+        // rounding of taking one vector from another.
+        if rise >= -hold && velocity.dot(up) <= 1e-4 {
+            accepted = up * (support + HALF_HEIGHT + CONTACT_SKIN);
+            let inward_speed = velocity.dot(up).min(0.0);
+            *velocity -= up * inward_speed;
+            grounded = true;
+        } else if can_step && rise > 0.0 {
+            accepted = up * (support + HALF_HEIGHT + CONTACT_SKIN);
+            grounded = true;
+        } else {
+            accepted = candidate;
+            grounded = false;
+        }
+    }
+    Swept {
+        accepted,
+        grounded,
+        blocked: None,
+    }
+}
+
+/// Swept support with a small capsule footprint, the towns' floors and
+/// stairs in it. A refused move slides: the part of it along the face is
+/// swept again, twice at most, for a corner (`tenebris-towns` section 4).
 fn resolve_ground(
     state: Res<WalkingState>,
     config: Res<WalkingConfig>,
@@ -949,63 +1141,39 @@ fn resolve_ground(
     }
     let structures = structures.as_deref();
     for (mut position, mut velocity, mut ground) in &mut walkers {
-        let start = ground.previous;
-        let destination = position.0;
-        let segments = (start.distance(destination) / 0.2).ceil().clamp(1.0, 128.0) as u32;
+        let was_grounded = ground.grounded;
+        let mut start = ground.previous;
+        let mut destination = position.0;
         let mut accepted = start;
         let mut grounded = false;
-        for i in 1..=segments {
-            let candidate = start.lerp(destination, i as f32 / segments as f32);
-            let up = candidate.normalize();
-            let Footprint {
-                support, ceiling, ..
-            } = footprint(&terrain, candidate);
-            let feet = candidate.length() - HALF_HEIGHT;
-            let old_feet = accepted.length() - HALF_HEIGHT;
-            let rise = support + CONTACT_SKIN - feet;
-            let can_step =
-                ground.grounded && support + CONTACT_SKIN - old_feet <= config.step_height;
-            // A passage lower than the body is a wall, exactly as a tall rise
-            // is: Tenebris's headroom check in `try_horizontal_step`, and what
-            // stops a walker forcing their head into a low tunnel.
-            let low = i > 0 && !headroom(support, ceiling);
-            // A town's wall is a wall as a rise is (slice 2a). A body already
-            // in a solid (a town built round it) is let walk out of it.
-            let walled = structures.is_some_and(|s| s.holds(candidate) && !s.holds(accepted));
-            // Water used to be a wall here, which is why the sea could be
-            // looked at and never entered. It is passable now: the seabed is
-            // ordinary ground, and what stops a swimmer is the seabed's own
-            // rise, exactly as on land.
-            if low
-                || walled
-                || (rise > 0.03 && !can_step && support + CONTACT_SKIN - old_feet > 0.03)
-            {
-                // Keep the last accepted angular position, allowing vertical
-                // jump/fall along it to continue against a blocked wall.
-                let old_up = accepted.normalize();
-                // Only block tangential motion. Preserve the full fixed tick's
-                // vertical displacement, independent of the first hit fraction.
-                let floor = footprint(&terrain, accepted).support + HALF_HEIGHT + CONTACT_SKIN;
-                accepted = old_up * destination.length().max(floor);
-                velocity.0 = old_up * velocity.0.dot(old_up);
-                grounded = accepted.length() <= floor + 0.03 && velocity.0.dot(old_up) <= 0.0;
-                if grounded {
-                    velocity.0 = Vec3::ZERO;
-                }
+        for slide in 0..3 {
+            let swept = sweep(
+                start,
+                destination,
+                was_grounded,
+                &mut velocity.0,
+                &config,
+                &terrain,
+                structures,
+            );
+            accepted = swept.accepted;
+            grounded = swept.grounded;
+            let Some((normal, tangential)) = swept.blocked else {
+                break;
+            };
+            let up = accepted.normalize();
+            let rest = destination - accepted;
+            let rest = rest - up * rest.dot(up);
+            let into = rest.dot(normal);
+            let along = rest - normal * into;
+            if slide == 2 || into >= 0.0 || along.length() < 1e-3 {
                 break;
             }
-            if rise >= -0.03 && velocity.0.dot(up) <= 0.0 {
-                accepted = up * (support + HALF_HEIGHT + CONTACT_SKIN);
-                let inward_speed = velocity.0.dot(up).min(0.0);
-                velocity.0 -= up * inward_speed;
-                grounded = true;
-            } else if can_step && rise > 0.0 {
-                accepted = up * (support + HALF_HEIGHT + CONTACT_SKIN);
-                grounded = true;
-            } else {
-                accepted = candidate;
-                grounded = false;
-            }
+            // The velocity keeps its part along the face, too.
+            let tangential = tangential - normal * tangential.dot(normal).min(0.0);
+            velocity.0 = up * velocity.0.dot(up) + tangential - up * tangential.dot(up);
+            start = accepted;
+            destination = (accepted + along).normalize() * accepted.length();
         }
         // The head against a ceiling. A jump under a cave roof stops at the
         // roof: the body drops to hang under it and the rise is taken off,
@@ -1013,7 +1181,10 @@ fn resolve_ground(
         // against rock stops rather than being snapped.
         let wet = sea.state(&config, accepted);
         let roof = structures.and_then(|s| s.ceiling(accepted));
-        let ceiling = match (footprint(&terrain, accepted).ceiling, roof) {
+        let ceiling = match (
+            footprint_in(&terrain, structures, accepted, config.step_height).ceiling,
+            roof,
+        ) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         };
@@ -1618,6 +1789,8 @@ mod tests {
             reach_m: 8.0,
             solids: vec![wall(-6.0, -0.5), wall(0.5, 6.0)],
             roof_plan: Vec::new(),
+            surfaces: Vec::new(),
+            doors: Vec::new(),
         };
         let walk = |across: f32| {
             let mut app = app_with_terrain_at(PlanetContact::test_flat_land(5).0, flat);
@@ -1858,12 +2031,14 @@ mod tests {
         let position = app.world().get::<Position>(body).unwrap().0;
         let velocity = app.world().get::<LinearVelocity>(body).unwrap().0;
         assert!(app.world().get::<GroundState>(body).unwrap().grounded);
+        // The move into the face is refused, and the part along it kept
+        // (slice 2b): the walker slides along the terrace, never into it.
         assert!(
-            position.distance(initial) < 0.7,
+            (position - initial).dot(heading) < 0.7,
             "walked through terrace: {position:?}"
         );
         assert!(
-            velocity.length() < 0.02,
+            velocity.dot(position.normalize()).abs() < 0.02,
             "gravity accumulated while blocked: {velocity:?}"
         );
         app.world_mut()
@@ -1934,5 +2109,370 @@ mod tests {
             !crate::vehicles::place::level_plain(sea, land),
             "on version 6 the old start is not level, so this test tells the rules apart"
         );
+    }
+
+    /// A building of Holbrook's village, cut on the finest cells at the flat
+    /// test land, its ground floor on that land (slice 2b).
+    fn village_house(
+        name: &str,
+    ) -> (
+        PlanetContact,
+        Vec3,
+        pbd_core::settlement::pieces::BuildingSolids,
+    ) {
+        use pbd_core::settlement::chart::chart;
+        use pbd_core::settlement::neighbour;
+        use pbd_core::settlement::pieces::{Meshes, cut_building};
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        let template = crate::towns::load_template("village");
+        let kits = crate::towns::load_kits();
+        let def = template
+            .buildings
+            .iter()
+            .find(|b| b.name == name)
+            .expect(name)
+            .clone();
+        // 25 m off the test land's cell centre, which is one of the sphere's
+        // twelve pentagons (no layout is charted across one), and on the same
+        // flat cell.
+        let site = (flat + flat.any_orthonormal_vector() * (25.0 / PLANET_RADIUS)).normalize();
+        let patch = crate::towns::patch_round(site, PLANET_RADIUS, 40.0);
+        let at = patch.nearest(site).unwrap();
+        let (_, east) = pbd_core::geo::north_east(patch.cells[at].direction);
+        let d0 = patch.side_toward(at, east);
+        let mut wanted = std::collections::BTreeSet::new();
+        for &[c, r] in &def.cells {
+            wanted.insert((c, r));
+            for d in 0..6 {
+                wanted.insert(neighbour(c, r, d));
+            }
+        }
+        let chart = chart(&patch, (def.cells[0][0], def.cells[0][1]), at, d0, &wanted).unwrap();
+        let floor = terrain.sample(site).floor_radius;
+        let mut meshes = Meshes::new();
+        let house = cut_building(
+            &mut meshes,
+            &|_: &str| 2.0,
+            &patch,
+            &chart,
+            &def,
+            kits.get(&def.kit).unwrap(),
+            PLANET_RADIUS,
+            floor - PLANET_RADIUS,
+        )
+        .unwrap();
+        (terrain, flat, house)
+    }
+
+    /// Put the walker's body at a point of a house's frame, `feet` over its
+    /// ground floor, standing.
+    fn stand_in(
+        app: &mut App,
+        house: &pbd_core::settlement::pieces::BuildingSolids,
+        x: f32,
+        feet: f32,
+        z: f32,
+    ) {
+        let p = house
+            .frame
+            .world(Vec3::new(x, feet + HALF_HEIGHT + CONTACT_SKIN, z));
+        place_walker(app.world_mut(), p.normalize(), None);
+        let body = app.world().resource::<WalkingState>().body;
+        app.world_mut().get_mut::<Position>(body).unwrap().0 = p;
+        let mut ground = app.world_mut().get_mut::<GroundState>(body).unwrap();
+        ground.previous = p;
+        ground.grounded = true;
+    }
+
+    /// What a scripted walk did: ticks whose eye moved more than 0.12 m (the
+    /// pitch line at the walk line climbs 0.088 m a tick at 8 m/s, and a
+    /// tread would jump 0.2 m), ticks in the air, and where it ended.
+    struct Walk {
+        jumps: u32,
+        airborne: u32,
+        ticks: u32,
+        end: Vec3,
+    }
+
+    /// Hold W, steering each tick along `steer` of the body's place in the
+    /// house's plan, until `done` of its place in the frame (feet height in
+    /// `y`) or `max` ticks.
+    fn walk_house(
+        app: &mut App,
+        house: &pbd_core::settlement::pieces::BuildingSolids,
+        steer: impl Fn(Vec2) -> Vec2,
+        mut done: impl FnMut(Vec3) -> bool,
+        max: u32,
+    ) -> Walk {
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        let body = app.world().resource::<WalkingState>().body;
+        let f = house.frame;
+        let mut walk = Walk {
+            jumps: 0,
+            airborne: 0,
+            ticks: 0,
+            end: Vec3::ZERO,
+        };
+        let mut eye = None::<f32>;
+        for _ in 0..max {
+            let p = app.world().get::<Position>(body).unwrap().0;
+            let mut local = f.local(p);
+            local.y -= HALF_HEIGHT;
+            walk.end = local;
+            if done(local) {
+                break;
+            }
+            let d = steer(Vec2::new(local.x, local.z));
+            let dir = f.x * d.x + f.z * d.y;
+            app.world_mut()
+                .resource_mut::<WalkingState>()
+                .face(p.normalize(), dir);
+            app.update();
+            walk.ticks += 1;
+            let p = app.world().get::<Position>(body).unwrap().0;
+            let e = p.length();
+            if eye.is_some_and(|last| (e - last).abs() > 0.12) {
+                walk.jumps += 1;
+            }
+            eye = Some(e);
+            if !app.world().get::<GroundState>(body).unwrap().grounded {
+                walk.airborne += 1;
+            }
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::KeyW);
+        walk
+    }
+
+    /// Slice 2b, as `tenebris-towns` section 5 did in the mockup: up and
+    /// down a Fieldstone house's newel at the walking speed, on the walk
+    /// line, with no eye jump and never a tick in the air.
+    #[test]
+    fn a_walker_climbs_a_newel_and_comes_down_it_on_its_pitch_line() {
+        use pbd_core::settlement::pieces::Surface;
+        let (terrain, flat, house) = village_house("Fieldstone house");
+        let Some(&Surface::Newel {
+            centre,
+            start,
+            sense,
+            top,
+            ..
+        }) = house
+            .surfaces
+            .iter()
+            .find(|s| matches!(s, Surface::Newel { .. }))
+        else {
+            panic!("a newel");
+        };
+        let walk_r = 0.72;
+        let on = |phi: f32| {
+            let a = start + sense * phi;
+            centre + Vec2::new(a.cos(), a.sin()) * walk_r
+        };
+        let steer = move |climb: f32| {
+            move |p: Vec2| {
+                let d = p - centre;
+                let r = d.length().max(1e-3);
+                let a = d.y.atan2(d.x);
+                let along = Vec2::new(-a.sin(), a.cos()) * (sense * climb);
+                (along + d / r * ((walk_r - r) * 3.0)).normalize()
+            }
+        };
+        let mut app = app_with_terrain_at(terrain, flat);
+        app.insert_resource(Structures(vec![house.clone()]));
+        let foot = on(-0.3);
+        stand_in(&mut app, &house, foot.x, 0.0, foot.y);
+        let up = walk_house(&mut app, &house, steer(1.0), |l| l.y >= top - 0.05, 400);
+        assert!(
+            up.end.y >= top - 0.05,
+            "reached {} of {top} m in {} ticks",
+            up.end.y,
+            up.ticks
+        );
+        assert_eq!(up.jumps, 0, "eye jumps going up");
+        assert_eq!(up.airborne, 0, "ticks in the air going up");
+
+        let mut app = app_with_terrain_at(PlanetContact::test_flat_land(5).0, flat);
+        app.insert_resource(Structures(vec![house.clone()]));
+        let landing = on(std::f32::consts::TAU * top / 3.0 + 0.3);
+        stand_in(&mut app, &house, landing.x, top, landing.y);
+        let down = walk_house(&mut app, &house, steer(-1.0), |l| l.y <= 0.05, 400);
+        assert!(down.end.y <= 0.05, "came down to {} m", down.end.y);
+        assert_eq!(down.jumps, 0, "eye jumps coming down");
+        assert_eq!(down.airborne, 0, "ticks in the air coming down");
+    }
+
+    /// Up and down a half-timbered house's straight flight.
+    #[test]
+    fn a_walker_climbs_a_flight_and_comes_down_it_on_its_pitch_line() {
+        use pbd_core::settlement::pieces::Surface;
+        let (terrain, flat, house) = village_house("Half-timbered house");
+        let Some(&Surface::Flight { foot, dir, len, .. }) = house
+            .surfaces
+            .iter()
+            .find(|s| matches!(s, Surface::Flight { .. }))
+        else {
+            panic!("a flight");
+        };
+        let side = Vec2::new(-dir.y, dir.x);
+        let steer = move |way: f32| {
+            move |p: Vec2| (dir * way - side * ((p - foot).dot(side) * 2.0)).normalize()
+        };
+        let mut app = app_with_terrain_at(terrain, flat);
+        app.insert_resource(Structures(vec![house.clone()]));
+        let start = foot - dir * 1.0;
+        stand_in(&mut app, &house, start.x, 0.0, start.y);
+        let up = walk_house(&mut app, &house, steer(1.0), |l| l.y >= 3.0 - 0.05, 300);
+        assert!(
+            up.end.y >= 2.95,
+            "reached {} m in {} ticks",
+            up.end.y,
+            up.ticks
+        );
+        assert_eq!(up.jumps, 0, "eye jumps going up");
+        assert_eq!(up.airborne, 0, "ticks in the air going up");
+
+        let mut app = app_with_terrain_at(PlanetContact::test_flat_land(5).0, flat);
+        app.insert_resource(Structures(vec![house.clone()]));
+        let top = foot + dir * (len - 0.3);
+        stand_in(
+            &mut app,
+            &house,
+            top.x,
+            3.0 + pbd_core::settlement::pieces::LIFT_M,
+            top.y,
+        );
+        let down = walk_house(&mut app, &house, steer(-1.0), |l| l.y <= 0.05, 300);
+        assert!(down.end.y <= 0.05, "came down to {} m", down.end.y);
+        assert_eq!(down.jumps, 0, "eye jumps coming down");
+        assert_eq!(down.airborne, 0, "ticks in the air coming down");
+    }
+
+    /// A refused move slides (`tenebris-towns` section 5): brushing a wall at
+    /// 8.6 degrees for a second, the walker slides on along it (the mockup
+    /// went 7.35 m), never into it.
+    #[test]
+    fn a_walker_brushing_a_wall_slides_along_it() {
+        use pbd_core::settlement::pieces::{BuildingSolids, Frame, Solid};
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        let up = flat.normalize();
+        let heading = up.any_orthonormal_vector();
+        let frame = Frame {
+            origin: up * terrain.sample(up).floor_radius,
+            x: heading,
+            y: up,
+            z: heading.cross(up),
+        };
+        let wall = BuildingSolids {
+            frame,
+            reach_m: 30.0,
+            solids: vec![Solid {
+                outline: vec![
+                    Vec2::new(2.9, -20.0),
+                    Vec2::new(3.1, -20.0),
+                    Vec2::new(3.1, 20.0),
+                    Vec2::new(2.9, 20.0),
+                ],
+                y0: 0.0,
+                y1: 3.0,
+            }],
+            roof_plan: Vec::new(),
+            surfaces: Vec::new(),
+            doors: Vec::new(),
+        };
+        let mut app = app_with_terrain_at(terrain, flat);
+        app.insert_resource(Structures(vec![wall.clone()]));
+        stand_in(&mut app, &wall, 2.55, 0.0, -8.0);
+        let a = 8.6f32.to_radians();
+        let brush = Vec2::new(a.sin(), a.cos());
+        let mut deepest = f32::MIN;
+        let walk = walk_house(
+            &mut app,
+            &wall,
+            |_| brush,
+            |l| {
+                deepest = deepest.max(l.x);
+                false
+            },
+            60,
+        );
+        assert!(
+            walk.end.z > -8.0 + 6.0,
+            "slid {} m along the wall",
+            walk.end.z + 8.0
+        );
+        assert!(
+            deepest < 2.9 - BODY_RADIUS + 0.05,
+            "into the wall to {deepest}"
+        );
+    }
+
+    /// A door (slice 2b): shut, it stops the walker at its doorway; E in
+    /// reach opens it, the player's record goes to the save, and the same
+    /// walk goes in.
+    #[test]
+    fn a_shut_door_stops_the_walker_and_e_opens_it_into_the_save() {
+        use crate::towns::{TownDoor, use_doors};
+        let (terrain, flat, house) = village_house("Fieldstone house");
+        let leaf = house.doors[0].clone();
+        let (out, middle) = (leaf.out, leaf.middle);
+        // How far in past the doorway's middle, along the way in.
+        let inward = move |l: Vec3| (Vec2::new(l.x, l.z) - middle).dot(-out);
+        let mut app = app_with_terrain_at(terrain, flat);
+        app.insert_resource(Structures(vec![house.clone()]))
+            .insert_resource(crate::saves::WorldSave::memory_only())
+            .add_systems(Update, use_doors);
+        let record = pbd_core::settlement::record::door_id(1 << 16, leaf.index);
+        app.world_mut().spawn(TownDoor {
+            building: 0,
+            door: 0,
+            record,
+            angle: 0.0,
+        });
+        let outside = middle + out * 2.0;
+        stand_in(&mut app, &house, outside.x, 0.0, outside.y);
+        let shut = walk_house(&mut app, &house, move |_| -out, |_| false, 90);
+        // The leaf hangs at the wall's inner face, so the body steps into the
+        // doorway's reveal and stops against it, short of the middle.
+        assert!(
+            inward(shut.end) < 0.0,
+            "stopped at the shut door: {} m in",
+            inward(shut.end)
+        );
+
+        let near = middle + out * 1.0;
+        stand_in(&mut app, &house, near.x, 0.0, near.y);
+        let body = app.world().resource::<WalkingState>().body;
+        let p = app.world().get::<Position>(body).unwrap().0;
+        let f = house.frame;
+        app.world_mut()
+            .resource_mut::<WalkingState>()
+            .face(p.normalize(), f.x * -out.x + f.z * -out.y);
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyE);
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::KeyE);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .clear_just_pressed(KeyCode::KeyE);
+        assert!(
+            app.world().resource::<Structures>().0[0].doors[0].open,
+            "E opened it"
+        );
+        let save = app.world().resource::<crate::saves::WorldSave>();
+        assert!(
+            pbd_core::settlement::record::door_open(&save.records, record),
+            "the player's door record is in the save"
+        );
+        let open = walk_house(&mut app, &house, move |_| -out, |l| inward(l) > 1.5, 90);
+        assert!(inward(open.end) > 1.5, "went in: {} m", inward(open.end));
     }
 }

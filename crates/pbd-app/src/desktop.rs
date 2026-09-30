@@ -127,6 +127,14 @@ pub struct Launch {
     /// meadow whose cover sits near 0.6 at launch, and the body's average is
     /// 0.18. Moves the field only, not the sun or the sea.
     pub weather_at: f32,
+    /// `--open-doors` opens every door of the towns when they are built, as
+    /// the player would, without writing it to the save: a capture that
+    /// looks through a doorway (`cities-in-the-world` slice 2b). Doors start
+    /// shut.
+    pub open_doors: bool,
+    /// `--up M` stands a capture's walker on the highest town floor within M
+    /// metres of the ground at `--at`: upstairs in a house.
+    pub up: f32,
     /// `--dig-ahead` digs along the camera's LOOK rather than straight down.
     /// Digging down is right for proving the verb and useless for judging the
     /// result: the walker falls into its own pit and the eye ends up inside
@@ -229,6 +237,8 @@ impl Launch {
             at: None,
             rain: 0.0,
             weather_at: 0.0,
+            open_doors: false,
+            up: 0.0,
             world: None,
             load: None,
             time: None,
@@ -568,6 +578,15 @@ impl Launch {
                         .expect("invalid weather seconds");
                     assert!(seconds.is_finite(), "weather seconds must be finite");
                     result.weather_at = seconds;
+                }
+                "--open-doors" => result.open_doors = true,
+                "--up" => {
+                    i += 1;
+                    result.up = args
+                        .get(i)
+                        .and_then(|v| v.parse().ok())
+                        .filter(|m: &f32| m.is_finite() && *m >= 0.0)
+                        .expect("--up requires metres");
                 }
                 "--verify-flight" => {}
                 "--verify-route" => {
@@ -940,6 +959,7 @@ pub fn run(args: &[String]) {
             yaw: launch.yaw.unwrap_or(0.0).to_radians(),
             turn: launch.turn.to_radians(),
             exact_start: launch.at.is_some(),
+            start_up_m: launch.up,
             ..default()
         })
         .add_plugins((
@@ -955,6 +975,9 @@ pub fn run(args: &[String]) {
         });
         if launch.at.is_some() {
             app.insert_resource(pbd_app::towns::RespawnInTown);
+        }
+        if launch.open_doors {
+            app.insert_resource(pbd_app::towns::OpenDoors);
         }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));

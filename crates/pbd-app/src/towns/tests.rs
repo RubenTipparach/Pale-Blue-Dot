@@ -232,6 +232,59 @@ fn print_where_to_stand_for_the_mockup_shots() {
     let (lc, lr) = pbd_core::settlement::neighbour(20, 17, 0);
     let ahead = laid.patch.cells[laid.chart.cell(lc, lr).unwrap()].direction - lane.direction;
     spot("the lane at (20, 17)", lane.direction * radius, ahead);
+    // Slice 2b: the Fieldstone house's newel, from the room beside its
+    // doorway, below (`--up 0`) and above (`--up 3.2`); the first
+    // half-timbered house's flight, from before its foot and from its
+    // landing (`--up 3.2`).
+    use pbd_core::settlement::pieces::Surface;
+    let plan = |b: &pbd_core::settlement::pieces::BuildingSolids, p: Vec2| {
+        b.frame.world(Vec3::new(p.x, 0.0, p.y))
+    };
+    let dir = |b: &pbd_core::settlement::pieces::BuildingSolids, d: Vec2| {
+        b.frame.x * d.x + b.frame.z * d.y
+    };
+    let b = &laid.solids[0];
+    if let Some(&Surface::Newel { centre, start, .. }) = b
+        .surfaces
+        .iter()
+        .find(|s| matches!(s, Surface::Newel { .. }))
+    {
+        let entry = Vec2::new(start.cos(), start.sin());
+        spot(
+            "the newel, from the room beside it",
+            plan(b, centre + entry * 2.6),
+            dir(b, -entry),
+        );
+    }
+    let (n, b) = laid
+        .solids
+        .iter()
+        .enumerate()
+        .find(|(_, b)| {
+            b.surfaces
+                .iter()
+                .any(|s| matches!(s, Surface::Flight { .. }))
+        })
+        .expect("a flight");
+    if let Some(&Surface::Flight {
+        foot, dir: up, len, ..
+    }) = b
+        .surfaces
+        .iter()
+        .find(|s| matches!(s, Surface::Flight { .. }))
+    {
+        let name = &template.buildings[n].name;
+        spot(
+            &format!("the {name}'s flight, from before its foot"),
+            plan(b, foot - up * 1.4),
+            dir(b, up),
+        );
+        spot(
+            &format!("the {name}'s flight, from its landing"),
+            plan(b, foot + up * (len - 0.35)),
+            dir(b, -up),
+        );
+    }
 }
 
 /// A measurement instrument, run by hand: the rain over Holbrook at 11:00,
@@ -271,4 +324,53 @@ fn print_the_rain_over_holbrook() {
         }
         println!("{line}");
     }
+}
+
+/// Slice 2b: a door the player opened is written to the save as theirs, and
+/// a reopened world finds it open, and every other door shut.
+#[test]
+fn a_door_opened_is_open_when_the_world_is_opened_again() {
+    use crate::saves::{self, LOG, WorldSave};
+    let root = temporary("door");
+    let slot = saves::create(&root, "Doors", 43).unwrap();
+    let config = *crate::planet::terrain_config();
+    let site = holbrook();
+    let template = load_template("village");
+    let town = lay_out(&site, &template, &config).unwrap();
+    let laid = build(&site, &town, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let door = record::door_id(
+        record::building_id(site.id, 0),
+        laid.solids[0].doors[0].index,
+    );
+    {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        save.store(&Author::Player(0), vec![record::door_record(door, true)])
+            .expect("stored");
+        save.drain();
+    }
+    let text = std::fs::read_to_string(root.join(&slot.id).join(LOG)).unwrap();
+    assert!(
+        text.lines()
+            .any(|l| l.starts_with(&format!("rec @p door {door} 1 "))),
+        "the player's line: {text}"
+    );
+    let reopened = WorldSave::open(root.clone(), saves::list(&root)[0].clone());
+    let mut solids = laid.solids.clone();
+    door_states(&mut solids, site.id, Some(&reopened.records), false);
+    assert!(solids[0].doors[0].open, "open again");
+    let shut = solids
+        .iter()
+        .flat_map(|b| &b.doors)
+        .filter(|d| !d.open)
+        .count();
+    assert_eq!(
+        shut,
+        solids.iter().map(|b| b.doors.len()).sum::<usize>() - 1
+    );
+    door_states(&mut solids, site.id, None, true);
+    assert!(
+        solids.iter().flat_map(|b| &b.doors).all(|d| d.open),
+        "--open-doors"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }

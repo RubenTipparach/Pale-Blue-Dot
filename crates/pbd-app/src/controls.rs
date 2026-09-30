@@ -214,7 +214,7 @@ const WASD: [Key; 4] = [
     Key::Board(KeyCode::KeyD),
 ];
 
-const ON_FOOT: [Binding; 10] = [
+const ON_FOOT: [Binding; 11] = [
     row(&WASD, " ", "move"),
     row(
         &[Key::Board(KeyCode::Space)],
@@ -222,6 +222,7 @@ const ON_FOOT: [Binding; 10] = [
         "jump, and rise in water",
     ),
     row(&[Key::Board(KeyCode::ShiftLeft)], " ", "sprint"),
+    row(&[Key::Board(KeyCode::KeyE)], " ", "open or shut a door"),
     row(
         &[Key::Mouse(MouseButton::Left)],
         " ",

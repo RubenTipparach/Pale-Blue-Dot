@@ -108,6 +108,194 @@ impl Solid {
     }
 }
 
+/// A floor the walker stands on (`tenebris-towns` section 4): a region in
+/// plan whose top is a function of position, and its underside, in its
+/// building's frame. A stair's top is its pitch line, not the tread under
+/// the point, so the eye climbs at the stair's slope.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Surface {
+    /// A flat floor over a convex outline, counter-clockwise.
+    Floor {
+        outline: Vec<Vec2>,
+        top: f32,
+        bottom: f32,
+    },
+    /// A straight flight: the foot of its first riser at `foot`, climbing
+    /// along `dir` for `len`, `half_width` either side, from `base` by
+    /// `risers` of `rise`; the last tread is the landing.
+    Flight {
+        foot: Vec2,
+        dir: Vec2,
+        len: f32,
+        half_width: f32,
+        base: f32,
+        rise: f32,
+        risers: u32,
+    },
+    /// A newel stair in one cell: `start` the angle it climbs from, turning
+    /// `sense` (+1 or -1), a turn every `turn_m` from `base` to `top`, with
+    /// `landing` radians of floor past the top and `margin` before the
+    /// foot; nothing within `newel_r` of the centre, nothing outside the
+    /// cell's `outline`.
+    Newel {
+        centre: Vec2,
+        start: f32,
+        sense: f32,
+        base: f32,
+        top: f32,
+        turn_m: f32,
+        newel_r: f32,
+        landing: f32,
+        margin: f32,
+        outline: Vec<Vec2>,
+    },
+}
+
+/// A tread's depth under its top: what a stair's underside is.
+pub const TREAD_M: f32 = 0.26;
+
+impl Surface {
+    /// Every `(underside, top)` the surface has over `p` in plan.
+    pub fn intervals(&self, p: Vec2, out: &mut Vec<(f32, f32)>) {
+        match self {
+            Surface::Floor {
+                outline,
+                top,
+                bottom,
+            } => {
+                if inside(outline, p) {
+                    out.push((*bottom, *top));
+                }
+            }
+            Surface::Flight {
+                foot,
+                dir,
+                len,
+                half_width,
+                base,
+                rise,
+                risers,
+            } => {
+                let d = p - *foot;
+                let u = d.dot(*dir);
+                if u < 0.0 || u > *len || d.perp_dot(*dir).abs() > *half_width {
+                    return;
+                }
+                let n = *risers as f32;
+                let run = len / n;
+                let top = base + (u / ((n - 1.0) * run)).clamp(0.0, 1.0) * n * rise;
+                // Boxed below, down to the floor it stands on.
+                out.push((base - 0.01, top));
+            }
+            Surface::Newel {
+                centre,
+                start,
+                sense,
+                base,
+                top,
+                turn_m,
+                newel_r,
+                landing,
+                margin,
+                outline,
+            } => {
+                let d = p - *centre;
+                if d.length() < *newel_r || !inside(outline, p) {
+                    return;
+                }
+                let tau = std::f32::consts::TAU;
+                let a = (sense * (d.y.atan2(d.x) - start)).rem_euclid(tau);
+                let end = (top - base) / turn_m * tau;
+                let mut k = -1.0f32;
+                while k * tau + a <= end + landing {
+                    let phi = a + k * tau;
+                    k += 1.0;
+                    if phi < -margin {
+                        continue;
+                    }
+                    let t = base + phi.clamp(0.0, end) / tau * turn_m;
+                    out.push((t - TREAD_M, t));
+                }
+            }
+        }
+    }
+}
+
+/// Whether a convex, counter-clockwise outline holds `p`.
+fn inside(outline: &[Vec2], p: Vec2) -> bool {
+    let n = outline.len();
+    n >= 3
+        && (0..n).all(|i| {
+            let (a, b) = (outline[i], outline[(i + 1) % n]);
+            (b - a).perp_dot(p - a) >= 0.0
+        })
+}
+
+/// A door's leaf (`tenebris-towns` section 8): hinged at the inner face of
+/// its jamb, `width` along the doorway when shut, swung inward against the
+/// wall when open. Shut, it is a solid; open, it is none. `index` is the
+/// door's number in its building's doors.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DoorLeaf {
+    pub index: usize,
+    pub hinge: Vec2,
+    /// Along the doorway from the hinge.
+    pub along: Vec2,
+    /// Out of the building, square to the wall.
+    pub out: Vec2,
+    pub width: f32,
+    pub y0: f32,
+    pub y1: f32,
+    /// The doorway's middle in plan, where E reaches for it.
+    pub middle: Vec2,
+    pub open: bool,
+}
+
+/// A door leaf's thickness.
+pub const LEAF_M: f32 = 0.07;
+
+impl DoorLeaf {
+    /// The leaf's direction from the hinge and its thickness's, swung
+    /// `angle` from shut (0) toward open (a quarter turn inward).
+    fn axes(&self, angle: f32) -> (Vec2, Vec2) {
+        let (c, s) = (angle.cos(), angle.sin());
+        (self.along * c - self.out * s, self.out * c + self.along * s)
+    }
+
+    /// The shut leaf as a solid.
+    pub fn solid(&self) -> Solid {
+        let (d, t) = self.axes(0.0);
+        let h = self.hinge;
+        Solid {
+            outline: ccw(vec![
+                h,
+                h + d * self.width,
+                h + d * self.width + t * LEAF_M,
+                h + t * LEAF_M,
+            ]),
+            y0: self.y0,
+            y1: self.y1,
+        }
+    }
+
+    /// The leaf drawn swung `angle` from shut, in planet-local metres.
+    pub fn mesh(&self, frame: Frame, angle: f32, repeat_m: &dyn Fn(&str) -> f32) -> Meshes {
+        let (d, t) = self.axes(angle);
+        let c = self.hinge + d * (self.width / 2.0) + t * (LEAF_M / 2.0);
+        let mut meshes = Meshes::new();
+        let mut sink = Sink::new(&mut meshes, repeat_m, frame);
+        sink.plain_box(
+            "timber",
+            c.x,
+            self.y0,
+            c.y,
+            Vec3::new(self.width - 0.04, self.y1 - self.y0 - 0.02, LEAF_M),
+            d.y.atan2(d.x),
+        );
+        meshes
+    }
+}
+
 /// One building's solids, in its frame.
 #[derive(Clone, Debug)]
 pub struct BuildingSolids {
@@ -118,6 +306,10 @@ pub struct BuildingSolids {
     /// The roof's plan, eaves included, in the frame: what no other roof
     /// may overlap (`tenebris-towns` section 2).
     pub roof_plan: Vec<Vec2>,
+    /// Its upper floors and stairs (slice 2b).
+    pub surfaces: Vec<Surface>,
+    /// Its door leaves, open or shut.
+    pub doors: Vec<DoorLeaf>,
 }
 
 impl BuildingSolids {
@@ -128,9 +320,77 @@ impl BuildingSolids {
         if Vec2::new(p.x, p.z).length() > self.reach_m + radius {
             return false;
         }
-        self.solids
+        let held = |s: &Solid| s.holds(p.x, p.z, p.y - half_height, p.y + half_height, radius);
+        self.solids.iter().any(held) || self.doors.iter().any(|d| !d.open && held(&d.solid()))
+    }
+
+    /// At a planet-local point, a foot: the highest top of a surface within
+    /// `reach` above it, the floor, and the lowest underside of a surface
+    /// above that, the ceiling; both as planet-local radii.
+    pub fn stand(&self, point: Vec3, reach: f32) -> (Option<f32>, Option<f32>) {
+        let p = self.frame.local(point);
+        let plan = Vec2::new(p.x, p.z);
+        if self.surfaces.is_empty() || plan.length() > self.reach_m {
+            return (None, None);
+        }
+        let mut spans = Vec::new();
+        for s in &self.surfaces {
+            s.intervals(plan, &mut spans);
+        }
+        let floor = spans
             .iter()
-            .any(|s| s.holds(p.x, p.z, p.y - half_height, p.y + half_height, radius))
+            .map(|s| s.1)
+            .filter(|&top| top <= p.y + reach)
+            .max_by(f32::total_cmp);
+        let ceiling = spans
+            .iter()
+            .filter(|s| s.1 > p.y + reach && s.0 > p.y)
+            .map(|s| s.0)
+            .min_by(f32::total_cmp);
+        let radius = |y: f32| self.frame.world(Vec3::new(p.x, y, p.z)).length();
+        (floor.map(radius), ceiling.map(radius))
+    }
+
+    /// The way out of whatever solid holds a body centred at `centre`: from
+    /// the nearest point of its outline toward the body, planet-local and
+    /// along the ground. A refused move slides along the face this is the
+    /// normal of (`tenebris-towns` section 4).
+    pub fn push_normal(&self, centre: Vec3, half_height: f32, radius: f32) -> Option<Vec3> {
+        let p = self.frame.local(centre);
+        let plan = Vec2::new(p.x, p.z);
+        let shut: Vec<Solid> = self
+            .doors
+            .iter()
+            .filter(|d| !d.open)
+            .map(DoorLeaf::solid)
+            .collect();
+        let mut best: Option<(f32, Vec2)> = None;
+        for s in self.solids.iter().chain(&shut) {
+            if !s.holds(p.x, p.z, p.y - half_height, p.y + half_height, radius) {
+                continue;
+            }
+            let n = s.outline.len();
+            let within = inside(&s.outline, plan);
+            for i in 0..n {
+                let (a, b) = (s.outline[i], s.outline[(i + 1) % n]);
+                let e = b - a;
+                let t = ((plan - a).dot(e) / e.length_squared().max(1e-9)).clamp(0.0, 1.0);
+                let q = a + e * t;
+                let d = q.distance(plan);
+                // Inside the outline the way out is the edge's own outward
+                // normal; outside it, from the nearest point to the body.
+                let away = if within {
+                    Vec2::new(e.y, -e.x).normalize_or_zero()
+                } else {
+                    (plan - q).normalize_or_zero()
+                };
+                if best.is_none_or(|(bd, _)| d < bd) {
+                    best = Some((d, away));
+                }
+            }
+        }
+        best.map(|(_, n)| self.frame.world_dir(Vec3::new(n.x, 0.0, n.y)))
+            .filter(|n| *n != Vec3::ZERO)
     }
 
     /// What a body centred at `centre` (planet-local), `radius` round, meets
@@ -158,9 +418,23 @@ pub struct Sink<'a> {
     pub frame: Frame,
     pub solids: Vec<Solid>,
     pub roof_plan: Vec<Vec2>,
+    pub surfaces: Vec<Surface>,
+    pub doors: Vec<DoorLeaf>,
 }
 
-impl Sink<'_> {
+impl<'a> Sink<'a> {
+    pub fn new(meshes: &'a mut Meshes, repeat_m: &'a dyn Fn(&str) -> f32, frame: Frame) -> Self {
+        Self {
+            meshes,
+            repeat_m,
+            frame,
+            solids: Vec::new(),
+            roof_plan: Vec::new(),
+            surfaces: Vec::new(),
+            doors: Vec::new(),
+        }
+    }
+
     /// A convex planar polygon in frame coordinates, turned to face `want`,
     /// with texture coordinates from `uv` or, by default, the mockup's
     /// `uvWorld`: floors by their plan, walls by their run and height.
@@ -374,12 +648,14 @@ fn uv_world(p: Vec3, n: Vec3, rep: f32) -> Vec2 {
 }
 
 /// An opening in a wall: a door or a window, `w` wide from `yb` to `ye`.
+/// A door has its number in its building's doors, and a leaf; a doorway
+/// with no door (a stair's) has neither.
 #[derive(Clone, Copy, Debug)]
 struct Opening {
     yb: f32,
     ye: f32,
     w: f32,
-    door: bool,
+    door: Option<usize>,
     sill: bool,
     shutters: bool,
 }
@@ -482,19 +758,15 @@ pub fn cut_building(
         .map(|p| p.length())
         .fold(0.0f32, f32::max)
         + 1.0;
-    let mut sink = Sink {
-        meshes,
-        repeat_m,
-        frame,
-        solids: Vec::new(),
-        roof_plan: Vec::new(),
-    };
-    cut(&mut sink, &plan, def, kit);
+    let mut sink = Sink::new(meshes, repeat_m, frame);
+    cut(&mut sink, &plan, def, kit)?;
     Ok(BuildingSolids {
         frame,
         reach_m,
         solids: sink.solids,
         roof_plan: sink.roof_plan,
+        surfaces: sink.surfaces,
+        doors: sink.doors,
     })
 }
 
@@ -506,7 +778,7 @@ fn edge_ends(plan: &Plan, i: usize, d: usize) -> (Vec2, Vec2) {
 /// its wall's thickness and its material.
 type Post = (Vec2, f32, f32, f32, String);
 
-fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) {
+fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(), String> {
     let storeys = def.storeys.max(1);
     let storey_m = if kit.hut {
         HUT_STOREY_M
@@ -516,30 +788,59 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) {
     let top = storeys as f32 * storey_m;
     let (door_w, door_h) = kit.door_m;
     let inside = |c: i32, r: i32| plan.index(c, r).is_some();
+    // The stair, from the building's stair cells (slice 2b).
+    let stair = stair_of(plan, def)?;
     // Floors: the ground floor's boards over the terrace, and a slab and a
-    // beam under every floor above.
+    // beam under every floor above. No floor is cut over a newel's cell,
+    // and a straight flight's two cells are floored only either side of its
+    // strip: the well.
     for (i, &(_, _)) in plan.cells.iter().enumerate() {
         let hex: Vec<Vec2> = plan.corners[i].to_vec();
         sink.prism(&kit.floor, &kit.floor, &hex, -0.05, LIFT_M, None);
         if !kit.hut {
+            let in_stair = stair.as_ref().is_some_and(|s| s.holds(i));
             for s in 1..storeys {
                 let fy = s as f32 * storey_m;
-                sink.prism(
-                    "plank",
-                    "timber",
-                    &hex,
-                    fy - SLAB_M,
-                    fy + LIFT_M,
-                    Some("plank"),
-                );
-                // The slab is a ceiling to the storey under it.
-                sink.solids.push(Solid {
-                    outline: ccw(hex.clone()),
-                    y0: fy - SLAB_M,
-                    y1: fy + LIFT_M,
-                });
+                let parts: Vec<Vec<Vec2>> = match &stair {
+                    Some(Stair::Newel { cell, .. }) if *cell == i => Vec::new(),
+                    Some(st @ Stair::Flight { .. }) if st.holds(i) && s == 1 => {
+                        let (foot, dir, hw) = flight_strip(plan, st);
+                        let side = Vec2::new(-dir.y, dir.x);
+                        [1.0f32, -1.0]
+                            .iter()
+                            .map(|&k| clip_half(&hex, foot + side * (k * hw), side * k))
+                            .filter(|p| p.len() >= 3)
+                            .collect()
+                    }
+                    _ => vec![hex.clone()],
+                };
+                for part in parts {
+                    sink.prism(
+                        "plank",
+                        "timber",
+                        &part,
+                        fy - SLAB_M,
+                        fy + LIFT_M,
+                        Some("plank"),
+                    );
+                    // The slab is a ceiling to the storey under it, and the
+                    // floor of the one it carries.
+                    sink.solids.push(Solid {
+                        outline: ccw(part.clone()),
+                        y0: fy - SLAB_M,
+                        y1: fy + LIFT_M,
+                    });
+                    sink.surfaces.push(Surface::Floor {
+                        outline: ccw(part),
+                        top: fy + LIFT_M,
+                        bottom: fy - SLAB_M,
+                    });
+                }
             }
             for s in 1..=storeys {
+                if in_stair && s < storeys {
+                    continue;
+                }
                 let fy = s as f32 * storey_m;
                 let c = plan.centres[i];
                 let run = (plan.corners[i][0] - plan.corners[i][3]).length();
@@ -569,12 +870,12 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) {
                 let y1 = y0 + storey_m;
                 let at = [c, r, d as i32, s as i32];
                 let mut openings = Vec::new();
-                if def.doors.contains(&at) {
+                if let Some(index) = def.doors.iter().position(|x| *x == at) {
                     openings.push(Opening {
                         yb: y0,
                         ye: y0 + door_h,
                         w: door_w,
-                        door: true,
+                        door: Some(index),
                         sill: false,
                         shutters: false,
                     });
@@ -584,7 +885,7 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) {
                             yb: y0 + 1.6,
                             ye: y0 + 4.4,
                             w: 0.9,
-                            door: false,
+                            door: None,
                             sill: true,
                             shutters: false,
                         });
@@ -593,7 +894,7 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) {
                             yb: y0 + 1.0,
                             ye: y0 + 1.0 + h,
                             w,
-                            door: false,
+                            door: None,
                             sill: !kit.hut,
                             shutters: false,
                         });
@@ -602,7 +903,7 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) {
                             yb: y0 + 1.0,
                             ye: y0 + 1.0 + WINDOW_M.1,
                             w: WINDOW_M.0,
-                            door: false,
+                            door: None,
                             sill: true,
                             shutters: true,
                         });
@@ -715,6 +1016,366 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) {
         sink.plain_box(m, p.x, top, p.y, Vec3::new(0.8, h, 0.8), 0.0);
         sink.solid_box(p.x, top, p.y, Vec3::new(0.8, h, 0.8), 0.0);
     }
+    if let Some(stair) = &stair {
+        cut_stair(sink, plan, kit, stair, storeys, storey_m);
+    }
+    Ok(())
+}
+
+/// A newel's winders a turn and their rise (`tenebris-towns` section 3).
+const NEWEL_WINDERS: u32 = 15;
+/// The newel post's radius.
+const NEWEL_R: f32 = 0.2;
+/// The newel's own walls, on its edges inside the building.
+const NEWEL_WALL_M: f32 = 0.2;
+/// The floor past a newel's last winder before its rail, radians.
+const NEWEL_LANDING: f32 = std::f32::consts::PI / 6.0;
+/// A straight flight's risers.
+const FLIGHT_RISERS: u32 = 16;
+/// A stair's doorway, wide by high (the mockup's newel exits).
+const STAIR_DOOR_M: (f32, f32) = (0.95, 2.2);
+
+/// A building's stair, from its stair cells as the mockup's `townHouse`
+/// makes it: one cell is a newel stair, two in a row a straight flight.
+enum Stair {
+    /// In plan cell `cell`, climbing from its edge `entry`.
+    Newel { cell: usize, entry: usize },
+    /// From plan cell `from` to its neighbour `to`, across edge `d`.
+    Flight { from: usize, to: usize, d: usize },
+}
+
+impl Stair {
+    fn holds(&self, i: usize) -> bool {
+        match self {
+            Stair::Newel { cell, .. } => *cell == i,
+            Stair::Flight { from, to, .. } => *from == i || *to == i,
+        }
+    }
+}
+
+fn stair_of(plan: &Plan, def: &BuildingDef) -> Result<Option<Stair>, String> {
+    let find = |[c, r]: [i32; 2]| {
+        plan.index(c, r)
+            .ok_or_else(|| format!("{}: stair cell ({c}, {r}) is not the building's", def.name))
+    };
+    match def.stair_cells.as_slice() {
+        [] => Ok(None),
+        [one] => {
+            let cell = find(*one)?;
+            let (c, r) = plan.cells[cell];
+            // The first edge onto another of the building's cells that is not
+            // the front door's.
+            let door_cells: Vec<(i32, i32)> = def
+                .doors
+                .iter()
+                .filter(|d| d[3] == 0)
+                .map(|d| (d[0], d[1]))
+                .collect();
+            let entry = (0..6)
+                .find(|&d| {
+                    let n = neighbour(c, r, d);
+                    plan.index(n.0, n.1).is_some() && !door_cells.contains(&n)
+                })
+                .ok_or_else(|| format!("{}: the newel at ({c}, {r}) has no way in", def.name))?;
+            Ok(Some(Stair::Newel { cell, entry }))
+        }
+        [a, b] => {
+            let (from, to) = (find(*a)?, find(*b)?);
+            let (c, r) = plan.cells[from];
+            let d = (0..6)
+                .find(|&d| neighbour(c, r, d) == plan.cells[to])
+                .ok_or_else(|| format!("{}: the flight's cells are not neighbours", def.name))?;
+            Ok(Some(Stair::Flight { from, to, d }))
+        }
+        more => Err(format!("{}: {} stair cells", def.name, more.len())),
+    }
+}
+
+/// A flight's foot (the middle of its first cell's far flat), its
+/// direction up, and its half width.
+fn flight_strip(plan: &Plan, stair: &Stair) -> (Vec2, Vec2, f32) {
+    let Stair::Flight { from, to, d } = *stair else {
+        unreachable!("a flight");
+    };
+    let (a, b) = edge_ends(plan, from, (d + 3) % 6);
+    let (a2, b2) = edge_ends(plan, to, d);
+    let (foot, end) = ((a + b) * 0.5, (a2 + b2) * 0.5);
+    let hw = ((b - a).length() + (b2 - a2).length()) / 4.0;
+    (foot, (end - foot).normalize(), hw)
+}
+
+/// The part of a convex polygon on the side of the line through `at` that
+/// `keep` points to.
+fn clip_half(poly: &[Vec2], at: Vec2, keep: Vec2) -> Vec<Vec2> {
+    let side = |p: Vec2| (p - at).dot(keep);
+    let mut out = Vec::new();
+    for i in 0..poly.len() {
+        let (p, q) = (poly[i], poly[(i + 1) % poly.len()]);
+        let (sp, sq) = (side(p), side(q));
+        if sp >= 0.0 {
+            out.push(p);
+        }
+        if (sp >= 0.0) != (sq >= 0.0) {
+            out.push(p + (q - p) * (sp / (sp - sq)));
+        }
+    }
+    out
+}
+
+/// Where two lines meet, each a point and a direction.
+fn meet((p0, e0): (Vec2, Vec2), (p1, e1): (Vec2, Vec2)) -> Vec2 {
+    p0 + e0 * ((p1 - p0).perp_dot(e1) / e0.perp_dot(e1))
+}
+
+/// The tread material a kit's stairs are made of, as the mockup chooses.
+fn tread_of(kit: &Kit) -> &'static str {
+    if matches!(
+        kit.name.as_str(),
+        "stone" | "fieldstone" | "ashlar" | "clay"
+    ) {
+        "stone"
+    } else {
+        "timber"
+    }
+}
+
+/// A rail at `yt`: its bar, a solid a metre high, and posts along it.
+fn rail(sink: &mut Sink, c: Vec2, yt: f32, len: f32, ang: f32) {
+    sink.plain_box(
+        "timber",
+        c.x,
+        yt + 0.95,
+        c.y,
+        Vec3::new(len, 0.08, 0.08),
+        ang,
+    );
+    sink.solid_box(c.x, yt, c.y, Vec3::new(len, 1.0, 0.1), ang);
+    let posts = ((len / 0.7).round() as i32).max(2);
+    let dir = Vec2::new(ang.cos(), ang.sin());
+    for k in 0..=posts {
+        let p = c + dir * ((k as f32 / posts as f32 - 0.5) * (len - 0.06));
+        sink.plain_box("timber", p.x, yt, p.y, Vec3::new(0.07, 0.95, 0.07), ang);
+    }
+}
+
+fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u32, storey_m: f32) {
+    let tread = tread_of(kit);
+    let inner = kit.walls[0].inside.clone();
+    match *stair {
+        Stair::Newel { cell, entry } => {
+            let c = plan.centres[cell];
+            let corners = plan.corners[cell];
+            let (cc, cr) = plan.cells[cell];
+            let own = |d: usize| {
+                let n = neighbour(cc, cr, d);
+                plan.index(n.0, n.1).is_some()
+            };
+            // The cell's inside: each edge's line moved in by half its wall.
+            let lines: Vec<(Vec2, Vec2)> = (0..6)
+                .map(|d| {
+                    let (a, b) = (corners[d], corners[(d + 1) % 6]);
+                    let e = (b - a).normalize();
+                    let mut n = Vec2::new(-e.y, e.x);
+                    if n.dot(c - a) < 0.0 {
+                        n = -n;
+                    }
+                    let t = if own(d) {
+                        NEWEL_WALL_M
+                    } else {
+                        kit.walls[0].thickness_m
+                    };
+                    (a + n * (t / 2.0), e)
+                })
+                .collect();
+            let verts: Vec<Vec2> = (0..6).map(|k| meet(lines[(k + 5) % 6], lines[k])).collect();
+            let reach = |a: f32| -> f32 {
+                let dir = Vec2::new(a.cos(), a.sin());
+                lines
+                    .iter()
+                    .filter_map(|&(p0, e)| {
+                        let den = dir.perp_dot(e);
+                        (den.abs() > 1e-6)
+                            .then(|| (p0 - c).perp_dot(e) / den)
+                            .filter(|r| *r > 0.0)
+                    })
+                    .fold(f32::MAX, f32::min)
+            };
+            // It climbs from its entry edge toward the edge numbered next, as
+            // the mockup's does, measured from the real edge midpoints.
+            let angle = |d: usize| {
+                let (a, b) = edge_ends(plan, cell, d);
+                let m = (a + b) * 0.5 - c;
+                m.y.atan2(m.x)
+            };
+            let tau = std::f32::consts::TAU;
+            let start = angle(entry);
+            let turn = (angle((entry + 1) % 6) - start + std::f32::consts::PI).rem_euclid(tau)
+                - std::f32::consts::PI;
+            let sense = turn.signum();
+            let at = |phi: f32| start + sense * phi;
+            let pt = |a: f32, r: f32| c + Vec2::new(a.cos(), a.sin()) * r;
+            let wedge = |p0: f32, p1: f32| -> Vec<Vec2> {
+                let mut pts = vec![pt(at(p0), NEWEL_R * 0.9), pt(at(p0), reach(at(p0)))];
+                let mut mids: Vec<(f32, Vec2)> = verts
+                    .iter()
+                    .filter_map(|v| {
+                        let d = *v - c;
+                        let phi = (sense * (d.y.atan2(d.x) - start)).rem_euclid(tau);
+                        let phi = phi + ((p0 - phi) / tau).ceil() * tau;
+                        (phi > p0 && phi < p1).then_some((phi, *v))
+                    })
+                    .collect();
+                mids.sort_by(|a, b| a.0.total_cmp(&b.0));
+                pts.extend(mids.into_iter().map(|m| m.1));
+                pts.push(pt(at(p1), reach(at(p1))));
+                pts.push(pt(at(p1), NEWEL_R * 0.9));
+                pts
+            };
+            let top = (storeys - 1) as f32 * storey_m;
+            let rise = storey_m / NEWEL_WINDERS as f32;
+            let dphi = tau / NEWEL_WINDERS as f32;
+            let winders = (top / rise).round() as u32;
+            for i in 1..=winders {
+                let y = i as f32 * rise;
+                let p0 = (i as f32 - 0.5) * dphi;
+                sink.prism(
+                    tread,
+                    tread,
+                    &wedge(p0, p0 + dphi),
+                    y - TREAD_M,
+                    y,
+                    Some(tread),
+                );
+            }
+            let wall_top = storeys as f32 * storey_m;
+            let post: Vec<Vec2> = (0..8).map(|k| pt(k as f32 * tau / 8.0, NEWEL_R)).collect();
+            sink.prism(tread, tread, &post, 0.0, wall_top, None);
+            sink.solids.push(Solid {
+                outline: ccw(post),
+                y0: 0.0,
+                y1: wall_top,
+            });
+            // The top: 30 degrees of floor past the last winder, then a rail,
+            // so a walker who keeps turning meets the rail, not the well.
+            let end = top / storey_m * tau;
+            let step = (NEWEL_LANDING - dphi * 0.5) / 4.0;
+            for k in 0..4 {
+                let p0 = end + dphi * 0.5 + k as f32 * step;
+                sink.prism(
+                    tread,
+                    tread,
+                    &wedge(p0, p0 + step),
+                    top - TREAD_M,
+                    top,
+                    Some(tread),
+                );
+            }
+            let ar = at(end + NEWEL_LANDING);
+            let len = reach(ar) - NEWEL_R;
+            rail(sink, pt(ar, NEWEL_R + len / 2.0), top, len, ar);
+            sink.surfaces.push(Surface::Newel {
+                centre: c,
+                start,
+                sense,
+                base: 0.0,
+                top,
+                turn_m: storey_m,
+                newel_r: NEWEL_R,
+                landing: NEWEL_LANDING,
+                margin: dphi * 0.5,
+                outline: ccw(corners.to_vec()),
+            });
+            // Its own walls on its edges inside the building, a doorway at
+            // the foot and one onto every floor above, all on the entry edge:
+            // a storey is three layers, and a layer turns two edges.
+            let edge = if tread == "timber" {
+                "timber".to_string()
+            } else {
+                inner.clone()
+            };
+            let faces = super::WallFaces {
+                outside: inner.clone(),
+                inside: inner.clone(),
+                edge,
+                thickness_m: NEWEL_WALL_M,
+                per_face: false,
+            };
+            for d in (0..6).filter(|&d| own(d)) {
+                let openings: Vec<Opening> = if d == entry {
+                    (0..storeys)
+                        .map(|s| Opening {
+                            yb: s as f32 * storey_m,
+                            ye: s as f32 * storey_m + STAIR_DOOR_M.1,
+                            w: STAIR_DOOR_M.0,
+                            door: None,
+                            sill: false,
+                            shutters: false,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                let (a, b) = edge_ends(plan, cell, d);
+                edge_wall(sink, c, a, b, 0.0, wall_top, &faces, &openings);
+            }
+        }
+        Stair::Flight { .. } => {
+            let (foot, dir, hw) = flight_strip(plan, stair);
+            let Stair::Flight { to, d, .. } = *stair else {
+                unreachable!("a flight");
+            };
+            let (a2, b2) = edge_ends(plan, to, d);
+            let len = ((a2 + b2) * 0.5 - foot).length();
+            let n = FLIGHT_RISERS;
+            let (rise, run) = (storey_m / n as f32, len / n as f32);
+            let ang = dir.y.atan2(dir.x);
+            let side = Vec2::new(-dir.y, dir.x);
+            for k in 0..n {
+                let y = (k + 1) as f32 * rise;
+                let p = foot + dir * (k as f32 * run + run / 2.0);
+                let m = if k == n - 1 { "plank" } else { tread };
+                sink.plain_box(m, p.x, 0.0, p.y, Vec3::new(run, y, 2.0 * hw - 0.02), ang);
+            }
+            sink.surfaces.push(Surface::Flight {
+                foot,
+                dir,
+                len,
+                half_width: hw,
+                base: 0.0,
+                rise,
+                risers: n,
+            });
+            // Boxed below, both sides, and the landing's end.
+            let mid = foot + dir * (len / 2.0);
+            for s in [-1.0f32, 1.0] {
+                let p = mid + side * (s * (hw + 0.07));
+                let size = Vec3::new(len, storey_m - SLAB_M, 0.14);
+                sink.plain_box(&inner, p.x, 0.0, p.y, size, ang);
+                sink.solid_box(p.x, 0.0, p.y, size, ang);
+            }
+            let p = foot + dir * (len - run / 2.0);
+            sink.solid_box(
+                p.x,
+                0.0,
+                p.y,
+                Vec3::new(run, storey_m - SLAB_M, 2.0 * hw),
+                ang,
+            );
+            // Up top, the well railed along both sides and across its foot,
+            // open at the landing.
+            for s in [-1.0f32, 1.0] {
+                let p = foot + dir * ((len - run) / 2.0) + side * (s * hw);
+                rail(sink, p, storey_m, len - run, ang);
+            }
+            rail(
+                sink,
+                foot,
+                storey_m,
+                2.0 * hw,
+                ang + std::f32::consts::FRAC_PI_2,
+            );
+        }
+    }
 }
 
 /// The mockup's `edgeWall`: a wall centred on the edge from `a` to `b`,
@@ -782,21 +1443,21 @@ fn edge_wall(
         seg(sink, 0.0, len, y, yb);
         seg(sink, -(w / 2.0 + jamb / 2.0), jamb, yb, ye);
         seg(sink, w / 2.0 + jamb / 2.0, jamb, yb, ye);
-        if op.door {
-            // The leaf, swung in against its jamb (the design's slice 2a:
-            // doorways are open until doors open and shut as world state),
-            // and the threshold.
-            let hinge = mid - tan * (w / 2.0) - out * (t / 2.0);
-            let leaf = hinge - out * (w / 2.0) + tan * 0.05;
-            let into = (-out).y.atan2((-out).x);
-            sink.plain_box(
-                "timber",
-                leaf.x,
-                yb,
-                leaf.y,
-                Vec3::new(w - 0.04, ye - yb - 0.02, 0.07),
-                into,
-            );
+        if let Some(index) = op.door {
+            // The leaf is the door's own, drawn and walked into by its state
+            // (slice 2b), hinged at the inner face of the jamb; and the
+            // threshold.
+            sink.doors.push(DoorLeaf {
+                index,
+                hinge: mid - tan * (w / 2.0) - out * (t / 2.0),
+                along: tan,
+                out,
+                width: w,
+                y0: yb,
+                y1: ye - 0.02,
+                middle: mid,
+                open: false,
+            });
             sink.plain_box(
                 "timber",
                 mid.x,

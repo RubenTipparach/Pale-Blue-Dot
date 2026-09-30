@@ -181,6 +181,11 @@ fn every_village_building_cuts_into_its_pieces() {
     let (a, b) = (cell.corners[side], cell.corners[(side + 1) % 6]);
     let at = |dir: Vec3, up: f32| dir.normalize() * (RADIUS_M + terrace + up);
     let doorway = (a + b) * 0.5;
+    assert!(body(at(doorway, 0.95)), "the door is shut");
+    for d in &mut solids[0].doors {
+        d.open = true;
+    }
+    let body = |p: Vec3| solids[0].holds(p, 0.9, 0.3);
     assert!(!body(at(doorway, 0.95)), "the doorway is open");
     let wall = a * 0.9 + b * 0.1;
     assert!(body(at(wall, 0.95)), "the wall beside it is solid");
@@ -667,4 +672,268 @@ fn every_kit_a_saved_town_can_name_is_shipped() {
             b.kit
         );
     }
+}
+
+/// Each of the village's buildings cut on the test patch, with its solids.
+fn cut_village() -> (Template, Vec<pieces::BuildingSolids>) {
+    let (patch, at) = patch();
+    let village = village();
+    let kits = kits();
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let d0 = patch.side_toward(*at, east);
+    let chart = chart(patch, (25, 17), *at, d0, &wanted(&village)).expect("charted");
+    let mut meshes = Meshes::new();
+    let solids = village
+        .buildings
+        .iter()
+        .map(|b| {
+            cut_building(
+                &mut meshes,
+                &|_: &str| 2.0,
+                patch,
+                &chart,
+                b,
+                kits.get(&b.kit).unwrap(),
+                RADIUS_M,
+                10.0,
+            )
+            .unwrap_or_else(|e| panic!("{e}"))
+        })
+        .collect();
+    (village, solids)
+}
+
+/// The top of every surface at a point of a building's plan.
+fn tops(b: &pieces::BuildingSolids, p: glam::Vec2) -> Vec<(f32, f32)> {
+    let mut out = Vec::new();
+    for s in &b.surfaces {
+        s.intervals(p, &mut out);
+    }
+    out
+}
+
+/// Slice 2b: one stair cell is a newel, two a straight flight; no floor
+/// over a newel, and a flight's cells floored only either side of it.
+#[test]
+fn every_stair_is_cut_and_nothing_floors_its_well() {
+    use pieces::Surface;
+    let (village, solids) = cut_village();
+    for (def, b) in village.buildings.iter().zip(&solids) {
+        let newels = b
+            .surfaces
+            .iter()
+            .filter(|s| matches!(s, Surface::Newel { .. }))
+            .count();
+        let flights = b
+            .surfaces
+            .iter()
+            .filter(|s| matches!(s, Surface::Flight { .. }))
+            .count();
+        let floors = b
+            .surfaces
+            .iter()
+            .filter(|s| matches!(s, Surface::Floor { .. }))
+            .count();
+        match def.stair_cells.len() {
+            0 => assert_eq!((newels, flights, floors), (0, 0, 0), "{}", def.name),
+            1 => {
+                assert_eq!((newels, flights), (1, 0), "{}", def.name);
+                // Every other cell floored upstairs, and not the newel's.
+                assert_eq!(floors, def.cells.len() - 1, "{}", def.name);
+                let Some(Surface::Newel { centre, .. }) = b
+                    .surfaces
+                    .iter()
+                    .find(|s| matches!(s, Surface::Newel { .. }))
+                else {
+                    unreachable!()
+                };
+                let over = tops(b, *centre + glam::Vec2::new(0.6, 0.0));
+                assert!(
+                    over.iter().all(|t| t.1 <= 3.0 + 1e-3),
+                    "{}: nothing over the newel but its own sheets: {over:?}",
+                    def.name
+                );
+            }
+            2 => {
+                assert_eq!((newels, flights), (0, 1), "{}", def.name);
+                // Two side parts in each of the flight's two cells.
+                assert_eq!(floors, def.cells.len() - 2 + 4, "{}", def.name);
+                let Some(Surface::Flight { foot, dir, len, .. }) = b
+                    .surfaces
+                    .iter()
+                    .find(|s| matches!(s, Surface::Flight { .. }))
+                else {
+                    unreachable!()
+                };
+                let mid = *foot + *dir * (len / 2.0);
+                let over = tops(b, mid);
+                assert_eq!(
+                    over.len(),
+                    1,
+                    "{}: only the flight over its strip",
+                    def.name
+                );
+            }
+            n => panic!("{}: {n} stair cells", def.name),
+        }
+    }
+}
+
+/// A straight flight answers its pitch line: from its foot at the floor to
+/// its landing at the storey, rising evenly, then flat.
+#[test]
+fn a_flight_answers_its_pitch_line() {
+    use pieces::Surface;
+    let (_, solids) = cut_village();
+    let b = solids
+        .iter()
+        .find(|b| {
+            b.surfaces
+                .iter()
+                .any(|s| matches!(s, Surface::Flight { .. }))
+        })
+        .expect("a house with a flight");
+    let Some(Surface::Flight {
+        foot,
+        dir,
+        len,
+        risers,
+        ..
+    }) = b
+        .surfaces
+        .iter()
+        .find(|s| matches!(s, Surface::Flight { .. }))
+    else {
+        unreachable!()
+    };
+    let run = len / *risers as f32;
+    let landing = (*risers - 1) as f32 * run;
+    // The flight's own sheet: at its foot it meets the floor over the cell
+    // before it, a storey up, which a walker at the foot does not reach.
+    let flight = b
+        .surfaces
+        .iter()
+        .find(|s| matches!(s, Surface::Flight { .. }))
+        .unwrap();
+    let top_at = |u: f32| {
+        let mut out = Vec::new();
+        flight.intervals(*foot + *dir * u, &mut out);
+        out.iter().map(|t| t.1).fold(f32::MIN, f32::max)
+    };
+    assert!(top_at(0.01).abs() < 0.01, "the foot at the floor");
+    assert!(
+        (top_at(landing) - STOREY_M).abs() < 1e-3,
+        "the landing at the storey"
+    );
+    assert!(
+        (top_at(len - 0.01) - STOREY_M).abs() < 1e-3,
+        "flat across the landing"
+    );
+    let mut last = top_at(0.0);
+    let mut u = 0.05;
+    while u < *len {
+        let t = top_at(u);
+        assert!(
+            t >= last - 1e-4 && t - last < 0.05,
+            "at {u} m: {last} to {t}"
+        );
+        last = t;
+        u += 0.05;
+    }
+}
+
+/// A newel answers one sheet a turn on its pitch line, 3 m a turn, with
+/// 2.74 m clear under the turn above; nothing inside its post.
+#[test]
+fn a_newel_answers_a_sheet_a_turn() {
+    use pieces::Surface;
+    let (_, solids) = cut_village();
+    let b = solids
+        .iter()
+        .find(|b| {
+            b.surfaces
+                .iter()
+                .any(|s| matches!(s, Surface::Newel { .. }))
+        })
+        .expect("a house with a newel");
+    let Some(Surface::Newel {
+        centre,
+        start,
+        sense,
+        top,
+        ..
+    }) = b
+        .surfaces
+        .iter()
+        .find(|s| matches!(s, Surface::Newel { .. }))
+    else {
+        unreachable!()
+    };
+    assert!(tops(b, *centre).is_empty(), "the post");
+    let at = |phi: f32| {
+        let a = start + sense * phi;
+        *centre + glam::Vec2::new(a.cos(), a.sin()) * 0.72
+    };
+    let tau = std::f32::consts::TAU;
+    let mut last = 0.0f32;
+    for k in 1..=60 {
+        let phi = k as f32 / 60.0 * tau * 0.97;
+        let here = tops(b, at(phi));
+        let sheet = here
+            .iter()
+            .map(|t| t.1)
+            .filter(|t| (t - last).abs() < 0.5)
+            .fold(f32::MIN, f32::max);
+        let want = phi / tau * STOREY_M;
+        assert!(
+            (sheet - want).abs() < 1e-3,
+            "at {phi:.2} rad: {sheet} for {want}"
+        );
+        assert!(sheet - last < 0.2, "a jump at {phi:.2}");
+        last = sheet;
+    }
+    // The village's newels climb one turn, so over the foot is the flat
+    // landing: 30 degrees at the storey, which costs the turn below some
+    // headroom (`tenebris-towns` section 3), never down to the body's 1.8 m.
+    assert!(*top >= STOREY_M, "a storey at least");
+    let mut k = 0.0;
+    while k < 0.55 {
+        let here = tops(b, at(k));
+        let lowest = here.iter().map(|t| t.1).fold(f32::MAX, f32::min);
+        if let Some(above) = here
+            .iter()
+            .filter(|t| t.1 > lowest + 1.0)
+            .map(|t| t.0)
+            .reduce(f32::min)
+        {
+            let clear = above - lowest;
+            assert!(
+                clear > 2.4 && clear <= STOREY_M - pieces::TREAD_M + 1e-3,
+                "at {k}: {lowest} to {above}"
+            );
+        }
+        k += 0.05;
+    }
+}
+
+/// Door leaves: one per door, shut by default, a solid across its doorway
+/// when shut and none when open.
+#[test]
+fn a_shut_door_holds_and_an_open_one_does_not() {
+    let (village, mut solids) = cut_village();
+    for (def, b) in village.buildings.iter().zip(&solids) {
+        assert_eq!(b.doors.len(), def.doors.len(), "{}", def.name);
+        assert!(b.doors.iter().all(|d| !d.open));
+    }
+    let b = &mut solids[0];
+    let d = b.doors[0].clone();
+    let at = b.frame.world(Vec3::new(d.middle.x, 0.95, d.middle.y));
+    assert!(b.holds(at, 0.9, 0.3), "shut");
+    assert!(b.push_normal(at, 0.9, 0.3).is_some(), "and a way out of it");
+    b.doors[0].open = true;
+    assert!(!b.holds(at, 0.9, 0.3), "open");
+    assert!(
+        !b.doors[0].mesh(b.frame, 1.5, &|_: &str| 2.0).is_empty(),
+        "drawn"
+    );
 }

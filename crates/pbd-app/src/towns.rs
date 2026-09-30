@@ -19,7 +19,7 @@ use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
 use crate::saves::WorldSave;
 use crate::sites::WorldSites;
-use crate::walking::Structures;
+use crate::walking::{EYE_HEIGHT, HALF_HEIGHT, Structures, Walker, WalkingState};
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{
     ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
@@ -30,7 +30,7 @@ use pbd_core::planet_gen::{self, TerrainConfig};
 use pbd_core::records::Author;
 use pbd_core::settlement::chart::{Chart, Patch};
 use pbd_core::settlement::ground::{self, Ground, TownGround};
-use pbd_core::settlement::pieces::{BuildingSolids, Meshes};
+use pbd_core::settlement::pieces::{BuildingSolids, MeshBuf, Meshes};
 use pbd_core::settlement::record::{self, Stored, Town};
 use pbd_core::settlement::{Kits, Template};
 use pbd_core::sites::{Site, SiteKind};
@@ -361,7 +361,16 @@ fn stand(world: &mut World, site: &Site, town: &Town) {
     };
     let (footprint, margin) = laid.ground.counts();
     ground::install(Some(Ground::new(config, vec![laid.ground.clone()])));
-    world.insert_resource(Structures(laid.solids.clone()));
+    // Each door as its save holds it: open where the player left it open,
+    // shut where there is no record (slice 2b).
+    let mut solids = laid.solids.clone();
+    door_states(
+        &mut solids,
+        site.id,
+        world.get_resource::<WorldSave>().map(|s| &s.records),
+        world.contains_resource::<OpenDoors>(),
+    );
+    world.insert_resource(Structures(solids.clone()));
     let near = world
         .query_filtered::<&avian3d::prelude::Position, With<crate::walking::Walker>>()
         .iter(world)
@@ -370,6 +379,7 @@ fn stand(world: &mut World, site: &Site, town: &Town) {
         .unwrap_or(site.direction);
     crate::planet::rebuild_planet(world, near);
     let entity = spawn_town(world, &laid);
+    spawn_doors(world, entity, site.id, &solids);
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
     info!(
         "{} built: {} buildings, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}, in {:.2} s",
@@ -388,6 +398,200 @@ fn stand(world: &mut World, site: &Site, town: &Town) {
     });
     if world.contains_resource::<RespawnInTown>() {
         crate::walking::respawn(world);
+    }
+}
+
+/// Open every door when the towns are built, as the player would, and write
+/// nothing to the save: the capture flag `--open-doors`.
+#[derive(Resource)]
+pub struct OpenDoors;
+
+/// A door's leaf in the world (slice 2b): its building and door in the
+/// walker's [`Structures`], its record, and how far it has swung (0 shut, a
+/// quarter turn open).
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TownDoor {
+    pub building: usize,
+    pub door: usize,
+    pub record: u64,
+    pub angle: f32,
+}
+
+/// How far a door swings open, and how fast, radians a second.
+const OPEN_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
+const SWING_RAD_S: f32 = 5.0;
+/// How far from the eye E reaches for a doorway's middle, metres.
+pub const DOOR_REACH_M: f32 = 2.2;
+
+/// Each of a town's doors as its save holds it (slice 2b): open where the
+/// player left it open, shut where there is no record. `open_all` is the
+/// capture flag `--open-doors`, which writes nothing.
+pub fn door_states(
+    solids: &mut [BuildingSolids],
+    site: u32,
+    records: Option<&pbd_core::records::Records>,
+    open_all: bool,
+) {
+    for (n, b) in solids.iter_mut().enumerate() {
+        let building = record::building_id(site, n as u32);
+        for d in &mut b.doors {
+            d.open = open_all
+                || records
+                    .is_some_and(|r| record::door_open(r, record::door_id(building, d.index)));
+        }
+    }
+}
+
+/// A triangle soup as a Bevy mesh.
+fn to_mesh(buf: &MeshBuf) -> Mesh {
+    let count = buf.positions.len() as u32;
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, buf.positions.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, buf.normals.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, buf.uvs.clone())
+    .with_inserted_indices(Indices::U32((0..count).collect()))
+}
+
+/// A door leaf drawn swung `angle` from shut.
+fn leaf_mesh(assets: &TownAssets, b: &BuildingSolids, door: usize, angle: f32) -> Mesh {
+    let repeat = |m: &str| {
+        assets
+            .repeats
+            .get(m)
+            .copied()
+            .filter(|r| *r > 0.0)
+            .unwrap_or(2.0)
+    };
+    let meshes = b.doors[door].mesh(b.frame, angle, &repeat);
+    to_mesh(meshes.values().next().expect("a leaf is timber"))
+}
+
+/// Each door of a town's buildings as its own entity under the town's root.
+fn spawn_doors(world: &mut World, root: Entity, site: u32, solids: &[BuildingSolids]) {
+    let image = texture(world.resource::<AssetServer>(), "timber");
+    let material = world
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(StandardMaterial {
+            base_color_texture: Some(image),
+            perceptual_roughness: 0.93,
+            ..default()
+        });
+    for (n, b) in solids.iter().enumerate() {
+        for (k, d) in b.doors.iter().enumerate() {
+            let angle = if d.open { OPEN_ANGLE } else { 0.0 };
+            let mesh = leaf_mesh(world.resource::<TownAssets>(), b, k, angle);
+            let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
+            let door = TownDoor {
+                building: n,
+                door: k,
+                record: record::door_id(record::building_id(site, n as u32), d.index),
+                angle,
+            };
+            let child = world
+                .spawn((
+                    Name::new("Door"),
+                    Mesh3d(mesh),
+                    MeshMaterial3d(material.clone()),
+                    Transform::default(),
+                    door,
+                ))
+                .id();
+            world.entity_mut(root).add_child(child);
+        }
+    }
+}
+
+/// E opens or shuts the door in reach: the nearest doorway within
+/// [`DOOR_REACH_M`] of the eye and in front of it. The change is the
+/// player's, and it is written to the save before the leaf moves; a save
+/// that refuses it leaves the door as it was.
+pub fn use_doors(
+    keys: Res<ButtonInput<KeyCode>>,
+    walking: Res<WalkingState>,
+    walker: Query<&avian3d::prelude::Position, With<Walker>>,
+    structures: Option<ResMut<Structures>>,
+    save: Option<ResMut<WorldSave>>,
+    doors: Query<&TownDoor>,
+) {
+    if !keys.just_pressed(KeyCode::KeyE) || !walking.active {
+        return;
+    }
+    if !(walking.captured || walking.scripted) {
+        return;
+    }
+    let (Some(mut structures), Ok(position)) = (structures, walker.single()) else {
+        return;
+    };
+    let up = position.0.normalize_or(Vec3::Y);
+    let eye = position.0 + up * (EYE_HEIGHT - HALF_HEIGHT);
+    let (heading, pitch) = walking.view();
+    let look = heading * pitch.cos() + up * pitch.sin();
+    let nearest = doors
+        .iter()
+        .filter_map(|door| {
+            let b = structures.0.get(door.building)?;
+            let d = b.doors.get(door.door)?;
+            let middle = b.frame.world(Vec3::new(d.middle.x, d.y0 + 1.1, d.middle.y));
+            let to = middle - eye;
+            let dist = to.length();
+            (dist <= DOOR_REACH_M && to.dot(look) >= 0.3 * dist).then_some((dist, *door))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+    let Some((_, door)) = nearest else {
+        return;
+    };
+    let leaf = &mut structures.0[door.building].doors[door.door];
+    let open = !leaf.open;
+    if let Some(mut save) = save {
+        if save
+            .store(
+                &Author::Player(0),
+                vec![record::door_record(door.record, open)],
+            )
+            .is_none()
+        {
+            warn!("the save refused the door; it stays as it was");
+            return;
+        }
+        save.note_record_kinds(&[(record::DOOR_RECORD, record::RECORD_SCHEMA)]);
+    }
+    leaf.open = open;
+}
+
+/// Swing each door's leaf toward its state, redrawing it as it goes.
+pub fn swing_doors(
+    time: Res<Time>,
+    structures: Option<Res<Structures>>,
+    assets: Res<TownAssets>,
+    mut doors: Query<(&mut TownDoor, &Mesh3d)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let Some(structures) = structures else {
+        return;
+    };
+    let step = SWING_RAD_S * time.delta_secs().max(1.0 / 60.0);
+    for (mut door, mesh) in &mut doors {
+        let Some(b) = structures.0.get(door.building) else {
+            continue;
+        };
+        let Some(leaf) = b.doors.get(door.door) else {
+            continue;
+        };
+        let target = if leaf.open { OPEN_ANGLE } else { 0.0 };
+        if door.angle == target {
+            continue;
+        }
+        door.angle = if door.angle < target {
+            (door.angle + step).min(target)
+        } else {
+            (door.angle - step).max(target)
+        };
+        if let Some(m) = meshes.get_mut(&mesh.0) {
+            *m = leaf_mesh(&assets, b, door.door, door.angle);
+        }
     }
 }
 
@@ -417,18 +621,7 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         let assets = world.resource::<AssetServer>();
         laid.meshes
             .iter()
-            .map(|(name, buf)| {
-                let count = buf.positions.len() as u32;
-                let mesh = Mesh::new(
-                    PrimitiveTopology::TriangleList,
-                    RenderAssetUsages::default(),
-                )
-                .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, buf.positions.clone())
-                .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, buf.normals.clone())
-                .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, buf.uvs.clone())
-                .with_inserted_indices(Indices::U32((0..count).collect()));
-                (mesh, texture(assets, name))
-            })
+            .map(|(name, buf)| (to_mesh(buf), texture(assets, name)))
             .collect()
     };
     let root = world
@@ -478,7 +671,10 @@ impl Plugin for TownsPlugin {
             repeats: load_repeats(),
         })
         .init_resource::<Towns>()
-        .add_systems(Update, (build_towns, follow_frame).chain());
+        .add_systems(
+            Update,
+            (build_towns, follow_frame, use_doors, swing_doors).chain(),
+        );
     }
 }
 
