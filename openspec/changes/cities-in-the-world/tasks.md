@@ -75,10 +75,11 @@ The owner, 2026-09-30: "alright once your tuning is done, begin working on other
 
 ## 5. Light
 
-- [ ] 5.0 Rooms lit by their own fires (design 7a): a hearth in the chimney cell, sconces on the stairs, and candles behind 55% of the windows. Each building's lights light its own rooms, storey by storey, the mockup's way. Verify:
+- [x] 5.0 Rooms lit by their own fires (design 7a): a hearth in the chimney cell, sconces on the stairs, and candles behind 55% of the windows. Each building's lights light its own rooms, storey by storey, the mockup's way. Verify:
   - core tests that every village house with a chimney has its hearth, every stair its sconces, and about half the windows a candle, all inside their building;
   - an app test that a building's rooms carry its lights;
   - captures at 11:00 and 22:30 beside the mockup's.
+  - As built: `settlement::tests::every_house_has_its_hearth_its_sconces_and_its_candles`; `towns::tests::holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts` (the lights packed into a room's material, fires first); `docs/screenshots/sun-shadows/newel.jpg` and `flight.jpg` at five hours beside the mockup's.
 - [ ] 5.1 (The candles are built in 5.0, as a room's light rather than a material; what is left here is the glow into the street.) `WindowCandle`, a dusk-lit material, placed behind about half the windows by the site's seed. Verify: core tests of its emission and dusk flag, and a test that a lit window's room is lit and its outer wall face is not.
 - [ ] 5.2 Street and wall lanterns placed by the template's spacing. The tier bakes the whole town. Verify: the bake time is recorded against `lamps-and-lanterns`' 300-lantern figure, and captures of a walled town at 22:30 from the street and from above.
 

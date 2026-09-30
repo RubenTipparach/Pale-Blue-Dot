@@ -89,3 +89,25 @@ at that hour (`towns::tests::print_the_rain_over_holbrook`).
   (the design's "Tuning across the day").
 - **The flames** read pale peach rather than orange: the tonemapper takes a
   bright warm colour toward white. A flame's core is pale, so it stays.
+
+## After: shadows on and off
+
+`shadows-on-off.jpg` is the lane and the town from 60 m at 08:00 and 17:30,
+each with the cascades and with `--no-shadows`. The lane and the view from
+above have no before (see "Before"), so the change is shown against itself.
+- **The lane at 17:30.** The stone house's long shadow covers the grass on
+  the left, and the trees shadow the grass on the right. Without the
+  cascades the whole field is lit.
+- **At 08:00.** The sun is low in front of the camera, so the shadows fall
+  toward it and are short in the frame. The house fronts are in their own
+  shade either way: a face turned from the sun takes the sky's fill.
+- **From 60 m.** Each house and tree throws its shadow away from the sun. At
+  60 m the far cascade holds them (texels of about 18 cm), so they are soft.
+
+## Not done here
+
+- Frame cost was not measured: the container has no GPU. The owner runs
+  `tools/perf_suite.py` (task 7.2).
+- Crawl and shimmer as the sun moves need a real-time recording (task 7.3).
+- The twilight curve for fill, fog and rim is still the old one (task 6.1).
+

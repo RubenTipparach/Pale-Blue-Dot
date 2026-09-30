@@ -53,6 +53,7 @@ shadows for the planet too, so we can read sun direction a little better".
 
 ## 7. The owner's check
 
-- [ ] 7.1 After captures of 1.1's views, beside the before, and the mockup's lane at the same hour. Verify: `docs/screenshots/sun-shadows/README.md` names each shot.
+- [x] 7.1 After captures of 1.1's views, beside the before, and the mockup's lane at the same hour. Verify: `docs/screenshots/sun-shadows/README.md` names each shot.
+  - As built: `newel.jpg`, `flight.jpg` and `front.jpg` (before, after and the mockup at 08:00, 11:00, 14:00, 17:30 and 22:30); `day.jpg` (five views indoors and out at the five hours); `shadows-on-off.jpg` (the lane and the view from above with and without the cascades); `room-sky.jpg` (the room shares tried). The README names each.
 - [ ] 7.2 `tools/perf_suite.py` on the owner's hardware: `walk`, `far-side` and `clouds`, before and after, interleaved; the report in `docs/benchmarks/`. A cloud session says the cost was not measured. Verify: the report, and the design's decision 6 holds or its fallbacks are taken.
 - [ ] 7.3 The owner records a walk and a fly-in in real time (`obs-record`) to judge crawl and shimmer, which fixed-step captures cannot show. Verify: the owner's word, quoted in `proposal.md`. Sync `planet/light`, and archive.
