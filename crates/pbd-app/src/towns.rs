@@ -14,7 +14,7 @@
 //!
 //! Only the home village is built so far; the other kinds follow in slice 4.
 
-use crate::field_light::LitByField;
+use crate::field_light::{LitByField, LitLikeTerrain, SkyShare};
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
 use crate::saves::WorldSave;
@@ -103,6 +103,8 @@ pub struct Laid {
     pub meshes: Meshes,
     /// Each building's solids, for the walker (slice 2a).
     pub solids: Vec<BuildingSolids>,
+    /// Each building's inside faces, by texture (`sun-shadows` decision 7).
+    pub rooms: Vec<Meshes>,
 }
 
 /// The patch of finest cells round a direction.
@@ -161,6 +163,7 @@ pub fn build(
         ground: built.ground,
         meshes: built.meshes,
         solids: built.solids,
+        rooms: built.rooms,
     })
 }
 
@@ -308,6 +311,7 @@ fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
         towns.standing.clear();
     }
     world.insert_resource(Structures::default());
+    world.insert_resource(crate::planet::shadow::TownCasters::default());
     ground::install(None);
     let Some(home) = sites
         .iter()
@@ -509,13 +513,18 @@ fn spawn_doors(world: &mut World, root: Entity, site: u32, solids: &[BuildingSol
 /// player's, and it is written to the save before the leaf moves; a save
 /// that refuses it leaves the door as it was.
 pub fn use_doors(
-    keys: Res<ButtonInput<KeyCode>>,
-    walking: Res<WalkingState>,
+    keys: Option<Res<ButtonInput<KeyCode>>>,
+    walking: Option<Res<WalkingState>>,
     walker: Query<&avian3d::prelude::Position, With<Walker>>,
     structures: Option<ResMut<Structures>>,
     save: Option<ResMut<WorldSave>>,
     doors: Query<&TownDoor>,
 ) {
+    // A camera that does not walk (a capture's view from above) opens no
+    // door.
+    let (Some(keys), Some(walking)) = (keys, walking) else {
+        return;
+    };
     if !keys.just_pressed(KeyCode::KeyE) || !walking.active {
         return;
     }
@@ -624,16 +633,39 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
             .map(|(name, buf)| (to_mesh(buf), texture(assets, name)))
             .collect()
     };
+    // Each building's rooms, apart: they take the room's own share of the
+    // sky, which its doors decide (`sun-shadows` decision 7).
+    let rooms: Vec<(usize, Mesh, Handle<Image>)> = {
+        let assets = world.resource::<AssetServer>();
+        laid.rooms
+            .iter()
+            .enumerate()
+            .flat_map(|(b, meshes)| {
+                meshes
+                    .iter()
+                    .map(move |(name, buf)| (b, to_mesh(buf), texture(assets, name)))
+            })
+            .collect()
+    };
     let root = world
         .spawn((
             Name::new(format!("Town: {}", laid.name)),
             TownRoot,
             LitByField,
+            LitLikeTerrain,
             Transform::from_translation(centre),
             Visibility::default(),
         ))
         .id();
-    for (mesh, image) in parts {
+    let pieces = parts
+        .into_iter()
+        .map(|(mesh, image)| (None, mesh, image))
+        .chain(
+            rooms
+                .into_iter()
+                .map(|(b, mesh, image)| (Some(b), mesh, image)),
+        );
+    for (room, mesh, image) in pieces {
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
         let material = world
             .resource_mut::<Assets<StandardMaterial>>()
@@ -642,12 +674,81 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
                 perceptual_roughness: 0.93,
                 ..default()
             });
-        let child = world
-            .spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()))
-            .id();
+        let mut child = world.spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()));
+        if let Some(building) = room {
+            child.insert((TownRoom { building }, SkyShare(ROOM_SKY_SHUT)));
+        }
+        let child = child.id();
         world.entity_mut(root).add_child(child);
     }
+    let casting = casting(laid);
+    let mut casters =
+        world.get_resource_or_insert_with(crate::planet::shadow::TownCasters::default);
+    casters.0.retain(|(site, _)| *site != laid.site);
+    casters.0.push((laid.site, std::sync::Arc::new(casting)));
     root
+}
+
+/// What a town casts into the sun's cascades (`sun-shadows` task 5.1): every
+/// triangle of its outside and its rooms, a floor shading the room under it,
+/// and not its doors, which swing.
+pub fn casting(laid: &Laid) -> Vec<[f32; 3]> {
+    laid.meshes
+        .values()
+        .chain(laid.rooms.iter().flat_map(|m| m.values()))
+        .flat_map(|m| m.positions.iter().copied())
+        .collect()
+}
+
+/// The share of the sky a room takes with a door of its building open, and
+/// with all of them shut (`sun-shadows` decision 7): round the day a room is
+/// about a quarter as bright as the street, as the mockup's rooms are.
+pub const ROOM_SKY_OPEN: f32 = 0.3;
+pub const ROOM_SKY_SHUT: f32 = 0.2;
+
+/// The rooms' share of the sky, open and shut, where a launch sets it
+/// (`--room-sky`): for tuning against the captures without a rebuild.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct RoomSky {
+    pub open: f32,
+    pub shut: f32,
+}
+
+impl Default for RoomSky {
+    fn default() -> Self {
+        Self {
+            open: ROOM_SKY_OPEN,
+            shut: ROOM_SKY_SHUT,
+        }
+    }
+}
+
+/// A mesh of a building's rooms: its index in the walker's [`Structures`].
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TownRoom {
+    pub building: usize,
+}
+
+/// A room takes more of the sky while a door of its building stands open.
+pub fn rooms_follow_doors(
+    structures: Option<Res<Structures>>,
+    sky: Option<Res<RoomSky>>,
+    mut rooms: Query<(&TownRoom, &mut SkyShare)>,
+) {
+    let Some(structures) = structures else {
+        return;
+    };
+    let sky = sky.map(|s| *s).unwrap_or_default();
+    for (room, mut share) in &mut rooms {
+        let open = structures
+            .0
+            .get(room.building)
+            .is_some_and(|b| b.doors.iter().any(|d| d.open));
+        let want = SkyShare(if open { sky.open } else { sky.shut });
+        if *share != want {
+            *share = want;
+        }
+    }
 }
 
 /// Keep each town on the planet as its render frame moves.
@@ -673,7 +774,14 @@ impl Plugin for TownsPlugin {
         .init_resource::<Towns>()
         .add_systems(
             Update,
-            (build_towns, follow_frame, use_doors, swing_doors).chain(),
+            (
+                build_towns,
+                follow_frame,
+                use_doors,
+                swing_doors,
+                rooms_follow_doors,
+            )
+                .chain(),
         );
     }
 }

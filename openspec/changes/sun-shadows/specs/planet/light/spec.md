@@ -18,13 +18,36 @@ SHALL hold still while the view moves or turns.
   house's shadow, and does beyond it
 
 #### Scenario: Shadows do not crawl
-- **WHEN** the view moves by less than a texel of a cascade, or turns in
-  place
-- **THEN** that cascade's projection is unchanged
+- **WHEN** the view moves, or turns in place
+- **THEN** each cascade keeps its size, and its box moves across the light
+  only by whole texels, so the texel grid stays where it is on the ground;
+  a move shorter than a texel moves it by one at most
 
 #### Scenario: No shadow from a sun under the horizon
 - **WHEN** the sun is below the horizon
 - **THEN** no surface takes direct sun, so no shadow is drawn
+
+### Requirement: A room takes its own share of the sky
+A building's rooms SHALL be lit by the sky's fill times the room's own share
+of the sky, less than the street's, more with a door of the building open
+than with all of them shut. The sun SHALL reach into a room only where its
+cascades see it, through a door or a window.
+
+#### Scenario: A room is dimmer than the street
+- **WHEN** a building's doors are shut
+- **THEN** its rooms' faces take the shut share of the sky, and the street
+  outside the whole of it
+
+#### Scenario: An open door lets the sky in
+- **WHEN** a door of the building is opened
+- **THEN** its rooms take the open share, and the rooms of the building
+  beside it do not
+
+#### Scenario: What is seen from a room is the room's
+- **WHEN** a ray from the middle of a room meets a face inside the
+  building's plan
+- **THEN** that face is one of the room's, and a ray from the street that
+  meets a face outside the plan meets one of the town's outside
 
 ## MODIFIED Requirements
 

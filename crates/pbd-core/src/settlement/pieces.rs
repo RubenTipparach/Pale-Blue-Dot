@@ -310,6 +310,10 @@ pub struct BuildingSolids {
     pub surfaces: Vec<Surface>,
     /// Its door leaves, open or shut.
     pub doors: Vec<DoorLeaf>,
+    /// The faces seen from inside it, by texture: its rooms' walls, floors,
+    /// ceilings and stairs (`sun-shadows` decision 7). They are drawn apart
+    /// from the town's outside, under the room's own share of the sky.
+    pub rooms: Meshes,
 }
 
 impl BuildingSolids {
@@ -420,6 +424,85 @@ pub struct Sink<'a> {
     pub roof_plan: Vec<Vec2>,
     pub surfaces: Vec<Surface>,
     pub doors: Vec<DoorLeaf>,
+    /// The faces seen from inside the building, apart from `meshes`.
+    pub rooms: Meshes,
+    /// What is inside: the plan's cells and the top of the top storey. Unset,
+    /// every face is the town's outside.
+    pub indoors: Option<Indoors>,
+}
+
+/// A building's inside, in its frame: the air over its plan's cells from its
+/// floor to its ceiling, and under a roof it is open to.
+#[derive(Clone, Debug)]
+pub struct Indoors {
+    cells: Vec<[Vec2; 6]>,
+    /// The plan's outer edges, where its walls stand.
+    walls: Vec<(Vec2, Vec2)>,
+    top: f32,
+    /// Whether its top storey is open to the roof, as a hut is to its cone:
+    /// otherwise a ceiling closes it and the roof's underside is the eaves'.
+    open_roof: bool,
+}
+
+/// How far in front of a face its air is looked for, metres: past a wall's
+/// face and short of the next.
+const FRONT_M: f32 = 0.05;
+/// How far inside the wall line a face's air must be to be a room's: a
+/// window's reveal and a door's jamb stand across the wall, in the opening
+/// the sky comes through, and are the outside's.
+const WALL_LINE_M: f32 = 0.02;
+
+impl Indoors {
+    pub fn new(cells: Vec<[Vec2; 6]>, top: f32, open_roof: bool) -> Self {
+        let near = |a: Vec2, b: Vec2| a.distance(b) < 0.05;
+        let mut walls = Vec::new();
+        for (i, hex) in cells.iter().enumerate() {
+            for k in 0..6 {
+                let (a, b) = (hex[k], hex[(k + 1) % 6]);
+                let shared = cells.iter().enumerate().any(|(j, other)| {
+                    j != i
+                        && (0..6).any(|m| {
+                            let (c, d) = (other[m], other[(m + 1) % 6]);
+                            (near(a, c) && near(b, d)) || (near(a, d) && near(b, c))
+                        })
+                });
+                if !shared {
+                    walls.push((a, b));
+                }
+            }
+        }
+        Self {
+            cells,
+            walls,
+            top,
+            open_roof,
+        }
+    }
+
+    /// Whether a face at `centre` (in the frame), facing `n`, is seen from
+    /// inside: the air in front of it is over a cell of the plan, inside the wall
+    /// line, and the face stands from the ground floor to the ceiling of the
+    /// top storey, or it is the underside of a roof the room is open to, as a
+    /// hut's is. A wall's outer face has its air outside the plan, and a
+    /// roof's top and the soffit under a ceiled roof stand over the ceiling.
+    pub fn holds(&self, centre: Vec3, n: Vec3) -> bool {
+        let front = centre + n * FRONT_M;
+        if front.y < -0.3 {
+            return false;
+        }
+        if centre.y > self.top + 0.005 && (n.y > -0.1 || !self.open_roof) {
+            return false;
+        }
+        let p = Vec2::new(front.x, front.z);
+        let over = self.cells.iter().any(|hex| {
+            let turn = (hex[1] - hex[0]).perp_dot(hex[2] - hex[0]).signum();
+            (0..6).all(|k| turn * (hex[(k + 1) % 6] - hex[k]).perp_dot(p - hex[k]) >= 0.0)
+        });
+        over && self.walls.iter().all(|&(a, b)| {
+            let t = ((p - a).dot(b - a) / (b - a).length_squared()).clamp(0.0, 1.0);
+            p.distance(a + (b - a) * t) >= WALL_LINE_M
+        })
+    }
 }
 
 impl<'a> Sink<'a> {
@@ -432,6 +515,8 @@ impl<'a> Sink<'a> {
             roof_plan: Vec::new(),
             surfaces: Vec::new(),
             doors: Vec::new(),
+            rooms: Meshes::new(),
+            indoors: None,
         }
     }
 
@@ -468,7 +553,17 @@ impl<'a> Sink<'a> {
             [t.x, -t.y]
         };
         let world_n = self.frame.world_dir(n).to_array();
-        let buf = self.meshes.entry(material.to_string()).or_default();
+        let centre = pts.iter().fold(Vec3::ZERO, |s, p| s + *p) / pts.len() as f32;
+        let inside = self
+            .indoors
+            .as_ref()
+            .is_some_and(|rooms| rooms.holds(centre, n));
+        let meshes = if inside {
+            &mut self.rooms
+        } else {
+            &mut *self.meshes
+        };
+        let buf = meshes.entry(material.to_string()).or_default();
         for i in 1..pts.len() - 1 {
             for &k in &[0, i, i + 1] {
                 buf.positions.push(self.frame.world(pts[k]).to_array());
@@ -767,6 +862,7 @@ pub fn cut_building(
         roof_plan: sink.roof_plan,
         surfaces: sink.surfaces,
         doors: sink.doors,
+        rooms: sink.rooms,
     })
 }
 
@@ -786,6 +882,8 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
         STOREY_M * def.tall.max(1) as f32
     };
     let top = storeys as f32 * storey_m;
+    let open_roof = def.roof == "cone" && plan.cells.len() == 1;
+    sink.indoors = Some(Indoors::new(plan.corners.clone(), top, open_roof));
     let (door_w, door_h) = kit.door_m;
     let inside = |c: i32, r: i32| plan.index(c, r).is_some();
     // The stair, from the building's stair cells (slice 2b).
@@ -1003,7 +1101,16 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
         RoofKind::Gable => {
             let under = if kit.hut { "thatch" } else { "plank" };
             gable_roof(
-                sink, min, max, top, def.pitch, &material, &kit.gable, overhang, under,
+                sink,
+                &plan.corners,
+                min,
+                max,
+                top,
+                def.pitch,
+                &material,
+                &kit.gable,
+                overhang,
+                under,
             );
         }
     }
@@ -1505,6 +1612,7 @@ fn edge_wall(
 #[allow(clippy::too_many_arguments)]
 fn gable_roof(
     sink: &mut Sink,
+    cells: &[[Vec2; 6]],
     min: Vec2,
     max: Vec2,
     wall_y: f32,
@@ -1599,13 +1707,21 @@ fn gable_roof(
             }
         }
     }
+    // The top storey's ceiling over each cell, and the soffit over the box
+    // a lift above it: the room sees the one and the street the other where
+    // the box stands past the walls (`sun-shadows` decision 7).
+    for hex in cells {
+        let ceiling: Vec<Vec3> = hex.iter().map(|p| Vec3::new(p.x, wall_y, p.y)).collect();
+        sink.face("plank", &ceiling, -Vec3::Y, None);
+    }
+    let soffit = wall_y + LIFT_M;
     sink.face(
         "plank",
         &[
-            Vec3::new(x0, wall_y, z0),
-            Vec3::new(x1, wall_y, z0),
-            Vec3::new(x1, wall_y, z1),
-            Vec3::new(x0, wall_y, z1),
+            Vec3::new(x0, soffit, z0),
+            Vec3::new(x1, soffit, z0),
+            Vec3::new(x1, soffit, z1),
+            Vec3::new(x0, soffit, z1),
         ],
         -Vec3::Y,
         None,

@@ -937,3 +937,180 @@ fn a_shut_door_holds_and_an_open_one_does_not() {
         "drawn"
     );
 }
+
+/// Where a ray from `from` along `dir` first meets a triangle, and which of
+/// the two sets it is in: the rooms' (true) or the outside's.
+fn first_hit(from: Vec3, dir: Vec3, tris: &[([Vec3; 3], bool)]) -> Option<(f32, bool, usize)> {
+    let mut best: Option<(f32, bool, usize)> = None;
+    for (k, (t, inside)) in tris.iter().enumerate() {
+        let (e1, e2) = (t[1] - t[0], t[2] - t[0]);
+        let p = dir.cross(e2);
+        let det = e1.dot(p);
+        if det.abs() < 1e-9 {
+            continue;
+        }
+        let s = from - t[0];
+        let u = s.dot(p) / det;
+        let q = s.cross(e1);
+        let v = dir.dot(q) / det;
+        let d = e2.dot(q) / det;
+        if u < 0.0 || v < 0.0 || u + v > 1.0 || d <= 1e-4 {
+            continue;
+        }
+        if best.is_none_or(|(b, _, _)| d < b) {
+            best = Some((d, *inside, k));
+        }
+    }
+    best
+}
+
+/// `sun-shadows` decision 7: the cutter tells a room's faces from the
+/// town's outside. From the middle of every ground-floor room, whatever a
+/// ray meets inside the building's plan is a room face (its walls, floor,
+/// ceiling, beams and stair); from the yard and from above, whatever a ray
+/// meets outside the plan is not (its outer walls, eaves and roof). A ray
+/// through a door or a window is let through: what it meets on the far side
+/// is the other side's.
+#[test]
+fn a_rooms_faces_are_what_is_seen_from_inside_it() {
+    let (patch, at) = patch();
+    let village = village();
+    let kits = kits();
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let d0 = patch.side_toward(*at, east);
+    let chart = chart(patch, (25, 17), *at, d0, &wanted(&village)).expect("charted");
+    let rays: Vec<Vec3> = (0..400)
+        .map(|i| {
+            // A Fibonacci sphere.
+            let y = 1.0 - 2.0 * (i as f32 + 0.5) / 400.0;
+            let a = i as f32 * 2.399_963;
+            let r = (1.0 - y * y).sqrt();
+            Vec3::new(r * a.cos(), y, r * a.sin())
+        })
+        .collect();
+    let mut seen = [0usize; 2];
+    for b in &village.buildings {
+        let kit = kits.get(&b.kit).unwrap();
+        let mut meshes = Meshes::new();
+        let cut = cut_building(
+            &mut meshes,
+            &|_: &str| 2.0,
+            patch,
+            &chart,
+            b,
+            kit,
+            RADIUS_M,
+            10.0,
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        assert!(!cut.rooms.is_empty(), "{} has no rooms", b.name);
+        let f = cut.frame;
+        let mut tris: Vec<([Vec3; 3], bool)> = Vec::new();
+        for (set, inside) in [(&meshes, false), (&cut.rooms, true)] {
+            for m in set.values() {
+                for t in m.positions.chunks(3) {
+                    tris.push((
+                        t.iter()
+                            .map(|p| f.local(Vec3::from_array(*p)))
+                            .collect::<Vec<_>>()
+                            .try_into()
+                            .unwrap(),
+                        inside,
+                    ));
+                }
+            }
+        }
+        let hexes: Vec<Vec<glam::Vec2>> = b
+            .cells
+            .iter()
+            .map(|&[c, r]| {
+                let cell = &patch.cells[chart.cell(c, r).unwrap()];
+                cell.corners.iter().map(|p| f.plane(*p)).collect()
+            })
+            .collect();
+        let in_plan = |p: Vec3| {
+            let q = glam::Vec2::new(p.x, p.z);
+            hexes.iter().any(|h| {
+                let n = h.len();
+                let turn = (h[1] - h[0]).perp_dot(h[2] - h[0]).signum();
+                (0..n).all(|k| turn * (h[(k + 1) % n] - h[k]).perp_dot(q - h[k]) >= -1e-3)
+            })
+        };
+        let storey = if kit.hut {
+            2.6
+        } else {
+            crate::settlement::STOREY_M
+        };
+        let top = b.storeys.max(1) as f32 * storey * b.tall.max(1) as f32;
+        // Under a ceiling, nothing over it is a room's.
+        let open_roof = b.roof == "cone" && b.cells.len() == 1;
+        if !open_roof {
+            for (t, inside) in &tris {
+                assert!(
+                    !inside || t.iter().all(|v| v.y <= top + 0.02),
+                    "{}: a room face over the ceiling: {t:?}",
+                    b.name
+                );
+            }
+        }
+        let centre_of = |c: i32, r: i32| {
+            let q = f.plane(patch.cells[chart.cell(c, r).unwrap()].direction);
+            Vec3::new(q.x, 0.0, q.y)
+        };
+        // Inside: the middle of each room cell that is not the stair's.
+        for &[c, r] in b.cells.iter().filter(|x| !b.stair_cells.contains(x)) {
+            let eye = centre_of(c, r) + Vec3::Y * 1.5;
+            for d in &rays {
+                if let Some((t, inside, k)) = first_hit(eye, *d, &tris) {
+                    let p = eye + *d * t;
+                    // A reveal or a jamb stands across the wall line.
+                    let across = tris[k].0.iter().any(|v| in_plan(*v))
+                        && tris[k].0.iter().any(|v| !in_plan(*v));
+                    if in_plan(p) && p.y < top - 0.05 && !across {
+                        assert!(
+                            inside,
+                            "{}: from its room at {eye}, an outside face at {p}: {:?}",
+                            b.name, tris[k]
+                        );
+                        seen[1] += 1;
+                    }
+                }
+            }
+        }
+        // Outside: from the yard, eight metres off every cell, and from
+        // above the ridge.
+        let middle = hexes.iter().flatten().fold(glam::Vec2::ZERO, |s, p| s + *p)
+            / hexes.iter().map(Vec::len).sum::<usize>() as f32;
+        let mut eyes: Vec<Vec3> = b
+            .cells
+            .iter()
+            .map(|&[c, r]| {
+                let q = centre_of(c, r);
+                let away = (glam::Vec2::new(q.x, q.z) - middle).normalize_or(glam::Vec2::X);
+                Vec3::new(q.x + away.x * 8.0, 1.5, q.z + away.y * 8.0)
+            })
+            .collect();
+        eyes.push(Vec3::new(middle.x, top + 20.0, middle.y));
+        for eye in eyes {
+            for d in &rays {
+                if let Some((t, inside, k)) = first_hit(eye, *d, &tris) {
+                    let p = eye + *d * t;
+                    let across = tris[k].0.iter().any(|v| in_plan(*v))
+                        && tris[k].0.iter().any(|v| !in_plan(*v));
+                    if !in_plan(p) && !across {
+                        assert!(
+                            !inside,
+                            "{}: from outside at {eye}, a room face at {p}: {:?}",
+                            b.name, tris[k]
+                        );
+                        seen[0] += 1;
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        seen[0] > 1000 && seen[1] > 1000,
+        "rays that met faces: {seen:?}"
+    );
+}

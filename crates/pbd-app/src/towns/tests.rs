@@ -374,3 +374,48 @@ fn a_door_opened_is_open_when_the_world_is_opened_again() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// `sun-shadows` decision 7 and task 5.1: every Holbrook building has rooms
+/// drawn apart from the town's outside, a room takes the shut share of the
+/// sky until a door of its building opens and the open share after, and the
+/// town casts every triangle of both.
+#[test]
+fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
+    let site = holbrook();
+    let config = *crate::planet::terrain_config();
+    let town = lay_out(&site, &load_template("village"), &config).unwrap();
+    let laid = build(&site, &town, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    assert_eq!(laid.rooms.len(), laid.solids.len());
+    for (b, rooms) in laid.rooms.iter().enumerate() {
+        assert!(!rooms.is_empty(), "building {b} has no rooms");
+    }
+    let triangles = |m: &Meshes| m.values().map(|b| b.positions.len()).sum::<usize>();
+    let outside = triangles(&laid.meshes);
+    let inside: usize = laid.rooms.iter().map(triangles).sum();
+    assert!(
+        inside > 1000 && outside > inside,
+        "{inside} inside, {outside} outside"
+    );
+    assert_eq!(casting(&laid).len(), outside + inside);
+
+    let mut world = World::new();
+    world.insert_resource(Structures(laid.solids.clone()));
+    let room = world
+        .spawn((TownRoom { building: 0 }, SkyShare(ROOM_SKY_SHUT)))
+        .id();
+    let other = world
+        .spawn((TownRoom { building: 1 }, SkyShare(ROOM_SKY_SHUT)))
+        .id();
+    let mut follow = IntoSystem::into_system(rooms_follow_doors);
+    follow.initialize(&mut world);
+    follow.run((), &mut world).unwrap();
+    assert_eq!(world.get::<SkyShare>(room), Some(&SkyShare(ROOM_SKY_SHUT)));
+    world.resource_mut::<Structures>().0[0].doors[0].open = true;
+    follow.run((), &mut world).unwrap();
+    assert_eq!(world.get::<SkyShare>(room), Some(&SkyShare(ROOM_SKY_OPEN)));
+    assert_eq!(
+        world.get::<SkyShare>(other),
+        Some(&SkyShare(ROOM_SKY_SHUT)),
+        "another building's door is not this one's"
+    );
+}

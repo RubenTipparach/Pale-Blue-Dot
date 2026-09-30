@@ -279,6 +279,9 @@ pub struct Built {
     pub meshes: Meshes,
     /// Each building's solids, for the walker.
     pub solids: Vec<BuildingSolids>,
+    /// Each building's inside faces, by texture (`sun-shadows` decision 7),
+    /// taken out of its solids.
+    pub rooms: Vec<Meshes>,
 }
 
 /// Build a town from its definition: its chart from the stored cells, its
@@ -303,11 +306,12 @@ pub fn build(
     let ground = TownGround::new(patch, radius_m, &footprint, terrace, natural);
     let mut meshes = Meshes::new();
     let mut solids = Vec::new();
+    let mut rooms = Vec::new();
     for b in &town.buildings {
         let kit = kits
             .get(&b.kit)
             .ok_or_else(|| format!("{}: no kit {}", b.name, b.kit))?;
-        solids.push(cut_building(
+        let mut cut = cut_building(
             &mut meshes,
             repeat_m,
             patch,
@@ -316,13 +320,16 @@ pub fn build(
             kit,
             radius_m,
             terrace + b.floor as f32,
-        )?);
+        )?;
+        rooms.push(std::mem::take(&mut cut.rooms));
+        solids.push(cut);
     }
     Ok(Built {
         chart,
         ground,
         meshes,
         solids,
+        rooms,
     })
 }
 

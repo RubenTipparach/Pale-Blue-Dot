@@ -132,6 +132,13 @@ pub struct Launch {
     /// looks through a doorway (`cities-in-the-world` slice 2b). Doors start
     /// shut.
     pub open_doors: bool,
+    /// `--no-shadows` draws no sun cascades and lights everything as if in
+    /// the sun: the same build's picture without them (`sun-shadows`).
+    pub no_shadows: bool,
+    /// `--room-sky OPEN SHUT` sets the share of the sky a town's rooms take
+    /// with a door open and with all shut (`sun-shadows` decision 7), for
+    /// tuning against captures.
+    pub room_sky: Option<(f32, f32)>,
     /// `--up M` stands a capture's walker on the highest town floor within M
     /// metres of the ground at `--at`: upstairs in a house.
     pub up: f32,
@@ -238,6 +245,8 @@ impl Launch {
             rain: 0.0,
             weather_at: 0.0,
             open_doors: false,
+            no_shadows: false,
+            room_sky: None,
             up: 0.0,
             world: None,
             load: None,
@@ -580,6 +589,19 @@ impl Launch {
                     result.weather_at = seconds;
                 }
                 "--open-doors" => result.open_doors = true,
+                "--no-shadows" => result.no_shadows = true,
+                "--room-sky" => {
+                    let mut share = || {
+                        i += 1;
+                        let v: f32 = args
+                            .get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--room-sky requires two shares, open and shut");
+                        assert!((0.0..=1.0).contains(&v), "--room-sky shares are 0..1");
+                        v
+                    };
+                    result.room_sky = Some((share(), share()));
+                }
                 "--up" => {
                     i += 1;
                     result.up = args
@@ -978,6 +1000,15 @@ pub fn run(args: &[String]) {
         }
         if launch.open_doors {
             app.insert_resource(pbd_app::towns::OpenDoors);
+        }
+        if let Some((open, shut)) = launch.room_sky {
+            app.insert_resource(pbd_app::towns::RoomSky { open, shut });
+        }
+        if launch.no_shadows {
+            app.insert_resource(pbd_app::planet::shadow::ShadowSettings {
+                enabled: false,
+                ..default()
+            });
         }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));

@@ -45,7 +45,24 @@ pub(crate) fn planet_surface_source() -> String {
         surface.contains(import),
         "planet_surface.wgsl's cloud import moved; update the splice"
     );
-    surface.replacen(import, &clouds, 1)
+    let shadow = "#import pbd::sun_shadow::{SunCascades, sun_shadow}";
+    assert!(
+        surface.contains(shadow),
+        "planet_surface.wgsl's shadow import moved; update the splice"
+    );
+    surface
+        .replacen(import, &clouds, 1)
+        .replacen(shadow, &sun_shadow_source(), 1)
+}
+
+/// `sun_shadow.wgsl` as naga reads it: the module's items, without the
+/// composer's import path.
+pub(crate) fn sun_shadow_source() -> String {
+    include_str!("../../../assets/shaders/sun_shadow.wgsl")
+        .lines()
+        .filter(|line| !line.starts_with("#define_import_path"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// `sea.wgsl` as naga reads it: its import path is Bevy's composer's, not
@@ -66,7 +83,7 @@ fn the_sea_module_compiles() {
 #[test]
 fn the_planet_surface_shader_compiles_with_the_entry_points_its_pipeline_names() {
     let entries = validated_entry_points("planet_surface.wgsl", &planet_surface_source());
-    for entry in ["vertex", "fragment"] {
+    for entry in ["vertex", "fragment", "shadow_fragment"] {
         assert!(
             entries.iter().any(|name| name == entry),
             "planet_surface.wgsl declares {entries:?}, and the draw pipeline asks for `{entry}`"

@@ -12,6 +12,7 @@ use bevy::camera::primitives::Aabb;
 use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
+use bevy::render::storage::ShaderStorageBuffer;
 use bevy::shader::ShaderRef;
 use pbd_core::light;
 
@@ -20,6 +21,19 @@ use pbd_core::light;
 /// material, extended with the field (`FieldLit`).
 #[derive(Component, Default, Clone, Copy)]
 pub struct LitByField;
+
+/// Put beside [`LitByField`] on a root whose meshes are lit as the terrain
+/// is, by the terrain's own fill and sun rather than Bevy's picture: a town's
+/// pieces (`sun-shadows` decision 7), which are the ground's own kind of
+/// thing and stand beside it.
+#[derive(Component, Default, Clone, Copy)]
+pub struct LitLikeTerrain;
+
+/// The share of the sky that reaches a mesh, 0..1, where it is less than the
+/// field says: a room's faces (`sun-shadows` decision 7), whose walls the
+/// voxel field has never heard of.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct SkyShare(pub f32);
 
 /// The field at a mesh's bounds, as `field_lit.wgsl` reads it.
 #[derive(Clone, Copy, Debug, Default, ShaderType, Reflect)]
@@ -30,13 +44,22 @@ pub struct FieldUniform {
     pub sun: Vec4,
     pub sky: [Vec4; 2],
     pub block: [Vec4; 2],
+    /// x one where it is lit as the terrain is ([`LitLikeTerrain`]); y the
+    /// share of the sky that reaches it ([`SkyShare`], one outdoors).
+    pub look: Vec4,
 }
 
-/// The extension that lights a PBR material from the field.
+/// The extension that lights a PBR material from the field, and shades it
+/// with the sun's cascades (`sun-shadows` decision 4).
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
 pub struct FieldLit {
     #[uniform(100)]
     pub field: FieldUniform,
+    #[texture(101, sample_type = "depth", dimension = "2d_array")]
+    #[sampler(102, sampler_type = "comparison")]
+    pub sun_map: Handle<Image>,
+    #[storage(103, read_only)]
+    pub sun_cascades: Handle<ShaderStorageBuffer>,
 }
 
 impl MaterialExtension for FieldLit {
@@ -59,13 +82,15 @@ impl Plugin for FieldLightPlugin {
                 (take_the_field, light_from_the_field)
                     .chain()
                     .after(bevy::transform::TransformSystems::Propagate),
-            );
+            )
+            .add_systems(Update, fill_follows_the_day);
     }
 }
 
 /// Give each new mesh under a `LitByField` root its own field-lit copy of its
 /// material. Its own, because each mesh is lit at its own bounds; the
 /// builders share one material between parts and never need to know.
+#[allow(clippy::too_many_arguments)]
 fn take_the_field(
     mut commands: Commands,
     added: Query<
@@ -73,8 +98,10 @@ fn take_the_field(
         Added<MeshMaterial3d<StandardMaterial>>,
     >,
     roots: Query<(), With<LitByField>>,
+    terrain_like: Query<(), With<LitLikeTerrain>>,
     parents: Query<&ChildOf>,
     standard: Res<Assets<StandardMaterial>>,
+    shadows: Option<Res<crate::planet::shadow::SunShadowMaps>>,
     mut lit: ResMut<Assets<FieldLitMaterial>>,
 ) {
     for (entity, material) in &added {
@@ -87,9 +114,22 @@ fn take_the_field(
         let Some(base) = standard.get(&material.0) else {
             continue;
         };
+        let like_terrain = std::iter::once(entity)
+            .chain(parents.iter_ancestors(entity))
+            .any(|at| terrain_like.contains(at));
         let handle = lit.add(ExtendedMaterial {
             base: base.clone(),
-            extension: FieldLit::default(),
+            extension: FieldLit {
+                field: FieldUniform {
+                    look: Vec4::new(if like_terrain { 1.0 } else { 0.0 }, 1.0, 0.0, 0.0),
+                    ..default()
+                },
+                sun_map: shadows.as_ref().map(|s| s.map.clone()).unwrap_or_default(),
+                sun_cascades: shadows
+                    .as_ref()
+                    .map(|s| s.cascades.clone())
+                    .unwrap_or_default(),
+            },
         });
         commands
             .entity(entity)
@@ -123,7 +163,7 @@ fn world_bounds(transform: &GlobalTransform, aabb: Option<&Aabb>) -> (Vec3, Vec3
 
 /// Sample the field at every field-lit mesh's eight corners, each frame
 /// (`lamps-and-lanterns` decision 2), and hand them to its material.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn light_from_the_field(
     fine: Option<Res<PlanetFine>>,
     contact: Option<Res<PlanetContact>>,
@@ -133,6 +173,7 @@ fn light_from_the_field(
         &GlobalTransform,
         Option<&Aabb>,
         &MeshMaterial3d<FieldLitMaterial>,
+        Option<&SkyShare>,
     )>,
     mut lit: ResMut<Assets<FieldLitMaterial>>,
 ) {
@@ -140,7 +181,7 @@ fn light_from_the_field(
         .map(|frame| frame.center.as_vec3())
         .unwrap_or(Vec3::ZERO);
     let toward_sun = sun.map(|sun| sun.direction()).unwrap_or(Vec3::Y);
-    for (transform, aabb, material) in &meshes {
+    for (transform, aabb, material, share) in &meshes {
         let (low, high) = world_bounds(transform, aabb);
         let mut field = FieldUniform {
             low: low.extend(0.0),
@@ -165,7 +206,10 @@ fn light_from_the_field(
         let Some(current) = lit.get(&material.0).map(|m| m.extension.field) else {
             continue;
         };
+        field.look = current.look;
+        field.look.y = share.map_or(1.0, |s| s.0);
         let moved = (current.low - field.low).abs().max_element() > 1e-3
+            || current.look != field.look
             || (current.high - field.high).abs().max_element() > 1e-3
             || (current.sun - field.sun).abs().max_element() > 1e-4
             || (0..2).any(|k| {
@@ -175,6 +219,33 @@ fn light_from_the_field(
         if moved && let Some(material) = lit.get_mut(&material.0) {
             material.extension.field = field;
         }
+    }
+}
+
+/// Bevy's own ambient, what lights a PBR face turned from the sun, is the
+/// terrain's cap fill for the hour where the camera is (`sun-shadows`
+/// decision 7): a shaded wall of a ship is lit as a shaded cliff is, not by
+/// Bevy's default. Divided by the camera's exposure, which Bevy multiplies
+/// every light by.
+fn fill_follows_the_day(
+    sun: Option<Res<crate::sky::Sun>>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    cameras: Query<(&Camera, &GlobalTransform, Option<&bevy::camera::Exposure>), With<Camera3d>>,
+    ambient: Option<ResMut<GlobalAmbientLight>>,
+) {
+    let (Some(sun), Some(frame), Some(mut ambient)) = (sun, frame, ambient) else {
+        return;
+    };
+    let Some((_, at, exposure)) = cameras.iter().find(|(camera, ..)| camera.is_active) else {
+        return;
+    };
+    let up = (at.translation().as_dvec3() - frame.center).as_vec3();
+    let fill = light::sky_fill(1.0, sun.clock.daylight(up));
+    let [r, g, b] = light::SKY_FILL;
+    let brightness = fill / exposure.copied().unwrap_or_default().exposure();
+    if (ambient.brightness - brightness).abs() > 1e-3 * brightness.max(1.0) {
+        ambient.color = Color::linear_rgb(r, g, b);
+        ambient.brightness = brightness;
     }
 }
 
@@ -224,17 +295,27 @@ mod tests {
             ),
             format!("const TORCH_GAIN: f32 = {:.2};", light::TORCH_GAIN),
             "    let g = f * (2.0 - f);\n    return g * g;".to_string(),
-            "let daylight = smoothstep(-0.13, 0.20, dot(up, field.sun.xyz));".to_string(),
-            // Decision 14: Bevy's sun only where it is up and the sky
-            // reaches, the floor on the albedo and never on the sun.
-            "let sun_up = daylight * sky;".to_string(),
+            "let daylight = smoothstep(-0.13, 0.20, elevation);".to_string(),
+            // `sun-shadows` decision 5: the sun ends at the horizon, the
+            // terrain's own curve for its direct term.
+            "let sunlight = smoothstep(-0.0145, 0.02, elevation);".to_string(),
+            // Decision 14 and `sun-shadows` decision 4: the sun only where it
+            // is up, the sky reaches and the cascades see it.
+            "let sun_up = sunlight * sky * shadow;".to_string(),
+            // `sun-shadows` decision 7: a town is lit as the terrain is, by
+            // its numbers.
+            "const SUN_TINT: vec3<f32> = vec3<f32>(1.12, 1.03, 0.87);".to_string(),
+            "const WALL_FILL: vec3<f32> = vec3<f32>(0.30, 0.32, 0.34);".to_string(),
+            "const WALL_NIGHT: f32 = 0.20;".to_string(),
+            "const WALL_GAIN: f32 = 0.95;".to_string(),
             format!(
                 "const SKY_FILL: vec3<f32> = vec3<f32>({:.2}, {:.2}, {:.2});",
                 light::SKY_FILL[0],
                 light::SKY_FILL[1],
                 light::SKY_FILL[2]
             ),
-            "let ambient = base * SKY_FILL * max(AMBIENT_FLOOR, NIGHT_FILL * sky);".to_string(),
+            "let ambient = base * SKY_FILL * max(AMBIENT_FLOOR, mix(NIGHT_FILL, 1.0, daylight) * sky);"
+                .to_string(),
             "out.color.rgb * sun_up + ambient * (1.0 - sun_up) + lamp".to_string(),
             "@binding(100) var<uniform> field: Field;".to_string(),
         ] {
@@ -255,6 +336,61 @@ mod tests {
         assert!(
             terrain.contains(&fill),
             "planet_surface.wgsl should carry `{fill}`"
+        );
+        // And its wall's fill, night and gain, and its sun's tint and curve,
+        // which a town takes as its own.
+        for line in [
+            "fill = vec3(0.30,0.32,0.34);",
+            "night = 0.20;",
+            "gain = 0.95;",
+            "vec3(1.12,1.03,0.87)*direct",
+            "let sunlight = smoothstep(-0.0145,0.02,sun_elevation);",
+        ] {
+            assert!(
+                terrain.contains(line),
+                "planet_surface.wgsl should carry `{line}`"
+            );
+        }
+    }
+
+    /// `sun-shadows` decision 7: Bevy's ambient, what lights a PBR face
+    /// turned from the sun, is the terrain's cap fill for the hour where the
+    /// camera stands: the whole of it at noon, the night's share at midnight.
+    #[test]
+    fn a_face_turned_from_the_sun_takes_the_skys_fill() {
+        let sun = crate::sky::Sun::default();
+        let overhead = sun.direction();
+        let mut world = World::new();
+        world.insert_resource(sun);
+        world.insert_resource(crate::planet::PlanetRenderFrame::default());
+        world.insert_resource(GlobalAmbientLight::default());
+        let camera = world
+            .spawn((
+                Camera3d::default(),
+                GlobalTransform::from_translation(overhead * PLANET_RADIUS),
+            ))
+            .id();
+        let mut follow = IntoSystem::into_system(fill_follows_the_day);
+        follow.initialize(&mut world);
+        follow.run((), &mut world).unwrap();
+        let exposure = bevy::camera::Exposure::default().exposure();
+        let at_noon = world.resource::<GlobalAmbientLight>().clone();
+        assert!(
+            (at_noon.brightness * exposure - 1.0).abs() < 1e-4,
+            "{at_noon:?}"
+        );
+        assert_eq!(
+            at_noon.color.to_linear().to_f32_array_no_alpha(),
+            light::SKY_FILL
+        );
+        world
+            .entity_mut(camera)
+            .insert(GlobalTransform::from_translation(-overhead * PLANET_RADIUS));
+        follow.run((), &mut world).unwrap();
+        let at_midnight = world.resource::<GlobalAmbientLight>().brightness * exposure;
+        assert!(
+            (at_midnight - light::NIGHT_FILL).abs() < 1e-4,
+            "{at_midnight}"
         );
     }
 

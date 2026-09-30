@@ -16,6 +16,8 @@ mod contact;
 pub(crate) mod lattice;
 #[path = "planet_lod.rs"]
 pub(crate) mod lod;
+#[path = "planet_shadow.rs"]
+pub mod shadow;
 #[path = "planet_terrain.rs"]
 pub(crate) mod terrain;
 #[path = "planet_topology.rs"]
@@ -241,7 +243,7 @@ pub struct PlanetPlugin;
 
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(crate::sea::SeaPlugin);
+        app.add_plugins((crate::sea::SeaPlugin, shadow::SunShadowPlugin));
         water::install_eye_water(app);
         app.add_plugins((
             ExtractResourcePlugin::<PlanetBase>::default(),
@@ -919,7 +921,11 @@ impl SpecializedRenderPipeline for PlanetPipeline {
     fn specialize(&self, (samples, hdr): Self::Key) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed("Opaque GPU hex world")),
-            layout: vec![self.draw_layout.clone(), weather_maps::layout()],
+            layout: vec![
+                self.draw_layout.clone(),
+                weather_maps::layout(),
+                shadow::receiver_layout(),
+            ],
             vertex: VertexState {
                 shader: self.shader.clone(),
                 entry_point: Some(Cow::Borrowed("vertex")),
@@ -1323,20 +1329,27 @@ fn queue_planet(
 type DrawPlanet = (SetItemPipeline, DrawPlanetIndirect);
 struct DrawPlanetIndirect;
 impl<P: PhaseItem> RenderCommand<P> for DrawPlanetIndirect {
-    type Param = Option<bevy::ecs::system::lifetimeless::SRes<weather_maps::WeatherMapGpu>>;
+    type Param = (
+        Option<bevy::ecs::system::lifetimeless::SRes<weather_maps::WeatherMapGpu>>,
+        Option<bevy::ecs::system::lifetimeless::SRes<shadow::ShadowState>>,
+    );
     type ViewQuery = Option<&'static PlanetViewGpu>;
     type ItemQuery = ();
     fn render<'w>(
         _: &P,
         view: Option<&'w PlanetViewGpu>,
         _: Option<()>,
-        maps: SystemParamItem<'w, '_, Self::Param>,
+        (maps, shadows): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (Some(view), Some(maps)) = (view, maps) else {
+        let (Some(view), Some(maps), Some(shadows)) = (view, maps, shadows) else {
+            return RenderCommandResult::Skip;
+        };
+        let Some(receiver) = shadows.into_inner().receiver.as_ref() else {
             return RenderCommandResult::Skip;
         };
         pass.set_bind_group(1, &maps.into_inner().bind_group, &[]);
+        pass.set_bind_group(2, receiver, &[]);
         pass.set_bind_group(0, &view.draw_bind_group, &[]);
         pass.draw_indirect(&view.indirect, 0);
         pass.set_bind_group(0, &view.foliage_bind_group, &[]);
@@ -1492,6 +1505,10 @@ impl render_graph::Node for PlanetComputeNode {
             pass.set_pipeline(compact);
             pass.dispatch_workgroups(planet.slots.div_ceil(128), 1, 1);
             span.end(&mut pass);
+            drop(pass);
+            // The sun's cascades, from the records this view draws
+            // (`sun-shadows`), before the camera's pass reads them.
+            shadow::draw_cascades(ctx, world, *entity, clear, compact, planet.slots);
         }
         Ok(())
     }

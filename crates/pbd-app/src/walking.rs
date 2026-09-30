@@ -1791,6 +1791,7 @@ mod tests {
             roof_plan: Vec::new(),
             surfaces: Vec::new(),
             doors: Vec::new(),
+            rooms: Default::default(),
         };
         let walk = |across: f32| {
             let mut app = app_with_terrain_at(PlanetContact::test_flat_land(5).0, flat);
@@ -2383,6 +2384,7 @@ mod tests {
             roof_plan: Vec::new(),
             surfaces: Vec::new(),
             doors: Vec::new(),
+            rooms: Default::default(),
         };
         let mut app = app_with_terrain_at(terrain, flat);
         app.insert_resource(Structures(vec![wall.clone()]));

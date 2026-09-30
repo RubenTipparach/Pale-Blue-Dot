@@ -206,6 +206,77 @@ The fixes:
 These land ahead of the cascades, in tasks 4b.1 and 4b.2, because they
 need none of them.
 
+## As built (2026-09-30)
+
+What the code does, where it differs from the decisions above, and why.
+
+- **Decision 1.** `planet_shadow.rs` is a child of the planet renderer, so it
+  reuses the terrain's records, pipeline layout and cull.
+  - The maps are one `Image` (four 2048² layers, `Depth32Float`, 64 MiB), and
+    the cascades one `ShaderStorageBuffer` of 304 bytes. Both are main-world
+    assets, so a field-lit material binds them as it binds a texture.
+  - The terrain reads them in its group 2. `sun_shadow.wgsl` declares no
+    binding: each shader hands its own in.
+  - Test: `planet::shadow::tests::the_cascades_buffer_is_the_shaders_struct`.
+- **Decision 2** is `pbd_core::shadow`, as designed.
+  - At the game's 60° lens and 1.6 aspect, on foot:
+    - the edges are 0.5, 14.4, 42.6, 164.9 and 900 m;
+    - the radii are 16, 47, 180 and 981 m;
+    - a texel is 1.6 cm, 4.6 cm, 17.6 cm and 96 cm.
+  - A move shorter than a texel can still cross a texel's edge, so the box
+    moves by whole texels only, and by one at most for such a move. That is
+    what keeps an edge from crawling, and the spec's scenario now says it
+    that way.
+  - The receivers read the matrices each map was drawn with, which the
+    render world records. They read no shadow at all until every map has
+    been drawn once.
+- **Decision 3.**
+  - The cull takes a cascade when `fade.w` is one: no horizon, no sea, no
+    clutter.
+  - The four cascades take turns with one set of lists, since each one's
+    cull runs just before its own draw.
+  - The depth entry is `shadow_fragment`. It drops the pixels `fragment`
+    drops (dissolve, band fade, split cell, tree thinning) through the
+    shared `dropped`, so a shadow is cast by what is drawn.
+  - Both faces cast, and the slope-scaled bias is 2.
+  - A town casts every triangle of its outside and its rooms, not its doors
+    (`towns::casting`).
+- **Decision 4.** The normal offset is 1.5 texels, the depth bias 1 texel of
+  the cascade in use, and the blend 10% of a box. Field-lit objects offset
+  along the geometric normal.
+- **Decision 5 is half built.**
+  - The direct sun and the glints take `sunlight` (the terrain and field-lit
+    shaders both).
+  - The fill, fog and rim still take `daylight`, not `twilight`. That moves
+    every dawn and dusk's fill and wants its own look, so
+    `preview-scale-and-shader-parity` task 7 stays open for that half.
+- **Decision 7, as built:**
+  - **A town is lit as the terrain is.** `LitLikeTerrain` on its root gives
+    its meshes the terrain's own formula: a cap's cool fill on what faces
+    up, a wall's paler one on the rest, and the terrain's sun tint.
+    - The harshness was Bevy's picture: its 15,000 lux sun at the default
+      exposure lit a white wall at about 4.8 times its albedo, against the
+      terrain's 1.12.
+    - Crafts, fish, drops and the float keep Bevy's picture, which now
+      takes the shadow too.
+  - **Bevy's ambient** (`GlobalAmbientLight`) is the cap fill for the hour
+    at the camera, for the PBR look (`fill_follows_the_day`).
+  - **The cutter tags a room's faces geometrically.** A face is a room's
+    when:
+    - the air 5 cm in front of it is over the plan's cells, 2 cm inside the
+      wall line;
+    - and the face stands under the top storey's ceiling, or is the
+      underside of a hut's cone.
+
+    A window's reveals and a door's jambs stand across the wall line, in the
+    opening, so they are the outside's. A gable's flat ceiling is now cut
+    per cell (the room's), with the soffit over the roof's box 1 cm above
+    it (the street's).
+  - **Rooms are drawn per building**, carrying `SkyShare`, which the
+    building's doors set (`rooms_follow_doors`). The shares are tuned below.
+  - **The sun inside is the cascades'.** No interim "no sun indoors" was
+    needed, since the cascades landed with the rooms.
+
 ## Risks / Trade-offs
 
 - **Acne and peter-panning.** The biases trade one against the other.
