@@ -30,6 +30,15 @@ fn village() -> Template {
     serde_json::from_str(&text).expect("village.json parses")
 }
 
+fn walled() -> Template {
+    let text = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/settlements/v1/town.json"
+    ))
+    .expect("town.json");
+    serde_json::from_str(&text).expect("town.json parses")
+}
+
 /// A patch of the level-7 sphere round a cell well away from the
 /// pentagons.
 fn patch() -> &'static (Patch, usize) {
@@ -614,7 +623,13 @@ fn a_damaged_settlement_record_is_named_not_remade() {
     };
     let damaged = |s: record::Stored| matches!(s, record::Stored::Damaged(_));
     assert!(damaged(put(Some(0), &|_| {})), "a building missing");
-    assert!(damaged(put(None, &|r| r.schema = 2)), "an unknown schema");
+    assert!(damaged(put(None, &|r| r.schema = 9)), "an unknown schema");
+    assert!(
+        damaged(put(None, &|r| if r.kind == record::SETTLEMENT_RECORD {
+            r.schema = record::TERRACED_SCHEMA
+        })),
+        "a terraced schema with no levels"
+    );
     assert!(
         damaged(put(None, &|r| if r.kind == record::SETTLEMENT_RECORD {
             r.body = "(nothing)".into()
@@ -656,7 +671,20 @@ fn a_towns_records_are_small() {
 /// stored building looks its kit up by name each time it is cut, so a kit
 /// once named here stays in `kits.ron` for good, as a generator version
 /// does (slice 3a). A new template's kits are added here when it ships.
-const KITS_SAVED_TOWNS_NAME: &[&str] = &["ashlar", "halftimber", "stone", "straw", "timber"];
+const KITS_SAVED_TOWNS_NAME: &[&str] = &[
+    "ashlar",
+    "halftimber",
+    "stone",
+    "straw",
+    "timber",
+    // The walled town (slice 4b).
+    "brick",
+    "brickbuff",
+    "brickdark",
+    "clay",
+    "marble",
+    "mud",
+];
 
 #[test]
 fn every_kit_a_saved_town_can_name_is_shipped() {
@@ -664,7 +692,7 @@ fn every_kit_a_saved_town_can_name_is_shipped() {
     for name in KITS_SAVED_TOWNS_NAME {
         assert!(kits.get(name).is_some(), "kits.ron dropped {name}");
     }
-    for b in &village().buildings {
+    for b in village().buildings.iter().chain(&walled().buildings) {
         assert!(
             KITS_SAVED_TOWNS_NAME.contains(&b.kit.as_str()),
             "{} names {}, which is not listed as a kit a saved town can name",
@@ -1337,4 +1365,97 @@ fn the_grid_finds_what_every_town_would() {
         }
     }
     assert!(checked > 1000, "{checked} directions on the town's ground");
+}
+
+/// Slice 4b: the walled town lays on its levels. Every built cell stands at
+/// its own height over the datum, a yard at the level of the built cell
+/// nearest it, every building on the level of its cells, and the ground
+/// the town is built on answers each cell's terrace.
+#[test]
+fn the_walled_town_lays_on_its_levels() {
+    let template = walled();
+    assert!(template.terraced);
+    let kits = kits();
+    for b in &template.buildings {
+        assert!(kits.get(&b.kit).is_some(), "{}: no kit {}", b.name, b.kit);
+    }
+    let town = laid_village(&template);
+    assert_eq!(town.levels.len(), town.cells.len());
+    let spread: BTreeSet<i8> = town.levels.iter().copied().collect();
+    assert!(spread.len() >= 3, "levels {spread:?}");
+    let height: std::collections::BTreeMap<(i32, i32), i32> =
+        template.ground.iter().map(|g| ((g.c, g.r), g.h)).collect();
+    let on: BTreeSet<(i32, i32)> = template
+        .built_cells()
+        .into_iter()
+        .map(|[c, r]| (c, r))
+        .collect();
+    let level: std::collections::BTreeMap<(i32, i32), i8> = town
+        .cells
+        .iter()
+        .zip(&town.levels)
+        .map(|(c, &l)| ((c.0, c.1), l))
+        .collect();
+    // The datum is where most of what is built stands: a built cell's
+    // height less its level.
+    let first = town
+        .cells
+        .iter()
+        .position(|c| on.contains(&(c.0, c.1)))
+        .expect("a built cell");
+    let datum = height[&(town.cells[first].0, town.cells[first].1)] - i32::from(town.levels[first]);
+    for (&at, &l) in &level {
+        if on.contains(&at) {
+            assert_eq!(i32::from(l), height[&at] - datum, "built cell {at:?}");
+        }
+    }
+    let (lo, hi) = (
+        on.iter().filter_map(|a| level.get(a)).min().unwrap(),
+        on.iter().filter_map(|a| level.get(a)).max().unwrap(),
+    );
+    assert!(
+        town.levels.iter().all(|l| l >= lo && l <= hi),
+        "no yard below the lowest built cell or above the highest"
+    );
+    for b in &town.buildings {
+        for &[c, r] in &b.cells {
+            assert_eq!(
+                i32::from(level[&(c, r)]),
+                b.floor,
+                "{} at ({c}, {r})",
+                b.name
+            );
+        }
+    }
+    let b = built(&town);
+    assert_eq!(b.solids.len(), template.buildings.len());
+    let (patch, _) = patch();
+    for (i, cell) in town.cells.iter().enumerate() {
+        let at = b.chart.cells[&(cell.0, cell.1)].cell;
+        let g = b
+            .ground
+            .at(patch.cells[at].direction)
+            .expect("on its ground");
+        assert_eq!(g.ring, 0);
+        assert_eq!(g.terrace, town.terrace_of(i), "({}, {})", cell.0, cell.1);
+    }
+}
+
+/// A terraced town goes into its records in schema 2 and comes back with
+/// its levels; a town on one level stays in schema 1, as it always was.
+#[test]
+fn a_terraced_town_is_stored_in_schema_2_and_a_flat_one_in_schema_1() {
+    for (template, schema) in [
+        (walled(), record::TERRACED_SCHEMA),
+        (village(), record::RECORD_SCHEMA),
+    ] {
+        let town = laid_village(&template);
+        let records = record::to_records(&town);
+        assert_eq!(records.last().unwrap().schema, schema, "{}", template.scene);
+        let mut store = crate::records::Records::new();
+        for r in records {
+            store.put(r);
+        }
+        assert_eq!(record::from_records(&store, 7), record::Stored::Town(town));
+    }
 }

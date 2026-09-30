@@ -62,6 +62,11 @@ pub struct Template {
     /// Cells with a street lamp.
     #[serde(default)]
     pub lamps: Vec<[i32; 2]>,
+    /// Whether the town stands on several levels, each built cell at its
+    /// own height (slice 4b): the walled town's terraces. A template without
+    /// it is laid flat on one terrace, as the village always has been.
+    #[serde(default)]
+    pub terraced: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]

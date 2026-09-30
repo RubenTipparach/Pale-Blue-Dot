@@ -32,6 +32,12 @@ pub const SETTLEMENT_RECORD: &str = "settlement";
 pub const BUILDING_RECORD: &str = "building";
 /// The schema both are written in.
 pub const RECORD_SCHEMA: u32 = 1;
+/// The settlement schema of a town on several levels (slice 4b): schema 1
+/// and a level for each footprint cell. A town on one level is still
+/// written in schema 1, so every village's records are as they were, and a
+/// build that reads only schema 1 refuses a terraced town rather than laying
+/// it flat.
+pub const TERRACED_SCHEMA: u32 = 2;
 /// The laying-out rules' version, stored for people to read: a town is
 /// never rebuilt by it.
 pub const LAYOUT_VERSION: u32 = 1;
@@ -147,7 +153,17 @@ pub struct Town {
     pub anchor: (i32, i32),
     /// Every footprint cell, by layout cell.
     pub cells: Vec<TownCell>,
+    /// Each footprint cell's level, layers over the terrace, in the order of
+    /// `cells`; empty where the town stands on one level (slice 4b).
+    pub levels: Vec<i8>,
     pub buildings: Vec<Building>,
+}
+
+impl Town {
+    /// A footprint cell's terrace, metres over the radius.
+    pub fn terrace_of(&self, cell: usize) -> f32 {
+        self.terrace as f32 + f32::from(self.levels.get(cell).copied().unwrap_or(0))
+    }
 }
 
 /// Which way a site's layout turns, 0..6 sides from the anchor cell's side
@@ -223,7 +239,7 @@ pub fn lay(
         .filter(|g| g.top != "grass" && g.top != "sand")
         .map(|g| (g.c, g.r))
         .collect();
-    let cells = footprint
+    let cells: Vec<TownCell> = footprint
         .iter()
         .filter_map(|&(c, r)| {
             let at = charted.cells.get(&(c, r))?;
@@ -232,14 +248,19 @@ pub fn lay(
         })
         .collect();
     // The mockup's datum: the level most of its village stands on.
-    let mut levels: Vec<i32> = template
+    let mut heights: Vec<i32> = template
         .ground
         .iter()
         .filter(|g| built.contains(&(g.c, g.r)))
         .map(|g| g.h)
         .collect();
-    levels.sort();
-    let datum = levels.get(levels.len() / 2).copied().unwrap_or(0);
+    heights.sort();
+    let datum = heights.get(heights.len() / 2).copied().unwrap_or(0);
+    let levels = if template.terraced {
+        levels_of(template, &built, &cells, datum)
+    } else {
+        Vec::new()
+    };
     Ok(Town {
         site,
         template: template.scene.clone(),
@@ -247,12 +268,58 @@ pub fn lay(
         terrace: terrace as i32,
         anchor,
         cells,
+        levels,
         buildings: template
             .buildings
             .iter()
             .map(|b| Building::laid(b, datum))
             .collect(),
     })
+}
+
+/// Each footprint cell's level over the datum, for a town on several levels
+/// (slice 4b): a built cell (a building's, a street's) at its own height, and
+/// a yard cell level with the built cell nearest it, so a yard never follows
+/// the mockup's ground past the town (the lake, the hillside) down or up.
+fn levels_of(
+    template: &Template,
+    built: &BTreeSet<(i32, i32)>,
+    cells: &[TownCell],
+    datum: i32,
+) -> Vec<i8> {
+    let height: BTreeMap<(i32, i32), i32> =
+        template.ground.iter().map(|g| ((g.c, g.r), g.h)).collect();
+    let inside: BTreeSet<(i32, i32)> = cells.iter().map(|c| (c.0, c.1)).collect();
+    let mut level: BTreeMap<(i32, i32), i32> = built
+        .iter()
+        .filter(|at| inside.contains(at))
+        .map(|&at| (at, height.get(&at).copied().unwrap_or(datum) - datum))
+        .collect();
+    let mut ring: Vec<(i32, i32)> = level.keys().copied().collect();
+    while !ring.is_empty() {
+        let mut next = Vec::new();
+        for &(c, r) in &ring {
+            let l = level[&(c, r)];
+            for d in 0..6 {
+                let n = neighbour(c, r, d);
+                if inside.contains(&n) && !level.contains_key(&n) {
+                    level.insert(n, l);
+                    next.push(n);
+                }
+            }
+        }
+        ring = next;
+    }
+    cells
+        .iter()
+        .map(|c| {
+            level
+                .get(&(c.0, c.1))
+                .copied()
+                .unwrap_or(0)
+                .clamp(-100, 100) as i8
+        })
+        .collect()
 }
 
 /// A town's chart on a patch, from its stored cells: each key found in
@@ -309,12 +376,19 @@ pub fn ground_of(
     natural: impl Fn(Vec3) -> f32,
 ) -> Result<(Chart, TownGround), String> {
     let chart = chart_of(town, patch)?;
-    let footprint: Vec<(usize, Option<Material>)> = town
+    let footprint: Vec<(usize, Option<Material>, f32)> = town
         .cells
         .iter()
-        .map(|&TownCell(c, r, _, _, top)| (chart.cells[&(c, r)].cell, top.map(Top::material)))
+        .enumerate()
+        .map(|(i, &TownCell(c, r, _, _, top))| {
+            (
+                chart.cells[&(c, r)].cell,
+                top.map(Top::material),
+                town.terrace_of(i),
+            )
+        })
         .collect();
-    let ground = TownGround::new(patch, radius_m, &footprint, town.terrace as f32, natural);
+    let ground = TownGround::terraced(patch, radius_m, &footprint, natural);
     Ok((chart, ground))
 }
 
@@ -373,6 +447,9 @@ struct SettlementBody {
     terrace: i32,
     anchor: (i32, i32),
     cells: Vec<TownCell>,
+    /// Schema 2 only: each cell's level (slice 4b).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    levels: Vec<i8>,
     buildings: Vec<u64>,
 }
 
@@ -389,16 +466,27 @@ pub fn to_records(town: &Town) -> Vec<Record> {
         .zip(&ids)
         .map(|(b, &id)| Record::of(BUILDING_RECORD, id, RECORD_SCHEMA, b))
         .collect();
+    let levels = if town.levels.iter().any(|&l| l != 0) {
+        town.levels.clone()
+    } else {
+        Vec::new()
+    };
+    let schema = if levels.is_empty() {
+        RECORD_SCHEMA
+    } else {
+        TERRACED_SCHEMA
+    };
     records.push(Record::of(
         SETTLEMENT_RECORD,
         u64::from(town.site),
-        RECORD_SCHEMA,
+        schema,
         &SettlementBody {
             template: town.template.clone(),
             layout: town.layout,
             terrace: town.terrace,
             anchor: town.anchor,
             cells: town.cells.clone(),
+            levels,
             buildings: ids,
         },
     ));
@@ -449,15 +537,25 @@ pub fn from_records(records: &Records, site: u32) -> Stored {
             Stored::None
         };
     };
-    if record.schema != RECORD_SCHEMA {
+    if record.schema != RECORD_SCHEMA && record.schema != TERRACED_SCHEMA {
         return Stored::Damaged(format!(
-            "settlement {site} is schema {}, and this build reads {RECORD_SCHEMA}",
+            "settlement {site} is schema {}, and this build reads {RECORD_SCHEMA} and {TERRACED_SCHEMA}",
             record.schema
         ));
     }
     let Some(body) = record.read::<SettlementBody>() else {
         return Stored::Damaged(format!("settlement {site} does not read"));
     };
+    let terraced = record.schema == TERRACED_SCHEMA;
+    // Schema 2 carries a level for every cell, and schema 1 none.
+    if terraced == body.levels.is_empty() || (terraced && body.levels.len() != body.cells.len()) {
+        return Stored::Damaged(format!(
+            "settlement {site}: {} levels for {} cells in schema {}",
+            body.levels.len(),
+            body.cells.len(),
+            record.schema
+        ));
+    }
     let mut buildings = Vec::with_capacity(body.buildings.len());
     for &id in &body.buildings {
         let Some(b) = records.get(BUILDING_RECORD, id) else {
@@ -481,6 +579,7 @@ pub fn from_records(records: &Records, site: u32) -> Stored {
         terrace: body.terrace,
         anchor: body.anchor,
         cells: body.cells,
+        levels: body.levels,
         buildings,
     })
 }

@@ -12,7 +12,8 @@
 //! their cells' real corners (`settlement::pieces`). The town is one entity
 //! with a mesh per texture, lit by the field as a drop or a craft is.
 //!
-//! Every village site stands (slice 4a): each is laid and stored on the
+//! Every village and walled town site stands (slices 4a and 4b): each is
+//! laid and stored on the
 //! world's first open, its ground installed with every other town's, and its
 //! pieces cut and faded in only within [`STAND_M`] of the viewer. The other
 //! kinds follow, a kind at a time.
@@ -258,15 +259,19 @@ pub const FADE_S: f32 = 1.0;
 pub struct TownAssets {
     pub kits: Arc<Kits>,
     pub village: Template,
+    /// The walled town (slice 4b).
+    pub walled: Template,
     pub repeats: Arc<BTreeMap<String, f32>>,
 }
 
 impl TownAssets {
-    /// The template a kind of site is laid from, where one is shipped: only
-    /// the village's so far (slice 4 adds a kind at a time).
+    /// The template a kind of site is laid from, where one is shipped: the
+    /// village's and the walled town's so far (slice 4 adds a kind at a
+    /// time).
     pub fn template_for(&self, kind: SiteKind) -> Option<&Template> {
         match kind {
             SiteKind::Village => Some(&self.village),
+            SiteKind::Walled => Some(&self.walled),
             _ => None,
         }
     }
@@ -476,10 +481,12 @@ fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
         let assets = world.resource::<TownAssets>();
         for site in sites {
             let template = assets.template_for(site.kind).expect("chosen for one");
+            if stored(&save, site.id) == Stored::None {
+                laid += 1;
+            }
             match ensure(&mut save, &site, template, &config) {
                 Ok((Some(_), seq)) if seq > 0 => {
                     wait = wait.max(seq);
-                    laid += 1;
                     waiting.push(site);
                 }
                 // Read, or stored with nothing to wait for (a save with no
@@ -501,8 +508,9 @@ fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
         }
     });
     info!(
-        "towns: {} held, {laid} laid out now, {unsettled} unsettled, in {:.2} s",
+        "towns: {} read, {laid} of them laid out now, {} waiting on the disk, {unsettled} unsettled, in {:.2} s",
         held.len(),
+        waiting.len(),
         started.elapsed().as_secs_f32()
     );
     let mut towns = world.resource_mut::<Towns>();
@@ -1223,6 +1231,7 @@ impl Plugin for TownsPlugin {
         app.insert_resource(TownAssets {
             kits: Arc::new(load_kits()),
             village: load_template("village"),
+            walled: load_template("town"),
             repeats: Arc::new(load_repeats()),
         })
         .init_resource::<Towns>()

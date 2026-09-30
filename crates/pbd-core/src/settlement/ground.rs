@@ -77,35 +77,52 @@ impl TownGround {
         terrace: f32,
         natural: impl Fn(Vec3) -> f32,
     ) -> Self {
+        let cells: Vec<(usize, Option<Material>, f32)> = footprint
+            .iter()
+            .map(|&(i, top)| (i, top, terrace))
+            .collect();
+        Self::terraced(patch, radius_m, &cells, natural)
+    }
+
+    /// A town's ground whose footprint stands on several levels (slice 4b):
+    /// each footprint cell with its own terrace, metres over the radius, and
+    /// each margin cell eased toward the terrace of the cell it was reached
+    /// from.
+    pub fn terraced(
+        patch: &Patch,
+        radius_m: f32,
+        footprint: &[(usize, Option<Material>, f32)],
+        natural: impl Fn(Vec3) -> f32,
+    ) -> Self {
         let mut cells = Vec::new();
         let mut seen: BTreeSet<usize> = BTreeSet::new();
-        for &(index, top) in footprint {
+        for &(index, top, terrace) in footprint {
             if seen.insert(index) {
-                cells.push((index, 0u8, top));
+                cells.push((index, 0u8, top, terrace));
             }
         }
-        let mut ring: Vec<usize> = footprint.iter().map(|f| f.0).collect();
+        let mut ring: Vec<(usize, f32)> = footprint.iter().map(|f| (f.0, f.2)).collect();
         let mut k = 0u8;
         loop {
             k += 1;
             let mut next = Vec::new();
-            for &i in &ring {
+            for &(i, terrace) in &ring {
                 for &n in &patch.cells[i].neighbors {
                     if n < patch.cells.len() && seen.insert(n) {
-                        next.push(n);
+                        next.push((n, terrace));
                     }
                 }
             }
             if next.is_empty() {
                 break;
             }
-            let settled = next
-                .iter()
-                .all(|&i| (natural(patch.cells[i].direction) - terrace).abs() <= f32::from(k));
+            let settled = next.iter().all(|&(i, terrace)| {
+                (natural(patch.cells[i].direction) - terrace).abs() <= f32::from(k)
+            });
             let last = settled || k > MAX_MARGIN_RINGS;
             let tag = if last { GroundAt::OUTSIDE } else { k };
-            for &i in &next {
-                cells.push((i, tag, None));
+            for &(i, terrace) in &next {
+                cells.push((i, tag, None, terrace));
             }
             if last {
                 break;
@@ -138,7 +155,7 @@ impl TownGround {
             buckets: HashMap::new(),
             cells: cells
                 .iter()
-                .map(|&(i, ring, top)| GroundAt {
+                .map(|&(i, ring, top, terrace)| GroundAt {
                     centre: patch.cells[i].direction,
                     ring,
                     terrace,

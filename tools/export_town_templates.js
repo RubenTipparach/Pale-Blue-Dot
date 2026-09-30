@@ -19,6 +19,9 @@ const { chromium } = require("playwright");
 const ROOT = path.join(__dirname, "..");
 const OUT = path.join(ROOT, "assets", "settlements", "v1");
 const scenes = process.argv.slice(2).length ? process.argv.slice(2) : ["village"];
+// Scenes that stand on several levels, each built cell at its own height
+// (`cities-in-the-world` slice 4b); every other scene is laid flat.
+const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
 
 (async () => {
   const executablePath = fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined;
@@ -84,6 +87,7 @@ const scenes = process.argv.slice(2).length ? process.argv.slice(2) : ["village"
       }
       return { scene, grid: { columns: NC, rows: NR, cell_m: W }, buildings: found, ground, lamps: STREET_LAMPS.slice() };
     }, scene);
+    if (TERRACED.has(scene)) layout.terraced = true;
     const file = path.join(OUT, `${scene}.json`);
     fs.writeFileSync(file, JSON.stringify(layout, null, 1) + "\n");
     console.log(`${scene}: ${layout.buildings.length} buildings -> ${path.relative(ROOT, file)}`);

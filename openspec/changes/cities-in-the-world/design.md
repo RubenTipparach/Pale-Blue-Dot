@@ -811,6 +811,54 @@ so the first can be looked at before it can be walked into.
       - A stored town never turns: it is built from its records.
     - **Shots.** Two other villages at 11:00 and 22:30, and the walk from
       one village to the next, where a town fades in on the way.
+  - **4a as built (2026-09-30).**
+    - **Laid and stored.**
+      - `towns::start_towns` lays every village site with no record,
+        in site id order, through `ensure`, and stores each.
+      - A world opened in the fast build lays all 20 villages in 0.44 s,
+        about 0.04 s each (`every_village_lays_and_cuts_on_its_own_ground`,
+        in the fast profile).
+      - The ground is installed once for all of them, and the planet rebuilt
+        once. That takes 8.4 s in the container, as Holbrook alone did.
+    - **The turn.** `record::turn` mixes the site's id and deals the six
+      sides about evenly: 6000 sites give 900 to 1100 each. The shipped
+      seed's 19 other villages take all six. Holbrook keeps its east, and its
+      lane shot is the same to the pixel.
+    - **Unsettled.**
+      - `TownGround::touches` looks for a player's edit on any footprint or
+        margin cell, by exact key.
+      - Such a site gets an `unsettled` record, schema 1. It reads back as
+        `Stored::Unsettled` and is never laid again, even once the edit is
+        gone.
+    - **In range.**
+      - `stand_in_range` cuts a town on the pool within 1.2 km of the camera
+        (the walker where no camera is active). It drops the town past
+        1.5 km, and in between the town stays as it is.
+      - The fade is `Faded` on the town's root, carried to every piece's
+        material as `centre.w`. `field_lit.wgsl` discards through the
+        terrain's own `bayer4`, and a test holds the two copies equal.
+      - Flames are unlit, so they show once a town is half there.
+      - A town that stands when the world opens is whole at once, as its
+        ground is.
+    - **Per town.** A door and a room name their site and their building's
+      number there. `Towns::index` finds the building in the walker's
+      `Structures`, which holds only the standing towns, in the order they
+      stood. A dropped town's buildings are taken out, and the later towns
+      move down.
+    - **One height a town, not twenty.**
+      - With every village's ground installed, a height cost 17% more than
+        with none. The instrument timed 200,000 directions in the fast
+        build: 1215 ns against 1417 ns. Every height asked every town.
+      - The world's ground now keeps the towns by square on a grid over the
+        cube's faces: 8 a side, about 1 km across here.
+      - A height asks only the towns in its own square. Twenty villages now
+        time within the instrument's run-to-run noise of one (-8% to +6%).
+      - `the_grid_finds_what_every_town_would` holds the grid to a look at
+        every town, on the town, round its edge and past it.
+    - **Not captured.** The fade itself is a second of frames. A still
+      capture shows its end, so the app test
+      (`a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves`)
+      is its proof until the owner's video batch.
   - **4b in detail.**
     - **The export.** `tools/export_town_templates.js town` writes
       `assets/settlements/v1/town.json`.
@@ -828,6 +876,47 @@ so the first can be looked at before it can be walked into.
       jetty and lamps come later (task 5.2 for the lamps).
     - **Shots.** The walled town's lane, square and market from the
       street, and from 60 m.
+  - **4b as built (2026-09-30), and where it left the plan.**
+    - **The export.** `tools/export_town_templates.js town` wrote
+      `town.json`: 29 buildings, 38 street lamps, and ground from -3 m (the
+      lake) to 9 m (the hillside past the hamlet). Its buildings stand on
+      whole layers, 1 to 3. So heights stay whole metres, and fractions come
+      with the kinds that carry them (the tundra, swamp, jungle and
+      harbour).
+    - **The footprint is as it was.**
+      - It is the built cells (buildings, and every top that is not grass
+        or sand) and two rings of yard. On the walled town that is the whole
+        walled town, its quay and its hamlet.
+      - It is not the lake, and not the hillside or the fields outside the
+        walls, which keep the planet's own ground.
+      - Reading the mockup's area names was not needed. The village's
+        footprint does not change.
+    - **A level a footprint cell.**
+      - `Template::terraced` (the exporter sets it for the town, the harbour,
+        the mountain and the mounds) lays each built cell at its own height
+        over the datum.
+      - A yard cell takes the level of the built cell nearest it, so no yard
+        follows the mockup's lake down or its hillside up.
+      - `TownGround::terraced` eases each margin cell toward the terrace of
+        the cell it was reached from.
+      - Every walled site of the shipped seed stands on four levels: the
+        quay at -1, the town's three terraces at 0, 1 and 2.
+    - **Records.**
+      - A town on one level is written in schema 1, as before, so every
+        village's records are byte for byte what 4a wrote.
+      - A terraced town is written in schema 2, with a level for each cell.
+        A build that reads only schema 1 refuses it as damaged, rather than
+        laying it flat.
+    - **No step pieces yet.** The walker climbs 1.05 m, so a 1 m change of
+      level is walked as the terrain's own step. The mockup's stepped
+      street cells stand at their own height for now, and half-steps are
+      pieces for later.
+    - **Streets are dirt.** The terrain has no cobble or flagstone material.
+      The walled town's streets take the village lanes' dirt until one is
+      added.
+    - **Linenleigh stands 520 m from Holbrook** on the shipped seed. So the
+      home village now has a walled town within sight, laid on a world's
+      first open with this build.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before

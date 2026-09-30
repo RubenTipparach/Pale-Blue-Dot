@@ -659,6 +659,7 @@ fn a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves() {
         .insert_resource(TownAssets {
             kits: Arc::new(load_kits()),
             village: load_template("village"),
+            walled: load_template("town"),
             repeats: Arc::new(load_repeats()),
         })
         .insert_resource(Towns {
@@ -770,4 +771,47 @@ fn print_the_cost_of_a_height_with_the_villages() {
         (one / none - 1.0) * 100.0,
         (all / none - 1.0) * 100.0
     );
+}
+
+/// Slice 4b: every walled site of the shipped seed lays and cuts the walled
+/// town on its own ground, on its levels, dry.
+#[test]
+fn every_walled_town_lays_and_cuts_on_its_levels() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("town");
+    let kits = load_kits();
+    let mut sites: Vec<Site> = pbd_core::sites::generate(
+        &load_rules(),
+        crate::planet::terrain_config(),
+        list_spawn(),
+        4,
+    )
+    .sites
+    .into_iter()
+    .filter(|s| s.kind == SiteKind::Walled)
+    .collect();
+    sites.sort_by_key(|s| s.id);
+    assert!(!sites.is_empty(), "walled sites");
+    for site in &sites {
+        let started = std::time::Instant::now();
+        let town =
+            lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let (footprint, margin) = laid.ground.counts();
+        let levels: std::collections::BTreeSet<i8> = town.levels.iter().copied().collect();
+        let (lat, lon) = pbd_core::geo::lat_lon(site.direction).degrees();
+        println!(
+            "{}{}: --at {lat:.5} {lon:.5}, turn {}, a terrace at {} m on levels {levels:?}, {footprint} cells eased over {margin}, laid and cut in {:.2} s",
+            site.name,
+            if site.capital { " (the capital)" } else { "" },
+            record::turn(site.id),
+            town.terrace,
+            started.elapsed().as_secs_f32()
+        );
+        assert_eq!(laid.solids.len(), template.buildings.len(), "{}", site.name);
+        assert!(levels.len() >= 3, "{}: levels {levels:?}", site.name);
+        let lowest = town.terrace as f32 + f32::from(*levels.first().unwrap());
+        assert!(lowest > config.sea_level_m, "{} is dry", site.name);
+    }
 }
