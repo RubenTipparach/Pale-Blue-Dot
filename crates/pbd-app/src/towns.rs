@@ -2,21 +2,22 @@
 //! built into the ground at its site and drawn with the mockup's own pieces
 //! and pixels.
 //!
-//! Once a world's sites are on disk, the home town's template is laid onto
-//! the finest cells round its anchor (`pbd_core::settlement::chart`), the
-//! ground under it is terraced (`settlement::ground`, installed where every
-//! height is read, and the planet rebuilt round the player), and its
-//! buildings are cut from their cells' real corners
-//! (`settlement::pieces`). The town is one entity with a mesh per texture,
-//! lit by the field as a drop or a craft is.
+//! Once a world's sites are on disk, the home town is read from the world's
+//! save, or, the first time, laid from its template onto the finest cells
+//! round its anchor (`pbd_core::settlement::chart`) and stored
+//! (`settlement::record`, slice 3a). It is built from the record only once
+//! the record is on disk, and always from the record: the ground under it
+//! is terraced (`settlement::ground`, installed where every height is read,
+//! and the planet rebuilt round the player), and its buildings are cut from
+//! their cells' real corners (`settlement::pieces`). The town is one entity
+//! with a mesh per texture, lit by the field as a drop or a craft is.
 //!
-//! Slice 1 builds the home village only, from its template each time. No
-//! build with towns ships before settlements are stored records (the
-//! design's decision 9).
+//! Only the home village is built so far; the other kinds follow in slice 4.
 
 use crate::field_light::LitByField;
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
+use crate::saves::WorldSave;
 use crate::sites::WorldSites;
 use crate::walking::Structures;
 use bevy::asset::RenderAssetUsages;
@@ -26,22 +27,20 @@ use bevy::image::{
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use pbd_core::planet_gen::{self, TerrainConfig};
-use pbd_core::settlement::chart::{Chart, Patch, chart};
+use pbd_core::records::Author;
+use pbd_core::settlement::chart::{Chart, Patch};
 use pbd_core::settlement::ground::{self, Ground, TownGround};
-use pbd_core::settlement::pieces::{BuildingSolids, Meshes, cut_building};
-use pbd_core::settlement::{Kits, Template, neighbour};
+use pbd_core::settlement::pieces::{BuildingSolids, Meshes};
+use pbd_core::settlement::record::{self, Stored, Town};
+use pbd_core::settlement::{Kits, Template};
 use pbd_core::sites::{Site, SiteKind};
-use pbd_core::terrain::Material;
 use serde::Deserialize;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 /// How far round a site its cells are fetched, metres: the village's grid
 /// reaches 82 m from its centre, and the margin rings a few more.
 pub const PATCH_M: f32 = 130.0;
-/// Rings of layout cells round the built ones that are terraced with them,
-/// so the yards between the houses are level too.
-pub const YARD_RINGS: usize = 2;
 
 fn asset(path: &str) -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets")).join(path)
@@ -92,7 +91,7 @@ pub fn load_repeats() -> BTreeMap<String, f32> {
         .collect()
 }
 
-/// A town laid out and cut, before it is in the world.
+/// A town built from its record, before it is in the world.
 pub struct Laid {
     pub site: u32,
     pub name: String,
@@ -104,18 +103,6 @@ pub struct Laid {
     pub meshes: Meshes,
     /// Each building's solids, for the walker (slice 2a).
     pub solids: Vec<BuildingSolids>,
-}
-
-/// The layout cell the template is anchored by: the middle of what it
-/// builds on.
-pub fn template_anchor(template: &Template) -> (i32, i32) {
-    let built = template.built_cells();
-    let (mut lo, mut hi) = ([i32::MAX; 2], [i32::MIN; 2]);
-    for [c, r] in &built {
-        lo = [lo[0].min(*c), lo[1].min(*r)];
-        hi = [hi[0].max(*c), hi[1].max(*r)];
-    }
-    ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)
 }
 
 /// The patch of finest cells round a direction.
@@ -130,101 +117,88 @@ pub fn patch_round(direction: Vec3, radius_m: f32, reach_m: f32) -> Patch {
     }
 }
 
-/// Lay a template at a site: chart it, terrace its ground, cut its
-/// buildings. `repeat_m` is how far a texture repeats.
-pub fn lay_out(
+/// The natural ground's layer at a direction, metres over the radius.
+fn natural(config: &TerrainConfig) -> impl Fn(Vec3) -> f32 + '_ {
+    |d: Vec3| planet_gen::surface_altitude(config, d).floor()
+}
+
+/// Lay a template at a site, once: its anchor on the site's cell, the
+/// layout's east along the cell's side nearest east, and the terrace from
+/// the natural ground (`record::lay`). What this returns is stored, and the
+/// town is built from the store.
+pub fn lay_out(site: &Site, template: &Template, config: &TerrainConfig) -> Result<Town, String> {
+    let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+    let at = patch.nearest(site.direction).ok_or("an empty patch")?;
+    let (_, east) = pbd_core::geo::north_east(patch.cells[at].direction);
+    let d0 = patch.side_toward(at, east);
+    record::lay(template, site.id, &patch, at, d0, natural(config))
+}
+
+/// Build a town from its definition: its ground and its pieces, cut on the
+/// cells it was laid on. `repeat_m` is how far a texture repeats.
+pub fn build(
     site: &Site,
-    template: &Template,
+    town: &Town,
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     config: &TerrainConfig,
 ) -> Result<Laid, String> {
-    let radius = config.radius_m;
-    let patch = patch_round(site.direction, radius, PATCH_M);
-    let at = patch.nearest(site.direction).ok_or("an empty patch")?;
-    let (_, east) = pbd_core::geo::north_east(patch.cells[at].direction);
-    let d0 = patch.side_toward(at, east);
-    let wanted: BTreeSet<(i32, i32)> = template.ground.iter().map(|g| (g.c, g.r)).collect();
-    let anchor = template_anchor(template);
-    let chart = chart(&patch, anchor, at, d0, &wanted)?;
-    // The footprint: what is built on, and the yards round it.
-    let built: BTreeSet<(i32, i32)> = template
-        .built_cells()
-        .into_iter()
-        .map(|[c, r]| (c, r))
-        .collect();
-    let mut footprint = built.clone();
-    let mut ring = built.clone();
-    for _ in 0..YARD_RINGS {
-        let mut next = BTreeSet::new();
-        for &(c, r) in &ring {
-            for d in 0..6 {
-                let n = neighbour(c, r, d);
-                if chart.cells.contains_key(&n) && footprint.insert(n) {
-                    next.insert(n);
-                }
-            }
-        }
-        ring = next;
-    }
-    let natural = |d: Vec3| planet_gen::surface_altitude(config, d).floor();
-    let mut heights: Vec<f32> = built
-        .iter()
-        .filter_map(|&(c, r)| chart.cell(c, r))
-        .map(|i| natural(patch.cells[i].direction))
-        .collect();
-    heights.sort_by(f32::total_cmp);
-    let terrace_m = *heights.get(heights.len() / 2).ok_or("nothing built")?;
-    let dirt: BTreeSet<(i32, i32)> = template
-        .ground
-        .iter()
-        .filter(|g| g.top != "grass" && g.top != "sand")
-        .map(|g| (g.c, g.r))
-        .collect();
-    let cells: Vec<(usize, Option<Material>)> = footprint
-        .iter()
-        .filter_map(|&(c, r)| {
-            let top = dirt.contains(&(c, r)).then_some(Material::Dirt);
-            chart.cell(c, r).map(|i| (i, top))
-        })
-        .collect();
-    let ground = TownGround::new(&patch, radius, &cells, terrace_m, natural);
-    // The mockup's datum: the level most of its village stands on.
-    let mut levels: Vec<i32> = template
-        .ground
-        .iter()
-        .filter(|g| built.contains(&(g.c, g.r)))
-        .map(|g| g.h)
-        .collect();
-    levels.sort();
-    let datum = levels.get(levels.len() / 2).copied().unwrap_or(0);
-    let mut meshes = Meshes::new();
-    let mut solids = Vec::new();
-    for b in &template.buildings {
-        let kit = kits
-            .get(&b.kit)
-            .ok_or_else(|| format!("{}: no kit {}", b.name, b.kit))?;
-        solids.push(cut_building(
-            &mut meshes,
-            repeat_m,
-            &patch,
-            &chart,
-            b,
-            kit,
-            radius,
-            terrace_m + (b.base - datum) as f32,
-        )?);
-    }
+    let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+    let built = record::build(
+        town,
+        &patch,
+        kits,
+        repeat_m,
+        config.radius_m,
+        natural(config),
+    )?;
     Ok(Laid {
         site: site.id,
         name: site.name.clone(),
-        chart,
+        chart: built.chart,
         patch,
-        terrace_m,
-        ground,
-        meshes,
-        solids,
+        terrace_m: town.terrace as f32,
+        ground: built.ground,
+        meshes: built.meshes,
+        solids: built.solids,
     })
+}
+
+/// A site's town as the world's save holds it.
+pub fn stored(save: &WorldSave, site: u32) -> Stored {
+    record::from_records(&save.records, site)
+}
+
+/// Queue a freshly laid town into the save, as the world's creation, and
+/// name its record kinds in the identity. The sequence of its last line
+/// (the settlement's), or `None` when the save has failed.
+pub fn store(save: &mut WorldSave, town: &Town) -> Option<u64> {
+    let seq = save.store(&Author::Creation, record::to_records(town))?;
+    save.note_record_kinds(&[
+        (record::BUILDING_RECORD, record::RECORD_SCHEMA),
+        (record::SETTLEMENT_RECORD, record::RECORD_SCHEMA),
+    ]);
+    Some(seq)
+}
+
+/// A site's town: the one its save holds, or one laid now from `template`
+/// and queued to the save, with the sequence to wait for (0 when nothing was
+/// written). A damaged record is an error, and nothing is written over it.
+pub fn ensure(
+    save: &mut WorldSave,
+    site: &Site,
+    template: &Template,
+    config: &TerrainConfig,
+) -> Result<(Town, u64), String> {
+    match stored(save, site.id) {
+        Stored::Town(town) => Ok((town, 0)),
+        Stored::Damaged(why) => Err(why),
+        Stored::None => {
+            let town = lay_out(site, template, config)?;
+            let seq = store(save, &town).ok_or("the save refused the town")?;
+            Ok((town, seq))
+        }
+    }
 }
 
 /// What the towns are built from: the kits, the templates and the textures.
@@ -249,6 +223,10 @@ pub struct Standing {
 #[derive(Resource, Default)]
 pub struct Towns {
     for_sites: Option<Vec<u32>>,
+    /// A town laid and queued to the save, shown once the writer's mark
+    /// passes its settlement's line (decision 8: written before it is
+    /// shown).
+    writing: Option<(Site, u64)>,
     pub standing: Vec<Standing>,
 }
 
@@ -264,6 +242,11 @@ pub struct TownRoot;
 
 /// Build the towns once a world's sites are on disk: an exclusive system,
 /// because it installs the ground and rebuilds the planet round the player.
+///
+/// A town the save holds is built from its records. One it does not hold is
+/// laid from the template, queued to the save, and built from the records
+/// once they are on disk. A town whose record is damaged is not built, and
+/// nothing is written over it.
 pub fn build_towns(world: &mut World) {
     let Some(sites) = world
         .get_resource::<WorldSites>()
@@ -273,9 +256,40 @@ pub fn build_towns(world: &mut World) {
         return;
     };
     let ids: Vec<u32> = sites.iter().map(|s| s.id).collect();
-    if world.resource::<Towns>().for_sites.as_ref() == Some(&ids) {
+    if world.resource::<Towns>().for_sites.as_ref() != Some(&ids) {
+        start_towns(world, &sites, ids);
         return;
     }
+    let Some((site, seq)) = world.resource::<Towns>().writing.clone() else {
+        return;
+    };
+    let Some(save) = world.get_resource::<WorldSave>() else {
+        return;
+    };
+    if let Some(why) = save.failure() {
+        error!("{} was not saved, so it is not shown: {why}", site.name);
+        world.resource_mut::<Towns>().writing = None;
+        return;
+    }
+    if save.committed() < seq {
+        return;
+    }
+    world.resource_mut::<Towns>().writing = None;
+    match stored(world.resource::<WorldSave>(), site.id) {
+        Stored::Town(town) => {
+            info!("{} is in the save", site.name);
+            stand(world, &site, &town);
+        }
+        other => error!(
+            "{} was written and does not read back: {other:?}",
+            site.name
+        ),
+    }
+}
+
+/// A new site list: take down the old towns, and read or lay the home
+/// village.
+fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
     let old: Vec<Entity> = world
         .resource::<Towns>()
         .standing
@@ -290,29 +304,58 @@ pub fn build_towns(world: &mut World) {
     {
         let mut towns = world.resource_mut::<Towns>();
         towns.for_sites = Some(ids);
+        towns.writing = None;
         towns.standing.clear();
     }
     world.insert_resource(Structures::default());
+    ground::install(None);
     let Some(home) = sites
         .iter()
         .find(|s| s.home && s.kind == SiteKind::Village)
         .cloned()
     else {
-        ground::install(None);
         return;
     };
+    if !world.contains_resource::<WorldSave>() {
+        warn!("{} is not built: there is no save to keep it in", home.name);
+        return;
+    }
+    let config = *crate::planet::terrain_config();
+    let made = world.resource_scope(|world, mut save: Mut<WorldSave>| {
+        let template = &world.resource::<TownAssets>().village;
+        ensure(&mut save, &home, template, &config)
+    });
+    match made {
+        // Read or stored with nothing to wait for (a save with no disk
+        // behind it): built from the records all the same.
+        Ok((_, 0)) => match stored(world.resource::<WorldSave>(), home.id) {
+            Stored::Town(town) => stand(world, &home, &town),
+            other => error!("{} does not read from the save: {other:?}", home.name),
+        },
+        Ok((_, seq)) => {
+            info!("{} laid out; shown once it is in the save", home.name);
+            world.resource_mut::<Towns>().writing = Some((home, seq));
+        }
+        Err(why) => error!("{} is not built: {why}", home.name),
+    }
+}
+
+/// Build a town from its record into the world: install its ground, rebuild
+/// the planet round the player, spawn its meshes and give the walker its
+/// solids.
+fn stand(world: &mut World, site: &Site, town: &Town) {
     let started = std::time::Instant::now();
     let config = *crate::planet::terrain_config();
     let laid = {
         let assets = world.resource::<TownAssets>();
         let repeats = &assets.repeats;
         let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
-        lay_out(&home, &assets.village, &assets.kits, &repeat, &config)
+        build(site, town, &assets.kits, &repeat, &config)
     };
     let laid = match laid {
         Ok(laid) => laid,
         Err(why) => {
-            warn!("{} could not be built: {why}", home.name);
+            warn!("{} could not be built: {why}", site.name);
             return;
         }
     };
@@ -324,14 +367,14 @@ pub fn build_towns(world: &mut World) {
         .iter(world)
         .next()
         .map(|p| p.0.normalize_or(Vec3::Y))
-        .unwrap_or(home.direction);
+        .unwrap_or(site.direction);
     crate::planet::rebuild_planet(world, near);
     let entity = spawn_town(world, &laid);
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
     info!(
         "{} built: {} buildings, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}, in {:.2} s",
         laid.name,
-        world.resource::<TownAssets>().village.buildings.len(),
+        town.buildings.len(),
         laid.meshes.len(),
         laid.terrace_m,
         started.elapsed().as_secs_f32()
@@ -339,7 +382,7 @@ pub fn build_towns(world: &mut World) {
     world.resource_mut::<Towns>().standing.push(Standing {
         site: laid.site,
         name: laid.name.clone(),
-        anchor: home.direction,
+        anchor: site.direction,
         terrace_m: laid.terrace_m,
         entity,
     });

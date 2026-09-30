@@ -419,3 +419,252 @@ fn no_two_roofs_cut_into_each_other() {
         }
     }
 }
+
+/// The village laid at the test patch's anchor, as a world would lay it,
+/// over a gently sloping natural ground.
+fn laid_village(template: &Template) -> record::Town {
+    let (patch, at) = patch();
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let d0 = patch.side_toward(*at, east);
+    record::lay(template, 7, patch, *at, d0, slope()).unwrap_or_else(|e| panic!("{e}"))
+}
+
+/// A natural ground rising a metre every 20 east of the anchor.
+fn slope() -> impl Fn(Vec3) -> f32 {
+    let (patch, at) = patch();
+    let centre = patch.cells[*at].direction;
+    let (_, east) = crate::geo::north_east(centre);
+    move |d: Vec3| (d - centre).dot(east) * RADIUS_M / 20.0 + 12.4
+}
+
+fn built(town: &record::Town) -> record::Built {
+    let (patch, _) = patch();
+    let natural = slope();
+    record::build(town, patch, &kits(), &|_: &str| 2.0, RADIUS_M, move |d| {
+        natural(d).floor()
+    })
+    .unwrap_or_else(|e| panic!("{e}"))
+}
+
+/// Slice 3a: a town goes into its records and comes back whole.
+#[test]
+fn a_town_round_trips_through_its_records() {
+    let town = laid_village(&village());
+    assert_eq!(town.buildings.len(), village().buildings.len());
+    assert!(
+        town.buildings
+            .iter()
+            .all(|b| b.state == record::BuildingState::Standing)
+    );
+    let records = record::to_records(&town);
+    assert_eq!(
+        records.last().map(|r| r.kind.as_str()),
+        Some(record::SETTLEMENT_RECORD),
+        "the settlement is written last"
+    );
+    let mut store = crate::records::Records::new();
+    for r in records {
+        store.put(r);
+    }
+    assert_eq!(record::from_records(&store, 7), record::Stored::Town(town));
+    assert_eq!(record::from_records(&store, 8), record::Stored::None);
+}
+
+/// A town built from its definition is the town the template lays: the
+/// same pieces, solids and ground as cutting the template's own buildings
+/// on the same chart and terrace.
+#[test]
+fn a_town_built_from_its_record_is_the_town_its_template_lays() {
+    let (patch, at) = patch();
+    let template = village();
+    let town = laid_village(&template);
+    let from_record = built(&town);
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let d0 = patch.side_toward(*at, east);
+    let charted = chart(
+        patch,
+        record::template_anchor(&template),
+        *at,
+        d0,
+        &wanted(&template),
+    )
+    .unwrap();
+    for (c, r) in town.cells.iter().map(|x| (x.0, x.1)) {
+        assert_eq!(from_record.chart.cells[&(c, r)], charted.cells[&(c, r)]);
+    }
+    let mut levels: Vec<i32> = template
+        .ground
+        .iter()
+        .filter(|g| template.built_cells().contains(&[g.c, g.r]))
+        .map(|g| g.h)
+        .collect();
+    levels.sort();
+    let datum = levels[levels.len() / 2];
+    let kits = kits();
+    let mut meshes = Meshes::new();
+    for b in &template.buildings {
+        cut_building(
+            &mut meshes,
+            &|_: &str| 2.0,
+            patch,
+            &charted,
+            b,
+            kits.get(&b.kit).unwrap(),
+            RADIUS_M,
+            town.terrace as f32 + (b.base - datum) as f32,
+        )
+        .unwrap();
+    }
+    assert!(meshes == from_record.meshes, "the same pieces");
+    // The ground as slice 1 laid it, straight from the template: what a
+    // world opened by the merged build stood on.
+    let built_cells: BTreeSet<(i32, i32)> = template
+        .built_cells()
+        .into_iter()
+        .map(|[c, r]| (c, r))
+        .collect();
+    let mut footprint = built_cells.clone();
+    let mut ring = built_cells;
+    for _ in 0..record::YARD_RINGS {
+        let mut next = BTreeSet::new();
+        for &(c, r) in &ring {
+            for d in 0..6 {
+                let n = neighbour(c, r, d);
+                if charted.cells.contains_key(&n) && footprint.insert(n) {
+                    next.insert(n);
+                }
+            }
+        }
+        ring = next;
+    }
+    let lanes: BTreeSet<(i32, i32)> = template
+        .ground
+        .iter()
+        .filter(|g| g.top != "grass" && g.top != "sand")
+        .map(|g| (g.c, g.r))
+        .collect();
+    let cells: Vec<(usize, Option<crate::terrain::Material>)> = footprint
+        .iter()
+        .map(|&(c, r)| {
+            let top = lanes
+                .contains(&(c, r))
+                .then_some(crate::terrain::Material::Dirt);
+            (charted.cell(c, r).unwrap(), top)
+        })
+        .collect();
+    let floored = |d: Vec3| slope()(d).floor();
+    let before = TownGround::new(patch, RADIUS_M, &cells, town.terrace as f32, floored);
+    let config = crate::planet_gen::TerrainConfig::default();
+    assert_eq!(
+        ground::Ground::new(config, vec![before]).digest(),
+        ground::Ground::new(config, vec![from_record.ground.clone()]).digest(),
+        "the same ground"
+    );
+    assert_eq!(from_record.solids.len(), template.buildings.len());
+    let (footprint, margin) = from_record.ground.counts();
+    assert_eq!(footprint, town.cells.len());
+    assert!(margin > 0, "the slope is eased over a margin");
+}
+
+/// Decision 8: a made town is its records, and a revised template changes
+/// only the towns laid after it.
+#[test]
+fn a_revised_template_leaves_a_made_town_as_it_was() {
+    let template = village();
+    let made = laid_village(&template);
+    let mut store = crate::records::Records::new();
+    for r in record::to_records(&made) {
+        store.put(r);
+    }
+    let mut revised = template.clone();
+    revised.buildings.remove(1);
+    revised.buildings[0].doors[0][2] = (revised.buildings[0].doors[0][2] + 3) % 6;
+    revised.buildings[0].storeys += 1;
+    let fresh = laid_village(&revised);
+    assert_ne!(fresh, made, "the revision is a different town");
+    let record::Stored::Town(kept) = record::from_records(&store, 7) else {
+        panic!("the made town reads");
+    };
+    assert_eq!(kept, made);
+    assert!(built(&kept).meshes == built(&made).meshes);
+}
+
+/// A settlement that is there but cannot be read whole is named, never
+/// taken for no town (which would lay a new one over it).
+#[test]
+fn a_damaged_settlement_record_is_named_not_remade() {
+    let town = laid_village(&village());
+    let records = record::to_records(&town);
+    let put = |skip: Option<usize>, change: &dyn Fn(&mut crate::records::Record)| {
+        let mut store = crate::records::Records::new();
+        for (i, r) in records.iter().enumerate() {
+            if Some(i) == skip {
+                continue;
+            }
+            let mut r = r.clone();
+            change(&mut r);
+            store.put(r);
+        }
+        record::from_records(&store, 7)
+    };
+    let damaged = |s: record::Stored| matches!(s, record::Stored::Damaged(_));
+    assert!(damaged(put(Some(0), &|_| {})), "a building missing");
+    assert!(damaged(put(None, &|r| r.schema = 2)), "an unknown schema");
+    assert!(
+        damaged(put(None, &|r| if r.kind == record::SETTLEMENT_RECORD {
+            r.body = "(nothing)".into()
+        })),
+        "a body that does not read"
+    );
+}
+
+/// What a town costs its save: measured, and held under a bound.
+#[test]
+fn a_towns_records_are_small() {
+    let town = laid_village(&village());
+    let bytes: Vec<(String, usize)> = record::to_records(&town)
+        .iter()
+        .map(|r| (r.kind.clone(), r.body.len()))
+        .collect();
+    let settlement: usize = bytes
+        .iter()
+        .filter(|b| b.0 == "settlement")
+        .map(|b| b.1)
+        .sum();
+    let buildings: usize = bytes
+        .iter()
+        .filter(|b| b.0 == "building")
+        .map(|b| b.1)
+        .sum();
+    println!(
+        "{} cells in {settlement} bytes; {} buildings in {buildings} bytes",
+        town.cells.len(),
+        town.buildings.len()
+    );
+    assert!(
+        settlement + buildings < 32_000,
+        "{settlement} + {buildings} bytes"
+    );
+}
+
+/// Every kit a saved town can name, by the build that first stored it. A
+/// stored building looks its kit up by name each time it is cut, so a kit
+/// once named here stays in `kits.ron` for good, as a generator version
+/// does (slice 3a). A new template's kits are added here when it ships.
+const KITS_SAVED_TOWNS_NAME: &[&str] = &["ashlar", "halftimber", "stone", "straw", "timber"];
+
+#[test]
+fn every_kit_a_saved_town_can_name_is_shipped() {
+    let kits = kits();
+    for name in KITS_SAVED_TOWNS_NAME {
+        assert!(kits.get(name).is_some(), "kits.ron dropped {name}");
+    }
+    for b in &village().buildings {
+        assert!(
+            KITS_SAVED_TOWNS_NAME.contains(&b.kit.as_str()),
+            "{} names {}, which is not listed as a kit a saved town can name",
+            b.name,
+            b.kit
+        );
+    }
+}

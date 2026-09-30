@@ -265,6 +265,14 @@ so the first can be looked at before it can be walked into.
       picks its time with `--weather-at <seconds>`.
       `towns::tests::print_the_rain_over_holbrook` reads the rain over
       Holbrook along the same path the capture takes.
+      - Measured 2026-09-30, at 11:00 on days 0, 1 and 2, with the weather
+        run 0 to 5 hours past the clock:
+        - it rains at every start (1.00);
+        - it is dry after two hours and after three (0.00 on each day);
+        - it rains again after four.
+      - `tools/capture_holbrook.sh` now takes its shots at `--weather-at
+        7200`. That runs the weather two hours on and leaves the time of
+        day at 11:00.
 - **Slice 1, found on its first shots (2026-09-29).** The owner: "hmm...they
   dont seem to quite follow the same rules as the js prototype project", and
   "the roof shouldnt extend pass the floor plan like that".
@@ -409,8 +417,12 @@ so the first can be looked at before it can be walked into.
     - Storing only the anchor and its side would bind every future chart
       rule to reproduce every old town. The walk would then be generation
       code, carried forever.
-    - Each cell costs about 20 bytes. The whole record is measured in the
-      tests and quoted here when built.
+    - Measured on the village (`settlement::tests::a_towns_records_are_small`):
+      - the footprint's 799 cells take 18.5 KB, 23 bytes a cell;
+      - its 12 buildings take 5.8 KB;
+      - so the town is 24 KB in all.
+      - Fifty such towns would be 1.2 MB, written once each. That is more
+        than the risk below guessed, and it is what the cells cost.
     - A cell's key is exact (`exact-cell-keys`). Its side numbering is the
       topology's, which is part of the world's identity.
   - **Derived, never stored.** A fix to any of these reaches every town,
@@ -468,6 +480,33 @@ so the first can be looked at before it can be walked into.
       - a world opened with a changed template builds the stored town;
       - a damaged settlement record builds no town and is not overwritten.
     - Screens: a capture of the lane, before and after, which must match.
+  - **As built (2026-09-30).**
+    - `pbd_core::settlement::record`:
+      - `lay` lays a template into a `Town`;
+      - `build` cuts a `Town` into its chart, ground, meshes and solids;
+      - `to_records` and `from_records` store and read it;
+      - `Stored` answers none, a town, or damaged.
+
+      The app's `towns` module stores the town (`ensure`) and waits for the
+      writer's mark, then builds it from the records (`stand`).
+    - Holbrook on generator 6:
+      - the terrace is 74 m;
+      - the footprint is 799 cells, eased over a margin of 2051;
+      - `towns::tests::holbrooks_ground_is_pinned` holds its ground digest.
+    - `settlement::tests::a_town_built_from_its_record_is_the_town_its_template_lays`
+      builds the ground as slice 1 laid it, straight from the template, and
+      holds the record's ground to it. So a world the merged build opened
+      keeps the ground it had.
+    - The other tests:
+      - core: `a_town_round_trips_through_its_records`,
+        `a_revised_template_leaves_a_made_town_as_it_was`,
+        `a_damaged_settlement_record_is_named_not_remade`,
+        `a_towns_records_are_small`,
+        `every_kit_a_saved_town_can_name_is_shipped`;
+      - app: `a_world_stores_its_town_once_and_keeps_it_when_the_template_changes`,
+        `a_damaged_settlement_is_neither_built_nor_written_over`.
+    - The capture is taken from a new memory-only world, whose town goes
+      through the same store and wait.
 - **Slice 3, lit, stored and seen from afar.** Lanterns and candles (group
   5), settlements as records (task 4.5), and the far form and the night
   points (4.2, 4.3).
@@ -500,8 +539,9 @@ so the first can be looked at before it can be walked into.
 - [Frame cost of towns: draw calls, thin-solid queries, light] → It cannot be
   measured in a cloud session. The owner runs `tools/perf_suite.py`, and a
   `town` scenario is added to the suite in this change.
-- [Records grow as towns do] → A building definition is a few hundred bytes,
-  which puts about 50 towns of 20 buildings near 500 KB. Growth adds
+- [Records grow as towns do] → A building definition is about 500 bytes,
+  and a town's footprint cells about 23 bytes each. The village is 24 KB,
+  which puts 50 towns near 1.2 MB (measured in slice 3a). Growth adds
   buildings to plots, so a town's record is bounded by its plots.
 - [The far form pops even though the pieces fade] → The fade covers the far
   form's own entrance too, and the night points fade in at dusk rather than

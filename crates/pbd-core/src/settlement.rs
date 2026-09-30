@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 pub mod chart;
 pub mod ground;
 pub mod pieces;
+pub mod record;
 
 /// Metres from one layer to the next: a storey is three.
 pub const LAYER_M: f32 = 1.0;

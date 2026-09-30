@@ -296,10 +296,15 @@ fn setup_walking(world: &mut World) {
             };
             // Cosmetic trunks occupy cell centers. Start four metres beside the
             // trunk, still safely inside this cap, so the first-person view
-            // opens onto the land.
-            let up = (center * ground.sample(center).radius
-                + tangent_heading(Vec3::Y.cross(center), center) * 4.0)
-                .normalize();
+            // opens onto the land. An exact start (a capture's `--at`) stands
+            // where it was asked.
+            let up = if config.exact_start {
+                center
+            } else {
+                (center * ground.sample(center).radius
+                    + tangent_heading(Vec3::Y.cross(center), center) * 4.0)
+                    .normalize()
+            };
             let support = footprint(ground, up * (ground.sample(up).radius + HALF_HEIGHT)).support;
             (up * (support + HALF_HEIGHT + CONTACT_SKIN), up)
         }
