@@ -277,6 +277,36 @@ What the code does, where it differs from the decisions above, and why.
   - **The sun inside is the cascades'.** No interim "no sun indoors" was
     needed, since the cascades landed with the rooms.
 
+## Tuning across the day (2026-09-30)
+
+The owner: "tune indoor lighting a bit more test with various times of days
+until we get that nice soft lighting combined with shadowed interiors".
+
+Every step was captured at 08:00, 11:00, 14:00, 17:30 and 22:30 from the
+slice 2b spots, beside the towns mockup's same views
+(`docs/screenshots/sun-shadows/`).
+- **The sky alone does not make a room soft.**
+  - A room's share of the sky at 0.3 read as a dull, cool grey room.
+  - At 0.6 it was brighter but no warmer. It was still flat, the sky's
+    blue-grey fill on white plaster.
+- **The mockup's rooms are warm because they burn.**
+  - Its rooms take 0.26 of the sky (`skyAt`, under a roof). Their warmth is
+    the hearth and the stairs' sconces, which burn all day, and the candles
+    by night (`cities-in-the-world` decision 7a).
+  - So the shares stay near the mockup's: 0.3 with a door open, 0.2 with all
+    shut. The rooms' own fires were built.
+- **The fires at the mockup's own weight** (`ROOM_LIGHT_GAIN` 1.0).
+  - At half, a room at 22:30 sat in the deep orange under the tonemapper's
+    shoulder.
+  - At full it is the mockup's warm tan by night, and a soft warm room by
+    day with the upper storey cooler and dimmer.
+- **The warm bounce** (`ROOM_BOUNCE`, the sun come in by the door and the
+  windows) stays at 0. The fires do its work without it. It remains a
+  launch knob, `--room-bounce`, beside `--room-sky`.
+- **Rain on the lens indoors** (the owner, on the first night shots: "Is that
+  rain indoors?") was the lens effect under a roof the column cannot see.
+  A building's roof now shelters its rooms (`BuildingSolids::shelters`).
+
 ## Risks / Trade-offs
 
 - **Acne and peter-panning.** The biases trade one against the other.

@@ -204,10 +204,20 @@ about half the windows by night (`docs/mockups/towns.html`, `hearth`,
   - Reaches are 7, 5.5 and 5 m, and powers 1, 0.75 and 0.45 to 0.8.
 - **Not through the voxel field.** The field cannot see a house's walls, since
   a building is pieces and not voxels. A hearth baked into it would shine
-  through its wall into the lane. Each building's lights, at most 12, ride in
+  through its wall into the lane. Each building's lights, at most 24, ride in
   its rooms' material and are summed per pixel in `field_lit.wgsl`.
 - **The flames are drawn unlit**, warm. A candle's light, and nothing else,
   waits for dusk.
+- **As built (2026-09-30).**
+  - The flames are drawn in timber-bracketed sconces rather than the
+    mockup's iron. Iron under its own flame took none of its light and read
+    as a black box.
+  - The flames' colour is the terrain lantern fire's, kept under the
+    tonemapper's shoulder.
+  - Each building carries at most 24 lights: a Holbrook house has 22 to 29
+    windows, so 12 to 16 candles.
+  - The weight against the sky's fill is the mockup's own
+    (`sun-shadows`, "Tuning across the day").
 - **Not in 7a:** the door and street lanterns and the mockup's glow from a lit
   window into the street. Those light the ground, which is the terrain's, so
   they stay with the voxel field (task 5.2).
