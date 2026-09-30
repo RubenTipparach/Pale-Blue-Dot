@@ -63,6 +63,13 @@ impl RoomLights {
     }
 }
 
+/// How far a field-lit thing has faded out, 0 drawn whole to 1 gone, on it
+/// or on its parent: a town standing up or dropped at the edge of its range
+/// (`cities-in-the-world` slice 4a). It is drawn through the terrain's own
+/// screen-door mask, so it never appears or vanishes in one frame.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct Faded(pub f32);
+
 /// How a room's faces are lit where the field cannot say (`sun-shadows`
 /// decision 7): the voxel field has never heard of a house's walls.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
@@ -79,6 +86,8 @@ pub struct SkyShare {
 pub struct FieldUniform {
     pub low: Vec4,
     pub high: Vec4,
+    /// The planet's centre in the render frame; w how far it has faded out
+    /// ([`Faded`]).
     pub centre: Vec4,
     pub sun: Vec4,
     pub sky: [Vec4; 2],
@@ -232,19 +241,24 @@ fn light_from_the_field(
         Option<&Aabb>,
         &MeshMaterial3d<FieldLitMaterial>,
         Option<&SkyShare>,
+        Option<&ChildOf>,
     )>,
+    faded: Query<&Faded>,
     mut lit: ResMut<Assets<FieldLitMaterial>>,
 ) {
     let centre = frame
         .map(|frame| frame.center.as_vec3())
         .unwrap_or(Vec3::ZERO);
     let toward_sun = sun.map(|sun| sun.direction()).unwrap_or(Vec3::Y);
-    for (transform, aabb, material, share) in &meshes {
+    for (transform, aabb, material, share, parent) in &meshes {
         let (low, high) = world_bounds(transform, aabb);
+        let gone = parent
+            .and_then(|p| faded.get(p.parent()).ok())
+            .map_or(0.0, |f| f.0.clamp(0.0, 1.0));
         let mut field = FieldUniform {
             low: low.extend(0.0),
             high: high.extend(0.0),
-            centre: centre.extend(0.0),
+            centre: centre.extend(gone),
             sun: toward_sun.extend(0.0),
             ..default()
         };
@@ -272,6 +286,7 @@ fn light_from_the_field(
         field.look.z = share.map_or(0.0, |s| s.bounce);
         let moved = (current.low - field.low).abs().max_element() > 1e-3
             || current.look != field.look
+            || current.centre.w != field.centre.w
             || (current.high - field.high).abs().max_element() > 1e-3
             || (current.sun - field.sun).abs().max_element() > 1e-4
             || (0..2).any(|k| {
@@ -339,6 +354,21 @@ pub fn light_of((sky, block): (f32, f32), daylight: f32) -> Vec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A fading town is drawn through the terrain's own mask
+    /// (`cities-in-the-world` slice 4a), so the two dissolve alike.
+    #[test]
+    fn a_fading_town_takes_the_terrains_mask() {
+        let town = include_str!("../../../assets/shaders/field_lit.wgsl");
+        let terrain = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        let body = |s: &str| {
+            let i = s.find("fn bayer4").expect("a bayer4");
+            let j = s[i..].find("\n}\n").expect("its end");
+            s[i..i + j].to_string()
+        };
+        assert_eq!(body(town), body(terrain));
+        assert!(town.contains("if bayer4(in.position.xy) < field.centre.w {"));
+    }
 
     /// `field_lit.wgsl` carries the terrain's light constants, and they are
     /// the core's: a ship and the ground it stands on are lit by one set of

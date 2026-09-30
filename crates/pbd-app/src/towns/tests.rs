@@ -95,6 +95,7 @@ fn a_world_stores_its_town_once_and_keeps_it_when_the_template_changes() {
         let mut save = WorldSave::open(root.clone(), slot.clone());
         assert_eq!(stored(&save, site.id), Stored::None, "no town yet");
         let (town, seq) = ensure(&mut save, &site, &template, &config).expect("laid");
+        let town = town.expect("a town, not an unsettled site");
         assert!(seq > 0, "queued to the disk");
         save.drain();
         assert!(save.committed() >= seq, "and on it");
@@ -123,7 +124,7 @@ fn a_world_stores_its_town_once_and_keeps_it_when_the_template_changes() {
     revised.buildings[0].storeys += 1;
     let mut reopened = WorldSave::open(root.clone(), saves::list(&root)[0].clone());
     let (kept, seq) = ensure(&mut reopened, &site, &revised, &config).expect("kept");
-    assert_eq!(kept, made, "the world keeps its town");
+    assert_eq!(kept, Some(made.clone()), "the world keeps its town");
     assert_eq!(seq, 0, "and nothing is written");
     reopened.drain();
     assert_eq!(
@@ -426,8 +427,25 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
     };
     let mut world = World::new();
     world.insert_resource(Structures(laid.solids.clone()));
-    let room = world.spawn((TownRoom { building: 0 }, shut)).id();
-    let other = world.spawn((TownRoom { building: 1 }, shut)).id();
+    world.insert_resource(Towns::standing_alone(site.id, laid.solids.len()));
+    let room = world
+        .spawn((
+            TownRoom {
+                site: site.id,
+                building: 0,
+            },
+            shut,
+        ))
+        .id();
+    let other = world
+        .spawn((
+            TownRoom {
+                site: site.id,
+                building: 1,
+            },
+            shut,
+        ))
+        .id();
     let mut follow = IntoSystem::into_system(rooms_follow_doors);
     follow.initialize(&mut world);
     follow.run((), &mut world).unwrap();
@@ -439,5 +457,317 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
         world.get::<SkyShare>(other),
         Some(&shut),
         "another building's door is not this one's"
+    );
+}
+
+/// Every village site of a new world's list, by id.
+fn villages() -> Vec<Site> {
+    let mut sites: Vec<Site> = pbd_core::sites::generate(
+        &load_rules(),
+        crate::planet::terrain_config(),
+        list_spawn(),
+        4,
+    )
+    .sites
+    .into_iter()
+    .filter(|s| s.kind == SiteKind::Village)
+    .collect();
+    sites.sort_by_key(|s| s.id);
+    sites
+}
+
+/// Slice 4a: every village site of the shipped seed lays and cuts on its
+/// own ground, dry, turned by its seed, and the grounds of two never meet.
+#[test]
+fn every_village_lays_and_cuts_on_its_own_ground() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("village");
+    let kits = load_kits();
+    let villages = villages();
+    assert!(villages.len() >= 10, "{} villages", villages.len());
+    let mut turns = std::collections::BTreeSet::new();
+    for site in &villages {
+        let started = std::time::Instant::now();
+        let town =
+            lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let (footprint, margin) = laid.ground.counts();
+        println!(
+            "{}: turn {}, a terrace at {} m over {footprint} cells eased over {margin}, laid and cut in {:.2} s",
+            site.name,
+            if site.home { 0 } else { record::turn(site.id) },
+            town.terrace,
+            started.elapsed().as_secs_f32()
+        );
+        assert!(footprint > 300, "{}: {footprint} cells", site.name);
+        assert_eq!(laid.solids.len(), template.buildings.len(), "{}", site.name);
+        assert!(laid.terrace_m > config.sea_level_m, "{} is dry", site.name);
+        if !site.home {
+            turns.insert(record::turn(site.id));
+        }
+    }
+    assert!(
+        turns.len() >= 3,
+        "the villages face several ways: {turns:?}"
+    );
+    for (i, a) in villages.iter().enumerate() {
+        for b in &villages[i + 1..] {
+            let apart = a.direction.angle_between(b.direction) * config.radius_m;
+            assert!(
+                apart > 2.0 * PATCH_M,
+                "{} and {}: {apart} m",
+                a.name,
+                b.name
+            );
+        }
+    }
+}
+
+/// Slice 4a: a new world stores every village once, and opening it again
+/// writes nothing.
+#[test]
+fn a_world_stores_every_village_once() {
+    use crate::saves::{self, LOG, WorldSave};
+    let root = temporary("villages");
+    let slot = saves::create(&root, "Villages", 41).unwrap();
+    let config = *crate::planet::terrain_config();
+    let template = load_template("village");
+    let villages = villages();
+    let made: Vec<Town> = {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        let made = villages
+            .iter()
+            .map(|site| {
+                let (town, seq) = ensure(&mut save, site, &template, &config).expect("laid");
+                assert!(seq > 0, "{} queued to the disk", site.name);
+                town.expect("a town")
+            })
+            .collect();
+        save.drain();
+        made
+    };
+    let path = root.join(&slot.id).join(LOG);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.starts_with("rec @c settlement "))
+            .count(),
+        villages.len(),
+        "a settlement line a village"
+    );
+    let mut reopened = WorldSave::open(root.clone(), saves::list(&root)[0].clone());
+    for (site, town) in villages.iter().zip(&made) {
+        let (kept, seq) = ensure(&mut reopened, site, &template, &config).expect("kept");
+        assert_eq!(kept.as_ref(), Some(town), "{} kept", site.name);
+        assert_eq!(seq, 0, "{}: nothing written", site.name);
+    }
+    reopened.drain();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        text,
+        "byte for byte"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Task 4.4: a village whose ground the player changed before it was laid
+/// is left unsettled, and stays so once the edit is gone.
+#[test]
+fn a_village_on_the_players_work_is_left_unsettled() {
+    use crate::saves::WorldSave;
+    let config = *crate::planet::terrain_config();
+    let template = load_template("village");
+    let site = villages()
+        .into_iter()
+        .find(|s| !s.home)
+        .expect("a village away from home");
+    let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+    let cell = patch.keys[patch.nearest(site.direction).unwrap()];
+    let mut save = WorldSave::memory_only();
+    save.edits.set(pbd_core::edits::Edit {
+        cell,
+        layer: 60,
+        material: pbd_core::terrain::Material::Air,
+    });
+    let (town, _) = ensure(&mut save, &site, &template, &config).expect("decided");
+    assert!(town.is_none(), "no town on the player's work");
+    assert_eq!(stored(&save, site.id), Stored::Unsettled);
+    save.edits = pbd_core::edits::Edits::new();
+    let (town, seq) = ensure(&mut save, &site, &template, &config).expect("decided");
+    assert!(
+        town.is_none() && seq == 0,
+        "unsettled for good, and nothing written"
+    );
+}
+
+/// Slice 4a: a town stands within 1.2 km of the viewer and goes past
+/// 1.5 km, and between the two it stays as it was; each way it fades over a
+/// second, a frame's share at a time.
+#[test]
+fn a_town_stands_in_range_goes_past_it_and_fades_each_way() {
+    assert!(wanted(STAND_M - 1.0) && !wanted(STAND_M + 1.0));
+    assert!(!leaving(DROP_M - 1.0, false), "standing, and in the gap");
+    assert!(leaving(DROP_M + 1.0, false), "past the drop");
+    assert!(leaving(DROP_M - 1.0, true), "going, and in the gap");
+    assert!(!leaving(STAND_M - 1.0, true), "back in range");
+    let frame = 1.0 / 60.0;
+    for going in [false, true] {
+        let mut shown = if going { 1.0 } else { 0.0 };
+        let mut frames = 0;
+        while shown != if going { 0.0 } else { 1.0 } {
+            let next = faded(shown, going, frame);
+            assert!((next - shown).abs() <= frame / FADE_S + 1e-6, "a step");
+            shown = next;
+            frames += 1;
+        }
+        assert!((59..=61).contains(&frames), "{frames} frames");
+    }
+    assert_eq!(
+        faded(0.0, false, 0.4),
+        0.4,
+        "a hitch is a longer step, not a jump"
+    );
+}
+
+/// Slice 4a, in a running app: a village stands, cut on the pool and faded
+/// in, when the walker comes within range, and gives the walker its
+/// buildings; it fades out and is taken down, buildings and all, when the
+/// walker goes on past.
+#[test]
+fn a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves() {
+    use bevy::time::TimeUpdateStrategy;
+    let config = *crate::planet::terrain_config();
+    let site = villages()
+        .into_iter()
+        .find(|s| !s.home)
+        .expect("a village away from home");
+    let town = lay_out(&site, &load_template("village"), &config).unwrap();
+    let held = Held {
+        site: site.clone(),
+        town,
+    };
+    let point = held.point(config.radius_m) + site.direction * 1.6;
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+        .init_asset::<Mesh>()
+        .init_asset::<StandardMaterial>()
+        .init_asset::<Image>()
+        .insert_resource(TimeUpdateStrategy::ManualDuration(
+            std::time::Duration::from_secs_f32(1.0 / 60.0),
+        ))
+        .insert_resource(TownAssets {
+            kits: Arc::new(load_kits()),
+            village: load_template("village"),
+            repeats: Arc::new(load_repeats()),
+        })
+        .insert_resource(Towns {
+            held: vec![held],
+            ..default()
+        })
+        .insert_resource(Structures::default())
+        .add_systems(Update, stand_in_range);
+    let walker = app
+        .world_mut()
+        .spawn((Walker, avian3d::prelude::Position(point)))
+        .id();
+    let standing = |app: &App| app.world().resource::<Towns>().standing.clone();
+    let mut frames = 0;
+    while standing(&app).is_empty() {
+        assert!(frames < 3000, "the village never stood");
+        app.update();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        frames += 1;
+    }
+    let root = standing(&app)[0].entity;
+    assert!(
+        app.world().get::<Faded>(root).is_some_and(|f| f.0 > 0.9),
+        "it comes in faded"
+    );
+    assert_eq!(
+        app.world().resource::<Structures>().0.len(),
+        load_template("village").buildings.len(),
+        "the walker has its buildings"
+    );
+    for _ in 0..70 {
+        app.update();
+    }
+    assert_eq!(
+        app.world().get::<Faded>(root),
+        Some(&Faded(0.0)),
+        "whole in a second"
+    );
+    // Past the drop: it fades out and goes.
+    let (_, east) = pbd_core::geo::north_east(site.direction);
+    app.world_mut()
+        .get_mut::<avian3d::prelude::Position>(walker)
+        .unwrap()
+        .0 = point + east * (DROP_M + 100.0);
+    app.update();
+    assert!(!standing(&app).is_empty(), "not gone in one frame");
+    for _ in 0..70 {
+        app.update();
+    }
+    assert!(standing(&app).is_empty(), "gone after its fade");
+    assert!(app.world().get_entity(root).is_err(), "its meshes with it");
+    assert!(
+        app.world().resource::<Structures>().0.is_empty(),
+        "and its buildings"
+    );
+}
+
+/// A measurement instrument, run by hand (slice 4a): what a height costs
+/// with every village's ground installed, against none. A height in no town
+/// pays one dot product a town. It installs the ground for the whole
+/// process, so it is run alone:
+/// `cargo test --release -p pbd-app --lib print_the_cost_of_a_height_with_the_villages -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn print_the_cost_of_a_height_with_the_villages() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("village");
+    let grounds: Vec<TownGround> = villages()
+        .iter()
+        .map(|site| {
+            let town = lay_out(site, &template, &config).unwrap();
+            let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+            record::ground_of(&town, &patch, config.radius_m, natural(&config))
+                .unwrap()
+                .1
+        })
+        .collect();
+    let count = grounds.len();
+    // Directions spread over the sphere, as the far terrain asks them.
+    let directions: Vec<Vec3> = (0..200_000u32)
+        .map(|i| {
+            let t = (i as f32 + 0.5) / 200_000.0;
+            let z = 1.0 - 2.0 * t;
+            let r = (1.0 - z * z).sqrt();
+            let a = i as f32 * 2.399_963;
+            Vec3::new(r * a.cos(), z, r * a.sin())
+        })
+        .collect();
+    let time = |label: &str| {
+        let started = std::time::Instant::now();
+        let mut sum = 0.0f32;
+        for d in &directions {
+            sum += pbd_core::column::surface_m(&config, *d);
+        }
+        let ns = started.elapsed().as_nanos() as f64 / directions.len() as f64;
+        println!("{label}: {ns:.0} ns a height ({sum:.0})");
+        ns
+    };
+    ground::install(None);
+    let none = time("no towns");
+    let home = villages().iter().position(|s| s.home).unwrap();
+    ground::install(Some(Ground::new(config, vec![grounds[home].clone()])));
+    let one = time("the home village alone");
+    ground::install(Some(Ground::new(config, grounds)));
+    let all = time(&format!("{count} villages"));
+    ground::install(None);
+    println!(
+        "{:+.1}% a height with the home village, {:+.1}% with all",
+        (one / none - 1.0) * 100.0,
+        (all / none - 1.0) * 100.0
     );
 }

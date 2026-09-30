@@ -1224,3 +1224,117 @@ fn a_roof_shelters_its_rooms_and_not_the_yard() {
         assert!(!cut.shelters(yard), "{}: the yard", b.name);
     }
 }
+
+/// Slice 4a: a village turns by its site, to any of six sides, and lays and
+/// cuts whole at every one of them.
+#[test]
+fn the_village_lays_and_cuts_at_each_of_its_six_turns() {
+    let (patch, at) = patch();
+    let template = village();
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let sides = patch.cells[*at].corners.len();
+    let base = patch.side_toward(*at, east);
+    let mut charts = BTreeSet::new();
+    let mut counts = BTreeSet::new();
+    for t in 0..6 {
+        let d0 = (base + t) % sides;
+        let town = record::lay(&template, 7, patch, *at, d0, slope())
+            .unwrap_or_else(|e| panic!("turn {t}: {e}"));
+        let b = built(&town);
+        assert_eq!(b.solids.len(), template.buildings.len(), "turn {t}");
+        counts.insert(town.cells.len());
+        let mut keys: Vec<u32> = town.cells.iter().map(|c| c.2).collect();
+        keys.sort_unstable();
+        charts.insert(keys);
+    }
+    assert_eq!(counts.len(), 1, "every turn lays the same footprint");
+    assert_eq!(charts.len(), 6, "each turn stands on its own cells");
+}
+
+/// The turn is the site's, and the six are dealt about evenly.
+#[test]
+fn a_sites_turn_is_its_own_and_the_six_are_dealt_evenly() {
+    let mut seen = [0u32; 6];
+    for site in 0..6000 {
+        assert_eq!(record::turn(site), record::turn(site));
+        seen[record::turn(site)] += 1;
+    }
+    assert!(
+        seen.iter().all(|&n| (900..1100).contains(&n)),
+        "turns dealt {seen:?}"
+    );
+}
+
+/// Task 4.4: a player's edit in a town's footprint or margin is found, and
+/// one outside it is not.
+#[test]
+fn an_edit_in_a_towns_ground_is_found_and_one_outside_is_not() {
+    let town = laid_village(&village());
+    let ground = built(&town).ground;
+    let edit = |cell: u32| {
+        let mut edits = crate::edits::Edits::new();
+        edits.set(crate::edits::Edit {
+            cell,
+            layer: 60,
+            material: crate::terrain::Material::Air,
+        });
+        edits
+    };
+    assert!(!ground.touches(&crate::edits::Edits::new()));
+    assert!(ground.touches(&edit(town.cells[0].2)), "in the footprint");
+    let (patch, _) = patch();
+    let inside: BTreeSet<u32> = town.cells.iter().map(|c| c.2).collect();
+    let anchor = ground.anchor();
+    let mut by_distance: Vec<usize> = (0..patch.cells.len()).collect();
+    by_distance.sort_by(|&a, &b| {
+        patch.cells[b]
+            .direction
+            .dot(anchor)
+            .total_cmp(&patch.cells[a].direction.dot(anchor))
+    });
+    let margin = by_distance
+        .iter()
+        .map(|&i| patch.keys[i])
+        .find(|k| !inside.contains(k) && ground.touches(&edit(*k)))
+        .expect("a margin cell");
+    assert!(!inside.contains(&margin));
+    let far = patch.keys[*by_distance.last().unwrap()];
+    assert!(!ground.touches(&edit(far)), "far outside");
+}
+
+/// An unsettled site reads as unsettled, never as a town not yet laid, so
+/// no later build lays one over the player's work.
+#[test]
+fn an_unsettled_site_stays_unsettled() {
+    let mut store = crate::records::Records::new();
+    store.put(record::unsettled_record(9, "dug"));
+    assert_eq!(record::from_records(&store, 9), record::Stored::Unsettled);
+    assert_eq!(record::from_records(&store, 10), record::Stored::None);
+}
+
+/// Slice 4a: the world's ground finds a town through the cube's grid, and
+/// finds exactly what a look at every town finds, in the town, round its
+/// edge and past it.
+#[test]
+fn the_grid_finds_what_every_town_would() {
+    let town = laid_village(&village());
+    let one = built(&town).ground;
+    let ground = ground::Ground::new(
+        crate::planet_gen::TerrainConfig::default(),
+        vec![one.clone()],
+    );
+    let anchor = one.anchor();
+    let (north, east) = crate::geo::north_east(anchor);
+    let mut checked = 0;
+    for ring in 0..60 {
+        let rho = ring as f32 * 0.012;
+        for k in 0..90 {
+            let a = k as f32 * std::f32::consts::TAU / 90.0;
+            let d =
+                (anchor * rho.cos() + (east * a.cos() + north * a.sin()) * rho.sin()).normalize();
+            assert_eq!(ground.at(d), one.at(d), "at {rho:.3} rad, {a:.2}");
+            checked += usize::from(one.at(d).is_some());
+        }
+    }
+    assert!(checked > 1000, "{checked} directions on the town's ground");
+}

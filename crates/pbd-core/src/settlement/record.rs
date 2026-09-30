@@ -150,6 +150,18 @@ pub struct Town {
     pub buildings: Vec<Building>,
 }
 
+/// Which way a site's layout turns, 0..6 sides from the anchor cell's side
+/// nearest east (decision 4, slice 4a): a mix of the site's id, so two
+/// villages seldom face the same way and a site always faces the same one.
+/// The home village does not turn: it was laid facing east before sites
+/// turned, and a new world lays it as every old one has it.
+pub fn turn(site: u32) -> usize {
+    let mut z = u64::from(site).wrapping_add(0x9e37_79b9_7f4a_7c15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    ((z ^ (z >> 31)) % 6) as usize
+}
+
 /// The layout cell a template is anchored by: the middle of what it builds
 /// on.
 pub fn template_anchor(template: &Template) -> (i32, i32) {
@@ -287,6 +299,25 @@ pub struct Built {
     pub lights: Vec<Vec<RoomLight>>,
 }
 
+/// A town's chart and ground from its definition, without cutting a piece:
+/// the stored terrace and footprint, the margin eased to `natural`. What a
+/// world installs for every town it holds, near or far (slice 4a).
+pub fn ground_of(
+    town: &Town,
+    patch: &Patch,
+    radius_m: f32,
+    natural: impl Fn(Vec3) -> f32,
+) -> Result<(Chart, TownGround), String> {
+    let chart = chart_of(town, patch)?;
+    let footprint: Vec<(usize, Option<Material>)> = town
+        .cells
+        .iter()
+        .map(|&TownCell(c, r, _, _, top)| (chart.cells[&(c, r)].cell, top.map(Top::material)))
+        .collect();
+    let ground = TownGround::new(patch, radius_m, &footprint, town.terrace as f32, natural);
+    Ok((chart, ground))
+}
+
 /// Build a town from its definition: its chart from the stored cells, its
 /// ground from the stored terrace and footprint (the margin eased to
 /// `natural`), and each building cut from its cells' real corners with its
@@ -299,14 +330,8 @@ pub fn build(
     radius_m: f32,
     natural: impl Fn(Vec3) -> f32,
 ) -> Result<Built, String> {
-    let chart = chart_of(town, patch)?;
+    let (chart, ground) = ground_of(town, patch, radius_m, natural)?;
     let terrace = town.terrace as f32;
-    let footprint: Vec<(usize, Option<Material>)> = town
-        .cells
-        .iter()
-        .map(|&TownCell(c, r, _, _, top)| (chart.cells[&(c, r)].cell, top.map(Top::material)))
-        .collect();
-    let ground = TownGround::new(patch, radius_m, &footprint, terrace, natural);
     let mut meshes = Meshes::new();
     let mut solids = Vec::new();
     let mut rooms = Vec::new();
@@ -380,12 +405,35 @@ pub fn to_records(town: &Town) -> Vec<Record> {
     records
 }
 
+/// A site left unsettled (task 4.4): the player had changed its ground
+/// before a town was laid there, so none ever is. Its id is its site's.
+pub const UNSETTLED_RECORD: &str = "unsettled";
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+struct UnsettledBody {
+    /// What the world found there, for people.
+    why: String,
+}
+
+/// The record that leaves a site unsettled.
+pub fn unsettled_record(site: u32, why: &str) -> Record {
+    Record::of(
+        UNSETTLED_RECORD,
+        u64::from(site),
+        RECORD_SCHEMA,
+        &UnsettledBody { why: why.into() },
+    )
+}
+
 /// What a save holds of a site's town.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stored {
     /// No settlement record: the town has not been laid.
     None,
     Town(Town),
+    /// No town, for good: the site was unsettled when its town would have
+    /// been laid (task 4.4).
+    Unsettled,
     /// A settlement record this build cannot read whole: a schema it does
     /// not know, a body that does not parse, or a building it names
     /// missing. The town is not built, and nothing is written over it.
@@ -395,7 +443,11 @@ pub enum Stored {
 /// A site's town as its save holds it.
 pub fn from_records(records: &Records, site: u32) -> Stored {
     let Some(record) = records.get(SETTLEMENT_RECORD, u64::from(site)) else {
-        return Stored::None;
+        return if records.get(UNSETTLED_RECORD, u64::from(site)).is_some() {
+            Stored::Unsettled
+        } else {
+            Stored::None
+        };
     };
     if record.schema != RECORD_SCHEMA {
         return Stored::Damaged(format!(

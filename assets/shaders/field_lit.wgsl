@@ -135,8 +135,22 @@ fn blend(corners: array<vec4<f32>, 2>, t: vec3<f32>) -> f32 {
     return mix(mix(x00, x10, t.y), mix(x01, x11, t.y), t.z);
 }
 
+// An ordered 4 x 4 Bayer threshold for a pixel, 0..1: the terrain's own
+// screen-door mask (`planet_surface.wgsl`, `detail-fade`), which a test holds
+// the two shaders to.
+fn bayer4(pixel: vec2<f32>) -> f32 {
+    let p = vec2<u32>(pixel) & vec2<u32>(3u);
+    let m = array<u32,16>(0u,8u,2u,10u, 12u,4u,14u,6u, 3u,11u,1u,9u, 15u,7u,13u,5u);
+    return (f32(m[p.y*4u + p.x]) + 0.5)/16.0;
+}
+
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
+    // A town fading in or out at the edge of its range (`cities-in-the-world`
+    // slice 4a): drawn through the terrain's mask, never whole in one frame.
+    if bayer4(in.position.xy) < field.centre.w {
+        discard;
+    }
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
 #ifdef PREPASS_PIPELINE

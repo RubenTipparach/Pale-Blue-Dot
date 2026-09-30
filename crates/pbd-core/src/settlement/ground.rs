@@ -59,6 +59,9 @@ pub struct TownGround {
     /// A keyed lookup, never iterated.
     buckets: HashMap<(i32, i32), Vec<u32>>,
     cells: Vec<GroundAt>,
+    /// The exact keys of the footprint's and the margin's cells: where a
+    /// player's edit leaves a site unsettled (slice 4a).
+    keys: Vec<u32>,
 }
 
 impl TownGround {
@@ -120,6 +123,11 @@ impl TownGround {
             .fold(1.0f32, f32::min)
             - 1e-6;
         let bucket_m = 3.0;
+        let keys = cells
+            .iter()
+            .filter(|c| c.1 != GroundAt::OUTSIDE)
+            .map(|c| patch.keys[c.0])
+            .collect();
         let mut ground = Self {
             anchor,
             cos_reach,
@@ -137,6 +145,7 @@ impl TownGround {
                     top,
                 })
                 .collect(),
+            keys,
         };
         for (i, cell) in ground.cells.iter().enumerate() {
             let key = ground.bucket(cell.centre);
@@ -173,6 +182,17 @@ impl TownGround {
         (cell.ring != GroundAt::OUTSIDE).then_some(cell)
     }
 
+    /// The direction at the middle of the footprint.
+    pub fn anchor(&self) -> Vec3 {
+        self.anchor
+    }
+
+    /// Whether a player's edit lies in the footprint or the margin: a town
+    /// laid there would bury it or leave it hanging (task 4.4).
+    pub fn touches(&self, edits: &crate::edits::Edits) -> bool {
+        !edits.is_empty() && self.keys.iter().any(|&k| !edits.for_cell(k).is_empty())
+    }
+
     /// How many cells are the footprint, and how many the margin.
     pub fn counts(&self) -> (usize, usize) {
         let footprint = self.cells.iter().filter(|c| c.ring == 0).count();
@@ -203,11 +223,37 @@ impl TownGround {
     }
 }
 
+/// Squares a side on each face of the cube the sphere is gridded by, for
+/// finding a direction's towns (slice 4a): a square is about 1 km across on
+/// the game's planet, many times a town's ground.
+const FACE_SQUARES: usize = 8;
+
+/// The square of the cube's grid a direction falls in.
+fn square(d: Vec3) -> usize {
+    let a = d.abs();
+    let (face, u, v, m) = if a.x >= a.y && a.x >= a.z {
+        (usize::from(d.x < 0.0), d.y, d.z, a.x)
+    } else if a.y >= a.z {
+        (2 + usize::from(d.y < 0.0), d.x, d.z, a.y)
+    } else {
+        (4 + usize::from(d.z < 0.0), d.x, d.y, a.z)
+    };
+    let q = |t: f32| {
+        let f = ((t / m.max(1e-9)) * 0.5 + 0.5) * FACE_SQUARES as f32;
+        (f.floor().max(0.0) as usize).min(FACE_SQUARES - 1)
+    };
+    (face * FACE_SQUARES + q(u)) * FACE_SQUARES + q(v)
+}
+
 /// Every town's ground in one world.
 #[derive(Clone, Debug)]
 pub struct Ground {
     config: TerrainConfig,
     towns: Vec<TownGround>,
+    /// The towns whose ground reaches into each square of the cube's grid,
+    /// in town order: a height in no town looks at the few in its square,
+    /// never at every town.
+    squares: Vec<Vec<u16>>,
     digest: u64,
 }
 
@@ -216,9 +262,34 @@ impl Ground {
         let digest = towns
             .iter()
             .fold(towns.len() as u64, |h, t| h.rotate_left(7) ^ t.digest());
+        let mut squares = vec![Vec::new(); 6 * FACE_SQUARES * FACE_SQUARES];
+        for (i, t) in towns.iter().enumerate() {
+            // Points over the town's cap, a little past its edge, closer
+            // together than the smallest square is wide (a square shrinks
+            // toward a cube's corner, to about a third), find every square
+            // the cap touches. The game's towns are a few points; a cap as
+            // wide as the test sphere's is a few hundred.
+            let reach = t.cos_reach.clamp(-1.0, 1.0).acos() * 1.1;
+            let step = std::f32::consts::FRAC_PI_2 / FACE_SQUARES as f32 / 6.0;
+            let rings = (reach / step).ceil().max(1.0) as usize;
+            let mut touched = BTreeSet::from([square(t.anchor)]);
+            for r in 1..=rings {
+                let rho = reach * r as f32 / rings as f32;
+                let around = ((std::f32::consts::TAU * rho.sin()) / step).ceil().max(8.0) as usize;
+                for k in 0..around {
+                    let a = k as f32 * std::f32::consts::TAU / around as f32;
+                    let side = t.east * a.cos() + t.north * a.sin();
+                    touched.insert(square(t.anchor * rho.cos() + side * rho.sin()));
+                }
+            }
+            for sq in touched {
+                squares[sq].push(i as u16);
+            }
+        }
         Self {
             config,
             towns,
+            squares,
             digest,
         }
     }
@@ -233,7 +304,9 @@ impl Ground {
 
     /// The first town's cell at a direction.
     pub fn at(&self, direction: Vec3) -> Option<&GroundAt> {
-        self.towns.iter().find_map(|t| t.at(direction))
+        self.squares[square(direction)]
+            .iter()
+            .find_map(|&i| self.towns[usize::from(i)].at(direction))
     }
 }
 

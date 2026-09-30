@@ -12,9 +12,12 @@
 //! their cells' real corners (`settlement::pieces`). The town is one entity
 //! with a mesh per texture, lit by the field as a drop or a craft is.
 //!
-//! Only the home village is built so far; the other kinds follow in slice 4.
+//! Every village site stands (slice 4a): each is laid and stored on the
+//! world's first open, its ground installed with every other town's, and its
+//! pieces cut and faded in only within [`STAND_M`] of the viewer. The other
+//! kinds follow, a kind at a time.
 
-use crate::field_light::{LitByField, LitLikeTerrain, RoomLights, SkyShare};
+use crate::field_light::{Faded, LitByField, LitLikeTerrain, RoomLights, SkyShare};
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
 use crate::saves::WorldSave;
@@ -26,6 +29,7 @@ use bevy::image::{
 };
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
+use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future};
 use pbd_core::planet_gen::{self, TerrainConfig};
 use pbd_core::records::Author;
 use pbd_core::settlement::chart::{Chart, Patch};
@@ -37,6 +41,7 @@ use pbd_core::sites::{Site, SiteKind};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// How far round a site its cells are fetched, metres: the village's grid
 /// reaches 82 m from its centre, and the margin rings a few more.
@@ -127,15 +132,27 @@ fn natural(config: &TerrainConfig) -> impl Fn(Vec3) -> f32 + '_ {
 }
 
 /// Lay a template at a site, once: its anchor on the site's cell, the
-/// layout's east along the cell's side nearest east, and the terrace from
-/// the natural ground (`record::lay`). What this returns is stored, and the
-/// town is built from the store.
+/// layout's east along the cell's side nearest east turned by the site's
+/// seed (`record::turn`; the home village does not turn), and the terrace
+/// from the natural ground (`record::lay`). What this returns is stored, and
+/// the town is built from the store.
 pub fn lay_out(site: &Site, template: &Template, config: &TerrainConfig) -> Result<Town, String> {
     let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+    lay_on(site, template, config, &patch)
+}
+
+fn lay_on(
+    site: &Site,
+    template: &Template,
+    config: &TerrainConfig,
+    patch: &Patch,
+) -> Result<Town, String> {
     let at = patch.nearest(site.direction).ok_or("an empty patch")?;
     let (_, east) = pbd_core::geo::north_east(patch.cells[at].direction);
-    let d0 = patch.side_toward(at, east);
-    record::lay(template, site.id, &patch, at, d0, natural(config))
+    let sides = patch.cells[at].corners.len();
+    let turn = if site.home { 0 } else { record::turn(site.id) };
+    let d0 = (patch.side_toward(at, east) + turn) % sides;
+    record::lay(template, site.id, patch, at, d0, natural(config))
 }
 
 /// Build a town from its definition: its ground and its pieces, cut on the
@@ -190,29 +207,90 @@ pub fn store(save: &mut WorldSave, town: &Town) -> Option<u64> {
 /// A site's town: the one its save holds, or one laid now from `template`
 /// and queued to the save, with the sequence to wait for (0 when nothing was
 /// written). A damaged record is an error, and nothing is written over it.
+///
+/// `None` is a site left unsettled (task 4.4): one already stored so, or one
+/// whose ground holds a player's edit, which is stored so now and never
+/// laid, so the town never buries the player's work.
 pub fn ensure(
     save: &mut WorldSave,
     site: &Site,
     template: &Template,
     config: &TerrainConfig,
-) -> Result<(Town, u64), String> {
+) -> Result<(Option<Town>, u64), String> {
     match stored(save, site.id) {
-        Stored::Town(town) => Ok((town, 0)),
+        Stored::Town(town) => Ok((Some(town), 0)),
+        Stored::Unsettled => Ok((None, 0)),
         Stored::Damaged(why) => Err(why),
         Stored::None => {
-            let town = lay_out(site, template, config)?;
+            let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+            let town = lay_on(site, template, config, &patch)?;
+            let (_, ground) = record::ground_of(&town, &patch, config.radius_m, natural(config))?;
+            if ground.touches(&save.edits) {
+                let seq = save
+                    .store(
+                        &Author::Creation,
+                        vec![record::unsettled_record(
+                            site.id,
+                            "the player had changed its ground",
+                        )],
+                    )
+                    .ok_or("the save refused the unsettled site")?;
+                save.note_record_kinds(&[(record::UNSETTLED_RECORD, record::RECORD_SCHEMA)]);
+                return Ok((None, seq));
+            }
             let seq = store(save, &town).ok_or("the save refused the town")?;
-            Ok((town, seq))
+            Ok((Some(town), seq))
         }
     }
 }
 
+/// Metres from the viewer within which a town stands (slice 4a): at
+/// 1.2 km a house is a few pixels.
+pub const STAND_M: f32 = 1200.0;
+/// Metres past which a standing town is dropped. The gap keeps one from
+/// standing and dropping on every step across the line.
+pub const DROP_M: f32 = 1500.0;
+/// Seconds a town takes to fade in or out (priority 1: no pop-in).
+pub const FADE_S: f32 = 1.0;
+
 /// What the towns are built from: the kits, the templates and the textures.
 #[derive(Resource)]
 pub struct TownAssets {
-    pub kits: Kits,
+    pub kits: Arc<Kits>,
     pub village: Template,
-    pub repeats: BTreeMap<String, f32>,
+    pub repeats: Arc<BTreeMap<String, f32>>,
+}
+
+impl TownAssets {
+    /// The template a kind of site is laid from, where one is shipped: only
+    /// the village's so far (slice 4 adds a kind at a time).
+    pub fn template_for(&self, kind: SiteKind) -> Option<&Template> {
+        match kind {
+            SiteKind::Village => Some(&self.village),
+            _ => None,
+        }
+    }
+
+    /// How far each texture repeats, metres, as the cutter asks it.
+    pub fn repeat(&self) -> impl Fn(&str) -> f32 + Clone + Send + Sync + 'static {
+        let repeats = self.repeats.clone();
+        move |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0)
+    }
+}
+
+/// A town the world holds, read back from its save (slice 4a). Its ground is
+/// installed wherever the viewer is; its pieces stand only in range.
+#[derive(Clone, Debug)]
+pub struct Held {
+    pub site: Site,
+    pub town: Town,
+}
+
+impl Held {
+    /// Its anchor at its terrace, in the planet's frame.
+    pub fn point(&self, radius_m: f32) -> Vec3 {
+        self.site.direction * (radius_m + self.town.terrace as f32)
+    }
 }
 
 /// A town standing in the world.
@@ -223,17 +301,62 @@ pub struct Standing {
     pub anchor: Vec3,
     pub terrace_m: f32,
     pub entity: Entity,
+    /// Its buildings' place in the walker's [`Structures`].
+    first: usize,
+    count: usize,
+    /// How much of it is drawn, 0..1, and whether it is going.
+    shown: f32,
+    leaving: bool,
 }
 
-/// The towns standing now, and the site list they were built for.
+/// Every town the world holds, the ones standing now, and the site list they
+/// were built for.
 #[derive(Resource, Default)]
 pub struct Towns {
     for_sites: Option<Vec<u32>>,
-    /// A town laid and queued to the save, shown once the writer's mark
-    /// passes its settlement's line (decision 8: written before it is
-    /// shown).
-    writing: Option<(Site, u64)>,
+    /// Towns laid and queued to the save: none is shown until the writer's
+    /// mark passes this line, the last one's (decision 8: written before it
+    /// is shown).
+    writing: Option<u64>,
+    /// The sites laid and waiting on that mark.
+    waiting: Vec<Site>,
+    /// Every town the world holds, by site id.
+    pub held: Vec<Held>,
     pub standing: Vec<Standing>,
+    /// Towns being cut on the pool, by site (decision 5: published whole).
+    cutting: Vec<(u32, Task<Result<Laid, String>>)>,
+}
+
+impl Towns {
+    /// One town standing with `count` buildings at the head of the walker's
+    /// [`Structures`], for a test that puts them there itself.
+    #[cfg(test)]
+    pub fn standing_alone(site: u32, count: usize) -> Self {
+        Self {
+            standing: vec![Standing {
+                site,
+                name: String::new(),
+                anchor: Vec3::Y,
+                terrace_m: 0.0,
+                entity: Entity::PLACEHOLDER,
+                first: 0,
+                count,
+                shown: 1.0,
+                leaving: false,
+            }],
+            ..default()
+        }
+    }
+
+    /// Where the `n`th building of a site's town is in the walker's
+    /// [`Structures`], while the town stands.
+    pub fn index(&self, site: u32, n: usize) -> Option<usize> {
+        self.standing
+            .iter()
+            .find(|s| s.site == site)
+            .filter(|s| n < s.count)
+            .map(|s| s.first + n)
+    }
 }
 
 /// Put the walker back on the ground once the towns are built: a capture
@@ -245,6 +368,11 @@ pub struct RespawnInTown;
 /// The root of a town's meshes.
 #[derive(Component)]
 pub struct TownRoot;
+
+/// A town's flame: unlit, so it is not faded with the town's pieces but
+/// shown once the town is more than half there.
+#[derive(Component)]
+pub struct TownFlame;
 
 /// Build the towns once a world's sites are on disk: an exclusive system,
 /// because it installs the ground and rebuilds the planet round the player.
@@ -266,35 +394,45 @@ pub fn build_towns(world: &mut World) {
         start_towns(world, &sites, ids);
         return;
     }
-    let Some((site, seq)) = world.resource::<Towns>().writing.clone() else {
+    let Some(seq) = world.resource::<Towns>().writing else {
         return;
     };
     let Some(save) = world.get_resource::<WorldSave>() else {
         return;
     };
     if let Some(why) = save.failure() {
-        error!("{} was not saved, so it is not shown: {why}", site.name);
-        world.resource_mut::<Towns>().writing = None;
+        error!("the towns were not saved, so none is shown: {why}");
+        let mut towns = world.resource_mut::<Towns>();
+        towns.writing = None;
+        towns.waiting.clear();
+        towns.held.clear();
         return;
     }
     if save.committed() < seq {
         return;
     }
+    let waiting = std::mem::take(&mut world.resource_mut::<Towns>().waiting);
     world.resource_mut::<Towns>().writing = None;
-    match stored(world.resource::<WorldSave>(), site.id) {
-        Stored::Town(town) => {
-            info!("{} is in the save", site.name);
-            stand(world, &site, &town);
+    let mut read = Vec::new();
+    {
+        let save = world.resource::<WorldSave>();
+        for site in waiting {
+            match stored(save, site.id) {
+                Stored::Town(town) => read.push(Held { site, town }),
+                other => error!(
+                    "{} was written and does not read back: {other:?}",
+                    site.name
+                ),
+            }
         }
-        other => error!(
-            "{} was written and does not read back: {other:?}",
-            site.name
-        ),
     }
+    info!("{} towns are in the save", read.len());
+    world.resource_mut::<Towns>().held.extend(read);
+    settle(world);
 }
 
-/// A new site list: take down the old towns, and read or lay the home
-/// village.
+/// A new site list: take down the old towns, and read or lay every site's
+/// town that has a template.
 fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
     let old: Vec<Entity> = world
         .resource::<Towns>()
@@ -307,67 +445,318 @@ fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
             e.despawn();
         }
     }
-    {
-        let mut towns = world.resource_mut::<Towns>();
-        towns.for_sites = Some(ids);
-        towns.writing = None;
-        towns.standing.clear();
-    }
+    *world.resource_mut::<Towns>() = Towns {
+        for_sites: Some(ids),
+        ..default()
+    };
     world.insert_resource(Structures::default());
     world.insert_resource(crate::planet::shadow::TownCasters::default());
     ground::install(None);
-    let Some(home) = sites
-        .iter()
-        .find(|s| s.home && s.kind == SiteKind::Village)
-        .cloned()
-    else {
-        return;
+    let mut sites: Vec<Site> = {
+        let assets = world.resource::<TownAssets>();
+        sites
+            .iter()
+            .filter(|s| assets.template_for(s.kind).is_some())
+            .cloned()
+            .collect()
     };
+    if sites.is_empty() {
+        return;
+    }
+    sites.sort_by_key(|s| s.id);
     if !world.contains_resource::<WorldSave>() {
-        warn!("{} is not built: there is no save to keep it in", home.name);
+        warn!("the towns are not built: there is no save to keep them in");
         return;
     }
     let config = *crate::planet::terrain_config();
-    let made = world.resource_scope(|world, mut save: Mut<WorldSave>| {
-        let template = &world.resource::<TownAssets>().village;
-        ensure(&mut save, &home, template, &config)
-    });
-    match made {
-        // Read or stored with nothing to wait for (a save with no disk
-        // behind it): built from the records all the same.
-        Ok((_, 0)) => match stored(world.resource::<WorldSave>(), home.id) {
-            Stored::Town(town) => stand(world, &home, &town),
-            other => error!("{} does not read from the save: {other:?}", home.name),
-        },
-        Ok((_, seq)) => {
-            info!("{} laid out; shown once it is in the save", home.name);
-            world.resource_mut::<Towns>().writing = Some((home, seq));
+    let started = std::time::Instant::now();
+    let (mut held, mut waiting, mut wait, mut laid, mut unsettled) =
+        (Vec::new(), Vec::new(), 0u64, 0usize, 0usize);
+    world.resource_scope(|world, mut save: Mut<WorldSave>| {
+        let assets = world.resource::<TownAssets>();
+        for site in sites {
+            let template = assets.template_for(site.kind).expect("chosen for one");
+            match ensure(&mut save, &site, template, &config) {
+                Ok((Some(_), seq)) if seq > 0 => {
+                    wait = wait.max(seq);
+                    laid += 1;
+                    waiting.push(site);
+                }
+                // Read, or stored with nothing to wait for (a save with no
+                // disk behind it): built from the records all the same.
+                Ok((Some(_), _)) => match stored(&save, site.id) {
+                    Stored::Town(town) => held.push(Held { site, town }),
+                    other => error!("{} does not read from the save: {other:?}", site.name),
+                },
+                Ok((None, seq)) => {
+                    wait = wait.max(seq);
+                    unsettled += 1;
+                    info!(
+                        "{} is unsettled: the player's work is on its ground",
+                        site.name
+                    );
+                }
+                Err(why) => error!("{} is not built: {why}", site.name),
+            }
         }
-        Err(why) => error!("{} is not built: {why}", home.name),
+    });
+    info!(
+        "towns: {} held, {laid} laid out now, {unsettled} unsettled, in {:.2} s",
+        held.len(),
+        started.elapsed().as_secs_f32()
+    );
+    let mut towns = world.resource_mut::<Towns>();
+    towns.held = held;
+    if wait > 0 {
+        info!("the towns laid out now are shown once they are in the save");
+        towns.writing = Some(wait);
+        towns.waiting = waiting;
+        return;
+    }
+    settle(world);
+}
+
+/// Where the viewer is in the planet's frame: the camera, or the walker
+/// where no camera is active yet.
+fn viewer(world: &mut World) -> Option<Vec3> {
+    let centre = world.get_resource::<PlanetRenderFrame>().map(|f| f.center);
+    let mut cameras = world.query_filtered::<(&Camera, &GlobalTransform), With<Camera3d>>();
+    if let Some(centre) = centre
+        && let Some((_, at)) = cameras.iter(world).find(|(c, _)| c.is_active)
+    {
+        return Some((at.translation().as_dvec3() - centre).as_vec3());
+    }
+    let mut walkers =
+        world.query_filtered::<&avian3d::prelude::Position, With<crate::walking::Walker>>();
+    walkers.iter(world).next().map(|p| p.0)
+}
+
+/// Every held town's ground, installed at once, and the planet rebuilt round
+/// the player once; then whatever is in range stands, whole, as the ground
+/// does.
+fn settle(world: &mut World) {
+    let started = std::time::Instant::now();
+    let config = *crate::planet::terrain_config();
+    let mut held = std::mem::take(&mut world.resource_mut::<Towns>().held);
+    held.sort_by_key(|h| h.site.id);
+    let mut grounds = Vec::new();
+    let mut kept = Vec::new();
+    for h in held {
+        let patch = patch_round(h.site.direction, config.radius_m, PATCH_M);
+        match record::ground_of(&h.town, &patch, config.radius_m, natural(&config)) {
+            Ok((_, g)) => {
+                let (lat, lon) = pbd_core::geo::lat_lon(h.site.direction).degrees();
+                info!(
+                    "{}: a {:?} at --at {lat:.5} {lon:.5}, a terrace at {} m",
+                    h.site.name, h.site.kind, h.town.terrace
+                );
+                grounds.push(g);
+                kept.push(h);
+            }
+            Err(why) => error!("{} could not be built: {why}", h.site.name),
+        }
+    }
+    if grounds.is_empty() {
+        return;
+    }
+    let count = grounds.len();
+    ground::install(Some(Ground::new(config, grounds)));
+    world.resource_mut::<Towns>().held = kept.clone();
+    let near = viewer(world)
+        .map(|p| p.normalize_or(Vec3::Y))
+        .unwrap_or(kept[0].site.direction);
+    crate::planet::rebuild_planet(world, near);
+    info!(
+        "{count} towns' ground installed and the planet rebuilt in {:.2} s",
+        started.elapsed().as_secs_f32()
+    );
+    let at = near * (config.radius_m + 2.0);
+    let (kits, repeat) = {
+        let assets = world.resource::<TownAssets>();
+        (assets.kits.clone(), assets.repeat())
+    };
+    for h in kept {
+        if (h.point(config.radius_m) - at).length() > STAND_M {
+            continue;
+        }
+        match build(&h.site, &h.town, &kits, &repeat, &config) {
+            Ok(laid) => stand(world, &h, laid, 1.0),
+            Err(why) => warn!("{} could not be built: {why}", h.site.name),
+        }
+    }
+    if world.contains_resource::<RespawnInTown>() {
+        crate::walking::respawn(world);
     }
 }
 
-/// Build a town from its record into the world: install its ground, rebuild
-/// the planet round the player, spawn its meshes and give the walker its
-/// solids.
-fn stand(world: &mut World, site: &Site, town: &Town) {
-    let started = std::time::Instant::now();
-    let config = *crate::planet::terrain_config();
-    let laid = {
-        let assets = world.resource::<TownAssets>();
-        let repeats = &assets.repeats;
-        let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
-        build(site, town, &assets.kits, &repeat, &config)
-    };
-    let laid = match laid {
-        Ok(laid) => laid,
-        Err(why) => {
-            warn!("{} could not be built: {why}", site.name);
+/// Whether a town `d` metres from the viewer that is not standing is stood.
+pub fn wanted(d: f32) -> bool {
+    d < STAND_M
+}
+
+/// Whether a standing town `d` metres from the viewer is going: past
+/// [`DROP_M`] it goes, and once going it turns back only within [`STAND_M`].
+pub fn leaving(d: f32, was: bool) -> bool {
+    d > DROP_M || (was && d > STAND_M)
+}
+
+/// How much of a town is drawn after `dt` seconds more of its fade, toward
+/// whole or toward gone: [`FADE_S`] end to end, and never a jump.
+pub fn faded(shown: f32, leaving: bool, dt: f32) -> f32 {
+    let step = dt.max(0.0) / FADE_S;
+    if leaving {
+        (shown - step).max(0.0)
+    } else {
+        (shown + step).min(1.0)
+    }
+}
+
+/// Stand the towns that come within [`STAND_M`] of the viewer, cut on the
+/// pool, and drop the ones past [`DROP_M`], each faded over [`FADE_S`]
+/// (slice 4a).
+pub fn stand_in_range(world: &mut World) {
+    {
+        let towns = world.resource::<Towns>();
+        if towns.writing.is_some() || towns.held.is_empty() {
             return;
         }
+    }
+    let Some(at) = viewer(world) else {
+        return;
     };
+    let config = *crate::planet::terrain_config();
+    let radius = config.radius_m;
+    // Cuts that are done stand, unless the viewer has gone on past.
+    let mut done = Vec::new();
+    world
+        .resource_mut::<Towns>()
+        .cutting
+        .retain_mut(|(site, task)| match block_on(future::poll_once(task)) {
+            Some(result) => {
+                done.push((*site, result));
+                false
+            }
+            None => true,
+        });
+    for (site, result) in done {
+        let Some(h) = world
+            .resource::<Towns>()
+            .held
+            .iter()
+            .find(|h| h.site.id == site)
+            .cloned()
+        else {
+            continue;
+        };
+        match result {
+            Ok(laid) if (h.point(radius) - at).length() <= DROP_M => stand(world, &h, laid, 0.0),
+            Ok(_) => {}
+            Err(why) => warn!("{} could not be built: {why}", h.site.name),
+        }
+    }
+    let (kits, repeat) = {
+        let assets = world.resource::<TownAssets>();
+        (assets.kits.clone(), assets.repeat())
+    };
+    let dt = world
+        .get_resource::<Time>()
+        .map_or(1.0 / 60.0, |t| t.delta_secs());
+    let mut gone = Vec::new();
+    let mut fades = Vec::new();
+    {
+        let mut towns = world.resource_mut::<Towns>();
+        let towns = &mut *towns;
+        for h in &towns.held {
+            let d = (h.point(radius) - at).length();
+            if let Some(s) = towns.standing.iter_mut().find(|s| s.site == h.site.id) {
+                s.leaving = leaving(d, s.leaving);
+            } else if wanted(d) && !towns.cutting.iter().any(|(site, _)| *site == h.site.id) {
+                let id = h.site.id;
+                let (h, kits, repeat) = (h.clone(), kits.clone(), repeat.clone());
+                let task = AsyncComputeTaskPool::get()
+                    .spawn(async move { build(&h.site, &h.town, &kits, &repeat, &config) });
+                towns.cutting.push((id, task));
+            }
+        }
+        for s in &mut towns.standing {
+            let before = s.shown;
+            s.shown = faded(s.shown, s.leaving, dt);
+            if s.shown != before {
+                fades.push((s.entity, s.shown));
+            }
+            if s.leaving && s.shown == 0.0 {
+                gone.push(s.site);
+            }
+        }
+    }
+    for (entity, shown) in fades {
+        show(world, entity, shown);
+    }
+    for site in gone {
+        drop_town(world, site);
+    }
+}
+
+/// Draw a town's root `shown` of the way in: its pieces through the mask,
+/// its flames once it is more than half there.
+fn show(world: &mut World, root: Entity, shown: f32) {
+    if let Ok(mut e) = world.get_entity_mut(root) {
+        e.insert(Faded(1.0 - shown));
+    }
+    let flames: Vec<Entity> = world
+        .get::<Children>(root)
+        .map(|c| c.iter().collect::<Vec<Entity>>())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|&c| world.get::<TownFlame>(c).is_some())
+        .collect();
+    let visibility = if shown > 0.5 {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for flame in flames {
+        if let Some(mut v) = world.get_mut::<Visibility>(flame) {
+            *v = visibility;
+        }
+    }
+}
+
+/// Take a town out of the world: its meshes, its buildings from the
+/// walker's [`Structures`], and its shadow.
+fn drop_town(world: &mut World, site: u32) {
+    let Some(k) = world
+        .resource::<Towns>()
+        .standing
+        .iter()
+        .position(|s| s.site == site)
+    else {
+        return;
+    };
+    let gone = world.resource_mut::<Towns>().standing.remove(k);
+    if let Ok(e) = world.get_entity_mut(gone.entity) {
+        e.despawn();
+    }
+    if let Some(mut structures) = world.get_resource_mut::<Structures>() {
+        let end = (gone.first + gone.count).min(structures.0.len());
+        structures.0.drain(gone.first.min(end)..end);
+    }
+    for s in &mut world.resource_mut::<Towns>().standing {
+        if s.first > gone.first {
+            s.first -= gone.count;
+        }
+    }
+    if let Some(mut casters) = world.get_resource_mut::<crate::planet::shadow::TownCasters>() {
+        casters.0.retain(|(s, _)| *s != site);
+    }
+    info!("{} is out of range", gone.name);
+}
+
+/// Stand a town cut from its record: its meshes, its doors as the save holds
+/// them, and its buildings for the walker, drawn `shown` of the way in.
+fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
+    let site = &held.site;
     let (footprint, margin) = laid.ground.counts();
-    ground::install(Some(Ground::new(config, vec![laid.ground.clone()])));
     // Each door as its save holds it: open where the player left it open,
     // shut where there is no record (slice 2b).
     let mut solids = laid.solids.clone();
@@ -377,24 +766,21 @@ fn stand(world: &mut World, site: &Site, town: &Town) {
         world.get_resource::<WorldSave>().map(|s| &s.records),
         world.contains_resource::<OpenDoors>(),
     );
-    world.insert_resource(Structures(solids.clone()));
-    let near = world
-        .query_filtered::<&avian3d::prelude::Position, With<crate::walking::Walker>>()
-        .iter(world)
-        .next()
-        .map(|p| p.0.normalize_or(Vec3::Y))
-        .unwrap_or(site.direction);
-    crate::planet::rebuild_planet(world, near);
+    let first = {
+        let mut structures = world.get_resource_or_insert_with(Structures::default);
+        let first = structures.0.len();
+        structures.0.extend(solids.iter().cloned());
+        first
+    };
     let entity = spawn_town(world, &laid);
     spawn_doors(world, entity, site.id, &solids);
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
     info!(
-        "{} built: {} buildings, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}, in {:.2} s",
+        "{} stands: {} buildings, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}",
         laid.name,
-        town.buildings.len(),
+        held.town.buildings.len(),
         laid.meshes.len(),
         laid.terrace_m,
-        started.elapsed().as_secs_f32()
     );
     world.resource_mut::<Towns>().standing.push(Standing {
         site: laid.site,
@@ -402,10 +788,12 @@ fn stand(world: &mut World, site: &Site, town: &Town) {
         anchor: site.direction,
         terrace_m: laid.terrace_m,
         entity,
+        first,
+        count: solids.len(),
+        shown,
+        leaving: false,
     });
-    if world.contains_resource::<RespawnInTown>() {
-        crate::walking::respawn(world);
-    }
+    show(world, entity, shown);
 }
 
 /// Open every door when the towns are built, as the player would, and write
@@ -418,6 +806,8 @@ pub struct OpenDoors;
 /// quarter turn open).
 #[derive(Component, Clone, Copy, Debug)]
 pub struct TownDoor {
+    /// Its town's site, and its building's number there.
+    pub site: u32,
     pub building: usize,
     pub door: usize,
     pub record: u64,
@@ -492,6 +882,7 @@ fn spawn_doors(world: &mut World, root: Entity, site: u32, solids: &[BuildingSol
             let mesh = leaf_mesh(world.resource::<TownAssets>(), b, k, angle);
             let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
             let door = TownDoor {
+                site,
                 building: n,
                 door: k,
                 record: record::door_id(record::building_id(site, n as u32), d.index),
@@ -520,6 +911,7 @@ pub fn use_doors(
     walking: Option<Res<WalkingState>>,
     walker: Query<&avian3d::prelude::Position, With<Walker>>,
     structures: Option<ResMut<Structures>>,
+    towns: Res<Towns>,
     save: Option<ResMut<WorldSave>>,
     doors: Query<&TownDoor>,
 ) {
@@ -544,7 +936,7 @@ pub fn use_doors(
     let nearest = doors
         .iter()
         .filter_map(|door| {
-            let b = structures.0.get(door.building)?;
+            let b = structures.0.get(towns.index(door.site, door.building)?)?;
             let d = b.doors.get(door.door)?;
             let middle = b.frame.world(Vec3::new(d.middle.x, d.y0 + 1.1, d.middle.y));
             let to = middle - eye;
@@ -555,7 +947,10 @@ pub fn use_doors(
     let Some((_, door)) = nearest else {
         return;
     };
-    let leaf = &mut structures.0[door.building].doors[door.door];
+    let Some(index) = towns.index(door.site, door.building) else {
+        return;
+    };
+    let leaf = &mut structures.0[index].doors[door.door];
     let open = !leaf.open;
     if let Some(mut save) = save {
         if save
@@ -577,6 +972,7 @@ pub fn use_doors(
 pub fn swing_doors(
     time: Res<Time>,
     structures: Option<Res<Structures>>,
+    towns: Res<Towns>,
     assets: Res<TownAssets>,
     mut doors: Query<(&mut TownDoor, &Mesh3d)>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -586,7 +982,10 @@ pub fn swing_doors(
     };
     let step = SWING_RAD_S * time.delta_secs().max(1.0 / 60.0);
     for (mut door, mesh) in &mut doors {
-        let Some(b) = structures.0.get(door.building) else {
+        let Some(b) = towns
+            .index(door.site, door.building)
+            .and_then(|i| structures.0.get(i))
+        else {
             continue;
         };
         let Some(leaf) = b.doors.get(door.door) else {
@@ -690,12 +1089,18 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
                 },
             });
         let mut child = world.spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()));
+        if flame {
+            child.insert(TownFlame);
+        }
         if let Some(building) = room.filter(|_| !flame) {
             child.insert(RoomLights(
                 laid.lights.get(building).cloned().unwrap_or_default(),
             ));
             child.insert((
-                TownRoom { building },
+                TownRoom {
+                    site: laid.site,
+                    building,
+                },
                 SkyShare {
                     sky: ROOM_SKY_SHUT,
                     bounce: ROOM_BOUNCE,
@@ -768,12 +1173,15 @@ impl Default for RoomSky {
 /// A mesh of a building's rooms: its index in the walker's [`Structures`].
 #[derive(Component, Clone, Copy, Debug)]
 pub struct TownRoom {
+    /// Its town's site, and its building's number there.
+    pub site: u32,
     pub building: usize,
 }
 
 /// A room takes more of the sky while a door of its building stands open.
 pub fn rooms_follow_doors(
     structures: Option<Res<Structures>>,
+    towns: Option<Res<Towns>>,
     sky: Option<Res<RoomSky>>,
     mut rooms: Query<(&TownRoom, &mut SkyShare)>,
 ) {
@@ -782,9 +1190,10 @@ pub fn rooms_follow_doors(
     };
     let sky = sky.map(|s| *s).unwrap_or_default();
     for (room, mut share) in &mut rooms {
-        let open = structures
-            .0
-            .get(room.building)
+        let open = towns
+            .as_ref()
+            .and_then(|t| t.index(room.site, room.building))
+            .and_then(|i| structures.0.get(i))
             .is_some_and(|b| b.doors.iter().any(|d| d.open));
         let want = SkyShare {
             sky: if open { sky.open } else { sky.shut },
@@ -812,15 +1221,16 @@ pub struct TownsPlugin;
 impl Plugin for TownsPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TownAssets {
-            kits: load_kits(),
+            kits: Arc::new(load_kits()),
             village: load_template("village"),
-            repeats: load_repeats(),
+            repeats: Arc::new(load_repeats()),
         })
         .init_resource::<Towns>()
         .add_systems(
             Update,
             (
                 build_towns,
+                stand_in_range,
                 follow_frame,
                 use_doors,
                 swing_doors,

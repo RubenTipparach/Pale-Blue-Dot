@@ -2430,10 +2430,12 @@ mod tests {
         let inward = move |l: Vec3| (Vec2::new(l.x, l.z) - middle).dot(-out);
         let mut app = app_with_terrain_at(terrain, flat);
         app.insert_resource(Structures(vec![house.clone()]))
+            .insert_resource(crate::towns::Towns::standing_alone(1, 1))
             .insert_resource(crate::saves::WorldSave::memory_only())
             .add_systems(Update, use_doors);
         let record = pbd_core::settlement::record::door_id(1 << 16, leaf.index);
         app.world_mut().spawn(TownDoor {
+            site: 1,
             building: 0,
             door: 0,
             record,
