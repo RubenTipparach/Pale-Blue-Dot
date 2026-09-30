@@ -34,6 +34,27 @@ each sheet below.
   standing in the town when the frame was taken, and the shot is of sky or
   sea. The before that stands is 08:00 and 11:00.
 
+## After: indoors and out across the day
+
+`day.jpg` is this change alone: a column an hour (08:00, 11:00, 14:00,
+17:30, 22:30), and a row a view, indoors first:
+- the newel stair's room and the flight's foot, indoors;
+- the house front's open door from the lane;
+- the lane, and the town from 60 m, outdoors.
+
+What it shows:
+- **Indoors.** The rooms keep their soft warm light all day and go warm tan
+  when the candles light at night.
+- **The lane.** At 08:00 the sun is low in the frame and the house fronts
+  stand in their own shade. At 11:00 and 14:00 the fronts are evenly lit.
+  At 17:30 the trees' long shadows lie across the grass.
+- **From 60 m.** The shadows turn with the sun. From 14:00 the walls toward
+  the camera are in their own shade, and the trees shadow the fields.
+- **At 22:30.** The windows glow down the lane. From above, the warm pools
+  on the fields are the glowing flowers lighting their sod
+  (`lamps-and-lanterns` decision 8), stepped cell by cell like every light
+  in the voxel field. They are not the rooms' lights, which stay indoors.
+
 ## After: the rooms
 
 `newel.jpg`, `flight.jpg` and `front.jpg`, one sheet a view:
