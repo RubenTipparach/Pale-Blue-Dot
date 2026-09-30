@@ -634,3 +634,183 @@ wall, up to 0.35 m deep; with it on, none do. No walk changed. For the engine:
 a settlement template places furniture with the same push, and a test checks
 that no piece overlaps a wall, post or door.
 
+
+## 12. The owner's walk-through notes (2026-09-29)
+
+The owner walked the mockup and sent eight notes with screenshots, kept in
+`docs/handoff/2026-09-29-owner-notes/`. The cause of each was found in the
+mockup's code before anything changed. All eight are fixed in the mockup
+first. What the game shares is listed under each note and in "For the
+engine" below.
+
+**1. Water inside the boats** (`water-in-boats.png`).
+- **Cause.** The harbour is one water sheet at the water level. A hull is
+  an open, double-sided shell, so the sheet is drawn straight across its
+  inside.
+- **Fix.** Each hull carries a mask: a flat polygon at its waterline,
+  taken from the same sections the hull is lofted from.
+  - The mask is drawn before the water. It writes the stencil and nothing
+    else.
+  - The water is drawn only where the stencil is clear.
+  - The mask is a child of the boat, so it bobs with it.
+  - This covers the cog, rowboats, sailing boats and canoes. Beached boats
+    and the shipyard's hull stand on dry sand and need none.
+
+**2. Holes in the stairs** (`stair-block-faces.png`).
+- **Where.** Reproduced at the coast's street steps, cells (22, 21) and
+  (23, 21). A teal stripe runs through them. With the water hidden, the
+  stripe turns sky-blue, so it is a hole through to the sky under the map.
+- **Cause.**
+  - A step is a strip of its hex, clipped from the hex polygon, and the
+    clipping can repeat a corner.
+  - `face()` takes a face's normal from its first three corners, and only
+    then turns the face to point the way it should.
+  - When those three corners collapse, the normal is zero, so the face is
+    never turned. A step's top can then face down and be culled from
+    above, leaving the hole.
+  - The strips cover their hex completely in plan: sampled at 7 cm, every
+    point is under a step.
+- **Fix.**
+  - A face's normal is the polygon's own (Newell's sum over all its
+    edges), not three corners'.
+  - Repeated corners are dropped before a face is built.
+  - A face with no area is not drawn.
+  - This is the same class of fault as section 11's: a face that is right
+    in plan and wrong in 3D.
+
+**3. Windows** (`windows.png`). The owner: "windows should be double sided,
+and transparent. they shouldnt glow either. interiors are lit and have
+light so thats good enough".
+- **Cause.** A window is an opening with no glass. At night, a share of
+  windows gets a one-sided, unlit, glowing pane (`windowGlow`), plus a
+  candle in the room behind.
+- **Fix.**
+  - Every window gets a pane of glass: double-sided, see-through (about 25%
+    opaque, a faint blue-grey), lit like everything else, with no glow.
+    The mound houses' round windows get round panes.
+  - The candle in the room behind a lit window stays, and so does its
+    light on the street.
+  - The glowing panes go.
+
+**4. Chimney bottoms z-fight** (`chimney-zfight.png`).
+- **Cause.** A chimney box starts at the wall top, where the soffit
+  (the ceiling under the roof) also lies. Both faces point down in one
+  plane.
+- **Fix.** The chimney starts 2 cm above the soffit. Its bottom is in the
+  roof space, never seen.
+- Section 11's scan checked upward faces only. It now checks downward
+  faces too.
+
+**5. Doors that open into furniture** (`mound-door-into-furniture.png`).
+- **Cause.** Every door swings inward. A mound house's round door is 2.2 m
+  across, and its table stands behind it.
+- **Fix.** A door swings inward unless its open leaf would pass through
+  furniture, a wall, a post or a hearth. Then it swings outward, if
+  outward is clear.
+  - The check samples the leaf's sweep at four points of the swing,
+    along its length, at knee and chest height.
+  - The count of doors turned outward is reported per settlement.
+
+**6. Jungle bridge posts** (`jungle-bridge-posts.png`).
+- **Cause.** A rope bridge meets a platform at the middle of one of the
+  hex's edges.
+  - The bridge's rails run 0.65 m either side of its centre line.
+  - That edge's corners are 0.82 m out, where the platform's own rails
+    end.
+  - So the bridge's end posts stand 17 cm inside the corners, and bridge
+    and platform rails do not meet.
+- **Fix.** A bridge that ends on an edge takes that edge's two corners as
+  its rails' ends, with a post at each. A post already standing at a
+  corner is not drawn twice.
+
+**7. More light in stairwells.**
+- **Cause.**
+  - A newel stair's cell and a straight flight's corridor are lit only by
+    the hearth of the room they belong to.
+  - A light reaches only its own storey, so the upper turns are dark.
+- **Fix.** A candle sconce, burning day and night like a hearth, is placed:
+  - once per turn of every newel stair, on its wall at mid-turn, 2.2 m over
+    the tread there;
+  - in every straight flight, on a side wall over its lower quarter,
+    clear of the head.
+
+**8. The igloo's tunnel** (`igloo.png`).
+- **Cause.**
+  - The tunnel was two flat slabs, 1.3 m high, with a half-cylinder vault
+    laid on top.
+  - The vault's ends were open. It met neither the slabs' ends nor the
+    dome.
+  - The dome's opening was cut by removing whole faces by angle, so its
+    edge was jagged.
+  - The lamp inside also lit the slabs' ends, so they read light-coloured.
+- **Fix.** The tunnel is one arched shell of snow blocks, with an outer and
+  an inner surface.
+  - Its profile is an arch on short walls: 2.0 m wide and 2.25 m high
+    outside, 1.44 m and 1.95 m inside.
+  - Each vertex of the shell starts where it meets the dome. A strip
+    along the dome joins the inner and outer surfaces there.
+  - A ring closes the mouth.
+  - The dome is cut by the tunnel's outer profile. It is built finer (48 by
+    16 faces) so the cut hides under the shell.
+  - The tunnel's collision follows the inner profile.
+
+**Built in the mockup, and measured (2026-09-30).**
+`tools/mockup_towns_checks.js` runs every settlement before and after.
+`tools/mockup_towns_notes_shots.sh` takes each note's view. The pairs are in
+`docs/screenshots/tenebris-towns-notes/`.
+- **Holes in the steps.**
+  - A ray straight down onto a street step found a hole on 290 of 803 rays
+    in the walled town, and 132 of 292 in the harbour. It finds none now.
+  - Faces left with a zero normal: 76 in the town, 31 at the harbour and
+    a few elsewhere. There are none now. The 97 with no area are not
+    drawn.
+- **Chimneys.** Downward faces overlapping in one plane fell by one per
+  chimney: 15 in the town, 9 in the village, 14 at the harbour, 13 in the
+  mountains. What remains is hidden: beam and slab undersides, and wall
+  tops under a storey.
+- **Doors.** 16 doors now swing outward:
+  - all 9 mound doors;
+  - 2 each at the jungle and the harbour, 3 in the caves;
+  - the rest swing inward, clear.
+
+  Three cave doors still graze something at the leaf's tip on both sides:
+  - two at knee height against their room's furniture;
+  - one against a stalagmite outside.
+
+  They keep the side with fewer hits. The next step for them is furniture
+  and stalagmites kept clear of every door's sweep.
+- **Glass.** Every window in every settlement has a pane (1,517 in all).
+  None glows.
+- **Hulls.** 26 hulls at the harbour mask the water.
+- **Sconces.** 70 in all, in every newel stair and straight flight.
+- **The igloo.** The tunnel is one shell, and the dome's opening hides
+  under it.
+- No roof clashes, and no page errors.
+
+**Saved games.** These fixes are made in the mockup. The game's town is
+still built from the template each time a world opens (`cities-in-the-world`,
+not yet stored records). So a change to the game's cutter is held to
+CLAUDE.md's rule, "Saved games survive every change":
+- **Render only (recommendation taken, ask only with screenshots).**
+  These change how a town looks, not where anything stands, and may change
+  in place:
+  - how a face is oriented;
+  - a trim face lifted clear of another;
+  - glass in a window;
+  - which way a door leaf swings, while leaves are not solids.
+- **Generation.** These are part of a world, and change only as a new
+  version for new worlds, or once towns are stored records:
+  - a building's cells, the ground under it, its solids, and where its
+    doors and windows are.
+
+**For the engine** (`pbd_core::settlement::pieces`), when the game's cutter
+next changes:
+- `Sink::face` takes its normal from the first three corners and drops the
+  face when they collapse. It should use the polygon's own normal, as
+  above.
+- The chimney's `plain_box` starts at the soffit's plane, as the mockup's
+  did.
+- Windows get double-sided glass. Doors swing by the rule above once
+  furniture is placed.
+- The water pass masks each hull's inside, when hulls reach the game
+  (`sail-the-cog`).

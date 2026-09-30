@@ -437,8 +437,22 @@ function uvWorld(p, n, rep) {
   return [(p[0] * -n[2] + p[2] * n[0]) / l * s, p[1] * s];
 }
 // A convex planar polygon. `want` orients it: the face is flipped to face it.
+// Its normal is the polygon's own, by Newell's sum over every edge, not its
+// first three corners': a corner repeated by clipping made that zero, the
+// face was never turned, and a street step's top faced down and left a hole
+// (design section 12, note 2). Repeated corners are dropped, and a face with
+// no area is not drawn.
+const FACE_STATS = { dropped: 0 };
+function newell(pts) {
+  let x = 0, y = 0, z = 0;
+  for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; x += (p[1] - q[1]) * (p[2] + q[2]); y += (p[2] - q[2]) * (p[0] + q[0]); z += (p[0] - q[0]) * (p[1] + q[1]); }
+  return [x, y, z];
+}
 function face(m, pts, want, uvf) {
-  let n = V.norm(V.cross(V.sub(pts[1], pts[0]), V.sub(pts[2], pts[0])));
+  pts = pts.filter((p, i, a) => { const q = a[(i + 1) % a.length]; return Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) > 1e-6; });
+  const nw = pts.length >= 3 ? newell(pts) : [0, 0, 0], area2 = Math.hypot(nw[0], nw[1], nw[2]);
+  if (area2 < 1e-7) { FACE_STATS.dropped++; return; }
+  let n = V.mul(nw, 1 / area2);
   if (want && V.dot(n, want) < 0) { pts = pts.slice().reverse(); n = V.mul(n, -1); }
   const b = buf(m), rep = REP[m] || 1;
   const uvs = pts.map(p => uvf ? uvf(p, n) : uvWorld(p, n, rep));
@@ -685,8 +699,35 @@ function addDoor(mx, mz, tx, tz, nx, nz, w, yb, ye, t, op) {
   }
   pivot.rotation.y = -base;
   const solid = addSolid({ type: "poly", pts: rectPts(mx, mz, w, 0.12, base), y0: yb, y1: ye, cls: "wall", label: "door" }); solid.wall = true;
-  const door = { pivot, solid, base, open: !!op.open, a: op.open ? 1 : 0, x: mx, z: mz, y: yb, swing: -(op.swing || 1), name: op.name || "door", nx, nz, tx, tz, w, t, hut: !!op.hut };
+  const door = { pivot, solid, base, open: !!op.open, a: op.open ? 1 : 0, x: mx, z: mz, y: yb, swing: -(op.swing || 1), name: op.name || "door", nx, nz, tx, tz, w, t, hut: !!op.hut, len: op.round ? 2 * op.round.rho : w };
   solid.off = door.open; DOORS.push(door); DOOR_GROUP.add(pivot);
+}
+// A door swings inward unless its open leaf would pass through furniture, a
+// wall, a post or a hearth; then it swings outward, if that side is clearer.
+// A mound house's round door, 2.2 m across, swung into its table (the owner,
+// 2026-09-29; design section 12, note 5). The leaf's sweep is sampled at four
+// points of the swing, along its length, at knee and chest height.
+const DOOR_STATS = { outward: 0, stillBlocked: 0 };
+function sweepHits(d, swing) {
+  let hits = 0; const near = [], iv = [];
+  for (const a of [0.25, 0.5, 0.75, 1]) {
+    const th = -d.base + swing * a * Math.PI / 2 * 0.95, ex = Math.cos(th), ez = -Math.sin(th);
+    for (const f of [0.35, 0.65, 0.95]) {
+      const px = d.pivot.position.x + ex * d.len * f, pz = d.pivot.position.z + ez * d.len * f;
+      nearSolids(px, pz, 0.1, near); intervalsAt(px, pz, iv, near);
+      for (const hgt of [0.3, 1.1]) { const y = d.y + hgt; if (iv.some(([b, t, o]) => b < y && t > y && o !== d.solid && !(o && o.label === "door"))) hits++; }
+    }
+  }
+  return hits;
+}
+function settleDoorSwings() {
+  DOOR_STATS.outward = 0; DOOR_STATS.stillBlocked = 0;
+  for (const d of DOORS) {
+    const now = sweepHits(d, d.swing); if (!now) continue;
+    const other = sweepHits(d, -d.swing);
+    if (other < now) { d.swing = -d.swing; DOOR_STATS.outward++; if (other) DOOR_STATS.stillBlocked++; } else DOOR_STATS.stillBlocked++;
+    d.pivot.rotation.y = -d.base + d.swing * smooth(d.a) * Math.PI / 2 * 0.95;
+  }
 }
 // A full-cell floor: boards on joists; the collision is a column run.
 // Floors are drawn ZLIFT above where they collide, so a wall top in the same
@@ -736,6 +777,7 @@ function straightFlight(c, r, sgn, base, o = {}) {
   });
   // enclosed below: plastered walls either side, and the landing block's end
   for (const s of [-1, 1]) solidBox("plaster", xm, base, z0 + s * (hw + 0.07), len, STOREY - SLAB, 0.14, 0);
+  sconce(x0 + sgn * len * 0.25, base + 2.45, z0 + hw - 0.01, 0, -1);   // over the flight's lower quarter, clear of the head
   solidBox(null, x0 + sgn * (len - run / 2), base, z0, run, STOREY - SLAB, R, 0);
   // up top: rails round the well, open at the landing
   const yt = base + STOREY, rail = (x, z, lx, lz) => {
@@ -769,6 +811,13 @@ function newelStair(c, r, entry, y0, yTop, o = {}) {
     prism(o.tread || "stone", o.tread || "stone", wedge(a0, a1), top - 0.26, top, { bottom: true });
   }
   solidCyl(o.newel || "stone", x, y0, z, NEWEL.newelR, (o.wallTop || yTop + 2.6) - y0, { n: 8 });
+  // A sconce every turn, 2.2 m over the tread, on the first wall round from
+  // the entry that is the stair's own and has no door in it.
+  { const own = [2, 4, 1, 5].map(k => (entry + k) % 6).find(d => !(o.skip && o.skip.includes(d)) && !(o.exits || []).some(e => e.d === d));
+    if (own !== undefined) for (let k = 0; k < Math.round((yTop - y0) / STOREY); k++) {
+      const f = ((own - entry) % 6 + 6) % 6 / 6, a = own * Math.PI / 3, r0 = rin - 0.02;
+      sconce(x + Math.cos(a) * r0, y0 + (k + f) * STOREY + 2.2, z + Math.sin(a) * r0, -Math.cos(a), -Math.sin(a));
+    } }
   const margin = dphi * 0.5, landing = o.landing === false ? margin : Math.PI * 30 / 180;
   // The top: 30 degrees of floor past the last winder, then a rail, so a walker
   // who keeps turning meets the rail instead of the well. Wider costs headroom:
@@ -1127,7 +1176,9 @@ function building(o) {
   else if (cone) { const [c, r] = cells[0]; pyramidRoof(c, r, top, roofH, kit.roofMat, oh, { open: true, under: kit.roofMat, name: o.name }); }
   else if (roofKind === "flat") { flatRoof(cells, top, kit.flatTop, kit.walls[0].out, o.parapetGaps || []); noteRoof(minx, maxx, minz, maxz, o.name); }
   else gableRoof(minx, maxx, minz, maxz, top, { m: roofKind === "cone" ? "thatch" : roofKind, pitch: o.pitch ?? kit.pitch ?? 1, gable: kit.gable, oh, name: o.name, softEaves: !!kit.hut, under: kit.hut ? (kit.roof === "turf" ? "plank" : "thatch") : "plank" });
-  if (o.chimney) { const [c, r] = o.chimney, x = cx(c, r), z = cz(c, r); solidBox(kit.chimney || "stone", x, top, z, 0.8, (maxz - minz) / 2 + 1.2, 0.8); }
+  // The chimney starts 2 cm over the soffit, whose plane its bottom shared
+  // (design section 12, note 4); its bottom is in the roof space.
+  if (o.chimney) { const [c, r] = o.chimney, x = cx(c, r), z = cz(c, r); solidBox(kit.chimney || "stone", x, top + 0.02, z, 0.8, (maxz - minz) / 2 + 1.18, 0.8); }
   if (kit.columns) { // marble: a column at every outside corner, with a base and a capital
     const seen = new Set();
     for (const [c, r] of cells) for (let d = 0; d < 6; d++) {
@@ -1454,7 +1505,7 @@ function resetWorld() {
   for (const n of NPCS) scene.remove(n.g); NPCS.length = 0;
   for (const k of Object.keys(GOTO)) delete GOTO[k];
   for (const k of Object.keys(KIT_SPOT)) delete KIT_SPOT[k];
-  HUT_SPOTS.length = 0; STREET_LAMPS.length = 0; WINDOWS.length = 0; FACADES.length = 0; GLOW.mesh = GLOW.always = null; STEPCELL.clear(); NO_TREE.clear(); INDOOR_SHAPES.length = 0; SPINNERS.length = 0; BOBBERS.length = 0;
+  HUT_SPOTS.length = 0; STREET_LAMPS.length = 0; WINDOWS.length = 0; FACADES.length = 0; GLASS.mesh = null; GLASS.panes = 0; POSTS.clear(); SCONCES.count = 0; MASKS.count = 0; FACE_STATS.dropped = 0; STEPCELL.clear(); NO_TREE.clear(); INDOOR_SHAPES.length = 0; SPINNERS.length = 0; BOBBERS.length = 0;
   for (const m of STATIC) { scene.remove(m); m.geometry.dispose(); } STATIC.length = 0;
   for (const m of DRESS) { scene.remove(m); if (m.geometry) m.geometry.dispose(); } DRESS.length = 0;
   FIREMESH.length = 0;
@@ -1519,7 +1570,7 @@ function domeCap(x, z, y0, r, h, m, o = {}) {
   const P = (i, j) => { const a = i / seg * 2 * Math.PI, t = j / rings * Math.PI / 2; return [x + r * Math.cos(t) * Math.cos(a), y0 + h * Math.sin(t), z + r * Math.cos(t) * Math.sin(a)]; };
   for (let j = 0; j < rings; j++) for (let i = 0; i < seg; i++) {
     const am = (i + 0.5) / seg * 2 * Math.PI;
-    if (o.skip && o.skip(am, y0 + h * Math.sin((j + 0.5) / rings * Math.PI / 2))) continue;
+    if (o.skip && o.skip(am, y0 + h * Math.sin((j + 0.5) / rings * Math.PI / 2), P(i + 0.5, j + 0.5))) continue;
     const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1);
     const pts = j === rings - 1 ? [a, b, c] : [a, b, c, d];
     let mx = 0, my = 0, mz = 0; for (const p of pts) { mx += p[0]; my += p[1]; mz += p[2]; } mx /= pts.length; my /= pts.length; mz /= pts.length;
@@ -1542,27 +1593,38 @@ function igloo(c, r, door, name = "Igloo") {
   const x = cx(c, r), z = cz(c, r), base = TOP[idx(c, r)], A = 2.3, H = 2.5, [dx, dz] = dvec(door), da = Math.atan2(dz, dx);
   for (let d = -1; d < 6; d++) { const [a, b] = d < 0 ? [c, r] : nb(c, r, d); if (!inMap(a, b)) continue; TOP[idx(a, b)] = base; TOPMAT[idx(a, b)] = "snow"; NO_TREE.add(idx(a, b)); if (d < 0) AREA[idx(a, b)] = name; }
   const along = (px, pz) => (px - x) * dx + (pz - z) * dz, across = (px, pz) => -(px - x) * dz + (pz - z) * dx;
-  const inTunnel = (px, pz) => along(px, pz) > 1.2 && Math.abs(across(px, pz)) < 0.72;
-  domeCap(x, z, base, A, H, "snowblock", { inner: "snowblock", seg: 24, rings: 8, ceiling: true, hole: inTunnel, label: "Igloo", detail: "snow blocks, 2.5 m high", skip: (a, y) => y < base + 2.05 && Math.abs(angDiff(a, da)) < 0.2 });
+  // The tunnel (the owner, 2026-09-29; design section 12, note 8): one arched
+  // shell of snow blocks, an arch on short walls, outside and in. Each vertex
+  // of the shell starts where it meets the dome, a strip along the dome joins
+  // the two surfaces, and a ring closes the mouth. The dome is cut by the
+  // outer profile, fine enough that the cut hides under the shell.
+  const T = { wo: 1.0, to: 2.25, wi: 0.72, ti: 1.95, spring: 1.0 }, u1 = A + 1.6;
+  const profile = (w, top) => { const pts = [[w, 0], [w, T.spring]]; for (let k = 1; k < 12; k++) { const th = k / 12 * Math.PI; pts.push([w * Math.cos(th), T.spring + (top - T.spring) * Math.sin(th)]); } pts.push([-w, T.spring], [-w, 0]); return pts; };
+  const outer = profile(T.wo, T.to), inner = profile(T.wi, T.ti);
+  const onDome = ([v, y]) => Math.sqrt(Math.max(0, A * A * (1 - (y / H) ** 2) - v * v));
+  const W3 = (u, [v, y]) => [x + dx * u - dz * v, base + y, z + dz * u + dx * v];
+  const outward = ([v0, y0], [v1, y1]) => { const vm = (v0 + v1) / 2, ym = (y0 + y1) / 2 - T.spring / 2; return [-dz * vm, ym, dx * vm]; };
+  for (let k = 0; k + 1 < outer.length; k++) {
+    const [p, q] = [outer[k], outer[k + 1]], [pi, qi] = [inner[k], inner[k + 1]], out = outward(p, q);
+    face("snowblock", [W3(onDome(p), p), W3(u1, p), W3(u1, q), W3(onDome(q), q)], out);
+    face("snowblock", [W3(onDome(pi), pi), W3(u1, pi), W3(u1, qi), W3(onDome(qi), qi)], V.mul(out, -1));
+    const ring = [W3(onDome(pi), pi), W3(onDome(qi), qi), W3(onDome(q), q), W3(onDome(p), p)];
+    face("snowblock", ring, [-dx, 0, -dz]); face("snowblock", ring, [dx, 0, dz]);
+    face("snowblock", [W3(u1, pi), W3(u1, qi), W3(u1, q), W3(u1, p)], [dx, 0, dz]);
+  }
+  const inOuter = (px, py, pz) => { const u = along(px, pz), v = Math.abs(across(px, pz)), y = py - base; return u > 0.3 && v < T.wo && y < T.spring + (T.to - T.spring) * Math.sqrt(Math.max(0, 1 - (v / T.wo) ** 2)); };
+  const inTunnel = (px, pz) => along(px, pz) > 1.2 && Math.abs(across(px, pz)) < T.wi;
+  domeCap(x, z, base, A, H, "snowblock", { inner: "snowblock", seg: 48, rings: 16, ceiling: true, hole: inTunnel, label: "Igloo", detail: "snow blocks, 2.5 m high", skip: (a, y, p) => inOuter(p[0], p[1], p[2]) });
   // the inner ring the body slides on, open at the tunnel
   for (let k = 0; k < 16; k++) {
     const a = k / 16 * 2 * Math.PI; if (Math.abs(angDiff(a, da)) < 0.45) continue;
     addSolid({ type: "poly", pts: rectPts(x + Math.cos(a) * 1.69, z + Math.sin(a) * 1.69, 0.72, 0.2, a + Math.PI / 2), y0: base, y1: base + 1.95, cls: "wall", label: "igloo wall" });
   }
-  // the tunnel: walls to 1.3 m, a barrel vault to 2.0 m
-  const u0 = 1.2, u1 = A + 1.6, um = (u0 + u1) / 2, len = u1 - u0;
-  for (const s of [-1, 1]) {
-    const wx = x + dx * um - dz * s * 0.82, wz = z + dz * um + dx * s * 0.82;
-    box("snowblock", wx, base, wz, len, 1.3, 0.2, da);
-    addSolid({ type: "poly", pts: rectPts(wx, wz, len, 0.2, da), y0: base, y1: base + 2.2, cls: "wall", label: "tunnel wall" });
-  }
-  for (let k = 0; k < 6; k++) {
-    const a0 = k / 6 * Math.PI, a1 = (k + 1) / 6 * Math.PI, R0 = 0.82, yc = base + 1.3;
-    const q = (a, u) => [x + dx * u - dz * Math.cos(a) * R0, yc + Math.sin(a) * 0.7, z + dz * u + dx * Math.cos(a) * R0];
-    const pts = [q(a0, u0), q(a0, u1), q(a1, u1), q(a1, u0)];
-    face("snowblock", pts, [0, 1, 0]); face("snowblock", pts, [0, -1, 0]);
-  }
-  addSolid({ type: "poly", pts: rectPts(x + dx * um, z + dz * um, len, 1.64, da), y0: base + 1.98, y1: base + 2.3, cls: "wall", label: "tunnel roof" });
+  // the tunnel collides as its inner profile: walls either side and a roof
+  { const ua = onDome([T.wi, 0]) - 0.1, um = (ua + u1) / 2;
+    for (const s of [-1, 1]) addSolid({ type: "poly", pts: rectPts(x + dx * um - dz * s * (T.wi + 0.1), z + dz * um + dx * s * (T.wi + 0.1), u1 - ua, 0.2, da), y0: base, y1: base + 2.2, cls: "wall", label: "tunnel wall" });
+    const ur = onDome([0, T.ti]) - 0.05, umr = (ur + u1) / 2;
+    addSolid({ type: "poly", pts: rectPts(x + dx * umr, z + dz * umr, u1 - ur, 2 * T.wi, da), y0: base + T.ti, y1: base + T.ti + 0.3, cls: "wall", label: "tunnel roof" }); }
   // a sleeping bench of snow at the back, furs, a lamp
   const back = da + Math.PI, bench = [];
   for (let k = 0; k <= 6; k++) { const a = back - 1.1 + k / 6 * 2.2; bench.push([x + Math.cos(a) * 1.55, z + Math.sin(a) * 1.55]); }
@@ -1578,12 +1640,25 @@ function igloo(c, r, door, name = "Igloo") {
   return { x: x + dx * (A + 3), z: z + dz * (A + 3), y: base, look: [x, z] };
 }
 
+// A candle sconce on a wall whose inward normal is (nx, nz), burning day and
+// night as a hearth does: the stairwells had no light of their own, and a
+// light reaches only its own storey (design section 12, note 7).
+const SCONCES = { count: 0 };
+function sconce(x, y, z, nx, nz) {
+  box("iron", x + nx * 0.08, y - 0.14, z + nz * 0.08, 0.16, 0.05, 0.12, Math.atan2(nz, nx));
+  FIRES.push({ x: x + nx * 0.14, y: y - 0.12, z: z + nz * 0.14, s: 0.22, lamp: true, always: true });
+  LIGHTS.push({ x: x + nx * 0.2, y, z: z + nz * 0.2, color: 0xffb870, kind: "sconce", power: 0.75 });
+  SCONCES.count++;
+}
+// Posts already standing, so two rails that meet at a corner share one.
+const POSTS = new Set();
+function post(x, y, z) { const k = Math.round(x * 20) + ":" + Math.round(y * 10) + ":" + Math.round(z * 20); if (POSTS.has(k)) return; POSTS.add(k); cyl("timber", x, y, z, 0.05, 1.02, 5); }
 // A rail along a segment at height y (or y0 to y1 along it): solid to 1 m.
 function railSeg(ax, az, ay, bx, bz, by, m = "timber") {
   const mx = (ax + bx) / 2, mz = (az + bz) / 2, L = Math.hypot(bx - ax, bz - az), a = Math.atan2(bz - az, bx - ax);
   if (L < 0.05) return;
   for (const hgt of [0.95, 0.5]) for (const want of [[0, 1, 0], [0, -1, 0]]) face(m, [[ax, ay + hgt, az], [bx, by + hgt, bz], [bx, by + hgt + 0.07, bz], [ax, ay + hgt + 0.07, az]], [-(bz - az), 0, bx - ax].map((v, i) => i === 1 ? 0 : v * (want[1] > 0 ? 1 : -1)));
-  cyl("timber", ax, ay, az, 0.05, 1.02, 5);
+  post(ax, ay, az);
   addSolid({ type: "poly", pts: rectPts(mx, mz, L, 0.1, a), y0: Math.min(ay, by) - 0.2, y1: Math.max(ay, by) + 1.0, cls: "wall", label: "rail" });
 }
 // A deck of plank cells at y on piles down to `bed`, railed on its outer edges
@@ -1623,9 +1698,18 @@ function bridge(A, B, o = {}) {
   const nx = -uz, nz = ux;
   if (o.rails !== false) {
     const m = Math.max(2, Math.round(L / 1.4));
-    for (const s of [-1, 1]) for (let k = 0; k < m; k++) {
-      const t0 = k / m, t1 = (k + 1) / m, off = s * (w / 2 + 0.05);
-      railSeg(A[0] + dx * t0 + nx * off, A[2] + dz * t0 + nz * off, h(t0), A[0] + dx * t1 + nx * off, A[2] + dz * t1 + nz * off, h(t1), o.railMat || "rope");
+    // A bridge that ends on a platform's edge ends its rails on that edge's
+    // two corners, where the platform's own rails end, with a post at each
+    // (the owner, 2026-09-29; design section 12, note 6). `o.ends` is the
+    // edge's corners [[x, z], [x, z]] at A's end and at B's.
+    const corner = (end, s) => { if (!o.ends || !o.ends[end]) return null; const [P0, P1] = o.ends[end], C = end ? B : A; return ((P0[0] - C[0]) * nx + (P0[1] - C[2]) * nz) * s > 0 ? P0 : P1; };
+    for (const s of [-1, 1]) {
+      const off = s * (w / 2 + 0.05), at = t => [A[0] + dx * t + nx * off, A[2] + dz * t + nz * off];
+      for (let k = 0; k < m; k++) {
+        const t0 = k / m, t1 = (k + 1) / m, p0 = (k === 0 && corner(0, s)) || at(t0), p1 = (k === m - 1 && corner(1, s)) || at(t1);
+        railSeg(p0[0], p0[1], h(t0), p1[0], p1[1], h(t1), o.railMat || "rope");
+      }
+      const e = corner(1, s); if (e) post(e[0], h(1), e[1]);
     }
   }
   if (o.piles !== undefined) {
@@ -1965,9 +2049,9 @@ function makeJungle() {
     let best = null, bd = 1e9; for (const [c, r] of plat[k].slice(1)) { const d2 = (cx(c, r) - ox) ** 2 + (cz(c, r) - oz) ** 2; if (d2 < bd) { bd = d2; best = [c, r]; } }
     let d = dirToward(best[0], best[1], ox, oz); if (inPlat(k, ...nb(best[0], best[1], d))) d = (d + 1) % 6;
     gaps[k].push([best[0], best[1], d]);
-    const [A, B] = edgeEnds(best[0], best[1], d); return [(A[0] + B[0]) / 2, PY, (A[1] + B[1]) / 2];
+    const [A, B] = edgeEnds(best[0], best[1], d); return Object.assign([(A[0] + B[0]) / 2, PY, (A[1] + B[1]) / 2], { corners: [A, B] });
   };
-  for (const [a, b] of [[0, 1], [1, 2], [0, 2]]) { const pa = endAt(a, b), pb = endAt(b, a); ends.push([pa, pb]); bridge(pa, pb, { sag: 0.8, width: 1.2, label: "Rope bridge" }); bridgeLamps(pa, pb, { sag: 0.8, width: 1.2 }); }
+  for (const [a, b] of [[0, 1], [1, 2], [0, 2]]) { const pa = endAt(a, b), pb = endAt(b, a); ends.push([pa, pb]); bridge(pa, pb, { sag: 0.8, width: 1.2, label: "Rope bridge", ends: [pa.corners, pb.corners] }); bridgeLamps(pa, pb, { sag: 0.8, width: 1.2 }); }
   // a stair tower of poles up to the first platform, on the side away from the bridges
   const [t0c, t0r] = trees[0]; let tower = null;
   for (const [c, r] of plat[0].slice(1)) {
@@ -2155,6 +2239,26 @@ const BOATS = {
   sail:    { L: 6.6, B: 2.2, D: 0.9, sheer: 0.3, draft: 0.45, wood: "boards" },
   canoe:   { L: 5.0, B: 0.85, D: 0.42, sheer: 0.12, draft: 0.18, wood: "driftwood" },
 };
+// A hull's mask against the water (the owner, 2026-09-29; design section 12,
+// note 1): a flat polygon at the hull's waterline, local height `yl`, from the
+// sections the hull is lofted from. It writes the stencil and nothing else,
+// before the water, and the water is drawn only where the stencil is clear.
+const MASK_MAT = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, transparent: true, side: THREE.DoubleSide, stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp });
+const MASKS = { count: 0 };
+function waterMask(g, L, B, D, sheer, yl) {
+  const right = [];
+  for (let i = 0; i <= 24; i++) {
+    const { x, b, d, top } = hullSection(L, B, D, sheer, i / 24), c = (top - yl) / d;
+    if (d <= 0 || c > 1 || c < -1) continue;
+    right.push([x, b * Math.sqrt(1 - c * c) * 0.99]);
+  }
+  if (right.length < 2) return;
+  const sh = new THREE.Shape(); sh.moveTo(right[0][0], right[0][1]);
+  for (const [px, pz] of right.slice(1)) sh.lineTo(px, pz);
+  for (const [px, pz] of right.slice().reverse()) sh.lineTo(px, -pz);
+  const geo = new THREE.ShapeGeometry(sh); geo.rotateX(Math.PI / 2); geo.translate(0, yl, 0);
+  const m = new THREE.Mesh(geo, MASK_MAT); m.renderOrder = -1; g.add(m); MASKS.count++;
+}
 // A boat at (x, z) heading `ang`, floating on the water at `wl` (or on land,
 // upside down on trestles, with `beached`). It is a solid the walker goes round.
 function boat(type, x, z, ang, o = {}) {
@@ -2178,6 +2282,7 @@ function boat(type, x, z, ang, o = {}) {
     for (const k of [-1, 1]) box("timber", x + Math.cos(ang) * k * s.L * 0.28, o.y ?? 0, z + Math.sin(ang) * k * s.L * 0.28, 0.2, 0.45, s.B * 1.1, ang + Math.PI / 2);
   } else {
     g.rotation.y = -ang; g.position.set(x, wl - s.draft + s.D, z);
+    waterMask(g, s.L, s.B, s.D, s.sheer, s.draft - s.D);
     if (!o.still) BOBBERS.push({ obj: g, y: g.position.y, ph: (x * 0.37 + z * 0.61) % 6.28, amp: o.amp ?? (type === "canoe" ? 0.05 : 0.04) });
   }
   scene.add(g); DRESS.push(g);
@@ -2197,6 +2302,7 @@ function cog(x, z, ang, gangSide, o = {}) {
   const hull = new THREE.Mesh(hullGeometry(L, B, D, 1.0), mat); hull.castShadow = hull.receiveShadow = true; g.add(hull);
   // the gunwale sits just under the deck, so a gangplank from the pier clears it
   g.rotation.y = -ang; g.position.set(x, deckY - 0.1, z); scene.add(g); DRESS.push(g);
+  waterMask(g, L, B, D, 1.0, wl - (deckY - 0.1));
   // the deck follows the hull's plan (the same curve hullGeometry lofts), a little inside it
   const wAt = lx => { const e = Math.abs(2 * (lx / L + 0.5) - 1); return B / 2 * Math.pow(Math.max(0, 1 - Math.pow(e, 2.4)), 0.55) * 0.96; };
   const hl = L / 2 * 0.94, S = 14, side = [];
@@ -2579,7 +2685,7 @@ function moundFront(x, z, y0, ang, o = {}) {
     const wx = x + ux * uF + vx * Wn.v * s, wz = z + uz * uF + vz * Wn.v * s;
     box("timber", wx, y0 + Wn.yc - Wn.rho, wz, 0.05, 2 * Wn.rho, 0.05, ang);
     box("timber", wx, y0 + Wn.yc - 0.025, wz, 0.05, 0.05, 2 * Wn.rho, ang);
-    WINDOWS.push({ x: wx, z: wz, nx: ux, nz: uz, tx: vx, tz: vz, w: 2 * Wn.rho, yb: y0 + Wn.yc - Wn.rho, ye: y0 + Wn.yc + Wn.rho, t });
+    WINDOWS.push({ x: wx, z: wz, nx: ux, nz: uz, tx: vx, tz: vz, w: 2 * Wn.rho, yb: y0 + Wn.yc - Wn.rho, ye: y0 + Wn.yc + Wn.rho, t, round: true });
   }
 }
 // A vaulted tunnel from A to B ([x, z]) at floor y0: walls to 1.3 m, a barrel
@@ -3066,8 +3172,7 @@ Object.assign(SCENES, {
 // =====================================================================
 const NIGHT_KINDS = new Set(["lamp", "torch", "brazier", "beacon", "window", "candle"]);   // lit after dusk; hearths and forges burn all day
 const BAKED_ONLY = new Set(["window", "candle"]);   // too many and too dim for the few point lights
-const LIGHT_REACH = { hearth: 7, forge: 9, lamp: 9, torch: 10, brazier: 11, beacon: 18, window: 4.5, candle: 5 };
-const GLOW = { mesh: null, always: null };   // lit windows: by night, and all day in a cave
+const LIGHT_REACH = { hearth: 7, forge: 9, lamp: 9, torch: 10, brazier: 11, beacon: 18, window: 4.5, candle: 5, sconce: 5.5 };
 
 // A torch on a pole, lit at night.
 function torch(x, y, z, h = 2.2) {
@@ -3112,28 +3217,36 @@ function facadeLamps(spacing) {
 // behind it, a little light out onto the street. Which ones is a hash of where
 // the window is, so a settlement is lit the same way every time.
 function windowGlow(share) {
-  const AL = SCENES[SCENE].alwaysLit, sets = { mesh: [[], []], always: [[], []] };
+  // Every window has a pane of glass: double-sided, see-through and lit like
+  // everything else, never glowing (the owner, 2026-09-29: "windows should be
+  // double sided, and transparent. they shouldnt glow either. interiors are
+  // lit and have light so thats good enough"; design section 12, note 3).
+  // A share of rooms still has a candle burning behind its window, which
+  // lights the room and a little of the street.
+  const pos = [], nor = [];
   for (const wi of WINDOWS) {
-    const [pos, col] = sets[AL && AL(wi.x, wi.yb, wi.z) ? "always" : "mesh"];
+    const P = (u, y) => [wi.x + wi.tx * u, y, wi.z + wi.tz * u], n = [wi.nx, 0, wi.nz];
+    const tri = (a, b, c) => { for (const p of [a, b, c]) { pos.push(...p); nor.push(...n); } };
+    if (wi.round) {
+      const rho = wi.w / 2, yc = (wi.yb + wi.ye) / 2, C = P(0, yc), K = 20;
+      for (let k = 0; k < K; k++) { const a0 = k / K * 2 * Math.PI, a1 = (k + 1) / K * 2 * Math.PI; tri(C, P(rho * Math.cos(a0), yc + rho * Math.sin(a0)), P(rho * Math.cos(a1), yc + rho * Math.sin(a1))); }
+    } else {
+      const hw = wi.w / 2;
+      tri(P(-hw, wi.yb), P(hw, wi.yb), P(hw, wi.ye)); tri(P(-hw, wi.yb), P(hw, wi.ye), P(-hw, wi.ye));
+    }
     const h = Math.abs(Math.sin(wi.x * 12.9898 + wi.z * 78.233 + wi.yb * 3.17) * 43758.5453) % 1;
     if (h > share) continue;
-    const k = 0.55 + 0.45 * ((h * 7.31) % 1), c = lin(0xffb45a).multiplyScalar(k), hw = wi.w / 2 - 0.02;
-    const P = (u, y) => [wi.x + wi.tx * u, y, wi.z + wi.tz * u];
-    let q = [P(-hw, wi.yb), P(hw, wi.yb), P(hw, wi.ye), P(-hw, wi.yb), P(hw, wi.ye), P(-hw, wi.ye)];
-    const e1 = V.sub(q[1], q[0]), e2 = V.sub(q[2], q[0]), n = V.cross(e1, e2);
-    if (n[0] * wi.nx + n[2] * wi.nz < 0) q = [q[0], q[2], q[1], q[3], q[5], q[4]];
-    for (const p of q) { pos.push(...p); col.push(c.r, c.g, c.b); }
-    const my = (wi.yb + wi.ye) / 2;
+    const k = 0.55 + 0.45 * ((h * 7.31) % 1), my = (wi.yb + wi.ye) / 2;
     LIGHTS.push({ x: wi.x - wi.nx * 0.8, y: wi.yb + 0.2, z: wi.z - wi.nz * 0.8, color: 0xffb060, kind: "candle", power: 0.45 * k });
     LIGHTS.push({ x: wi.x + wi.nx * 0.6, y: my, z: wi.z + wi.nz * 0.6, color: 0xffb060, kind: "window", power: 0.3 * k });
   }
-  for (const [k, [pos, col]] of Object.entries(sets)) {
-    if (!pos.length) continue;
-    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-    GLOW[k] = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true }));
-    scene.add(GLOW[k]); DRESS.push(GLOW[k]);
-  }
+  if (!pos.length) return;
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  GLASS.mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: lin(0xb9d2dd), transparent: true, opacity: 0.26, roughness: 0.12, metalness: 0, side: THREE.DoubleSide, depthWrite: false }));
+  GLASS.panes = WINDOWS.length;
+  scene.add(GLASS.mesh); DRESS.push(GLASS.mesh);
 }
+const GLASS = { mesh: null, panes: 0 };
 // Small lanterns hung on alternate sides of a walkway's rails, every few metres.
 function bridgeLamps(A, B, o = {}) {
   const sag = o.sag ?? 0, w = o.width ?? 1.2, dx = B[0] - A[0], dz = B[2] - A[2], L = Math.hypot(dx, dz), nx = -dz / L, nz = dx / L, n = Math.max(2, Math.round(L / (o.every || 5.5)));
@@ -3422,7 +3535,7 @@ function buildDressing() {
     const wv = env.water, depth = wv.zMax !== undefined ? wv.zMax + 450 : 900, zc = wv.zMax !== undefined ? wv.zMax - depth / 2 : ROW * NR / 2;
     // fog is worked out per vertex, so a sheet of two triangles 900 m across is
     // fogged as if every point were 450 m away: tile it at 7.5 m
-    const water = add(new THREE.Mesh(new THREE.PlaneGeometry(900, depth, 120, Math.max(1, Math.round(depth / 7.5))), new THREE.MeshStandardMaterial({ color: lin(wv.color), roughness: wv.rough ?? 0.5, metalness: 0, transparent: true, opacity: wv.opacity })));
+    const water = add(new THREE.Mesh(new THREE.PlaneGeometry(900, depth, 120, Math.max(1, Math.round(depth / 7.5))), new THREE.MeshStandardMaterial({ color: lin(wv.color), roughness: wv.rough ?? 0.5, metalness: 0, transparent: true, opacity: wv.opacity, stencilWrite: true, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc, stencilZPass: THREE.KeepStencilOp })));
     water.rotation.x = -Math.PI / 2; water.position.set(W * NC / 2, wv.level, zc);
   }
   // far ground past the map's edge, so the land does not end in a cliff over nothing
@@ -3458,7 +3571,7 @@ function setTime(h) {
   hemi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
   STATE.night = 1 - day;
   for (const b of SUNBEAMS) b.material.opacity = b.userData.o * (1 - STATE.night);
-  lampMat.color.set(STATE.night > 0.3 ? 0xffd9a0 : 0x6a655a); if (GLOW.mesh) GLOW.mesh.visible = STATE.night > 0.3;
+  lampMat.color.set(STATE.night > 0.3 ? 0xffd9a0 : 0x6a655a);
   $("vDay").setAttribute("aria-pressed", STATE.night <= 0.5); $("vNight").setAttribute("aria-pressed", STATE.night > 0.5); torchMat.color.set(STATE.night > 0.3 ? 0xff8a3a : 0x2e2620);
   BLOCK.fire.value = 0.9 + 0.3 * STATE.night; BLOCK.lamp.value = 1.8 * clamp((STATE.night - 0.25) / 0.35, 0, 1);
   const hh = Math.floor(h) % 24, mm = Math.round((h % 1) * 60);
@@ -3807,6 +3920,7 @@ function loadScene(key) {
   SCENE = key; $("scene").value = key;
   resetWorld();
   SCENES[key].build();
+  settleDoorSwings();
   nightLamps();
   finalize();
   buildDressing();

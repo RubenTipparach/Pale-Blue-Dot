@@ -149,3 +149,7 @@
 - [ ] E opens and closes the door in reach; the state change goes through the
       durable transaction path.
 - [ ] Test: open a door, reload, it is open.
+
+## 6. The owner's walk-through notes (design section 12)
+- [ ] 6.1 (Built 2026-09-30, awaiting the owner's look: `tools/mockup_towns_checks.js`, `docs/screenshots/tenebris-towns-notes/`.) Mockup: hulls mask the water inside their waterline; faces take the polygon's own normal and drop repeated corners; every window has double-sided glass and none glows; chimneys start above the soffit and the coplanar scan checks downward faces; doors swing outward where inward is blocked; jungle bridges end on their edge's corners; sconces in every stairwell; the igloo's tunnel is one arched shell joined to the dome. Verify: before-and-after shots of each in `docs/screenshots/tenebris-towns-notes/`, the page's checks (no face with a zero normal; the coplanar scan both ways; doors turned outward, per settlement; every step cell covered and every top face facing up), and the owner's look.
+- [ ] 6.2 The game's cutter takes the render-only fixes (section 12, "For the engine"): the polygon's own normal, the chimney above the soffit, window glass. Verify: `settlement::tests` pin no face dropped for a zero normal and no downward face in the soffit's plane.
