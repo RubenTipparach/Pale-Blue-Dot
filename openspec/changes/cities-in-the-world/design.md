@@ -57,6 +57,8 @@ the changes this one follows (2026-09-27):
   pieces. Doors open and shut.
 - **Boats that sail.** The harbour's boats are fixed obstacles and the cog is
   boarded like a building, as in `tenebris-towns`.
+  - Superseded for the small boats by survey T7 ("you can use any boat you
+    find"; task 4.2b), and for the cog by `sail-the-cog` (T9).
 
 ## Decisions
 
@@ -709,7 +711,123 @@ so the first can be looked at before it can be walked into.
 - **Slice 3, lit, stored and seen from afar.** Lanterns and candles (group
   5), settlements as records (task 4.5), and the far form and the night
   points (4.2, 4.3).
-- **Slice 4, every kind.** The other eight templates.
+- **Slice 4, every kind (written 2026-09-30).** Asked how many towns were
+  built, the answer was one, the home village. The owner then said: "alright
+  once your tuning is done, begin working on other towns".
+  - **Where it stands (measured 2026-09-30).** Each world stores about 55 sites:
+    20 villages, 6 walled towns, 6 harbours, 6 jungle, 4 desert, 4 tundra,
+    4 cliff, 3 swamp and 2 cave. Only the home village is laid and built.
+    The mockup has ten settlements. Against the cutter as it stands:
+
+    | Kind | Mockup | `building()` calls | Cut as-is | New |
+    | --- | --- | ---: | ---: | --- |
+    | Walled town | `makeTown` | 29 | 29 | terraces at 0 to 3 m, street steps, curtain wall and gates, 2 towers, the keep; clay houses lack their parapet, the exchange its columns |
+    | Harbour | `makeCoast` | 18 | 3 | whitewash and driftwood kits, terraces, piers on piles, open-sided boathouses, stilts, the boats (task 4.2b) |
+    | Desert | `makeDesert` | 11 | 0 | sandstone and adobe kits, walkable flat roofs with parapets, domes, outdoor stairs, the oasis |
+    | Mountain | `makeMountain` | 14 | 0 | the alpine kit, terraces at 3 to 15 m, switchback stairs, rock-cut rooms (hollows, task 3.1a), the gorge bridge |
+    | Tundra | `makeTundra` | 1 | 0 | the granite kit, igloos (a dome not cut to the cell, with its tunnel), the ice keep and wall (4c's masonry) |
+    | Swamp | `makeSwamp` | 6 | 0 | the alder kit, stilt floors and piles, decks, boardwalks, the bayou's water |
+    | Jungle | `makeJungle` | 5 | 0 | the jungle hut kit, platforms 9 m up round kapok trunks, rope bridges, the pole tower |
+    | Caves | `makeCaves` | 0 | 0 | hollows (3.1a): chamber, tunnel, carved rooms and the shaft; lights that burn all day |
+    | Mounds | `makeMounds` | 0 | 0 | turf domes cut by a plane, round doors, the vaulted back room; no site kind yet |
+
+  - **Four things break before any new piece is written.**
+    - **Heights are whole metres.** `BuildingDef.base` and `GroundCell.h`
+      are `i32`, and the tundra, swamp, jungle, harbour and cave templates
+      carry fractions.
+    - **The footprint is read from a cell's top.** Every top that is not
+      grass or sand counts as built. Outside the fields nearly every cell
+      of the 50 × 34 grid would become footprint. It is read from the
+      mockup's areas instead (plot, street, building).
+    - **One terrace a town.** `record::lay` stands the whole footprint on
+      its median layer. The walled town, the harbour, the mountain and the
+      mounds are terraced at several levels.
+    - **Eight kits are missing** (sandstone, adobe, granite, jungle hut,
+      alder, whitewash, driftwood, alpine), with the dome roof and the flat
+      roof's parapet.
+  - **The order.** Sub-slices, each ending in shots of a town in the game.
+    Recommendation taken (ask only with screenshots).
+    - **4a, every village stands.** The plumbing every other kind needs:
+      towns at sites that are not home, laid and stored on the world's first
+      open, standing in range. No new pieces.
+    - **4b, the walled town's streets and houses.** All 29 of its buildings
+      cut as they stand, once heights are fractional, the footprint comes
+      from areas, and a town stands on several levels.
+    - **4c, the walled town's masonry.** Curtain wall, gates, towers and the
+      keep. The tundra's ice keep and wall reuse them.
+    - **4d, the harbour.** Two kits, 4b's levels, and piers on piles at the
+      real sea.
+    - **4e, the desert.** Flat roofs that can be walked, parapets, domes and
+      outdoor stairs.
+    - **4f, the mountain.** Its terraces are 4b's. Its rock-cut rooms are
+      the first hollows (task 3.1a).
+    - **4g, the tundra.** Igloos are the first dome not cut to the cell.
+    - **4h, the swamp; 4i, the jungle.** Raised floors, decks, boardwalks,
+      then platforms and rope bridges.
+    - **4j, the caves.** The whole of 3.1a.
+    - **4k, the mounds.** Turf domes. A share of the fields' village sites
+      take the mound template, chosen by the site's seed (the parity list,
+      row 35). A village already stored keeps its template.
+    - The order follows what is reused. The plumbing comes first. The walled
+      town's houses need no new piece. Its masonry serves the tundra. Levels
+      serve the harbour, the mountain and the mounds. Hollows serve the
+      mountain before the caves. Curved and raised work comes last.
+  - **4a in detail.**
+    - **Which sites.** Every site whose kind has a shipped template: the
+      villages now, with each later sub-slice adding its kind.
+    - **When they are laid.**
+      - All of them are laid on the world's first open with this build, in
+        site id order, and before any town stands. A new world lays them at
+        creation.
+      - Each is stored through the durable path as Holbrook is (slice 3a),
+        with the settlement record last.
+      - Laying and cutting a village took 0.30 s in a debug test
+        (`a_town_built_from_its_record_is_the_town_its_template_lays`). The
+        release time is measured on the first 4a build and recorded here.
+    - **Unsettled sites (task 4.4).** A site with a player's edit in its
+      footprint or margin is not laid. It is stored as unsettled, so it is
+      never tried again. A world made before towns keeps what the player
+      did there (CLAUDE.md, "Saved games survive every change").
+    - **One ground, installed once.** Every laid town's ground is installed
+      together when the world's towns are read, and the planet is rebuilt
+      once. `settlement::ground` already holds a list of towns. A height
+      that is in no town pays one dot product a town (55 at most). An
+      instrument times `column::surface_m` with no towns and with twenty,
+      and the cost is recorded.
+    - **Standing in range (decision 5, tasks 4.1 and 4.3).**
+      - A town's pieces are cut, spawned and given to the walker only
+        within 1.2 km of the camera, and dropped past 1.5 km.
+      - They are cut on the task pool and published whole.
+      - A town fades in and out with a dither over a second: it never
+        appears or vanishes in one frame (priority 1, no pop-in).
+      - Its ground is there at every distance, so its terraces and lanes
+        show before its houses. The far form (task 4.2) is later.
+    - **Per town.** The walker's solids, the doors, the shadow casters and
+      the room lights come from the standing towns only.
+    - **Rotation (decision 4, in part).**
+      - The home village keeps its layout's east as it is.
+      - Every other village turns by its site's seed, to one of six sides.
+      - The mirror and the empty plots come with task 2.2.
+      - A stored town never turns: it is built from its records.
+    - **Shots.** Two other villages at 11:00 and 22:30, and the walk from
+      one village to the next, where a town fades in on the way.
+  - **4b in detail.**
+    - **The export.** `tools/export_town_templates.js town` writes
+      `assets/settlements/v1/town.json`.
+    - **The template takes fractional heights and areas.** Serde reads the
+      village's whole numbers as before.
+    - **A level a footprint cell.**
+      - Each cell stands at the terrace plus its template height, rounded to
+        a layer.
+      - The level goes in the cell's record: schema 2, where a schema 1
+        record reads as level 0 (CLAUDE.md, "Saved games survive every
+        change").
+      - A cell a layer below its neighbour gets a street step.
+    - **Out of 4b.** The lake at -3 m is dry ground until a lake takes
+      water. The wall, towers and keep are 4c. The stalls, well, smithy,
+      jetty and lamps come later (task 5.2 for the lamps).
+    - **Shots.** The walled town's lane, square and market from the
+      street, and from 60 m.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before
