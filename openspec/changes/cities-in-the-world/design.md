@@ -931,6 +931,44 @@ so the first can be looked at before it can be walked into.
     - **Linenleigh stands 520 m from Holbrook** on the shipped seed. So the
       home village now has a walled town within sight, laid on a world's
       first open with this build.
+  - **4c in detail (written 2026-09-30).** The mockup's masonry, as it is
+    built (`buildWalls`, `wallTower`, the keep in `makeTown`).
+    - **The curtain wall.**
+      - 116 cells: rows 6 and 31, columns 3 to 36, and columns 3 and 36
+        between.
+      - Each cell is a prism of masonry cut from its real corners, from its
+        ground to `WALL_TOP` (9 m on the mockup's datum, 6 to 8 m over the
+        streets). Its sides are rubble and its top is flagstone.
+      - Its top is the wall walk, a surface the walker stands on.
+      - Two merlons stand on each edge that faces out of the town and not
+        onto more wall.
+    - **The gates.** The four gate cells (columns 19 and 20 of rows 6 and
+      31) hold their masonry only from 4 m over their ground, so a passage
+      4 m high runs under it. The walker walks through.
+    - **The towers and the keep are 4c's second half.**
+      - The two stair towers are one cell each: a stone newel from the
+        street to the wall walk, with a doorway onto the walk and a
+        pyramid roof. The cutter's newel and its cone roof on one cell are
+        those pieces already. What is new is a doorway at the walk's height.
+      - The keep is a ring of six cells round a newel, three storeys, with
+        0.6 m walls and a crenellated flat roof. It needs the flat roof's
+        parapet (the desert's too).
+    - **What is stored.**
+      - The masonry is not a record. It is the template's, `v1/town.json`,
+        cut on the town's stored chart every time it is built, like a
+        building's pieces.
+      - So `v1` templates are frozen from 4c. A later change to a v1
+        template's masonry, or to any other part of it, is a `v2` template
+        for towns laid after it.
+      - A walled town that a 4b build stored has no masonry of its own, and
+        it takes the wall at its first open with 4c. The v1 town template
+        takes its masonry there, before any v1 walled town is shipped.
+    - **Export.** The exporter calls the mockup's own `isWall`, `gate` and
+      `inTown`, and writes each wall cell's cell, its bottom (its ground, or
+      4 m over it at a gate), `WALL_TOP` and its merlon edges. The game
+      retypes nothing.
+    - **Shots.** The walled town from 60 m with its wall, the north gate
+      from the road outside, and the wall walk from the top of a tower.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before

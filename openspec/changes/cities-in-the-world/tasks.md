@@ -34,7 +34,10 @@ The owner, 2026-09-30: "alright once your tuning is done, begin working on other
   - core tests that the town template loads, that the village's footprint is unchanged by reading areas, that a schema 1 record reads as level 0, that each cell stands at its template level, and that every level change of a layer has its step;
   - the town's layout checks;
   - shots of its lane, square and market, and from 60 m.
-- [ ] 0.13 Slice 4c, the walled town's masonry: the curtain wall as masonry cells with its wall walk and merlons, the gate passages, the two stair towers and the keep. Verify: the walker up a tower's newel onto the wall walk and through a gate, and shots.
+- [ ] 0.13 Slice 4c, the walled town's masonry (design, "4c in detail"): the curtain wall as masonry prisms from the template with its wall walk and merlons, and the gate passages; then the two stair towers and the keep. Verify:
+  - core tests that every wall cell is cut, that its top is a surface at `WALL_TOP` and its sides are solid, that a gate's passage is open to 4 m, and that merlons stand only on outward edges;
+  - a walker test through a gate and, with the towers, up a newel onto the wall walk;
+  - shots of the wall from 60 m, the north gate from the road, and the walk.
 - [ ] 0.14 Slice 4d, the harbour: the whitewash and driftwood kits, piers on piles at the real sea, open-sided boathouses and stilted fish huts. Verify: the kits load, the quay's water rows keep the sea, and shots.
 - [ ] 0.15 Slice 4e, the desert: the sandstone and adobe kits, walkable flat roofs with parapets and their gaps, domes, outdoor stairs, the oasis. Verify: the walker up an outdoor stair onto a roof, and shots.
 - [ ] 0.16 Slice 4f, the mountain: the alpine kit, its terraces, switchback stairs, and the rock-cut rooms as the first hollows (task 3.1a). Verify: 3.1a's tests on the cliff's rooms, and shots.
