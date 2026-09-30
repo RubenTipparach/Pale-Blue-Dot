@@ -253,6 +253,18 @@ so the first can be looked at before it can be walked into.
   - **Captures.** `--at <lat> <lon>` puts a new world's walker there, not at
     the level start, so a shot can stand in a town. The existing `--yaw`,
     `--pitch` and `--height` frame it.
+    - **Found on the first shots (2026-09-30).** `--at` still stood the
+      walker 4 m west of the spot.
+      - A new world steps 4 m aside from its start, so that a tree's trunk
+        does not fill the first view. `--at` inherited that step.
+      - The inside shot then faced a wall 4 m from its door.
+      - `--at` now stands exactly where it is asked. The new world's own
+        start keeps its step.
+    - **`--rain` is a storm forcing, not the weather.** `--rain 0` forces
+      nothing, and the atmosphere's own weather still rains. A dry shot
+      picks its time with `--weather-at <seconds>`.
+      `towns::tests::print_the_rain_over_holbrook` reads the rain over
+      Holbrook along the same path the capture takes.
 - **Slice 1, found on its first shots (2026-09-29).** The owner: "hmm...they
   dont seem to quite follow the same rules as the js prototype project", and
   "the roof shouldnt extend pass the floor plan like that".
@@ -354,6 +366,108 @@ so the first can be looked at before it can be walked into.
   - **2b, the rest of the walker's rules:** sliding along a face, holding a
     grounded walker to a floor below, the stairs, and doors opening and
     shutting through the save.
+- **Slice 3a, the town is a stored record (written 2026-09-30, before the
+  code).** Task 4.5's storing half, taken ahead of 2b. PR #19 merged slice 1
+  and 2a to `main` on 2026-09-29. Every world that build opens gets Holbrook
+  built from the template, fresh each time. So the next re-export of the
+  village would move houses in worlds already played. 3a stops that. Until
+  it lands, the village template is not exported again.
+  - **What is stored.** Decision 8 split three ways:
+    - **Stored:** what the town was laid as.
+    - **Derived:** what the rules make of it each time.
+    - **Generation:** what the ground makes of it, pinned like the
+      generator.
+  - **Two record kinds, schema 1** (`pbd_core::settlement::record`):
+    - **`settlement`, one per town, id = its site's id.**
+      - `template` and `layout`: the template it was laid from and the
+        laying-out rules' version. Both are kept to be read by people,
+        never to rebuild the town.
+      - `terrace`: the terrace's layer, a whole number of metres over the
+        radius.
+      - `cells`, one entry per footprint cell (built cells and yard rings):
+        - its layout cell `(c, r)`;
+        - its exact cell key;
+        - which of its sides is the layout's direction 0;
+        - the top it takes (dirt on a lane, none elsewhere).
+      - `buildings`: its building records' ids, in order.
+      - Written last, so that a write torn by a crash leaves no settlement
+        and the town is made again whole. The site list does the same.
+    - **`building`, one per building.**
+      - Its id is the site's id times 65 536 plus its number in the town.
+      - It holds the template's building as it was, in layout cells: kit,
+        cells, storeys, tall storeys, doors, windows, roof, pitch, chimney
+        and stair cells.
+      - The ground floor is stored as `floor`, in layers over the terrace.
+        The mockup's datum is gone from it.
+      - It holds a `state`, which is only ever `Standing` when a town is
+        made. Abandoned and ruined are for `world-persistence`'s process
+        and the night lights (slice 3). They read it later without a new
+        schema.
+  - **Why the chart's cells, and not only the anchor.** The town stands on
+    the cells it was laid on, whatever a later chart rule would walk to.
+    - The neighbour walk (decision 2) runs once, when a town is made.
+    - Storing only the anchor and its side would bind every future chart
+      rule to reproduce every old town. The walk would then be generation
+      code, carried forever.
+    - Each cell costs about 20 bytes. The whole record is measured in the
+      tests and quoted here when built.
+    - A cell's key is exact (`exact-cell-keys`). Its side numbering is the
+      topology's, which is part of the world's identity.
+  - **Derived, never stored.** A fix to any of these reaches every town,
+    which is decision 8's point:
+    - the pieces, cut from the definitions (`settlement::pieces`);
+    - the solids;
+    - the meshes and textures;
+    - the kits' faces and sizes, looked up by the kit's name. A kit a
+      saved town names stays in `kits.ron` for good, as a generator
+      version does. A test holds every stored kit name to a kit.
+  - **Generation, pinned.** The ground is terrain: the terrace over the
+    footprint, eased over the margin to the natural height. The margin's
+    rings come from the stored terrace and footprint and the world's own
+    generator. A test pins Holbrook's ground digest on the shipped seed, as
+    a generator version's ground is pinned. A change to the easing is a new
+    rule for new towns, never a reshaping of a made one.
+  - **Made once, before it is shown.** The home village is laid out and
+    stored once the world's sites are on disk (`WorldSites::ready`). If the
+    world's save holds no `settlement` record for that site:
+    - the town is laid from the template (decision 2's chart, the terrace,
+      the footprint);
+    - its records are queued as `Author::Creation`, buildings first;
+    - the kinds are named in the identity.
+
+    The town is built into the world only once the writer's mark has passed
+    the settlement's line, as the site list waits. A world that holds the
+    record is built from it, and the template is never read.
+  - **One path.** A town just made is built from its records as well, not
+    from the template it was laid from, so the town shown is always the
+    record. A test holds the two to the same pieces.
+  - **A damaged record is not remade.** A settlement record that is there
+    but does not read is left alone, and the log says why. The same goes
+    for a schema this build does not know, or a building it names that is
+    missing. That town is not built, and nothing is written over it.
+  - **Old worlds** get their record at their first open by a 3a build, from
+    that build's template. That is the town the merged build already showed
+    them. The rule that leaves a site unsettled where the player dug first
+    (task 4.4) is not applied to the home village: the merged build already
+    stood Holbrook in every world it opened. It applies from slice 4, to
+    every site that no build has settled before. The player's edits are kept
+    at their layers in either case (`column::BASE_M`). Recommendation taken
+    (ask only with screenshots).
+  - **Verify.**
+    - Core tests:
+      - Holbrook's records round-trip;
+      - a town built from its records has the same pieces, solids and
+        ground as the one laid from the template;
+      - a moved door or a dropped building in the template leaves the
+        town rebuilt from a made world's records unchanged;
+      - the records' size;
+      - the ground digest pinned.
+    - App tests:
+      - a new world stores its town once;
+      - a second open writes nothing;
+      - a world opened with a changed template builds the stored town;
+      - a damaged settlement record builds no town and is not overwritten.
+    - Screens: a capture of the lane, before and after, which must match.
 - **Slice 3, lit, stored and seen from afar.** Lanterns and candles (group
   5), settlements as records (task 4.5), and the far form and the night
   points (4.2, 4.3).
@@ -363,6 +477,10 @@ so the first can be looked at before it can be walked into.
   saved world has towns, so no build with towns merges to `main` before
   settlements are stored records (CLAUDE.md, "Saved games survive every
   change").
+  - PR #19 merged slices 1 and 2a to `main` on 2026-09-29, ahead of this
+    rule. Nothing of the town was saved, so nothing was lost. But the
+    village template now stays as it is until slice 3a stores the town.
+    3a is the next slice, ahead of 2b.
 - **Each building is cut in its own tangent frame.** The frame sits at the
   building's centre, with up along the radius there. The real cell corners
   are projected into it. Over a house's 8 m the sphere falls away by under
@@ -393,7 +511,9 @@ so the first can be looked at before it can be walked into.
 
 - An old save gets its settlement records the first time it is opened with
   towns, written through the durable path before anything is shown. Its sites
-  are checked for earlier player edits at that moment.
+  are checked for earlier player edits at that moment. The home village is
+  the exception: the build merged in PR #19 already stood it in every world
+  it opened, so it is stored as that build showed it (slice 3a).
 - Rollback is the previous build. The towns vanish and the terraces return to
   natural ground. Door edits are ignored. No player edit is lost.
 
