@@ -6,7 +6,7 @@ shadows for the planet too, so we can read sun direction a little better".
 ## 1. Measure first
 
 - [x] 1.1 Before captures at a low sun: 08:00 and 17:30 over a ridge, down Holbrook's lane, among trees, and from 1 km up, with the towns mockup's lane at the same hour beside them. Verify: the shots are in `docs/screenshots/sun-shadows/` with the flags that took them.
-  - As built: ten before shots on the build before this change (the newel, the flight's foot and the house front at 08:00, 11:00 and 14:00, and the newel at 17:30), by `tools/capture_sun_shadows.sh`. The lane and the view from above have no before: the build was replaced under the run. They are compared with `--no-shadows` instead.
+  - As built: before shots on the build before this change by `tools/capture_sun_shadows.sh`: the newel, the flight's foot and the house front at 08:00 and 11:00. The 14:00 shots and the newel at 17:30 are capture flakes (the walker was not in the town), and the rest were not taken: the build was replaced under the run. The lane and the view from above have no before; they are compared with `--no-shadows` instead.
 - [x] 1.2 A `planet_shadow` GPU span in `RenderDiagnosticsPlugin`'s set, so `--frame-log` and `tools/perf_suite.py` report the pass. Verify: an app test that the span's name is registered.
   - As built: `planet_shadow` is a top-level time span, so `--frame-log`'s GPU total takes it (`desktop::gpu_times`). Verified by `planet::shadow::tests::the_shadow_pass_is_timed_as_its_own_span`.
 
