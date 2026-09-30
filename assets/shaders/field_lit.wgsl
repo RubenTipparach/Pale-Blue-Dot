@@ -81,10 +81,11 @@ const WALL_GAIN: f32 = 0.95;
 // room's share of the sky lets in and the sun's height puts on the ground
 // (`sun-shadows` decision 7). Times `look.z`.
 const ROOM_BOUNCE: vec3<f32> = vec3<f32>(0.30, 0.24, 0.16);
-// How a building's own light weighs against the sky's fill: the mockup adds
-// its block light to its hemisphere's, which is about twice the terrain's
-// fill, so its fires are taken at half.
-const ROOM_LIGHT_GAIN: f32 = 0.5;
+// How a building's own light weighs against the sky's fill: the mockup's
+// own, as its block light is added to its hemisphere's. At half, a room at
+// 22:30 stayed in the deep orange under the tonemapper's shoulder where the
+// mockup's is a warm tan (`docs/screenshots/sun-shadows`).
+const ROOM_LIGHT_GAIN: f32 = 1.0;
 
 // What a building's own fires and candles lay on a room face at `body`
 // facing `n` (`cities-in-the-world` decision 7a, the mockup's `blockLighter`):

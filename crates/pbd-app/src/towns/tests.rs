@@ -307,15 +307,15 @@ fn print_the_rain_over_holbrook() {
         lon: 1.36f32.to_radians(),
     });
     let hour = (3600.0 / settings.dt_s).ceil() as u32;
-    for day in 0..3 {
-        let clock = Clock::at(day, 11.0);
+    for (day, at) in (0..3).flat_map(|d| [(d, 11.0), (d, 22.5)]) {
+        let clock = Clock::at(day, at);
         let mut air = crate::atmosphere::Air::open(
             settings,
             crate::planet::terrain_config().seed,
             None,
             clock.seconds,
         );
-        let mut line = format!("--day {day} --time 11, --weather-at 0, 3600, ...:");
+        let mut line = format!("--day {day} --time {at}, --weather-at 0, 3600, ...:");
         for k in 0..6 {
             if k > 0 {
                 air.run(hour, &[]);

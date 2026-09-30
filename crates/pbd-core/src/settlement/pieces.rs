@@ -316,9 +316,32 @@ pub struct BuildingSolids {
     pub rooms: Meshes,
     /// What burns in its rooms (`cities-in-the-world` decision 7a).
     pub lights: Vec<RoomLight>,
+    /// Its top storey's ceiling over its floor, metres: under it, and under
+    /// the roof's plan, the rain does not fall.
+    pub top_m: f32,
 }
 
 impl BuildingSolids {
+    /// Whether the roof keeps the rain off a planet-local point: over the
+    /// roof's plan, eaves and all, between the floor and the top storey's
+    /// ceiling. A hut's cone and a gable's attic are over that ceiling, so
+    /// a point in the room under them is sheltered too.
+    pub fn shelters(&self, point: Vec3) -> bool {
+        let p = self.frame.local(point);
+        if p.y < -0.5 || p.y > self.top_m || self.roof_plan.len() < 3 {
+            return false;
+        }
+        let q = Vec2::new(p.x, p.z);
+        let n = self.roof_plan.len();
+        let turn = (self.roof_plan[1] - self.roof_plan[0])
+            .perp_dot(self.roof_plan[2] - self.roof_plan[0])
+            .signum();
+        (0..n).all(|k| {
+            let (a, b) = (self.roof_plan[k], self.roof_plan[(k + 1) % n]);
+            turn * (b - a).perp_dot(q - a) >= 0.0
+        })
+    }
+
     /// Whether a body centred at `centre` (planet-local), `half_height`
     /// tall each way and `radius` round, is in any solid.
     pub fn holds(&self, centre: Vec3, half_height: f32, radius: f32) -> bool {
@@ -990,6 +1013,7 @@ pub fn cut_building(
         roof_plan: sink.roof_plan,
         surfaces: sink.surfaces,
         doors: sink.doors,
+        top_m: sink.indoors.as_ref().map_or(0.0, |i| i.top),
         rooms: sink.rooms,
         lights: sink.lights,
     })

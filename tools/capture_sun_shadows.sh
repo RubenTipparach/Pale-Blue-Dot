@@ -13,8 +13,11 @@ D=${1:-docs/screenshots/sun-shadows}
 P=${2:-before}
 HOURS=${3:-"8 11 14 17.5"}
 VIEWS=${4:-"newel flight front lane above"}
-# More flags for every shot, e.g. EXTRA=--no-shadows.
+# More flags for every shot, e.g. EXTRA=--no-shadows; and the weather's
+# offset (--weather-at 7200 is dry at 08:00 to 14:00 over Holbrook, 3600 at
+# 11:00 and 22:30: towns::tests::print_the_rain_over_holbrook).
 EXTRA=${EXTRA:-}
+WEATHER=${WEATHER:-7200}
 cd "$(dirname "$0")/.."
 mkdir -p "$D"
 EXE=target/fast/pbd-app
@@ -36,7 +39,7 @@ for hour in $HOURS; do
     args=$(view_args "$view") || continue
     name="$P-$view-$(awk -v h="$hour" 'BEGIN { printf "%02dh%02d", int(h), (h - int(h)) * 60 }')"
     timeout 1100 xvfb-run -a -s "-screen 0 1440x900x24" $EXE $args --open-doors $EXTRA \
-      --time "$hour" --rain 0 --weather-at 7200 --capture "$D/$name.png" --frames 150 \
+      --time "$hour" --rain 0 --weather-at "$WEATHER" --capture "$D/$name.png" --frames 150 \
       > "$D/$name.log" 2>&1
     echo "$name exit $?"
   done

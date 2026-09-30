@@ -1201,3 +1201,26 @@ fn every_house_has_its_hearth_its_sconces_and_its_candles() {
     }
     assert!((pieces::srgb_linear(0xff9a4a)[1] - 0.3231).abs() < 1e-3);
 }
+
+/// A house's roof keeps the rain off whoever is under it (the owner,
+/// 2026-09-30, on drops on the lens indoors): a room of every building is
+/// sheltered, and the yard beside it and the air over its roof are not.
+#[test]
+fn a_roof_shelters_its_rooms_and_not_the_yard() {
+    let (patch, at) = patch();
+    let (village, solids) = cut_village();
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let d0 = patch.side_toward(*at, east);
+    let chart = chart(patch, (25, 17), *at, d0, &wanted(&village)).expect("charted");
+    for (b, cut) in village.buildings.iter().zip(&solids) {
+        let f = cut.frame;
+        let [c, r] = b.cells[0];
+        let q = f.plane(patch.cells[chart.cell(c, r).unwrap()].direction);
+        let room = f.world(Vec3::new(q.x, 1.6, q.y));
+        assert!(cut.shelters(room), "{}: its room", b.name);
+        let over = f.world(Vec3::new(q.x, cut.top_m + 6.0, q.y));
+        assert!(!cut.shelters(over), "{}: over its roof", b.name);
+        let yard = f.world(Vec3::new(q.x, 1.6, q.y) + Vec3::new(40.0, 0.0, 0.0));
+        assert!(!cut.shelters(yard), "{}: the yard", b.name);
+    }
+}
