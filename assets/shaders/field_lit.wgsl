@@ -69,6 +69,11 @@ const SUN_TINT: vec3<f32> = vec3<f32>(1.12, 1.03, 0.87);
 const WALL_FILL: vec3<f32> = vec3<f32>(0.30, 0.32, 0.34);
 const WALL_NIGHT: f32 = 0.20;
 const WALL_GAIN: f32 = 0.95;
+// A room's own light: the sun that came in by its door and windows and
+// bounced round it off the floor and the walls, warm, as much of it as the
+// room's share of the sky lets in and the sun's height puts on the ground
+// (`sun-shadows` decision 7). Times `look.z`.
+const ROOM_BOUNCE: vec3<f32> = vec3<f32>(0.30, 0.24, 0.16);
 
 fn lamp_strength(level: f32) -> f32 {
     let f = clamp(level, 0.0, 1.0);
@@ -123,8 +128,9 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         let night = mix(WALL_NIGHT, NIGHT_FILL, upness);
         let gain = mix(WALL_GAIN, 1.0, upness);
         let open = sky * field.look.y;
+        let bounce = ROOM_BOUNCE * (field.look.z * open * sunlight * max(elevation, 0.0));
         let lit = base * (fill * max(AMBIENT_FLOOR, mix(night, 1.0, daylight) * open)
-            + SUN_TINT * facing * sun_up) * gain;
+            + SUN_TINT * facing * sun_up + bounce) * gain;
         out.color = vec4<f32>(lit + lamp, pbr_input.material.base_color.a);
     } else {
         out.color = apply_pbr_lighting(pbr_input);

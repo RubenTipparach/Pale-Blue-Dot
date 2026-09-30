@@ -139,6 +139,9 @@ pub struct Launch {
     /// with a door open and with all shut (`sun-shadows` decision 7), for
     /// tuning against captures.
     pub room_sky: Option<(f32, f32)>,
+    /// `--room-bounce K`: how much of the sun bounces round a room, times
+    /// `field_lit.wgsl`'s `ROOM_BOUNCE`, for tuning.
+    pub room_bounce: Option<f32>,
     /// `--up M` stands a capture's walker on the highest town floor within M
     /// metres of the ground at `--at`: upstairs in a house.
     pub up: f32,
@@ -247,6 +250,7 @@ impl Launch {
             open_doors: false,
             no_shadows: false,
             room_sky: None,
+            room_bounce: None,
             up: 0.0,
             world: None,
             load: None,
@@ -601,6 +605,15 @@ impl Launch {
                         v
                     };
                     result.room_sky = Some((share(), share()));
+                }
+                "--room-bounce" => {
+                    i += 1;
+                    let k: f32 = args
+                        .get(i)
+                        .and_then(|v| v.parse().ok())
+                        .expect("--room-bounce requires a weight");
+                    assert!(k.is_finite() && k >= 0.0, "--room-bounce is 0 or more");
+                    result.room_bounce = Some(k);
                 }
                 "--up" => {
                     i += 1;
@@ -1001,8 +1014,14 @@ pub fn run(args: &[String]) {
         if launch.open_doors {
             app.insert_resource(pbd_app::towns::OpenDoors);
         }
-        if let Some((open, shut)) = launch.room_sky {
-            app.insert_resource(pbd_app::towns::RoomSky { open, shut });
+        if launch.room_sky.is_some() || launch.room_bounce.is_some() {
+            let base = pbd_app::towns::RoomSky::default();
+            let (open, shut) = launch.room_sky.unwrap_or((base.open, base.shut));
+            app.insert_resource(pbd_app::towns::RoomSky {
+                open,
+                shut,
+                bounce: launch.room_bounce.unwrap_or(base.bounce),
+            });
         }
         if launch.no_shadows {
             app.insert_resource(pbd_app::planet::shadow::ShadowSettings {

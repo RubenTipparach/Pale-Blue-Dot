@@ -29,11 +29,16 @@ pub struct LitByField;
 #[derive(Component, Default, Clone, Copy)]
 pub struct LitLikeTerrain;
 
-/// The share of the sky that reaches a mesh, 0..1, where it is less than the
-/// field says: a room's faces (`sun-shadows` decision 7), whose walls the
-/// voxel field has never heard of.
+/// How a room's faces are lit where the field cannot say (`sun-shadows`
+/// decision 7): the voxel field has never heard of a house's walls.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
-pub struct SkyShare(pub f32);
+pub struct SkyShare {
+    /// The share of the sky that reaches it, 0..1.
+    pub sky: f32,
+    /// How much of the sun that came in by its door and windows bounces
+    /// round it, warm, times the shader's `ROOM_BOUNCE`: zero outdoors.
+    pub bounce: f32,
+}
 
 /// The field at a mesh's bounds, as `field_lit.wgsl` reads it.
 #[derive(Clone, Copy, Debug, Default, ShaderType, Reflect)]
@@ -45,7 +50,8 @@ pub struct FieldUniform {
     pub sky: [Vec4; 2],
     pub block: [Vec4; 2],
     /// x one where it is lit as the terrain is ([`LitLikeTerrain`]); y the
-    /// share of the sky that reaches it ([`SkyShare`], one outdoors).
+    /// share of the sky that reaches it and z the sun bounced round a room
+    /// ([`SkyShare`]; one and zero outdoors).
     pub look: Vec4,
 }
 
@@ -207,7 +213,8 @@ fn light_from_the_field(
             continue;
         };
         field.look = current.look;
-        field.look.y = share.map_or(1.0, |s| s.0);
+        field.look.y = share.map_or(1.0, |s| s.sky);
+        field.look.z = share.map_or(0.0, |s| s.bounce);
         let moved = (current.low - field.low).abs().max_element() > 1e-3
             || current.look != field.look
             || (current.high - field.high).abs().max_element() > 1e-3

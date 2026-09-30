@@ -676,7 +676,13 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
             });
         let mut child = world.spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()));
         if let Some(building) = room {
-            child.insert((TownRoom { building }, SkyShare(ROOM_SKY_SHUT)));
+            child.insert((
+                TownRoom { building },
+                SkyShare {
+                    sky: ROOM_SKY_SHUT,
+                    bounce: ROOM_BOUNCE,
+                },
+            ));
         }
         let child = child.id();
         world.entity_mut(root).add_child(child);
@@ -705,6 +711,9 @@ pub fn casting(laid: &Laid) -> Vec<[f32; 3]> {
 /// about a quarter as bright as the street, as the mockup's rooms are.
 pub const ROOM_SKY_OPEN: f32 = 0.3;
 pub const ROOM_SKY_SHUT: f32 = 0.2;
+/// How much of the sun bounces round a room, times `field_lit.wgsl`'s
+/// `ROOM_BOUNCE`.
+pub const ROOM_BOUNCE: f32 = 0.0;
 
 /// The rooms' share of the sky, open and shut, where a launch sets it
 /// (`--room-sky`): for tuning against the captures without a rebuild.
@@ -712,6 +721,7 @@ pub const ROOM_SKY_SHUT: f32 = 0.2;
 pub struct RoomSky {
     pub open: f32,
     pub shut: f32,
+    pub bounce: f32,
 }
 
 impl Default for RoomSky {
@@ -719,6 +729,7 @@ impl Default for RoomSky {
         Self {
             open: ROOM_SKY_OPEN,
             shut: ROOM_SKY_SHUT,
+            bounce: ROOM_BOUNCE,
         }
     }
 }
@@ -744,7 +755,10 @@ pub fn rooms_follow_doors(
             .0
             .get(room.building)
             .is_some_and(|b| b.doors.iter().any(|d| d.open));
-        let want = SkyShare(if open { sky.open } else { sky.shut });
+        let want = SkyShare {
+            sky: if open { sky.open } else { sky.shut },
+            bounce: sky.bounce,
+        };
         if *share != want {
             *share = want;
         }

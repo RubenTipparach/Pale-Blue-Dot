@@ -398,24 +398,28 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
     );
     assert_eq!(casting(&laid).len(), outside + inside);
 
+    let shut = SkyShare {
+        sky: ROOM_SKY_SHUT,
+        bounce: ROOM_BOUNCE,
+    };
+    let open = SkyShare {
+        sky: ROOM_SKY_OPEN,
+        bounce: ROOM_BOUNCE,
+    };
     let mut world = World::new();
     world.insert_resource(Structures(laid.solids.clone()));
-    let room = world
-        .spawn((TownRoom { building: 0 }, SkyShare(ROOM_SKY_SHUT)))
-        .id();
-    let other = world
-        .spawn((TownRoom { building: 1 }, SkyShare(ROOM_SKY_SHUT)))
-        .id();
+    let room = world.spawn((TownRoom { building: 0 }, shut)).id();
+    let other = world.spawn((TownRoom { building: 1 }, shut)).id();
     let mut follow = IntoSystem::into_system(rooms_follow_doors);
     follow.initialize(&mut world);
     follow.run((), &mut world).unwrap();
-    assert_eq!(world.get::<SkyShare>(room), Some(&SkyShare(ROOM_SKY_SHUT)));
+    assert_eq!(world.get::<SkyShare>(room), Some(&shut));
     world.resource_mut::<Structures>().0[0].doors[0].open = true;
     follow.run((), &mut world).unwrap();
-    assert_eq!(world.get::<SkyShare>(room), Some(&SkyShare(ROOM_SKY_OPEN)));
+    assert_eq!(world.get::<SkyShare>(room), Some(&open));
     assert_eq!(
         world.get::<SkyShare>(other),
-        Some(&SkyShare(ROOM_SKY_SHUT)),
+        Some(&shut),
         "another building's door is not this one's"
     );
 }
