@@ -262,22 +262,38 @@ fn light_from_the_field(
             sun: toward_sun.extend(0.0),
             ..default()
         };
+        let Some(current) = lit.get(&material.0).map(|m| m.extension.field) else {
+            continue;
+        };
+        let like_terrain = current.look.x > 0.5;
         for i in 0..8 {
             let corner = Vec3::new(
                 if i & 1 == 0 { low.x } else { high.x },
                 if i & 2 == 0 { low.y } else { high.y },
                 if i & 4 == 0 { low.z } else { high.z },
             );
+            let mut at = corner - centre;
+            // A town's mesh spans the town, and its box, square to the render
+            // frame's axes, reaches into the ground wherever the town's up is
+            // tilted from them: at Theringford two corners of every piece's
+            // box read the rock's dark (`cities-in-the-world` slice 4a). A
+            // corner under the ground reads the field just over it instead:
+            // the town stands on the ground, never in it.
+            if like_terrain && let Some(up) = at.try_normalize() {
+                let ground = PLANET_RADIUS
+                    + pbd_core::column::surface_m(crate::planet::terrain_config(), up)
+                    + GROUND_CLEAR_M;
+                if at.length() < ground {
+                    at = up * ground;
+                }
+            }
             let (sky, block) = match (&fine, &contact) {
-                (Some(fine), Some(contact)) => field_at(fine, contact, corner - centre),
+                (Some(fine), Some(contact)) => field_at(fine, contact, at),
                 _ => (1.0, 0.0),
             };
             field.sky[i / 4][i % 4] = sky;
             field.block[i / 4][i % 4] = block;
         }
-        let Some(current) = lit.get(&material.0).map(|m| m.extension.field) else {
-            continue;
-        };
         field.look = current.look;
         field.lights = current.lights;
         field.light_colour = current.light_colour;
@@ -298,6 +314,10 @@ fn light_from_the_field(
         }
     }
 }
+
+/// How far over the ground a town's buried bound reads the field, metres:
+/// half a layer, in the air of the cell on top.
+const GROUND_CLEAR_M: f32 = 0.5;
 
 /// Bevy's own ambient, what lights a PBR face turned from the sun, is the
 /// terrain's cap fill for the hour where the camera is (`sun-shadows`

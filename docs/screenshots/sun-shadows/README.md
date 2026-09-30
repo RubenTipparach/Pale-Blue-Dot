@@ -111,3 +111,12 @@ above have no before (see "Before"), so the change is shown against itself.
 - Crawl and shimmer as the sun moves need a real-time recording (task 7.3).
 - The twilight curve for fill, fog and rim is still the old one (task 6.1).
 
+## A fault in the views from above (found 2026-09-30)
+
+The town from 60 m (`day.jpg`'s bottom row and `shadows-on-off.jpg`'s bottom
+row) was captured without the field-lit plugin, which a still with no walker
+never added (`cities-in-the-world` slice 4a, "The dark towns"). The houses in
+those shots are lit by Bevy's own sun and ambient, so their faces turned from
+the sun are near black. The terrain and its shadows in them are right. The
+views from above are retaken on the fixed build.
+

@@ -855,6 +855,20 @@ so the first can be looked at before it can be walked into.
         time within the instrument's run-to-run noise of one (-8% to +6%).
       - `the_grid_finds_what_every_town_would` holds the grid to a look at
         every town, on the town, round its edge and past it.
+    - **The dark towns (found on the shots).**
+      - The first shots of other villages from above drew some towns near
+        black: every face turned from the sun, walls and roofs alike.
+      - **The cause was the capture, not the town.** A still with no walker
+        (`--view column`, every view from above) never added the field-lit
+        plugin. Towns there were drawn with Bevy's own sun and its default
+        ambient, the harsh look `sun-shadows` decision 7 replaced. The
+        field-lit plugin is now added in every run.
+      - **Found with it:** a town piece's bounding box is square to the
+        render frame's axes, so where a town's up is tilted from them the
+        box reaches into the ground. At Theringford two of each box's eight
+        corners read the rock's dark (sky 0). A corner under the ground now
+        reads the field half a metre over it, and all eight read the open
+        sky there.
     - **Not captured.** The fade itself is a second of frames. A still
       capture shows its end, so the app test
       (`a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves`)

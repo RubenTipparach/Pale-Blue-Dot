@@ -982,6 +982,10 @@ pub fn run(args: &[String]) {
         app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin)
             .add_systems(Last, quit_after_route);
     }
+    // Towns are lit by the field in every run, a still from above as much as
+    // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
+    // with Bevy's own sun and ambient, near black on every face in shade.
+    app.add_plugins(pbd_app::field_light::FieldLightPlugin);
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
@@ -1002,7 +1006,6 @@ pub fn run(args: &[String]) {
             pbd_app::vehicles::VehiclePlugin,
             pbd_app::fish::FishPlugin,
             pbd_app::held::HeldPlugin,
-            pbd_app::field_light::FieldLightPlugin,
         ))
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
