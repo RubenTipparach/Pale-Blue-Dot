@@ -1114,3 +1114,90 @@ fn a_rooms_faces_are_what_is_seen_from_inside_it() {
         "rays that met faces: {seen:?}"
     );
 }
+
+/// `cities-in-the-world` decision 7a: every village house with a chimney has
+/// its hearth by it, every stair its sconces, and about half the windows a
+/// candle; every light burns inside its building, over its floor and under
+/// its roof, and burns as its kind does.
+#[test]
+fn every_house_has_its_hearth_its_sconces_and_its_candles() {
+    use pieces::LightKind;
+    let (patch, at) = patch();
+    let (village, solids) = cut_village();
+    let kits = kits();
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let d0 = patch.side_toward(*at, east);
+    let chart = chart(patch, (25, 17), *at, d0, &wanted(&village)).expect("charted");
+    let (mut windows, mut candles) = (0usize, 0usize);
+    for (b, cut) in village.buildings.iter().zip(&solids) {
+        let kit = kits.get(&b.kit).unwrap();
+        let count = |kind| cut.lights.iter().filter(|l| l.kind == kind).count();
+        let hearth = b
+            .chimney
+            .filter(|c| b.cells.contains(c) && !b.stair_cells.contains(c));
+        assert_eq!(
+            count(LightKind::Hearth),
+            usize::from(hearth.is_some()),
+            "{}: a hearth under its chimney",
+            b.name
+        );
+        let sconces = match b.stair_cells.len() {
+            2 => 1,
+            1 => b.storeys.max(1) as usize - 1,
+            _ => 0,
+        };
+        assert_eq!(
+            count(LightKind::Sconce),
+            sconces,
+            "{}: its stair's sconces",
+            b.name
+        );
+        windows += b.windows.len();
+        candles += count(LightKind::Candle);
+        let f = cut.frame;
+        let hexes: Vec<Vec<glam::Vec2>> = b
+            .cells
+            .iter()
+            .map(|&[c, r]| {
+                let cell = &patch.cells[chart.cell(c, r).unwrap()];
+                cell.corners.iter().map(|p| f.plane(*p)).collect()
+            })
+            .collect();
+        let storey = if kit.hut {
+            2.0
+        } else {
+            crate::settlement::STOREY_M
+        };
+        let top = b.storeys.max(1) as f32 * storey * b.tall.max(1) as f32;
+        for l in &cut.lights {
+            let p = f.local(l.at);
+            let q = glam::Vec2::new(p.x, p.z);
+            let over = hexes.iter().any(|h| {
+                let turn = (h[1] - h[0]).perp_dot(h[2] - h[0]).signum();
+                (0..h.len()).all(|k| turn * (h[(k + 1) % h.len()] - h[k]).perp_dot(q - h[k]) >= 0.0)
+            });
+            assert!(
+                over && p.y > 0.0 && p.y < top,
+                "{}: a {:?} outside at {p}",
+                b.name,
+                l.kind
+            );
+            assert!(l.below_m > 0.0 && l.above_m > 0.0 && l.power > 0.0);
+            assert_eq!(l.kind.all_day(), l.kind != LightKind::Candle);
+        }
+    }
+    let share = candles as f32 / windows as f32;
+    assert!(
+        (0.35..0.75).contains(&share),
+        "{candles} candles behind {windows} windows"
+    );
+    // The mockup's colours, in linear light: warm, red over blue.
+    for kind in [LightKind::Hearth, LightKind::Sconce, LightKind::Candle] {
+        let [r, g, b] = kind.colour();
+        assert!(
+            r == 1.0 && r > g && g > b && b > 0.0,
+            "{kind:?} {r} {g} {b}"
+        );
+    }
+    assert!((pieces::srgb_linear(0xff9a4a)[1] - 0.3231).abs() < 1e-3);
+}

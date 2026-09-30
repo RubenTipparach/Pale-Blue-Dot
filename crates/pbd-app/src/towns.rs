@@ -14,7 +14,7 @@
 //!
 //! Only the home village is built so far; the other kinds follow in slice 4.
 
-use crate::field_light::{LitByField, LitLikeTerrain, SkyShare};
+use crate::field_light::{LitByField, LitLikeTerrain, RoomLights, SkyShare};
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
 use crate::saves::WorldSave;
@@ -30,7 +30,7 @@ use pbd_core::planet_gen::{self, TerrainConfig};
 use pbd_core::records::Author;
 use pbd_core::settlement::chart::{Chart, Patch};
 use pbd_core::settlement::ground::{self, Ground, TownGround};
-use pbd_core::settlement::pieces::{BuildingSolids, MeshBuf, Meshes};
+use pbd_core::settlement::pieces::{BuildingSolids, MeshBuf, Meshes, RoomLight};
 use pbd_core::settlement::record::{self, Stored, Town};
 use pbd_core::settlement::{Kits, Template};
 use pbd_core::sites::{Site, SiteKind};
@@ -105,6 +105,8 @@ pub struct Laid {
     pub solids: Vec<BuildingSolids>,
     /// Each building's inside faces, by texture (`sun-shadows` decision 7).
     pub rooms: Vec<Meshes>,
+    /// What burns in each building's rooms (decision 7a).
+    pub lights: Vec<Vec<RoomLight>>,
 }
 
 /// The patch of finest cells round a direction.
@@ -164,6 +166,7 @@ pub fn build(
         meshes: built.meshes,
         solids: built.solids,
         rooms: built.rooms,
+        lights: built.lights,
     })
 }
 
@@ -635,15 +638,18 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
     };
     // Each building's rooms, apart: they take the room's own share of the
     // sky, which its doors decide (`sun-shadows` decision 7).
-    let rooms: Vec<(usize, Mesh, Handle<Image>)> = {
+    let rooms: Vec<(usize, Mesh, Option<Handle<Image>>)> = {
         let assets = world.resource::<AssetServer>();
         laid.rooms
             .iter()
             .enumerate()
             .flat_map(|(b, meshes)| {
-                meshes
-                    .iter()
-                    .map(move |(name, buf)| (b, to_mesh(buf), texture(assets, name)))
+                meshes.iter().map(move |(name, buf)| {
+                    // A flame is drawn unlit, warm, and is no texture
+                    // (decision 7a).
+                    let image = (name != FLAME).then(|| texture(assets, name));
+                    (b, to_mesh(buf), image)
+                })
             })
             .collect()
     };
@@ -659,23 +665,35 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         .id();
     let pieces = parts
         .into_iter()
-        .map(|(mesh, image)| (None, mesh, image))
+        .map(|(mesh, image)| (None, mesh, Some(image)))
         .chain(
             rooms
                 .into_iter()
                 .map(|(b, mesh, image)| (Some(b), mesh, image)),
         );
     for (room, mesh, image) in pieces {
+        let flame = image.is_none();
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
         let material = world
             .resource_mut::<Assets<StandardMaterial>>()
-            .add(StandardMaterial {
-                base_color_texture: Some(image),
-                perceptual_roughness: 0.93,
-                ..default()
+            .add(match image {
+                Some(image) => StandardMaterial {
+                    base_color_texture: Some(image),
+                    perceptual_roughness: 0.93,
+                    ..default()
+                },
+                None => StandardMaterial {
+                    base_color: Color::linear_rgb(FLAME_RGB[0], FLAME_RGB[1], FLAME_RGB[2]),
+                    unlit: true,
+                    cull_mode: None,
+                    ..default()
+                },
             });
         let mut child = world.spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()));
-        if let Some(building) = room {
+        if let Some(building) = room.filter(|_| !flame) {
+            child.insert(RoomLights(
+                laid.lights.get(building).cloned().unwrap_or_default(),
+            ));
             child.insert((
                 TownRoom { building },
                 SkyShare {
@@ -701,10 +719,21 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
 pub fn casting(laid: &Laid) -> Vec<[f32; 3]> {
     laid.meshes
         .values()
-        .chain(laid.rooms.iter().flat_map(|m| m.values()))
+        .chain(laid.rooms.iter().flat_map(|m| {
+            m.iter()
+                .filter(|(name, _)| name.as_str() != FLAME)
+                .map(|(_, buf)| buf)
+        }))
         .flat_map(|m| m.positions.iter().copied())
         .collect()
 }
+
+/// The pieces' name for a flame (`pbd_core::settlement::pieces`), which is
+/// drawn unlit in [`FLAME_RGB`] and casts nothing.
+pub const FLAME: &str = "flame";
+/// A flame's colour, linear and past one, so the tonemapper's shoulder takes
+/// it to a warm glow rather than a flat orange.
+pub const FLAME_RGB: [f32; 3] = [2.4, 1.1, 0.3];
 
 /// The share of the sky a room takes with a door of its building open, and
 /// with all of them shut (`sun-shadows` decision 7): round the day a room is

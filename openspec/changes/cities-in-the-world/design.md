@@ -167,6 +167,51 @@ cities contribute to LOD hexes on the night side of the world too".
   from `lamps-and-lanterns` task 5.5 decides whether the tier needs splitting
   before this lands.
 
+**7a. Rooms are lit by their own fires (2026-09-30).** The owner, on the
+`sun-shadows` shots: "did you add interior lights to the game like the
+mockup? ... implement that!" The mockup's rooms are warm at every hour,
+because a hearth and the stairs' sconces burn all day and candles burn behind
+about half the windows by night (`docs/mockups/towns.html`, `hearth`,
+`sconce`, `blockLighter`). They are placed and lit as the mockup does them:
+- **What the cutter places**, from the building's definition, derived and
+  never saved:
+  - **A hearth**, in the chimney cell, against the first of its outer walls
+    that has no door or window, trying edge 0 first as the mockup's
+    `hearth(c1, front, 0)` does. It is a stone hearth 0.7 m deep and 1.4 m
+    wide, with cheeks, a hood to the ceiling, logs and a fire. A chimney cell
+    that holds the stair has none. Flat-roofed kits have no chimney, and the
+    mockup's clay oven is later.
+  - **A sconce** on a straight flight's boxed side, a quarter of the way
+    up, 2.45 m over its foot. On a newel stair there is one a storey, 2.2 m
+    over the tread, on the first of the stair's own walls without a doorway.
+    Each sconce is an iron bracket with a flame.
+  - **A candle** behind 55% of the windows (the mockup's town share),
+    0.8 m inside the window, 0.2 m over its sill. Which windows is a hash of
+    the window's place in the building's definition, so a town's candles are
+    the same on every load. A candle has no mesh, as in the mockup: only its
+    light shows, on the room and through the pane.
+- **How a light lights**, the mockup's `blockLighter`:
+  - a building's lights light only that building's room faces, and only
+    within the light's own storey;
+  - `p * (1 - (d/R)^2)^2 * (0.3 + 0.7 * max(n.l, 0)) * d^2 / (d^2 + 0.36)`;
+  - a face turned away past -0.15 is left unlit.
+
+  Hearths burn all day, 0.9 + 0.3 of the night. Sconces burn all day as
+  hearths do. Candles burn only at night, 1.8 times the night past 0.25 over
+  0.35.
+  - Colours are the mockup's, in linear light: hearth `#ff9a4a`, sconce
+    `#ffb870`, candle `#ffb060`.
+  - Reaches are 7, 5.5 and 5 m, and powers 1, 0.75 and 0.45 to 0.8.
+- **Not through the voxel field.** The field cannot see a house's walls, since
+  a building is pieces and not voxels. A hearth baked into it would shine
+  through its wall into the lane. Each building's lights, at most 12, ride in
+  its rooms' material and are summed per pixel in `field_lit.wgsl`.
+- **The flames are drawn unlit**, warm. A candle's light, and nothing else,
+  waits for dusk.
+- **Not in 7a:** the door and street lanterns and the mockup's glow from a lit
+  window into the street. Those light the ground, which is the terrain's, so
+  they stay with the voxel field (task 5.2).
+
 **8. A town is a stored record, and its buildings are definitions, not
 pieces** (the owner's save model, `world-persistence` decisions 1 and 2).
 - When a world is made, every site's settlement is generated: the chart, the

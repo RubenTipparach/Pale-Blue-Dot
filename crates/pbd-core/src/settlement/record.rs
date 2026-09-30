@@ -17,7 +17,7 @@
 
 use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::TownGround;
-use super::pieces::{BuildingSolids, Meshes, cut_building};
+use super::pieces::{BuildingSolids, Meshes, RoomLight, cut_building};
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
 use crate::terrain::Material;
@@ -282,6 +282,9 @@ pub struct Built {
     /// Each building's inside faces, by texture (`sun-shadows` decision 7),
     /// taken out of its solids.
     pub rooms: Vec<Meshes>,
+    /// What burns in each building's rooms (decision 7a), taken out of its
+    /// solids.
+    pub lights: Vec<Vec<RoomLight>>,
 }
 
 /// Build a town from its definition: its chart from the stored cells, its
@@ -307,6 +310,7 @@ pub fn build(
     let mut meshes = Meshes::new();
     let mut solids = Vec::new();
     let mut rooms = Vec::new();
+    let mut lights = Vec::new();
     for b in &town.buildings {
         let kit = kits
             .get(&b.kit)
@@ -322,6 +326,7 @@ pub fn build(
             terrace + b.floor as f32,
         )?;
         rooms.push(std::mem::take(&mut cut.rooms));
+        lights.push(std::mem::take(&mut cut.lights));
         solids.push(cut);
     }
     Ok(Built {
@@ -330,6 +335,7 @@ pub fn build(
         meshes,
         solids,
         rooms,
+        lights,
     })
 }
 

@@ -51,7 +51,11 @@ of; their own tasks stay open until each is whole.
 
 ## 5. Light
 
-- [ ] 5.1 `WindowCandle`, a dusk-lit material, placed behind about half the windows by the site's seed. Verify: core tests of its emission and dusk flag, and a test that a lit window's room is lit and its outer wall face is not.
+- [ ] 5.0 Rooms lit by their own fires (design 7a): a hearth in the chimney cell, sconces on the stairs, and candles behind 55% of the windows. Each building's lights light its own rooms, storey by storey, the mockup's way. Verify:
+  - core tests that every village house with a chimney has its hearth, every stair its sconces, and about half the windows a candle, all inside their building;
+  - an app test that a building's rooms carry its lights;
+  - captures at 11:00 and 22:30 beside the mockup's.
+- [ ] 5.1 (The candles are built in 5.0, as a room's light rather than a material; what is left here is the glow into the street.) `WindowCandle`, a dusk-lit material, placed behind about half the windows by the site's seed. Verify: core tests of its emission and dusk flag, and a test that a lit window's room is lit and its outer wall face is not.
 - [ ] 5.2 Street and wall lanterns placed by the template's spacing. The tier bakes the whole town. Verify: the bake time is recorded against `lamps-and-lanterns`' 300-lantern figure, and captures of a walled town at 22:30 from the street and from above.
 
 ## 6. The owner's check

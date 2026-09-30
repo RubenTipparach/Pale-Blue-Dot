@@ -314,6 +314,8 @@ pub struct BuildingSolids {
     /// ceilings and stairs (`sun-shadows` decision 7). They are drawn apart
     /// from the town's outside, under the room's own share of the sky.
     pub rooms: Meshes,
+    /// What burns in its rooms (`cities-in-the-world` decision 7a).
+    pub lights: Vec<RoomLight>,
 }
 
 impl BuildingSolids {
@@ -429,6 +431,91 @@ pub struct Sink<'a> {
     /// What is inside: the plan's cells and the top of the top storey. Unset,
     /// every face is the town's outside.
     pub indoors: Option<Indoors>,
+    /// What burns in its rooms (decision 7a).
+    pub lights: Vec<RoomLight>,
+}
+
+/// What burns in a room (`cities-in-the-world` decision 7a), as the towns
+/// mockup's `hearth`, `sconce` and window candles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LightKind {
+    Hearth,
+    Sconce,
+    Candle,
+}
+
+impl LightKind {
+    /// Its colour in linear light: the mockup's `#ff9a4a`, `#ffb870` and
+    /// `#ffb060`.
+    pub fn colour(self) -> [f32; 3] {
+        srgb_linear(match self {
+            LightKind::Hearth => 0xff9a4a,
+            LightKind::Sconce => 0xffb870,
+            LightKind::Candle => 0xffb060,
+        })
+    }
+
+    /// How far it reaches, metres: the mockup's `LIGHT_REACH`.
+    pub fn reach_m(self) -> f32 {
+        match self {
+            LightKind::Hearth => 7.0,
+            LightKind::Sconce => 5.5,
+            LightKind::Candle => 5.0,
+        }
+    }
+
+    /// Whether it burns all day, as a fire does, or only by night, as a
+    /// candle does.
+    pub fn all_day(self) -> bool {
+        !matches!(self, LightKind::Candle)
+    }
+}
+
+/// An sRGB colour as linear light, as the mockup's `lin`.
+pub fn srgb_linear(hex: u32) -> [f32; 3] {
+    let channel = |shift: u32| {
+        let c = ((hex >> shift) & 0xff) as f32 / 255.0;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    [channel(16), channel(8), channel(0)]
+}
+
+/// A light of a building's own: where it burns (planet-local), how strongly
+/// (the mockup's `power`), and the band of height round it that it lights,
+/// metres below and above it: its storey, or a stairwell's run.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RoomLight {
+    pub kind: LightKind,
+    pub at: Vec3,
+    pub power: f32,
+    pub below_m: f32,
+    pub above_m: f32,
+}
+
+/// The share of a town's windows with a candle behind them: the mockup's
+/// `litWindows` for its town.
+pub const CANDLE_SHARE: f32 = 0.55;
+/// A hearth's width between its cheeks, metres (the mockup's `w`).
+const HEARTH_W_M: f32 = 1.2;
+
+/// Which of a building's windows has a candle behind it, 0..1 against
+/// [`CANDLE_SHARE`]: a hash of the window's place in the building's
+/// definition, so a town's candles are the same on every load.
+pub fn window_roll(c: i32, r: i32, d: usize, storey: u32) -> f32 {
+    let mut x = (c as u32).wrapping_mul(0x9E37_79B1)
+        ^ (r as u32).wrapping_mul(0x85EB_CA77)
+        ^ (d as u32).wrapping_mul(0xC2B2_AE3D)
+        ^ storey.wrapping_mul(0x27D4_EB2F);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x2C1B_3C6D);
+    x ^= x >> 12;
+    x = x.wrapping_mul(0x297A_2D39);
+    x ^= x >> 15;
+    (x >> 8) as f32 / (1u32 << 24) as f32
 }
 
 /// A building's inside, in its frame: the air over its plan's cells from its
@@ -517,7 +604,48 @@ impl<'a> Sink<'a> {
             doors: Vec::new(),
             rooms: Meshes::new(),
             indoors: None,
+            lights: Vec::new(),
         }
+    }
+
+    /// A light at `p` in the frame.
+    fn light(&mut self, kind: LightKind, p: Vec3, power: f32, below_m: f32, above_m: f32) {
+        self.lights.push(RoomLight {
+            kind,
+            at: self.frame.world(p),
+            power,
+            below_m,
+            above_m,
+        });
+    }
+
+    /// A flame standing at `p` in the frame, `h` tall: three blades crossed,
+    /// drawn unlit in `material` (`flame`).
+    fn flame(&mut self, material: &str, p: Vec3, h: f32) {
+        for k in 0..3 {
+            let a = k as f32 * std::f32::consts::FRAC_PI_3;
+            let along = Vec3::new(a.cos(), 0.0, a.sin()) * (h * 0.3);
+            let facing = Vec3::new(-a.sin(), 0.0, a.cos());
+            self.face(
+                material,
+                &[p - along, p + along, p + Vec3::Y * h],
+                facing,
+                None,
+            );
+        }
+    }
+
+    /// A sconce on a wall at `wall` (plan), `y` up, facing into the room
+    /// along `n`: an iron bracket, a flame, and its light, which reaches up
+    /// and down a stairwell as the mockup's does.
+    fn sconce(&mut self, wall: Vec2, y: f32, n: Vec2) {
+        let ang = n.y.atan2(n.x);
+        let b = wall + n * 0.08;
+        self.plain_box("iron", b.x, y - 0.14, b.y, Vec3::new(0.16, 0.05, 0.12), ang);
+        let f = wall + n * 0.14;
+        self.flame("flame", Vec3::new(f.x, y - 0.09, f.y), 0.22);
+        let l = wall + n * 0.2;
+        self.light(LightKind::Sconce, Vec3::new(l.x, y, l.y), 0.75, 1.2, 2.8);
     }
 
     /// A convex planar polygon in frame coordinates, turned to face `want`,
@@ -863,6 +991,7 @@ pub fn cut_building(
         surfaces: sink.surfaces,
         doors: sink.doors,
         rooms: sink.rooms,
+        lights: sink.lights,
     })
 }
 
@@ -1009,6 +1138,29 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
                 }
                 let (a, b) = edge_ends(plan, i, d);
                 edge_wall(sink, plan.centres[i], a, b, y0, y1, wall, &openings);
+                // A candle in the room behind about half the windows, 0.8 m
+                // in and 0.2 m over the sill (decision 7a).
+                let roll = window_roll(c, r, d, s);
+                if let Some(op) = openings.first().filter(|o| o.door.is_none())
+                    && roll < CANDLE_SHARE
+                {
+                    let mid = (a + b) * 0.5;
+                    let e = (b - a).normalize();
+                    let mut inward = Vec2::new(-e.y, e.x);
+                    if inward.dot(plan.centres[i] - mid) < 0.0 {
+                        inward = -inward;
+                    }
+                    let at = mid + inward * 0.8;
+                    let y = op.yb + 0.2;
+                    let k = 0.55 + 0.45 * (roll * 7.31).fract();
+                    sink.light(
+                        LightKind::Candle,
+                        Vec3::new(at.x, y, at.y),
+                        0.45 * k,
+                        y - y0 + 0.05,
+                        y1 - SLAB_M - y + 0.05,
+                    );
+                }
                 for p in [a, b] {
                     let key = ((p.x * 20.0).round() as i32, (p.y * 20.0).round() as i32);
                     let e = posts.entry(key).or_insert((
@@ -1114,6 +1266,25 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
             );
         }
     }
+    // The hearth under the chimney, against the first of its cell's outer
+    // walls with no door or window, edge 0 first as the mockup's (decision
+    // 7a). Not in a stair's cell.
+    if let Some([hc, hr]) = def.chimney
+        && let Some(i) = plan.index(hc, hr)
+        && !stair.as_ref().is_some_and(|s| s.holds(i))
+    {
+        let opened = |d: usize| {
+            let at = [hc, hr, d as i32, 0];
+            def.doors.contains(&at) || def.windows.contains(&at)
+        };
+        let wall = (0..6).find(|&d| {
+            let (c2, r2) = neighbour(hc, hr, d);
+            !inside(c2, r2) && !opened(d)
+        });
+        if let Some(d) = wall {
+            hearth(sink, plan, i, d, storey_m);
+        }
+    }
     // The chimney: up through the roof at its cell.
     if let (Some([c, r]), Some(m)) = (def.chimney, kit.chimney.as_ref())
         && let Some(i) = plan.index(c, r)
@@ -1127,6 +1298,64 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
         cut_stair(sink, plan, kit, stair, storeys, storey_m);
     }
     Ok(())
+}
+
+/// The mockup's `hearth`: against edge `d` of plan cell `i`, inside it, a
+/// stone hearth with cheeks, a hood to the ceiling, logs and a fire, whose
+/// light fills the ground storey.
+fn hearth(sink: &mut Sink, plan: &Plan, i: usize, d: usize, storey_m: f32) {
+    let c = plan.centres[i];
+    let (a, b) = edge_ends(plan, i, d);
+    let m = (a + b) * 0.5;
+    let u = (m - c).normalize();
+    let across = Vec2::new(-u.y, u.x);
+    let p = c + u * ((m - c).length() - 0.55);
+    let ang = u.y.atan2(u.x);
+    let w = HEARTH_W_M;
+    let stone = |sink: &mut Sink, q: Vec2, y0: f32, s: Vec3, solid: bool| {
+        sink.plain_box("stone", q.x, y0, q.y, s, ang);
+        if solid {
+            sink.solid_box(q.x, y0, q.y, s, ang);
+        }
+    };
+    stone(sink, p, 0.0, Vec3::new(0.7, 0.35, w + 0.2), true);
+    for side in [-1.0f32, 1.0] {
+        stone(
+            sink,
+            p + across * (side * w / 2.0),
+            0.35,
+            Vec3::new(0.7, 1.05, 0.2),
+            true,
+        );
+    }
+    let ceiling = storey_m - SLAB_M;
+    stone(
+        sink,
+        p + u * 0.1,
+        1.4,
+        Vec3::new(0.5, ceiling - 1.4, w + 0.2),
+        false,
+    );
+    for k in [-1.0f32, 0.0, 1.0] {
+        let q = p - across * (k * 0.2);
+        sink.plain_box(
+            "bark",
+            q.x,
+            0.35,
+            q.y,
+            Vec3::new(0.5, 0.1, 0.1),
+            ang + 0.4 * k,
+        );
+    }
+    let fire = p - u * 0.05;
+    sink.flame("flame", Vec3::new(fire.x, 0.45, fire.y), 0.5);
+    sink.light(
+        LightKind::Hearth,
+        Vec3::new(fire.x, 0.9, fire.y),
+        1.0,
+        0.95,
+        ceiling - 0.9 + 0.05,
+    );
 }
 
 /// A newel's winders a turn and their rise (`tenebris-towns` section 3).
@@ -1425,6 +1654,22 @@ fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u3
                 let (a, b) = edge_ends(plan, cell, d);
                 edge_wall(sink, c, a, b, 0.0, wall_top, &faces, &openings);
             }
+            // A sconce a storey, 2.2 m over the tread, on the first of the
+            // stair's own walls round from its entry without a doorway, the
+            // mockup's order (decision 7a).
+            if let Some(k) = [2usize, 4, 1, 5]
+                .into_iter()
+                .find(|&k| own((entry + k) % 6))
+            {
+                let (a, b) = edge_ends(plan, cell, (entry + k) % 6);
+                let m = (a + b) * 0.5;
+                let u = (m - c).normalize();
+                let wall = c + u * ((m - c).length() - NEWEL_WALL_M / 2.0 - 0.02);
+                for s in 0..storeys.saturating_sub(1) {
+                    let y = (s as f32 + k as f32 / 6.0) * storey_m + 2.2;
+                    sink.sconce(wall, y, -u);
+                }
+            }
         }
         Stair::Flight { .. } => {
             let (foot, dir, hw) = flight_strip(plan, stair);
@@ -1460,6 +1705,9 @@ fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u3
                 sink.plain_box(&inner, p.x, 0.0, p.y, size, ang);
                 sink.solid_box(p.x, 0.0, p.y, size, ang);
             }
+            // A sconce on the boxed side, a quarter of the way up, clear of
+            // the head (decision 7a).
+            sink.sconce(foot + dir * (len * 0.25) + side * (hw - 0.01), 2.45, -side);
             let p = foot + dir * (len - run / 2.0);
             sink.solid_box(
                 p.x,

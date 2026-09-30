@@ -47,8 +47,15 @@ struct Field {
     sky: array<vec4<f32>, 2>,
     block: array<vec4<f32>, 2>,
     // x one where it is lit as the terrain is; y the share of the sky that
-    // reaches it (one outdoors); z, w spare.
+    // reaches it (one outdoors); z the sun bounced round a room; w how many
+    // room lights.
     look: vec4<f32>,
+    // A building's own lights (`cities-in-the-world` decision 7a): where, in
+    // the planet's frame, and how far; colour times power, w one for a
+    // candle; the band of height round each that it lights.
+    lights: array<vec4<f32>, 24>,
+    light_colour: array<vec4<f32>, 24>,
+    light_span: array<vec4<f32>, 24>,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> field: Field;
@@ -74,6 +81,43 @@ const WALL_GAIN: f32 = 0.95;
 // room's share of the sky lets in and the sun's height puts on the ground
 // (`sun-shadows` decision 7). Times `look.z`.
 const ROOM_BOUNCE: vec3<f32> = vec3<f32>(0.30, 0.24, 0.16);
+// How a building's own light weighs against the sky's fill: the mockup adds
+// its block light to its hemisphere's, which is about twice the terrain's
+// fill, so its fires are taken at half.
+const ROOM_LIGHT_GAIN: f32 = 0.5;
+
+// What a building's own fires and candles lay on a room face at `body`
+// facing `n` (`cities-in-the-world` decision 7a, the mockup's `blockLighter`):
+// each within its reach and its storey, facing it, the fires burning all day
+// and brighter at night, the candles only by night.
+fn room_lights(body: vec3<f32>, n: vec3<f32>, night: f32) -> vec3<f32> {
+    let fire = 0.9 + 0.3 * night;
+    let candle = 1.8 * clamp((night - 0.25) / 0.35, 0.0, 1.0);
+    var sum = vec3<f32>(0.0);
+    let count = min(u32(field.look.w), 24u);
+    for (var i = 0u; i < count; i++) {
+        let at = field.lights[i];
+        let to = at.xyz - body;
+        let d = length(to);
+        if d >= at.w {
+            continue;
+        }
+        let rise = dot(body - at.xyz, normalize(at.xyz));
+        let span = field.light_span[i];
+        if rise < span.x || rise > span.y {
+            continue;
+        }
+        let facing = dot(to, n) / max(d, 1e-3);
+        if facing < -0.15 {
+            continue;
+        }
+        let q = 1.0 - (d / at.w) * (d / at.w);
+        let f = q * q * (0.3 + 0.7 * max(facing, 0.0)) * d * d / (d * d + 0.36);
+        let c = field.light_colour[i];
+        sum += c.rgb * (f * select(fire, candle, c.w > 0.5));
+    }
+    return sum * ROOM_LIGHT_GAIN;
+}
 
 fn lamp_strength(level: f32) -> f32 {
     let f = clamp(level, 0.0, 1.0);
@@ -131,7 +175,8 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         let bounce = ROOM_BOUNCE * (field.look.z * open * sunlight * max(elevation, 0.0));
         let lit = base * (fill * max(AMBIENT_FLOOR, mix(night, 1.0, daylight) * open)
             + SUN_TINT * facing * sun_up + bounce) * gain;
-        out.color = vec4<f32>(lit + lamp, pbr_input.material.base_color.a);
+        let own = base * room_lights(body, n, 1.0 - daylight);
+        out.color = vec4<f32>(lit + lamp + own, pbr_input.material.base_color.a);
     } else {
         out.color = apply_pbr_lighting(pbr_input);
         // Bevy's sun has no shadows and lights whatever faces it, from under

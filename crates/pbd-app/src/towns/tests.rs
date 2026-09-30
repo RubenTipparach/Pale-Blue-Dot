@@ -396,7 +396,25 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
         inside > 1000 && outside > inside,
         "{inside} inside, {outside} outside"
     );
-    assert_eq!(casting(&laid).len(), outside + inside);
+    let flames = laid
+        .rooms
+        .iter()
+        .filter_map(|m| m.get(FLAME))
+        .map(|b| b.positions.len())
+        .sum::<usize>();
+    assert!(flames > 0, "the hearths and sconces burn");
+    assert_eq!(casting(&laid).len(), outside + inside - flames);
+    // Decision 7a: a building's rooms carry its lights, a house's hearth
+    // first, into their material.
+    let mut field = crate::field_light::FieldUniform::default();
+    crate::field_light::RoomLights(laid.lights[0].clone()).pack(&mut field);
+    assert!(field.look.w >= 2.0, "a hearth and a sconce at least");
+    assert_eq!(field.light_colour[0].w, 0.0, "a fire first");
+    for i in 0..field.look.w as usize {
+        let at = field.lights[i];
+        assert!(at.w > 4.0 && (at.truncate().length() - 4800.0).abs() < 400.0);
+        assert!(field.light_span[i].x < 0.0 && field.light_span[i].y > 0.0);
+    }
 
     let shut = SkyShare {
         sky: ROOM_SKY_SHUT,

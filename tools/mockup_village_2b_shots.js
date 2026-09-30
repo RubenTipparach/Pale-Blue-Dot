@@ -5,6 +5,8 @@
 // shut and open. Each stair is found by the rule the game's cutter follows
 // (`cities-in-the-world` slice 2b). Usage: THREE_JS=<three.min.js r128>
 // NODE_PATH=$(npm root -g) node tools/mockup_village_2b_shots.js <out dir>
+// HOUR=22.5 takes them at another hour (11 by default), and SUFFIX=-22h30 is
+// added to every name.
 const fs = require("fs"); const path = require("path"); const { chromium } = require("playwright");
 (async () => {
   const out = process.argv[2];
@@ -20,8 +22,9 @@ const fs = require("fs"); const path = require("path"); const { chromium } = req
   await page.goto(`file://${root}/docs/mockups/towns.html#village`);
   await page.waitForFunction(() => typeof SCENE !== "undefined" && SCENE === "village", null, { timeout: 60000 });
   await page.waitForTimeout(1500);
-  await page.evaluate(() => { document.getElementById("tod").value = 11; setTime(11); assignLights(); for (const s of document.querySelectorAll(".panel")) s.style.display = "none"; });
-  const shot = async (name, fn, arg) => { await page.evaluate(fn, arg); await page.waitForTimeout(900); await page.screenshot({ path: `${out}/${name}.png` }); };
+  const hour = Number(process.env.HOUR || 11), suffix = process.env.SUFFIX || "";
+  await page.evaluate((h) => { document.getElementById("tod").value = h; setTime(h); assignLights(); for (const s of document.querySelectorAll(".panel")) s.style.display = "none"; }, hour);
+  const shot = async (name, fn, arg) => { await page.evaluate(fn, arg); await page.waitForTimeout(900); await page.screenshot({ path: `${out}/${name}${suffix}.png` }); };
   // The newel: its entry is the first edge onto another of the house's cells
   // that is not the door's; stand 2.6 m out through it, look back at it.
   const newel = ({ b, up, pitch }) => {

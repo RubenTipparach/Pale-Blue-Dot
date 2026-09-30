@@ -29,6 +29,40 @@ pub struct LitByField;
 #[derive(Component, Default, Clone, Copy)]
 pub struct LitLikeTerrain;
 
+/// The most lights a building's rooms carry (`cities-in-the-world` decision
+/// 7a): a hearth, a stair's sconces and its candles. `field_lit.wgsl`'s
+/// arrays are the same length, and a test holds them together.
+pub const MAX_ROOM_LIGHTS: usize = 24;
+
+/// What burns in a building's rooms, on each of its room meshes: the lights
+/// its faces take on top of the field's (`cities-in-the-world` decision 7a).
+#[derive(Component, Clone, Debug, Default)]
+pub struct RoomLights(pub Vec<pbd_core::settlement::pieces::RoomLight>);
+
+impl RoomLights {
+    /// As `field_lit.wgsl` reads them, in the planet's frame: where and how
+    /// far, colour times power and whether only by night, and the band of
+    /// height each lights. The fires first, so a building with more candles
+    /// than room keeps its hearth and sconces.
+    pub fn pack(&self, field: &mut FieldUniform) {
+        let mut lights: Vec<_> = self.0.iter().collect();
+        lights.sort_by_key(|l| !l.kind.all_day());
+        let n = lights.len().min(MAX_ROOM_LIGHTS);
+        for (i, l) in lights.into_iter().take(n).enumerate() {
+            let [r, g, b] = l.kind.colour();
+            field.lights[i] = l.at.extend(l.kind.reach_m());
+            field.light_colour[i] = Vec4::new(
+                r * l.power,
+                g * l.power,
+                b * l.power,
+                if l.kind.all_day() { 0.0 } else { 1.0 },
+            );
+            field.light_span[i] = Vec4::new(-l.below_m, l.above_m, 0.0, 0.0);
+        }
+        field.look.w = n as f32;
+    }
+}
+
 /// How a room's faces are lit where the field cannot say (`sun-shadows`
 /// decision 7): the voxel field has never heard of a house's walls.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
@@ -51,8 +85,14 @@ pub struct FieldUniform {
     pub block: [Vec4; 2],
     /// x one where it is lit as the terrain is ([`LitLikeTerrain`]); y the
     /// share of the sky that reaches it and z the sun bounced round a room
-    /// ([`SkyShare`]; one and zero outdoors).
+    /// ([`SkyShare`]; one and zero outdoors); w how many room lights.
     pub look: Vec4,
+    /// A room's own lights ([`RoomLights::pack`]): where (planet frame) and
+    /// how far; colour times power, w one for a candle; the band of height
+    /// round each that it lights.
+    pub lights: [Vec4; MAX_ROOM_LIGHTS],
+    pub light_colour: [Vec4; MAX_ROOM_LIGHTS],
+    pub light_span: [Vec4; MAX_ROOM_LIGHTS],
 }
 
 /// The extension that lights a PBR material from the field, and shades it
@@ -96,11 +136,15 @@ impl Plugin for FieldLightPlugin {
 /// Give each new mesh under a `LitByField` root its own field-lit copy of its
 /// material. Its own, because each mesh is lit at its own bounds; the
 /// builders share one material between parts and never need to know.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn take_the_field(
     mut commands: Commands,
     added: Query<
-        (Entity, &MeshMaterial3d<StandardMaterial>),
+        (
+            Entity,
+            &MeshMaterial3d<StandardMaterial>,
+            Option<&RoomLights>,
+        ),
         Added<MeshMaterial3d<StandardMaterial>>,
     >,
     roots: Query<(), With<LitByField>>,
@@ -110,7 +154,7 @@ fn take_the_field(
     shadows: Option<Res<crate::planet::shadow::SunShadowMaps>>,
     mut lit: ResMut<Assets<FieldLitMaterial>>,
 ) {
-    for (entity, material) in &added {
+    for (entity, material, room_lights) in &added {
         let marked = std::iter::once(entity)
             .chain(parents.iter_ancestors(entity))
             .any(|at| roots.contains(at));
@@ -120,16 +164,24 @@ fn take_the_field(
         let Some(base) = standard.get(&material.0) else {
             continue;
         };
+        // A flame draws its own light, unlit.
+        if base.unlit {
+            continue;
+        }
         let like_terrain = std::iter::once(entity)
             .chain(parents.iter_ancestors(entity))
             .any(|at| terrain_like.contains(at));
+        let mut field = FieldUniform {
+            look: Vec4::new(if like_terrain { 1.0 } else { 0.0 }, 1.0, 0.0, 0.0),
+            ..default()
+        };
+        if let Some(room_lights) = room_lights {
+            room_lights.pack(&mut field);
+        }
         let handle = lit.add(ExtendedMaterial {
             base: base.clone(),
             extension: FieldLit {
-                field: FieldUniform {
-                    look: Vec4::new(if like_terrain { 1.0 } else { 0.0 }, 1.0, 0.0, 0.0),
-                    ..default()
-                },
+                field,
                 sun_map: shadows.as_ref().map(|s| s.map.clone()).unwrap_or_default(),
                 sun_cascades: shadows
                     .as_ref()
@@ -213,6 +265,9 @@ fn light_from_the_field(
             continue;
         };
         field.look = current.look;
+        field.lights = current.lights;
+        field.light_colour = current.light_colour;
+        field.light_span = current.light_span;
         field.look.y = share.map_or(1.0, |s| s.sky);
         field.look.z = share.map_or(0.0, |s| s.bounce);
         let moved = (current.low - field.low).abs().max_element() > 1e-3
@@ -325,6 +380,15 @@ mod tests {
                 .to_string(),
             "out.color.rgb * sun_up + ambient * (1.0 - sun_up) + lamp".to_string(),
             "@binding(100) var<uniform> field: Field;".to_string(),
+            // `cities-in-the-world` decision 7a: a building's own lights, as
+            // many as the uniform carries, lit the mockup's way.
+            format!("lights: array<vec4<f32>, {MAX_ROOM_LIGHTS}>,"),
+            format!("light_colour: array<vec4<f32>, {MAX_ROOM_LIGHTS}>,"),
+            format!("light_span: array<vec4<f32>, {MAX_ROOM_LIGHTS}>,"),
+            format!("let count = min(u32(field.look.w), {MAX_ROOM_LIGHTS}u);"),
+            "q * q * (0.3 + 0.7 * max(facing, 0.0)) * d * d / (d * d + 0.36)".to_string(),
+            "let fire = 0.9 + 0.3 * night;".to_string(),
+            "let candle = 1.8 * clamp((night - 0.25) / 0.35, 0.0, 1.0);".to_string(),
         ] {
             assert!(
                 shader.contains(&line),
