@@ -162,6 +162,50 @@ in the same commit.
 - **Not measured in the cloud.** A cloud session has no GPU, so the
   write-up and the PR say so. The owner runs the suite on real hardware.
 
+**7. Indoors, and faces in shade** (the owner, 2026-09-30, on the slice 2b
+shots: "Why is lighting indoor so harsh?"). Three causes in `field_lit.wgsl`,
+read from the code and the shots:
+- **The sun reaches inside.** Bevy's sun has no shadows, so a wall inside
+  a house that faces the sun is lit as if it stood outdoors. That is the
+  bright white plaster in `game-2b-newel-below.png`.
+- **A house does not darken its inside.**
+  - The field's sky term is sampled at the eight corners of each mesh's
+    bounds and blended between them.
+  - A town is one mesh per texture across the whole village. Its corners
+    sit out in the air, or off the lit tier, which reads as open sky.
+  - The voxel sky field has never heard of a house anyway, since
+    buildings are pieces, not voxels.
+
+  So every room reads as open sky. `sun_up = daylight * sky` is about 1,
+  and the dimming that makes a cave dark never applies.
+- **A face turned from the sun gets almost nothing.** With `sun_up` near 1,
+  the shader keeps only Bevy's picture: `pbr * sun_up + fill *
+  (1 - sun_up)`. Bevy's fill is its default ambient (80, nothing is set),
+  not the terrain's sky fill. That is the near-black wall in
+  `game-2b-flight-foot.png`. It also darkens house fronts outdoors that face
+  away from the sun.
+
+The fixes:
+- **The sky fill is always added, never blended away.**
+  - Bevy's own ambient is set to the terrain's daytime sky fill, and follows
+    the clock. So a face in shade is lit as a shaded cliff is, indoors or
+    out.
+  - It is one resource, kept in step by the shader-constant test, not a
+    second copy of the sun.
+- **A building's inside has its own openness.**
+  - The cutter tags every face inside a building: inner wall faces, floors,
+    ceilings, stairs.
+  - The town draws those faces as their own meshes, with a sky of 0.3 when
+    a door stands open and 0.2 when shut. Round the day, a room is about a
+    quarter as bright as the street, as the mockup's rooms are.
+  - Candles and hearths light rooms when slice 3 brings them.
+- **The sun stays out** once the cascades land: the house's walls and roof
+  cast, so its inside is in their shadow (decision 4). Until then, the
+  inside meshes take no direct sun at all.
+
+These land ahead of the cascades, in tasks 4b.1 and 4b.2, because they
+need none of them.
+
 ## Risks / Trade-offs
 
 - **Acne and peter-panning.** The biases trade one against the other.

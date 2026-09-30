@@ -25,6 +25,11 @@ shadows for the planet too, so we can read sun direction a little better".
 - [ ] 4.2 The terrain takes it on its direct term only. Verify: the shader-constant tests pin the new line, and a GPU test that a shadowed face open to the sky matches a sunless one's sky fill.
 - [ ] 4.3 Field-lit objects take it (`sun_up = sunlight * sky * sun_shadow`). Verify: `field_light` tests extended to a shadowed point.
 
+## 4b. Indoors, and faces in shade (design decision 7)
+
+- [ ] 4b.1 Bevy's ambient set to the terrain's daytime sky fill, following the clock. Field-lit objects add it rather than blend it away. Verify: the shader-constant test holds the one fill, a `field_light` test that a face turned from the sun reads the sky fill at noon, and before and after shots of a house front facing away from the sun.
+- [ ] 4b.2 The cutter tags each building's inside faces, and the town draws them as their own meshes with a sky of 0.3 when a door stands open and 0.2 when shut, taking no direct sun. Verify: a core test that every inner wall face, floor, ceiling and stair is tagged inside and no outer face is; the slice 2b views retaken, beside the before and the mockup's.
+
 ## 5. Towns cast
 
 - [ ] 5.1 A town's meshes as one static caster buffer, drawn by a position-only depth pipeline. Verify: an app test that a built town registers its caster, and a capture of a house's shadow across the lane.
