@@ -814,3 +814,78 @@ next changes:
   furniture is placed.
 - The water pass masks each hull's inside, when hulls reach the game
   (`sail-the-cog`).
+
+## 12b. The owner's second look (2026-09-30)
+
+On version 11 of the mockup the owner wrote:
+- "Rope bridge still broke. rope crosses over entrance."
+- "Ship still has small slive[r] of water."
+- "Igloo still has seems."
+
+Each was measured by a new check in `tools/mockup_towns_checks.js`, before
+anything changed. The before and after shots are in
+`docs/screenshots/tenebris-towns-notes/`, as `12b-*.jpg`.
+
+**1. Two rope bridges on one entrance.**
+- **Cause.** Each bridge end took the ring cell nearest the other tree, then
+  that cell's edge facing it. From the first platform, both other trees are
+  nearest one cell. So two bridges ended on the same edge. Their decks
+  overlapped there, and each one's ropes crossed the other's entrance.
+- **Fix.** Each end is now the outward edge of a ring cell that faces the
+  other tree most squarely: the edge's normal against the line from its
+  middle to that tree. No two bridges share an edge or a corner. The rails
+  still end on the edge's corners (note 6).
+- **Measured.**
+  - Bridge ends shared: 1 before, 0 after.
+  - Rails over another bridge's deck: 2 before, 0 after.
+
+**2. Water in the hulls, still.**
+- **Cause.** The first mask (note 1) had three faults.
+  - It was traced at 99% of the ideal hull curve, but the drawn hull is its
+    faceted mesh, which lies inside that curve.
+  - It stopped a section short of the bow and the stern.
+  - It rode in the boat at the resting waterline. Boats bob, pitch and roll,
+    so the mask stood as much as 10 cm off the water. As a boat dipped the
+    mask sank under the water, and seen at an angle it fell short of the
+    hull's far side. That is the sliver the owner saw.
+- **Fix.** The mask now lies on the water. Every frame it is cut from the
+  hull mesh's own triangles where the water plane meets them, and grown by
+  1 cm. It follows the boat through every bob, pitch and roll.
+- **Measured** at rest and at the four extremes of bob, pitch and roll, seen
+  at 45 degrees from four sides.
+  - The check walks the hull's own waterline, and adds up the water showing
+    between it and the mask.
+  - Before: 1,289,091 cm² over the 26 hulls, all poses and views, and the
+    widest sliver was 61 cm (at a cog's end, pitched).
+  - After: none.
+
+**3. Seams on the igloo.**
+- **Cause.** Two kinds of seam.
+  - **Gaps where the tunnel meets the dome.** The dome dropped whole faces
+    whose centre lay inside the tunnel's outline, and those faces do not
+    follow the outline. From outside, the lit inside showed through; from
+    inside, the sky did.
+  - **Broken brick courses.** Each face of the tunnel took its own flat
+    texture projection, so the courses broke at every face of the arch. The
+    dome wrapped its texture 7.23 times around, so it broke again where the
+    angle wraps.
+- **Fix.**
+  - The dome's faces are cut exactly to the tunnel's outer outline. Each is
+    taken into the tunnel's cross-section, the outline is cut out of it edge
+    by edge, and what is left is put back on the dome.
+  - The shell reaches 2 cm into the dome past that cut.
+  - The tunnel's blocks run along it and round its arch.
+  - The dome wraps a whole number of times (7).
+- **Measured.** Rays from three heights inside the igloo, within 70 degrees
+  either side of the tunnel. A ray leaks if it meets no snow and does not
+  leave by the mouth. It counts only if rays a twentieth of a degree either
+  side leak too, because a ray straight along the edge between two faces
+  can miss both.
+  - Leaks: 150 of 16,074 before, 0 after.
+
+**For the engine.**
+- Water: the game's water pass should mask each hull with its own waterline,
+  cut each frame from the hull as it floats, when hulls reach the game
+  (`sail-the-cog`). A mask carried in the boat at rest shows this sliver.
+- Where two surfaces join (a tunnel into a dome, a dormer into a roof), the
+  cut should follow the exact outline, not drop whole faces.

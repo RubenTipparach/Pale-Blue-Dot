@@ -21,3 +21,15 @@ are in the design.
 | 6. Jungle bridge posts | `6-bridge-before/after.jpg` | A rope bridge meeting a platform. Before, its rails ended 17 cm short of the platform's corners. After, they end on the corners. |
 | 7. Stairwell light | `7-flight-before/after.jpg`, `7-newel-before/after.jpg` | A straight flight and a newel stair in the village. After, each has a candle sconce burning day and night: the flight's is on its right wall. |
 | 8. The igloo | `8-igloo-before/after.jpg` | Before, slab walls with a vault laid on top, open ends, and a jagged cut in the dome. After, one arched tunnel of snow blocks, joined to the dome and closed at the mouth. |
+
+## The owner's second look (2026-09-30, design section 12b)
+
+Each sheet has the page before these fixes on the left and after on the
+right. `tools/mockup_towns_notes_shots.sh` takes the views as `12b-*`, with
+the same set-up as above.
+
+| note | file | what it shows |
+| --- | --- | --- |
+| "Rope crosses over entrance" | `12b-1-bridges.jpg` | Standing on each of four rope bridges, 2.6 m out, looking back at its entrance. Before, the first platform's two bridges ended on one edge: their decks overlapped, and their ropes crossed over the entrance. After, every bridge has its own edge. |
+| "Small sliver of water" | `12b-2-boats.jpg` | Rowboats at the harbour, at two moments of their bob. Before, crescents of water showed inside the hulls, along the far side and at the ends. After, none. |
+| "Igloo still has seams" | `12b-3-igloo.jpg` | The tunnel's junction from outside, the tunnel seen from inside, and the mouth. Before, the lit inside showed through the gap between the tunnel and the dome, the sky showed from inside, and the tunnel's brick courses broke at every face. After, the joint is closed and the courses run along the tunnel. |
