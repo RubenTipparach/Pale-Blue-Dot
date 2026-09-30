@@ -371,9 +371,113 @@ so the first can be looked at before it can be walked into.
       - Not yet, and left for 2b: roofs are not solids. A hut's walls are
         2 m, so a jump from beside one lands on the wall's top and walks on
         over it.
-  - **2b, the rest of the walker's rules:** sliding along a face, holding a
-    grounded walker to a floor below, the stairs, and doors opening and
-    shutting through the save.
+  - **2b, the rest of the walker's rules (written 2026-09-30, before the
+    code).** The owner: "commence 2b". Four parts, each from
+    `tenebris-towns` sections 3 to 5 and 8, with the game's cutter porting
+    the mockup's pieces.
+    - **Floors from the town, not only walls.**
+      - Today only the terrain holds the walker up: a town's solids stop
+        it or cap its head, and an upper floor holds no one.
+      - Each building gains *surfaces* beside its solids (`tenebris-towns`
+        section 4). A surface is a region in plan whose top is a function
+        of position, and it answers its underside too:
+        - every upper floor, flat, over its cells less the stair well;
+        - a straight flight, on its pitch line;
+        - a newel stair, one sheet a turn, on its pitch line.
+      - At each of its footprint points the walker takes the higher of the
+        terrain's floor and the highest surface top within its step of the
+        feet. The MAX floor over the footprint is kept.
+      - A surface's underside joins the solids' as a ceiling. So a floor
+        overhead is a ceiling, and the turn above a newel's walker leaves
+        2.74 m.
+    - **The stairs, cut from the stored definition** (derived, decision 8).
+      The template gives only a building's stair cells. The kind, and where
+      the stair starts, follow the mockup's `townHouse` rule:
+      - one cell is a **newel stair**:
+        - 15 winders a turn of 0.2 m, a turn a storey;
+        - it starts on the first edge whose neighbour is in the building
+          and is not the front door's cell, and leaves every upper storey
+          by the same edge (3 m is 3 layers, so exit = entry);
+        - a 30-degree landing at the top, then a rail;
+        - walls on its inner edges, with a doorway at the foot and at each
+          exit;
+      - two cells in a row are a **straight flight**:
+        - from the first cell's far flat to the second's, 16 risers of
+          0.1875 m;
+        - boxed below by walls either side;
+        - the well railed up top, open at the landing;
+        - the two cells floored upstairs only outside the flight's strip.
+      - No floor is cut over a stair cell but those strips' triangles.
+        Today's cutter floors every cell, which would roof each stair.
+      - The newel turns toward the edge numbered next after its entry, as
+        the mockup's does. In the game the angle is measured from the real
+        edge midpoints, so the sense holds whichever way the chart turned.
+    - **The three walker rules** (`tenebris-towns` section 4):
+      - **The pitch line.** A stair's top at a point is the line from the
+        foot of its first riser to the nosing of its landing, so the eye
+        climbs at the stair's slope, with no jump.
+      - **Held down 0.35 m.** A walker that was grounded, and is not rising
+        from a jump, is held to a floor up to 0.35 m below. It comes down a
+        stair without leaving it. A terrace drops a whole layer (1 m), so the
+        terrain is unchanged: a walker still steps off a ledge.
+      - **A refused move slides.** A body stopped by a wall, a door, a rise
+        too tall to step or a passage too low keeps the part of its move
+        along the face. It is swept again along that part, twice at most,
+        for a corner.
+        - A solid's normal is from its outline's nearest point to the body.
+        - The terrain's is the fall of its floor across the body.
+
+        A hex town's walls zigzag at 60 degrees, so a walker that stops
+        dead catches on every corner.
+    - **Doors open and shut, and are saved** (`tenebris-towns` section 8
+      and task 5).
+      - A door's leaf is its own entity, hinged at its jamb. Shut, it stands
+        in the doorway and is a solid. Open, it lies swung inward against
+        the wall and is none.
+      - It swings inward. The mockup turns a leaf outward where furniture
+        blocks its sweep, and the game places no furniture yet.
+      - **E** opens or shuts the door in reach: the nearest doorway within
+        2 m of the eye, in front of it.
+      - **Saved as a record.**
+        - The kind is `door`, schema 1, with the body `(open: bool)`.
+        - Its id is its building's record id times 16, plus the door's
+          number in the building.
+        - It is written as the player's (`Author::Player(0)`) through the
+          durable path.
+        - No record is a shut door. Opening the world reads the records.
+        - A world process that later shuts a door the player opened is
+          refused, as a player-owned field is (`world-persistence`
+          decision 6).
+      - Doors start shut. That is my recommendation, taken because a
+        question goes to the owner only with screenshots. Until now a door
+        was drawn open and was no solid. A world played on that build
+        finds its doors shut. Nothing it made changes.
+      - A capture opens every door with `--open-doors`, as the player
+        would. The inside shot looks out through its door as before.
+    - **Not in 2b**, and next with the speeds (`tenebris-towns` task 2):
+      - run 5, walk 3, sprint 8, crouch 1;
+      - walking under a roof;
+      - Caps Lock.
+
+      The walker keeps today's 8 m/s walk and 14 m/s sprint. The mockup's
+      stair walks were measured at 8.
+    - **Verify.**
+      - Core: a flight answers its pitch line, from the foot to the landing;
+        a newel answers one sheet a turn, and the 2.74 m under the next;
+        no floor over a stair cell but the flight's side triangles; a shut
+        leaf is a solid and an open one is not.
+      - App, on Holbrook's own houses, as `tenebris-towns` section 5 did in
+        the mockup:
+        - up and down a newel and a flight at the walking speed: no eye
+          jump over 0.1 m in a tick, and not one tick in the air coming
+          down;
+        - along a wall at 8.6 degrees for a second, the walker slides on;
+        - a shut door stops the walker, and the same door opened lets it in;
+        - E opens a door, the record is on disk, and a reopened world has
+          it open.
+      - Captures, with the mockup's same view beside each: upstairs in a
+        Fieldstone house looking down its newel; on a half-timbered
+        house's flight; a shut door, and the same door open.
 - **Slice 3a, the town is a stored record (written 2026-09-30, before the
   code).** Task 4.5's storing half, taken ahead of 2b. PR #19 merged slice 1
   and 2a to `main` on 2026-09-29. Every world that build opens gets Holbrook
