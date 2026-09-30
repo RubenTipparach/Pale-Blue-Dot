@@ -659,12 +659,21 @@ impl<'a> Sink<'a> {
     }
 
     /// A sconce on a wall at `wall` (plan), `y` up, facing into the room
-    /// along `n`: an iron bracket, a flame, and its light, which reaches up
-    /// and down a stairwell as the mockup's does.
+    /// along `n`: a timber bracket, a flame, and its light, which reaches up
+    /// and down a stairwell as the mockup's does. Timber, not the mockup's
+    /// iron: a bracket this close under its own flame takes none of its
+    /// light, and iron read as a black box on the wall.
     fn sconce(&mut self, wall: Vec2, y: f32, n: Vec2) {
         let ang = n.y.atan2(n.x);
         let b = wall + n * 0.08;
-        self.plain_box("iron", b.x, y - 0.14, b.y, Vec3::new(0.16, 0.05, 0.12), ang);
+        self.plain_box(
+            "timber",
+            b.x,
+            y - 0.14,
+            b.y,
+            Vec3::new(0.16, 0.05, 0.12),
+            ang,
+        );
         let f = wall + n * 0.14;
         self.flame("flame", Vec3::new(f.x, y - 0.09, f.y), 0.22);
         let l = wall + n * 0.2;

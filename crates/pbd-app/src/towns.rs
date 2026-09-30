@@ -731,9 +731,10 @@ pub fn casting(laid: &Laid) -> Vec<[f32; 3]> {
 /// The pieces' name for a flame (`pbd_core::settlement::pieces`), which is
 /// drawn unlit in [`FLAME_RGB`] and casts nothing.
 pub const FLAME: &str = "flame";
-/// A flame's colour, linear and past one, so the tonemapper's shoulder takes
-/// it to a warm glow rather than a flat orange.
-pub const FLAME_RGB: [f32; 3] = [2.4, 1.1, 0.3];
+/// A flame's colour, linear: the terrain's lantern fire at its root
+/// (`planet_surface.wgsl`), kept under the tonemapper's shoulder, which took
+/// a brighter flame to a pale cone rather than a fire.
+pub const FLAME_RGB: [f32; 3] = [0.98, 0.66, 0.22];
 
 /// The share of the sky a room takes with a door of its building open, and
 /// with all of them shut (`sun-shadows` decision 7): round the day a room is
