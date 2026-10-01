@@ -599,6 +599,13 @@ only with screenshots).
     seconds then shows it under way, sail set, rather than gathering way
     from rest.
 
+  For task 6.1, `--sail-for <s>` measures. Once the player is aboard a
+  cog, the run sails it for that many seconds of real time, logs
+  `SAIL_DONE`, and quits, as `--walk-distance` ends a walk.
+  `tools/perf_suite.py` has a `sail` scenario: Holinghaven's cog cast off
+  with its yard braced, sailing for 60 s from its helm. It is not run in
+  this cloud session; the owner runs it on real hardware.
+
   The shots are:
   - the cog under sail, in the chase view;
   - the cog from its helm, under sail;

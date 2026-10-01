@@ -12,6 +12,7 @@ Scenarios (each ends itself):
     cloud-hop --route clouds      low in the layer through several separate clouds
     far-side  --route far-side    ground to 3 km and down on the far side
     walk      --walk-distance 1000
+    sail      Holinghaven's cog cast off from its helm, --sail-for 60
 
 Variants are `name|exe|ENV=1;ENV2=2|assets` (all but the name optional). The
 game reads its shaders and `assets/config` from this checkout at run time, so
@@ -50,8 +51,13 @@ SCENARIOS = {
     "cloud-hop": ["--route", "clouds"],
     "far-side": ["--route", "far-side"],
     "walk": ["--walk-distance", "1000"],
+    # Holinghaven's cog cast off with its yard braced, from its helm
+    # (`sail-the-cog` task 6.1).
+    "sail": ["--walk", "--at", "23.71891", "-115.27982", "--aboard", "cog", "--sail", "-40",
+             "--seat", "--sail-for", "60"],
 }
-DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE"}
+DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE",
+        "sail": "SAIL_DONE"}
 WANT_MS = 1000 / 120
 FLOOR_MS = 1000 / 60
 ANSI = re.compile(r"\x1b\[[0-9;]*m")

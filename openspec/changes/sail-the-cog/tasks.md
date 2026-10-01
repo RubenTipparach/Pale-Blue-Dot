@@ -33,6 +33,6 @@ tasks 1 and 3d (thin solids and surfaces in `stand`, and the ship piece).
 
 ## 6. The owner's check
 
-- [ ] 6.1 A `sail` scenario in `tools/perf_suite.py`, and a note that frame cost was not measured in the cloud session. Verify: the scenario runs.
+- [ ] 6.1 A `sail` scenario in `tools/perf_suite.py`, and a note that frame cost was not measured in the cloud session. Verify: the scenario runs. (Built: the `sail` scenario and the game's `--sail-for` instrument, which logs `SAIL_DONE`. Not run here, by the owner's rule for cloud sessions; it is the owner's to run on real hardware.)
 - [ ] 6.2 The gate video (`step-videos`, showcase `cog`), each shot beside the mockup's cog: up the gangplank; casting off and taking the helm; a reach with the walker then letting go and walking to the aftcastle while the ship sails and turns; over the side and swimming back. Verify: the gate page is linked from the PR.
 - [ ] 6.3 The owner watches and accepts. Verify: the quote is in `proposal.md`. Sync the three specs, and archive.

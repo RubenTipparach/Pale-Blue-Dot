@@ -59,6 +59,10 @@ pub struct Launch {
     /// once it has walked that far: a repeatable stretch of streaming for the
     /// frame log to measure.
     pub walk_distance: Option<f32>,
+    /// `--sail-for SECONDS`: a measurement instrument. Once aboard a cog
+    /// (`--aboard cog --sail DEG`), the run sails it that long in real
+    /// time, logs `SAIL_DONE` and quits: `perf_suite.py`'s `sail`.
+    pub sail_for: Option<f32>,
     /// `--frame-graph`: start with the frame graph shown (`F3` toggles it).
     pub frame_graph: bool,
     /// `--no-vsync`: present unpaced, a measurement instrument, so a frame's
@@ -229,6 +233,7 @@ impl Launch {
             capture: None,
             frame_log: None,
             walk_distance: None,
+            sail_for: None,
             frame_graph: false,
             no_vsync: false,
             view: "coast".into(),
@@ -541,6 +546,14 @@ impl Launch {
                     result.walk = true;
                 }
                 "--seat" => result.seat = true,
+                "--sail-for" => {
+                    i += 1;
+                    result.sail_for = Some(
+                        args.get(i)
+                            .and_then(|a| a.parse().ok())
+                            .expect("--sail-for requires seconds"),
+                    );
+                }
                 "--sail" => {
                     i += 1;
                     result.sail = Some(
@@ -1078,6 +1091,13 @@ pub fn run(args: &[String]) {
                     .chain()
                     .after(bevy::input::InputSystems),
             );
+        }
+        if let Some(seconds) = launch.sail_for {
+            app.insert_resource(SailFor {
+                seconds,
+                since: None,
+            })
+            .add_systems(Update, sail_for);
         }
         if launch.walk_distance.is_some() {
             // Where the swim's keys go, for the same reason (below).
@@ -2180,6 +2200,43 @@ fn walk_script(
             progress.walked_m,
             now.duration_since(started).as_secs_f32(),
             progress.turns
+        );
+        exit.write(AppExit::Success);
+    }
+}
+
+/// `--sail-for`: how long to sail, and when the cog was boarded.
+#[derive(Resource)]
+struct SailFor {
+    seconds: f32,
+    since: Option<std::time::Instant>,
+}
+
+/// End a `--sail-for` run: once aboard a cog, sail it the given seconds of
+/// real time, log `SAIL_DONE` with how far it went, and quit.
+fn sail_for(
+    mut sail: ResMut<SailFor>,
+    aboard: Res<pbd_app::vehicles::Aboard>,
+    vehicles: Query<&pbd_app::vehicles::Vehicle>,
+    mut from: Local<Option<pbd_core::DVec3>>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    let Some(craft) = aboard
+        .0
+        .and_then(|e| vehicles.get(e).ok())
+        .map(|v| &v.craft)
+        .filter(|c| c.kind == pbd_core::vehicle::Kind::Cog)
+    else {
+        return;
+    };
+    let started = *sail.since.get_or_insert_with(std::time::Instant::now);
+    let at = *from.get_or_insert(craft.reference_position());
+    let elapsed = started.elapsed().as_secs_f32();
+    if elapsed >= sail.seconds {
+        info!(
+            "SAIL_DONE {:.0} m in {:.1} s",
+            craft.reference_position().distance(at),
+            elapsed
         );
         exit.write(AppExit::Success);
     }
