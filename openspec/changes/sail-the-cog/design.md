@@ -547,6 +547,43 @@ only with screenshots).
     harbour, which is the same path as a new world's.
   - **Not built yet:** the stern lantern, an app reach in a wind, and the
     shots.
+- **Step 3, part 4 in detail (written 2026-10-01, before code): the stern
+  lantern.** What it builds on, measured on this branch:
+  - A craft takes its light from the planet's light field, which only lamp
+    blocks feed, and a lamp block cannot sail.
+  - A town's rooms carry their own lights (`RoomLights`): each a place in
+    the planet's frame, a reach and a band of height, packed onto the
+    room's field-lit material once and summed in `field_lit.wgsl`. A
+    candle's lights only by night.
+  - A town's flame is drawn unlit (`FLAME_RGB`).
+  - The street lamps burn while `DuskLamps` says the dusk lamps are lit
+    where the player is.
+
+  The decisions, recommendation taken (ask only with screenshots):
+  - **The lantern** stands on a post on the middle line at the aftcastle's
+    stern rail. It is a timber cage of four corner posts and a cap, with a
+    flame inside, cut by `pieces::cog::lantern` in the craft's frame. The
+    flame is drawn unlit and shown only while the dusk lamps are lit, as a
+    street lamp burns.
+  - **Its light** is a candle's: by night only, 5 m, warm, lighting the
+    aftcastle and the helm down to the main deck. It is a `RoomLights`
+    entry on each of the ship's meshes. Each frame its place is moved to
+    where the lantern is, and a `RoomLights` that changes is packed onto
+    its material again.
+  - **Verify.** Core: the lantern stands on the aftcastle and has its flame.
+    App: the flame is shown with the dusk lamps and hidden without them,
+    and the light's place goes with the ship when it moves.
+- **Step 3, part 4 as built (2026-10-01): the stern lantern.** Built as
+  written above.
+  - `pieces::cog::lantern` cuts the post, the cage and the flame, and
+    `stern_light` gives its light.
+  - The app draws the flame unlit and shows it while `DuskLamps` is lit.
+    Each of the ship's meshes carries the light (`CarriedLight`), moved
+    each frame to where the lantern is. `repack_room_lights` packs a
+    changed `RoomLights` onto its material again.
+  - Proved by core `the_cogs_stern_lantern_stands_on_its_aftcastle` and app
+    `a_cogs_stern_lantern_burns_from_dusk_and_its_light_goes_with_it`. How
+    it looks at 22:30 is for the shots.
 - **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
   in the voxel field, which cannot sail. A light carried on a craft is part
   of the craft's drawing.

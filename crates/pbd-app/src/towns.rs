@@ -997,30 +997,48 @@ pub(crate) fn repeat_in(world: &World) -> impl Fn(&str) -> f32 + use<> {
 }
 
 /// A cut's faces drawn under `parent` in the towns' textures, in the
-/// parent's frame: the harbour's cog at its mooring, and the cog a craft
-/// carries.
-pub(crate) fn spawn_meshes(world: &mut World, parent: Entity, meshes: &Meshes) {
-    let parts: Vec<(Mesh, Handle<Image>)> = {
+/// parent's frame, a flame unlit in [`FLAME_RGB`] as a town's is: the cog a
+/// craft carries. Each mesh drawn, by its texture's name.
+pub(crate) fn spawn_meshes(
+    world: &mut World,
+    parent: Entity,
+    meshes: &Meshes,
+) -> Vec<(String, Entity)> {
+    let parts: Vec<(String, Mesh, Option<Handle<Image>>)> = {
         let assets = world.resource::<AssetServer>();
         meshes
             .iter()
-            .map(|(name, buf)| (to_mesh(buf), texture(assets, name)))
+            .map(|(name, buf)| {
+                let image = (name != FLAME).then(|| texture(assets, name));
+                (name.clone(), to_mesh(buf), image)
+            })
             .collect()
     };
-    for (mesh, image) in parts {
+    let mut out = Vec::new();
+    for (name, mesh, image) in parts {
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
         let material = world
             .resource_mut::<Assets<StandardMaterial>>()
-            .add(StandardMaterial {
-                base_color_texture: Some(image),
-                perceptual_roughness: 0.93,
-                ..default()
+            .add(match image {
+                Some(image) => StandardMaterial {
+                    base_color_texture: Some(image),
+                    perceptual_roughness: 0.93,
+                    ..default()
+                },
+                None => StandardMaterial {
+                    base_color: Color::linear_rgb(FLAME_RGB[0], FLAME_RGB[1], FLAME_RGB[2]),
+                    unlit: true,
+                    cull_mode: None,
+                    ..default()
+                },
             });
         let part = world
             .spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()))
             .id();
         world.entity_mut(parent).add_child(part);
+        out.push((name, part));
     }
+    out
 }
 
 /// Open every door when the towns are built, as the player would, and write

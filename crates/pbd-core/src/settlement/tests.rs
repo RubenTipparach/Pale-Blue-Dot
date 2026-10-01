@@ -2530,3 +2530,41 @@ fn the_cog_cut_for_its_craft_lies_bow_forward_without_its_yard() {
     );
     assert!(count(&pieces::cog::rig(&repeat, true), "linen") > count(&rig, "linen"));
 }
+
+/// `sail-the-cog` step 3, part 4: the cog's stern lantern stands on its
+/// aftcastle, over its deck, with a flame in its cage.
+#[test]
+fn the_cogs_stern_lantern_stands_on_its_aftcastle() {
+    let repeat = |_: &str| 2.0;
+    let ship = pieces::cog::sailing(&mut Meshes::new(), &repeat, -1);
+    let at = pieces::cog::LANTERN;
+    let p = Vec2::new(at.x, at.z);
+    let feet = ship
+        .solids
+        .iter()
+        .filter(|s| {
+            let n = s.outline.len();
+            (0..n).all(|i| {
+                let (a, b) = (s.outline[i], s.outline[(i + 1) % n]);
+                (b - a).perp_dot(p - a) >= 0.0
+            })
+        })
+        .map(|s| s.y1)
+        .fold(f32::MIN, f32::max);
+    assert!(
+        (feet - 3.5).abs() < 0.01,
+        "on the aftcastle's deck, at {feet}"
+    );
+    assert!(at.y > feet + 1.0, "over the deck, at {}", at.y);
+    let lantern = pieces::cog::lantern(&repeat);
+    assert!(
+        lantern
+            .get("flame")
+            .is_some_and(|m| !m.positions.is_empty())
+    );
+    assert!(
+        lantern
+            .get("timber")
+            .is_some_and(|m| !m.positions.is_empty())
+    );
+}

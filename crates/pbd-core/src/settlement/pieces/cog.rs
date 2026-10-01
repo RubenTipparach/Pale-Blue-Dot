@@ -152,6 +152,57 @@ pub fn sailing(
 /// the deck amidships, [`MAST_M`] forward of the middle.
 pub const MAST_STEP: Vec3 = Vec3::new(0.0, DECK_M, -MAST_M);
 
+/// The stern lantern's flame, in the craft's frame (`sail-the-cog` step 3,
+/// part 4): on its post on the middle line at the aftcastle's stern rail,
+/// 1.2 m over the castle's deck.
+pub const LANTERN: Vec3 = Vec3::new(0.0, DECK_M + CASTLE_M + 1.2, 6.6);
+
+/// The stern lantern's light where its flame is, `at` in the planet's
+/// frame: a candle's, by night only, lighting the aftcastle and the helm
+/// down to the main deck.
+pub fn stern_light(at: Vec3) -> super::RoomLight {
+    super::RoomLight {
+        kind: super::LightKind::Candle,
+        at,
+        power: 1.2,
+        below_m: LANTERN.y - DECK_M + 0.2,
+        above_m: 1.0,
+    }
+}
+
+/// The stern lantern in the craft's frame: its post from the aftcastle's
+/// deck, a timber cage of a base, four corner posts and a cap, and its
+/// flame inside (`flame`, drawn unlit).
+pub fn lantern(repeat_m: &dyn Fn(&str) -> f32) -> Meshes {
+    let mut out = Meshes::new();
+    let mut sink = Sink::new(&mut out, repeat_m, CRAFT);
+    let (x, y, z) = (LANTERN.x, LANTERN.y, LANTERN.z);
+    let foot = DECK_M + CASTLE_M;
+    sink.plain_box(
+        "timber",
+        x,
+        foot,
+        z,
+        Vec3::new(0.08, y - 0.2 - foot, 0.08),
+        0.0,
+    );
+    sink.plain_box("timber", x, y - 0.2, z, Vec3::new(0.3, 0.04, 0.3), 0.0);
+    for (a, b) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+        sink.plain_box(
+            "timber",
+            x + a * 0.13,
+            y - 0.16,
+            z + b * 0.13,
+            Vec3::new(0.03, 0.36, 0.03),
+            0.0,
+        );
+    }
+    sink.plain_box("timber", x, y + 0.2, z, Vec3::new(0.34, 0.06, 0.34), 0.0);
+    sink.flame("flame", Vec3::new(x, y - 0.15, z), 0.25);
+    drop(sink);
+    out
+}
+
 /// The yard and its sail in the yard's own frame, its origin at the mast's
 /// step and the yard square across it (+x to starboard, +z aft): `set`, the
 /// sail hangs from it to its foot; furled, it is bundled on the yard.

@@ -46,6 +46,8 @@ enum Moving {
     /// Its sail, set (true) or furled on the yard: set at sea, furled at a
     /// mooring or an anchor.
     Sail(bool),
+    /// Its stern lantern's flame, burning while the dusk lamps do.
+    Flame,
     /// The figure aboard, drawn only from the chase view.
     Crew,
 }
@@ -284,7 +286,31 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
                 .map_or(-1, |c| c.gang_side);
             let mut meshes = Default::default();
             ship::sailing(&mut meshes, &repeat, gang_side);
-            crate::towns::spawn_meshes(b.world, entity, &meshes);
+            // The stern lantern's light on the ship's faces, carried with
+            // it (`sail-the-cog` step 3, part 4).
+            for (_, mesh) in crate::towns::spawn_meshes(b.world, entity, &meshes) {
+                b.world.entity_mut(mesh).insert((
+                    crate::field_light::RoomLights(vec![ship::stern_light(ship::LANTERN)]),
+                    CarriedLight {
+                        owner: entity,
+                        local: ship::LANTERN,
+                    },
+                ));
+            }
+            for (name, mesh) in crate::towns::spawn_meshes(b.world, entity, &ship::lantern(&repeat))
+            {
+                if name == crate::towns::FLAME {
+                    b.world.entity_mut(mesh).insert((
+                        Visibility::Hidden,
+                        LanternFlame,
+                        Part {
+                            owner: entity,
+                            kind: Moving::Flame,
+                            spin: 0.0,
+                        },
+                    ));
+                }
+            }
             let yard = b.pivot(
                 entity,
                 Moving::Yard,
@@ -311,16 +337,45 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
     }
 }
 
+/// A craft's lantern's flame (the cog's stern lantern).
+#[derive(Component)]
+pub struct LanternFlame;
+
+/// A light a craft carries on its faces (the cog's stern lantern): where
+/// it is in the craft's frame, so its place in the planet's goes with it.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct CarriedLight {
+    pub owner: Entity,
+    pub local: Vec3,
+}
+
 /// Put every craft where the physics says it is and move its parts.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn place(
     time: Res<Time>,
     frame: Res<crate::planet::PlanetRenderFrame>,
     view: Res<VehicleView>,
     aboard: Res<super::Aboard>,
+    dusk: Option<Res<crate::planet::lod::DuskLamps>>,
     mut crafts: Query<(Entity, &Vehicle, &mut Transform), Without<Part>>,
     mut parts: Query<(&mut Part, &mut Transform, &mut Visibility)>,
+    mut carried: Query<(&CarriedLight, &mut crate::field_light::RoomLights)>,
 ) {
+    // A carried light goes where its craft does, in the planet's frame.
+    for (light, mut lights) in &mut carried {
+        let Ok((_, vehicle, _)) = crafts.get(light.owner) else {
+            continue;
+        };
+        let craft = &vehicle.craft;
+        let at = (craft.reference_position() + craft.body.orientation * light.local.as_dvec3())
+            .as_vec3();
+        if let Some(l) = lights.0.first()
+            && l.at.distance(at) > 1e-3
+        {
+            lights.0[0].at = at;
+        }
+    }
+    let lamps_lit = dusk.is_some_and(|d| d.lit);
     for (_, vehicle, mut transform) in &mut crafts {
         let craft = &vehicle.craft;
         transform.translation = (frame.center + craft.reference_position()).as_vec3();
@@ -360,6 +415,9 @@ pub fn place(
             }
             (Moving::Sail(set), CraftState::Cog(_)) => {
                 *visibility = visible(set == craft.mooring.is_none());
+            }
+            (Moving::Flame, _) => {
+                *visibility = visible(lamps_lit);
             }
             (Moving::Paddle, CraftState::Loon(s)) => {
                 *transform = paddle(craft, s);

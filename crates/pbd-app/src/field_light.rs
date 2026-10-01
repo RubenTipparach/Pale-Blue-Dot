@@ -134,7 +134,7 @@ impl Plugin for FieldLightPlugin {
         app.add_plugins(MaterialPlugin::<FieldLitMaterial>::default())
             .add_systems(
                 PostUpdate,
-                (take_the_field, light_from_the_field)
+                (take_the_field, light_from_the_field, repack_room_lights)
                     .chain()
                     .after(bevy::transform::TransformSystems::Propagate),
             )
@@ -311,6 +311,19 @@ fn light_from_the_field(
             });
         if moved && let Some(material) = lit.get_mut(&material.0) {
             material.extension.field = field;
+        }
+    }
+}
+
+/// Pack a mesh's room lights onto its material again when they change: a
+/// light a craft carries moves with it (`sail-the-cog` step 3, part 4).
+fn repack_room_lights(
+    meshes: Query<(&RoomLights, &MeshMaterial3d<FieldLitMaterial>), Changed<RoomLights>>,
+    mut lit: ResMut<Assets<FieldLitMaterial>>,
+) {
+    for (lights, material) in &meshes {
+        if let Some(material) = lit.get_mut(&material.0) {
+            lights.pack(&mut material.extension.field);
         }
     }
 }

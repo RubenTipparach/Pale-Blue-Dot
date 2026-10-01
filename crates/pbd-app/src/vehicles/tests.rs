@@ -1132,3 +1132,54 @@ fn a_moored_cog_is_saved_on_its_bollard_at_its_berth() {
     let off = back.reference_position().distance(rest.origin.as_dvec3());
     assert!(off < 0.2, "at its berth, {off:.3} m off");
 }
+
+/// `sail-the-cog` step 3, part 4: a cog's stern lantern burns while the
+/// dusk lamps do and is dark by day, and its light on the ship's faces goes
+/// where the ship does.
+#[test]
+fn a_cogs_stern_lantern_burns_from_dusk_and_its_light_goes_with_it() {
+    use crate::planet::lod::DuskLamps;
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let cog = launch_cog(&mut app, 2.5);
+    let flame = |app: &mut App| {
+        let mut q = app
+            .world_mut()
+            .query_filtered::<(&Visibility, &ChildOf), With<draw::LanternFlame>>();
+        let found: Vec<Visibility> = q
+            .iter(app.world())
+            .filter(|(_, p)| p.parent() == cog)
+            .map(|(v, _)| *v)
+            .collect();
+        assert_eq!(found.len(), 1, "one flame in its lantern");
+        found[0]
+    };
+    app.insert_resource(DuskLamps { lit: true });
+    app.update();
+    assert_eq!(flame(&mut app), Visibility::Inherited, "lit at dusk");
+    app.insert_resource(DuskLamps { lit: false });
+    app.update();
+    assert_eq!(flame(&mut app), Visibility::Hidden, "out by day");
+    for _ in 0..120 {
+        app.update();
+    }
+    let craft = the_craft(&mut app, cog);
+    let want = (craft.reference_position()
+        + craft.body.orientation * pbd_core::settlement::pieces::cog::LANTERN.as_dvec3())
+    .as_vec3();
+    let mut q = app
+        .world_mut()
+        .query::<(&draw::CarriedLight, &crate::field_light::RoomLights)>();
+    let lights: Vec<Vec3> = q
+        .iter(app.world())
+        .filter(|(c, _)| c.owner == cog)
+        .map(|(_, l)| l.0[0].at)
+        .collect();
+    assert!(!lights.is_empty(), "its faces carry its light");
+    for at in lights {
+        assert!(
+            at.distance(want) < 0.01,
+            "the light at {at}, the lantern at {want}"
+        );
+    }
+}
