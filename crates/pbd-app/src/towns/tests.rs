@@ -983,23 +983,39 @@ fn print_where_the_harbours_stand() {
         let head = sea::point(&laid.chart, &laid.patch, pier.to[0], pier.to[2], cell_m).unwrap();
         let quay =
             sea::point(&laid.chart, &laid.patch, pier.from[0], pier.from[2], cell_m).unwrap();
-        // `--yaw` from the quay down the pier, as the walker's start reads it:
-        // its heading is `Y x up` turned by `-yaw` about up.
-        let up = quay.normalize();
-        let base = Vec3::Y.cross(up).normalize();
-        let along = head - quay;
-        let t = (along - up * along.dot(up)).normalize();
-        let yaw = -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees();
+        // `--yaw` from one point toward another, as the walker's start reads
+        // it: its heading is `Y x up` turned by `-yaw` about up.
+        let yaw = |from: Vec3, to: Vec3| {
+            let up = from.normalize();
+            let base = Vec3::Y.cross(up).normalize();
+            let along = to - from;
+            let t = (along - up * along.dot(up)).normalize();
+            -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees()
+        };
+        let point = |x: f32, z: f32| sea::point(&laid.chart, &laid.patch, x, z, cell_m).unwrap();
+        let mid = |c: i32, r: i32| sea::centre(c, r, cell_m);
         println!(
-            "{}: footprint {}; quay {} --yaw {yaw:.1}; pier head {}; fish hut {}; boathouse {}; marker {}",
+            "{}: footprint {}; quay {} --yaw {:.1}; pier head {}; fish hut {}; boathouse {}; marker {}",
             site.name,
             at(laid.ground.anchor()),
             at(quay),
+            yaw(quay, head),
             at(head),
             at(cell(4, 9)),
             at(cell(9, 12)),
             at(site.direction)
         );
+        // Task 4.2c: where to stand for the fish market (from the harbour
+        // street, over a stall to the racks on the beach) and the shipyard
+        // (the mockup's own view of it).
+        let ((sx, sz), (tx, tz)) = (mid(21, 16), mid(16, 14));
+        let (street, racks) = (point(sx, sz), point(tx, tz));
+        println!("   market {} --yaw {:.1}", at(street), yaw(street, racks));
+        if let Some(y) = &template.shipyard {
+            let from = point(y.x - 7.0, mid(0, 14).1 + 0.9);
+            let hull = point(y.x, y.z);
+            println!("   shipyard {} --yaw {:.1}", at(from), yaw(from, hull));
+        }
         // Holes: a cell left unlaid with every neighbour laid, or one laid
         // lower than all of its own.
         let level: std::collections::BTreeMap<(i32, i32), f32> = town
