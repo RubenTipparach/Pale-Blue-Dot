@@ -173,6 +173,17 @@ only with screenshots).
     the main pier up the gangplank, across the deck and up the stair onto
     the aftcastle. `every_harbour_lays_on_its_sea_and_cuts` holds each of
     the six harbours' cogs standing.
+- **Finding: the cog floated half a metre high (2026-10-01).** The game
+  draws its sea `depth_offset_m` (0.5 m) under the sea level the layers are
+  filled to (`cities-in-the-world`, 4.2b's finding). Step 1 cut the cog's
+  waterline at the layers' sea level, so the quay shot shows its bottom
+  above the drawn water.
+  - The ship is cut with its waterline at the drawn sea, which the game
+    passes to `build_town`, and its deck is 1.9 m over that.
+  - The gangplank still runs from the pier's deck to the cog's. It now
+    climbs 0.4 m, not the mockup's 0.9 m, because the pier stands 1.5 m
+    over the drawn water.
+  - Recommendation taken (ask only with screenshots).
 - **Step 2 in detail (written 2026-10-01, before code).** Measured on this
   branch:
   - **The walker** is an Avian capsule. `drive_walker` sets its velocity

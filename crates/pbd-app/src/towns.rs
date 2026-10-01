@@ -155,6 +155,21 @@ pub struct Laid {
     pub cog_bow: Vec3,
 }
 
+/// The drawn sea's surface, metres over the radius: the layers' sea level
+/// less the depth the water pass draws its sheet under it (`water.ron`'s
+/// `depth_offset_m`), which is what boats float on.
+pub fn sheet_m(config: &TerrainConfig, water: &crate::config::WaterSettings) -> f32 {
+    config.sea_level_m - water.depth_offset_m
+}
+
+/// [`sheet_m`] in a world, from its water settings or the shipped ones.
+fn sheet_in(world: &World, config: &TerrainConfig) -> f32 {
+    match world.get_resource::<crate::config::WaterSettings>() {
+        Some(water) => sheet_m(config, water),
+        None => sheet_m(config, &crate::config::WaterSettings::default()),
+    }
+}
+
 /// The patch of finest cells round a direction.
 pub fn patch_round(direction: Vec3, radius_m: f32, reach_m: f32) -> Patch {
     let locals = Lattice::default().cells_in_band(11, direction, 0.0, reach_m / radius_m);
@@ -212,7 +227,8 @@ fn lay_on(
 
 /// Build a town from its definition: its ground and its pieces, cut on the
 /// cells it was laid on, and the masonry of `template`, the template it was
-/// laid from (slice 4c). `repeat_m` is how far a texture repeats.
+/// laid from (slice 4c). `repeat_m` is how far a texture repeats, and
+/// `sheet_m` the drawn sea's surface over the radius ([`sheet_m`]).
 pub fn build(
     site: &Site,
     town: &Town,
@@ -220,6 +236,7 @@ pub fn build(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     config: &TerrainConfig,
+    sheet_m: f32,
 ) -> Result<Laid, String> {
     let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
     let built = record::build_town(
@@ -229,6 +246,7 @@ pub fn build(
         kits,
         repeat_m,
         config.radius_m,
+        sheet_m,
         natural(config),
     )?;
     Ok(Laid {
@@ -689,6 +707,7 @@ fn settle(world: &mut World) {
         let assets = world.resource::<TownAssets>();
         (assets.kits.clone(), assets.repeat())
     };
+    let sheet = sheet_in(world, &config);
     for h in kept {
         if (h.point(config.radius_m) - at).length() > STAND_M {
             continue;
@@ -697,7 +716,15 @@ fn settle(world: &mut World) {
             .resource::<TownAssets>()
             .template_named(&h.town.template)
             .cloned();
-        match build(&h.site, &h.town, template.as_ref(), &kits, &repeat, &config) {
+        match build(
+            &h.site,
+            &h.town,
+            template.as_ref(),
+            &kits,
+            &repeat,
+            &config,
+            sheet,
+        ) {
             Ok(laid) => stand(world, &h, laid, 1.0),
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
@@ -772,14 +799,21 @@ pub fn stand_in_range(world: &mut World) {
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
     }
+    // Every template a town can be laid from: the harbour's too, or a
+    // harbour coming into range is cut with none of its sea's pieces.
     let (kits, repeat, templates) = {
         let assets = world.resource::<TownAssets>();
         (
             assets.kits.clone(),
             assets.repeat(),
-            [assets.village.clone(), assets.walled.clone()],
+            [
+                assets.village.clone(),
+                assets.walled.clone(),
+                assets.harbour.clone(),
+            ],
         )
     };
+    let sheet = sheet_in(world, &config);
     let dt = world
         .get_resource::<Time>()
         .map_or(1.0 / 60.0, |t| t.delta_secs());
@@ -800,7 +834,15 @@ pub fn stand_in_range(world: &mut World) {
                     .cloned();
                 let (h, kits, repeat) = (h.clone(), kits.clone(), repeat.clone());
                 let task = AsyncComputeTaskPool::get().spawn(async move {
-                    build(&h.site, &h.town, template.as_ref(), &kits, &repeat, &config)
+                    build(
+                        &h.site,
+                        &h.town,
+                        template.as_ref(),
+                        &kits,
+                        &repeat,
+                        &config,
+                        sheet,
+                    )
                 });
                 towns.cutting.push((id, task));
             }

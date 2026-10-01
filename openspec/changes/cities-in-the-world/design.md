@@ -1404,6 +1404,28 @@ so the first can be looked at before it can be walked into.
       `a_craft_far_away_is_stowed_and_comes_back_where_it_was_left` hold it.
     - **Open:** the boarding-from-the-pier test. A craft is boarded as any
       craft is, by the existing tests' path.
+  - **Finding: the drawn sea is half a metre under the layers' sea level
+    (2026-10-01).** In the game's run at Holinghaven, 1 boat moored and 22
+    berths were skipped. The app test moors 21 there.
+    - `assets/config/water.ron` draws the sea `depth_offset_m` (0.5 m) under
+      the sea level the layers are filled to. The game's `Sea::radius` is
+      that drawn sheet, and the boats float on it.
+    - The test took the layers' sea level for the sea, so every berth held
+      half a metre more water in the test than in the game.
+    - `print_the_seabed_under_the_harbours_berths` rules out the other
+      suspect. The harbour's margin, eased to its terrace, lifts the seabed
+      at 1 to 13 of a harbour's 23 berths, but leaves only 5 or 6 of them
+      under a metre of water.
+    - **Fix: the draughts are measured against the drawn sea.**
+      - A Loon's hull is 0.36 m deep, so it moors in 0.5 m of drawn water,
+        the water over a seabed one layer down.
+      - A Tern keeps 2 m, its keel's 1.7 m and a hand.
+      - The app test asks the depth of the same drawn sea the game does.
+    - The cog floats on the drawn sea too (`sail-the-cog` design 6). A
+      harbour's quay and piers stay where they are, whole layers over the
+      layers' sea level, and so 1.5 m over the drawn water rather than the
+      mockup's 1 m.
+    - Recommendation taken (ask only with screenshots).
 - **Task 4.2c in detail, the harbour's dressing (written 2026-10-01).**
   Third in the owner's order: "We're good on the mockup already. Approved.
   Implement in game".

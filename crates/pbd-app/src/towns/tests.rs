@@ -29,7 +29,8 @@ fn holbrook_is_laid_out_on_its_own_ground() {
     let repeats = load_repeats();
     let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
     let town = lay_out(&site, &template, &config).unwrap_or_else(|e| panic!("{e}"));
-    let laid = build(&site, &town, None, &kits, &repeat, &config).unwrap_or_else(|e| panic!("{e}"));
+    let laid = build(&site, &town, None, &kits, &repeat, &config, sheet(&config))
+        .unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(
         laid.chart.cells.len(),
         town.cells.len(),
@@ -174,7 +175,16 @@ fn holbrooks_ground_is_pinned() {
     let site = holbrook();
     let config = *crate::planet::terrain_config();
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
-    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &|_: &str| 2.0,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
     let digest = Ground::new(config, vec![laid.ground.clone()]).digest();
     let (footprint, margin) = laid.ground.counts();
     println!(
@@ -201,7 +211,16 @@ fn print_where_to_stand_for_the_mockup_shots() {
     let repeats = load_repeats();
     let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
     let town = lay_out(&site, &template, &config).unwrap();
-    let laid = build(&site, &town, None, &load_kits(), &repeat, &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &repeat,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
     let radius = config.radius_m;
     // `--at` and `--yaw` for standing at `stand` looking along `toward`.
     let spot = |name: &str, stand: Vec3, toward: Vec3| {
@@ -338,7 +357,16 @@ fn a_door_opened_is_open_when_the_world_is_opened_again() {
     let site = holbrook();
     let template = load_template("village");
     let town = lay_out(&site, &template, &config).unwrap();
-    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &|_: &str| 2.0,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
     let door = record::door_id(
         record::building_id(site.id, 0),
         laid.solids[0].doors[0].index,
@@ -385,7 +413,16 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
     let site = holbrook();
     let config = *crate::planet::terrain_config();
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
-    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &|_: &str| 2.0,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
     assert_eq!(laid.rooms.len(), laid.solids.len());
     for (b, rooms) in laid.rooms.iter().enumerate() {
         assert!(!rooms.is_empty(), "building {b} has no rooms");
@@ -490,8 +527,16 @@ fn every_village_lays_and_cuts_on_its_own_ground() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
-            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (footprint, margin) = laid.ground.counts();
         println!(
             "{}: turn {}, a terrace at {} m over {footprint} cells eased over {margin}, laid and cut in {:.2} s",
@@ -797,8 +842,16 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
-            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (footprint, margin) = laid.ground.counts();
         let levels: std::collections::BTreeSet<i8> = town.levels.iter().copied().collect();
         let (lat, lon) = pbd_core::geo::lat_lon(site.direction).degrees();
@@ -867,8 +920,16 @@ fn every_harbour_lays_on_its_sea_and_cuts() {
         let placed = started.elapsed().as_secs_f32();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
-            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (lat, lon) = pbd_core::geo::lat_lon(site.direction).degrees();
         println!(
             "{}: --at {lat:.5} {lon:.5}, {:.0}% of its cells agree about the sea, placed in {placed:.2} s, laid and cut in {:.2} s, {} pieces",
@@ -973,6 +1034,7 @@ fn print_where_the_harbours_stand() {
             &kits,
             &|_: &str| 2.0,
             &config,
+            sheet(&config),
         )
         .unwrap();
         let at = |d: Vec3| {
@@ -1059,7 +1121,8 @@ fn every_harbours_boats_are_made_once_at_their_berths() {
     let config = *crate::planet::terrain_config();
     let template = load_template("coast");
     let fleet = crate::vehicles::Fleet::new(crate::config::VehiclesConfig::default().0);
-    let sea_radius = config.radius_m + config.sea_level_m;
+    // The drawn sea, which the game's boats float on.
+    let sea_radius = config.radius_m + sheet_m(&config, &crate::config::WaterSettings::default());
     let mut total = 0;
     for site in harbours() {
         let town = lay_out(&site, &template, &config).unwrap();
@@ -1192,4 +1255,45 @@ fn print_where_caves_open_into_towns() {
         }
     }
     println!("{opened_towns} of {} towns", sites.len());
+}
+
+/// Instrument (`cities-in-the-world` task 4.2b, found 2026-10-01): the
+/// seabed under each harbour's berths, the planet's own and as the
+/// harbour's ground, with its margin eased to its terrace, has it.
+#[test]
+#[ignore = "instrument: prints the seabed under each harbour's berths"]
+fn print_the_seabed_under_the_harbours_berths() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let sea_m = config.sea_level_m;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, ground) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let nat = natural(&config);
+        let (mut raised, mut shallow_then, mut shallow_now) = (0, 0, 0);
+        for boat in &template.boats {
+            let Some((d, _)) = sea::boat_pose(&chart, &patch, boat, template.grid.cell_m) else {
+                continue;
+            };
+            let n = nat(d);
+            let eased = ground.at(d).map_or(n, |g| g.height(n));
+            if eased > n + 0.01 {
+                raised += 1;
+            }
+            shallow_then += usize::from(sea_m - n.floor() < 1.0);
+            shallow_now += usize::from(sea_m - eased.floor() < 1.0);
+        }
+        println!(
+            "{}: {} berths, {raised} with the seabed raised by the margin; under a metre of water: {shallow_then} on the planet's own seabed, {shallow_now} on the harbour's",
+            site.name,
+            template.boats.len()
+        );
+    }
+}
+
+/// The drawn sea's surface over the radius, as the game draws it.
+fn sheet(config: &TerrainConfig) -> f32 {
+    sheet_m(config, &crate::config::WaterSettings::default())
 }

@@ -36,16 +36,17 @@ pub fn kind_of(boat: &str) -> Kind {
     }
 }
 
-/// The water a craft needs under it at a mooring, m, from its hull in
-/// `vehicles.ron`: the Tern's keel reaches about 1.7 m under its waterline,
-/// and the Loon's hull is 0.36 m deep. A harbour's water is whole layers, so
-/// a metre floats a Loon and two a Tern. (A new world's own two boats are
-/// placed with more margin, `place::TERN_DEPTH_M` and `LOON_DEPTH_M`, in
-/// open water.)
+/// The water a craft needs under it at a mooring, m of the drawn sea, from
+/// its hull in `vehicles.ron`: the Tern's keel reaches about 1.7 m under its
+/// waterline, and the Loon's hull is 0.36 m deep. The drawn sea lies half a
+/// metre under the layers' sea level (`water.ron`), so a seabed one layer
+/// down holds 0.5 m of it, which floats a Loon; a Tern wants 2 m. (A new
+/// world's own two boats are placed with more margin, `place::TERN_DEPTH_M`
+/// and `LOON_DEPTH_M`, in open water.)
 fn draws(kind: Kind) -> f32 {
     match kind {
         Kind::Tern => 2.0,
-        _ => 1.0,
+        _ => 0.5,
     }
 }
 

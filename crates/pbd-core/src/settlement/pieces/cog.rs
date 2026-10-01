@@ -38,9 +38,9 @@ fn beam_at(lx: f32) -> f32 {
     b * 0.96
 }
 
-/// The cog's ship, cut where the template moors it. `terrace_m` is the
-/// sea's surface over the radius, which a harbour's terrace is. `None`
-/// where it is off the chart.
+/// The cog's ship, cut where the template moors it, floating with its
+/// waterline at `waterline_m` over the radius: the drawn sea. `None` where
+/// it is off the chart.
 #[allow(clippy::too_many_arguments)]
 pub fn ship(
     meshes: &mut Meshes,
@@ -50,10 +50,10 @@ pub fn ship(
     template: &Template,
     cog: &Cog,
     radius_m: f32,
-    terrace_m: f32,
+    waterline_m: f32,
 ) -> Option<BuildingSolids> {
     let cell_m = template.grid.cell_m;
-    let place = Place::new(chart, patch, cell_m, (cog.x, cog.z), radius_m, terrace_m)?;
+    let place = Place::new(chart, patch, cell_m, (cog.x, cog.z), radius_m, waterline_m)?;
     Some(cut(meshes, repeat_m, &place, cog))
 }
 
@@ -285,11 +285,13 @@ fn cut(
     finish(sink, place.frame, HULL.l / 2.0 + 1.0)
 }
 
-/// The cog's gangplank, from the pier up to its deck. The mockup ends it 2
-/// cm over the deck's edge, which two frames on the chart do not keep: a
-/// landing the walker stands on, not drawn, laps [`LANDING_M`] onto the
-/// deck at its height, as a pier's stretches lap. `None` where it is off
-/// the chart.
+/// The cog's gangplank, from the pier up to its deck: its foot on the pier
+/// at the template's height over the harbour's terrace, its head on the
+/// deck at the template's height over the cog's waterline, `(terrace_m,
+/// waterline_m)` over the radius. The mockup ends it 2 cm over the deck's
+/// edge, which two frames on the chart do not keep: a landing the walker
+/// stands on, not drawn, laps [`LANDING_M`] onto the deck at its height, as
+/// a pier's stretches lap. `None` where it is off the chart.
 #[allow(clippy::too_many_arguments)]
 pub fn gangplank(
     meshes: &mut Meshes,
@@ -299,10 +301,10 @@ pub fn gangplank(
     template: &Template,
     cog: &Cog,
     radius_m: f32,
-    terrace_m: f32,
+    (terrace_m, waterline_m): (f32, f32),
 ) -> Option<BuildingSolids> {
     let g = &cog.gangplank;
-    let ends = (terrace_m + g.from[1], terrace_m + g.to[1]);
+    let ends = (terrace_m + g.from[1], waterline_m + g.to[1]);
     let cell_m = template.grid.cell_m;
     let mut plank = ramp(
         meshes, repeat_m, patch, chart, cell_m, g, ends, radius_m, "boards",

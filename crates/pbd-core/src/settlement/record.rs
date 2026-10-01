@@ -658,7 +658,11 @@ pub fn build(
 /// every world. A masonry cell stands on its own cell's terrace and rises to
 /// the template's top over the datum; a gate's vault starts as far over its
 /// ground as the template has it. Masonry comes after the buildings, each
-/// with no rooms and no lights.
+/// with no rooms and no lights. `sheet_m` is the drawn sea's surface,
+/// metres over the radius, which a harbour's cog floats on (`sail-the-cog`
+/// design 6): the game draws it under the sea level the layers are filled
+/// to.
+#[allow(clippy::too_many_arguments)]
 pub fn build_town(
     town: &Town,
     template: Option<&Template>,
@@ -666,6 +670,7 @@ pub fn build_town(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     radius_m: f32,
+    sheet_m: f32,
     natural: impl Fn(Vec3) -> f32,
 ) -> Result<Built, String> {
     let mut built = build(town, patch, kits, repeat_m, radius_m, &natural)?;
@@ -713,7 +718,7 @@ pub fn build_town(
                 template,
                 c,
                 radius_m,
-                terrace,
+                sheet_m,
             );
             let plank = cog::gangplank(
                 &mut built.meshes,
@@ -723,7 +728,7 @@ pub fn build_town(
                 template,
                 c,
                 radius_m,
-                terrace,
+                (terrace, sheet_m),
             );
             let bow = cog::bow(patch, &built.chart, template, c);
             match (ship, plank, bow) {

@@ -1499,6 +1499,7 @@ fn the_walled_towns_wall_stands_and_its_gates_open() {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
+        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -1563,6 +1564,7 @@ fn a_stair_tower_climbs_to_the_walk_and_the_keep_to_its_roof() {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
+        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -1646,6 +1648,7 @@ fn a_walker_goes_through_a_gate_and_up_a_tower_onto_the_walk() {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
+        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -1962,6 +1965,10 @@ fn a_harbour_is_stored_in_schema_3() {
 
 /// The harbour laid on the test coast and cut whole: its buildings, then
 /// its piers' stretches and its light, every door open.
+/// The drawn sea's surface over the radius, as the game draws it: half a
+/// metre under the layers' sea level (`water.ron`, `depth_offset_m`).
+const SHEET_M: f32 = -0.5;
+
 fn cut_harbour() -> (Template, record::Town, record::Built) {
     let (template, town, _) = laid_harbour();
     let (patch, _) = patch();
@@ -1973,6 +1980,7 @@ fn cut_harbour() -> (Template, record::Town, record::Built) {
         &kits(),
         &|_: &str| 2.0,
         RADIUS_M,
+        SHEET_M,
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
@@ -2343,7 +2351,7 @@ fn a_walker_goes_down_the_slip_into_the_water() {
 /// falling and the body in nothing.
 #[test]
 fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
-    let (_, town, b) = cut_harbour();
+    let (_, _, b) = cut_harbour();
     let n = b.cog.expect("the cog stands");
     let (ship, plank) = (&b.solids[n], &b.solids[n + 1]);
     assert!(!b.cog_meshes.is_empty(), "the ship is drawn apart");
@@ -2369,11 +2377,11 @@ fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
     else {
         panic!("the cog has its stair");
     };
-    let sea = RADIUS_M + town.terrace as f32;
+    let sea = RADIUS_M + SHEET_M;
     let deck = ship.frame.origin.length() + 1.9;
     assert!(
         (deck - sea - 1.9).abs() < 0.01,
-        "the deck 1.9 m over the sea"
+        "the deck 1.9 m over the drawn sea"
     );
     let at = |f: &pieces::Frame, p: Vec2| f.world(Vec3::new(p.x, 0.0, p.y)).normalize();
     let way = [
@@ -2385,7 +2393,12 @@ fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
     let mut feet = feet_on(&b, way[0] * (plank.frame.origin.length() + 0.01))
         .expect("the pier at the gangplank's foot");
     assert!((feet - plank.frame.origin.length()).abs() < 0.03);
-    assert!(rise > 0.8, "the gangplank climbs {rise} m to the deck");
+    // The pier is a layer over the layers' sea level, the deck 1.9 m over
+    // the drawn sea half a metre under it.
+    assert!(
+        (rise - 0.4).abs() < 0.02,
+        "the gangplank climbs {rise} m to the deck"
+    );
     for (leg, name) in way
         .windows(2)
         .zip(["the gangplank", "the deck", "the stair"])
