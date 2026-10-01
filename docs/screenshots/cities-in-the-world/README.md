@@ -70,3 +70,14 @@ above. `tools/mockup_village_2b_shots.js` takes the mockup's same views, at
 | `game-2b-flight-landing.png` | `mockup-2b-flight-landing.png` | `--walk --at 29.63465 1.08097 --yaw -0.5 --pitch -28 --up 3.2 --open-doors` | Down the same flight from its landing, the well railed on both sides. |
 | `game-2b-door-shut.png` | `mockup-2b-door-shut.png` | `--walk --at 29.71981 0.82332 --yaw 59.2` | The Fieldstone house's door, shut: a new world's doors start shut, and the walker stops at them. |
 | `game-2b-door-open.png` | `mockup-2b-door-open.png` | the same with `--open-doors` | The same door open, its leaf swung in against the wall. |
+
+## Slice 4: built towns on the map (2026-10-01)
+
+The owner: "highlight built cities on the map please". In-game captures,
+2026-10-01: a cloud container on lavapipe at 1440 x 900 with no GPU, the
+fast build under `xvfb-run`, a new memory-only world at `--time 12`.
+
+| file | flags | what it shows |
+| --- | --- | --- |
+| `game-map-built-spawn.png` | `--walk --menu map --map-mpp 12` | The spawn's continent. A built town's marker is cream with a green ring: Holbrook, Linenleigh, Holingmouth, Holmouth, Ashenstead, Dunmouth and the rest. A site whose kind has no town yet is dimmed, its name too: Durnacrag, Huatzico, Barberg, Coringport. The legend reads "55 settlements on the map: 26 built, 29 still to come." |
+| `game-map-built-world.png` | `--walk --menu map --map-mpp 40` | The whole planet: the 20 villages and 6 walled towns ringed, the harbours, desert, tundra, jungle, swamp, cliff and cave sites faint. |
