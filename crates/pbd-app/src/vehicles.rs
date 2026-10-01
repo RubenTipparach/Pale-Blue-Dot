@@ -493,6 +493,10 @@ pub struct VehicleScript {
     pub board: Option<Kind>,
     /// In the seat rather than the chase view.
     pub seat: bool,
+    /// A cog boarded is cast off with its yard braced this many degrees
+    /// off square and 2 m/s of way along its bow (`--sail`): a capture's,
+    /// so a few seconds show it under way.
+    pub sail: Option<f32>,
 }
 
 fn scripted_board(world: &mut World) {
@@ -510,6 +514,11 @@ fn scripted_board(world: &mut World) {
         .iter(world)
         .find(|(_, v)| v.craft.kind == kind)
         .map(|(e, _)| e);
+    // A harbour makes its cog when the fleet first meets it, after the
+    // fleet is in: wait for it.
+    if found.is_none() && kind == Kind::Cog {
+        return;
+    }
     world.resource_mut::<VehicleScript>().board = None;
     let Some(entity) = found else {
         warn!("--aboard: this world has no {}", kind.name());
@@ -517,6 +526,16 @@ fn scripted_board(world: &mut World) {
     };
     world.resource_mut::<view::VehicleView>().seat = script.seat;
     take_seat(world, entity, true);
+    if let Some(deg) = script.sail
+        && let Some(mut vehicle) = world.get_mut::<Vehicle>(entity)
+        && let pbd_core::vehicle::CraftState::Cog(s) = &mut vehicle.craft.state
+    {
+        s.yard = f64::from(deg).to_radians();
+        let craft = &mut vehicle.craft;
+        craft.mooring = None;
+        craft.body.velocity = craft.body.axis(pbd_core::vehicle::FORWARD) * 2.0;
+        info!("--sail: cast off with the yard braced {deg} deg");
+    }
 }
 
 /// Step off: the craft stays, unattended; the walker is put at its exit.

@@ -584,6 +584,20 @@ only with screenshots).
   - Proved by core `the_cogs_stern_lantern_stands_on_its_aftcastle` and app
     `a_cogs_stern_lantern_burns_from_dusk_and_its_light_goes_with_it`. How
     it looks at 22:30 is for the shots.
+- **The shots' instrument (written 2026-10-01, before code).** A headless
+  capture can board a craft (`--aboard`) but cannot cast off or set a
+  sail. Two capture flags change nothing a player can do:
+  - `--aboard cog` waits for the harbour to make its cog, where it used to
+    give up on the first frame.
+  - `--sail <deg>` casts the boarded cog off, braces its yard `deg` off
+    square, and gives it 2 m/s of way along its bow. A capture of a few
+    seconds then shows it under way, sail set, rather than gathering way
+    from rest.
+
+  The shots are:
+  - the cog under sail, in the chase view;
+  - the cog from its helm, under sail;
+  - the moored cog from the quay at 22:30, its lantern lit.
 - **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
   in the voxel field, which cannot sail. A light carried on a craft is part
   of the craft's drawing.

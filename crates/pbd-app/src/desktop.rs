@@ -90,6 +90,9 @@ pub struct Launch {
     /// has nobody to walk up to a craft and press F. Implies `--walk`.
     pub aboard: Option<pbd_core::vehicle::Kind>,
     pub seat: bool,
+    /// Capture instrument: a cog boarded with `--aboard cog` is cast off
+    /// with its yard braced this many degrees and 2 m/s of way.
+    pub sail: Option<f32>,
     /// Static capture instrument: translate the scene within the local frame.
     pub render_offset: Vec3,
     /// Capture instrument for the `shore` view: camera height above the last
@@ -245,6 +248,7 @@ impl Launch {
             fish: false,
             aboard: None,
             seat: false,
+            sail: None,
             render_offset: Vec3::ZERO,
             height: None,
             spawn: None,
@@ -537,6 +541,14 @@ impl Launch {
                     result.walk = true;
                 }
                 "--seat" => result.seat = true,
+                "--sail" => {
+                    i += 1;
+                    result.sail = Some(
+                        args.get(i)
+                            .and_then(|a| a.parse().ok())
+                            .expect("--sail requires the yard's angle in degrees"),
+                    );
+                }
                 "--fixed-dt" => result.fixed = true,
                 "--render-offset" => {
                     let mut components = [0.0; 3];
@@ -1039,6 +1051,7 @@ pub fn run(args: &[String]) {
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
             seat: launch.seat,
+            sail: launch.sail,
         });
         if launch.at.is_some() {
             app.insert_resource(pbd_app::towns::RespawnInTown);
