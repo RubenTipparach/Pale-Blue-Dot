@@ -284,6 +284,75 @@ only with screenshots).
   - **Not ticked yet:** tasks 3.1 and 3.2, and the `player/walking`
     requirement, are about a craft's deck while it sails. They tick when
     step 3 drives this same deck from the craft.
+- **Step 3 in detail (written 2026-10-01, before code).** What it builds
+  on, measured on this branch:
+  - **A craft** (`pbd_core::vehicle`) is a spec in `vehicles.ron`, a
+    `CraftState` per kind, and a `forces` function, stepped four times a
+    tick in `FixedUpdate` (`step_vehicles`), before the walker's physics
+    step.
+  - **The Tern** is the model: a hull of cells floated on the sampled sea
+    (`hull::float`, cells at most a third of the beam), its sail one foil
+    whose angle the sheet stops, a keel and a rudder as wet foils, and
+    resistance, windage, bilge and contacts.
+  - **Kinds are matched** in 10 places in the core and 13 in the app:
+    draw, view, chase camera, HUD, place, saves, harbour.
+  - **A town's pieces** are numbered in `Structures` by town, and the
+    numbers shift as towns come and go. A ship must not be one of them.
+
+  The decisions:
+  - **`Kind::Cog`, a spec of the Tern's shape.** Recommendation taken (ask
+    only with screenshots).
+    - The hull is the mockup's: 15 m by 5 m, 3.2 m deep, 1 m of sheer,
+      floating 1.2 m deep. Its cells are 0.8 m, under a third of the beam.
+    - Its mass comes from what that hull displaces at that draught, about
+      45 t. Its parts put the ballast low.
+    - **The square sail** is one foil on the yard, about 60 m², nearly
+      square, quick to stall, and draggy. Its centre of effort is at the
+      sail's middle, under the yard.
+    - **The braces** turn the yard about the mast, at most 60° either way,
+      at a fixed rate. A cog cannot point high: it sails little closer than
+      70° off the wind.
+    - A long keel and a stern rudder are wet foils.
+    - Validation refuses a hull cell over a third of the beam (it already
+      does) and a sail with no yard.
+  - **`CogState { yard, tiller }`.** At the helm, W and S brace the yard
+    round and A and D steer. F at the tiller takes the helm and lets go of
+    it. A cog nobody steers keeps its yard and tiller as they were.
+  - **Its deck is cut once, in the craft's own frame** (`cog::ship_in` at a
+    frame at the origin), and held by the craft, not in `Structures`.
+    - The walker asks the towns' pieces and the craft's decks.
+    - `GroundState::on` names which: a town piece by its number, or a craft
+      by its entity.
+    - Each tick the deck's frame is the craft's pose. Its `then` is taken
+      before `step_vehicles` and its `now` after, so `ride_decks` carries
+      the walker by exactly the motion the craft made.
+  - **It is drawn from the same cut**, the ship's meshes in the craft's
+    frame, on the craft's entity. The harbour's piece and the craft are one
+    model.
+  - **The harbour's cog becomes a craft**, made once when the fleet first
+    meets the harbour, as the boats are, with its berth `(site, COG)`.
+    - **Moored, it keeps its berth on the step 2 swing.** Its integrator does
+      not run, so the gangplank meets its deck. A moored ship's lines and
+      fenders are not worth simulating.
+    - **Casting off (T at the helm) hands it to its integrator** at the
+      swing's pose and velocity. Making fast again (T within a few metres of
+      its berth, slow) puts it back on the swing there. A cog at sea
+      anchors as a boat does.
+    - Once the craft is made, the town is cut without its ship, and the
+      gangplank stays the town's.
+  - **The stern lantern** is part of the cog's drawing, lit from dusk as a
+    lamp is. It is no lamp block, because those cannot sail.
+  - **Verify.**
+    - Core: the spec validates, and a cog's sail follows its braces against
+      the apparent wind.
+    - Core: a scripted reach, beat and run log speed and heel. The heel
+      stays under 15° on the reach.
+    - App: a harbour's cog is made once, moored at its berth, and still
+      boarded up its gangplank.
+    - App: cast off, take the helm and sail a reach. Let go of the helm and
+      walk to the aftcastle while the ship sails and turns. These are the
+      `player/walking` scenarios, which move into the main spec then.
+    - Shots: the cog under sail from the pier, and from its deck.
 - **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
   in the voxel field, which cannot sail. A light carried on a craft is part
   of the craft's drawing.
