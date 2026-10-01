@@ -120,3 +120,12 @@ those shots are lit by Bevy's own sun and ambient, so their faces turned from
 the sun are near black. The terrain and its shadows in them are right. The
 views from above are retaken on the fixed build.
 
+A second fault, found 2026-10-01 when the retakes came back: the two
+`--no-shadows` shots from above were byte for byte the shadowed ones. The
+flag was read only in a walking run, inside `desktop.rs`'s block for runs that
+are not photos, so a `--view column` still ignored it and drew its shadows.
+`shadows-on-off.jpg`'s first bottom row compared shadows with shadows. The
+flag now applies in every run, and the two views are retaken. `--open-doors`
+and `--room-sky` are still read only when walking. Their photos from above
+draw the doors shut, which no view from 60 m can see.
+

@@ -986,6 +986,14 @@ pub fn run(args: &[String]) {
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
     // with Bevy's own sun and ambient, near black on every face in shade.
     app.add_plugins(pbd_app::field_light::FieldLightPlugin);
+    // `--no-shadows` in every run, a still as much as a walk: read only when
+    // walking, a photo from above drew its shadows regardless.
+    if launch.no_shadows {
+        app.insert_resource(pbd_app::planet::shadow::ShadowSettings {
+            enabled: false,
+            ..default()
+        });
+    }
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
@@ -1024,12 +1032,6 @@ pub fn run(args: &[String]) {
                 open,
                 shut,
                 bounce: launch.room_bounce.unwrap_or(base.bounce),
-            });
-        }
-        if launch.no_shadows {
-            app.insert_resource(pbd_app::planet::shadow::ShadowSettings {
-                enabled: false,
-                ..default()
             });
         }
         if launch.break_s.is_some() || launch.tool.is_some() {
