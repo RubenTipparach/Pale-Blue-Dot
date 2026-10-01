@@ -1109,7 +1109,12 @@ fn print_where_caves_open_into_towns() {
     let sites: Vec<Site> = pbd_core::sites::generate(&load_rules(), &config, list_spawn(), 4)
         .sites
         .into_iter()
-        .filter(|s| matches!(s.kind, SiteKind::Village | SiteKind::Walled | SiteKind::Harbour))
+        .filter(|s| {
+            matches!(
+                s.kind,
+                SiteKind::Village | SiteKind::Walled | SiteKind::Harbour
+            )
+        })
         .collect();
     let mut opened_towns = 0;
     for site in &sites {
@@ -1120,7 +1125,8 @@ fn print_where_caves_open_into_towns() {
         };
         let town = lay_out(site, template, &config).unwrap();
         let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
-        let (chart, _) = record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let (chart, _) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
         let worms = pbd_core::worms::gather(&field, &config, site.direction, 250.0);
         let mut opened = Vec::new();
         for (i, c) in town.cells.iter().enumerate() {
@@ -1131,7 +1137,9 @@ fn print_where_caves_open_into_towns() {
                 .filter_map(|&a| layer_at(a))
                 .collect();
             let mut hit = false;
-            worms.carve(&config, d, field.floor_layers, |index| hit |= top.contains(&index));
+            worms.carve(&config, d, field.floor_layers, |index| {
+                hit |= top.contains(&index)
+            });
             if hit {
                 opened.push((c.0, c.1));
             }
