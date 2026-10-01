@@ -1016,6 +1016,32 @@ so the first can be looked at before it can be walked into.
         - A walled town stored by a 4b build keeps the 29 buildings it was
           stored with. It gets its wall, which is the template's, but not
           the towers or the keep, which would be new buildings.
+    - **The seam on the walk (found 2026-10-01 by the walker test).**
+      - **The finding.** Each masonry cell is a prism standing straight up
+        from its own cell, in its own frame. Two neighbouring cells' "up"
+        differ by the angle between their centres, so their prisms lean
+        apart. Up on the walk the floors leave a wedge between them, as wide
+        as the walk's height times the cell spacing over the radius.
+        - `a_walker_goes_through_a_gate_and_up_a_tower_onto_the_walk`, on
+          the 300 m gold-standard body, measured 61 mm at 7 m. The gap was
+          the same between the tower and its wall cell and between two wall
+          cells, and nothing answered a floor inside it.
+        - On the shipped 4800 m planet it is 7 × 2.833 / 4800 = 4 mm. A
+          walker at about 7 cm a tick lands in it on about one crossing in
+          15 and falls for that tick.
+        - A house has no seam: all its cells share one frame.
+      - **The fix.** A wall cell's walk reaches across the seam on each
+        edge that has no merlons, the edges that face more wall, a tower or
+        the town.
+        - The reach is a strip as wide as the wedge, the walk's height
+          times the distance between the two cells' centres over the
+          radius: 66 mm at 7 m on 300 m, 4 mm on 4800 m.
+        - The strip is a floor only, 0.1 m deep under the walk's top. The
+          walker stands on it; nothing is drawn and nothing is solid.
+        - The drawn crack is left alone. At 4 mm it is under a pixel from
+          the walk.
+      - **Verify.** The same walker test walks out of each tower's doorway
+        onto the walk without falling, sampled at 40 points.
     - **Export.** The exporter calls the mockup's own `isWall`, `gate` and
       `inTown`, and writes each wall cell's cell, its bottom (its ground, or
       4 m over it at a gate), `WALL_TOP` and its merlon edges. The game

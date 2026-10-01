@@ -1122,6 +1122,21 @@ pub fn cut_masonry(
         top: y1,
         bottom: y0,
     });
+    // The seam: each cell stands up from its own cell, so up on the walk
+    // two neighbours lean apart by the angle between their centres. Every
+    // edge without merlons (more wall, a tower, the town) reaches across
+    // the wedge with a strip of floor, which is not drawn and not solid.
+    for d in (0..6).filter(|d| !cell.merlons.iter().any(|&m| usize::from(m) % 6 == *d)) {
+        let (a, b) = (corners[d], corners[(d + 1) % 6]);
+        let half = (a + b) * 0.5 - centre;
+        let seam = y1 * 2.0 * half.length() / (radius_m + ground_m);
+        let out = half.normalize_or_zero() * seam;
+        sink.surfaces.push(Surface::Floor {
+            outline: ccw(vec![a, b, b + out, a + out]),
+            top: y1,
+            bottom: y1 - 0.1,
+        });
+    }
     let (w, h, t) = MERLON_M;
     for &d in &cell.merlons {
         let d = usize::from(d) % 6;

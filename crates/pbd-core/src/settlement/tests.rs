@@ -1610,3 +1610,198 @@ fn a_stair_tower_climbs_to_the_walk_and_the_keep_to_its_roof() {
     }
     assert_eq!((towers, keeps), (2, 1));
 }
+
+/// Task 0.13: the walker's way through each gate and up each stair tower
+/// onto the wall walk, asked of what the walker asks a town (`holds` and
+/// `stand`): a body 1.8 m tall and 0.3 m round, its feet on the highest
+/// top within a tread's reach.
+#[test]
+fn a_walker_goes_through_a_gate_and_up_a_tower_onto_the_walk() {
+    use pieces::Surface;
+    let template = walled();
+    let town = laid_village(&template);
+    let (patch, _) = patch();
+    let natural = slope();
+    let b = record::build_town(
+        &town,
+        Some(&template),
+        patch,
+        &kits(),
+        &|_: &str| 2.0,
+        RADIUS_M,
+        move |d| natural(d).floor(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let natural = slope();
+    let (chart, _) = record::ground_of(&town, patch, RADIUS_M, move |d| natural(d).floor())
+        .unwrap_or_else(|e| panic!("{e}"));
+    let centre = |(c, r): (i32, i32)| chart.cell(c, r).map(|i| patch.cells[i].direction);
+    let held = |p: Vec3| b.solids.iter().any(|s| s.holds(p, 0.9, 0.3));
+    let walls: BTreeSet<(i32, i32)> = template.masonry.iter().map(|m| (m.c, m.r)).collect();
+    let n = template.buildings.len();
+
+    // Across every wall cell from the cell before it to the cell after, on
+    // the ground of the wall's cell: a gate lets the body by, a wall stops it.
+    let (mut through, mut stopped) = (0, 0);
+    for (m, s) in template.masonry.iter().zip(&b.solids[n..]) {
+        let across = (0..3).find_map(|d| {
+            let (a, z) = (neighbour(m.c, m.r, d), neighbour(m.c, m.r, d + 3));
+            if walls.contains(&a) || walls.contains(&z) {
+                return None;
+            }
+            Some((centre(a)?, centre(z)?))
+        });
+        let Some((a, z)) = across else {
+            continue;
+        };
+        let feet = s.frame.origin.length();
+        let stops = (0..=40).any(|k| held(a.lerp(z, k as f32 / 40.0).normalize() * (feet + 0.95)));
+        if s.solids[0].y0 > 0.5 {
+            assert!(
+                !stops,
+                "({}, {}): the gate's passage stops the walker",
+                m.c, m.r
+            );
+            through += 1;
+        } else {
+            assert!(stops, "({}, {}): walked through the wall", m.c, m.r);
+            stopped += 1;
+        }
+    }
+    assert_eq!(through, 4, "both cells of both gates");
+    assert!(stopped > 80, "{stopped} wall cells walked into");
+
+    // Along the walk from every wall cell to each wall cell beside it, the
+    // feet always on the walk: no seam between two cells' frames.
+    let datum = record::datum(&template);
+    let mut seams = 0;
+    for (m, s) in template.masonry.iter().zip(&b.solids[n..]) {
+        let walk = RADIUS_M + town.terrace as f32 + (m.to - datum) as f32;
+        for d in 0..6 {
+            let next = neighbour(m.c, m.r, d);
+            let Some(k) = template.masonry.iter().position(|x| (x.c, x.r) == next) else {
+                continue;
+            };
+            let (a, z) = (
+                s.frame.origin.normalize(),
+                b.solids[n + k].frame.origin.normalize(),
+            );
+            for j in 0..=40 {
+                let at = a.lerp(z, j as f32 / 40.0).normalize() * (walk + 0.01);
+                let feet = [s, &b.solids[n + k]]
+                    .iter()
+                    .filter_map(|x| x.stand(at, 0.3).0)
+                    .fold(f32::MIN, f32::max);
+                assert!(
+                    (feet - walk).abs() < 0.02,
+                    "({}, {}) to {next:?}: the feet at {} m on a walk at {} m",
+                    m.c,
+                    m.r,
+                    feet - RADIUS_M,
+                    walk - RADIUS_M
+                );
+            }
+            seams += 1;
+        }
+    }
+    assert!(seams > 200, "{seams} steps between wall cells");
+
+    // Up each tower's newel from its foot, the feet on each tread in turn,
+    // then round its landing and out of its doorway onto the walk.
+    let mut towers = 0;
+    for (def, s) in town.buildings.iter().zip(&b.solids) {
+        let Some(newel) = def.newel.as_ref().filter(|_| def.cells.len() == 1) else {
+            continue;
+        };
+        let Some(&Surface::Newel {
+            centre: c,
+            start,
+            sense,
+            top,
+            turn_m,
+            landing,
+            ..
+        }) = s
+            .surfaces
+            .iter()
+            .find(|x| matches!(x, Surface::Newel { .. }))
+        else {
+            panic!("{}: no newel", def.name);
+        };
+        let floor = s.frame.origin.length();
+        let (ed, ey) = newel.exits[0];
+        let [tc, tr] = def.cells[0];
+        let out = neighbour(tc, tr, usize::from(ed));
+        let wall = template
+            .masonry
+            .iter()
+            .position(|m| (m.c, m.r) == out)
+            .map(|k| &b.solids[n + k])
+            .unwrap_or_else(|| panic!("{}: no wall at its doorway", def.name));
+        // Feet on whatever the tower or the wall answers within a tread of
+        // where they are; the body over them in nothing.
+        let step = |plan: glam::Vec2, feet: f32, what: &str| -> f32 {
+            let at = s.frame.world(Vec3::new(plan.x, feet, plan.y));
+            let up = at.normalize();
+            let next = [s, wall]
+                .iter()
+                .filter_map(|x| x.stand(at, 0.3).0)
+                .fold(f32::MIN, f32::max)
+                - floor;
+            assert!(
+                next > feet - 0.3,
+                "{}, {what}: fell from {feet} m to {next} m",
+                def.name
+            );
+            let body = up * (floor + next + 0.95);
+            assert!(!held(body), "{}, {what}: held at {next} m", def.name);
+            next
+        };
+        let tau = std::f32::consts::TAU;
+        let r_walk = 0.72;
+        let on = |phi: f32| {
+            let a = start + sense * phi;
+            c + glam::Vec2::new(a.cos(), a.sin()) * r_walk
+        };
+        let end = top / turn_m * tau;
+        let mut feet = 0.0;
+        for k in 1..=200 {
+            let phi = end * k as f32 / 200.0;
+            feet = step(on(phi), feet, "the newel");
+        }
+        assert!((feet - top).abs() < 0.01, "{}: up at {feet} m", def.name);
+        assert!(
+            (top - ey).abs() < 0.01,
+            "{}: its way out at {ey} m",
+            def.name
+        );
+        // The doorway's bearing on the landing: the wall cell's centre.
+        let w = s.frame.local(
+            centre(out).unwrap_or_else(|| panic!("{}: the walk is off the chart", def.name))
+                * (floor + ey),
+        );
+        let w = glam::Vec2::new(w.x, w.z);
+        let a_out = (w - c).y.atan2((w - c).x);
+        let phi_out = end + (sense * (a_out - start) - end).rem_euclid(tau);
+        assert!(
+            phi_out - end <= landing + 1e-3,
+            "{}: the doorway {:.0} degrees round from the landing's end, past its {:.0}",
+            def.name,
+            (phi_out - end).to_degrees(),
+            landing.to_degrees()
+        );
+        // From the last tread straight out through the doorway: the landing
+        // is 30 degrees, so close to the post its rail is a body's width away.
+        let from = on(end);
+        for k in 1..=40 {
+            feet = step(from.lerp(w, k as f32 / 40.0), feet, "the doorway");
+        }
+        assert!(
+            (feet - ey).abs() < 0.05,
+            "{}: on the walk at {feet} m",
+            def.name
+        );
+        towers += 1;
+    }
+    assert_eq!(towers, 2);
+}
