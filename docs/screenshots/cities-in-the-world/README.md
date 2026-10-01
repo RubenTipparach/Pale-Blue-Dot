@@ -129,6 +129,9 @@ world, `--open-doors --rain 0`; walking runs at the quay, market and shipyard,
 things look like, not how smoothly they run.
 
 These were rendered on the build before the cog became a craft, so its ship
-here is the town's piece; moored, the craft is the same cut. The log of the
-quay run says 17 boats moored at Holinghaven, but none is in the quay frame,
-where the mockup moors them along the piers: under investigation.
+here is the town's piece; moored, the craft is the same cut. The quay run
+moored 17 boats at Holinghaven (its log). They are in the frame: the flat
+teal shapes along the piers on the left are the rowboats and canoes, moored
+as the game's Loon (a teal canoe that sits low), and a Tern's sail stands
+past the lighthouse. Beside the mockup's wooden rowboats and white sails they
+hardly read as boats from the quay.
