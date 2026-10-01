@@ -23,7 +23,7 @@ struct Params {
     column: vec4<f32>,         // tier reach m, cave dark floor, cave dark depth m, cos(2 x reach / R)
     ground: vec4<f32>,         // sod depth m, soil depth m, snow tileset slot, spare
     tilesets: array<vec4<u32>,2>, // atlas slot per biome, in Biome order
-    fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs, spare
+    fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs; w one for a sun cascade (`sun-shadows`)
     lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
     bands_prev: vec4<f32>,     // and its band cosines
     records_in: vec4<f32>,     // the records' ring per fine level round `anchor`, cosines, a tile inside:
@@ -385,9 +385,15 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // Capacities cover the whole dispatch before any counts can be published;
     // malformed bindings must not create partial generations or invalid IDs.
     let count = u32(params.settings.y);
+    // A sun cascade (`sun-shadows` decision 3) lists what casts into its box:
+    // the terrain, the trees and the column tier, the camera's detail levels,
+    // and no horizon, since a ridge past the camera's horizon still shades
+    // what the camera sees. No sea sheet and no clutter.
+    let cascade = params.fade.w > 0.5;
     // The terrain and foliage lists take a cell twice while a landing
     // cross-fades, once per partition (`detail-fade`), so they hold two.
-    if arrayLength(&cells)<count || arrayLength(&visible)<2u*count || arrayLength(&foliage)<2u*count || arrayLength(&water)<count || arrayLength(&clutter)<count || arrayLength(&column)<count { return; }
+    if arrayLength(&cells)<count || arrayLength(&visible)<2u*count || arrayLength(&foliage)<2u*count || arrayLength(&column)<count { return; }
+    if !cascade && (arrayLength(&water)<count || arrayLength(&clutter)<count) { return; }
     if id.x >= count { return; }
     if !slot_live(id.x) { return; }
     let cell = cells[id.x];
@@ -421,7 +427,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     let horizon_cosine = (ca*cb-sa*sb)*0.9998380043739528
         - (sa*cb+ca*sb)*0.017999028015746276 - 0.000002;
     let facing = dot(cell.direction_height.xyz, params.camera.xyz/max(camera_radius,1.0));
-    if facing < horizon_cosine { return; }
+    if !cascade && facing < horizon_cosine { return; }
     // Every invocation emits at most once, capacity equals authoritative cell
     // count. No partial geometry generation can be published on overflow.
     // The terrain cap sits at its real height, the seabed included; the water
@@ -445,7 +451,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     // The sea sheet, the clutter and the columns are drawn for the current
     // partition only; the foliage below is drawn for both.
-    if now && cell.direction_height.w < 0.0 {
+    if now && !cascade && cell.direction_height.w < 0.0 {
         let sea = params.water_absorption.w;
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;
@@ -473,7 +479,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     // A clutter bound is the cell's own hexagon and the tallest piece standing
     // on it, which is a couple of metres rather than a tree's fifteen.
-    if now && has_clutter(cell,center) && in_frustum(center,4.) {
+    if now && !cascade && has_clutter(cell,center) && in_frustum(center,4.) {
         let slot = atomicAdd(&args[3].instance_count,1u);
         clutter[slot] = id.x;
     }

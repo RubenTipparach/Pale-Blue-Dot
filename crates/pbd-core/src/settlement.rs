@@ -17,6 +17,8 @@ use serde::{Deserialize, Serialize};
 pub mod chart;
 pub mod ground;
 pub mod pieces;
+pub mod record;
+pub mod sea;
 
 /// Metres from one layer to the next: a storey is three.
 pub const LAYER_M: f32 = 1.0;
@@ -61,6 +63,66 @@ pub struct Template {
     /// Cells with a street lamp.
     #[serde(default)]
     pub lamps: Vec<[i32; 2]>,
+    /// Whether the town stands on several levels, each built cell at its
+    /// own height (slice 4b): the walled town's terraces. A template without
+    /// it is laid flat on one terrace, as the village always has been.
+    #[serde(default)]
+    pub terraced: bool,
+    /// Its masonry cells (slice 4c): the walled town's curtain wall and its
+    /// gates, as the mockup's `buildWalls` raises them.
+    #[serde(default)]
+    pub masonry: Vec<MasonryCell>,
+    /// Whether the town stands on the sea (slice 4d): the template's 0 m is
+    /// the sea's surface, and no cell its ground puts under the sea is laid.
+    #[serde(default)]
+    pub sea: bool,
+    /// Its piers (slice 4d): planks on piles, as the mockup's `bridge`.
+    #[serde(default)]
+    pub piers: Vec<Pier>,
+    /// Lanterns off the grid, `[x, y, z]` in the mockup's metres: the
+    /// harbour's along its quay and at its piers' ends.
+    #[serde(default)]
+    pub lanterns: Vec<[f32; 3]>,
+    /// The harbour's light on its mole (slice 4d).
+    #[serde(default)]
+    pub light: Option<RoundTower>,
+}
+
+/// A pier (slice 4d): a deck of planks `width_m` wide from `from` to `to`,
+/// `[x, y, z]` in the mockup's metres (x east, z south, y over the sea), on
+/// piles down to the ground under it.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Pier {
+    pub from: [f32; 3],
+    pub to: [f32; 3],
+    pub width_m: f32,
+}
+
+/// A round stone tower standing on the ground at `(x, z)`, the mockup's
+/// metres: the harbour's light.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct RoundTower {
+    pub x: f32,
+    pub z: f32,
+    pub radius_m: f32,
+    /// Its foot, layers over the template's 0 m.
+    pub base_m: i32,
+    /// Its top, metres over the template's 0 m.
+    pub top_m: f32,
+}
+
+/// One cell of masonry: a prism from `from` to `to`, layers on the mockup's
+/// grid, with two merlons on each edge in `merlons` (the mockup's
+/// directions). A gate's `from` is over its ground, and the passage under it
+/// is open.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct MasonryCell {
+    pub c: i32,
+    pub r: i32,
+    pub from: i32,
+    pub to: i32,
+    #[serde(default)]
+    pub merlons: Vec<u8>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
@@ -94,6 +156,51 @@ pub struct BuildingDef {
     pub chimney: Option<[i32; 2]>,
     #[serde(default)]
     pub stair_cells: Vec<[i32; 2]>,
+    /// A stair tower's or a keep's newel (slice 4c), where it is not a
+    /// house's: its entry, how high it climbs and its walls rise, and its
+    /// ways out.
+    #[serde(default)]
+    pub newel: Option<NewelDef>,
+    /// A flat roof that is walked on, merlons on its outer edges: the keep's.
+    #[serde(default)]
+    pub parapet: bool,
+    /// `[c, r, d]`: an outer edge with no wall (slice 4d), a boathouse's
+    /// seaward side, the mockup's `skipWall`.
+    #[serde(default)]
+    pub open: Vec<[i32; 3]>,
+    /// A house on piles (slice 4d): the harbour's fish huts.
+    #[serde(default)]
+    pub stilts: Option<Stilts>,
+}
+
+/// A house on stilts (slice 4d), the mockup's `stiltHouse`: its floor on
+/// piles down to the ground under it, a deck on the same piles at its door,
+/// and an open stair from the deck down to where it lands.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Stilts {
+    /// The deck's cells.
+    pub deck: Vec<[i32; 2]>,
+    /// `[c, r, d]`: the deck edge the porch stair goes down from.
+    pub porch: [i32; 3],
+    /// Where the stair lands, metres over the template's 0 m.
+    pub foot_m: f32,
+}
+
+/// A newel that is not a house's (slice 4c): the mockup's `newelStair` as a
+/// stair tower or the keep calls it. Heights are metres over the building's
+/// ground floor.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct NewelDef {
+    /// The edge it climbs from.
+    pub entry: u8,
+    /// How high it climbs.
+    pub top_m: f32,
+    /// How high its own walls rise; over a flat roof, they are a turret.
+    pub wall_top_m: f32,
+    /// Each way out, `[edge, metres]`: a doorway at that height in that
+    /// edge's wall.
+    #[serde(default)]
+    pub exits: Vec<(u8, f32)>,
 }
 
 fn one() -> u32 {

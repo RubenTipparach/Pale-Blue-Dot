@@ -3,6 +3,7 @@
 // previously documented Tenebris port in hex_terrain.wgsl. The sea is not
 // drawn here: water cells draw their seabed and water.wgsl draws the sheet.
 #import pbd::clouds::cloud_map_smooth
+#import pbd::sun_shadow::{SunCascades, sun_shadow}
 
 struct Cell {
     direction_height: vec4<f32>,
@@ -28,7 +29,7 @@ struct Params {
     column: vec4<f32>,         // tier reach m, cave dark floor, cave dark depth m, cos(2 x reach / R)
     ground: vec4<f32>,         // sod depth m, soil depth m, snow tileset slot, spare
     tilesets: array<vec4<u32>,2>, // atlas slot per biome, in Biome order
-    fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs, spare
+    fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs; w one for a sun cascade (`sun-shadows`)
     lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
     bands_prev: vec4<f32>,     // and its band cosines
     records_in: vec4<f32>,     // the records' ring per fine level (`detail-fade` section 4);
@@ -43,6 +44,12 @@ struct Params {
 @group(1) @binding(1) var weather_wind: texture_cube<f32>;
 @group(1) @binding(2) var weather_overlay: texture_cube<f32>;
 @group(1) @binding(3) var weather_sampler: sampler;
+// The sun's cascades (`sun-shadows`): their depth maps, the comparison sampler
+// that reads them, and where each stands. `planet_shadow.rs` draws and binds
+// them; `sun_shadow.wgsl` reads them, for this pass and `field_lit.wgsl` alike.
+@group(2) @binding(0) var sun_map: texture_depth_2d_array;
+@group(2) @binding(1) var sun_cmp: sampler_comparison;
+@group(2) @binding(2) var<storage, read> sun_cascades: SunCascades;
 
 // How much of the sun reaches a point past the clouds: the cloud where the
 // ray toward the sun crosses the cloud layer (`clutter_more.w`, a radius),
@@ -1589,10 +1596,12 @@ fn tree_shown(radial: vec3<f32>, position: vec3<f32>, part: Partition) -> f32 {
     return clamp(left/params.fade.x, 0.0, 1.0);
 }
 
-@fragment
-fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
+// Whether a pixel of this piece is left out: a landing's dissolve, a band's
+// cross-fade, a split midpoint cell's far half, a tree thinning at the edge of
+// its range (`detail-fade`, `distance-lod-fade`). The main pass and the sun's
+// cascades ask the same question, so a shadow is cast by what is drawn.
+fn dropped(input: VertexOut) -> bool {
     let radial = normalized(input.position);
-    let part = partition_of(input.part_mark);
     let mask = bayer4(input.clip.xy);
     // A landing's dissolve (`detail-fade`): each pixel shows the new
     // partition where its mask is under the dissolve's progress and the old
@@ -1600,7 +1609,7 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // run in step with the distance cross-fade's.
     let dissolve = fract(52.9829189*fract(dot(input.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
     if input.part_mark != PART_BOTH && ((input.part_mark == PART_NEW) != (dissolve < params.fade.y)) {
-        discard;
+        return true;
     }
     // The partition in this pixel's dither class (`distance-lod-fade`): the
     // cell is drawn where its owner is in its band (the nearer owner, for a
@@ -1610,15 +1619,15 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // owners fall on different sides.
     let cut = input.fade_t.z < 0.0;
     let next_t = select(input.fade_t.z, -1.0 - input.fade_t.z, cut);
-    if next_t > mask { discard; }
+    if next_t > mask { return true; }
     if input.level > base_level() {
         if cut {
-            if (input.fade_t.x > mask) == (input.fade_t.y > mask) { discard; }
+            if (input.fade_t.x > mask) == (input.fade_t.y > mask) { return true; }
         } else if input.kind == 2u {
-            if min(input.fade_t.x, input.fade_t.y) <= mask { discard; }
+            if min(input.fade_t.x, input.fade_t.y) <= mask { return true; }
         } else {
             let owner_t = select(input.fade_t.y, input.fade_t.x, dot(radial, input.split) >= 0.0);
-            if owner_t <= mask { discard; }
+            if owner_t <= mask { return true; }
         }
     }
     // A tree thins out through the same mask over the last `tree_fade_m`
@@ -1630,9 +1639,21 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         // Only the foliage range now: at a band's edge a tree fades with its
         // cell, across the ring (`distance-lod-fade`).
         let left = params.settings.w - distance(input.position, params.camera.xyz) - TREE_FADE_MARGIN_M;
-        if mask >= clamp(left/params.fade.x, 0.0, 1.0) { discard; }
+        if mask >= clamp(left/params.fade.x, 0.0, 1.0) { return true; }
     }
+    return false;
+}
 
+// The depth the sun's cascades are drawn with (`sun-shadows` decision 3).
+@fragment
+fn shadow_fragment(input: VertexOut) {
+    if dropped(input) { discard; }
+}
+
+@fragment
+fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
+    if dropped(input) { discard; }
+    let radial = normalized(input.position);
     let n = normalized(input.normal);
     let sun = params.sun.xyz;
     let toward_camera = normalized(params.camera.xyz-input.position);
@@ -1652,7 +1673,16 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let here_cover = clamp(textureSampleLevel(weather_cloud,weather_sampler,radial,0.0).x,0.,1.);
     let sun_dim = cloud_sun(input.position,sun);
     let fill_dim = 1.-here_cover*params.rain[4].y;
-    let direct = max(dot(n,sun),0.0)*daylight*sun_dim;
+    // The sun ends at the horizon (`sun-shadows` decision 5), and reaches a
+    // face only where its cascades see it (decision 4). A face turned from it
+    // is unlit by `dot(n, sun)` already, and its shadow is not sampled.
+    let sunlight = smoothstep(-0.0145,0.02,sun_elevation);
+    let facing = max(dot(n,sun),0.0)*sunlight;
+    var shade = 1.0;
+    if facing > 0.0 {
+        shade = sun_shadow(sun_map, sun_cmp, sun_cascades, input.position, n);
+    }
+    let direct = facing*sun_dim*shade;
     // The heightfield's per-cell occlusion, times the voxel field's answer at
     // this vertex. Outside the column tier the second is one and this is what
     // it always was; inside it, it is what carries the cave and the crease.
@@ -1955,7 +1985,7 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         // `overcast_sun_dim` of itself, so a storm has none and a passing
         // shower sparkles.
         let glint = pow(max(dot(wet_n,sun),0.),max(k_glint_power,1.));
-        color += vec3(k_glint_strength)*(glint*wet*daylight*sun_dim);
+        color += vec3(k_glint_strength)*(glint*wet*sunlight*sun_dim*shade);
     }
     // Tenebris-style limb and distance haze, all in the same body-local frame.
     let altitude = max(length(params.camera.xyz)-params.settings.x,0.);

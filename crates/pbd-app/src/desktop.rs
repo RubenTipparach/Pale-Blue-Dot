@@ -127,6 +127,24 @@ pub struct Launch {
     /// meadow whose cover sits near 0.6 at launch, and the body's average is
     /// 0.18. Moves the field only, not the sun or the sea.
     pub weather_at: f32,
+    /// `--open-doors` opens every door of the towns when they are built, as
+    /// the player would, without writing it to the save: a capture that
+    /// looks through a doorway (`cities-in-the-world` slice 2b). Doors start
+    /// shut.
+    pub open_doors: bool,
+    /// `--no-shadows` draws no sun cascades and lights everything as if in
+    /// the sun: the same build's picture without them (`sun-shadows`).
+    pub no_shadows: bool,
+    /// `--room-sky OPEN SHUT` sets the share of the sky a town's rooms take
+    /// with a door open and with all shut (`sun-shadows` decision 7), for
+    /// tuning against captures.
+    pub room_sky: Option<(f32, f32)>,
+    /// `--room-bounce K`: how much of the sun bounces round a room, times
+    /// `field_lit.wgsl`'s `ROOM_BOUNCE`, for tuning.
+    pub room_bounce: Option<f32>,
+    /// `--up M` stands a capture's walker on the highest town floor within M
+    /// metres of the ground at `--at`: upstairs in a house.
+    pub up: f32,
     /// `--dig-ahead` digs along the camera's LOOK rather than straight down.
     /// Digging down is right for proving the verb and useless for judging the
     /// result: the walker falls into its own pit and the eye ends up inside
@@ -229,6 +247,11 @@ impl Launch {
             at: None,
             rain: 0.0,
             weather_at: 0.0,
+            open_doors: false,
+            no_shadows: false,
+            room_sky: None,
+            room_bounce: None,
+            up: 0.0,
             world: None,
             load: None,
             time: None,
@@ -568,6 +591,37 @@ impl Launch {
                         .expect("invalid weather seconds");
                     assert!(seconds.is_finite(), "weather seconds must be finite");
                     result.weather_at = seconds;
+                }
+                "--open-doors" => result.open_doors = true,
+                "--no-shadows" => result.no_shadows = true,
+                "--room-sky" => {
+                    let mut share = || {
+                        i += 1;
+                        let v: f32 = args
+                            .get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--room-sky requires two shares, open and shut");
+                        assert!((0.0..=1.0).contains(&v), "--room-sky shares are 0..1");
+                        v
+                    };
+                    result.room_sky = Some((share(), share()));
+                }
+                "--room-bounce" => {
+                    i += 1;
+                    let k: f32 = args
+                        .get(i)
+                        .and_then(|v| v.parse().ok())
+                        .expect("--room-bounce requires a weight");
+                    assert!(k.is_finite() && k >= 0.0, "--room-bounce is 0 or more");
+                    result.room_bounce = Some(k);
+                }
+                "--up" => {
+                    i += 1;
+                    result.up = args
+                        .get(i)
+                        .and_then(|v| v.parse().ok())
+                        .filter(|m: &f32| m.is_finite() && *m >= 0.0)
+                        .expect("--up requires metres");
                 }
                 "--verify-flight" => {}
                 "--verify-route" => {
@@ -928,6 +982,18 @@ pub fn run(args: &[String]) {
         app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin)
             .add_systems(Last, quit_after_route);
     }
+    // Towns are lit by the field in every run, a still from above as much as
+    // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
+    // with Bevy's own sun and ambient, near black on every face in shade.
+    app.add_plugins(pbd_app::field_light::FieldLightPlugin);
+    // `--no-shadows` in every run, a still as much as a walk: read only when
+    // walking, a photo from above drew its shadows regardless.
+    if launch.no_shadows {
+        app.insert_resource(pbd_app::planet::shadow::ShadowSettings {
+            enabled: false,
+            ..default()
+        });
+    }
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
@@ -940,6 +1006,7 @@ pub fn run(args: &[String]) {
             yaw: launch.yaw.unwrap_or(0.0).to_radians(),
             turn: launch.turn.to_radians(),
             exact_start: launch.at.is_some(),
+            start_up_m: launch.up,
             ..default()
         })
         .add_plugins((
@@ -947,7 +1014,6 @@ pub fn run(args: &[String]) {
             pbd_app::vehicles::VehiclePlugin,
             pbd_app::fish::FishPlugin,
             pbd_app::held::HeldPlugin,
-            pbd_app::field_light::FieldLightPlugin,
         ))
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
@@ -955,6 +1021,18 @@ pub fn run(args: &[String]) {
         });
         if launch.at.is_some() {
             app.insert_resource(pbd_app::towns::RespawnInTown);
+        }
+        if launch.open_doors {
+            app.insert_resource(pbd_app::towns::OpenDoors);
+        }
+        if launch.room_sky.is_some() || launch.room_bounce.is_some() {
+            let base = pbd_app::towns::RoomSky::default();
+            let (open, shut) = launch.room_sky.unwrap_or((base.open, base.shut));
+            app.insert_resource(pbd_app::towns::RoomSky {
+                open,
+                shut,
+                bounce: launch.room_bounce.unwrap_or(base.bounce),
+            });
         }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));

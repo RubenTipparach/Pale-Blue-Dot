@@ -89,6 +89,37 @@ pub fn chart(
     d0: usize,
     wanted: &BTreeSet<(i32, i32)>,
 ) -> Result<Chart, String> {
+    let out = walk(patch, anchor, at, d0, wanted, true)?;
+    if let Some(missed) = wanted.iter().find(|w| !out.cells.contains_key(w)) {
+        return Err(format!(
+            "layout cell {missed:?} is not reached from the anchor"
+        ));
+    }
+    Ok(out)
+}
+
+/// As [`chart`], but every cell in `wanted` that cannot be laid (off the
+/// patch, past a pentagon, where the walk would not close) is left out
+/// rather than failing the chart: how far a layout could reach, for a
+/// harbour weighing where to lie (slice 4d).
+pub fn chart_reach(
+    patch: &Patch,
+    anchor: (i32, i32),
+    at: usize,
+    d0: usize,
+    wanted: &BTreeSet<(i32, i32)>,
+) -> Chart {
+    walk(patch, anchor, at, d0, wanted, false).unwrap_or_default()
+}
+
+fn walk(
+    patch: &Patch,
+    anchor: (i32, i32),
+    at: usize,
+    d0: usize,
+    wanted: &BTreeSet<(i32, i32)>,
+    strict: bool,
+) -> Result<Chart, String> {
     let mut out = Chart {
         anchor,
         cells: BTreeMap::new(),
@@ -97,11 +128,21 @@ pub fn chart(
     out.cells.insert(anchor, Charted { cell: at, d0 });
     used.insert(at, anchor);
     let mut queue = VecDeque::from([anchor]);
+    // A strict walk fails where a lenient one leaves the cell out.
+    macro_rules! refuse {
+        ($($why:tt)*) => {
+            if strict {
+                return Err(format!($($why)*));
+            } else {
+                continue;
+            }
+        };
+    }
     while let Some((c, r)) = queue.pop_front() {
         let here = out.cells[&(c, r)];
         let cell = &patch.cells[here.cell];
         if cell.neighbors.len() != 6 {
-            return Err(format!("layout cell ({c}, {r}) is on a pentagon"));
+            refuse!("layout cell ({c}, {r}) is on a pentagon");
         }
         for d in 0..6 {
             let next = neighbour(c, r, d);
@@ -111,36 +152,34 @@ pub fn chart(
             let side = (here.d0 + 6 - d) % 6;
             let there = cell.neighbors[side];
             if there == usize::MAX || there >= patch.cells.len() {
-                return Err(format!("layout cell {next:?} is off the patch"));
+                refuse!("layout cell {next:?} is off the patch");
             }
-            let back = patch.cells[there]
+            let Some(back) = patch.cells[there]
                 .neighbors
                 .iter()
                 .position(|&n| n == here.cell)
-                .ok_or_else(|| format!("cell {there} does not list {} back", here.cell))?;
+            else {
+                refuse!("cell {there} does not list {} back", here.cell);
+            };
             let reached = Charted {
                 cell: there,
                 d0: (back + d + 3) % 6,
             };
             match out.cells.get(&next) {
                 Some(seen) if *seen != reached => {
-                    return Err(format!("the chart does not close at {next:?}"));
+                    refuse!("the chart does not close at {next:?}");
                 }
                 Some(_) => {}
                 None => {
                     if let Some(other) = used.insert(there, next) {
-                        return Err(format!("{next:?} and {other:?} land on one cell"));
+                        used.insert(there, other);
+                        refuse!("{next:?} and {other:?} land on one cell");
                     }
                     out.cells.insert(next, reached);
                     queue.push_back(next);
                 }
             }
         }
-    }
-    if let Some(missed) = wanted.iter().find(|w| !out.cells.contains_key(w)) {
-        return Err(format!(
-            "layout cell {missed:?} is not reached from the anchor"
-        ));
     }
     Ok(out)
 }

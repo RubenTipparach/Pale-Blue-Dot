@@ -12,6 +12,7 @@ use bevy::camera::primitives::Aabb;
 use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
+use bevy::render::storage::ShaderStorageBuffer;
 use bevy::shader::ShaderRef;
 use pbd_core::light;
 
@@ -21,22 +22,99 @@ use pbd_core::light;
 #[derive(Component, Default, Clone, Copy)]
 pub struct LitByField;
 
+/// Put beside [`LitByField`] on a root whose meshes are lit as the terrain
+/// is, by the terrain's own fill and sun rather than Bevy's picture: a town's
+/// pieces (`sun-shadows` decision 7), which are the ground's own kind of
+/// thing and stand beside it.
+#[derive(Component, Default, Clone, Copy)]
+pub struct LitLikeTerrain;
+
+/// The most lights a building's rooms carry (`cities-in-the-world` decision
+/// 7a): a hearth, a stair's sconces and its candles. `field_lit.wgsl`'s
+/// arrays are the same length, and a test holds them together.
+pub const MAX_ROOM_LIGHTS: usize = 24;
+
+/// What burns in a building's rooms, on each of its room meshes: the lights
+/// its faces take on top of the field's (`cities-in-the-world` decision 7a).
+#[derive(Component, Clone, Debug, Default)]
+pub struct RoomLights(pub Vec<pbd_core::settlement::pieces::RoomLight>);
+
+impl RoomLights {
+    /// As `field_lit.wgsl` reads them, in the planet's frame: where and how
+    /// far, colour times power and whether only by night, and the band of
+    /// height each lights. The fires first, so a building with more candles
+    /// than room keeps its hearth and sconces.
+    pub fn pack(&self, field: &mut FieldUniform) {
+        let mut lights: Vec<_> = self.0.iter().collect();
+        lights.sort_by_key(|l| !l.kind.all_day());
+        let n = lights.len().min(MAX_ROOM_LIGHTS);
+        for (i, l) in lights.into_iter().take(n).enumerate() {
+            let [r, g, b] = l.kind.colour();
+            field.lights[i] = l.at.extend(l.kind.reach_m());
+            field.light_colour[i] = Vec4::new(
+                r * l.power,
+                g * l.power,
+                b * l.power,
+                if l.kind.all_day() { 0.0 } else { 1.0 },
+            );
+            field.light_span[i] = Vec4::new(-l.below_m, l.above_m, 0.0, 0.0);
+        }
+        field.look.w = n as f32;
+    }
+}
+
+/// How far a field-lit thing has faded out, 0 drawn whole to 1 gone, on it
+/// or on its parent: a town standing up or dropped at the edge of its range
+/// (`cities-in-the-world` slice 4a). It is drawn through the terrain's own
+/// screen-door mask, so it never appears or vanishes in one frame.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct Faded(pub f32);
+
+/// How a room's faces are lit where the field cannot say (`sun-shadows`
+/// decision 7): the voxel field has never heard of a house's walls.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct SkyShare {
+    /// The share of the sky that reaches it, 0..1.
+    pub sky: f32,
+    /// How much of the sun that came in by its door and windows bounces
+    /// round it, warm, times the shader's `ROOM_BOUNCE`: zero outdoors.
+    pub bounce: f32,
+}
+
 /// The field at a mesh's bounds, as `field_lit.wgsl` reads it.
 #[derive(Clone, Copy, Debug, Default, ShaderType, Reflect)]
 pub struct FieldUniform {
     pub low: Vec4,
     pub high: Vec4,
+    /// The planet's centre in the render frame; w how far it has faded out
+    /// ([`Faded`]).
     pub centre: Vec4,
     pub sun: Vec4,
     pub sky: [Vec4; 2],
     pub block: [Vec4; 2],
+    /// x one where it is lit as the terrain is ([`LitLikeTerrain`]); y the
+    /// share of the sky that reaches it and z the sun bounced round a room
+    /// ([`SkyShare`]; one and zero outdoors); w how many room lights.
+    pub look: Vec4,
+    /// A room's own lights ([`RoomLights::pack`]): where (planet frame) and
+    /// how far; colour times power, w one for a candle; the band of height
+    /// round each that it lights.
+    pub lights: [Vec4; MAX_ROOM_LIGHTS],
+    pub light_colour: [Vec4; MAX_ROOM_LIGHTS],
+    pub light_span: [Vec4; MAX_ROOM_LIGHTS],
 }
 
-/// The extension that lights a PBR material from the field.
+/// The extension that lights a PBR material from the field, and shades it
+/// with the sun's cascades (`sun-shadows` decision 4).
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
 pub struct FieldLit {
     #[uniform(100)]
     pub field: FieldUniform,
+    #[texture(101, sample_type = "depth", dimension = "2d_array")]
+    #[sampler(102, sampler_type = "comparison")]
+    pub sun_map: Handle<Image>,
+    #[storage(103, read_only)]
+    pub sun_cascades: Handle<ShaderStorageBuffer>,
 }
 
 impl MaterialExtension for FieldLit {
@@ -59,25 +137,33 @@ impl Plugin for FieldLightPlugin {
                 (take_the_field, light_from_the_field)
                     .chain()
                     .after(bevy::transform::TransformSystems::Propagate),
-            );
+            )
+            .add_systems(Update, fill_follows_the_day);
     }
 }
 
 /// Give each new mesh under a `LitByField` root its own field-lit copy of its
 /// material. Its own, because each mesh is lit at its own bounds; the
 /// builders share one material between parts and never need to know.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn take_the_field(
     mut commands: Commands,
     added: Query<
-        (Entity, &MeshMaterial3d<StandardMaterial>),
+        (
+            Entity,
+            &MeshMaterial3d<StandardMaterial>,
+            Option<&RoomLights>,
+        ),
         Added<MeshMaterial3d<StandardMaterial>>,
     >,
     roots: Query<(), With<LitByField>>,
+    terrain_like: Query<(), With<LitLikeTerrain>>,
     parents: Query<&ChildOf>,
     standard: Res<Assets<StandardMaterial>>,
+    shadows: Option<Res<crate::planet::shadow::SunShadowMaps>>,
     mut lit: ResMut<Assets<FieldLitMaterial>>,
 ) {
-    for (entity, material) in &added {
+    for (entity, material, room_lights) in &added {
         let marked = std::iter::once(entity)
             .chain(parents.iter_ancestors(entity))
             .any(|at| roots.contains(at));
@@ -87,9 +173,30 @@ fn take_the_field(
         let Some(base) = standard.get(&material.0) else {
             continue;
         };
+        // A flame draws its own light, unlit.
+        if base.unlit {
+            continue;
+        }
+        let like_terrain = std::iter::once(entity)
+            .chain(parents.iter_ancestors(entity))
+            .any(|at| terrain_like.contains(at));
+        let mut field = FieldUniform {
+            look: Vec4::new(if like_terrain { 1.0 } else { 0.0 }, 1.0, 0.0, 0.0),
+            ..default()
+        };
+        if let Some(room_lights) = room_lights {
+            room_lights.pack(&mut field);
+        }
         let handle = lit.add(ExtendedMaterial {
             base: base.clone(),
-            extension: FieldLit::default(),
+            extension: FieldLit {
+                field,
+                sun_map: shadows.as_ref().map(|s| s.map.clone()).unwrap_or_default(),
+                sun_cascades: shadows
+                    .as_ref()
+                    .map(|s| s.cascades.clone())
+                    .unwrap_or_default(),
+            },
         });
         commands
             .entity(entity)
@@ -123,7 +230,7 @@ fn world_bounds(transform: &GlobalTransform, aabb: Option<&Aabb>) -> (Vec3, Vec3
 
 /// Sample the field at every field-lit mesh's eight corners, each frame
 /// (`lamps-and-lanterns` decision 2), and hand them to its material.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn light_from_the_field(
     fine: Option<Res<PlanetFine>>,
     contact: Option<Res<PlanetContact>>,
@@ -133,39 +240,69 @@ fn light_from_the_field(
         &GlobalTransform,
         Option<&Aabb>,
         &MeshMaterial3d<FieldLitMaterial>,
+        Option<&SkyShare>,
+        Option<&ChildOf>,
     )>,
+    faded: Query<&Faded>,
     mut lit: ResMut<Assets<FieldLitMaterial>>,
 ) {
     let centre = frame
         .map(|frame| frame.center.as_vec3())
         .unwrap_or(Vec3::ZERO);
     let toward_sun = sun.map(|sun| sun.direction()).unwrap_or(Vec3::Y);
-    for (transform, aabb, material) in &meshes {
+    for (transform, aabb, material, share, parent) in &meshes {
         let (low, high) = world_bounds(transform, aabb);
+        let gone = parent
+            .and_then(|p| faded.get(p.parent()).ok())
+            .map_or(0.0, |f| f.0.clamp(0.0, 1.0));
         let mut field = FieldUniform {
             low: low.extend(0.0),
             high: high.extend(0.0),
-            centre: centre.extend(0.0),
+            centre: centre.extend(gone),
             sun: toward_sun.extend(0.0),
             ..default()
         };
+        let Some(current) = lit.get(&material.0).map(|m| m.extension.field) else {
+            continue;
+        };
+        let like_terrain = current.look.x > 0.5;
         for i in 0..8 {
             let corner = Vec3::new(
                 if i & 1 == 0 { low.x } else { high.x },
                 if i & 2 == 0 { low.y } else { high.y },
                 if i & 4 == 0 { low.z } else { high.z },
             );
+            let mut at = corner - centre;
+            // A town's mesh spans the town, and its box, square to the render
+            // frame's axes, reaches into the ground wherever the town's up is
+            // tilted from them: at Theringford two corners of every piece's
+            // box read the rock's dark (`cities-in-the-world` slice 4a). A
+            // corner under the ground reads the field just over it instead:
+            // the town stands on the ground, never in it.
+            if like_terrain && let Some(up) = at.try_normalize() {
+                let ground = PLANET_RADIUS
+                    + pbd_core::column::surface_m(crate::planet::terrain_config(), up)
+                    + GROUND_CLEAR_M;
+                if at.length() < ground {
+                    at = up * ground;
+                }
+            }
             let (sky, block) = match (&fine, &contact) {
-                (Some(fine), Some(contact)) => field_at(fine, contact, corner - centre),
+                (Some(fine), Some(contact)) => field_at(fine, contact, at),
                 _ => (1.0, 0.0),
             };
             field.sky[i / 4][i % 4] = sky;
             field.block[i / 4][i % 4] = block;
         }
-        let Some(current) = lit.get(&material.0).map(|m| m.extension.field) else {
-            continue;
-        };
+        field.look = current.look;
+        field.lights = current.lights;
+        field.light_colour = current.light_colour;
+        field.light_span = current.light_span;
+        field.look.y = share.map_or(1.0, |s| s.sky);
+        field.look.z = share.map_or(0.0, |s| s.bounce);
         let moved = (current.low - field.low).abs().max_element() > 1e-3
+            || current.look != field.look
+            || current.centre.w != field.centre.w
             || (current.high - field.high).abs().max_element() > 1e-3
             || (current.sun - field.sun).abs().max_element() > 1e-4
             || (0..2).any(|k| {
@@ -175,6 +312,37 @@ fn light_from_the_field(
         if moved && let Some(material) = lit.get_mut(&material.0) {
             material.extension.field = field;
         }
+    }
+}
+
+/// How far over the ground a town's buried bound reads the field, metres:
+/// half a layer, in the air of the cell on top.
+const GROUND_CLEAR_M: f32 = 0.5;
+
+/// Bevy's own ambient, what lights a PBR face turned from the sun, is the
+/// terrain's cap fill for the hour where the camera is (`sun-shadows`
+/// decision 7): a shaded wall of a ship is lit as a shaded cliff is, not by
+/// Bevy's default. Divided by the camera's exposure, which Bevy multiplies
+/// every light by.
+fn fill_follows_the_day(
+    sun: Option<Res<crate::sky::Sun>>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    cameras: Query<(&Camera, &GlobalTransform, Option<&bevy::camera::Exposure>), With<Camera3d>>,
+    ambient: Option<ResMut<GlobalAmbientLight>>,
+) {
+    let (Some(sun), Some(frame), Some(mut ambient)) = (sun, frame, ambient) else {
+        return;
+    };
+    let Some((_, at, exposure)) = cameras.iter().find(|(camera, ..)| camera.is_active) else {
+        return;
+    };
+    let up = (at.translation().as_dvec3() - frame.center).as_vec3();
+    let fill = light::sky_fill(1.0, sun.clock.daylight(up));
+    let [r, g, b] = light::SKY_FILL;
+    let brightness = fill / exposure.copied().unwrap_or_default().exposure();
+    if (ambient.brightness - brightness).abs() > 1e-3 * brightness.max(1.0) {
+        ambient.color = Color::linear_rgb(r, g, b);
+        ambient.brightness = brightness;
     }
 }
 
@@ -207,6 +375,21 @@ pub fn light_of((sky, block): (f32, f32), daylight: f32) -> Vec3 {
 mod tests {
     use super::*;
 
+    /// A fading town is drawn through the terrain's own mask
+    /// (`cities-in-the-world` slice 4a), so the two dissolve alike.
+    #[test]
+    fn a_fading_town_takes_the_terrains_mask() {
+        let town = include_str!("../../../assets/shaders/field_lit.wgsl");
+        let terrain = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        let body = |s: &str| {
+            let i = s.find("fn bayer4").expect("a bayer4");
+            let j = s[i..].find("\n}\n").expect("its end");
+            s[i..i + j].to_string()
+        };
+        assert_eq!(body(town), body(terrain));
+        assert!(town.contains("if bayer4(in.position.xy) < field.centre.w {"));
+    }
+
     /// `field_lit.wgsl` carries the terrain's light constants, and they are
     /// the core's: a ship and the ground it stands on are lit by one set of
     /// numbers.
@@ -224,19 +407,38 @@ mod tests {
             ),
             format!("const TORCH_GAIN: f32 = {:.2};", light::TORCH_GAIN),
             "    let g = f * (2.0 - f);\n    return g * g;".to_string(),
-            "let daylight = smoothstep(-0.13, 0.20, dot(up, field.sun.xyz));".to_string(),
-            // Decision 14: Bevy's sun only where it is up and the sky
-            // reaches, the floor on the albedo and never on the sun.
-            "let sun_up = daylight * sky;".to_string(),
+            "let daylight = smoothstep(-0.13, 0.20, elevation);".to_string(),
+            // `sun-shadows` decision 5: the sun ends at the horizon, the
+            // terrain's own curve for its direct term.
+            "let sunlight = smoothstep(-0.0145, 0.02, elevation);".to_string(),
+            // Decision 14 and `sun-shadows` decision 4: the sun only where it
+            // is up, the sky reaches and the cascades see it.
+            "let sun_up = sunlight * sky * shadow;".to_string(),
+            // `sun-shadows` decision 7: a town is lit as the terrain is, by
+            // its numbers.
+            "const SUN_TINT: vec3<f32> = vec3<f32>(1.12, 1.03, 0.87);".to_string(),
+            "const WALL_FILL: vec3<f32> = vec3<f32>(0.30, 0.32, 0.34);".to_string(),
+            "const WALL_NIGHT: f32 = 0.20;".to_string(),
+            "const WALL_GAIN: f32 = 0.95;".to_string(),
             format!(
                 "const SKY_FILL: vec3<f32> = vec3<f32>({:.2}, {:.2}, {:.2});",
                 light::SKY_FILL[0],
                 light::SKY_FILL[1],
                 light::SKY_FILL[2]
             ),
-            "let ambient = base * SKY_FILL * max(AMBIENT_FLOOR, NIGHT_FILL * sky);".to_string(),
+            "let ambient = base * SKY_FILL * max(AMBIENT_FLOOR, mix(NIGHT_FILL, 1.0, daylight) * sky);"
+                .to_string(),
             "out.color.rgb * sun_up + ambient * (1.0 - sun_up) + lamp".to_string(),
             "@binding(100) var<uniform> field: Field;".to_string(),
+            // `cities-in-the-world` decision 7a: a building's own lights, as
+            // many as the uniform carries, lit the mockup's way.
+            format!("lights: array<vec4<f32>, {MAX_ROOM_LIGHTS}>,"),
+            format!("light_colour: array<vec4<f32>, {MAX_ROOM_LIGHTS}>,"),
+            format!("light_span: array<vec4<f32>, {MAX_ROOM_LIGHTS}>,"),
+            format!("let count = min(u32(field.look.w), {MAX_ROOM_LIGHTS}u);"),
+            "q * q * (0.3 + 0.7 * max(facing, 0.0)) * d * d / (d * d + 0.36)".to_string(),
+            "let fire = 0.9 + 0.3 * night;".to_string(),
+            "let candle = 1.8 * clamp((night - 0.25) / 0.35, 0.0, 1.0);".to_string(),
         ] {
             assert!(
                 shader.contains(&line),
@@ -255,6 +457,61 @@ mod tests {
         assert!(
             terrain.contains(&fill),
             "planet_surface.wgsl should carry `{fill}`"
+        );
+        // And its wall's fill, night and gain, and its sun's tint and curve,
+        // which a town takes as its own.
+        for line in [
+            "fill = vec3(0.30,0.32,0.34);",
+            "night = 0.20;",
+            "gain = 0.95;",
+            "vec3(1.12,1.03,0.87)*direct",
+            "let sunlight = smoothstep(-0.0145,0.02,sun_elevation);",
+        ] {
+            assert!(
+                terrain.contains(line),
+                "planet_surface.wgsl should carry `{line}`"
+            );
+        }
+    }
+
+    /// `sun-shadows` decision 7: Bevy's ambient, what lights a PBR face
+    /// turned from the sun, is the terrain's cap fill for the hour where the
+    /// camera stands: the whole of it at noon, the night's share at midnight.
+    #[test]
+    fn a_face_turned_from_the_sun_takes_the_skys_fill() {
+        let sun = crate::sky::Sun::default();
+        let overhead = sun.direction();
+        let mut world = World::new();
+        world.insert_resource(sun);
+        world.insert_resource(crate::planet::PlanetRenderFrame::default());
+        world.insert_resource(GlobalAmbientLight::default());
+        let camera = world
+            .spawn((
+                Camera3d::default(),
+                GlobalTransform::from_translation(overhead * PLANET_RADIUS),
+            ))
+            .id();
+        let mut follow = IntoSystem::into_system(fill_follows_the_day);
+        follow.initialize(&mut world);
+        follow.run((), &mut world).unwrap();
+        let exposure = bevy::camera::Exposure::default().exposure();
+        let at_noon = world.resource::<GlobalAmbientLight>().clone();
+        assert!(
+            (at_noon.brightness * exposure - 1.0).abs() < 1e-4,
+            "{at_noon:?}"
+        );
+        assert_eq!(
+            at_noon.color.to_linear().to_f32_array_no_alpha(),
+            light::SKY_FILL
+        );
+        world
+            .entity_mut(camera)
+            .insert(GlobalTransform::from_translation(-overhead * PLANET_RADIUS));
+        follow.run((), &mut world).unwrap();
+        let at_midnight = world.resource::<GlobalAmbientLight>().brightness * exposure;
+        assert!(
+            (at_midnight - light::NIGHT_FILL).abs() < 1e-4,
+            "{at_midnight}"
         );
     }
 

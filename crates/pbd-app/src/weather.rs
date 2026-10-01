@@ -131,6 +131,7 @@ fn sample_field(
     air: Res<Air>,
     frame: Res<PlanetRenderFrame>,
     contact: Option<Res<PlanetContact>>,
+    structures: Option<Res<crate::walking::Structures>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut weather: ResMut<Weather>,
     mut reported: Local<Option<i32>>,
@@ -158,7 +159,11 @@ fn sample_field(
     weather.rain = if cell.raining { cell.cover } else { 0.0 };
     weather.cover = cell.cover;
     weather.snowing = cell.precip == Precip::Snow;
-    weather.sheltered = contact.is_some_and(|contact| !contact.open_to_sky(body_local.as_vec3()));
+    // Under rock, or under a roof: a town's roofs are pieces, which the
+    // column has never heard of, so a room asks its building.
+    let point = body_local.as_vec3();
+    weather.sheltered = contact.is_some_and(|contact| !contact.open_to_sky(point))
+        || structures.is_some_and(|s| s.0.iter().any(|b| b.shelters(point)));
     // Every twentieth the cover moves, and whenever the eye goes under or out
     // from under rock, so a capture says what weather it was taken under.
     let step = (cell.cover * 20.0).round() as i32 * 2 + i32::from(weather.sheltered);

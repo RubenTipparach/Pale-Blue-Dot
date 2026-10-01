@@ -43,7 +43,8 @@ Checks run in the cloud session:
 
 ## Not finished
 
-1. **The game's Holbrook captures.** Four shots sit beside the mockup's:
+1. **The game's Holbrook captures (taken; see the owner's notes section for
+   the two to retake).** Four shots sit beside the mockup's:
    lane, outside the Fieldstone house, inside it looking out, and the
    overview.
    - Run `tools/capture_holbrook.sh docs/screenshots/cities-in-the-world`
@@ -65,10 +66,23 @@ Checks run in the cloud session:
    - sites stored and on the map (`city-sites` 3.1, 4.1);
    - towns slices 1 and 2a;
    - bare hands.
-4. **Do not merge PR #19 to main** until towns are stored records
-   (`cities-in-the-world` slice 3, task 4.5; CLAUDE.md, "Saved games
-   survive every change"). Holbrook is built from the template each time,
-   which is safe only while no saved world has towns.
+4. **PR #19 was merged to main on 2026-09-29, with towns built from the
+   template each time a world opens.** Towns are not stored records yet
+   (`cities-in-the-world` slice 3, task 4.5). Until they are, any change to
+   what Holbrook is built from changes Holbrook in worlds already saved
+   (CLAUDE.md, "Saved games survive every change"). That covers:
+   - `assets/settlements/v1/village.json`;
+   - `assets/config/kits.ron`;
+   - `pbd_core::settlement` (chart, ground, pieces);
+   - `pbd_app::towns::lay_out`.
+
+   So, before any such change, do one of these:
+   - make towns stored records first (slice 3 moves up to the next step);
+   - or leave the current layout and cutter as version 1, carried forever,
+     and add the change beside it as a new version (`v2/`) for new worlds.
+
+   The mockup fixes in note 0.8 change the mockup and the cutter, so they
+   are held to this too.
 
 ## The owner's notes on the towns mockup (2026-09-29)
 
@@ -113,9 +127,19 @@ tracked as `cities-in-the-world` task 0.8.
    Make the tunnel one piece with the dome, built of the same snow blocks,
    with closed ends and no bare faces.
 
-The game's `game-lane.png` was captured after the commit above and is added
-beside the mockup's. It has not been looked at yet. The other three game
-shots are still to be taken.
+All four game shots are taken and sit beside the mockup's in
+`docs/screenshots/cities-in-the-world/`. A first look:
+- **`game-lane.png` and `game-overview.png` are right.**
+  - Each roof follows its walls.
+  - The houses stand in pairs two columns apart.
+  - The tool slot shows the open hand.
+- **It rained anyway.** `--rain 0` did not clear the storm at Holbrook.
+  Retake the shots on a clear day: find the flag that pins the weather, or
+  another `--day`.
+- **`game-inside.png` is framed wrong.** It faces the plaster wall beside the
+  door, with the doorway off to the left, not out through the door. Check
+  the sign of `--yaw`, and the stand point, in
+  `towns::tests::print_where_to_stand_for_the_mockup_shots`, then retake it.
 
 ## Next steps (the owner's order)
 

@@ -57,6 +57,8 @@ the changes this one follows (2026-09-27):
   pieces. Doors open and shut.
 - **Boats that sail.** The harbour's boats are fixed obstacles and the cog is
   boarded like a building, as in `tenebris-towns`.
+  - Superseded for the small boats by survey T7 ("you can use any boat you
+    find"; task 4.2b), and for the cog by `sail-the-cog` (T9).
 
 ## Decisions
 
@@ -167,6 +169,61 @@ cities contribute to LOD hexes on the night side of the world too".
   from `lamps-and-lanterns` task 5.5 decides whether the tier needs splitting
   before this lands.
 
+**7a. Rooms are lit by their own fires (2026-09-30).** The owner, on the
+`sun-shadows` shots: "did you add interior lights to the game like the
+mockup? ... implement that!" The mockup's rooms are warm at every hour,
+because a hearth and the stairs' sconces burn all day and candles burn behind
+about half the windows by night (`docs/mockups/towns.html`, `hearth`,
+`sconce`, `blockLighter`). They are placed and lit as the mockup does them:
+- **What the cutter places**, from the building's definition, derived and
+  never saved:
+  - **A hearth**, in the chimney cell, against the first of its outer walls
+    that has no door or window, trying edge 0 first as the mockup's
+    `hearth(c1, front, 0)` does. It is a stone hearth 0.7 m deep and 1.4 m
+    wide, with cheeks, a hood to the ceiling, logs and a fire. A chimney cell
+    that holds the stair has none. Flat-roofed kits have no chimney, and the
+    mockup's clay oven is later.
+  - **A sconce** on a straight flight's boxed side, a quarter of the way
+    up, 2.45 m over its foot. On a newel stair there is one a storey, 2.2 m
+    over the tread, on the first of the stair's own walls without a doorway.
+    Each sconce is an iron bracket with a flame.
+  - **A candle** behind 55% of the windows (the mockup's town share),
+    0.8 m inside the window, 0.2 m over its sill. Which windows is a hash of
+    the window's place in the building's definition, so a town's candles are
+    the same on every load. A candle has no mesh, as in the mockup: only its
+    light shows, on the room and through the pane.
+- **How a light lights**, the mockup's `blockLighter`:
+  - a building's lights light only that building's room faces, and only
+    within the light's own storey;
+  - `p * (1 - (d/R)^2)^2 * (0.3 + 0.7 * max(n.l, 0)) * d^2 / (d^2 + 0.36)`;
+  - a face turned away past -0.15 is left unlit.
+
+  Hearths burn all day, 0.9 + 0.3 of the night. Sconces burn all day as
+  hearths do. Candles burn only at night, 1.8 times the night past 0.25 over
+  0.35.
+  - Colours are the mockup's, in linear light: hearth `#ff9a4a`, sconce
+    `#ffb870`, candle `#ffb060`.
+  - Reaches are 7, 5.5 and 5 m, and powers 1, 0.75 and 0.45 to 0.8.
+- **Not through the voxel field.** The field cannot see a house's walls, since
+  a building is pieces and not voxels. A hearth baked into it would shine
+  through its wall into the lane. Each building's lights, at most 24, ride in
+  its rooms' material and are summed per pixel in `field_lit.wgsl`.
+- **The flames are drawn unlit**, warm. A candle's light, and nothing else,
+  waits for dusk.
+- **As built (2026-09-30).**
+  - The flames are drawn in timber-bracketed sconces rather than the
+    mockup's iron. Iron under its own flame took none of its light and read
+    as a black box.
+  - The flames' colour is the terrain lantern fire's, kept under the
+    tonemapper's shoulder.
+  - Each building carries at most 24 lights: a Holbrook house has 22 to 29
+    windows, so 12 to 16 candles.
+  - The weight against the sky's fill is the mockup's own
+    (`sun-shadows`, "Tuning across the day").
+- **Not in 7a:** the door and street lanterns and the mockup's glow from a lit
+  window into the street. Those light the ground, which is the terrain's, so
+  they stay with the voxel field (task 5.2).
+
 **8. A town is a stored record, and its buildings are definitions, not
 pieces** (the owner's save model, `world-persistence` decisions 1 and 2).
 - When a world is made, every site's settlement is generated: the chart, the
@@ -253,6 +310,26 @@ so the first can be looked at before it can be walked into.
   - **Captures.** `--at <lat> <lon>` puts a new world's walker there, not at
     the level start, so a shot can stand in a town. The existing `--yaw`,
     `--pitch` and `--height` frame it.
+    - **Found on the first shots (2026-09-30).** `--at` still stood the
+      walker 4 m west of the spot.
+      - A new world steps 4 m aside from its start, so that a tree's trunk
+        does not fill the first view. `--at` inherited that step.
+      - The inside shot then faced a wall 4 m from its door.
+      - `--at` now stands exactly where it is asked. The new world's own
+        start keeps its step.
+    - **`--rain` is a storm forcing, not the weather.** `--rain 0` forces
+      nothing, and the atmosphere's own weather still rains. A dry shot
+      picks its time with `--weather-at <seconds>`.
+      `towns::tests::print_the_rain_over_holbrook` reads the rain over
+      Holbrook along the same path the capture takes.
+      - Measured 2026-09-30, at 11:00 on days 0, 1 and 2, with the weather
+        run 0 to 5 hours past the clock:
+        - it rains at every start (1.00);
+        - it is dry after two hours and after three (0.00 on each day);
+        - it rains again after four.
+      - `tools/capture_holbrook.sh` now takes its shots at `--weather-at
+        7200`. That runs the weather two hours on and leaves the time of
+        day at 11:00.
 - **Slice 1, found on its first shots (2026-09-29).** The owner: "hmm...they
   dont seem to quite follow the same rules as the js prototype project", and
   "the roof shouldnt extend pass the floor plan like that".
@@ -351,18 +428,864 @@ so the first can be looked at before it can be walked into.
       - Not yet, and left for 2b: roofs are not solids. A hut's walls are
         2 m, so a jump from beside one lands on the wall's top and walks on
         over it.
-  - **2b, the rest of the walker's rules:** sliding along a face, holding a
-    grounded walker to a floor below, the stairs, and doors opening and
-    shutting through the save.
+  - **2b, the rest of the walker's rules (written 2026-09-30, before the
+    code).** The owner: "commence 2b". Four parts, each from
+    `tenebris-towns` sections 3 to 5 and 8, with the game's cutter porting
+    the mockup's pieces.
+    - **Floors from the town, not only walls.**
+      - Today only the terrain holds the walker up: a town's solids stop
+        it or cap its head, and an upper floor holds no one.
+      - Each building gains *surfaces* beside its solids (`tenebris-towns`
+        section 4). A surface is a region in plan whose top is a function
+        of position, and it answers its underside too:
+        - every upper floor, flat, over its cells less the stair well;
+        - a straight flight, on its pitch line;
+        - a newel stair, one sheet a turn, on its pitch line.
+      - At each of its footprint points the walker takes the higher of the
+        terrain's floor and the highest surface top within its step of the
+        feet. The MAX floor over the footprint is kept.
+      - A surface's underside joins the solids' as a ceiling. So a floor
+        overhead is a ceiling, and the turn above a newel's walker leaves
+        2.74 m.
+    - **The stairs, cut from the stored definition** (derived, decision 8).
+      The template gives only a building's stair cells. The kind, and where
+      the stair starts, follow the mockup's `townHouse` rule:
+      - one cell is a **newel stair**:
+        - 15 winders a turn of 0.2 m, a turn a storey;
+        - it starts on the first edge whose neighbour is in the building
+          and is not the front door's cell, and leaves every upper storey
+          by the same edge (3 m is 3 layers, so exit = entry);
+        - a 30-degree landing at the top, then a rail;
+        - walls on its inner edges, with a doorway at the foot and at each
+          exit;
+      - two cells in a row are a **straight flight**:
+        - from the first cell's far flat to the second's, 16 risers of
+          0.1875 m;
+        - boxed below by walls either side;
+        - the well railed up top, open at the landing;
+        - the two cells floored upstairs only outside the flight's strip.
+      - No floor is cut over a stair cell but those strips' triangles.
+        Today's cutter floors every cell, which would roof each stair.
+      - The newel turns toward the edge numbered next after its entry, as
+        the mockup's does. In the game the angle is measured from the real
+        edge midpoints, so the sense holds whichever way the chart turned.
+    - **The three walker rules** (`tenebris-towns` section 4):
+      - **The pitch line.** A stair's top at a point is the line from the
+        foot of its first riser to the nosing of its landing, so the eye
+        climbs at the stair's slope, with no jump.
+      - **Held down 0.35 m.** A walker that was grounded, and is not rising
+        from a jump, is held to a floor up to 0.35 m below. It comes down a
+        stair without leaving it. A terrace drops a whole layer (1 m), so the
+        terrain is unchanged: a walker still steps off a ledge.
+      - **A refused move slides.** A body stopped by a wall, a door, a rise
+        too tall to step or a passage too low keeps the part of its move
+        along the face. It is swept again along that part, twice at most,
+        for a corner.
+        - A solid's normal is from its outline's nearest point to the body.
+        - The terrain's is the fall of its floor across the body.
+
+        A hex town's walls zigzag at 60 degrees, so a walker that stops
+        dead catches on every corner.
+    - **Doors open and shut, and are saved** (`tenebris-towns` section 8
+      and task 5).
+      - A door's leaf is its own entity, hinged at its jamb. Shut, it stands
+        in the doorway and is a solid. Open, it lies swung inward against
+        the wall and is none.
+      - It swings inward. The mockup turns a leaf outward where furniture
+        blocks its sweep, and the game places no furniture yet.
+      - **E** opens or shuts the door in reach: the nearest doorway within
+        2 m of the eye, in front of it.
+      - **Saved as a record.**
+        - The kind is `door`, schema 1, with the body `(open: bool)`.
+        - Its id is its building's record id times 16, plus the door's
+          number in the building.
+        - It is written as the player's (`Author::Player(0)`) through the
+          durable path.
+        - No record is a shut door. Opening the world reads the records.
+        - A world process that later shuts a door the player opened is
+          refused, as a player-owned field is (`world-persistence`
+          decision 6).
+      - Doors start shut. That is my recommendation, taken because a
+        question goes to the owner only with screenshots. Until now a door
+        was drawn open and was no solid. A world played on that build
+        finds its doors shut. Nothing it made changes.
+      - A capture opens every door with `--open-doors`, as the player
+        would. The inside shot looks out through its door as before.
+    - **Not in 2b**, and next with the speeds (`tenebris-towns` task 2):
+      - run 5, walk 3, sprint 8, crouch 1;
+      - walking under a roof;
+      - Caps Lock.
+
+      The walker keeps today's 8 m/s walk and 14 m/s sprint. The mockup's
+      stair walks were measured at 8.
+    - **Verify.**
+      - Core: a flight answers its pitch line, from the foot to the landing;
+        a newel answers one sheet a turn, and the 2.74 m under the next;
+        no floor over a stair cell but the flight's side triangles; a shut
+        leaf is a solid and an open one is not.
+      - App, on Holbrook's own houses, as `tenebris-towns` section 5 did in
+        the mockup:
+        - up and down a newel and a flight at the walking speed: no eye
+          jump over 0.1 m in a tick, and not one tick in the air coming
+          down;
+        - along a wall at 8.6 degrees for a second, the walker slides on;
+        - a shut door stops the walker, and the same door opened lets it in;
+        - E opens a door, the record is on disk, and a reopened world has
+          it open.
+      - Captures, with the mockup's same view beside each: upstairs in a
+        Fieldstone house looking down its newel; on a half-timbered
+        house's flight; a shut door, and the same door open.
+    - **As built (2026-09-30).**
+      - `pbd_core::settlement::pieces`:
+        - `Surface` (floor, flight, newel) and `DoorLeaf`;
+        - `BuildingSolids::stand` and `push_normal`;
+        - the stairs cut from the stair cells;
+        - the wells left open.
+
+        `settlement::record` adds the `door` records.
+      - The walker (`walking.rs`):
+        - `footprint_in` takes the town's floors;
+        - `sweep` holds a grounded walker to a floor up to 0.35 m below;
+        - `resolve_ground` slides twice at most.
+
+        One existing test changed with the rule it pinned. Pushing straight
+        into a terrace, the walker now slides along its face at 0.62 m/s:
+        8 m/s by the sine of its 4.4 degrees off square. The test now holds
+        how far it gets *into* the terrace.
+      - Doors (`towns.rs`):
+        - `TownDoor` entities under the town's root;
+        - E through `use_doors`, which writes the save before the leaf moves;
+        - `swing_doors` swings the leaf at 5 rad/s;
+        - `door_states` reads the records when the town is built.
+      - Captures: `--open-doors` opens every door without saving it, and
+        `--up M` stands the walker on the highest town floor within M
+        metres of the ground.
+      - Tests:
+        - core: `every_stair_is_cut_and_nothing_floors_its_well`,
+          `a_flight_answers_its_pitch_line`, `a_newel_answers_a_sheet_a_turn`,
+          `a_shut_door_holds_and_an_open_one_does_not`;
+        - app: `a_walker_climbs_a_newel_and_comes_down_it_on_its_pitch_line`,
+          `a_walker_climbs_a_flight_and_comes_down_it_on_its_pitch_line`,
+          `a_walker_brushing_a_wall_slides_along_it`,
+          `a_shut_door_stops_the_walker_and_e_opens_it_into_the_save`,
+          `towns::tests::a_door_opened_is_open_when_the_world_is_opened_again`.
+
+        The stair walks use the village's own houses, cut on the flat test
+        land 25 m off its pentagon.
+      - The village's newels climb one turn, so over the foot is the 30
+        degree landing. The clearance under it is 2.65 m, not the 2.74 m
+        under a winder. Both are well over the 1.8 m body.
+- **Slice 3a, the town is a stored record (written 2026-09-30, before the
+  code).** Task 4.5's storing half, taken ahead of 2b. PR #19 merged slice 1
+  and 2a to `main` on 2026-09-29. Every world that build opens gets Holbrook
+  built from the template, fresh each time. So the next re-export of the
+  village would move houses in worlds already played. 3a stops that. Until
+  it lands, the village template is not exported again.
+  - **What is stored.** Decision 8 split three ways:
+    - **Stored:** what the town was laid as.
+    - **Derived:** what the rules make of it each time.
+    - **Generation:** what the ground makes of it, pinned like the
+      generator.
+  - **Two record kinds, schema 1** (`pbd_core::settlement::record`):
+    - **`settlement`, one per town, id = its site's id.**
+      - `template` and `layout`: the template it was laid from and the
+        laying-out rules' version. Both are kept to be read by people,
+        never to rebuild the town.
+      - `terrace`: the terrace's layer, a whole number of metres over the
+        radius.
+      - `cells`, one entry per footprint cell (built cells and yard rings):
+        - its layout cell `(c, r)`;
+        - its exact cell key;
+        - which of its sides is the layout's direction 0;
+        - the top it takes (dirt on a lane, none elsewhere).
+      - `buildings`: its building records' ids, in order.
+      - Written last, so that a write torn by a crash leaves no settlement
+        and the town is made again whole. The site list does the same.
+    - **`building`, one per building.**
+      - Its id is the site's id times 65 536 plus its number in the town.
+      - It holds the template's building as it was, in layout cells: kit,
+        cells, storeys, tall storeys, doors, windows, roof, pitch, chimney
+        and stair cells.
+      - The ground floor is stored as `floor`, in layers over the terrace.
+        The mockup's datum is gone from it.
+      - It holds a `state`, which is only ever `Standing` when a town is
+        made. Abandoned and ruined are for `world-persistence`'s process
+        and the night lights (slice 3). They read it later without a new
+        schema.
+  - **Why the chart's cells, and not only the anchor.** The town stands on
+    the cells it was laid on, whatever a later chart rule would walk to.
+    - The neighbour walk (decision 2) runs once, when a town is made.
+    - Storing only the anchor and its side would bind every future chart
+      rule to reproduce every old town. The walk would then be generation
+      code, carried forever.
+    - Measured on the village (`settlement::tests::a_towns_records_are_small`):
+      - the footprint's 799 cells take 18.5 KB, 23 bytes a cell;
+      - its 12 buildings take 5.8 KB;
+      - so the town is 24 KB in all.
+      - Fifty such towns would be 1.2 MB, written once each. That is more
+        than the risk below guessed, and it is what the cells cost.
+    - A cell's key is exact (`exact-cell-keys`). Its side numbering is the
+      topology's, which is part of the world's identity.
+  - **Derived, never stored.** A fix to any of these reaches every town,
+    which is decision 8's point:
+    - the pieces, cut from the definitions (`settlement::pieces`);
+    - the solids;
+    - the meshes and textures;
+    - the kits' faces and sizes, looked up by the kit's name. A kit a
+      saved town names stays in `kits.ron` for good, as a generator
+      version does. A test holds every stored kit name to a kit.
+  - **Generation, pinned.** The ground is terrain: the terrace over the
+    footprint, eased over the margin to the natural height. The margin's
+    rings come from the stored terrace and footprint and the world's own
+    generator. A test pins Holbrook's ground digest on the shipped seed, as
+    a generator version's ground is pinned. A change to the easing is a new
+    rule for new towns, never a reshaping of a made one.
+  - **Made once, before it is shown.** The home village is laid out and
+    stored once the world's sites are on disk (`WorldSites::ready`). If the
+    world's save holds no `settlement` record for that site:
+    - the town is laid from the template (decision 2's chart, the terrace,
+      the footprint);
+    - its records are queued as `Author::Creation`, buildings first;
+    - the kinds are named in the identity.
+
+    The town is built into the world only once the writer's mark has passed
+    the settlement's line, as the site list waits. A world that holds the
+    record is built from it, and the template is never read.
+  - **One path.** A town just made is built from its records as well, not
+    from the template it was laid from, so the town shown is always the
+    record. A test holds the two to the same pieces.
+  - **A damaged record is not remade.** A settlement record that is there
+    but does not read is left alone, and the log says why. The same goes
+    for a schema this build does not know, or a building it names that is
+    missing. That town is not built, and nothing is written over it.
+  - **Old worlds** get their record at their first open by a 3a build, from
+    that build's template. That is the town the merged build already showed
+    them. The rule that leaves a site unsettled where the player dug first
+    (task 4.4) is not applied to the home village: the merged build already
+    stood Holbrook in every world it opened. It applies from slice 4, to
+    every site that no build has settled before. The player's edits are kept
+    at their layers in either case (`column::BASE_M`). Recommendation taken
+    (ask only with screenshots).
+  - **Verify.**
+    - Core tests:
+      - Holbrook's records round-trip;
+      - a town built from its records has the same pieces, solids and
+        ground as the one laid from the template;
+      - a moved door or a dropped building in the template leaves the
+        town rebuilt from a made world's records unchanged;
+      - the records' size;
+      - the ground digest pinned.
+    - App tests:
+      - a new world stores its town once;
+      - a second open writes nothing;
+      - a world opened with a changed template builds the stored town;
+      - a damaged settlement record builds no town and is not overwritten.
+    - Screens: a capture of the lane, before and after, which must match.
+  - **As built (2026-09-30).**
+    - `pbd_core::settlement::record`:
+      - `lay` lays a template into a `Town`;
+      - `build` cuts a `Town` into its chart, ground, meshes and solids;
+      - `to_records` and `from_records` store and read it;
+      - `Stored` answers none, a town, or damaged.
+
+      The app's `towns` module stores the town (`ensure`) and waits for the
+      writer's mark, then builds it from the records (`stand`).
+    - Holbrook on generator 6:
+      - the terrace is 74 m;
+      - the footprint is 799 cells, eased over a margin of 2051;
+      - `towns::tests::holbrooks_ground_is_pinned` holds its ground digest.
+    - `settlement::tests::a_town_built_from_its_record_is_the_town_its_template_lays`
+      builds the ground as slice 1 laid it, straight from the template, and
+      holds the record's ground to it. So a world the merged build opened
+      keeps the ground it had.
+    - The other tests:
+      - core: `a_town_round_trips_through_its_records`,
+        `a_revised_template_leaves_a_made_town_as_it_was`,
+        `a_damaged_settlement_record_is_named_not_remade`,
+        `a_towns_records_are_small`,
+        `every_kit_a_saved_town_can_name_is_shipped`;
+      - app: `a_world_stores_its_town_once_and_keeps_it_when_the_template_changes`,
+        `a_damaged_settlement_is_neither_built_nor_written_over`.
+    - The capture is taken from a new memory-only world, whose town goes
+      through the same store and wait.
 - **Slice 3, lit, stored and seen from afar.** Lanterns and candles (group
   5), settlements as records (task 4.5), and the far form and the night
   points (4.2, 4.3).
-- **Slice 4, every kind.** The other eight templates.
+- **Slice 4, every kind (written 2026-09-30).** Asked how many towns were
+  built, the answer was one, the home village. The owner then said: "alright
+  once your tuning is done, begin working on other towns".
+  - **Where it stands (measured 2026-09-30).** Each world stores about 55 sites:
+    20 villages, 6 walled towns, 6 harbours, 6 jungle, 4 desert, 4 tundra,
+    4 cliff, 3 swamp and 2 cave. Only the home village is laid and built.
+    The mockup has ten settlements. Against the cutter as it stands:
+
+    | Kind | Mockup | `building()` calls | Cut as-is | New |
+    | --- | --- | ---: | ---: | --- |
+    | Walled town | `makeTown` | 29 | 29 | terraces at 0 to 3 m, street steps, curtain wall and gates, 2 towers, the keep; clay houses lack their parapet, the exchange its columns |
+    | Harbour | `makeCoast` | 18 | 3 | whitewash and driftwood kits, terraces, piers on piles, open-sided boathouses, stilts, the boats (task 4.2b) |
+    | Desert | `makeDesert` | 11 | 0 | sandstone and adobe kits, walkable flat roofs with parapets, domes, outdoor stairs, the oasis |
+    | Mountain | `makeMountain` | 14 | 0 | the alpine kit, terraces at 3 to 15 m, switchback stairs, rock-cut rooms (hollows, task 3.1a), the gorge bridge |
+    | Tundra | `makeTundra` | 1 | 0 | the granite kit, igloos (a dome not cut to the cell, with its tunnel), the ice keep and wall (4c's masonry) |
+    | Swamp | `makeSwamp` | 6 | 0 | the alder kit, stilt floors and piles, decks, boardwalks, the bayou's water |
+    | Jungle | `makeJungle` | 5 | 0 | the jungle hut kit, platforms 9 m up round kapok trunks, rope bridges, the pole tower |
+    | Caves | `makeCaves` | 0 | 0 | hollows (3.1a): chamber, tunnel, carved rooms and the shaft; lights that burn all day |
+    | Mounds | `makeMounds` | 0 | 0 | turf domes cut by a plane, round doors, the vaulted back room; no site kind yet |
+
+  - **Four things break before any new piece is written.**
+    - **Heights are whole metres.** `BuildingDef.base` and `GroundCell.h`
+      are `i32`, and the tundra, swamp, jungle, harbour and cave templates
+      carry fractions.
+    - **The footprint is read from a cell's top.** Every top that is not
+      grass or sand counts as built. Outside the fields nearly every cell
+      of the 50 × 34 grid would become footprint. It is read from the
+      mockup's areas instead (plot, street, building).
+    - **One terrace a town.** `record::lay` stands the whole footprint on
+      its median layer. The walled town, the harbour, the mountain and the
+      mounds are terraced at several levels.
+    - **Eight kits are missing** (sandstone, adobe, granite, jungle hut,
+      alder, whitewash, driftwood, alpine), with the dome roof and the flat
+      roof's parapet.
+  - **The order.** Sub-slices, each ending in shots of a town in the game.
+    Recommendation taken (ask only with screenshots).
+    - **4a, every village stands.** The plumbing every other kind needs:
+      towns at sites that are not home, laid and stored on the world's first
+      open, standing in range. No new pieces.
+    - **4b, the walled town's streets and houses.** All 29 of its buildings
+      cut as they stand, once heights are fractional, the footprint comes
+      from areas, and a town stands on several levels.
+    - **4c, the walled town's masonry.** Curtain wall, gates, towers and the
+      keep. The tundra's ice keep and wall reuse them.
+    - **4d, the harbour.** Two kits, 4b's levels, and piers on piles at the
+      real sea.
+    - **4e, the desert.** Flat roofs that can be walked, parapets, domes and
+      outdoor stairs.
+    - **4f, the mountain.** Its terraces are 4b's. Its rock-cut rooms are
+      the first hollows (task 3.1a).
+    - **4g, the tundra.** Igloos are the first dome not cut to the cell.
+    - **4h, the swamp; 4i, the jungle.** Raised floors, decks, boardwalks,
+      then platforms and rope bridges.
+    - **4j, the caves.** The whole of 3.1a.
+    - **4k, the mounds.** Turf domes. A share of the fields' village sites
+      take the mound template, chosen by the site's seed (the parity list,
+      row 35). A village already stored keeps its template.
+    - The order follows what is reused. The plumbing comes first. The walled
+      town's houses need no new piece. Its masonry serves the tundra. Levels
+      serve the harbour, the mountain and the mounds. Hollows serve the
+      mountain before the caves. Curved and raised work comes last.
+  - **4a in detail.**
+    - **Which sites.** Every site whose kind has a shipped template: the
+      villages now, with each later sub-slice adding its kind.
+    - **When they are laid.**
+      - All of them are laid on the world's first open with this build, in
+        site id order, and before any town stands. A new world lays them at
+        creation.
+      - Each is stored through the durable path as Holbrook is (slice 3a),
+        with the settlement record last.
+      - Laying and cutting a village took 0.30 s in a debug test
+        (`a_town_built_from_its_record_is_the_town_its_template_lays`). The
+        release time is measured on the first 4a build and recorded here.
+    - **Unsettled sites (task 4.4).** A site with a player's edit in its
+      footprint or margin is not laid. It is stored as unsettled, so it is
+      never tried again. A world made before towns keeps what the player
+      did there (CLAUDE.md, "Saved games survive every change").
+    - **One ground, installed once.** Every laid town's ground is installed
+      together when the world's towns are read, and the planet is rebuilt
+      once. `settlement::ground` already holds a list of towns. A height
+      that is in no town pays one dot product a town (55 at most). An
+      instrument times `column::surface_m` with no towns and with twenty,
+      and the cost is recorded.
+    - **Standing in range (decision 5, tasks 4.1 and 4.3).**
+      - A town's pieces are cut, spawned and given to the walker only
+        within 1.2 km of the camera, and dropped past 1.5 km.
+      - They are cut on the task pool and published whole.
+      - A town fades in and out with a dither over a second: it never
+        appears or vanishes in one frame (priority 1, no pop-in).
+      - Its ground is there at every distance, so its terraces and lanes
+        show before its houses. The far form (task 4.2) is later.
+    - **Per town.** The walker's solids, the doors, the shadow casters and
+      the room lights come from the standing towns only.
+    - **Rotation (decision 4, in part).**
+      - The home village keeps its layout's east as it is.
+      - Every other village turns by its site's seed, to one of six sides.
+      - The mirror and the empty plots come with task 2.2.
+      - A stored town never turns: it is built from its records.
+    - **Shots.** Two other villages at 11:00 and 22:30, and the walk from
+      one village to the next, where a town fades in on the way.
+  - **4a as built (2026-09-30).**
+    - **Laid and stored.**
+      - `towns::start_towns` lays every village site with no record,
+        in site id order, through `ensure`, and stores each.
+      - A world opened in the fast build lays all 20 villages in 0.44 s,
+        about 0.04 s each (`every_village_lays_and_cuts_on_its_own_ground`,
+        in the fast profile).
+      - The ground is installed once for all of them, and the planet rebuilt
+        once. That takes 8.4 s in the container, as Holbrook alone did.
+    - **The turn.** `record::turn` mixes the site's id and deals the six
+      sides about evenly: 6000 sites give 900 to 1100 each. The shipped
+      seed's 19 other villages take all six. Holbrook keeps its east, and its
+      lane shot is the same to the pixel.
+    - **Unsettled.**
+      - `TownGround::touches` looks for a player's edit on any footprint or
+        margin cell, by exact key.
+      - Such a site gets an `unsettled` record, schema 1. It reads back as
+        `Stored::Unsettled` and is never laid again, even once the edit is
+        gone.
+    - **In range.**
+      - `stand_in_range` cuts a town on the pool within 1.2 km of the camera
+        (the walker where no camera is active). It drops the town past
+        1.5 km, and in between the town stays as it is.
+      - The fade is `Faded` on the town's root, carried to every piece's
+        material as `centre.w`. `field_lit.wgsl` discards through the
+        terrain's own `bayer4`, and a test holds the two copies equal.
+      - Flames are unlit, so they show once a town is half there.
+      - A town that stands when the world opens is whole at once, as its
+        ground is.
+    - **Per town.** A door and a room name their site and their building's
+      number there. `Towns::index` finds the building in the walker's
+      `Structures`, which holds only the standing towns, in the order they
+      stood. A dropped town's buildings are taken out, and the later towns
+      move down.
+    - **One height a town, not twenty.**
+      - With every village's ground installed, a height cost 17% more than
+        with none. The instrument timed 200,000 directions in the fast
+        build: 1215 ns against 1417 ns. Every height asked every town.
+      - The world's ground now keeps the towns by square on a grid over the
+        cube's faces: 8 a side, about 1 km across here.
+      - A height asks only the towns in its own square. Twenty villages now
+        time within the instrument's run-to-run noise of one (-8% to +6%).
+      - `the_grid_finds_what_every_town_would` holds the grid to a look at
+        every town, on the town, round its edge and past it.
+    - **The dark towns (found on the shots).**
+      - The first shots of other villages from above drew some towns near
+        black: every face turned from the sun, walls and roofs alike.
+      - **The cause was the capture, not the town.** A still with no walker
+        (`--view column`, every view from above) never added the field-lit
+        plugin. Towns there were drawn with Bevy's own sun and its default
+        ambient, the harsh look `sun-shadows` decision 7 replaced. The
+        field-lit plugin is now added in every run.
+      - **Found with it:** a town piece's bounding box is square to the
+        render frame's axes, so where a town's up is tilted from them the
+        box reaches into the ground. At Theringford two of each box's eight
+        corners read the rock's dark (sky 0). A corner under the ground now
+        reads the field half a metre over it, and all eight read the open
+        sky there.
+    - **Not captured.** The fade itself is a second of frames. A still
+      capture shows its end, so the app test
+      (`a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves`)
+      is its proof until the owner's video batch.
+  - **Built towns on the map (2026-10-01).** The owner: "highlight built
+    cities on the map please".
+    - **Built** means a town the world holds and stands when you come near:
+      laid, stored and read back.
+    - The map's sites layer (`city-sites` task 4.1) draws a built town's
+      marker in cream with a green ring round it.
+    - A site of a kind with no template yet is drawn dimmed. An unsettled
+      site (task 4.4) is dimmed with a red edge.
+    - The legend's line counts them: "55 settlements on the map: 26 built,
+      29 still to come."
+    - Shots: the spawn's continent at 12 m a pixel, and the whole planet.
+  - **4b in detail.**
+    - **The export.** `tools/export_town_templates.js town` writes
+      `assets/settlements/v1/town.json`.
+    - **The template takes fractional heights and areas.** Serde reads the
+      village's whole numbers as before.
+    - **A level a footprint cell.**
+      - Each cell stands at the terrace plus its template height, rounded to
+        a layer.
+      - The level goes in the cell's record: schema 2, where a schema 1
+        record reads as level 0 (CLAUDE.md, "Saved games survive every
+        change").
+      - A cell a layer below its neighbour gets a street step.
+    - **Out of 4b.** The lake at -3 m is dry ground until a lake takes
+      water. The wall, towers and keep are 4c. The stalls, well, smithy,
+      jetty and lamps come later (task 5.2 for the lamps).
+    - **Shots.** The walled town's lane, square and market from the
+      street, and from 60 m.
+  - **4b as built (2026-09-30), and where it left the plan.**
+    - **The export.** `tools/export_town_templates.js town` wrote
+      `town.json`: 29 buildings, 38 street lamps, and ground from -3 m (the
+      lake) to 9 m (the hillside past the hamlet). Its buildings stand on
+      whole layers, 1 to 3. So heights stay whole metres, and fractions come
+      with the kinds that carry them (the tundra, swamp, jungle and
+      harbour).
+    - **The footprint is as it was.**
+      - It is the built cells (buildings, and every top that is not grass
+        or sand) and two rings of yard. On the walled town that is the whole
+        walled town, its quay and its hamlet.
+      - It is not the lake, and not the hillside or the fields outside the
+        walls, which keep the planet's own ground.
+      - Reading the mockup's area names was not needed. The village's
+        footprint does not change.
+    - **A level a footprint cell.**
+      - `Template::terraced` (the exporter sets it for the town, the harbour,
+        the mountain and the mounds) lays each built cell at its own height
+        over the datum.
+      - A yard cell takes the level of the built cell nearest it, so no yard
+        follows the mockup's lake down or its hillside up.
+      - `TownGround::terraced` eases each margin cell toward the terrace of
+        the cell it was reached from.
+      - Every walled site of the shipped seed stands on four levels: the
+        quay at -1, the town's three terraces at 0, 1 and 2.
+    - **Records.**
+      - A town on one level is written in schema 1, as before, so every
+        village's records are byte for byte what 4a wrote.
+      - A terraced town is written in schema 2, with a level for each cell.
+        A build that reads only schema 1 refuses it as damaged, rather than
+        laying it flat.
+    - **No step pieces yet.** The walker climbs 1.05 m, so a 1 m change of
+      level is walked as the terrain's own step. The mockup's stepped
+      street cells stand at their own height for now, and half-steps are
+      pieces for later.
+    - **Streets are dirt.** The terrain has no cobble or flagstone material.
+      The walled town's streets take the village lanes' dirt until one is
+      added.
+    - **Linenleigh stands 520 m from Holbrook** on the shipped seed. So the
+      home village now has a walled town within sight, laid on a world's
+      first open with this build.
+  - **4c in detail (written 2026-09-30).** The mockup's masonry, as it is
+    built (`buildWalls`, `wallTower`, the keep in `makeTown`).
+    - **The curtain wall.**
+      - 116 cells: rows 6 and 31, columns 3 to 36, and columns 3 and 36
+        between.
+      - Each cell is a prism of masonry cut from its real corners, from its
+        ground to `WALL_TOP` (9 m on the mockup's datum, 6 to 8 m over the
+        streets). Its sides are rubble and its top is flagstone.
+      - Its top is the wall walk, a surface the walker stands on.
+      - Two merlons stand on each edge that faces out of the town and not
+        onto more wall.
+    - **The gates.** The four gate cells (columns 19 and 20 of rows 6 and
+      31) hold their masonry only from 4 m over their ground, so a passage
+      4 m high runs under it. The walker walks through.
+    - **The towers and the keep are 4c's second half.**
+      - The two stair towers are one cell each: a stone newel from the
+        street to the wall walk, with a doorway onto the walk and a
+        pyramid roof. The cutter's newel and its cone roof on one cell are
+        those pieces already. What is new is a doorway at the walk's height.
+      - The keep is a ring of six cells round a newel, three storeys, with
+        0.6 m walls and a crenellated flat roof. It needs the flat roof's
+        parapet (the desert's too).
+    - **What is stored.**
+      - The masonry is not a record. It is the template's, `v1/town.json`,
+        cut on the town's stored chart every time it is built, like a
+        building's pieces.
+      - So `v1` templates are frozen from 4c. A later change to a v1
+        template's masonry, or to any other part of it, is a `v2` template
+        for towns laid after it.
+      - A walled town that a 4b build stored has no masonry of its own, and
+        it takes the wall at its first open with 4c. The v1 town template
+        takes its masonry there, before any v1 walled town is shipped.
+    - **The towers and the keep, how they are cut (written 2026-10-01).**
+      - Both are buildings, exported from the mockup's own `wallTower` and
+        keep code as building definitions. A definition gains `newel` (how
+        high the stair climbs, how high its walls rise, and its exits: an
+        edge and a height each) and `parapet` (a flat roof that can be
+        walked on, with merlons on its outer edges).
+      - **A tower** is one cell, a single storey as high as its walls
+        (`wall_top`, 3 m over the wall walk).
+        - Its newel climbs to the walk at the mockup's rate, a turn every
+          3 m, from the entry the mockup chose so that the climb ends facing
+          the wall.
+        - Its exit is a doorway at the walk's height in the wall's edge.
+        - Its cone roof sits on its walls, as a hut's does.
+      - **The keep** is the ring of six cells and its newel cell: three
+        storeys of 0.6 m rubble walls.
+        - The newel climbs on to the roof, with a doorway onto each floor
+          and the roof on its entry edge.
+        - Its roof over the ring is flat and walkable, with merlons on the
+          outer edges.
+        - The newel's own walls rise 2.6 m over the roof to a cone of slate,
+          the turret.
+      - Both are stored as buildings are, so a later change to how they are
+        cut reaches every keep, and a change to the definitions is a new
+        template.
+      - **As built (2026-10-01).**
+        - The exporter wraps the mockup's own `newelStair` and `edgeWall`
+          outside any `building()`. It writes the two towers (one cell, entry
+          1 and 4, climbing 7 m to an exit onto the walk, walls to 10 m) and
+          the keep (seven cells, three storeys, its door and 18 windows, the
+          newel climbing to the roof at 9 m with exits at 3, 6 and 9 m,
+          walls to 11.6 m).
+        - Two kits are new: `tower` (stone, a slate cone) and `keep` (0.6 m
+          rubble outside, stone in).
+        - A definition's `newel` and `parapet` are written into its building
+          record only where there is one, so every house's record is as it
+          was.
+        - `a_stair_tower_climbs_to_the_walk_and_the_keep_to_its_roof` holds
+          each tower's way out to the walk's height across it, within 5 cm,
+          and the keep's roof as walkable over its six ring cells.
+        - A walled town stored by a 4b build keeps the 29 buildings it was
+          stored with. It gets its wall, which is the template's, but not
+          the towers or the keep, which would be new buildings.
+    - **The seam on the walk (found 2026-10-01 by the walker test).**
+      - **The finding.** Each masonry cell is a prism standing straight up
+        from its own cell, in its own frame. Two neighbouring cells' "up"
+        differ by the angle between their centres, so their prisms lean
+        apart. Up on the walk the floors leave a wedge between them, as wide
+        as the walk's height times the cell spacing over the radius.
+        - `a_walker_goes_through_a_gate_and_up_a_tower_onto_the_walk`, on
+          the 300 m gold-standard body, measured 61 mm at 7 m. The gap was
+          the same between the tower and its wall cell and between two wall
+          cells, and nothing answered a floor inside it.
+        - On the shipped 4800 m planet it is 7 × 2.833 / 4800 = 4 mm. A
+          walker at about 7 cm a tick lands in it on about one crossing in
+          15 and falls for that tick.
+        - A house has no seam: all its cells share one frame.
+      - **The fix.** A wall cell's walk reaches across the seam on each
+        edge that has no merlons, the edges that face more wall, a tower or
+        the town.
+        - The reach is a strip as wide as the wedge, the walk's height
+          times the distance between the two cells' centres over the
+          radius: 66 mm at 7 m on 300 m, 4 mm on 4800 m.
+        - The strip is a floor only, 0.1 m deep under the walk's top. The
+          walker stands on it; nothing is drawn and nothing is solid.
+        - The drawn crack is left alone. At 4 mm it is under a pixel from
+          the walk.
+      - **Verify.** The same walker test walks out of each tower's doorway
+        onto the walk without falling, sampled at 40 points.
+    - **Export.** The exporter calls the mockup's own `isWall`, `gate` and
+      `inTown`, and writes each wall cell's cell, its bottom (its ground, or
+      4 m over it at a gate), `WALL_TOP` and its merlon edges. The game
+      retypes nothing.
+    - **Shots.** The walled town from 60 m with its wall, the north gate
+      from the road outside, and the wall walk from the top of a tower.
+  - **4d in detail, the harbour (written 2026-10-01).** The mockup's
+    `makeCoast`, on the six harbour sites a world stores. Each choice below
+    is a recommendation taken (ask only with screenshots). The owner sees
+    them in 4d's shots beside the mockup's.
+    - **What the mockup builds.** Rows 0 to 11 are sea over a sand bed
+      shelving from 4 m to 0.35 m deep, 12 to 14 the beach (0.25 to 0.75 m),
+      15 the stone quay (1 m), then the village on terraces at 1, 2 and 3 m
+      and the hills behind. Its pieces:
+      - 14 houses, 7 whitewash, 4 driftwood, 2 fieldstone and 1 timber,
+        among them the Gull inn;
+      - 2 boathouses on the beach, open on their two seaward edges;
+      - 2 fish huts on stilts off the hut pier, each with a deck and a
+        porch stair down to the pier;
+      - 11 piers (a main pier, its head, the west, east and hut piers, six
+        finger piers), planks on piles a metre over the water;
+      - the mole (a strip of flags 1.2 m up across the harbour mouth) and
+        its light, a round stone tower 8 m high with a beacon fire;
+      - 21 street lamps, 5 lanterns along the quay and 5 at the piers'
+        ends;
+      - besides these: two dozen boats, the cog with a lantern on its
+        stern, the gangplank, the fish
+        market's stalls, nets, racks, pots, barrels and crates, the shipyard's
+        hull in frame and its slip, and the people.
+    - **It stands on the sea.** Every other town stands on its site's
+      ground. A harbour stands on the water.
+      - Its terrace is the sea level, 0 m. Each cell's level is its height
+        in the template, rounded to a whole layer: the beach at 0 and 1, the
+        quay at 1, the village at 1 to 3, the mole at 1. The planet's water
+        fills every layer under 0 m above the ground (`column.rs`), so the
+        sea is the planet's own.
+      - **Its sea is the planet's.** No cell the template puts under the sea
+        is laid, and no yard ring reaches into one. The seabed under the
+        piers is the natural ground, and the quay meets whatever water the
+        planet has there.
+      - The land is cut or filled to the template's layers, as every
+        terraced town's is, and eased back to the natural ground over the
+        margin.
+      - No fractions are needed after all. 4b expected the harbour to bring
+        fractional heights. A building's base rounds as the ground does:
+        the boathouses stand at 0, and the fish huts' floors at 2 m over
+        the sea.
+    - **It faces its sea.** A village's turn is the site's seeded one. A
+      harbour's is chosen from the ground, with a shift as well.
+      - Of the six turns, and every anchor shift up to 8 cells, take the
+        placement where the most template cells agree with the planet about
+        being sea (the natural ground under 0 m) or land. Ties go to the
+        seeded turn, then to the smaller shift.
+      - The scan reads the natural height of each patch cell once:
+        6 × 217 placements of about 1,700 cells. Its time is measured on the
+        first build and recorded here.
+      - The site's harbour rule already keeps the anchor within 60 m of
+        shelf water, with shallows in the footprint (`sites.rs`), so a
+        match is near.
+      - The record needs nothing new. It stores the layout cell on the
+        site's anchor and each cell's patch cell and side, so the chosen
+        placement is stored as any town's is.
+    - **New pieces.** Each is cut from the template on the town's stored
+      chart, as 4c's masonry is, and stored as a building where it is one.
+      - **The kits** `whitewash` (whitewash outside, plaster in, 0.5 m, slate
+        at pitch 0.9, a flag floor and a chimney) and `driftwood` (driftwood
+        both faces, 0.25 m, thatch, a plank floor). Their textures are
+        already exported.
+      - **An open side.** A building's `open` edges get no wall: the
+        boathouses' seaward edges, the mockup's `skipWall`.
+      - **Piers.** A pier is a deck of planks between two points, its width,
+        and its height, with a pile on each side about every 2.2 m (the
+        mockup's `L / 2.2`) down to the natural ground under it. Its top is a floor and its edges are open.
+        The template writes each pier as the mockup's `bridge` call gives it.
+      - **Stilts, a deck and a porch stair.** These are the fish huts'. The
+        swamp (4h) builds its village from the same three.
+        - A raised building stands on piles to the natural ground.
+        - A deck is a floor round it on the same piles, railed on its outer
+          edges except at the stair.
+        - A porch stair is a straight, open, railed flight outside the
+          building, from the deck down to its foot.
+      - **The light.** A round stone tower on the mole, solid to its top.
+        It has an iron cage and a beacon that burns from dusk as a lamp does
+        (task 5.4's kinds take a `beacon`).
+      - **Lanterns off the grid.** A lantern has a position and a height in
+        the template, not only a cell: the piers' lanterns stand over the
+        water at the piers' height.
+    - **Not in 4d.**
+      - The boats are task 4.2b: the game's own craft, parked as vehicle
+        records at their moorings. The cog and its gangplank are
+        `sail-the-cog`.
+      - The stalls, nets, racks, pots, barrels, crates, the shipyard and the
+        people come with the other towns' dressing.
+      - Street steps are 4b's open item.
+      - The lanes and the quay are dirt until the terrain has cobble and
+        flags, as the walled town's streets are.
+    - **What is stored.** A harbour's town and buildings are records, as
+      every town's are. Its piers, stilts, decks and light are the
+      template's, like the masonry. No world has a harbour yet. An old save
+      gains its harbours once on its next open, as it gained its villages
+      in 4a, unless the player has worked their ground.
+    - **Verify.**
+      - Core: the two kits load, and a saved town can name them
+        (`every_kit_a_saved_town_can_name_is_shipped`).
+      - Core: `coast.json` lays on a test patch. No cell under the
+        template's sea is in its footprint, and the natural ground there is
+        untouched. The quay is 1 m over the water.
+      - Core: on the shipped seed, every harbour site's chosen placement
+        puts at least three quarters of the template's sea cells over the
+        planet's sea.
+      - Core walker tests, as 4c's: along the main pier from the quay to
+        its head, with the feet on the planks all the way; into a boathouse
+        from the sea side; and up a fish hut's porch stair onto its deck and
+        in at its door.
+      - App: every harbour lays and cuts on its own ground, and a world
+        stores each once.
+      - Shots beside the mockup's: the harbour from the pier head, from
+        60 m by day and at night, a fish hut, and a boathouse.
+  - **4d as built.**
+    - **The export (2026-10-01).** `tools/export_town_templates.js coast`
+      wrote `coast.json`.
+      - It holds 18 buildings (7 whitewash, 8 driftwood, 2 fieldstone,
+        1 timber), 21 street lamps, 11 piers, 10 lanterns and the light.
+      - Every height is a whole layer: the ground runs from -4 to 5, the
+        boathouses stand at 0 and the fish huts at 2.
+      - Wrappers round the mockup's `bridge` (only one with piles is a
+        pier), `stiltHouse` and `lantern` write what stands over the water.
+        A building's `skipWall` edges are its `open` edges.
+      - The lantern on the cog's stern is left to `sail-the-cog`.
+      - Every new field is written for a sea scene only, so `village.json`
+        and `town.json` re-export byte for byte.
+      - `whitewash` and `driftwood` are in `kits.ron`, and
+        `every_kit_a_saved_town_can_name_is_shipped` reads the harbour too.
+      - A building record writes `open` and `stilts` only where there are
+        some, so every record already saved is as it was.
+    - **Lamps are not drawn in any town yet.** The game reads no template's
+      `lamps`; a town's street lamps are task 5.2. The light of the
+      Linenleigh night shots is its rooms' and the glowing flowers'. The
+      harbour's lanterns are in its template for 5.2, not drawn in 4d, and
+      the light's beacon waits with them.
+    - **Laying it on the sea (2026-10-01).** `record::lay_at_sea`, and
+      `settlement::sea`.
+      - **The record does need something new**, unlike what "It faces its
+        sea" said. A town's stored cells are its footprint. The fish huts,
+        their decks and the cells under the piers are over the water, so they
+        are not in the footprint, and a town built from its record could not
+        chart them.
+        - A harbour stores those cells too, as `over_sea`: charted, each by
+          its exact key and side, and not laid.
+        - It is written in a new settlement schema, 3, only when there are
+          some. A build that does not know the sea calls a harbour damaged
+          rather than cutting it without its fish huts.
+        - Every village's and walled town's record is as it was.
+      - **Tops.** A town's footprint took one top, dirt. A town on the sea
+        keeps its beach as sand and its headland as bare rock (`Top::Sand`,
+        `Top::Stone`). A land template's tops are as they were.
+      - **The footprint** is the template's dry built cells and two yard
+        rings over dry cells only. The margin eases the natural ground toward
+        the beach a metre a ring, as at any town's edge, so the seabed
+        shelves down from the shore. The open sea under the piers is the
+        planet's.
+      - **The placement scan** charts each of the six turns once, over the
+        template grown by the 8-cell shift on every side. A shift is a
+        translation on the hex grid, so each of the 217 shifts is scored by
+        looking cells up in the grown chart (`chart::chart_reach` leaves out
+        what cannot be laid rather than failing).
+        - On the test coast it picks the same placement as charting every
+          one of the 1,302 placements did. That took 3.9 s, and this takes
+          0.36 s (dev profile, place and lay).
+        - 87.6% of the harbour's cells agree with the coast about the sea.
+      - `a_harbour_lies_with_its_sea_over_the_planets`,
+        `a_harbour_stands_on_the_sea` and `a_harbour_is_stored_in_schema_3`
+        hold it.
+    - **Its pieces (2026-10-01).** `pieces::harbour`.
+      - **Open edges.** The cutter gives an edge in a building's `open` no
+        wall in any storey.
+      - **Stilts.** A fish hut is cut as any building, on its floor 2 m over
+        the sea, and its stilts are added to its own cut, in its frame.
+        - Its floor gets an underside, and the walker a floor surface,
+          because no ground is under it.
+        - Its deck is a plank slab, railed on its outer edges but at the
+          porch.
+        - Every outside corner of hut and deck has a pile down to the
+          ground under it.
+        - The porch stair is a straight open flight, 0.3 m treads, down to
+          the pier at 1 m.
+      - **Piers.** A pier is cut in stretches of about 2.2 m, each flat in
+        its own frame, so no stretch bows off the sphere. Each stretch laps
+        the next by 5 cm, so the planks have no seam, the 4c lesson. Each
+        joint has a pile either side, the mockup's spacing.
+      - **The light.** A twelve-sided stone tower, solid to its flagged top,
+        with an iron cage and a slate cap.
+      - **Where the pieces stand.** A point in the mockup's metres is placed
+        in its cell: as far toward the real centres across the cell's edges
+        0 and 1 as the mockup puts it toward its own (`sea::point`).
+      - **The ground under them.** A pile reaches the ground the column
+        has: the town's where it laid or eased it, the planet's elsewhere.
+      - **Walker tests**, on the test coast, asking the town what the
+        walker asks:
+        - `a_walker_goes_down_the_main_pier_to_its_head`: the planks at
+          1 m all the way, 120 steps.
+        - `a_walker_comes_into_a_boathouse_from_the_sea`: every open edge
+          lets the walker by, and every walled one stops it.
+        - `a_walker_climbs_a_fish_huts_porch_and_goes_in`: from the hut
+          pier up the porch, across the deck and in at the door, both huts.
+    - **In the game (2026-10-01).** Every harbour site is laid and stored
+      as the villages and walled towns are (`TownAssets::harbour`, the
+      `coast` template).
+      - **The shift is 24 cells, not 8.** The six harbour sites of the
+        shipped seed are mostly sea: 63 to 83% of the ground within 90 m
+        is under water, against 26% in the template.
+        - The site rule looks for shallows and a low shore, not for room on
+          land, so with 8 cells of shift three sites agreed at only 54 to
+          62%.
+        - At 16 cells they agreed at 64 to 87%.
+        - At 24 cells (about 68 m) they agree at 76 to 92%: Marenstrand 76,
+          Wickingstrand 84, Holinghaven 92, Coringport 92, Selingquay 79,
+          Corowstrand 86.
+        - A placement counts only if the whole template lands on the patch,
+          which for a harbour is 72 m wider (`patch_m`).
+        - Placing takes 0.24 to 0.38 s a harbour, and laying and cutting
+          0.6 to 0.9 s (dev profile).
+      - **Where they still disagree, it degrades gently.** Template sea over
+        the planet's land is left as the land: the piers stand over a beach.
+        Template land over the planet's sea is laid as land, reclaimed. The
+        owner judges both in the shots.
+      - **A better rule for new worlds** would look for room on land too.
+        Sites are stored, so it would change only new worlds. It is not done
+        here.
+      - **The log** names each town at its own footprint's middle, not its
+        site's marker, so a harbour's `--at` stands over it.
+      - `every_harbour_lays_on_its_sea_and_cuts` and
+        `a_world_stores_every_harbour_once` (schema 3, a second open
+        writes nothing) hold it. `print_where_the_harbours_stand` prints
+        where to stand for shots.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before
   settlements are stored records (CLAUDE.md, "Saved games survive every
   change").
+  - PR #19 merged slices 1 and 2a to `main` on 2026-09-29, ahead of this
+    rule. Nothing of the town was saved, so nothing was lost. But the
+    village template now stays as it is until slice 3a stores the town.
+    3a is the next slice, ahead of 2b.
 - **Each building is cut in its own tangent frame.** The frame sits at the
   building's centre, with up along the radius there. The real cell corners
   are projected into it. Over a house's 8 m the sphere falls away by under
@@ -382,8 +1305,9 @@ so the first can be looked at before it can be walked into.
 - [Frame cost of towns: draw calls, thin-solid queries, light] → It cannot be
   measured in a cloud session. The owner runs `tools/perf_suite.py`, and a
   `town` scenario is added to the suite in this change.
-- [Records grow as towns do] → A building definition is a few hundred bytes,
-  which puts about 50 towns of 20 buildings near 500 KB. Growth adds
+- [Records grow as towns do] → A building definition is about 500 bytes,
+  and a town's footprint cells about 23 bytes each. The village is 24 KB,
+  which puts 50 towns near 1.2 MB (measured in slice 3a). Growth adds
   buildings to plots, so a town's record is bounded by its plots.
 - [The far form pops even though the pieces fade] → The fade covers the far
   form's own entrance too, and the night points fade in at dusk rather than
@@ -393,7 +1317,9 @@ so the first can be looked at before it can be walked into.
 
 - An old save gets its settlement records the first time it is opened with
   towns, written through the durable path before anything is shown. Its sites
-  are checked for earlier player edits at that moment.
+  are checked for earlier player edits at that moment. The home village is
+  the exception: the build merged in PR #19 already stood it in every world
+  it opened, so it is stored as that build showed it (slice 3a).
 - Rollback is the previous build. The towns vanish and the terraces return to
   natural ground. Door edits are ignored. No player edit is lost.
 

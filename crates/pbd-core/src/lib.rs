@@ -27,6 +27,7 @@ pub mod planet_gen;
 pub mod records;
 pub mod sea;
 pub mod settlement;
+pub mod shadow;
 pub mod sites;
 pub mod terrain;
 pub mod topology;
