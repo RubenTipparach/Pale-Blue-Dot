@@ -1160,6 +1160,28 @@ so the first can be looked at before it can be walked into.
         stores each once.
       - Shots beside the mockup's: the harbour from the pier head, from
         60 m by day and at night, a fish hut, and a boathouse.
+  - **4d as built.**
+    - **The export (2026-10-01).** `tools/export_town_templates.js coast`
+      wrote `coast.json`.
+      - It holds 18 buildings (7 whitewash, 8 driftwood, 2 fieldstone,
+        1 timber), 21 street lamps, 11 piers, 10 lanterns and the light.
+      - Every height is a whole layer: the ground runs from -4 to 5, the
+        boathouses stand at 0 and the fish huts at 2.
+      - Wrappers round the mockup's `bridge` (only one with piles is a
+        pier), `stiltHouse` and `lantern` write what stands over the water.
+        A building's `skipWall` edges are its `open` edges.
+      - The lantern on the cog's stern is left to `sail-the-cog`.
+      - Every new field is written for a sea scene only, so `village.json`
+        and `town.json` re-export byte for byte.
+      - `whitewash` and `driftwood` are in `kits.ron`, and
+        `every_kit_a_saved_town_can_name_is_shipped` reads the harbour too.
+      - A building record writes `open` and `stilts` only where there are
+        some, so every record already saved is as it was.
+    - **Lamps are not drawn in any town yet.** The game reads no template's
+      `lamps`; a town's street lamps are task 5.2. The light of the
+      Linenleigh night shots is its rooms' and the glowing flowers'. The
+      harbour's lanterns are in its template for 5.2, not drawn in 4d, and
+      the light's beacon waits with them.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before

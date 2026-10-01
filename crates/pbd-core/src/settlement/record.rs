@@ -106,6 +106,14 @@ pub struct Building {
     pub newel: Option<super::NewelDef>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub parapet: bool,
+    /// A boathouse's open edges (slice 4d), written only where there are
+    /// some.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub open: Vec<[i32; 3]>,
+    /// A fish hut's stilts, deck and porch stair (slice 4d), its foot in
+    /// metres over the town's terrace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stilts: Option<super::Stilts>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -130,6 +138,11 @@ impl Building {
             state: BuildingState::Standing,
             newel: def.newel.clone(),
             parapet: def.parapet,
+            open: def.open.clone(),
+            stilts: def.stilts.as_ref().map(|s| super::Stilts {
+                foot_m: s.foot_m - datum as f32,
+                ..s.clone()
+            }),
         }
     }
 
@@ -150,6 +163,8 @@ impl Building {
             stair_cells: self.stair_cells.clone(),
             newel: self.newel.clone(),
             parapet: self.parapet,
+            open: self.open.clone(),
+            stilts: self.stilts.clone(),
         }
     }
 }

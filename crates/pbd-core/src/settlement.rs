@@ -71,6 +71,43 @@ pub struct Template {
     /// gates, as the mockup's `buildWalls` raises them.
     #[serde(default)]
     pub masonry: Vec<MasonryCell>,
+    /// Whether the town stands on the sea (slice 4d): the template's 0 m is
+    /// the sea's surface, and no cell its ground puts under the sea is laid.
+    #[serde(default)]
+    pub sea: bool,
+    /// Its piers (slice 4d): planks on piles, as the mockup's `bridge`.
+    #[serde(default)]
+    pub piers: Vec<Pier>,
+    /// Lanterns off the grid, `[x, y, z]` in the mockup's metres: the
+    /// harbour's along its quay and at its piers' ends.
+    #[serde(default)]
+    pub lanterns: Vec<[f32; 3]>,
+    /// The harbour's light on its mole (slice 4d).
+    #[serde(default)]
+    pub light: Option<RoundTower>,
+}
+
+/// A pier (slice 4d): a deck of planks `width_m` wide from `from` to `to`,
+/// `[x, y, z]` in the mockup's metres (x east, z south, y over the sea), on
+/// piles down to the ground under it.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Pier {
+    pub from: [f32; 3],
+    pub to: [f32; 3],
+    pub width_m: f32,
+}
+
+/// A round stone tower standing on the ground at `(x, z)`, the mockup's
+/// metres: the harbour's light.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct RoundTower {
+    pub x: f32,
+    pub z: f32,
+    pub radius_m: f32,
+    /// Its foot, layers over the template's 0 m.
+    pub base_m: i32,
+    /// Its top, metres over the template's 0 m.
+    pub top_m: f32,
 }
 
 /// One cell of masonry: a prism from `from` to `to`, layers on the mockup's
@@ -126,6 +163,26 @@ pub struct BuildingDef {
     /// A flat roof that is walked on, merlons on its outer edges: the keep's.
     #[serde(default)]
     pub parapet: bool,
+    /// `[c, r, d]`: an outer edge with no wall (slice 4d), a boathouse's
+    /// seaward side, the mockup's `skipWall`.
+    #[serde(default)]
+    pub open: Vec<[i32; 3]>,
+    /// A house on piles (slice 4d): the harbour's fish huts.
+    #[serde(default)]
+    pub stilts: Option<Stilts>,
+}
+
+/// A house on stilts (slice 4d), the mockup's `stiltHouse`: its floor on
+/// piles down to the ground under it, a deck on the same piles at its door,
+/// and an open stair from the deck down to where it lands.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Stilts {
+    /// The deck's cells.
+    pub deck: Vec<[i32; 2]>,
+    /// `[c, r, d]`: the deck edge the porch stair goes down from.
+    pub porch: [i32; 3],
+    /// Where the stair lands, metres over the template's 0 m.
+    pub foot_m: f32,
 }
 
 /// A newel that is not a house's (slice 4c): the mockup's `newelStair` as a

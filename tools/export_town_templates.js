@@ -22,6 +22,10 @@ const scenes = process.argv.slice(2).length ? process.argv.slice(2) : ["village"
 // Scenes that stand on several levels, each built cell at its own height
 // (`cities-in-the-world` slice 4b); every other scene is laid flat.
 const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
+// Scenes that stand on the sea (`cities-in-the-world` slice 4d): the
+// template's 0 m is the sea's surface, every height is a whole layer, and
+// what stands over the water (piers, stilts) is written as well.
+const SEA = new Set(["coast"]);
 
 (async () => {
   const executablePath = fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined;
@@ -37,7 +41,7 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
   await page.waitForFunction(() => typeof SCENES === "object" && typeof building === "function", null, { timeout: 60000 });
   fs.mkdirSync(OUT, { recursive: true });
   for (const scene of scenes) {
-    const layout = await page.evaluate((scene) => {
+    const layout = await page.evaluate(({ scene, SEA_SCENES }) => {
       const found = [];
       const inner = building;
       // The newels and walls a scene raises outside any building(): a stair
@@ -45,6 +49,30 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
       const newels = [], edges = [];
       let depth = 0;
       const innerNewel = newelStair, innerEdge = edgeWall;
+      // The sea's pieces (slice 4d): piers on piles (a `bridge` with piles),
+      // a stilt house's deck and porch stair, and the lanterns.
+      const sea = SEA_SCENES.includes(scene);
+      const piers = [], lanterns = [];
+      const innerBridge = bridge, innerStilt = stiltHouse, innerLantern = lantern;
+      // eslint-disable-next-line no-global-assign
+      bridge = function (A, B, o = {}) {
+        if (sea && o.piles !== undefined) piers.push({ from: A.slice(), to: B.slice(), width_m: o.width ?? 2 });
+        return innerBridge(A, B, o);
+      };
+      // eslint-disable-next-line no-global-assign
+      stiltHouse = function (o) {
+        const out = innerStilt(o);
+        if (sea) {
+          const b = found[found.length - 1];
+          b.stilts = { deck: o.deckCells.map(([c, r]) => [c, r]), porch: o.stairEdge.slice(0, 3), foot_m: o.footY };
+        }
+        return out;
+      };
+      // eslint-disable-next-line no-global-assign
+      lantern = function (x, y, z, post = true) {
+        if (sea) lanterns.push([x, y, z]);
+        return innerLantern(x, y, z, post);
+      };
       // eslint-disable-next-line no-global-assign
       newelStair = function (c, r, entry, y0, yTop, o = {}) {
         if (depth === 0) newels.push({ c, r, entry, y0, yTop, wallTop: o.wallTop ?? yTop + 2.6, exits: (o.exits || []).map((e) => [e.d, e.y]) });
@@ -79,11 +107,16 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
             }
           }
         }
+        const open = [];
+        if (o.skipWall) for (const [c, r] of cells) for (let d = 0; d < 6; d++) {
+          const [c2, r2] = nb(c, r, d);
+          if (!inB(c2, r2) && o.skipWall(c, r, d)) open.push([c, r, d]);
+        }
         found.push({
           name: o.name || "",
           kit: o.kit || "halftimber",
           cells,
-          base: out.base,
+          base: sea ? Math.round(out.base) : out.base,
           storeys,
           tall: o.tall || 1,
           doors: (o.doors || []).map((e) => [e[0], e[1], e[2], e[3] || 0]),
@@ -92,6 +125,7 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
           pitch: o.pitch ?? kit.pitch ?? 1,
           chimney: o.chimney || null,
           stair_cells: o.stairCells || [],
+          ...(open.length ? { open } : {}),
         });
         return out;
       };
@@ -102,6 +136,9 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
         building = inner;
         newelStair = innerNewel;
         edgeWall = innerEdge;
+        bridge = innerBridge;
+        stiltHouse = innerStilt;
+        lantern = innerLantern;
       }
       // A stair tower is its newel's one cell; the keep is its newel's cell
       // and the ring round it, its doors and windows as its walls were cut.
@@ -129,7 +166,7 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
       const ground = [];
       for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
         const i = idx(c, r);
-        ground.push({ c, r, h: TOP[i], top: TOPMAT[i], area: AREA[i] });
+        ground.push({ c, r, h: sea ? Math.round(TOP[i]) : TOP[i], top: TOPMAT[i], area: AREA[i] });
       }
       // The walled town's curtain wall and gates, as `buildWalls` raises
       // them: each wall cell from its ground (a gate from 4 m over it) to
@@ -149,8 +186,17 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
       }
       const out = { scene, grid: { columns: NC, rows: NR, cell_m: W }, buildings: found, ground, lamps: STREET_LAMPS.slice() };
       if (masonry.length) out.masonry = masonry;
+      if (sea) {
+        out.sea = true;
+        out.piers = piers;
+        // The one on the cog's stern is the cog's (`sail-the-cog`).
+        out.lanterns = lanterns.filter(([, y]) => y < 2);
+        // The mole's light: the round solid the scene labels so.
+        const light = SOLIDS.find((x) => x.type === "circ" && x.label === "The light");
+        if (light) out.light = { x: light.x, z: light.z, radius_m: light.r, base_m: Math.round(light.y0), top_m: light.y1 };
+      }
       return out;
-    }, scene);
+    }, { scene, SEA_SCENES: [...SEA] });
     if (TERRACED.has(scene)) layout.terraced = true;
     const file = path.join(OUT, `${scene}.json`);
     fs.writeFileSync(file, JSON.stringify(layout, null, 1) + "\n");

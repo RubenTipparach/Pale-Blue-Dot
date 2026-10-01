@@ -30,6 +30,15 @@ fn village() -> Template {
     serde_json::from_str(&text).expect("village.json parses")
 }
 
+fn harbour() -> Template {
+    let text = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/settlements/v1/coast.json"
+    ))
+    .expect("coast.json");
+    serde_json::from_str(&text).expect("coast.json parses")
+}
+
 fn walled() -> Template {
     let text = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -687,6 +696,9 @@ const KITS_SAVED_TOWNS_NAME: &[&str] = &[
     // Its stair towers and keep (slice 4c).
     "tower",
     "keep",
+    // The harbour (slice 4d).
+    "whitewash",
+    "driftwood",
 ];
 
 #[test]
@@ -695,7 +707,12 @@ fn every_kit_a_saved_town_can_name_is_shipped() {
     for name in KITS_SAVED_TOWNS_NAME {
         assert!(kits.get(name).is_some(), "kits.ron dropped {name}");
     }
-    for b in village().buildings.iter().chain(&walled().buildings) {
+    for b in village()
+        .buildings
+        .iter()
+        .chain(&walled().buildings)
+        .chain(&harbour().buildings)
+    {
         assert!(
             KITS_SAVED_TOWNS_NAME.contains(&b.kit.as_str()),
             "{} names {}, which is not listed as a kit a saved town can name",
