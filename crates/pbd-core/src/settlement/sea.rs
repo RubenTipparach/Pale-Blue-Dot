@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// How far from the site's cell a harbour's anchor may be shifted, in rings
 /// of cells.
-pub const SHIFT_RINGS: i32 = 8;
+pub const SHIFT_RINGS: i32 = 24;
 
 /// The mockup's offset cell holding `(x, z)`, its metres: its `cellAt`.
 pub fn cell_at(x: f32, z: f32, cell_m: f32) -> (i32, i32) {
@@ -168,10 +168,14 @@ pub fn placement(
             let Some(Some((at, d0_at))) = index(offset(aq + dq, ar + dr)).map(|i| dense[i]) else {
                 continue;
             };
+            // A placement counts only where every cell of the template can
+            // be laid: on the patch, off any pentagon.
             let mut agree = 0;
+            let mut whole = true;
             for &((q, r), wet) in &cells {
                 let Some(Some((cell, _))) = index(offset(q + dq, r + dr)).map(|i| dense[i]) else {
-                    continue;
+                    whole = false;
+                    break;
                 };
                 let is_sea = *sea_at[cell]
                     .get_or_insert_with(|| natural(patch.cells[cell].direction) < sea_m);
@@ -179,7 +183,7 @@ pub fn placement(
                     agree += 1;
                 }
             }
-            if best.is_none_or(|(a, ..)| agree > a) {
+            if whole && best.is_none_or(|(a, ..)| agree > a) {
                 best = Some((agree, at, d0_at, turn));
             }
         }

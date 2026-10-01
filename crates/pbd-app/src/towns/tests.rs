@@ -660,6 +660,7 @@ fn a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves() {
             kits: Arc::new(load_kits()),
             village: load_template("village"),
             walled: load_template("town"),
+            harbour: load_template("coast"),
             repeats: Arc::new(load_repeats()),
         })
         .insert_resource(Towns {
@@ -818,5 +819,170 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
         assert!(levels.len() >= 3, "{}: levels {levels:?}", site.name);
         let lowest = town.terrace as f32 + f32::from(*levels.first().unwrap());
         assert!(lowest > config.sea_level_m, "{} is dry", site.name);
+    }
+}
+
+fn harbours() -> Vec<Site> {
+    let mut sites: Vec<Site> = pbd_core::sites::generate(
+        &load_rules(),
+        crate::planet::terrain_config(),
+        list_spawn(),
+        4,
+    )
+    .sites
+    .into_iter()
+    .filter(|s| s.kind == SiteKind::Harbour)
+    .collect();
+    sites.sort_by_key(|s| s.id);
+    sites
+}
+
+/// Slice 4d: every harbour site of the shipped seed lies with its sea over
+/// the planet's, stands on the sea with its quay a metre over the water,
+/// and cuts whole: its buildings, its piers' stretches and its light.
+#[test]
+fn every_harbour_lays_on_its_sea_and_cuts() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let kits = load_kits();
+    let sites = harbours();
+    assert!(!sites.is_empty(), "harbour sites");
+    for site in &sites {
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let at = patch.nearest(site.direction).unwrap();
+        let (_, east) = pbd_core::geo::north_east(patch.cells[at].direction);
+        let d0 = (patch.side_toward(at, east) + record::turn(site.id)) % 6;
+        let started = std::time::Instant::now();
+        let (_, _, share) = sea::placement(
+            &template,
+            &patch,
+            at,
+            d0,
+            record::template_anchor(&template),
+            natural(&config),
+            config.sea_level_m,
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let placed = started.elapsed().as_secs_f32();
+        let town =
+            lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let (lat, lon) = pbd_core::geo::lat_lon(site.direction).degrees();
+        println!(
+            "{}: --at {lat:.5} {lon:.5}, {:.0}% of its cells agree about the sea, placed in {placed:.2} s, laid and cut in {:.2} s, {} pieces",
+            site.name,
+            share * 100.0,
+            started.elapsed().as_secs_f32(),
+            laid.solids.len()
+        );
+        assert!(share >= 0.75, "{}: {:.0}% agree", site.name, share * 100.0);
+        assert_eq!(
+            town.terrace as f32,
+            config.sea_level_m.floor(),
+            "{}",
+            site.name
+        );
+        let quay = town
+            .cells
+            .iter()
+            .position(|c| (c.0, c.1) == (20, 15))
+            .unwrap_or_else(|| panic!("{}: no quay", site.name));
+        assert_eq!(town.terrace_of(quay), 1.0, "{}: the quay", site.name);
+        assert!(
+            laid.solids.len() > template.buildings.len() + template.piers.len(),
+            "{}: buildings, piers and the light",
+            site.name
+        );
+    }
+}
+
+/// Slice 4d: a world stores each harbour once, in schema 3, and a second
+/// open writes nothing.
+#[test]
+fn a_world_stores_every_harbour_once() {
+    use crate::saves::{self, LOG, WorldSave};
+    let root = temporary("harbours");
+    let slot = saves::create(&root, "Harbours", 41).unwrap();
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let sites = harbours();
+    let made: Vec<Town> = {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        let made = sites
+            .iter()
+            .map(|site| {
+                let (town, seq) = ensure(&mut save, site, &template, &config).expect("laid");
+                assert!(seq > 0, "{} queued to the disk", site.name);
+                town.expect("a town")
+            })
+            .collect();
+        save.drain();
+        made
+    };
+    let path = root.join(&slot.id).join(LOG);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.starts_with("rec @c settlement "))
+            .count(),
+        sites.len(),
+        "a settlement line a harbour"
+    );
+    let mut reopened = WorldSave::open(root.clone(), saves::list(&root)[0].clone());
+    for (site, town) in sites.iter().zip(&made) {
+        let (kept, seq) = ensure(&mut reopened, site, &template, &config).expect("kept");
+        assert_eq!(kept.as_ref(), Some(town), "{} kept", site.name);
+        assert_eq!(seq, 0, "{}: nothing written", site.name);
+    }
+    reopened.drain();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        text,
+        "byte for byte"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An instrument for the slice 4d shots: where a harbour's pieces stand on
+/// the shipped seed, as `--at` takes them. A harbour lies up to its shift
+/// from its site's marker, so its shots are taken from where it stands.
+#[test]
+#[ignore = "an instrument: prints where to stand for the harbour shots"]
+fn print_where_the_harbours_stand() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let kits = load_kits();
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let laid = build(
+            &site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+        )
+        .unwrap();
+        let at = |d: Vec3| {
+            let (lat, lon) = pbd_core::geo::lat_lon(d).degrees();
+            format!("--at {lat:.5} {lon:.5}")
+        };
+        let cell = |c: i32, r: i32| laid.patch.cells[laid.chart.cell(c, r).unwrap()].direction;
+        let cell_m = template.grid.cell_m;
+        let pier = &template.piers[0];
+        let head = sea::point(&laid.chart, &laid.patch, pier.to[0], pier.to[2], cell_m).unwrap();
+        let quay =
+            sea::point(&laid.chart, &laid.patch, pier.from[0], pier.from[2], cell_m).unwrap();
+        println!(
+            "{}: footprint {}; quay {}; pier head {}; fish hut {}; boathouse {}; marker {}",
+            site.name,
+            at(laid.ground.anchor()),
+            at(quay),
+            at(head),
+            at(cell(4, 9)),
+            at(cell(9, 12)),
+            at(site.direction)
+        );
     }
 }

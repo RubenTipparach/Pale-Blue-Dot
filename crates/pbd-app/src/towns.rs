@@ -12,8 +12,8 @@
 //! their cells' real corners (`settlement::pieces`). The town is one entity
 //! with a mesh per texture, lit by the field as a drop or a craft is.
 //!
-//! Every village and walled town site stands (slices 4a and 4b): each is
-//! laid and stored on the
+//! Every village, walled town and harbour site stands (slices 4a, 4b and
+//! 4d): each is laid and stored on the
 //! world's first open, its ground installed with every other town's, and its
 //! pieces cut and faded in only within [`STAND_M`] of the viewer. The other
 //! kinds follow, a kind at a time.
@@ -37,6 +37,7 @@ use pbd_core::settlement::chart::{Chart, Patch};
 use pbd_core::settlement::ground::{self, Ground, TownGround};
 use pbd_core::settlement::pieces::{BuildingSolids, MeshBuf, Meshes, RoomLight};
 use pbd_core::settlement::record::{self, Stored, Town};
+use pbd_core::settlement::sea;
 use pbd_core::settlement::{Kits, Template};
 use pbd_core::sites::{Site, SiteKind};
 use serde::Deserialize;
@@ -47,6 +48,16 @@ use std::sync::Arc;
 /// How far round a site its cells are fetched, metres: the village's grid
 /// reaches 82 m from its centre, and the margin rings a few more.
 pub const PATCH_M: f32 = 130.0;
+
+/// How far round a site of `kind` its cells are fetched, metres: a
+/// harbour's further by the most its anchor may be shifted toward its sea
+/// (slice 4d).
+pub fn patch_m(kind: SiteKind) -> f32 {
+    match kind {
+        SiteKind::Harbour => PATCH_M + sea::SHIFT_RINGS as f32 * 3.0,
+        _ => PATCH_M,
+    }
+}
 
 fn asset(path: &str) -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets")).join(path)
@@ -138,7 +149,7 @@ fn natural(config: &TerrainConfig) -> impl Fn(Vec3) -> f32 + '_ {
 /// from the natural ground (`record::lay`). What this returns is stored, and
 /// the town is built from the store.
 pub fn lay_out(site: &Site, template: &Template, config: &TerrainConfig) -> Result<Town, String> {
-    let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+    let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
     lay_on(site, template, config, &patch)
 }
 
@@ -153,6 +164,20 @@ fn lay_on(
     let sides = patch.cells[at].corners.len();
     let turn = if site.home { 0 } else { record::turn(site.id) };
     let d0 = (patch.side_toward(at, east) + turn) % sides;
+    if template.sea {
+        // A harbour faces its sea (slice 4d): its turn and an anchor shift
+        // are chosen from the ground, ties going to the site's own turn.
+        let anchor = record::template_anchor(template);
+        let sea_m = config.sea_level_m;
+        let (cell, side, share) =
+            sea::placement(template, patch, at, d0, anchor, natural(config), sea_m)?;
+        info!(
+            "{}: the harbour lies with {:.0}% of its cells agreeing about the sea",
+            site.name,
+            share * 100.0
+        );
+        return record::lay_at_sea(template, site.id, patch, cell, side, natural(config), sea_m);
+    }
     record::lay(template, site.id, patch, at, d0, natural(config))
 }
 
@@ -167,7 +192,7 @@ pub fn build(
     repeat_m: &dyn Fn(&str) -> f32,
     config: &TerrainConfig,
 ) -> Result<Laid, String> {
-    let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+    let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
     let built = record::build_town(
         town,
         template,
@@ -226,7 +251,7 @@ pub fn ensure(
         Stored::Unsettled => Ok((None, 0)),
         Stored::Damaged(why) => Err(why),
         Stored::None => {
-            let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+            let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
             let town = lay_on(site, template, config, &patch)?;
             let (_, ground) = record::ground_of(&town, &patch, config.radius_m, natural(config))?;
             if ground.touches(&save.edits) {
@@ -264,24 +289,27 @@ pub struct TownAssets {
     pub village: Template,
     /// The walled town (slice 4b).
     pub walled: Template,
+    /// The harbour (slice 4d).
+    pub harbour: Template,
     pub repeats: Arc<BTreeMap<String, f32>>,
 }
 
 impl TownAssets {
     /// The template a kind of site is laid from, where one is shipped: the
-    /// village's and the walled town's so far (slice 4 adds a kind at a
-    /// time).
+    /// village's, the walled town's and the harbour's so far (slice 4 adds a
+    /// kind at a time).
     pub fn template_for(&self, kind: SiteKind) -> Option<&Template> {
         match kind {
             SiteKind::Village => Some(&self.village),
             SiteKind::Walled => Some(&self.walled),
+            SiteKind::Harbour => Some(&self.harbour),
             _ => None,
         }
     }
 
     /// The template a stored town names, by its scene.
     pub fn template_named(&self, scene: &str) -> Option<&Template> {
-        [&self.village, &self.walled]
+        [&self.village, &self.walled, &self.harbour]
             .into_iter()
             .find(|t| t.scene == scene)
     }
@@ -580,10 +608,12 @@ fn settle(world: &mut World) {
     let mut grounds = Vec::new();
     let mut kept = Vec::new();
     for h in held {
-        let patch = patch_round(h.site.direction, config.radius_m, PATCH_M);
+        let patch = patch_round(h.site.direction, config.radius_m, patch_m(h.site.kind));
         match record::ground_of(&h.town, &patch, config.radius_m, natural(&config)) {
             Ok((_, g)) => {
-                let (lat, lon) = pbd_core::geo::lat_lon(h.site.direction).degrees();
+                // Where the town stands: a harbour lies up to its shift from
+                // its site's marker (slice 4d).
+                let (lat, lon) = pbd_core::geo::lat_lon(g.anchor()).degrees();
                 info!(
                     "{}: a {:?} at --at {lat:.5} {lon:.5}, a terrace at {} m",
                     h.site.name, h.site.kind, h.town.terrace
@@ -1275,6 +1305,7 @@ impl Plugin for TownsPlugin {
             kits: Arc::new(load_kits()),
             village: load_template("village"),
             walled: load_template("town"),
+            harbour: load_template("coast"),
             repeats: Arc::new(load_repeats()),
         })
         .init_resource::<Towns>()

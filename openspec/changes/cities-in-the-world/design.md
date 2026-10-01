@@ -1247,6 +1247,36 @@ so the first can be looked at before it can be walked into.
           lets the walker by, and every walled one stops it.
         - `a_walker_climbs_a_fish_huts_porch_and_goes_in`: from the hut
           pier up the porch, across the deck and in at the door, both huts.
+    - **In the game (2026-10-01).** Every harbour site is laid and stored
+      as the villages and walled towns are (`TownAssets::harbour`, the
+      `coast` template).
+      - **The shift is 24 cells, not 8.** The six harbour sites of the
+        shipped seed are mostly sea: 63 to 83% of the ground within 90 m
+        is under water, against 26% in the template.
+        - The site rule looks for shallows and a low shore, not for room on
+          land, so with 8 cells of shift three sites agreed at only 54 to
+          62%.
+        - At 16 cells they agreed at 64 to 87%.
+        - At 24 cells (about 68 m) they agree at 76 to 92%: Marenstrand 76,
+          Wickingstrand 84, Holinghaven 92, Coringport 92, Selingquay 79,
+          Corowstrand 86.
+        - A placement counts only if the whole template lands on the patch,
+          which for a harbour is 72 m wider (`patch_m`).
+        - Placing takes 0.24 to 0.38 s a harbour, and laying and cutting
+          0.6 to 0.9 s (dev profile).
+      - **Where they still disagree, it degrades gently.** Template sea over
+        the planet's land is left as the land: the piers stand over a beach.
+        Template land over the planet's sea is laid as land, reclaimed. The
+        owner judges both in the shots.
+      - **A better rule for new worlds** would look for room on land too.
+        Sites are stored, so it would change only new worlds. It is not done
+        here.
+      - **The log** names each town at its own footprint's middle, not its
+        site's marker, so a harbour's `--at` stands over it.
+      - `every_harbour_lays_on_its_sea_and_cuts` and
+        `a_world_stores_every_harbour_once` (schema 3, a second open
+        writes nothing) hold it. `print_where_the_harbours_stand` prints
+        where to stand for shots.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before
