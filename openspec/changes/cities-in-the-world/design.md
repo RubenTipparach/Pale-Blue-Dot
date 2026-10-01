@@ -1319,6 +1319,28 @@ so the first can be looked at before it can be walked into.
       and a column away from them gets none.
     - App: the walled town's 38 lamps and the harbour's 31 are installed.
     - Shots at 22:30, from the street and from above.
+- **Finding: caves open into towns' ground (2026-10-01).** A harbour shot
+  showed a dark hexagonal hole in the beach at Coringport.
+  `print_where_caves_open_into_towns` asks the planet's worms which layers
+  they open under each town's footprint.
+  - On the shipped seed they open the top two layers of a town's ground in
+    26 of its 32 towns: 1 to 50 cells a town, in lanes, yards and under
+    floors.
+  - Holbrook's lane has one cave mouth of 4 cells, (25, 23) to (26, 24).
+    Holbrook is on `main`, so saves made since #19 already have it.
+  - Coringport's hole is not in its footprint. It is most likely one of the
+    natural cave mouths the worms make on purpose (`surface_share`), on the
+    natural beach past the town.
+  - **The choice is the owner's**, because closing them changes the
+    generated ground of saves that exist (CLAUDE.md, "Saved games survive
+    every change"). It goes in the survey with a shot of Holbrook's lane.
+    - **Recommended: a crust.** Worms carve nothing in the top three layers
+      of a town's footprint, as `cleared` keeps its trees off, so a lane or a
+      floor is never a pit. A player's edit still wins. It changes 4 cells of
+      Holbrook in existing saves, and only where no edit is. Nothing a
+      player made is lost.
+    - **Or leave them.** A cave mouth in a lane is a way down, as anywhere
+      on the planet.
 - **Task 4.2b in detail, the moored boats (written 2026-10-01).** Survey
   T7: "you can use any boat you find".
   - **What the mockup moors.** 23 boats on the water: 14 rowboats, 6

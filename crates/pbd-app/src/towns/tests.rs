@@ -974,8 +974,15 @@ fn print_where_the_harbours_stand() {
         let head = sea::point(&laid.chart, &laid.patch, pier.to[0], pier.to[2], cell_m).unwrap();
         let quay =
             sea::point(&laid.chart, &laid.patch, pier.from[0], pier.from[2], cell_m).unwrap();
+        // `--yaw` from the quay down the pier, as the walker's start reads it:
+        // its heading is `Y x up` turned by `-yaw` about up.
+        let up = quay.normalize();
+        let base = Vec3::Y.cross(up).normalize();
+        let along = head - quay;
+        let t = (along - up * along.dot(up)).normalize();
+        let yaw = -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees();
         println!(
-            "{}: footprint {}; quay {}; pier head {}; fish hut {}; boathouse {}; marker {}",
+            "{}: footprint {}; quay {} --yaw {yaw:.1}; pier head {}; fish hut {}; boathouse {}; marker {}",
             site.name,
             at(laid.ground.anchor()),
             at(quay),
@@ -1085,4 +1092,66 @@ fn every_harbours_boats_are_made_once_at_their_berths() {
         total += made.len();
     }
     assert!(total > 0, "some boats moored");
+}
+
+/// An instrument for the finding in Coringport's beach (2026-10-01): how
+/// many of each town's footprint cells the planet's worms open within the
+/// top two layers of the town's ground, where a cave mouth or a hole shows.
+#[test]
+#[ignore = "an instrument: counts cave mouths in towns' ground"]
+fn print_where_caves_open_into_towns() {
+    use pbd_core::column::layer_at;
+    let config = *crate::planet::terrain_config();
+    let field = pbd_core::worms::WormField::DEFAULT;
+    let assets_village = load_template("village");
+    let assets_walled = load_template("town");
+    let assets_coast = load_template("coast");
+    let sites: Vec<Site> = pbd_core::sites::generate(&load_rules(), &config, list_spawn(), 4)
+        .sites
+        .into_iter()
+        .filter(|s| matches!(s.kind, SiteKind::Village | SiteKind::Walled | SiteKind::Harbour))
+        .collect();
+    let mut opened_towns = 0;
+    for site in &sites {
+        let template = match site.kind {
+            SiteKind::Village => &assets_village,
+            SiteKind::Walled => &assets_walled,
+            _ => &assets_coast,
+        };
+        let town = lay_out(site, template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, _) = record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let worms = pbd_core::worms::gather(&field, &config, site.direction, 250.0);
+        let mut opened = Vec::new();
+        for (i, c) in town.cells.iter().enumerate() {
+            let d = patch.cells[chart.cell(c.0, c.1).unwrap()].direction;
+            let terrace = town.terrace_of(i);
+            let top: Vec<usize> = [terrace - 0.5, terrace - 1.5]
+                .iter()
+                .filter_map(|&a| layer_at(a))
+                .collect();
+            let mut hit = false;
+            worms.carve(&config, d, field.floor_layers, |index| hit |= top.contains(&index));
+            if hit {
+                opened.push((c.0, c.1));
+            }
+        }
+        if let Some(&(c, r)) = opened.first() {
+            let d = patch.cells[chart.cell(c, r).unwrap()].direction;
+            let (lat, lon) = pbd_core::geo::lat_lon(d).degrees();
+            println!("   the first at --at {lat:.5} {lon:.5}");
+        }
+        if !opened.is_empty() {
+            opened_towns += 1;
+            println!(
+                "{} ({:?}): {} of {} footprint cells open to a cave in their top two layers, {:?}",
+                site.name,
+                site.kind,
+                opened.len(),
+                town.cells.len(),
+                &opened[..opened.len().min(6)]
+            );
+        }
+    }
+    println!("{opened_towns} of {} towns", sites.len());
 }
