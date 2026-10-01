@@ -100,6 +100,16 @@ pub struct Building {
     pub stair_cells: Vec<[i32; 2]>,
     #[serde(default)]
     pub state: BuildingState,
+    /// A stair tower's or the keep's newel (slice 4c). Written only where
+    /// there is one, so every house's record is as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub newel: Option<super::NewelDef>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub parapet: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl Building {
@@ -118,6 +128,8 @@ impl Building {
             chimney: def.chimney,
             stair_cells: def.stair_cells.clone(),
             state: BuildingState::Standing,
+            newel: def.newel.clone(),
+            parapet: def.parapet,
         }
     }
 
@@ -136,6 +148,8 @@ impl Building {
             pitch: self.pitch,
             chimney: self.chimney,
             stair_cells: self.stair_cells.clone(),
+            newel: self.newel.clone(),
+            parapet: self.parapet,
         }
     }
 }

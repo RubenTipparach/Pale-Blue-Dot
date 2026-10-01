@@ -40,9 +40,30 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
     const layout = await page.evaluate((scene) => {
       const found = [];
       const inner = building;
+      // The newels and walls a scene raises outside any building(): a stair
+      // tower's and the keep's (`cities-in-the-world` slice 4c).
+      const newels = [], edges = [];
+      let depth = 0;
+      const innerNewel = newelStair, innerEdge = edgeWall;
+      // eslint-disable-next-line no-global-assign
+      newelStair = function (c, r, entry, y0, yTop, o = {}) {
+        if (depth === 0) newels.push({ c, r, entry, y0, yTop, wallTop: o.wallTop ?? yTop + 2.6, exits: (o.exits || []).map((e) => [e.d, e.y]) });
+        return innerNewel(c, r, entry, y0, yTop, o);
+      };
+      // eslint-disable-next-line no-global-assign
+      edgeWall = function (c, r, d, y0, y1, o = {}) {
+        if (depth === 0) edges.push({ c, r, d, y0, openings: (o.openings || []).map((p) => ({ door: !!p.door, win: !!p.win })) });
+        return innerEdge(c, r, d, y0, y1, o);
+      };
       // eslint-disable-next-line no-global-assign
       building = function (o) {
-        const out = inner(o);
+        depth++;
+        let out;
+        try {
+          out = inner(o);
+        } finally {
+          depth--;
+        }
         const kit = KITS[o.kit || "halftimber"];
         const cells = out.cells.map(([c, r]) => [c, r]);
         const inB = (c, r) => cells.some(([a, b]) => a === c && b === r);
@@ -79,6 +100,31 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
         SCENES[scene].build();
       } finally {
         building = inner;
+        newelStair = innerNewel;
+        edgeWall = innerEdge;
+      }
+      // A stair tower is its newel's one cell; the keep is its newel's cell
+      // and the ring round it, its doors and windows as its walls were cut.
+      if (scene === "town") for (const n of newels) {
+        const name = AREA[idx(n.c, n.r)];
+        const newel = { entry: n.entry, top_m: n.yTop - n.y0, wall_top_m: n.wallTop - n.y0, exits: n.exits.map(([d, y]) => [d, y - n.y0]) };
+        if (/stair tower$/.test(name)) {
+          found.push({ name, kit: "tower", cells: [[n.c, n.r]], base: n.y0, storeys: 1, tall: 1, doors: [[n.c, n.r, n.entry, 0]], windows: [], roof: "cone", pitch: 1, chimney: null, stair_cells: [[n.c, n.r]], newel });
+          continue;
+        }
+        const ring = [0, 1, 2, 3, 4, 5].map((d) => nb(n.c, n.r, d));
+        if (!ring.every(([c, r]) => AREA[idx(c, r)] === "The keep")) continue;
+        const cells = [[n.c, n.r], ...ring];
+        const doors = [], windows = [];
+        for (const w of edges) {
+          if (!cells.some(([a, b]) => a === w.c && b === w.r)) continue;
+          const st = Math.round((w.y0 - n.y0) / STOREY);
+          for (const p of w.openings) {
+            if (p.door) doors.push([w.c, w.r, w.d, st]);
+            else if (p.win) windows.push([w.c, w.r, w.d, st]);
+          }
+        }
+        found.push({ name: "The keep", kit: "keep", cells, base: n.y0, storeys: Math.round((n.yTop - n.y0) / STOREY), tall: 1, doors, windows, roof: "flat", parapet: true, pitch: 1, chimney: null, stair_cells: [[n.c, n.r]], newel });
       }
       const ground = [];
       for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {

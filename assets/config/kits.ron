@@ -36,5 +36,11 @@
             roof: Flat, roof_material: "claytile", gable: "clay", floor: "claytile", window_m: Some((0.6, 0.8)), chimney: Some("clay")),
         (name: "marble", label: "Marble", walls: [(outside: "marble", inside: "marble", edge: "marble", thickness_m: 0.5)],
             roof: Gable, roof_material: "tile", pitch: 0.55, gable: "marble", floor: "marblefloor", columns: true),
+        // The walled town's stair towers and keep (`cities-in-the-world` slice
+        // 4c): the mockup's stone towers and the keep's 0.6 m rubble walls.
+        (name: "tower", label: "Stair tower", walls: [(outside: "stone", inside: "stone", edge: "stone", thickness_m: 0.5)],
+            roof: Cone, roof_material: "slate", gable: "stone", floor: "flag"),
+        (name: "keep", label: "Keep", walls: [(outside: "rubble", inside: "stone", edge: "rubble", thickness_m: 0.6)],
+            roof: Flat, roof_material: "slate", gable: "rubble", floor: "flag", door_m: (1.2, 2.5), window_m: Some((0.35, 1.2))),
     ],
 )

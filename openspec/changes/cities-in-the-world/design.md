@@ -987,6 +987,24 @@ so the first can be looked at before it can be walked into.
       - Both are stored as buildings are, so a later change to how they are
         cut reaches every keep, and a change to the definitions is a new
         template.
+      - **As built (2026-10-01).**
+        - The exporter wraps the mockup's own `newelStair` and `edgeWall`
+          outside any `building()`. It writes the two towers (one cell, entry
+          1 and 4, climbing 7 m to an exit onto the walk, walls to 10 m) and
+          the keep (seven cells, three storeys, its door and 18 windows, the
+          newel climbing to the roof at 9 m with exits at 3, 6 and 9 m,
+          walls to 11.6 m).
+        - Two kits are new: `tower` (stone, a slate cone) and `keep` (0.6 m
+          rubble outside, stone in).
+        - A definition's `newel` and `parapet` are written into its building
+          record only where there is one, so every house's record is as it
+          was.
+        - `a_stair_tower_climbs_to_the_walk_and_the_keep_to_its_roof` holds
+          each tower's way out to the walk's height across it, within 5 cm,
+          and the keep's roof as walkable over its six ring cells.
+        - A walled town stored by a 4b build keeps the 29 buildings it was
+          stored with. It gets its wall, which is the template's, but not
+          the towers or the keep, which would be new buildings.
     - **Export.** The exporter calls the mockup's own `isWall`, `gate` and
       `inTown`, and writes each wall cell's cell, its bottom (its ground, or
       4 m over it at a gate), `WALL_TOP` and its merlon edges. The game

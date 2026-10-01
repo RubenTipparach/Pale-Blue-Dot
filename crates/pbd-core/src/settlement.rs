@@ -118,6 +118,31 @@ pub struct BuildingDef {
     pub chimney: Option<[i32; 2]>,
     #[serde(default)]
     pub stair_cells: Vec<[i32; 2]>,
+    /// A stair tower's or a keep's newel (slice 4c), where it is not a
+    /// house's: its entry, how high it climbs and its walls rise, and its
+    /// ways out.
+    #[serde(default)]
+    pub newel: Option<NewelDef>,
+    /// A flat roof that is walked on, merlons on its outer edges: the keep's.
+    #[serde(default)]
+    pub parapet: bool,
+}
+
+/// A newel that is not a house's (slice 4c): the mockup's `newelStair` as a
+/// stair tower or the keep calls it. Heights are metres over the building's
+/// ground floor.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct NewelDef {
+    /// The edge it climbs from.
+    pub entry: u8,
+    /// How high it climbs.
+    pub top_m: f32,
+    /// How high its own walls rise; over a flat roof, they are a turret.
+    pub wall_top_m: f32,
+    /// Each way out, `[edge, metres]`: a doorway at that height in that
+    /// edge's wall.
+    #[serde(default)]
+    pub exits: Vec<(u8, f32)>,
 }
 
 fn one() -> u32 {

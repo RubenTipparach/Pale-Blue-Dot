@@ -1159,7 +1159,12 @@ type Post = (Vec2, f32, f32, f32, String);
 
 fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(), String> {
     let storeys = def.storeys.max(1);
-    let storey_m = if kit.hut {
+    // A stair tower is one cell and one storey, as high as its walls (slice
+    // 4c).
+    let tower = def.newel.as_ref().filter(|_| plan.cells.len() == 1);
+    let storey_m = if let Some(n) = tower {
+        n.wall_top_m
+    } else if kit.hut {
         HUT_STOREY_M
     } else {
         STOREY_M * def.tall.max(1) as f32
@@ -1290,6 +1295,24 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
                         });
                     }
                 }
+                // A newel's way out through an outer wall at a height: a
+                // tower's onto the wall walk (slice 4c).
+                if let Some(n) = &def.newel
+                    && stair.as_ref().is_some_and(|st| st.holds(i))
+                {
+                    for &(ed, ey) in &n.exits {
+                        if usize::from(ed) % 6 == d && ey >= y0 - 0.01 && ey < y1 - 0.5 {
+                            openings.push(Opening {
+                                yb: ey,
+                                ye: (ey + door_h).min(y1),
+                                w: door_w,
+                                door: None,
+                                sill: false,
+                                shutters: false,
+                            });
+                        }
+                    }
+                }
                 let (a, b) = edge_ends(plan, i, d);
                 edge_wall(sink, plan.centres[i], a, b, y0, y1, wall, &openings);
                 // A candle in the room behind about half the windows, 0.8 m
@@ -1392,6 +1415,75 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
                 overhang,
             );
         }
+        RoofKind::Flat if def.parapet => {
+            // A roof that is walked on (slice 4c, the keep): flagstones over
+            // every cell but the newel's, merlons on each outer edge, and
+            // over the newel, which climbs on above, a turret's cone.
+            let newel_cell = match &stair {
+                Some(Stair::Newel { cell, .. }) => Some(*cell),
+                _ => None,
+            };
+            let (w, h, t) = MERLON_M;
+            for (i, &(c, r)) in plan.cells.iter().enumerate() {
+                if Some(i) == newel_cell {
+                    continue;
+                }
+                let hex = ccw(plan.corners[i].to_vec());
+                sink.prism(
+                    "flag",
+                    &kit.walls[0].outside,
+                    &hex,
+                    top - SLAB_M,
+                    top + LIFT_M,
+                    Some("plank"),
+                );
+                sink.solids.push(Solid {
+                    outline: hex.clone(),
+                    y0: top - SLAB_M,
+                    y1: top + LIFT_M,
+                });
+                sink.surfaces.push(Surface::Floor {
+                    outline: hex,
+                    top: top + LIFT_M,
+                    bottom: top - SLAB_M,
+                });
+                for d in 0..6 {
+                    let (c2, r2) = neighbour(c, r, d);
+                    if inside(c2, r2) {
+                        continue;
+                    }
+                    let (a, b) = edge_ends(plan, i, d);
+                    let edge = b - a;
+                    let out = ((a + b) * 0.5 - plan.centres[i]).normalize_or_zero();
+                    let ang = edge.y.atan2(edge.x);
+                    for f in [0.19, 0.81] {
+                        let p = a + edge * f - out * (t / 2.0);
+                        sink.plain_box(
+                            &kit.walls[0].outside,
+                            p.x,
+                            top + LIFT_M,
+                            p.y,
+                            Vec3::new(w, h, t),
+                            ang,
+                        );
+                        sink.solid_box(p.x, top + LIFT_M, p.y, Vec3::new(w, h, t), ang);
+                    }
+                }
+            }
+            if let (Some(i), Some(n)) = (newel_cell, &def.newel)
+                && n.wall_top_m > top + 0.5
+            {
+                cone_roof(
+                    sink,
+                    plan.centres[i],
+                    &plan.corners[i],
+                    n.wall_top_m,
+                    2.4,
+                    &material,
+                    0.35,
+                );
+            }
+        }
         RoofKind::Flat => {
             for corners in &plan.corners {
                 sink.prism(
@@ -1449,7 +1541,15 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
         sink.solid_box(p.x, top, p.y, Vec3::new(0.8, h, 0.8), 0.0);
     }
     if let Some(stair) = &stair {
-        cut_stair(sink, plan, kit, stair, storeys, storey_m);
+        cut_stair(
+            sink,
+            plan,
+            kit,
+            stair,
+            storeys,
+            storey_m,
+            def.newel.as_ref(),
+        );
     }
     Ok(())
 }
@@ -1552,6 +1652,14 @@ fn stair_of(plan: &Plan, def: &BuildingDef) -> Result<Option<Stair>, String> {
         [] => Ok(None),
         [one] => {
             let cell = find(*one)?;
+            // A stair tower's or the keep's newel climbs from the edge the
+            // mockup gave it (slice 4c).
+            if let Some(n) = &def.newel {
+                return Ok(Some(Stair::Newel {
+                    cell,
+                    entry: usize::from(n.entry) % 6,
+                }));
+            }
             let (c, r) = plan.cells[cell];
             // The first edge onto another of the building's cells that is not
             // the front door's.
@@ -1648,7 +1756,15 @@ fn rail(sink: &mut Sink, c: Vec2, yt: f32, len: f32, ang: f32) {
     }
 }
 
-fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u32, storey_m: f32) {
+fn cut_stair(
+    sink: &mut Sink,
+    plan: &Plan,
+    kit: &Kit,
+    stair: &Stair,
+    storeys: u32,
+    storey_m: f32,
+    newel: Option<&super::NewelDef>,
+) {
     let tread = tread_of(kit);
     let inner = kit.walls[0].inside.clone();
     match *stair {
@@ -1721,8 +1837,13 @@ fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u3
                 pts.push(pt(at(p1), NEWEL_R * 0.9));
                 pts
             };
-            let top = (storeys - 1) as f32 * storey_m;
-            let rise = storey_m / NEWEL_WINDERS as f32;
+            // A house's newel turns once a storey and climbs to its top
+            // floor. A stair tower's or the keep's turns once every 3 m, as
+            // the mockup's do, and climbs as high as its definition says
+            // (slice 4c).
+            let turn_m = if newel.is_some() { STOREY_M } else { storey_m };
+            let top = newel.map_or((storeys - 1) as f32 * storey_m, |n| n.top_m);
+            let rise = turn_m / NEWEL_WINDERS as f32;
             let dphi = tau / NEWEL_WINDERS as f32;
             let winders = (top / rise).round() as u32;
             for i in 1..=winders {
@@ -1737,7 +1858,9 @@ fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u3
                     Some(tread),
                 );
             }
-            let wall_top = storeys as f32 * storey_m;
+            let wall_top = newel.map_or(storeys as f32 * storey_m, |n| {
+                n.wall_top_m.max(storeys as f32 * storey_m)
+            });
             let post: Vec<Vec2> = (0..8).map(|k| pt(k as f32 * tau / 8.0, NEWEL_R)).collect();
             sink.prism(tread, tread, &post, 0.0, wall_top, None);
             sink.solids.push(Solid {
@@ -1747,7 +1870,7 @@ fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u3
             });
             // The top: 30 degrees of floor past the last winder, then a rail,
             // so a walker who keeps turning meets the rail, not the well.
-            let end = top / storey_m * tau;
+            let end = top / turn_m * tau;
             let step = (NEWEL_LANDING - dphi * 0.5) / 4.0;
             for k in 0..4 {
                 let p0 = end + dphi * 0.5 + k as f32 * step;
@@ -1769,7 +1892,7 @@ fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u3
                 sense,
                 base: 0.0,
                 top,
-                turn_m: storey_m,
+                turn_m,
                 newel_r: NEWEL_R,
                 landing: NEWEL_LANDING,
                 margin: dphi * 0.5,
@@ -1791,7 +1914,7 @@ fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u3
                 per_face: false,
             };
             for d in (0..6).filter(|&d| own(d)) {
-                let openings: Vec<Opening> = if d == entry {
+                let mut openings: Vec<Opening> = if d == entry {
                     (0..storeys)
                         .map(|s| Opening {
                             yb: s as f32 * storey_m,
@@ -1805,6 +1928,22 @@ fn cut_stair(sink: &mut Sink, plan: &Plan, kit: &Kit, stair: &Stair, storeys: u3
                 } else {
                     Vec::new()
                 };
+                // Its ways out at a height on this edge that no floor's
+                // doorway already is: the keep's onto its roof.
+                for &(ed, ey) in newel.map_or(&[][..], |n| &n.exits[..]) {
+                    if usize::from(ed) % 6 == d && openings.iter().all(|o| (o.yb - ey).abs() > 0.1)
+                    {
+                        openings.push(Opening {
+                            yb: ey,
+                            ye: (ey + STAIR_DOOR_M.1).min(wall_top),
+                            w: STAIR_DOOR_M.0,
+                            door: None,
+                            sill: false,
+                            shutters: false,
+                        });
+                    }
+                }
+                openings.sort_by(|a, b| a.yb.total_cmp(&b.yb));
                 let (a, b) = edge_ends(plan, cell, d);
                 edge_wall(sink, c, a, b, 0.0, wall_top, &faces, &openings);
             }

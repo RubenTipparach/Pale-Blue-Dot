@@ -684,6 +684,9 @@ const KITS_SAVED_TOWNS_NAME: &[&str] = &[
     "clay",
     "marble",
     "mud",
+    // Its stair towers and keep (slice 4c).
+    "tower",
+    "keep",
 ];
 
 #[test]
@@ -1525,4 +1528,85 @@ fn the_walled_towns_wall_stands_and_its_gates_open() {
         }
     }
     assert_eq!(gates, 4, "two gates, two cells each");
+}
+
+/// Slice 4c: each stair tower's newel climbs to the wall walk, and its way
+/// out stands at the walk's height on the edge where the wall is; the
+/// keep's newel climbs to its roof, which is walked on over its ring.
+#[test]
+fn a_stair_tower_climbs_to_the_walk_and_the_keep_to_its_roof() {
+    let template = walled();
+    let town = laid_village(&template);
+    let (patch, _) = patch();
+    let natural = slope();
+    let b = record::build_town(
+        &town,
+        Some(&template),
+        patch,
+        &kits(),
+        &|_: &str| 2.0,
+        RADIUS_M,
+        move |d| natural(d).floor(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let masonry_at = |c: i32, r: i32| {
+        template
+            .masonry
+            .iter()
+            .position(|m| (m.c, m.r) == (c, r))
+            .map(|k| &b.solids[template.buildings.len() + k])
+    };
+    let (mut towers, mut keeps) = (0, 0);
+    for (def, s) in town.buildings.iter().zip(&b.solids) {
+        let Some(n) = &def.newel else {
+            continue;
+        };
+        let climb = s
+            .surfaces
+            .iter()
+            .find_map(|x| match x {
+                pieces::Surface::Newel { top, .. } => Some(*top),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{}: no newel", def.name));
+        assert!(
+            (climb - n.top_m).abs() < 0.01,
+            "{}: climbs to {climb}",
+            def.name
+        );
+        let floor = s.frame.origin.length();
+        if def.cells.len() == 1 {
+            towers += 1;
+            let [c, r] = def.cells[0];
+            let (d, y) = n.exits[0];
+            let (c2, r2) = neighbour(c, r, usize::from(d));
+            let wall = masonry_at(c2, r2)
+                .unwrap_or_else(|| panic!("{}: no wall across its way out", def.name));
+            let up = wall.frame.origin.normalize();
+            let (walk, _) = wall.stand(up * (floor + y + 0.4), 1.0);
+            let walk = walk.expect("the walk");
+            assert!(
+                (walk - (floor + y)).abs() < 0.05,
+                "{}: the way out at {y} m, the walk at {} m",
+                def.name,
+                walk - floor
+            );
+        } else {
+            keeps += 1;
+            let roof = 3.0 * def.storeys as f32;
+            let walked = s
+                .surfaces
+                .iter()
+                .filter(|x| {
+                    matches!(x, pieces::Surface::Floor { top, .. } if (*top - roof).abs() < 0.1)
+                })
+                .count();
+            assert_eq!(walked, def.cells.len() - 1, "the keep's roof over its ring");
+            assert!(
+                n.exits.iter().any(|&(_, y)| (y - roof).abs() < 0.01),
+                "a way onto the roof"
+            );
+        }
+    }
+    assert_eq!((towers, keeps), (2, 1));
 }
