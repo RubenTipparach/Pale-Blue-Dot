@@ -209,6 +209,7 @@ fn built_towns_are_ringed_and_counted() {
             cells: Vec::new(),
             levels: Vec::new(),
             buildings: Vec::new(),
+            over_sea: Vec::new(),
         };
         Towns::holding(
             vec![Held {

@@ -1822,3 +1822,140 @@ fn a_walker_goes_through_a_gate_and_up_a_tower_onto_the_walk() {
     }
     assert_eq!(towers, 2);
 }
+
+/// A coast across the test patch for the harbour (slice 4d): the ground
+/// rising a metre in ten from the sea, the shore 15 m to one side of the
+/// patch's centre.
+fn coast() -> impl Fn(Vec3) -> f32 {
+    let (patch, at) = patch();
+    let centre = patch.cells[*at].direction;
+    let (north, east) = crate::geo::north_east(centre);
+    let inland = (north + east * 0.5).normalize();
+    move |d: Vec3| ((d - centre).dot(inland) * RADIUS_M + 15.0) / 10.0
+}
+
+/// The harbour laid on the test coast where it lies best, and the share of
+/// its cells that agree with the coast about the sea.
+fn laid_harbour() -> (Template, record::Town, f32) {
+    let template = harbour();
+    let (patch, at) = patch();
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let side = patch.side_toward(*at, east);
+    let anchor = record::template_anchor(&template);
+    let (cell, d0, share) = sea::placement(&template, patch, *at, side, anchor, coast(), 0.0)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let town = record::lay_at_sea(&template, 9, patch, cell, d0, coast(), 0.0)
+        .unwrap_or_else(|e| panic!("{e}"));
+    (template, town, share)
+}
+
+/// Slice 4d: a harbour is turned and shifted so its sea lies over the
+/// planet's, and lying it any other way agrees less.
+#[test]
+fn a_harbour_lies_with_its_sea_over_the_planets() {
+    let started = std::time::Instant::now();
+    let (template, _, share) = laid_harbour();
+    println!(
+        "the harbour lies with {:.1}% of its cells agreeing about the sea, placed and laid in {:.2} s",
+        share * 100.0,
+        started.elapsed().as_secs_f32()
+    );
+    assert!(share >= 0.75, "{:.0}% of its cells agree", share * 100.0);
+    // The same anchor turned to each other side does worse.
+    let (patch, at) = patch();
+    let wanted: BTreeSet<(i32, i32)> = template.ground.iter().map(|g| (g.c, g.r)).collect();
+    let anchor = record::template_anchor(&template);
+    let natural = coast();
+    let agree = |d0: usize| {
+        let charted = chart(patch, anchor, *at, d0, &wanted).expect("charted");
+        let n = template
+            .ground
+            .iter()
+            .filter(|g| {
+                charted
+                    .cell(g.c, g.r)
+                    .is_some_and(|i| (natural(patch.cells[i].direction) < 0.0) == (g.h < 0))
+            })
+            .count();
+        n as f32 / template.ground.len() as f32
+    };
+    let worst = (0..6).map(agree).fold(f32::MAX, f32::min);
+    assert!(
+        worst < share - 0.2,
+        "turned the worst way, {worst:.2} against {share:.2}"
+    );
+}
+
+/// Slice 4d: a harbour stands on the sea. Its terrace is the sea's surface
+/// and every footprint cell is at its own layer in the template; nothing
+/// the template puts under the sea is laid; the beach is sand; and the
+/// fish huts' cells are charted over the water.
+#[test]
+fn a_harbour_stands_on_the_sea() {
+    let (template, town, _) = laid_harbour();
+    assert_eq!(town.terrace, 0);
+    assert!(!town.over_sea.is_empty());
+    let ground: std::collections::BTreeMap<(i32, i32), &GroundCell> =
+        template.ground.iter().map(|g| ((g.c, g.r), g)).collect();
+    let built: BTreeSet<(i32, i32)> = template
+        .built_cells()
+        .into_iter()
+        .map(|[c, r]| (c, r))
+        .collect();
+    let laid: BTreeSet<(i32, i32)> = town.cells.iter().map(|c| (c.0, c.1)).collect();
+    for (cell, &level) in town.cells.iter().zip(&town.levels) {
+        let g = ground[&(cell.0, cell.1)];
+        assert!(g.h >= 0, "({}, {}) laid under the sea", cell.0, cell.1);
+        if built.contains(&(cell.0, cell.1)) {
+            assert_eq!(i32::from(level), g.h, "({}, {})", cell.0, cell.1);
+        }
+        if g.top == "ivorysand" {
+            assert_eq!(cell.4, Some(record::Top::Sand), "the beach");
+        }
+    }
+    for c in 10..=36 {
+        assert!(laid.contains(&(c, 15)), "the quay at ({c}, 15)");
+    }
+    let quay = town
+        .cells
+        .iter()
+        .position(|c| (c.0, c.1) == (20, 15))
+        .unwrap();
+    assert_eq!(town.terrace_of(quay), 1.0, "the quay a metre over the sea");
+    let over: BTreeSet<(i32, i32)> = town.over_sea.iter().map(|c| (c.0, c.1)).collect();
+    assert!(over.is_disjoint(&laid));
+    for b in template.buildings.iter().filter(|b| b.stilts.is_some()) {
+        for &[c, r] in &b.cells {
+            assert!(over.contains(&(c, r)), "{} at ({c}, {r})", b.name);
+        }
+    }
+    // The ground: the footprint is the town's, and the water is not.
+    let (patch, _) = patch();
+    let (chart, tg) = record::ground_of(&town, patch, RADIUS_M, coast()).expect("ground");
+    for &(c, r) in &over {
+        let d = patch.cells[chart.cell(c, r).unwrap()].direction;
+        assert_ne!(
+            tg.at(d).map(|g| g.ring),
+            Some(0),
+            "({c}, {r}) over the water"
+        );
+    }
+}
+
+/// Slice 4d: a harbour is written in schema 3 with its cells over the sea,
+/// and read back whole; a land template is not laid on the sea, nor a sea
+/// one on land.
+#[test]
+fn a_harbour_is_stored_in_schema_3() {
+    let (template, town, _) = laid_harbour();
+    let records = record::to_records(&town);
+    assert_eq!(records.last().unwrap().schema, record::SEA_SCHEMA);
+    let mut store = crate::records::Records::new();
+    for r in records {
+        store.put(r);
+    }
+    assert_eq!(record::from_records(&store, 9), record::Stored::Town(town));
+    let (patch, at) = patch();
+    assert!(record::lay(&template, 9, patch, *at, 0, coast()).is_err());
+    assert!(record::lay_at_sea(&walled(), 9, patch, *at, 0, coast(), 0.0).is_err());
+}

@@ -1182,6 +1182,39 @@ so the first can be looked at before it can be walked into.
       Linenleigh night shots is its rooms' and the glowing flowers'. The
       harbour's lanterns are in its template for 5.2, not drawn in 4d, and
       the light's beacon waits with them.
+    - **Laying it on the sea (2026-10-01).** `record::lay_at_sea`, and
+      `settlement::sea`.
+      - **The record does need something new**, unlike what "It faces its
+        sea" said. A town's stored cells are its footprint. The fish huts,
+        their decks and the cells under the piers are over the water, so they
+        are not in the footprint, and a town built from its record could not
+        chart them.
+        - A harbour stores those cells too, as `over_sea`: charted, each by
+          its exact key and side, and not laid.
+        - It is written in a new settlement schema, 3, only when there are
+          some. A build that does not know the sea calls a harbour damaged
+          rather than cutting it without its fish huts.
+        - Every village's and walled town's record is as it was.
+      - **Tops.** A town's footprint took one top, dirt. A town on the sea
+        keeps its beach as sand and its headland as bare rock (`Top::Sand`,
+        `Top::Stone`). A land template's tops are as they were.
+      - **The footprint** is the template's dry built cells and two yard
+        rings over dry cells only. The margin eases the natural ground toward
+        the beach a metre a ring, as at any town's edge, so the seabed
+        shelves down from the shore. The open sea under the piers is the
+        planet's.
+      - **The placement scan** charts each of the six turns once, over the
+        template grown by the 8-cell shift on every side. A shift is a
+        translation on the hex grid, so each of the 217 shifts is scored by
+        looking cells up in the grown chart (`chart::chart_reach` leaves out
+        what cannot be laid rather than failing).
+        - On the test coast it picks the same placement as charting every
+          one of the 1,302 placements did. That took 3.9 s, and this takes
+          0.36 s (dev profile, place and lay).
+        - 87.6% of the harbour's cells agree with the coast about the sea.
+      - `a_harbour_lies_with_its_sea_over_the_planets`,
+        `a_harbour_stands_on_the_sea` and `a_harbour_is_stored_in_schema_3`
+        hold it.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before

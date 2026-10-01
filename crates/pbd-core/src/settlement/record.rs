@@ -38,6 +38,12 @@ pub const RECORD_SCHEMA: u32 = 1;
 /// build that reads only schema 1 refuses a terraced town rather than laying
 /// it flat.
 pub const TERRACED_SCHEMA: u32 = 2;
+/// The settlement schema of a town on the sea (slice 4d): schema 2 and the
+/// cells charted over the water, where the planet's own ground is left and
+/// piers and stilts stand. Only a harbour is written in it, so a build that
+/// does not know the sea refuses a harbour rather than cutting one without
+/// its fish huts.
+pub const SEA_SCHEMA: u32 = 3;
 /// The laying-out rules' version, stored for people to read: a town is
 /// never rebuilt by it.
 pub const LAYOUT_VERSION: u32 = 1;
@@ -55,12 +61,31 @@ pub fn building_id(site: u32, n: u32) -> u64 {
 pub enum Top {
     /// A lane, or the ground under a building's floor.
     Dirt,
+    /// A harbour's beach (slice 4d).
+    Sand,
+    /// A harbour's headland of bare rock (slice 4d).
+    Stone,
 }
 
 impl Top {
     pub fn material(self) -> Material {
         match self {
             Top::Dirt => Material::Dirt,
+            Top::Sand => Material::Sand,
+            Top::Stone => Material::Stone,
+        }
+    }
+
+    /// The top a town gives a cell whose template top is `top`; none where
+    /// the planet's own top stays. A town on the sea keeps its beach sand
+    /// and its headland rock (slice 4d); every other built top is dirt, as
+    /// the village's and the walled town's always have been.
+    fn of(top: &str, sea: bool) -> Option<Top> {
+        match top {
+            "grass" | "sand" => None,
+            "ivorysand" if sea => Some(Top::Sand),
+            "fieldstone" if sea => Some(Top::Stone),
+            _ => Some(Top::Dirt),
         }
     }
 }
@@ -186,6 +211,10 @@ pub struct Town {
     /// `cells`; empty where the town stands on one level (slice 4b).
     pub levels: Vec<i8>,
     pub buildings: Vec<Building>,
+    /// A harbour's cells over the water (slice 4d): charted, so its piers
+    /// and fish huts are cut on them, and not laid, so the planet's own
+    /// ground and sea stay there. Empty for every other town.
+    pub over_sea: Vec<TownCell>,
 }
 
 impl Town {
@@ -224,7 +253,8 @@ pub fn template_anchor(template: &Template) -> (i32, i32) {
 /// neighbour tables (decision 2). The footprint is what is built on and
 /// [`YARD_RINGS`] of yard round it; the terrace is the median natural layer
 /// under what is built, so it cuts as much as it fills. `natural` is the
-/// natural ground's height at a direction, metres over the radius.
+/// natural ground's height at a direction, metres over the radius. A sea
+/// template is laid by [`lay_at_sea`].
 pub fn lay(
     template: &Template,
     site: u32,
@@ -233,13 +263,52 @@ pub fn lay(
     d0: usize,
     natural: impl Fn(Vec3) -> f32,
 ) -> Result<Town, String> {
+    if template.sea {
+        return Err(format!("{} stands on the sea", template.scene));
+    }
+    lay_with(template, site, patch, at, d0, natural, None)
+}
+
+/// Lay a sea template (slice 4d), as [`lay`] lays any other, but on the
+/// sea: its terrace is the sea's surface `sea_m`, each footprint cell at its
+/// own layer in the template, and no cell the template's ground puts under
+/// the sea is laid, nor any yard reaches into one. The cells under its piers
+/// and stilts there are charted, as `over_sea`.
+pub fn lay_at_sea(
+    template: &Template,
+    site: u32,
+    patch: &Patch,
+    at: usize,
+    d0: usize,
+    natural: impl Fn(Vec3) -> f32,
+    sea_m: f32,
+) -> Result<Town, String> {
+    if !template.sea {
+        return Err(format!("{} does not stand on the sea", template.scene));
+    }
+    lay_with(template, site, patch, at, d0, natural, Some(sea_m))
+}
+
+fn lay_with(
+    template: &Template,
+    site: u32,
+    patch: &Patch,
+    at: usize,
+    d0: usize,
+    natural: impl Fn(Vec3) -> f32,
+    sea_m: Option<f32>,
+) -> Result<Town, String> {
     let wanted: BTreeSet<(i32, i32)> = template.ground.iter().map(|g| (g.c, g.r)).collect();
     let anchor = template_anchor(template);
     let charted = chart(patch, anchor, at, d0, &wanted)?;
+    // On the sea, only dry ground is laid.
+    let dry = super::sea::dry(template);
+    let laid = |cell: &(i32, i32)| sea_m.is_none() || dry.contains_key(cell);
     let built: BTreeSet<(i32, i32)> = template
         .built_cells()
         .into_iter()
         .map(|[c, r]| (c, r))
+        .filter(laid)
         .collect();
     let mut footprint = built.clone();
     let mut ring = built.clone();
@@ -248,34 +317,47 @@ pub fn lay(
         for &(c, r) in &ring {
             for d in 0..6 {
                 let n = neighbour(c, r, d);
-                if charted.cells.contains_key(&n) && footprint.insert(n) {
+                if charted.cells.contains_key(&n) && laid(&n) && footprint.insert(n) {
                     next.insert(n);
                 }
             }
         }
         ring = next;
     }
-    let mut heights: Vec<f32> = built
-        .iter()
-        .filter_map(|&(c, r)| charted.cell(c, r))
-        .map(|i| natural(patch.cells[i].direction).floor())
-        .collect();
-    heights.sort_by(f32::total_cmp);
-    let terrace = *heights.get(heights.len() / 2).ok_or("nothing built")?;
-    let dirt: BTreeSet<(i32, i32)> = template
+    let terrace = match sea_m {
+        Some(sea) => sea.floor(),
+        None => {
+            let mut heights: Vec<f32> = built
+                .iter()
+                .filter_map(|&(c, r)| charted.cell(c, r))
+                .map(|i| natural(patch.cells[i].direction).floor())
+                .collect();
+            heights.sort_by(f32::total_cmp);
+            *heights.get(heights.len() / 2).ok_or("nothing built")?
+        }
+    };
+    let tops: BTreeMap<(i32, i32), Top> = template
         .ground
         .iter()
-        .filter(|g| g.top != "grass" && g.top != "sand")
-        .map(|g| (g.c, g.r))
+        .filter_map(|g| Some(((g.c, g.r), Top::of(&g.top, sea_m.is_some())?)))
         .collect();
-    let cells: Vec<TownCell> = footprint
-        .iter()
-        .filter_map(|&(c, r)| {
-            let at = charted.cells.get(&(c, r))?;
-            let top = dirt.contains(&(c, r)).then_some(Top::Dirt);
-            Some(TownCell(c, r, patch.keys[at.cell], at.d0 as u8, top))
-        })
-        .collect();
+    let town_cell = |&(c, r): &(i32, i32)| {
+        let at = charted.cells.get(&(c, r))?;
+        let top = tops.get(&(c, r)).copied();
+        Some(TownCell(c, r, patch.keys[at.cell], at.d0 as u8, top))
+    };
+    let cells: Vec<TownCell> = footprint.iter().filter_map(town_cell).collect();
+    let over_sea: Vec<TownCell> = if sea_m.is_some() {
+        super::sea::over_water(template)
+            .difference(&footprint)
+            .filter_map(|cell| {
+                let TownCell(c, r, key, side, _) = town_cell(cell)?;
+                Some(TownCell(c, r, key, side, None))
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let datum = datum(template);
     let levels = if template.terraced {
         levels_of(template, &built, &cells, datum)
@@ -295,6 +377,7 @@ pub fn lay(
             .iter()
             .map(|b| Building::laid(b, datum))
             .collect(),
+        over_sea,
     })
 }
 
@@ -302,6 +385,10 @@ pub fn lay(
 /// at. A town's terrace is this level, and every height in the template is
 /// over it.
 pub fn datum(template: &Template) -> i32 {
+    // On the sea, the datum is the sea's surface (slice 4d).
+    if template.sea {
+        return 0;
+    }
     let built: BTreeSet<(i32, i32)> = template
         .built_cells()
         .into_iter()
@@ -373,7 +460,7 @@ pub fn chart_of(town: &Town, patch: &Patch) -> Result<Chart, String> {
         .map(|(i, &k)| (k, i))
         .collect();
     let mut cells = BTreeMap::new();
-    for &TownCell(c, r, key, side, _) in &town.cells {
+    for &TownCell(c, r, key, side, _) in town.cells.iter().chain(&town.over_sea) {
         let cell = *by_key
             .get(&key)
             .ok_or_else(|| format!("layout cell ({c}, {r}): cell {key} is not in the patch"))?;
@@ -549,6 +636,9 @@ struct SettlementBody {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     levels: Vec<i8>,
     buildings: Vec<u64>,
+    /// Schema 3 only: a harbour's cells over the water (slice 4d).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    over_sea: Vec<TownCell>,
 }
 
 /// A town as the records its save stores: a record per building, then the
@@ -564,12 +654,15 @@ pub fn to_records(town: &Town) -> Vec<Record> {
         .zip(&ids)
         .map(|(b, &id)| Record::of(BUILDING_RECORD, id, RECORD_SCHEMA, b))
         .collect();
-    let levels = if town.levels.iter().any(|&l| l != 0) {
+    let on_sea = !town.over_sea.is_empty();
+    let levels = if on_sea || town.levels.iter().any(|&l| l != 0) {
         town.levels.clone()
     } else {
         Vec::new()
     };
-    let schema = if levels.is_empty() {
+    let schema = if on_sea {
+        SEA_SCHEMA
+    } else if levels.is_empty() {
         RECORD_SCHEMA
     } else {
         TERRACED_SCHEMA
@@ -586,6 +679,7 @@ pub fn to_records(town: &Town) -> Vec<Record> {
             cells: town.cells.clone(),
             levels,
             buildings: ids,
+            over_sea: town.over_sea.clone(),
         },
     ));
     records
@@ -635,17 +729,25 @@ pub fn from_records(records: &Records, site: u32) -> Stored {
             Stored::None
         };
     };
-    if record.schema != RECORD_SCHEMA && record.schema != TERRACED_SCHEMA {
+    if ![RECORD_SCHEMA, TERRACED_SCHEMA, SEA_SCHEMA].contains(&record.schema) {
         return Stored::Damaged(format!(
-            "settlement {site} is schema {}, and this build reads {RECORD_SCHEMA} and {TERRACED_SCHEMA}",
+            "settlement {site} is schema {}, and this build reads {RECORD_SCHEMA}, {TERRACED_SCHEMA} and {SEA_SCHEMA}",
             record.schema
         ));
     }
     let Some(body) = record.read::<SettlementBody>() else {
         return Stored::Damaged(format!("settlement {site} does not read"));
     };
-    let terraced = record.schema == TERRACED_SCHEMA;
-    // Schema 2 carries a level for every cell, and schema 1 none.
+    let terraced = record.schema != RECORD_SCHEMA;
+    // Schemas 2 and 3 carry a level for every cell, and schema 1 none; only
+    // schema 3 has cells over the sea.
+    if (record.schema == SEA_SCHEMA) == body.over_sea.is_empty() {
+        return Stored::Damaged(format!(
+            "settlement {site}: {} cells over the sea in schema {}",
+            body.over_sea.len(),
+            record.schema
+        ));
+    }
     if terraced == body.levels.is_empty() || (terraced && body.levels.len() != body.cells.len()) {
         return Stored::Damaged(format!(
             "settlement {site}: {} levels for {} cells in schema {}",
@@ -679,6 +781,7 @@ pub fn from_records(records: &Records, site: u32) -> Stored {
         cells: body.cells,
         levels: body.levels,
         buildings,
+        over_sea: body.over_sea,
     })
 }
 
