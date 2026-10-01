@@ -76,6 +76,23 @@ the apparent wind, and its keel SHALL resist leeway with lift.
 - **WHEN** the Tern is driven hard on a broad reach
 - **THEN** its speed levels off near sqrt(g L / 2 pi) for its waterline length
 
+### Requirement: A sailing boat's keel lifts to the water under it
+The Tern's keel SHALL go as deep as the water under it allows, its ballast
+with it: it SHALL rise at once when the seabed comes up under it and lower at
+its rate when the water deepens. A Tern SHALL float upright, moored, in half a
+metre of water, and in open water its keel SHALL be all the way down
+(`vehicle::tests::a_terns_keel_lifts_to_the_water_under_it`).
+
+#### Scenario: Moored in the shallows
+- **WHEN** a Tern is moored in 0.5 m of water in a 6 m/s wind
+- **THEN** its keel lifts clear of the seabed at once and it heels under 8
+  degrees
+
+#### Scenario: Out into deep water
+- **WHEN** a Tern with its keel lifted comes over deep water
+- **THEN** the keel is about half way down after 1.5 s and all the way down
+  after 3.5 s
+
 ### Requirement: A paddle stroke is drag on the blade
 Each stroke SHALL apply the blade's hydrodynamic drag against the local water
 velocity at the blade's position, so a stroke on one side turns the canoe and

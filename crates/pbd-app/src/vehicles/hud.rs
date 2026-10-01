@@ -139,10 +139,15 @@ fn panel(vehicle: &Vehicle, seat: bool) -> String {
             );
             let _ = writeln!(
                 s,
-                "sheet {:>3.0}%  sail {sail}  leeway {:>+4.1} deg  water aboard {:>4.0} kg",
+                "sheet {:>3.0}%  sail {sail}  leeway {:>+4.1} deg  water aboard {:>4.0} kg{}",
                 t.sheet * 100.0,
                 t.leeway.to_degrees(),
-                craft.bilge_kg
+                craft.bilge_kg,
+                if t.keel_down < 0.95 {
+                    format!("  KEEL UP {:.0}%, shallow", (1.0 - t.keel_down) * 100.0)
+                } else {
+                    String::new()
+                }
             );
             let hint = match t.sail_state {
                 SailState::Luffing => "Bear away from headwind or trim the sheet in.",

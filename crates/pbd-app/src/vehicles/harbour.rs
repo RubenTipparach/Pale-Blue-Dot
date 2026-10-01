@@ -42,26 +42,21 @@ pub fn kind_of(boat: &str) -> Kind {
     }
 }
 
-/// The water a craft needs under it at a mooring, m of the drawn sea, from
-/// its hull in `vehicles.ron`: the Tern's keel reaches about 1.7 m under its
-/// waterline, and the Loon's hull is 0.36 m deep. The drawn sea lies half a
-/// metre under the layers' sea level (`water.ron`), so a seabed one layer
-/// down holds 0.5 m of it, which floats a Loon; a Tern wants 2 m. (A new
-/// world's own two boats are placed with more margin, `place::TERN_DEPTH_M`
-/// and `LOON_DEPTH_M`, in open water.)
-fn draws(kind: Kind) -> f32 {
-    match kind {
-        Kind::Tern => 2.0,
-        _ => 0.5,
-    }
-}
+/// The water a harbour boat needs under it at a mooring, m of the drawn sea,
+/// from its hull in `vehicles.ron`. The Loon's hull is 0.36 m deep; the
+/// Tern's keel lifts into its hull in shallow water (`TernSpec::lift`), and
+/// then it draws 0.3 m. The drawn sea lies half a metre under the layers' sea
+/// level (`water.ron`), so a seabed one layer down holds 0.5 m of it, which
+/// floats either. (A new world's own two boats are placed with more margin,
+/// `place::TERN_DEPTH_M` and `LOON_DEPTH_M`, in open water.)
+const DRAWS_M: f32 = 0.5;
 
 /// A harbour's boats the fleet does not hold yet (`made` names the berths it
 /// does), each at its berth on the water, anchored to the seabed under it
 /// and tagged with its berth, numbered from `next_id`. `floor` is the solid
 /// ground's radius under a direction and `sea_radius` the water's. Returns
 /// the craft, and how many berths were skipped: over land, or over water
-/// shallower than a Loon draws.
+/// shallower than a harbour boat draws ([`DRAWS_M`]).
 #[allow(clippy::too_many_arguments)]
 pub fn boats_for(
     site: u32,
@@ -92,13 +87,8 @@ pub fn boats_for(
         };
         let bed = floor(direction);
         let depth = sea_radius - bed;
-        // A sailing berth too shallow for a Tern takes a Loon, so the berth
-        // keeps a boat.
-        let kind = match kind_of(&boat.kind) {
-            Kind::Tern if depth < draws(Kind::Tern) => Kind::Loon,
-            kind => kind,
-        };
-        if depth < draws(kind) {
+        let kind = kind_of(&boat.kind);
+        if depth < DRAWS_M {
             skipped += 1;
             continue;
         }

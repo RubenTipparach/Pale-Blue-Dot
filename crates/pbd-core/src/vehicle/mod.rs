@@ -193,6 +193,8 @@ pub struct Craft {
     hulls: Hulls,
     /// Seconds since the mass was last worked out.
     reweigh: f64,
+    /// How far down a Tern's keel was when the mass was last worked out.
+    keel_weighed: f64,
 }
 
 /// What every force in a substep shares.
@@ -390,6 +392,7 @@ impl Craft {
             specs,
             hulls,
             reweigh: 0.0,
+            keel_weighed: 1.0,
         };
         craft.weigh();
         craft.set_reference_pose(position, orientation);
@@ -438,6 +441,13 @@ impl Craft {
             Kind::Tern => {
                 let s = &specs.tern;
                 let mut parts = s.parts.to_vec();
+                // The ballast rides in the keel (`TernSpec::lift`).
+                let down = match &self.state {
+                    CraftState::Tern(st) => st.keel,
+                    _ => 1.0,
+                };
+                parts[s.lift.ballast].at[1] += s.lift.raised_m(down) as f32;
+                self.keel_weighed = down;
                 parts.push(Part {
                     mass_kg: bilge,
                     at: s.bilge.at,
@@ -576,7 +586,10 @@ impl Craft {
             self.body.integrate(h);
         }
         self.reweigh += dt;
-        if self.hull().is_some() && self.reweigh >= 0.5 {
+        // A keel that moved moves the ballast: weigh again at once.
+        let keel_moved =
+            matches!(&self.state, CraftState::Tern(s) if (s.keel - self.keel_weighed).abs() > 0.05);
+        if self.hull().is_some() && (self.reweigh >= 0.5 || keel_moved) {
             self.reweigh = 0.0;
             self.weigh();
         }

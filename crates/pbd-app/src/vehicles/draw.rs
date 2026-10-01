@@ -41,6 +41,8 @@ enum Moving {
     Boom,
     Tiller,
     Paddle,
+    /// The Tern's keel, lifted in shallow water.
+    Keel,
     /// The cog's yard, turned about its mast by the braces.
     Yard,
     /// Its sail, set (true) or furled on the yard: set at sea, furled at a
@@ -207,11 +209,17 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
                 mast + Vec3::Y * head / 2.0,
                 &dark,
             );
+            // The keel, lifted in shallow water (`TernSpec::lift`).
             let keel_h = (s.keel.area_m2 * s.keel.aspect).sqrt();
-            b.cuboid(
+            let keel = b.pivot(
                 entity,
+                Moving::Keel,
+                Transform::from_translation(Vec3::from(s.keel.at)),
+            );
+            b.cuboid(
+                keel,
                 Vec3::new(0.08, keel_h, s.keel.area_m2 / keel_h),
-                Vec3::from(s.keel.at),
+                Vec3::ZERO,
                 &dark,
             );
             // The boom and the sail swing together about the mast.
@@ -406,6 +414,11 @@ pub fn place(
             }
             (Moving::Tiller, CraftState::Tern(s)) => {
                 transform.rotation = Quat::from_rotation_y(s.tiller as f32);
+            }
+            (Moving::Keel, CraftState::Tern(s)) => {
+                let spec = &craft.specs().tern;
+                transform.translation =
+                    Vec3::from(spec.keel.at) + Vec3::Y * spec.lift.raised_m(s.keel) as f32;
             }
             (Moving::Tiller, CraftState::Cog(s)) => {
                 transform.rotation = Quat::from_rotation_y(s.tiller as f32);

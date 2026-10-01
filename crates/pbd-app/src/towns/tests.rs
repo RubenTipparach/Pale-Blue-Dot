@@ -1149,6 +1149,13 @@ fn every_harbours_boats_are_made_once_at_their_berths() {
                 .count()
         );
         assert_eq!(made.len() + skipped, template.boats.len(), "{}", site.name);
+        // Every sailing berth over water takes its sailboat, the Tern, its
+        // keel lifted in the shallows.
+        for c in &made {
+            let (_, n) = c.berth.expect("tagged with its berth");
+            let want = crate::vehicles::harbour::kind_of(&template.boats[n as usize].kind);
+            assert_eq!(c.kind, want, "{}: berth {n}", site.name);
+        }
         let berths: std::collections::BTreeSet<(u32, u32)> =
             made.iter().filter_map(|c| c.berth).collect();
         assert_eq!(berths.len(), made.len(), "{}: a berth a boat", site.name);

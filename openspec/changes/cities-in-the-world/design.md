@@ -1495,6 +1495,14 @@ so the first can be looked at before it can be walked into.
       - App: each harbour's sailing berths over water make Terns.
       - A shot of Holinghaven's quay with its sailboats, beside the
         mockup's.
+    - **As built (2026-10-01).** As written. `TernSpec::lift` (rise 1.08 m,
+      a third of its travel a second, 0.1 m off the seabed; the ballast is
+      part 1 and the tip contact 0). On the shipped seed every sailing berth
+      over water now makes its Tern: Holinghaven 5 (none before), 32 across
+      the six harbours. `a_terns_keel_lifts_to_the_water_under_it` holds the
+      keel, and the requirement is in `openspec/specs/player/vehicles`. The
+      Tern's open-water tests (close reach, in irons, hull speed) pass
+      unchanged.
     - Recommendation taken (ask only with screenshots).
 - **Task 4.2c in detail, the harbour's dressing (written 2026-10-01).**
   Third in the owner's order: "We're good on the mockup already. Approved.

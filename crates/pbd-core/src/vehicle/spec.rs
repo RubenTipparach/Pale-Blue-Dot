@@ -421,6 +421,33 @@ pub struct TernSpec {
     /// Where a mooring line is made fast.
     pub bow: [f32; 3],
     pub seat: SeatSpec,
+    /// How its keel lifts in shallow water.
+    pub lift: KeelLift,
+}
+
+/// A keel that lifts (`cities-in-the-world` task 4.2b): it goes as deep as
+/// the water under it allows, its ballast with it. It rises at once when the
+/// seabed comes up under it, as a keel kicks up on the bottom, and lowers at
+/// its rate when the water deepens.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeelLift {
+    /// How far it rises from all the way down to all the way up, m.
+    pub rise_m: f32,
+    /// How fast it lowers: its travel a second.
+    pub rate: f32,
+    /// How far its tip keeps off the seabed, m.
+    pub clearance_m: f32,
+    /// Which of the craft's parts is its ballast, and which contact its tip.
+    pub ballast: usize,
+    pub tip: usize,
+}
+
+impl KeelLift {
+    /// How far the keel is lifted, m, `down` of the way down (1 all the way).
+    pub fn raised_m(&self, down: f64) -> f64 {
+        self.rise_m as f64 * (1.0 - down.clamp(0.0, 1.0))
+    }
 }
 
 fn seabed(at: [f32; 3], stiffness: f32, damping: f32) -> ContactSpec {
@@ -533,6 +560,14 @@ impl Default for TernSpec {
                 reach_m: 4.5,
                 exit: [0.0, 0.62, 0.0],
             },
+            // The keel's tip, 1.5 m down, rises to just under the hull.
+            lift: KeelLift {
+                rise_m: 1.08,
+                rate: 0.35,
+                clearance_m: 0.1,
+                ballast: 1,
+                tip: 0,
+            },
         }
     }
 }
@@ -561,6 +596,16 @@ impl TernSpec {
         }
         self.hull.validate("tern")?;
         self.keel.validate("tern.keel")?;
+        let lift = &self.lift;
+        if !(lift.rise_m >= 0.0 && lift.rate > 0.0 && lift.clearance_m >= 0.0)
+            || lift.ballast >= self.parts.len()
+            || lift.tip >= self.contacts.len()
+        {
+            return Err(
+                "tern.lift: rise_m and clearance_m at least 0, rate over 0, and ballast and tip naming a part and a contact"
+                    .into(),
+            );
+        }
         self.rudder.validate("tern.rudder")
     }
 }

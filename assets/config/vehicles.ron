@@ -221,6 +221,13 @@
             reach_m: 4.5,
             exit: (0.0, 0.62, 0.0),
         ),
+        lift: (
+            rise_m: 1.08,
+            rate: 0.35,
+            clearance_m: 0.1,
+            ballast: 1,
+            tip: 0,
+        ),
     ),
     loon: (
         parts: ((

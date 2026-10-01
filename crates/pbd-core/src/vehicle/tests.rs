@@ -1129,3 +1129,54 @@ fn print_a_tern_with_its_keel_raised() {
         }
     }
 }
+
+/// `cities-in-the-world` task 4.2b: a Tern's keel goes as deep as the water
+/// under it allows. Moored in half a metre of water it lifts clear of the
+/// seabed at once, and the Tern floats upright there; in open water it is
+/// all the way down; when the water deepens it lowers in about three
+/// seconds.
+#[test]
+fn a_terns_keel_lifts_to_the_water_under_it() {
+    let down = |craft: &Craft| match &craft.state {
+        CraftState::Tern(s) => s.keel,
+        _ => panic!("a Tern"),
+    };
+    let lift = VehicleSpecs::default().tern.lift;
+    let tip = VehicleSpecs::default().tern.contacts[lift.tip].at;
+    let mut world = World::new(RADIUS - 0.5);
+    world.wind = Vec3::X * 6.0;
+    world.sea_wind = 6.0;
+    let mut craft = at_pole(Kind::Tern, 0.0, 0.0);
+    craft.mooring = Some(Mooring {
+        at: craft.bow().normalize() * (RADIUS - 0.5),
+        length: 2.5,
+        anchored: true,
+    });
+    world.run(&mut craft, TICK, |_| Input::default());
+    assert!(down(&craft) < 0.1, "lifted at once: {} down", down(&craft));
+    let mut worst: f64 = 1.0;
+    for _ in 0..30 {
+        world.run(&mut craft, 1.0, |_| Input::default());
+        let up = craft.body.position.normalize();
+        worst = worst.min(craft.body.axis(DVec3::Y).dot(up));
+        let at = DVec3::new(
+            tip[0] as f64,
+            tip[1] as f64 + lift.raised_m(down(&craft)),
+            tip[2] as f64,
+        );
+        let clear = craft.body.point(at - craft.com).length() - (RADIUS - 0.5);
+        assert!(clear > 0.0, "the keel's tip {clear:.2} m into the seabed");
+    }
+    assert!(
+        worst.acos().to_degrees() < 8.0,
+        "heeled {:.1} deg at its berth",
+        worst.acos().to_degrees()
+    );
+    // Out over deep water it lowers at its rate.
+    world.ground = RADIUS - 40.0;
+    world.run(&mut craft, 1.5, |_| Input::default());
+    let half = down(&craft);
+    assert!((0.4..0.75).contains(&half), "{half} down after 1.5 s");
+    world.run(&mut craft, 2.0, |_| Input::default());
+    assert_eq!(down(&craft), 1.0, "all the way down");
+}
