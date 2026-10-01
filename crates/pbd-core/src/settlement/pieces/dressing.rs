@@ -136,6 +136,17 @@ impl Place {
         Some(Self { frame, x, z, m })
     }
 
+    /// A frame taken as it is, the mockup's metres about `(0, 0)` its own
+    /// plan's: for a piece cut off any chart (a test's deck).
+    pub(super) fn flat(frame: Frame) -> Self {
+        Self {
+            frame,
+            x: 0.0,
+            z: 0.0,
+            m: Mat2::IDENTITY,
+        }
+    }
+
     /// The mockup's point `(x, z)` in the frame's plan.
     pub(super) fn plan(&self, x: f32, z: f32) -> Vec2 {
         self.m * Vec2::new(x - self.x, z - self.z)

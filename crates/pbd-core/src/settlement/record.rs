@@ -497,10 +497,15 @@ pub struct Built {
     /// left out for standing off its chart.
     pub dressing: usize,
     pub dressing_skipped: usize,
-    /// Whether its cog stands at its mooring (`sail-the-cog` design 6, step
-    /// 1); its two pieces, the ship and the gangplank, come before the
-    /// dressing.
-    pub cog: bool,
+    /// Its cog's ship among its solids, where it stands at its mooring
+    /// (`sail-the-cog` design 6): the gangplank is the piece after it, and
+    /// the dressing comes after both.
+    pub cog: Option<usize>,
+    /// The ship's faces, by texture, apart from the town's: it rides the
+    /// water, so it is drawn on its own.
+    pub cog_meshes: Meshes,
+    /// Which way its bow points, a planet-local unit tangent.
+    pub cog_bow: Vec3,
 }
 
 /// A town's chart and ground from its definition, without cutting a piece:
@@ -640,7 +645,9 @@ pub fn build(
         lights,
         dressing: 0,
         dressing_skipped: 0,
-        cog: false,
+        cog: None,
+        cog_meshes: Meshes::new(),
+        cog_bow: Vec3::ZERO,
     })
 }
 
@@ -694,10 +701,21 @@ pub fn build_town(
                 terrace,
             )?);
         }
-        // Its cog at its mooring (`sail-the-cog` design 6, step 1), and the
-        // gangplank up to it, off the chart in a harbour stored before it.
+        // Its cog at its mooring (`sail-the-cog` design 6), drawn apart from
+        // the town since it rides the water, and the gangplank up to it, off
+        // the chart in a harbour stored before it.
         if let Some(c) = &template.cog {
-            match cog::cog(
+            let ship = cog::ship(
+                &mut built.cog_meshes,
+                repeat_m,
+                patch,
+                &built.chart,
+                template,
+                c,
+                radius_m,
+                terrace,
+            );
+            let plank = cog::gangplank(
                 &mut built.meshes,
                 repeat_m,
                 patch,
@@ -706,12 +724,19 @@ pub fn build_town(
                 c,
                 radius_m,
                 terrace,
-            ) {
-                Some(pieces) => {
-                    cut.extend(pieces);
-                    built.cog = true;
+            );
+            let bow = cog::bow(patch, &built.chart, template, c);
+            match (ship, plank, bow) {
+                (Some(ship), Some(plank), Some(bow)) => {
+                    built.cog = Some(built.solids.len() + cut.len());
+                    built.cog_bow = bow;
+                    cut.push(ship);
+                    cut.push(plank);
                 }
-                None => built.dressing_skipped += 1,
+                _ => {
+                    built.cog_meshes.clear();
+                    built.dressing_skipped += 1;
+                }
             }
         }
         // Its dressing (task 4.2c), each thing on what is under it.

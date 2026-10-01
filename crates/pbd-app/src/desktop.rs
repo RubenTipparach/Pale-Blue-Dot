@@ -135,6 +135,10 @@ pub struct Launch {
     /// `--no-shadows` draws no sun cascades and lights everything as if in
     /// the sun: the same build's picture without them (`sun-shadows`).
     pub no_shadows: bool,
+    /// `--cog-swing <scale>` scales how far the harbours' cogs swing at
+    /// their moorings, 1 the mooring swing and 0 still (`sail-the-cog`
+    /// design 6, step 2).
+    pub cog_swing: Option<f32>,
     /// `--room-sky OPEN SHUT` sets the share of the sky a town's rooms take
     /// with a door open and with all shut (`sun-shadows` decision 7), for
     /// tuning against captures.
@@ -249,6 +253,7 @@ impl Launch {
             weather_at: 0.0,
             open_doors: false,
             no_shadows: false,
+            cog_swing: None,
             room_sky: None,
             room_bounce: None,
             up: 0.0,
@@ -594,6 +599,19 @@ impl Launch {
                 }
                 "--open-doors" => result.open_doors = true,
                 "--no-shadows" => result.no_shadows = true,
+                "--cog-swing" => {
+                    i += 1;
+                    let scale: f32 = args
+                        .get(i)
+                        .expect("--cog-swing requires a scale")
+                        .parse()
+                        .expect("invalid cog swing");
+                    assert!(
+                        scale.is_finite() && scale >= 0.0,
+                        "--cog-swing takes 0 or more"
+                    );
+                    result.cog_swing = Some(scale);
+                }
                 "--room-sky" => {
                     let mut share = || {
                         i += 1;
@@ -993,6 +1011,9 @@ pub fn run(args: &[String]) {
             enabled: false,
             ..default()
         });
+    }
+    if let Some(scale) = launch.cog_swing {
+        app.insert_resource(pbd_app::decks::CogSwing(scale));
     }
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {

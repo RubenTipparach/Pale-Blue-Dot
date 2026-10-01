@@ -2344,9 +2344,9 @@ fn a_walker_goes_down_the_slip_into_the_water() {
 #[test]
 fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
     let (_, town, b) = cut_harbour();
-    assert!(b.cog, "the cog stands");
-    let n = b.solids.len() - b.dressing;
-    let (ship, plank) = (&b.solids[n - 2], &b.solids[n - 1]);
+    let n = b.cog.expect("the cog stands");
+    let (ship, plank) = (&b.solids[n], &b.solids[n + 1]);
+    assert!(!b.cog_meshes.is_empty(), "the ship is drawn apart");
     let Some(&pieces::Surface::Ramp {
         foot: pa,
         dir: pd,

@@ -9,7 +9,7 @@
 use super::super::chart::{Chart, Patch};
 use super::super::{Cog, Template};
 use super::dressing::{Hull, Place, both, cylinder, finish, hull_skin, ramp};
-use super::{BuildingSolids, Meshes, Sink, Solid, Surface, ccw, rail};
+use super::{BuildingSolids, Frame, Meshes, Sink, Solid, Surface, ccw, rail};
 use glam::{Vec2, Vec3};
 
 /// The cog's hull (the mockup's `L`, `B`, `D` and the sheer it lofts).
@@ -38,11 +38,11 @@ fn beam_at(lx: f32) -> f32 {
     b * 0.96
 }
 
-/// The cog, cut where the template moors it, and its gangplank. `terrace_m`
-/// is the sea's surface over the radius, which a harbour's terrace is.
-/// `None` where it is off the chart.
+/// The cog's ship, cut where the template moors it. `terrace_m` is the
+/// sea's surface over the radius, which a harbour's terrace is. `None`
+/// where it is off the chart.
 #[allow(clippy::too_many_arguments)]
-pub fn cog(
+pub fn ship(
     meshes: &mut Meshes,
     repeat_m: &dyn Fn(&str) -> f32,
     patch: &Patch,
@@ -51,9 +51,53 @@ pub fn cog(
     cog: &Cog,
     radius_m: f32,
     terrace_m: f32,
-) -> Option<Vec<BuildingSolids>> {
+) -> Option<BuildingSolids> {
     let cell_m = template.grid.cell_m;
     let place = Place::new(chart, patch, cell_m, (cog.x, cog.z), radius_m, terrace_m)?;
+    Some(cut(meshes, repeat_m, &place, cog))
+}
+
+/// Which way the cog's bow points where the template moors it, a
+/// planet-local unit tangent: the axis it rolls about.
+pub fn bow(patch: &Patch, chart: &Chart, template: &Template, cog: &Cog) -> Option<Vec3> {
+    let cell_m = template.grid.cell_m;
+    let place = Place::new(chart, patch, cell_m, (cog.x, cog.z), 1.0, 0.0)?;
+    let t = place.turn(cog.heading);
+    let f = place.frame;
+    Some((f.x * t.cos() + f.z * t.sin()).normalize())
+}
+
+/// The cog's ship cut in `frame` as it stands, its waterline's middle at the
+/// frame's origin and its bow along `heading` in the frame's plan (from `x`
+/// toward `z`): a deck off any chart, for a walker's tests.
+pub fn ship_in(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    frame: Frame,
+    heading: f32,
+    gang_side: i32,
+) -> BuildingSolids {
+    let cog = Cog {
+        x: 0.0,
+        z: 0.0,
+        heading,
+        gang_side,
+        gangplank: super::super::Pier {
+            from: [0.0; 3],
+            to: [0.0; 3],
+            width_m: 1.0,
+        },
+    };
+    cut(meshes, repeat_m, &Place::flat(frame), &cog)
+}
+
+/// The ship, in `place`'s frame.
+fn cut(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    place: &Place,
+    cog: &Cog,
+) -> BuildingSolids {
     let (ca, sa) = (cog.heading.cos(), cog.heading.sin());
     // The cog's own `(along, across)` in the mockup's metres (its `tw`), and
     // in the frame's plan.
@@ -238,14 +282,28 @@ pub fn cog(
     sink.plain_box("timber", c.x, DECK_M, c.y, size, turn);
     sink.solid_box(c.x, DECK_M, c.y, size, turn);
 
-    let frame = place.frame;
-    let mut out = vec![finish(sink, frame, HULL.l / 2.0 + 1.0)];
-    // The gangplank, from the pier up to the deck. The mockup ends it 2 cm
-    // over the deck's edge, which two frames on the chart do not keep: a
-    // landing the walker stands on, not drawn, laps [`LANDING_M`] onto the
-    // deck at its height, as a pier's stretches lap.
+    finish(sink, place.frame, HULL.l / 2.0 + 1.0)
+}
+
+/// The cog's gangplank, from the pier up to its deck. The mockup ends it 2
+/// cm over the deck's edge, which two frames on the chart do not keep: a
+/// landing the walker stands on, not drawn, laps [`LANDING_M`] onto the
+/// deck at its height, as a pier's stretches lap. `None` where it is off
+/// the chart.
+#[allow(clippy::too_many_arguments)]
+pub fn gangplank(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    patch: &Patch,
+    chart: &Chart,
+    template: &Template,
+    cog: &Cog,
+    radius_m: f32,
+    terrace_m: f32,
+) -> Option<BuildingSolids> {
     let g = &cog.gangplank;
     let ends = (terrace_m + g.from[1], terrace_m + g.to[1]);
+    let cell_m = template.grid.cell_m;
     let mut plank = ramp(
         meshes, repeat_m, patch, chart, cell_m, g, ends, radius_m, "boards",
     )?;
@@ -267,8 +325,7 @@ pub fn cog(
         });
         plank.reach_m += LANDING_M;
     }
-    out.push(plank);
-    Some(out)
+    Some(plank)
 }
 
 /// Where the cog stands, as the mockup's metres a ship piece covers: its

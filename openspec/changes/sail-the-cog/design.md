@@ -229,6 +229,50 @@ only with screenshots).
   - **Over the side:** a walker walks off through the gangway and leaves
     with the deck's point velocity added.
   - **A still:** a capture of the walker on the swinging deck.
+- **Step 2 as built (2026-10-01).**
+  - **The cog is a deck.** `build_town` cuts the ship into its own meshes,
+    apart from the town's, and records its piece. The game draws it on its
+    own entity under the town's root and registers it in `decks::Decks`,
+    keyed by its town and piece (`Towns::index`), so its place is found
+    again as towns come and go.
+  - **`move_decks`** sets each deck's frame from its swing (`Swing`: heave,
+    roll, swing about its mooring, and a steady turn for tests) at the start
+    of each physics step. The deck's piece answers in that frame, and the
+    drawing's transform is set from the same frame.
+    `--cog-swing <scale>` scales it, 1 by default.
+  - **The walker's footprint reports which piece holds it.** A walker the
+    deck held at the end of a tick is moved with the deck at the start of
+    the next, before it walks.
+  - **Measured: carrying the position itself drifts.** On the test planet,
+    4.8 km out, an `f32` position steps every 0.49 mm. A deck turning a
+    quarter round in ten seconds moves a point 2 m out about ten of those
+    steps a tick, and each tick's rounding fell the same way as the last:
+    the walker crept 9 cm in ten seconds.
+    - So the walker's place on the deck is kept in the deck's own frame,
+      where its numbers are small. Its position is made from that place
+      each tick, and the place moves only when the walker does, by more
+      than 2 mm.
+    - It now holds to under a centimetre.
+  - **Leaving.** The deck's way at the point the walker left is kept as
+    drift. `drive_walker` writes the walker's velocity from the keys each
+    tick, so a velocity added once would be gone a tick later. Drift is
+    carried in the air and in the water, damped there as a fall is, and
+    cleared on landing.
+  - **Tests.**
+    - `a_walker_stands_on_a_deck_through_a_quarter_turn`: held every tick,
+      within 1 cm of where it was set, still facing along the deck.
+    - `a_walker_climbs_the_cogs_stair_while_it_swings`: ten times the
+      mooring swing (1.5 m of heave, 20° of roll, 40° of swing), onto the
+      aftcastle with no tick in the air.
+    - `a_walker_leaves_a_turning_deck_with_its_way`: it leaves through the
+      gangway with 0.48 m/s of the deck's way, and lands with none.
+    - The `decks` unit tests check that a carried point keeps its place
+      over 500 ticks and that the drawing goes where the frame does.
+  - **The cog casts its shadow from where it rests.** Its swing at a
+    mooring is small.
+  - **Not ticked yet:** tasks 3.1 and 3.2, and the `player/walking`
+    requirement, are about a craft's deck while it sails. They tick when
+    step 3 drives this same deck from the craft.
 - **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
   in the voxel field, which cannot sail. A light carried on a craft is part
   of the craft's drawing.

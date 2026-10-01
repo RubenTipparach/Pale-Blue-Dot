@@ -2,6 +2,7 @@
 //! resolve its contact against the same hex triangles drawn by the GPU.
 //! This surface motor does not yet supply cave or decorative-tree collisions.
 
+use crate::decks::Decks;
 use avian3d::prelude::*;
 use bevy::ecs::system::SystemParam;
 use bevy::{
@@ -39,17 +40,19 @@ pub struct Structures(pub Vec<pbd_core::settlement::pieces::BuildingSolids>);
 const HOLD_M: f32 = 0.35;
 
 impl Structures {
-    /// At a foot: the highest town floor within `reach` above it, and the
-    /// lowest underside of one above that, as planet-local radii.
-    fn stand(&self, feet: Vec3, reach: f32) -> (Option<f32>, Option<f32>) {
-        let mut floor: Option<f32> = None;
+    /// At a foot: the highest town floor within `reach` above it, with the
+    /// piece it is of, and the lowest underside of one above that, as
+    /// planet-local radii.
+    fn stand(&self, feet: Vec3, reach: f32) -> (Option<(f32, usize)>, Option<f32>) {
+        let mut floor: Option<(f32, usize)> = None;
         let mut ceiling: Option<f32> = None;
-        for b in &self.0 {
+        for (n, b) in self.0.iter().enumerate() {
             let (f, c) = b.stand(feet, reach);
-            floor = match (floor, f) {
-                (Some(a), Some(b)) => Some(a.max(b)),
-                (a, b) => a.or(b),
-            };
+            if let Some(f) = f
+                && floor.is_none_or(|(a, _)| f > a)
+            {
+                floor = Some((f, n));
+            }
             ceiling = match (ceiling, c) {
                 (Some(a), Some(b)) => Some(a.min(b)),
                 (a, b) => a.or(b),
@@ -198,6 +201,19 @@ pub struct WalkingCamera;
 pub struct GroundState {
     pub previous: Vec3,
     pub grounded: bool,
+    /// The town piece whose floor holds the feet, by its place in the
+    /// walker's [`Structures`], where a piece's floor and not the terrain
+    /// holds them: a deck the walker rides (`sail-the-cog` design 6).
+    pub on: Option<usize>,
+    /// The deck's velocity the walker left it with, along the ground: kept
+    /// while it is in the air or the water, so stepping off a moving deck
+    /// keeps the deck's way, and gone when it lands.
+    pub drift: Vec3,
+    /// Where the body is on the deck it rides, in the deck's frame. Kept in
+    /// the deck's small numbers, not carried in the planet's large ones,
+    /// where a moored deck's motion is a few of an `f32`'s steps a tick and
+    /// rounding them would walk the walker across the deck.
+    pub on_deck: Option<Vec3>,
 }
 
 #[derive(Resource)]
@@ -278,6 +294,7 @@ impl Plugin for WalkingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WalkingConfig>()
             .init_resource::<WalkingReadout>()
+            .init_resource::<Decks>()
             .add_systems(PostStartup, setup_walking.in_set(WalkingSetup))
             .add_systems(
                 RunFixedMainLoop,
@@ -288,7 +305,8 @@ impl Plugin for WalkingPlugin {
             )
             .add_systems(
                 PhysicsSchedule,
-                drive_walker
+                (crate::decks::move_decks, ride_decks, drive_walker)
+                    .chain()
                     .after(PhysicsStepSystems::First)
                     .after(crate::apply_ship_controls)
                     .before(PhysicsStepSystems::BroadPhase),
@@ -363,6 +381,9 @@ fn setup_walking(world: &mut World) {
             GroundState {
                 previous: position,
                 grounded: true,
+                on: None,
+                drift: Vec3::ZERO,
+                on_deck: None,
             },
         ))
         .id();
@@ -571,6 +592,9 @@ pub fn drop_walker(world: &mut World, eye: Vec3, velocity: Vec3, view: Quat) {
         GroundState {
             previous: position,
             grounded: false,
+            on: None,
+            drift: Vec3::ZERO,
+            on_deck: None,
         },
     ));
     let mut state = world.resource_mut::<WalkingState>();
@@ -602,6 +626,9 @@ pub fn restore(world: &mut World, pose: RestoredPose) {
         GroundState {
             previous: pose.position,
             grounded: false,
+            on: None,
+            drift: Vec3::ZERO,
+            on_deck: None,
         },
     ));
     let mut state = world.resource_mut::<WalkingState>();
@@ -704,6 +731,9 @@ fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
         GroundState {
             previous: position,
             grounded: !floating,
+            on: None,
+            drift: Vec3::ZERO,
+            on_deck: None,
         },
     ));
     let mut state = world.resource_mut::<WalkingState>();
@@ -794,6 +824,31 @@ fn read_walking_input(
     state.jump_held = keys.pressed(KeyCode::Space);
 }
 
+/// Carry a walker a deck holds by the deck's own motion over the tick
+/// (`sail-the-cog` design 6): its place on the deck and its heading kept,
+/// and the place its sweep starts from with it.
+fn ride_decks(
+    decks: Res<Decks>,
+    mut state: ResMut<WalkingState>,
+    mut walkers: Query<(&mut Position, &mut GroundState), With<Walker>>,
+) {
+    if !state.active {
+        return;
+    }
+    for (mut position, mut ground) in &mut walkers {
+        let Some(deck) = ground.on.and_then(|i| decks.at(i)) else {
+            continue;
+        };
+        let local = ground
+            .on_deck
+            .unwrap_or_else(|| deck.then.local(position.0));
+        position.0 = deck.now.world(local);
+        ground.previous = position.0;
+        ground.on_deck = Some(local);
+        state.heading = deck.carry_dir(state.heading);
+    }
+}
+
 #[allow(clippy::type_complexity)]
 fn drive_walker(
     mut state: ResMut<WalkingState>,
@@ -843,7 +898,15 @@ fn drive_walker(
         if wet.body {
             speed *= config.water_movement_mult;
         }
-        let planar = (right * state.axes.x + state.heading * state.axes.y) * speed;
+        // A deck's way, kept off it (`sail-the-cog` design 6), until the
+        // feet are down; water takes it off as it takes a fall.
+        if ground.grounded {
+            ground.drift = Vec3::ZERO;
+        } else if wet.body {
+            ground.drift *= (-config.water_drag_per_s * dt).exp();
+        }
+        let drift = ground.drift - up * ground.drift.dot(up);
+        let planar = (right * state.axes.x + state.heading * state.axes.y) * speed + drift;
         let mut vertical = velocity.0.dot(up);
         let swimming = wet.eyes || (wet.body && !ground.grounded);
         if state.jump || (state.jump_held && swimming) {
@@ -935,6 +998,8 @@ struct Footprint {
     support: f32,
     ceiling: Option<f32>,
     water: bool,
+    /// The town piece whose floor is the support, where one is.
+    on: Option<usize>,
 }
 
 fn footprint(terrain: &PlanetContact, position: Vec3) -> Footprint {
@@ -960,13 +1025,18 @@ fn footprint_in(
     let mut support = 0.0_f32;
     let mut ceiling: Option<f32> = None;
     let mut water = false;
+    let mut on = None;
     for offset in [Vec3::ZERO, tangent, -tangent, cross, -cross] {
         let feet = (position + offset).normalize() * feet_radius;
         let mut stand = terrain.stand(feet);
+        let mut piece = None;
         if let Some(s) = structures {
             let (floor, roof) = s.stand(feet, reach);
-            if let Some(f) = floor {
-                stand.floor_radius = stand.floor_radius.max(f);
+            if let Some((f, n)) = floor
+                && f >= stand.floor_radius
+            {
+                stand.floor_radius = f;
+                piece = Some(n);
             }
             stand.ceiling_radius = match (stand.ceiling_radius, roof) {
                 (Some(a), Some(b)) => Some(a.min(b)),
@@ -976,6 +1046,9 @@ fn footprint_in(
         // The SOLID ground, which under a water cap is the seabed. Taking
         // the sheet put the walker on top of the sea as if it were a floor,
         // which is the other half of why water read as a wall.
+        if stand.floor_radius > support || (on.is_none() && stand.floor_radius >= support) {
+            on = piece;
+        }
         support = support.max(stand.floor_radius);
         // The max floor keeps an edge stable; the MIN ceiling is the same
         // rule read upward, so a head against any part of a roof is a head
@@ -990,6 +1063,7 @@ fn footprint_in(
         support,
         ceiling,
         water,
+        on,
     }
 }
 
@@ -1128,12 +1202,15 @@ fn sweep(
 /// Swept support with a small capsule footprint, the towns' floors and
 /// stairs in it. A refused move slides: the part of it along the face is
 /// swept again, twice at most, for a corner (`tenebris-towns` section 4).
+#[allow(clippy::too_many_arguments)]
 fn resolve_ground(
     state: Res<WalkingState>,
     config: Res<WalkingConfig>,
     terrain: Res<PlanetContact>,
     sea: Sea,
     structures: Option<Res<Structures>>,
+    decks: Option<Res<Decks>>,
+    time: Res<Time>,
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
 ) {
     if !state.active {
@@ -1205,6 +1282,38 @@ fn resolve_ground(
         position.0 = accepted;
         ground.previous = accepted;
         ground.grounded = grounded && !submerged;
+        // The piece the feet are on, and the deck's way handed over when
+        // the walker leaves one (`sail-the-cog` design 6): its rise or fall
+        // into the walker's own, its way along the ground kept as drift.
+        let on = if ground.grounded {
+            footprint_in(&terrain, structures, accepted, config.step_height).on
+        } else {
+            None
+        };
+        if on != ground.on
+            && let Some(deck) = decks
+                .as_deref()
+                .and_then(|d| ground.on.and_then(|i| d.at(i)))
+        {
+            let way = deck.velocity_at(accepted, time.delta_secs());
+            let up = accepted.normalize();
+            velocity.0 += up * way.dot(up);
+            ground.drift = way - up * way.dot(up);
+        }
+        if ground.grounded {
+            ground.drift = Vec3::ZERO;
+        }
+        // Its place on a deck, moved only when the walker moved on it by
+        // more than the planet's numbers can tell apart.
+        let deck = decks.as_deref().and_then(|d| on.and_then(|i| d.at(i)));
+        ground.on_deck = deck.map(|deck| {
+            let local = deck.now.local(accepted);
+            match ground.on_deck.filter(|_| ground.on == on) {
+                Some(kept) if kept.distance(local) < 2e-3 => kept,
+                _ => local,
+            }
+        });
+        ground.on = on;
     }
 }
 
@@ -1314,6 +1423,9 @@ mod tests {
             GroundState {
                 previous: position,
                 grounded,
+                on: None,
+                drift: Vec3::ZERO,
+                on_deck: None,
             },
         ));
         walker
@@ -1846,6 +1958,9 @@ mod tests {
                 GroundState {
                     previous: start,
                     grounded: false,
+                    on: None,
+                    drift: Vec3::ZERO,
+                    on_deck: None,
                 },
             ));
             let mut ticks = 0;
@@ -1893,6 +2008,9 @@ mod tests {
                 GroundState {
                     previous: position,
                     grounded: false,
+                    on: None,
+                    drift: Vec3::ZERO,
+                    on_deck: None,
                 },
             ));
             let ship = crate::spawn_ship(
@@ -2482,5 +2600,230 @@ mod tests {
         );
         let open = walk_house(&mut app, &house, move |_| -out, |l| inward(l) > 1.5, 90);
         assert!(inward(open.end) > 1.5, "went in: {} m", inward(open.end));
+    }
+
+    /// The cog's ship standing on the flat test land, its waterline's
+    /// middle at the land and its deck 1.9 m over it, as the walker's one
+    /// structure and a deck moving by `swing` (`sail-the-cog` design 6).
+    fn cog_deck(swing: crate::decks::Swing) -> (App, pbd_core::settlement::pieces::BuildingSolids) {
+        use crate::decks::Deck;
+        use pbd_core::settlement::pieces::{Frame, Meshes, cog};
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        let site = (flat + flat.any_orthonormal_vector() * (25.0 / PLANET_RADIUS)).normalize();
+        let floor = terrain.sample(site).floor_radius;
+        let x = site.any_orthonormal_vector();
+        let frame = Frame {
+            origin: site * floor,
+            x,
+            y: site,
+            z: x.cross(site),
+        };
+        let ship = cog::ship_in(&mut Meshes::new(), &|_: &str| 2.0, frame, 0.0, -1);
+        let mut app = app_with_terrain_at(terrain, flat);
+        app.insert_resource(Structures(vec![ship.clone()]));
+        app.insert_resource(Decks {
+            list: vec![Deck::new(None, 0, frame, frame.x, swing)],
+            t: 0.0,
+        });
+        (app, ship)
+    }
+
+    /// Stand the walker on the deck at `(x, z)` of its plan, `feet` over
+    /// its waterline, held by it.
+    fn stand_on_deck(
+        app: &mut App,
+        ship: &pbd_core::settlement::pieces::BuildingSolids,
+        x: f32,
+        feet: f32,
+        z: f32,
+    ) {
+        stand_in(app, ship, x, feet, z);
+        let body = app.world().resource::<WalkingState>().body;
+        // The body's transform too, or the physics' sync of a moved
+        // transform puts it back where it was placed before.
+        let p = app.world().get::<Position>(body).unwrap().0;
+        app.world_mut()
+            .entity_mut(body)
+            .insert(Transform::from_translation(p));
+        app.world_mut().get_mut::<GroundState>(body).unwrap().on = Some(0);
+    }
+
+    /// The deck's frame now.
+    fn deck_now(app: &App) -> pbd_core::settlement::pieces::Frame {
+        app.world().resource::<Decks>().list[0].now
+    }
+
+    /// `sail-the-cog` design 6, step 2 (`player/walking`, standing through a
+    /// turn): a walker set on the deck while it turns a quarter round in ten
+    /// seconds stands where it was on the deck, to a centimetre, held all
+    /// the way, facing the same way along it.
+    #[test]
+    fn a_walker_stands_on_a_deck_through_a_quarter_turn() {
+        use crate::decks::Swing;
+        let (mut app, ship) = cog_deck(Swing {
+            spin: std::f32::consts::FRAC_PI_2 / 10.0,
+            ..Swing::STILL
+        });
+        let at = Vec3::new(2.0, 1.9, 0.5);
+        stand_on_deck(&mut app, &ship, at.x, at.y, at.z);
+        let body = app.world().resource::<WalkingState>().body;
+        let f0 = deck_now(&app);
+        let heading = app.world().resource::<WalkingState>().view().0;
+        let along = Vec3::new(heading.dot(f0.x), 0.0, heading.dot(f0.z));
+        let mut ticks = 0;
+        while app.world().resource::<Decks>().t < 10.0 {
+            app.update();
+            ticks += 1;
+            let ground = app.world().get::<GroundState>(body).unwrap();
+            assert!(
+                ground.grounded && ground.on == Some(0),
+                "let go at tick {ticks}"
+            );
+        }
+        let f = deck_now(&app);
+        assert!(
+            f.x.angle_between(f0.x) > 1.5,
+            "the deck turned a quarter round"
+        );
+        let p = app.world().get::<Position>(body).unwrap().0;
+        let mut local = f.local(p);
+        local.y -= HALF_HEIGHT + CONTACT_SKIN;
+        assert!(
+            local.distance(at) < 0.01,
+            "on the deck at {local}, set at {at}"
+        );
+        let heading = app.world().resource::<WalkingState>().view().0;
+        let now = Vec3::new(heading.dot(f.x), 0.0, heading.dot(f.z));
+        assert!(
+            now.angle_between(along) < 1f32.to_radians(),
+            "still facing along the deck"
+        );
+    }
+
+    /// Hold W, steering each tick along `steer` of the body's place in the
+    /// deck's plan as the deck is now, until `done` or `max` ticks; the same
+    /// count as [`walk_house`] keeps.
+    fn walk_deck(
+        app: &mut App,
+        steer: impl Fn(Vec2) -> Vec2,
+        mut done: impl FnMut(Vec3) -> bool,
+        max: u32,
+    ) -> Walk {
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        let body = app.world().resource::<WalkingState>().body;
+        let mut walk = Walk {
+            jumps: 0,
+            airborne: 0,
+            ticks: 0,
+            end: Vec3::ZERO,
+        };
+        for _ in 0..max {
+            let f = deck_now(app);
+            let p = app.world().get::<Position>(body).unwrap().0;
+            // The feet, under the body along the planet's up, in the deck's
+            // frame: a rolled deck's up is not the planet's.
+            let local = f.local(p - p.normalize() * (HALF_HEIGHT + CONTACT_SKIN));
+            walk.end = local;
+            if done(local) {
+                break;
+            }
+            let d = steer(Vec2::new(local.x, local.z));
+            let dir = f.x * d.x + f.z * d.y;
+            app.world_mut()
+                .resource_mut::<WalkingState>()
+                .face(p.normalize(), dir);
+            app.update();
+            walk.ticks += 1;
+            if !app.world().get::<GroundState>(body).unwrap().grounded {
+                walk.airborne += 1;
+            }
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::KeyW);
+        walk
+    }
+
+    /// `sail-the-cog` design 6, step 2 (`player/walking`, up the stair under
+    /// way): a walker climbs the cog's stair onto the aftcastle while the
+    /// deck heaves, rolls and swings at ten times its mooring swing, never a
+    /// tick in the air.
+    #[test]
+    fn a_walker_climbs_the_cogs_stair_while_it_swings() {
+        use crate::decks::Swing;
+        use pbd_core::settlement::pieces::Surface;
+        let (mut app, ship) = cog_deck(Swing::MOORED.scaled(10.0));
+        let Some(&Surface::Flight { foot, dir, len, .. }) = ship
+            .surfaces
+            .iter()
+            .find(|s| matches!(s, Surface::Flight { .. }))
+        else {
+            panic!("the cog's stair");
+        };
+        let start = foot - dir * 0.6;
+        stand_on_deck(&mut app, &ship, start.x, 1.9, start.y);
+        let side = Vec2::new(-dir.y, dir.x);
+        let up = walk_deck(
+            &mut app,
+            move |p| (dir - side * ((p - foot).dot(side) * 2.0)).normalize(),
+            |l| (Vec2::new(l.x, l.z) - foot).dot(dir) > len + 0.8,
+            400,
+        );
+        assert!(
+            (up.end.y - 3.5).abs() < 0.05,
+            "on the aftcastle, the feet {} m over the waterline",
+            up.end.y
+        );
+        assert_eq!(up.airborne, 0, "ticks in the air going up");
+    }
+
+    /// `sail-the-cog` design 6, step 2 (`player/walking`, over the side): a
+    /// walker walks off the turning deck through the gangway, leaves it
+    /// with the deck's way at the gangway kept as drift, and lands on the
+    /// ground with it gone.
+    #[test]
+    fn a_walker_leaves_a_turning_deck_with_its_way() {
+        use crate::decks::Swing;
+        let (mut app, ship) = cog_deck(Swing {
+            spin: 0.2,
+            ..Swing::STILL
+        });
+        stand_on_deck(&mut app, &ship, 0.0, 1.9, -1.0);
+        let body = app.world().resource::<WalkingState>().body;
+        let mut left = None;
+        let mut landed = false;
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        for _ in 0..400 {
+            let f = deck_now(&app);
+            let p = app.world().get::<Position>(body).unwrap().0;
+            app.world_mut()
+                .resource_mut::<WalkingState>()
+                .face(p.normalize(), -f.z);
+            app.update();
+            let ground = app.world().get::<GroundState>(body).unwrap();
+            if left.is_none() && ground.on.is_none() {
+                let drift = ground.drift.length();
+                // The gangway is 2.4 m off the turn's centre: 0.48 m/s.
+                assert!(
+                    (drift - 0.48).abs() < 0.08,
+                    "left with {drift} m/s of the deck's way"
+                );
+                left = Some(drift);
+            }
+            if left.is_some() && ground.grounded {
+                assert!(ground.on.is_none(), "landed on the ground, not the deck");
+                assert_eq!(ground.drift, Vec3::ZERO, "the way is gone on landing");
+                landed = true;
+                break;
+            }
+        }
+        assert!(left.is_some(), "walked off the deck");
+        assert!(landed, "landed");
     }
 }

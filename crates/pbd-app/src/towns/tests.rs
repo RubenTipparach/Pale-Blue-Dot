@@ -904,7 +904,7 @@ fn every_harbour_lays_on_its_sea_and_cuts() {
             site.name
         );
         // `sail-the-cog` design 6, step 1: its cog at its mooring.
-        assert!(laid.cog, "{}: its cog", site.name);
+        assert!(laid.cog.is_some(), "{}: its cog", site.name);
     }
 }
 

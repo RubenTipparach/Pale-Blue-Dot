@@ -18,6 +18,7 @@
 //! pieces cut and faded in only within [`STAND_M`] of the viewer. The other
 //! kinds follow, a kind at a time.
 
+use crate::decks::{CogSwing, Deck, Decks, Swing};
 use crate::field_light::{Faded, LitByField, LitLikeTerrain, RoomLights, SkyShare};
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
@@ -147,8 +148,11 @@ pub struct Laid {
     /// Its dressing things standing, and those left off its chart (task
     /// 4.2c).
     pub dressing: (usize, usize),
-    /// Whether its cog stands at its mooring (`sail-the-cog` design 6).
-    pub cog: bool,
+    /// Its cog's ship among its solids, where it stands at its mooring
+    /// (`sail-the-cog` design 6), its faces drawn apart, and its bow.
+    pub cog: Option<usize>,
+    pub cog_meshes: Meshes,
+    pub cog_bow: Vec3,
 }
 
 /// The patch of finest cells round a direction.
@@ -240,6 +244,8 @@ pub fn build(
         lights: built.lights,
         dressing: (built.dressing, built.dressing_skipped),
         cog: built.cog,
+        cog_meshes: built.cog_meshes,
+        cog_bow: built.cog_bow,
     })
 }
 
@@ -902,7 +908,7 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
         (n, 0) => format!(", {n} dressing things"),
         (n, off) => format!(", {n} dressing things ({off} off its chart)"),
     };
-    if laid.cog {
+    if laid.cog.is_some() {
         dressing.push_str(", its cog moored");
     }
     info!(
@@ -923,7 +929,63 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
         shown,
         leaving: false,
     });
+    // Its cog rides the water at its mooring (`sail-the-cog` design 6): a
+    // deck the walker rides, drawn on its own.
+    if let Some(n) = laid.cog {
+        let mesh = spawn_cog(world, entity, &laid);
+        let swing = world
+            .get_resource::<CogSwing>()
+            .copied()
+            .unwrap_or_default();
+        let mut deck = Deck::new(
+            Some((site.id, n)),
+            first + n,
+            solids[n].frame,
+            laid.cog_bow,
+            Swing::MOORED.scaled(swing.0),
+        );
+        deck.mesh = Some(mesh);
+        world
+            .get_resource_or_insert_with(Decks::default)
+            .list
+            .push(deck);
+    }
     show(world, entity, shown);
+}
+
+/// A town's cog drawn apart from it, under its root (`sail-the-cog` design
+/// 6): its faces as cut where it rests, moved by its deck's transform.
+fn spawn_cog(world: &mut World, root: Entity, laid: &Laid) -> Entity {
+    let parts: Vec<(Mesh, Handle<Image>)> = {
+        let assets = world.resource::<AssetServer>();
+        laid.cog_meshes
+            .iter()
+            .map(|(name, buf)| (to_mesh(buf), texture(assets, name)))
+            .collect()
+    };
+    let cog = world
+        .spawn((
+            Name::new(format!("{}'s cog", laid.name)),
+            Transform::default(),
+            Visibility::default(),
+        ))
+        .id();
+    world.entity_mut(root).add_child(cog);
+    for (mesh, image) in parts {
+        let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
+        let material = world
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(StandardMaterial {
+                base_color_texture: Some(image),
+                perceptual_roughness: 0.93,
+                ..default()
+            });
+        let part = world
+            .spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()))
+            .id();
+        world.entity_mut(cog).add_child(part);
+    }
+    cog
 }
 
 /// Open every door when the towns are built, as the player would, and write
@@ -1261,8 +1323,11 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
 /// cast as a solid sheet.
 pub fn casting(laid: &Laid) -> Vec<[f32; 3]> {
     let cut = cut_textures();
+    // The cog casts from where it rests: its swing at its mooring is small
+    // (`sail-the-cog` design 6, step 2).
     laid.meshes
         .iter()
+        .chain(&laid.cog_meshes)
         .filter(|(name, _)| !cut.contains(*name))
         .map(|(_, buf)| buf)
         .chain(laid.rooms.iter().flat_map(|m| {
