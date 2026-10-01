@@ -861,17 +861,25 @@ fn the_cog_floats_on_its_waterline() {
 }
 
 /// `sail-the-cog` task 2.2: the braces turn the yard at their rate and no
-/// further than they reach, and only with someone at the helm.
+/// further than they reach, and only with someone at the helm; nobody at
+/// it, the yard and the tiller stay as they were left.
 #[test]
 fn the_cogs_yard_follows_its_braces() {
     let mut world = World::new(RADIUS - 40.0);
     let mut craft = at_pole(Kind::Cog, 0.0, 0.0);
+    if let CraftState::Cog(s) = &mut craft.state {
+        s.tiller = 0.3;
+    }
     let brace = Input {
         sheet: 1.0,
         ..Default::default()
     };
     world.run(&mut craft, 2.0, |_| brace);
     assert_eq!(cog_telemetry(&craft).yard, 0.0, "nobody at the helm");
+    assert!(
+        matches!(&craft.state, CraftState::Cog(s) if s.tiller == 0.3),
+        "the tiller left over stays over"
+    );
     craft.board();
     world.run(&mut craft, 2.0, |_| brace);
     let yard = cog_telemetry(&craft).yard.to_degrees();

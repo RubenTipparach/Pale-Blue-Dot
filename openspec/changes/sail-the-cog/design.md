@@ -408,6 +408,67 @@ only with screenshots).
     - the app scenarios and the shots.
   - The frame cost is not measured: this is a cloud session, so
     `perf_suite.py` was not run.
+- **Step 3, part 2 in detail (written 2026-10-01, before code): the deck
+  under sail.** What it builds on, measured on this branch:
+  - The walker's pieces are `Structures`, a list the towns rebuild as they
+    come and go. `GroundState::on` names a piece by its place in that list.
+    The moored deck (`Decks`) finds its place again by `(site, n)`.
+  - Town pieces are planet-local and the walker's frame is too. A craft's
+    pose is planet-local `f64`, and the vehicles reach the walker's frame by
+    adding `PlanetRenderFrame::center`, which is nought outside an offset
+    test.
+  - Craft step in `FixedUpdate` (`step_vehicles`). The walker's step runs
+    after, in the physics schedule: `move_decks`, `ride_decks`,
+    `drive_walker`, and later `resolve_ground`.
+
+  The decisions, recommendation taken (ask only with screenshots):
+  - **`CraftDecks`**, a resource beside `Structures`: one deck per cog in
+    the world, by its entity. Each holds `cog::sailing`'s solids, cut once
+    in the craft's frame, and the frame they stand in. A system run first
+    in the walker's chain sets each deck's frame from its craft's pose
+    after the craft's step: `then` is the last tick's frame, `now` this
+    one's. A deck whose craft is gone is dropped.
+  - **`Piece`**: `GroundState::on` and the footprint name a town piece by
+    its place, or a craft by its entity. The walker's queries (stand, a
+    wall, a ceiling) ask the town pieces and then the craft decks.
+  - **One motion for both decks.** The moored swing and the sailing ship
+    both move a deck from `then` to `now`, and `ride_decks` carries the
+    walker by it either way. The deck-local place (`on_deck`) is kept as it
+    is for the moored deck.
+  - **Leaving the helm** puts the walker at the seat's exit on the
+    aftcastle with the ship's velocity as its drift. So its first tick
+    does not leave it behind a deck making 2 m/s.
+  - **Verify.** App tests, on a cog sailed by its own physics with nobody
+    at the helm:
+    - a walker set on its deck stays on it, at its place, through a turn;
+    - a walker climbs the stair to the aftcastle under way;
+    - a walker steps over the rail into the sea, keeping the ship's way
+      until the water takes it off;
+    - leaving the helm puts the walker on the aftcastle, riding.
+- **Step 3, part 2 as built (2026-10-01): the deck under sail.**
+  - **Built as written above.** `CraftDecks` holds each cog's deck, and
+    `move_craft_decks` runs first in the walker's chain. `Piece` names a
+    town piece or a craft. `Motion` is the one carry both kinds of deck
+    use. Leaving the helm keeps the ship's way as drift.
+  - **Found: the tiller recentred with nobody at the helm.** The yard kept
+    its place, but the tiller still followed an empty helm back to amidships.
+    The design says a cog nobody steers keeps both as they were, so the
+    tiller now moves only with someone at the helm. The braces test pins it.
+  - **Found: a heeling deck tipped the walker.** The deck carried the
+    body's centre rigidly. As the ship heeled about 1° in its turn, the
+    body tipped with it and was then stood upright again, and the feet crept
+    1.8 cm through a 90° turn. A standing person keeps their feet still and
+    their body upright. So the deck now carries the feet, and the body
+    stands over them along the planet's up. The moored deck's tests pass
+    unchanged. Through the turn the feet now move under a centimetre.
+  - **Measured in the app tests:** coasting from 4 m/s with its tiller hard
+    over and nobody at the helm, the cog turns through 90° in about 45 s.
+    The test app has no air, so these are coasting turns, not sailing ones.
+    The core tests sail it.
+  - The walking requirement ("A walker stands and walks on a moving deck")
+    is in `openspec/specs/player/walking` with the tests that prove it.
+  - **Not built yet:** the harbour's cog made a craft, with cast off and
+    make fast; the stern lantern; an app reach in a wind; the shots.
 - **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
   in the voxel field, which cannot sail. A light carried on a craft is part
   of the craft's drawing.

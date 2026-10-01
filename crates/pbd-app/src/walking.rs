@@ -2,7 +2,7 @@
 //! resolve its contact against the same hex triangles drawn by the GPU.
 //! This surface motor does not yet supply cave or decorative-tree collisions.
 
-use crate::decks::Decks;
+use crate::decks::{CraftDecks, Decks, Motion};
 use avian3d::prelude::*;
 use bevy::ecs::system::SystemParam;
 use bevy::{
@@ -25,7 +25,7 @@ use crate::{
 pub const EYE_HEIGHT: f32 = 1.6;
 pub const HALF_HEIGHT: f32 = 0.9;
 const BODY_RADIUS: f32 = 0.3;
-const CONTACT_SKIN: f32 = 0.015;
+pub(crate) const CONTACT_SKIN: f32 = 0.015;
 const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
 
 /// What the walker meets that is not terrain: the walls, posts, chimneys,
@@ -39,14 +39,53 @@ pub struct Structures(pub Vec<pbd_core::settlement::pieces::BuildingSolids>);
 /// one-metre layer, so a walker still steps off a ledge.
 const HOLD_M: f32 = 0.35;
 
-impl Structures {
-    /// At a foot: the highest town floor within `reach` above it, with the
-    /// piece it is of, and the lowest underside of one above that, as
-    /// planet-local radii.
-    fn stand(&self, feet: Vec3, reach: f32) -> (Option<(f32, usize)>, Option<f32>) {
-        let mut floor: Option<(f32, usize)> = None;
+/// A piece the walker stands on that is not terrain: a town's, by its place
+/// in [`Structures`], or a ship's deck under sail, by its craft
+/// (`sail-the-cog` step 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Piece {
+    Town(usize),
+    Craft(Entity),
+}
+
+/// Everything the walker meets that is not terrain, asked together: the
+/// towns' pieces and the ships' decks under sail.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Meets<'a> {
+    pub towns: Option<&'a Structures>,
+    pub crafts: Option<&'a CraftDecks>,
+}
+
+impl<'a> Meets<'a> {
+    fn of(world: &'a World) -> Self {
+        Self {
+            towns: world.get_resource::<Structures>(),
+            crafts: world.get_resource::<CraftDecks>(),
+        }
+    }
+
+    fn pieces(
+        &self,
+    ) -> impl Iterator<Item = (Piece, &'a pbd_core::settlement::pieces::BuildingSolids)> + use<'a>
+    {
+        let towns = self
+            .towns
+            .into_iter()
+            .flat_map(|s| s.0.iter().enumerate().map(|(n, b)| (Piece::Town(n), b)));
+        let crafts = self
+            .crafts
+            .into_iter()
+            .flat_map(|c| c.list.iter().map(|d| (Piece::Craft(d.craft), &d.solids)));
+        towns.chain(crafts)
+    }
+
+    /// At a foot: the highest floor within `reach` above it, with the piece
+    /// it is of, and the lowest underside of one above that, as planet-local
+    /// radii.
+    fn stand(&self, feet: Vec3, reach: f32) -> (Option<(f32, Piece)>, Option<f32>) {
+        let mut floor: Option<(f32, Piece)> = None;
         let mut ceiling: Option<f32> = None;
-        for (n, b) in self.0.iter().enumerate() {
+        for (n, b) in self.pieces() {
             let (f, c) = b.stand(feet, reach);
             if let Some(f) = f
                 && floor.is_none_or(|(a, _)| f > a)
@@ -64,24 +103,29 @@ impl Structures {
     /// The way out of the solid that holds a body at `centre`, along the
     /// ground: the face a refused move slides along.
     fn push_normal(&self, centre: Vec3) -> Option<Vec3> {
-        self.0
-            .iter()
-            .find_map(|b| b.push_normal(centre, HALF_HEIGHT, BODY_RADIUS))
+        self.pieces()
+            .find_map(|(_, b)| b.push_normal(centre, HALF_HEIGHT, BODY_RADIUS))
     }
 
     /// Whether the body centred at `centre` is in a solid.
     fn holds(&self, centre: Vec3) -> bool {
-        self.0
-            .iter()
-            .any(|b| b.holds(centre, HALF_HEIGHT, BODY_RADIUS))
+        self.pieces()
+            .any(|(_, b)| b.holds(centre, HALF_HEIGHT, BODY_RADIUS))
     }
 
     /// The lowest solid underside over the body, a planet-local radius.
     fn ceiling(&self, centre: Vec3) -> Option<f32> {
-        self.0
-            .iter()
-            .filter_map(|b| b.ceiling(centre, BODY_RADIUS))
+        self.pieces()
+            .filter_map(|(_, b)| b.ceiling(centre, BODY_RADIUS))
             .min_by(f32::total_cmp)
+    }
+}
+
+/// How the deck a piece is moved over the last tick, where it is a deck.
+fn motion_of(decks: Option<&Decks>, crafts: Option<&CraftDecks>, piece: Piece) -> Option<Motion> {
+    match piece {
+        Piece::Town(i) => decks.and_then(|d| d.at(i)).map(|d| d.motion()),
+        Piece::Craft(e) => crafts.and_then(|c| c.at(e)).map(|d| d.motion),
     }
 }
 
@@ -201,18 +245,19 @@ pub struct WalkingCamera;
 pub struct GroundState {
     pub previous: Vec3,
     pub grounded: bool,
-    /// The town piece whose floor holds the feet, by its place in the
-    /// walker's [`Structures`], where a piece's floor and not the terrain
-    /// holds them: a deck the walker rides (`sail-the-cog` design 6).
-    pub on: Option<usize>,
+    /// The piece whose floor holds the feet, where a piece's floor and not
+    /// the terrain holds them: a deck the walker rides (`sail-the-cog`
+    /// design 6) is one.
+    pub on: Option<Piece>,
     /// The deck's velocity the walker left it with, along the ground: kept
     /// while it is in the air or the water, so stepping off a moving deck
     /// keeps the deck's way, and gone when it lands.
     pub drift: Vec3,
-    /// Where the body is on the deck it rides, in the deck's frame. Kept in
-    /// the deck's small numbers, not carried in the planet's large ones,
-    /// where a moored deck's motion is a few of an `f32`'s steps a tick and
-    /// rounding them would walk the walker across the deck.
+    /// Where the feet are on the deck it rides, in the deck's frame; the
+    /// body stands over them along the planet's up, however the deck heels.
+    /// Kept in the deck's small numbers, not carried in the planet's large
+    /// ones, where a moored deck's motion is a few of an `f32`'s steps a
+    /// tick and rounding them would walk the walker across the deck.
     pub on_deck: Option<Vec3>,
 }
 
@@ -295,6 +340,7 @@ impl Plugin for WalkingPlugin {
         app.init_resource::<WalkingConfig>()
             .init_resource::<WalkingReadout>()
             .init_resource::<Decks>()
+            .init_resource::<CraftDecks>()
             .add_systems(PostStartup, setup_walking.in_set(WalkingSetup))
             .add_systems(
                 RunFixedMainLoop,
@@ -305,7 +351,12 @@ impl Plugin for WalkingPlugin {
             )
             .add_systems(
                 PhysicsSchedule,
-                (crate::decks::move_decks, ride_decks, drive_walker)
+                (
+                    crate::decks::move_decks,
+                    crate::decks::move_craft_decks,
+                    ride_decks,
+                    drive_walker,
+                )
                     .chain()
                     .after(PhysicsStepSystems::First)
                     .after(crate::apply_ship_controls)
@@ -710,7 +761,7 @@ fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
         .map_or(0.0, |c| c.start_up_m);
     let Footprint { support, water, .. } = footprint_in(
         terrain,
-        world.get_resource::<Structures>(),
+        Meets::of(world),
         up * (terrain.sample(up).floor_radius + HALF_HEIGHT),
         reach,
     );
@@ -829,6 +880,7 @@ fn read_walking_input(
 /// and the place its sweep starts from with it.
 fn ride_decks(
     decks: Res<Decks>,
+    crafts: Option<Res<CraftDecks>>,
     mut state: ResMut<WalkingState>,
     mut walkers: Query<(&mut Position, &mut GroundState), With<Walker>>,
 ) {
@@ -836,13 +888,20 @@ fn ride_decks(
         return;
     }
     for (mut position, mut ground) in &mut walkers {
-        let Some(deck) = ground.on.and_then(|i| decks.at(i)) else {
+        let Some(deck) = ground
+            .on
+            .and_then(|p| motion_of(Some(&decks), crafts.as_deref(), p))
+        else {
             continue;
         };
+        // The feet go with the deck; the body stands over them along the
+        // planet's up, so a deck that heels does not tip the walker with it.
+        let lift = HALF_HEIGHT + CONTACT_SKIN;
         let local = ground
             .on_deck
-            .unwrap_or_else(|| deck.then.local(position.0));
-        position.0 = deck.now.world(local);
+            .unwrap_or_else(|| deck.then.local(position.0 - position.0.normalize() * lift));
+        let feet = deck.now.world(local);
+        position.0 = feet + feet.normalize() * lift;
         ground.previous = position.0;
         ground.on_deck = Some(local);
         state.heading = deck.carry_dir(state.heading);
@@ -998,23 +1057,18 @@ struct Footprint {
     support: f32,
     ceiling: Option<f32>,
     water: bool,
-    /// The town piece whose floor is the support, where one is.
-    on: Option<usize>,
+    /// The piece whose floor is the support, where one is.
+    on: Option<Piece>,
 }
 
 fn footprint(terrain: &PlanetContact, position: Vec3) -> Footprint {
-    footprint_in(terrain, None, position, 0.0)
+    footprint_in(terrain, Meets::default(), position, 0.0)
 }
 
 /// The footprint with the towns' floors and stairs in it: at each point the
 /// higher of the terrain's floor and the highest town floor within `reach`
 /// of the feet, and the lower of their ceilings.
-fn footprint_in(
-    terrain: &PlanetContact,
-    structures: Option<&Structures>,
-    position: Vec3,
-    reach: f32,
-) -> Footprint {
+fn footprint_in(terrain: &PlanetContact, meets: Meets, position: Vec3, reach: f32) -> Footprint {
     let up = position.normalize();
     let tangent = up.any_orthonormal_vector() * BODY_RADIUS;
     let cross = up.cross(tangent);
@@ -1030,19 +1084,17 @@ fn footprint_in(
         let feet = (position + offset).normalize() * feet_radius;
         let mut stand = terrain.stand(feet);
         let mut piece = None;
-        if let Some(s) = structures {
-            let (floor, roof) = s.stand(feet, reach);
-            if let Some((f, n)) = floor
-                && f >= stand.floor_radius
-            {
-                stand.floor_radius = f;
-                piece = Some(n);
-            }
-            stand.ceiling_radius = match (stand.ceiling_radius, roof) {
-                (Some(a), Some(b)) => Some(a.min(b)),
-                (a, b) => a.or(b),
-            };
+        let (floor, roof) = meets.stand(feet, reach);
+        if let Some((f, n)) = floor
+            && f >= stand.floor_radius
+        {
+            stand.floor_radius = f;
+            piece = Some(n);
         }
+        stand.ceiling_radius = match (stand.ceiling_radius, roof) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         // The SOLID ground, which under a water cap is the seabed. Taking
         // the sheet put the walker on top of the sea as if it were a floor,
         // which is the other half of why water read as a wall.
@@ -1086,19 +1138,14 @@ struct Swept {
 /// of a rise too tall to step, from the terrain's columns and the towns'
 /// floors round it. None on level ground, where there is no face to slide
 /// along (a passage too low).
-fn rise_normal(
-    terrain: &PlanetContact,
-    structures: Option<&Structures>,
-    at: Vec3,
-    reach: f32,
-) -> Option<Vec3> {
+fn rise_normal(terrain: &PlanetContact, meets: Meets, at: Vec3, reach: f32) -> Option<Vec3> {
     let up = at.normalize();
     let e1 = up.any_orthonormal_vector();
     let e2 = up.cross(e1);
     let probe = |d: Vec3| {
         footprint_in(
             terrain,
-            structures,
+            meets,
             (at + d * 0.25).normalize() * at.length(),
             reach,
         )
@@ -1120,7 +1167,7 @@ fn sweep(
     velocity: &mut Vec3,
     config: &WalkingConfig,
     terrain: &PlanetContact,
-    structures: Option<&Structures>,
+    meets: Meets,
 ) -> Swept {
     let reach = config.step_height;
     let segments = (start.distance(destination) / 0.2).ceil().clamp(1.0, 128.0) as u32;
@@ -1132,7 +1179,7 @@ fn sweep(
         let up = candidate.normalize();
         let Footprint {
             support, ceiling, ..
-        } = footprint_in(terrain, structures, candidate, reach);
+        } = footprint_in(terrain, meets, candidate, reach);
         let feet = candidate.length() - HALF_HEIGHT;
         let old_feet = accepted.length() - HALF_HEIGHT;
         let rise = support + CONTACT_SKIN - feet;
@@ -1143,18 +1190,18 @@ fn sweep(
         let low = i > 0 && !headroom(support, ceiling);
         // A town's wall is a wall as a rise is (slice 2a). A body already
         // in a solid (a town built round it) is let walk out of it.
-        let walled = structures.is_some_and(|s| s.holds(candidate) && !s.holds(accepted));
+        let walled = meets.holds(candidate) && !meets.holds(accepted);
         // Water used to be a wall here, which is why the sea could be
         // looked at and never entered. It is passable now: the seabed is
         // ordinary ground, and what stops a swimmer is the seabed's own
         // rise, exactly as on land.
         if low || walled || (rise > 0.03 && !can_step && support + CONTACT_SKIN - old_feet > 0.03) {
             let normal = if walled {
-                structures.and_then(|s| s.push_normal(candidate))
+                meets.push_normal(candidate)
             } else if low {
                 None
             } else {
-                rise_normal(terrain, structures, candidate, reach)
+                rise_normal(terrain, meets, candidate, reach)
             };
             // Keep the last accepted angular position, allowing vertical
             // jump/fall along it to continue against a blocked wall.
@@ -1162,9 +1209,8 @@ fn sweep(
             let tangential = *velocity - old_up * velocity.dot(old_up);
             // Only block tangential motion. Preserve the full fixed tick's
             // vertical displacement, independent of the first hit fraction.
-            let floor = footprint_in(terrain, structures, accepted, reach).support
-                + HALF_HEIGHT
-                + CONTACT_SKIN;
+            let floor =
+                footprint_in(terrain, meets, accepted, reach).support + HALF_HEIGHT + CONTACT_SKIN;
             accepted = old_up * destination.length().max(floor);
             *velocity = old_up * velocity.dot(old_up);
             grounded = accepted.length() <= floor + 0.03 && velocity.dot(old_up) <= 0.0;
@@ -1209,6 +1255,7 @@ fn resolve_ground(
     terrain: Res<PlanetContact>,
     sea: Sea,
     structures: Option<Res<Structures>>,
+    crafts: Option<Res<CraftDecks>>,
     decks: Option<Res<Decks>>,
     time: Res<Time>,
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
@@ -1216,7 +1263,13 @@ fn resolve_ground(
     if !state.active {
         return;
     }
-    let structures = structures.as_deref();
+    let meets = Meets {
+        towns: structures.as_deref(),
+        crafts: crafts.as_deref(),
+    };
+    let motion = |piece: Option<Piece>| {
+        piece.and_then(|p| motion_of(decks.as_deref(), crafts.as_deref(), p))
+    };
     for (mut position, mut velocity, mut ground) in &mut walkers {
         let was_grounded = ground.grounded;
         let mut start = ground.previous;
@@ -1231,7 +1284,7 @@ fn resolve_ground(
                 &mut velocity.0,
                 &config,
                 &terrain,
-                structures,
+                meets,
             );
             accepted = swept.accepted;
             grounded = swept.grounded;
@@ -1257,9 +1310,9 @@ fn resolve_ground(
         // tangential motion kept. Underwater only the rise goes, so a swimmer
         // against rock stops rather than being snapped.
         let wet = sea.state(&config, accepted);
-        let roof = structures.and_then(|s| s.ceiling(accepted));
+        let roof = meets.ceiling(accepted);
         let ceiling = match (
-            footprint_in(&terrain, structures, accepted, config.step_height).ceiling,
+            footprint_in(&terrain, meets, accepted, config.step_height).ceiling,
             roof,
         ) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -1286,14 +1339,12 @@ fn resolve_ground(
         // the walker leaves one (`sail-the-cog` design 6): its rise or fall
         // into the walker's own, its way along the ground kept as drift.
         let on = if ground.grounded {
-            footprint_in(&terrain, structures, accepted, config.step_height).on
+            footprint_in(&terrain, meets, accepted, config.step_height).on
         } else {
             None
         };
         if on != ground.on
-            && let Some(deck) = decks
-                .as_deref()
-                .and_then(|d| ground.on.and_then(|i| d.at(i)))
+            && let Some(deck) = motion(ground.on)
         {
             let way = deck.velocity_at(accepted, time.delta_secs());
             let up = accepted.normalize();
@@ -1305,9 +1356,9 @@ fn resolve_ground(
         }
         // Its place on a deck, moved only when the walker moved on it by
         // more than the planet's numbers can tell apart.
-        let deck = decks.as_deref().and_then(|d| on.and_then(|i| d.at(i)));
-        ground.on_deck = deck.map(|deck| {
-            let local = deck.now.local(accepted);
+        ground.on_deck = motion(on).map(|deck| {
+            let feet = accepted - accepted.normalize() * (HALF_HEIGHT + CONTACT_SKIN);
+            let local = deck.now.local(feet);
             match ground.on_deck.filter(|_| ground.on == on) {
                 Some(kept) if kept.distance(local) < 2e-3 => kept,
                 _ => local,
@@ -2645,7 +2696,7 @@ mod tests {
         app.world_mut()
             .entity_mut(body)
             .insert(Transform::from_translation(p));
-        app.world_mut().get_mut::<GroundState>(body).unwrap().on = Some(0);
+        app.world_mut().get_mut::<GroundState>(body).unwrap().on = Some(Piece::Town(0));
     }
 
     /// The deck's frame now.
@@ -2676,7 +2727,7 @@ mod tests {
             ticks += 1;
             let ground = app.world().get::<GroundState>(body).unwrap();
             assert!(
-                ground.grounded && ground.on == Some(0),
+                ground.grounded && ground.on == Some(Piece::Town(0)),
                 "let go at tick {ticks}"
             );
         }

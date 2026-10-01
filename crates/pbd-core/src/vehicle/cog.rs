@@ -91,15 +91,15 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         return;
     };
     // The controls: the braces turn the yard (the sheet's keys), the tiller
-    // steers.
+    // steers. Nobody at the helm, both stay as they were left.
     if occupied {
         let reach = (s.sail.brace_deg as f64).to_radians();
         let rate = (s.sail.brace_rate_deg as f64).to_radians();
         st.yard = (st.yard + input.sheet as f64 * rate * h).clamp(-reach, reach);
+        let helm = input.steer as f64 * s.rudder_max_rad as f64;
+        let turn = s.rudder_rate as f64 * h;
+        st.tiller += (helm - st.tiller).clamp(-turn, turn);
     }
-    let helm = input.steer as f64 * s.rudder_max_rad as f64;
-    let turn = s.rudder_rate as f64 * h;
-    st.tiller += (helm - st.tiller).clamp(-turn, turn);
 
     let water = cx.water_view();
     let displaced = float(body, &hull, com, &water, s.heave_damping as f64);

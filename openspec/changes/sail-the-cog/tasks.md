@@ -19,12 +19,12 @@ tasks 1 and 3d (thin solids and surfaces in `stand`, and the ship piece).
 
 ## 3. Walking on the deck
 
-- [ ] 3.1 The ground query asks decks of craft in reach in their frames before the terrain. Verify: an app test that a walker set on the moored deck stands on it.
-- [ ] 3.2 The walker aboard keeps a local pose in the ship's frame, composed for drawing and the camera; leaving the deck hands it back to the planet's frame at the composed velocity, and climbing on hands it in. Verify: the `player/walking` scenarios as app tests (standing through a turn, up the stair under way, over the side).
+- [x] 3.1 The ground query asks decks of craft in reach in their frames before the terrain. Verify: an app test that a walker set on the moored deck stands on it. (The walker asks the towns' pieces and `CraftDecks` together; `walking::tests::a_walker_stands_on_a_deck_through_a_quarter_turn` on the moored deck, `vehicles::tests::a_walker_rides_a_cog_under_way_through_a_turn` on the craft's.)
+- [x] 3.2 The walker aboard keeps a local pose in the ship's frame, composed for drawing and the camera; leaving the deck hands it back to the planet's frame at the composed velocity, and climbing on hands it in. Verify: the `player/walking` scenarios as app tests (standing through a turn, up the stair under way, over the side). (`vehicles::tests::a_walker_rides_a_cog_under_way_through_a_turn`, `a_walker_climbs_a_cogs_stair_under_way`, `a_walker_goes_over_a_cogs_side_with_its_way`; the feet are what is kept, design 6 step 3 part 2. The requirement is in `openspec/specs/player/walking`.)
 
 ## 4. The helm
 
-- [ ] 4.1 F at the tiller takes and lets go of the helm; W and S brace the yard, A and D steer. Verify: the `player/vehicles` scenarios as app tests (a reach; letting go of the helm), and the binding table lists the helm keys.
+- [ ] 4.1 F at the tiller takes and lets go of the helm; W and S brace the yard, A and D steer. Verify: the `player/vehicles` scenarios as app tests (a reach; letting go of the helm), and the binding table lists the helm keys. (Built: the keys and the COG bindings group, `each_craft_maps_its_controls_and_menus_suppress_keys_and_look`; letting go, `letting_go_of_a_cogs_helm_leaves_the_walker_riding_its_aftcastle`. Open: the reach as an app test, which needs wind in the test app.)
 
 ## 5. Saves
 

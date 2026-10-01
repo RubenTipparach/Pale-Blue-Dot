@@ -6,7 +6,7 @@ use super::*;
 use crate::flight_view::{FlightViewConfig, FlightViewPlugin};
 use crate::planet::PlanetContact;
 use crate::planet::terrain::PLANET_RADIUS;
-use crate::walking::{EYE_HEIGHT, WalkingPlugin};
+use crate::walking::{EYE_HEIGHT, HALF_HEIGHT, WalkingPlugin};
 use bevy::input::mouse::AccumulatedMouseMotion;
 use pbd_core::vehicle::record::RECORD_VERSION;
 
@@ -695,4 +695,293 @@ fn a_harbour_boat_is_paddled_away_and_kept_where_it_was_left() {
         "back where it was left"
     );
     assert_eq!(back.berth, Some((7, 3)), "still its harbour's boat");
+}
+
+/// A cog put where the Tern lies, under way at `speed` m/s with its tiller
+/// hard over and nobody at its helm: sailed by its own physics, coasting
+/// round a turn (from 4 m/s, through 90° in about 45 s), its deck standing
+/// once a tick has passed.
+fn launch_cog(app: &mut App, speed: f64) -> Entity {
+    let tern = crafts(app)
+        .into_iter()
+        .find(|(_, c)| c.kind == Kind::Tern)
+        .expect("the Tern")
+        .1;
+    let mut cog = {
+        let mut fleet = app.world_mut().resource_mut::<Fleet>();
+        let id = fleet.next_id;
+        fleet.next_id += 1;
+        Craft::new(
+            Kind::Cog,
+            id,
+            fleet.specs.clone(),
+            fleet.hulls.clone(),
+            tern.reference_position(),
+            tern.body.orientation,
+        )
+    };
+    cog.body.velocity = cog.body.axis(pbd_core::vehicle::FORWARD) * speed;
+    let hard_over = cog.specs().cog.rudder_max_rad as f64;
+    if let pbd_core::vehicle::CraftState::Cog(s) = &mut cog.state {
+        s.tiller = hard_over;
+    }
+    let entity = place::spawn_craft(app.world_mut(), cog);
+    app.update();
+    entity
+}
+
+/// The cog's deck frame now.
+fn cog_frame(app: &App, cog: Entity) -> pbd_core::settlement::pieces::Frame {
+    app.world()
+        .resource::<crate::decks::CraftDecks>()
+        .at(cog)
+        .expect("the cog holds its deck")
+        .motion
+        .now
+}
+
+/// The walker's feet in the cog's frame.
+fn feet_on_cog(app: &mut App, cog: Entity) -> Vec3 {
+    let p = walker(app);
+    cog_frame(app, cog).local(p - p.normalize() * (HALF_HEIGHT + crate::walking::CONTACT_SKIN))
+}
+
+/// Stand the walker on the cog's deck with its feet at `at` in the cog's
+/// frame, held by it.
+fn stand_on_cog(app: &mut App, cog: Entity, at: Vec3) {
+    use crate::walking::{GroundState, Piece};
+    let f = cog_frame(app, cog);
+    let feet = f.world(at);
+    let p = feet + feet.normalize() * (HALF_HEIGHT + crate::walking::CONTACT_SKIN);
+    let body = app
+        .world_mut()
+        .query_filtered::<Entity, With<Walker>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().entity_mut(body).insert((
+        Position(p),
+        Transform::from_translation(p),
+        LinearVelocity::ZERO,
+        GroundState {
+            previous: p,
+            grounded: true,
+            on: Some(Piece::Craft(cog)),
+            drift: Vec3::ZERO,
+            on_deck: Some(at),
+        },
+    ));
+}
+
+/// Whether the walker's feet are down, what holds them, and the way it
+/// keeps.
+fn ground(app: &mut App) -> (bool, Option<crate::walking::Piece>, Vec3) {
+    let g = app
+        .world_mut()
+        .query_filtered::<&crate::walking::GroundState, With<Walker>>()
+        .single(app.world())
+        .unwrap();
+    (g.grounded, g.on, g.drift)
+}
+
+/// `sail-the-cog` step 3 (`player/walking`, standing still through a turn):
+/// a walker set on the aftcastle of a cog under way, 6 m from its mast,
+/// stands where it was on the deck to a centimetre, held all the way, while
+/// the cog turns through 90° with nobody at its helm.
+#[test]
+fn a_walker_rides_a_cog_under_way_through_a_turn() {
+    use crate::walking::Piece;
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let cog = launch_cog(&mut app, 4.0);
+    let at = Vec3::new(1.0, 3.5, 4.6);
+    let mast = pbd_core::settlement::pieces::cog::MAST_STEP;
+    assert!(Vec2::new(at.x - mast.x, at.z - mast.z).length() > 6.0);
+    stand_on_cog(&mut app, cog, at);
+    let f0 = cog_frame(&app, cog);
+    let mut ticks = 0;
+    while cog_frame(&app, cog).z.angle_between(f0.z) < std::f32::consts::FRAC_PI_2 {
+        assert!(ticks < 4000, "the cog never turned a quarter round");
+        app.update();
+        ticks += 1;
+        let (grounded, on, _) = ground(&mut app);
+        assert!(
+            grounded && on == Some(Piece::Craft(cog)),
+            "let go at tick {ticks}"
+        );
+    }
+    let feet = feet_on_cog(&mut app, cog);
+    assert!(
+        feet.distance(at) < 0.01,
+        "on the deck at {feet}, set at {at}"
+    );
+}
+
+/// `sail-the-cog` step 3 (`player/walking`, up the stair under way): a
+/// walker climbs the cog's stair onto the aftcastle while it coasts round
+/// its turn, never a tick in the air.
+#[test]
+fn a_walker_climbs_a_cogs_stair_under_way() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let cog = launch_cog(&mut app, 2.5);
+    // The stair rises aft from amidships on the middle line.
+    stand_on_cog(&mut app, cog, Vec3::new(0.0, 1.9, -0.8));
+    let body = app
+        .world_mut()
+        .query_filtered::<Entity, With<Walker>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().resource_mut::<WalkingState>().captured = true;
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::KeyW);
+    let mut airborne = 0;
+    let mut feet = feet_on_cog(&mut app, cog);
+    let mut jump: f32 = 0.0;
+    for _ in 0..400 {
+        let was = feet;
+        feet = feet_on_cog(&mut app, cog);
+        jump = jump.max((feet.y - was.y).abs());
+        if feet.z > 5.2 {
+            break;
+        }
+        let f = cog_frame(&app, cog);
+        // Aft along the middle line.
+        let dir = f.z - f.x * (feet.x * 2.0);
+        let p = walker(&mut app);
+        app.world_mut()
+            .resource_mut::<WalkingState>()
+            .face(p.normalize(), dir);
+        app.update();
+        if !app
+            .world()
+            .get::<crate::walking::GroundState>(body)
+            .unwrap()
+            .grounded
+        {
+            airborne += 1;
+        }
+    }
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .release(KeyCode::KeyW);
+    assert!(feet.z > 5.2, "got aft to {feet}");
+    assert!(
+        (feet.y - 3.5).abs() < 0.05,
+        "on the aftcastle, the feet {} m over the waterline",
+        feet.y
+    );
+    assert_eq!(airborne, 0, "ticks in the air going up");
+    assert!(jump < 0.1, "the eye jumped {jump} m in a tick");
+}
+
+/// `sail-the-cog` step 3 (`player/vehicles`, letting go of the helm): F at
+/// the helm of a cog under way puts the walker at the tiller on the
+/// aftcastle, riding it, not left behind by its way; the cog sails on with
+/// its yard and tiller as they were.
+#[test]
+fn letting_go_of_a_cogs_helm_leaves_the_walker_riding_its_aftcastle() {
+    use crate::walking::Piece;
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let cog = launch_cog(&mut app, 2.5);
+    take_seat(app.world_mut(), cog, true);
+    app.update();
+    let rig = |app: &mut App| match crafts(app).into_iter().find(|(e, _)| *e == cog) {
+        Some((
+            _,
+            Craft {
+                state: pbd_core::vehicle::CraftState::Cog(s),
+                ..
+            },
+        )) => (s.yard, s.tiller),
+        _ => panic!("the cog"),
+    };
+    let held = rig(&mut app);
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(app.world().resource::<Aboard>().0, None, "let go");
+    let exit = crafts(&mut app)
+        .into_iter()
+        .find(|(e, _)| *e == cog)
+        .unwrap()
+        .1
+        .specs()
+        .cog
+        .seat
+        .exit;
+    let exit = Vec3::from(exit);
+    for _ in 0..180 {
+        app.update();
+    }
+    let (grounded, on, _) = ground(&mut app);
+    assert!(grounded && on == Some(Piece::Craft(cog)), "riding it");
+    let feet = feet_on_cog(&mut app, cog);
+    assert!(
+        (feet.y - 3.5).abs() < 0.05 && Vec2::new(feet.x - exit.x, feet.z - exit.z).length() < 0.3,
+        "on the aftcastle at {feet}, the tiller's exit {exit}"
+    );
+    assert_eq!(rig(&mut app), held, "its yard and tiller as they were left");
+    let sails = crafts(&mut app)
+        .into_iter()
+        .find(|(e, _)| *e == cog)
+        .unwrap()
+        .1
+        .body
+        .velocity
+        .length();
+    assert!(sails > 1.0, "and it sails on at {sails} m/s");
+}
+
+/// `sail-the-cog` step 3 (`player/walking`, over the side): a walker goes
+/// out through the gangway of a cog under way, leaves the deck with the
+/// deck's way there as drift, and the water takes it off; the cog sails on.
+#[test]
+fn a_walker_goes_over_a_cogs_side_with_its_way() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let cog = launch_cog(&mut app, 2.5);
+    stand_on_cog(&mut app, cog, Vec3::new(-0.8, 1.9, 0.0));
+    app.world_mut().resource_mut::<WalkingState>().captured = true;
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::KeyW);
+    let mut left: Option<f32> = None;
+    let mut way = 0.0;
+    for _ in 0..600 {
+        let f = cog_frame(&app, cog);
+        let p = walker(&mut app);
+        // To port, through the gangway, and on away from the ship.
+        app.world_mut()
+            .resource_mut::<WalkingState>()
+            .face(p.normalize(), -f.x);
+        let before = f.origin;
+        app.update();
+        let (_, on, drift) = ground(&mut app);
+        if left.is_none() && on.is_none() {
+            let speed = cog_frame(&app, cog).origin.distance(before) * 60.0;
+            left = Some(drift.length());
+            way = speed;
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .release(KeyCode::KeyW);
+        }
+        if left.is_some() && drift.length() < 0.05 {
+            break;
+        }
+    }
+    let left = left.expect("went over the side");
+    assert!(
+        (left - way).abs() < 0.25 * way,
+        "left with {left} m/s of the ship's {way} m/s"
+    );
+    assert!(ground(&mut app).2.length() < 0.05, "the water took it off");
+    let sails = crafts(&mut app)
+        .into_iter()
+        .find(|(e, _)| *e == cog)
+        .unwrap()
+        .1
+        .body
+        .velocity
+        .length();
+    assert!(sails > 1.0, "and the cog sails on at {sails} m/s");
 }

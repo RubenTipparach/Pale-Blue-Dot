@@ -1,15 +1,51 @@
-//! Pieces that move, and the walker riding them (`sail-the-cog` design 6,
-//! step 2). A deck is a town piece in the walker's [`Structures`] whose
-//! `Frame` is set each tick from where the deck is: its solids and surfaces
-//! answer in that frame, so they move rigidly with it and nothing is cut
-//! again. A walker the deck holds is carried by the deck's own motion over
-//! the tick, `p ← now · then⁻¹ · p`, before it walks: its place on the deck
-//! is kept, so a turn neither slides nor jitters it.
+//! Pieces that move, and the walker riding them (`sail-the-cog` design 6).
+//! A deck's `Frame` is set each tick from where the deck is: its solids and
+//! surfaces answer in that frame, so they move rigidly with it and nothing
+//! is cut again. A walker the deck holds is carried by the deck's own
+//! [`Motion`] over the tick, `p ← now · then⁻¹ · p`, before it walks: its
+//! place on the deck is kept, so a turn neither slides nor jitters it.
+//!
+//! Two kinds of deck move. A moored ship's ([`Decks`], step 2) is a town
+//! piece in the walker's [`Structures`] swung about where it rests. A ship
+//! under sail's ([`CraftDecks`], step 3) is held by the craft and stands
+//! where its physics puts it.
 
 use crate::towns::Towns;
+use crate::vehicles::Vehicle;
 use crate::walking::Structures;
 use bevy::prelude::*;
-use pbd_core::settlement::pieces::Frame;
+use pbd_core::settlement::pieces::{BuildingSolids, Frame, Meshes};
+use pbd_core::vehicle::Kind;
+
+/// How a deck moved over the last tick: where its frame was, and is.
+#[derive(Clone, Copy, Debug)]
+pub struct Motion {
+    pub then: Frame,
+    pub now: Frame,
+}
+
+impl Motion {
+    /// Where a planet-local point on the deck went over the last tick.
+    pub fn carry(&self, p: Vec3) -> Vec3 {
+        self.now.world(self.then.local(p))
+    }
+
+    /// Where a planet-local direction on the deck turned over the last tick.
+    pub fn carry_dir(&self, v: Vec3) -> Vec3 {
+        let l = Vec3::new(v.dot(self.then.x), v.dot(self.then.y), v.dot(self.then.z));
+        self.now.x * l.x + self.now.y * l.y + self.now.z * l.z
+    }
+
+    /// The deck's own velocity at a planet-local point on it, over the last
+    /// tick of `dt` seconds.
+    pub fn velocity_at(&self, p: Vec3, dt: f32) -> Vec3 {
+        if dt > 0.0 {
+            (self.carry(p) - p) / dt
+        } else {
+            Vec3::ZERO
+        }
+    }
+}
 
 /// How a deck moves about where it rests: a heave, a roll and a swing, each
 /// a sine, and a steady turn. Amplitudes in metres and radians, periods in
@@ -115,25 +151,17 @@ impl Deck {
         }
     }
 
+    /// How it moved over the last tick.
+    pub fn motion(&self) -> Motion {
+        Motion {
+            then: self.then,
+            now: self.now,
+        }
+    }
+
     /// Where a planet-local point on the deck went over the last tick.
     pub fn carry(&self, p: Vec3) -> Vec3 {
-        self.now.world(self.then.local(p))
-    }
-
-    /// Where a planet-local direction on the deck turned over the last tick.
-    pub fn carry_dir(&self, v: Vec3) -> Vec3 {
-        let l = Vec3::new(v.dot(self.then.x), v.dot(self.then.y), v.dot(self.then.z));
-        self.now.x * l.x + self.now.y * l.y + self.now.z * l.z
-    }
-
-    /// The deck's own velocity at a planet-local point on it, over the last
-    /// tick of `dt` seconds.
-    pub fn velocity_at(&self, p: Vec3, dt: f32) -> Vec3 {
-        if dt > 0.0 {
-            (self.carry(p) - p) / dt
-        } else {
-            Vec3::ZERO
-        }
+        self.motion().carry(p)
     }
 
     /// Its drawing's transform under the town's root: from where it rests
@@ -204,6 +232,90 @@ pub fn move_decks(
         }
         true
     });
+}
+
+/// A ship's deck under sail (`sail-the-cog` step 3): the craft's ship cut
+/// once in its own frame ([`pbd_core::settlement::pieces::cog::sailing`]),
+/// standing where the craft is.
+#[derive(Clone, Debug)]
+pub struct CraftDeck {
+    pub craft: Entity,
+    pub solids: BuildingSolids,
+    pub motion: Motion,
+}
+
+/// Every craft's deck, by its craft: what the walker meets aboard a ship,
+/// beside the towns' pieces.
+#[derive(Resource, Default)]
+pub struct CraftDecks {
+    pub list: Vec<CraftDeck>,
+    /// The ship as cut once, in the craft's frame.
+    cut: Option<BuildingSolids>,
+}
+
+impl CraftDecks {
+    /// The deck a craft holds, if it holds one.
+    pub fn at(&self, craft: Entity) -> Option<&CraftDeck> {
+        self.list.iter().find(|d| d.craft == craft)
+    }
+}
+
+/// Where a craft stands, as a frame in the walker's: its reference frame's
+/// origin and axes, the render frame's centre added (`PlanetRenderFrame`),
+/// as the vehicles reach the walker.
+pub fn craft_frame(craft: &pbd_core::vehicle::Craft, centre: bevy::math::DVec3) -> Frame {
+    let o = craft.body.orientation;
+    Frame {
+        origin: (centre + craft.reference_position()).as_vec3(),
+        x: (o * bevy::math::DVec3::X).as_vec3(),
+        y: (o * bevy::math::DVec3::Y).as_vec3(),
+        z: (o * bevy::math::DVec3::Z).as_vec3(),
+    }
+}
+
+/// Stand each cog's deck where its craft is after the craft's step, the
+/// last tick's frame kept as where it was; cut a deck for a cog that has
+/// none, and drop one whose craft is gone.
+pub(crate) fn move_craft_decks(
+    mut decks: ResMut<CraftDecks>,
+    vehicles: Query<(Entity, &Vehicle)>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    assets: Option<Res<crate::towns::TownAssets>>,
+) {
+    let centre = frame.map_or(bevy::math::DVec3::ZERO, |f| f.center);
+    let decks = &mut *decks;
+    decks.list.retain(|d| {
+        vehicles
+            .get(d.craft)
+            .is_ok_and(|(_, v)| v.craft.kind == Kind::Cog)
+    });
+    for (entity, vehicle) in &vehicles {
+        if vehicle.craft.kind != Kind::Cog {
+            continue;
+        }
+        let now = craft_frame(&vehicle.craft, centre);
+        if let Some(deck) = decks.list.iter_mut().find(|d| d.craft == entity) {
+            deck.motion.then = deck.motion.now;
+            deck.motion.now = now;
+            deck.solids.frame = now;
+            continue;
+        }
+        let cut = decks.cut.get_or_insert_with(|| {
+            // Its gangway on the side the harbour moors it, as it is drawn.
+            let gang_side = assets
+                .as_ref()
+                .and_then(|a| a.harbour.cog.as_ref())
+                .map_or(-1, |c| c.gang_side);
+            pbd_core::settlement::pieces::cog::sailing(&mut Meshes::new(), &|_| 2.0, gang_side)
+        });
+        let mut solids = cut.clone();
+        solids.frame = now;
+        decks.list.push(CraftDeck {
+            craft: entity,
+            solids,
+            motion: Motion { then: now, now },
+        });
+    }
 }
 
 #[cfg(test)]

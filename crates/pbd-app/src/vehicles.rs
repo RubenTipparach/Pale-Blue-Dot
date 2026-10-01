@@ -531,6 +531,21 @@ pub fn leave(world: &mut World, entity: Entity) {
         .map_or(Quat::IDENTITY, |t| t.rotation);
     let captured = world.resource::<view::VehicleView>().captured;
     crate::walking::drop_walker(world, eye, velocity.as_vec3(), look);
+    // Off a ship's helm onto its deck (`sail-the-cog` step 3): the walker
+    // keeps the ship's way until its feet are down, and the deck carries it
+    // from there.
+    if world
+        .get_resource::<crate::decks::CraftDecks>()
+        .is_some_and(|d| d.at(entity).is_some())
+    {
+        let v = velocity.as_vec3();
+        for mut ground in world
+            .query_filtered::<&mut crate::walking::GroundState, With<Walker>>()
+            .iter_mut(world)
+        {
+            ground.drift = v - up * v.dot(up);
+        }
+    }
     world.resource_mut::<WalkingState>().captured = captured;
     crate::walking::set_view(world, View::Walking);
     world.resource_mut::<Fleet>().dirty = true;
