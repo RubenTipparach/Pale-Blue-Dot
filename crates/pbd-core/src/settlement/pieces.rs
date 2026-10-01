@@ -14,6 +14,8 @@ use super::{BuildingDef, HUT_STOREY_M, Kit, RoofKind, STOREY_M, neighbour};
 use glam::{Vec2, Vec3};
 use std::collections::BTreeMap;
 
+pub mod harbour;
+
 /// Floor boards and joists, metres.
 pub const SLAB_M: f32 = 0.2;
 /// A floor is drawn this far over where it stands, so a wall top in its
@@ -1262,7 +1264,8 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
     for (i, &(c, r)) in plan.cells.iter().enumerate() {
         for d in 0..6 {
             let (c2, r2) = neighbour(c, r, d);
-            if inside(c2, r2) {
+            // An open edge has no wall at all: a boathouse's seaward side.
+            if inside(c2, r2) || def.open.contains(&[c, r, d as i32]) {
                 continue;
             }
             for s in 0..storeys {

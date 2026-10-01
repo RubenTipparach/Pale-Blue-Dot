@@ -1959,3 +1959,188 @@ fn a_harbour_is_stored_in_schema_3() {
     assert!(record::lay(&template, 9, patch, *at, 0, coast()).is_err());
     assert!(record::lay_at_sea(&walled(), 9, patch, *at, 0, coast(), 0.0).is_err());
 }
+
+/// The harbour laid on the test coast and cut whole: its buildings, then
+/// its piers' stretches and its light, every door open.
+fn cut_harbour() -> (Template, record::Town, record::Built) {
+    let (template, town, _) = laid_harbour();
+    let (patch, _) = patch();
+    let natural = coast();
+    let mut b = record::build_town(
+        &town,
+        Some(&template),
+        patch,
+        &kits(),
+        &|_: &str| 2.0,
+        RADIUS_M,
+        move |d| natural(d).floor(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    for s in &mut b.solids {
+        for d in &mut s.doors {
+            d.open = true;
+        }
+    }
+    (template, town, b)
+}
+
+/// What a walker's feet find at `p` (planet-local, at the feet): the
+/// highest floor any of the town's pieces answers within a tread's reach,
+/// as a radius.
+fn feet_on(b: &record::Built, p: Vec3) -> Option<f32> {
+    b.solids
+        .iter()
+        .filter_map(|s| s.stand(p, 0.3).0)
+        .max_by(f32::total_cmp)
+}
+
+/// Slice 4d: the walker along the harbour's main pier from the quay to its
+/// head, the feet on the planks at 1 m over the sea all the way and the
+/// body in nothing.
+#[test]
+fn a_walker_goes_down_the_main_pier_to_its_head() {
+    let (template, _, b) = cut_harbour();
+    let (patch, _) = patch();
+    let pier = template
+        .piers
+        .iter()
+        .max_by(|a, z| {
+            let l = |p: &Pier| (p.to[2] - p.from[2]).abs() + (p.to[0] - p.from[0]).abs();
+            l(a).total_cmp(&l(z))
+        })
+        .expect("a pier");
+    let deck = RADIUS_M + pier.from[1];
+    let steps = 120;
+    for k in 0..=steps {
+        let t = k as f32 / steps as f32;
+        let (x, z) = (
+            pier.from[0] + (pier.to[0] - pier.from[0]) * t,
+            pier.from[2] + (pier.to[2] - pier.from[2]) * t,
+        );
+        let d = sea::point(&b.chart, patch, x, z, template.grid.cell_m).expect("on the chart");
+        let feet = feet_on(&b, d * (deck + 0.01)).unwrap_or_else(|| {
+            panic!(
+                "no planks at {:.1} m of the pier",
+                t * (pier.to[2] - pier.from[2]).abs()
+            )
+        });
+        assert!(
+            (feet - deck).abs() < 0.03,
+            "the deck at {} m",
+            feet - RADIUS_M
+        );
+        let body = d * (deck + 0.95);
+        assert!(
+            !b.solids.iter().any(|s| s.holds(body, 0.9, 0.3)),
+            "held on the pier at {t:.2}"
+        );
+    }
+}
+
+/// Slice 4d: a boathouse has no wall on its seaward edges, so the walker
+/// comes in from the beach's edge; its other edges are walls.
+#[test]
+fn a_walker_comes_into_a_boathouse_from_the_sea() {
+    let (template, town, b) = cut_harbour();
+    let (patch, _) = patch();
+    let n = template
+        .buildings
+        .iter()
+        .position(|x| !x.open.is_empty())
+        .expect("a boathouse");
+    let def = &template.buildings[n];
+    let s = &b.solids[n];
+    let floor = RADIUS_M + town.terrace as f32 + def.base as f32;
+    let (mut open_edges, mut walls) = (0, 0);
+    for &[c, r] in &def.cells {
+        let centre = patch.cells[b.chart.cell(c, r).unwrap()].direction;
+        for d in 0..6 {
+            let (c2, r2) = neighbour(c, r, d);
+            let door = def.doors.iter().any(|x| x[..3] == [c, r, d as i32]);
+            if def.cells.contains(&[c2, r2]) || door {
+                continue;
+            }
+            let beyond = patch.cells[b.chart.cell(c2, r2).unwrap()].direction;
+            let held = (0..=20).any(|k| {
+                let p = centre.lerp(beyond, k as f32 / 20.0).normalize() * (floor + 0.95);
+                s.holds(p, 0.9, 0.3)
+            });
+            let open = def.open.contains(&[c, r, d as i32]);
+            assert_eq!(!held, open, "({c}, {r}) edge {d}: open {open}, held {held}");
+            if open {
+                open_edges += 1;
+            } else {
+                walls += 1;
+            }
+        }
+    }
+    assert_eq!(open_edges, def.open.len());
+    assert!(walls >= 4, "{walls} walls walked into");
+}
+
+/// Slice 4d: the walker from the hut pier up each fish hut's porch stair
+/// onto its deck and in at its door, the feet never falling and the body
+/// in nothing.
+#[test]
+fn a_walker_climbs_a_fish_huts_porch_and_goes_in() {
+    let (template, _, b) = cut_harbour();
+    let (patch, _) = patch();
+    let mut huts = 0;
+    for (n, def) in template.buildings.iter().enumerate() {
+        let Some(st) = &def.stilts else {
+            continue;
+        };
+        let s = &b.solids[n];
+        let Some(&pieces::Surface::Flight { foot, dir, len, .. }) = s
+            .surfaces
+            .iter()
+            .find(|x| matches!(x, pieces::Surface::Flight { .. }))
+        else {
+            panic!("{}: no porch stair", def.name);
+        };
+        let floor = s.frame.origin.length();
+        let plan = |c: i32, r: i32| {
+            s.frame
+                .plane(patch.cells[b.chart.cell(c, r).unwrap()].direction)
+        };
+        let [dc, dr] = st.deck[0];
+        let [hc, hr] = def.cells[0];
+        // The way: the pier before the stair's foot, up the stair, across the
+        // deck, in at the door.
+        let way = [
+            foot - dir * 0.5,
+            foot + dir * len,
+            plan(dc, dr),
+            plan(hc, hr),
+        ];
+        let start = s.frame.world(Vec3::new(way[0].x, -1.0 + 0.01, way[0].y));
+        let mut feet = feet_on(&b, start).expect("the pier at the stair's foot") - floor;
+        for leg in way.windows(2) {
+            for k in 1..=40 {
+                let p = leg[0].lerp(leg[1], k as f32 / 40.0);
+                let at = s.frame.world(Vec3::new(p.x, feet, p.y));
+                let next = feet_on(&b, at).map(|f| f - floor);
+                let next = next.unwrap_or_else(|| panic!("{}: nothing underfoot at {p}", def.name));
+                assert!(
+                    next > feet - 0.3,
+                    "{}: fell from {feet} to {next}",
+                    def.name
+                );
+                let body = s.frame.world(Vec3::new(p.x, next + 0.95, p.y));
+                assert!(
+                    !b.solids.iter().any(|x| x.holds(body, 0.9, 0.3)),
+                    "{}: held at {p} on {next}",
+                    def.name
+                );
+                feet = next;
+            }
+        }
+        assert!(
+            feet.abs() < 0.05,
+            "{}: inside on its floor, {feet}",
+            def.name
+        );
+        huts += 1;
+    }
+    assert_eq!(huts, 2);
+}

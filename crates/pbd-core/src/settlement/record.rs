@@ -17,7 +17,7 @@
 
 use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::TownGround;
-use super::pieces::{BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry};
+use super::pieces::{BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry, harbour};
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
 use crate::terrain::Material;
@@ -519,6 +519,14 @@ pub fn ground_of(
     Ok((chart, ground))
 }
 
+/// The ground's height at a direction, metres over the radius, as the
+/// column has it: the town's where it has laid or eased it, the natural
+/// ground's elsewhere.
+fn ground_under(ground: &TownGround, natural: &dyn Fn(Vec3) -> f32, d: Vec3) -> f32 {
+    let n = natural(d);
+    ground.at(d).map_or(n, |g| g.height(n))
+}
+
 /// Build a town from its definition: its chart from the stored cells, its
 /// ground from the stored terrace and footprint (the margin eased to
 /// `natural`), and each building cut from its cells' real corners with its
@@ -531,7 +539,7 @@ pub fn build(
     radius_m: f32,
     natural: impl Fn(Vec3) -> f32,
 ) -> Result<Built, String> {
-    let (chart, ground) = ground_of(town, patch, radius_m, natural)?;
+    let (chart, ground) = ground_of(town, patch, radius_m, &natural)?;
     let terrace = town.terrace as f32;
     let mut meshes = Meshes::new();
     let mut solids = Vec::new();
@@ -541,6 +549,7 @@ pub fn build(
         let kit = kits
             .get(&b.kit)
             .ok_or_else(|| format!("{}: no kit {}", b.name, b.kit))?;
+        let floor = terrace + b.floor as f32;
         let mut cut = cut_building(
             &mut meshes,
             repeat_m,
@@ -549,8 +558,25 @@ pub fn build(
             &b.def(),
             kit,
             radius_m,
-            terrace + b.floor as f32,
+            floor,
         )?;
+        // A fish hut's stilts, deck and porch stair (slice 4d), on piles down
+        // to the ground under it.
+        if let Some(stilts) = &b.stilts {
+            let under = |d: Vec3| ground_under(&ground, &natural, d);
+            harbour::stilts(
+                &mut cut,
+                &mut meshes,
+                repeat_m,
+                patch,
+                &chart,
+                &b.cells,
+                stilts,
+                floor,
+                terrace + stilts.foot_m,
+                &under,
+            )?;
+        }
         rooms.push(std::mem::take(&mut cut.rooms));
         lights.push(std::mem::take(&mut cut.lights));
         solids.push(cut);
@@ -582,7 +608,45 @@ pub fn build_town(
     radius_m: f32,
     natural: impl Fn(Vec3) -> f32,
 ) -> Result<Built, String> {
-    let mut built = build(town, patch, kits, repeat_m, radius_m, natural)?;
+    let mut built = build(town, patch, kits, repeat_m, radius_m, &natural)?;
+    // The harbour's piers and light (slice 4d), the template's as its
+    // masonry is, each with no rooms and no lights.
+    if let Some(template) = template.filter(|t| t.sea) {
+        let under = |d: Vec3| ground_under(&built.ground, &natural, d);
+        let cell_m = template.grid.cell_m;
+        let terrace = town.terrace as f32;
+        let mut cut = Vec::new();
+        for p in &template.piers {
+            cut.extend(harbour::pier(
+                &mut built.meshes,
+                repeat_m,
+                patch,
+                &built.chart,
+                p,
+                cell_m,
+                radius_m,
+                terrace,
+                &under,
+            )?);
+        }
+        if let Some(light) = &template.light {
+            cut.push(harbour::light(
+                &mut built.meshes,
+                repeat_m,
+                patch,
+                &built.chart,
+                light,
+                cell_m,
+                radius_m,
+                terrace,
+            )?);
+        }
+        for c in cut {
+            built.rooms.push(Meshes::new());
+            built.lights.push(Vec::new());
+            built.solids.push(c);
+        }
+    }
     let Some(template) = template.filter(|t| !t.masonry.is_empty()) else {
         return Ok(built);
     };

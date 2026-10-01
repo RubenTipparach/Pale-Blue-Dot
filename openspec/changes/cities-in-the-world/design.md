@@ -1215,6 +1215,38 @@ so the first can be looked at before it can be walked into.
       - `a_harbour_lies_with_its_sea_over_the_planets`,
         `a_harbour_stands_on_the_sea` and `a_harbour_is_stored_in_schema_3`
         hold it.
+    - **Its pieces (2026-10-01).** `pieces::harbour`.
+      - **Open edges.** The cutter gives an edge in a building's `open` no
+        wall in any storey.
+      - **Stilts.** A fish hut is cut as any building, on its floor 2 m over
+        the sea, and its stilts are added to its own cut, in its frame.
+        - Its floor gets an underside, and the walker a floor surface,
+          because no ground is under it.
+        - Its deck is a plank slab, railed on its outer edges but at the
+          porch.
+        - Every outside corner of hut and deck has a pile down to the
+          ground under it.
+        - The porch stair is a straight open flight, 0.3 m treads, down to
+          the pier at 1 m.
+      - **Piers.** A pier is cut in stretches of about 2.2 m, each flat in
+        its own frame, so no stretch bows off the sphere. Each stretch laps
+        the next by 5 cm, so the planks have no seam, the 4c lesson. Each
+        joint has a pile either side, the mockup's spacing.
+      - **The light.** A twelve-sided stone tower, solid to its flagged top,
+        with an iron cage and a slate cap.
+      - **Where the pieces stand.** A point in the mockup's metres is placed
+        in its cell: as far toward the real centres across the cell's edges
+        0 and 1 as the mockup puts it toward its own (`sea::point`).
+      - **The ground under them.** A pile reaches the ground the column
+        has: the town's where it laid or eased it, the planet's elsewhere.
+      - **Walker tests**, on the test coast, asking the town what the
+        walker asks:
+        - `a_walker_goes_down_the_main_pier_to_its_head`: the planks at
+          1 m all the way, 120 steps.
+        - `a_walker_comes_into_a_boathouse_from_the_sea`: every open edge
+          lets the walker by, and every walled one stops it.
+        - `a_walker_climbs_a_fish_huts_porch_and_goes_in`: from the hut
+          pier up the porch, across the deck and in at the door, both huts.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before
