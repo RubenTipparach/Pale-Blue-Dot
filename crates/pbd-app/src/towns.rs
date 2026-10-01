@@ -157,17 +157,20 @@ fn lay_on(
 }
 
 /// Build a town from its definition: its ground and its pieces, cut on the
-/// cells it was laid on. `repeat_m` is how far a texture repeats.
+/// cells it was laid on, and the masonry of `template`, the template it was
+/// laid from (slice 4c). `repeat_m` is how far a texture repeats.
 pub fn build(
     site: &Site,
     town: &Town,
+    template: Option<&Template>,
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     config: &TerrainConfig,
 ) -> Result<Laid, String> {
     let patch = patch_round(site.direction, config.radius_m, PATCH_M);
-    let built = record::build(
+    let built = record::build_town(
         town,
+        template,
         &patch,
         kits,
         repeat_m,
@@ -274,6 +277,13 @@ impl TownAssets {
             SiteKind::Walled => Some(&self.walled),
             _ => None,
         }
+    }
+
+    /// The template a stored town names, by its scene.
+    pub fn template_named(&self, scene: &str) -> Option<&Template> {
+        [&self.village, &self.walled]
+            .into_iter()
+            .find(|t| t.scene == scene)
     }
 
     /// How far each texture repeats, metres, as the cutter asks it.
@@ -587,7 +597,11 @@ fn settle(world: &mut World) {
         if (h.point(config.radius_m) - at).length() > STAND_M {
             continue;
         }
-        match build(&h.site, &h.town, &kits, &repeat, &config) {
+        let template = world
+            .resource::<TownAssets>()
+            .template_named(&h.town.template)
+            .cloned();
+        match build(&h.site, &h.town, template.as_ref(), &kits, &repeat, &config) {
             Ok(laid) => stand(world, &h, laid, 1.0),
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
@@ -662,9 +676,13 @@ pub fn stand_in_range(world: &mut World) {
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
     }
-    let (kits, repeat) = {
+    let (kits, repeat, templates) = {
         let assets = world.resource::<TownAssets>();
-        (assets.kits.clone(), assets.repeat())
+        (
+            assets.kits.clone(),
+            assets.repeat(),
+            [assets.village.clone(), assets.walled.clone()],
+        )
     };
     let dt = world
         .get_resource::<Time>()
@@ -680,9 +698,14 @@ pub fn stand_in_range(world: &mut World) {
                 s.leaving = leaving(d, s.leaving);
             } else if wanted(d) && !towns.cutting.iter().any(|(site, _)| *site == h.site.id) {
                 let id = h.site.id;
+                let template = templates
+                    .iter()
+                    .find(|t| t.scene == h.town.template)
+                    .cloned();
                 let (h, kits, repeat) = (h.clone(), kits.clone(), repeat.clone());
-                let task = AsyncComputeTaskPool::get()
-                    .spawn(async move { build(&h.site, &h.town, &kits, &repeat, &config) });
+                let task = AsyncComputeTaskPool::get().spawn(async move {
+                    build(&h.site, &h.town, template.as_ref(), &kits, &repeat, &config)
+                });
                 towns.cutting.push((id, task));
             }
         }

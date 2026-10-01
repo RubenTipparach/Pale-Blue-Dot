@@ -29,7 +29,7 @@ fn holbrook_is_laid_out_on_its_own_ground() {
     let repeats = load_repeats();
     let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
     let town = lay_out(&site, &template, &config).unwrap_or_else(|e| panic!("{e}"));
-    let laid = build(&site, &town, &kits, &repeat, &config).unwrap_or_else(|e| panic!("{e}"));
+    let laid = build(&site, &town, None, &kits, &repeat, &config).unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(
         laid.chart.cells.len(),
         town.cells.len(),
@@ -174,7 +174,7 @@ fn holbrooks_ground_is_pinned() {
     let site = holbrook();
     let config = *crate::planet::terrain_config();
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
-    let laid = build(&site, &town, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
     let digest = Ground::new(config, vec![laid.ground.clone()]).digest();
     let (footprint, margin) = laid.ground.counts();
     println!(
@@ -201,7 +201,7 @@ fn print_where_to_stand_for_the_mockup_shots() {
     let repeats = load_repeats();
     let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
     let town = lay_out(&site, &template, &config).unwrap();
-    let laid = build(&site, &town, &load_kits(), &repeat, &config).unwrap();
+    let laid = build(&site, &town, None, &load_kits(), &repeat, &config).unwrap();
     let radius = config.radius_m;
     // `--at` and `--yaw` for standing at `stand` looking along `toward`.
     let spot = |name: &str, stand: Vec3, toward: Vec3| {
@@ -338,7 +338,7 @@ fn a_door_opened_is_open_when_the_world_is_opened_again() {
     let site = holbrook();
     let template = load_template("village");
     let town = lay_out(&site, &template, &config).unwrap();
-    let laid = build(&site, &town, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
     let door = record::door_id(
         record::building_id(site.id, 0),
         laid.solids[0].doors[0].index,
@@ -385,7 +385,7 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
     let site = holbrook();
     let config = *crate::planet::terrain_config();
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
-    let laid = build(&site, &town, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
     assert_eq!(laid.rooms.len(), laid.solids.len());
     for (b, rooms) in laid.rooms.iter().enumerate() {
         assert!(!rooms.is_empty(), "building {b} has no rooms");
@@ -490,7 +490,7 @@ fn every_village_lays_and_cuts_on_its_own_ground() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(site, &town, &kits, &|_: &str| 2.0, &config)
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
             .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (footprint, margin) = laid.ground.counts();
         println!(
@@ -796,7 +796,7 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(site, &town, &kits, &|_: &str| 2.0, &config)
+        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
             .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (footprint, margin) = laid.ground.counts();
         let levels: std::collections::BTreeSet<i8> = town.levels.iter().copied().collect();
@@ -809,7 +809,12 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
             town.terrace,
             started.elapsed().as_secs_f32()
         );
-        assert_eq!(laid.solids.len(), template.buildings.len(), "{}", site.name);
+        assert_eq!(
+            laid.solids.len(),
+            template.buildings.len() + template.masonry.len(),
+            "{}: every building and every cell of the wall",
+            site.name
+        );
         assert!(levels.len() >= 3, "{}: levels {levels:?}", site.name);
         let lowest = town.terrace as f32 + f32::from(*levels.first().unwrap());
         assert!(lowest > config.sea_level_m, "{} is dry", site.name);

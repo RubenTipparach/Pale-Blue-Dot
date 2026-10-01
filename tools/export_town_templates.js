@@ -85,7 +85,25 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds"]);
         const i = idx(c, r);
         ground.push({ c, r, h: TOP[i], top: TOPMAT[i], area: AREA[i] });
       }
-      return { scene, grid: { columns: NC, rows: NR, cell_m: W }, buildings: found, ground, lamps: STREET_LAMPS.slice() };
+      // The walled town's curtain wall and gates, as `buildWalls` raises
+      // them: each wall cell from its ground (a gate from 4 m over it) to
+      // WALL_TOP, with merlons on each edge that looks out of the town and
+      // not onto more wall (`cities-in-the-world` slice 4c).
+      const masonry = [];
+      if (scene === "town") {
+        for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+          if (!isWall(c, r)) continue;
+          const base = TOP[idx(c, r)], merlons = [];
+          for (let d = 0; d < 6; d++) {
+            const [c2, r2] = nb(c, r, d);
+            if (!(isWall(c2, r2) || inTown(c2, r2))) merlons.push(d);
+          }
+          masonry.push({ c, r, from: gate(c, r) ? base + 4 : base, to: WALL_TOP, merlons });
+        }
+      }
+      const out = { scene, grid: { columns: NC, rows: NR, cell_m: W }, buildings: found, ground, lamps: STREET_LAMPS.slice() };
+      if (masonry.length) out.masonry = masonry;
+      return out;
     }, scene);
     if (TERRACED.has(scene)) layout.terraced = true;
     const file = path.join(OUT, `${scene}.json`);

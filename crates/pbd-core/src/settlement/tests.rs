@@ -1459,3 +1459,70 @@ fn a_terraced_town_is_stored_in_schema_2_and_a_flat_one_in_schema_1() {
         assert_eq!(record::from_records(&store, 7), record::Stored::Town(town));
     }
 }
+
+/// Slice 4c: the walled town's curtain wall is cut from its template on
+/// the town's stored chart. Every wall cell stands on its own cell's
+/// ground and rises to the template's top, where the walker stands on the
+/// wall walk; a body in a wall is held, and under a gate's vault it walks
+/// through; merlons stand only on edges that look out.
+#[test]
+fn the_walled_towns_wall_stands_and_its_gates_open() {
+    let template = walled();
+    assert_eq!(template.masonry.len(), 116);
+    let town = laid_village(&template);
+    let (patch, _) = patch();
+    let natural = slope();
+    let b = record::build_town(
+        &town,
+        Some(&template),
+        patch,
+        &kits(),
+        &|_: &str| 2.0,
+        RADIUS_M,
+        move |d| natural(d).floor(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(
+        b.solids.len(),
+        template.buildings.len() + template.masonry.len()
+    );
+    assert_eq!(b.rooms.len(), b.solids.len());
+    let datum = record::datum(&template);
+    let walls: BTreeSet<(i32, i32)> = template.masonry.iter().map(|m| (m.c, m.r)).collect();
+    let mut gates = 0;
+    for (m, s) in template
+        .masonry
+        .iter()
+        .zip(&b.solids[template.buildings.len()..])
+    {
+        let top = town.terrace as f32 + (m.to - datum) as f32;
+        let up = s.frame.origin.normalize();
+        let ground = s.frame.origin.length() - RADIUS_M;
+        let (floor, _) = s.stand(up * (RADIUS_M + top + 0.4), 1.0);
+        let floor = floor.unwrap_or_else(|| panic!("({}, {}): no wall walk", m.c, m.r));
+        assert!(
+            (floor - (RADIUS_M + top)).abs() < 0.01,
+            "({}, {}): the walk at {} m, not {top} m",
+            m.c,
+            m.r,
+            floor - RADIUS_M
+        );
+        let body = up * (RADIUS_M + ground + 1.0);
+        if s.solids[0].y0 > 0.5 {
+            gates += 1;
+            assert!(s.solids[0].y0 >= 3.99, "a gate's vault is 4 m up");
+            assert!(!s.holds(body, 0.9, 0.3), "({}, {}): the passage", m.c, m.r);
+        } else {
+            assert!(s.holds(body, 0.9, 0.3), "({}, {}): the wall", m.c, m.r);
+        }
+        for &d in &m.merlons {
+            assert!(
+                !walls.contains(&neighbour(m.c, m.r, usize::from(d))),
+                "({}, {}): a merlon on edge {d} faces more wall",
+                m.c,
+                m.r
+            );
+        }
+    }
+    assert_eq!(gates, 4, "two gates, two cells each");
+}

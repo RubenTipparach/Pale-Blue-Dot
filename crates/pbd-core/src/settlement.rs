@@ -67,6 +67,24 @@ pub struct Template {
     /// it is laid flat on one terrace, as the village always has been.
     #[serde(default)]
     pub terraced: bool,
+    /// Its masonry cells (slice 4c): the walled town's curtain wall and its
+    /// gates, as the mockup's `buildWalls` raises them.
+    #[serde(default)]
+    pub masonry: Vec<MasonryCell>,
+}
+
+/// One cell of masonry: a prism from `from` to `to`, layers on the mockup's
+/// grid, with two merlons on each edge in `merlons` (the mockup's
+/// directions). A gate's `from` is over its ground, and the passage under it
+/// is open.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct MasonryCell {
+    pub c: i32,
+    pub r: i32,
+    pub from: i32,
+    pub to: i32,
+    #[serde(default)]
+    pub merlons: Vec<u8>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]

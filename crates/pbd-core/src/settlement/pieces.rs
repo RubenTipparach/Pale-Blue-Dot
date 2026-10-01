@@ -1028,6 +1028,127 @@ pub fn cut_building(
     })
 }
 
+/// A merlon's width along its edge, height and thickness, metres: the
+/// mockup's `merlons` (`STONE_T` thick).
+const MERLON_M: (f32, f32, f32) = (0.62, 1.2, 0.5);
+
+/// Cut one masonry cell (slice 4c): a prism of rubble from `bottom_m` to
+/// `top_m`, metres over `radius_m`, flagged on top where the wall walk is,
+/// cut from its cell's real corners in its own frame. Its sides are drawn
+/// only where no other masonry stands against them (`walled` says which
+/// edges do). A gate's bottom is over its ground (`ground_m`), and the
+/// passage under it is open, its vault in stone.
+#[allow(clippy::too_many_arguments)]
+pub fn cut_masonry(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    patch: &Patch,
+    chart: &Chart,
+    cell: &super::MasonryCell,
+    walled: &dyn Fn(usize) -> bool,
+    radius_m: f32,
+    ground_m: f32,
+    bottom_m: f32,
+    top_m: f32,
+) -> Result<BuildingSolids, String> {
+    let (c, r) = (cell.c, cell.r);
+    let at = chart
+        .cells
+        .get(&(c, r))
+        .ok_or_else(|| format!("masonry ({c}, {r}) is not charted"))?;
+    let here = &patch.cells[at.cell];
+    let y = here.direction;
+    let along = (here.corners[at.d0] + here.corners[(at.d0 + 1) % here.corners.len()]) * 0.5
+        - here.direction;
+    let x = (along - y * along.dot(y)).normalize();
+    let frame = Frame {
+        origin: y * (radius_m + ground_m),
+        x,
+        y,
+        z: x.cross(y),
+    };
+    let mut corners = [Vec2::ZERO; 6];
+    for (d, corner) in corners.iter_mut().enumerate() {
+        let s = chart.side(c, r, d).expect("charted");
+        *corner = frame.plane(here.corners[(s + 1) % 6]);
+    }
+    let (y0, y1) = (bottom_m - ground_m, top_m - ground_m);
+    let mut sink = Sink::new(meshes, repeat_m, frame);
+    let outline = ccw(corners.to_vec());
+    sink.face(
+        "flag",
+        &outline
+            .iter()
+            .map(|p| Vec3::new(p.x, y1, p.y))
+            .collect::<Vec<_>>(),
+        Vec3::Y,
+        None,
+    );
+    if y0 > 0.01 {
+        // A gate's vault, seen from the passage under it.
+        let down: Vec<Vec3> = outline
+            .iter()
+            .rev()
+            .map(|p| Vec3::new(p.x, y0, p.y))
+            .collect();
+        sink.face("stone", &down, -Vec3::Y, None);
+    }
+    let centre = corners.iter().fold(Vec2::ZERO, |s, p| s + *p) / 6.0;
+    for d in 0..6 {
+        if walled(d) {
+            continue;
+        }
+        let (a, b) = (corners[d], corners[(d + 1) % 6]);
+        let mid = (a + b) * 0.5 - centre;
+        sink.face(
+            "rubble",
+            &[
+                Vec3::new(a.x, y0, a.y),
+                Vec3::new(b.x, y0, b.y),
+                Vec3::new(b.x, y1, b.y),
+                Vec3::new(a.x, y1, a.y),
+            ],
+            Vec3::new(mid.x, 0.0, mid.y),
+            None,
+        );
+    }
+    sink.solids.push(Solid {
+        outline: outline.clone(),
+        y0,
+        y1,
+    });
+    sink.surfaces.push(Surface::Floor {
+        outline,
+        top: y1,
+        bottom: y0,
+    });
+    let (w, h, t) = MERLON_M;
+    for &d in &cell.merlons {
+        let d = usize::from(d) % 6;
+        let (a, b) = (corners[d], corners[(d + 1) % 6]);
+        let edge = b - a;
+        let out = ((a + b) * 0.5 - centre).normalize_or_zero();
+        let ang = edge.y.atan2(edge.x);
+        for f in [0.19, 0.81] {
+            let p = a + edge * f - out * (t / 2.0);
+            sink.plain_box("rubble", p.x, y1, p.y, Vec3::new(w, h, t), ang);
+            sink.solid_box(p.x, y1, p.y, Vec3::new(w, h, t), ang);
+        }
+    }
+    let reach_m = corners.iter().map(|p| p.length()).fold(0.0f32, f32::max) + 1.0;
+    Ok(BuildingSolids {
+        frame,
+        reach_m,
+        solids: sink.solids,
+        roof_plan: Vec::new(),
+        surfaces: sink.surfaces,
+        doors: Vec::new(),
+        top_m: 0.0,
+        rooms: Meshes::new(),
+        lights: Vec::new(),
+    })
+}
+
 fn edge_ends(plan: &Plan, i: usize, d: usize) -> (Vec2, Vec2) {
     (plan.corners[i][d % 6], plan.corners[i][(d + 1) % 6])
 }

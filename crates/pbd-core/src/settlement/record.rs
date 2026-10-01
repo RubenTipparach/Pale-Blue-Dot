@@ -17,7 +17,7 @@
 
 use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::TownGround;
-use super::pieces::{BuildingSolids, Meshes, RoomLight, cut_building};
+use super::pieces::{BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry};
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
 use crate::terrain::Material;
@@ -247,15 +247,7 @@ pub fn lay(
             Some(TownCell(c, r, patch.keys[at.cell], at.d0 as u8, top))
         })
         .collect();
-    // The mockup's datum: the level most of its village stands on.
-    let mut heights: Vec<i32> = template
-        .ground
-        .iter()
-        .filter(|g| built.contains(&(g.c, g.r)))
-        .map(|g| g.h)
-        .collect();
-    heights.sort();
-    let datum = heights.get(heights.len() / 2).copied().unwrap_or(0);
+    let datum = datum(template);
     let levels = if template.terraced {
         levels_of(template, &built, &cells, datum)
     } else {
@@ -275,6 +267,25 @@ pub fn lay(
             .map(|b| Building::laid(b, datum))
             .collect(),
     })
+}
+
+/// The mockup's datum: the level most of what a template builds on stands
+/// at. A town's terrace is this level, and every height in the template is
+/// over it.
+pub fn datum(template: &Template) -> i32 {
+    let built: BTreeSet<(i32, i32)> = template
+        .built_cells()
+        .into_iter()
+        .map(|[c, r]| (c, r))
+        .collect();
+    let mut heights: Vec<i32> = template
+        .ground
+        .iter()
+        .filter(|g| built.contains(&(g.c, g.r)))
+        .map(|g| g.h)
+        .collect();
+    heights.sort();
+    heights.get(heights.len() / 2).copied().unwrap_or(0)
 }
 
 /// Each footprint cell's level over the datum, for a town on several levels
@@ -436,6 +447,64 @@ pub fn build(
         rooms,
         lights,
     })
+}
+
+/// Build a town from its definition and its template's masonry (slice 4c):
+/// [`build`], and then each masonry cell of the template the town was laid
+/// from, cut on the town's stored chart. The masonry is the template's, not
+/// the town's record: a `v1` template is frozen, so it is the same wall in
+/// every world. A masonry cell stands on its own cell's terrace and rises to
+/// the template's top over the datum; a gate's vault starts as far over its
+/// ground as the template has it. Masonry comes after the buildings, each
+/// with no rooms and no lights.
+pub fn build_town(
+    town: &Town,
+    template: Option<&Template>,
+    patch: &Patch,
+    kits: &Kits,
+    repeat_m: &dyn Fn(&str) -> f32,
+    radius_m: f32,
+    natural: impl Fn(Vec3) -> f32,
+) -> Result<Built, String> {
+    let mut built = build(town, patch, kits, repeat_m, radius_m, natural)?;
+    let Some(template) = template.filter(|t| !t.masonry.is_empty()) else {
+        return Ok(built);
+    };
+    let datum = datum(template);
+    let height: BTreeMap<(i32, i32), i32> =
+        template.ground.iter().map(|g| ((g.c, g.r), g.h)).collect();
+    let terrace: BTreeMap<(i32, i32), f32> = town
+        .cells
+        .iter()
+        .enumerate()
+        .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
+        .collect();
+    let walls: BTreeSet<(i32, i32)> = template.masonry.iter().map(|m| (m.c, m.r)).collect();
+    for m in &template.masonry {
+        let Some(&ground) = terrace.get(&(m.c, m.r)) else {
+            return Err(format!("masonry ({}, {}) is not in the town", m.c, m.r));
+        };
+        let h = height.get(&(m.c, m.r)).copied().unwrap_or(datum);
+        let bottom = ground + (m.from - h).max(0) as f32;
+        let top = town.terrace as f32 + (m.to - datum) as f32;
+        let walled = |d: usize| walls.contains(&neighbour(m.c, m.r, d));
+        let cut = cut_masonry(
+            &mut built.meshes,
+            repeat_m,
+            patch,
+            &built.chart,
+            m,
+            &walled,
+            radius_m,
+            ground,
+            bottom,
+            top,
+        )?;
+        built.rooms.push(Meshes::new());
+        built.lights.push(Vec::new());
+        built.solids.push(cut);
+    }
+    Ok(built)
 }
 
 /// The settlement's record body: everything of the town but its buildings,
