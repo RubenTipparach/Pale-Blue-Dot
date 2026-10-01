@@ -1521,7 +1521,15 @@ so the first can be looked at before it can be walked into.
     have built.
     - Their dressing is its own step, as a new template version for new
       towns that leaves `v1` as it is.
-    - The harbour is new on this branch, so no save from `main` holds one.
+    - The harbour reached `main` with #20, merged 2026-10-01 at 13:26, so
+      a save made since holds its harbours. They were stored before the
+      dressing and the cog charted their cells over the water.
+      - In such a save, the dressing on dry ground and on the piers
+        stands. What stands over cells the save never charted (the slip,
+        the cog and its gangplank) is left out and counted (`Built`'s
+        `dressing_skipped`, in the town's log line).
+      - Nothing a player made is moved or removed. The dressing is derived
+        and stands over whatever is there, as the lamps do.
     - Recommendation taken (ask only with screenshots).
   - **The cost.** The dressing is triangles and solids in each harbour's
     town meshes, logged with the town's count. Its frame cost is not
