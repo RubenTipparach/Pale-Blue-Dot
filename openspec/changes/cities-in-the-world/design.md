@@ -1065,8 +1065,10 @@ so the first can be looked at before it can be walked into.
         finger piers), planks on piles a metre over the water;
       - the mole (a strip of flags 1.2 m up across the harbour mouth) and
         its light, a round stone tower 8 m high with a beacon fire;
-      - 21 street lamps and 6 lanterns at the piers' ends;
-      - besides these: 23 boats and the cog, the gangplank, the fish
+      - 21 street lamps, 5 lanterns along the quay and 5 at the piers'
+        ends;
+      - besides these: two dozen boats, the cog with a lantern on its
+        stern, the gangplank, the fish
         market's stalls, nets, racks, pots, barrels and crates, the shipyard's
         hull in frame and its slip, and the people.
     - **It stands on the sea.** Every other town stands on its site's
@@ -1109,11 +1111,10 @@ so the first can be looked at before it can be walked into.
         both faces, 0.25 m, thatch, a plank floor). Their textures are
         already exported.
       - **An open side.** A building's `open` edges get no wall: the
-        boathouses' seaward edges, the mockup's `skipWall`. The roof stands
-        on posts at the open corners.
+        boathouses' seaward edges, the mockup's `skipWall`.
       - **Piers.** A pier is a deck of planks between two points, its width,
-        and its height, with a pile every 2 m on each side down to the
-        natural ground under it. Its top is a floor and its edges are open.
+        and its height, with a pile on each side about every 2.2 m (the
+        mockup's `L / 2.2`) down to the natural ground under it. Its top is a floor and its edges are open.
         The template writes each pier as the mockup's `bridge` call gives it.
       - **Stilts, a deck and a porch stair.** These are the fish huts'. The
         swamp (4h) builds its village from the same three.
