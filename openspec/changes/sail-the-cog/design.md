@@ -105,6 +105,51 @@ rule, built for the first time.
   is saved where it came to.
 - `RECORD_VERSION` goes to 2. A version 1 file reads with no deck positions.
 
+**6. The order of building (written 2026-10-01).** The owner, on the
+harbour mockup: "We're good on the mockup already. Approved. Implement in
+game". The cog is fourth in that order, after the street lamps, the moored
+boats and the dressing (`cities-in-the-world`, "4d as built"). What it
+builds on, measured on this branch:
+- **The harbour stands in the game without its cog.** The export leaves the
+  cog out, with its stern lantern, its barrel and crate, and the gangplank.
+- **The pieces it needs are partly built:**
+  - the lofted hull (`pieces::dressing::Hull`, the mockup's `hullSection`);
+  - the ramp surface, which is the gangplank's;
+  - thin solids and surfaces, flights, rails and the walker's `stand` over
+    them (`tenebris-towns` 1 and the towns' slice 2b).
+- **`LocalFrame` still only translates**, and the walker still stands only
+  on fixed pieces (`walking::Structures`) and the terrain.
+
+So it comes in four steps, each with its shots. Recommendation taken (ask
+only with screenshots).
+1. **The cog moored.** The ship piece (`tenebris-towns` 3d) stands at its
+   berth by the main pier, as the mockup draws it, cut on the harbour's
+   chart in its own frame as the light is:
+   - the hull, the deck following its plan, the rail with its gangway gap;
+   - the castles and the stair to the aftcastle;
+   - the mast, the yard with its sail furled, and the shrouds;
+   - its barrel and crate;
+   - the gangplank, a ramp from the pier up to the deck.
+
+   It is derived from the template, as the dressing is, and never saved. It
+   does not move. Verify: core walker tests up the gangplank, across the
+   deck and up the stair to the aftcastle, and shots beside the mockup's
+   `cog` and `castle` views.
+2. **A turning frame and a moving deck** (tasks 1.1, 3.1, 3.2). `LocalFrame`
+   gains its orientation and angular velocity. The walker keeps a local pose
+   on a deck. It is tried first on the moored cog made to bob and swing at
+   its mooring, where the deck's motion is small and known.
+3. **The cog as a craft** (tasks 2.1 to 2.3). `Kind::Cog`, drawn from the
+   same piece. Each harbour's cog is made once at its berth, as the moored
+   boats are (`cities-in-the-world` 4.2b), and the step 1 piece stops being
+   cut. Nothing saved has to move, because step 1 saved nothing.
+4. **The helm and the saves** (tasks 4.1, 5.1). Task 5.2 becomes the step 3
+   handover: there is no building cog in any save to turn into a craft.
+
+- **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
+  in the voxel field, which cannot sail. A light carried on a craft is part
+  of the craft's drawing.
+
 ## Risks / Trade-offs
 
 - [The heel makes the deck a slope steeper than the walker stands on] → The
