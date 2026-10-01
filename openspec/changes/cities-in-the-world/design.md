@@ -963,6 +963,30 @@ so the first can be looked at before it can be walked into.
       - A walled town that a 4b build stored has no masonry of its own, and
         it takes the wall at its first open with 4c. The v1 town template
         takes its masonry there, before any v1 walled town is shipped.
+    - **The towers and the keep, how they are cut (written 2026-10-01).**
+      - Both are buildings, exported from the mockup's own `wallTower` and
+        keep code as building definitions. A definition gains `newel` (how
+        high the stair climbs, how high its walls rise, and its exits: an
+        edge and a height each) and `parapet` (a flat roof that can be
+        walked on, with merlons on its outer edges).
+      - **A tower** is one cell, a single storey as high as its walls
+        (`wall_top`, 3 m over the wall walk).
+        - Its newel climbs to the walk at the mockup's rate, a turn every
+          3 m, from the entry the mockup chose so that the climb ends facing
+          the wall.
+        - Its exit is a doorway at the walk's height in the wall's edge.
+        - Its cone roof sits on its walls, as a hut's does.
+      - **The keep** is the ring of six cells and its newel cell: three
+        storeys of 0.6 m rubble walls.
+        - The newel climbs on to the roof, with a doorway onto each floor
+          and the roof on its entry edge.
+        - Its roof over the ring is flat and walkable, with merlons on the
+          outer edges.
+        - The newel's own walls rise 2.6 m over the roof to a cone of slate,
+          the turret.
+      - Both are stored as buildings are, so a later change to how they are
+        cut reaches every keep, and a change to the definitions is a new
+        template.
     - **Export.** The exporter calls the mockup's own `isWall`, `gate` and
       `inTown`, and writes each wall cell's cell, its bottom (its ground, or
       4 m over it at a gate), `WALL_TOP` and its merlon edges. The game
