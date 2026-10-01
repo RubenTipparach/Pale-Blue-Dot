@@ -1501,6 +1501,39 @@ so the first can be looked at before it can be walked into.
     - Export: the village and the walled town re-export byte-identical.
     - Shots of the fish market and the nets at 11:00 and 22:30, and of the
       shipyard at 11:00.
+  - **As built (2026-10-01).**
+    - **The export** writes 73 things and the shipyard: 4 stalls, 3 net
+      racks, 2 fish racks, 16 pots, 5 barrels, 6 crates, 12 bollards, 6
+      oars and 4 boats on land.
+      - The coopers' barrels and crate stand inside their houses. They are
+        furniture, which every town's houses take in their own step, and
+        are left out.
+      - A pot in a pile is written with its lift over the pile's foot, so
+        the pile stands as a pile on whatever is under it.
+      - `village.json`, `town.json` and the 70 painted textures re-export
+        byte-identical. `net.png` is new, marked `cut` in the manifest.
+    - **Placing a thing.** Its frame is read from the chart at its point and
+      a metre east and south of it. The mockup's offsets go through that
+      local map, which carries the chart's turn, any mirroring and its
+      stretch together. Those cells join the harbour's cells over the water.
+    - **Two departures from the mockup**, both on the beached rowboats:
+      - the mockup stands each one a hull's depth over its trestles, and
+        here its gunwale rests on them;
+      - the mockup runs its trestles along the keel, and here they run
+        across the boat.
+    - **A harbour stored before this** charted no cells for its slip, so a
+      thing off the chart is left out and counted, not an error. The town's
+      log line names how many stand and how many are off.
+    - **The net** is drawn alpha-masked at 0.5 through the field-lit
+      material's own `alpha_discard`, and left out of the town's casters.
+    - `a_harbours_dressing_stands_on_what_is_under_it` (18 or more things
+      on a pier's deck, the rest on the ground),
+      `a_walker_is_held_by_a_stall_and_goes_round_a_barrel`,
+      `a_walker_goes_down_the_slip_into_the_water` and, in the app,
+      `every_harbour_lays_on_its_sea_and_cuts` (each of the six harbours
+      has 76 dressing pieces, none off its chart) hold it.
+    - The main pier's walker test now goes by the pier's own pieces: the
+      mockup's crate at the head stands on the pier's middle.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before

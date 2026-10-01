@@ -1,6 +1,7 @@
 // The towns mockup's painted textures (docs/mockups/towns.html), exported by
 // tools/export_town_textures.js. `repeat_m` is the metres one repeat covers
-// on a wall or a floor; 0 is a texture mapped once per face.
+// on a wall or a floor; 0 is a texture mapped once per face. A `cut` texture
+// is cut out where it is clear, as the mockup's net is.
 (
   textures: [
     (name: "grass", width: 32, height: 32, repeat_m: 2.0),
@@ -73,5 +74,6 @@
     (name: "roofsnow", width: 32, height: 32, repeat_m: 2.0),
     (name: "caveceil", width: 32, height: 32, repeat_m: 2.0),
     (name: "rockface", width: 32, height: 32, repeat_m: 2.0),
+    (name: "net", width: 32, height: 32, repeat_m: 1.0, cut: true),
   ],
 )

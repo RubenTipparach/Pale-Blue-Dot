@@ -89,6 +89,138 @@ pub struct Template {
     /// The harbour's boats on the water (task 4.2b).
     #[serde(default)]
     pub boats: Vec<Boat>,
+    /// The things it stands about its lanes, quay and piers (task 4.2c).
+    #[serde(default)]
+    pub dressing: Vec<Dress>,
+    /// The harbour's shipyard (task 4.2c).
+    #[serde(default)]
+    pub shipyard: Option<Shipyard>,
+}
+
+/// A thing a town stands about (task 4.2c), where the mockup puts it:
+/// `(x, z)` in its metres, `y` the height it stands at there (the game
+/// stands it on what is under it), and `angle` its turn from `x` toward
+/// `z`.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Dress {
+    /// A market stall: posts, a counter, a sloped awning of `cloth` and its
+    /// goods on the counter.
+    Stall {
+        x: f32,
+        y: f32,
+        z: f32,
+        cloth: String,
+        goods: Vec<Goods>,
+    },
+    /// Nets hung to dry on three posts and a bar.
+    NetRack {
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+    },
+    /// Fish hung to dry on two posts and a bar.
+    FishRack {
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+    },
+    /// A lobster pot, `lift_m` over its pile's foot at `y`.
+    Pot {
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+        lift_m: f32,
+    },
+    Crate {
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+        side_m: f32,
+    },
+    Barrel {
+        x: f32,
+        y: f32,
+        z: f32,
+    },
+    Bollard {
+        x: f32,
+        y: f32,
+        z: f32,
+        radius_m: f32,
+        height_m: f32,
+    },
+    /// An oar stood on end.
+    Oar {
+        x: f32,
+        y: f32,
+        z: f32,
+    },
+    /// A boat on land: keel up on trestles where `beached`, else on its
+    /// keel. `boat` is the mockup's kind (`rowboat`, `sail`, `canoe`).
+    Boat {
+        boat: String,
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+        beached: bool,
+    },
+}
+
+impl Dress {
+    /// Where it stands in the mockup's metres, `(x, z)`.
+    pub fn at(&self) -> (f32, f32) {
+        match *self {
+            Dress::Stall { x, z, .. }
+            | Dress::NetRack { x, z, .. }
+            | Dress::FishRack { x, z, .. }
+            | Dress::Pot { x, z, .. }
+            | Dress::Crate { x, z, .. }
+            | Dress::Barrel { x, z, .. }
+            | Dress::Bollard { x, z, .. }
+            | Dress::Oar { x, z, .. }
+            | Dress::Boat { x, z, .. } => (x, z),
+        }
+    }
+
+    /// Its height in the mockup, metres over the template's 0 m.
+    pub fn y(&self) -> f32 {
+        match *self {
+            Dress::Stall { y, .. }
+            | Dress::NetRack { y, .. }
+            | Dress::FishRack { y, .. }
+            | Dress::Pot { y, .. }
+            | Dress::Crate { y, .. }
+            | Dress::Barrel { y, .. }
+            | Dress::Bollard { y, .. }
+            | Dress::Oar { y, .. }
+            | Dress::Boat { y, .. } => y,
+        }
+    }
+}
+
+/// A box of goods on a stall's counter, of `material`.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Goods {
+    pub material: String,
+    pub x: f32,
+    pub z: f32,
+}
+
+/// The harbour's shipyard (task 4.2c): a hull in frame on its keel blocks
+/// at `(x, z)`, along `x`, its slip down into the water, and a stack of
+/// planks at `planks` (`[x, y, z]`), all in the mockup's metres.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Shipyard {
+    pub x: f32,
+    pub z: f32,
+    pub slip: Pier,
+    pub planks: [f32; 3],
 }
 
 /// A boat on the water (task 4.2b): the mockup's kind (`rowboat`, `sail`,

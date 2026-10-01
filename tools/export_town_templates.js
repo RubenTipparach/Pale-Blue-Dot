@@ -60,12 +60,69 @@ const SEA = new Set(["coast"]);
       // eslint-disable-next-line no-global-assign
       boat = function (type, x, z, ang, o = {}) {
         if (sea && !o.beached && !o.still) boats.push({ kind: type, x, z, heading: ang });
+        // A boat on land is dressing: keel up on trestles on the beach, or on
+        // the sand in a boathouse (task 4.2c).
+        else if (sea) dressing.push({ kind: "boat", boat: type, x, y: o.beached ? o.y ?? 0 : (o.wl ?? 0) - BOATS[type].draft, z, angle: ang, beached: !!o.beached });
         return innerBoat(type, x, z, ang, o);
       };
       // eslint-disable-next-line no-global-assign
       bridge = function (A, B, o = {}) {
         if (sea && o.piles !== undefined) piers.push({ from: A.slice(), to: B.slice(), width_m: o.width ?? 2 });
+        if (sea && o.label === "The slip") slip = { from: A.slice(), to: B.slice(), width_m: o.width ?? 1.2 };
         return innerBridge(A, B, o);
+      };
+      // The harbour's dressing (task 4.2c), each thing where the mockup puts
+      // it, after its own `fitOut`: the leaf calls are wrapped, and a flag
+      // says which dressing call they are inside. The cog's barrel and
+      // crate are the cog's (`sail-the-cog`). What stands in a house (a
+      // cooper's barrels) is its furniture, not the town's dressing.
+      const dressing = [];
+      let slip = null, inside = 0, // in the cog or a house
+        inStall = null, inCrate = 0, potFoot = null;
+      const innerHouse = townHouse, innerBox = box, innerSolidBox = solidBox, innerSolidCyl = solidCyl, innerCog = cog,
+        innerStall = marketStall, innerCrate = crate, innerNetRack = netRack, innerFishRack = fishRack, innerPots = lobsterPots;
+      // A pile of pots: each pot, and how far over the pile's foot it sits.
+      // eslint-disable-next-line no-global-assign
+      lobsterPots = function (x, y, z, n) { potFoot = y; try { return innerPots(x, y, z, n); } finally { potFoot = null; } };
+      // eslint-disable-next-line no-global-assign
+      cog = function (...a) { inside++; try { return innerCog(...a); } finally { inside--; } };
+      // eslint-disable-next-line no-global-assign
+      townHouse = function (...a) { inside++; try { return innerHouse(...a); } finally { inside--; } };
+      // eslint-disable-next-line no-global-assign
+      marketStall = function (c, r, cloth, y, goods) {
+        const stall = { kind: "stall", x: cx(c, r), y, z: cz(c, r), cloth, goods: [] };
+        inStall = stall;
+        try { return innerStall(c, r, cloth, y, goods); } finally { inStall = null; if (sea) dressing.push(stall); }
+      };
+      // eslint-disable-next-line no-global-assign
+      crate = function (...a) { inCrate++; try { return innerCrate(...a); } finally { inCrate--; } };
+      // eslint-disable-next-line no-global-assign
+      netRack = function (x, y, z, ang) {
+        if (sea) dressing.push({ kind: "net_rack", x, y, z, angle: ang });
+        return innerNetRack(x, y, z, ang);
+      };
+      // eslint-disable-next-line no-global-assign
+      fishRack = function (x, y, z, ang) {
+        if (sea) dressing.push({ kind: "fish_rack", x, y, z, angle: ang });
+        return innerFishRack(x, y, z, ang);
+      };
+      // eslint-disable-next-line no-global-assign
+      box = function (m, x, y0, z, sx, sy, sz, ang = 0, uvf) {
+        if (sea && inStall && sy === 0.14) inStall.goods.push({ material: m, x, z });
+        if (sea && !inside && m === "timber" && sx === 0.07 && sy === 2.6) dressing.push({ kind: "oar", x, y: y0, z });
+        return innerBox(m, x, y0, z, sx, sy, sz, ang, uvf);
+      };
+      // eslint-disable-next-line no-global-assign
+      solidBox = function (m, x, y0, z, sx, sy, sz, ang = 0, opt = {}) {
+        if (sea && !inside && opt.label === "Lobster pots") dressing.push({ kind: "pot", x, y: potFoot ?? y0, z, angle: ang, lift_m: y0 - (potFoot ?? y0) });
+        else if (sea && !inside && inCrate) dressing.push({ kind: "crate", x, y: y0, z, angle: ang, side_m: sx });
+        return innerSolidBox(m, x, y0, z, sx, sy, sz, ang, opt);
+      };
+      // eslint-disable-next-line no-global-assign
+      solidCyl = function (m, x, y0, z, r, h, opt = {}) {
+        if (sea && !inside && m === "barrel") dressing.push({ kind: "barrel", x, y: y0, z });
+        else if (sea && opt.label === "Bollard") dressing.push({ kind: "bollard", x, y: y0, z, radius_m: r, height_m: h });
+        return innerSolidCyl(m, x, y0, z, r, h, opt);
       };
       // eslint-disable-next-line no-global-assign
       stiltHouse = function (o) {
@@ -148,6 +205,16 @@ const SEA = new Set(["coast"]);
         stiltHouse = innerStilt;
         lantern = innerLantern;
         boat = innerBoat;
+        cog = innerCog;
+        townHouse = innerHouse;
+        marketStall = innerStall;
+        crate = innerCrate;
+        netRack = innerNetRack;
+        fishRack = innerFishRack;
+        lobsterPots = innerPots;
+        box = innerBox;
+        solidBox = innerSolidBox;
+        solidCyl = innerSolidCyl;
       }
       // A stair tower is its newel's one cell; the keep is its newel's cell
       // and the ring round it, its doors and windows as its walls were cut.
@@ -204,6 +271,16 @@ const SEA = new Set(["coast"]);
         // The mole's light: the round solid the scene labels so.
         const light = SOLIDS.find((x) => x.type === "circ" && x.label === "The light");
         if (light) out.light = { x: light.x, z: light.z, radius_m: light.r, base_m: Math.round(light.y0), top_m: light.y1 };
+        out.dressing = dressing;
+        // The shipyard: its hull in frame where the scene's solid labels it,
+        // the slip, and the stack of planks.
+        const hull = SOLIDS.find((x) => x.label === "A hull in frame");
+        const planks = SOLIDS.find((x) => x.label === "Planks");
+        const mid = (pts) => pts.reduce(([a, b], [x, z]) => [a + x / pts.length, b + z / pts.length], [0, 0]);
+        if (hull && slip && planks) {
+          const [hx, hz] = mid(hull.pts), [px, pz] = mid(planks.pts);
+          out.shipyard = { x: hx, z: hz, slip, planks: [px, planks.y0, pz] };
+        }
       }
       return out;
     }, { scene, SEA_SCENES: [...SEA] });

@@ -1996,7 +1996,7 @@ fn feet_on(b: &record::Built, p: Vec3) -> Option<f32> {
 
 /// Slice 4d: the walker along the harbour's main pier from the quay to its
 /// head, the feet on the planks at 1 m over the sea all the way and the
-/// body in nothing.
+/// body in nothing of the pier's.
 #[test]
 fn a_walker_goes_down_the_main_pier_to_its_head() {
     let (template, _, b) = cut_harbour();
@@ -2029,9 +2029,12 @@ fn a_walker_goes_down_the_main_pier_to_its_head() {
             "the deck at {} m",
             feet - RADIUS_M
         );
+        // The pier's own pieces: its dressing (a crate at the head, on the
+        // pier's middle) is the walker's to go round.
         let body = d * (deck + 0.95);
+        let pieces = &b.solids[..b.solids.len() - b.dressing];
         assert!(
-            !b.solids.iter().any(|s| s.holds(body, 0.9, 0.3)),
+            !pieces.iter().any(|s| s.holds(body, 0.9, 0.3)),
             "held on the pier at {t:.2}"
         );
     }
@@ -2197,4 +2200,139 @@ fn a_towns_lamps_stand_over_their_cells() {
         lamps.iter().filter(|l| l.altitude_m == 1.0).count() >= on_piers,
         "a pier's lantern at the pier's metre"
     );
+}
+
+/// The harbour's dressing pieces (task 4.2c), the last of its cut pieces,
+/// each with what the template says it is: its things in order, then the
+/// shipyard's hull, planks and slip.
+fn dressing_of(b: &record::Built) -> &[pieces::BuildingSolids] {
+    &b.solids[b.solids.len() - b.dressing..]
+}
+
+/// Task 4.2c: every dressing thing of the harbour stands, on the chart, on
+/// what is under it: a pier's deck where it is on a pier, else the ground
+/// as the town laid it.
+#[test]
+fn a_harbours_dressing_stands_on_what_is_under_it() {
+    let (template, _, b) = cut_harbour();
+    let natural = coast();
+    assert_eq!(b.dressing_skipped, 0, "things left off the chart");
+    assert_eq!(b.dressing, template.dressing.len() + 3);
+    let rest = &b.solids[..b.solids.len() - b.dressing];
+    let mut on_decks = 0;
+    for (k, s) in dressing_of(&b).iter().enumerate() {
+        if s.surfaces
+            .iter()
+            .any(|x| matches!(x, pieces::Surface::Ramp { .. }))
+        {
+            continue;
+        }
+        let d = s.frame.origin.normalize();
+        let at = s.frame.origin.length();
+        let n = natural(d).floor();
+        let ground = RADIUS_M + b.ground.at(d).map_or(n, |g| g.height(n));
+        let deck = rest
+            .iter()
+            .filter_map(|x| x.stand(d * (at + 0.01), 0.3).0)
+            .max_by(f32::total_cmp);
+        let on_deck = deck.is_some_and(|h| (h - at).abs() < 0.02);
+        assert!(
+            on_deck || (ground - at).abs() < 0.02,
+            "thing {k} at {:.2} m stands on nothing: the ground at {:.2} m, a deck at {:?}",
+            at - RADIUS_M,
+            ground - RADIUS_M,
+            deck.map(|h| h - RADIUS_M)
+        );
+        on_decks += usize::from(on_deck);
+    }
+    // The pier heads' barrels and crates and the main pier's bollards.
+    assert!(on_decks >= 18, "{on_decks} things on the piers");
+}
+
+/// Task 4.2c: a walker is held by a stall's counter and not by the street
+/// in front of it, and goes round a barrel, held at it and free a step off
+/// it on every side.
+#[test]
+fn a_walker_is_held_by_a_stall_and_goes_round_a_barrel() {
+    let (template, _, b) = cut_harbour();
+    let (patch, _) = patch();
+    let cell_m = template.grid.cell_m;
+    let body = |s: &pieces::BuildingSolids, x: f32, z: f32| {
+        let d = sea::point(&b.chart, patch, x, z, cell_m).expect("on the chart");
+        s.holds(d * (s.frame.origin.length() + 0.95), 0.9, 0.3)
+    };
+    let (mut stalls, mut barrels) = (0, 0);
+    for (dress, s) in template.dressing.iter().zip(dressing_of(&b)) {
+        match *dress {
+            Dress::Stall { x, z, .. } => {
+                assert!(body(s, x, z - 0.3), "a stall's counter holds the walker");
+                assert!(
+                    !body(s, x, z + 1.3),
+                    "the street in front of a stall is open"
+                );
+                stalls += 1;
+            }
+            Dress::Barrel { x, z, .. } => {
+                assert!(body(s, x, z), "a barrel holds the walker");
+                // A step off it in its own frame's metres: it stands at the
+                // frame's middle.
+                for k in 0..8 {
+                    let a = k as f32 / 8.0 * std::f32::consts::TAU;
+                    let p = s.frame.world(Vec3::new(0.7 * a.cos(), 0.95, 0.7 * a.sin()));
+                    assert!(!s.holds(p, 0.9, 0.3), "held 0.7 m off a barrel");
+                }
+                barrels += 1;
+            }
+            _ => {}
+        }
+    }
+    assert_eq!((stalls, barrels), (4, 5));
+}
+
+/// Task 4.2c: the walker down the shipyard's slip from the beach into the
+/// water, the feet going down with it and never falling, the body in
+/// nothing, ending under the sea's surface.
+#[test]
+fn a_walker_goes_down_the_slip_into_the_water() {
+    let (_, town, b) = cut_harbour();
+    let s = dressing_of(&b)
+        .iter()
+        .find(|s| {
+            s.surfaces
+                .iter()
+                .any(|x| matches!(x, pieces::Surface::Ramp { .. }))
+        })
+        .expect("the slip");
+    let Some(&pieces::Surface::Ramp {
+        foot, dir, len, to, ..
+    }) = s.surfaces.first()
+    else {
+        panic!("the slip is a ramp");
+    };
+    let floor = s.frame.origin.length();
+    // From half a metre down it: its head lies against the hull in frame.
+    let mut feet = to * 0.05;
+    for k in 1..=80 {
+        let t = 0.05 + 0.95 * k as f32 / 80.0;
+        let p = foot + dir * (len * t);
+        let at = s.frame.world(Vec3::new(p.x, feet + 0.01, p.y));
+        let next = feet_on(&b, at).map(|f| f - floor);
+        let next = next.unwrap_or_else(|| panic!("nothing underfoot at {:.1} m", len * t));
+        assert!(next > feet - 0.1, "fell from {feet} to {next}");
+        let body = s.frame.world(Vec3::new(p.x, next + 0.95, p.y));
+        assert!(
+            !b.solids.iter().any(|x| x.holds(body, 0.9, 0.3)),
+            "held at {:.1} m down the slip",
+            len * t
+        );
+        feet = next;
+    }
+    // On the ramp at its foot, or on the seabed where the bed comes up over
+    // it.
+    assert!(
+        feet > to - 0.03 && feet < to + 0.3,
+        "at its foot, {feet} against {to}"
+    );
+    let sea = RADIUS_M + town.terrace as f32;
+    assert!(floor + feet < sea - 1.0, "its foot in the water");
 }

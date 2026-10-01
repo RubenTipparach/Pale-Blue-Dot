@@ -41,7 +41,7 @@ use pbd_core::settlement::sea;
 use pbd_core::settlement::{Kits, Template};
 use pbd_core::sites::{Site, SiteKind};
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -93,19 +93,39 @@ struct ManifestTexture {
     #[allow(dead_code)]
     height: u32,
     repeat_m: f32,
+    /// Cut out where it is clear, as the mockup's net is (task 4.2c).
+    #[serde(default)]
+    cut: bool,
+}
+
+fn load_manifest() -> Manifest {
+    let path = asset("textures/settlement/manifest.ron");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    ron::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
 /// Metres one repeat of each town texture covers, from its manifest.
 pub fn load_repeats() -> BTreeMap<String, f32> {
-    let path = asset("textures/settlement/manifest.ron");
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-    let manifest: Manifest =
-        ron::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-    manifest
+    load_manifest()
         .textures
         .into_iter()
         .map(|t| (t.name, t.repeat_m))
         .collect()
+}
+
+/// The town textures cut out where they are clear (task 4.2c), from the
+/// manifest: drawn alpha-masked, and casting no shadow, since the shadow
+/// pass casts whole triangles.
+pub fn cut_textures() -> &'static BTreeSet<String> {
+    static CUT: std::sync::OnceLock<BTreeSet<String>> = std::sync::OnceLock::new();
+    CUT.get_or_init(|| {
+        load_manifest()
+            .textures
+            .into_iter()
+            .filter(|t| t.cut)
+            .map(|t| t.name)
+            .collect()
+    })
 }
 
 /// A town built from its record, before it is in the world.
@@ -124,6 +144,9 @@ pub struct Laid {
     pub rooms: Vec<Meshes>,
     /// What burns in each building's rooms (decision 7a).
     pub lights: Vec<Vec<RoomLight>>,
+    /// Its dressing things standing, and those left off its chart (task
+    /// 4.2c).
+    pub dressing: (usize, usize),
 }
 
 /// The patch of finest cells round a direction.
@@ -213,6 +236,7 @@ pub fn build(
         solids: built.solids,
         rooms: built.rooms,
         lights: built.lights,
+        dressing: (built.dressing, built.dressing_skipped),
     })
 }
 
@@ -869,8 +893,14 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     let entity = spawn_town(world, &laid);
     spawn_doors(world, entity, site.id, &solids);
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
+    let (things, off) = laid.dressing;
+    let dressing = match (things, off) {
+        (0, 0) => String::new(),
+        (n, 0) => format!(", {n} dressing things"),
+        (n, off) => format!(", {n} dressing things ({off} off its chart)"),
+    };
     info!(
-        "{} stands: {} buildings, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}",
+        "{} stands: {} buildings{dressing}, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}",
         laid.name,
         held.town.buildings.len(),
         laid.meshes.len(),
@@ -1122,11 +1152,12 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
     let centre = world
         .get_resource::<PlanetRenderFrame>()
         .map_or(Vec3::ZERO, |f| f.center.as_vec3());
-    let parts: Vec<(Mesh, Handle<Image>)> = {
+    let parts: Vec<(Mesh, Handle<Image>, bool)> = {
         let assets = world.resource::<AssetServer>();
+        let cut = cut_textures();
         laid.meshes
             .iter()
-            .map(|(name, buf)| (to_mesh(buf), texture(assets, name)))
+            .map(|(name, buf)| (to_mesh(buf), texture(assets, name), cut.contains(name)))
             .collect()
     };
     // Each building's rooms, apart: they take the room's own share of the
@@ -1158,13 +1189,13 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         .id();
     let pieces = parts
         .into_iter()
-        .map(|(mesh, image)| (None, mesh, Some(image)))
+        .map(|(mesh, image, cut)| (None, mesh, Some(image), cut))
         .chain(
             rooms
                 .into_iter()
-                .map(|(b, mesh, image)| (Some(b), mesh, image)),
+                .map(|(b, mesh, image)| (Some(b), mesh, image, false)),
         );
-    for (room, mesh, image) in pieces {
+    for (room, mesh, image, cut) in pieces {
         let flame = image.is_none();
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
         let material = world
@@ -1173,6 +1204,12 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
                 Some(image) => StandardMaterial {
                     base_color_texture: Some(image),
                     perceptual_roughness: 0.93,
+                    // A net is see-through between its cords (task 4.2c).
+                    alpha_mode: if cut {
+                        AlphaMode::Mask(0.5)
+                    } else {
+                        AlphaMode::Opaque
+                    },
                     ..default()
                 },
                 None => StandardMaterial {
@@ -1214,10 +1251,14 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
 
 /// What a town casts into the sun's cascades (`sun-shadows` task 5.1): every
 /// triangle of its outside and its rooms, a floor shading the room under it,
-/// and not its doors, which swing.
+/// and not its doors, which swing, nor what is cut out (a net), which would
+/// cast as a solid sheet.
 pub fn casting(laid: &Laid) -> Vec<[f32; 3]> {
+    let cut = cut_textures();
     laid.meshes
-        .values()
+        .iter()
+        .filter(|(name, _)| !cut.contains(*name))
+        .map(|(_, buf)| buf)
         .chain(laid.rooms.iter().flat_map(|m| {
             m.iter()
                 .filter(|(name, _)| name.as_str() != FLAME)

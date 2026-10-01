@@ -14,6 +14,7 @@ use super::{BuildingDef, HUT_STOREY_M, Kit, RoofKind, STOREY_M, neighbour};
 use glam::{Vec2, Vec3};
 use std::collections::BTreeMap;
 
+pub mod dressing;
 pub mod harbour;
 
 /// Floor boards and joists, metres.
@@ -134,6 +135,18 @@ pub enum Surface {
         rise: f32,
         risers: u32,
     },
+    /// A straight slope (task 4.2c): from `foot` along `dir` for `len`,
+    /// `half_width` either side, its top from `from` at the foot to `to` at
+    /// the far end, planks `depth` thick. A shipyard's slip, a gangplank.
+    Ramp {
+        foot: Vec2,
+        dir: Vec2,
+        len: f32,
+        half_width: f32,
+        from: f32,
+        to: f32,
+        depth: f32,
+    },
     /// A newel stair in one cell: `start` the angle it climbs from, turning
     /// `sense` (+1 or -1), a turn every `turn_m` from `base` to `top`, with
     /// `landing` radians of floor past the top and `margin` before the
@@ -188,6 +201,23 @@ impl Surface {
                 let top = base + (u / ((n - 1.0) * run)).clamp(0.0, 1.0) * n * rise;
                 // Boxed below, down to the floor it stands on.
                 out.push((base - 0.01, top));
+            }
+            Surface::Ramp {
+                foot,
+                dir,
+                len,
+                half_width,
+                from,
+                to,
+                depth,
+            } => {
+                let d = p - *foot;
+                let u = d.dot(*dir);
+                if u < 0.0 || u > *len || d.perp_dot(*dir).abs() > *half_width {
+                    return;
+                }
+                let top = from + (to - from) * u / len;
+                out.push((top - depth, top));
             }
             Surface::Newel {
                 centre,

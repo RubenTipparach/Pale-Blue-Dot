@@ -17,7 +17,9 @@
 
 use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::{Lamp, TownGround};
-use super::pieces::{BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry, harbour};
+use super::pieces::{
+    BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry, dressing, harbour,
+};
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
 use crate::terrain::Material;
@@ -491,6 +493,10 @@ pub struct Built {
     /// What burns in each building's rooms (decision 7a), taken out of its
     /// solids.
     pub lights: Vec<Vec<RoomLight>>,
+    /// How many of its dressing things stand (task 4.2c), and how many were
+    /// left out for standing off its chart.
+    pub dressing: usize,
+    pub dressing_skipped: usize,
 }
 
 /// A town's chart and ground from its definition, without cutting a piece:
@@ -628,6 +634,8 @@ pub fn build(
         solids,
         rooms,
         lights,
+        dressing: 0,
+        dressing_skipped: 0,
     })
 }
 
@@ -681,6 +689,20 @@ pub fn build_town(
                 terrace,
             )?);
         }
+        // Its dressing (task 4.2c), each thing on what is under it.
+        let (things, skipped) = dressing::dressing(
+            &mut built.meshes,
+            repeat_m,
+            patch,
+            &built.chart,
+            template,
+            radius_m,
+            terrace,
+            &under,
+        );
+        built.dressing = things.len();
+        built.dressing_skipped = skipped;
+        cut.extend(things);
         for c in cut {
             built.rooms.push(Meshes::new());
             built.lights.push(Vec::new());

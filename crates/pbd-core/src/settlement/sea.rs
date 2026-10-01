@@ -77,8 +77,9 @@ pub fn boat_pose(
 }
 
 /// The cells under what a sea template stands over the water: its
-/// buildings' and decks' cells, every cell a pier crosses, and its
-/// lanterns', boats' and light's. Some are dry, and those are laid as well.
+/// buildings' and decks' cells, every cell a pier or the slip crosses, and
+/// its lanterns', boats', light's and dressing's. Some are dry, and those
+/// are laid as well.
 pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
     let cell_m = template.grid.cell_m;
     let mut out = BTreeSet::new();
@@ -88,7 +89,8 @@ pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
             out.extend(s.deck.iter().map(|&[c, r]| (c, r)));
         }
     }
-    for p in &template.piers {
+    let slip = template.shipyard.as_ref().map(|y| &y.slip);
+    for p in template.piers.iter().chain(slip) {
         let (dx, dz) = (p.to[0] - p.from[0], p.to[2] - p.from[2]);
         let len = (dx * dx + dz * dz).sqrt();
         let (ux, uz) = if len > 0.0 {
@@ -121,6 +123,18 @@ pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
     }
     if let Some(l) = &template.light {
         out.insert(cell_at(l.x, l.z, cell_m));
+    }
+    // A dressing thing's cell and the cells a metre east and south of it,
+    // where its frame is read (task 4.2c).
+    let things = template.dressing.iter().map(super::Dress::at);
+    let yard = template
+        .shipyard
+        .iter()
+        .flat_map(|y| [(y.x, y.z), (y.planks[0], y.planks[2])]);
+    for (x, z) in things.chain(yard) {
+        for (dx, dz) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)] {
+            out.insert(cell_at(x + dx, z + dz, cell_m));
+        }
     }
     let (nc, nr) = (template.grid.columns, template.grid.rows);
     out.retain(|&(c, r)| c >= 0 && r >= 0 && c < nc && r < nr);

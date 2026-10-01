@@ -839,7 +839,8 @@ fn harbours() -> Vec<Site> {
 
 /// Slice 4d: every harbour site of the shipped seed lies with its sea over
 /// the planet's, stands on the sea with its quay a metre over the water,
-/// and cuts whole: its buildings, its piers' stretches and its light.
+/// and cuts whole: its buildings, its piers' stretches, its light and its
+/// dressing.
 #[test]
 fn every_harbour_lays_on_its_sea_and_cuts() {
     let config = *crate::planet::terrain_config();
@@ -892,6 +893,14 @@ fn every_harbour_lays_on_its_sea_and_cuts() {
         assert!(
             laid.solids.len() > template.buildings.len() + template.piers.len(),
             "{}: buildings, piers and the light",
+            site.name
+        );
+        // Task 4.2c: its dressing, every thing on its chart, and the
+        // shipyard's hull, planks and slip.
+        assert_eq!(
+            laid.dressing,
+            (template.dressing.len() + 3, 0),
+            "{}: its dressing",
             site.name
         );
     }
