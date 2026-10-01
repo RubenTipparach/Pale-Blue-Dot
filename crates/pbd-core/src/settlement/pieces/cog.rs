@@ -75,6 +75,23 @@ pub fn bow(patch: &Patch, chart: &Chart, template: &Template, cog: &Cog) -> Opti
     Some((f.x * t.cos() + f.z * t.sin()).normalize())
 }
 
+/// Where the template moors its cog, as a craft stands there at rest: its
+/// waterline's middle, planet-local at `waterline_m` over the radius (the
+/// drawn sea), and its bow, a unit tangent. The ship [`ship`] cuts stands
+/// in a frame with that origin. `None` where it is off the chart.
+pub fn berth(
+    patch: &Patch,
+    chart: &Chart,
+    template: &Template,
+    cog: &Cog,
+    radius_m: f32,
+    waterline_m: f32,
+) -> Option<(Vec3, Vec3)> {
+    let cell_m = template.grid.cell_m;
+    let place = Place::new(chart, patch, cell_m, (cog.x, cog.z), radius_m, waterline_m)?;
+    Some((place.frame.origin, bow(patch, chart, template, cog)?))
+}
+
 /// The cog's ship cut in `frame` as it stands, its waterline's middle at the
 /// frame's origin and its bow along `heading` in the frame's plan (from `x`
 /// toward `z`): a deck off any chart, for a walker's tests.

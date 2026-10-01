@@ -1187,6 +1187,62 @@ fn every_harbours_boats_are_made_once_at_their_berths() {
     assert!(total > 0, "some boats moored");
 }
 
+/// `sail-the-cog` step 3, part 3: each harbour of the shipped seed makes its
+/// cog once, at its berth, on a bollard and on the drawn sea, riding its
+/// swing; asked again, it makes none.
+#[test]
+fn every_harbours_cog_is_made_once_at_its_berth() {
+    use crate::vehicles::harbour::{COG, cog_berth, cog_for, on_swing};
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let fleet = crate::vehicles::Fleet::new(crate::config::VehiclesConfig::default().0);
+    let sea_radius = config.radius_m + sheet_m(&config, &crate::config::WaterSettings::default());
+    let mut made = 0;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let mut next = 1;
+        let make = |made: &std::collections::BTreeSet<(u32, u32)>, next: &mut u64| {
+            cog_for(
+                site.id,
+                &town,
+                &template,
+                &patch,
+                config.radius_m,
+                sea_radius,
+                made,
+                &fleet.specs,
+                &fleet.hulls,
+                next,
+            )
+        };
+        let cog = make(&Default::default(), &mut next)
+            .unwrap_or_else(|| panic!("{}: its cog", site.name));
+        assert_eq!(cog.kind, pbd_core::vehicle::Kind::Cog);
+        assert_eq!(cog.berth, Some((site.id, COG)), "{}", site.name);
+        assert!(on_swing(&cog), "{}: on its bollard", site.name);
+        let (origin, _) = cog_berth(&town, &template, &patch, config.radius_m, sea_radius).unwrap();
+        assert!(
+            cog.reference_position().distance(origin.as_dvec3()) < 1e-3,
+            "{}: at its berth",
+            site.name
+        );
+        let afloat = cog.reference_position().length() - f64::from(sea_radius);
+        assert!(
+            afloat.abs() < 0.01,
+            "{}: on the drawn sea, {afloat:.3} m",
+            site.name
+        );
+        assert!(
+            make(&[(site.id, COG)].into_iter().collect(), &mut next).is_none(),
+            "{}: made once",
+            site.name
+        );
+        made += 1;
+    }
+    assert!(made > 0, "some cogs made");
+}
+
 /// An instrument for the finding in Coringport's beach (2026-10-01): how
 /// many of each town's footprint cells the planet's worms open within the
 /// top two layers of the town's ground, where a cave mouth or a hole shows.

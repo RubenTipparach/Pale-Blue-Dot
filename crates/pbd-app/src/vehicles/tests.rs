@@ -985,3 +985,150 @@ fn a_walker_goes_over_a_cogs_side_with_its_way() {
         .length();
     assert!(sails > 1.0, "and the cog sails on at {sails} m/s");
 }
+
+/// A harbour's cog made fast at its berth where the Tern lies, its berth
+/// worked out as if from its town.
+fn moor_cog(app: &mut App) -> Entity {
+    let tern = crafts(app)
+        .into_iter()
+        .find(|(_, c)| c.kind == Kind::Tern)
+        .expect("the Tern")
+        .1;
+    let mut cog = {
+        let mut fleet = app.world_mut().resource_mut::<Fleet>();
+        let id = fleet.next_id;
+        fleet.next_id += 1;
+        Craft::new(
+            Kind::Cog,
+            id,
+            fleet.specs.clone(),
+            fleet.hulls.clone(),
+            tern.reference_position(),
+            tern.body.orientation,
+        )
+    };
+    cog.berth = Some((7, harbour::COG));
+    cog.mooring = Some(pbd_core::vehicle::Mooring {
+        at: cog.bow(),
+        length: 2.0,
+        anchored: false,
+    });
+    let origin = cog.reference_position().as_vec3();
+    let bow = cog.body.axis(pbd_core::vehicle::FORWARD).as_vec3();
+    let bow = (bow - origin.normalize() * bow.dot(origin.normalize())).normalize();
+    let entity = place::spawn_craft(app.world_mut(), cog);
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(harbour::Berthed::new(origin, bow));
+    entity
+}
+
+fn the_craft(app: &mut App, entity: Entity) -> Craft {
+    crafts(app)
+        .into_iter()
+        .find(|(e, _)| *e == entity)
+        .expect("the craft")
+        .1
+}
+
+/// How far a cog lies from its swing at its berth now, m.
+fn off_swing(app: &mut App, cog: Entity) -> f32 {
+    let t = app.world().resource::<Time<Fixed>>().elapsed_secs();
+    let berthed = *app.world().get::<harbour::Berthed>(cog).unwrap();
+    let want = crate::decks::Swing::MOORED.at(&berthed.rest, berthed.bow, t);
+    let craft = the_craft(app, cog);
+    let f = crate::decks::craft_frame(&craft, bevy::math::DVec3::ZERO);
+    f.origin.distance(want.origin) + f.x.distance(want.x) * 10.0
+}
+
+/// `sail-the-cog` step 3, part 3: a harbour's cog made fast at its berth
+/// rides the mooring swing there, to a millimetre, and is not stepped; T at
+/// its helm casts it off to its own physics; brought back slow within a few
+/// metres of its berth, T makes it fast and it eases back onto the swing;
+/// far from its berth, T anchors it as a boat.
+#[test]
+fn a_harbours_cog_rides_its_swing_casts_off_and_makes_fast_again() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let cog = moor_cog(&mut app);
+    for _ in 0..120 {
+        app.update();
+        assert!(off_swing(&mut app, cog) < 1e-3, "off its swing");
+    }
+    assert!(harbour::on_swing(&the_craft(&mut app, cog)));
+    // Cast off, and give it way: it goes where its physics takes it.
+    take_seat(app.world_mut(), cog, true);
+    tap(&mut app, KeyCode::KeyT);
+    let cast = the_craft(&mut app, cog);
+    assert!(cast.mooring.is_none(), "cast off");
+    assert!(cast.body.velocity.length() < 0.3, "at the swing's way");
+    let rest = app.world().get::<harbour::Berthed>(cog).unwrap().rest;
+    let bow = app.world().get::<harbour::Berthed>(cog).unwrap().bow;
+    app.world_mut()
+        .get_mut::<Vehicle>(cog)
+        .unwrap()
+        .craft
+        .body
+        .velocity = bow.as_dvec3();
+    for _ in 0..120 {
+        app.update();
+    }
+    let gone = the_craft(&mut app, cog)
+        .reference_position()
+        .distance(rest.origin.as_dvec3());
+    assert!(gone > 1.5, "sailed {gone:.2} m off its berth");
+    // Back 2 m off its berth and still: T makes it fast, and it eases on.
+    let put = |app: &mut App, along: f32| {
+        let mut v = app.world_mut().get_mut::<Vehicle>(cog).unwrap();
+        let q = v.craft.body.orientation;
+        v.craft
+            .set_reference_pose((rest.origin + bow * along).as_dvec3(), q);
+        v.craft.body.velocity = bevy::math::DVec3::ZERO;
+        v.craft.body.angular_velocity = bevy::math::DVec3::ZERO;
+    };
+    put(&mut app, 2.0);
+    tap(&mut app, KeyCode::KeyT);
+    let fast = the_craft(&mut app, cog);
+    assert!(fast.mooring.is_some_and(|m| !m.anchored), "made fast");
+    assert!(off_swing(&mut app, cog) > 1.0, "not snapped onto the swing");
+    for _ in 0..(harbour::EASE_S * 60.0) as usize + 30 {
+        app.update();
+    }
+    assert!(off_swing(&mut app, cog) < 1e-3, "eased onto its swing");
+    // Far from its berth, T anchors it.
+    tap(&mut app, KeyCode::KeyT);
+    put(&mut app, 25.0);
+    tap(&mut app, KeyCode::KeyT);
+    assert!(
+        the_craft(&mut app, cog).mooring.is_some_and(|m| m.anchored),
+        "anchored, 25 m off its berth"
+    );
+}
+
+/// `sail-the-cog` step 3, part 3: a harbour's cog made fast at its berth is
+/// saved on its bollard with its berth, and comes back on its swing there.
+#[test]
+fn a_moored_cog_is_saved_on_its_bollard_at_its_berth() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let cog = moor_cog(&mut app);
+    for _ in 0..30 {
+        app.update();
+    }
+    let was = the_craft(&mut app, cog);
+    let rest = app.world().get::<harbour::Berthed>(cog).unwrap().rest;
+    let file = put_away(app.world_mut()).expect("a spawned fleet");
+    app.world_mut()
+        .resource_mut::<crate::saves::WorldSave>()
+        .snapshot_vehicles(&file);
+    app.update();
+    let (_, back) = crafts(&mut app)
+        .into_iter()
+        .find(|(_, c)| c.id == was.id)
+        .expect("the cog is back");
+    assert_eq!(back.kind, Kind::Cog);
+    assert_eq!(back.berth, Some((7, harbour::COG)));
+    assert!(harbour::on_swing(&back), "on its bollard, on its swing");
+    let off = back.reference_position().distance(rest.origin.as_dvec3());
+    assert!(off < 0.2, "at its berth, {off:.3} m off");
+}

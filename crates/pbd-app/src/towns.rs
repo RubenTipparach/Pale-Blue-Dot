@@ -18,7 +18,6 @@
 //! pieces cut and faded in only within [`STAND_M`] of the viewer. The other
 //! kinds follow, a kind at a time.
 
-use crate::decks::{CogSwing, Deck, Decks, Swing};
 use crate::field_light::{Faded, LitByField, LitLikeTerrain, RoomLights, SkyShare};
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
@@ -148,11 +147,10 @@ pub struct Laid {
     /// Its dressing things standing, and those left off its chart (task
     /// 4.2c).
     pub dressing: (usize, usize),
-    /// Its cog's ship among its solids, where it stands at its mooring
-    /// (`sail-the-cog` design 6), its faces drawn apart, and its bow.
+    /// Its cog's ship among its solids, where the template moors it
+    /// (`sail-the-cog` design 6). The town stands it empty: the cog is a
+    /// craft (step 3, part 3).
     pub cog: Option<usize>,
-    pub cog_meshes: Meshes,
-    pub cog_bow: Vec3,
 }
 
 /// The drawn sea's surface, metres over the radius: the layers' sea level
@@ -262,8 +260,6 @@ pub fn build(
         lights: built.lights,
         dressing: (built.dressing, built.dressing_skipped),
         cog: built.cog,
-        cog_meshes: built.cog_meshes,
-        cog_bow: built.cog_bow,
     })
 }
 
@@ -929,6 +925,22 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     // Each door as its save holds it: open where the player left it open,
     // shut where there is no record (slice 2b).
     let mut solids = laid.solids.clone();
+    // Its cog is a craft (`sail-the-cog` step 3, part 3), made with its
+    // boats: the ship's place among its pieces is kept, empty, so the
+    // town's numbering holds, and its gangplank stays the town's.
+    if let Some(n) = laid.cog {
+        solids[n] = BuildingSolids {
+            frame: solids[n].frame,
+            reach_m: 0.0,
+            solids: Vec::new(),
+            roof_plan: Vec::new(),
+            surfaces: Vec::new(),
+            doors: Vec::new(),
+            top_m: 0.0,
+            rooms: Meshes::new(),
+            lights: Vec::new(),
+        };
+    }
     door_states(
         &mut solids,
         site.id,
@@ -951,7 +963,7 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
         (n, off) => format!(", {n} dressing things ({off} off its chart)"),
     };
     if laid.cog.is_some() {
-        dressing.push_str(", its cog moored");
+        dressing.push_str(", a berth for its cog");
     }
     info!(
         "{} stands: {} buildings{dressing}, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}",
@@ -971,43 +983,7 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
         shown,
         leaving: false,
     });
-    // Its cog rides the water at its mooring (`sail-the-cog` design 6): a
-    // deck the walker rides, drawn on its own.
-    if let Some(n) = laid.cog {
-        let mesh = spawn_cog(world, entity, &laid);
-        let swing = world
-            .get_resource::<CogSwing>()
-            .copied()
-            .unwrap_or_default();
-        let mut deck = Deck::new(
-            Some((site.id, n)),
-            first + n,
-            solids[n].frame,
-            laid.cog_bow,
-            Swing::MOORED.scaled(swing.0),
-        );
-        deck.mesh = Some(mesh);
-        world
-            .get_resource_or_insert_with(Decks::default)
-            .list
-            .push(deck);
-    }
     show(world, entity, shown);
-}
-
-/// A town's cog drawn apart from it, under its root (`sail-the-cog` design
-/// 6): its faces as cut where it rests, moved by its deck's transform.
-fn spawn_cog(world: &mut World, root: Entity, laid: &Laid) -> Entity {
-    let cog = world
-        .spawn((
-            Name::new(format!("{}'s cog", laid.name)),
-            Transform::default(),
-            Visibility::default(),
-        ))
-        .id();
-    world.entity_mut(root).add_child(cog);
-    spawn_meshes(world, cog, &laid.cog_meshes);
-    cog
 }
 
 /// How far each town texture repeats, metres, as the cutter asks it: the
@@ -1382,11 +1358,8 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
 /// cast as a solid sheet.
 pub fn casting(laid: &Laid) -> Vec<[f32; 3]> {
     let cut = cut_textures();
-    // The cog casts from where it rests: its swing at its mooring is small
-    // (`sail-the-cog` design 6, step 2).
     laid.meshes
         .iter()
-        .chain(&laid.cog_meshes)
         .filter(|(name, _)| !cut.contains(*name))
         .map(|(_, buf)| buf)
         .chain(laid.rooms.iter().flat_map(|m| {

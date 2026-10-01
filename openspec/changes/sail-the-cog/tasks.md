@@ -29,7 +29,7 @@ tasks 1 and 3d (thin solids and surfaces in `stand`, and the ship piece).
 ## 5. Saves
 
 - [ ] 5.1 The cog's record, and a walker saved on a deck with the craft's ID and local position, at `RECORD_VERSION` 2; a version-1 file reads with none. Verify: format tests, and an app test that quits on the aftcastle and loads there.
-- [ ] 5.2 A harbour's building cog becomes the craft at the same mooring (design 6: step 1's piece is never saved, so this is the handover in step 3). Verify: an app test on a world made before this change.
+- [x] 5.2 A harbour's building cog becomes the craft at the same mooring (design 6: step 1's piece is never saved, so this is the handover in step 3). Verify: an app test on a world made before this change. (A world made before has no `(site, COG)` in its fleet, and `moor_harbours` makes the cog then, as for a new world: `towns::tests::every_harbours_cog_is_made_once_at_its_berth`; on its swing, cast off, made fast and saved: `vehicles::tests::a_harbours_cog_rides_its_swing_casts_off_and_makes_fast_again`, `a_moored_cog_is_saved_on_its_bollard_at_its_berth`; boarded up the town's gangplank: `settlement::tests::the_craft_cog_stands_at_its_berth_and_is_boarded_up_the_towns_gangplank`.)
 
 ## 6. The owner's check
 

@@ -469,6 +469,84 @@ only with screenshots).
     is in `openspec/specs/player/walking` with the tests that prove it.
   - **Not built yet:** the harbour's cog made a craft, with cast off and
     make fast; the stern lantern; an app reach in a wind; the shots.
+- **Step 3, part 3 in detail (written 2026-10-01, before code): the
+  harbour's cog becomes the craft.** What it builds on, measured on this
+  branch:
+  - A harbour's boats are made once by `moor_harbours` when the fleet
+    first meets the harbour. Each is tagged with its berth `(site, n)`, and
+    a craft far off is stowed as its record.
+  - T at the helm casts off a moored craft or anchors it.
+  - The town stands its ship as a piece in `Structures`, on the step 2
+    swing (`Decks`), drawn by `spawn_cog`.
+
+  The decisions, recommendation taken (ask only with screenshots):
+  - **The cog's berth is `(site, COG)`**, `COG` being `u32::MAX`, past any
+    boat's number. `moor_harbours` makes it as it makes the boats. It is
+    made at its berth's rest pose, which `pieces::cog::berth` gives from
+    the chart: the waterline's middle on the drawn sea, and the bow. Its
+    mooring is a bollard, not an anchor.
+  - **On its swing.** A cog moored by a bollard at its own berth is not
+    stepped. Each tick its pose is the step 2 swing's about the berth's
+    rest frame, scaled by `--cog-swing`, and its velocity is the swing's.
+    So its deck (part 2) carries the walker exactly as the piece's did. A
+    `Berthed` component caches the rest frame, worked out once from the
+    held town.
+  - **Casting off** (T at the helm) drops the bollard. The integrator then
+    takes the cog at the swing's pose and velocity.
+  - **Making fast** (T at the helm) takes the bollard again when the cog is
+    within 4 m of its berth, slower than 0.8 m/s and within 30° of its
+    berth's heading. It then eases onto the swing over 3 s, so it does not
+    jump. Anywhere else, T anchors it as it anchors a boat.
+  - **The town stands without its ship.** The cog is always the craft now.
+    The ship's place in `Structures` is kept empty, so the towns' numbering
+    holds, and it is not drawn. The gangplank stays the town's. The town's
+    `Decks` machinery stays, tested, for any town piece that moves.
+  - **The ship no longer casts the town's shadow.** Craft do not cast in
+    the town shadow pass, and the cog is a craft now. That is noted, not
+    fixed here.
+  - **Saves.** The cog's record carries its berth and its bollard, so a
+    loaded cog is back on its swing. A world made before this change has no
+    cog in its fleet, so `moor_harbours` makes one the first time it meets
+    each harbour, at the same berth.
+  - **Verify.**
+    - Core: `cog::berth` agrees with the piece's frame and `cog::bow`. The
+      town's gangplank lands on the craft's cut stood at the berth, and a
+      walker walks up it, across the deck and up the stair.
+    - App: every harbour's cog is made once at its berth, on a bollard, on
+      the drawn sea; asked again, it makes none.
+    - App: a moored cog follows its swing to a millimetre. Cast off, it
+      sails on its own physics. Made fast 2 m off its berth, it eases
+      onto the swing. T far from its berth anchors it.
+- **Step 3, part 3 as built (2026-10-01): the harbour's cog is the craft.**
+  - **Built as written above.**
+    - `moor_harbours` makes each harbour's cog with its boats (`cog_for`),
+      at `pieces::cog::berth`'s rest pose, on a bollard, tagged
+      `(site, COG)`.
+    - `swing_moored_cogs` rides it on its swing after the craft step, and
+      the step skips it. Its velocity is the swing's, and it counts as at
+      rest, so the save does not keep rewriting it.
+    - T at its helm casts it off. T within 4 m of its berth, slow and
+      heading as it lies, makes it fast and eases it back over 3 s.
+      Elsewhere T anchors it.
+    - The town keeps the ship's place empty and does not draw it.
+  - **The swing's clock** is the fixed step's elapsed time, so the swing is
+    the same instant the test names. The moored-deck `Decks` keeps its own
+    clock for town pieces.
+  - **Proved by:**
+    - core `the_craft_cog_stands_at_its_berth_and_is_boarded_up_the_towns_gangplank`
+      (the craft's cut at `berth` is the piece's place, and the town's
+      gangplank boards it);
+    - `towns::tests::every_harbours_cog_is_made_once_at_its_berth`, over
+      every harbour on the shipped seed;
+    - `vehicles::tests::a_harbours_cog_rides_its_swing_casts_off_and_makes_fast_again`
+      (on its swing to a millimetre; cast off it sails off; made fast 2 m
+      off its berth it does not snap but eases on; 25 m off, T anchors);
+    - `a_moored_cog_is_saved_on_its_bollard_at_its_berth`.
+  - **A world made before this change** has no cog in its fleet. So
+    `moor_harbours` makes one at the berth the first time it meets each
+    harbour, which is the same path as a new world's.
+  - **Not built yet:** the stern lantern, an app reach in a wind, and the
+    shots.
 - **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
   in the voxel field, which cannot sail. A light carried on a craft is part
   of the craft's drawing.

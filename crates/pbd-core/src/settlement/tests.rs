@@ -2352,6 +2352,45 @@ fn a_walker_goes_down_the_slip_into_the_water() {
 #[test]
 fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
     let (_, _, b) = cut_harbour();
+    walk_aboard(&b);
+}
+
+/// `sail-the-cog` step 3, part 3: the craft stands where the template moors
+/// the ship. `cog::berth` is the ship piece's own frame's origin and its
+/// bow, and with the craft's cut stood there in the ship's place, a walker
+/// still comes up the town's gangplank, across the deck and up the stair.
+#[test]
+fn the_craft_cog_stands_at_its_berth_and_is_boarded_up_the_towns_gangplank() {
+    let (template, town, mut b) = cut_harbour();
+    let n = b.cog.expect("the cog stands");
+    let (patch, _) = patch();
+    let chart = record::chart_of(&town, patch).unwrap();
+    let cog = template.cog.as_ref().expect("the harbour moors a cog");
+    let (origin, bow) =
+        pieces::cog::berth(patch, &chart, &template, cog, RADIUS_M, SHEET_M).expect("on the chart");
+    assert!(origin.distance(b.solids[n].frame.origin) < 1e-3);
+    let towns_bow = pieces::cog::bow(patch, &chart, &template, cog).unwrap();
+    assert!(bow.distance(towns_bow) < 1e-6);
+    let up = origin.normalize();
+    assert!(
+        bow.dot(up).abs() < 1e-5,
+        "the bow lies in the tangent plane"
+    );
+    let z = -bow;
+    let mut craft = pieces::cog::sailing(&mut Meshes::new(), &|_: &str| 2.0, cog.gang_side);
+    craft.frame = pieces::Frame {
+        origin,
+        x: up.cross(z),
+        y: up,
+        z,
+    };
+    b.solids[n] = craft;
+    walk_aboard(&b);
+}
+
+/// From the pier up the gangplank, across the cog's deck and up its stair
+/// to the aftcastle, the feet never falling and the body never held.
+fn walk_aboard(b: &record::Built) {
     let n = b.cog.expect("the cog stands");
     let (ship, plank) = (&b.solids[n], &b.solids[n + 1]);
     assert!(!b.cog_meshes.is_empty(), "the ship is drawn apart");
@@ -2390,7 +2429,7 @@ fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
         at(&ship.frame, sf - sd * 0.4),
         at(&ship.frame, sf + sd * (sl + 1.0)),
     ];
-    let mut feet = feet_on(&b, way[0] * (plank.frame.origin.length() + 0.01))
+    let mut feet = feet_on(b, way[0] * (plank.frame.origin.length() + 0.01))
         .expect("the pier at the gangplank's foot");
     assert!((feet - plank.frame.origin.length()).abs() < 0.03);
     // The pier is a layer over the layers' sea level, the deck 1.9 m over
@@ -2405,7 +2444,7 @@ fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
     {
         for k in 1..=60 {
             let d = leg[0].lerp(leg[1], k as f32 / 60.0).normalize();
-            let next = feet_on(&b, d * (feet + 0.01)).unwrap_or_else(|| {
+            let next = feet_on(b, d * (feet + 0.01)).unwrap_or_else(|| {
                 let l = ship.frame.local(d * (feet + 0.01));
                 let e = plank.frame.local(d * (feet + 0.01));
                 let end = pa + pd * pl;

@@ -154,7 +154,10 @@ impl Plugin for VehiclePlugin {
                     .chain()
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
             )
-            .add_systems(FixedUpdate, (step_vehicles, hold_craft).chain())
+            .add_systems(
+                FixedUpdate,
+                (step_vehicles, hold_craft, harbour::swing_moored_cogs).chain(),
+            )
             .add_systems(
                 PostUpdate,
                 (draw::place, view::follow)
@@ -239,28 +242,10 @@ fn step_vehicles(
         } else {
             Input::default()
         };
-        let before = vehicle.craft.clone();
-        vehicle.craft.step(dt, SUBSTEPS, &input, &env);
-        if !vehicle.craft.is_finite() {
-            // A state that left its domain goes back a tick, stopped, rather
-            // than carrying a NaN into every frame after it.
-            warn!("{} left its domain; held where it was", before.kind.name());
-            vehicle.craft = before;
-            vehicle.craft.body.velocity = DVec3::ZERO;
-            vehicle.craft.body.angular_velocity = DVec3::ZERO;
-        }
-        // A rest is a place the save must keep.
-        let still = vehicle.craft.body.velocity.length() < REST_SPEED
-            && vehicle.craft.body.angular_velocity.length() < REST_SPEED;
-        if still {
-            vehicle.still += dt as f32;
-            if vehicle.still >= REST_S && !vehicle.rested {
-                vehicle.rested = true;
-                fleet.dirty = true;
-            }
-        } else {
-            vehicle.still = 0.0;
-            vehicle.rested = false;
+        // A cog on its swing is moved by it, not stepped
+        // (`harbour::swing_moored_cogs`).
+        if !harbour::on_swing(&vehicle.craft) {
+            step_one(&mut vehicle, dt, &input, &env, &mut fleet);
         }
         // The player aboard is carried: the walker stands at the craft's exit,
         // so a save taken aboard puts them on foot beside it on reload.
@@ -273,6 +258,34 @@ fn step_vehicles(
                 transform.translation = position.0;
             }
         }
+    }
+}
+
+/// One craft's tick: stepped, held back a tick where it left its domain,
+/// and its rest noted for the save.
+fn step_one(vehicle: &mut Vehicle, dt: f64, input: &Input, env: &Surroundings, fleet: &mut Fleet) {
+    let before = vehicle.craft.clone();
+    vehicle.craft.step(dt, SUBSTEPS, input, env);
+    if !vehicle.craft.is_finite() {
+        // A state that left its domain goes back a tick, stopped, rather
+        // than carrying a NaN into every frame after it.
+        warn!("{} left its domain; held where it was", before.kind.name());
+        vehicle.craft = before;
+        vehicle.craft.body.velocity = DVec3::ZERO;
+        vehicle.craft.body.angular_velocity = DVec3::ZERO;
+    }
+    // A rest is a place the save must keep.
+    let still = vehicle.craft.body.velocity.length() < REST_SPEED
+        && vehicle.craft.body.angular_velocity.length() < REST_SPEED;
+    if still {
+        vehicle.still += dt as f32;
+        if vehicle.still >= REST_S && !vehicle.rested {
+            vehicle.rested = true;
+            fleet.dirty = true;
+        }
+    } else {
+        vehicle.still = 0.0;
+        vehicle.rested = false;
     }
 }
 
@@ -570,6 +583,12 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
         info!("cast off");
         return;
     }
+    if make_fast_at_berth(world, entity) {
+        return;
+    }
+    let Some(vehicle) = world.get::<Vehicle>(entity) else {
+        return;
+    };
     let bow = vehicle.craft.bow();
     let direction = bow.normalize();
     let floor = ground_under(
@@ -593,6 +612,67 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
     });
     world.resource_mut::<Fleet>().dirty = true;
     info!("anchored in {depth:.1} m");
+}
+
+/// How near its berth a harbour's cog makes fast there, m; how slow it must
+/// be, m/s; and how near its berth's heading, rad.
+const MAKE_FAST_M: f64 = 4.0;
+const MAKE_FAST_SPEED: f64 = 0.8;
+const MAKE_FAST_RAD: f64 = 30.0 * std::f64::consts::PI / 180.0;
+
+/// A harbour's cog near its own berth, slow and heading as it lies there,
+/// makes fast to its bollard and eases back onto its swing
+/// (`sail-the-cog` step 3, part 3). Whether it did.
+fn make_fast_at_berth(world: &mut World, entity: Entity) -> bool {
+    let Some(vehicle) = world.get::<Vehicle>(entity) else {
+        return false;
+    };
+    let craft = &vehicle.craft;
+    let Some((site, harbour::COG)) = craft.berth else {
+        return false;
+    };
+    let berthed = match world.get::<harbour::Berthed>(entity) {
+        Some(b) => *b,
+        None => {
+            let (Some(towns), Some(assets)) = (
+                world.get_resource::<crate::towns::Towns>(),
+                world.get_resource::<crate::towns::TownAssets>(),
+            ) else {
+                return false;
+            };
+            let sea = world.resource::<Sea>().radius;
+            let Some(b) = harbour::berth_of(towns, assets, sea, site) else {
+                return false;
+            };
+            b
+        }
+    };
+    let off = craft
+        .reference_position()
+        .distance(berthed.rest.origin.as_dvec3());
+    let speed = craft.body.velocity.length();
+    let heading = craft
+        .body
+        .axis(pbd_core::vehicle::FORWARD)
+        .angle_between(berthed.bow.as_dvec3());
+    if off > MAKE_FAST_M || speed > MAKE_FAST_SPEED || heading > MAKE_FAST_RAD {
+        return false;
+    }
+    let from = (craft.reference_position(), craft.body.orientation);
+    let at = craft.bow();
+    let mut vehicle = world.get_mut::<Vehicle>(entity).expect("checked");
+    vehicle.craft.mooring = Some(Mooring {
+        at,
+        length: 2.0,
+        anchored: false,
+    });
+    world.entity_mut(entity).insert(harbour::Berthed {
+        easing: Some((from.0, from.1, 0.0)),
+        ..berthed
+    });
+    world.resource_mut::<Fleet>().dirty = true;
+    info!("made fast at its berth, {off:.1} m off");
+    true
 }
 
 /// Write the fleet whenever something a save must keep happened (a craft

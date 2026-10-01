@@ -47,6 +47,12 @@ impl Motion {
     }
 }
 
+/// A smooth step from 0 at `x` 0 to 1 at `x` 1, flat at both ends.
+pub fn ease(x: f32) -> f32 {
+    let x = x.clamp(0.0, 1.0);
+    x * x * (3.0 - 2.0 * x)
+}
+
 /// How a deck moves about where it rests: a heave, a roll and a swing, each
 /// a sine, and a steady turn. Amplitudes in metres and radians, periods in
 /// seconds, the turn in radians a second.
