@@ -1048,6 +1048,117 @@ so the first can be looked at before it can be walked into.
       retypes nothing.
     - **Shots.** The walled town from 60 m with its wall, the north gate
       from the road outside, and the wall walk from the top of a tower.
+  - **4d in detail, the harbour (written 2026-10-01).** The mockup's
+    `makeCoast`, on the six harbour sites a world stores. Each choice below
+    is a recommendation taken (ask only with screenshots). The owner sees
+    them in 4d's shots beside the mockup's.
+    - **What the mockup builds.** Rows 0 to 11 are sea over a sand bed
+      shelving from 4 m to 0.35 m deep, 12 to 14 the beach (0.25 to 0.75 m),
+      15 the stone quay (1 m), then the village on terraces at 1, 2 and 3 m
+      and the hills behind. Its pieces:
+      - 14 houses, 7 whitewash, 4 driftwood, 2 fieldstone and 1 timber,
+        among them the Gull inn;
+      - 2 boathouses on the beach, open on their two seaward edges;
+      - 2 fish huts on stilts off the hut pier, each with a deck and a
+        porch stair down to the pier;
+      - 11 piers (a main pier, its head, the west, east and hut piers, six
+        finger piers), planks on piles a metre over the water;
+      - the mole (a strip of flags 1.2 m up across the harbour mouth) and
+        its light, a round stone tower 8 m high with a beacon fire;
+      - 21 street lamps and 6 lanterns at the piers' ends;
+      - besides these: 23 boats and the cog, the gangplank, the fish
+        market's stalls, nets, racks, pots, barrels and crates, the shipyard's
+        hull in frame and its slip, and the people.
+    - **It stands on the sea.** Every other town stands on its site's
+      ground. A harbour stands on the water.
+      - Its terrace is the sea level, 0 m. Each cell's level is its height
+        in the template, rounded to a whole layer: the beach at 0 and 1, the
+        quay at 1, the village at 1 to 3, the mole at 1. The planet's water
+        fills every layer under 0 m above the ground (`column.rs`), so the
+        sea is the planet's own.
+      - **Its sea is the planet's.** No cell the template puts under the sea
+        is laid, and no yard ring reaches into one. The seabed under the
+        piers is the natural ground, and the quay meets whatever water the
+        planet has there.
+      - The land is cut or filled to the template's layers, as every
+        terraced town's is, and eased back to the natural ground over the
+        margin.
+      - No fractions are needed after all. 4b expected the harbour to bring
+        fractional heights. A building's base rounds as the ground does:
+        the boathouses stand at 0, and the fish huts' floors at 2 m over
+        the sea.
+    - **It faces its sea.** A village's turn is the site's seeded one. A
+      harbour's is chosen from the ground, with a shift as well.
+      - Of the six turns, and every anchor shift up to 8 cells, take the
+        placement where the most template cells agree with the planet about
+        being sea (the natural ground under 0 m) or land. Ties go to the
+        seeded turn, then to the smaller shift.
+      - The scan reads the natural height of each patch cell once:
+        6 × 217 placements of about 1,700 cells. Its time is measured on the
+        first build and recorded here.
+      - The site's harbour rule already keeps the anchor within 60 m of
+        shelf water, with shallows in the footprint (`sites.rs`), so a
+        match is near.
+      - The record needs nothing new. It stores the layout cell on the
+        site's anchor and each cell's patch cell and side, so the chosen
+        placement is stored as any town's is.
+    - **New pieces.** Each is cut from the template on the town's stored
+      chart, as 4c's masonry is, and stored as a building where it is one.
+      - **The kits** `whitewash` (whitewash outside, plaster in, 0.5 m, slate
+        at pitch 0.9, a flag floor and a chimney) and `driftwood` (driftwood
+        both faces, 0.25 m, thatch, a plank floor). Their textures are
+        already exported.
+      - **An open side.** A building's `open` edges get no wall: the
+        boathouses' seaward edges, the mockup's `skipWall`. The roof stands
+        on posts at the open corners.
+      - **Piers.** A pier is a deck of planks between two points, its width,
+        and its height, with a pile every 2 m on each side down to the
+        natural ground under it. Its top is a floor and its edges are open.
+        The template writes each pier as the mockup's `bridge` call gives it.
+      - **Stilts, a deck and a porch stair.** These are the fish huts'. The
+        swamp (4h) builds its village from the same three.
+        - A raised building stands on piles to the natural ground.
+        - A deck is a floor round it on the same piles, railed on its outer
+          edges except at the stair.
+        - A porch stair is a straight, open, railed flight outside the
+          building, from the deck down to its foot.
+      - **The light.** A round stone tower on the mole, solid to its top.
+        It has an iron cage and a beacon that burns from dusk as a lamp does
+        (task 5.4's kinds take a `beacon`).
+      - **Lanterns off the grid.** A lantern has a position and a height in
+        the template, not only a cell: the piers' lanterns stand over the
+        water at the piers' height.
+    - **Not in 4d.**
+      - The boats are task 4.2b: the game's own craft, parked as vehicle
+        records at their moorings. The cog and its gangplank are
+        `sail-the-cog`.
+      - The stalls, nets, racks, pots, barrels, crates, the shipyard and the
+        people come with the other towns' dressing.
+      - Street steps are 4b's open item.
+      - The lanes and the quay are dirt until the terrain has cobble and
+        flags, as the walled town's streets are.
+    - **What is stored.** A harbour's town and buildings are records, as
+      every town's are. Its piers, stilts, decks and light are the
+      template's, like the masonry. No world has a harbour yet. An old save
+      gains its harbours once on its next open, as it gained its villages
+      in 4a, unless the player has worked their ground.
+    - **Verify.**
+      - Core: the two kits load, and a saved town can name them
+        (`every_kit_a_saved_town_can_name_is_shipped`).
+      - Core: `coast.json` lays on a test patch. No cell under the
+        template's sea is in its footprint, and the natural ground there is
+        untouched. The quay is 1 m over the water.
+      - Core: on the shipped seed, every harbour site's chosen placement
+        puts at least three quarters of the template's sea cells over the
+        planet's sea.
+      - Core walker tests, as 4c's: along the main pier from the quay to
+        its head, with the feet on the planks all the way; into a boathouse
+        from the sea side; and up a fish hut's porch stair onto its deck and
+        in at its door.
+      - App: every harbour lays and cuts on its own ground, and a world
+        stores each once.
+      - Shots beside the mockup's: the harbour from the pier head, from
+        60 m by day and at night, a fish hut, and a boathouse.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before
