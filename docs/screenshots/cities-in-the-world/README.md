@@ -81,3 +81,38 @@ fast build under `xvfb-run`, a new memory-only world at `--time 12`.
 | --- | --- | --- |
 | `game-map-built-spawn.png` | `--walk --menu map --map-mpp 12` | The spawn's continent. A built town's marker is cream with a green ring: Holbrook, Linenleigh, Holingmouth, Holmouth, Ashenstead, Dunmouth and the rest. A site whose kind has no town yet is dimmed, its name too: Durnacrag, Huatzico, Barberg, Coringport. The legend reads "55 settlements on the map: 26 built, 29 still to come." |
 | `game-map-built-world.png` | `--walk --menu map --map-mpp 40` | The whole planet: the 20 villages and 6 walled towns ringed, the harbours, desert, tundra, jungle, swamp, cliff and cave sites faint. |
+
+## Slice 4a to 4c: the villages and walled towns in the world (2026-10-01)
+
+Every village and walled-town site stands in the game: 20 villages and 6
+walled towns on the shipped seed, each turned by its site and laid on its own
+ground. The walled town stands on its levels, inside its curtain wall, with
+its gates, two stair towers and the keep. In-game captures, 2026-09-30 and
+2026-10-01: a cloud container on lavapipe at 1440 x 900 with no GPU, the
+fast build under `xvfb-run`, a new memory-only world, `--view column`,
+`--open-doors --rain 0 --frames 150`. Nothing here says how smoothly the
+towns run; the frame cost was not measured (CLAUDE.md, cloud sessions).
+
+`--time` is the home village's hour. A town far east or west of it is at its
+own hour of the sun, so each shot is labelled with the town's local sun time,
+from its longitude. `towns-4abc-2026-10-01.jpg` puts the nine side by side.
+
+| file | town | flags | what it shows |
+| --- | --- | --- | --- |
+| `game-4c-linenleigh-street.jpg` | Linenleigh (walled) | `--at 29.41553 8.48*  --height 20 --pitch -18 --time 11` | Over the roofs toward the far wall: the houses in their kits, the wall and its merlons, the towers' cones. 11:30 there. |
+| `game-4c-linenleigh-above.jpg` | Linenleigh | `--height 60 --pitch -42 --time 11` | The whole town from 60 m: the curtain wall round its terraces and its gate, the hamlet's huts outside it. |
+| `game-4c-ashingstead-above-dusk.jpg` | Ashingstead (walled, 53° S) | `--at -53.42846 108.35* --height 60 --pitch -42 --time 11` | The same town at another site, turned and on other ground. It is 107° east of home, so 18:10 there: dusk, windows lit, cold haze. |
+| `game-4a-holbrook-25m.jpg` | Holbrook (home) | `--at 29.69510 1.36* --height 25 --pitch -6 --time 11` | The home village as it was, unturned. |
+| `game-4a-holmouth-low.jpg` | Holmouth (village) | `--at 1.16510 -39.77* --height 20 --pitch -18 --time 11` | The village turned by its site, on a slope at 52 m. 08:15 there. |
+| `game-4a-dunmouth-low.jpg` | Dunmouth (village) | `--at 9.62570 56.57* --height 20 --pitch -18 --time 11` | Another turn, by the lane, at 81 m. 14:40 there. |
+| `game-4a-holmouth-above-sunset.jpg` | Holmouth | `--height 60 --pitch -42 --time 22.5` | From 60 m as the sun sets there, 19:45. |
+| `game-4c-linenleigh-above-night.jpg` | Linenleigh | `--height 60 --pitch -42 --time 22.5` | At night, 23:00: street lamps' pools along the lanes, lit windows, the wall's line. The pools in the fields outside are the glowing flowers. |
+| `game-4a-dunmouth-above-night.jpg` | Dunmouth | `--height 60 --pitch -42 --time 22.5` | At night, 02:10: the lane's lamps and lit windows. |
+
+`*` The camera stands 59.5 m east of the town's anchor (60 m at Holbrook),
+added to the anchor's longitude, so the town is in front of it. The weather is a clear hour, `--weather-at 7200` by day
+and `3600` at night.
+
+**Not in these shots, and not built:** the smithy, well, windmill, crops and
+fences, the market stalls, the quay's jetty and boat, furniture and people.
+The lake under the walled town is dry ground, and the streets are dirt.
