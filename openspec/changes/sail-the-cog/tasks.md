@@ -9,7 +9,7 @@ tasks 1 and 3d (thin solids and surfaces in `stand`, and the ship piece).
 
 ## 1. A turning frame
 
-- [ ] 1.1 `LocalFrame` with orientation and angular velocity, composing with the `ω × r` term. Verify: the `world/frames` scenarios as core tests (a point on a turning deck, out and back).
+- [x] 1.1 `LocalFrame` with orientation and angular velocity, composing with the `ω × r` term. Verify: the `world/frames` scenarios as core tests (a point on a turning deck, out and back). (`frame::tests::a_point_on_a_turning_deck_moves_with_the_turn`, `a_position_composed_out_and_back_returns`; the requirement is in `openspec/specs/world/frames`.)
 
 ## 2. The cog as a craft
 

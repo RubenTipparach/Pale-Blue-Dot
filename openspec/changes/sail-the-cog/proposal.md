@@ -63,7 +63,8 @@ The game can sail small craft, but nobody can stand on anything that moves
 - `player/vehicles`: the cog, a craft you walk on; a walker on a deck is
   saved on it.
 - `player/walking`: standing and walking on a moving deck.
-- `world/frames`: a local frame that turns.
+- `world/frames`: a local frame that turns. Built and moved into
+  `openspec/specs/world/frames` with its tests (task 1.1, 2026-10-01).
 
 ## Impact
 

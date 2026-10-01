@@ -16,10 +16,10 @@ pub fn run(steps: u32) {
     let mut app = headless_app();
     let scene = CelestialScene::demo();
     let planet = scene.states[0];
-    app.insert_resource(PhysicsFrame(LocalFrame {
-        origin: planet.position,
-        velocity: planet.velocity,
-    }));
+    app.insert_resource(PhysicsFrame(LocalFrame::moving(
+        planet.position,
+        planet.velocity,
+    )));
     app.insert_resource(scene);
     let ship = spawn_ship(
         app.world_mut(),
