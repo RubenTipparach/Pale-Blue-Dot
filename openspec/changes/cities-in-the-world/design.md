@@ -1319,6 +1319,46 @@ so the first can be looked at before it can be walked into.
       and a column away from them gets none.
     - App: the walled town's 38 lamps and the harbour's 31 are installed.
     - Shots at 22:30, from the street and from above.
+- **Task 4.2b in detail, the moored boats (written 2026-10-01).** Survey
+  T7: "you can use any boat you find".
+  - **What the mockup moors.** 23 boats on the water: 14 rowboats, 6
+    sailing boats and 3 canoes. Two more rowboats lie beached and two sit in
+    the boathouses; those four are dressing, not craft.
+  - **Which craft.** The game has two boats, the Tern (a sailing keelboat)
+    and the Loon (a paddle canoe). A sailing boat is a Tern. A rowboat and a
+    canoe are Loons, the game's nearest small boat. A rowboat of its own is
+    a new craft for later. Recommendation taken (ask only with screenshots).
+  - **The export.** A wrapper round the mockup's `boat` writes each boat on
+    the water: its kind, where it lies in the mockup's metres, and its
+    heading.
+  - **A harbour's boats are craft records, made once.**
+    - When the fleet first meets a harbour it holds no boats of, it makes
+      them. Each is tagged with its berth, the harbour's site and its number
+      there, so it is never made twice, even after the player sails it away.
+    - Each lies at its berth on the planet's water, anchored to the seabed
+      under it with the rode the game already gives an anchor.
+    - A berth over land, or over water shallower than the craft draws
+      (Tern 3 m, Loon 1.2 m), is skipped, and the skip is logged.
+  - **Stowing.** Today every craft is stepped every tick, wherever it is.
+    Six harbours would make that about 140.
+    - The fleet keeps a craft further than 1.5 km from the viewer as its
+      record only, stowed, and brings it back within 1.2 km, the towns'
+      ranges. The craft the player is aboard is never stowed.
+    - The save's fleet file is the live craft and the stowed ones
+      together, so nothing is lost by stowing.
+    - At a harbour about 23 craft are stepped, against 2 today. The cost is
+      not measured in the cloud session. If it shows, a moored craft at rest
+      can sleep.
+  - **Records.** A craft's record gains `berth`, written only where there is
+    one, so a fleet without harbour boats is written as it always was.
+  - **Verify.**
+    - App: a harbour's boats are made once and saved, and a second open
+      makes none.
+    - App: a craft is stowed past 1.5 km and back within 1.2 km at the
+      pose it was left in.
+    - App: a moored boat is boarded from the pier and paddled away, and a
+      reload finds it where it was left.
+    - Shots of the harbour with its boats.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before
