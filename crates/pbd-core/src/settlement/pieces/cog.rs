@@ -153,52 +153,65 @@ pub fn sailing(
 pub const MAST_STEP: Vec3 = Vec3::new(0.0, DECK_M, -MAST_M);
 
 /// The stern lantern's flame, in the craft's frame (`sail-the-cog` step 3,
-/// part 4): on its post on the middle line at the aftcastle's stern rail,
-/// 1.2 m over the castle's deck.
-pub const LANTERN: Vec3 = Vec3::new(0.0, DECK_M + CASTLE_M + 1.2, 6.6);
+/// part 4): the mockup's `lantern()` on the cog's aftcastle, its post 86%
+/// of the deck's half-length aft on the middle line, the lamp hung 2.3 m up
+/// at the end of its arm, out to starboard.
+pub const LANTERN: Vec3 = Vec3::new(0.45, DECK_M + CASTLE_M + 2.3, HULL.l / 2.0 * 0.94 * 0.86);
 
 /// The stern lantern's light where its flame is, `at` in the planet's
-/// frame: a candle's, by night only, lighting the aftcastle and the helm
-/// down to the main deck.
+/// frame: the mockup's lamp, by night only, lighting the aftcastle and the
+/// helm down to the main deck.
 pub fn stern_light(at: Vec3) -> super::RoomLight {
     super::RoomLight {
         kind: super::LightKind::Candle,
         at,
-        power: 1.2,
+        power: 0.7,
         below_m: LANTERN.y - DECK_M + 0.2,
         above_m: 1.0,
     }
 }
 
-/// The stern lantern in the craft's frame: its post from the aftcastle's
-/// deck, a timber cage of a base, four corner posts and a cap, and its
-/// flame inside (`flame`, drawn unlit).
+/// The stern lantern in the craft's frame, as the mockup's `lantern()`: a
+/// 2.6 m post from the aftcastle's deck with an arm out to starboard, a
+/// small timber cage hung from it, and its flame inside (`flame`, drawn
+/// unlit).
 pub fn lantern(repeat_m: &dyn Fn(&str) -> f32) -> Meshes {
     let mut out = Meshes::new();
     let mut sink = Sink::new(&mut out, repeat_m, CRAFT);
     let (x, y, z) = (LANTERN.x, LANTERN.y, LANTERN.z);
     let foot = DECK_M + CASTLE_M;
+    cylinder(
+        &mut sink,
+        "timber",
+        "timber",
+        Vec2::new(0.0, z),
+        foot,
+        0.08,
+        2.6,
+        6,
+    );
     sink.plain_box(
         "timber",
-        x,
-        foot,
+        0.25,
+        foot + 2.55,
         z,
-        Vec3::new(0.08, y - 0.2 - foot, 0.08),
+        Vec3::new(0.5, 0.06, 0.06),
         0.0,
     );
-    sink.plain_box("timber", x, y - 0.2, z, Vec3::new(0.3, 0.04, 0.3), 0.0);
+    sink.plain_box("timber", x, y - 0.15, z, Vec3::new(0.24, 0.03, 0.24), 0.0);
     for (a, b) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
         sink.plain_box(
             "timber",
-            x + a * 0.13,
-            y - 0.16,
-            z + b * 0.13,
-            Vec3::new(0.03, 0.36, 0.03),
+            x + a * 0.1,
+            y - 0.12,
+            z + b * 0.1,
+            Vec3::new(0.025, 0.24, 0.025),
             0.0,
         );
     }
-    sink.plain_box("timber", x, y + 0.2, z, Vec3::new(0.34, 0.06, 0.34), 0.0);
-    sink.flame("flame", Vec3::new(x, y - 0.15, z), 0.25);
+    sink.plain_box("timber", x, y + 0.12, z, Vec3::new(0.27, 0.05, 0.27), 0.0);
+    sink.plain_box("rope", x, y + 0.17, z, Vec3::new(0.02, 0.08, 0.02), 0.0);
+    sink.flame("flame", Vec3::new(x, y - 0.11, z), 0.2);
     drop(sink);
     out
 }

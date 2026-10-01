@@ -560,13 +560,18 @@ only with screenshots).
     where the player is.
 
   The decisions, recommendation taken (ask only with screenshots):
-  - **The lantern** stands on a post on the middle line at the aftcastle's
-    stern rail. It is a timber cage of four corner posts and a cap, with a
-    flame inside, cut by `pieces::cog::lantern` in the craft's frame. The
-    flame is drawn unlit and shown only while the dusk lamps are lit, as a
-    street lamp burns.
-  - **Its light** is a candle's: by night only, 5 m, warm, lighting the
-    aftcastle and the helm down to the main deck. It is a `RoomLights`
+  - **The lantern** is the mockup's `lantern()` where the mockup puts it on
+    the cog: a 2.6 m post on the aftcastle, 86% of the deck's half-length
+    aft on the middle line, with an arm out to starboard. A small timber
+    cage hangs from the arm 2.3 m up, with a flame inside. It is cut by
+    `pieces::cog::lantern` in the craft's frame. The flame is drawn unlit
+    and shown only while the dusk lamps are lit, as a street lamp burns.
+    (First cut as a short post at the stern rail; moved to the mockup's
+    form when its shots were taken beside the game's, before the game's
+    were.)
+  - **Its light** is the mockup's lamp (power 0.7) as a candle: by night
+    only, 5 m, warm, lighting the aftcastle and the helm down to the main
+    deck. It is a `RoomLights`
     entry on each of the ship's meshes. Each frame its place is moved to
     where the lantern is, and a `RoomLights` that changes is packed onto
     its material again.
