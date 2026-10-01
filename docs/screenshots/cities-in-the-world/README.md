@@ -135,3 +135,14 @@ teal shapes along the piers on the left are the rowboats and canoes, moored
 as the game's Loon (a teal canoe that sits low), and a Tern's sail stands
 past the lighthouse. Beside the mockup's wooden rowboats and white sails they
 hardly read as boats from the quay.
+
+## Task 4.2b: the harbour's sailboats (2026-10-01)
+
+`harbour-sailboats-2026-10-01.jpg`: Holinghaven's quay at 11:00, the mockup
+above the game before and after. Before, every sailing berth held a canoe:
+its 0.5 to 1.5 m of water was too shallow for the Tern's fixed 1.7 m keel.
+Now the Tern's keel lifts to the water under it (design, task 4.2b), and the
+berths along the piers hold Terns with their tall masts and sails. The cog's
+stern lantern stands on its aftcastle. Same capture setup as the slice 4d
+shots above (lavapipe, no GPU, `--walk --at 23.50609 -115.10515 --yaw -66.9
+--pitch -4 --time 18.77`).
