@@ -1,5 +1,6 @@
-//! Vehicles: a VTOL tiltrotor (Kestrel), a sailing keelboat (Tern) and a
-//! paddle canoe (Loon), stepped here and drawn by the app (`vehicles` change).
+//! Vehicles: a VTOL tiltrotor (Kestrel), a sailing keelboat (Tern), a paddle
+//! canoe (Loon) and the harbour's cog (`sail-the-cog`), stepped here and drawn
+//! by the app (`vehicles` change).
 //!
 //! A craft steps itself at the substep rate against its `Surroundings`: the sea
 //! function, the wind at a point, gravity and the ground. Nothing here knows
@@ -8,6 +9,7 @@
 //! to is `docs/mockups/vehicles.html`.
 
 pub mod body;
+pub mod cog;
 pub mod foil;
 pub mod hull;
 mod kestrel;
@@ -18,6 +20,7 @@ mod tern;
 #[cfg(test)]
 mod tests;
 
+pub use cog::{CogState, CogTelemetry};
 pub use kestrel::{KestrelState, KestrelTelemetry};
 pub use loon::{LoonState, LoonTelemetry, Stroke};
 pub use tern::{SailState, TernState, TernTelemetry};
@@ -43,16 +46,18 @@ pub enum Kind {
     Kestrel,
     Tern,
     Loon,
+    Cog,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 3] = [Kind::Kestrel, Kind::Tern, Kind::Loon];
+    pub const ALL: [Kind; 4] = [Kind::Kestrel, Kind::Tern, Kind::Loon, Kind::Cog];
 
     pub fn name(self) -> &'static str {
         match self {
             Kind::Kestrel => "Kestrel",
             Kind::Tern => "Tern",
             Kind::Loon => "Loon",
+            Kind::Cog => "Cog",
         }
     }
 
@@ -62,6 +67,7 @@ impl Kind {
             Kind::Kestrel => "kestrel",
             Kind::Tern => "tern",
             Kind::Loon => "loon",
+            Kind::Cog => "cog",
         }
     }
 
@@ -103,7 +109,8 @@ pub struct Input {
     pub tilt: f32,
     /// Tern: turn left (+). Loon: turn left (+), by paddling on the right.
     pub steer: f32,
-    /// Tern: sheet in (+) or ease (-).
+    /// Tern: sheet in (+) or ease (-). Cog: brace the yard round, its
+    /// starboard arm forward (+) or aft (-).
     pub sheet: f32,
     /// Tern: crew to starboard (+) or port (-).
     pub crew: f32,
@@ -131,6 +138,7 @@ pub enum CraftState {
     Kestrel(KestrelState),
     Tern(TernState),
     Loon(LoonState),
+    Cog(CogState),
 }
 
 /// What the instruments read.
@@ -141,6 +149,7 @@ pub enum Telemetry {
     Kestrel(KestrelTelemetry),
     Tern(TernTelemetry),
     Loon(LoonTelemetry),
+    Cog(CogTelemetry),
 }
 
 /// Hulls are the same for every craft of a kind: built once.
@@ -148,6 +157,7 @@ pub enum Telemetry {
 pub struct Hulls {
     pub tern: Arc<Hull>,
     pub loon: Arc<Hull>,
+    pub cog: Arc<Hull>,
 }
 
 impl Hulls {
@@ -155,6 +165,7 @@ impl Hulls {
         Self {
             tern: Arc::new(Hull::new(specs.tern.hull)),
             loon: Arc::new(Hull::new(specs.loon.hull)),
+            cog: Arc::new(Hull::new(specs.cog.hull)),
         }
     }
 }
@@ -363,6 +374,7 @@ impl Craft {
             Kind::Kestrel => CraftState::Kestrel(KestrelState::default()),
             Kind::Tern => CraftState::Tern(TernState::default()),
             Kind::Loon => CraftState::Loon(LoonState::default()),
+            Kind::Cog => CraftState::Cog(CogState::default()),
         };
         let mut craft = Self {
             id,
@@ -393,6 +405,7 @@ impl Craft {
             Kind::Kestrel => None,
             Kind::Tern => Some(&self.hulls.tern),
             Kind::Loon => Some(&self.hulls.loon),
+            Kind::Cog => Some(&self.hulls.cog),
         }
     }
 
@@ -449,6 +462,18 @@ impl Craft {
                 }
                 mass_model(&parts, &s.inertia_box)
             }
+            Kind::Cog => {
+                let s = &specs.cog;
+                let mut parts = s.parts.to_vec();
+                parts.push(Part {
+                    mass_kg: bilge,
+                    at: s.bilge.at,
+                });
+                if self.occupied {
+                    parts.push(s.helmsman);
+                }
+                mass_model(&parts, &s.inertia_box)
+            }
         };
         let reference = self.reference_position();
         self.body.mass = mass;
@@ -472,7 +497,7 @@ impl Craft {
                 s.sheet = 1.0;
                 s.crew = 0.0;
             }
-            CraftState::Loon(_) => {}
+            CraftState::Loon(_) | CraftState::Cog(_) => {}
         }
         self.weigh();
     }
@@ -483,6 +508,7 @@ impl Craft {
             Kind::Kestrel => self.specs.kestrel.seat,
             Kind::Tern => self.specs.tern.seat,
             Kind::Loon => self.specs.loon.seat,
+            Kind::Cog => self.specs.cog.seat,
         };
         let mut eye = seat.eye;
         if let CraftState::Tern(s) = &self.state {
@@ -502,6 +528,7 @@ impl Craft {
             Kind::Kestrel => self.specs.kestrel.seat,
             Kind::Tern => self.specs.tern.seat,
             Kind::Loon => self.specs.loon.seat,
+            Kind::Cog => self.specs.cog.seat,
         }
     }
 
@@ -511,6 +538,7 @@ impl Craft {
             Kind::Kestrel => self.body.position,
             Kind::Tern => self.reference_point(self.specs.tern.bow),
             Kind::Loon => self.reference_point(self.specs.loon.bow),
+            Kind::Cog => self.reference_point(self.specs.cog.bow),
         }
     }
 
@@ -542,6 +570,7 @@ impl Craft {
                 Kind::Kestrel => kestrel::forces(self, &input, &cx),
                 Kind::Tern => tern::forces(self, &input, &cx),
                 Kind::Loon => loon::forces(self, &input, &cx),
+                Kind::Cog => cog::forces(self, &input, &cx),
             }
             self.moor();
             self.body.integrate(h);

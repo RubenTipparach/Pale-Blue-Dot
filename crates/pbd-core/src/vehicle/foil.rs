@@ -115,6 +115,29 @@ pub fn apply_oriented(
     lift_scale: f64,
     drag_scale: f64,
 ) -> FoilForce {
+    let (out, _) = oriented(
+        body, at, chord, normal, spec, fluid, density, deflection, lift_scale, drag_scale,
+    );
+    body.push(out.force, out.at);
+    out
+}
+
+/// What [`apply_oriented`] would do, without doing it: the foil's force and,
+/// apart, the lift in it, for a foil whose lift is cut by something the
+/// coefficients do not know (a square sail's luff).
+#[allow(clippy::too_many_arguments)]
+pub fn oriented(
+    body: &RigidBody,
+    at: DVec3,
+    chord: DVec3,
+    normal: DVec3,
+    spec: &FoilSpec,
+    fluid: DVec3,
+    density: f64,
+    deflection: f64,
+    lift_scale: f64,
+    drag_scale: f64,
+) -> (FoilForce, DVec3) {
     let at = body.point(at);
     let c = body.axis(chord);
     let n = body.axis(normal);
@@ -123,10 +146,11 @@ pub fn apply_oriented(
     rel -= span * rel.dot(span);
     let v2 = rel.length_squared();
     if v2 < 1e-6 {
-        return FoilForce {
+        let out = FoilForce {
             at,
             ..Default::default()
         };
+        return (out, DVec3::ZERO);
     }
     let d = rel / v2.sqrt();
     let alpha = d.dot(n).atan2(-d.dot(c)) + deflection;
@@ -142,15 +166,16 @@ pub fn apply_oriented(
     let lift_dir = d.cross(span).normalize_or_zero();
     let pressure = 0.5 * density * v2;
     let q = pressure * spec.area_m2 as f64;
-    let force = lift_dir * (cl * q) + d * (cd * q);
-    body.push(force, at);
-    FoilForce {
+    let lift = lift_dir * (cl * q);
+    let force = lift + d * (cd * q);
+    let out = FoilForce {
         force,
         alpha,
         stall,
         at,
         pressure,
-    }
+    };
+    (out, lift)
 }
 
 pub(crate) fn smoothstep(lo: f64, hi: f64, x: f64) -> f64 {

@@ -315,6 +315,12 @@ const LOON: [Binding; 4] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
+const COG: [Binding; 3] = [
+    row(&A_D, "/", "tiller"),
+    row(&W_S, "/", "brace the yard round"),
+    row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
+];
+
 const WORLD: [Binding; 5] = [
     row(&[Key::Board(KeyCode::KeyM)], " ", "the map"),
     row(&[Key::Board(KeyCode::KeyR)], " ", "walk or fly"),
@@ -330,7 +336,7 @@ const SCREEN: [Binding; 3] = [
 ];
 
 /// Every control in the game, once.
-pub const BINDINGS: [Group; 8] = [
+pub const BINDINGS: [Group; 9] = [
     Group {
         heading: "ON FOOT",
         rows: &ON_FOOT,
@@ -354,6 +360,10 @@ pub const BINDINGS: [Group; 8] = [
     Group {
         heading: "LOON",
         rows: &LOON,
+    },
+    Group {
+        heading: "COG",
+        rows: &COG,
     },
     Group {
         heading: "WORLD",

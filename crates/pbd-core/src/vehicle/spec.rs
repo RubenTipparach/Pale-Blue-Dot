@@ -16,13 +16,16 @@ pub struct VehicleSpecs {
     pub kestrel: KestrelSpec,
     pub tern: TernSpec,
     pub loon: LoonSpec,
+    /// The harbour's cog (`sail-the-cog`).
+    pub cog: CogSpec,
 }
 
 impl VehicleSpecs {
     pub fn validate(&self) -> Result<(), String> {
         self.kestrel.validate()?;
         self.tern.validate()?;
-        self.loon.validate()
+        self.loon.validate()?;
+        self.cog.validate()
     }
 }
 
@@ -720,5 +723,203 @@ impl LoonSpec {
         self.hull.validate("loon")?;
         self.lateral.validate("loon.lateral")?;
         self.skeg.validate("loon.skeg")
+    }
+}
+
+// ---- Cog ----------------------------------------------------------------------
+
+/// A square sail bent to a yard, which the braces turn about the mast
+/// (`sail-the-cog` design 1).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SquareSailSpec {
+    /// Where the mast steps on the deck.
+    pub mast: [f32; 3],
+    /// The yard's height over the step and the sail's foot's, and the sail's
+    /// width, m: its area is the width by the height between.
+    pub yard_height_m: f32,
+    pub foot_height_m: f32,
+    pub width_m: f32,
+    pub aspect: f32,
+    pub cl_max: f32,
+    pub cd0: f32,
+    /// How far the braces turn the yard either way off square, deg, and how
+    /// fast, deg/s.
+    pub brace_deg: f32,
+    pub brace_rate_deg: f32,
+    /// The luff, deg: a square sail's weather edge is a free leech, not a
+    /// spar, so with the wind closer to the yard than `luff_deg` it falls in
+    /// and the sail lifts nothing; it fills, and lifts as the foil it is,
+    /// from `fill_deg`. Drag is whole throughout: a luffing sail flogs.
+    pub luff_deg: f32,
+    pub fill_deg: f32,
+}
+
+impl SquareSailSpec {
+    /// The sail's area, m^2.
+    pub fn area_m2(&self) -> f32 {
+        self.width_m * (self.yard_height_m - self.foot_height_m)
+    }
+}
+
+/// The cog: the harbour's ship, 15 m by 5 m, the mockup's (`towns.html`,
+/// `cog()`), sailed from its tiller on the aftcastle. Its reference frame's
+/// origin is its waterline's middle, as the harbour's moored piece's is.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CogSpec {
+    /// The hull's timber, its ballast, and the mast and yard.
+    pub parts: [Part; 3],
+    pub inertia_box: InertiaBox,
+    /// Whoever has the helm, at the tiller.
+    pub helmsman: Part,
+    pub hull: HullSpec,
+    pub sail: SquareSailSpec,
+    pub keel: FoilSpec,
+    pub rudder: FoilSpec,
+    /// The tiller's reach, rad, and how fast it is put over, rad/s.
+    pub rudder_max_rad: f32,
+    pub rudder_rate: f32,
+    pub resistance: ResistanceSpec,
+    pub windage: WindageSpec,
+    pub bilge: BilgeSpec,
+    pub contacts: [ContactSpec; 3],
+    pub heave_damping: f32,
+    pub angular_damping: f32,
+    /// Where a mooring line is made fast.
+    pub bow: [f32; 3],
+    pub seat: SeatSpec,
+}
+
+impl Default for CogSpec {
+    fn default() -> Self {
+        let part = |mass_kg, at| Part { mass_kg, at };
+        Self {
+            parts: [
+                part(22_000.0, [0.0, 0.0, 0.4]),
+                part(9_500.0, [0.0, -0.95, 0.0]),
+                part(2_500.0, [0.0, 8.5, -1.5]),
+            ],
+            inertia_box: InertiaBox {
+                mass_kg: 22_000.0,
+                size_m: [5.0, 3.2, 15.0],
+            },
+            helmsman: part(80.0, [0.0, 4.4, 5.6]),
+            hull: HullSpec {
+                length_m: 15.0,
+                beam_m: 5.0,
+                depth_m: 3.1,
+                sheer_m: 1.8,
+                cell_m: 0.8,
+                bow_power: 2.0,
+                stern_power: 2.6,
+                section_power: 4.0,
+                deck: true,
+            },
+            sail: SquareSailSpec {
+                mast: [0.0, 1.9, -1.5],
+                yard_height_m: 11.0,
+                foot_height_m: 4.0,
+                width_m: 8.8,
+                aspect: 1.3,
+                cl_max: 1.0,
+                cd0: 0.12,
+                brace_deg: 60.0,
+                brace_rate_deg: 12.0,
+                luff_deg: 15.0,
+                fill_deg: 30.0,
+            },
+            keel: FoilSpec {
+                at: [0.0, -1.0, 0.0],
+                chord: [0.0, 0.0, -1.0],
+                normal: [1.0, 0.0, 0.0],
+                area_m2: 7.0,
+                aspect: 0.6,
+                cl_max: 0.9,
+                cd0: 0.02,
+            },
+            rudder: FoilSpec {
+                at: [0.0, -0.5, 7.2],
+                chord: [0.0, 0.0, -1.0],
+                normal: [1.0, 0.0, 0.0],
+                area_m2: 1.6,
+                aspect: 1.4,
+                cl_max: 1.0,
+                cd0: 0.015,
+            },
+            rudder_max_rad: 0.6,
+            rudder_rate: 0.6,
+            resistance: ResistanceSpec {
+                at: [0.0, -0.5, 0.0],
+                wetted_m2: 70.0,
+                waterline_m: 13.5,
+                lateral_m2: 14.0,
+                friction: 0.004,
+            },
+            windage: WindageSpec {
+                at: [0.0, 3.0, 0.0],
+                area_m2: [35.0, 60.0, 12.0],
+            },
+            bilge: BilgeSpec {
+                open_m2: 4.0,
+                rim_share: 0.1,
+                rim_from_z: -7.5,
+                drain_kgps: 5.0,
+                bail_kgps: 20.0,
+                capacity_kg: 8_000.0,
+                at: [0.0, -0.6, 0.0],
+                slosh: 1.0,
+                slosh_max_m: 1.5,
+            },
+            contacts: [
+                seabed([0.0, -1.35, 0.0], 2_000_000.0, 200_000.0),
+                seabed([0.0, -0.9, -6.5], 2_000_000.0, 200_000.0),
+                seabed([0.0, -0.9, 6.5], 2_000_000.0, 200_000.0),
+            ],
+            heave_damping: 17_000.0,
+            angular_damping: 200_000.0,
+            bow: [0.0, 1.9, -7.2],
+            seat: SeatSpec {
+                eye: [0.0, 5.1, 5.6],
+                reach_m: 3.0,
+                exit: [0.0, 3.5, 4.6],
+            },
+        }
+    }
+}
+
+impl CogSpec {
+    fn validate(&self) -> Result<(), String> {
+        let masses: Vec<f32> = self.parts.iter().map(|p| p.mass_kg).collect();
+        positive("cog.parts", &masses)?;
+        positive(
+            "cog sizes",
+            &[
+                self.helmsman.mass_kg,
+                self.sail.width_m,
+                self.sail.aspect,
+                self.sail.cl_max,
+                self.sail.brace_rate_deg,
+                self.rudder_max_rad,
+                self.rudder_rate,
+                self.heave_damping,
+            ],
+        )?;
+        // A square sail needs a yard over its foot to be bent to.
+        if !(self.sail.yard_height_m > self.sail.foot_height_m && self.sail.foot_height_m >= 0.0) {
+            return Err("cog.sail: the yard must stand over the sail's foot".into());
+        }
+        if !(0.0..=90.0).contains(&self.sail.brace_deg) {
+            return Err("cog.sail.brace_deg must be within 0..=90".into());
+        }
+        if !(0.0 <= self.sail.luff_deg
+            && self.sail.luff_deg < self.sail.fill_deg
+            && self.sail.fill_deg <= 90.0)
+        {
+            return Err("cog.sail: luff_deg must rise to fill_deg within 0..=90".into());
+        }
+        self.hull.validate("cog")?;
+        self.keel.validate("cog.keel")?;
+        self.rudder.validate("cog.rudder")
     }
 }

@@ -354,6 +354,10 @@ fn read_controls(
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
             input.rudder = axis(KeyCode::KeyQ, KeyCode::KeyE);
         }
+        Kind::Cog => {
+            input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
+            input.sheet = axis(KeyCode::KeyW, KeyCode::KeyS);
+        }
     }
     controls.0 = input;
 }

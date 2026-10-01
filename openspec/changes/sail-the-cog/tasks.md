@@ -13,8 +13,8 @@ tasks 1 and 3d (thin solids and surfaces in `stand`, and the ship piece).
 
 ## 2. The cog as a craft
 
-- [ ] 2.1 `Kind::Cog` with its hull, square-sail, keel, rudder and seat specs in `vehicles.ron`, validated. Verify: settings tests refuse a hull cell over a third of the beam, and a sail with no yard.
-- [ ] 2.2 The square sail: a foil on a yard braced round the mast. Verify: core tests that the yard's angle of attack follows the braces and the apparent wind, and that a scripted reach, beat and run log speed and heel, with the heel under 15° on the reach.
+- [x] 2.1 `Kind::Cog` with its hull, square-sail, keel, rudder and seat specs in `vehicles.ron`, validated. Verify: settings tests refuse a hull cell over a third of the beam, and a sail with no yard. (`vehicle::tests::a_cogs_settings_refuse_a_coarse_hull_a_yardless_sail_and_a_backward_luff`, `the_cog_floats_on_its_waterline`, `vehicle_specs_match_the_ship_they_sail`.)
+- [x] 2.2 The square sail: a foil on a yard braced round the mast. Verify: core tests that the yard's angle of attack follows the braces and the apparent wind, and that a scripted reach, beat and run log speed and heel, with the heel under 15° on the reach. (`the_cogs_yard_follows_its_braces`, `a_square_sail_luffs_with_the_wind_along_its_yard`, `the_cog_reaches_runs_and_cannot_point_high`; the luff and the measured polar are in design 6, step 3 part 1.)
 - [ ] 2.3 The ship piece (`tenebris-towns` 3d) built in the craft's frame, and the craft drawn from the same model the harbour's cog is. Verify: a capture of the cog at its mooring matches the harbour's building cog.
 
 ## 3. Walking on the deck

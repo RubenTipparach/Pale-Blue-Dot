@@ -310,8 +310,9 @@ only with screenshots).
       square, quick to stall, and draggy. Its centre of effort is at the
       sail's middle, under the yard.
     - **The braces** turn the yard about the mast, at most 60° either way,
-      at a fixed rate. A cog cannot point high: it sails little closer than
-      70° off the wind.
+      at a fixed rate. A cog cannot point high: it makes good a track
+      little closer than 70° off the wind (measured in part 1 as built,
+      below).
     - A long keel and a stern rudder are wet foils.
     - Validation refuses a hull cell over a third of the beam (it already
       does) and a sail with no yard.
@@ -353,6 +354,60 @@ only with screenshots).
       walk to the aftcastle while the ship sails and turns. These are the
       `player/walking` scenarios, which move into the main spec then.
     - Shots: the cog under sail from the pier, and from its deck.
+- **Step 3, part 1 as built (2026-10-01): the cog as a craft.**
+  - **Built.**
+    - `Kind::Cog` with its `CogSpec` in `vehicles.ron`, regenerated from the
+      defaults: the hull, the square sail on its yard, the keel and rudder,
+      the helmsman and the seat. A cog's yard is saved in its record.
+    - The square sail is one foil whose chord runs along the yard; W and S
+      brace the yard, A and D steer.
+    - It is drawn from the harbour's own cut: `cog::sailing` is the ship in
+      the craft's frame without its yard, and `cog::rig` is the yard with
+      its sail, set at sea and furled at a mooring or an anchor. The app
+      turns the rig by the yard's angle, on a pivot at the mast's step.
+    - The HUD says whether the sail luffs, draws or is stalled, and the
+      bindings table has a COG group.
+  - **Finding: the flat foil pointed too high.** The first measure of the
+    windward work read the telemetry at one instant. At 20° off the wind it
+    reported 0.58 m/s made good to windward, which no sail can do. Traced
+    second by second, the cog was in irons and driven astern. Going astern
+    turned the rudder's effect round, so the helmsman spun it, and the keel
+    carried its sternway round to windward. So the sail's signs were right
+    and the measure was wrong. Measured instead as the mean over 60-120 s
+    of a held course, the sail as a flat foil drew with the wind at 14° to
+    the yard. Its best course to windward was 50° off the wind (0.61 m/s
+    made good). That is a fore-and-aft rig's pointing, not a square sail's.
+  - **The luff: the physics the flat foil lacked.** A square sail's weather
+    edge is a free leech, not a spar. With the wind close along the yard it
+    falls in, and the sail lifts nothing until the wind is well across it.
+    So below `luff_deg` (15°) of wind to the yard the sail's lift is gone,
+    and from `fill_deg` (30°) it lifts as the foil it is, blended between.
+    Its drag stays whole throughout: a luffing sail flogs. Recommendation
+    taken (ask only with screenshots); both angles are in `vehicles.ron`.
+  - **Measured with the luff** (8 m/s wind, the mean over 60-120 s of a
+    held course, the best brace for each course; the instrument is
+    `print_the_cogs_polar`):
+
+    | Off the wind | Made good to windward | Along its bow | Leeway | Wandered |
+    | ---: | ---: | ---: | ---: | ---: |
+    | 40° | +0.25 m/s | 0.85 m/s | 17° | 32°: cannot hold it |
+    | 50° | +0.34 m/s | 1.05 m/s | 13° | 10° |
+    | 60° | **+0.44 m/s** | 1.58 m/s | 9° | 6° |
+    | 70° | +0.37 m/s | 2.10 m/s | 5° | 5° |
+    | 90° | -0.26 m/s (leeway) | 2.21 m/s | 4° | 3° |
+
+    Its best course to windward is 60° off with the yard braced hard. Its
+    leeway there makes a track 69° off the wind, which is what a square
+    rig does. It reaches at 2.2 m/s and runs at better than 2 m/s.
+    `the_cog_reaches_runs_and_cannot_point_high` holds these facts.
+  - **Not built yet**, in this order:
+    - the deck held by the craft, so the walker rides it under sail;
+    - the harbour's cog made a craft, moored on the swing, with cast off
+      and make fast;
+    - the stern lantern;
+    - the app scenarios and the shots.
+  - The frame cost is not measured: this is a cloud session, so
+    `perf_suite.py` was not run.
 - **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
   in the voxel field, which cannot sail. A light carried on a craft is part
   of the craft's drawing.

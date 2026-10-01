@@ -532,7 +532,7 @@ impl Launch {
                     let key = args.get(i).expect("--aboard requires a craft");
                     result.aboard = Some(
                         pbd_core::vehicle::Kind::from_key(key)
-                            .expect("--aboard knows kestrel, tern and loon"),
+                            .expect("--aboard knows kestrel, tern, loon and cog"),
                     );
                     result.walk = true;
                 }

@@ -998,13 +998,6 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
 /// A town's cog drawn apart from it, under its root (`sail-the-cog` design
 /// 6): its faces as cut where it rests, moved by its deck's transform.
 fn spawn_cog(world: &mut World, root: Entity, laid: &Laid) -> Entity {
-    let parts: Vec<(Mesh, Handle<Image>)> = {
-        let assets = world.resource::<AssetServer>();
-        laid.cog_meshes
-            .iter()
-            .map(|(name, buf)| (to_mesh(buf), texture(assets, name)))
-            .collect()
-    };
     let cog = world
         .spawn((
             Name::new(format!("{}'s cog", laid.name)),
@@ -1013,6 +1006,31 @@ fn spawn_cog(world: &mut World, root: Entity, laid: &Laid) -> Entity {
         ))
         .id();
     world.entity_mut(root).add_child(cog);
+    spawn_meshes(world, cog, &laid.cog_meshes);
+    cog
+}
+
+/// How far each town texture repeats, metres, as the cutter asks it: the
+/// towns' table where they are loaded, else their manifest's.
+pub(crate) fn repeat_in(world: &World) -> impl Fn(&str) -> f32 + use<> {
+    let repeats = world
+        .get_resource::<TownAssets>()
+        .map(|a| a.repeats.clone())
+        .unwrap_or_else(|| Arc::new(load_repeats()));
+    move |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0)
+}
+
+/// A cut's faces drawn under `parent` in the towns' textures, in the
+/// parent's frame: the harbour's cog at its mooring, and the cog a craft
+/// carries.
+pub(crate) fn spawn_meshes(world: &mut World, parent: Entity, meshes: &Meshes) {
+    let parts: Vec<(Mesh, Handle<Image>)> = {
+        let assets = world.resource::<AssetServer>();
+        meshes
+            .iter()
+            .map(|(name, buf)| (to_mesh(buf), texture(assets, name)))
+            .collect()
+    };
     for (mesh, image) in parts {
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
         let material = world
@@ -1025,9 +1043,8 @@ fn spawn_cog(world: &mut World, root: Entity, laid: &Laid) -> Entity {
         let part = world
             .spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()))
             .id();
-        world.entity_mut(cog).add_child(part);
+        world.entity_mut(parent).add_child(part);
     }
-    cog
 }
 
 /// Open every door when the towns are built, as the player would, and write

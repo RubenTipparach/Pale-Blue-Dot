@@ -2433,3 +2433,61 @@ fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
         feet - sea
     );
 }
+
+/// `sail-the-cog` step 3: the ship the craft carries is the moored one cut
+/// in the craft's own frame, without its yard: its deck amidships 1.9 m over
+/// the waterline, its aftcastle aft (+z), where the helm is, and its yard and
+/// furled sail apart, in the rig the craft turns.
+#[test]
+fn the_cog_cut_for_its_craft_lies_bow_forward_without_its_yard() {
+    let repeat = |_: &str| 2.0;
+    let frame = pieces::Frame {
+        origin: Vec3::ZERO,
+        x: Vec3::X,
+        y: Vec3::Y,
+        z: Vec3::Z,
+    };
+    let mut moored = Meshes::new();
+    pieces::cog::ship_in(&mut moored, &repeat, frame, -std::f32::consts::FRAC_PI_2, 1);
+    let mut sailing = Meshes::new();
+    let ship = pieces::cog::sailing(&mut sailing, &repeat, 1);
+    let top = |x: f32, z: f32| {
+        let p = Vec2::new(x, z);
+        ship.solids
+            .iter()
+            .filter(|s| {
+                let n = s.outline.len();
+                (0..n).all(|i| {
+                    let (a, b) = (s.outline[i], s.outline[(i + 1) % n]);
+                    (b - a).perp_dot(p - a) >= 0.0
+                })
+            })
+            .map(|s| s.y1)
+            .fold(f32::MIN, f32::max)
+    };
+    // The hull is solid to a hand under the deck's floor at 1.9 m, and the
+    // aftcastle's deck 1.6 m over that.
+    let (waist, castle) = (top(0.0, 0.0), top(0.0, 5.6));
+    assert!((1.75..=1.9).contains(&waist), "the hull's top at {waist}");
+    assert!((castle - 3.5).abs() < 0.05, "aftcastle at {castle}");
+    let Some(&pieces::Surface::Flight { foot, dir, .. }) = ship
+        .surfaces
+        .iter()
+        .find(|x| matches!(x, pieces::Surface::Flight { .. }))
+    else {
+        panic!("the cog has its stair");
+    };
+    assert!(
+        dir.y > 0.99,
+        "the stair climbs aft to the aftcastle: from {foot} along {dir}"
+    );
+    let count = |m: &Meshes, k: &str| m.get(k).map_or(0, |b| b.positions.len());
+    let rig = pieces::cog::rig(&repeat, false);
+    assert_eq!(count(&sailing, "linen"), 0, "the sail is in the rig");
+    assert_eq!(count(&moored, "linen"), count(&rig, "linen"));
+    assert_eq!(
+        count(&moored, "timber"),
+        count(&sailing, "timber") + count(&rig, "timber")
+    );
+    assert!(count(&pieces::cog::rig(&repeat, true), "linen") > count(&rig, "linen"));
+}

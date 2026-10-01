@@ -2,7 +2,9 @@
 //! physics is (the hull's own loft, the wing's own span and chord, the rotor's
 //! own hub and radius), and the parts that move with its state - the
 //! Kestrel's nacelles and rotors, the Tern's boom and tiller, the Loon's
-//! paddle - placed from that state every frame. Nothing here decides anything.
+//! paddle, the cog's yard and sail - placed from that state every frame.
+//! The cog is the harbour's ship as its piece is cut. Nothing here decides
+//! anything.
 
 use super::{Vehicle, view::VehicleView};
 use bevy::asset::RenderAssetUsages;
@@ -39,6 +41,11 @@ enum Moving {
     Boom,
     Tiller,
     Paddle,
+    /// The cog's yard, turned about its mast by the braces.
+    Yard,
+    /// Its sail, set (true) or furled on the yard: set at sea, furled at a
+    /// mooring or an anchor.
+    Sail(bool),
     /// The figure aboard, drawn only from the chase view.
     Crew,
 }
@@ -263,6 +270,44 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
             );
             b.crew(entity, s.seat.eye, &crew);
         }
+        Kind::Cog => {
+            // The harbour's ship, as its piece is cut (`sail-the-cog` step
+            // 3): one model moored and sailing. Its gangway is on the side
+            // the harbour moors it.
+            use pbd_core::settlement::pieces::cog as ship;
+            let s = &specs.cog;
+            let repeat = crate::towns::repeat_in(b.world);
+            let gang_side = b
+                .world
+                .get_resource::<crate::towns::TownAssets>()
+                .and_then(|a| a.harbour.cog.as_ref())
+                .map_or(-1, |c| c.gang_side);
+            let mut meshes = Default::default();
+            ship::sailing(&mut meshes, &repeat, gang_side);
+            crate::towns::spawn_meshes(b.world, entity, &meshes);
+            let yard = b.pivot(
+                entity,
+                Moving::Yard,
+                Transform::from_translation(ship::MAST_STEP),
+            );
+            for set in [true, false] {
+                let sail = b.pivot(yard, Moving::Sail(set), Transform::IDENTITY);
+                crate::towns::spawn_meshes(b.world, sail, &ship::rig(&repeat, set));
+            }
+            let rudder_h = (s.rudder.area_m2 * s.rudder.aspect).sqrt();
+            let tiller = b.pivot(
+                entity,
+                Moving::Tiller,
+                Transform::from_translation(Vec3::from(s.rudder.at)),
+            );
+            b.cuboid(
+                tiller,
+                Vec3::new(0.12, rudder_h, s.rudder.area_m2 / rudder_h),
+                Vec3::ZERO,
+                &dark,
+            );
+            b.crew(entity, s.seat.eye, &crew);
+        }
     }
 }
 
@@ -306,6 +351,15 @@ pub fn place(
             }
             (Moving::Tiller, CraftState::Tern(s)) => {
                 transform.rotation = Quat::from_rotation_y(s.tiller as f32);
+            }
+            (Moving::Tiller, CraftState::Cog(s)) => {
+                transform.rotation = Quat::from_rotation_y(s.tiller as f32);
+            }
+            (Moving::Yard, CraftState::Cog(s)) => {
+                transform.rotation = Quat::from_rotation_y(s.yard as f32);
+            }
+            (Moving::Sail(set), CraftState::Cog(_)) => {
+                *visibility = visible(set == craft.mooring.is_none());
             }
             (Moving::Paddle, CraftState::Loon(s)) => {
                 *transform = paddle(craft, s);
