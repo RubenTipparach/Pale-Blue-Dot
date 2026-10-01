@@ -315,6 +315,13 @@ const LOON: [Binding; 4] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
+const ROWBOAT: [Binding; 4] = [
+    row(&W_S, "/", "row ahead or back"),
+    row(&A_D, "/", "steer"),
+    row(&Q_E, "/", "trail an oar as a rudder"),
+    row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
+];
+
 const COG: [Binding; 3] = [
     row(&A_D, "/", "tiller"),
     row(&W_S, "/", "brace the yard round"),
@@ -336,7 +343,7 @@ const SCREEN: [Binding; 3] = [
 ];
 
 /// Every control in the game, once.
-pub const BINDINGS: [Group; 9] = [
+pub const BINDINGS: [Group; 10] = [
     Group {
         heading: "ON FOOT",
         rows: &ON_FOOT,
@@ -360,6 +367,10 @@ pub const BINDINGS: [Group; 9] = [
     Group {
         heading: "LOON",
         rows: &LOON,
+    },
+    Group {
+        heading: "ROWBOAT",
+        rows: &ROWBOAT,
     },
     Group {
         heading: "COG",

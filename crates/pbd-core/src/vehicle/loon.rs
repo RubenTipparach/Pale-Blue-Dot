@@ -7,7 +7,8 @@
 use super::foil::FoilForce;
 use super::hull::{bilge_flow, float, resist};
 use super::{
-    Context, Craft, CraftState, FORWARD, Input, RIGHT, SEA_DENSITY, Telemetry, contact, v3, windage,
+    Context, Craft, CraftState, FORWARD, Input, Kind, RIGHT, SEA_DENSITY, Telemetry, contact, v3,
+    windage,
 };
 use glam::DVec3;
 
@@ -65,9 +66,11 @@ pub struct LoonTelemetry {
 
 pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let specs = craft.specs.clone();
-    let s = &specs.loon;
+    let (s, hull) = match craft.kind {
+        Kind::Rowboat => (&specs.rowboat, craft.hulls.rowboat.clone()),
+        _ => (&specs.loon, craft.hulls.loon.clone()),
+    };
     let p = &s.paddle;
-    let hull = craft.hulls.loon.clone();
     let occupied = craft.occupied;
     let com = craft.com;
     let bilge_kg = craft.bilge_kg;

@@ -1546,6 +1546,35 @@ so the first can be looked at before it can be walked into.
       - App: each harbour's rowboat berths make Rowboats.
       - Shots of the quay beside the mockup's.
     - Recommendation taken (ask only with screenshots).
+    - **As built (2026-10-01).**
+      - `pieces::dressing::small_boat` lofts the mockup's hull at the
+        craft's length, beam and depth with the mockup's sheer, and draws
+        the rowboat's thwarts and oars from the same `fittings` the
+        harbour's beached and slipway boats use. The canoe's paddle is cut
+        apart (`laid_paddle`) and drawn only while nobody is aboard: the
+        paddler holds the Loon's moving one.
+      - **The floor follows the trim.** Laid level 3 cm over the level
+        waterline, the canoe's floor was 2 cm under the sea at its stern:
+        its paddler sits aft and trims it by the stern. `Hull::waterline`
+        now solves the trim (the centre of buoyancy under the centre of
+        mass), and `Craft::floor` lays the boards 3 cm over that, rising
+        aft with it: about 1.7 degrees for the canoe, 1.1 for the
+        rowboat. Through a whole swell their corners stay 2.6 and 2.7 cm
+        over the sea.
+      - **The rowboat's floor is flat.** On 0.2 m cells and a round
+        section (power 2.5) it took its rower at a steady 14 degrees of
+        heel: its waterline, in the bottom row of cells, was 0.6 m wide.
+        On 0.1 m cells and a section of power 3.5, nearer the mockup's U
+        (about 3 to 4), it floats within 0.03 degrees of upright with its
+        rower and rows at 1.0 m/s. The Loon carries the same note.
+      - The mockup tints some of its boats (a beige and a pale grey-blue
+        wash); the game's berths carry no tint, so every boat is bare
+        wood. Not exported; noted.
+      - Oars that pivot in rowlocks are still the later refinement: the
+        rowboat's oars lie across its thwarts while it is rowed.
+      - Requirements in `openspec/specs/player/vehicles`: "The rowboat is
+        its own craft and rows" and "An open boat's floor stays over the
+        sea".
 - **Task 4.2c in detail, the harbour's dressing (written 2026-10-01).**
   Third in the owner's order: "We're good on the mockup already. Approved.
   Implement in game".

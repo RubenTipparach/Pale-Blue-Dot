@@ -93,6 +93,34 @@ metre of water, and in open water its keel SHALL be all the way down
 - **THEN** the keel is about half way down after 1.5 s and all the way down
   after 3.5 s
 
+### Requirement: The rowboat is its own craft and rows
+The harbour's rowboat SHALL be its own craft, `Kind::Rowboat`, at the towns
+mockup's size (4.2 m by 1.45 m, 0.6 m deep), rowed with the Loon's stroke on
+its own spec (`rowboat` in `vehicles.ron`). It SHALL float upright empty and
+with its rower aboard, and row ahead
+(`vehicle::tests::a_rowboat_floats_upright_empty_and_with_its_rower_and_rows_ahead`).
+
+#### Scenario: Afloat with its rower
+- **WHEN** a rowboat with its rower aboard settles on the sea for 30 s
+- **THEN** it stands within 3 degrees of upright, keel under the water and
+  gunwale more than 0.2 m over it
+
+#### Scenario: Rowing ahead
+- **WHEN** its rower rows ahead for 30 s from rest
+- **THEN** it has gone more than 20 m ahead and makes more than 0.8 m/s
+
+### Requirement: An open boat's floor stays over the sea
+An open boat (the Loon and the rowboat) SHALL be drawn with floorboards laid
+3 cm over the still water it floats in with its paddler aboard, along the trim
+the paddler gives it, inside its drawn planks, so the sea's sheet never shows
+inside it (`vehicle::tests::an_open_boats_floorboards_stand_over_the_sea_inside_its_hull`).
+
+#### Scenario: Through a swell
+- **WHEN** a Loon or a rowboat with its paddler aboard rides the sea's swell
+  for 25 s
+- **THEN** every corner of its floorboards stays more than 1.5 cm over the
+  sea
+
 ### Requirement: A paddle stroke is drag on the blade
 Each stroke SHALL apply the blade's hydrodynamic drag against the local water
 velocity at the blade's position, so a stroke on one side turns the canoe and

@@ -138,6 +138,46 @@ impl Hull {
         }
     }
 
+    /// How still water stands on the hull floating with `mass_kg` in it,
+    /// its centre of mass `com_z` along it and level across: the water's
+    /// height in the reference frame at the middle, m, and how far it rises
+    /// per metre aft (+z), from the cells each counted for the share of it
+    /// under, as [`float`] counts them. The rise is the trim that puts the
+    /// centre of buoyancy over the centre of mass.
+    pub fn waterline(&self, mass_kg: f64, com_z: f64, density: f64) -> (f32, f32) {
+        let s = self.spec.cell_m as f64;
+        let cell_kg = s * s * s * density;
+        // Mass held up and its moment along the hull, for water at `y`
+        // amidships rising `rise` per metre aft.
+        let held = |y: f64, rise: f64| -> (f64, f64) {
+            self.cells.iter().fold((0.0, 0.0), |(m, mz), c| {
+                let share = ((y + rise * c.z as f64 - c.y as f64 + s / 2.0) / s).clamp(0.0, 1.0);
+                (m + share * cell_kg, mz + share * cell_kg * c.z as f64)
+            })
+        };
+        let bisect = |mut lo: f64, mut hi: f64, low: &dyn Fn(f64) -> bool| -> f64 {
+            for _ in 0..48 {
+                let mid = (lo + hi) / 2.0;
+                if low(mid) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        let (keel, sheer) = (
+            (self.spec.sheer_m - self.spec.depth_m) as f64,
+            self.spec.sheer_m as f64,
+        );
+        let level = |rise: f64| bisect(keel - 1.0, sheer + 1.0, &|y| held(y, rise).0 < mass_kg);
+        let rise = bisect(-0.3, 0.3, &|rise| {
+            let (m, mz) = held(level(rise), rise);
+            mz / m.max(1e-9) < com_z
+        });
+        (level(rise) as f32, rise as f32)
+    }
+
     /// The hull's surface for drawing: `stations` sections along it, `across`
     /// points round each. Positions in the reference frame; triangles wound
     /// outward.

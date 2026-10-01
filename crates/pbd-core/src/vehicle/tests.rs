@@ -1180,3 +1180,169 @@ fn a_terns_keel_lifts_to_the_water_under_it() {
     world.run(&mut craft, 2.0, |_| Input::default());
     assert_eq!(down(&craft), 1.0, "all the way down");
 }
+
+/// Where the sea's surface is under a point of a craft, m over it: the
+/// sea of `World::run`, its swell running, sampled as `float` samples it.
+fn over_the_sea(world: &World, at: DVec3) -> f64 {
+    let state = world.sea.state(world.sea_wind, world.wind);
+    let up = at.normalize().as_vec3();
+    let sea = world.sea.local(&state, up, 40.0, world.seconds);
+    at.length() - RADIUS - sea.at(at.as_vec3(), RADIUS as f32, 0.0).height as f64
+}
+
+/// The corners of the floorboards an open boat is drawn with, and the rest
+/// of its planks, in its reference frame.
+fn floorboards_of(craft: &Craft) -> (Vec<Vec3>, Vec<Vec3>) {
+    let h = craft.loon_spec().hull;
+    let (kind, wood) = match craft.kind {
+        Kind::Rowboat => ("rowboat", "boards"),
+        _ => ("canoe", "driftwood"),
+    };
+    let (middle, rise) = craft.floor().expect("an open boat");
+    let cut = crate::settlement::pieces::dressing::small_boat(
+        &|_| 1.5,
+        kind,
+        Vec3::new(h.length_m, h.beam_m, h.depth_m),
+        h.sheer_m,
+        (middle, rise),
+    );
+    cut[wood]
+        .positions
+        .iter()
+        .map(|p| Vec3::from(*p))
+        .partition(|p| (p.y - (middle + rise * p.z)).abs() < 1e-4)
+}
+
+#[test]
+fn an_open_boats_floorboards_stand_over_the_sea_inside_its_hull() {
+    for kind in [Kind::Loon, Kind::Rowboat] {
+        let mut craft = at_pole(kind, 0.0, 0.0);
+        craft.occupied = true;
+        let mut world = World::new(RADIUS - 40.0);
+        world.run(&mut craft, 30.0, |_| Input::default());
+        let floor = floorboards_of(&craft).0;
+        assert!(floor.len() > 40, "{}: {} corners", kind.name(), floor.len());
+        // Inside the hull as drawn: its planks at the floor's height are
+        // at least as far out to that side, near that station.
+        let skin = floorboards_of(&craft).1;
+        for p in &floor {
+            assert!(
+                skin.iter().any(|q| (q.z - p.z).abs() < 0.2
+                    && q.x * p.x >= 0.0
+                    && q.x.abs() >= p.x.abs()
+                    && (q.y - p.y).abs() < 0.08),
+                "{p} through the planks"
+            );
+        }
+        // Through a whole swell, the boat riding it.
+        let mut least = f64::MAX;
+        for _ in 0..50 {
+            world.run(&mut craft, 0.5, |_| Input::default());
+            for p in &floor {
+                least = least.min(over_the_sea(&world, craft.reference_point(p.to_array())));
+            }
+        }
+        let (middle, rise) = craft.floor().unwrap();
+        println!(
+            "{}: floor {middle:.3} m amidships rising {rise:.4} aft, least over the sea {least:.3} m",
+            kind.name()
+        );
+        assert!(
+            least > FLOOR_OVER_M as f64 / 2.0,
+            "{}: the floor comes within {least:.3} m of the sea",
+            kind.name()
+        );
+    }
+}
+
+#[test]
+fn a_rowboat_floats_upright_empty_and_with_its_rower_and_rows_ahead() {
+    // Across the sea's face: its swell lifts and drops a boat riding it.
+    let drift = |craft: &Craft| {
+        let up = craft.body.position.normalize();
+        let v = craft.body.velocity;
+        (v - up * v.dot(up)).length()
+    };
+    for occupied in [false, true] {
+        let mut craft = at_pole(Kind::Rowboat, 0.0, 0.0);
+        craft.occupied = occupied;
+        let mut world = World::new(RADIUS - 40.0);
+        world.run(&mut craft, 30.0, |_| Input::default());
+        let up = craft.body.position.normalize();
+        let upright = craft.body.axis(DVec3::Y).dot(up);
+        let keel = over_the_sea(&world, craft.reference_point([0.0, -0.25, 0.0]));
+        let gunwale = over_the_sea(&world, craft.reference_point([0.0, 0.35, 0.0]));
+        println!(
+            "rowboat, occupied {occupied}: upright {upright:.4}, keel {keel:+.3} m, gunwale {gunwale:+.3} m, drift {:.3}",
+            drift(&craft)
+        );
+        assert!(upright > 3f64.to_radians().cos(), "heeled: {upright}");
+        assert!(
+            keel < 0.0 && gunwale > 0.2,
+            "keel {keel}, gunwale {gunwale}"
+        );
+        assert!(drift(&craft) < 0.05);
+    }
+    let mut craft = at_pole(Kind::Rowboat, 0.0, 0.0);
+    craft.occupied = true;
+    let mut world = World::new(RADIUS - 40.0);
+    world.run(&mut craft, 5.0, |_| Input::default());
+    let start = craft.body.position;
+    let ahead = craft.body.axis(FORWARD);
+    world.run(&mut craft, 30.0, |_| Input {
+        forward: 1.0,
+        ..Default::default()
+    });
+    let made = (craft.body.position - start).dot(ahead);
+    let speed = craft.body.velocity.dot(craft.body.axis(FORWARD));
+    println!("rowboat rowed 30 s: {made:.1} m ahead, {speed:.2} m/s");
+    assert!(made > 20.0 && speed > 0.8, "{made} m, {speed} m/s");
+}
+
+#[test]
+#[ignore = "instrument: an empty boat settling on a still sea"]
+fn print_an_empty_boat_settling() {
+    for kind in [Kind::Loon, Kind::Rowboat] {
+        let mut craft = at_pole(kind, 0.0, 0.0);
+        let mut world = World::new(RADIUS - 40.0);
+        for _ in 0..12 {
+            world.run(&mut craft, 5.0, |_| Input::default());
+            let v = craft.body.velocity;
+            println!(
+                "{} t {:>3.0}: v {:+.3} {:+.3} {:+.3}, w {:.3}, pos {:+.3} {:+.3}",
+                kind.name(),
+                world.seconds - 1000.0,
+                v.x,
+                v.y,
+                v.z,
+                craft.body.angular_velocity.length(),
+                craft.body.position.x,
+                craft.body.position.z
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "instrument: an open boat with its paddler aboard, heel and trim"]
+fn print_an_open_boat_with_its_paddler() {
+    for kind in [Kind::Loon, Kind::Rowboat] {
+        let mut craft = at_pole(kind, 0.0, 0.0);
+        craft.occupied = true;
+        let mut world = World::new(RADIUS - 40.0);
+        for _ in 0..8 {
+            world.run(&mut craft, 5.0, |_| Input::default());
+            let up = craft.body.position.normalize();
+            let heel = craft.body.axis(RIGHT).dot(up).asin().to_degrees();
+            let trim = craft.body.axis(FORWARD).dot(up).asin().to_degrees();
+            println!(
+                "{} t {:>3.0}: heel {heel:+.2} deg, bow up {trim:+.2} deg, com {:?}, mass {:.0}",
+                kind.name(),
+                world.seconds - 1000.0,
+                craft.com,
+                craft.body.mass
+            );
+        }
+        println!("  floor {:?}", craft.floor());
+    }
+}

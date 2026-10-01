@@ -10,7 +10,7 @@ fn main() {
         .struct_names(false)
         .separate_tuple_members(false);
     println!(
-        "// The three craft (pbd_core::vehicle::spec): every number each is made of.\n\
+        "// The craft (pbd_core::vehicle::spec): every number each is made of.\n\
          // The code defaults written out by `cargo run -p pbd-core --example\n\
          // vehicle_specs`; a test holds the two together. Metres, kilograms,\n\
          // seconds and radians unless a name says otherwise. Coordinates are the\n\

@@ -89,9 +89,10 @@ pub struct Launch {
     /// photographed and the fishery's numbers logged. A capture instrument,
     /// like `--swim`: a headless run has no hand on the mouse.
     pub fish: bool,
-    /// `--aboard KIND` boards the Kestrel, Tern or Loon once the fleet is in,
-    /// and `--seat` takes the seat rather than the chase view: a headless run
-    /// has nobody to walk up to a craft and press F. Implies `--walk`.
+    /// `--aboard KIND` boards a craft of that kind once the fleet is in (a
+    /// cog or a rowboat once a harbour has made one), and `--seat` takes the
+    /// seat rather than the chase view: a headless run has nobody to walk up
+    /// to a craft and press F. Implies `--walk`.
     pub aboard: Option<pbd_core::vehicle::Kind>,
     pub seat: bool,
     /// Capture instrument: a cog boarded with `--aboard cog` is cast off
@@ -541,7 +542,7 @@ impl Launch {
                     let key = args.get(i).expect("--aboard requires a craft");
                     result.aboard = Some(
                         pbd_core::vehicle::Kind::from_key(key)
-                            .expect("--aboard knows kestrel, tern, loon and cog"),
+                            .expect("--aboard knows kestrel, tern, loon, cog and rowboat"),
                     );
                     result.walk = true;
                 }

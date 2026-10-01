@@ -10,7 +10,7 @@ use super::foil::FoilSpec;
 use super::hull::{BilgeSpec, HullSpec, ResistanceSpec};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct VehicleSpecs {
     pub kestrel: KestrelSpec,
@@ -18,6 +18,21 @@ pub struct VehicleSpecs {
     pub loon: LoonSpec,
     /// The harbour's cog (`sail-the-cog`).
     pub cog: CogSpec,
+    /// The harbour's rowboat (`cities-in-the-world` task 4.2b): the
+    /// mockup's, rowed with the Loon's stroke.
+    pub rowboat: LoonSpec,
+}
+
+impl Default for VehicleSpecs {
+    fn default() -> Self {
+        Self {
+            kestrel: Default::default(),
+            tern: Default::default(),
+            loon: Default::default(),
+            cog: Default::default(),
+            rowboat: LoonSpec::rowboat(),
+        }
+    }
 }
 
 impl VehicleSpecs {
@@ -25,6 +40,7 @@ impl VehicleSpecs {
         self.kestrel.validate()?;
         self.tern.validate()?;
         self.loon.validate()?;
+        self.rowboat.validate()?;
         self.cog.validate()
     }
 }
@@ -752,6 +768,107 @@ impl Default for LoonSpec {
 }
 
 impl LoonSpec {
+    /// The harbour's rowboat: the towns mockup's (`BOATS.rowboat`), 4.2 m
+    /// by 1.45 m and 0.6 m deep, its gunwale 0.35 m over the waterline, so
+    /// it draws about 0.25 m. Its oars are the Loon's stroke, out at the
+    /// rowlocks' reach.
+    pub fn rowboat() -> Self {
+        Self {
+            parts: [Part {
+                mass_kg: 110.0,
+                at: [0.0, 0.0, 0.0],
+            }],
+            inertia_box: InertiaBox {
+                mass_kg: 110.0,
+                size_m: [1.45, 0.6, 4.2],
+            },
+            paddler: Part {
+                mass_kg: 80.0,
+                at: [0.0, 0.3, 0.3],
+            },
+            hull: HullSpec {
+                length_m: 4.2,
+                beam_m: 1.45,
+                depth_m: 0.6,
+                sheer_m: 0.35,
+                cell_m: 0.1,
+                bow_power: 2.4,
+                stern_power: 2.0,
+                // Flat-floored, as the mockup's U section is (about 3 to 4):
+                // a round bottom floats it with its rower on a waterline too
+                // narrow to hold them upright, as the Loon's.
+                section_power: 3.5,
+                deck: false,
+            },
+            lateral: FoilSpec {
+                at: [0.0, -0.12, 0.1],
+                chord: [0.0, 0.0, -1.0],
+                normal: [1.0, 0.0, 0.0],
+                area_m2: 1.0,
+                aspect: 0.15,
+                cl_max: 0.5,
+                cd0: 0.02,
+            },
+            skeg: FoilSpec {
+                at: [0.0, -0.15, 1.8],
+                chord: [0.0, 0.0, -1.0],
+                normal: [1.0, 0.0, 0.0],
+                area_m2: 0.08,
+                aspect: 0.5,
+                cl_max: 0.9,
+                cd0: 0.02,
+            },
+            paddle: PaddleSpec {
+                reach_m: 1.1,
+                depth_m: -0.15,
+                catch_z: -0.6,
+                stroke_m: 1.4,
+                power_s: 0.7,
+                recovery_s: 0.6,
+                blade_m2: 0.12,
+                blade_cd: 1.25,
+                rudder_at: [0.8, 1.8],
+                rudder_m2: 0.08,
+            },
+            resistance: ResistanceSpec {
+                at: [0.0, -0.1, 0.1],
+                wetted_m2: 4.5,
+                waterline_m: 3.9,
+                lateral_m2: 1.2,
+                friction: 0.0045,
+            },
+            windage: WindageSpec {
+                at: [0.0, 0.4, 0.0],
+                area_m2: [1.2, 1.4, 0.6],
+            },
+            windage_empty_m2: [0.8, 1.4, 0.4],
+            bilge: BilgeSpec {
+                open_m2: 5.0,
+                rim_share: 1.0,
+                rim_from_z: -99.0,
+                drain_kgps: 0.0,
+                bail_kgps: 6.0,
+                capacity_kg: 1200.0,
+                at: [0.0, -0.1, 0.0],
+                slosh: 1.2,
+                slosh_max_m: 0.4,
+            },
+            contacts: [
+                seabed([0.0, -0.25, 0.0], 20_000.0, 2_500.0),
+                seabed([0.0, 0.0, -1.9], 20_000.0, 2_500.0),
+                seabed([0.0, 0.0, 1.9], 20_000.0, 2_500.0),
+            ],
+            heave_damping: 17_000.0,
+            angular_damping: 8.0,
+            bow: [0.0, 0.35, -2.0],
+            seat: SeatSpec {
+                eye: [0.0, 1.05, 0.3],
+                reach_m: 3.5,
+                exit: [0.0, 0.35, 0.3],
+            },
+        }
+    }
+
     fn validate(&self) -> Result<(), String> {
         positive(
             "loon sizes",

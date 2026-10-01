@@ -30,11 +30,13 @@ use crate::wind::{AirHere, GustSettings, wind_at};
 use body::RigidBody;
 use glam::{DQuat, DVec3};
 use hull::Hull;
-use spec::{ContactSpec, InertiaBox, Part, VehicleSpecs, WindageSpec};
+use spec::{ContactSpec, InertiaBox, LoonSpec, Part, VehicleSpecs, WindageSpec};
 use std::sync::Arc;
 
 pub const AIR_DENSITY: f64 = 1.225;
 pub const SEA_DENSITY: f64 = 1025.0;
+/// How far an open boat's floorboards stand over its loaded waterline, m.
+pub const FLOOR_OVER_M: f32 = 0.03;
 
 /// Body axes.
 pub const FORWARD: DVec3 = DVec3::NEG_Z;
@@ -47,16 +49,26 @@ pub enum Kind {
     Tern,
     Loon,
     Cog,
+    /// The harbour's rowboat: the Loon's stroke on the towns' wider,
+    /// deeper hull.
+    Rowboat,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 4] = [Kind::Kestrel, Kind::Tern, Kind::Loon, Kind::Cog];
+    pub const ALL: [Kind; 5] = [
+        Kind::Kestrel,
+        Kind::Tern,
+        Kind::Loon,
+        Kind::Cog,
+        Kind::Rowboat,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Kind::Kestrel => "Kestrel",
             Kind::Tern => "Tern",
             Kind::Loon => "Loon",
+            Kind::Rowboat => "Rowboat",
             Kind::Cog => "Cog",
         }
     }
@@ -67,6 +79,7 @@ impl Kind {
             Kind::Kestrel => "kestrel",
             Kind::Tern => "tern",
             Kind::Loon => "loon",
+            Kind::Rowboat => "rowboat",
             Kind::Cog => "cog",
         }
     }
@@ -158,6 +171,7 @@ pub struct Hulls {
     pub tern: Arc<Hull>,
     pub loon: Arc<Hull>,
     pub cog: Arc<Hull>,
+    pub rowboat: Arc<Hull>,
 }
 
 impl Hulls {
@@ -165,6 +179,7 @@ impl Hulls {
         Self {
             tern: Arc::new(Hull::new(specs.tern.hull)),
             loon: Arc::new(Hull::new(specs.loon.hull)),
+            rowboat: Arc::new(Hull::new(specs.rowboat.hull)),
             cog: Arc::new(Hull::new(specs.cog.hull)),
         }
     }
@@ -375,7 +390,7 @@ impl Craft {
         let state = match kind {
             Kind::Kestrel => CraftState::Kestrel(KestrelState::default()),
             Kind::Tern => CraftState::Tern(TernState::default()),
-            Kind::Loon => CraftState::Loon(LoonState::default()),
+            Kind::Loon | Kind::Rowboat => CraftState::Loon(LoonState::default()),
             Kind::Cog => CraftState::Cog(CogState::default()),
         };
         let mut craft = Self {
@@ -403,11 +418,39 @@ impl Craft {
         &self.specs
     }
 
+    /// Where an open boat's floorboards are laid (`cities-in-the-world`
+    /// task 4.2b): [`FLOOR_OVER_M`] over the still water it floats in with
+    /// its paddler aboard, along the trim the paddler gives it, so the sea's
+    /// one sheet stays under them. Their height in the reference frame
+    /// amidships, m, and how far they rise per metre aft. Only the Loon and
+    /// the rowboat are open.
+    pub fn floor(&self) -> Option<(f32, f32)> {
+        if !matches!(self.kind, Kind::Loon | Kind::Rowboat) {
+            return None;
+        }
+        let s = self.loon_spec();
+        let loaded: Vec<Part> = s.parts.iter().copied().chain([s.paddler]).collect();
+        let kg: f32 = loaded.iter().map(|p| p.mass_kg).sum();
+        let com_z = loaded.iter().map(|p| p.mass_kg * p.at[2]).sum::<f32>() / kg;
+        let (middle, rise) = self.hull()?.waterline(kg as f64, com_z as f64, SEA_DENSITY);
+        Some((middle + FLOOR_OVER_M, rise))
+    }
+
+    /// The paddled spec this craft is rowed by: the Loon's own, or the
+    /// rowboat's. Only meaningful for those two kinds.
+    pub fn loon_spec(&self) -> &LoonSpec {
+        match self.kind {
+            Kind::Rowboat => &self.specs.rowboat,
+            _ => &self.specs.loon,
+        }
+    }
+
     pub fn hull(&self) -> Option<&Arc<Hull>> {
         match self.kind {
             Kind::Kestrel => None,
             Kind::Tern => Some(&self.hulls.tern),
             Kind::Loon => Some(&self.hulls.loon),
+            Kind::Rowboat => Some(&self.hulls.rowboat),
             Kind::Cog => Some(&self.hulls.cog),
         }
     }
@@ -460,8 +503,8 @@ impl Craft {
                 }
                 mass_model(&parts, &s.inertia_box)
             }
-            Kind::Loon => {
-                let s = &specs.loon;
+            Kind::Loon | Kind::Rowboat => {
+                let s = self.loon_spec();
                 let mut parts = s.parts.to_vec();
                 parts.push(Part {
                     mass_kg: bilge,
@@ -517,7 +560,7 @@ impl Craft {
         let seat = match self.kind {
             Kind::Kestrel => self.specs.kestrel.seat,
             Kind::Tern => self.specs.tern.seat,
-            Kind::Loon => self.specs.loon.seat,
+            Kind::Loon | Kind::Rowboat => self.loon_spec().seat,
             Kind::Cog => self.specs.cog.seat,
         };
         let mut eye = seat.eye;
@@ -537,7 +580,7 @@ impl Craft {
         match self.kind {
             Kind::Kestrel => self.specs.kestrel.seat,
             Kind::Tern => self.specs.tern.seat,
-            Kind::Loon => self.specs.loon.seat,
+            Kind::Loon | Kind::Rowboat => self.loon_spec().seat,
             Kind::Cog => self.specs.cog.seat,
         }
     }
@@ -547,7 +590,7 @@ impl Craft {
         match self.kind {
             Kind::Kestrel => self.body.position,
             Kind::Tern => self.reference_point(self.specs.tern.bow),
-            Kind::Loon => self.reference_point(self.specs.loon.bow),
+            Kind::Loon | Kind::Rowboat => self.reference_point(self.loon_spec().bow),
             Kind::Cog => self.reference_point(self.specs.cog.bow),
         }
     }
@@ -579,7 +622,7 @@ impl Craft {
             match self.kind {
                 Kind::Kestrel => kestrel::forces(self, &input, &cx),
                 Kind::Tern => tern::forces(self, &input, &cx),
-                Kind::Loon => loon::forces(self, &input, &cx),
+                Kind::Loon | Kind::Rowboat => loon::forces(self, &input, &cx),
                 Kind::Cog => cog::forces(self, &input, &cx),
             }
             self.moor();

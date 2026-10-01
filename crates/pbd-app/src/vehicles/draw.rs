@@ -41,6 +41,9 @@ enum Moving {
     Boom,
     Tiller,
     Paddle,
+    /// What lies in a boat until someone aboard takes it up: the canoe's
+    /// paddle.
+    Laid,
     /// The Tern's keel, lifted in shallow water.
     Keel,
     /// The cog's yard, turned about its mast by the braces.
@@ -264,20 +267,42 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
             );
             b.crew(entity, s.seat.eye, &crew);
         }
-        Kind::Loon => {
-            let s = &specs.loon;
-            let shape = craft.hull().expect("a boat has a hull").clone();
-            let (p, i) = shape.loft(28, 8);
-            let canoe = paint(b.world, Color::srgb(0.2, 0.42, 0.36), true);
-            b.piece(entity, mesh(p, i), &canoe, Transform::IDENTITY);
-            let paddle = b.pivot(entity, Moving::Paddle, Transform::IDENTITY);
-            b.cuboid(paddle, Vec3::new(0.04, 1.3, 0.04), Vec3::Y * 0.65, &dark);
-            b.piece(
-                paddle,
-                paddle_blade(s.paddle.blade_m2),
-                &trim,
-                Transform::IDENTITY,
+        Kind::Loon | Kind::Rowboat => {
+            // The towns mockup's small boats (`cities-in-the-world` task
+            // 4.2b): the canoe in driftwood, the rowboat in boards with its
+            // thwarts and oars, at the craft's own hull and unpainted.
+            use pbd_core::settlement::pieces::dressing as boats;
+            let s = *craft.loon_spec();
+            let h = s.hull;
+            let rowboat = craft.kind == Kind::Rowboat;
+            let repeat = crate::towns::repeat_in(b.world);
+            let size = Vec3::new(h.length_m, h.beam_m, h.depth_m);
+            let floor = craft.floor().expect("an open boat has floorboards");
+            let cut = boats::small_boat(
+                &repeat,
+                if rowboat { "rowboat" } else { "canoe" },
+                size,
+                h.sheer_m,
+                floor,
             );
+            crate::towns::spawn_meshes(b.world, entity, &cut);
+            if !rowboat {
+                // Its paddle lies in it until someone takes it up.
+                let laid = b.pivot(entity, Moving::Laid, Transform::IDENTITY);
+                crate::towns::spawn_meshes(
+                    b.world,
+                    laid,
+                    &boats::laid_paddle(&repeat, size, h.sheer_m),
+                );
+                let paddle = b.pivot(entity, Moving::Paddle, Transform::IDENTITY);
+                b.cuboid(paddle, Vec3::new(0.04, 1.3, 0.04), Vec3::Y * 0.65, &dark);
+                b.piece(
+                    paddle,
+                    paddle_blade(s.paddle.blade_m2),
+                    &trim,
+                    Transform::IDENTITY,
+                );
+            }
             b.crew(entity, s.seat.eye, &crew);
         }
         Kind::Cog => {
@@ -432,6 +457,9 @@ pub fn place(
             (Moving::Flame, _) => {
                 *visibility = visible(lamps_lit);
             }
+            (Moving::Laid, _) => {
+                *visibility = visible(!craft.occupied);
+            }
             (Moving::Paddle, CraftState::Loon(s)) => {
                 *transform = paddle(craft, s);
                 *visibility = visible(craft.occupied);
@@ -461,7 +489,7 @@ fn visible(shown: bool) -> Visibility {
 /// The paddle's blade: in the water through the power phase, sweeping along
 /// the stroke, and lifted forward again through the recovery.
 fn paddle(craft: &Craft, state: &pbd_core::vehicle::LoonState) -> Transform {
-    let p = craft.specs().loon.paddle;
+    let p = craft.loon_spec().paddle;
     if let pbd_core::vehicle::Telemetry::Loon(t) = &craft.telemetry
         && let Some(at) = t.rudder_at
     {

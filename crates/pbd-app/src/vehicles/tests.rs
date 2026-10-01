@@ -106,7 +106,9 @@ fn a_new_world_places_each_craft_where_it_can_work() {
                 assert!(depth >= need, "{} in {depth} m", craft.kind.name());
                 assert!(craft.mooring.is_some_and(|m| m.anchored), "and at anchor");
             }
-            Kind::Cog => unreachable!("a harbour moors the cog, not the starting fleet"),
+            Kind::Cog | Kind::Rowboat => {
+                unreachable!("a harbour moors it, not the starting fleet")
+            }
         }
     }
     // And they stay afloat and upright: a berth judged on a coarser seabed
@@ -354,27 +356,29 @@ fn each_craft_maps_its_controls_and_menus_suppress_keys_and_look() {
     let mut app = app(crate::saves::WorldSave::memory_only());
     app.update();
     stop_clock(&mut app);
-    // The starting fleet has no cog (a harbour moors it), so one is put
-    // where the Tern lies, for its keys.
+    // The starting fleet has no cog or rowboat (a harbour moors them), so
+    // one of each is put where the Tern lies, for its keys.
     let tern = crafts(&mut app)
         .into_iter()
         .find(|(_, c)| c.kind == Kind::Tern)
         .expect("the Tern")
         .1;
-    let cog = {
-        let mut fleet = app.world_mut().resource_mut::<Fleet>();
-        let id = fleet.next_id;
-        fleet.next_id += 1;
-        pbd_core::vehicle::Craft::new(
-            Kind::Cog,
-            id,
-            fleet.specs.clone(),
-            fleet.hulls.clone(),
-            tern.reference_position(),
-            tern.body.orientation,
-        )
-    };
-    super::place::spawn_craft(app.world_mut(), cog);
+    for kind in [Kind::Cog, Kind::Rowboat] {
+        let craft = {
+            let mut fleet = app.world_mut().resource_mut::<Fleet>();
+            let id = fleet.next_id;
+            fleet.next_id += 1;
+            pbd_core::vehicle::Craft::new(
+                kind,
+                id,
+                fleet.specs.clone(),
+                fleet.hulls.clone(),
+                tern.reference_position(),
+                tern.body.orientation,
+            )
+        };
+        super::place::spawn_craft(app.world_mut(), craft);
+    }
     for (entity, craft) in crafts(&mut app) {
         take_seat(app.world_mut(), entity, true);
         let held = [
@@ -410,7 +414,7 @@ fn each_craft_maps_its_controls_and_menus_suppress_keys_and_look() {
                 (input.steer, input.sheet, input.crew, input.bail),
                 (1.0, 1.0, -1.0, true)
             ),
-            Kind::Loon => assert_eq!(
+            Kind::Loon | Kind::Rowboat => assert_eq!(
                 (input.forward, input.steer, input.rudder, input.bail),
                 (1.0, 1.0, 1.0, true)
             ),

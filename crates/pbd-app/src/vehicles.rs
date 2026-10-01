@@ -362,7 +362,7 @@ fn read_controls(
             input.sheet = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.crew = axis(KeyCode::KeyE, KeyCode::KeyQ);
         }
-        Kind::Loon => {
+        Kind::Loon | Kind::Rowboat => {
             input.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
             input.rudder = axis(KeyCode::KeyQ, KeyCode::KeyE);
@@ -514,9 +514,9 @@ fn scripted_board(world: &mut World) {
         .iter(world)
         .find(|(_, v)| v.craft.kind == kind)
         .map(|(e, _)| e);
-    // A harbour makes its cog when the fleet first meets it, after the
-    // fleet is in: wait for it.
-    if found.is_none() && kind == Kind::Cog {
+    // A harbour makes its cog and its rowboats when the fleet first meets
+    // it, after the fleet is in: wait for them.
+    if found.is_none() && matches!(kind, Kind::Cog | Kind::Rowboat) {
         return;
     }
     world.resource_mut::<VehicleScript>().board = None;

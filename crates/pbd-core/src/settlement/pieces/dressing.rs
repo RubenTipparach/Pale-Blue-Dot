@@ -8,7 +8,7 @@ use super::super::chart::{Chart, Patch};
 use super::super::{Dress, Goods, Pier, Shipyard, Template, sea};
 use super::{BuildingSolids, Frame, Meshes, Sink, Solid, Surface, ccw};
 use glam::{Mat2, Vec2, Vec3};
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 /// How far over the mockup's own height a thing may stand. A sea template
 /// rounds its ground to whole layers, so the mockup's 0.75 m beach is 1 m in
@@ -519,24 +519,7 @@ fn boat(sink: &mut Sink, place: &Place, (x, z): (f32, f32), kind: &str, ang: f32
             );
         }
     } else if kind == "rowboat" {
-        let part = |sink: &mut Sink, size: Vec3, p: Vec3| {
-            let c = to(Vec3::new(p.x, 0.0, p.z));
-            sink.plain_box(wood, c.x, gunwale + p.y - size.y / 2.0, c.z, size, turn);
-        };
-        for tx in [-0.7, 0.7] {
-            part(
-                sink,
-                Vec3::new(0.22, 0.05, hull.b * 0.82),
-                Vec3::new(tx, -hull.d * 0.35, 0.0),
-            );
-        }
-        for s in [-0.2, 0.2] {
-            part(
-                sink,
-                Vec3::new(2.6, 0.04, 0.08),
-                Vec3::new(0.1, -hull.d * 0.3, s),
-            );
-        }
+        fittings(sink, hull, kind, wood, gunwale, &to, turn);
     }
     let outline: Vec<Vec2> = hull_outline(hull)
         .iter()
@@ -548,6 +531,165 @@ fn boat(sink: &mut Sink, place: &Place, (x, z): (f32, f32), kind: &str, ang: f32
         y0: -0.2,
         y1: top,
     });
+}
+
+/// A small boat's fittings (the mockup's `boat`, not `bare`): a rowboat's
+/// two thwarts and its two oars laid along it, a canoe's paddle. `to` takes
+/// the hull's frame into the sink's, `turn` is the hull's heading there and
+/// `gunwale` the sink's height of its gunwale amidships.
+fn fittings(
+    sink: &mut Sink,
+    hull: Hull,
+    kind: &str,
+    wood: &str,
+    gunwale: f32,
+    to: &dyn Fn(Vec3) -> Vec3,
+    turn: f32,
+) {
+    let part = |sink: &mut Sink, size: Vec3, p: Vec3| {
+        let c = to(Vec3::new(p.x, 0.0, p.z));
+        sink.plain_box(wood, c.x, gunwale + p.y - size.y / 2.0, c.z, size, turn);
+    };
+    match kind {
+        "rowboat" => {
+            for tx in [-0.7, 0.7] {
+                part(
+                    sink,
+                    Vec3::new(0.22, 0.05, hull.b * 0.82),
+                    Vec3::new(tx, -hull.d * 0.35, 0.0),
+                );
+            }
+            for s in [-0.2, 0.2] {
+                part(
+                    sink,
+                    Vec3::new(2.6, 0.04, 0.08),
+                    Vec3::new(0.1, -hull.d * 0.3, s),
+                );
+            }
+        }
+        "canoe" => part(
+            sink,
+            Vec3::new(1.8, 0.04, 0.07),
+            Vec3::new(0.3, -hull.d * 0.4, 0.1),
+        ),
+        _ => {}
+    }
+}
+
+/// The frame a craft is cut in: its reference frame, bow along -z.
+const CRAFT: Frame = Frame {
+    origin: Vec3::ZERO,
+    x: Vec3::X,
+    y: Vec3::Y,
+    z: Vec3::Z,
+};
+
+/// The mockup's small boat as a craft carries it (`cities-in-the-world`
+/// task 4.2b): the hull of `kind` ("rowboat" or "canoe") lofted as the
+/// mockup's `boat` lofts it, at the craft's `size` (length, beam and depth,
+/// m), cut in the craft's frame with its bow along -z and its gunwale
+/// amidships `gunwale_m` up. In it are the rowboat's thwarts and oars, and
+/// floorboards across it ([`floorboards`]) as the craft lays them: `floor`
+/// is their height amidships, m, and how far they rise per metre aft. The
+/// canoe's paddle is apart, in [`laid_paddle`], since it is put away while
+/// it is paddled.
+pub fn small_boat(
+    repeat_m: &dyn Fn(&str) -> f32,
+    kind: &str,
+    size: Vec3,
+    gunwale_m: f32,
+    floor: (f32, f32),
+) -> Meshes {
+    let (hull, wood) = craft_hull(kind, size);
+    let mut out = Meshes::new();
+    let mut sink = Sink::new(&mut out, repeat_m, CRAFT);
+    let to = craft_to(gunwale_m);
+    hull_skin(&mut sink, wood, hull, 1.0, &to);
+    if kind == "rowboat" {
+        fittings(&mut sink, hull, kind, wood, gunwale_m, &to, -FRAC_PI_2);
+    }
+    // Aft is the hull's -x.
+    floorboards(&mut sink, wood, hull, (floor.0 - gunwale_m, -floor.1), &to);
+    out
+}
+
+/// The canoe's paddle laid in it, as [`small_boat`] cuts the canoe.
+pub fn laid_paddle(repeat_m: &dyn Fn(&str) -> f32, size: Vec3, gunwale_m: f32) -> Meshes {
+    let (hull, wood) = craft_hull("canoe", size);
+    let mut out = Meshes::new();
+    let mut sink = Sink::new(&mut out, repeat_m, CRAFT);
+    let to = craft_to(gunwale_m);
+    fittings(&mut sink, hull, "canoe", wood, gunwale_m, &to, -FRAC_PI_2);
+    out
+}
+
+/// The mockup's hull of `kind` at a craft's length, beam and depth, keeping
+/// its sheer, and its planks' texture.
+fn craft_hull(kind: &str, size: Vec3) -> (Hull, &'static str) {
+    let (mockup, _, wood) = Hull::of(kind);
+    (
+        Hull {
+            l: size.x,
+            b: size.y,
+            d: size.z,
+            sheer: mockup.sheer,
+        },
+        wood,
+    )
+}
+
+/// The hull's frame (x along it, z across) into a craft's (bow along -z),
+/// its gunwale amidships `gunwale_m` up.
+fn craft_to(gunwale_m: f32) -> impl Fn(Vec3) -> Vec3 {
+    move |p: Vec3| Vec3::new(p.z, gunwale_m + p.y, -p.x)
+}
+
+/// The floorboards across an open hull, a plane `(y, slope)` in its own
+/// frame: `y` from its gunwale amidships (negative, down), rising `slope`
+/// per metre along it. From side to side a little inside the planks
+/// wherever the hull is deeper than that, so the sea's sheet, which the
+/// game draws through the hull, stays out of sight under them. The mockup
+/// hides it with a stencil instead.
+pub(super) fn floorboards(
+    sink: &mut Sink,
+    wood: &str,
+    hull: Hull,
+    (y, slope): (f32, f32),
+    to: &dyn Fn(Vec3) -> Vec3,
+) {
+    const S: usize = 40;
+    // The floor a share `t` along: where it is along the hull, its height
+    // and its half width, where the section at `t` meets that height, a
+    // hair inside its planks.
+    let half = |t: f32| -> Option<(f32, f32, f32)> {
+        let (x, b, d, top) = hull.section(t);
+        let y = y + slope * x;
+        let c = (top - y) / d;
+        (c < 1.0).then(|| (x, y, b * (1.0 - c * c).max(0.0).sqrt() * 0.97))
+    };
+    let repeat = 1.5;
+    for i in 0..S {
+        let (Some((x0, y0, w0)), Some((x1, y1, w1))) =
+            (half(i as f32 / S as f32), half((i + 1) as f32 / S as f32))
+        else {
+            continue;
+        };
+        let corners = [
+            (Vec3::new(x0, y0, -w0), Vec2::new(x0, -w0) / repeat),
+            (Vec3::new(x1, y1, -w1), Vec2::new(x1, -w1) / repeat),
+            (Vec3::new(x1, y1, w1), Vec2::new(x1, w1) / repeat),
+            (Vec3::new(x0, y0, w0), Vec2::new(x0, w0) / repeat),
+        ]
+        .map(|(p, uv)| (to(p), uv));
+        let pts = corners.map(|c| c.0);
+        let uv = |x: Vec3| {
+            corners
+                .iter()
+                .min_by(|a, b| a.0.distance_squared(x).total_cmp(&b.0.distance_squared(x)))
+                .map_or(Vec2::ZERO, |c| c.1)
+        };
+        both(sink, wood, &pts, &uv);
+    }
 }
 
 /// Cut each of a town's dressing things in its own frame, on what is under

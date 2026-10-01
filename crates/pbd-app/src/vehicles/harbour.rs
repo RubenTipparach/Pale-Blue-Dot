@@ -33,11 +33,13 @@ pub const STOW_M: f64 = 1500.0;
 /// A stowed craft nearer than this comes back, m.
 pub const WAKE_M: f64 = 1200.0;
 
-/// The game's craft for a mockup boat: a sailing boat is a Tern, a rowboat
-/// or a canoe a Loon, the game's nearest small boat.
+/// The game's craft for a mockup boat (`cities-in-the-world` task 4.2b): a
+/// sailing boat is a Tern, a rowboat a Rowboat and a canoe a Loon, each
+/// drawn as the mockup draws it.
 pub fn kind_of(boat: &str) -> Kind {
     match boat {
         "sail" => Kind::Tern,
+        "rowboat" => Kind::Rowboat,
         _ => Kind::Loon,
     }
 }
