@@ -69,6 +69,7 @@ const SEA = new Set(["coast"]);
       bridge = function (A, B, o = {}) {
         if (sea && o.piles !== undefined) piers.push({ from: A.slice(), to: B.slice(), width_m: o.width ?? 2 });
         if (sea && o.label === "The slip") slip = { from: A.slice(), to: B.slice(), width_m: o.width ?? 1.2 };
+        if (sea && o.label === "Gangplank") gangplank = { from: A.slice(), to: B.slice(), width_m: o.width ?? 1.2 };
         return innerBridge(A, B, o);
       };
       // The harbour's dressing (task 4.2c), each thing where the mockup puts
@@ -84,8 +85,14 @@ const SEA = new Set(["coast"]);
       // A pile of pots: each pot, and how far over the pile's foot it sits.
       // eslint-disable-next-line no-global-assign
       lobsterPots = function (x, y, z, n) { potFoot = y; try { return innerPots(x, y, z, n); } finally { potFoot = null; } };
+      // The cog (`sail-the-cog` design 6, step 1): where it lies, its
+      // heading and the side its gangway opens on.
+      let cogAt = null, gangplank = null;
       // eslint-disable-next-line no-global-assign
-      cog = function (...a) { inside++; try { return innerCog(...a); } finally { inside--; } };
+      cog = function (x, z, ang, gangSide, o = {}) {
+        if (sea) cogAt = { x, z, heading: ang, gang_side: gangSide };
+        inside++; try { return innerCog(x, z, ang, gangSide, o); } finally { inside--; }
+      };
       // eslint-disable-next-line no-global-assign
       townHouse = function (...a) { inside++; try { return innerHouse(...a); } finally { inside--; } };
       // eslint-disable-next-line no-global-assign
@@ -277,6 +284,7 @@ const SEA = new Set(["coast"]);
         const hull = SOLIDS.find((x) => x.label === "A hull in frame");
         const planks = SOLIDS.find((x) => x.label === "Planks");
         const mid = (pts) => pts.reduce(([a, b], [x, z]) => [a + x / pts.length, b + z / pts.length], [0, 0]);
+        if (cogAt && gangplank) out.cog = { ...cogAt, gangplank };
         if (hull && slip && planks) {
           const [hx, hz] = mid(hull.pts), [px, pz] = mid(planks.pts);
           out.shipyard = { x: hx, z: hz, slip, planks: [px, planks.y0, pz] };

@@ -14,6 +14,7 @@ use super::{BuildingDef, HUT_STOREY_M, Kit, RoofKind, STOREY_M, neighbour};
 use glam::{Vec2, Vec3};
 use std::collections::BTreeMap;
 
+pub mod cog;
 pub mod dressing;
 pub mod harbour;
 

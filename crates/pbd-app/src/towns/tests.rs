@@ -839,8 +839,8 @@ fn harbours() -> Vec<Site> {
 
 /// Slice 4d: every harbour site of the shipped seed lies with its sea over
 /// the planet's, stands on the sea with its quay a metre over the water,
-/// and cuts whole: its buildings, its piers' stretches, its light and its
-/// dressing.
+/// and cuts whole: its buildings, its piers' stretches, its light, its
+/// dressing and its cog.
 #[test]
 fn every_harbour_lays_on_its_sea_and_cuts() {
     let config = *crate::planet::terrain_config();
@@ -903,6 +903,8 @@ fn every_harbour_lays_on_its_sea_and_cuts() {
             "{}: its dressing",
             site.name
         );
+        // `sail-the-cog` design 6, step 1: its cog at its mooring.
+        assert!(laid.cog, "{}: its cog", site.name);
     }
 }
 
@@ -1011,6 +1013,9 @@ fn print_where_the_harbours_stand() {
         let ((sx, sz), (tx, tz)) = (mid(21, 16), mid(16, 14));
         let (street, racks) = (point(sx, sz), point(tx, tz));
         println!("   market {} --yaw {:.1}", at(street), yaw(street, racks));
+        if let Some(c) = &template.cog {
+            println!("   cog {}", at(point(c.x, c.z)));
+        }
         if let Some(y) = &template.shipyard {
             let from = point(y.x - 7.0, mid(0, 14).1 + 0.9);
             let hull = point(y.x, y.z);

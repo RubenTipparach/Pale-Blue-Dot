@@ -95,6 +95,22 @@ pub struct Template {
     /// The harbour's shipyard (task 4.2c).
     #[serde(default)]
     pub shipyard: Option<Shipyard>,
+    /// The harbour's cog at its mooring (`sail-the-cog` design 6, step 1).
+    #[serde(default)]
+    pub cog: Option<Cog>,
+}
+
+/// The harbour's cog (`sail-the-cog` design 6, step 1): moored with its
+/// middle at `(x, z)` in the mockup's metres, its bow along `heading` (from
+/// `x` toward `z`), its gangway on `gang_side` (+1 or -1 across it), and
+/// its gangplank up from the pier to its deck.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Cog {
+    pub x: f32,
+    pub z: f32,
+    pub heading: f32,
+    pub gang_side: i32,
+    pub gangplank: Pier,
 }
 
 /// A thing a town stands about (task 4.2c), where the mockup puts it:

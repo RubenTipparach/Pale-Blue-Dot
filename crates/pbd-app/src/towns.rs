@@ -147,6 +147,8 @@ pub struct Laid {
     /// Its dressing things standing, and those left off its chart (task
     /// 4.2c).
     pub dressing: (usize, usize),
+    /// Whether its cog stands at its mooring (`sail-the-cog` design 6).
+    pub cog: bool,
 }
 
 /// The patch of finest cells round a direction.
@@ -237,6 +239,7 @@ pub fn build(
         rooms: built.rooms,
         lights: built.lights,
         dressing: (built.dressing, built.dressing_skipped),
+        cog: built.cog,
     })
 }
 
@@ -894,11 +897,14 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     spawn_doors(world, entity, site.id, &solids);
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
     let (things, off) = laid.dressing;
-    let dressing = match (things, off) {
+    let mut dressing = match (things, off) {
         (0, 0) => String::new(),
         (n, 0) => format!(", {n} dressing things"),
         (n, off) => format!(", {n} dressing things ({off} off its chart)"),
     };
+    if laid.cog {
+        dressing.push_str(", its cog moored");
+    }
     info!(
         "{} stands: {} buildings{dressing}, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}",
         laid.name,

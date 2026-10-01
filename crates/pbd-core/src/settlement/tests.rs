@@ -3,7 +3,7 @@ use super::ground::{GroundAt, TownGround};
 use super::pieces::{Meshes, cut_building};
 use super::*;
 use crate::topology::dual_sphere;
-use glam::Vec3;
+use glam::{Vec2, Vec3};
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
@@ -2335,4 +2335,88 @@ fn a_walker_goes_down_the_slip_into_the_water() {
     );
     let sea = RADIUS_M + town.terrace as f32;
     assert!(floor + feet < sea - 1.0, "its foot in the water");
+}
+
+/// `sail-the-cog` design 6, step 1: the walker from the main pier up the
+/// gangplank through the gangway onto the cog's deck, 1.9 m over the sea,
+/// across it to the stair and up onto the aftcastle, the feet never
+/// falling and the body in nothing.
+#[test]
+fn a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle() {
+    let (_, town, b) = cut_harbour();
+    assert!(b.cog, "the cog stands");
+    let n = b.solids.len() - b.dressing;
+    let (ship, plank) = (&b.solids[n - 2], &b.solids[n - 1]);
+    let Some(&pieces::Surface::Ramp {
+        foot: pa,
+        dir: pd,
+        len: pl,
+        to: rise,
+        ..
+    }) = plank.surfaces.first()
+    else {
+        panic!("the gangplank is a ramp");
+    };
+    let Some(&pieces::Surface::Flight {
+        foot: sf,
+        dir: sd,
+        len: sl,
+        ..
+    }) = ship
+        .surfaces
+        .iter()
+        .find(|x| matches!(x, pieces::Surface::Flight { .. }))
+    else {
+        panic!("the cog has its stair");
+    };
+    let sea = RADIUS_M + town.terrace as f32;
+    let deck = ship.frame.origin.length() + 1.9;
+    assert!(
+        (deck - sea - 1.9).abs() < 0.01,
+        "the deck 1.9 m over the sea"
+    );
+    let at = |f: &pieces::Frame, p: Vec2| f.world(Vec3::new(p.x, 0.0, p.y)).normalize();
+    let way = [
+        at(&plank.frame, pa - pd * 0.6),
+        at(&plank.frame, pa + pd * (pl + 1.0)),
+        at(&ship.frame, sf - sd * 0.4),
+        at(&ship.frame, sf + sd * (sl + 1.0)),
+    ];
+    let mut feet = feet_on(&b, way[0] * (plank.frame.origin.length() + 0.01))
+        .expect("the pier at the gangplank's foot");
+    assert!((feet - plank.frame.origin.length()).abs() < 0.03);
+    assert!(rise > 0.8, "the gangplank climbs {rise} m to the deck");
+    for (leg, name) in way
+        .windows(2)
+        .zip(["the gangplank", "the deck", "the stair"])
+    {
+        for k in 1..=60 {
+            let d = leg[0].lerp(leg[1], k as f32 / 60.0).normalize();
+            let next = feet_on(&b, d * (feet + 0.01)).unwrap_or_else(|| {
+                let l = ship.frame.local(d * (feet + 0.01));
+                let e = plank.frame.local(d * (feet + 0.01));
+                let end = pa + pd * pl;
+                panic!(
+                    "{name}: nothing underfoot at {k}: in the ship ({:.3}, {:.3}, {:.3}), {:.3} past the plank's end",
+                    l.x, l.y, l.z, (Vec2::new(e.x, e.z) - end).dot(pd)
+                )
+            });
+            assert!(next > feet - 0.3, "{name}: fell from {feet} to {next}");
+            let body = d * (next + 0.95);
+            assert!(
+                !b.solids.iter().any(|x| x.holds(body, 0.9, 0.3)),
+                "{name}: held at {k}, the feet {:.2} m over the sea",
+                next - sea
+            );
+            feet = next;
+        }
+        if name == "the gangplank" {
+            assert!((feet - deck).abs() < 0.03, "on the deck, {}", feet - sea);
+        }
+    }
+    assert!(
+        (feet - deck - 1.6).abs() < 0.03,
+        "on the aftcastle, {:.2} m over the sea",
+        feet - sea
+    );
 }

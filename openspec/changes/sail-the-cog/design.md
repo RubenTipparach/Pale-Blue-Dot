@@ -146,6 +146,33 @@ only with screenshots).
 4. **The helm and the saves** (tasks 4.1, 5.1). Task 5.2 becomes the step 3
    handover: there is no building cog in any save to turn into a craft.
 
+- **Step 1 as built (2026-10-01).**
+  - The export writes the cog (where it lies, its heading, its gangway's
+    side) and its gangplank. Nothing else in the harbour changes, and the
+    village and walled town re-export byte-identical.
+  - `pieces::cog` cuts it at the sea's surface in its own frame, from the
+    mockup's sizes:
+    - the hull, lofted by the dressing's `Hull`;
+    - the deck as a floor over a solid hull down to the keel;
+    - the rail round the deck with the gangway's 1.4 m gap;
+    - the castles, solid, railed but on the waist's side;
+    - the eight-riser stair to the aftcastle;
+    - the mast, the yard with the sail furled, and the shrouds;
+    - a barrel and a crate.
+  - **The gangplank** is the ramp the slip is, from the pier's deck up to
+    the cog's.
+    - The mockup ends it 2 cm over the deck's edge. Cut in two frames on the
+      chart, the plank's end and the deck's edge met within a millimetre,
+      and the walker found nothing underfoot there.
+    - So a landing the walker stands on, not drawn, laps 30 cm onto the
+      deck at its height, as a pier's stretches lap.
+  - The harbour's cells over the water take in the cog's plan and the
+    gangplank. A harbour stored before this charted none, so its cog is left
+    out and counted with the dressing off its chart.
+  - `a_walker_boards_the_moored_cog_and_climbs_to_its_aftcastle` walks from
+    the main pier up the gangplank, across the deck and up the stair onto
+    the aftcastle. `every_harbour_lays_on_its_sea_and_cuts` holds each of
+    the six harbours' cogs standing.
 - **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
   in the voxel field, which cannot sail. A light carried on a craft is part
   of the craft's drawing.

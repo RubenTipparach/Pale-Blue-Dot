@@ -77,8 +77,9 @@ pub fn boat_pose(
 }
 
 /// The cells under what a sea template stands over the water: its
-/// buildings' and decks' cells, every cell a pier or the slip crosses, and
-/// its lanterns', boats', light's and dressing's. Some are dry, and those
+/// buildings' and decks' cells, every cell a pier, the slip or the
+/// gangplank crosses, and its lanterns', boats', light's, dressing's and
+/// cog's. Some are dry, and those
 /// are laid as well.
 pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
     let cell_m = template.grid.cell_m;
@@ -90,7 +91,8 @@ pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
         }
     }
     let slip = template.shipyard.as_ref().map(|y| &y.slip);
-    for p in template.piers.iter().chain(slip) {
+    let gangplank = template.cog.as_ref().map(|c| &c.gangplank);
+    for p in template.piers.iter().chain(slip).chain(gangplank) {
         let (dx, dz) = (p.to[0] - p.from[0], p.to[2] - p.from[2]);
         let len = (dx * dx + dz * dz).sqrt();
         let (ux, uz) = if len > 0.0 {
@@ -131,7 +133,11 @@ pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
         .shipyard
         .iter()
         .flat_map(|y| [(y.x, y.z), (y.planks[0], y.planks[2])]);
-    for (x, z) in things.chain(yard) {
+    let cog = template
+        .cog
+        .iter()
+        .flat_map(super::pieces::cog::plan_points);
+    for (x, z) in things.chain(yard).chain(cog) {
         for (dx, dz) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)] {
             out.insert(cell_at(x + dx, z + dz, cell_m));
         }

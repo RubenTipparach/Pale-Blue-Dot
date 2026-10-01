@@ -18,7 +18,7 @@
 use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::{Lamp, TownGround};
 use super::pieces::{
-    BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry, dressing, harbour,
+    BuildingSolids, Meshes, RoomLight, cog, cut_building, cut_masonry, dressing, harbour,
 };
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
@@ -497,6 +497,10 @@ pub struct Built {
     /// left out for standing off its chart.
     pub dressing: usize,
     pub dressing_skipped: usize,
+    /// Whether its cog stands at its mooring (`sail-the-cog` design 6, step
+    /// 1); its two pieces, the ship and the gangplank, come before the
+    /// dressing.
+    pub cog: bool,
 }
 
 /// A town's chart and ground from its definition, without cutting a piece:
@@ -636,6 +640,7 @@ pub fn build(
         lights,
         dressing: 0,
         dressing_skipped: 0,
+        cog: false,
     })
 }
 
@@ -689,6 +694,26 @@ pub fn build_town(
                 terrace,
             )?);
         }
+        // Its cog at its mooring (`sail-the-cog` design 6, step 1), and the
+        // gangplank up to it, off the chart in a harbour stored before it.
+        if let Some(c) = &template.cog {
+            match cog::cog(
+                &mut built.meshes,
+                repeat_m,
+                patch,
+                &built.chart,
+                template,
+                c,
+                radius_m,
+                terrace,
+            ) {
+                Some(pieces) => {
+                    cut.extend(pieces);
+                    built.cog = true;
+                }
+                None => built.dressing_skipped += 1,
+            }
+        }
         // Its dressing (task 4.2c), each thing on what is under it.
         let (things, skipped) = dressing::dressing(
             &mut built.meshes,
@@ -701,7 +726,7 @@ pub fn build_town(
             &under,
         );
         built.dressing = things.len();
-        built.dressing_skipped = skipped;
+        built.dressing_skipped += skipped;
         cut.extend(things);
         for c in cut {
             built.rooms.push(Meshes::new());

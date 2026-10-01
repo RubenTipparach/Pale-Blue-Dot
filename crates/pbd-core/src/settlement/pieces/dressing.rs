@@ -81,7 +81,7 @@ impl Hull {
 
     /// The section a share `t` along the hull: where it is along the hull,
     /// its half beam, its depth and its gunwale's rise.
-    fn section(&self, t: f32) -> (f32, f32, f32, f32) {
+    pub(super) fn section(&self, t: f32) -> (f32, f32, f32, f32) {
         let e = (2.0 * t - 1.0).abs();
         let f = (1.0 - e.powf(2.4)).max(0.0);
         (
@@ -103,8 +103,8 @@ impl Hull {
 /// Where a thing of the mockup lands: a frame flat on the planet at its
 /// point, and the map from the mockup's metres about that point into the
 /// frame's plan, which carries the chart's turn and its stretch.
-struct Place {
-    frame: Frame,
+pub(super) struct Place {
+    pub(super) frame: Frame,
     x: f32,
     z: f32,
     m: Mat2,
@@ -112,7 +112,7 @@ struct Place {
 
 impl Place {
     /// A frame at the mockup's `(x, z)`, its floor `at_m` over the radius.
-    fn new(
+    pub(super) fn new(
         chart: &Chart,
         patch: &Patch,
         cell_m: f32,
@@ -137,24 +137,24 @@ impl Place {
     }
 
     /// The mockup's point `(x, z)` in the frame's plan.
-    fn plan(&self, x: f32, z: f32) -> Vec2 {
+    pub(super) fn plan(&self, x: f32, z: f32) -> Vec2 {
         self.m * Vec2::new(x - self.x, z - self.z)
     }
 
     /// The mockup's point `(x, z)`, `y` over the frame's floor.
-    fn at(&self, x: f32, y: f32, z: f32) -> Vec3 {
+    pub(super) fn at(&self, x: f32, y: f32, z: f32) -> Vec3 {
         let p = self.plan(x, z);
         Vec3::new(p.x, y, p.y)
     }
 
     /// The mockup's point under a frame point: what [`Place::plan`] took it
     /// from.
-    fn mockup(&self, p: Vec3) -> Vec2 {
+    pub(super) fn mockup(&self, p: Vec3) -> Vec2 {
         self.m.inverse() * Vec2::new(p.x, p.z) + Vec2::new(self.x, self.z)
     }
 
     /// The mockup's heading `ang` in the frame.
-    fn turn(&self, ang: f32) -> f32 {
+    pub(super) fn turn(&self, ang: f32) -> f32 {
         let v = self.m * Vec2::new(ang.cos(), ang.sin());
         v.y.atan2(v.x)
     }
@@ -220,7 +220,16 @@ fn ring(c: Vec2, r: f32, n: usize) -> Vec<Vec2> {
 /// the mockup's `cyl`, a texture mapped once wraps once round it, full
 /// height; any other repeats.
 #[allow(clippy::too_many_arguments)]
-fn cylinder(sink: &mut Sink, side: &str, top: &str, c: Vec2, y0: f32, r: f32, h: f32, n: usize) {
+pub(super) fn cylinder(
+    sink: &mut Sink,
+    side: &str,
+    top: &str,
+    c: Vec2,
+    y0: f32,
+    r: f32,
+    h: f32,
+    n: usize,
+) {
     let pts = ring(c, r, n);
     let rep = (sink.repeat_m)(side);
     let around = TAU * r;
@@ -288,7 +297,7 @@ fn bar(sink: &mut Sink, material: &str, a: Vec3, b: Vec3, w: f32) {
 
 /// A two-sided face: drawn from both sides, as the mockup's cloth and nets
 /// are.
-fn both(sink: &mut Sink, material: &str, pts: &[Vec3], uv: &dyn Fn(Vec3) -> Vec2) {
+pub(super) fn both(sink: &mut Sink, material: &str, pts: &[Vec3], uv: &dyn Fn(Vec3) -> Vec2) {
     let n = (pts[1] - pts[0]).cross(pts[2] - pts[0]);
     sink.face(material, pts, n, Some(uv));
     sink.face(material, pts, -n, Some(uv));
@@ -298,7 +307,13 @@ fn both(sink: &mut Sink, material: &str, pts: &[Vec3], uv: &dyn Fn(Vec3) -> Vec2
 /// of its planks drawn, to `part` of the way round each section from the
 /// keel. `to` takes a point in the hull's own frame (x along it, y up, z
 /// across) into the sink's.
-fn hull_skin(sink: &mut Sink, material: &str, hull: Hull, part: f32, to: &dyn Fn(Vec3) -> Vec3) {
+pub(super) fn hull_skin(
+    sink: &mut Sink,
+    material: &str,
+    hull: Hull,
+    part: f32,
+    to: &dyn Fn(Vec3) -> Vec3,
+) {
     const S: usize = 18;
     const K: usize = 8;
     let at = |i: usize, k: usize| -> (Vec3, Vec2) {
@@ -344,7 +359,7 @@ fn hull_outline(hull: Hull) -> [Vec2; 6] {
 }
 
 /// The solids and surfaces cut into `sink`, as a piece of the town.
-fn finish(sink: Sink, frame: Frame, reach_m: f32) -> BuildingSolids {
+pub(super) fn finish(sink: Sink, frame: Frame, reach_m: f32) -> BuildingSolids {
     BuildingSolids {
         frame,
         reach_m,
@@ -710,9 +725,9 @@ fn shipyard(
     Ok(out)
 }
 
-/// The slip (the mockup's `bridge` with `ramp`): one sloped deck of planks
-/// with cleats across it, from just over the beach at its head down to its
-/// foot in the water, the mockup's height there over the sea.
+/// The slip (the mockup's `bridge` with `ramp`): from just over the beach
+/// at its head, 5 cm over the sand as the mockup's, down to its foot in the
+/// water at the mockup's height there over the sea.
 #[allow(clippy::too_many_arguments)]
 fn slip(
     meshes: &mut Meshes,
@@ -725,27 +740,51 @@ fn slip(
     terrace_m: f32,
     ground: &dyn Fn(Vec3) -> f32,
 ) -> Result<BuildingSolids, String> {
-    let off = || "the slip is off the chart".to_string();
     let (a, b) = (slip.from, slip.to);
-    // Its head lies on the beach as the mockup's does, 5 cm over the sand.
-    let head_m =
-        stand(template, chart, patch, terrace_m, ground, a[0], a[1], a[2]).ok_or_else(off)? + 0.05;
-    let foot_m = terrace_m + b[1];
+    let head_m = stand(template, chart, patch, terrace_m, ground, a[0], a[1], a[2])
+        .ok_or("the slip is off the chart")?
+        + 0.05;
+    let ends = (head_m, terrace_m + b[1]);
+    let cell_m = template.grid.cell_m;
+    ramp(
+        meshes, repeat_m, patch, chart, cell_m, slip, ends, radius_m, "plank",
+    )
+    .ok_or_else(|| "the slip is off the chart".to_string())
+}
+
+/// A ramp (the mockup's `bridge` with `ramp`): one sloped deck of
+/// `material`, 10 cm thick, with cleats across it, from `pier.from` to
+/// `pier.to` (the mockup's metres), its top at `ends`' heights over the
+/// radius: a slip, a gangplank. Cut in one frame at its head, the walker
+/// going up or down it on a [`Surface::Ramp`]. `None` where an end is off
+/// the chart.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn ramp(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    patch: &Patch,
+    chart: &Chart,
+    cell_m: f32,
+    pier: &Pier,
+    (head_m, foot_m): (f32, f32),
+    radius_m: f32,
+    material: &str,
+) -> Option<BuildingSolids> {
+    let (a, b) = (pier.from, pier.to);
     let mid = ((a[0] + b[0]) / 2.0, (a[2] + b[2]) / 2.0);
-    let place =
-        Place::new(chart, patch, template.grid.cell_m, mid, radius_m, head_m).ok_or_else(off)?;
+    let place = Place::new(chart, patch, cell_m, mid, radius_m, head_m)?;
     let mut sink = Sink::new(meshes, repeat_m, place.frame);
     let (pa, pb) = (place.plan(a[0], a[2]), place.plan(b[0], b[2]));
     let len = pa.distance(pb);
     let dir = (pb - pa) / len;
-    let side = dir.perp() * (slip.width_m / 2.0);
+    let side = dir.perp() * (pier.width_m / 2.0);
     let drop = foot_m - head_m;
     let p = |t: f32, s: f32, dy: f32| {
         let q = pa + (pb - pa) * t + side * s;
         Vec3::new(q.x, drop * t + dy, q.y)
     };
     sink.face(
-        "plank",
+        material,
         &[
             p(0.0, -1.0, 0.0),
             p(1.0, -1.0, 0.0),
@@ -756,7 +795,7 @@ fn slip(
         None,
     );
     sink.face(
-        "plank",
+        material,
         &[
             p(0.0, -1.0, -0.1),
             p(1.0, -1.0, -0.1),
@@ -769,7 +808,7 @@ fn slip(
     for s in [-1.0f32, 1.0] {
         let out = side * s;
         sink.face(
-            "plank",
+            material,
             &[
                 p(0.0, s, -0.1),
                 p(1.0, s, -0.1),
@@ -790,7 +829,7 @@ fn slip(
             q.x,
             q.y - 0.01,
             q.z,
-            Vec3::new(0.05, 0.05, slip.width_m * 0.9),
+            Vec3::new(0.05, 0.05, pier.width_m * 0.9),
             ang,
         );
     }
@@ -798,14 +837,14 @@ fn slip(
         foot: pa,
         dir,
         len,
-        half_width: slip.width_m / 2.0,
+        half_width: pier.width_m / 2.0,
         from: 0.0,
         to: drop,
         depth: 0.1,
     });
-    let reach_m = len / 2.0 + slip.width_m;
+    let reach_m = len / 2.0 + pier.width_m;
     let frame = place.frame;
-    Ok(finish(sink, frame, reach_m))
+    Some(finish(sink, frame, reach_m))
 }
 
 #[cfg(test)]
