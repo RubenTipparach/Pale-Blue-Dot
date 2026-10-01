@@ -1404,6 +1404,103 @@ so the first can be looked at before it can be walked into.
       `a_craft_far_away_is_stowed_and_comes_back_where_it_was_left` hold it.
     - **Open:** the boarding-from-the-pier test. A craft is boarded as any
       craft is, by the existing tests' path.
+- **Task 4.2c in detail, the harbour's dressing (written 2026-10-01).**
+  Third in the owner's order: "We're good on the mockup already. Approved.
+  Implement in game".
+  - **What the mockup puts in its harbour** (`makeCoast`), besides its
+    buildings, piers, light, lanterns and boats:
+    - **The fish market:** four stalls on the quay. Each has four posts, a
+      plank counter, a sloped cloth awning and five boxes of goods (fish and
+      wool).
+    - **On the beach:** three net racks (posts, a bar and a see-through net
+      hung both sides), two fish racks (seven fish on a bar), and two piles
+      of lobster pots (5 and 3).
+    - **At the piers:** a barrel and a crate at each of three pier heads.
+      Twelve bollards line the main pier.
+    - **On the quay:** three crates and two barrels.
+    - **The boathouses:** each has a rowboat on the sand, three oars on end
+      and four lobster pots.
+    - **Two rowboats** lie keel up on trestles on the beach.
+    - **The shipyard:**
+      - a hull in frame on the beach: the lower planks on, eleven ribs bare
+        above them, stem and stern posts;
+      - its keel on blocks, with fourteen shores;
+      - a stack of planks;
+      - the slip, 4 m wide, down from the beach into the water.
+    - **Not this step:** the people (townsfolk are a non-goal), and the
+      cog's own barrel, crate and gangplank, which are `sail-the-cog`'s.
+  - **The export.** Wrappers round the mockup's `marketStall`, `netRack`,
+    `fishRack`, `lobsterPots`, `crate`, `barrel`, the bollards and the
+    beached and housed boats write a `dressing` list into the template.
+    - Each entry has its kind, where it stands in the mockup's metres, its
+      height and its turn. A pile of pots also has its count, a crate its
+      side and a stall its cloth.
+    - The shipyard is written as one entry: where its hull lies, the slip's
+      two ends and width, and where its planks are stacked. Its sizes are
+      the mockup's constants, carried in the piece.
+    - Only the harbour is written. `village.json` and `town.json` must
+      re-export byte-identical (see below).
+  - **Derived, never saved.** A town's dressing is placed from its template
+    and its stored chart, as its lamps are. Nothing about it enters the
+    town's record. The cells under it join the harbour's cells over the
+    water, so the slip's are charted.
+  - **Where each thing stands.** It stands on what is under it in the game,
+    not at the mockup's height. That is the highest of a pier's deck, a
+    building's floor and its cell's ground that is no more than half a
+    metre over the mockup's own height.
+    - A sea template rounds heights to whole layers, so the mockup's 0.75 m
+      beach is 1 m in the game. The racks and pots on it rise with it.
+    - A barrel at a pier head stands on the deck. A pot in a boathouse
+      stands on its floor.
+  - **How each is cut.** Each is cut in its own frame at its point, as the
+    light is, from the boxes, cylinders and prisms the pieces already have.
+    - **A new piece, the hull.** The mockup's `hullGeometry` and
+      `hullSection` are ported into the pieces: a hull lofted from U-shaped
+      sections. The beached and housed rowboats use it whole. The shipyard
+      uses it planked to 0.45 of its depth, with its ribs drawn on the same
+      sections. The cog will need it too.
+    - **A new surface, the ramp.** It is a straight slope the walker stands
+      on, from one height to another, as the mockup's `bridge` with `ramp`
+      is. The slip is the first. The cog's gangplank will be the second.
+  - **What the walker goes round.** These are the mockup's solids:
+    - every barrel, crate and pile of pots;
+    - each stall's counter and posts;
+    - each rack, as a thin wall;
+    - each bollard;
+    - each beached boat, to its keel;
+    - the shipyard's hull, 10.2 by 3.4 m.
+    - The awnings stand over head height. The oars and the goods are
+      drawn only.
+  - **The net is see-through.** The mockup draws it from a 32 px texture
+    with cords every 5 px, cut out where it is clear.
+    - `export_town_textures.js` also writes the mockup's custom textures.
+      The manifest marks the ones the mockup cuts out (its `ALPHA` set).
+    - The game draws a cut-out texture alpha-masked at 0.5, on both sides.
+    - The net casts no shadow. The shadow pass casts whole triangles, so a
+      net would throw a solid sheet of shadow onto the beach.
+    - Recommendation taken (ask only with screenshots).
+  - **Only the harbour, for now.** The village and the walled town have
+    dressing of their own: the market's stalls, the coopers' barrels and
+    crates. Adding it to their `v1` templates would stand new solids in
+    towns that saves already hold, Holbrook among them, where a player may
+    have built.
+    - Their dressing is its own step, as a new template version for new
+      towns that leaves `v1` as it is.
+    - The harbour is new on this branch, so no save from `main` holds one.
+    - Recommendation taken (ask only with screenshots).
+  - **The cost.** The dressing is triangles and solids in each harbour's
+    town meshes, logged with the town's count. Its frame cost is not
+    measured in the cloud session.
+  - **Verify.**
+    - Core: every dressing thing of the harbour stands within 2 cm of the
+      deck, floor or ground under it.
+    - Core: a walker on the quay is held by a stall's counter and goes
+      round a barrel.
+    - Core: a walker goes down the slip from the beach into the water.
+    - App: every harbour cuts with its dressing.
+    - Export: the village and the walled town re-export byte-identical.
+    - Shots of the fish market and the nets at 11:00 and 22:30, and of the
+      shipyard at 11:00.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before
