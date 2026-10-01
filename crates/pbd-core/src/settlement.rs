@@ -86,6 +86,20 @@ pub struct Template {
     /// The harbour's light on its mole (slice 4d).
     #[serde(default)]
     pub light: Option<RoundTower>,
+    /// The harbour's boats on the water (task 4.2b).
+    #[serde(default)]
+    pub boats: Vec<Boat>,
+}
+
+/// A boat on the water (task 4.2b): the mockup's kind (`rowboat`, `sail`,
+/// `canoe`), where it lies in the mockup's metres, and its heading, the bow
+/// along `(cos, sin)` in `(x, z)`.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Boat {
+    pub kind: String,
+    pub x: f32,
+    pub z: f32,
+    pub heading: f32,
 }
 
 /// A pier (slice 4d): a deck of planks `width_m` wide from `from` to `to`,

@@ -10,6 +10,7 @@
 
 mod chase;
 mod draw;
+pub(crate) mod harbour;
 mod hud;
 mod model;
 pub(crate) mod place;
@@ -53,6 +54,9 @@ pub struct Fleet {
     pub dirty: bool,
     /// Whether this world's craft are in it yet.
     pub spawned: bool,
+    /// Craft stowed as their records, far from the viewer (`cities-in-the-world`
+    /// task 4.2b): in the save, not in the world, until the viewer comes near.
+    pub stowed: Vec<pbd_core::vehicle::record::VehicleRecord>,
 }
 
 impl Fleet {
@@ -64,12 +68,17 @@ impl Fleet {
             next_id: 1,
             dirty: false,
             spawned: false,
+            stowed: Vec::new(),
         }
     }
 
-    /// The whole fleet as the save file holds it.
+    /// The whole fleet as the save file holds it: the craft in the world and
+    /// the ones stowed.
     pub fn file<'a>(&self, crafts: impl Iterator<Item = &'a Craft>) -> VehicleFile {
-        let mut vehicles: Vec<_> = crafts.map(Craft::record).collect();
+        let mut vehicles: Vec<_> = crafts
+            .map(Craft::record)
+            .chain(self.stowed.iter().cloned())
+            .collect();
         vehicles.sort_by_key(|record| record.id);
         VehicleFile {
             version: RECORD_VERSION,
@@ -129,7 +138,16 @@ impl Plugin for VehiclePlugin {
             .init_resource::<CraftHold>()
             .init_resource::<view::VehicleView>()
             .add_systems(Startup, (view::spawn_camera, hud::spawn))
-            .add_systems(Update, (place::spawn_fleet, scripted_board).chain())
+            .add_systems(
+                Update,
+                (
+                    place::spawn_fleet,
+                    harbour::moor_harbours,
+                    harbour::stow_and_wake,
+                    scripted_board,
+                )
+                    .chain(),
+            )
             .add_systems(
                 RunFixedMainLoop,
                 (board_or_leave, read_controls)
@@ -610,6 +628,7 @@ pub fn put_away(world: &mut World) -> Option<VehicleFile> {
     fleet.spawned = false;
     fleet.dirty = false;
     fleet.next_id = 1;
+    fleet.stowed.clear();
     file
 }
 

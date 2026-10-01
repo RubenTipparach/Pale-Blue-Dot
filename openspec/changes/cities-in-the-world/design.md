@@ -1359,6 +1359,29 @@ so the first can be looked at before it can be walked into.
     - App: a moored boat is boarded from the pier and paddled away, and a
       reload finds it where it was left.
     - Shots of the harbour with its boats.
+  - **As built (2026-10-01).**
+    - **The export** writes the 23 boats on the water (14 rowboats, 6 sailing
+      boats, 3 canoes) from a wrapper round `boat`. The cells under them join
+      the harbour's cells over the water, so they are charted.
+    - **The draughts are the boats' own, not the spawn's.** A harbour's water
+      is whole layers, mostly 1 to 2 m deep at the berths. The spawn places a
+      new world's boats with margins (3 m for the Tern, 1.2 m for the Loon),
+      and those left Holinghaven with no boats and Coringport with one.
+      - From `vehicles.ron`: the Tern's keel reaches about 1.7 m under its
+        waterline, and the Loon's hull is 0.36 m deep. So a mooring wants
+        2 m for a Tern and 1 m for a Loon.
+      - A sailing berth too shallow for a Tern takes a Loon, so the berth
+        keeps a boat.
+    - **On the shipped seed** 120 boats moor across the six harbours, 0 to 5
+      berths skipped at each: Marenstrand 19 (5 Terns), Wickingstrand 18
+      (4), Holinghaven 21 (1), Coringport 19 (3), Selingquay 20 (2),
+      Corowstrand 23 (5).
+    - **Stowing** runs once a second. The save's fleet file is the live
+      craft and the stowed records together.
+    - `every_harbours_boats_are_made_once_at_their_berths` and
+      `a_craft_far_away_is_stowed_and_comes_back_where_it_was_left` hold it.
+    - **Open:** the boarding-from-the-pier test. A craft is boarded as any
+      craft is, by the existing tests' path.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before

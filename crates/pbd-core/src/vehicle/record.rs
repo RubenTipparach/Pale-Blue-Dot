@@ -39,6 +39,11 @@ pub struct VehicleRecord {
     pub nacelle: Option<f64>,
     pub brake: Option<bool>,
     pub sheet: Option<f64>,
+    /// A harbour boat's berth, its harbour's site and its number there
+    /// (`cities-in-the-world` task 4.2b). Written only where there is one, so
+    /// every other craft's record is as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub berth: Option<(u32, u32)>,
 }
 
 /// Every craft in a world, as the save file holds them.
@@ -76,6 +81,7 @@ impl Craft {
             nacelle,
             brake,
             sheet,
+            berth: self.berth,
         }
     }
 
@@ -118,6 +124,7 @@ impl Craft {
         craft.set_reference_pose(DVec3::from(record.position), orientation);
         craft.body.velocity = DVec3::from(record.velocity);
         craft.body.angular_velocity = DVec3::from(record.angular_velocity);
+        craft.berth = record.berth;
         craft.mooring = record.mooring.map(|(at, length, anchored)| Mooring {
             at: DVec3::from(at),
             length,

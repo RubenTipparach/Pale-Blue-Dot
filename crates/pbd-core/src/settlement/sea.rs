@@ -60,9 +60,25 @@ pub fn point(chart: &Chart, patch: &Patch, x: f32, z: f32, cell_m: f32) -> Optio
     Some((o + e0 * a + e1 * b).normalize())
 }
 
+/// Where a harbour's boat lies (task 4.2b): its direction on the planet,
+/// and the tangent its bow points along there, placed as [`point`] places
+/// any of the mockup's points. `None` where its cell is not charted.
+pub fn boat_pose(
+    chart: &Chart,
+    patch: &Patch,
+    boat: &super::Boat,
+    cell_m: f32,
+) -> Option<(Vec3, Vec3)> {
+    let at = point(chart, patch, boat.x, boat.z, cell_m)?;
+    let (x, z) = (boat.x + boat.heading.cos(), boat.z + boat.heading.sin());
+    let ahead = point(chart, patch, x, z, cell_m)?;
+    let bow = ahead - at;
+    Some((at, (bow - at * bow.dot(at)).normalize_or_zero()))
+}
+
 /// The cells under what a sea template stands over the water: its
 /// buildings' and decks' cells, every cell a pier crosses, and its
-/// lanterns' and light's. Some are dry, and those are laid as well.
+/// lanterns', boats' and light's. Some are dry, and those are laid as well.
 pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
     let cell_m = template.grid.cell_m;
     let mut out = BTreeSet::new();
@@ -93,6 +109,15 @@ pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
     }
     for l in &template.lanterns {
         out.insert(cell_at(l[0], l[2], cell_m));
+    }
+    // A boat's cell, and the cell a metre ahead of it, where its bow is read.
+    for b in &template.boats {
+        out.insert(cell_at(b.x, b.z, cell_m));
+        out.insert(cell_at(
+            b.x + b.heading.cos(),
+            b.z + b.heading.sin(),
+            cell_m,
+        ));
     }
     if let Some(l) = &template.light {
         out.insert(cell_at(l.x, l.z, cell_m));

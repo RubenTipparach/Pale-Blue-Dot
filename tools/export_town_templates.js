@@ -52,8 +52,16 @@ const SEA = new Set(["coast"]);
       // The sea's pieces (slice 4d): piers on piles (a `bridge` with piles),
       // a stilt house's deck and porch stair, and the lanterns.
       const sea = SEA_SCENES.includes(scene);
-      const piers = [], lanterns = [];
-      const innerBridge = bridge, innerStilt = stiltHouse, innerLantern = lantern;
+      const piers = [], lanterns = [], boats = [];
+      const innerBridge = bridge, innerStilt = stiltHouse, innerLantern = lantern, innerBoat = boat;
+      // A boat on the water (not beached, not still in a boathouse): its kind,
+      // where it lies and its heading, the bow along (cos, sin) in (x, z)
+      // (`cities-in-the-world` task 4.2b).
+      // eslint-disable-next-line no-global-assign
+      boat = function (type, x, z, ang, o = {}) {
+        if (sea && !o.beached && !o.still) boats.push({ kind: type, x, z, heading: ang });
+        return innerBoat(type, x, z, ang, o);
+      };
       // eslint-disable-next-line no-global-assign
       bridge = function (A, B, o = {}) {
         if (sea && o.piles !== undefined) piers.push({ from: A.slice(), to: B.slice(), width_m: o.width ?? 2 });
@@ -139,6 +147,7 @@ const SEA = new Set(["coast"]);
         bridge = innerBridge;
         stiltHouse = innerStilt;
         lantern = innerLantern;
+        boat = innerBoat;
       }
       // A stair tower is its newel's one cell; the keep is its newel's cell
       // and the ring round it, its doors and windows as its walls were cut.
@@ -191,6 +200,7 @@ const SEA = new Set(["coast"]);
         out.piers = piers;
         // The one on the cog's stern is the cog's (`sail-the-cog`).
         out.lanterns = lanterns.filter(([, y]) => y < 2);
+        out.boats = boats;
         // The mole's light: the round solid the scene labels so.
         const light = SOLIDS.find((x) => x.type === "circ" && x.label === "The light");
         if (light) out.light = { x: light.x, z: light.z, radius_m: light.r, base_m: Math.round(light.y0), top_m: light.y1 };

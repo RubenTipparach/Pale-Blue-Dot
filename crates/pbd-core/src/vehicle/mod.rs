@@ -172,6 +172,10 @@ pub struct Craft {
     /// Water aboard, kg.
     pub bilge_kg: f64,
     pub mooring: Option<Mooring>,
+    /// A harbour boat's berth (`cities-in-the-world` task 4.2b): its
+    /// harbour's site and its number there, so the harbour never makes it
+    /// twice. `None` for every other craft.
+    pub berth: Option<(u32, u32)>,
     pub state: CraftState,
     pub telemetry: Telemetry,
     specs: Arc<VehicleSpecs>,
@@ -368,6 +372,7 @@ impl Craft {
             occupied: false,
             bilge_kg: 0.0,
             mooring: None,
+            berth: None,
             state,
             telemetry: Telemetry::None,
             specs,

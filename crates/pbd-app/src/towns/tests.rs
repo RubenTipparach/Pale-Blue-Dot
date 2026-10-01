@@ -1012,3 +1012,77 @@ fn print_where_the_harbours_stand() {
         }
     }
 }
+
+/// Task 4.2b: each harbour of the shipped seed moors its boats once, each
+/// afloat at its berth, anchored and tagged with its berth; the berths over
+/// land or too shallow are skipped and counted; asked again, it makes none.
+#[test]
+fn every_harbours_boats_are_made_once_at_their_berths() {
+    use crate::vehicles::harbour::boats_for;
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let fleet = crate::vehicles::Fleet::new(crate::config::VehiclesConfig::default().0);
+    let sea_radius = config.radius_m + config.sea_level_m;
+    let mut total = 0;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let mut next = 1;
+        let (made, skipped) = boats_for(
+            site.id,
+            &town,
+            &template,
+            &patch,
+            sea_radius,
+            &Default::default(),
+            &fleet.specs,
+            &fleet.hulls,
+            &mut next,
+            crate::vehicles::place::floor,
+        );
+        println!(
+            "{}: {} boats moored ({} Terns), {skipped} berths skipped",
+            site.name,
+            made.len(),
+            made.iter()
+                .filter(|c| c.kind == pbd_core::vehicle::Kind::Tern)
+                .count()
+        );
+        assert_eq!(made.len() + skipped, template.boats.len(), "{}", site.name);
+        let berths: std::collections::BTreeSet<(u32, u32)> =
+            made.iter().filter_map(|c| c.berth).collect();
+        assert_eq!(berths.len(), made.len(), "{}: a berth a boat", site.name);
+        for c in &made {
+            assert!(
+                c.mooring.is_some_and(|m| m.anchored),
+                "{}: anchored",
+                site.name
+            );
+            let afloat = c.reference_position().length() - f64::from(sea_radius);
+            assert!(
+                afloat.abs() < 0.5,
+                "{}: at the sea, {afloat:.2} m",
+                site.name
+            );
+        }
+        assert_eq!(next, made.len() as u64 + 1);
+        let all: std::collections::BTreeSet<(u32, u32)> = (0..template.boats.len() as u32)
+            .map(|n| (site.id, n))
+            .collect();
+        let (again, _) = boats_for(
+            site.id,
+            &town,
+            &template,
+            &patch,
+            sea_radius,
+            &all,
+            &fleet.specs,
+            &fleet.hulls,
+            &mut next,
+            crate::vehicles::place::floor,
+        );
+        assert!(again.is_empty(), "{}: made once", site.name);
+        total += made.len();
+    }
+    assert!(total > 0, "some boats moored");
+}

@@ -524,3 +524,79 @@ fn a_held_kestrel_stays_where_the_capture_put_it() {
     let fell = at.length() - kestrel(&mut app).body.position.length();
     assert!(fell > 1.0, "let go, it falls: {fell:.2} m");
 }
+
+/// Task 4.2b: a craft left far away is stowed as its record, still in the
+/// save, and comes back where it was left once the player is near again.
+#[test]
+fn a_craft_far_away_is_stowed_and_comes_back_where_it_was_left() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let (entity, loon) = crafts(&mut app)
+        .into_iter()
+        .find(|(_, c)| c.kind == Kind::Loon)
+        .unwrap();
+    // Carry it 3 km round the planet away from the player, past the stowing
+    // range.
+    let far = {
+        let at = loon.reference_position();
+        let up = at.normalize();
+        let away = at - walker(&mut app).as_dvec3();
+        let side = (away - up * away.dot(up)).normalize();
+        let angle = 3000.0 / at.length();
+        (up * angle.cos() + side * angle.sin()) * at.length()
+    };
+    {
+        let mut vehicle = app.world_mut().get_mut::<Vehicle>(entity).unwrap();
+        let orientation = vehicle.craft.body.orientation;
+        vehicle.craft.set_reference_pose(far, orientation);
+        vehicle.craft.mooring = None;
+    }
+    for _ in 0..120 {
+        app.update();
+    }
+    assert!(
+        crafts(&mut app).iter().all(|(_, c)| c.id != loon.id),
+        "stowed out of the world"
+    );
+    let stowed = app.world().resource::<Fleet>().stowed.clone();
+    let record = stowed
+        .iter()
+        .find(|r| r.id == loon.id)
+        .expect("its record kept");
+    let file = app.world().resource::<Fleet>().file(std::iter::empty());
+    assert!(file.vehicles.iter().any(|r| r.id == loon.id), "in the save");
+    // Its record is where it was left.
+    assert!(
+        pbd_core::DVec3::from(record.position).distance(far) < 1.0,
+        "stowed where it was left"
+    );
+    // Bring the record within range of the player, as coming near it does,
+    // and it is back in the world at that pose, the same craft.
+    let near = {
+        let w = walker(&mut app).as_dvec3();
+        let up = w.normalize();
+        let side = up.any_orthonormal_vector();
+        let angle = 60.0 / w.length();
+        (up * angle.cos() + side * angle.sin()) * far.length()
+    };
+    {
+        let mut fleet = app.world_mut().resource_mut::<Fleet>();
+        let r = fleet.stowed.iter_mut().find(|r| r.id == loon.id).unwrap();
+        r.position = near.to_array();
+    }
+    // On the frame it is back, before it has stepped far.
+    let mut back = None;
+    for _ in 0..120 {
+        app.update();
+        back = crafts(&mut app).into_iter().find(|(_, c)| c.id == loon.id);
+        if back.is_some() {
+            break;
+        }
+    }
+    let (_, craft) = back.expect("back");
+    assert!(
+        craft.reference_position().distance(near) < 1.0,
+        "brought back at its record's pose"
+    );
+    assert!(app.world().resource::<Fleet>().stowed.is_empty());
+}

@@ -71,21 +71,29 @@ pub fn spawn_fleet(world: &mut World) {
             if fresh { "placed" } else { "restored" },
             at.distance(walker)
         );
-        let entity = world
-            .spawn((
-                Name::new(craft.kind.name()),
-                Transform::from_translation(at),
-                Visibility::default(),
-            ))
-            .id();
-        draw::build(world, entity, &craft);
-        world.entity_mut(entity).insert(Vehicle::new(craft));
+        spawn_craft(world, craft);
     }
     let mut fleet = world.resource_mut::<Fleet>();
     fleet.next_id = next_id;
     fleet.spawned = true;
     // A new fleet is a world mutation like any other: written now.
     fleet.dirty |= fresh;
+}
+
+/// A craft into the world as an entity, drawn, at its pose.
+pub(crate) fn spawn_craft(world: &mut World, craft: Craft) -> Entity {
+    let center = world.resource::<crate::planet::PlanetRenderFrame>().center;
+    let at = (center + craft.reference_position()).as_vec3();
+    let entity = world
+        .spawn((
+            Name::new(craft.kind.name()),
+            Transform::from_translation(at),
+            Visibility::default(),
+        ))
+        .id();
+    draw::build(world, entity, &craft);
+    world.entity_mut(entity).insert(Vehicle::new(craft));
+    entity
 }
 
 /// The craft this world should have: its save's, or a new placement round
@@ -314,7 +322,7 @@ fn rings(radius: f32, centre: Vec3, good: impl Fn(Vec3, f32) -> bool) -> Option<
 /// `PlanetContact::sample`: far from the player that answers from the coarse
 /// level, which put the Tern's berth in 3.5 m of water that was 1.5 m deep once
 /// the tier arrived, and ran it aground on its first tick.
-fn floor(direction: Vec3) -> f32 {
+pub(crate) fn floor(direction: Vec3) -> f32 {
     super::ground_under(
         None,
         direction.normalize_or(Vec3::Y).as_dvec3() * PLANET_RADIUS as f64,
