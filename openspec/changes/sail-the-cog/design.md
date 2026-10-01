@@ -173,6 +173,62 @@ only with screenshots).
     the main pier up the gangplank, across the deck and up the stair onto
     the aftcastle. `every_harbour_lays_on_its_sea_and_cuts` holds each of
     the six harbours' cogs standing.
+- **Step 2 in detail (written 2026-10-01, before code).** Measured on this
+  branch:
+  - **The walker** is an Avian capsule. `drive_walker` sets its velocity
+    from the keys. Avian moves it. `resolve_ground` then sweeps it from
+    last tick's accepted position to the new one, in 0.2 m pieces, against
+    the terrain and the towns' pieces (`walking::Structures`). Each piece
+    answers in its own `Frame`, through `frame.local(p)`.
+  - **So a piece moves rigidly when its `Frame` moves.** Nothing in a
+    piece's solids or surfaces needs re-cutting. A deck is a piece whose
+    frame is set each tick from the ship's pose.
+  - **The cog's drawing is in the town's meshes**, baked in planet-local
+    coordinates. A moving cog needs its own meshes, in its frame's
+    coordinates, on its own entity, with a transform set from the same
+    pose.
+
+  How the walker lives on a deck (decision 2), in this codebase:
+  - **Riding.** The ground query reports which piece holds the feet when a
+    piece's floor wins over the terrain. A walker held by a moving piece at
+    the end of a tick is on that deck.
+  - At the start of the next tick, before it moves, the walker is carried
+    by the deck's own motion over the tick: `p ← F_now · F_then⁻¹ · p`,
+    with its heading turned by the same rotation. The same goes for the
+    position the sweep starts from.
+    - This is the local pose kept and composed. The walker's place on the
+      deck is unchanged to rounding, so a turn neither slides nor jitters
+      it.
+    - It is not the rejected alternative, which added the deck's velocity
+      and is only first-order in the turn.
+    - Mouse look stays raw. The view turns with the deck because the
+      heading is carried, never eased.
+  - **Walking** is then the walker's own velocity, swept against the deck
+    where the deck now is, exactly as on a town's floor. The rail is still
+    in the deck's frame, so a walk into it is refused, never pushed through.
+  - **Leaving.** When the feet stop being held by the deck (over the side,
+    off the castle, a jump), the walker takes the deck's velocity at its
+    point, `v + ω × r`, once, into its own. Landing on a deck takes it back
+    out. So momentum is the composed velocity, as `world/frames` requires.
+  - **No fictitious forces** (a non-goal): gravity stays the planet's.
+
+  **The moving thing for step 2** is the moored cog swinging at its
+  mooring on a script: it heaves 0.15 m on a 6 s period, rolls 2° on 7 s
+  and swings 4° about its mooring on 23 s. The motion is small, known in
+  closed form, and enough to prove the walker rides. Step 3 drives the
+  same frame from the craft's integrator instead.
+  - A `--cog-swing <scale>` flag scales it for tests and shots. The
+    default, 1, is the swing a moored ship has. Recommendation taken (ask
+    only with screenshots).
+
+  **Verify** (the `player/walking` scenarios as app tests):
+  - **Standing through a turn:** a walker set on the deck, the deck turned
+    90° over 10 s, stays grounded at the same deck position to a centimetre.
+  - **Up the stair under way:** a walker climbs the stair to the aftcastle
+    while the deck swings at ten times the mooring swing.
+  - **Over the side:** a walker walks off through the gangway and leaves
+    with the deck's point velocity added.
+  - **A still:** a capture of the walker on the swinging deck.
 - **The stern lantern waits for step 3.** A town's lanterns are lamp blocks
   in the voxel field, which cannot sail. A light carried on a craft is part
   of the craft's drawing.

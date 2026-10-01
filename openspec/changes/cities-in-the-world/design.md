@@ -1502,7 +1502,7 @@ so the first can be looked at before it can be walked into.
     - Shots of the fish market and the nets at 11:00 and 22:30, and of the
       shipyard at 11:00.
   - **As built (2026-10-01).**
-    - **The export** writes 73 things and the shipyard: 4 stalls, 3 net
+    - **The export** writes 58 things and the shipyard: 4 stalls, 3 net
       racks, 2 fish racks, 16 pots, 5 barrels, 6 crates, 12 bollards, 6
       oars and 4 boats on land.
       - The coopers' barrels and crate stand inside their houses. They are
@@ -1531,7 +1531,7 @@ so the first can be looked at before it can be walked into.
       `a_walker_is_held_by_a_stall_and_goes_round_a_barrel`,
       `a_walker_goes_down_the_slip_into_the_water` and, in the app,
       `every_harbour_lays_on_its_sea_and_cuts` (each of the six harbours
-      has 76 dressing pieces, none off its chart) hold it.
+      has 61 dressing pieces, none off its chart) hold it.
     - The main pier's walker test now goes by the pier's own pieces: the
       mockup's crate at the head stands on the pier's middle.
 - **Towns are stored before any of this ships.** A slice before task 4.5
