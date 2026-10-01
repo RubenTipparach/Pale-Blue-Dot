@@ -185,3 +185,93 @@ fn a_town_in_the_dark_lights_the_ground_round_it() {
         }
     }
 }
+
+/// Built towns on the map (`cities-in-the-world`, 2026-10-01): with the
+/// world's towns known, a built town is ringed and drawn cream, a site still
+/// to come is dimmed and an unsettled one red-edged; only a built town
+/// lights the ground at night; the legend counts them.
+#[test]
+fn built_towns_are_ringed_and_counted() {
+    use pbd_app::towns::{Held, Towns};
+    use pbd_core::settlement::record::Town;
+    let view = MapView {
+        centre: Vec2::new(0.5, 0.5),
+        px_per_turn: SCREEN.x,
+    };
+    let home = list()[1].clone();
+    let towns = || {
+        let town = Town {
+            site: home.id,
+            template: "village".into(),
+            layout: 1,
+            terrace: 0,
+            anchor: (0, 0),
+            cells: Vec::new(),
+            levels: Vec::new(),
+            buildings: Vec::new(),
+        };
+        Towns::holding(
+            vec![Held {
+                site: home.clone(),
+                town,
+            }],
+            vec![4],
+        )
+    };
+    for night in [false, true] {
+        let mut app = app(view, night);
+        app.insert_resource(towns());
+        app.update();
+        let shown = |app: &mut App, part: Part| -> Vec<usize> {
+            let mut v: Vec<usize> = parts(app)
+                .into_iter()
+                .filter(|(p, n)| p.part == part && n.display == Display::Flex)
+                .map(|(p, _)| p.site)
+                .collect();
+            v.sort();
+            v.dedup();
+            v
+        };
+        assert_eq!(
+            shown(&mut app, Part::Built),
+            vec![1],
+            "only Holbrook is built"
+        );
+        if night {
+            assert!(
+                shown(&mut app, Part::Glow).iter().all(|&i| i == 1),
+                "only a built town lights the ground"
+            );
+            continue;
+        }
+        let mut icons = app
+            .world_mut()
+            .query::<(&SitePart, &BackgroundColor, &BorderColor)>();
+        let colours: Vec<(usize, Color, Color)> = icons
+            .iter(app.world())
+            .filter(|(p, ..)| p.part == Part::Icon && p.copy == 0)
+            .map(|(p, f, b)| (p.site, f.0, b.top))
+            .collect();
+        // By place in the list: the capital and Coringport are still to
+        // come, Holbrook is built, Stoagard (id 4) is unsettled.
+        for (index, fill, border) in colours {
+            match index {
+                1 => assert_eq!(fill, Color::srgb_u8(0xf4, 0xef, 0xe4), "built is cream"),
+                0 | 2 => assert!(fill.alpha() < 0.9, "to come is dimmed"),
+                3 => assert_eq!(border, Color::srgba_u8(0xe0, 0x5a, 0x48, 0xb3), "unsettled"),
+                _ => unreachable!("four sites"),
+            }
+        }
+        let note = app
+            .world_mut()
+            .query_filtered::<&Text, With<SitesNote>>()
+            .single(app.world())
+            .unwrap()
+            .0
+            .clone();
+        assert_eq!(
+            note,
+            "4 settlements on the map: 1 built, 2 still to come, 1 unsettled."
+        );
+    }
+}

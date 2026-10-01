@@ -873,6 +873,17 @@ so the first can be looked at before it can be walked into.
       capture shows its end, so the app test
       (`a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves`)
       is its proof until the owner's video batch.
+  - **Built towns on the map (2026-10-01).** The owner: "highlight built
+    cities on the map please".
+    - **Built** means a town the world holds and stands when you come near:
+      laid, stored and read back.
+    - The map's sites layer (`city-sites` task 4.1) draws a built town's
+      marker in cream with a green ring round it.
+    - A site of a kind with no template yet is drawn dimmed. An unsettled
+      site (task 4.4) is dimmed with a red edge.
+    - The legend's line counts them: "55 settlements on the map: 26 built,
+      29 still to come."
+    - Shots: the spawn's continent at 12 m a pixel, and the whole planet.
   - **4b in detail.**
     - **The export.** `tools/export_town_templates.js town` writes
       `assets/settlements/v1/town.json`.

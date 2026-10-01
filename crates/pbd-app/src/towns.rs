@@ -337,12 +337,30 @@ pub struct Towns {
     waiting: Vec<Site>,
     /// Every town the world holds, by site id.
     pub held: Vec<Held>,
+    /// The sites left unsettled (task 4.4), by id.
+    pub unsettled: Vec<u32>,
     pub standing: Vec<Standing>,
     /// Towns being cut on the pool, by site (decision 5: published whole).
     cutting: Vec<(u32, Task<Result<Laid, String>>)>,
 }
 
 impl Towns {
+    /// The towns a world holds and the sites it left unsettled, standing
+    /// nowhere yet: what the map reads (and its tests make).
+    pub fn holding(held: Vec<Held>, unsettled: Vec<u32>) -> Self {
+        Self {
+            held,
+            unsettled,
+            ..default()
+        }
+    }
+
+    /// Whether a site's town is built: laid, stored and read back, so it
+    /// stands when the viewer comes near (the map's highlight).
+    pub fn built(&self, site: u32) -> bool {
+        self.held.iter().any(|h| h.site.id == site) || self.waiting.iter().any(|s| s.id == site)
+    }
+
     /// One town standing with `count` buildings at the head of the walker's
     /// [`Structures`], for a test that puts them there itself.
     #[cfg(test)]
@@ -486,7 +504,7 @@ fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
     let config = *crate::planet::terrain_config();
     let started = std::time::Instant::now();
     let (mut held, mut waiting, mut wait, mut laid, mut unsettled) =
-        (Vec::new(), Vec::new(), 0u64, 0usize, 0usize);
+        (Vec::new(), Vec::new(), 0u64, 0usize, Vec::new());
     world.resource_scope(|world, mut save: Mut<WorldSave>| {
         let assets = world.resource::<TownAssets>();
         for site in sites {
@@ -507,7 +525,7 @@ fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
                 },
                 Ok((None, seq)) => {
                     wait = wait.max(seq);
-                    unsettled += 1;
+                    unsettled.push(site.id);
                     info!(
                         "{} is unsettled: the player's work is on its ground",
                         site.name
@@ -518,13 +536,15 @@ fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
         }
     });
     info!(
-        "towns: {} read, {laid} of them laid out now, {} waiting on the disk, {unsettled} unsettled, in {:.2} s",
+        "towns: {} read, {laid} of them laid out now, {} waiting on the disk, {} unsettled, in {:.2} s",
         held.len(),
         waiting.len(),
+        unsettled.len(),
         started.elapsed().as_secs_f32()
     );
     let mut towns = world.resource_mut::<Towns>();
     towns.held = held;
+    towns.unsettled = unsettled;
     if wait > 0 {
         info!("the towns laid out now are shown once they are in the save");
         towns.writing = Some(wait);

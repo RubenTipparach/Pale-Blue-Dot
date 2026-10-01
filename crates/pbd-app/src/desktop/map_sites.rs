@@ -8,6 +8,11 @@
 //! ellipse as wide as the map stretches its latitude. With the map's night
 //! on, each town lights a pool round it as strong as the dark is deep there.
 //!
+//! A town that is built (`cities-in-the-world` slice 4: laid, stored, and
+//! standing when the player comes near) is drawn bright, with a green ring;
+//! a site whose kind has no town yet is dimmed, and one left unsettled is
+//! dimmed with a red edge. Only a built town lights the ground at night.
+//!
 //! Each part of each site is its own UI node in [`SiteLayer`], drawn in
 //! passes (the lamplight under the footprints, under the markers, under the
 //! names), once for each of the map's three copies across the antimeridian.
@@ -20,6 +25,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use pbd_app::sites::{SitesRules, WorldSites};
 use pbd_app::sky::Sun;
+use pbd_app::towns::Towns;
 use pbd_core::geo;
 use pbd_core::sites::{Site, SiteKind};
 
@@ -42,6 +48,7 @@ pub const FOOTPRINT_MIN_PX: f32 = 6.0;
 pub enum Part {
     Glow,
     Footprint,
+    Built,
     Icon,
     Crown,
     Label,
@@ -53,6 +60,58 @@ pub struct SitePart {
     pub site: usize,
     pub copy: i32,
     pub part: Part,
+}
+
+/// What stands at a site, where the world's towns are known.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Standing {
+    /// Its town is built.
+    Built,
+    /// Its kind has no town yet.
+    ToCome,
+    /// The player's work was there first (task 4.4): no town, ever.
+    Unsettled,
+}
+
+/// What stands at a site; `None` where the world's towns are not known,
+/// which draws every site as the list alone would.
+pub fn standing(towns: Option<&Towns>, site: &Site) -> Option<Standing> {
+    let towns = towns?;
+    Some(if towns.built(site.id) {
+        Standing::Built
+    } else if towns.unsettled.contains(&site.id) {
+        Standing::Unsettled
+    } else {
+        Standing::ToCome
+    })
+}
+
+/// The green of a built town's ring.
+const BUILT_RING: Color = Color::srgb(0.47, 0.88, 0.58);
+
+/// The legend's line: how many settlements, and, where the towns are known,
+/// how many are built.
+pub fn note(sites: &[Site], towns: Option<&Towns>) -> String {
+    let n = sites.len();
+    let Some(towns) = towns else {
+        return format!("{n} settlements on the map.");
+    };
+    let count = |want: Standing| {
+        sites
+            .iter()
+            .filter(|s| standing(Some(towns), s) == Some(want))
+            .count()
+    };
+    let (built, unsettled) = (count(Standing::Built), count(Standing::Unsettled));
+    let mut line = format!(
+        "{n} settlements on the map: {built} built, {} still to come",
+        n - built - unsettled
+    );
+    if unsettled > 0 {
+        line.push_str(&format!(", {unsettled} unsettled"));
+    }
+    line.push('.');
+    line
 }
 
 /// Which list the layer's nodes were made for.
@@ -107,6 +166,7 @@ fn spawn_parts(commands: &mut Commands, parent: Entity, sites: &[Site]) {
     for part in [
         Part::Glow,
         Part::Footprint,
+        Part::Built,
         Part::Icon,
         Part::Crown,
         Part::Label,
@@ -150,6 +210,23 @@ fn spawn_parts(commands: &mut Commands, parent: Entity, sites: &[Site]) {
                             },
                             BackgroundColor(Color::srgb_u8(0x1b, 0x15, 0x10)),
                             BorderColor::all(Color::srgb_u8(0xf0, 0xe6, 0xd0)),
+                        ))
+                        .id(),
+                    Part::Built => commands
+                        .spawn((
+                            tag,
+                            Node {
+                                width: px(2.0 * (half(site) + 2.5)),
+                                height: px(2.0 * (half(site) + 2.5)),
+                                border: UiRect::all(px(2.0)),
+                                border_radius: if is_big(site) {
+                                    BorderRadius::all(px(2.0))
+                                } else {
+                                    BorderRadius::MAX
+                                },
+                                ..absolute()
+                            },
+                            BorderColor::all(BUILT_RING),
                         ))
                         .id(),
                     Part::Crown => commands
@@ -214,6 +291,7 @@ pub fn draw_sites(
     sun: Res<Sun>,
     world_sites: Option<Res<WorldSites>>,
     rules: Option<Res<SitesRules>>,
+    towns: Option<Res<Towns>>,
     mut drawn: ResMut<DrawnSites>,
     windows: Query<&Window, With<PrimaryWindow>>,
     layer: Query<(Entity, Option<&Children>), With<SiteLayer>>,
@@ -224,9 +302,10 @@ pub fn draw_sites(
         return;
     }
     let sites = world_sites.as_ref().and_then(|w| w.ready());
+    let towns = towns.as_deref();
     for mut text in &mut notes {
         text.0 = match (sites, world_sites.as_ref().is_some_and(|w| w.surveying())) {
-            (Some(list), _) => format!("{} settlements on the map.", list.len()),
+            (Some(list), _) => note(list, towns),
             (None, true) => "Surveying the settlements...".into(),
             (None, false) => String::new(),
         };
@@ -262,7 +341,9 @@ pub fn draw_sites(
         };
         let centre = view.to_screen(geo::project(site.direction), size)
             + Vec2::X * tag.copy as f32 * view.px_per_turn;
-        let night = if choice.night {
+        let stands = standing(towns, site);
+        // Only a town that stands lights the ground round it.
+        let night = if choice.night && stands.is_none_or(|s| s == Standing::Built) {
             1.0 - sun.clock.daylight(site.direction)
         } else {
             0.0
@@ -280,6 +361,11 @@ pub fn draw_sites(
                 let ry = footprint * px_per_m;
                 (ry * stretch, ry, ry > FOOTPRINT_MIN_PX)
             }
+            Part::Built => (
+                half(site) + 2.5,
+                half(site) + 2.5,
+                stands == Some(Standing::Built),
+            ),
             Part::Icon => (half(site), half(site), true),
             Part::Crown => (half(site) + 4.0, half(site) + 4.0, true),
             Part::Label => (0.0, 0.0, labels || site.capital || site.home),
@@ -313,30 +399,36 @@ pub fn draw_sites(
             }
             Part::Icon => {
                 if let Some(mut fill) = fill {
-                    fill.0 = if lit {
-                        Color::srgb_u8(0xff, 0xe2, 0xa8)
-                    } else {
-                        Color::srgb_u8(0x1b, 0x15, 0x10)
+                    fill.0 = match stands {
+                        _ if lit => Color::srgb_u8(0xff, 0xe2, 0xa8),
+                        // A built town's marker is cream, the others' dark.
+                        Some(Standing::Built) => Color::srgb_u8(0xf4, 0xef, 0xe4),
+                        Some(_) => Color::srgba_u8(0x1b, 0x15, 0x10, 0x8c),
+                        None => Color::srgb_u8(0x1b, 0x15, 0x10),
                     };
                 }
                 if let Some(mut border) = border {
-                    *border = BorderColor::all(if lit {
-                        Color::srgba(1.0, 0.78, 0.47, 0.9)
-                    } else {
-                        Color::srgb_u8(0xf0, 0xe6, 0xd0)
+                    *border = BorderColor::all(match stands {
+                        _ if lit => Color::srgba(1.0, 0.78, 0.47, 0.9),
+                        Some(Standing::Built) => Color::srgb_u8(0x1b, 0x15, 0x10),
+                        Some(Standing::ToCome) => Color::srgba_u8(0xf0, 0xe6, 0xd0, 0x73),
+                        Some(Standing::Unsettled) => Color::srgba_u8(0xe0, 0x5a, 0x48, 0xb3),
+                        None => Color::srgb_u8(0xf0, 0xe6, 0xd0),
                     });
                 }
             }
             Part::Label => {
                 if let Some(mut colour) = text {
-                    colour.0 = if lit {
-                        Color::srgb_u8(0xff, 0xe6, 0xb8)
-                    } else {
-                        Color::srgb_u8(0xf4, 0xef, 0xe4)
+                    colour.0 = match stands {
+                        _ if lit => Color::srgb_u8(0xff, 0xe6, 0xb8),
+                        Some(Standing::ToCome | Standing::Unsettled) => {
+                            Color::srgba_u8(0xf4, 0xef, 0xe4, 0x99)
+                        }
+                        _ => Color::srgb_u8(0xf4, 0xef, 0xe4),
                     };
                 }
             }
-            Part::Footprint | Part::Crown => {}
+            Part::Footprint | Part::Crown | Part::Built => {}
         }
     }
 }
