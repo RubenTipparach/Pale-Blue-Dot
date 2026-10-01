@@ -1438,6 +1438,63 @@ so the first can be looked at before it can be walked into.
       harbour's quay and piers stay where they are, whole layers over the
       layers' sea level, and so 1.5 m over the drawn water rather than the
       mockup's 1 m.
+  - **Finding: the harbour has no sailboats (the owner, 2026-10-01, on the
+    harbour shots: "where are all the boats in the harbor?", "Did they
+    capsize?", "The original showed sailboats with tall masts").**
+    - **Nothing capsized.** Every Holinghaven boat is made upright, deck up,
+      on the drawn sea. An empty moored Loon stays upright at every depth
+      from 0.3 m to 40 m over 30 s. Both instruments are in the tests
+      (`print_the_pose_of_holinghavens_boats`,
+      `print_an_empty_moored_boat_by_depth`). The game's boats read as
+      upturned because each is the Loon, a bare teal shell with no rim,
+      seats or paddler.
+    - **No sailing berth floats a Tern** at Holinghaven. Its six sailing
+      berths hold 0.5 m or 1.5 m of drawn water, and one is on land. Water
+      2 m deep is 7 to 29 m away, or not within 30 m
+      (`print_the_water_at_the_sailing_berths`). So every one took a Loon.
+      Moving the berths out would break the mockup's layout, where the
+      sailboats lie along the piers.
+    - **The mismatch is the keel.** The mockup's sailboat is 6.6 m by 2.2 m
+      with a 7.4 m mast, close to the Tern's 6.2 m by 2.3 m and 7 m. But it
+      draws 0.45 m, a harbour boat. The Tern hangs 220 kg of ballast 1.45 m
+      down on a fixed keel and needs 2 m of water.
+    - **Measured: a Tern with its keel raised floats in shallow water.**
+      With its ballast at the hull's bottom and its keel's foil and
+      grounding point just under the hull, it draws 0.3 m. Moored in 0.5 m
+      of water, empty, it heels 4° in a 6 m/s wind, 13° at 10 and 21° at
+      14 (`print_a_tern_with_its_keel_raised`).
+  - **Fix: the Tern gets a lifting keel (written 2026-10-01, before code).**
+    Recommendation taken (ask only with screenshots).
+    - Its keel, with the ballast in it, goes down as far as the water under
+      it allows and no further. It rises at once when the seabed comes up
+      under it, as a keel kicks up on the bottom, and lowers at a steady
+      rate when the water deepens. In open water it is all the way down, as
+      it is now, so the Tern sails as it did.
+    - `TernSpec` gains `keel_rise_m` (1.08 m: the keel's tip from 1.5 m
+      down to just under the hull), `keel_rate` (a third of the way a
+      second) and `keel_clearance_m` (0.1 m). Raising it lifts the keel
+      foil, the ballast and the grounding point together. A raised keel's
+      foil is short and shallow: its area is the lowered share of it, never
+      under a quarter, so a Tern in the shallows makes leeway.
+    - How far it is down is `TernState::keel`, not saved. A loaded Tern
+      starts with it down, and the water under it lifts it on the first
+      tick.
+    - It is drawn where it is, and the HUD reads "keel up" in shallow water.
+    - **The berths.** A Tern now moors in 0.5 m of drawn water, as a Loon
+      does. Every sailing berth that is not on land gets its Tern, tall
+      mast and sail, as the mockup's do.
+    - **Saves.** A world whose harbour already made its boats keeps them as
+      they are, with Loons at the sailing berths. Its boats are records it
+      holds, and none is replaced. A harbour first met from now on makes
+      Terns.
+    - **Verify.**
+      - Core: in 0.5 m of water the keel rises clear of the seabed and the
+        Tern floats upright. In deep water it is all the way down and the
+        close-reach and in-irons tests pass unchanged. Lowered from raised,
+        it takes about three seconds.
+      - App: each harbour's sailing berths over water make Terns.
+      - A shot of Holinghaven's quay with its sailboats, beside the
+        mockup's.
     - Recommendation taken (ask only with screenshots).
 - **Task 4.2c in detail, the harbour's dressing (written 2026-10-01).**
   Third in the owner's order: "We're good on the mockup already. Approved.

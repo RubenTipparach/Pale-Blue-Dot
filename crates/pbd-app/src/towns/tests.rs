@@ -1392,3 +1392,48 @@ fn print_the_pose_of_holinghavens_boats() {
         }
     }
 }
+
+#[test]
+#[ignore = "instrument: the drawn water at each harbour's sailing berths, and the nearest that floats a Tern"]
+fn print_the_water_at_the_sailing_berths() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let surface = sheet(&config);
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, ground) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let nat = natural(&config);
+        let depth = |d: Vec3| {
+            let n = nat(d);
+            surface - ground.at(d).map_or(n, |g| g.height(n)).floor()
+        };
+        let mut row = format!("{:>13}:", site.name);
+        for boat in template.boats.iter().filter(|b| b.kind == "sail") {
+            let Some((d, bow)) = sea::boat_pose(&chart, &patch, boat, template.grid.cell_m) else {
+                row += " off-chart";
+                continue;
+            };
+            // The nearest point within 30 m, in steps of 1 m, with 2 m of
+            // drawn water, the Tern's need.
+            let side = d.cross(bow).normalize();
+            let mut near: Option<f32> = None;
+            for r in 0..=30 {
+                for k in 0..16 {
+                    let a = k as f32 * std::f32::consts::TAU / 16.0;
+                    let off = (bow * a.cos() + side * a.sin()) * (r as f32 / config.radius_m);
+                    if depth((d + off).normalize()) >= 2.0 {
+                        near.get_or_insert(r as f32);
+                    }
+                }
+            }
+            row += &format!(
+                " | {:.1} m deep, 2 m at {}",
+                depth(d),
+                near.map_or("none in 30 m".into(), |r| format!("{r:.0} m"))
+            );
+        }
+        println!("{row}");
+    }
+}

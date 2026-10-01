@@ -1085,3 +1085,47 @@ fn print_an_empty_moored_boat_by_depth() {
         }
     }
 }
+
+#[test]
+#[ignore = "instrument: a Tern with its keel raised and its ballast in the hull, moored in shallow water in a wind"]
+fn print_a_tern_with_its_keel_raised() {
+    let mut specs = VehicleSpecs::default();
+    // The keel raised into the hull: its ballast at the hull's bottom, its
+    // foil and its grounding point just under it.
+    specs.tern.parts[1].at[1] = -0.3;
+    specs.tern.keel.at[1] = -0.35;
+    specs.tern.contacts[0].at[1] = -0.42;
+    let hulls = Hulls::new(&specs);
+    let specs = Arc::new(specs);
+    for wind in [0.0f32, 6.0, 10.0, 14.0] {
+        for depth in [0.5f64, 0.8] {
+            let mut world = World::new(RADIUS - depth);
+            world.wind = Vec3::X * wind;
+            world.sea_wind = wind;
+            let mut craft = Craft::new(
+                Kind::Tern,
+                1,
+                specs.clone(),
+                hulls.clone(),
+                DVec3::new(0.0, RADIUS, 0.0),
+                DQuat::IDENTITY,
+            );
+            craft.mooring = Some(Mooring {
+                at: craft.bow().normalize() * (RADIUS - depth),
+                length: depth + 2.0,
+                anchored: true,
+            });
+            let mut worst: f64 = 1.0;
+            for _ in 0..60 {
+                world.run(&mut craft, 1.0, |_| Input::default());
+                let up = craft.body.position.normalize();
+                worst = worst.min(craft.body.axis(DVec3::Y).dot(up));
+            }
+            println!(
+                "wind {wind:>4} m/s, {depth} m of water: worst heel {:.1} deg, waterline {:+.2} m",
+                worst.clamp(-1.0, 1.0).acos().to_degrees(),
+                craft.reference_position().length() - RADIUS
+            );
+        }
+    }
+}
