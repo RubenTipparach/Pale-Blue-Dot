@@ -600,3 +600,76 @@ fn a_craft_far_away_is_stowed_and_comes_back_where_it_was_left() {
     );
     assert!(app.world().resource::<Fleet>().stowed.is_empty());
 }
+
+/// `cities-in-the-world` task 4.2b ("you can use any boat you find"): a
+/// harbour's boat, at anchor at its berth, is boarded, cast off and paddled
+/// away, and after the world is put away and opened again it is where it
+/// was left, the same craft, still tagged with its berth so its harbour
+/// never makes it again. The walker boards from beside it; the test planet
+/// has no pier.
+#[test]
+fn a_harbour_boat_is_paddled_away_and_kept_where_it_was_left() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let (entity, loon) = crafts(&mut app)
+        .into_iter()
+        .find(|(_, c)| c.kind == Kind::Loon)
+        .unwrap();
+    app.world_mut()
+        .get_mut::<Vehicle>(entity)
+        .unwrap()
+        .craft
+        .berth = Some((7, 3));
+    board_from(&mut app, loon.exit().as_vec3());
+    assert_eq!(
+        app.world().resource::<Aboard>().0,
+        Some(entity),
+        "F boards it"
+    );
+    tap(&mut app, KeyCode::KeyT);
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::KeyW);
+    for _ in 0..240 {
+        app.update();
+    }
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .release(KeyCode::KeyW);
+    for _ in 0..60 {
+        app.update();
+    }
+    let moved = crafts(&mut app)
+        .into_iter()
+        .find(|(_, c)| c.id == loon.id)
+        .unwrap()
+        .1;
+    let paddled = moved
+        .reference_position()
+        .distance(loon.reference_position());
+    assert!(paddled > 3.0, "paddled {paddled:.1} m away from its berth");
+    tap(&mut app, KeyCode::KeyF);
+    assert_eq!(app.world().resource::<Aboard>().0, None, "stepped off");
+    app.update();
+    let left = crafts(&mut app)
+        .into_iter()
+        .find(|(_, c)| c.id == loon.id)
+        .unwrap()
+        .1;
+    let file = put_away(app.world_mut()).expect("a spawned fleet");
+    app.world_mut()
+        .resource_mut::<crate::saves::WorldSave>()
+        .snapshot_vehicles(&file);
+    app.update();
+    let (_, back) = crafts(&mut app)
+        .into_iter()
+        .find(|(_, c)| c.id == loon.id)
+        .expect("the same craft is back");
+    assert!(
+        back.reference_position()
+            .distance(left.reference_position())
+            < 0.5,
+        "back where it was left"
+    );
+    assert_eq!(back.berth, Some((7, 3)), "still its harbour's boat");
+}

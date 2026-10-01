@@ -1402,8 +1402,15 @@ so the first can be looked at before it can be walked into.
       craft and the stowed records together.
     - `every_harbours_boats_are_made_once_at_their_berths` and
       `a_craft_far_away_is_stowed_and_comes_back_where_it_was_left` hold it.
-    - **Open:** the boarding-from-the-pier test. A craft is boarded as any
-      craft is, by the existing tests' path.
+    - **The boarding test** (`a_harbour_boat_is_paddled_away_and_kept_where_it_was_left`):
+      - a harbour's boat at anchor, tagged with its berth, is boarded, cast
+        off and paddled more than 3 m away;
+      - the world is put away and opened again, and the boat is back where
+        it was left, the same craft, still tagged with its berth.
+      - The walker boards from beside it, not from a pier, because the
+        vehicles' test planet has no harbour. Boarding from a pier is the
+        same F within reach.
+      - Recommendation taken (ask only with screenshots).
   - **Finding: the drawn sea is half a metre under the layers' sea level
     (2026-10-01).** In the game's run at Holinghaven, 1 boat moored and 22
     berths were skipped. The app test moors 21 there.
