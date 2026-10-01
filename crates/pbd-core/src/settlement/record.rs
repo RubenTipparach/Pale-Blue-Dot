@@ -16,7 +16,7 @@
 //! the ground's margin, which is generation and pinned as a generator is.
 
 use super::chart::{Chart, Charted, Patch, chart};
-use super::ground::TownGround;
+use super::ground::{Lamp, TownGround};
 use super::pieces::{BuildingSolids, Meshes, RoomLight, cut_building, cut_masonry, harbour};
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
@@ -517,6 +517,46 @@ pub fn ground_of(
         .collect();
     let ground = TownGround::terraced(patch, radius_m, &footprint, natural);
     Ok((chart, ground))
+}
+
+/// A town's street lamps and lanterns (task 5.2), from the template it was
+/// laid from on its stored chart: a `LanternPost` in the first layer over
+/// each lamp cell's terrace, and each of a harbour's lanterns in the cell
+/// under it, at its height over the terrace where the cell is not laid (a
+/// pier's end). Derived, never saved, as the masonry is.
+pub fn lamps_of(town: &Town, template: &Template, chart: &Chart, patch: &Patch) -> Vec<Lamp> {
+    let terrace: BTreeMap<(i32, i32), f32> = town
+        .cells
+        .iter()
+        .enumerate()
+        .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
+        .collect();
+    let lamp = |c: i32, r: i32, over: f32| {
+        let cell = chart.cell(c, r)?;
+        let altitude_m = terrace
+            .get(&(c, r))
+            .copied()
+            .unwrap_or(town.terrace as f32 + over);
+        Some(Lamp {
+            direction: patch.cells[cell].direction,
+            altitude_m,
+            material: Material::LanternPost,
+        })
+    };
+    let cell_m = template.grid.cell_m;
+    let mut out: Vec<Lamp> = template
+        .lamps
+        .iter()
+        .filter_map(|&[c, r]| lamp(c, r, 0.0))
+        .chain(template.lanterns.iter().filter_map(|&[x, y, z]| {
+            let (c, r) = super::sea::cell_at(x, z, cell_m);
+            lamp(c, r, y.floor())
+        }))
+        .collect();
+    // One lamp a column.
+    let mut seen = BTreeSet::new();
+    out.retain(|l| seen.insert((l.direction.x.to_bits(), l.direction.y.to_bits())));
+    out
 }
 
 /// The ground's height at a direction, metres over the radius, as the

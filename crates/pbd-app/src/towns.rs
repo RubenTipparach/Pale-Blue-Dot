@@ -609,14 +609,27 @@ fn settle(world: &mut World) {
     let mut kept = Vec::new();
     for h in held {
         let patch = patch_round(h.site.direction, config.radius_m, patch_m(h.site.kind));
+        let template = world
+            .resource::<TownAssets>()
+            .template_named(&h.town.template)
+            .cloned();
         match record::ground_of(&h.town, &patch, config.radius_m, natural(&config)) {
-            Ok((_, g)) => {
+            Ok((chart, g)) => {
+                // Its street lamps and lanterns (task 5.2), from its template.
+                let lamps = template
+                    .as_ref()
+                    .map(|t| record::lamps_of(&h.town, t, &chart, &patch))
+                    .unwrap_or_default();
+                let g = g.with_lamps(lamps);
                 // Where the town stands: a harbour lies up to its shift from
                 // its site's marker (slice 4d).
                 let (lat, lon) = pbd_core::geo::lat_lon(g.anchor()).degrees();
                 info!(
-                    "{}: a {:?} at --at {lat:.5} {lon:.5}, a terrace at {} m",
-                    h.site.name, h.site.kind, h.town.terrace
+                    "{}: a {:?} at --at {lat:.5} {lon:.5}, a terrace at {} m, {} lamps",
+                    h.site.name,
+                    h.site.kind,
+                    h.town.terrace,
+                    g.lamps().len()
                 );
                 grounds.push(g);
                 kept.push(h);

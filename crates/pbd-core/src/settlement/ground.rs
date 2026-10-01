@@ -47,6 +47,17 @@ impl GroundAt {
     }
 }
 
+/// A lamp a town stands in its ground (`cities-in-the-world` task 5.2): a
+/// lamp block at a cell's centre, in the layer from `altitude_m`, metres
+/// over the radius. It is the template's, on the town's stored chart, so it
+/// is derived and never saved.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lamp {
+    pub direction: Vec3,
+    pub altitude_m: f32,
+    pub material: Material,
+}
+
 /// One town's ground.
 #[derive(Clone, Debug)]
 pub struct TownGround {
@@ -62,6 +73,8 @@ pub struct TownGround {
     /// The exact keys of the footprint's and the margin's cells: where a
     /// player's edit leaves a site unsettled (slice 4a).
     keys: Vec<u32>,
+    /// Its street lamps and lanterns (task 5.2).
+    lamps: Vec<Lamp>,
 }
 
 impl TownGround {
@@ -163,6 +176,7 @@ impl TownGround {
                 })
                 .collect(),
             keys,
+            lamps: Vec::new(),
         };
         for (i, cell) in ground.cells.iter().enumerate() {
             let key = ground.bucket(cell.centre);
@@ -202,6 +216,31 @@ impl TownGround {
     /// The direction at the middle of the footprint.
     pub fn anchor(&self) -> Vec3 {
         self.anchor
+    }
+
+    /// This ground with its town's lamps (task 5.2).
+    pub fn with_lamps(mut self, lamps: Vec<Lamp>) -> Self {
+        self.lamps = lamps;
+        self
+    }
+
+    pub fn lamps(&self) -> &[Lamp] {
+        &self.lamps
+    }
+
+    /// The lamp in the column at a direction, a cell's centre, if the town
+    /// stands one there.
+    pub fn lamp(&self, direction: Vec3) -> Option<&Lamp> {
+        if self.lamps.is_empty() {
+            return None;
+        }
+        let d = direction.normalize_or_zero();
+        if d.dot(self.anchor) < self.cos_reach {
+            return None;
+        }
+        // Half a metre off a cell's centre is still that cell's column.
+        let near = (0.5 / self.radius_m).cos();
+        self.lamps.iter().find(|l| l.direction.dot(d) > near)
     }
 
     /// Whether a player's edit lies in the footprint or the margin: a town
@@ -325,6 +364,13 @@ impl Ground {
             .iter()
             .find_map(|&i| self.towns[usize::from(i)].at(direction))
     }
+
+    /// The first town's lamp in the column at a direction (task 5.2).
+    pub fn lamp(&self, direction: Vec3) -> Option<&Lamp> {
+        self.squares[square(direction)]
+            .iter()
+            .find_map(|&i| self.towns[usize::from(i)].lamp(direction))
+    }
 }
 
 static INSTALLED: RwLock<Option<Arc<Ground>>> = RwLock::new(None);
@@ -369,6 +415,21 @@ pub fn surface(config: &TerrainConfig, direction: Vec3, natural: f32) -> f32 {
 /// The top a town gives the ground at a direction, where it gives one.
 pub fn top(config: &TerrainConfig, direction: Vec3) -> Option<Material> {
     with(config, direction, |g| g.top).flatten()
+}
+
+/// The lamp a town stands in the column at a direction (task 5.2): what
+/// [`crate::column::generate_solid`] puts in that column's first layer over
+/// the ground, where the layer is air.
+pub fn lamp(config: &TerrainConfig, direction: Vec3) -> Option<Lamp> {
+    if !ANY.load(Ordering::Acquire) {
+        return None;
+    }
+    let guard = INSTALLED.read().unwrap_or_else(|e| e.into_inner());
+    let ground = guard.as_ref()?;
+    if ground.config != *config {
+        return None;
+    }
+    ground.lamp(direction).copied()
 }
 
 /// Whether a direction is in a town's footprint, where no tree grows.

@@ -2144,3 +2144,57 @@ fn a_walker_climbs_a_fish_huts_porch_and_goes_in() {
     }
     assert_eq!(huts, 2);
 }
+
+/// Task 5.2: a town's street lamps stand in the first layer over their
+/// cells' terrace, one a column, and the ground answers a lamp only at its
+/// own cell. A harbour's lanterns over the water stand at its piers' height.
+#[test]
+fn a_towns_lamps_stand_over_their_cells() {
+    let template = walled();
+    let town = laid_village(&template);
+    let (patch, _) = patch();
+    let (chart, ground) = record::ground_of(&town, patch, RADIUS_M, slope()).expect("ground");
+    let lamps = record::lamps_of(&town, &template, &chart, patch);
+    assert_eq!(lamps.len(), template.lamps.len(), "a lamp a street lamp");
+    let terrace: std::collections::BTreeMap<(i32, i32), f32> = town
+        .cells
+        .iter()
+        .enumerate()
+        .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
+        .collect();
+    for (&[c, r], l) in template.lamps.iter().zip(&lamps) {
+        assert_eq!(l.altitude_m, terrace[&(c, r)], "({c}, {r}) on its terrace");
+        assert_eq!(l.material, crate::terrain::Material::LanternPost);
+    }
+    let ground = ground.with_lamps(lamps.clone());
+    for (&[c, r], l) in template.lamps.iter().zip(&lamps) {
+        assert_eq!(ground.lamp(l.direction), Some(l), "({c}, {r})");
+        let beside = (0..6)
+            .map(|d| neighbour(c, r, d))
+            .find(|n| !template.lamps.contains(&[n.0, n.1]))
+            .unwrap();
+        let d = patch.cells[chart.cell(beside.0, beside.1).unwrap()].direction;
+        assert_eq!(ground.lamp(d), None, "none beside ({c}, {r})");
+    }
+    // The harbour: its street lamps on their terraces, its lanterns over the
+    // piers a metre over the sea.
+    let (template, town, _) = laid_harbour();
+    let (chart, _) = record::ground_of(&town, patch, RADIUS_M, coast()).expect("ground");
+    let lamps = record::lamps_of(&town, &template, &chart, patch);
+    assert!(
+        lamps.len() >= template.lamps.len() + template.lanterns.len() - 2,
+        "{} lamps",
+        lamps.len()
+    );
+    let over: BTreeSet<(i32, i32)> = town.over_sea.iter().map(|c| (c.0, c.1)).collect();
+    let on_piers = template
+        .lanterns
+        .iter()
+        .filter(|l| over.contains(&sea::cell_at(l[0], l[2], template.grid.cell_m)))
+        .count();
+    assert!(on_piers > 0, "lanterns over the water");
+    assert!(
+        lamps.iter().filter(|l| l.altitude_m == 1.0).count() >= on_piers,
+        "a pier's lantern at the pier's metre"
+    );
+}

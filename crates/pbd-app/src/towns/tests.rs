@@ -984,5 +984,31 @@ fn print_where_the_harbours_stand() {
             at(cell(9, 12)),
             at(site.direction)
         );
+        // Holes: a cell left unlaid with every neighbour laid, or one laid
+        // lower than all of its own.
+        let level: std::collections::BTreeMap<(i32, i32), f32> = town
+            .cells
+            .iter()
+            .enumerate()
+            .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
+            .collect();
+        for g in &template.ground {
+            let (c, r) = (g.c, g.r);
+            let around: Vec<Option<f32>> = (0..6)
+                .map(|d| {
+                    let n = pbd_core::settlement::neighbour(c, r, d);
+                    level.get(&n).copied()
+                })
+                .collect();
+            if around.iter().all(|a| a.is_some()) {
+                match level.get(&(c, r)) {
+                    None => println!("   hole at ({c}, {r}), template {} {}", g.h, g.top),
+                    Some(&l) if around.iter().all(|a| a.unwrap() > l) => {
+                        println!("   pit at ({c}, {r}) level {l}, template {} {}", g.h, g.top)
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
 }

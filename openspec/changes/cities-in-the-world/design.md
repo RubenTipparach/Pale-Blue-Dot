@@ -1277,6 +1277,48 @@ so the first can be looked at before it can be walked into.
         `a_world_stores_every_harbour_once` (schema 3, a second open
         writes nothing) hold it. `print_where_the_harbours_stand` prints
         where to stand for shots.
+    - **The owner (2026-10-01): "We're good on the mockup already.
+      Approved. Implement in game".** The harbour mockup is approved. The
+      rest of what it shows comes into the game in this order, each written
+      up before it is built. Recommendation taken (ask only with
+      screenshots).
+      1. Street lamps and lanterns (task 5.2, below). Every town is dark at
+         night without them, not only the harbour.
+      2. The moored boats (task 4.2b).
+      3. The dressing: the fish market's stalls, nets, racks, pots,
+         barrels and crates, and the shipyard.
+      4. The cog, `sail-the-cog`'s own change.
+- **Task 5.2 in detail, street lamps (written 2026-10-01).** Decision 7
+  already puts a town's street lanterns in the voxel field as
+  `lamps-and-lanterns`' dusk-lit materials. A street lamp is a
+  `LanternPost` block, and the tier's bake lights it as it lights one the
+  player places. A lamp block is neither solid nor opaque, so one in a lane
+  is walked through.
+  - **Which lamps.**
+    - A template's `lamps` cells: the mockup's street lamps (3 in the
+      village, 38 in the walled town, 21 in the harbour).
+    - A sea template's `lanterns`: the harbour's 10 along its quay and at
+      its piers' ends, each in the cell under it.
+  - **Where.** In the first layer over the cell's ground: its terrace where
+    the town laid it. Over the water, a pier's lantern stands in the layer
+    at the pier's height over the sea.
+  - **Derived, not stored.** A town's lamps come from its frozen template
+    on its stored chart, as its masonry does, so every town already in a
+    save gains its lamps without a record changing. A player's edit to a
+    lamp's cell wins over the lamp, as over any generated block.
+  - **How the column gets one.** Each town's ground carries its lamps:
+    each cell's centre, the layer's altitude and the material.
+    `ground::lamp` answers the column generator for a column at a lamp's
+    cell. `column::generate_solid` puts the lamp in that layer if the
+    layer is air.
+  - **Cost.** The village has 3 lamps and the walled town 38, against
+    `lamps-and-lanterns`' 300-lantern figure (task 4.0). The bake time is
+    not measured in the cloud session.
+  - **Verify.**
+    - Core: a town's lamps land in the first air layer over their cells,
+      and a column away from them gets none.
+    - App: the walled town's 38 lamps and the harbour's 31 are installed.
+    - Shots at 22:30, from the street and from above.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before

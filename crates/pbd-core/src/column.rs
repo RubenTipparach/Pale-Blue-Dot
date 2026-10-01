@@ -426,6 +426,14 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
         }
         *layer = material_at_depth(top, surface_m - altitude);
     }
+    // A town's street lamp or lantern (`cities-in-the-world` task 5.2), in
+    // the air over its cell. A lamp is walked through, so it blocks no lane.
+    if let Some(lamp) = crate::settlement::ground::lamp(terrain, direction)
+        && let Some(i) = layer_at(lamp.altitude_m + 0.5)
+        && layers[i] == Material::Air
+    {
+        layers[i] = lamp.material;
+    }
     // Bedrock. Never mineable, and the reference's own rule.
     layers[0] = Material::Stone;
     Column { layers }
