@@ -1353,3 +1353,42 @@ fn print_the_seabed_under_the_harbours_berths() {
 fn sheet(config: &TerrainConfig) -> f32 {
     sheet_m(config, &crate::config::WaterSettings::default())
 }
+
+#[test]
+#[ignore = "instrument: the pose each harbour boat is made in, upright or not"]
+fn print_the_pose_of_holinghavens_boats() {
+    use crate::vehicles::harbour::boats_for;
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let fleet = crate::vehicles::Fleet::new(crate::config::VehiclesConfig::default().0);
+    let sea_radius = config.radius_m + sheet_m(&config, &crate::config::WaterSettings::default());
+    for site in harbours().into_iter().filter(|s| s.name == "Holinghaven") {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (made, _) = boats_for(
+            site.id,
+            &town,
+            &template,
+            &patch,
+            sea_radius,
+            &Default::default(),
+            &fleet.specs,
+            &fleet.hulls,
+            &mut 1,
+            crate::vehicles::place::floor,
+        );
+        for c in made {
+            let up = c.reference_position().normalize();
+            let deck = c.body.axis(pbd_core::DVec3::Y);
+            let bow = c.body.axis(pbd_core::vehicle::FORWARD);
+            println!(
+                "berth {:?} {}: deck up . up {:+.3}, bow . up {:+.3}, waterline {:+.3} m",
+                c.berth,
+                c.kind.name(),
+                deck.dot(up),
+                bow.dot(up),
+                c.reference_position().length() - f64::from(sea_radius)
+            );
+        }
+    }
+}

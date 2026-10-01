@@ -1053,3 +1053,35 @@ fn a_cogs_settings_refuse_a_coarse_hull_a_yardless_sail_and_a_backward_luff() {
     assert!(refused(&|c| c.sail.yard_height_m = c.sail.foot_height_m).contains("yard"));
     assert!(refused(&|c| c.sail.fill_deg = c.sail.luff_deg).contains("luff"));
 }
+
+#[test]
+#[ignore = "instrument: an empty moored boat left alone, by depth: does it stay upright?"]
+fn print_an_empty_moored_boat_by_depth() {
+    for kind in [Kind::Loon, Kind::Tern] {
+        for depth in [0.3f64, 0.5, 0.8, 1.2, 2.0, 3.0, 5.0, 40.0] {
+            let mut world = World::new(RADIUS - depth);
+            let mut craft = at_pole(kind, 0.0, 0.0);
+            let bed = RADIUS - depth;
+            craft.mooring = Some(Mooring {
+                at: craft.bow().normalize() * bed,
+                length: depth + 2.0,
+                anchored: true,
+            });
+            let mut worst: f64 = 1.0;
+            for _ in 0..30 {
+                world.run(&mut craft, 1.0, |_| Input::default());
+                let up = craft.body.position.normalize();
+                worst = worst.min(craft.body.axis(DVec3::Y).dot(up));
+            }
+            let up = craft.body.position.normalize();
+            println!(
+                "{:>4} in {depth:>4} m: deck up . up {:+.3} (worst {:+.3}), waterline {:+.2} m, speed {:.3}",
+                kind.name(),
+                craft.body.axis(DVec3::Y).dot(up),
+                worst,
+                craft.reference_position().length() - RADIUS,
+                craft.body.velocity.length()
+            );
+        }
+    }
+}
