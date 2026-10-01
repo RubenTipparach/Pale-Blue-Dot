@@ -1503,6 +1503,48 @@ so the first can be looked at before it can be walked into.
       keel, and the requirement is in `openspec/specs/player/vehicles`. The
       Tern's open-water tests (close reach, in irons, hull speed) pass
       unchanged.
+  - **Finding: teal canoes the mockup never had (the owner, 2026-10-01:
+    "there were no teal boats in the original", "I never asked for teal
+    canoes", "make the row boats like the original!!").** The harbour's 14
+    rowboats and 3 canoes were all moored as the Loon, the game's paddle
+    canoe from the vehicles work (2026-09-24), drawn as a bare teal shell.
+    That was recorded above as "A rowboat and a canoe are Loons" and taken
+    as a recommendation, but the owner was never shown that it would not
+    look like the mockup's boats. It did not, and it was wrong to take it.
+  - **Fix: the small boats are the mockup's (written 2026-10-01, before
+    code).** The owner's words are the decision.
+    - **One cut for the mockup's small boats**, shared by the harbour's
+      dressing and the craft. `pieces::dressing::small_boat` cuts the
+      mockup's `boat` (its `hullGeometry` lofted in `boards` or
+      `driftwood`, its thwarts, the rowboat's two oars laid across, the
+      canoe's paddle) in a craft's frame: its gunwale at the craft's sheer,
+      its bow forward.
+    - **Its inside is dry.** The game draws the sea as one sheet, and an
+      open boat floats with its inside floor under it, so the sea would
+      show inside as if it were swamped (the mockup hides it with a
+      stencil). The cut lays floorboards across the hull 3 cm over the
+      waterline it floats at with someone aboard, as wide as the hull is
+      there, so the sheet stays under them.
+    - **The canoe is drawn as the mockup's canoe**, in driftwood, at the
+      Loon's own size (5 m by 0.92 m), wherever the game has a Loon: the
+      harbour's and the player's own. No craft is teal.
+    - **The rowboat is its own craft, `Kind::Rowboat`**, at the mockup's
+      size: 4.2 m by 1.45 m, 0.6 m deep, drawing about 0.25 m. It is the
+      Loon's model on its own spec in `vehicles.ron` (`rowboat`): a hull of
+      cells, a lateral plane and skeg, and the Loon's stroke for its oars,
+      W and S to row and A and D to steer. Oars that pivot in rowlocks are
+      a later refinement, noted, not built here.
+    - **The berths.** A rowboat berth makes a Rowboat, a canoe berth a
+      Loon, a sailing berth a Tern.
+    - **Saves.** A harbour already met keeps the boats it made: its
+      rowboat berths keep their canoes, now drawn in driftwood. A harbour
+      first met from now on makes rowboats.
+    - **Verify.**
+      - Core: the small boat's floorboards stand over the loaded waterline
+        and inside the hull; a rowboat floats upright empty and with its
+        rower, and rows ahead; the spec validates.
+      - App: each harbour's rowboat berths make Rowboats.
+      - Shots of the quay beside the mockup's.
     - Recommendation taken (ask only with screenshots).
 - **Task 4.2c in detail, the harbour's dressing (written 2026-10-01).**
   Third in the owner's order: "We're good on the mockup already. Approved.
