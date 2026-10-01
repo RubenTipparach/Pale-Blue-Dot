@@ -1341,6 +1341,12 @@ so the first can be looked at before it can be walked into.
       player made is lost.
     - **Or leave them.** A cave mouth in a lane is a way down, as anywhere
       on the planet.
+    - **Asked as survey T14 (2026-10-01)**, with the shot of Holbrook's
+      lane, on its own page (https://claude.ai/artifact/RriyuLo9EEZ1gTzGq58A2r).
+      This session's Docs connector could not edit the survey doc. The page
+      keeps the answer, and it moves into the survey doc when the connector
+      is back. Nothing is built until the owner answers, since it changes
+      existing saves.
 - **Task 4.2b in detail, the moored boats (written 2026-10-01).** Survey
   T7: "you can use any boat you find".
   - **What the mockup moors.** 23 boats on the water: 14 rowboats, 6
