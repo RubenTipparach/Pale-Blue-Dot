@@ -116,3 +116,19 @@ and `3600` at night.
 **Not in these shots, and not built:** the smithy, well, windmill, crops and
 fences, the market stalls, the quay's jetty and boat, furniture and people.
 The lake under the walled town is dry ground, and the streets are dirt.
+
+## Slice 4d: the harbour, beside the mockup (2026-10-01)
+
+`harbour-4d-2026-10-01.jpg`: Holinghaven, the towns mockup's harbour
+(`tools/mockup_coast_shots.js`) on the left and the game on the right, row by
+row: the quay, the fish market, the shipyard, the cog at its pier, the harbour
+from above, and the quay and market at 22:30. In-game captures on lavapipe at
+1440 x 900 with no GPU, the fast build under `xvfb-run`, a new memory-only
+world, `--open-doors --rain 0`; walking runs at the quay, market and shipyard,
+`--view column` for the cog (14 m up) and from above (60 m). They show what
+things look like, not how smoothly they run.
+
+These were rendered on the build before the cog became a craft, so its ship
+here is the town's piece; moored, the craft is the same cut. The log of the
+quay run says 17 boats moored at Holinghaven, but none is in the quay frame,
+where the mockup moors them along the piers: under investigation.
