@@ -199,6 +199,12 @@ impl TownGround {
         (x.floor() as i32, y.floor() as i32)
     }
 
+    /// Every cell of its ground: the footprint, the margin and the ring
+    /// past it.
+    pub fn cells(&self) -> &[GroundAt] {
+        &self.cells
+    }
+
     /// The town's cell at a direction, or `None` off its ground.
     pub fn at(&self, direction: Vec3) -> Option<&GroundAt> {
         let d = direction.normalize_or_zero();

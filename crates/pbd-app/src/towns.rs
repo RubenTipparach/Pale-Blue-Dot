@@ -342,13 +342,15 @@ pub struct TownAssets {
     pub desert: Template,
     /// The tundra camp (slice 4g).
     pub tundra: Template,
+    /// The jungle village (slice 4i).
+    pub jungle: Template,
     pub repeats: Arc<BTreeMap<String, f32>>,
 }
 
 impl TownAssets {
     /// The template a kind of site is laid from, where one is shipped: the
-    /// village's, the walled town's, the harbour's, the desert's and the
-    /// tundra's so far (slice 4 adds a kind at a time).
+    /// village's, the walled town's, the harbour's, the desert's, the
+    /// tundra's and the jungle's so far (slice 4 adds a kind at a time).
     pub fn template_for(&self, kind: SiteKind) -> Option<&Template> {
         match kind {
             SiteKind::Village => Some(&self.village),
@@ -356,6 +358,7 @@ impl TownAssets {
             SiteKind::Harbour => Some(&self.harbour),
             SiteKind::Desert => Some(&self.desert),
             SiteKind::Tundra => Some(&self.tundra),
+            SiteKind::Jungle => Some(&self.jungle),
             _ => None,
         }
     }
@@ -368,6 +371,7 @@ impl TownAssets {
             &self.harbour,
             &self.desert,
             &self.tundra,
+            &self.jungle,
         ]
         .into_iter()
         .find(|t| t.scene == scene)
@@ -820,6 +824,7 @@ pub fn stand_in_range(world: &mut World) {
                 assets.harbour.clone(),
                 assets.desert.clone(),
                 assets.tundra.clone(),
+                assets.jungle.clone(),
             ],
         )
     };
@@ -1497,6 +1502,7 @@ impl Plugin for TownsPlugin {
             harbour: load_template("coast"),
             desert: load_template("desert"),
             tundra: load_template("tundra"),
+            jungle: load_template("jungle"),
             repeats: Arc::new(load_repeats()),
         })
         .init_resource::<Towns>()

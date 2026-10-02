@@ -276,3 +276,26 @@ shots found, the game before on the left and now on the right.
 
 Same capture setup as the slice 4e and 4g shots above. The frame cost was
 not measured in this cloud session.
+
+## The crust under towns and lamps in the sun, before and after (2026-10-02)
+
+`crust-and-lamp-fade-2026-10-02.jpg`: the owner's two survey answers built,
+the game before on the left and now on the right.
+
+- Holbrook's lane from above (survey T14, "crust"). Before, a worm's cave
+  opened into the lane beside the lantern: 32 of the shipped seed's 40
+  towns had a cave open in their footprint. Now no worm carves the top
+  three layers under a town's footprint, and none of the 34,514 footprint
+  cells opens (`no_cave_opens_into_a_towns_ground`). The caves under them
+  are as they were. The margin round a town keeps its caves.
+- Torifjell's camp and its ice gate at 11:00 (survey L4, "recommended").
+  Before, the camp fire and the gate's torches turned the snow round them
+  tan in full sun. Now a lamp's light is scaled by `1 - daylight x sky`: it
+  is whole at night, under a roof and in a cave, and fades where the sun
+  reaches (`lamps-and-lanterns` decision 15). One rule in core and both
+  shaders.
+
+Same capture setup as above: the column view straight down at Holbrook's
+first mouth (`--at 29.88359 1.40006 --height 10 --pitch -89 --time 10.9`),
+and the tundra's camp and gate spots at 11:00. The frame cost was not
+measured in this cloud session.

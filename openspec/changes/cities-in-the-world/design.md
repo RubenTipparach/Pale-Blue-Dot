@@ -1637,10 +1637,9 @@ so the first can be looked at before it can be walked into.
   - **The stilt huts.** The mockup's `stiltHouse`, as 4d's: two huts of
     the `junglehut` kit, 1.2 m over the floor, each with a deck and a porch
     stair. The exporter writes `stilts` for the jungle as for the sea.
-    - The game puts a stair's foot at the terrace plus `foot_m`. That is
-      right for the sea, whose datum is 0. For the jungle it would be a
-      metre high. The foot is the terrace plus `foot_m` less the datum,
-      which leaves every harbour as it is.
+    - A stair's foot is stored over the town's terrace: the lay takes the
+      datum off `foot_m` (4d), so the jungle's lands on its floor as the
+      harbour's lands on its beach.
   - **Lights at 9 m.**
     - Two torches stand at each platform's rails, and a fire burns on the
       second platform. Each is a lamp (task 5.2): a torch a `Torch`, the
@@ -1697,6 +1696,59 @@ so the first can be looked at before it can be walked into.
     - Shots beside the mockup's, by day and at 22:30: the clearing, the
       tower's door, the platform, the bridge, a tree hut's door and the
       lookout, and the village from above.
+  - **Finding: a column can take its neighbour's ground (2026-10-02).**
+    Found when the crust test (T14) took in the jungle's six villages: in
+    Ixapaya, the footprint cell (30, 23) has no crust. Its own column finds
+    a margin cell 2.6 m away as its cell.
+    - A town's ground finds a direction's cell by the largest dot product
+      of the direction with each cell's centre (`TownGround::at`). At a
+      radius of 4800 m, neighbouring centres differ in that dot by about
+      1.5e-7. A product of two unit `f32` vectors is good to about 1e-7.
+      So both read 1.0 here, and the tie goes to the lower index. It is
+      the same flaw as the lamps' (finding above), in the lookup every
+      column's ground goes through.
+    - In the older towns a footprint cell's neighbours are mostly
+      footprint cells on the same terrace, so a wrong pick changes
+      nothing. The jungle's footprint is thin: a lone torch's cell, a
+      bridge's strip. There a wrong pick makes a footprint column a margin
+      column: no crust, eased rather than laid, and a tree may grow in it.
+    - **Measuring before fixing.** The fix is to compare chords, as the
+      lamps now do. But this lookup gives every column of every town its
+      height, top and trees, so a fix could move ground in worlds already
+      saved. An instrument (an ignored test) counts, over every footprint
+      and margin column of the shipped seed's older towns, how many find
+      another cell by chord than by dot, and how many of those would take
+      a different height, top, crust or clearing.
+    - **Measured (2026-10-02),** `print_the_ground_lookup_against_the_chord`
+      on the shipped seed:
+
+      | Towns | Columns | Another cell by dot | Another ground | Towns touched |
+      | --- | ---: | ---: | ---: | ---: |
+      | Villages | 49,092 | 4,638 | 1,056 | 20 |
+      | Walled towns | 13,071 | 1,173 | 394 | 6 |
+      | Harbours | 16,198 | 894 | 267 | 6 |
+      | Desert towns | 6,312 | 222 | 25 | 4 |
+      | Tundra camps | 6,088 | 517 | 148 | 4 |
+      | Jungle villages (new) | 2,651 | 216 | 64 | 6 |
+
+      So 1,860 columns of the 40 older towns would take another height,
+      top, crust or clearing. That is ground already in saved worlds.
+    - **Decision (recommendation taken, ask only with screenshots).** The
+      lookup is part of a town's laying-out rules, which each stored town
+      already names (`layout`, 1 so far, "a town is never rebuilt by it").
+      `LAYOUT_VERSION` becomes 2: a town laid from now on finds a
+      direction's cell by the nearest chord, and a stored town of layout 1
+      keeps the dot lookup, column for column.
+      - A town is stored the first time it is met, so every layout-2 town
+        is ground no one has seen. That includes every jungle village, and
+        an old save's sites not yet visited.
+      - Rejected: the chord everywhere (moves 1,860 columns under saved
+        towns), and the chord for the jungle only (the next template would
+        need the same exception).
+    - **Verify.** Core: a layout-2 town's every footprint and margin column
+      finds its own cell; a layout-1 town's lookup is unchanged (its ground's
+      digest and the measured counts above). App: the crust test holds on
+      every town, the jungle's included.
 - **Task 5.2 in detail, street lamps (written 2026-10-01).** Decision 7
   already puts a town's street lanterns in the voxel field as
   `lamps-and-lanterns`' dusk-lit materials. A street lamp is a

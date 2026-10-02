@@ -19,7 +19,7 @@ use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::{Lamp, TownGround};
 use super::pieces::{
     BuildingSolids, Meshes, RoomLight, cog, cut_building, cut_masonry, desert, dressing, harbour,
-    tundra,
+    jungle, tundra,
 };
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
@@ -163,6 +163,10 @@ pub struct Building {
     /// Doorways with no leaf (slice 4e), written only where there are some.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub archways: Vec<[i32; 4]>,
+    /// A floor with no ground under it (slice 4i), a tree hut's, written
+    /// only where it is raised.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub raised: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -194,6 +198,7 @@ impl Building {
             }),
             parapet_gaps: def.parapet_gaps.clone(),
             archways: def.archways.clone(),
+            raised: def.raised,
         }
     }
 
@@ -218,6 +223,7 @@ impl Building {
             stilts: self.stilts.clone(),
             parapet_gaps: self.parapet_gaps.clone(),
             archways: self.archways.clone(),
+            raised: self.raised,
         }
     }
 }
@@ -577,12 +583,17 @@ pub fn lamps_of(town: &Town, template: &Template, chart: &Chart, patch: &Patch) 
         .enumerate()
         .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
         .collect();
-    let lamp = |c: i32, r: i32, over: f32, material: Material| {
+    // A street lamp stands on its cell's terrace. A lantern or a fire
+    // stands `over` the town's terrace, but never under its cell's ground:
+    // a platform's torch 8 m up (slice 4i), a brazier on the ground.
+    let lamp = |c: i32, r: i32, over: Option<f32>, material: Material| {
         let cell = chart.cell(c, r)?;
-        let altitude_m = terrace
-            .get(&(c, r))
-            .copied()
-            .unwrap_or(town.terrace as f32 + over);
+        let raised = town.terrace as f32 + over.unwrap_or(0.0);
+        let altitude_m = match (terrace.get(&(c, r)).copied(), over) {
+            (Some(t), Some(_)) => t.max(raised),
+            (Some(t), None) => t,
+            (None, _) => raised,
+        };
         Some(Lamp {
             direction: patch.cells[cell].direction,
             altitude_m,
@@ -595,12 +606,12 @@ pub fn lamps_of(town: &Town, template: &Template, chart: &Chart, patch: &Patch) 
     let datum = datum(template) as f32;
     let off_grid = |x: f32, y: f32, z: f32, material: Material| {
         let (c, r) = super::sea::cell_at(x, z, cell_m);
-        lamp(c, r, (y - datum).floor(), material)
+        lamp(c, r, Some((y - datum).floor()), material)
     };
     let mut out: Vec<Lamp> = template
         .lamps
         .iter()
-        .filter_map(|&[c, r]| lamp(c, r, 0.0, Material::LanternPost))
+        .filter_map(|&[c, r]| lamp(c, r, None, Material::LanternPost))
         .chain(
             template
                 .lanterns
@@ -615,6 +626,12 @@ pub fn lamps_of(town: &Town, template: &Template, chart: &Chart, patch: &Patch) 
                 .iter()
                 .filter_map(|f| off_grid(f.x, f.y, f.z, f.material())),
         )
+        // The jungle's lanterns, hanging off its bridges' ropes (slice 4i).
+        .chain(template.bridges.iter().flat_map(|b| {
+            b.lanterns
+                .iter()
+                .filter_map(|&[x, y, z]| off_grid(x, y, z, Material::LanternHanging))
+        }))
         .collect();
     // One lamp a column.
     let mut seen = BTreeSet::new();
@@ -817,7 +834,13 @@ pub fn build_town(
     // template's, as its masonry is, each with no rooms and no lights, at
     // its heights over the template's datum.
     if let Some(template) = template.filter(|t| {
-        !t.sea && (!t.stairs.is_empty() || !t.dressing.is_empty() || t.frozen.is_some())
+        !t.sea
+            && (!t.stairs.is_empty()
+                || !t.dressing.is_empty()
+                || t.frozen.is_some()
+                || !t.kapoks.is_empty()
+                || !t.platforms.is_empty()
+                || !t.bridges.is_empty())
     }) {
         let under = |d: Vec3| ground_under(&built.ground, &natural, d);
         let zero = town.terrace as f32 - datum(template) as f32;
@@ -881,6 +904,49 @@ pub fn build_town(
                 zero,
             ) {
                 Some(ice) => cut.push(ice),
+                None => built.dressing_skipped += 1,
+            }
+        }
+        // The jungle's kapoks, platforms and rope bridges (slice 4i).
+        for k in &template.kapoks {
+            match jungle::kapok(
+                &mut built.meshes,
+                repeat_m,
+                patch,
+                &built.chart,
+                k,
+                &template.beams,
+                cell_m,
+                radius_m,
+                zero,
+            ) {
+                Some(tree) => cut.push(tree),
+                None => built.dressing_skipped += 1,
+            }
+        }
+        for p in &template.platforms {
+            cut.push(jungle::platform(
+                &mut built.meshes,
+                repeat_m,
+                patch,
+                &built.chart,
+                p,
+                radius_m,
+                zero,
+            )?);
+        }
+        for b in &template.bridges {
+            match jungle::rope_bridge(
+                &mut built.meshes,
+                repeat_m,
+                patch,
+                &built.chart,
+                b,
+                cell_m,
+                radius_m,
+                zero,
+            ) {
+                Some(spans) => cut.extend(spans),
                 None => built.dressing_skipped += 1,
             }
         }

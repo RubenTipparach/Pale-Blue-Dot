@@ -125,6 +125,22 @@ pub struct Template {
     /// floored with ice at `top_m` over the template's 0 m.
     #[serde(default)]
     pub frozen: Option<Frozen>,
+    /// The jungle's kapoks (slice 4i), each with the parts the mockup drew.
+    #[serde(default)]
+    pub kapoks: Vec<Kapok>,
+    /// Its plank platforms round them (slice 4i).
+    #[serde(default)]
+    pub platforms: Vec<Platform>,
+    /// Its rope bridges between the platforms (slice 4i).
+    #[serde(default)]
+    pub bridges: Vec<RopeBridge>,
+    /// The beams under its platforms (slice 4i), as the mockup drew them.
+    #[serde(default)]
+    pub beams: Vec<Part>,
+    /// The cells it keeps the planet's trees off (slice 4i), the mockup's
+    /// `NO_TREE`: built, though their area is wild.
+    #[serde(default)]
+    pub cleared: Vec<[i32; 2]>,
 }
 
 /// What a town's masonry is made of (slice 4g): its walls and merlons, and
@@ -164,6 +180,102 @@ impl MasonryMaterial {
 pub struct Frozen {
     pub top_m: f32,
     pub cells: Vec<[i32; 2]>,
+}
+
+/// A box the mockup drew (slice 4i): its material, the middle of its foot
+/// `[x, y, z]` in the mockup's metres, its size along its turn, up and
+/// across, and its turn. A part with `solid_m` is a solid that high from
+/// its foot: a kapok's buttress fin.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Part {
+    pub material: String,
+    pub at: [f32; 3],
+    pub size: [f32; 3],
+    pub angle: f32,
+    #[serde(default)]
+    pub solid_m: Option<f32>,
+}
+
+/// A kapok (slice 4i), the mockup's `kapok`: a trunk `radius_m` round from
+/// its foot at `(x, y, z)`, the mockup's metres, up `height_m`, and the
+/// fins, branches, crown and vines the mockup drew about it.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Kapok {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub radius_m: f32,
+    pub height_m: f32,
+    pub parts: Vec<Part>,
+}
+
+/// A platform (slice 4i), the mockup's `deck`: plank cells with their top
+/// at `y`, the mockup's metres, railed on the `[c, r, d]` edges in `rails`.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Platform {
+    pub y: f32,
+    pub cells: Vec<[i32; 2]>,
+    pub rails: Vec<[i32; 3]>,
+}
+
+/// A rope bridge (slice 4i), the mockup's `bridge` with sag: a walk
+/// `width_m` wide from `from` to `to`, `[x, y, z]` in the mockup's metres,
+/// `sag_m` low in its middle. `ends` are the corners of the platform edge
+/// each end comes in on, `[x, z]`, where its ropes end; `lanterns` hang off
+/// its ropes, `[x, y, z]` at their flames.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct RopeBridge {
+    pub from: [f32; 3],
+    pub to: [f32; 3],
+    pub width_m: f32,
+    pub sag_m: f32,
+    pub ends: [[[f32; 2]; 2]; 2],
+    #[serde(default)]
+    pub lanterns: Vec<[f32; 3]>,
+}
+
+impl RopeBridge {
+    /// Its length in plan, metres.
+    pub fn length(&self) -> f32 {
+        (self.to[0] - self.from[0]).hypot(self.to[2] - self.from[2])
+    }
+
+    /// The walk's height a share `t` along, the mockup's metres: the
+    /// mockup's `A + (B - A) t - 4 sag t (1 - t)`.
+    pub fn height(&self, t: f32) -> f32 {
+        self.from[1] + (self.to[1] - self.from[1]) * t - 4.0 * self.sag_m * t * (1.0 - t)
+    }
+
+    /// The point a share `t` along, in plan, the mockup's `(x, z)`.
+    pub fn plan(&self, t: f32) -> (f32, f32) {
+        (
+            self.from[0] + (self.to[0] - self.from[0]) * t,
+            self.from[2] + (self.to[2] - self.from[2]) * t,
+        )
+    }
+
+    /// The cells its walk crosses, sampled every 0.5 m along it and at its
+    /// edges and middle across it.
+    pub fn cells(&self, cell_m: f32) -> Vec<[i32; 2]> {
+        let len = self.length();
+        let (dx, dz) = (
+            (self.to[0] - self.from[0]) / len.max(1e-3),
+            (self.to[2] - self.from[2]) / len.max(1e-3),
+        );
+        let steps = (len / 0.5).ceil().max(1.0) as usize;
+        let mut out = Vec::new();
+        for k in 0..=steps {
+            let (x, z) = self.plan(k as f32 / steps as f32);
+            for s in [-0.5f32, 0.0, 0.5] {
+                let off = s * self.width_m;
+                let (c, r) = sea::cell_at(x - dz * off, z + dx * off, cell_m);
+                out.push([c, r]);
+            }
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
 }
 
 /// A fire a town burns (slices 4e and 4g), where the mockup stands it:
@@ -450,6 +562,10 @@ pub struct BuildingDef {
     /// A house on piles (slice 4d): the harbour's fish huts.
     #[serde(default)]
     pub stilts: Option<Stilts>,
+    /// A floor with no ground under it and no stilts (slice 4i): a tree
+    /// hut on its platform.
+    #[serde(default)]
+    pub raised: bool,
 }
 
 /// A house on stilts (slice 4d), the mockup's `stiltHouse`: its floor on
@@ -523,19 +639,41 @@ impl Template {
             }
         };
         // There, the cells its fires, lanterns and dressing stand on are
-        // built too: the tundra's camp fire stands on the open tundra.
+        // built too: the tundra's camp fire stands on the open tundra. So
+        // are the jungle's platforms, the cells under its bridges, the
+        // cells it keeps its trees off, and its stilt huts' decks and the
+        // cells their stairs come down on (slice 4i).
         let things: Vec<[i32; 2]> = if self.wild.is_empty() {
             Vec::new()
         } else {
+            let cell_m = self.grid.cell_m;
+            let porch = |s: &Stilts| {
+                let (c, r) = neighbour(s.porch[0], s.porch[1], s.porch[2] as usize);
+                [c, r]
+            };
             self.fires
                 .iter()
                 .map(|f| (f.x, f.z))
                 .chain(self.lanterns.iter().map(|l| (l[0], l[2])))
                 .chain(self.dressing.iter().map(Dress::at))
+                .chain(
+                    self.bridges
+                        .iter()
+                        .flat_map(|b| b.lanterns.iter().map(|l| (l[0], l[2]))),
+                )
                 .map(|(x, z)| {
-                    let (c, r) = sea::cell_at(x, z, self.grid.cell_m);
+                    let (c, r) = sea::cell_at(x, z, cell_m);
                     [c, r]
                 })
+                .chain(self.platforms.iter().flat_map(|p| p.cells.iter().copied()))
+                .chain(self.bridges.iter().flat_map(|b| b.cells(cell_m)))
+                .chain(self.cleared.iter().copied())
+                .chain(
+                    self.buildings
+                        .iter()
+                        .filter_map(|b| b.stilts.as_ref())
+                        .flat_map(|s| s.deck.iter().copied().chain([porch(s)])),
+                )
                 .collect()
         };
         let mut cells: Vec<[i32; 2]> = self

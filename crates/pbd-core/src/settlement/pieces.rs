@@ -18,6 +18,7 @@ pub mod cog;
 pub mod desert;
 pub mod dressing;
 pub mod harbour;
+pub mod jungle;
 pub mod tundra;
 
 /// Floor boards and joists, metres.
@@ -1259,6 +1260,17 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
     for (i, &(_, _)) in plan.cells.iter().enumerate() {
         let hex: Vec<Vec2> = plan.corners[i].to_vec();
         sink.prism(&kit.floor, &kit.floor, &hex, -0.05, LIFT_M, None);
+        // A raised floor (slice 4i), a tree hut's on its platform, has no
+        // ground under it: a slab under its boards, as a stilt house's has,
+        // and a floor for the walker.
+        if def.raised {
+            sink.prism("plank", "timber", &hex, -SLAB_M, -0.05, Some("plank"));
+            sink.surfaces.push(Surface::Floor {
+                outline: ccw(hex.clone()),
+                top: LIFT_M,
+                bottom: -SLAB_M,
+            });
+        }
         if !kit.hut {
             let in_stair = stair.as_ref().is_some_and(|s| s.holds(i));
             for s in 1..storeys {

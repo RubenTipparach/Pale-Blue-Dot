@@ -708,6 +708,7 @@ fn a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves() {
             harbour: load_template("coast"),
             desert: load_template("desert"),
             tundra: load_template("tundra"),
+            jungle: load_template("jungle"),
             repeats: Arc::new(load_repeats()),
         })
         .insert_resource(Towns {
@@ -1798,6 +1799,149 @@ fn a_world_stores_every_tundra_camp_once() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// Slice 4i: every jungle site of the shipped seed lays and cuts whole: its
+/// huts and tower, its kapoks, its platforms and its bridges' spans, every
+/// one on its chart. It prints where to stand for the jungle's shots.
+#[test]
+fn every_jungle_village_lays_and_cuts() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("jungle");
+    let kits = load_kits();
+    let sites = sites_of(SiteKind::Jungle);
+    assert!(!sites.is_empty(), "jungle sites");
+    let cell_m = template.grid.cell_m;
+    let spans: usize = template
+        .bridges
+        .iter()
+        .map(|b| ((b.length() / 1.4).round() as usize).max(2))
+        .sum();
+    let datum = record::datum(&template) as f32;
+    for site in &sites {
+        let started = std::time::Instant::now();
+        let town =
+            lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        assert_eq!(
+            laid.solids.len(),
+            template.buildings.len() + template.kapoks.len() + template.platforms.len() + spans,
+            "{}: huts and tower, kapoks, platforms and bridge spans",
+            site.name
+        );
+        assert_eq!(
+            laid.dressing,
+            (0, 0),
+            "{}: nothing off its chart",
+            site.name
+        );
+        let point = |x: f32, z: f32| sea::point(&laid.chart, &laid.patch, x, z, cell_m).unwrap();
+        let at = |(x, z): (f32, f32)| {
+            let (lat, lon) = pbd_core::geo::lat_lon(point(x, z)).degrees();
+            format!("--at {lat:.5} {lon:.5}")
+        };
+        let yaw = |(fx, fz): (f32, f32), (tx, tz): (f32, f32)| {
+            let (from, to) = (point(fx, fz), point(tx, tz));
+            let up = from.normalize();
+            let base = Vec3::Y.cross(up).normalize();
+            let along = to - from;
+            let t = (along - up * along.dot(up)).normalize();
+            -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees()
+        };
+        // The mockup's own spots (its `GOTO`, the mockup's metres): the
+        // clearing looking up at the first kapok, the tower's door, the
+        // first platform looking to the second tree, the first bridge from
+        // its start, a tree hut's door and the lookout. A spot on the
+        // platforms is a column view at their height plus an eye.
+        let up = 9.0 - datum + EYE_HEIGHT;
+        let spots: [(&str, (f32, f32), (f32, f32), f32, bool); 6] = [
+            ("clearing", (56.993, 47.569), (45.328, 44.162), 22.9, false),
+            ("tower", (40.370, 42.935), (41.079, 41.709), 0.0, false),
+            ("platform", (43.912, 41.709), (72.242, 31.895), 0.0, true),
+            ("bridge", (50.286, 40.973), (69.409, 34.348), 0.0, true),
+            ("treehut", (73.658, 29.441), (70.825, 29.441), 0.0, true),
+            ("lookout", (79.324, 58.883), (80.741, 56.429), 0.0, true),
+        ];
+        println!(
+            "{}: laid and cut in {:.2} s; overview {}",
+            site.name,
+            started.elapsed().as_secs_f32(),
+            overview(&point, sea::centre(21, 20, cell_m), (62.326, 44.162), 90.0)
+        );
+        for (name, from, to, pitch, raised) in spots {
+            if raised {
+                println!(
+                    "{}: {name} --view column {} --yaw {:.1} --height {up:.2} --pitch {pitch:.1}",
+                    site.name,
+                    at(from),
+                    yaw(from, to)
+                );
+            } else {
+                println!(
+                    "{}: {name} --walk {} --yaw {:.1} --pitch {pitch:.1}",
+                    site.name,
+                    at(from),
+                    yaw(from, to)
+                );
+            }
+        }
+    }
+}
+
+/// Slice 4i: a world stores each jungle village once, and a second open
+/// writes nothing.
+#[test]
+fn a_world_stores_every_jungle_village_once() {
+    use crate::saves::{self, LOG, WorldSave};
+    let root = temporary("jungles");
+    let slot = saves::create(&root, "Jungles", 43).unwrap();
+    let config = *crate::planet::terrain_config();
+    let template = load_template("jungle");
+    let sites = sites_of(SiteKind::Jungle);
+    let made: Vec<Town> = {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        let made = sites
+            .iter()
+            .map(|site| {
+                let (town, seq) = ensure(&mut save, site, &template, &config).expect("laid");
+                assert!(seq > 0, "{} queued to the disk", site.name);
+                town.expect("a town")
+            })
+            .collect();
+        save.drain();
+        made
+    };
+    let path = root.join(&slot.id).join(LOG);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.starts_with("rec @c settlement "))
+            .count(),
+        sites.len(),
+        "a settlement line a jungle village"
+    );
+    let mut reopened = WorldSave::open(root.clone(), saves::list(&root)[0].clone());
+    for (site, town) in sites.iter().zip(&made) {
+        let (kept, seq) = ensure(&mut reopened, site, &template, &config).expect("kept");
+        assert_eq!(kept.as_ref(), Some(town), "{} kept", site.name);
+        assert_eq!(seq, 0, "{}: nothing written", site.name);
+    }
+    reopened.drain();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        text,
+        "byte for byte"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Every town's lamps on the shipped seed, each with its town's ground
 /// (task 5.2), by the template it was laid from.
 fn every_towns_lamps(mut each: impl FnMut(&Site, &Ground, &[ground::Lamp])) {
@@ -1808,6 +1952,7 @@ fn every_towns_lamps(mut each: impl FnMut(&Site, &Ground, &[ground::Lamp])) {
         (SiteKind::Harbour, "coast"),
         (SiteKind::Desert, "desert"),
         (SiteKind::Tundra, "tundra"),
+        (SiteKind::Jungle, "jungle"),
     ] {
         let template = load_template(name);
         for site in sites_of(kind) {
@@ -1822,6 +1967,72 @@ fn every_towns_lamps(mut each: impl FnMut(&Site, &Ground, &[ground::Lamp])) {
                 &lamps,
             );
         }
+    }
+}
+
+/// Instrument (design, "Finding: a column can take its neighbour's
+/// ground"): over every footprint and margin column of every town on the
+/// shipped seed, how many find another cell by the ground's dot-product
+/// lookup than by the nearest chord, and how many of those would take
+/// another height, top, crust or clearing.
+#[test]
+#[ignore = "an instrument"]
+fn print_the_ground_lookup_against_the_chord() {
+    let config = *crate::planet::terrain_config();
+    let natural = natural(&config);
+    for (kind, name) in [
+        (SiteKind::Village, "village"),
+        (SiteKind::Walled, "town"),
+        (SiteKind::Harbour, "coast"),
+        (SiteKind::Desert, "desert"),
+        (SiteKind::Tundra, "tundra"),
+        (SiteKind::Jungle, "jungle"),
+    ] {
+        let template = load_template(name);
+        let (mut columns, mut other, mut changed, mut towns) = (0, 0, 0, 0);
+        for site in sites_of(kind) {
+            let town = lay_out(&site, &template, &config).unwrap();
+            let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+            let (_, g) = record::ground_of(&town, &patch, config.radius_m, &natural).unwrap();
+            let cells = g.cells();
+            let mut here = 0;
+            for cell in cells.iter().filter(|c| c.ring != ground::GroundAt::OUTSIDE) {
+                let d = cell.centre;
+                columns += 1;
+                let by_dot = g.at(d);
+                let by_chord = cells
+                    .iter()
+                    .min_by(|a, b| {
+                        (a.centre - d)
+                            .length_squared()
+                            .total_cmp(&(b.centre - d).length_squared())
+                    })
+                    .filter(|c| c.ring != ground::GroundAt::OUTSIDE);
+                if by_dot.map(|c| c.centre) == by_chord.map(|c| c.centre) {
+                    continue;
+                }
+                other += 1;
+                let n = natural(d);
+                let outcome = |c: Option<&ground::GroundAt>| {
+                    c.map(|c| {
+                        (
+                            c.height(n).to_bits(),
+                            c.top,
+                            c.crust().map(f32::to_bits),
+                            c.ring == 0,
+                        )
+                    })
+                };
+                if outcome(by_dot) != outcome(by_chord) {
+                    changed += 1;
+                    here += 1;
+                }
+            }
+            towns += usize::from(here > 0);
+        }
+        println!(
+            "{name}: {columns} columns; {other} find another cell by dot than by chord; {changed} of them would take another ground, in {towns} towns"
+        );
     }
 }
 
@@ -1841,6 +2052,7 @@ fn no_cave_opens_into_a_towns_ground() {
         (SiteKind::Harbour, "coast"),
         (SiteKind::Desert, "desert"),
         (SiteKind::Tundra, "tundra"),
+        (SiteKind::Jungle, "jungle"),
     ] {
         let template = load_template(name);
         for site in sites_of(kind) {
@@ -1853,7 +2065,30 @@ fn no_cave_opens_into_a_towns_ground() {
             let mut open_here = 0;
             for c in &town.cells {
                 let d = patch.cells[chart.cell(c.0, c.1).unwrap()].direction;
-                let top = ground.crust(d).expect("a footprint cell has its crust");
+                let Some(top) = ground.crust(d) else {
+                    let at = ground.at(d).map(|g| {
+                        (
+                            g.ring,
+                            g.centre.dot(d),
+                            g.centre.distance(d) * config.radius_m,
+                        )
+                    });
+                    let own = chart.cell(c.0, c.1).unwrap();
+                    let same: Vec<_> = town
+                        .cells
+                        .iter()
+                        .filter(|x| chart.cell(x.0, x.1) == Some(own))
+                        .map(|x| (x.0, x.1))
+                        .collect();
+                    eprintln!("own patch cell {own}, layout cells on it {same:?}, d {d:?}");
+                    panic!(
+                        "{}: ({}, {}) has no crust: {at:?}, {} cells",
+                        site.name,
+                        c.0,
+                        c.1,
+                        town.cells.len()
+                    );
+                };
                 let band = |i: usize| {
                     let centre = layer_altitude(i) + 0.5;
                     centre < top && centre > top - CRUST_LAYERS as f32
