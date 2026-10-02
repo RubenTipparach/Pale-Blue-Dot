@@ -191,10 +191,13 @@ and the game on the right, by day and at 22:30. Rows:
 - A domed adobe house. A starting-fleet Kestrel stands in the left of the
   day frame; it is placed 16 m from the player wherever the game starts.
 - The caravan hall from its open arch.
-- The town from above: the mockup's overview beside the game from 60 m up
-  (`--view column --height 60 --pitch -42`), the dunes left wild round it.
-  The night shot from above was not taken: the run reached its two-hour
-  limit first.
+- The town from above, as the mockup's overview frames it (its `ORB`
+  round the oasis; `overview` in the spots test prints the game's spot),
+  the dunes left wild round it.
+
+Every game frame here is on the lamp fix (below, "The towns' lamps and
+the igloo's light"): the first shots were taken with half the town's
+lamps missing, and the braziers across the oasis now stand.
 
 In-game captures on lavapipe at 1440 x 900 with no GPU, the fast build under
 `xvfb-run`, a new memory-only world, `--open-doors --rain 0 --weather-at
