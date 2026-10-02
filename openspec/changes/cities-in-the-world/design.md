@@ -1484,6 +1484,22 @@ so the first can be looked at before it can be walked into.
         stronger than on any ground the lights were judged on. Changing it
         changes an approved decision, so it is asked as survey L4 with the
         camp's and the gate's shots.
+    - **Finding: a lamp lights the ground by a wall but not the wall
+      (2026-10-02).** At 22:30 the ice gate's torches light the snow
+      under them, and the ice of the wall a metre away stays as dark as
+      the rest; the keep's merlons are the same. The mockup's torches warm
+      the ice beside them.
+      - A town's pieces take the light field as a craft does
+        (`lamps-and-lanterns` decision 2): eight samples at the corners of
+        each mesh's bounds, blended across them. A town's meshes are one a
+        texture, so the camp's ice is one mesh some 40 m across, and its
+        corners are far from any torch, whose light reaches about 14 m.
+      - **Proposed, not built:** cut a town's meshes into pieces no wider
+        than a lamp's reach (a building, or a run of wall a few cells
+        long), so the corners that light a piece are near what lights it.
+        It costs draws, which the cloud session cannot measure. It belongs
+        to the lights as much as to the towns, and it waits for its own
+        write-up.
     - **Finding: the igloo's candle lit nothing (2026-10-02).** At 22:30
       the mockup's igloo glows warm through its tunnel and the game's is
       grey inside.

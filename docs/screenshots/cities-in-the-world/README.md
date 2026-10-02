@@ -225,7 +225,9 @@ left and the game on the right, by day and at 22:30. Rows:
   player's torch, a stick of 0.55 m, where the mockup's stand 2 m on poles.
   At night they light the ground, but the ice of the wall beside them
   stays dark where the mockup's catches their light; the keep's merlons
-  are the same. Noted, not changed here.
+  are the same. A town's pieces take the light at their mesh's corners,
+  and the camp's ice is one mesh 40 m across (design, "Finding: a lamp
+  lights the ground by a wall but not the wall"). Not changed here.
 - The keep's walked roof, looking out over the merlons and the wall walk
   to the camp. It is shot from the column view at the roof's height, which
   now takes `--yaw` (design, "The keep's roof shot").
