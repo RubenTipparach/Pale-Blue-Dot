@@ -204,3 +204,49 @@ The game's sky reads a deeper blue than the mockup's pale one: that is the
 game's own sky over a desert, not a change here. They show what things look
 like, not how smoothly they run; the frame cost was not measured in this
 cloud session.
+
+## Slice 4g: the tundra camp, beside the mockup (2026-10-02)
+
+`tundra-4g-2026-10-02.jpg`: Torifjell, one of the four tundra sites, with
+the towns mockup's tundra camp (`tools/mockup_town_shots.js tundra`) on the
+left and the game on the right, by day and at 22:30. Rows:
+
+- The camp from beside its fire, an igloo past it and the longhouse on the
+  right. The fire pit is a brazier block where the mockup has a ring of
+  stones, and the drying racks and the people are not built.
+- An igloo from out along its tunnel: the dome cut to the tunnel's
+  profile, its snow bench, furs and lamp. At 22:30 its candle lights it
+  from inside. The first shots found it lit nothing: an igloo's faces were
+  none of them its room's, and it had no floor of its own (design,
+  "Finding: the igloo's candle lit nothing"). Both igloo rows are the fix.
+- The longhouse at its door: granite outside, plank inside, its window and
+  sconces.
+- The ice gate from the road, the keep's door beyond. Its torches are the
+  player's torch, a stick of 0.55 m, where the mockup's stand 2 m on poles.
+  At night they light the ground, but the ice of the wall beside them
+  stays dark where the mockup's catches their light; the keep's merlons
+  are the same. Noted, not changed here.
+- The keep's walked roof, looking out over the merlons and the wall walk
+  to the camp. It is shot from the column view at the roof's height, which
+  now takes `--yaw` (design, "The keep's roof shot").
+- The frozen lake from its shore, its sheet of ice a level down.
+- The camp from above, as the mockup's overview frames it (its `ORB`
+  round column 24, row 16; `overview` in the spots test prints the game's
+  spot). The frozen lake shows on the left, where the mockup's white
+  ground hides it.
+
+By day the camp fire and the gate's torches turn the snow round them tan.
+Torches and fires burn all day and their light is added at full strength
+at noon (`lamps-and-lanterns`), which on white snow reads as sand. It is
+asked as survey L4, with `l4-lamps-by-day-2026-10-02.jpg`.
+
+Night at Torifjell is taken on day 25 of the 100-day year, the equinox
+(`--day 25`). On day 0, the northern summer solstice, the sun at 66 N does
+not set: at 22:30 it stands 7.5 degrees up.
+
+In-game captures on lavapipe at 1440 x 900 with no GPU, the fast build under
+`xvfb-run`, a new memory-only world, `--open-doors --rain 0 --weather-at
+7200`, walking runs at `--time 18.18` for 11:00 and `--day 25 --time 5.68`
+for 22:30 (Torifjell's own sun). The spots are printed by
+`every_tundra_camp_lays_and_cuts`. They show what things look like, not how
+smoothly they run; the frame cost was not measured in this cloud session.
