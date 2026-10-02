@@ -1783,6 +1783,19 @@ so the first can be looked at before it can be walked into.
         beside it and the far side of a post as the terrain is lit. It
         replaces "split a town's meshes". Its cost, a field sample per
         vertex per rebake on the CPU, is measured before it is built.
+      - **Measured (2026-10-02),** `print_the_towns_vertex_counts` on the
+        test patch: a town's outside is 34,104 vertices (the jungle) to
+        151,167 (the walled town), and its rooms 3,489 to 92,949. A field
+        sample is a slot lookup and an interpolation, so a rebake is one
+        sample a vertex, about 150,000 at most, and 1.2 MB of upload for
+        two channels.
+      - **Only the outside.** The field does not see a town's walls: they
+        are pieces, not voxels. Baked into a room's faces, a street lamp
+        would shine through the wall onto them. So the bake is the outside
+        meshes'; a room keeps its own sky share and its own lights.
+      - The jungle's night shots show what it is for: the platforms' planks
+        and the bridges stay grey round their torches and lanterns, where
+        the mockup's are warm.
     - **Verify.** Core: every stair's sconces are one a turn of its climb,
       in every template; a house's count is as before. The shader-text test
       holds the backside share. The jungle tower's stair at 22:30, before

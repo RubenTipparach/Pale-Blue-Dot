@@ -3737,3 +3737,39 @@ fn every_stair_has_a_sconce_a_turn() {
     }
     assert!(towers >= 6, "{towers} towers and keeps");
 }
+
+/// Instrument (design, "Finding: the stair towers have no light", the
+/// per-vertex bake): how many vertices each town's outside and rooms carry,
+/// the samples a bake of the light field would take.
+#[test]
+#[ignore = "an instrument"]
+fn print_the_towns_vertex_counts() {
+    for template in [village(), walled(), tundra(), jungle(), desert()] {
+        let town = laid_village(&template);
+        let (patch, _) = patch();
+        let natural = slope();
+        let b = record::build_town(
+            &town,
+            Some(&template),
+            patch,
+            &kits(),
+            &|_: &str| 2.0,
+            RADIUS_M,
+            SHEET_M,
+            move |d| natural(d).floor(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let outside: usize = b.meshes.values().map(|m| m.positions.len()).sum();
+        let rooms: usize = b
+            .rooms
+            .iter()
+            .flat_map(|r| r.values())
+            .map(|m| m.positions.len())
+            .sum();
+        println!(
+            "{}: {outside} outside vertices in {} meshes, {rooms} room vertices",
+            template.scene,
+            b.meshes.len()
+        );
+    }
+}
