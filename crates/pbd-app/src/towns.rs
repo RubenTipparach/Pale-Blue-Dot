@@ -338,27 +338,39 @@ pub struct TownAssets {
     pub walled: Template,
     /// The harbour (slice 4d).
     pub harbour: Template,
+    /// The desert town (slice 4e).
+    pub desert: Template,
+    /// The tundra camp (slice 4g).
+    pub tundra: Template,
     pub repeats: Arc<BTreeMap<String, f32>>,
 }
 
 impl TownAssets {
     /// The template a kind of site is laid from, where one is shipped: the
-    /// village's, the walled town's and the harbour's so far (slice 4 adds a
-    /// kind at a time).
+    /// village's, the walled town's, the harbour's, the desert's and the
+    /// tundra's so far (slice 4 adds a kind at a time).
     pub fn template_for(&self, kind: SiteKind) -> Option<&Template> {
         match kind {
             SiteKind::Village => Some(&self.village),
             SiteKind::Walled => Some(&self.walled),
             SiteKind::Harbour => Some(&self.harbour),
+            SiteKind::Desert => Some(&self.desert),
+            SiteKind::Tundra => Some(&self.tundra),
             _ => None,
         }
     }
 
     /// The template a stored town names, by its scene.
     pub fn template_named(&self, scene: &str) -> Option<&Template> {
-        [&self.village, &self.walled, &self.harbour]
-            .into_iter()
-            .find(|t| t.scene == scene)
+        [
+            &self.village,
+            &self.walled,
+            &self.harbour,
+            &self.desert,
+            &self.tundra,
+        ]
+        .into_iter()
+        .find(|t| t.scene == scene)
     }
 
     /// How far each texture repeats, metres, as the cutter asks it.
@@ -806,6 +818,8 @@ pub fn stand_in_range(world: &mut World) {
                 assets.village.clone(),
                 assets.walled.clone(),
                 assets.harbour.clone(),
+                assets.desert.clone(),
+                assets.tundra.clone(),
             ],
         )
     };
@@ -1481,6 +1495,8 @@ impl Plugin for TownsPlugin {
             village: load_template("village"),
             walled: load_template("town"),
             harbour: load_template("coast"),
+            desert: load_template("desert"),
+            tundra: load_template("tundra"),
             repeats: Arc::new(load_repeats()),
         })
         .init_resource::<Towns>()

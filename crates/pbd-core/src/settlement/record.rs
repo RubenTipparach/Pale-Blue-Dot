@@ -18,7 +18,8 @@
 use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::{Lamp, TownGround};
 use super::pieces::{
-    BuildingSolids, Meshes, RoomLight, cog, cut_building, cut_masonry, dressing, harbour,
+    BuildingSolids, Meshes, RoomLight, cog, cut_building, cut_masonry, desert, dressing, harbour,
+    tundra,
 };
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
@@ -65,8 +66,11 @@ pub enum Top {
     Dirt,
     /// A harbour's beach (slice 4d).
     Sand,
-    /// A harbour's headland of bare rock (slice 4d).
+    /// A harbour's headland of bare rock (slice 4d); the desert's plaza
+    /// (slice 4e).
     Stone,
+    /// The tundra's snow (slice 4g).
+    Snow,
 }
 
 impl Top {
@@ -75,6 +79,7 @@ impl Top {
             Top::Dirt => Material::Dirt,
             Top::Sand => Material::Sand,
             Top::Stone => Material::Stone,
+            Top::Snow => Material::Snow,
         }
     }
 
@@ -82,7 +87,17 @@ impl Top {
     /// the planet's own top stays. A town on the sea keeps its beach sand
     /// and its headland rock (slice 4d); every other built top is dirt, as
     /// the village's and the walled town's always have been.
-    fn of(top: &str, sea: bool) -> Option<Top> {
+    fn of(top: &str, sea: bool, tops: &BTreeMap<String, String>) -> Option<Top> {
+        // A template that maps its tops (slices 4e and 4g) is read by its
+        // map, and a top it does not name keeps the planet's.
+        if !tops.is_empty() {
+            return match tops.get(top)?.as_str() {
+                "sand" => Some(Top::Sand),
+                "stone" => Some(Top::Stone),
+                "snow" => Some(Top::Snow),
+                _ => Some(Top::Dirt),
+            };
+        }
         match top {
             "grass" | "sand" => None,
             "ivorysand" if sea => Some(Top::Sand),
@@ -141,6 +156,13 @@ pub struct Building {
     /// metres over the town's terrace.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stilts: Option<super::Stilts>,
+    /// A walked flat roof's parapet gaps (slice 4e), written only where the
+    /// roof is walked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parapet_gaps: Option<Vec<[i32; 3]>>,
+    /// Doorways with no leaf (slice 4e), written only where there are some.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub archways: Vec<[i32; 4]>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -170,6 +192,8 @@ impl Building {
                 foot_m: s.foot_m - datum as f32,
                 ..s.clone()
             }),
+            parapet_gaps: def.parapet_gaps.clone(),
+            archways: def.archways.clone(),
         }
     }
 
@@ -192,6 +216,8 @@ impl Building {
             parapet: self.parapet,
             open: self.open.clone(),
             stilts: self.stilts.clone(),
+            parapet_gaps: self.parapet_gaps.clone(),
+            archways: self.archways.clone(),
         }
     }
 }
@@ -341,7 +367,12 @@ fn lay_with(
     let tops: BTreeMap<(i32, i32), Top> = template
         .ground
         .iter()
-        .filter_map(|g| Some(((g.c, g.r), Top::of(&g.top, sea_m.is_some())?)))
+        .filter_map(|g| {
+            Some((
+                (g.c, g.r),
+                Top::of(&g.top, sea_m.is_some(), &template.tops)?,
+            ))
+        })
         .collect();
     let town_cell = |&(c, r): &(i32, i32)| {
         let at = charted.cells.get(&(c, r))?;
@@ -546,7 +577,7 @@ pub fn lamps_of(town: &Town, template: &Template, chart: &Chart, patch: &Patch) 
         .enumerate()
         .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
         .collect();
-    let lamp = |c: i32, r: i32, over: f32| {
+    let lamp = |c: i32, r: i32, over: f32, material: Material| {
         let cell = chart.cell(c, r)?;
         let altitude_m = terrace
             .get(&(c, r))
@@ -555,18 +586,35 @@ pub fn lamps_of(town: &Town, template: &Template, chart: &Chart, patch: &Patch) 
         Some(Lamp {
             direction: patch.cells[cell].direction,
             altitude_m,
-            material: Material::LanternPost,
+            material,
         })
     };
     let cell_m = template.grid.cell_m;
+    // A lantern's or a fire's height is the template's over its datum (the
+    // sea's surface for a harbour).
+    let datum = datum(template) as f32;
+    let off_grid = |x: f32, y: f32, z: f32, material: Material| {
+        let (c, r) = super::sea::cell_at(x, z, cell_m);
+        lamp(c, r, (y - datum).floor(), material)
+    };
     let mut out: Vec<Lamp> = template
         .lamps
         .iter()
-        .filter_map(|&[c, r]| lamp(c, r, 0.0))
-        .chain(template.lanterns.iter().filter_map(|&[x, y, z]| {
-            let (c, r) = super::sea::cell_at(x, z, cell_m);
-            lamp(c, r, y.floor())
-        }))
+        .filter_map(|&[c, r]| lamp(c, r, 0.0, Material::LanternPost))
+        .chain(
+            template
+                .lanterns
+                .iter()
+                .filter_map(|&[x, y, z]| off_grid(x, y, z, Material::LanternPost)),
+        )
+        // The desert's braziers, the tundra's torches and fire (slices 4e
+        // and 4g).
+        .chain(
+            template
+                .fires
+                .iter()
+                .filter_map(|f| off_grid(f.x, f.y, f.z, f.material())),
+        )
         .collect();
     // One lamp a column.
     let mut seen = BTreeSet::new();
@@ -764,6 +812,84 @@ pub fn build_town(
             built.solids.push(c);
         }
     }
+    // A land town's outside stairs and dressing (slice 4e): the desert's
+    // flights to its roofs, its stalls, crates and cacti. They are the
+    // template's, as its masonry is, each with no rooms and no lights, at
+    // its heights over the template's datum.
+    if let Some(template) = template.filter(|t| {
+        !t.sea && (!t.stairs.is_empty() || !t.dressing.is_empty() || t.frozen.is_some())
+    }) {
+        let under = |d: Vec3| ground_under(&built.ground, &natural, d);
+        let zero = town.terrace as f32 - datum(template) as f32;
+        let mut cut = Vec::new();
+        // The roof edge a stair climbs to: the parapet gap of the house just
+        // past its head.
+        let cell_m = template.grid.cell_m;
+        let head = |s: &super::OutsideStair| {
+            let (dx, dz) = (s.to[0] - s.from[0], s.to[2] - s.from[2]);
+            let l = (dx * dx + dz * dz).sqrt().max(1e-3);
+            let past = (s.to[0] + dx / l * 0.3, s.to[2] + dz / l * 0.3);
+            let cell = super::sea::cell_at(past.0, past.1, cell_m);
+            template
+                .buildings
+                .iter()
+                .filter_map(|b| b.parapet_gaps.as_ref())
+                .flatten()
+                .find(|g| (g[0], g[1]) == cell)
+                .copied()
+        };
+        for s in &template.stairs {
+            match desert::outside_stair(
+                &mut built.meshes,
+                repeat_m,
+                patch,
+                &built.chart,
+                s,
+                cell_m,
+                radius_m,
+                zero,
+                head(s),
+            ) {
+                Some(piece) => cut.push(piece),
+                None => built.dressing_skipped += 1,
+            }
+        }
+        let (things, skipped) = dressing::dressing(
+            &mut built.meshes,
+            repeat_m,
+            patch,
+            &built.chart,
+            template,
+            radius_m,
+            zero,
+            &under,
+        );
+        built.dressing = things.len();
+        built.dressing_skipped += skipped;
+        cut.extend(things);
+        // The tundra's frozen lake (slice 4g): its ice over the cells laid
+        // a layer under the shore.
+        if let Some(frozen) = &template.frozen {
+            match tundra::ice_sheet(
+                &mut built.meshes,
+                repeat_m,
+                patch,
+                &built.chart,
+                frozen,
+                cell_m,
+                radius_m,
+                zero,
+            ) {
+                Some(ice) => cut.push(ice),
+                None => built.dressing_skipped += 1,
+            }
+        }
+        for c in cut {
+            built.rooms.push(Meshes::new());
+            built.lights.push(Vec::new());
+            built.solids.push(c);
+        }
+    }
     let Some(template) = template.filter(|t| !t.masonry.is_empty()) else {
         return Ok(built);
     };
@@ -777,6 +903,7 @@ pub fn build_town(
         .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
         .collect();
     let walls: BTreeSet<(i32, i32)> = template.masonry.iter().map(|m| (m.c, m.r)).collect();
+    let material = template.masonry_material.clone().unwrap_or_default();
     for m in &template.masonry {
         let Some(&ground) = terrace.get(&(m.c, m.r)) else {
             return Err(format!("masonry ({}, {}) is not in the town", m.c, m.r));
@@ -796,6 +923,7 @@ pub fn build_town(
             ground,
             bottom,
             top,
+            &material,
         )?;
         built.rooms.push(Meshes::new());
         built.lights.push(Vec::new());

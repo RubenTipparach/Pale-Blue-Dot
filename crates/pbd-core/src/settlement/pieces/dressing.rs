@@ -216,6 +216,68 @@ pub fn stand(
     Some(best.unwrap_or(floor))
 }
 
+/// The mockup's own turn, 6.28 rather than TAU, so its draws stand the same.
+#[allow(clippy::approx_constant)]
+const MOCKUP_TURN: f32 = 6.28;
+
+/// The mockup's `rng`: a xorshift on 32 bits from `seed` (0 is taken as 1),
+/// each draw in [0, 1), so a thing the mockup scatters by it stands the same
+/// in the game.
+fn mockup_rng(seed: i32) -> impl FnMut() -> f32 {
+    let mut s = (seed as u32).max(1);
+    move || {
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
+        (s as f64 / 4_294_967_296.0) as f32
+    }
+}
+
+/// A cactus (slice 4e), the mockup's `cactus`: a column of eight sides,
+/// `s` times 2.4 m tall, which the walker goes round, and up to two arms,
+/// where the mockup's own draw puts them.
+fn cactus(sink: &mut Sink, place: &Place, (x, z): (f32, f32), s: f32) {
+    cylinder(
+        sink,
+        "cactus",
+        "cactus",
+        place.plan(x, z),
+        0.0,
+        0.26 * s,
+        2.4 * s,
+        8,
+    );
+    // JavaScript's `| 0` truncates toward zero, as `as i32` does.
+    let mut rn = mockup_rng((x * 17.0 + z) as i32);
+    for _ in 0..2 {
+        if rn() < 0.3 {
+            continue;
+        }
+        let a = rn() * MOCKUP_TURN;
+        let ay = (0.9 + rn() * 0.7) * s;
+        let (ax, az) = (x + a.cos() * 0.55 * s, z + a.sin() * 0.55 * s);
+        let mid = place.plan((x + ax) / 2.0, (z + az) / 2.0);
+        sink.plain_box(
+            "cactus",
+            mid.x,
+            ay,
+            mid.y,
+            Vec3::new(0.55 * s, 0.3 * s, 0.3 * s),
+            place.turn(a),
+        );
+        cylinder(
+            sink,
+            "cactus",
+            "cactus",
+            place.plan(ax, az),
+            ay,
+            0.17 * s,
+            0.9 * s,
+            6,
+        );
+    }
+}
+
 /// A ring of `n` points `r` round `c`, counter-clockwise in plan.
 fn ring(c: Vec2, r: f32, n: usize) -> Vec<Vec2> {
     (0..n)
@@ -769,6 +831,10 @@ pub fn dressing(
             } => {
                 boat(&mut sink, &place, (x, z), kind, *angle, *beached);
                 Hull::of(kind).0.l / 2.0 + 1.0
+            }
+            Dress::Cactus { scale, .. } => {
+                cactus(&mut sink, &place, (x, z), *scale);
+                1.5 * scale
             }
         };
         out.push(finish(sink, frame, reach_m));

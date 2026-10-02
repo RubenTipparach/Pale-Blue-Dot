@@ -706,6 +706,8 @@ fn a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves() {
             village: load_template("village"),
             walled: load_template("town"),
             harbour: load_template("coast"),
+            desert: load_template("desert"),
+            tundra: load_template("tundra"),
             repeats: Arc::new(load_repeats()),
         })
         .insert_resource(Towns {
@@ -876,6 +878,11 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
 }
 
 fn harbours() -> Vec<Site> {
+    sites_of(SiteKind::Harbour)
+}
+
+/// The shipped seed's sites of `kind`, in id order.
+fn sites_of(kind: SiteKind) -> Vec<Site> {
     let mut sites: Vec<Site> = pbd_core::sites::generate(
         &load_rules(),
         crate::planet::terrain_config(),
@@ -884,7 +891,7 @@ fn harbours() -> Vec<Site> {
     )
     .sites
     .into_iter()
-    .filter(|s| s.kind == SiteKind::Harbour)
+    .filter(|s| s.kind == kind)
     .collect();
     sites.sort_by_key(|s| s.id);
     sites
@@ -1443,4 +1450,261 @@ fn print_the_water_at_the_sailing_berths() {
         }
         println!("{row}");
     }
+}
+
+/// Slice 4e: every desert site of the shipped seed lays and cuts whole: its
+/// buildings, its five roof stairs and its dressing, every thing on its
+/// chart. It prints where to stand for the desert's shots.
+#[test]
+fn every_desert_lays_and_cuts() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("desert");
+    let kits = load_kits();
+    let sites = sites_of(SiteKind::Desert);
+    assert!(!sites.is_empty(), "desert sites");
+    let cell_m = template.grid.cell_m;
+    for site in &sites {
+        let started = std::time::Instant::now();
+        let town =
+            lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        assert_eq!(
+            laid.solids.len(),
+            template.buildings.len() + template.stairs.len() + template.dressing.len(),
+            "{}: buildings, roof stairs and dressing",
+            site.name
+        );
+        assert_eq!(
+            laid.dressing,
+            (template.dressing.len(), 0),
+            "{}: its dressing",
+            site.name
+        );
+        let point = |x: f32, z: f32| sea::point(&laid.chart, &laid.patch, x, z, cell_m).unwrap();
+        let mid = |c: i32, r: i32| {
+            let (x, z) = sea::centre(c, r, cell_m);
+            point(x, z)
+        };
+        let at = |d: Vec3| {
+            let (lat, lon) = pbd_core::geo::lat_lon(d).degrees();
+            format!("--at {lat:.5} {lon:.5}")
+        };
+        let yaw = |from: Vec3, to: Vec3| {
+            let up = from.normalize();
+            let base = Vec3::Y.cross(up).normalize();
+            let along = to - from;
+            let t = (along - up * along.dot(up)).normalize();
+            -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees()
+        };
+        // The mockup's own spots: the plaza toward the oasis, the second
+        // house's roof stair from its foot, a domed house from the plaza's
+        // side, and the caravan hall from its arch.
+        let (plaza, oasis) = (mid(25, 13), mid(25, 17));
+        let s = &template.stairs[1];
+        let (foot, head) = (point(s.from[0] + 1.0, s.from[2]), point(s.to[0], s.to[2]));
+        let (house, door) = (mid(14, 14), mid(16, 14));
+        let (hall, arch) = (mid(35, 23), mid(32, 23));
+        let (rx, rz) = sea::centre(21, 9, cell_m);
+        let roof = point(rx, rz + 1.2);
+        println!(
+            "{}: laid and cut in {:.2} s; plaza {} --yaw {:.1}; roof stair {} --yaw {:.1}; roof {} --yaw {:.1}; domed house {} --yaw {:.1}; hall {} --yaw {:.1}",
+            site.name,
+            started.elapsed().as_secs_f32(),
+            at(plaza),
+            yaw(plaza, oasis),
+            at(foot),
+            yaw(foot, head),
+            at(roof),
+            yaw(roof, oasis),
+            at(door),
+            yaw(door, house),
+            at(arch),
+            yaw(arch, hall),
+        );
+    }
+}
+
+/// Slice 4e: a world stores each desert town once, in schema 2, and a
+/// second open writes nothing.
+#[test]
+fn a_world_stores_every_desert_once() {
+    use crate::saves::{self, LOG, WorldSave};
+    let root = temporary("deserts");
+    let slot = saves::create(&root, "Deserts", 41).unwrap();
+    let config = *crate::planet::terrain_config();
+    let template = load_template("desert");
+    let sites = sites_of(SiteKind::Desert);
+    let made: Vec<Town> = {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        let made = sites
+            .iter()
+            .map(|site| {
+                let (town, seq) = ensure(&mut save, site, &template, &config).expect("laid");
+                assert!(seq > 0, "{} queued to the disk", site.name);
+                town.expect("a town")
+            })
+            .collect();
+        save.drain();
+        made
+    };
+    let path = root.join(&slot.id).join(LOG);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.starts_with("rec @c settlement "))
+            .count(),
+        sites.len(),
+        "a settlement line a desert town"
+    );
+    let mut reopened = WorldSave::open(root.clone(), saves::list(&root)[0].clone());
+    for (site, town) in sites.iter().zip(&made) {
+        let (kept, seq) = ensure(&mut reopened, site, &template, &config).expect("kept");
+        assert_eq!(kept.as_ref(), Some(town), "{} kept", site.name);
+        assert_eq!(seq, 0, "{}: nothing written", site.name);
+    }
+    reopened.drain();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        text,
+        "byte for byte"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Slice 4g: every tundra site of the shipped seed lays and cuts whole: its
+/// buildings, its lake's ice and its wall. It prints where to stand for the
+/// tundra's shots.
+#[test]
+fn every_tundra_camp_lays_and_cuts() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("tundra");
+    let kits = load_kits();
+    let sites = sites_of(SiteKind::Tundra);
+    assert!(!sites.is_empty(), "tundra sites");
+    let cell_m = template.grid.cell_m;
+    for site in &sites {
+        let started = std::time::Instant::now();
+        let town =
+            lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        assert_eq!(
+            laid.solids.len(),
+            template.buildings.len() + 1 + template.masonry.len(),
+            "{}: buildings, the lake's ice and the wall",
+            site.name
+        );
+        assert_eq!(
+            laid.dressing,
+            (0, 0),
+            "{}: nothing off its chart",
+            site.name
+        );
+        let point = |x: f32, z: f32| sea::point(&laid.chart, &laid.patch, x, z, cell_m).unwrap();
+        let mid = |c: i32, r: i32| {
+            let (x, z) = sea::centre(c, r, cell_m);
+            point(x, z)
+        };
+        let at = |d: Vec3| {
+            let (lat, lon) = pbd_core::geo::lat_lon(d).degrees();
+            format!("--at {lat:.5} {lon:.5}")
+        };
+        let yaw = |from: Vec3, to: Vec3| {
+            let up = from.normalize();
+            let base = Vec3::Y.cross(up).normalize();
+            let along = to - from;
+            let t = (along - up * along.dot(up)).normalize();
+            -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees()
+        };
+        // The mockup's own spots: the camp from beside its fire, an igloo
+        // from out along its tunnel, the longhouse at its door, the castle
+        // gate from 4.5 m out, and the frozen lake from its north shore.
+        let fire = mid(13, 12);
+        let (cx, cz) = sea::centre(13, 12, cell_m);
+        let camp = point(cx - 2.0, cz + 2.5);
+        let (igloo, out) = (mid(9, 9), mid(11, 9));
+        let (house, door) = (mid(22, 11), mid(22, 13));
+        let (gx, gz) = sea::centre(31, 16, cell_m);
+        let (gate, keep) = (point(gx - 4.5, gz), mid(35, 16));
+        let (lake, shore) = (mid(12, 27), mid(12, 22));
+        println!(
+            "{}: laid and cut in {:.2} s; camp {} --yaw {:.1}; igloo {} --yaw {:.1}; longhouse {} --yaw {:.1}; gate {} --yaw {:.1}; lake {} --yaw {:.1}",
+            site.name,
+            started.elapsed().as_secs_f32(),
+            at(camp),
+            yaw(camp, fire),
+            at(out),
+            yaw(out, igloo),
+            at(door),
+            yaw(door, house),
+            at(gate),
+            yaw(gate, keep),
+            at(shore),
+            yaw(shore, lake),
+        );
+    }
+}
+
+/// Slice 4g: a world stores each tundra camp once, in schema 2, and a
+/// second open writes nothing.
+#[test]
+fn a_world_stores_every_tundra_camp_once() {
+    use crate::saves::{self, LOG, WorldSave};
+    let root = temporary("tundras");
+    let slot = saves::create(&root, "Tundras", 41).unwrap();
+    let config = *crate::planet::terrain_config();
+    let template = load_template("tundra");
+    let sites = sites_of(SiteKind::Tundra);
+    let made: Vec<Town> = {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        let made = sites
+            .iter()
+            .map(|site| {
+                let (town, seq) = ensure(&mut save, site, &template, &config).expect("laid");
+                assert!(seq > 0, "{} queued to the disk", site.name);
+                town.expect("a town")
+            })
+            .collect();
+        save.drain();
+        made
+    };
+    let path = root.join(&slot.id).join(LOG);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.starts_with("rec @c settlement "))
+            .count(),
+        sites.len(),
+        "a settlement line a tundra camp"
+    );
+    let mut reopened = WorldSave::open(root.clone(), saves::list(&root)[0].clone());
+    for (site, town) in sites.iter().zip(&made) {
+        let (kept, seq) = ensure(&mut reopened, site, &template, &config).expect("kept");
+        assert_eq!(kept.as_ref(), Some(town), "{} kept", site.name);
+        assert_eq!(seq, 0, "{}: nothing written", site.name);
+    }
+    reopened.drain();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        text,
+        "byte for byte"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }
