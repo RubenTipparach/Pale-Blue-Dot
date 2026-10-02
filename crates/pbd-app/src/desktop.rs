@@ -1041,6 +1041,11 @@ pub fn run(args: &[String]) {
     if let Some(scale) = launch.cog_swing {
         app.insert_resource(pbd_app::decks::CogSwing(scale));
     }
+    // Every door of every town open, for a capture, with a walker or in a
+    // still view (the column view's tree hut).
+    if launch.open_doors {
+        app.insert_resource(pbd_app::towns::OpenDoors);
+    }
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
@@ -1069,9 +1074,6 @@ pub fn run(args: &[String]) {
         });
         if launch.at.is_some() {
             app.insert_resource(pbd_app::towns::RespawnInTown);
-        }
-        if launch.open_doors {
-            app.insert_resource(pbd_app::towns::OpenDoors);
         }
         if launch.room_sky.is_some() || launch.room_bounce.is_some() {
             let base = pbd_app::towns::RoomSky::default();

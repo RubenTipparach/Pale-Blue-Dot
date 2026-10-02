@@ -1728,6 +1728,10 @@ so the first can be looked at before it can be walked into.
       is installed. So a spot on the platforms gives its height over the
       natural ground under it, as `every_jungle_village_lays_and_cuts`
       prints it. A capture camera only.
+    - **The shots' doors.** `--open-doors` opened a town's doors only when a
+      walker is spawned, so in the column view the tree hut's door stood
+      shut where the mockup's stands open. It now opens them in the column
+      view too. A capture flag only: no door in the game changes.
     - **Cost.** Each jungle village lays and cuts in 0.04 s (dev profile).
       The frame cost was not measured in this cloud session.
     - `the_jungle_lays_with_its_floor_wild_and_its_platforms_built`,
