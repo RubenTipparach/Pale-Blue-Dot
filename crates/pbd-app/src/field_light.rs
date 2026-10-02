@@ -138,6 +138,7 @@ impl Plugin for FieldLightPlugin {
                     .chain()
                     .after(bevy::transform::TransformSystems::Propagate),
             )
+            .add_systems(Update, bake_town_outsides)
             .add_systems(Update, fill_follows_the_day);
     }
 }
@@ -332,6 +333,111 @@ fn repack_room_lights(
 /// half a layer, in the air of the cell on top.
 const GROUND_CLEAR_M: f32 = 0.5;
 
+/// A town's outside mesh, lit from the field vertex by vertex
+/// (`cities-in-the-world`, "Finding: the stair towers have no light"): the
+/// fine set and the relight it was last baked from. Its mesh carries the
+/// field's `(sky, block)` in its second UV channel, `-1` until baked.
+#[derive(Component, Default, Clone, Copy, Debug)]
+pub struct BakedField(pub Option<(usize, u64)>);
+
+/// What a town's outside reads before it is baked: the shader takes the
+/// corners where it finds this.
+pub const UNBAKED: [f32; 2] = [-1.0, 0.0];
+
+/// How far in front of its face a vertex reads the field, metres: in the
+/// air the face looks into, not the wall it is on.
+const BAKE_FRONT_M: f32 = 0.3;
+
+/// The most vertices baked in a frame: a walled town is about 150,000,
+/// so a town or two a frame.
+const BAKE_BUDGET: usize = 200_000;
+
+/// Each vertex's `(sky, block)`: the field at the point `BAKE_FRONT_M` in
+/// front of it along its normal, positions and normals in the planet's
+/// frame. `field` answers a point.
+pub fn bake_vertices(
+    positions: &[[f32; 3]],
+    normals: &[[f32; 3]],
+    field: impl Fn(Vec3) -> (f32, f32),
+) -> Vec<[f32; 2]> {
+    positions
+        .iter()
+        .zip(normals)
+        .map(|(p, n)| {
+            let (sky, block) = field(Vec3::from(*p) + Vec3::from(*n) * BAKE_FRONT_M);
+            [sky, block]
+        })
+        .collect()
+}
+
+/// Bake every town's outside from the field whenever the fine set serving
+/// it, or its light, has changed since: a dig, a lamp, dusk and dawn. A
+/// point under the ground reads the air just over it, as a corner does.
+fn bake_town_outsides(
+    fine: Option<Res<PlanetFine>>,
+    contact: Option<Res<PlanetContact>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut outsides: Query<(&Mesh3d, &mut BakedField)>,
+) {
+    let (Some(fine), Some(contact)) = (fine, contact) else {
+        return;
+    };
+    if !contact.serves(&fine.set) {
+        return;
+    }
+    let key = (
+        std::sync::Arc::as_ptr(&fine.set) as usize,
+        fine.set.columns.light_version(),
+    );
+    let config = crate::planet::terrain_config();
+    let field = |at: Vec3| {
+        let Some(up) = at.try_normalize() else {
+            return (1.0, 0.0);
+        };
+        let ground = PLANET_RADIUS + pbd_core::column::surface_m(config, up) + GROUND_CLEAR_M;
+        field_at(
+            &fine,
+            &contact,
+            if at.length() < ground {
+                up * ground
+            } else {
+                at
+            },
+        )
+    };
+    let mut budget = BAKE_BUDGET;
+    for (mesh, mut baked) in &mut outsides {
+        if baked.0 == Some(key) {
+            continue;
+        }
+        let Some(m) = meshes.get_mut(&mesh.0) else {
+            continue;
+        };
+        let (Some(positions), Some(normals)) = (
+            m.attribute(Mesh::ATTRIBUTE_POSITION)
+                .and_then(|a| a.as_float3())
+                .map(<[_]>::to_vec),
+            m.attribute(Mesh::ATTRIBUTE_NORMAL)
+                .and_then(|a| a.as_float3())
+                .map(<[_]>::to_vec),
+        ) else {
+            continue;
+        };
+        if positions.len() > budget && budget < BAKE_BUDGET {
+            break;
+        }
+        budget = budget.saturating_sub(positions.len());
+        m.insert_attribute(
+            Mesh::ATTRIBUTE_UV_1,
+            bake_vertices(&positions, &normals, field),
+        );
+        baked.0 = Some(key);
+        if budget == 0 {
+            break;
+        }
+    }
+}
+
 /// Bevy's own ambient, what lights a PBR face turned from the sun, is the
 /// terrain's cap fill for the hour where the camera is (`sun-shadows`
 /// decision 7): a shaded wall of a ship is lit as a shaded cliff is, not by
@@ -388,6 +494,44 @@ pub fn light_of((sky, block): (f32, f32), daylight: f32) -> Vec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `cities-in-the-world`, "Finding: the stair towers have no light": a
+    /// baked vertex reads the field in the air in front of its face, so a
+    /// plank beside a lamp is lit and one 10 m off is not, and a face turned
+    /// toward the lamp reads nearer it than one turned away.
+    #[test]
+    fn a_town_vertex_bakes_the_field_in_front_of_its_face() {
+        let lamp = Vec3::new(0.0, 1.0, 0.0);
+        // A made-up field: the lamp's light falls off over 6 m.
+        let field = |p: Vec3| (1.0, (1.0 - p.distance(lamp) / 6.0).max(0.0));
+        let positions = [
+            [1.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+        ];
+        let normals = [
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+        ];
+        let baked = bake_vertices(&positions, &normals, field);
+        assert_eq!(baked.len(), 4);
+        assert!(baked[0][1] > 0.5, "beside the lamp: {:?}", baked[0]);
+        assert_eq!(baked[1][1], 0.0, "10 m off");
+        assert!(
+            baked[2][1] > baked[3][1],
+            "the face toward the lamp reads nearer it: {:?} {:?}",
+            baked[2],
+            baked[3]
+        );
+        assert!(
+            baked.iter().all(|b| b[0] == 1.0),
+            "the sky as the field gives it"
+        );
+        const { assert!(UNBAKED[0] < 0.0, "unbaked reads the corners") };
+    }
 
     /// A fading town is drawn through the terrain's own mask
     /// (`cities-in-the-world` slice 4a), so the two dissolve alike.
@@ -464,6 +608,14 @@ mod tests {
                 "field_lit.wgsl should carry `{line}`"
             );
         }
+        // A town's outside reads the field baked into its vertices, where
+        // it has been baked (`BakedField`).
+        assert!(
+            shader.contains("if in.uv_b.x >= 0.0 {")
+                && shader.contains("sky = in.uv_b.x;")
+                && shader.contains("block = in.uv_b.y;"),
+            "field_lit.wgsl reads the baked field"
+        );
         // A room face turned away from a building's light still takes its
         // 0.3 share (`cities-in-the-world`, "Finding: the stair towers have
         // no light").

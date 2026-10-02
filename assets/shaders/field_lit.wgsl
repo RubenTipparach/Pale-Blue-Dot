@@ -13,7 +13,8 @@
 //
 // Either way the sun reaches only where it is up, the sky reaches, and the
 // cascades see it, and the lamps' warm light is added, both read off the
-// field at the eight corners of the mesh's bounds and blended across them.
+// field at the eight corners of the mesh's bounds and blended across them,
+// or, on a town's outside, off the field baked into each vertex.
 // The constants are the terrain shader's, and `the_field_lit_shader_carries_
 // the_terrain_light_constants` holds both copies to `pbd_core::light`.
 
@@ -165,8 +166,17 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     var out: FragmentOutput;
     let span = max(field.high.xyz - field.low.xyz, vec3<f32>(1e-3));
     let t = clamp((in.world_position.xyz - field.low.xyz) / span, vec3<f32>(0.0), vec3<f32>(1.0));
-    let sky = blend(field.sky, t);
-    let block = blend(field.block, t);
+    var sky = blend(field.sky, t);
+    var block = blend(field.block, t);
+#ifdef VERTEX_UVS_B
+    // A town's outside, baked from the field vertex by vertex where its
+    // face looks into the air (`cities-in-the-world`, "Finding: the stair
+    // towers have no light"); the corners until it is baked.
+    if in.uv_b.x >= 0.0 {
+        sky = in.uv_b.x;
+        block = in.uv_b.y;
+    }
+#endif
     let body = in.world_position.xyz - field.centre.xyz;
     let up = normalize(body);
     let sun = field.sun.xyz;

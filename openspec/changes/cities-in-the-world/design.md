@@ -1796,6 +1796,24 @@ so the first can be looked at before it can be walked into.
       - The jungle's night shots show what it is for: the platforms' planks
         and the bridges stay grey round their torches and lanterns, where
         the mockup's are warm.
+      - **How it is built (recommendation taken, ask only with screenshots).**
+        - Each town's outside mesh carries a second UV channel, the field's
+          `(sky, block)` at each vertex, sampled 0.3 m along its normal. A
+          town is spawned with it unbaked (`-1`), which the shader reads as
+          "use the corners".
+        - The column tier counts its relights. A town's outside is rebaked
+          when the fine set that serves it or that count changes: a dig, a
+          lamp, dusk and dawn. The bake runs on the main thread under a
+          budget of vertices a frame, a town or two at a time.
+        - `field_lit.wgsl` takes the baked values where a vertex has them,
+          and the corner blend everywhere else: a room, a craft, a fish.
+        - Like any vertex lighting, a light in the middle of one large face
+          shows only at its corners. A platform's cells and the bridge's
+          slats are small; a long wall is two triangles.
+      - **Verify.** An app test that a baked vertex beside a lamp is brighter
+        in `block` than one 10 m off, from a field made up for it; the
+        shader-text test for the baked branch; the jungle's platform and
+        bridge at 22:30 before and after.
     - **Seen in the shot after (2026-10-02).** The pole tower's stair is lit
       from about 2 m up. Its foot stays dim: the lowest sconce is 3.2 m up
       and lights 1.2 m under itself, as the mockup's does, and the mockup's

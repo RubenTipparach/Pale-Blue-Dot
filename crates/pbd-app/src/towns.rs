@@ -18,7 +18,9 @@
 //! pieces cut and faded in only within [`STAND_M`] of the viewer. The other
 //! kinds follow, a kind at a time.
 
-use crate::field_light::{Faded, LitByField, LitLikeTerrain, RoomLights, SkyShare};
+use crate::field_light::{
+    BakedField, Faded, LitByField, LitLikeTerrain, RoomLights, SkyShare, UNBAKED,
+};
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
 use crate::saves::WorldSave;
@@ -1295,9 +1297,17 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
     let parts: Vec<(Mesh, Handle<Image>, bool)> = {
         let assets = world.resource::<AssetServer>();
         let cut = cut_textures();
+        // The outside takes the field vertex by vertex once baked
+        // (`BakedField`), its second UV channel unbaked until then.
         laid.meshes
             .iter()
-            .map(|(name, buf)| (to_mesh(buf), texture(assets, name), cut.contains(name)))
+            .map(|(name, buf)| {
+                let mesh = to_mesh(buf).with_inserted_attribute(
+                    Mesh::ATTRIBUTE_UV_1,
+                    vec![UNBAKED; buf.positions.len()],
+                );
+                (mesh, texture(assets, name), cut.contains(name))
+            })
             .collect()
     };
     // Each building's rooms, apart: they take the room's own share of the
@@ -1362,6 +1372,9 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         let mut child = world.spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()));
         if flame {
             child.insert(TownFlame);
+        }
+        if room.is_none() && !flame {
+            child.insert(BakedField::default());
         }
         if let Some(building) = room.filter(|_| !flame) {
             child.insert(RoomLights(
