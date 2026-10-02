@@ -340,3 +340,22 @@ for 22:30 (Copan's own sun). The spots are printed by
 at their height over the natural ground, which is what the column view
 measures from. They show what things look like, not how smoothly they run;
 the frame cost was not measured in this cloud session.
+
+## A town's outside lit vertex by vertex, before and after (2026-10-02)
+
+`town-light-bake-2026-10-02.jpg`: the owner's "Are you using proper light
+baking?", answered. Before, a town's outside took the light field at only
+the eight corners of each mesh's bounds, tens of metres apart, so the
+jungle's planks stayed grey beside their own torches. Now each vertex of a
+town's outside carries the field's sky and lamp light from the air 0.3 m in
+front of its face, baked again whenever the field there changes (a dig, a
+lamp, dusk and dawn).
+
+- The first platform at 22:30: its deck, rails and tree hut take the
+  torches' light, as the mockup's do.
+- The first rope bridge at 22:30: its slats and ropes take its lanterns'.
+
+A room keeps its own light: the field does not see a town's walls, and a
+street lamp would shine through them onto a room's faces. Same capture setup
+as the slice 4i shots above; the frame cost was not measured in this cloud
+session.

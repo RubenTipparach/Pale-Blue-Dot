@@ -1810,6 +1810,10 @@ so the first can be looked at before it can be walked into.
         - Like any vertex lighting, a light in the middle of one large face
           shows only at its corners. A platform's cells and the bridge's
           slats are small; a long wall is two triangles.
+      - **Built (2026-10-02).** At 22:30 the jungle's first platform and
+        bridge take their torches' and lanterns' light on their planks,
+        rails and huts, where they were grey
+        (`docs/screenshots/cities-in-the-world/town-light-bake-2026-10-02.jpg`).
       - **Verify.** An app test that a baked vertex beside a lamp is brighter
         in `block` than one 10 m off, from a field made up for it; the
         shader-text test for the baked branch; the jungle's platform and
