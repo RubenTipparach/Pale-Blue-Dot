@@ -1484,6 +1484,32 @@ so the first can be looked at before it can be walked into.
         stronger than on any ground the lights were judged on. Changing it
         changes an approved decision, so it is asked as survey L4 with the
         camp's and the gate's shots.
+    - **Finding: the igloo's candle lit nothing (2026-10-02).** At 22:30
+      the mockup's igloo glows warm through its tunnel and the game's is
+      grey inside.
+      - A room's light reaches only the faces cut as its room's, and a face
+        is the room's when its air is inside the building's `Indoors`.
+        `igloo` set its `Indoors` after cutting every face, where a building
+        sets it before, so no face of an igloo was its room's.
+      - Its `Indoors` was its cell's hex besides, 1.42 m from centre to
+        edge, under a dome of 2.3 m: most of the dome's inside would have
+        been outside it.
+      - And an igloo had no floor of its own. The walker stands on the
+        planet's snow, which a room's light never reaches.
+      - **The fix.** An igloo's inside is its dome's own air, `(r / R)^2 +
+        (y / H)^2 < 1` round its centre (the dome is that ellipsoid), set
+        before it cuts. A floor of its kit's snow is cut under the dome, a
+        centimetre over the ground as a building's is. So the dome's inside,
+        the bench, the furs and the floor are its room's and the candle
+        lights them; the dome's outside and the tunnel past it are not.
+      - **Verify.** A core test that every face of an igloo whose air is
+        under its dome is cut as its room's and none outside it is, and
+        that it has a floor; the igloo's shot at 22:30 retaken.
+      - **Fixed (2026-10-02).** `Indoors::dome` holds the dome's air, and
+        `an_igloos_room_is_the_air_under_its_dome` finds every room face's
+        air under the dome, over 500 faces of the dome's inside and the
+        floor among them. On the old cut it failed: an igloo had no room
+        faces at all.
     - **Not built.**
       - The plaza's flags become the terrain's stone, which reads red in a
         desert, where the mockup's are pale. The shots show it.

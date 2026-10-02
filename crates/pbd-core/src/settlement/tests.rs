@@ -3012,6 +3012,79 @@ fn a_walker_goes_into_an_igloo_through_its_tunnel() {
     assert_eq!(igloos, 5);
 }
 
+/// Slice 4g: an igloo's inside is its dome's air, so its candle lights it
+/// (design, "Finding: the igloo's candle lit nothing"): every face cut as
+/// its room's has its air under the dome, the dome's whole inside is among
+/// them, and so is a floor of snow over the ground.
+#[test]
+fn an_igloos_room_is_the_air_under_its_dome() {
+    let (template, _, b) = cut_tundra();
+    let mut igloos = 0;
+    for (i, def) in template.buildings.iter().enumerate() {
+        if def.kit != "igloo" {
+            continue;
+        }
+        let s = &b.solids[i];
+        let local = |p: &[f32; 3]| s.frame.local(Vec3::from_array(*p));
+        let turn = |n: &[f32; 3]| {
+            let n = Vec3::from_array(*n);
+            Vec3::new(n.dot(s.frame.x), n.dot(s.frame.y), n.dot(s.frame.z))
+        };
+        // The dome's middle in the frame: the room's light stands in it.
+        let lamp = s.frame.local(b.lights[i][0].at);
+        let (mut inward, mut floor) = (0, false);
+        let mut middle = glam::Vec2::ZERO;
+        let room = &b.rooms[i];
+        // The dome's centre is the middle of its floor, a 24-gon whose box
+        // is square on it.
+        if let Some(snow) = room.get("snow") {
+            let (lo, hi) = snow.positions.iter().fold(
+                (glam::Vec2::splat(f32::MAX), glam::Vec2::splat(f32::MIN)),
+                |(lo, hi), p| {
+                    let q = local(p);
+                    let q = glam::Vec2::new(q.x, q.z);
+                    (lo.min(q), hi.max(q))
+                },
+            );
+            middle = (lo + hi) / 2.0;
+            floor = snow
+                .positions
+                .iter()
+                .zip(&snow.normals)
+                .any(|(p, n)| turn(n).y > 0.9 && local(p).y.abs() < 0.05);
+        }
+        assert!(floor, "{}: a floor of snow under its dome", def.name);
+        for (material, buf) in room {
+            for (tri, n) in buf.positions.chunks(3).zip(buf.normals.chunks(3)) {
+                let centre = tri.iter().map(local).sum::<Vec3>() / 3.0;
+                let n = turn(&n[0]);
+                let air = centre + n * 0.05;
+                let across = glam::Vec2::new(air.x, air.z).distance(middle) / 2.3;
+                let up = air.y.max(0.0) / 2.5;
+                // A triangle's middle is not its face's, so a hair over.
+                assert!(
+                    across * across + up * up < 1.02,
+                    "{}: its room's {material} face at {centre} has its air outside the dome",
+                    def.name
+                );
+                let out = glam::Vec2::new(centre.x, centre.z) - middle;
+                if material == "snowblock" && out.dot(glam::Vec2::new(n.x, n.z)) < 0.0 {
+                    inward += 1;
+                }
+            }
+        }
+        assert!(
+            inward > 500,
+            "{}: {inward} faces of its dome's inside are its room's",
+            def.name
+        );
+        let lamp_off = glam::Vec2::new(lamp.x, lamp.z).distance(middle);
+        assert!(lamp_off < 2.0, "{}: its candle under the dome", def.name);
+        igloos += 1;
+    }
+    assert_eq!(igloos, 5);
+}
+
 /// Slice 4g: the walker through the ice castle's gate, into its wall, along
 /// its walk and up each of its two towers onto it, as the walled town's.
 #[test]

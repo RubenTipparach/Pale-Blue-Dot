@@ -587,6 +587,9 @@ pub struct Indoors {
     /// Whether its top storey is open to the roof, as a hut is to its cone:
     /// otherwise a ceiling closes it and the roof's underside is the eaves'.
     open_roof: bool,
+    /// An igloo's dome, centre, radius and height: its inside is the dome's
+    /// own air, which spills past its cell (slice 4g).
+    dome: Option<(Vec2, f32, f32)>,
 }
 
 /// How far in front of a face its air is looked for, metres: past a wall's
@@ -621,6 +624,19 @@ impl Indoors {
             walls,
             top,
             open_roof,
+            dome: None,
+        }
+    }
+
+    /// The inside of a dome `height` high on a circle of `radius` round
+    /// `centre`, the ellipsoid an igloo's shell is cut on.
+    pub fn dome(centre: Vec2, radius: f32, height: f32) -> Self {
+        Self {
+            cells: Vec::new(),
+            walls: Vec::new(),
+            top: height,
+            open_roof: true,
+            dome: Some((centre, radius, height)),
         }
     }
 
@@ -634,6 +650,11 @@ impl Indoors {
         let front = centre + n * FRONT_M;
         if front.y < -0.3 {
             return false;
+        }
+        if let Some((middle, radius, height)) = self.dome {
+            let across = Vec2::new(front.x, front.z).distance(middle) / radius;
+            let up = front.y.max(0.0) / height;
+            return across * across + up * up < 1.0;
         }
         if centre.y > self.top + 0.005 && (n.y > -0.1 || !self.open_roof) {
             return false;
@@ -1211,7 +1232,7 @@ type Post = (Vec2, f32, f32, f32, String);
 fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(), String> {
     // An igloo is cut by its own shape, not to its cell (slice 4g).
     if def.roof == "igloo" {
-        return tundra::igloo(sink, plan, def);
+        return tundra::igloo(sink, plan, def, kit);
     }
     let storeys = def.storeys.max(1);
     // A stair tower is one cell and one storey, as high as its walls (slice

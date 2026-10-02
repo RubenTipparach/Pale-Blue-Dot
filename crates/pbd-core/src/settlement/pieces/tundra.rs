@@ -2,10 +2,10 @@
 //! first building not cut to its cell, and the frozen lake's ice.
 
 use super::super::chart::{Chart, Patch};
-use super::super::{BuildingDef, Frozen};
+use super::super::{BuildingDef, Frozen, Kit};
 use super::dressing::{Place, finish};
 use super::{
-    BuildingSolids, Indoors, LightKind, Meshes, Plan, Sink, Solid, Surface, ccw, edge_ends,
+    BuildingSolids, Indoors, LIFT_M, LightKind, Meshes, Plan, Sink, Solid, Surface, ccw, edge_ends,
 };
 use glam::{Vec2, Vec3};
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
@@ -88,8 +88,22 @@ fn ang_diff(a: f32, b: f32) -> f32 {
 /// edge, open at the tunnel, and by the tunnel's walls and roof; a second
 /// ring outside the dome's foot keeps a walker outside from walking into
 /// its shell, which the mockup leaves open.
-pub(super) fn igloo(sink: &mut Sink, plan: &Plan, def: &BuildingDef) -> Result<(), String> {
+pub(super) fn igloo(
+    sink: &mut Sink,
+    plan: &Plan,
+    def: &BuildingDef,
+    kit: &Kit,
+) -> Result<(), String> {
     let centre = plan.centres[0];
+    // Its inside is the dome's own air, set before anything is cut so that
+    // what faces into it is cut as its room's and its candle lights it.
+    sink.indoors = Some(Indoors::dome(centre, DOME_R, DOME_H));
+    // A floor of the kit's snow under the dome, a centimetre over the
+    // ground as a building's is: the planet's snow is no room's.
+    let floor: Vec<Vec2> = (0..24)
+        .map(|k| centre + Vec2::from_angle(k as f32 / 24.0 * TAU) * (DOME_R - 0.05))
+        .collect();
+    sink.prism(&kit.floor, &kit.floor, &floor, -0.05, LIFT_M, None);
     let [_, _, door, _] = *def
         .doors
         .first()
@@ -334,8 +348,7 @@ pub(super) fn igloo(sink: &mut Sink, plan: &Plan, def: &BuildingDef) -> Result<(
         0.45,
         DOME_H,
     );
-    // Sheltered under the dome; its plan for shadows and roof checks.
-    sink.indoors = Some(Indoors::new(plan.corners.clone(), DOME_H, true));
+    // Its plan for shadows and roof checks.
     sink.roof_plan = (0..12)
         .map(|k| centre + Vec2::from_angle(k as f32 / 12.0 * TAU) * DOME_R)
         .collect();
