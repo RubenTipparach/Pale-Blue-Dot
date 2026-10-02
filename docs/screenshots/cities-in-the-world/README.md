@@ -252,3 +252,24 @@ In-game captures on lavapipe at 1440 x 900 with no GPU, the fast build under
 for 22:30 (Torifjell's own sun). The spots are printed by
 `every_tundra_camp_lays_and_cuts`. They show what things look like, not how
 smoothly they run; the frame cost was not measured in this cloud session.
+
+## The towns' lamps and the igloo's light, before and after (2026-10-02)
+
+`lamps-and-igloo-fixes-2026-10-02.jpg`: what the desert's and the tundra's
+shots found, the game before on the left and now on the right.
+
+- Torifjell's camp at 11:00. Before, no camp fire stood where the mockup
+  has one, 3 m ahead: half of every town's lamps stood nowhere on the
+  game's planet, because the lookup that finds a lamp's column compared a
+  cosine that is exactly 1.0 in `f32` at a radius of 4800 m. 255 of the
+  shipped seed's 522 lamps stood; now all 522 do (design, "Finding: half
+  of every town's lamps stand nowhere"). Lamps are derived from the
+  template, so every saved town gains its missing ones on open.
+- Sarzash's plaza at 22:30. Two more braziers stand across the oasis.
+- An igloo at 22:30. Before, its inside was grey: none of its faces were
+  its room's, so its candle lit nothing. Now its inside is the dome's own
+  air, it has a floor of snow, and the candle lights it (design, "Finding:
+  the igloo's candle lit nothing").
+
+Same capture setup as the slice 4e and 4g shots above. The frame cost was
+not measured in this cloud session.
