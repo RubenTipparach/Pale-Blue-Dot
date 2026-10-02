@@ -603,7 +603,9 @@ fn a_town_built_from_its_record_is_the_town_its_template_lays() {
         })
         .collect();
     let floored = |d: Vec3| slope()(d).floor();
-    let before = TownGround::new(patch, RADIUS_M, &cells, town.terrace as f32, floored);
+    // The same cells, found by the rule the town's layout names.
+    let before = TownGround::new(patch, RADIUS_M, &cells, town.terrace as f32, floored)
+        .by_chord(town.layout >= record::CHORD_LAYOUT);
     let config = crate::planet_gen::TerrainConfig::default();
     assert_eq!(
         ground::Ground::new(config, vec![before]).digest(),
@@ -3634,4 +3636,62 @@ fn no_lamp_of_an_older_town_moves() {
     }
     println!("{checked} lamps of five towns where they stood");
     assert!(checked >= 80);
+}
+
+/// Design, "Finding: a column can take its neighbour's ground": a town of
+/// layout 2 finds every column's own cell by the nearest chord; a town
+/// stored at layout 1 keeps the dot lookup it was played with, and reads
+/// its layout back from its records.
+#[test]
+fn a_towns_layout_names_how_its_ground_finds_a_cell() {
+    let (patch, _) = patch();
+    let town = laid_village(&village());
+    assert_eq!(town.layout, record::LAYOUT_VERSION);
+    assert_eq!(record::LAYOUT_VERSION, 2);
+    let mut old = town.clone();
+    old.layout = 1;
+    let mut store = crate::records::Records::new();
+    for r in record::to_records(&old) {
+        store.put(r);
+    }
+    let record::Stored::Town(kept) = record::from_records(&store, old.site) else {
+        panic!("the layout-1 town reads back");
+    };
+    assert_eq!(kept.layout, 1, "a layout-1 town stays layout 1");
+    for (t, chord) in [(&town, true), (&old, false)] {
+        let (_, g) = record::ground_of(t, patch, RADIUS_M, slope()).expect("ground");
+        let cells = g.cells();
+        let mut checked = 0;
+        for c in cells.iter().filter(|c| c.ring != GroundAt::OUTSIDE) {
+            let d = c.centre;
+            let nearest = cells
+                .iter()
+                .enumerate()
+                .max_by(|(i, a), (j, b)| {
+                    let (x, y) = if chord {
+                        (
+                            -(a.centre - d).length_squared(),
+                            -(b.centre - d).length_squared(),
+                        )
+                    } else {
+                        (a.centre.dot(d), b.centre.dot(d))
+                    };
+                    x.total_cmp(&y).then(j.cmp(i))
+                })
+                .map(|(_, n)| n.centre);
+            let found = g.at(d).map(|x| x.centre);
+            if nearest.is_some_and(|n| {
+                cells
+                    .iter()
+                    .any(|x| x.centre == n && x.ring != GroundAt::OUTSIDE)
+            }) {
+                assert_eq!(found, nearest, "layout {}: the column at {d:?}", t.layout);
+            }
+            if chord {
+                assert_eq!(found, Some(d), "layout 2 finds its own cell");
+            }
+            checked += 1;
+        }
+        assert!(checked > 500);
+    }
 }

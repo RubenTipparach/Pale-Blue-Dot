@@ -170,33 +170,44 @@ fn a_damaged_settlement_is_neither_built_nor_written_over() {
 /// over its footprint and the margin eased to the natural ground. It is
 /// pinned here as a generator version's ground is, so a change to the
 /// easing is a new rule for new towns and never reshapes a made one.
+///
+/// A Holbrook stored at layout 1 keeps that ground; one laid now, at layout
+/// 2, finds its cells by chord (design, "Finding: a column can take its
+/// neighbour's ground") and is pinned apart.
 #[test]
 fn holbrooks_ground_is_pinned() {
     let site = holbrook();
     let config = *crate::planet::terrain_config();
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
-    let laid = build(
-        &site,
-        &town,
-        None,
-        &load_kits(),
-        &|_: &str| 2.0,
-        &config,
-        sheet(&config),
-    )
-    .unwrap();
-    let digest = Ground::new(config, vec![laid.ground.clone()]).digest();
-    let (footprint, margin) = laid.ground.counts();
-    println!(
-        "Holbrook's ground: terrace {} m, {footprint} + {margin} cells, digest {digest:#018x}",
-        town.terrace
-    );
-    assert_eq!(digest, HOLBROOK_GROUND);
+    assert_eq!(town.layout, record::LAYOUT_VERSION);
+    let mut stored = town.clone();
+    stored.layout = 1;
+    for (town, pinned) in [(&stored, HOLBROOK_GROUND), (&town, HOLBROOK_GROUND_V2)] {
+        let laid = build(
+            &site,
+            town,
+            None,
+            &load_kits(),
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap();
+        let digest = Ground::new(config, vec![laid.ground.clone()]).digest();
+        let (footprint, margin) = laid.ground.counts();
+        println!(
+            "Holbrook's ground at layout {}: terrace {} m, {footprint} + {margin} cells, digest {digest:#018x}",
+            town.layout, town.terrace
+        );
+        assert_eq!(digest, pinned, "layout {}", town.layout);
+    }
 }
 
 /// Measured 2026-09-30 on generator 6: a terrace at 74 m over 799 cells, eased
 /// over 2051.
 const HOLBROOK_GROUND: u64 = 0xc331_13d0_7b63_82f3;
+/// Holbrook laid at layout 2 (2026-10-02): the same cells, found by chord.
+const HOLBROOK_GROUND_V2: u64 = 0x0fe7_1d41_aa16_a736;
 
 /// A measurement instrument, run by hand: where to stand in Holbrook for
 /// the shots set beside the mockup's, as `--at` and `--yaw` for a capture.
@@ -1861,7 +1872,10 @@ fn every_jungle_village_lays_and_cuts() {
         // its start, a tree hut's door and the lookout. A spot on the
         // platforms is a column view at their height plus an eye.
         let up = 9.0 - datum + EYE_HEIGHT;
-        let spots: [(&str, (f32, f32), (f32, f32), f32, bool); 6] = [
+        // A spot: its name, where it stands and looks, its pitch, and
+        // whether it is up on the platforms.
+        type Spot<'a> = (&'a str, (f32, f32), (f32, f32), f32, bool);
+        let spots: [Spot; 6] = [
             ("clearing", (56.993, 47.569), (45.328, 44.162), 22.9, false),
             ("tower", (40.370, 42.935), (41.079, 41.709), 0.0, false),
             ("platform", (43.912, 41.709), (72.242, 31.895), 0.0, true),
@@ -2037,7 +2051,7 @@ fn print_the_ground_lookup_against_the_chord() {
 }
 
 /// Survey T14 on the shipped seed: no worm opens a layer within
-/// `CRUST_LAYERS` of any town's footprint ground, where 26 of 32 towns had
+/// `CRUST_LAYERS` of any town's footprint ground, where 32 of 46 towns had
 /// cave mouths in theirs (design, "Finding: caves open into towns'
 /// ground"). It asks each town's own ground, not the installed one.
 #[test]
@@ -2065,30 +2079,9 @@ fn no_cave_opens_into_a_towns_ground() {
             let mut open_here = 0;
             for c in &town.cells {
                 let d = patch.cells[chart.cell(c.0, c.1).unwrap()].direction;
-                let Some(top) = ground.crust(d) else {
-                    let at = ground.at(d).map(|g| {
-                        (
-                            g.ring,
-                            g.centre.dot(d),
-                            g.centre.distance(d) * config.radius_m,
-                        )
-                    });
-                    let own = chart.cell(c.0, c.1).unwrap();
-                    let same: Vec<_> = town
-                        .cells
-                        .iter()
-                        .filter(|x| chart.cell(x.0, x.1) == Some(own))
-                        .map(|x| (x.0, x.1))
-                        .collect();
-                    eprintln!("own patch cell {own}, layout cells on it {same:?}, d {d:?}");
-                    panic!(
-                        "{}: ({}, {}) has no crust: {at:?}, {} cells",
-                        site.name,
-                        c.0,
-                        c.1,
-                        town.cells.len()
-                    );
-                };
+                let top = ground
+                    .crust(d)
+                    .unwrap_or_else(|| panic!("{}: ({}, {}) has no crust", site.name, c.0, c.1));
                 let band = |i: usize| {
                     let centre = layer_altitude(i) + 0.5;
                     centre < top && centre > top - CRUST_LAYERS as f32

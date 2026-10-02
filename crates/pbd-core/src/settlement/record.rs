@@ -47,9 +47,13 @@ pub const TERRACED_SCHEMA: u32 = 2;
 /// does not know the sea refuses a harbour rather than cutting one without
 /// its fish huts.
 pub const SEA_SCHEMA: u32 = 3;
-/// The laying-out rules' version, stored for people to read: a town is
-/// never rebuilt by it.
-pub const LAYOUT_VERSION: u32 = 1;
+/// The laying-out rules' version, stored with each town: a town is never
+/// rebuilt by it, and its ground is found by the rules it names.
+pub const LAYOUT_VERSION: u32 = 2;
+/// The first layout whose ground finds a direction's cell by the nearest
+/// chord (design, "Finding: a column can take its neighbour's ground"): a
+/// town stored at layout 1 keeps the dot lookup it was played with.
+pub const CHORD_LAYOUT: u32 = 2;
 /// Rings of layout cells round the built ones that are terraced with them,
 /// so the yards between the houses are level too.
 pub const YARD_RINGS: usize = 2;
@@ -567,7 +571,8 @@ pub fn ground_of(
             )
         })
         .collect();
-    let ground = TownGround::terraced(patch, radius_m, &footprint, natural);
+    let ground = TownGround::terraced(patch, radius_m, &footprint, natural)
+        .by_chord(town.layout >= CHORD_LAYOUT);
     Ok((chart, ground))
 }
 

@@ -283,9 +283,9 @@ not measured in this cloud session.
 the game before on the left and now on the right.
 
 - Holbrook's lane from above (survey T14, "crust"). Before, a worm's cave
-  opened into the lane beside the lantern: 32 of the shipped seed's 40
+  opened into the lane beside the lantern: 32 of the shipped seed's 46
   towns had a cave open in their footprint. Now no worm carves the top
-  three layers under a town's footprint, and none of the 34,514 footprint
+  three layers under a town's footprint, and none of the 36,074 footprint
   cells opens (`no_cave_opens_into_a_towns_ground`). The caves under them
   are as they were. The margin round a town keeps its caves.
 - Torifjell's camp and its ice gate at 11:00 (survey L4, "recommended").
