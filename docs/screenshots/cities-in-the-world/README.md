@@ -173,3 +173,34 @@ Same capture setup as the slice 4d shots above (lavapipe, no GPU, 1440 x
 900, `--walk --at 23.50609 -115.10515 --time 18.77`, and `--time 6.27` for
 22:30). They show what things look like, not how smoothly they run; the
 frame cost was not measured in this cloud session.
+
+## Slice 4e: the desert town, beside the mockup (2026-10-02)
+
+`desert-4e-2026-10-02.jpg`: Sarzash, one of the four desert sites, with the
+towns mockup's desert town (`tools/mockup_town_shots.js desert`) on the left
+and the game on the right, by day and at 22:30. Rows:
+
+- The plaza toward the oasis. The oasis is a sand hollow a level under the
+  plaza, as the mockup's (it draws no water there), with its cacti and
+  market stalls round it. At 22:30 the five braziers round the plaza light
+  the sand. The plaza's flags read as red stone in the game where the
+  mockup's are pale: the template names them `stone`, which is the planet's
+  red rock here (design, "4e and 4g as built").
+- A sandstone house's outside stair up to its roof, the gap in the parapet
+  at its head.
+- A domed adobe house. A starting-fleet Kestrel stands in the left of the
+  day frame; it is placed 16 m from the player wherever the game starts.
+- The caravan hall from its open arch.
+- The town from above: the mockup's overview beside the game from 60 m up
+  (`--view column --height 60 --pitch -42`), the dunes left wild round it.
+  The night shot from above was not taken: the run reached its two-hour
+  limit first.
+
+In-game captures on lavapipe at 1440 x 900 with no GPU, the fast build under
+`xvfb-run`, a new memory-only world, `--open-doors --rain 0 --weather-at
+7200`, walking runs at `--time 19.08` for 11:00 and `--time 6.58` for 22:30
+(Sarzash's own sun). The spots are printed by `every_desert_lays_and_cuts`.
+The game's sky reads a deeper blue than the mockup's pale one: that is the
+game's own sky over a desert, not a change here. They show what things look
+like, not how smoothly they run; the frame cost was not measured in this
+cloud session.
