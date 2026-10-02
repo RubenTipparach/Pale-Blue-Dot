@@ -1825,6 +1825,65 @@ fn every_towns_lamps(mut each: impl FnMut(&Site, &Ground, &[ground::Lamp])) {
     }
 }
 
+/// Survey T14 on the shipped seed: no worm opens a layer within
+/// `CRUST_LAYERS` of any town's footprint ground, where 26 of 32 towns had
+/// cave mouths in theirs (design, "Finding: caves open into towns'
+/// ground"). It asks each town's own ground, not the installed one.
+#[test]
+fn no_cave_opens_into_a_towns_ground() {
+    use pbd_core::column::{CRUST_LAYERS, Column, LAYERS, carve_worms, layer_altitude};
+    let config = *crate::planet::terrain_config();
+    let field = pbd_core::worms::WormField::DEFAULT;
+    let (mut opened, mut towns, mut cells) = (0, 0, 0);
+    for (kind, name) in [
+        (SiteKind::Village, "village"),
+        (SiteKind::Walled, "town"),
+        (SiteKind::Harbour, "coast"),
+        (SiteKind::Desert, "desert"),
+        (SiteKind::Tundra, "tundra"),
+    ] {
+        let template = load_template(name);
+        for site in sites_of(kind) {
+            let town = lay_out(&site, &template, &config).unwrap();
+            let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+            let (chart, g) =
+                record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+            let ground = Ground::new(config, vec![g]);
+            let worms = pbd_core::worms::gather(&field, &config, site.direction, 250.0);
+            let mut open_here = 0;
+            for c in &town.cells {
+                let d = patch.cells[chart.cell(c.0, c.1).unwrap()].direction;
+                let top = ground.crust(d).expect("a footprint cell has its crust");
+                let band = |i: usize| {
+                    let centre = layer_altitude(i) + 0.5;
+                    centre < top && centre > top - CRUST_LAYERS as f32
+                };
+                let carve = |crust: Option<f32>| {
+                    let mut column = Column::bedrock();
+                    for i in 1..LAYERS {
+                        column.set(i, pbd_core::terrain::Material::Stone);
+                    }
+                    carve_worms(&mut column, &worms, &field, &config, d, crust);
+                    (1..LAYERS).any(|i| band(i) && !column.solid(i))
+                };
+                assert!(
+                    !carve(Some(top)),
+                    "{}: a cave opens into ({}, {})",
+                    site.name,
+                    c.0,
+                    c.1
+                );
+                open_here += usize::from(carve(None));
+                cells += 1;
+            }
+            towns += 1;
+            opened += usize::from(open_here > 0);
+        }
+    }
+    println!("{cells} footprint cells of {towns} towns crusted; {opened} towns had a cave open");
+    assert!(opened > 0, "the worms do reach some towns' ground");
+}
+
 /// Task 5.2 on the shipped seed: the ground answers every lamp of every
 /// town at its own column, over the ground there. On the game's planet the
 /// lookup by dot product found half of them (design, "Finding: half of

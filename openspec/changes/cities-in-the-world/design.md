@@ -1627,6 +1627,15 @@ so the first can be looked at before it can be walked into.
     hold and the layers under them still open. An app test asks every
     town on the shipped seed: no footprint cell's top three layers open,
     where 26 of 32 towns had some. Holbrook's lane before and after.
+  - **Built (2026-10-02).** `GroundAt::crust` and `ground::crust` answer
+    the footprint's terrace; `column::carve_worms` is the carve, with
+    `CRUST_LAYERS` 3. `a_crust_keeps_a_cave_mouth_out_of_the_top_three_layers`
+    carves 400 columns round a cave mouth with and without it: the crust
+    holds in every one, and everything under it opens as before.
+    `no_cave_opens_into_a_towns_ground` asks all 40 towns of the shipped
+    seed (the deserts and tundra camps now among them): none of their
+    34,514 footprint cells opens in its top three layers, where 32 of the
+    40 towns had a cave mouth without the crust.
 - **Finding: half of every town's lamps stand nowhere (2026-10-02).** The
   tundra camp's shot at Torifjell has no camp fire where the mockup has one
   3 m ahead, and the desert's plaza shows none of its five braziers.

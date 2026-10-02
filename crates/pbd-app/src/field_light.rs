@@ -377,11 +377,12 @@ pub fn field_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> (f32
 }
 
 /// The light a sample lays over a white surface, linear RGB: the sky's fill
-/// for how much of it is day where the point is, and the lamps' warm light.
+/// for how much of it is day where the point is, and the lamps' warm light
+/// where the sun does not drown it (`lamps-and-lanterns` decision 15).
 pub fn light_of((sky, block): (f32, f32), daylight: f32) -> Vec3 {
     let fill = light::sky_fill(sky, daylight);
     let lamp = light::lamp_light(block);
-    Vec3::splat(fill) + Vec3::from_array(lamp)
+    Vec3::splat(fill) + Vec3::from_array(lamp) * light::lamp_share(sky, daylight)
 }
 
 #[cfg(test)]
@@ -420,6 +421,11 @@ mod tests {
             ),
             format!("const TORCH_GAIN: f32 = {:.2};", light::TORCH_GAIN),
             "    let g = f * (2.0 - f);\n    return g * g;".to_string(),
+            // Decision 15 (survey L4): the lamp fades where the sun reaches,
+            // the core's `light::lamp_share` written out.
+            "    return 1.0 - clamp(daylight, 0.0, 1.0) * clamp(sky, 0.0, 1.0);".to_string(),
+            // ... over a town's piece by its room's share of the sky too.
+            "* lamp_share(sky * field.look.y, daylight);".to_string(),
             "let daylight = smoothstep(-0.13, 0.20, elevation);".to_string(),
             // `sun-shadows` decision 5: the sun ends at the horizon, the
             // terrain's own curve for its direct term.

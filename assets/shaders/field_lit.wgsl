@@ -126,6 +126,13 @@ fn lamp_strength(level: f32) -> f32 {
     return g * g;
 }
 
+// How much of a lamp's light shows where the sun reaches (`lamps-and-
+// lanterns` decision 15, survey L4): none in the open at noon, all of it in
+// shade, indoors and at night. `light::lamp_share` in the core, word for word.
+fn lamp_share(sky: f32, daylight: f32) -> f32 {
+    return 1.0 - clamp(daylight, 0.0, 1.0) * clamp(sky, 0.0, 1.0);
+}
+
 // One channel at a point in the bounds, blended across the eight corners.
 fn blend(corners: array<vec4<f32>, 2>, t: vec3<f32>) -> f32 {
     let x00 = mix(corners[0].x, corners[0].y, t.x);
@@ -178,7 +185,8 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // The sun where it is up, the sky reaches and the cascades see it.
     let sun_up = sunlight * sky * shadow;
     let base = pbr_input.material.base_color.rgb;
-    let lamp = base * TORCH_TINT * (lamp_strength(block) * TORCH_GAIN);
+    let lamp = base * TORCH_TINT * (lamp_strength(block) * TORCH_GAIN)
+        * lamp_share(sky * field.look.y, daylight);
     if field.look.x > 0.5 {
         // As the terrain is lit: a cap's cool fill on what faces up, a wall's
         // paler one on what faces across or down.

@@ -45,6 +45,14 @@ impl GroundAt {
             k => natural.clamp(self.terrace - f32::from(k), self.terrace + f32::from(k)),
         }
     }
+
+    /// The ground no cave opens under (survey T14, "crust"): the terrace in
+    /// the footprint, and none in the margin, which is eased natural ground
+    /// and keeps its caves. [`crate::column::carve_worms`] keeps
+    /// [`crate::column::CRUST_LAYERS`] under it whole.
+    pub fn crust(&self) -> Option<f32> {
+        (self.ring == 0).then_some(self.terrace)
+    }
 }
 
 /// A lamp a town stands in its ground (`cities-in-the-world` task 5.2): a
@@ -370,6 +378,11 @@ impl Ground {
             .find_map(|&i| self.towns[usize::from(i)].at(direction))
     }
 
+    /// The crust a town keeps over its caves at a direction (survey T14).
+    pub fn crust(&self, direction: Vec3) -> Option<f32> {
+        self.at(direction).and_then(GroundAt::crust)
+    }
+
     /// The first town's lamp in the column at a direction (task 5.2).
     pub fn lamp(&self, direction: Vec3) -> Option<&Lamp> {
         self.squares[square(direction)]
@@ -415,6 +428,12 @@ fn with<T>(config: &TerrainConfig, direction: Vec3, f: impl FnOnce(&GroundAt) ->
 /// [`crate::column::surface_m`] answers.
 pub fn surface(config: &TerrainConfig, direction: Vec3, natural: f32) -> f32 {
     with(config, direction, |g| g.height(natural)).unwrap_or(natural)
+}
+
+/// The ground no cave opens under at a direction (survey T14): what
+/// [`crate::column::generate_edited`] hands its carve.
+pub fn crust(config: &TerrainConfig, direction: Vec3) -> Option<f32> {
+    with(config, direction, GroundAt::crust).flatten()
 }
 
 /// The top a town gives the ground at a direction, where it gives one.

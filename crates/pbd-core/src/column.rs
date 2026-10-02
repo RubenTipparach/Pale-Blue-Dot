@@ -336,9 +336,8 @@ pub fn generate_edited(
     edits: &[(u16, Material)],
 ) -> Column {
     let mut column = generate_solid(terrain, direction);
-    worms.carve(terrain, direction, field.floor_layers, |index| {
-        column.layers[index] = Material::Air;
-    });
+    let crust = crate::settlement::ground::crust(terrain, direction);
+    carve_worms(&mut column, worms, field, terrain, direction, crust);
     for &(layer, material) in edits {
         if let Some(slot) = column.layers.get_mut(layer as usize) {
             *slot = material;
@@ -346,6 +345,33 @@ pub fn generate_edited(
     }
     column.layers[0] = Material::Stone;
     column
+}
+
+/// How many layers under a town's ground no cave opens (survey T14,
+/// "crust"): a lane or a floor is never a pit, and a cave under a town is
+/// still there, roofed.
+pub const CRUST_LAYERS: usize = 3;
+
+/// The worms' carve on a column: every layer whose centre is inside a worm
+/// is air, but for the `CRUST_LAYERS` under `crust` (a town's ground in its
+/// footprint, [`crate::settlement::ground::crust`]).
+pub fn carve_worms(
+    column: &mut Column,
+    worms: &Worms,
+    field: &WormField,
+    terrain: &TerrainConfig,
+    direction: Vec3,
+    crust: Option<f32>,
+) {
+    let held = |index: usize| {
+        let centre = layer_altitude(index) + 0.5;
+        crust.is_some_and(|top| centre < top && centre > top - CRUST_LAYERS as f32)
+    };
+    worms.carve(terrain, direction, field.floor_layers, |index| {
+        if !held(index) {
+            column.layers[index] = Material::Air;
+        }
+    });
 }
 
 /// The same column with NO carve: solid from bedrock to the surface.
@@ -604,6 +630,39 @@ mod tests {
     fn spawn() -> (Vec3, Worms) {
         let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
         (spawn, worms::gather(&FIELD, &TERRAIN, spawn, 120.0))
+    }
+
+    /// Survey T14: a town's crust keeps a cave mouth out of the three layers
+    /// under its ground, and the worm still opens everything under them.
+    #[test]
+    fn a_crust_keeps_a_cave_mouth_out_of_the_top_three_layers() {
+        let (spawn, worms) = spawn();
+        let mouth = worms
+            .nearest_opening(spawn)
+            .expect("a cave mouth near the spawn");
+        let (mut mouths, mut deeper) = (0, 0);
+        for d in near(mouth, 12.0, 400) {
+            let top = surface_m(&TERRAIN, d);
+            let carved = |crust: Option<f32>| -> Vec<usize> {
+                let mut column = generate_solid(&TERRAIN, d);
+                carve_worms(&mut column, &worms, &FIELD, &TERRAIN, d, crust);
+                (1..LAYERS)
+                    .filter(|&i| layer_altitude(i) + 0.5 < top && !column.solid(i))
+                    .collect()
+            };
+            let crust = |i: &usize| layer_altitude(*i) + 0.5 > top - CRUST_LAYERS as f32;
+            let open = carved(None);
+            let held = carved(Some(top));
+            assert!(!held.iter().any(crust), "the crust holds: {held:?}");
+            let under: Vec<usize> = open.iter().copied().filter(|i| !crust(i)).collect();
+            assert_eq!(held, under, "everything under the crust still opens");
+            if open.iter().any(crust) {
+                mouths += 1;
+                deeper += usize::from(!under.is_empty());
+            }
+        }
+        assert!(mouths > 0, "the mouth opens the top layers somewhere");
+        assert!(deeper > 0, "and the cave goes on down under the crust");
     }
 
     #[test]
