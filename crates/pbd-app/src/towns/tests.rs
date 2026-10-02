@@ -1639,8 +1639,17 @@ fn every_tundra_camp_lays_and_cuts() {
         let fire = mid(13, 12);
         let (cx, cz) = sea::centre(13, 12, cell_m);
         let camp = point(cx - 2.0, cz + 2.5);
-        let (igloo, out) = (mid(9, 9), mid(11, 9));
-        let (house, door) = (mid(22, 11), mid(22, 13));
+        // Out from a cell's edge `d`, as the mockup's `outsideDoor` and
+        // `dvec` put it.
+        let off = |c: i32, r: i32, d: i32, m: f32| {
+            let (x, z) = sea::centre(c, r, cell_m);
+            let a = d as f32 * std::f32::consts::FRAC_PI_3;
+            point(x + a.cos() * m, z + a.sin() * m)
+        };
+        let first = template.buildings.iter().find(|b| b.kit == "igloo").unwrap();
+        let [ic, ir, id, _] = first.doors[0];
+        let (igloo, out) = (mid(ic, ir), off(ic, ir, id, 5.3));
+        let (house, door) = (off(22, 12, 1, cell_m / 2.0), off(22, 12, 1, cell_m / 2.0 + 1.8));
         let (gx, gz) = sea::centre(31, 16, cell_m);
         let (gate, keep) = (point(gx - 4.5, gz), mid(35, 16));
         let (lake, shore) = (mid(12, 27), mid(12, 22));

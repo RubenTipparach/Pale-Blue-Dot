@@ -1420,6 +1420,68 @@ so the first can be looked at before it can be walked into.
       - App: every tundra site lays and cuts, and a world stores each once.
       - Shots beside the mockup's, by day and at 22:30: the camp, an
         igloo, the longhouse, the gate and the keep's roof.
+  - **4e and 4g as built (2026-10-02).**
+    - **The export.** `tools/export_town_templates.js desert tundra` writes
+      `desert.json` and `tundra.json`. The village, the walled town and the
+      harbour re-export byte for byte: each new field is written only for
+      the scenes that have it.
+      - The desert has 11 buildings (5 sandstone, 5 domed, the hall), 5
+        roof stairs, 5 braziers, 2 lanterns, and 4 stalls, 3 crates and 6
+        cacti.
+      - The tundra has 9 buildings: the longhouse, the ice keep, 2 ice
+        towers and 5 igloos. It also has 24 cells of ice wall (one of
+        them a gate), a frozen lake of 55 cells with its ice at 0.6 m,
+        and 4 torches and the camp fire.
+      - The tundra's keep, towers and wall are written from their own
+        `ringKeep`, `wallTower` and `curtainWall` calls. The town's are
+        still found by its area names.
+    - **The footprint** is every cell outside the wild areas. It also
+      takes the cells a fire, a lantern or a dressing thing stands on:
+      the tundra's camp fire stands on the open tundra, where it would
+      otherwise be off the town's chart, and so out of its lamps.
+    - **The parapet is a wall, not merlons.** The mockup's `flatRoof`
+      raises a parapet 0.65 m high and 0.4 m thick on every outer edge but
+      the gap. It has a post at each corner, so no top is shared, and the
+      beam ends show under it.
+    - **The roof stair meets the roof.** Placed by the mockup's metres
+      alone, its last tread stopped 16 cm short of the roof: the house is
+      cut on its cells' real corners.
+      - Its head now ends on the real corners of the gap edge it climbs to.
+      - A landing 0.4 m long runs on over the roof. The stair's frame and
+        the house's are flat apart and part by up to 10 cm.
+      - A step taller than a walker steps (1.05 m) is solid under its tread,
+        so the flight is not walked into from beside it.
+    - **The tundra's masonry** is the walled town's, in ice. The template
+      names its material (ice under snow, ice under the gate's vault too).
+      - The keep's walked roof is topped with its kit's floor: flagstones
+        in the town, snow here.
+      - The keep's spire and the towers' cones are as high as the template
+        says, 5 m.
+      - Each ice tower's doorway is about 5 degrees short of its stair's
+        landing, where the town's are on it, so the walker steps straight
+        out. The walls test, now shared by both towns, allows 10 degrees.
+    - **The igloo** is cut as the mockup cuts it: the dome is cut to its
+      tunnel's profile, and it has its snow bench, furs and lamp. A candle
+      lights it.
+      - One departure: a second ring of wall round the dome's foot. In the
+        mockup, a walker outside walks 0.6 m into the dome's shell before
+        the inner ring stops it.
+    - **Not built.**
+      - The plaza's flags become the terrain's stone, which reads red in a
+        desert, where the mockup's are pale. The shots show it.
+      - The longhouse's open fire, the drying racks and every room's
+        furniture wait for furniture.
+    - **Cost.** Each desert or tundra lays and cuts in 0.04 to 0.08 s
+      (dev profile). The frame cost was not measured in this cloud session.
+    - `the_desert_lays_with_its_dunes_wild_and_its_oasis_a_level_down`,
+      `a_walker_climbs_a_sandstone_houses_stair_onto_its_roof`,
+      `a_walker_goes_into_a_domed_house_under_its_dome`,
+      `the_tundra_lays_with_its_open_ground_wild_and_its_lake_a_level_down`,
+      `a_walker_goes_into_an_igloo_through_its_tunnel`,
+      `a_walker_goes_through_the_ice_gate_and_up_a_tower_onto_the_walk`,
+      and the app's `every_desert_lays_and_cuts`,
+      `every_tundra_camp_lays_and_cuts` and the two store-once tests hold
+      it.
 - **Task 5.2 in detail, street lamps (written 2026-10-01).** Decision 7
   already puts a town's street lanterns in the voxel field as
   `lamps-and-lanterns`' dusk-lit materials. A street lamp is a
