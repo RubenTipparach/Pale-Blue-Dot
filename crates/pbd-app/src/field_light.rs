@@ -464,6 +464,13 @@ mod tests {
                 "field_lit.wgsl should carry `{line}`"
             );
         }
+        // A room face turned away from a building's light still takes its
+        // 0.3 share (`cities-in-the-world`, "Finding: the stair towers have
+        // no light").
+        assert!(
+            !shader.contains("if facing < -0.15"),
+            "a room light's backside takes the 0.3 share"
+        );
         // The fill's colour is the terrain's cap fill, which that shader
         // writes without spaces.
         let terrain = include_str!("../../../assets/shaders/planet_surface.wgsl");

@@ -3695,3 +3695,45 @@ fn a_towns_layout_names_how_its_ground_finds_a_cell() {
         assert!(checked > 500);
     }
 }
+
+/// Design, "Finding: the stair towers have no light": a stair's sconces
+/// are one a turn of its climb, as the mockup's `newelStair` hangs them, so
+/// a stair tower climbing 8 m has three. A house's newel climbs to its top
+/// floor and keeps one a storey but the top.
+#[test]
+fn every_stair_has_a_sconce_a_turn() {
+    use pieces::LightKind;
+    let mut towers = 0;
+    for template in [village(), walled(), tundra(), jungle(), desert()] {
+        let town = laid_village(&template);
+        let (patch, _) = patch();
+        let natural = slope();
+        let b = record::build_town(
+            &town,
+            Some(&template),
+            patch,
+            &kits(),
+            &|_: &str| 2.0,
+            RADIUS_M,
+            SHEET_M,
+            move |d| natural(d).floor(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        for (def, lights) in town.buildings.iter().zip(&b.lights) {
+            let sconces = lights
+                .iter()
+                .filter(|l| l.kind == LightKind::Sconce)
+                .count();
+            if let Some(n) = &def.newel {
+                let want = (n.top_m / STOREY_M).round() as usize;
+                assert_eq!(
+                    sconces, want,
+                    "{} {}: {} m of stair",
+                    template.scene, def.name, n.top_m
+                );
+                towers += 1;
+            }
+        }
+    }
+    assert!(towers >= 6, "{towers} towers and keeps");
+}

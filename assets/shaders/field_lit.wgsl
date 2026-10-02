@@ -89,8 +89,10 @@ const ROOM_LIGHT_GAIN: f32 = 1.0;
 
 // What a building's own fires and candles lay on a room face at `body`
 // facing `n` (`cities-in-the-world` decision 7a, the mockup's `blockLighter`):
-// each within its reach and its storey, facing it, the fires burning all day
-// and brighter at night, the candles only by night.
+// each within its reach and its storey, the fires burning all day and
+// brighter at night, the candles only by night. A face turned away still
+// takes the 0.3 share, the light off the room's walls (design, "Finding: the
+// stair towers have no light"): the underside of a tread over a sconce.
 fn room_lights(body: vec3<f32>, n: vec3<f32>, night: f32) -> vec3<f32> {
     let fire = 0.9 + 0.3 * night;
     let candle = 1.8 * clamp((night - 0.25) / 0.35, 0.0, 1.0);
@@ -109,9 +111,6 @@ fn room_lights(body: vec3<f32>, n: vec3<f32>, night: f32) -> vec3<f32> {
             continue;
         }
         let facing = dot(to, n) / max(d, 1e-3);
-        if facing < -0.15 {
-            continue;
-        }
         let q = 1.0 - (d / at.w) * (d / at.w);
         let f = q * q * (0.3 + 0.7 * max(facing, 0.0)) * d * d / (d * d + 0.36);
         let c = field.light_colour[i];

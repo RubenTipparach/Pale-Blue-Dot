@@ -2220,19 +2220,41 @@ fn cut_stair(
                 let (a, b) = edge_ends(plan, cell, d);
                 edge_wall(sink, c, a, b, 0.0, wall_top, &faces, &openings);
             }
-            // A sconce a storey, 2.2 m over the tread, on the first of the
-            // stair's own walls round from its entry without a doorway, the
-            // mockup's order (decision 7a).
-            if let Some(k) = [2usize, 4, 1, 5]
+            // A sconce a turn of the climb, 2.2 m over the tread, on the first
+            // of the stair's own walls round from its entry without a doorway,
+            // the mockup's order (decision 7a). A house's newel turns once a
+            // storey up to its top floor; a stair tower's turns every 3 m all
+            // the way up, so it has one a turn too (design, "Finding: the
+            // stair towers have no light").
+            // A stair tower is its newel's one cell, so it has none of its own
+            // walls inside a building: its sconces go on its outer wall, the
+            // first of the same four round from its entry with no way out in
+            // it, as the mockup's `wallTower` hangs them.
+            let exit = |d: usize| {
+                newel.is_some_and(|n| n.exits.iter().any(|&(e, _)| usize::from(e) % 6 == d))
+            };
+            let inner_wall = [2usize, 4, 1, 5]
                 .into_iter()
                 .find(|&k| own((entry + k) % 6))
-            {
+                .map(|k| (k, NEWEL_WALL_M));
+            let outer_wall = || {
+                [2usize, 4, 1, 5]
+                    .into_iter()
+                    .find(|&k| !exit((entry + k) % 6))
+                    .map(|k| (k, kit.walls[0].thickness_m))
+            };
+            let tower_wall = if plan.cells.len() == 1 {
+                outer_wall()
+            } else {
+                None
+            };
+            if let Some((k, thickness)) = inner_wall.or(tower_wall) {
                 let (a, b) = edge_ends(plan, cell, (entry + k) % 6);
                 let m = (a + b) * 0.5;
                 let u = (m - c).normalize();
-                let wall = c + u * ((m - c).length() - NEWEL_WALL_M / 2.0 - 0.02);
-                for s in 0..storeys.saturating_sub(1) {
-                    let y = (s as f32 + k as f32 / 6.0) * storey_m + 2.2;
+                let wall = c + u * ((m - c).length() - thickness / 2.0 - 0.02);
+                for s in 0..(top / turn_m).round() as u32 {
+                    let y = (s as f32 + k as f32 / 6.0) * turn_m + 2.2;
                     sink.sconce(wall, y, -u);
                 }
             }

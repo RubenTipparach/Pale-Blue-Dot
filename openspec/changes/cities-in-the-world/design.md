@@ -1740,6 +1740,53 @@ so the first can be looked at before it can be walked into.
       `no_lamp_of_an_older_town_moves`, and the app's
       `every_jungle_village_lays_and_cuts` and
       `a_world_stores_every_jungle_village_once` hold it.
+  - **Finding: the stair towers have no light (2026-10-02).** The owner,
+    on the jungle's night shots: "Stairway of the tree city doesn't have
+    lights. Are you using proper light baking? I wonder if backsides of
+    geometry should be lit too".
+    - **The sconces.** A newel's sconces are one a storey but the top
+      (`storeys - 1`). That is the mockup's count for a house, whose newel
+      climbs to its top floor. A stair tower is one storey as tall as its
+      walls, so it gets none: the jungle's pole tower, the walled town's
+      towers and the tundra's ice towers all climb in the dark.
+      - The mockup's rule is one a turn of the climb, `round((top - base) /
+        3 m)`, each 2.2 m over its tread on the stair's own wall. That is
+        three on the jungle's 8 m tower, and for a house the same number as
+        now.
+      - **Fix:** the count and heights follow the climb and the turn, as
+        the mockup's. Lights are derived and never saved, so every tower in
+        every town gains them on its next cut.
+    - **How a town's pieces are lit: not baked.** Two terms at draw time:
+      1. The planet's light field (the sky and the lamps, the field the
+         terrain is lit by), read at the eight corners of each mesh's bounds
+         and blended. A town's mesh is one a texture, tens of metres across,
+         so an outdoor lamp reaches the pieces beside it weakly or not at
+         all (the finding above, "a lamp lights the ground by a wall but not
+         the wall").
+      2. A building's own lights (a hearth, the sconces, the candles), per
+         pixel on its room faces: each within its reach and storey, weighted
+         `0.3 + 0.7 x` how squarely the face looks at it. A face turned away
+         by more than a little gets nothing.
+    - **Backsides.** In the terrain's field a face takes the light of the air
+      in front of it, so a face turned away from a lamp is lit by the light
+      that came round. Town pieces get that from neither term.
+      - **Fix now (recommendation taken, ask only with screenshots):** a
+        room face within a light's reach and storey takes at least the
+        `0.3` share, the light off the room's walls, whichever way it faces.
+        The underside of a tread over a sconce and the back of the newel
+        post are lit as the rest of the stairwell.
+      - **Proposed next: bake the field per vertex.** When a town's pieces
+        are cut, and when the field under them changes (dusk, a lamp placed
+        or dug), each vertex takes the field's sky and block from the air
+        0.3 m in front of its face, kept with the vertex. The shader reads
+        that in place of the corner blend. A lamp then lights the wall
+        beside it and the far side of a post as the terrain is lit. It
+        replaces "split a town's meshes". Its cost, a field sample per
+        vertex per rebake on the CPU, is measured before it is built.
+    - **Verify.** Core: every stair's sconces are one a turn of its climb,
+      in every template; a house's count is as before. The shader-text test
+      holds the backside share. The jungle tower's stair at 22:30, before
+      and after.
   - **Finding: a column can take its neighbour's ground (2026-10-02).**
     Found when the crust test (T14) took in the jungle's six villages: in
     Ixapaya, the footprint cell (30, 23) has no crust. Its own column finds
