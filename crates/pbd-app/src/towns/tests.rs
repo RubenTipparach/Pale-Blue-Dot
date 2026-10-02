@@ -1646,10 +1646,17 @@ fn every_tundra_camp_lays_and_cuts() {
             let a = d as f32 * std::f32::consts::FRAC_PI_3;
             point(x + a.cos() * m, z + a.sin() * m)
         };
-        let first = template.buildings.iter().find(|b| b.kit == "igloo").unwrap();
+        let first = template
+            .buildings
+            .iter()
+            .find(|b| b.kit == "igloo")
+            .unwrap();
         let [ic, ir, id, _] = first.doors[0];
         let (igloo, out) = (mid(ic, ir), off(ic, ir, id, 5.3));
-        let (house, door) = (off(22, 12, 1, cell_m / 2.0), off(22, 12, 1, cell_m / 2.0 + 1.8));
+        let (house, door) = (
+            off(22, 12, 1, cell_m / 2.0),
+            off(22, 12, 1, cell_m / 2.0 + 1.8),
+        );
         let (gx, gz) = sea::centre(31, 16, cell_m);
         let (gate, keep) = (point(gx - 4.5, gz), mid(35, 16));
         let (lake, shore) = (mid(12, 27), mid(12, 22));
@@ -1716,4 +1723,97 @@ fn a_world_stores_every_tundra_camp_once() {
         "byte for byte"
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Every town's lamps on the shipped seed, each with its town's ground
+/// (task 5.2), by the template it was laid from.
+fn every_towns_lamps(mut each: impl FnMut(&Site, &Ground, &[ground::Lamp])) {
+    let config = *crate::planet::terrain_config();
+    for (kind, name) in [
+        (SiteKind::Village, "village"),
+        (SiteKind::Walled, "town"),
+        (SiteKind::Harbour, "coast"),
+        (SiteKind::Desert, "desert"),
+        (SiteKind::Tundra, "tundra"),
+    ] {
+        let template = load_template(name);
+        for site in sites_of(kind) {
+            let town = lay_out(&site, &template, &config).unwrap();
+            let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+            let (chart, g) =
+                record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+            let lamps = record::lamps_of(&town, &template, &chart, &patch);
+            each(
+                &site,
+                &Ground::new(config, vec![g.with_lamps(lamps.clone())]),
+                &lamps,
+            );
+        }
+    }
+}
+
+/// Task 5.2 on the shipped seed: the ground answers every lamp of every
+/// town at its own column, over the ground there. On the game's planet the
+/// lookup by dot product found half of them (design, "Finding: half of
+/// every town's lamps stand nowhere"). It asks the ground it is given, not
+/// the installed one, so it runs beside every other test.
+#[test]
+fn every_towns_lamps_are_found_at_their_columns() {
+    let config = *crate::planet::terrain_config();
+    let natural = natural(&config);
+    let mut found = 0;
+    let mut missing = Vec::new();
+    every_towns_lamps(|site, ground, lamps| {
+        for l in lamps {
+            let under = natural(l.direction);
+            let surface = ground.at(l.direction).map_or(under, |at| at.height(under));
+            if ground.lamp(l.direction) == Some(l) && surface <= l.altitude_m {
+                found += 1;
+            } else {
+                let (lat, lon) = pbd_core::geo::lat_lon(l.direction).degrees();
+                missing.push(format!(
+                    "{} {:?} at {lat:.5} {lon:.5}, ground at {surface}",
+                    site.name, l.material
+                ));
+            }
+        }
+    });
+    println!("{found} lamps found");
+    assert!(found > 500, "{found} lamps");
+    assert!(
+        missing.is_empty(),
+        "{} missing: {missing:#?}",
+        missing.len()
+    );
+}
+
+/// Instrument (slices 4e and 4g, 2026-10-02): every lamp read from the
+/// column the planet generates at it, with its town's ground installed.
+/// It installs the ground for the whole process, so it is run alone:
+/// `cargo test -p pbd-app --lib print_the_lamps_in_their_columns -- --ignored --nocapture`
+#[test]
+#[ignore = "an instrument: installs the ground for the whole process"]
+fn print_the_lamps_in_their_columns() {
+    use pbd_core::column::{generate_solid, layer_at};
+    let config = *crate::planet::terrain_config();
+    let (mut stood, mut missing) = (0, 0);
+    every_towns_lamps(|site, ground, lamps| {
+        ground::install(Some(ground.clone()));
+        for l in lamps {
+            let i = layer_at(l.altitude_m + 0.5).unwrap();
+            let there = generate_solid(&config, l.direction).material(i);
+            if there == l.material {
+                stood += 1;
+            } else {
+                missing += 1;
+                let (lat, lon) = pbd_core::geo::lat_lon(l.direction).degrees();
+                println!(
+                    "{} {:?} at {lat:.5} {lon:.5}: {there:?}",
+                    site.name, l.material
+                );
+            }
+        }
+        ground::install(None);
+    });
+    println!("{stood} lamps stand in their columns, {missing} do not");
 }

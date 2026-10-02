@@ -238,9 +238,14 @@ impl TownGround {
         if d.dot(self.anchor) < self.cos_reach {
             return None;
         }
-        // Half a metre off a cell's centre is still that cell's column.
-        let near = (0.5 / self.radius_m).cos();
-        self.lamps.iter().find(|l| l.direction.dot(d) > near)
+        // Half a metre off a cell's centre is still that cell's column. By
+        // the chord, not the dot product: on a planet of 4800 m the cosine
+        // of half a metre is 1.0 in f32, and two equal directions' dot
+        // product lands either side of it.
+        let near = 0.5 / self.radius_m;
+        self.lamps
+            .iter()
+            .find(|l| (l.direction - d).length_squared() < near * near)
     }
 
     /// Whether a player's edit lies in the footprint or the margin: a town

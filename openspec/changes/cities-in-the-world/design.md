@@ -1541,6 +1541,44 @@ so the first can be looked at before it can be walked into.
       keeps the answer, and it moves into the survey doc when the connector
       is back. Nothing is built until the owner answers, since it changes
       existing saves.
+- **Finding: half of every town's lamps stand nowhere (2026-10-02).** The
+  tundra camp's shot at Torifjell has no camp fire where the mockup has one
+  3 m ahead, and the desert's plaza shows none of its five braziers.
+  - An instrument (now `print_the_lamps_in_their_columns`) reads the
+    column the planet generates at each lamp, with the town's ground installed. Each
+    lamp's altitude is its cell's terrace, and the ground there is at it.
+    Only 24 of the 48 lamps of the 8 deserts and tundra camps are in their
+    columns. The layer of each of the rest is plain air, lantern posts as
+    much as braziers and torches: none at all at Vasefjell, the fire
+    missing at Torifjell.
+  - **Why.** `TownGround::lamp` finds the lamp in a column by
+    `lamp · column > cos(0.5 m / R)`. On the 300 m test body that cosine
+    is 0.9999986. On the game's planet, R = 4800 m, it is 1 - 5.4e-9, which
+    is exactly 1.0 in `f32`. So a lamp is found only where the dot product
+    of two equal unit vectors happens to round above 1.0: a coin toss a
+    lamp, the same toss on every run. The village's 3, the walled town's 38
+    and the harbour's lamps are subject to it too. The core tests run on
+    the 300 m body, where it does not happen.
+  - **The fix.** Compare the chord instead: a lamp is in a column when
+    `|lamp - column| * R < 0.5 m`. The difference of two unit vectors
+    holds its precision where their dot product does not.
+  - **Saves.** A town's lamps are derived from its template, never saved
+    (task 5.2), so every saved town gains its missing lamps on open. A
+    player's edit in a lamp's cell still wins over it. Nothing saved
+    changes.
+  - **Verify.** A core test finds a lamp at its own column and none at the
+    next cell on a body of the game's radius; an app test reads every
+    lamp of every town on the shipped seed in its column; the desert's
+    and the tundra's shots are retaken.
+  - **Fixed (2026-10-02).** `a_towns_lamps_stand_over_their_cells` now
+    repeats its lookups on the same patch at 4800 m, and failed on the
+    old lookup. `every_towns_lamps_are_found_at_their_columns` asks each
+    of the 36 towns' grounds for each of its lamps: the old lookup found
+    255 of the 522, the chord finds all 522. It asks the ground it is
+    given, not the installed one, so it cannot disturb a test beside it.
+    The instrument `print_the_lamps_in_their_columns`, run alone, installs
+    each town's ground and reads all 522 in the columns the planet
+    generates.
 - **Task 4.2b in detail, the moored boats (written 2026-10-01).** Survey
   T7: "you can use any boat you find".
   - **What the mockup moors.** 23 boats on the water: 14 rowboats, 6

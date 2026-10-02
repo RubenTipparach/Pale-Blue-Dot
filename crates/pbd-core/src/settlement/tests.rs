@@ -2233,6 +2233,20 @@ fn a_towns_lamps_stand_over_their_cells() {
         let d = patch.cells[chart.cell(beside.0, beside.1).unwrap()].direction;
         assert_eq!(ground.lamp(d), None, "none beside ({c}, {r})");
     }
+    // The same on a body of the game's radius, where half a metre's cosine
+    // is 1.0 in f32 and a lamp found by the dot product is a coin toss
+    // (design, "Finding: half of every town's lamps stand nowhere").
+    let (chart, ground) = record::ground_of(&town, patch, 4800.0, slope()).expect("ground");
+    let ground = ground.with_lamps(lamps.clone());
+    for (&[c, r], l) in template.lamps.iter().zip(&lamps) {
+        assert_eq!(ground.lamp(l.direction), Some(l), "({c}, {r}) at 4800 m");
+        let beside = (0..6)
+            .map(|d| neighbour(c, r, d))
+            .find(|n| !template.lamps.contains(&[n.0, n.1]))
+            .unwrap();
+        let d = patch.cells[chart.cell(beside.0, beside.1).unwrap()].direction;
+        assert_eq!(ground.lamp(d), None, "none beside ({c}, {r}) at 4800 m");
+    }
     // The harbour: its street lamps on their terraces, its lanterns over the
     // piers a metre over the sea.
     let (template, town, _) = laid_harbour();
