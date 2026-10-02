@@ -311,11 +311,11 @@ on the left and the game on the right.
   clearing, the planet's own jungle standing round them.
 - The clearing, the tower's door, the first platform, the first bridge (a
   tenth of the way along its sag), a tree hut's door and the lookout.
-- At 22:30 the platforms' torches and the bridges' lanterns stand and burn,
-  but the planks round them stay grey where the mockup's are warm: a town's
-  pieces take the light field at only the eight corners of each mesh's
-  bounds. Baking the field per vertex is written up as the next step
-  (design, "Finding: the stair towers have no light").
+- At 22:30 the platforms' torches and the bridges' lanterns light the
+  planks, rails, huts and trunks round them, as the mockup's do: the night
+  shots are taken with a town's outside baked from the light field vertex
+  by vertex (below). Before it, the planks stayed grey beside their own
+  torches.
 - Seen and not built: the people, the beds and the sleeping mat
   (furniture and folk), and the mockup's lantern beside every outdoor door.
 
