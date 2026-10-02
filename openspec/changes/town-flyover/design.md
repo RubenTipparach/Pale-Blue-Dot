@@ -107,3 +107,89 @@ per-frame drawing costs, not the shot's pacing.
   frame is the sea). The town shots used `--rain 0 --weather-at 7200`; the
   flyover takes the same. The still camera faces east from straight over each
   town, so it frames them poorly; the flyover's arcs are what frame them.
+
+## The owner's notes on the first cut (2026-10-02)
+
+The owner, on the first flyover: "There are gaps in the terrain on the sides
+of hex faces. The fly over should fly through the city to get a more
+detailed look. The fly over should also fly up in to the sky and to the next
+city instead of gimbal locking the camera and teleport.. I don't like how
+you're doing transitions we had good transitions before".
+
+The first cut was built in the desktop session and not pushed. Each note
+changes the design above; the path, the legs and the camera are redone as
+follows before anything is recorded.
+
+### 1. Through the town, not round it
+
+The 130 m half-circle at 60 to 90 m shows a town as a model on a table. The
+owner wants a detailed look, so the shot goes through it.
+
+- **The pass.** Each town is crossed on a straight line through its centre,
+  along its long axis (the template's columns, 142 m), entering on the side
+  the leg arrives from where that is within 60 degrees of the axis, else
+  turning onto the axis in the approach.
+- **Height.** 6 m over the town's highest roof or wall on the line (the
+  template's buildings and masonry give it, so a walled town's towers and
+  the jungle's canopy are cleared), and never under 12 m over the terrace.
+  That is rooftop height: the lanes, the doors and the dressing are seen.
+- **Speed and look.** 12 m/s through the town, about 12 s for 142 m. The
+  look leads the camera by 1.5 s, pitched 15 degrees under the line, so it
+  looks into the streets ahead, not at a fixed centre.
+- **In and out.** The descent into the pass and the climb out of it are
+  the legs' own glide and climb (below), so the pass is part of the one
+  line, not a separate move.
+
+### 2. Up into the sky and on to the next town: the far-side route's flight
+
+The far-side route already flies the transition the owner liked:
+`flight_view/route.rs`, "one rule shapes the whole flight: the target
+height at a point is the lowest of the cruise height, the arc flown times
+the climb slope, and the arc remaining times that slope". Each leg between
+towns is that rule, from the end of one town's pass to the start of the
+next one's.
+
+- **Climb, cruise, glide.** It climbs at the far-side route's angle to a
+  cruise height that grows with the leg: 25% of its length, within 300 and
+  1,500 m. The 5.5 km leg to the tundra camp cruises 1.4 km up, high
+  enough to see the planet round off, and then glides down into the camp's
+  pass. There is no cut and no jump anywhere: every leg is flown.
+- **Speed.** Eased from the pass's 12 m/s to a cruise of up to 250 m/s and
+  back, so the shortest legs are a hop and the long one a flight.
+- **The camera rig.** The far-side route's: the look leads the path, drops
+  to the ground as the horizon falls away, and swings to the next town on
+  the way down; it eases without overshoot.
+
+### 3. No gimbal lock
+
+A look-at with the local up as its up fails when the look runs along the up:
+straight down over a town, or a steep climb. There the camera's roll is
+undefined, and it spins or snaps. That was the "gimbal locking".
+
+- The camera's orientation is a quaternion, carried from frame to frame:
+  each frame it turns toward the wanted look by the shortest rotation,
+  rate-limited and eased, as `tour.rs`'s `attitude_acceleration` turns the
+  ship. Its roll is held level to the local horizon by a second, small
+  correction, not rebuilt from the look each frame.
+- The wanted look never comes within 20 degrees of straight down or up,
+  so the level-horizon correction always has a horizon to level to.
+
+### 4. Gaps in the terrain on the sides of hex faces
+
+From the air, the cliff faces between hex columns of different heights show
+gaps. Not yet measured: the first cut's footage is on the desktop.
+
+- **Measure first.** Column-view captures over each town at the pass's
+  height and the legs' heights (60, 300 and 1,000 m), looking at stepped
+  ground, to find where the side faces are missing. Then see whether the gaps
+  fall on a boundary between detail tiers or terrain tiles (`hexagon-lod`
+  says neighbouring tiles must agree, or the boundary cracks) or inside one
+  tier.
+- The fix is written up once it is found, in the change that owns that
+  ground (`hexagon-lod` or the column tier's), not in this one.
+
+### The jungle
+
+The jungle village is built (`cities-in-the-world` slice 4i), so the tour
+takes six kinds: a jungle village joins the harbour, desert town, village,
+walled town and tundra camp, by the same shortest-tour choice.
