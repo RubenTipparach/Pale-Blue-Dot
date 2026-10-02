@@ -1870,8 +1870,14 @@ fn every_jungle_village_lays_and_cuts() {
         // clearing looking up at the first kapok, the tower's door, the
         // first platform looking to the second tree, the first bridge from
         // its start, a tree hut's door and the lookout. A spot on the
-        // platforms is a column view at their height plus an eye.
-        let up = 9.0 - datum + EYE_HEIGHT;
+        // platforms is a column view at their height plus an eye. The column
+        // view stands its eye over the ground it finds when it starts, the
+        // natural ground before the town's is installed, so the height is
+        // taken from that ground.
+        let natural = natural(&config);
+        let up = |(x, z): (f32, f32), walk: f32| {
+            town.terrace as f32 + walk - datum + EYE_HEIGHT - natural(point(x, z))
+        };
         // A spot: its name, where it stands and looks, its pitch, and
         // whether it is up on the platforms.
         type Spot<'a> = (&'a str, (f32, f32), (f32, f32), f32, bool);
@@ -1891,11 +1897,18 @@ fn every_jungle_village_lays_and_cuts() {
         );
         for (name, from, to, pitch, raised) in spots {
             if raised {
+                // The bridge's spot is a tenth of the way along its walk.
+                let walk = if name == "bridge" {
+                    template.bridges[0].height(0.1)
+                } else {
+                    9.0
+                };
                 println!(
-                    "{}: {name} --view column {} --yaw {:.1} --height {up:.2} --pitch {pitch:.1}",
+                    "{}: {name} --view column {} --yaw {:.1} --height {:.2} --pitch {pitch:.1}",
                     site.name,
                     at(from),
-                    yaw(from, to)
+                    yaw(from, to),
+                    up(from, walk)
                 );
             } else {
                 println!(

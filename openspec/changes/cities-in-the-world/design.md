@@ -1696,6 +1696,46 @@ so the first can be looked at before it can be walked into.
     - Shots beside the mockup's, by day and at 22:30: the clearing, the
       tower's door, the platform, the bridge, a tree hut's door and the
       lookout, and the village from above.
+  - **4i as built (2026-10-02).**
+    - **The export.** `tools/export_town_templates.js jungle` writes
+      `jungle.json`. The village, the walled town, the harbour, the desert
+      and the tundra re-export byte for byte.
+      - Six buildings: three tree huts at 9 m (the third the lookout), two
+        stilt huts, and the pole tower. The mockup asks for two huts on the
+        first platform but places one there, as no two of its free ring
+        cells are neighbours; the game has what it placed.
+      - Three kapoks of 33 parts each (six of them solid fins), three
+        platforms of six cells (the seventh is a hut's), 18 beams, and three
+        bridges of 22.5, 18.6 and 27.9 m. Their steepest spans are 6.5 to
+        9.8 degrees.
+      - Ten fires: six platform torches, the platform's fire, the clearing's
+        pit and a torch at each stilt hut. Nine bridge lanterns.
+    - **The footprint** on the test patch is 74 cells of the 1,700; the
+      rest keep the planet's jungle.
+    - **One lamp a column.** The third bridge passes over the clearing's
+      fire pit, and the lantern over it shares the pit's column. So 8 of
+      the 9 lanterns stand, and the pit keeps its column.
+    - **The platform's floor laps its cells by 6 cm.** The pole tower's newel
+      is cut in a frame on the ground and the platform in one 8 m up. Each
+      finds the shared edge from its own frame, so on the 300 m test body a
+      walker stepping out of the tower fell through a 4 cm gap (2 mm on the
+      game's planet). The lap closes it; the platform's outer edges are
+      railed, so it is never walked off.
+    - **A flat platform is 2.5 cm higher at its edge** than at its middle on
+      the test body (1.7 mm on the game's), which the walk tests allow.
+    - **The shots' height.** The column view stands its eye over the ground
+      it finds when it starts, the natural ground, before the town's ground
+      is installed. So a spot on the platforms gives its height over the
+      natural ground under it, as `every_jungle_village_lays_and_cuts`
+      prints it. A capture camera only.
+    - **Cost.** Each jungle village lays and cuts in 0.04 s (dev profile).
+      The frame cost was not measured in this cloud session.
+    - `the_jungle_lays_with_its_floor_wild_and_its_platforms_built`,
+      `a_walker_climbs_the_pole_tower_and_crosses_a_rope_bridge`,
+      `a_walker_goes_into_the_tree_huts_and_up_onto_the_stilt_huts`,
+      `no_lamp_of_an_older_town_moves`, and the app's
+      `every_jungle_village_lays_and_cuts` and
+      `a_world_stores_every_jungle_village_once` hold it.
   - **Finding: a column can take its neighbour's ground (2026-10-02).**
     Found when the crust test (T14) took in the jungle's six villages: in
     Ixapaya, the footprint cell (30, 23) has no crust. Its own column finds
