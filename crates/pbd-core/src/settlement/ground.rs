@@ -45,6 +45,14 @@ impl GroundAt {
             k => natural.clamp(self.terrace - f32::from(k), self.terrace + f32::from(k)),
         }
     }
+
+    /// The ground no cave opens under (survey T14, "crust"): the terrace in
+    /// the footprint, and none in the margin, which is eased natural ground
+    /// and keeps its caves. [`crate::column::carve_worms`] keeps
+    /// [`crate::column::CRUST_LAYERS`] under it whole.
+    pub fn crust(&self) -> Option<f32> {
+        (self.ring == 0).then_some(self.terrace)
+    }
 }
 
 /// A lamp a town stands in its ground (`cities-in-the-world` task 5.2): a
@@ -75,6 +83,12 @@ pub struct TownGround {
     keys: Vec<u32>,
     /// Its street lamps and lanterns (task 5.2).
     lamps: Vec<Lamp>,
+    /// Whether a direction's cell is the nearest by chord (a town of layout
+    /// 2 on, `record::CHORD_LAYOUT`) rather than by the largest dot product,
+    /// which at the game's radius cannot tell neighbours apart (design,
+    /// "Finding: a column can take its neighbour's ground"). A stored town
+    /// of layout 1 keeps the dot, so its ground stays column for column.
+    chord: bool,
 }
 
 impl TownGround {
@@ -177,6 +191,7 @@ impl TownGround {
                 .collect(),
             keys,
             lamps: Vec::new(),
+            chord: false,
         };
         for (i, cell) in ground.cells.iter().enumerate() {
             let key = ground.bucket(cell.centre);
@@ -191,6 +206,12 @@ impl TownGround {
         (x.floor() as i32, y.floor() as i32)
     }
 
+    /// Every cell of its ground: the footprint, the margin and the ring
+    /// past it.
+    pub fn cells(&self) -> &[GroundAt] {
+        &self.cells
+    }
+
     /// The town's cell at a direction, or `None` off its ground.
     pub fn at(&self, direction: Vec3) -> Option<&GroundAt> {
         let d = direction.normalize_or_zero();
@@ -202,9 +223,14 @@ impl TownGround {
         for dx in -1..=1 {
             for dy in -1..=1 {
                 for &i in self.buckets.get(&(bx + dx, by + dy)).into_iter().flatten() {
-                    let dot = self.cells[i as usize].centre.dot(d);
-                    if best.is_none_or(|(b, j)| dot > b || (dot == b && i < j)) {
-                        best = Some((dot, i));
+                    // The larger the nearer: the dot, or the chord negated.
+                    let near = if self.chord {
+                        -(self.cells[i as usize].centre - d).length_squared()
+                    } else {
+                        self.cells[i as usize].centre.dot(d)
+                    };
+                    if best.is_none_or(|(b, j)| near > b || (near == b && i < j)) {
+                        best = Some((near, i));
                     }
                 }
             }
@@ -219,6 +245,13 @@ impl TownGround {
     }
 
     /// This ground with its town's lamps (task 5.2).
+    /// The ground of a town whose layout finds a direction's cell by
+    /// chord, or by dot (layout 1).
+    pub fn by_chord(mut self, chord: bool) -> Self {
+        self.chord = chord;
+        self
+    }
+
     pub fn with_lamps(mut self, lamps: Vec<Lamp>) -> Self {
         self.lamps = lamps;
         self
@@ -279,6 +312,10 @@ impl TownGround {
             mix(u64::from(c.ring));
             mix(u64::from(c.terrace.to_bits()));
             mix(c.top.map_or(0, |m| m as u64 + 1));
+        }
+        // A layout-1 town's digest is as it was.
+        if self.chord {
+            mix(1);
         }
         h
     }
@@ -370,6 +407,11 @@ impl Ground {
             .find_map(|&i| self.towns[usize::from(i)].at(direction))
     }
 
+    /// The crust a town keeps over its caves at a direction (survey T14).
+    pub fn crust(&self, direction: Vec3) -> Option<f32> {
+        self.at(direction).and_then(GroundAt::crust)
+    }
+
     /// The first town's lamp in the column at a direction (task 5.2).
     pub fn lamp(&self, direction: Vec3) -> Option<&Lamp> {
         self.squares[square(direction)]
@@ -415,6 +457,12 @@ fn with<T>(config: &TerrainConfig, direction: Vec3, f: impl FnOnce(&GroundAt) ->
 /// [`crate::column::surface_m`] answers.
 pub fn surface(config: &TerrainConfig, direction: Vec3, natural: f32) -> f32 {
     with(config, direction, |g| g.height(natural)).unwrap_or(natural)
+}
+
+/// The ground no cave opens under at a direction (survey T14): what
+/// [`crate::column::generate_edited`] hands its carve.
+pub fn crust(config: &TerrainConfig, direction: Vec3) -> Option<f32> {
+    with(config, direction, GroundAt::crust).flatten()
 }
 
 /// The top a town gives the ground at a direction, where it gives one.

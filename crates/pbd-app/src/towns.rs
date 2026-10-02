@@ -18,7 +18,9 @@
 //! pieces cut and faded in only within [`STAND_M`] of the viewer. The other
 //! kinds follow, a kind at a time.
 
-use crate::field_light::{Faded, LitByField, LitLikeTerrain, RoomLights, SkyShare};
+use crate::field_light::{
+    BakedField, Faded, LitByField, LitLikeTerrain, RoomLights, SkyShare, UNBAKED,
+};
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
 use crate::saves::WorldSave;
@@ -342,13 +344,15 @@ pub struct TownAssets {
     pub desert: Template,
     /// The tundra camp (slice 4g).
     pub tundra: Template,
+    /// The jungle village (slice 4i).
+    pub jungle: Template,
     pub repeats: Arc<BTreeMap<String, f32>>,
 }
 
 impl TownAssets {
     /// The template a kind of site is laid from, where one is shipped: the
-    /// village's, the walled town's, the harbour's, the desert's and the
-    /// tundra's so far (slice 4 adds a kind at a time).
+    /// village's, the walled town's, the harbour's, the desert's, the
+    /// tundra's and the jungle's so far (slice 4 adds a kind at a time).
     pub fn template_for(&self, kind: SiteKind) -> Option<&Template> {
         match kind {
             SiteKind::Village => Some(&self.village),
@@ -356,6 +360,7 @@ impl TownAssets {
             SiteKind::Harbour => Some(&self.harbour),
             SiteKind::Desert => Some(&self.desert),
             SiteKind::Tundra => Some(&self.tundra),
+            SiteKind::Jungle => Some(&self.jungle),
             _ => None,
         }
     }
@@ -368,6 +373,7 @@ impl TownAssets {
             &self.harbour,
             &self.desert,
             &self.tundra,
+            &self.jungle,
         ]
         .into_iter()
         .find(|t| t.scene == scene)
@@ -820,6 +826,7 @@ pub fn stand_in_range(world: &mut World) {
                 assets.harbour.clone(),
                 assets.desert.clone(),
                 assets.tundra.clone(),
+                assets.jungle.clone(),
             ],
         )
     };
@@ -1290,9 +1297,17 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
     let parts: Vec<(Mesh, Handle<Image>, bool)> = {
         let assets = world.resource::<AssetServer>();
         let cut = cut_textures();
+        // The outside takes the field vertex by vertex once baked
+        // (`BakedField`), its second UV channel unbaked until then.
         laid.meshes
             .iter()
-            .map(|(name, buf)| (to_mesh(buf), texture(assets, name), cut.contains(name)))
+            .map(|(name, buf)| {
+                let mesh = to_mesh(buf).with_inserted_attribute(
+                    Mesh::ATTRIBUTE_UV_1,
+                    vec![UNBAKED; buf.positions.len()],
+                );
+                (mesh, texture(assets, name), cut.contains(name))
+            })
             .collect()
     };
     // Each building's rooms, apart: they take the room's own share of the
@@ -1357,6 +1372,9 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         let mut child = world.spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()));
         if flame {
             child.insert(TownFlame);
+        }
+        if room.is_none() && !flame {
+            child.insert(BakedField::default());
         }
         if let Some(building) = room.filter(|_| !flame) {
             child.insert(RoomLights(
@@ -1497,6 +1515,7 @@ impl Plugin for TownsPlugin {
             harbour: load_template("coast"),
             desert: load_template("desert"),
             tundra: load_template("tundra"),
+            jungle: load_template("jungle"),
             repeats: Arc::new(load_repeats()),
         })
         .init_resource::<Towns>()

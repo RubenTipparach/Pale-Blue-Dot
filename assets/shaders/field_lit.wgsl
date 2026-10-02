@@ -13,7 +13,8 @@
 //
 // Either way the sun reaches only where it is up, the sky reaches, and the
 // cascades see it, and the lamps' warm light is added, both read off the
-// field at the eight corners of the mesh's bounds and blended across them.
+// field at the eight corners of the mesh's bounds and blended across them,
+// or, on a town's outside, off the field baked into each vertex.
 // The constants are the terrain shader's, and `the_field_lit_shader_carries_
 // the_terrain_light_constants` holds both copies to `pbd_core::light`.
 
@@ -89,8 +90,10 @@ const ROOM_LIGHT_GAIN: f32 = 1.0;
 
 // What a building's own fires and candles lay on a room face at `body`
 // facing `n` (`cities-in-the-world` decision 7a, the mockup's `blockLighter`):
-// each within its reach and its storey, facing it, the fires burning all day
-// and brighter at night, the candles only by night.
+// each within its reach and its storey, the fires burning all day and
+// brighter at night, the candles only by night. A face turned away still
+// takes the 0.3 share, the light off the room's walls (design, "Finding: the
+// stair towers have no light"): the underside of a tread over a sconce.
 fn room_lights(body: vec3<f32>, n: vec3<f32>, night: f32) -> vec3<f32> {
     let fire = 0.9 + 0.3 * night;
     let candle = 1.8 * clamp((night - 0.25) / 0.35, 0.0, 1.0);
@@ -109,9 +112,6 @@ fn room_lights(body: vec3<f32>, n: vec3<f32>, night: f32) -> vec3<f32> {
             continue;
         }
         let facing = dot(to, n) / max(d, 1e-3);
-        if facing < -0.15 {
-            continue;
-        }
         let q = 1.0 - (d / at.w) * (d / at.w);
         let f = q * q * (0.3 + 0.7 * max(facing, 0.0)) * d * d / (d * d + 0.36);
         let c = field.light_colour[i];
@@ -124,6 +124,13 @@ fn lamp_strength(level: f32) -> f32 {
     let f = clamp(level, 0.0, 1.0);
     let g = f * (2.0 - f);
     return g * g;
+}
+
+// How much of a lamp's light shows where the sun reaches (`lamps-and-
+// lanterns` decision 15, survey L4): none in the open at noon, all of it in
+// shade, indoors and at night. `light::lamp_share` in the core, word for word.
+fn lamp_share(sky: f32, daylight: f32) -> f32 {
+    return 1.0 - clamp(daylight, 0.0, 1.0) * clamp(sky, 0.0, 1.0);
 }
 
 // One channel at a point in the bounds, blended across the eight corners.
@@ -159,8 +166,17 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     var out: FragmentOutput;
     let span = max(field.high.xyz - field.low.xyz, vec3<f32>(1e-3));
     let t = clamp((in.world_position.xyz - field.low.xyz) / span, vec3<f32>(0.0), vec3<f32>(1.0));
-    let sky = blend(field.sky, t);
-    let block = blend(field.block, t);
+    var sky = blend(field.sky, t);
+    var block = blend(field.block, t);
+#ifdef VERTEX_UVS_B
+    // A town's outside, baked from the field vertex by vertex where its
+    // face looks into the air (`cities-in-the-world`, "Finding: the stair
+    // towers have no light"); the corners until it is baked.
+    if in.uv_b.x >= 0.0 {
+        sky = in.uv_b.x;
+        block = in.uv_b.y;
+    }
+#endif
     let body = in.world_position.xyz - field.centre.xyz;
     let up = normalize(body);
     let sun = field.sun.xyz;
@@ -178,7 +194,8 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // The sun where it is up, the sky reaches and the cascades see it.
     let sun_up = sunlight * sky * shadow;
     let base = pbr_input.material.base_color.rgb;
-    let lamp = base * TORCH_TINT * (lamp_strength(block) * TORCH_GAIN);
+    let lamp = base * TORCH_TINT * (lamp_strength(block) * TORCH_GAIN)
+        * lamp_share(sky * field.look.y, daylight);
     if field.look.x > 0.5 {
         // As the terrain is lit: a cap's cool fill on what faces up, a wall's
         // paler one on what faces across or down.

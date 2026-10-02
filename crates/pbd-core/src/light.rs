@@ -87,8 +87,19 @@ pub fn sky_fill(sky: f32, daylight: f32) -> f32 {
     ((NIGHT_FILL + (1.0 - NIGHT_FILL) * day) * sky.clamp(0.0, 1.0)).max(AMBIENT_FLOOR)
 }
 
+/// How much of a lamp's light shows where the sun reaches (survey L4,
+/// `lamps-and-lanterns` decision 15): none in the open at noon, all of it in
+/// the shade, indoors, down a cave and at night. `sky` is how much of the sky
+/// reaches the surface and `daylight` how much it is day there, both 0..1.
+/// The shaders' `lamp_share` is the same arithmetic, and a test holds their
+/// text to it.
+pub fn lamp_share(sky: f32, daylight: f32) -> f32 {
+    1.0 - daylight.clamp(0.0, 1.0) * sky.clamp(0.0, 1.0)
+}
+
 /// What a block level (0..1) adds, as linear RGB over a white surface: the
-/// terrain shader's `TORCH_TINT * lamp_strength(lamp) * TORCH_GAIN`.
+/// terrain shader's `TORCH_TINT * lamp_strength(lamp) * TORCH_GAIN`, before
+/// [`lamp_share`].
 pub fn lamp_light(block: f32) -> [f32; 3] {
     let k = lamp_strength(block) * TORCH_GAIN;
     [TORCH_TINT[0] * k, TORCH_TINT[1] * k, TORCH_TINT[2] * k]
@@ -951,6 +962,23 @@ mod tests {
     /// tunnel, the brazier's light reaches further. Across, each lights about
     /// a metre a level, which is the towns mockup's reach for each
     /// (`lamps-and-lanterns` decision 7).
+    /// Survey L4: a lamp's light fades where the sun reaches. At noon in the
+    /// open it adds nothing it would show; in shade, indoors and at night it
+    /// adds all it did; at dusk half.
+    #[test]
+    fn a_lamp_shows_where_the_sun_does_not() {
+        assert_eq!(lamp_share(1.0, 1.0), 0.0, "noon in the open");
+        assert_eq!(lamp_share(0.0, 1.0), 1.0, "noon down a cave");
+        assert_eq!(lamp_share(1.0, 0.0), 1.0, "midnight in the open");
+        assert_eq!(
+            lamp_share(0.5, 1.0),
+            0.5,
+            "under a vault half the sky reaches"
+        );
+        assert_eq!(lamp_share(1.0, 0.5), 0.5, "dusk");
+        assert_eq!(lamp_share(2.0, -1.0), 1.0, "both clamped");
+    }
+
     #[test]
     fn a_brazier_reaches_further_than_a_candle() {
         let reach = |material: Material| {

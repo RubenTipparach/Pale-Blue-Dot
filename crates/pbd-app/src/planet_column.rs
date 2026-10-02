@@ -148,6 +148,10 @@ pub struct ColumnTier {
     /// joined on: what `sample` blends a point across (decision 10).
     centres: Vec<Vec3>,
     sides: Vec<[u32; 6]>,
+    /// How many times the field has been baked: what a town's outside,
+    /// baked from it vertex by vertex, watches to bake again
+    /// (`cities-in-the-world`, "Finding: the stair towers have no light").
+    relit: u64,
 }
 
 impl ColumnTier {
@@ -162,7 +166,13 @@ impl ColumnTier {
             glow: Vec::new(),
             centres: Vec::new(),
             sides: Vec::new(),
+            relit: 0,
         }
+    }
+
+    /// How many times the field has been baked.
+    pub fn light_version(&self) -> u64 {
+        self.relit
     }
 
     /// Whether the dusk-lit lamps are lit in this tier's field.
@@ -370,6 +380,7 @@ impl ColumnTier {
     /// pass is where the reference records its own scar - a dug cell that
     /// "stayed dark forever".
     pub fn relight(&mut self) {
+        self.relit += 1;
         self.sides = self.neighbor_slots();
         let emitters = self.emitters();
         self.light = light::bake(
@@ -740,6 +751,7 @@ pub fn build(
         glow,
         centres,
         sides: Vec::new(),
+        relit: 0,
     };
     // The light comes last, because it is a function of the finished columns:
     // the rim's solid ring and every edit are already in them, and lighting
@@ -1815,6 +1827,7 @@ mod tests {
             glow: vec![false; N as usize],
             centres: vec![Vec3::Y; N as usize],
             sides: Vec::new(),
+            relit: 0,
         };
         tier.relight();
         assert_eq!(tier.light_at(0, 41).block(), 0, "the lantern is out by day");
@@ -2041,6 +2054,7 @@ mod tests {
             glow,
             centres: vec![Vec3::Y; N],
             sides: Vec::new(),
+            relit: 0,
         };
         tier.relight();
         let emits = |tier: &ColumnTier, slot: u32| {

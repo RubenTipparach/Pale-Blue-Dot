@@ -57,6 +57,15 @@ fn tundra() -> Template {
     serde_json::from_str(&text).expect("tundra.json parses")
 }
 
+fn jungle() -> Template {
+    let text = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/settlements/v1/jungle.json"
+    ))
+    .expect("jungle.json");
+    serde_json::from_str(&text).expect("jungle.json parses")
+}
+
 fn desert() -> Template {
     let text = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -594,7 +603,9 @@ fn a_town_built_from_its_record_is_the_town_its_template_lays() {
         })
         .collect();
     let floored = |d: Vec3| slope()(d).floor();
-    let before = TownGround::new(patch, RADIUS_M, &cells, town.terrace as f32, floored);
+    // The same cells, found by the rule the town's layout names.
+    let before = TownGround::new(patch, RADIUS_M, &cells, town.terrace as f32, floored)
+        .by_chord(town.layout >= record::CHORD_LAYOUT);
     let config = crate::planet_gen::TerrainConfig::default();
     assert_eq!(
         ground::Ground::new(config, vec![before]).digest(),
@@ -3090,4 +3101,675 @@ fn an_igloos_room_is_the_air_under_its_dome() {
 #[test]
 fn a_walker_goes_through_the_ice_gate_and_up_a_tower_onto_the_walk() {
     walk_the_walls(&tundra(), 1, 10, 40, 2);
+}
+
+fn cut_jungle() -> (Template, record::Town, record::Built) {
+    let template = jungle();
+    let town = laid_village(&template);
+    let (patch, _) = patch();
+    let natural = slope();
+    let mut b = record::build_town(
+        &town,
+        Some(&template),
+        patch,
+        &kits(),
+        &|_: &str| 2.0,
+        RADIUS_M,
+        SHEET_M,
+        move |d| natural(d).floor(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    for s in &mut b.solids {
+        for d in &mut s.doors {
+            d.open = true;
+        }
+    }
+    (template, town, b)
+}
+
+/// Slice 4i: the jungle lays with its floor and its stream wild, on one
+/// terrace; its footprint is what it builds on or over: its buildings, its
+/// platforms, the cells under its bridges, the cells it keeps its trees
+/// off and its stilt huts' decks. It cuts whole, and its torches stand on
+/// their platforms 8 m up.
+#[test]
+fn the_jungle_lays_with_its_floor_wild_and_its_platforms_built() {
+    let template = jungle();
+    assert!(!template.terraced);
+    assert_eq!(template.wild, ["The jungle floor", "The stream"]);
+    let kits = kits();
+    for b in &template.buildings {
+        assert!(kits.get(&b.kit).is_some(), "{}: no kit {}", b.name, b.kit);
+    }
+    assert_eq!(template.kapoks.len(), 3);
+    assert_eq!(template.platforms.len(), 3);
+    assert_eq!(template.bridges.len(), 3);
+    let cell_m = template.grid.cell_m;
+    let built: BTreeSet<[i32; 2]> = template.built_cells().into_iter().collect();
+    let must = template
+        .platforms
+        .iter()
+        .flat_map(|p| p.cells.iter().copied())
+        .chain(template.bridges.iter().flat_map(|b| b.cells(cell_m)))
+        .chain(template.cleared.iter().copied())
+        .chain(
+            template
+                .buildings
+                .iter()
+                .flat_map(|b| b.cells.iter().copied()),
+        );
+    for c in must {
+        assert!(built.contains(&c), "{c:?} is not built");
+    }
+    for g in &template.ground {
+        if g.area == "The stream" {
+            assert!(
+                !built.contains(&[g.c, g.r]),
+                "the stream at ({}, {})",
+                g.c,
+                g.r
+            );
+        }
+    }
+    let wild = template
+        .ground
+        .iter()
+        .filter(|g| !built.contains(&[g.c, g.r]))
+        .count();
+    println!(
+        "the jungle builds {} cells of {}; {wild} keep the planet's ground",
+        built.len(),
+        template.ground.len()
+    );
+    assert!(built.len() < 200 && wild > template.ground.len() * 8 / 10);
+    let town = laid_village(&template);
+    assert!(town.levels.iter().all(|&l| l == 0), "laid on one terrace");
+    let (_, _, b) = cut_jungle();
+    let spans: usize = template
+        .bridges
+        .iter()
+        .map(|x| ((x.length() / 1.4).round() as usize).max(2))
+        .sum();
+    assert_eq!(
+        b.solids.len(),
+        template.buildings.len() + 3 + 3 + spans,
+        "the buildings, the kapoks, the platforms and the bridges' spans"
+    );
+    assert_eq!(b.dressing_skipped, 0);
+    let (patch, _) = patch();
+    let (chart, _) = record::ground_of(&town, patch, RADIUS_M, slope()).expect("ground");
+    let lamps = record::lamps_of(&town, &template, &chart, patch);
+    let terrace = town.terrace as f32;
+    let count = |m: crate::terrain::Material, at: f32| {
+        lamps
+            .iter()
+            .filter(|l| l.material == m && (l.altitude_m - terrace - at).abs() < 0.01)
+            .count()
+    };
+    use crate::terrain::Material::{Brazier, LanternHanging, Torch};
+    assert_eq!(count(Torch, 8.0), 6, "two torches on each platform");
+    assert_eq!(count(Torch, 0.0), 2, "a torch at each stilt hut");
+    assert_eq!(count(Brazier, 8.0), 1, "the platform's fire");
+    assert_eq!(count(Brazier, 0.0), 1, "the clearing's fire pit");
+    let hanging = lamps
+        .iter()
+        .filter(|l| l.material == LanternHanging)
+        .count();
+    // One column holds one lamp: the third bridge crosses over the
+    // clearing's fire pit, and the lantern over it is the pit's column.
+    let lanterns: usize = template.bridges.iter().map(|x| x.lanterns.len()).sum();
+    assert_eq!((hanging, lanterns), (8, 9), "the bridges' lanterns");
+}
+
+/// Feet on whatever a piece answers within a tread of where they are, the
+/// body over them in nothing, along `path` (directions) from `feet`, metres
+/// over the radius: where they end up.
+fn walk_along(b: &record::Built, path: &[Vec3], mut feet: f32, what: &str) -> f32 {
+    let held = |p: Vec3| b.solids.iter().any(|s| s.holds(p, 0.9, 0.3));
+    for w in path.windows(2) {
+        for k in 1..=60 {
+            let d = w[0].lerp(w[1], k as f32 / 60.0).normalize();
+            let next = b
+                .solids
+                .iter()
+                .filter_map(|x| x.stand(d * feet, 0.3).0)
+                .fold(f32::MIN, f32::max);
+            assert!(
+                next > feet - 0.3,
+                "{what}: fell from {:.2} m to {:.2} m",
+                feet - RADIUS_M,
+                next - RADIUS_M
+            );
+            assert!(
+                !held(d * (next + 0.95)),
+                "{what}: held at {:.2} m",
+                next - RADIUS_M
+            );
+            feet = next;
+        }
+    }
+    feet
+}
+
+/// Slice 4i: a walker goes in at the pole tower's door, climbs its newel
+/// and steps out onto the first platform 8 m up; walks round the platform
+/// to a bridge, and across it, down its sag and up again, to the next
+/// platform; and cannot step off a bridge's side.
+#[test]
+fn a_walker_climbs_the_pole_tower_and_crosses_a_rope_bridge() {
+    use pieces::Surface;
+    let (template, town, b) = cut_jungle();
+    let (patch, _) = patch();
+    let natural = slope();
+    let (chart, _) = record::ground_of(&town, patch, RADIUS_M, move |d| natural(d).floor())
+        .unwrap_or_else(|e| panic!("{e}"));
+    let cell_m = template.grid.cell_m;
+    let centre = |c: i32, r: i32| {
+        chart
+            .cell(c, r)
+            .map(|i| patch.cells[i].direction)
+            .unwrap_or_else(|| panic!("({c}, {r}) is off the chart"))
+    };
+    let point = |x: f32, z: f32| {
+        sea::point(&chart, patch, x, z, cell_m)
+            .unwrap_or_else(|| panic!("({x}, {z}) is off the chart"))
+    };
+    let terrace = RADIUS_M + town.terrace as f32;
+    let datum = record::datum(&template) as f32;
+    let deck = terrace + 9.0 - datum + pieces::LIFT_M;
+    // A platform is flat in its frame at its middle: 4 m out, on this 300 m
+    // body, its floor stands 2.5 cm over the middle's (1.7 mm on the game's
+    // 4800 m one).
+    let flat = 0.04;
+    let held = |p: Vec3| b.solids.iter().any(|s| s.holds(p, 0.9, 0.3));
+
+    // Up the tower's newel, as the walls' test climbs a tower.
+    let (k, def) = town
+        .buildings
+        .iter()
+        .enumerate()
+        .find(|(_, d)| d.newel.is_some())
+        .expect("a tower");
+    let s = &b.solids[k];
+    let Some(&Surface::Newel {
+        centre: c,
+        start,
+        sense,
+        top,
+        turn_m,
+        ..
+    }) = s
+        .surfaces
+        .iter()
+        .find(|x| matches!(x, Surface::Newel { .. }))
+    else {
+        panic!("no newel");
+    };
+    let floor = s.frame.origin.length();
+    let end = top / turn_m * std::f32::consts::TAU;
+    let on = |phi: f32| {
+        let a = start + sense * phi;
+        let p = c + Vec2::new(a.cos(), a.sin()) * 0.72;
+        s.frame.world(Vec3::new(p.x, 0.0, p.y)).normalize()
+    };
+    let path: Vec<Vec3> = (0..=200).map(|k| on(end * k as f32 / 200.0)).collect();
+    let feet = walk_along(&b, &path, floor, "the newel");
+    assert!(
+        (feet - floor - top).abs() < 0.01,
+        "up at {:.2} m",
+        feet - floor
+    );
+    // Out of its doorway onto the platform's cell, and to its middle.
+    let newel = def.newel.as_ref().expect("newel");
+    let [tc, tr] = def.cells[0];
+    let out = neighbour(tc, tr, usize::from(newel.exits[0].0));
+    let feet = walk_along(&b, &[on(end), centre(out.0, out.1)], feet, "the doorway");
+    assert!(
+        (feet - deck).abs() < flat,
+        "on the platform at {:.2} m",
+        feet - terrace
+    );
+
+    // Round the platform's ring to the cell its bridge comes in on.
+    let first = template
+        .platforms
+        .iter()
+        .position(|p| p.cells.iter().any(|&[c, r]| (c, r) == out))
+        .expect("the tower's platform");
+    let platform = &template.platforms[first];
+    let huts: BTreeSet<[i32; 2]> = template
+        .buildings
+        .iter()
+        .filter(|b| b.raised)
+        .flat_map(|b| b.cells.iter().copied())
+        .collect();
+    let ring: Vec<[i32; 2]> = platform.cells[1..].to_vec();
+    let on_platform = |x: f32, z: f32| {
+        let (c, r) = sea::cell_at(x, z, cell_m);
+        ring.contains(&[c, r])
+    };
+    let (bridge, from_start) = template
+        .bridges
+        .iter()
+        .find_map(|x| {
+            if on_platform(
+                x.from[0] - (x.to[0] - x.from[0]) * 0.01,
+                x.from[2] - (x.to[2] - x.from[2]) * 0.01,
+            ) {
+                Some((x, true))
+            } else if on_platform(
+                x.to[0] + (x.to[0] - x.from[0]) * 0.01,
+                x.to[2] + (x.to[2] - x.from[2]) * 0.01,
+            ) {
+                Some((x, false))
+            } else {
+                None
+            }
+        })
+        .expect("a bridge from the tower's platform");
+    let t_of = |k: usize| {
+        if from_start {
+            k as f32 / 100.0
+        } else {
+            1.0 - k as f32 / 100.0
+        }
+    };
+    let (sx, sz) = bridge.plan(t_of(0));
+    let (ex, ez) = bridge.plan(t_of(100));
+    // The ring cells, in order round from the doorway's cell to the
+    // bridge's, the way that passes no hut.
+    let (bc, br) = {
+        let (dx, dz) = (sx - (ex - sx) * 0.01, sz - (ez - sz) * 0.01);
+        sea::cell_at(dx, dz, cell_m)
+    };
+    let tree = platform.cells[0];
+    let order: Vec<[i32; 2]> = {
+        let mut order = vec![[out.0, out.1]];
+        // Neighbouring ring cells share an edge; walk them round.
+        while order.len() < ring.len() {
+            let last = *order.last().unwrap();
+            let next = ring.iter().find(|&&x| {
+                !order.contains(&x)
+                    && (0..6).any(|d| neighbour(last[0], last[1], d) == (x[0], x[1]))
+            });
+            match next {
+                Some(&n) => order.push(n),
+                None => break,
+            }
+        }
+        order
+    };
+    let to = order
+        .iter()
+        .position(|&x| x == [bc, br])
+        .expect("the bridge's cell on the ring");
+    let one_way: Vec<[i32; 2]> = order[..=to].to_vec();
+    let other_way: Vec<[i32; 2]> = std::iter::once(order[0])
+        .chain(order[to..].iter().rev().copied())
+        .collect();
+    let route = if one_way.iter().all(|c| !huts.contains(c)) {
+        one_way
+    } else {
+        other_way
+    };
+    assert!(
+        route.iter().all(|c| !huts.contains(c) && *c != tree),
+        "{route:?}"
+    );
+    let mut path: Vec<Vec3> = route.iter().map(|&[c, r]| centre(c, r)).collect();
+    path.push(point(sx, sz));
+    let feet = walk_along(&b, &path, feet, "round the platform");
+    assert!(
+        (feet - deck).abs() < flat,
+        "at the bridge at {:.2} m",
+        feet - terrace
+    );
+
+    // Across the bridge, the feet on its sagging walk all the way.
+    let mut feet = feet;
+    let mut lowest = f32::MAX;
+    for k in 1..=100 {
+        let t = t_of(k);
+        let (x, z) = bridge.plan(t);
+        let (px, pz) = bridge.plan(t_of(k - 1));
+        feet = walk_along(&b, &[point(px, pz), point(x, z)], feet, "the bridge");
+        let want = terrace + bridge.height(t) - datum;
+        // At its far end the feet are on the far platform's lapped edge.
+        let within = if k == 100 { flat } else { 0.03 };
+        assert!(
+            (feet - want).abs() < within,
+            "{:.0}% across: the feet at {:.2} m on a walk at {:.2} m",
+            t * 100.0,
+            feet - terrace,
+            want - terrace
+        );
+        lowest = lowest.min(feet);
+    }
+    assert!(
+        deck - lowest > bridge.sag_m - 0.05,
+        "down the sag: {:.2} m under the deck",
+        deck - lowest
+    );
+    // On into the far platform's cell.
+    let far = template
+        .platforms
+        .iter()
+        .find(|p| {
+            p.cells.iter().any(|&[c, r]| {
+                (c, r) == sea::cell_at(ex + (ex - sx) * 0.01, ez + (ez - sz) * 0.01, cell_m)
+            })
+        })
+        .expect("the far platform");
+    let (fc, fr) = sea::cell_at(ex + (ex - sx) * 0.01, ez + (ez - sz) * 0.01, cell_m);
+    assert!(far.cells.contains(&[fc, fr]));
+    let feet = walk_along(
+        &b,
+        &[point(ex, ez), centre(fc, fr)],
+        feet,
+        "onto the far platform",
+    );
+    assert!(
+        (feet - deck).abs() < flat,
+        "on the far platform at {:.2} m",
+        feet - terrace
+    );
+
+    // Off the side of every bridge: the ropes hold the walker in.
+    for x in &template.bridges {
+        let (dx, dz) = (x.to[0] - x.from[0], x.to[2] - x.from[2]);
+        let len = x.length();
+        let (nx, nz) = (-dz / len, dx / len);
+        for k in 1..10 {
+            let t = k as f32 / 10.0;
+            let (px, pz) = x.plan(t);
+            let feet = terrace + x.height(t) - datum;
+            assert!(
+                !held(point(px, pz) * (feet + 0.95)),
+                "held on the walk at {t}"
+            );
+            for s in [-1.0f32, 1.0] {
+                let off = s * (x.width_m / 2.0 + 0.05);
+                let side = point(px + nx * off, pz + nz * off);
+                assert!(held(side * (feet + 0.95)), "stepped off the side at {t}");
+            }
+        }
+    }
+}
+
+/// Slice 4i: a walker goes into each tree hut through its door from its
+/// platform, on the hut's raised floor; and up each stilt hut's porch stair
+/// from the jungle floor onto its deck and in at its door.
+#[test]
+fn a_walker_goes_into_the_tree_huts_and_up_onto_the_stilt_huts() {
+    use pieces::Surface;
+    let (_template, town, b) = cut_jungle();
+    let (patch, _) = patch();
+    let natural = slope();
+    let (chart, _) = record::ground_of(&town, patch, RADIUS_M, move |d| natural(d).floor())
+        .unwrap_or_else(|e| panic!("{e}"));
+    let centre = |c: i32, r: i32| {
+        chart
+            .cell(c, r)
+            .map(|i| patch.cells[i].direction)
+            .unwrap_or_else(|| panic!("({c}, {r}) is off the chart"))
+    };
+    let (mut trees, mut stilted) = (0, 0);
+    for (def, s) in town.buildings.iter().zip(&b.solids) {
+        let floor = s.frame.origin.length() + pieces::LIFT_M;
+        let [c, r, d, _] = def.doors[0];
+        if def.raised {
+            let (oc, or) = neighbour(c, r, d as usize);
+            let feet = walk_along(&b, &[centre(oc, or), centre(c, r)], floor, &def.name);
+            assert!(
+                (feet - floor).abs() < 0.02,
+                "{}: in at {:.2} m",
+                def.name,
+                feet - floor
+            );
+            trees += 1;
+        }
+        if def.stilts.is_some() {
+            let Some(&Surface::Flight {
+                foot,
+                dir,
+                len,
+                base,
+                ..
+            }) = s
+                .surfaces
+                .iter()
+                .find(|x| matches!(x, Surface::Flight { .. }))
+            else {
+                panic!("{}: no porch stair", def.name);
+            };
+            let at = |p: Vec2| s.frame.world(Vec3::new(p.x, 0.0, p.y)).normalize();
+            let start = s.frame.origin.length() + base;
+            let (oc, or) = neighbour(c, r, d as usize);
+            let path = [
+                at(foot + dir * 0.05),
+                at(foot + dir * len),
+                centre(oc, or),
+                centre(c, r),
+            ];
+            let feet = walk_along(&b, &path, start, &def.name);
+            assert!(
+                (feet - floor).abs() < 0.02,
+                "{}: in at {:.2} m over its floor",
+                def.name,
+                feet - floor
+            );
+            stilted += 1;
+        }
+    }
+    assert_eq!((trees, stilted), (3, 2));
+}
+
+/// Slice 4i: the lamp height rule moves no lamp of a town that already
+/// stands. Every lamp of the village, the walled town, the harbour, the
+/// desert and the tundra is where the old rule put it: a lamp on a cell of
+/// the town at its cell's terrace, one off them at the town's terrace and
+/// its height over the datum.
+#[test]
+fn no_lamp_of_an_older_town_moves() {
+    let (patch, _) = patch();
+    let towns = [
+        (village(), laid_village(&village())),
+        (walled(), laid_village(&walled())),
+        {
+            let (t, town, _) = laid_harbour();
+            (t, town)
+        },
+        (desert(), laid_village(&desert())),
+        (tundra(), laid_village(&tundra())),
+    ];
+    let mut checked = 0;
+    for (template, town) in &towns {
+        let natural = slope();
+        let (chart, _) = record::ground_of(town, patch, RADIUS_M, move |d| natural(d).floor())
+            .unwrap_or_else(|e| panic!("{e}"));
+        let terrace: std::collections::BTreeMap<(i32, i32), f32> = town
+            .cells
+            .iter()
+            .enumerate()
+            .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
+            .collect();
+        let datum = record::datum(template) as f32;
+        let cell_m = template.grid.cell_m;
+        let old = |x: f32, y: f32, z: f32| {
+            let (c, r) = sea::cell_at(x, z, cell_m);
+            let i = chart.cell(c, r)?;
+            let at = terrace
+                .get(&(c, r))
+                .copied()
+                .unwrap_or(town.terrace as f32 + (y - datum).floor());
+            Some((patch.cells[i].direction, at))
+        };
+        let mut want: Vec<(Vec3, f32)> = template
+            .lamps
+            .iter()
+            .filter_map(|&[c, r]| {
+                let i = chart.cell(c, r)?;
+                let at = terrace.get(&(c, r)).copied().unwrap_or(town.terrace as f32);
+                Some((patch.cells[i].direction, at))
+            })
+            .chain(
+                template
+                    .lanterns
+                    .iter()
+                    .filter_map(|l| old(l[0], l[1], l[2])),
+            )
+            .chain(template.fires.iter().filter_map(|f| old(f.x, f.y, f.z)))
+            .collect();
+        let mut seen = BTreeSet::new();
+        want.retain(|(d, _)| seen.insert((d.x.to_bits(), d.y.to_bits())));
+        let lamps = record::lamps_of(town, template, &chart, patch);
+        assert_eq!(lamps.len(), want.len(), "{}", template.scene);
+        for (l, (d, at)) in lamps.iter().zip(&want) {
+            assert_eq!(l.direction, *d, "{}", template.scene);
+            assert_eq!(
+                l.altitude_m, *at,
+                "{}: a lamp moved from {at} m to {} m",
+                template.scene, l.altitude_m
+            );
+            checked += 1;
+        }
+    }
+    println!("{checked} lamps of five towns where they stood");
+    assert!(checked >= 80);
+}
+
+/// Design, "Finding: a column can take its neighbour's ground": a town of
+/// layout 2 finds every column's own cell by the nearest chord; a town
+/// stored at layout 1 keeps the dot lookup it was played with, and reads
+/// its layout back from its records.
+#[test]
+fn a_towns_layout_names_how_its_ground_finds_a_cell() {
+    let (patch, _) = patch();
+    let town = laid_village(&village());
+    assert_eq!(town.layout, record::LAYOUT_VERSION);
+    assert_eq!(record::LAYOUT_VERSION, 2);
+    let mut old = town.clone();
+    old.layout = 1;
+    let mut store = crate::records::Records::new();
+    for r in record::to_records(&old) {
+        store.put(r);
+    }
+    let record::Stored::Town(kept) = record::from_records(&store, old.site) else {
+        panic!("the layout-1 town reads back");
+    };
+    assert_eq!(kept.layout, 1, "a layout-1 town stays layout 1");
+    for (t, chord) in [(&town, true), (&old, false)] {
+        let (_, g) = record::ground_of(t, patch, RADIUS_M, slope()).expect("ground");
+        let cells = g.cells();
+        let mut checked = 0;
+        for c in cells.iter().filter(|c| c.ring != GroundAt::OUTSIDE) {
+            let d = c.centre;
+            let nearest = cells
+                .iter()
+                .enumerate()
+                .max_by(|(i, a), (j, b)| {
+                    let (x, y) = if chord {
+                        (
+                            -(a.centre - d).length_squared(),
+                            -(b.centre - d).length_squared(),
+                        )
+                    } else {
+                        (a.centre.dot(d), b.centre.dot(d))
+                    };
+                    x.total_cmp(&y).then(j.cmp(i))
+                })
+                .map(|(_, n)| n.centre);
+            let found = g.at(d).map(|x| x.centre);
+            if nearest.is_some_and(|n| {
+                cells
+                    .iter()
+                    .any(|x| x.centre == n && x.ring != GroundAt::OUTSIDE)
+            }) {
+                assert_eq!(found, nearest, "layout {}: the column at {d:?}", t.layout);
+            }
+            if chord {
+                assert_eq!(found, Some(d), "layout 2 finds its own cell");
+            }
+            checked += 1;
+        }
+        assert!(checked > 500);
+    }
+}
+
+/// Design, "Finding: the stair towers have no light": a stair's sconces
+/// are one a turn of its climb, as the mockup's `newelStair` hangs them, so
+/// a stair tower climbing 8 m has three. A house's newel climbs to its top
+/// floor and keeps one a storey but the top.
+#[test]
+fn every_stair_has_a_sconce_a_turn() {
+    use pieces::LightKind;
+    let mut towers = 0;
+    for template in [village(), walled(), tundra(), jungle(), desert()] {
+        let town = laid_village(&template);
+        let (patch, _) = patch();
+        let natural = slope();
+        let b = record::build_town(
+            &town,
+            Some(&template),
+            patch,
+            &kits(),
+            &|_: &str| 2.0,
+            RADIUS_M,
+            SHEET_M,
+            move |d| natural(d).floor(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        for (def, lights) in town.buildings.iter().zip(&b.lights) {
+            let sconces = lights
+                .iter()
+                .filter(|l| l.kind == LightKind::Sconce)
+                .count();
+            if let Some(n) = &def.newel {
+                let want = (n.top_m / STOREY_M).round() as usize;
+                assert_eq!(
+                    sconces, want,
+                    "{} {}: {} m of stair",
+                    template.scene, def.name, n.top_m
+                );
+                towers += 1;
+            }
+        }
+    }
+    assert!(towers >= 6, "{towers} towers and keeps");
+}
+
+/// Instrument (design, "Finding: the stair towers have no light", the
+/// per-vertex bake): how many vertices each town's outside and rooms carry,
+/// the samples a bake of the light field would take.
+#[test]
+#[ignore = "an instrument"]
+fn print_the_towns_vertex_counts() {
+    for template in [village(), walled(), tundra(), jungle(), desert()] {
+        let town = laid_village(&template);
+        let (patch, _) = patch();
+        let natural = slope();
+        let b = record::build_town(
+            &town,
+            Some(&template),
+            patch,
+            &kits(),
+            &|_: &str| 2.0,
+            RADIUS_M,
+            SHEET_M,
+            move |d| natural(d).floor(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let outside: usize = b.meshes.values().map(|m| m.positions.len()).sum();
+        let rooms: usize = b
+            .rooms
+            .iter()
+            .flat_map(|r| r.values())
+            .map(|m| m.positions.len())
+            .sum();
+        println!(
+            "{}: {outside} outside vertices in {} meshes, {rooms} room vertices",
+            template.scene,
+            b.meshes.len()
+        );
+    }
 }

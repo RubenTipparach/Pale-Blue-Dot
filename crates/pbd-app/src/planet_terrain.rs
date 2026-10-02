@@ -407,6 +407,11 @@ mod tests {
             "let daylight = smoothstep(-0.13,0.20,sun_elevation);".to_string(),
             // The lamp curve, written out the same way on both sides.
             "    let g = f * (2.0 - f);\n    return g * g;".to_string(),
+            // Decision 15 (survey L4): the lamp fades where the sun reaches,
+            // the core's `light::lamp_share` written out.
+            "    return 1.0 - clamp(daylight, 0.0, 1.0) * clamp(sky, 0.0, 1.0);".to_string(),
+            // ... laid over the albedo by the sky's reach at the fragment.
+            "*lamp_share(skylight, daylight);".to_string(),
             format!(
                 "const GLOW_LIT_BIT: u32 = {:#010x}u;",
                 crate::planet::column::GLOW_LIT_BIT

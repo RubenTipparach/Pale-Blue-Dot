@@ -276,3 +276,86 @@ shots found, the game before on the left and now on the right.
 
 Same capture setup as the slice 4e and 4g shots above. The frame cost was
 not measured in this cloud session.
+
+## The crust under towns and lamps in the sun, before and after (2026-10-02)
+
+`crust-and-lamp-fade-2026-10-02.jpg`: the owner's two survey answers built,
+the game before on the left and now on the right.
+
+- Holbrook's lane from above (survey T14, "crust"). Before, a worm's cave
+  opened into the lane beside the lantern: 32 of the shipped seed's 46
+  towns had a cave open in their footprint. Now no worm carves the top
+  three layers under a town's footprint, and none of the 36,074 footprint
+  cells opens (`no_cave_opens_into_a_towns_ground`). The caves under them
+  are as they were. The margin round a town keeps its caves.
+- Torifjell's camp and its ice gate at 11:00 (survey L4, "recommended").
+  Before, the camp fire and the gate's torches turned the snow round them
+  tan in full sun. Now a lamp's light is scaled by `1 - daylight x sky`: it
+  is whole at night, under a roof and in a cave, and fades where the sun
+  reaches (`lamps-and-lanterns` decision 15). One rule in core and both
+  shaders.
+
+Same capture setup as above: the column view straight down at Holbrook's
+first mouth (`--at 29.88359 1.40006 --height 10 --pitch -89 --time 10.9`),
+and the tundra's camp and gate spots at 11:00. The frame cost was not
+measured in this cloud session.
+
+## Slice 4i: the jungle village, beside the mockup (2026-10-02)
+
+`jungle-4i-2026-10-02.jpg`: Copan, one of the shipped seed's six jungle
+villages, at each of the mockup's own spots by day and at 22:30, the mockup
+on the left and the game on the right.
+
+- From above: three kapoks with their crowns, the platforms round them 8 m
+  up, the three rope bridges, the tree huts and the stilt huts, and the red
+  clearing, the planet's own jungle standing round them.
+- The clearing, the tower's door, the first platform, the first bridge (a
+  tenth of the way along its sag), a tree hut's door and the lookout.
+- At 22:30 the platforms' torches and the bridges' lanterns stand and burn,
+  but the planks round them stay grey where the mockup's are warm: a town's
+  pieces take the light field at only the eight corners of each mesh's
+  bounds. Baking the field per vertex is written up as the next step
+  (design, "Finding: the stair towers have no light").
+- Seen and not built: the people, the beds and the sleeping mat
+  (furniture and folk), and the mockup's lantern beside every outdoor door.
+
+`jungle-stair-lights-2026-10-02.jpg`: the owner's "Stairway of the tree
+city doesn't have lights", before and after.
+
+- The pole tower's stair at 22:30. Before, no stair tower in any town had a
+  sconce: they were counted one a storey but the top, and a tower is one
+  storey as tall as its walls. Now there is one a 3 m turn of the climb, as
+  the mockup's `newelStair` hangs them, and a room light also reaches a face
+  turned away from it at its 0.3 share. The stair is lit from about 2 m up;
+  its foot stays dim, where the mockup's is lit by the lantern beside its
+  door (not built).
+- The tree hut by day: `--open-doors` now opens the doors in a still view
+  too, so the hut is seen through its door as the mockup's is.
+
+In-game captures on lavapipe at 1440 x 900 with no GPU, the fast build under
+`xvfb-run`, a new memory-only world, `--open-doors --rain 0 --weather-at
+7200`, at Copan (4.3 S, 21.9 W), `--time 12.45` for 11:00 and `--time 23.95`
+for 22:30 (Copan's own sun). The spots are printed by
+`every_jungle_village_lays_and_cuts`; those on the platforms are column views
+at their height over the natural ground, which is what the column view
+measures from. They show what things look like, not how smoothly they run;
+the frame cost was not measured in this cloud session.
+
+## A town's outside lit vertex by vertex, before and after (2026-10-02)
+
+`town-light-bake-2026-10-02.jpg`: the owner's "Are you using proper light
+baking?", answered. Before, a town's outside took the light field at only
+the eight corners of each mesh's bounds, tens of metres apart, so the
+jungle's planks stayed grey beside their own torches. Now each vertex of a
+town's outside carries the field's sky and lamp light from the air 0.3 m in
+front of its face, baked again whenever the field there changes (a dig, a
+lamp, dusk and dawn).
+
+- The first platform at 22:30: its deck, rails and tree hut take the
+  torches' light, as the mockup's do.
+- The first rope bridge at 22:30: its slats and ropes take its lanterns'.
+
+A room keeps its own light: the field does not see a town's walls, and a
+street lamp would shine through them onto a room's faces. Same capture setup
+as the slice 4i shots above; the frame cost was not measured in this cloud
+session.

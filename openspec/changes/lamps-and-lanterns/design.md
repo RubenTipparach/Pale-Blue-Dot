@@ -375,6 +375,28 @@ midnight.
 0.18 that break on the next upgrade. The split above gives the same answer
 at the three ends that matter (day, night, cave) with none of that.
 
+**15. A lamp's light fades where the sun reaches it (survey L4, 2026-10-02:
+"recommended").** Decision 5 kept the old shader's rule, "a torch is as bright
+at noon as at midnight". On white snow that reads as sand: by day the tundra
+camp's fire and the ice gate's torches turned the snow round them tan out to
+about 10 m (`cities-in-the-world`, "Seen in the tundra's shots").
+- What a lamp adds is now `tint * strength(block) * gain * share`, where
+  `share = 1 - daylight * sky`: `daylight` is how much it is day where the
+  surface is (the terrain shader's own, 0 at night, 1 by day) and `sky` is
+  how much of the sky reaches it (the field's sky channel, times a room's own
+  share for a town's piece).
+- So in the open at noon a lamp adds nothing it would show; in the shade of a
+  vault, inside a room, down a cave and at night it adds what it always did.
+  A lamp's own flame and glass are drawn as before, so a torch is still seen
+  to burn by day.
+- One rule in one place: `light::lamp_share` in the core, written out the
+  same in `planet_surface.wgsl` and `field_lit.wgsl`, and a test holds both
+  texts to it, as it holds `lamp_strength`. The held tool and the ship take
+  it through `light_of`.
+- The field is unchanged, so the light bake and what is saved do not move.
+- *Alternative:* make torches and fires dusk-lit, like the street lanterns.
+  Rejected: a torch carried into a cave at noon must light it.
+
 ## Risks / Trade-offs
 
 - [A level-13 lantern floods about 13 cells, over 30 m across 2.833 m cells,

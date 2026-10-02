@@ -255,6 +255,13 @@ fn lamp_strength(level: f32) -> f32 {
     return g * g;
 }
 
+// How much of a lamp's light shows where the sun reaches (`lamps-and-
+// lanterns` decision 15, survey L4): none in the open at noon, all of it in
+// shade, indoors and at night. `light::lamp_share` in the core, word for word.
+fn lamp_share(sky: f32, daylight: f32) -> f32 {
+    return 1.0 - clamp(daylight, 0.0, 1.0) * clamp(sky, 0.0, 1.0);
+}
+
 // One vertex of a lamp.
 struct LampVertex {
     position: vec3<f32>,
@@ -1825,7 +1832,7 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // albedo so a torch lights the ground it stands on rather than painting a
     // flat orange patch over it. This is the term that makes a night worth
     // carrying a light through.
-    color += albedo*TORCH_TINT*(lamp_strength(lamp)*TORCH_GAIN);
+    color += albedo*TORCH_TINT*(lamp_strength(lamp)*TORCH_GAIN)*lamp_share(skylight, daylight);
     // A lamp's own light is drawn as the light it is, whatever lights the
     // cell around it. A lantern is lit panes in its iron frame; a brazier's
     // fire and a candle's flame are white-gold at the root and orange at the

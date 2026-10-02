@@ -28,14 +28,20 @@ const TERRACED = new Set(["town", "coast", "mountain", "mounds", "desert", "tund
 const SEA = new Set(["coast"]);
 // Scenes whose wild areas keep the planet's ground (`cities-in-the-world`
 // 4e and 4g): every other cell is built, whatever its top.
-const WILD = { desert: ["The dunes"], tundra: ["The tundra"] };
+const WILD = { desert: ["The dunes"], tundra: ["The tundra"], jungle: ["The jungle floor", "The stream"] };
 // Their tops on the terrain's; a top they do not name keeps the planet's.
-const TOPS = { desert: { sand: "sand", sand2: "sand", flag: "stone" }, tundra: { snow: "snow", ice: "snow" } };
-// Scenes whose dressing, lanterns and fires are written (4d, 4e, 4g).
-const DRESSED = new Set(["coast", "desert", "tundra"]);
+const TOPS = { desert: { sand: "sand", sand2: "sand", flag: "stone" }, tundra: { snow: "snow", ice: "snow" }, jungle: { redloam: "dirt" } };
+// Scenes whose dressing, lanterns and fires are written (4d, 4e, 4g, 4i).
+const DRESSED = new Set(["coast", "desert", "tundra", "jungle"]);
 // Scenes whose outside stairs and open doorways are written (4e): the
 // sandstone houses' flights to their roofs, the caravan hall's arch.
-const STAIRED = new Set(["desert", "tundra"]);
+const STAIRED = new Set(["desert", "tundra", "jungle"]);
+// Scenes whose houses on stilts are written (4d, 4i): the harbour's fish
+// huts, the jungle's stilt huts.
+const STILTED = new Set(["coast", "jungle"]);
+// Scenes in the trees (4i): the jungle's kapoks, the platforms round them,
+// the rope bridges between, and the cells it keeps its trees off.
+const CANOPY = new Set(["jungle"]);
 
 (async () => {
   const executablePath = fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined;
@@ -51,7 +57,7 @@ const STAIRED = new Set(["desert", "tundra"]);
   await page.waitForFunction(() => typeof SCENES === "object" && typeof building === "function", null, { timeout: 60000 });
   fs.mkdirSync(OUT, { recursive: true });
   for (const scene of scenes) {
-    const layout = await page.evaluate(({ scene, SEA_SCENES, DRESSED_SCENES, STAIRED_SCENES }) => {
+    const layout = await page.evaluate(({ scene, SEA_SCENES, DRESSED_SCENES, STAIRED_SCENES, STILTED_SCENES, CANOPY_SCENES }) => {
       const found = [];
       const inner = building;
       // The newels and walls a scene raises outside any building(): a stair
@@ -66,6 +72,53 @@ const STAIRED = new Set(["desert", "tundra"]);
       // Only the scenes slice 4e brought write their outside stairs and
       // their open doorways, so the others re-export byte for byte.
       const staired = STAIRED_SCENES.includes(scene);
+      const stilted = STILTED_SCENES.includes(scene);
+      // The jungle's (4i): each kapok and its parts as the mockup made them,
+      // the platforms and their railed edges, the beams under them, and the
+      // rope bridges with their ends and lanterns.
+      const canopy = CANOPY_SCENES.includes(scene);
+      const kapoks = [], platforms = [], ropeBridges = [], beams = [];
+      let inKapok = null, inPit = 0;
+      const innerKapok = kapok, innerDeck = deck, innerBridgeLamps = bridgeLamps, innerAddFire = addFire, innerAddSolid = addSolid;
+      // eslint-disable-next-line no-global-assign
+      kapok = function (x, y, z, h, s = 1) {
+        if (!canopy) return innerKapok(x, y, z, h, s);
+        inKapok = { x, y, z, radius_m: 1.15 * s, height_m: h, parts: [] };
+        try { return innerKapok(x, y, z, h, s); } finally { kapoks.push(inKapok); inKapok = null; }
+      };
+      // A buttress fin is a solid to its own height, short of its top.
+      // eslint-disable-next-line no-global-assign
+      addSolid = function (o) {
+        if (inKapok && o.label === "buttress root") inKapok.parts[inKapok.parts.length - 1].solid_m = o.y1 - o.y0;
+        return innerAddSolid(o);
+      };
+      // eslint-disable-next-line no-global-assign
+      deck = function (cells, y, o = {}) {
+        if (canopy && !inStilt) {
+          const inB = (c, r) => cells.some(([a, b]) => a === c && b === r), rails = [];
+          for (const [c, r] of cells) for (let d = 0; d < 6; d++) {
+            if (inB(...nb(c, r, d))) continue;
+            if ((o.gaps || []).some(([a, b, e]) => a === c && b === r && e === d)) continue;
+            if (o.skip && o.skip(c, r, d)) continue;
+            rails.push([c, r, d]);
+          }
+          platforms.push({ y, cells: cells.map(([c, r]) => [c, r]), rails });
+        }
+        return innerDeck(cells, y, o);
+      };
+      // eslint-disable-next-line no-global-assign
+      bridgeLamps = function (A, B, o = {}) {
+        const n0 = FIRES.length;
+        const out = innerBridgeLamps(A, B, o);
+        if (canopy && ropeBridges.length) for (const f of FIRES.slice(n0)) ropeBridges[ropeBridges.length - 1].lanterns.push([f.x, f.y, f.z]);
+        return out;
+      };
+      // A fire on a platform's deck; a hearth's or a fire pit's is theirs.
+      // eslint-disable-next-line no-global-assign
+      addFire = function (x, y, z, s = 1, kind = "hearth") {
+        if (canopy && !depth && !inPit && !inStilt) fires.push({ kind: "fire", x, y, z });
+        return innerAddFire(x, y, z, s, kind);
+      };
       const piers = [], lanterns = [], boats = [];
       const innerBridge = bridge, innerStilt = stiltHouse, innerLantern = lantern, innerBoat = boat;
       // A scene's fires (4e, 4g): braziers, torches and fire pits, each where
@@ -117,7 +170,11 @@ const STAIRED = new Set(["desert", "tundra"]);
       // eslint-disable-next-line no-global-assign
       torch = function (x, y, z, h) { if (dressed && !sea) fires.push({ kind: "torch", x, y, z }); return innerTorch(x, y, z, h); };
       // eslint-disable-next-line no-global-assign
-      firePit = function (x, y, z) { if (dressed && !sea) fires.push({ kind: "fire", x, y, z }); return innerFirePit(x, y, z); };
+      firePit = function (x, y, z) {
+        if (dressed && !sea) fires.push({ kind: "fire", x, y, z });
+        inPit++;
+        try { return innerFirePit(x, y, z); } finally { inPit--; }
+      };
       // eslint-disable-next-line no-global-assign
       stairRun = function (A, B, o = {}) {
         if (staired && !inStilt && !depth) stairs.push({ from: A.slice(), to: B.slice(), width_m: o.width ?? 1.1, material: o.m || "stone" });
@@ -145,6 +202,7 @@ const STAIRED = new Set(["desert", "tundra"]);
       };
       // eslint-disable-next-line no-global-assign
       bridge = function (A, B, o = {}) {
+        if (canopy && o.sag) ropeBridges.push({ from: A.slice(), to: B.slice(), width_m: o.width ?? 1.2, sag_m: o.sag, ends: o.ends.map((e) => e.map((p) => p.slice())), lanterns: [] });
         if (sea && o.piles !== undefined) piers.push({ from: A.slice(), to: B.slice(), width_m: o.width ?? 2 });
         if (sea && o.label === "The slip") slip = { from: A.slice(), to: B.slice(), width_m: o.width ?? 1.2 };
         if (sea && o.label === "Gangplank") gangplank = { from: A.slice(), to: B.slice(), width_m: o.width ?? 1.2 };
@@ -194,6 +252,8 @@ const STAIRED = new Set(["desert", "tundra"]);
       // eslint-disable-next-line no-global-assign
       box = function (m, x, y0, z, sx, sy, sz, ang = 0, uvf) {
         if (dressed && inStall && sy === 0.14) inStall.goods.push({ material: m, x, z });
+        if (inKapok) inKapok.parts.push({ material: m, at: [x, y0, z], size: [sx, sy, sz], angle: ang });
+        else if (canopy && !depth && m === "kapok") beams.push({ material: m, at: [x, y0, z], size: [sx, sy, sz], angle: ang });
         if (sea && !inside && m === "timber" && sx === 0.07 && sy === 2.6) dressing.push({ kind: "oar", x, y: y0, z });
         return innerBox(m, x, y0, z, sx, sy, sz, ang, uvf);
       };
@@ -214,7 +274,7 @@ const STAIRED = new Set(["desert", "tundra"]);
         inStilt++;
         let out;
         try { out = innerStilt(o); } finally { inStilt--; }
-        if (sea) {
+        if (stilted) {
           const b = found[found.length - 1];
           b.stilts = { deck: o.deckCells.map(([c, r]) => [c, r]), porch: o.stairEdge.slice(0, 3), foot_m: o.footY };
         }
@@ -268,7 +328,7 @@ const STAIRED = new Set(["desert", "tundra"]);
           name: o.name || "",
           kit: o.kit || "halftimber",
           cells,
-          base: sea ? Math.round(out.base) : out.base,
+          base: stilted ? Math.round(out.base) : out.base,
           storeys,
           tall: o.tall || 1,
           doors: (o.doors || []).map((e) => [e[0], e[1], e[2], e[3] || 0]),
@@ -283,6 +343,8 @@ const STAIRED = new Set(["desert", "tundra"]);
           ...(o.parapetGaps ? { parapet_gaps: o.parapetGaps.map((g) => g.slice(0, 3)) } : {}),
           // Doorways with no leaf, the mockup's "open" doors (4e).
           ...(staired && (o.doors || []).some((e) => e[4] === "open") ? { archways: o.doors.filter((e) => e[4] === "open").map((e) => [e[0], e[1], e[2], e[3] || 0]) } : {}),
+          // A floor with no ground under it and no stilts (4i): a tree hut.
+          ...(o.raised && o.stilts === undefined ? { raised: true } : {}),
         });
         return out;
       };
@@ -295,6 +357,11 @@ const STAIRED = new Set(["desert", "tundra"]);
         edgeWall = innerEdge;
         bridge = innerBridge;
         stiltHouse = innerStilt;
+        kapok = innerKapok;
+        addSolid = innerAddSolid;
+        deck = innerDeck;
+        bridgeLamps = innerBridgeLamps;
+        addFire = innerAddFire;
         lantern = innerLantern;
         brazier = innerBrazier;
         torch = innerTorch;
@@ -406,6 +473,13 @@ const STAIRED = new Set(["desert", "tundra"]);
         out.masonry_material = curtains.material;
       }
       if (frozen.length) out.frozen = { top_m: iceTop, cells: frozen };
+      if (canopy) {
+        out.kapoks = kapoks;
+        out.platforms = platforms;
+        out.bridges = ropeBridges;
+        out.beams = beams;
+        out.cleared = [...NO_TREE].sort((a, b) => a - b).map((i) => [i % NC, Math.floor(i / NC)]);
+      }
       if (!sea && dressed) {
         if (lanterns.length) out.lanterns = lanterns;
         if (fires.length) out.fires = fires;
@@ -434,7 +508,7 @@ const STAIRED = new Set(["desert", "tundra"]);
         }
       }
       return out;
-    }, { scene, SEA_SCENES: [...SEA], DRESSED_SCENES: [...DRESSED], STAIRED_SCENES: [...STAIRED] });
+    }, { scene, SEA_SCENES: [...SEA], DRESSED_SCENES: [...DRESSED], STAIRED_SCENES: [...STAIRED], STILTED_SCENES: [...STILTED], CANOPY_SCENES: [...CANOPY] });
     if (WILD[scene]) layout.wild = WILD[scene];
     if (TOPS[scene]) layout.tops = TOPS[scene];
     if (TERRACED.has(scene)) layout.terraced = true;

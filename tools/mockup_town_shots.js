@@ -1,6 +1,7 @@
-// The towns mockup's desert town (`makeDesert`, slice 4e) and tundra camp
-// (`makeTundra`, slice 4g), for the game's shots to stand beside: each
-// scene's own spots by day and at 22:30, and the whole scene from above.
+// The towns mockup's desert town (`makeDesert`, slice 4e), tundra camp
+// (`makeTundra`, slice 4g) and jungle village (`makeJungle`, slice 4i), for
+// the game's shots to stand beside: each scene's own spots by day and at
+// 22:30, and the whole scene from above.
 // Each game shot stands where the mockup's does (the app's
 // `every_desert_lays_and_cuts` and `every_tundra_camp_lays_and_cuts` print
 // where). Usage: THREE_JS=<path to three.min.js r128> NODE_PATH=$(npm root
@@ -10,6 +11,7 @@ const fs = require("fs"); const { chromium } = require("playwright");
 const VIEWS = {
   desert: { plaza: "plaza", roofstair: "roofStair", roof: "roof", domed: [[16, 14], [14, 14]], hall: [[32, 23], [35, 23]] },
   tundra: { camp: "camp", igloo: "igloo", longhouse: "longhouse", gate: "gate", keeproof: "keepRoof", lake: "lake" },
+  jungle: { clearing: "clearing", tower: "tower", platform: "platform", bridge: "bridge", treehut: "treehut", lookout: "lookout" },
 };
 (async () => {
   const [scene, out] = process.argv.slice(2);

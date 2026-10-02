@@ -41,6 +41,8 @@ the lights (group 7) before `world-map` starts.
 - [x] 5.4 Kit grant 2 (decision 12, survey L2): a new world's kit drops snow, rock and ore and holds the five lights; an old save is dealt them once into whatever room it has, and the log names what did not fit. Verify: the kit tests extended with a new world's ten slots, an old save gaining them once, and a full save gaining nothing and saying so.
 - [x] 5.5 A synthetic "city" of 300 lanterns, baked and timed in a test. Verify: its bake time is recorded in the design's risk note. If it is over 12 ms, open a follow-up before `cities-in-the-world`.
 
+- [x] 5.6 A lamp's light fades where the sun reaches it (decision 15, survey L4): `light::lamp_share`, the same arithmetic in both shaders and in `light_of`. Verify: a core test of the share at noon in the open, in shade and at night; the shader-text test holding both shaders to it; the tundra camp and the ice gate at 11:00 before and after. Built (2026-10-02): `light::lamp_share` and the same arithmetic in both shaders, held to it by the shader-text tests; `a_lamp_shows_where_the_sun_does_not`. The camp and the gate at 11:00 before and after: `docs/screenshots/cities-in-the-world/crust-and-lamp-fade-2026-10-02.jpg`.
+
 ## 6. Glowing flowers
 
 - [x] 6.1 A share of flower cells chosen on the CPU, carried as a bit in the cell record and fed to the emitters as dusk-lit. Verify: a test that the bit and the emitter list agree for every cell of a spawn tier.

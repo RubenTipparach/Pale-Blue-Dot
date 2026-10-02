@@ -65,5 +65,12 @@
             roof: Flat, roof_material: "ice", gable: "ice", floor: "snow", door_m: (1.2, 2.5), window_m: Some((0.4, 1.2))),
         (name: "igloo", label: "Igloo", walls: [(outside: "snowblock", inside: "snowblock", edge: "snowblock", thickness_m: 0.3)],
             roof: Dome, roof_material: "snowblock", gable: "snowblock", floor: "snow", hut: true, door_m: (0.9, 1.9)),
+        // The jungle's (`cities-in-the-world` slice 4i): huts of lashed poles
+        // under a thatch of leaves, and the pole stair tower up to the
+        // platforms, roofed in the same thatch.
+        (name: "junglehut", label: "Kapok hut", walls: [(outside: "poles", inside: "poles", edge: "timber", thickness_m: 0.25)],
+            roof: Gable, roof_material: "leafthatch", pitch: 1.2, gable: "poles", floor: "plank", hut: true, door_m: (0.9, 1.9), window_m: Some((0.7, 0.6))),
+        (name: "poles", label: "Pole tower", walls: [(outside: "poles", inside: "poles", edge: "poles", thickness_m: 0.5)],
+            roof: Cone, roof_material: "leafthatch", gable: "poles", floor: "plank"),
     ],
 )

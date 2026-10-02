@@ -1483,7 +1483,9 @@ so the first can be looked at before it can be walked into.
         bright at noon as at midnight"). On white snow that warm term is
         stronger than on any ground the lights were judged on. Changing it
         changes an approved decision, so it is asked as survey L4 with the
-        camp's and the gate's shots.
+        camp's and the gate's shots. **Answered (2026-10-02):
+        "recommended"**: a lamp's light fades where the sun reaches it,
+        `lamps-and-lanterns` decision 15.
     - **Finding: a lamp lights the ground by a wall but not the wall
       (2026-10-02).** At 22:30 the ice gate's torches light the snow
       under them, and the ice of the wall a metre away stays as dark as
@@ -1542,6 +1544,343 @@ so the first can be looked at before it can be walked into.
       and the app's `every_desert_lays_and_cuts`,
       `every_tundra_camp_lays_and_cuts` and the two store-once tests hold
       it.
+- **4i in detail, the jungle (written 2026-10-02).** The owner: "alright
+  now jungle city". This is the mockup's `makeJungle`, on the jungle sites
+  a world stores. Three kapok trees stand in the jungle with a plank
+  platform round each, 9 m up. Rope bridges join the platforms. A pole
+  tower climbs to the first platform. There are huts on the platforms, two
+  huts on stilts on the ground, and a clearing with a fire pit. Each choice
+  below is a recommendation taken (ask only with screenshots).
+  - **The footprint is what the village built.**
+    - The whole floor is one area, "The jungle floor", and the stream is
+      "The stream". Both are wild (4e's `wild`), so the planet's own jungle,
+      trees and all, stands between the village's pieces, as the mockup's
+      scatter of trees does.
+    - The footprint is the cells the village builds on or over:
+      - every building's cells;
+      - each platform's seven cells;
+      - every cell a bridge's line crosses;
+      - the tower's door cell, and the stilt huts' decks and stair feet;
+      - the clearing: its fire pit's cell and the three the mockup keeps
+        its trees off;
+      - the cells its fires stand on (4e's rule).
+    - A planet tree in a footprint cell would grow through a platform or a
+      bridge, so none grows there (4a's clearing). And the ground under a
+      bridge is the terrace, so a bridge 8 m over it stays 8 m over it on
+      a hilly site.
+    - The exporter writes the clearing as `cleared`: the cells the mockup's
+      `NO_TREE` holds that no platform, building or deck already names.
+  - **Tops.** `redloam` is dirt and `litter` keeps the planet's top (4e's
+    `tops`). So the clearing and the paths read as the mockup's red earth.
+  - **Laid flat.** Every cell the village builds is on the floor at 1 m, the
+    stream is wild, and the scene's raised edges are wild too. So it is laid
+    as a village is, on one terrace at the template's 1 m, not terraced.
+    Its pieces' heights are over that datum: the platforms are 8 m over the
+    terrace.
+  - **The kapok.** The mockup's `kapok`, one at each platform's centre:
+    - A trunk 2.3 m across and 15 m tall, a 12-sided prism of `kapok`
+      bark. Six buttress fins round its foot. Five branches at its top,
+      fourteen blocks of `leaves` for its crown, and eight hanging vines.
+    - The mockup seeds each tree's fins, branches and leaves from where it
+      stands. The exporter writes each part as the mockup made it: its
+      material, centre, size and turn, in the mockup's metres. So the game
+      draws the mockup's trees, not a second copy of its random numbers.
+    - The trunk and the fins are solids (the mockup's `addSolid`), from
+      the ground to 2.2 m for a fin. The crown is not: nothing walks there.
+    - Each is cut in its own frame at its trunk, as a building is.
+    - The kapok is the template's, not the planet's flora. A world's jungle
+      trees are unchanged.
+  - **The platforms.** The mockup's `deck` at 9 m, a plank slab on each of
+    a platform's cells but the huts'.
+    - Each cell is the slab the stilts' deck is (4d), with its floor for
+      the walker. The centre cell's slab runs into the trunk, which holds
+      the walker off it.
+    - Rails stand on the outer edges, except where a bridge or the tower
+      comes in, and except an edge onto a hut. The exporter writes the
+      railed edges, so the game does not work out the gaps again.
+    - Six beams of kapok run from the trunk out under each ring cell,
+      2.4 m under the deck, as the mockup's.
+  - **The rope bridges.** The mockup's `bridge` with sag, three of them,
+    1.2 m wide, each sagging 0.8 m at its middle:
+    `h(t) = A + (B - A) t - 4 sag t (1 - t)`.
+    - Each is cut as a pier is (4d): in stretches, each flat in its own
+      frame, but sloped. A stretch is the mockup's rope span, about 1.4 m,
+      and its walk is a `Ramp` from `h` at its start to `h` at its end. The
+      steepest stretch is at the ends, at about 10 degrees on these bridges.
+    - The planks are the mockup's slats, one every 0.34 m, each a box in
+      its stretch's frame at `h` under it.
+    - Two ropes run each side, 0.5 m and 0.95 m up, with a post at each
+      span's start. At each end the ropes end on the platform edge's
+      corners, where its rails end (the mockup's `ends`, section 12b).
+    - Each span's rope is a wall solid to 1 m over the walk, so the walker
+      cannot step off the side. The ends are open.
+    - Its lanterns hang off the ropes every 5.5 m, on alternate sides: the
+      mockup's `bridgeLamps`. Each is a `LanternHanging` lamp in the
+      column under where it hangs.
+  - **The pole tower.** The mockup's `wallTower` in the `poles` kit: 4c's
+    stair tower, a newel from the ground up to 9 m, its exit onto the first
+    platform, its walls to 12 m, and a cone of `leafthatch` 2.6 m high. The
+    exporter writes it as the tundra's towers, from the call. The `poles`
+    kit is poles out, in and at the edges, 0.5 m thick, roofed in
+    `leafthatch`.
+  - **The tree huts.** The mockup's `building` with `raised: true`, on
+    ring cells at 9 m: two on the first platform, and one on each of the
+    others (the third the "Lookout hut").
+    - The `junglehut` kit, field for field: poles outside and in, timber
+      at the edges, 0.25 m thick. A `leafthatch` gable at pitch 1.2, a
+      plank floor, a door 0.9 × 1.9 m and windows 0.7 × 0.6 m. One storey,
+      a hut.
+    - A raised building has no ground under its floor. It gets the stilts'
+      floor slab under each of its cells, and a floor for the walker, but no
+      piles. The exporter writes `raised`, which every other template lacks,
+      so they re-export byte for byte.
+  - **The stilt huts.** The mockup's `stiltHouse`, as 4d's: two huts of
+    the `junglehut` kit, 1.2 m over the floor, each with a deck and a porch
+    stair. The exporter writes `stilts` for the jungle as for the sea.
+    - A stair's foot is stored over the town's terrace: the lay takes the
+      datum off `foot_m` (4d), so the jungle's lands on its floor as the
+      harbour's lands on its beach.
+  - **Lights at 9 m.**
+    - Two torches stand at each platform's rails, and a fire burns on the
+      second platform. Each is a lamp (task 5.2): a torch a `Torch`, the
+      fire a `Brazier`. A torch stands at each stilt hut's stair foot, and
+      the clearing has its fire pit.
+    - The exporter writes the platform's fire (the mockup's `addFire` on
+      the deck) as a fire. A fire inside a hearth or a pit is not written
+      twice.
+    - **A lamp's height (a fix).** `lamps_of` puts a lamp on a cell of the
+      town at the cell's terrace, whatever height the template gives it.
+      Only a lamp off the town's cells gets the template's height. A
+      platform's torch would stand on the ground 8 m under it.
+    - The rule becomes: a lamp stands at the higher of its cell's terrace
+      and the town's terrace plus its height over the datum.
+    - A lamp already standing on its ground keeps its layer. A test pins
+      every lamp of the village, the walled town, the harbour, the desert
+      and the tundra to the layer it has today, so only a raised lamp
+      moves.
+    - A lamp stands at its column's centre, as every town lamp does. So a
+      platform's torch stands at its ring cell's centre, 0.9 m in from where
+      the mockup's stands, and a bridge's lantern up to 1.4 m off the
+      bridge's line.
+  - **Not built.**
+    - The huts' beds, the platform's sleeping mat and the people wait for
+      furniture and folk.
+    - The scatter's basalt boulders are the planet's own ground.
+  - **Night.** At 22:30 the torches will light the ground under them and
+    the planks very little. A town's planks are one mesh, lit at the
+    corners of its bounds: the finding above ("a lamp lights the ground by
+    a wall but not the wall"). The jungle's planks are a platform 8 m up
+    and three bridges, so they show that finding more than any town yet.
+    Its fix, splitting a town's meshes, stays proposed, and the night shots
+    will show what it is for.
+  - **Saves.** A town is stored the first time it is met, as every town
+    is. Jungle sites have no town yet, so an old save gains them on its
+    next open, unless the player has worked their ground (4a). The kapoks,
+    platforms, bridges and lights are the template's and derived, never
+    saved. The lamp height fix moves no lamp of a town that already
+    stands.
+  - **Verify.**
+    - Core: `jungle.json` lays with the floor and the stream outside the
+      footprint, and the platforms, the bridge cells, the tower and the
+      clearing in it.
+    - Core: a walker goes in at the tower's door, climbs its newel and
+      steps out onto the first platform 8 m up. It walks to a bridge's end
+      and across it, down the sag and up again, held on the walk by its
+      ropes, to the second platform.
+    - Core: a walker on a bridge cannot step off its side.
+    - Core: a walker goes into a tree hut through its door, and onto a stilt
+      hut's deck by its porch stair.
+    - Core: every lamp of the other five templates stands where it stood,
+      and a platform's torches stand 8 m up.
+    - App: every jungle site lays and cuts, and a world stores each once.
+    - Shots beside the mockup's, by day and at 22:30: the clearing, the
+      tower's door, the platform, the bridge, a tree hut's door and the
+      lookout, and the village from above.
+  - **4i as built (2026-10-02).**
+    - **The export.** `tools/export_town_templates.js jungle` writes
+      `jungle.json`. The village, the walled town, the harbour, the desert
+      and the tundra re-export byte for byte.
+      - Six buildings: three tree huts at 9 m (the third the lookout), two
+        stilt huts, and the pole tower. The mockup asks for two huts on the
+        first platform but places one there, as no two of its free ring
+        cells are neighbours; the game has what it placed.
+      - Three kapoks of 33 parts each (six of them solid fins), three
+        platforms of six cells (the seventh is a hut's), 18 beams, and three
+        bridges of 22.5, 18.6 and 27.9 m. Their steepest spans are 6.5 to
+        9.8 degrees.
+      - Ten fires: six platform torches, the platform's fire, the clearing's
+        pit and a torch at each stilt hut. Nine bridge lanterns.
+    - **The footprint** on the test patch is 74 cells of the 1,700; the
+      rest keep the planet's jungle.
+    - **One lamp a column.** The third bridge passes over the clearing's
+      fire pit, and the lantern over it shares the pit's column. So 8 of
+      the 9 lanterns stand, and the pit keeps its column.
+    - **The platform's floor laps its cells by 6 cm.** The pole tower's newel
+      is cut in a frame on the ground and the platform in one 8 m up. Each
+      finds the shared edge from its own frame, so on the 300 m test body a
+      walker stepping out of the tower fell through a 4 cm gap (2 mm on the
+      game's planet). The lap closes it; the platform's outer edges are
+      railed, so it is never walked off.
+    - **A flat platform is 2.5 cm higher at its edge** than at its middle on
+      the test body (1.7 mm on the game's), which the walk tests allow.
+    - **The shots' height.** The column view stands its eye over the ground
+      it finds when it starts, the natural ground, before the town's ground
+      is installed. So a spot on the platforms gives its height over the
+      natural ground under it, as `every_jungle_village_lays_and_cuts`
+      prints it. A capture camera only.
+    - **The shots' doors.** `--open-doors` opened a town's doors only when a
+      walker is spawned, so in the column view the tree hut's door stood
+      shut where the mockup's stands open. It now opens them in the column
+      view too. A capture flag only: no door in the game changes.
+    - **Cost.** Each jungle village lays and cuts in 0.04 s (dev profile).
+      The frame cost was not measured in this cloud session.
+    - `the_jungle_lays_with_its_floor_wild_and_its_platforms_built`,
+      `a_walker_climbs_the_pole_tower_and_crosses_a_rope_bridge`,
+      `a_walker_goes_into_the_tree_huts_and_up_onto_the_stilt_huts`,
+      `no_lamp_of_an_older_town_moves`, and the app's
+      `every_jungle_village_lays_and_cuts` and
+      `a_world_stores_every_jungle_village_once` hold it.
+  - **Finding: the stair towers have no light (2026-10-02).** The owner,
+    on the jungle's night shots: "Stairway of the tree city doesn't have
+    lights. Are you using proper light baking? I wonder if backsides of
+    geometry should be lit too".
+    - **The sconces.** A newel's sconces are one a storey but the top
+      (`storeys - 1`). That is the mockup's count for a house, whose newel
+      climbs to its top floor. A stair tower is one storey as tall as its
+      walls, so it gets none: the jungle's pole tower, the walled town's
+      towers and the tundra's ice towers all climb in the dark.
+      - The mockup's rule is one a turn of the climb, `round((top - base) /
+        3 m)`, each 2.2 m over its tread on the stair's own wall. That is
+        three on the jungle's 8 m tower, and for a house the same number as
+        now.
+      - **Fix:** the count and heights follow the climb and the turn, as
+        the mockup's. Lights are derived and never saved, so every tower in
+        every town gains them on its next cut.
+    - **How a town's pieces are lit: not baked.** Two terms at draw time:
+      1. The planet's light field (the sky and the lamps, the field the
+         terrain is lit by), read at the eight corners of each mesh's bounds
+         and blended. A town's mesh is one a texture, tens of metres across,
+         so an outdoor lamp reaches the pieces beside it weakly or not at
+         all (the finding above, "a lamp lights the ground by a wall but not
+         the wall").
+      2. A building's own lights (a hearth, the sconces, the candles), per
+         pixel on its room faces: each within its reach and storey, weighted
+         `0.3 + 0.7 x` how squarely the face looks at it. A face turned away
+         by more than a little gets nothing.
+    - **Backsides.** In the terrain's field a face takes the light of the air
+      in front of it, so a face turned away from a lamp is lit by the light
+      that came round. Town pieces get that from neither term.
+      - **Fix now (recommendation taken, ask only with screenshots):** a
+        room face within a light's reach and storey takes at least the
+        `0.3` share, the light off the room's walls, whichever way it faces.
+        The underside of a tread over a sconce and the back of the newel
+        post are lit as the rest of the stairwell.
+      - **Proposed next: bake the field per vertex.** When a town's pieces
+        are cut, and when the field under them changes (dusk, a lamp placed
+        or dug), each vertex takes the field's sky and block from the air
+        0.3 m in front of its face, kept with the vertex. The shader reads
+        that in place of the corner blend. A lamp then lights the wall
+        beside it and the far side of a post as the terrain is lit. It
+        replaces "split a town's meshes". Its cost, a field sample per
+        vertex per rebake on the CPU, is measured before it is built.
+      - **Measured (2026-10-02),** `print_the_towns_vertex_counts` on the
+        test patch: a town's outside is 34,104 vertices (the jungle) to
+        151,167 (the walled town), and its rooms 3,489 to 92,949. A field
+        sample is a slot lookup and an interpolation, so a rebake is one
+        sample a vertex, about 150,000 at most, and 1.2 MB of upload for
+        two channels.
+      - **Only the outside.** The field does not see a town's walls: they
+        are pieces, not voxels. Baked into a room's faces, a street lamp
+        would shine through the wall onto them. So the bake is the outside
+        meshes'; a room keeps its own sky share and its own lights.
+      - The jungle's night shots show what it is for: the platforms' planks
+        and the bridges stay grey round their torches and lanterns, where
+        the mockup's are warm.
+      - **How it is built (recommendation taken, ask only with screenshots).**
+        - Each town's outside mesh carries a second UV channel, the field's
+          `(sky, block)` at each vertex, sampled 0.3 m along its normal. A
+          town is spawned with it unbaked (`-1`), which the shader reads as
+          "use the corners".
+        - The column tier counts its relights. A town's outside is rebaked
+          when the fine set that serves it or that count changes: a dig, a
+          lamp, dusk and dawn. The bake runs on the main thread under a
+          budget of vertices a frame, a town or two at a time.
+        - `field_lit.wgsl` takes the baked values where a vertex has them,
+          and the corner blend everywhere else: a room, a craft, a fish.
+        - Like any vertex lighting, a light in the middle of one large face
+          shows only at its corners. A platform's cells and the bridge's
+          slats are small; a long wall is two triangles.
+      - **Built (2026-10-02).** At 22:30 the jungle's first platform and
+        bridge take their torches' and lanterns' light on their planks,
+        rails and huts, where they were grey
+        (`docs/screenshots/cities-in-the-world/town-light-bake-2026-10-02.jpg`).
+      - **Verify.** An app test that a baked vertex beside a lamp is brighter
+        in `block` than one 10 m off, from a field made up for it; the
+        shader-text test for the baked branch; the jungle's platform and
+        bridge at 22:30 before and after.
+    - **Seen in the shot after (2026-10-02).** The pole tower's stair is lit
+      from about 2 m up. Its foot stays dim: the lowest sconce is 3.2 m up
+      and lights 1.2 m under itself, as the mockup's does, and the mockup's
+      foot is lit by the lantern it hangs beside every outdoor door
+      (`doorLamps`), which no town in the game has yet. A door's lantern is
+      a `LanternWall` lamp in the voxel field; proposed with the bake.
+    - **Verify.** Core: every stair's sconces are one a turn of its climb,
+      in every template; a house's count is as before. The shader-text test
+      holds the backside share. The jungle tower's stair at 22:30, before
+      and after.
+  - **Finding: a column can take its neighbour's ground (2026-10-02).**
+    Found when the crust test (T14) took in the jungle's six villages: in
+    Ixapaya, the footprint cell (30, 23) has no crust. Its own column finds
+    a margin cell 2.6 m away as its cell.
+    - A town's ground finds a direction's cell by the largest dot product
+      of the direction with each cell's centre (`TownGround::at`). At a
+      radius of 4800 m, neighbouring centres differ in that dot by about
+      1.5e-7. A product of two unit `f32` vectors is good to about 1e-7.
+      So both read 1.0 here, and the tie goes to the lower index. It is
+      the same flaw as the lamps' (finding above), in the lookup every
+      column's ground goes through.
+    - In the older towns a footprint cell's neighbours are mostly
+      footprint cells on the same terrace, so a wrong pick changes
+      nothing. The jungle's footprint is thin: a lone torch's cell, a
+      bridge's strip. There a wrong pick makes a footprint column a margin
+      column: no crust, eased rather than laid, and a tree may grow in it.
+    - **Measuring before fixing.** The fix is to compare chords, as the
+      lamps now do. But this lookup gives every column of every town its
+      height, top and trees, so a fix could move ground in worlds already
+      saved. An instrument (an ignored test) counts, over every footprint
+      and margin column of the shipped seed's older towns, how many find
+      another cell by chord than by dot, and how many of those would take
+      a different height, top, crust or clearing.
+    - **Measured (2026-10-02),** `print_the_ground_lookup_against_the_chord`
+      on the shipped seed:
+
+      | Towns | Columns | Another cell by dot | Another ground | Towns touched |
+      | --- | ---: | ---: | ---: | ---: |
+      | Villages | 49,092 | 4,638 | 1,056 | 20 |
+      | Walled towns | 13,071 | 1,173 | 394 | 6 |
+      | Harbours | 16,198 | 894 | 267 | 6 |
+      | Desert towns | 6,312 | 222 | 25 | 4 |
+      | Tundra camps | 6,088 | 517 | 148 | 4 |
+      | Jungle villages (new) | 2,651 | 216 | 64 | 6 |
+
+      So 1,860 columns of the 40 older towns would take another height,
+      top, crust or clearing. That is ground already in saved worlds.
+    - **Decision (recommendation taken, ask only with screenshots).** The
+      lookup is part of a town's laying-out rules, which each stored town
+      already names (`layout`, 1 so far, "a town is never rebuilt by it").
+      `LAYOUT_VERSION` becomes 2: a town laid from now on finds a
+      direction's cell by the nearest chord, and a stored town of layout 1
+      keeps the dot lookup, column for column.
+      - A town is stored the first time it is met, so every layout-2 town
+        is ground no one has seen. That includes every jungle village, and
+        an old save's sites not yet visited.
+      - Rejected: the chord everywhere (moves 1,860 columns under saved
+        towns), and the chord for the jungle only (the next template would
+        need the same exception).
+    - **Verify.** Core: a layout-2 town's every footprint and margin column
+      finds its own cell; a layout-1 town's lookup is unchanged (its ground's
+      digest and the measured counts above). App: the crust test holds on
+      every town, the jungle's included.
 - **Task 5.2 in detail, street lamps (written 2026-10-01).** Decision 7
   already puts a town's street lanterns in the voxel field as
   `lamps-and-lanterns`' dusk-lit materials. A street lamp is a
@@ -1601,6 +1940,41 @@ so the first can be looked at before it can be walked into.
       keeps the answer, and it moves into the survey doc when the connector
       is back. Nothing is built until the owner answers, since it changes
       existing saves.
+  - **Answered (2026-10-01, read 2026-10-02): "crust"**, the
+    recommendation, on its page. It moved into the survey doc's "Already
+    decided".
+  - **How it is built.**
+    - A town's ground answers, for a direction, the altitude of its
+      ground there when the direction is in its footprint (`crust`), and
+      nothing elsewhere: the margin's rings are eased natural ground and
+      keep their caves.
+    - The column's carve takes that altitude and opens no layer whose
+      centre is within `CRUST_LAYERS` (3) under it. Deeper layers carve as
+      before, so a cave under a town is still there, roofed.
+    - It is the one carve every column takes (`generate_edited`), so the
+      collision, the light and the drawing all see the same crust.
+    - A player's edits are applied after the carve, as before, so a hole
+      someone dug stays dug.
+  - **Saves.** Generated ground, never stored. In a save made since the
+    towns shipped, a cave mouth in a town's lanes, yards or floors fills
+    in where nobody has edited it: Holbrook's 4 cells and the rest of the
+    26 towns'. The owner chose this knowing it.
+  - **Verify.** A core test carves a surface-starting worm's column with
+    and without a crust: without, its top three layers open; with, they
+    hold and the layers under them still open. An app test asks every
+    town on the shipped seed: no footprint cell's top three layers open,
+    where 26 of 32 towns had some. Holbrook's lane before and after.
+  - **Built (2026-10-02).** `GroundAt::crust` and `ground::crust` answer
+    the footprint's terrace; `column::carve_worms` is the carve, with
+    `CRUST_LAYERS` 3. `a_crust_keeps_a_cave_mouth_out_of_the_top_three_layers`
+    carves 400 columns round a cave mouth with and without it: the crust
+    holds in every one, and everything under it opens as before.
+    `no_cave_opens_into_a_towns_ground` asks all 46 towns of the shipped
+    seed (the deserts, tundra camps and jungle villages among them): none of
+    their 36,074 footprint cells opens in its top three layers, where 32 of
+    the 46 had a cave mouth without the crust. The jungle's needed the
+    layout-2 ground lookup (finding below): a thin footprint read some of
+    its own columns as margin.
 - **Finding: half of every town's lamps stand nowhere (2026-10-02).** The
   tundra camp's shot at Torifjell has no camp fire where the mockup has one
   3 m ahead, and the desert's plaza shows none of its five braziers.
