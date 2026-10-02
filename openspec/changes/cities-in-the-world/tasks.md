@@ -55,6 +55,7 @@ The owner, 2026-09-30: "alright once your tuning is done, begin working on other
 - [ ] 0.19 Slice 4i, the jungle: kapok trunks, platforms 9 m up, rope bridges and the pole tower. Verify: a walk up the tower and across a bridge, and shots.
 - [ ] 0.20 Slice 4j, the caves: the chamber, tunnel, carved rooms and shaft (the rest of task 3.1a), with lights that burn all day. Verify: 3.1a's tests on the chamber, and shots from the portal and the ledge.
 - [ ] 0.21 Slice 4k, the mounds: turf domes, round doors, the vaulted back room, and a share of village sites taking the mound template by seed. Verify: a stored village keeps its template, and shots.
+- [ ] 0.22 A crust under towns (survey T14, "crust"; design, "Finding: caves open into towns' ground"): no worm opens a layer within three of a town's footprint ground, by the one carve every column takes. Verify: a core test of a surface-starting worm's column with and without the crust; an app test that no town on the shipped seed has a footprint cell open in its top three layers; Holbrook's lane before and after.
 
 ## 1. The pieces: `tenebris-towns`, built
 

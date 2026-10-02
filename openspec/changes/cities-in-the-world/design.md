@@ -1483,7 +1483,9 @@ so the first can be looked at before it can be walked into.
         bright at noon as at midnight"). On white snow that warm term is
         stronger than on any ground the lights were judged on. Changing it
         changes an approved decision, so it is asked as survey L4 with the
-        camp's and the gate's shots.
+        camp's and the gate's shots. **Answered (2026-10-02):
+        "recommended"**: a lamp's light fades where the sun reaches it,
+        `lamps-and-lanterns` decision 15.
     - **Finding: a lamp lights the ground by a wall but not the wall
       (2026-10-02).** At 22:30 the ice gate's torches light the snow
       under them, and the ice of the wall a metre away stays as dark as
@@ -1601,6 +1603,30 @@ so the first can be looked at before it can be walked into.
       keeps the answer, and it moves into the survey doc when the connector
       is back. Nothing is built until the owner answers, since it changes
       existing saves.
+  - **Answered (2026-10-01, read 2026-10-02): "crust"**, the
+    recommendation, on its page. It moved into the survey doc's "Already
+    decided".
+  - **How it is built.**
+    - A town's ground answers, for a direction, the altitude of its
+      ground there when the direction is in its footprint (`crust`), and
+      nothing elsewhere: the margin's rings are eased natural ground and
+      keep their caves.
+    - The column's carve takes that altitude and opens no layer whose
+      centre is within `CRUST_LAYERS` (3) under it. Deeper layers carve as
+      before, so a cave under a town is still there, roofed.
+    - It is the one carve every column takes (`generate_edited`), so the
+      collision, the light and the drawing all see the same crust.
+    - A player's edits are applied after the carve, as before, so a hole
+      someone dug stays dug.
+  - **Saves.** Generated ground, never stored. In a save made since the
+    towns shipped, a cave mouth in a town's lanes, yards or floors fills
+    in where nobody has edited it: Holbrook's 4 cells and the rest of the
+    26 towns'. The owner chose this knowing it.
+  - **Verify.** A core test carves a surface-starting worm's column with
+    and without a crust: without, its top three layers open; with, they
+    hold and the layers under them still open. An app test asks every
+    town on the shipped seed: no footprint cell's top three layers open,
+    where 26 of 32 towns had some. Holbrook's lane before and after.
 - **Finding: half of every town's lamps stand nowhere (2026-10-02).** The
   tundra camp's shot at Torifjell has no camp fire where the mockup has one
   3 m ahead, and the desert's plaza shows none of its five braziers.
