@@ -325,21 +325,40 @@ fn same_in_both(cell: Cell, a: Partition, b: Partition) -> bool {
     return true;
 }
 
-// Whether the records hold the old partition's cells at `direction` while a
-// fade runs (`detail-fade` design section 4): the old partition's level there
-// (the finest of its bands that covers the point) lies inside that level's
-// ring of the records, a tile inside. The base is always held. Where it is
-// not held, the old half of the dither would be a hole.
+// Whether the records hold every cell the old partition can draw at
+// `direction` while a landing dissolves (`detail-fade` section 4,
+// `dissolve-coverage`). Across a band's cross-fade ring the old partition
+// draws two levels, so each fine level it can draw there is asked: one inside
+// its band's outer edge and outside the next finer band's inner ring edge,
+// round the old centre, each reach widened by two tiles because a cell's level
+// is decided at its owner and its centre, not at the pixel. Each such level's
+// ring of the records, a tile inside, must hold the point. The base is always
+// held. Where any level is not, the old half of the dither would be a hole.
 fn old_held(direction: vec3<f32>) -> bool {
     let old = partition_of(PART_OLD);
+    let from_old = acos(clamp(dot(direction, old.anchor), -1.0, 1.0));
     let along = dot(direction, params.anchor.xyz);
-    for (var level = finest_level(); level > base_level(); level--) {
-        if dot(direction, old.anchor) > band_cos_in(old.bands, level) {
+    for (var level = base_level() + 1u; level <= finest_level(); level++) {
+        let out_cos = band_cos_in(old.bands, level);
+        if out_cos > 1.0 { continue; }
+        var inner = 0.0;
+        if level < finest_level() {
+            let in_cos = band_cos_in(old.bands_in, level + 1u);
+            if in_cos <= 1.0 { inner = acos(clamp(in_cos, -1.0, 1.0)) - 2.0*tile_angle(level); }
+        }
+        let outer = acos(clamp(out_cos, -1.0, 1.0)) + 2.0*tile_angle(level - 1u);
+        if from_old < outer && from_old >= inner {
             let k = level - base_level() - 1u;
-            return along <= params.records_in[k] && along >= params.records_out[k];
+            if !(along <= params.records_in[k] && along >= params.records_out[k]) { return false; }
         }
     }
     return true;
+}
+
+// A level's mean tile width as an angle on the unit sphere: `1.2087 / 2^level`
+// (the Tenebris gold standard's measured constant).
+fn tile_angle(level: u32) -> f32 {
+    return 1.2087/f32(1u << level);
 }
 
 // The list entry for a cell: its index, and which partition it is drawn for

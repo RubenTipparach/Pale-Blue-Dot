@@ -537,14 +537,16 @@ mod tests {
     /// (`cities-in-the-world` slice 4a), so the two dissolve alike.
     #[test]
     fn a_fading_town_takes_the_terrains_mask() {
-        let town = include_str!("../../../assets/shaders/field_lit.wgsl");
-        let terrain = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        // A checkout may carry either line ending (`core.autocrlf`).
+        let town = include_str!("../../../assets/shaders/field_lit.wgsl").replace("\r\n", "\n");
+        let terrain =
+            include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
         let body = |s: &str| {
             let i = s.find("fn bayer4").expect("a bayer4");
             let j = s[i..].find("\n}\n").expect("its end");
             s[i..i + j].to_string()
         };
-        assert_eq!(body(town), body(terrain));
+        assert_eq!(body(&town), body(&terrain));
         assert!(town.contains("if bayer4(in.position.xy) < field.centre.w {"));
     }
 
@@ -553,7 +555,7 @@ mod tests {
     /// numbers.
     #[test]
     fn the_field_lit_shader_carries_the_terrain_light_constants() {
-        let shader = include_str!("../../../assets/shaders/field_lit.wgsl");
+        let shader = include_str!("../../../assets/shaders/field_lit.wgsl").replace("\r\n", "\n");
         for line in [
             format!("const AMBIENT_FLOOR: f32 = {:.2};", light::AMBIENT_FLOOR),
             format!("const NIGHT_FILL: f32 = {:.2};", light::NIGHT_FILL),

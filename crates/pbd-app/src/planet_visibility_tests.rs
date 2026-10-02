@@ -746,6 +746,8 @@ fn actual_gpu_cross_fade_lists_each_partition_it_draws() {
     let short = |held: bool| {
         let mut p = fading(-2., -2., 1.);
         p.bands_prev = Vec4::new(-2., -2., -2., 2.);
+        // A band not laid has no ring either (`LodParams::of`).
+        p.bands_prev_in = Vec4::new(-2., -2., -2., 2.);
         if !held {
             // Level 10's ring holds nothing: an outer cosine of 2.
             p.records_out.z = 2.;
@@ -754,4 +756,312 @@ fn actual_gpu_cross_fade_lists_each_partition_it_draws() {
     };
     expect(&gpu, &cells, short(true), &[PART_NEW], &[]);
     expect(&gpu, &cells, short(false), &[0], &[]);
+}
+
+/// The shipped `old_held` on the GPU: the visibility shader with a probe entry
+/// point appended, which writes `old_held` of each point into its `w`.
+fn probe_old_held(gpu: &VisibilityGpu, params: PlanetParams, points: &[Vec3]) -> Vec<bool> {
+    const PROBE: &str = "
+@group(0) @binding(8) var<storage,read_write> probe: array<vec4<f32>>;
+@compute @workgroup_size(64)
+fn probe_old_held(@builtin(global_invocation_id) id: vec3<u32>) {
+    if id.x >= arrayLength(&probe) { return; }
+    let p = probe[id.x];
+    probe[id.x] = vec4(p.xyz, select(0.0, 1.0, old_held(p.xyz)));
+}
+";
+    let source = format!(
+        "{}\n{PROBE}",
+        include_str!("../../../assets/shaders/planet_visibility.wgsl")
+    );
+    let shader = gpu
+        .device
+        .create_and_validate_shader_module(ShaderModuleDescriptor {
+            label: Some("planet_visibility.wgsl with an old_held probe"),
+            source: ShaderSource::Wgsl(source.into()),
+        });
+    let pipeline = gpu
+        .device
+        .create_compute_pipeline(&RawComputePipelineDescriptor {
+            label: Some("old_held probe"),
+            layout: None,
+            module: &shader,
+            entry_point: Some("probe_old_held"),
+            compilation_options: default(),
+            cache: None,
+        });
+    let layout = BindGroupLayout::from(pipeline.get_bind_group_layout(0));
+    let mut uniform = UniformBuffer::from(params);
+    uniform.write_buffer(&gpu.device, &gpu.queue);
+    let words: Vec<[f32; 4]> = points.iter().map(|p| p.extend(0.).to_array()).collect();
+    let probe = gpu.device.create_buffer_with_data(&BufferInitDescriptor {
+        label: Some("old_held probe points"),
+        contents: bytemuck::cast_slice(&words),
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+    });
+    let bytes = (words.len() * 16) as u64;
+    let readback = gpu.device.create_buffer(&BufferDescriptor {
+        label: Some("test-only old_held readback"),
+        size: bytes,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let bind_group = gpu.device.create_bind_group(
+        "old_held probe inputs",
+        &layout,
+        &BindGroupEntries::with_indices(((0, &uniform), (8, probe.as_entire_binding()))),
+    );
+    let mut encoder = gpu
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    {
+        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+        pass.set_bind_group(0, &*bind_group, &[]);
+        pass.set_pipeline(&pipeline);
+        pass.dispatch_workgroups((words.len() as u32).div_ceil(64), 1, 1);
+    }
+    encoder.copy_buffer_to_buffer(&probe, 0, &readback, 0, bytes);
+    let submitted = gpu.queue.submit([encoder.finish()]);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let slice = readback.slice(..);
+    slice.map_async(MapMode::Read, move |result| sender.send(result).unwrap());
+    gpu.device
+        .poll(PollType::Wait {
+            submission_index: Some(submitted),
+            timeout: Some(Duration::from_secs(30)),
+        })
+        .expect("old_held probe must finish");
+    receiver
+        .recv_timeout(Duration::from_secs(30))
+        .expect("readback callback must run")
+        .expect("probe readback must map");
+    let mapped = slice.get_mapped_range();
+    let out: &[[f32; 4]] = bytemuck::cast_slice(&mapped);
+    out.iter().map(|w| w[3] > 0.5).collect()
+}
+
+/// The side of the great circle through `a` and `b` that `centre` is on.
+fn edge_sign(a: Vec3, b: Vec3, centre: Vec3) -> f32 {
+    a.cross(b).dot(centre).signum()
+}
+
+/// One level's records, bucketed on a tangent plane round `centre` so the
+/// record holding a point is found among a few.
+struct LevelIndex<'a> {
+    records: &'a [GpuCell],
+    buckets: std::collections::HashMap<(i32, i32), Vec<u32>>,
+    size: f32,
+    frame: (Vec3, Vec3, Vec3),
+}
+
+impl<'a> LevelIndex<'a> {
+    fn new(records: &'a [GpuCell], size: f32, frame: (Vec3, Vec3, Vec3)) -> Self {
+        let mut index = Self {
+            records,
+            buckets: default(),
+            size,
+            frame,
+        };
+        for (i, cell) in records.iter().enumerate() {
+            let key = index.key(Vec3::from_slice(&cell.direction_height[..3]));
+            index.buckets.entry(key).or_default().push(i as u32);
+        }
+        index
+    }
+
+    fn key(&self, v: Vec3) -> (i32, i32) {
+        let (centre, e1, e2) = self.frame;
+        let scale = PLANET_RADIUS / v.dot(centre).max(1e-3);
+        (
+            (v.dot(e1) * scale / self.size).floor() as i32,
+            (v.dot(e2) * scale / self.size).floor() as i32,
+        )
+    }
+
+    /// Whether a record's own hexagon contains `p`. Every record near it is
+    /// asked, not only the nearest centre: on the geodesic dual the nearest
+    /// centre is not always the cell a point lies in.
+    fn holds(&self, p: Vec3) -> bool {
+        let (x, y) = self.key(p);
+        let contains = |cell: &GpuCell| {
+            let degree = (cell.metadata[0] & 0xff) as usize;
+            let centre = Vec3::from_slice(&cell.direction_height[..3]);
+            centre.dot(p) > 0.0
+                && (0..degree).all(|i| {
+                    let a = Vec3::from_slice(&cell.corners[i][..3]);
+                    let b = Vec3::from_slice(&cell.corners[(i + 1) % degree][..3]);
+                    // A few centimetres of rounding: a point on a corner
+                    // the cells share, where two of a hexagon's corners
+                    // nearly meet, otherwise falls outside all of them.
+                    let edge = a.cross(b).normalize() * edge_sign(a, b, centre);
+                    edge.dot(p) >= -5e-6
+                })
+        };
+        (x - 1..=x + 1).any(|i| {
+            (y - 1..=y + 1).any(|j| {
+                self.buckets
+                    .get(&(i, j))
+                    .into_iter()
+                    .flatten()
+                    .any(|&n| contains(&self.records[n as usize]))
+            })
+        })
+    }
+}
+
+/// A measurement instrument (`dissolve-coverage` design section 4): where a
+/// landing's dissolve lets the new ground stand aside for the old, does the
+/// old partition have a cell to draw? Real fine sets before and after a move,
+/// the shipped `old_held`, and the records' own hexagons. A hole is a point
+/// `old_held` calls held where a level the old partition can draw there has
+/// no record containing it.
+#[test]
+#[ignore = "requires a GPU; run cargo test -p pbd-app --lib dissolve_coverage -- --ignored --nocapture"]
+fn dissolve_coverage_on_real_fine_sets() {
+    let gpu = VisibilityGpu::new();
+    let width = 0.3;
+    let a = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+    let tangent = Vec3::Y.cross(a).normalize();
+    let axis = a.cross(tangent).normalize();
+    let columns = crate::config::ColumnSettings::default();
+    let edits = pbd_core::edits::Edits::new();
+    eprintln!("h m | d m | points | held | holes strict | holes slack | missing by level (strict)");
+    let mut total_strict = 0usize;
+    let mut total_slack = 0usize;
+    for h in [0.0f32, 60.0, 150.0] {
+        let live = lod::live_bands_m(PLANET_RADIUS + h, PLANET_RADIUS);
+        let regen = lod::regen_m(h);
+        let old = lod::generate_fine_live(a, live, regen, &columns, &edits, 4, None, width);
+        let old_lod = lod::LodParams::of(&old);
+        for d in [20.0f32, 80.0, 200.0, 400.0] {
+            let b = Quat::from_axis_angle(axis, d / PLANET_RADIUS) * a;
+            let new = lod::generate_fine_live(
+                b,
+                live,
+                regen,
+                &columns,
+                &edits,
+                4,
+                Some(old.replaced()),
+                width,
+            );
+            let new_lod = lod::LodParams::of(&new);
+            // The old fade centre trails the camera toward the new anchor, as
+            // far from its own anchor as its fit lets it.
+            let old_centre = toward(a, b, old.fit_m() / PLANET_RADIUS);
+            let (records_in, records_out) = lod::records_cosines(&new.rings());
+            let mut params = params(1, 0., 0.);
+            params.settings = Vec4::new(PLANET_RADIUS, 1., 0., 1200.);
+            params.lod = new.anchor.extend(lod::BASE_LEVEL as f32);
+            params.bands = new_lod.bands;
+            params.bands_in = new_lod.bands_in;
+            params.anchor = new.anchor.extend(0.);
+            params.lod_prev = old_centre.extend(0.);
+            params.bands_prev = old_lod.bands;
+            params.bands_prev_in = old_lod.bands_in;
+            params.records_in = records_in;
+            params.records_out = records_out;
+            params.fade = Vec4::new(0., 0.5, 1., 0.);
+            // Points on a tangent-plane grid round the new anchor, every 8 m
+            // out past the coarsest band.
+            let e2 = new.anchor.cross(tangent).normalize();
+            let e1 = e2.cross(new.anchor).normalize();
+            let frame = (new.anchor, e1, e2);
+            let reach = 2_900.0f32;
+            let step = 8.0f32;
+            let n = (reach / step) as i32;
+            let mut points = Vec::new();
+            for i in -n..=n {
+                for j in -n..=n {
+                    let (x, y) = (i as f32 * step, j as f32 * step);
+                    if x * x + y * y > reach * reach {
+                        continue;
+                    }
+                    points.push((new.anchor + (e1 * x + e2 * y) / PLANET_RADIUS).normalize());
+                }
+            }
+            let held = probe_old_held(&gpu, params, &points);
+            let index: Vec<LevelIndex> = (0..4)
+                .map(|k| {
+                    LevelIndex::new(
+                        &new.levels[k],
+                        // Two tiles a bucket: the tangent plane stretches a
+                        // cell by up to a third at the coarsest band's edge.
+                        2.0 * lod::tile_width_m(lod::FINE_LEVELS[k]),
+                        frame,
+                    )
+                })
+                .collect();
+            let angle =
+                |cos: f32| (cos <= 1.0).then(|| cos.clamp(-1.0, 1.0).acos() * PLANET_RADIUS);
+            let out_m: [Option<f32>; 4] = std::array::from_fn(|k| angle(old_lod.bands[k]));
+            let in_m: [Option<f32>; 4] = std::array::from_fn(|k| angle(old_lod.bands_in[k]));
+            let (mut holes_strict, mut holes_slack, mut n_held) = (0usize, 0usize, 0usize);
+            let mut missing = [0usize; 4];
+            // Where the holes are: per level, metres from the old centre in
+            // 100 m steps.
+            let mut at: [std::collections::BTreeMap<i32, usize>; 4] = default();
+            for (p, &is_held) in points.iter().zip(&held) {
+                if !is_held {
+                    continue;
+                }
+                n_held += 1;
+                let r = p.dot(old_centre).clamp(-1.0, 1.0).acos() * PLANET_RADIUS;
+                let mut strict = false;
+                let mut slack = false;
+                for k in 0..4 {
+                    let Some(outer) = out_m[k] else { continue };
+                    let inner = if k + 1 < 4 {
+                        in_m[k + 1].unwrap_or(0.0)
+                    } else {
+                        0.0
+                    };
+                    let coarser = lod::tile_width_m(lod::FINE_LEVELS[k] - 1);
+                    let own = lod::tile_width_m(lod::FINE_LEVELS[k]);
+                    // Strict: the level's band at the pixel. Slack: as far as a
+                    // cell of it can reach, its level being decided at its
+                    // owner and its centre: under a tile of the level below
+                    // past the band, and of its own inside the finer ring.
+                    // Measured at a tile and a half, inside the rule's two.
+                    let draws_strict = r < outer && r >= inner;
+                    let draws_slack = r < outer + 1.5 * coarser && r >= inner - 1.5 * own;
+                    if !draws_slack || index[k].holds(*p) {
+                        continue;
+                    }
+                    slack = true;
+                    if draws_strict {
+                        strict = true;
+                        missing[k] += 1;
+                        *at[k].entry((r / 100.0) as i32 * 100).or_default() += 1;
+                    }
+                }
+                holes_strict += usize::from(strict);
+                holes_slack += usize::from(slack);
+            }
+            eprintln!(
+                "{h:>3} | {d:>3} | {} | {n_held} | {holes_strict} | {holes_slack} | L8..L11 {missing:?}  (old fit {:.0} m, new rings {:?})",
+                points.len(),
+                old.fit_m(),
+                new.rings().map(|r| [r[0].round(), r[1].round()])
+            );
+            for (k, by) in at.iter().enumerate() {
+                if !by.is_empty() {
+                    eprintln!(
+                        "      L{} holes by metres from the old centre: {by:?}",
+                        8 + k
+                    );
+                }
+            }
+            total_strict += holes_strict;
+            total_slack += holes_slack;
+        }
+    }
+    eprintln!("total holes: strict {total_strict}, slack {total_slack}");
+    // `dissolve-coverage`: wherever `old_held` lets the new ground stand
+    // aside, every level the old partition can draw there has its cell.
+    assert_eq!(
+        (total_strict, total_slack),
+        (0, 0),
+        "the dissolve shows the sky through the ground"
+    );
 }

@@ -1576,6 +1576,42 @@ fn puddle_noise(p: vec2<f32>) -> f32 {
 const PUDDLE_MASK_MEAN: f32 = 0.5003;
 const PUDDLE_MASK_SPREAD: f32 = 0.1587;
 
+// Whether the records hold every cell the old partition can draw at
+// `direction` while a landing dissolves (`detail-fade` section 4,
+// `dissolve-coverage`). Across a band's cross-fade ring the old partition
+// draws two levels, so each fine level it can draw there is asked: one inside
+// its band's outer edge and outside the next finer band's inner ring edge,
+// round the old centre, each reach widened by two tiles because a cell's level
+// is decided at its owner and its centre, not at the pixel. Each such level's
+// ring of the records, a tile inside, must hold the point. The base is always
+// held. Where any level is not, the old half of the dither would be a hole.
+fn old_held(direction: vec3<f32>) -> bool {
+    let old = partition_of(PART_OLD);
+    let from_old = acos(clamp(dot(direction, old.anchor), -1.0, 1.0));
+    let along = dot(direction, params.anchor.xyz);
+    for (var level = base_level() + 1u; level <= finest_level(); level++) {
+        let out_cos = band_cos_in(old.bands, level);
+        if out_cos > 1.0 { continue; }
+        var inner = 0.0;
+        if level < finest_level() {
+            let in_cos = band_cos_in(old.bands_in, level + 1u);
+            if in_cos <= 1.0 { inner = acos(clamp(in_cos, -1.0, 1.0)) - 2.0*tile_angle(level); }
+        }
+        let outer = acos(clamp(out_cos, -1.0, 1.0)) + 2.0*tile_angle(level - 1u);
+        if from_old < outer && from_old >= inner {
+            let k = level - base_level() - 1u;
+            if !(along <= params.records_in[k] && along >= params.records_out[k]) { return false; }
+        }
+    }
+    return true;
+}
+
+// A level's mean tile width as an angle on the unit sphere: `1.2087 / 2^level`
+// (the Tenebris gold standard's measured constant).
+fn tile_angle(level: u32) -> f32 {
+    return 1.2087/f32(1u << level);
+}
+
 // An ordered 4 x 4 Bayer threshold for a pixel, 0..1: the screen-door mask a
 // fading piece is drawn through (`detail-fade`). Fixed to the screen, so a
 // piece that stands still at one fade holds one still pattern.
@@ -1615,8 +1651,17 @@ fn dropped(input: VertexOut) -> bool {
     // one elsewhere. Its own mask, interleaved gradient noise, so it does not
     // run in step with the distance cross-fade's.
     let dissolve = fract(52.9829189*fract(dot(input.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
-    if input.part_mark != PART_BOTH && ((input.part_mark == PART_NEW) != (dissolve < params.fade.y)) {
-        return true;
+    // Whether the old partition is there to draw this pixel's old half is
+    // judged at the pixel itself, not at the cell's centre (`town-flyover`,
+    // the owner's "gaps in the terrain"): a coarse new cell tested at its
+    // centre spans old cells past the records' ring, and its old half there
+    // showed the sky through the ground. Where the old cell is not held, the
+    // new cell keeps the pixel and the old one gives it up.
+    if input.part_mark != PART_BOTH {
+        let new_half = dissolve < params.fade.y;
+        let held = old_held(radial);
+        if input.part_mark == PART_NEW && !new_half && held { return true; }
+        if input.part_mark == PART_OLD && (new_half || !held) { return true; }
     }
     // The partition in this pixel's dither class (`distance-lod-fade`): the
     // cell is drawn where its owner is in its band (the nearer owner, for a
