@@ -46,9 +46,9 @@ The owner, 2026-09-30: "alright once your tuning is done, begin working on other
   - core walker tests along the main pier to its head, into a boathouse from the sea, and up a fish hut's porch stair onto its deck and in at its door;
   - an app test that every harbour lays and cuts and is stored once, and the placement scan's time recorded in the design;
   - shots beside the mockup's: the harbour from the pier head, from 60 m by day and at night, a fish hut and a boathouse.
-- [ ] 0.15 Slice 4e, the desert: the sandstone and adobe kits, walkable flat roofs with parapets and their gaps, domes, outdoor stairs, the oasis. Verify: the walker up an outdoor stair onto a roof, and shots.
+- [ ] 0.15 Slice 4e, the desert (design, "4e and 4g in detail"): the sandstone and adobe kits, walkable flat roofs with parapets and their gaps, domes, outdoor stairs, the oasis. Verify: the walker up an outdoor stair onto a roof, and shots.
 - [ ] 0.16 Slice 4f, the mountain: the alpine kit, its terraces, switchback stairs, and the rock-cut rooms as the first hollows (task 3.1a). Verify: 3.1a's tests on the cliff's rooms, and shots.
-- [ ] 0.17 Slice 4g, the tundra: the granite longhouse, igloos with their tunnels, the ice keep and wall. Verify: the walker into an igloo through its tunnel, and shots.
+- [ ] 0.17 Slice 4g, the tundra (design, "4e and 4g in detail"): the granite longhouse, igloos with their tunnels, the ice keep and wall. Verify: the walker into an igloo through its tunnel, and shots.
 - [ ] 0.18 Slice 4h, the swamp: the alder kit, stilt floors on piles, decks, porch stairs, boardwalks and the jetty over the bayou. Verify: a walk along the boardwalk into a stilt house, and shots.
 - [ ] 0.19 Slice 4i, the jungle: kapok trunks, platforms 9 m up, rope bridges and the pole tower. Verify: a walk up the tower and across a bridge, and shots.
 - [ ] 0.20 Slice 4j, the caves: the chamber, tunnel, carved rooms and shaft (the rest of task 3.1a), with lights that burn all day. Verify: 3.1a's tests on the chamber, and shots from the portal and the ledge.

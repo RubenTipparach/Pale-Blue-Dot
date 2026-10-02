@@ -1288,6 +1288,138 @@ so the first can be looked at before it can be walked into.
       3. The dressing: the fish market's stalls, nets, racks, pots,
          barrels and crates, and the shipyard.
       4. The cog, `sail-the-cog`'s own change.
+- **4e and 4g in detail, the desert and the tundra (written 2026-10-02).**
+  The owner: "work on snow and desert cities next". These are the mockup's
+  `makeDesert` and `makeTundra`, on the 4 desert and 4 tundra sites a world
+  stores. The desert comes first, then the tundra, each ending in shots
+  beside the mockup's. Each choice below is a recommendation taken (ask
+  only with screenshots).
+  - **What is shared.**
+    - **Footprint by area.** The rule that every top other than grass or
+      sand is built (4b) paves both scenes whole. The desert's dunes are
+      `sand2`, and the tundra's open ground is snow and sage. So a template
+      may name its wild areas (`wild`): "The dunes" and "The tundra". Their
+      cells are not built. The footprint is the buildings, the masonry and
+      every other painted cell, and two yard rings. A template without
+      `wild` is as it was, so the village, the walled town and the harbour
+      re-export byte for byte.
+    - **Tops.** A template may map its tops to the terrain's (`tops`). The
+      desert's are `sand2` and `sand` to sand, and the plaza's `flag` to
+      stone. The tundra's are `snow` and `ice` to snow, and `sage` to the
+      planet's own. `Top` gains `Snow`. Every other template keeps its rule,
+      and a stored town keeps the tops it was laid with.
+    - **Laid on levels.** Both are terraced (4b), at the site's seeded
+      turn as a village is. The desert's plateau is level 2 and its oasis
+      level 1. The tundra's camp and castle are level 1. Its lake is 0.6 m
+      in the mockup, which is laid at level 0, with the ice at 0.6 m.
+    - **Lights.** The mockup's lanterns, braziers, torches and the camp's
+      fire go through task 5.2's lamps, in the first air layer over their
+      cells: a lantern is a `LanternPost`, a brazier and the fire pit a
+      `Brazier`, and a torch a `Torch`. The exporter writes `lanterns`
+      for every scene. Until now it wrote them only for the sea.
+    - **Saves.** A town is stored the first time it is met, as every town
+      is. Desert and tundra sites have no town yet, so an old save gains
+      them on its next open, unless the player has worked their ground
+      (4a). Both are terraced, so they are written in schema 2. A build that
+      does not know `Top::Snow` refuses a tundra's record as damaged rather
+      than laying it wrong.
+  - **4e, the desert.** A sandstone town on a plateau, round a sunken oasis.
+    - **The kits**, field for field from the mockup's `KITS`:
+      - `sandstone`: sandstone outside, salt plaster in, 0.5 m. A flat roof
+        topped with clay tile, a clay-tile floor, and 0.6 × 0.8 m windows.
+      - `adobe`: clay outside, salt plaster in, 0.5 m. A dome of salt
+        plaster, a sand floor, and 0.5 × 0.6 m windows.
+    - **A walked flat roof with a gap.** The five sandstone houses have the
+      keep's walked roof (4c): its top in the kit's roof material, with
+      merlons on its outer edges. A building's `parapet_gaps` leave one edge
+      without merlons, where its outside stair arrives (the mockup's
+      `parapetGaps`).
+    - **An outside stair.** The mockup's `stairRun`: a straight flight of
+      solid steps, 1.1 m wide, from the ground at the house's east end up to
+      the roof's gap, about 17 risers of 0.19 m. The exporter writes each as
+      `stairs: [{from, to, width_m, material}]`. The game cuts it as the
+      harbour's porch stair, with solid steps rather than open treads. The
+      walker climbs it as any stair.
+    - **The dome.** Roof `dome`: a 0.25 m cap over every cell, and a
+      half-ellipsoid on it, the mockup's `domeCap`. One cell has a dome
+      0.46 of a cell across. Seven cells (the caravan hall) have a dome
+      1.35 cells across over the middle, as high as it is across. Inside, the
+      cap's underside is the ceiling. The hall is one tall storey (`tall:
+      2`), with an open doorway, no leaf.
+    - **The plaza and the oasis.** The plaza's flags are stone, and the
+      oasis is a sand hollow a metre down. The mockup draws no water there,
+      so the game draws none. A pool in a town is the swamp's work (4h).
+    - **Dressing.** The four market stalls, the hall's crates and the
+      cacti round the oasis are 4.2c's pieces, written for every scene. The
+      cactus is new: a ribbed column with two arms, the mockup's `cactus`.
+      The dunes' cacti are the planet's own flora. The pots, cloth and tables
+      inside the houses are furniture, which no town has yet.
+    - **Verify.**
+      - Core: `desert.json` lays on a test patch with the dunes outside the
+        footprint, and the plaza at one level and the oasis a level under
+        it.
+      - Core: a walker climbs a sandstone house's outside stair onto its
+        roof, through the parapet's gap, and is held by the merlons.
+      - Core: a walker goes into a domed house and is held by its walls,
+        and the dome is over the walker's head.
+      - App: every desert site lays and cuts, and a world stores each once.
+      - Shots beside the mockup's, by day and at 22:30: the plaza, a roof
+        from its stair, a domed house, and the caravan hall.
+  - **4g, the tundra.** Igloos round a fire, a granite longhouse, and an
+    ice castle on a frozen lake's shore.
+    - **The kits:**
+      - `granite`: granite outside, plank in, 0.6 m. A gable of sage turf
+        at pitch 0.5, a plank floor, and a hearth (decision 7a's).
+      - `ice`: ice outside and in, 0.6 m, and a snow floor. Its walked roof
+        is topped with snow, and its turret is a spire of ice.
+      - `igloo`: snow blocks, cut by its own shape (below).
+    - **The ice keep, its wall and its towers.** These are 4c's masonry,
+      in ice.
+      - The keep is the mockup's `ringKeep`: two storeys round a newel,
+        and a walked roof. Its turret is a 5 m spire of ice where the
+        town's is 2.6 m of slate. The exporter writes it from the
+        `ringKeep` call rather than from the town's area names.
+        `NewelDef` gains `spire_m`.
+      - The curtain wall is the hex ring of four round the keep, 5 m over
+        the camp, with its gate. Merlons stand on its outward edges, and the
+        gate's arch is 4 m, as the town's.
+        - The exporter writes it from the `curtainWall` call. The template
+          names the masonry's material (`masonry_material: ice, snow`),
+          where the town's is rubble and stone.
+      - The two ice towers are 4c's stair towers, from the `wallTower`
+        call, in the `ice` kit with a 5 m spire.
+    - **The igloo.** It is the first building not cut to its cell.
+      - A dome of snow blocks 4.6 m across and 2.5 m high stands on one
+        cell and spills over its ring.
+      - A vaulted tunnel runs out along its door's direction, 2 m wide and
+        2.25 m high outside.
+      - Both are cut as the mockup cuts them: the dome is cut to the
+        tunnel's outer profile, and the tunnel's shell reaches 2 cm into
+        the dome, so there is no seam (12b).
+      - The walker is held as the mockup holds it. Sixteen wall segments
+        inside the dome's low edge stop at the tunnel. The tunnel's walls
+        stand either side, with its roof over them. The dome's underside is
+        the ceiling.
+      - An igloo is a building record (kit `igloo`, its cell and its door),
+        so a town can say who lives in one later.
+    - **The longhouse** is a granite building of ten cells, with its
+      hearth. Its benches and beds are furniture, as the desert's are.
+    - **The frozen lake.** It is laid a layer down and floored with a
+      sheet of ice at 0.6 m. The sheet is a walked floor in the `ice`
+      texture over the snow, and it is the template's, like the piers.
+    - **Dressing.** The fire pit is a stone ring with a brazier's light, and
+      the two drying racks are posts with a hide. The shrubs and boulders
+      round the camp are the planet's own flora.
+    - **Verify.**
+      - Core: `tundra.json` lays with the open tundra outside the
+        footprint, and the lake a level under the camp.
+      - Core: a walker goes in through an igloo's tunnel, stands up inside,
+        and is held by its wall. It cannot walk out through the dome.
+      - Core: a walker goes through the ice gate, up a tower and onto the
+        wall walk, as 4c's test does in the town.
+      - App: every tundra site lays and cuts, and a world stores each once.
+      - Shots beside the mockup's, by day and at 22:30: the camp, an
+        igloo, the longhouse, the gate and the keep's roof.
 - **Task 5.2 in detail, street lamps (written 2026-10-01).** Decision 7
   already puts a town's street lanterns in the voxel field as
   `lamps-and-lanterns`' dusk-lit materials. A street lamp is a
