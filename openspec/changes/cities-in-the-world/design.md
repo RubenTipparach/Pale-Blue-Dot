@@ -1466,6 +1466,24 @@ so the first can be looked at before it can be walked into.
       - One departure: a second ring of wall round the dome's foot. In the
         mockup, a walker outside walks 0.6 m into the dome's shell before
         the inner ring stops it.
+    - **The keep's roof shot.** A walker is placed on the terrain under its
+      spot, which under the keep is its ground floor, so the roof is shot
+      from the column view at the roof's height. The column view faces
+      east; it now takes `--yaw` as the walk does (east turned about the
+      up by minus the yaw, 0 leaving it east), so it can look where the
+      mockup's `keepRoof` looks. A capture camera only: the game's own
+      cameras do not change.
+    - **Seen in the tundra's shots (2026-10-02).**
+      - The camp's fire pit is a brazier block where the mockup has a ring
+        of stones round embers. The gate's torches are the player's torch,
+        a stick of 0.55 m, where the mockup's stand 2 m on poles.
+      - By day the camp fire and the gate's torches turn the snow round
+        them tan, like sand. They are always lit, and `lamps-and-lanterns`
+        adds a lamp's light without scaling it by daylight ("a torch is as
+        bright at noon as at midnight"). On white snow that warm term is
+        stronger than on any ground the lights were judged on. Changing it
+        changes an approved decision, so it is asked as survey L4 with the
+        camp's and the gate's shots.
     - **Not built.**
       - The plaza's flags become the terrain's stone, which reads red in a
         desert, where the mockup's are pale. The shots show it.

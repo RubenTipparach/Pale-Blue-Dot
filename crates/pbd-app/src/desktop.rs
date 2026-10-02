@@ -2065,10 +2065,13 @@ fn photo_camera(
         // so a forced storm (`--rain`) brews directly under it at any height.
         // The spawn is `spawn_direction`'s, so `--spawn desert` stands it over
         // a desert (`bigger-biomes` 4.1); without `--spawn` it is the default.
+        // `--yaw` turns it off east as it turns a walker.
         let direction = spawn_direction(&launch);
         let height = launch.height.unwrap_or(EYE_HEIGHT);
         let position = direction * (terrain_radius(direction) + height);
-        let east = Vec3::Y.cross(direction).normalize_or_zero();
+        let yaw = launch.yaw.unwrap_or(0.0).to_radians();
+        let east =
+            Quat::from_axis_angle(direction, -yaw) * Vec3::Y.cross(direction).normalize_or_zero();
         let pitch = launch.pitch.unwrap_or(-30.0).to_radians();
         let forward = east * pitch.cos() + direction * pitch.sin();
         let mut transform = Transform::from_translation(position).looking_to(forward, direction);

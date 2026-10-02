@@ -9,7 +9,7 @@ const fs = require("fs"); const { chromium } = require("playwright");
 // A spot is a `GOTO` name, or a cell to stand in and a cell to look at.
 const VIEWS = {
   desert: { plaza: "plaza", roofstair: "roofStair", roof: "roof", domed: [[16, 14], [14, 14]], hall: [[32, 23], [35, 23]] },
-  tundra: { camp: "camp", igloo: "igloo", longhouse: "longhouse", gate: "gate", lake: "lake" },
+  tundra: { camp: "camp", igloo: "igloo", longhouse: "longhouse", gate: "gate", keeproof: "keepRoof", lake: "lake" },
 };
 (async () => {
   const [scene, out] = process.argv.slice(2);

@@ -1452,6 +1452,39 @@ fn print_the_water_at_the_sailing_berths() {
     }
 }
 
+/// The mockup's overview of a scene (its `ORB`: yaw -1.9, pitch 0.72 round
+/// the scene's centre) as a column view's spot, yaw, height and pitch. The
+/// game's lens is wider than the mockup's 50 degrees, so it stands at 0.7
+/// of the scene's distance. The centre may be off the town's chart (a
+/// tundra camp's is open ground), so the template's axes are read at a
+/// spot on it and carried there.
+fn overview(
+    point: &dyn Fn(f32, f32) -> Vec3,
+    (sx, sz): (f32, f32),
+    (tx, tz): (f32, f32),
+    dist_m: f32,
+) -> String {
+    let radius_m = crate::planet::terrain_config().radius_m;
+    let (yaw, pitch) = (-1.9f32, 0.72f32);
+    let (out, up) = (0.7 * dist_m * pitch.cos(), 0.7 * dist_m * pitch.sin());
+    // The template's x and z on the planet, at the spot and so at the centre.
+    let spot = point(sx, sz);
+    let x = (point(sx + 1.0, sz) - spot).normalize();
+    let z = (point(sx, sz + 1.0) - spot).normalize();
+    let target = (spot + (x * (tx - sx) + z * (tz - sz)) / radius_m).normalize();
+    let from = (target - (x * yaw.cos() + z * yaw.sin()) * out / radius_m).normalize();
+    // Turned as a walker's `--yaw` turns it: off east about the up.
+    let east = Vec3::Y.cross(from).normalize();
+    let along = target - from;
+    let t = (along - from * along.dot(from)).normalize();
+    let turn = -east.cross(t).dot(from).atan2(east.dot(t)).to_degrees();
+    let (lat, lon) = pbd_core::geo::lat_lon(from).degrees();
+    format!(
+        "--view column --at {lat:.5} {lon:.5} --yaw {turn:.1} --height {up:.0} --pitch {:.1}",
+        -pitch.to_degrees()
+    )
+}
+
 /// Slice 4e: every desert site of the shipped seed lays and cuts whole: its
 /// buildings, its five roof stairs and its dressing, every thing on its
 /// chart. It prints where to stand for the desert's shots.
@@ -1515,6 +1548,17 @@ fn every_desert_lays_and_cuts() {
         let (hall, arch) = (mid(35, 23), mid(32, 23));
         let (rx, rz) = sea::centre(21, 9, cell_m);
         let roof = point(rx, rz + 1.2);
+        // The mockup's overview: round the oasis's row 17 at column 25, 115 m.
+        println!(
+            "{}: overview {}",
+            site.name,
+            overview(
+                &point,
+                sea::centre(25, 17, cell_m),
+                (cell_m * 25.0, cell_m * 0.75f32.sqrt() * 17.0),
+                115.0
+            )
+        );
         println!(
             "{}: laid and cut in {:.2} s; plaza {} --yaw {:.1}; roof stair {} --yaw {:.1}; roof {} --yaw {:.1}; domed house {} --yaw {:.1}; hall {} --yaw {:.1}",
             site.name,
@@ -1660,6 +1704,35 @@ fn every_tundra_camp_lays_and_cuts() {
         let (gx, gz) = sea::centre(31, 16, cell_m);
         let (gate, keep) = (point(gx - 4.5, gz), mid(35, 16));
         let (lake, shore) = (mid(12, 27), mid(12, 22));
+        // The keep's roof, as the mockup's `keepRoof`: on its door's cell,
+        // looking on out past the door, at the roof's height plus an eye
+        // over the keep's ground (a column view).
+        let (rx, rz) = sea::centre(34, 16, cell_m);
+        let (roof, beyond) = (point(rx - 0.3, rz), mid(33, 16));
+        let keep_top = template
+            .buildings
+            .iter()
+            .find_map(|b| b.newel.as_ref().filter(|_| b.name == "The ice keep"))
+            .unwrap()
+            .top_m;
+        let roof_m = keep_top - record::datum(&template) as f32 + EYE_HEIGHT;
+        // The mockup's overview: round column 24, row 16, at 125 m.
+        println!(
+            "{}: overview {}",
+            site.name,
+            overview(
+                &point,
+                sea::centre(13, 12, cell_m),
+                (cell_m * 24.0, cell_m * 0.75f32.sqrt() * 16.0),
+                125.0
+            )
+        );
+        println!(
+            "{}: keep roof {} --yaw {:.1} --height {roof_m:.2}",
+            site.name,
+            at(roof),
+            yaw(roof, beyond),
+        );
         println!(
             "{}: laid and cut in {:.2} s; camp {} --yaw {:.1}; igloo {} --yaw {:.1}; longhouse {} --yaw {:.1}; gate {} --yaw {:.1}; lake {} --yaw {:.1}",
             site.name,
