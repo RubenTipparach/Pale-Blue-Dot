@@ -1796,6 +1796,12 @@ so the first can be looked at before it can be walked into.
       - The jungle's night shots show what it is for: the platforms' planks
         and the bridges stay grey round their torches and lanterns, where
         the mockup's are warm.
+    - **Seen in the shot after (2026-10-02).** The pole tower's stair is lit
+      from about 2 m up. Its foot stays dim: the lowest sconce is 3.2 m up
+      and lights 1.2 m under itself, as the mockup's does, and the mockup's
+      foot is lit by the lantern it hangs beside every outdoor door
+      (`doorLamps`), which no town in the game has yet. A door's lantern is
+      a `LanternWall` lamp in the voxel field; proposed with the bake.
     - **Verify.** Core: every stair's sconces are one a turn of its climb,
       in every template; a house's count is as before. The shader-text test
       holds the backside share. The jungle tower's stair at 22:30, before

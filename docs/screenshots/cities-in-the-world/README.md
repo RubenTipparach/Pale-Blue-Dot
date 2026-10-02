@@ -299,3 +299,44 @@ Same capture setup as above: the column view straight down at Holbrook's
 first mouth (`--at 29.88359 1.40006 --height 10 --pitch -89 --time 10.9`),
 and the tundra's camp and gate spots at 11:00. The frame cost was not
 measured in this cloud session.
+
+## Slice 4i: the jungle village, beside the mockup (2026-10-02)
+
+`jungle-4i-2026-10-02.jpg`: Copan, one of the shipped seed's six jungle
+villages, at each of the mockup's own spots by day and at 22:30, the mockup
+on the left and the game on the right.
+
+- From above: three kapoks with their crowns, the platforms round them 8 m
+  up, the three rope bridges, the tree huts and the stilt huts, and the red
+  clearing, the planet's own jungle standing round them.
+- The clearing, the tower's door, the first platform, the first bridge (a
+  tenth of the way along its sag), a tree hut's door and the lookout.
+- At 22:30 the platforms' torches and the bridges' lanterns stand and burn,
+  but the planks round them stay grey where the mockup's are warm: a town's
+  pieces take the light field at only the eight corners of each mesh's
+  bounds. Baking the field per vertex is written up as the next step
+  (design, "Finding: the stair towers have no light").
+- Seen and not built: the people, the beds and the sleeping mat
+  (furniture and folk), and the mockup's lantern beside every outdoor door.
+
+`jungle-stair-lights-2026-10-02.jpg`: the owner's "Stairway of the tree
+city doesn't have lights", before and after.
+
+- The pole tower's stair at 22:30. Before, no stair tower in any town had a
+  sconce: they were counted one a storey but the top, and a tower is one
+  storey as tall as its walls. Now there is one a 3 m turn of the climb, as
+  the mockup's `newelStair` hangs them, and a room light also reaches a face
+  turned away from it at its 0.3 share. The stair is lit from about 2 m up;
+  its foot stays dim, where the mockup's is lit by the lantern beside its
+  door (not built).
+- The tree hut by day: `--open-doors` now opens the doors in a still view
+  too, so the hut is seen through its door as the mockup's is.
+
+In-game captures on lavapipe at 1440 x 900 with no GPU, the fast build under
+`xvfb-run`, a new memory-only world, `--open-doors --rain 0 --weather-at
+7200`, at Copan (4.3 S, 21.9 W), `--time 12.45` for 11:00 and `--time 23.95`
+for 22:30 (Copan's own sun). The spots are printed by
+`every_jungle_village_lays_and_cuts`; those on the platforms are column views
+at their height over the natural ground, which is what the column view
+measures from. They show what things look like, not how smoothly they run;
+the frame cost was not measured in this cloud session.
