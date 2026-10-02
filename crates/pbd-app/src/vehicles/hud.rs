@@ -10,7 +10,7 @@ use super::{Aboard, Vehicle, view::VehicleView};
 use crate::walking::{Walker, WalkingState};
 use avian3d::prelude::Position;
 use bevy::prelude::*;
-use pbd_core::vehicle::{CraftState, SailState, Telemetry};
+use pbd_core::vehicle::{CraftState, Kind, SailState, Telemetry};
 use std::fmt::Write;
 
 #[derive(Component)]
@@ -176,6 +176,8 @@ fn panel(vehicle: &Vehicle, seat: bool) -> String {
                 "power stroke"
             } else if t.stroke.is_some() {
                 "recovering"
+            } else if craft.kind == Kind::Rowboat {
+                "oars resting"
             } else {
                 "paddle resting"
             };
