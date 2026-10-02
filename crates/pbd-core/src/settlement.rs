@@ -13,6 +13,7 @@
 //! cells, and its roof.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 pub mod chart;
 pub mod ground;
@@ -86,6 +87,275 @@ pub struct Template {
     /// The harbour's light on its mole (slice 4d).
     #[serde(default)]
     pub light: Option<RoundTower>,
+    /// The harbour's boats on the water (task 4.2b).
+    #[serde(default)]
+    pub boats: Vec<Boat>,
+    /// The things it stands about its lanes, quay and piers (task 4.2c).
+    #[serde(default)]
+    pub dressing: Vec<Dress>,
+    /// The harbour's shipyard (task 4.2c).
+    #[serde(default)]
+    pub shipyard: Option<Shipyard>,
+    /// The harbour's cog at its mooring (`sail-the-cog` design 6, step 1).
+    #[serde(default)]
+    pub cog: Option<Cog>,
+    /// The areas whose cells keep the planet's ground (slices 4e and 4g):
+    /// the desert's dunes, the open tundra. Where a template names some,
+    /// every other cell is built, whatever its top.
+    #[serde(default)]
+    pub wild: Vec<String>,
+    /// Its tops on the terrain's (`sand`, `stone`, `snow`, `dirt`), by the
+    /// mockup's texture; a top it does not name keeps the planet's. Where a
+    /// template names none, [`record::Top`]'s own rule holds.
+    #[serde(default)]
+    pub tops: BTreeMap<String, String>,
+    /// Its fires (slices 4e and 4g): braziers, torches and fire pits, each
+    /// a lamp in the first air layer over where it stands (task 5.2).
+    #[serde(default)]
+    pub fires: Vec<Fire>,
+    /// Its outside stairs (slice 4e): the sandstone houses' flights up to
+    /// their roofs.
+    #[serde(default)]
+    pub stairs: Vec<OutsideStair>,
+    /// What its masonry is made of (slice 4g), where it is not the walled
+    /// town's rubble.
+    #[serde(default)]
+    pub masonry_material: Option<MasonryMaterial>,
+    /// Its frozen lake (slice 4g): the cells laid a layer under the shore,
+    /// floored with ice at `top_m` over the template's 0 m.
+    #[serde(default)]
+    pub frozen: Option<Frozen>,
+}
+
+/// What a town's masonry is made of (slice 4g): its walls and merlons, and
+/// its walk's top. The walled town's is rubble under flagstones, with
+/// stone under a gate's vault; the tundra's is ice under snow, ice under
+/// its gate too.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct MasonryMaterial {
+    pub wall: String,
+    pub top: String,
+}
+
+impl Default for MasonryMaterial {
+    fn default() -> Self {
+        Self {
+            wall: "rubble".into(),
+            top: "flag".into(),
+        }
+    }
+}
+
+impl MasonryMaterial {
+    /// Under a gate's vault: the walled town's dressed stone, or the wall's
+    /// own.
+    pub fn vault(&self) -> &str {
+        if self.wall == "rubble" {
+            "stone"
+        } else {
+            &self.wall
+        }
+    }
+}
+
+/// A frozen lake (slice 4g): its cells, and its ice's top in the mockup's
+/// metres.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Frozen {
+    pub top_m: f32,
+    pub cells: Vec<[i32; 2]>,
+}
+
+/// A fire a town burns (slices 4e and 4g), where the mockup stands it:
+/// `(x, z)` in its metres, `y` its height there.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Fire {
+    /// `brazier`, `torch` or `fire` (a fire pit).
+    pub kind: String,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl Fire {
+    /// The lamp it is in the voxel field: a brazier's for a brazier and a
+    /// fire pit, a torch's for a torch.
+    pub fn material(&self) -> crate::terrain::Material {
+        match self.kind.as_str() {
+            "torch" => crate::terrain::Material::Torch,
+            _ => crate::terrain::Material::Brazier,
+        }
+    }
+}
+
+/// A straight flight of solid steps outside (slice 4e), the mockup's
+/// `stairRun`: from its foot `from` up to its head `to`, `[x, y, z]` in the
+/// mockup's metres, `width_m` wide, its steps of `material`.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct OutsideStair {
+    pub from: [f32; 3],
+    pub to: [f32; 3],
+    pub width_m: f32,
+    pub material: String,
+}
+
+/// The harbour's cog (`sail-the-cog` design 6, step 1): moored with its
+/// middle at `(x, z)` in the mockup's metres, its bow along `heading` (from
+/// `x` toward `z`), its gangway on `gang_side` (+1 or -1 across it), and
+/// its gangplank up from the pier to its deck.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Cog {
+    pub x: f32,
+    pub z: f32,
+    pub heading: f32,
+    pub gang_side: i32,
+    pub gangplank: Pier,
+}
+
+/// A thing a town stands about (task 4.2c), where the mockup puts it:
+/// `(x, z)` in its metres, `y` the height it stands at there (the game
+/// stands it on what is under it), and `angle` its turn from `x` toward
+/// `z`.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Dress {
+    /// A market stall: posts, a counter, a sloped awning of `cloth` and its
+    /// goods on the counter.
+    Stall {
+        x: f32,
+        y: f32,
+        z: f32,
+        cloth: String,
+        goods: Vec<Goods>,
+    },
+    /// Nets hung to dry on three posts and a bar.
+    NetRack {
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+    },
+    /// Fish hung to dry on two posts and a bar.
+    FishRack {
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+    },
+    /// A lobster pot, `lift_m` over its pile's foot at `y`.
+    Pot {
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+        lift_m: f32,
+    },
+    Crate {
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+        side_m: f32,
+    },
+    Barrel {
+        x: f32,
+        y: f32,
+        z: f32,
+    },
+    Bollard {
+        x: f32,
+        y: f32,
+        z: f32,
+        radius_m: f32,
+        height_m: f32,
+    },
+    /// An oar stood on end.
+    Oar {
+        x: f32,
+        y: f32,
+        z: f32,
+    },
+    /// A boat on land: keel up on trestles where `beached`, else on its
+    /// keel. `boat` is the mockup's kind (`rowboat`, `sail`, `canoe`).
+    Boat {
+        boat: String,
+        x: f32,
+        y: f32,
+        z: f32,
+        angle: f32,
+        beached: bool,
+    },
+    /// A cactus (slice 4e), `scale` times the mockup's 2.4 m one.
+    Cactus {
+        x: f32,
+        y: f32,
+        z: f32,
+        scale: f32,
+    },
+}
+
+impl Dress {
+    /// Where it stands in the mockup's metres, `(x, z)`.
+    pub fn at(&self) -> (f32, f32) {
+        match *self {
+            Dress::Stall { x, z, .. }
+            | Dress::NetRack { x, z, .. }
+            | Dress::FishRack { x, z, .. }
+            | Dress::Pot { x, z, .. }
+            | Dress::Crate { x, z, .. }
+            | Dress::Barrel { x, z, .. }
+            | Dress::Bollard { x, z, .. }
+            | Dress::Oar { x, z, .. }
+            | Dress::Boat { x, z, .. }
+            | Dress::Cactus { x, z, .. } => (x, z),
+        }
+    }
+
+    /// Its height in the mockup, metres over the template's 0 m.
+    pub fn y(&self) -> f32 {
+        match *self {
+            Dress::Stall { y, .. }
+            | Dress::NetRack { y, .. }
+            | Dress::FishRack { y, .. }
+            | Dress::Pot { y, .. }
+            | Dress::Crate { y, .. }
+            | Dress::Barrel { y, .. }
+            | Dress::Bollard { y, .. }
+            | Dress::Oar { y, .. }
+            | Dress::Boat { y, .. }
+            | Dress::Cactus { y, .. } => y,
+        }
+    }
+}
+
+/// A box of goods on a stall's counter, of `material`.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Goods {
+    pub material: String,
+    pub x: f32,
+    pub z: f32,
+}
+
+/// The harbour's shipyard (task 4.2c): a hull in frame on its keel blocks
+/// at `(x, z)`, along `x`, its slip down into the water, and a stack of
+/// planks at `planks` (`[x, y, z]`), all in the mockup's metres.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Shipyard {
+    pub x: f32,
+    pub z: f32,
+    pub slip: Pier,
+    pub planks: [f32; 3],
+}
+
+/// A boat on the water (task 4.2b): the mockup's kind (`rowboat`, `sail`,
+/// `canoe`), where it lies in the mockup's metres, and its heading, the bow
+/// along `(cos, sin)` in `(x, z)`.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Boat {
+    pub kind: String,
+    pub x: f32,
+    pub z: f32,
+    pub heading: f32,
 }
 
 /// A pier (slice 4d): a deck of planks `width_m` wide from `from` to `to`,
@@ -168,6 +438,15 @@ pub struct BuildingDef {
     /// seaward side, the mockup's `skipWall`.
     #[serde(default)]
     pub open: Vec<[i32; 3]>,
+    /// A walked flat roof's parapet wall, but at these `[c, r, d]` edges
+    /// (slice 4e), where an outside stair comes up: the mockup's
+    /// `flatRoof` with its `parapetGaps`. None for a roof not walked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parapet_gaps: Option<Vec<[i32; 3]>>,
+    /// `[c, r, d, storey]`: doorways with no leaf (slice 4e), the mockup's
+    /// open doors.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub archways: Vec<[i32; 4]>,
     /// A house on piles (slice 4d): the harbour's fish huts.
     #[serde(default)]
     pub stilts: Option<Stilts>,
@@ -201,6 +480,11 @@ pub struct NewelDef {
     /// edge's wall.
     #[serde(default)]
     pub exits: Vec<(u8, f32)>,
+    /// How high the spire over it rises (slice 4g): the ice keep's and its
+    /// towers' 5 m. None for the walled town's, a tower's 2.6 m and the
+    /// keep's turret's 2.4 m.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spire_m: Option<f32>,
 }
 
 fn one() -> u32 {
@@ -228,16 +512,38 @@ impl Template {
     /// The cells a building stands on or a lane crosses: what the ground is
     /// terraced under. Offset coordinates, sorted.
     pub fn built_cells(&self) -> Vec<[i32; 2]> {
+        // A template that names its wild areas builds every other cell
+        // (slices 4e and 4g); one that does not, every top but grass and
+        // sand (slice 1).
+        let built = |g: &&GroundCell| {
+            if self.wild.is_empty() {
+                g.top != "grass" && g.top != "sand"
+            } else {
+                !self.wild.contains(&g.area)
+            }
+        };
+        // There, the cells its fires, lanterns and dressing stand on are
+        // built too: the tundra's camp fire stands on the open tundra.
+        let things: Vec<[i32; 2]> = if self.wild.is_empty() {
+            Vec::new()
+        } else {
+            self.fires
+                .iter()
+                .map(|f| (f.x, f.z))
+                .chain(self.lanterns.iter().map(|l| (l[0], l[2])))
+                .chain(self.dressing.iter().map(Dress::at))
+                .map(|(x, z)| {
+                    let (c, r) = sea::cell_at(x, z, self.grid.cell_m);
+                    [c, r]
+                })
+                .collect()
+        };
         let mut cells: Vec<[i32; 2]> = self
             .buildings
             .iter()
             .flat_map(|b| b.cells.iter().copied())
-            .chain(
-                self.ground
-                    .iter()
-                    .filter(|g| g.top != "grass" && g.top != "sand")
-                    .map(|g| [g.c, g.r]),
-            )
+            .chain(self.ground.iter().filter(built).map(|g| [g.c, g.r]))
+            .chain(things)
             .collect();
         cells.sort();
         cells.dedup();
@@ -251,6 +557,9 @@ pub enum RoofKind {
     Gable,
     Cone,
     Flat,
+    /// A cap over its cells and a half-ellipsoid on it (slice 4e), the
+    /// mockup's `domeCap`: the adobe houses' and the caravan hall's.
+    Dome,
 }
 
 /// One storey's wall.

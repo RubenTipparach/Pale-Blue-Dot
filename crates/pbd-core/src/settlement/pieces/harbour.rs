@@ -29,7 +29,13 @@ const PORCH_WIDTH_M: f32 = 1.1;
 
 /// A cell's corners in a frame, in the mockup's corner order (edge `d` from
 /// corner `d` to `d + 1`), as `cut_building` takes them.
-fn corners(patch: &Patch, chart: &Chart, frame: &Frame, c: i32, r: i32) -> Option<[Vec2; 6]> {
+pub(super) fn corners(
+    patch: &Patch,
+    chart: &Chart,
+    frame: &Frame,
+    c: i32,
+    r: i32,
+) -> Option<[Vec2; 6]> {
     let at = chart.cells.get(&(c, r))?;
     let cell = &patch.cells[at.cell];
     let mut out = [Vec2::ZERO; 6];

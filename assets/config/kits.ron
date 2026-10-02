@@ -7,7 +7,7 @@
 // and edge (the wall's end and top) textures, and its thickness in metres.
 // Texture names are `assets/textures/settlement/<name>.png`.
 // `roof`: a gable in `roof_material` ("thatch", "shingle", "slate", "tile",
-// "turf"), a six-sided `Cone`, or `Flat` with a parapet. `pitch` is rise
+// "turf"), a six-sided `Cone`, `Flat` with a parapet, or a `Dome`. `pitch` is rise
 // over run (1 is 45 degrees). Doors and windows in metres, wide by high.
 (
     kits: [
@@ -48,5 +48,22 @@
             roof: Gable, roof_material: "slate", pitch: 0.9, gable: "whitewash", floor: "flag", chimney: Some("whitewash")),
         (name: "driftwood", label: "Driftwood", walls: [(outside: "driftwood", inside: "driftwood", edge: "timber", thickness_m: 0.25)],
             roof: Gable, roof_material: "thatch", gable: "driftwood", floor: "plank"),
+        // The desert's (`cities-in-the-world` slice 4e): rust sandstone under
+        // a walked roof of clay tile, and mud brick under a dome of salt
+        // plaster.
+        (name: "sandstone", label: "Sandstone", walls: [(outside: "sandstone", inside: "salt", edge: "sandstone", thickness_m: 0.5)],
+            roof: Flat, roof_material: "claytile", gable: "sandstone", floor: "claytile", window_m: Some((0.6, 0.8))),
+        (name: "adobe", label: "Adobe dome", walls: [(outside: "clay", inside: "salt", edge: "clay", thickness_m: 0.5)],
+            roof: Dome, roof_material: "salt", gable: "clay", floor: "sand2", window_m: Some((0.5, 0.6))),
+        // The tundra's (`cities-in-the-world` slice 4g): a longhouse of cold
+        // granite under a turf roof, the castle's ice (its walked roof
+        // topped with its snow floor, its spires of ice), and the igloo's
+        // snow blocks, which it cuts by its own shape.
+        (name: "granite", label: "Granite longhouse", walls: [(outside: "granite", inside: "plank", edge: "granite", thickness_m: 0.6)],
+            roof: Gable, roof_material: "sage", pitch: 0.5, gable: "granite", floor: "plank"),
+        (name: "ice", label: "Ice", walls: [(outside: "ice", inside: "ice", edge: "ice", thickness_m: 0.6)],
+            roof: Flat, roof_material: "ice", gable: "ice", floor: "snow", door_m: (1.2, 2.5), window_m: Some((0.4, 1.2))),
+        (name: "igloo", label: "Igloo", walls: [(outside: "snowblock", inside: "snowblock", edge: "snowblock", thickness_m: 0.3)],
+            roof: Dome, roof_material: "snowblock", gable: "snowblock", floor: "snow", hut: true, door_m: (0.9, 1.9)),
     ],
 )

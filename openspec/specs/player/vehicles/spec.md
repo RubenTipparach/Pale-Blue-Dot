@@ -76,6 +76,51 @@ the apparent wind, and its keel SHALL resist leeway with lift.
 - **WHEN** the Tern is driven hard on a broad reach
 - **THEN** its speed levels off near sqrt(g L / 2 pi) for its waterline length
 
+### Requirement: A sailing boat's keel lifts to the water under it
+The Tern's keel SHALL go as deep as the water under it allows, its ballast
+with it: it SHALL rise at once when the seabed comes up under it and lower at
+its rate when the water deepens. A Tern SHALL float upright, moored, in half a
+metre of water, and in open water its keel SHALL be all the way down
+(`vehicle::tests::a_terns_keel_lifts_to_the_water_under_it`).
+
+#### Scenario: Moored in the shallows
+- **WHEN** a Tern is moored in 0.5 m of water in a 6 m/s wind
+- **THEN** its keel lifts clear of the seabed at once and it heels under 8
+  degrees
+
+#### Scenario: Out into deep water
+- **WHEN** a Tern with its keel lifted comes over deep water
+- **THEN** the keel is about half way down after 1.5 s and all the way down
+  after 3.5 s
+
+### Requirement: The rowboat is its own craft and rows
+The harbour's rowboat SHALL be its own craft, `Kind::Rowboat`, at the towns
+mockup's size (4.2 m by 1.45 m, 0.6 m deep), rowed with the Loon's stroke on
+its own spec (`rowboat` in `vehicles.ron`). It SHALL float upright empty and
+with its rower aboard, and row ahead
+(`vehicle::tests::a_rowboat_floats_upright_empty_and_with_its_rower_and_rows_ahead`).
+
+#### Scenario: Afloat with its rower
+- **WHEN** a rowboat with its rower aboard settles on the sea for 30 s
+- **THEN** it stands within 3 degrees of upright, keel under the water and
+  gunwale more than 0.2 m over it
+
+#### Scenario: Rowing ahead
+- **WHEN** its rower rows ahead for 30 s from rest
+- **THEN** it has gone more than 20 m ahead and makes more than 0.8 m/s
+
+### Requirement: An open boat's floor stays over the sea
+An open boat (the Loon and the rowboat) SHALL be drawn with floorboards laid
+3 cm over the still water it floats in with its paddler aboard, along the trim
+the paddler gives it, inside its drawn planks, so the sea's sheet never shows
+inside it (`vehicle::tests::an_open_boats_floorboards_stand_over_the_sea_inside_its_hull`).
+
+#### Scenario: Through a swell
+- **WHEN** a Loon or a rowboat with its paddler aboard rides the sea's swell
+  for 25 s
+- **THEN** every corner of its floorboards stays more than 1.5 cm over the
+  sea
+
 ### Requirement: A paddle stroke is drag on the blade
 Each stroke SHALL apply the blade's hydrodynamic drag against the local water
 velocity at the blade's position, so a stroke on one side turns the canoe and

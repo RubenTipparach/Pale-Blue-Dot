@@ -2,7 +2,8 @@
 //! the apparent wind until the sheet stops it; the angle between the stopped
 //! sail and the wind is what drives the boat. A ballasted keel stops her
 //! sliding sideways and, heeled, brings her upright; the crew hikes out to
-//! help. Resistance climbs a wall near hull speed.
+//! help. The keel lifts in shallow water, its ballast with it, so she lies
+//! at a harbour's berth. Resistance climbs a wall near hull speed.
 
 use super::foil::{self, FoilForce};
 use super::hull::{bilge_flow, float, resist};
@@ -22,6 +23,9 @@ pub struct TernState {
     pub boom: f64,
     /// Where the crew sits across the boat, m; positive to starboard.
     pub crew: f64,
+    /// How far the keel is down: 1 all the way, 0 lifted into the hull
+    /// (`TernSpec::lift`). Not saved: the water under it sets it.
+    pub keel: f64,
 }
 
 impl Default for TernState {
@@ -31,6 +35,7 @@ impl Default for TernState {
             tiller: 0.0,
             boom: 0.0,
             crew: 0.0,
+            keel: 1.0,
         }
     }
 }
@@ -69,6 +74,8 @@ pub struct TernTelemetry {
     pub sail: FoilForce,
     pub keel: FoilForce,
     pub sail_state: SailState,
+    /// How far the keel is down, 0 to 1.
+    pub keel_down: f64,
     pub boom: f64,
     pub sheet: f64,
     pub displaced_m3: f64,
@@ -156,8 +163,25 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         FoilForce::default()
     };
 
+    // The keel goes as deep as the water under it allows: up at once as the
+    // seabed comes up under it, down at its rate as the water deepens. Its
+    // foil, ballast and tip go with it; lifted, its foil is short.
+    let lift = &s.lift;
+    let tip = body.point(v3(s.contacts[lift.tip].at) - com);
+    let short = ((cx.env.ground)(tip) + lift.clearance_m as f64 - tip.length()).max(0.0);
+    let most = if lift.rise_m > 0.0 {
+        (1.0 - short / lift.rise_m as f64).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    st.keel = (st.keel + lift.rate as f64 * h).min(most);
+    let raised = lift.raised_m(st.keel) as f32;
+    let mut keel_spec = s.keel;
+    keel_spec.at[1] += raised;
+    keel_spec.area_m2 *= st.keel.max(0.25) as f32;
+
     // The keel and the rudder, where they are in the water.
-    let keel = cx.wet_foil(body, &s.keel, com, 0.0);
+    let keel = cx.wet_foil(body, &keel_spec, com, 0.0);
     cx.wet_foil(body, &s.rudder, com, st.tiller);
     let (_, surface_water) = cx.water(body.position, 0.3);
     let froude = resist(
@@ -200,8 +224,12 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         let moved = body.point(at + DVec3::X * slosh) - body.point(at);
         body.twist(moved.cross(cx.env.gravity * *bilge));
     }
-    for leg in &s.contacts {
-        contact(body, leg, com, cx.env.ground, true);
+    for (n, leg) in s.contacts.iter().enumerate() {
+        let mut leg = *leg;
+        if n == lift.tip {
+            leg.at[1] += raised;
+        }
+        contact(body, &leg, com, cx.env.ground, true);
     }
 
     let forward = body.axis(FORWARD);
@@ -238,6 +266,7 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
         sail,
         keel,
         sail_state,
+        keel_down: st.keel,
         boom: st.boom,
         sheet: st.sheet,
         displaced_m3: displaced,

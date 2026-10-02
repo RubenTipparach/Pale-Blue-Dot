@@ -1277,6 +1277,734 @@ so the first can be looked at before it can be walked into.
         `a_world_stores_every_harbour_once` (schema 3, a second open
         writes nothing) hold it. `print_where_the_harbours_stand` prints
         where to stand for shots.
+    - **The owner (2026-10-01): "We're good on the mockup already.
+      Approved. Implement in game".** The harbour mockup is approved. The
+      rest of what it shows comes into the game in this order, each written
+      up before it is built. Recommendation taken (ask only with
+      screenshots).
+      1. Street lamps and lanterns (task 5.2, below). Every town is dark at
+         night without them, not only the harbour.
+      2. The moored boats (task 4.2b).
+      3. The dressing: the fish market's stalls, nets, racks, pots,
+         barrels and crates, and the shipyard.
+      4. The cog, `sail-the-cog`'s own change.
+- **4e and 4g in detail, the desert and the tundra (written 2026-10-02).**
+  The owner: "work on snow and desert cities next". These are the mockup's
+  `makeDesert` and `makeTundra`, on the 4 desert and 4 tundra sites a world
+  stores. The desert comes first, then the tundra, each ending in shots
+  beside the mockup's. Each choice below is a recommendation taken (ask
+  only with screenshots).
+  - **What is shared.**
+    - **Footprint by area.** The rule that every top other than grass or
+      sand is built (4b) paves both scenes whole. The desert's dunes are
+      `sand2`, and the tundra's open ground is snow and sage. So a template
+      may name its wild areas (`wild`): "The dunes" and "The tundra". Their
+      cells are not built. The footprint is the buildings, the masonry and
+      every other painted cell, and two yard rings. A template without
+      `wild` is as it was, so the village, the walled town and the harbour
+      re-export byte for byte.
+    - **Tops.** A template may map its tops to the terrain's (`tops`). The
+      desert's are `sand2` and `sand` to sand, and the plaza's `flag` to
+      stone. The tundra's are `snow` and `ice` to snow, and `sage` to the
+      planet's own. `Top` gains `Snow`. Every other template keeps its rule,
+      and a stored town keeps the tops it was laid with.
+    - **Laid on levels.** Both are terraced (4b), at the site's seeded
+      turn as a village is. The desert's plateau is level 2 and its oasis
+      level 1. The tundra's camp and castle are level 1. Its lake is 0.6 m
+      in the mockup, which is laid at level 0, with the ice at 0.6 m.
+    - **Lights.** The mockup's lanterns, braziers, torches and the camp's
+      fire go through task 5.2's lamps, in the first air layer over their
+      cells: a lantern is a `LanternPost`, a brazier and the fire pit a
+      `Brazier`, and a torch a `Torch`. The exporter writes `lanterns`
+      for every scene. Until now it wrote them only for the sea.
+    - **Saves.** A town is stored the first time it is met, as every town
+      is. Desert and tundra sites have no town yet, so an old save gains
+      them on its next open, unless the player has worked their ground
+      (4a). Both are terraced, so they are written in schema 2. A build that
+      does not know `Top::Snow` refuses a tundra's record as damaged rather
+      than laying it wrong.
+  - **4e, the desert.** A sandstone town on a plateau, round a sunken oasis.
+    - **The kits**, field for field from the mockup's `KITS`:
+      - `sandstone`: sandstone outside, salt plaster in, 0.5 m. A flat roof
+        topped with clay tile, a clay-tile floor, and 0.6 × 0.8 m windows.
+      - `adobe`: clay outside, salt plaster in, 0.5 m. A dome of salt
+        plaster, a sand floor, and 0.5 × 0.6 m windows.
+    - **A walked flat roof with a gap.** The five sandstone houses have the
+      keep's walked roof (4c): its top in the kit's roof material, with
+      merlons on its outer edges. A building's `parapet_gaps` leave one edge
+      without merlons, where its outside stair arrives (the mockup's
+      `parapetGaps`).
+    - **An outside stair.** The mockup's `stairRun`: a straight flight of
+      solid steps, 1.1 m wide, from the ground at the house's east end up to
+      the roof's gap, about 17 risers of 0.19 m. The exporter writes each as
+      `stairs: [{from, to, width_m, material}]`. The game cuts it as the
+      harbour's porch stair, with solid steps rather than open treads. The
+      walker climbs it as any stair.
+    - **The dome.** Roof `dome`: a 0.25 m cap over every cell, and a
+      half-ellipsoid on it, the mockup's `domeCap`. One cell has a dome
+      0.46 of a cell across. Seven cells (the caravan hall) have a dome
+      1.35 cells across over the middle, as high as it is across. Inside, the
+      cap's underside is the ceiling. The hall is one tall storey (`tall:
+      2`), with an open doorway, no leaf.
+    - **The plaza and the oasis.** The plaza's flags are stone, and the
+      oasis is a sand hollow a metre down. The mockup draws no water there,
+      so the game draws none. A pool in a town is the swamp's work (4h).
+    - **Dressing.** The four market stalls, the hall's crates and the
+      cacti round the oasis are 4.2c's pieces, written for every scene. The
+      cactus is new: a ribbed column with two arms, the mockup's `cactus`.
+      The dunes' cacti are the planet's own flora. The pots, cloth and tables
+      inside the houses are furniture, which no town has yet.
+    - **Verify.**
+      - Core: `desert.json` lays on a test patch with the dunes outside the
+        footprint, and the plaza at one level and the oasis a level under
+        it.
+      - Core: a walker climbs a sandstone house's outside stair onto its
+        roof, through the parapet's gap, and is held by the merlons.
+      - Core: a walker goes into a domed house and is held by its walls,
+        and the dome is over the walker's head.
+      - App: every desert site lays and cuts, and a world stores each once.
+      - Shots beside the mockup's, by day and at 22:30: the plaza, a roof
+        from its stair, a domed house, and the caravan hall.
+  - **4g, the tundra.** Igloos round a fire, a granite longhouse, and an
+    ice castle on a frozen lake's shore.
+    - **The kits:**
+      - `granite`: granite outside, plank in, 0.6 m. A gable of sage turf
+        at pitch 0.5, a plank floor, and a hearth (decision 7a's).
+      - `ice`: ice outside and in, 0.6 m, and a snow floor. Its walked roof
+        is topped with snow, and its turret is a spire of ice.
+      - `igloo`: snow blocks, cut by its own shape (below).
+    - **The ice keep, its wall and its towers.** These are 4c's masonry,
+      in ice.
+      - The keep is the mockup's `ringKeep`: two storeys round a newel,
+        and a walked roof. Its turret is a 5 m spire of ice where the
+        town's is 2.6 m of slate. The exporter writes it from the
+        `ringKeep` call rather than from the town's area names.
+        `NewelDef` gains `spire_m`.
+      - The curtain wall is the hex ring of four round the keep, 5 m over
+        the camp, with its gate. Merlons stand on its outward edges, and the
+        gate's arch is 4 m, as the town's.
+        - The exporter writes it from the `curtainWall` call. The template
+          names the masonry's material (`masonry_material: ice, snow`),
+          where the town's is rubble and stone.
+      - The two ice towers are 4c's stair towers, from the `wallTower`
+        call, in the `ice` kit with a 5 m spire.
+    - **The igloo.** It is the first building not cut to its cell.
+      - A dome of snow blocks 4.6 m across and 2.5 m high stands on one
+        cell and spills over its ring.
+      - A vaulted tunnel runs out along its door's direction, 2 m wide and
+        2.25 m high outside.
+      - Both are cut as the mockup cuts them: the dome is cut to the
+        tunnel's outer profile, and the tunnel's shell reaches 2 cm into
+        the dome, so there is no seam (12b).
+      - The walker is held as the mockup holds it. Sixteen wall segments
+        inside the dome's low edge stop at the tunnel. The tunnel's walls
+        stand either side, with its roof over them. The dome's underside is
+        the ceiling.
+      - An igloo is a building record (kit `igloo`, its cell and its door),
+        so a town can say who lives in one later.
+    - **The longhouse** is a granite building of ten cells, with its
+      hearth. Its benches and beds are furniture, as the desert's are.
+    - **The frozen lake.** It is laid a layer down and floored with a
+      sheet of ice at 0.6 m. The sheet is a walked floor in the `ice`
+      texture over the snow, and it is the template's, like the piers.
+    - **Dressing.** The fire pit is a stone ring with a brazier's light, and
+      the two drying racks are posts with a hide. The shrubs and boulders
+      round the camp are the planet's own flora.
+    - **Verify.**
+      - Core: `tundra.json` lays with the open tundra outside the
+        footprint, and the lake a level under the camp.
+      - Core: a walker goes in through an igloo's tunnel, stands up inside,
+        and is held by its wall. It cannot walk out through the dome.
+      - Core: a walker goes through the ice gate, up a tower and onto the
+        wall walk, as 4c's test does in the town.
+      - App: every tundra site lays and cuts, and a world stores each once.
+      - Shots beside the mockup's, by day and at 22:30: the camp, an
+        igloo, the longhouse, the gate and the keep's roof.
+  - **4e and 4g as built (2026-10-02).**
+    - **The export.** `tools/export_town_templates.js desert tundra` writes
+      `desert.json` and `tundra.json`. The village, the walled town and the
+      harbour re-export byte for byte: each new field is written only for
+      the scenes that have it.
+      - The desert has 11 buildings (5 sandstone, 5 domed, the hall), 5
+        roof stairs, 5 braziers, 2 lanterns, and 4 stalls, 3 crates and 6
+        cacti.
+      - The tundra has 9 buildings: the longhouse, the ice keep, 2 ice
+        towers and 5 igloos. It also has 24 cells of ice wall (one of
+        them a gate), a frozen lake of 55 cells with its ice at 0.6 m,
+        and 4 torches and the camp fire.
+      - The tundra's keep, towers and wall are written from their own
+        `ringKeep`, `wallTower` and `curtainWall` calls. The town's are
+        still found by its area names.
+    - **The footprint** is every cell outside the wild areas. It also
+      takes the cells a fire, a lantern or a dressing thing stands on:
+      the tundra's camp fire stands on the open tundra, where it would
+      otherwise be off the town's chart, and so out of its lamps.
+    - **The parapet is a wall, not merlons.** The mockup's `flatRoof`
+      raises a parapet 0.65 m high and 0.4 m thick on every outer edge but
+      the gap. It has a post at each corner, so no top is shared, and the
+      beam ends show under it.
+    - **The roof stair meets the roof.** Placed by the mockup's metres
+      alone, its last tread stopped 16 cm short of the roof: the house is
+      cut on its cells' real corners.
+      - Its head now ends on the real corners of the gap edge it climbs to.
+      - A landing 0.4 m long runs on over the roof. The stair's frame and
+        the house's are flat apart and part by up to 10 cm.
+      - A step taller than a walker steps (1.05 m) is solid under its tread,
+        so the flight is not walked into from beside it.
+    - **The tundra's masonry** is the walled town's, in ice. The template
+      names its material (ice under snow, ice under the gate's vault too).
+      - The keep's walked roof is topped with its kit's floor: flagstones
+        in the town, snow here.
+      - The keep's spire and the towers' cones are as high as the template
+        says, 5 m.
+      - Each ice tower's doorway is about 5 degrees short of its stair's
+        landing, where the town's are on it, so the walker steps straight
+        out. The walls test, now shared by both towns, allows 10 degrees.
+    - **The igloo** is cut as the mockup cuts it: the dome is cut to its
+      tunnel's profile, and it has its snow bench, furs and lamp. A candle
+      lights it.
+      - One departure: a second ring of wall round the dome's foot. In the
+        mockup, a walker outside walks 0.6 m into the dome's shell before
+        the inner ring stops it.
+    - **The keep's roof shot.** A walker is placed on the terrain under its
+      spot, which under the keep is its ground floor, so the roof is shot
+      from the column view at the roof's height. The column view faces
+      east; it now takes `--yaw` as the walk does (east turned about the
+      up by minus the yaw, 0 leaving it east), so it can look where the
+      mockup's `keepRoof` looks. A capture camera only: the game's own
+      cameras do not change.
+    - **Seen in the tundra's shots (2026-10-02).**
+      - The camp's fire pit is a brazier block where the mockup has a ring
+        of stones round embers. The gate's torches are the player's torch,
+        a stick of 0.55 m, where the mockup's stand 2 m on poles.
+      - By day the camp fire and the gate's torches turn the snow round
+        them tan, like sand. They are always lit, and `lamps-and-lanterns`
+        adds a lamp's light without scaling it by daylight ("a torch is as
+        bright at noon as at midnight"). On white snow that warm term is
+        stronger than on any ground the lights were judged on. Changing it
+        changes an approved decision, so it is asked as survey L4 with the
+        camp's and the gate's shots.
+    - **Finding: a lamp lights the ground by a wall but not the wall
+      (2026-10-02).** At 22:30 the ice gate's torches light the snow
+      under them, and the ice of the wall a metre away stays as dark as
+      the rest; the keep's merlons are the same. The mockup's torches warm
+      the ice beside them.
+      - A town's pieces take the light field as a craft does
+        (`lamps-and-lanterns` decision 2): eight samples at the corners of
+        each mesh's bounds, blended across them. A town's meshes are one a
+        texture, so the camp's ice is one mesh some 40 m across, and its
+        corners are far from any torch, whose light reaches about 14 m.
+      - **Proposed, not built:** cut a town's meshes into pieces no wider
+        than a lamp's reach (a building, or a run of wall a few cells
+        long), so the corners that light a piece are near what lights it.
+        It costs draws, which the cloud session cannot measure. It belongs
+        to the lights as much as to the towns, and it waits for its own
+        write-up.
+    - **Finding: the igloo's candle lit nothing (2026-10-02).** At 22:30
+      the mockup's igloo glows warm through its tunnel and the game's is
+      grey inside.
+      - A room's light reaches only the faces cut as its room's, and a face
+        is the room's when its air is inside the building's `Indoors`.
+        `igloo` set its `Indoors` after cutting every face, where a building
+        sets it before, so no face of an igloo was its room's.
+      - Its `Indoors` was its cell's hex besides, 1.42 m from centre to
+        edge, under a dome of 2.3 m: most of the dome's inside would have
+        been outside it.
+      - And an igloo had no floor of its own. The walker stands on the
+        planet's snow, which a room's light never reaches.
+      - **The fix.** An igloo's inside is its dome's own air, `(r / R)^2 +
+        (y / H)^2 < 1` round its centre (the dome is that ellipsoid), set
+        before it cuts. A floor of its kit's snow is cut under the dome, a
+        centimetre over the ground as a building's is. So the dome's inside,
+        the bench, the furs and the floor are its room's and the candle
+        lights them; the dome's outside and the tunnel past it are not.
+      - **Verify.** A core test that every face of an igloo whose air is
+        under its dome is cut as its room's and none outside it is, and
+        that it has a floor; the igloo's shot at 22:30 retaken.
+      - **Fixed (2026-10-02).** `Indoors::dome` holds the dome's air, and
+        `an_igloos_room_is_the_air_under_its_dome` finds every room face's
+        air under the dome, over 500 faces of the dome's inside and the
+        floor among them. On the old cut it failed: an igloo had no room
+        faces at all.
+    - **Not built.**
+      - The plaza's flags become the terrain's stone, which reads red in a
+        desert, where the mockup's are pale. The shots show it.
+      - The longhouse's open fire, the drying racks and every room's
+        furniture wait for furniture.
+    - **Cost.** Each desert or tundra lays and cuts in 0.04 to 0.08 s
+      (dev profile). The frame cost was not measured in this cloud session.
+    - `the_desert_lays_with_its_dunes_wild_and_its_oasis_a_level_down`,
+      `a_walker_climbs_a_sandstone_houses_stair_onto_its_roof`,
+      `a_walker_goes_into_a_domed_house_under_its_dome`,
+      `the_tundra_lays_with_its_open_ground_wild_and_its_lake_a_level_down`,
+      `a_walker_goes_into_an_igloo_through_its_tunnel`,
+      `a_walker_goes_through_the_ice_gate_and_up_a_tower_onto_the_walk`,
+      and the app's `every_desert_lays_and_cuts`,
+      `every_tundra_camp_lays_and_cuts` and the two store-once tests hold
+      it.
+- **Task 5.2 in detail, street lamps (written 2026-10-01).** Decision 7
+  already puts a town's street lanterns in the voxel field as
+  `lamps-and-lanterns`' dusk-lit materials. A street lamp is a
+  `LanternPost` block, and the tier's bake lights it as it lights one the
+  player places. A lamp block is neither solid nor opaque, so one in a lane
+  is walked through.
+  - **Which lamps.**
+    - A template's `lamps` cells: the mockup's street lamps (3 in the
+      village, 38 in the walled town, 21 in the harbour).
+    - A sea template's `lanterns`: the harbour's 10 along its quay and at
+      its piers' ends, each in the cell under it.
+  - **Where.** In the first layer over the cell's ground: its terrace where
+    the town laid it. Over the water, a pier's lantern stands in the layer
+    at the pier's height over the sea.
+  - **Derived, not stored.** A town's lamps come from its frozen template
+    on its stored chart, as its masonry does, so every town already in a
+    save gains its lamps without a record changing. A player's edit to a
+    lamp's cell wins over the lamp, as over any generated block.
+  - **How the column gets one.** Each town's ground carries its lamps:
+    each cell's centre, the layer's altitude and the material.
+    `ground::lamp` answers the column generator for a column at a lamp's
+    cell. `column::generate_solid` puts the lamp in that layer if the
+    layer is air.
+  - **Cost.** The village has 3 lamps and the walled town 38, against
+    `lamps-and-lanterns`' 300-lantern figure (task 4.0). The bake time is
+    not measured in the cloud session.
+  - **Verify.**
+    - Core: a town's lamps land in the first air layer over their cells,
+      and a column away from them gets none.
+    - App: the walled town's 38 lamps and the harbour's 31 are installed.
+    - Shots at 22:30, from the street and from above.
+- **Finding: caves open into towns' ground (2026-10-01).** A harbour shot
+  showed a dark hexagonal hole in the beach at Coringport.
+  `print_where_caves_open_into_towns` asks the planet's worms which layers
+  they open under each town's footprint.
+  - On the shipped seed they open the top two layers of a town's ground in
+    26 of its 32 towns: 1 to 50 cells a town, in lanes, yards and under
+    floors.
+  - Holbrook's lane has one cave mouth of 4 cells, (25, 23) to (26, 24).
+    Holbrook is on `main`, so saves made since #19 already have it.
+  - Coringport's hole is not in its footprint. It is most likely one of the
+    natural cave mouths the worms make on purpose (`surface_share`), on the
+    natural beach past the town.
+  - **The choice is the owner's**, because closing them changes the
+    generated ground of saves that exist (CLAUDE.md, "Saved games survive
+    every change"). It goes in the survey with a shot of Holbrook's lane.
+    - **Recommended: a crust.** Worms carve nothing in the top three layers
+      of a town's footprint, as `cleared` keeps its trees off, so a lane or a
+      floor is never a pit. A player's edit still wins. It changes 4 cells of
+      Holbrook in existing saves, and only where no edit is. Nothing a
+      player made is lost.
+    - **Or leave them.** A cave mouth in a lane is a way down, as anywhere
+      on the planet.
+    - **Asked as survey T14 (2026-10-01)**, with the shot of Holbrook's
+      lane, on its own page (https://claude.ai/artifact/RriyuLo9EEZ1gTzGq58A2r).
+      This session's Docs connector could not edit the survey doc. The page
+      keeps the answer, and it moves into the survey doc when the connector
+      is back. Nothing is built until the owner answers, since it changes
+      existing saves.
+- **Finding: half of every town's lamps stand nowhere (2026-10-02).** The
+  tundra camp's shot at Torifjell has no camp fire where the mockup has one
+  3 m ahead, and the desert's plaza shows none of its five braziers.
+  - An instrument (now `print_the_lamps_in_their_columns`) reads the
+    column the planet generates at each lamp, with the town's ground installed. Each
+    lamp's altitude is its cell's terrace, and the ground there is at it.
+    Only 24 of the 48 lamps of the 8 deserts and tundra camps are in their
+    columns. The layer of each of the rest is plain air, lantern posts as
+    much as braziers and torches: none at all at Vasefjell, the fire
+    missing at Torifjell.
+  - **Why.** `TownGround::lamp` finds the lamp in a column by
+    `lamp · column > cos(0.5 m / R)`. On the 300 m test body that cosine
+    is 0.9999986. On the game's planet, R = 4800 m, it is 1 - 5.4e-9, which
+    is exactly 1.0 in `f32`. So a lamp is found only where the dot product
+    of two equal unit vectors happens to round above 1.0: a coin toss a
+    lamp, the same toss on every run. The village's 3, the walled town's 38
+    and the harbour's lamps are subject to it too. The core tests run on
+    the 300 m body, where it does not happen.
+  - **The fix.** Compare the chord instead: a lamp is in a column when
+    `|lamp - column| * R < 0.5 m`. The difference of two unit vectors
+    holds its precision where their dot product does not.
+  - **Saves.** A town's lamps are derived from its template, never saved
+    (task 5.2), so every saved town gains its missing lamps on open. A
+    player's edit in a lamp's cell still wins over it. Nothing saved
+    changes.
+  - **Verify.** A core test finds a lamp at its own column and none at the
+    next cell on a body of the game's radius; an app test reads every
+    lamp of every town on the shipped seed in its column; the desert's
+    and the tundra's shots are retaken.
+  - **Fixed (2026-10-02).** `a_towns_lamps_stand_over_their_cells` now
+    repeats its lookups on the same patch at 4800 m, and failed on the
+    old lookup. `every_towns_lamps_are_found_at_their_columns` asks each
+    of the 36 towns' grounds for each of its lamps: the old lookup found
+    255 of the 522, the chord finds all 522. It asks the ground it is
+    given, not the installed one, so it cannot disturb a test beside it.
+    The instrument `print_the_lamps_in_their_columns`, run alone, installs
+    each town's ground and reads all 522 in the columns the planet
+    generates.
+- **Task 4.2b in detail, the moored boats (written 2026-10-01).** Survey
+  T7: "you can use any boat you find".
+  - **What the mockup moors.** 23 boats on the water: 14 rowboats, 6
+    sailing boats and 3 canoes. Two more rowboats lie beached and two sit in
+    the boathouses; those four are dressing, not craft.
+  - **Which craft.** The game has two boats, the Tern (a sailing keelboat)
+    and the Loon (a paddle canoe). A sailing boat is a Tern. A rowboat and a
+    canoe are Loons, the game's nearest small boat. A rowboat of its own is
+    a new craft for later. Recommendation taken (ask only with screenshots).
+  - **The export.** A wrapper round the mockup's `boat` writes each boat on
+    the water: its kind, where it lies in the mockup's metres, and its
+    heading.
+  - **A harbour's boats are craft records, made once.**
+    - When the fleet first meets a harbour it holds no boats of, it makes
+      them. Each is tagged with its berth, the harbour's site and its number
+      there, so it is never made twice, even after the player sails it away.
+    - Each lies at its berth on the planet's water, anchored to the seabed
+      under it with the rode the game already gives an anchor.
+    - A berth over land, or over water shallower than the craft draws
+      (Tern 3 m, Loon 1.2 m), is skipped, and the skip is logged.
+  - **Stowing.** Today every craft is stepped every tick, wherever it is.
+    Six harbours would make that about 140.
+    - The fleet keeps a craft further than 1.5 km from the viewer as its
+      record only, stowed, and brings it back within 1.2 km, the towns'
+      ranges. The craft the player is aboard is never stowed.
+    - The save's fleet file is the live craft and the stowed ones
+      together, so nothing is lost by stowing.
+    - At a harbour about 23 craft are stepped, against 2 today. The cost is
+      not measured in the cloud session. If it shows, a moored craft at rest
+      can sleep.
+  - **Records.** A craft's record gains `berth`, written only where there is
+    one, so a fleet without harbour boats is written as it always was.
+  - **Verify.**
+    - App: a harbour's boats are made once and saved, and a second open
+      makes none.
+    - App: a craft is stowed past 1.5 km and back within 1.2 km at the
+      pose it was left in.
+    - App: a moored boat is boarded from the pier and paddled away, and a
+      reload finds it where it was left.
+    - Shots of the harbour with its boats.
+  - **As built (2026-10-01).**
+    - **The export** writes the 23 boats on the water (14 rowboats, 6 sailing
+      boats, 3 canoes) from a wrapper round `boat`. The cells under them join
+      the harbour's cells over the water, so they are charted.
+    - **The draughts are the boats' own, not the spawn's.** A harbour's water
+      is whole layers, mostly 1 to 2 m deep at the berths. The spawn places a
+      new world's boats with margins (3 m for the Tern, 1.2 m for the Loon),
+      and those left Holinghaven with no boats and Coringport with one.
+      - From `vehicles.ron`: the Tern's keel reaches about 1.7 m under its
+        waterline, and the Loon's hull is 0.36 m deep. So a mooring wants
+        2 m for a Tern and 1 m for a Loon.
+      - A sailing berth too shallow for a Tern takes a Loon, so the berth
+        keeps a boat.
+    - **On the shipped seed** 120 boats moor across the six harbours, 0 to 5
+      berths skipped at each: Marenstrand 19 (5 Terns), Wickingstrand 18
+      (4), Holinghaven 21 (1), Coringport 19 (3), Selingquay 20 (2),
+      Corowstrand 23 (5).
+    - **Stowing** runs once a second. The save's fleet file is the live
+      craft and the stowed records together.
+    - `every_harbours_boats_are_made_once_at_their_berths` and
+      `a_craft_far_away_is_stowed_and_comes_back_where_it_was_left` hold it.
+    - **The boarding test** (`a_harbour_boat_is_paddled_away_and_kept_where_it_was_left`):
+      - a harbour's boat at anchor, tagged with its berth, is boarded, cast
+        off and paddled more than 3 m away;
+      - the world is put away and opened again, and the boat is back where
+        it was left, the same craft, still tagged with its berth.
+      - The walker boards from beside it, not from a pier, because the
+        vehicles' test planet has no harbour. Boarding from a pier is the
+        same F within reach.
+      - Recommendation taken (ask only with screenshots).
+  - **Finding: the drawn sea is half a metre under the layers' sea level
+    (2026-10-01).** In the game's run at Holinghaven, 1 boat moored and 22
+    berths were skipped. The app test moors 21 there.
+    - `assets/config/water.ron` draws the sea `depth_offset_m` (0.5 m) under
+      the sea level the layers are filled to. The game's `Sea::radius` is
+      that drawn sheet, and the boats float on it.
+    - The test took the layers' sea level for the sea, so every berth held
+      half a metre more water in the test than in the game.
+    - `print_the_seabed_under_the_harbours_berths` rules out the other
+      suspect. The harbour's margin, eased to its terrace, lifts the seabed
+      at 1 to 13 of a harbour's 23 berths, but leaves only 5 or 6 of them
+      under a metre of water.
+    - **Fix: the draughts are measured against the drawn sea.**
+      - A Loon's hull is 0.36 m deep, so it moors in 0.5 m of drawn water,
+        the water over a seabed one layer down.
+      - A Tern keeps 2 m, its keel's 1.7 m and a hand.
+      - The app test asks the depth of the same drawn sea the game does.
+    - The cog floats on the drawn sea too (`sail-the-cog` design 6). A
+      harbour's quay and piers stay where they are, whole layers over the
+      layers' sea level, and so 1.5 m over the drawn water rather than the
+      mockup's 1 m.
+  - **Finding: the harbour has no sailboats (the owner, 2026-10-01, on the
+    harbour shots: "where are all the boats in the harbor?", "Did they
+    capsize?", "The original showed sailboats with tall masts").**
+    - **Nothing capsized.** Every Holinghaven boat is made upright, deck up,
+      on the drawn sea. An empty moored Loon stays upright at every depth
+      from 0.3 m to 40 m over 30 s. Both instruments are in the tests
+      (`print_the_pose_of_holinghavens_boats`,
+      `print_an_empty_moored_boat_by_depth`). The game's boats read as
+      upturned because each is the Loon, a bare teal shell with no rim,
+      seats or paddler.
+    - **No sailing berth floats a Tern** at Holinghaven. Its six sailing
+      berths hold 0.5 m or 1.5 m of drawn water, and one is on land. Water
+      2 m deep is 7 to 29 m away, or not within 30 m
+      (`print_the_water_at_the_sailing_berths`). So every one took a Loon.
+      Moving the berths out would break the mockup's layout, where the
+      sailboats lie along the piers.
+    - **The mismatch is the keel.** The mockup's sailboat is 6.6 m by 2.2 m
+      with a 7.4 m mast, close to the Tern's 6.2 m by 2.3 m and 7 m. But it
+      draws 0.45 m, a harbour boat. The Tern hangs 220 kg of ballast 1.45 m
+      down on a fixed keel and needs 2 m of water.
+    - **Measured: a Tern with its keel raised floats in shallow water.**
+      With its ballast at the hull's bottom and its keel's foil and
+      grounding point just under the hull, it draws 0.3 m. Moored in 0.5 m
+      of water, empty, it heels 4° in a 6 m/s wind, 13° at 10 and 21° at
+      14 (`print_a_tern_with_its_keel_raised`).
+  - **Fix: the Tern gets a lifting keel (written 2026-10-01, before code).**
+    Recommendation taken (ask only with screenshots).
+    - Its keel, with the ballast in it, goes down as far as the water under
+      it allows and no further. It rises at once when the seabed comes up
+      under it, as a keel kicks up on the bottom, and lowers at a steady
+      rate when the water deepens. In open water it is all the way down, as
+      it is now, so the Tern sails as it did.
+    - `TernSpec` gains `keel_rise_m` (1.08 m: the keel's tip from 1.5 m
+      down to just under the hull), `keel_rate` (a third of the way a
+      second) and `keel_clearance_m` (0.1 m). Raising it lifts the keel
+      foil, the ballast and the grounding point together. A raised keel's
+      foil is short and shallow: its area is the lowered share of it, never
+      under a quarter, so a Tern in the shallows makes leeway.
+    - How far it is down is `TernState::keel`, not saved. A loaded Tern
+      starts with it down, and the water under it lifts it on the first
+      tick.
+    - It is drawn where it is, and the HUD reads "keel up" in shallow water.
+    - **The berths.** A Tern now moors in 0.5 m of drawn water, as a Loon
+      does. Every sailing berth that is not on land gets its Tern, tall
+      mast and sail, as the mockup's do.
+    - **Saves.** A world whose harbour already made its boats keeps them as
+      they are, with Loons at the sailing berths. Its boats are records it
+      holds, and none is replaced. A harbour first met from now on makes
+      Terns.
+    - **Verify.**
+      - Core: in 0.5 m of water the keel rises clear of the seabed and the
+        Tern floats upright. In deep water it is all the way down and the
+        close-reach and in-irons tests pass unchanged. Lowered from raised,
+        it takes about three seconds.
+      - App: each harbour's sailing berths over water make Terns.
+      - A shot of Holinghaven's quay with its sailboats, beside the
+        mockup's.
+    - **As built (2026-10-01).** As written. `TernSpec::lift` (rise 1.08 m,
+      a third of its travel a second, 0.1 m off the seabed; the ballast is
+      part 1 and the tip contact 0). On the shipped seed every sailing berth
+      over water now makes its Tern: Holinghaven 5 (none before), 32 across
+      the six harbours. `a_terns_keel_lifts_to_the_water_under_it` holds the
+      keel, and the requirement is in `openspec/specs/player/vehicles`. The
+      Tern's open-water tests (close reach, in irons, hull speed) pass
+      unchanged.
+  - **Finding: teal canoes the mockup never had (the owner, 2026-10-01:
+    "there were no teal boats in the original", "I never asked for teal
+    canoes", "make the row boats like the original!!").** The harbour's 14
+    rowboats and 3 canoes were all moored as the Loon, the game's paddle
+    canoe from the vehicles work (2026-09-24), drawn as a bare teal shell.
+    That was recorded above as "A rowboat and a canoe are Loons" and taken
+    as a recommendation, but the owner was never shown that it would not
+    look like the mockup's boats. It did not, and it was wrong to take it.
+  - **Fix: the small boats are the mockup's (written 2026-10-01, before
+    code).** The owner's words are the decision.
+    - **One cut for the mockup's small boats**, shared by the harbour's
+      dressing and the craft. `pieces::dressing::small_boat` cuts the
+      mockup's `boat` (its `hullGeometry` lofted in `boards` or
+      `driftwood`, its thwarts, the rowboat's two oars laid across, the
+      canoe's paddle) in a craft's frame: its gunwale at the craft's sheer,
+      its bow forward.
+    - **Its inside is dry.** The game draws the sea as one sheet, and an
+      open boat floats with its inside floor under it, so the sea would
+      show inside as if it were swamped (the mockup hides it with a
+      stencil). The cut lays floorboards across the hull 3 cm over the
+      waterline it floats at with someone aboard, as wide as the hull is
+      there, so the sheet stays under them.
+    - **The canoe is drawn as the mockup's canoe**, in driftwood, at the
+      Loon's own size (5 m by 0.92 m), wherever the game has a Loon: the
+      harbour's and the player's own. No craft is teal.
+    - **The rowboat is its own craft, `Kind::Rowboat`**, at the mockup's
+      size: 4.2 m by 1.45 m, 0.6 m deep, drawing about 0.25 m. It is the
+      Loon's model on its own spec in `vehicles.ron` (`rowboat`): a hull of
+      cells, a lateral plane and skeg, and the Loon's stroke for its oars,
+      W and S to row and A and D to steer. Oars that pivot in rowlocks are
+      a later refinement, noted, not built here.
+    - **The berths.** A rowboat berth makes a Rowboat, a canoe berth a
+      Loon, a sailing berth a Tern.
+    - **Saves.** A harbour already met keeps the boats it made: its
+      rowboat berths keep their canoes, now drawn in driftwood. A harbour
+      first met from now on makes rowboats.
+    - **Verify.**
+      - Core: the small boat's floorboards stand over the loaded waterline
+        and inside the hull; a rowboat floats upright empty and with its
+        rower, and rows ahead; the spec validates.
+      - App: each harbour's rowboat berths make Rowboats.
+      - Shots of the quay beside the mockup's.
+    - Recommendation taken (ask only with screenshots).
+    - **As built (2026-10-01).**
+      - `pieces::dressing::small_boat` lofts the mockup's hull at the
+        craft's length, beam and depth with the mockup's sheer, and draws
+        the rowboat's thwarts and oars from the same `fittings` the
+        harbour's beached and slipway boats use. The canoe's paddle is cut
+        apart (`laid_paddle`) and drawn only while nobody is aboard: the
+        paddler holds the Loon's moving one.
+      - **The floor follows the trim.** Laid level 3 cm over the level
+        waterline, the canoe's floor was 2 cm under the sea at its stern:
+        its paddler sits aft and trims it by the stern. `Hull::waterline`
+        now solves the trim (the centre of buoyancy under the centre of
+        mass), and `Craft::floor` lays the boards 3 cm over that, rising
+        aft with it: about 1.7 degrees for the canoe, 1.1 for the
+        rowboat. Through a whole swell their corners stay 2.6 and 2.7 cm
+        over the sea.
+      - **The rowboat's floor is flat.** On 0.2 m cells and a round
+        section (power 2.5) it took its rower at a steady 14 degrees of
+        heel: its waterline, in the bottom row of cells, was 0.6 m wide.
+        On 0.1 m cells and a section of power 3.5, nearer the mockup's U
+        (about 3 to 4), it floats within 0.03 degrees of upright with its
+        rower and rows at 1.0 m/s. The Loon carries the same note.
+      - The mockup tints some of its boats (a beige and a pale grey-blue
+        wash); the game's berths carry no tint, so every boat is bare
+        wood. Not exported; noted.
+      - Oars that pivot in rowlocks are still the later refinement: the
+        rowboat's oars lie across its thwarts while it is rowed.
+      - Requirements in `openspec/specs/player/vehicles`: "The rowboat is
+        its own craft and rows" and "An open boat's floor stays over the
+        sea".
+- **Task 4.2c in detail, the harbour's dressing (written 2026-10-01).**
+  Third in the owner's order: "We're good on the mockup already. Approved.
+  Implement in game".
+  - **What the mockup puts in its harbour** (`makeCoast`), besides its
+    buildings, piers, light, lanterns and boats:
+    - **The fish market:** four stalls on the quay. Each has four posts, a
+      plank counter, a sloped cloth awning and five boxes of goods (fish and
+      wool).
+    - **On the beach:** three net racks (posts, a bar and a see-through net
+      hung both sides), two fish racks (seven fish on a bar), and two piles
+      of lobster pots (5 and 3).
+    - **At the piers:** a barrel and a crate at each of three pier heads.
+      Twelve bollards line the main pier.
+    - **On the quay:** three crates and two barrels.
+    - **The boathouses:** each has a rowboat on the sand, three oars on end
+      and four lobster pots.
+    - **Two rowboats** lie keel up on trestles on the beach.
+    - **The shipyard:**
+      - a hull in frame on the beach: the lower planks on, eleven ribs bare
+        above them, stem and stern posts;
+      - its keel on blocks, with fourteen shores;
+      - a stack of planks;
+      - the slip, 4 m wide, down from the beach into the water.
+    - **Not this step:** the people (townsfolk are a non-goal), and the
+      cog's own barrel, crate and gangplank, which are `sail-the-cog`'s.
+  - **The export.** Wrappers round the mockup's `marketStall`, `netRack`,
+    `fishRack`, `lobsterPots`, `crate`, `barrel`, the bollards and the
+    beached and housed boats write a `dressing` list into the template.
+    - Each entry has its kind, where it stands in the mockup's metres, its
+      height and its turn. A pile of pots also has its count, a crate its
+      side and a stall its cloth.
+    - The shipyard is written as one entry: where its hull lies, the slip's
+      two ends and width, and where its planks are stacked. Its sizes are
+      the mockup's constants, carried in the piece.
+    - Only the harbour is written. `village.json` and `town.json` must
+      re-export byte-identical (see below).
+  - **Derived, never saved.** A town's dressing is placed from its template
+    and its stored chart, as its lamps are. Nothing about it enters the
+    town's record. The cells under it join the harbour's cells over the
+    water, so the slip's are charted.
+  - **Where each thing stands.** It stands on what is under it in the game,
+    not at the mockup's height. That is the highest of a pier's deck, a
+    building's floor and its cell's ground that is no more than half a
+    metre over the mockup's own height.
+    - A sea template rounds heights to whole layers, so the mockup's 0.75 m
+      beach is 1 m in the game. The racks and pots on it rise with it.
+    - A barrel at a pier head stands on the deck. A pot in a boathouse
+      stands on its floor.
+  - **How each is cut.** Each is cut in its own frame at its point, as the
+    light is, from the boxes, cylinders and prisms the pieces already have.
+    - **A new piece, the hull.** The mockup's `hullGeometry` and
+      `hullSection` are ported into the pieces: a hull lofted from U-shaped
+      sections. The beached and housed rowboats use it whole. The shipyard
+      uses it planked to 0.45 of its depth, with its ribs drawn on the same
+      sections. The cog will need it too.
+    - **A new surface, the ramp.** It is a straight slope the walker stands
+      on, from one height to another, as the mockup's `bridge` with `ramp`
+      is. The slip is the first. The cog's gangplank will be the second.
+  - **What the walker goes round.** These are the mockup's solids:
+    - every barrel, crate and pile of pots;
+    - each stall's counter and posts;
+    - each rack, as a thin wall;
+    - each bollard;
+    - each beached boat, to its keel;
+    - the shipyard's hull, 10.2 by 3.4 m.
+    - The awnings stand over head height. The oars and the goods are
+      drawn only.
+  - **The net is see-through.** The mockup draws it from a 32 px texture
+    with cords every 5 px, cut out where it is clear.
+    - `export_town_textures.js` also writes the mockup's custom textures.
+      The manifest marks the ones the mockup cuts out (its `ALPHA` set).
+    - The game draws a cut-out texture alpha-masked at 0.5, on both sides.
+    - The net casts no shadow. The shadow pass casts whole triangles, so a
+      net would throw a solid sheet of shadow onto the beach.
+    - Recommendation taken (ask only with screenshots).
+  - **Only the harbour, for now.** The village and the walled town have
+    dressing of their own: the market's stalls, the coopers' barrels and
+    crates. Adding it to their `v1` templates would stand new solids in
+    towns that saves already hold, Holbrook among them, where a player may
+    have built.
+    - Their dressing is its own step, as a new template version for new
+      towns that leaves `v1` as it is.
+    - The harbour reached `main` with #20, merged 2026-10-01 at 13:26, so
+      a save made since holds its harbours. They were stored before the
+      dressing and the cog charted their cells over the water.
+      - In such a save, the dressing on dry ground and on the piers
+        stands. What stands over cells the save never charted (the slip,
+        the cog and its gangplank) is left out and counted (`Built`'s
+        `dressing_skipped`, in the town's log line).
+      - Nothing a player made is moved or removed. The dressing is derived
+        and stands over whatever is there, as the lamps do.
+    - Recommendation taken (ask only with screenshots).
+  - **The cost.** The dressing is triangles and solids in each harbour's
+    town meshes, logged with the town's count. Its frame cost is not
+    measured in the cloud session.
+  - **Verify.**
+    - Core: every dressing thing of the harbour stands within 2 cm of the
+      deck, floor or ground under it.
+    - Core: a walker on the quay is held by a stall's counter and goes
+      round a barrel.
+    - Core: a walker goes down the slip from the beach into the water.
+    - App: every harbour cuts with its dressing.
+    - Export: the village and the walled town re-export byte-identical.
+    - Shots of the fish market and the nets at 11:00 and 22:30, and of the
+      shipyard at 11:00.
+  - **As built (2026-10-01).**
+    - **The export** writes 58 things and the shipyard: 4 stalls, 3 net
+      racks, 2 fish racks, 16 pots, 5 barrels, 6 crates, 12 bollards, 6
+      oars and 4 boats on land.
+      - The coopers' barrels and crate stand inside their houses. They are
+        furniture, which every town's houses take in their own step, and
+        are left out.
+      - A pot in a pile is written with its lift over the pile's foot, so
+        the pile stands as a pile on whatever is under it.
+      - `village.json`, `town.json` and the 70 painted textures re-export
+        byte-identical. `net.png` is new, marked `cut` in the manifest.
+    - **Placing a thing.** Its frame is read from the chart at its point and
+      a metre east and south of it. The mockup's offsets go through that
+      local map, which carries the chart's turn, any mirroring and its
+      stretch together. Those cells join the harbour's cells over the water.
+    - **Two departures from the mockup**, both on the beached rowboats:
+      - the mockup stands each one a hull's depth over its trestles, and
+        here its gunwale rests on them;
+      - the mockup runs its trestles along the keel, and here they run
+        across the boat.
+    - **A harbour stored before this** charted no cells for its slip, so a
+      thing off the chart is left out and counted, not an error. The town's
+      log line names how many stand and how many are off.
+    - **The net** is drawn alpha-masked at 0.5 through the field-lit
+      material's own `alpha_discard`, and left out of the town's casters.
+    - `a_harbours_dressing_stands_on_what_is_under_it` (18 or more things
+      on a pier's deck, the rest on the ground),
+      `a_walker_is_held_by_a_stall_and_goes_round_a_barrel`,
+      `a_walker_goes_down_the_slip_into_the_water` and, in the app,
+      `every_harbour_lays_on_its_sea_and_cuts` (each of the six harbours
+      has 61 dressing pieces, none off its chart) hold it.
+    - The main pier's walker test now goes by the pier's own pieces: the
+      mockup's crate at the head stands on the pier's middle.
 - **Towns are stored before any of this ships.** A slice before task 4.5
   builds the town from its template each time. That is safe only while no
   saved world has towns, so no build with towns merges to `main` before

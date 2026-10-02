@@ -10,7 +10,7 @@ use super::{Aboard, Vehicle, view::VehicleView};
 use crate::walking::{Walker, WalkingState};
 use avian3d::prelude::Position;
 use bevy::prelude::*;
-use pbd_core::vehicle::{CraftState, SailState, Telemetry};
+use pbd_core::vehicle::{CraftState, Kind, SailState, Telemetry};
 use std::fmt::Write;
 
 #[derive(Component)]
@@ -139,10 +139,15 @@ fn panel(vehicle: &Vehicle, seat: bool) -> String {
             );
             let _ = writeln!(
                 s,
-                "sheet {:>3.0}%  sail {sail}  leeway {:>+4.1} deg  water aboard {:>4.0} kg",
+                "sheet {:>3.0}%  sail {sail}  leeway {:>+4.1} deg  water aboard {:>4.0} kg{}",
                 t.sheet * 100.0,
                 t.leeway.to_degrees(),
-                craft.bilge_kg
+                craft.bilge_kg,
+                if t.keel_down < 0.95 {
+                    format!("  KEEL UP {:.0}%, shallow", (1.0 - t.keel_down) * 100.0)
+                } else {
+                    String::new()
+                }
             );
             let hint = match t.sail_state {
                 SailState::Luffing => "Bear away from headwind or trim the sheet in.",
@@ -171,6 +176,8 @@ fn panel(vehicle: &Vehicle, seat: bool) -> String {
                 "power stroke"
             } else if t.stroke.is_some() {
                 "recovering"
+            } else if craft.kind == Kind::Rowboat {
+                "oars resting"
             } else {
                 "paddle resting"
             };
@@ -178,6 +185,50 @@ fn panel(vehicle: &Vehicle, seat: bool) -> String {
                 s,
                 "{phase} - alternate strokes to make way; rudder steers while moving."
             );
+        }
+        (Telemetry::Cog(t), CraftState::Cog(_)) => {
+            let sail = if t.fill < 0.5 {
+                "luffing"
+            } else if t.sail.stall > 0.5 {
+                "stalled"
+            } else {
+                "drawing"
+            };
+            let _ = writeln!(
+                s,
+                "water {:>4.1} m/s  ground {:>4.1} m/s  heel {:>+4.0} deg  leeway {:>+4.1} deg",
+                t.water_speed,
+                t.speed,
+                t.heel.to_degrees(),
+                t.leeway.to_degrees()
+            );
+            let _ = writeln!(
+                s,
+                "apparent wind {:>4.1} m/s  {} {:>3.0} deg  windward VMG (ground) {:>+4.1} m/s",
+                t.apparent.length(),
+                side(t.apparent_angle),
+                t.apparent_angle.to_degrees().abs(),
+                t.upwind
+            );
+            let _ = writeln!(
+                s,
+                "yard {:>3.0} deg {}  sail {sail}  water aboard {:>4.0} kg",
+                t.yard.to_degrees().abs(),
+                if t.yard > 0.0 {
+                    "starboard arm forward"
+                } else if t.yard < 0.0 {
+                    "port arm forward"
+                } else {
+                    "square"
+                },
+                craft.bilge_kg
+            );
+            let hint = if t.fill < 0.5 {
+                "Too close: bear away, or brace the yard square to the wind."
+            } else {
+                "A square sail will not point: make way on a reach or a run."
+            };
+            let _ = writeln!(s, "{hint}");
         }
         _ => {}
     }

@@ -7,6 +7,7 @@ pub mod atmosphere;
 pub mod config;
 #[cfg(feature = "desktop")]
 pub mod controls;
+pub mod decks;
 #[cfg(feature = "desktop")]
 pub mod drops;
 pub mod field_light;

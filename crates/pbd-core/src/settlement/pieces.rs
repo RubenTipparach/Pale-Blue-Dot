@@ -14,7 +14,11 @@ use super::{BuildingDef, HUT_STOREY_M, Kit, RoofKind, STOREY_M, neighbour};
 use glam::{Vec2, Vec3};
 use std::collections::BTreeMap;
 
+pub mod cog;
+pub mod desert;
+pub mod dressing;
 pub mod harbour;
+pub mod tundra;
 
 /// Floor boards and joists, metres.
 pub const SLAB_M: f32 = 0.2;
@@ -134,6 +138,18 @@ pub enum Surface {
         rise: f32,
         risers: u32,
     },
+    /// A straight slope (task 4.2c): from `foot` along `dir` for `len`,
+    /// `half_width` either side, its top from `from` at the foot to `to` at
+    /// the far end, planks `depth` thick. A shipyard's slip, a gangplank.
+    Ramp {
+        foot: Vec2,
+        dir: Vec2,
+        len: f32,
+        half_width: f32,
+        from: f32,
+        to: f32,
+        depth: f32,
+    },
     /// A newel stair in one cell: `start` the angle it climbs from, turning
     /// `sense` (+1 or -1), a turn every `turn_m` from `base` to `top`, with
     /// `landing` radians of floor past the top and `margin` before the
@@ -188,6 +204,23 @@ impl Surface {
                 let top = base + (u / ((n - 1.0) * run)).clamp(0.0, 1.0) * n * rise;
                 // Boxed below, down to the floor it stands on.
                 out.push((base - 0.01, top));
+            }
+            Surface::Ramp {
+                foot,
+                dir,
+                len,
+                half_width,
+                from,
+                to,
+                depth,
+            } => {
+                let d = p - *foot;
+                let u = d.dot(*dir);
+                if u < 0.0 || u > *len || d.perp_dot(*dir).abs() > *half_width {
+                    return;
+                }
+                let top = from + (to - from) * u / len;
+                out.push((top - depth, top));
             }
             Surface::Newel {
                 centre,
@@ -554,6 +587,9 @@ pub struct Indoors {
     /// Whether its top storey is open to the roof, as a hut is to its cone:
     /// otherwise a ceiling closes it and the roof's underside is the eaves'.
     open_roof: bool,
+    /// An igloo's dome, centre, radius and height: its inside is the dome's
+    /// own air, which spills past its cell (slice 4g).
+    dome: Option<(Vec2, f32, f32)>,
 }
 
 /// How far in front of a face its air is looked for, metres: past a wall's
@@ -588,6 +624,19 @@ impl Indoors {
             walls,
             top,
             open_roof,
+            dome: None,
+        }
+    }
+
+    /// The inside of a dome `height` high on a circle of `radius` round
+    /// `centre`, the ellipsoid an igloo's shell is cut on.
+    pub fn dome(centre: Vec2, radius: f32, height: f32) -> Self {
+        Self {
+            cells: Vec::new(),
+            walls: Vec::new(),
+            top: height,
+            open_roof: true,
+            dome: Some((centre, radius, height)),
         }
     }
 
@@ -601,6 +650,11 @@ impl Indoors {
         let front = centre + n * FRONT_M;
         if front.y < -0.3 {
             return false;
+        }
+        if let Some((middle, radius, height)) = self.dome {
+            let across = Vec2::new(front.x, front.z).distance(middle) / radius;
+            let up = front.y.max(0.0) / height;
+            return across * across + up * up < 1.0;
         }
         if centre.y > self.top + 0.005 && (n.y > -0.1 || !self.open_roof) {
             return false;
@@ -1052,6 +1106,7 @@ pub fn cut_masonry(
     ground_m: f32,
     bottom_m: f32,
     top_m: f32,
+    material: &super::MasonryMaterial,
 ) -> Result<BuildingSolids, String> {
     let (c, r) = (cell.c, cell.r);
     let at = chart
@@ -1078,7 +1133,7 @@ pub fn cut_masonry(
     let mut sink = Sink::new(meshes, repeat_m, frame);
     let outline = ccw(corners.to_vec());
     sink.face(
-        "flag",
+        &material.top,
         &outline
             .iter()
             .map(|p| Vec3::new(p.x, y1, p.y))
@@ -1093,7 +1148,7 @@ pub fn cut_masonry(
             .rev()
             .map(|p| Vec3::new(p.x, y0, p.y))
             .collect();
-        sink.face("stone", &down, -Vec3::Y, None);
+        sink.face(material.vault(), &down, -Vec3::Y, None);
     }
     let centre = corners.iter().fold(Vec2::ZERO, |s, p| s + *p) / 6.0;
     for d in 0..6 {
@@ -1103,7 +1158,7 @@ pub fn cut_masonry(
         let (a, b) = (corners[d], corners[(d + 1) % 6]);
         let mid = (a + b) * 0.5 - centre;
         sink.face(
-            "rubble",
+            &material.wall,
             &[
                 Vec3::new(a.x, y0, a.y),
                 Vec3::new(b.x, y0, b.y),
@@ -1148,7 +1203,7 @@ pub fn cut_masonry(
         let ang = edge.y.atan2(edge.x);
         for f in [0.19, 0.81] {
             let p = a + edge * f - out * (t / 2.0);
-            sink.plain_box("rubble", p.x, y1, p.y, Vec3::new(w, h, t), ang);
+            sink.plain_box(&material.wall, p.x, y1, p.y, Vec3::new(w, h, t), ang);
             sink.solid_box(p.x, y1, p.y, Vec3::new(w, h, t), ang);
         }
     }
@@ -1175,6 +1230,10 @@ fn edge_ends(plan: &Plan, i: usize, d: usize) -> (Vec2, Vec2) {
 type Post = (Vec2, f32, f32, f32, String);
 
 fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(), String> {
+    // An igloo is cut by its own shape, not to its cell (slice 4g).
+    if def.roof == "igloo" {
+        return tundra::igloo(sink, plan, def, kit);
+    }
     let storeys = def.storeys.max(1);
     // A stair tower is one cell and one storey, as high as its walls (slice
     // 4c).
@@ -1279,7 +1338,8 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
                         yb: y0,
                         ye: y0 + door_h,
                         w: door_w,
-                        door: Some(index),
+                        // An archway is a doorway with no leaf (slice 4e).
+                        door: (!def.archways.contains(&at)).then_some(index),
                         sill: false,
                         shutters: false,
                     });
@@ -1400,6 +1460,8 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
         RoofKind::Cone
     } else if def.roof == "flat" {
         RoofKind::Flat
+    } else if def.roof == "dome" {
+        RoofKind::Dome
     } else {
         RoofKind::Gable
     };
@@ -1423,12 +1485,14 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
     };
     match roof_kind {
         RoofKind::Cone => {
+            // A tower's spire as high as its template asks (slice 4g).
+            let rise = def.newel.as_ref().and_then(|n| n.spire_m).unwrap_or(2.6);
             cone_roof(
                 sink,
                 plan.centres[0],
                 &plan.corners[0],
                 top,
-                2.6,
+                rise,
                 &material,
                 overhang,
             );
@@ -1447,8 +1511,10 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
                     continue;
                 }
                 let hex = ccw(plan.corners[i].to_vec());
+                // Topped with the kit's floor: the keep's flagstones, the
+                // ice keep's snow (slice 4g).
                 sink.prism(
-                    "flag",
+                    &kit.floor,
                     &kit.walls[0].outside,
                     &hex,
                     top - SLAB_M,
@@ -1496,11 +1562,55 @@ fn cut(sink: &mut Sink, plan: &Plan, def: &BuildingDef, kit: &Kit) -> Result<(),
                     plan.centres[i],
                     &plan.corners[i],
                     n.wall_top_m,
-                    2.4,
+                    n.spire_m.unwrap_or(2.4),
                     &material,
                     0.35,
                 );
             }
+        }
+        RoofKind::Flat if def.parapet_gaps.is_some() => {
+            walked_roof(
+                sink,
+                plan,
+                kit,
+                &material,
+                top,
+                def.parapet_gaps.as_deref().unwrap_or_default(),
+            );
+        }
+        RoofKind::Dome => {
+            // A cap over every cell, and the dome on it (slice 4e): over the
+            // most central cell, or over the middle of a hall of seven or
+            // more, as the mockup's `building` puts it.
+            for corners in &plan.corners {
+                sink.prism(
+                    &material,
+                    &kit.walls[0].outside,
+                    corners,
+                    top,
+                    top + DOME_CAP_M,
+                    Some(&kit.walls[0].inside),
+                );
+            }
+            let middle = (min + max) * 0.5;
+            let cell_m = plan.corners[0]
+                .iter()
+                .map(|p| p.distance(plan.centres[0]))
+                .sum::<f32>()
+                / 6.0
+                * 3f32.sqrt();
+            let (centre, r) = if plan.cells.len() >= 7 {
+                (middle, cell_m * 1.35)
+            } else {
+                let nearest = plan
+                    .centres
+                    .iter()
+                    .copied()
+                    .min_by(|a, b| a.distance(middle).total_cmp(&b.distance(middle)))
+                    .unwrap_or(middle);
+                (nearest, cell_m * 0.46)
+            };
+            dome(sink, &material, centre, top + DOME_CAP_M, r, r * 1.05);
         }
         RoofKind::Flat => {
             for corners in &plan.corners {
@@ -1628,6 +1738,139 @@ fn hearth(sink: &mut Sink, plan: &Plan, i: usize, d: usize, storey_m: f32) {
         0.95,
         ceiling - 0.9 + 0.05,
     );
+}
+
+/// A dome's cap over its walls (slice 4e).
+const DOME_CAP_M: f32 = 0.25;
+/// A walked flat roof's slab, and its parapet wall's height and thickness
+/// (slice 4e), the mockup's `flatRoof`.
+const WALKED_SLAB_M: f32 = 0.3;
+const PARAPET_M: (f32, f32) = (0.65, 0.4);
+
+/// A flat roof that is walked on (slice 4e), the mockup's `flatRoof`: a
+/// slab of `material` over every cell, its top a floor, a low parapet wall
+/// on each outer edge but at `gaps`, where an outside stair comes up, and
+/// the ends of the beams under it out through the walls.
+fn walked_roof(
+    sink: &mut Sink,
+    plan: &Plan,
+    kit: &Kit,
+    material: &str,
+    top: f32,
+    gaps: &[[i32; 3]],
+) {
+    let wall = &kit.walls[0].outside;
+    let (h, t) = PARAPET_M;
+    let inside = |c: i32, r: i32| plan.index(c, r).is_some();
+    let mut corners: Vec<Vec2> = Vec::new();
+    for (i, &(c, r)) in plan.cells.iter().enumerate() {
+        let hex = ccw(plan.corners[i].to_vec());
+        sink.prism(material, wall, &hex, top, top + WALKED_SLAB_M, None);
+        sink.solids.push(Solid {
+            outline: hex.clone(),
+            y0: top,
+            y1: top + WALKED_SLAB_M,
+        });
+        sink.surfaces.push(Surface::Floor {
+            outline: hex,
+            top: top + WALKED_SLAB_M,
+            bottom: top,
+        });
+        for d in 0..6 {
+            let (c2, r2) = neighbour(c, r, d);
+            if inside(c2, r2) {
+                continue;
+            }
+            let (a, b) = edge_ends(plan, i, d);
+            let edge = b - a;
+            let out = ((a + b) * 0.5 - plan.centres[i]).normalize_or_zero();
+            for f in [0.3, 0.7] {
+                let p = a + edge * f + out * 0.3;
+                sink.plain_box(
+                    "timber",
+                    p.x,
+                    top - 0.32,
+                    p.y,
+                    Vec3::new(0.6, 0.16, 0.16),
+                    out.y.atan2(out.x),
+                );
+            }
+            if gaps.contains(&[c, r, d as i32]) {
+                continue;
+            }
+            let m = (a + b) * 0.5;
+            let size = Vec3::new(edge.length(), h, t);
+            let ang = edge.y.atan2(edge.x);
+            sink.plain_box(wall, m.x, top + WALKED_SLAB_M, m.y, size, ang);
+            sink.solid_box(m.x, top + WALKED_SLAB_M, m.y, size, ang);
+            for p in [a, b] {
+                if !corners.iter().any(|q| q.distance(p) < 0.01) {
+                    corners.push(p);
+                }
+            }
+        }
+    }
+    // A post at each corner closes the parapet round it, 2 cm over the
+    // wall so their tops never share a plane.
+    for p in corners {
+        let hex: Vec<Vec2> = (0..6)
+            .map(|k| {
+                let a = k as f32 * std::f32::consts::FRAC_PI_3;
+                p + Vec2::new(a.cos(), a.sin()) * (t / 2.0)
+            })
+            .collect();
+        let (y0, y1) = (top + WALKED_SLAB_M, top + WALKED_SLAB_M + h + 0.02);
+        sink.prism(wall, wall, &hex, y0, y1, None);
+        sink.solids.push(Solid {
+            outline: ccw(hex),
+            y0,
+            y1,
+        });
+    }
+}
+
+/// A dome (slice 4e), the mockup's `domeCap`: a half-ellipsoid `r` across
+/// at its foot on `y0` round `c`, `h` high, in `material`, its courses
+/// running round it a whole number of times so they meet without a seam.
+fn dome(sink: &mut Sink, material: &str, c: Vec2, y0: f32, r: f32, h: f32) {
+    const SEG: usize = 20;
+    const RINGS: usize = 7;
+    use std::f32::consts::{FRAC_PI_2, PI, TAU};
+    let wraps = (PI * r).round().max(1.0);
+    let at = |i: usize, j: usize| -> Vec3 {
+        let a = i as f32 / SEG as f32 * TAU;
+        let t = j as f32 / RINGS as f32 * FRAC_PI_2;
+        Vec3::new(
+            c.x + r * t.cos() * a.cos(),
+            y0 + h * t.sin(),
+            c.y + r * t.cos() * a.sin(),
+        )
+    };
+    for j in 0..RINGS {
+        for i in 0..SEG {
+            let am = (i as f32 + 0.5) / SEG as f32 * TAU;
+            let quad = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
+            let pts = if j == RINGS - 1 {
+                &quad[..3]
+            } else {
+                &quad[..]
+            };
+            let m = pts.iter().fold(Vec3::ZERO, |s, q| s + *q) / pts.len() as f32;
+            let out = Vec3::new(m.x - c.x, m.y - y0 + 0.001, m.z - c.y);
+            let uv = |q: Vec3| {
+                let an = (q.z - c.y).atan2(q.x - c.x);
+                let mut d = an - am;
+                while d > PI {
+                    d -= TAU;
+                }
+                while d < -PI {
+                    d += TAU;
+                }
+                Vec2::new((am + d) / TAU * wraps, (q.y - y0) / 1.6)
+            };
+            sink.face(material, pts, out, Some(&uv));
+        }
+    }
 }
 
 /// A newel's winders a turn and their rise (`tenebris-towns` section 3).

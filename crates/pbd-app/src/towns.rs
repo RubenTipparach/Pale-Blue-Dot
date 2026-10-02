@@ -41,7 +41,7 @@ use pbd_core::settlement::sea;
 use pbd_core::settlement::{Kits, Template};
 use pbd_core::sites::{Site, SiteKind};
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -93,19 +93,39 @@ struct ManifestTexture {
     #[allow(dead_code)]
     height: u32,
     repeat_m: f32,
+    /// Cut out where it is clear, as the mockup's net is (task 4.2c).
+    #[serde(default)]
+    cut: bool,
+}
+
+fn load_manifest() -> Manifest {
+    let path = asset("textures/settlement/manifest.ron");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    ron::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
 /// Metres one repeat of each town texture covers, from its manifest.
 pub fn load_repeats() -> BTreeMap<String, f32> {
-    let path = asset("textures/settlement/manifest.ron");
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-    let manifest: Manifest =
-        ron::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-    manifest
+    load_manifest()
         .textures
         .into_iter()
         .map(|t| (t.name, t.repeat_m))
         .collect()
+}
+
+/// The town textures cut out where they are clear (task 4.2c), from the
+/// manifest: drawn alpha-masked, and casting no shadow, since the shadow
+/// pass casts whole triangles.
+pub fn cut_textures() -> &'static BTreeSet<String> {
+    static CUT: std::sync::OnceLock<BTreeSet<String>> = std::sync::OnceLock::new();
+    CUT.get_or_init(|| {
+        load_manifest()
+            .textures
+            .into_iter()
+            .filter(|t| t.cut)
+            .map(|t| t.name)
+            .collect()
+    })
 }
 
 /// A town built from its record, before it is in the world.
@@ -124,6 +144,28 @@ pub struct Laid {
     pub rooms: Vec<Meshes>,
     /// What burns in each building's rooms (decision 7a).
     pub lights: Vec<Vec<RoomLight>>,
+    /// Its dressing things standing, and those left off its chart (task
+    /// 4.2c).
+    pub dressing: (usize, usize),
+    /// Its cog's ship among its solids, where the template moors it
+    /// (`sail-the-cog` design 6). The town stands it empty: the cog is a
+    /// craft (step 3, part 3).
+    pub cog: Option<usize>,
+}
+
+/// The drawn sea's surface, metres over the radius: the layers' sea level
+/// less the depth the water pass draws its sheet under it (`water.ron`'s
+/// `depth_offset_m`), which is what boats float on.
+pub fn sheet_m(config: &TerrainConfig, water: &crate::config::WaterSettings) -> f32 {
+    config.sea_level_m - water.depth_offset_m
+}
+
+/// [`sheet_m`] in a world, from its water settings or the shipped ones.
+fn sheet_in(world: &World, config: &TerrainConfig) -> f32 {
+    match world.get_resource::<crate::config::WaterSettings>() {
+        Some(water) => sheet_m(config, water),
+        None => sheet_m(config, &crate::config::WaterSettings::default()),
+    }
 }
 
 /// The patch of finest cells round a direction.
@@ -183,7 +225,8 @@ fn lay_on(
 
 /// Build a town from its definition: its ground and its pieces, cut on the
 /// cells it was laid on, and the masonry of `template`, the template it was
-/// laid from (slice 4c). `repeat_m` is how far a texture repeats.
+/// laid from (slice 4c). `repeat_m` is how far a texture repeats, and
+/// `sheet_m` the drawn sea's surface over the radius ([`sheet_m`]).
 pub fn build(
     site: &Site,
     town: &Town,
@@ -191,6 +234,7 @@ pub fn build(
     kits: &Kits,
     repeat_m: &dyn Fn(&str) -> f32,
     config: &TerrainConfig,
+    sheet_m: f32,
 ) -> Result<Laid, String> {
     let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
     let built = record::build_town(
@@ -200,6 +244,7 @@ pub fn build(
         kits,
         repeat_m,
         config.radius_m,
+        sheet_m,
         natural(config),
     )?;
     Ok(Laid {
@@ -213,6 +258,8 @@ pub fn build(
         solids: built.solids,
         rooms: built.rooms,
         lights: built.lights,
+        dressing: (built.dressing, built.dressing_skipped),
+        cog: built.cog,
     })
 }
 
@@ -291,27 +338,39 @@ pub struct TownAssets {
     pub walled: Template,
     /// The harbour (slice 4d).
     pub harbour: Template,
+    /// The desert town (slice 4e).
+    pub desert: Template,
+    /// The tundra camp (slice 4g).
+    pub tundra: Template,
     pub repeats: Arc<BTreeMap<String, f32>>,
 }
 
 impl TownAssets {
     /// The template a kind of site is laid from, where one is shipped: the
-    /// village's, the walled town's and the harbour's so far (slice 4 adds a
-    /// kind at a time).
+    /// village's, the walled town's, the harbour's, the desert's and the
+    /// tundra's so far (slice 4 adds a kind at a time).
     pub fn template_for(&self, kind: SiteKind) -> Option<&Template> {
         match kind {
             SiteKind::Village => Some(&self.village),
             SiteKind::Walled => Some(&self.walled),
             SiteKind::Harbour => Some(&self.harbour),
+            SiteKind::Desert => Some(&self.desert),
+            SiteKind::Tundra => Some(&self.tundra),
             _ => None,
         }
     }
 
     /// The template a stored town names, by its scene.
     pub fn template_named(&self, scene: &str) -> Option<&Template> {
-        [&self.village, &self.walled, &self.harbour]
-            .into_iter()
-            .find(|t| t.scene == scene)
+        [
+            &self.village,
+            &self.walled,
+            &self.harbour,
+            &self.desert,
+            &self.tundra,
+        ]
+        .into_iter()
+        .find(|t| t.scene == scene)
     }
 
     /// How far each texture repeats, metres, as the cutter asks it.
@@ -609,14 +668,27 @@ fn settle(world: &mut World) {
     let mut kept = Vec::new();
     for h in held {
         let patch = patch_round(h.site.direction, config.radius_m, patch_m(h.site.kind));
+        let template = world
+            .resource::<TownAssets>()
+            .template_named(&h.town.template)
+            .cloned();
         match record::ground_of(&h.town, &patch, config.radius_m, natural(&config)) {
-            Ok((_, g)) => {
+            Ok((chart, g)) => {
+                // Its street lamps and lanterns (task 5.2), from its template.
+                let lamps = template
+                    .as_ref()
+                    .map(|t| record::lamps_of(&h.town, t, &chart, &patch))
+                    .unwrap_or_default();
+                let g = g.with_lamps(lamps);
                 // Where the town stands: a harbour lies up to its shift from
                 // its site's marker (slice 4d).
                 let (lat, lon) = pbd_core::geo::lat_lon(g.anchor()).degrees();
                 info!(
-                    "{}: a {:?} at --at {lat:.5} {lon:.5}, a terrace at {} m",
-                    h.site.name, h.site.kind, h.town.terrace
+                    "{}: a {:?} at --at {lat:.5} {lon:.5}, a terrace at {} m, {} lamps",
+                    h.site.name,
+                    h.site.kind,
+                    h.town.terrace,
+                    g.lamps().len()
                 );
                 grounds.push(g);
                 kept.push(h);
@@ -643,6 +715,7 @@ fn settle(world: &mut World) {
         let assets = world.resource::<TownAssets>();
         (assets.kits.clone(), assets.repeat())
     };
+    let sheet = sheet_in(world, &config);
     for h in kept {
         if (h.point(config.radius_m) - at).length() > STAND_M {
             continue;
@@ -651,7 +724,15 @@ fn settle(world: &mut World) {
             .resource::<TownAssets>()
             .template_named(&h.town.template)
             .cloned();
-        match build(&h.site, &h.town, template.as_ref(), &kits, &repeat, &config) {
+        match build(
+            &h.site,
+            &h.town,
+            template.as_ref(),
+            &kits,
+            &repeat,
+            &config,
+            sheet,
+        ) {
             Ok(laid) => stand(world, &h, laid, 1.0),
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
@@ -726,14 +807,23 @@ pub fn stand_in_range(world: &mut World) {
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
     }
+    // Every template a town can be laid from: the harbour's too, or a
+    // harbour coming into range is cut with none of its sea's pieces.
     let (kits, repeat, templates) = {
         let assets = world.resource::<TownAssets>();
         (
             assets.kits.clone(),
             assets.repeat(),
-            [assets.village.clone(), assets.walled.clone()],
+            [
+                assets.village.clone(),
+                assets.walled.clone(),
+                assets.harbour.clone(),
+                assets.desert.clone(),
+                assets.tundra.clone(),
+            ],
         )
     };
+    let sheet = sheet_in(world, &config);
     let dt = world
         .get_resource::<Time>()
         .map_or(1.0 / 60.0, |t| t.delta_secs());
@@ -754,7 +844,15 @@ pub fn stand_in_range(world: &mut World) {
                     .cloned();
                 let (h, kits, repeat) = (h.clone(), kits.clone(), repeat.clone());
                 let task = AsyncComputeTaskPool::get().spawn(async move {
-                    build(&h.site, &h.town, template.as_ref(), &kits, &repeat, &config)
+                    build(
+                        &h.site,
+                        &h.town,
+                        template.as_ref(),
+                        &kits,
+                        &repeat,
+                        &config,
+                        sheet,
+                    )
                 });
                 towns.cutting.push((id, task));
             }
@@ -841,6 +939,22 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     // Each door as its save holds it: open where the player left it open,
     // shut where there is no record (slice 2b).
     let mut solids = laid.solids.clone();
+    // Its cog is a craft (`sail-the-cog` step 3, part 3), made with its
+    // boats: the ship's place among its pieces is kept, empty, so the
+    // town's numbering holds, and its gangplank stays the town's.
+    if let Some(n) = laid.cog {
+        solids[n] = BuildingSolids {
+            frame: solids[n].frame,
+            reach_m: 0.0,
+            solids: Vec::new(),
+            roof_plan: Vec::new(),
+            surfaces: Vec::new(),
+            doors: Vec::new(),
+            top_m: 0.0,
+            rooms: Meshes::new(),
+            lights: Vec::new(),
+        };
+    }
     door_states(
         &mut solids,
         site.id,
@@ -856,8 +970,17 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
     let entity = spawn_town(world, &laid);
     spawn_doors(world, entity, site.id, &solids);
     let triangles: usize = laid.meshes.values().map(|m| m.positions.len() / 3).sum();
+    let (things, off) = laid.dressing;
+    let mut dressing = match (things, off) {
+        (0, 0) => String::new(),
+        (n, 0) => format!(", {n} dressing things"),
+        (n, off) => format!(", {n} dressing things ({off} off its chart)"),
+    };
+    if laid.cog.is_some() {
+        dressing.push_str(", a berth for its cog");
+    }
     info!(
-        "{} stands: {} buildings, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}",
+        "{} stands: {} buildings{dressing}, {triangles} triangles in {} textures, a terrace at {} m over {footprint} cells eased over {margin}",
         laid.name,
         held.town.buildings.len(),
         laid.meshes.len(),
@@ -875,6 +998,61 @@ fn stand(world: &mut World, held: &Held, laid: Laid, shown: f32) {
         leaving: false,
     });
     show(world, entity, shown);
+}
+
+/// How far each town texture repeats, metres, as the cutter asks it: the
+/// towns' table where they are loaded, else their manifest's.
+pub(crate) fn repeat_in(world: &World) -> impl Fn(&str) -> f32 + use<> {
+    let repeats = world
+        .get_resource::<TownAssets>()
+        .map(|a| a.repeats.clone())
+        .unwrap_or_else(|| Arc::new(load_repeats()));
+    move |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0)
+}
+
+/// A cut's faces drawn under `parent` in the towns' textures, in the
+/// parent's frame, a flame unlit in [`FLAME_RGB`] as a town's is: the cog a
+/// craft carries. Each mesh drawn, by its texture's name.
+pub(crate) fn spawn_meshes(
+    world: &mut World,
+    parent: Entity,
+    meshes: &Meshes,
+) -> Vec<(String, Entity)> {
+    let parts: Vec<(String, Mesh, Option<Handle<Image>>)> = {
+        let assets = world.resource::<AssetServer>();
+        meshes
+            .iter()
+            .map(|(name, buf)| {
+                let image = (name != FLAME).then(|| texture(assets, name));
+                (name.clone(), to_mesh(buf), image)
+            })
+            .collect()
+    };
+    let mut out = Vec::new();
+    for (name, mesh, image) in parts {
+        let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
+        let material = world
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(match image {
+                Some(image) => StandardMaterial {
+                    base_color_texture: Some(image),
+                    perceptual_roughness: 0.93,
+                    ..default()
+                },
+                None => StandardMaterial {
+                    base_color: Color::linear_rgb(FLAME_RGB[0], FLAME_RGB[1], FLAME_RGB[2]),
+                    unlit: true,
+                    cull_mode: None,
+                    ..default()
+                },
+            });
+        let part = world
+            .spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()))
+            .id();
+        world.entity_mut(parent).add_child(part);
+        out.push((name, part));
+    }
+    out
 }
 
 /// Open every door when the towns are built, as the player would, and write
@@ -1109,11 +1287,12 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
     let centre = world
         .get_resource::<PlanetRenderFrame>()
         .map_or(Vec3::ZERO, |f| f.center.as_vec3());
-    let parts: Vec<(Mesh, Handle<Image>)> = {
+    let parts: Vec<(Mesh, Handle<Image>, bool)> = {
         let assets = world.resource::<AssetServer>();
+        let cut = cut_textures();
         laid.meshes
             .iter()
-            .map(|(name, buf)| (to_mesh(buf), texture(assets, name)))
+            .map(|(name, buf)| (to_mesh(buf), texture(assets, name), cut.contains(name)))
             .collect()
     };
     // Each building's rooms, apart: they take the room's own share of the
@@ -1145,13 +1324,13 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         .id();
     let pieces = parts
         .into_iter()
-        .map(|(mesh, image)| (None, mesh, Some(image)))
+        .map(|(mesh, image, cut)| (None, mesh, Some(image), cut))
         .chain(
             rooms
                 .into_iter()
-                .map(|(b, mesh, image)| (Some(b), mesh, image)),
+                .map(|(b, mesh, image)| (Some(b), mesh, image, false)),
         );
-    for (room, mesh, image) in pieces {
+    for (room, mesh, image, cut) in pieces {
         let flame = image.is_none();
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
         let material = world
@@ -1160,6 +1339,12 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
                 Some(image) => StandardMaterial {
                     base_color_texture: Some(image),
                     perceptual_roughness: 0.93,
+                    // A net is see-through between its cords (task 4.2c).
+                    alpha_mode: if cut {
+                        AlphaMode::Mask(0.5)
+                    } else {
+                        AlphaMode::Opaque
+                    },
                     ..default()
                 },
                 None => StandardMaterial {
@@ -1201,10 +1386,14 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
 
 /// What a town casts into the sun's cascades (`sun-shadows` task 5.1): every
 /// triangle of its outside and its rooms, a floor shading the room under it,
-/// and not its doors, which swing.
+/// and not its doors, which swing, nor what is cut out (a net), which would
+/// cast as a solid sheet.
 pub fn casting(laid: &Laid) -> Vec<[f32; 3]> {
+    let cut = cut_textures();
     laid.meshes
-        .values()
+        .iter()
+        .filter(|(name, _)| !cut.contains(*name))
+        .map(|(_, buf)| buf)
         .chain(laid.rooms.iter().flat_map(|m| {
             m.iter()
                 .filter(|(name, _)| name.as_str() != FLAME)
@@ -1306,6 +1495,8 @@ impl Plugin for TownsPlugin {
             village: load_template("village"),
             walled: load_template("town"),
             harbour: load_template("coast"),
+            desert: load_template("desert"),
+            tundra: load_template("tundra"),
             repeats: Arc::new(load_repeats()),
         })
         .init_resource::<Towns>()

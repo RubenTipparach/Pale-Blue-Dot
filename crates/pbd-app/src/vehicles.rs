@@ -10,6 +10,7 @@
 
 mod chase;
 mod draw;
+pub(crate) mod harbour;
 mod hud;
 mod model;
 pub(crate) mod place;
@@ -53,6 +54,9 @@ pub struct Fleet {
     pub dirty: bool,
     /// Whether this world's craft are in it yet.
     pub spawned: bool,
+    /// Craft stowed as their records, far from the viewer (`cities-in-the-world`
+    /// task 4.2b): in the save, not in the world, until the viewer comes near.
+    pub stowed: Vec<pbd_core::vehicle::record::VehicleRecord>,
 }
 
 impl Fleet {
@@ -64,12 +68,17 @@ impl Fleet {
             next_id: 1,
             dirty: false,
             spawned: false,
+            stowed: Vec::new(),
         }
     }
 
-    /// The whole fleet as the save file holds it.
+    /// The whole fleet as the save file holds it: the craft in the world and
+    /// the ones stowed.
     pub fn file<'a>(&self, crafts: impl Iterator<Item = &'a Craft>) -> VehicleFile {
-        let mut vehicles: Vec<_> = crafts.map(Craft::record).collect();
+        let mut vehicles: Vec<_> = crafts
+            .map(Craft::record)
+            .chain(self.stowed.iter().cloned())
+            .collect();
         vehicles.sort_by_key(|record| record.id);
         VehicleFile {
             version: RECORD_VERSION,
@@ -129,14 +138,26 @@ impl Plugin for VehiclePlugin {
             .init_resource::<CraftHold>()
             .init_resource::<view::VehicleView>()
             .add_systems(Startup, (view::spawn_camera, hud::spawn))
-            .add_systems(Update, (place::spawn_fleet, scripted_board).chain())
+            .add_systems(
+                Update,
+                (
+                    place::spawn_fleet,
+                    harbour::moor_harbours,
+                    harbour::stow_and_wake,
+                    scripted_board,
+                )
+                    .chain(),
+            )
             .add_systems(
                 RunFixedMainLoop,
                 (board_or_leave, read_controls)
                     .chain()
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
             )
-            .add_systems(FixedUpdate, (step_vehicles, hold_craft).chain())
+            .add_systems(
+                FixedUpdate,
+                (step_vehicles, hold_craft, harbour::swing_moored_cogs).chain(),
+            )
             .add_systems(
                 PostUpdate,
                 (draw::place, view::follow)
@@ -221,28 +242,10 @@ fn step_vehicles(
         } else {
             Input::default()
         };
-        let before = vehicle.craft.clone();
-        vehicle.craft.step(dt, SUBSTEPS, &input, &env);
-        if !vehicle.craft.is_finite() {
-            // A state that left its domain goes back a tick, stopped, rather
-            // than carrying a NaN into every frame after it.
-            warn!("{} left its domain; held where it was", before.kind.name());
-            vehicle.craft = before;
-            vehicle.craft.body.velocity = DVec3::ZERO;
-            vehicle.craft.body.angular_velocity = DVec3::ZERO;
-        }
-        // A rest is a place the save must keep.
-        let still = vehicle.craft.body.velocity.length() < REST_SPEED
-            && vehicle.craft.body.angular_velocity.length() < REST_SPEED;
-        if still {
-            vehicle.still += dt as f32;
-            if vehicle.still >= REST_S && !vehicle.rested {
-                vehicle.rested = true;
-                fleet.dirty = true;
-            }
-        } else {
-            vehicle.still = 0.0;
-            vehicle.rested = false;
+        // A cog on its swing is moved by it, not stepped
+        // (`harbour::swing_moored_cogs`).
+        if !harbour::on_swing(&vehicle.craft) {
+            step_one(&mut vehicle, dt, &input, &env, &mut fleet);
         }
         // The player aboard is carried: the walker stands at the craft's exit,
         // so a save taken aboard puts them on foot beside it on reload.
@@ -255,6 +258,34 @@ fn step_vehicles(
                 transform.translation = position.0;
             }
         }
+    }
+}
+
+/// One craft's tick: stepped, held back a tick where it left its domain,
+/// and its rest noted for the save.
+fn step_one(vehicle: &mut Vehicle, dt: f64, input: &Input, env: &Surroundings, fleet: &mut Fleet) {
+    let before = vehicle.craft.clone();
+    vehicle.craft.step(dt, SUBSTEPS, input, env);
+    if !vehicle.craft.is_finite() {
+        // A state that left its domain goes back a tick, stopped, rather
+        // than carrying a NaN into every frame after it.
+        warn!("{} left its domain; held where it was", before.kind.name());
+        vehicle.craft = before;
+        vehicle.craft.body.velocity = DVec3::ZERO;
+        vehicle.craft.body.angular_velocity = DVec3::ZERO;
+    }
+    // A rest is a place the save must keep.
+    let still = vehicle.craft.body.velocity.length() < REST_SPEED
+        && vehicle.craft.body.angular_velocity.length() < REST_SPEED;
+    if still {
+        vehicle.still += dt as f32;
+        if vehicle.still >= REST_S && !vehicle.rested {
+            vehicle.rested = true;
+            fleet.dirty = true;
+        }
+    } else {
+        vehicle.still = 0.0;
+        vehicle.rested = false;
     }
 }
 
@@ -331,10 +362,14 @@ fn read_controls(
             input.sheet = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.crew = axis(KeyCode::KeyE, KeyCode::KeyQ);
         }
-        Kind::Loon => {
+        Kind::Loon | Kind::Rowboat => {
             input.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
             input.rudder = axis(KeyCode::KeyQ, KeyCode::KeyE);
+        }
+        Kind::Cog => {
+            input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
+            input.sheet = axis(KeyCode::KeyW, KeyCode::KeyS);
         }
     }
     controls.0 = input;
@@ -458,6 +493,10 @@ pub struct VehicleScript {
     pub board: Option<Kind>,
     /// In the seat rather than the chase view.
     pub seat: bool,
+    /// A cog boarded is cast off with its yard braced this many degrees
+    /// off square and 2 m/s of way along its bow (`--sail`): a capture's,
+    /// so a few seconds show it under way.
+    pub sail: Option<f32>,
 }
 
 fn scripted_board(world: &mut World) {
@@ -475,6 +514,11 @@ fn scripted_board(world: &mut World) {
         .iter(world)
         .find(|(_, v)| v.craft.kind == kind)
         .map(|(e, _)| e);
+    // A harbour makes its cog and its rowboats when the fleet first meets
+    // it, after the fleet is in: wait for them.
+    if found.is_none() && matches!(kind, Kind::Cog | Kind::Rowboat) {
+        return;
+    }
     world.resource_mut::<VehicleScript>().board = None;
     let Some(entity) = found else {
         warn!("--aboard: this world has no {}", kind.name());
@@ -482,6 +526,16 @@ fn scripted_board(world: &mut World) {
     };
     world.resource_mut::<view::VehicleView>().seat = script.seat;
     take_seat(world, entity, true);
+    if let Some(deg) = script.sail
+        && let Some(mut vehicle) = world.get_mut::<Vehicle>(entity)
+        && let pbd_core::vehicle::CraftState::Cog(s) = &mut vehicle.craft.state
+    {
+        s.yard = f64::from(deg).to_radians();
+        let craft = &mut vehicle.craft;
+        craft.mooring = None;
+        craft.body.velocity = craft.body.axis(pbd_core::vehicle::FORWARD) * 2.0;
+        info!("--sail: cast off with the yard braced {deg} deg");
+    }
 }
 
 /// Step off: the craft stays, unattended; the walker is put at its exit.
@@ -509,6 +563,21 @@ pub fn leave(world: &mut World, entity: Entity) {
         .map_or(Quat::IDENTITY, |t| t.rotation);
     let captured = world.resource::<view::VehicleView>().captured;
     crate::walking::drop_walker(world, eye, velocity.as_vec3(), look);
+    // Off a ship's helm onto its deck (`sail-the-cog` step 3): the walker
+    // keeps the ship's way until its feet are down, and the deck carries it
+    // from there.
+    if world
+        .get_resource::<crate::decks::CraftDecks>()
+        .is_some_and(|d| d.at(entity).is_some())
+    {
+        let v = velocity.as_vec3();
+        for mut ground in world
+            .query_filtered::<&mut crate::walking::GroundState, With<Walker>>()
+            .iter_mut(world)
+        {
+            ground.drift = v - up * v.dot(up);
+        }
+    }
     world.resource_mut::<WalkingState>().captured = captured;
     crate::walking::set_view(world, View::Walking);
     world.resource_mut::<Fleet>().dirty = true;
@@ -533,6 +602,12 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
         info!("cast off");
         return;
     }
+    if make_fast_at_berth(world, entity) {
+        return;
+    }
+    let Some(vehicle) = world.get::<Vehicle>(entity) else {
+        return;
+    };
     let bow = vehicle.craft.bow();
     let direction = bow.normalize();
     let floor = ground_under(
@@ -556,6 +631,67 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
     });
     world.resource_mut::<Fleet>().dirty = true;
     info!("anchored in {depth:.1} m");
+}
+
+/// How near its berth a harbour's cog makes fast there, m; how slow it must
+/// be, m/s; and how near its berth's heading, rad.
+const MAKE_FAST_M: f64 = 4.0;
+const MAKE_FAST_SPEED: f64 = 0.8;
+const MAKE_FAST_RAD: f64 = 30.0 * std::f64::consts::PI / 180.0;
+
+/// A harbour's cog near its own berth, slow and heading as it lies there,
+/// makes fast to its bollard and eases back onto its swing
+/// (`sail-the-cog` step 3, part 3). Whether it did.
+fn make_fast_at_berth(world: &mut World, entity: Entity) -> bool {
+    let Some(vehicle) = world.get::<Vehicle>(entity) else {
+        return false;
+    };
+    let craft = &vehicle.craft;
+    let Some((site, harbour::COG)) = craft.berth else {
+        return false;
+    };
+    let berthed = match world.get::<harbour::Berthed>(entity) {
+        Some(b) => *b,
+        None => {
+            let (Some(towns), Some(assets)) = (
+                world.get_resource::<crate::towns::Towns>(),
+                world.get_resource::<crate::towns::TownAssets>(),
+            ) else {
+                return false;
+            };
+            let sea = world.resource::<Sea>().radius;
+            let Some(b) = harbour::berth_of(towns, assets, sea, site) else {
+                return false;
+            };
+            b
+        }
+    };
+    let off = craft
+        .reference_position()
+        .distance(berthed.rest.origin.as_dvec3());
+    let speed = craft.body.velocity.length();
+    let heading = craft
+        .body
+        .axis(pbd_core::vehicle::FORWARD)
+        .angle_between(berthed.bow.as_dvec3());
+    if off > MAKE_FAST_M || speed > MAKE_FAST_SPEED || heading > MAKE_FAST_RAD {
+        return false;
+    }
+    let from = (craft.reference_position(), craft.body.orientation);
+    let at = craft.bow();
+    let mut vehicle = world.get_mut::<Vehicle>(entity).expect("checked");
+    vehicle.craft.mooring = Some(Mooring {
+        at,
+        length: 2.0,
+        anchored: false,
+    });
+    world.entity_mut(entity).insert(harbour::Berthed {
+        easing: Some((from.0, from.1, 0.0)),
+        ..berthed
+    });
+    world.resource_mut::<Fleet>().dirty = true;
+    info!("made fast at its berth, {off:.1} m off");
+    true
 }
 
 /// Write the fleet whenever something a save must keep happened (a craft
@@ -610,6 +746,7 @@ pub fn put_away(world: &mut World) -> Option<VehicleFile> {
     fleet.spawned = false;
     fleet.dirty = false;
     fleet.next_id = 1;
+    fleet.stowed.clear();
     file
 }
 

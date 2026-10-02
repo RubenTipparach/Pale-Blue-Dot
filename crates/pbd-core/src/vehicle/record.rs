@@ -39,6 +39,15 @@ pub struct VehicleRecord {
     pub nacelle: Option<f64>,
     pub brake: Option<bool>,
     pub sheet: Option<f64>,
+    /// A harbour boat's berth, its harbour's site and its number there
+    /// (`cities-in-the-world` task 4.2b). Written only where there is one, so
+    /// every other craft's record is as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub berth: Option<(u32, u32)>,
+    /// The cog's yard off square, rad (`sail-the-cog`). Written only for a
+    /// cog, so every other craft's record is as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub yard: Option<f64>,
 }
 
 /// Every craft in a world, as the save file holds them.
@@ -58,7 +67,11 @@ impl Craft {
         let (nacelle, brake, sheet) = match &self.state {
             CraftState::Kestrel(s) => (Some(s.nacelle), Some(s.brake), None),
             CraftState::Tern(s) => (None, None, Some(s.sheet)),
-            CraftState::Loon(_) => (None, None, None),
+            CraftState::Loon(_) | CraftState::Cog(_) => (None, None, None),
+        };
+        let yard = match &self.state {
+            CraftState::Cog(s) => Some(s.yard),
+            _ => None,
         };
         VehicleRecord {
             id: self.id,
@@ -76,6 +89,8 @@ impl Craft {
             nacelle,
             brake,
             sheet,
+            berth: self.berth,
+            yard,
         }
     }
 
@@ -118,6 +133,7 @@ impl Craft {
         craft.set_reference_pose(DVec3::from(record.position), orientation);
         craft.body.velocity = DVec3::from(record.velocity);
         craft.body.angular_velocity = DVec3::from(record.angular_velocity);
+        craft.berth = record.berth;
         craft.mooring = record.mooring.map(|(at, length, anchored)| Mooring {
             at: DVec3::from(at),
             length,
@@ -135,6 +151,12 @@ impl Craft {
             CraftState::Tern(s) => {
                 if let Some(sheet) = record.sheet.filter(|s| s.is_finite()) {
                     s.sheet = sheet.clamp(0.0, 1.0);
+                }
+            }
+            CraftState::Cog(s) => {
+                let reach = (craft.specs.cog.sail.brace_deg as f64).to_radians();
+                if let Some(yard) = record.yard.filter(|y| y.is_finite()) {
+                    s.yard = yard.clamp(-reach, reach);
                 }
             }
             CraftState::Loon(_) => {}

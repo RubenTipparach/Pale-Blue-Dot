@@ -59,6 +59,10 @@ pub struct Launch {
     /// once it has walked that far: a repeatable stretch of streaming for the
     /// frame log to measure.
     pub walk_distance: Option<f32>,
+    /// `--sail-for SECONDS`: a measurement instrument. Once aboard a cog
+    /// (`--aboard cog --sail DEG`), the run sails it that long in real
+    /// time, logs `SAIL_DONE` and quits: `perf_suite.py`'s `sail`.
+    pub sail_for: Option<f32>,
     /// `--frame-graph`: start with the frame graph shown (`F3` toggles it).
     pub frame_graph: bool,
     /// `--no-vsync`: present unpaced, a measurement instrument, so a frame's
@@ -85,11 +89,15 @@ pub struct Launch {
     /// photographed and the fishery's numbers logged. A capture instrument,
     /// like `--swim`: a headless run has no hand on the mouse.
     pub fish: bool,
-    /// `--aboard KIND` boards the Kestrel, Tern or Loon once the fleet is in,
-    /// and `--seat` takes the seat rather than the chase view: a headless run
-    /// has nobody to walk up to a craft and press F. Implies `--walk`.
+    /// `--aboard KIND` boards a craft of that kind once the fleet is in (a
+    /// cog or a rowboat once a harbour has made one), and `--seat` takes the
+    /// seat rather than the chase view: a headless run has nobody to walk up
+    /// to a craft and press F. Implies `--walk`.
     pub aboard: Option<pbd_core::vehicle::Kind>,
     pub seat: bool,
+    /// Capture instrument: a cog boarded with `--aboard cog` is cast off
+    /// with its yard braced this many degrees and 2 m/s of way.
+    pub sail: Option<f32>,
     /// Static capture instrument: translate the scene within the local frame.
     pub render_offset: Vec3,
     /// Capture instrument for the `shore` view: camera height above the last
@@ -135,6 +143,10 @@ pub struct Launch {
     /// `--no-shadows` draws no sun cascades and lights everything as if in
     /// the sun: the same build's picture without them (`sun-shadows`).
     pub no_shadows: bool,
+    /// `--cog-swing <scale>` scales how far the harbours' cogs swing at
+    /// their moorings, 1 the mooring swing and 0 still (`sail-the-cog`
+    /// design 6, step 2).
+    pub cog_swing: Option<f32>,
     /// `--room-sky OPEN SHUT` sets the share of the sky a town's rooms take
     /// with a door open and with all shut (`sun-shadows` decision 7), for
     /// tuning against captures.
@@ -222,6 +234,7 @@ impl Launch {
             capture: None,
             frame_log: None,
             walk_distance: None,
+            sail_for: None,
             frame_graph: false,
             no_vsync: false,
             view: "coast".into(),
@@ -241,6 +254,7 @@ impl Launch {
             fish: false,
             aboard: None,
             seat: false,
+            sail: None,
             render_offset: Vec3::ZERO,
             height: None,
             spawn: None,
@@ -249,6 +263,7 @@ impl Launch {
             weather_at: 0.0,
             open_doors: false,
             no_shadows: false,
+            cog_swing: None,
             room_sky: None,
             room_bounce: None,
             up: 0.0,
@@ -527,11 +542,27 @@ impl Launch {
                     let key = args.get(i).expect("--aboard requires a craft");
                     result.aboard = Some(
                         pbd_core::vehicle::Kind::from_key(key)
-                            .expect("--aboard knows kestrel, tern and loon"),
+                            .expect("--aboard knows kestrel, tern, loon, cog and rowboat"),
                     );
                     result.walk = true;
                 }
                 "--seat" => result.seat = true,
+                "--sail-for" => {
+                    i += 1;
+                    result.sail_for = Some(
+                        args.get(i)
+                            .and_then(|a| a.parse().ok())
+                            .expect("--sail-for requires seconds"),
+                    );
+                }
+                "--sail" => {
+                    i += 1;
+                    result.sail = Some(
+                        args.get(i)
+                            .and_then(|a| a.parse().ok())
+                            .expect("--sail requires the yard's angle in degrees"),
+                    );
+                }
                 "--fixed-dt" => result.fixed = true,
                 "--render-offset" => {
                     let mut components = [0.0; 3];
@@ -594,6 +625,19 @@ impl Launch {
                 }
                 "--open-doors" => result.open_doors = true,
                 "--no-shadows" => result.no_shadows = true,
+                "--cog-swing" => {
+                    i += 1;
+                    let scale: f32 = args
+                        .get(i)
+                        .expect("--cog-swing requires a scale")
+                        .parse()
+                        .expect("invalid cog swing");
+                    assert!(
+                        scale.is_finite() && scale >= 0.0,
+                        "--cog-swing takes 0 or more"
+                    );
+                    result.cog_swing = Some(scale);
+                }
                 "--room-sky" => {
                     let mut share = || {
                         i += 1;
@@ -994,6 +1038,9 @@ pub fn run(args: &[String]) {
             ..default()
         });
     }
+    if let Some(scale) = launch.cog_swing {
+        app.insert_resource(pbd_app::decks::CogSwing(scale));
+    }
     if !photo && !launch.tour {
         app.insert_resource(WalkingConfig {
             start_walking: !launch.fly,
@@ -1018,6 +1065,7 @@ pub fn run(args: &[String]) {
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
             seat: launch.seat,
+            sail: launch.sail,
         });
         if launch.at.is_some() {
             app.insert_resource(pbd_app::towns::RespawnInTown);
@@ -1044,6 +1092,13 @@ pub fn run(args: &[String]) {
                     .chain()
                     .after(bevy::input::InputSystems),
             );
+        }
+        if let Some(seconds) = launch.sail_for {
+            app.insert_resource(SailFor {
+                seconds,
+                since: None,
+            })
+            .add_systems(Update, sail_for);
         }
         if launch.walk_distance.is_some() {
             // Where the swim's keys go, for the same reason (below).
@@ -2010,10 +2065,13 @@ fn photo_camera(
         // so a forced storm (`--rain`) brews directly under it at any height.
         // The spawn is `spawn_direction`'s, so `--spawn desert` stands it over
         // a desert (`bigger-biomes` 4.1); without `--spawn` it is the default.
+        // `--yaw` turns it off east as it turns a walker.
         let direction = spawn_direction(&launch);
         let height = launch.height.unwrap_or(EYE_HEIGHT);
         let position = direction * (terrain_radius(direction) + height);
-        let east = Vec3::Y.cross(direction).normalize_or_zero();
+        let yaw = launch.yaw.unwrap_or(0.0).to_radians();
+        let east =
+            Quat::from_axis_angle(direction, -yaw) * Vec3::Y.cross(direction).normalize_or_zero();
         let pitch = launch.pitch.unwrap_or(-30.0).to_radians();
         let forward = east * pitch.cos() + direction * pitch.sin();
         let mut transform = Transform::from_translation(position).looking_to(forward, direction);
@@ -2146,6 +2204,43 @@ fn walk_script(
             progress.walked_m,
             now.duration_since(started).as_secs_f32(),
             progress.turns
+        );
+        exit.write(AppExit::Success);
+    }
+}
+
+/// `--sail-for`: how long to sail, and when the cog was boarded.
+#[derive(Resource)]
+struct SailFor {
+    seconds: f32,
+    since: Option<std::time::Instant>,
+}
+
+/// End a `--sail-for` run: once aboard a cog, sail it the given seconds of
+/// real time, log `SAIL_DONE` with how far it went, and quit.
+fn sail_for(
+    mut sail: ResMut<SailFor>,
+    aboard: Res<pbd_app::vehicles::Aboard>,
+    vehicles: Query<&pbd_app::vehicles::Vehicle>,
+    mut from: Local<Option<pbd_core::DVec3>>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    let Some(craft) = aboard
+        .0
+        .and_then(|e| vehicles.get(e).ok())
+        .map(|v| &v.craft)
+        .filter(|c| c.kind == pbd_core::vehicle::Kind::Cog)
+    else {
+        return;
+    };
+    let started = *sail.since.get_or_insert_with(std::time::Instant::now);
+    let at = *from.get_or_insert(craft.reference_position());
+    let elapsed = started.elapsed().as_secs_f32();
+    if elapsed >= sail.seconds {
+        info!(
+            "SAIL_DONE {:.0} m in {:.1} s",
+            craft.reference_position().distance(at),
+            elapsed
         );
         exit.write(AppExit::Success);
     }

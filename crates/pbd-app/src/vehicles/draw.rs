@@ -2,7 +2,9 @@
 //! physics is (the hull's own loft, the wing's own span and chord, the rotor's
 //! own hub and radius), and the parts that move with its state - the
 //! Kestrel's nacelles and rotors, the Tern's boom and tiller, the Loon's
-//! paddle - placed from that state every frame. Nothing here decides anything.
+//! paddle, the cog's yard and sail - placed from that state every frame.
+//! The cog is the harbour's ship as its piece is cut. Nothing here decides
+//! anything.
 
 use super::{Vehicle, view::VehicleView};
 use bevy::asset::RenderAssetUsages;
@@ -39,6 +41,18 @@ enum Moving {
     Boom,
     Tiller,
     Paddle,
+    /// What lies in a boat until someone aboard takes it up: the canoe's
+    /// paddle.
+    Laid,
+    /// The Tern's keel, lifted in shallow water.
+    Keel,
+    /// The cog's yard, turned about its mast by the braces.
+    Yard,
+    /// Its sail, set (true) or furled on the yard: set at sea, furled at a
+    /// mooring or an anchor.
+    Sail(bool),
+    /// Its stern lantern's flame, burning while the dusk lamps do.
+    Flame,
     /// The figure aboard, drawn only from the chase view.
     Crew,
 }
@@ -198,11 +212,17 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
                 mast + Vec3::Y * head / 2.0,
                 &dark,
             );
+            // The keel, lifted in shallow water (`TernSpec::lift`).
             let keel_h = (s.keel.area_m2 * s.keel.aspect).sqrt();
-            b.cuboid(
+            let keel = b.pivot(
                 entity,
+                Moving::Keel,
+                Transform::from_translation(Vec3::from(s.keel.at)),
+            );
+            b.cuboid(
+                keel,
                 Vec3::new(0.08, keel_h, s.keel.area_m2 / keel_h),
-                Vec3::from(s.keel.at),
+                Vec3::ZERO,
                 &dark,
             );
             // The boom and the sail swing together about the mast.
@@ -247,35 +267,148 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
             );
             b.crew(entity, s.seat.eye, &crew);
         }
-        Kind::Loon => {
-            let s = &specs.loon;
-            let shape = craft.hull().expect("a boat has a hull").clone();
-            let (p, i) = shape.loft(28, 8);
-            let canoe = paint(b.world, Color::srgb(0.2, 0.42, 0.36), true);
-            b.piece(entity, mesh(p, i), &canoe, Transform::IDENTITY);
-            let paddle = b.pivot(entity, Moving::Paddle, Transform::IDENTITY);
-            b.cuboid(paddle, Vec3::new(0.04, 1.3, 0.04), Vec3::Y * 0.65, &dark);
-            b.piece(
-                paddle,
-                paddle_blade(s.paddle.blade_m2),
-                &trim,
-                Transform::IDENTITY,
+        Kind::Loon | Kind::Rowboat => {
+            // The towns mockup's small boats (`cities-in-the-world` task
+            // 4.2b): the canoe in driftwood, the rowboat in boards with its
+            // thwarts and oars, at the craft's own hull and unpainted.
+            use pbd_core::settlement::pieces::dressing as boats;
+            let s = *craft.loon_spec();
+            let h = s.hull;
+            let rowboat = craft.kind == Kind::Rowboat;
+            let repeat = crate::towns::repeat_in(b.world);
+            let size = Vec3::new(h.length_m, h.beam_m, h.depth_m);
+            let floor = craft.floor().expect("an open boat has floorboards");
+            let cut = boats::small_boat(
+                &repeat,
+                if rowboat { "rowboat" } else { "canoe" },
+                size,
+                h.sheer_m,
+                floor,
+            );
+            crate::towns::spawn_meshes(b.world, entity, &cut);
+            if !rowboat {
+                // Its paddle lies in it until someone takes it up.
+                let laid = b.pivot(entity, Moving::Laid, Transform::IDENTITY);
+                crate::towns::spawn_meshes(
+                    b.world,
+                    laid,
+                    &boats::laid_paddle(&repeat, size, h.sheer_m),
+                );
+                let paddle = b.pivot(entity, Moving::Paddle, Transform::IDENTITY);
+                b.cuboid(paddle, Vec3::new(0.04, 1.3, 0.04), Vec3::Y * 0.65, &dark);
+                b.piece(
+                    paddle,
+                    paddle_blade(s.paddle.blade_m2),
+                    &trim,
+                    Transform::IDENTITY,
+                );
+            }
+            b.crew(entity, s.seat.eye, &crew);
+        }
+        Kind::Cog => {
+            // The harbour's ship, as its piece is cut (`sail-the-cog` step
+            // 3): one model moored and sailing. Its gangway is on the side
+            // the harbour moors it.
+            use pbd_core::settlement::pieces::cog as ship;
+            let s = &specs.cog;
+            let repeat = crate::towns::repeat_in(b.world);
+            let gang_side = b
+                .world
+                .get_resource::<crate::towns::TownAssets>()
+                .and_then(|a| a.harbour.cog.as_ref())
+                .map_or(-1, |c| c.gang_side);
+            let mut meshes = Default::default();
+            ship::sailing(&mut meshes, &repeat, gang_side);
+            // The stern lantern's light on the ship's faces, carried with
+            // it (`sail-the-cog` step 3, part 4).
+            for (_, mesh) in crate::towns::spawn_meshes(b.world, entity, &meshes) {
+                b.world.entity_mut(mesh).insert((
+                    crate::field_light::RoomLights(vec![ship::stern_light(ship::LANTERN)]),
+                    CarriedLight {
+                        owner: entity,
+                        local: ship::LANTERN,
+                    },
+                ));
+            }
+            for (name, mesh) in crate::towns::spawn_meshes(b.world, entity, &ship::lantern(&repeat))
+            {
+                if name == crate::towns::FLAME {
+                    b.world.entity_mut(mesh).insert((
+                        Visibility::Hidden,
+                        LanternFlame,
+                        Part {
+                            owner: entity,
+                            kind: Moving::Flame,
+                            spin: 0.0,
+                        },
+                    ));
+                }
+            }
+            let yard = b.pivot(
+                entity,
+                Moving::Yard,
+                Transform::from_translation(ship::MAST_STEP),
+            );
+            for set in [true, false] {
+                let sail = b.pivot(yard, Moving::Sail(set), Transform::IDENTITY);
+                crate::towns::spawn_meshes(b.world, sail, &ship::rig(&repeat, set));
+            }
+            let rudder_h = (s.rudder.area_m2 * s.rudder.aspect).sqrt();
+            let tiller = b.pivot(
+                entity,
+                Moving::Tiller,
+                Transform::from_translation(Vec3::from(s.rudder.at)),
+            );
+            b.cuboid(
+                tiller,
+                Vec3::new(0.12, rudder_h, s.rudder.area_m2 / rudder_h),
+                Vec3::ZERO,
+                &dark,
             );
             b.crew(entity, s.seat.eye, &crew);
         }
     }
 }
 
+/// A craft's lantern's flame (the cog's stern lantern).
+#[derive(Component)]
+pub struct LanternFlame;
+
+/// A light a craft carries on its faces (the cog's stern lantern): where
+/// it is in the craft's frame, so its place in the planet's goes with it.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct CarriedLight {
+    pub owner: Entity,
+    pub local: Vec3,
+}
+
 /// Put every craft where the physics says it is and move its parts.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn place(
     time: Res<Time>,
     frame: Res<crate::planet::PlanetRenderFrame>,
     view: Res<VehicleView>,
     aboard: Res<super::Aboard>,
+    dusk: Option<Res<crate::planet::lod::DuskLamps>>,
     mut crafts: Query<(Entity, &Vehicle, &mut Transform), Without<Part>>,
     mut parts: Query<(&mut Part, &mut Transform, &mut Visibility)>,
+    mut carried: Query<(&CarriedLight, &mut crate::field_light::RoomLights)>,
 ) {
+    // A carried light goes where its craft does, in the planet's frame.
+    for (light, mut lights) in &mut carried {
+        let Ok((_, vehicle, _)) = crafts.get(light.owner) else {
+            continue;
+        };
+        let craft = &vehicle.craft;
+        let at = (craft.reference_position() + craft.body.orientation * light.local.as_dvec3())
+            .as_vec3();
+        if let Some(l) = lights.0.first()
+            && l.at.distance(at) > 1e-3
+        {
+            lights.0[0].at = at;
+        }
+    }
+    let lamps_lit = dusk.is_some_and(|d| d.lit);
     for (_, vehicle, mut transform) in &mut crafts {
         let craft = &vehicle.craft;
         transform.translation = (frame.center + craft.reference_position()).as_vec3();
@@ -307,6 +440,26 @@ pub fn place(
             (Moving::Tiller, CraftState::Tern(s)) => {
                 transform.rotation = Quat::from_rotation_y(s.tiller as f32);
             }
+            (Moving::Keel, CraftState::Tern(s)) => {
+                let spec = &craft.specs().tern;
+                transform.translation =
+                    Vec3::from(spec.keel.at) + Vec3::Y * spec.lift.raised_m(s.keel) as f32;
+            }
+            (Moving::Tiller, CraftState::Cog(s)) => {
+                transform.rotation = Quat::from_rotation_y(s.tiller as f32);
+            }
+            (Moving::Yard, CraftState::Cog(s)) => {
+                transform.rotation = Quat::from_rotation_y(s.yard as f32);
+            }
+            (Moving::Sail(set), CraftState::Cog(_)) => {
+                *visibility = visible(set == craft.mooring.is_none());
+            }
+            (Moving::Flame, _) => {
+                *visibility = visible(lamps_lit);
+            }
+            (Moving::Laid, _) => {
+                *visibility = visible(!craft.occupied);
+            }
             (Moving::Paddle, CraftState::Loon(s)) => {
                 *transform = paddle(craft, s);
                 *visibility = visible(craft.occupied);
@@ -336,7 +489,7 @@ fn visible(shown: bool) -> Visibility {
 /// The paddle's blade: in the water through the power phase, sweeping along
 /// the stroke, and lifted forward again through the recovery.
 fn paddle(craft: &Craft, state: &pbd_core::vehicle::LoonState) -> Transform {
-    let p = craft.specs().loon.paddle;
+    let p = craft.loon_spec().paddle;
     if let pbd_core::vehicle::Telemetry::Loon(t) = &craft.telemetry
         && let Some(at) = t.rudder_at
     {

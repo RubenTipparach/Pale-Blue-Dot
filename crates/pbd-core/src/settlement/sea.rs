@@ -60,9 +60,27 @@ pub fn point(chart: &Chart, patch: &Patch, x: f32, z: f32, cell_m: f32) -> Optio
     Some((o + e0 * a + e1 * b).normalize())
 }
 
+/// Where a harbour's boat lies (task 4.2b): its direction on the planet,
+/// and the tangent its bow points along there, placed as [`point`] places
+/// any of the mockup's points. `None` where its cell is not charted.
+pub fn boat_pose(
+    chart: &Chart,
+    patch: &Patch,
+    boat: &super::Boat,
+    cell_m: f32,
+) -> Option<(Vec3, Vec3)> {
+    let at = point(chart, patch, boat.x, boat.z, cell_m)?;
+    let (x, z) = (boat.x + boat.heading.cos(), boat.z + boat.heading.sin());
+    let ahead = point(chart, patch, x, z, cell_m)?;
+    let bow = ahead - at;
+    Some((at, (bow - at * bow.dot(at)).normalize_or_zero()))
+}
+
 /// The cells under what a sea template stands over the water: its
-/// buildings' and decks' cells, every cell a pier crosses, and its
-/// lanterns' and light's. Some are dry, and those are laid as well.
+/// buildings' and decks' cells, every cell a pier, the slip or the
+/// gangplank crosses, and its lanterns', boats', light's, dressing's and
+/// cog's. Some are dry, and those
+/// are laid as well.
 pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
     let cell_m = template.grid.cell_m;
     let mut out = BTreeSet::new();
@@ -72,7 +90,9 @@ pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
             out.extend(s.deck.iter().map(|&[c, r]| (c, r)));
         }
     }
-    for p in &template.piers {
+    let slip = template.shipyard.as_ref().map(|y| &y.slip);
+    let gangplank = template.cog.as_ref().map(|c| &c.gangplank);
+    for p in template.piers.iter().chain(slip).chain(gangplank) {
         let (dx, dz) = (p.to[0] - p.from[0], p.to[2] - p.from[2]);
         let len = (dx * dx + dz * dz).sqrt();
         let (ux, uz) = if len > 0.0 {
@@ -94,8 +114,33 @@ pub fn over_water(template: &Template) -> BTreeSet<(i32, i32)> {
     for l in &template.lanterns {
         out.insert(cell_at(l[0], l[2], cell_m));
     }
+    // A boat's cell, and the cell a metre ahead of it, where its bow is read.
+    for b in &template.boats {
+        out.insert(cell_at(b.x, b.z, cell_m));
+        out.insert(cell_at(
+            b.x + b.heading.cos(),
+            b.z + b.heading.sin(),
+            cell_m,
+        ));
+    }
     if let Some(l) = &template.light {
         out.insert(cell_at(l.x, l.z, cell_m));
+    }
+    // A dressing thing's cell and the cells a metre east and south of it,
+    // where its frame is read (task 4.2c).
+    let things = template.dressing.iter().map(super::Dress::at);
+    let yard = template
+        .shipyard
+        .iter()
+        .flat_map(|y| [(y.x, y.z), (y.planks[0], y.planks[2])]);
+    let cog = template
+        .cog
+        .iter()
+        .flat_map(super::pieces::cog::plan_points);
+    for (x, z) in things.chain(yard).chain(cog) {
+        for (dx, dz) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)] {
+            out.insert(cell_at(x + dx, z + dz, cell_m));
+        }
     }
     let (nc, nr) = (template.grid.columns, template.grid.rows);
     out.retain(|&(c, r)| c >= 0 && r >= 0 && c < nc && r < nr);

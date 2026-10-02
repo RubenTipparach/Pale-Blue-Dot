@@ -116,3 +116,163 @@ and `3600` at night.
 **Not in these shots, and not built:** the smithy, well, windmill, crops and
 fences, the market stalls, the quay's jetty and boat, furniture and people.
 The lake under the walled town is dry ground, and the streets are dirt.
+
+## Slice 4d: the harbour, beside the mockup (2026-10-01)
+
+`harbour-4d-2026-10-01.jpg`: Holinghaven, the towns mockup's harbour
+(`tools/mockup_coast_shots.js`) on the left and the game on the right, row by
+row: the quay, the fish market, the shipyard, the cog at its pier, the harbour
+from above, and the quay and market at 22:30. In-game captures on lavapipe at
+1440 x 900 with no GPU, the fast build under `xvfb-run`, a new memory-only
+world, `--open-doors --rain 0`; walking runs at the quay, market and shipyard,
+`--view column` for the cog (14 m up) and from above (60 m). They show what
+things look like, not how smoothly they run.
+
+These were rendered on the build before the cog became a craft, so its ship
+here is the town's piece; moored, the craft is the same cut. The quay run
+moored 17 boats at Holinghaven (its log). They are in the frame: the flat
+teal shapes along the piers on the left are the rowboats and canoes, moored
+as the game's Loon (a teal canoe that sits low), and a Tern's sail stands
+past the lighthouse. Beside the mockup's wooden rowboats and white sails they
+hardly read as boats from the quay.
+
+## Task 4.2b: the harbour's sailboats (2026-10-01)
+
+`harbour-sailboats-2026-10-01.jpg`: Holinghaven's quay at 11:00, the mockup
+above the game before and after. Before, every sailing berth held a canoe:
+its 0.5 to 1.5 m of water was too shallow for the Tern's fixed 1.7 m keel.
+Now the Tern's keel lifts to the water under it (design, task 4.2b), and the
+berths along the piers hold Terns with their tall masts and sails. The cog's
+stern lantern stands on its aftcastle. Same capture setup as the slice 4d
+shots above (lavapipe, no GPU, `--walk --at 23.50609 -115.10515 --yaw -66.9
+--pitch -4 --time 18.77`).
+
+## Task 4.2b: the harbour's small boats as the mockup's (2026-10-02)
+
+`harbour-small-boats-2026-10-02.jpg`: Holinghaven's rowboats and canoes,
+the mockup on the left, the game before in the middle and the game now on
+the right. Before, every rowboat and canoe was the Loon drawn as a bare teal
+shell, which the mockup never had (the owner, 2026-10-01). Now a rowboat
+berth makes a Rowboat, the mockup's wooden boat with its thwarts and oars,
+and every canoe (the harbour's and the player's own) is the mockup's grey
+driftwood canoe. Floorboards laid over the loaded waterline keep the sea out
+of sight inside them (design, task 4.2b). Rows:
+
+- The quay at 11:00, and the same frames closer on the boats under its left
+  pier: the teal shapes are now wooden rowboats.
+- A rowboat close up: the mockup from 9 m off one end
+  (`tools/mockup_coast_shots.js`, its new `rowboat` view), the game from the
+  chase view aboard one (`--aboard rowboat`). There was no rowboat craft
+  before.
+- A canoe close up: the mockup's canoes under its fish huts; before, a crop
+  of the teal Loons; now the player's own canoe from its chase view
+  (`--aboard loon`), cropped closer, its paddler holding the paddle.
+- The quay at 22:30.
+
+Same capture setup as the slice 4d shots above (lavapipe, no GPU, 1440 x
+900, `--walk --at 23.50609 -115.10515 --time 18.77`, and `--time 6.27` for
+22:30). They show what things look like, not how smoothly they run; the
+frame cost was not measured in this cloud session.
+
+## Slice 4e: the desert town, beside the mockup (2026-10-02)
+
+`desert-4e-2026-10-02.jpg`: Sarzash, one of the four desert sites, with the
+towns mockup's desert town (`tools/mockup_town_shots.js desert`) on the left
+and the game on the right, by day and at 22:30. Rows:
+
+- The plaza toward the oasis. The oasis is a sand hollow a level under the
+  plaza, as the mockup's (it draws no water there), with its cacti and
+  market stalls round it. At 22:30 the five braziers round the plaza light
+  the sand. The plaza's flags read as red stone in the game where the
+  mockup's are pale: the template names them `stone`, which is the planet's
+  red rock here (design, "4e and 4g as built").
+- A sandstone house's outside stair up to its roof, the gap in the parapet
+  at its head.
+- A domed adobe house. A starting-fleet Kestrel stands in the left of the
+  day frame; it is placed 16 m from the player wherever the game starts.
+- The caravan hall from its open arch.
+- The town from above, as the mockup's overview frames it (its `ORB`
+  round the oasis; `overview` in the spots test prints the game's spot),
+  the dunes left wild round it.
+
+Every game frame here is on the lamp fix (below, "The towns' lamps and
+the igloo's light"): the first shots were taken with half the town's
+lamps missing, and the braziers across the oasis now stand.
+
+In-game captures on lavapipe at 1440 x 900 with no GPU, the fast build under
+`xvfb-run`, a new memory-only world, `--open-doors --rain 0 --weather-at
+7200`, walking runs at `--time 19.08` for 11:00 and `--time 6.58` for 22:30
+(Sarzash's own sun). The spots are printed by `every_desert_lays_and_cuts`.
+The game's sky reads a deeper blue than the mockup's pale one: that is the
+game's own sky over a desert, not a change here. They show what things look
+like, not how smoothly they run; the frame cost was not measured in this
+cloud session.
+
+## Slice 4g: the tundra camp, beside the mockup (2026-10-02)
+
+`tundra-4g-2026-10-02.jpg`: Torifjell, one of the four tundra sites, with
+the towns mockup's tundra camp (`tools/mockup_town_shots.js tundra`) on the
+left and the game on the right, by day and at 22:30. Rows:
+
+- The camp from beside its fire, an igloo past it and the longhouse on the
+  right. The fire pit is a brazier block where the mockup has a ring of
+  stones, and the drying racks and the people are not built.
+- An igloo from out along its tunnel: the dome cut to the tunnel's
+  profile, its snow bench, furs and lamp. At 22:30 its candle lights it
+  from inside. The first shots found it lit nothing: an igloo's faces were
+  none of them its room's, and it had no floor of its own (design,
+  "Finding: the igloo's candle lit nothing"). Both igloo rows are the fix.
+- The longhouse at its door: granite outside, plank inside, its window and
+  sconces.
+- The ice gate from the road, the keep's door beyond. Its torches are the
+  player's torch, a stick of 0.55 m, where the mockup's stand 2 m on poles.
+  At night they light the ground, but the ice of the wall beside them
+  stays dark where the mockup's catches their light; the keep's merlons
+  are the same. A town's pieces take the light at their mesh's corners,
+  and the camp's ice is one mesh 40 m across (design, "Finding: a lamp
+  lights the ground by a wall but not the wall"). Not changed here.
+- The keep's walked roof, looking out over the merlons and the wall walk
+  to the camp. It is shot from the column view at the roof's height, which
+  now takes `--yaw` (design, "The keep's roof shot").
+- The frozen lake from its shore, its sheet of ice a level down.
+- The camp from above, as the mockup's overview frames it (its `ORB`
+  round column 24, row 16; `overview` in the spots test prints the game's
+  spot). The frozen lake shows on the left, where the mockup's white
+  ground hides it.
+
+By day the camp fire and the gate's torches turn the snow round them tan.
+Torches and fires burn all day and their light is added at full strength
+at noon (`lamps-and-lanterns`), which on white snow reads as sand. It is
+asked as survey L4, with `l4-lamps-by-day-2026-10-02.jpg`.
+
+Night at Torifjell is taken on day 25 of the 100-day year, the equinox
+(`--day 25`). On day 0, the northern summer solstice, the sun at 66 N does
+not set: at 22:30 it stands 7.5 degrees up.
+
+In-game captures on lavapipe at 1440 x 900 with no GPU, the fast build under
+`xvfb-run`, a new memory-only world, `--open-doors --rain 0 --weather-at
+7200`, walking runs at `--time 18.18` for 11:00 and `--day 25 --time 5.68`
+for 22:30 (Torifjell's own sun). The spots are printed by
+`every_tundra_camp_lays_and_cuts`. They show what things look like, not how
+smoothly they run; the frame cost was not measured in this cloud session.
+
+## The towns' lamps and the igloo's light, before and after (2026-10-02)
+
+`lamps-and-igloo-fixes-2026-10-02.jpg`: what the desert's and the tundra's
+shots found, the game before on the left and now on the right.
+
+- Torifjell's camp at 11:00. Before, no camp fire stood where the mockup
+  has one, 3 m ahead: half of every town's lamps stood nowhere on the
+  game's planet, because the lookup that finds a lamp's column compared a
+  cosine that is exactly 1.0 in `f32` at a radius of 4800 m. 255 of the
+  shipped seed's 522 lamps stood; now all 522 do (design, "Finding: half
+  of every town's lamps stand nowhere"). Lamps are derived from the
+  template, so every saved town gains its missing ones on open.
+- Sarzash's plaza at 22:30. Two more braziers stand across the oasis.
+- An igloo at 22:30. Before, its inside was grey: none of its faces were
+  its room's, so its candle lit nothing. Now its inside is the dome's own
+  air, it has a floor of snow, and the candle lights it (design, "Finding:
+  the igloo's candle lit nothing").
+
+Same capture setup as the slice 4e and 4g shots above. The frame cost was
+not measured in this cloud session.

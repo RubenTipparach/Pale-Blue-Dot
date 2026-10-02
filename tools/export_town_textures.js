@@ -35,21 +35,24 @@ const OUT = path.join(ROOT, "assets", "textures", "settlement");
   await page.goto("file://" + path.join(ROOT, "docs", "mockups", "towns.html"));
   await page.waitForFunction(() => typeof PAINT === "object" && typeof texture === "function", null, { timeout: 60000 });
   const painted = await page.evaluate(() =>
-    Object.keys(PAINT).map((name) => {
+    // The painted textures, then the ones drawn by hand (the net), each
+    // marked `cut` where the mockup cuts it out where it is clear.
+    [...Object.keys(PAINT), ...Object.keys(CUSTOM).filter((n) => !(n in PAINT))].map((name) => {
       const image = texture(name).image;
-      return { name, w: image.width, h: image.height, rep: REP[name] ?? 1, png: image.toDataURL("image/png") };
+      return { name, w: image.width, h: image.height, rep: REP[name] ?? 1, cut: ALPHA.has(name), png: image.toDataURL("image/png") };
     })
   );
   fs.mkdirSync(OUT, { recursive: true });
   const lines = [];
   for (const t of painted) {
     fs.writeFileSync(path.join(OUT, `${t.name}.png`), Buffer.from(t.png.split(",")[1], "base64"));
-    lines.push(`    (name: "${t.name}", width: ${t.w}, height: ${t.h}, repeat_m: ${Number(t.rep).toFixed(1)}),`);
+    lines.push(`    (name: "${t.name}", width: ${t.w}, height: ${t.h}, repeat_m: ${Number(t.rep).toFixed(1)}${t.cut ? ", cut: true" : ""}),`);
   }
   const manifest = [
     "// The towns mockup's painted textures (docs/mockups/towns.html), exported by",
     "// tools/export_town_textures.js. `repeat_m` is the metres one repeat covers",
-    "// on a wall or a floor; 0 is a texture mapped once per face.",
+    "// on a wall or a floor; 0 is a texture mapped once per face. A `cut` texture",
+    "// is cut out where it is clear, as the mockup's net is.",
     "(",
     "  textures: [",
     ...lines,

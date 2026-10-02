@@ -29,7 +29,8 @@ fn holbrook_is_laid_out_on_its_own_ground() {
     let repeats = load_repeats();
     let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
     let town = lay_out(&site, &template, &config).unwrap_or_else(|e| panic!("{e}"));
-    let laid = build(&site, &town, None, &kits, &repeat, &config).unwrap_or_else(|e| panic!("{e}"));
+    let laid = build(&site, &town, None, &kits, &repeat, &config, sheet(&config))
+        .unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(
         laid.chart.cells.len(),
         town.cells.len(),
@@ -174,7 +175,16 @@ fn holbrooks_ground_is_pinned() {
     let site = holbrook();
     let config = *crate::planet::terrain_config();
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
-    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &|_: &str| 2.0,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
     let digest = Ground::new(config, vec![laid.ground.clone()]).digest();
     let (footprint, margin) = laid.ground.counts();
     println!(
@@ -201,7 +211,16 @@ fn print_where_to_stand_for_the_mockup_shots() {
     let repeats = load_repeats();
     let repeat = |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0);
     let town = lay_out(&site, &template, &config).unwrap();
-    let laid = build(&site, &town, None, &load_kits(), &repeat, &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &repeat,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
     let radius = config.radius_m;
     // `--at` and `--yaw` for standing at `stand` looking along `toward`.
     let spot = |name: &str, stand: Vec3, toward: Vec3| {
@@ -338,7 +357,16 @@ fn a_door_opened_is_open_when_the_world_is_opened_again() {
     let site = holbrook();
     let template = load_template("village");
     let town = lay_out(&site, &template, &config).unwrap();
-    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &|_: &str| 2.0,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
     let door = record::door_id(
         record::building_id(site.id, 0),
         laid.solids[0].doors[0].index,
@@ -385,7 +413,16 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
     let site = holbrook();
     let config = *crate::planet::terrain_config();
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
-    let laid = build(&site, &town, None, &load_kits(), &|_: &str| 2.0, &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &|_: &str| 2.0,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
     assert_eq!(laid.rooms.len(), laid.solids.len());
     for (b, rooms) in laid.rooms.iter().enumerate() {
         assert!(!rooms.is_empty(), "building {b} has no rooms");
@@ -490,8 +527,16 @@ fn every_village_lays_and_cuts_on_its_own_ground() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
-            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (footprint, margin) = laid.ground.counts();
         println!(
             "{}: turn {}, a terrace at {} m over {footprint} cells eased over {margin}, laid and cut in {:.2} s",
@@ -661,6 +706,8 @@ fn a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves() {
             village: load_template("village"),
             walled: load_template("town"),
             harbour: load_template("coast"),
+            desert: load_template("desert"),
+            tundra: load_template("tundra"),
             repeats: Arc::new(load_repeats()),
         })
         .insert_resource(Towns {
@@ -797,8 +844,16 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
         let started = std::time::Instant::now();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
-            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (footprint, margin) = laid.ground.counts();
         let levels: std::collections::BTreeSet<i8> = town.levels.iter().copied().collect();
         let (lat, lon) = pbd_core::geo::lat_lon(site.direction).degrees();
@@ -823,6 +878,11 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
 }
 
 fn harbours() -> Vec<Site> {
+    sites_of(SiteKind::Harbour)
+}
+
+/// The shipped seed's sites of `kind`, in id order.
+fn sites_of(kind: SiteKind) -> Vec<Site> {
     let mut sites: Vec<Site> = pbd_core::sites::generate(
         &load_rules(),
         crate::planet::terrain_config(),
@@ -831,7 +891,7 @@ fn harbours() -> Vec<Site> {
     )
     .sites
     .into_iter()
-    .filter(|s| s.kind == SiteKind::Harbour)
+    .filter(|s| s.kind == kind)
     .collect();
     sites.sort_by_key(|s| s.id);
     sites
@@ -839,7 +899,8 @@ fn harbours() -> Vec<Site> {
 
 /// Slice 4d: every harbour site of the shipped seed lies with its sea over
 /// the planet's, stands on the sea with its quay a metre over the water,
-/// and cuts whole: its buildings, its piers' stretches and its light.
+/// and cuts whole: its buildings, its piers' stretches, its light, its
+/// dressing and its cog.
 #[test]
 fn every_harbour_lays_on_its_sea_and_cuts() {
     let config = *crate::planet::terrain_config();
@@ -866,8 +927,16 @@ fn every_harbour_lays_on_its_sea_and_cuts() {
         let placed = started.elapsed().as_secs_f32();
         let town =
             lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
-        let laid = build(site, &town, Some(&template), &kits, &|_: &str| 2.0, &config)
-            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
         let (lat, lon) = pbd_core::geo::lat_lon(site.direction).degrees();
         println!(
             "{}: --at {lat:.5} {lon:.5}, {:.0}% of its cells agree about the sea, placed in {placed:.2} s, laid and cut in {:.2} s, {} pieces",
@@ -894,6 +963,16 @@ fn every_harbour_lays_on_its_sea_and_cuts() {
             "{}: buildings, piers and the light",
             site.name
         );
+        // Task 4.2c: its dressing, every thing on its chart, and the
+        // shipyard's hull, planks and slip.
+        assert_eq!(
+            laid.dressing,
+            (template.dressing.len() + 3, 0),
+            "{}: its dressing",
+            site.name
+        );
+        // `sail-the-cog` design 6, step 1: its cog at its mooring.
+        assert!(laid.cog.is_some(), "{}: its cog", site.name);
     }
 }
 
@@ -962,6 +1041,7 @@ fn print_where_the_harbours_stand() {
             &kits,
             &|_: &str| 2.0,
             &config,
+            sheet(&config),
         )
         .unwrap();
         let at = |d: Vec3| {
@@ -974,15 +1054,839 @@ fn print_where_the_harbours_stand() {
         let head = sea::point(&laid.chart, &laid.patch, pier.to[0], pier.to[2], cell_m).unwrap();
         let quay =
             sea::point(&laid.chart, &laid.patch, pier.from[0], pier.from[2], cell_m).unwrap();
+        // `--yaw` from one point toward another, as the walker's start reads
+        // it: its heading is `Y x up` turned by `-yaw` about up.
+        let yaw = |from: Vec3, to: Vec3| {
+            let up = from.normalize();
+            let base = Vec3::Y.cross(up).normalize();
+            let along = to - from;
+            let t = (along - up * along.dot(up)).normalize();
+            -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees()
+        };
+        let point = |x: f32, z: f32| sea::point(&laid.chart, &laid.patch, x, z, cell_m).unwrap();
+        let mid = |c: i32, r: i32| sea::centre(c, r, cell_m);
         println!(
-            "{}: footprint {}; quay {}; pier head {}; fish hut {}; boathouse {}; marker {}",
+            "{}: footprint {}; quay {} --yaw {:.1}; pier head {}; fish hut {}; boathouse {}; marker {}",
             site.name,
             at(laid.ground.anchor()),
             at(quay),
+            yaw(quay, head),
             at(head),
             at(cell(4, 9)),
             at(cell(9, 12)),
             at(site.direction)
         );
+        // Task 4.2c: where to stand for the fish market (from the harbour
+        // street, over a stall to the racks on the beach) and the shipyard
+        // (the mockup's own view of it).
+        let ((sx, sz), (tx, tz)) = (mid(21, 16), mid(16, 14));
+        let (street, racks) = (point(sx, sz), point(tx, tz));
+        println!("   market {} --yaw {:.1}", at(street), yaw(street, racks));
+        if let Some(c) = &template.cog {
+            println!("   cog {}", at(point(c.x, c.z)));
+        }
+        if let Some(y) = &template.shipyard {
+            let from = point(y.x - 7.0, mid(0, 14).1 + 0.9);
+            let hull = point(y.x, y.z);
+            println!("   shipyard {} --yaw {:.1}", at(from), yaw(from, hull));
+        }
+        // Holes: a cell left unlaid with every neighbour laid, or one laid
+        // lower than all of its own.
+        let level: std::collections::BTreeMap<(i32, i32), f32> = town
+            .cells
+            .iter()
+            .enumerate()
+            .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
+            .collect();
+        for g in &template.ground {
+            let (c, r) = (g.c, g.r);
+            let around: Vec<Option<f32>> = (0..6)
+                .map(|d| {
+                    let n = pbd_core::settlement::neighbour(c, r, d);
+                    level.get(&n).copied()
+                })
+                .collect();
+            if around.iter().all(|a| a.is_some()) {
+                match level.get(&(c, r)) {
+                    None => println!("   hole at ({c}, {r}), template {} {}", g.h, g.top),
+                    Some(&l) if around.iter().all(|a| a.unwrap() > l) => {
+                        println!("   pit at ({c}, {r}) level {l}, template {} {}", g.h, g.top)
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
+}
+
+/// Task 4.2b: each harbour of the shipped seed moors its boats once, each
+/// afloat at its berth, anchored and tagged with its berth; the berths over
+/// land or too shallow are skipped and counted; asked again, it makes none.
+#[test]
+fn every_harbours_boats_are_made_once_at_their_berths() {
+    use crate::vehicles::harbour::boats_for;
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let fleet = crate::vehicles::Fleet::new(crate::config::VehiclesConfig::default().0);
+    // The drawn sea, which the game's boats float on.
+    let sea_radius = config.radius_m + sheet_m(&config, &crate::config::WaterSettings::default());
+    let mut total = 0;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let mut next = 1;
+        let (made, skipped) = boats_for(
+            site.id,
+            &town,
+            &template,
+            &patch,
+            sea_radius,
+            &Default::default(),
+            &fleet.specs,
+            &fleet.hulls,
+            &mut next,
+            crate::vehicles::place::floor,
+        );
+        println!(
+            "{}: {} boats moored ({} Terns), {skipped} berths skipped",
+            site.name,
+            made.len(),
+            made.iter()
+                .filter(|c| c.kind == pbd_core::vehicle::Kind::Tern)
+                .count()
+        );
+        assert_eq!(made.len() + skipped, template.boats.len(), "{}", site.name);
+        // Every sailing berth over water takes its sailboat, the Tern, its
+        // keel lifted in the shallows.
+        for c in &made {
+            let (_, n) = c.berth.expect("tagged with its berth");
+            let want = crate::vehicles::harbour::kind_of(&template.boats[n as usize].kind);
+            assert_eq!(c.kind, want, "{}: berth {n}", site.name);
+        }
+        let berths: std::collections::BTreeSet<(u32, u32)> =
+            made.iter().filter_map(|c| c.berth).collect();
+        assert_eq!(berths.len(), made.len(), "{}: a berth a boat", site.name);
+        for c in &made {
+            assert!(
+                c.mooring.is_some_and(|m| m.anchored),
+                "{}: anchored",
+                site.name
+            );
+            let afloat = c.reference_position().length() - f64::from(sea_radius);
+            assert!(
+                afloat.abs() < 0.5,
+                "{}: at the sea, {afloat:.2} m",
+                site.name
+            );
+        }
+        assert_eq!(next, made.len() as u64 + 1);
+        let all: std::collections::BTreeSet<(u32, u32)> = (0..template.boats.len() as u32)
+            .map(|n| (site.id, n))
+            .collect();
+        let (again, _) = boats_for(
+            site.id,
+            &town,
+            &template,
+            &patch,
+            sea_radius,
+            &all,
+            &fleet.specs,
+            &fleet.hulls,
+            &mut next,
+            crate::vehicles::place::floor,
+        );
+        assert!(again.is_empty(), "{}: made once", site.name);
+        total += made.len();
+    }
+    assert!(total > 0, "some boats moored");
+}
+
+/// `sail-the-cog` step 3, part 3: each harbour of the shipped seed makes its
+/// cog once, at its berth, on a bollard and on the drawn sea, riding its
+/// swing; asked again, it makes none.
+#[test]
+fn every_harbours_cog_is_made_once_at_its_berth() {
+    use crate::vehicles::harbour::{COG, cog_berth, cog_for, on_swing};
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let fleet = crate::vehicles::Fleet::new(crate::config::VehiclesConfig::default().0);
+    let sea_radius = config.radius_m + sheet_m(&config, &crate::config::WaterSettings::default());
+    let mut made = 0;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let mut next = 1;
+        let make = |made: &std::collections::BTreeSet<(u32, u32)>, next: &mut u64| {
+            cog_for(
+                site.id,
+                &town,
+                &template,
+                &patch,
+                config.radius_m,
+                sea_radius,
+                made,
+                &fleet.specs,
+                &fleet.hulls,
+                next,
+            )
+        };
+        let cog = make(&Default::default(), &mut next)
+            .unwrap_or_else(|| panic!("{}: its cog", site.name));
+        assert_eq!(cog.kind, pbd_core::vehicle::Kind::Cog);
+        assert_eq!(cog.berth, Some((site.id, COG)), "{}", site.name);
+        assert!(on_swing(&cog), "{}: on its bollard", site.name);
+        let (origin, _) = cog_berth(&town, &template, &patch, config.radius_m, sea_radius).unwrap();
+        assert!(
+            cog.reference_position().distance(origin.as_dvec3()) < 1e-3,
+            "{}: at its berth",
+            site.name
+        );
+        let afloat = cog.reference_position().length() - f64::from(sea_radius);
+        assert!(
+            afloat.abs() < 0.01,
+            "{}: on the drawn sea, {afloat:.3} m",
+            site.name
+        );
+        assert!(
+            make(&[(site.id, COG)].into_iter().collect(), &mut next).is_none(),
+            "{}: made once",
+            site.name
+        );
+        made += 1;
+    }
+    assert!(made > 0, "some cogs made");
+}
+
+/// An instrument for the finding in Coringport's beach (2026-10-01): how
+/// many of each town's footprint cells the planet's worms open within the
+/// top two layers of the town's ground, where a cave mouth or a hole shows.
+#[test]
+#[ignore = "an instrument: counts cave mouths in towns' ground"]
+fn print_where_caves_open_into_towns() {
+    use pbd_core::column::layer_at;
+    let config = *crate::planet::terrain_config();
+    let field = pbd_core::worms::WormField::DEFAULT;
+    let assets_village = load_template("village");
+    let assets_walled = load_template("town");
+    let assets_coast = load_template("coast");
+    let sites: Vec<Site> = pbd_core::sites::generate(&load_rules(), &config, list_spawn(), 4)
+        .sites
+        .into_iter()
+        .filter(|s| {
+            matches!(
+                s.kind,
+                SiteKind::Village | SiteKind::Walled | SiteKind::Harbour
+            )
+        })
+        .collect();
+    let mut opened_towns = 0;
+    for site in &sites {
+        let template = match site.kind {
+            SiteKind::Village => &assets_village,
+            SiteKind::Walled => &assets_walled,
+            _ => &assets_coast,
+        };
+        let town = lay_out(site, template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, _) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let worms = pbd_core::worms::gather(&field, &config, site.direction, 250.0);
+        let mut opened = Vec::new();
+        for (i, c) in town.cells.iter().enumerate() {
+            let d = patch.cells[chart.cell(c.0, c.1).unwrap()].direction;
+            let terrace = town.terrace_of(i);
+            let top: Vec<usize> = [terrace - 0.5, terrace - 1.5]
+                .iter()
+                .filter_map(|&a| layer_at(a))
+                .collect();
+            let mut hit = false;
+            worms.carve(&config, d, field.floor_layers, |index| {
+                hit |= top.contains(&index)
+            });
+            if hit {
+                opened.push((c.0, c.1));
+            }
+        }
+        if let Some(&(c, r)) = opened.first() {
+            let d = patch.cells[chart.cell(c, r).unwrap()].direction;
+            let (lat, lon) = pbd_core::geo::lat_lon(d).degrees();
+            println!("   the first at --at {lat:.5} {lon:.5}");
+        }
+        if !opened.is_empty() {
+            opened_towns += 1;
+            println!(
+                "{} ({:?}): {} of {} footprint cells open to a cave in their top two layers, {:?}",
+                site.name,
+                site.kind,
+                opened.len(),
+                town.cells.len(),
+                &opened[..opened.len().min(6)]
+            );
+        }
+    }
+    println!("{opened_towns} of {} towns", sites.len());
+}
+
+/// Instrument (`cities-in-the-world` task 4.2b, found 2026-10-01): the
+/// seabed under each harbour's berths, the planet's own and as the
+/// harbour's ground, with its margin eased to its terrace, has it.
+#[test]
+#[ignore = "instrument: prints the seabed under each harbour's berths"]
+fn print_the_seabed_under_the_harbours_berths() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let sea_m = config.sea_level_m;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, ground) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let nat = natural(&config);
+        let (mut raised, mut shallow_then, mut shallow_now) = (0, 0, 0);
+        for boat in &template.boats {
+            let Some((d, _)) = sea::boat_pose(&chart, &patch, boat, template.grid.cell_m) else {
+                continue;
+            };
+            let n = nat(d);
+            let eased = ground.at(d).map_or(n, |g| g.height(n));
+            if eased > n + 0.01 {
+                raised += 1;
+            }
+            shallow_then += usize::from(sea_m - n.floor() < 1.0);
+            shallow_now += usize::from(sea_m - eased.floor() < 1.0);
+        }
+        println!(
+            "{}: {} berths, {raised} with the seabed raised by the margin; under a metre of water: {shallow_then} on the planet's own seabed, {shallow_now} on the harbour's",
+            site.name,
+            template.boats.len()
+        );
+    }
+}
+
+/// The drawn sea's surface over the radius, as the game draws it.
+fn sheet(config: &TerrainConfig) -> f32 {
+    sheet_m(config, &crate::config::WaterSettings::default())
+}
+
+#[test]
+#[ignore = "instrument: the pose each harbour boat is made in, upright or not"]
+fn print_the_pose_of_holinghavens_boats() {
+    use crate::vehicles::harbour::boats_for;
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let fleet = crate::vehicles::Fleet::new(crate::config::VehiclesConfig::default().0);
+    let sea_radius = config.radius_m + sheet_m(&config, &crate::config::WaterSettings::default());
+    for site in harbours().into_iter().filter(|s| s.name == "Holinghaven") {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (made, _) = boats_for(
+            site.id,
+            &town,
+            &template,
+            &patch,
+            sea_radius,
+            &Default::default(),
+            &fleet.specs,
+            &fleet.hulls,
+            &mut 1,
+            crate::vehicles::place::floor,
+        );
+        for c in made {
+            let up = c.reference_position().normalize();
+            let deck = c.body.axis(pbd_core::DVec3::Y);
+            let bow = c.body.axis(pbd_core::vehicle::FORWARD);
+            println!(
+                "berth {:?} {}: deck up . up {:+.3}, bow . up {:+.3}, waterline {:+.3} m",
+                c.berth,
+                c.kind.name(),
+                deck.dot(up),
+                bow.dot(up),
+                c.reference_position().length() - f64::from(sea_radius)
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "instrument: the drawn water at each harbour's sailing berths, and the nearest that floats a Tern"]
+fn print_the_water_at_the_sailing_berths() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let surface = sheet(&config);
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, ground) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let nat = natural(&config);
+        let depth = |d: Vec3| {
+            let n = nat(d);
+            surface - ground.at(d).map_or(n, |g| g.height(n)).floor()
+        };
+        let mut row = format!("{:>13}:", site.name);
+        for boat in template.boats.iter().filter(|b| b.kind == "sail") {
+            let Some((d, bow)) = sea::boat_pose(&chart, &patch, boat, template.grid.cell_m) else {
+                row += " off-chart";
+                continue;
+            };
+            // The nearest point within 30 m, in steps of 1 m, with 2 m of
+            // drawn water, the Tern's need.
+            let side = d.cross(bow).normalize();
+            let mut near: Option<f32> = None;
+            for r in 0..=30 {
+                for k in 0..16 {
+                    let a = k as f32 * std::f32::consts::TAU / 16.0;
+                    let off = (bow * a.cos() + side * a.sin()) * (r as f32 / config.radius_m);
+                    if depth((d + off).normalize()) >= 2.0 {
+                        near.get_or_insert(r as f32);
+                    }
+                }
+            }
+            row += &format!(
+                " | {:.1} m deep, 2 m at {}",
+                depth(d),
+                near.map_or("none in 30 m".into(), |r| format!("{r:.0} m"))
+            );
+        }
+        println!("{row}");
+    }
+}
+
+/// The mockup's overview of a scene (its `ORB`: yaw -1.9, pitch 0.72 round
+/// the scene's centre) as a column view's spot, yaw, height and pitch. The
+/// game's lens is wider than the mockup's 50 degrees, so it stands at 0.7
+/// of the scene's distance. The centre may be off the town's chart (a
+/// tundra camp's is open ground), so the template's axes are read at a
+/// spot on it and carried there.
+fn overview(
+    point: &dyn Fn(f32, f32) -> Vec3,
+    (sx, sz): (f32, f32),
+    (tx, tz): (f32, f32),
+    dist_m: f32,
+) -> String {
+    let radius_m = crate::planet::terrain_config().radius_m;
+    let (yaw, pitch) = (-1.9f32, 0.72f32);
+    let (out, up) = (0.7 * dist_m * pitch.cos(), 0.7 * dist_m * pitch.sin());
+    // The template's x and z on the planet, at the spot and so at the centre.
+    let spot = point(sx, sz);
+    let x = (point(sx + 1.0, sz) - spot).normalize();
+    let z = (point(sx, sz + 1.0) - spot).normalize();
+    let target = (spot + (x * (tx - sx) + z * (tz - sz)) / radius_m).normalize();
+    let from = (target - (x * yaw.cos() + z * yaw.sin()) * out / radius_m).normalize();
+    // Turned as a walker's `--yaw` turns it: off east about the up.
+    let east = Vec3::Y.cross(from).normalize();
+    let along = target - from;
+    let t = (along - from * along.dot(from)).normalize();
+    let turn = -east.cross(t).dot(from).atan2(east.dot(t)).to_degrees();
+    let (lat, lon) = pbd_core::geo::lat_lon(from).degrees();
+    format!(
+        "--view column --at {lat:.5} {lon:.5} --yaw {turn:.1} --height {up:.0} --pitch {:.1}",
+        -pitch.to_degrees()
+    )
+}
+
+/// Slice 4e: every desert site of the shipped seed lays and cuts whole: its
+/// buildings, its five roof stairs and its dressing, every thing on its
+/// chart. It prints where to stand for the desert's shots.
+#[test]
+fn every_desert_lays_and_cuts() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("desert");
+    let kits = load_kits();
+    let sites = sites_of(SiteKind::Desert);
+    assert!(!sites.is_empty(), "desert sites");
+    let cell_m = template.grid.cell_m;
+    for site in &sites {
+        let started = std::time::Instant::now();
+        let town =
+            lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        assert_eq!(
+            laid.solids.len(),
+            template.buildings.len() + template.stairs.len() + template.dressing.len(),
+            "{}: buildings, roof stairs and dressing",
+            site.name
+        );
+        assert_eq!(
+            laid.dressing,
+            (template.dressing.len(), 0),
+            "{}: its dressing",
+            site.name
+        );
+        let point = |x: f32, z: f32| sea::point(&laid.chart, &laid.patch, x, z, cell_m).unwrap();
+        let mid = |c: i32, r: i32| {
+            let (x, z) = sea::centre(c, r, cell_m);
+            point(x, z)
+        };
+        let at = |d: Vec3| {
+            let (lat, lon) = pbd_core::geo::lat_lon(d).degrees();
+            format!("--at {lat:.5} {lon:.5}")
+        };
+        let yaw = |from: Vec3, to: Vec3| {
+            let up = from.normalize();
+            let base = Vec3::Y.cross(up).normalize();
+            let along = to - from;
+            let t = (along - up * along.dot(up)).normalize();
+            -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees()
+        };
+        // The mockup's own spots: the plaza toward the oasis, the second
+        // house's roof stair from its foot, a domed house from the plaza's
+        // side, and the caravan hall from its arch.
+        let (plaza, oasis) = (mid(25, 13), mid(25, 17));
+        let s = &template.stairs[1];
+        let (foot, head) = (point(s.from[0] + 1.0, s.from[2]), point(s.to[0], s.to[2]));
+        let (house, door) = (mid(14, 14), mid(16, 14));
+        let (hall, arch) = (mid(35, 23), mid(32, 23));
+        let (rx, rz) = sea::centre(21, 9, cell_m);
+        let roof = point(rx, rz + 1.2);
+        // The mockup's overview: round the oasis's row 17 at column 25, 115 m.
+        println!(
+            "{}: overview {}",
+            site.name,
+            overview(
+                &point,
+                sea::centre(25, 17, cell_m),
+                (cell_m * 25.0, cell_m * 0.75f32.sqrt() * 17.0),
+                115.0
+            )
+        );
+        println!(
+            "{}: laid and cut in {:.2} s; plaza {} --yaw {:.1}; roof stair {} --yaw {:.1}; roof {} --yaw {:.1}; domed house {} --yaw {:.1}; hall {} --yaw {:.1}",
+            site.name,
+            started.elapsed().as_secs_f32(),
+            at(plaza),
+            yaw(plaza, oasis),
+            at(foot),
+            yaw(foot, head),
+            at(roof),
+            yaw(roof, oasis),
+            at(door),
+            yaw(door, house),
+            at(arch),
+            yaw(arch, hall),
+        );
+    }
+}
+
+/// Slice 4e: a world stores each desert town once, in schema 2, and a
+/// second open writes nothing.
+#[test]
+fn a_world_stores_every_desert_once() {
+    use crate::saves::{self, LOG, WorldSave};
+    let root = temporary("deserts");
+    let slot = saves::create(&root, "Deserts", 41).unwrap();
+    let config = *crate::planet::terrain_config();
+    let template = load_template("desert");
+    let sites = sites_of(SiteKind::Desert);
+    let made: Vec<Town> = {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        let made = sites
+            .iter()
+            .map(|site| {
+                let (town, seq) = ensure(&mut save, site, &template, &config).expect("laid");
+                assert!(seq > 0, "{} queued to the disk", site.name);
+                town.expect("a town")
+            })
+            .collect();
+        save.drain();
+        made
+    };
+    let path = root.join(&slot.id).join(LOG);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.starts_with("rec @c settlement "))
+            .count(),
+        sites.len(),
+        "a settlement line a desert town"
+    );
+    let mut reopened = WorldSave::open(root.clone(), saves::list(&root)[0].clone());
+    for (site, town) in sites.iter().zip(&made) {
+        let (kept, seq) = ensure(&mut reopened, site, &template, &config).expect("kept");
+        assert_eq!(kept.as_ref(), Some(town), "{} kept", site.name);
+        assert_eq!(seq, 0, "{}: nothing written", site.name);
+    }
+    reopened.drain();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        text,
+        "byte for byte"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Slice 4g: every tundra site of the shipped seed lays and cuts whole: its
+/// buildings, its lake's ice and its wall. It prints where to stand for the
+/// tundra's shots.
+#[test]
+fn every_tundra_camp_lays_and_cuts() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("tundra");
+    let kits = load_kits();
+    let sites = sites_of(SiteKind::Tundra);
+    assert!(!sites.is_empty(), "tundra sites");
+    let cell_m = template.grid.cell_m;
+    for site in &sites {
+        let started = std::time::Instant::now();
+        let town =
+            lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        assert_eq!(
+            laid.solids.len(),
+            template.buildings.len() + 1 + template.masonry.len(),
+            "{}: buildings, the lake's ice and the wall",
+            site.name
+        );
+        assert_eq!(
+            laid.dressing,
+            (0, 0),
+            "{}: nothing off its chart",
+            site.name
+        );
+        let point = |x: f32, z: f32| sea::point(&laid.chart, &laid.patch, x, z, cell_m).unwrap();
+        let mid = |c: i32, r: i32| {
+            let (x, z) = sea::centre(c, r, cell_m);
+            point(x, z)
+        };
+        let at = |d: Vec3| {
+            let (lat, lon) = pbd_core::geo::lat_lon(d).degrees();
+            format!("--at {lat:.5} {lon:.5}")
+        };
+        let yaw = |from: Vec3, to: Vec3| {
+            let up = from.normalize();
+            let base = Vec3::Y.cross(up).normalize();
+            let along = to - from;
+            let t = (along - up * along.dot(up)).normalize();
+            -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees()
+        };
+        // The mockup's own spots: the camp from beside its fire, an igloo
+        // from out along its tunnel, the longhouse at its door, the castle
+        // gate from 4.5 m out, and the frozen lake from its north shore.
+        let fire = mid(13, 12);
+        let (cx, cz) = sea::centre(13, 12, cell_m);
+        let camp = point(cx - 2.0, cz + 2.5);
+        // Out from a cell's edge `d`, as the mockup's `outsideDoor` and
+        // `dvec` put it.
+        let off = |c: i32, r: i32, d: i32, m: f32| {
+            let (x, z) = sea::centre(c, r, cell_m);
+            let a = d as f32 * std::f32::consts::FRAC_PI_3;
+            point(x + a.cos() * m, z + a.sin() * m)
+        };
+        let first = template
+            .buildings
+            .iter()
+            .find(|b| b.kit == "igloo")
+            .unwrap();
+        let [ic, ir, id, _] = first.doors[0];
+        let (igloo, out) = (mid(ic, ir), off(ic, ir, id, 5.3));
+        let (house, door) = (
+            off(22, 12, 1, cell_m / 2.0),
+            off(22, 12, 1, cell_m / 2.0 + 1.8),
+        );
+        let (gx, gz) = sea::centre(31, 16, cell_m);
+        let (gate, keep) = (point(gx - 4.5, gz), mid(35, 16));
+        let (lake, shore) = (mid(12, 27), mid(12, 22));
+        // The keep's roof, as the mockup's `keepRoof`: on its door's cell,
+        // looking on out past the door, at the roof's height plus an eye
+        // over the keep's ground (a column view).
+        let (rx, rz) = sea::centre(34, 16, cell_m);
+        let (roof, beyond) = (point(rx - 0.3, rz), mid(33, 16));
+        let keep_top = template
+            .buildings
+            .iter()
+            .find_map(|b| b.newel.as_ref().filter(|_| b.name == "The ice keep"))
+            .unwrap()
+            .top_m;
+        let roof_m = keep_top - record::datum(&template) as f32 + EYE_HEIGHT;
+        // The mockup's overview: round column 24, row 16, at 125 m.
+        println!(
+            "{}: overview {}",
+            site.name,
+            overview(
+                &point,
+                sea::centre(13, 12, cell_m),
+                (cell_m * 24.0, cell_m * 0.75f32.sqrt() * 16.0),
+                125.0
+            )
+        );
+        println!(
+            "{}: keep roof {} --yaw {:.1} --height {roof_m:.2}",
+            site.name,
+            at(roof),
+            yaw(roof, beyond),
+        );
+        println!(
+            "{}: laid and cut in {:.2} s; camp {} --yaw {:.1}; igloo {} --yaw {:.1}; longhouse {} --yaw {:.1}; gate {} --yaw {:.1}; lake {} --yaw {:.1}",
+            site.name,
+            started.elapsed().as_secs_f32(),
+            at(camp),
+            yaw(camp, fire),
+            at(out),
+            yaw(out, igloo),
+            at(door),
+            yaw(door, house),
+            at(gate),
+            yaw(gate, keep),
+            at(shore),
+            yaw(shore, lake),
+        );
+    }
+}
+
+/// Slice 4g: a world stores each tundra camp once, in schema 2, and a
+/// second open writes nothing.
+#[test]
+fn a_world_stores_every_tundra_camp_once() {
+    use crate::saves::{self, LOG, WorldSave};
+    let root = temporary("tundras");
+    let slot = saves::create(&root, "Tundras", 41).unwrap();
+    let config = *crate::planet::terrain_config();
+    let template = load_template("tundra");
+    let sites = sites_of(SiteKind::Tundra);
+    let made: Vec<Town> = {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        let made = sites
+            .iter()
+            .map(|site| {
+                let (town, seq) = ensure(&mut save, site, &template, &config).expect("laid");
+                assert!(seq > 0, "{} queued to the disk", site.name);
+                town.expect("a town")
+            })
+            .collect();
+        save.drain();
+        made
+    };
+    let path = root.join(&slot.id).join(LOG);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.starts_with("rec @c settlement "))
+            .count(),
+        sites.len(),
+        "a settlement line a tundra camp"
+    );
+    let mut reopened = WorldSave::open(root.clone(), saves::list(&root)[0].clone());
+    for (site, town) in sites.iter().zip(&made) {
+        let (kept, seq) = ensure(&mut reopened, site, &template, &config).expect("kept");
+        assert_eq!(kept.as_ref(), Some(town), "{} kept", site.name);
+        assert_eq!(seq, 0, "{}: nothing written", site.name);
+    }
+    reopened.drain();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        text,
+        "byte for byte"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Every town's lamps on the shipped seed, each with its town's ground
+/// (task 5.2), by the template it was laid from.
+fn every_towns_lamps(mut each: impl FnMut(&Site, &Ground, &[ground::Lamp])) {
+    let config = *crate::planet::terrain_config();
+    for (kind, name) in [
+        (SiteKind::Village, "village"),
+        (SiteKind::Walled, "town"),
+        (SiteKind::Harbour, "coast"),
+        (SiteKind::Desert, "desert"),
+        (SiteKind::Tundra, "tundra"),
+    ] {
+        let template = load_template(name);
+        for site in sites_of(kind) {
+            let town = lay_out(&site, &template, &config).unwrap();
+            let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+            let (chart, g) =
+                record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+            let lamps = record::lamps_of(&town, &template, &chart, &patch);
+            each(
+                &site,
+                &Ground::new(config, vec![g.with_lamps(lamps.clone())]),
+                &lamps,
+            );
+        }
+    }
+}
+
+/// Task 5.2 on the shipped seed: the ground answers every lamp of every
+/// town at its own column, over the ground there. On the game's planet the
+/// lookup by dot product found half of them (design, "Finding: half of
+/// every town's lamps stand nowhere"). It asks the ground it is given, not
+/// the installed one, so it runs beside every other test.
+#[test]
+fn every_towns_lamps_are_found_at_their_columns() {
+    let config = *crate::planet::terrain_config();
+    let natural = natural(&config);
+    let mut found = 0;
+    let mut missing = Vec::new();
+    every_towns_lamps(|site, ground, lamps| {
+        for l in lamps {
+            let under = natural(l.direction);
+            let surface = ground.at(l.direction).map_or(under, |at| at.height(under));
+            if ground.lamp(l.direction) == Some(l) && surface <= l.altitude_m {
+                found += 1;
+            } else {
+                let (lat, lon) = pbd_core::geo::lat_lon(l.direction).degrees();
+                missing.push(format!(
+                    "{} {:?} at {lat:.5} {lon:.5}, ground at {surface}",
+                    site.name, l.material
+                ));
+            }
+        }
+    });
+    println!("{found} lamps found");
+    assert!(found > 500, "{found} lamps");
+    assert!(
+        missing.is_empty(),
+        "{} missing: {missing:#?}",
+        missing.len()
+    );
+}
+
+/// Instrument (slices 4e and 4g, 2026-10-02): every lamp read from the
+/// column the planet generates at it, with its town's ground installed.
+/// It installs the ground for the whole process, so it is run alone:
+/// `cargo test -p pbd-app --lib print_the_lamps_in_their_columns -- --ignored --nocapture`
+#[test]
+#[ignore = "an instrument: installs the ground for the whole process"]
+fn print_the_lamps_in_their_columns() {
+    use pbd_core::column::{generate_solid, layer_at};
+    let config = *crate::planet::terrain_config();
+    let (mut stood, mut missing) = (0, 0);
+    every_towns_lamps(|site, ground, lamps| {
+        ground::install(Some(ground.clone()));
+        for l in lamps {
+            let i = layer_at(l.altitude_m + 0.5).unwrap();
+            let there = generate_solid(&config, l.direction).material(i);
+            if there == l.material {
+                stood += 1;
+            } else {
+                missing += 1;
+                let (lat, lon) = pbd_core::geo::lat_lon(l.direction).degrees();
+                println!(
+                    "{} {:?} at {lat:.5} {lon:.5}: {there:?}",
+                    site.name, l.material
+                );
+            }
+        }
+        ground::install(None);
+    });
+    println!("{stood} lamps stand in their columns, {missing} do not");
 }
