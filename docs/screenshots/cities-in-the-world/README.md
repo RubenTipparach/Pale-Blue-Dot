@@ -146,3 +146,30 @@ berths along the piers hold Terns with their tall masts and sails. The cog's
 stern lantern stands on its aftcastle. Same capture setup as the slice 4d
 shots above (lavapipe, no GPU, `--walk --at 23.50609 -115.10515 --yaw -66.9
 --pitch -4 --time 18.77`).
+
+## Task 4.2b: the harbour's small boats as the mockup's (2026-10-02)
+
+`harbour-small-boats-2026-10-02.jpg`: Holinghaven's rowboats and canoes,
+the mockup on the left, the game before in the middle and the game now on
+the right. Before, every rowboat and canoe was the Loon drawn as a bare teal
+shell, which the mockup never had (the owner, 2026-10-01). Now a rowboat
+berth makes a Rowboat, the mockup's wooden boat with its thwarts and oars,
+and every canoe (the harbour's and the player's own) is the mockup's grey
+driftwood canoe. Floorboards laid over the loaded waterline keep the sea out
+of sight inside them (design, task 4.2b). Rows:
+
+- The quay at 11:00, and the same frames closer on the boats under its left
+  pier: the teal shapes are now wooden rowboats.
+- A rowboat close up: the mockup from 9 m off one end
+  (`tools/mockup_coast_shots.js`, its new `rowboat` view), the game from the
+  chase view aboard one (`--aboard rowboat`). There was no rowboat craft
+  before.
+- A canoe close up: the mockup's canoes under its fish huts; before, a crop
+  of the teal Loons; now the player's own canoe from its chase view
+  (`--aboard loon`), cropped closer, its paddler holding the paddle.
+- The quay at 22:30.
+
+Same capture setup as the slice 4d shots above (lavapipe, no GPU, 1440 x
+900, `--walk --at 23.50609 -115.10515 --time 18.77`, and `--time 6.27` for
+22:30). They show what things look like, not how smoothly they run; the
+frame cost was not measured in this cloud session.
