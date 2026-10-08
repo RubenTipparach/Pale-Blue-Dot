@@ -1,11 +1,54 @@
 # Town frame time, 2026-10-08
 
-The `town-frame-time` change against `main`, in one sitting, interleaved
-(main, after, after, main) on the owner's machine. The sitting was stopped
-after the town runs because the owner needed the computer. `clouds`, `storm`
-and `walk` were not measured.
+Two rounds on the town walk out of Ashenstead, each an interleaved A/B in one
+sitting on the owner's machine (RTX 3070, Vulkan, 1440 x 900, no vsync, 10:00,
+rain forced).
 
 ## Findings
+
+- **Round 2 (this page's tables): 82 to 98 fps mean, p50 10.5 to 9.1 ms.**
+  `before` is round 1's build, `after` adds decisions 5-7. Resting craft
+  sleep: the craft stepped a tick fell from about 20 to under 2, about 2.9 ms
+  a tick saved. A town's templates are no longer cloned every frame, and a
+  town material is re-prepared about once a second, not every 45 ms. p99.9
+  fell from 131 to 45 ms.
+- **Round 1: main 63 fps at p50 to 94-98 fps.** Each town's lighting is no
+  longer recomputed on every terrain landing (240-450 ms hitches), and the
+  field corners stop recomputing a ground height that never changes (6-10 ms
+  a frame). Its tables are in `report.md`'s round 1 section, checked in
+  beside this page.
+- **From main to now, at p50: 16.0 ms to about 9.1 ms.** GPU time is about
+  6 ms throughout, so the frame is close to the GPU now.
+- **Still open:** frames slower than 14 ms are 7% of the walk and are not
+  periodic: they are the spread of an uncapped frame. A fresh world freezes
+  for about 18 s at its start, in both builds, and is next to measure.
+
+## Limits
+
+- The owner was using the machine during round 2, so its spread is wider.
+  Its two variants were interleaved, so both saw the same disturbance.
+- Only the town walk. The flights, storm and open-country walk are not
+  measured in either round.
+
+# Performance suite, 2026-10-08 18:39
+
+- revision: `b3c5428` (uncommitted changes)
+- adapter: NVIDIA GeForce RTX 3070 (Vulkan); window 1440 x 900, uncapped (`--no-vsync`)
+- clock pinned at 10.0 h; first 10.0 s of each run thrown away; 2 run(s) per variant, interleaved
+- budgets: p95 within 8.3 ms (120 fps), p99 within 16.7 ms (60 fps); **over** marks a miss. Each cell is the median over the valid runs.
+
+## town
+
+| variant | valid runs | fps | p50 | p95 | p99 | p99.9 | max | GPU total p50 | GPU clouds p50 / p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| before | 2/2 | 82.38 | 10.52 | 16.35 **over** | 18.79 **over** | 130.66 | 6792.44 | 7.21 | 0.51 / 0.91 |
+| after | 2/2 | 98.01 | 9.18 | 15.20 **over** | 19.58 **over** | 44.58 | 6838.06 | 5.86 | 0.19 / 0.49 |
+
+
+
+## Round 1 (main against decisions 1-4)
+
+
 
 - **Walking through a town: 63 fps to 94-98 fps at the median.** Frame p50
   is 16.0 ms on main and 10.2-10.7 ms after. p95 is 18.4 against 16.1-16.5
@@ -30,7 +73,7 @@ and `walk` were not measured.
   change does not touch it. It is not yet known whether opening a saved world
   pays any of it.
 
-## Limits
+### Limits
 
 - One valid main run. The other stopped at 230 m (`no WALK_DONE`) when the
   sitting was interrupted, so main's row is that one run. The branch's two
@@ -48,7 +91,7 @@ and `walk` were not measured.
 - clock pinned at 10.0 h; first 10.0 s of each run thrown away; 2 run(s) per variant, interleaved
 - budgets: p95 within 8.3 ms (120 fps), p99 within 16.7 ms (60 fps); **over** marks a miss. Each cell is the median over the valid runs.
 
-## town
+### town
 
 | variant | valid runs | fps | p50 | p95 | p99 | p99.9 | max | GPU total p50 | GPU clouds p50 / p95 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
