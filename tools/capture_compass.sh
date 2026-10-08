@@ -3,12 +3,12 @@
 # default spawn on a new memory-only world. Needs the fast build:
 #   cargo build -p pbd-app --profile fast
 # `--yaw 0` faces compass WEST (the walker's default heading is Y x up), so
-# `--yaw 180` faces east and `--yaw 90` north. The before shots run an older
-# build given as the second argument.
-# Usage: tools/capture_compass.sh <out dir> [<before exe>]   (about 6 minutes a shot on lavapipe)
+# `--yaw 180` faces east and `--yaw 90` north. The map before the change is
+# cities-in-the-world/game-map-built-spawn.png, taken with the same flags: an
+# older build cannot run here, since it reads this tree's assets at run time.
+# Usage: tools/capture_compass.sh <out dir>   (6 to 15 minutes a shot on lavapipe)
 set -u
 D=${1:-docs/screenshots/compass-bar}
-BEFORE=${2:-}
 cd "$(dirname "$0")/.."
 EXE=target/fast/pbd-app
 shot() {
@@ -20,6 +20,3 @@ shot $EXE compass-sunrise --walk --time 7.6 --yaw 180 --pitch 6
 shot $EXE compass-noon-north --walk --time 12 --yaw 90 --pitch 4
 shot $EXE map-after --walk --time 12 --menu map --map-mpp 12
 shot $EXE orbit-north-up --view column --at 28.64 0 --height 5000 --pitch -84 --yaw 90 --time 12
-if [ -n "$BEFORE" ]; then
-  shot "$BEFORE" map-before --walk --time 12 --menu map --map-mpp 12
-fi

@@ -39,9 +39,14 @@
 
 ## 5. Show it
 
-- [ ] 5.1 Captures: the bar at sunrise facing east (the sun under E); the bar
-      facing a town with its name; the map beside the planet seen from orbit,
-      before and after the flip. In `docs/screenshots/compass-bar/`.
+- [x] 5.1 Captures, in `docs/screenshots/compass-bar/` (`tools/capture_compass.sh`):
+      - the bar at sunrise facing east, with the sun just right of E at
+        bearing 113°;
+      - the bar facing north at noon, naming Tahal 2.2 km;
+      - the map beside the planet seen from orbit, before and after the
+        flip. The before map is the 2026-10-01 shot taken with the same
+        flags, because an older build reads this tree's assets and cannot
+        run here.
 - [ ] 5.2 Video for the batch (CLAUDE.md: screenshots stand in for now).
 
 The requirements stay in this change's delta until the owner's gate. Each is
