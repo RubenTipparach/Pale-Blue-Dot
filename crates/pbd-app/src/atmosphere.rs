@@ -628,4 +628,195 @@ mod tests {
             before = after;
         }
     }
+
+    /// A measurement instrument for the `smooth-weather` change: how far the
+    /// weather the player sees moves at each published state, and how hard
+    /// rain switches on. Per publish (one step, and the three and thirty a
+    /// held step catches up with), the cover map's largest and 99th-percentile
+    /// change; then, over ten minutes at 3,000 places, every time a place
+    /// starts or stops raining, the rain intensity it jumps by (the cover
+    /// there, `weather::rain_at`), and how many seconds the rain rate takes to
+    /// climb from half the threshold to it and on to twice it. Run with
+    /// `cargo test -p pbd-app --lib weather_steps -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn weather_steps() {
+        let settings = pbd_core::atmosphere::AtmosphereSettings::default();
+        let start = 0.4 * pbd_core::daylight::DAY_S as f64;
+        let air = Air::open(settings, terrain_config().seed, None, start);
+        let mut atmosphere = (*air.now).clone();
+        let mut t = start;
+        let mut before = weather_maps(&atmosphere);
+        for steps in [1u32, 1, 1, 3, 30] {
+            for _ in 0..steps {
+                t += settings.dt_s as f64;
+                atmosphere.step(Clock { seconds: t }.sun(), &[]);
+            }
+            let after = weather_maps(&atmosphere);
+            let mut deltas: Vec<f32> = before
+                .cloud
+                .iter()
+                .zip(&after.cloud)
+                .map(|(a, b)| (a[0] - b[0]).abs())
+                .collect();
+            deltas.sort_by(f32::total_cmp);
+            let share = |over: f32| {
+                100.0 * deltas.iter().filter(|d| **d > over).count() as f32 / deltas.len() as f32
+            };
+            eprintln!(
+                "one publish of {steps} step(s): cover moves by at most {:.3}, 99th percentile \
+                 {:.4}; {:.2}% of texels by more than 0.01, {:.2}% by more than 0.05",
+                deltas[deltas.len() - 1],
+                deltas[deltas.len() * 99 / 100],
+                share(0.01),
+                share(0.05)
+            );
+            before = after;
+        }
+        let places = 3000;
+        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+        let points: Vec<Vec3> = (0..places)
+            .map(|i| {
+                let y = 1.0 - 2.0 * (i as f32 + 0.5) / places as f32;
+                let r = (1.0 - y * y).sqrt();
+                let a = golden * i as f32;
+                Vec3::new(r * a.cos(), y, r * a.sin())
+            })
+            .collect();
+        let threshold = settings.raining_rate;
+        let mut was: Vec<bool> = points
+            .iter()
+            .map(|p| atmosphere.sample(*p).rain_rate >= threshold)
+            .collect();
+        // The candidates for what a player sees: the rain as it is shown now
+        // (the cover where it rains, nothing where it does not) followed with
+        // an attack and a release time, seconds, so rain builds in and dies
+        // away rather than switching.
+        let taus = [(4.0f32, 15.0f32), (5.0, 20.0), (8.0, 8.0)];
+        let raw = |s: &pbd_core::atmosphere::Sample| {
+            if s.rain_rate >= threshold {
+                s.cover
+            } else {
+                0.0
+            }
+        };
+        let first: Vec<f32> = points.iter().map(|p| raw(&atmosphere.sample(*p))).collect();
+        let mut seen: Vec<Vec<f32>> = taus.iter().map(|_| first.clone()).collect();
+        let mut seen_flips = vec![0usize; taus.len()];
+        let mut seen_steps: Vec<Vec<f32>> = vec![Vec::new(); taus.len()];
+        let (mut raw_sum, mut seen_sum) = (0.0f64, vec![0.0f64; taus.len()]);
+        let mut changed_at: Vec<Option<u32>> = vec![None; places];
+        let (mut wet_spells, mut dry_gaps) = (Vec::new(), Vec::new());
+        let mut half_at: Vec<Option<u32>> = vec![None; places];
+        let mut onset_at: Vec<Option<u32>> = vec![None; places];
+        let (mut jumps, mut climb_in, mut climb_on) = (Vec::new(), Vec::new(), Vec::new());
+        let minutes = 10;
+        for step in 0..minutes * 60 {
+            t += settings.dt_s as f64;
+            atmosphere.step(Clock { seconds: t }.sun(), &[]);
+            for (k, p) in points.iter().enumerate() {
+                let s = atmosphere.sample(*p);
+                if s.rain_rate < 0.5 * threshold {
+                    half_at[k] = None;
+                } else if half_at[k].is_none() {
+                    half_at[k] = Some(step);
+                }
+                let target = raw(&s);
+                raw_sum += f64::from(target);
+                for (i, (attack, release)) in taus.iter().enumerate() {
+                    let before = seen[i][k];
+                    let tau = if target > before { attack } else { release };
+                    let now = before + (target - before) * (1.0 - (-settings.dt_s / tau).exp());
+                    seen_sum[i] += f64::from(now);
+                    if (now > 0.05) != (before > 0.05) {
+                        seen_flips[i] += 1;
+                    }
+                    if now > 0.0 || before > 0.0 {
+                        seen_steps[i].push((now - before).abs());
+                    }
+                    seen[i][k] = now;
+                }
+                let raining = s.rain_rate >= threshold;
+                if raining != was[k] {
+                    if let Some(c) = changed_at[k] {
+                        let length = (step - c) as f32 * settings.dt_s;
+                        if raining {
+                            dry_gaps.push(length);
+                        } else {
+                            wet_spells.push(length);
+                        }
+                    }
+                    changed_at[k] = Some(step);
+                    jumps.push(s.cover);
+                    if raining {
+                        if let Some(h) = half_at[k] {
+                            climb_in.push((step - h) as f32 * settings.dt_s);
+                        }
+                        onset_at[k] = Some(step);
+                    }
+                    was[k] = raining;
+                }
+                if let Some(o) = onset_at[k]
+                    && s.rain_rate >= 2.0 * threshold
+                {
+                    climb_on.push((step - o) as f32 * settings.dt_s);
+                    onset_at[k] = None;
+                }
+                if !raining {
+                    onset_at[k] = None;
+                }
+            }
+        }
+        let summary = |name: &str, mut v: Vec<f32>| {
+            if v.is_empty() {
+                eprintln!("{name}: none");
+                return;
+            }
+            v.sort_by(f32::total_cmp);
+            let mean = v.iter().sum::<f32>() / v.len() as f32;
+            eprintln!(
+                "{name}: {} of them, mean {mean:.3}, median {:.3}, 10th percentile {:.3}, \
+                 90th {:.3}, 99th {:.3}, largest {:.3}",
+                v.len(),
+                v[v.len() / 2],
+                v[v.len() / 10],
+                v[v.len() * 9 / 10],
+                v[v.len() * 99 / 100],
+                v[v.len() - 1]
+            );
+        };
+        eprintln!(
+            "{places} places over {minutes} minutes: rain starts or stops {:.2} times a place an hour",
+            jumps.len() as f32 / places as f32 * 60.0 / minutes as f32
+        );
+        let flips = jumps.len();
+        summary("the rain intensity a start or a stop jumps by", jumps);
+        summary("seconds from half the raining rate to it", climb_in);
+        summary("seconds from the raining rate to twice it", climb_on);
+        let rained = changed_at.iter().filter(|c| c.is_some()).count();
+        eprintln!(
+            "{rained} of the places started or stopped raining at least once; each of those \
+             changed {:.1} times in the {minutes} minutes",
+            flips as f32 / rained.max(1) as f32
+        );
+        summary("seconds a rain lasts, start to stop", wet_spells);
+        summary("seconds dry between two rains", dry_gaps);
+        eprintln!(
+            "the rain as it is shown now, averaged over every place and second: {:.4}",
+            raw_sum / (places * minutes as usize * 60) as f64
+        );
+        for (i, (attack, release)) in taus.iter().enumerate() {
+            eprintln!(
+                "built in over {attack} s and let go over {release} s: the rain seen crosses \
+                 0.05 {:.1} times a raining place in the {minutes} minutes; averaged over every \
+                 place and second it is {:.4}",
+                seen_flips[i] as f32 / rained.max(1) as f32,
+                seen_sum[i] / (places * minutes as usize * 60) as f64
+            );
+            summary(
+                "  how far the rain seen moves in one second",
+                std::mem::take(&mut seen_steps[i]),
+            );
+        }
+    }
 }
