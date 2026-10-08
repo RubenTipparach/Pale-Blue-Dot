@@ -152,6 +152,10 @@ pub struct ColumnTier {
     /// baked from it vertex by vertex, watches to bake again
     /// (`cities-in-the-world`, "Finding: the stair towers have no light").
     relit: u64,
+    /// The anchor and the cosine of the angle the tier's columns lie within
+    /// (`build`'s `reach`); `None` where that is not known, which
+    /// [`ColumnTier::may_cover`] takes as covering everything.
+    reach: Option<(Vec3, f32)>,
 }
 
 impl ColumnTier {
@@ -167,12 +171,31 @@ impl ColumnTier {
             centres: Vec::new(),
             sides: Vec::new(),
             relit: 0,
+            reach: Some((Vec3::Y, 2.0)),
         }
     }
 
     /// How many times the field has been baked.
     pub fn light_version(&self) -> u64 {
         self.relit
+    }
+
+    /// Whether any column of the tier can lie within `angle` radians of
+    /// `direction`. `false` means every point there answers [`Self::sample`]
+    /// with the open sky and no lamp (`town-frame-time` decision 3).
+    pub fn may_cover(&self, direction: Vec3, angle: f32) -> bool {
+        let Some((anchor, reach_cos)) = self.reach else {
+            return true;
+        };
+        if reach_cos > 1.0 {
+            return false;
+        }
+        let apart = direction
+            .normalize_or(Vec3::Y)
+            .dot(anchor)
+            .clamp(-1.0, 1.0)
+            .acos();
+        apart - angle < reach_cos.clamp(-1.0, 1.0).acos()
     }
 
     /// Whether the dusk-lit lamps are lit in this tier's field.
@@ -752,6 +775,7 @@ pub fn build(
         centres,
         sides: Vec::new(),
         relit: 0,
+        reach: Some((anchor, reach)),
     };
     // The light comes last, because it is a function of the finished columns:
     // the rim's solid ring and every edit are already in them, and lighting
@@ -1037,6 +1061,46 @@ mod tests {
                 "the skylight half of the word survived the slot"
             );
         }
+    }
+
+    /// `town-frame-time` decision 3: a cap `may_cover` refuses holds no
+    /// column, so every point in it samples the open sky and no lamp; and
+    /// a cap round any column is never refused.
+    #[test]
+    fn a_cap_the_tier_cannot_cover_samples_the_open_sky() {
+        let anchor = Vec3::new(0.3, 0.7, 0.2).normalize();
+        let (set, tier) = tier(anchor);
+        let finest = set.finest_records();
+        let small = 20.0 / PLANET_RADIUS;
+        let (mut refused, mut covered) = (0, 0);
+        for (index, cell) in finest.iter().enumerate() {
+            let direction = Vec3::from_slice(&cell.direction_height[..3]);
+            if tier.may_cover(direction, small) {
+                covered += 1;
+                continue;
+            }
+            refused += 1;
+            assert!(
+                tier.column(index).is_none(),
+                "a refused cap holds no column"
+            );
+            assert_eq!(
+                tier.sample(Some(index), direction, 3.0),
+                (1.0, 0.0),
+                "off the tier a point reads the open sky"
+            );
+        }
+        assert!(refused > 0 && covered > 0, "both kinds were tried");
+        for (index, cell) in finest.iter().enumerate() {
+            if tier.column(index).is_some() {
+                let direction = Vec3::from_slice(&cell.direction_height[..3]);
+                assert!(tier.may_cover(direction, 0.0), "a column's own cap");
+            }
+        }
+        assert!(
+            !ColumnTier::empty().may_cover(anchor, 1.0),
+            "an empty tier covers nothing"
+        );
     }
 
     #[test]
@@ -1828,6 +1892,7 @@ mod tests {
             centres: vec![Vec3::Y; N as usize],
             sides: Vec::new(),
             relit: 0,
+            reach: None,
         };
         tier.relight();
         assert_eq!(tier.light_at(0, 41).block(), 0, "the lantern is out by day");
@@ -2055,6 +2120,7 @@ mod tests {
             centres: vec![Vec3::Y; N],
             sides: Vec::new(),
             relit: 0,
+            reach: None,
         };
         tier.relight();
         let emits = |tier: &ColumnTier, slot: u32| {

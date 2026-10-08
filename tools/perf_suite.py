@@ -12,6 +12,7 @@ Scenarios (each ends itself):
     cloud-hop --route clouds      low in the layer through several separate clouds
     far-side  --route far-side    ground to 3 km and down on the far side
     walk      --walk-distance 1000
+    town      a walk from Ashenstead's middle out through the walled town, rain forced
     sail      Holinghaven's cog cast off from its helm, --sail-for 60
 
 Variants are `name|exe|ENV=1;ENV2=2|assets` (all but the name optional). The
@@ -51,13 +52,16 @@ SCENARIOS = {
     "cloud-hop": ["--route", "clouds"],
     "far-side": ["--route", "far-side"],
     "walk": ["--walk-distance", "1000"],
+    # From the middle of Ashenstead (walled, the shipped seed's tour town 4)
+    # out through it under forced rain (`town-frame-time`).
+    "town": ["--walk", "--at", "19.644", "59.178", "--walk-distance", "400", "--rain", "1"],
     # Holinghaven's cog cast off with its yard braced, from its helm
     # (`sail-the-cog` task 6.1).
     "sail": ["--walk", "--at", "23.71891", "-115.27982", "--aboard", "cog", "--sail", "-40",
              "--seat", "--sail-for", "60"],
 }
 DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE",
-        "sail": "SAIL_DONE"}
+        "town": "WALK_DONE", "sail": "SAIL_DONE"}
 WANT_MS = 1000 / 120
 FLOOR_MS = 1000 / 60
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
