@@ -14,7 +14,8 @@
 
 struct MapLive {
     // The view: the map position at the node's centre (u, v), and how much of
-    // the map the node spans (u across, v down).
+    // the map the node spans (u across, v up: the map is drawn compass-north
+    // up, `compass-bar` decision 7, and v runs from the compass's south).
     view: vec4<f32>,
     // The sun's body-local direction; w how strongly to draw the night side,
     // 0 for not at all (0.3 of itself over an overlay, decision 11).
@@ -84,7 +85,8 @@ fn over(stack: Stack, colour: vec3<f32>, alpha: f32) -> Stack {
 
 @fragment
 fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
-    let uv = map.view.xy + (in.uv - vec2<f32>(0.5)) * map.view.zw;
+    let across = in.uv - vec2<f32>(0.5);
+    let uv = map.view.xy + vec2<f32>(across.x, -across.y) * map.view.zw;
     if (uv.y < 0.0 || uv.y > 1.0) {
         return vec4<f32>(0.0);
     }

@@ -1,10 +1,21 @@
 //! Latitude and longitude, in one place (`world-map` decision 5).
 //!
-//! A body's frame has +Y through its north pole. A body-local unit
-//! direction's latitude is `asin(y)` and its longitude `atan2(z, x)`, so longitude 0 is
-//! +X and longitude 90 degrees east is +Z. The readouts, the map, the site
-//! placer and the rasters the mockup was drawn from all go through here, so
-//! they agree by construction rather than by four copies of one formula.
+//! A body's FRAME has +Y through the pole this module's frame functions call
+//! north. A body-local unit direction's frame latitude is `asin(y)` and its
+//! longitude `atan2(z, x)`, so longitude 0 is +X and longitude 90 degrees
+//! east is +Z. The map's rasters, the site placer and the towns' layouts all
+//! go through here, so they agree by construction rather than by four copies
+//! of one formula.
+//!
+//! That frame north is not the COMPASS's (`compass-bar`). The planet turns
+//! about -Y: the sun rises toward +Z at +X and the atmosphere's prograde wind
+//! is `c x Y`. By the rule every compass on Earth follows, the north pole is
+//! the one the planet turns counter-clockwise about, so a compass points to
+//! -Y, and facing it, east (the same +Z) is on the right and the sun rises
+//! there. In frame terms, east is on the LEFT of a player facing +Y. What a
+//! player reads - a heading, a latitude, a bearing, the map's way up - goes
+//! through the `compass_*` functions; the frame functions keep their meaning
+//! because layouts and saved records were built on them.
 //!
 //! The map is equirectangular at every zoom (the owner, survey M2): `u` runs
 //! from 0 at longitude -180 degrees to 1 at +180, and `v` from 0 at the north
@@ -57,8 +68,9 @@ pub fn direction(at: LatLon) -> Vec3 {
     Vec3::new(cos_lat * cos_lon, sin_lat, cos_lat * sin_lon)
 }
 
-/// North and east at a direction: unit vectors in the ground's plane, north
-/// toward the north pole along the meridian and east along the parallel.
+/// The FRAME's north and east at a direction: unit vectors in the ground's
+/// plane, north toward +Y along the meridian and east along the parallel.
+/// Layouts orient by these; a player reads [`compass_north_east`].
 /// At a pole, where both are undefined, they are taken along longitude 0,
 /// so they stay continuous along that meridian.
 pub fn north_east(direction: Vec3) -> (Vec3, Vec3) {
@@ -72,11 +84,68 @@ pub fn north_east(direction: Vec3) -> (Vec3, Vec3) {
     (east.cross(d).normalize(), east)
 }
 
-/// A heading, radians clockwise from north as a compass reads, of a forward
-/// vector at a direction. Forward need not lie in the ground's plane.
+/// A heading in the FRAME's terms, radians from +Y's meridian toward frame
+/// east. Facing frame north this runs the wrong way round for a compass;
+/// a player reads [`compass_heading`].
 pub fn heading(direction: Vec3, forward: Vec3) -> f32 {
     let (north, east) = north_east(direction);
     forward.dot(east).atan2(forward.dot(north))
+}
+
+/// The pole a compass points to: the one the planet turns counter-clockwise
+/// about, which the sun's path and the atmosphere's winds agree on.
+pub const COMPASS_NORTH: Vec3 = Vec3::NEG_Y;
+
+/// North and east as a compass reads them at a direction: unit vectors in
+/// the ground's plane, north toward [`COMPASS_NORTH`] and east on its right,
+/// which is the side the sun rises on. Compass east is frame east; compass
+/// north is frame north turned round.
+pub fn compass_north_east(direction: Vec3) -> (Vec3, Vec3) {
+    let (north, east) = north_east(direction);
+    (-north, east)
+}
+
+/// A heading, radians clockwise from compass north as a compass reads it, of
+/// a forward vector at a direction, in `-pi..=pi`. Forward need not lie in
+/// the ground's plane.
+pub fn compass_heading(direction: Vec3, forward: Vec3) -> f32 {
+    let (north, east) = compass_north_east(direction);
+    forward.dot(east).atan2(forward.dot(north))
+}
+
+/// The compass bearing from one place to another, radians clockwise from
+/// compass north: the heading the great circle between them sets off on.
+/// Zero when the two are the same place or opposite.
+pub fn bearing(from: Vec3, to: Vec3) -> f32 {
+    let from = from.normalize_or(Vec3::Y);
+    let to = to.normalize_or(Vec3::Y);
+    let toward = to - from * from.dot(to);
+    if toward.length_squared() < 1e-12 {
+        return 0.0;
+    }
+    compass_heading(from, toward)
+}
+
+/// A compass heading as the map draws it at a direction, radians clockwise
+/// from the map's up (`compass-bar` decision 7a). The map is equirectangular
+/// and compass-north up, so it stretches east-west by 1 / cos(latitude): a
+/// step north-east is drawn leaning toward east. This is the way a step along
+/// `heading` moves on the map, which is the way the player's arrow points.
+/// The cardinals are unchanged.
+pub fn map_heading(direction: Vec3, heading: f32) -> f32 {
+    let across = lat_lon(direction).lat.cos().max(1e-4);
+    heading.sin().atan2(heading.cos() * across)
+}
+
+/// Latitude and longitude as a compass reads them: north positive, toward
+/// [`COMPASS_NORTH`]. The frame latitude negated; longitude is the same,
+/// because compass east is frame east.
+pub fn compass_lat_lon(direction: Vec3) -> LatLon {
+    let at = lat_lon(direction);
+    LatLon {
+        lat: -at.lat,
+        lon: at.lon,
+    }
 }
 
 /// The equirectangular map position of a direction, `(u, v)` in `0..=1`.
@@ -219,6 +288,136 @@ mod tests {
             let (north, east) = north_east(pole);
             assert!(north.is_finite() && east.is_finite());
             assert!(north.dot(pole).abs() < 1e-6 && east.dot(pole).abs() < 1e-6);
+        }
+    }
+
+    /// The compass is the right way round everywhere (`compass-bar`): facing
+    /// compass north, east is on the screen's right (Bevy's right is forward
+    /// x up); from space with compass north up the screen, east is on the
+    /// right too; and wherever the sun rises, it rises toward compass east and
+    /// then crosses toward west. The frame's north fails all three, which is
+    /// what the change measured.
+    #[test]
+    fn the_compass_has_east_on_the_right_and_the_sun_rising_there() {
+        use crate::daylight::{Clock, DAY_S};
+        for (lat, lon) in [
+            (0.0f32, 0.0f32),
+            (30.0, 45.0),
+            (-40.0, -120.0),
+            (60.0, 170.0),
+            // Day 0 is the +Y hemisphere's summer, so far toward -Y is a
+            // polar night with no sunrise to test.
+            (-50.0, 10.0),
+        ] {
+            let d = direction(LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            });
+            let (north, east) = compass_north_east(d);
+            assert!(north.dot(d).abs() < 1e-5 && east.dot(d).abs() < 1e-5);
+            let right_facing_north = north.cross(d);
+            assert!(
+                right_facing_north.dot(east) > 0.999,
+                "facing north at ({lat}, {lon}), east is on the right"
+            );
+            let right_from_space = (-d).cross(north);
+            assert!(
+                right_from_space.dot(east) > 0.999,
+                "seen from space at ({lat}, {lon}), east is on the right"
+            );
+            let (frame_north, _) = north_east(d);
+            assert!(
+                frame_north.cross(d).dot(east) < -0.999,
+                "the frame's north has east on the left"
+            );
+            assert!(compass_heading(d, north).abs() < 1e-5);
+            assert!((compass_heading(d, east) - FRAC_PI_2).abs() < 1e-5);
+            assert!((compass_heading(d, right_facing_north) - FRAC_PI_2).abs() < 1e-4);
+            // Sunrise here: the first upward crossing of the horizon in a day.
+            let mut last = Clock { seconds: 0.0 }.elevation(d);
+            let mut rose = None;
+            for second in 1..=DAY_S as u32 {
+                let clock = Clock {
+                    seconds: f64::from(second),
+                };
+                let e = clock.elevation(d);
+                if last < 0.0 && e >= 0.0 {
+                    rose = Some(clock);
+                    break;
+                }
+                last = e;
+            }
+            let rose = rose.expect("the sun rises everywhere but the poles");
+            let sun = rose.sun();
+            let flat = (sun - d * sun.dot(d)).normalize();
+            assert!(
+                flat.dot(east) > 0.5,
+                "at ({lat}, {lon}) the sun rises toward {flat:?}, east is {east:?}"
+            );
+            // At local noon the sun is crossing the meridian, westward.
+            let noon = Clock::at(0, (12.0 - lon / 15.0).rem_euclid(24.0));
+            let later = Clock {
+                seconds: noon.seconds + 60.0,
+            };
+            assert!(
+                (later.sun() - noon.sun()).dot(east) < 0.0,
+                "at ({lat}, {lon}) the sun crosses toward west"
+            );
+        }
+    }
+
+    /// Compass latitude is the frame's negated and longitude the same; a
+    /// place a little compass-east bears 90 degrees and a little north 0.
+    #[test]
+    fn compass_latitude_and_bearing() {
+        let d = direction(LatLon {
+            lat: 20f32.to_radians(),
+            lon: -35f32.to_radians(),
+        });
+        let (lat, lon) = compass_lat_lon(d).degrees();
+        assert!((lat + 20.0).abs() < 1e-4 && (lon + 35.0).abs() < 1e-4);
+        assert!((compass_lat_lon(COMPASS_NORTH).lat - FRAC_PI_2).abs() < 1e-5);
+        let (north, east) = compass_north_east(d);
+        assert!((bearing(d, d + east * 1e-3) - FRAC_PI_2).abs() < 1e-3);
+        assert!(bearing(d, d + north * 1e-3).abs() < 1e-3);
+        assert!((bearing(d, d - north * 1e-3).abs() - PI).abs() < 1e-3);
+        assert!(
+            compass_lat_lon(d + north * 1e-3).lat > compass_lat_lon(d).lat,
+            "compass north climbs in compass latitude"
+        );
+        assert_eq!(bearing(d, d), 0.0);
+    }
+
+    /// A heading as the map draws it is the way a step along it moves on the
+    /// map: the change in longitude across and in latitude up, which is how
+    /// the map is drawn compass-north up; the cardinals are unchanged and the
+    /// diagonals lean east-west by the map's stretch.
+    #[test]
+    fn a_heading_on_the_map_is_where_a_step_goes() {
+        for (lat, lon) in [
+            (0.0f32, 10.0f32),
+            (28.64, 0.0),
+            (-60.0, -120.0),
+            (75.0, 30.0),
+        ] {
+            let d = direction(LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            });
+            let (north, east) = compass_north_east(d);
+            for k in 0..8 {
+                let h = k as f32 * PI / 4.0;
+                let step = (d + (north * h.cos() + east * h.sin()) * 1e-4).normalize();
+                let (a, b) = (compass_lat_lon(d), compass_lat_lon(step));
+                let across = (b.lon - a.lon + PI).rem_euclid(TAU) - PI;
+                let drawn = across.atan2(b.lat - a.lat);
+                let off = (map_heading(d, h) - drawn + PI).rem_euclid(TAU) - PI;
+                assert!(off.abs() < 1e-2, "({lat}, {lon}) heading {k}: off by {off}");
+                if k % 2 == 0 {
+                    let true_off = (map_heading(d, h) - h + PI).rem_euclid(TAU) - PI;
+                    assert!(true_off.abs() < 1e-5, "a cardinal is unchanged");
+                }
+            }
         }
     }
 

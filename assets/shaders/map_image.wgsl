@@ -43,7 +43,10 @@ fn greyed(linear: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
-    let colour = textureSample(image, image_sampler, in.uv);
+    // A raster's first row is the frame's +Y pole, which a compass calls
+    // south, and the map is drawn compass-north up (`compass-bar` decision
+    // 7): each image is drawn turned top to bottom.
+    let colour = textureSample(image, image_sampler, vec2<f32>(in.uv.x, 1.0 - in.uv.y));
     if (grey.x > 0.5) {
         return vec4<f32>(greyed(colour.rgb), colour.a);
     }

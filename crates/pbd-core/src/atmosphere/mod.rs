@@ -78,6 +78,8 @@ pub struct Sample {
     pub cloud_top: f32,
     /// Precipitation, kg/m^2/s (mm/s).
     pub rain_rate: f32,
+    /// The rain a person sees here, 0..1: `Atmosphere::rain_seen`.
+    pub rain_seen: f32,
     /// Whether that falls as snow.
     pub snow: bool,
     /// Surface wind and the cloud-level wind, m/s, tangent.
@@ -150,6 +152,15 @@ pub struct Atmosphere {
     pub sunlight: Vec<f32>,
     /// Strikes within the last `strike_keep_s`.
     pub strikes: Vec<Strike>,
+    /// The rain a person standing in each cell sees, 0..1 (`smooth-weather`
+    /// decision 1): the cover where the cell rains and nothing where it does
+    /// not, followed after each step with `rain_rise_s` up and `rain_fall_s`
+    /// down, so a burst of rain builds in and dies away rather than
+    /// switching. Derived: never saved and never read by the physics.
+    pub rain_seen: Vec<f32>,
+    /// Whether the next step sets `rain_seen` to the rain as it stands rather
+    /// than following it: a new or restored state has worked out no rain yet.
+    rain_seen_fresh: bool,
     /// Ascent the weather slider drives this step, m/s, per cell. Input, not
     /// state: it is worked out afresh from the forcing every step, so it is
     /// not saved.
@@ -188,6 +199,8 @@ impl Atmosphere {
             upper: vec![Vec3::ZERO; n],
             sunlight: vec![0.0; n],
             strikes: Vec::new(),
+            rain_seen: vec![0.0; n],
+            rain_seen_fresh: true,
             forced: vec![0.0; n],
             mesoscale: vec![0.0; n],
             grid: Arc::new(grid),
@@ -268,6 +281,30 @@ impl Atmosphere {
         s.cover_min_kg + cover.clamp(0.0, 1.0) * (s.cover_full_kg - s.cover_min_kg)
     }
 
+    /// Follow the rain a person sees toward each cell's rain after a step of
+    /// `dt` seconds (`smooth-weather` decision 1): up with `rain_rise_s`, down
+    /// with `rain_fall_s`. The first step of a new or restored state sets it.
+    pub(super) fn follow_rain(&mut self, dt: f32) {
+        let s = self.settings;
+        let rise = 1.0 - numeric::exp(-dt / s.rain_rise_s);
+        let fall = 1.0 - numeric::exp(-dt / s.rain_fall_s);
+        for i in 0..self.grid.len() {
+            let target = if self.rain_rate[i] >= s.raining_rate {
+                self.cover(i)
+            } else {
+                0.0
+            };
+            let seen = self.rain_seen[i];
+            self.rain_seen[i] = if self.rain_seen_fresh {
+                target
+            } else {
+                let k = if target > seen { rise } else { fall };
+                (seen + (target - seen) * k).clamp(0.0, 1.0)
+            };
+        }
+        self.rain_seen_fresh = false;
+    }
+
     /// A cell's cloud cover: the cover of the water condensed in it or of the
     /// humid air in it, whichever is more. The one answer the sunlight, the
     /// sample and the report all read.
@@ -305,6 +342,7 @@ impl Atmosphere {
             cloud,
             cloud_top: self.cloud_top(cloud, lift),
             rain_rate: weighted(&self.rain_rate, cells, w).max(0.0),
+            rain_seen: weighted(&self.rain_seen, cells, w).clamp(0.0, 1.0),
             snow: ground < 0.0,
             wind: weighted_vec(&self.wind, cells, w),
             upper: weighted_vec(&self.upper, cells, w),
@@ -491,6 +529,7 @@ impl Atmosphere {
         };
         self.refresh_mesoscale();
         self.step = step;
+        self.rain_seen_fresh = true;
         Ok(())
     }
 
