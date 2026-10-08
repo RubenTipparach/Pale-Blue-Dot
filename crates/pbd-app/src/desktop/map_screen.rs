@@ -1574,16 +1574,25 @@ pub fn markers(
     let size = Vec2::new(window.width(), window.height());
     let view = view.clamped(size);
     let player = player.get();
-    let forward = cameras
+    let view_of = cameras
         .iter()
         .find(|(camera, _)| camera.is_active)
-        .map(|(_, t)| t.forward().as_vec3());
+        .map(|(_, t)| (t.forward().as_vec3(), t.up().as_vec3()));
     let ship_at = ship.iter().next().map(|p| p.0);
     let mut seen_crafts = Vec::new();
     for (entity, mark, mut node, mut turn) in &mut marks {
         let (at, heading) = match *mark {
             MapMarker::Player => match player {
-                Some(up) => (Some(up), forward.map(|f| geo::compass_heading(up, f))),
+                // The arrow points where a step forward goes ON THE MAP: the
+                // compass heading, steady when looking down as the bar's is,
+                // leaned by the map's east-west stretch (`compass-bar`
+                // decision 7a, the eight-wind calibration).
+                Some(up) => (
+                    Some(up),
+                    view_of
+                        .and_then(|(f, u)| pbd_app::compass::view_heading(up, f, u))
+                        .map(|h| geo::map_heading(up, h)),
+                ),
                 None => (None, None),
             },
             MapMarker::Ship => (ship_at, None),
@@ -1965,6 +1974,160 @@ mod tests {
         assert_eq!(at(&app, ship), ship0, "the ship stays where it was parked");
         let moved = at(&app, player) - player0;
         assert!(moved.x > 50.0, "the player moves east on the map: {moved}");
+    }
+
+    /// The eight winds, clockwise from north, each with the way it points on
+    /// a screen whose y runs down.
+    fn winds() -> [(&'static str, Vec2); 8] {
+        let d = std::f32::consts::FRAC_1_SQRT_2;
+        [
+            ("N", Vec2::new(0.0, -1.0)),
+            ("NE", Vec2::new(d, -d)),
+            ("E", Vec2::new(1.0, 0.0)),
+            ("SE", Vec2::new(d, d)),
+            ("S", Vec2::new(0.0, 1.0)),
+            ("SW", Vec2::new(-d, d)),
+            ("W", Vec2::new(-1.0, 0.0)),
+            ("NW", Vec2::new(-d, -d)),
+        ]
+    }
+
+    /// Facing each of the eight winds at a place, through the real systems:
+    /// what the compass bar reads in its middle, which way the player's
+    /// arrow points on the map's screen (turned clockwise by its UI rotation
+    /// from its tip-up picture), and which way a step forward moves the
+    /// player there. One row per wind: (name, bar letter, arrow, step).
+    fn facing(lat: f32, lon: f32) -> Vec<(&'static str, &'static str, Vec2, Vec2)> {
+        let mut app = App::new();
+        let up = geo::direction(LatLon {
+            lat: lat.to_radians(),
+            lon: lon.to_radians(),
+        });
+        app.insert_resource(Screen::Map)
+            .insert_resource(MapView {
+                centre: geo::project(up),
+                px_per_turn: 60_000.0,
+            })
+            .insert_resource(WalkingReadout {
+                active: true,
+                ..default()
+            })
+            .insert_resource(MarkerIcons {
+                arrow: Handle::default(),
+                craft: Handle::default(),
+            })
+            .add_systems(Update, markers);
+        app.world_mut().spawn((
+            Window {
+                resolution: (1440, 900).into(),
+                ..default()
+            },
+            PrimaryWindow,
+        ));
+        app.world_mut()
+            .spawn((Walker, Position(up * PLANET_RADIUS)));
+        let player = app
+            .world_mut()
+            .spawn((
+                MapMarker::Player,
+                Node {
+                    position_type: PositionType::Absolute,
+                    width: px(34),
+                    height: px(34),
+                    ..default()
+                },
+                UiTransform::default(),
+            ))
+            .id();
+        let camera = app
+            .world_mut()
+            .spawn((
+                Camera3d::default(),
+                Camera::default(),
+                GlobalTransform::default(),
+            ))
+            .id();
+        let (north, _) = geo::compass_north_east(up);
+        winds()
+            .into_iter()
+            .enumerate()
+            .map(|(k, (name, _))| {
+                // Turning right is clockwise seen from above: about -up.
+                let heading = k as f32 * std::f32::consts::FRAC_PI_4;
+                let forward = Quat::from_axis_angle(up, -heading) * north;
+                let eye =
+                    Transform::from_translation(up * (PLANET_RADIUS + 1.7)).looking_to(forward, up);
+                *app.world_mut().get_mut::<GlobalTransform>(camera).unwrap() = eye.into();
+                app.update();
+                let turn = app.world().get::<UiTransform>(player).unwrap().rotation;
+                let arrow = (Mat2::from(turn) * Vec2::new(0.0, -1.0)).normalize();
+                let view = app.world().resource::<MapView>().clamped(SCREEN);
+                let here = view.to_screen(geo::project(up), SCREEN);
+                let ahead = (up + forward * 2e-4).normalize();
+                let step = (view.to_screen(geo::project(ahead), SCREEN) - here).normalize();
+                let bar =
+                    pbd_app::compass::view_heading(up, eye.forward().as_vec3(), eye.up().as_vec3())
+                        .expect("a view");
+                let letter = pbd_app::compass::marks(bar, &[])
+                    .into_iter()
+                    .filter(|m| !m.label.is_empty())
+                    .min_by(|a, b| a.offset.abs().total_cmp(&b.offset.abs()))
+                    .map_or("", |m| m.label);
+                (name, letter, arrow, step)
+            })
+            .collect()
+    }
+
+    /// The owner, 2026-10-08: "When I'm facing East in the world, am I facing
+    /// East on the map? Calibrate for all other directions too." At places
+    /// from the equator to 75 degrees either side and over the antimeridian,
+    /// facing each of the eight winds: the compass bar reads that wind in
+    /// its middle; a step forward moves the player that way on the map for N,
+    /// E, S and W, and between the neighbouring cardinals for the diagonals;
+    /// and the player's arrow points along that step, within a degree, so
+    /// walking the way the arrow points is walking the way you face.
+    #[test]
+    fn facing_each_wind_the_bar_the_map_arrow_and_a_step_agree() {
+        let mut worst: f32 = 0.0;
+        for (lat, lon) in [
+            (0.0f32, 0.0f32),
+            (28.64, 0.0),
+            (-28.64, 0.0),
+            (45.0, 179.95),
+            (-60.0, -120.0),
+            (75.0, 30.0),
+        ] {
+            for ((name, letter, arrow, step), (_, screen)) in
+                facing(lat, lon).into_iter().zip(winds())
+            {
+                assert_eq!(letter, name, "the bar at ({lat}, {lon})");
+                if name.len() == 1 {
+                    assert!(
+                        step.dot(screen) > 0.9999,
+                        "facing {name} at ({lat}, {lon}) a step goes {step} on the map"
+                    );
+                } else {
+                    // A diagonal on an equirectangular map leans toward east
+                    // or west by 1 / cos(latitude), but stays in its quarter.
+                    assert!(
+                        step.x.signum() == screen.x.signum()
+                            && step.y.signum() == screen.y.signum(),
+                        "facing {name} at ({lat}, {lon}) a step goes {step} on the map"
+                    );
+                }
+                let off = arrow.angle_to(step).to_degrees().abs();
+                worst = worst.max(off);
+                eprintln!(
+                    "({lat:7.2}, {lon:7.2}) facing {name:>2}: bar {letter:>2}, arrow {:6.1} deg, step {:6.1} deg on the map, {off:5.2} apart",
+                    arrow.x.atan2(-arrow.y).to_degrees(),
+                    step.x.atan2(-step.y).to_degrees()
+                );
+            }
+        }
+        assert!(
+            worst < 1.0,
+            "the arrow is up to {worst:.1} degrees off the way a step goes"
+        );
     }
 
     /// A layer added through the registry from outside the map's code gets

@@ -126,6 +126,17 @@ pub fn bearing(from: Vec3, to: Vec3) -> f32 {
     compass_heading(from, toward)
 }
 
+/// A compass heading as the map draws it at a direction, radians clockwise
+/// from the map's up (`compass-bar` decision 7a). The map is equirectangular
+/// and compass-north up, so it stretches east-west by 1 / cos(latitude): a
+/// step north-east is drawn leaning toward east. This is the way a step along
+/// `heading` moves on the map, which is the way the player's arrow points.
+/// The cardinals are unchanged.
+pub fn map_heading(direction: Vec3, heading: f32) -> f32 {
+    let across = lat_lon(direction).lat.cos().max(1e-4);
+    heading.sin().atan2(heading.cos() * across)
+}
+
 /// Latitude and longitude as a compass reads them: north positive, toward
 /// [`COMPASS_NORTH`]. The frame latitude negated; longitude is the same,
 /// because compass east is frame east.
@@ -375,6 +386,39 @@ mod tests {
             "compass north climbs in compass latitude"
         );
         assert_eq!(bearing(d, d), 0.0);
+    }
+
+    /// A heading as the map draws it is the way a step along it moves on the
+    /// map: the change in longitude across and in latitude up, which is how
+    /// the map is drawn compass-north up; the cardinals are unchanged and the
+    /// diagonals lean east-west by the map's stretch.
+    #[test]
+    fn a_heading_on_the_map_is_where_a_step_goes() {
+        for (lat, lon) in [
+            (0.0f32, 10.0f32),
+            (28.64, 0.0),
+            (-60.0, -120.0),
+            (75.0, 30.0),
+        ] {
+            let d = direction(LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            });
+            let (north, east) = compass_north_east(d);
+            for k in 0..8 {
+                let h = k as f32 * PI / 4.0;
+                let step = (d + (north * h.cos() + east * h.sin()) * 1e-4).normalize();
+                let (a, b) = (compass_lat_lon(d), compass_lat_lon(step));
+                let across = (b.lon - a.lon + PI).rem_euclid(TAU) - PI;
+                let drawn = across.atan2(b.lat - a.lat);
+                let off = (map_heading(d, h) - drawn + PI).rem_euclid(TAU) - PI;
+                assert!(off.abs() < 1e-2, "({lat}, {lon}) heading {k}: off by {off}");
+                if k % 2 == 0 {
+                    let true_off = (map_heading(d, h) - h + PI).rem_euclid(TAU) - PI;
+                    assert!(true_off.abs() < 1e-5, "a cardinal is unchanged");
+                }
+            }
+        }
     }
 
     /// A body far from the system origin reads its places as one at the

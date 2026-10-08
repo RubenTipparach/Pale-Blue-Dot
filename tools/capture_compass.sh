@@ -20,3 +20,9 @@ shot $EXE compass-sunrise --walk --time 7.6 --yaw 180 --pitch 6
 shot $EXE compass-noon-north --walk --time 12 --yaw 90 --pitch 4
 shot $EXE map-after --walk --time 12 --menu map --map-mpp 12
 shot $EXE orbit-north-up --view column --at 28.64 0 --height 5000 --pitch -84 --yaw 90 --time 12
+# The eight-wind calibration (decision 7a): the map's arrow facing N, E and
+# NE. At the spawn's 28.6 degrees a north-east step leans to 48.7 degrees on
+# the map, and the arrow with it.
+shot $EXE map-facing-north --walk --time 12 --yaw 90 --menu map --map-mpp 6
+shot $EXE map-facing-east --walk --time 12 --yaw 180 --menu map --map-mpp 6
+shot $EXE map-facing-northeast --walk --time 12 --yaw 135 --menu map --map-mpp 6
