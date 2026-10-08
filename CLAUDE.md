@@ -249,6 +249,8 @@ https://claude.ai/artifact/CbuRh6C4kZZvULnQyrtor1 (update it with that URL;
 a new baseline may get its own page, linked from here). The `cloud-close-up`
 before-and-after page is https://claude.ai/artifact/SSeb4wCF2B7xCgYsExSRKx.
 The `detail-fade` one is https://claude.ai/artifact/P1WypbYauGUsPrC1NpSuzQ.
+The `town-frame-time` A/B (a town walk, main against the branch) is
+https://claude.ai/artifact/UijFaGpci12P1wHjR4otzk.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 

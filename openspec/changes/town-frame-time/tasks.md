@@ -11,7 +11,9 @@
 - [ ] 1.3 A log line per weather publish (steps, held seconds, step/map split).
 - [ ] 1.4 Frame-log columns `baked_verts`, `mats_touched`, `air_gen`,
       `blend_t`, `cover`, `rain`; `frame_graph.py` marks pair moves.
-- [ ] 1.5 The sitting: `before` (09-25 baseline) against `after`, and
+- [ ] 1.5 (Town runs done, 2026-10-08: `docs/benchmarks/2026-10-08-town-frame-time/`,
+      https://claude.ai/artifact/UijFaGpci12P1wHjR4otzk. The sitting was
+      stopped at the owner's request before clouds, storm and walk.) The sitting: `before` (09-25 baseline) against `after`, and
       `after` with `--no-shadows` and with `PBD_NO_CLOUDS=1`, on `town`,
       `clouds`, `storm`, `walk`, two repeats; the report in
       `docs/benchmarks/2026-10-08-town-frame-time/`, and a published page.
@@ -31,5 +33,8 @@
 - [ ] 3.3 Weather upload: `to` only; rain-map buffer kept.
 - [ ] 3.4 Whatever 2.1 adds (shadow casters, held steps, wind drift), each
       with before-and-after shots where it changes the picture.
+- [ ] 3.6 A fresh world freezes for about 18 s at its start (8.7, 2.5 and
+      6.8 s frames, both builds): measure whether opening a saved world pays
+      any of it, and write it up.
 - [ ] 3.5 The sitting again, after against before; p95 within 16.7 ms in
       `town`, and the report and page updated.
