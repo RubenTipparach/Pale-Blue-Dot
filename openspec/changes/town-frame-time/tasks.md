@@ -33,6 +33,10 @@
 - [ ] 3.3 Weather upload: `to` only; rain-map buffer kept.
 - [ ] 3.4 Whatever 2.1 adds (shadow casters, held steps, wind drift), each
       with before-and-after shots where it changes the picture.
+- [x] 3.7 The trace build (`--features trace`, `tools/trace_rank.py`) and
+      decisions 5-7: templates cloned only to cut, resting craft sleep
+      (`a_resting_craft_far_off_sleeps_and_is_checked`), a material's sun
+      rewritten past 2e-3. Measured in the design.
 - [ ] 3.6 A fresh world freezes for about 18 s at its start (8.7, 2.5 and
       6.8 s frames, both builds): measure whether opening a saved world pays
       any of it, and write it up.

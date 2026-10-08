@@ -147,6 +147,101 @@ not yet measured, and are taken up after these.
    dusk relight reaches every mesh of a town over a fraction of a second, not
    in one frame.
 
+## Next: what the remaining 10 ms is (2026-10-08)
+
+After decisions 1-4 the town walk runs about 10.4 ms a frame against 6.3 ms of
+GPU time. The frame is still CPU-bound, and none of the `SPENT` lines says
+where. The instrument is a build feature, `trace`, which turns on Bevy's
+`trace_chrome`. Every system and render stage then writes a span to a Chrome
+trace file, and a script adds up each span's time per frame over a
+town walk. It changes no behaviour. The spans cost time themselves, so it
+ranks costs and does not measure them; a fix is measured on the ordinary
+release build, as above.
+
+### Measured: the trace of a 100 m town walk
+
+From the `trace` build (`fast` profile), the 1,186 frames between 25 s and
+36.6 s, median frame 10.8 ms. The spans cost time themselves, so this ranks
+costs; it does not measure them.
+
+| Span | ms a frame | Where |
+| --- | ---: | --- |
+| Main schedule, all of it | 8.1 | main thread |
+| `vehicles::step_vehicles` (in `FixedUpdate`) | 1.8 | holds the main schedule |
+| `towns::stand_in_range` | 1.7 | main thread |
+| Physics (`PhysicsSchedule`) | 0.7 | main thread |
+| `field_light::light_from_the_field` | 0.34 | main thread |
+| `weather_maps::blend` + `weather::rebuild_shower` | 0.69 | main thread |
+| Render schedule, all of it | 8.1 | render thread, beside the next main |
+| `prepare_windows` (waits on the swapchain) | 2.4 | render thread |
+| `prepare_erased_assets<FieldLit>` + `prepare_material_bind_groups` | 1.45 | render thread |
+| Extract | 1.45 | between the two |
+
+The main and render threads each take about 8 ms, so both must come down.
+
+## Decision: the next three (2026-10-08)
+
+5. **`stand_in_range` copies six town templates every frame.** A `Template`
+   is a plain struct: its buildings, its wall cells and its ground grid.
+   The system clones all six, with the kits, before asking whether any town
+   needs cutting. It clones them only when one does. No change to behaviour.
+6. **`step_vehicles`: about 2.9 ms a tick, on craft sitting still.**
+   - Harbour boats past 1,500 m are not the cost: they are already stowed as
+     records and not stepped (`harbour::stow_and_wake`).
+   - The instrument (`VEHICLE_STEP`, each kind's mean step every 5 s) found
+     about 20 craft in range of Ashenstead, each stepped every tick with 4
+     substeps:
+
+     | Craft | ms a step | Stepped a tick | ms a tick |
+     | --- | ---: | ---: | ---: |
+     | Rowboat | 0.12 | 11 | 1.3 |
+     | Tern | 0.19 | 6 | 1.1 |
+     | Loon | 0.23 | 2 | 0.45 |
+     | Kestrel | 0.04 | 1 | 0.04 |
+
+   - The Kestrel, 16 m away on the column tier, steps 3-5 times faster than
+     the far craft. Off the tier, every contact point of every substep asks
+     the terrain generator for the ground (`vehicles::ground_under`).
+   - Nothing about a craft at rest changes from one tick to the next. So a
+     craft that nobody is aboard, that has been at rest for `REST_S` (the
+     `rested` the save already keeps), and that is more than 30 m from the
+     camera **sleeps**. It is stepped once every 30 ticks (0.5 s) to see whether
+     anything has moved it: wind, a storm's sea, a dig under it. A step that
+     finds it moving wakes it, and it is stepped every tick again. Boarding it
+     or coming within 30 m does the same.
+   - What changes: a resting craft answers a push up to half a second late,
+     and only when it is more than 30 m away. Recommendation taken (ask only
+     with screenshots).
+7. **Town materials are prepared again every few frames.**
+   `light_from_the_field` rewrites a material when the sun has moved by 1e-4
+   (0.006°). With `DAY_S` 2880 the sun crosses that every 45 ms, so 50-125 of
+   577 materials are rewritten a frame. Each rewrite makes Bevy prepare the
+   material again (a new uniform buffer and bind group, `prepare_erased_assets`).
+   The threshold becomes 2e-3 (0.11°): each material's sun is at most 0.11°
+   behind the sky's, and each is rewritten about once a second. The meshes
+   still cross it at different moments, so the rewrites stay spread across
+   frames. Nothing on screen changes by a visible amount; recommendation taken
+   (ask only with screenshots).
+
+### Measured: decisions 5-7 (2026-10-08)
+
+The town walk, `before` (decisions 1-4) against `after` (1-7), interleaved,
+two runs each, in one sitting (`tools/perf_suite.py --scenarios town`). The
+owner was using the machine during it, so the spread is wider than in the
+earlier sitting.
+
+| | before | after |
+| --- | ---: | ---: |
+| Frame p50 | 10.43-10.52 ms | **9.08-9.18 ms** |
+| Mean fps | 82 | **98** |
+| p95 | 16.2-16.4 ms | 15.0-15.2 ms |
+| p99.9 | 131 ms | 45 ms |
+
+Craft stepped a tick fell from about 20 to under 2. Only the Kestrel, 16 m
+from the walk's start, steps every tick. Their cost fell from about 2.9 ms a
+tick to about 0.15 ms. The frames slower than 14 ms (7%) are not periodic:
+they are the spread of an uncapped frame (2-20 ms), not hitches with a cause.
+
 ## Candidate fixes (each waits for its number)
 
 | Suspect | Fix | Changes the picture? |

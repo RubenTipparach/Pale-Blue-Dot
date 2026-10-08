@@ -813,29 +813,16 @@ pub fn stand_in_range(world: &mut World) {
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
         }
     }
-    // Every template a town can be laid from: the harbour's too, or a
-    // harbour coming into range is cut with none of its sea's pieces.
-    let (kits, repeat, templates) = {
-        let assets = world.resource::<TownAssets>();
-        (
-            assets.kits.clone(),
-            assets.repeat(),
-            [
-                assets.village.clone(),
-                assets.walled.clone(),
-                assets.harbour.clone(),
-                assets.desert.clone(),
-                assets.tundra.clone(),
-                assets.jungle.clone(),
-            ],
-        )
-    };
     let sheet = sheet_in(world, &config);
     let dt = world
         .get_resource::<Time>()
         .map_or(1.0 / 60.0, |t| t.delta_secs());
     let mut gone = Vec::new();
     let mut fades = Vec::new();
+    // The towns that come into range this frame, to be cut. Most frames
+    // there are none, so nothing is cloned for them (`town-frame-time`
+    // decision 5): a template is a whole town's plan.
+    let mut wanted_now = Vec::new();
     {
         let mut towns = world.resource_mut::<Towns>();
         let towns = &mut *towns;
@@ -844,12 +831,31 @@ pub fn stand_in_range(world: &mut World) {
             if let Some(s) = towns.standing.iter_mut().find(|s| s.site == h.site.id) {
                 s.leaving = leaving(d, s.leaving);
             } else if wanted(d) && !towns.cutting.iter().any(|(site, _)| *site == h.site.id) {
+                wanted_now.push(h.clone());
+            }
+        }
+    }
+    if !wanted_now.is_empty() {
+        let assets = world.resource::<TownAssets>();
+        let (kits, repeat) = (assets.kits.clone(), assets.repeat());
+        // Every template a town can be laid from: the harbour's too, or a
+        // harbour coming into range is cut with none of its sea's pieces.
+        let cuts: Vec<_> = wanted_now
+            .into_iter()
+            .map(|h| {
+                let template = [
+                    &assets.village,
+                    &assets.walled,
+                    &assets.harbour,
+                    &assets.desert,
+                    &assets.tundra,
+                    &assets.jungle,
+                ]
+                .into_iter()
+                .find(|t| t.scene == h.town.template)
+                .cloned();
                 let id = h.site.id;
-                let template = templates
-                    .iter()
-                    .find(|t| t.scene == h.town.template)
-                    .cloned();
-                let (h, kits, repeat) = (h.clone(), kits.clone(), repeat.clone());
+                let (kits, repeat) = (kits.clone(), repeat.clone());
                 let task = AsyncComputeTaskPool::get().spawn(async move {
                     build(
                         &h.site,
@@ -861,9 +867,14 @@ pub fn stand_in_range(world: &mut World) {
                         sheet,
                     )
                 });
-                towns.cutting.push((id, task));
-            }
-        }
+                (id, task)
+            })
+            .collect();
+        world.resource_mut::<Towns>().cutting.extend(cuts);
+    }
+    {
+        let mut towns = world.resource_mut::<Towns>();
+        let towns = &mut *towns;
         for s in &mut towns.standing {
             let before = s.shown;
             s.shown = faded(s.shown, s.leaving, dt);

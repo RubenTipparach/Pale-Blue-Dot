@@ -229,6 +229,13 @@ fn world_bounds(transform: &GlobalTransform, aabb: Option<&Aabb>) -> (Vec3, Vec3
     (low, high)
 }
 
+/// How far the sun moves, in its unit direction's components, before a
+/// field-lit material is given it again (`town-frame-time` decision 7): 2e-3
+/// is 0.11 degrees, about once a second at `DAY_S` 2880. Each rewrite makes
+/// the renderer prepare the material again, and at 1e-4 a town's were
+/// prepared every 45 ms.
+const SUN_STEP: f32 = 2e-3;
+
 /// What a field-lit mesh's corners last read (`town-frame-time` decision 1):
 /// the corners where it stood, the points they read (ground-clamped), the
 /// field they were read from and what it said. The generator's ground is
@@ -367,7 +374,7 @@ fn light_from_the_field(
             || current.look != field.look
             || current.centre.w != field.centre.w
             || (current.high - field.high).abs().max_element() > 1e-3
-            || (current.sun - field.sun).abs().max_element() > 1e-4
+            || (current.sun - field.sun).abs().max_element() > SUN_STEP
             || (0..2).any(|k| {
                 (current.sky[k] - field.sky[k]).abs().max_element() > 1e-3
                     || (current.block[k] - field.block[k]).abs().max_element() > 1e-3
