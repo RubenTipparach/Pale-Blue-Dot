@@ -24,4 +24,5 @@
 
 - [ ] 3.1 The riser inside the north gate, with shots: leave it, or make it a
       stair (a template change, a new template version, so towns already
-      laid keep theirs).
+      laid keep theirs). Asked as G1 in the owner survey, 2026-10-08, with
+      the outside and passage shots; recommendation: a stone stair.
