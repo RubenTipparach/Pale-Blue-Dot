@@ -19,3 +19,12 @@ heading.
 
 - **WHEN** a place lies a little compass-north of the player
 - **THEN** it is drawn above the player's arrow on the map
+
+#### Scenario: Facing each of the eight winds
+
+- **WHEN** the player faces N, NE, E, SE, S, SW, W or NW anywhere from the
+  equator to 75 degrees
+- **THEN** the compass bar reads that wind in its middle
+- **AND** the player's arrow on the map points, within a degree, the way a
+  step forward moves the player on the map: straight up for N, right for E,
+  down for S, left for W, and between them for the diagonals

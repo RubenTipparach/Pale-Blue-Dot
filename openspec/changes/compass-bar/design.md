@@ -134,11 +134,53 @@ cache. What changes is how they reach the screen, which now runs v upward:
   the layer image, and a `1 - v` in `map_image.wgsl`.
 - **The live layer**: `map_live.wgsl` turns a node's uv into map v with the
   same flip.
-- **The readout and the arrow**: the cursor readout gives `compass_lat_lon`,
-  and the player's arrow turns by `compass_heading`.
+- **The readout and the arrow**: the cursor readout gives `compass_lat_lon`.
+  The player's arrow turns by the map's own drawing of the heading (decision
+  7a).
 
 Clockwise on screen stays clockwise in the world. Before, both the arrow and
 the map were mirrored, so they agreed with each other. Now neither is.
+
+### 7a. The arrow points where a step goes on the map (the eight-wind calibration)
+
+The owner, 2026-10-08: "When I'm facing East in the world, am I facing East
+on the map? Calibrate for all other directions too."
+
+`map_screen::tests::facing_each_wind_the_bar_the_map_arrow_and_a_step_agree`
+does this through the real systems. At six places it faces each of the eight
+winds in turn:
+- the equator;
+- 28.64° either side, where the spawn is;
+- 45° on the antimeridian;
+- 60° and 75°.
+
+For each, it reads three things: the compass bar's middle letter, the way the
+player's arrow points on the map's screen (`markers`, turned clockwise from
+its tip-up picture by Bevy's UI rotation), and the way a step forward moves the
+player on the map. With the arrow turned by the true compass heading:
+
+- **The bar** reads the right wind at every place.
+- **N, E, S and W** agree exactly. Facing east in the world, the arrow points
+  right on the map and a step moves right.
+- **The diagonals do not.** An equirectangular map stretches east-west by
+  1 / cos(latitude), so a step to the north-east is drawn leaning toward
+  east. The arrow stayed at 45°:
+
+| Latitude | Facing NE: the arrow | A step moves on the map | Apart |
+| --- | ---: | ---: | ---: |
+| 0° | 45.0° | 45.0° | 0.0° |
+| 28.64° (the spawn) | 45.0° | 48.7° | 3.7° |
+| 45° | 45.0° | 54.7° | 9.7° |
+| 60° | 45.0° | 63.5° | 18.5° |
+| 75° | 45.0° | 75.5° | 30.5° |
+
+So the arrow turns by the heading as the map draws it:
+`geo::map_heading(direction, heading)`, which is
+`atan2(sin h, cos h * cos lat)`. Walking the way the arrow points is then
+walking the way the player faces. The cardinals do not move. A town the
+compass bar has dead ahead is under the arrow's tip on the map, for as far as
+a great circle and the map's straight line agree. The bar keeps the true
+heading, which is what a compass reads.
 
 ### 8. The season
 

@@ -34,6 +34,10 @@
 - [x] 4.2 The cursor readout gives compass latitude; the arrow turns by the
       compass heading; the map's tests updated and a test that a place a
       little compass-north is drawn above and a little east to the right.
+- [ ] 4.4 The eight-wind calibration (decision 7a): the test facing each wind
+      at six places through the real systems; `geo::map_heading` and the
+      arrow turned by it; the test passing within a degree; map shots facing
+      N, E and NE.
 - [ ] 4.3 The published world-map mockup redrawn compass-north up (a page,
       not the game; follow-up).
 
