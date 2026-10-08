@@ -973,8 +973,9 @@ pub fn build_town(
         .enumerate()
         .map(|(i, c)| ((c.0, c.1), town.terrace_of(i)))
         .collect();
-    let walls: BTreeSet<(i32, i32)> = template.masonry.iter().map(|m| (m.c, m.r)).collect();
-    let material = template.masonry_material.clone().unwrap_or_default();
+    // Each masonry cell's ground and the height it stands over, bottom to
+    // top: a gate's bottom is its vault, over the passage.
+    let mut spans: BTreeMap<(i32, i32), (f32, f32, f32)> = BTreeMap::new();
     for m in &template.masonry {
         let Some(&ground) = terrace.get(&(m.c, m.r)) else {
             return Err(format!("masonry ({}, {}) is not in the town", m.c, m.r));
@@ -982,14 +983,26 @@ pub fn build_town(
         let h = height.get(&(m.c, m.r)).copied().unwrap_or(datum);
         let bottom = ground + (m.from - h).max(0) as f32;
         let top = town.terrace as f32 + (m.to - datum) as f32;
-        let walled = |d: usize| walls.contains(&neighbour(m.c, m.r, d));
+        spans.insert((m.c, m.r), (ground, bottom, top));
+    }
+    let material = template.masonry_material.clone().unwrap_or_default();
+    for m in &template.masonry {
+        let (ground, bottom, top) = spans[&(m.c, m.r)];
+        // What masonry stands against each edge, bottom to top (`town-gates`):
+        // a wall's side is drawn wherever it is not, so a gate's passage is
+        // walled from its ground to its vault.
+        let against = |d: usize| {
+            spans
+                .get(&neighbour(m.c, m.r, d))
+                .map(|&(_, bottom, top)| (bottom, top))
+        };
         let cut = cut_masonry(
             &mut built.meshes,
             repeat_m,
             patch,
             &built.chart,
             m,
-            &walled,
+            &against,
             radius_m,
             ground,
             bottom,

@@ -1586,6 +1586,109 @@ fn the_walled_towns_wall_stands_and_its_gates_open() {
     assert_eq!(gates, 4, "two gates, two cells each");
 }
 
+/// `town-gates`: the sides of a gate's passage are drawn. From the middle of
+/// each gate cell, 2 m over its ground, a line toward each wall cell beside
+/// it meets the wall's face before the wall's middle. Before, the wall drew
+/// no side against any masonry, a gate included, and the line met nothing:
+/// from the passage one saw into the wall.
+#[test]
+fn a_gate_passage_is_walled_on_both_sides() {
+    let template = walled();
+    let town = laid_village(&template);
+    let (patch, _) = patch();
+    let natural = slope();
+    let b = record::build_town(
+        &town,
+        Some(&template),
+        patch,
+        &kits(),
+        &|_: &str| 2.0,
+        RADIUS_M,
+        SHEET_M,
+        move |d| natural(d).floor(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let wall = template.masonry_material.clone().unwrap_or_default().wall;
+    let mesh = &b.meshes[&wall];
+    let solids = &b.solids[template.buildings.len()..];
+    let at: std::collections::BTreeMap<(i32, i32), usize> = template
+        .masonry
+        .iter()
+        .enumerate()
+        .map(|(i, m)| ((m.c, m.r), i))
+        .collect();
+    // Where a line from `from` to `to` first meets the mesh, as a share of
+    // the way (Moller-Trumbore, both faces).
+    let first_hit = |from: Vec3, to: Vec3| {
+        let dir = to - from;
+        mesh.positions
+            .chunks_exact(3)
+            .filter_map(|t| {
+                let (a, b, c) = (Vec3::from(t[0]), Vec3::from(t[1]), Vec3::from(t[2]));
+                let (e1, e2) = (b - a, c - a);
+                let p = dir.cross(e2);
+                let det = e1.dot(p);
+                if det.abs() < 1e-9 {
+                    return None;
+                }
+                let s = from - a;
+                let u = s.dot(p) / det;
+                let q = s.cross(e1);
+                let v = dir.dot(q) / det;
+                let t = e2.dot(q) / det;
+                (u >= 0.0 && v >= 0.0 && u + v <= 1.0 && (0.0..=1.0).contains(&t)).then_some(t)
+            })
+            .fold(None, |best: Option<f32>, t| {
+                Some(best.map_or(t, |b| b.min(t)))
+            })
+    };
+    let mut sides = 0;
+    for (i, m) in template.masonry.iter().enumerate() {
+        if solids[i].solids[0].y0 < 0.5 {
+            continue;
+        }
+        let gate = solids[i].frame.origin;
+        let up = gate.normalize();
+        let eye = gate + up * 2.0;
+        for d in 0..6 {
+            let Some(&j) = at.get(&neighbour(m.c, m.r, d)) else {
+                continue;
+            };
+            if solids[j].solids[0].y0 > 0.5 {
+                continue;
+            }
+            let beside = solids[j].frame.origin.normalize() * eye.length();
+            let hit = first_hit(eye, beside);
+            assert!(
+                hit.is_some_and(|t| t < 0.75),
+                "({}, {}) edge {d}: no wall face between the passage and the wall beside it",
+                m.c,
+                m.r
+            );
+            sides += 1;
+        }
+    }
+    assert_eq!(sides, 4, "each gate has a wall cell on either side");
+}
+
+#[test]
+fn a_side_shows_where_its_neighbour_does_not_stand() {
+    use super::pieces::open_spans;
+    assert_eq!(open_spans((0.0, 8.0), None), vec![(0.0, 8.0)]);
+    assert_eq!(open_spans((0.0, 8.0), Some((0.0, 8.0))), vec![]);
+    // A wall beside a gate whose vault is 4 m up: its side shows below it.
+    assert_eq!(open_spans((1.0, 8.0), Some((4.0, 8.0))), vec![(1.0, 4.0)]);
+    // A gate beside a wall that stands from lower ground: nothing shows.
+    assert_eq!(open_spans((4.0, 8.0), Some((1.0, 8.0))), vec![]);
+    // A neighbour standing in a band of the cell's height only.
+    assert_eq!(
+        open_spans((0.0, 9.0), Some((3.0, 6.0))),
+        vec![(0.0, 3.0), (6.0, 9.0)]
+    );
+    // A neighbour wholly above or below it hides nothing.
+    assert_eq!(open_spans((0.0, 4.0), Some((5.0, 9.0))), vec![(0.0, 4.0)]);
+}
+
 /// Slice 4c: each stair tower's newel climbs to the wall walk, and its way
 /// out stands at the walk's height on the edge where the wall is; the
 /// keep's newel climbs to its roof, which is walked on over its ring.

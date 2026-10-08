@@ -889,6 +889,68 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
     }
 }
 
+/// MEASUREMENT (`town-gates`): where to stand for each walled town's gate
+/// shots. Prints, for the north gate (cells 19 and 20 of row 6) and the
+/// south gate (row 31), a spot outside looking in, a spot in the passage
+/// looking along it, and a spot in the passage looking at the wall beside
+/// it.
+#[test]
+fn walled_town_gate_spots() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("town");
+    let kits = load_kits();
+    let cell_m = template.grid.cell_m;
+    for site in &sites_of(SiteKind::Walled) {
+        let town =
+            lay_out(site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let laid = build(
+            site,
+            &town,
+            Some(&template),
+            &kits,
+            &|_: &str| 2.0,
+            &config,
+            sheet(&config),
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+        let point = |x: f32, z: f32| sea::point(&laid.chart, &laid.patch, x, z, cell_m).unwrap();
+        let between = |a: (i32, i32), b: (i32, i32)| {
+            let (ax, az) = sea::centre(a.0, a.1, cell_m);
+            let (bx, bz) = sea::centre(b.0, b.1, cell_m);
+            point((ax + bx) / 2.0, (az + bz) / 2.0)
+        };
+        let mid = |c: i32, r: i32| {
+            let (x, z) = sea::centre(c, r, cell_m);
+            point(x, z)
+        };
+        let at = |d: Vec3| {
+            let (lat, lon) = pbd_core::geo::lat_lon(d).degrees();
+            format!("--at {lat:.5} {lon:.5}")
+        };
+        let yaw = |from: Vec3, to: Vec3| {
+            let up = from.normalize();
+            let base = Vec3::Y.cross(up).normalize();
+            let along = to - from;
+            let t = (along - up * along.dot(up)).normalize();
+            -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees()
+        };
+        for (gate, row, outside, inside) in [("north", 6, 4, 9), ("south", 31, 33, 28)] {
+            let passage = between((19, row), (20, row));
+            let out = between((19, outside), (20, outside));
+            let into = between((19, inside), (20, inside));
+            println!(
+                "{} {gate} gate: outside {} --yaw {:.1}; passage {} --yaw {:.1}; side wall --yaw {:.1}",
+                site.name,
+                at(out),
+                yaw(out, passage),
+                at(passage),
+                yaw(passage, into),
+                yaw(passage, mid(21, row)),
+            );
+        }
+    }
+}
+
 fn harbours() -> Vec<Site> {
     sites_of(SiteKind::Harbour)
 }
