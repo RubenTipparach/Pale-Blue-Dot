@@ -973,3 +973,84 @@ fn with_no_easterly_the_tropics_aloft_have_the_surface_wind() {
     let edge = steepest(&aloft_bands(&a, 2.5, 35.0), 2.5);
     assert!(edge <= 3.5, "the jet's edge changes {edge:.2} m/s a degree");
 }
+
+/// The rain a person sees builds in and dies away (`smooth-weather` decision
+/// 1): a burst that switches on in one step moves it only the rise's share of
+/// the way, and a 20 s gap between two bursts lets it fall to a lull, not to
+/// nothing.
+#[test]
+fn the_rain_seen_builds_in_and_dies_away() {
+    let mut a = air(quiet());
+    let s = a.settings;
+    let dt = s.dt_s;
+    let cell = 0;
+    a.cloud[cell] = s.cover_full_kg * 2.0;
+    let cover = a.cover(cell);
+    assert!(cover > 0.99, "a full cell");
+    a.rain_rate.fill(0.0);
+    a.follow_rain(dt);
+    assert_eq!(
+        a.rain_seen[cell], 0.0,
+        "a new state starts at the rain as it is"
+    );
+    a.rain_rate[cell] = s.raining_rate * 50.0;
+    a.follow_rain(dt);
+    let rise = 1.0 - (-dt / s.rain_rise_s).exp();
+    assert!(
+        (a.rain_seen[cell] - rise * cover).abs() < 1e-4,
+        "one step of a burst moves it {} of the way, not all of it",
+        a.rain_seen[cell]
+    );
+    for _ in 0..60 {
+        a.follow_rain(dt);
+    }
+    let full = a.rain_seen[cell];
+    assert!(full > 0.99 * cover, "a minute of rain is all of it: {full}");
+    a.rain_rate[cell] = 0.0;
+    for _ in 0..20 {
+        a.follow_rain(dt);
+    }
+    let lull = a.rain_seen[cell] / full;
+    let expected = (-20.0 * dt / s.rain_fall_s).exp();
+    assert!(
+        (lull - expected).abs() < 1e-3 && lull > 0.3,
+        "a 20 s gap falls to {lull:.3} of the rain, not to nothing"
+    );
+}
+
+/// The rain seen is derived: the saved bytes do not hold it, and a restored
+/// state's first step sets it to the rain as it stands rather than fading it
+/// in from nothing.
+#[test]
+fn the_rain_seen_is_not_saved_and_starts_at_the_rain_as_it_stands() {
+    let mut a = air(quiet());
+    let storm = Vec3::new(0.3, 0.8, 0.2).normalize();
+    for _ in 0..60 {
+        a.step(
+            SUN,
+            &[Forcing {
+                direction: storm,
+                strength: 1.0,
+            }],
+        );
+    }
+    let bytes = a.to_bytes();
+    let mut other = a.clone();
+    other.rain_seen.fill(0.7);
+    assert_eq!(other.to_bytes(), bytes, "the rain seen is not saved");
+    let mut restored = air(quiet());
+    restored.restore(&bytes).expect("its own bytes");
+    restored.step(SUN, &[]);
+    let s = restored.settings;
+    let mut raining = 0;
+    for i in 0..restored.grid.len() {
+        let target = if restored.rain_rate[i] >= s.raining_rate {
+            raining += 1;
+            restored.cover(i)
+        } else {
+            0.0
+        };
+        assert_eq!(restored.rain_seen[i], target, "cell {i}");
+    }
+    assert!(raining > 0, "the brewed storm still rains");
+}

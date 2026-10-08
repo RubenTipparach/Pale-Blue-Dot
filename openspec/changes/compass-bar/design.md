@@ -65,7 +65,7 @@ latitude flips.
 ### 3. The bar
 
 - **Where**: top centre, 36% of the window's width, held between 320 and
-  640 px, 24 px tall, with a 14 px line under it for a place's name.
+  640 px, 32 px tall (letters and ticks above, a row for the towns along its foot), with a 14 px line under it for a place's name.
 - **Look**: a dark band at 0.45 alpha with a hairline above and below, and a
   notch at the centre.
 - **What it spans**: 180 degrees, 90 either side of the heading.

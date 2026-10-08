@@ -73,20 +73,30 @@ pub fn solar(field: &WeatherField, seed: u64, direction: Vec3, seconds: f32) -> 
 pub struct CloudCell {
     /// Cover in [0, 1]: nothing at zero, a full mass at one.
     pub cover: f32,
-    /// Whether this column is precipitating.
+    /// Whether the simulation has this column precipitating now: its rain
+    /// rate against `raining_rate`. The physics' answer, which switches in
+    /// bursts; what a person sees is `rain`.
     pub raining: bool,
-    /// What falls, meaningful only when `raining`.
+    /// The rain a person sees here, 0..1 (`Atmosphere::rain_seen`): the cover
+    /// where it rains, built in and let go over seconds rather than switched.
+    pub rain: f32,
+    /// What falls where any rain is seen.
     pub precip: Precip,
 }
+
+/// The rain seen below which nothing is drawn falling.
+pub const RAIN_SEEN_MIN: f32 = 0.01;
 
 /// Sample the whole of one column's weather.
 pub fn cloud_cell(atmosphere: &Atmosphere, direction: Vec3) -> CloudCell {
     let sample = atmosphere.sample(direction);
     let raining = sample.rain_rate >= atmosphere.settings.raining_rate;
+    let falling = sample.rain_seen > RAIN_SEEN_MIN;
     CloudCell {
         cover: sample.cover,
         raining,
-        precip: match (raining, sample.snow) {
+        rain: sample.rain_seen,
+        precip: match (falling, sample.snow) {
             (false, _) => Precip::None,
             (true, true) => Precip::Snow,
             (true, false) => Precip::Rain,
@@ -94,15 +104,15 @@ pub fn cloud_cell(atmosphere: &Atmosphere, direction: Vec3) -> CloudCell {
     }
 }
 
-/// How hard it is raining in [0, 1] at a column: the cover where it rains and
-/// nothing where it does not. This is the ONE number every rain effect reads.
+/// How hard it is raining in [0, 1] at a column, as a person there sees it:
+/// the cover where it rains, built in and let go over seconds
+/// (`smooth-weather`). This is the ONE number every rain effect reads.
 pub fn rain_at(atmosphere: &Atmosphere, direction: Vec3) -> f32 {
-    let cell = cloud_cell(atmosphere, direction);
-    if cell.raining { cell.cover } else { 0.0 }
+    cloud_cell(atmosphere, direction).rain
 }
 
-/// One cell of the rain lattice: a row from the north pole and a place along
-/// it, and the direction of its centre.
+/// One cell of the rain lattice: a row from the frame's +Y pole and a place
+/// along it, and the direction of its centre.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RainCell {
     pub row: u32,
@@ -110,6 +120,8 @@ pub struct RainCell {
     pub direction: Vec3,
     /// What falls there.
     pub precip: Precip,
+    /// How much of it a person sees, 0..1 (`rain_at`).
+    pub rain: f32,
 }
 
 /// The lattice rain is drawn on: rows of constant latitude `cell_angle` apart,
@@ -153,9 +165,10 @@ pub fn lattice_near(
     }
 }
 
-/// Every cell of the rain lattice within `range_angle` of `eye` that is raining
-/// now, which is where a shaft is drawn: the weather's own answer, sampled at
-/// each cell's centre, so a shaft stands exactly where it rains.
+/// Every cell of the rain lattice within `range_angle` of `eye` where rain is
+/// seen now, which is where a shaft is drawn, with how much: the weather's own
+/// answer, sampled at each cell's centre, so a shaft stands exactly where it
+/// rains and thins as the rain there builds in or dies away.
 pub fn raining_cells(
     atmosphere: &Atmosphere,
     eye: Vec3,
@@ -165,12 +178,13 @@ pub fn raining_cells(
     let mut cells = Vec::new();
     lattice_near(eye, cell_angle, range_angle, |row, column, direction| {
         let cell = cloud_cell(atmosphere, direction);
-        if cell.raining {
+        if cell.precip != Precip::None {
             cells.push(RainCell {
                 row,
                 column,
                 direction,
                 precip: cell.precip,
+                rain: cell.rain,
             });
         }
     });
@@ -202,10 +216,10 @@ pub fn precipitation_map(
             let y = (row as f32 + 0.5 - half) * cell_m;
             let direction = (anchor * radius + u * x + v * y).normalize();
             let cell = cloud_cell(atmosphere, direction);
-            map.push(match (cell.raining, cell.precip) {
-                (true, Precip::Snow) => -cell.cover,
-                (true, _) => cell.cover,
-                _ => 0.0,
+            map.push(match cell.precip {
+                Precip::Snow => -cell.rain,
+                Precip::Rain => cell.rain,
+                Precip::None => 0.0,
             });
         }
     }
@@ -257,15 +271,19 @@ mod tests {
         let drawn = raining_cells(&air, eye, cell, range);
         let mut expected = Vec::new();
         lattice_near(eye, cell, std::f32::consts::PI, |row, column, direction| {
-            if direction.dot(eye) >= range.cos() && cloud_cell(&air, direction).raining {
+            if direction.dot(eye) >= range.cos() && cloud_cell(&air, direction).rain > RAIN_SEEN_MIN
+            {
                 expected.push((row, column));
             }
         });
         let got: Vec<_> = drawn.iter().map(|c| (c.row, c.column)).collect();
         assert_eq!(
             got, expected,
-            "the shafts must be exactly the raining cells"
+            "the shafts must be exactly the cells where rain is seen"
         );
+        for c in &drawn {
+            assert_eq!(c.rain, rain_at(&air, c.direction), "each with its own rain");
+        }
         assert!(
             expected.len() > 20,
             "a brewed storm rains in view: {}",
@@ -310,10 +328,10 @@ mod tests {
                 let y = (row as f32 + 0.5 - 8.0) * cell;
                 let d = (anchor * radius + u * x + v * y).normalize();
                 let c = cloud_cell(&air, d);
-                let want = match (c.raining, c.precip) {
-                    (false, _) => 0.0,
-                    (true, Precip::Snow) => -c.cover,
-                    (true, _) => c.cover,
+                let want = match c.precip {
+                    Precip::None => 0.0,
+                    Precip::Snow => -c.rain,
+                    Precip::Rain => c.rain,
                 };
                 assert_eq!(map[row * size + column], want);
                 wet += usize::from(want != 0.0);

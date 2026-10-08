@@ -164,6 +164,12 @@ pub struct AtmosphereSettings {
     pub cover_full_kg: f32,
     /// Precipitation rate that counts as raining, kg/m^2/s.
     pub raining_rate: f32,
+    /// How fast the rain a person sees (`Atmosphere::rain_seen`) climbs
+    /// toward a burst of rain, and how slowly it dies away after one, s: e-fold
+    /// times (`smooth-weather` decision 1). They shape only what is shown;
+    /// the physics never reads them.
+    pub rain_rise_s: f32,
+    pub rain_fall_s: f32,
     /// Relative humidity above which air is partly cloudy without rising,
     /// 0..1: the critical humidity of Sundqvist's sub-grid cloud. That cover
     /// is a deck or a haze of small cumulus and rains nothing.
@@ -299,6 +305,8 @@ impl Default for AtmosphereSettings {
             cover_min_kg: 0.2,
             cover_full_kg: 0.8,
             raining_rate: 2.0e-4,
+            rain_rise_s: 5.0,
+            rain_fall_s: 20.0,
             humid_cover_rh: 0.45,
             humid_cover_rh_land: 0.7,
             convection_mps_per_wm2: 0.02,
@@ -387,6 +395,8 @@ impl AtmosphereSettings {
             ("evaporation_wind_mps", self.evaporation_wind_mps),
             ("jet_max_mps", self.jet_max_mps),
             ("cloud_pace", self.cloud_pace),
+            ("rain_rise_s", self.rain_rise_s),
+            ("rain_fall_s", self.rain_fall_s),
         ];
         for (name, value) in positive {
             if !(value.is_finite() && value > 0.0) {

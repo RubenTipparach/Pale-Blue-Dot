@@ -155,10 +155,22 @@ fn sample_field(
         return;
     };
     weather.here = direction;
-    let cell = field::cloud_cell(&air.now, direction);
-    weather.rain = if cell.raining { cell.cover } else { 0.0 };
-    weather.cover = cell.cover;
-    weather.snowing = cell.precip == Precip::Snow;
+    // What is SHOWN here: the pair of published states mixed by how far the
+    // view has come between them (`smooth-weather` decision 3), and the rain
+    // as a person sees it, which builds in and dies away (decision 1).
+    let shown = &air.shown;
+    let (a, b) = (
+        field::cloud_cell(shown.from(), direction),
+        field::cloud_cell(shown.to(), direction),
+    );
+    let t = shown.t;
+    weather.rain = a.rain + (b.rain - a.rain) * t;
+    weather.cover = a.cover + (b.cover - a.cover) * t;
+    weather.snowing = falling(&a, &b, t) == Precip::Snow;
+    let cell = field::CloudCell {
+        cover: weather.cover,
+        ..b
+    };
     // Under rock, or under a roof: a town's roofs are pieces, which the
     // column has never heard of, so a room asks its building.
     let point = body_local.as_vec3();
@@ -179,6 +191,17 @@ fn sample_field(
     }
 }
 
+/// What falls in the mix of two cells: the nearer state's, or the other's
+/// where the nearer has nothing falling.
+fn falling(a: &field::CloudCell, b: &field::CloudCell, t: f32) -> Precip {
+    let (near, far) = if t < 0.5 { (a, b) } else { (b, a) };
+    if near.precip == Precip::None {
+        far.precip
+    } else {
+        near.precip
+    }
+}
+
 fn follow_rain(time: Res<Time>, settings: Res<WeatherSettings>, mut weather: ResMut<Weather>) {
     // Snow does not wet the ground.
     let liquid = weather.liquid();
@@ -193,8 +216,9 @@ fn follow_rain(time: Res<Time>, settings: Res<WeatherSettings>, mut weather: Res
 /// The precipitation round the camera that the rain VOLUME is drawn from:
 /// `pbd_core::weather::precipitation_map` on a plane tangent at `anchor`,
 /// extracted to the render world and uploaded for the water pass to march.
-/// Refilled when the camera strays a quarter of the map from the anchor, and
-/// whenever the atmosphere publishes a new state.
+/// Filled from both states of the shown pair when the camera strays a quarter
+/// of the map from the anchor or the pair moves on, and mixed between them
+/// every frame (`smooth-weather` decision 3).
 #[derive(Resource, Clone, Debug, Default, ExtractResource)]
 pub struct RainMap {
     pub anchor: Vec3,
@@ -204,8 +228,14 @@ pub struct RainMap {
     pub size: u32,
     /// Row-major along `v`; negative where it snows.
     pub values: Vec<f32>,
-    /// The atmosphere's state it was filled from.
-    generation: u64,
+}
+
+/// The rain map of each state of the shown pair, and which pair it is.
+#[derive(Default)]
+struct RainPair {
+    from: Vec<f32>,
+    to: Vec<f32>,
+    pair: u64,
 }
 
 fn fill_rain_map(
@@ -214,6 +244,7 @@ fn fill_rain_map(
     frame: Res<PlanetRenderFrame>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut map: ResMut<RainMap>,
+    mut pair: Local<RainPair>,
 ) {
     let Some(camera) = cameras
         .iter()
@@ -232,27 +263,37 @@ fn fill_rain_map(
     let reach = s.rain_map_size as f32 * s.rain_map_cell_m;
     let strayed = up.angle_between(map.anchor) * PLANET_RADIUS > reach * 0.25;
     let reshaped = map.size != s.rain_map_size || map.cell_m != s.rain_map_cell_m;
-    let stale = map.generation != air.generation;
-    if !(map.values.is_empty() || strayed || reshaped || stale) {
-        return;
+    let stale = pair.pair != air.shown.pair;
+    if map.values.is_empty() || strayed || reshaped || stale {
+        if map.values.is_empty() || strayed || reshaped {
+            map.anchor = up;
+            map.u = up.any_orthonormal_vector();
+            map.v = up.cross(map.u);
+        }
+        map.size = s.rain_map_size;
+        map.cell_m = s.rain_map_cell_m;
+        let fill = |state: &pbd_core::atmosphere::Atmosphere| {
+            field::precipitation_map(
+                state,
+                map.anchor,
+                map.u,
+                map.v,
+                PLANET_RADIUS,
+                map.size as usize,
+                map.cell_m,
+            )
+        };
+        pair.from = fill(air.shown.from());
+        pair.to = fill(air.shown.to());
+        pair.pair = air.shown.pair;
     }
-    if map.values.is_empty() || strayed || reshaped {
-        map.anchor = up;
-        map.u = up.any_orthonormal_vector();
-        map.v = up.cross(map.u);
-    }
-    map.size = s.rain_map_size;
-    map.cell_m = s.rain_map_cell_m;
-    map.values = field::precipitation_map(
-        &air.now,
-        map.anchor,
-        map.u,
-        map.v,
-        PLANET_RADIUS,
-        map.size as usize,
-        map.cell_m,
-    );
-    map.generation = air.generation;
+    let t = air.shown.t;
+    map.values = pair
+        .from
+        .iter()
+        .zip(&pair.to)
+        .map(|(a, b)| a + (b - a) * t)
+        .collect();
 }
 
 /// Lightning: the atmosphere's own strikes (`pbd_core::atmosphere::Strike`),
@@ -588,15 +629,51 @@ fn near_shower(frame: &ShowerFrame, rain: f32, snow: bool, quads: &mut Quads) {
     }
 }
 
-/// Rain near: every raining cell of the body-fixed lattice inside the detail
-/// range, as shafts of streaks falling from the cloud base to the ground.
-/// Tenebris's `draw_distant_shafts`, on our lattice. Beyond it the rain is the
-/// volume the water pass marches (`RainMap`).
-fn cell_shafts(frame: &ShowerFrame, air: &pbd_core::atmosphere::Atmosphere, quads: &mut Quads) {
+/// The lattice cells near `up` where rain is shown, each with the rain seen
+/// there mixed between the shown pair (`smooth-weather` decision 3), in row
+/// then column order.
+fn shown_rain_cells(
+    shown: &crate::atmosphere::Shown,
+    up: Vec3,
+    cell_angle: f32,
+    range_angle: f32,
+) -> Vec<field::RainCell> {
+    let mut cells: std::collections::BTreeMap<(u32, u32), (field::RainCell, f32, f32)> =
+        std::collections::BTreeMap::new();
+    for (k, state) in [shown.from(), shown.to()].into_iter().enumerate() {
+        for cell in field::raining_cells(state, up, cell_angle, range_angle) {
+            let entry = cells
+                .entry((cell.row, cell.column))
+                .or_insert((cell, 0.0, 0.0));
+            if k == 0 {
+                entry.1 = cell.rain;
+            } else {
+                entry.2 = cell.rain;
+                if shown.t >= 0.5 {
+                    entry.0.precip = cell.precip;
+                }
+            }
+        }
+    }
+    cells
+        .into_values()
+        .filter_map(|(mut cell, a, b)| {
+            cell.rain = a + (b - a) * shown.t;
+            (cell.rain > field::RAIN_SEEN_MIN).then_some(cell)
+        })
+        .collect()
+}
+
+/// Rain near: every cell of the body-fixed lattice inside the detail range
+/// where rain is shown, as shafts of streaks falling from the cloud base to
+/// the ground, as many as the rain there. Tenebris's `draw_distant_shafts`,
+/// on our lattice. Beyond it the rain is the volume the water pass marches
+/// (`RainMap`).
+fn cell_shafts(frame: &ShowerFrame, shown: &crate::atmosphere::Shown, quads: &mut Quads) {
     let s = frame.settings;
     let cell_angle = s.rain_cell_m / PLANET_RADIUS;
     let range_angle = s.rain_detail_range_m / PLANET_RADIUS;
-    let cells = field::raining_cells(air, frame.up, cell_angle, range_angle);
+    let cells = shown_rain_cells(shown, frame.up, cell_angle, range_angle);
     let cloud_base = crate::sky::CLOUD_RADIUS;
     let per_cell = s.rain_cell_density * s.rain_cell_m * s.rain_cell_m;
     let mut streaks = 0u32;
@@ -619,7 +696,9 @@ fn cell_shafts(frame: &ShowerFrame, air: &pbd_core::atmosphere::Atmosphere, quad
             .cross(base - frame.eye)
             .try_normalize()
             .unwrap_or(frame.right);
-        let count = (per_cell * lod.streak_share).round() as u32;
+        // The rain seen thins a shaft as it builds in and dies away, as it
+        // thins the shower round the camera.
+        let count = (per_cell * lod.streak_share * cell.rain).round() as u32;
         if count == 0 || lod.streak_alpha <= 0.001 {
             continue;
         }
@@ -726,7 +805,7 @@ fn rebuild_shower(
         if !weather.sheltered {
             near_shower(&shower, weather.rain, weather.snowing, &mut quads);
         }
-        cell_shafts(&shower, &air.now, &mut quads);
+        cell_shafts(&shower, &air.shown, &mut quads);
     }
     *visibility = if quads.positions.is_empty() {
         Visibility::Hidden
@@ -824,6 +903,7 @@ impl Plugin for WeatherPlugin {
                 sample_field,
                 crate::atmosphere::warm_capture,
                 crate::atmosphere::advance_air,
+                crate::atmosphere::blend_air,
                 crate::overlay::fill_overlay,
                 follow_rain,
                 cycle_rain,

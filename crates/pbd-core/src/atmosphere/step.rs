@@ -44,6 +44,7 @@ impl Atmosphere {
         self.ocean(dt);
         self.waves(dt);
         self.guard();
+        self.follow_rain(dt);
         self.step += 1;
     }
 

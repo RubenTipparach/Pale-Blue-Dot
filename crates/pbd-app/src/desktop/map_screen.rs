@@ -125,16 +125,26 @@ impl MapView {
 
     /// Where a map position lands on a screen of `size`, pixels from its top
     /// left, taking the copy of it nearest the centre in longitude.
+    ///
+    /// The map is drawn COMPASS-north up (`compass-bar` decision 7): `v` runs
+    /// from the frame's +Y pole at 0, which a compass calls south, so it runs
+    /// up the screen. East, `u`, runs to the right. Drawn the other way up,
+    /// the map was the mirror of the planet seen from orbit.
     pub fn to_screen(self, uv: Vec2, size: Vec2) -> Vec2 {
         let du = (uv.x - self.centre.x + 0.5).rem_euclid(1.0) - 0.5;
-        let dv = uv.y - self.centre.y;
+        let dv = self.centre.y - uv.y;
         size / 2.0 + Vec2::new(du * self.px_per_turn, dv * self.px_per_turn / 2.0)
     }
 
     /// The map position under a screen pixel.
     pub fn to_map(self, at: Vec2, size: Vec2) -> Vec2 {
         let d = at - size / 2.0;
-        self.centre + Vec2::new(d.x / self.px_per_turn, d.y / (self.px_per_turn / 2.0))
+        self.centre + Vec2::new(d.x / self.px_per_turn, -d.y / (self.px_per_turn / 2.0))
+    }
+
+    /// Where a row of the map at `v` lands on a screen of `size`, pixels down.
+    pub fn row_on_screen(self, v: f32, size: Vec2) -> f32 {
+        size.y / 2.0 + (self.centre.y - v) * self.px_per_turn / 2.0
     }
 
     /// Zoom by `factor` about a screen pixel, which keeps the place under it.
@@ -1087,8 +1097,9 @@ pub fn steer(
         *dragging = None;
     }
     if let (Some(from), Some(to)) = (*dragging, pointer) {
+        // The map follows the pointer: what was under it stays under it.
         let d = to - from;
-        next.centre -= Vec2::new(d.x / next.px_per_turn, d.y / (next.px_per_turn / 2.0));
+        next.centre -= Vec2::new(d.x / next.px_per_turn, -d.y / (next.px_per_turn / 2.0));
         next = next.clamped(size);
         *dragging = Some(to);
     }
@@ -1346,7 +1357,9 @@ pub fn lay_out(
     // Where map position (u, 0) is on screen: the copy of the map a whole
     // turn either side of the one under the centre is `u` plus or minus 1.
     let x_of = |u: f32| size.x / 2.0 + (u - view.centre.x) * w;
-    let top = size.y / 2.0 - view.centre.y * h;
+    // Compass north up: the whole map's top is its last row, v = 1, and every
+    // image is drawn turned top to bottom (`compass-bar` decision 7).
+    let top = view.row_on_screen(1.0, size);
     let grey = grey_of(choice.overlay != MapOverlay::None);
     if let Some(base) = &raster.base {
         set_image(&mut images, &live.base, base, grey);
@@ -1363,6 +1376,9 @@ pub fn lay_out(
         match &layer {
             Some(handle) => {
                 image.image = handle.clone();
+                // A raster's first row is the frame's +Y pole, the compass's
+                // south: drawn turned, as the base is.
+                image.flip_y = true;
                 node.display = Display::Flex;
                 place(&mut node, x_of(copy.0 as f32), top, w, h);
             }
@@ -1399,7 +1415,7 @@ pub fn lay_out(
         // Half a pixel over each edge, so rounding never leaves a hairline
         // of the base between two tiles.
         let at_left = x_of(column as f32 * TILE as f32 / lw as f32);
-        let at_top = top + f32::from(key.y) * side_y;
+        let at_top = view.row_on_screen((f32::from(key.y) + 1.0) * TILE as f32 / lh as f32, size);
         match shown.get(&(key, column)) {
             Some(&entity) => {
                 if let Ok((_, _, material, mut node)) = tiles.get_mut(entity) {
@@ -1567,7 +1583,7 @@ pub fn markers(
     for (entity, mark, mut node, mut turn) in &mut marks {
         let (at, heading) = match *mark {
             MapMarker::Player => match player {
-                Some(up) => (Some(up), forward.map(|f| geo::heading(up, f))),
+                Some(up) => (Some(up), forward.map(|f| geo::compass_heading(up, f))),
                 None => (None, None),
             },
             MapMarker::Ship => (ship_at, None),
@@ -1623,7 +1639,7 @@ pub fn markers(
             .cursor_position()
             .map(|p| view.to_map(p, size))
             .filter(|uv| (0.0..=1.0).contains(&uv.y))
-            .map(|uv| geo::lat_lon(geo::unproject(uv)).degrees());
+            .map(|uv| geo::compass_lat_lon(geo::unproject(uv)).degrees());
         let place = |(lat, lon): (f32, f32)| {
             format!(
                 "{:.2}{} {:.2}{}",
@@ -1637,7 +1653,7 @@ pub fn markers(
         if let Some(at) = under {
             line = format!("{}   {line}", place(at));
         } else if let Some(p) = player {
-            line = format!("you {}   {line}", place(geo::lat_lon(p).degrees()));
+            line = format!("you {}   {line}", place(geo::compass_lat_lon(p).degrees()));
         }
         text.0 = line;
     }
@@ -1765,6 +1781,38 @@ mod tests {
             east.x > SCREEN.x / 2.0 && east.x < SCREEN.x / 2.0 + 60.0,
             "{east}"
         );
+    }
+
+    /// The map is the planet the right way round (`compass-bar`, the spec's
+    /// "A place east of the player" and "north of the player"): a place a
+    /// little compass-east of the centre is drawn to its right, and one a
+    /// little compass-north above it, wherever the map is looking; and a
+    /// screen row's place comes back from the map.
+    #[test]
+    fn north_is_up_and_east_is_right_on_the_map() {
+        for (lat, lon) in [(0.0f32, 0.0f32), (35.0, -100.0), (-60.0, 150.0)] {
+            let here = geo::direction(LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            });
+            let view = MapView {
+                centre: geo::project(here),
+                px_per_turn: 20_000.0,
+            };
+            let (north, east) = geo::compass_north_east(here);
+            let middle = view.to_screen(geo::project(here), SCREEN);
+            let to_east = view.to_screen(geo::project(here + east * 1e-3), SCREEN);
+            let to_north = view.to_screen(geo::project(here + north * 1e-3), SCREEN);
+            assert!(
+                to_east.x > middle.x + 1.0,
+                "east is right at ({lat}, {lon})"
+            );
+            assert!((to_east.y - middle.y).abs() < 1.0);
+            assert!(to_north.y < middle.y - 1.0, "north is up at ({lat}, {lon})");
+            assert!((to_north.x - middle.x).abs() < 1.0);
+            let row = view.row_on_screen(geo::project(here + north * 1e-3).y, SCREEN);
+            assert!((row - to_north.y).abs() < 1e-2);
+        }
     }
 
     /// The view asks for the tiles it shows, at the level it needs, the one

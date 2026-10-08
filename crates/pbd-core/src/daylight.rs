@@ -98,15 +98,18 @@ impl Clock {
         (self.seconds / DAY_S as f64 / YEAR_DAYS).rem_euclid(1.0)
     }
 
-    /// The northern hemisphere's season, in words: each season is the quarter
-    /// of the year centred on its solstice or equinox, and the year starts at
-    /// the northern summer solstice. The southern hemisphere has the opposite.
+    /// The season, in words a player reads: each season is the quarter of the
+    /// year centred on its solstice or equinox. The year starts at the summer
+    /// solstice of the frame's +Y hemisphere ("northern" in this module's own
+    /// comments), which a compass calls SOUTH (`geo::COMPASS_NORTH`,
+    /// `compass-bar` decision 8), so it is named as the southern hemisphere's.
+    /// The compass's north has the opposite.
     pub fn season(self) -> &'static str {
         const SEASONS: [&str; 4] = [
-            "northern summer",
-            "northern autumn",
-            "northern winter",
-            "northern spring",
+            "southern summer",
+            "southern autumn",
+            "southern winter",
+            "southern spring",
         ];
         let quarter = ((self.year_fraction() + 0.125) * 4.0).floor() as usize % 4;
         SEASONS[quarter]
@@ -407,13 +410,16 @@ mod tests {
     #[test]
     fn the_season_follows_the_sun_north_and_south() {
         let quarter = YEAR_DAYS as u32 / 4;
-        assert_eq!(Clock::at(0, 0.0).season(), "northern summer");
-        assert_eq!(Clock::at(quarter, 0.0).season(), "northern autumn");
-        assert_eq!(Clock::at(2 * quarter, 0.0).season(), "northern winter");
-        assert_eq!(Clock::at(3 * quarter, 0.0).season(), "northern spring");
-        assert_eq!(Clock::at(4 * quarter - 1, 0.0).season(), "northern summer");
-        // Summer is when the sun stands north.
+        assert_eq!(Clock::at(0, 0.0).season(), "southern summer");
+        assert_eq!(Clock::at(quarter, 0.0).season(), "southern autumn");
+        assert_eq!(Clock::at(2 * quarter, 0.0).season(), "southern winter");
+        assert_eq!(Clock::at(3 * quarter, 0.0).season(), "southern spring");
+        assert_eq!(Clock::at(4 * quarter - 1, 0.0).season(), "southern summer");
+        // The named summer is when the sun stands over the frame's +Y, which
+        // is the compass's south.
         assert!(Clock::at(0, 0.0).declination() > 0.3);
+        let over = Clock::at(0, 12.0).sun();
+        assert!(over.dot(crate::geo::COMPASS_NORTH) < -0.3);
         assert!(Clock::at(2 * quarter, 0.0).declination() < -0.3);
     }
 }

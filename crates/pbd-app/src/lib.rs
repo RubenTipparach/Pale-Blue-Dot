@@ -4,6 +4,8 @@
 #[cfg(feature = "desktop")]
 pub mod atmosphere;
 #[cfg(feature = "desktop")]
+pub mod compass;
+#[cfg(feature = "desktop")]
 pub mod config;
 #[cfg(feature = "desktop")]
 pub mod controls;
@@ -47,6 +49,8 @@ mod map_gpu_tests;
 mod sea_gpu_tests;
 #[cfg(test)]
 mod shader_tests;
+#[cfg(all(test, feature = "desktop"))]
+mod weather_gpu_tests;
 
 use std::time::Duration;
 

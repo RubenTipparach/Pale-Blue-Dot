@@ -45,13 +45,133 @@ pub struct WeatherMaps {
     pub wind: Vec<[f32; 4]>,
 }
 
+/// The longest a blend between two shown states runs, seconds of world time
+/// (`smooth-weather` decision 2): a held step that catches up thirty seconds
+/// at once plays out over this, never in one frame.
+pub const MAX_BLEND_S: f32 = 4.0;
+
+/// A published state, as the shown pair holds it: the atmosphere, its maps,
+/// and the world time it stands at.
+#[derive(Clone)]
+struct Published {
+    atmosphere: Arc<Atmosphere>,
+    maps: Arc<WeatherMaps>,
+    at: f64,
+}
+
+/// What the weather SHOWS (`smooth-weather` decision 2): two published states
+/// and how far it has come from the first to the second. Everything a player
+/// sees of the weather - the cover and rain over them, the cloud and wind maps
+/// the shaders read, the rain map, the rain shafts - mixes the pair by `t`,
+/// so it moves continuously between the once-a-second states rather than
+/// jumping at each. A state published during a blend waits for it to end; a
+/// blend lasts the weather time between its states, one step to
+/// [`MAX_BLEND_S`].
+#[derive(Clone)]
+pub struct Shown {
+    from: Published,
+    to: Published,
+    /// How far from `from` to `to`, 0..1.
+    pub t: f32,
+    /// World seconds the blend takes.
+    span_s: f32,
+    /// The newest state, waiting for the blend to end.
+    pending: Option<Published>,
+    /// Bumped whenever the pair changes, so the GPU uploads it once.
+    pub pair: u64,
+    /// The world clock this last advanced at.
+    clock: Option<f64>,
+}
+
+impl Shown {
+    fn at(state: Published) -> Self {
+        Shown {
+            from: state.clone(),
+            to: state,
+            t: 1.0,
+            span_s: 1.0,
+            pending: None,
+            pair: 1,
+            clock: None,
+        }
+    }
+
+    /// The state the blend runs from.
+    pub fn from(&self) -> &Atmosphere {
+        &self.from.atmosphere
+    }
+
+    /// The state the blend runs to.
+    pub fn to(&self) -> &Atmosphere {
+        &self.to.atmosphere
+    }
+
+    /// The pair's maps, from and to.
+    pub fn maps(&self) -> (&Arc<WeatherMaps>, &Arc<WeatherMaps>) {
+        (&self.from.maps, &self.to.maps)
+    }
+
+    /// Show `state` at once: a capture, a first state, a clock that jumped.
+    fn snap(&mut self, state: Published) {
+        self.from = state.clone();
+        self.to = state;
+        self.t = 1.0;
+        self.pending = None;
+        self.pair += 1;
+    }
+
+    /// Show the newest state there is at once.
+    fn snap_to_newest(&mut self) {
+        let newest = self.pending.take().unwrap_or_else(|| self.to.clone());
+        self.snap(newest);
+    }
+
+    /// Advance by the world clock, now at `clock` seconds; `dt_s` is the
+    /// weather's step. A clock that went back or leapt more than
+    /// [`MAX_GAP_S`] snaps to the newest state: a load, the time slider or a
+    /// `--day` jump moves the sun at once, and the weather goes with it.
+    pub fn advance(&mut self, clock: f64, dt_s: f32) {
+        let step = self.clock.map_or(0.0, |last| clock - last);
+        self.clock = Some(clock);
+        if !(0.0..=MAX_GAP_S).contains(&step) {
+            self.snap_to_newest();
+            return;
+        }
+        self.t += step as f32 / self.span_s;
+        if self.t < 1.0 {
+            return;
+        }
+        match self.pending.take() {
+            Some(next) => {
+                let past = (self.t - 1.0) * self.span_s;
+                self.from = std::mem::replace(&mut self.to, next);
+                self.span_s = ((self.to.at - self.from.at) as f32).clamp(dt_s, MAX_BLEND_S);
+                self.t = (past / self.span_s).min(1.0);
+                self.pair += 1;
+            }
+            None => self.t = 1.0,
+        }
+    }
+
+    /// A value read off each state of the pair, mixed by how far the blend
+    /// has come.
+    pub fn mix(&self, read: impl Fn(&Atmosphere) -> f32) -> f32 {
+        let a = read(self.from());
+        a + (read(self.to()) - a) * self.t
+    }
+}
+
 /// The atmosphere as the app holds it.
 #[derive(Resource)]
 pub struct Air {
-    /// The latest complete state. Every reader reads this.
+    /// The latest complete state: what is stepped, saved, struck by lightning
+    /// and read by the map and the overlays. What a player SEES of the weather
+    /// reads [`Air::shown`], which runs smoothly toward this.
     pub now: Arc<Atmosphere>,
     /// The maps of that state.
     pub maps: Arc<WeatherMaps>,
+    /// What is shown: the pair of states the view is running between.
+    pub shown: Shown,
     /// Bumped whenever `now` changes, so a consumer can tell a new state.
     pub generation: u64,
     /// World time the state stands at, seconds.
@@ -191,10 +311,16 @@ impl Air {
                 started.elapsed().as_secs_f32()
             );
         }
-        let maps = weather_maps(&atmosphere);
+        let now = Arc::new(atmosphere);
+        let maps = Arc::new(weather_maps(&now));
         Air {
-            now: Arc::new(atmosphere),
-            maps: Arc::new(maps),
+            shown: Shown::at(Published {
+                atmosphere: now.clone(),
+                maps: maps.clone(),
+                at: seconds,
+            }),
+            now,
+            maps,
             generation: 1,
             at_seconds: seconds,
             in_place: false,
@@ -206,7 +332,7 @@ impl Air {
     /// harness's `--weather-at` and a forced storm's warm-up.
     pub fn run(&mut self, steps: u32, forcing: &[Forcing]) {
         let stepped = step_copy(&self.now, self.at_seconds, steps, forcing.to_vec());
-        self.publish(stepped);
+        self.publish(stepped, true);
     }
 
     /// Whether a step is running on the pool.
@@ -214,7 +340,10 @@ impl Air {
         self.task.is_some()
     }
 
-    fn publish(&mut self, stepped: Stepped) {
+    /// Make `stepped` the newest state. `snap` shows it at once, as a
+    /// capture and the harness's runs do; otherwise it waits its turn in the
+    /// shown pair.
+    fn publish(&mut self, stepped: Stepped, snap: bool) {
         // A trim held at its limit means the heat terms are badly off again
         // (`climate-balance` decision 4), so it is said once when it starts
         // and once when it ends.
@@ -239,6 +368,16 @@ impl Air {
         self.maps = Arc::new(stepped.maps);
         self.at_seconds = stepped.at_seconds;
         self.generation += 1;
+        let published = Published {
+            atmosphere: self.now.clone(),
+            maps: self.maps.clone(),
+            at: self.at_seconds,
+        };
+        if snap || self.in_place {
+            self.shown.snap(published);
+        } else {
+            self.shown.pending = Some(published);
+        }
     }
 }
 
@@ -356,7 +495,7 @@ pub fn advance_air(
         match block_on(future::poll_once(task)) {
             Some(stepped) => {
                 air.task = None;
-                air.publish(stepped);
+                air.publish(stepped, false);
             }
             None => return,
         }
@@ -391,6 +530,16 @@ pub fn advance_air(
     air.task = Some(
         AsyncComputeTaskPool::get().spawn(async move { step_copy(&from, start, steps, forcing) }),
     );
+}
+
+/// Run what is shown toward the newest state by the world clock
+/// (`smooth-weather` decision 2). A capture shows each state as it is made.
+pub fn blend_air(mut air: ResMut<Air>, sun: Res<Sun>) {
+    if air.in_place {
+        return;
+    }
+    let dt = air.now.settings.dt_s;
+    air.shown.advance(sun.clock.seconds, dt);
 }
 
 /// A capture with the storm forcing on brews its storm before the picture:
@@ -558,6 +707,179 @@ mod tests {
         assert!(cube_direction(0, 32, 0, 64).z > 0.5);
         assert!(cube_direction(0, 0, 32, 64).y > 0.5);
         assert!(cube_direction(4, 32, 0, 64).x < -0.5);
+    }
+
+    /// States for the shown pair's tests: one small atmosphere, copied with
+    /// its step count set to `n`, which is what `mix` reads back.
+    fn numbered(n: u64, at: f64) -> Published {
+        thread_local! {
+            static BASE: Atmosphere = Atmosphere::new(
+                terrain_config(),
+                AtmosphereSettings { level: 2, ..Default::default() },
+                1,
+            );
+        }
+        let mut atmosphere = BASE.with(|a| a.clone());
+        atmosphere.step = n;
+        Published {
+            atmosphere: Arc::new(atmosphere),
+            maps: Arc::new(WeatherMaps::default()),
+            at,
+        }
+    }
+
+    /// Advance at 60 frames a second for `seconds` from `clock`, returning
+    /// the shown step count each frame.
+    fn play(shown: &mut Shown, clock: &mut f64, seconds: f64) -> Vec<f32> {
+        let frames = (seconds * 60.0).round() as u32;
+        (0..frames)
+            .map(|_| {
+                *clock += 1.0 / 60.0;
+                shown.advance(*clock, 1.0);
+                shown.mix(|a| a.step as f32)
+            })
+            .collect()
+    }
+
+    fn largest_move(seen: &[f32]) -> f32 {
+        seen.windows(2)
+            .map(|w| (w[1] - w[0]).abs())
+            .fold(0.0, f32::max)
+    }
+
+    /// An ordinary step plays over its second with no jump between frames,
+    /// and arrives (`smooth-weather` decision 2).
+    #[test]
+    fn a_step_plays_over_its_second() {
+        let mut shown = Shown::at(numbered(0, 0.0));
+        let mut clock = 0.0;
+        shown.advance(clock, 1.0);
+        shown.pending = Some(numbered(1, 1.0));
+        let seen = play(&mut shown, &mut clock, 1.5);
+        assert!(
+            largest_move(&seen) <= 1.0 / 60.0 + 1e-4,
+            "{}",
+            largest_move(&seen)
+        );
+        assert!(
+            (seen[29] - 0.5).abs() < 0.02,
+            "half way at half a second: {}",
+            seen[29]
+        );
+        assert_eq!(*seen.last().unwrap(), 1.0, "and it arrives");
+    }
+
+    /// Thirty steps published at once play out over the cap, never in a
+    /// frame; a state published meanwhile waits its turn.
+    #[test]
+    fn a_held_step_plays_over_the_cap_and_a_new_one_waits() {
+        let mut shown = Shown::at(numbered(0, 0.0));
+        let mut clock = 0.0;
+        shown.advance(clock, 1.0);
+        shown.pending = Some(numbered(30, 30.0));
+        let first = play(&mut shown, &mut clock, 1.0);
+        shown.pending = Some(numbered(31, 31.0));
+        let rest = play(&mut shown, &mut clock, 4.5);
+        let seen: Vec<f32> = first.into_iter().chain(rest).collect();
+        let fastest = 30.0 / (MAX_BLEND_S * 60.0);
+        assert!(
+            largest_move(&seen) <= fastest + 1e-3,
+            "{}",
+            largest_move(&seen)
+        );
+        let at_cap = seen[(MAX_BLEND_S * 60.0) as usize - 1];
+        assert!(
+            (at_cap - 30.0).abs() < 0.3,
+            "the thirty steps take the cap: {at_cap}"
+        );
+        assert!(*seen.last().unwrap() > 30.0, "then the waiting one plays");
+        assert!(seen.windows(2).all(|w| w[1] >= w[0]), "never backwards");
+    }
+
+    /// A clock that jumps - a load, the time slider - shows the newest state
+    /// at once, and so does a clock that goes back.
+    #[test]
+    fn a_clock_that_jumps_snaps_to_the_newest_state() {
+        let mut shown = Shown::at(numbered(0, 0.0));
+        shown.advance(0.0, 1.0);
+        shown.pending = Some(numbered(1, 1.0));
+        shown.advance(0.2, 1.0);
+        assert!(shown.t < 1.0);
+        shown.pending = Some(numbered(2, 2.0));
+        shown.advance(500.0, 1.0);
+        assert_eq!((shown.from().step, shown.to().step, shown.t), (2, 2, 1.0));
+        shown.pending = Some(numbered(3, 3.0));
+        shown.advance(10.0, 1.0);
+        assert_eq!(
+            shown.mix(|a| a.step as f32),
+            3.0,
+            "a clock gone back snaps too"
+        );
+    }
+
+    /// A measurement instrument for the `smooth-weather` change's chart: the
+    /// place among 3,000 whose rain switched most often in three minutes, a
+    /// second at a time, as `t_s,cover,rain_switched,rain_seen` - the rain as it
+    /// was shown before the change (the cover where it rains, nothing where it
+    /// does not) and the rain seen after it. Written to the path in
+    /// `PBD_RAIN_CSV`. Run with
+    /// `PBD_RAIN_CSV=out.csv cargo test -p pbd-app --lib rain_at_one_place -- --ignored`.
+    #[test]
+    #[ignore]
+    fn rain_at_one_place() {
+        let settings = pbd_core::atmosphere::AtmosphereSettings::default();
+        let start = 0.4 * pbd_core::daylight::DAY_S as f64;
+        let air = Air::open(settings, terrain_config().seed, None, start);
+        let mut atmosphere = (*air.now).clone();
+        let places = 3000;
+        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+        let points: Vec<Vec3> = (0..places)
+            .map(|i| {
+                let y = 1.0 - 2.0 * (i as f32 + 0.5) / places as f32;
+                let r = (1.0 - y * y).sqrt();
+                let a = golden * i as f32;
+                Vec3::new(r * a.cos(), y, r * a.sin())
+            })
+            .collect();
+        let threshold = settings.raining_rate;
+        let seconds = 180;
+        let mut rows: Vec<Vec<(f32, f32, f32)>> = vec![Vec::new(); places];
+        let mut t = start;
+        for _ in 0..=seconds {
+            for (k, p) in points.iter().enumerate() {
+                let s = atmosphere.sample(*p);
+                let switched = if s.rain_rate >= threshold {
+                    s.cover
+                } else {
+                    0.0
+                };
+                rows[k].push((s.cover, switched, s.rain_seen));
+            }
+            t += settings.dt_s as f64;
+            atmosphere.step(Clock { seconds: t }.sun(), &[]);
+        }
+        let flips = |row: &Vec<(f32, f32, f32)>| {
+            row.windows(2)
+                .filter(|w| (w[0].1 > 0.0) != (w[1].1 > 0.0))
+                .count()
+        };
+        let (best, row) = rows
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, row)| flips(row))
+            .expect("places");
+        let mut csv = format!(
+            "# place {best} of {places}: {:?}; the rain switched {} times in {seconds} s\n\
+             t_s,cover,rain_switched,rain_seen\n",
+            points[best],
+            flips(row)
+        );
+        for (i, (cover, switched, seen)) in row.iter().enumerate() {
+            csv += &format!("{i},{cover:.4},{switched:.4},{seen:.4}\n");
+        }
+        let path = std::env::var("PBD_RAIN_CSV").unwrap_or_else(|_| "rain-at-one-place.csv".into());
+        std::fs::write(&path, csv).expect("the chart's data");
+        eprintln!("wrote {path}: place {best}, {} switches", flips(row));
     }
 
     /// A measurement instrument for the `calm-clouds` change: how fast the

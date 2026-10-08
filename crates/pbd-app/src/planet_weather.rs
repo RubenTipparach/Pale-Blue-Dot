@@ -1,12 +1,18 @@
 //! The weather maps on the GPU: two cube textures the render world owns and
-//! rewrites in place whenever the atmosphere publishes a new state.
+//! rewrites in place every frame with the weather the view is showing.
 //!
 //! The sky's clouds, the sea, the ground's cloud shadows and the overlays all
 //! sample these, through one bind group layout, so every one of them sees the
-//! same weather at the same place. The textures are created once and written
-//! with `write_texture`, so a bind group made with their views stays valid for
-//! the life of the app: nothing downstream has to notice that the weather
-//! changed.
+//! same weather at the same place. The textures are created once, so a bind
+//! group made with their views stays valid for the life of the app: nothing
+//! downstream has to notice that the weather changed.
+//!
+//! What is written into them is the shown pair's mix (`smooth-weather`
+//! decision 4): the two published states the view runs between are uploaded
+//! once each into `from` and `to` textures, and a compute pass
+//! (`weather_blend.wgsl`) writes their mix into the cubes every frame. Until
+//! that pipeline is ready, `to` is written straight in, as every state used
+//! to be.
 
 use crate::atmosphere::{Air, MAP_SIZE, WeatherMaps};
 use bevy::{
@@ -15,20 +21,29 @@ use bevy::{
         Render, RenderApp, RenderStartup, RenderSystems,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_resource::{
-            binding_types::{sampler, texture_cube},
+            binding_types::{
+                sampler, texture_2d_array, texture_cube, texture_storage_2d_array, uniform_buffer,
+            },
             *,
         },
         renderer::{RenderDevice, RenderQueue},
     },
 };
+use std::borrow::Cow;
 use std::sync::Arc;
 
-/// What the main world hands the render world each frame: the published
-/// maps, and their generation so an unchanged state is not uploaded again.
+/// What the main world hands the render world each frame: the shown pair's
+/// maps, the pair's generation so an unchanged pair is not uploaded again,
+/// and how far the view has come between them.
 #[derive(Resource, Clone, Default, ExtractResource)]
 pub struct WeatherMapsNow {
     pub generation: u64,
+    /// The state the blend runs from.
+    pub from: Arc<WeatherMaps>,
+    /// The state it runs to.
     pub maps: Arc<WeatherMaps>,
+    /// How far from `from` to `maps`, 0..1.
+    pub t: f32,
     /// The overlay's map, when one is showing: see `crate::overlay`.
     pub overlay: Option<Arc<Vec<[f32; 4]>>>,
     pub overlay_generation: u64,
@@ -38,11 +53,17 @@ pub struct WeatherMapsNow {
 }
 
 fn publish(air: Option<Res<Air>>, mut now: ResMut<WeatherMapsNow>) {
-    if let Some(air) = air
-        && air.generation != now.generation
-    {
-        now.generation = air.generation;
-        now.maps = air.maps.clone();
+    let Some(air) = air else {
+        return;
+    };
+    if air.shown.pair != now.generation {
+        let (from, to) = air.shown.maps();
+        now.generation = air.shown.pair;
+        now.from = from.clone();
+        now.maps = to.clone();
+    }
+    if now.t != air.shown.t {
+        now.t = air.shown.t;
     }
 }
 
@@ -63,6 +84,29 @@ pub fn layout() -> BindGroupLayoutDescriptor {
     )
 }
 
+/// The blend pass's bind group layout: how far, then each map's `from`,
+/// `to` and the cube it writes, as a 2D array of its six faces.
+fn blend_layout() -> BindGroupLayoutDescriptor {
+    let read = || texture_2d_array(TextureSampleType::Float { filterable: false });
+    let write =
+        || texture_storage_2d_array(TextureFormat::Rgba16Float, StorageTextureAccess::WriteOnly);
+    BindGroupLayoutDescriptor::new(
+        "weather maps blend",
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::COMPUTE,
+            (
+                uniform_buffer::<Vec4>(false),
+                read(),
+                read(),
+                write(),
+                read(),
+                read(),
+                write(),
+            ),
+        ),
+    )
+}
+
 /// The render world's textures and the one bind group every consumer sets.
 #[derive(Resource)]
 pub struct WeatherMapGpu {
@@ -72,9 +116,27 @@ pub struct WeatherMapGpu {
     pub bind_group: BindGroup,
     generation: u64,
     overlay_generation: u64,
+    /// The shown pair, as uploaded.
+    cloud_from: Texture,
+    cloud_to: Texture,
+    wind_from: Texture,
+    wind_to: Texture,
+    /// The blend pass: how far, its bind group and its pipeline.
+    blend: Buffer,
+    blend_group: BindGroup,
+    pipeline: CachedComputePipelineId,
 }
 
 fn cube(device: &RenderDevice, label: &'static str) -> Texture {
+    texture(
+        device,
+        label,
+        TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING,
+    )
+}
+
+/// A texture of the weather maps' size and format, six layers deep.
+fn texture(device: &RenderDevice, label: &'static str, usage: TextureUsages) -> Texture {
     device.create_texture(&TextureDescriptor {
         label: Some(label),
         size: Extent3d {
@@ -87,9 +149,18 @@ fn cube(device: &RenderDevice, label: &'static str) -> Texture {
         dimension: TextureDimension::D2,
         // Half floats: filterable on every adapter, where 32-bit floats need
         // a feature, and a cover or a wind speed needs nothing like their range.
+        // Every adapter can also write them from a compute pass.
         format: TextureFormat::Rgba16Float,
-        usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+        usage,
         view_formats: &[],
+    })
+}
+
+/// A texture's six faces as a 2D array, for the blend pass.
+fn layers_view(texture: &Texture) -> TextureView {
+    texture.create_view(&TextureViewDescriptor {
+        dimension: Some(TextureViewDimension::D2Array),
+        ..default()
     })
 }
 
@@ -105,14 +176,61 @@ fn create(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     cache: Res<PipelineCache>,
+    assets: Res<AssetServer>,
 ) {
     let cloud = cube(&device, "weather map: cloud");
     let wind = cube(&device, "weather map: wind");
     let overlay = cube(&device, "weather map: overlay");
+    let pair = |label| {
+        texture(
+            &device,
+            label,
+            TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+        )
+    };
+    let cloud_from = pair("weather map: cloud, from");
+    let cloud_to = pair("weather map: cloud, to");
+    let wind_from = pair("weather map: wind, from");
+    let wind_to = pair("weather map: wind, to");
     let blank = vec![[0.0f32; 4]; 6 * MAP_SIZE * MAP_SIZE];
-    for texture in [&cloud, &wind, &overlay] {
+    for texture in [
+        &cloud,
+        &wind,
+        &overlay,
+        &cloud_from,
+        &cloud_to,
+        &wind_from,
+        &wind_to,
+    ] {
         write(&queue, texture, &blank);
     }
+    let blend = device.create_buffer(&BufferDescriptor {
+        label: Some("weather maps blend"),
+        size: 16,
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let blend_layout = blend_layout();
+    let blend_group = device.create_bind_group(
+        Some("weather maps blend"),
+        &cache.get_bind_group_layout(&blend_layout),
+        &BindGroupEntries::sequential((
+            blend.as_entire_binding(),
+            &layers_view(&cloud_from),
+            &layers_view(&cloud_to),
+            &layers_view(&cloud),
+            &layers_view(&wind_from),
+            &layers_view(&wind_to),
+            &layers_view(&wind),
+        )),
+    );
+    let pipeline = cache.queue_compute_pipeline(ComputePipelineDescriptor {
+        label: Some(Cow::Borrowed("weather maps blend")),
+        layout: vec![blend_layout],
+        shader: assets.load("shaders/weather_blend.wgsl"),
+        entry_point: Some(Cow::Borrowed("blend_maps")),
+        ..default()
+    });
     let sampler = device.create_sampler(&SamplerDescriptor {
         label: Some("weather maps"),
         mag_filter: FilterMode::Linear,
@@ -139,6 +257,13 @@ fn create(
         bind_group,
         generation: 0,
         overlay_generation: 0,
+        cloud_from,
+        cloud_to,
+        wind_from,
+        wind_to,
+        blend,
+        blend_group,
+        pipeline,
     });
 }
 
@@ -180,6 +305,17 @@ fn upload(queue: Res<RenderQueue>, now: Res<WeatherMapsNow>, gpu: Option<ResMut<
         return;
     };
     if now.generation != gpu.generation && !now.maps.cloud.is_empty() {
+        // The pair, once; and `to` straight into the cubes, which is what
+        // shows until the blend pass is ready to write the mix there.
+        let from = if now.from.cloud.is_empty() {
+            &now.maps
+        } else {
+            &now.from
+        };
+        write(&queue, &gpu.cloud_from, &from.cloud);
+        write(&queue, &gpu.wind_from, &from.wind);
+        write(&queue, &gpu.cloud_to, &now.maps.cloud);
+        write(&queue, &gpu.wind_to, &now.maps.wind);
         write(&queue, &gpu.cloud, &now.maps.cloud);
         write(&queue, &gpu.wind, &now.maps.wind);
         gpu.generation = now.generation;
@@ -190,6 +326,44 @@ fn upload(queue: Res<RenderQueue>, now: Res<WeatherMapsNow>, gpu: Option<ResMut<
         write(&queue, &gpu.overlay, overlay);
         gpu.overlay_generation = now.overlay_generation;
     }
+}
+
+/// Write the shown pair's mix into the cubes, every frame, before the frame's
+/// passes read them (`smooth-weather` decision 4). Submitted on its own, after
+/// the uploads, which the queue runs first.
+fn blend(
+    device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
+    cache: Res<PipelineCache>,
+    now: Res<WeatherMapsNow>,
+    gpu: Option<Res<WeatherMapGpu>>,
+) {
+    let Some(gpu) = gpu else {
+        return;
+    };
+    if gpu.generation == 0 {
+        return;
+    }
+    let Some(pipeline) = cache.get_compute_pipeline(gpu.pipeline) else {
+        return;
+    };
+    let t = [now.t.clamp(0.0, 1.0), 0.0, 0.0, 0.0];
+    let bytes: Vec<u8> = t.iter().flat_map(|v| v.to_le_bytes()).collect();
+    queue.write_buffer(&gpu.blend, 0, &bytes);
+    let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+        label: Some("weather maps blend"),
+    });
+    {
+        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("weather maps blend"),
+            ..default()
+        });
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, &gpu.blend_group, &[]);
+        let groups = (MAP_SIZE as u32).div_ceil(8);
+        pass.dispatch_workgroups(groups, groups, 6);
+    }
+    queue.submit([encoder.finish()]);
 }
 
 /// An `f32` as IEEE half-float bits, rounded to nearest, with infinities and
@@ -239,7 +413,12 @@ pub(super) fn build(app: &mut App) {
         .add_systems(PostUpdate, publish);
     app.sub_app_mut(RenderApp)
         .add_systems(RenderStartup, create)
-        .add_systems(Render, upload.in_set(RenderSystems::PrepareResources));
+        .add_systems(
+            Render,
+            (upload, blend)
+                .chain()
+                .in_set(RenderSystems::PrepareResources),
+        );
 }
 
 #[cfg(test)]

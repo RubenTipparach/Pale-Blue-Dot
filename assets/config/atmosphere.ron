@@ -98,6 +98,11 @@
     cover_min_kg: 0.2,
     cover_full_kg: 0.8,
     raining_rate: 2.0e-4,
+    // What a person sees of the rain builds in and dies away rather than
+    // switching: e-fold times, s, up and down (smooth-weather). The physics
+    // never reads them.
+    rain_rise_s: 5.0,
+    rain_fall_s: 20.0,
     // Humid air is partly cloudy without rising, past this relative humidity
     // (Sundqvist): the decks and hazes of cumulus away from the rain belt.
     // Land's is higher, because those decks are mostly marine.

@@ -1,3 +1,4 @@
+mod compass_bar;
 mod cracks;
 mod digging;
 mod drops_view;
@@ -170,7 +171,8 @@ pub struct Launch {
     /// walker otherwise looks dead level at the horizon.
     pub pitch: Option<f32>,
     /// `--yaw <degrees>` turns the walker's starting heading that far to the
-    /// right of the default. With `--time` the launch log says where the sun
+    /// right of the default, which faces compass west (`Y x up`): 90 faces
+    /// north, 180 east (`compass-bar`). With `--time` the launch log says where the sun
     /// stands from the spawn, as the yaw and pitch that would centre it, so a
     /// sky capture is aimed off the clock rather than guessed.
     pub yaw: Option<f32>,
@@ -883,6 +885,7 @@ pub fn run(args: &[String]) {
     .add_plugins(map_screen::MapScreenPlugin)
     // Each world's city sites, made once and kept in its save (`city-sites`).
     .add_plugins(pbd_app::sites::SitesPlugin)
+    .add_plugins(pbd_app::compass::CompassPlugin)
     // The towns standing at their sites (`cities-in-the-world`).
     .add_plugins(pbd_app::towns::TownsPlugin)
     .insert_resource(launch.map.clone())
@@ -935,6 +938,7 @@ pub fn run(args: &[String]) {
         (
             scene::setup,
             hud::setup,
+            compass_bar::spawn,
             frame_graph::setup,
             photo_camera,
             overlay_ui::spawn,
@@ -995,6 +999,7 @@ pub fn run(args: &[String]) {
             guide::press,
             guide::paint,
             hud::near_field,
+            compass_bar::update,
             (frame_graph::toggle, frame_graph::update).chain(),
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
@@ -2061,13 +2066,15 @@ fn photo_camera(
     }
     if launch.view == "column" {
         // A camera standing straight over the spawn at `--height` metres
-        // above its ground, facing east and tilted by `--pitch` (-89 looks
+        // above its ground, facing compass west (`Y x up`, as a walker's
+        // default heading does; `compass-bar`) and tilted by `--pitch` (-89 looks
         // straight down): a descent through the weather is this view at a
         // run of heights. The weather's "here" is the camera's own direction,
         // so a forced storm (`--rain`) brews directly under it at any height.
         // The spawn is `spawn_direction`'s, so `--spawn desert` stands it over
         // a desert (`bigger-biomes` 4.1); without `--spawn` it is the default.
-        // `--yaw` turns it off east as it turns a walker.
+        // `--yaw` turns it to the right as it turns a walker: 90 faces
+        // compass north, 180 east.
         let direction = spawn_direction(&launch);
         let height = launch.height.unwrap_or(EYE_HEIGHT);
         let position = direction * (terrain_radius(direction) + height);
@@ -2771,6 +2778,38 @@ mod tests {
     use super::*;
     use pbd_core::planet_gen::{self, Biome, TerrainConfig};
     use pbd_core::terrain::Material;
+
+    /// What the player reads is the compass's (`compass-bar` decision 2):
+    /// nothing on the screen works out a latitude, a heading or north from
+    /// the frame's functions, whose north is the compass's south. A readout
+    /// written with them would be the mirror of the planet again.
+    #[test]
+    fn the_screen_reads_the_compass_not_the_frame() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = vec![dir.join("desktop.rs")];
+        for entry in std::fs::read_dir(dir.join("desktop")).expect("the desktop modules") {
+            let path = entry.expect("an entry").path();
+            if path.extension().is_some_and(|e| e == "rs") {
+                files.push(path);
+            }
+        }
+        // Spelt out at run time, so this test does not find itself.
+        let frame = ["lat_lon", "heading", "north_east"].map(|f| format!("geo::{f}("));
+        let mut found = Vec::new();
+        for path in files {
+            let text = std::fs::read_to_string(&path).expect("a source file");
+            for (n, line) in text.lines().enumerate() {
+                if frame.iter().any(|f| line.contains(f)) {
+                    found.push(format!("{}:{}: {}", path.display(), n + 1, line.trim()));
+                }
+            }
+        }
+        assert!(
+            found.is_empty(),
+            "frame north on the screen:\n{}",
+            found.join("\n")
+        );
+    }
 
     /// A world made before identities is made by version 4, and the spawn a
     /// player of it logs back into is the ground it always was: 73 m up, on
