@@ -1,0 +1,117 @@
+{
+  "tool": "built-in image_gen",
+  "images": {
+    "fields": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2044491,
+      "sha256": "97c24908dbc927bd4ef61a6f5b75a3e005455a93c77d379d793d87b069a514cc",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "desert": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2284134,
+      "sha256": "14927b1064d0d2ba23318d43dfc66f19c43e7ee9cbe7bdc455051bff0b0988be",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "mountains": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2419415,
+      "sha256": "1276e8c1f3c7880998d9486084cddecda6243aff78f9e9fbe3780e58c6ba578f",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "tundra": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2240494,
+      "sha256": "879563168383959e8f95bf69023fec265b9eae0f24595230a9066aac2c77b66d",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "swamp": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2443272,
+      "sha256": "eaa82cea314331f62fef8955d1f3360069265eff836215564bc87c9bedf6750f",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "jungle": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2560387,
+      "sha256": "89db555ec95d4a797be1b53180140f4e77b360724e59dd12322c30a1c45d7938",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "ocean": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2624206,
+      "sha256": "2f7da232fc929a3ad6818953adba95dc3d687d997c54d9ed51b55455b7daa33a",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "beach": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2727152,
+      "sha256": "b8ee6c1d11b1c9b6bb2ef56c89c7fb7a516376d226668f73872d97b439814dc2",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "redwood_forest": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2397433,
+      "sha256": "e15f340ef57860cc77228575ca96fa91c770885252f0ac4c5509d93a12936acc",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "sporewood": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2514015,
+      "sha256": "610b79996896a0843cf67c2f497dae9e3d056225c7429c66022c48c729050aaa",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "basalt_wastes": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2166682,
+      "sha256": "1d2aa5124978f54dbb4ce5c15891f05bacc7b96018f481318e4b6a61fd888dc3",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "frozen_wastes": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2421538,
+      "sha256": "b2cd4fcb26f0929c78b8d29e9bcb0afa36e133a368b5d73d51968f7f12237202",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "lunar_regolith": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2513189,
+      "sha256": "45c5cdf111db25ab894b4262e1c96f43986ce1ea928fb1c66d6d3beb9d5393ee",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    },
+    "asteroid": {
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2672567,
+      "sha256": "fc5fd5af4f725e265fcb6828e78b63408c461598c5b064bc156790f5356491fe",
+      "exact_four_by_four_pixel_grid": false,
+      "production_approved": false
+    }
+  }
+}

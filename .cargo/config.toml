@@ -1,0 +1,4 @@
+# The LLD linker bundled with the Rust toolchain: several times faster than
+# MSVC's link.exe on a binary this size.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"

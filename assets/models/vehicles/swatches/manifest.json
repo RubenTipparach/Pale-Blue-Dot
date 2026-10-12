@@ -1,0 +1,167 @@
+{
+  "schema": 1,
+  "generator": "built-in image_gen",
+  "pixels_per_metre": 16,
+  "sampling": "centre-nearest: floor((destination+0.5)*source_size/32)",
+  "quantization": "nearest squared RGB distance to the recorded ramp; no dithering",
+  "alpha": "composite over alpha_background before quantization",
+  "wrap_repair": "copy column 0 to column 31, then row 0 to row 31; no blur",
+  "swatches": [
+    {
+      "name": "white-panels",
+      "prompt": "Use case: stylized-concept. Asset type: seamless tileable pixel-art albedo material swatch for a low-poly vehicle game. Output one square swatch filling the entire image, no border, no labels, no text, no objects or environment. Flat-lit orthographic top-down surface. Draw on a strict logical 32 by 32 pixel grid, enlarged with nearest neighbor into a large square image. This tile represents 2 by 2 metres at 16 pixels/metre. Compact hand-placed pixel clusters, restrained four-color palette, visible hard texels. Seamless periodic repeat in both directions, opposite edges match. No perspective, no photographic noise, no random speckle, no gradients, no cast shadows, no ambient occlusion, no baked sunlight or directional shading. Material construction and wear only. White aircraft hull panels with thin grey panel seams and sparse paired rivet rows; large calm off-white painted areas. Four shades #A8B7B5 #CFD8D2 #E5E9E2 #F6F4EA.",
+      "generated": "generated/white-panels.png",
+      "normalized": "white-panels.png",
+      "size": [
+        32,
+        32
+      ],
+      "repeat_metres": [
+        2,
+        2
+      ],
+      "palette": [
+        "A8B7B5",
+        "CFD8D2",
+        "E5E9E2",
+        "F6F4EA"
+      ],
+      "ramp": "white",
+      "alpha_background": "E5E9E2",
+      "source_size": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "name": "coral-trim",
+      "prompt": "Use case: stylized-concept. Asset type: seamless tileable pixel-art albedo material swatch for a low-poly vehicle game. Output one square swatch filling the entire image, no border, no labels, no text, no objects or environment. Flat-lit orthographic top-down surface. Draw on a strict logical 32 by 32 pixel grid, enlarged with nearest neighbor into a large square image. This tile represents 2 by 2 metres at 16 pixels/metre. Compact hand-placed pixel clusters, restrained four-color palette, visible hard texels. Seamless periodic repeat in both directions, opposite edges match. No perspective, no photographic noise, no random speckle, no gradients, no cast shadows, no ambient occlusion, no baked sunlight or directional shading. Material construction and wear only. Coral painted aircraft trim, slim darker inset construction seams and occasional compact lighter edge-wear pixels; calm coral center, no rivets. Four shades #A74438 #D96549 #EA8763 #F5AE83.",
+      "generated": "generated/coral-trim.png",
+      "normalized": "coral-trim.png",
+      "size": [
+        32,
+        32
+      ],
+      "repeat_metres": [
+        2,
+        2
+      ],
+      "palette": [
+        "A74438",
+        "D96549",
+        "EA8763",
+        "F5AE83"
+      ],
+      "ramp": "coral",
+      "alpha_background": "D96549",
+      "source_size": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "name": "canopy",
+      "prompt": "Use case: stylized-concept. Asset type: seamless tileable pixel-art albedo material swatch for a low-poly vehicle game. Output one square swatch filling the entire image, no border, no labels, no text, no objects or environment. Flat-lit orthographic top-down surface. Draw on a strict logical 32 by 32 pixel grid, enlarged with nearest neighbor into a large square image. This tile represents 2 by 2 metres at 16 pixels/metre. Compact hand-placed pixel clusters, restrained four-color palette, visible hard texels. Seamless periodic repeat in both directions, opposite edges match. No perspective, no photographic noise, no random speckle, no gradients, no cast shadows, no ambient occlusion, no baked sunlight or directional shading. Material construction and wear only.  Fully opaque image, alpha 255 everywhere, solid painted material across the entire tile.Dark navy opaque cockpit material swatch: a simple regular grid of slim black-navy structural mullions separating broad SOLID UNIFORM navy rectangular panes, a few tiny frame fasteners. Pane interiors must be entirely uniform flat navy. NO diagonal marks, NO reflection triangles, NO glints, NO shine, NO lighting, NO transparency. Four shades #182731 #263A49 #405965 #71888C.",
+      "generated": "generated/canopy.png",
+      "normalized": "canopy.png",
+      "size": [
+        32,
+        32
+      ],
+      "repeat_metres": [
+        2,
+        2
+      ],
+      "palette": [
+        "182731",
+        "263A49",
+        "405965",
+        "71888C"
+      ],
+      "ramp": "navy",
+      "alpha_background": "263A49",
+      "source_size": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "name": "intake-grille",
+      "prompt": "Use case: stylized-concept. Asset type: seamless tileable pixel-art albedo material swatch for a low-poly vehicle game. Output one square swatch filling the entire image, no border, no labels, no text, no objects or environment. Flat-lit orthographic top-down surface. Draw on a strict logical 32 by 32 pixel grid, enlarged with nearest neighbor into a large square image. This tile represents 2 by 2 metres at 16 pixels/metre. Compact hand-placed pixel clusters, restrained four-color palette, visible hard texels. Seamless periodic repeat in both directions, opposite edges match. No perspective, no photographic noise, no random speckle, no gradients, no cast shadows, no ambient occlusion, no baked sunlight or directional shading. Material construction and wear only. Dark navy nacelle intake grille: regularly spaced narrow parallel slots and short cross braces in compact mechanical pixel clusters, flat graphic construction. Four shades #182731 #263A49 #405965 #71888C.",
+      "generated": "generated/intake-grille.png",
+      "normalized": "intake-grille.png",
+      "size": [
+        32,
+        32
+      ],
+      "repeat_metres": [
+        2,
+        2
+      ],
+      "palette": [
+        "182731",
+        "263A49",
+        "405965",
+        "71888C"
+      ],
+      "ramp": "navy",
+      "alpha_background": "263A49",
+      "source_size": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "name": "rotor",
+      "prompt": "Use case: stylized-concept. Asset type: seamless tileable pixel-art albedo material swatch for a low-poly vehicle game. Output one square swatch filling the entire image, no border, no labels, no text, no objects or environment. Flat-lit orthographic top-down surface. Draw on a strict logical 32 by 32 pixel grid, enlarged with nearest neighbor into a large square image. This tile represents 2 by 2 metres at 16 pixels/metre. Compact hand-placed pixel clusters, restrained four-color palette, visible hard texels. Seamless periodic repeat in both directions, opposite edges match. No perspective, no photographic noise, no random speckle, no gradients, no cast shadows, no ambient occlusion, no baked sunlight or directional shading. Material construction and wear only.  Fully opaque image, alpha 255 everywhere, solid painted material across the entire tile.Dark navy painted rotor blade material, subtle longitudinal construction seam and a few short lighter scuff clusters. No tip stripe (added later). Four shades #182731 #263A49 #405965 #71888C.",
+      "generated": "generated/rotor.png",
+      "normalized": "rotor.png",
+      "size": [
+        32,
+        32
+      ],
+      "repeat_metres": [
+        2,
+        2
+      ],
+      "palette": [
+        "182731",
+        "263A49",
+        "405965",
+        "71888C"
+      ],
+      "ramp": "navy",
+      "alpha_background": "263A49",
+      "source_size": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "name": "gear-metal",
+      "prompt": "Use case: stylized-concept. Asset type: seamless tileable pixel-art albedo material swatch for a low-poly vehicle game. Output one square swatch filling the entire image, no border, no labels, no text, no objects or environment. Flat-lit orthographic top-down surface. Draw on a strict logical 32 by 32 pixel grid, enlarged with nearest neighbor into a large square image. This tile represents 2 by 2 metres at 16 pixels/metre. Compact hand-placed pixel clusters, restrained four-color palette, visible hard texels. Seamless periodic repeat in both directions, opposite edges match. No perspective, no photographic noise, no random speckle, no gradients, no cast shadows, no ambient occlusion, no baked sunlight or directional shading. Material construction and wear only.  Fully opaque image, alpha 255 everywhere, solid painted material across the entire tile.Dull blue-grey landing-gear metal with sparse mechanical joints and compact wear marks, no shine or reflected light. Four shades #405965 #71888C #A8B7B5 #CFD8D2.",
+      "generated": "generated/gear-metal.png",
+      "normalized": "gear-metal.png",
+      "size": [
+        32,
+        32
+      ],
+      "repeat_metres": [
+        2,
+        2
+      ],
+      "palette": [
+        "405965",
+        "71888C",
+        "A8B7B5",
+        "CFD8D2"
+      ],
+      "ramp": "metal",
+      "alpha_background": "71888C",
+      "source_size": [
+        1254,
+        1254
+      ]
+    }
+  ]
+}

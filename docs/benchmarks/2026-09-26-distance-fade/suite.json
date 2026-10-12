@@ -1,0 +1,720 @@
+{
+ "meta": {
+  "when": "2026-09-26 01:28",
+  "revision": "bbd3c5f",
+  "dirty": true,
+  "variants": [
+   {
+    "name": "before",
+    "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\perf\\before-bbd3c5f\\pbd-app.exe",
+    "env": {},
+    "assets": null
+   },
+   {
+    "name": "after",
+    "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\target\\release\\pbd-app.exe",
+    "env": {},
+    "assets": null
+   }
+  ],
+  "args": [
+   "--scenarios",
+   "clouds,far-side,walk",
+   "--repeats",
+   "2",
+   "--out",
+   "output/perf/2026-09-26-distance-fade",
+   "--variant",
+   "before|output/perf/before-bbd3c5f/pbd-app.exe",
+   "--variant",
+   "after|target/release/pbd-app.exe"
+  ],
+  "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)"
+ },
+ "results": [
+  {
+   "scenario": "clouds",
+   "variant": "before",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\perf\\before-bbd3c5f\\pbd-app.exe",
+   "env": {},
+   "index": 0,
+   "seconds": 54.4,
+   "frame_ms": {
+    "n": 6088,
+    "mean": 7.084800755584757,
+    "p50": 6.72,
+    "p95": 11.838,
+    "p99": 16.308,
+    "p999": 20.279,
+    "max": 22.047,
+    "over_want": 1653,
+    "over_floor": 54
+   },
+   "gpu_total_ms": {
+    "n": 6088,
+    "mean": 5.89333426412615,
+    "p50": 5.665,
+    "p95": 9.888,
+    "p99": 10.698,
+    "p999": 11.416,
+    "max": 11.858,
+    "over_want": 779,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 6088,
+    "mean": 2.999641097240473,
+    "p50": 1.739,
+    "p95": 7.235,
+    "p99": 7.86,
+    "p999": 8.521,
+    "max": 8.681,
+    "over_want": 30,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2052,
+     "mean": 8.1914171539961,
+     "p50": 8.005,
+     "p95": 12.143,
+     "p99": 16.355,
+     "p999": 19.647,
+     "max": 20.754,
+     "over_want": 855,
+     "over_floor": 20
+    },
+    "gpu_total_ms": {
+     "n": 2052,
+     "mean": 6.999280214424951,
+     "p50": 6.583,
+     "p95": 9.522,
+     "p99": 9.991,
+     "p999": 10.104,
+     "max": 10.116,
+     "over_want": 310,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2052,
+     "mean": 4.463126218323587,
+     "p50": 4.134,
+     "p95": 6.928,
+     "p99": 7.305,
+     "p999": 7.437,
+     "max": 7.527,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "clouds",
+   "variant": "after",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\target\\release\\pbd-app.exe",
+   "env": {},
+   "index": 0,
+   "seconds": 54.4,
+   "frame_ms": {
+    "n": 6287,
+    "mean": 6.942484332750119,
+    "p50": 6.623,
+    "p95": 11.755,
+    "p99": 16.026,
+    "p999": 20.187,
+    "max": 22.423,
+    "over_want": 1657,
+    "over_floor": 51
+   },
+   "gpu_total_ms": {
+    "n": 6287,
+    "mean": 5.853323047558454,
+    "p50": 5.67,
+    "p95": 9.93,
+    "p99": 10.99,
+    "p999": 11.363,
+    "max": 11.717,
+    "over_want": 748,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 6287,
+    "mean": 2.941387307141721,
+    "p50": 1.559,
+    "p95": 7.225,
+    "p99": 7.825,
+    "p999": 8.513,
+    "max": 8.778,
+    "over_want": 30,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2024,
+     "mean": 8.30101333992095,
+     "p50": 8.093,
+     "p95": 12.266,
+     "p99": 16.515,
+     "p999": 19.13,
+     "max": 19.962,
+     "over_want": 888,
+     "over_floor": 20
+    },
+    "gpu_total_ms": {
+     "n": 2024,
+     "mean": 7.205745059288538,
+     "p50": 6.803,
+     "p95": 9.685,
+     "p99": 10.147,
+     "p999": 10.227,
+     "max": 10.317,
+     "over_want": 332,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2024,
+     "mean": 4.485645256916996,
+     "p50": 4.102,
+     "p95": 6.968,
+     "p99": 7.284,
+     "p999": 7.435,
+     "max": 7.451,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "clouds",
+   "variant": "after",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\target\\release\\pbd-app.exe",
+   "env": {},
+   "index": 1,
+   "seconds": 54.1,
+   "frame_ms": {
+    "n": 6223,
+    "mean": 6.9560318174513895,
+    "p50": 6.557,
+    "p95": 12.0,
+    "p99": 16.219,
+    "p999": 20.913,
+    "max": 22.43,
+    "over_want": 1592,
+    "over_floor": 60
+   },
+   "gpu_total_ms": {
+    "n": 6223,
+    "mean": 5.8831214848143984,
+    "p50": 5.63,
+    "p95": 10.138,
+    "p99": 10.841,
+    "p999": 11.916,
+    "max": 12.073,
+    "over_want": 766,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 6223,
+    "mean": 2.9808317531737103,
+    "p50": 1.595,
+    "p95": 7.301,
+    "p99": 7.821,
+    "p999": 8.467,
+    "max": 8.607,
+    "over_want": 27,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2017,
+     "mean": 8.336975706494794,
+     "p50": 8.104,
+     "p95": 12.617,
+     "p99": 16.12,
+     "p999": 19.905,
+     "max": 20.252,
+     "over_want": 874,
+     "over_floor": 17
+    },
+    "gpu_total_ms": {
+     "n": 2017,
+     "mean": 7.262206246901339,
+     "p50": 6.91,
+     "p95": 9.867,
+     "p99": 10.386,
+     "p999": 10.528,
+     "max": 10.577,
+     "over_want": 332,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2017,
+     "mean": 4.520295984134854,
+     "p50": 4.224,
+     "p95": 7.091,
+     "p99": 7.494,
+     "p999": 7.65,
+     "max": 7.75,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "clouds",
+   "variant": "before",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\perf\\before-bbd3c5f\\pbd-app.exe",
+   "env": {},
+   "index": 1,
+   "seconds": 53.9,
+   "frame_ms": {
+    "n": 6241,
+    "mean": 6.905144528120493,
+    "p50": 6.613,
+    "p95": 11.583,
+    "p99": 14.53,
+    "p999": 19.666,
+    "max": 21.033,
+    "over_want": 1495,
+    "over_floor": 31
+   },
+   "gpu_total_ms": {
+    "n": 6241,
+    "mean": 5.721608235859638,
+    "p50": 5.554,
+    "p95": 9.687,
+    "p99": 10.58,
+    "p999": 11.214,
+    "max": 11.674,
+    "over_want": 702,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 6241,
+    "mean": 2.9739397532446725,
+    "p50": 1.644,
+    "p95": 7.125,
+    "p99": 7.817,
+    "p999": 8.532,
+    "max": 8.697,
+    "over_want": 25,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2075,
+     "mean": 8.099572530120483,
+     "p50": 7.854,
+     "p95": 11.72,
+     "p99": 14.824,
+     "p999": 18.95,
+     "max": 19.87,
+     "over_want": 753,
+     "over_floor": 10
+    },
+    "gpu_total_ms": {
+     "n": 2075,
+     "mean": 6.905007710843373,
+     "p50": 6.591,
+     "p95": 9.276,
+     "p99": 9.797,
+     "p999": 9.929,
+     "max": 9.944,
+     "over_want": 278,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2075,
+     "mean": 4.476359036144578,
+     "p50": 4.183,
+     "p95": 6.811,
+     "p99": 7.193,
+     "p999": 7.486,
+     "max": 7.565,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "far-side",
+   "variant": "before",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\perf\\before-bbd3c5f\\pbd-app.exe",
+   "env": {},
+   "index": 0,
+   "seconds": 103.4,
+   "frame_ms": {
+    "n": 20368,
+    "mean": 4.542033385703063,
+    "p50": 4.293,
+    "p95": 7.352,
+    "p99": 9.197,
+    "p999": 13.93,
+    "max": 14.838,
+    "over_want": 379,
+    "over_floor": 0
+   },
+   "gpu_total_ms": {
+    "n": 20368,
+    "mean": 3.611616457187745,
+    "p50": 3.398,
+    "p95": 5.401,
+    "p99": 6.91,
+    "p999": 7.248,
+    "max": 7.514,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 20368,
+    "mean": 0.8739476630007855,
+    "p50": 0.671,
+    "p95": 2.222,
+    "p99": 4.041,
+    "p999": 4.184,
+    "max": 4.314,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "far-side",
+   "variant": "after",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\target\\release\\pbd-app.exe",
+   "env": {},
+   "index": 0,
+   "seconds": 104.0,
+   "frame_ms": {
+    "n": 19655,
+    "mean": 4.736706537776647,
+    "p50": 4.385,
+    "p95": 7.567,
+    "p99": 9.976,
+    "p999": 14.145,
+    "max": 20.697,
+    "over_want": 508,
+    "over_floor": 1
+   },
+   "gpu_total_ms": {
+    "n": 19655,
+    "mean": 3.779775222589672,
+    "p50": 3.385,
+    "p95": 5.793,
+    "p99": 7.026,
+    "p999": 7.538,
+    "max": 7.718,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 19655,
+    "mean": 0.8617532943271432,
+    "p50": 0.668,
+    "p95": 2.216,
+    "p99": 3.979,
+    "p999": 4.11,
+    "max": 4.308,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "far-side",
+   "variant": "after",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\target\\release\\pbd-app.exe",
+   "env": {},
+   "index": 1,
+   "seconds": 103.9,
+   "frame_ms": {
+    "n": 19569,
+    "mean": 4.7537520568245695,
+    "p50": 4.394,
+    "p95": 7.655,
+    "p99": 10.249,
+    "p999": 14.041,
+    "max": 17.002,
+    "over_want": 558,
+    "over_floor": 1
+   },
+   "gpu_total_ms": {
+    "n": 19569,
+    "mean": 3.806068731156421,
+    "p50": 3.4,
+    "p95": 5.817,
+    "p99": 7.054,
+    "p999": 7.461,
+    "max": 7.759,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 19569,
+    "mean": 0.8661759926414226,
+    "p50": 0.67,
+    "p95": 2.208,
+    "p99": 3.978,
+    "p999": 4.121,
+    "max": 4.29,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "far-side",
+   "variant": "before",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\perf\\before-bbd3c5f\\pbd-app.exe",
+   "env": {},
+   "index": 1,
+   "seconds": 103.5,
+   "frame_ms": {
+    "n": 20326,
+    "mean": 4.55472547476139,
+    "p50": 4.332,
+    "p95": 7.308,
+    "p99": 9.259,
+    "p999": 13.596,
+    "max": 15.442,
+    "over_want": 412,
+    "over_floor": 0
+   },
+   "gpu_total_ms": {
+    "n": 20326,
+    "mean": 3.6207271966938896,
+    "p50": 3.404,
+    "p95": 5.464,
+    "p99": 6.947,
+    "p999": 7.274,
+    "max": 7.633,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 20326,
+    "mean": 0.8746149758929449,
+    "p50": 0.671,
+    "p95": 2.237,
+    "p99": 4.037,
+    "p999": 4.206,
+    "max": 4.328,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "walk",
+   "variant": "before",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\perf\\before-bbd3c5f\\pbd-app.exe",
+   "env": {},
+   "index": 0,
+   "seconds": 315.8,
+   "frame_ms": {
+    "n": 69558,
+    "mean": 4.379543848299261,
+    "p50": 4.282,
+    "p95": 6.319,
+    "p99": 7.471,
+    "p999": 8.701,
+    "max": 11.625,
+    "over_want": 201,
+    "over_floor": 0
+   },
+   "gpu_total_ms": {
+    "n": 69558,
+    "mean": 3.3067652750222836,
+    "p50": 3.203,
+    "p95": 3.767,
+    "p99": 3.884,
+    "p999": 4.053,
+    "max": 4.315,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 69558,
+    "mean": 0.23170728025532647,
+    "p50": 0.182,
+    "p95": 0.41,
+    "p99": 0.494,
+    "p999": 0.602,
+    "max": 0.761,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "walk",
+   "variant": "after",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\target\\release\\pbd-app.exe",
+   "env": {},
+   "index": 0,
+   "seconds": 318.2,
+   "frame_ms": {
+    "n": 65888,
+    "mean": 4.660236188683827,
+    "p50": 4.581,
+    "p95": 6.617,
+    "p99": 7.636,
+    "p999": 8.921,
+    "max": 37.74,
+    "over_want": 208,
+    "over_floor": 1
+   },
+   "gpu_total_ms": {
+    "n": 65888,
+    "mean": 3.6894975868139874,
+    "p50": 3.643,
+    "p95": 4.139,
+    "p99": 4.512,
+    "p999": 4.83,
+    "max": 5.061,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 65888,
+    "mean": 0.22605708171442448,
+    "p50": 0.176,
+    "p95": 0.408,
+    "p99": 0.47,
+    "p999": 0.553,
+    "max": 0.601,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "walk",
+   "variant": "after",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\target\\release\\pbd-app.exe",
+   "env": {},
+   "index": 1,
+   "seconds": 318.1,
+   "frame_ms": {
+    "n": 65982,
+    "mean": 4.652645948895153,
+    "p50": 4.594,
+    "p95": 6.386,
+    "p99": 7.707,
+    "p999": 9.103,
+    "max": 13.895,
+    "over_want": 281,
+    "over_floor": 0
+   },
+   "gpu_total_ms": {
+    "n": 65982,
+    "mean": 3.6765075020460127,
+    "p50": 3.634,
+    "p95": 4.128,
+    "p99": 4.546,
+    "p999": 4.845,
+    "max": 4.949,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 65982,
+    "mean": 0.22113309690521657,
+    "p50": 0.175,
+    "p95": 0.382,
+    "p99": 0.449,
+    "p999": 0.543,
+    "max": 0.617,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "walk",
+   "variant": "before",
+   "exe": "C:\\Users\\santi\\repos\\Pale-Blue-Dot\\output\\perf\\before-bbd3c5f\\pbd-app.exe",
+   "env": {},
+   "index": 1,
+   "seconds": 300.9,
+   "frame_ms": {
+    "n": 65957,
+    "mean": 4.39422185666419,
+    "p50": 4.32,
+    "p95": 6.101,
+    "p99": 7.251,
+    "p999": 8.734,
+    "max": 13.02,
+    "over_want": 151,
+    "over_floor": 0
+   },
+   "gpu_total_ms": {
+    "n": 65957,
+    "mean": 3.315625498430796,
+    "p50": 3.224,
+    "p95": 3.764,
+    "p99": 3.872,
+    "p999": 4.055,
+    "max": 4.247,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "gpu_clouds_ms": {
+    "n": 65957,
+    "mean": 0.23269475567415135,
+    "p50": 0.182,
+    "p95": 0.408,
+    "p99": 0.508,
+    "p999": 0.601,
+    "max": 0.669,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3060 Laptop GPU (Vulkan)",
+   "valid": true,
+   "problems": []
+  }
+ ]
+}

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pale Blue Dot — biome atlas</title>
+<style>
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0e171d; color: #e7eee9; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 1440px; padding: 36px; }
+  a { color: #9cd7d7; } h1 { font-size: clamp(2rem, 4vw, 3.5rem); margin: 12px 0; font-weight: 600; letter-spacing: -.04em; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .18em; font-size: .75rem; color: #a2bfb9; }
+  .intro { max-width: 820px; line-height: 1.6; color: #b3c5c7; }
+  label { display: block; margin-bottom: 8px; font-size: .85rem; }
+  select { width: min(100%, 500px); padding: 12px; background: #192831; color: inherit; border: 1px solid #49616a; font: inherit; }
+  main { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 32px; margin-top: 28px; }
+  figure { margin: 0; } #sheet { width: 100%; display: block; image-rendering: pixelated; }
+  figcaption, .muted { color: #a9bfc4; font-size: .85rem; line-height: 1.6; }
+  figcaption { margin-top: 10px; } h2 { margin: 0 0 8px; font-size: 1.6rem; }
+  #palette { display: flex; gap: 8px; margin: 12px 0 22px; }
+  .swatch { width: 56px; height: 24px; border: 1px solid #ffffff35; }
+  #tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tile { cursor: pointer; padding: 0; border: 2px solid transparent; background: none; color: inherit; min-width: 0; }
+  .tile:hover, .tile:focus-visible, .tile[aria-pressed=true] { border-color: #c1f2df; outline: none; }
+  .sample { display: block; width: 100%; aspect-ratio: 1; background-size: 400% 400%; image-rendering: pixelated; }
+  .tile-label { display: block; padding: 4px 2px; font-size: .67rem; min-height: 2.8em; line-height: 1.2; }
+  #repeat { display: grid; grid-template-columns: repeat(3, 1fr); max-width: 330px; margin-top: 12px; }
+  #selected { margin-top: 24px; } footer { border-top: 1px solid #304750; margin-top: 36px; padding-top: 18px; }
+  @media(max-width: 820px) { body { padding: 20px; } main { grid-template-columns: 1fr; } }
+</style>
+<header>
+  <div class="eyebrow">Pale Blue Dot / material library / revision 0.1</div>
+  <h1>Four worlds. Fourteen biomes.</h1>
+  <p class="intro">Pixel-art source sheets for hexagonal voxel terrain. Browse a world, choose a material, and inspect repetition. These generated originals establish the art direction; production pixel-grid and seam approval are still pending.</p>
+  <label for="biome">Choose a biome</label>
+  <select id="biome"><option value="0">Tenebris / Temperate fields</option><option value="1">Tenebris / Ochre desert</option><option value="2">Tenebris / Slate mountains</option><option value="3">Tenebris / Polar tundra</option><option value="4">Tenebris / Peat swamp</option><option value="5">Tenebris / Emerald jungle</option><option value="6">Tenebris / Shallow ocean</option><option value="7">Tenebris / Shell beach</option><option value="8">Sequoia / Sequoia redwood forest</option><option value="9">Sequoia / Sporewood basin</option><option value="10">Crag / Crag basalt wastes</option><option value="11">Frostbite / Frostbite frozen wastes</option><option value="12">Moons / Airless lunar regolith</option><option value="13">Asteroid belt / Metallic asteroid</option></select>
+</header>
+<main>
+  <figure><img id="sheet" alt=""><figcaption><a id="original">Open original PNG</a> · 4 × 4 material layout · nearest-filtered preview</figcaption></figure>
+  <section aria-labelledby="name"><div id="planet" class="eyebrow"></div><h2 id="name"></h2><p id="description" class="muted"></p><div id="palette" aria-label="Biome palette"></div><div id="tiles" aria-label="Material slots"></div><h3 id="selected"></h3><p class="muted">3 × 3 repetition study. Source boundaries use normalized quarters; this preview does not certify an exact production texel grid.</p><div id="repeat"></div></section>
+</main>
+<footer class="muted">Generated with the built-in image_gen tool. <a href="../assets/tilesets/prompts.json">Exact prompts</a> · <a href="../assets/tilesets/biomes.json">Material manifest</a> · <a href="game-design.md">Game design</a></footer>
+<script>
+const biomes = [{"id": "fields", "planet": "Tenebris", "name": "Temperate fields", "colors": ["#334b36", "#79904c", "#c5bd77", "#70513a"], "surface": "golden olive pasture grass", "soil": "warm brown soil", "rock": "gray limestone", "accent": "white field flowers", "tiles": ["pasture grass", "grass over dirt side", "crumbly dirt", "limestone", "copper ore in limestone", "clay", "oak bark", "oak end grain", "oak leaves", "wildflower ground", "mossy limestone", "packed path", "pebbled earth", "cut oak boards", "tilled soil", "weathered ruins"], "image": "fields.png"}, {"id": "desert", "planet": "Tenebris", "name": "Ochre desert", "colors": ["#9b4f36", "#d59a58", "#e4c78e", "#59784d"], "surface": "pale ochre sand", "soil": "rust orange sand", "rock": "layered sandstone", "accent": "turquoise mineral seams", "tiles": ["pale sand", "stratified sand side", "ochre grit", "red sandstone", "copper ore", "salt crust", "cactus skin", "cactus cut core", "dry scrub ground", "cracked clay", "sand ripples", "packed dune track", "dark desert pebbles", "sandstone bricks", "fossil bed", "turquoise seam"], "image": "desert.png"}, {"id": "mountains", "planet": "Tenebris", "name": "Slate mountains", "colors": ["#333e50", "#667583", "#a6b3b8", "#e1e2d9"], "surface": "gray blue scree", "soil": "coarse dark gravel", "rock": "blue slate", "accent": "rust iron veins", "tiles": ["scree", "scree over stone side", "dark gravel", "slate", "iron ore", "quartz seam", "granite", "fractured slate", "lichen stone", "snow dusted rock", "dark shale", "worn stone path", "angular pebbles", "slate bricks", "alpine soil", "frozen fissure"], "image": "mountains.png"}, {"id": "tundra", "planet": "Tenebris", "name": "Polar tundra", "colors": ["#526263", "#82918b", "#bcc6bb", "#e0e8df"], "surface": "thin white snow over sage moss", "soil": "frozen brown soil", "rock": "cold green gray granite", "accent": "amber lichen", "tiles": ["snowy moss", "snow over soil side", "frozen soil", "cold granite", "iron ore", "clear ice", "dwarf willow bark", "willow end grain", "dwarf willow leaves", "amber lichen", "wind packed snow", "frozen footpath", "frost pebbles", "rough willow boards", "peat", "ice crack"], "image": "tundra.png"}, {"id": "swamp", "planet": "Tenebris", "name": "Peat swamp", "colors": ["#253c38", "#506143", "#746741", "#a8b475"], "surface": "dark olive moss", "soil": "wet brown peat", "rock": "green weathered stone", "accent": "pale reed fibers", "tiles": ["swamp moss", "moss over mud side", "wet peat", "green stone", "bog iron", "clay", "alder bark", "alder end grain", "alder leaves", "reed mat", "duckweed surface", "mud trail", "wet pebbles", "alder boards", "root filled mud", "peat bricks"], "image": "swamp.png"}, {"id": "jungle", "planet": "Tenebris", "name": "Emerald jungle", "colors": ["#173d3b", "#286344", "#70a74d", "#bfbc6a"], "surface": "deep emerald jungle litter", "soil": "dark red loam", "rock": "moss coated basalt", "accent": "golden fern fronds", "tiles": ["jungle grass", "jungle grass over loam side", "red loam", "dark basalt", "copper ore", "river clay", "kapok bark", "kapok end grain", "broad kapok leaves", "fern ground", "mossy basalt", "root path", "river stones", "kapok boards", "vine covered stone", "ancient brick"], "image": "jungle.png"}, {"id": "ocean", "planet": "Tenebris", "name": "Shallow ocean", "colors": ["#164a60", "#267c83", "#63b5a5", "#c6d8b1"], "surface": "pale submerged sand", "soil": "blue green seabed silt", "rock": "cool reef limestone", "accent": "muted coral salmon", "tiles": ["seabed sand", "sand over silt side", "ocean silt", "reef limestone", "copper nodule", "chalk", "kelp mat", "shell bed", "seagrass ground", "coral rubble", "water ripple pattern", "scoured seabed", "smooth pebbles", "encrusted bricks", "deep seabed mud", "salt mineral"], "image": "ocean.png"}, {"id": "beach", "planet": "Tenebris", "name": "Shell beach", "colors": ["#92765b", "#c4ad7a", "#eee0b1", "#598e83"], "surface": "warm ivory shell sand", "soil": "damp ochre sand", "rock": "rounded coastal sandstone", "accent": "pale turquoise sea glass", "tiles": ["dry shell sand", "dry over wet sand side", "wet sand", "coastal sandstone", "iron stained rock", "shell bed", "driftwood bark", "driftwood end grain", "beach grass ground", "seaweed mat", "tidal ripple sand", "packed beach trail", "rounded pebbles", "driftwood boards", "sea glass rubble", "salt crust"], "image": "beach.png"}, {"id": "redwood_forest", "planet": "Sequoia", "name": "Sequoia redwood forest", "colors": ["#283b48", "#455e65", "#96624d", "#bbb68b"], "surface": "dusky blue teal needle litter", "soil": "wine brown humus", "rock": "blue green bedrock", "accent": "copper red redwood bark", "tiles": ["teal needle litter", "litter over humus side", "wine brown humus", "blue green stone", "copper ore", "pale clay", "redwood bark", "redwood end grain", "redwood foliage", "silver fern ground", "moss stone", "root trail", "blue pebbles", "redwood boards", "dense roots", "ancient redwood charcoal"], "image": "redwood_forest.png"}, {"id": "sporewood", "planet": "Sequoia", "name": "Sporewood basin", "colors": ["#34374c", "#71667f", "#8aa68f", "#d5c5ad"], "surface": "pale mint mycelium", "soil": "violet humus", "rock": "purple gray stone", "accent": "muted cyan luminous spores", "tiles": ["mint mycelium", "mycelium over humus side", "violet humus", "purple gray stone", "crystal ore", "spore clay", "sporewood stalk", "sporewood end grain", "fungal gills", "mushroom cap skin", "cyan spore clusters", "compacted mycelium path", "violet pebbles", "sporewood boards", "root web", "basin silt"], "image": "sporewood.png"}, {"id": "basalt_wastes", "planet": "Crag", "name": "Crag basalt wastes", "colors": ["#292c35", "#51505a", "#914d3e", "#c88b5e"], "surface": "dark ash", "soil": "red volcanic grit", "rock": "black cracked basalt", "accent": "dull copper and sulfur", "tiles": ["ash crust", "ash over basalt side", "volcanic grit", "basalt", "iron ore", "sulfur", "obsidian", "pumice", "red scoria", "copper ore", "cracked basalt", "compacted ash track", "volcanic rubble", "basalt bricks", "fossil lava rope", "dark mineral seam"], "image": "basalt_wastes.png"}, {"id": "frozen_wastes", "planet": "Frostbite", "name": "Frostbite frozen wastes", "colors": ["#394963", "#68819a", "#a9c9d3", "#e6eded"], "surface": "blue white wind packed ice", "soil": "frozen gray regolith", "rock": "navy blue stone", "accent": "pale violet salt", "tiles": ["wind packed snow", "snow over ice side", "frozen regolith", "navy stone", "iron ore", "clear blue ice", "layered glacial ice", "fractured ice", "frost crystals", "violet salt", "snow sastrugi", "compressed ice track", "frost rubble", "ice bricks", "deep blue ice", "buried dust layer"], "image": "frozen_wastes.png"}, {"id": "lunar_regolith", "planet": "Moons", "name": "Airless lunar regolith", "colors": ["#353744", "#686776", "#a09b9e", "#cbc5bb"], "surface": "neutral warm gray moon dust", "soil": "dark crater dust", "rock": "purple gray breccia", "accent": "pale anorthosite", "tiles": ["moon dust", "dust over breccia side", "crater dust", "breccia", "iron ore", "anorthosite", "vesicular basalt", "impact glass", "microcrater texture", "pale ejecta", "fractured bedrock", "compressed rover track", "impact rubble", "sintered regolith bricks", "subsurface ice trace", "dark mare basalt"], "image": "lunar_regolith.png"}, {"id": "asteroid", "planet": "Asteroid belt", "name": "Metallic asteroid", "colors": ["#252a31", "#525b61", "#888879", "#c0af8a"], "surface": "charcoal metallic dust", "soil": "dark carbonaceous grit", "rock": "nickel iron rock", "accent": "brassy metallic inclusions", "tiles": ["metal dust", "dust over metal rock side", "carbon grit", "nickel iron rock", "iron ore", "silicate", "carbonaceous stone", "impact melt", "brassy metal inclusions", "pale olivine", "fractured metal rock", "compacted drill track", "metal rubble", "sintered metal plates", "ice pocket", "dark chondrules"], "image": "asteroid.png"}];
+const byId = id => document.getElementById(id);
+let active = 0;
+function sample(biome, index) {
+  const span = document.createElement('span');
+  span.className = 'sample';
+  span.style.backgroundImage = `url('../assets/tilesets/${biome.image}')`;
+  span.style.backgroundPosition = `${(index % 4) * 100 / 3}% ${Math.floor(index / 4) * 100 / 3}%`;
+  return span;
+}
+function selectTile(index) {
+  const biome = biomes[active];
+  byId('selected').textContent = `${String(index).padStart(2, '0')} / ${biome.tiles[index]}`;
+  byId('repeat').replaceChildren(...Array.from({length: 9}, () => sample(biome, index)));
+  document.querySelectorAll('.tile').forEach((tile, i) => tile.setAttribute('aria-pressed', String(i === index)));
+}
+function show(index) {
+  active = index;
+  const biome = biomes[index];
+  byId('planet').textContent = biome.planet;
+  byId('name').textContent = biome.name;
+  byId('description').textContent = `${biome.surface}; ${biome.soil}; ${biome.rock}.`;
+  byId('sheet').src = `../assets/tilesets/${biome.image}`;
+  byId('sheet').alt = `${biome.name}: sixteen pixel-art terrain material textures`;
+  byId('original').href = byId('sheet').src;
+  byId('palette').replaceChildren(...biome.colors.map(color => {
+    const swatch = document.createElement('span'); swatch.className = 'swatch'; swatch.style.backgroundColor = color; swatch.title = color; return swatch;
+  }));
+  byId('tiles').replaceChildren(...biome.tiles.map((name, i) => {
+    const button = document.createElement('button'); button.className = 'tile'; button.type = 'button'; button.title = name;
+    const label = document.createElement('span'); label.className = 'tile-label'; label.textContent = `${i}. ${name}`;
+    button.append(sample(biome, i), label); button.addEventListener('click', () => selectTile(i)); return button;
+  }));
+  selectTile(0);
+}
+byId('biome').addEventListener('change', event => show(Number(event.target.value)));
+show(0);
+</script>
+</html>

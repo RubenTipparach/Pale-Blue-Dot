@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pale Blue Dot — biome atlas</title>
+<style>
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0e171d; color: #e7eee9; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 1440px; padding: 36px; }
+  a { color: #9cd7d7; } h1 { font-size: clamp(2rem, 4vw, 3.5rem); margin: 12px 0; font-weight: 600; letter-spacing: -.04em; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .18em; font-size: .75rem; color: #a2bfb9; }
+  .intro { max-width: 820px; line-height: 1.6; color: #b3c5c7; }
+  label { display: block; margin-bottom: 8px; font-size: .85rem; }
+  select { width: min(100%, 500px); padding: 12px; background: #192831; color: inherit; border: 1px solid #49616a; font: inherit; }
+  main { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 32px; margin-top: 28px; }
+  figure { margin: 0; } #sheet { width: 100%; display: block; image-rendering: pixelated; }
+  figcaption, .muted { color: #a9bfc4; font-size: .85rem; line-height: 1.6; }
+  figcaption { margin-top: 10px; } h2 { margin: 0 0 8px; font-size: 1.6rem; }
+  #palette { display: flex; gap: 8px; margin: 12px 0 22px; }
+  .swatch { width: 56px; height: 24px; border: 1px solid #ffffff35; }
+  #tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tile { cursor: pointer; padding: 0; border: 2px solid transparent; background: none; color: inherit; min-width: 0; }
+  .tile:hover, .tile:focus-visible, .tile[aria-pressed=true] { border-color: #c1f2df; outline: none; }
+  .sample { display: block; width: 100%; aspect-ratio: 1; background-size: 400% 400%; image-rendering: pixelated; }
+  .tile-label { display: block; padding: 4px 2px; font-size: .67rem; min-height: 2.8em; line-height: 1.2; }
+  #repeat { display: grid; grid-template-columns: repeat(3, 1fr); max-width: 330px; margin-top: 12px; }
+  #selected { margin-top: 24px; } footer { border-top: 1px solid #304750; margin-top: 36px; padding-top: 18px; }
+  @media(max-width: 820px) { body { padding: 20px; } main { grid-template-columns: 1fr; } }
+</style>
+<header>
+  <div class="eyebrow">Pale Blue Dot / material library / revision 0.1</div>
+  <h1>Four worlds. Fourteen biomes.</h1>
+  <p class="intro">Pixel-art source sheets for hexagonal voxel terrain. Browse a world, choose a material, and inspect repetition. These generated originals establish the art direction; production pixel-grid and seam approval are still pending.</p>
+  <label for="biome">Choose a biome</label>
+  <select id="biome">__OPTIONS__</select>
+</header>
+<main>
+  <figure><img id="sheet" alt=""><figcaption><a id="original">Open original PNG</a> · 4 × 4 material layout · nearest-filtered preview</figcaption></figure>
+  <section aria-labelledby="name"><div id="planet" class="eyebrow"></div><h2 id="name"></h2><p id="description" class="muted"></p><div id="palette" aria-label="Biome palette"></div><div id="tiles" aria-label="Material slots"></div><h3 id="selected"></h3><p class="muted">3 × 3 repetition study. Source boundaries use normalized quarters; this preview does not certify an exact production texel grid.</p><div id="repeat"></div></section>
+</main>
+<footer class="muted">Generated with the built-in image_gen tool. <a href="../assets/tilesets/prompts.json">Exact prompts</a> · <a href="../assets/tilesets/biomes.json">Material manifest</a> · <a href="game-design.md">Game design</a></footer>
+<script>
+const biomes = __BIOME_DATA__;
+const byId = id => document.getElementById(id);
+let active = 0;
+function sample(biome, index) {
+  const span = document.createElement('span');
+  span.className = 'sample';
+  span.style.backgroundImage = `url('../assets/tilesets/${biome.image}')`;
+  span.style.backgroundPosition = `${(index % 4) * 100 / 3}% ${Math.floor(index / 4) * 100 / 3}%`;
+  return span;
+}
+function selectTile(index) {
+  const biome = biomes[active];
+  byId('selected').textContent = `${String(index).padStart(2, '0')} / ${biome.tiles[index]}`;
+  byId('repeat').replaceChildren(...Array.from({length: 9}, () => sample(biome, index)));
+  document.querySelectorAll('.tile').forEach((tile, i) => tile.setAttribute('aria-pressed', String(i === index)));
+}
+function show(index) {
+  active = index;
+  const biome = biomes[index];
+  byId('planet').textContent = biome.planet;
+  byId('name').textContent = biome.name;
+  byId('description').textContent = `${biome.surface}; ${biome.soil}; ${biome.rock}.`;
+  byId('sheet').src = `../assets/tilesets/${biome.image}`;
+  byId('sheet').alt = `${biome.name}: sixteen pixel-art terrain material textures`;
+  byId('original').href = byId('sheet').src;
+  byId('palette').replaceChildren(...biome.colors.map(color => {
+    const swatch = document.createElement('span'); swatch.className = 'swatch'; swatch.style.backgroundColor = color; swatch.title = color; return swatch;
+  }));
+  byId('tiles').replaceChildren(...biome.tiles.map((name, i) => {
+    const button = document.createElement('button'); button.className = 'tile'; button.type = 'button'; button.title = name;
+    const label = document.createElement('span'); label.className = 'tile-label'; label.textContent = `${i}. ${name}`;
+    button.append(sample(biome, i), label); button.addEventListener('click', () => selectTile(i)); return button;
+  }));
+  selectTile(0);
+}
+byId('biome').addEventListener('change', event => show(Number(event.target.value)));
+show(0);
+</script>
+</html>

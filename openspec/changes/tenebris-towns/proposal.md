@@ -1,0 +1,165 @@
+# Proposal: Tenebris towns, with interiors, proper stairs and collision
+
+## Why
+
+**The owner's request: "Make html mock up of cities. I want interiors, proper
+stairs and collisions. The tenebris people have sort of medieval level tech so
+their stuff is not super advanced."** Then, on the first mockup: "Roof is
+clipping here and the move stick isn't working when I tap on my phone. Can you
+make a couple of different kits? Like a small straw huts or dirt huts or wooden
+houses, or brick houses. Try to mix with different brick types, stone, marble,
+clay." And on the kits: "I would think different biomes would have different
+building materials. Do you have sets like igloos, ice castles? What about
+deserts? Jungles with big tree houses and wooden bridges? I also want to see
+what a small town by itself would look like as well. Also a swamp would have
+like houses [raised] on wooden platforms like the bayou." And last: "I need
+like a coastal town/fishing hamlet where there's lots of [docks] and boats."
+(Bracketed words are the owner's own corrections or plain typos fixed.) And
+on the harbour at dusk: "All your mockups should have lighting at night." And
+then: "I expect bigger cities to have well lit streets and partially lit
+windows. The forest bridges should have lighting too. Maybe smaller lights."
+
+The world has terrain, trees, water and weather, and nothing anyone built.
+Three things stand between the engine and a town you can walk into:
+
+1. **A whole cell is too big to be a wall.** A cell is 2.833 m flat to flat
+   (CLAUDE.md's gold standard). A house built from solid cells has walls
+   2.8 m thick, and a house one ring of cells across has one cell of room
+   inside it. Interiors need walls much thinner than a cell.
+2. **The walker cannot climb a proper stair.** `walking.rs` climbs anything up
+   to `step_height` (1.05 m) in a single tick, snaps down only within 3 cm, and
+   drops all tangential motion when a move is refused. On a real stair
+   (0.19 m risers on 0.35 m treads) that is 22 jumps of the eye a second going
+   up, a fall at every riser coming down, and a dead stop at every door jamb.
+   The mockup measures all three (design section 5).
+3. **Collision has no thin geometry.** `PlanetContact::stand` answers a floor
+   and a ceiling per hex column. A wall on a cell edge, a door, a table or a
+   stair rail is not a column.
+
+## What changes
+
+- **A mockup came first, as asked.** `docs/mockups/towns.html`, published at
+  <https://claude.ai/artifact/59zS9ERBTkrVrzPedfoUL2>, is a three.js walled market town on
+  three terraces: an inn with a hall and rooms upstairs, twelve houses, a
+  smithy, a moot hall, a three-storey keep, two wall towers, a quay, a market
+  and sixteen townsfolk. Every room can be entered. The walker is
+  `walking.rs`'s, and a switch (T) swaps between today's rules and the
+  proposed ones on the same stairs. The collision near you can be drawn (C).
+- **Buildings are cut to the cell, not scaled to it.** Walls sit on cell
+  edges (0.3 m timber, 0.5 m stone), one wall per shared edge. Floors are
+  per cell. A storey is three layers: 3 m floor to floor, 2.8 m clear. Doors
+  are 1.0 by 2.2 m. The town wall and the keep's footing are whole masonry
+  cells, as a real curtain wall is 2 to 3 m thick.
+- **Three stairs, each landing on a layer line.**
+  - A **straight flight** over two cells climbs one storey in 16 risers of
+    0.1875 m on 0.354 m treads (28°). It needs a cell before it and a cell
+    after it, in line.
+  - A **newel stair** in one cell turns once per storey: 15 winders of 0.2 m.
+    A metre of rise turns 120°, two edges, so a doorway at any layer line is
+    centred on an edge. It ends in a 30° landing and a rail.
+  - **Street steps** climb one 1 m terrace in one cell: 6 risers of 0.167 m on
+    0.472 m treads.
+- **Collision gains a second primitive and three rules.**
+  - *Thin solids*: a convex outline in plan, extruded over a height range
+    (walls, jambs, doors, rails, furniture, posts, people), beside the column
+    runs `stand` already answers. *Surfaces*: pieces whose top is a function
+    of position (stairs, roofs).
+  - A stair's walking surface is its **pitch line**. The treads are drawn,
+    and the eye climbs smoothly with no camera easing.
+  - A grounded walker is **held to a floor up to 0.35 m below**, so going
+    down a stair never leaves it.
+  - A blocked move **slides**: the body is pushed out along the face it hit,
+    and only the motion into the face is lost.
+- **Doors are world state.** E opens and closes one. Open or shut, it is a
+  world mutation and goes through the durable save path.
+- **Kits: what a building is made of, not how it is cut.** Eleven: straw hut,
+  mud hut, timber boards, half-timber, red brick, buff brick, clinker brick
+  (Flemish bond), fieldstone, ashlar, clay (a flat roof with beam ends) and
+  marble (columns at every corner). A kit sets the wall faces per storey, the
+  corner posts, the roof and gable, and the floor; walls on edges, floors in
+  cells and the stairs are the same for all of them. Huts are the one exception
+  to the storey: one storey of two layers, 1.9 m doors, a cone or turf roof.
+  The town mixes the house kits; a hamlet of huts stands outside the east wall.
+- **A settlement per biome, from that biome's materials.** Seven, switched in
+  the mockup: the walled town and a village standing by itself in the fields,
+  a desert town round an oasis (sandstone houses with roof stairs, mud-brick
+  domes, a domed caravan hall), a tundra camp (igloos, a granite longhouse under
+  turf and snow, a castle of ice), a jungle village on platforms in three kapok
+  giants joined by rope bridges, a swamp village of alder stilt houses on
+  boardwalks, and a fishing harbour where the beach meets the fields. Each
+  takes its materials and plants from the biome catalogue in
+  `docs/game-design.md`, so no settlement borrows another biome's; the harbour
+  stands on two, and takes from those two only.
+- **The harbour: docks and boats, as asked.** Four piers a metre over the
+  water, six finger piers and a pier head; twenty-three small boats
+  (rowboats, sailing boats, canoes) moored along them, one in each boathouse
+  and two upturned on the beach; a 15 m cog alongside the main pier that you board over a
+  gangplank; two boathouses open to the sea, a shipyard with a hull in frame
+  and a slip, fish huts on stilts off their own pier, a light on the mole, a
+  fish market along the quay, nets and fish drying on the beach, and fourteen
+  houses on three terraces behind. Driftwood and whitewash are the two new
+  kits.
+- **Four new pieces carry them:** a dome (its underside the ceiling), a raised
+  deck on piles, a walkway between two points (a rope bridge that sags, a
+  boardwalk, a jetty), and an outdoor stair between two points. All four
+  collide as floors, ceilings and rails the way the rest do. The harbour adds
+  **boats and a ship**: a moored boat is a solid hull the walker goes round,
+  and a ship's deck, castles and stair are floors behind a rail with a gangway
+  in it.
+- **Every settlement is lit at night by its own lights.** Hearths, a lantern
+  by every house door, street lanterns (densest in the walled town), about
+  half the windows lit, small lanterns on the jungle's rope bridges, and each
+  biome's own torches and braziers. Every light lights what is near it wherever the camera is (block
+  light baked into the vertices, kept to its room), where before only the 8
+  nearest the camera did.
+- **Roofs never cut into each other.** The first mockup's clipping was two
+  houses in touching columns: on the hex grid their plans interlock by half a
+  cell, and the eaves overlapped. Every roof's plan, eaves included, is now
+  checked against every other when a town is laid out, and the keep and towers
+  count as roofs.
+
+## Impact
+
+- **Specs.** `world/settlements` is new. `player/walking` gains the pitch line,
+  the hold-down and the slide.
+- **Code.**
+  - `pbd-core`: a `settlement` module (pieces, the stair set, the layout of a
+    town as data) and thin solids and surfaces in the contact query, with the
+    stair heights as functions both the walker and the tests read.
+  - `pbd-app`: piece meshes built from each cell's real corners, the three
+    walker changes, doors and their save records.
+- **Nothing here changes terrain, digging or the flight model.** Street steps
+  and buildings sit on the existing terrace grid.
+- **Out of scope:** the player building with these pieces, townsfolk who do
+  more than walk a path or work in place, trade, and where towns go on the
+  planet.
+
+## Questions for the owner, answered
+
+The owner answered in the survey (2026-09-27), and the cities roadmap
+answered two more (questions 3 and 4 of the original nine):
+
+| # | Question | The owner's answer | What it changes |
+| --- | --- | --- | --- |
+| T1 | Walking speed indoors | "yea 8 is running, 2.5 is walking. slow automatically when indoors or if I hold shift, then run" | Walking is 2.5 m/s and running 8 m/s. The walker walks under a roof or while Shift is held, and runs otherwise (task 2). How this sits with the 14 m/s sprint on Shift today is asked again in the survey (T8) |
+| T2 | What Tenebris people look like | "this is fine, instead of cubes I prefer hexagonal blocks that look like cubes, keeps the spirit of the game" | Townsfolk are built from hexagonal prisms of the terrain's pixel style (`townsfolk`) |
+| T3 | Pitch line or treads | "prefer glide, it feels nice" | The pitch line, as proposed |
+| T4 | Walkable roofs | "yea" | All roofs are walkable |
+| T5 | Which kits, where | "all, and yes you can steal from people lol, but there will be consequences." | All kits, placed by wealth. Stealing from townsfolk, and their reaction, is a later change after the roadmap |
+| T6 | Settlements per biome | "ooh mountain or cave settlements need to be there too, no other planets for now, revise mockups with mountain dwellings please, and cave dwellers too! hobbit ground based houses or mounds would be cool too!" | A ninth mockup round adds mountain dwellings, cave dwellers and mound houses (task 0). Tenebris only |
+| T7 | Boats | "Yup, you can use any boat you find." | Every harbour boat is a usable craft (`cities-in-the-world` task 4.2b) |
+| T8 | Sprint and Shift | "caps to toggle sprint off, shift to sprint, run at 5 ms, sprint at 8ms, walk at 3 ms, ctrl is crouch 1 ms" | Run 5 m/s, sprint 8 on Shift, walk 3, crouch 1 on Ctrl (design section 4, task 2). What Caps Lock does is T8b and T8c |
+| T8b | What Caps Lock toggles | "Recommended for both items" | Caps Lock switches between run (5 m/s) and walk (3 m/s), and Shift sprints (8 m/s) over either (design section 4, task 2) |
+| T8c | Walking under a roof | "Recommended for both items" | Under a roof the walker walks unless Shift is held, as T1 asked |
+| T9 | Can the cog be sailed | "YES" | The cog sails with you walking on its deck, as its own change after the roadmap (`sail-the-cog`), which was the recommended timing |
+| T10 | Touch controls | "this isnt even a question, we're building a desktop game, no need for this nonsense." | Mockup only. The game has no touch controls |
+| T11 | The T walker toggle | "drop" | Not in the game. The mockup keeps it for comparing, and the videos show the difference |
+| T12 | Mountain settlements on the map | "recommended" | `city-sites` places cliff villages and cave towns |
+| T13 | Where a cave town's chamber comes from | "recommended" | The town's stored record holds its hollows, and the ground is generated from it (`cities-in-the-world` decision 3) |
+| 3 | Hand-made or generated | the roadmap: both | `city-sites` generates them, and the owner's overrides pin and strike |
+| 4 | Can the player build with the pieces | the roadmap: yes | `player-building` |
+
+## Status
+
+Proposed. The mockup is built and published for the owner's verdict. No Rust
+has been written. The next step is that verdict, then `/opsx:apply`.

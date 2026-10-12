@@ -1,0 +1,17 @@
+// How the tool in hand moves (crates/pbd-app/src/held.rs). The tools' shapes,
+// their held poses and the hand are not here: they are generated data,
+// assets/models/held_tools.ron, written by tools/gen_held_tools.py from the
+// approved Hex Tool Bench mockup (openspec/changes/hex-held-tools).
+//
+// The idle sway (amplitude right and up, m, and rate, rad/s) and the chop
+// while a block is being broken (rate, rad/s; drop, m; pitch about the fist,
+// rad) are Tenebris's viewmodel's.
+//
+// The code defaults written out; a test holds the two together.
+(
+    sway_m: (0.006, 0.005),
+    sway_rate: (1.3, 1.7),
+    swing_rate: 9.0,
+    swing_drop_m: 0.06,
+    swing_pitch_rad: 0.85,
+)

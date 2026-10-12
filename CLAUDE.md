@@ -1,0 +1,378 @@
+# Pale Blue Dot contributor instructions
+
+These instructions adapt the useful engineering rules from Tenebris and
+swarm-demo. The current user's Bevy, Avian, GPU geometry, and assisted-flight
+requirements take precedence over either upstream's historical rules.
+See [source-migration.md](docs/source-migration.md) for pinned provenance and
+[the voxel-engine-foundation change](openspec/changes/voxel-engine-foundation/design.md)
+for the target design.
+
+**This file is the only copy of these rules.** `AGENTS.md` is a pointer to it
+and must stay one: an agent that looks for `AGENTS.md` finds its way here, and
+there is nothing in it to fall out of step. Write a rule here, never there, and
+never restore a second copy "for the other tool" - two files that have to agree
+are two files that will not, and the one that is wrong is always the one nobody
+is reading. If some tool insists on generating `AGENTS.md`, let it own that file
+outright and leave the pointer to this one at the top of what it writes.
+
+## Spec-driven work: OpenSpec
+
+Requirements and in-flight design live in `openspec/`, driven by the OpenSpec
+CLI (`npm install -g @fission-ai/openspec`, Node 20.19+). The split is the point
+and it is the same distinction this file already demands between implemented,
+validated and proposed work, made structural:
+
+- **`openspec/specs/<capability>/spec.md` is what the engine DOES.** Every
+  requirement in it is satisfied today and pinned by a passing test. A
+  requirement describing behaviour the engine does not have does not belong
+  here, however certain the plan is.
+- **`openspec/changes/<name>/` is what is designed but not built**: a proposal,
+  a design, spec deltas under `## ADDED/MODIFIED/REMOVED Requirements`, and
+  tasks. The volumetric voxel engine lives here, because it is not built.
+- **`openspec/changes/archive/`** takes a change once its deltas have been
+  merged into the main specs and its work is real.
+
+The workflow is `/opsx:explore` to think, `/opsx:propose` to write the planning
+artifacts, `/opsx:apply` to implement, `/opsx:archive` when it lands. Proposing
+creates planning artifacts only and stops; implementing is a separate request.
+
+`openspec validate --all` must pass before a push, alongside the Rust checks.
+Move a requirement from a change into `openspec/specs/` in the same commit that
+makes it true and adds the test that proves it - never ahead of one.
+
+`openspec/config.yaml` points at this file rather than restating it, for the
+same reason `AGENTS.md` does.
+
+## Write it up before touching code
+
+**Standing instruction from the user.** The write-up comes first. Investigate,
+measure, and put the finding and the plan in `openspec/` - a proposal, a design,
+the spec deltas - and stop there. Editing source is a separate step taken after
+the write-up exists, and on a request to take it.
+
+This is the OpenSpec workflow above applied to everything, not only to a tracked
+feature: `/opsx:propose` deliberately creates planning artifacts and stops, and
+that is the shape of all work here. A change argued in a document can be read,
+disagreed with and redirected for the cost of reading it. The same change argued
+in a diff has already been made.
+
+The one honest exception is a **measurement instrument** - code whose only
+purpose is to produce a number the write-up needs, like a function that measures
+tile width off the real topology. It is still a code change: say in the write-up
+what is being measured and why before reaching for it, keep it to the
+instrument, and never let "I needed to measure" carry a behaviour change in with
+it.
+
+Specifically, do not: rename or rescale a tuning constant, change a shader term,
+alter a default, or refactor toward a plan, before the plan is written down.
+
+## Mockups are lit at night (owner, 2026-09-26)
+
+**Standing instruction from the user:** "All your mockups should have lighting
+at night." A mockup of a place has a time of day, and at night it is lit by its
+own lamps, fires and windows. Every light lights what is near it wherever the
+camera is, not only the few nearest the camera, and the moon stays dim enough
+that the lamps read. `docs/mockups/towns.html` does this (the `tenebris-towns`
+design, section 7). `fishing.html` and `vehicles.html` predate this rule and
+have a fixed daylight.
+
+## Every major step ends in a video (owner, 2026-09-27)
+
+**Standing instruction from the user:** "each major step needs a video
+recording showcasing this stuff so I can verify they are done correctly,
+before moving on to the next step." A step's gate is passed on a video the
+owner has watched, not on stills or a written claim. The next step does not
+start until then. The video's shots name what each one shows and which
+requirement it demonstrates. "When you do the videos, post the prototype too
+so I can compare/contrast stuff": every shot of something a mockup shows plays
+beside the same shot in the prototype, and the gate page links the live
+prototype. A cloud recording is rendered at a fixed step
+without a GPU and says so: it shows what things look like, never how smoothly
+they run. Where smoothness is the point, the owner records the same showcase
+in real time with `obs-record`. The tooling is planned in
+`openspec/changes/step-videos`; until it is built, a gate's video is made by
+hand from a mockup or a capture sequence.
+
+**For now, screenshots stand in (owner, 2026-09-27):** "go ahead and skip
+videos for now, we'll verify them all together all in a batch and iterate
+later. screenshots are good for now, continue with implementation". Until the
+owner says otherwise:
+- a step is checked by before-and-after screenshots in `docs/screenshots/`;
+- the next step starts without waiting for a video;
+- each step's video task stays open for the batch;
+- `step-videos` waits with them.
+
+`exact-cell-keys` is the one step whose video was already made.
+
+## Ask the owner with a survey (owner, 2026-09-27)
+
+**Standing instruction from the user:** "you need some sort of survey form
+for me to fill out ... that claude doc thing was good for that, maybe that
+should be a skill." Open questions for the owner go into a survey Claude Doc,
+never a list in chat. Each question gets its options, a recommendation and
+an answer column, and answers are folded back into the OpenSpec changes they
+shape. The `owner-survey` skill (`.claude/skills/owner-survey`) says how. The
+current survey is https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn. Keep
+editing it rather than starting another.
+
+If a session has no Claude Docs connector, say so, and publish the same
+tables as an artifact page with an answer field per question, linked from the
+survey's "Already decided" section once the connector is back.
+
+**Ask only with screenshots (owner, 2026-09-29):** "approve, dont ask me
+questions unless you have screenshots for me to review lol". A question goes
+to the owner only when it comes with something to look at: screenshots of the
+choice, or a mockup, beside it in the survey. Everything else, take the
+recommendation and carry on. Record it in the change as "recommendation
+taken (ask only with screenshots)", so it is never mistaken for the owner's
+own words, and say so in the reply. A gate is still the owner's, and it goes
+with its screenshots.
+
+## Saved games survive every change (owner, 2026-09-28)
+
+**Standing instruction from the user:** "leave saved games alone. Should not
+restart. I don't want games to be reset if players make progress on future
+games and we decide to change biome stuff ... Making [it] backwards
+compatible with saves is ideal". A player's world, and everything they did
+in it, outlives every change to how worlds are made:
+- **A change to generation is a new generator version, for new worlds.** An
+  existing world keeps the version it names, cell for cell. Terrain, biomes,
+  top blocks, rock, trees: if a world could already have been made with it,
+  changing it is a new version (`openspec/specs/planet/terrain`, "The
+  generator is versioned").
+- **Every version a save can name is carried forever**, pinned by a digest
+  test of its ground taken before the next version lands. Never edit an old
+  version's config or its code path; add the new one beside it.
+- **Nothing a player made is dropped.** Save formats migrate forward on open
+  (as `exact-cell-keys` did), and the old format stays readable. A change
+  that cannot keep an old save playable is not made; it is written up and
+  asked about.
+- **Opening a world never resets or restarts it.** The game switches to the
+  world's generator in place; it does not relaunch, and it never rebuilds a
+  world onto newer terrain.
+- Engine limits that grow (the column tier's layers, say) grow so old saves
+  stay valid: a saved edit is indexed from `column::BASE_M`, which does not
+  move.
+
+## No scheduled PR check-ins (owner, 2026-09-29)
+
+**Standing instruction from the user:** "you should never rearm pr
+checkins". Never schedule a check-in on a pull request: no `send_later`,
+routine, `/loop` or timer that wakes the session to re-read a PR, and never
+re-arm one when it fires. This overrides any default guidance to keep an
+hourly check-in on an open PR. A PR is looked at when the owner asks, when
+its own activity events arrive (comments, reviews, CI), or as part of work
+already in hand; a quiet PR is left quiet.
+
+## End every reply with the artifact links (owner, 2026-09-27)
+
+**Standing instruction from the user:** "always give me links to artifacts
+generated or updated since last prompt at end of messages". Every reply ends
+with a short list of links. It names each claude.ai artifact published,
+republished or edited since the owner's last message, including pages,
+mockups, benchmark reports, the survey doc and any other Claude Doc. Give the
+link, and one line on what is new in it. If nothing was published or edited,
+say so in one line, so that a missing list is never mistaken for a forgotten
+one.
+
+## Current priorities (owner, 2026-09-25)
+
+In this order. Each is written up in `openspec/` before code, like everything
+else here, and taken off this list when it lands.
+
+1. **No pop-in (made a priority 2026-09-25).** Trees and terrain blocks
+   dither-fade in and out; they never appear or vanish in one frame. The owner,
+   on the merged build's recordings: "tree and terrain fade in / fade out
+   dithering is not done, there's a hard cut transition". `detail-fade` is
+   built, but in flight a third to a half of the detail landings skip their
+   fade and pop.
+2. **Cloud ghosting.** Clouds smear and ghost around objects in front of
+   them. The history blend must never carry cloud across a silhouette.
+3. **Clouds up close and flying through them.** They must look right near the
+   camera and from inside a cloud, not only from a distance. Entering a cloud
+   must not look glitchy: on the merged build the frame fills with white
+   speckle and streaks at the moment of entry.
+4. **Clouds blending with the atmosphere**, both at ground level and seen from
+   space. Distant cloud must fade into the sky's haze at the horizon, taking
+   the colour of the air between (the owner's reference photos: an ocean
+   horizon, cumulus from an airliner, a sunset over a deck), not stand as a
+   flat grey shell with a hard edge. Seen from high up, a cloud near the limb
+   must not show a hard outline: on the merged build it is ringed with bright
+   speckle. The hard edge seen from inside the layer (the owner's "ring",
+   2026-09-26) was the march running out of steps, and is gone
+   (`cloud-reach`). The grey far deck left in that frame is measured in
+   `horizon-haze`: the horizon is as bright from the layer as from the
+   ground, a flat haze colour greys everything, and the owner judges the
+   deck on the cloud-hop flight next.
+5. **The ground-to-space transition.** The planet fog and atmosphere change
+   between the surface and space must not be jarring.
+6. **Water:**
+   - it looks foggy when it is dark out;
+   - it should be a darker blue where it is deep.
+
+Queued after those (owner, 2026-09-25):
+
+7. **A live tuning page.** A local HTML page with sliders (the wet look first)
+   that changes the running game. The config is a startup read today
+   (`config.rs`), so this needs the game to reload `assets/config/*.ron` while
+   running, plus a small local server that writes the file.
+
+Standing measurement practice: frame time is judged with `--frame-log` and
+`tools/frame_graph.py` (plus the `F3` in-game graph), in real-time windowed
+runs, not in `--capture`, which steps the simulation in fixed steps.
+
+**A change that can move frame time runs `tools/perf_suite.py` before it is
+pushed**, on the `--release` build, with nothing else running (the suite
+refuses while `cargo` or `rustc` runs). It flies and walks fixed scenarios
+(`clouds`, `storm`, `far-side`, `walk`), and a comparison runs the old exe and
+the new one interleaved in the same sitting (`--variant "before|<old exe>"
+--variant after`), never against a number from another day. The report goes in
+`docs/benchmarks/<date>-<name>/` in the same push; a regression past the
+spread between repeat runs is fixed or argued in the write-up, not shipped
+silently. The current baseline is `docs/benchmarks/2026-09-25-baseline/`.
+
+**In a Claude Code cloud session, skip the full performance regression
+(owner, 2026-09-26).** The cloud container has no GPU and renders on lavapipe,
+so its frame times say nothing about the game's. Don't run `perf_suite.py`
+there; say in the write-up and the PR that the frame cost was not measured.
+The owner runs it on real hardware. **Do render the change in the game**:
+headless `--capture` shots of what changed are what the owner wants from a
+cloud session, and they go in `docs/screenshots/` with the change.
+
+**Keep the HTML report current (owner, 2026-09-25).** Every so often when a
+benchmark is run - and always when a result changes the picture (a new
+baseline, a regression, a cost that moved) - regenerate the page with
+`tools/perf_report_html.py <run dir> --notes <report.md> --out
+docs/benchmarks/<date>-<name>/report.html`, check it in, and republish the
+artifact so the owner's link shows the latest: the baseline page is
+https://claude.ai/artifact/CbuRh6C4kZZvULnQyrtor1 (update it with that URL;
+a new baseline may get its own page, linked from here). The `cloud-close-up`
+before-and-after page is https://claude.ai/artifact/SSeb4wCF2B7xCgYsExSRKx.
+The `detail-fade` one is https://claude.ai/artifact/P1WypbYauGUsPrC1NpSuzQ.
+
+## Hex size is fixed across every planet: the Tenebris gold standard
+
+**Standing instruction from the user.** A cell is the same size on every body.
+Digging a hex of dirt on one planet, flying to another and finding the hexes a
+different size is the bug this rule exists to prevent - a cell is a unit of
+material, and a unit that changes size between worlds is not a unit.
+
+The definitive spec is `tenebris-rs`, and the gold standard is its **main
+Tenebris planet** (radius 300 m at Goldberg level 7). Its other bodies are
+prototype stage and are NOT the reference; Sequoia is still under development
+and is not either. Measured off that body:
+
+| Quantity | Value |
+| --- | ---: |
+| Tile width, mean (flat-to-flat, = centre-to-centre spacing) | **2.833 m** |
+| Tile width across the sphere | 2.595 - 3.101 m |
+| Cell height (one vertical layer) | **1.000 m** |
+
+The range is geodesic distortion and is not a tolerance to spend: the dual of a
+subdivided icosahedron varies about +/-9% around its mean at every level, so
+that spread is the same shape on every body and cancels out of any comparison.
+
+**Tile width follows from the radius and the level**, measured on the unit
+sphere as `1.2087 * R / 2^L`. Holding it at the gold standard therefore locks
+the two together:
+
+```text
+R = 300 m * 2^(L - 7)     ->   300, 600, 1200, 2400, 4800, 9600 m
+```
+
+So an authored body radius SHALL sit on that ladder, or the level that serves
+it SHALL be chosen to land within the measured spread of 2.833 m. Do not author
+a radius first and accept whatever tile size falls out - that is how a planet
+ends up with cells six times the size of another's.
+
+Do NOT port Tenebris's `subdivisions_for_radius` as the rule. It writes the
+constant as 1.05 where the measured value is 1.2087, and it clamps the level at
+7, so it silently stops holding the standard on any body large enough to need
+more - which is exactly the case this repository cares about.
+
+`planet::tile_widths` measures the shipped value and the startup log reports it;
+a test pins it. When the scale moves, both move in the same commit.
+
+## Architecture and authority
+
+- Work in this repository's Rust workspace. `.reference/` contains read-only
+  source snapshots, not runtime dependencies. Copy any required source or
+  asset into this repository with provenance; never include files from the
+  reference checkout in a build.
+- `pbd-core` owns engine-independent rules, stable IDs, generation inputs,
+  coordinate conversion, and flight policy. `pbd-app` adapts these rules to
+  Bevy ECS and Avian. Rendering and platform APIs never become core dependencies.
+- ECS entities represent bodies, ships, actors, and active chunks. Individual
+  terrain voxels, face records, and cosmetic particles live in packed arrays
+  or GPU buffers. Query only the components a system needs.
+- Authoritative terrain and edits remain on the CPU. GPU geometry, visual
+  light propagation, and particles are derived state. Do not require GPU
+  readback for collision, mining, persistence, or multiplayer decisions.
+- Use one authoritative implementation of a gameplay rule across single
+  player and future multiplayer. Search before adding parallel functionality.
+  If Rust/WGSL layouts or algorithms must agree, validate actual artifacts and
+  their interface rather than two hand-written copies of an expected value.
+
+## Non-negotiable world and flight invariants
+
+- Planets, moons, and stations can use analytic on-rails orbits. Ships use
+  local gravity falloff, Newtonian motion, configurable linear/angular limits,
+  and inertial/rotational dampeners. Do not restore rocket patched conics,
+  maneuver nodes, transfer-window requirements, or n-body ship simulation.
+- Store system coordinates and orbital time as `f64`; render and simulate
+  collision in bounded local `f32` frames. Subtract the origin before casting.
+  Keep frame identity explicit in poses, velocities, persistence, and uploads.
+- Free rotation is quaternion-backed. Rebase poses, interpolation history,
+  physics state, and frame-relative velocities together at a tick boundary.
+  Station passengers simulate in the station's local frame.
+- Start the desktop explorer in first-person walking mode on dry land. Player
+  mouse look uses the current frame's raw displacement, with no camera easing,
+  smoothing, interpolation delay, or dependence on ship angular response.
+  Physical ship limits still apply independently. Terrain textures use nearest
+  point sampling; do not replace it with linear filtering.
+- Exiting a ship changes its occupancy, never its existence. Persist its ID,
+  pose/frame, inventory, damage, and ownership so it remains boardable.
+- A spherical hex world includes twelve pentagons. Use explicit 5/6 degree
+  neighbor tables and shared edge ownership; do not fake a sphere by wrapping
+  one flat axial grid. Topology/generator versions are part of saved world IDs.
+- Airless bodies have no atmospheric sky, weather, or clouds. Life and biome
+  rosters are explicit planet data; avoid accidental species/texture fallback
+  across planets. Airless barren, frozen, and asteroid catalog worlds are lifeless.
+- Water, atmosphere, terrain lighting, and their cameras use the same declared
+  body-local frame. Test an offset planet as well as the origin planet.
+- Every accepted world mutation enters the durable transaction path immediately.
+  A queued write alone is not a durable save; acknowledge commitment only after
+  the storage backend succeeds. Do not rely on save-on-exit or an autosave timer.
+- The player is not the only author of change (owner, 2026-09-27): towns will
+  grow and buildings will be abandoned on their own. Whoever makes a change, it
+  takes the same durable path and names its author, and a change the world
+  makes never overwrites the player's. What the seed and the rules decide
+  (terrain, habitat) is derived and never saved. What is generated once and
+  must then persist or change (sites, towns, landmarks, named zones) is a
+  stored record. World time passes only while the world is played, not while
+  the game is closed (owner, 2026-09-27). The design is
+  `openspec/changes/world-persistence`, which is not built yet.
+
+## Implementation and verification
+
+- Keep modules focused, public contracts documented, tunable values in validated
+  data with units, and one source for defaults. Missing values use explicit
+  optional overrides; zero is a valid value, not an implicit fallback sentinel.
+- Use readable WGSL files, explicit Rust/WGSL alignment, bounds checks, versioned
+  chunk jobs, and finite-value guards. Publish complete geometry generations;
+  handle capacity overflow without drawing partial data or writing out of bounds.
+- Authoritative iteration/order must be stable. A hash map used only for keyed
+  lookup is acceptable; never let randomized iteration order choose saved IDs,
+  simulation outcomes, or replay hashes. GPU atomic ordering is not deterministic.
+- Keep pixel-art sources as committed PNG assets with tile manifests. Follow
+  the atlas dimensions and filtering rules in the art specification; generated
+  imagery still needs seam, palette, transparency, and in-engine checks.
+- Run `cargo fmt --all -- --check`, relevant tests, and appropriate Clippy checks.
+  Validate WGSL and its actual pipelines when shader interfaces change. A parser
+  check does not establish render-graph correctness or visual parity.
+- Measure performance in reproducible release scenes, reporting hardware,
+  resolution, scene seed, warm-up, percentiles, upload bytes, and memory. Do not
+  describe an unmeasured design as a speedup. Keep a baseline binary for comparisons.
+- Clearly distinguish implemented behavior, validated behavior, and proposed
+  work in documentation. Visual tests supplement unit tests; unfinished visual
+  verification is a stated limitation, not an inherited approval workflow.

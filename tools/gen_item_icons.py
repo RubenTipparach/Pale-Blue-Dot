@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Draw the item icons this repository makes itself: the three fish new to
+Pale Blue Dot, the six lights and the bare hand, as 16x16 RGBA PNGs under
+assets/items/. The four tool icons are drawn from the tools' own hexes by
+tools/gen_held_tools.py, which uses this file's PNG writer.
+
+The lights (`lamps-and-lanterns` task 5.3) are drawn as the game draws them:
+iron frames round lit glass in the towns mockup's lamp colour, and flames
+white-gold at the root and orange at the tip. One palette serves all six, so
+a lantern's glass is the same colour in every slot.
+
+The pixel grids are the fishing mockup's (docs/mockups/fishing.html), which is
+what was shown and approved; a grid letter names a palette colour and "." is
+transparent. The five fish reused from Tenebris are NOT drawn here: they are
+copied byte for byte with their provenance (assets/items/fish/PROVENANCE.md).
+
+    python3 tools/gen_item_icons.py            # write the icons
+    python3 tools/gen_item_icons.py --check    # fail if any differs
+
+Deterministic, stdlib only (zlib), so --check holds on any machine.
+"""
+
+import struct
+import sys
+import zlib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent / "assets" / "items"
+
+
+ICONS = {
+    "fish/silverfin": ([
+        "................", "................", "................", "................",
+        "..........s.....", "....ssssssss..t.", "..sssssssssssst.", ".seSsssssssssstt",
+        "..sssssssssssst.", "....ssssssss..t.", "..........s.....", "................",
+        "................", "................", "................", "................",
+    ], {"s": "#cfe3ea", "S": "#9fb9c2", "e": "#1b1b1b", "t": "#9fb9c2"}),
+    "fish/perch": ([
+        "................", "................", "......d.d.......", ".....ddddd......",
+        "...pbpbpbpbp..t.", "..pbpbpbpbpbp.t.", ".epbpbpbpbpbpttt", "..pbpbpbpbpbp.t.",
+        "...pbpbpbpbp..t.", ".....ppppp......", "................", "................",
+        "................", "................", "................", "................",
+    ], {"p": "#d8a13a", "b": "#6b4a18", "d": "#c8612b", "e": "#1b1b1b", "t": "#c8612b"}),
+    "fish/deepback": ([
+        "................", "................", "........dd......", "......dddd......",
+        "..ddddddddddd...", ".dddddddddddddtt", "eddddddddddddttt", ".lllllllllllddtt",
+        "..lllllllllll...", "................", "................", "................",
+        "................", "................", "................", "................",
+    ], {"d": "#4f6f8f", "l": "#9fb6c9", "e": "#e8e8e8", "t": "#4f6f8f"}),
+}
+
+
+# The lights' one palette: iron dark to light, lit glass, flame root to tip,
+# wood and wax.
+LIGHT = {
+    "k": "#1e1e22", "i": "#3c3c44", "I": "#5d5d68",
+    "g": "#ffd9a0", "G": "#fff2cc",
+    "y": "#fff0b0", "F": "#ffc050", "f": "#ff8a3a",
+    "w": "#5a3a1e", "W": "#8a5a30",
+    "x": "#efe6d0", "X": "#cbbf9f",
+}
+
+ICONS.update({
+    "lights/torch": ([
+        "................", "........y.......", ".......yF.......", "......fFyf......",
+        "......FyyF......", ".....fFyyFf.....", "......fFFf......", "......kkkk......",
+        "......wWWw......", ".......Ww.......", ".......Ww.......", ".......Ww.......",
+        ".......Ww.......", ".......Ww.......", ".......ww.......", "................",
+    ], LIGHT),
+    "lights/lantern_post": ([
+        "......kkkk......", ".....kIiiIk.....", ".....kgGGgk.....", ".....kgGGgk.....",
+        ".....kggggk.....", ".....kkkkkk.....", ".......ki.......", ".......ki.......",
+        ".......ki.......", ".......ki.......", ".......ki.......", ".......ki.......",
+        ".......ki.......", "......kiik......", ".....kiiiik.....", "................",
+    ], LIGHT),
+    "lights/lantern_wall": ([
+        "................", "kk..............", "kIkkkkkkk.......", "kIiiiiiik.......",
+        "kI.....k........", "kI....kkkk......", "kI...kIiiIk.....", "kk...kgGGgk.....",
+        ".....kgGGgk.....", ".....kgGGgk.....", ".....kggggk.....", ".....kkkkkk.....",
+        "......kiik......", "................", "................", "................",
+    ], LIGHT),
+    "lights/lantern_hanging": ([
+        ".......k........", ".......I........", ".......k........", ".......I........",
+        ".......k........", "......kkkk......", ".....kIiiIk.....", ".....kgGGgk.....",
+        ".....kgGGgk.....", ".....kgGGgk.....", ".....kggggk.....", ".....kkkkkk.....",
+        "......kiik......", "................", "................", "................",
+    ], LIGHT),
+    "lights/brazier": ([
+        "................", "................", ".......y........", "......yFy.......",
+        ".....fFyFf......", "....fFFyFFf.....", "...fFFFFFFFf....", "..kiiiiiiiiik...",
+        "..kIiiiiiiiIk...", "...kiiiiiiik....", "....kkkkkkk.....", ".......ki.......",
+        ".......ki.......", "......kiik......", "....kki..ikk....", "................",
+    ], LIGHT),
+    "lights/candle": ([
+        "................", "................", "................", ".......y........",
+        "......yFy.......", "......fFf.......", ".......k........", "......xxX.......",
+        "......xxX.......", "......xxX.......", "......xxX.......", "......xxX.......",
+        "......xxX.......", "....kIiiiIk.....", ".....kkkkk......", "................",
+    ], LIGHT),
+})
+
+
+# Bare hands (`inventory-grid` decision 8): an open palm, fingers up, in the
+# held hand's two skin tones (assets/models/held_tools.ron) with a dark rim.
+ICONS["tools/hand"] = ([
+    "................", "......k.k.......", ".....kskskk.....", ".....ksksksk....",
+    ".....ksksksk....", ".....ksksksk....", "..k..ksksksk....", ".ksk.kssssssk...",
+    ".ksskssssssk....", "..kssssssssk....", "...ksssssssk....", "....kssssssk....",
+    ".....kSSSSk.....", ".....kSSSSk.....", "......kkkk......", "................",
+], {"k": "#5a3a24", "s": "#e3b089", "S": "#c39776"})
+
+
+def rgba(hex_colour):
+    h = hex_colour.lstrip("#")
+    return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"
+
+
+def png(rows, palette):
+    assert len(rows) == 16 and all(len(r) == 16 for r in rows)
+    raw = b"".join(
+        b"\x00" + b"".join(rgba(palette[c]) if c in palette else b"\x00\x00\x00\x00" for c in row)
+        for row in rows
+    )
+
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    header = struct.pack(">IIBBBBB", 16, 16, 8, 6, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header)
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
+def main():
+    check = "--check" in sys.argv[1:]
+    stale = []
+    for name, (rows, palette) in ICONS.items():
+        path = ROOT / f"{name}.png"
+        data = png(rows, palette)
+        if check:
+            if not path.exists() or path.read_bytes() != data:
+                stale.append(str(path))
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+    if stale:
+        raise SystemExit("stale icons (run tools/gen_item_icons.py): " + ", ".join(stale))
+    print(("checked " if check else "wrote ") + f"{len(ICONS)} icons")
+
+
+if __name__ == "__main__":
+    main()

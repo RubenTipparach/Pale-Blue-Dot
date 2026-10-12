@@ -1,0 +1,13054 @@
+{
+ "scene": "desert",
+ "grid": {
+  "columns": 50,
+  "rows": 34,
+  "cell_m": 2.833
+ },
+ "buildings": [
+  {
+   "name": "Sandstone house",
+   "kit": "sandstone",
+   "cells": [
+    [
+     13,
+     9
+    ],
+    [
+     14,
+     9
+    ],
+    [
+     15,
+     9
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     14,
+     10
+    ],
+    [
+     15,
+     10
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     14,
+     10,
+     1,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     13,
+     9,
+     3,
+     0
+    ],
+    [
+     13,
+     9,
+     5,
+     0
+    ],
+    [
+     14,
+     9,
+     4,
+     0
+    ],
+    [
+     15,
+     9,
+     1,
+     0
+    ],
+    [
+     15,
+     9,
+     5,
+     0
+    ],
+    [
+     13,
+     10,
+     1,
+     0
+    ],
+    [
+     13,
+     10,
+     3,
+     0
+    ],
+    [
+     14,
+     10,
+     2,
+     0
+    ],
+    [
+     15,
+     10,
+     1,
+     0
+    ]
+   ],
+   "roof": "flat",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": [],
+   "parapet_gaps": [
+    [
+     15,
+     10,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "Sandstone house",
+   "kit": "sandstone",
+   "cells": [
+    [
+     20,
+     9
+    ],
+    [
+     21,
+     9
+    ],
+    [
+     22,
+     9
+    ],
+    [
+     20,
+     10
+    ],
+    [
+     21,
+     10
+    ],
+    [
+     22,
+     10
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     21,
+     10,
+     2,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     20,
+     9,
+     4,
+     0
+    ],
+    [
+     21,
+     9,
+     5,
+     0
+    ],
+    [
+     22,
+     9,
+     0,
+     0
+    ],
+    [
+     22,
+     9,
+     4,
+     0
+    ],
+    [
+     20,
+     10,
+     2,
+     0
+    ],
+    [
+     20,
+     10,
+     4,
+     0
+    ],
+    [
+     21,
+     10,
+     1,
+     0
+    ],
+    [
+     22,
+     10,
+     0,
+     0
+    ],
+    [
+     22,
+     10,
+     2,
+     0
+    ]
+   ],
+   "roof": "flat",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": [],
+   "parapet_gaps": [
+    [
+     22,
+     10,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "Sandstone house",
+   "kit": "sandstone",
+   "cells": [
+    [
+     29,
+     9
+    ],
+    [
+     30,
+     9
+    ],
+    [
+     31,
+     9
+    ],
+    [
+     29,
+     10
+    ],
+    [
+     30,
+     10
+    ],
+    [
+     31,
+     10
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     30,
+     10,
+     1,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     29,
+     9,
+     3,
+     0
+    ],
+    [
+     29,
+     9,
+     5,
+     0
+    ],
+    [
+     30,
+     9,
+     4,
+     0
+    ],
+    [
+     31,
+     9,
+     1,
+     0
+    ],
+    [
+     31,
+     9,
+     5,
+     0
+    ],
+    [
+     29,
+     10,
+     1,
+     0
+    ],
+    [
+     29,
+     10,
+     3,
+     0
+    ],
+    [
+     30,
+     10,
+     2,
+     0
+    ],
+    [
+     31,
+     10,
+     1,
+     0
+    ]
+   ],
+   "roof": "flat",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": [],
+   "parapet_gaps": [
+    [
+     31,
+     10,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "Sandstone house",
+   "kit": "sandstone",
+   "cells": [
+    [
+     13,
+     24
+    ],
+    [
+     14,
+     24
+    ],
+    [
+     15,
+     24
+    ],
+    [
+     13,
+     25
+    ],
+    [
+     14,
+     25
+    ],
+    [
+     15,
+     25
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     14,
+     24,
+     4,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     13,
+     24,
+     3,
+     0
+    ],
+    [
+     13,
+     24,
+     5,
+     0
+    ],
+    [
+     15,
+     24,
+     5,
+     0
+    ],
+    [
+     13,
+     25,
+     1,
+     0
+    ],
+    [
+     13,
+     25,
+     3,
+     0
+    ],
+    [
+     14,
+     25,
+     2,
+     0
+    ],
+    [
+     15,
+     25,
+     1,
+     0
+    ],
+    [
+     15,
+     25,
+     5,
+     0
+    ]
+   ],
+   "roof": "flat",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": [],
+   "parapet_gaps": [
+    [
+     15,
+     24,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "Sandstone house",
+   "kit": "sandstone",
+   "cells": [
+    [
+     29,
+     24
+    ],
+    [
+     30,
+     24
+    ],
+    [
+     31,
+     24
+    ],
+    [
+     29,
+     25
+    ],
+    [
+     30,
+     25
+    ],
+    [
+     31,
+     25
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     30,
+     24,
+     5,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     29,
+     24,
+     3,
+     0
+    ],
+    [
+     29,
+     24,
+     5,
+     0
+    ],
+    [
+     30,
+     24,
+     4,
+     0
+    ],
+    [
+     31,
+     24,
+     5,
+     0
+    ],
+    [
+     29,
+     25,
+     1,
+     0
+    ],
+    [
+     29,
+     25,
+     3,
+     0
+    ],
+    [
+     30,
+     25,
+     2,
+     0
+    ],
+    [
+     31,
+     25,
+     1,
+     0
+    ],
+    [
+     31,
+     25,
+     5,
+     0
+    ]
+   ],
+   "roof": "flat",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": [],
+   "parapet_gaps": [
+    [
+     31,
+     24,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "Domed house",
+   "kit": "adobe",
+   "cells": [
+    [
+     14,
+     14
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     14,
+     14,
+     0,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     14,
+     14,
+     3,
+     0
+    ]
+   ],
+   "roof": "dome",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": []
+  },
+  {
+   "name": "Domed house",
+   "kit": "adobe",
+   "cells": [
+    [
+     14,
+     19
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     14,
+     19,
+     0,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     14,
+     19,
+     3,
+     0
+    ]
+   ],
+   "roof": "dome",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": []
+  },
+  {
+   "name": "Domed house",
+   "kit": "adobe",
+   "cells": [
+    [
+     36,
+     14
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     36,
+     14,
+     3,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     36,
+     14,
+     0,
+     0
+    ]
+   ],
+   "roof": "dome",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": []
+  },
+  {
+   "name": "Domed house",
+   "kit": "adobe",
+   "cells": [
+    [
+     36,
+     19
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     36,
+     19,
+     3,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     36,
+     19,
+     0,
+     0
+    ]
+   ],
+   "roof": "dome",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": []
+  },
+  {
+   "name": "Domed house",
+   "kit": "adobe",
+   "cells": [
+    [
+     19,
+     22
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 1,
+   "doors": [
+    [
+     19,
+     22,
+     5,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     19,
+     22,
+     2,
+     0
+    ]
+   ],
+   "roof": "dome",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": []
+  },
+  {
+   "name": "The caravan hall",
+   "kit": "adobe",
+   "cells": [
+    [
+     35,
+     23
+    ],
+    [
+     35,
+     22
+    ],
+    [
+     36,
+     22
+    ],
+    [
+     36,
+     23
+    ],
+    [
+     36,
+     24
+    ],
+    [
+     35,
+     24
+    ],
+    [
+     34,
+     23
+    ]
+   ],
+   "base": 2,
+   "storeys": 1,
+   "tall": 2,
+   "doors": [
+    [
+     34,
+     23,
+     3,
+     0
+    ]
+   ],
+   "windows": [
+    [
+     35,
+     22,
+     4,
+     0
+    ],
+    [
+     36,
+     22,
+     0,
+     0
+    ],
+    [
+     36,
+     22,
+     4,
+     0
+    ],
+    [
+     36,
+     23,
+     0,
+     0
+    ],
+    [
+     36,
+     24,
+     0,
+     0
+    ],
+    [
+     36,
+     24,
+     2,
+     0
+    ],
+    [
+     35,
+     24,
+     2,
+     0
+    ],
+    [
+     34,
+     23,
+     2,
+     0
+    ],
+    [
+     34,
+     23,
+     4,
+     0
+    ]
+   ],
+   "roof": "dome",
+   "pitch": 1,
+   "chimney": null,
+   "stair_cells": [],
+   "archways": [
+    [
+     34,
+     23,
+     3,
+     0
+    ]
+   ]
+  }
+ ],
+ "ground": [
+  {
+   "c": 0,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 0,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 0,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 0,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 1,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 1,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 1,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 1,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 1,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 1,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 1,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 1,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 1,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 2,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 2,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 2,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 2,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 2,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 2,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 2,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 2,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 2,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 3,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 3,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 3,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 4,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 4,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 4,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 5,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 5,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 5,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 6,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 6,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 6,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 6,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 6,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 6,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 6,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 6,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 6,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 6,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 6,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 7,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 7,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 7,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 7,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 7,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 7,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 7,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 7,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 7,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 7,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 7,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 7,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 7,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 7,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 7,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 7,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 8,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 8,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 8,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 8,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 8,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 8,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 8,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 8,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 8,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 9,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 9,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 9,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 9,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 9,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 9,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 9,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 9,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 14,
+   "r": 9,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 15,
+   "r": 9,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 16,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 9,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 21,
+   "r": 9,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 22,
+   "r": 9,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 23,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 9,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 30,
+   "r": 9,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 31,
+   "r": 9,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 32,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 9,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 9,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 9,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 9,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 10,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 10,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 10,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 10,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 10,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 10,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 10,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 10,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 10,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 14,
+   "r": 10,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 15,
+   "r": 10,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 16,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 10,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 21,
+   "r": 10,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 22,
+   "r": 10,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 23,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 10,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 30,
+   "r": 10,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 31,
+   "r": 10,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 32,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 10,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 10,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 10,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 11,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 11,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 11,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 11,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 11,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 11,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 11,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 11,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 11,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 11,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 12,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 12,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 13,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 13,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 13,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 24,
+   "r": 13,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 25,
+   "r": 13,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 26,
+   "r": 13,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 27,
+   "r": 13,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 28,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 13,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 13,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 13,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 13,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 13,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 13,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 13,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 13,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 14,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "Domed house"
+  },
+  {
+   "c": 15,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 14,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 24,
+   "r": 14,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 25,
+   "r": 14,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 26,
+   "r": 14,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 27,
+   "r": 14,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 28,
+   "r": 14,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 29,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "Domed house"
+  },
+  {
+   "c": 37,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 14,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 14,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 14,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 14,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 14,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 14,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 14,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 14,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 15,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 23,
+   "r": 15,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 24,
+   "r": 15,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 25,
+   "r": 15,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 26,
+   "r": 15,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 27,
+   "r": 15,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 28,
+   "r": 15,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 29,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 15,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 15,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 15,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 15,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 15,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 15,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 15,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 16,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 23,
+   "r": 16,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 24,
+   "r": 16,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 25,
+   "r": 16,
+   "h": 1,
+   "top": "sand",
+   "area": "The oasis"
+  },
+  {
+   "c": 26,
+   "r": 16,
+   "h": 1,
+   "top": "sand",
+   "area": "The oasis"
+  },
+  {
+   "c": 27,
+   "r": 16,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 28,
+   "r": 16,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 29,
+   "r": 16,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 30,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 16,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 16,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 16,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 16,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 16,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 16,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 17,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 22,
+   "r": 17,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 23,
+   "r": 17,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 24,
+   "r": 17,
+   "h": 1,
+   "top": "sand",
+   "area": "The oasis"
+  },
+  {
+   "c": 25,
+   "r": 17,
+   "h": 1,
+   "top": "sand",
+   "area": "The oasis"
+  },
+  {
+   "c": 26,
+   "r": 17,
+   "h": 1,
+   "top": "sand",
+   "area": "The oasis"
+  },
+  {
+   "c": 27,
+   "r": 17,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 28,
+   "r": 17,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 29,
+   "r": 17,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 30,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 17,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 17,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 17,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 17,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 17,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 18,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 23,
+   "r": 18,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 24,
+   "r": 18,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 25,
+   "r": 18,
+   "h": 1,
+   "top": "sand",
+   "area": "The oasis"
+  },
+  {
+   "c": 26,
+   "r": 18,
+   "h": 1,
+   "top": "sand",
+   "area": "The oasis"
+  },
+  {
+   "c": 27,
+   "r": 18,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 28,
+   "r": 18,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 29,
+   "r": 18,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 30,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 18,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 18,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 18,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 18,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 18,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 18,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "Domed house"
+  },
+  {
+   "c": 15,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 19,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 23,
+   "r": 19,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 24,
+   "r": 19,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 25,
+   "r": 19,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 26,
+   "r": 19,
+   "h": 2,
+   "top": "sand",
+   "area": "The plaza"
+  },
+  {
+   "c": 27,
+   "r": 19,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 28,
+   "r": 19,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 29,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "Domed house"
+  },
+  {
+   "c": 37,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 19,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 19,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 19,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 20,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 20,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 20,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 20,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 20,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 20,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 20,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 20,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 20,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 20,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 24,
+   "r": 20,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 25,
+   "r": 20,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 26,
+   "r": 20,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 27,
+   "r": 20,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 28,
+   "r": 20,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 29,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 20,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 20,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 20,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 20,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 21,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 21,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 21,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 21,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 21,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 21,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 21,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 21,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 21,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 21,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 24,
+   "r": 21,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 25,
+   "r": 21,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 26,
+   "r": 21,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 27,
+   "r": 21,
+   "h": 2,
+   "top": "flag",
+   "area": "The plaza"
+  },
+  {
+   "c": 28,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 21,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 21,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 21,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 21,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 22,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 22,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 22,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "Domed house"
+  },
+  {
+   "c": 20,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The caravan hall"
+  },
+  {
+   "c": 36,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The caravan hall"
+  },
+  {
+   "c": 37,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 22,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 22,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 23,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 23,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 23,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 23,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 23,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 23,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 23,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 23,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 23,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 23,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The caravan hall"
+  },
+  {
+   "c": 35,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The caravan hall"
+  },
+  {
+   "c": 36,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The caravan hall"
+  },
+  {
+   "c": 37,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 23,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 23,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 23,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 23,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 23,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 23,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 24,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 24,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 24,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 24,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 24,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 24,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 24,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 24,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 24,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 24,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 24,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 14,
+   "r": 24,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 15,
+   "r": 24,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 16,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 24,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 30,
+   "r": 24,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 31,
+   "r": 24,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 32,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The caravan hall"
+  },
+  {
+   "c": 36,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The caravan hall"
+  },
+  {
+   "c": 37,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 24,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 24,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 24,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 24,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 24,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 24,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 25,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 14,
+   "r": 25,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 15,
+   "r": 25,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 16,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 25,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 30,
+   "r": 25,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 31,
+   "r": 25,
+   "h": 2,
+   "top": "claytile",
+   "area": "Sandstone house"
+  },
+  {
+   "c": 32,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 25,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 25,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 25,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 26,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 26,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 26,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 26,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 27,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 12,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 13,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 14,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 15,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 16,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 17,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 18,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 19,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 20,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 21,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 22,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 23,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 24,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 25,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 26,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 27,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 28,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 29,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 30,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 31,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 32,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 33,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 34,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 35,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 36,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 37,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 38,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 39,
+   "r": 27,
+   "h": 2,
+   "top": "sand2",
+   "area": "The town"
+  },
+  {
+   "c": 40,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 27,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 28,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 28,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 28,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 28,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 28,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 28,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 28,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 28,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 28,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 28,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 29,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 29,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 29,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 29,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 29,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 29,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 30,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 30,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 30,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 30,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 31,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 31,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 31,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 31,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 32,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 32,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 32,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 32,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 32,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 0,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 1,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 2,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 3,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 4,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 5,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 6,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 7,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 8,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 9,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 10,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 11,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 12,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 13,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 14,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 15,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 16,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 17,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 18,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 19,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 20,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 21,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 22,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 23,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 24,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 25,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 26,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 27,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 28,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 29,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 30,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 31,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 32,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 33,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 34,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 35,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 36,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 37,
+   "r": 33,
+   "h": 4,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 38,
+   "r": 33,
+   "h": 3,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 39,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 40,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 41,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 42,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 43,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 44,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 45,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 46,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 47,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 48,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  },
+  {
+   "c": 49,
+   "r": 33,
+   "h": 2,
+   "top": "sand2",
+   "area": "The dunes"
+  }
+ ],
+ "lamps": [],
+ "lanterns": [
+  [
+   66.5755,
+   2,
+   31.894849595977092
+  ],
+  [
+   77.9075,
+   2,
+   51.52244934734761
+  ]
+ ],
+ "fires": [
+  {
+   "kind": "brazier",
+   "x": 77.9075,
+   "y": 2,
+   "z": 36.801749533819724
+  },
+  {
+   "kind": "brazier",
+   "x": 79.32400000000001,
+   "y": 2,
+   "z": 44.16209944058367
+  },
+  {
+   "kind": "brazier",
+   "x": 73.658,
+   "y": 2,
+   "z": 49.0689993784263
+  },
+  {
+   "kind": "brazier",
+   "x": 66.5755,
+   "y": 2,
+   "z": 46.61554940950498
+  },
+  {
+   "kind": "brazier",
+   "x": 65.159,
+   "y": 2,
+   "z": 39.255199502741036
+  }
+ ],
+ "stairs": [
+  {
+   "from": [
+    49.3115,
+    2,
+    24.53449968921315
+   ],
+   "to": [
+    43.911500000000004,
+    5.3,
+    24.53449968921315
+   ],
+   "width_m": 1.1,
+   "material": "sandstone"
+  },
+  {
+   "from": [
+    69.14250000000001,
+    2,
+    24.53449968921315
+   ],
+   "to": [
+    63.74250000000001,
+    5.3,
+    24.53449968921315
+   ],
+   "width_m": 1.1,
+   "material": "sandstone"
+  },
+  {
+   "from": [
+    94.63950000000001,
+    2,
+    24.53449968921315
+   ],
+   "to": [
+    89.2395,
+    5.3,
+    24.53449968921315
+   ],
+   "width_m": 1.1,
+   "material": "sandstone"
+  },
+  {
+   "from": [
+    49.3115,
+    2,
+    58.88279925411155
+   ],
+   "to": [
+    43.911500000000004,
+    5.3,
+    58.88279925411155
+   ],
+   "width_m": 1.1,
+   "material": "sandstone"
+  },
+  {
+   "from": [
+    94.63950000000001,
+    2,
+    58.88279925411155
+   ],
+   "to": [
+    89.2395,
+    5.3,
+    58.88279925411155
+   ],
+   "width_m": 1.1,
+   "material": "sandstone"
+  }
+ ],
+ "dressing": [
+  {
+   "kind": "crate",
+   "x": 101.188,
+   "y": 2,
+   "z": 54.27589931626892,
+   "angle": 0,
+   "side_m": 0.7
+  },
+  {
+   "kind": "crate",
+   "x": 101.988,
+   "y": 2,
+   "z": 54.27589931626892,
+   "angle": 0.2,
+   "side_m": 0.7
+  },
+  {
+   "kind": "crate",
+   "x": 102.68583223229095,
+   "y": 2,
+   "z": 54.27589931626892,
+   "angle": 0.4,
+   "side_m": 0.7
+  },
+  {
+   "kind": "stall",
+   "x": 59.493,
+   "y": 2,
+   "z": 34.348299564898404,
+   "cloth": "cloth",
+   "goods": [
+    {
+     "material": "leaves",
+     "x": 58.743,
+     "z": 34.049488252808736
+    },
+    {
+     "material": "leaves",
+     "x": 59.113,
+     "z": 34.00619353930226
+    },
+    {
+     "material": "sand",
+     "x": 59.483000000000004,
+     "z": 34.196779752068615
+    },
+    {
+     "material": "sand",
+     "x": 59.853,
+     "z": 34.15595893835409
+    },
+    {
+     "material": "leaves",
+     "x": 60.223,
+     "z": 33.934469025430666
+    }
+   ]
+  },
+  {
+   "kind": "stall",
+   "x": 82.15700000000001,
+   "y": 2,
+   "z": 34.348299564898404,
+   "cloth": "cloth2",
+   "goods": [
+    {
+     "material": "leaves",
+     "x": 81.40700000000001,
+     "z": 34.01378764506655
+    },
+    {
+     "material": "sand",
+     "x": 81.77700000000002,
+     "z": 34.13367865347529
+    },
+    {
+     "material": "sand",
+     "x": 82.147,
+     "z": 34.06444159474915
+    },
+    {
+     "material": "sand",
+     "x": 82.51700000000001,
+     "z": 33.94523588417789
+    },
+    {
+     "material": "leaves",
+     "x": 82.88700000000001,
+     "z": 34.15420251697062
+    }
+   ]
+  },
+  {
+   "kind": "stall",
+   "x": 59.493,
+   "y": 2,
+   "z": 49.0689993784263,
+   "cloth": "cloth2",
+   "goods": [
+    {
+     "material": "leaves",
+     "x": 58.743,
+     "z": 48.798306414039175
+    },
+    {
+     "material": "leaves",
+     "x": 59.113,
+     "z": 48.91046679622617
+    },
+    {
+     "material": "sand",
+     "x": 59.483000000000004,
+     "z": 48.825047545271296
+    },
+    {
+     "material": "sand",
+     "x": 59.853,
+     "z": 48.89730215696275
+    },
+    {
+     "material": "leaves",
+     "x": 60.223,
+     "z": 48.8152991100413
+    }
+   ]
+  },
+  {
+   "kind": "stall",
+   "x": 82.15700000000001,
+   "y": 2,
+   "z": 49.0689993784263,
+   "cloth": "cloth",
+   "goods": [
+    {
+     "material": "leaves",
+     "x": 81.40700000000001,
+     "z": 48.762615104621574
+    },
+    {
+     "material": "sand",
+     "x": 81.77700000000002,
+     "z": 48.74608637084842
+    },
+    {
+     "material": "sand",
+     "x": 82.147,
+     "z": 48.87757324978833
+    },
+    {
+     "material": "sand",
+     "x": 82.51700000000001,
+     "z": 48.65496019920923
+    },
+    {
+     "material": "leaves",
+     "x": 82.88700000000001,
+     "z": 48.73502344630782
+    }
+   ]
+  },
+  {
+   "kind": "cactus",
+   "x": 69.80850000000001,
+   "y": 2,
+   "z": 36.501749533819726,
+   "scale": 0.9
+  },
+  {
+   "kind": "cactus",
+   "x": 75.4745,
+   "y": 2,
+   "z": 36.501749533819726,
+   "scale": 0.9
+  },
+  {
+   "kind": "cactus",
+   "x": 76.891,
+   "y": 2,
+   "z": 38.95519950274104,
+   "scale": 0.9
+  },
+  {
+   "kind": "cactus",
+   "x": 76.891,
+   "y": 2,
+   "z": 43.86209944058367,
+   "scale": 0.9
+  },
+  {
+   "kind": "cactus",
+   "x": 75.4745,
+   "y": 2,
+   "z": 46.31554940950498,
+   "scale": 0.9
+  },
+  {
+   "kind": "cactus",
+   "x": 69.80850000000001,
+   "y": 2,
+   "z": 46.31554940950498,
+   "scale": 0.9
+  }
+ ],
+ "wild": [
+  "The dunes"
+ ],
+ "tops": {
+  "sand": "sand",
+  "sand2": "sand",
+  "flag": "stone"
+ },
+ "terraced": true
+}

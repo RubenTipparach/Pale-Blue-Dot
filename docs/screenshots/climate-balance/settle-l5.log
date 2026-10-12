@@ -1,0 +1,75 @@
+day   10: whole surface 13.21 C, sea 15.62 C, trim 0.869, 170 s
+resumed from the checkpoint at day 10
+day   20: whole surface 13.28 C, sea 15.50 C, trim 0.880, 162 s
+day   30: whole surface 13.58 C, sea 15.77 C, trim 0.884, 322 s
+day   40: whole surface 13.58 C, sea 15.96 C, trim 0.893, 481 s
+day   50: whole surface 13.29 C, sea 15.87 C, trim 0.909, 642 s
+day   60: whole surface 13.86 C, sea 16.07 C, trim 0.908, 803 s
+day   70: whole surface 16.96 C, sea 17.94 C, trim 0.852, 962 s
+day   80: whole surface 13.17 C, sea 16.35 C, trim 0.928, 1122 s
+day   90: whole surface 14.10 C, sea 16.78 C, trim 0.915, 1284 s
+day  100: whole surface 14.84 C, sea 16.82 C, trim 0.908, 1442 s
+day  110: whole surface 17.60 C, sea 18.36 C, trim 0.858, 1601 s
+day  120: whole surface 29.76 C, sea 27.32 C, trim 0.700, 1759 s
+day  130: whole surface 14.25 C, sea 16.73 C, trim 0.926, 1919 s
+day  140: whole surface 14.63 C, sea 17.23 C, trim 0.922, 2078 s
+day  150: whole surface 15.01 C, sea 17.30 C, trim 0.920, 2238 s
+day  160: whole surface 18.41 C, sea 18.90 C, trim 0.856, 2400 s
+day  170: whole surface 13.46 C, sea 16.37 C, trim 0.954, 2560 s
+day  180: whole surface 14.85 C, sea 17.33 C, trim 0.927, 2720 s
+day  190: whole surface 15.36 C, sea 17.84 C, trim 0.915, 2880 s
+day 200: the sea set to its mean and its true capacity
+day  200: whole surface 16.02 C, sea 18.25 C, trim 0.908, 3046 s
+day  210: whole surface 16.25 C, sea 18.35 C, trim 0.898, 3213 s
+day  220: whole surface 16.04 C, sea 18.34 C, trim 0.900, 3374 s
+day  230: whole surface 16.11 C, sea 18.30 C, trim 0.897, 3535 s
+day  240: whole surface 16.13 C, sea 18.24 C, trim 0.896, 3696 s
+day  250: whole surface 15.99 C, sea 18.17 C, trim 0.900, 3857 s
+day  260: whole surface 15.89 C, sea 18.08 C, trim 0.900, 4019 s
+day  270: whole surface 15.90 C, sea 18.01 C, trim 0.895, 4179 s
+day  280: whole surface 15.77 C, sea 17.98 C, trim 0.891, 4337 s
+day  290: whole surface 15.52 C, sea 17.95 C, trim 0.891, 4496 s
+true year 1: the whole surface averaged 15.95 C, +0.95 K; the sea shifted -0.95 K and another year run
+day  300: whole surface 15.02 C, sea 16.93 C, trim 0.888, 4657 s
+day  310: whole surface 14.80 C, sea 16.99 C, trim 0.905, 4821 s
+day  320: whole surface 14.81 C, sea 17.02 C, trim 0.904, 4983 s
+day  330: whole surface 14.84 C, sea 17.05 C, trim 0.903, 5147 s
+day  340: whole surface 14.93 C, sea 17.04 C, trim 0.902, 5311 s
+day  350: whole surface 14.81 C, sea 17.01 C, trim 0.907, 5475 s
+day  360: whole surface 14.76 C, sea 16.98 C, trim 0.910, 5637 s
+day  370: whole surface 14.91 C, sea 17.00 C, trim 0.908, 5800 s
+day  380: whole surface 14.85 C, sea 17.04 C, trim 0.907, 5963 s
+day  390: whole surface 14.82 C, sea 17.10 C, trim 0.906, 6127 s
+true year 2: the whole surface averaged 14.84 C, -0.16 K; landed
+day  400: whole surface 14.91 C, sea 17.10 C, trim 0.906, 6290 s
+wrote /tmp/claude-0/-home-user-Pale-Blue-Dot/448394de-91a1-5722-af87-64c93e6c9a15/scratchpad/settle-l5/settled-l5.bin at day 400.375: whole surface 14.94 C, sea 17.10 C
+new world day   1: whole surface 14.87 C, trim 0.907
+new world day   2: whole surface 14.91 C, trim 0.906
+new world day   3: whole surface 14.87 C, trim 0.907
+new world day   4: whole surface 14.85 C, trim 0.908
+new world day   5: whole surface 14.93 C, trim 0.906
+new world day   6: whole surface 14.98 C, trim 0.905
+new world day   7: whole surface 14.94 C, trim 0.906
+new world day   8: whole surface 14.92 C, trim 0.907
+new world day   9: whole surface 14.90 C, trim 0.907
+new world day  10: whole surface 14.86 C, trim 0.908
+new world day  11: whole surface 14.88 C, trim 0.908
+new world day  12: whole surface 14.81 C, trim 0.909
+new world day  13: whole surface 14.78 C, trim 0.910
+new world day  14: whole surface 14.81 C, trim 0.909
+new world day  15: whole surface 14.82 C, trim 0.909
+new world day  16: whole surface 14.79 C, trim 0.910
+new world day  17: whole surface 14.83 C, trim 0.909
+new world day  18: whole surface 14.91 C, trim 0.907
+new world day  19: whole surface 14.92 C, trim 0.907
+new world day  20: whole surface 14.85 C, trim 0.908
+new world day  21: whole surface 14.80 C, trim 0.909
+new world day  22: whole surface 14.85 C, trim 0.908
+new world day  23: whole surface 14.85 C, trim 0.908
+new world day  24: whole surface 14.83 C, trim 0.908
+new world day  25: whole surface 14.85 C, trim 0.908
+new world day  26: whole surface 14.92 C, trim 0.906
+new world day  27: whole surface 14.95 C, trim 0.906
+new world day  28: whole surface 14.95 C, trim 0.906
+new world day  29: whole surface 14.98 C, trim 0.905
+new world day  30: whole surface 14.99 C, trim 0.905

@@ -1,0 +1,5572 @@
+{
+  "schema": 1,
+  "craft": "kestrel",
+  "pixels_per_metre": 16,
+  "width": 160,
+  "height": 224,
+  "pixel_origin": "bottom-left, Blender UV; glTF V is flipped",
+  "palette": {
+    "0": "182731",
+    "1": "263A49",
+    "2": "405965",
+    "3": "71888C",
+    "4": "A74438",
+    "5": "A8B7B5",
+    "6": "AE7C50",
+    "7": "CFD8D2",
+    "8": "D4A875",
+    "9": "D96549",
+    "10": "E5E9E2",
+    "11": "EA8763",
+    "12": "EACA94",
+    "13": "F6F4EA"
+  },
+  "swatches": [
+    "canopy",
+    "coral-trim",
+    "gear-metal",
+    "intake-grille",
+    "rotor",
+    "white-panels"
+  ],
+  "regions": [
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 0,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 49,
+          "tag": "pale",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        3,
+        3
+      ],
+      "rect": [
+        45,
+        149,
+        7,
+        7
+      ],
+      "origin": [
+        47,
+        151
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 1,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 3,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 8,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 10,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 12,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 17,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        2,
+        24
+      ],
+      "rect": [
+        141,
+        87,
+        6,
+        28
+      ],
+      "origin": [
+        143,
+        89
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 2,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 4,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 5,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 7,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 9,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 11,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 13,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 14,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 16,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 18,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 19,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 21,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 24,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 26,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 28,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 30,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 33,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 35,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        8,
+        24
+      ],
+      "rect": [
+        9,
+        182,
+        12,
+        28
+      ],
+      "origin": [
+        11,
+        184
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 6,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 15,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        3,
+        24
+      ],
+      "rect": [
+        21,
+        182,
+        7,
+        28
+      ],
+      "origin": [
+        23,
+        184
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 20,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 22,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 25,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 27,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 29,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 31,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 34,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 36,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        24,
+        9
+      ],
+      "rect": [
+        0,
+        211,
+        28,
+        13
+      ],
+      "origin": [
+        2,
+        213
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 23,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 32,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        23,
+        9
+      ],
+      "rect": [
+        0,
+        133,
+        27,
+        13
+      ],
+      "origin": [
+        2,
+        135
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 37,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 39,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 40,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 41,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 42,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 44,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 46,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 48,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 49,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 50,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 51,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 53,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        66,
+        9
+      ],
+      "rect": [
+        0,
+        74,
+        70,
+        13
+      ],
+      "origin": [
+        2,
+        76
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 38,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 43,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 45,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 47,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 52,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 54,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        8,
+        66
+      ],
+      "rect": [
+        70,
+        74,
+        12,
+        70
+      ],
+      "origin": [
+        72,
+        76
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 55,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 64,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 69,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        37,
+        8
+      ],
+      "rect": [
+        108,
+        12,
+        41,
+        12
+      ],
+      "origin": [
+        110,
+        14
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 56,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 70,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        37,
+        6
+      ],
+      "rect": [
+        108,
+        24,
+        41,
+        10
+      ],
+      "origin": [
+        110,
+        26
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 57,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 68,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        36,
+        9
+      ],
+      "rect": [
+        108,
+        43,
+        40,
+        13
+      ],
+      "origin": [
+        110,
+        45
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 58,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        36,
+        6
+      ],
+      "rect": [
+        108,
+        56,
+        40,
+        10
+      ],
+      "origin": [
+        110,
+        58
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 59,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        35,
+        8
+      ],
+      "rect": [
+        108,
+        75,
+        39,
+        12
+      ],
+      "origin": [
+        110,
+        77
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 60,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        9,
+        34
+      ],
+      "rect": [
+        82,
+        85,
+        13,
+        38
+      ],
+      "origin": [
+        84,
+        87
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 61,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        6,
+        35
+      ],
+      "rect": [
+        147,
+        83,
+        10,
+        39
+      ],
+      "origin": [
+        149,
+        85
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 62,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 66,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        8,
+        36
+      ],
+      "rect": [
+        148,
+        43,
+        12,
+        40
+      ],
+      "origin": [
+        150,
+        45
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 63,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        5,
+        34
+      ],
+      "rect": [
+        95,
+        85,
+        9,
+        38
+      ],
+      "origin": [
+        97,
+        87
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 65,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        36,
+        5
+      ],
+      "rect": [
+        108,
+        66,
+        40,
+        9
+      ],
+      "origin": [
+        110,
+        68
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 67,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        37,
+        5
+      ],
+      "rect": [
+        108,
+        34,
+        41,
+        9
+      ],
+      "origin": [
+        110,
+        36
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 71,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        38,
+        8
+      ],
+      "rect": [
+        108,
+        0,
+        42,
+        12
+      ],
+      "origin": [
+        110,
+        2
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 72,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        5,
+        38
+      ],
+      "rect": [
+        150,
+        0,
+        9,
+        42
+      ],
+      "origin": [
+        152,
+        2
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 73,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 77,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 82,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 86,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 87,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 89,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        6,
+        26
+      ],
+      "rect": [
+        126,
+        123,
+        10,
+        30
+      ],
+      "origin": [
+        128,
+        125
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 74,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 85,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 88,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 90,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        26,
+        4
+      ],
+      "rect": [
+        82,
+        141,
+        30,
+        8
+      ],
+      "origin": [
+        84,
+        143
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 75,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        5,
+        25
+      ],
+      "rect": [
+        0,
+        182,
+        9,
+        29
+      ],
+      "origin": [
+        2,
+        184
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 76,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        3,
+        25
+      ],
+      "rect": [
+        8,
+        149,
+        7,
+        29
+      ],
+      "origin": [
+        10,
+        151
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 78,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 80,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        6,
+        25
+      ],
+      "rect": [
+        126,
+        153,
+        10,
+        29
+      ],
+      "origin": [
+        128,
+        155
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 79,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 81,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fuselage",
+          "face": 83,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        4,
+        25
+      ],
+      "rect": [
+        0,
+        149,
+        8,
+        29
+      ],
+      "origin": [
+        2,
+        151
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 84,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        26,
+        5
+      ],
+      "rect": [
+        82,
+        132,
+        30,
+        9
+      ],
+      "origin": [
+        84,
+        134
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fuselage",
+          "face": 91,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        9,
+        7
+      ],
+      "rect": [
+        109,
+        176,
+        13,
+        11
+      ],
+      "origin": [
+        111,
+        178
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 49,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        5,
+        5
+      ],
+      "rect": [
+        64,
+        167,
+        9,
+        9
+      ],
+      "origin": [
+        66,
+        169
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 9,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 13,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 38,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 46,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        13,
+        3
+      ],
+      "rect": [
+        56,
+        176,
+        17,
+        7
+      ],
+      "origin": [
+        58,
+        178
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 6,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 10,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 14,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        13,
+        8
+      ],
+      "rect": [
+        46,
+        208,
+        17,
+        12
+      ],
+      "origin": [
+        48,
+        210
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 11,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        4,
+        12
+      ],
+      "rect": [
+        73,
+        167,
+        8,
+        16
+      ],
+      "origin": [
+        75,
+        169
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 12,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        8,
+        12
+      ],
+      "rect": [
+        71,
+        183,
+        12,
+        16
+      ],
+      "origin": [
+        73,
+        185
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 7,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 15,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 34,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 36,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 40,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 42,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 44,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 48,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        3,
+        14
+      ],
+      "rect": [
+        40,
+        183,
+        7,
+        18
+      ],
+      "origin": [
+        42,
+        185
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 8,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 16,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 35,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 37,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 43,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 45,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        8,
+        14
+      ],
+      "rect": [
+        28,
+        191,
+        12,
+        18
+      ],
+      "origin": [
+        30,
+        193
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 17,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 23,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 24,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 25,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 31,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 32,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        7,
+        18
+      ],
+      "rect": [
+        45,
+        156,
+        11,
+        22
+      ],
+      "origin": [
+        47,
+        158
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 18,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 26,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        8,
+        18
+      ],
+      "rect": [
+        33,
+        149,
+        12,
+        22
+      ],
+      "origin": [
+        35,
+        151
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 19,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 20,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 21,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 22,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 27,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 28,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 29,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 30,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        8,
+        19
+      ],
+      "rect": [
+        52,
+        133,
+        12,
+        23
+      ],
+      "origin": [
+        54,
+        135
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "canopy",
+          "face": 33,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 39,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 41,
+          "tag": "navy",
+          "swatch": "canopy"
+        },
+        {
+          "object": "canopy",
+          "face": 47,
+          "tag": "navy",
+          "swatch": "canopy"
+        }
+      ],
+      "size": [
+        14,
+        7
+      ],
+      "rect": [
+        28,
+        209,
+        18,
+        11
+      ],
+      "origin": [
+        30,
+        211
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nose_badge",
+          "face": 0,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nose_badge",
+          "face": 1,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        3,
+        7
+      ],
+      "rect": [
+        93,
+        203,
+        7,
+        11
+      ],
+      "origin": [
+        95,
+        205
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nose_badge",
+          "face": 2,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nose_badge",
+          "face": 3,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        9,
+        7
+      ],
+      "rect": [
+        96,
+        179,
+        13,
+        11
+      ],
+      "origin": [
+        98,
+        181
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nose_badge",
+          "face": 4,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nose_badge",
+          "face": 5,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        9,
+        3
+      ],
+      "rect": [
+        122,
+        182,
+        13,
+        7
+      ],
+      "origin": [
+        124,
+        184
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "cabin_hatch",
+          "face": 0,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "cabin_hatch",
+          "face": 1,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        13,
+        3
+      ],
+      "rect": [
+        58,
+        200,
+        17,
+        7
+      ],
+      "origin": [
+        60,
+        202
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "cabin_hatch",
+          "face": 2,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "cabin_hatch",
+          "face": 3,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        3,
+        19
+      ],
+      "rect": [
+        64,
+        144,
+        7,
+        23
+      ],
+      "origin": [
+        66,
+        146
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "cabin_hatch",
+          "face": 4,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "cabin_hatch",
+          "face": 5,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        19,
+        13
+      ],
+      "rect": [
+        136,
+        166,
+        23,
+        17
+      ],
+      "origin": [
+        138,
+        168
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wing_left_skin",
+          "face": 0,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "wing_right_skin",
+          "face": 1,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        21,
+        4
+      ],
+      "rect": [
+        27,
+        133,
+        25,
+        8
+      ],
+      "origin": [
+        29,
+        135
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wing_left_skin",
+          "face": 1,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "wing_right_skin",
+          "face": 0,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        21,
+        4
+      ],
+      "rect": [
+        27,
+        141,
+        25,
+        8
+      ],
+      "origin": [
+        29,
+        143
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wing_left_skin",
+          "face": 2,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "wing_left_skin",
+          "face": 6,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        81,
+        5
+      ],
+      "rect": [
+        0,
+        35,
+        85,
+        9
+      ],
+      "origin": [
+        2,
+        37
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wing_left_skin",
+          "face": 3,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "wing_left_skin",
+          "face": 5,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        81,
+        19
+      ],
+      "rect": [
+        0,
+        0,
+        85,
+        23
+      ],
+      "origin": [
+        2,
+        2
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wing_left_skin",
+          "face": 4,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        81,
+        3
+      ],
+      "rect": [
+        0,
+        53,
+        85,
+        7
+      ],
+      "origin": [
+        2,
+        55
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "flaperon_left_skin",
+          "face": 0,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "flaperon_left_skin",
+          "face": 1,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "flaperon_right_skin",
+          "face": 0,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "flaperon_right_skin",
+          "face": 1,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        81,
+        8
+      ],
+      "rect": [
+        0,
+        23,
+        85,
+        12
+      ],
+      "origin": [
+        2,
+        25
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "flaperon_left_skin",
+          "face": 2,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "flaperon_left_skin",
+          "face": 4,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "flaperon_right_skin",
+          "face": 2,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "flaperon_right_skin",
+          "face": 4,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        81,
+        3
+      ],
+      "rect": [
+        0,
+        60,
+        85,
+        7
+      ],
+      "origin": [
+        2,
+        62
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "flaperon_left_skin",
+          "face": 3,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "flaperon_left_skin",
+          "face": 5,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "flaperon_right_skin",
+          "face": 3,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "flaperon_right_skin",
+          "face": 5,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        8,
+        3
+      ],
+      "rect": [
+        96,
+        190,
+        12,
+        7
+      ],
+      "origin": [
+        98,
+        192
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wing_right_skin",
+          "face": 2,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "wing_right_skin",
+          "face": 6,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        81,
+        5
+      ],
+      "rect": [
+        0,
+        44,
+        85,
+        9
+      ],
+      "origin": [
+        2,
+        46
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wing_right_skin",
+          "face": 3,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "wing_right_skin",
+          "face": 5,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        19,
+        81
+      ],
+      "rect": [
+        85,
+        0,
+        23,
+        85
+      ],
+      "origin": [
+        87,
+        2
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wing_right_skin",
+          "face": 4,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        81,
+        3
+      ],
+      "rect": [
+        0,
+        67,
+        85,
+        7
+      ],
+      "origin": [
+        2,
+        69
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "tail_skin",
+          "face": 0,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "tail_skin",
+          "face": 1,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        12,
+        4
+      ],
+      "rect": [
+        78,
+        158,
+        16,
+        8
+      ],
+      "origin": [
+        80,
+        160
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "tail_skin",
+          "face": 2,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "tail_skin",
+          "face": 6,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        65,
+        4
+      ],
+      "rect": [
+        0,
+        111,
+        69,
+        8
+      ],
+      "origin": [
+        2,
+        113
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "tail_skin",
+          "face": 3,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "tail_skin",
+          "face": 5,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        65,
+        11
+      ],
+      "rect": [
+        0,
+        87,
+        69,
+        15
+      ],
+      "origin": [
+        2,
+        89
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "tail_skin",
+          "face": 4,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        65,
+        3
+      ],
+      "rect": [
+        0,
+        119,
+        69,
+        7
+      ],
+      "origin": [
+        2,
+        121
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "elevator_skin",
+          "face": 0,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "elevator_skin",
+          "face": 1,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        65,
+        5
+      ],
+      "rect": [
+        0,
+        102,
+        69,
+        9
+      ],
+      "origin": [
+        2,
+        104
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "elevator_skin",
+          "face": 2,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "elevator_skin",
+          "face": 4,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        65,
+        3
+      ],
+      "rect": [
+        0,
+        126,
+        69,
+        7
+      ],
+      "origin": [
+        2,
+        128
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "elevator_skin",
+          "face": 3,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "elevator_skin",
+          "face": 5,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        3,
+        5
+      ],
+      "rect": [
+        116,
+        194,
+        7,
+        9
+      ],
+      "origin": [
+        118,
+        196
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fin_skin",
+          "face": 0,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fin_skin",
+          "face": 1,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        4,
+        16
+      ],
+      "rect": [
+        56,
+        156,
+        8,
+        20
+      ],
+      "origin": [
+        58,
+        158
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fin_skin",
+          "face": 2,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fin_skin",
+          "face": 6,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        33,
+        4
+      ],
+      "rect": [
+        104,
+        115,
+        37,
+        8
+      ],
+      "origin": [
+        106,
+        117
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fin_skin",
+          "face": 3,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "fin_skin",
+          "face": 5,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        33,
+        14
+      ],
+      "rect": [
+        104,
+        87,
+        37,
+        18
+      ],
+      "origin": [
+        106,
+        89
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "fin_skin",
+          "face": 4,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        3,
+        33
+      ],
+      "rect": [
+        141,
+        122,
+        7,
+        37
+      ],
+      "origin": [
+        143,
+        124
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "rudder_skin",
+          "face": 0,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "rudder_skin",
+          "face": 1,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        33,
+        6
+      ],
+      "rect": [
+        104,
+        105,
+        37,
+        10
+      ],
+      "origin": [
+        106,
+        107
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "rudder_skin",
+          "face": 2,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "rudder_skin",
+          "face": 4,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        3,
+        33
+      ],
+      "rect": [
+        148,
+        122,
+        7,
+        37
+      ],
+      "origin": [
+        150,
+        124
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "rudder_skin",
+          "face": 3,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "rudder_skin",
+          "face": 5,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        3,
+        6
+      ],
+      "rect": [
+        100,
+        197,
+        7,
+        10
+      ],
+      "origin": [
+        102,
+        199
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "gear_0",
+          "face": 0,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_0",
+          "face": 7,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_1",
+          "face": 0,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_1",
+          "face": 7,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_2",
+          "face": 0,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_2",
+          "face": 7,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 17,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 17,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        }
+      ],
+      "size": [
+        3,
+        3
+      ],
+      "rect": [
+        138,
+        191,
+        7,
+        7
+      ],
+      "origin": [
+        140,
+        193
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "gear_0",
+          "face": 1,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_0",
+          "face": 2,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_0",
+          "face": 3,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_0",
+          "face": 4,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_0",
+          "face": 5,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_0",
+          "face": 6,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_1",
+          "face": 1,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_1",
+          "face": 2,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_1",
+          "face": 3,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_1",
+          "face": 4,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_1",
+          "face": 5,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_1",
+          "face": 6,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_2",
+          "face": 1,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_2",
+          "face": 2,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_2",
+          "face": 3,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_2",
+          "face": 4,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_2",
+          "face": 5,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "gear_2",
+          "face": 6,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        }
+      ],
+      "size": [
+        3,
+        16
+      ],
+      "rect": [
+        33,
+        171,
+        7,
+        20
+      ],
+      "origin": [
+        35,
+        173
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wheel_0",
+          "face": 0,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 13,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 0,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 13,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 0,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 13,
+          "tag": "ink",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        9,
+        9
+      ],
+      "rect": [
+        109,
+        163,
+        13,
+        13
+      ],
+      "origin": [
+        111,
+        165
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "wheel_0",
+          "face": 1,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 2,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 3,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 4,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 5,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 6,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 7,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 8,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 9,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 10,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 11,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_0",
+          "face": 12,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 1,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 2,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 3,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 4,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 5,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 6,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 7,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 8,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 9,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 10,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 11,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_1",
+          "face": 12,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 1,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 2,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 3,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 4,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 5,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 6,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 7,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 8,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 9,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 10,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 11,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "wheel_2",
+          "face": 12,
+          "tag": "ink",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_visor",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_visor",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_visor",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_visor",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_-1",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_1",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        3,
+        5
+      ],
+      "rect": [
+        120,
+        203,
+        7,
+        9
+      ],
+      "origin": [
+        122,
+        205
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nacelle_skin_left",
+          "face": 0,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 31,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 0,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 31,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        9,
+        9
+      ],
+      "rect": [
+        96,
+        166,
+        13,
+        13
+      ],
+      "origin": [
+        98,
+        168
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nacelle_skin_left",
+          "face": 1,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 2,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 3,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 4,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 5,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 6,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 7,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 8,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 9,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 10,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 1,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 2,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 3,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 4,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 5,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 6,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 7,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 8,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 9,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 10,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        6,
+        7
+      ],
+      "rect": [
+        63,
+        207,
+        10,
+        11
+      ],
+      "origin": [
+        65,
+        209
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nacelle_skin_left",
+          "face": 11,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 13,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 14,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 16,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 18,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 19,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 11,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 13,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 14,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 16,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 18,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 19,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        5,
+        23
+      ],
+      "rect": [
+        15,
+        149,
+        9,
+        27
+      ],
+      "origin": [
+        17,
+        151
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nacelle_skin_left",
+          "face": 12,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 15,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 17,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 20,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 12,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 15,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 17,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 20,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        5,
+        23
+      ],
+      "rect": [
+        24,
+        149,
+        9,
+        27
+      ],
+      "origin": [
+        26,
+        151
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nacelle_skin_left",
+          "face": 21,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 24,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 26,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 29,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 21,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 24,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 26,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 29,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        6,
+        7
+      ],
+      "rect": [
+        73,
+        207,
+        10,
+        11
+      ],
+      "origin": [
+        75,
+        209
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nacelle_skin_left",
+          "face": 22,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 23,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 25,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 27,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 28,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_left",
+          "face": 30,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 22,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 23,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 25,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 27,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 28,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "nacelle_skin_right",
+          "face": 30,
+          "tag": "coral",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        6,
+        7
+      ],
+      "rect": [
+        83,
+        203,
+        10,
+        11
+      ],
+      "origin": [
+        85,
+        205
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nacelle_collar_left",
+          "face": 0,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 0,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        13,
+        13
+      ],
+      "rect": [
+        47,
+        183,
+        17,
+        17
+      ],
+      "origin": [
+        49,
+        185
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nacelle_collar_left",
+          "face": 1,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_left",
+          "face": 2,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_left",
+          "face": 3,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_left",
+          "face": 4,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_left",
+          "face": 5,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_left",
+          "face": 6,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_left",
+          "face": 7,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_left",
+          "face": 8,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_left",
+          "face": 9,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_left",
+          "face": 10,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 1,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 2,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 3,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 4,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 5,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 6,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 7,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 8,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 9,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 10,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 0,
+          "tag": "pale",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        5,
+        5
+      ],
+      "rect": [
+        107,
+        197,
+        9,
+        9
+      ],
+      "origin": [
+        109,
+        199
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "nacelle_collar_left",
+          "face": 11,
+          "tag": "white",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "nacelle_collar_right",
+          "face": 11,
+          "tag": "white",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        11,
+        11
+      ],
+      "rect": [
+        81,
+        166,
+        15,
+        15
+      ],
+      "origin": [
+        83,
+        168
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "rotor_hub_left",
+          "face": 0,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 0,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        }
+      ],
+      "size": [
+        7,
+        7
+      ],
+      "rect": [
+        83,
+        192,
+        11,
+        11
+      ],
+      "origin": [
+        85,
+        194
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "rotor_hub_left",
+          "face": 1,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 2,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 3,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 4,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 5,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 6,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 7,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 8,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 1,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 2,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 3,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 4,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 5,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 6,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 7,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 8,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        }
+      ],
+      "size": [
+        5,
+        5
+      ],
+      "rect": [
+        102,
+        214,
+        9,
+        9
+      ],
+      "origin": [
+        104,
+        216
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "rotor_hub_left",
+          "face": 9,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 10,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 11,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 12,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 13,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 14,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 15,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_left",
+          "face": 16,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 9,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 10,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 11,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 12,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 13,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 14,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 15,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        },
+        {
+          "object": "rotor_hub_right",
+          "face": 16,
+          "tag": "metal",
+          "swatch": "gear-metal"
+        }
+      ],
+      "size": [
+        4,
+        5
+      ],
+      "rect": [
+        111,
+        215,
+        8,
+        9
+      ],
+      "origin": [
+        113,
+        217
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "blade_left_0",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_1",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_2",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_0",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_1",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_2",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        31,
+        5
+      ],
+      "rect": [
+        82,
+        123,
+        35,
+        9
+      ],
+      "origin": [
+        84,
+        125
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "blade_left_0",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_1",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_2",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_0",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_1",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_2",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        5,
+        31
+      ],
+      "rect": [
+        117,
+        123,
+        9,
+        35
+      ],
+      "origin": [
+        119,
+        125
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "blade_left_0",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_1",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_2",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_0",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_1",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_2",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        20,
+        3
+      ],
+      "rect": [
+        136,
+        159,
+        24,
+        7
+      ],
+      "origin": [
+        138,
+        161
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "blade_left_0",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_1",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_2",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_0",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_1",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_2",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        3,
+        13
+      ],
+      "rect": [
+        64,
+        183,
+        7,
+        17
+      ],
+      "origin": [
+        66,
+        185
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "blade_left_0",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_1",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_2",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_0",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_1",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_2",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        3,
+        3
+      ],
+      "rect": [
+        145,
+        191,
+        7,
+        7
+      ],
+      "origin": [
+        147,
+        193
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "blade_left_0",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_1",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_2",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_0",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_1",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_2",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        14,
+        3
+      ],
+      "rect": [
+        40,
+        201,
+        18,
+        7
+      ],
+      "origin": [
+        42,
+        203
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "blade_left_0",
+          "face": 6,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_1",
+          "face": 6,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_2",
+          "face": 6,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_0",
+          "face": 6,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_1",
+          "face": 6,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_2",
+          "face": 6,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        3,
+        19
+      ],
+      "rect": [
+        71,
+        144,
+        7,
+        23
+      ],
+      "origin": [
+        73,
+        146
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "blade_left_0",
+          "face": 7,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_1",
+          "face": 7,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_left_2",
+          "face": 7,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_0",
+          "face": 7,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_1",
+          "face": 7,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "blade_right_2",
+          "face": 7,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        4,
+        3
+      ],
+      "rect": [
+        152,
+        183,
+        8,
+        7
+      ],
+      "origin": [
+        154,
+        185
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_jacket",
+          "face": 0,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        9,
+        7
+      ],
+      "rect": [
+        83,
+        181,
+        13,
+        11
+      ],
+      "origin": [
+        85,
+        183
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_jacket",
+          "face": 1,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 2,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 7,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 8,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 9,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 10,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 15,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 16,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        4,
+        10
+      ],
+      "rect": [
+        109,
+        149,
+        8,
+        14
+      ],
+      "origin": [
+        111,
+        151
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_jacket",
+          "face": 3,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 6,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 11,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 14,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        11,
+        5
+      ],
+      "rect": [
+        78,
+        149,
+        15,
+        9
+      ],
+      "origin": [
+        80,
+        151
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_jacket",
+          "face": 4,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 5,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 12,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 13,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        11,
+        4
+      ],
+      "rect": [
+        94,
+        158,
+        15,
+        8
+      ],
+      "origin": [
+        96,
+        160
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_jacket",
+          "face": 17,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 18,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 19,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 20,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 25,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 26,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 27,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 28,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        3,
+        5
+      ],
+      "rect": [
+        123,
+        189,
+        7,
+        9
+      ],
+      "origin": [
+        125,
+        191
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_jacket",
+          "face": 21,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 23,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 29,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 31,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        4,
+        4
+      ],
+      "rect": [
+        75,
+        199,
+        8,
+        8
+      ],
+      "origin": [
+        77,
+        201
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_jacket",
+          "face": 22,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 24,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 30,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        },
+        {
+          "object": "crew_jacket",
+          "face": 32,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        4,
+        3
+      ],
+      "rect": [
+        152,
+        190,
+        8,
+        7
+      ],
+      "origin": [
+        154,
+        192
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_jacket",
+          "face": 33,
+          "tag": "amber",
+          "swatch": "coral-trim"
+        }
+      ],
+      "size": [
+        7,
+        5
+      ],
+      "rect": [
+        83,
+        214,
+        11,
+        9
+      ],
+      "origin": [
+        85,
+        216
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_helmet",
+          "face": 1,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 5,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 6,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 9,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 13,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 14,
+          "tag": "pale",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        5,
+        3
+      ],
+      "rect": [
+        135,
+        183,
+        9,
+        7
+      ],
+      "origin": [
+        137,
+        185
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_helmet",
+          "face": 2,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 10,
+          "tag": "pale",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        4,
+        5
+      ],
+      "rect": [
+        119,
+        215,
+        8,
+        9
+      ],
+      "origin": [
+        121,
+        217
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_helmet",
+          "face": 3,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 4,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 7,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 8,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 11,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 12,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 15,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 16,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 33,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 34,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 37,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 39,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 40,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 41,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 42,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 45,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 47,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 48,
+          "tag": "pale",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        4,
+        3
+      ],
+      "rect": [
+        130,
+        190,
+        8,
+        7
+      ],
+      "origin": [
+        132,
+        192
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_helmet",
+          "face": 17,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 18,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 19,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 20,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 21,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 23,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 25,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 26,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 27,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 28,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 29,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 31,
+          "tag": "pale",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        4,
+        6
+      ],
+      "rect": [
+        94,
+        214,
+        8,
+        10
+      ],
+      "origin": [
+        96,
+        216
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_helmet",
+          "face": 22,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 24,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 30,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 32,
+          "tag": "pale",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        6,
+        3
+      ],
+      "rect": [
+        100,
+        207,
+        10,
+        7
+      ],
+      "origin": [
+        102,
+        209
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_helmet",
+          "face": 35,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 43,
+          "tag": "pale",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        4,
+        4
+      ],
+      "rect": [
+        144,
+        183,
+        8,
+        8
+      ],
+      "origin": [
+        146,
+        185
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_helmet",
+          "face": 36,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 38,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 44,
+          "tag": "pale",
+          "swatch": "white-panels"
+        },
+        {
+          "object": "crew_helmet",
+          "face": 46,
+          "tag": "pale",
+          "swatch": "white-panels"
+        }
+      ],
+      "size": [
+        2,
+        4
+      ],
+      "rect": [
+        64,
+        133,
+        6,
+        8
+      ],
+      "origin": [
+        66,
+        135
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_visor",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_visor",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        3,
+        3
+      ],
+      "rect": [
+        130,
+        197,
+        7,
+        7
+      ],
+      "origin": [
+        132,
+        199
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_arm_-1",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_-1",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_-1",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_-1",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_-1",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_-1",
+          "face": 6,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_1",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_1",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_1",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_1",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_1",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_1",
+          "face": 6,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        9,
+        3
+      ],
+      "rect": [
+        109,
+        187,
+        13,
+        7
+      ],
+      "origin": [
+        111,
+        189
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_arm_-1",
+          "face": 7,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_-1",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_-1",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_arm_1",
+          "face": 7,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_1",
+          "face": 0,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_1",
+          "face": 1,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        5,
+        5
+      ],
+      "rect": [
+        111,
+        206,
+        9,
+        9
+      ],
+      "origin": [
+        113,
+        208
+      ],
+      "padding": 2
+    },
+    {
+      "users": [
+        {
+          "object": "crew_leg_-1",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_-1",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_-1",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_-1",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_1",
+          "face": 2,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_1",
+          "face": 3,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_1",
+          "face": 4,
+          "tag": "navy",
+          "swatch": "rotor"
+        },
+        {
+          "object": "crew_leg_1",
+          "face": 5,
+          "tag": "navy",
+          "swatch": "rotor"
+        }
+      ],
+      "size": [
+        9,
+        5
+      ],
+      "rect": [
+        93,
+        149,
+        13,
+        9
+      ],
+      "origin": [
+        95,
+        151
+      ],
+      "padding": 2
+    }
+  ]
+}

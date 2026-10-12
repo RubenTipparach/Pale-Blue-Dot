@@ -1,0 +1,520 @@
+//! The harbour's cog at its mooring (`sail-the-cog` design 6, step 1): the
+//! ship piece (`tenebris-towns` 3d) as the mockup's `cog` draws it, 15 m by
+//! 5 m with its deck 1.9 m over the water. Its hull, deck, rail with the
+//! gangway gap, castles, stair to the aftcastle, mast with the sail furled
+//! on its yard, shrouds, a barrel and a crate, and the gangplank up from
+//! the pier. It is cut on the harbour's chart in its own frame at the sea's
+//! surface, placed from the template and never saved, and it does not move.
+
+use super::super::chart::{Chart, Patch};
+use super::super::{Cog, Template};
+use super::dressing::{Hull, Place, both, cylinder, finish, hull_skin, ramp};
+use super::{BuildingSolids, Frame, Meshes, Sink, Solid, Surface, ccw, rail};
+use glam::{Vec2, Vec3};
+
+/// The cog's hull (the mockup's `L`, `B`, `D` and the sheer it lofts).
+const HULL: Hull = Hull {
+    l: 15.0,
+    b: 5.0,
+    d: 3.2,
+    sheer: 1.0,
+};
+/// How deep it floats, metres.
+const DRAFT_M: f32 = 1.2;
+/// Its deck over the water: the hull's depth less its draught, and a hand
+/// under the gunwale's middle.
+const DECK_M: f32 = HULL.d - DRAFT_M - 0.1;
+/// Its castles' decks over the main deck.
+const CASTLE_M: f32 = 1.6;
+/// The gangway's half-width in the rail amidships.
+const GANGWAY_M: f32 = 0.7;
+/// How far the gangplank's landing laps onto the deck.
+const LANDING_M: f32 = 0.3;
+/// The mast's step forward of the middle, the yard's height over the deck,
+/// and its sail's width and foot over the deck (the craft's
+/// `SquareSailSpec`: `vehicle_specs_match_the_ship_they_sail` holds them
+/// together).
+pub const MAST_M: f32 = 1.5;
+pub const YARD_M: f32 = 11.0;
+pub const SAIL_W: f32 = 8.8;
+pub const SAIL_FOOT_M: f32 = 4.0;
+
+/// The deck's half-beam `lx` along the cog from its middle: the hull's own
+/// plan, a little inside it (the mockup's `wAt`).
+fn beam_at(lx: f32) -> f32 {
+    let (_, b, _, _) = HULL.section(lx / HULL.l + 0.5);
+    b * 0.96
+}
+
+/// The cog's ship, cut where the template moors it, floating with its
+/// waterline at `waterline_m` over the radius: the drawn sea. `None` where
+/// it is off the chart.
+#[allow(clippy::too_many_arguments)]
+pub fn ship(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    patch: &Patch,
+    chart: &Chart,
+    template: &Template,
+    cog: &Cog,
+    radius_m: f32,
+    waterline_m: f32,
+) -> Option<BuildingSolids> {
+    let cell_m = template.grid.cell_m;
+    let place = Place::new(chart, patch, cell_m, (cog.x, cog.z), radius_m, waterline_m)?;
+    Some(cut(meshes, repeat_m, &place, cog, true))
+}
+
+/// Which way the cog's bow points where the template moors it, a
+/// planet-local unit tangent: the axis it rolls about.
+pub fn bow(patch: &Patch, chart: &Chart, template: &Template, cog: &Cog) -> Option<Vec3> {
+    let cell_m = template.grid.cell_m;
+    let place = Place::new(chart, patch, cell_m, (cog.x, cog.z), 1.0, 0.0)?;
+    let t = place.turn(cog.heading);
+    let f = place.frame;
+    Some((f.x * t.cos() + f.z * t.sin()).normalize())
+}
+
+/// Where the template moors its cog, as a craft stands there at rest: its
+/// waterline's middle, planet-local at `waterline_m` over the radius (the
+/// drawn sea), and its bow, a unit tangent. The ship [`ship`] cuts stands
+/// in a frame with that origin. `None` where it is off the chart.
+pub fn berth(
+    patch: &Patch,
+    chart: &Chart,
+    template: &Template,
+    cog: &Cog,
+    radius_m: f32,
+    waterline_m: f32,
+) -> Option<(Vec3, Vec3)> {
+    let cell_m = template.grid.cell_m;
+    let place = Place::new(chart, patch, cell_m, (cog.x, cog.z), radius_m, waterline_m)?;
+    Some((place.frame.origin, bow(patch, chart, template, cog)?))
+}
+
+/// The cog's ship cut in `frame` as it stands, its waterline's middle at the
+/// frame's origin and its bow along `heading` in the frame's plan (from `x`
+/// toward `z`): a deck off any chart, for a walker's tests.
+pub fn ship_in(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    frame: Frame,
+    heading: f32,
+    gang_side: i32,
+) -> BuildingSolids {
+    let cog = Cog {
+        x: 0.0,
+        z: 0.0,
+        heading,
+        gang_side,
+        gangplank: super::super::Pier {
+            from: [0.0; 3],
+            to: [0.0; 3],
+            width_m: 1.0,
+        },
+    };
+    cut(meshes, repeat_m, &Place::flat(frame), &cog, true)
+}
+
+/// The frame a craft's parts are given in: its reference frame, +x to
+/// starboard, +y up and +z aft, its waterline's middle at the origin.
+const CRAFT: Frame = Frame {
+    origin: Vec3::ZERO,
+    x: Vec3::X,
+    y: Vec3::Y,
+    z: Vec3::Z,
+};
+
+/// The cog's ship as the craft carries it (`sail-the-cog` step 3): cut in
+/// the craft's own frame, its waterline's middle at the origin and its bow
+/// along -z, the gangway on `gang_side` (+1 starboard). Its yard is not in
+/// it: the craft turns that with its braces ([`rig`]).
+pub fn sailing(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    gang_side: i32,
+) -> BuildingSolids {
+    let cog = Cog {
+        x: 0.0,
+        z: 0.0,
+        heading: -std::f32::consts::FRAC_PI_2,
+        gang_side,
+        gangplank: super::super::Pier {
+            from: [0.0; 3],
+            to: [0.0; 3],
+            width_m: 1.0,
+        },
+    };
+    cut(meshes, repeat_m, &Place::flat(CRAFT), &cog, false)
+}
+
+/// Where the mast steps on the deck, in the craft's frame: its foot, on
+/// the deck amidships, [`MAST_M`] forward of the middle.
+pub const MAST_STEP: Vec3 = Vec3::new(0.0, DECK_M, -MAST_M);
+
+/// The stern lantern's flame, in the craft's frame (`sail-the-cog` step 3,
+/// part 4): the mockup's `lantern()` on the cog's aftcastle, its post 86%
+/// of the deck's half-length aft on the middle line, the lamp hung 2.3 m up
+/// at the end of its arm, out to starboard.
+pub const LANTERN: Vec3 = Vec3::new(0.45, DECK_M + CASTLE_M + 2.3, HULL.l / 2.0 * 0.94 * 0.86);
+
+/// The stern lantern's light where its flame is, `at` in the planet's
+/// frame: the mockup's lamp, by night only, lighting the aftcastle and the
+/// helm down to the main deck.
+pub fn stern_light(at: Vec3) -> super::RoomLight {
+    super::RoomLight {
+        kind: super::LightKind::Candle,
+        at,
+        power: 0.7,
+        below_m: LANTERN.y - DECK_M + 0.2,
+        above_m: 1.0,
+    }
+}
+
+/// The stern lantern in the craft's frame, as the mockup's `lantern()`: a
+/// 2.6 m post from the aftcastle's deck with an arm out to starboard, a
+/// small timber cage hung from it, and its flame inside (`flame`, drawn
+/// unlit).
+pub fn lantern(repeat_m: &dyn Fn(&str) -> f32) -> Meshes {
+    let mut out = Meshes::new();
+    let mut sink = Sink::new(&mut out, repeat_m, CRAFT);
+    let (x, y, z) = (LANTERN.x, LANTERN.y, LANTERN.z);
+    let foot = DECK_M + CASTLE_M;
+    cylinder(
+        &mut sink,
+        "timber",
+        "timber",
+        Vec2::new(0.0, z),
+        foot,
+        0.08,
+        2.6,
+        6,
+    );
+    sink.plain_box(
+        "timber",
+        0.25,
+        foot + 2.55,
+        z,
+        Vec3::new(0.5, 0.06, 0.06),
+        0.0,
+    );
+    sink.plain_box("timber", x, y - 0.15, z, Vec3::new(0.24, 0.03, 0.24), 0.0);
+    for (a, b) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+        sink.plain_box(
+            "timber",
+            x + a * 0.1,
+            y - 0.12,
+            z + b * 0.1,
+            Vec3::new(0.025, 0.24, 0.025),
+            0.0,
+        );
+    }
+    sink.plain_box("timber", x, y + 0.12, z, Vec3::new(0.27, 0.05, 0.27), 0.0);
+    sink.plain_box("rope", x, y + 0.17, z, Vec3::new(0.02, 0.08, 0.02), 0.0);
+    sink.flame("flame", Vec3::new(x, y - 0.11, z), 0.2);
+    drop(sink);
+    out
+}
+
+/// The yard and its sail in the yard's own frame, its origin at the mast's
+/// step and the yard square across it (+x to starboard, +z aft): `set`, the
+/// sail hangs from it to its foot; furled, it is bundled on the yard.
+pub fn rig(repeat_m: &dyn Fn(&str) -> f32, set: bool) -> Meshes {
+    let mut out = Meshes::new();
+    let mut sink = Sink::new(&mut out, repeat_m, CRAFT);
+    sink.plain_box("timber", 0.0, YARD_M, 0.0, Vec3::new(9.5, 0.25, 0.25), 0.0);
+    if set {
+        // A square of linen from the yard to its foot, forward of the mast,
+        // bellied forward as the wind from aft fills it.
+        let (half, top, foot) = (SAIL_W / 2.0, YARD_M - 0.05, SAIL_FOOT_M);
+        let rows = 4;
+        let cols = 6;
+        let at = |i: usize, k: usize| {
+            let u = i as f32 / cols as f32;
+            let v = k as f32 / rows as f32;
+            let belly = 0.9 * (std::f32::consts::PI * u).sin() * (std::f32::consts::PI * v).sin();
+            Vec3::new(-half + u * SAIL_W, foot + v * (top - foot), -0.35 - belly)
+        };
+        let uv = |q: Vec3| Vec2::new(q.x, q.y);
+        for i in 0..cols {
+            for k in 0..rows {
+                both(
+                    &mut sink,
+                    "linen",
+                    &[at(i, k), at(i + 1, k), at(i + 1, k + 1), at(i, k + 1)],
+                    &uv,
+                );
+            }
+        }
+    } else {
+        sink.plain_box(
+            "linen",
+            0.0,
+            YARD_M - 0.45,
+            -0.2,
+            Vec3::new(SAIL_W, 0.45, 0.45),
+            0.0,
+        );
+    }
+    drop(sink);
+    out
+}
+
+/// The ship, in `place`'s frame.
+fn cut(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    place: &Place,
+    cog: &Cog,
+    yard: bool,
+) -> BuildingSolids {
+    let (ca, sa) = (cog.heading.cos(), cog.heading.sin());
+    // The cog's own `(along, across)` in the mockup's metres (its `tw`), and
+    // in the frame's plan.
+    let tw = |lx: f32, lz: f32| (cog.x + lx * ca - lz * sa, cog.z + lx * sa + lz * ca);
+    let plan = |lx: f32, lz: f32| {
+        let (x, z) = tw(lx, lz);
+        place.plan(x, z)
+    };
+    let turn = place.turn(cog.heading);
+    let mut sink = Sink::new(meshes, repeat_m, place.frame);
+
+    // The hull, its gunwale just under the deck, so the gangplank clears it.
+    let gunwale = DECK_M - 0.1;
+    let to = |p: Vec3| {
+        let (x, z) = tw(p.x, p.z);
+        place.at(x, gunwale + p.y, z)
+    };
+    hull_skin(&mut sink, "boards", HULL, 1.0, &to);
+
+    // The deck, following the hull's plan: a floor, and under it the hull
+    // as a solid down to its keel.
+    let hl = HULL.l / 2.0 * 0.94;
+    let n = 14;
+    let side: Vec<(f32, f32)> = (0..=n)
+        .map(|i| {
+            let lx = -hl + 2.0 * hl * i as f32 / n as f32;
+            (lx, beam_at(lx))
+        })
+        .collect();
+    let deck: Vec<(f32, f32)> = side
+        .iter()
+        .map(|&(a, b)| (a, -b))
+        .chain(side.iter().rev().map(|&(a, b)| (a, b)))
+        .fold(Vec::new(), |mut out: Vec<(f32, f32)>, p| {
+            if out
+                .last()
+                .is_none_or(|q| (p.0 - q.0).hypot(p.1 - q.1) > 1e-3)
+            {
+                out.push(p);
+            }
+            out
+        });
+    let outline: Vec<Vec2> = deck.iter().map(|&(a, b)| plan(a, b)).collect();
+    let floor: Vec<Vec3> = outline
+        .iter()
+        .map(|p| Vec3::new(p.x, DECK_M, p.y))
+        .collect();
+    sink.face("plank", &floor, Vec3::Y, None);
+    sink.surfaces.push(Surface::Floor {
+        outline: ccw(outline.clone()),
+        top: DECK_M,
+        bottom: DECK_M - 0.1,
+    });
+    sink.solids.push(Solid {
+        outline: ccw(outline),
+        y0: DECK_M - HULL.d - 0.2,
+        y1: DECK_M - 0.1,
+    });
+
+    // The rail round the deck, with the gangway's gap amidships.
+    let rail_between = |sink: &mut Sink, (a, b): (f32, f32), (c, d): (f32, f32), y: f32| {
+        let (p, q) = (plan(a, b), plan(c, d));
+        let e = q - p;
+        if e.length() > 0.05 {
+            rail(sink, (p + q) * 0.5, y, e.length(), e.y.atan2(e.x));
+        }
+    };
+    let gang = cog.gang_side as f32;
+    for i in 0..deck.len() {
+        let ((a, b), (c, d)) = (deck[i], deck[(i + 1) % deck.len()]);
+        let across = (b + d).signum();
+        if across == gang && a.min(c) < GANGWAY_M && a.max(c) > -GANGWAY_M {
+            let at = |u: f32| (u, b + (d - b) * (u - a) / (c - a));
+            let (lo, hi) = (a.min(c), a.max(c));
+            if lo < -GANGWAY_M {
+                rail_between(&mut sink, at(lo), at(-GANGWAY_M), DECK_M);
+            }
+            if hi > GANGWAY_M {
+                rail_between(&mut sink, at(GANGWAY_M), at(hi), DECK_M);
+            }
+            continue;
+        }
+        rail_between(&mut sink, (a, b), (c, d), DECK_M);
+    }
+
+    // The castles: solid decks over the ends, railed but on the side that
+    // looks onto the main deck.
+    let castle = |sink: &mut Sink, x0: f32, x1: f32, open: usize| {
+        let lxs: Vec<f32> = (0..=4).map(|k| x0 + (x1 - x0) * k as f32 / 4.0).collect();
+        let pts: Vec<(f32, f32)> = lxs
+            .iter()
+            .map(|&lx| (lx, -beam_at(lx) * 0.97))
+            .chain(lxs.iter().rev().map(|&lx| (lx, beam_at(lx) * 0.97)))
+            .collect();
+        let outline: Vec<Vec2> = pts.iter().map(|&(a, b)| plan(a, b)).collect();
+        sink.prism("plank", "boards", &outline, DECK_M, DECK_M + CASTLE_M, None);
+        sink.solids.push(Solid {
+            outline: ccw(outline.clone()),
+            y0: DECK_M,
+            y1: DECK_M + CASTLE_M,
+        });
+        sink.surfaces.push(Surface::Floor {
+            outline: ccw(outline),
+            top: DECK_M + CASTLE_M,
+            bottom: DECK_M + CASTLE_M - 0.1,
+        });
+        for i in (0..pts.len()).filter(|&i| i != open) {
+            rail_between(sink, pts[i], pts[(i + 1) % pts.len()], DECK_M + CASTLE_M);
+        }
+    };
+    let aft_x = -hl * 0.36;
+    castle(&mut sink, -hl * 0.97, aft_x, 4);
+    castle(&mut sink, hl * 0.42, hl * 0.97, 9);
+
+    // The stair up to the aftcastle, open treads on the deck's middle line.
+    let (foot, top) = (plan(aft_x + 2.55, 0.0), plan(aft_x, 0.0));
+    let len = foot.distance(top);
+    let dir = (top - foot) / len;
+    let risers = (CASTLE_M / 0.19).round() as u32;
+    let (rise, run) = (CASTLE_M / risers as f32, len / risers as f32);
+    let stair_turn = dir.y.atan2(dir.x);
+    for k in 0..risers {
+        let p = foot + dir * ((k as f32 + 0.5) * run);
+        let y = DECK_M + (k + 1) as f32 * rise;
+        sink.plain_box(
+            "plank",
+            p.x,
+            y - 0.07,
+            p.y,
+            Vec3::new(run + 0.02, 0.07, 1.0),
+            stair_turn,
+        );
+    }
+    sink.surfaces.push(Surface::Flight {
+        foot,
+        dir,
+        len,
+        half_width: 0.5,
+        base: DECK_M,
+        rise,
+        risers,
+    });
+
+    // The mast, the yard across the ship with its sail furled on it (where
+    // the ship does not turn its yard itself: [`rig`]), and the shrouds
+    // from the masthead to the rail either side.
+    let mast = plan(MAST_M, 0.0);
+    cylinder(&mut sink, "timber", "timber", mast, DECK_M, 0.28, 13.0, 8);
+    if yard {
+        sink.plain_box(
+            "timber",
+            mast.x,
+            DECK_M + YARD_M,
+            mast.y,
+            Vec3::new(0.25, 0.25, 9.5),
+            turn,
+        );
+        let furl = plan(MAST_M + 0.2, 0.0);
+        sink.plain_box(
+            "linen",
+            furl.x,
+            DECK_M + YARD_M - 0.45,
+            furl.y,
+            Vec3::new(0.45, 0.45, SAIL_W),
+            turn,
+        );
+    }
+    let head = Vec3::new(mast.x, DECK_M + 12.6, mast.y);
+    let ahead = plan(1.56, 0.0);
+    let head2 = Vec3::new(ahead.x, DECK_M + 12.6, ahead.y);
+    for k in [-1.0, 1.0] {
+        for f in [-0.6, 0.6] {
+            let p = plan(1.5 + f, k * beam_at(1.5 + f));
+            let foot = Vec3::new(p.x, DECK_M + 0.95, p.y);
+            let uv = |q: Vec3| Vec2::new(0.0, q.y);
+            both(&mut sink, "rope", &[head, head2, foot], &uv);
+        }
+    }
+
+    // A barrel and a crate on the deck.
+    let b = plan(-1.0, -1.3);
+    cylinder(&mut sink, "barrel", "timber", b, DECK_M, 0.34, 0.9, 10);
+    let c = plan(2.1, -1.5);
+    let size = Vec3::splat(0.6);
+    sink.plain_box("timber", c.x, DECK_M, c.y, size, turn);
+    sink.solid_box(c.x, DECK_M, c.y, size, turn);
+
+    finish(sink, place.frame, HULL.l / 2.0 + 1.0)
+}
+
+/// The cog's gangplank, from the pier up to its deck: its foot on the pier
+/// at the template's height over the harbour's terrace, its head on the
+/// deck at the template's height over the cog's waterline, `(terrace_m,
+/// waterline_m)` over the radius. The mockup ends it 2 cm over the deck's
+/// edge, which two frames on the chart do not keep: a landing the walker
+/// stands on, not drawn, laps [`LANDING_M`] onto the deck at its height, as
+/// a pier's stretches lap. `None` where it is off the chart.
+#[allow(clippy::too_many_arguments)]
+pub fn gangplank(
+    meshes: &mut Meshes,
+    repeat_m: &dyn Fn(&str) -> f32,
+    patch: &Patch,
+    chart: &Chart,
+    template: &Template,
+    cog: &Cog,
+    radius_m: f32,
+    (terrace_m, waterline_m): (f32, f32),
+) -> Option<BuildingSolids> {
+    let g = &cog.gangplank;
+    let ends = (terrace_m + g.from[1], waterline_m + g.to[1]);
+    let cell_m = template.grid.cell_m;
+    let mut plank = ramp(
+        meshes, repeat_m, patch, chart, cell_m, g, ends, radius_m, "boards",
+    )?;
+    if let Some(&Surface::Ramp {
+        foot,
+        dir,
+        len,
+        half_width,
+        to,
+        ..
+    }) = plank.surfaces.first()
+    {
+        let side = dir.perp() * half_width;
+        let (a, b) = (foot + dir * (len - 0.05), foot + dir * (len + LANDING_M));
+        plank.surfaces.push(Surface::Floor {
+            outline: ccw(vec![a - side, b - side, b + side, a + side]),
+            top: to,
+            bottom: to - 0.1,
+        });
+        plank.reach_m += LANDING_M;
+    }
+    Some(plank)
+}
+
+/// Where the cog stands, as the mockup's metres a ship piece covers: its
+/// plan sampled every half metre, for the harbour's cells over the water.
+pub fn plan_points(cog: &Cog) -> Vec<(f32, f32)> {
+    let (ca, sa) = (cog.heading.cos(), cog.heading.sin());
+    let mut out = Vec::new();
+    let (hl, hb) = (HULL.l / 2.0, HULL.b / 2.0);
+    let (nl, nb) = ((HULL.l / 0.5) as i32, (HULL.b / 0.5) as i32);
+    for i in 0..=nl {
+        for j in 0..=nb {
+            let (lx, lz) = (-hl + i as f32 * 0.5, -hb + j as f32 * 0.5);
+            out.push((cog.x + lx * ca - lz * sa, cog.z + lx * sa + lz * ca));
+        }
+    }
+    out
+}

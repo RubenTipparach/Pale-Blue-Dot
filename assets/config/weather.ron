@@ -1,0 +1,181 @@
+// Rain and what it does to the lens, the ground and the air. Every field is
+// the code default written out (crates/pbd-app/src/config.rs); a test holds
+// the two together. Omit a field to inherit; a zero is a zero. Names follow
+// Tenebris's weather.yaml and the values are its shipped ones.
+(
+    wet_fade_tau_s: 1.6,
+    // The wind a craft feels (pbd_core::wind): gust strength as a share of
+    // the mean wind, and more of it per mm/h of rain; roughness lengths (m)
+    // for the log-law profile; its cap; the downdraft under rain, m/s per
+    // sqrt(mm/h); and the heights (m) over which it turns to the cloud wind.
+    gusts: (
+        gustiness: 0.25,
+        gustiness_per_mmh: 0.0125,
+        roughness_sea_m: 0.0005,
+        roughness_land_m: 0.03,
+        shear_max: 1.4,
+        downdraft: 0.3,
+        aloft_m: (150.0, 300.0),
+    ),
+
+    // Where and when it rains is the simulated atmosphere's (atmosphere.ron);
+    // what follows is how rain looks.
+    rain_fall_mps: 70.0,
+    rain_width_m: 0.012,
+    rain_streak_m: 1.5,
+    rain_color: (0.52, 0.62, 0.90),
+    // Where the field's column is cold it snows: slow flakes that sway.
+    // Tenebris's fall speed.
+    snow_fall_mps: 3.0,
+    snow_size_m: 0.07,
+    snow_sway_m: 0.5,
+    snow_color: (0.93, 0.95, 1.0),
+    // Snow falls twenty times slower than rain, so the near shower draws this
+    // many times more flakes; and snow is opaque where rain is a streak.
+    snow_density: 3.0,
+    snow_alpha_near: 0.95,
+    snow_alpha_far: 0.6,
+    rain_alpha_near: 0.78,
+    rain_alpha_far: 0.10,
+    shower_radius_m: 18.0,
+    shower_column_m: 46.0,
+    shower_max_streaks: 1700,
+    rain_lens_density: 1.4,
+    rain_lens_refract: 1.7,
+    rain_lens_speed: 1.0,
+    rain_lens_size: 0.7,
+    // The drops on the lens this many times smaller than Tenebris's, trails,
+    // beads and refraction with them (lens-weather): at 1440x900 its big drop
+    // was about 55 px across, at 2 about 27.
+    rain_lens_scale: 2.0,
+    // Condensation on the lens in cloud (lens-weather), driven by the cloud's
+    // own density at the eye: how strong (0 off), seconds to mist over and to
+    // clear standing still (0 at once), how much faster per metre a second of
+    // airspeed, beads per screen height, blur in screen heights, and how far it
+    // lifts the image toward its own brightness.
+    lens_mist_strength: 0.8,
+    lens_mist_fog_s: 2.0,
+    lens_mist_clear_s: 6.0,
+    lens_mist_per_mps: 0.02,
+    lens_mist_beads: 220.0,
+    lens_mist_blur: 0.008,
+    lens_mist_whiten: 0.35,
+    rain_ripple_scale: 5.0,
+    rain_ripple_strength: 2.0,
+    rain_flow_across: 128.0,
+    rain_flow_down: 1.0,
+    rain_flow_speed: 1.3,
+    rain_flow_strength: -2.0,
+    rain_wave_scale: 7.0,
+    rain_wave_strength: 0.6,
+    rain_wave_speed: 1.4,
+    rain_wet_darken: 0.72,
+    rain_glint_power: 24.0,
+    rain_glint_strength: 0.5,
+    // Wet ground is WATER: it mirrors the sky by a Fresnel term along the
+    // rippled normal. Water stands in puddles on flat faces, cut from noise of
+    // this size and growing with the wetness to this share of a soaked floor;
+    // the rings and the full mirror live in the puddles. Grass is never a
+    // floor. Ours, not Tenebris's: its sheen could only darken.
+    rain_puddle_scale_m: 0.4,
+    rain_puddle_share: 0.35,
+    rain_mirror_strength: 1.0,
+    // Raindrop rings fall on every wet upward face; on grass at this share.
+    rain_grass_rings: 0.5,
+
+    // Overcast: the cover over the player dims the light, so the ground cannot
+    // go stormy while the sun still shines on it. Tenebris's values.
+    overcast_sun_dim: 0.72,
+    overcast_amb_dim: 0.48,
+    overcast_sky_blue_cut: 0.75,
+    overcast_sky_haze: 0.6,
+    overcast_sky_dim: 0.6,
+    cloud_fog_add: 0.35,
+    rain_fog_mult: 1.6,
+    // A full, thick cloud keeps this share of the sun off the ground under
+    // it: the depth of a cloud's shadow, cast where the sun puts it.
+    cloud_shadow: 0.8,
+
+    // The clouds: where they are is the atmosphere's; this is how they are
+    // lit (shaders/clouds.wgsl; the cloud-lighting change). One extinction per
+    // metre for the view and the light, fair and at full cover.
+    cloud_extinction: 0.0115,
+    cloud_storm_extinction: 0.03,
+    cloud_night_floor: 0.045,
+    // The sun's strength on a cloud, sky light from above and ground bounce
+    // from below; the cloud over a sample dims the sky light, which is what
+    // darkens a thick base.
+    cloud_sun: 0.55,
+    cloud_ambient_sky: 0.9,
+    cloud_ambient_ground: 0.35,
+    // Two Henyey-Greenstein lobes: forward (the silver lining), back, blend.
+    cloud_phase_forward: 0.8,
+    cloud_phase_back: -0.3,
+    cloud_phase_blend: 0.5,
+    // Multiple scattering, three octaves: each is this share of the last.
+    cloud_scatter_extinction_falloff: 0.5,
+    cloud_scatter_energy_falloff: 0.5,
+    cloud_scatter_phase_falloff: 0.5,
+    // Detail finer than the atmosphere's 181 m cells. The deck floor opens
+    // lanes in a full cover (convective cloud keeps none); erosion eats the
+    // soft edges (fading as its octaves fall under a pixel, or they alias);
+    // shear combs detail along the wind aloft, 1 for none and each unit past
+    // it a noise cell (~230 m) of push at shear_mps and above; cells is how
+    // far a tall convective cloud takes cumulus's cellular texture.
+    cloud_deck_floor: 0.45,
+    cloud_erosion: 0.5,
+    cloud_shear: 2.0,
+    cloud_shear_mps: 25.0,
+    cloud_cells: 0.6,
+    // What the clouds cost (cloud-budget): the march runs at this share of the
+    // view's resolution per axis (0.25..1) and a full-resolution composite
+    // lays it over the scene; its nearest step (m), growing with distance;
+    // and the most steps a ray takes (8..256). Measured on an RTX 3070 at
+    // 1440x900; see openspec/changes/cloud-budget.
+    cloud_render_scale: 0.4,
+    cloud_step_m: 12.0,
+    cloud_max_steps: 48,
+    // How strongly the air in front of a cloud fades it, as a multiple of the
+    // ground haze's density (cloud-close-up): 1 matches the ground, 0 is off;
+    // 3 dissolves the layer at the horizon (stills in the change's design).
+    cloud_haze: 3.0,
+
+    // Rain near: every raining cell inside the detail range draws shafts of
+    // streaks, thinning to the far fraction and fading out over the blend
+    // band. No rain and no lens drops above the altitude gate. Tenebris's
+    // values, except the cell and its density, which are its 30 m cell's 52
+    // streaks per square metre on a body sixteen times the size.
+    rain_cell_m: 60.0,
+    rain_detail_range_m: 150.0,
+    rain_lod_blend_m: 60.0,
+    rain_lod_far_frac: 0.25,
+    rain_cell_density: 0.058,
+    rain_cell_width_mult: 6.0,
+    rain_max_cell_streaks: 9000,
+    rain_lod_alt_m: 200.0,
+
+    // Rain far: a volume marched per pixel off a 64 x 64 map of the field in
+    // 50 m cells round the camera, falling as stretched, scrolling streaks.
+    // At full rain a kilometre of it is an optical depth of 3: a storm hides
+    // the far side of a valley, which is what makes it read as a storm.
+    rain_map_size: 64,
+    rain_map_cell_m: 50.0,
+    rain_volume_density: 0.003,
+    rain_volume_range_m: 2000.0,
+    rain_volume_stretch: 10.0,
+    rain_volume_color: (0.55, 0.58, 0.62),
+
+    // Lightning: where it strikes is the atmosphere's. A strike flickers for
+    // flash_s and lights the cloud and the ground by these.
+    lightning_flash_s: 0.7,
+    lightning_cloud: 6.0,
+    lightning_ground: 0.8,
+
+    // The overlays (M): how the map looks. What it shows is the atmosphere's.
+    // A streak is twelve steps of streak_step_m along the flow; at the top of
+    // the overlay's range it crawls streak_scroll streak lengths a second.
+    overlay_opacity: 0.7,
+    overlay_streak_step_m: 50.0,
+    overlay_streak_scroll: 0.35,
+    overlay_streak_strength: 0.8,
+)

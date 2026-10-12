@@ -1,0 +1,33 @@
+// The voxel column tier. See crates/pbd-app/src/config.rs for units and what
+// each knob does, and openspec/changes/voxel-columns-and-mining for why the
+// tier is a sub-band rather than the whole finest LOD band.
+//
+// These are the code defaults written out. A field left out inherits the code
+// default; a field written as zero IS zero. `reach_m: 0.0` is the off switch:
+// no columns anywhere, every cell answering from the heightfield.
+(
+    // About 3,100 cells per rebuild.
+    reach_m: 90.0,
+
+    // The worms. Seeded on a lattice of `worm_cell_m` cells at `worm_density`
+    // per cell; each walks `worm_length_m` at `worm_radius_m`, steered by noise
+    // `worm_steer_scale_m` across, turning up to `worm_turn` a step and never
+    // steeper than `worm_pitch_max`. `worm_surface_share` of them start at the
+    // ground heading down, and those are the cave mouths.
+    worm_cell_m: 45.0,
+    worm_density: 1.2,
+    worm_length_m: (50.0, 160.0),
+    worm_radius_m: (1.6, 3.4),
+    worm_step_m: 2.0,
+    worm_turn: 0.12,
+    worm_pitch_max: 0.45,
+    worm_surface_share: 0.30,
+    worm_start_depth_m: (8.0, 50.0),
+    worm_steer_scale_m: 30.0,
+    cave_floor_layers: 3,
+
+    // The share of cells that grow a glowing flower, lit from dusk to dawn
+    // where the cell is grassy: a third of `flower_chance` in scatter.ron, so
+    // about one in 25 green cells, every 14 m or so across a meadow.
+    glow_flower_chance: 0.04,
+)

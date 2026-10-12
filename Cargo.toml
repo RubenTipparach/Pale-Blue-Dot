@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = ["crates/pbd-core", "crates/pbd-app"]
+default-members = ["crates/pbd-core", "crates/pbd-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+
+[workspace.dependencies]
+glam = "0.30.10"
+bevy = { version = "=0.18.1", default-features = false, features = ["std", "multi_threaded"] }
+avian3d = { version = "=0.6.1", default-features = false, features = ["3d", "f32", "parry-f32", "parallel"] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+strip = true
+lto = "thin"
+
+# Everyday runs (`run.bat`): release optimisation without link-time
+# optimisation, so a one-line change relinks in seconds rather than minutes.
+# Frame times are close to release but not identical: measure performance,
+# record footage and judge regressions with `--release` (`run.bat --full`).
+[profile.fast]
+inherits = "release"
+lto = false
+incremental = true
+codegen-units = 256

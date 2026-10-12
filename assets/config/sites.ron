@@ -1,0 +1,106 @@
+// Where the planet's settlements stand (openspec/changes/city-sites), read by
+// `pbd_core::sites`. The rules, the names, and the owner's overrides: the
+// map mockup's site editor copies its pins and strikes out in this form.
+//
+// Distances are metres along the ground. A kind keeps its `spacing_m` from
+// its own kind, and half the smaller spacing from any other, between the
+// footprints' edges. `count` is a target: a seed with too little of a biome
+// falls short, and the list says by how much.
+(
+    // The sites version a world records with the list it was made with.
+    version: 1,
+    // The candidates: the level-7 cells' centres, about 45 m apart.
+    level: 7,
+    // Two level-7 cells: no footprint comes nearer a pentagon than this.
+    pentagon_margin_m: 90.0,
+    // Survey C2: a village or small walled town within this of the spawn.
+    home_within_m: 500.0,
+    // The score is flatness, plus `river_bonus` for a town or village with a
+    // river within `river_reach_m` of its footprint, plus up to `jitter` of
+    // seeded noise, so the towns do not all crowd the flattest plain.
+    jitter: 0.4,
+    river_bonus: 0.3,
+    river_reach_m: 60.0,
+    // The design's decision 1 table. `flatness_m` is the surface range over
+    // the footprint sampled at the terrain's own 2.833 m cells, which reads
+    // 1.2 to 1.4 times the seven-sample screen's range; so each limit is the
+    // table's times 1.4, which accepts the ground the table's limit did on
+    // the mockup's screen (the design's "Built" section).
+    kinds: [
+        (kind: Walled, radius_m: 75.0, flatness_m: 11.0, spacing_m: 2500.0, count: 6, people: "fields"),
+        (kind: Village, radius_m: 35.0, flatness_m: 5.5, spacing_m: 700.0, count: 20, people: "fields"),
+        (kind: Desert, radius_m: 60.0, flatness_m: 8.5, spacing_m: 2000.0, count: 4, people: "desert"),
+        (kind: Tundra, radius_m: 30.0, flatness_m: 5.5, spacing_m: 700.0, count: 4, people: "tundra"),
+        // Loose: the jungle village stands on platforms.
+        (kind: Jungle, radius_m: 35.0, flatness_m: 14.0, spacing_m: 700.0, count: 6, people: "jungle"),
+        // Tight, over its dry ground: its houses stand on stilts over the
+        // water, which may lie under the footprint as deep as the shallows.
+        (kind: Swamp, radius_m: 35.0, flatness_m: 4.0, spacing_m: 700.0, count: 3, people: "swamp"),
+        // The harbour, cliff village and cave town hold their own tests below;
+        // their `flatness_m` is not read.
+        (kind: Harbour, radius_m: 60.0, flatness_m: 12.0, spacing_m: 1500.0, count: 6, people: "fields"),
+        (kind: Cliff, radius_m: 50.0, flatness_m: 25.0, spacing_m: 1500.0, count: 4, people: "mountain"),
+        (kind: Cave, radius_m: 50.0, flatness_m: 40.0, spacing_m: 2500.0, count: 2, people: "mountain"),
+    ],
+    // Decision 3: a beach with dry ground no higher than `shore_max_m`,
+    // shallows in its footprint, and shelf water (6 to 40 m deep) within
+    // `shelf_reach_m`: the mockup's twelve rows of water and the approach.
+    harbour: (shore_max_m: 12.0, shelf_reach_m: 60.0),
+    // Decision 5: the mockup's village climbs 15 m in five terraces over
+    // about 70 m. The ground rises 9 to 25 m across the footprint, with no
+    // 10 m step rising more than 6 m.
+    cliff: (rise_min_m: 9.0, rise_max_m: 25.0, step_m: 10.0, step_rise_max_m: 6.0),
+    // Decision 5: the mockup's chamber is 93 by 37 m under at least 16 m of
+    // rock, entered from a face within 30 m of its downhill end.
+    cave: (rock_m: 16.0, chamber_length_m: 93.0, chamber_width_m: 37.0, mouth_reach_m: 30.0),
+    // Decision 4's six peoples. A name is an onset, a middle and an ending;
+    // where two parts meet on the same vowel, it is written once. First
+    // draft: the map mockup's placeholder syllables.
+    peoples: [
+        (
+            name: "fields",
+            onsets: ["Ash", "Bram", "Cor", "Dun", "Hol", "Lin", "Mar", "Wick", "Ther", "Sel"],
+            middles: ["", "e", "en", "ow", "ing"],
+            endings: ["ford", "ham", "stead", "wick", "ton", "leigh"],
+            // A harbour draws its ending from these, and a village on a
+            // river from these (the design's finding 5).
+            harbour_endings: ["haven", "port", "quay", "strand"],
+            river_endings: ["ford", "bridge", "brook", "mouth"],
+        ),
+        (
+            name: "desert",
+            onsets: ["Qa", "Sar", "Zem", "Ta", "Ras", "Al", "Mir"],
+            middles: ["ha", "ri", "za", "du", "sa"],
+            endings: ["n", "d", "r", "sh", "l"],
+        ),
+        (
+            name: "tundra",
+            onsets: ["Kel", "Ulv", "Siv", "Tor", "Hrim", "Vas"],
+            middles: ["a", "e", "i"],
+            endings: ["mark", "fjell", "vik", "hold"],
+        ),
+        (
+            name: "jungle",
+            onsets: ["Tla", "Ixa", "Co", "Ma", "Ya", "Hua"],
+            middles: ["pa", "lo", "tzi", "ca", "na"],
+            endings: ["tl", "n", "co", "ya"],
+        ),
+        (
+            name: "swamp",
+            onsets: ["Bog", "Fen", "Mire", "Reed", "Sedge"],
+            middles: ["", "e"],
+            endings: ["wade", "moss", "pool", "holm"],
+        ),
+        (
+            name: "mountain",
+            onsets: ["Kar", "Dol", "Grim", "Bar", "Sto", "Durn"],
+            middles: ["", "a", "e"],
+            endings: ["crag", "gard", "hald", "berg"],
+        ),
+    ],
+    // The owner's overrides. A pin: (kind: Walled, lat: 12.5, lon: -40.0,
+    // name: Some("Kingsbridge"), capital: true). A strike is a generated
+    // site's id.
+    pins: [],
+    strikes: [],
+)
