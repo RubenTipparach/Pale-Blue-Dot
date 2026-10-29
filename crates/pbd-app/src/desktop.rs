@@ -2238,18 +2238,22 @@ fn walk_script(
     let (anchor, since) = *progress.anchor.get_or_insert((here, now));
     if here.distance(anchor) > 4.0 {
         progress.anchor = Some((here, now));
+        mouse.release(MouseButton::Left);
     } else {
         let stalled = now.duration_since(since).as_secs_f32();
         // Stuck, as a player gets unstuck: jump (a tap every 0.7 s, released
         // between so each counts), then dig through what is in front with the
-        // pickaxe, and only then turn. (Fly is F, not the jump key.)
+        // pickaxe, and only then turn. (Fly is F, not the jump key.) Breaking
+        // is a HOLD (`dig_and_place`): the button stays down from 2.5 s on, as
+        // the owner put it, "gotta hold mouse down to break blocks". Tapped,
+        // it only ever started a crack and let go.
         let pulse = |period: f32| (stalled % period) < 0.05;
         if stalled > 0.6 && pulse(0.7) {
             keys.press(KeyCode::Space);
         } else {
             keys.release(KeyCode::Space);
         }
-        if stalled > 2.5 && pulse(0.4) {
+        if stalled > 2.5 {
             mouse.press(MouseButton::Left);
         } else {
             mouse.release(MouseButton::Left);
