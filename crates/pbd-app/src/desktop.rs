@@ -2285,6 +2285,9 @@ fn ground_m(a: Vec3, b: Vec3) -> f32 {
 
 /// The `--stroll` instrument: walk ahead at walking pace for a video, hop
 /// what stalls it, turn a quarter after three seconds stuck, never dig.
+// Ten parameters, `walk_script`'s reason: an instrument that drives keys,
+// reads the walker and the towns, and quits.
+#[allow(clippy::too_many_arguments)]
 fn stroll_script(
     launch: Res<Launch>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
