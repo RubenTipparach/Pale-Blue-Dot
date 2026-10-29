@@ -348,6 +348,15 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         anchor: Vec3::Z.extend(0.),
         bands_in: Vec4::splat(-2.),
         bands_prev_in: Vec4::splat(-2.),
+        light: Vec4::ZERO,
+        sky_sh: [Vec4::ZERO; 18],
+        wet: Vec4::ZERO,
+        lamps: [Vec4::ZERO; super::NEAR_LAMPS],
+        reflect: Vec4::ZERO,
+        lamp_bake: Vec4::ZERO,
+        ssr_clip: Mat4::IDENTITY,
+        ssr_eye: Vec4::ZERO,
+        rain_near: Vec4::ZERO,
     }
 }
 

@@ -266,6 +266,51 @@ impl Validated for WaterSettings {
     }
 }
 
+/// Which renderer draws the cloud layer (`cloud-puffs`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+pub enum CloudRenderer {
+    /// One lit billboard a puff, laid out by the weather.
+    #[default]
+    Puffs,
+    /// The ray march through the layer (`cloud-lighting`, `cloud-budget`).
+    March,
+}
+
+impl CloudRenderer {
+    /// The configured renderer, unless `PBD_CLOUD_RENDERER` names one: a
+    /// pricing instrument, so one build flies both in an A/B.
+    pub fn resolved(self) -> Self {
+        match std::env::var("PBD_CLOUD_RENDERER").as_deref() {
+            Ok("march") => CloudRenderer::March,
+            Ok("puffs") => CloudRenderer::Puffs,
+            _ => self,
+        }
+    }
+}
+
+/// Which renderer draws the rain seen from under the cloud base
+/// (`rain-shells`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+pub enum RainRenderer {
+    /// The volume marched per pixel (`storm`).
+    #[default]
+    Volume,
+    /// Streaks on a few cylinders round the eye, nothing marched.
+    Shells,
+}
+
+impl RainRenderer {
+    /// The configured renderer, unless `PBD_RAIN_RENDERER` names one: a
+    /// pricing instrument, so one build flies both in an A/B.
+    pub fn resolved(self) -> Self {
+        match std::env::var("PBD_RAIN_RENDERER").as_deref() {
+            Ok("volume") => RainRenderer::Volume,
+            Ok("shells") => RainRenderer::Shells,
+            _ => self,
+        }
+    }
+}
+
 /// Rain, and what it does to the lens, the ground and the air. Names follow
 /// Tenebris's `weather.yaml`.
 #[derive(Resource, Clone, Debug, PartialEq, Deserialize, ExtractResource)]
@@ -359,6 +404,18 @@ pub struct WeatherSettings {
     pub rain_mirror_strength: f32,
     /// Strength of the raindrop rings on grass against bare ground, 0..1.
     pub rain_grass_rings: f32,
+    /// `lighting-model` wet ground (owner: "kinda dull"): the GGX roughness
+    /// of a wet face and of a puddle, 0..1. Only the new model reads them.
+    pub rain_wet_roughness: f32,
+    pub rain_puddle_roughness: f32,
+    /// How bright a lamp's highlight on wet ground is (one: the mockup's).
+    pub rain_lamp_specular: f32,
+    /// `wet-near-detail` (owner: "simplified 20m from the camera"): how far
+    /// from the eye the raindrop rings, the rippled sheet and the rivulets
+    /// are drawn, metres, and the band before it they fade out over, metres
+    /// (`0 <= fade <= reach`). Past the reach the ground is only wet.
+    pub rain_detail_reach_m: f32,
+    pub rain_detail_fade_m: f32,
 
     // ---- Overcast: what the cover over the player does to the light. Names
     // and values are Tenebris's. Each is a fraction taken off (or, for the
@@ -440,6 +497,32 @@ pub struct WeatherSettings {
     /// through the same exponential atmosphere: 1 is the ground's haze, 0
     /// turns the fade off. A distant cloud dissolves into what is behind it.
     pub cloud_haze: f32,
+    /// Which renderer draws the cloud layer (`cloud-puffs`): `Puffs`, one lit
+    /// billboard a puff laid out by the weather, or `March`, the ray march.
+    /// `PBD_CLOUD_RENDERER=march|puffs` overrides it for an A/B on one build.
+    pub cloud_renderer: CloudRenderer,
+    /// How far apart the puffs' sites stand over the sphere, metres.
+    pub cloud_puff_spacing_m: f32,
+    /// A puff's opacity at full presence, 0..1.
+    pub cloud_puff_opacity: f32,
+    /// How far the sun wraps round a puff into its shade, 0..1.
+    pub cloud_puff_wrap: f32,
+    /// How much darker a white puff is at its column's base, 0..1, and a storm
+    /// grey one.
+    pub cloud_puff_base_shade: f32,
+    pub cloud_puff_storm_shade: f32,
+    /// The silver lining's strength toward the sun.
+    pub cloud_puff_silver: f32,
+    /// The optical depth at which a puff is about two thirds opaque: thin
+    /// cloud is drawn thin.
+    pub cloud_puff_optical_depth: f32,
+    /// How far noise eats a puff's edge, 0..1.
+    pub cloud_puff_erosion: f32,
+    /// A puff fades over this many metres in front of the ground behind it.
+    pub cloud_puff_soft_m: f32,
+    /// A puff fades in over this distance from the eye, metres; inside it the
+    /// near fog carries the cloud.
+    pub cloud_puff_near_m: f32,
 
     // ---- Rain near: Tenebris's shafts of streaks over every raining cell of
     // a lattice fixed to the body, inside the detail range. Beyond it the rain
@@ -479,6 +562,12 @@ pub struct WeatherSettings {
     pub rain_volume_stretch: f32,
     /// The volume's colour, display (sRGB) RGB. Snow is `snow_color`.
     pub rain_volume_color: [f32; 3],
+    /// Which renderer draws it (`rain-shells`): `Volume`, the march, or
+    /// `Shells`, streaks on cylinders round the eye. `PBD_RAIN_RENDERER=
+    /// volume|shells` overrides it for an A/B on one build.
+    pub rain_renderer: RainRenderer,
+    /// A shell fades over this many metres in front of the ground or the sea.
+    pub rain_shell_soft_m: f32,
 
     // ---- Lightning: where it strikes is the atmosphere's; this is how a
     // strike looks.
@@ -551,6 +640,11 @@ impl Default for WeatherSettings {
             rain_puddle_share: 0.35,
             rain_mirror_strength: 1.0,
             rain_grass_rings: 0.5,
+            rain_wet_roughness: 0.18,
+            rain_puddle_roughness: 0.04,
+            rain_lamp_specular: 1.0,
+            rain_detail_reach_m: 20.0,
+            rain_detail_fade_m: 4.0,
             overcast_sun_dim: 0.72,
             overcast_amb_dim: 0.48,
             overcast_sky_blue_cut: 0.75,
@@ -580,6 +674,17 @@ impl Default for WeatherSettings {
             cloud_step_m: 12.0,
             cloud_max_steps: 48,
             cloud_haze: 3.0,
+            cloud_renderer: CloudRenderer::Puffs,
+            cloud_puff_spacing_m: 250.0,
+            cloud_puff_opacity: 0.95,
+            cloud_puff_wrap: 0.6,
+            cloud_puff_base_shade: 0.45,
+            cloud_puff_storm_shade: 0.75,
+            cloud_puff_silver: 1.6,
+            cloud_puff_optical_depth: 15.0,
+            cloud_puff_erosion: 0.55,
+            cloud_puff_soft_m: 60.0,
+            cloud_puff_near_m: 120.0,
             rain_cell_m: 60.0,
             rain_detail_range_m: 150.0,
             rain_lod_blend_m: 60.0,
@@ -593,6 +698,8 @@ impl Default for WeatherSettings {
             rain_volume_density: 0.003,
             rain_volume_range_m: 2000.0,
             rain_volume_stretch: 10.0,
+            rain_renderer: RainRenderer::Volume,
+            rain_shell_soft_m: 4.0,
             rain_volume_color: [0.55, 0.58, 0.62],
             lightning_flash_s: 0.7,
             lightning_cloud: 6.0,
@@ -666,6 +773,12 @@ impl Validated for WeatherSettings {
             .then_some(())
             .ok_or("snow_density must be within 0..=10")?;
         non_negative("rain_volume_color", &s.rain_volume_color)?;
+        non_negative("rain_lamp_specular", &[s.rain_lamp_specular])?;
+        positive("rain_detail_reach_m", &[s.rain_detail_reach_m])?;
+        (s.rain_detail_fade_m.is_finite()
+            && (0.0..=s.rain_detail_reach_m).contains(&s.rain_detail_fade_m))
+        .then_some(())
+        .ok_or("rain_detail_fade_m must be within 0..=rain_detail_reach_m")?;
         for (name, value) in [
             ("rain_alpha_near", s.rain_alpha_near),
             ("rain_alpha_far", s.rain_alpha_far),
@@ -675,6 +788,8 @@ impl Validated for WeatherSettings {
             ("rain_puddle_share", s.rain_puddle_share),
             ("rain_mirror_strength", s.rain_mirror_strength),
             ("rain_grass_rings", s.rain_grass_rings),
+            ("rain_wet_roughness", s.rain_wet_roughness),
+            ("rain_puddle_roughness", s.rain_puddle_roughness),
             ("overcast_sun_dim", s.overcast_sun_dim),
             ("overcast_amb_dim", s.overcast_amb_dim),
             ("overcast_sky_blue_cut", s.overcast_sky_blue_cut),
@@ -717,6 +832,28 @@ impl Validated for WeatherSettings {
         (s.cloud_haze.is_finite() && s.cloud_haze >= 0.0)
             .then_some(())
             .ok_or("cloud_haze must be finite and not negative")?;
+        positive(
+            "cloud_puff_spacing_m, cloud_puff_soft_m, cloud_puff_near_m, cloud_puff_optical_depth",
+            &[
+                s.cloud_puff_spacing_m,
+                s.cloud_puff_soft_m,
+                s.cloud_puff_near_m,
+                s.cloud_puff_optical_depth,
+            ],
+        )?;
+        (s.cloud_puff_spacing_m >= 50.0)
+            .then_some(())
+            .ok_or("cloud_puff_spacing_m must be at least 50")?;
+        positive("rain_shell_soft_m", &[s.rain_shell_soft_m])?;
+        unit("cloud_puff_opacity", s.cloud_puff_opacity)?;
+        unit("cloud_puff_wrap", s.cloud_puff_wrap)?;
+        unit("cloud_puff_base_shade", s.cloud_puff_base_shade)?;
+        unit("cloud_puff_storm_shade", s.cloud_puff_storm_shade)?;
+        unit("cloud_puff_erosion", s.cloud_puff_erosion)?;
+        finite("cloud_puff_silver", &[s.cloud_puff_silver])?;
+        (s.cloud_puff_silver >= 0.0)
+            .then_some(())
+            .ok_or("cloud_puff_silver must not be negative")?;
         positive("rain_lens_scale", &[s.rain_lens_scale])?;
         unit("lens_mist_strength", s.lens_mist_strength)?;
         unit("lens_mist_whiten", s.lens_mist_whiten)?;
@@ -1071,6 +1208,189 @@ impl Validated for crate::held::HeldSettings {
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
 pub struct HeldConfig(pub crate::held::HeldSettings);
 
+/// The lighting model (`lighting-model`): which one draws, and its knobs.
+#[derive(Resource, Clone, Debug, PartialEq, Deserialize, ExtractResource)]
+#[serde(default, deny_unknown_fields)]
+pub struct LightingSettings {
+    /// The new model (true, the owner's pick) or today's (false). The
+    /// environment variable `PBD_LIGHTING=today` forces today's, so
+    /// `perf_suite` can run both from one build, interleaved.
+    pub new_model: bool,
+    /// L6 metering: the scene's mean luminance that maps to mid grey, and
+    /// how far toward it the eye goes (0..1, the mockup's 0.62).
+    pub exposure_key: f32,
+    pub exposure_gain: f32,
+    /// The eye's range, EV either side of none. At night the top comes down
+    /// by `night_ev_cut`, so a lamp-lit wall stays under the curve's shoulder
+    /// and keeps its warmth (owner).
+    pub exposure_min_ev: f32,
+    pub exposure_max_ev: f32,
+    pub night_ev_cut: f32,
+    /// How fast the eye follows, EV per second.
+    pub adapt_ev_per_s: f32,
+    /// Bloom (owner: visible): Bevy's bloom, its intensity and the HDR level
+    /// it starts at.
+    pub bloom_intensity: f32,
+    /// Whether bloom is on before the player says (Settings, GRAPHICS). Left
+    /// out, it is off on a Mac and on elsewhere (owner, 2026-10-28: Bevy's
+    /// bloom costs 2.4 ms on an M4 Max, "turn it off on mac and have a config
+    /// in options to turn it on in pc"). The player's choice is kept in
+    /// `saves/preferences.ron`.
+    pub bloom: Option<bool>,
+    pub bloom_threshold: f32,
+    /// Which bloom: our own lighter one (`bloom.rs`, task 3.3) or Bevy's.
+    pub bloom_lite: bool,
+    /// The grade: the white balance's shift at golden hour and at night
+    /// (added to one, per channel), the saturation, and how much of it night
+    /// and a full deck take away. Night is cooled by the moon's own colour,
+    /// not by the grade (owner).
+    pub golden_balance: [f32; 3],
+    pub night_balance: [f32; 3],
+    pub saturation: f32,
+    pub night_desaturate: f32,
+    pub cover_desaturate: f32,
+    /// Dither amplitude in eight-bit steps (zero turns it off).
+    pub dither: f32,
+    /// A lantern's panes and a flame, as HDR: bright enough to bloom (the
+    /// mockup's 6).
+    pub lamp_glow: f32,
+    /// L3: contact-hardening sun shadows in the two finest cascades (PCSS
+    /// lite). Off keeps today's 3 x 3 filter. `PBD_SOFT_SHADOWS=0` forces
+    /// it off for A/B runs.
+    pub soft_shadows: bool,
+    /// The sun's apparent size against the real one (owner: x12), which sets
+    /// how fast a shadow softens away from its caster.
+    pub sun_size: f32,
+    /// How much wider the sun looks under a full deck (the mockup's 5): an
+    /// overcast day softens its shadows instead of only dimming them.
+    pub shadow_cover_soften: f32,
+    /// L8: a wet face's reflected ray walks the block grid near the camera
+    /// (voxels first, owner), this far. Off mirrors only the sky.
+    /// `PBD_REFLECT=0` forces it off for A/B runs.
+    pub reflections: bool,
+    pub reflection_reach_m: f32,
+    /// L4: the sun's bounce in the voxel field, and how strong it is drawn.
+    /// `PBD_BOUNCE=0` forces it off for A/B runs.
+    pub bounce: bool,
+    pub bounce_strength: f32,
+    /// L7: lamps lit by the bake (direction, shadow and a bounce) instead of
+    /// the flood fill. `PBD_LAMP_BAKE=0` forces it off for A/B runs.
+    pub lamp_bake: bool,
+}
+
+impl Default for LightingSettings {
+    fn default() -> Self {
+        Self {
+            new_model: true,
+            exposure_key: 0.16,
+            exposure_gain: 0.62,
+            exposure_min_ev: -1.0,
+            exposure_max_ev: 2.0,
+            night_ev_cut: 0.6,
+            adapt_ev_per_s: 2.0,
+            bloom_intensity: 0.2,
+            bloom: None,
+            bloom_threshold: 1.0,
+            bloom_lite: true,
+            golden_balance: [0.07, 0.005, -0.10],
+            night_balance: [0.03, 0.0, -0.04],
+            saturation: 1.08,
+            night_desaturate: 0.05,
+            cover_desaturate: 0.15,
+            dither: 1.0,
+            lamp_glow: 6.0,
+            soft_shadows: true,
+            sun_size: 12.0,
+            shadow_cover_soften: 2.0,
+            reflections: true,
+            reflection_reach_m: 48.0,
+            bounce: true,
+            bounce_strength: 1.0,
+            lamp_bake: true,
+        }
+    }
+}
+
+impl Validated for LightingSettings {
+    fn validate(&self) -> Result<(), String> {
+        positive("exposure_key", &[self.exposure_key])?;
+        unit("exposure_gain", self.exposure_gain)?;
+        finite(
+            "exposure_min_ev",
+            &[self.exposure_min_ev, self.exposure_max_ev],
+        )?;
+        (self.exposure_min_ev <= self.exposure_max_ev)
+            .then_some(())
+            .ok_or("exposure_min_ev must not exceed exposure_max_ev")?;
+        non_negative(
+            "lighting",
+            &[
+                self.night_ev_cut,
+                self.adapt_ev_per_s,
+                self.bloom_intensity,
+                self.bloom_threshold,
+                self.saturation,
+                self.night_desaturate,
+                self.cover_desaturate,
+                self.dither,
+                self.lamp_glow,
+                self.sun_size,
+                self.shadow_cover_soften,
+                self.reflection_reach_m,
+                self.bounce_strength,
+            ],
+        )?;
+        finite("golden_balance", &self.golden_balance)?;
+        finite("night_balance", &self.night_balance)
+    }
+}
+
+impl LightingSettings {
+    /// Bloom before the player has chosen: the config's say, else off on a
+    /// Mac and on elsewhere.
+    pub fn bloom_by_default(&self) -> bool {
+        self.bloom.unwrap_or(!cfg!(target_os = "macos"))
+    }
+
+    /// L3: the tangent of the sun's apparent radius in a clear sky, the
+    /// penumbra's metres per metre from caster to receiver; zero while
+    /// contact-hardening shadows are off (or today's model draws).
+    pub fn shadow_spread(&self) -> f32 {
+        let off = std::env::var("PBD_SOFT_SHADOWS").is_ok_and(|v| v == "0");
+        if !self.new_model_on() || !self.soft_shadows || off {
+            return 0.0;
+        }
+        (pbd_core::sky_light::SUN_RADIUS_RAD * self.sun_size).tan()
+    }
+
+    /// L7: whether the lamps are baked and drawn from the bake.
+    pub fn lamp_bake_on(&self) -> bool {
+        let off = std::env::var("PBD_LAMP_BAKE").is_ok_and(|v| v == "0");
+        self.new_model_on() && self.lamp_bake && !off
+    }
+
+    /// L4: whether the sun's bounce is baked and drawn.
+    pub fn bounce_on(&self) -> bool {
+        let off = std::env::var("PBD_BOUNCE").is_ok_and(|v| v == "0");
+        self.new_model_on() && self.bounce && !off
+    }
+
+    /// L8: whether reflections walk the columns, after the environment's say.
+    pub fn reflections_on(&self) -> bool {
+        let off = std::env::var("PBD_REFLECT").is_ok_and(|v| v == "0");
+        self.new_model_on() && self.reflections && !off
+    }
+
+    /// Whether the new model draws, after the environment's say.
+    pub fn new_model_on(&self) -> bool {
+        match std::env::var("PBD_LIGHTING").ok().as_deref() {
+            Some("today") => false,
+            Some("new") => true,
+            _ => self.new_model,
+        }
+    }
+}
+
 pub struct ConfigPlugin;
 
 impl Plugin for ConfigPlugin {
@@ -1079,6 +1399,7 @@ impl Plugin for ConfigPlugin {
             .insert_resource(load::<WeatherSettings>("weather"))
             .insert_resource(load::<ScatterSettings>("scatter"))
             .insert_resource(load::<ColumnSettings>("column"))
+            .insert_resource(load::<LightingSettings>("lighting"))
             .insert_resource(AtmosphereConfig(load("atmosphere")))
             .insert_resource(VehiclesConfig(load("vehicles")))
             .insert_resource(FaunaConfig(load("fauna")))
@@ -1090,6 +1411,7 @@ impl Plugin for ConfigPlugin {
             bevy::render::extract_resource::ExtractResourcePlugin::<WeatherSettings>::default(),
             bevy::render::extract_resource::ExtractResourcePlugin::<ScatterSettings>::default(),
             bevy::render::extract_resource::ExtractResourcePlugin::<ColumnSettings>::default(),
+            bevy::render::extract_resource::ExtractResourcePlugin::<LightingSettings>::default(),
         ));
     }
 }
@@ -1161,5 +1483,22 @@ mod tests {
     fn defaults_validate() {
         WaterSettings::default().validate().unwrap();
         WeatherSettings::default().validate().unwrap();
+    }
+
+    #[test]
+    fn rain_detail_reach_holds_its_fade() {
+        let with = |reach_m: f32, fade_m: f32| WeatherSettings {
+            rain_detail_reach_m: reach_m,
+            rain_detail_fade_m: fade_m,
+            ..WeatherSettings::default()
+        };
+        with(20.0, 4.0).validate().unwrap();
+        with(20.0, 0.0).validate().unwrap();
+        with(20.0, 20.0).validate().unwrap();
+        assert!(with(0.0, 0.0).validate().is_err());
+        assert!(with(20.0, 21.0).validate().is_err());
+        assert!(with(20.0, -1.0).validate().is_err());
+        assert!(with(f32::NAN, 4.0).validate().is_err());
+        assert!(with(20.0, f32::NAN).validate().is_err());
     }
 }

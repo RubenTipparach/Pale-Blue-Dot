@@ -3,7 +3,7 @@
 // previously documented Tenebris port in hex_terrain.wgsl. The sea is not
 // drawn here: water cells draw their seabed and water.wgsl draws the sheet.
 #import pbd::clouds::cloud_map_smooth
-#import pbd::sun_shadow::{SunCascades, sun_shadow}
+#import pbd::sun_shadow::{SunCascades, sun_shadow_soft}
 
 struct Cell {
     direction_height: vec4<f32>,
@@ -37,6 +37,15 @@ struct Params {
     anchor: vec4<f32>,         // `distance-lod-fade`: the fine set's anchor (`lod` is the fade centre),
     bands_in: vec4<f32>,       // the bands' cross-fade rings' inner edges, cosines,
     bands_prev_in: vec4<f32>,  // and those of the partition a landing dissolves from
+    light: vec4<f32>,          // `lighting-model`: x one for the new model, y a lamp's glow (HDR), z the sun's radius as a tangent (L3), w its widening under a full deck
+    sky_sh: array<vec4<f32>,18>, // L2: the sky's SH, clear then a full deck, local frame
+    wet: vec4<f32>,            // the new wet film: roughness wet and in a puddle, lamp highlights, one when the rings follow the rain
+    lamps: array<vec4<f32>,8>, // the lights nearest the eye, planet frame; w the level 0..1 (zero: none)
+    reflect: vec4<f32>,        // L8: x one while the reflected ray walks the columns, y its reach m; L4: z the bounce's strength now; w spare
+    lamp_bake: vec4<f32>,      // L7: x the newest bake's fade-in 0..1, y the older half holds this set, z the newest does, w the newest half
+    ssr_clip: mat4x4<f32>,     // L8 (10.2): the screen trace history's clip_from_body
+    ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
+    rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -158,6 +167,33 @@ struct ColumnRec {
 // draws it, and not in a rule on depth under the run's top: a placed stone is
 // stone at whatever depth it sits. `ColumnTier::gpu_materials` packs it.
 @group(0) @binding(6) var<storage,read> materials: array<u32>;
+// Every column tier slot's unit direction (`ColumnTier::gpu_centres`): the
+// border between two columns is the plane midway between their directions,
+// square to the step from one to the other, which is what the reflected
+// ray's walk crosses (`lighting-model` L8).
+@group(0) @binding(7) var<storage,read> centres: array<vec4<f32>>;
+// `lighting-model` L4: the sun's bounce over the tier (`pbd_core::bounce`):
+// `BOUNCE_BASES` words of each slot's window base layer, then per slot
+// `BOUNCE_WORDS` words of sixteen-bit 5:6:5 cells, two to a word.
+@group(0) @binding(8) var<storage,read> bounce: array<u32>;
+const BOUNCE_BASES: u32 = 16384u;
+const BOUNCE_WORDS: u32 = 16u;
+const BOUNCE_SPAN: u32 = 32u;
+const BOUNCE_MAX: f32 = 0.5;
+// `lighting-model` L7: the lamp bake (`pbd_core::lamp_bake`), two halves of
+// `LAMP_HALF_WORDS`: the lamps (four words each: where, as f32 bits, and the
+// level), each slot's window base, then per cell the lamps it sees (four
+// indices, 255 none) and its bounce (5:6:5, the in-reach flag over it).
+@group(0) @binding(9) var<storage,read> lamp_bake: array<u32>;
+const LAMP_LIST_WORDS: u32 = 1024u;
+const LAMP_HALF_WORDS: u32 = 1065984u;
+const LAMP_CELL_WORDS: u32 = 2u;
+const LAMP_BOUNCE_MAX: f32 = 1.0;
+const LAMP_REACH_M: f32 = 16.0;
+const LAMP_BAKE_GAIN: f32 = 2.4;
+// L8 (10.2): the screen trace's history (`planet_ssr.rs`): last frame's
+// colour, and in w each pixel's distance from that frame's eye.
+@group(0) @binding(10) var ssr_history: texture_2d<f32>;
 const MATERIAL_PER_WORD: u32 = 8u;
 const MATERIAL_WORDS: u32 = 63u;
 // The render code of the layer `layer` of column slot `slot` (plus one, as
@@ -1532,6 +1568,56 @@ fn rain_ripple_grad(uv: vec2<f32>, t: f32) -> vec2<f32> {
     }
     return circles/9.0;
 }
+// `lighting-model` (owner: "amount of rain drops on ground should vary based
+// on rain intensity"): the same rings, each drop of each cycle kept with a
+// chance `keep` picked anew every cycle, on a grid offset by `salt`.
+fn rain_ripple_layer(uv: vec2<f32>, t: f32, keep: f32, salt: f32) -> vec2<f32> {
+    let p0 = floor(uv);
+    var circles = vec2(0.);
+    for (var j=-1; j<=1; j++) {
+        for (var i=-1; i<=1; i++) {
+            let pi = p0+vec2(f32(i),f32(j));
+            let p = pi+rr_hash22(pi+salt);
+            let ph = 0.3*t+rr_hash12(pi+salt);
+            let tt = fract(ph);
+            if rr_hash12(pi*1.37+floor(ph)*7.13+salt) >= keep { continue; }
+            let v = p-uv;
+            let len = length(v)+1e-6;
+            let d = len-2.0*tt;
+            let h = 0.012;
+            let d1 = d-h;
+            let d2 = d+h;
+            let q1 = sin(31.0*d1)*smoothstep(-0.6,-0.3,d1)*smoothstep(0.0,-0.3,d1);
+            let q2 = sin(31.0*d2)*smoothstep(-0.6,-0.3,d2)*smoothstep(0.0,-0.3,d2);
+            circles += 0.5*(v/len)*((q2-q1)/(2.0*h)*(1.0-tt)*(1.0-tt));
+        }
+    }
+    return circles/9.0;
+}
+// As many drops as it is raining: a drizzle dots a puddle, a storm boils it
+// (a second, offset grid above half), none once it stops.
+fn rain_rings(uv: vec2<f32>, t: f32, rain: f32) -> vec2<f32> {
+    var g = rain_ripple_layer(uv, t, clamp(rain*2.0, 0.0, 1.0), 0.0);
+    if rain > 0.5 { g += rain_ripple_layer(uv+vec2(0.5,0.37), t*1.07, rain*2.0-1.0, 41.0); }
+    return g;
+}
+// GGX with Smith-Schlick visibility and Schlick Fresnel at F0 0.02 (water):
+// the light of colour `c` from direction `l` off a film of roughness^2 `a`.
+fn ggx_d(nh: f32, a: f32) -> f32 {
+    let a2 = a*a;
+    let d = nh*nh*(a2-1.0)+1.0;
+    return a2/(3.14159*d*d);
+}
+fn spec_light(n: vec3<f32>, v: vec3<f32>, l: vec3<f32>, c: vec3<f32>, a: f32) -> vec3<f32> {
+    let nl = max(dot(n,l),0.0);
+    if nl <= 0.0 { return vec3(0.0); }
+    let h = normalized(v+l);
+    let nv = max(dot(n,v),1e-3);
+    let k = a*0.5;
+    let vis = 0.25/((nl*(1.0-k)+k)*(nv*(1.0-k)+k));
+    let f = 0.02+0.98*pow(1.0-max(dot(v,h),0.0),5.0);
+    return c*ggx_d(max(dot(n,h),0.0),a)*vis*f*nl;
+}
 fn rd_n(t: f32) -> f32 { return fract(sin(t*12345.564)*7658.76); }
 // Rivulets: a few vertical channels per face at hashed offsets, carrying
 // brightness ripples that scroll down, so side water reads as streams.
@@ -1652,6 +1738,383 @@ fn dropped(input: VertexOut) -> bool {
 }
 
 // The depth the sun's cascades are drawn with (`sun-shadows` decision 3).
+// `lighting-model` L1: the sun after the air it came through. The arithmetic
+// is `pbd_core::sky_light::sun_air`, and a test holds these constants to it.
+const SKY_TAU = vec3<f32>(0.040, 0.100, 0.240);
+const SKY_TAU_M = 0.07;
+const SUN_NOW = vec3<f32>(1.12, 1.03, 0.87);
+const SUN_NORM = vec3<f32>(0.880787, 0.821865, 0.699257);
+fn airmass(e: f32) -> f32 {
+    let h = asin(clamp(e, 0.0, 1.0));
+    return 1.0/(sin(h) + 0.50572*pow(h*57.29578 + 6.07995, -1.6364));
+}
+fn sun_air(e: f32) -> vec3<f32> {
+    let t = exp(-(SKY_TAU + SKY_TAU_M)*airmass(e));
+    return t/SUN_NORM*SUN_NOW*smoothstep(-0.02, 0.01, e);
+}
+// L2: irradiance (over pi) from the sky's nine coefficients, for a normal
+// already in the local frame (y up, the sun in the x-y plane); `deck` mixes
+// the clear set toward the overcast one. `pbd_core::sky_light::sh_irradiance`.
+fn sh_irradiance(n: vec3<f32>, deck: f32) -> vec3<f32> {
+    let x = n.x; let y = n.y; let z = n.z;
+    let b = array<f32, 9>(0.282095, 0.488603*y, 0.488603*z, 0.488603*x,
+        1.092548*x*y, 1.092548*y*z, 0.315392*(3.0*z*z - 1.0), 1.092548*x*z, 0.546274*(x*x - y*y));
+    var e = vec3<f32>(0.0);
+    for (var k = 0u; k < 9u; k++) {
+        e += mix(params.sky_sh[k].xyz, params.sky_sh[k + 9u].xyz, deck)*b[k];
+    }
+    return e;
+}
+// The sky's RADIANCE toward a local direction, out of the same nine
+// coefficients: each band un-convolved (1, 3/2, 4). Soft, as an L2 sky is;
+// what the wet film mirrors where nothing nearer is found.
+fn sh_radiance(d: vec3<f32>, deck: f32) -> vec3<f32> {
+    let x = d.x; let y = d.y; let z = d.z;
+    let b = array<f32, 9>(0.282095, 1.5*0.488603*y, 1.5*0.488603*z, 1.5*0.488603*x,
+        4.0*1.092548*x*y, 4.0*1.092548*y*z, 4.0*0.315392*(3.0*z*z - 1.0), 4.0*1.092548*x*z, 4.0*0.546274*(x*x - y*y));
+    var e = vec3<f32>(0.0);
+    for (var k = 0u; k < 9u; k++) {
+        e += mix(params.sky_sh[k].xyz, params.sky_sh[k + 9u].xyz, deck)*b[k];
+    }
+    return max(e, vec3(0.0));
+}
+// A world normal in a fragment's own local frame: up its radial, x toward its
+// own sun's azimuth, so the sky reads right anywhere on the curved body.
+fn sky_frame(n: vec3<f32>, up: vec3<f32>, sun: vec3<f32>) -> vec3<f32> {
+    var sx = sun - up*dot(sun, up);
+    let l = length(sx);
+    var ax = select(normalized(cross(up, vec3(0.0, 0.0, 1.0)) + vec3(1e-4, 0.0, 0.0)), sx/l, l > 1e-4);
+    let az = cross(ax, up);
+    return vec3(dot(n, ax), dot(n, up), dot(n, az));
+}
+
+// ---- `lighting-model` L4: the sun's bounce ----------------------------------
+// The bounce in one cell of a slot (plus one, as records carry it), zero
+// outside its window or off the tier.
+fn bounce_at(slot: u32, layer: u32) -> vec3<f32> {
+    if slot == 0u || slot > BOUNCE_BASES { return vec3(0.0); }
+    let base = bounce[slot - 1u];
+    if layer < base || layer - base >= BOUNCE_SPAN { return vec3(0.0); }
+    let k = layer - base;
+    let at = BOUNCE_BASES + (slot - 1u)*BOUNCE_WORDS + k/2u;
+    if at >= arrayLength(&bounce) { return vec3(0.0); }
+    let v = (bounce[at] >> ((k % 2u)*16u)) & 0xffffu;
+    return vec3(f32((v >> 11u) & 31u)/31.0, f32((v >> 5u) & 63u)/63.0, f32(v & 31u)/31.0)*BOUNCE_MAX;
+}
+// The column holding `q`: `slot`, or the neighbour across whichever border
+// plane `q` is furthest past (a step being all a point half a metre off a
+// face can take). The plane test, not the nearer of two directions: both of
+// those dots are one to within f32's last bit, and comparing them flipped
+// from pixel to pixel as a fine speckle.
+fn column_of(q: vec3<f32>, slot: u32) -> u32 {
+    let rec = columns[slot - 1u];
+    let c = centres[slot - 1u].xyz;
+    var best = slot;
+    var past = 0.0;
+    for (var s = 0u; s < min(rec.more[2], 6u); s++) {
+        let ns = column_neighbour(rec, s);
+        if ns == 0u { continue; }
+        let nc = centres[ns - 1u].xyz;
+        let plane = nc - c;
+        let here = dot(q - (c + nc)*(0.5*length(q)), plane)/max(length(plane), 1e-12);
+        if here > past { past = here; best = ns; }
+    }
+    return best;
+}
+// The column holding `q` and the one across the border nearest it, with how
+// much of that second one to blend in: a half on the border, none 0.8 m in.
+// What a cell's light is blended across, so its hex edge is never drawn.
+// Scored against `slot` and its neighbours: a point half a metre off a face
+// is never further.
+fn column_pair(q: vec3<f32>, slot: u32) -> vec3<f32> {
+    let rec = columns[slot - 1u];
+    let c = centres[slot - 1u].xyz;
+    var first = slot;
+    var first_score = 0.0;
+    var second = 0u;
+    var second_score = -1e9;
+    for (var s = 0u; s < min(rec.more[2], 6u); s++) {
+        let ns = column_neighbour(rec, s);
+        if ns == 0u { continue; }
+        let nc = centres[ns - 1u].xyz;
+        let plane = nc - c;
+        let score = dot(q - (c + nc)*(0.5*length(q)), plane)/max(length(plane), 1e-12);
+        if score > first_score {
+            second = first;
+            second_score = first_score;
+            first = ns;
+            first_score = score;
+        } else if score > second_score {
+            second = ns;
+            second_score = score;
+        }
+    }
+    if second == 0u { return vec3(f32(first), 0.0, 0.0); }
+    let w = 0.5*(1.0 - smoothstep(0.0, 0.8, first_score - second_score));
+    return vec3(f32(first), f32(second), w);
+}
+// The bounce half a metre off a face, between the two layers it falls
+// between; a layer that is rock (none) gives way to the other.
+fn bounce_near(position: vec3<f32>, n: vec3<f32>, slot: u32) -> vec3<f32> {
+    let q = position + n*0.5;
+    let pair = column_pair(q, slot);
+    let alt = length(q) - params.settings.x - COLUMN_BASE_M - 0.5;
+    if alt < 0.0 { return vec3(0.0); }
+    let l0 = u32(floor(alt));
+    let f = fract(alt);
+    let here = bounce_column(u32(pair.x), l0, f);
+    if pair.z <= 0.0 { return here; }
+    return mix(here, bounce_column(u32(pair.y), l0, f), pair.z);
+}
+fn bounce_column(s: u32, l0: u32, f: f32) -> vec3<f32> {
+    let a = bounce_at(s, l0);
+    let b = bounce_at(s, l0 + 1u);
+    if dot(a, a) == 0.0 { return b; }
+    if dot(b, b) == 0.0 { return a; }
+    return mix(a, b, f);
+}
+// ---- `lighting-model` L7: the lamp bake -------------------------------------
+// One cell's baked lamp light on a face at `p` turned to `n`: each lamp the
+// cell sees, by N.L and the windowed inverse square (`lamp_bake::falloff`),
+// plus the cell's bounce; w one where some lamp is in reach (the bake lights
+// it), zero where none is, and -1 outside the cell's window.
+fn lamp_cell(half: u32, slot: u32, layer: u32, p: vec3<f32>, n: vec3<f32>) -> vec4<f32> {
+    let off = half*LAMP_HALF_WORDS;
+    let base = lamp_bake[off + LAMP_LIST_WORDS + slot - 1u];
+    if layer < base || layer - base >= BOUNCE_SPAN { return vec4(0.0, 0.0, 0.0, -1.0); }
+    let cell = off + LAMP_LIST_WORDS + BOUNCE_BASES
+        + ((slot - 1u)*BOUNCE_SPAN + layer - base)*LAMP_CELL_WORDS;
+    let seen = lamp_bake[cell];
+    let more = lamp_bake[cell + 1u];
+    var direct = 0.0;
+    for (var k = 0u; k < 4u; k++) {
+        let i = (seen >> (8u*k)) & 0xffu;
+        if i == 255u { break; }
+        let at = off + i*4u;
+        let lamp = vec3(bitcast<f32>(lamp_bake[at]), bitcast<f32>(lamp_bake[at + 1u]),
+            bitcast<f32>(lamp_bake[at + 2u]));
+        let to = lamp - p;
+        let d = max(length(to), 1e-3);
+        let nl = dot(n, to/d);
+        if d > LAMP_REACH_M || nl <= 0.0 { continue; }
+        let w = max(1.0 - pow(d/LAMP_REACH_M, 4.0), 0.0);
+        direct += nl*w*w/(1.0 + (d/2.2)*(d/2.2))*LAMP_BAKE_GAIN*bitcast<f32>(lamp_bake[at + 3u]);
+    }
+    let v = more & 0xffffu;
+    let bounce = vec3(f32((v >> 11u) & 31u)/31.0, f32((v >> 5u) & 63u)/63.0, f32(v & 31u)/31.0)
+        *LAMP_BOUNCE_MAX;
+    return vec4(vec3(direct) + bounce, select(0.0, 1.0, (more & 0x10000u) != 0u));
+}
+// The baked light half a metre off a face, between the two layers it falls
+// between, or -1 in w where the bake does not hold it (the flood lights it).
+fn lamp_near(half: u32, position: vec3<f32>, n: vec3<f32>, slot: u32) -> vec4<f32> {
+    let q = position + n*0.5;
+    let pair = column_pair(q, slot);
+    let alt = length(q) - params.settings.x - COLUMN_BASE_M - 0.5;
+    if alt < 0.0 { return vec4(0.0, 0.0, 0.0, -1.0); }
+    let l0 = u32(floor(alt));
+    let here = lamp_column(half, u32(pair.x), l0, fract(alt), position, n);
+    if pair.z <= 0.0 || here.w < 0.0 { return here; }
+    let there = lamp_column(half, u32(pair.y), l0, fract(alt), position, n);
+    if there.w < 0.0 { return here; }
+    return mix(here, there, pair.z);
+}
+fn lamp_column(half: u32, s: u32, l0: u32, f: f32, position: vec3<f32>, n: vec3<f32>) -> vec4<f32> {
+    let a = lamp_cell(half, s, l0, position, n);
+    let b = lamp_cell(half, s, l0 + 1u, position, n);
+    if a.w < 0.0 || b.w < 0.0 { return vec4(0.0, 0.0, 0.0, -1.0); }
+    // Rock holds nothing: the other layer answers.
+    if solid_at(s, l0) { return b; }
+    if solid_at(s, l0 + 1u) { return a; }
+    return mix(a, b, f);
+}
+
+// ---- `lighting-model` L8: the reflected ray walks the columns -------------
+//
+// The screen cannot see what the camera cannot: an eave's underside, a
+// slab's, the far side of a wall. So a wet face's reflected ray first walks
+// the block grid itself, cell to cell (a DDA over hex prisms: out through
+// whichever of the six side planes or the two layer spheres it meets first),
+// up to 72 cells or `reflect.y` metres. Where it reaches a solid cell, that
+// face is lit as the terrain is: the sky by the field's light in the air in
+// front of it, the sun with its cascades and the cloud over it, the lamps by
+// the field, and a lit lantern glows. Where it finds nothing it says so, and
+// the film mirrors the sky. Off the tier there is nothing to walk.
+fn column_neighbour(rec: ColumnRec, side: u32) -> u32 {
+    let raw = column_side(rec, side);
+    return select(raw + 1u, 0u, raw == NO_NEIGHBOR);
+}
+// A face's flat colour by its render code, for what a reflection shows at
+// the size it shows it: the means of the tiles the terrain draws.
+fn vox_albedo(code: u32, up: f32) -> vec3<f32> {
+    if code == 1u || code == 4u { return vec3(0.61,0.48,0.25); }
+    if code == 5u { return vec3(0.31,0.34,0.33); }
+    if code == 6u { return vec3(0.80,0.90,0.91); }
+    if code == 8u { return vec3(0.16,0.105,0.055); }
+    if grassy(code) {
+        if up > 0.5 { return vec3(0.12,0.32,0.075); }
+        return GROUND_MEAN;
+    }
+    if code == 9u { return vec3(0.085,0.24,0.060); }
+    return GROUND_MEAN;
+}
+fn reflect_trace(origin: vec3<f32>, dir: vec3<f32>, start: u32, sun: vec3<f32>,
+                 cover: f32) -> vec4<f32> {
+    if start == 0u || params.reflect.x < 0.5 { return vec4(0.0); }
+    let radius = params.settings.x;
+    var slot = start;
+    var p = origin;
+    var layer = light_layer(length(p) - radius);
+    var walked = 0.0;
+    for (var i = 0u; i < 72u; i++) {
+        if layer >= LIGHT_LAYERS { return vec4(0.0); }
+        let rec = columns[slot - 1u];
+        let c = centres[slot - 1u].xyz;
+        let degree = min(rec.more[2], 6u);
+        var t_exit = 1e9;
+        var next = slot;
+        var next_layer = layer;
+        var across = vec3(0.0);
+        for (var s = 0u; s < degree; s++) {
+            let ns = column_neighbour(rec, s);
+            if ns == 0u { continue; }
+            // Through the point midway between the columns at this height:
+            // through the planet's centre, the plane would hang on the radial
+            // part of `plane`, which is below f32's resolution.
+            let nc = centres[ns - 1u].xyz;
+            let plane = nc - c;
+            let mid = (c + nc)*(0.5*length(p));
+            let dn = dot(dir, plane);
+            if dn > 1e-9 {
+                let t = -dot(p - mid, plane)/dn;
+                if t < t_exit { t_exit = max(t, 0.0); next = ns; next_layer = layer; across = plane; }
+            }
+        }
+        // The layer's two spheres.
+        let b = dot(p, dir);
+        let pp = dot(p, p);
+        let r_hi = radius + COLUMN_BASE_M + f32(layer) + 1.0;
+        let up_disc = b*b - (pp - r_hi*r_hi);
+        if up_disc >= 0.0 {
+            let t = -b + sqrt(up_disc);
+            if t >= 0.0 && t < t_exit { t_exit = t; next = slot; next_layer = layer + 1u; across = vec3(0.0); }
+        }
+        let r_lo = r_hi - 1.0;
+        let lo_disc = b*b - (pp - r_lo*r_lo);
+        if lo_disc >= 0.0 && layer > 0u {
+            let t = -b - sqrt(lo_disc);
+            if t >= 0.0 && t < t_exit { t_exit = t; next = slot; next_layer = layer - 1u; across = vec3(0.0); }
+        }
+        if t_exit > 1e8 { return vec4(0.0); }
+        walked += t_exit;
+        if walked > params.reflect.y { return vec4(0.0); }
+        p += dir*(t_exit + 1e-4);
+        let air_slot = slot;
+        let air_layer = layer;
+        slot = next;
+        layer = next_layer;
+        if layer >= LIGHT_LAYERS { return vec4(0.0); }
+        if solid_at(slot, layer) {
+            let up = normalized(p);
+            var hn = -normalized(across);
+            if dot(across, across) < 1e-12 {
+                hn = select(up, -up, layer > air_layer);
+            }
+            let e = dot(up, sun);
+            let daylight = smoothstep(-0.13, 0.20, e);
+            let field = light_at(air_slot, air_layer);
+            let hrec = columns[slot - 1u];
+            var col = vec3(0.0);
+            if lamp_lit(hrec) && lamp_layer(hrec) == layer + 1u {
+                col = vec3(1.0, 0.80, 0.46)*params.light.y;
+            } else {
+                let alb = vox_albedo(material_at(slot, layer), dot(hn, up));
+                let amb = max(max(sh_irradiance(sky_frame(hn, up, sun), cover), vec3(0.0))*field.x,
+                    vec3(0.006, 0.008, 0.011));
+                var key = vec3(0.0);
+                let facing = max(dot(hn, sun), 0.0)*smoothstep(-0.0145, 0.02, e);
+                if facing > 0.0 {
+                    key = sun_air(e)*facing*cloud_sun(p, sun)
+                        *sun_shadow_soft(sun_map, sun_cmp, sun_cascades, p, hn, 0.0, facing)*field.x;
+                }
+                let lamps = TORCH_TINT*(lamp_strength(field.y)*TORCH_GAIN)*lamp_share(field.x, daylight);
+                col = alb*(amb + key + lamps);
+            }
+            // Faded over the last quarter of the reach, never cut.
+            return vec4(col, 1.0 - smoothstep(0.75*params.reflect.y, params.reflect.y, walked));
+        }
+    }
+    return vec4(0.0);
+}
+
+// ---- `lighting-model` L8 (10.2): the screen trace ---------------------------
+// Where the walk over the columns finds no block (a house, a tree, the sea),
+// the reflected ray marches through last frame's colour and distances,
+// reprojected with last frame's matrix. Read at an explicit level: a loop
+// that can stop early has no screen derivatives (Direct3D's X3595, the
+// owner's laptop). A step that lands within three texels of where the ray
+// started is skipped (its own surface, which drew lines), and a hit needs
+// the ray to have CROSSED behind the surface since the last step, not only to
+// be behind it (which smeared). It fades at the screen's edge and at the end
+// of the march, never cut.
+fn ssr_uv(p: vec3<f32>) -> vec3<f32> {
+    let clip = params.ssr_clip*vec4(p, 1.0);
+    if clip.w <= 1e-4 { return vec3(-1.0); }
+    return vec3(clip.x/clip.w*0.5 + 0.5, 0.5 - clip.y/clip.w*0.5, 1.0);
+}
+fn ssr_trace(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
+    if params.ssr_eye.w < 0.5 || params.reflect.x < 0.5 { return vec4(0.0); }
+    let size = vec2<f32>(textureDimensions(ssr_history));
+    let home = ssr_uv(origin).xy;
+    var t = 0.04;
+    var behind_before = -1.0;
+    let reach = params.reflect.y;
+    for (var i = 0u; i < 32u; i++) {
+        t += 0.05 + t*0.12;
+        if t > reach { break; }
+        let p = origin + dir*t;
+        let at = ssr_uv(p);
+        if at.z < 0.0 || any(at.xy < vec2(0.0)) || any(at.xy > vec2(1.0)) { break; }
+        if length((at.xy - home)*size) < 3.0 { continue; }
+        let texel = textureLoad(ssr_history, vec2<i32>(at.xy*size), 0);
+        if texel.w <= 0.0 { break; }
+        let behind = distance(p, params.ssr_eye.xyz) - texel.w;
+        let thickness = clamp(0.25 + 0.06*t, 0.25, 1.2);
+        if behind > 0.0 && behind_before < 0.0 && behind < thickness {
+            let edge = min(min(at.x, 1.0 - at.x), min(at.y, 1.0 - at.y));
+            let fade = smoothstep(0.0, 0.08, edge)*(1.0 - smoothstep(0.75*reach, reach, t));
+            return vec4(texel.rgb, fade);
+        }
+        behind_before = behind;
+    }
+    return vec4(0.0);
+}
+
+// The distance haze and the limb, the last of every terrain fragment.
+fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
+          distance_to_camera: f32, sun_elevation: f32, daylight: f32, cover: f32,
+          skylight: f32) -> vec4<f32> {
+    var color = lit;
+    // Tenebris-style limb and distance haze, all in the same body-local frame.
+    let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
+    let air = exp(-altitude/1050.);
+    // Both take the FIELD: a face the sky does not reach has no atmosphere
+    // between it and the eye, and without this a cave wall forty metres
+    // underground fogged toward the sky colour exactly as a ridge at the same
+    // distance did. Tenebris gates its rim by `v_sky_light` for the same
+    // reason; the haze here is the same term one step earlier.
+    //
+    // The air thickens under cloud (`cloud_fog_add` per unit cover) and in
+    // rain (up to `rain_fog_mult`), and hazes toward the overcast sky.
+    let haze_density = 0.00036*(1.+cover*params.rain[4].z)
+        *mix(1.,params.rain[4].w,clamp(params.weather.y,0.,1.));
+    let fog = (1.-exp(-distance_to_camera*haze_density))*air*daylight*skylight;
+    color=mix(color,ground_sky(sun_elevation,cover),fog*0.55);
+    let rim = pow(1.-clamp(dot(radial,toward_camera),0.,1.),4.);
+    color+=vec3(0.07,0.16,0.25)*rim*(0.25+0.75*daylight)*(1.-air)*0.55*skylight;
+    return vec4(color,1.);
+}
+
 @fragment
 fn shadow_fragment(input: VertexOut) {
     if dropped(input) { discard; }
@@ -1659,6 +2122,10 @@ fn shadow_fragment(input: VertexOut) {
 
 @fragment
 fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
+    // A pixel's footprint on the ground, metres: taken before anything can
+    // branch, since a derivative needs every pixel of its quad. The new wet
+    // film fades rings under it and widens its lobe by it (specular AA).
+    let foot = length(fwidth(input.position));
     if dropped(input) { discard; }
     let radial = normalized(input.position);
     let n = normalized(input.normal);
@@ -1687,7 +2154,11 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     let facing = max(dot(n,sun),0.0)*sunlight;
     var shade = 1.0;
     if facing > 0.0 {
-        shade = sun_shadow(sun_map, sun_cmp, sun_cascades, input.position, n);
+        // `lighting-model` L3: `light.z` is the sun's apparent radius as a
+        // tangent (zero: today's filter), wider under the cover over this
+        // face, so an overcast day softens its shadows (`light.w`).
+        let spread = params.light.z*(1.0 + params.light.w*here_cover);
+        shade = sun_shadow_soft(sun_map, sun_cmp, sun_cascades, input.position, n, spread, dot(n,sun));
     }
     let direct = facing*sun_dim*shade;
     // The heightfield's per-cell occlusion, times the voxel field's answer at
@@ -1828,11 +2299,51 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
     // darker for a cloud over the hill it is dug into.
     var color = albedo*(fill*max(AMBIENT_FLOOR,mix(night,1.,daylight)*skylight*fill_dim)
         + vec3(1.12,1.03,0.87)*direct*skylight)*gain;
+    if params.light.x > 0.5 {
+        // `lighting-model` L1 + L2: the sun takes the colour of the air it came
+        // through at THIS face's own elevation, and the shade is lit by the sky
+        // that is there (its nine coefficients, mixed by the cover over this
+        // face), through the field's sky light. No wall gain and no fixed
+        // fill: the sky's own light says what a wall and a cap get.
+        let amb = max(max(sh_irradiance(sky_frame(n, radial, sun), here_cover), vec3(0.0))*skylight,
+            vec3(0.006, 0.008, 0.011));
+        color = albedo*(amb + sun_air(sun_elevation)*max(dot(n,sun),0.0)*sun_dim*shade*skylight);
+        // L4: the sun thrown back off the faces round this one (baked in the
+        // field), as dim as the cloud makes the sun here. The field does not
+        // say where it came from, and most of the air over a floor was lit by
+        // that floor: a face turned up takes a fifth, so a floor is not lit by
+        // itself, while walls and undersides take it all.
+        if params.reflect.z > 0.0 && input.slot != 0u {
+            let toward_floor = 1.0 - 0.8*max(dot(n, radial), 0.0);
+            color += albedo*bounce_near(input.position, n, input.slot)
+                *(params.reflect.z*sun_dim*toward_floor);
+        }
+    }
     // A lamp, ADDED. Warm, because everything that burns is, and over the
     // albedo so a torch lights the ground it stands on rather than painting a
     // flat orange patch over it. This is the term that makes a night worth
     // carrying a light through.
-    color += albedo*TORCH_TINT*(lamp_strength(lamp)*TORCH_GAIN)*lamp_share(skylight, daylight);
+    let flood = albedo*TORCH_TINT*(lamp_strength(lamp)*TORCH_GAIN)*lamp_share(skylight, daylight);
+    var torch = flood;
+    if params.light.x > 0.5 && input.slot != 0u && params.lamp_bake.y + params.lamp_bake.z > 0.5 {
+        // `lighting-model` L7: the baked lamps where the bake holds this face
+        // and a lamp is in reach, the flood elsewhere; the newest bake fades
+        // in over the one before it (or over the flood), never a cell at a
+        // time.
+        let new_half = u32(params.lamp_bake.w);
+        var newer = flood;
+        var older = flood;
+        if params.lamp_bake.z > 0.5 {
+            let l = lamp_near(new_half, input.position, n, input.slot);
+            if l.w > 0.0 { newer = albedo*TORCH_TINT*TORCH_GAIN*l.rgb*lamp_share(skylight, daylight); }
+        }
+        if params.lamp_bake.y > 0.5 && params.lamp_bake.x < 1.0 {
+            let l = lamp_near(1u - new_half, input.position, n, input.slot);
+            if l.w > 0.0 { older = albedo*TORCH_TINT*TORCH_GAIN*l.rgb*lamp_share(skylight, daylight); }
+        }
+        torch = mix(older, newer, params.lamp_bake.x);
+    }
+    color += torch;
     // A lamp's own light is drawn as the light it is, whatever lights the
     // cell around it. A lantern is lit panes in its iron frame; a brazier's
     // fire and a candle's flame are white-gold at the root and orange at the
@@ -1853,6 +2364,9 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         } else {
             color = vec3(1.0, 0.80, 0.46)*(0.82 + 0.35*grain);
         }
+        // The new model's display transform has room above white: a lit pane
+        // and a flame glow there, and bloom (`lighting-model` L6).
+        if params.light.x > 0.5 && !lantern_frame(input.uv, up) { color *= params.light.y; }
     }
     // Lightning: the storm's cloud lit from inside, which lights everything
     // under open sky a cool white for the length of a flicker. Gated by the
@@ -1940,8 +2454,17 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         // as water; putting them only in puddles left a meadow in a storm
         // with none, and a meadow is where the game starts.
         let rings = top_w*max(puddle,select(k_grass_rings,1.,floor_like));
+        // `wet-near-detail` (owner: "We don't need [rain] drops [further] out
+        // than that"): the sheet, the rings and the rivulets only within the
+        // reach, fading out over the band before it; past it the work is
+        // skipped, not only weighed out. Today's model draws them everywhere.
+        var near_detail = 1.;
+        if params.light.x > 0.5 {
+            let reach = max(params.rain_near.x,0.);
+            near_detail = 1.-smoothstep(reach-max(params.rain_near.y,0.),reach,distance_to_camera);
+        }
         var pg = vec2(0.);
-        if rings > 0.001 {
+        if rings > 0.001 && near_detail > 0.001 {
             // A continuous rippled sheet so the whole wet face reads as a
             // normal map, then raindrop impact rings on top of it.
             pg += vec2(
@@ -1950,10 +2473,19 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
                 cos(uv.y*k_wave_scale-wet_t*k_wave_speed*0.9)
                     +0.7*cos((uv.x-uv.y)*k_wave_scale*0.6+wet_t*k_wave_speed*0.7)
             )*(k_wave_strength*puddle);
-            pg += rain_ripple_grad(uv*k_ripple_scale,wet_t)*(k_ripple_strength*rings);
+            if params.wet.w > 0.5 {
+                // The new model: as many drops as it is raining, faded once a
+                // ring falls under a pixel, or the rings turn to speckle.
+                pg += rain_rings(uv*k_ripple_scale,wet_t,clamp(params.weather.y,0.,1.))
+                    *(k_ripple_strength*rings);
+                pg /= 1.+pow(foot*k_ripple_scale*3.,2.);
+            } else {
+                pg += rain_ripple_grad(uv*k_ripple_scale,wet_t)*(k_ripple_strength*rings);
+            }
+            pg *= near_detail;
         }
         var pert = ax_a*pg.x+ax_b*pg.y;
-        if side_w > 0.001 {
+        if side_w > 0.001 && near_detail > 0.001 {
             // Down is radially inward within the face; the rivulets live in the
             // face's own texture UV so they line up with it.
             var down_dir = -wet_up-n*dot(-wet_up,n);
@@ -1965,13 +2497,18 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
             let dm = rivulets(duv,dt);
             let de = vec2(0.01,0.);
             let dn = vec2(rivulets(duv+de,dt)-dm, rivulets(duv+de.yx,dt)-dm);
-            pert += (across_dir*dn.x+down_dir*dn.y)*(k_flow_strength*side_w);
+            pert += (across_dir*dn.x+down_dir*dn.y)*(k_flow_strength*side_w*near_detail);
         }
         let wet = wet_amt*max(top_w,side_w);
         let wet_n = normalized(n+pert);
         // Wet darkens AND saturates: water fills the grain, so the colour
-        // deepens toward its own hue rather than toward grey.
-        color *= mix(1.,k_wet_darken,wet);
+        // deepens toward its own hue rather than toward grey. The new film
+        // darkens a little more, and a puddle more again.
+        if params.light.x > 0.5 {
+            color *= mix(1.,k_wet_darken*0.85,wet)*mix(1.,0.7,puddle*wet_amt);
+        } else {
+            color *= mix(1.,k_wet_darken,wet);
+        }
         let grey = dot(color,vec3(0.2126,0.7152,0.0722));
         color = max(mix(vec3(grey),color,1.+0.25*wet),vec3(0.));
         // The sky, mirrored. Fresnel against the view along the RIPPLED
@@ -1983,6 +2520,58 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         let cos_v = clamp(dot(wet_n,toward_camera),0.,1.);
         let fresnel = 0.02+0.98*pow(1.-cos_v,5.);
         let r = reflect(-toward_camera,wet_n);
+        if params.light.x > 0.5 {
+            // `lighting-model`, wet ground (owner: "kinda dull"): a glossy
+            // film. GGX at the wet or the puddle roughness, widened where the
+            // rippled normal turns fast across a pixel (specular AA), that
+            // mirrors the real sky (L2) and takes highlights from the sun and
+            // from every lamp near the eye. The masks above are today's.
+            let rough0 = mix(params.wet.x,params.wet.y,puddle);
+            let turn = dot(pg,pg)*min(foot*k_ripple_scale*2.,1.);
+            let rough = clamp(sqrt(rough0*rough0+2.*turn),rough0,0.6);
+            let a = rough*rough;
+            let r_up = dot(r,wet_up);
+            // The sky's nine coefficients are soft and dim at the horizon,
+            // which is where a puddle seen from eye height looks: never
+            // darker than the sky the haze takes (`ground_sky`), the dome's
+            // own colour there.
+            var env = max(sh_radiance(sky_frame(normalized(r-wet_up*min(r_up,0.)),wet_up,sun),here_cover),
+                ground_sky(sun_elevation,cover)*mix(0.12,1.,daylight));
+            if r_up < 0. { env *= 0.35; }
+            env *= mix(0.4,1.,skylight);
+            // L8: what the reflected ray really reaches, where it finds it.
+            let fr = fresnel*(1.-rough)*k_mirror*mix(0.45,1.,puddle)*wet;
+            var hit = vec4(0.);
+            if fr > 0.03 {
+                hit = reflect_trace(input.position+n*0.02, r, input.slot, sun, here_cover);
+                // Voxels first (owner); the screen where they find nothing.
+                if hit.a <= 0.0 { hit = ssr_trace(input.position+n*0.02, r); }
+            }
+            env = mix(env,hit.rgb,hit.a);
+            color = color*(1.-fr)+env*fr;
+            // The key light's glint, wider under cover so a storm keeps a soft
+            // sheen; hidden where the reflection finds a surface in front of it.
+            let a_key = max(a,0.02+0.25*here_cover);
+            let key = sun_air(sun_elevation)*sun_dim*sunlight;
+            color += min(spec_light(wet_n,toward_camera,sun,key*3.14159,a_key),vec3(3.))
+                *shade*wet*(1.-hit.a);
+            // Each lamp's own highlight, where its light reaches this face (the
+            // field's block channel says so: none through a wall).
+            var ls = vec3(0.);
+            for (var i = 0u; i < 8u; i++) {
+                let lamp_at = params.lamps[i];
+                if lamp_at.w <= 0. { continue; }
+                let q = lamp_at.xyz-input.position;
+                let d = length(q);
+                if d < 16. {
+                    ls += spec_light(wet_n,toward_camera,q/d,
+                        TORCH_TINT*TORCH_GAIN*lamp_at.w*11.6/(4.84+d*d)*(1.-d/16.),max(a,0.02));
+                }
+            }
+            color += min(ls,vec3(6.))*params.wet.z*wet*lamp_share(skylight,daylight)
+                *clamp(lamp*3.,0.,1.)*(1.-0.8*hit.a);
+            return finish(color, radial, toward_camera, distance_to_camera, sun_elevation, daylight, cover, skylight);
+        }
         let r_up = dot(r,wet_up);
         let sky_seen = ground_sky(sun_elevation,cover)*mix(0.12,1.,daylight)
             *mix(0.55,1.,smoothstep(-0.05,0.35,r_up));
@@ -1994,22 +2583,5 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         let glint = pow(max(dot(wet_n,sun),0.),max(k_glint_power,1.));
         color += vec3(k_glint_strength)*(glint*wet*sunlight*sun_dim*shade);
     }
-    // Tenebris-style limb and distance haze, all in the same body-local frame.
-    let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
-    let air = exp(-altitude/1050.);
-    // Both take the FIELD: a face the sky does not reach has no atmosphere
-    // between it and the eye, and without this a cave wall forty metres
-    // underground fogged toward the sky colour exactly as a ridge at the same
-    // distance did. Tenebris gates its rim by `v_sky_light` for the same
-    // reason; the haze here is the same term one step earlier.
-    //
-    // The air thickens under cloud (`cloud_fog_add` per unit cover) and in
-    // rain (up to `rain_fog_mult`), and hazes toward the overcast sky.
-    let haze_density = 0.00036*(1.+cover*params.rain[4].z)
-        *mix(1.,params.rain[4].w,clamp(params.weather.y,0.,1.));
-    let fog = (1.-exp(-distance_to_camera*haze_density))*air*daylight*skylight;
-    color=mix(color,ground_sky(sun_elevation,cover),fog*0.55);
-    let rim = pow(1.-clamp(dot(radial,toward_camera),0.,1.),4.);
-    color+=vec3(0.07,0.16,0.25)*rim*(0.25+0.75*daylight)*(1.-air)*0.55*skylight;
-    return vec4(color,1.);
+    return finish(color, radial, toward_camera, distance_to_camera, sun_elevation, daylight, cover, skylight);
 }

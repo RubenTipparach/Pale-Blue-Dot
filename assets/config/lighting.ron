@@ -1,0 +1,50 @@
+// The lighting model (`openspec/changes/lighting-model`). Fields default to
+// the code's values; see `LightingSettings` in `crates/pbd-app/src/config.rs`.
+(
+    // The new model (L1-L8, the owner's pick, 2026-10-28) or today's.
+    // `PBD_LIGHTING=today` in the environment forces today's, for A/B runs.
+    new_model: true,
+    // L6: metering, the eye's range and speed.
+    exposure_key: 0.16,
+    exposure_gain: 0.62,
+    exposure_min_ev: -1.0,
+    exposure_max_ev: 2.0,
+    night_ev_cut: 0.6,
+    adapt_ev_per_s: 2.0,
+    // L6: bloom (owner: visible).
+    bloom_intensity: 0.2,
+    // Bloom before the player chooses (Settings > GRAPHICS): left out, off on a
+    // Mac (it costs ~2.4 ms there) and on elsewhere. `Some(true)` forces it on.
+    // The player's choice is kept in `saves/preferences.ron`.
+    // bloom: Some(true),
+    bloom_threshold: 1.0,
+    // Our own lighter bloom (task 3.3) or Bevy's. `PBD_BLOOM=bevy|lite` picks
+    // one for A/B runs.
+    bloom_lite: true,
+    // L6: the grade.
+    golden_balance: (0.07, 0.005, -0.10),
+    night_balance: (0.03, 0.0, -0.04),
+    saturation: 1.08,
+    night_desaturate: 0.05,
+    cover_desaturate: 0.15,
+    dither: 1.0,
+    // A lantern's panes and a flame, HDR.
+    lamp_glow: 6.0,
+    // L3: contact-hardening sun shadows (PCSS lite) in the two finest
+    // cascades. The sun's size against the real one (owner: x12), and how
+    // much wider it looks under a full deck (the mockup had 5; the game's rain
+    // captures lost their shadows at that, recommendation taken: 2).
+    soft_shadows: true,
+    sun_size: 12.0,
+    shadow_cover_soften: 2.0,
+    // L8: a wet face's reflected ray walks the blocks near the camera
+    // (voxels first, owner), this far, metres.
+    reflections: true,
+    reflection_reach_m: 48.0,
+    // L4: the sun's bounce in the voxel field, and how strong it is drawn.
+    bounce: true,
+    bounce_strength: 1.0,
+    // L7: lamps lit by the bake (direction, shadow and a bounce), cross-faded
+    // in over half a second, instead of the flood fill.
+    lamp_bake: true,
+)

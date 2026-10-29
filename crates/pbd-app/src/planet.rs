@@ -7,6 +7,13 @@
 
 #[path = "planet_cloud_noise.rs"]
 mod cloud_noise;
+#[path = "planet_cloud_puffs.rs"]
+mod cloud_puffs;
+#[path = "planet_cloud_timer.rs"]
+mod cloud_timer;
+pub use cloud_timer::cloud_gpu_ms;
+#[path = "planet_bounce.rs"]
+pub mod bounce;
 #[path = "planet_column.rs"]
 pub mod column;
 pub use column::mouth_of;
@@ -18,6 +25,8 @@ pub(crate) mod lattice;
 pub(crate) mod lod;
 #[path = "planet_shadow.rs"]
 pub mod shadow;
+#[path = "planet_ssr.rs"]
+mod ssr;
 #[path = "planet_terrain.rs"]
 pub(crate) mod terrain;
 #[path = "planet_topology.rs"]
@@ -256,7 +265,12 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<water::EyeWaterState>::default(),
             ExtractResourcePlugin::<PlanetRenderFrame>::default(),
             ExtractComponentPlugin::<PlanetSurface>::default(),
+            ExtractResourcePlugin::<bounce::BounceField>::default(),
+            ExtractResourcePlugin::<bounce::LampBakeField>::default(),
         ))
+        .init_resource::<bounce::BounceField>()
+        .init_resource::<bounce::LampBakeField>()
+        .add_systems(Update, (bounce::update_bounce, bounce::update_lamp_bake))
         .init_resource::<PlanetClock>()
         .init_resource::<PlanetRenderFrame>()
         .init_resource::<lod::LodRefresh>()
@@ -288,6 +302,7 @@ impl Plugin for PlanetPlugin {
                 ),
             );
         water::build(render_app);
+        ssr::build(render_app);
         let mut graph = render_app.world_mut().resource_mut::<RenderGraph>();
         graph.add_node(PlanetComputeLabel, PlanetComputeNode::default());
         graph.add_node_edge(PlanetComputeLabel, bevy::render::graph::CameraDriverLabel);
@@ -589,6 +604,150 @@ struct PlanetParams {
     anchor: Vec4,
     bands_in: Vec4,
     bands_prev_in: Vec4,
+    // `lighting-model`: x one for the new model (L1, L2), yzw spare.
+    light: Vec4,
+    // The sky's light from all round (L2), nine SH coefficients for a clear
+    // sky then nine for a full deck, in the local frame of the player's sun
+    // elevation (`pbd_core::sky_light`); a fragment mixes them by the cover
+    // over it and reads them in its own up-and-sun frame.
+    sky_sh: [Vec4; 18],
+    // The new wet film (`lighting-model`, wet ground): roughness wet and in a
+    // puddle, how bright a lamp's highlight is, and one while the rain rings
+    // follow the rain's intensity (the new model).
+    wet: Vec4,
+    // The lights nearest the camera, planet frame, w the level 0..1 (zero
+    // ends the list): the wet film's lamp highlights.
+    lamps: [Vec4; NEAR_LAMPS],
+    // L8: x one while a wet face's reflected ray walks the columns, y how far
+    // it walks, metres; L4: z the sun's bounce's strength now (zero: none,
+    // or not baked for this set yet).
+    reflect: Vec4,
+    // L7: x how far the newest lamp bake has faded in, 0..1; y one where the
+    // bake before it holds this set's slots, z one where the newest does; w
+    // which half of the buffer is the newest.
+    lamp_bake: Vec4,
+    // L8 (10.2): the frame the screen trace's history holds, its
+    // clip_from_body and its eye (w one once there is one).
+    ssr_clip: Mat4,
+    ssr_eye: Vec4,
+    // `wet-near-detail`: x how far from the eye rain's fine detail is drawn,
+    // metres; y the band it fades out over before that; zw spare.
+    rain_near: Vec4,
+}
+
+/// L7: the lamp bake's cross-fade, as `PlanetParams::lamp_bake` carries it.
+fn lamp_bake_state(
+    lighting: &crate::config::LightingSettings,
+    planet: &PlanetGpu,
+    fine: Option<&lod::PlanetFine>,
+    now_s: f32,
+) -> Vec4 {
+    let Some(fine) = fine else {
+        return Vec4::ZERO;
+    };
+    if !lighting.lamp_bake_on() {
+        return Vec4::ZERO;
+    }
+    let valid = |half: usize| {
+        planet.lamp_halves[half].is_some_and(|(_, anchor)| anchor.distance(fine.set.anchor) < 1e-3)
+    };
+    let new = planet.lamp_new;
+    Vec4::new(
+        ((now_s - planet.lamp_landed_s) / 0.5).clamp(0.0, 1.0),
+        if valid(1 - new) { 1.0 } else { 0.0 },
+        if valid(new) { 1.0 } else { 0.0 },
+        new as f32,
+    )
+}
+
+/// L4: how strongly the bounce is drawn: none where the bake held is for a
+/// set laid round another anchor, faded in over half a second after a bake
+/// for a new anchor lands, and at full strength otherwise.
+fn bounce_gain(
+    lighting: &crate::config::LightingSettings,
+    fine: Option<&lod::PlanetFine>,
+    field: Option<&bounce::BounceField>,
+    now_s: f32,
+) -> f32 {
+    let (Some(fine), Some(field)) = (fine, field) else {
+        return 0.0;
+    };
+    if !lighting.bounce_on()
+        || field.gpu.is_empty()
+        || fine.set.anchor.distance(field.anchor) > 1e-3
+    {
+        return 0.0;
+    }
+    let fade = if field.fades {
+        ((now_s - field.landed_s) / 0.5).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    lighting.bounce_strength * fade
+}
+
+/// How many lights near the camera the terrain is told of.
+pub(crate) const NEAR_LAMPS: usize = 8;
+
+/// The lights of the column tier nearest `camera` (planet frame), nearest
+/// first, within `reach` metres: the field's lamps, not its glowing flowers.
+pub(crate) fn near_lamps(
+    tier: &column::ColumnTier,
+    camera: Vec3,
+    reach: f32,
+) -> [Vec4; NEAR_LAMPS] {
+    let mut found: Vec<(f32, Vec4)> = tier
+        .lamps()
+        .iter()
+        .filter(|l| l.level > pbd_core::flora::GLOW_FLOWER_LEVEL)
+        .filter_map(|l| {
+            let at = l.direction * (PLANET_RADIUS + l.altitude);
+            let d = at.distance_squared(camera);
+            (d < reach * reach)
+                .then(|| (d, at.extend(l.level as f32 / pbd_core::light::MAX as f32)))
+        })
+        .collect();
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut out = [Vec4::ZERO; NEAR_LAMPS];
+    for (slot, (_, lamp)) in out.iter_mut().zip(found) {
+        *slot = lamp;
+    }
+    out
+}
+
+/// The sky's light (`lighting-model` L2) for a sun at elevation sine `e`: a
+/// clear sky's nine coefficients, then a full deck's. The ground under each
+/// is lit by the sun that gets through it (`1 - 0.85 cover`, the mockup's).
+///
+/// Read off a table built once (513 elevations, each a projection of a few
+/// hundred sky samples, about a tenth of a second in all) and interpolated:
+/// the sun's elevation where the camera is changes every frame in flight,
+/// and projecting per call cost two projections a frame on two threads.
+pub(crate) fn sky_sh_pair(e: f32) -> [Vec4; 18] {
+    use std::sync::OnceLock;
+    const N: usize = 512;
+    static TABLE: OnceLock<Vec<[Vec4; 18]>> = OnceLock::new();
+    let table = TABLE.get_or_init(|| {
+        (0..=N)
+            .map(|k| {
+                let e = -1.0 + 2.0 * k as f32 / N as f32;
+                let sun = pbd_core::sky_light::sun_air(e);
+                let mut out = [Vec4::ZERO; 18];
+                for (half, cover) in [0.0f32, 1.0].into_iter().enumerate() {
+                    let dim = 1.0 - 0.85 * cover;
+                    let c = pbd_core::sky_light::sky_sh(e, cover, sun.map(|v| v * dim));
+                    for (i, v) in c.iter().enumerate() {
+                        out[half * 9 + i] = Vec3::from_array(*v).extend(0.0);
+                    }
+                }
+                out
+            })
+            .collect()
+    });
+    let x = (e.clamp(-1.0, 1.0) + 1.0) * 0.5 * N as f32;
+    let k = (x.floor() as usize).min(N - 1);
+    let t = x - k as f32;
+    std::array::from_fn(|i| table[k][i].lerp(table[k + 1][i], t))
 }
 
 /// The eight biome slots, in `Biome` order, packed two vec4s wide for the
@@ -627,6 +786,26 @@ struct PlanetGpu {
     /// Every layer's render code, per column tier slot: what a column-pass
     /// face wears. `ColumnTier::gpu_materials` packs it.
     materials: Buffer,
+    /// Every column tier slot's unit direction (w spare): what the reflected
+    /// ray's walk over the columns steps from one cell to the next by
+    /// (`lighting-model` L8). `ColumnTier::gpu_centres` packs it.
+    centres: Buffer,
+    /// L4: the sun's bounce over the tier (`planet_bounce.rs`): per slot the
+    /// base layer of its window, then its words; and which bake it holds.
+    bounce: Buffer,
+    bounce_version: u64,
+    /// L7: the lamp bake, two halves (`planet_bounce::lamp_half_words` each):
+    /// the newest bake, and the one before it that it cross-fades from. Per
+    /// half the versions and the anchor it was baked for; which half is the
+    /// newest, and when it landed.
+    lamp_bake: Buffer,
+    /// L8 (10.2): the screen trace's history (`planet_ssr.rs`).
+    #[allow(dead_code)]
+    ssr: Texture,
+    ssr_view: TextureView,
+    lamp_halves: [Option<((u64, u64), Vec3)>; 2],
+    lamp_new: usize,
+    lamp_landed_s: f32,
     /// Record slots in the buffer: the base then four fine regions.
     slots: u32,
     base_count: u32,
@@ -676,6 +855,13 @@ struct PlanetViewGpu {
     fade_from: Vec3,
     last: std::time::Instant,
     last_camera: Vec3,
+    /// The frame's clip_from_body: next frame's screen trace reads the
+    /// history this frame leaves with it.
+    last_clip: Mat4,
+    /// What this frame's screen trace reprojects with (the history's frame),
+    /// for the sea's trace as well as the terrain's.
+    ssr_clip: Mat4,
+    ssr_eye: Vec4,
 }
 
 /// The slowest the fade centre catches up with the camera after a landing,
@@ -747,6 +933,25 @@ fn upload_planet(
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    let bounce = device.create_buffer(&BufferDescriptor {
+        label: Some("Persistent planet sun bounce for the column tier"),
+        size: column::COLUMN_CAPACITY as u64 * (1 + pbd_core::bounce::WORDS as u64) * 4,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let (ssr, ssr_view) = ssr::create_texture(&device);
+    let lamp_bake = device.create_buffer(&BufferDescriptor {
+        label: Some("Persistent planet lamp bake for the column tier, two halves"),
+        size: 2 * bounce::lamp_half_words(column::COLUMN_CAPACITY as usize) as u64 * 4,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let centres = device.create_buffer(&BufferDescriptor {
+        label: Some("Persistent planet voxel column centres for the column tier"),
+        size: column::COLUMN_CAPACITY as u64 * 16,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
     // Zero-initialised: every run word is the absent one, so a slot nothing has
     // written draws no face at all.
     let columns = device.create_buffer(&BufferDescriptor {
@@ -758,6 +963,15 @@ fn upload_planet(
     commands.insert_resource(PlanetGpu {
         light,
         materials,
+        centres,
+        bounce,
+        bounce_version: u64::MAX,
+        lamp_bake,
+        ssr,
+        ssr_view,
+        lamp_halves: [None, None],
+        lamp_new: 0,
+        lamp_landed_s: 0.0,
         cells,
         columns,
         slots,
@@ -777,10 +991,41 @@ fn upload_fine(
     fine: Option<Res<lod::PlanetFine>>,
     planet: Option<ResMut<PlanetGpu>>,
     queue: Res<RenderQueue>,
+    bounce: Option<Res<bounce::BounceField>>,
+    lamps: Option<Res<bounce::LampBakeField>>,
+    clock: Res<PlanetClock>,
 ) {
     let (Some(fine), Some(mut planet)) = (fine, planet) else {
         return;
     };
+    // L4: a new bake of the bounce goes up whenever one lands.
+    if let Some(bounce) = bounce
+        && bounce.version != planet.bounce_version
+        && !bounce.gpu.is_empty()
+    {
+        let room = planet.bounce.size() as usize / 4;
+        let words = &bounce.gpu[..bounce.gpu.len().min(room)];
+        queue.write_buffer(&planet.bounce, 0, bytemuck::cast_slice(words));
+        planet.bounce_version = bounce.version;
+    }
+    // L7: a new lamp bake goes into the older half, and the shader fades to
+    // it from the other over half a second.
+    if let Some(lamps) = lamps
+        && !lamps.gpu.is_empty()
+        && planet.lamp_halves[planet.lamp_new].map(|h| h.0) != Some(lamps.version)
+    {
+        let half = 1 - planet.lamp_new;
+        let words = bounce::lamp_half_words(column::COLUMN_CAPACITY as usize);
+        let data = &lamps.gpu[..lamps.gpu.len().min(words)];
+        queue.write_buffer(
+            &planet.lamp_bake,
+            (half * words * 4) as u64,
+            bytemuck::cast_slice(data),
+        );
+        planet.lamp_halves[half] = Some((lamps.version, lamps.anchor));
+        planet.lamp_new = half;
+        planet.lamp_landed_s = clock.0;
+    }
     if planet.uploaded == fine.version {
         return;
     }
@@ -809,6 +1054,8 @@ fn upload_fine(
         // layer is a placed stone wearing the earth that was there before.
         let materials = fine.set.columns.gpu_materials();
         queue.write_buffer(&planet.materials, 0, bytemuck::cast_slice(&materials));
+        let centres = fine.set.columns.gpu_centres();
+        queue.write_buffer(&planet.centres, 0, bytemuck::cast_slice(&centres));
     }
     planet.uploaded = fine.version;
     let old = planet.lod;
@@ -864,6 +1111,10 @@ fn draw_layout() -> BindGroupLayoutDescriptor {
                 ),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(16)),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
+                texture_2d(TextureSampleType::Float { filterable: false }),
             ),
         ),
     )
@@ -978,6 +1229,11 @@ pub(crate) struct Tunables<'w> {
     weather: Res<'w, crate::config::WeatherSettings>,
     scatter: Res<'w, crate::config::ScatterSettings>,
     columns: Res<'w, crate::config::ColumnSettings>,
+    lighting: Res<'w, crate::config::LightingSettings>,
+    /// The fine set, for the lights near the camera (`lighting-model`).
+    fine: Option<Res<'w, lod::PlanetFine>>,
+    /// L4: the bounce baked for it.
+    bounce: Option<Res<'w, bounce::BounceField>>,
     /// Whether an overlay is showing: the map hides the clouds, and so their
     /// shadows.
     maps: Res<'w, weather_maps::WeatherMapsNow>,
@@ -1004,6 +1260,7 @@ fn prepare_views(
     let weather_settings = &tunables.weather;
     let scatter = &tunables.scatter;
     let columns = &tunables.columns;
+    let lighting = &tunables.lighting;
     let Some(planet) = planet else {
         return;
     };
@@ -1184,8 +1441,48 @@ fn prepare_views(
             anchor: anchor.extend(0.0),
             bands_in: lod.bands_in,
             bands_prev_in: prev.bands_in,
+            light: Vec4::new(
+                if lighting.new_model_on() { 1.0 } else { 0.0 },
+                lighting.lamp_glow,
+                lighting.shadow_spread(),
+                lighting.shadow_cover_soften,
+            ),
+            sky_sh: sky_sh_pair(camera_position.normalize_or(Vec3::Y).dot(sun.direction())),
+            wet: Vec4::new(
+                w.rain_wet_roughness,
+                w.rain_puddle_roughness,
+                w.rain_lamp_specular,
+                if lighting.new_model_on() { 1.0 } else { 0.0 },
+            ),
+            lamps: tunables
+                .fine
+                .as_ref()
+                .map(|fine| near_lamps(&fine.set.columns, camera_position, 32.0))
+                .unwrap_or([Vec4::ZERO; NEAR_LAMPS]),
+            reflect: Vec4::new(
+                if lighting.reflections_on() { 1.0 } else { 0.0 },
+                lighting.reflection_reach_m,
+                bounce_gain(
+                    lighting,
+                    tunables.fine.as_deref(),
+                    tunables.bounce.as_deref(),
+                    clock.0,
+                ),
+                0.0,
+            ),
+            lamp_bake: lamp_bake_state(lighting, &planet, tunables.fine.as_deref(), clock.0),
+            ssr_clip: existing
+                .as_ref()
+                .map_or(Mat4::IDENTITY, |gpu| gpu.last_clip),
+            rain_near: Vec4::new(w.rain_detail_reach_m, w.rain_detail_fade_m, 0.0, 0.0),
+            ssr_eye: existing
+                .as_ref()
+                .map_or(Vec4::ZERO, |gpu| gpu.last_camera.extend(1.0)),
         };
+        let (ssr_clip, ssr_eye) = (params.ssr_clip, params.ssr_eye);
         if let Some(mut gpu) = existing {
+            gpu.ssr_clip = ssr_clip;
+            gpu.ssr_eye = ssr_eye;
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
             gpu.centre = centre;
@@ -1193,6 +1490,7 @@ fn prepare_views(
             gpu.fade_from = fade_from;
             gpu.last = now;
             gpu.last_camera = camera_position;
+            gpu.last_clip = clip_from_body;
             continue;
         }
         let mut uniform = UniformBuffer::from(params);
@@ -1249,6 +1547,10 @@ fn prepare_views(
                     planet.columns.as_entire_binding(),
                     planet.light.as_entire_binding(),
                     planet.materials.as_entire_binding(),
+                    planet.centres.as_entire_binding(),
+                    planet.bounce.as_entire_binding(),
+                    planet.lamp_bake.as_entire_binding(),
+                    &planet.ssr_view,
                 )),
             )
         };
@@ -1288,6 +1590,9 @@ fn prepare_views(
             fade_from,
             last: now,
             last_camera: camera_position,
+            last_clip: clip_from_body,
+            ssr_clip,
+            ssr_eye,
         });
     }
 }
@@ -1413,10 +1718,10 @@ mod pipeline_tests {
             );
         }
         for (layout, read_only_bindings) in [
-            // 5 is the voxel sky light and 6 the layer materials: read
-            // only, like the cells, the visible list and the column records
-            // they are sampled beside.
-            (draw_layout(), &[1, 2, 4, 5, 6][..]),
+            // 5 is the voxel sky light, 6 the layer materials, 7 the column
+            // centres, 8 the sun's bounce and 9 the lamp bake: read only, like the cells, the visible list and
+            // the column records they are sampled beside.
+            (draw_layout(), &[1, 2, 4, 5, 6, 7, 8, 9][..]),
             (compute_layout(), &[1][..]),
         ] {
             for entry in &layout.entries {

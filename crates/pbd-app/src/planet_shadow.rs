@@ -543,6 +543,10 @@ fn prepare_shadows(
                         planet.columns.as_entire_binding(),
                         planet.light.as_entire_binding(),
                         planet.materials.as_entire_binding(),
+                        planet.centres.as_entire_binding(),
+                        planet.bounce.as_entire_binding(),
+                        planet.lamp_bake.as_entire_binding(),
+                        &planet.ssr_view,
                     )),
                 )
             };

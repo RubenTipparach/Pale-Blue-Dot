@@ -67,6 +67,11 @@ def obs_running() -> bool:
                               "/FI", "STATUS ne UNKNOWN"],
                              capture_output=True, text=True).stdout
         return "obs64.exe" in out
+    if sys.platform == "darwin":
+        # The Mac's process is `OBS`, inside its app bundle: `pgrep -x obs`
+        # never saw it, so a second OBS could be started beside a running one.
+        return subprocess.run(["pgrep", "-f", "OBS.app/Contents/MacOS/OBS"],
+                              capture_output=True).returncode == 0
     return subprocess.run(["pgrep", "-x", "obs"], capture_output=True).returncode == 0
 
 
@@ -87,9 +92,14 @@ def clear_stale_crash_markers():
 def close_obs():
     """Close OBS the way a user would, so it writes its config and exits
     cleanly; force it only as a last resort, then clear what that leaves."""
-    polite, force = ((["taskkill", "/IM", "obs64.exe"], ["taskkill", "/F", "/IM", "obs64.exe"])
-                     if sys.platform == "win32" else
-                     (["pkill", "-x", "obs"], ["pkill", "-9", "-x", "obs"]))
+    # The Mac's process is `OBS`; `pkill -x obs` matched nothing and left it
+    # running. Quit it as an app first, which is what a user does.
+    if sys.platform == "win32":
+        polite, force = (["taskkill", "/IM", "obs64.exe"], ["taskkill", "/F", "/IM", "obs64.exe"])
+    elif sys.platform == "darwin":
+        polite, force = (["osascript", "-e", 'quit app "OBS"'], ["pkill", "-9", "-x", "OBS"])
+    else:
+        polite, force = (["pkill", "-x", "obs"], ["pkill", "-9", "-x", "obs"])
     subprocess.run(polite, capture_output=True)
     for _ in range(40):
         if not obs_running():
@@ -153,10 +163,9 @@ class ObsSession:
             clear_stale_crash_markers()
             # A normal window, not --minimize-to-tray: a tray-only OBS cannot be
             # closed cleanly, and an unclean exit brings the Safe Mode prompt.
-            # --multi: an OBS that exited uncleanly can linger in the process
-            # list holding its single-instance lock, and a new one then stops at
-            # "OBS is already running". No running OBS was found above.
-            subprocess.Popen([str(exe), "--disable-shutdown-check", "--multi"], cwd=str(exe.parent))
+            # Never --multi (owner, 2026-10-28: "only 1 obs instance allowed"):
+            # a second OBS is exactly what that flag allows.
+            subprocess.Popen([str(exe), "--disable-shutdown-check"], cwd=str(exe.parent))
             self.started_obs = True
         for _ in range(180):
             try:
@@ -243,14 +252,28 @@ def blank_lead(ff: str, video: str, look_s: float = 60.0) -> float:
     return 0.0
 
 
-def find_window(c, pattern_exe: str | None, pattern_title: str | None, timeout: float) -> str:
-    """The window_capture item for the target window, e.g.
-    'Title:WindowClass:app.exe'."""
+def find_window(c, pattern_exe: str | None, pattern_title: str | None, timeout: float):
+    """The window_capture item for the target window: on Windows a string,
+    e.g. 'Title:WindowClass:app.exe'; on a Mac the window's number, its name
+    '[app] title'."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         items = c.get_input_properties_list_property_items(SOURCE, "window").property_items
+        if os.environ.get("OBS_RECORD_LIST_WINDOWS"):
+            print("windows:", [item.get("itemName") for item in items], flush=True)
         for item in items:
             value = item["itemValue"]
+            if not isinstance(value, str):
+                # The Mac names a window "[app] title": match the app in its
+                # brackets only. A substring anywhere matched a terminal whose
+                # title held the program's command line, and filmed that.
+                name = str(item.get("itemName", "")).lower()
+                app = pattern_exe.lower().removesuffix(".exe") if pattern_exe else None
+                if app and name.startswith("[" + app + "]"):
+                    return value
+                if pattern_title and pattern_title.lower() in name:
+                    return value
+                continue
             if pattern_exe and value.lower().endswith(":" + pattern_exe.lower()):
                 return value
             if pattern_title and pattern_title.lower() in value.lower():
