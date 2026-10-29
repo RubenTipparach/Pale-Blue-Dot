@@ -855,6 +855,10 @@ struct PlanetViewGpu {
     /// The frame's clip_from_body: next frame's screen trace reads the
     /// history this frame leaves with it.
     last_clip: Mat4,
+    /// What this frame's screen trace reprojects with (the history's frame),
+    /// for the sea's trace as well as the terrain's.
+    ssr_clip: Mat4,
+    ssr_eye: Vec4,
 }
 
 /// The slowest the fade centre catches up with the camera after a landing,
@@ -1471,7 +1475,10 @@ fn prepare_views(
                 .as_ref()
                 .map_or(Vec4::ZERO, |gpu| gpu.last_camera.extend(1.0)),
         };
+        let (ssr_clip, ssr_eye) = (params.ssr_clip, params.ssr_eye);
         if let Some(mut gpu) = existing {
+            gpu.ssr_clip = ssr_clip;
+            gpu.ssr_eye = ssr_eye;
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
             gpu.centre = centre;
@@ -1580,6 +1587,8 @@ fn prepare_views(
             last: now,
             last_camera: camera_position,
             last_clip: clip_from_body,
+            ssr_clip,
+            ssr_eye,
         });
     }
 }

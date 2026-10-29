@@ -149,6 +149,11 @@ pub(super) struct WaterView {
     rain_sky: Vec4,
     rain_sun: Vec4,
     rain_lamps: [Vec4; super::NEAR_LAMPS],
+    /// `lighting-model` L8 (10.3): the screen trace's history frame, as the
+    /// terrain's (`PlanetViewGpu::ssr_clip`), so the sea mirrors the land,
+    /// the houses and the trees as the wet ground does.
+    ssr_clip: Mat4,
+    ssr_eye: Vec4,
 }
 
 /// Where the shells' fall wraps, m: a multiple of every shell's streak cycle
@@ -375,6 +380,9 @@ struct WaterPipelines {
     /// The rain's fourth group (`lighting-model`, the rain fog lit): the sun's
     /// cascades, their comparison sampler and where each stands.
     rain_light_layout: BindGroupLayoutDescriptor,
+    /// The compose and the cap's fourth group (`lighting-model` L8): the
+    /// screen trace's history.
+    ssr_layout: BindGroupLayoutDescriptor,
     sampler: Sampler,
     cells: TextureView,
     cells_sampler: Sampler,
@@ -452,6 +460,19 @@ fn puff_layout() -> BindGroupLayoutDescriptor {
                     false,
                     NonZeroU64::new(size_of::<super::cloud_puffs::PuffInstance>() as u64),
                 ),
+            ),),
+        ),
+    )
+}
+
+fn ssr_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "water: the screen trace's history",
+        &BindGroupLayoutEntries::with_indices(
+            ShaderStages::FRAGMENT,
+            ((
+                14,
+                texture_2d(TextureSampleType::Float { filterable: false }),
             ),),
         ),
     )
@@ -611,6 +632,7 @@ fn initialize_pipelines(
         scene_layout_multisampled: scene_layout(true),
         history_layout: history_layout(),
         rain_light_layout: rain_light_layout(),
+        ssr_layout: ssr_layout(),
         composite_layout: composite_layout(),
         resolve_layout: resolve_layout(),
         mist_layout: mist_layout(),
@@ -765,6 +787,13 @@ impl SpecializedRenderPipeline for WaterPipelines {
                         Pass::CloudPuffs => self.puff_layout.clone(),
                         _ => self.composite_layout.clone(),
                     },
+                ]
+            } else if matches!(key.pass, Pass::Cap | Pass::Compose) {
+                vec![
+                    self.data_layout.clone(),
+                    scene,
+                    super::weather_maps::layout(),
+                    self.ssr_layout.clone(),
                 ]
             } else if key.pass == Pass::Rain {
                 vec![
@@ -1043,7 +1072,7 @@ fn prepare_water_views(
     let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
     // `lighting-model`: under the new model the rain's rings on the water are
     // as many as it is raining (the terrain's own rule), not one a cell.
-    let rings_follow_rain = lighting.is_some_and(|l| l.new_model_on());
+    let rings_follow_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
     let (overlay, overlay_flow) =
         crate::overlay::overlay_lanes(maps.overlay_kind, &weather_settings);
     let overlay_needed = maps.overlay_kind.is_some();
@@ -1291,6 +1320,12 @@ fn prepare_water_views(
                 .filter(|_| lit_rain)
                 .map(|fine| super::near_lamps(&fine.set.columns, camera, 32.0))
                 .unwrap_or([Vec4::ZERO; super::NEAR_LAMPS]),
+            ssr_clip: planet_view.ssr_clip,
+            ssr_eye: if lighting.as_ref().is_some_and(|l| l.reflections_on()) {
+                planet_view.ssr_eye
+            } else {
+                Vec4::ZERO
+            },
         };
         // The puffs under the shown weather, far to near from this eye
         // (`cloud-puffs`).
@@ -1659,6 +1694,15 @@ impl ViewNode for WaterCompositeNode {
                 &BindGroupEntries::sequential((source, depth.view(), &pipelines.sampler)),
             )
         };
+        // The screen trace's history (`lighting-model` L8), for the cap.
+        let Some(planet_gpu) = world.get_resource::<PlanetGpu>() else {
+            return Ok(());
+        };
+        let ssr_group = device.create_bind_group(
+            Some("water: the screen trace's history"),
+            &cache.get_bind_group_layout(&pipelines.ssr_layout),
+            &BindGroupEntries::with_indices(((14, &planet_gpu.ssr_view),)),
+        );
         // Compose then the cap, both reading the scene and writing the other
         // main texture. Compose touches every pixel, so nothing needs clearing.
         {
@@ -1691,6 +1735,7 @@ impl ViewNode for WaterCompositeNode {
             pass.set_bind_group(0, &water.data_bind_group, &[]);
             pass.set_bind_group(1, &scene, &[]);
             pass.set_bind_group(2, &maps.bind_group, &[]);
+            pass.set_bind_group(3, &ssr_group, &[]);
             let span = diagnostics.pass_span(&mut pass, "water_compose");
             pass.set_render_pipeline(compose);
             pass.draw(0..3, 0..1);
@@ -2089,7 +2134,7 @@ mod tests {
 
     #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
-        // Three mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
+        // Four mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
         let shader = include_str!("../../../assets/shaders/water.wgsl");
         let start = shader.find("struct WaterView {").unwrap();
@@ -2098,7 +2143,7 @@ mod tests {
         // The lit rain's lamps are one array of eight lanes (`lighting-model`).
         let lamps = block.matches("array<vec4<f32>, 8>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * lamps;
-        assert_eq!((mat4, vec4, lamps), (3, 59, 1));
+        assert_eq!((mat4, vec4, lamps), (4, 60, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");

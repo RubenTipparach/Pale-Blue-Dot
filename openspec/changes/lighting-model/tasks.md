@@ -67,10 +67,14 @@
 
 ## 6. L5
 
-- [ ] 6.1 Reflection cube with a face a frame, prefiltered, read by water
-  and wet ground. Not built: L8 replaced it on the ground (the owner's halo),
-  and what is left of it (the ship's hull, glass) needs the terrain pass to
-  draw a cube's faces as extra views. Next.
+- [x] 6.1 What a PBR surface mirrors (`field_lit.wgsl`, `sky_specular`): the
+  sky's radiance along the reflected ray (L2, un-convolved), blurred toward
+  its irradiance as the surface roughens, through Fresnel, shut out where the
+  field says the sky does not reach; a metal takes no diffuse light. As
+  built, no cube: what was left of the probe after L8 took the ground is the
+  ship's hull, drops and fish, and rendering the land into a cube means the
+  whole planet pipeline in extra views. Those surfaces mirror the sky, not
+  the land (recommendation taken, ask only with screenshots).
 - [x] 6.2 Movers take the SH plus the field: the held tool, drops, fish,
   vehicles and towns all draw with `field_lit.wgsl`, which reads L2's SH, the
   field, and now L3's soft shadows. (There are no townsfolk yet.)
@@ -137,9 +141,8 @@
   composite (`planet_ssr.rs`, a fixed 960 x 600 history, so nothing rebinds
   on resize), reprojected with that frame's matrix; loads in the loop, the
   home-pixel rule and the crossing rule.
-- [ ] 10.3 Wet ground and the sea read it; the key light's glint is hidden
-  where the reflection finds a surface. Done for wet ground (and the lamp
-  highlights scale down where it hits); the sea keeps its own reflection.
-  Capture `game-l8-desert-rain-10-*`. Captures by the house at noon, at
-  golden hour toward the sun after rain, and in a night storm. A/B.
+- [x] 10.3 Wet ground and the sea read it; the key light's glint is hidden
+  where the reflection finds a surface. The sea traces the same history
+  (`sea_ssr` in `water.wgsl`, the compose and cap's group 3) with a longer
+  reach. Captures `game-l8-desert-rain-10-*`, `game-l8-sea-shore-*`.
 

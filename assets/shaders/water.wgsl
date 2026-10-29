@@ -112,6 +112,10 @@ struct WaterView {
     rain_sky: vec4<f32>,
     rain_sun: vec4<f32>,
     rain_lamps: array<vec4<f32>, 8>,
+    // `lighting-model` L8 (10.3): the screen trace history's clip_from_body
+    // and its eye (w one once there is one, and reflections are on).
+    ssr_clip: mat4x4<f32>,
+    ssr_eye: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -532,7 +536,13 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let sun_elevation = dot(radial,sun_direction);
     let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
     let day_sky = mix(view.horizon_color.rgb,view.zenith_color.rgb,reflection_height);
-    let reflected = mix(night_sky(reflected_ray,camera_body,sun_direction),day_sky,daylight);
+    var reflected = mix(night_sky(reflected_ray,camera_body,sun_direction),day_sky,daylight);
+    // What the reflected ray really meets on the screen: the shore, a house,
+    // the trees (`lighting-model` L8). Only where the mirror shows.
+    if (fresnel > 0.02) {
+        let hit = sea_ssr(in.body_position + radial*0.05, reflected_ray);
+        reflected = mix(reflected, hit.rgb, hit.a);
+    }
     let transmitted = mix(view.deep_color.rgb,scene,exp(-absorption*path_length));
     let crest = smoothstep(view.foam_crest.x,max(view.foam_crest.y,view.foam_crest.x+1e-4),height)*view.foam_crest.z;
     let slope = smoothstep(view.foam_slope.x,max(view.foam_slope.y,view.foam_slope.x+1e-4),raw_slope)*view.foam_slope.z;
@@ -554,6 +564,41 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // The clouds over this water are the clouds pass's, drawn after the sheet
     // over everything against depth.
     return vec4<f32>(fogged,1.);
+}
+
+// ---- The sea's screen trace (`lighting-model` L8, 10.3) ----------------------
+// The terrain's `ssr_trace`, over the same history: last frame's colour and
+// distances, reprojected. The sea's ray is in the body frame.
+fn sea_ssr_uv(p: vec3<f32>) -> vec3<f32> {
+    let clip = view.ssr_clip*vec4<f32>(p, 1.0);
+    if (clip.w <= 1e-4) { return vec3<f32>(-1.0); }
+    return vec3<f32>(clip.x/clip.w*0.5 + 0.5, 0.5 - clip.y/clip.w*0.5, 1.0);
+}
+fn sea_ssr(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
+    if (view.ssr_eye.w < 0.5) { return vec4<f32>(0.0); }
+    let size = vec2<f32>(textureDimensions(ssr_history));
+    let home = sea_ssr_uv(origin).xy;
+    var t = 0.1;
+    var behind_before = -1.0;
+    let reach = 120.0;
+    for (var i = 0u; i < 32u; i++) {
+        t += 0.1 + t*0.14;
+        if (t > reach) { break; }
+        let p = origin + dir*t;
+        let at = sea_ssr_uv(p);
+        if (at.z < 0.0 || any(at.xy < vec2<f32>(0.0)) || any(at.xy > vec2<f32>(1.0))) { break; }
+        if (length((at.xy - home)*size) < 3.0) { continue; }
+        let texel = textureLoad(ssr_history, vec2<i32>(at.xy*size), 0);
+        if (texel.w <= 0.0) { break; }
+        let behind = distance(p, view.ssr_eye.xyz) - texel.w;
+        let thickness = clamp(0.4 + 0.08*t, 0.4, 3.0);
+        if (behind > 0.0 && behind_before < 0.0 && behind < thickness) {
+            let edge = min(min(at.x, 1.0 - at.x), min(at.y, 1.0 - at.y));
+            return vec4<f32>(texel.rgb, smoothstep(0.0, 0.08, edge)*(1.0 - smoothstep(0.75*reach, reach, t)));
+        }
+        behind_before = behind;
+    }
+    return vec4<f32>(0.0);
 }
 
 // ---- The composite: compose before the cap, lens after it ------------------
@@ -1494,6 +1539,7 @@ fn rain_shell_streak(x: f32, y: f32, shell: f32, snow: bool) -> f32 {
 // (Henyey-Greenstein) where the cascades say it reaches, so trees and eaves
 // cast shafts through it, and every lamp near the eye by the closed form of a
 // point light's in-scatter along the stretch, so a lantern glows in the rain.
+@group(3) @binding(14) var ssr_history: texture_2d<f32>;
 @group(3) @binding(11) var rain_sun_map: texture_depth_2d_array;
 @group(3) @binding(12) var rain_sun_cmp: sampler_comparison;
 @group(3) @binding(13) var<storage, read> rain_cascades: SunCascades;

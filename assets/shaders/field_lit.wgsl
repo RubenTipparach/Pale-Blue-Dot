@@ -170,6 +170,41 @@ fn sun_air(e: f32) -> vec3<f32> {
     let t = exp(-(SKY_TAU + SKY_TAU_M)*airmass(e));
     return t/SUN_NORM*SUN_NOW*smoothstep(-0.02, 0.01, e);
 }
+// `lighting-model` L5: the sky's RADIANCE toward a world direction, the same
+// nine coefficients with each band un-convolved (1, 3/2, 4): what a metal or
+// a pane mirrors. Under the horizon it sees the ground, dimmed.
+fn sky_radiance(d_world: vec3<f32>, up: vec3<f32>, sun: vec3<f32>, deck: f32) -> vec3<f32> {
+    let below = dot(d_world, up) < 0.0;
+    let d = normalize(d_world - up*min(dot(d_world, up), 0.0));
+    var sx = sun - up*dot(sun, up);
+    let l = length(sx);
+    let ax = select(normalize(cross(up, vec3(0.0, 0.0, 1.0)) + vec3(1e-4, 0.0, 0.0)), sx/l, l > 1e-4);
+    let az = cross(ax, up);
+    let x = dot(d, ax); let y = dot(d, up); let z = dot(d, az);
+    let b = array<f32, 9>(0.282095, 1.5*0.488603*y, 1.5*0.488603*z, 1.5*0.488603*x,
+        4.0*1.092548*x*y, 4.0*1.092548*y*z, 4.0*0.315392*(3.0*z*z - 1.0), 4.0*1.092548*x*z,
+        4.0*0.546274*(x*x - y*y));
+    var e = vec3<f32>(0.0);
+    for (var k = 0u; k < 9u; k++) {
+        e += mix(field.sky_sh[k].xyz, field.sky_sh[k + 9u].xyz, deck)*b[k];
+    }
+    return max(e, vec3(0.0))*select(1.0, 0.35, below);
+}
+// L5: what a PBR surface mirrors, as the probe would give it: the sky's
+// radiance along the reflected ray, blurred toward the sky's light from all
+// round as the surface roughens, through Fresnel (Schlick, the roughness'
+// fall-off), shut out as far as the field says the sky does not reach.
+fn sky_specular(n: vec3<f32>, v: vec3<f32>, up: vec3<f32>, sun: vec3<f32>, deck: f32,
+                base: vec3<f32>, metallic: f32, roughness: f32, open: f32) -> vec3<f32> {
+    let r = reflect(-v, n);
+    let sharp = sky_radiance(r, up, sun, deck);
+    let soft = sky_irradiance(r, up, sun, deck);
+    let env = mix(sharp, soft, clamp(roughness*1.4, 0.0, 1.0));
+    let f0 = mix(vec3(0.04), base, metallic);
+    let nv = clamp(dot(n, v), 1e-3, 1.0);
+    let fresnel = f0 + (max(vec3(1.0 - roughness), f0) - f0)*pow(1.0 - nv, 5.0);
+    return env*fresnel*open;
+}
 fn sky_irradiance(n_world: vec3<f32>, up: vec3<f32>, sun: vec3<f32>, deck: f32) -> vec3<f32> {
     var sx = sun - up*dot(sun, up);
     let l = length(sx);
@@ -259,10 +294,18 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         // direct term is, and the rest is the albedo in the terrain's fill,
         // whose floor keeps a cave legible (`lamps-and-lanterns` decision 14).
         var ambient = base * SKY_FILL * max(AMBIENT_FLOOR, mix(NIGHT_FILL, 1.0, daylight) * sky);
+        var mirrored = vec3(0.0);
         if field.model.x > 0.5 {
-            ambient = base * max(sky_irradiance(n, up, sun, field.model.y) * sky, vec3(0.006, 0.008, 0.011));
+            // A metal takes no diffuse light: its colour is what it mirrors.
+            let metallic = pbr_input.material.metallic;
+            ambient = base * (1.0 - metallic)
+                * max(sky_irradiance(n, up, sun, field.model.y) * sky, vec3(0.006, 0.008, 0.011));
+            // L5: what it mirrors (the sky's own light; no probe of the land).
+            mirrored = sky_specular(n, pbr_input.V, up, sun, field.model.y, base, metallic,
+                pbr_input.material.perceptual_roughness, sky);
         }
-        out.color = vec4<f32>(out.color.rgb * sun_up + ambient * (1.0 - sun_up) + lamp, out.color.a);
+        out.color = vec4<f32>(out.color.rgb * sun_up + ambient * (1.0 - sun_up) + mirrored + lamp,
+            out.color.a);
     }
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif

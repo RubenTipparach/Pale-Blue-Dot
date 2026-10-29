@@ -386,7 +386,10 @@ for A/B runs). Where the game differs from the mockup:
   term, because the game has no moon key light yet.
 - **Bloom**: our own (`bloom.rs`), described under L6.
 - **L5**: the movers already read L2 and the field through `field_lit.wgsl`.
-  The reflection cube (6.1) is not built.
+  As the probe, a PBR surface mirrors the sky's radiance (L2), blurred by
+  its roughness, through Fresnel and the field's sky light. There is no cube
+  of the land: that would draw the planet pipeline again into extra views.
+- **The sea** traces the same screen history as wet ground.
 
 ## Order
 

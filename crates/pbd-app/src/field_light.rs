@@ -716,7 +716,7 @@ mod tests {
             ),
             "var ambient = base * SKY_FILL * max(AMBIENT_FLOOR, mix(NIGHT_FILL, 1.0, daylight) * sky);"
                 .to_string(),
-            "out.color.rgb * sun_up + ambient * (1.0 - sun_up) + lamp".to_string(),
+            "out.color.rgb * sun_up + ambient * (1.0 - sun_up) + mirrored + lamp".to_string(),
             "@binding(100) var<uniform> field: Field;".to_string(),
             // `cities-in-the-world` decision 7a: a building's own lights, as
             // many as the uniform carries, lit the mockup's way.
