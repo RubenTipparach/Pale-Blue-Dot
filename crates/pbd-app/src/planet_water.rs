@@ -1338,14 +1338,32 @@ fn prepare_water_views(
                 *sites = Some(super::cloud_puffs::PuffSites::new(spacing));
             }
             if let Some(sites) = sites.as_mut() {
-                sites.build(
+                let view = pbd_core::frustum::Planes::from_clip(clip_from_body);
+                let started = std::time::Instant::now();
+                let counts = sites.build(
                     &maps.from,
                     &maps.maps,
                     maps.t,
                     camera,
+                    Some(&view),
                     &weather_settings,
                     instances,
                 );
+                // The cull's measure (`puff-frustum-cull`): one line in 120
+                // frames, which `tools/frame_graph.py` lines up with the log.
+                static BUILDS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                if BUILDS
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    .is_multiple_of(120)
+                {
+                    info!(
+                        "PUFFS built {}, over the horizon {}, in view {}, build {:.2} ms",
+                        counts.built,
+                        counts.over_horizon,
+                        counts.in_view,
+                        started.elapsed().as_secs_f64() * 1e3
+                    );
+                }
             }
         }
         let puff_count = instances.len() as u32;

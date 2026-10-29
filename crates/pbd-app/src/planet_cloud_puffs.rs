@@ -12,6 +12,7 @@ use crate::sky::{CLOUD_RADIUS, CLOUD_THICKNESS};
 use bevy::prelude::*;
 use bytemuck::{Pod, Zeroable};
 use pbd_core::cloud_puffs::{self, Layer, Look, Puff, Site};
+use pbd_core::frustum::Planes;
 
 /// One puff as `PuffInstance` in `water.wgsl` reads it. 48 bytes.
 #[repr(C)]
@@ -67,22 +68,26 @@ impl PuffSites {
         self.spacing_m
     }
 
-    /// The puffs under the shown weather, sorted far to near from `eye`
+    /// The puffs under the shown weather that `view` can see (when given:
+    /// the frustum in body-local space), sorted far to near from `eye`
     /// (body-local), into `out`.
+    #[allow(clippy::too_many_arguments)]
     pub fn build(
         &mut self,
         from: &WeatherMaps,
         to: &WeatherMaps,
         t: f32,
         eye: Vec3,
+        view: Option<&Planes>,
         settings: &WeatherSettings,
         out: &mut Vec<PuffInstance>,
-    ) {
+    ) -> PuffCounts {
         out.clear();
         self.puffs.clear();
+        let mut counts = PuffCounts::default();
         let texels = 6 * MAP_SIZE * MAP_SIZE;
         if to.cloud.len() != texels {
-            return;
+            return counts;
         }
         let from = if from.cloud.len() == texels { from } else { to };
         let layer = Layer {
@@ -114,10 +119,20 @@ impl PuffSites {
             };
             cloud_puffs::puffs_at(site, look, &layer, &mut self.puffs);
         }
+        counts.built = self.puffs.len();
         // Past the horizon nothing of a puff shows (design 3b).
         let sea = crate::planet::PLANET_RADIUS;
         self.puffs
             .retain(|p| cloud_puffs::over_horizon(eye, p, sea));
+        counts.over_horizon = self.puffs.len();
+        // Nor outside the view: culled only when the box round every
+        // orientation of its billboard misses the frustum
+        // (`puff-frustum-cull`).
+        if let Some(view) = view {
+            self.puffs
+                .retain(|p| view.touches_box(p.centre, Vec3::splat(cloud_puffs::bound_radius(p))));
+        }
+        counts.in_view = self.puffs.len();
         // Far to near: the blend is "over", so the nearest is drawn last.
         let mut order: Vec<(f32, u32)> = self
             .puffs
@@ -131,7 +146,16 @@ impl PuffSites {
                 .iter()
                 .map(|&(_, i)| PuffInstance::from(&self.puffs[i as usize])),
         );
+        counts
     }
+}
+
+/// How many puffs one build made, kept past the horizon, and kept in view.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct PuffCounts {
+    pub built: usize,
+    pub over_horizon: usize,
+    pub in_view: usize,
 }
 
 /// The texels `direction` reads on a cube map of `size`, the inverse of
@@ -208,12 +232,12 @@ mod tests {
         };
         let eye = Vec3::Y * (CLOUD_RADIUS + 50.0);
         let mut out = Vec::new();
-        sites.build(&maps, &maps, 0.0, eye, &settings, &mut out);
+        sites.build(&maps, &maps, 0.0, eye, None, &settings, &mut out);
         assert!(out.is_empty(), "clear sky drew {}", out.len());
         for v in &mut maps.cloud {
             *v = [0.6, 0.2, 0.0, 30.0];
         }
-        sites.build(&maps, &maps, 0.0, eye, &settings, &mut out);
+        sites.build(&maps, &maps, 0.0, eye, None, &settings, &mut out);
         let share = out.len() as f32 / sites.sites.len() as f32;
         assert!(share > 0.5 && share < 0.75, "{share}");
         let d: Vec<f32> = out

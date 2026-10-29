@@ -16,6 +16,7 @@ pub mod fishing;
 pub mod flight;
 pub mod flora;
 pub mod frame;
+pub mod frustum;
 pub mod geo;
 pub mod gravity;
 pub mod hex;

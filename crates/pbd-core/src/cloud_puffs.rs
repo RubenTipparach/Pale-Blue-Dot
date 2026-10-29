@@ -210,6 +210,17 @@ pub fn over_horizon(eye: Vec3, puff: &Puff, sea_radius_m: f32) -> bool {
     angle <= horizon + puff.radius_across_m / sea_radius_m
 }
 
+/// How far any corner of `puff`'s billboard can lie from its centre, in
+/// every orientation the vertex stage turns it to (`cloud_puff_vertex`): its
+/// corners sit at `right * across +- up * h` on an orthonormal pair, with
+/// `h` between its radius up and its radius across. Grown by 1% and a metre
+/// against roundoff (`puff-frustum-cull`).
+pub fn bound_radius(puff: &Puff) -> f32 {
+    let across = puff.radius_across_m.abs();
+    let up = puff.radius_up_m.abs().max(across);
+    (across * across + up * up).sqrt() * 1.01 + 1.0
+}
+
 fn smoothstep(lo: f32, hi: f32, x: f32) -> f32 {
     let t = ((x - lo) / (hi - lo)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
@@ -392,6 +403,30 @@ mod tests {
         assert!(!over_horizon(orbit, &one(-Vec3::Y), sea));
         // Under the sea nothing is culled.
         assert!(over_horizon(Vec3::Y * 4_700.0, &one(-Vec3::Y), sea));
+    }
+
+    #[test]
+    fn every_billboard_corner_lies_inside_the_bound() {
+        let mut out = Vec::new();
+        for (i, site) in sites(4_800.0, 250.0).iter().take(400).enumerate() {
+            puffs_at(site, look(0.3 + (i % 7) as f32 * 0.1), &LAYER, &mut out);
+        }
+        assert!(!out.is_empty());
+        for (i, puff) in out.iter().enumerate() {
+            let bound = bound_radius(puff);
+            // The vertex stage's up runs from the radius up to the radius
+            // across as the view turns down onto the puff.
+            for k in [0.0f32, 0.3, 0.7, 1.0] {
+                let up = puff.radius_up_m + (puff.radius_across_m - puff.radius_up_m) * k * k;
+                let turn = i as f32 * 0.37 + k;
+                let right = Vec3::new(turn.cos(), 0.0, turn.sin());
+                let upward = Vec3::new(0.0, 1.0, 0.0);
+                for (x, y) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
+                    let corner = right * (x * puff.radius_across_m) + upward * (y * up);
+                    assert!(corner.length() < bound, "{} >= {bound}", corner.length());
+                }
+            }
+        }
     }
 
     #[test]
