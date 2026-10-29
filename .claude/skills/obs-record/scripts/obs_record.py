@@ -259,11 +259,17 @@ def find_window(c, pattern_exe: str | None, pattern_title: str | None, timeout: 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         items = c.get_input_properties_list_property_items(SOURCE, "window").property_items
+        if os.environ.get("OBS_RECORD_LIST_WINDOWS"):
+            print("windows:", [item.get("itemName") for item in items], flush=True)
         for item in items:
             value = item["itemValue"]
             if not isinstance(value, str):
+                # The Mac names a window "[app] title": match the app in its
+                # brackets only. A substring anywhere matched a terminal whose
+                # title held the program's command line, and filmed that.
                 name = str(item.get("itemName", "")).lower()
-                if pattern_exe and pattern_exe.lower().removesuffix(".exe") in name:
+                app = pattern_exe.lower().removesuffix(".exe") if pattern_exe else None
+                if app and name.startswith("[" + app + "]"):
                     return value
                 if pattern_title and pattern_title.lower() in name:
                     return value
