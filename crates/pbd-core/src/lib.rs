@@ -3,7 +3,9 @@
 
 pub mod aim;
 pub mod atmosphere;
+pub mod bounce;
 pub mod cell_key;
+pub mod cloud_puffs;
 pub mod column;
 pub mod daylight;
 pub mod dig;
@@ -19,6 +21,7 @@ pub mod gravity;
 pub mod hex;
 pub mod hexel;
 pub mod inventory;
+pub mod lamp_bake;
 pub mod light;
 pub mod map;
 pub mod orbit;
@@ -29,6 +32,7 @@ pub mod sea;
 pub mod settlement;
 pub mod shadow;
 pub mod sites;
+pub mod sky_light;
 pub mod terrain;
 pub mod topology;
 pub mod vehicle;

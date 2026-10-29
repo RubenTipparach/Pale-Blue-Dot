@@ -82,6 +82,11 @@
     rain_mirror_strength: 1.0,
     // Raindrop rings fall on every wet upward face; on grass at this share.
     rain_grass_rings: 0.5,
+    // The new lighting model's wet film (`lighting-model`, wet ground): GGX
+    // roughness wet and in a puddle, and how bright a lamp's highlight is.
+    rain_wet_roughness: 0.18,
+    rain_puddle_roughness: 0.04,
+    rain_lamp_specular: 1.0,
 
     // Overcast: the cover over the player dims the light, so the ground cannot
     // go stormy while the sun still shines on it. Tenebris's values.
@@ -139,6 +144,26 @@
     // ground haze's density (cloud-close-up): 1 matches the ground, 0 is off;
     // 3 dissolves the layer at the horizon (stills in the change's design).
     cloud_haze: 3.0,
+    // Which renderer draws the clouds (cloud-puffs): Puffs, one lit billboard
+    // a puff laid out by the weather (Crab-breeze's look, on the sphere), or
+    // March, the ray march above. PBD_CLOUD_RENDERER=march|puffs overrides it.
+    // The puffs: their sites' spacing (m), opacity, the sun's wrap into the
+    // shade, how much darker a white and a storm column is at its base, the
+    // silver lining, the optical depth at which a puff is two thirds opaque
+    // (thin cloud is drawn thin), how far noise eats the edge, the fade in
+    // front of the ground behind (m) and the fade-in from the eye (m). A full
+    // low deck keeps cloud_deck_floor of its sites open, as the march does.
+    cloud_renderer: Puffs,
+    cloud_puff_spacing_m: 250.0,
+    cloud_puff_opacity: 0.95,
+    cloud_puff_wrap: 0.6,
+    cloud_puff_base_shade: 0.45,
+    cloud_puff_storm_shade: 0.75,
+    cloud_puff_silver: 1.6,
+    cloud_puff_optical_depth: 15.0,
+    cloud_puff_erosion: 0.55,
+    cloud_puff_soft_m: 60.0,
+    cloud_puff_near_m: 120.0,
 
     // Rain near: every raining cell inside the detail range draws shafts of
     // streaks, thinning to the far fraction and fading out over the blend
@@ -164,6 +189,11 @@
     rain_volume_range_m: 2000.0,
     rain_volume_stretch: 10.0,
     rain_volume_color: (0.55, 0.58, 0.62),
+    // Or streaks on six cylinders round the eye, 6 to 1,500 m out, each standing
+    // for the air between it and the next (`rain-shells`). Volume until the
+    // shells are benchmarked and the owner has seen them.
+    rain_renderer: Volume,
+    rain_shell_soft_m: 4.0,
 
     // Lightning: where it strikes is the atmosphere's. A strike flickers for
     // flash_s and lights the cloud and the ground by these.

@@ -8,6 +8,7 @@
 // where that frame sits in the render frame (zero today).
 #import pbd::clouds::{CloudLayer, CloudSample, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at, cloud_map_smooth, cloud_hash, cloud_near_m, cloud_near_fog, cloud_density, cloud_lookup, cloud_local, cloud_wind, cloud_noise}
 #import pbd::sea::{SeaView, sea_surface}
+#import pbd::sun_shadow::SunCascades
 struct Cell {
     direction_height: vec4<f32>,
     corners: array<vec4<f32>,6>,
@@ -46,7 +47,7 @@ struct WaterView {
     lod: vec4<f32>,           // xyz player direction, w base level
     bands: vec4<f32>,         // cos(band radius / R) per fine level, coarsest first
     bands_in: vec4<f32>,      // the bands' cross-fade rings' inner edges (`distance-lod-fade`)
-    rain: vec4<f32>,          // x the rain on the LENS (zero under a roof), yzw spare
+    rain: vec4<f32>,          // x the rain on the LENS (zero under a roof), y frame s, z airspeed, w one when the rings follow the rain (`lighting-model`)
     // The cloud layer, `pbd::clouds::CloudLayer`'s four lanes as the sky has
     // them this frame, so the sheet can put the same clouds over itself.
     cloud_clouds: vec4<f32>,
@@ -93,6 +94,24 @@ struct WaterView {
     // the image toward its own brightness, and the drops' scale.
     mist: vec4<f32>,
     mist_look: vec4<f32>,
+    // The puffs (`cloud-puffs`): the sun's wrap, a white and a storm column's
+    // base shade, the silver lining; then the edge erosion, the fade in front
+    // of the ground (m), the fade-in from the eye (m), and one when the puffs
+    // draw the clouds (the march then makes only the near fog).
+    cloud_puff: vec4<f32>,
+    cloud_puff_fade: vec4<f32>,
+    // The rain shells (`rain-shells`): xyz the eye's velocity, body-local m/s,
+    // w one when the shells draw the rain instead of the volume; then how far
+    // the rain and the snow have fallen past the eye, m (wrapped at
+    // `RAIN_SHELL_WRAP_M` in Rust), the fade in front of the ground (m), w spare.
+    rain_shell: vec4<f32>,
+    rain_shell_fall: vec4<f32>,
+    // `lighting-model`, the rain fog lit: the sky's mean radiance (w one for
+    // the new model), the sun after the air and the cloud (w the forward
+    // scatter's g), and the lights nearest the eye (w the level, 0 none).
+    rain_sky: vec4<f32>,
+    rain_sun: vec4<f32>,
+    rain_lamps: array<vec4<f32>, 8>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -205,6 +224,36 @@ fn rr_hash22(p: vec2<f32>) -> vec2<f32> {
     var p3 = fract(vec3<f32>(p.x,p.y,p.x)*vec3<f32>(0.1031,0.1030,0.0973));
     p3 += dot(p3, p3.yzx + 19.19);
     return fract((p3.xx+p3.yz)*p3.zy);
+}
+// `lighting-model`: each drop of each cycle kept with a chance `keep`, picked
+// anew each cycle, on a grid offset by `salt` (the terrain's own rings).
+fn rain_ripple_layer(uv: vec2<f32>, t: f32, keep: f32, salt: f32) -> vec2<f32> {
+    let p0 = floor(uv);
+    var circles = vec2<f32>(0.0);
+    for (var j = -1; j <= 1; j++) {
+        for (var i = -1; i <= 1; i++) {
+            let pi = p0 + vec2<f32>(f32(i),f32(j));
+            let p = pi + rr_hash22(pi + salt);
+            let ph = 0.3*t + rr_hash12(pi + salt);
+            let tt = fract(ph);
+            if rr_hash12(pi*1.37 + floor(ph)*7.13 + salt) >= keep { continue; }
+            let v = p - uv;
+            let len = length(v) + 1e-6;
+            let d = len - 2.0*tt;
+            let h = 1e-3;
+            let d1 = d - h;
+            let d2 = d + h;
+            let q1 = sin(31.0*d1)*smoothstep(-0.6,-0.3,d1)*smoothstep(0.0,-0.3,d1);
+            let q2 = sin(31.0*d2)*smoothstep(-0.6,-0.3,d2)*smoothstep(0.0,-0.3,d2);
+            circles += 0.5*(v/len)*((q2-q1)/(2.0*h)*(1.0-tt)*(1.0-tt));
+        }
+    }
+    return circles/9.0;
+}
+fn rain_rings(uv: vec2<f32>, t: f32, rain: f32) -> vec2<f32> {
+    var g = rain_ripple_layer(uv, t, clamp(rain*2.0, 0.0, 1.0), 0.0);
+    if rain > 0.5 { g += rain_ripple_layer(uv + vec2<f32>(0.5, 0.37), t*1.07, rain*2.0 - 1.0, 41.0); }
+    return g;
 }
 fn rain_ripple_grad(uv: vec2<f32>, t: f32) -> vec2<f32> {
     let p0 = floor(uv);
@@ -416,7 +465,12 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     gradient -= radial*dot(gradient,radial);
     if (view.fx.z > 0.001) {
         let uv = vec2<f32>(dot(in.body_position,tangent_u),dot(in.body_position,tangent_v))*view.ripple.z;
-        let g = rain_ripple_grad(uv,time)*(view.fx.z*view.ripple.w);
+        var g = rain_ripple_grad(uv,time)*(view.fx.z*view.ripple.w);
+        if view.rain.w > 0.5 {
+            // `lighting-model`: as many drops as it is raining, the terrain's
+            // rule, at full strength each.
+            g = rain_rings(uv,time,view.fx.z)*view.ripple.w;
+        }
         gradient += tangent_u*g.x + tangent_v*g.y;
     }
     // Slope cap BEFORE the gradient bends the normal: the rain kernel spikes it
@@ -882,9 +936,16 @@ fn cloud_texel_sees(texel: vec2<f32>, far: f32) -> bool {
 // cloud, every texel over land and sea fell back to one raw sample. An
 // occluder in front of the cloud still stopped the march short of `reach`.
 fn cloud_texel_sees_to(texel: vec2<f32>, far: f32, reach: f32) -> bool {
-    let near_enough = texel.x <= far*1.03 + 10.0;
+    let near_enough = cloud_texel_distance(texel.x) <= far*1.03 + 10.0;
     let far_enough = texel.y >= min(min(reach, far), CLOUD_FAR_CAP_M)*0.97 - 10.0;
     return near_enough && far_enough;
+}
+
+// A texel's cloud distance, zero for none. The puffs' pass clears its
+// distances to the far cap and keeps the nearest puff (`cloud-puffs`), so the
+// cap is "no cloud" there as zero is in the march's.
+fn cloud_texel_distance(x: f32) -> f32 {
+    return select(x, 0.0, x >= CLOUD_FAR_CAP_M*0.999);
 }
 
 // The previous frame's cloud at `was` on its screen, for a ray this frame
@@ -988,11 +1049,14 @@ fn cloud_march_pass(in: FullscreenVertexOutput) -> CloudMarchOut {
     let sun = safe_normal(view.sun.xyz);
     // The first metres from the eye are the cloud's own fog, unjittered and
     // outside the history; the march takes the rest (`cloud-entry`).
-    let slab_end = min(cloud_near_m(layer), span.y);
+    let slab_end = min(cloud_near_reach(layer), span.y);
     if (slab_end > span.x) {
         out.near = cloud_near_fog(eye,ray.direction,span.x,slab_end,layer,sun,
             weather_cloud,weather_wind,weather_sampler,cloud_cells_tex,cloud_cells_sampler);
     }
+    // The puffs draw the cloud (`cloud-puffs`): this pass makes only the
+    // near field's fog, which carries the eye into a cloud as before.
+    if (view.cloud_puff_fade.w > 0.5) { return out; }
     // A different step offset for every pixel AND every frame, so the
     // history averages samples at new depths: interleaved gradient noise,
     // moved each frame. White noise left a 3x3 block short of the range the
@@ -1116,8 +1180,9 @@ fn cloud_upsampled(uv: vec2<f32>, far: f32, distance: ptr<function, f32>) -> vec
         let cloud = textureLoad(cloud_history, texel, 0);
         sum += cloud*w*kept;
         weight += w*kept;
-        let holds = w*kept*cloud.w*select(0.0, 1.0, depth.x > 0.0);
-        at_sum += depth.x*holds;
+        let held_at = cloud_texel_distance(depth.x);
+        let holds = w*kept*cloud.w*select(0.0, 1.0, held_at > 0.0);
+        at_sum += held_at*holds;
         at_weight += holds;
     }
     *distance = select(0.0, at_sum/max(at_weight, 1e-6), at_weight > 1e-6);
@@ -1178,11 +1243,201 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // cloud's fog seen in front of everything else: it thickens as the eye
     // enters a cloud and thins as it leaves, with nothing to flicker
     // (`cloud-entry`).
-    let near_m = cloud_near_m(cloud_layer());
+    let near_m = cloud_near_reach(cloud_layer());
     let slab = clamp(min(far, near_m) - span.x, 0.0, near_m);
     if (slab <= 0.0) { return vec4<f32>(behind,1.0); }
     let fog = textureSampleLevel(cloud_near, cloud_history_sampler, uv, 0.0);
     return vec4<f32>(mix(behind, fog.rgb, 1.0 - exp(-max(fog.a, 0.0)*slab)),1.0);
+}
+
+// ---- The puffs (`cloud-puffs`) ---------------------------------------------
+// One billboard a puff, laid out by the weather on the CPU
+// (`pbd_core::cloud_puffs`), sorted far to near and drawn instanced into the
+// clouds' history targets at the march's resolution; the composite above lays
+// them over the scene as it lays the march, hazed by the air in front.
+// The look is Crab-breeze's (`assets/shaders/cloud.wesl`, `puff` and
+// `facing`, origin/main d663b86c) on a sphere: "up" is the puff's own
+// direction from the body's centre, and the light is the march's colours.
+
+struct PuffInstance {
+    centre_seed: vec4<f32>, // xyz centre, body-local m; w noise seed
+    shape: vec4<f32>,       // x radius across, y radius up, z darkness, w opacity
+    layer: vec4<f32>,       // x the column's base radius, y its top radius
+}
+@group(3) @binding(10) var<storage, read> cloud_puffs: array<PuffInstance>;
+
+struct PuffVaryings {
+    @builtin(position) position: vec4<f32>,
+    @location(0) body: vec3<f32>,
+    @location(1) corner: vec2<f32>,
+    @location(2) clip: vec4<f32>,
+    @location(3) @interpolate(flat) instance: u32,
+}
+
+// A puff's frame: it faces the eye's position and stays upright on the
+// sphere, so turning the head never rolls it; only moving past it turns it.
+// Columns: right, up, back toward the eye. Straight under or over a puff,
+// where upright means nothing, its right is a fixed tangent.
+fn puff_facing(c: vec3<f32>, eye: vec3<f32>) -> mat3x3<f32> {
+    let radial = safe_normal(c);
+    let back = safe_normal(eye - c);
+    let level = cross(radial, back);
+    var fixed = cross(radial, vec3<f32>(0.0, 0.0, 1.0));
+    if (dot(fixed, fixed) < 1e-4) { fixed = cross(radial, vec3<f32>(1.0, 0.0, 0.0)); }
+    fixed = fixed - back*dot(fixed, back);
+    if (dot(fixed, level) < 0.0) { fixed = -fixed; }
+    let right = safe_normal(mix(safe_normal(fixed), level, smoothstep(0.02, 0.2, length(level))));
+    let up = cross(back, right);
+    return mat3x3<f32>(right, up, back);
+}
+
+@vertex
+fn cloud_puff_vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> PuffVaryings {
+    let puff = cloud_puffs[instance];
+    let corners = array<vec2<f32>, 6>(
+        vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0),
+        vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, 1.0));
+    let corner = corners[vertex % 6u];
+    let c = puff.centre_seed.xyz;
+    let eye = view.camera_time.xyz - view.planet_center.xyz;
+    let f = puff_facing(c, eye);
+    // A flat puff seen from above is round: its height on screen grows toward
+    // its width as the view turns down onto it.
+    let k = abs(dot(f[2], safe_normal(c)));
+    let up = mix(puff.shape.y, puff.shape.x, k*k);
+    let body = c + f[0]*(corner.x*puff.shape.x) + f[1]*(corner.y*up);
+    var out: PuffVaryings;
+    out.clip = view.clip_from_local*vec4<f32>(body + view.planet_center.xyz, 1.0);
+    out.position = out.clip;
+    out.body = body;
+    out.corner = corner;
+    out.instance = instance;
+    return out;
+}
+
+// Billows, 0..1: up to three octaves of gradient noise on a plane through
+// the lattice, one plane a puff. `detail` weighs the second and third: a puff
+// small on screen leaves them out (design 3b), and as noise of mean nought
+// they fade to their mean, so its edge keeps its place.
+fn puff_billow(p: vec2<f32>, z: f32, detail: vec2<f32>) -> f32 {
+    var g = gnoise3(vec3<f32>(p.x, z, p.y))*0.5;
+    if (detail.x > 0.0) {
+        g += gnoise3(vec3<f32>(p.x*2.03 + 17.0, z + 3.1, p.y*2.03))*0.25*detail.x;
+    }
+    if (detail.y > 0.0) {
+        g += gnoise3(vec3<f32>(p.x*4.07 + 31.0, z + 7.3, p.y*4.07))*0.125*detail.y;
+    }
+    return clamp(0.5 + 0.75*g, 0.0, 1.0);
+}
+
+// How far the near field's fog reaches from the eye: the march's two near
+// steps, or with the puffs the distance they fade in over, so the fog
+// carries the cloud up to where the puffs take over (design 3a).
+fn cloud_near_reach(layer: CloudLayer) -> f32 {
+    return select(cloud_near_m(layer), max(view.cloud_puff_fade.z, 1.0), view.cloud_puff_fade.w > 0.5);
+}
+
+struct PuffOut {
+    // Premultiplied light and coverage, blended "over".
+    @location(0) cloud: vec4<f32>,
+    // The puff's distance and the scene's stop along this ray, both kept at
+    // their nearest (blend Min); cleared to the far cap.
+    @location(1) depth: vec2<f32>,
+}
+
+@fragment
+fn cloud_puff_fragment(in: PuffVaryings) -> PuffOut {
+    let puff = cloud_puffs[in.instance];
+    let p = in.corner;
+    // The puff's width in texels of this target, before any branch, where the
+    // derivative is defined: what its detail is chosen by (design 3b).
+    let texels = 2.0/max(length(fwidth(p)), 1e-6);
+    let detail = vec2<f32>(smoothstep(16.0, 24.0, texels), smoothstep(32.0, 48.0, texels));
+    let d = length(p);
+    if (d > 1.0) { discard; }
+    let eye = view.camera_time.xyz - view.planet_center.xyz;
+    let to = in.body - eye;
+    let dist = max(length(to), 1e-3);
+    let look = to/dist;
+    // Where this pixel's ray stops in the scene: the depth buffer, the sea.
+    let ndc = in.clip.xy/in.clip.w;
+    let uv = vec2<f32>(ndc.x*0.5 + 0.5, 0.5 - ndc.y*0.5);
+    var far = CLOUD_FAR_CAP_M;
+    let depth = load_depth(uv);
+    if (depth > 1e-7) {
+        far = min(far, length(reconstruct_local(uv, depth) - view.camera_time.xyz));
+    }
+    let sea = cloud_sphere_hit(eye, look, view.planet_center.w);
+    if (sea.x > 0.0) { far = min(far, sea.x); }
+    let soft = smoothstep(0.0, max(view.cloud_puff_fade.y, 1.0), far - dist);
+    let near = smoothstep(view.cloud_puff_fade.z*0.3, view.cloud_puff_fade.z, dist);
+    // The eye inside the puff: its billboard faces the eye through the puff's
+    // middle and would lay one flat sheet over the whole view. It fades as
+    // the eye enters, and the near fog carries the cloud from there.
+    let rel = eye - puff.centre_seed.xyz;
+    let radial_off = dot(rel, safe_normal(puff.centre_seed.xyz));
+    let across = rel - safe_normal(puff.centre_seed.xyz)*radial_off;
+    let inside = length(vec2<f32>(length(across)/max(puff.shape.x, 1.0), radial_off/max(puff.shape.y, 1.0)));
+    let outside = smoothstep(0.8, 1.6, inside);
+    // Behind the ground, past the limb, too near or with the eye inside: done
+    // before any noise is paid for.
+    if (soft*near*outside*puff.shape.w < 0.004) { discard; }
+    let seed = puff.centre_seed.w;
+    let dark = puff.shape.z;
+    // The edge eaten by billows, faded out before the circle whatever the
+    // noise says, so no puff shows the arc where its quad is cut.
+    let n = puff_billow(p*2.2, seed*13.1 + view.snow_tint.w*0.004, detail);
+    var n2 = 0.5;
+    if (detail.x > 0.0) {
+        n2 = mix(0.5, clamp(0.5 + 0.65*gnoise3(vec3<f32>(p.x*7.0, seed*5.0 + 40.0, p.y*7.0)), 0.0, 1.0), detail.x);
+    }
+    let dens = smoothstep(1.0, 0.45, d + (n - 0.5)*view.cloud_puff_fade.x + (n2 - 0.5)*0.2)
+        * smoothstep(1.0, 0.8, d);
+    let f = puff_facing(puff.centre_seed.xyz, eye);
+    let z = sqrt(max(0.0, 1.0 - d*d));
+    let nrm = safe_normal(f[0]*p.x + f[1]*p.y + f[2]*(z + 0.15) + 0.5*(vec3<f32>(n, n2, n) - 0.5));
+    let sun = safe_normal(view.sun.xyz);
+    let radial = safe_normal(in.body);
+    let wrap = view.cloud_puff.x;
+    let diffuse = clamp((dot(nrm, sun) + wrap)/(1.0 + wrap), 0.0, 1.0);
+    // Height through its column: the base goes grey, the tops stay white.
+    let r = length(in.body);
+    let h = clamp((r - puff.layer.x)/max(puff.layer.y - puff.layer.x, 1.0), 0.0, 1.0);
+    let base_shade = mix(view.cloud_puff.y, view.cloud_puff.z, dark);
+    let under = smoothstep(-0.95, 0.55, p.y + (n - 0.5)*0.4);
+    let above_base = smoothstep(0.0, 350.0, r - puff.layer.x);
+    let shadow = mix(0.35, 1.0, under)*mix(0.55, 1.0, above_base);
+    let body = mix(1.0 - base_shade, 1.0, smoothstep(0.0, 0.7, h))*shadow;
+    let silver = pow(max(dot(look, sun), 0.0), 6.0)*(1.0 - z)*(1.0 - z)*view.cloud_puff.w;
+    // The march's light (`cloud_light`): the sun's colour by its height, the
+    // sky, the ground's bounce, the night floor and a lightning flash.
+    let elevation = dot(radial, sun);
+    let day = smoothstep(-0.10, 0.15, elevation);
+    let sun_colour = mix(vec3<f32>(1.0, 0.62, 0.36), vec3<f32>(1.0, 0.97, 0.92), smoothstep(0.0, 0.35, elevation));
+    let sky = mix(vec3<f32>(0.03, 0.04, 0.07), vec3<f32>(0.55, 0.68, 0.92), day);
+    let ground = vec3<f32>(0.30, 0.32, 0.28)*day*(1.0 - h);
+    let layer = cloud_layer();
+    let albedo = mix(1.0, 0.55, dark);
+    let lit = sun_colour*layer.light.x*day*1.6*(diffuse*body + silver + 0.25*body)*albedo
+        + sky*layer.clouds.y*mix(0.45, 1.0, h)*mix(0.5, 1.0, shadow)*albedo
+        + ground*layer.slab.y*(1.0 - under*0.5)
+        + vec3<f32>(layer.clouds.w)
+        + vec3<f32>(0.80, 0.85, 1.0)*cloud_flash_at(in.body, layer);
+    // The flat base: nothing below the column's base, cut on the height of
+    // the puff's own round surface here over a band a third of its height
+    // deep. From under the base looking up, the base is what the eye sees.
+    let surface = puff.centre_seed.xyz + puff.shape.x*f[0]*p.x + puff.shape.y*(f[1]*p.y + f[2]*z);
+    let band = max(puff.shape.y*0.35, 20.0);
+    let eye_r = length(eye);
+    let from_below = smoothstep(puff.layer.x - 30.0, puff.layer.x - 250.0, eye_r)
+        * smoothstep(0.15, 0.5, dot(look, safe_normal(eye)));
+    let floor_cut = mix(smoothstep(puff.layer.x - band, puff.layer.x + band*0.5, length(surface)), 1.0, from_below);
+    let a = clamp(dens*puff.shape.w*near*soft*floor_cut*outside, 0.0, 1.0);
+    if (a < 0.004) { discard; }
+    var out: PuffOut;
+    out.cloud = vec4<f32>(lit*a, a);
+    out.depth = vec2<f32>(dist, far);
+    return out;
 }
 
 // The streaks' two widths, metres, and the distance from the eye over which
@@ -1190,6 +1445,180 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 const RAIN_STREAK_FINE_M: f32 = 1.5;
 const RAIN_STREAK_BROAD_M: f32 = 8.0;
 const RAIN_STREAK_BLEND_M: vec2<f32> = vec2<f32>(150.0, 700.0);
+
+// ---- Rain as shells round the eye (`rain-shells`) -----------------------------
+// The owner's cylinders: streaks on a few cylinders centred on the eye,
+// scrolling down at the fall speed, nothing marched. Each cylinder is met
+// analytically here (the eye is on its axis, so the hit is one division), which
+// draws exactly what a cylinder mesh would, in the volume's own pass. Each shell
+// stands for the slab of air between it and the next, so five samples carry the
+// volume's sum. The axis leans into the fall the eye feels (the fall minus the
+// eye's velocity), so in flight the streaks slant and rush past.
+
+const RAIN_SHELLS: u32 = 6u;
+// Each about 3 times the one inside. Two out past half a kilometre, so a
+// storm 1-2 km off is read where it is, as the volume's sixteen steps read it.
+const RAIN_SHELL_RADII: array<f32, 6> = array<f32, 6>(6.0, 20.0, 70.0, 250.0, 700.0, 1500.0);
+// The slab each stands for, between the midpoints to its neighbours, metres
+// from the axis; the last runs to the volume's range.
+const RAIN_SHELL_EDGES: array<f32, 7> = array<f32, 7>(0.0, 13.0, 45.0, 160.0, 475.0, 1100.0, 1.0e9);
+// One cycle of the streak pattern along the axis, metres: a power of two, so
+// all of them divide the fall's wrap and the pattern never jumps.
+const RAIN_SHELL_CYCLE_M: array<f32, 6> = array<f32, 6>(1.0, 4.0, 16.0, 64.0, 256.0, 512.0);
+// Streak columns round every shell: about 0.004 rad each, a few pixels.
+const RAIN_SHELL_COLUMNS: f32 = 1536.0;
+
+fn rain_hash(a: vec2<f32>) -> f32 {
+    return fract(sin(dot(a, vec2<f32>(127.1, 311.7)))*43758.5453);
+}
+
+// The streak pattern, 0..1, at `x` columns round and `y` cycles along the
+// fall: one streak a column a cycle, of hashed place, length and presence,
+// brightest at its head. Snow is a short flake.
+fn rain_shell_streak(x: f32, y: f32, shell: f32, snow: bool) -> f32 {
+    let column = floor(x);
+    let wrapped = column - RAIN_SHELL_COLUMNS*floor(column/RAIN_SHELL_COLUMNS);
+    let h1 = rain_hash(vec2<f32>(wrapped, shell));
+    let h2 = rain_hash(vec2<f32>(shell*3.1, wrapped + 17.0));
+    let across = clamp(1.0 - abs(fract(x) - (0.3 + 0.4*h1))/0.18, 0.0, 1.0);
+    let along = y + h2;
+    let present = step(0.4, rain_hash(vec2<f32>(wrapped + shell*7.0, floor(along))));
+    let v = fract(along);
+    let streak_len = select(0.15 + 0.3*h1, 0.03 + 0.03*h1, snow);
+    return across*present*smoothstep(streak_len, 0.0, v);
+}
+
+// ---- The rain fog, lit (`lighting-model`) ------------------------------------
+// Under the new model a stretch of rain takes the light that is there: the
+// sky's from all round (L2), the sun's or the moon's scattered forward
+// (Henyey-Greenstein) where the cascades say it reaches, so trees and eaves
+// cast shafts through it, and every lamp near the eye by the closed form of a
+// point light's in-scatter along the stretch, so a lantern glows in the rain.
+@group(3) @binding(11) var rain_sun_map: texture_depth_2d_array;
+@group(3) @binding(12) var rain_sun_cmp: sampler_comparison;
+@group(3) @binding(13) var<storage, read> rain_cascades: SunCascades;
+
+// One comparison tap of the finest cascade holding `p` (body frame): 1 lit.
+fn rain_sun_at(p: vec3<f32>) -> f32 {
+    if (rain_cascades.settings.x < 0.5) { return 1.0; }
+    for (var i = 0u; i < 4u; i++) {
+        let clip = rain_cascades.clip_from_body[i]*vec4<f32>(p, 1.0);
+        if (max(abs(clip.x), abs(clip.y)) < 1.0 && clip.z > 0.0 && clip.z < 1.0) {
+            let uv = vec2<f32>(clip.x*0.5 + 0.5, 0.5 - clip.y*0.5);
+            let bias = rain_cascades.settings.z*rain_cascades.texel_m[i]/rain_cascades.depth_m[i];
+            return textureSampleCompareLevel(rain_sun_map, rain_sun_cmp, uv, i, clip.z - bias);
+        }
+    }
+    return 1.0;
+}
+
+// How much of the stretch `a`..`b` the sun reaches, six taps jittered per
+// pixel (twelve over the two nearest shells' sixty metres).
+fn rain_sun_seen(eye: vec3<f32>, direction: vec3<f32>, a: f32, b: f32, jitter: f32) -> f32 {
+    var seen = 0.0;
+    for (var k = 0u; k < 6u; k++) {
+        seen += rain_sun_at(eye + direction*mix(a, b, (f32(k) + jitter)/6.0));
+    }
+    return seen/6.0;
+}
+
+fn rain_phase(mu: f32, g: f32) -> f32 {
+    return (1.0 - g*g)/(12.566371*pow(1.0 + g*g - 2.0*g*mu, 1.5));
+}
+
+// The mean light of every lamp near the eye over the stretch `a`..`b`: the
+// integral of 1/(h^2 + s^2) along it, closed form, softened by 2.2 m as the
+// wet film's highlights are.
+fn rain_lamp_glow(eye: vec3<f32>, direction: vec3<f32>, a: f32, b: f32) -> vec3<f32> {
+    var glow = vec3<f32>(0.0);
+    for (var i = 0u; i < 8u; i++) {
+        let lamp = view.rain_lamps[i];
+        if (lamp.w <= 0.0) { continue; }
+        let q = lamp.xyz - eye;
+        let s0 = dot(q, direction);
+        let h2 = max(dot(q, q) - s0*s0, 0.0);
+        if (h2 > 256.0) { continue; }
+        let h = sqrt(h2 + 4.84);
+        let along = (atan((b - s0)/h) - atan((a - s0)/h))/h;
+        glow += vec3<f32>(1.00, 0.70, 0.30)*1.25*lamp.w*11.6*along/max(b - a, 1e-3);
+    }
+    return glow;
+}
+
+fn rain_shells(scene: vec3<f32>, eye: vec3<f32>, direction: vec3<f32>, far: f32, range: f32,
+               jitter: f32) -> vec4<f32> {
+    let layer = cloud_layer();
+    let base = view.cloud_clouds.x;
+    let down = -safe_normal(eye);
+    let velocity = view.rain_shell.xyz;
+    let seconds = view.snow_tint.w;
+    let soft_m = max(view.rain_shell_fall.z, 0.01);
+    var transmittance = 1.0;
+    var light = vec3<f32>(0.0);
+    for (var kind = 0u; kind < 2u; kind++) {
+        let snow = kind == 1u;
+        let fall = select(view.rain_look.x, view.rain_tint.w, snow);
+        let relative = down*fall - velocity;
+        let axis = select(down, relative/max(length(relative), 1e-3), length(relative) > 0.1);
+        let fallen = select(view.rain_shell_fall.x, view.rain_shell_fall.y, snow);
+        let c = dot(direction, axis);
+        // Looking along the axis a cylinder's streaks crowd into lines.
+        let steep = 1.0 - smoothstep(0.75, 0.95, abs(c));
+        let across = direction - axis*c;
+        let reference = view.rain_u.xyz - axis*dot(view.rain_u.xyz, axis);
+        let b1 = select(safe_normal(reference), safe_normal(cross(axis, vec3<f32>(0.0, 0.0, 1.0))), length(reference) < 1e-3);
+        let b2 = cross(axis, b1);
+        let angle = atan2(dot(across, b2), dot(across, b1));
+        let oblique = 1.0/sqrt(max(1.0 - c*c, 1e-4));
+        let stop = min(far, range);
+        for (var i = 0u; i < RAIN_SHELLS; i++) {
+            // The stretch of this ray the shell stands for, cut at the ground,
+            // the sea, the cloud base or the range: all of it is rain's haze,
+            // so looking down at the ground the whole way there is covered.
+            let enter = RAIN_SHELL_EDGES[i]*oblique;
+            if (enter >= stop) { break; }
+            let leave = min(RAIN_SHELL_EDGES[i + 1u]*oblique, stop);
+            let t = RAIN_SHELL_RADII[i]*oblique;
+            // The streaks are on the shell, when it is in front of what is
+            // behind it; otherwise the stretch is haze alone, read midway.
+            let on_shell = t < stop;
+            let p = eye + direction*select(0.5*(enter + leave), t, on_shell);
+            let here = rain_map_at(p);
+            // The other kind's shells carry this place.
+            if (abs(here) < 1e-3 || (here < 0.0) != snow) { continue; }
+            var streak = 0.0;
+            if (on_shell) {
+                let shell = f32(i);
+                var x = angle/6.2831853*RAIN_SHELL_COLUMNS + shell*0.37;
+                let y = (t*c - fallen)/RAIN_SHELL_CYCLE_M[i];
+                if (snow) { x += 0.3*sin(seconds*1.3 + y*2.0 + shell); }
+                // Into the ground or the sea at the bottom, and the steep view.
+                streak = rain_shell_streak(x, y, shell, snow)*steep*smoothstep(0.0, soft_m, far - t);
+            }
+            // The volume's mean darkening (its 0.3 + 1.4 streak averages
+            // about one), with the light gathered into the streaks.
+            let density = abs(here)*view.rain_v.w*(0.7 + 6.0*streak);
+            // Into the cloud base at the top, and the air's haze with distance.
+            let blend = smoothstep(base, base - 45.0, length(p))*cloud_air(eye, direction, enter);
+            let absorbed = (1.0 - exp(-density*(leave - enter)))*blend;
+            var tint = select(view.rain_tint.rgb, view.snow_tint.rgb, snow)*view.rain_look.z
+                + vec3<f32>(0.80, 0.85, 1.0)*cloud_flash_at(p, layer)*0.15;
+            if (view.rain_sky.w > 0.5) {
+                var sun_seen = 1.0;
+                if (enter < 60.0) { sun_seen = rain_sun_seen(eye, direction, enter, min(leave, 60.0), jitter); }
+                let mu = dot(direction, safe_normal(view.sun.xyz));
+                let lit = view.rain_sky.rgb
+                    + view.rain_sun.rgb*rain_phase(mu, view.rain_sun.w)*12.566371*sun_seen
+                    + rain_lamp_glow(eye, direction, enter, leave);
+                tint = select(view.rain_tint.rgb, view.snow_tint.rgb, snow)*lit
+                    + vec3<f32>(0.80, 0.85, 1.0)*cloud_flash_at(p, layer)*0.15;
+            }
+            light += tint*transmittance*absorbed;
+            transmittance *= 1.0 - absorbed;
+        }
+    }
+    return vec4<f32>(scene*transmittance + light, 1.0);
+}
 
 @fragment
 fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
@@ -1214,6 +1643,11 @@ fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let ceiling = cloud_sphere_hit(eye,ray.direction,base);
     if (ceiling.y > 0.0) { far = min(far,ceiling.y); }
     if (far <= 1.0) { return vec4<f32>(scene,1.0); }
+    if (view.rain_shell.w > 0.5) {
+        let pixel = in.uv*vec2<f32>(textureDimensions(scene_color));
+        let jitter = fract(52.9829189*fract(dot(pixel, vec2<f32>(0.06711056, 0.00583715))));
+        return rain_shells(scene,eye,ray.direction,far,range,jitter);
+    }
     let layer = cloud_layer();
     let steps = 16.0;
     let step_size = far/steps;

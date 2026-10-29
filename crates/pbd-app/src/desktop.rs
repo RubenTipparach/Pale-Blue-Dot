@@ -833,6 +833,8 @@ pub fn run(args: &[String]) {
         PlanetPlugin,
         FlightViewPlugin,
         SkyPlugin,
+        pbd_app::tone::TonePlugin,
+        pbd_app::bloom::LiteBloomPlugin,
     ))
     .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
     .insert_resource(PhysicsFrame(pbd_core::frame::LocalFrame {
@@ -990,6 +992,15 @@ pub fn run(args: &[String]) {
     .add_systems(
         Update,
         (
+            menu::press_graphics,
+            menu::label_graphics,
+            menu::wheel_scroll,
+        )
+            .chain(),
+    )
+    .add_systems(
+        Update,
+        (
             configure_camera,
             scene::move_moon,
             scene::turn_stars,
@@ -1028,8 +1039,15 @@ pub fn run(args: &[String]) {
     if launch.frame_log.is_some() {
         // GPU time per render pass for the frame log (`perf-rig`), and a
         // route that ends the run when it lands, like `--walk-distance`.
-        app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin)
-            .add_systems(Last, quit_after_route);
+        // Not on macOS: its spans write timestamps inside a pass, which Apple
+        // GPUs cannot, so they read nought there, and the counter sample
+        // buffers it still makes for every frame in flight ran out under slow
+        // frames ("Cannot allocate sample buffer", a crash). The clouds'
+        // boundary timer measures them there instead (`cloud-puffs`).
+        if !cfg!(target_os = "macos") {
+            app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
+        }
+        app.add_systems(Last, (quit_after_route, log_window_attention));
     }
     // Towns are lit by the field in every run, a still from above as much as
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
@@ -2540,7 +2558,14 @@ fn write_frame_log(
     let Some(out) = log.0.as_mut() else {
         return;
     };
-    let (gpu_clouds, gpu_total) = diagnostics.map_or((f64::NAN, f64::NAN), |d| gpu_times(&d));
+    let (mut gpu_clouds, gpu_total) = diagnostics.map_or((f64::NAN, f64::NAN), |d| gpu_times(&d));
+    // Where the passes' own spans read nothing (Metal: no timestamps inside
+    // a pass), the clouds' boundary timer (`cloud-puffs`).
+    if (gpu_clouds.is_nan() || gpu_clouds <= 0.0)
+        && let Some(ms) = pbd_app::planet::cloud_gpu_ms()
+    {
+        gpu_clouds = ms;
+    }
     let Some(ms) = stats.samples.last() else {
         return;
     };
@@ -2586,10 +2611,32 @@ fn gpu_times(store: &bevy::diagnostic::DiagnosticsStore) -> (f64, f64) {
     let current = spans.iter().filter(|s| s.2 == newest);
     let clouds = current
         .clone()
-        .filter(|s| matches!(s.0.as_str(), "cloud_march" | "cloud_resolve" | "clouds"))
+        .filter(|s| {
+            matches!(
+                s.0.as_str(),
+                "cloud_march" | "cloud_resolve" | "cloud_puffs" | "clouds"
+            )
+        })
         .map(|s| s.1)
         .sum();
     (clouds, current.map(|s| s.1).sum())
+}
+
+/// With `--frame-log`, every change in whether the window has the user's
+/// attention: a window out of focus or hidden is paced by the OS (Bevy updates
+/// an unfocused window at 60 Hz; macOS throttles one it cannot show, as under a
+/// locked screen), so a run that saw one measured the pacing, not the game.
+/// `tools/perf_suite.py` marks such a run invalid (`frame-budget`).
+fn log_window_attention(
+    mut focus: MessageReader<bevy::window::WindowFocused>,
+    mut occluded: MessageReader<bevy::window::WindowOccluded>,
+) {
+    for event in focus.read() {
+        info!("WINDOW_FOCUS {}", event.focused);
+    }
+    for event in occluded.read() {
+        info!("WINDOW_OCCLUDED {}", event.occluded);
+    }
 }
 
 /// With `--frame-log`, a route run ends itself once the route is complete.

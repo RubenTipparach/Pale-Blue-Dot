@@ -45,7 +45,7 @@ pub(crate) fn planet_surface_source() -> String {
         surface.contains(import),
         "planet_surface.wgsl's cloud import moved; update the splice"
     );
-    let shadow = "#import pbd::sun_shadow::{SunCascades, sun_shadow}";
+    let shadow = "#import pbd::sun_shadow::{SunCascades, sun_shadow_soft}";
     assert!(
         surface.contains(shadow),
         "planet_surface.wgsl's shadow import moved; update the splice"
@@ -147,4 +147,42 @@ fn the_water_vertex_draws_the_sea_table_and_no_literal_waves() {
             "the vertex stage computes a wave of its own: {literal}"
         );
     }
+}
+
+/// `lighting-model` L1: the terrain's sun constants are the core's, so the
+/// sun the CPU computes (for the sky's light) and the one each fragment does
+/// are one sun.
+#[test]
+fn the_terrains_sun_after_the_air_is_the_cores() {
+    for src in [
+        include_str!("../../../assets/shaders/planet_surface.wgsl"),
+        include_str!("../../../assets/shaders/field_lit.wgsl"),
+    ] {
+        sun_constants_match(src);
+    }
+}
+
+fn sun_constants_match(src: &str) {
+    let vec_of = |name: &str| -> [f32; 3] {
+        let at = src
+            .find(&format!("const {name} = vec3<f32>("))
+            .unwrap_or_else(|| panic!("{name} is gone from planet_surface.wgsl"));
+        let rest = &src[at..];
+        let open = rest.find('(').unwrap() + 1;
+        let close = rest.find(')').unwrap();
+        let v: Vec<f32> = rest[open..close]
+            .split(',')
+            .map(|x| x.trim().parse().unwrap())
+            .collect();
+        [v[0], v[1], v[2]]
+    };
+    use pbd_core::sky_light::{SUN_NOW, TAU, sun_norm};
+    let close = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-5);
+    assert!(close(vec_of("SKY_TAU"), TAU));
+    assert!(close(vec_of("SUN_NOW"), SUN_NOW));
+    assert!(close(vec_of("SUN_NORM"), sun_norm()), "{:?}", sun_norm());
+    assert!(src.contains(&format!(
+        "const SKY_TAU_M = {};",
+        pbd_core::sky_light::TAU_M
+    )));
 }
