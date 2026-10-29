@@ -253,7 +253,8 @@ The `cloud-puffs` march-against-puffs page (an M4 Max Mac, not the desktop) is
 https://claude.ai/artifact/PuWVaY1gADriGx1KjfGrbx.
 The `rain-shells` volume-against-shells page (the same Mac) is
 https://claude.ai/artifact/DwjHNxEt99BvDNS1azKDdQ.
-The `lighting-model` today-against-new page (the same Mac) is
+The `lighting-model` today-against-new page (the same Mac; the full
+sitting of 2026-10-29, `docs/benchmarks/2026-10-29-lighting-full/`) is
 https://claude.ai/artifact/C1ENmiyd73ia1pnxxKPtj7.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
