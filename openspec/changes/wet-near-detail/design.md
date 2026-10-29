@@ -47,7 +47,8 @@ Recommendation taken (ask only with screenshots): 20 m as the owner said, a
 
 ## As built (2026-10-29)
 
-Measured in `docs/benchmarks/2026-10-29-cull-wet`: no change at p50 on the
-rain stroll (19.27 -> 19.15 ms, inside its 0.3 ms spread). The cut is what
-the owner asked for, rings to 20 m and a wet film past it, at no cost; it is
-not a measurable saving on this Mac.
+Measured in `docs/benchmarks/2026-10-29-cull-wet`: **2.1 ms at p50 on the
+flights** (clouds 19.27 -> 17.17, storm 19.18 -> 17.14, with and without the
+cut on one build), and p95 about 4 ms lower: from the air nearly every wet
+pixel is past the reach. On the rain stroll it does not show at p50 (19.27 ->
+19.15, inside the spread).

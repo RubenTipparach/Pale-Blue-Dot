@@ -64,12 +64,11 @@ sphere, the five-plane conservative test, no far plane.
 
 ## As built (2026-10-29)
 
-Measured in `docs/benchmarks/2026-10-29-cull-wet`: the flights are 2.5 ms
-faster at p50 (clouds 19.74 -> 17.22, storm 19.70 -> 17.12), and the GPU
-time up to the composite falls by the same 2.45 ms. The cull keeps about half
-of what passes the horizon (250-400 of 450-900 puffs, from 2,080 built); the
-build costs the CPU 0.15-0.18 ms. Why the culled billboards cost the GPU that
-much is not established (a GPU capture would show it). The same cloudy frame
+Measured in `docs/benchmarks/2026-10-29-cull-wet`: the cull is worth about
+0.45 ms at p50 on the flights (19.74 before against 19.27 with the cull and
+not the wet cut; two sittings). The 2.5 ms first credited to it is mostly
+`wet-near-detail` (2.1 ms), as a second sitting that split them showed. The
+cull keeps about half of what passes the horizon (250-400 of 450-900 puffs,
+from 2,080 built); the build costs the CPU 0.15-0.18 ms. The same cloudy frame
 before and after (`docs/screenshots/puff-frustum-cull/`) is identical across
-the sky; the only band that differs is far wet grass, which is
-`wet-near-detail`.
+the sky.

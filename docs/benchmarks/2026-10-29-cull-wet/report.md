@@ -19,32 +19,39 @@ dig fix, which no scenario here exercises). All 12 runs were valid.
 
 ## Findings
 
-- **The flights are 2.5 ms faster at p50**: clouds 19.75 -> 17.22 ms, storm
-  19.70 -> 17.12 ms. Repeats agree within 0.05 ms, so this is far past the
-  spread. p95 falls 4-5 ms (clouds 36.9 -> 32.5, storm 37.1 -> 32.4) and p99
-  about 4 ms.
-- **It is the puff cull, on the GPU.** The GPU time up to the composite
-  falls by the same 2.45 ms (clouds 15.47 -> 13.03, storm 15.40 -> 12.99),
-  and the rain stroll, where the wet cut does most of its work, does not move
-  at p50 (19.27 before, 19.15 after, inside its 0.3 ms spread).
-- **What the cull removes**: on the clouds flight 2,080 puffs are built a
-  frame, 450-900 survive the horizon, and 250-400 survive the view: about half
-  of what the horizon kept. The build costs the CPU 0.15-0.18 ms.
-- **Why culled puffs cost the GPU is not established.** Off-screen billboards
-  are clipped before they are shaded, so 500 of them should be cheap; the
-  measured 2.45 ms says otherwise. A GPU capture of one frame would show
-  where (vertex, binning on Apple's tiled GPU, or the pass's resolve); it is
-  not done.
-- **The wet cut costs nothing and saves nothing measurable at p50 here.**
-  Its p95 moves inside the stroll's own spread (40.7-43.4 before, 39.7-47.4
-  after). Its stills show the change is what was asked: rings, sheet and
-  rivulets end by 20 m, and past it the ground stays wet, puddled and
-  mirroring (`docs/screenshots/wet-near-detail/before-after.jpg`).
+**Corrected the same day.** The first reading of this sitting credited the
+2.5 ms to the puff cull. A second sitting split the two changes, on the
+after build with the wet cut switched off by its own setting
+(`rain_detail_reach_m: 100000`, laid over the checkout for those runs only):
 
-- **The cull changes nothing visible.** The same cloudy frame before and
-  after (`docs/screenshots/puff-frustum-cull/`) matches across the whole sky;
-  0.6% of pixels differ by more than 8/255, all in far wet grass, which is
-  the wet cut.
+| Scenario | cull + cut | cull only | the cut's share |
+| --- | ---: | ---: | ---: |
+| clouds p50 | 17.17 | 19.27 | **2.10 ms** |
+| storm p50 | 17.14 | 19.18 | **2.04 ms** |
+| clouds p95 | 32.3 | 36.3 | 4.0 ms |
+
+Repeats agree within 0.05 ms (`split/suite.json`).
+
+- **The flights are 2.5 ms faster at p50**: clouds 19.74 -> 17.22 ms, storm
+  19.70 -> 17.12 ms, p95 4-5 ms lower.
+- **About 2.1 ms of it is the wet cut.** From the air nearly every wet pixel
+  is past 20 m, and each one used to compute the rippled sheet and the ring
+  layers and then fade them to nothing by its footprint. The GPU time up to
+  the composite falls by the same 2.0 ms (15.0 -> 13.0).
+- **About 0.45 ms is the puff cull** (19.74 before against 19.27 cull-only,
+  across two sittings, so read it as roughly half a millisecond). That fits
+  what the puffs cost at all: about 1.9 ms in `2026-10-28-cloud-puffs`.
+  The cull keeps 250-400 of the 450-900 puffs over the horizon, from 2,080
+  built; the build costs the CPU 0.15-0.18 ms.
+- **On the rain stroll the cut does not show at p50** (19.27 -> 19.15, inside
+  the 0.3 ms spread): in a lane much of the wet ground is inside 20 m, and the
+  stroll's frame is dominated by other work.
+- **Neither change is visible where it should not be.** The same cloudy
+  frame before and after (`docs/screenshots/puff-frustum-cull/`) matches
+  across the sky; 0.6% of pixels differ by more than 8/255, all in far wet
+  grass, which is the wet cut. The street stills
+  (`docs/screenshots/wet-near-detail/before-after.jpg`) show rings ending by
+  20 m and the ground past it wet, puddled and mirroring.
 
 ## Limits
 
