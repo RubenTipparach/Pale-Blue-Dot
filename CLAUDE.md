@@ -256,6 +256,8 @@ https://claude.ai/artifact/DwjHNxEt99BvDNS1azKDdQ.
 The `lighting-model` today-against-new page (the same Mac; the full
 sitting of 2026-10-29, `docs/benchmarks/2026-10-29-lighting-full/`) is
 https://claude.ai/artifact/C1ENmiyd73ia1pnxxKPtj7.
+The `puff-frustum-cull` + `wet-near-detail` before-and-after page (the same
+Mac) is https://claude.ai/artifact/C4cAspjVyuc2uGem4G66Co.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 
