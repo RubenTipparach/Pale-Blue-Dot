@@ -630,6 +630,9 @@ struct PlanetParams {
     // clip_from_body and its eye (w one once there is one).
     ssr_clip: Mat4,
     ssr_eye: Vec4,
+    // `wet-near-detail`: x how far from the eye rain's fine detail is drawn,
+    // metres; y the band it fades out over before that; zw spare.
+    rain_near: Vec4,
 }
 
 /// L7: the lamp bake's cross-fade, as `PlanetParams::lamp_bake` carries it.
@@ -1471,6 +1474,7 @@ fn prepare_views(
             ssr_clip: existing
                 .as_ref()
                 .map_or(Mat4::IDENTITY, |gpu| gpu.last_clip),
+            rain_near: Vec4::new(w.rain_detail_reach_m, w.rain_detail_fade_m, 0.0, 0.0),
             ssr_eye: existing
                 .as_ref()
                 .map_or(Vec4::ZERO, |gpu| gpu.last_camera.extend(1.0)),

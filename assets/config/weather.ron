@@ -87,6 +87,12 @@
     rain_wet_roughness: 0.18,
     rain_puddle_roughness: 0.04,
     rain_lamp_specular: 1.0,
+    // Rain's fine detail only near the eye (`wet-near-detail`; owner: "We
+    // don't need [rain] drops [further] out than that"): the rings, the
+    // rippled sheet and the rivulets within this many metres, fading out over
+    // the last `fade` metres before it. Past it the ground is only wet.
+    rain_detail_reach_m: 20.0,
+    rain_detail_fade_m: 4.0,
 
     // Overcast: the cover over the player dims the light, so the ground cannot
     // go stormy while the sun still shines on it. Tenebris's values.

@@ -51,12 +51,16 @@ SCENARIOS = {
     "cloud-hop": ["--route", "clouds"],
     "far-side": ["--route", "far-side"],
     "walk": ["--walk-distance", "1000"],
+    # Up and down Holbrook's lane in a forced rain (`wet-near-detail`): wet
+    # ground near and far of the eye, on a script that never digs.
+    "rain-stroll": ["--walk", "--at", "29.69673", "1.19287", "--yaw", "179.4", "--rain", "1",
+                    "--stroll", "45", "--stroll-leg", "7"],
     # Holinghaven's cog cast off with its yard braced, from its helm
     # (`sail-the-cog` task 6.1).
     "sail": ["--walk", "--at", "23.71891", "-115.27982", "--aboard", "cog", "--sail", "-40",
              "--seat", "--sail-for", "60"],
 }
-DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE",
+DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE", "rain-stroll": "STROLL_DONE",
         "sail": "SAIL_DONE"}
 WANT_MS = 1000 / 120
 FLOOR_MS = 1000 / 60
@@ -186,6 +190,11 @@ def screen_locked() -> bool:
 # Anything that would share the machine with a run. A build in the background
 # once made a walk read 37 ms at p50 that reads a fraction of that alone.
 BUSY = ["pbd-app.exe", "cargo.exe", "rustc.exe"]
+# Apps that draw on the GPU or burn CPU behind the game's back (owner,
+# 2026-10-29: "close out any apps using the gpu before doing your run").
+# Steam was found at 173% CPU through a whole sitting.
+if sys.platform == "darwin":
+    BUSY += ["steam_osx", "Google Chrome", "Spotify", "Electron", "Code"]
 # Idle, these cost little; recording, they cost a lot. Warn rather than refuse.
 WARN = ["obs64.exe"] if WINDOWS else ["OBS"]
 

@@ -186,3 +186,31 @@ fn sun_constants_match(src: &str) {
         pbd_core::sky_light::TAU_M
     )));
 }
+
+/// `wet-near-detail`: the new model's wet film draws the rain's fine detail
+/// only within the reach, and skips it past there; today's model is not
+/// gated.
+#[test]
+fn rain_detail_is_gated_near_the_eye_in_the_new_model_only() {
+    let src = include_str!("../../../assets/shaders/planet_surface.wgsl");
+    let gate = src
+        .find("var near_detail = 1.;")
+        .expect("the near-detail gate is gone from the wet branch");
+    let after = &src[gate..];
+    let new_only = after.find("if params.light.x > 0.5 {").unwrap();
+    let fade = after
+        .find("smoothstep(reach-max(params.rain_near.y,0.),reach,distance_to_camera)")
+        .unwrap();
+    assert!(
+        new_only < fade,
+        "the fade must sit inside the new model's branch"
+    );
+    for skipped in [
+        "if rings > 0.001 && near_detail > 0.001 {",
+        "pg *= near_detail;",
+        "if side_w > 0.001 && near_detail > 0.001 {",
+        "side_w*near_detail",
+    ] {
+        assert!(after.contains(skipped), "missing `{skipped}`");
+    }
+}

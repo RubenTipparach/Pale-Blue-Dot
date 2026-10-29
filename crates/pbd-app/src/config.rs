@@ -410,6 +410,12 @@ pub struct WeatherSettings {
     pub rain_puddle_roughness: f32,
     /// How bright a lamp's highlight on wet ground is (one: the mockup's).
     pub rain_lamp_specular: f32,
+    /// `wet-near-detail` (owner: "simplified 20m from the camera"): how far
+    /// from the eye the raindrop rings, the rippled sheet and the rivulets
+    /// are drawn, metres, and the band before it they fade out over, metres
+    /// (`0 <= fade <= reach`). Past the reach the ground is only wet.
+    pub rain_detail_reach_m: f32,
+    pub rain_detail_fade_m: f32,
 
     // ---- Overcast: what the cover over the player does to the light. Names
     // and values are Tenebris's. Each is a fraction taken off (or, for the
@@ -637,6 +643,8 @@ impl Default for WeatherSettings {
             rain_wet_roughness: 0.18,
             rain_puddle_roughness: 0.04,
             rain_lamp_specular: 1.0,
+            rain_detail_reach_m: 20.0,
+            rain_detail_fade_m: 4.0,
             overcast_sun_dim: 0.72,
             overcast_amb_dim: 0.48,
             overcast_sky_blue_cut: 0.75,
@@ -766,6 +774,11 @@ impl Validated for WeatherSettings {
             .ok_or("snow_density must be within 0..=10")?;
         non_negative("rain_volume_color", &s.rain_volume_color)?;
         non_negative("rain_lamp_specular", &[s.rain_lamp_specular])?;
+        positive("rain_detail_reach_m", &[s.rain_detail_reach_m])?;
+        (s.rain_detail_fade_m.is_finite()
+            && (0.0..=s.rain_detail_reach_m).contains(&s.rain_detail_fade_m))
+        .then_some(())
+        .ok_or("rain_detail_fade_m must be within 0..=rain_detail_reach_m")?;
         for (name, value) in [
             ("rain_alpha_near", s.rain_alpha_near),
             ("rain_alpha_far", s.rain_alpha_far),
@@ -1470,5 +1483,22 @@ mod tests {
     fn defaults_validate() {
         WaterSettings::default().validate().unwrap();
         WeatherSettings::default().validate().unwrap();
+    }
+
+    #[test]
+    fn rain_detail_reach_holds_its_fade() {
+        let with = |reach_m: f32, fade_m: f32| WeatherSettings {
+            rain_detail_reach_m: reach_m,
+            rain_detail_fade_m: fade_m,
+            ..WeatherSettings::default()
+        };
+        with(20.0, 4.0).validate().unwrap();
+        with(20.0, 0.0).validate().unwrap();
+        with(20.0, 20.0).validate().unwrap();
+        assert!(with(0.0, 0.0).validate().is_err());
+        assert!(with(20.0, 21.0).validate().is_err());
+        assert!(with(20.0, -1.0).validate().is_err());
+        assert!(with(f32::NAN, 4.0).validate().is_err());
+        assert!(with(20.0, f32::NAN).validate().is_err());
     }
 }

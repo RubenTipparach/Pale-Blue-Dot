@@ -356,6 +356,7 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         lamp_bake: Vec4::ZERO,
         ssr_clip: Mat4::IDENTITY,
         ssr_eye: Vec4::ZERO,
+        rain_near: Vec4::ZERO,
     }
 }
 

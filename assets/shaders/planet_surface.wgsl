@@ -45,6 +45,7 @@ struct Params {
     lamp_bake: vec4<f32>,      // L7: x the newest bake's fade-in 0..1, y the older half holds this set, z the newest does, w the newest half
     ssr_clip: mat4x4<f32>,     // L8 (10.2): the screen trace history's clip_from_body
     ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
+    rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -2453,8 +2454,17 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
         // as water; putting them only in puddles left a meadow in a storm
         // with none, and a meadow is where the game starts.
         let rings = top_w*max(puddle,select(k_grass_rings,1.,floor_like));
+        // `wet-near-detail` (owner: "We don't need [rain] drops [further] out
+        // than that"): the sheet, the rings and the rivulets only within the
+        // reach, fading out over the band before it; past it the work is
+        // skipped, not only weighed out. Today's model draws them everywhere.
+        var near_detail = 1.;
+        if params.light.x > 0.5 {
+            let reach = max(params.rain_near.x,0.);
+            near_detail = 1.-smoothstep(reach-max(params.rain_near.y,0.),reach,distance_to_camera);
+        }
         var pg = vec2(0.);
-        if rings > 0.001 {
+        if rings > 0.001 && near_detail > 0.001 {
             // A continuous rippled sheet so the whole wet face reads as a
             // normal map, then raindrop impact rings on top of it.
             pg += vec2(
@@ -2472,9 +2482,10 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
             } else {
                 pg += rain_ripple_grad(uv*k_ripple_scale,wet_t)*(k_ripple_strength*rings);
             }
+            pg *= near_detail;
         }
         var pert = ax_a*pg.x+ax_b*pg.y;
-        if side_w > 0.001 {
+        if side_w > 0.001 && near_detail > 0.001 {
             // Down is radially inward within the face; the rivulets live in the
             // face's own texture UV so they line up with it.
             var down_dir = -wet_up-n*dot(-wet_up,n);
@@ -2486,7 +2497,7 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
             let dm = rivulets(duv,dt);
             let de = vec2(0.01,0.);
             let dn = vec2(rivulets(duv+de,dt)-dm, rivulets(duv+de.yx,dt)-dm);
-            pert += (across_dir*dn.x+down_dir*dn.y)*(k_flow_strength*side_w);
+            pert += (across_dir*dn.x+down_dir*dn.y)*(k_flow_strength*side_w*near_detail);
         }
         let wet = wet_amt*max(top_w,side_w);
         let wet_n = normalized(n+pert);
