@@ -1085,7 +1085,11 @@ pub fn run(args: &[String]) {
                 .before(pbd_app::fish::FishSet),
             digging::scripted_dig,
             // A photograph is of the world, not of the loading screen.
-            capture.run_if(pbd_app::loading::ready),
+            // After the screen lifts, so a capture's frame 1 is the first
+            // open frame, as it was before the screen existed.
+            capture
+                .run_if(pbd_app::loading::ready)
+                .after(pbd_app::loading::warm),
         ),
     )
     .init_resource::<menu::SaveIndex>()
@@ -1219,7 +1223,10 @@ pub fn run(args: &[String]) {
     }
     // The loading screen (`loading-screen`): added last, because it takes
     // over `Main` from the plugins that made it.
-    app.add_plugins(pbd_app::loading::LoadingPlugin { launched });
+    app.add_plugins(pbd_app::loading::LoadingPlugin {
+        launched,
+        capture: launch.capture.is_some(),
+    });
     if launch.capture_loading
         && let Some(path) = &launch.capture
     {

@@ -28,6 +28,9 @@
 - [ ] 3.4 `READY` and `LATE_PIPELINE` lines.
 - [ ] 3.5 Captures wait for `READY`; `--capture-loading` photographs the
       screen itself.
+- [x] 3.6 A capture is deterministic (decision 5): time paused while
+      loading, no warm-up, `--frames` from `READY`; two captures of one scene
+      compared pixel for pixel.
 
 ## 4. Measure and show
 

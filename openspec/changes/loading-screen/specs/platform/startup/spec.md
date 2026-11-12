@@ -53,6 +53,20 @@ the screen SHALL lift only once the pipeline cache has had nothing waiting for
 - **WHEN** the world has been built and pipelines are still compiling
 - **THEN** the screen shows the compiled and total pipeline counts and stays up
 
+### Requirement: A capture is the same on every run
+
+A `--capture` run SHALL advance no simulated time while it loads and SHALL
+not warm behind the screen, so `--frames` and every timed system count from
+the end of loading, and two captures of the same scene with the same exe,
+assets and arguments SHALL match within the noise they had before the screen
+(0-14 pixels at 1/255).
+
+#### Scenario: One scene captured twice
+
+- **WHEN** the same `--capture` command is run twice
+- **THEN** the two images differ in no more pixels than two such runs did
+  before the loading screen
+
 ### Requirement: The end of loading is logged
 
 The game SHALL log one `READY` line when the loading screen lifts, giving the

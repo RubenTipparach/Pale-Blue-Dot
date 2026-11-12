@@ -72,6 +72,9 @@ pub struct Warming {
     /// Whether the world clock ran before the screen held it; `None` until
     /// the first warm frame holds it.
     clock_ran: Option<bool>,
+    /// A `--capture`: the screen lifts on the first open frame, without
+    /// warming (see [`LoadingPlugin::capture`]).
+    immediate: bool,
 }
 
 /// Whether the loading screen has lifted (or there never was one).
@@ -334,11 +337,28 @@ struct Block(usize);
 /// The loading screen.
 pub struct LoadingPlugin {
     pub launched: Instant,
+    /// A `--capture` run, which must draw the same frame every time it is
+    /// run. How long the world takes to prepare and how many frames the
+    /// pipelines take to compile vary from run to run, so in a capture
+    /// nothing is simulated while loading: virtual time is paused until the
+    /// world opens (no clock, weather, cloud, wave or fixed step advances),
+    /// and the screen lifts on the first open frame instead of warming.
+    /// `--frames` and every timed system then count from `READY`, as they
+    /// counted from the first frame before the screen existed.
+    pub capture: bool,
 }
+
+/// Present in a `--capture` run (see [`LoadingPlugin::capture`]).
+#[derive(Resource)]
+struct CaptureRun;
 
 impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
         let watch = PipelineWatch::default();
+        if self.capture {
+            app.insert_resource(CaptureRun);
+            app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        }
         // `Main`, gated: while the world is prepared only the schedules that
         // draw the screen run. The same as Bevy's `Main::run_main` after.
         let mut main = Schedule::new(Main);
@@ -387,6 +407,10 @@ fn run_main_gated(world: &mut World, mut started: Local<bool>) {
     if let Some(loading) = world.get_resource::<WorldLoading>() {
         if loading.open_next {
             world.remove_resource::<WorldLoading>();
+            // A capture's time starts as the world opens.
+            if world.contains_resource::<CaptureRun>() {
+                world.resource_mut::<Time<Virtual>>().unpause();
+            }
         } else {
             for label in [
                 First.intern(),
@@ -601,11 +625,13 @@ fn drive_loading(world: &mut World) {
     // `Startup` must see it as the launch set it, or the air opens as a
     // capture's (`Air::in_place`) and steps on the main thread for the rest
     // of the run.
+    let immediate = world.contains_resource::<CaptureRun>();
     world.insert_resource(Warming {
         started: Instant::now(),
         frames: 0,
         quiet: 0,
         clock_ran: None,
+        immediate,
     });
     world.resource_mut::<WorldLoading>().open_next = true;
     // From here the screen draws on the game's UI camera, above everything.
@@ -663,7 +689,7 @@ fn look_heading(frames: u32) -> Option<u32> {
 
 /// The world warming behind the screen: lift it when the pipelines are
 /// quiet, the look round is done and the towns stand.
-fn warm(world: &mut World) {
+pub fn warm(world: &mut World) {
     let watch = world.resource::<PipelineWatch>().0.clone();
     let (total, waiting) = (
         watch.total.load(Ordering::Acquire),
@@ -672,7 +698,8 @@ fn warm(world: &mut World) {
     let towns_settled = world.get_resource::<Towns>().is_none_or(Towns::settled);
     // Hold the world clock from the first warm frame (after `Startup`, before
     // `run_clock`), so loading spends no world time.
-    if world.resource::<Warming>().clock_ran.is_none() {
+    let immediate = world.resource::<Warming>().immediate;
+    if !immediate && world.resource::<Warming>().clock_ran.is_none() {
         let ran = world
             .get_resource_mut::<crate::sky::Sun>()
             .is_some_and(|mut sun| std::mem::replace(&mut sun.running, false));
@@ -703,7 +730,7 @@ fn warm(world: &mut World) {
             world_s + elapsed.as_secs_f32()
         ),
     );
-    let done = frames >= MIN_WARM_FRAMES && !compiling && towns_settled;
+    let done = immediate || (frames >= MIN_WARM_FRAMES && !compiling && towns_settled);
     let capped = elapsed > WARM_CAP;
     if !done && !capped {
         return;

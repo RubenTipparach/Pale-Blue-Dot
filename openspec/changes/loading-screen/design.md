@@ -127,6 +127,35 @@ with the frame log's `frame` column). After it, a render-world system logs each
 new pipeline by label as `LATE_PIPELINE <label>`: the list of what the next
 prewarm must reach.
 
+## Decision 5: a capture loads with time stopped and does not warm
+
+A `--capture` must draw the same picture every time it is run with the same
+exe, assets and arguments; before the screen, two runs matched to 0-14 pixels
+at 1/255. The screen broke that (Holbrook lane at `--frames 300`: 73% of the
+pixels differ; a shore view at 30 m: 26%), because a capture steps time by a
+fixed amount every frame (`TimeUpdateStrategy::ManualDuration`), and loading
+takes a different number of frames on every run: the thread's build time,
+then however many frames the pipelines take to compile behind the screen.
+Each loading frame moved virtual time, and each warm frame ran the whole
+simulation (weather, clouds, waves, town fades, fixed steps).
+
+So in a capture:
+
+- virtual time is paused from launch and unpaused as the world opens, just
+  before `Startup`, so loading advances nothing that reads time;
+- there is no warm-up: the screen lifts on the first open frame, and the
+  capture system runs after the lift that frame. `--frames` and every timed
+  system count from `READY`, as they counted from the first frame before the
+  screen existed. Pipelines compile during the counted frames, as they did
+  then.
+
+A capture is not a warm-up measurement; real-time runs keep decision 3.
+
+Measured with `tools/capture_repeat.py` (each scene captured twice,
+`--frames 300`, 1440x900, RTX 3070, release, 2026-11-12): before the fix,
+Holbrook lane 0 pixels differed and a harbour from 30 m (rain, night) 44.6%
+(578,454 of 1,296,000, worst 77/255); with it, 0 and 0.
+
 ## The screen
 
 Full window, the game's clear colour; a panel with the menu's edge, `PALE BLUE
