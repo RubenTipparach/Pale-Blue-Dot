@@ -1,0 +1,12 @@
+// How a standing town is drawn, read by `crates/pbd-app/src/towns.rs`.
+//
+// `dressing_cascades`: how many of the sun's four cascades, finest first, a
+// town's dressing things (stalls, racks, pots, boats, barrels, cacti) cast
+// into (`crab-breeze-lessons` rank 5, after Crab Breeze's cast distances).
+// 1 to 4; 4 casts everywhere a building does. On foot the cascades end at
+// about 14, 43, 165 and 900 m, so 3 is out to about 165 m, where a barrel's
+// shadow is under one texel of the last cascade. Past it the shadow goes
+// out through the cascades' own blend at that edge, never in one frame.
+(
+    dressing_cascades: 3,
+)

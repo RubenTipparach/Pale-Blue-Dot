@@ -12,9 +12,14 @@ It launches the game, so it holds the machine like any capture: it refuses
 while `C:/Users/santi/repos/perf.lock` (or `PBD_PERF_LOCK`) exists and is not
 its caller's.
 
+With `--against <exe>` it captures each scene once with each exe instead
+and compares them: a change that must not move a pixel (`crab-breeze-lessons`
+rank 2) is held to the same count.
+
 Usage:
     python tools/capture_repeat.py <exe> [--out output/capture-repeat]
         [--frames 300] [--scenes lane,shore] [--tolerance 1] [--max-pixels 14]
+        [--against <other exe>]
 """
 from __future__ import annotations
 
@@ -27,12 +32,23 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-# The Holbrook lane (tools/capture_holbrook.sh) and a harbour seen from 30 m.
+# The Holbrook lane (tools/capture_holbrook.sh) and a harbour seen from 30 m;
+# then towns by day and by night (`crab-breeze-lessons` 3.4): the lane, the
+# middle of Ashenstead (the perf suite's `town`), and Holinghaven's quay with
+# its dressing, at 10:00 and 22:00.
+DRY = ["--rain", "0", "--weather-at", "7200"]
+LANE = ["--walk", "--at", "29.69673", "1.19287", "--yaw", "179.4", "--open-doors"]
+ASHENSTEAD = ["--walk", "--at", "19.644", "59.178"]
+QUAY = ["--view", "column", "--at", "23.71891", "-115.27982", "--height", "30", "--pitch", "-20"]
 SCENES = {
-    "lane": ["--walk", "--at", "29.69673", "1.19287", "--yaw", "179.4",
-             "--time", "11", "--rain", "0", "--weather-at", "7200", "--open-doors"],
-    "shore": ["--view", "column", "--at", "23.71891", "-115.27982", "--height", "30",
-              "--pitch", "-20", "--time", "11", "--rain", "0", "--weather-at", "7200"],
+    "lane": LANE + ["--time", "11"] + DRY,
+    "shore": QUAY + ["--time", "11"] + DRY,
+    "lane-day": LANE + ["--time", "10"] + DRY,
+    "lane-night": LANE + ["--time", "22"] + DRY,
+    "ash-day": ASHENSTEAD + ["--time", "10"] + DRY,
+    "ash-night": ASHENSTEAD + ["--time", "22"] + DRY,
+    "quay-day": QUAY + ["--time", "10"] + DRY,
+    "quay-night": QUAY + ["--time", "22"] + DRY,
 }
 
 
@@ -70,6 +86,8 @@ def main() -> int:
     ap.add_argument("--max-pixels", type=int, default=14)
     ap.add_argument("--lock-owner", default=None,
                     help="text in perf.lock that marks it as the caller's own")
+    ap.add_argument("--against", default=None,
+                    help="another exe: capture each scene once with each and compare")
     a = ap.parse_args()
     lock = Path(os.environ.get("PBD_PERF_LOCK", "C:/Users/santi/repos/perf.lock"))
     out = Path(a.out)
@@ -77,12 +95,13 @@ def main() -> int:
     failed = False
     for name in a.scenes.split(","):
         pngs = []
-        for run in (1, 2):
+        exes = [("1", a.exe), ("2", a.exe)] if a.against is None else [("a", a.exe), ("b", a.against)]
+        for run, exe in exes:
             if lock_held_by_other(lock, a.lock_owner):
                 sys.exit(f"{lock} is held by another sitting; not launching")
             png = out / f"{name}-{run}.png"
             png.unlink(missing_ok=True)
-            capture(a.exe, SCENES[name], a.frames, png)
+            capture(exe, SCENES[name], a.frames, png)
             pngs.append(png)
         n, total, worst = differing(*pngs, a.tolerance)
         ok = n <= a.max_pixels

@@ -17,10 +17,16 @@
 // or, on a town's outside, off the field baked into each vertex.
 // The constants are the terrain shader's, and `the_field_lit_shader_carries_
 // the_terrain_light_constants` holds both copies to `pbd_core::light`.
+//
+// Every mesh of a base material shares one material (`crab-breeze-lessons`
+// rank 2): what differs from mesh to mesh is its row of `rows`, found by its
+// `MeshTag`, and its room lights in `room`; what is the same for all is
+// `scene`. All three are written in place each frame.
 
 #import bevy_pbr::{
     pbr_functions::alpha_discard,
     pbr_fragment::pbr_input_from_standard_material,
+    mesh_functions,
 }
 
 #ifdef PREPASS_PIPELINE
@@ -36,27 +42,11 @@
 #import pbd::sun_shadow::{SunCascades, sun_shadow_soft}
 #endif
 
-struct Field {
-    // The mesh's bounds in the render frame.
-    low: vec4<f32>,
-    high: vec4<f32>,
+// What every field-lit mesh reads alike.
+struct Scene {
     // The planet's centre in the render frame, and the way to the sun.
     centre: vec4<f32>,
     sun: vec4<f32>,
-    // The field at the bounds' eight corners, corner `x + 2y + 4z`: sky in
-    // `sky[i / 4][i % 4]`, block in `block[i / 4][i % 4]`, each 0..1.
-    sky: array<vec4<f32>, 2>,
-    block: array<vec4<f32>, 2>,
-    // x one where it is lit as the terrain is; y the share of the sky that
-    // reaches it (one outdoors); z the sun bounced round a room; w how many
-    // room lights.
-    look: vec4<f32>,
-    // A building's own lights (`cities-in-the-world` decision 7a): where, in
-    // the planet's frame, and how far; colour times power, w one for a
-    // candle; the band of height round each that it lights.
-    lights: array<vec4<f32>, 24>,
-    light_colour: array<vec4<f32>, 24>,
-    light_span: array<vec4<f32>, 24>,
     // `lighting-model`: x one for the new model, y the cover, z a lamp's glow,
     // w the sun's apparent radius as a tangent (L3);
     // the sky's SH (L2), clear then under a full deck.
@@ -64,7 +54,38 @@ struct Field {
     sky_sh: array<vec4<f32>, 18>,
 }
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> field: Field;
+// One mesh's own row.
+struct Field {
+    // The mesh's bounds in the render frame.
+    low: vec4<f32>,
+    high: vec4<f32>,
+    // x how far it has faded out.
+    fade: vec4<f32>,
+    // The field at the bounds' eight corners, corner `x + 2y + 4z`: sky in
+    // `sky[i / 4][i % 4]`, block in `block[i / 4][i % 4]`, each 0..1.
+    sky: array<vec4<f32>, 2>,
+    block: array<vec4<f32>, 2>,
+    // x one where it is lit as the terrain is; y the share of the sky that
+    // reaches it (one outdoors); z the sun bounced round a room.
+    look: vec4<f32>,
+    // x the first of its room lights in `room`, y how many.
+    lights: vec4<f32>,
+}
+
+// A building's own light (`cities-in-the-world` decision 7a): where, in the
+// planet's frame, and how far; colour times power, w one for a candle; the
+// band of height round it that it lights.
+struct RoomLight {
+    at: vec4<f32>,
+    colour: vec4<f32>,
+    span: vec4<f32>,
+}
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<storage, read> scene: Scene;
+@group(#{MATERIAL_BIND_GROUP}) @binding(104) var<storage, read> rows: array<Field>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(105) var<storage, read> room: array<RoomLight>;
+// This fragment's mesh's row, read once at the top of `fragment`.
+var<private> field: Field;
 #ifndef PREPASS_PIPELINE
 @group(#{MATERIAL_BIND_GROUP}) @binding(101) var sun_map: texture_depth_2d_array;
 @group(#{MATERIAL_BIND_GROUP}) @binding(102) var sun_cmp: sampler_comparison;
@@ -103,23 +124,25 @@ fn room_lights(body: vec3<f32>, n: vec3<f32>, night: f32) -> vec3<f32> {
     let fire = 0.9 + 0.3 * night;
     let candle = 1.8 * clamp((night - 0.25) / 0.35, 0.0, 1.0);
     var sum = vec3<f32>(0.0);
-    let count = min(u32(field.look.w), 24u);
+    let count = min(u32(field.lights.y), 24u);
+    let first = u32(field.lights.x);
     for (var i = 0u; i < count; i++) {
-        let at = field.lights[i];
+        let light = room[first + i];
+        let at = light.at;
         let to = at.xyz - body;
         let d = length(to);
         if d >= at.w {
             continue;
         }
         let rise = dot(body - at.xyz, normalize(at.xyz));
-        let span = field.light_span[i];
+        let span = light.span;
         if rise < span.x || rise > span.y {
             continue;
         }
         let facing = dot(to, n) / max(d, 1e-3);
         let q = 1.0 - (d / at.w) * (d / at.w);
         let f = q * q * (0.3 + 0.7 * max(facing, 0.0)) * d * d / (d * d + 0.36);
-        let c = field.light_colour[i];
+        let c = light.colour;
         sum += c.rgb * (f * select(fire, candle, c.w > 0.5));
     }
     return sum * ROOM_LIGHT_GAIN;
@@ -186,7 +209,7 @@ fn sky_radiance(d_world: vec3<f32>, up: vec3<f32>, sun: vec3<f32>, deck: f32) ->
         4.0*0.546274*(x*x - y*y));
     var e = vec3<f32>(0.0);
     for (var k = 0u; k < 9u; k++) {
-        e += mix(field.sky_sh[k].xyz, field.sky_sh[k + 9u].xyz, deck)*b[k];
+        e += mix(scene.sky_sh[k].xyz, scene.sky_sh[k + 9u].xyz, deck)*b[k];
     }
     return max(e, vec3(0.0))*select(1.0, 0.35, below);
 }
@@ -215,7 +238,7 @@ fn sky_irradiance(n_world: vec3<f32>, up: vec3<f32>, sun: vec3<f32>, deck: f32) 
         1.092548*x*y, 1.092548*y*z, 0.315392*(3.0*z*z - 1.0), 1.092548*x*z, 0.546274*(x*x - y*y));
     var e = vec3<f32>(0.0);
     for (var k = 0u; k < 9u; k++) {
-        e += mix(field.sky_sh[k].xyz, field.sky_sh[k + 9u].xyz, deck)*b[k];
+        e += mix(scene.sky_sh[k].xyz, scene.sky_sh[k + 9u].xyz, deck)*b[k];
     }
     return max(e, vec3(0.0));
 }
@@ -224,7 +247,8 @@ fn sky_irradiance(n_world: vec3<f32>, up: vec3<f32>, sun: vec3<f32>, deck: f32) 
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
     // A town fading in or out at the edge of its range (`cities-in-the-world`
     // slice 4a): drawn through the terrain's mask, never whole in one frame.
-    if bayer4(in.position.xy) < field.centre.w {
+    field = rows[mesh_functions::get_tag(in.instance_index)];
+    if bayer4(in.position.xy) < field.fade.x {
         discard;
     }
     var pbr_input = pbr_input_from_standard_material(in, is_front);
@@ -246,9 +270,9 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         block = in.uv_b.y;
     }
 #endif
-    let body = in.world_position.xyz - field.centre.xyz;
+    let body = in.world_position.xyz - scene.centre.xyz;
     let up = normalize(body);
-    let sun = field.sun.xyz;
+    let sun = scene.sun.xyz;
     let elevation = dot(up, sun);
     let daylight = smoothstep(-0.13, 0.20, elevation);
     // The sun ends at the horizon (`sun-shadows` decision 5): a shadow cast
@@ -261,7 +285,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         // `lighting-model` L3: `model.w` the sun's apparent radius, already
         // widened by the cover (zero: today's filter).
         shadow = sun_shadow_soft(sun_map, sun_cmp, sun_cascades, body, pbr_input.world_normal,
-            field.model.w, dot(pbr_input.world_normal, sun));
+            scene.model.w, dot(pbr_input.world_normal, sun));
     }
     // The sun where it is up, the sky reaches and the cascades see it.
     let sun_up = sunlight * sky * shadow;
@@ -279,9 +303,9 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         let bounce = ROOM_BOUNCE * (field.look.z * open * sunlight * max(elevation, 0.0));
         var lit = base * (fill * max(AMBIENT_FLOOR, mix(night, 1.0, daylight) * open)
             + SUN_TINT * facing * sun_up + bounce) * gain;
-        if field.model.x > 0.5 {
+        if scene.model.x > 0.5 {
             // The new model: the sky that is there, and the sun after the air.
-            let amb = max(sky_irradiance(n, up, sun, field.model.y) * open, vec3(0.006, 0.008, 0.011));
+            let amb = max(sky_irradiance(n, up, sun, scene.model.y) * open, vec3(0.006, 0.008, 0.011));
             lit = base * (amb + sun_air(elevation) * facing * sky * shadow + bounce);
         }
         let own = base * room_lights(body, n, 1.0 - daylight);
@@ -295,13 +319,13 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         // whose floor keeps a cave legible (`lamps-and-lanterns` decision 14).
         var ambient = base * SKY_FILL * max(AMBIENT_FLOOR, mix(NIGHT_FILL, 1.0, daylight) * sky);
         var mirrored = vec3(0.0);
-        if field.model.x > 0.5 {
+        if scene.model.x > 0.5 {
             // A metal takes no diffuse light: its colour is what it mirrors.
             let metallic = pbr_input.material.metallic;
             ambient = base * (1.0 - metallic)
-                * max(sky_irradiance(n, up, sun, field.model.y) * sky, vec3(0.006, 0.008, 0.011));
+                * max(sky_irradiance(n, up, sun, scene.model.y) * sky, vec3(0.006, 0.008, 0.011));
             // L5: what it mirrors (the sky's own light; no probe of the land).
-            mirrored = sky_specular(n, pbr_input.V, up, sun, field.model.y, base, metallic,
+            mirrored = sky_specular(n, pbr_input.V, up, sun, scene.model.y, base, metallic,
                 pbr_input.material.perceptual_roughness, sky);
         }
         out.color = vec4<f32>(out.color.rgb * sun_up + ambient * (1.0 - sun_up) + mirrored + lamp,
