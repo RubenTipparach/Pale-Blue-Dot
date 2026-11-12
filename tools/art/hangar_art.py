@@ -5,7 +5,11 @@ solitaire collection's style, every colour from Sweaft-64 (the kit's save() refu
 Four kinds of output, all into docs/mockups/hangar/:
 
 - part icons: 32 x 32, transparent, one bold subject, 1 px outline, light from the top left, drawn
-  chibi (fat bodies, big canopies, fat blades); the page shows them only at whole multiples of 32 px;
+  chibi (fat bodies, big canopies, fat blades); the page shows them only at whole multiples of 32 px.
+  Each part is drawn once in every livery paint (its painted panels in that paint's ramp, nothing
+  else changed), into `<part>-paints.png`, a 288 x 32 strip in PAINTS order, so the builder's grid
+  shows each piece in its colour (the owner: "would be nice for the grid pieces to actually get
+  colors too"); `<part>.png` is the red one, for the part cards and the hotbar;
 - livery decals: the shark mouth (32 x 16), three roundels of the player's own (16 x 16: no real air
   force's insignia) and a 3 x 5 digit sheet for nose numbers (50 x 7), hard alpha, used by the page's
   three.js aircraft as cut-out cards with alphaTest 0.5;
@@ -71,8 +75,12 @@ def body(sp, x0, x1, y0, y1, ramp, nose=4, tail=3):
     return sp.part(m, ramp, "cyl_h", base=2)
 
 
-def cockpit(sp):
-    body(sp, 2, 29, 16, 28, PAINTS["red"])
+# Every icon takes P, the paint ramp (dark to light, four tones from PAINTS): the part's painted
+# panels are drawn in it and nothing else is, so one drawing makes every colour's variant with
+# exact palette tones (no hue shifting). The page shows the variant of the piece's colour.
+
+def cockpit(sp, P):
+    body(sp, 2, 29, 16, 28, P)
     canopy = sp.poly([(8, 17), (11, 8), (16, 5), (22, 5), (26, 9), (27, 17)])
     sp.part(canopy, R["cyan"], "sphere", base=2)
     sp.fill(sp.line([(13, 14), (17, 8)], 2) & canopy, R["cyan"][4])
@@ -81,139 +89,139 @@ def cockpit(sp):
     sp.outline()
 
 
-def fuselage(sp):
-    body(sp, 1, 30, 6, 26, PAINTS["red"], nose=7, tail=7)
+def fuselage(sp, P):
+    body(sp, 1, 30, 6, 26, P, nose=7, tail=7)
     for x in (11, 20):
-        sp.fill(sp.rect(x, 7, x, 25), PAINTS["red"][1])
-    sp.part(sp.rect(2, 15, 29, 18), PAINTS["white"], "flat", base=2)
+        sp.fill(sp.rect(x, 7, x, 25), P[1])
+    sp.part(sp.rect(2, 15, 29, 18), R["white"], "flat", base=3)
     sp.plots([(8, 11), (9, 11)], GLINT)
     sp.outline()
 
 
-def prop_engine(sp):
+def prop_engine(sp, P):
     cowl = sp.poly([(3, 9), (18, 7), (22, 10), (22, 22), (18, 25), (3, 23)])
-    sp.part(cowl, PAINTS["sunny"], "cyl_h", base=2)
+    sp.part(cowl, P, "cyl_h", base=2)
     for x in (8, 13):
-        sp.fill(sp.rect(x, 9, x, 23) & cowl, PAINTS["sunny"][0])
+        sp.fill(sp.rect(x, 9, x, 23) & cowl, P[0])
     spinner = sp.poly([(22, 12), (27, 14), (29, 16), (27, 18), (22, 20)])
     sp.part(spinner, R["white"], "cyl_h", base=3)
     sp.part(sp.taper(25, 15, 25, 1, 5, 3), R["soot"], "rim", base=2)
     sp.part(sp.taper(25, 17, 25, 31, 5, 3), R["soot"], "rim", base=2)
-    sp.fill(sp.rect(23, 1, 27, 3), PAINTS["sunny"][2])
-    sp.fill(sp.rect(23, 29, 27, 31), PAINTS["sunny"][2])
+    sp.fill(sp.rect(23, 1, 27, 3), R["white"][3])
+    sp.fill(sp.rect(23, 29, 27, 31), R["white"][3])
     sp.plots([(6, 10), (7, 10)], GLINT)
     sp.outline()
 
 
-def jet(sp):
+def jet(sp, P):
     pod = sp.poly([(6, 7), (24, 6), (29, 10), (29, 22), (24, 26), (6, 25)])
-    sp.part(pod, R["white"], "cyl_h", base=3)
+    sp.part(pod, P, "cyl_h", base=2)
     sp.part(sp.rect(25, 9, 30, 23), R["dark"], "cyl_h", base=3)
     sp.part(sp.rect(6, 10, 9, 22), R["dark"], "flat", base=1)
-    sp.fill(sp.rect(14, 6, 15, 26) & pod, R["white"][1])
-    sp.part(sp.rect(16, 13, 22, 19), PAINTS["red"], "flat", base=2)
+    sp.fill(sp.rect(14, 6, 15, 26) & pod, P[0])
+    sp.part(sp.rect(16, 13, 22, 19), R["white"], "flat", base=3)
     sp.plots([(10, 8), (11, 8)], GLINT)
     sp.outline()
     sp.part(sp.poly([(0, 11), (5, 10), (5, 22), (0, 21)]), R["flame"], "inset", glow=True)
 
 
-def wing(sp):
+def wing(sp, P):
     # three-quarter view: a thick stubby wing, leading edge to the right, roundel on its top
     top = sp.poly([(1, 18), (17, 4), (30, 7), (14, 23)])
-    sp.part(top, PAINTS["red"], "rim", base=2, depth=1)
+    sp.part(top, P, "rim", base=2, depth=1)
     edge = sp.poly([(14, 23), (30, 7), (30, 12), (14, 28)])
-    sp.part(edge, PAINTS["red"], "flat", base=1)
-    sp.part(sp.poly([(1, 18), (14, 23), (14, 28), (1, 22)]), PAINTS["red"], "flat", base=0)
-    sp.part(sp.poly([(17, 4), (22, 5), (9, 20), (5, 19)]), PAINTS["white"], "rim", base=2)
+    sp.part(edge, P, "flat", base=1)
+    sp.part(sp.poly([(1, 18), (14, 23), (14, 28), (1, 22)]), P, "flat", base=0)
+    sp.part(sp.poly([(17, 4), (22, 5), (9, 20), (5, 19)]), R["white"], "rim", base=3)
     sp.part(sp.ellipse(16, 10, 24, 15), R["blue"], "flat", base=2)
     sp.part(sp.ellipse(19, 11, 21, 13), R["paper"], "flat", base=2)
     sp.plots([(16, 5), (17, 5)], GLINT)
     sp.outline()
 
 
-def tailplane(sp):
+def tailplane(sp, P):
     w = sp.poly([(2, 20), (16, 8), (30, 10), (16, 23)])
-    sp.part(w, PAINTS["sunny"], "rim", base=2, depth=1)
-    sp.part(sp.poly([(16, 23), (30, 10), (30, 14), (16, 27)]), PAINTS["sunny"], "flat", base=0)
-    sp.part(sp.poly([(2, 20), (16, 23), (16, 27), (2, 23)]), PAINTS["sunny"], "flat", base=0)
-    sp.part(sp.poly([(22, 9), (30, 10), (27, 13), (19, 12)]), PAINTS["red"], "rim", base=2)
+    sp.part(w, P, "rim", base=2, depth=1)
+    sp.part(sp.poly([(16, 23), (30, 10), (30, 14), (16, 27)]), P, "flat", base=0)
+    sp.part(sp.poly([(2, 20), (16, 23), (16, 27), (2, 23)]), P, "flat", base=0)
+    sp.part(sp.poly([(22, 9), (30, 10), (27, 13), (19, 12)]), R["white"], "rim", base=3)
     sp.plots([(14, 9), (15, 9)], GLINT)
     sp.outline()
 
 
-def fin(sp):
+def fin(sp, P):
     f = sp.poly([(4, 29), (10, 6), (16, 3), (22, 4), (25, 8), (27, 29)])
-    sp.part(f, PAINTS["sunny"], "rim", base=2, depth=2)
-    sp.part(sp.poly([(9, 12), (11, 6), (16, 3), (22, 4), (24, 7), (24, 12)]), PAINTS["red"], "rim", base=2)
-    sp.fill(sp.rect(17, 14, 18, 28) & f, PAINTS["sunny"][0])
+    sp.part(f, P, "rim", base=2, depth=2)
+    sp.part(sp.poly([(9, 12), (11, 6), (16, 3), (22, 4), (24, 7), (24, 12)]), R["white"], "rim", base=3)
+    sp.fill(sp.rect(17, 14, 18, 28) & f, P[0])
     sp.plots([(12, 7), (13, 6)], GLINT)
     sp.outline()
 
 
-def rotor(sp):
-    sp.part(sp.rect(13, 12, 18, 27), R["steel"], "cyl_v", base=2)
-    sp.part(sp.rect(10, 24, 21, 30), R["white"], "rim", base=3)
+def rotor(sp, P):
+    sp.part(sp.poly([(4, 31), (7, 24), (24, 24), (27, 31)]), P, "cyl_h", base=2)
+    sp.part(sp.rect(13, 12, 18, 25), R["steel"], "cyl_v", base=2)
     sp.part(sp.rect(11, 8, 20, 13), R["dark"], "rim", base=3)
     sp.part(sp.taper(1, 8, 15, 10, 4, 6), R["soot"], "rim", base=2)
     sp.part(sp.taper(16, 10, 30, 8, 6, 4), R["soot"], "rim", base=2)
-    sp.fill(sp.rect(1, 6, 3, 10), PAINTS["sunny"][2])
-    sp.fill(sp.rect(28, 6, 30, 10), PAINTS["sunny"][2])
+    sp.fill(sp.rect(1, 6, 3, 10), P[2])
+    sp.fill(sp.rect(28, 6, 30, 10), P[2])
     sp.plots([(14, 13), (14, 14)], GLINT)
     sp.outline()
 
 
-def tail_rotor(sp):
+def tail_rotor(sp, P):
     boom = sp.poly([(1, 18), (18, 16), (18, 23), (1, 22)])
-    sp.part(boom, PAINTS["red"], "cyl_h", base=2)
+    sp.part(boom, P, "cyl_h", base=2)
     f = sp.poly([(14, 24), (17, 9), (24, 7), (25, 24)])
-    sp.part(f, PAINTS["red"], "rim", base=2)
+    sp.part(f, P, "rim", base=2)
     hub = sp.circle(21, 15, 2)
     sp.part(sp.taper(21, 15, 21, 1, 5, 4), R["soot"], "rim", base=2)
     sp.part(sp.taper(21, 15, 21, 30, 5, 4), R["soot"], "rim", base=2)
-    sp.fill(sp.rect(19, 1, 23, 3), PAINTS["white"][3])
-    sp.fill(sp.rect(19, 28, 23, 30), PAINTS["white"][3])
+    sp.fill(sp.rect(19, 1, 23, 3), R["white"][3])
+    sp.fill(sp.rect(19, 28, 23, 30), R["white"][3])
     sp.part(hub, R["white"], "sphere", base=3)
     sp.outline()
 
 
-def nacelle(sp):
+def nacelle(sp, P):
     pod = sp.poly([(10, 31), (10, 14), (13, 11), (19, 11), (22, 14), (22, 31)])
-    sp.part(pod, R["white"], "cyl_v", base=3)
-    sp.part(sp.rect(10, 24, 22, 26), PAINTS["orange"], "cyl_v", base=2)
+    sp.part(pod, P, "cyl_v", base=2)
+    sp.part(sp.rect(10, 24, 22, 26), R["white"], "cyl_v", base=3)
     sp.part(sp.rect(13, 7, 19, 11), R["dark"], "rim", base=3)
     sp.part(sp.taper(1, 5, 15, 7, 4, 6), R["soot"], "rim", base=2)
     sp.part(sp.taper(17, 7, 31, 5, 6, 4), R["soot"], "rim", base=2)
-    sp.fill(sp.rect(1, 3, 3, 7), PAINTS["orange"][2])
-    sp.fill(sp.rect(29, 3, 31, 7), PAINTS["orange"][2])
+    sp.fill(sp.rect(1, 3, 3, 7), R["white"][3])
+    sp.fill(sp.rect(29, 3, 31, 7), R["white"][3])
     sp.plots([(12, 15), (12, 16)], GLINT)
     sp.outline()
 
 
-def gear(sp):
+def gear(sp, P):
     sp.part(sp.rect(14, 2, 18, 15), R["steel"], "cyl_v", base=2)
-    sp.part(sp.rect(10, 1, 22, 4), R["white"], "rim", base=3)
+    sp.part(sp.rect(9, 1, 23, 5), P, "rim", base=2)
     wheel = sp.circle(16, 21, 9)
     sp.part(wheel, R["tyre"], "sphere", base=2)
-    sp.part(sp.circle(16, 21, 4), R["white"], "sphere", base=3)
-    sp.part(sp.circle(16, 21, 1), PAINTS["red"], "flat", base=2)
+    sp.part(sp.circle(16, 21, 4), P, "sphere", base=2)
+    sp.part(sp.circle(16, 21, 1), R["white"], "flat", base=3)
     sp.plots([(11, 15), (12, 14)], R["tyre"][3])
     sp.outline()
 
 
-def float_(sp):
+def float_(sp, P):
     for x in (9, 22):
         sp.part(sp.rect(x, 4, x + 2, 16), R["steel"], "cyl_v", base=2)
     pont = sp.poly([(2, 17), (24, 16), (29, 18), (31, 21), (27, 26), (4, 26), (2, 23)])
-    sp.part(pont, R["white"], "cyl_h", base=3)
-    sp.part(sp.rect(3, 23, 28, 25) & pont, PAINTS["red"], "flat", base=2)
-    sp.part(sp.rect(4, 1, 27, 4), PAINTS["teal"], "rim", base=2)
+    sp.part(pont, P, "cyl_h", base=2)
+    sp.part(sp.rect(3, 23, 28, 25) & pont, R["white"], "flat", base=3)
+    sp.part(sp.rect(4, 1, 27, 4), R["steel"], "rim", base=2)
     sp.plots([(7, 18), (8, 18)], GLINT)
     sp.outline()
 
 
-def fuel(sp):
+def fuel(sp, P):
     tank = sp.poly([(2, 16), (6, 10), (24, 10), (30, 16), (24, 22), (6, 22)])
-    sp.part(tank, PAINTS["red"], "cyl_h", base=2)
+    sp.part(tank, P, "cyl_h", base=2)
     sp.part(sp.rect(12, 10, 17, 22) & tank, R["white"], "cyl_h", base=3)
     sp.part(sp.poly([(13, 13), (16, 13), (17, 16), (14, 19), (13, 16)]), R["flame"], "flat", base=2, seam=False)
     sp.part(sp.rect(18, 5, 21, 9), R["steel"], "rim", base=2)
@@ -221,23 +229,23 @@ def fuel(sp):
     sp.outline()
 
 
-def cargo(sp):
+def cargo(sp, P):
     top = sp.poly([(7, 5), (29, 5), (25, 10), (3, 10)])
     front = sp.rect(3, 11, 24, 28)
     side = sp.poly([(25, 11), (29, 6), (29, 23), (25, 28)])
-    sp.part(front, PAINTS["tan"], "rim", base=2)
+    sp.part(front, P, "rim", base=2)
     for x in (8, 14, 19):
-        sp.fill(sp.rect(x, 12, x, 27), PAINTS["tan"][1])
-    sp.part(side, PAINTS["tan"], "flat", base=1)
-    sp.part(top, PAINTS["tan"], "flat", base=3)
-    sp.part(sp.rect(4, 17, 23, 21), PAINTS["sunny"], "flat", base=2)
+        sp.fill(sp.rect(x, 12, x, 27), P[1])
+    sp.part(side, P, "flat", base=1)
+    sp.part(top, P, "flat", base=3)
+    sp.part(sp.rect(4, 17, 23, 21), R["white"], "flat", base=3)
     sp.plots([(8, 6), (9, 6)], GLINT)
     sp.outline()
 
 
-def utility(sp):
+def utility(sp, P):
     pod = sp.poly([(2, 11), (20, 10), (24, 13), (24, 21), (20, 23), (2, 22)])
-    sp.part(pod, R["white"], "cyl_h", base=3)
+    sp.part(pod, P, "cyl_h", base=2)
     sp.part(sp.rect(9, 4, 13, 10), R["steel"], "rim", base=2)
     sp.part(sp.rect(22, 12, 26, 22), R["dark"], "rim", base=3)
     sp.plots([(5, 12), (6, 12)], GLINT)
@@ -247,15 +255,16 @@ def utility(sp):
     sp.plot(27, 17, GLINT, glow=True)
 
 
-def livery(sp):
+def livery(sp, P):
+    # the paint brush tool: a spray can, its band in the brush's colour
     can = sp.poly([(5, 10), (19, 10), (19, 30), (5, 30)])
     sp.part(can, R["white"], "cyl_v", base=3)
-    sp.part(sp.rect(5, 16, 19, 23), PAINTS["red"], "cyl_v", base=2)
+    sp.part(sp.rect(5, 16, 19, 23), P, "cyl_v", base=2)
     sp.part(sp.rect(9, 5, 15, 9), R["steel"], "rim", base=2)
     sp.part(sp.rect(10, 2, 14, 4), R["dark"], "rim", base=3)
     sp.plots([(7, 12), (7, 13)], GLINT)
     sp.outline()
-    for (x, y), c in zip([(22, 4), (26, 7), (23, 10), (28, 12), (25, 15)], ["#d12d41", "#faaf5c", "#1096c3", "#559642", "#fa3a64"]):
+    for (x, y), c in zip([(22, 4), (26, 7), (23, 10), (28, 12), (25, 15)], [P[2], P[3], P[2], P[3], P[1]]):
         sp.fill(sp.rect(x, y, x + 2, y + 2), c, glow=True)
 
 
@@ -438,13 +447,21 @@ for _name, _ramp in PAINTS.items():
 def main():
     os.makedirs(OUT, exist_ok=True)
     src = "balatro-pixel-art pixelkit"
-    icons, decals, texes = [], [], []
+    icons, decals, texes, sheets = [], [], [], []
+    from PIL import Image
     for name, draw in ICONS.items():
-        sp = Sprite(N, N)
-        draw(sp)
-        img = sp.image()
-        save(img, os.path.join(OUT, name + ".png"), source=src)
-        icons.append((name, img))
+        # one sheet a part: its variant in each paint, PAINTS order, 32 px a frame
+        strip = Image.new("RGBA", (N * len(PAINTS), N))
+        for i, ramp in enumerate(PAINTS.values()):
+            sp = Sprite(N, N)
+            draw(sp, ramp)
+            img = sp.image()
+            strip.paste(img, (i * N, 0))
+            if i == 0:
+                save(img, os.path.join(OUT, name + ".png"), source=src)   # red: the cards and the hotbar
+                icons.append((name, img))
+        save(strip, os.path.join(OUT, name + "-paints.png"), source=src)
+        sheets.append((name + "-paints", strip))
     for name, img in [("shark-mouth", shark_mouth()), ("roundel-dot", roundel("dot")),
                       ("roundel-sun", roundel("sun")), ("roundel-chevron", roundel("chevron")),
                       ("digits", digit_sheet())]:
@@ -457,7 +474,7 @@ def main():
         assert img.getchannel("A").getextrema() == (255, 255), name + " has holes"
         save(img.convert("RGB"), os.path.join(OUT, name + ".png"), source=src)
         texes.append((name, img))
-    print("wrote", len(icons), "icons,", len(decals), "decals and", len(texes), "textures to", OUT)
+    print("wrote", len(icons), "icons,", len(sheets), "paint sheets,", len(decals), "decals and", len(texes), "textures to", OUT)
     if "--sheet" in sys.argv:
         from PIL import Image
         path = sys.argv[sys.argv.index("--sheet") + 1]
@@ -478,6 +495,12 @@ def main():
             big.append((name, c))
         sheet(refs + icons + big + tiled, scale=3, cols=8).save(path)
         print("sheet", path)
+        # the paint variants: every part in every colour, one row a part
+        rows = Image.new("RGBA", (N * len(PAINTS), N * len(sheets)), (31, 59, 82, 255))
+        for k, (name, strip) in enumerate(sheets):
+            rows.alpha_composite(strip, (0, k * N))
+        rows.resize((rows.width * 3, rows.height * 3), Image.NEAREST).save(path.replace(".png", "-paints.png"))
+        print("sheet", path.replace(".png", "-paints.png"))
 
 
 if __name__ == "__main__":

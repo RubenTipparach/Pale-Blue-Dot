@@ -12,7 +12,9 @@ the GPU when there is one").
 
 Each shot is the page with `?shot=<view>&time=<day|night>` (the stage fills the
 window and holds one picture; the rotors are stopped at fixed angles), or the
-builder section with `?still&preset=<id>`.
+builder section with `?still&preset=<id>`. Nothing on the page turns on its own; the rotors stand at fixed angles.
+
+The shots taken before per-piece paint (`airfield-*.jpg` but `airfield-rolled-out.jpg`, `hangar-night.jpg`, `bumble-pad-night.jpg`, `presets.jpg`) show the presets without the little paint they now carry: Sharky's fin is red and Puffin's nacelles orange on the page.
 
 | File | What it shows | Design |
 | --- | --- | --- |
@@ -21,5 +23,8 @@ builder section with `?still&preset=<id>`.
 | `hangar-night.jpg` | Into the bays at night: Sharky and Gull inside under the bay lamps, the workbench where the builder opens, the light the open doors spill on the apron. | 4, "A hangar is required" |
 | `bumble-pad-night.jpg` | Bumble on the helipad at night, ringed by its pad lights. | 4, the page 1 |
 | `presets.jpg` | The five presets close up by day, one panel each: Sharky (prop fighter, shark mouth, nose number 106), Bumble (utility helicopter, glass nose, skids, tail rotor), Puffin (tiltrotor VTOL, beside the game's Kestrel), Gull (floatplane), Dart (little jet). The chibi proportions are the owner's question A1. | 4, "Chibi"; 5 |
-| `builder-sharky.jpg` | The builder with Sharky loaded: the palette, the mirrored 13 x 11 grid of 1 m cells, the livery panel, the live 3D preview, the numbers that follow from the parts, the checks and the bill of materials. | 4, "The builder is M4's", "Numbers from the parts", "Checks" |
+| `builder-sharky.jpg` | The builder with Sharky loaded: the palette (its pieces in the livery's colours, the paint brush beside the eraser), the brush swatches, the mirrored 13 x 11 grid of 1 m cells with every piece drawn in its colour (teal base; sunny trim on the cowl, the tailplanes and the wing tips; the fin painted red, marked in the cell's corner), the livery panel, the 3D preview, the numbers, the checks and the bill of materials. Retaken for "the grid shows the paint". | 4, "The builder is M4's", "The grid shows the paint", "Numbers from the parts", "Checks" |
+| `builder-bumble-paint.jpg` | Bumble given a paint job with the brush, mirror on: the cab's sides and two bands on the tail boom in sunny, the tail rotor, the tailplanes and the rotor's blade tips in red, on its green livery. The grid and the preview show the same colours. | 4, "The grid shows the paint" |
+| `airfield-rolled-out.jpg` | That repainted Bumble rolled out on the apron in front of the middle bay, by day: the rolled-out craft wears each piece's paint. | 4, "The grid shows the paint"; the page 2, "Roll out" |
+| `contact-sheet-art-paints.png` | Every part icon in every livery paint, one row a part (cockpit to the brush's spray can), as `tools/art/hangar_art.py` draws them into `hangar/<part>-paints.png`: the painted panels in each paint's own ramp, all in the kit's palette. | 4, "The grid shows the paint" |
 | `contact-sheet-art.png` | The new pixel art from `tools/art/hangar_art.py` beside four of the solitaire collection's reference sprites: the part icons, the livery decals (shark mouth, the three roundels, the digits) and the textures, each tiled 2 x 2 so a seam would show. | ART-DIRECTION, "The gate before a page is published" |
