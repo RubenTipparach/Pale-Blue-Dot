@@ -1,0 +1,544 @@
+<meta charset="utf-8">
+<title>The Long Fall: Games and Jobs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500;700&family=Fira+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a bar at night. A sticky wallet over a column of game tables, each a felt-green surface with its odds printed on it. */
+:root{
+  color-scheme: dark;
+  --ground:#0c0a0d;
+  --panel:#16131a;
+  --raise:#1e1a23;
+  --felt:#103226;
+  --felt-edge:#1d5a43;
+  --line:rgba(236,214,170,.15);
+  --ink:#efe7da;
+  --muted:#a89d8e;
+  --amber:#f0b43c;
+  --neon:#ff5fc8;
+  --ok:#79e0a0;
+  --warn:#ff6b57;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html{background:var(--ground)}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+a{color:var(--amber)}
+button{font:inherit}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:11.5px;color:var(--muted)}
+.tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
+
+.wallet{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:8px}
+.wallet .in{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;gap:6px 22px;align-items:center}
+.wallet b{font-family:var(--display);font-size:18px;letter-spacing:.04em}
+.stat{display:grid;line-height:1.15}
+.stat .k{font-family:var(--display);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--mono);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.pos{color:var(--ok)} .negv{color:var(--warn)}
+.wallet .sp{flex:1}
+
+main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:26px 64px}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:42px}
+section{display:grid;gap:14px;min-width:0}
+h1{margin:0;font-family:var(--display);font-weight:700;font-size:clamp(34px,6vw,58px);line-height:.95;letter-spacing:.01em;text-wrap:balance}
+h1 span{color:var(--neon)}
+h2{margin:0;font-family:var(--display);font-weight:700;font-size:28px;letter-spacing:.02em;line-height:1.1;text-wrap:balance}
+h3{margin:0;font-family:var(--display);font-weight:600;font-size:19px;letter-spacing:.03em}
+p{margin:0;max-width:70ch}
+.lede{font-size:16.5px;max-width:72ch}
+.muted{color:var(--muted)}
+.hero{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;align-items:center}
+.hero .art{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.hero .art img{width:96px;height:96px}
+.hero .art img[src$="card_back.png"]{width:66px}
+img{image-rendering:pixelated}
+@media (max-width:760px){.hero{grid-template-columns:1fr}}
+.banner{border:1px solid var(--line);border-radius:6px;padding:10px 14px;background:var(--panel);font-size:13.5px;color:var(--muted);display:flex;gap:10px 16px;flex-wrap:wrap;align-items:center}
+
+.table{background:radial-gradient(ellipse at 50% 0%,#164434 0%,var(--felt) 70%);border:2px solid var(--felt-edge);border-radius:14px;padding:16px;display:grid;gap:12px;min-width:0}
+.table header{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;justify-content:space-between}
+.odds{font-family:var(--mono);font-size:12px;color:#cfe8dc;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:3px 8px;font-variant-numeric:tabular-nums}
+.ctrl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.b{all:unset;cursor:pointer;font-family:var(--display);font-size:15px;letter-spacing:.05em;padding:6px 12px;border-radius:4px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.25);color:var(--ink);text-align:center}
+.b:hover{border-color:var(--amber)}
+.b:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.b.main{background:var(--amber);color:#1a1205;border-color:var(--amber);font-weight:600}
+.b[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.b[disabled]{opacity:.4;pointer-events:none}
+.msg{font-family:var(--display);font-size:18px;letter-spacing:.03em;min-height:26px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+canvas.game{width:100%;height:auto;display:block;border-radius:8px;background:#0b1712;touch-action:manipulation}
+.reels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:360px}
+.reel{aspect-ratio:1;background:#0b0f0c;border:2px solid #3b2d12;border-radius:8px;display:grid;place-items:center;max-width:100%}
+.reel img{width:96px;height:96px}
+.reel.win{border-color:var(--amber);box-shadow:0 0 18px rgba(240,180,60,.45)}
+.pay{font-size:13px;display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center}
+.pay img{width:32px;height:32px;vertical-align:middle}
+.pay .x{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.dice{display:flex;gap:10px}
+.dice img{width:96px;height:96px}
+.hand{display:flex;flex-wrap:wrap;gap:6px;min-height:104px;align-items:center}
+.card{width:66px;height:96px;border-radius:7px;background:#f6efe0;color:#1a1410;border:2px solid #2b2218;display:grid;grid-template-rows:auto 1fr;padding:4px;box-sizing:border-box;font-family:var(--display);font-weight:700;font-size:20px;line-height:1}
+.card img{width:32px;height:32px;justify-self:center;align-self:center}
+.card.back{background:none;border:none;padding:0}
+.card.back img{width:66px;height:96px;object-fit:cover}
+.tot{font-family:var(--mono);font-size:13px;color:#cfe8dc}
+.jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.job{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:12px;display:grid;grid-template-columns:64px 1fr;gap:10px;min-width:0}
+.job img{width:64px;height:64px}
+.job h3{font-size:17px}
+.job .pay2{font-family:var(--mono);color:var(--amber);font-size:13px}
+.job p{font-size:13.5px}
+.risk{font-family:var(--display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:1px 6px;border-radius:2px;border:1px solid var(--line);color:var(--muted)}
+.risk.hi{border-color:var(--warn);color:var(--warn)} .risk.lo{border-color:var(--ok);color:var(--ok)}
+table.t{border-collapse:collapse;width:100%;font-size:13.5px}
+.t th,.t td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.t th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
+.t td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.scroll{overflow-x:auto}
+.figure{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px;overflow-x:auto}
+.figure svg{display:block;width:100%;height:auto;min-width:640px}
+.q{display:grid;gap:10px}
+.q article{border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--panel);display:grid;gap:6px}
+.q article p{font-size:14px}
+.rec{color:var(--ok);font-weight:500}
+footer{font-size:12.5px;color:var(--muted)}
+.lanes button{min-width:0}
+@media (prefers-reduced-motion: reduce){.reel.win{box-shadow:none}}
+
+/* ---- The game's HUD look (crates/pbd-app/src/desktop/{menu,pack,slots}.rs): square panels of PANEL_FILL edged in EDGE,
+   mint headings, monospace labels (the game draws its UI in Fira Mono), slots for pixel icons shown at whole-number scales. */
+:root{
+  --ground:#070b0e;
+  --panel:rgba(5,15,20,.94);          /* PANEL_FILL 0.02,0.06,0.08,0.94 */
+  --panel-solid:#050f14;
+  --raise:rgba(15,33,38,.9);          /* button idle 0.06,0.13,0.15,0.9 */
+  --hover:rgba(28,56,61,.95);         /* button hovered 0.11,0.22,0.24,0.95 */
+  --line:rgba(140,191,189,.6);        /* EDGE 0.55,0.75,0.74,0.6 */
+  --slot-edge:rgba(140,191,189,.5);   /* an idle slot's border */
+  --slot-fill:rgba(5,15,20,.72);      /* an idle slot's fill */
+  --ink:#e0f0e8;                      /* INK 0.88,0.94,0.91 */
+  --muted:#99b8b8;                    /* DIM 0.6,0.72,0.72 */
+  --mint:#7accc4;                     /* MINT 0.48,0.8,0.77 */
+  --display:"Fira Mono",ui-monospace,Menlo,monospace;
+  --mono:"Fira Mono",ui-monospace,Menlo,monospace;
+  --body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*,*::before,*::after{border-radius:0 !important}
+h1,h2,h3,.eyebrow{font-family:var(--display);letter-spacing:.02em}
+h1{font-weight:500} h2,h3{font-weight:500;color:var(--mint);text-transform:uppercase}
+.b{font-family:var(--mono) !important;text-transform:uppercase;letter-spacing:.04em !important;background:var(--raise) !important;border:1px solid var(--line) !important}
+.b:hover{background:var(--hover) !important}
+.b[aria-pressed="true"]{border-color:#fad973 !important;color:#fad973 !important}
+img{image-rendering:pixelated}
+.b.main{background:rgba(250,217,115,.14) !important;color:#fad973 !important;border-color:#fad973 !important;font-weight:600}
+.b.main:hover{background:rgba(250,217,115,.26) !important}
+.b[disabled]{opacity:1 !important;color:var(--muted) !important;background:transparent !important;border:1px dashed var(--slot-edge) !important}
+.msg{font-size:14px !important}
+
+.table{background:var(--panel) !important;border:1px solid var(--line) !important}
+.reel{background:var(--slot-fill) !important;border:1px solid var(--slot-edge) !important}
+.reel.win{border-color:#fad973 !important;box-shadow:none !important}
+canvas.game{background:#050f14 !important;image-rendering:pixelated}
+.job,.banner,.wallet{background:var(--panel) !important;border-color:var(--line) !important}
+.job img,.dice img,.hero .art img{background:var(--slot-fill);outline:1px solid var(--slot-edge);outline-offset:0}
+.card{font-family:var(--mono) !important}
+.odds,.tot{color:var(--ink) !important;font-family:var(--mono)}
+h1 span{color:var(--mint)}
+</style>
+
+<div class="wallet" aria-label="Wallet">
+  <div class="in">
+    <b>Wallet</b>
+    <div class="stat"><span class="k">Credits</span><span class="v" id="wCr">500</span></div>
+    <div class="stat"><span class="k">Session</span><span class="v" id="wNet">+0</span></div>
+    <div class="stat"><span class="k">Wagered</span><span class="v" id="wBet">0</span></div>
+    <div class="stat"><span class="k">House expects to keep</span><span class="v" id="wEdge">0.0</span></div>
+    <div class="stat"><span class="k">Earned working</span><span class="v" id="wWork">0</span></div>
+    <span class="sp"></span>
+    <button class="b" id="wReset">Reset to 500</button>
+  </div>
+</div>
+
+<main>
+<div class="wrap">
+  <section class="hero">
+    <div style="display:grid;gap:12px">
+      <span class="eyebrow">Meridian Exchange, ring deck, spinward of the lift</span>
+      <h1>The Long Fall <span>bar, casino and job board</span></h1>
+      <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+      <p class="lede">Ways to make money on a station that are not hauling cargo between markets: a shift at the ore sorter, contracts off the board, and the games in the bar. Five of them are playable below with one wallet. Every game shows its odds and the house's edge on the table, because the player is owed the truth about a bet.</p>
+    </div>
+    <div class="art" aria-hidden="true">
+      <img src="minigames/sym_star.png" alt=""><img src="minigames/die_6.png" alt=""><img src="minigames/chip_50.png" alt=""><img src="minigames/card_back.png" alt=""><img src="minigames/racer_red.png" alt=""><img src="minigames/drill.png" alt="">
+    </div>
+  </section>
+  <div class="banner"><span class="tag">Proposal, not built</span><span>None of this is in the engine. The art is pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/minigames_art.py</code>): 32 x 32 sprites shown only at whole-number scales, nearest neighbour.</span></div>
+
+  <!-- ============================================================ jobs -->
+  <section aria-labelledby="h-jobs">
+    <span class="eyebrow">Earning, not betting</span>
+    <h2 id="h-jobs">The job board</h2>
+    <p>Contracts are posted by NPC companies and stations (and, later, other players). Pay sits in escrow when the contract is posted, and is released on delivery: a contract can never pay out money that nobody had.</p>
+    <div class="jobs" id="jobs"></div>
+  </section>
+
+  <!-- ============================================================ ore sorter -->
+  <section aria-labelledby="h-ore">
+    <span class="eyebrow">Playable: a mining shift</span>
+    <h2 id="h-ore">Ore sorter, Kessler Rock</h2>
+    <div class="table">
+      <header><h3>45-second shift on the sorting belt</h3><span class="odds">pay set by Kessler's ore prices today</span></header>
+      <canvas class="game" id="ore" width="720" height="230" aria-label="Ore sorting belt"></canvas>
+      <div class="ctrl" id="oreBins"></div>
+      <div class="ctrl"><button class="b main" id="oreGo">Start shift</button><span class="msg" id="oreMsg">Route each rock as it passes the scanner: keys 1 to 4, Space for slag.</span></div>
+      <p class="muted" style="font-size:13px">A wrong bin contaminates the hopper and is docked 3 cr; slag let through costs 2 cr. A good shift pays 80 to 140 cr: worse than hauling, better than nothing, and it needs no ship.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ casino -->
+  <section aria-labelledby="h-bar">
+    <span class="eyebrow">Playable: the bar</span>
+    <h2 id="h-bar">The games</h2>
+    <div class="two">
+      <div class="table">
+        <header><h3>Reactor Roll</h3><span class="odds" id="slotOdds">return --</span></header>
+        <div class="reels" id="reels"></div>
+        <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="slotBet"></span><button class="b main" id="slotGo">Pull</button></div>
+        <div class="msg" id="slotMsg">Three reels, twenty stops each.</div>
+        <div class="pay" id="paytable"></div>
+      </div>
+      <div class="table">
+        <header><h3>Hazard Dock (dice)</h3><span class="odds">house edge 16.7% on every bet</span></header>
+        <div class="dice"><img id="d1" src="minigames/die_3.png" alt="die showing 3"><img id="d2" src="minigames/die_4.png" alt="die showing 4"></div>
+        <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="diceBet"></span></div>
+        <div class="ctrl"><button class="b main" data-dice="under">Under 7 pays 1:1</button><button class="b main" data-dice="seven">Seven pays 4:1</button><button class="b main" data-dice="over">Over 7 pays 1:1</button></div>
+        <div class="msg" id="diceMsg">The dockworkers' game. Two dice, three bets.</div>
+        <p class="muted" style="font-size:13px">Under 7: 15 of 36 rolls. Seven: 6 of 36. Over 7: 15 of 36. Every bet returns 30 of every 36 credits staked, on average. It is the worst game in the bar and the most popular.</p>
+      </div>
+      <div class="table">
+        <header><h3>Orbit 21</h3><span class="odds">house edge about 1.0% with perfect play</span></header>
+        <div><span class="tot" id="dTot">Dealer</span><div class="hand" id="dealer"></div></div>
+        <div><span class="tot" id="pTot">You</span><div class="hand" id="player"></div></div>
+        <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="bjBet"></span><button class="b main" id="bjDeal">Deal</button><button class="b" id="bjHit" disabled>Hit</button><button class="b" id="bjStand" disabled>Stand</button><button class="b" id="bjDouble" disabled>Double</button></div>
+        <div class="msg" id="bjMsg">Blackjack by another name. Suits are ore, coolant, fuel and core.</div>
+        <p class="muted" style="font-size:13px">Dealer stands on 17, a natural 21 pays 3:2, double on any two cards, no splits, cards drawn from an endless shoe. 1.0% is measured: 2 million simulated hands of basic strategy under exactly these rules.</p>
+      </div>
+      <div class="table">
+        <header><h3>The race book</h3><span class="odds">book margin 12%</span></header>
+        <canvas class="game" id="race" width="720" height="250" aria-label="Ship race"></canvas>
+        <div class="ctrl lanes" id="raceRunners"></div>
+        <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="raceBet"></span><button class="b main" id="raceGo">Race</button><button class="b" id="raceNew">New card</button></div>
+        <div class="msg" id="raceMsg">Pick a ship. Odds are set from each pilot's form, less the book's margin.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ odds -->
+  <section aria-labelledby="h-odds">
+    <span class="eyebrow">The truth about a bet</span>
+    <h2 id="h-odds">Odds and house edge</h2>
+    <div class="scroll"><table class="t">
+      <thead><tr><th>Game</th><th>Where</th><th class="num">Return to player</th><th class="num">House edge</th><th class="num">Table limit</th><th>Note</th></tr></thead>
+      <tbody id="oddsTable"></tbody>
+    </table></div>
+    <p class="muted">Every game here loses money on average, by design: gambling must never be a better job than a job. The variance is the point: a player who needs 400 cr for a repair tonight can risk 100 to get it. Limits are per station kind and per game day, so the casino cannot be farmed.</p>
+  </section>
+
+  <!-- ============================================================ economy -->
+  <section aria-labelledby="h-econ">
+    <span class="eyebrow">Where the money goes</span>
+    <h2 id="h-econ">Credits in, credits out</h2>
+    <div class="figure"><svg viewBox="0 0 900 360" role="img" aria-label="Flow of credits between the player, the house, the station and the market">
+      <rect x="0" y="0" width="900" height="360" fill="#16131a"/>
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a89d8e"/></marker></defs>
+      <g font-family="Fira Mono, monospace" font-size="16" fill="#efe7da" text-anchor="middle">
+        <rect x="30" y="140" width="150" height="70" rx="6" fill="#1e1a23" stroke="#f0b43c"/><text x="105" y="172">Player wallet</text><text x="105" y="192" font-size="12" fill="#a89d8e">jobs, trade, winnings</text>
+        <rect x="300" y="40" width="160" height="64" rx="6" fill="#1e1a23" stroke="rgba(236,214,170,.4)"/><text x="380" y="68">The house</text><text x="380" y="88" font-size="12" fill="#a89d8e">keeps the edge on stakes</text>
+        <rect x="300" y="250" width="160" height="64" rx="6" fill="#1e1a23" stroke="rgba(236,214,170,.4)"/><text x="380" y="278">Contract escrow</text><text x="380" y="298" font-size="12" fill="#a89d8e">funded by NPC companies</text>
+        <rect x="580" y="20" width="150" height="56" rx="6" fill="#1e1a23" stroke="rgba(236,214,170,.4)"/><text x="655" y="45">Station owner</text><text x="655" y="63" font-size="12" fill="#a89d8e">40% of house take</text>
+        <rect x="580" y="96" width="150" height="56" rx="6" fill="#1e1a23" stroke="rgba(236,214,170,.4)"/><text x="655" y="121">Bar operator</text><text x="655" y="139" font-size="12" fill="#a89d8e">35%: wages, stock</text>
+        <rect x="580" y="172" width="150" height="56" rx="6" fill="#1e1a23" stroke="#ff6b57"/><text x="655" y="197">Leaves the economy</text><text x="655" y="215" font-size="12" fill="#a89d8e">25%: off-system imports</text>
+        <rect x="770" y="40" width="110" height="56" rx="6" fill="#1e1a23" stroke="rgba(236,214,170,.4)"/><text x="825" y="65">Patrols and</text><text x="825" y="83">bounties</text>
+        <rect x="770" y="250" width="110" height="64" rx="6" fill="#1e1a23" stroke="rgba(236,214,170,.4)"/><text x="825" y="276">Market</text><text x="825" y="296" font-size="12" fill="#a89d8e">NPC demand</text>
+      </g>
+      <g stroke="#a89d8e" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+        <path d="M180,160 C240,140 250,80 298,72"/>
+        <path d="M300,96 C250,120 220,160 182,172"/>
+        <path d="M460,62 C510,50 540,48 578,48"/>
+        <path d="M460,78 C510,100 540,120 578,124"/>
+        <path d="M460,92 C520,150 540,190 578,198"/>
+        <path d="M730,46 L768,62"/>
+        <path d="M768,90 C600,330 300,330 182,200"/>
+        <path d="M730,130 C780,180 800,220 818,248"/>
+        <path d="M770,290 L462,290"/>
+        <path d="M300,282 C240,270 210,230 182,206"/>
+      </g>
+      <g font-family="'Fira Mono', monospace" font-size="12" fill="#a89d8e">
+        <text x="214" y="96">stakes</text><text x="204" y="150">payouts</text><text x="560" y="340">bounty pay</text><text x="560" y="284">companies post contracts</text><text x="196" y="262">delivery pay</text>
+      </g>
+    </svg></div>
+    <p>Proposed rule: the house's take is not destroyed outright. Most of it goes back into the world as wages (NPCs buying at the market, nudging prices) and as the station owner's budget, which posts bounties. A quarter leaves the economy as the cost of goods the station imports from off-system: that is the credit sink, and it scales with how much people gamble, not with a timer.</p>
+  </section>
+
+  <section aria-labelledby="h-q">
+    <span class="eyebrow">For the owner</span>
+    <h2 id="h-q">Decisions / questions for the owner</h2>
+    <div class="q">
+      <article><h3>1. Is there gambling in the game at all?</h3><p>Options: (a) yes, with real odds shown; (b) only for in-game items, never credits; (c) none.</p><p class="rec">Recommendation: (a), with the odds printed on every table as here. It is a credit sink and a story generator. If the game will ever be rated for young players, gate it behind a setting and replace the casino with the job board's games.</p></article>
+      <article><h3>2. Which minigames ship first?</h3><p>The ore sorter, Reactor Roll, Hazard Dock, Orbit 21 and the race book are all playable here.</p><p class="rec">Recommendation: the ore sorter and Hazard Dock first (both tiny, both teach the economy), then the race book, because it can later use real NPC ships racing on real tracks round the station.</p></article>
+      <article><h3>3. Can players play each other?</h3><p>Options: house games only; player-versus-player card tables with a 5% rake; anything goes at the smuggler den.</p><p class="rec">Recommendation: house games first; player tables later at the den only, with the rake as the sink. Player-versus-player gambling needs the same durable transaction path as trades.</p></article>
+      <article><h3>4. How big are the limits?</h3><p class="rec">Recommendation: per-game limits by station kind (trade hub 200 cr, mining outpost 50 cr, smuggler den 2,000 cr), and a daily loss cap the player can set, which the game honours.</p></article>
+      <article><h3>5. Do mining shifts pay from the market?</h3><p class="rec">Recommendation: yes. The ore sorter's pay per rock is the outpost's buy price for that ore, scaled to a shift, so a rich vein event or a crash in iron shows up in the job's pay too.</p></article>
+    </div>
+  </section>
+  <footer>Mockup for Pale Blue Dot. Five games run in this page with one wallet; odds for Reactor Roll are computed from its reel strips by the page itself, and the Orbit 21 edge was measured by simulation. Art: pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style. Nothing here is built.</footer>
+</div>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const IMG = {}; const img = n => (IMG[n] || (IMG[n] = Object.assign(new Image(), { src: `minigames/${n}.png` })));
+["ore_iron", "ore_copper", "ore_gold", "ore_ice", "slag", "drill", "racer_red", "racer_blue", "racer_green", "racer_yellow"].forEach(img);
+
+// ------------------------------------------------------------------ wallet
+const W = { cr: 500, net: 0, bet: 0, edge: 0, work: 0 };
+function paint() {
+  $("wCr").textContent = W.cr.toLocaleString();
+  $("wNet").textContent = (W.net >= 0 ? "+" : "") + W.net.toLocaleString(); $("wNet").className = "v " + (W.net > 0 ? "pos" : W.net < 0 ? "negv" : "");
+  $("wBet").textContent = W.bet.toLocaleString(); $("wEdge").textContent = W.edge.toFixed(1); $("wWork").textContent = W.work.toLocaleString();
+}
+function stake(n, edge) { if (n > W.cr) return false; W.cr -= n; W.net -= n; W.bet += n; W.edge += n * edge; paint(); return true; }
+function win(n) { W.cr += n; W.net += n; paint(); }
+$("wReset").onclick = () => { Object.assign(W, { cr: 500, net: 0, bet: 0, edge: 0, work: 0 }); paint(); };
+function betPicker(id, opts, def) {
+  const box = $(id); let val = def;
+  box.innerHTML = opts.map(v => `<button class="b" aria-pressed="${v === def}" data-v="${v}">${v}</button>`).join("");
+  box.querySelectorAll("button").forEach(b => b.onclick = () => { val = +b.dataset.v; box.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); });
+  return () => val;
+}
+const rand = () => Math.random();
+
+// ------------------------------------------------------------------ jobs
+const JOBS = [
+  { img: "cargo", title: "Ice run to the Meridian", by: "Meridian hydroponics", pay: "1,140 cr", risk: "lo", text: "Haul 24 t of water ice from Kessler Rock to the Meridian within 3 game days. Pay is escrowed; late delivery pays half." },
+  { img: "salvage", title: "Salvage: Tamsin's Luck", by: "Gatehouse Kappa impound", pay: "30% of value", risk: "", text: "A freighter drifting dead off the customs lane. Cut it open, bring back what you can. The navy keeps 70% and the hull." },
+  { img: "bounty", title: "Wanted: Wren Askew", by: "Gatehouse Kappa", pay: "2,500 cr", risk: "hi", text: "Smuggler, armed cutter, last seen near The Hollow. 2,500 cr brought in alive, 1,200 for a disabled ship. The Hollow will remember." },
+  { img: "drill", title: "Sorting shift", by: "Kessler Deep Mining", pay: "80 to 140 cr", risk: "lo", text: "45 seconds on the ore belt, below. No ship needed. Pay per rock is today's ore price at the outpost." },
+  { img: "sym_ice", title: "Medicine to the frontier", by: "Meridian clinic", pay: "800 cr", risk: "hi", text: "40 crates of medicine to The Hollow. Legal cargo, lawless destination. Raiders read the same job board you do." },
+  { img: "sym_core", title: "Samples for Lumen", by: "Lumen Deep Field", pay: "650 cr + bonus", risk: "", text: "Bring back core samples from three named sites. A rare find pays a bonus and moves Lumen's share price." },
+];
+$("jobs").innerHTML = JOBS.map(j => `<article class="job"><img src="minigames/${j.img}.png" alt="" width="64" height="64"><div style="min-width:0"><h3>${j.title}</h3>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pay2">${j.pay}</span><span class="risk ${j.risk}">${j.risk === "hi" ? "high risk" : j.risk === "lo" ? "low risk" : "some risk"}</span></div>
+  <p class="muted" style="margin-top:2px">${j.by}</p><p>${j.text}</p></div></article>`).join("");
+
+// ------------------------------------------------------------------ ore sorter
+const ORES = [
+  { k: "ore_iron", name: "Iron", key: "1", pay: 2 }, { k: "ore_copper", name: "Copper", key: "2", pay: 3 },
+  { k: "ore_gold", name: "Gold", key: "3", pay: 9 }, { k: "ore_ice", name: "Ice", key: "4", pay: 2 }, { k: "slag", name: "Slag", key: "Space", pay: 1 },
+];
+$("oreBins").innerHTML = ORES.map((o, i) => `<button class="b" data-i="${i}"><img src="minigames/${o.k}.png" alt="" width="32" height="32" style="vertical-align:middle;margin-right:4px">${o.key === "Space" ? "Space" : o.key}: ${o.name} <span class="muted" style="font-size:12px">${o.name === "Slag" ? "reject" : o.pay + " cr"}</span></button>`).join("");
+const oreC = $("ore"), og = oreC.getContext("2d"); og.imageSmoothingEnabled = false;   // pixel art at 2x, nearest neighbour
+const SORT = { on: false, t: 0, items: [], next: 0, pay: 0, pops: [] };
+const ZONE = [130, 230];
+function oreSpawn() { const r = rand(); const i = r < 0.3 ? 0 : r < 0.52 ? 1 : r < 0.6 ? 2 : r < 0.8 ? 3 : 4; SORT.items.push({ i, x: 760, done: false, y: 0 }); }
+function oreRoute(bin) {
+  if (!SORT.on) return;
+  const it = SORT.items.find(o => !o.done && o.x > ZONE[0] - 30 && o.x < ZONE[1] + 10);
+  if (!it) { SORT.pops.push({ x: 180, y: 70, s: "nothing at the scanner", c: "#a89d8e", t: 1 }); return; }
+  it.done = true; it.bin = bin;
+  const ok = bin === it.i, d = ok ? ORES[it.i].pay : -3;
+  SORT.pay += d; SORT.pops.push({ x: it.x, y: 90, s: (d > 0 ? "+" : "") + d + " cr", c: ok ? "#79e0a0" : "#ff6b57", t: 1 });
+}
+$("oreBins").querySelectorAll("button").forEach(b => b.onclick = () => oreRoute(+b.dataset.i));
+$("oreGo").onclick = () => { Object.assign(SORT, { on: true, t: 0, items: [], next: 0.2, pay: 0, pops: [] }); $("oreGo").disabled = true; $("oreMsg").textContent = "Shift running."; };
+addEventListener("keydown", e => {
+  if (!SORT.on) return; const m = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Space: 4, Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3 }[e.code];
+  if (m !== undefined) { e.preventDefault(); oreRoute(m); }
+});
+function oreDraw(dt) {
+  const w = 720, h = 230;
+  if (SORT.on) {
+    SORT.t += dt; const speed = 120 + SORT.t * 4.5;
+    if ((SORT.next -= dt) <= 0) { oreSpawn(); SORT.next = Math.max(0.45, 1.25 - SORT.t * 0.018) * (0.7 + rand() * 0.6); }
+    for (const it of SORT.items) {
+      if (it.done) { it.y += dt * 260; it.x -= speed * dt * 0.3; } else it.x -= speed * dt;
+      if (!it.done && it.x < ZONE[0] - 30) { it.done = true; it.missed = true; if (it.i === 4) { SORT.pay -= 2; SORT.pops.push({ x: 110, y: 90, s: "-2 slag in", c: "#ff6b57", t: 1 }); } }
+    }
+    SORT.items = SORT.items.filter(o => o.x > -60 && o.y < 200);
+    if (SORT.t >= 45) { SORT.on = false; const p = Math.max(0, SORT.pay); W.cr += p; W.work += p; paint(); $("oreGo").disabled = false; $("oreGo").textContent = "Another shift"; $("oreMsg").textContent = `Shift over: paid ${p} cr.`; }
+  }
+  og.fillStyle = "#0b1712"; og.fillRect(0, 0, w, h);
+  // belt
+  og.fillStyle = "#2a2e33"; og.fillRect(0, 120, w, 46);
+  const off = (performance.now() / 1000 * (SORT.on ? 120 + SORT.t * 4.5 : 30)) % 40;
+  og.strokeStyle = "#3c424a"; og.lineWidth = 3; for (let x = -off; x < w; x += 40) { og.beginPath(); og.moveTo(x, 122); og.lineTo(x + 14, 164); og.stroke(); }
+  // scanner
+  og.fillStyle = "rgba(255,210,138,.12)"; og.fillRect(ZONE[0], 20, ZONE[1] - ZONE[0], 150);
+  og.strokeStyle = "#f0b43c"; og.setLineDash([6, 5]); og.strokeRect(ZONE[0], 20, ZONE[1] - ZONE[0], 150); og.setLineDash([]);
+  og.fillStyle = "#f0b43c"; og.font = "600 13px 'Fira Mono', monospace"; og.fillText("SCANNER", ZONE[0] + 6, 36);
+  for (const it of SORT.items) { const im = img(ORES[it.i].k); og.globalAlpha = it.missed ? 0.4 : 1; if (im.complete) og.drawImage(im, Math.round(it.x) - 32, Math.round(86 + it.y), 64, 64); og.globalAlpha = 1; }
+  for (const p of SORT.pops) { p.t -= dt; p.y -= dt * 30; og.globalAlpha = Math.max(0, p.t); og.fillStyle = p.c; og.font = "700 18px 'Fira Mono', monospace"; og.fillText(p.s, p.x - 20, p.y); og.globalAlpha = 1; }
+  SORT.pops = SORT.pops.filter(p => p.t > 0);
+  og.fillStyle = "#efe7da"; og.font = "600 16px 'JetBrains Mono', monospace";
+  og.fillText(`pay ${SORT.pay} cr`, w - 170, 30); og.fillText(`${Math.max(0, 45 - SORT.t).toFixed(0)} s`, w - 170, 54);
+  if (!SORT.on && SORT.t === 0) { og.fillStyle = "#a89d8e"; og.font = "500 12px 'Fira Mono', monospace"; og.fillText("Rocks ride the belt right to left.", 250, 198); og.fillText("Route each one while it is in the scanner.", 250, 214); }
+}
+
+// ------------------------------------------------------------------ Reactor Roll
+const SYM = [ // the reel strip: 20 stops, weights per symbol
+  { k: "sym_star", n: "Star", w: 1 }, { k: "sym_core", n: "Core", w: 2 }, { k: "sym_fuel", n: "Fuel", w: 3 },
+  { k: "sym_ice", n: "Coolant", w: 4 }, { k: "sym_ore", n: "Ore", w: 5 }, { k: "sym_meltdown", n: "Meltdown", w: 5 },
+];
+const STOPS = SYM.reduce((a, s) => a + s.w, 0);
+const THREE = { sym_star: 250, sym_core: 70, sym_fuel: 30, sym_ice: 15, sym_ore: 10, sym_meltdown: 0 };
+function slotPay(r) { // r: three symbol keys; returns multiple of the stake returned
+  const c = k => r.filter(x => x === k).length;
+  if (c("sym_meltdown") >= 2) return 0;
+  if (r[0] === r[1] && r[1] === r[2]) return THREE[r[0]];
+  if (c("sym_star") === 2) return 12;
+  if (c("sym_star") === 1) return 2;
+  if (c("sym_core") === 2) return 4;
+  return 0;
+}
+const SLOT = (function () { let rtp = 0, hit = 0; for (const a of SYM) for (const b of SYM) for (const c of SYM) { const p = a.w * b.w * c.w / STOPS ** 3, v = slotPay([a.k, b.k, c.k]); rtp += p * v; hit += v > 0 ? p : 0; } return { rtp, hit }; })();
+$("slotOdds").textContent = `returns ${(SLOT.rtp * 100).toFixed(1)}%, edge ${((1 - SLOT.rtp) * 100).toFixed(1)}%`;
+$("paytable").innerHTML = [
+  ...SYM.filter(s => s.k !== "sym_meltdown").map(s => [`<span><img src="minigames/${s.k}.png" alt=""><img src="minigames/${s.k}.png" alt=""><img src="minigames/${s.k}.png" alt=""></span>`, `three ${s.n}`, THREE[s.k] + "x"]),
+  [`<span><img src="minigames/sym_star.png" alt=""><img src="minigames/sym_star.png" alt=""></span>`, "any two Stars", "12x"],
+  [`<span><img src="minigames/sym_core.png" alt=""><img src="minigames/sym_core.png" alt=""></span>`, "any two Cores", "4x"],
+  [`<span><img src="minigames/sym_star.png" alt=""></span>`, "any one Star", "2x"],
+  [`<span><img src="minigames/sym_meltdown.png" alt=""><img src="minigames/sym_meltdown.png" alt=""></span>`, "two Meltdowns void the pull", "0"],
+].map(r => `${r[0]}<span>${r[1]}</span><span class="x">${r[2]}</span>`).join("") + `<span></span><span class="muted">pays a winning line 1 in ${(1 / SLOT.hit).toFixed(1)} pulls</span><span></span>`;
+$("reels").innerHTML = [0, 1, 2].map(i => `<div class="reel" id="reel${i}"><img src="minigames/${SYM[i + 2].k}.png" alt="${SYM[i + 2].n}"></div>`).join("");
+const slotBet = betPicker("slotBet", [5, 10, 25], 10);
+function pick() { let r = rand() * STOPS; for (const s of SYM) { if ((r -= s.w) < 0) return s; } return SYM[SYM.length - 1]; }
+$("slotGo").onclick = () => {
+  const bet = slotBet(); if (!stake(bet, 1 - SLOT.rtp)) { $("slotMsg").textContent = "Not enough credits."; return; }
+  $("slotGo").disabled = true; const res = [pick(), pick(), pick()];
+  document.querySelectorAll(".reel").forEach(r => r.classList.remove("win"));
+  [0, 1, 2].forEach(i => {
+    const el = $("reel" + i).querySelector("img"); let n = 0;
+    const iv = setInterval(() => { const s = SYM[Math.floor(rand() * SYM.length)]; el.src = `minigames/${s.k}.png`; if (++n > 8 + i * 5) { clearInterval(iv); el.src = `minigames/${res[i].k}.png`; el.alt = res[i].n;
+      if (i === 2) { const m = slotPay(res.map(s => s.k)); if (m > 0) { win(bet * m); document.querySelectorAll(".reel").forEach(r => r.classList.add("win")); $("slotMsg").textContent = `Pays ${m}x: +${bet * m} cr.`; } else $("slotMsg").textContent = res.filter(s => s.k === "sym_meltdown").length >= 2 ? "Meltdown. The reactor eats the stake." : "Nothing."; $("slotGo").disabled = false; } } }, 60);
+  });
+};
+
+// ------------------------------------------------------------------ Hazard Dock
+const diceBet = betPicker("diceBet", [5, 10, 25, 50], 10);
+document.querySelectorAll("[data-dice]").forEach(b => b.onclick = () => {
+  const bet = diceBet(); if (!stake(bet, 1 / 6)) { $("diceMsg").textContent = "Not enough credits."; return; }
+  document.querySelectorAll("[data-dice]").forEach(x => x.disabled = true);
+  const a = 1 + Math.floor(rand() * 6), c = 1 + Math.floor(rand() * 6); let n = 0;
+  const iv = setInterval(() => { $("d1").src = `minigames/die_${1 + Math.floor(rand() * 6)}.png`; $("d2").src = `minigames/die_${1 + Math.floor(rand() * 6)}.png`;
+    if (++n > 10) { clearInterval(iv); $("d1").src = `minigames/die_${a}.png`; $("d2").src = `minigames/die_${c}.png`; $("d1").alt = "die showing " + a; $("d2").alt = "die showing " + c;
+      const s = a + c, k = b.dataset.dice, won = (k === "under" && s < 7) || (k === "over" && s > 7) || (k === "seven" && s === 7);
+      const pay = won ? bet * (k === "seven" ? 5 : 2) : 0; if (pay) win(pay);
+      $("diceMsg").textContent = `${a} + ${c} = ${s}. ` + (won ? `You win ${pay - bet} cr.` : "The house takes it.");
+      document.querySelectorAll("[data-dice]").forEach(x => x.disabled = false); } }, 70);
+});
+
+// ------------------------------------------------------------------ Orbit 21
+const SUITS = ["sym_ore", "sym_ice", "sym_fuel", "sym_core"], RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+const BJ = { p: [], d: [], bet: 0, live: false };
+const bjBet = betPicker("bjBet", [10, 25, 50, 100], 25);
+const draw = () => ({ r: RANKS[Math.floor(rand() * 13)], s: SUITS[Math.floor(rand() * 4)] });
+const val = c => c.r === "A" ? 1 : ["J", "Q", "K"].includes(c.r) ? 10 : +c.r;
+function total(h) { let t = h.reduce((a, c) => a + val(c), 0); const soft = h.some(c => c.r === "A") && t + 10 <= 21; return { t: soft ? t + 10 : t, soft }; }
+const cardHTML = (c, hidden) => hidden ? `<div class="card back"><img src="minigames/card_back.png" alt="face-down card"></div>` : `<div class="card" aria-label="${c.r}"><span>${c.r}</span><img src="minigames/${c.s}.png" alt=""></div>`;
+function bjPaint(reveal) {
+  $("player").innerHTML = BJ.p.map(c => cardHTML(c)).join(""); $("dealer").innerHTML = BJ.d.map((c, i) => cardHTML(c, i === 1 && !reveal)).join("");
+  const pt = total(BJ.p); $("pTot").textContent = BJ.p.length ? `You: ${pt.soft ? "soft " : ""}${pt.t}` : "You";
+  $("dTot").textContent = BJ.d.length ? (reveal ? `Dealer: ${total(BJ.d).t}` : `Dealer shows ${BJ.d[0].r}`) : "Dealer";
+  ["bjHit", "bjStand"].forEach(id => $(id).disabled = !BJ.live); $("bjDouble").disabled = !(BJ.live && BJ.p.length === 2 && W.cr >= BJ.bet); $("bjDeal").disabled = BJ.live;
+}
+function bjEnd(msg, pay) { BJ.live = false; if (pay) win(pay); bjPaint(true); $("bjMsg").textContent = msg; }
+function bjDealer() {
+  while (total(BJ.d).t < 17) BJ.d.push(draw());
+  const p = total(BJ.p).t, d = total(BJ.d).t;
+  if (d > 21) bjEnd(`Dealer busts with ${d}. You win ${BJ.bet} cr.`, BJ.bet * 2);
+  else if (p > d) bjEnd(`${p} beats ${d}. You win ${BJ.bet} cr.`, BJ.bet * 2);
+  else if (p === d) bjEnd(`Push at ${p}. Stake back.`, BJ.bet);
+  else bjEnd(`Dealer's ${d} beats your ${p}.`, 0);
+}
+$("bjDeal").onclick = () => {
+  const bet = bjBet(); if (!stake(bet, 0.010)) { $("bjMsg").textContent = "Not enough credits."; return; }
+  Object.assign(BJ, { bet, p: [draw(), draw()], d: [draw(), draw()], live: true });
+  const pn = total(BJ.p).t === 21, dn = total(BJ.d).t === 21;
+  if (pn || dn) { if (pn && dn) bjEnd("Both natural 21. Push.", bet); else if (pn) bjEnd(`Natural 21: pays 3:2, +${bet * 1.5} cr.`, bet * 2.5); else bjEnd("Dealer has a natural 21.", 0); return; }
+  $("bjMsg").textContent = "Hit, stand or double."; bjPaint(false);
+};
+$("bjHit").onclick = () => { BJ.p.push(draw()); const t = total(BJ.p).t; if (t > 21) bjEnd(`Bust at ${t}.`, 0); else if (t === 21) bjDealer(); else bjPaint(false); };
+$("bjStand").onclick = () => bjDealer();
+$("bjDouble").onclick = () => { if (!stake(BJ.bet, 0.010)) return; BJ.bet *= 2; BJ.p.push(draw()); const t = total(BJ.p).t; if (t > 21) bjEnd(`Doubled and bust at ${t}.`, 0); else bjDealer(); };
+bjPaint(false);
+
+// ------------------------------------------------------------------ race book
+const RUNNERS = [
+  { k: "racer_red", n: "Red Kite", pilot: "J. Okafor" }, { k: "racer_blue", n: "Blue Shrike", pilot: "M. Ivers" },
+  { k: "racer_green", n: "Verdigris", pilot: "Two-Boots" }, { k: "racer_yellow", n: "Canary", pilot: "S. Lindqvist" },
+];
+const MARGIN = 0.12; const raceBet = betPicker("raceBet", [10, 25, 50, 100], 25);
+const RACE = { p: [], odds: [], pick: 0, running: false, t: 0, T: [], wob: [], done: false, winner: -1 };
+function newCard() {
+  const f = RUNNERS.map(() => 0.5 + rand() * 1.5); const s = f.reduce((a, b) => a + b, 0);
+  RACE.p = f.map(x => x / s); RACE.odds = RACE.p.map(p => Math.max(1.1, Math.round((1 - MARGIN) / p * 10) / 10));
+  RACE.done = false; RACE.t = 0; RACE.winner = -1;
+  $("raceRunners").innerHTML = RUNNERS.map((r, i) => `<button class="b" aria-pressed="${i === RACE.pick}" data-i="${i}"><img src="minigames/${r.k}.png" alt="" width="32" height="32" style="vertical-align:middle;margin-right:4px">${r.n} <span style="font-family:var(--mono);font-size:12px">${RACE.odds[i].toFixed(1)}</span></button>`).join("");
+  $("raceRunners").querySelectorAll("button").forEach(b => b.onclick = () => { if (RACE.running) return; RACE.pick = +b.dataset.i; $("raceRunners").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); });
+  $("raceMsg").textContent = `Decimal odds (stake included). ${RUNNERS[RACE.pick].n} wins ${(RACE.p[RACE.pick] * 100).toFixed(0)}% of the time on form.`;
+}
+$("raceNew").onclick = () => { if (!RACE.running) newCard(); };
+$("raceGo").onclick = () => {
+  if (RACE.running) return; const bet = raceBet();
+  const exp = 1 - RACE.p[RACE.pick] * RACE.odds[RACE.pick];
+  if (!stake(bet, exp)) { $("raceMsg").textContent = "Not enough credits."; return; }
+  let r = rand(), w = 0; for (; w < 3; w++) { if ((r -= RACE.p[w]) < 0) break; }
+  RACE.winner = w; RACE.bet = bet; RACE.running = true; RACE.t = 0; RACE.done = false;
+  RACE.T = RUNNERS.map((_, i) => i === w ? 6 : 6.25 + rand() * 0.9); RACE.wob = RUNNERS.map(() => [rand() * 6, rand() * 6, 0.05 + rand() * 0.05]);
+  $("raceGo").disabled = true; $("raceMsg").textContent = "They're off.";
+};
+const raceC = $("race"), rg = raceC.getContext("2d"); rg.imageSmoothingEnabled = false;
+function raceDraw(dt) {
+  const w = 720, h = 250, x0 = 140, x1 = 680;
+  rg.fillStyle = "#0b1712"; rg.fillRect(0, 0, w, h);
+  // stars and the course buoys
+  rg.fillStyle = "rgba(255,255,255,.5)"; for (let i = 0; i < 40; i++) rg.fillRect((i * 97) % w, (i * 53) % h, 1.5, 1.5);
+  rg.strokeStyle = "#f0b43c"; rg.setLineDash([4, 6]); rg.beginPath(); rg.moveTo(x1, 14); rg.lineTo(x1, h - 14); rg.stroke(); rg.setLineDash([]);
+  rg.fillStyle = "#f0b43c"; rg.font = "600 12px 'Fira Mono', monospace"; rg.fillText("FINISH", x1 - 14, 12);
+  if (RACE.running) RACE.t += dt;
+  RUNNERS.forEach((r, i) => {
+    const y = 34 + i * 54; rg.strokeStyle = "rgba(255,255,255,.08)"; rg.beginPath(); rg.moveTo(x0, y + 22); rg.lineTo(x1, y + 22); rg.stroke();
+    let u = 0; if (RACE.running || RACE.done) { const q = Math.min(1, RACE.t / RACE.T[i]), [a, b, k] = RACE.wob[i]; u = Math.min(1, q + k * Math.sin(q * 9 + a) * q * (1 - q) + k * 0.6 * Math.sin(q * 17 + b) * q * (1 - q)); }
+    const x = x0 + (x1 - x0) * u - 30, im = img(r.k); if (im.complete) rg.drawImage(im, Math.round(x) - 24, y - 10, 64, 64);
+    rg.fillStyle = "#efe7da"; rg.font = "600 13px 'Fira Mono', monospace"; rg.fillText(r.n, 6, y + 26);
+  });
+  if (RACE.running && RACE.t > Math.max(...RACE.T)) {
+    RACE.running = false; RACE.done = true; $("raceGo").disabled = false;
+    const won = RACE.winner === RACE.pick, pay = won ? Math.round(RACE.bet * RACE.odds[RACE.pick]) : 0; if (pay) win(pay);
+    $("raceMsg").textContent = `${RUNNERS[RACE.winner].n} wins. ` + (won ? `You collect ${pay} cr.` : "Your ship is still crossing the line.");
+    setTimeout(() => { if (!RACE.running) newCard(); }, 2500);
+  }
+}
+newCard();
+
+// ------------------------------------------------------------------ odds table
+$("oddsTable").innerHTML = [
+  ["Reactor Roll", "Every bar", (SLOT.rtp * 100).toFixed(1) + "%", ((1 - SLOT.rtp) * 100).toFixed(1) + "%", "25 cr", "Computed from the reel strips above by this page"],
+  ["Hazard Dock", "Every bar, docks", "83.3%", "16.7%", "50 cr", "Exact: 30 of 36 for every bet"],
+  ["Orbit 21", "Trade hubs", "99.0%", "1.0%", "100 cr", "Perfect basic strategy; a casual player loses 3 to 5%"],
+  ["Race book", "Trade hubs, the den", "88%", "12%", "100 cr", "Margin built into the odds; rounded to 0.1"],
+  ["Ore sorter", "Mining outposts", "n/a", "none", "n/a", "A job, not a bet: skill pays, no stake"],
+].map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td class="num">${r[2]}</td><td class="num">${r[3]}</td><td class="num">${r[4]}</td><td class="muted">${r[5]}</td></tr>`).join("");
+
+// ------------------------------------------------------------------ loop
+let last = performance.now();
+function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; oreDraw(dt); raceDraw(dt); requestAnimationFrame(loop); }
+paint(); requestAnimationFrame(loop);
+</script>

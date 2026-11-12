@@ -149,6 +149,24 @@ fn the_water_vertex_draws_the_sea_table_and_no_literal_waves() {
     }
 }
 
+/// The landing dissolve's coverage rule (`dissolve-coverage`): the visibility
+/// pass asks it of a cell's centre and the surface pass of each pixel, so the
+/// two copies are one rule only while they are the same text.
+#[test]
+fn the_dissolve_coverage_rule_is_the_same_in_both_passes() {
+    let visibility =
+        include_str!("../../../assets/shaders/planet_visibility.wgsl").replace("\r\n", "\n");
+    let surface = include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
+    for name in ["fn old_held(", "fn tile_angle("] {
+        let body = |source: &str| {
+            let start = source.find(name).expect("the function is defined");
+            let end = source[start..].find("\n}\n").expect("the function ends");
+            source[start..start + end].to_string()
+        };
+        assert_eq!(body(&visibility), body(&surface), "{name} differs");
+    }
+}
+
 /// `lighting-model` L1: the terrain's sun constants are the core's, so the
 /// sun the CPU computes (for the sky's light) and the one each fragment does
 /// are one sun.

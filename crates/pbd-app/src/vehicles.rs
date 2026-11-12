@@ -43,6 +43,28 @@ const ANCHOR_DEPTH_M: f64 = 35.0;
 const REST_SPEED: f64 = 0.05;
 const REST_S: f32 = 2.0;
 
+/// A resting craft this far from the camera sleeps, metres
+/// (`town-frame-time` decision 6).
+const SLEEP_BEYOND_M: f64 = 30.0;
+
+/// A sleeping craft is stepped once in this many ticks, to see whether
+/// anything has moved it: half a second at 60 Hz.
+const SLEEP_CHECK_TICKS: u32 = 30;
+
+/// Whether a craft sleeps through this tick: nobody aboard, at rest for
+/// `REST_S`, beyond `SLEEP_BEYOND_M` of the camera, and not due its check.
+/// Counts the ticks it sleeps, and is woken by anything that ends the rest
+/// (the check step finds it moving, and `step_one` clears `rested`).
+fn sleeps(vehicle: &mut Vehicle, aboard: bool, camera: Option<DVec3>) -> bool {
+    let far = camera.is_none_or(|c| vehicle.craft.body.position.distance(c) > SLEEP_BEYOND_M);
+    if aboard || !vehicle.rested || !far {
+        vehicle.dozing = 0;
+        return false;
+    }
+    vehicle.dozing += 1;
+    !vehicle.dozing.is_multiple_of(SLEEP_CHECK_TICKS)
+}
+
 /// The craft data (`assets/config/vehicles.ron`), the hulls built from it, and
 /// the next ID to give a craft.
 #[derive(Resource)]
@@ -95,6 +117,8 @@ pub struct Vehicle {
     /// Seconds it has been still, for writing a rest once.
     still: f32,
     rested: bool,
+    /// Ticks it has slept through (`town-frame-time` decision 6).
+    dozing: u32,
 }
 
 impl Vehicle {
@@ -103,6 +127,7 @@ impl Vehicle {
             craft,
             still: 0.0,
             rested: false,
+            dozing: 0,
         }
     }
 }
@@ -163,7 +188,8 @@ impl Plugin for VehiclePlugin {
                 (draw::place, view::follow)
                     .chain()
                     .after(crate::planet::update_planet_frame)
-                    .before(bevy::transform::TransformSystems::Propagate),
+                    .before(bevy::transform::TransformSystems::Propagate)
+                    .run_if(crate::world_open),
             )
             .add_systems(Update, (hud::show, save_vehicles, view::look));
     }
@@ -197,6 +223,8 @@ fn step_vehicles(
     mut clock: ResMut<VehicleClock>,
     mut fleet: ResMut<Fleet>,
     mut walkers: Query<(&mut Position, &mut Transform), With<Walker>>,
+    mut timing: Local<StepTiming>,
+    cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
 ) {
     let Some(sea) = world.sea.as_deref() else {
         return;
@@ -213,7 +241,15 @@ fn step_vehicles(
     };
     let contact = world.contact.as_deref();
     let ground = |p: DVec3| ground_under(contact, p);
+    // Where the camera is, body-local, as `towns` measures range.
+    let camera = cameras
+        .iter()
+        .find(|(c, _)| c.is_active)
+        .map(|(_, at)| at.translation().as_dvec3() - world.frame.center);
     for (entity, mut vehicle) in &mut vehicles {
+        if sleeps(&mut vehicle, aboard.0 == Some(entity), camera) {
+            continue;
+        }
         let craft = &vehicle.craft;
         let up = craft.body.position.normalize_or(DVec3::Y);
         let direction = up.as_vec3();
@@ -245,7 +281,12 @@ fn step_vehicles(
         // A cog on its swing is moved by it, not stepped
         // (`harbour::swing_moored_cogs`).
         if !harbour::on_swing(&vehicle.craft) {
+            // MEASUREMENT (`town-frame-time` decision 6): each kind's step.
+            let started = std::time::Instant::now();
             step_one(&mut vehicle, dt, &input, &env, &mut fleet);
+            let entry = timing.1.entry(vehicle.craft.kind.name()).or_default();
+            entry.0 += 1;
+            entry.1 += started.elapsed().as_secs_f64();
         }
         // The player aboard is carried: the walker stands at the craft's exit,
         // so a save taken aboard puts them on foot beside it on reload.
@@ -259,6 +300,34 @@ fn step_vehicles(
             }
         }
     }
+    report_steps(&mut timing, dt as f32);
+}
+
+/// MEASUREMENT (`town-frame-time` decision 6): seconds since the last report,
+/// and each kind's steps and seconds spent stepping.
+type StepTiming = (f32, std::collections::BTreeMap<&'static str, (u32, f64)>);
+
+/// MEASUREMENT (`town-frame-time` decision 6): every 5 s, each kind's mean
+/// step and how many were stepped, then forget them.
+fn report_steps(timing: &mut StepTiming, dt: f32) {
+    timing.0 += dt;
+    if timing.0 < 5.0 {
+        return;
+    }
+    let ticks = (timing.0 * crate::FIXED_HZ as f32).round().max(1.0);
+    let line: Vec<String> = timing
+        .1
+        .iter()
+        .map(|(kind, (n, s))| {
+            format!(
+                "{kind} {:.3} ms a step, {:.1} a tick",
+                s * 1000.0 / f64::from(*n).max(1.0),
+                *n as f32 / ticks
+            )
+        })
+        .collect();
+    info!("VEHICLE_STEP {}", line.join("; "));
+    *timing = Default::default();
 }
 
 /// One craft's tick: stepped, held back a tick where it left its domain,

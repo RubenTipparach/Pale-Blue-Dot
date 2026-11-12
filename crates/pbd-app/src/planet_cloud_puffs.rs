@@ -47,6 +47,16 @@ pub(super) struct PuffSites {
     sites: Vec<Site>,
     taps: Vec<Taps>,
     puffs: Vec<Puff>,
+    /// What each site reads off the shown pair's two maps (cover, top,
+    /// optical depth), kept while the pair is the same (`lighting-perf`
+    /// 2.4): the 8 map taps a site were most of a build, and the pair
+    /// changes only when the weather steps, while `t` moves every frame.
+    looks: Vec<([f32; 3], [f32; 3])>,
+    /// The pair `looks` was read from: `WeatherMapsNow::generation`, which
+    /// moves whenever the shown pair does.
+    looks_of: Option<u64>,
+    /// The far-to-near order's scratch, kept to save its allocation.
+    order: Vec<(f32, u32)>,
 }
 
 impl PuffSites {
@@ -61,6 +71,9 @@ impl PuffSites {
             sites,
             taps,
             puffs: Vec::new(),
+            looks: Vec::new(),
+            looks_of: None,
+            order: Vec::new(),
         }
     }
 
@@ -70,10 +83,13 @@ impl PuffSites {
 
     /// The puffs under the shown weather that `view` can see (when given:
     /// the frustum in body-local space), sorted far to near from `eye`
-    /// (body-local), into `out`.
+    /// (body-local), into `out`. `pair` names the two maps
+    /// (`WeatherMapsNow::generation`): what the sites read off them is kept
+    /// until it changes.
     #[allow(clippy::too_many_arguments)]
     pub fn build(
         &mut self,
+        pair: u64,
         from: &WeatherMaps,
         to: &WeatherMaps,
         t: f32,
@@ -99,23 +115,32 @@ impl PuffSites {
             optical_depth_scale: settings.cloud_puff_optical_depth,
         };
         let t = t.clamp(0.0, 1.0);
-        for (site, taps) in self.sites.iter().zip(&self.taps) {
-            let read = |maps: &WeatherMaps| {
-                taps.iter().fold([0.0f32; 4], |mut acc, &(i, w)| {
-                    let v = maps.cloud[i as usize];
-                    for k in 0..4 {
-                        acc[k] += v[k] * w;
-                    }
-                    acc
+        if self.looks_of != Some(pair) || self.looks.len() != self.sites.len() {
+            self.looks = self
+                .taps
+                .iter()
+                .map(|taps| {
+                    let read = |maps: &WeatherMaps| {
+                        let v = taps.iter().fold([0.0f32; 4], |mut acc, &(i, w)| {
+                            let v = maps.cloud[i as usize];
+                            for k in 0..4 {
+                                acc[k] += v[k] * w;
+                            }
+                            acc
+                        });
+                        [v[0], v[1], v[3]]
+                    };
+                    (read(from), read(to))
                 })
-            };
-            let a = read(from);
-            let b = read(to);
+                .collect();
+            self.looks_of = Some(pair);
+        }
+        for (site, (a, b)) in self.sites.iter().zip(&self.looks) {
             let mix = |k: usize| a[k] + (b[k] - a[k]) * t;
             let look = Look {
                 cover: mix(0),
                 top: mix(1),
-                optical_depth: mix(3),
+                optical_depth: mix(2),
             };
             cloud_puffs::puffs_at(site, look, &layer, &mut self.puffs);
         }
@@ -134,12 +159,14 @@ impl PuffSites {
         }
         counts.in_view = self.puffs.len();
         // Far to near: the blend is "over", so the nearest is drawn last.
-        let mut order: Vec<(f32, u32)> = self
-            .puffs
-            .iter()
-            .enumerate()
-            .map(|(i, p)| (p.centre.distance_squared(eye), i as u32))
-            .collect();
+        let order = &mut self.order;
+        order.clear();
+        order.extend(
+            self.puffs
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (p.centre.distance_squared(eye), i as u32)),
+        );
         order.sort_unstable_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
         out.extend(
             order
@@ -217,6 +244,39 @@ mod tests {
         }
     }
 
+    /// `lighting-perf` 2.4: a build that reuses what the sites read off the
+    /// pair is the build that reads it afresh, bit for bit, at any `t`, and
+    /// a new pair is read anew.
+    #[test]
+    fn a_kept_reading_builds_the_same_puffs() {
+        let texels = 6 * MAP_SIZE * MAP_SIZE;
+        let maps = |k: f32| WeatherMaps {
+            cloud: (0..texels)
+                .map(|i| {
+                    let x = (i as f32 * 0.37 + k).sin() * 0.5 + 0.5;
+                    [x, 0.3 + 0.2 * x, 0.0, 10.0 + 20.0 * x]
+                })
+                .collect(),
+            wind: vec![[0.0; 4]; texels],
+        };
+        let (a, b, c) = (maps(0.0), maps(1.3), maps(2.9));
+        let settings = WeatherSettings::default();
+        let eye = Vec3::Y * (CLOUD_RADIUS - 400.0);
+        let mut kept = PuffSites::new(250.0);
+        let mut out = Vec::new();
+        kept.build(1, &a, &b, 0.9, eye, None, &settings, &mut out);
+        for (pair, from, to, t) in [(1, &a, &b, 0.3), (1, &a, &b, 0.71), (2, &b, &c, 0.2)] {
+            kept.build(pair, from, to, t, eye, None, &settings, &mut out);
+            let mut fresh_out = Vec::new();
+            PuffSites::new(250.0).build(pair, from, to, t, eye, None, &settings, &mut fresh_out);
+            assert!(!out.is_empty());
+            assert_eq!(
+                bytemuck::cast_slice::<_, u8>(&out),
+                bytemuck::cast_slice::<_, u8>(&fresh_out)
+            );
+        }
+    }
+
     #[test]
     fn puffs_follow_the_map_and_come_far_to_near() {
         let texels = 6 * MAP_SIZE * MAP_SIZE;
@@ -232,12 +292,12 @@ mod tests {
         };
         let eye = Vec3::Y * (CLOUD_RADIUS + 50.0);
         let mut out = Vec::new();
-        sites.build(&maps, &maps, 0.0, eye, None, &settings, &mut out);
+        sites.build(0, &maps, &maps, 0.0, eye, None, &settings, &mut out);
         assert!(out.is_empty(), "clear sky drew {}", out.len());
         for v in &mut maps.cloud {
             *v = [0.6, 0.2, 0.0, 30.0];
         }
-        sites.build(&maps, &maps, 0.0, eye, None, &settings, &mut out);
+        sites.build(1, &maps, &maps, 0.0, eye, None, &settings, &mut out);
         let share = out.len() as f32 / sites.sites.len() as f32;
         assert!(share > 0.5 && share < 0.75, "{share}");
         let d: Vec<f32> = out

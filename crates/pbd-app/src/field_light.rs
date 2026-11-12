@@ -142,7 +142,8 @@ impl Plugin for FieldLightPlugin {
                 PostUpdate,
                 (take_the_field, light_from_the_field, repack_room_lights)
                     .chain()
-                    .after(bevy::transform::TransformSystems::Propagate),
+                    .after(bevy::transform::TransformSystems::Propagate)
+                    .run_if(crate::world_open),
             )
             .add_systems(Update, bake_town_outsides)
             .add_systems(Update, fill_follows_the_day);
@@ -235,8 +236,31 @@ fn world_bounds(transform: &GlobalTransform, aabb: Option<&Aabb>) -> (Vec3, Vec3
     (low, high)
 }
 
+/// How far the sun moves, in its unit direction's components, before a
+/// field-lit material is given it again (`town-frame-time` decision 7): 2e-3
+/// is 0.11 degrees, about once a second at `DAY_S` 2880. Each rewrite makes
+/// the renderer prepare the material again, and at 1e-4 a town's were
+/// prepared every 45 ms.
+const SUN_STEP: f32 = 2e-3;
+
+/// What a field-lit mesh's corners last read (`town-frame-time` decision 1):
+/// the corners where it stood, the points they read (ground-clamped), the
+/// field they were read from and what it said. The generator's ground is
+/// asked again only when the mesh moves, the field only when it changes.
+struct Corners {
+    raw: [Vec3; 8],
+    points: [Vec3; 8],
+    key: (usize, u64, bool),
+    sky: [Vec4; 2],
+    block: [Vec4; 2],
+    /// The frame it was last used in, so a despawned mesh's entry goes.
+    seen: u32,
+}
+
 /// Sample the field at every field-lit mesh's eight corners, each frame
-/// (`lamps-and-lanterns` decision 2), and hand them to its material.
+/// (`lamps-and-lanterns` decision 2), and hand them to its material. A mesh
+/// that has not moved, under a field that has not changed, keeps what its
+/// corners read last (`town-frame-time` decision 1).
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn light_from_the_field(
     fine: Option<Res<PlanetFine>>,
@@ -244,6 +268,7 @@ fn light_from_the_field(
     sun: Option<Res<crate::sky::Sun>>,
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     meshes: Query<(
+        Entity,
         &GlobalTransform,
         Option<&Aabb>,
         &MeshMaterial3d<FieldLitMaterial>,
@@ -253,13 +278,30 @@ fn light_from_the_field(
     faded: Query<&Faded>,
     sky_light: Option<Res<crate::tone::SkyLight>>,
     mut lit: ResMut<Assets<FieldLitMaterial>>,
+    mut read: Local<(u32, std::collections::HashMap<Entity, Corners>)>,
 ) {
     let sky_light = sky_light.map(|s| *s).unwrap_or_default();
     let centre = frame
         .map(|frame| frame.center.as_vec3())
         .unwrap_or(Vec3::ZERO);
     let toward_sun = sun.map(|sun| sun.direction()).unwrap_or(Vec3::Y);
-    for (transform, aabb, material, share, parent) in &meshes {
+    let key = match (&fine, &contact) {
+        (Some(fine), Some(contact)) => (
+            std::sync::Arc::as_ptr(&fine.set) as usize,
+            fine.set.columns.light_version(),
+            contact.serves(&fine.set),
+        ),
+        _ => (0, 0, false),
+    };
+    let (count, cache) = &mut *read;
+    *count = count.wrapping_add(1);
+    let now = *count;
+    // MEASUREMENT (`town-frame-time`): this system's time and how many
+    // materials it rewrote, each frame it passes 2 ms.
+    let started = std::time::Instant::now();
+    let (mut seen, mut rewritten) = (0usize, 0usize);
+    for (entity, transform, aabb, material, share, parent) in &meshes {
+        seen += 1;
         let (low, high) = world_bounds(transform, aabb);
         let gone = parent
             .and_then(|p| faded.get(p.parent()).ok())
@@ -282,34 +324,62 @@ fn light_from_the_field(
             continue;
         };
         let like_terrain = current.look.x > 0.5;
-        for i in 0..8 {
-            let corner = Vec3::new(
+        let raw: [Vec3; 8] = std::array::from_fn(|i| {
+            Vec3::new(
                 if i & 1 == 0 { low.x } else { high.x },
                 if i & 2 == 0 { low.y } else { high.y },
                 if i & 4 == 0 { low.z } else { high.z },
-            );
-            let mut at = corner - centre;
-            // A town's mesh spans the town, and its box, square to the render
-            // frame's axes, reaches into the ground wherever the town's up is
-            // tilted from them: at Theringford two corners of every piece's
-            // box read the rock's dark (`cities-in-the-world` slice 4a). A
-            // corner under the ground reads the field just over it instead:
-            // the town stands on the ground, never in it.
-            if like_terrain && let Some(up) = at.try_normalize() {
-                let ground = PLANET_RADIUS
-                    + pbd_core::column::surface_m(crate::planet::terrain_config(), up)
-                    + GROUND_CLEAR_M;
-                if at.length() < ground {
-                    at = up * ground;
+            ) - centre
+        });
+        let entry = cache.entry(entity).or_insert_with(|| Corners {
+            // NaN is never near, so the first frame reads everything.
+            raw: [Vec3::NAN; 8],
+            points: raw,
+            key,
+            sky: [Vec4::ONE; 2],
+            block: [Vec4::ZERO; 2],
+            seen: now,
+        });
+        entry.seen = now;
+        let still = entry
+            .raw
+            .iter()
+            .zip(&raw)
+            .all(|(a, b)| (*a - *b).abs().max_element() <= 1e-3);
+        if !still {
+            entry.raw = raw;
+            entry.points = raw.map(|mut at| {
+                // A town's mesh spans the town, and its box, square to the
+                // render frame's axes, reaches into the ground wherever the
+                // town's up is tilted from them: at Theringford two corners
+                // of every piece's box read the rock's dark
+                // (`cities-in-the-world` slice 4a). A corner under the ground
+                // reads the field just over it instead: the town stands on
+                // the ground, never in it.
+                if like_terrain && let Some(up) = at.try_normalize() {
+                    let ground = PLANET_RADIUS
+                        + pbd_core::column::surface_m(crate::planet::terrain_config(), up)
+                        + GROUND_CLEAR_M;
+                    if at.length() < ground {
+                        at = up * ground;
+                    }
                 }
-            }
-            let (sky, block) = match (&fine, &contact) {
-                (Some(fine), Some(contact)) => field_at(fine, contact, at),
-                _ => (1.0, 0.0),
-            };
-            field.sky[i / 4][i % 4] = sky;
-            field.block[i / 4][i % 4] = block;
+                at
+            });
         }
+        if !still || entry.key != key {
+            entry.key = key;
+            for (i, at) in entry.points.iter().enumerate() {
+                let (sky, block) = match (&fine, &contact) {
+                    (Some(fine), Some(contact)) => field_at(fine, contact, *at),
+                    _ => (1.0, 0.0),
+                };
+                entry.sky[i / 4][i % 4] = sky;
+                entry.block[i / 4][i % 4] = block;
+            }
+        }
+        field.sky = entry.sky;
+        field.block = entry.block;
         field.look = current.look;
         field.lights = current.lights;
         field.light_colour = current.light_colour;
@@ -320,15 +390,24 @@ fn light_from_the_field(
             || current.look != field.look
             || current.centre.w != field.centre.w
             || (current.high - field.high).abs().max_element() > 1e-3
-            || (current.sun - field.sun).abs().max_element() > 1e-4
+            || (current.sun - field.sun).abs().max_element() > SUN_STEP
             || (0..2).any(|k| {
                 (current.sky[k] - field.sky[k]).abs().max_element() > 1e-3
                     || (current.block[k] - field.block[k]).abs().max_element() > 1e-3
             });
         if moved && let Some(material) = lit.get_mut(&material.0) {
             material.extension.field = field;
+            rewritten += 1;
         }
     }
+    // Every so often, forget the meshes that are gone.
+    if now % 600 == 0 {
+        cache.retain(|_, c| c.seen == now);
+    }
+    crate::planet::lod::spent(
+        &format!("field corners: {seen} meshes, {rewritten} materials rewritten"),
+        started,
+    );
 }
 
 /// Pack a mesh's room lights onto its material again when they change: a
@@ -662,14 +741,16 @@ mod tests {
     /// (`cities-in-the-world` slice 4a), so the two dissolve alike.
     #[test]
     fn a_fading_town_takes_the_terrains_mask() {
-        let town = include_str!("../../../assets/shaders/field_lit.wgsl");
-        let terrain = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        // A checkout may carry either line ending (`core.autocrlf`).
+        let town = include_str!("../../../assets/shaders/field_lit.wgsl").replace("\r\n", "\n");
+        let terrain =
+            include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
         let body = |s: &str| {
             let i = s.find("fn bayer4").expect("a bayer4");
             let j = s[i..].find("\n}\n").expect("its end");
             s[i..i + j].to_string()
         };
-        assert_eq!(body(town), body(terrain));
+        assert_eq!(body(&town), body(&terrain));
         assert!(town.contains("if bayer4(in.position.xy) < field.centre.w {"));
     }
 
@@ -678,7 +759,7 @@ mod tests {
     /// numbers.
     #[test]
     fn the_field_lit_shader_carries_the_terrain_light_constants() {
-        let shader = include_str!("../../../assets/shaders/field_lit.wgsl");
+        let shader = include_str!("../../../assets/shaders/field_lit.wgsl").replace("\r\n", "\n");
         for line in [
             format!("const AMBIENT_FLOOR: f32 = {:.2};", light::AMBIENT_FLOOR),
             format!("const NIGHT_FILL: f32 = {:.2};", light::NIGHT_FILL),

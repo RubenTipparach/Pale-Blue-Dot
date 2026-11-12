@@ -1,12 +1,20 @@
 ---
 name: owner-survey
-description: Put questions for the owner into a survey Claude Doc they fill in, instead of asking them in chat, and fold their answers back into the OpenSpec changes. Use whenever a plan, a mockup or a change has open questions for the owner ("Questions for the owner", "Open Questions", a gate that needs their choice), whenever you would otherwise ask more than two questions in one message, and whenever the owner answers in the survey ("I filled in the survey", "answered the doc").
+description: Superseded on 2026-11-12 by the html-survey skill; use html-survey for every question to the owner. Kept as the record of how the first survey, a Claude Doc (https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn), was run, and for reading that doc if an old answer needs checking.
 metadata:
   author: Pale Blue Dot (Claude Code)
   version: "1.0"
 ---
 
 # Ask the owner with a survey, not a chat list
+
+> **Superseded (2026-11-12).** Questions now go into the HTML survey,
+> https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5 (`docs/design/survey.html`), run by the
+> `html-survey` skill (`.claude/skills/html-survey`). The owner, 2026-11-12: "can you create a
+> mockup tracking dock, and a survey html tracker? both of these skills are found in fleet command
+> repo". The Claude Doc below is kept as the earlier record and is no longer edited; its open
+> question (G1) and its Already decided list were carried into the HTML survey. The rule to ask only
+> with screenshots carries over unchanged. What follows is the old workflow, for reference.
 
 The owner, 2026-09-27: "you need some sort of survey form for me to fill out
 geeze ... that claude doc thing was good for that, maybe that should be a

@@ -1,0 +1,480 @@
+<meta charset="utf-8">
+<title>Exchange Terminal</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500;700&family=Fira+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a trading terminal. Status strip, then the station's board beside the chart, then shares, the cross-station board, contracts and the news wire. */
+:root{
+  color-scheme: dark;
+  --ground:#0a0d10;
+  --panel:#11161b;
+  --raise:#172028;
+  --line:rgba(170,200,220,.14);
+  --grid:rgba(170,200,220,.09);
+  --ink:#e2e9ee;
+  --muted:#8fa0ad;
+  --amber:#f0b43c;
+  --series:#3987e5;     /* the selected series (categorical slot 1, dark step) */
+  --other:#5c6670;      /* the rest, recessive */
+  --cheap:#3987e5;      /* diverging pole: below base price */
+  --dear:#d95926;       /* diverging pole: above base price */
+  --mid:#3a4048;        /* diverging midpoint, neutral */
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html{background:var(--ground)}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:14.5px;line-height:1.5;margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+a{color:var(--amber)}
+button,select,input{font:inherit}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:11.5px;color:var(--muted)}
+.tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.strip{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:8px}
+.strip .in{max-width:1240px;margin:0 auto;display:flex;flex-wrap:wrap;gap:6px 20px;align-items:center}
+.strip b{font-family:var(--display);font-size:19px;letter-spacing:.04em}
+.stat{display:grid;line-height:1.15}
+.stat .k{font-family:var(--display);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--mono);font-size:14.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.sp{flex:1}
+.b{all:unset;cursor:pointer;font-family:var(--display);font-size:14px;letter-spacing:.05em;padding:4px 10px;border-radius:4px;border:1px solid var(--line);background:var(--raise);color:var(--ink);text-align:center;white-space:nowrap}
+.b:hover{border-color:var(--amber)}
+.b:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.b[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+.b.sm{font-size:12.5px;padding:2px 7px}
+.b[disabled]{opacity:.35;pointer-events:none}
+select{background:var(--raise);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
+
+main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:22px 64px}
+.wrap{max-width:1240px;margin:0 auto;display:grid;gap:30px}
+h1{margin:0;font-family:var(--display);font-weight:700;font-size:clamp(30px,5vw,46px);line-height:1;letter-spacing:.01em}
+h2{margin:0;font-family:var(--display);font-weight:700;font-size:25px;letter-spacing:.02em;line-height:1.1;text-wrap:balance}
+h3{margin:0;font-family:var(--display);font-weight:600;font-size:18px;letter-spacing:.03em}
+p{margin:0;max-width:72ch}
+.muted{color:var(--muted)}
+section{display:grid;gap:12px;min-width:0}
+.box{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:12px;min-width:0;display:grid;gap:10px;align-content:start}
+.grid2{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:980px){.grid2{grid-template-columns:1fr}}
+.scroll{overflow-x:auto}
+table.t{border-collapse:collapse;width:100%;font-size:13.5px}
+.t th,.t td{padding:5px 7px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
+.t th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:11.5px;color:var(--muted);font-weight:600}
+.t td.r,.t th.r{text-align:right}
+.t tr.sel td{background:rgba(57,135,229,.10)}
+.t tr.click{cursor:pointer}
+.t img{width:28px;height:28px;vertical-align:middle}
+img{image-rendering:pixelated}
+.chg{font-family:var(--mono);font-size:12.5px}
+.acts{display:flex;gap:4px}
+.chart svg{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.tip{position:absolute;pointer-events:none;background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:6px 8px;font-size:12px;line-height:1.35;white-space:nowrap;z-index:3}
+.tip b{font-family:var(--display);font-size:13px;letter-spacing:.05em}
+.chartwrap{position:relative}
+.hold{display:grid;gap:4px;font-size:13px}
+.meter{height:8px;border-radius:4px;background:var(--raise);overflow:hidden}
+.meter span{display:block;height:100%;background:var(--series);border-radius:4px}
+.heat td.c{text-align:center;font-family:var(--mono);font-size:12.5px;color:#f2f4f6;border:2px solid var(--panel)}
+.heat td.here{outline:2px solid var(--amber);outline-offset:-2px}
+.scale{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.scale .bar{width:180px;max-width:40vw;height:10px;border-radius:5px;background:linear-gradient(90deg,var(--cheap),var(--mid),var(--dear))}
+.news{display:grid;gap:6px;max-height:300px;overflow:auto;font-size:13.5px}
+.news div{border-left:3px solid var(--line);padding:2px 0 2px 10px}
+.news div.ev{border-left-color:var(--amber)}
+.news .when{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-right:8px}
+.con{display:grid;gap:8px}
+.con article{border:1px solid var(--line);border-radius:5px;padding:9px 10px;display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;background:var(--raise);min-width:0}
+.con article img{width:56px;height:56px}
+.con .who{font-size:12px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--raise);border:1px solid var(--amber);border-radius:5px;padding:7px 14px;font-family:var(--display);letter-spacing:.05em;font-size:15px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9}
+.q{display:grid;gap:10px}
+.q article{border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--panel);display:grid;gap:6px}
+.rec{color:#79e0a0;font-weight:500}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px}
+.notes .box p{font-size:13.5px}
+footer{font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+
+/* ---- The game's HUD look (crates/pbd-app/src/desktop/{menu,pack,slots}.rs): square panels of PANEL_FILL edged in EDGE,
+   mint headings, monospace labels (the game draws its UI in Fira Mono), slots for pixel icons shown at whole-number scales. */
+:root{
+  --ground:#070b0e;
+  --panel:rgba(5,15,20,.94);          /* PANEL_FILL 0.02,0.06,0.08,0.94 */
+  --panel-solid:#050f14;
+  --raise:rgba(15,33,38,.9);          /* button idle 0.06,0.13,0.15,0.9 */
+  --hover:rgba(28,56,61,.95);         /* button hovered 0.11,0.22,0.24,0.95 */
+  --line:rgba(140,191,189,.6);        /* EDGE 0.55,0.75,0.74,0.6 */
+  --slot-edge:rgba(140,191,189,.5);   /* an idle slot's border */
+  --slot-fill:rgba(5,15,20,.72);      /* an idle slot's fill */
+  --ink:#e0f0e8;                      /* INK 0.88,0.94,0.91 */
+  --muted:#99b8b8;                    /* DIM 0.6,0.72,0.72 */
+  --mint:#7accc4;                     /* MINT 0.48,0.8,0.77 */
+  --display:"Fira Mono",ui-monospace,Menlo,monospace;
+  --mono:"Fira Mono",ui-monospace,Menlo,monospace;
+  --body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*,*::before,*::after{border-radius:0 !important}
+h1,h2,h3,.eyebrow{font-family:var(--display);letter-spacing:.02em}
+h1{font-weight:500} h2,h3{font-weight:500;color:var(--mint);text-transform:uppercase}
+.b{font-family:var(--mono) !important;text-transform:uppercase;letter-spacing:.04em !important;background:var(--raise) !important;border:1px solid var(--line) !important}
+.b:hover{background:var(--hover) !important}
+.b[aria-pressed="true"]{border-color:#fad973 !important;color:#fad973 !important}
+img{image-rendering:pixelated}
+.b.main{background:rgba(250,217,115,.14) !important;color:#fad973 !important;border-color:#fad973 !important;font-weight:600}
+.b.main:hover{background:rgba(250,217,115,.26) !important}
+.b[disabled]{opacity:1 !important;color:var(--muted) !important;background:transparent !important;border:1px dashed var(--slot-edge) !important}
+
+.strip,.box,.con article,.q article{background:var(--panel) !important;border-color:var(--line) !important}
+.t img,.con article img{background:var(--slot-fill);outline:1px solid var(--slot-edge);outline-offset:0}
+.t th{font-family:var(--mono) !important;color:var(--mint) !important}
+select{background:var(--raise) !important;border:1px solid var(--line) !important;font-family:var(--mono)}
+</style>
+
+<div class="strip" aria-label="Status">
+  <div class="in">
+    <b>Exchange</b>
+    <label class="stat" for="dock"><span class="k">Docked at</span><select id="dock"></select></label>
+    <div class="stat"><span class="k">Credits</span><span class="v" id="sCr">5,000</span></div>
+    <div class="stat"><span class="k">Hold</span><span class="v" id="sHold">0 / 60 t</span></div>
+    <div class="stat"><span class="k">Shares</span><span class="v" id="sShares">0</span></div>
+    <div class="stat"><span class="k">Net worth</span><span class="v" id="sNet">5,000</span></div>
+    <div class="stat"><span class="k">Game time</span><span class="v" id="sTime">day 1, 00:00</span></div>
+    <span class="sp"></span>
+    <button class="b" id="tPlay" aria-pressed="true">Running</button>
+    <button class="b" id="tFast" aria-pressed="false">4x</button>
+  </div>
+</div>
+
+<main>
+<div class="wrap">
+  <section>
+    <span class="eyebrow">Pale Blue Dot, a design for trading</span>
+    <h1>The exchange terminal</h1>
+    <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+    <p>Every station keeps its own stock of eight goods, and its prices follow that stock: what it makes piles up and gets cheap, what it eats runs short and gets dear. NPC haulers move goods toward the price gaps, and events (a mine collapse, a blight, a navy exercise) push them apart again. Five companies are listed; their shares follow the goods they live on. The market below is running: buy here, dock somewhere else, sell.</p>
+    <p class="muted" style="font-size:13px"><span class="tag">Proposal, not built</span> &nbsp;Nothing here is in the engine. Travel is instant in this mockup, so arbitrage is easier than it will be. Icons and company marks are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/market_art.py</code>): 28 x 28 sprites shown at 1x and 2x, nearest neighbour.</p>
+  </section>
+
+  <div class="grid2">
+    <section class="box" aria-labelledby="h-board">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 id="h-board">Board at <span id="boardName">Meridian</span></h2><span class="muted" style="font-size:12.5px" id="boardNote">spread 6%</span></div>
+      <div class="scroll"><table class="t" id="board"><thead><tr><th></th><th>Good</th><th class="r">Buy</th><th class="r">Sell</th><th class="r">24 h</th><th class="r">Stock</th><th class="r">Held</th><th>Trade</th></tr></thead><tbody></tbody></table></div>
+      <p class="muted" style="font-size:12.5px">Buy is what you pay the station, sell is what it pays you. Click a row to chart it. Quantities are tonnes.</p>
+    </section>
+    <section class="box" aria-labelledby="h-chart">
+      <h2 id="h-chart"><span id="chartTitle">Price history</span></h2>
+      <div class="legend" id="legend"></div>
+      <div class="chartwrap chart" id="cw1"><svg id="chart1" viewBox="0 0 560 300" role="img" aria-label="Price history"></svg></div>
+      <div class="hold" id="holdBox"></div>
+    </section>
+  </div>
+
+  <section class="box" aria-labelledby="h-shares">
+    <h2 id="h-shares">Company shares</h2>
+    <div class="grid2" style="gap:14px">
+      <div class="scroll"><table class="t" id="shares"><thead><tr><th></th><th>Company</th><th class="r">Price</th><th class="r">24 h</th><th>30 days</th><th class="r">Owned</th><th>Trade</th></tr></thead><tbody></tbody></table></div>
+      <div><div class="chartwrap chart" id="cw2"><svg id="chart2" viewBox="0 0 560 250" role="img" aria-label="Share price history"></svg></div><p class="muted" style="font-size:12.5px" id="coNote"></p></div>
+    </div>
+  </section>
+
+  <section class="box" aria-labelledby="h-heat">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2 id="h-heat">Every station's price, against the base price</h2>
+      <div class="scale"><span>cheaper</span><span class="bar"></span><span>dearer</span></div></div>
+    <div class="scroll"><table class="t heat" id="heat"></table></div>
+    <p class="muted" style="font-size:12.5px">The number is the mid price in credits per tonne; the colour is how far it sits from the system's base price for that good (half to double). In the game you only see stations you have visited recently, and what you see is as old as your last visit or the last news.</p>
+  </section>
+
+  <div class="grid2">
+    <section class="box" aria-labelledby="h-con">
+      <h2 id="h-con">Contracts and player listings</h2>
+      <div class="con" id="contracts"></div>
+    </section>
+    <section class="box" aria-labelledby="h-news">
+      <h2 id="h-news">News wire</h2>
+      <div class="news" id="news" aria-live="polite"></div>
+      <div class="acts" style="flex-wrap:wrap"><span class="muted" style="font-size:12.5px;align-self:center">Trigger an event:</span><span class="acts" id="evBtns" style="flex-wrap:wrap"></span></div>
+    </section>
+  </div>
+
+  <section aria-labelledby="h-how">
+    <span class="eyebrow">How it works</span>
+    <h2 id="h-how">The model behind the numbers</h2>
+    <div class="notes">
+      <div class="box"><h3>Price from stock</h3><p>Each station has a target stock for each good. Mid price = base &times; (target / stock)<sup>0.6</sup>, held between 0.3x and 4x base. Buy and sell sit either side of the mid by the station's spread: 6% at a trade hub, 14% at the smuggler den.</p></div>
+      <div class="box"><h3>Production, consumption, haulers</h3><p>Every game hour a station makes and eats goods at its own rates. NPC haulers move a little stock from where a good is cheap to where it is dear, which ties prices together without making them equal. The player's trades move stock exactly as an NPC's do.</p></div>
+      <div class="box"><h3>Events</h3><p>An event changes a station's rates for a few days. The wire announces it when it happens, so a player who reads the news can get there first. Events are drawn by the world, never by the player's position, and the draw is seeded so it replays.</p></div>
+      <div class="box"><h3>Shares</h3><p>Each company has a fair value computed from the goods it sells and buys (Kessler from ore and ice, Ventra from fuel less ore). The price drifts toward fair value with noise, and events hit fair value directly. Players can only buy what is listed; no shorting in this design.</p></div>
+      <div class="box"><h3>Persistence</h3><p>Stocks, prices, contracts and share holdings are stored state on the durable path, with authors: a trade by the player, a delivery by an NPC hauler. The world only advances while it is played. A player's own sell listing is a stored record that outlives the session.</p></div>
+      <div class="box"><h3>One rule, two players</h3><p>The market is one authoritative simulation on the host. A trade is a transaction: it commits or it does not. Two players buying the last 10 t at once cannot both get it.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-q">
+    <span class="eyebrow">For the owner</span>
+    <h2 id="h-q">Decisions / questions for the owner</h2>
+    <div class="q">
+      <article><h3>1. How much do players know about other stations' prices?</h3><p>Options: (a) everything, live; (b) what they saw last time they docked, plus news; (c) a paid data service.</p><p class="rec">Recommendation: (b), with (c) as an upgrade sold by the research station. Stale prices are what make trading a game rather than a spreadsheet.</p></article>
+      <article><h3>2. Can players move prices?</h3><p class="rec">Recommendation: yes, by the same stock rule as NPCs. Dumping 60 t of iron on Kessler Rock should crash it; that keeps one good route from being farmed forever.</p></article>
+      <article><h3>3. How far does the stock market go?</h3><p>Options: buy and sell listed shares only; plus dividends; plus shorting and options; plus player-founded companies.</p><p class="rec">Recommendation: buy and sell plus a quarterly dividend. No shorting. Player companies later, tied to owning an outpost.</p></article>
+      <article><h3>4. Player-to-player trade</h3><p>Options: direct trades when docked together; a station order book; contracts with escrow.</p><p class="rec">Recommendation: sell listings on a station's order book, and contracts with escrow, both durable records. Direct trades later, once multiplayer exists.</p></article>
+      <article><h3>5. Are there illegal goods?</h3><p class="rec">Recommendation: yes, per jurisdiction: spice is legal at the Meridian and contraband at Gatehouse Kappa. The den buys anything. It gives the customs scan on the stations page a reason to exist.</p></article>
+    </div>
+  </section>
+  <footer>Mockup for Pale Blue Dot. The market runs in this page: one tick is one game hour, two ticks a second (eight at 4x). Seeded, so a reload replays the same first days until you trade. Nothing here is built.</footer>
+</div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let seed = 20261111; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const gauss = () => { let u = 0, v = 0; while (u === 0) u = rnd(); v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * v); };
+const fmt = n => Math.round(n).toLocaleString();
+const toast = s => { const t = $("toast"); t.textContent = s; t.style.opacity = 1; clearTimeout(toast.h); toast.h = setTimeout(() => t.style.opacity = 0, 1800); };
+
+// ------------------------------------------------------------------ the world
+const GOODS = [
+  { id: "iron_ore", n: "Iron ore", base: 40 }, { id: "water_ice", n: "Water ice", base: 30 }, { id: "fuel_cells", n: "Fuel cells", base: 120 },
+  { id: "grain", n: "Grain", base: 55 }, { id: "alloy", n: "Alloy", base: 160 }, { id: "medicine", n: "Medicine", base: 260 },
+  { id: "electronics", n: "Electronics", base: 320 }, { id: "spice", n: "Spice", base: 210 },
+];
+// per station: rate per hour for each good (+ makes, - eats), spread
+const STN = [
+  { id: "mer", n: "Meridian Exchange", short: "Meridian", spread: 0.06, rate: [-2, -2, -1.5, 3.7, -2, 1.6, 1.2, -0.8] },
+  { id: "kes", n: "Kessler Rock", short: "Kessler", spread: 0.08, rate: [5, 5, -1.5, -1.5, 0, -0.6, -0.3, 0] },
+  { id: "ven", n: "Ventra Crack 4", short: "Ventra", spread: 0.07, rate: [-3, -2, 4.8, -0.6, 3, -0.2, -0.3, 0] },
+  { id: "gat", n: "Gatehouse Kappa", short: "Gatehouse", spread: 0.08, rate: [0, -0.5, -1.2, -0.8, -1, -0.3, -0.6, 0] },
+  { id: "hol", n: "The Hollow", short: "Hollow", spread: 0.14, rate: [0, -0.5, -0.6, -0.8, 0, -0.5, 0, 0.8] },
+];
+const TARGET = 120;
+for (const s of STN) { s.stock = GOODS.map((g, i) => TARGET * (s.rate[i] > 0 ? 1.6 : s.rate[i] < 0 ? 0.7 : 1) * (0.85 + rnd() * 0.3)); s.mod = GOODS.map(() => 1); s.hist = GOODS.map(() => []); }
+const priceOf = (s, i) => Math.min(4, Math.max(0.3, Math.pow(TARGET / Math.max(1, s.stock[i]), 0.6))) * GOODS[i].base;
+const buyP = (s, i) => priceOf(s, i) * (1 + s.spread / 2), sellP = (s, i) => priceOf(s, i) * (1 - s.spread / 2);
+
+const COS = [
+  { id: "co_kessler", tk: "KDM", n: "Kessler Deep Mining", p: 48, fair: () => 0.55 * avgP(0) + 0.6 * avgP(1) - 4, note: "Earns from iron ore and water ice." },
+  { id: "co_halyard", tk: "HAL", n: "Halyard Shipyards", p: 72, fair: () => 140 - 0.42 * avgP(4) + 0.05 * avgP(6) + EV.halyard, note: "Builds ships: cheap alloy and fleet orders help it." },
+  { id: "co_greenbelt", tk: "GRN", n: "Greenbelt Co-op", p: 31, fair: () => 0.58 * avgP(3), note: "Grows grain on the Meridian and sells it everywhere." },
+  { id: "co_ventra", tk: "VEN", n: "Ventra Power", p: 55, fair: () => 0.5 * avgP(2) - 0.2 * avgP(0) + 3, note: "Cracks ore and ice into fuel cells." },
+  { id: "co_lumen", tk: "LUM", n: "Lumen Labs", p: 90, fair: () => 0.3 * avgP(5) + EV.lumen + 12, note: "Medicine and research; discoveries move it hard." },
+];
+const EV = { halyard: 0, lumen: 0 };
+const avgP = i => STN.reduce((a, s) => a + priceOf(s, i), 0) / STN.length;
+for (const c of COS) { c.hist = []; c.vol = c.tk === "LUM" ? 0.022 : 0.011; }
+
+const ME = { cr: 5000, at: 0, hold: GOODS.map(() => 0), cap: 60, shares: COS.map(() => 0), sel: 0, selCo: 0 };
+let HOUR = 0;
+const EVENTS = [
+  { k: "collapse", label: "Mine collapse", go: () => { modify(1, 0, 0.25, 72); news("A gallery has collapsed at Kessler Rock. Iron ore output is down to a quarter for three days.", 1); } },
+  { k: "blight", label: "Blight", go: () => { modify(0, 3, 2.4, 96); news("Blight in the Meridian's hydroponics: the ring is buying grain at any price for four days.", 1); } },
+  { k: "navy", label: "Navy exercise", go: () => { modify(3, 2, 3, 60); modify(3, 4, 3, 60); news("Navy exercise off Gatehouse Kappa: fuel and alloy wanted in bulk.", 1); } },
+  { k: "outbreak", label: "Outbreak", go: () => { modify(4, 5, 4, 80); EV.lumen += 25; news("Outbreak on the frontier. The Hollow will pay anything for medicine; Lumen Labs is up on the news.", 1); } },
+  { k: "vein", label: "Ice vein", go: () => { modify(1, 1, 2.2, 96); news("Kessler Rock has struck a rich ice vein. Water ice will be cheap there this week.", 1); } },
+  { k: "fleet", label: "Fleet order", go: () => { EV.halyard += 30; modify(0, 4, 2, 72); news("Halyard Shipyards wins a navy fleet order. Alloy demand on the Meridian jumps.", 1); } },
+  { k: "discovery", label: "Discovery", go: () => { EV.lumen += 40; news("Lumen Deep Field publishes a discovery. Lumen Labs shares are bid up.", 1); } },
+];
+const MODS = [];
+function modify(si, gi, k, hours) { MODS.push({ si, gi, k, until: HOUR + hours }); }
+function news(text, ev) { NEWS.unshift({ h: HOUR, text, ev }); if (NEWS.length > 40) NEWS.pop(); paintNews(); }
+const NEWS = [];
+
+function tick() {
+  HOUR++;
+  EV.lumen *= 0.995; EV.halyard *= 0.995;   // news fades out of a share price over a few weeks
+  for (const s of STN) s.mod.fill(1);
+  for (let i = MODS.length - 1; i >= 0; i--) { const m = MODS[i]; if (HOUR > m.until) { MODS.splice(i, 1); continue; } const s = STN[m.si]; s.mod[m.gi] *= m.k; }
+  STN.forEach(s => GOODS.forEach((g, i) => {
+    const r = s.rate[i]; let d = r >= 0 ? r * (s.mod[i] === 1 ? 1 : (s.mod[i] < 1 ? s.mod[i] : 1)) : r * s.mod[i];
+    // a producer's rate is cut by a mod below 1; an eater's appetite is raised by a mod above 1
+    if (r > 0 && s.mod[i] > 1) d = r * s.mod[i];
+    s.stock[i] = Math.max(2, s.stock[i] + d + gauss() * 0.8 + (TARGET - s.stock[i]) * 0.01);
+  }));
+  // NPC haulers: a little stock flows from the cheapest station to the dearest, for each good
+  GOODS.forEach((g, i) => {
+    let lo = 0, hi = 0; STN.forEach((s, k) => { if (priceOf(s, i) < priceOf(STN[lo], i)) lo = k; if (priceOf(s, i) > priceOf(STN[hi], i)) hi = k; });
+    const gap = priceOf(STN[hi], i) / priceOf(STN[lo], i);
+    if (gap > 1.25) { const q = Math.min(STN[lo].stock[i] * 0.06, 6 * (gap - 1.1)); STN[lo].stock[i] -= q; STN[hi].stock[i] += q * 0.97; }
+  });
+  STN.forEach(s => GOODS.forEach((g, i) => { s.hist[i].push(priceOf(s, i)); if (s.hist[i].length > 240) s.hist[i].shift(); }));
+  COS.forEach(c => { const f = Math.max(5, c.fair()); c.p *= Math.exp(c.vol * gauss() + 0.035 * (f / c.p - 1)); c.hist.push(c.p); if (c.hist.length > 720) c.hist.shift(); });
+  if (HOUR > 30 && rnd() < 0.012) EVENTS[Math.floor(rnd() * EVENTS.length)].go();
+  if (HOUR % 24 === 0) { const g = Math.floor(rnd() * GOODS.length); news(`Daily close: ${GOODS[g].n} averages ${fmt(avgP(g))} cr/t across the system.`); }
+}
+// warm the market up: ten days of history before the player arrives
+for (let h = 0; h < 240; h++) tick();
+for (const c of COS) while (c.hist.length < 720) c.hist.unshift(c.hist[0] * Math.exp(0.012 * gauss()));
+NEWS.length = 0; news("Markets open. You are docked at the Meridian Exchange with 5,000 cr and an empty 60 t hold.", 1);
+
+// ------------------------------------------------------------------ trading
+const used = () => ME.hold.reduce((a, b) => a + b, 0);
+function trade(i, q) {
+  const s = STN[ME.at];
+  if (q > 0) { q = Math.min(q, ME.cap - used(), Math.floor(s.stock[i] - 2)); const cost = buyP(s, i) * q; if (q <= 0) return toast("Hold is full"); if (cost > ME.cr) return toast("Not enough credits"); ME.cr -= cost; ME.hold[i] += q; s.stock[i] -= q; toast(`Bought ${q} t ${GOODS[i].n} for ${fmt(cost)} cr`); }
+  else { q = Math.min(-q, ME.hold[i]); if (q <= 0) return; const got = sellP(s, i) * q; ME.cr += got; ME.hold[i] -= q; s.stock[i] += q; toast(`Sold ${q} t ${GOODS[i].n} for ${fmt(got)} cr`); }
+  paintAll();
+}
+function tradeCo(k, q) {
+  const c = COS[k];
+  if (q > 0) { const cost = c.p * q * 1.005; if (cost > ME.cr) return toast("Not enough credits"); ME.cr -= cost; ME.shares[k] += q; c.p *= 1 + 0.0008 * q; toast(`Bought ${q} ${c.tk} at ${c.p.toFixed(2)}`); }
+  else { q = Math.min(-q, ME.shares[k]); if (!q) return; ME.cr += c.p * q * 0.995; ME.shares[k] -= q; c.p *= 1 - 0.0008 * q; toast(`Sold ${q} ${c.tk}`); }
+  paintAll();
+}
+
+// ------------------------------------------------------------------ contracts
+const CON = [
+  { img: "grain", t: "20 t grain to Kessler Rock", who: "Kessler Deep Mining, escrowed", gi: 3, q: 20, to: 1, pay: 2100, kind: "npc" },
+  { img: "medicine", t: "10 t medicine to The Hollow", who: "Meridian clinic, escrowed", gi: 5, q: 10, to: 4, pay: 4100, kind: "npc" },
+  { img: "alloy", t: "15 t alloy to Gatehouse Kappa", who: "Navy procurement, escrowed", gi: 4, q: 15, to: 3, pay: 3300, kind: "npc" },
+  { img: "spice", t: "Sell: 12 t spice at The Hollow, 190 cr/t", who: "Player listing: vela_k (example)", gi: 7, q: 12, at: 4, price: 190, kind: "listing" },
+  { img: "electronics", t: "Sell: 8 t electronics at Kessler, 300 cr/t", who: "Player listing: oskar.d (example)", gi: 6, q: 8, at: 1, price: 300, kind: "listing" },
+];
+function paintCon() {
+  $("contracts").innerHTML = CON.map((c, k) => {
+    let btn, state = "";
+    if (c.done) { btn = `<span class="muted">done</span>`; }
+    else if (c.kind === "npc") {
+      const can = ME.at === c.to && ME.hold[c.gi] >= c.q;
+      btn = `<button class="b sm" data-con="${k}" ${can ? "" : "disabled"}>Deliver</button>`;
+      state = ` &middot; you hold ${ME.hold[c.gi]} / ${c.q} t${ME.at === c.to ? "" : ", deliver at " + STN[c.to].short}`;
+    } else {
+      const can = ME.at === c.at && ME.cr >= c.price * c.q && used() + c.q <= ME.cap;
+      btn = `<button class="b sm" data-con="${k}" ${can ? "" : "disabled"}>Buy lot</button>`;
+      state = ` &middot; ${fmt(c.price * c.q)} cr${ME.at === c.at ? "" : ", dock at " + STN[c.at].short}`;
+    }
+    return `<article><img src="market/${c.img}.png" alt=""><div style="min-width:0;white-space:normal"><div>${c.t}${c.kind === "npc" ? ` <span class="mono" style="color:var(--amber)">${fmt(c.pay)} cr</span>` : ""}</div><div class="who">${c.who}${state}</div></div>${btn}</article>`;
+  }).join("");
+  $("contracts").querySelectorAll("[data-con]").forEach(b => b.onclick = () => {
+    const c = CON[+b.dataset.con];
+    if (c.kind === "npc") { ME.hold[c.gi] -= c.q; ME.cr += c.pay; c.done = true; toast(`Delivered: +${fmt(c.pay)} cr from escrow`); }
+    else { ME.cr -= c.price * c.q; ME.hold[c.gi] += c.q; c.done = true; toast(`Bought the lot from the listing`); }
+    paintAll();
+  });
+}
+
+// ------------------------------------------------------------------ painting
+$("dock").innerHTML = STN.map((s, k) => `<option value="${k}">${s.n}</option>`).join("");
+$("dock").onchange = e => { ME.at = +e.target.value; news(`Docked at ${STN[ME.at].n}.`); paintAll(); };
+const chg = h => { if (h.length < 25) return 0; return (h[h.length - 1] / h[h.length - 25] - 1) * 100; };
+const chgTxt = v => `${v >= 0 ? "▲ +" : "▼ "}${v.toFixed(1)}%`;
+function paintBoard() {
+  const s = STN[ME.at]; $("boardName").textContent = s.short; $("boardNote").textContent = `spread ${(s.spread * 100).toFixed(0)}%`;
+  $("board").querySelector("tbody").innerHTML = GOODS.map((g, i) => `<tr class="click${i === ME.sel ? " sel" : ""}" data-i="${i}">
+    <td><img src="market/${g.id}.png" alt=""></td><td>${g.n}</td><td class="r num">${fmt(buyP(s, i))}</td><td class="r num">${fmt(sellP(s, i))}</td>
+    <td class="r chg">${chgTxt(chg(s.hist[i]))}</td><td class="r num">${fmt(s.stock[i])}</td><td class="r num">${ME.hold[i] || ""}</td>
+    <td><span class="acts"><button class="b sm" data-buy="${i}" aria-label="Buy 10 t ${g.n}">+10</button><button class="b sm" data-buy1="${i}" aria-label="Buy 1 t ${g.n}">+1</button><button class="b sm" data-sell="${i}" ${ME.hold[i] ? "" : "disabled"} aria-label="Sell all ${g.n}">Sell all</button></span></td></tr>`).join("");
+  $("board").querySelectorAll("tr.click").forEach(tr => tr.onclick = e => { if (e.target.closest("button")) return; ME.sel = +tr.dataset.i; paintBoard(); paintChart1(); });
+  $("board").querySelectorAll("[data-buy]").forEach(b => b.onclick = () => trade(+b.dataset.buy, 10));
+  $("board").querySelectorAll("[data-buy1]").forEach(b => b.onclick = () => trade(+b.dataset.buy1, 1));
+  $("board").querySelectorAll("[data-sell]").forEach(b => b.onclick = () => trade(+b.dataset.sell, -ME.hold[+b.dataset.sell]));
+}
+function paintStrip() {
+  const s = STN[ME.at];
+  const cargo = GOODS.reduce((a, g, i) => a + ME.hold[i] * sellP(s, i), 0), sh = COS.reduce((a, c, k) => a + ME.shares[k] * c.p, 0);
+  $("sCr").textContent = fmt(ME.cr); $("sHold").textContent = `${used()} / ${ME.cap} t`; $("sShares").textContent = fmt(sh); $("sNet").textContent = fmt(ME.cr + cargo + sh);
+  const d = Math.floor(HOUR / 24) - 9, h = HOUR % 24; $("sTime").textContent = `day ${Math.max(1, d)}, ${String(h).padStart(2, "0")}:00`;
+  $("holdBox").innerHTML = `<div style="display:flex;justify-content:space-between"><span class="eyebrow">Your hold</span><span class="num">${used()} / ${ME.cap} t</span></div><div class="meter"><span style="width:${used() / ME.cap * 100}%"></span></div>
+    <div class="muted" style="font-size:12.5px">${GOODS.map((g, i) => ME.hold[i] ? `${ME.hold[i]} t ${g.n}` : "").filter(Boolean).join(", ") || "Empty. Buy something cheap here and sell it where it is dear."}</div>`;
+}
+
+// a line chart: one emphasised series, the rest recessive; crosshair and tooltip
+function lineChart(svgId, wrapId, series, opts) {
+  const svg = $(svgId), W = opts.w, H = opts.h, L = 52, R = 74, T = 12, B = 26;
+  const n = series[0].v.length; let lo = Infinity, hi = -Infinity; series.forEach(s => s.v.forEach(x => { lo = Math.min(lo, x); hi = Math.max(hi, x); }));
+  const pad = (hi - lo) * 0.08 || 1; lo = Math.max(0, lo - pad); hi += pad;
+  const step = niceStep((hi - lo) / 4); lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const X = i => L + (W - L - R) * i / (n - 1), Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  let g = "";
+  for (let v = lo; v <= hi + 1e-9; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" font-family="JetBrains Mono" font-size="10.5" fill="var(--muted)">${opts.fmt(v)}</text>`;
+  for (const t of opts.ticks) g += `<text x="${X(t.i)}" y="${H - 8}" text-anchor="middle" font-family="Fira Mono" font-size="11" fill="var(--muted)">${t.s}</text>`;
+  const path = s => s.v.map((x, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(x).toFixed(1)).join("");
+  const order = series.slice().sort((a, b) => (a.main ? 1 : 0) - (b.main ? 1 : 0));
+  for (const s of order) {
+    if (s.main && opts.area) g += `<path d="${path(s)}L${X(n - 1)},${Y(lo)}L${X(0)},${Y(lo)}Z" fill="var(--series)" opacity=".10"/>`;
+    g += `<path d="${path(s)}" fill="none" stroke="${s.main ? "var(--series)" : "var(--other)"}" stroke-width="${s.main ? 2 : 1.2}" stroke-linejoin="round"/>`;
+  }
+  // direct labels at the right end: the emphasised series always, others only when they fit
+  const ends = series.map(s => ({ s, y: Y(s.v[n - 1]) })).sort((a, b) => a.y - b.y); let lastY = -99;
+  for (const e of ends) { if (!e.s.main && Math.abs(e.y - lastY) < 13) continue; const yy = Math.max(e.y, lastY + 13); lastY = yy;
+    g += `<text x="${W - R + 6}" y="${yy + 4}" font-family="Fira Mono" font-size="12" fill="${e.s.main ? "var(--ink)" : "var(--muted)"}">${e.s.name}</text>`; }
+  const m = series.find(s => s.main); if (m) g += `<circle cx="${X(n - 1)}" cy="${Y(m.v[n - 1])}" r="4" fill="var(--series)" stroke="var(--panel)" stroke-width="2"/>`;
+  g += `<line id="${svgId}x" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="${svgId}hit"/>`;
+  svg.innerHTML = g;
+  const hit = $(svgId + "hit"), cx = $(svgId + "x"), wrap = $(wrapId);
+  let tip = wrap.querySelector(".tip"); if (!tip) { tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; wrap.appendChild(tip); }
+  const move = e => { const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * W / r.width; const i = Math.max(0, Math.min(n - 1, Math.round((px - L) / (W - L - R) * (n - 1))));
+    cx.setAttribute("x1", X(i)); cx.setAttribute("x2", X(i)); cx.setAttribute("visibility", "visible");
+    tip.hidden = false; tip.innerHTML = `<b>${opts.when(i)}</b><br>` + series.slice().sort((a, b) => b.v[i] - a.v[i]).map(s => `<span style="color:${s.main ? "var(--ink)" : "var(--muted)"}">${s.name}</span> <span class="mono">${opts.fmt(s.v[i], true)}</span>`).join("<br>");
+    const wx = (X(i) / W) * r.width; tip.style.left = Math.min(r.width - tip.offsetWidth - 4, wx + 12) + "px"; tip.style.top = "8px"; };
+  hit.onpointermove = move; hit.onpointerleave = () => { tip.hidden = true; cx.setAttribute("visibility", "hidden"); };
+}
+function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))), f = x / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+function paintChart1() {
+  const i = ME.sel, n = 120;
+  $("chartTitle").textContent = `${GOODS[i].n}, mid price at every station`;
+  const series = STN.map((s, k) => ({ name: s.short, v: s.hist[i].slice(-n), main: k === ME.at }));
+  $("legend").innerHTML = `<span><i style="background:var(--series)"></i>${STN[ME.at].short} (docked)</span><span><i style="background:var(--other)"></i>other stations</span><span>last 5 game days, cr/t</span>`;
+  lineChart("chart1", "cw1", series, { w: 560, h: 300, area: true, fmt: (v, t) => t ? fmt(v) + " cr" : fmt(v),
+    ticks: [0, 24, 48, 72, 96, 119].map((t, k) => ({ i: t, s: k === 5 ? "now" : `-${5 - k} d` })), when: k => `${((n - 1 - k) / 24).toFixed(1)} days ago` });
+}
+function paintChart2() {
+  const c = COS[ME.selCo], n = c.hist.length;
+  $("coNote").textContent = `${c.n} (${c.tk}): ${c.note} Last 30 game days.`;
+  lineChart("chart2", "cw2", [{ name: c.tk, v: c.hist.slice(), main: true }], { w: 560, h: 250, area: true, fmt: (v, t) => t ? v.toFixed(2) + " cr" : v.toFixed(0),
+    ticks: [0, 168, 336, 504, 719].map((t, k) => ({ i: t, s: k === 4 ? "now" : `-${30 - k * 7} d` })), when: k => `${((n - 1 - k) / 24).toFixed(1)} days ago` });
+}
+function spark(v) { const w = 90, h = 24, lo = Math.min(...v), hi = Math.max(...v), s = v.filter((_, i) => i % 6 === 0);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${s.map((x, i) => (i ? "L" : "M") + (i / (s.length - 1) * w).toFixed(1) + "," + (h - 2 - (x - lo) / (hi - lo || 1) * (h - 4)).toFixed(1)).join("")}" fill="none" stroke="var(--series)" stroke-width="1.5"/></svg>`; }
+function paintShares() {
+  $("shares").querySelector("tbody").innerHTML = COS.map((c, k) => `<tr class="click${k === ME.selCo ? " sel" : ""}" data-k="${k}"><td><img src="market/${c.id}.png" alt=""></td><td><b>${c.tk}</b> <span class="muted">${c.n}</span></td>
+    <td class="r num">${c.p.toFixed(2)}</td><td class="r chg">${chgTxt(chg(c.hist))}</td><td>${spark(c.hist)}</td><td class="r num">${ME.shares[k] || ""}</td>
+    <td><span class="acts"><button class="b sm" data-cb="${k}" aria-label="Buy 10 ${c.tk}">+10</button><button class="b sm" data-cs="${k}" ${ME.shares[k] ? "" : "disabled"} aria-label="Sell 10 ${c.tk}">-10</button></span></td></tr>`).join("");
+  $("shares").querySelectorAll("tr.click").forEach(tr => tr.onclick = e => { if (e.target.closest("button")) return; ME.selCo = +tr.dataset.k; paintShares(); paintChart2(); });
+  $("shares").querySelectorAll("[data-cb]").forEach(b => b.onclick = () => tradeCo(+b.dataset.cb, 10));
+  $("shares").querySelectorAll("[data-cs]").forEach(b => b.onclick = () => tradeCo(+b.dataset.cs, -10));
+}
+// diverging colour: log2(price / base) from -1 (half) to +1 (double), through a neutral grey
+const hex = h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
+const CHEAP = hex("#3987e5"), DEAR = hex("#d95926"), MID = hex("#3a4048");
+function divColor(x) { x = Math.max(-1, Math.min(1, x)); const a = x < 0 ? CHEAP : DEAR, t = Math.abs(x); return `rgb(${MID.map((m, k) => Math.round(m + (a[k] - m) * t)).join(",")})`; }
+function paintHeat() {
+  let h = `<thead><tr><th>Station</th>${GOODS.map(g => `<th style="text-align:center"><img src="market/${g.id}.png" alt="" style="width:28px;height:28px"><br>${g.n}</th>`).join("")}</tr></thead><tbody>`;
+  STN.forEach((s, k) => { h += `<tr><td>${s.short}${k === ME.at ? ' <span style="color:var(--amber)">&#9679;</span>' : ""}</td>` + GOODS.map((g, i) => { const p = priceOf(s, i); return `<td class="c${k === ME.at ? " here" : ""}" style="background:${divColor(Math.log2(p / g.base))}" title="${s.short}, ${g.n}: ${fmt(p)} cr/t">${fmt(p)}</td>`; }).join("") + "</tr>"; });
+  $("heat").innerHTML = h + "</tbody>";
+}
+function paintNews() {
+  $("news").innerHTML = NEWS.map(n => `<div class="${n.ev ? "ev" : ""}"><span class="when">d${Math.max(1, Math.floor(n.h / 24) - 9)} ${String(n.h % 24).padStart(2, "0")}:00</span>${n.text}</div>`).join("");
+}
+$("evBtns").innerHTML = EVENTS.map((e, k) => `<button class="b sm" data-ev="${k}">${e.label}</button>`).join("");
+$("evBtns").querySelectorAll("[data-ev]").forEach(b => b.onclick = () => { EVENTS[+b.dataset.ev].go(); });
+// Repainting rebuilds rows, so hold it while a button is pressed (a click must land on the row it started on),
+// and leave a chart alone while the pointer is reading it.
+const UI = { down: false, over: null };
+addEventListener("pointerdown", () => UI.down = true, true);
+addEventListener("pointerup", () => setTimeout(() => UI.down = false, 60), true);
+["cw1", "cw2"].forEach(id => { $(id).addEventListener("pointerenter", () => UI.over = id); $(id).addEventListener("pointerleave", () => { UI.over = null; }); });
+function paintAll(fromClock) {
+  if (fromClock && UI.down) return;
+  paintStrip(); paintBoard(); if (!(fromClock && UI.over === "cw1")) paintChart1(); paintShares(); if (!(fromClock && UI.over === "cw2")) paintChart2(); paintHeat(); paintCon();
+}
+
+// ------------------------------------------------------------------ the clock
+const CLK = { run: true, fast: false, acc: 0 };
+$("tPlay").onclick = () => { CLK.run = !CLK.run; $("tPlay").setAttribute("aria-pressed", CLK.run); $("tPlay").textContent = CLK.run ? "Running" : "Paused"; };
+$("tFast").onclick = () => { CLK.fast = !CLK.fast; $("tFast").setAttribute("aria-pressed", CLK.fast); };
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  if (CLK.run) { CLK.acc += dt * (CLK.fast ? 8 : 2); let did = false; while (CLK.acc >= 1) { CLK.acc -= 1; tick(); did = true; } if (did) paintAll(true); }
+  requestAnimationFrame(loop);
+}
+// keep every icon decoded in memory, so the board can redraw its rows every frame without the icons flickering out
+const ICONS = [...GOODS.map(g => g.id), ...COS.map(c => c.id), ...CON.map(c => c.img)].map(id => Object.assign(new Image(), { src: `market/${id}.png` }));
+paintAll(); paintNews(); requestAnimationFrame(loop);
+</script>

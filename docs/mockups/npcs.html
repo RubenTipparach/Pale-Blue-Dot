@@ -1,0 +1,646 @@
+<title>Townsfolk and Peoples</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one dark lantern-lit page; a live town square first, then the sheets that explain it, read top to bottom. House style of towns.html. */
+:root{
+  color-scheme: dark;
+  --ground:#0d0f0c;
+  --panel:rgba(18,17,13,.88);
+  --panel-solid:#17150f;
+  --raise:#1d1b15;
+  --line:rgba(226,206,160,.17);
+  --ink:#ece4d2;
+  --muted:#a89d86;
+  --amber:#f0b43c;
+  --ember:#ff8a3d;
+  --sky:#8fc3d8;
+  --warn:#ff6b57;
+  --ok:#8fdc9a;
+  --violet:#b49cf0;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html{background:var(--ground)}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:44px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(34px,5vw,54px)}
+h2{font-size:28px}
+h3{font-size:19px;font-weight:600}
+p{margin:0;max-width:68ch}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.badge{display:inline-block;font-family:var(--display);font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--amber);color:var(--amber);border-radius:2px;vertical-align:middle}
+.lede{color:var(--muted);font-size:16px}
+.lede b,.note b{color:var(--ink);font-weight:600}
+header.top{display:grid;gap:12px;padding-top:28px}
+section{display:grid;gap:16px;min-width:0}
+.sec-head{display:grid;gap:6px}
+.note{font-size:13px;color:var(--muted);border-left:2px solid var(--line);padding-left:12px;max-width:80ch}
+.src{font-family:var(--mono);font-size:12px;color:var(--sky)}
+button{font:inherit;color:inherit}
+.btn{cursor:pointer;background:transparent;border:1px solid var(--line);border-radius:4px;padding:6px 10px;font-family:var(--display);font-size:14px;letter-spacing:.05em;color:var(--ink)}
+.btn:hover{border-color:rgba(240,180,60,.55)}
+.btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.btn:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* the square */
+.stage{position:relative;height:min(78vh,720px);min-height:460px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#0e1424}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.clock{top:12px;left:12px;padding:10px 12px;display:grid;gap:8px;width:min(300px,calc(100% - 24px))}
+.clock .time{font-family:var(--mono);font-size:26px;font-weight:600;font-variant-numeric:tabular-nums}
+.clock .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.clock input[type=range]{width:100%;accent-color:var(--amber);margin:0}
+.clock .small{font-size:12px;color:var(--muted);line-height:1.4}
+.card{right:12px;top:12px;width:min(300px,calc(100% - 24px));padding:12px;display:grid;gap:10px}
+.card .who{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center}
+.card img{width:96px;height:96px;image-rendering:pixelated;background:var(--raise);border-radius:4px}
+.card .name{font-family:var(--display);font-size:21px;font-weight:700;line-height:1}
+.card .meta{font-size:12.5px;color:var(--muted)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px}
+.kv dt{color:var(--muted);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;padding-top:2px}
+.kv dd{margin:0}
+.meter{height:8px;border-radius:4px;background:var(--raise);border:1px solid var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:linear-gradient(90deg,var(--ember),var(--amber))}
+.hint{left:50%;bottom:12px;transform:translateX(-50%);padding:6px 12px;font-family:var(--display);letter-spacing:.06em;font-size:14px;color:var(--muted);white-space:nowrap}
+.toast{left:50%;top:12px;transform:translateX(-50%);padding:6px 12px;font-family:var(--display);letter-spacing:.06em;font-size:14px;opacity:0;transition:opacity .4s;pointer-events:none;max-width:80%;text-align:center}
+@media (max-width:760px){
+  .stage{height:auto;min-height:0;display:grid}
+  .stage canvas{height:56vh}
+  .panel.clock,.panel.card{position:static;width:auto;border-radius:0;border-width:1px 0 0}
+  .hint{display:none}
+}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+
+/* peoples */
+.peoples{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.people{border:1px solid var(--line);border-radius:6px;padding:14px;background:var(--panel-solid);display:grid;gap:8px;align-content:start}
+.people .world{font-family:var(--mono);font-size:11.5px;color:var(--sky)}
+.swatches{display:flex;gap:4px;flex-wrap:wrap}
+.swatches i{width:18px;height:18px;border-radius:3px;border:1px solid rgba(0,0,0,.4)}
+.people p{font-size:13.5px;color:var(--muted)}
+.people.none{border-style:dashed}
+
+/* roles */
+.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:12px}
+.role{display:grid;grid-template-columns:96px 1fr;gap:12px;border:1px solid var(--line);border-radius:6px;padding:12px;background:var(--panel-solid);align-items:start}
+.role img{width:96px;height:96px;image-rendering:pixelated}
+.role h3{margin-bottom:2px}
+.role .where{font-size:12px;color:var(--sky);font-family:var(--mono)}
+.role p{font-size:13.5px;color:var(--muted);margin-top:6px}
+.role .offers{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+.chip{font-family:var(--display);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:1px 7px;border-radius:2px;border:1px solid var(--line);color:var(--muted)}
+.chip.trade{color:var(--amber);border-color:rgba(240,180,60,.5)}
+.chip.quest{color:var(--ok);border-color:rgba(143,220,154,.5)}
+.chip.law{color:var(--warn);border-color:rgba(255,107,87,.5)}
+
+/* lineup */
+.lineup{position:relative;height:420px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#141210}
+.lineup canvas{display:block;width:100%;height:100%;touch-action:pan-y}
+.lineup .panel{left:12px;top:12px;padding:10px;display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 24px)}
+.lineup .labels{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:space-around;pointer-events:none;padding:0 8px}
+.lineup .labels span{font-family:var(--display);font-size:13px;letter-spacing:.06em;color:var(--muted);text-align:center;background:var(--panel);padding:2px 6px;border-radius:3px}
+.parts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.parts div{border-top:1px solid var(--line);padding-top:8px;font-size:13.5px;color:var(--muted)}
+.parts b{color:var(--ink);display:block;font-family:var(--display);font-size:16px;letter-spacing:.03em}
+
+/* schedule */
+.sched{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--panel-solid)}
+.sched table{border-collapse:collapse;width:100%;min-width:720px}
+.sched th,.sched td{padding:5px 10px;text-align:left;font-size:13px}
+.sched th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
+.sched td.name{white-space:nowrap;font-family:var(--display);font-size:15px;width:120px}
+.bar{position:relative;height:22px;border-radius:3px;overflow:hidden;background:var(--raise)}
+.bar i{position:absolute;top:0;bottom:0;display:block}
+.bar .now{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);box-shadow:0 0 6px var(--amber)}
+.hours{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.legend i{width:12px;height:12px;border-radius:2px;display:inline-block}
+.a-sleep{background:#2a3150}.a-work{background:#c98a2c}.a-away{background:#4a6e5a}.a-inn{background:#a8503a}.a-patrol{background:#6f6fb0}.a-idle{background:#6a6458}.a-lurk{background:#5a3a6a}
+
+/* ui mocks */
+.mocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.mock{border:1px solid var(--line);border-radius:6px;background:linear-gradient(180deg,#191b24,#121110);padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
+.mock .tag{font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.dlg{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start}
+.dlg img{width:96px;height:96px;image-rendering:pixelated;background:var(--raise);border-radius:4px}
+.dlg .line{font-size:15px}
+.dlg .speaker{font-family:var(--display);font-size:18px;font-weight:700;color:var(--amber)}
+.opts{display:grid;gap:5px}
+.opts button{all:unset;cursor:pointer;display:grid;grid-template-columns:32px 1fr auto;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:4px;font-size:14px}
+.opts button:hover,.opts button:focus-visible{border-color:var(--amber);outline:none}
+.opts img{width:32px;height:32px;image-rendering:pixelated}
+.opts small{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.quest{border:1px solid rgba(240,180,60,.35);border-radius:4px;padding:10px;display:grid;gap:6px;background:rgba(240,180,60,.05)}
+.quest h3{font-size:18px}
+.quest ul{margin:0;padding-left:18px;font-size:13.5px}
+.quest li.done{color:var(--muted);text-decoration:line-through}
+.rel{display:grid;gap:8px}
+.rel .r{display:grid;grid-template-columns:48px 1fr auto;gap:8px;align-items:center;font-size:13.5px}
+.rel img{width:48px;height:48px;image-rendering:pixelated}
+.rel .meter{height:7px}
+.rel .lv{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.trade{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px}
+.trade div{border:1px solid var(--line);border-radius:4px;padding:6px 8px;display:flex;justify-content:space-between;gap:8px}
+.trade span{font-family:var(--mono);color:var(--amber)}
+
+/* tables and decisions */
+.tbl{overflow-x:auto}
+.tbl table{border-collapse:collapse;width:100%;min-width:640px;font-size:13.5px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+.tbl th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
+.tbl td:first-child{font-family:var(--display);font-size:15px;white-space:nowrap}
+.rec{color:var(--ok)}
+.qs{display:grid;gap:10px;counter-reset:q}
+.q{border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--panel-solid);display:grid;gap:6px}
+.q h3{font-size:18px}
+.q p{font-size:14px;color:var(--muted)}
+.q .rec b{color:var(--ok)}
+footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+#err{position:fixed;left:8px;bottom:8px;max-width:60ch;background:#400;color:#fff;font:12px var(--mono);padding:6px;white-space:pre-wrap;z-index:9}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; <span class="badge">Proposal, not built</span></div>
+    <h1>Townsfolk and the peoples of the worlds</h1>
+    <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+    <p class="lede">Who lives in the towns, what they do with their day, and how you talk, trade and fall out with them. The square below runs a whole day on <b>world time</b>, which only moves while the game is played. It is 22:30 and the lamps are lit. Click anyone to see who they are.</p>
+    <p class="note">This extends <span class="src">openspec/changes/townsfolk</span>, which builds people as the towns mockup has them (walkers, workers, idlers, a gate guard) and leaves schedules, talk and trade out of scope. Everything here past that is <b>proposed</b>. The square is <b>the game's village template</b> (<span class="src">assets/settlements/v1/village.json</span>, copied byte for byte), built the way <span class="src">towns.html</span> and the engine cut it: hex columns 2.833 m across and 1 m a layer with the terrain atlas's own tiles, walls on every outside edge per storey with its doors and windows, gable and cone roofs, the game's trees (<span class="src">planet_surface.wgsl</span>). Walls and roofs are the game's settlement textures, sampled nearest at the manifest's scale. <b>Mockup-only</b>: the stalls, well, brazier, forge, kiosk and the four lamp posts round the green (cut from the game's materials; the kiosk's metal panel is drawn), and the townsfolk, hexagonal prisms as <span class="src">townsfolk</span> design 2 builds them, wearing cloth, face and hair tiles drawn with the pixel-art kit and tinted per person. The portraits (48 px) and icons (16 px) are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="src">tools/art/npcs_art.py</span>), shown at whole-number scales with no smoothing; the kiosk's metal panel is a 32 px tile from the same kit.</p>
+  </header>
+
+  <section aria-labelledby="sq-h">
+    <div class="sec-head"><div class="eyebrow">1 &middot; The square at night</div><h2 id="sq-h">Hollin Cross, a fields town on Tenebris</h2></div>
+    <div class="stage" id="stage">
+      <canvas id="sq" tabindex="0" aria-label="A hex-cell town square at night, lit by lanterns, lit windows, a brazier and the smith's forge, with townsfolk going about their schedules."></canvas>
+      <div class="panel clock" aria-label="World clock">
+        <div class="row" style="justify-content:space-between"><span class="eyebrow">World time</span><span class="small" id="dayname">Day 41</span></div>
+        <div class="time" id="clock">22:30</div>
+        <input type="range" id="hour" min="0" max="24" step="0.05" value="22.5" aria-label="Hour of the day">
+        <div class="row">
+          <button class="btn" id="play" aria-pressed="false">Play day</button>
+          <button class="btn" id="toNight">Night</button>
+          <button class="btn" id="toDay">Noon</button>
+          <button class="btn" id="quit">Quit for 8 h</button>
+        </div>
+        <div class="small" id="status">14 townsfolk &middot; 9 outdoors</div>
+      </div>
+      <div class="panel card" id="card" aria-live="polite">
+        <div class="who"><img id="cImg" alt="" src="npcs/smith.png"><div><div class="name" id="cName">Click someone</div><div class="meta" id="cMeta">Every figure in the square is a townsperson with a role and a day.</div></div></div>
+        <dl class="kv" id="cKv"><dt>Now</dt><dd id="cNow">-</dd><dt>Next</dt><dd id="cNext">-</dd><dt>Home</dt><dd id="cHome">-</dd></dl>
+        <div><div class="eyebrow" style="margin-bottom:4px">Standing with you</div><div class="meter"><i id="cRel" style="width:40%"></i></div></div>
+      </div>
+      <div class="panel hint" id="hint">Drag to turn &middot; wheel or pinch to zoom &middot; click a person</div>
+      <div class="panel toast" id="toast" role="status"></div>
+    </div>
+    <p class="note">Lit at night as CLAUDE.md asks: each lantern, lit window, the brazier and the forge lights what is near it, wherever the camera is, with towns.html's falloff <span class="src">(1 - (d/R)^2)^2</span>, so each lamp throws a pool on the ground as the game's do. The moon is held at 0.035, as dark as the game's night, so the ground between the pools reads near black. The light is worked out per pixel, so the people who move are lit by the same lights as the walls. The clock runs a game hour every three seconds here so a day fits in a minute and a bit.</p>
+  </section>
+
+  <section aria-labelledby="pp-h">
+    <div class="sec-head"><div class="eyebrow">2 &middot; Peoples per habitable world</div><h2 id="pp-h">One kind of person, many peoples</h2>
+      <p class="lede">Only Tenebris and Sequoia have air. The game-design catalogue already keeps life to its own planet, and people follow the same rule: a people belongs to a biome's settlements and takes its clothes and colours from that biome's materials, as the towns take their kits. Airless bodies have no natives at all.</p></div>
+    <div class="peoples" id="peoples"></div>
+  </section>
+
+  <section aria-labelledby="rl-h">
+    <div class="sec-head"><div class="eyebrow">3 &middot; Roles</div><h2 id="rl-h">Eight jobs a town or station needs</h2>
+      <p class="lede">A role decides where a person works, what they carry, what they will do for you, and their day. A town draws its roles from its template: a harbour has fishers, a cliff village has miners, every walled town has guards on its gates.</p></div>
+    <div class="roles" id="roles"></div>
+  </section>
+
+  <section aria-labelledby="cs-h">
+    <div class="sec-head"><div class="eyebrow">4 &middot; Character sheets</div><h2 id="cs-h">Variation: body, clothes, palette</h2>
+      <p class="lede">Built from hexagonal prisms that read as cubes, as the owner chose (survey T2). Every figure is rolled from the settlement's seed and the person's index, so a town's people are the same on every visit and every machine. Roll another town to see the spread.</p></div>
+    <div class="lineup">
+      <canvas id="lu" aria-label="A lineup of townsfolk figures from six peoples, each rolled with different height, build, skin, hair and clothes."></canvas>
+      <div class="panel"><button class="btn" id="reroll">Roll another town</button><button class="btn" id="spin" aria-pressed="true">Turn</button></div>
+      <div class="labels" id="luLabels"></div>
+    </div>
+    <div class="parts">
+      <div><b>Body</b>Height 0.92 to 1.08 of the 1.9 m walker-sized figure, shoulders 0.85 to 1.2 wide. Children are a later question (section 8).</div>
+      <div><b>Clothes</b>Tunic, legs, belt and one headpiece from the people's list; the role adds its own piece: apron, tabard, oilskin, hard hat, headset, hood.</div>
+      <div><b>Palette</b>Skin, hair and cloth from the people's swatches, never another people's, as textures never cross planets.</div>
+      <div><b>Prop</b>One held thing says the job at a distance: pitchfork, hammer, coin pouch, spear, fish, pick, datapad, crate.</div>
+    </div>
+  </section>
+
+  <section aria-labelledby="sc-h">
+    <div class="sec-head"><div class="eyebrow">5 &middot; Daily schedules</div><h2 id="sc-h">A day on world time</h2>
+      <p class="lede">Each role has a day; each person shifts it by up to half an hour from their seed so a town does not move in lockstep. World time passes only while the world is played (owner, 2026-09-27). Quit at 22:30 and come back a week later and it is still 22:30, the smith still at the inn. Nothing is simulated while the game is closed, so nothing needs catching up.</p></div>
+    <div class="legend"><span><i class="a-sleep"></i>Asleep at home</span><span><i class="a-work"></i>At work</span><span><i class="a-away"></i>Away (fields, sea, mine)</span><span><i class="a-inn"></i>At the inn</span><span><i class="a-patrol"></i>Patrol</span><span><i class="a-idle"></i>Idle about town</span><span><i class="a-lurk"></i>Lurking</span></div>
+    <div class="sched"><table><thead><tr><th>Role</th><th><div class="hours"><span>00</span><span>04</span><span>08</span><span>12</span><span>16</span><span>20</span><span>24</span></div></th></tr></thead><tbody id="schedBody"></tbody></table></div>
+    <p class="note">A schedule is a law, not a record: where a person is at 14:00 follows from the seed and the clock, so it is never saved (world-persistence: what the rules decide is derived). What <b>is</b> saved is what you did to them: standing, quests, a debt, a theft. Those are stored records authored by the player.</p>
+  </section>
+
+  <section aria-labelledby="ui-h">
+    <div class="sec-head"><div class="eyebrow">6 &middot; Talking, quests, standing</div><h2 id="ui-h">The conversation, the job board and who likes you</h2>
+      <p class="lede">E on a person opens talk, as E opens a door today. Talk is short: a line, three or four answers, and the doors it opens (trade, a job, a rumour). Mouse look stops while the panel is up; the world clock does not.</p></div>
+    <div class="mocks">
+      <div class="mock">
+        <div class="tag">Talk</div>
+        <div class="dlg"><img src="npcs/smith.png" alt="Portrait of Orrin the smith"><div><div class="speaker">Orrin Vale, smith</div><div class="line" id="dlgLine">"Forge is banked for the night. If it's an edge you want, come back at six. If it's iron you're selling, I'm listening."</div></div></div>
+        <div class="opts" id="dlgOpts">
+          <button data-r="trade"><img src="npcs/ui_trade.png" alt="">Show me what you have.<small>Trade</small></button>
+          <button data-r="quest"><img src="npcs/ui_quest.png" alt="">Anything you need fetched?<small>Job</small></button>
+          <button data-r="rumour"><img src="npcs/ui_talk.png" alt="">Who's the hooded one by the well?<small>Rumour</small></button>
+          <button data-r="bye"><img src="npcs/ui_heart.png" alt="">Good night, Orrin.<small>+1 standing</small></button>
+        </div>
+      </div>
+      <div class="mock">
+        <div class="tag">Job &middot; from the smith</div>
+        <div class="quest">
+          <h3>Ore for the gate hinges</h3>
+          <p style="font-size:13.5px;color:var(--muted)">The north gate's hinges have rusted through. Orrin needs iron ore from the hills east of town before the guard captain loses patience.</p>
+          <ul><li class="done">Talk to Orrin at the forge</li><li>Mine 12 iron ore <span class="src">7 / 12</span></li><li>Bring it to the forge between 06:00 and 19:00</li></ul>
+          <div class="trade"><div>Reward<span>40 coin</span></div><div>Standing<span>+8 Orrin</span></div></div>
+        </div>
+        <p class="note">A job names a real place and a real thing to dig or carry, as station contracts do in game-design section 13. The hours come from the giver's schedule: he is not at the forge at midnight.</p>
+      </div>
+      <div class="mock">
+        <div class="tag">Standing &middot; Hollin Cross</div>
+        <div class="rel" id="relList"></div>
+        <p class="note">Standing is per person and per town. It rises with trade, jobs and kindness, and falls with theft and with a house of theirs you take apart (the owner's P2 and T5: "you can steal from people lol, but there will be consequences").</p>
+      </div>
+      <div class="mock">
+        <div class="tag">Trade &middot; Mara Quell, trader</div>
+        <div class="dlg"><img src="npcs/trader.png" alt="Portrait of Mara the trader"><div><div class="speaker">Mara Quell</div><div class="line">"Salt from the desert, glass from the coast. Prices hold till the caravan leaves."</div></div></div>
+        <div class="trade">
+          <div>Lantern<span>18</span></div><div>Iron ore x10<span>-22</span></div>
+          <div>Rope, 20 m<span>9</span></div><div>Wheat x20<span>-14</span></div>
+          <div>Glass pane<span>12</span></div><div>Fish x5<span>-8</span></div>
+        </div>
+        <p class="note">Buy on the left, sell on the right. Prices are stable enough to plan a trip (game-design 13). Mood shifts them a little: standing above 60 takes 10% off.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="tw-h">
+    <div class="sec-head"><div class="eyebrow">7 &middot; How they live in towns</div><h2 id="tw-h">Homes, posts and paths come from the settlement</h2></div>
+    <div class="tbl"><table>
+      <thead><tr><th>Thing</th><th>Where it comes from</th><th>Saved?</th><th>Change</th></tr></thead>
+      <tbody>
+        <tr><td>Who lives in a town</td><td>The settlement template's roles, rolled with the seed. A home is a house in the layout; a post is a stall, a forge, a gate.</td><td>No, derived</td><td><span class="src">townsfolk</span></td></tr>
+        <tr><td>Where they are now</td><td>The schedule at the world clock's hour, walked along the town's own streets.</td><td>No, derived</td><td>proposed here</td></tr>
+        <tr><td>What they look like</td><td>The people's palette, the role's piece, the seed.</td><td>No, derived</td><td><span class="src">townsfolk</span></td></tr>
+        <tr><td>Your standing, a job in progress, a debt</td><td>What you did. Authored by the player, on the durable path.</td><td>Yes, a record</td><td>proposed here, on <span class="src">world-persistence</span></td></tr>
+        <tr><td>A person who left or died</td><td>A town process, later. It yields to the player: it never removes someone you are mid-job with.</td><td>Yes, a record</td><td>later (owner: no population systems yet)</td></tr>
+        <tr><td>Their house, taken apart by you</td><td>A player edit. They are homeless and upset; they do not rebuild over your edit.</td><td>Yes, the edit</td><td><span class="src">player-building</span></td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">Solid and lit as <span class="src">townsfolk</span> has it: a 0.28 m circle from the feet to 1.9 m that the walker slides round, and the light field sampled at the body's corners. At night the square keeps a few people out: the night guard, the innkeeper's last customers, the smuggler. Most are home, and their windows are the lit ones.</p>
+  </section>
+
+  <section aria-labelledby="q-h">
+    <div class="sec-head"><div class="eyebrow">8 &middot; Decisions / questions for the owner</div><h2 id="q-h">What needs your call</h2></div>
+    <div class="qs">
+      <div class="q"><h3>N1 &middot; One species or several?</h3><p>Everyone here is one kind of person, split into peoples by world and biome. The alternative is a second species on Sequoia (the catalogue's Shellkin and Crane are animals today).</p><p class="rec"><b>Recommendation:</b> one species, peoples by biome. It keeps one figure rig, and the difference is in the clothes and palette you can see in section 4.</p></div>
+      <div class="q"><h3>N2 &middot; Do schedules ship with the people, or after?</h3><p><span class="src">townsfolk</span> puts schedules out of scope. Without them the night square is as busy as noon.</p><p class="rec"><b>Recommendation:</b> a follow-on change, <span class="src">townsfolk-days</span>, right after <span class="src">townsfolk</span>: sleep, work, inn, patrol. It is derived from the clock and needs no save format.</p></div>
+      <div class="q"><h3>N3 &middot; How much talk?</h3><p>Short exchanges (a line and three or four answers) or branching conversations.</p><p class="rec"><b>Recommendation:</b> short exchanges with a role's stock lines plus one line about what the town knows (a rumour, a job). Branching trees cost writing time the roadmap does not have yet.</p></div>
+      <div class="q"><h3>N4 &middot; Standing: per person, per town, or both?</h3><p>Section 6 shows both.</p><p class="rec"><b>Recommendation:</b> both, with the town's the mean of its people's. Theft from one person drops theirs a lot and the town's a little.</p></div>
+      <div class="q"><h3>N5 &middot; Station clerks and smugglers: in towns, stations, or both?</h3><p>The square has a starport kiosk clerk and a smuggler by the well.</p><p class="rec"><b>Recommendation:</b> clerks and smugglers mostly on stations and outposts, with one kiosk in towns that have a landing clearing.</p></div>
+      <div class="q"><h3>N6 &middot; Children?</h3><p>Smaller figures playing in the square by day.</p><p class="rec"><b>Recommendation:</b> later, once standing and theft consequences exist, so nothing awkward can be done to them first.</p></div>
+    </div>
+  </section>
+
+  <footer>Mockup for the owner, 2026-11-11, redrawn 2026-11-12 to look like the game (<span class="src">docs/mockups/ART-DIRECTION.md</span>). Proposal only: nothing on this page is built behaviour. Portraits and icons are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<span class="src">tools/art/npcs_art.py</span>); walls, roofs and ground are the game's settlement textures, copied byte for byte (<span class="src">docs/mockups/building/game/README.md</span>); the kiosk's metal panel is drawn the same way for the mockup (<span class="src">tools/art/building_art.py</span>).</footer>
+</div>
+<div id="err" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="building/scene-kit.js?v=1"></script>
+<script>
+"use strict";
+window.addEventListener("error", e => { const el = document.getElementById("err"); el.hidden = false; el.textContent += (e.message || e) + " @" + (e.lineno || "") + "\n"; });
+const $ = id => document.getElementById(id);
+// ===================================================================
+// Scale: the engine's cell. 2.833 m flat to flat, 1 m a layer, 3 m a storey.
+// ===================================================================
+const W = 2.833, R = W / Math.sqrt(3), ROW = 1.5 * R, STOREY = 3;
+const hx = (q, r) => W * (q + r / 2), hz = (q, r) => ROW * r;
+const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+const hexDist = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+function corner(q, r, k) { const a = (60 * k - 30) * Math.PI / 180; return [hx(q, r) + R * Math.cos(a), hz(q, r) + R * Math.sin(a)]; }
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
+function hash2(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+const lin = h => new THREE.Color(h).convertSRGBToLinear();
+
+// ===================================================================
+// Peoples and roles (proposed data)
+// ===================================================================
+const PEOPLES = {
+  fields:   { name: "Fields folk", world: "Tenebris \u00b7 fields, village, walled town", skin: [0xe2ac80, 0xc99a74, 0x9c6b4a, 0xf0c49e, 0x7a5038], cloth: [0x5c9a46, 0x7a5a3a, 0xb0884a, 0x4a6e9a, 0xa04a3a, 0xd8c8a0], hair: [0x3b2a1e, 0x8a5a2a, 0xd8b060, 0x1e1a18, 0xa04a2a], hat: ["none", "none", "straw", "cap"], text: "Farmers, millers, smiths and guards in oak and limestone towns. Undyed wool, olive and madder red." },
+  desert:   { name: "Caravan folk", world: "Tenebris \u00b7 desert oasis towns", skin: [0xb07a52, 0x8a5a3c, 0xc89064, 0x6a4430], cloth: [0xe0b050, 0xc0603a, 0xf0e0c0, 0x3a8aa0, 0x9a3a2a], hair: [0x1e1a18, 0x2a201a, 0x3a2a20], hat: ["turban", "turban", "hood", "none"], text: "Traders between the sandstone towns. Ochre, salt white and the cyan of the oasis glaze; wraps against the sun." },
+  tundra:   { name: "Ice-camp folk", world: "Tenebris \u00b7 tundra camps", skin: [0xe8c0a0, 0xc8a080, 0xa88060], cloth: [0x8aa0b8, 0xe8e4dc, 0x6a4a3a, 0xc04040, 0x5a6a50], hair: [0xe0d8c8, 0x3a2a20, 0x6a5040], hat: ["hood", "hood", "cap", "none"], text: "Igloo and longhouse people. Furs in sage, granite grey and one hard red for festival days." },
+  coast:    { name: "Harbour folk", world: "Tenebris \u00b7 beach and fishing harbours", skin: [0xd8a880, 0xb08060, 0xe8c0a0, 0x8a5a40], cloth: [0xf0c830, 0x2a4a7a, 0xe8e0d0, 0x6a8a9a, 0xa04a3a], hair: [0x8a6a4a, 0xd0b080, 0x2a201a], hat: ["sou", "sou", "cap", "none"], text: "Fishers and boatwrights in driftwood and whitewash. Oilskin yellow, navy and sail canvas." },
+  redwood:  { name: "Canopy folk", world: "Sequoia \u00b7 redwood forest", skin: [0xd8a888, 0xa87858, 0xc89878, 0x7a5040], cloth: [0x2a8a80, 0x8a2a3a, 0xc06a40, 0x3a5a40], hair: [0x2a3a30, 0x5a2a20, 0xc06a40], hat: ["hood", "none", "cap", "none"], text: "Resin tappers and fibre weavers on Sequoia. Teal needle green, wine and copper bark; nothing borrowed from Tenebris." },
+  sporewood:{ name: "Basin folk", world: "Sequoia \u00b7 sporewood basins", skin: [0xe0b8a0, 0xb08a70, 0x8a6a58], cloth: [0x8a5ac0, 0x5ae0c0, 0x2a2440, 0xc0a0e0], hair: [0x2a2440, 0x5ae0c0, 0xe0e0f0], hat: ["hood", "none", "none", "cap"], text: "Mycelium growers of the flooded basins. Violet, mint and a little cyan glow on their lanterns and cuffs." },
+  station:  { name: "Station crews", world: "Stations and outposts (any origin)", skin: [0xe2ac80, 0xb07a52, 0xe8c0a0, 0x7a5038, 0xd8a888], cloth: [0x3a96be, 0xe0e4ea, 0x5a6270, 0xf0b43c], hair: [0x1e1a18, 0xa04a2a, 0xd8b060, 0x5a5a60], hat: ["headset", "none", "headset", "cap"], text: "Clerks, dock hands and traders from both worlds, in station blue. On airless bodies they are the only people, in suits outdoors." },
+};
+const NONE_PEOPLE = { name: "No natives", world: "Crag, Frostbite, the moons, asteroids", text: "Airless and lifeless (CLAUDE.md). People there are visitors: an outpost's crew, a miner's camp, a smuggler's cache. Their settlements are habitats, built and pressurised (see the building mockup)." };
+const ROLES = {
+  farmer:   { label: "Farmer", img: "farmer", where: "fields \u00b7 market stall", text: "Out at dawn, sells at the stall at midday, back to the fields till dusk.", offers: [["trade", "Grain, eggs"], ["quest", "Pests, fences"]], prop: "fork", hat: "straw", sched: [[0, "sleep"], [5, "away"], [12, "work"], [16, "away"], [19, "inn"], [21.5, "sleep"]] },
+  smith:    { label: "Smith", img: "smith", where: "forge", text: "Hammers from six to seven with a break at the inn. Buys ore, sells tools and hinges.", offers: [["trade", "Tools, nails"], ["quest", "Ore runs"]], prop: "hammer", apron: 0x8a5a30, sched: [[0, "sleep"], [6, "work"], [12, "inn"], [13, "work"], [19, "inn"], [23, "sleep"]] },
+  trader:   { label: "Trader", img: "trader", where: "market stall", text: "Keeps the stall from seven. Moves goods between towns; prices hold while the caravan is in.", offers: [["trade", "Everything"], ["quest", "Deliveries"]], prop: "pouch", hat: "turban", sched: [[0, "sleep"], [7, "work"], [19, "inn"], [23, "sleep"]] },
+  guard:    { label: "Guard", img: "guard", where: "gate \u00b7 patrol", text: "Two shifts, so the gate is never empty. Notices theft and remembers your face.", offers: [["law", "Bounties"], ["quest", "Patrol jobs"]], prop: "spear", hat: "helmet", tabard: 0xc03a30, sched: [[0, "sleep"], [6, "patrol"], [18, "inn"], [22, "sleep"]] },
+  fisher:   { label: "Fisher", img: "fisher", where: "harbour \u00b7 stall", text: "Out before light, sells the catch at eleven, mends nets till dark.", offers: [["trade", "Fish, bait"], ["quest", "Lost pots"]], prop: "fish", hat: "sou", sched: [[0, "sleep"], [4, "away"], [11, "work"], [15, "away"], [20, "inn"], [22, "sleep"]] },
+  miner:    { label: "Miner", img: "miner", where: "the hill mine", text: "Underground all day. Knows where the ore seams are and will tell you for a drink.", offers: [["trade", "Ore, coal"], ["quest", "Rumours of seams"]], prop: "pick", hat: "miner", sched: [[0, "sleep"], [6, "away"], [17, "idle"], [19, "inn"], [23, "sleep"]] },
+  clerk:    { label: "Station clerk", img: "clerk", where: "starport kiosk \u00b7 stations", text: "Books docking, buys survey data, posts contracts with real destinations.", offers: [["trade", "Survey data"], ["quest", "Contracts"]], prop: "pad", hat: "headset", sched: [[0, "sleep"], [7, "work"], [20, "inn"], [22, "sleep"]] },
+  smuggler: { label: "Smuggler", img: "smuggler", where: "by the well, after dark", text: "Only around at night. Buys what the stalls will not, sells what the guards would rather you did not have.", offers: [["trade", "Contraband"], ["law", "Standing risk"]], prop: "crate", hat: "hood", sched: [[0, "lurk"], [3, "sleep"], [13, "inn"], [17, "away"], [21, "lurk"]] },
+  inn:      { label: "Innkeeper", img: "trader", where: "The Plough", text: "", offers: [], prop: "none", apron: 0xe8e0d0, sched: [[0, "work"], [1.5, "sleep"], [9, "work"]] },
+};
+const ACT = { sleep: ["Asleep at home", "a-sleep"], work: ["At work", "a-work"], away: ["Away", "a-away"], inn: ["At the inn", "a-inn"], patrol: ["On patrol", "a-patrol"], idle: ["Idle about town", "a-idle"], lurk: ["Lurking", "a-lurk"] };
+
+// ===================================================================
+// A figure: hexagonal prisms that read as cubes, flat side forward.
+// ===================================================================
+function figure(spec, lit = true) { return PBD.figure(spec, lit); }
+function rollSpec(people, role, seed) {
+  const rn = rng(seed * 7919 + 13), pick = a => a[Math.floor(rn() * a.length) % a.length], P = PEOPLES[people], Ro = ROLES[role] || {};
+  const tunic = pick(P.cloth);
+  return {
+    h: 0.92 + rn() * 0.16, b: 0.85 + rn() * 0.35, skin: pick(P.skin), hair: pick(P.hair), tunic, legs: pick(P.cloth.filter(c => c !== tunic)) ?? 0x4a3b2c,
+    accent: pick(P.cloth), hat: Ro.hat || pick(P.hat), prop: Ro.prop || "none", apron: Ro.apron, tabard: Ro.tabard, long: rn() < 0.4,
+  };
+}
+
+// ===================================================================
+// Hollin Cross: the square
+// ===================================================================
+const canvas = $("sq");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0e1424, 80, 200);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 500);
+const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 260 }); scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.2); scene.add(hemi);
+
+const LIGHTS = [], FLAMES = [], PLACES = {}, SOLIDS = [];
+// The village, as the game builds it: assets/settlements/v1/village.json (copied byte for
+// byte to npcs/game/), cut the way towns.html cuts it, on hex columns with the terrain's tiles.
+const TPL = (() => { const x = new XMLHttpRequest(); x.open("GET", "npcs/game/village.json", false); x.send(); return JSON.parse(x.responseText); })();
+const OC = 24, OR = 17;   // the green's middle, at the origin
+const VIL = PBD.buildTown(TPL, { ox: PBD.W * (OC + 0.5 * PBD.par(OR)), oz: PBD.ROW * OR });
+const GS = VIL.GS, at = (c, r) => [VIL.cx(c, r), VIL.cz(c, r), VIL.TOP[VIL.idx(c, r)]];
+function cellOf(x, z) {
+  x += PBD.W * (OC + 0.5 * PBD.par(OR)); z += PBD.ROW * OR;
+  const qf = (Math.sqrt(3) / 3 * x - z / 3) / PBD.R, rf = (2 / 3 * z) / PBD.R, sf = -qf - rf;
+  let q = Math.round(qf), r = Math.round(rf); const s = Math.round(sf), dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s - sf);
+  if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
+  return PBD.toOff(q, r);
+}
+const groundY = (x, z) => { const [c, r] = cellOf(x, z); return VIL.inMap(c, r) ? VIL.TOP[VIL.idx(c, r)] : 1; };
+const LK = { lamp: [0xffd27a, 1.6, 5.2], wall: [0xffc070, 1.3, 4.4], window: [0xffa850, 0.35, 2.0], fire: [0xff8a3a, 1.3, 6.0], forge: [0xff7a30, 1.2, 5.5], kiosk: [0x9ae0ff, 0.6, 3.5] };
+function addLight(x, y, z, kind) { const K = LK[kind]; LIGHTS.push({ x, y, z, c: lin(K[0]), p: K[1], R: K[2], kind }); }
+const lampMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), fireMat = new THREE.MeshBasicMaterial({ color: 0xffa040 });
+function glowBox(x, y, z, s) { const m = new THREE.Mesh(new THREE.BoxGeometry(s, s * 1.3, s), lampMat); m.position.set(x, y, z); scene.add(m); return m; }
+function fire(x, y, z, s, kind) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.4 * s, 0.5 * s, 0.4 * s), fireMat); m.position.set(x, y + 0.25 * s, z); scene.add(m); FLAMES.push({ m, ph: Math.random() * 6 }); addLight(x, y + 0.6, z, kind); }
+// the template's street lamps, and a wall lantern by every door, as the game's towns light theirs
+for (const L of VIL.lamps) { glowBox(L.x, L.y, L.z, 0.2); addLight(L.x, L.y - 0.05, L.z, "lamp"); }
+for (const d of VIL.doors) { const [x, y, z] = d.lamp; GS.box("iron", x - d.nx * 0.14, y + 0.25, z - d.nz * 0.14, 0.06, 0.06, 0.3, d.ang + Math.PI / 2); glowBox(x, y, z, 0.18); addLight(x + d.nx * 0.2, y, z + d.nz * 0.2, "wall"); }
+VIL.buildings.forEach((b, i) => { if (b.door) PLACES["door_" + (i < 8 ? "h" + (i + 1) : i === 8 ? "inn" : "b" + i)] = [b.door.x, b.door.z]; for (const [c, r] of b.cells) SOLIDS.push({ x: VIL.cx(c, r), z: VIL.cz(c, r), r: PBD.R * 0.98 }); });
+// windows: a pane in every opening; a lit one glows at night and lights a little round it
+const PANE = { lit: new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide }), dark: new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide }) };
+{ const G2 = { lit: new PBD.Geo(), dark: new PBD.Geo() };
+  for (const p of VIL.panes) {
+    const tx = Math.cos(p.ang), tz = Math.sin(p.ang), hw = p.w / 2, hh = p.h / 2, P = (a, b) => [p.x + tx * a, p.y + b, p.z + tz * a];
+    G2[p.lit ? "lit" : "dark"].face([P(-hw, -hh), P(hw, -hh), P(hw, hh), P(-hw, hh)], [p.nx, 0, p.nz]);
+    if (p.lit) addLight(p.x + p.nx * 0.6, p.y, p.z + p.nz * 0.6, "window");
+  }
+  for (const k of ["lit", "dark"]) scene.add(new THREE.Mesh(G2[k].build(), PANE[k])); }
+// The square's dressing, mockup-only but cut from the game's materials: stalls, the well, a
+// brazier, the forge in the smithy yard, the starport kiosk, lamp posts round the green.
+function stall(c, r, cloth, ang, name) {
+  const [x, z, y] = at(c, r), ux = Math.cos(ang), uz = Math.sin(ang);
+  for (const [a, b] of [[-1, -0.6], [1, -0.6], [-1, 0.6], [1, 0.6]]) GS.box("timber", x + ux * a - uz * b, y, z + uz * a + ux * b, 0.1, 2.3, 0.1, ang);
+  GS.box("plank", x, y + 0.85, z, 2.2, 0.1, 1.2, ang); GS.box(cloth, x, y + 2.3, z, 2.5, 0.08, 1.6, ang); GS.box("thatch", x + uz * 0.1, y + 0.95, z - ux * 0.1, 1.6, 0.25, 0.6, ang);
+  SOLIDS.push({ x, z, r: 1.1 }); PLACES[name] = [x - uz * 1.4, z + ux * 1.4];
+}
+stall(21, 14, "cloth", 0, "stall1"); stall(27, 14, "cloth2", 0, "stall2"); stall(22, 13, "cloth", 0, "stall3");
+{ const [x, z, y] = at(27, 20), p = []; for (let k = 0; k < 6; k++) { const a = (60 * k - 30) * Math.PI / 180; p.push([x + Math.cos(a), z + Math.sin(a)]); }
+  GS.prism("stone", "stone", p, y, y + 0.8); for (const s of [-1, 1]) GS.box("timber", x + s * 0.85, y, z, 0.12, 2.2, 0.12); GS.box("thatch", x, y + 2.2, z, 2.2, 0.18, 1.4);
+  SOLIDS.push({ x, z, r: 1.3 }); PLACES.well = [x - 1.6, z - 1.2]; }
+{ const [x, z, y] = at(25, 16); GS.box("iron", x, y, z, 0.7, 0.9, 0.7); fire(x, y + 0.9, z, 0.9, "fire"); SOLIDS.push({ x, z, r: 0.6 }); PLACES.brazier = [x + 1.0, z - 0.6]; }
+{ const [x, z, y] = at(27, 22);
+  for (const [ox, oz] of [[-1.8, -1.2], [1.8, -1.2], [-1.8, 1.2], [1.8, 1.2]]) GS.box("timber", x + ox, y, z + oz, 0.18, 2.6, 0.18);
+  GS.box("plank", x, y + 2.6, z, 4.2, 0.12, 3.0); GS.box("thatch", x, y + 2.72, z, 4.4, 0.25, 3.2);
+  GS.box("stone", x + 1.0, y, z, 1.2, 0.9, 1.2); fire(x + 1.0, y + 0.9, z, 0.7, "forge"); GS.box("iron", x - 0.3, y, z + 0.2, 0.7, 0.75, 0.35);
+  PLACES.forge = [x - 0.2, z - 0.9]; SOLIDS.push({ x: x + 1.0, z, r: 0.85 }); }
+{ const [x, z, y] = at(28, 18); GS.box("metal", x, y, z, 1.6, 2.4, 1.2); GS.box("metal", x, y + 2.4, z, 2.0, 0.12, 1.6);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), new THREE.MeshBasicMaterial({ color: 0x7ad8f0 })); scr.position.set(x, y + 1.5, z - 0.61); scr.rotation.y = Math.PI; scene.add(scr);
+  addLight(x, y + 1.5, z - 1.2, "kiosk"); PLACES.kiosk = [x, z - 1.4]; SOLIDS.push({ x, z, r: 1.0 }); }
+for (const [c, r] of [[20, 13], [28, 13], [20, 21], [28, 21]]) { const [x, z, y] = at(c, r); PBD.lampPost(GS, x, y, z); glowBox(x + 0.45, y + 2.25, z, 0.2); addLight(x + 0.45, y + 2.2, z, "lamp"); SOLIDS.push({ x, z, r: 0.3 }); }
+const SEATS = [];
+{ const d = VIL.buildings[8].door; for (let k = -1; k <= 1; k++) { const x = d.x + d.nx * 1.4 + Math.cos(d.ang) * k * 2.4, z = d.z + d.nz * 1.4 + Math.sin(d.ang) * k * 2.4, y = groundY(x, z); GS.box("plank", x, y + 0.72, z, 1.4, 0.08, 0.8, d.ang); GS.box("timber", x, y, z, 0.1, 0.72, 0.6, d.ang); SOLIDS.push({ x, z, r: 0.6 }); SEATS.push([x - Math.cos(d.ang) * 0.9, z - Math.sin(d.ang) * 0.9], [x + Math.cos(d.ang) * 0.9, z + Math.sin(d.ang) * 0.9]); } }
+{ const p = (c, r) => at(c, r).slice(0, 2); PLACES.east = p(46, 17); PLACES.north = p(24, 4); PLACES.gateA = p(38, 17); PLACES.gateB = p(24, 10); PLACES.alley = p(13, 16); }
+// the game's trees on the fields round the village (planet_surface.wgsl's, one to a cell)
+for (let r = 0; r < VIL.NR; r++) for (let c = 0; c < VIL.NC; c++) {
+  const i = VIL.idx(c, r); if (VIL.MAT[i] !== "grass" || VIL.AREA[i] !== "Fields" || PBD.hash2(c * 3 + 1, r * 5 + 2) > 0.09) continue;
+  let clear = true; for (let d = 0; d < 6; d++) { const [c2, r2] = PBD.nb(c, r, d); if (VIL.inMap(c2, r2) && (VIL.BLD[VIL.idx(c2, r2)] >= 0 || VIL.MAT[VIL.idx(c2, r2)] !== "grass" || VIL.AREA[VIL.idx(c2, r2)] !== "Fields")) clear = false; }
+  if (!clear) continue;
+  PBD.tree(GS, VIL.hexPts(c, r), VIL.cx(c, r), VIL.cz(c, r), VIL.TOP[i], c * 97 + r, "a:bark", "a:leaves");
+  SOLIDS.push({ x: VIL.cx(c, r), z: VIL.cz(c, r), r: 0.5 });
+}
+PBD.REP.cloth = 2.5; PBD.REP.cloth2 = 2.5; PBD.REP.metal = 1.5;
+PBD.addMeshes(GS, scene, { mat: k => k === "metal" ? (PBD._metal || (PBD._metal = PBD.litMaterial(PBD.tex("building/tex_metal.png?v=2")))) : PBD.mat(k), cast: k => k !== "a:grass" && k !== "a:path" });
+// the pond
+if (VIL.water) { const g = new PBD.Geo(); for (const [c, r] of VIL.water) g.face(VIL.hexPts(c, r).map(p => [p[0], 0.82, p[1]]), [0, 1, 0]); scene.add(new THREE.Mesh(g.build(), PBD.litMaterial(null, 0x2f5f8a, { transparent: true, opacity: 0.82 }))); }
+PBD.setLights(LIGHTS);
+const U = { lamp: PBD.LU.uLamp };
+// sky dome stars at night
+const stars = (() => { const n = 600, p = new Float32Array(n * 3), rn = rng(5); for (let i = 0; i < n; i++) { const a = rn() * 6.283, e = 0.08 + rn() * 1.4; p[3 * i] = Math.cos(a) * Math.cos(e) * 300; p[3 * i + 1] = Math.sin(e) * 300; p[3 * i + 2] = Math.sin(a) * Math.cos(e) * 300; } const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(p, 3)); const m = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.2, sizeAttenuation: false, fog: false, transparent: true })); scene.add(m); return m; })();
+
+// ---- the townsfolk ---------------------------------------------------------
+const NAMES = ["Bryn Ash", "Orrin Vale", "Mara Quell", "Tam Holt", "Ide Rook", "Wen Farrow", "Sela Brook", "Cal Dunmore", "Nessa Pike", "Ivo Kett", "Rhun Mallow", "Petra Lind", "Hal Cobb", "Ysolde Fenn"];
+const TOWN = [
+  ["farmer", "h1"], ["smith", "h2"], ["trader", "h3"], ["guard", "h7"], ["fisher", "h4"], ["miner", "h5"], ["clerk", "h8"], ["smuggler", "h6"],
+  ["inn", "inn"], ["farmer", "h5"], ["trader", "h6"], ["guard", "h3", true], ["miner", "h1"], ["farmer", "h4"],
+];
+const NPCS = TOWN.map(([role, home, night], i) => {
+  const spec = rollSpec("fields", role, 100 + i), f = figure(spec); scene.add(f.g);
+  const shift = (rng(i * 31 + 7)() - 0.5);
+  let sched = ROLES[role].sched.map(([h, a]) => [h, a]);
+  if (night) sched = [[0, "patrol"], [6, "inn"], [8, "sleep"], [18, "patrol"]];
+  const npc = { i, role, home, name: NAMES[i], spec, f, sched, shift, x: 0, z: 0, tx: 0, tz: 0, face: 0, vis: 1, act: null, place: null, phase: rng(i)() * 6, rel: [62, 74, 55, 40, 50, 48, 66, 22, 70, 58, 45, 38, 52, 60][i], seat: SEATS[i % SEATS.length] };
+  return npc;
+});
+function actAt(n, h) { const t = (h - n.shift + 24) % 24; let a = n.sched[0][1], nx = null; for (let k = 0; k < n.sched.length; k++) { if (t >= n.sched[k][0]) { a = n.sched[k][1]; nx = n.sched[(k + 1) % n.sched.length]; } } return { a, next: nx }; }
+function workPlace(n) {
+  return { farmer: n.i === 0 ? "stall1" : "stall3", smith: "forge", trader: n.i === 2 ? "stall2" : "stall3", fisher: "stall1", clerk: "kiosk", inn: "door_inn", miner: "well", guard: "gateA", smuggler: "alley" }[n.role];
+}
+function target(n, a) {
+  if (a === "sleep") return { p: PLACES["door_" + n.home], hide: true, label: "Asleep at home" };
+  if (a === "away") { const p = n.role === "fisher" ? PLACES.north : PLACES.east; return { p, hide: true, label: { farmer: "In the fields", fisher: "At sea", miner: "Down the hill mine", smuggler: "Out of town" }[n.role] || "Away" }; }
+  if (a === "inn") return { p: n.seat, label: "At The Plough" };
+  if (a === "patrol") return { p: n.i === 3 ? PLACES.gateA : PLACES.gateB, patrol: n.i === 3 ? [PLACES.gateA, PLACES.brazier] : [PLACES.gateB, PLACES.well], label: "On patrol" };
+  if (a === "idle") return { p: PLACES.well, label: "Idling by the well" };
+  if (a === "lurk") return { p: PLACES.alley, label: "Lurking in the alley" };
+  const w = workPlace(n); return { p: PLACES[w], work: true, label: { stall1: "Selling at the stall", stall2: "Selling at the stall", stall3: "Selling at the stall", forge: "Hammering at the forge", kiosk: "At the starport kiosk", door_inn: "Serving at The Plough" }[w] || "Working" };
+}
+const STATE = { hour: 22.5, play: false, hover: null, sel: null };
+function placeAll(snap) {
+  for (const n of NPCS) {
+    const { a } = actAt(n, STATE.hour), t = target(n, a);
+    const changed = n.act !== a; n.act = a; n.t = t;
+    if (snap || changed && snap !== false) { /* keep walking */ }
+    n.tx = t.p[0]; n.tz = t.p[1];
+    if (snap) { n.x = n.tx + (rng(n.i)() - 0.5) * 0.6; n.z = n.tz + (rng(n.i + 5)() - 0.5) * 0.6; n.vis = t.hide ? 0 : 1; }
+    if (changed && !snap && n.vis === 0 && !t.hide) { const from = n.t && (a === "sleep") ? null : (actAt(n, STATE.hour - 0.3).a === "away" ? (n.role === "fisher" ? PLACES.north : PLACES.east) : PLACES["door_" + n.home]); if (from) { n.x = from[0]; n.z = from[1]; } }
+  }
+}
+const tmpC = new THREE.Color();
+function stepNpc(n, dt, T) {
+  const t = n.t; if (!t) return;
+  let tx = n.tx, tz = n.tz;
+  if (t.patrol) { const leg = Math.floor(Math.abs(T * 0.06 + n.phase) % 2), P = t.patrol[leg]; tx = P[0]; tz = P[1]; }
+  const dx = tx - n.x, dz = tz - n.z, d = Math.hypot(dx, dz), sp = 2.2;
+  let walking = false;
+  if (d > 0.15) {
+    if (d > 40) { n.x = tx; n.z = tz; }
+    else { const s = Math.min(d, sp * dt); n.x += dx / d * s; n.z += dz / d * s; n.face = Math.atan2(dx, dz); walking = true; if (n.vis < 1 && !t.hide) n.vis = Math.min(1, n.vis + dt * 2); }
+  } else if (t.hide) n.vis = Math.max(0, n.vis - dt * 2);
+  else n.vis = Math.min(1, n.vis + dt * 2);
+  // slide round solids (houses, stalls, the well), as the walker does
+  for (const s of SOLIDS) { const ox = n.x - s.x, oz = n.z - s.z, l = Math.hypot(ox, oz), m = s.r + 0.28; if (l < m && l > 1e-4 && d > 0.3) { n.x = s.x + ox / l * m; n.z = s.z + oz / l * m; } }
+  const f = n.f; f.g.position.set(n.x, groundY(n.x, n.z), n.z); f.g.rotation.y = n.face; f.g.visible = n.vis > 0.02; f.g.scale.setScalar(0.4 + 0.6 * n.vis);
+  const sw = walking ? Math.sin(T * 7 + n.phase) * 0.6 : 0;
+  f.legL.rotation.x = sw; f.legR.rotation.x = -sw; f.armL.rotation.x = -sw * 0.8;
+  if (!walking && t.work) f.armR.rotation.x = -1.2 + Math.abs(Math.sin(T * (n.role === "smith" ? 5 : 2) + n.phase)) * (n.role === "smith" ? 1.4 : 0.5);
+  else if (!walking && n.act === "inn") f.armR.rotation.x = -0.4 - 0.6 * Math.max(0, Math.sin(T * 0.7 + n.phase * 3));
+  else f.armR.rotation.x = sw * 0.8;
+  if (!walking) { f.headG.rotation.y = Math.sin(T * 0.4 + n.phase) * 0.5; if (!t.work && !t.patrol) n.face += (Math.atan2(-n.x, -n.z) - n.face) * 0; } else f.headG.rotation.y = 0;
+  // lit like everything else: the block light reaches the figure per pixel (scene-kit.js)
+}
+
+// ---- time of day ----------------------------------------------------------
+const cA = new THREE.Color();
+function setHour(h) {
+  STATE.hour = (h + 24) % 24; $("hour").value = STATE.hour;
+  const ang = (STATE.hour - 6) / 12 * Math.PI, el = Math.sin(ang), day = clamp((el + 0.08) / 0.3, 0, 1), dusk = clamp(1 - Math.abs(el) / 0.35, 0, 1) * (STATE.hour > 3 && STATE.hour < 21 ? 1 : 0);
+  const sunDir = el > 0 ? new THREE.Vector3(Math.cos(ang) * 0.8, Math.max(0.12, el), 0.45 - 0.2 * Math.cos(ang)).normalize() : new THREE.Vector3(-0.4, 0.7, 0.55).normalize();
+  cA.set(0x0e1424).lerp(new THREE.Color(0x9fc6e2), day).lerp(new THREE.Color(0xe0a27a), dusk * 0.55);
+  scene.background = cA.clone(); scene.fog.color.copy(cA);
+  sun.position.copy(sunDir).multiplyScalar(80); sun.target.position.set(0, 0, 0);
+  if (el > 0) { sun.color.setHSL(0.09 - 0.03 * dusk, 0.5 + 0.4 * dusk, 0.85 - 0.15 * dusk); sun.intensity = 1.8 * clamp(el * 3, 0, 1); } else { sun.color.set(0x8fa6d8); sun.intensity = 0.035; }
+  hemi.intensity = 0.008 + 0.57 * day; hemi.color.copy(cA).lerp(new THREE.Color(0xffffff), 0.35); hemi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
+  const night = 1 - day; STATE.night = night;
+  U.lamp.value = 0.85 * clamp((night - 0.25) / 0.35, 0, 1);
+  lampMat.color.set(night > 0.3 ? 0xffd9a0 : 0x6a655a);
+  PANE.lit.color.setRGB(...(night > 0.3 ? [1.0, 0.72, 0.36] : [0.1, 0.11, 0.14]));
+  stars.material.opacity = clamp(night * 1.2 - 0.2, 0, 1);
+  const hh = Math.floor(STATE.hour), mm = Math.floor((STATE.hour % 1) * 60);
+  $("clock").textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+  placeAll(false);
+  const out = NPCS.filter(n => !n.t.hide).length; $("status").textContent = `${NPCS.length} townsfolk \u00b7 ${out} out and about \u00b7 lamps ${U.lamp.value > 0.1 ? "lit" : "out"}`;
+  updateNow(); if (STATE.sel) showCard(STATE.sel);
+}
+
+// ---- camera: orbit ----------------------------------------------------------
+const ORB = { tx: 1, ty: 1.5, tz: 1, dist: 27, yaw: 0.6, pitch: 0.58 };
+function placeCam() { const cp = Math.cos(ORB.pitch); camera.position.set(ORB.tx + Math.sin(ORB.yaw) * cp * ORB.dist, ORB.ty + Math.sin(ORB.pitch) * ORB.dist, ORB.tz + Math.cos(ORB.yaw) * cp * ORB.dist); camera.lookAt(ORB.tx, ORB.ty, ORB.tz); }
+function orbitControls(el, orb, onClick) {
+  const pts = new Map(); let moved = 0, pinch = 0;
+  el.addEventListener("pointerdown", e => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY, e.button, e.shiftKey]); moved = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+  el.addEventListener("pointermove", e => {
+    const p = pts.get(e.pointerId); if (!p) { if (onClick) onClick(e, true); return; }
+    const dx = e.clientX - p[0], dy = e.clientY - p[1]; moved += Math.abs(dx) + Math.abs(dy);
+    if (pts.size === 2) { p[0] = e.clientX; p[1] = e.clientY; const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) orb.dist = clamp(orb.dist * pinch / d, 6, 90); pinch = d; return; }
+    if (p[2] === 2 || p[3]) { const s = orb.dist * 0.0016; orb.tx -= (Math.cos(orb.yaw) * dx - Math.sin(orb.yaw) * dy) * s; orb.tz -= (-Math.sin(orb.yaw) * dx - Math.cos(orb.yaw) * dy) * s; }
+    else { orb.yaw -= dx * 0.006; orb.pitch = clamp(orb.pitch + dy * 0.005, 0.08, 1.45); }
+    p[0] = e.clientX; p[1] = e.clientY;
+  });
+  const up = e => { const was = pts.has(e.pointerId); pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; if (was && moved < 6 && onClick) onClick(e, false); };
+  el.addEventListener("pointerup", up); el.addEventListener("pointercancel", e => pts.delete(e.pointerId));
+  el.addEventListener("contextmenu", e => e.preventDefault());
+  el.addEventListener("wheel", e => { e.preventDefault(); orb.dist = clamp(orb.dist * Math.exp(e.deltaY * 0.0012), 6, 90); }, { passive: false });
+}
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+function pickNpc(e) {
+  const r = canvas.getBoundingClientRect(); mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(mouse, camera);
+  const hits = ray.intersectObjects(NPCS.filter(n => n.f.g.visible).map(n => n.f.g), true); if (!hits.length) return null;
+  let o = hits[0].object; while (o && !NPCS.find(n => n.f.g === o)) o = o.parent; return NPCS.find(n => n.f.g === o) || null;
+}
+orbitControls(canvas, ORB, (e, hover) => { const n = pickNpc(e); if (hover) { canvas.style.cursor = n ? "pointer" : "grab"; return; } if (n) { STATE.sel = n; showCard(n); } });
+function fmt(h) { h = (h + 24) % 24; return String(Math.floor(h)).padStart(2, "0") + ":" + String(Math.round((h % 1) * 60) % 60).padStart(2, "0"); }
+function showCard(n) {
+  const R0 = ROLES[n.role], { a, next } = actAt(n, STATE.hour);
+  $("cImg").src = "npcs/" + R0.img + ".png"; $("cImg").alt = "Portrait of " + n.name;
+  $("cName").textContent = n.name; $("cMeta").textContent = R0.label + " \u00b7 Fields folk of Tenebris";
+  $("cNow").textContent = n.t.label; $("cNext").textContent = next ? (ACT[next[1]][0] + " at " + fmt(next[0] + n.shift)) : "-";
+  $("cHome").textContent = n.home === "inn" ? "Rooms above The Plough" : "House " + n.home.slice(1) + " on the square"; $("cRel").style.width = n.rel + "%";
+}
+function toast(t) { const el = $("toast"); el.textContent = t; el.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.opacity = 0, 2600); }
+
+$("hour").addEventListener("input", e => { setHour(+e.target.value); placeAll(true); });
+$("play").addEventListener("click", () => { STATE.play = !STATE.play; $("play").setAttribute("aria-pressed", STATE.play); $("play").textContent = STATE.play ? "Pause" : "Play day"; });
+$("toNight").addEventListener("click", () => { setHour(22.5); placeAll(true); });
+$("toDay").addEventListener("click", () => { setHour(12.5); placeAll(true); });
+$("quit").addEventListener("click", () => { STATE.play = false; $("play").setAttribute("aria-pressed", false); $("play").textContent = "Play day"; toast("Game closed for 8 hours. World clock: still " + $("clock").textContent + ". Nobody moved."); });
+
+function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize);
+let last = performance.now(), T = 0;
+function frame(now) {
+  const dt = clamp((now - last) / 1000, 0, 0.1); last = now; T += dt;
+  if (STATE.play) setHour(STATE.hour + dt / 3);
+  for (const n of NPCS) stepNpc(n, dt, T);
+  for (const f of FLAMES) f.m.scale.set(1, 0.8 + 0.3 * Math.sin(T * 9 + f.ph) * Math.sin(T * 5.3 + f.ph * 2), 1);
+  if (FOCUS) { ORB.tx = FOCUS.x; ORB.tz = FOCUS.z; ORB.ty = groundY(FOCUS.x, FOCUS.z) + 1.2; }
+  placeCam(); renderer.render(scene, camera); requestAnimationFrame(frame);
+}
+
+// ===================================================================
+// The page around it
+// ===================================================================
+const sw = c => `<i style="background:#${c.toString(16).padStart(6, "0")}"></i>`;
+$("peoples").innerHTML = Object.values(PEOPLES).map(p => `<div class="people"><div class="world">${p.world}</div><h3>${p.name}</h3><div class="swatches">${p.skin.map(sw).join("")}</div><div class="swatches">${p.cloth.map(sw).join("")}</div><p>${p.text}</p></div>`).join("")
+  + `<div class="people none"><div class="world">${NONE_PEOPLE.world}</div><h3>${NONE_PEOPLE.name}</h3><p>${NONE_PEOPLE.text}</p></div>`;
+$("roles").innerHTML = Object.entries(ROLES).filter(([k]) => k !== "inn").map(([k, r]) => `<div class="role"><img src="npcs/${r.img}.png" alt="Portrait of a ${r.label.toLowerCase()}"><div><h3>${r.label}</h3><div class="where">${r.where}</div><p>${r.text}</p><div class="offers">${r.offers.map(([c, t]) => `<span class="chip ${c}">${t}</span>`).join("")}</div></div></div>`).join("");
+function schedRow(label, sched) {
+  let html = ""; for (let k = 0; k < sched.length; k++) { const [h, a] = sched[k], h1 = k + 1 < sched.length ? sched[k + 1][0] : 24; html += `<i class="${ACT[a][1]}" style="left:${h / 24 * 100}%;width:${(h1 - h) / 24 * 100}%" title="${ACT[a][0]} ${fmt(h)}-${fmt(h1)}"></i>`; }
+  return `<tr><td class="name">${label}</td><td><div class="bar">${html}<span class="now"></span></div></td></tr>`;
+}
+$("schedBody").innerHTML = Object.entries(ROLES).map(([k, r]) => schedRow(r.label, r.sched)).join("") + schedRow("Night guard", [[0, "patrol"], [6, "inn"], [8, "sleep"], [18, "patrol"]]);
+function updateNow() { for (const el of document.querySelectorAll(".bar .now")) el.style.left = (STATE.hour / 24 * 100) + "%"; }
+$("relList").innerHTML = [["smith", "Orrin Vale, smith", 74, "Friendly"], ["trader", "Mara Quell, trader", 55, "Neutral"], ["guard", "Tam Holt, guard", 40, "Wary: saw you near the stall"], ["smuggler", "Hal Cobb, smuggler", 22, "Owes you; you owe him more"], ["farmer", "Hollin Cross (town)", 58, "Mean of 14 people"]]
+  .map(([img, n, v, t]) => `<div class="r"><img src="npcs/${img}.png" alt=""><div><div>${n}</div><div class="meter"><i style="width:${v}%"></i></div></div><span class="lv">${v} \u00b7 ${t}</span></div>`).join("");
+const REPLY = { trade: "\"Nails, hinges, a good axe head. Iron I'll buy at four a lump.\"", quest: "\"The north gate's hinges are rust. Bring me twelve ore from the east hills and I'll see you right.\"", rumour: "\"Hal? Comes at dark, gone by three. The guards pretend not to see. You'd do well to do the same.\"", bye: "\"Mind the step. Night.\"" };
+for (const b of document.querySelectorAll("#dlgOpts button")) b.addEventListener("click", () => { $("dlgLine").textContent = REPLY[b.dataset.r]; });
+
+// ---- the lineup: six peoples, four each ------------------------------------
+const lu = $("lu"), lr = new THREE.WebGLRenderer({ canvas: lu, antialias: true }); lr.setPixelRatio(Math.min(2, devicePixelRatio)); lr.outputEncoding = THREE.sRGBEncoding;
+const ls = new THREE.Scene(); ls.background = new THREE.Color(0x141210);
+const lc = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
+ls.add(new THREE.HemisphereLight(0xfff0d8, 0x2a2420, 0.7)); const key = new THREE.DirectionalLight(0xffe0b0, 1.1); key.position.set(-4, 6, 8); ls.add(key);
+const rimL = new THREE.DirectionalLight(0x8fb0ff, 0.5); rimL.position.set(5, 3, -6); ls.add(rimL);
+const plinth = new THREE.Mesh(new THREE.CylinderGeometry(40, 40, 0.2, 6), new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 1 })); plinth.position.y = -0.1; ls.add(plinth);
+const LU_PEOPLES = ["fields", "desert", "tundra", "coast", "redwood", "station"], LU_ROLES = { fields: ["farmer", "smith", "guard", "inn"], desert: ["trader", "trader", "guard", "smuggler"], tundra: ["miner", "guard", "farmer", "inn"], coast: ["fisher", "fisher", "trader", "inn"], redwood: ["farmer", "smith", "trader", "inn"], station: ["clerk", "clerk", "smuggler", "trader"] };
+let LU = [], townSeed = 1;
+function lineup() {
+  for (const o of LU) ls.remove(o); LU = [];
+  LU_PEOPLES.forEach((p, gi) => LU_ROLES[p].forEach((role, k) => {
+    const spec = rollSpec(p, role, townSeed * 1000 + gi * 10 + k); if (role === "inn") spec.prop = "none";
+    const f = figure(spec, false); f.g.position.set((gi - 2.5) * 3.2 + (k - 1.5) * 0.72, 0, (k % 2) * 0.5); f.g.rotation.y = (k - 1.5) * 0.2; ls.add(f.g); LU.push(f.g);
+  }));
+  $("luLabels").innerHTML = LU_PEOPLES.map(p => `<span>${PEOPLES[p].name}</span>`).join("");
+}
+let spin = true;
+$("reroll").addEventListener("click", () => { townSeed++; lineup(); });
+$("spin").addEventListener("click", () => { spin = !spin; $("spin").setAttribute("aria-pressed", spin); });
+function luResize() { const w = lu.clientWidth, h = lu.clientHeight; lr.setSize(w, h, false); lc.aspect = w / h; const dist = Math.max(14, 10.8 / (Math.tan(15 * Math.PI / 180) * lc.aspect)); lc.position.set(0, 2.6 + dist * 0.08, dist); lc.lookAt(0, 1.0, 0); lc.updateProjectionMatrix(); }
+addEventListener("resize", luResize);
+function luFrame(now) { if (spin) LU.forEach((g, i) => g.rotation.y += 0.008); lr.render(ls, lc); requestAnimationFrame(luFrame); }
+
+const Q = new URLSearchParams(location.search);
+resize(); setHour(Q.has("hour") ? +Q.get("hour") : 22.5); placeAll(true);
+for (const k of ["dist", "yaw", "pitch", "tx", "tz"]) if (Q.has(k)) ORB[k] = +Q.get(k);
+const FOCUS = Q.has("focus") ? NPCS[+Q.get("focus")] : null; STATE.sel = NPCS[1]; showCard(NPCS[1]); requestAnimationFrame(frame);
+lineup(); luResize(); requestAnimationFrame(luFrame);
+window.__npcs = { NPCS, LIGHTS, setHour, scene };
+</script>

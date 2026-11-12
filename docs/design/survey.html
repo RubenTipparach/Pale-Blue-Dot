@@ -1,0 +1,480 @@
+<title>Pale Blue Dot Survey</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: the game's HUD at night; one column of question cards, each with the screenshots it turns on, a sticky tally bar.
+   Tokens keep the template's names (paper, brass, done) so its rules stay as written. */
+:root {
+  --bg: #0b1119; --paper: #131c28; --ink: #dfe8f1; --muted: #8a9bb0; --line: #2a3a4f;
+  --brass: #e8b44c; --brass-soft: #3a2c12; --done: #7fcf86; --done-soft: #17301c;
+  --sun: #e8b44c; --crescent: #7fcf86; --star: #f07a6a; --eagle: #7fb2f0;
+  --display: "Pixelify Sans", "Courier New", monospace;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #e9eef3; --paper: #f7f9fb; --ink: #142030; --muted: #52637a; --line: #c5d0dc;
+    --brass: #9a6a10; --brass-soft: #f6e6c4; --done: #2f7a3a; --done-soft: #dcefdc;
+    --sun: #9a6a10; --crescent: #2f7a3a; --star: #b8392b; --eagle: #2a5ea8;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #e9eef3; --paper: #f7f9fb; --ink: #142030; --muted: #52637a; --line: #c5d0dc;
+  --brass: #9a6a10; --brass-soft: #f6e6c4; --done: #2f7a3a; --done-soft: #dcefdc;
+  --sun: #9a6a10; --crescent: #2f7a3a; --star: #b8392b; --eagle: #2a5ea8;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 400 16px/1.55 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 28px; }
+header.top { padding-top: 28px; display: grid; gap: 10px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--brass); }
+h1 { font: 700 clamp(36px, 8vw, 56px)/1 var(--display); letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 62ch; }
+.suits { display: flex; gap: 6px; }
+.suits span { width: 28px; height: 6px; border-radius: 3px; }
+.tally {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+  padding-block: 10px; border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+}
+.meter { flex: 1 1 160px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; min-width: 120px; }
+.meter i { display: block; height: 100%; width: 0; background: var(--done); transition: width 0.3s; }
+.count { font: 500 13px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.btn {
+  font: 600 14px/1 var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--line);
+  border-radius: 8px; padding: 0 14px; min-height: 44px; cursor: pointer;
+}
+.btn:hover { border-color: var(--brass); }
+.btn:focus-visible, .opt:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.notice { font-size: 14px; color: var(--muted); background: var(--brass-soft); border-radius: 8px; padding: 10px 12px; margin: 0; }
+.how { display: grid; gap: 6px; font-size: 15px; }
+.how p { margin: 0; }
+section.topic { display: grid; gap: 14px; }
+section.topic > h2 {
+  font: 700 26px/1 var(--display); margin: 0; display: flex; align-items: baseline; gap: 10px; text-wrap: balance;
+}
+section.topic > h2 .tag { font: 500 13px/1 var(--mono); color: var(--brass); letter-spacing: 0.1em; }
+section.topic > p { margin: 0; color: var(--muted); max-width: 64ch; }
+figure { margin: 0; display: grid; gap: 6px; }
+figure img { width: 100%; max-width: 100%; height: auto; border-radius: 8px; background: #241b14; display: block; }
+figcaption { font-size: 13px; color: var(--muted); }
+.q {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px;
+  display: grid; gap: 12px; min-width: 0;
+}
+.q.answered { border-color: color-mix(in srgb, var(--done) 55%, var(--line)); }
+.q-head { display: flex; gap: 10px; align-items: flex-start; }
+.qid {
+  font: 500 13px/1 var(--mono); color: var(--brass); border: 1px solid currentColor; border-radius: 6px;
+  padding: 5px 7px; flex: none; margin-top: 2px;
+}
+.q-text { margin: 0; font-weight: 500; min-width: 0; }
+.opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.opt {
+  font: 400 15px/1.3 var(--body); color: var(--ink); text-align: left; background: transparent;
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-height: 44px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+}
+.opt:hover { border-color: var(--brass); }
+.opt[aria-pressed="true"] { background: var(--done-soft); border-color: var(--done); font-weight: 600; }
+.opt .rec { font: 500 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--brass); white-space: nowrap; }
+.why { margin: 0; font-size: 14px; color: var(--muted); }
+.why b { color: var(--ink); font-weight: 600; }
+label.note { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+textarea {
+  font: 400 15px/1.45 var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; min-height: 64px; resize: vertical; width: 100%;
+}
+.status { font: 500 12px/1 var(--mono); color: var(--muted); min-height: 12px; }
+.status.ok { color: var(--done); }
+.status.err { color: var(--star); }
+details.decided { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
+details.decided summary { cursor: pointer; padding: 14px 16px; font: 700 22px/1 var(--display); min-height: 44px; }
+.dec-list { list-style: none; margin: 0; padding: 0 16px 16px; display: grid; gap: 12px; }
+.dec-list li { display: grid; gap: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.dec-list .d-text { margin: 0; }
+.dec-list .d-where { margin: 0; font: 500 12px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.dec-list .replaced { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--star); }
+code { font: 500 0.9em var(--mono); }
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 10px; }
+.shots img { aspect-ratio: 16 / 10; object-fit: cover; }
+.shots a { display: block; }
+.qmeta { margin: 0; font: 500 12px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.qmeta a, .how a, .lede a { color: var(--brass); }
+.dec-list .d-id { font: 500 12px/1 var(--mono); color: var(--brass); margin-right: 8px; }
+.dec-list .taken { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--brass); }
+@media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Owner survey · opened 2026-11-12</div>
+    <h1>Pale Blue Dot Survey</h1>
+    <div class="suits" aria-hidden="true"><span style="background:var(--sun)"></span><span style="background:var(--crescent)"></span><span style="background:var(--star)"></span><span style="background:var(--eagle)"></span></div>
+    <p class="lede">Open questions about the game. Each comes with the screenshots it turns on and the option I recommend, which is what gets built while it is open. Pick an option, add a note, or leave it blank. <a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+  </header>
+
+  <div class="tally">
+    <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+    <span class="count" id="count">0 of 0 answered</span>
+    <button class="btn" id="download" type="button" hidden>Download HTML</button>
+  </div>
+
+  <div class="how">
+    <p><b>A blank answer means the recommendation is accepted.</b> Claude records it as "(recommendation accepted)", never as your words.</p>
+    <p>Answers save as you go. Tap a chosen option again to clear it.</p>
+    <p>A question comes to you only with something to look at (your rule, 2026-09-29). For anything without screenshots I take my recommendation and list it under Already decided as "recommendation taken".</p>
+    <p>Your earlier answers are in <a href="https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn" target="_blank" rel="noopener">the first survey (a Claude Doc)</a>, kept as the record; all of them are copied under Already decided.</p>
+    <p class="notice" id="mode" hidden></p>
+  </div>
+
+  <main id="sections" class="wrap" style="gap:36px"></main>
+
+  <details class="decided" id="decided">
+    <summary>Already decided</summary>
+    <ul class="dec-list" id="dec-list"></ul>
+  </details>
+</div>
+
+<script>
+// The questions. Answers live in the db collection `answers`, one document per question id. Every question carries the
+// pictures it turns on (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
+const SECTIONS = [
+  { tag: 'W', name: 'World and towns',
+    lead: 'From town-gates (2026-10-08). The gate passage is now walled on both sides; before the fix you could see through the walls beside it into the stone. Left as it is: the ledge below. Both shots are Ashenstead\'s north gate at 10:00 in rain.',
+    qs: [
+      { id: 'G1', q: 'Just inside the north gate of every walled town, the street climbs 1 m in one step, as bare earth. You can walk up it, with 3.5 cm to spare on the 1.05 m step, but not while in the air. It is the mockup\'s "wall lane steps" turned into one block.',
+        options: ['Leave it', 'Make it a stone stair of 2 to 4 steps', 'Level the street to the gate'], rec: 1,
+        why: 'It reads as a way in, and a run of 0.25 to 0.5 m steps never catches a jump. It is a new town template version, so towns already laid in saved worlds keep theirs.',
+        change: 'town-gates', asked: '2026-10-08 in the first survey, carried over',
+        images: [
+          { src: 'img/g1-outside.png', alt: 'Ashenstead\'s north gate from outside: the passage walled on both sides, the earth ledge beyond it', caption: 'From outside: the passage walled on both sides, the ledge beyond it.' },
+          { src: 'img/g1-passage.png', alt: 'In the passage, looking into the town: the 1 m earth ledge across the street', caption: 'In the passage, looking in: the 1 m earth ledge across the street.' },
+        ] },
+    ] },
+];
+
+// The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
+const DECIDED = [
+  {"date": "2026-11-12", "id": "", "text": "\"can you create a mockup tracking dock, and a survey html tracker?\": questions now come in this page, with the screenshots beside them; the Claude Doc survey is kept as the earlier record. Every mockup and page is listed on the mockup tracker, where you approve each one for build and then for the game.", "where": "CLAUDE.md \"Ask the owner with a survey\" and \"The mockup tracker\"; the html-survey and mockup-tracker skills"},
+  {"date": "2026-10-02", "id": "L4", "text": "\"recommended\": a lamp's light fades where the sun reaches it. By day a torch or fire no longer turns open snow tan; it still lights a vault, a room, a cave and the night, and its flame still shows. Being built now, with before-and-after shots of the tundra camp and its gate.", "where": "lamps-and-lanterns decision 15, task 5.6; cities-in-the-world (\"Seen in the tundra's shots\")"},
+  {"date": "2026-10-01", "id": "T14", "text": "\"crust\" (on its own page): no cave opens in the top three layers of a town's ground, so a lane or a floor is never a pit. Caves under a town stay, roofed. In saves made since the towns shipped, Holbrook's 4 cells and the other towns' fill in where nobody has dug; anything you dug stays dug. Being built now, with Holbrook's lane before and after.", "where": "cities-in-the-world (\"Finding: caves open into towns' ground\", task 0.22)"},
+  {"date": "2026-09-29", "id": "C4, C5", "text": "\"approve\": the 55 city sites on the map mockup, as drawn, and the names from the six peoples' syllables. No pins placed. Next: storing the list in each world, then the sites on the game's map.", "where": "city-sites (proposal, task 1.4)"},
+  {"date": "2026-09-29", "id": "", "text": "\"dont ask me questions unless you have screenshots for me to review lol\": a question comes to you only with screenshots or a mockup to look at. Otherwise I take my recommendation and say so.", "where": "CLAUDE.md \"Ask only with screenshots\"; the owner-survey skill"},
+  {"date": "2026-09-29", "id": "B6", "text": "\"10.5 % desert\": version 6's desert is halved, from a third of the temperate land to a sixth. The land it gives up goes evenly to fields (26%) and jungle (25%). Version 5 worlds keep their deserts. Built, in PR #19, and the map mockup is redrawn with it.", "where": "fewer-deserts (proposal, decision 1, task 1.2)"},
+  {"date": "2026-09-29", "id": "H4", "text": "\"recommended\": a new version-6 world starts on the level ground nearest today's start, with the Kestrel beside you. Worlds made on versions 4 and 5 keep their start. Built, in PR #19.", "where": "taller-mountains (decision 8, task 2.5a)"},
+  {"date": "2026-09-29", "id": "W2", "text": "\"H\": the jet follows the air (faded before its cap, balanced as at 30 degrees), and the tropics aloft follow their storms (their outflow, and the wind round the high they build). The easterly drops to 6 m/s. Being built next; the level-5 starting climates for both jet fixes are then one desktop run.", "where": "tropical-weather-aloft (proposal, design decisions, task 1.2)"},
+  {"date": "2026-09-29", "id": "W3", "text": "\"recommended\": the tropics' surface weather (trade winds 1.5 m/s at most, the warmest air on one line of latitude) is written up as the next change, after W2. A write-up first; nothing is built from it until you choose.", "where": "tropical-weather-aloft (proposal, design decisions, task 1.2)"},
+  {"date": "2026-09-29", "id": "W1", "text": "\"are the jets fixed? just do recommended\": candidate C. The tropics blow from the east at 8 m/s aloft, and the jet fades in across them, full by 30 degrees. Built, in PR #18; the map mockup is redrawn. The level-5 starting climates are yours to remake on the desktop (\"we can run this sim on my desktop later!\").", "where": "tropical-upper-wind (proposal, decision 1, task 1.2)"},
+  {"date": "2026-09-29", "id": "B4", "text": "\"Biome is the right size\": the 750 m moisture field stays. The desert's share is B6.", "where": "fewer-deserts (proposal)"},
+  {"date": "2026-09-29", "id": "", "text": "\"you should never rearm pr checkins\": no scheduled check-ins on a pull request.", "where": "CLAUDE.md \"No scheduled PR check-ins\""},
+  {"date": "2026-09-28", "id": "B5", "text": "\"leave saved games alone. Should not restart. I don't want games to be reset if players make progress on future games and we decide to change biome stuff ... Making [it] backwards compatible with saves is ideal, add to Claude md too\": opening a world of another biome version switches the planet in place, never relaunches; old worlds keep their ground and everything done in them. A standing rule in CLAUDE.md.", "where": "CLAUDE.md \"Saved games survive every change\"; bigger-biomes decision 6"},
+  {"date": "2026-09-28", "id": "B4, H1, H2, H3", "text": "\"Accept everything as recommended\": 750 m biomes for now (B4); wide ranges to about 290 m, walkable, with snowy tops (H1, H3); version 6 in its own step after PR #18 (H2).", "where": "bigger-biomes decision 5a; taller-mountains decisions 1 to 3, gate 1.4"},
+  {"date": "2026-09-28", "id": "G1", "text": "\"rock stripes should follow contour lines which are by height\": a desert's rock is every 7th metre of height, so it traces the terraces round each hill; a swamp's water lies in its lowest layer. Old worlds keep their latitude bands.", "where": "bigger-biomes decision 7, task 3.4: in version 5, before PR #18 merges"},
+  {"date": "2026-09-27", "id": "M6", "text": "The map is approved, with its smooth drawing and the finer tiles as you zoom in: \"good approve\". The in-game map starts next.", "where": "world-map task 1.5 and design"},
+  {"date": "2026-09-27", "id": "I5", "text": "No blocks merge: each dug block stays its own item. \"I just told you we have grass-> dirt transition blocks, these have a different image on the side thant he pure dirt block. and SHOULD NOT MERGE\". This was already settled by I4; asking it again was my mistake.", "where": "inventory-grid decision 7"},
+  {"date": "2026-09-27", "id": "M5", "text": "Not yet: \"what about all the other overlays like cloud cover, solar, wind, currents etc, id also like it to have linear interpolation, instead of blocky pixels, canwe have a more detailed layer whenI zoom in?\" The eight weather overlays are in. The map is drawn smooth at every zoom, and a more detailed layer loads as you zoom in. The gate is asked again once both are in.", "where": "world-map decisions 8 and 9, tasks 1.3b and 1.3c"},
+  {"date": "2026-09-27", "id": "I4", "text": "A block's slot picture and its floating drop show its side, the grass fading into earth: \"should use the side of the block, there is a grad transtion to dirt block. this is the obvious\"", "where": "inventory-grid decision 7"},
+  {"date": "2026-09-27", "id": "K6", "text": "A new world starts at 15 °C and stays there: \"why not start at 15c? why climb it back up?\" It did start at 15 °C on average, but with the land too warm and the sea too cold. The land cooled in days, while the sea took hundreds of days to warm. A new world now starts from the settled planet, so it is 15 °C with the right pattern from day one. Built now.", "where": "climate-balance decision 8"},
+  {"date": "2026-09-27", "id": "R1", "text": "Withdrawn: measured at the game's own level, the reef fish already have warm water. The heat spread is now the same at every grid size, and your world did not change", "where": "climate-balance finding 8, decision 7"},
+  {"date": "2026-09-27", "id": "I1", "text": "The pack is built now, while the climate runs compute (recommendation accepted)", "where": "inventory-grid"},
+  {"date": "2026-09-27", "id": "I2", "text": "Thirty slots, three rows of ten (recommendation accepted)", "where": "inventory-grid decision 1"},
+  {"date": "2026-09-27", "id": "I3", "text": "Digging always works, and dug blocks drop into the world as floating blocks, as in Tenebris: \"they can dig, but see how tenebris drops blocks into the world like minecraft!\" and \"if pack is full, stuff just gets mined into the world as floating blocks\"", "where": "inventory-grid decision 4"},
+  {"date": "2026-09-27", "id": "", "text": "The lights are approved on the screenshots: \"quick glans at stuff and I'm happy with it, move on to next stage\". The video waits for your batch", "where": "lamps-and-lanterns (proposal, task 7.3)"},
+  {"date": "2026-09-27", "id": "L1", "text": "Daylight fades like lamplight, a level a metre: a tunnel's twilight reaches about 11 m in, not 40 m. \"sounds good, makes sense\"", "where": "lamps-and-lanterns decision 11; the light spec"},
+  {"date": "2026-09-27", "id": "L2", "text": "A new world's kit drops snow, rock and ore for the five lights, and an old save gets what fits. \"need to give the player an inventory grid, just drop something\"", "where": "lamps-and-lanterns decision 12; inventory-grid, a new change (I1 to I3)"},
+  {"date": "2026-09-27", "id": "L3", "text": "The caves are right: \"its good for now\"", "where": "voxel-light and night-and-lamps archived"},
+  {"date": "2026-09-27", "id": "T8b", "text": "Caps Lock switches between run (5 m/s) and walk (3 m/s), and Shift sprints (8 m/s) over either: \"Recommended for both items\"", "where": "tenebris-towns (the walker, design section 4, task 2); the parity list"},
+  {"date": "2026-09-27", "id": "T8c", "text": "Under a roof you walk unless Shift is held: \"Recommended for both items\"", "where": "tenebris-towns (the walker)"},
+  {"date": "2026-09-27", "id": "T8", "text": "\"caps to toggle sprint off, shift to sprint, run at 5 ms, sprint at 8ms, walk at 3 ms, ctrl is crouch 1 ms\"", "where": "tenebris-towns (the walker's speeds and crouch). What Caps Lock does: T8b"},
+  {"date": "2026-09-27", "id": "T9", "text": "The cog sails, and you walk its deck while it does: \"YES\", as its own change after the roadmap", "where": "sail-the-cog, a new change"},
+  {"date": "2026-09-27", "id": "T10", "text": "Touch controls stay in the mockup: \"we're building a desktop game\"", "where": "The parity list (mockup only)"},
+  {"date": "2026-09-27", "id": "T11", "text": "The T key that swaps in today's walker is dropped: \"drop\"", "where": "tenebris-towns (debug keys); the parity list"},
+  {"date": "2026-09-27", "id": "T12", "text": "The cliff village and the cave town are placed on the map now: \"recommended\"", "where": "city-sites (nine site kinds, found by their rock)"},
+  {"date": "2026-09-27", "id": "T13", "text": "A cave town digs its own chamber, saved with the town: \"recommended\"", "where": "cities-in-the-world (hollows); the terrain spec"},
+  {"date": "2026-09-27", "id": "", "text": "Every feature of the towns mockup is on the roadmap, and gate videos show the prototype beside the game", "where": "The parity list; step-videos; CLAUDE.md"},
+  {"date": "2026-09-27", "id": "T1", "text": "\"8 is running, 2.5 is walking. slow automatically when indoors or if I hold shift\"", "where": "tenebris-towns (walker). Shift and sprint: T8"},
+  {"date": "2026-09-27", "id": "T2", "text": "Townsfolk made of \"hexagonal blocks that look like cubes\"", "where": "townsfolk, a new change"},
+  {"date": "2026-09-27", "id": "T3", "text": "Stairs glide on the pitch line: \"prefer glide, it feels nice\"", "where": "tenebris-towns"},
+  {"date": "2026-09-27", "id": "T4", "text": "Roofs are walkable", "where": "tenebris-towns"},
+  {"date": "2026-09-27", "id": "T5", "text": "All kits, placed by wealth. \"You can steal from people, but there will be consequences\"", "where": "tenebris-towns; consequences after the roadmap"},
+  {"date": "2026-09-27", "id": "T6", "text": "Mountain dwellings, cave dwellers and mound houses. Tenebris only for now", "where": "tenebris-towns: the ninth mockup round"},
+  {"date": "2026-09-27", "id": "T7", "text": "\"You can use any boat you find\"", "where": "cities-in-the-world 4.2b. The cog: T9"},
+  {"date": "2026-09-27", "id": "M1", "text": "The whole map is known from the start", "where": "world-map"},
+  {"date": "2026-09-27", "id": "M2", "text": "Flat, like the fish range maps, at every zoom", "where": "world-map"},
+  {"date": "2026-09-27", "id": "M3", "text": "The base map looks like the world, with its towns. Biomes and the rest are overlays that grey it out", "where": "world-map"},
+  {"date": "2026-09-27", "id": "M4", "text": "M opens and closes the map, with a button for each overlay", "where": "world-map"},
+  {"date": "2026-09-27", "id": "B1", "text": "4x as wide, about 750 m (recommendation accepted)", "where": "bigger-biomes"},
+  {"date": "2026-09-27", "id": "B2", "text": "Fields, desert, and jungle with swamp, about a third each (recommendation accepted)", "where": "bigger-biomes"},
+  {"date": "2026-09-27", "id": "B3", "text": "You start new worlds to get the new biomes", "where": "bigger-biomes: no update option"},
+  {"date": "2026-09-27", "id": "C1", "text": "About 50 settlements (recommendation accepted)", "where": "city-sites"},
+  {"date": "2026-09-27", "id": "C2", "text": "A new player starts near a settlement", "where": "city-sites"},
+  {"date": "2026-09-27", "id": "C3", "text": "A small town near the spawn and the capital elsewhere. City lights light the far terrain at night", "where": "city-sites; cities-in-the-world"},
+  {"date": "2026-09-27", "id": "K1", "text": "Fix the two heat terms and add the thermostat, with the sun reading as constant", "where": "climate-balance"},
+  {"date": "2026-09-27", "id": "K2", "text": "15 °C averaged over the whole surface. The temperature map is made", "where": "climate-balance; docs/wiki/temperature"},
+  {"date": "2026-09-27", "id": "K3", "text": "Before the map mockup", "where": "climate-balance; the roadmap"},
+  {"date": "2026-09-27", "id": "K4", "text": "Five climate classes", "where": "climate-and-fish-maps"},
+  {"date": "2026-09-27", "id": "K5", "text": "Every species on the fish map, for now", "where": "climate-and-fish-maps"},
+  {"date": "2026-09-27", "id": "P1", "text": "Building costs wait until the rest is done", "where": "player-building"},
+  {"date": "2026-09-27", "id": "P2", "text": "You may take a town's buildings apart, \"but people will be upset\"", "where": "player-building; consequences after the roadmap"},
+  {"date": "2026-09-27", "id": "P3", "text": "The build key waits until the rest is done. B for now", "where": "player-building"},
+  {"date": "2026-09-27", "id": "", "text": "The sun holds the planet's average at 15 °C", "where": "climate-balance"},
+  {"date": "2026-09-27", "id": "", "text": "World time passes only while you play", "where": "world-persistence; CLAUDE.md"},
+  {"date": "2026-09-27", "id": "", "text": "The cell-number fix ships first", "where": "exact-cell-keys"},
+  {"date": "2026-09-27", "id": "", "text": "A seeded world. Towns, landmarks and named zones are stored in the save, and players and the world both change it", "where": "world-persistence; CLAUDE.md"},
+  {"date": "2026-09-27", "id": "", "text": "Every major step ends in a video", "where": "step-videos; CLAUDE.md"},
+  {"date": "2026-09-27", "id": "", "text": "Order: lights, map mockup, city maps, climate and fish maps, cities, then building", "where": "The roadmap"},
+  {"date": "2026-09-26", "id": "", "text": "Every mockup is lit at night", "where": "CLAUDE.md"}
+];
+
+const ALL_QS = SECTIONS.flatMap((s) => s.qs);
+const answers = {}; // id -> { choice: number|null, text: string }
+const cards = {};   // id -> { root, opts, textarea, status }
+let db = null;
+let canWrite = true;
+const standalone = !window.claude;
+const LOCAL_KEY = 'pale-blue-dot.survey.answers';
+
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else if (k === 'text') n.textContent = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k);
+  return n;
+}
+
+function render() {
+  const root = document.getElementById('sections');
+  for (const s of SECTIONS) {
+    const sec = el('section', { class: 'topic', id: 'topic-' + s.tag },
+      el('h2', {}, el('span', { class: 'tag', text: s.tag }), s.name),
+      el('p', { text: s.lead }));
+    for (const q of s.qs) sec.append(questionCard(q));
+    root.append(sec);
+  }
+  const list = document.getElementById('dec-list');
+  for (const d of DECIDED) {
+    list.append(el('li', {},
+      d.replaced ? el('span', { class: 'replaced', text: 'Replaced' }) : null,
+      d.taken ? el('span', { class: 'taken', text: 'Recommendation taken (ask only with screenshots)' }) : null,
+      el('p', { class: 'd-text' }, d.id ? el('span', { class: 'd-id', text: d.id }) : null, d.text),
+      el('p', { class: 'd-where', text: (d.date ? d.date + '  ·  ' : '') + d.where })));
+  }
+}
+
+function questionCard(q) {
+  const status = el('div', { class: 'status', 'aria-live': 'polite' });
+  const opts = q.options.map((label, i) => el('button', {
+    class: 'opt', type: 'button', 'aria-pressed': 'false', id: `opt-${q.id}-${i}`,
+    onclick: () => choose(q.id, i),
+  }, el('span', { text: label }), i === q.rec ? el('span', { class: 'rec', text: 'Recommended' }) : null));
+  const textarea = el('textarea', { id: 'note-' + q.id, rows: '2', placeholder: 'Your answer in your own words (optional)' });
+  textarea.addEventListener('input', () => {
+    answers[q.id] = { ...(answers[q.id] ?? { choice: null }), text: textarea.value };
+    paint(q.id);
+    queueSave(q.id);
+  });
+  textarea.addEventListener('blur', () => flush(q.id));
+  const root = el('article', { class: 'q', id: 'q-' + q.id },
+    el('div', { class: 'q-head' }, el('span', { class: 'qid', text: q.id }), el('p', { class: 'q-text', text: q.q })),
+    q.images ? el('div', { class: 'shots' }, q.images.map((im) => el('figure', {},
+      el('a', { href: im.src, target: '_blank', rel: 'noopener' }, el('img', { src: im.src, alt: im.alt, loading: 'lazy' })),
+      el('figcaption', { text: im.caption })))) : null,
+    q.link ? el('p', { class: 'qmeta' }, el('a', { href: q.link.url, target: '_blank', rel: 'noopener' }, q.link.label)) : null,
+    el('p', { class: 'qmeta', text: [q.change ? 'OpenSpec: ' + q.change : '', q.asked ? 'asked ' + q.asked : ''].filter(Boolean).join('  ·  ') }),
+    el('div', { class: 'opts', role: 'group', 'aria-label': q.id + ' options' }, opts),
+    el('p', { class: 'why' }, el('b', { text: 'Why I recommend it: ' }), q.why),
+    el('label', { class: 'note', for: 'note-' + q.id }, 'Your answer or note', textarea),
+    status);
+  cards[q.id] = { root, opts, textarea, status };
+  return root;
+}
+
+function isAnswered(a) {
+  return !!a && (a.choice != null || (a.text ?? '').trim() !== '');
+}
+
+function paint(id) {
+  const a = answers[id];
+  const c = cards[id];
+  if (!c) return;
+  c.opts.forEach((b, i) => b.setAttribute('aria-pressed', String(a?.choice === i)));
+  if (document.activeElement !== c.textarea) c.textarea.value = a?.text ?? '';
+  c.root.classList.toggle('answered', isAnswered(a));
+  const n = ALL_QS.filter((q) => isAnswered(answers[q.id])).length;
+  document.getElementById('count').textContent = `${n} of ${ALL_QS.length} answered`;
+  document.getElementById('meter').style.width = `${(100 * n) / ALL_QS.length}%`;
+}
+
+function setStatus(id, text, cls = '') {
+  const s = cards[id]?.status;
+  if (!s) return;
+  s.textContent = text;
+  s.className = 'status ' + cls;
+}
+
+function choose(id, i) {
+  if (!canWrite) return;
+  const cur = answers[id] ?? { choice: null, text: '' };
+  answers[id] = { ...cur, choice: cur.choice === i ? null : i };
+  paint(id);
+  flush(id);
+}
+
+// One write per pause in typing; one write at a time per document.
+const timers = {};
+const inflight = {};
+function queueSave(id) {
+  clearTimeout(timers[id]);
+  setStatus(id, 'Editing…');
+  timers[id] = setTimeout(() => flush(id), 900);
+}
+
+async function flush(id) {
+  clearTimeout(timers[id]);
+  if (!canWrite) return;
+  if (inflight[id]) { inflight[id].again = true; return; }
+  const body = { choice: answers[id]?.choice ?? null, text: answers[id]?.text ?? '', updatedAt: new Date().toISOString() };
+  if (!db) {
+    saveLocal();
+    setStatus(id, standalone ? 'Saved in this browser' : '', standalone ? 'ok' : '');
+    return;
+  }
+  inflight[id] = { again: false };
+  setStatus(id, 'Saving…');
+  try {
+    await db.collection('answers').doc(id).set(body);
+    setStatus(id, 'Saved', 'ok');
+  } catch (e) {
+    if (e?.code === 'invalid_argument') { canWrite = false; readOnly(); }
+    setStatus(id, e?.code === 'quota_exceeded' ? 'Not saved: the survey store is full.' : 'Not saved. Try again in a moment.', 'err');
+  }
+  const again = inflight[id].again;
+  inflight[id] = null;
+  if (again) flush(id);
+}
+
+function saveLocal() {
+  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(answers)); } catch (e) { /* storage blocked: answers stay on screen */ }
+}
+
+function loadLocal() {
+  try { Object.assign(answers, JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}')); } catch (e) { /* nothing saved */ }
+}
+
+function readOnly() {
+  for (const c of Object.values(cards)) {
+    c.textarea.readOnly = true;
+    c.opts.forEach((b) => { b.disabled = true; });
+  }
+  showMode('You can read this survey, but only its owner can answer it.');
+}
+
+function showMode(text) {
+  const m = document.getElementById('mode');
+  m.textContent = text;
+  m.hidden = false;
+}
+
+// The download: a standalone, read-only copy of the survey with today's answers filled in.
+function snapshotHtml() {
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const date = new Date().toISOString().slice(0, 10);
+  const rows = SECTIONS.map((s) => `<h2>${esc(s.tag)}: ${esc(s.name)}</h2>` + s.qs.map((q) => {
+    const a = answers[q.id];
+    const pick = a?.choice != null ? q.options[a.choice] : null;
+    const note = (a?.text ?? '').trim();
+    const answer = pick || note
+      ? `${pick ? `<b>${esc(pick)}</b>` : ''}${pick && note ? '. ' : ''}${note ? esc(note) : ''}`
+      : `<i>Blank: recommendation accepted (${esc(q.options[q.rec])})</i>`;
+    return `<div class="q"><p class="h"><span class="id">${esc(q.id)}</span> ${esc(q.q)}</p>`
+      + `<p class="o">Options: ${q.options.map(esc).join(' / ')}</p>`
+      + `<p class="r">Recommended: ${esc(q.options[q.rec])}. ${esc(q.why)}</p>`
+      + `<p class="a">Answer: ${answer}</p></div>`;
+  }).join('')).join('');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+    + `<title>Pale Blue Dot Survey (${date})</title><style>`
+    + `body{font:16px/1.55 system-ui,sans-serif;max-width:760px;margin:0 auto;padding:24px 16px;background:#f8f2e5;color:#2a2118}`
+    + `h1{font-size:32px;margin:0 0 4px}h2{margin:32px 0 8px;font-size:22px}.q{border-top:1px solid #d8c9ac;padding:10px 0}`
+    + `.q p{margin:4px 0}.h{font-weight:600}.id{font-family:ui-monospace,monospace;color:#94621a}.o,.r{color:#6e5f4c;font-size:14px}`
+    + `.a{background:#dcebd5;padding:6px 10px;border-radius:6px}</style></head><body>`
+    + `<h1>Pale Blue Dot Survey</h1><p>Answers as of ${date}.</p>${rows}`
+    + `<h2>Already decided</h2><ul>${DECIDED.map((d) => `<li>${d.replaced ? '<b>Replaced:</b> ' : ''}${d.taken ? '<b>Recommendation taken:</b> ' : ''}${d.id ? esc(d.id) + ': ' : ''}${esc(d.text)} <small>(${esc(d.date || '')} ${esc(d.where)})</small></li>`).join('')}</ul>`
+    + `</body></html>`;
+}
+
+async function setupDownload() {
+  const btn = document.getElementById('download');
+  const filename = `pale-blue-dot-survey-${new Date().toISOString().slice(0, 10)}.html`;
+  if (standalone) {
+    // Opened as a file, outside claude.ai: a plain download link works here.
+    btn.hidden = false;
+    btn.addEventListener('click', () => {
+      const url = URL.createObjectURL(new Blob([snapshotHtml()], { type: 'text/html' }));
+      const a = el('a', { href: url, download: filename });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    });
+    return;
+  }
+  const downloads = await window.claude.use('downloads');
+  if (!downloads) return;
+  btn.hidden = false;
+  btn.addEventListener('click', async () => {
+    try {
+      await downloads.save({ filename, data: snapshotHtml() });
+    } catch (e) {
+      if (e?.code === 'unavailable' || e?.code === 'not_granted' || e?.code === 'capability_disabled') btn.hidden = true;
+    }
+  });
+}
+
+async function connect() {
+  if (standalone) {
+    loadLocal();
+    ALL_QS.forEach((q) => paint(q.id));
+    showMode('This copy is open outside claude.ai, so answers are kept in this browser only. Claude reads the answers on the survey page at claude.ai.');
+    return;
+  }
+  const [store, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+  if (!store) {
+    canWrite = false;
+    readOnly();
+    showMode('Answers cannot be loaded here. Open the survey on claude.ai while signed in.');
+    return;
+  }
+  db = store;
+  if (user && (await user.can('data.write')) === false) { canWrite = false; readOnly(); }
+  db.collection('answers').onSnapshot((snap) => {
+    for (const d of snap.docs) {
+      if (!d.exists) continue;
+      const body = d.data();
+      if (inflight[d.id] || document.activeElement === cards[d.id]?.textarea) continue;
+      answers[d.id] = { choice: typeof body.choice === 'number' ? body.choice : null, text: typeof body.text === 'string' ? body.text : '' };
+      paint(d.id);
+    }
+  }, () => showMode('Live updates stopped. Reload the page to see the latest answers.'));
+}
+
+render();
+ALL_QS.forEach((q) => paint(q.id));
+connect();
+setupDownload();
+</script>

@@ -1356,8 +1356,7 @@ impl LightingSettings {
     /// penumbra's metres per metre from caster to receiver; zero while
     /// contact-hardening shadows are off (or today's model draws).
     pub fn shadow_spread(&self) -> f32 {
-        let off = std::env::var("PBD_SOFT_SHADOWS").is_ok_and(|v| v == "0");
-        if !self.new_model_on() || !self.soft_shadows || off {
+        if !self.new_model_on() || !self.soft_shadows || ENV.soft_shadows_off {
             return 0.0;
         }
         (pbd_core::sky_light::SUN_RADIUS_RAD * self.sun_size).tan()
@@ -1365,31 +1364,135 @@ impl LightingSettings {
 
     /// L7: whether the lamps are baked and drawn from the bake.
     pub fn lamp_bake_on(&self) -> bool {
-        let off = std::env::var("PBD_LAMP_BAKE").is_ok_and(|v| v == "0");
-        self.new_model_on() && self.lamp_bake && !off
+        self.new_model_on() && self.lamp_bake && !ENV.lamp_bake_off
     }
 
     /// L4: whether the sun's bounce is baked and drawn.
     pub fn bounce_on(&self) -> bool {
-        let off = std::env::var("PBD_BOUNCE").is_ok_and(|v| v == "0");
-        self.new_model_on() && self.bounce && !off
+        self.new_model_on() && self.bounce && !ENV.bounce_off
     }
 
-    /// L8: whether reflections walk the columns, after the environment's say.
+    /// L8: whether any part of the reflections runs, after the
+    /// environment's say (`PBD_REFLECT`, [`ReflectOff`]).
     pub fn reflections_on(&self) -> bool {
-        let off = std::env::var("PBD_REFLECT").is_ok_and(|v| v == "0");
-        self.new_model_on() && self.reflections && !off
+        self.reflect_base() && !REFLECT_OFF.all()
+    }
+
+    /// L8: whether a wet face's reflected ray walks the columns.
+    pub fn reflect_walk_on(&self) -> bool {
+        self.reflect_base() && !REFLECT_OFF.walk
+    }
+
+    /// L8: whether a wet face's ray that the walk did not stop marches the
+    /// screen (last frame's capture).
+    pub fn reflect_screen_on(&self) -> bool {
+        self.reflect_base() && !REFLECT_OFF.screen
+    }
+
+    /// L8: whether the sea's reflected ray marches the screen.
+    pub fn reflect_sea_on(&self) -> bool {
+        self.reflect_base() && !REFLECT_OFF.sea
+    }
+
+    /// L8: whether last frame's colour and distances are captured for the
+    /// screen traces to read. Off, both screen traces see no history and
+    /// return nothing, as they do on the first frame.
+    pub fn reflect_capture_on(&self) -> bool {
+        self.reflect_base() && !REFLECT_OFF.capture
+    }
+
+    /// L8 as the model and the config have it, before `PBD_REFLECT`.
+    fn reflect_base(&self) -> bool {
+        self.new_model_on() && self.reflections
     }
 
     /// Whether the new model draws, after the environment's say.
     pub fn new_model_on(&self) -> bool {
-        match std::env::var("PBD_LIGHTING").ok().as_deref() {
-            Some("today") => false,
-            Some("new") => true,
-            _ => self.new_model,
-        }
+        ENV.lighting.unwrap_or(self.new_model)
     }
 }
+
+/// `PBD_REFLECT`: a pricing instrument (`lighting-perf` 1.1), not a
+/// setting. `0` switches every part of L8 off, as it always has; otherwise a
+/// comma list of the parts to switch off: `walk` (wet ground's voxel walk),
+/// `screen` (wet ground's screen trace), `terrain` (both of those), `sea`
+/// (the sea's screen trace) and `capture` (last frame's capture, which both
+/// screen traces read). Read once: the environment does not change in a run.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ReflectOff {
+    pub walk: bool,
+    pub screen: bool,
+    pub sea: bool,
+    pub capture: bool,
+}
+
+impl ReflectOff {
+    /// The parts `value` switches off; an unknown word is reported and
+    /// switches nothing off.
+    pub fn parse(value: Option<&str>) -> Self {
+        let mut off = Self::default();
+        let Some(value) = value else {
+            return off;
+        };
+        for word in value.split(',').map(str::trim).filter(|w| !w.is_empty()) {
+            match word {
+                "0" => {
+                    off = Self {
+                        walk: true,
+                        screen: true,
+                        sea: true,
+                        capture: true,
+                    }
+                }
+                "walk" => off.walk = true,
+                "screen" => off.screen = true,
+                "terrain" => {
+                    off.walk = true;
+                    off.screen = true;
+                }
+                "sea" => off.sea = true,
+                "capture" => off.capture = true,
+                other => warn!(
+                    "PBD_REFLECT: `{other}` is not a part (walk, screen, terrain, sea, capture or 0)"
+                ),
+            }
+        }
+        off
+    }
+
+    /// Every part off: `PBD_REFLECT=0` or all four named.
+    pub fn all(&self) -> bool {
+        self.walk && self.screen && self.sea && self.capture
+    }
+}
+
+/// The lighting model's A/B switches (`PBD_LIGHTING`, `PBD_SOFT_SHADOWS`,
+/// `PBD_LAMP_BAKE`, `PBD_BOUNCE`), read once (`lighting-perf` 2.5): they were
+/// read on every call, several times a frame, and the environment does not
+/// change in a run.
+struct LightingEnv {
+    lighting: Option<bool>,
+    soft_shadows_off: bool,
+    lamp_bake_off: bool,
+    bounce_off: bool,
+}
+
+static ENV: std::sync::LazyLock<LightingEnv> = std::sync::LazyLock::new(|| {
+    let zero = |name: &str| std::env::var(name).is_ok_and(|v| v == "0");
+    LightingEnv {
+        lighting: match std::env::var("PBD_LIGHTING").ok().as_deref() {
+            Some("today") => Some(false),
+            Some("new") => Some(true),
+            _ => None,
+        },
+        soft_shadows_off: zero("PBD_SOFT_SHADOWS"),
+        lamp_bake_off: zero("PBD_LAMP_BAKE"),
+        bounce_off: zero("PBD_BOUNCE"),
+    }
+});
+
+static REFLECT_OFF: std::sync::LazyLock<ReflectOff> =
+    std::sync::LazyLock::new(|| ReflectOff::parse(std::env::var("PBD_REFLECT").ok().as_deref()));
 
 pub struct ConfigPlugin;
 
@@ -1418,6 +1521,22 @@ impl Plugin for ConfigPlugin {
 
 #[cfg(test)]
 mod tests {
+    /// `PBD_REFLECT` prices L8's parts apart (`lighting-perf` 1.1): `0`
+    /// keeps switching all of them off, and a comma list switches off only
+    /// the parts it names, so `sea` leaves wet ground tracing.
+    #[test]
+    fn reflect_off_names_the_parts() {
+        use super::ReflectOff;
+        assert_eq!(ReflectOff::parse(None), ReflectOff::default());
+        assert!(ReflectOff::parse(Some("0")).all());
+        let sea = ReflectOff::parse(Some("sea"));
+        assert!(sea.sea && !sea.walk && !sea.screen && !sea.capture);
+        let terrain = ReflectOff::parse(Some("terrain, capture"));
+        assert!(terrain.walk && terrain.screen && terrain.capture && !terrain.sea);
+        assert!(ReflectOff::parse(Some("walk,screen,sea,capture")).all());
+        assert_eq!(ReflectOff::parse(Some("1")), ReflectOff::default());
+    }
+
     use super::*;
 
     const WATER_RON: &str = include_str!("../../../assets/config/water.ron");

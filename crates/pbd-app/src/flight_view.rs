@@ -292,7 +292,8 @@ impl Plugin for FlightViewPlugin {
                 PostUpdate,
                 (update_route_camera, follow_flight_camera)
                     .chain()
-                    .before(TransformSystems::Propagate),
+                    .before(TransformSystems::Propagate)
+                    .run_if(crate::world_open),
             );
     }
 }

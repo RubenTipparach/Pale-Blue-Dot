@@ -16,6 +16,7 @@ use bevy::{
     prelude::*,
     render::{
         RenderStartup,
+        diagnostic::RecordDiagnostics,
         render_graph::{
             NodeRunError, RenderGraphContext, RenderGraphExt, RenderLabel, ViewNode, ViewNodeRunner,
         },
@@ -167,7 +168,7 @@ impl ViewNode for SsrCaptureNode {
     ) -> Result<(), NodeRunError> {
         let on = world
             .get_resource::<crate::config::LightingSettings>()
-            .is_some_and(|l| l.reflections_on());
+            .is_some_and(|l| l.reflect_capture_on());
         let (Some(pipelines), Some(planet)) = (
             world.get_resource::<SsrPipelines>(),
             world.get_resource::<PlanetGpu>(),
@@ -204,6 +205,8 @@ impl ViewNode for SsrCaptureNode {
                 uniform.as_entire_binding(),
             )),
         );
+        // Its own column in the frame log (`lighting-perf` 1.2).
+        let diagnostics = ctx.diagnostic_recorder();
         let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some("screen trace capture"),
             color_attachments: &[Some(RenderPassColorAttachment {
@@ -219,9 +222,11 @@ impl ViewNode for SsrCaptureNode {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+        let span = diagnostics.pass_span(&mut pass, "ssr_capture");
         pass.set_render_pipeline(pipeline);
         pass.set_bind_group(0, &group, &[]);
         pass.draw(0..3, 0..1);
+        span.end(&mut pass);
         Ok(())
     }
 }

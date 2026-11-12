@@ -410,7 +410,7 @@ pub fn half_bits(value: f32) -> u16 {
 pub(super) fn build(app: &mut App) {
     app.init_resource::<WeatherMapsNow>()
         .add_plugins(ExtractResourcePlugin::<WeatherMapsNow>::default())
-        .add_systems(PostUpdate, publish);
+        .add_systems(PostUpdate, publish.run_if(crate::world_open));
     app.sub_app_mut(RenderApp)
         .add_systems(RenderStartup, create)
         .add_systems(

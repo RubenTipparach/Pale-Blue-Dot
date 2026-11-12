@@ -358,6 +358,14 @@ fn run_hi(word: u32) -> f32 { return COLUMN_BASE_M + f32((word >> 9u) & 0x1ffu);
 // came back as.
 fn run_code(word: u32) -> u32 { return (word >> 18u) & 0xfu; }
 fn run_body(word: u32) -> u32 { return (word >> 22u) & 0xfu; }
+// `more[2]` is the cell's degree in its low byte and, in the records the
+// GPU is given, the column's reach top above it (`lighting-perf` 2.1,
+// `ColumnTier::gpu_records_with_reach`): the highest solid layer, plus one,
+// of every column a reflected ray in this one could still enter.
+const DEGREE_MASK: u32 = 255u;
+const REACH_TOP_SHIFT: u32 = 8u;
+fn column_degree(rec: ColumnRec) -> u32 { return min(rec.more[2] & DEGREE_MASK, 6u); }
+fn reach_top(rec: ColumnRec) -> u32 { return (rec.more[2] >> REACH_TOP_SHIFT) & 0x1ffu; }
 fn column_side(rec: ColumnRec, side: u32) -> u32 {
     if side < 4u { return rec.neighbors[side]; }
     return rec.more[side - 4u];
@@ -1662,6 +1670,42 @@ fn puddle_noise(p: vec2<f32>) -> f32 {
 const PUDDLE_MASK_MEAN: f32 = 0.5003;
 const PUDDLE_MASK_SPREAD: f32 = 0.1587;
 
+// Whether the records hold every cell the old partition can draw at
+// `direction` while a landing dissolves (`detail-fade` section 4,
+// `dissolve-coverage`). Across a band's cross-fade ring the old partition
+// draws two levels, so each fine level it can draw there is asked: one inside
+// its band's outer edge and outside the next finer band's inner ring edge,
+// round the old centre, each reach widened by two tiles because a cell's level
+// is decided at its owner and its centre, not at the pixel. Each such level's
+// ring of the records, a tile inside, must hold the point. The base is always
+// held. Where any level is not, the old half of the dither would be a hole.
+fn old_held(direction: vec3<f32>) -> bool {
+    let old = partition_of(PART_OLD);
+    let from_old = acos(clamp(dot(direction, old.anchor), -1.0, 1.0));
+    let along = dot(direction, params.anchor.xyz);
+    for (var level = base_level() + 1u; level <= finest_level(); level++) {
+        let out_cos = band_cos_in(old.bands, level);
+        if out_cos > 1.0 { continue; }
+        var inner = 0.0;
+        if level < finest_level() {
+            let in_cos = band_cos_in(old.bands_in, level + 1u);
+            if in_cos <= 1.0 { inner = acos(clamp(in_cos, -1.0, 1.0)) - 2.0*tile_angle(level); }
+        }
+        let outer = acos(clamp(out_cos, -1.0, 1.0)) + 2.0*tile_angle(level - 1u);
+        if from_old < outer && from_old >= inner {
+            let k = level - base_level() - 1u;
+            if !(along <= params.records_in[k] && along >= params.records_out[k]) { return false; }
+        }
+    }
+    return true;
+}
+
+// A level's mean tile width as an angle on the unit sphere: `1.2087 / 2^level`
+// (the Tenebris gold standard's measured constant).
+fn tile_angle(level: u32) -> f32 {
+    return 1.2087/f32(1u << level);
+}
+
 // An ordered 4 x 4 Bayer threshold for a pixel, 0..1: the screen-door mask a
 // fading piece is drawn through (`detail-fade`). Fixed to the screen, so a
 // piece that stands still at one fade holds one still pattern.
@@ -1701,8 +1745,17 @@ fn dropped(input: VertexOut) -> bool {
     // one elsewhere. Its own mask, interleaved gradient noise, so it does not
     // run in step with the distance cross-fade's.
     let dissolve = fract(52.9829189*fract(dot(input.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
-    if input.part_mark != PART_BOTH && ((input.part_mark == PART_NEW) != (dissolve < params.fade.y)) {
-        return true;
+    // Whether the old partition is there to draw this pixel's old half is
+    // judged at the pixel itself, not at the cell's centre (`town-flyover`,
+    // the owner's "gaps in the terrain"): a coarse new cell tested at its
+    // centre spans old cells past the records' ring, and its old half there
+    // showed the sky through the ground. Where the old cell is not held, the
+    // new cell keeps the pixel and the old one gives it up.
+    if input.part_mark != PART_BOTH {
+        let new_half = dissolve < params.fade.y;
+        let held = old_held(radial);
+        if input.part_mark == PART_NEW && !new_half && held { return true; }
+        if input.part_mark == PART_OLD && (new_half || !held) { return true; }
     }
     // The partition in this pixel's dither class (`distance-lod-fade`): the
     // cell is drawn where its owner is in its band (the nearer owner, for a
@@ -1811,7 +1864,7 @@ fn column_of(q: vec3<f32>, slot: u32) -> u32 {
     let c = centres[slot - 1u].xyz;
     var best = slot;
     var past = 0.0;
-    for (var s = 0u; s < min(rec.more[2], 6u); s++) {
+    for (var s = 0u; s < column_degree(rec); s++) {
         let ns = column_neighbour(rec, s);
         if ns == 0u { continue; }
         let nc = centres[ns - 1u].xyz;
@@ -1833,7 +1886,7 @@ fn column_pair(q: vec3<f32>, slot: u32) -> vec3<f32> {
     var first_score = 0.0;
     var second = 0u;
     var second_score = -1e9;
-    for (var s = 0u; s < min(rec.more[2], 6u); s++) {
+    for (var s = 0u; s < column_degree(rec); s++) {
         let ns = column_neighbour(rec, s);
         if ns == 0u { continue; }
         let nc = centres[ns - 1u].xyz;
@@ -1969,8 +2022,13 @@ fn reflect_trace(origin: vec3<f32>, dir: vec3<f32>, start: u32, sun: vec3<f32>,
     for (var i = 0u; i < 72u; i++) {
         if layer >= LIGHT_LAYERS { return vec4(0.0); }
         let rec = columns[slot - 1u];
+        // Rising (its altitude only grows from here on) and at or above the
+        // highest solid layer of every column it could still enter: nothing
+        // is left to hit, so the walk ends with the miss it would have ended
+        // with after the rest of its steps (`lighting-perf` 2.1).
+        if dot(p, dir) >= 0.0 && layer >= reach_top(rec) { return vec4(0.0); }
         let c = centres[slot - 1u].xyz;
-        let degree = min(rec.more[2], 6u);
+        let degree = column_degree(rec);
         var t_exit = 1e9;
         var next = slot;
         var next_layer = layer;
@@ -2063,12 +2121,17 @@ fn ssr_uv(p: vec3<f32>) -> vec3<f32> {
     return vec3(clip.x/clip.w*0.5 + 0.5, 0.5 - clip.y/clip.w*0.5, 1.0);
 }
 fn ssr_trace(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
-    if params.ssr_eye.w < 0.5 || params.reflect.x < 0.5 { return vec4(0.0); }
+    if params.ssr_eye.w < 0.5 || params.reflect.w < 0.5 { return vec4(0.0); }
     let size = vec2<f32>(textureDimensions(ssr_history));
     let home = ssr_uv(origin).xy;
     var t = 0.04;
     var behind_before = -1.0;
     let reach = params.reflect.y;
+    // As the sea's (`lighting-perf` 2.2): the last step lands 16.75 m out
+    // (t += 0.05 + 0.12 t, 32 times); where that projects within the three
+    // texels every step skips, no step can hit.
+    let far = ssr_uv(origin + dir*min(16.8, reach));
+    if far.z > 0.0 && length((far.xy - home)*size) < 3.0 { return vec4(0.0); }
     for (var i = 0u; i < 32u; i++) {
         t += 0.05 + t*0.12;
         if t > reach { break; }

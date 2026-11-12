@@ -102,6 +102,30 @@ impl WorldSites {
         }
     }
 
+    /// The list of a world the loading thread opened (`loading-screen`
+    /// decision 1): on disk already, or `None` where the world gets none (its
+    /// generator is not the planet's, or the save refused the list).
+    /// `keep_sites` sees the world's key and leaves it be.
+    pub fn opened(save: &WorldSave, sites: Option<Vec<Site>>) -> Self {
+        let world = Some(WorldKey {
+            slot: save.slot().map(|slot| slot.id.clone()),
+            seed: save.identity.seed,
+            generator: save.identity.generator,
+        });
+        match sites {
+            Some(sites) => Self {
+                sites,
+                survey: Survey::Ready,
+                world,
+            },
+            None => Self {
+                sites: Vec::new(),
+                survey: Survey::Failed,
+                world,
+            },
+        }
+    }
+
     /// Whether the list is being made or written.
     pub fn surveying(&self) -> bool {
         matches!(self.survey, Survey::Running { .. } | Survey::Writing { .. })
@@ -161,7 +185,7 @@ pub fn list_spawn() -> Vec3 {
     FlightViewConfig::default().spawn_direction.normalize()
 }
 
-fn threads() -> usize {
+pub fn threads() -> usize {
     std::thread::available_parallelism().map_or(1, |n| n.get())
 }
 

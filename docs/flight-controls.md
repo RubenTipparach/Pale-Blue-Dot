@@ -20,7 +20,11 @@ independently of the view. Pixel textures use explicit nearest/point filtering,
 and terrain atlas sampling uses integer texel loads.
 
 Interactive presentation uses VSync with a requested maximum frame latency of
-one. There is no additional frame-pacing sleep. Captures disable VSync so their
+two (`--frame-latency 1` asks for one). Two let the CPU encode the next frame
+while the GPU draws this one; measured on the owner's desktop (RTX 3070,
+2026-11-12) it took about 3.6 ms off the median frame in flight and on foot in
+the rain, for up to one frame more between input and photon. Mouse look still
+applies each frame's raw motion. There is no additional frame-pacing sleep. Captures disable VSync so their
 timings remain uncapped; the queue setting is not a measured latency guarantee.
 
 | Input | Walking | Flying |

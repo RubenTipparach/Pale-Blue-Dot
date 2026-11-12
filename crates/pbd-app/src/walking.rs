@@ -370,7 +370,9 @@ impl Plugin for WalkingPlugin {
             )
             .add_systems(
                 PostUpdate,
-                follow_walker.before(TransformSystems::Propagate),
+                follow_walker
+                    .before(TransformSystems::Propagate)
+                    .run_if(crate::world_open),
             );
     }
 }

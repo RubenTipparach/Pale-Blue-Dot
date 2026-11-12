@@ -354,6 +354,57 @@ fn build_planet(
     }
 }
 
+/// A planet built before `Startup`, on the loading thread, with the opened
+/// world's towns' ground already installed (`loading-screen` decision 1).
+/// `create_planet` takes it in place of building one, so the planet is built
+/// once.
+#[derive(Resource)]
+pub struct PreparedPlanet(Option<BuiltPlanet>);
+
+impl PreparedPlanet {
+    /// What `create_planet` would build round `near`, built now, on this
+    /// thread, with whatever ground is installed.
+    pub fn build(
+        near: Vec3,
+        columns: &crate::config::ColumnSettings,
+        scatter: &crate::config::ScatterSettings,
+        edits: &pbd_core::edits::Edits,
+    ) -> Self {
+        Self(Some(build_planet(near, columns, scatter, edits)))
+    }
+
+    /// Hashes of what the planet is made of: the base records, every fine
+    /// level's records and neighbours, and the column tier's records. Two
+    /// planets with equal hashes drew and collided the same.
+    pub fn digest(&self) -> [u64; 3] {
+        use std::hash::{Hash, Hasher};
+        let built = self.0.as_ref().expect("a prepared planet not yet taken");
+        let hash = |bytes: &[&[u8]]| {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            for b in bytes {
+                b.hash(&mut h);
+            }
+            h.finish()
+        };
+        let base = hash(&[bytemuck::cast_slice(&built.base)]);
+        let mut fine: Vec<&[u8]> = built
+            .fine
+            .levels
+            .iter()
+            .map(|l| bytemuck::cast_slice::<GpuCell, u8>(l))
+            .collect();
+        fine.push(bytemuck::cast_slice(&built.fine.finest_neighbors));
+        let fine = hash(&fine);
+        let tier = hash(&[bytemuck::cast_slice(&built.fine.columns.records)]);
+        [base, fine, tier]
+    }
+
+    /// Where the fine set is anchored.
+    pub fn anchor(&self) -> Option<Vec3> {
+        self.0.as_ref().map(|b| b.anchor)
+    }
+}
+
 /// Rebuild the planet for the generator a load just switched to, round
 /// `near`, with the opened world's edits, and put it in place of the old one
 /// in one step: nothing is ever removed, since a dozen systems take the
@@ -398,15 +449,23 @@ fn create_planet(
     columns: Res<crate::config::ColumnSettings>,
     scatter: Res<crate::config::ScatterSettings>,
     edits: Res<crate::saves::WorldSave>,
+    prepared: Option<ResMut<PreparedPlanet>>,
 ) {
     let started = std::time::Instant::now();
+    // Built already behind the loading screen, with the towns' ground in
+    // place; otherwise (a test app, a run without the screen) built here.
+    let taken = prepared.and_then(|mut p| p.0.take());
+    if taken.is_some() {
+        commands.remove_resource::<PreparedPlanet>();
+    }
     let BuiltPlanet {
         cells,
         base,
         contacts,
         fine,
         anchor,
-    } = build_planet(flight.spawn_direction, &columns, &scatter, &edits.edits);
+    } = taken
+        .unwrap_or_else(|| build_planet(flight.spawn_direction, &columns, &scatter, &edits.edits));
     let (narrowest, mean_width, widest) = tile_widths(&cells);
     if !edits.edits.is_empty() {
         info!(
@@ -696,23 +755,25 @@ pub(crate) fn near_lamps(
     camera: Vec3,
     reach: f32,
 ) -> [Vec4; NEAR_LAMPS] {
-    let mut found: Vec<(f32, Vec4)> = tier
+    // The nearest few, kept in order as they are found (`lighting-perf`
+    // 2.5): no list of every lamp in reach is made and sorted each frame.
+    // A tie keeps the lamp found first, as the stable sort it replaces did.
+    let mut near = [(f32::INFINITY, Vec4::ZERO); NEAR_LAMPS];
+    for l in tier
         .lamps()
         .iter()
         .filter(|l| l.level > pbd_core::flora::GLOW_FLOWER_LEVEL)
-        .filter_map(|l| {
-            let at = l.direction * (PLANET_RADIUS + l.altitude);
-            let d = at.distance_squared(camera);
-            (d < reach * reach)
-                .then(|| (d, at.extend(l.level as f32 / pbd_core::light::MAX as f32)))
-        })
-        .collect();
-    found.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let mut out = [Vec4::ZERO; NEAR_LAMPS];
-    for (slot, (_, lamp)) in out.iter_mut().zip(found) {
-        *slot = lamp;
+    {
+        let at = l.direction * (PLANET_RADIUS + l.altitude);
+        let d = at.distance_squared(camera);
+        if d >= reach * reach || d >= near[NEAR_LAMPS - 1].0 {
+            continue;
+        }
+        let at_rank = near.iter().position(|n| d < n.0).unwrap_or(NEAR_LAMPS - 1);
+        near.copy_within(at_rank..NEAR_LAMPS - 1, at_rank + 1);
+        near[at_rank] = (d, at.extend(l.level as f32 / pbd_core::light::MAX as f32));
     }
-    out
+    near.map(|(_, lamp)| lamp)
 }
 
 /// The sky's light (`lighting-model` L2) for a sun at elevation sine `e`: a
@@ -994,6 +1055,7 @@ fn upload_fine(
     bounce: Option<Res<bounce::BounceField>>,
     lamps: Option<Res<bounce::LampBakeField>>,
     clock: Res<PlanetClock>,
+    lighting: Option<Res<crate::config::LightingSettings>>,
 ) {
     let (Some(fine), Some(mut planet)) = (fine, planet) else {
         return;
@@ -1042,9 +1104,15 @@ fn upload_fine(
         }
         planet.counts[k] = level.len().min(lod::FINE_CAPACITY as usize) as u32;
     }
-    let records = fine.set.columns.gpu_records();
+    // With each column's reach top, which ends a reflected ray's walk once
+    // it has risen past everything it could still meet (`lighting-perf` 2.1).
+    let reach_m = lighting.map_or_else(
+        || crate::config::LightingSettings::default().reflection_reach_m,
+        |l| l.reflection_reach_m,
+    );
+    let records = fine.set.columns.gpu_records_with_reach(reach_m);
     if !records.is_empty() {
-        queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(records));
+        queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(&records));
         // The light goes up with the records that decide what it lights. Two
         // uploads a frame apart would draw one frame of the new geometry lit
         // by the old world.
@@ -1247,7 +1315,7 @@ fn prepare_views(
     cache: Res<PipelineCache>,
     pipeline: Res<PlanetPipeline>,
     planet: Option<Res<PlanetGpu>>,
-    art: Res<PlanetArt>,
+    art: Option<Res<PlanetArt>>,
     images: Res<RenderAssets<GpuImage>>,
     clock: Res<PlanetClock>,
     sun: Res<crate::sky::Sun>,
@@ -1264,7 +1332,7 @@ fn prepare_views(
     let Some(planet) = planet else {
         return;
     };
-    let Some(atlas) = images.get(&art.0) else {
+    let Some(atlas) = art.as_ref().and_then(|art| images.get(&art.0)) else {
         return;
     };
     for (entity, view, existing) in &mut views {
@@ -1459,8 +1527,9 @@ fn prepare_views(
                 .as_ref()
                 .map(|fine| near_lamps(&fine.set.columns, camera_position, 32.0))
                 .unwrap_or([Vec4::ZERO; NEAR_LAMPS]),
+            // x the voxel walk, w the screen trace (`PBD_REFLECT`).
             reflect: Vec4::new(
-                if lighting.reflections_on() { 1.0 } else { 0.0 },
+                if lighting.reflect_walk_on() { 1.0 } else { 0.0 },
                 lighting.reflection_reach_m,
                 bounce_gain(
                     lighting,
@@ -1468,16 +1537,25 @@ fn prepare_views(
                     tunables.bounce.as_deref(),
                     clock.0,
                 ),
-                0.0,
+                if lighting.reflect_screen_on() {
+                    1.0
+                } else {
+                    0.0
+                },
             ),
             lamp_bake: lamp_bake_state(lighting, &planet, tunables.fine.as_deref(), clock.0),
             ssr_clip: existing
                 .as_ref()
                 .map_or(Mat4::IDENTITY, |gpu| gpu.last_clip),
             rain_near: Vec4::new(w.rain_detail_reach_m, w.rain_detail_fade_m, 0.0, 0.0),
-            ssr_eye: existing
-                .as_ref()
-                .map_or(Vec4::ZERO, |gpu| gpu.last_camera.extend(1.0)),
+            // w: there is a history to read, so not while the capture is off.
+            ssr_eye: existing.as_ref().map_or(Vec4::ZERO, |gpu| {
+                gpu.last_camera.extend(if lighting.reflect_capture_on() {
+                    1.0
+                } else {
+                    0.0
+                })
+            }),
         };
         let (ssr_clip, ssr_eye) = (params.ssr_clip, params.ssr_eye);
         if let Some(mut gpu) = existing {

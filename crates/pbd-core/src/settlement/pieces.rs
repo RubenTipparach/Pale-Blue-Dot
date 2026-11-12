@@ -1092,9 +1092,42 @@ const MERLON_M: (f32, f32, f32) = (0.62, 1.2, 0.5);
 /// Cut one masonry cell (slice 4c): a prism of rubble from `bottom_m` to
 /// `top_m`, metres over `radius_m`, flagged on top where the wall walk is,
 /// cut from its cell's real corners in its own frame. Its sides are drawn
-/// only where no other masonry stands against them (`walled` says which
-/// edges do). A gate's bottom is over its ground (`ground_m`), and the
-/// passage under it is open, its vault in stone.
+/// only where no other masonry stands against them (`against` says what
+/// stands against each edge, bottom to top, in the same metres as `bottom_m`
+/// and `top_m`). A gate's bottom is over its ground (`ground_m`), and the
+/// passage under it is open, its vault in stone; the wall beside it draws
+/// its side up to that vault (`town-gates`).
+/// The parts of `own`, bottom to top, that `against` does not fill: where a
+/// masonry cell's side shows. None where the neighbour covers it all, all of
+/// it where there is no neighbour, and below, above or both round a
+/// neighbour that covers only a band. A sliver under a centimetre is left
+/// out.
+pub fn open_spans(own: (f32, f32), against: Option<(f32, f32)>) -> Vec<(f32, f32)> {
+    const SLIVER_M: f32 = 0.01;
+    let (lo, hi) = own;
+    let mut open = Vec::new();
+    let Some((a, b)) = against else {
+        if hi - lo > SLIVER_M {
+            open.push(own);
+        }
+        return open;
+    };
+    let (a, b) = (a.max(lo), b.min(hi));
+    if a >= b {
+        if hi - lo > SLIVER_M {
+            open.push(own);
+        }
+        return open;
+    }
+    if a - lo > SLIVER_M {
+        open.push((lo, a));
+    }
+    if hi - b > SLIVER_M {
+        open.push((b, hi));
+    }
+    open
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn cut_masonry(
     meshes: &mut Meshes,
@@ -1102,7 +1135,7 @@ pub fn cut_masonry(
     patch: &Patch,
     chart: &Chart,
     cell: &super::MasonryCell,
-    walled: &dyn Fn(usize) -> bool,
+    against: &dyn Fn(usize) -> Option<(f32, f32)>,
     radius_m: f32,
     ground_m: f32,
     bottom_m: f32,
@@ -1153,22 +1186,24 @@ pub fn cut_masonry(
     }
     let centre = corners.iter().fold(Vec2::ZERO, |s, p| s + *p) / 6.0;
     for d in 0..6 {
-        if walled(d) {
-            continue;
-        }
         let (a, b) = (corners[d], corners[(d + 1) % 6]);
         let mid = (a + b) * 0.5 - centre;
-        sink.face(
-            &material.wall,
-            &[
-                Vec3::new(a.x, y0, a.y),
-                Vec3::new(b.x, y0, b.y),
-                Vec3::new(b.x, y1, b.y),
-                Vec3::new(a.x, y1, a.y),
-            ],
-            Vec3::new(mid.x, 0.0, mid.y),
-            None,
-        );
+        for (lo, hi) in open_spans(
+            (y0, y1),
+            against(d).map(|(bottom, top)| (bottom - ground_m, top - ground_m)),
+        ) {
+            sink.face(
+                &material.wall,
+                &[
+                    Vec3::new(a.x, lo, a.y),
+                    Vec3::new(b.x, lo, b.y),
+                    Vec3::new(b.x, hi, b.y),
+                    Vec3::new(a.x, hi, a.y),
+                ],
+                Vec3::new(mid.x, 0.0, mid.y),
+                None,
+            );
+        }
     }
     sink.solids.push(Solid {
         outline: outline.clone(),

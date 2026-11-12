@@ -1187,3 +1187,38 @@ fn a_cogs_stern_lantern_burns_from_dusk_and_its_light_goes_with_it() {
         );
     }
 }
+
+/// `town-frame-time` decision 6: a resting craft far from the camera sleeps,
+/// is stepped once every `SLEEP_CHECK_TICKS` to see whether it has moved, and
+/// never sleeps while aboard, near the camera, or moving.
+#[test]
+fn a_resting_craft_far_off_sleeps_and_is_checked() {
+    use pbd_core::vehicle::{Hulls, Kind, spec::VehicleSpecs};
+    use pbd_core::{DQuat, DVec3};
+    let specs = std::sync::Arc::new(VehicleSpecs::default());
+    let mut v = Vehicle::new(Craft::new(
+        Kind::Tern,
+        1,
+        specs.clone(),
+        Hulls::new(&specs),
+        DVec3::Y * 4800.0,
+        DQuat::IDENTITY,
+    ));
+    let far = Some(DVec3::Y * 4800.0 + DVec3::X * 100.0);
+    let near = Some(DVec3::Y * 4800.0 + DVec3::X * 10.0);
+    // Moving: never sleeps.
+    assert!(!sleeps(&mut v, false, far));
+    v.rested = true;
+    // Aboard or near: never sleeps, and the count starts again.
+    assert!(!sleeps(&mut v, true, far));
+    assert!(!sleeps(&mut v, false, near));
+    // Far and at rest: sleeps, but is stepped on every SLEEP_CHECK_TICKS-th.
+    let stepped = (0..SLEEP_CHECK_TICKS * 3)
+        .filter(|_| !sleeps(&mut v, false, far))
+        .count();
+    assert_eq!(stepped, 3);
+    // A check step that finds it moving ends the rest: stepped every tick.
+    v.rested = false;
+    assert!(!sleeps(&mut v, false, far));
+    assert_eq!(v.dozing, 0);
+}

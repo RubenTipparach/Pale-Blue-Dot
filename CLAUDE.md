@@ -108,16 +108,21 @@ owner says otherwise:
 
 **Standing instruction from the user:** "you need some sort of survey form
 for me to fill out ... that claude doc thing was good for that, maybe that
-should be a skill." Open questions for the owner go into a survey Claude Doc,
-never a list in chat. Each question gets its options, a recommendation and
-an answer column, and answers are folded back into the OpenSpec changes they
-shape. The `owner-survey` skill (`.claude/skills/owner-survey`) says how. The
-current survey is https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn. Keep
-editing it rather than starting another.
+should be a skill." Open questions for the owner go into the survey, never a
+list in chat. Each question gets its options, a recommendation and a place to
+answer, and answers are folded back into the OpenSpec changes they shape.
 
-If a session has no Claude Docs connector, say so, and publish the same
-tables as an artifact page with an answer field per question, linked from the
-survey's "Already decided" section once the connector is back.
+**The survey is an HTML page (owner, 2026-11-12):** "can you create a mockup
+tracking dock, and a survey html tracker? both of these skills are found in
+fleet command repo". Questions go into
+https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5 (`docs/design/survey.html`),
+whose database holds the answers; the `html-survey` skill
+(`.claude/skills/html-survey`) says how to ask, read the answers back with
+`ArtifactData`, and move them to "Already decided". Keep republishing that
+page rather than starting another. The Claude Doc survey before it,
+https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn, is kept as the earlier
+record and is no longer edited; its answers are copied into the HTML survey's
+"Already decided".
 
 **Ask only with screenshots (owner, 2026-09-29):** "approve, dont ask me
 questions unless you have screenshots for me to review lol". A question goes
@@ -127,6 +132,21 @@ recommendation and carry on. Record it in the change as "recommendation
 taken (ask only with screenshots)", so it is never mistaken for the owner's
 own words, and say so in the reply. A gate is still the owner's, and it goes
 with its screenshots.
+
+## The mockup tracker (owner, 2026-11-12)
+
+**Standing instruction from the user** (the same message): every Pale Blue
+Dot artifact is listed on one master page, the mockup tracker,
+https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`).
+Its sections are Game mockups (each approved by the owner for build, then for
+the game), Guides and Misc (surveys, benchmark reports, gate pages). Every new
+mockup, and every other page published for this repository, goes on it in
+the same step that first publishes it, and the page carries an "All Pale Blue
+Dot mockups (the tracker)" link near its top. Approvals are the owner's, read
+back with `ArtifactData` (collection `reviews`) and recorded in
+`docs/mockups/mockup-work.md` and the mockup's OpenSpec change; an approval
+for the game still waits for a request before any game code. The
+`mockup-tracker` skill (`.claude/skills/mockup-tracker`) says how.
 
 ## Saved games survive every change (owner, 2026-09-28)
 
@@ -174,6 +194,23 @@ mockups, benchmark reports, the survey doc and any other Claude Doc. Give the
 link, and one line on what is new in it. If nothing was published or edited,
 say so in one line, so that a missing list is never mistaken for a forgotten
 one.
+
+## Render on the GPU when there is one (owner, 2026-11-12)
+
+**Standing instruction from the user:** "dont use software renderer on
+equiped gpu device ... you can do your work much faster using gpu". On the
+owner's desktop (RTX 3070) every render runs on the GPU: the game's
+`--capture` shots, and browser screenshots of mockups (Edge or Chrome with
+`--use-angle=d3d11 --enable-gpu --ignore-gpu-blocklist`, never
+`--use-angle=swiftshader`, `--enable-unsafe-swiftshader` or
+`--disable-gpu`). Software rendering (SwiftShader, lavapipe) is only for a
+machine with no GPU, such as a Claude Code cloud container, and a write-up
+says when it was used. Frame numbers from a software renderer are never
+reported as the game's or a mockup's performance.
+
+Nothing heavy runs beside a benchmark: a browser rendering on the CPU or the
+GPU, a build or a second game makes the numbers worthless (perf-measure rule
+2). Run mockup screenshots before or after a perf sitting, not during it.
 
 ## Current priorities (owner, 2026-09-25)
 
@@ -249,6 +286,8 @@ https://claude.ai/artifact/CbuRh6C4kZZvULnQyrtor1 (update it with that URL;
 a new baseline may get its own page, linked from here). The `cloud-close-up`
 before-and-after page is https://claude.ai/artifact/SSeb4wCF2B7xCgYsExSRKx.
 The `detail-fade` one is https://claude.ai/artifact/P1WypbYauGUsPrC1NpSuzQ.
+The `town-frame-time` A/B (a town walk, main against the branch) is
+https://claude.ai/artifact/UijFaGpci12P1wHjR4otzk.
 The `cloud-puffs` march-against-puffs page (an M4 Max Mac, not the desktop) is
 https://claude.ai/artifact/PuWVaY1gADriGx1KjfGrbx.
 The `rain-shells` volume-against-shells page (the same Mac) is
@@ -258,6 +297,16 @@ sitting of 2026-10-29, `docs/benchmarks/2026-10-29-lighting-full/`) is
 https://claude.ai/artifact/C1ENmiyd73ia1pnxxKPtj7.
 The `puff-frustum-cull` + `wet-near-detail` before-and-after page (the same
 Mac) is https://claude.ai/artifact/C4cAspjVyuc2uGem4G66Co.
+The `lighting-model` cost on the desktop (RTX 3070; main before the merge,
+the new model and `PBD_LIGHTING=today`, then by part and at night;
+`docs/benchmarks/2026-11-12-lighting-model-clean/`, a quiet machine; the
+2026-11-11 sitting it replaces was contaminated; plan in `lighting-perf`)
+is https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9.
+The `lighting-perf` checkpoint (the desktop, main's `f15a647` against the
+branch before it and the branch with frame latency 2 and the L8 fixes, every
+scenario, at night, with vsync, and the slow frames classified;
+`docs/benchmarks/2026-11-12-lighting-perf/`) is
+https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 

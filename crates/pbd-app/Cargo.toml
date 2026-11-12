@@ -11,6 +11,9 @@ desktop = [
     "bevy/default_font", "bevy/bevy_winit", "bevy/x11", "bevy/keyboard",
     "bevy/mouse", "dep:bytemuck", "dep:gltf", "dep:serde_json",
 ]
+# MEASUREMENT (`town-frame-time`): a span per system and render stage, written
+# to a Chrome trace file. Ranks where a frame's time goes; never for numbers.
+trace = ["bevy/trace_chrome", "bevy/debug"]
 
 [dependencies]
 avian3d.workspace = true

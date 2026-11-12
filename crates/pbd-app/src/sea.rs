@@ -78,7 +78,9 @@ impl Plugin for SeaPlugin {
             .add_systems(Startup, load_sea_module)
             .add_systems(
                 PostUpdate,
-                publish_sea.after(bevy::transform::TransformSystems::Propagate),
+                publish_sea
+                    .after(bevy::transform::TransformSystems::Propagate)
+                    .run_if(crate::world_open),
             );
     }
 }

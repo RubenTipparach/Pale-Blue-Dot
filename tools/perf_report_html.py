@@ -127,7 +127,10 @@ def main() -> None:
             if r["scenario"] != s:
                 continue
             csv_path = a.run_dir / Path(r["csv"]).name
-            ser = series(csv_path, SKIP_S, r.get("cloud_leg_m"))
+            # From where the suite counted the run's warm-up (`lighting-perf`
+            # 1.3: the ready line or the first frame), else from launch.
+            warm = r.get("warm_up", {})
+            ser = series(csv_path, warm.get("from_s", 0.0) + warm.get("skip_s", SKIP_S), r.get("cloud_leg_m"))
             if ser:
                 runs.append({"variant": r["variant"], "index": r["index"], "valid": r["valid"], **ser})
         rows = [{"variant": v, **summarise(results, s, v)} for v in variants]
@@ -220,6 +223,7 @@ pre{background:var(--panel);border:1px solid var(--rule);border-radius:8px;paddi
 
 <div class="wrap">
 <header>
+  <a class="mono" href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk">All Pale Blue Dot mockups (the tracker)</a>
   <h3>%%EYEBROW%%</h3>
   <h1>%%TITLE%%</h1>
   <p>%%INTRO%%</p>

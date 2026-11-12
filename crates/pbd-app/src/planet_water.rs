@@ -273,7 +273,9 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye:
 pub(super) fn install_eye_water(app: &mut App) {
     app.init_resource::<EyeWaterState>().add_systems(
         PostUpdate,
-        publish_eye_water.after(bevy::transform::TransformSystems::Propagate),
+        publish_eye_water
+            .after(bevy::transform::TransformSystems::Propagate)
+            .run_if(crate::world_open),
     );
 }
 
@@ -1305,7 +1307,7 @@ fn prepare_water_views(
                 rain_fallen.x,
                 rain_fallen.y,
                 weather_settings.rain_shell_soft_m,
-                0.0,
+                rain_kinds(rain_map.as_deref()),
             ),
             rain_sky: rain_sky(sun.elevation(camera), weather.cover).extend(if lit_rain {
                 1.0
@@ -1321,7 +1323,10 @@ fn prepare_water_views(
                 .map(|fine| super::near_lamps(&fine.set.columns, camera, 32.0))
                 .unwrap_or([Vec4::ZERO; super::NEAR_LAMPS]),
             ssr_clip: planet_view.ssr_clip,
-            ssr_eye: if lighting.as_ref().is_some_and(|l| l.reflections_on()) {
+            ssr_eye: if lighting
+                .as_ref()
+                .is_some_and(|l| l.reflect_sea_on() && l.reflect_capture_on())
+            {
                 planet_view.ssr_eye
             } else {
                 Vec4::ZERO
@@ -1341,6 +1346,7 @@ fn prepare_water_views(
                 let view = pbd_core::frustum::Planes::from_clip(clip_from_body);
                 let started = std::time::Instant::now();
                 let counts = sites.build(
+                    maps.generation,
                     &maps.from,
                     &maps.maps,
                     maps.t,
@@ -1624,6 +1630,20 @@ fn water_depth(device: &RenderDevice, size: UVec2) -> TextureView {
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub(super) struct WaterCompositeLabel;
+
+/// Which kinds of fall the rain map holds anywhere, as the shells read them
+/// (`lighting-perf` 2.10): bit 0 rain (a value over the shader's 1e-3), bit 1
+/// snow (under -1e-3). The shader's sample is a bilinear mix of the map's
+/// values, so it can only cross a threshold some value crosses; the margin
+/// keeps a kind on for a value at the threshold itself.
+fn rain_kinds(map: Option<&crate::weather::RainMap>) -> f32 {
+    let Some(map) = map else {
+        return 0.0;
+    };
+    let rain = map.values.iter().any(|v| *v > 0.5e-3);
+    let snow = map.values.iter().any(|v| *v < -0.5e-3);
+    f32::from(u8::from(rain) | u8::from(snow) << 1)
+}
 
 /// `PBD_NO_CLOUDS=1`: a pricing instrument (`perf-rig`), not a setting. It skips
 /// the cloud march and composite so a run can say what the clouds cost on the
