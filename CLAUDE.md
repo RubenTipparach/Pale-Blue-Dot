@@ -175,6 +175,23 @@ link, and one line on what is new in it. If nothing was published or edited,
 say so in one line, so that a missing list is never mistaken for a forgotten
 one.
 
+## Render on the GPU when there is one (owner, 2026-11-12)
+
+**Standing instruction from the user:** "dont use software renderer on
+equiped gpu device ... you can do your work much faster using gpu". On the
+owner's desktop (RTX 3070) every render runs on the GPU: the game's
+`--capture` shots, and browser screenshots of mockups (Edge or Chrome with
+`--use-angle=d3d11 --enable-gpu --ignore-gpu-blocklist`, never
+`--use-angle=swiftshader`, `--enable-unsafe-swiftshader` or
+`--disable-gpu`). Software rendering (SwiftShader, lavapipe) is only for a
+machine with no GPU, such as a Claude Code cloud container, and a write-up
+says when it was used. Frame numbers from a software renderer are never
+reported as the game's or a mockup's performance.
+
+Nothing heavy runs beside a benchmark: a browser rendering on the CPU or the
+GPU, a build or a second game makes the numbers worthless (perf-measure rule
+2). Run mockup screenshots before or after a perf sitting, not during it.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
