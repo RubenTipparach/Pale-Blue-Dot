@@ -1,0 +1,667 @@
+<title>Stations and Outposts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one live viewport of three stations in orbit, then the design written down the page in plain sections. */
+:root{
+  color-scheme: dark;
+  --ground:#080b12;
+  --panel:rgba(12,16,26,.88);
+  --panel-solid:#0f1420;
+  --raise:#141a28;
+  --line:rgba(170,190,230,.16);
+  --ink:#e4e8f2;
+  --muted:#93a0b8;
+  --amber:#f0b43c;
+  --lamp:#ffd28a;
+  --sky:#8fc3e8;
+  --warn:#ff6b57;
+  --ok:#79e0a0;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html{background:var(--ground)}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;margin:0}
+a{color:var(--sky)}
+button{font:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:11.5px;color:var(--muted)}
+.tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
+
+/* the viewport */
+.stage{position:relative;height:min(78vh,760px);min-height:440px;background:#000;overflow:hidden}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none;cursor:grab}
+#view:active{cursor:grabbing}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.hud{top:16px;left:max(16px,env(safe-area-inset-left,0px));padding:12px;width:min(310px,calc(100% - 32px));display:grid;gap:10px}
+.hud h1{margin:0;font-family:var(--display);font-weight:700;font-size:24px;line-height:1;letter-spacing:.02em}
+.hud h1 span{color:var(--muted);font-size:13px;font-weight:500;letter-spacing:.1em;margin-left:6px}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.seg button,.btn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:5px 6px;font-family:var(--display);font-size:13.5px;letter-spacing:.04em;text-align:center}
+.seg button:hover,.btn:hover{border-color:rgba(240,180,60,.6)}
+.seg button[aria-pressed="true"],.btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.seg button:focus-visible,.btn:focus-visible{outline:2px solid var(--amber)}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.field{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center}
+.field label{font-size:12px;color:var(--muted)}
+.field output{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+.field input{grid-column:1/-1;width:100%;accent-color:var(--amber);margin:0}
+.status{font-size:12.5px;color:var(--muted);line-height:1.45}
+.status b{color:var(--ink);font-weight:500}
+.inst{right:max(16px,env(safe-area-inset-right,0px));bottom:16px;padding:10px 14px;width:min(420px,calc(100% - 32px));display:grid;gap:6px}
+.where{font-family:var(--display);font-size:18px;font-weight:600;letter-spacing:.03em}
+.where small{font-family:var(--body);font-size:12px;font-weight:400;color:var(--muted);margin-left:6px}
+.readouts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 12px}
+.ro{display:grid;min-width:0}
+.ro .k{font-family:var(--display);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ro .v{font-family:var(--mono);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.label{position:absolute;transform:translate(-50%,-100%);pointer-events:none;font-family:var(--display);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:rgba(8,11,18,.66);border:1px solid var(--line);border-radius:3px;padding:1px 6px;white-space:nowrap}
+.label i{font-style:normal;color:var(--muted);font-size:11px;margin-left:5px}
+.keys{left:max(16px,env(safe-area-inset-left,0px));bottom:16px;padding:8px 10px;font-size:12px}
+.keys td:first-child{font-family:var(--mono);font-size:11px;color:var(--amber);padding-right:10px;white-space:nowrap}
+@media (max-width:900px){.keys{display:none}}
+@media (max-width:640px){
+  .stage{height:auto;min-height:0;display:flex;flex-direction:column}
+  #view{position:relative;height:56vh;min-height:320px}
+  .panel{position:relative;inset:auto;width:auto;margin:10px 16px 0;transform:none}
+  .inst{margin-bottom:12px}
+  .readouts{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* the write-up */
+main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:44px}
+section{display:grid;gap:14px;min-width:0}
+h2{margin:0;font-family:var(--display);font-weight:700;font-size:28px;letter-spacing:.02em;line-height:1.1;text-wrap:balance}
+h3{margin:0;font-family:var(--display);font-weight:600;font-size:19px;letter-spacing:.03em}
+p{margin:0;max-width:70ch}
+.lede{font-size:16.5px;color:var(--ink);max-width:72ch}
+.muted{color:var(--muted)}
+.banner{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--panel-solid)}
+.banner p{font-size:13.5px;color:var(--muted)}
+.types{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.type{display:grid;grid-template-columns:104px 1fr;gap:12px;align-items:start;border:1px solid var(--line);border-radius:6px;padding:12px;background:var(--panel-solid);min-width:0}
+.type img{width:104px;height:104px;image-rendering:auto}
+.type h3 small{display:block;font-family:var(--body);font-size:12px;font-weight:400;color:var(--muted);letter-spacing:0}
+.type dl{margin:6px 0 0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}
+.type dt{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--muted);padding-top:2px}
+.type dd{margin:0}
+.type .in3d{font-family:var(--display);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ok)}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:10px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;counter-increment:s}
+.steps li::before{content:counter(s);font-family:var(--mono);font-weight:600;font-size:13px;color:var(--ground);background:var(--amber);border-radius:3px;text-align:center;padding:3px 0}
+.steps b{font-weight:600}
+.two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:860px){.two{grid-template-columns:1fr}}
+.figure{border:1px solid var(--line);border-radius:6px;background:var(--panel-solid);padding:10px;overflow-x:auto}
+.figure svg{display:block;width:100%;height:auto;min-width:520px}
+.cap{font-size:12.5px;color:var(--muted);margin-top:6px}
+.roominfo{border:1px solid var(--line);border-radius:6px;padding:12px;background:var(--raise);min-height:118px}
+.roominfo h3{color:var(--lamp)}
+table.t{border-collapse:collapse;width:100%;font-size:13.5px}
+.t th,.t td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.t th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
+.t td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto}
+.frames{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.frame{border:1px solid var(--line);border-radius:5px;padding:10px;background:var(--panel-solid);font-size:13px;min-width:0}
+.frame b{display:block;font-family:var(--display);font-size:15px;letter-spacing:.04em}
+.frame code{font-family:var(--mono);font-size:11.5px;color:var(--sky)}
+@media (max-width:760px){.frames{grid-template-columns:1fr 1fr}}
+.q{display:grid;gap:10px}
+.q article{border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--panel-solid);display:grid;gap:6px}
+.q article p{font-size:14px}
+.rec{color:var(--ok);font-weight:500}
+footer{font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+</style>
+
+<div class="stage" id="stage">
+  <canvas id="view" tabindex="0" aria-label="Three stations in orbit: a trade ring, a mining outpost on an asteroid and a customs post. Drag to orbit, wheel to zoom."></canvas>
+  <section class="panel hud" aria-label="View">
+    <h1>Stations<span>PROPOSAL</span></h1>
+    <div class="seg" role="group" aria-label="Look at">
+      <button id="fAll" aria-pressed="true">All</button>
+      <button id="f0" aria-pressed="false">Meridian</button>
+      <button id="f1" aria-pressed="false">Kessler</button>
+      <button id="f2" aria-pressed="false">Gatehouse</button>
+    </div>
+    <div class="field">
+      <label for="orbit">Orbit position</label><output id="orbitOut">0</output>
+      <input id="orbit" type="range" min="0" max="360" step="1" value="200">
+    </div>
+    <div class="row">
+      <button class="btn" id="bSun" aria-pressed="false">Sunlit</button>
+      <button class="btn" id="bShadow" aria-pressed="true">Planet shadow</button>
+      <button class="btn" id="bLamps" aria-pressed="true">Station lamps</button>
+      <button class="btn" id="bDock" aria-pressed="false">Dock at Meridian</button>
+    </div>
+    <p class="status" id="status">In the planet's shadow the stations are lit only by their own lamps, floodlights and windows.</p>
+  </section>
+  <section class="panel inst" aria-label="Readouts">
+    <div class="where" id="where">Meridian Exchange<small>orbital trade ring</small></div>
+    <div class="readouts">
+      <div class="ro"><span class="k">Sun</span><span class="v" id="rSun">shadow</span></div>
+      <div class="ro"><span class="k">Ring spin</span><span class="v" id="rSpin">3.86 rpm</span></div>
+      <div class="ro"><span class="k">Rim gravity</span><span class="v" id="rG">1.00 g</span></div>
+      <div class="ro"><span class="k">Lamps</span><span class="v" id="rLamps">0</span></div>
+      <div class="ro"><span class="k">Frame</span><span class="v" id="rFrame">orbit</span></div>
+      <div class="ro"><span class="k">Range</span><span class="v" id="rRange">--</span></div>
+      <div class="ro"><span class="k">Closing</span><span class="v" id="rClose">--</span></div>
+      <div class="ro"><span class="k">Clearance</span><span class="v" id="rClear">--</span></div>
+    </div>
+  </section>
+  <section class="panel keys" aria-label="Controls"><table>
+    <tr><td>Drag</td><td>Orbit the camera</td></tr>
+    <tr><td>Wheel</td><td>Zoom</td></tr>
+    <tr><td>1 2 3 0</td><td>Look at a station, or all</td></tr>
+    <tr><td>L</td><td>Lamps on or off</td></tr>
+    <tr><td>N</td><td>Sunlit or shadow</td></tr>
+    <tr><td>D</td><td>Fly the docking approach</td></tr>
+  </table></section>
+</div>
+
+<main>
+<div class="wrap">
+
+  <div class="banner">
+    <span class="tag">Proposal, not built</span>
+    <p>Nothing on this page is in the engine. It is a design for stations and outposts, with a mockup scene to argue it. The station portraits are painted by code in the owner's friend's hand-drawn style (the <code>hand-drawn-illustration</code> kit, <code>tools/art/stations_art.py</code>), not by the friend.</p>
+  </div>
+
+  <section aria-labelledby="h-types">
+    <span class="eyebrow">What you can dock at</span>
+    <h2 id="h-types">Six kinds of station</h2>
+    <p class="lede">A station is a place on rails: it rides an analytic orbit like a moon does, so it is always where the clock says it is, and its market, jobs and people stay put between visits. Each kind has a different job in the economy, a different law, and a different reason to come back.</p>
+    <div class="types" id="types"></div>
+  </section>
+
+  <section aria-labelledby="h-dock">
+    <span class="eyebrow">Arriving</span>
+    <h2 id="h-dock">The docking flow</h2>
+    <div class="two">
+      <ol class="steps">
+        <li><div><b>Hail at 20 km.</b> The station answers with who it is, who runs it and what it wants from you: a pad number, a toll, or a scan. A smuggler den answers only to a known transponder or a password from a contact.</div></li>
+        <li><div><b>Clearance and a berth.</b> Hub berths sit on the spin axis and never move; ring berths and bays ride the spin. The berth is reserved for 5 minutes of game time; the approach corridor lights up for you (the green lane in the scene).</div></li>
+        <li><div><b>Enter the control volume (2 km).</b> From here the ship's pose and velocity are written in the <b>station's local frame</b>. Assisted flight holds you to the corridor's speed cone and, for a ring berth, matches the spin before the last 50 m.</div></li>
+        <li><div><b>Customs, where there is any.</b> Military posts scan every hold. Trade hubs scan one in five. Mining outposts do not care. Contraband found is fined or seized, and your standing with the station's owner drops.</div></li>
+        <li><div><b>Final approach and clamp.</b> Under 50 m the assist takes the last metres at under 1 m/s; magnetic clamps take the ship. Docking fees are paid on clamp, by size class.</div></li>
+        <li><div><b>Step off.</b> The ship's occupancy changes; it does not stop existing. Its ID, pose in the berth, hold, damage and owner persist, and it is boardable from the hangar. You walk off as a passenger, simulated in the station's frame.</div></li>
+      </ol>
+      <div>
+        <div class="figure">
+          <svg viewBox="0 0 560 300" role="img" aria-label="Approach corridor: speed limits fall from 120 m/s at 2 km to 1 m/s at the clamp">
+            <rect x="0" y="0" width="560" height="300" fill="#0f1420"/>
+            <polygon points="40,40 40,260 520,170 520,130" fill="rgba(121,224,160,.08)" stroke="rgba(121,224,160,.55)" stroke-width="1.5"/>
+            <g stroke="rgba(170,190,230,.25)" stroke-width="1">
+              <line x1="160" y1="58" x2="160" y2="242"/><line x1="300" y1="83" x2="300" y2="217"/><line x1="420" y1="105" x2="420" y2="195"/><line x1="490" y1="119" x2="490" y2="181"/>
+            </g>
+            <g font-family="JetBrains Mono, monospace" font-size="12" fill="#e4e8f2">
+              <text x="44" y="30">2 km</text><text x="150" y="48">1 km</text><text x="288" y="73">400 m</text><text x="404" y="95">150 m</text><text x="474" y="110">50 m</text>
+            </g>
+            <g font-family="Barlow Condensed, sans-serif" font-size="15" fill="#79e0a0">
+              <text x="74" y="156">120 m/s</text><text x="200" y="156">60 m/s</text><text x="330" y="156">20 m/s</text><text x="430" y="156">5</text><text x="496" y="156">1</text>
+            </g>
+            <rect x="520" y="120" width="22" height="60" rx="3" fill="#8a96a8" stroke="#e4e8f2" stroke-width="1"/>
+            <text x="508" y="206" font-family="Barlow Condensed, sans-serif" font-size="14" fill="#93a0b8">clamp</text>
+            <g fill="#ffd28a"><circle cx="160" cy="150" r="3"/><circle cx="300" cy="150" r="3"/><circle cx="420" cy="150" r="3"/><circle cx="490" cy="150" r="3"/></g>
+            <text x="44" y="288" font-family="Barlow, sans-serif" font-size="13" fill="#93a0b8">Speed limit at each gate of the corridor, closing speed in the station frame</text>
+          </svg>
+        </div>
+        <p class="cap">The cone is a limit the assist holds, not a rail. A pilot with assist off can fly it by hand; touching a gate over its limit costs a fine, and hitting the hull costs damage.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-inside">
+    <span class="eyebrow">Inside the Meridian ring</span>
+    <h2 id="h-inside">The concourse</h2>
+    <p class="lede">A ring is a street bent into a circle. "Down" is outward, the floor curves up ahead and behind you, and every shop on the station is a walk spinward or antispinward from the lift. Hover or tap a room.</p>
+    <div class="two">
+      <div class="figure"><svg id="plan" viewBox="0 0 600 360" role="img" aria-label="Plan of one sector of the Meridian ring concourse"></svg></div>
+      <div class="roominfo" id="roominfo" aria-live="polite"><h3>Pick a room</h3><p class="muted">Each room is a place the player walks to; the ones that open a screen say which.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-frames">
+    <span class="eyebrow">Where a passenger lives</span>
+    <h2 id="h-frames">Frames, from the system to your boots</h2>
+    <p>CLAUDE.md already requires it: station passengers simulate in the station's local frame. A ring adds one more frame, the spinning one, so walking on the concourse is ordinary walking on a floor with gravity pointing outward. The chain is:</p>
+    <div class="frames">
+      <div class="frame"><b>System</b><code>f64</code>, orbital time. The station's rails (an analytic orbit) give its pose at any time.</div>
+      <div class="frame"><b>Station</b><code>f32</code>, origin at the hub. Ships in the control volume, the hub, berths on the axis.</div>
+      <div class="frame"><b>Ring</b><code>f32</code>, spinning at a fixed rate about the hub axis. The concourse, ring berths, passengers.</div>
+      <div class="frame"><b>Passenger</b>Walks with the ring's own gravity (centripetal, 9.8 m/s&sup2; at 60 m). Rebased with the ring at a tick boundary.</div>
+    </div>
+    <p class="muted">Spin numbers in the scene are real: a 60 m ring at 3.86 rpm gives 1.0 g at the floor and about 0.85 g a deck in. Coriolis is small enough at that size to ignore for walking; we propose leaving it out, and keeping thrown objects and spilled cargo inside the ring frame too.</p>
+  </section>
+
+  <section aria-labelledby="h-econ">
+    <span class="eyebrow">Why come back</span>
+    <h2 id="h-econ">What each kind does for the economy</h2>
+    <div class="scroll"><table class="t">
+      <thead><tr><th>Kind</th><th>Sells cheap</th><th>Buys dear</th><th>Services</th><th>Law</th><th>Dock fee</th></tr></thead>
+      <tbody id="econ"></tbody>
+    </table></div>
+    <p class="muted">Prices move with stock and with events; the <a id="lnkMarket" href="#">market mockup</a> runs that live. The bar's games and the job board are in the <a id="lnkGames" href="#">minigames mockup</a>.</p>
+  </section>
+
+  <section aria-labelledby="h-q">
+    <span class="eyebrow">For the owner</span>
+    <h2 id="h-q">Decisions / questions for the owner</h2>
+    <div class="q">
+      <article><h3>1. Do stations spin?</h3><p>Options: (a) rings spin and give gravity, hubs do not; (b) no spin, artificial gravity everywhere; (c) only some kinds spin.</p><p class="rec">Recommendation: (a). It is what makes a station feel like a station, it costs one extra frame we need anyway, and outposts on rocks can use the rock's own weak gravity or magnetic boots.</p></article>
+      <article><h3>2. Are stations built from cells like the planets?</h3><p>Options: (a) authored meshes, never editable; (b) built from hex cells, so the player can mine or build onto one; (c) authored shell, cell interiors.</p><p class="rec">Recommendation: (c). An authored hull reads well from outside; a cell interior lets the player rent and furnish a room, and keeps one building system.</p></article>
+      <article><h3>3. Can the player own a station?</h3><p>Options: no; a module on someone else's station; a whole outpost later.</p><p class="rec">Recommendation: a rented room and hangar first, a mining outpost of their own later. Either way it is a stored record on the durable path, like a town.</p></article>
+      <article><h3>4. How hard is the docking?</h3><p>Options: fully automatic once cleared; assisted inside the corridor (proposed); fully manual.</p><p class="rec">Recommendation: assisted inside the corridor, with an "auto-dock" upgrade sold at shipyards. It keeps the Newtonian flight honest and the last 50 m tense without being a chore.</p></article>
+      <article><h3>5. Are stations lit inside the planet's shadow?</h3><p>The scene shows it: in eclipse, everything you see is the station's own lamps. Recommendation: yes, every station kind has floodlights on its hull, warm windows and lit approach lanes; the lights are block lights in the same system the towns use, so they light the hull wherever the camera is.</p></article>
+    </div>
+  </section>
+
+  <footer>Mockup for Pale Blue Dot. Scene: three.js r128, every hull lamp baked into the hull's vertices in the station's own frame (so a lamp lights what is near it wherever the camera is), sun shadows from a shadow map, the planet's shadow computed from the orbit. Portraits: painted by code in the friend's style. Nothing here is built.</footer>
+</div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+// ---------------------------------------------------------------- the write-up's data
+const TYPES = [
+  { img: "trade_ring", name: "Orbital trade hub", ex: "Meridian Exchange", in3d: true,
+    run: "A trading house, licensed by the planet's government", sells: "Everything, at a margin", law: "Patrolled; one hold in five scanned",
+    note: "The big ring. Busy market, shipyard, bar and casino, the best job board. Prices are fair and fees are high." },
+  { img: "mining_outpost", name: "Mining outpost", ex: "Kessler Rock", in3d: true,
+    run: "A mining company (Kessler Deep Mining)", sells: "Raw ore, ice", law: "Company security only",
+    note: "Bolted onto an asteroid. Cheap ore, hungry for food, fuel and medicine. Drilling and ore-sorting shifts for cash." },
+  { img: "refinery", name: "Refinery", ex: "Ventra Crack 4",
+    run: "An energy company", sells: "Fuel cells, alloy", law: "Company security",
+    note: "Turns ore and ice into fuel and alloy. Its prices sit between the mines and the shipyards, so it is the hauler's middle stop." },
+  { img: "customs_post", name: "Military and customs post", ex: "Gatehouse Kappa", in3d: true,
+    run: "The navy of whoever owns the system", sells: "Fuel, repairs, bounties", law: "Strict; every hold scanned",
+    note: "Guards a lane between bodies. Tolls, scans, bounty contracts, and a market that only sells what the navy needs to unload." },
+  { img: "smuggler_den", name: "Frontier smuggler den", ex: "The Hollow",
+    run: "Nobody, officially", sells: "Contraband, stolen salvage", law: "None; you are the law",
+    note: "In a hollowed rock off the lanes. Buys what others seize, sells what others ban, runs the crooked games. Needs a contact to find." },
+  { img: "research_station", name: "Research station", ex: "Lumen Deep Field",
+    run: "A lab company or a university", sells: "Data, rare samples, prototypes", law: "Quiet; restricted decks",
+    note: "Pays for samples brought back from far bodies and sells prototype ship parts. Its discoveries move company shares." },
+];
+const ECON = [
+  ["Trade hub", "Electronics, medicine", "Spice, luxury goods", "Market, shipyard, bar and casino, job board, hotel", "Patrolled", "40 cr"],
+  ["Mining outpost", "Iron ore, water ice", "Grain, fuel cells, medicine", "Repairs, ore-sorting shifts, drill contracts", "Company", "10 cr"],
+  ["Refinery", "Fuel cells, alloy", "Ore, ice", "Refuelling at cost, hauling contracts", "Company", "15 cr"],
+  ["Customs post", "Fuel (navy surplus)", "Alloy, electronics", "Bounties, tolls, impound auctions", "Strict", "toll 25 cr"],
+  ["Smuggler den", "Contraband, salvage", "Seized goods, medicine", "Fence, crooked games, quiet repairs", "None", "none"],
+  ["Research station", "Prototypes, data", "Rare samples", "Survey contracts, prototype parts", "Restricted", "20 cr"],
+];
+$("types").innerHTML = TYPES.map(t => `<article class="type"><img src="stations/${t.img}.png" alt="${t.name}, hand-drawn style portrait" width="104" height="104">
+  <div style="min-width:0"><h3>${t.name}<small>${t.ex}${t.in3d ? ' <span class="in3d">in the scene</span>' : ''}</small></h3>
+  <p style="font-size:13.5px;margin-top:4px">${t.note}</p>
+  <dl><dt>Run by</dt><dd>${t.run}</dd><dt>Sells</dt><dd>${t.sells}</dd><dt>Law</dt><dd>${t.law}</dd></dl></div></article>`).join("");
+$("econ").innerHTML = ECON.map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td class="num">${r[5]}</td></tr>`).join("");
+$("lnkMarket").href = "https://claude.ai/artifact/MepSVNts31YTwsZ4QmZhPK";
+$("lnkGames").href = "https://claude.ai/artifact/M6bJTTQmSRcfZoGyjAZZvD";
+
+// ---------------------------------------------------------------- concourse plan (one sector of the ring, unrolled onto an arc)
+const ROOMS = [
+  { id: "lift", name: "Spoke lift", a0: -8, a1: 8, deck: 0, text: "The lift down a spoke from the hub berths. Gravity builds from nothing at the hub to 1 g at the concourse as it descends; the ride is 40 seconds." },
+  { id: "customs", name: "Customs and arrivals", a0: 8, a1: 22, deck: 0, text: "Every arrival passes a scan arch. At the Meridian one hold in five is searched; contraband is fined here and the fine goes to the station's owner." },
+  { id: "market", name: "Trade terminals", a0: 22, a1: 44, deck: 0, screen: "market", text: "The commodity exchange and the share board. Opens the trade terminal: buy, sell, check prices at other stations you have visited, and take hauling contracts." },
+  { id: "outfit", name: "Shipwright and outfitter", a0: -36, a1: -8, deck: 0, text: "Parts, refits and repairs for the ship waiting in its berth. Ship crafting is its own mockup." },
+  { id: "bar", name: "The Long Fall (bar and casino)", a0: -60, a1: -36, deck: 0, screen: "games", text: "Drinks, rumours, and the games: Reactor Roll, dice, Orbit 21 and the race book. The house takes its edge; the station's owner takes a cut of that." },
+  { id: "jobs", name: "Job board", a0: 44, a1: 58, deck: 0, screen: "games", text: "Hauling, salvage, bounties and mining shifts, posted by NPCs and by other players. Contracts pay from escrow on delivery." },
+  { id: "hotel", name: "Bunks and a rented room", a0: -60, a1: -20, deck: 1, text: "Sleep, store things, and later rent a room of your own to furnish. A rented room is a stored record, like a house in a town." },
+  { id: "clinic", name: "Clinic", a0: -20, a1: 6, deck: 1, text: "Heals, sells medicine, buys medicine at a premium when there is an outbreak somewhere in the system." },
+  { id: "hydro", name: "Hydroponics", a0: 6, a1: 58, deck: 1, text: "Where the station grows its own food. When it fails (an event), grain prices on the station jump and the job board fills with food runs." },
+];
+(function plan() {
+  const svg = $("plan"), cx = 300, cy = -560, R0 = 700, R1 = 780, R2 = 840; // a big circle, so one sector reads as a gentle arc
+  const ns = "http://www.w3.org/2000/svg";
+  const P = (r, a) => [cx + r * Math.sin(a * Math.PI / 180 * 0.42), cy + r * Math.cos(a * Math.PI / 180 * 0.42)];
+  function sector(r0, r1, a0, a1) {
+    const n = 12, pts = [];
+    for (let i = 0; i <= n; i++) pts.push(P(r1, a0 + (a1 - a0) * i / n));
+    for (let i = n; i >= 0; i--) pts.push(P(r0, a0 + (a1 - a0) * i / n));
+    return "M" + pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join("L") + "Z";
+  }
+  let html = `<rect x="0" y="0" width="600" height="360" fill="#0f1420"/>`;
+  html += `<path d="${sector(R0 - 26, R0, -64, 64)}" fill="#141a28" stroke="rgba(170,190,230,.25)"/>`;
+  html += `<text x="300" y="${P(R0 - 13, 0)[1] + 4}" text-anchor="middle" font-family="Barlow Condensed" font-size="12" letter-spacing="2" fill="#93a0b8">CONCOURSE STREET  (SPINWARD &#8594;)</text>`;
+  for (const r of ROOMS) {
+    const ra = r.deck === 0 ? R0 : R1 + 6, rb = r.deck === 0 ? R1 : R2;
+    const c = P((ra + rb) / 2, (r.a0 + r.a1) / 2);
+    const fill = r.screen ? "rgba(255,210,138,.16)" : "rgba(143,195,232,.10)";
+    html += `<g class="room" data-id="${r.id}" tabindex="0" role="button" aria-label="${r.name}" style="cursor:pointer">
+      <path d="${sector(ra, rb, r.a0 + 0.6, r.a1 - 0.6)}" fill="${fill}" stroke="rgba(228,232,242,.45)" stroke-width="1.2"/>
+      <text x="${c[0].toFixed(1)}" y="${(c[1] + 4).toFixed(1)}" text-anchor="middle" font-family="Barlow Condensed" font-size="${(r.a1 - r.a0) < 18 ? 11 : 13}" fill="#e4e8f2">${r.name.split(" (")[0].replace("Shipwright and outfitter", "Shipwright").replace("Trade terminals", "Trade").replace("Customs and arrivals", "Customs").replace("Bunks and a rented room", "Bunks").replace("The Long Fall", "Bar")}</text></g>`;
+  }
+  html += `<text x="16" y="24" font-family="Barlow Condensed" font-size="13" letter-spacing="1.5" fill="#93a0b8">HUB IS UP. DOWN (OUTWARD) IS THE FLOOR.</text>`;
+  html += `<text x="16" y="346" font-family="Barlow" font-size="12" fill="#93a0b8">Upper band: concourse deck (1.0 g). Lower band: the deck below. Warm rooms open a screen.</text>`;
+  svg.innerHTML = html;
+  const show = id => { const r = ROOMS.find(x => x.id === id); $("roominfo").innerHTML = `<h3>${r.name}</h3><p>${r.text}</p>${r.screen ? `<p class="muted" style="margin-top:6px">Opens: ${r.screen === "market" ? '<a href="' + $("lnkMarket").href + '">the market</a>' : '<a href="' + $("lnkGames").href + '">the games and job board</a>'}</p>` : ""}`;
+    svg.querySelectorAll(".room path").forEach(p => p.setAttribute("stroke-width", "1.2")); svg.querySelector(`.room[data-id="${id}"] path`).setAttribute("stroke-width", "3"); };
+  svg.querySelectorAll(".room").forEach(g => { g.addEventListener("mouseenter", () => show(g.dataset.id)); g.addEventListener("click", () => show(g.dataset.id)); g.addEventListener("focus", () => show(g.dataset.id)); });
+  show("bar");
+})();
+
+// ---------------------------------------------------------------- the scene
+const canvas = $("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 40000);
+
+// the sun is fixed; the stations ride an orbit, so the planet moves round them (the origin stays on the stations)
+const SUN = new THREE.Vector3(1, 0.18, -0.35).normalize();
+const sun = new THREE.DirectionalLight(0xfff4e0, 1.25);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -560, right: 560, top: 560, bottom: -560, near: 1, far: 2400 });
+sun.shadow.bias = -0.0008;
+sun.shadow.normalBias = 0.6;
+scene.add(sun, sun.target);
+const amb = new THREE.AmbientLight(0x2a3346, 0.22);     // starlight and planetshine, dim enough that the lamps read
+scene.add(amb);
+
+// planet, its atmosphere, stars
+const PLANET_R = 2400, ORBIT_R = 3050;
+function planetTexture() {
+  const c = document.createElement("canvas"); c.width = 512; c.height = 256; const g = c.getContext("2d");
+  g.fillStyle = "#1d4f86"; g.fillRect(0, 0, 512, 256);
+  let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 70; i++) { const x = rnd() * 512, y = 40 + rnd() * 176, r = 8 + rnd() * 34; g.fillStyle = rnd() < 0.5 ? "#4f7a3a" : "#8a7a4a"; g.beginPath(); g.ellipse(x, y, r * 1.6, r, rnd() * 3, 0, 7); g.fill(); }
+  g.fillStyle = "rgba(255,255,255,.55)"; for (let i = 0; i < 120; i++) { const x = rnd() * 512, y = rnd() * 256; g.beginPath(); g.ellipse(x, y, 10 + rnd() * 30, 3 + rnd() * 5, 0, 0, 7); g.fill(); }
+  g.fillStyle = "#e8eef4"; g.fillRect(0, 0, 512, 14); g.fillRect(0, 242, 512, 14);
+  return new THREE.CanvasTexture(c);
+}
+const planet = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 96, 64), new THREE.MeshLambertMaterial({ map: planetTexture() }));
+scene.add(planet);
+const atmo = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R * 1.025, 96, 64), new THREE.MeshBasicMaterial({ color: 0x6fb2ff, transparent: true, opacity: 0.16, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+planet.add(atmo);
+(function stars() {
+  const n = 2600, p = new Float32Array(n * 3); let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < n; i++) { const u = rnd() * 2 - 1, t = rnd() * 6.283, r = Math.sqrt(1 - u * u); p[i * 3] = r * Math.cos(t) * 30000; p[i * 3 + 1] = u * 30000; p[i * 3 + 2] = r * Math.sin(t) * 30000; }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xc8d4ff, size: 1.6, sizeAttenuation: false })));
+})();
+const sunDisc = new THREE.Mesh(new THREE.SphereGeometry(260, 24, 16), new THREE.MeshBasicMaterial({ color: 0xfff6dd }));
+sunDisc.position.copy(SUN).multiplyScalar(30000); scene.add(sunDisc);
+
+// ---- hull material: lit by the sun (with shadows) plus the station's own lamps, baked per vertex
+const LAMPS_ON = { value: 1 };
+function hullMat(color, opts = {}) {
+  const m = new THREE.MeshPhongMaterial(Object.assign({ color, shininess: 18, specular: 0x222222, flatShading: !!opts.flat }, opts.vertexColors ? { vertexColors: true } : {}));
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uLamps = LAMPS_ON;
+    sh.vertexShader = "attribute vec3 lamp;\nvarying vec3 vLamp;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvLamp = lamp;");
+    sh.fragmentShader = "uniform float uLamps;\nvarying vec3 vLamp;\n" + sh.fragmentShader.replace("#include <envmap_fragment>", "outgoingLight += diffuseColor.rgb * vLamp * uLamps;\n#include <envmap_fragment>");
+  };
+  return m;
+}
+const glowMats = [];   // emissive bits: windows, beacons, lane lights (they dim a little in sunlight)
+function glowMat(color, k = 1) { const m = new THREE.MeshBasicMaterial({ color }); m.userData = { base: new THREE.Color(color), k }; glowMats.push(m); return m; }
+
+class Station {
+  constructor(name, kind, pos) { this.name = name; this.kind = kind; this.root = new THREE.Group(); this.lamps = []; this.blink = []; this.root.position.copy(pos); scene.add(this.root); }
+  part(geo, color, parent, opts = {}) {
+    const m = new THREE.Mesh(geo, hullMat(color, opts)); m.castShadow = true; m.receiveShadow = true; m.userData.hull = true; (parent || this.root).add(m); return m;
+  }
+  glow(geo, color, parent, k) { const m = new THREE.Mesh(geo, glowMat(color, k)); (parent || this.root).add(m); return m; }
+  // a lamp in station-local metres: colour, reach R (m), power. `bulb` draws the fitting.
+  lamp(x, y, z, color, R, p = 1, bulb = true, parent) {
+    const c = new THREE.Color(color); this.lamps.push({ v: new THREE.Vector3(x, y, z), c, R, p });
+    if (bulb) { const b = this.glow(new THREE.SphereGeometry(Math.max(0.5, R * 0.03), 8, 6), c.clone().lerp(new THREE.Color(0xffffff), 0.35), parent); b.position.set(x, y, z); return b; }
+  }
+  // Bake every lamp into every hull vertex, in this station's own frame: each lamp lights what is near it
+  // wherever the camera is. The root is at the origin with no spin while this runs.
+  bake() {
+    const keep = this.root.position.clone(); this.root.position.set(0, 0, 0); this.root.updateMatrixWorld(true);
+    const v = new THREE.Vector3(), n = new THREE.Vector3(), d = new THREE.Vector3(), nm = new THREE.Matrix3();
+    this.root.traverse(o => {
+      if (!o.userData.hull) return;
+      const g = o.geometry; if (!g.attributes.normal) g.computeVertexNormals();
+      const P = g.attributes.position, N = g.attributes.normal, out = new Float32Array(P.count * 3);
+      nm.getNormalMatrix(o.matrixWorld);
+      for (let i = 0; i < P.count; i++) {
+        v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld); n.fromBufferAttribute(N, i).applyMatrix3(nm).normalize();
+        let r = 0, gg = 0, b = 0;
+        for (const L of this.lamps) {
+          d.subVectors(L.v, v); const dist = d.length(); if (dist > L.R) continue;
+          const nd = dist > 1e-4 ? n.dot(d) / dist : 1; if (nd < -0.15) continue;
+          const f = 1.9 * (1 - dist / L.R) ** 2 * L.p * (0.3 + 0.7 * Math.max(nd, 0));
+          r += L.c.r * f; gg += L.c.g * f; b += L.c.b * f;
+        }
+        out[i * 3] = Math.min(r, 3); out[i * 3 + 1] = Math.min(gg, 3); out[i * 3 + 2] = Math.min(b, 3);
+      }
+      g.setAttribute("lamp", new THREE.BufferAttribute(out, 3));
+    });
+    this.root.position.copy(keep); this.root.updateMatrixWorld(true);
+  }
+}
+const WARM = 0xffc27a, WHITE = 0xe8f0ff, AMBER = 0xffa040, GREEN = 0x5dff9a, RED = 0xff4a3a, BLUE = 0x8fc8ff;
+let seed = 5; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+// ---- 1. Meridian Exchange: a still hub on the axis and a ring spinning for 1 g at 60 m
+const RING_R = 60, SPIN = Math.sqrt(9.81 / RING_R);      // rad/s
+const meridian = new Station("Meridian Exchange", "orbital trade ring", new THREE.Vector3(0, 0, 0));
+(function build(S) {
+  S.part(new THREE.CylinderGeometry(9, 9, 74, 28), 0x8b97aa);
+  for (const y of [-41, 41]) { const c = S.part(new THREE.CylinderGeometry(5.5, 7, 8, 20), 0xa8503c); c.position.y = y; }
+  const port = S.glow(new THREE.TorusGeometry(4.6, 0.5, 8, 24), GREEN); port.rotation.x = Math.PI / 2; port.position.y = 45.2;
+  for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3, m = S.part(new THREE.BoxGeometry(7, 12, 7), 0x9aa3b4); m.position.set(Math.cos(a) * 11, 14, Math.sin(a) * 11); m.rotation.y = -a; }
+  // solar arrays on the still hub, above the ring's plane
+  for (const s of [-1, 1]) { const arm = S.part(new THREE.BoxGeometry(44, 1.2, 1.2), 0x6b7385); arm.position.set(s * 31, 30, 0);
+    const pan = S.part(new THREE.BoxGeometry(34, 0.6, 16), 0x2d5aa6); pan.position.set(s * 36, 30, 0); }
+  // the ring, its spokes and windows: one group, spun about the hub axis
+  S.ring = new THREE.Group(); S.root.add(S.ring);
+  const tor = S.part(new THREE.TorusGeometry(RING_R, 6.5, 14, 120), 0x9ea8ba, S.ring); tor.rotation.x = Math.PI / 2;
+  const deck = S.part(new THREE.CylinderGeometry(RING_R + 7.5, RING_R + 7.5, 5, 120, 1, true), 0x7d8799, S.ring);
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4, sp = S.part(new THREE.CylinderGeometry(1.7, 1.7, RING_R - 9, 10), 0x7d8799, S.ring);
+    sp.rotation.z = Math.PI / 2; sp.rotation.y = -a; sp.position.set(Math.cos(a) * (RING_R / 2 + 4), 0, Math.sin(a) * (RING_R / 2 + 4));
+    S.lamp(Math.cos(a) * 34, 2.2, Math.sin(a) * 34, WARM, 16, 0.9, true, S.ring); }
+  // windows: about half lit, a lamp in the room behind each lit one
+  const win = new THREE.BoxGeometry(2.2, 1.4, 0.4);
+  for (let i = 0; i < 72; i++) {
+    const a = i / 72 * Math.PI * 2, lit = rnd() < 0.55;
+    const w = S.glow(win, lit ? 0xffd28a : 0x1a1f2a, S.ring, lit ? 1 : 0); w.position.set(Math.cos(a) * (RING_R + 7.7), (i % 2 ? 1.2 : -1.2), Math.sin(a) * (RING_R + 7.7)); w.rotation.y = -a + Math.PI / 2;
+    if (lit && i % 3 === 0) S.lamp(Math.cos(a) * (RING_R + 9), 0, Math.sin(a) * (RING_R + 9), WARM, 15, 1.1, false);
+  }
+  for (let i = 0; i < 16; i++) { const a = (i + 0.5) / 16 * Math.PI * 2; S.lamp(Math.cos(a) * (RING_R - 8), 4, Math.sin(a) * (RING_R - 8), 0xffe0b0, 17, 0.8, true, S.ring); }
+  // hub floodlights and the docking port's lights (on the axis, so they light the spinning ring the same at every angle)
+  for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + 0.5; S.lamp(Math.cos(a) * 10.5, -8, Math.sin(a) * 10.5, WHITE, 26, 1.1); S.lamp(Math.cos(a) * 10.5, 26, Math.sin(a) * 10.5, WARM, 20, 0.8); }
+  S.lamp(0, 47, 0, GREEN, 18, 1.2); S.lamp(0, -46, 0, RED, 14, 1);
+  // the approach lane over the top port: a string of lights the ship flies down
+  S.lane = [];
+  for (let k = 1; k <= 9; k++) { const y = 46 + k * 22; for (const s of [-1, 1]) { const b = S.glow(new THREE.SphereGeometry(0.9, 8, 6), GREEN, null, 1); b.position.set(s * 9, y, 0); S.lane.push(b); } }
+  const mast = S.part(new THREE.CylinderGeometry(0.5, 0.5, 14, 6), 0xc8ccd4); mast.position.set(0, -52, 0);
+  S.blink.push(S.glow(new THREE.SphereGeometry(1.1, 8, 6), RED)); S.blink[0].position.set(0, -59.5, 0);
+})(meridian);
+
+// ---- 2. Kessler Rock: a mining outpost bolted onto an asteroid
+const kessler = new Station("Kessler Rock", "mining outpost", new THREE.Vector3(-360, -60, 200));
+(function build(S) {
+  const g = new THREE.IcosahedronGeometry(46, 4), P = g.attributes.position, cols = new Float32Array(P.count * 3), v = new THREE.Vector3();
+  const noise = (x, y, z) => Math.sin(x * 0.09 + 1.3) * Math.sin(y * 0.11 + 0.4) * Math.sin(z * 0.08 + 2.1) + 0.5 * Math.sin(x * 0.23 + y * 0.19) * Math.sin(z * 0.21 + 0.7);
+  for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); const k = 1 + 0.22 * noise(v.x, v.y, v.z); v.multiplyScalar(k); v.y *= 0.78; v.x *= 1.25; P.setXYZ(i, v.x, v.y, v.z);
+    const ore = Math.sin(v.x * 0.15 + v.z * 0.1) > 0.85, sh = 0.82 + 0.18 * Math.sin(v.y * 0.3 + v.x * 0.2);
+    const c = ore ? [0.78, 0.42, 0.18] : [0.52 * sh, 0.42 * sh, 0.35 * sh]; cols.set(c, i * 3); }
+  g.setAttribute("color", new THREE.BufferAttribute(cols, 3)); g.computeVertexNormals();
+  S.part(g, 0xffffff, null, { flat: true, vertexColors: true });
+  // habitat on the top: three cans, a glass dome, a pad
+  for (let k = 0; k < 3; k++) { const c = S.part(new THREE.CylinderGeometry(6, 6, 22, 16), k === 1 ? 0xd9a33a : 0xb9bec8); c.rotation.z = Math.PI / 2; c.position.set(-18 + k * 18, 36, -6 + k * 3); c.rotation.y = 0.3; }
+  const dome = S.part(new THREE.SphereGeometry(9, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), 0x8fd8e8); dome.position.set(20, 38, 12);
+  const inner = S.glow(new THREE.SphereGeometry(6.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xffc890, null, 1); inner.position.set(20, 38.3, 12);
+  const pad = S.part(new THREE.CylinderGeometry(13, 13, 1.5, 24), 0x5c626e); pad.position.set(-36, 32, 22);
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; S.lamp(-36 + Math.cos(a) * 12.5, 33.4, 22 + Math.sin(a) * 12.5, GREEN, 8, 0.9); }
+  // the derrick over the pit, floodlights looking down into it
+  for (const [x, z] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) { const leg = S.part(new THREE.BoxGeometry(0.8, 34, 0.8), 0xe0b030); leg.position.set(36 + x * (0.7), 46, -20 + z * 0.7); }
+  for (const y of [34, 44, 54, 62]) { const b = S.part(new THREE.BoxGeometry(7, 0.7, 7), 0xe0b030); b.position.set(36, y, -20); }
+  const pit = S.glow(new THREE.CylinderGeometry(9, 6, 1, 18), 0x2a1408, null, 0); pit.position.set(36, 27.5, -20);
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.6; S.lamp(36 + Math.cos(a) * 10, 40, -20 + Math.sin(a) * 10, WHITE, 62, 2.0); }
+  S.blink.push(S.glow(new THREE.SphereGeometry(1, 8, 6), RED)); S.blink[0].position.set(36, 64.5, -20);
+  // ore glowing in the pit and veins
+  for (let k = 0; k < 7; k++) { const c = S.glow(new THREE.ConeGeometry(1.4, 5 + rnd() * 4, 5), 0xff8a2a, null, 0.6); c.position.set(30 + rnd() * 12, 28, -26 + rnd() * 12); c.rotation.set(rnd() - 0.5, 0, rnd() - 0.5); }
+  // the mass driver: a rail off the rock with lamps all along it
+  const rail = S.part(new THREE.BoxGeometry(3, 3, 110), 0x7a808c); rail.position.set(-20, -6, -96);
+  for (let k = 0; k < 11; k++) { const z = -48 - k * 10; S.lamp(-20, -3.4, z, AMBER, 13, 1.1); }
+  // hab windows
+  for (let k = 0; k < 12; k++) { const lit = rnd() < 0.6, w = S.glow(new THREE.BoxGeometry(1.6, 1.2, 0.3), lit ? 0xffd28a : 0x1a1f2a, null, lit ? 1 : 0); w.position.set(-27 + k * 3.2, 37, 0.9 + k * 0.5); w.rotation.y = 0.3; if (lit && k % 2) S.lamp(-27 + k * 3.2, 37, 4 + k * 0.5, WARM, 14, 1); }
+})(kessler);
+
+// ---- 3. Gatehouse Kappa: an armoured customs post and its scan gate
+const gate = new Station("Gatehouse Kappa", "military customs post", new THREE.Vector3(380, 50, 160));
+(function build(S) {
+  const body = S.part(new THREE.CylinderGeometry(26, 28, 24, 6), 0x4e5c7c); body.rotation.y = Math.PI / 6;
+  const stripe = S.part(new THREE.CylinderGeometry(28.6, 28.6, 4, 6), 0xb8352c); stripe.rotation.y = Math.PI / 6; stripe.position.y = -2;
+  const top = S.part(new THREE.CylinderGeometry(18, 26, 8, 6), 0x3e4964); top.rotation.y = Math.PI / 6; top.position.y = 16;
+  const tower = S.part(new THREE.BoxGeometry(10, 16, 10), 0x5d6a88); tower.position.y = 28;
+  const mast = S.part(new THREE.CylinderGeometry(0.5, 0.5, 18, 6), 0xc8ccd4); mast.position.y = 45;
+  S.blink.push(S.glow(new THREE.SphereGeometry(1.2, 8, 6), RED)); S.blink[0].position.y = 55;
+  for (const s of [-1, 1]) { const t = S.part(new THREE.SphereGeometry(6, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0x8a93a8); t.position.set(s * 16, 20, -8);
+    const barrel = S.part(new THREE.CylinderGeometry(0.8, 0.8, 16, 8), 0x2c3242); barrel.rotation.x = Math.PI / 2 - 0.25; barrel.position.set(s * 16, 24, 0); }
+  // hangar mouth facing the gate, lit inside
+  const mouth = S.glow(new THREE.BoxGeometry(18, 8, 0.6), 0xffb46a, null, 1); mouth.position.set(0, -4, 26.6);
+  S.lamp(0, -4, 32, WARM, 34, 2.0);
+  for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; S.lamp(Math.cos(a) * 30, 10, Math.sin(a) * 30, WHITE, 24, 1.0); }
+  for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.PI / 6; const b = S.glow(new THREE.SphereGeometry(0.9, 8, 6), RED); b.position.set(Math.cos(a) * 29, 12, Math.sin(a) * 29); S.blink.push(b); S.lamp(Math.cos(a) * 30, 12, Math.sin(a) * 30, RED, 10, 0.7, false); }
+  // the scan gate: a square frame 90 m out, lane lights all round it
+  const F = new THREE.Group(); F.position.set(0, -4, 110); S.root.add(F); S.frame = F;
+  for (const [w, h, x, y] of [[50, 3, 0, 24], [50, 3, 0, -24], [3, 51, 24, 0], [3, 51, -24, 0]]) { const b = S.part(new THREE.BoxGeometry(w, h, 3), 0x5d6a88, F); b.position.set(x, y, 0); }
+  for (let k = 0; k < 16; k++) { const t = k / 16 * 4, side = Math.floor(t), u = t - side;
+    const p = [[-22 + 44 * u, 22], [22, 22 - 44 * u], [22 - 44 * u, -22], [-22, -22 + 44 * u]][side];
+    S.lamp(p[0], p[1] - 4, 110 + 2, BLUE, 20, 1.1); }
+  S.scan = new THREE.Mesh(new THREE.PlaneGeometry(44, 3), new THREE.MeshBasicMaterial({ color: 0x8fc8ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+  F.add(S.scan);
+  // a navy cutter parked on the spine
+  const cut = S.part(new THREE.ConeGeometry(3, 16, 6), 0xb0b6c4); cut.rotation.x = Math.PI / 2; cut.position.set(-30, -10, 10);
+})(gate);
+const STATIONS = [meridian, kessler, gate];
+for (const S of STATIONS) S.bake();
+
+// a ship of our own (for the docking run), and an NPC that passes the gate
+function makeShip(color) {
+  const g = new THREE.Group();
+  const hull = new THREE.Mesh(new THREE.ConeGeometry(2.4, 11, 6), hullMat(color)); hull.rotation.x = Math.PI / 2; hull.castShadow = true;
+  hull.geometry.setAttribute("lamp", new THREE.BufferAttribute(new Float32Array(hull.geometry.attributes.position.count * 3).fill(0.15), 3));
+  const eng = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 6), glowMat(0x9fd8ff)); eng.position.z = -5.8;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 6, 4), glowMat(0xffffff)); head.position.z = 5.8;
+  g.add(hull, eng, head); scene.add(g); return g;
+}
+const myShip = makeShip(0xe0a040); myShip.visible = false; myShip.scale.setScalar(2);   // a 22 m freighter
+const npc = makeShip(0x8090b0);
+
+// labels
+const labels = STATIONS.map(S => { const d = document.createElement("div"); d.className = "label"; d.innerHTML = `${S.name}<i>${S.kind}</i>`; $("stage").appendChild(d); return d; });
+
+// ---------------------------------------------------------------- camera
+const VIEW = { target: new THREE.Vector3(), goal: new THREE.Vector3(), yaw: 0.35, pitch: 0.32, dist: 600, goalDist: 600 };
+const FOCI = [
+  { t: new THREE.Vector3(0, 0, 0), d: 230, name: 0 },
+  { t: kessler.root.position.clone().add(new THREE.Vector3(0, 10, 0)), d: 200, name: 1 },
+  { t: gate.root.position.clone().add(new THREE.Vector3(0, 0, 50)), d: 240, name: 2 },
+];
+let focus = -1;
+function setFocus(i) {
+  focus = i; ["fAll", "f0", "f1", "f2"].forEach((id, k) => $(id).setAttribute("aria-pressed", (k - 1) === i));
+  if (i < 0) { VIEW.goal.set(0, -10, 120); VIEW.goalDist = 600; } else { VIEW.goal.copy(FOCI[i].t); VIEW.goalDist = FOCI[i].d; }
+  const S = STATIONS[Math.max(0, i)]; $("where").innerHTML = `${S.name}<small>${S.kind}</small>`;
+  $("rSpin").textContent = S === meridian ? (SPIN * 60 / (2 * Math.PI)).toFixed(2) + " rpm" : "none";
+  $("rG").textContent = S === meridian ? "1.00 g" : S === kessler ? "0.002 g" : "0 g";
+  $("rLamps").textContent = S.lamps.length;
+}
+$("fAll").onclick = () => setFocus(-1); $("f0").onclick = () => setFocus(0); $("f1").onclick = () => setFocus(1); $("f2").onclick = () => setFocus(2);
+let drag = null;
+canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", e => { if (!drag) return; VIEW.yaw -= (e.clientX - drag.x) * 0.005; VIEW.pitch = Math.max(-1.4, Math.min(1.4, VIEW.pitch + (e.clientY - drag.y) * 0.005)); drag = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener("pointerup", () => drag = null);
+canvas.addEventListener("wheel", e => { e.preventDefault(); VIEW.goalDist = Math.max(60, Math.min(2200, VIEW.goalDist * Math.exp(e.deltaY * 0.0012))); }, { passive: false });
+
+// ---------------------------------------------------------------- orbit, sun and planet shadow
+const STATE = { orbit: 200, lamps: true, dock: null, t: 0 };
+function sunFactor() {
+  // the stations sit at P on a circular orbit; the planet is at -P from them. Sun blocked when the planet is between.
+  const a = STATE.orbit * Math.PI / 180, P = new THREE.Vector3(Math.cos(a) * ORBIT_R, 0, Math.sin(a) * ORBIT_R);
+  const along = P.dot(SUN); const perp = P.clone().sub(SUN.clone().multiplyScalar(along)).length();
+  const lit = along > 0 ? 1 : THREE.MathUtils.smoothstep(perp, PLANET_R - 120, PLANET_R + 60);
+  return { P, lit };
+}
+function applyOrbit() {
+  const { P, lit } = sunFactor();
+  planet.position.copy(P).multiplyScalar(-1);
+  planet.rotation.y = STATE.orbit * Math.PI / 180 * 0.2;
+  sun.intensity = 1.25 * lit;
+  amb.intensity = 0.2 + 0.1 * lit;
+  for (const m of glowMats) m.color.copy(m.userData.base).multiplyScalar(1 - 0.35 * lit * (m.userData.k ?? 1));
+  $("orbitOut").textContent = STATE.orbit + "°";
+  $("rSun").textContent = lit > 0.99 ? "sunlit" : lit < 0.01 ? "shadow" : "penumbra";
+  $("bSun").setAttribute("aria-pressed", lit > 0.5); $("bShadow").setAttribute("aria-pressed", lit <= 0.5);
+  $("status").textContent = lit < 0.5 ? "In the planet's shadow the stations are lit only by their own lamps, floodlights and windows." : "In sunlight: the sun casts the ring's shadow on the hub, and the lamps still pool on the shadowed side.";
+}
+$("orbit").addEventListener("input", e => { STATE.orbit = +e.target.value; applyOrbit(); });
+const setOrbit = v => { STATE.orbit = v; $("orbit").value = v; applyOrbit(); };
+$("bSun").onclick = () => setOrbit(20); $("bShadow").onclick = () => setOrbit(200);
+const toggleLamps = () => { STATE.lamps = !STATE.lamps; $("bLamps").setAttribute("aria-pressed", STATE.lamps); LAMPS_ON.value = STATE.lamps ? 1 : 0; };
+$("bLamps").onclick = toggleLamps;
+
+// ---------------------------------------------------------------- docking run, in the Meridian's frame
+const GATES = [[2000, 120], [1000, 60], [400, 20], [150, 5], [50, 1]];
+function limitAt(r) { // the corridor's speed cone, closing speed in m/s at range r
+  if (r >= 2000) return 120; for (let i = 0; i < GATES.length - 1; i++) { const [r0, v0] = GATES[i], [r1, v1] = GATES[i + 1]; if (r <= r0 && r >= r1) return v1 + (v0 - v1) * (r - r1) / (r0 - r1); } return 1;
+}
+function startDock() {
+  STATE.dock = { r: 260, v: 12, phase: "corridor" }; $("status").textContent = "Docking run, played at 4x: the assist holds the closing speed under the corridor's cone (in the Meridian's frame), then the clamps take the ship."; myShip.visible = true; setFocus(0); VIEW.goalDist = 300; VIEW.pitch = 0.18;
+  $("bDock").setAttribute("aria-pressed", "true"); $("rFrame").textContent = "Meridian";
+}
+$("bDock").onclick = () => STATE.dock ? endDock() : startDock();
+function endDock() { STATE.dock = null; myShip.visible = false; $("bDock").setAttribute("aria-pressed", "false"); $("rFrame").textContent = "orbit"; $("rRange").textContent = "--"; $("rClose").textContent = "--"; $("rClear").textContent = "--"; applyOrbit(); }
+
+addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.code === "Digit1") setFocus(0); if (e.code === "Digit2") setFocus(1); if (e.code === "Digit3") setFocus(2); if (e.code === "Digit0") setFocus(-1);
+  if (e.code === "KeyL") toggleLamps(); if (e.code === "KeyN") setOrbit(STATE.orbit === 20 ? 200 : 20); if (e.code === "KeyD") (STATE.dock ? endDock() : startDock());
+});
+
+// ---------------------------------------------------------------- loop
+const clock = new THREE.Clock(); const tmp = new THREE.Vector3();
+function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); } }
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05); STATE.t += dt; resize();
+  if (!reduce) meridian.ring.rotation.y += SPIN * dt;
+  const on = (Math.sin(STATE.t * 3.2) > 0.2); for (const S of STATIONS) for (const b of S.blink) b.visible = on;
+  meridian.lane.forEach((b, i) => b.material.color.setHex(((Math.floor(STATE.t * 6) - Math.floor(i / 2)) % 9 + 9) % 9 === 0 ? 0xffffff : 0x3fd27a));
+  gate.scan.position.y = Math.sin(STATE.t * 1.6) * 20;
+  // the NPC flies through the gate on a loop
+  const u = (STATE.t * 0.05) % 1; npc.position.set(gate.root.position.x + 4, gate.root.position.y - 4, gate.root.position.z + 520 - u * 900); npc.rotation.y = Math.PI; npc.visible = u < 0.82;
+  // docking: the assist holds the closing speed under the cone, then clamps
+  if (STATE.dock) {
+    const D = STATE.dock;
+    const sdt = dt * 4; VIEW.goal.set(0, 47 + D.r * 0.5, 0); VIEW.goalDist = 150 + D.r * 1.2;
+    if (D.phase === "corridor") { const lim = limitAt(D.r); D.v += Math.max(-4 * sdt, Math.min(2 * sdt, lim * 0.92 - D.v)); D.r = Math.max(0, D.r - D.v * sdt); if (D.r <= 0.2) { D.phase = "clamped"; D.hold = 3; } }
+    else if ((D.hold -= dt) <= 0) endDock();
+    if (STATE.dock) {
+      myShip.position.set(0, 47 + D.r, 0); myShip.rotation.set(Math.PI / 2, 0, 0);
+      $("rRange").textContent = D.r.toFixed(D.r < 10 ? 1 : 0) + " m"; $("rClose").textContent = D.v.toFixed(1) + " m/s";
+      $("rClear").textContent = D.phase === "clamped" ? "clamped" : "berth 1";
+    }
+  }
+  // camera
+  VIEW.target.lerp(VIEW.goal, 1 - Math.exp(-dt * 3)); VIEW.dist += (VIEW.goalDist - VIEW.dist) * (1 - Math.exp(-dt * 3));
+  camera.position.set(VIEW.target.x + VIEW.dist * Math.cos(VIEW.pitch) * Math.sin(VIEW.yaw), VIEW.target.y + VIEW.dist * Math.sin(VIEW.pitch), VIEW.target.z + VIEW.dist * Math.cos(VIEW.pitch) * Math.cos(VIEW.yaw));
+  camera.lookAt(VIEW.target);
+  sun.target.position.copy(VIEW.target).setY(0).multiplyScalar(0.0); sun.position.copy(SUN).multiplyScalar(1200);
+  renderer.render(scene, camera);
+  const w = canvas.clientWidth, h = canvas.clientHeight, rect = canvas.getBoundingClientRect(), srect = $("stage").getBoundingClientRect();
+  STATIONS.forEach((S, i) => { tmp.copy(S.root.position); tmp.y += i === 0 ? 70 : 62; tmp.project(camera); const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1;
+    labels[i].style.display = vis ? "" : "none"; labels[i].style.left = (rect.left - srect.left + (tmp.x * 0.5 + 0.5) * w) + "px"; labels[i].style.top = (rect.top - srect.top + (-tmp.y * 0.5 + 0.5) * h) + "px"; });
+  requestAnimationFrame(frame);
+}
+setFocus(-1); applyOrbit(); requestAnimationFrame(frame);
+</script>

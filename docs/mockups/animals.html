@@ -1,0 +1,875 @@
+<title>Herds, Hunters and Glowmoths</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the roaming scene first, full width; then a reading column of rosters, rules and decisions.
+   The house style of docs/mockups/towns.html: dark ground, amber for what you can press, one deliberate dark look. */
+:root{
+  color-scheme: dark;
+  --ground:#0e100c;
+  --panel:rgba(20,19,14,.88);
+  --panel-solid:#18170f;
+  --raise:#1f1d15;
+  --line:rgba(226,206,160,.17);
+  --ink:#ece4d2;
+  --muted:#a89d86;
+  --amber:#f0b43c;
+  --sky:#8fc3d8;
+  --moss:#8fdc9a;
+  --warn:#ff6b57;
+  --glow:#c6ff78;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+html,body{background:var(--ground);color:var(--ink)}
+body{font-family:var(--body);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:28px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,5vw,46px)}
+h2{font-size:26px;margin-bottom:10px}
+h3{font-size:18px;letter-spacing:.04em}
+p{margin:0 0 10px;max-width:72ch}
+a{color:var(--sky)}
+code{font-family:var(--mono);font-size:12.5px;color:var(--sky)}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.pill{display:inline-block;font-family:var(--display);font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:12px;padding:3px 9px;border-radius:3px;border:1px solid var(--amber);color:var(--amber)}
+header.top{display:grid;gap:10px}
+header.top .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lede{font-size:17px;color:var(--ink);max-width:70ch}
+.muted{color:var(--muted)}
+
+/* the scene */
+.stage{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#000;height:min(72vh,680px);min-height:420px}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.ctl{top:12px;left:12px;padding:10px;display:grid;gap:8px;width:min(300px,calc(100% - 24px))}
+.ctl .seg{display:flex;flex-wrap:wrap;gap:5px}
+.ctl button,.chipbtn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:4px 8px;font-family:var(--display);font-size:14px;letter-spacing:.05em}
+.ctl button[aria-pressed="true"],.chipbtn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.ctl button:hover,.chipbtn:hover{border-color:rgba(240,180,60,.55)}
+.ctl button:focus-visible,.chipbtn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.ctl label{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.ctl output{font-family:var(--mono);color:var(--ink);font-size:12px}
+.ctl input[type=range]{width:100%;accent-color:var(--amber);margin:0}
+select{background:var(--panel-solid);color:var(--ink);border:1px solid var(--line);border-radius:3px;padding:5px;font-family:var(--body);width:100%}
+.who{right:12px;top:12px;padding:10px 12px;width:min(270px,calc(100% - 24px));display:grid;gap:6px;font-size:13px}
+.who img{width:64px;height:64px;image-rendering:auto;float:left;margin-right:8px}
+.who .k{font-family:var(--display);letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--muted)}
+.who b{font-family:var(--display);font-size:18px;letter-spacing:.03em}
+.legend{left:12px;right:12px;bottom:12px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.legend .chipbtn{font-size:13px;padding:2px 7px;display:inline-flex;align-items:center;gap:5px}
+.legend .chipbtn img{width:22px;height:22px}
+.banner{left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 18px;text-align:center;max-width:360px}
+.banner b{font-family:var(--display);font-size:22px;display:block}
+.toast{left:50%;top:12px;transform:translateX(-50%);padding:5px 12px;font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:13px;transition:opacity .4s;opacity:0;pointer-events:none}
+@media (max-width:760px){
+  .stage{height:78vh}
+  .who{top:auto;bottom:64px;right:12px}
+  .ctl{width:calc(100% - 24px)}
+  .legend{display:none}
+}
+
+/* reading sections */
+section{display:grid;gap:10px}
+.biomes{display:grid;gap:18px}
+.biome{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:10px}
+.biome header{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
+.biome header .muted{font-size:13px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.card{background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:10px;display:grid;grid-template-columns:72px 1fr;gap:4px 10px;align-items:start;min-width:0}
+.card img.por{width:72px;height:72px;grid-row:span 3}
+.card h4{margin:0;font-family:var(--display);font-size:18px;letter-spacing:.03em}
+.card .tags{display:flex;flex-wrap:wrap;gap:4px}
+.tag{font-family:var(--display);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;padding:1px 6px;border-radius:2px;border:1px solid var(--line);color:var(--muted)}
+.tag.pred{color:var(--warn);border-color:rgba(255,107,87,.5)}
+.tag.live{color:var(--amber);border-color:rgba(240,180,60,.5)}
+.tag.night{color:var(--sky);border-color:rgba(143,195,216,.5)}
+.tag.glow{color:var(--glow);border-color:rgba(198,255,120,.5)}
+.card p{font-size:13px;margin:0;grid-column:2;color:var(--muted)}
+.drops{display:flex;gap:3px;grid-column:2}
+.drops img{width:26px;height:26px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
+tr:last-child td{border-bottom:none}
+td img{width:30px;height:30px;vertical-align:middle}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.cols>div{min-width:0}
+.note{border-left:3px solid var(--amber);padding:8px 12px;background:var(--raise);border-radius:0 6px 6px 0;font-size:14px}
+.note p:last-child{margin:0}
+.dropgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.drop{display:flex;gap:8px;align-items:center;background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px}
+.drop img{width:44px;height:44px}
+.drop b{display:block;font-family:var(--display);font-size:15px;letter-spacing:.03em}
+ol.q{display:grid;gap:12px;padding-left:22px;margin:0}
+ol.q li{max-width:80ch}
+ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
+.rec{color:var(--moss)}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="row"><span class="pill">Proposal, not built</span><span class="eyebrow">Design mockup &middot; 2026-11-11 &middot; fauna beyond fish</span></div>
+  <h1>Herds, Hunters and Glowmoths</h1>
+  <p class="lede">Animals for the home planet, biome by biome: who grazes, who hunts, who sleeps by day, what glows after dark, what can be tamed and what each one drops. Fish already swim (<code>world/fauna</code>); this is everything that walks, flies and crawls. Nothing on this page exists in the game yet.</p>
+</header>
+
+<div class="stage" id="stage">
+  <canvas id="view" aria-label="A hex patch of one biome with procedurally varied animals roaming it. Drag to orbit, scroll to zoom, click an animal to inspect it."></canvas>
+  <div class="panel ctl" id="ctl">
+    <div class="eyebrow">Hex patch, 271 cells of 2.833 m</div>
+    <select id="biome" aria-label="Biome">
+      <option value="fields">Fields</option>
+      <option value="desert">Desert</option>
+      <option value="jungle">Jungle</option>
+      <option value="swamp">Swamp</option>
+      <option value="mountains">Mountains</option>
+      <option value="tundra">Tundra</option>
+      <option value="beach">Beach</option>
+      <option value="moon">Barren moon (airless)</option>
+    </select>
+    <div class="seg" role="group" aria-label="Season">
+      <button data-season="0" aria-pressed="true">Summer</button><button data-season="1" aria-pressed="false">Autumn</button><button data-season="2" aria-pressed="false">Winter</button><button data-season="3" aria-pressed="false">Spring</button>
+    </div>
+    <label for="hour">Time of day <output id="hourOut">10:00</output></label>
+    <input id="hour" type="range" min="0" max="24" step="0.1" value="10">
+    <div class="seg">
+      <button id="night" aria-pressed="false">Night (N)</button>
+      <button id="reroll" aria-pressed="false">New animals (R)</button>
+      <button id="pause" aria-pressed="false">Pause</button>
+    </div>
+    <div class="muted" style="font-size:12px" id="season">Day 0 of 100, northern summer</div>
+  </div>
+  <div class="panel who" id="who" aria-live="polite">
+    <div class="k">Click an animal</div>
+    <div class="muted">Each one is built from its species' body plan with its own size, colour and pattern drawn from a seed.</div>
+  </div>
+  <div class="panel legend" id="legend"></div>
+  <div class="panel banner" id="banner" hidden><b>Nothing lives here</b><span class="muted">An airless body has an empty roster: no animals, no birds, no insects. Only your own lamps.</span></div>
+  <div class="panel toast" id="toast"></div>
+</div>
+
+<section>
+  <h2>Who lives where</h2>
+  <p>Each biome of generator version 6 (<code>bigger-biomes</code>: fields, desert, jungle, swamp, mountains, tundra, beach, ocean) gets a short roster: one or two grazers, a hunter, a bird and something small. The ocean's roster is the fish list that already ships. Portraits are drawn at the size the field guide would show them.</p>
+  <div class="biomes" id="rosters"></div>
+</section>
+
+<section>
+  <h2>How they behave</h2>
+  <div class="cols">
+    <div>
+      <h3>Herd, flee, hunt</h3>
+      <p>Land animals reuse the schools' approach (<code>fauna</code>): packed arrays stepped on the CPU at a fixed rate, deterministic from a seed, one draw per kind. A herd shares a goal and keeps together; a grazer that sees a hunter inside its fear radius bolts away from it and the rest of the herd follows. A hunter picks the nearest prey in reach, chases at its run speed and gives up after a few seconds. In this mockup the hunter always misses; in the game a catch removes the prey from the herd and leaves its drops.</p>
+    </div>
+    <div>
+      <h3>Day, dusk and night</h3>
+      <p>Every species has an activity window. Grazers lie down at night in a tight group; foxes, dust hounds, stripe cats and pale wolves wake at dusk. Their eyes catch your lamplight. Fireflies, glowmoths and bog toads glow: fireflies drift over fields and swamp, glowmoths gather round the nearest lamp, toads' spots pulse by the water. A glow is light: each swarm lights what is near it, like a small lamp.</p>
+    </div>
+    <div>
+      <h3>Seasons and migration</h3>
+      <p>A year is 100 days (<code>orbit-and-seasons</code>), and day 0 is the northern summer. Shagback herds leave the tundra for the winter quarter and come back in spring. Larks leave the fields in winter. Snow hares and pale wolves turn white for winter and brown-grey in summer. The tropics have no winter to speak of, so the jungle roster is the same all year. Pick a season above to see it.</p>
+    </div>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>Behaviour</th><th>Who</th><th>Rule (proposed)</th><th>Numbers to tune</th></tr></thead>
+    <tbody>
+      <tr><td>Graze</td><td>grazers, livestock</td><td>Walk to the herd's goal, stop, head down, pick a new goal every 8 to 15 s</td><td>walk 0.6 to 1.4 m/s; herd spacing 1.5 m</td></tr>
+      <tr><td>Flee</td><td>all prey</td><td>A hunter inside the fear radius: run directly away, the herd follows the first to bolt</td><td>fear 9 m; run 3 to 6 m/s</td></tr>
+      <tr><td>Hunt</td><td>fox, dust hound, stripe cat, pale wolf, mire lurker, crag eagle</td><td>Nearest prey within 18 m, chase for at most 6 s, then rest 8 s</td><td>run 4 to 7 m/s</td></tr>
+      <tr><td>Sleep</td><td>everything outside its window</td><td>Lie down where it stands; birds land and fold; insects hide</td><td>window per species</td></tr>
+      <tr><td>Migrate</td><td>shagback, lark</td><td>Absent from the roster in the listed season; the herd leaves by walking off the map</td><td>season list per species</td></tr>
+      <tr><td>Avoid the player</td><td>wild animals</td><td>The player counts as a hunter for flee, at half the radius while crouched</td><td>4.5 m crouched</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Taming and husbandry</h2>
+  <div class="cols">
+    <div>
+      <p><b>Tame by feeding.</b> Hold a species' food (grain for woolbacks and hens, turnips for plodders, kale for ridge goats, dates for sand striders) and walk up crouched. Each feed fills a trust meter; full trust and the animal follows you. Lead it into a pen and it is livestock.</p>
+      <p><b>Livestock is yours and is saved.</b> A tamed animal is a stored record on the durable path (<code>world-persistence</code>), with its own ID, its species, its seed (so it keeps its size and coat) and its owner. Wild animals are derived from the seed and the clock and are never saved, the way schools are not.</p>
+    </div>
+    <div>
+      <p><b>Pens give produce on a timer</b> in world time, which passes only while the world is played: a woolback grows a fleece every 4 days and is shorn with shears; a hen lays an egg a day; a plodder gives milk each day with a pail. Fed livestock breeds when two share a pen: a new animal whose seed mixes its parents', so its size and coat sit between theirs.</p>
+      <p><b>Mounts:</b> sand striders carry a pack (8 slots) and walk you across the desert at 6 m/s. They are the only mount on this page; a ship is still the way to travel far.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What they drop</h2>
+  <p>Drops are items for the inventory grid. Hunting is a choice, never a requirement: every drop a wild animal gives, a tamed one gives without being killed (wool, milk, eggs, feathers, glow), except meat and hide.</p>
+  <div class="dropgrid" id="drops"></div>
+</section>
+
+<section>
+  <h2>Rosters are per body</h2>
+  <div class="note">
+    <p>The rule the fish already follow holds for every animal: a body's roster is explicit data, no species lives on two bodies, and an airless body's roster is empty. Barren, frozen and asteroid catalogue worlds are lifeless; pick "Barren moon" above and the patch is empty apart from your lamps. A future living world gets its own animals, never a copy of these.</p>
+    <p>Rosters are append-only, like the fish list, because a tamed animal is saved as its species' index. Adding or retuning wild animals never touches a saved world's terrain; it only changes what roams it.</p>
+  </div>
+</section>
+
+<section>
+  <h2>About the art</h2>
+  <p class="muted">The portraits and drop icons are painted by code, not by hand: <code>tools/art/animals_art.py</code> drives the hand-drawn-illustration kit, which copies the owner's friend's marker method (flat block, hatching in the shape's own tones, form crescents, a same-hue edge). It gets close; it is not the friend's work. Every four-legged portrait comes from one function fed the same body-plan numbers as the 3D creatures above. The 3D creatures are primitives (ellipsoids, cylinders, cones) as a stand-in for real models.</p>
+</section>
+
+<section>
+  <h2>Decisions / questions for the owner</h2>
+  <ol class="q">
+    <li><b>Do animals ever attack the player?</b> <span class="rec">Recommendation: no, not in the first version.</span> Hunters chase prey only and flee from the player at close range. Danger can come later, behind a world setting.</li>
+    <li><b>Is hunting in, or only husbandry?</b> <span class="rec">Recommendation: both, with every non-meat drop available from tamed animals,</span> so a player who never hunts misses nothing but meat and hide.</li>
+    <li><b>How many animals on screen?</b> <span class="rec">Recommendation: at most 40 land animals within 150 m, despawned behind the player,</span> in packed arrays like schools. This needs a <code>perf_suite</code> run on real hardware before it lands.</li>
+    <li><b>Do predators thin the herds for real?</b> <span class="rec">Recommendation: yes, but only near the player.</span> Out of sight the population is a number per region that drifts back to its target, never a simulation.</li>
+    <li><b>Glowing creatures as light sources?</b> <span class="rec">Recommendation: yes, as block light at the swarm's cell,</span> the way lamps are (<code>lamps-and-lanterns</code>), with a glow jar item that is a dim portable lamp.</li>
+    <li><b>Art: primitives, Blender models, or painted billboards?</b> <span class="rec">Recommendation: low-poly Blender models with pixel-art textures</span>, the vehicle pipeline, with these portraits as the field guide's art.</li>
+  </ol>
+</section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// =====================================================================
+// Data: rosters per biome. Sizes are metres; a cell is 2.833 m across.
+// =====================================================================
+const IMG = n => "animals/" + n + ".png";
+const DROPS = {
+  wool: ["Wool", "Shorn, or from the wild flock"], hide: ["Hide", "Leather for packs and tents"], meat: ["Meat", "Cooked at a hearth"],
+  egg: ["Egg", "One a day from a penned hen"], feather: ["Feather", "Fletching, bedding, a quill"], glow: ["Glow jar", "A dim lamp you carry"],
+  milk: ["Milk", "Pail it from a plodder"], horn: ["Horn", "Tool handles, a hunting horn"], shell: ["Shell", "Burnt for lime, like the harbour's"],
+};
+// plan: quad | bird | insect | crab | croc | toad. role: graze | live | hunt | bird | small.
+// act: day | night | dusk | always. glow: hex colour of the light it makes at night.
+const SPECIES = {
+  woolback: { name: "Woolback", role: "live", act: "day", herd: [4, 6], walk: 0.8, run: 3.5, plan: "quad", p: { L: 1.15, H: 0.75, leg: 0.42, neck: 0.12, head: 0.3, col: 0xeee6d2, headCol: 0x4a3e3c, legCol: 0x4a3e3c, wool: 1, ears: "flop", tail: "stub" }, drops: ["wool", "meat", "hide"], tame: "Grain", text: "A shaggy grazer in flocks. Shear it every 4 days." },
+  plodder: { name: "Plodder", role: "live", act: "day", herd: [2, 4], walk: 0.6, run: 3, plan: "quad", p: { L: 2.0, H: 1.0, leg: 0.8, neck: 0.2, head: 0.38, col: 0xb06e46, legCol: 0x8a5436, pattern: 2, patCol: 0xf6efe4, patScale: 2.2, horns: "spike", ears: "flop", tail: "tuft" }, drops: ["milk", "meat", "hide", "horn"], tame: "Turnip", text: "Slow cattle. Milk daily; pulls a plough later." },
+  hen: { name: "Meadow hen", role: "live", act: "day", herd: [3, 5], walk: 0.7, run: 3, plan: "bird", p: { L: 0.42, col: 0xde783c, wing: 0x8a4a22, beak: 0xf0c040, crest: 0xe02828, ground: 1 }, drops: ["egg", "feather", "meat"], tame: "Grain", text: "Never flies far. A penned hen lays an egg a day." },
+  meadow_hare: { name: "Meadow hare", role: "graze", act: "dusk", herd: [2, 3], walk: 1.0, run: 7, plan: "quad", p: { L: 0.55, H: 0.42, leg: 0.16, neck: 0.1, head: 0.2, col: 0xb08c64, ears: "long", tail: "stub", tailCol: 0xfaf6ec }, drops: ["hide", "meat"], text: "Fast and nervous, out at dawn and dusk." },
+  red_fox: { name: "Red fox", role: "hunt", act: "night", herd: [1, 1], walk: 1.2, run: 6, plan: "quad", eyes: 1, p: { L: 0.9, H: 0.45, leg: 0.38, neck: 0.14, head: 0.24, snout: 1, col: 0xe8702a, legCol: 0x3a2824, ears: "point", tail: "bush", tipCol: 0xfaf6ec }, drops: ["hide"], text: "Hunts hares and hens at night. Keep the pen shut." },
+  lark: { name: "Lark", role: "bird", act: "day", herd: [3, 5], plan: "bird", away: [2], p: { L: 0.22, col: 0xaa825a, wing: 0x7a5a3a, beak: 0xd0a060 }, drops: ["feather"], text: "Sings over the fields. Gone south in winter." },
+  firefly: { name: "Firefly", role: "small", act: "night", herd: [14, 18], plan: "insect", glow: 0xc8ff5a, drops: ["glow"], text: "Swarms over grass and water after dark. Net them for a glow jar." },
+  sand_strider: { name: "Sand strider", role: "live", act: "day", herd: [2, 4], walk: 0.9, run: 4.5, plan: "quad", p: { L: 1.9, H: 0.9, leg: 1.35, neck: 0.95, head: 0.3, col: 0xd6aa64, hump: 1, ears: "round", tail: "tuft" }, drops: ["hide", "milk"], tame: "Dates", text: "Carries a pack and a rider. Drinks once a week." },
+  dust_hound: { name: "Dust hound", role: "hunt", act: "night", herd: [2, 3], walk: 1.1, run: 6.5, plan: "quad", eyes: 1, p: { L: 1.0, H: 0.45, leg: 0.5, neck: 0.15, head: 0.26, snout: 1, col: 0xc8a06e, pattern: 2, patCol: 0x6e503c, patScale: 3.2, ears: "point", tail: "thin" }, drops: ["hide"], text: "Runs in pairs under the stars." },
+  scarab: { name: "Scarab", role: "small", act: "day", herd: [3, 5], walk: 0.25, run: 0.5, plan: "crab", p: { L: 0.3, col: 0x288c96 }, drops: ["shell"], text: "Rolls dung balls between dunes. Its shell is a dye." },
+  stripe_cat: { name: "Stripe cat", role: "hunt", act: "night", herd: [1, 1], walk: 1.0, run: 7, plan: "quad", eyes: 1, p: { L: 1.7, H: 0.62, leg: 0.55, neck: 0.12, head: 0.34, snout: 0.4, col: 0xf09628, pattern: 1, patCol: 0x281e1e, patScale: 3.5, ears: "round", tail: "long" }, drops: ["hide"], text: "The jungle's hunter. Tusk boar are its prey." },
+  tusk_boar: { name: "Tusk boar", role: "graze", act: "day", herd: [3, 5], walk: 0.8, run: 4.5, plan: "quad", p: { L: 1.3, H: 0.72, leg: 0.36, neck: 0.1, head: 0.34, snout: 1, col: 0x5a4c50, mane: 0x3c3234, horns: "tusk", ears: "point", tail: "thin" }, drops: ["meat", "hide", "horn"], text: "Roots in the leaf litter in noisy sounders." },
+  parrot: { name: "Parrot", role: "bird", act: "day", herd: [3, 4], plan: "bird", p: { L: 0.32, col: 0x28be50, wing: 0x286edc, beak: 0xf0f0dc, head: 0xf0d228, tail: 0xe63232 }, drops: ["feather"], text: "Loud in the canopy, quiet at night." },
+  glowmoth: { name: "Glowmoth", role: "small", act: "night", herd: [6, 8], plan: "insect", glow: 0x78dcff, lampSeek: 1, drops: ["glow"], text: "Gathers round any lamp. Its dust lights a jar." },
+  bog_toad: { name: "Bog toad", role: "small", act: "night", herd: [3, 5], walk: 0.3, run: 1.5, plan: "toad", glow: 0x96ffd2, p: { L: 0.32, col: 0x5a8246 }, drops: ["glow"], text: "Its spots pulse at night. Harmless, and loud." },
+  heron: { name: "Heron", role: "bird", act: "day", herd: [1, 2], walk: 0.4, run: 2, plan: "bird", p: { L: 0.6, col: 0xaabed2, wing: 0x6e82a0, beak: 0xe0c040, head: 0xe6ecf0, legs: 1.8, ground: 1 }, drops: ["feather"], text: "Stands in the shallows, still as a post." },
+  mire_lurker: { name: "Mire lurker", role: "hunt", act: "dusk", herd: [1, 1], walk: 0.4, run: 4, plan: "croc", p: { L: 2.8, H: 0.42, leg: 0.2, col: 0x507846 }, drops: ["hide", "meat"], text: "Waits in the water for whatever comes to drink." },
+  ridge_goat: { name: "Ridge goat", role: "live", act: "day", herd: [3, 5], walk: 0.8, run: 4.5, plan: "quad", p: { L: 1.1, H: 0.6, leg: 0.55, neck: 0.25, head: 0.28, col: 0xd6d0c4, headCol: 0xeceae2, legCol: 0x968a80, horns: "curl", hornCol: 0x785e44, ears: "point", tail: "stub" }, drops: ["milk", "horn", "hide"], tame: "Kale", text: "Climbs a full cell at a bound. Milk makes a hard cheese." },
+  crag_eagle: { name: "Crag eagle", role: "hunt", act: "day", herd: [1, 1], plan: "bird", p: { L: 0.8, col: 0x6e5032, wing: 0x50382a, head: 0xf6f2e8, beak: 0xf0c040, soar: 1 }, drops: ["feather"], text: "Circles high and takes hares and kids." },
+  shagback: { name: "Shagback", role: "graze", act: "day", herd: [5, 7], walk: 0.6, run: 4, plan: "quad", away: [2], p: { L: 2.1, H: 1.25, leg: 0.55, neck: 0.1, head: 0.42, col: 0x8e6a4a, headCol: 0x463428, wool: 1, hump: 1, horns: "droop", ears: "none", tail: "stub" }, drops: ["wool", "meat", "hide", "horn"], text: "Herds that winter south of the tree line and return in spring." },
+  pale_wolf: { name: "Pale wolf", role: "hunt", act: "dusk", herd: [3, 4], walk: 1.1, run: 7, plan: "quad", eyes: 1, coat: { 0: 0x8c8a86, 2: 0xe6eaf0 }, p: { L: 1.4, H: 0.6, leg: 0.6, neck: 0.15, head: 0.3, snout: 1.1, col: 0xdce2ec, ears: "point", tail: "bush" }, drops: ["hide"], text: "Packs follow the shagback herds." },
+  snow_hare: { name: "Snow hare", role: "graze", act: "dusk", herd: [2, 4], walk: 1.0, run: 7, plan: "quad", coat: { 0: 0x9c8466, 1: 0xb8a68c, 2: 0xf4f6fa, 3: 0xd8d2c6 }, p: { L: 0.6, H: 0.45, leg: 0.17, neck: 0.1, head: 0.22, col: 0xf4f6fa, ears: "long", tail: "stub", tailCol: 0xffffff }, drops: ["hide", "meat"], text: "White in winter, brown in summer." },
+  shore_crab: { name: "Shore crab", role: "small", act: "always", herd: [4, 6], walk: 0.35, run: 1.2, plan: "crab", p: { L: 0.4, col: 0xe65a32 }, drops: ["shell", "meat"], text: "Scuttles sideways between tide and dune." },
+  gull: { name: "Gull", role: "bird", act: "day", herd: [3, 5], plan: "bird", p: { L: 0.45, col: 0xf0f4f6, wing: 0x96a4b4, beak: 0xf0c040, tail: 0x282c32 }, drops: ["feather", "egg"], text: "Follows boats and steals your catch." },
+};
+const BIOMES = {
+  fields: { name: "Fields", sub: "22% of land at 750 m", top: [0x6a9a44, 0x7fae50], side: 0x6b4a30, water: 0.05, relief: 1.2, trees: 5, tree: "oak", roster: ["woolback", "plodder", "hen", "meadow_hare", "red_fox", "lark", "firefly"] },
+  desert: { name: "Desert", sub: "22% of land", top: [0xd8bc84, 0xe4c890], side: 0xb8925c, water: 0.0, relief: 1.6, trees: 2, tree: "cactus", roster: ["sand_strider", "dust_hound", "scarab"] },
+  jungle: { name: "Jungle", sub: "21% of land", top: [0x3f7a32, 0x4f8c3a], side: 0x5a3c26, water: 0.04, relief: 1.2, trees: 16, tree: "kapok", roster: ["stripe_cat", "tusk_boar", "parrot", "glowmoth"] },
+  swamp: { name: "Swamp", sub: "1% of land, low and wet", top: [0x4e6a3a, 0x5d7242], side: 0x4a3626, water: 0.32, relief: 0.6, trees: 6, tree: "alder", roster: ["bog_toad", "heron", "mire_lurker", "firefly"] },
+  mountains: { name: "Mountains", sub: "above 105 m", top: [0x8a8a84, 0x7c7e76], side: 0x5e5c58, water: 0.0, relief: 4.5, trees: 2, tree: "pine", snowAbove: 3, roster: ["ridge_goat", "crag_eagle", "meadow_hare"] },
+  tundra: { name: "Tundra", sub: "past latitude 0.875", top: [0x8c9a74, 0x9aa680], snow: [0xe6ecf0, 0xd8e0e6], side: 0x6a5c4c, water: 0.06, relief: 1.0, trees: 1, tree: "pine", roster: ["shagback", "pale_wolf", "snow_hare"] },
+  beach: { name: "Beach", sub: "the 2 m band at the sea", top: [0xe6d29e, 0xeedaa8], side: 0xc8aa74, water: 0.45, relief: 0.5, trees: 1, tree: "palm", coast: 1, roster: ["shore_crab", "gull"] },
+  moon: { name: "Barren moon", sub: "airless, roster empty", top: [0x77777c, 0x6a6a70], side: 0x55555a, water: 0, relief: 1.4, trees: 0, roster: [], airless: 1 },
+};
+const ROSTER_ORDER = ["fields", "desert", "jungle", "swamp", "mountains", "tundra", "beach"];
+const SEASONS = ["summer", "autumn", "winter", "spring"];
+
+// =====================================================================
+// The roster cards and the drops grid (plain DOM, from the same data)
+// =====================================================================
+const roleTag = s => s.role === "hunt" ? '<span class="tag pred">hunter</span>' : s.role === "live" ? '<span class="tag live">livestock</span>' : s.role === "bird" ? '<span class="tag">bird</span>' : s.role === "small" ? '<span class="tag">small</span>' : '<span class="tag">grazer</span>';
+const actTag = s => s.act === "night" ? '<span class="tag night">night</span>' : s.act === "dusk" ? '<span class="tag night">dusk</span>' : s.act === "always" ? '<span class="tag">day and night</span>' : '<span class="tag">day</span>';
+(function cards() {
+  const root = document.getElementById("rosters");
+  for (const b of ROSTER_ORDER) {
+    const B = BIOMES[b];
+    const el = document.createElement("div"); el.className = "biome";
+    el.innerHTML = `<header><h3>${B.name}</h3><span class="muted">${B.sub}</span></header><div class="cards">${B.roster.map(id => {
+      const s = SPECIES[id];
+      return `<div class="card"><img class="por" src="${IMG(id)}" alt="${s.name}, painted portrait"><h4>${s.name}</h4><div class="tags">${roleTag(s)}${actTag(s)}${s.glow ? '<span class="tag glow">glows</span>' : ""}${s.tame ? `<span class="tag live">tame: ${s.tame.toLowerCase()}</span>` : ""}${s.away ? '<span class="tag">migrates</span>' : ""}</div><p>${s.text}</p><div class="drops">${s.drops.map(d => `<img src="${IMG("drop_" + d)}" alt="${DROPS[d][0]}" title="${DROPS[d][0]}">`).join("")}</div></div>`;
+    }).join("")}</div>`;
+    root.appendChild(el);
+  }
+  const ocean = document.createElement("div"); ocean.className = "biome";
+  ocean.innerHTML = `<header><h3>Ocean, rivers and shelf</h3><span class="muted">already built</span></header><p class="muted">Minnow, silverfin, banded perch, ray, eel, reef fish, deepback and sea serpent swim in schools today (<code>assets/config/fauna.ron</code>). Gulls and herons are the land roster's link to them: both take fish from the shallows.</p>`;
+  root.appendChild(ocean);
+  const dg = document.getElementById("drops");
+  for (const [k, [n, t]] of Object.entries(DROPS)) {
+    const from = Object.values(SPECIES).filter(s => s.drops.includes(k)).map(s => s.name);
+    dg.insertAdjacentHTML("beforeend", `<div class="drop"><img src="${IMG("drop_" + k)}" alt=""><div><b>${n}</b><span class="muted">${t}. From ${from.slice(0, 3).join(", ")}${from.length > 3 ? " and more" : ""}.</span></div></div>`);
+  }
+})();
+
+// =====================================================================
+// Lighting: one shader for everything. Every lamp and glowing swarm is in
+// one uniform array, so each lights what is near it wherever the camera is.
+// =====================================================================
+const MAXL = 24;
+const U = {
+  uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) },
+  uSky: { value: new THREE.Color() }, uGround: { value: new THREE.Color() }, uFogCol: { value: new THREE.Color() }, uFogFar: { value: 160 },
+  uLampPos: { value: Array.from({ length: MAXL }, () => new THREE.Vector3()) }, uLampCol: { value: Array.from({ length: MAXL }, () => new THREE.Vector3()) },
+  uLampReach: { value: new Array(MAXL).fill(1) }, uLampN: { value: 0 }, uNight: { value: 0 },
+};
+const VS = `
+varying vec3 vW; varying vec3 vN; varying vec3 vL; varying vec3 vC; varying vec2 vUv;
+void main(){
+  vL = position; vUv = uv;
+  #ifdef USE_COLOR
+  vC = color;
+  #else
+  vC = vec3(1.0);
+  #endif
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const FS = `
+uniform vec3 uColor; uniform vec3 uEmissive; uniform float uNightEmit; uniform int uPattern; uniform vec3 uPatCol; uniform float uPatScale; uniform float uOpacity;
+uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uSky; uniform vec3 uGround; uniform vec3 uFogCol; uniform float uFogFar; uniform float uNight;
+uniform vec3 uLampPos[${MAXL}]; uniform vec3 uLampCol[${MAXL}]; uniform float uLampReach[${MAXL}]; uniform int uLampN;
+varying vec3 vW; varying vec3 vN; varying vec3 vL; varying vec3 vC; varying vec2 vUv;
+void main(){
+  vec3 base = uColor * vC;
+  if (uPattern == 1) { float s = step(0.62, fract(vL.x * uPatScale + 0.15 * sin(vL.y * 9.0))); base = mix(base, uPatCol, s * step(-0.2, vL.y)); }
+  if (uPattern == 2) { vec3 q = fract(vL * uPatScale + vec3(0.3, 0.1, 0.7)) - 0.5; base = mix(base, uPatCol, step(length(q), 0.24)); }
+  vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
+  vec3 light = mix(uGround, uSky, n.y * 0.5 + 0.5) + uSunCol * max(dot(n, uSunDir), 0.0);
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uLampN) break;
+    vec3 d = uLampPos[i] - vW; float r = length(d);
+    float f = clamp(1.0 - r / uLampReach[i], 0.0, 1.0); f *= f;
+    light += uLampCol[i] * f * (0.3 + 0.7 * max(dot(n, d / max(r, 0.001)), 0.0));
+  }
+  vec3 em = uNightEmit > 0.0 ? uEmissive * uNight * uNightEmit : uEmissive;
+  vec3 col = base * light + em;
+  float fog = smoothstep(uFogFar * 0.35, uFogFar, length(vW - cameraPosition));
+  gl_FragColor = vec4(mix(col, uFogCol, fog), uOpacity);
+}`;
+function litMat(o = {}) {
+  const m = new THREE.ShaderMaterial({
+    uniforms: Object.assign({
+      uColor: { value: new THREE.Color(o.color ?? 0xffffff) }, uEmissive: { value: new THREE.Color(o.emissive ?? 0x000000) }, uNightEmit: { value: o.nightEmit ?? 0 },
+      uPattern: { value: o.pattern ?? 0 }, uPatCol: { value: new THREE.Color(o.patCol ?? 0) }, uPatScale: { value: o.patScale ?? 3 }, uOpacity: { value: o.opacity ?? 1 },
+    }, U),
+    vertexShader: VS, fragmentShader: FS, vertexColors: !!o.vc, transparent: (o.opacity ?? 1) < 1, side: o.side ?? THREE.FrontSide, depthWrite: (o.opacity ?? 1) >= 1,
+  });
+  return m;
+}
+
+// =====================================================================
+// Renderer, camera, a small orbit control (drag, wheel, pinch)
+// =====================================================================
+const canvas = document.getElementById("view"), stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
+const orbit = { yaw: 0.7, pitch: 0.55, dist: 46, target: new THREE.Vector3(0, 0, 0), follow: null };
+function placeCamera() {
+  if (orbit.follow) orbit.target.lerp(orbit.follow.g.position, 0.08);
+  const cp = Math.cos(orbit.pitch);
+  camera.position.set(orbit.target.x + orbit.dist * cp * Math.sin(orbit.yaw), orbit.target.y + orbit.dist * Math.sin(orbit.pitch), orbit.target.z + orbit.dist * cp * Math.cos(orbit.yaw));
+  camera.lookAt(orbit.target);
+}
+function resize() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+window.addEventListener("resize", resize);
+{
+  const ptrs = new Map(); let moved = 0, pinch = 0;
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); moved = 0; canvas.style.cursor = "grabbing"; });
+  canvas.addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId)) return;
+    const [x, y] = ptrs.get(e.pointerId); const dx = e.clientX - x, dy = e.clientY - y; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 1) { orbit.yaw -= dx * 0.006; orbit.pitch = Math.min(1.45, Math.max(0.08, orbit.pitch + dy * 0.005)); moved += Math.abs(dx) + Math.abs(dy); }
+    else if (ptrs.size === 2) { const p = [...ptrs.values()]; const d = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]); if (pinch) orbit.dist = Math.min(110, Math.max(6, orbit.dist * pinch / d)); pinch = d; moved = 99; }
+  });
+  const up = e => { ptrs.delete(e.pointerId); pinch = 0; canvas.style.cursor = "grab"; if (moved < 5 && e.type === "pointerup") pick(e); };
+  canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  canvas.addEventListener("wheel", e => { e.preventDefault(); orbit.dist = Math.min(110, Math.max(6, orbit.dist * (1 + Math.sign(e.deltaY) * 0.1))); }, { passive: false });
+}
+
+// =====================================================================
+// The hex patch: pointy-top hex columns, 2.833 m flat to flat, 1 m layers
+// =====================================================================
+const W = 2.833, RH = W / Math.sqrt(3), RINGS = 9;
+const hexXZ = (q, r) => [W * (q + r / 2), RH * 1.5 * r];
+function xzHex(x, z) {
+  const r = z / (RH * 1.5), q = x / W - r / 2;
+  let rq = Math.round(q), rr = Math.round(r), rs = Math.round(-q - r);
+  const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs + q + r);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  return [rq, rr];
+}
+function hash(a, b, s) { let h = (a * 374761393 + b * 668265263 + s * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, z, s) {
+  const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
+  const a = hash(xi, zi, s), b = hash(xi + 1, zi, s), c = hash(xi, zi + 1, s), d = hash(xi + 1, zi + 1, s);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function rng(seed) { let s = seed >>> 0 || 1; return () => { s = Math.imul(s ^ (s >>> 15), 2246822507) + 0x9e3779b9 | 0; s ^= s >>> 13; return ((s >>> 0) % 100000) / 100000; }; }
+
+const world = new THREE.Group(); scene.add(world);
+const CELLS = new Map();
+let BIOME = "fields", SEASON = 0, SEED = 7;
+const groundY = (x, z) => { const c = CELLS.get(xzHex(x, z).join(",")); return c ? Math.max(c.h, c.water ? -0.35 : c.h) : -3; };
+const cellAt = (x, z) => CELLS.get(xzHex(x, z).join(","));
+
+function seasonTop(B, h, rnd) {
+  const c = new THREE.Color(B.top[rnd() < 0.5 ? 0 : 1]);
+  if (B.snowAbove !== undefined && h >= B.snowAbove) c.set(0xeef2f4);
+  if (BIOME === "tundra" && (SEASON === 2 || (SEASON === 1 && rnd() < 0.4) || (SEASON === 3 && rnd() < 0.5))) c.set(B.snow[rnd() < 0.5 ? 0 : 1]);
+  if (BIOME === "fields" || BIOME === "mountains") {
+    if (SEASON === 1) c.lerp(new THREE.Color(0xb09a48), 0.45);
+    if (SEASON === 2) c.lerp(new THREE.Color(0xdfe6ea), BIOME === "fields" ? 0.55 : 0.75);
+  }
+  c.offsetHSL(0, 0, (rnd() - 0.5) * 0.06);
+  return c;
+}
+function buildPatch() {
+  while (world.children.length) { const o = world.children.pop(); o.traverse(m => { if (m.geometry) m.geometry.dispose(); }); }
+  CELLS.clear(); LAMPS.length = 0;
+  const B = BIOMES[BIOME], rnd = rng(SEED * 31 + 5);
+  const pos = [], nor = [], col = [];
+  const push = (p, n, c) => { pos.push(...p); nor.push(...n); col.push(c.r, c.g, c.b); };
+  const corners = i => { const a = Math.PI / 180 * (60 * i - 30); return [RH * Math.cos(a), RH * Math.sin(a)]; };
+  const waterCells = [];
+  for (let q = -RINGS; q <= RINGS; q++) for (let r = -RINGS; r <= RINGS; r++) {
+    if (Math.abs(q + r) > RINGS) continue;
+    const [x, z] = hexXZ(q, r);
+    let n = vnoise(x / 14, z / 14, SEED) * 0.7 + vnoise(x / 6, z / 6, SEED + 9) * 0.3;
+    let wet = vnoise(x / 11 + 40, z / 11, SEED + 3);
+    let h = Math.round((n - 0.45) * B.relief * 2.2);
+    let water = false;
+    if (B.coast) { water = x + (vnoise(z / 8, 0, SEED) - 0.5) * 10 > 4; h = water ? -1 : (x > -6 ? 0 : Math.max(0, h)); }
+    else if (wet < B.water * 1.15 + 0.12 && B.water > 0 && n < 0.55) { water = true; h = -1; }
+    if (BIOME === "mountains") h = Math.max(0, Math.round((n - 0.2) * 6 + Math.abs(x) * 0.08));
+    const cell = { q, r, x, z, h, water }; CELLS.set(q + "," + r, cell);
+    const top = water ? new THREE.Color(B.side).multiplyScalar(0.7) : seasonTop(B, h, rnd);
+    const side = new THREE.Color(B.side).offsetHSL(0, 0, (rnd() - 0.5) * 0.04);
+    for (let i = 0; i < 6; i++) {
+      const [ax, az] = corners(i), [bx, bz] = corners((i + 1) % 6);
+      push([x, h, z, x + bx, h, z + bz, x + ax, h, z + az], [0, 1, 0, 0, 1, 0, 0, 1, 0], top), col.push(top.r, top.g, top.b, top.r, top.g, top.b);
+      const nx = (ax + bx) / 2, nz = (az + bz) / 2, l = Math.hypot(nx, nz), sh = side.clone().multiplyScalar(0.8 + 0.2 * (nx / l * -0.5 + 0.5));
+      const y0 = -4;
+      pos.push(x + ax, h, z + az, x + bx, h, z + bz, x + bx, y0, z + bz, x + ax, h, z + az, x + bx, y0, z + bz, x + ax, y0, z + az);
+      for (let k = 0; k < 6; k++) { nor.push(nx / l, 0, nz / l); col.push(sh.r, sh.g, sh.b); }
+    }
+    if (water) waterCells.push(cell);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  world.add(new THREE.Mesh(g, litMat({ vc: true })));
+  if (waterCells.length) {
+    const wg = new THREE.CylinderGeometry(RH * 1.001, RH * 1.001, 0.05, 6);
+    const wm = litMat({ color: BIOME === "swamp" ? 0x3a5a48 : 0x2f6f9a, opacity: 0.78 });
+    for (const c of waterCells) { const m = new THREE.Mesh(wg, wm); m.position.set(c.x, -0.3, c.z); world.add(m); }
+  }
+  // trees, from the biome
+  const land = [...CELLS.values()].filter(c => !c.water && Math.hypot(c.x, c.z) > 6);
+  for (let i = 0; i < B.trees; i++) {
+    const c = land[Math.floor(rnd() * land.length)]; if (!c || c.tree) continue; c.tree = 1;
+    tree(B.tree, c.x + (rnd() - 0.5), c.h, c.z + (rnd() - 0.5), 0.8 + rnd() * 0.5);
+  }
+  // lamps: a hunter's camp near the middle, posts along a track. They light at night.
+  const camp = land.length ? land.reduce((a, c) => Math.hypot(c.x - 8, c.z + 6) < Math.hypot(a.x - 8, a.z + 6) ? c : a) : { x: 8, z: -6, h: 0 };
+  campfire(camp.x, camp.h, camp.z);
+  for (const [dx, dz] of [[-14, 10], [-4, 16], [14, 12], [-18, -6], [4, -18]]) {
+    const c = cellAt(dx, dz); if (c && !c.water) lantern(c.x + 0.6, c.h, c.z + 0.6);
+  }
+  if (B.airless) {
+    for (const [dx, dz] of [[-6, -4], [6, 6]]) { const c = cellAt(dx, dz); lantern(c.x, c.h, c.z, 0xcfe4ff); }
+  }
+}
+function tree(kind, x, y, z, s) {
+  const trunkM = litMat({ color: kind === "alder" ? 0x5a5048 : kind === "palm" ? 0x9a7a52 : 0x6a4a30 });
+  if (kind === "cactus") {
+    const m = litMat({ color: 0x4a8a46 });
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 3 * s, 7), m); t.position.set(x, y + 1.5 * s, z); world.add(t);
+    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 1.2 * s, 7), m); a.position.set(x + 0.5, y + 2 * s, z); world.add(a);
+    return;
+  }
+  const H = { kapok: 9, oak: 5, alder: 5.5, pine: 6, palm: 6 }[kind] * s;
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.38 * s, H, 7), trunkM); t.position.set(x, y + H / 2, z); world.add(t);
+  const leafC = { kapok: 0x2f6a2a, oak: 0x4a7c34, alder: 0x56703e, pine: 0x2c4c34, palm: 0x4a8a3a }[kind];
+  const lm = litMat({ color: SEASON === 1 && kind === "oak" ? 0xb07a30 : leafC });
+  if (kind === "pine") { for (let i = 0; i < 3; i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(1.8 * s - i * 0.45, 2.4 * s, 8), lm); c.position.set(x, y + H * 0.45 + i * 1.3 * s, z); world.add(c); } return; }
+  if (SEASON === 2 && (kind === "oak" || kind === "alder")) return; // bare in winter
+  const r = { kapok: 4.2, oak: 2.6, alder: 2, palm: 2.2 }[kind] * s;
+  const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), lm); c.scale.y = kind === "kapok" || kind === "palm" ? 0.45 : 0.85; c.position.set(x, y + H + r * 0.2, z); world.add(c);
+}
+// ---- lamps (all of them reach the shader) ----
+const LAMPS = [];
+const bulbOff = new THREE.MeshBasicMaterial({ color: 0x4a3a28 });
+function lantern(x, y, z, color = 0xffc070) {
+  const post = litMat({ color: 0x4a3a2a });
+  const p = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.4, 0.14), post); p.position.set(x, y + 1.2, z); world.add(p);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.1), post); arm.position.set(x + 0.25, y + 2.35, z); world.add(arm);
+  const b = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.34, 0.26), new THREE.MeshBasicMaterial({ color })); b.position.set(x + 0.5, y + 2.1, z); world.add(b);
+  LAMPS.push({ pos: new THREE.Vector3(x + 0.5, y + 2.0, z), col: new THREE.Color(color), power: 1.6, reach: 10, mesh: b, on: color, night: true });
+}
+function campfire(x, y, z) {
+  const stone = litMat({ color: 0x6a665e });
+  for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const s = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22), stone); s.position.set(x + Math.cos(a) * 0.6, y + 0.12, z + Math.sin(a) * 0.6); world.add(s); }
+  const f = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.8, 6), new THREE.MeshBasicMaterial({ color: 0xff8a3a })); f.position.set(x, y + 0.4, z); world.add(f);
+  LAMPS.push({ pos: new THREE.Vector3(x, y + 0.8, z), col: new THREE.Color(0xff9a4a), power: 2.2, reach: 13, mesh: f, on: 0xff8a3a, night: true, flicker: 1 });
+  const tent = new THREE.Mesh(new THREE.ConeGeometry(1.4, 2, 4), litMat({ color: 0x9a8a6a })); tent.position.set(x + 2.4, y + 1, z - 1.6); tent.rotation.y = 0.4; world.add(tent);
+}
+
+// =====================================================================
+// Creatures: one body plan per kind, varied per individual by a seed
+// =====================================================================
+const SPH = new THREE.SphereGeometry(1, 16, 12), CYL = new THREE.CylinderGeometry(1, 0.8, 1, 7), CONE = new THREE.ConeGeometry(1, 1, 6);
+const WOOL = (() => { const g = new THREE.IcosahedronGeometry(1, 2); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(p, i); v.multiplyScalar(1 + 0.08 * Math.sin(v.x * 11) * Math.sin(v.y * 9) * Math.sin(v.z * 10)); p.setXYZ(i, v.x, v.y, v.z); } g.computeVertexNormals(); return g; })();
+const mesh = (geo, mat, sx, sy, sz, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); parent.add(m); return m; };
+let CREATURES = [];
+const creatureRoot = new THREE.Group(); scene.add(creatureRoot);
+
+function coatOf(sp) { if (!sp.coat) return sp.p.col; let c = sp.coat[SEASON]; if (c === undefined) c = sp.coat[0]; return c; }
+function buildQuad(sp, k, rnd, c) {
+  const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const col = new THREE.Color(coatOf(sp)).offsetHSL((rnd() - 0.5) * 0.03, (rnd() - 0.5) * 0.1, (rnd() - 0.5) * 0.1);
+  const mB = litMat({ color: col, pattern: p.pattern || 0, patCol: p.patCol || 0, patScale: (p.patScale || 3) * (0.8 + rnd() * 0.4) });
+  const mL = litMat({ color: p.legCol ?? col.clone().multiplyScalar(0.8) }), mH = p.headCol ? litMat({ color: p.headCol }) : mB;
+  const L = p.L * k, H = p.H * k, leg = p.leg * k;
+  const torso = mesh(p.wool ? WOOL : SPH, mB, L / 2, H / 2, H / 2 * 0.92, 0, leg + H * 0.45, 0, body);
+  if (p.hump) mesh(p.wool ? WOOL : SPH, mB, L * 0.22, H * 0.32, H * 0.3, -L * 0.02, leg + H * 0.92, 0, body);
+  if (p.mane) mesh(SPH, litMat({ color: p.mane }), L * 0.22, H * 0.45, H * 0.4, L * 0.28, leg + H * 0.6, 0, body);
+  c.legs = [];
+  for (const fx of [L * 0.3, -L * 0.3]) for (const s of [-1, 1]) {
+    const piv = new THREE.Group(); piv.position.set(fx, leg + H * 0.2, s * H * 0.24); body.add(piv);
+    const lw = Math.max(0.04, H * 0.11) * (p.wool ? 0.8 : 1);
+    mesh(CYL, mL, lw, leg + H * 0.2, lw, 0, -(leg + H * 0.2) / 2, 0, piv);
+    c.legs.push(piv);
+  }
+  const hp = new THREE.Group(); hp.position.set(L * 0.42, leg + H * 0.6, 0); body.add(hp); c.head = hp;
+  const hr = p.head * k, nk = p.neck * k * 1.6;
+  if (p.neck > 0.15) { const n = mesh(CYL, mB, H * 0.16, nk, H * 0.16, nk * 0.25, nk * 0.45, 0, hp); n.rotation.z = -0.5; }
+  const hx = nk * 0.5 + hr * 0.5, hy = nk * 0.85;
+  mesh(SPH, mH, hr * 1.05, hr * 0.85, hr * 0.8, hx, hy, 0, hp);
+  mesh(SPH, mH, hr * (0.45 + (p.snout || 0.5) * 0.35), hr * 0.42, hr * 0.48, hx + hr * (0.75 + (p.snout || 0.5) * 0.3), hy - hr * 0.2, 0, hp);
+  const earM = mH;
+  if (p.ears === "long") for (const s of [-1, 1]) { const e = mesh(SPH, earM, hr * 0.18, hr * 0.9, hr * 0.1, hx - hr * 0.2, hy + hr * 1.2, s * hr * 0.3, hp); e.rotation.z = -0.25; }
+  if (p.ears === "point") for (const s of [-1, 1]) mesh(CONE, earM, hr * 0.28, hr * 0.6, hr * 0.15, hx - hr * 0.2, hy + hr * 0.95, s * hr * 0.45, hp);
+  if (p.ears === "round") for (const s of [-1, 1]) mesh(SPH, earM, hr * 0.25, hr * 0.25, hr * 0.1, hx - hr * 0.3, hy + hr * 0.8, s * hr * 0.55, hp);
+  if (p.ears === "flop") for (const s of [-1, 1]) { const e = mesh(SPH, earM, hr * 0.42, hr * 0.15, hr * 0.2, hx - hr * 0.3, hy + hr * 0.25, s * hr * 0.85, hp); e.rotation.x = s * 0.5; }
+  const hornM = litMat({ color: p.hornCol ?? 0xece0b8 });
+  if (p.horns === "spike") for (const s of [-1, 1]) { const h = mesh(CONE, hornM, hr * 0.12, hr * 0.8, hr * 0.12, hx - hr * 0.1, hy + hr * 1.1, s * hr * 0.35, hp); h.rotation.x = -s * 0.4; }
+  if (p.horns === "curl") for (const s of [-1, 1]) { const t = new THREE.Mesh(new THREE.TorusGeometry(hr * 0.45, hr * 0.12, 6, 12, Math.PI * 1.4), hornM); t.position.set(hx - hr * 0.5, hy + hr * 0.6, s * hr * 0.45); t.rotation.z = 0.6; hp.add(t); }
+  if (p.horns === "droop") for (const s of [-1, 1]) { const t = new THREE.Mesh(new THREE.TorusGeometry(hr * 0.55, hr * 0.13, 6, 12, Math.PI), hornM); t.position.set(hx - hr * 0.1, hy + hr * 0.3, s * hr * 0.75); t.rotation.set(0, s * 1.3, Math.PI / 2); hp.add(t); }
+  if (p.horns === "tusk") for (const s of [-1, 1]) { const h = mesh(CONE, hornM, hr * 0.08, hr * 0.5, hr * 0.08, hx + hr * 1.1, hy + hr * 0.05, s * hr * 0.3, hp); h.rotation.z = -0.5; }
+  // eyes, which catch lamplight at night for hunters
+  const eyeM = sp.eyes ? litMat({ color: 0x141018, emissive: 0x000000, nightEmit: 0 }) : litMat({ color: 0x141018 });
+  if (sp.eyes) { eyeM.uniforms.uEmissive.value.set(0x0a1a0c); eyeM.uniforms.uNightEmit.value = 6; }
+  for (const s of [-1, 1]) mesh(SPH, eyeM, hr * 0.12, hr * 0.12, hr * 0.12, hx + hr * 0.55, hy + hr * 0.2, s * hr * 0.55, hp);
+  // tail
+  const tm = p.tailCol ? litMat({ color: p.tailCol }) : mB;
+  if (p.tail === "bush") { const t = mesh(SPH, mB, L * 0.32, H * 0.2, H * 0.2, -L * 0.62, leg + H * 0.35, 0, body); t.rotation.z = 0.5; mesh(SPH, litMat({ color: p.tipCol || 0xffffff }), L * 0.1, H * 0.14, H * 0.14, -L * 0.88, leg + H * 0.12, 0, body); }
+  else if (p.tail === "long") { const t = mesh(CYL, mB, H * 0.07, L * 0.75, H * 0.07, -L * 0.75, leg + H * 0.4, 0, body); t.rotation.z = 1.0; }
+  else if (p.tail === "tuft" || p.tail === "thin") { const t = mesh(CYL, mB, H * 0.05, L * 0.4, H * 0.05, -L * 0.55, leg + H * 0.3, 0, body); t.rotation.z = -0.35; }
+  else if (p.tail === "stub") mesh(SPH, tm, H * 0.14, H * 0.14, H * 0.14, -L * 0.5, leg + H * 0.55, 0, body);
+  c.body = body; c.legLen = leg + H * 0.2; c.radius = L * 0.6;
+  return g;
+}
+function buildBird(sp, k, rnd, c) {
+  const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const col = new THREE.Color(p.col).offsetHSL(0, 0, (rnd() - 0.5) * 0.08), L = p.L * k;
+  const mB = litMat({ color: col }), mW = litMat({ color: p.wing ?? col, side: THREE.DoubleSide });
+  const legH = L * (p.legs || 0.6);
+  for (const s of [-1, 1]) mesh(CYL, litMat({ color: 0xd8a040 }), L * 0.03, legH, L * 0.03, 0, legH / 2, s * L * 0.1, body);
+  mesh(SPH, mB, L * 0.5, L * 0.3, L * 0.28, 0, legH + L * 0.25, 0, body);
+  mesh(SPH, litMat({ color: p.head ?? col }), L * 0.18, L * 0.18, L * 0.18, L * 0.42, legH + L * 0.48, 0, body);
+  const bk = mesh(CONE, litMat({ color: p.beak }), L * 0.06, L * 0.25 * (p.legs > 1 ? 2 : 1), L * 0.06, L * 0.62 + (p.legs > 1 ? L * 0.15 : 0), legH + L * 0.46, 0, body); bk.rotation.z = -Math.PI / 2;
+  if (p.crest) mesh(CONE, litMat({ color: p.crest }), L * 0.06, L * 0.18, L * 0.04, L * 0.4, legH + L * 0.68, 0, body);
+  const tl = mesh(SPH, litMat({ color: p.tail ?? p.wing ?? col }), L * 0.3, L * 0.05, L * 0.14, -L * 0.55, legH + L * 0.3, 0, body); tl.rotation.z = 0.3;
+  c.wings = [];
+  for (const s of [-1, 1]) { const piv = new THREE.Group(); piv.position.set(0, legH + L * 0.38, s * L * 0.2); body.add(piv); const w = mesh(new THREE.BoxGeometry(1, 1, 1), mW, L * 0.5, L * 0.03, L * (p.soar ? 1.3 : 0.75), -L * 0.05, 0, s * L * (p.soar ? 0.65 : 0.38), piv); c.wings.push([piv, s]); }
+  c.body = body; c.legLen = legH; c.radius = L;
+  return g;
+}
+function buildCrab(sp, k, rnd, c) {
+  const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const L = p.L * k, m = litMat({ color: new THREE.Color(p.col).offsetHSL(0, 0, (rnd() - 0.5) * 0.1) });
+  mesh(SPH, m, L * 0.45, L * 0.2, L * 0.35, 0, L * 0.3, 0, body);
+  c.legs = [];
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) { const piv = new THREE.Group(); piv.position.set(-L * 0.2 + i * L * 0.2, L * 0.3, s * L * 0.3); body.add(piv); const l = mesh(CYL, m, L * 0.04, L * 0.45, L * 0.04, 0, -L * 0.15, s * L * 0.15, piv); l.rotation.x = s * 0.9; c.legs.push(piv); }
+  if (BIOME !== "desert") for (const s of [-1, 1]) mesh(SPH, m, L * 0.18, L * 0.12, L * 0.12, L * 0.5, L * 0.35, s * L * 0.3, body);
+  c.body = body; c.legLen = 0.0; c.radius = L;
+  return g;
+}
+function buildToad(sp, k, rnd, c) {
+  const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const L = p.L * k, m = litMat({ color: new THREE.Color(p.col).offsetHSL(0, 0, (rnd() - 0.5) * 0.1) });
+  mesh(SPH, m, L * 0.5, L * 0.32, L * 0.45, 0, L * 0.3, 0, body);
+  for (const s of [-1, 1]) mesh(SPH, litMat({ color: 0xf0d050 }), L * 0.1, L * 0.1, L * 0.1, L * 0.3, L * 0.55, s * L * 0.2, body);
+  const gm = litMat({ color: 0x3a5a40, emissive: new THREE.Color(sp.glow).multiplyScalar(0.05), nightEmit: 6 });
+  for (let i = 0; i < 6; i++) mesh(SPH, gm, L * 0.07, L * 0.05, L * 0.07, (rnd() - 0.5) * L * 0.6, L * 0.58, (rnd() - 0.5) * L * 0.6, body);
+  c.body = body; c.legLen = 0; c.radius = L; c.glowMat = gm;
+  return g;
+}
+function buildCroc(sp, k, rnd, c) {
+  const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const L = p.L * k, H = p.H * k, m = litMat({ color: new THREE.Color(p.col).offsetHSL(0, 0, (rnd() - 0.5) * 0.08) });
+  mesh(SPH, m, L * 0.32, H * 0.5, H * 0.7, 0, H * 0.55, 0, body);
+  mesh(SPH, m, L * 0.25, H * 0.3, H * 0.35, L * 0.42, H * 0.5, 0, body);
+  const t = mesh(CONE, m, H * 0.5, L * 0.5, H * 0.3, -L * 0.5, H * 0.45, 0, body); t.rotation.z = Math.PI / 2;
+  for (const s of [-1, 1]) mesh(SPH, litMat({ color: 0xf0d050, emissive: 0x081000, nightEmit: 6 }), H * 0.1, H * 0.1, H * 0.1, L * 0.28, H * 0.85, s * H * 0.28, body);
+  c.legs = [];
+  for (const fx of [L * 0.2, -L * 0.2]) for (const s of [-1, 1]) { const piv = new THREE.Group(); piv.position.set(fx, H * 0.4, s * H * 0.6); body.add(piv); mesh(CYL, m, H * 0.15, H * 0.5, H * 0.15, 0, -H * 0.2, 0, piv); c.legs.push(piv); }
+  c.body = body; c.legLen = 0; c.radius = L * 0.5;
+  return g;
+}
+// glow sprites for insect swarms
+const glowTex = (() => { const cv = document.createElement("canvas"); cv.width = cv.height = 64; const x = cv.getContext("2d"); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(0.25, "rgba(255,255,255,.55)"); gr.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
+function buildSwarm(sp, n, rnd, home) {
+  const g = new THREE.Group();
+  const mat = new THREE.SpriteMaterial({ map: glowTex, color: sp.glow, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+  const motes = [];
+  for (let i = 0; i < n; i++) { const s = new THREE.Sprite(mat); const sz = sp.lampSeek ? 0.55 : 0.32; s.scale.set(sz, sz, sz); g.add(s); motes.push({ s, a: rnd() * 6.28, b: rnd() * 6.28, r: 1 + rnd() * 2.5, sp: 0.4 + rnd() * 0.8, y: 0.4 + rnd() * 1.8 }); }
+  return { g, motes, mat, home };
+}
+
+function isActive(sp, sunEl) {
+  if (sp.act === "always") return true;
+  if (sp.act === "day") return sunEl > -0.02;
+  if (sp.act === "night") return sunEl < 0.05;
+  return sunEl < 0.3; // dusk: evening, night and dawn
+}
+function spawn() {
+  for (const c of CREATURES) { creatureRoot.remove(c.g); }
+  CREATURES = []; SWARMS.length = 0; while (creatureRoot.children.length) creatureRoot.remove(creatureRoot.children[0]);
+  const B = BIOMES[BIOME], rnd = rng(SEED * 977 + 13);
+  const land = [...CELLS.values()].filter(c => !c.water && Math.hypot(c.x, c.z) < RINGS * W * 0.8);
+  const wet = [...CELLS.values()].filter(c => c.water);
+  for (const id of B.roster) {
+    const sp = SPECIES[id];
+    if (sp.away && sp.away.includes(SEASON)) continue;
+    const n = sp.herd[0] + Math.floor(rnd() * (sp.herd[1] - sp.herd[0] + 1));
+    const pool = (id === "heron" || id === "mire_lurker") && wet.length ? wet : land;
+    const home = pool[Math.floor(rnd() * pool.length)] || { x: 0, z: 0 };
+    if (sp.plan === "insect") { const sw = buildSwarm(sp, n, rnd, new THREE.Vector3(home.x, 0, home.z)); sw.sp = sp; sw.id = id; creatureRoot.add(sw.g); SWARMS.push(sw); continue; }
+    const herd = { goal: new THREE.Vector3(home.x, 0, home.z), t: 0 };
+    for (let i = 0; i < n; i++) {
+      const seed = Math.floor(rnd() * 1e6), r2 = rng(seed);
+      const k = 0.85 + r2() * 0.3;
+      const c = { id, sp, seed, k, herd, state: "graze", vel: new THREE.Vector3(), phase: r2() * 6, t: r2() * 5, rest: 0 };
+      const build = { quad: buildQuad, bird: buildBird, crab: buildCrab, toad: buildToad, croc: buildCroc }[sp.plan];
+      c.g = build(sp, k, r2, c);
+      c.g.position.set(home.x + (r2() - 0.5) * 6, 0, home.z + (r2() - 0.5) * 6);
+      if (sp.plan === "bird" && !sp.p.ground) { c.fly = { cx: home.x, cz: home.z, r: 6 + r2() * 10, a: r2() * 6.28, alt: (sp.p.soar ? 16 : 5) + r2() * 4, w: (0.25 + r2() * 0.2) * (r2() < 0.5 ? 1 : -1) }; }
+      c.g.traverse(o => { o.userData.c = c; });
+      c.g.rotation.y = r2() * 6.28;
+      creatureRoot.add(c.g); CREATURES.push(c);
+    }
+  }
+  legend();
+  document.getElementById("banner").hidden = !B.airless;
+}
+const SWARMS = [];
+
+// =====================================================================
+// Behaviour, stepped each frame (the game would step at a fixed rate)
+// =====================================================================
+const tmp = new THREE.Vector3();
+const PATCH_R = RINGS * W * 0.82;
+function step(dt, time, sunEl) {
+  const night = sunEl < 0.05;
+  for (const c of CREATURES) {
+    const sp = c.sp, active = isActive(sp, sunEl), g = c.g;
+    c.t += dt;
+    if (c.fly) { // flying birds circle; they roost on the ground when inactive
+      if (!active) { c.state = "roosting"; const y = groundY(c.fly.cx, c.fly.cz); g.position.lerp(tmp.set(c.fly.cx + Math.cos(c.phase) * 1.5, y, c.fly.cz + Math.sin(c.phase) * 1.5), 0.02); for (const [w, s] of c.wings) w.rotation.x = s * 0.1; continue; }
+      c.state = sp.role === "hunt" ? "soaring, watching for hares" : "flying";
+      c.fly.a += c.fly.w * dt; const x = c.fly.cx + Math.cos(c.fly.a) * c.fly.r, z = c.fly.cz + Math.sin(c.fly.a) * c.fly.r;
+      const y = Math.max(groundY(x, z), 0) + c.fly.alt + Math.sin(time * 0.7 + c.phase) * 0.6;
+      tmp.set(x - g.position.x, 0, z - g.position.z); g.position.set(x, y, z);
+      if (tmp.lengthSq() > 1e-6) g.rotation.y = Math.atan2(-tmp.z, tmp.x);
+      const flap = sp.p.soar ? 0.15 * Math.sin(time * 2 + c.phase) : 0.9 * Math.sin(time * 12 + c.phase);
+      for (const [w, s] of c.wings) w.rotation.x = -s * flap;
+      continue;
+    }
+    // land animals (and ground birds)
+    let want = new THREE.Vector3(), speed = 0;
+    let threat = null, td = 9;
+    if (sp.role !== "hunt") for (const o of CREATURES) if (o.sp.role === "hunt" && !o.fly && o.state.startsWith("hunting")) { const d = o.g.position.distanceTo(g.position); if (d < td) { td = d; threat = o; } }
+    if (threat) { c.state = (active ? "fleeing the " : "woken, fleeing the ") + threat.sp.name.toLowerCase(); want.subVectors(g.position, threat.g.position).setY(0).normalize(); speed = sp.run || 3; }
+    else if (!active) { c.state = sp.plan === "bird" ? "roosting" : "sleeping"; }
+    else if (sp.role === "hunt") {
+      if (c.rest > 0) { c.rest -= dt; c.state = "resting after a chase"; }
+      else {
+        let best = null, bd = 18;
+        for (const o of CREATURES) if (o !== c && (o.sp.role === "graze" || o.sp.role === "live" || (o.sp.role === "small" && o.sp.plan !== "crab")) && !o.fly) { const d = o.g.position.distanceTo(g.position); if (d < bd) { bd = d; best = o; } }
+        if (best) { c.state = "hunting " + best.sp.name.toLowerCase(); want.subVectors(best.g.position, g.position).setY(0).normalize(); speed = sp.run; c.chase = (c.chase || 0) + dt; if (c.chase > 6 || bd < 0.8) { c.rest = 8; c.chase = 0; } }
+        else { c.state = "prowling"; c.chase = 0; }
+      }
+    } else c.state = "grazing";
+    if (active && speed === 0 && (sp.walk || 0) > 0) {
+      const h = c.herd; h.t -= dt * 0.25;
+      if (h.t <= 0) { h.t = 8 + Math.random() * 7; const a = Math.random() * 6.28, r = Math.random() * PATCH_R * 0.7; h.goal.set(Math.cos(a) * r, 0, Math.sin(a) * r); }
+      tmp.subVectors(h.goal, g.position).setY(0);
+      const d = tmp.length();
+      if (d > 2.5 + (c.seed % 5) * 0.5) { want.copy(tmp.normalize()); speed = sp.walk; if (c.state === "grazing") c.state = sp.role === "hunt" ? "prowling" : "walking with the herd"; }
+    }
+    // separation, and stay on the patch and out of deep water
+    for (const o of CREATURES) if (o !== c && !o.fly) { const d = g.position.distanceTo(o.g.position), m = c.radius + o.radius; if (d < m && d > 1e-3) want.add(tmp.subVectors(g.position, o.g.position).setY(0).multiplyScalar((m - d) / d * 2)); }
+    if (Math.hypot(g.position.x, g.position.z) > PATCH_R) want.add(tmp.set(-g.position.x, 0, -g.position.z).normalize().multiplyScalar(2));
+    const waders = c.id === "heron" || c.id === "mire_lurker" || c.id === "bog_toad";
+    tmp.copy(g.position).addScaledVector(want, 1.5); const ahead = cellAt(tmp.x, tmp.z);
+    if (ahead && ahead.water && !waders) { want.set(-want.z, 0, want.x); }
+    c.vel.lerp(want.multiplyScalar(speed), Math.min(1, dt * 3));
+    g.position.addScaledVector(c.vel, dt);
+    const sp2 = c.vel.length();
+    if (sp2 > 0.05) { const yaw = Math.atan2(-c.vel.z, c.vel.x) + (sp.plan === "crab" ? Math.PI / 2 : 0); let dy = yaw - g.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); g.rotation.y += dy * Math.min(1, dt * 6); }
+    const gy = groundY(g.position.x, g.position.z);
+    g.position.y += (gy - g.position.y) * Math.min(1, dt * 8);
+    // pose
+    c.phase += dt * sp2 * (sp.plan === "crab" ? 10 : 4.5) / Math.max(0.3, c.k);
+    const asleep = (c.state === "sleeping" || c.state === "roosting") && sp2 < 0.3;
+    if (c.body) c.body.position.y += ((asleep && c.legLen ? -c.legLen * 0.85 : 0) - c.body.position.y) * Math.min(1, dt * 3);
+    if (c.legs) c.legs.forEach((l, i) => { l.rotation.z = asleep && sp.plan === "quad" ? (i < 2 ? -1.3 : 1.3) : Math.sin(c.phase + (i % 3 === 0 ? 0 : Math.PI)) * Math.min(0.7, sp2 * 0.35); });
+    if (c.head) c.head.rotation.z += (((c.state === "grazing" && sp2 < 0.1) ? -0.75 : asleep ? -0.35 : 0) - c.head.rotation.z) * Math.min(1, dt * 3);
+    if (sp.plan === "toad") { const hop = (c.t % 3) < 0.4 && active ? Math.sin((c.t % 3) / 0.4 * Math.PI) * 0.25 : 0; c.body.position.y = hop; if (hop) { g.position.x += Math.cos(c.seed) * dt * 0.8; g.position.z += Math.sin(c.seed) * dt * 0.8; } c.glowMat.uniforms.uEmissive.value.copy(new THREE.Color(sp.glow)).multiplyScalar(night ? 0.06 * (0.6 + 0.4 * Math.sin(time * 2 + c.seed)) : 0.0); c.state = active ? "calling by the water, spots pulsing" : "buried in the mud"; }
+    if (c.wings) for (const [w, s] of c.wings) w.rotation.x = -s * (c.vel.length() > 2 ? 0.7 * Math.sin(time * 14) : 0.05);
+  }
+  // swarms: drift about home, or gather at the nearest lamp; each lights what is near it
+  for (const sw of SWARMS) {
+    sw.g.visible = night;
+    if (!night) continue;
+    const home = sw.home.clone();
+    let gy = groundY(home.x, home.z);
+    if (sw.sp.lampSeek && LAMPS.length) { let best = LAMPS[0]; for (const l of LAMPS) if (l.pos.distanceTo(sw.home) < best.pos.distanceTo(sw.home)) best = l; home.set(best.pos.x, 0, best.pos.z); gy = best.pos.y - 2.2; }
+    sw.center = new THREE.Vector3(home.x, gy + 1.2, home.z);
+    for (const m of sw.motes) {
+      m.a += dt * m.sp; m.b += dt * m.sp * 0.7;
+      const rr = sw.sp.lampSeek ? m.r * 0.45 : m.r;
+      m.s.position.set(home.x + Math.cos(m.a) * rr, gy + (sw.sp.lampSeek ? 1.6 + m.y * 0.4 : m.y) + Math.sin(m.b) * 0.4, home.z + Math.sin(m.a * 1.3) * rr);
+      const blink = sw.sp.lampSeek ? 1 : Math.max(0, Math.sin(time * 2.2 + m.b * 3));
+      m.s.material.opacity = 1; m.s.scale.setScalar((sw.sp.lampSeek ? 0.5 : 0.3) * (0.4 + blink));
+    }
+  }
+}
+
+// =====================================================================
+// Sky, sun, moon and lamps
+// =====================================================================
+let HOUR = 10, paused = false;
+const C = (h) => new THREE.Color(h);
+function sky(time) {
+  const B = BIOMES[BIOME];
+  const a = (HOUR - 6) / 24 * Math.PI * 2, el = Math.sin(a);
+  const day = Math.max(0, Math.min(1, el * 4 + 0.15)), dusk = Math.max(0, 1 - Math.abs(el) * 5);
+  U.uNight.value = 1 - day;
+  const sunDir = new THREE.Vector3(Math.cos(a) * 0.8, Math.max(el, 0.12), 0.45).normalize();
+  if (day > 0) { U.uSunDir.value.copy(sunDir); U.uSunCol.value.copy(C(0xfff1d8)).lerp(C(0xff9a5a), dusk).multiplyScalar(1.15 * day); }
+  else { U.uSunDir.value.set(-0.3, 0.8, -0.5).normalize(); U.uSunCol.value.copy(C(0x8098c8)).multiplyScalar(0.07); } // the moon, dim enough that lamps read
+  const skyDay = B.airless ? C(0x050608) : C(0x9cc6e4), skyNight = B.airless ? C(0x020203) : C(0x0a1020);
+  const bg = skyNight.clone().lerp(skyDay, day).lerp(C(0xe08a5a), dusk * 0.45 * (B.airless ? 0 : 1));
+  scene.background = bg; U.uFogCol.value.copy(bg); U.uFogFar.value = B.airless ? 1e4 : 170;
+  U.uSky.value.copy(C(0x02040a)).lerp(C(B.airless ? 0x202024 : 0x8aa6c8), day).multiplyScalar(B.airless ? 0.35 : 0.55).add(C(0x0b0f18).multiplyScalar(0.25));
+  U.uGround.value.copy(C(0x050404)).lerp(C(0x6a5a40), day).multiplyScalar(0.35);
+  // lamps: lit after dusk, each one lights what is near it
+  const lampsOn = el < 0.08;
+  let n = 0;
+  for (const l of LAMPS) {
+    l.mesh.material.color.set(lampsOn ? l.on : 0x4a3a28);
+    if (!lampsOn || n >= MAXL) continue;
+    const f = l.flicker ? 0.85 + 0.15 * Math.sin(time * 13) * Math.sin(time * 7.3) : 1;
+    U.uLampPos.value[n].copy(l.pos); U.uLampCol.value[n].set(l.col.r * l.power * f, l.col.g * l.power * f, l.col.b * l.power * f); U.uLampReach.value[n] = l.reach; n++;
+  }
+  if (el < 0.05) for (const sw of SWARMS) if (sw.center && n < MAXL) { const c = new THREE.Color(sw.sp.glow); U.uLampPos.value[n].copy(sw.center); U.uLampCol.value[n].set(c.r * 0.5, c.g * 0.5, c.b * 0.5); U.uLampReach.value[n] = 5; n++; }
+  U.uLampN.value = n;
+  return el;
+}
+
+// =====================================================================
+// UI
+// =====================================================================
+const $ = id => document.getElementById(id);
+const toast = (t) => { const e = $("toast"); e.textContent = t; e.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.opacity = 0, 1800); };
+function setHour(h) { HOUR = (h + 24) % 24; $("hour").value = HOUR; const hh = Math.floor(HOUR), mm = Math.floor((HOUR - hh) * 60); $("hourOut").textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); $("night").setAttribute("aria-pressed", String(HOUR < 5.5 || HOUR > 19.5)); }
+$("hour").addEventListener("input", e => setHour(+e.target.value));
+$("night").addEventListener("click", () => { setHour(HOUR < 5.5 || HOUR > 19.5 ? 10 : 22); toast(HOUR > 12 ? "Night: lamps lit, hunters awake" : "Day"); });
+$("reroll").addEventListener("click", () => { SEED++; rebuild(); toast("New individuals from seed " + SEED); });
+$("pause").addEventListener("click", e => { paused = !paused; e.currentTarget.setAttribute("aria-pressed", String(paused)); });
+$("biome").addEventListener("change", e => { BIOME = e.target.value; orbit.follow = null; rebuild(); });
+document.querySelectorAll("[data-season]").forEach(b => b.addEventListener("click", () => {
+  SEASON = +b.dataset.season; document.querySelectorAll("[data-season]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); rebuild();
+  const away = BIOMES[BIOME].roster.filter(id => SPECIES[id].away && SPECIES[id].away.includes(SEASON)).map(id => SPECIES[id].name);
+  if (away.length) toast(away.join(", ") + " migrated away for the " + SEASONS[SEASON]);
+}));
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.key === "n" || e.key === "N") $("night").click();
+  if (e.key === "r" || e.key === "R") $("reroll").click();
+});
+function rebuild() {
+  buildPatch(); spawn();
+  const day = [0, 25, 50, 75][SEASON];
+  $("season").textContent = `Day ${day} of 100, northern ${SEASONS[SEASON]}` + (BIOME === "jungle" || BIOME === "desert" ? " (little changes in the tropics)" : "");
+}
+function legend() {
+  const L = $("legend"), B = BIOMES[BIOME]; L.innerHTML = "";
+  if (!B.roster.length) { L.innerHTML = '<span class="muted" style="font-size:13px">Roster: empty. Airless bodies are lifeless.</span>'; return; }
+  for (const id of B.roster) {
+    const sp = SPECIES[id], gone = sp.away && sp.away.includes(SEASON);
+    const n = CREATURES.filter(c => c.id === id).length + SWARMS.filter(s => s.id === id).reduce((a, s) => a + s.motes.length, 0);
+    const b = document.createElement("button"); b.className = "chipbtn"; b.setAttribute("aria-pressed", "false");
+    b.innerHTML = `<img src="${IMG(id)}" alt="">${sp.name} <span class="muted">${gone ? "away" : n}</span>`;
+    b.addEventListener("click", () => { const c = CREATURES.find(x => x.id === id); if (c) { select(c); } else if (gone) toast(sp.name + ": away for the " + SEASONS[SEASON]); else toast(sp.name + ": out only at night"); });
+    L.appendChild(b);
+  }
+}
+let selected = null;
+function select(c) {
+  selected = c; orbit.follow = c; orbit.dist = Math.min(orbit.dist, 18);
+  showWho();
+}
+function showWho() {
+  const c = selected; if (!c) return;
+  const sp = c.sp;
+  $("who").innerHTML = `<div><img src="${IMG(c.id)}" alt=""><span class="k">${{ hunt: "Hunter", live: "Livestock", graze: "Grazer", bird: "Bird", small: "Small" }[sp.role]} &middot; ${sp.act}</span><br><b>${sp.name}</b></div>
+  <div style="clear:both">Now: <b style="font-size:14px;font-family:var(--body)">${c.state}</b></div>
+  <div class="muted">Seed ${c.seed}. Size ${(c.k * 100).toFixed(0)}% of its kind${sp.p && sp.p.pattern ? ", " + (sp.p.pattern === 1 ? "stripes" : "spots") + " at its own spacing" : ""}.</div>
+  <div class="muted">Drops: ${sp.drops.map(d => DROPS[d][0].toLowerCase()).join(", ")}${sp.tame ? ". Tame with " + sp.tame.toLowerCase() : ""}.</div>
+  <button class="chipbtn" id="unfollow" aria-pressed="true" style="justify-self:start">Following (click to stop)</button>`;
+  $("unfollow").addEventListener("click", () => { orbit.follow = null; selected = null; $("who").innerHTML = '<div class="k">Click an animal</div><div class="muted">Each one is built from its species\' body plan with its own size, colour and pattern drawn from a seed.</div>'; });
+}
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+function pick(e) {
+  const r = canvas.getBoundingClientRect(); mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hit = ray.intersectObjects(creatureRoot.children, true).find(h => h.object.userData.c);
+  if (hit) select(hit.object.userData.c);
+}
+
+// =====================================================================
+// Go
+// =====================================================================
+setHour(10); rebuild(); resize();
+let last = performance.now(), T = 0, whoT = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (!paused) T += dt;
+  const el = sky(T);
+  if (!paused) step(dt, T, el);
+  placeCamera();
+  whoT += dt; if (whoT > 0.5 && selected) { whoT = 0; const s = document.querySelector("#who b[style]"); if (s) s.textContent = selected.state; }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

@@ -1,0 +1,755 @@
+<title>Hex House Builder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the builder is the page's first screen; below it the rules it runs on, read top to bottom. House style of towns.html, blueprint cyan for ghosts. */
+:root{
+  color-scheme: dark;
+  --ground:#0d0f0c;
+  --panel:rgba(18,17,13,.9);
+  --panel-solid:#17150f;
+  --raise:#1f1c16;
+  --line:rgba(226,206,160,.17);
+  --ink:#ece4d2;
+  --muted:#a89d86;
+  --amber:#f0b43c;
+  --ember:#ff8a3d;
+  --sky:#8fc3d8;
+  --blue:#6fd0e8;
+  --warn:#ff6b57;
+  --ok:#8fdc9a;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html{background:var(--ground)}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.wrap{max-width:1240px;margin:0 auto;display:grid;gap:44px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(34px,5vw,54px)}
+h2{font-size:28px}
+h3{font-size:19px;font-weight:600}
+p{margin:0;max-width:70ch}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.badge{display:inline-block;font-family:var(--display);font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--amber);color:var(--amber);border-radius:2px;vertical-align:middle}
+.lede{color:var(--muted);font-size:16px}
+.lede b,.note b{color:var(--ink);font-weight:600}
+header.top{display:grid;gap:12px;padding-top:28px}
+section{display:grid;gap:16px;min-width:0}
+.sec-head{display:grid;gap:6px}
+.note{font-size:13px;color:var(--muted);border-left:2px solid var(--line);padding-left:12px;max-width:84ch}
+.src{font-family:var(--mono);font-size:12px;color:var(--sky)}
+button{font:inherit;color:inherit}
+.btn{cursor:pointer;background:transparent;border:1px solid var(--line);border-radius:4px;padding:5px 9px;font-family:var(--display);font-size:14px;letter-spacing:.05em;color:var(--ink)}
+.btn:hover{border-color:rgba(240,180,60,.55)}
+.btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.btn:focus-visible,select:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* the builder */
+.builder{display:grid;grid-template-columns:200px minmax(0,1fr) 280px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel-solid);height:min(82vh,760px);min-height:540px}
+.side{padding:12px;display:grid;gap:12px;align-content:start;overflow:auto;min-width:0}
+.side + .stage,.stage + .side{border-left:1px solid var(--line)}
+.stage{position:relative;min-width:0}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none;outline:none;cursor:crosshair}
+.pal{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pal button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:6px 4px;border:1px solid var(--line);border-radius:4px;font-family:var(--display);font-size:13px;letter-spacing:.04em;text-align:center;position:relative}
+.pal button img{width:44px;height:44px}
+.pal button kbd{position:absolute;top:3px;left:5px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.pal button[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.12);color:var(--amber)}
+.pal button:focus-visible{outline:2px solid var(--amber)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.seg.three{grid-template-columns:repeat(2,1fr)}
+.field{display:grid;gap:5px}
+.field > span{font-family:var(--display);letter-spacing:.1em;text-transform:uppercase;font-size:11.5px;color:var(--muted)}
+.ghostline{position:absolute;left:12px;right:12px;bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
+.pill{font-family:var(--display);font-size:14px;letter-spacing:.06em;padding:4px 10px;border-radius:3px;background:var(--panel);border:1px solid var(--line)}
+.pill.ok{color:var(--ok);border-color:rgba(143,220,154,.5)}
+.pill.bad{color:var(--warn);border-color:rgba(255,107,87,.6)}
+.pill.air{color:var(--blue);border-color:rgba(111,208,232,.5)}
+.topline{position:absolute;left:12px;top:12px;display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 24px)}
+.topline .pill{font-size:13px}
+.journal{display:grid;gap:4px;font-family:var(--mono);font-size:11.5px;line-height:1.35}
+.journal div{padding:4px 6px;border-radius:3px;background:var(--raise);border-left:2px solid var(--line)}
+.journal .player{border-left-color:var(--amber)}
+.journal .world{border-left-color:var(--sky)}
+.journal .refused{border-left-color:var(--warn);color:var(--warn)}
+.stats{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}
+.stats dt{color:var(--muted)}
+.stats dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.keys{font-size:12px;color:var(--muted);line-height:1.5}
+.keys kbd{font-family:var(--mono);color:var(--amber);font-size:11px}
+@media (max-width:1000px){
+  .builder{grid-template-columns:1fr;height:auto;min-height:0}
+  .stage{height:62vh;min-height:360px;order:-1}
+  .side + .stage,.stage + .side{border-left:0;border-top:1px solid var(--line)}
+  .side{border-top:1px solid var(--line)}
+  .pal{grid-template-columns:repeat(5,1fr)}
+}
+@media (max-width:480px){.pal{grid-template-columns:repeat(3,1fr)}}
+
+/* sheets */
+.pieces{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.piece{display:grid;grid-template-columns:64px 1fr;gap:10px;border:1px solid var(--line);border-radius:6px;padding:10px;background:var(--panel-solid);align-items:start}
+.piece img{width:64px;height:64px}
+.piece p{font-size:13px;color:var(--muted)}
+.piece .snap{font-family:var(--mono);font-size:11.5px;color:var(--blue)}
+.tiers{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.tier{border:1px solid var(--line);border-radius:6px;background:var(--panel-solid);display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+.tier .tex{display:grid;grid-template-columns:repeat(3,1fr);height:84px}
+.tier .tex div{background-size:64px 64px;image-rendering:pixelated;border-right:1px solid rgba(0,0,0,.3)}
+.tier .body{padding:12px;display:grid;gap:6px;align-content:start}
+.tier p{font-size:13.5px;color:var(--muted)}
+.tier .from{font-family:var(--mono);font-size:11.5px;color:var(--sky)}
+.tier .btn{justify-self:start;margin-top:4px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;counter-reset:s}
+.step{border-top:2px solid var(--amber);padding-top:10px;display:grid;gap:6px}
+.step p{font-size:13.5px;color:var(--muted)}
+.tbl{overflow-x:auto}
+.tbl table{border-collapse:collapse;width:100%;min-width:640px;font-size:13.5px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+.tbl th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
+.tbl td:first-child{font-family:var(--display);font-size:15px;white-space:nowrap}
+.reason{color:var(--warn);font-family:var(--display);letter-spacing:.03em}
+.qs{display:grid;gap:10px}
+.q{border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--panel-solid);display:grid;gap:6px}
+.q h3{font-size:18px}
+.q p{font-size:14px;color:var(--muted)}
+.rec{color:var(--ok)}
+.rec b{color:var(--ok)}
+footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+#err{position:fixed;left:8px;bottom:8px;max-width:60ch;background:#400;color:#fff;font:12px var(--mono);padding:6px;white-space:pre-wrap;z-index:9}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; <span class="badge">Proposal, not built</span></div>
+    <h1>Building on the hex grid</h1>
+    <p class="lede">Walls on cell edges, floors in cells, a storey every three layers: the town's own cut, put in the player's hands. Pick a piece, aim at the plot, click. The ghost is green when the town's rules accept it and red with the reason when they do not. It is night, so what you build is lit by the lanterns you place.</p>
+    <p class="note">This is the build mockup <span class="src">openspec/changes/player-building</span> asks for first (it names it <span class="src">build.html</span>), grown from the towns mockup's cut and checks, on a plot of 91 cells. It runs on <span class="src">dig-and-place</span>'s journal and <span class="src">lamps-and-lanterns</span>' lights. Everything here is <b>proposed</b>, not built behaviour. The piece icons and material textures are <b>painted by code</b> (<span class="src">tools/art/building_art.py</span>) with the hand-drawn-illustration kit in the owner's friend's style; they are not the friend's drawings.</p>
+  </header>
+
+  <section aria-labelledby="b-h">
+    <div class="sec-head"><div class="eyebrow">1 &middot; Try it</div><h2 id="b-h">The builder</h2></div>
+    <div class="builder">
+      <aside class="side" aria-label="Pieces">
+        <div class="field"><span>Piece</span><div class="pal" id="pal"></div></div>
+        <div class="field"><span>Storey</span><div class="seg"><button class="btn" id="s0" aria-pressed="true">Ground</button><button class="btn" id="s1" aria-pressed="false">Upper (3 m)</button></div></div>
+        <div class="keys"><kbd>1</kbd>-<kbd>0</kbd> pieces &middot; <kbd>Tab</kbd> storey &middot; drag to turn &middot; right-drag or <kbd>Shift</kbd>-drag to pan &middot; wheel to zoom</div>
+      </aside>
+      <div class="stage">
+        <canvas id="cv" tabindex="0" aria-label="A hex plot to build on. Click to place the selected piece."></canvas>
+        <div class="topline" id="topline"></div>
+        <div class="ghostline"><span class="pill" id="ghostPill">Aim at the plot</span><span class="pill" id="airPill" hidden></span></div>
+      </div>
+      <aside class="side" aria-label="Kit, site and journal">
+        <div class="field"><span>Kit</span><div class="seg three" id="kits"></div></div>
+        <div class="field"><span>Site</span><div class="seg"><button class="btn" id="siteT" aria-pressed="true">Tenebris</button><button class="btn" id="siteM" aria-pressed="false">Airless moon</button></div></div>
+        <div class="field"><span>Time</span><div class="seg"><button class="btn" id="tNight" aria-pressed="true">22:00</button><button class="btn" id="tDay" aria-pressed="false">14:00</button></div></div>
+        <div class="field"><span>Load an example</span><div class="seg three"><button class="btn" data-ex="hut">Hut</button><button class="btn" data-ex="stone">Stone house</button><button class="btn" data-ex="hab">Habitat</button><button class="btn" data-ex="clear">Clear</button></div></div>
+        <div class="field"><span>World process</span><button class="btn" id="grow">Let the town grow</button></div>
+        <dl class="stats" id="stats"></dl>
+        <div class="field"><span>Journal (newest first)</span><div class="journal" id="journal"></div></div>
+      </aside>
+    </div>
+    <p class="note">Lit at night as CLAUDE.md asks: every lantern you place, the town's two street lamps and each window with a lantern behind it bake their light into what is near them, wherever the camera is; the moon stays at 0.16. Placing or removing anything re-bakes, as an edit re-lights the field in the engine. Building is free (owner, P1); costs come later and are sketched in section 3.</p>
+  </section>
+
+  <section aria-labelledby="p-h">
+    <div class="sec-head"><div class="eyebrow">2 &middot; Build pieces</div><h2 id="p-h">What snaps where</h2>
+      <p class="lede">Every piece lands on the cut, so a player's house and a town's house are the same kind of thing and the walker, collision and light treat them alike. Sizes are the engine's: a cell is 2.833 m flat to flat, its edge 1.636 m, a layer 1 m.</p></div>
+    <div class="pieces" id="pieces"></div>
+  </section>
+
+  <section aria-labelledby="t-h">
+    <div class="sec-head"><div class="eyebrow">3 &middot; Materials per tier</div><h2 id="t-h">From reeds to pressure hulls</h2>
+      <p class="lede">A tier is a kit: the same pieces, cut the same way, made of something better. Each tier's materials come from the production chain in game-design section 10, so a tier is reached by going somewhere, not by grinding a number.</p></div>
+    <div class="tiers" id="tiers"></div>
+  </section>
+
+  <section aria-labelledby="g-h">
+    <div class="sec-head"><div class="eyebrow">4 &middot; Progression</div><h2 id="g-h">Hut, stone house, habitat</h2></div>
+    <div class="steps">
+      <div class="step"><h3>A reed hut on the first night</h3><p>One cell, six reed walls 2.2 m high, a door, a thatch cone. Cut reeds and a few poles; an axe and your hands. It keeps the rain off and holds a lantern. Load "Hut" above.</p></div>
+      <div class="step"><h3>A stone house in a town</h3><p>Three cells, half-metre fieldstone walls, windows on a 1 m sill, a gable roof, lanterns at the door and inside, so its windows light the street. Built beside the town, it is yours; the town grows round it, never over it. Load "Stone house".</p></div>
+      <div class="step"><h3>A habitat on an airless moon</h3><p>Seven cells of metal panel and glass under a flat roof, one airlock. The builder checks the seal: every outside edge walled, every cell floored and roofed. Leave an edge open and it names the leak in red. Load "Habitat" with the moon as the site.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="c-h">
+    <div class="sec-head"><div class="eyebrow">5 &middot; Checks and their reasons</div><h2 id="c-h">One rule set for towns and players</h2>
+      <p class="lede">The ghost's reason is the first rule that fails, named as the town's requirement names it. <span class="src">player-building</span> decision 3: one implementation in <span class="src">pbd-core</span>, called per piece by the builder and per layout by the town templates.</p></div>
+    <div class="tbl"><table>
+      <thead><tr><th>Rule</th><th>Red ghost says</th><th>In this mockup</th></tr></thead>
+      <tbody>
+        <tr><td>One piece per slot</td><td class="reason">Something is already on this edge</td><td>Yes</td></tr>
+        <tr><td>Held up</td><td class="reason">Nothing holds it up: put a wall or post under it</td><td>Yes, upper floors and walls</td></tr>
+        <tr><td>Headroom at every walkable point</td><td class="reason">No headroom: a floor 3 m over the stair</td><td>Yes, stairs and floors over them</td></tr>
+        <tr><td>Walls do not cut stairs</td><td class="reason">The wall would cut through a stair</td><td>Yes</td></tr>
+        <tr><td>A roof needs a room</td><td class="reason">Not a room: the walls do not close round it</td><td>Yes, the roof tool flood-fills</td></tr>
+        <tr><td>Roofs do not overlap</td><td class="reason">The roof would cut into another roof</td><td>Yes, eaves included</td></tr>
+        <tr><td>Remove nothing something rests on</td><td class="reason">The roof rests on this wall</td><td>Yes, on remove</td></tr>
+        <tr><td>Pentagons</td><td class="reason">A five-sided cell: five walls, no straight stair</td><td>No pentagon on this plot; twelve on the sphere</td></tr>
+        <tr><td>No two faces in one plane</td><td class="reason">Two faces would fight here</td><td>No; the town check exists</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section aria-labelledby="w-h">
+    <div class="sec-head"><div class="eyebrow">6 &middot; The world never overwrites the player</div><h2 id="w-h">What the town may do with your house</h2>
+      <p class="lede">Towns will grow on their own (owner, 2026-09-27). Every change goes through the same durable journal and names its author, and <span class="src">world-persistence</span> says a world-authored change that would alter a cell or piece the player has changed is refused. Press "Let the town grow" with something built: the town lays a fence round the plot's edge and stops at every cell you touched, and the journal shows each refusal.</p></div>
+    <div class="tbl"><table>
+      <thead><tr><th>Who</th><th>May</th><th>May not</th></tr></thead>
+      <tbody>
+        <tr><td>The player</td><td>Build anywhere the checks allow; take apart a town's building (owner, P2: "yes, but people will be upset")</td><td>Build what the walker cannot use</td></tr>
+        <tr><td>A town growing</td><td>Add pieces on cells nobody has edited</td><td>Touch a cell or piece the player has changed, or build so a player's piece fails a check</td></tr>
+        <tr><td>A building abandoned</td><td>Decay its own town-authored pieces</td><td>Decay anything the player placed, even in a town building</td></tr>
+        <tr><td>A new generator version</td><td>Shape new worlds</td><td>Move an existing world's ground under a saved house (CLAUDE.md, saves survive every change)</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section aria-labelledby="q-h">
+    <div class="sec-head"><div class="eyebrow">7 &middot; Decisions / questions for the owner</div><h2 id="q-h">What needs your call</h2></div>
+    <div class="qs">
+      <div class="q"><h3>B1 &middot; Aim-snap or grid cursor?</h3><p>The ghost here follows the mouse to the nearest slot, the way blocks are placed today.</p><p class="rec"><b>Recommendation:</b> aim-snap on foot, as <span class="src">player-building</span> decision 2 says; the top-down view in this page is the mockup's convenience, not a mode.</p></div>
+      <div class="q"><h3>B2 &middot; Does the moon habitat need air to be a gameplay rule?</h3><p>The seal check shows pressurised or leaking. It could also be what lets you take the helmet off.</p><p class="rec"><b>Recommendation:</b> yes, later: a sealed habitat is a breathable room. For now the check is shown, with no survival rule behind it.</p></div>
+      <div class="q"><h3>B3 &middot; Tiers as kits, with materials from places</h3><p>Section 3 ties each tier to a body: timber and stone on Tenebris, resin on Sequoia, alloys from Crag, seals from Frostbite.</p><p class="rec"><b>Recommendation:</b> yes, once costs exist (P1 put costs after the rest of the roadmap). Until then every kit is free.</p></div>
+      <div class="q"><h3>B4 &middot; Upper storeys and the stair</h3><p>A straight flight takes two cells and needs the floor above cut away, as towns do it.</p><p class="rec"><b>Recommendation:</b> keep the towns' three stairs only; no ladders, so every house walks.</p></div>
+      <div class="q"><h3>B5 &middot; The page name</h3><p><span class="src">player-building</span> calls this mockup <span class="src">build.html</span>; this one is <span class="src">building.html</span>.</p><p class="rec"><b>Recommendation:</b> rename the change's reference to <span class="src">building.html</span> when this is approved.</p></div>
+    </div>
+  </section>
+
+  <footer>Mockup for the owner, 2026-11-11. Proposal only: nothing on this page is built behaviour. Icons and textures painted by code in the friend's style (<span class="src">tools/art/building_art.py</span>).</footer>
+</div>
+<div id="err" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+window.addEventListener("error", e => { const el = document.getElementById("err"); el.hidden = false; el.textContent += (e.message || e) + " @" + (e.lineno || "") + "\n"; });
+const $ = id => document.getElementById(id);
+// ===================================================================
+// Scale: the engine's cell. 2.833 m flat to flat, 1 m a layer, 3 m a storey.
+// ===================================================================
+const W = 2.833, R = W / Math.sqrt(3), ROW = 1.5 * R, PLOT = 5;
+const hx = (q, r) => W * (q + r / 2), hz = (q, r) => ROW * r;
+const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+const hexDist = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+const inPlot = (q, r) => hexDist(q, r) <= PLOT;
+function corner(q, r, k) { const a = (60 * k - 30) * Math.PI / 180; return [hx(q, r) + R * Math.cos(a), hz(q, r) + R * Math.sin(a)]; }
+function axRound(q, r) { const s = -q - r; let rq = Math.round(q), rr = Math.round(r); const rs = Math.round(s), dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s); if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs; return [rq, rr]; }
+const cellAt = (x, z) => { const r = z / ROW; return axRound(x / W - r / 2, r); };
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
+const lin = h => new THREE.Color(h).convertSRGBToLinear();
+
+class Geo {
+  constructor() { this.p = []; this.n = []; }
+  tri(a, b, c, hint) {
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    if (hint && nx * hint[0] + ny * hint[1] + nz * hint[2] < 0) { nx = -nx; ny = -ny; nz = -nz; this.p.push(...a, ...c, ...b); } else this.p.push(...a, ...b, ...c);
+    for (let i = 0; i < 3; i++) this.n.push(nx, ny, nz);
+  }
+  quad(a, b, c, d, hint) { this.tri(a, b, c, hint); this.tri(a, c, d, hint); }
+  add(g, m) { const gg = (g.index ? g.toNonIndexed() : g); gg.applyMatrix4(m); const P = gg.attributes.position.array, N = gg.attributes.normal.array; for (let i = 0; i < P.length; i++) { this.p.push(P[i]); this.n.push(N[i]); } }
+  box(x, y0, z, sx, sy, sz, ang = 0) { const s = v => Math.max(1, Math.ceil(v / 0.45)); this.add(new THREE.BoxGeometry(sx, sy, sz, s(sx), s(sy), s(sz)), new THREE.Matrix4().makeRotationY(-ang).setPosition(x, y0 + sy / 2, z)); }
+  cyl(x, y0, z, r, h, n = 8, r2) { this.add(new THREE.CylinderGeometry(r2 ?? r, r, h, n, Math.max(1, Math.ceil(h / 0.5))), new THREE.Matrix4().makeTranslation(x, y0 + h / 2, z)); }
+  hexTop(q, r, y, y0, grow = 0) {
+    const c = [hx(q, r), y, hz(q, r)], N = 3, k0 = (R + grow) / R;
+    for (let k = 0; k < 6; k++) {
+      const a0 = corner(q, r, k), b0 = corner(q, r, k + 1), a = [c[0] + (a0[0] - c[0]) * k0, c[2] + (a0[1] - c[2]) * k0], b = [c[0] + (b0[0] - c[0]) * k0, c[2] + (b0[1] - c[2]) * k0], A = [a[0], y, a[1]], B = [b[0], y, b[1]];
+      for (let i = 0; i < N; i++) for (let j = 0; j < N - i; j++) {
+        const P = (u, v) => [c[0] + (A[0] - c[0]) * u / N + (B[0] - c[0]) * v / N, y, c[2] + (A[2] - c[2]) * u / N + (B[2] - c[2]) * v / N];
+        this.tri(P(i, j), P(i + 1, j), P(i, j + 1), [0, 1, 0]); if (j < N - i - 1) this.tri(P(i + 1, j), P(i + 1, j + 1), P(i, j + 1), [0, 1, 0]);
+      }
+      if (y0 !== undefined) { const mx = (a[0] + b[0]) / 2 - c[0], mz = (a[1] + b[1]) / 2 - c[2]; this.quad([a[0], y0, a[1]], [b[0], y0, b[1]], B, A, [mx, 0, mz]); }
+    }
+  }
+  build(rep = 2) {
+    const g = new THREE.BufferGeometry(), P = new Float32Array(this.p), N = new Float32Array(this.n), nv = P.length / 3, uv = new Float32Array(nv * 2);
+    for (let i = 0; i < nv; i++) { const x = P[3 * i], y = P[3 * i + 1], z = P[3 * i + 2], nx = N[3 * i], ny = N[3 * i + 1], nz = N[3 * i + 2]; if (Math.abs(ny) > 0.7) { uv[2 * i] = x / rep; uv[2 * i + 1] = z / rep; } else { const l = Math.hypot(nx, nz) || 1; uv[2 * i] = (x * -nz + z * nx) / l / rep; uv[2 * i + 1] = y / rep; } }
+    g.setAttribute("position", new THREE.BufferAttribute(P, 3)); g.setAttribute("normal", new THREE.BufferAttribute(N, 3)); g.setAttribute("uv", new THREE.BufferAttribute(uv, 2)); g.setAttribute("blk", new THREE.BufferAttribute(new Float32Array(nv * 3), 3));
+    return g;
+  }
+}
+function bake(g, lights) {
+  const P = g.attributes.position.array, N = g.attributes.normal.array, B = g.attributes.blk.array; B.fill(0);
+  if (!g.boundingBox) g.computeBoundingBox(); const bb = g.boundingBox;
+  for (const L of lights) {
+    if (L.x + L.R < bb.min.x || L.x - L.R > bb.max.x || L.z + L.R < bb.min.z || L.z - L.R > bb.max.z || L.y + L.R < bb.min.y || L.y - L.R > bb.max.y) continue;
+    const R2 = L.R * L.R;
+    for (let k = 0, nv = P.length / 3; k < nv; k++) {
+      const dx = L.x - P[3 * k], dy = L.y - P[3 * k + 1], dz = L.z - P[3 * k + 2], d2 = dx * dx + dy * dy + dz * dz; if (d2 >= R2) continue;
+      const d = Math.sqrt(d2), nd = (dx * N[3 * k] + dy * N[3 * k + 1] + dz * N[3 * k + 2]) / Math.max(d, 1e-3); if (nd < -0.15) continue;
+      const f = L.p * (1 - d2 / R2) ** 2 * (0.3 + 0.7 * Math.max(0, nd)) * d2 / (d2 + 0.36);
+      B[3 * k] += L.c.r * f; B[3 * k + 1] += L.c.g * f; B[3 * k + 2] += L.c.b * f;
+    }
+  }
+  g.attributes.blk.needsUpdate = true;
+}
+const U = { lamp: { value: 1.15 } };
+const TEX = {}, loader = new THREE.TextureLoader();
+function tex(name) { if (TEX[name]) return TEX[name]; const t = loader.load(name); t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.NearestFilter; t.anisotropy = 4; return (TEX[name] = t); }
+function litMat(texName, color = 0xffffff, extra = {}) {
+  const m = new THREE.MeshStandardMaterial({ map: texName ? tex(texName) : null, color, roughness: 0.9, metalness: 0, ...extra });
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uLamp = U.lamp;
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute vec3 blk;\nuniform float uLamp;\nvarying vec3 vBlk;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvBlk = blk * uLamp;");
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vBlk;").replace("#include <aomap_fragment>", "#include <aomap_fragment>\nreflectedLight.indirectDiffuse += vBlk * material.diffuseColor;");
+  };
+  return m;
+}
+const MATDEF = {
+  grass: ["building/tex_plaster.png", 0x4f7034, 2.5], regolith: ["building/tex_regolith.png", 0xffffff, 2.2], reed: ["building/tex_thatch.png", 0xd8c890, 1.6], thatch: ["building/tex_thatch.png", 0xffffff, 2],
+  earth: ["building/tex_plaster.png", 0x9a7a58, 2], plank: ["building/tex_plank.png", 0xffffff, 2], shingle: ["building/tex_plank.png", 0x9a7464, 1.4], stone: ["building/tex_stone.png", 0xffffff, 1.6],
+  slate: ["building/tex_stone.png", 0x7a8498, 1.2], flag: ["building/tex_stone.png", 0xd8d0c0, 2], metal: ["building/tex_metal.png", 0xffffff, 1.5], airlock: ["building/tex_metal.png", 0xf0c040, 1.2],
+  glass: ["building/tex_glass.png", 0xffffff, 1.5], dark: [null, 0x2b2b2e, 1], brick: ["building/tex_brick.png", 0xffffff, 2], plaster: ["building/tex_plaster.png", 0xffffff, 2],
+};
+const MATS = {}; const mat = k => MATS[k] || (MATS[k] = litMat(MATDEF[k][0], MATDEF[k][1], k === "thatch" || k === "reed" || k === "glass" ? { side: THREE.DoubleSide } : {}));
+const KITS = {
+  hut:     { label: "Reed hut",  wall: "reed",  roof: "thatch",  floor: "earth", door: "plank",   t: 0.3,  H: 2.2, roofKind: "cone",  tier: 1 },
+  timber:  { label: "Timber",    wall: "plank", roof: "shingle", floor: "plank", door: "plank",   t: 0.25, H: 3,   roofKind: "gable", tier: 2 },
+  stone:   { label: "Stone",     wall: "stone", roof: "slate",   floor: "flag",  door: "plank",   t: 0.5,  H: 3,   roofKind: "gable", tier: 3 },
+  habitat: { label: "Habitat",   wall: "metal", roof: "metal",   floor: "metal", door: "airlock", t: 0.3,  H: 3,   roofKind: "flat",  tier: 4, sealed: true },
+};
+const STOREY = 3;
+
+// ===================================================================
+// Scene
+// ===================================================================
+const canvas = $("cv");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.outputEncoding = THREE.sRGBEncoding; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0e1424, 70, 170);
+const camera = new THREE.PerspectiveCamera(48, 1, 0.3, 600);
+const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 200 }); scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.2); scene.add(hemi);
+const stars = (() => { const n = 900, p = new Float32Array(n * 3), rn = rng(5); for (let i = 0; i < n; i++) { const a = rn() * 6.283, e = 0.04 + rn() * 1.45; p[3 * i] = Math.cos(a) * Math.cos(e) * 400; p[3 * i + 1] = Math.sin(e) * 400; p[3 * i + 2] = Math.sin(a) * Math.cos(e) * 400; } const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(p, 3)); const m = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.3, sizeAttenuation: false, fog: false, transparent: true })); scene.add(m); return m; })();
+const planet = new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), new THREE.MeshBasicMaterial({ color: 0x3f7fc0, fog: false })); planet.position.set(-200, 160, -320); scene.add(planet);
+const planetLand = new THREE.Mesh(new THREE.SphereGeometry(40.4, 32, 16, 0.3, 1.4, 0.6, 1.2), new THREE.MeshBasicMaterial({ color: 0x5f9a4a, fog: false })); planetLand.position.copy(planet.position); scene.add(planetLand);
+
+const ST = { site: "tenebris", night: true, piece: "wall", kit: "timber", storey: 0, ghost: null, aim: null };
+let GROUND = null;
+function buildGround() {
+  if (GROUND) { scene.remove(GROUND); GROUND.geometry.dispose(); }
+  const g = new Geo(), mk = ST.site === "moon" ? "regolith" : "grass";
+  for (let q = -9; q <= 9; q++) for (let r = -9; r <= 9; r++) { const d = hexDist(q, r); if (d > 9) continue; const y = d > PLOT + 1 ? (ST.site === "moon" ? ((q * 7 + r * 3) % 3 === 0 ? 1 : 0) : 0) : 0; g.hexTop(q, r, y, -1); }
+  GROUND = new THREE.Mesh(g.build(MATDEF[mk][2]), mat(mk)); GROUND.receiveShadow = true; scene.add(GROUND);
+}
+// the plot's cell outlines, a blueprint grid
+const gridLines = (() => { const pts = []; for (let q = -PLOT; q <= PLOT; q++) for (let r = -PLOT; r <= PLOT; r++) { if (!inPlot(q, r)) continue; for (let k = 0; k < 3; k++) { const a = corner(q, r, k), b = corner(q, r, k + 1); pts.push(a[0], 0.03, a[1], b[0], 0.03, b[1]); } for (let k = 3; k < 6; k++) { const nq = q + DIRS[k][0], nr = r + DIRS[k][1]; if (inPlot(nq, nr)) continue; const a = corner(q, r, k), b = corner(q, r, k + 1); pts.push(a[0], 0.03, a[1], b[0], 0.03, b[1]); } } const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); const m = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x6fd0e8, transparent: true, opacity: 0.22 })); scene.add(m); return m; })();
+
+// ===================================================================
+// Pieces: the cut. A wall on an edge, a floor in a cell, a post on a corner.
+// ===================================================================
+const PIECES = new Map(); let EDIT_N = 0;
+const canonEdge = (q, r, d) => d < 3 ? [q, r, d] : [q + DIRS[d][0], r + DIRS[d][1], d - 3];
+const WALLISH = new Set(["wall", "door", "window"]);
+function keyOf(p) {
+  if (WALLISH.has(p.kind) || p.kind === "fence") { const [a, b, d] = canonEdge(p.q, p.r, p.d); return `E:${a},${b},${d},${p.s}`; }
+  if (p.kind === "floor") return `F:${p.q},${p.r},${p.s}`;
+  if (p.kind === "post") { const [x, z] = corner(p.q, p.r, p.d); return `P:${Math.round(x * 10)},${Math.round(z * 10)},${p.s}`; }
+  if (p.kind === "stairs") return `S:${p.q},${p.r},${p.s}`;
+  if (p.kind === "lantern") return `L:${p.q},${p.r},${p.s}`;
+  if (p.kind === "roof") return `R:${p.cells[0][0]},${p.cells[0][1]},${p.s}`;
+}
+const edgeAt = (q, r, d, s) => { const [a, b, dd] = canonEdge(q, r, d); return PIECES.get(`E:${a},${b},${dd},${s}`); };
+const floorAt = (q, r, s) => PIECES.get(`F:${q},${r},${s}`);
+const stairOver = (q, r, s) => { for (const p of PIECES.values()) if (p.kind === "stairs" && p.s === s && stairCells(p).some(([a, b]) => a === q && b === r)) return p; return null; };
+const stairCells = p => [[p.q, p.r], [p.q + DIRS[p.d][0], p.r + DIRS[p.d][1]]];
+const roofOver = (q, r, s) => { for (const p of PIECES.values()) if (p.kind === "roof" && p.s === s && p.cells.some(([a, b]) => a === q && b === r)) return p; return null; };
+const yOf = (s, kit) => s * STOREY;
+
+function edgeInfo(q, r, d) { const A = corner(q, r, d), B = corner(q, r, d + 1), a = d * Math.PI / 3; return { A, B, mx: (A[0] + B[0]) / 2, mz: (A[1] + B[1]) / 2, nx: Math.cos(a), nz: Math.sin(a), ang: Math.atan2(B[1] - A[1], B[0] - A[0]) }; }
+// Geometry for one piece, as { material: Geo }, plus extra meshes (panes, flames)
+function pieceGeo(p) {
+  const K = KITS[p.kit], G = {}, g = k => G[k] || (G[k] = new Geo()), extra = [], y0 = yOf(p.s, K), H = K.H;
+  if (WALLISH.has(p.kind) || p.kind === "fence") {
+    const e = edgeInfo(p.q, p.r, p.d), T = p.kind === "fence" ? 0.12 : K.t, len = R + T * 0.58, ux = Math.cos(e.ang), uz = Math.sin(e.ang), w = p.kind === "fence" ? "plank" : K.wall;
+    const seg = (o, wl, a, b) => g(w).box(e.mx + ux * o, y0 + a, e.mz + uz * o, wl, b - a, T, e.ang);
+    if (p.kind === "fence") { g("plank").box(e.mx, y0 + 0.5, e.mz, R, 0.12, 0.08, e.ang); g("plank").box(e.mx, y0 + 0.95, e.mz, R, 0.12, 0.08, e.ang); g("plank").cyl(e.A[0], y0, e.A[1], 0.07, 1.15, 6); }
+    else if (p.kind === "wall") seg(0, len, 0, H);
+    else if (p.kind === "door") {
+      const dw = K.H < 3 ? 0.9 : 1.0, dh = K.H < 3 ? 1.9 : 2.2, side = (len - dw) / 2;
+      seg(-(dw / 2 + side / 2), side, 0, H); seg(dw / 2 + side / 2, side, 0, H); seg(0, dw, dh, H);
+      g(K.door).box(e.mx - e.nx * 0.02, y0, e.mz - e.nz * 0.02, dw, dh, 0.08, e.ang);
+      if (K.sealed) { g("airlock").box(e.mx + e.nx * (T / 2 + 0.06), y0, e.mz + e.nz * (T / 2 + 0.06), dw + 0.3, dh + 0.2, 0.1, e.ang); g(K.door).box(e.mx + e.nx * (T / 2 + 0.1), y0 + 0.05, e.mz + e.nz * (T / 2 + 0.1), dw - 0.1, dh - 0.1, 0.06, e.ang); }
+    } else {
+      const ww = K.H < 3 ? 0.5 : 0.8, sill = K.H < 3 ? 0.9 : 1.0, top = sill + (K.H < 3 ? 0.5 : 1.0), side = (len - ww) / 2;
+      seg(-(ww / 2 + side / 2), side, 0, H); seg(ww / 2 + side / 2, side, 0, H); seg(0, ww, 0, sill); seg(0, ww, top, H);
+      if (K.sealed) g("glass").box(e.mx, y0 + sill, e.mz, ww, top - sill, 0.06, e.ang);
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(ww, top - sill), new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide, transparent: !!K.sealed, opacity: K.sealed ? 0.55 : 1 }));
+      pane.position.set(e.mx - e.nx * 0.03, y0 + (sill + top) / 2, e.mz - e.nz * 0.03); pane.rotation.y = -Math.atan2(e.nz, e.nx) + Math.PI / 2; pane.userData.pane = true; extra.push(pane);
+    }
+  } else if (p.kind === "floor") {
+    if (p.s === 0) g(K.floor).hexTop(p.q, p.r, 0.12, 0); else g(K.floor).hexTop(p.q, p.r, y0, y0 - 0.2);
+  } else if (p.kind === "post") {
+    const [x, z] = corner(p.q, p.r, p.d); g(K.wall === "metal" ? "metal" : K.wall === "stone" ? "stone" : "plank").cyl(x, y0, z, K.t * 0.6, H, 6);
+  } else if (p.kind === "stairs") {
+    const ux = Math.cos(p.d * Math.PI / 3), uz = Math.sin(p.d * Math.PI / 3), x0 = hx(p.q, p.r) - ux * W / 2, z0 = hz(p.q, p.r) - uz * W / 2, n = 16, run = 2 * W / n, rise = STOREY / n, ang = Math.atan2(-ux, uz);
+    for (let i = 0; i < n; i++) g(K.floor === "earth" ? "plank" : K.floor).box(x0 + ux * (i + 0.5) * run, y0, z0 + uz * (i + 0.5) * run, 1.0, (i + 1) * rise, run, Math.atan2(uz, ux) + Math.PI / 2);
+  } else if (p.kind === "lantern") {
+    const x = hx(p.q, p.r), z = hz(p.q, p.r); g("dark").cyl(x, y0, z, 0.05, 2.0, 6); g("dark").box(x, y0, z, 0.36, 0.06, 0.36);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), LAMPMAT); m.position.set(x, y0 + 2.2, z); m.userData.flame = true; extra.push(m);
+    const c = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.3), CAGEMAT); c.position.copy(m.position); extra.push(c);
+  } else if (p.kind === "roof") roofGeo(p, K, g);
+  return { G, extra };
+}
+function roofBox(cells, eave = 0.45) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [q, r] of cells) for (let k = 0; k < 6; k++) { const [x, z] = corner(q, r, k); x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } return [x0 - eave, x1 + eave, z0 - eave, z1 + eave]; }
+function roofGeo(p, K, g) {
+  const yW = yOf(p.s, K) + K.H;
+  if (K.roofKind === "flat") { for (const [q, r] of p.cells) { g(K.roof).hexTop(q, r, yW + 0.2, yW, 0.05); } return; }
+  const [x0, x1, z0, z1] = roofBox(p.cells), y = yW - 0.12;
+  if (K.roofKind === "cone" && p.cells.length === 1) {
+    const [q, r] = p.cells[0], c = [hx(q, r), hz(q, r)], top = yW + 1.9;
+    for (let k = 0; k < 6; k++) { const a = corner(q, r, k), b = corner(q, r, k + 1), s = (R + 0.5) / R, A = [c[0] + (a[0] - c[0]) * s, y - 0.25, c[1] + (a[1] - c[1]) * s], B = [c[0] + (b[0] - c[0]) * s, y - 0.25, c[1] + (b[1] - c[1]) * s]; g(K.roof).tri(A, B, [c[0], top, c[1]], [(a[0] + b[0]) / 2 - c[0], 1, (a[1] + b[1]) / 2 - c[1]]); }
+    return;
+  }
+  g(K.wall).box((x0 + x1) / 2, yW, (z0 + z1) / 2, x1 - x0 - 0.9, 0.1, z1 - z0 - 0.9);
+  const alongX = x1 - x0 >= z1 - z0, half = alongX ? (z1 - z0) / 2 : (x1 - x0) / 2, top = yW + half * (K.roof === "slate" ? 0.84 : 1);
+  if (alongX) { const zm = (z0 + z1) / 2; g(K.roof).quad([x0, y, z0], [x1, y, z0], [x1, top, zm], [x0, top, zm], [0, 1, -1]); g(K.roof).quad([x0, y, z1], [x0, top, zm], [x1, top, zm], [x1, y, z1], [0, 1, 1]); g(K.wall).tri([x0 + 0.45, yW, z0 + 0.45], [x0 + 0.45, yW, z1 - 0.45], [x0 + 0.45, top - 0.3, zm], [-1, 0, 0]); g(K.wall).tri([x1 - 0.45, yW, z0 + 0.45], [x1 - 0.45, yW, z1 - 0.45], [x1 - 0.45, top - 0.3, zm], [1, 0, 0]); }
+  else { const xm = (x0 + x1) / 2; g(K.roof).quad([x0, y, z0], [xm, top, z0], [xm, top, z1], [x0, y, z1], [-1, 1, 0]); g(K.roof).quad([x1, y, z0], [x1, y, z1], [xm, top, z1], [xm, top, z0], [1, 1, 0]); g(K.wall).tri([x0 + 0.45, yW, z0 + 0.45], [x1 - 0.45, yW, z0 + 0.45], [xm, top - 0.3, z0 + 0.45], [0, 0, -1]); g(K.wall).tri([x0 + 0.45, yW, z1 - 0.45], [x1 - 0.45, yW, z1 - 0.45], [xm, top - 0.3, z1 - 0.45], [0, 0, 1]); }
+}
+const LAMPMAT = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), CAGEMAT = new THREE.MeshStandardMaterial({ color: 0x2b2b2e, wireframe: true });
+const GHOST_OK = new THREE.MeshBasicMaterial({ color: 0x8fdc9a, transparent: true, opacity: 0.45, depthWrite: false }), GHOST_BAD = new THREE.MeshBasicMaterial({ color: 0xff6b57, transparent: true, opacity: 0.5, depthWrite: false });
+function realise(p) {
+  const grp = new THREE.Group(), { G, extra } = pieceGeo(p);
+  for (const [k, g] of Object.entries(G)) { const m = new THREE.Mesh(g.build(MATDEF[k][2]), mat(k)); m.castShadow = true; m.receiveShadow = true; m.userData.key = p.key; grp.add(m); }
+  for (const e of extra) { e.userData.key = p.key; grp.add(e); }
+  p.grp = grp; scene.add(grp); return grp;
+}
+function ghostOf(p, ok) {
+  const grp = new THREE.Group(), { G, extra } = pieceGeo(p), m = ok ? GHOST_OK : GHOST_BAD;
+  for (const g of Object.values(G)) grp.add(new THREE.Mesh(g.build(), m));
+  for (const e of extra) { e.material = m; grp.add(e); }
+  return grp;
+}
+
+// ===================================================================
+// The checks: one function per rule, the first to fail is the reason.
+// ===================================================================
+function roomFrom(q, r, s) {
+  const seen = new Set([q + "," + r]), out = [[q, r]], stack = [[q, r]]; let leaks = 0;
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    for (let d = 0; d < 6; d++) {
+      const e = edgeAt(a, b, d, s); if (e && WALLISH.has(e.kind)) continue;
+      const na = a + DIRS[d][0], nb = b + DIRS[d][1], k = na + "," + nb; if (seen.has(k)) continue;
+      if (!inPlot(na, nb) || out.length > 14) return { cells: out, open: true };
+      seen.add(k); out.push([na, nb]); stack.push([na, nb]);
+    }
+  }
+  return { cells: out, open: false };
+}
+function supported(q, r, s) {
+  if (s === 0) return true;
+  for (let d = 0; d < 6; d++) { const e = edgeAt(q, r, d, s - 1); if (e && WALLISH.has(e.kind)) return true; }
+  for (let d = 0; d < 6; d++) { const [x, z] = corner(q, r, d); if (PIECES.get(`P:${Math.round(x * 10)},${Math.round(z * 10)},${s - 1}`)) return true; }
+  for (let d = 0; d < 6; d++) if (floorAt(q + DIRS[d][0], r + DIRS[d][1], s)) return true;
+  return false;
+}
+function check(p) {
+  const cells = p.kind === "roof" ? p.cells : p.kind === "stairs" ? stairCells(p) : [[p.q, p.r]];
+  if (cells.some(([q, r]) => !inPlot(q, r))) return "Outside the plot";
+  if (p.kind !== "roof" && PIECES.has(p.key)) return p.kind === "floor" ? "There is already a floor here" : WALLISH.has(p.kind) ? "Something is already on this edge" : "Something is already here";
+  if (p.kind === "floor") {
+    if (!supported(p.q, p.r, p.s)) return "Nothing holds it up: put a wall or post under it";
+    if (p.s > 0 && stairOver(p.q, p.r, p.s - 1)) return "No headroom: a floor 3 m over the stair";
+  }
+  if (WALLISH.has(p.kind)) {
+    const nq = p.q + DIRS[p.d][0], nr = p.r + DIRS[p.d][1];
+    if (p.s > 0 && !floorAt(p.q, p.r, p.s) && !floorAt(nq, nr, p.s) && !(edgeAt(p.q, p.r, p.d, p.s - 1))) return "Nothing holds it up: a wall upstairs needs a floor or a wall under it";
+    const st = stairOver(p.q, p.r, p.s); if (st && stairCells(st).some(([a, b]) => a === nq && b === nr)) return "The wall would cut through a stair";
+    if (p.kind === "window" && KITS[p.kit].H < 3 && false) return "";
+  }
+  if (p.kind === "post" && p.s > 0 && !supported(p.q, p.r, p.s)) return "Nothing holds it up: put a wall or post under it";
+  if (p.kind === "stairs") {
+    const [[a, b], [c, d]] = cells;
+    for (const [x, y] of cells) { if (floorAt(x, y, p.s + 1)) return "No headroom: a floor 3 m over the stair"; if (stairOver(x, y, p.s) || PIECES.get(`L:${x},${y},${p.s}`)) return "Something is already here"; }
+    const e = edgeAt(a, b, p.d, p.s); if (e && WALLISH.has(e.kind)) return "A wall is in the way of the flight";
+    if (p.s > 0 && !floorAt(a, b, p.s)) return "Nothing holds it up: the flight needs a floor to start from";
+    if (p.s >= 1) return "One upper storey in this mockup";
+  }
+  if (p.kind === "lantern") { if (stairOver(p.q, p.r, p.s)) return "A stair is there"; if (p.s > 0 && !floorAt(p.q, p.r, p.s)) return "Nothing holds it up: it needs a floor"; }
+  if (p.kind === "roof") {
+    if (p.open) return "Not a room: the walls do not close round it";
+    if (p.s > 0 && cells.some(([q, r]) => !floorAt(q, r, p.s))) return "Not a room: part of it has no floor";
+    for (const [q, r] of cells) { if (floorAt(q, r, p.s + 1)) return "A floor is already over this room"; if (roofOver(q, r, p.s)) return "This room already has a roof"; }
+    const [x0, x1, z0, z1] = roofBox(cells);
+    if (KITS[p.kit].roofKind !== "flat") for (const o of PIECES.values()) if (o.kind === "roof" && KITS[o.kit].roofKind !== "flat") { const [a0, a1, b0, b1] = roofBox(o.cells); if (x0 < a1 && x1 > a0 && z0 < b1 && z1 > b0) return "The roof would cut into another roof"; }
+  }
+  return null;
+}
+function dependants(p) {
+  if (WALLISH.has(p.kind)) { const nq = p.q + DIRS[p.d][0], nr = p.r + DIRS[p.d][1]; if (roofOver(p.q, p.r, p.s) || roofOver(nq, nr, p.s)) return "The roof rests on this wall"; if (edgeAt(p.q, p.r, p.d, p.s + 1)) return "A wall upstairs stands on it"; }
+  if (p.kind === "floor") { if (PIECES.get(`L:${p.q},${p.r},${p.s}`)) return "A lantern stands on it"; if (roofOver(p.q, p.r, p.s) && p.s > 0) return "The roof rests on this room"; }
+  return null;
+}
+
+// ===================================================================
+// Edits: every placement and removal is a journal entry with an author.
+// ===================================================================
+const JOURNAL = [];
+function log(author, text, cls) { JOURNAL.unshift({ n: ++EDIT_N, author, text, cls: cls || author }); $("journal").innerHTML = JOURNAL.slice(0, 9).map(j => `<div class="${j.cls}">#${j.n} ${j.author}: ${j.text}</div>`).join(""); }
+const where = p => p.kind === "roof" ? `${p.cells.length} cells` : `(${p.q},${p.r})${WALLISH.has(p.kind) || p.kind === "fence" ? " edge " + p.d : ""}${p.s ? " upper" : ""}`;
+function add(p, author = "player", quiet = false) {
+  p.key = keyOf(p); const why = check(p); if (why) return why;
+  p.author = author; PIECES.set(p.key, p); realise(p);
+  if (author === "player") touch(p);
+  if (!quiet) { log(author, `add ${p.kind} ${where(p)} &middot; ${KITS[p.kit].label.toLowerCase()}`); relight(); }
+  return null;
+}
+function remove(key) {
+  const p = PIECES.get(key); if (!p) return; const why = dependants(p); if (why) { flash(why, false); return; }
+  scene.remove(p.grp); PIECES.delete(key); touch(p); log("player", `remove ${p.kind} ${where(p)}${p.author !== "player" ? " (the town's)" : ""}`); relight();
+}
+// Cells the player has changed: the world yields on these (world-persistence).
+const TOUCHED = new Set();
+function touch(p) { const cells = p.kind === "roof" ? p.cells : p.kind === "stairs" ? stairCells(p) : WALLISH.has(p.kind) || p.kind === "fence" ? [[p.q, p.r], [p.q + DIRS[p.d][0], p.r + DIRS[p.d][1]]] : [[p.q, p.r]]; for (const [q, r] of cells) TOUCHED.add(q + "," + r); }
+
+// the town grows: a fence round the plot's edge, world-authored, refused where you built
+function grow() {
+  let placed = 0, refused = 0;
+  for (let q = -PLOT; q <= PLOT; q++) for (let r = -PLOT; r <= PLOT; r++) {
+    if (hexDist(q, r) !== PLOT) continue;
+    for (let d = 0; d < 6; d++) {
+      const nq = q + DIRS[d][0], nr = r + DIRS[d][1]; if (inPlot(nq, nr)) continue;
+      const p = { kind: "fence", kit: "timber", q, r, d, s: 0 }; p.key = keyOf(p); if (PIECES.has(p.key)) continue;
+      if (TOUCHED.has(q + "," + r)) { refused++; if (refused <= 3) log("world", `fence at (${q},${r}) refused: the player built there`, "refused"); continue; }
+      p.author = "world"; PIECES.set(p.key, p); realise(p); placed++;
+    }
+  }
+  if (refused > 3) log("world", `${refused - 3} more fence pieces refused on player cells`, "refused");
+  log("world", placed ? `the town grows: ${placed} fence pieces round the plot` : "the town has nothing left to add here", "world");
+  relight();
+}
+
+// ===================================================================
+// Light: lanterns, the town's street lamps, windows with a lantern behind them
+// ===================================================================
+let LIGHTS = [];
+function relight() {
+  const lamp = c => lin(c), L = [];
+  if (ST.site === "tenebris") for (const [x, z] of STREET) L.push({ x, y: 2.4, z, c: lamp(0xffc878), p: 0.62, R: 8 });
+  else L.push({ x: BEACON[0], y: 3.2, z: BEACON[1], c: lamp(0xffb070), p: 0.7, R: 10 });
+  for (const p of PIECES.values()) if (p.kind === "lantern") L.push({ x: hx(p.q, p.r), y: yOf(p.s) + 2.2, z: hz(p.q, p.r), c: lamp(0xffc878), p: 0.62, R: 8, room: p });
+  // a window glows when a lantern stands in a cell either side of it
+  for (const p of PIECES.values()) if (p.kind === "window") {
+    const nq = p.q + DIRS[p.d][0], nr = p.r + DIRS[p.d][1], lit = PIECES.get(`L:${p.q},${p.r},${p.s}`) || PIECES.get(`L:${nq},${nr},${p.s}`);
+    p.lit = !!lit; const e = edgeInfo(p.q, p.r, p.d);
+    if (lit) { const sgn = PIECES.get(`L:${p.q},${p.r},${p.s}`) ? 1 : -1; L.push({ x: e.mx + e.nx * 0.5 * sgn, y: yOf(p.s) + 1.5, z: e.mz + e.nz * 0.5 * sgn, c: lamp(0xffb860), p: 0.32, R: 4.5 }); }
+  }
+  LIGHTS = L;
+  bake(GROUND.geometry, L);
+  for (const p of PIECES.values()) p.grp.traverse(o => { if (o.isMesh && o.geometry.attributes.blk) bake(o.geometry, L); });
+  applyTime(); status();
+}
+const STREET = [[hx(PLOT + 1, -3), hz(PLOT + 1, -3)], [hx(-PLOT - 1, 3), hz(-PLOT - 1, 3)]], BEACON = [hx(PLOT + 1, -3), hz(PLOT + 1, -3)];
+const fixtures = new THREE.Group(); scene.add(fixtures);
+function buildFixtures() {
+  fixtures.clear();
+  const g = new Geo(), lamps = [];
+  if (ST.site === "tenebris") for (const [x, z] of STREET) { g.cyl(x, 0, z, 0.06, 2.5, 6); g.box(x, 2.45, z, 0.5, 0.06, 0.08); lamps.push([x + 0.22, 2.2, z]); }
+  else { const [x, z] = BEACON; g.cyl(x, 0, z, 0.12, 3.0, 6); lamps.push([x, 3.2, z]); }
+  const m = new THREE.Mesh(g.build(), mat("dark")); fixtures.add(m); FIXMESH = m;
+  for (const [x, y, z] of lamps) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), LAMPMAT); b.position.set(x, y, z); fixtures.add(b); const c = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.3), CAGEMAT); c.position.copy(b.position); fixtures.add(c); }
+}
+let FIXMESH = null;
+
+const cA = new THREE.Color();
+function applyTime() {
+  const night = ST.night, moon = ST.site === "moon";
+  if (moon) { cA.set(night ? 0x020308 : 0x05060c); } else cA.set(night ? 0x0e1424 : 0x9fc6e2);
+  scene.background = cA.clone(); scene.fog.color.copy(cA); scene.fog.near = moon ? 400 : 70; scene.fog.far = moon ? 900 : 170;
+  if (night) { sun.color.set(0x8fa6d8); sun.intensity = moon ? 0.22 : 0.16; sun.position.set(-30, 50, 40); hemi.intensity = moon ? 0.08 : 0.13; hemi.color.set(moon ? 0x8090b0 : 0x34405a); hemi.groundColor.set(0x1a1a22); }
+  else { sun.color.set(moon ? 0xffffff : 0xfff0d8); sun.intensity = moon ? 2.8 : 2.4; sun.position.set(50, 60, 30); hemi.intensity = moon ? 0.15 : 0.75; hemi.color.set(moon ? 0x404650 : 0xc8dcea); hemi.groundColor.set(0x5a5040); }
+  U.lamp.value = night ? 1.15 : 0; LAMPMAT.color.set(night ? 0xffd9a0 : 0x6a655a);
+  stars.material.opacity = night || moon ? 1 : 0; planet.visible = planetLand.visible = moon;
+  for (const p of PIECES.values()) p.grp.traverse(o => { if (o.userData.pane) o.material.color.set(p.lit && night ? 0xffc870 : (KITS[p.kit].sealed ? 0x5aa8c8 : 0x1a1a22)); });
+  if (FIXMESH) bake(FIXMESH.geometry, LIGHTS);
+}
+
+// ===================================================================
+// Pressure: is a habitat room sealed?
+// ===================================================================
+const leakGrp = new THREE.Group(); scene.add(leakGrp);
+const LEAKMAT = new THREE.MeshBasicMaterial({ color: 0xff6b57 });
+function seal() {
+  leakGrp.clear(); const res = [];
+  for (const p of PIECES.values()) {
+    if (p.kind !== "roof" || !KITS[p.kit].sealed) continue;
+    const set = new Set(p.cells.map(([q, r]) => q + "," + r)); let open = 0, nofloor = 0;
+    for (const [q, r] of p.cells) {
+      if (!floorAt(q, r, p.s)) nofloor++;
+      for (let d = 0; d < 6; d++) {
+        const nq = q + DIRS[d][0], nr = r + DIRS[d][1]; if (set.has(nq + "," + nr)) continue;
+        const e = edgeAt(q, r, d, p.s), ok = e && WALLISH.has(e.kind) && KITS[e.kit].sealed;
+        if (!ok) { open++; const E = edgeInfo(q, r, d), m = new THREE.Mesh(new THREE.BoxGeometry(R * 0.9, 0.12, 0.12), LEAKMAT); m.position.set(E.mx, yOf(p.s) + 0.4, E.mz); m.rotation.y = -E.ang; leakGrp.add(m); const m2 = m.clone(); m2.position.y = yOf(p.s) + KITS[p.kit].H - 0.3; leakGrp.add(m2); }
+      }
+    }
+    res.push({ cells: p.cells.length, open, nofloor, vol: Math.round(p.cells.length * (Math.sqrt(3) / 2) * W * W * KITS[p.kit].H) });
+  }
+  return res;
+}
+function status() {
+  const s = seal(), ap = $("airPill");
+  if (!s.length) ap.hidden = ST.site !== "moon", ap.className = "pill", ap.textContent = "No habitat: nothing holds air";
+  else { ap.hidden = false; const bad = s.find(x => x.open || x.nofloor); if (bad) { ap.className = "pill bad"; ap.textContent = `Leaking: ${bad.open} open edge${bad.open === 1 ? "" : "s"}${bad.nofloor ? `, ${bad.nofloor} cell${bad.nofloor === 1 ? "" : "s"} with no floor` : ""}`; } else { ap.className = "pill air"; ap.textContent = `Pressurised: ${s.reduce((a, x) => a + x.cells, 0)} cells, ${s.reduce((a, x) => a + x.vol, 0)} m³`; } }
+  const by = a => [...PIECES.values()].filter(p => p.author === a).length;
+  $("stats").innerHTML = `<dt>Pieces, yours</dt><dd>${by("player")}</dd><dt>Pieces, the town's</dt><dd>${by("world")}</dd><dt>Lights baked</dt><dd>${LIGHTS.length}</dd><dt>Cells you touched</dt><dd>${TOUCHED.size}</dd><dt>Cell</dt><dd>2.833 m, storey 3 m</dd>`;
+  $("topline").innerHTML = `<span class="pill">${KITS[ST.kit].label} kit</span><span class="pill">${ST.storey ? "Upper storey, floor at 3 m" : "Ground storey"}</span><span class="pill">${ST.site === "moon" ? "Airless moon" : "Tenebris, fields"} &middot; ${ST.night ? "22:00" : "14:00"}</span>`;
+}
+
+// ===================================================================
+// Aim and the ghost
+// ===================================================================
+const PALETTE = [["wall", "Wall", "icon_wall"], ["door", "Door", "icon_door"], ["window", "Window", "icon_window"], ["floor", "Floor", "icon_floor"], ["roof", "Roof", "icon_roof"], ["stairs", "Stairs", "icon_stairs"], ["post", "Post", "icon_post"], ["lantern", "Lantern", "icon_lantern"], ["airlock", "Airlock", "icon_airlock"], ["remove", "Remove", null]];
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(), hit = new THREE.Vector3();
+function aimAt(e) {
+  const rc = canvas.getBoundingClientRect(); mouse.set((e.clientX - rc.left) / rc.width * 2 - 1, -(e.clientY - rc.top) / rc.height * 2 + 1); ray.setFromCamera(mouse, camera);
+  if (ST.piece === "remove") {
+    const objs = []; for (const p of PIECES.values()) p.grp.traverse(o => { if (o.isMesh) objs.push(o); });
+    const h = ray.intersectObjects(objs, false)[0]; return h ? { remove: h.object.userData.key } : null;
+  }
+  const y = ST.storey * STOREY + (ST.storey ? 0 : 0.05);
+  if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y), hit)) return null;
+  const [q, r] = cellAt(hit.x, hit.z), ax = hit.x - hx(q, r), az = hit.z - hz(q, r);
+  const d = ((Math.round(Math.atan2(az, ax) / (Math.PI / 3)) % 6) + 6) % 6;
+  const ck = ((Math.round((Math.atan2(az, ax) + Math.PI / 6) / (Math.PI / 3)) % 6) + 6) % 6;
+  return { q, r, d, ck, x: hit.x, z: hit.z };
+}
+function candidate(a) {
+  if (!a || a.remove) return null; const kind = ST.piece === "airlock" ? "door" : ST.piece, kit = ST.piece === "airlock" ? "habitat" : ST.kit, s = ST.storey;
+  if (kind === "roof") { const room = roomFrom(a.q, a.r, s); return { kind, kit, s, cells: room.cells, open: room.open, q: a.q, r: a.r }; }
+  if (kind === "post") return { kind, kit, q: a.q, r: a.r, d: a.ck, s };
+  return { kind, kit, q: a.q, r: a.r, d: a.d, s };
+}
+function setGhost(a) {
+  if (ST.ghost) { scene.remove(ST.ghost); ST.ghost = null; }
+  const pill = $("ghostPill");
+  if (a && a.remove) { const p = PIECES.get(a.remove); const why = p && dependants(p); pill.className = why ? "pill bad" : "pill ok"; pill.textContent = p ? (why ? why : `Remove ${p.kind}${p.author !== "player" ? " (the town's; people will be upset)" : ""}`) : "Aim at a piece"; return; }
+  const c = candidate(a); if (!c) { pill.className = "pill"; pill.textContent = ST.piece === "remove" ? "Aim at a piece to remove" : "Aim at the plot"; return; }
+  c.key = keyOf(c); const why = check(c); c.why = why;
+  ST.ghost = ghostOf(c, !why); scene.add(ST.ghost); ST.cand = c;
+  pill.className = why ? "pill bad" : "pill ok"; pill.textContent = why || `Place ${c.kind}${c.kind === "roof" ? ` over ${c.cells.length} cell${c.cells.length > 1 ? "s" : ""}` : ""}`;
+}
+function flash(t, ok) { const pill = $("ghostPill"); pill.className = ok ? "pill ok" : "pill bad"; pill.textContent = t; }
+function click(e) {
+  const a = aimAt(e); if (!a) return;
+  if (a.remove) { remove(a.remove); setGhost(aimAt(e)); return; }
+  const c = candidate(a); const why = add(c); if (why) flash(why, false); setGhost(aimAt(e));
+}
+
+// ---- camera ----------------------------------------------------------------
+const ORB = { tx: 0, ty: 1, tz: 0, dist: 30, yaw: 0.7, pitch: 0.72 };
+function placeCam() { const cp = Math.cos(ORB.pitch); camera.position.set(ORB.tx + Math.sin(ORB.yaw) * cp * ORB.dist, ORB.ty + Math.sin(ORB.pitch) * ORB.dist, ORB.tz + Math.cos(ORB.yaw) * cp * ORB.dist); camera.lookAt(ORB.tx, ORB.ty, ORB.tz); }
+{
+  const pts = new Map(); let moved = 0, pinch = 0;
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY, e.button, e.shiftKey]); moved = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+  canvas.addEventListener("pointermove", e => {
+    const p = pts.get(e.pointerId); if (!p) { setGhost(aimAt(e)); return; }
+    const dx = e.clientX - p[0], dy = e.clientY - p[1]; moved += Math.abs(dx) + Math.abs(dy);
+    if (pts.size === 2) { p[0] = e.clientX; p[1] = e.clientY; const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) ORB.dist = clamp(ORB.dist * pinch / d, 6, 80); pinch = d; return; }
+    if (moved < 6) return;
+    if (p[2] === 2 || p[3]) { const s = ORB.dist * 0.0016; ORB.tx -= (Math.cos(ORB.yaw) * dx - Math.sin(ORB.yaw) * dy) * s; ORB.tz -= (-Math.sin(ORB.yaw) * dx - Math.cos(ORB.yaw) * dy) * s; }
+    else { ORB.yaw -= dx * 0.006; ORB.pitch = clamp(ORB.pitch + dy * 0.005, 0.1, 1.45); }
+    p[0] = e.clientX; p[1] = e.clientY;
+  });
+  canvas.addEventListener("pointerup", e => { const p = pts.get(e.pointerId); pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; if (p && moved < 6 && p[2] === 0) click(e); });
+  canvas.addEventListener("pointercancel", e => pts.delete(e.pointerId));
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+  canvas.addEventListener("wheel", e => { e.preventDefault(); ORB.dist = clamp(ORB.dist * Math.exp(e.deltaY * 0.0012), 6, 80); }, { passive: false });
+  canvas.addEventListener("pointerleave", () => setGhost(null));
+}
+
+// ---- controls ----------------------------------------------------------------
+function setPiece(k) { ST.piece = k; for (const b of $("pal").children) b.setAttribute("aria-pressed", b.dataset.k === k); setGhost(null); }
+$("pal").innerHTML = PALETTE.map(([k, l, ic], i) => `<button data-k="${k}" aria-pressed="${k === ST.piece}"><kbd>${(i + 1) % 10}</kbd>${ic ? `<img src="building/${ic}.png" alt="">` : `<svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true"><path d="M10 10 L34 34 M34 10 L10 34" stroke="#ff6b57" stroke-width="6" stroke-linecap="round"/></svg>`}${l}</button>`).join("");
+for (const b of $("pal").children) b.addEventListener("click", () => setPiece(b.dataset.k));
+$("kits").innerHTML = Object.entries(KITS).map(([k, K]) => `<button class="btn" data-kit="${k}" aria-pressed="${k === ST.kit}">${K.label}</button>`).join("");
+function setKit(k) { ST.kit = k; for (const b of $("kits").children) b.setAttribute("aria-pressed", b.dataset.kit === k); status(); }
+for (const b of $("kits").children) b.addEventListener("click", () => setKit(b.dataset.kit));
+function setStorey(s) { ST.storey = s; $("s0").setAttribute("aria-pressed", s === 0); $("s1").setAttribute("aria-pressed", s === 1); gridLines.position.y = s * STOREY; status(); }
+$("s0").addEventListener("click", () => setStorey(0)); $("s1").addEventListener("click", () => setStorey(1));
+function setSite(s) { ST.site = s; $("siteT").setAttribute("aria-pressed", s === "tenebris"); $("siteM").setAttribute("aria-pressed", s === "moon"); buildGround(); buildFixtures(); relight(); }
+$("siteT").addEventListener("click", () => setSite("tenebris")); $("siteM").addEventListener("click", () => setSite("moon"));
+function setNight(n) { ST.night = n; $("tNight").setAttribute("aria-pressed", n); $("tDay").setAttribute("aria-pressed", !n); applyTime(); }
+$("tNight").addEventListener("click", () => setNight(true)); $("tDay").addEventListener("click", () => setNight(false));
+$("grow").addEventListener("click", grow);
+addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest("input,select,textarea")) return;
+  const n = "1234567890".indexOf(e.key); if (n >= 0 && document.activeElement === canvas) { setPiece(PALETTE[n][0]); e.preventDefault(); }
+  if (e.key === "Tab" && document.activeElement === canvas) { setStorey(1 - ST.storey); e.preventDefault(); }
+});
+
+// ---- examples ------------------------------------------------------------------
+function clearAll() { for (const p of PIECES.values()) scene.remove(p.grp); PIECES.clear(); TOUCHED.clear(); }
+function walls(cells, kit, s, doorEdge, windowAt) {
+  const set = new Set(cells.map(([q, r]) => q + "," + r));
+  for (const [q, r] of cells) for (let d = 0; d < 6; d++) { if (set.has((q + DIRS[d][0]) + "," + (r + DIRS[d][1]))) continue; const isDoor = doorEdge && doorEdge[0] === q && doorEdge[1] === r && doorEdge[2] === d; add({ kind: isDoor ? "door" : windowAt(q, r, d) ? "window" : "wall", kit, q, r, d, s }, "player", true); }
+}
+function example(which) {
+  clearAll();
+  if (which === "hut") {
+    setKit("hut"); add({ kind: "floor", kit: "hut", q: 0, r: 0, s: 0 }, "player", true); walls([[0, 0]], "hut", 0, [0, 0, 1], (q, r, d) => d === 4);
+    add({ kind: "lantern", kit: "hut", q: 0, r: 0, s: 0 }, "player", true); add({ kind: "roof", kit: "hut", s: 0, cells: [[0, 0]] }, "player", true);
+    add({ kind: "lantern", kit: "hut", q: 1, r: 1, s: 0 }, "player", true);
+  } else if (which === "stone") {
+    setKit("stone"); const C = [[-1, 0], [0, 0], [1, 0]];
+    for (const [q, r] of C) add({ kind: "floor", kit: "stone", q, r, s: 0 }, "player", true);
+    walls(C, "stone", 0, [0, 0, 1], (q, r, d) => d !== 1 && (q + d) % 2 === 0);
+    add({ kind: "lantern", kit: "stone", q: -1, r: 0, s: 0 }, "player", true); add({ kind: "lantern", kit: "stone", q: 1, r: 0, s: 0 }, "player", true);
+    add({ kind: "roof", kit: "stone", s: 0, cells: C }, "player", true); add({ kind: "lantern", kit: "stone", q: 0, r: 2, s: 0 }, "player", true);
+  } else if (which === "hab") {
+    setSite("moon"); setKit("habitat"); const C = [[0, 0], ...DIRS.map(([a, b]) => [a, b])];
+    for (const [q, r] of C) add({ kind: "floor", kit: "habitat", q, r, s: 0 }, "player", true);
+    walls(C, "habitat", 0, [1, 0, 0], (q, r, d) => (q * 3 + r * 5 + d) % 3 === 0);
+    add({ kind: "lantern", kit: "habitat", q: 0, r: 0, s: 0 }, "player", true); add({ kind: "lantern", kit: "habitat", q: -1, r: 1, s: 0 }, "player", true); add({ kind: "lantern", kit: "habitat", q: 1, r: -1, s: 0 }, "player", true);
+    add({ kind: "roof", kit: "habitat", s: 0, cells: C }, "player", true); add({ kind: "lantern", kit: "habitat", q: 3, r: -1, s: 0 }, "player", true);
+  }
+  if (which !== "hab" && ST.site !== "tenebris") setSite("tenebris");
+  log("player", which === "clear" ? "cleared the plot" : `built the ${which === "hab" ? "habitat" : which === "stone" ? "stone house" : "hut"} example (${PIECES.size} pieces)`);
+  relight();
+}
+for (const b of document.querySelectorAll("[data-ex]")) b.addEventListener("click", () => example(b.dataset.ex));
+
+// ---- the sheets ----------------------------------------------------------------
+const PIECE_INFO = [
+  ["icon_floor", "Floor", "in a cell, at a layer line", "Boards 0.2 m thick. On the ground it is the cell's top; upstairs it needs a wall or post under it."],
+  ["icon_wall", "Wall", "on a cell edge, one storey", "1.636 m long, 0.25 to 0.5 m thick by kit. Two houses that touch share one party wall: an edge has one owner."],
+  ["icon_door", "Door", "an opening in a wall", "1.0 by 2.2 m (huts 0.9 by 1.9). Opening it is a world edit, as in the towns."],
+  ["icon_window", "Window", "an opening in a wall", "0.8 by 1.0 m on a 1 m sill. Lit at night when a lantern is in the room behind it."],
+  ["icon_roof", "Roof", "fitted over a room", "The roof tool fills the room bounded by walls and fits the kit's roof: a cone, a gable with 0.45 m eaves, or flat."],
+  ["icon_stairs", "Stairs", "two cells, floor to floor", "The straight flight: 16 risers of 0.1875 m on a 0.354 m run, landing on the layer line 3 m up. The floor above must be open."],
+  ["icon_post", "Post", "on a cell corner", "Covers the 120 degree joint where walls meet, and holds an upper floor with no wall under it."],
+  ["icon_lantern", "Lantern", "in a cell", "A light from lamps-and-lanterns: 8 m of reach. It is what lights a room and its windows."],
+  ["icon_airlock", "Airlock", "an opening in a habitat wall", "The habitat kit's door. A room seals only when every outside edge is habitat wall, glass or airlock."],
+];
+$("pieces").innerHTML = PIECE_INFO.map(([ic, l, snap, t]) => `<div class="piece"><img src="building/${ic}.png" alt="${l} icon"><div><h3>${l}</h3><div class="snap">${snap}</div><p>${t}</p></div></div>`).join("");
+const TIERS = [
+  ["hut", "Tier 1 &middot; Reed and earth", ["tex_thatch", "tex_plaster", "tex_plank"], "Any grassland, the first night", "Reed walls 0.3 m, a thatch cone, an earth floor; 2.2 m storeys under the cone. Cut reeds, poles from any tree."],
+  ["timber", "Tier 2 &middot; Timber", ["tex_plank", "tex_plank", "tex_thatch"], "Tenebris forests, an axe that fells", "Lapped boards and shingle, plank floors. Felled trees drop logs; a saw bench turns them to planks."],
+  ["stone", "Tier 3 &middot; Stone and brick", ["tex_stone", "tex_brick", "tex_plaster"], "Limestone, granite, clay pits", "Fieldstone at 0.5 m, slate or tile roofs, flagstone floors, brick from a kiln. The towns' own kits."],
+  ["habitat", "Tier 4 &middot; Habitat", ["tex_metal", "tex_glass", "tex_regolith"], "Crag alloys, Sequoia resin seals, Frostbite volatiles", "Metal panel, glass, airlocks. The only kit that holds air, so the only way to live on an airless body."],
+];
+$("tiers").innerHTML = TIERS.map(([k, t, tx, from, txt]) => `<div class="tier"><div class="tex">${tx.map(n => `<div style="background-image:url(building/${n}.png)" role="img" aria-label="${n.replace("tex_", "")} texture"></div>`).join("")}</div><div class="body"><h3>${t}</h3><div class="from">${from}</div><p>${txt}</p><button class="btn" data-kit2="${k}">Build with it</button></div></div>`).join("");
+for (const b of document.querySelectorAll("[data-kit2]")) b.addEventListener("click", () => { setKit(b.dataset.kit2); $("cv").scrollIntoView({ behavior: "smooth", block: "center" }); });
+
+// ---- go ------------------------------------------------------------------------
+function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize);
+let T = 0, last = performance.now();
+function frame(now) { const dt = clamp((now - last) / 1000, 0, 0.1); last = now; T += dt; placeCam(); renderer.render(scene, camera); requestAnimationFrame(frame); }
+buildGround(); buildFixtures(); resize();
+example("stone");
+add({ kind: "floor", kit: "timber", q: -3, r: 3, s: 0 }, "player", true); add({ kind: "wall", kit: "timber", q: -3, r: 3, d: 2, s: 0 }, "player", true); add({ kind: "wall", kit: "timber", q: -3, r: 3, d: 3, s: 0 }, "player", true);
+JOURNAL.length = 0; EDIT_N = 0; log("player", "built the stone house example (16 pieces)"); log("player", "add wall (-3,3) edge 3 &middot; timber");
+setKit("timber"); relight(); setPiece("wall");
+const HASH = { "#hut": "hut", "#stone-house": "stone", "#habitat": "hab" };
+function route() { const ex = HASH[location.hash]; if (ex) example(ex); }
+addEventListener("hashchange", route); route();
+requestAnimationFrame(frame);
+window.__build = { PIECES, add, check, example, grow, LIGHTS: () => LIGHTS };
+</script>

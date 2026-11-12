@@ -1,0 +1,693 @@
+<meta charset="utf-8">
+<title>Halcyon Transit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the transfer is the hero (a scene and its flight strip), then the
+   rules of flight in diagrams, top to bottom in the order you meet them:
+   regimes, gravity, the map and its times, dampeners, docking, fuel, lanes,
+   then the owner's decisions. Dark by choice, like the other mockups. */
+:root{
+  color-scheme: dark;
+  --ground:#080a0f;
+  --panel:#11141c;
+  --panel-2:#171b25;
+  --line:rgba(190,205,235,.16);
+  --ink:#e8ebf2;
+  --muted:#9aa3b6;
+  --amber:#f0b43c;
+  --sky:#8fc3e8;
+  --ok:#8fdc9a;
+  --warn:#ff7a5c;
+  --violet:#b98cff;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html,body{background:var(--ground);color:var(--ink)}
+body{font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:.02em;text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:clamp(30px,5vw,46px);font-weight:700}
+h2{font-size:26px}
+p{margin:0}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+.btn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-family:var(--display);font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);background:var(--panel);white-space:nowrap}
+.btn:hover{border-color:rgba(240,180,60,.6)}
+.btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.btn:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+header.top{padding-block:28px 18px;display:grid;gap:12px}
+header.top .lede{max-width:74ch;color:var(--muted)}
+header.top .lede b{color:var(--ink);font-weight:500}
+.banner{display:flex;gap:10px;align-items:flex-start;border:1px solid rgba(240,180,60,.45);background:rgba(240,180,60,.07);border-radius:6px;padding:10px 12px;font-size:14px;max-width:920px}
+.banner b{color:var(--amber);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+
+.scene{position:relative;height:clamp(380px,58vh,660px);border-top:1px solid var(--line);background:#04050a;overflow:hidden}
+.scene canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.scene .tag{position:absolute;left:max(16px,env(safe-area-inset-left,0px));top:14px;font-family:var(--display);font-size:22px;font-weight:600;letter-spacing:.03em;text-shadow:0 1px 4px #000}
+.scene .tag small{display:block;font-family:var(--body);font-size:13px;font-weight:400;color:var(--muted);letter-spacing:0;max-width:52ch}
+.scene .cams{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:14px;display:flex;gap:6px}
+.strip{border-bottom:1px solid var(--line);background:var(--panel)}
+.strip .wrap{display:grid;gap:10px;padding-block:12px}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ctl input[type=range]{flex:1 1 220px;accent-color:var(--amber);min-width:160px}
+.phases{display:flex;flex-wrap:wrap;gap:5px}
+.phases button{all:unset;cursor:pointer;font-family:var(--display);font-size:13px;letter-spacing:.06em;padding:3px 8px;border-radius:3px;border:1px solid var(--line);color:var(--muted)}
+.phases button[aria-current="true"]{color:#140e04;background:var(--amber);border-color:var(--amber)}
+.phases button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.ro{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 16px}
+.ro div{display:grid;min-width:0}
+.ro .k{font-family:var(--display);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.ro .v{font-family:var(--mono);font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pnote{font-size:14px;color:var(--muted);min-height:2.9em}
+.pnote b{color:var(--ink);font-weight:500}
+
+section{padding-block:34px 6px}
+section > .wrap{display:grid;gap:14px}
+.sub{color:var(--muted);max-width:78ch}
+.sub b{color:var(--ink);font-weight:500}
+.fig{border:1px solid var(--line);border-radius:6px;background:var(--panel);overflow-x:auto}
+.fig svg{display:block;width:100%;height:auto;min-width:640px}
+.fig svg text{font-family:var(--body);fill:var(--ink)}
+.fig svg .m{fill:var(--muted)}
+.fig svg .d{font-family:var(--display);letter-spacing:.06em}
+.fig svg .num{font-family:var(--mono);font-size:12px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.two > *{min-width:0}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table.grid{border-collapse:collapse;width:100%;font-size:14px;min-width:620px}
+table.grid th,table.grid td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.grid th{font-family:var(--display);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);background:var(--panel)}
+table.grid td.n,table.grid th.n{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+table.grid th.n{font-family:var(--display);font-size:12px}
+table.grid tr:last-child td{border-bottom:0}
+table.grid td.rec{color:var(--ok)}
+.daybar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.daybar input{flex:1 1 220px;accent-color:var(--amber);min-width:160px}
+.icons{display:flex;flex-wrap:wrap;gap:14px}
+.icons figure{margin:0;display:grid;justify-items:center;width:92px;text-align:center;font-size:12.5px;color:var(--muted);line-height:1.25}
+.icons img{width:64px;height:64px}
+.note{font-size:14px;color:var(--muted);max-width:80ch}
+.note b{color:var(--ink);font-weight:500}
+.bar{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:14px}
+.bar .track{height:12px;border-radius:2px;background:var(--panel-2);border:1px solid var(--line);position:relative;overflow:hidden}
+.bar .fill{position:absolute;inset:0 auto 0 0;background:var(--amber)}
+.bar .fill.two{background:#c98a2a}
+.bar .v{font-family:var(--mono);font-size:13px;text-align:right;font-variant-numeric:tabular-nums}
+.bars{display:grid;gap:7px}
+figure.sheet{margin:0;display:grid;gap:6px}
+figure.sheet img{width:100%;border:1px solid var(--line);border-radius:6px;background:#20242e}
+figure.sheet figcaption{font-size:13px;color:var(--muted)}
+footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
+@media (max-width:640px){ .bar{grid-template-columns:minmax(0,1fr) 80px}.bar .track{grid-column:1/-1;grid-row:2} .scene .cams{top:auto;bottom:12px} }
+</style>
+
+<header class="top wrap">
+  <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; travel</div>
+  <h1>Halcyon Transit</h1>
+  <p class="lede">How you get from one world to another. You <b>fly the whole way yourself</b>: lift off, climb out of the gravity band, light the transit drive, coast, flip, brake into the next body's band and dock. No orbits to plan, no transfer windows, no manoeuvre nodes. The planets ride analytic rails at <b>3 to 7 m/s</b>, so you never chase one: the trip's length depends only on where they are, and a trip to the far giant takes eight to ten minutes.</p>
+  <div class="banner" role="note"><b>Proposal</b><span>None of this is built. Today the ship flies at 120 m/s (600 m/s in cruise) with 20 m/s&sup2; of thrust round one planet. The transit drive, its fuel, the frame handoff between bodies, the stations and the lanes are proposed here; the numbers are recommendations, and the decisions are listed at the end. Bodies and their numbers are from the <span class="mono">planets</span> mockup.</span></div>
+</header>
+
+<div class="scene" id="scene">
+  <canvas id="sceneCanvas" tabindex="0" aria-label="A three-dimensional transfer from Pale Blue's night side to the skimmer platform at Amber's cloud tops. Drag to turn the camera."></canvas>
+  <div class="tag">Pale Blue to Amber<small>A town on the night side to the skimmer platform, 900 km. Not to scale: the bodies are enlarged and pulled together. The numbers in the strip below are the real ones.</small></div>
+  <div class="cams"><button class="btn" id="camChase" aria-pressed="true">Chase</button><button class="btn" id="camWide">Whole route</button></div>
+</div>
+<div class="strip">
+  <div class="wrap">
+    <div class="ctl">
+      <button class="btn" id="play" aria-pressed="true">Pause</button>
+      <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Time along the transfer">
+      <span class="mono" id="clock">0:00 / 5:51</span>
+      <button class="btn" id="rate">&times;8</button>
+    </div>
+    <div class="phases" id="phases"></div>
+    <div class="ro">
+      <div><span class="k">Speed</span><span class="v" id="roSpeed">0 m/s</span></div>
+      <div><span class="k">Local gravity</span><span class="v" id="roG">25.0 m/s&sup2;</span></div>
+      <div><span class="k">Frame</span><span class="v" id="roFrame">Pale Blue</span></div>
+      <div><span class="k">Drive</span><span class="v" id="roDrive">lift</span></div>
+      <div><span class="k">Dampeners</span><span class="v" id="roDamp">on</span></div>
+      <div><span class="k">Transit fuel</span><span class="v" id="roFuel">30.0 km/s</span></div>
+      <div><span class="k">Distance left</span><span class="v" id="roLeft">900 km</span></div>
+    </div>
+    <p class="pnote" id="pnote"></p>
+  </div>
+</div>
+
+<section id="regimes">
+  <div class="wrap">
+    <div><div class="eyebrow">From the ground up</div><h2>Four regimes, one ship</h2></div>
+    <p class="sub">The ship's limits change with where it is, never with a mode the player has to pick. The boundary that matters is the <b>edge of the gravity band</b>, 1.8 R from the centre: inside it the anchor field pulls and hover compensation cancels it; outside it the field is zero, which <span class="mono">gravity-model</span> already makes the "in space" flag. Only there does the transit drive light.</p>
+    <div class="fig"><svg viewBox="0 0 1000 300" role="img" aria-label="Diagram of the four flight regimes from the surface outward: air, gravity band, the body's frame, and system space, with each one's speed cap and drive">
+      <defs><linearGradient id="gband" x1="0" x2="1"><stop offset="0" stop-color="#f0b43c" stop-opacity=".35"/><stop offset=".5" stop-color="#f0b43c" stop-opacity=".35"/><stop offset="1" stop-color="#f0b43c" stop-opacity="0"/></linearGradient></defs>
+      <rect x="20" y="70" width="110" height="120" fill="#3c6a3a" opacity=".55"/>
+      <rect x="130" y="70" width="170" height="120" fill="#8fc3e8" opacity=".2"/>
+      <rect x="300" y="70" width="250" height="120" fill="url(#gband)"/>
+      <rect x="550" y="70" width="210" height="120" fill="#b98cff" opacity=".12"/>
+      <rect x="760" y="70" width="220" height="120" fill="#ffffff" opacity=".03"/>
+      <g stroke="#9aa3b6" stroke-opacity=".5" stroke-dasharray="4 4"><line x1="130" y1="56" x2="130" y2="204"/><line x1="300" y1="56" x2="300" y2="204"/><line x1="425" y1="56" x2="425" y2="204"/><line x1="550" y1="56" x2="550" y2="204"/><line x1="760" y1="56" x2="760" y2="204"/></g>
+      <text x="75" y="42" text-anchor="middle" class="d" font-size="15">GROUND</text>
+      <text x="215" y="42" text-anchor="middle" class="d" font-size="15">AIR</text>
+      <text x="425" y="42" text-anchor="middle" class="d" font-size="15">GRAVITY BAND</text>
+      <text x="655" y="42" text-anchor="middle" class="d" font-size="15">THE BODY'S FRAME</text>
+      <text x="870" y="42" text-anchor="middle" class="d" font-size="15">SYSTEM SPACE</text>
+      <text x="75" y="105" text-anchor="middle" font-size="13">walk, run</text>
+      <text x="75" y="125" text-anchor="middle" class="m" font-size="12">25 m/s&#178; at 1 g</text>
+      <text x="215" y="105" text-anchor="middle" font-size="13">120 m/s; 600 cruise</text>
+      <text x="215" y="125" text-anchor="middle" class="m" font-size="12">lift drive, free</text>
+      <text x="215" y="145" text-anchor="middle" class="m" font-size="12">weather, clouds</text>
+      <text x="362" y="105" text-anchor="middle" font-size="13">full pull</text>
+      <text x="362" y="125" text-anchor="middle" class="m" font-size="12">hover cancels it</text>
+      <text x="488" y="105" text-anchor="middle" font-size="13">tapers to 0</text>
+      <text x="488" y="125" text-anchor="middle" class="m" font-size="12">600 m/s cap</text>
+      <text x="655" y="105" text-anchor="middle" font-size="13">transit drive: 4 km/s</text>
+      <text x="655" y="125" text-anchor="middle" class="m" font-size="12">60 m/s&#178;, burns fuel</text>
+      <text x="655" y="145" text-anchor="middle" class="m" font-size="12">poses in the body's frame</text>
+      <text x="870" y="105" text-anchor="middle" font-size="13">4 km/s; lanes 25 km/s</text>
+      <text x="870" y="125" text-anchor="middle" class="m" font-size="12">poses in the star's frame</text>
+      <text x="870" y="145" text-anchor="middle" class="m" font-size="12">keep 60 km from Halcyon</text>
+      <g class="num m" font-size="12"><text x="130" y="224" text-anchor="middle">R</text><text x="300" y="224" text-anchor="middle">air top</text><text x="425" y="224" text-anchor="middle">1.4 R</text><text x="550" y="224" text-anchor="middle">1.8 R</text><text x="760" y="224" text-anchor="middle">frame sphere</text></g>
+      <g class="num" font-size="12"><text x="20" y="262">Pale Blue:</text><text x="130" y="262" text-anchor="middle">4,800 m</text><text x="300" y="262" text-anchor="middle">+0.96 km</text><text x="425" y="262" text-anchor="middle">+1.92 km</text><text x="550" y="262" text-anchor="middle">+3.84 km</text><text x="760" y="262" text-anchor="middle">60 km</text></g>
+      <g class="num m" font-size="12"><text x="20" y="284">Amber:</text><text x="130" y="284" text-anchor="middle">19,200 m</text><text x="300" y="284" text-anchor="middle">(no floor)</text><text x="425" y="284" text-anchor="middle">+7.68 km</text><text x="550" y="284" text-anchor="middle">+15.4 km</text><text x="760" y="284" text-anchor="middle">200 km</text></g>
+    </svg></div>
+  </div>
+</section>
+
+<section id="gravity">
+  <div class="wrap">
+    <div><div class="eyebrow">Local gravity falloff</div><h2>The pull, body by body</h2></div>
+    <p class="sub">Tenebris's anchor field: full pull out to 1.4 R, a linear taper to zero by 1.8 R, nothing beyond. Surface gravity is <span class="mono">gravity_g &times; 25 m/s&sup2;</span>, declared per body. Because the band scales with R, a small moon lets go of you a kilometre up and a giant holds you for 15 km.</p>
+    <div class="fig"><svg id="gchart" viewBox="0 0 1000 380" role="img" aria-label="Chart of local gravity against altitude for five bodies"></svg></div>
+  </div>
+</section>
+
+<section id="map">
+  <div class="wrap">
+    <div><div class="eyebrow">The system map</div><h2>Routes and travel times</h2></div>
+    <p class="sub">Every body is on rails, so the map is exact for any day. A trip is the climb out, the transit (accelerate at 60 m/s&sup2; to 4 km/s, coast, flip, brake) and the descent. The route is a straight line, bent round the star when it would pass within 60 km. Drag the day: times change with where the worlds are, not with a window you have to wait for.</p>
+    <div class="daybar"><label for="mapDay" class="eyebrow">Day</label><input type="range" id="mapDay" min="0" max="1232" value="40"><span class="mono" id="mapDayOut">40</span><button class="btn" id="mapPlay" aria-pressed="false">Run</button></div>
+    <div class="two">
+      <div class="fig"><svg id="sysmap" viewBox="0 0 640 640" role="img" aria-label="Top-down map of the system with routes from Pale Blue to every other world" style="min-width:320px"></svg></div>
+      <div style="display:grid;gap:10px;align-content:start;min-width:0">
+        <div class="tablewrap"><table class="grid" id="timeTable" style="min-width:420px"></table></div>
+        <p class="note">Distance is centre to centre. Times are minutes:seconds of play, door to door, with no lanes. <b>&Delta;v</b> is the transit drive's use one way; the runabout's tank holds 30 km/s. Moons from their planet: Lantern is 26 km from Pale Blue, about 1:40 door to door.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="takeoff">
+  <div class="wrap">
+    <div class="two">
+      <div style="display:grid;gap:10px;align-content:start">
+        <div class="eyebrow">Takeoff</div><h2>Hover compensation first, then thrust</h2>
+        <p class="note">The ship's 20 m/s&sup2; is never spent holding it up. Hover compensation cancels the anchor field's pull at any altitude, as the walker's ground does, and the stick's 20 m/s&sup2; is all yours. So a ship lifts off a 1.6 g giant's platform as easily as off Pebble; what changes is how long the band holds it, and that hover compensation has to be strong enough (40 m/s&sup2; at Amber). The lift drive in the air burns nothing: getting stranded on the ground is never a fuel problem.</p>
+      </div>
+      <div class="tablewrap"><table class="grid" id="liftTable" style="min-width:440px"></table></div>
+    </div>
+  </div>
+</section>
+
+<section id="damp">
+  <div class="wrap">
+    <div><div class="eyebrow">Assisted flight</div><h2>Dampeners on, dampeners off</h2></div>
+    <p class="sub">Motion is Newtonian; the dampeners are an assist, toggled with a key as today. <b>On</b>, letting go of the stick bleeds velocity relative to the <b>current frame</b> at the ship's linear damping (1.0 per second) and stops rotation at 4 per second, so a ship parks itself next to a moving station. <b>Off</b>, the ship coasts: what the transit uses, so a coast costs nothing.</p>
+    <div class="fig"><svg viewBox="0 0 1000 260" role="img" aria-label="Two panels: with dampeners on the ship's path curves to a stop after the throttle is released; with them off it carries on in a straight line">
+      <rect x="10" y="10" width="485" height="240" rx="4" fill="#ffffff" opacity=".02"/>
+      <rect x="505" y="10" width="485" height="240" rx="4" fill="#ffffff" opacity=".02"/>
+      <text x="30" y="40" class="d" font-size="16" fill="#8fdc9a" style="fill:#8fdc9a">DAMPENERS ON</text>
+      <text x="525" y="40" class="d" font-size="16">DAMPENERS OFF</text>
+      <path d="M50 200 C 130 190, 200 150, 250 120" stroke="#f0b43c" stroke-width="3" fill="none"/>
+      <path d="M250 120 C 300 92, 340 84, 380 82" stroke="#8fdc9a" stroke-width="3" fill="none" stroke-dasharray="7 5"/>
+      <circle cx="380" cy="82" r="6" fill="#8fdc9a"/>
+      <g class="m num" font-size="12"><text x="60" y="226">thrust</text><text x="250" y="146">stick released</text><text x="360" y="110">at rest in the frame</text></g>
+      <g fill="#9aa3b6"><circle cx="290" cy="97" r="2.5"/><circle cx="320" cy="89" r="2.5"/><circle cx="345" cy="85" r="2.5"/><circle cx="362" cy="83" r="2.5"/><circle cx="373" cy="82" r="2.5"/></g>
+      <text x="30" y="240" class="m" font-size="12">v(t) = v&#8320; e&#8315;&#7511; in the frame's rest; rotation stops at 4/s</text>
+      <path d="M545 200 C 625 190, 695 150, 745 120" stroke="#f0b43c" stroke-width="3" fill="none"/>
+      <path d="M745 120 L 975 -18" stroke="#8fc3e8" stroke-width="3" fill="none" stroke-dasharray="7 5"/>
+      <g fill="#9aa3b6"><circle cx="790" cy="93" r="2.5"/><circle cx="835" cy="66" r="2.5"/><circle cx="880" cy="39" r="2.5"/><circle cx="925" cy="12" r="2.5"/></g>
+      <g class="m num" font-size="12"><text x="555" y="226">thrust</text><text x="745" y="146">stick released</text><text x="800" y="120">carries on, evenly spaced</text></g>
+      <text x="525" y="240" class="m" font-size="12">Newtonian: momentum keeps; the transit's coast runs like this</text>
+    </svg></div>
+  </div>
+</section>
+
+<section id="dock">
+  <div class="wrap">
+    <div><div class="eyebrow">Stations</div><h2>Docking</h2></div>
+    <p class="sub">A station is on rails like a body, and has its own local frame: the people walking its deck simulate in it. Docking is flown, with the corridor's lights to steer by at night, and finished by clamps.</p>
+    <div class="fig"><svg viewBox="0 0 1000 300" role="img" aria-label="A docking approach drawn from left to right: hail at 2 km, corridor at 500 m with a 50 m/s cap, frame lock at 50 m, clamps at 10 m">
+      <path d="M40 60 L 820 140 L 820 160 L 40 240 Z" fill="#f0b43c" opacity=".07"/>
+      <line x1="40" y1="150" x2="820" y2="150" stroke="#9aa3b6" stroke-opacity=".4" stroke-dasharray="3 6"/>
+      <g fill="#ffd38a"><circle cx="160" cy="72" r="3"/><circle cx="160" cy="228" r="3"/><circle cx="330" cy="90" r="3"/><circle cx="330" cy="210" r="3"/><circle cx="500" cy="107" r="3"/><circle cx="500" cy="193" r="3"/><circle cx="660" cy="124" r="3"/><circle cx="660" cy="176" r="3"/></g>
+      <g fill="#ffd38a" opacity=".22"><circle cx="160" cy="72" r="11"/><circle cx="160" cy="228" r="11"/><circle cx="330" cy="90" r="11"/><circle cx="330" cy="210" r="11"/><circle cx="500" cy="107" r="11"/><circle cx="500" cy="193" r="11"/><circle cx="660" cy="124" r="11"/><circle cx="660" cy="176" r="11"/></g>
+      <polygon points="860,100 905,74 950,100 950,200 905,226 860,200" fill="#7e828c" stroke="#c8ccd6" stroke-width="2"/>
+      <rect x="820" y="140" width="42" height="20" fill="#9aa0aa"/>
+      <g fill="#fff1d0"><rect x="880" y="120" width="10" height="8"/><rect x="920" y="120" width="10" height="8"/><rect x="880" y="170" width="10" height="8"/><rect x="920" y="170" width="10" height="8"/></g>
+      <path d="M60 150 l 26 -10 l 0 20 z" fill="#e4e6ea"/>
+      <g class="d" font-size="14"><text x="60" y="40">2 KM &middot; HAIL</text><text x="300" y="40">500 M &middot; CORRIDOR</text><text x="560" y="40">50 M &middot; FRAME LOCK</text><text x="770" y="40">10 M &middot; CLAMPS</text></g>
+      <g class="m" font-size="12.5"><text x="60" y="275">request a berth; traffic told</text><text x="300" y="275">speed cap 50 m/s; lights mark it</text><text x="560" y="275">dampeners null to the station's frame</text><text x="770" y="275">under 1 m/s: clamps pull in</text></g>
+      <g stroke="#9aa3b6" stroke-opacity=".5"><line x1="60" y1="48" x2="60" y2="58"/><line x1="300" y1="48" x2="300" y2="86"/><line x1="560" y1="48" x2="560" y2="112"/><line x1="770" y1="48" x2="770" y2="132"/></g>
+    </svg></div>
+    <div class="tablewrap"><table class="grid">
+      <thead><tr><th>Station</th><th>Where</th><th>On rails as</th><th>What it is for</th></tr></thead>
+      <tbody>
+        <tr><td>Highport</td><td>Over Pale Blue, 12 km up, above the first town</td><td>Fixed in Pale Blue's turning frame, so it hangs over one place</td><td>The first dock; ship sales, repairs, hydrogen</td></tr>
+        <tr><td>Skimmer platform</td><td>Amber's cloud tops (and one at Glaucus)</td><td>A point on the turning giant, held up by hover compensation in 1.6 g</td><td>Fuel from the scoop; the transfer above ends here</td></tr>
+        <tr><td>Rime depot</td><td>On Rime's ice, by the drill</td><td>A surface base: it turns with the moon</td><td>Water ice made into hydrogen; the cheapest fuel in the system</td></tr>
+        <tr><td>Lane gates</td><td>Near Pale Blue, Amber and Glaucus (if built)</td><td>Each in its body's frame, 40 km out</td><td>Long hops in a minute (see Lanes)</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="fuel">
+  <div class="wrap">
+    <div><div class="eyebrow">Fuel</div><h2>Only the transit drive burns it</h2></div>
+    <p class="sub">The tank holds <b>30 km/s</b> of &Delta;v for the transit drive. Lift, hover and air flight are free. A one-way trip spends twice its peak speed. When the tank is dry, a <b>reserve</b> still drives the ship at 400 m/s in space, so a ship always gets home, slowly; nobody is stranded.</p>
+    <div class="two">
+      <div class="bars" id="fuelBars"></div>
+      <div class="icons">
+        <figure><img src="travel/icon_fuel.png" alt="">Hydrogen cell: the fuel</figure>
+        <figure><img src="planets/res_ice.png" alt="">Water ice: Rime, Lantern's poles</figure>
+        <figure><img src="planets/res_helium3.png" alt="">Helium-3: skimmed, double strength</figure>
+        <figure><img src="planets/res_methane.png" alt="">Methane: Murk, burns in a pinch</figure>
+        <figure><img src="travel/icon_skimmer.png" alt="">The scoop, flown low over a giant</figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="lanes">
+  <div class="wrap">
+    <div class="two">
+      <div style="display:grid;gap:10px;align-content:start">
+        <div class="eyebrow">Lanes and gates</div><h2>A shortcut to the giants, built late</h2>
+        <p class="note">A pair of gates makes a lane: fly through one aligned and slow, and the ship is carried at 25 km/s to the other, which rides its own body's rails, so the lane's length changes through the year. Nothing is simulated in between. Pale Blue to Glaucus drops from eight to ten minutes to about two and a half. <b>Recommended for later</b>: the system works without them, and building the first pair is a goal worth having.</p>
+        <div class="icons"><figure><img src="travel/icon_gate.png" alt="">Lane gate</figure><figure><img src="travel/icon_station.png" alt="">Station</figure><figure><img src="travel/icon_ship.png" alt="">The runabout</figure><figure><img src="travel/icon_dampener.png" alt="">Dampeners</figure></div>
+      </div>
+      <div class="fig"><svg viewBox="0 0 600 260" role="img" aria-label="Two lane gates, one by Pale Blue and one by Glaucus, joined by a lane" style="min-width:420px">
+        <circle cx="80" cy="150" r="34" fill="#2a6ab0"/><text x="80" y="208" text-anchor="middle" font-size="13">Pale Blue</text>
+        <circle cx="530" cy="120" r="44" fill="#78c0d8"/><text x="530" y="188" text-anchor="middle" font-size="13">Glaucus</text>
+        <ellipse cx="160" cy="138" rx="9" ry="22" fill="none" stroke="#5ad2f0" stroke-width="5"/>
+        <ellipse cx="445" cy="124" rx="9" ry="22" fill="none" stroke="#5ad2f0" stroke-width="5"/>
+        <line x1="170" y1="138" x2="435" y2="124" stroke="#5ad2f0" stroke-width="2" stroke-dasharray="10 6"/>
+        <text x="300" y="112" text-anchor="middle" class="num" font-size="12">25 km/s &middot; 1,300 to 1,900 km &middot; 52 to 76 s</text>
+        <text x="160" y="182" text-anchor="middle" class="m" font-size="12">gate, 40 km out</text>
+        <text x="445" y="168" text-anchor="middle" class="m" font-size="12">gate, 40 km out</text>
+        <text x="300" y="240" text-anchor="middle" class="m" font-size="12">enter under 200 m/s, within 5&deg; of the lane</text>
+      </svg></div>
+    </div>
+  </div>
+</section>
+
+<section id="art">
+  <div class="wrap">
+    <div><div class="eyebrow">Where the art comes from</div><h2>Painted by code, in the friend's style</h2></div>
+    <p class="note">The icons on this page, and the globes' maps, are <b>painted by code</b> with the crayon kit in <span class="mono">.claude/skills/hand-drawn-illustration</span>, copying the owner's friend's method. <b>They are not the friend's drawings.</b> Script: <span class="mono">tools/art/travel_art.py</span>, two passes against the sheet below (the dampener's arrows pulled in; the ship's engine flames enlarged).</p>
+    <figure class="sheet" style="max-width:820px"><img src="travel/contact_travel.png" alt="Contact sheet: the six travel icons blown up and at 64 and 48 pixels, beside the friend's power output and eagle eye icons" loading="lazy"><figcaption>The travel icons beside two of the friend's (marked "theirs").</figcaption></figure>
+  </div>
+</section>
+
+<section id="decisions">
+  <div class="wrap">
+    <div><div class="eyebrow">For the owner</div><h2>Questions and decisions</h2></div>
+    <p class="sub">Each row has a recommendation. None is decided until the owner says so.</p>
+    <div class="tablewrap"><table class="grid">
+      <thead><tr><th>#</th><th>Question</th><th>Options</th><th>Recommendation</th></tr></thead>
+      <tbody>
+        <tr><td>T1</td><td>How fast is space? Sets every trip's length.</td><td>2 km/s (longest trip 18 min); 4 km/s (10 min); 8 km/s (7.5 min, most of it spent accelerating).</td><td class="rec">4 km/s at 60 m/s&sup2;: Lantern in under two minutes, the far giant in eight to ten.</td></tr>
+        <tr><td>T2</td><td>What burns fuel?</td><td>Everything with thrust; only the transit drive.</td><td class="rec">Only the transit drive. Flying round a world, landing and hovering stay free.</td></tr>
+        <tr><td>T3</td><td>An empty tank.</td><td>Stranded until rescued; a slow reserve drive.</td><td class="rec">A 400 m/s reserve in space. Slow enough to make refuelling matter, and nobody loses a ship.</td></tr>
+        <tr><td>T4</td><td>Lanes and gates.</td><td>None; there from the start; built by the player later.</td><td class="rec">Built later, as a goal: one pair to Glaucus first.</td></tr>
+        <tr><td>T5</td><td>Where the ship changes frame.</td><td>At the gravity band's edge; at a separate frame sphere per body.</td><td class="rec">A frame sphere (60 km round a planet or moon, 200 km round a giant). Orbits move at under 7 m/s, so the rebase at the tick boundary is invisible.</td></tr>
+        <tr><td>T6</td><td>How much the ship flies itself.</td><td>Manual only; an "engage transit" assist that burns, flips and brakes to a target; full autopilot.</td><td class="rec">The assist: the player still lifts off, aims and docks; the assist runs the burn and the flip with the stick able to take over.</td></tr>
+        <tr><td>T7</td><td>Docking.</td><td>Fully manual; clamps finish the last 10 m.</td><td class="rec">Clamps below 10 m and 1 m/s.</td></tr>
+        <tr><td>T8</td><td>The star.</td><td>A hard wall; heat that rises the closer you go.</td><td class="rec">Heat, from 60 km in. Routes bend round it.</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<footer class="wrap">Mockup page for the travel design. Three.js r128. Art: <span class="mono">tools/art/travel_art.py</span> and <span class="mono">tools/art/planets_art.py</span>. Related designs: <span class="mono">gravity-model</span>, <span class="mono">far-side-flight</span>, <span class="mono">planet-spin</span>, <span class="mono">orbit-and-seasons</span>, <span class="mono">per-body-rendering</span>.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+const fmt = (v, d = 0) => v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const G1 = 25, A_T = 60, V_T = 4000, TANK = 30;
+const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60) % 60).padStart(2, "0")}`;
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+// The bodies, as on the planets page (same ids, so the same phases).
+const BODIES = [
+  { id: "ochre", name: "Ochre", a: 180, R: 1200, g: 0.70, col: "#d2784a" },
+  { id: "home", name: "Pale Blue", a: 300, R: 4800, g: 1.00, col: "#3c84d0" },
+  { id: "verdance", name: "Verdance", a: 450, R: 2400, g: 0.90, col: "#3aa070" },
+  { id: "pebble", name: "Pebble (belt)", a: 650, R: 300, g: 0.15, col: "#8a7a6a" },
+  { id: "amber", name: "Amber", a: 1000, R: 19200, g: 1.60, col: "#e0a868", giant: true },
+  { id: "glaucus", name: "Glaucus", a: 1600, R: 9600, g: 1.20, col: "#8ad0e4", giant: true },
+];
+for (const b of BODIES) { b.T = 100 * Math.pow(b.a / 300, 1.5); b.phase = ((b.id.charCodeAt(0) * 37 + b.id.length * 101) % 360) * Math.PI / 180; }
+const posOf = (b, day) => { const t = b.phase + 2 * Math.PI * day / b.T; return [Math.cos(t) * b.a, -Math.sin(t) * b.a]; };
+const ground = b => 22 + 0.8 * b.R / 400;     // seconds: lift off and leave the band (or the reverse)
+function transit(dkm) {
+  const d = dkm * 1000, dAcc = V_T * V_T / A_T;
+  if (d >= dAcc) return { t: d / V_T + V_T / A_T, vpk: V_T };
+  const vpk = Math.sqrt(A_T * d); return { t: 2 * vpk / A_T, vpk };
+}
+// route length with the star's keep-out: if the chord passes within 60 km, go round
+function routeKm(p, q) {
+  const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy);
+  const t = Math.max(0, Math.min(1, -(p[0] * dx + p[1] * dy) / (L * L)));
+  const cx = p[0] + dx * t, cy = p[1] + dy * t, miss = Math.hypot(cx, cy);
+  return miss >= 60 ? { L, bend: 0 } : { L: L + 2 * (60 - miss) * 1.2, bend: 60 - miss };
+}
+function trip(from, to, day) {
+  const r = routeKm(posOf(from, day), posOf(to, day)), tr = transit(r.L);
+  return { km: r.L, t: ground(from) + tr.t + ground(to), dv: 2 * tr.vpk / 1000, bend: r.bend };
+}
+
+// =====================================================================
+// The transfer: a schedule of real numbers, and a scene not to scale.
+// =====================================================================
+const D_KM = 900;
+const PH = [
+  { key: "pad", name: "Lift off", t: 10, v0: 0, v1: 60, drive: "lift", damp: "on", note: "<b>Hover compensation cancels Pale Blue's 25 m/s&sup2;</b>, so the 20 m/s&sup2; of thrust is all climb. The town's lamps are lit below; it is just past dusk." },
+  { key: "air", name: "Climb through the air", t: 16, v0: 60, v1: 600, drive: "lift (cruise)", damp: "on", note: "Up through the weather at the air's cap: 600 m/s in cruise. The lift drive burns nothing." },
+  { key: "band", name: "Leave the band", t: 6, v0: 600, v1: 600, drive: "lift (cruise)", damp: "on", note: "Full pull to 1.92 km up, then a linear taper to <b>zero at 3.84 km</b> (1.8 R). Past it the field is zero: you are in space, and the transit drive can light." },
+  { key: "burn", name: "Transit burn", t: 3400 / A_T, v0: 600, v1: 4000, drive: "transit 60 m/s²", damp: "off", note: "Accelerate at 60 m/s&sup2; to 4 km/s. Halfway through, 60 km out, the ship <b>leaves Pale Blue's frame</b>: pose, velocity and history are rebased to the star's frame at one tick (the planet moves at 6.5 m/s, so nothing jumps)." },
+  { key: "coast", name: "Coast", t: 0, v0: 4000, v1: 4000, drive: "off", damp: "off", note: "Dampeners off, drive off: the ship carries on. Nothing to do but look; the coast is about two and a half minutes on this route." },
+  { key: "brake", name: "Flip and brake", t: 3400 / A_T, v0: 4000, v1: 600, drive: "transit 60 m/s²", damp: "off", note: "Turn round and burn the other way. 200 km out the ship <b>enters Amber's frame</b>, rebased the same way (Amber moves at 3.6 m/s)." },
+  { key: "desc", name: "Into Amber's band", t: 30, v0: 600, v1: 50, drive: "lift", damp: "on", note: "Into the band at 15.4 km: the pull rises to <b>40 m/s&sup2;</b> (1.6 g) by 7.7 km and hover compensation takes all of it. The platform's rail lamps show through the cloud tops." },
+  { key: "dock", name: "Dock", t: 20, v0: 50, v1: 0, drive: "lift", damp: "on (frame lock)", note: "Down the corridor at under 50 m/s; at 50 m the dampeners lock to the platform's frame, and under 1 m/s at 10 m the clamps pull the ship in. Fuel used: 6.8 km/s of the 30." },
+];
+const dist = p => (p.v0 + p.v1) / 2 * p.t;
+PH[4].t = (D_KM * 1000 - PH.reduce((s, p) => s + dist(p), 0)) / V_T;
+let acc = 0; for (const p of PH) { p.s0 = acc; acc += p.t; p.d0 = 0; }
+const TOTAL = acc;
+{ let d = 0; for (const p of PH) { p.d0 = d; d += dist(p); } }
+
+const sc = document.getElementById("scene"), cv = document.getElementById("sceneCanvas");
+const R = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+R.setPixelRatio(Math.min(devicePixelRatio, 2));
+const S = new THREE.Scene(), C = new THREE.PerspectiveCamera(45, 1, 0.01, 6000);
+const SUN = new THREE.Vector3(-1, 0.18, 0.32).normalize();
+const loader = new THREE.TextureLoader(), tex = p => loader.load(p);
+const PV = `varying vec3 vN; varying vec3 vW; varying vec2 vUv; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
+const PF = `uniform sampler2D map; uniform sampler2D lights; uniform float lightsAmt; uniform vec3 sunDir; uniform vec3 air; uniform float airAmt;
+varying vec3 vN; varying vec3 vW; varying vec2 vUv;
+void main(){ vec3 N = normalize(vN); vec3 V = normalize(cameraPosition - vW); float ndl = dot(N, normalize(sunDir));
+  vec3 alb = pow(texture2D(map, vUv).rgb, vec3(2.2)); vec3 col = alb * (max(ndl, 0.0) * 1.15 + 0.02);
+  col += pow(texture2D(lights, vUv).rgb, vec3(2.2)) * smoothstep(0.10, -0.14, ndl) * 1.9 * lightsAmt;
+  vec3 a = pow(air, vec3(2.2)); col += a * pow(1.0 - max(dot(N, V), 0.0), 3.0) * airAmt * smoothstep(-0.35, 0.45, ndl) * 1.3;
+  gl_FragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0); }`;
+function planet(id, r, air, lights) {
+  const c = new THREE.Color(air || 0);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 72, 36), new THREE.ShaderMaterial({
+    uniforms: { map: { value: tex(`planets/map_${id}.png`) }, lights: { value: lights ? tex(`planets/lights_${id}.png`) : new THREE.Texture() }, lightsAmt: { value: lights ? 1 : 0 },
+      sunDir: { value: SUN }, air: { value: new THREE.Vector3(c.r, c.g, c.b) }, airAmt: { value: air ? 1 : 0 } },
+    vertexShader: PV, fragmentShader: PF }));
+  S.add(m); return m;
+}
+function shell(center, r, colour, k = 0.5) {
+  const c = new THREE.Color(colour);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.ShaderMaterial({
+    uniforms: { col: { value: new THREE.Vector3(c.r, c.g, c.b) }, k: { value: k } },
+    vertexShader: PV, fragmentShader: `uniform vec3 col; uniform float k; varying vec3 vN; varying vec3 vW; void main(){ vec3 V = normalize(cameraPosition - vW); float f = pow(1.0 - abs(dot(normalize(vN), V)), 4.0); gl_FragColor = vec4(col, f * k); }`,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+  m.position.copy(center); S.add(m); return m;
+}
+function glowTex(c0 = "rgba(255,240,210,1)") {
+  const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, c0); g.addColorStop(0.3, c0.replace(/[\d.]+\)$/, "0.4)")); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const GT = glowTex();
+const sprite = (pos, colour, size, parent = S) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GT, color: colour, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false })); s.position.copy(pos); s.scale.set(size, size, 1); parent.add(s); return s; };
+{ // stars and the far sun
+  const g = new THREE.BufferGeometry(), p = []; let s = 3; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 2200; i++) { const y = rnd() * 2 - 1, a = rnd() * 6.283, q = Math.sqrt(1 - y * y); p.push(q * Math.cos(a) * 3000, y * 3000, q * Math.sin(a) * 3000); }
+  g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+  S.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 1.5, sizeAttenuation: false })));
+  sprite(SUN.clone().multiplyScalar(2800), 0xfff0c8, 420);
+}
+const HOME_R = 10, HOME = new THREE.Vector3(0, 0, 0);
+const AMB_R = 30, AMB = new THREE.Vector3(250, 12, -170);
+const home = planet("home", HOME_R, 0x86c8ff, true); home.rotation.y = 2.2;
+const amber = planet("amber", AMB_R, 0xffd8a0, false); amber.position.copy(AMB);
+{ // Amber's rings
+  const c = document.createElement("canvas"); c.width = 256; c.height = 4; const x = c.getContext("2d");
+  for (let i = 0; i < 256; i++) { const t = i / 255; x.fillStyle = `rgba(${226 - t * 40 | 0},${196 - t * 50 | 0},${150 - t * 50 | 0},${0.25 + 0.5 * Math.abs(Math.sin(t * 19) * Math.sin(t * 7 + 1))})`; x.fillRect(i, 0, 1, 4); }
+  const g = new THREE.RingGeometry(AMB_R * 1.35, AMB_R * 2.3, 120), p = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) { const r = Math.hypot(p.getX(i), p.getY(i)); uv.setXY(i, (r - AMB_R * 1.35) / (AMB_R * 0.95), 0.5); }
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, side: THREE.DoubleSide, depthWrite: false, color: 0x9a8a78 }));
+  m.position.copy(AMB); m.rotation.x = -Math.PI / 2 + 0.16; S.add(m);
+}
+const lantern = planet("lantern", 2.4, 0, false); lantern.position.set(-26, 6, 14);
+// the bands and the frame spheres
+shell(HOME, HOME_R * 1.4, 0xf0b43c, 0.35); shell(HOME, HOME_R * 1.8, 0xf0b43c, 0.5); shell(HOME, 46, 0xb98cff, 0.35);
+shell(AMB, AMB_R * 1.4, 0xf0b43c, 0.3); shell(AMB, AMB_R * 1.8, 0xf0b43c, 0.45); shell(AMB, 95, 0xb98cff, 0.3);
+// the route's control points: one per phase boundary
+const d0 = new THREE.Vector3(0.42, 0.5, 0.76).normalize();          // just past the terminator: dusk at the town
+const dA = new THREE.Vector3(-0.66, 0.42, 0.62).normalize();        // the platform faces back toward Pale Blue
+const T0 = d0.clone().multiplyScalar(HOME_R * 1.8), T1 = AMB.clone().add(dA.clone().multiplyScalar(AMB_R * 1.8));
+const PTS = [
+  d0.clone().multiplyScalar(HOME_R + 0.02), d0.clone().multiplyScalar(HOME_R + 0.35), d0.clone().multiplyScalar(HOME_R * 1.25),
+  T0, T0.clone().lerp(T1, 0.24).add(new THREE.Vector3(0, 10, 0)), T0.clone().lerp(T1, 0.76).add(new THREE.Vector3(0, 10, 0)), T1,
+  AMB.clone().add(dA.clone().multiplyScalar(AMB_R + 0.9)), AMB.clone().add(dA.clone().multiplyScalar(AMB_R + 0.18)),
+];
+const CURVE = new THREE.CatmullRomCurve3(PTS, false, "centripetal");
+{ // the route line, dotted
+  const pts = CURVE.getPoints(600);
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: 0x8fc3e8, dashSize: 0.8, gapSize: 0.8, transparent: true, opacity: 0.55 }));
+  l.computeLineDistances(); S.add(l);
+}
+// the town on the night side: a cluster of lamps where the ship lifts off
+for (let i = 0; i < 70; i++) {
+  const k = 0.012 + 0.03 * (i % 7) / 7;
+  const v = d0.clone().add(new THREE.Vector3(Math.sin(i * 12.9) * k, Math.sin(i * 7.7) * k, Math.sin(i * 4.1) * k)).normalize().multiplyScalar(HOME_R + 0.004);
+  sprite(v, i % 9 ? 0xffc070 : 0xfff0d0, 0.02 + (i % 3) * 0.012);
+}
+// Highport, over the town
+{
+  const p = d0.clone().multiplyScalar(HOME_R + 2.6), g = new THREE.Group(); g.position.copy(p); g.lookAt(HOME);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.08, 6, 24), new THREE.MeshBasicMaterial({ color: 0x8a8e98 })); g.add(ring);
+  for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283; sprite(new THREE.Vector3(Math.cos(a) * 0.6, Math.sin(a) * 0.6, 0), 0xfff0c8, 0.14, g); }
+  S.add(g);
+}
+// the skimmer platform at Amber's cloud tops: a hex deck with rail lamps
+{
+  const g = new THREE.Group(); g.position.copy(AMB.clone().add(dA.clone().multiplyScalar(AMB_R + 0.1)));
+  g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dA);
+  const deck = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 6), new THREE.MeshBasicMaterial({ color: 0x6e727c })); g.add(deck);
+  const domeM = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 6, 0, 6.283, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xc8c4b8 })); domeM.position.set(-0.15, 0.03, -0.1); g.add(domeM);
+  for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; sprite(new THREE.Vector3(Math.cos(a) * 0.48, 0.08, Math.sin(a) * 0.48), 0xffc77a, 0.1, g); }
+  sprite(new THREE.Vector3(0, 0.1, 0), 0xffd9a0, 0.5, g);
+  S.add(g);
+}
+// the ship: a wedge, two engines, nav lights, a flame
+const ship = new THREE.Group();
+{
+  const hull = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 4), new THREE.MeshBasicMaterial({ color: 0xe4e6ea })); hull.rotation.x = Math.PI / 2; hull.scale.set(1, 1, 0.45); ship.add(hull);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.08), new THREE.MeshBasicMaterial({ color: 0xf0aa40 })); stripe.position.set(0, 0.012, -0.01); ship.add(stripe);
+  sprite(new THREE.Vector3(-0.05, 0, -0.06), 0xff4040, 0.05, ship); sprite(new THREE.Vector3(0.05, 0, -0.06), 0x40ff70, 0.05, ship);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0x8fc8ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+  flame.rotation.x = -Math.PI / 2; flame.position.z = -0.2; ship.add(flame); ship.userData.flame = flame;
+  ship.userData.glow = sprite(new THREE.Vector3(0, 0, -0.14), 0x8fc8ff, 0.2, ship);
+}
+S.add(ship);
+
+// playback
+let simT = 0, playing = true, rate = 8, chase = true;
+const scrub = document.getElementById("scrub"), clock = document.getElementById("clock");
+const phasesEl = document.getElementById("phases");
+for (const p of PH) {
+  const b = document.createElement("button"); b.textContent = p.name; b.dataset.key = p.key;
+  b.addEventListener("click", () => { simT = p.s0 + 0.01; update(); }); phasesEl.appendChild(b);
+}
+document.getElementById("play").addEventListener("click", e => { playing = !playing; e.currentTarget.textContent = playing ? "Pause" : "Play"; e.currentTarget.setAttribute("aria-pressed", playing); });
+document.getElementById("rate").addEventListener("click", e => { rate = rate === 8 ? 16 : rate === 16 ? 2 : 8; e.currentTarget.innerHTML = "&times;" + rate; });
+scrub.addEventListener("input", () => { simT = scrub.value / 1000 * TOTAL; update(); });
+for (const [id, v] of [["camChase", true], ["camWide", false]]) document.getElementById(id).addEventListener("click", () => { chase = v; document.getElementById("camChase").setAttribute("aria-pressed", v); document.getElementById("camWide").setAttribute("aria-pressed", !v); });
+const ro = id => document.getElementById(id);
+function state(t) {
+  let i = PH.findIndex(p => t < p.s0 + p.t); if (i < 0) i = PH.length - 1;
+  const p = PH[i], tau = p.t > 0 ? Math.min(1, Math.max(0, (t - p.s0) / p.t)) : 1;
+  const v = p.v0 + (p.v1 - p.v0) * tau;
+  const s = (p.v0 + p.v1) > 0 ? (p.v0 * tau + (p.v1 - p.v0) * tau * tau / 2) / ((p.v0 + p.v1) / 2) : tau;
+  return { i, p, tau, v, s, d: p.d0 + (p.v0 * tau + (p.v1 - p.v0) * tau * tau / 2) * p.t };
+}
+function readouts(st) {
+  const { p, tau, v, d } = st;
+  let g = 0, frame = "Pale Blue", fuel = TANK;
+  if (p.key === "pad" || p.key === "air") g = 25;
+  if (p.key === "band") { const alt = 0.96 + tau * (3.84 - 0.96); g = alt < 1.92 ? 25 : 25 * (1 - (alt - 1.92) / 1.92); }
+  if (p.key === "desc") { const alt = 15.36 - tau * 15.36; g = alt > 7.68 ? 40 * (1 - (alt - 7.68) / 7.68) : 40; }
+  if (p.key === "dock") g = 40;
+  const order = PH.indexOf(p);
+  if (order > 3 || (p.key === "burn" && tau > 0.55)) frame = "Halcyon (star)";
+  if (order > 5 || (p.key === "brake" && tau > 0.35)) frame = "Amber";
+  if (p.key === "dock" && tau > 0.3) frame = "Skimmer platform";
+  if (p.key === "burn") fuel = TANK - (v - 600) / 1000;
+  if (order > 3) fuel = TANK - 3.4;
+  if (p.key === "brake") fuel = TANK - 3.4 - (4000 - v) / 1000;
+  if (order > 5) fuel = TANK - 6.8;
+  ro("roSpeed").textContent = v >= 1000 ? `${fmt(v / 1000, 2)} km/s` : `${fmt(v)} m/s`;
+  ro("roG").innerHTML = `${fmt(g, 1)} m/s&sup2;`;
+  ro("roFrame").textContent = frame;
+  ro("roDrive").textContent = p.drive;
+  ro("roDamp").textContent = p.damp;
+  ro("roFuel").textContent = `${fmt(fuel, 1)} km/s`;
+  ro("roLeft").textContent = `${fmt(Math.max(0, D_KM - d / 1000), D_KM - d / 1000 < 10 ? 2 : 0)} km`;
+  ro("pnote").innerHTML = p.note;
+  for (const b of phasesEl.children) b.setAttribute("aria-current", b.dataset.key === p.key ? "true" : "false");
+}
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), camPos = new THREE.Vector3(30, 22, 48), camLook = new THREE.Vector3();
+let lastKey = null, yawOff = 0, pitchOff = 0;
+function update() {
+  const st = state(simT);
+  const n = PTS.length - 1, u = Math.min(0.9999, (st.i + st.s) / n);
+  CURVE.getPoint(u, _a); CURVE.getPoint(Math.min(1, u + 0.0015), _b);
+  ship.position.copy(_a);
+  const fwd = _b.clone().sub(_a);
+  if (fwd.lengthSq() > 1e-10) { const look = st.p.key === "brake" ? _a.clone().sub(fwd) : _b; ship.lookAt(look); }
+  const thrust = { pad: 0.8, air: 1, band: 0.5, burn: 1, coast: 0, brake: 1, desc: 0.5, dock: 0.15 }[st.p.key];
+  ship.userData.flame.scale.set(1, 0.3 + thrust * (0.9 + 0.2 * Math.sin(performance.now() * 0.05)), 1);
+  ship.userData.flame.visible = thrust > 0; ship.userData.glow.visible = thrust > 0;
+  scrub.value = Math.round(simT / TOTAL * 1000);
+  clock.textContent = `${mmss(simT)} / ${mmss(TOTAL)}`;
+  if (st.p.key !== lastKey || true) readouts(st);
+  lastKey = st.p.key;
+  return st;
+}
+{ // drag to look around the ship (or the route)
+  let last = null;
+  cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); last = { x: e.clientX, y: e.clientY }; });
+  cv.addEventListener("pointermove", e => { if (!last) return; yawOff -= (e.clientX - last.x) * 0.006; pitchOff = Math.max(-1.2, Math.min(1.2, pitchOff + (e.clientY - last.y) * 0.005)); last = { x: e.clientX, y: e.clientY }; });
+  const up = () => { last = null; }; cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+}
+let prev = performance.now();
+function loop(now) {
+  const dt = Math.max(0, Math.min(0.1, (now - prev) / 1000)); prev = now;
+  if (playing) { simT += dt * rate; if (simT > TOTAL + 3) simT = 0; }
+  const st = update();
+  const w = sc.clientWidth, h = sc.clientHeight;
+  if (cv.width !== Math.round(w * R.getPixelRatio()) || cv.height !== Math.round(h * R.getPixelRatio())) { R.setSize(w, h, false); C.aspect = w / h; C.updateProjectionMatrix(); }
+  // chase distance grows with speed, so the ship stays readable from the pad to the coast
+  const k = st.p.key, far = { pad: 1.5, air: 2.2, band: 3.5, burn: 10, coast: 26, brake: 12, desc: 3, dock: 1.1 }[k];
+  let wantPos, wantLook;
+  if (chase) {
+    const fwd = _b.clone().sub(_a).normalize(), up = ship.position.clone().sub(st.i < 4 ? HOME : st.i > 5 ? AMB : HOME).normalize();
+    const side = new THREE.Vector3().crossVectors(fwd, up).normalize();
+    const back = fwd.clone().multiplyScalar(-1).applyAxisAngle(up, 0.55 + yawOff);
+    wantPos = ship.position.clone().add(back.multiplyScalar(far)).add(up.clone().multiplyScalar(far * (0.35 + pitchOff * 0.6))).add(side.multiplyScalar(far * 0.15));
+    wantLook = ship.position.clone().lerp(st.i < 4 ? HOME : st.i > 5 ? AMB : AMB, st.i >= 3 && st.i <= 5 ? 0.18 : 0.05);
+  } else {
+    const c = HOME.clone().lerp(AMB, 0.5); const r = 340;
+    wantPos = c.clone().add(new THREE.Vector3(Math.sin(0.4 + yawOff) * r * Math.cos(0.55 + pitchOff), r * Math.sin(0.55 + pitchOff), Math.cos(0.4 + yawOff) * r * Math.cos(0.55 + pitchOff)));
+    wantLook = c;
+  }
+  const kk = Math.min(1, dt * 2.5);
+  camPos.lerp(wantPos, kk); camLook.lerp(wantLook, kk);
+  C.position.copy(camPos); C.lookAt(camLook);
+  home.rotation.y += dt * 0.004;
+  R.render(S, C);
+  requestAnimationFrame(loop);
+}
+update(); camPos.copy(ship.position).add(new THREE.Vector3(0.6, 0.6, 0.9)); camLook.copy(ship.position);
+requestAnimationFrame(loop);
+
+// =====================================================================
+// The diagrams.
+// =====================================================================
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, parent, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text !== undefined) e.textContent = text; parent.appendChild(e); return e; };
+// gravity chart
+{
+  const svg = document.getElementById("gchart"), x0 = 70, x1 = 960, y0 = 330, y1 = 30, XM = 16, YM = 42;
+  const X = a => x0 + (x1 - x0) * a / XM, Y = g => y0 - (y0 - y1) * g / YM;
+  for (let a = 0; a <= XM; a += 2) { el("line", { x1: X(a), x2: X(a), y1: y0, y2: y1, stroke: "#9aa3b6", "stroke-opacity": 0.12 }, svg); el("text", { x: X(a), y: y0 + 20, "text-anchor": "middle", class: "num m" }, svg, a); }
+  for (let g = 0; g <= 40; g += 10) { el("line", { x1: x0, x2: x1, y1: Y(g), y2: Y(g), stroke: "#9aa3b6", "stroke-opacity": 0.12 }, svg); el("text", { x: x0 - 10, y: Y(g) + 4, "text-anchor": "end", class: "num m" }, svg, g); }
+  el("text", { x: (x0 + x1) / 2, y: y0 + 44, "text-anchor": "middle", class: "m", "font-size": 13 }, svg, "altitude above the surface, km");
+  el("text", { x: 18, y: (y0 + y1) / 2, "text-anchor": "middle", class: "m", "font-size": 13, transform: `rotate(-90 18 ${(y0 + y1) / 2})` }, svg, "pull, m/s²");
+  const curves = [
+    { name: "Lantern 0.35 g", R: 1.2, g: 0.35, col: "#b8b8c4" }, { name: "Ochre 0.70 g", R: 1.2, g: 0.70, col: "#e08a5a" },
+    { name: "Verdance 0.90 g", R: 2.4, g: 0.90, col: "#5ac08a" }, { name: "Pale Blue 1.00 g", R: 4.8, g: 1.0, col: "#5aa2ec" },
+    { name: "Amber 1.60 g", R: 19.2, g: 1.6, col: "#f0b43c" },
+  ];
+  for (const c of curves) {
+    const s = c.g * G1, pts = [[0, s], [0.4 * c.R, s], [0.8 * c.R, 0], [XM, 0]].map(([a, g]) => [Math.min(a, XM), g]);
+    el("polyline", { points: pts.map(([a, g]) => `${X(a)},${Y(g)}`).join(" "), fill: "none", stroke: c.col, "stroke-width": 2.5 }, svg);
+  }
+  curves.forEach((c, i) => {   // a legend in the empty top right, clear of every line
+    const y = 52 + i * 22, x = X(11.6);
+    el("line", { x1: x, x2: x + 22, y1: y - 4, y2: y - 4, stroke: c.col, "stroke-width": 3 }, svg);
+    el("text", { x: x + 30, y, "font-size": 13 }, svg, `${c.name} · band to ${fmt(0.8 * c.R, 2)} km`);
+  });
+  el("line", { x1: X(3.84), x2: X(3.84), y1: y0, y2: Y(32), stroke: "#5aa2ec", "stroke-dasharray": "4 4" }, svg);
+  el("text", { x: X(3.84) + 6, y: Y(31), class: "m", "font-size": 12 }, svg, "Pale Blue's band edge: in space past here");
+}
+// system map and times
+const mapSvg = document.getElementById("sysmap"), dayIn = document.getElementById("mapDay"), dayOut = document.getElementById("mapDayOut");
+const MR = a => 14 + 7.0 * Math.sqrt(a);    // radius on the map: square-root scaled so the inner worlds show
+function drawMap(day) {
+  mapSvg.innerHTML = "";
+  const c = 320;
+  el("text", { x: 16, y: 26, class: "m", "font-size": 12 }, mapSvg, "Top-down; distance from the star square-root scaled");
+  el("circle", { cx: c, cy: c, r: MR(60) - 4, fill: "#ff7a5c", "fill-opacity": 0.08, stroke: "#ff7a5c", "stroke-opacity": 0.4, "stroke-dasharray": "3 4" }, mapSvg);
+  el("circle", { cx: c, cy: c, r: 9, fill: "#ffd27a" }, mapSvg);
+  el("circle", { cx: c, cy: c, r: MR(650), fill: "none", stroke: "#8a7a6a", "stroke-width": 9, "stroke-opacity": 0.22 }, mapSvg);
+  const home = BODIES[1], hp = posOf(home, day);
+  const P = b => { const [x, y] = posOf(b, day), r = Math.hypot(x, y), k = MR(r) / r; return [c + x * k, c + y * k]; };
+  for (const b of BODIES) el("circle", { cx: c, cy: c, r: MR(b.a), fill: "none", stroke: "#56627e", "stroke-opacity": 0.6 }, mapSvg);
+  const [hx, hy] = P(home);
+  for (const b of BODIES) {
+    if (b === home) continue;
+    const [x, y] = P(b), tr = trip(home, b, day);
+    let d = `M${hx},${hy} L${x},${y}`;
+    if (tr.bend > 0) { const mx = (hx + x) / 2, my = (hy + y) / 2, L = Math.hypot(mx - c, my - c) || 1, push = MR(60) + 26; d = `M${hx},${hy} Q${c + (mx - c) / L * push * 2},${c + (my - c) / L * push * 2} ${x},${y}`; }
+    el("path", { d, fill: "none", stroke: b.col, "stroke-width": 1.6, "stroke-opacity": 0.8, "stroke-dasharray": "6 4" }, mapSvg);
+    const lx = hx + (x - hx) * 0.55, ly = hy + (y - hy) * 0.55;
+    el("rect", { x: lx - 22, y: ly - 10, width: 44, height: 18, rx: 3, fill: "#11141c", "fill-opacity": 0.85 }, mapSvg);
+    el("text", { x: lx, y: ly + 4, "text-anchor": "middle", class: "num", "font-size": 11.5 }, mapSvg, mmss(tr.t));
+  }
+  for (const b of BODIES) {
+    const [x, y] = P(b);
+    el("circle", { cx: x, cy: y, r: b.giant ? 11 : b === home ? 8 : 6, fill: b.col, stroke: b === home ? "#f0b43c" : "none", "stroke-width": 2 }, mapSvg);
+    el("text", { x: x + 12, y: y - 10, class: "d", "font-size": 14 }, mapSvg, b.name);
+  }
+  // the table
+  const rows = BODIES.filter(b => b !== home).map(b => {
+    let mn = 1e9, mx = 0;
+    for (let k = 0; k < 400; k++) { const t = trip(home, b, k * 1232 / 400).t; mn = Math.min(mn, t); mx = Math.max(mx, t); }
+    const tr = trip(home, b, day);
+    return `<tr><td><span style="color:${b.col}">&#9679;</span> ${b.name}</td><td class="n">${fmt(tr.km)} km</td><td class="n"><b>${mmss(tr.t)}</b></td><td class="n">${mmss(mn)} &ndash; ${mmss(mx)}</td><td class="n">${fmt(tr.dv, 1)} km/s</td></tr>`;
+  });
+  document.getElementById("timeTable").innerHTML = `<thead><tr><th>From Pale Blue to</th><th class="n">Now</th><th class="n">Time now</th><th class="n">Over the year</th><th class="n">&Delta;v</th></tr></thead><tbody>${rows.join("")}</tbody>`;
+  dayOut.textContent = fmt(day);
+}
+dayIn.addEventListener("input", () => drawMap(+dayIn.value));
+let mapRun = false;
+document.getElementById("mapPlay").addEventListener("click", e => { mapRun = !mapRun; e.currentTarget.setAttribute("aria-pressed", mapRun); e.currentTarget.textContent = mapRun ? "Stop" : "Run"; if (mapRun) tick(); });
+function tick() { if (!mapRun) return; dayIn.value = (+dayIn.value + 1) % 1232; drawMap(+dayIn.value); setTimeout(tick, 60); }
+drawMap(+dayIn.value);
+// takeoff table
+{
+  const list = [["Pebble", 300, 0.15], ["Lantern", 1200, 0.35], ["Ochre", 1200, 0.70], ["Verdance", 2400, 0.90], ["Pale Blue", 4800, 1.0], ["Glaucus (platform)", 9600, 1.2], ["Amber (platform)", 19200, 1.6]];
+  document.getElementById("liftTable").innerHTML = `<thead><tr><th>Body</th><th class="n">Pull</th><th class="n">Hover cancels</th><th class="n">Band edge</th><th class="n">Time to space</th></tr></thead><tbody>` +
+    list.map(([n, R, g]) => `<tr><td>${n}</td><td class="n">${fmt(g, 2)} g</td><td class="n">${fmt(g * G1, 1)} m/s&sup2;</td><td class="n">${fmt(0.8 * R / 1000, 2)} km up</td><td class="n">${mmss(22 + 0.8 * R / 400)}</td></tr>`).join("") + `</tbody>`;
+}
+// fuel bars, one-way trips at their longest, against the 30 km/s tank
+{
+  const box = document.getElementById("fuelBars"), home = BODIES[1];
+  const rows = [["Lantern (26 km)", 2 * Math.sqrt(A_T * 26000) / 1000]].concat(BODIES.filter(b => b !== home).map(b => { let mx = 0; for (let k = 0; k < 200; k++) mx = Math.max(mx, trip(home, b, k * 6.16).dv); return [b.name, mx]; }));
+  box.innerHTML = rows.map(([n, dv]) => `<div class="bar"><span>${n}</span><span class="track"><span class="fill" style="width:${dv / TANK * 100}%"></span></span><span class="v">${fmt(dv, 1)} / 30</span></div>`).join("") +
+    `<p class="note">&Delta;v for one way at the longest, in km/s, against a full 30 km/s tank. A round trip to either giant, there and back, uses 16 of it.</p>`;
+}
+</script>

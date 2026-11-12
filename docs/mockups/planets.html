@@ -1,0 +1,1198 @@
+<meta charset="utf-8">
+<title>The Halcyon System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a working document. The orbit view is the hero, then the body
+   inspector (globe + a lit surface vignette), the card deck, the ladder,
+   the art note, and the owner's decisions. Dark by choice, as the other
+   mockups in docs/mockups are: it is a view into space. */
+:root{
+  color-scheme: dark;
+  --ground:#090b10;
+  --panel:#12151d;
+  --panel-2:#181c26;
+  --line:rgba(190,205,235,.16);
+  --ink:#e8ebf2;
+  --muted:#9aa3b6;
+  --amber:#f0b43c;
+  --sky:#8fc3e8;
+  --ok:#8fdc9a;
+  --warn:#ff7a5c;
+  --violet:#b98cff;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html,body{background:var(--ground);color:var(--ink)}
+body{font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:.02em;text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:clamp(30px,5vw,46px);font-weight:700}
+h2{font-size:26px}
+h3{font-size:19px}
+p{margin:0}
+a{color:var(--sky)}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.btn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-family:var(--display);font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);background:var(--panel)}
+.btn:hover{border-color:rgba(240,180,60,.6)}
+.btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.chip{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:1px 7px;border-radius:2px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip.air{color:#0a1420;background:var(--sky);border-color:var(--sky)}
+.chip.none{color:var(--muted)}
+.chip.life{color:#0b1a0e;background:var(--ok);border-color:var(--ok)}
+.chip.prop{color:#1a1206;background:var(--amber);border-color:var(--amber)}
+
+header.top{padding-block:28px 18px;display:grid;gap:12px}
+header.top .lede{max-width:72ch;color:var(--muted)}
+header.top .lede b{color:var(--ink);font-weight:500}
+.banner{display:flex;gap:10px;align-items:flex-start;border:1px solid rgba(240,180,60,.45);background:rgba(240,180,60,.07);border-radius:6px;padding:10px 12px;font-size:14px;max-width:900px}
+.banner b{color:var(--amber);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+
+/* orbit view */
+.orbit{position:relative;height:clamp(420px,64vh,720px);border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#05060a;overflow:hidden}
+.orbit canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.orbit .labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.orbit .lbl{position:absolute;transform:translate(-50%,-150%);font-family:var(--display);font-size:13px;letter-spacing:.06em;color:var(--ink);text-shadow:0 1px 3px #000,0 0 6px #000;white-space:nowrap;pointer-events:auto;cursor:pointer}
+.orbit .lbl.moon{font-size:11.5px;color:var(--muted)}
+.orbit .lbl.sel{color:var(--amber)}
+.ohud{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;max-width:calc(100% - 32px)}
+.ohud .day{font-family:var(--mono);font-size:13px;background:rgba(9,11,16,.8);border:1px solid var(--line);border-radius:4px;padding:5px 9px}
+.okey{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:14px;font-size:12px;color:var(--muted);background:rgba(9,11,16,.78);border:1px solid var(--line);border-radius:4px;padding:6px 9px;max-width:260px;line-height:1.4}
+
+section{padding-block:34px 8px}
+section > .wrap{display:grid;gap:16px}
+.sub{color:var(--muted);max-width:76ch}
+
+/* inspector */
+.insp{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:16px;align-items:start}
+.globe{position:relative;aspect-ratio:1/1;max-width:100%;background:radial-gradient(circle at 50% 50%,#0d1120,#05060a 70%);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.globe canvas,.vig canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.vigwrap{display:grid;gap:8px;min-width:0}
+.vig{position:relative;aspect-ratio:16/9;max-width:100%;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#05060a}
+.vig canvas{touch-action:none;cursor:grab}
+.vig .novig{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);font-size:14px}
+.vigbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.vigbar input[type=range]{flex:1 1 160px;accent-color:var(--amber);min-width:120px}
+.vigbar output{font-family:var(--mono);font-size:13px;min-width:7ch}
+.vigcap{font-size:13px;color:var(--muted)}
+.facts{display:grid;gap:12px;min-width:0}
+.fhead{display:flex;gap:12px;align-items:center}
+.fhead img{width:72px;height:72px;flex:none}
+.fhead .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+table.stats{border-collapse:collapse;width:100%;font-size:14px}
+table.stats th{text-align:left;font-weight:400;color:var(--muted);padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top}
+table.stats td{padding:3px 0;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+.res{display:flex;flex-wrap:wrap;gap:8px}
+.res figure{margin:0;display:grid;justify-items:center;gap:0;width:64px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.2}
+.res img{width:48px;height:48px}
+.lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.lists div{min-width:0}
+.lists h4{margin:0 0 3px;font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.lists ul{margin:0;padding-left:17px}
+.lists li{margin:1px 0}
+
+/* card deck */
+.deck{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.card{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-rows:auto auto 1fr auto;gap:8px;padding:12px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.card:hover{border-color:rgba(240,180,60,.5)}
+.card:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.card[aria-current="true"]{border-color:var(--amber);background:var(--panel-2)}
+.card .ch{display:flex;gap:10px;align-items:center}
+.card img.pt{width:56px;height:56px;flex:none}
+.card .nm{font-family:var(--display);font-size:20px;font-weight:600;line-height:1}
+.card .kd{font-size:12px;color:var(--muted)}
+.card .row{display:flex;flex-wrap:wrap;gap:5px}
+.card .one{font-size:13px;color:var(--muted)}
+.card .ri{display:flex;gap:2px}
+.card .ri img{width:26px;height:26px}
+.card .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+.card .nums span{display:grid}
+.card .nums small{font-family:var(--display);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table.grid{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+table.grid th,table.grid td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.grid th{font-family:var(--display);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);background:var(--panel)}
+table.grid td.n{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+table.grid tr:last-child td{border-bottom:0}
+table.grid td.rec{color:var(--ok)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.two > *{min-width:0}
+.note{font-size:14px;color:var(--muted);max-width:80ch}
+.note b{color:var(--ink);font-weight:500}
+figure.sheet{margin:0;display:grid;gap:6px}
+figure.sheet img{width:100%;border:1px solid var(--line);border-radius:6px;background:#20242e}
+figure.sheet figcaption{font-size:13px;color:var(--muted)}
+footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
+
+@media (max-width:820px){
+  .insp{grid-template-columns:1fr}
+  .globe{max-width:320px}
+  .okey{display:none}
+}
+@media (prefers-reduced-motion: reduce){ *{scroll-behavior:auto} }
+</style>
+
+<header class="top wrap">
+  <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; planets</div>
+  <h1>The Halcyon System</h1>
+  <p class="lede">Twelve bodies round one star: <b>three worlds you can live on</b>, two gas giants you skim for fuel, and seven moons and rocks that each play differently: an airless moon in the home sky, a volcanic one, an ice shell, a hazy methane moon, a hollow one full of caves, an ocean moon that always faces its giant, and a 300 m asteroid. Every body with ground is made of the same <b>2.833 m hex cells</b>, because its radius sits on the ladder <span class="mono">R = 300 m &times; 2<sup>L&minus;7</sup></span>.</p>
+  <div class="banner" role="note"><b>Proposal</b><span>None of this is built. The game today has one planet (the 4,800 m home world, generator <span class="mono">TENEBRIS</span> v5) and an 850 m placeholder moon sphere. Names, sizes, gravities and rosters below are recommendations for the owner to accept or change; the decisions are listed at the end.</span></div>
+</header>
+
+<div class="orbit" id="orbit">
+  <canvas id="orbitCanvas" tabindex="0" aria-label="Three-dimensional orbit view of the Halcyon system. Drag to turn, scroll or pinch to zoom, click a body to inspect it."></canvas>
+  <div class="labels" id="labels"></div>
+  <div class="okey">Orbits are analytic and on rails: each body's position is a function of world time alone. <b style="color:var(--ink);font-weight:500">Not to scale</b>: sizes are enlarged and moon orbits spread so you can see them. True numbers are on the cards. The night side shows each world's own lights.</div>
+  <div class="ohud">
+    <span class="day" id="dayOut">Day 0.0</span>
+    <button class="btn" id="spd0" data-s="0">Pause</button>
+    <button class="btn" id="spd1" data-s="0.25" aria-pressed="true">&frac14; day/s</button>
+    <button class="btn" id="spd2" data-s="2">2 days/s</button>
+    <button class="btn" id="spd3" data-s="12">12 days/s</button>
+    <button class="btn" id="sysBtn">Whole system</button>
+  </div>
+</div>
+
+<section id="inspect">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Selected body</div>
+      <h2 id="iName">Pale Blue</h2>
+    </div>
+    <div class="insp">
+      <div class="facts">
+        <div class="globe"><canvas id="globeCanvas" aria-label="The selected body, turning, lit from the left, its night side on the right"></canvas></div>
+        <div class="fhead"><img id="iPortrait" alt="" src="planets/portrait_home.png"><div><div id="iKind" class="kd"></div><div class="chips" id="iChips"></div></div></div>
+        <table class="stats" id="iStats"></table>
+      </div>
+      <div class="vigwrap">
+        <div class="vig" id="vig"><canvas id="vigCanvas" tabindex="0" aria-label="A lit surface vignette of the selected body on the hex grid. Drag to turn."></canvas><div class="novig" id="noVig" hidden></div></div>
+        <div class="vigbar">
+          <button class="btn" id="tDay">Day</button>
+          <button class="btn" id="tDusk">Dusk</button>
+          <button class="btn" id="tNight" aria-pressed="true">Night</button>
+          <input type="range" id="vigTime" min="0" max="24" step="0.1" value="22" aria-label="Local time of day">
+          <output id="vigTimeOut" for="vigTime">22:00</output>
+        </div>
+        <p class="vigcap" id="vigCap"></p>
+        <div class="lists" id="iLists"></div>
+        <div><h4 class="eyebrow" style="margin:0 0 6px">Resources</h4><div class="res" id="iRes"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="bodies">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Every body</div>
+      <h2>The deck</h2>
+    </div>
+    <p class="sub">Click a card to inspect it above. Chips say whether a body has air (and so sky, weather and clouds) and life. An airless body has neither, by the world rules in CLAUDE.md.</p>
+    <div class="deck" id="deck"></div>
+  </div>
+</section>
+
+<section id="ladder">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Hex size is fixed</div>
+      <h2>Every body sits on the ladder</h2>
+    </div>
+    <p class="sub">Tile width is <span class="mono">1.2087 &times; R / 2<sup>L</sup></span>, measured on the unit sphere. Holding it at the Tenebris gold standard of 2.833 m ties the radius to the subdivision level, so a radius is chosen from this ladder and never authored first. A cell dug on Lantern is the same cell dug at home.</p>
+    <div class="tablewrap"><table class="grid" id="ladderTable"></table></div>
+    <p class="note">The two giants have no cells: you cannot stand on them. Their cloud-top radii are still taken from the ladder's next rungs (L12 and L13), so the system has one size scale throughout. Cell counts are <span class="mono">10 &times; 4<sup>L</sup> + 2</span>, twelve of them pentagons on every body.</p>
+  </div>
+</section>
+
+<section id="night">
+  <div class="wrap">
+    <div class="two">
+      <div style="display:grid;gap:10px">
+        <div class="eyebrow">Mockups are lit at night</div>
+        <h2>How the vignettes are lit</h2>
+        <p class="note">Each vignette has a time of day. At night every lamp, window, fire, lava pool and glowing crystal lights what is near it, wherever the camera is: the light is baked into the faces when the vignette is built, the way the engine's block light will carry it, with the same falloff <span class="mono">towns.html</span> uses. Fires, lava and crystals burn all day; lamps and windows come on at dusk. The moon (or the giant's shine on a moon) is kept dim enough that the lamps read. Airless bodies have a black sky by day, stars and all, and no haze.</p>
+      </div>
+      <div style="display:grid;gap:10px">
+        <div class="eyebrow">From orbit too</div>
+        <h2>Lights on the night side</h2>
+        <p class="note">The globes carry a painted lights map on their dark side: town lights on the three habitable worlds and Tidewater, lava on Cinder, violet cave glow through Hollow's sinkholes, one outpost on Murk. It fades in across the terminator, so dusk on a world reads from space.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="art">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Where the art comes from</div>
+      <h2>Painted by code, in the friend's style</h2>
+    </div>
+    <p class="note">The surface maps, portraits and resource icons are <b>painted by code</b> with the crayon kit in <span class="mono">.claude/skills/hand-drawn-illustration</span>, copying the owner's friend's method stroke by stroke: a flat saturated block, loose hatching in the shape's own lighter and darker tones, a shadow crescent that follows the form, highlight dabs, a bright rim, an edge in a deep tone of the same hue. <b>None of it is the friend's drawing</b>, and it is not proposed as final game art. The script is <span class="mono">tools/art/planets_art.py</span>; it took three passes against the sheets below (fixes: darker terminators, seam-wrapped bands without stray edges, a sulfur fountain instead of a crown on Cinder, a geyser spray on Rime, bases no longer cut off).</p>
+    <div class="two">
+      <figure class="sheet"><img src="planets/contact_portraits.png" alt="Contact sheet: the thirteen body portraits blown up and at 64 and 48 pixels, beside two of the friend's icons, magnetic field and inferno" loading="lazy"><figcaption>Portraits beside two of the friend's icons (marked "theirs").</figcaption></figure>
+      <figure class="sheet"><img src="planets/contact_resources.png" alt="Contact sheet: eleven resource icons beside the friend's plating and vitality icons" loading="lazy"><figcaption>Resource icons beside the friend's plating and vitality.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="decisions">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">For the owner</div>
+      <h2>Questions and decisions</h2>
+    </div>
+    <p class="sub">Each row has a recommendation. Nothing here is decided until the owner says so.</p>
+    <div class="tablewrap"><table class="grid">
+      <thead><tr><th>#</th><th>Question</th><th>Options</th><th>Recommendation</th></tr></thead>
+      <tbody>
+        <tr><td>P1</td><td>Names: the star "Halcyon", the home world "Pale Blue", and the rest.</td><td>Keep; rename any.</td><td class="rec">Keep as working names; rename freely, nothing is saved under them yet.</td></tr>
+        <tr><td>P2</td><td>Today's 850 m moon sphere is off the ladder. Which rung does Lantern take?</td><td>600 m (L8, 0.66 M cells) or 1,200 m (L9, 2.6 M cells).</td><td class="rec">1,200 m. It looks about as big in the home sky as today's sphere does (5.3&deg; at 26 km against 3.7&deg;) and has room to mine.</td></tr>
+        <tr><td>P3</td><td>Are the gas giants landable?</td><td>No surface (skim only); a floor at the cloud tops; a solid core far down.</td><td class="rec">No surface and no cells. The cloud tops are a hard floor that crushes a hull which sinks below it. You skim them for fuel and dock at a floating platform.</td></tr>
+        <tr><td>P4</td><td>Life on Hollow. Its surface is airless, but sealed caverns could hold air.</td><td>Lifeless everywhere (strict); a cavern-only roster with the surface still lifeless.</td><td class="rec">Cavern-only roster (glow fungus, cave crickets), declared per cavern in the body's data, so the "airless is lifeless" rule still holds for every surface.</td></tr>
+        <tr><td>P5</td><td>Life on Murk, which has thick air but is 90 K cold.</td><td>None; methane lichen and slow drifters.</td><td class="rec">None for now. It stays a fuel and exploration world; life can be a later generator version.</td></tr>
+        <tr><td>P6</td><td>Tidally locked moons have long days: Tidewater's day is its 6-day orbit, 4.8 hours of play.</td><td>Keep locked; give every moon a 48-minute spin.</td><td class="rec">Keep locked. The giant standing still in Tidewater's sky, and the home world in Lantern's, are what make those moons distinct.</td></tr>
+        <tr><td>P7</td><td>Cell budget: how many bodies at each rung.</td><td>As shown (one L11, three L10, four L9, one L8, one L7); more large worlds.</td><td class="rec">As shown. One 4,800 m world, and the other two habitable worlds at 2,400 m and 1,200 m, keep generation and saves small.</td></tr>
+        <tr><td>P8</td><td>Gravity per body.</td><td>Derived from mass; declared per body.</td><td class="rec">Declared as <span class="mono">gravity_g</span> in each body's data, against the shared 25 m/s&sup2; constant, as <span class="mono">gravity-model</span> already says. The numbers here are picks for feel, not physics.</td></tr>
+        <tr><td>P9</td><td>Saves: every new body is generated by a versioned generator.</td><td>Version per body; one shared version.</td><td class="rec">A generator id and version per body, starting at v1, carried for ever as the saves rule asks. Adding a body never touches an existing world.</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<footer class="wrap">Mockup page for the planets design. Three.js r128. Art: <span class="mono">tools/art/planets_art.py</span>, output in <span class="mono">docs/mockups/planets/</span>. Related designs: <span class="mono">orbit-and-seasons</span>, <span class="mono">gravity-model</span>, <span class="mono">per-body-rendering</span>, <span class="mono">planet-spin</span>, <span class="mono">far-side-flight</span>.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// =====================================================================
+// The system's data. Real values first; the orbit view's display values
+// (dR, dA) are separate and not to scale.
+// =====================================================================
+const DAY_MIN = 48, G1 = 25.0, JUMP = 12.0, TILE_K = 1.2087;
+const yearOf = a => 100 * Math.pow(a / 300, 1.5);       // days: the home year is 100 days at 300 km
+const B = [
+  { id: "star", name: "Halcyon", kind: "Star", parent: null, dR: 7, dA: 0, R: null, L: null, g: null, air: false, color: 0xffd27a,
+    one: "A yellow dwarf. No surface; a hull heats inside 60 km.", res: [], biomes: [], life: [], doing: ["Steer round it: routes bend to keep 60 km clear"], vig: null },
+  { id: "ochre", name: "Ochre", kind: "Habitable world, the inner one", parent: "star", a: 180, dA: 26, dR: 1.7, R: 1200, L: 9, g: 0.70, day: 60, air: "thin, dry", airC: 0xffc496, sky: 0xe8b48c,
+    one: "A rust desert of canyons, salt flats and oasis towns.", res: ["iron", "obsidian", "water"],
+    weather: "Dust storms; rare rain at the poles",
+    biomes: ["Desert (rust sand)", "Mesa canyons (new)", "Salt flats (new)", "Steppe", "Oasis", "Tundra at the poles"],
+    life: ["Cactus, dwarf acacia", "Sand lizard, dune beetle", "Oasis carp", "Townsfolk in the oasis towns"],
+    doing: ["Mine iron and volcanic glass in the canyon walls", "Trade salt between oasis towns", "Fly the canyons low; the walls are 60 m of cells"] },
+  { id: "home", name: "Pale Blue", kind: "Habitable world, home", parent: "star", a: 300, dA: 42, dR: 3.0, R: 4800, L: 11, g: 1.0, day: 48, air: "Earthlike", airC: 0x86c8ff, sky: 0x8fc3e8,
+    one: "The world built today: oceans, eight biomes, towns, fish.", res: ["timber", "iron", "water", "fish"],
+    weather: "The full weather model: clouds, rain, storms, wind",
+    biomes: ["Ocean", "Beach", "Fields", "Desert", "Jungle", "Swamp", "Mountains", "Tundra"],
+    life: ["Oak, kapok, alder, dwarf willow, cactus", "Minnow, silverfin, banded perch, ray, eel, reef fish, deepback, sea serpent", "Townsfolk in ten kinds of settlement"],
+    doing: ["Start here, walking, on dry land", "Build, fish, sail, visit towns", "The first ship takes off from here"] },
+  { id: "lantern", name: "Lantern", kind: "Moon of Pale Blue", parent: "home", a: 26, T: 8, dA: 6.5, dR: 0.9, R: 1200, L: 9, g: 0.35, locked: true, air: false, airC: 0x000000,
+    one: "Grey and airless, with Pale Blue hanging in its sky.", res: ["regolith", "ice", "iron"],
+    biomes: ["Maria (dark basalt plains)", "Highland regolith", "Craters, with ice on the polar floors"],
+    life: [],
+    doing: ["The first flight out: 26 km from home", "Low-gravity mining; a jump clears 8 m", "Strip helium-3 from regolith; ice from the polar craters"] },
+  { id: "verdance", name: "Verdance", kind: "Habitable world, the wet one", parent: "star", a: 450, dA: 58, dR: 2.2, R: 2400, L: 10, g: 0.90, day: 40, air: "thick, humid", airC: 0x9cf0d0, sky: 0x9cc8b8,
+    one: "A jungle archipelago under near-constant rain.", res: ["timber", "fish", "water"],
+    weather: "Rain most days; thunderstorms; mist in the mornings",
+    biomes: ["Jungle", "Swamp", "Mangrove coast (new)", "Reef shallows (new)", "Ocean"],
+    life: ["Kapok giants, mangrove alder, reeds", "Glider frog, mud crab, canopy bird", "Reef fish, ray, eel", "Townsfolk in tree and stilt villages"],
+    doing: ["Sail between the islands", "Live in the canopy villages", "Fish the reef shallows"] },
+  { id: "pebble", name: "Pebble", kind: "Asteroid, one of the belt", parent: "star", a: 650, dA: 78, dR: 0.55, R: 300, L: 7, g: 0.15, day: 20, air: false,
+    one: "A 300 m rock: the size of Tenebris's own gold-standard planet.", res: ["iron", "regolith"],
+    biomes: ["Rubble", "Metal outcrops"], life: [],
+    doing: ["Stake a claim and strip it", "The horizon is 30 m away; walk round it in 6 minutes", "The belt has more like it, each a 300 m L7 body"] },
+  { id: "amber", name: "Amber", kind: "Gas giant", parent: "star", a: 1000, dA: 112, dR: 7.5, R: 19200, L: 13, nocells: true, g: 1.6, day: 30, air: "hydrogen, helium", airC: 0xffd8a0, rings: true,
+    one: "Banded and ringed. No ground: you skim it for fuel.", res: ["helium3", "methane"],
+    weather: "Banded jets; a storm that never ends",
+    biomes: ["Cloud bands", "The storm"], life: [],
+    doing: ["Skim the cloud tops with a scoop for fuel", "Dock at the floating skimmer platform", "Three moons, each its own world"] },
+  { id: "cinder", name: "Cinder", kind: "Moon of Amber, volcanic", parent: "amber", a: 60, T: 2, dA: 11.5, dR: 1.0, R: 1200, L: 9, g: 0.45, locked: true, air: false,
+    one: "Sulfur plains, black flows and open lava lakes.", res: ["sulfur", "obsidian", "iron"],
+    biomes: ["Sulfur plains", "Basalt flows", "Lava lakes", "Frost vents"], life: [],
+    doing: ["Mine sulfur and volcanic glass", "Mind the lava: it is the only light at night, and it burns", "Amber fills a quarter of the sky"] },
+  { id: "rime", name: "Rime", kind: "Moon of Amber, icy", parent: "amber", a: 95, T: 4, dA: 15, dR: 1.0, R: 1200, L: 9, g: 0.40, locked: true, air: false,
+    one: "An ice shell over a sealed ocean, cracked and venting.", res: ["ice", "water"],
+    biomes: ["Ice plains", "Ridged fractures", "Geyser fields at the south pole"], life: [],
+    doing: ["Drill water ice; the refinery makes hydrogen fuel", "Dig down through the shell (the ocean below is sealed)", "Watch the geysers at the south pole"] },
+  { id: "murk", name: "Murk", kind: "Moon of Amber, hazy", parent: "amber", a: 140, T: 7, dA: 19, dR: 1.6, R: 2400, L: 10, g: 0.60, locked: true, air: "thick methane haze", airC: 0xffaa50, sky: 0xc48a48, haze: 0.62,
+    one: "Orange haze, methane rain and dark methane seas.", res: ["methane", "ice"],
+    weather: "Methane drizzle; haze always",
+    biomes: ["Tholin dunes", "Methane seas", "Ice bedrock highlands"], life: [],
+    doing: ["Pump methane from the seas", "Fly by instruments: you see 200 m", "Sail a methane sea"] },
+  { id: "glaucus", name: "Glaucus", kind: "Ice giant", parent: "star", a: 1600, dA: 150, dR: 5, R: 9600, L: 12, nocells: true, g: 1.2, day: 36, air: "hydrogen, methane", airC: 0xbff4ff,
+    one: "Pale cyan and far out. Deep skimming, and the far gate.", res: ["helium3", "methane"],
+    weather: "Faint bands; a dark storm",
+    biomes: ["Cloud bands", "The dark spot"], life: [],
+    doing: ["Deep-skim for helium-3", "The far end of the lanes, if lanes are built", "Two moons"] },
+  { id: "hollow", name: "Hollow", kind: "Moon of Glaucus, caves", parent: "glaucus", a: 50, T: 3, dA: 8.5, dR: 0.7, R: 600, L: 8, g: 0.25, locked: true, air: false, caverns: true,
+    one: "A pitted crust over caverns that glow violet.", res: ["glowcrystal", "iron", "ice"],
+    biomes: ["Pitted crust", "Sinkholes", "Glow caverns (sealed air, see P4)"],
+    life: ["None on the surface", "In sealed caverns only (proposed): glow fungus, cave crickets"],
+    doing: ["Climb down the sinkholes", "Mine glowcrystal: it lights a cave for ever", "Build a cavern settlement lit by its crystals"] },
+  { id: "tidewater", name: "Tidewater", kind: "Moon of Glaucus, ocean", parent: "glaucus", a: 90, T: 6, dA: 12, dR: 1.6, R: 2400, L: 10, g: 0.80, locked: true, air: "Earthlike, salty", airC: 0x8cd2ff, sky: 0x9ec9e4,
+    one: "One ocean, a reef ring, and the giant fixed in the sky.", res: ["fish", "water", "timber"],
+    weather: "Squalls; big tides twice a day",
+    biomes: ["Ocean", "Reef ring under the giant (new)", "Beach", "Palm islets"],
+    life: ["Palm, beach grass", "Silverfin, ray, deepback, sea serpent", "Sea birds", "Townsfolk in stilt fishing villages"],
+    doing: ["Sail and fish", "The big tides strand and float your boat", "Glaucus never moves in the sky"] },
+];
+const BY = Object.fromEntries(B.map(b => [b.id, b]));
+for (const b of B) {
+  if (b.parent === "star") b.T = yearOf(b.a);
+  b.phase = ((b.id.charCodeAt(0) * 37 + b.id.length * 101) % 360) * Math.PI / 180;
+}
+
+const fmt = (v, d = 0) => v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const tileW = b => TILE_K * b.R / Math.pow(2, b.L);
+const cells = L => 10 * Math.pow(4, L) + 2;
+function cellsTxt(L) { const c = cells(L); return c >= 1e6 ? fmt(c / 1e6, 1) + " M" : fmt(c / 1e3, 0) + " k"; }
+function dayTxt(b) {
+  if (b.locked) return `locked: ${b.T} days (${fmt(b.T * DAY_MIN / 60, 1)} h of play)`;
+  return b.day ? `${b.day} min` : "n/a";
+}
+
+// =====================================================================
+// Shared planet shader: lit from the sun, night lights on the dark side,
+// an atmosphere rim on bodies with air, haze over Murk.
+// =====================================================================
+const loader = new THREE.TextureLoader();
+const TEX = {};
+function tex(path) {
+  if (!TEX[path]) { const t = loader.load(path); t.anisotropy = 4; TEX[path] = t; }
+  return TEX[path];
+}
+const LIGHTS_OF = new Set(["home", "verdance", "ochre", "cinder", "murk", "hollow", "tidewater"]);
+const BLACK = (() => { const c = document.createElement("canvas"); c.width = c.height = 2; const t = new THREE.CanvasTexture(c); return t; })();
+const PLANET_VS = `varying vec3 vN; varying vec3 vW; varying vec2 vUv;
+void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
+const PLANET_FS = `uniform sampler2D map; uniform sampler2D lights; uniform vec3 sunPos; uniform vec3 sunDir; uniform float useDir;
+uniform vec3 air; uniform float airAmt; uniform float haze; uniform float lightsAmt;
+varying vec3 vN; varying vec3 vW; varying vec2 vUv;
+void main(){
+  vec3 N = normalize(vN);
+  vec3 L = useDir > 0.5 ? normalize(sunDir) : normalize(sunPos - vW);
+  vec3 V = normalize(cameraPosition - vW);
+  float ndl = dot(N, L);
+  vec3 alb = pow(texture2D(map, vUv).rgb, vec3(2.2));
+  vec3 airL = pow(air, vec3(2.2));
+  alb = mix(alb, airL * 0.8, haze);
+  vec3 col = alb * (max(ndl, 0.0) * 1.15 + 0.02);
+  float night = smoothstep(0.10, -0.14, ndl);
+  col += pow(texture2D(lights, vUv).rgb, vec3(2.2)) * night * 1.8 * lightsAmt;
+  float fr = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+  col += airL * fr * airAmt * smoothstep(-0.35, 0.45, ndl) * 1.3;
+  gl_FragColor = vec4(pow(col, vec3(1.0 / 2.2)), 1.0);
+}`;
+function planetMaterial(b, useDir) {
+  const air = b.air ? new THREE.Color(b.airC) : new THREE.Color(0);
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: tex(`planets/map_${b.id}.png`) },
+      lights: { value: LIGHTS_OF.has(b.id) ? tex(`planets/lights_${b.id}.png`) : BLACK },
+      lightsAmt: { value: LIGHTS_OF.has(b.id) ? 1 : 0 },
+      sunPos: { value: new THREE.Vector3() }, sunDir: { value: new THREE.Vector3(-1, 0.25, 0.55).normalize() }, useDir: { value: useDir ? 1 : 0 },
+      air: { value: new THREE.Vector3(air.r, air.g, air.b) }, airAmt: { value: b.air ? 1 : 0 }, haze: { value: b.haze || 0 },
+    },
+    vertexShader: PLANET_VS, fragmentShader: PLANET_FS,
+  });
+}
+function ringMesh(rIn, rOut) {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 4;
+  const x = c.getContext("2d");
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255, a = 0.25 + 0.55 * Math.abs(Math.sin(t * 19) * Math.sin(t * 7 + 1)) * (t > 0.62 && t < 0.68 ? 0.1 : 1);
+    x.fillStyle = `rgba(${226 - t * 40 | 0},${196 - t * 50 | 0},${150 - t * 50 | 0},${a})`; x.fillRect(i, 0, 1, 4);
+  }
+  const g = new THREE.RingGeometry(rIn, rOut, 96, 1), p = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) { const r = Math.hypot(p.getX(i), p.getY(i)); uv.setXY(i, (r - rIn) / (rOut - rIn), 0.5); }
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2 + 0.12;
+  return m;
+}
+function glowTexture(inner = "rgba(255,240,200,1)", outer = "rgba(255,200,80,0)") {
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const x = c.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, inner); g.addColorStop(0.25, inner.replace(/[\d.]+\)$/, "0.45)")); g.addColorStop(1, outer);
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+function starField(n, r, size) {
+  const g = new THREE.BufferGeometry(), p = [];
+  let s = 7;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < n; i++) { const y = rnd() * 2 - 1, a = rnd() * Math.PI * 2, q = Math.sqrt(1 - y * y); p.push(q * Math.cos(a) * r, y * r, q * Math.sin(a) * r); }
+  g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcfd8ff, size, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
+}
+
+// =====================================================================
+// The orbit view.
+// =====================================================================
+const orbitEl = document.getElementById("orbit"), oc = document.getElementById("orbitCanvas");
+const R1 = new THREE.WebGLRenderer({ canvas: oc, antialias: true });
+R1.setPixelRatio(Math.min(devicePixelRatio, 2));
+const S1 = new THREE.Scene(), C1 = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+S1.add(starField(1600, 2000, 1.6));
+const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(7, 32, 16), new THREE.MeshBasicMaterial({ color: 0xffe2a0 }));
+S1.add(sunMesh);
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+sunGlow.scale.set(60, 60, 1); S1.add(sunGlow);
+const NODES = {};
+const pickables = [];
+for (const b of B) {
+  if (b.id === "star") { NODES.star = { group: sunMesh, mesh: sunMesh, b }; sunMesh.userData.id = "star"; pickables.push(sunMesh); continue; }
+  const group = new THREE.Group();
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(b.dR, 48, 24), planetMaterial(b, false));
+  mesh.userData.id = b.id; group.add(mesh); pickables.push(mesh);
+  if (b.rings) group.add(ringMesh(b.dR * 1.35, b.dR * 2.3));
+  S1.add(group);
+  // the orbit line, round the parent
+  const pts = [];
+  for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * b.dA, 0, Math.sin(a) * b.dA)); }
+  const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: b.parent === "star" ? 0x56627e : 0x3c4660, transparent: true, opacity: b.parent === "star" ? 0.75 : 0.6 }));
+  S1.add(line);
+  NODES[b.id] = { group, mesh, line, b };
+}
+// the belt
+{
+  const g = new THREE.BufferGeometry(), p = [];
+  for (let i = 0; i < 1800; i++) { const a = Math.random() * Math.PI * 2, r = 72 + Math.random() * 12; p.push(Math.cos(a) * r, (Math.random() - 0.5) * 1.6, Math.sin(a) * r); }
+  g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+  S1.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x8a7f74, size: 0.35, transparent: true, opacity: 0.8 })));
+}
+// labels
+const labelsEl = document.getElementById("labels");
+for (const b of B) {
+  const d = document.createElement("div");
+  d.className = "lbl" + (b.parent && b.parent !== "star" ? " moon" : "");
+  d.textContent = b.name; d.dataset.id = b.id;
+  d.addEventListener("click", () => select(b.id, true));
+  labelsEl.appendChild(d); NODES[b.id].label = d;
+}
+
+let worldDay = 12, daysPerSec = 0.25;
+const _v = new THREE.Vector3();
+function placeAll(day) {
+  for (const b of B) {
+    if (b.id === "star") continue;
+    const n = NODES[b.id];
+    const ang = b.phase + 2 * Math.PI * day / b.T;
+    const parentPos = b.parent === "star" ? new THREE.Vector3() : NODES[b.parent].group.position;
+    n.group.position.set(parentPos.x + Math.cos(ang) * b.dA, 0, parentPos.z - Math.sin(ang) * b.dA);
+    n.line.position.copy(parentPos);
+    // spin: locked moons keep one face to their parent
+    n.mesh.rotation.y = b.locked ? ang + Math.PI : 2 * Math.PI * day * (DAY_MIN / (b.day || DAY_MIN));
+    n.mesh.material.uniforms.sunPos.value.set(0, 0, 0);
+  }
+}
+// order matters: parents before moons
+B.sort((x, y) => (x.parent === "star" || !x.parent ? 0 : 1) - (y.parent === "star" || !y.parent ? 0 : 1));
+
+// camera: yaw, pitch, distance round a target that follows the selection
+const cam = { yaw: 0.6, pitch: 0.62, dist: 260, target: new THREE.Vector3(), follow: null, wantDist: 260 };
+let drag = null;
+const ptrs = new Map();
+oc.addEventListener("pointerdown", e => { oc.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); drag = { x: e.clientX, y: e.clientY, moved: 0 }; oc.style.cursor = "grabbing"; });
+oc.addEventListener("pointermove", e => {
+  if (!ptrs.has(e.pointerId)) return;
+  const prev = ptrs.get(e.pointerId);
+  if (ptrs.size === 2) {
+    const other = [...ptrs.entries()].find(([k]) => k !== e.pointerId)[1];
+    const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(e.clientX - other.x, e.clientY - other.y);
+    if (d0 > 0) cam.wantDist = THREE.MathUtils.clamp(cam.wantDist * d0 / d1, 6, 600);
+  } else if (drag) {
+    const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    drag.moved += Math.abs(dx) + Math.abs(dy);
+    cam.yaw -= dx * 0.006; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dy * 0.005, -1.4, 1.45);
+  }
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+});
+function endPtr(e) {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId); oc.style.cursor = "grab";
+  if (drag && drag.moved < 6 && ptrs.size === 0) pick(e);
+  if (ptrs.size === 0) drag = null;
+}
+oc.addEventListener("pointerup", endPtr); oc.addEventListener("pointercancel", endPtr);
+oc.addEventListener("wheel", e => { e.preventDefault(); cam.wantDist = THREE.MathUtils.clamp(cam.wantDist * Math.exp(e.deltaY * 0.0012), 6, 600); }, { passive: false });
+const ray = new THREE.Raycaster();
+function pick(e) {
+  const r = oc.getBoundingClientRect();
+  ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, C1);
+  const hit = ray.intersectObjects(pickables, false)[0];
+  if (hit) select(hit.object.userData.id, true);
+}
+document.getElementById("sysBtn").addEventListener("click", () => { cam.follow = null; cam.wantDist = 260; });
+for (const id of ["spd0", "spd1", "spd2", "spd3"]) {
+  const el = document.getElementById(id);
+  el.addEventListener("click", () => {
+    daysPerSec = +el.dataset.s;
+    for (const j of ["spd0", "spd1", "spd2", "spd3"]) document.getElementById(j).setAttribute("aria-pressed", j === id ? "true" : "false");
+  });
+}
+const dayOut = document.getElementById("dayOut");
+function sizeOrbit() {
+  const w = orbitEl.clientWidth, h = orbitEl.clientHeight;
+  R1.setSize(w, h, false); C1.aspect = w / h; C1.updateProjectionMatrix();
+}
+
+// =====================================================================
+// The inspector globe.
+// =====================================================================
+const gc = document.getElementById("globeCanvas");
+const R2 = new THREE.WebGLRenderer({ canvas: gc, antialias: true, alpha: true });
+R2.setPixelRatio(Math.min(devicePixelRatio, 2));
+const S2 = new THREE.Scene(), C2 = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+C2.position.set(0, 0.35, 4.3); C2.lookAt(0, 0, 0);
+S2.add(starField(500, 40, 1.2));
+let globe = null, globeRing = null;
+function setGlobe(b) {
+  if (globe) { S2.remove(globe); globe = null; }
+  if (globeRing) { S2.remove(globeRing); globeRing = null; }
+  if (b.id === "star") {
+    globe = new THREE.Group();
+    globe.add(new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.MeshBasicMaterial({ color: 0xffe2a0 })));
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false })); s.scale.set(4.2, 4.2, 1); globe.add(s);
+  } else {
+    globe = new THREE.Mesh(new THREE.SphereGeometry(b.id === "pebble" ? 0.8 : 1, 64, 32), planetMaterial(b, true));
+    if (b.id === "pebble") { // lumpy, like the rock it is
+      const p = globe.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) { _v.fromBufferAttribute(p, i); const k = 1 + 0.18 * Math.sin(_v.x * 3.1 + 1) * Math.sin(_v.y * 2.3) + 0.12 * Math.sin(_v.z * 4.2 + 2); _v.multiplyScalar(k); p.setXYZ(i, _v.x, _v.y, _v.z); }
+      globe.geometry.computeVertexNormals();
+    }
+    if (b.rings) { globeRing = ringMesh(1.35 * 0.82, 2.3 * 0.82); globe.scale.setScalar(0.82); S2.add(globeRing); }
+    globe.rotation.z = 0.2;
+  }
+  S2.add(globe);
+}
+
+// =====================================================================
+// The surface vignette: a patch of hex columns on the real 2.833 m grid,
+// bent by the body's own curvature, lit by its sun, moon and lamps.
+// =====================================================================
+const W = 2.833, SQ3 = Math.sqrt(3), HEXR = W / SQ3;
+const vc = document.getElementById("vigCanvas");
+const R3 = new THREE.WebGLRenderer({ canvas: vc, antialias: true });
+R3.setPixelRatio(Math.min(devicePixelRatio, 2));
+const S3 = new THREE.Scene(), C3 = new THREE.PerspectiveCamera(48, 16 / 9, 0.3, 3000);
+const lin = c => [Math.pow(((c >> 16) & 255) / 255, 2.2), Math.pow(((c >> 8) & 255) / 255, 2.2), Math.pow((c & 255) / 255, 2.2)];
+const VIG_VS = `attribute vec3 color; attribute vec3 fire; attribute vec3 lamp;
+varying vec3 vC; varying vec3 vN; varying vec3 vF; varying vec3 vL; varying float vD;
+void main(){ vC = color; vN = normal; vF = fire; vL = lamp; vec4 mv = modelViewMatrix * vec4(position, 1.0); vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`;
+const VIG_FS = `uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 moonDir; uniform vec3 moonCol; uniform vec3 skyAmb; uniform vec3 gndAmb;
+uniform float uLamp; uniform vec3 fogCol; uniform float fogDen; uniform float alpha; uniform float flick;
+varying vec3 vC; varying vec3 vN; varying vec3 vF; varying vec3 vL; varying float vD;
+void main(){
+  vec3 N = normalize(vN);
+  vec3 lit = sunCol * max(dot(N, sunDir), 0.0) + moonCol * max(dot(N, moonDir), 0.0) + mix(gndAmb, skyAmb, N.y * 0.5 + 0.5);
+  vec3 col = vC * lit + vC * vF * flick + vC * vL * uLamp;
+  col = col / (1.0 + col * 0.12);
+  float f = 1.0 - exp(-fogDen * fogDen * vD * vD);
+  col = mix(col, fogCol, f);
+  gl_FragColor = vec4(pow(col, vec3(1.0 / 2.2)), alpha);
+}`;
+function vigMaterial(alpha) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Vector3(1, 1, 1) },
+      moonDir: { value: new THREE.Vector3(-0.3, 0.8, -0.4).normalize() }, moonCol: { value: new THREE.Vector3() },
+      skyAmb: { value: new THREE.Vector3(0.2, 0.25, 0.3) }, gndAmb: { value: new THREE.Vector3(0.05, 0.05, 0.05) },
+      uLamp: { value: 1 }, fogCol: { value: new THREE.Vector3() }, fogDen: { value: 0 }, alpha: { value: alpha }, flick: { value: 1 },
+    },
+    vertexShader: VIG_VS, fragmentShader: VIG_FS, transparent: alpha < 1, depthWrite: alpha >= 1, side: THREE.DoubleSide,
+  });
+}
+// A bag of flat-shaded triangles with a colour and two emissions each.
+class Bag {
+  constructor() { this.p = []; this.n = []; this.c = []; this.f = []; this.l = []; }
+  push(pt, nx, ny, nz, col, ef, el) {
+    this.p.push(pt[0], pt[1], pt[2]); this.n.push(nx, ny, nz); this.c.push(col[0], col[1], col[2]);
+    this.f.push(ef ? ef[0] : 0, ef ? ef[1] : 0, ef ? ef[2] : 0); this.l.push(el ? el[0] : 0, el ? el[1] : 0, el ? el[2] : 0);
+  }
+  tri(a, b, c, col, hint, ef, el) {
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const L = Math.hypot(nx, ny, nz) || 1; nx /= L; ny /= L; nz /= L;
+    if (hint && nx * hint[0] + ny * hint[1] + nz * hint[2] < 0) { nx = -nx; ny = -ny; nz = -nz; }
+    this.push(a, nx, ny, nz, col, ef, el); this.push(b, nx, ny, nz, col, ef, el); this.push(c, nx, ny, nz, col, ef, el);
+  }
+  quad(a, b, c, d, col, hint, ef, el) { this.tri(a, b, c, col, hint, ef, el); this.tri(a, c, d, col, hint, ef, el); }
+  three(g, m, col, ef, el) {
+    g = g.index ? g.toNonIndexed() : g; g.applyMatrix4(m); g.computeVertexNormals();
+    const P = g.attributes.position.array, N = g.attributes.normal.array;
+    for (let i = 0; i < P.length; i += 3) this.push([P[i], P[i + 1], P[i + 2]], N[i], N[i + 1], N[i + 2], col, ef, el);
+  }
+}
+const M4 = (x, y, z, ry = 0, sx = 1, sy = 1, sz = 1, rz = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, rz)), new THREE.Vector3(sx, sy, sz));
+let V = null; // the vignette being built: { bag, water, lights, R, cells, ... }
+const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
+function vnoise(x, z) {
+  const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi, u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+  const a = hash(xi, zi), b = hash(xi + 1, zi), c = hash(xi, zi + 1), d = hash(xi + 1, zi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const fbm = (x, z) => vnoise(x, z) * 0.6 + vnoise(x * 2.1 + 5, z * 2.1) * 0.3 + vnoise(x * 4.3, z * 4.3 + 9) * 0.1;
+const cx = (q, r) => W * (q + r / 2), cz = r => W * SQ3 / 2 * r;
+function axialAt(x, z) {
+  const r = z / (W * SQ3 / 2), q = x / W - r / 2;
+  let rx = Math.round(q), rz = Math.round(r), ry = Math.round(-q - r);
+  const dx = Math.abs(rx - q), dz = Math.abs(rz - r), dy = Math.abs(ry + q + r);
+  if (dx > dy && dx > dz) rx = -ry - rz; else if (dz > dy) rz = -rx - ry;
+  return [rx, rz];
+}
+const topAt = (x, z) => { const [q, r] = axialAt(x, z), c = V.cells.get(q + "," + r); return c ? c.h : 0; };
+const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+
+function terrain(o) {
+  // o: { N, height(x,z)->m, topAt(x,z,h)->colour, side(y)->colour, base, emit(x,z,h)->{ef} }
+  const N = o.N || 10, base = o.base ?? -5;
+  for (let q = -N; q <= N; q++) for (let r = Math.max(-N, -q - N); r <= Math.min(N, -q + N); r++) {
+    const x = cx(q, r), z = cz(r);
+    V.cells.set(q + "," + r, { q, r, x, z, h: Math.round(o.height(x, z)) });
+  }
+  for (const c of V.cells.values()) {
+    const corner = k => { const a = (-30 + 60 * k) * Math.PI / 180; return [c.x + HEXR * Math.cos(a), c.z + HEXR * Math.sin(a)]; };
+    const col = o.top(c.x, c.z, c.h), em = o.emit ? o.emit(c.x, c.z, c.h) : null;
+    for (let k = 0; k < 6; k++) {
+      const [ax, az] = corner(k), [bx, bz] = corner(k + 1);
+      V.bag.tri([c.x, c.h, c.z], [ax, c.h, az], [bx, c.h, bz], col, [0, 1, 0], em && em.ef, em && em.el);
+      const nb = V.cells.get((c.q + DIRS[k][0]) + "," + (c.r + DIRS[k][1]));
+      const floor = nb ? nb.h : base;
+      const mid = 60 * k * Math.PI / 180, hint = [Math.cos(mid), 0, Math.sin(mid)];
+      for (let y = c.h; y > floor; y--) {
+        const sc = o.side(y, c.h - y);
+        V.bag.quad([ax, y, az], [bx, y, bz], [bx, y - 1, bz], [ax, y - 1, az], sc, hint);
+      }
+    }
+  }
+}
+function water(level, colour, N = 11) {
+  // a fine grid so lamplight on the water reads
+  const span = W * N * 1.05, n = 44, col = lin(colour);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const x0 = -span + 2 * span * i / n, x1 = -span + 2 * span * (i + 1) / n, z0 = -span + 2 * span * j / n, z1 = -span + 2 * span * (j + 1) / n;
+    if (Math.hypot((x0 + x1) / 2, (z0 + z1) / 2) > span * 0.93) continue;
+    V.water.quad([x0, level, z0], [x1, level, z0], [x1, level, z1], [x0, level, z1], col, [0, 1, 0]);
+  }
+}
+// props: every helper puts its feet on the cell top at (x, z)
+const box = (x, y, z, w, h, d, c, o = {}) => V.bag.three(new THREE.BoxGeometry(w, h, d), M4(x, y + h / 2, z, o.ry || 0), lin(c), o.ef, o.el);
+const cyl = (x, y, z, r, h, c, o = {}) => V.bag.three(new THREE.CylinderGeometry(o.r2 ?? r, r, h, o.n || 6), M4(x, y + h / 2, z, o.ry || 0, 1, 1, 1, o.rz || 0), lin(c), o.ef, o.el);
+const cone = (x, y, z, r, h, c, o = {}) => V.bag.three(new THREE.ConeGeometry(r, h, o.n || 6), M4(x, y + h / 2, z, o.ry || 0), lin(c), o.ef, o.el);
+const ball = (x, y, z, r, c, o = {}) => V.bag.three(new THREE.IcosahedronGeometry(r, o.detail ?? 0), M4(x, y, z, 0, o.sx || 1, o.sy || 1, o.sz || 1), lin(c), o.ef, o.el);
+function light(x, y, z, kind, colour, R, p = 1) {
+  V.lights.push({ x, y, z, R, p, col: lin(colour), night: kind !== "fire", kind });
+}
+const EL = [3.2, 2.5, 1.4], EF = [3.0, 1.5, 0.45];
+function lampPost(x, z, h = 2.8) {
+  const y = topAt(x, z);
+  cyl(x, y, z, 0.07, h, 0x2b2a2e, { n: 5 });
+  box(x, y + h, z, 0.36, 0.42, 0.36, 0xfff1d0, { el: EL });
+  box(x, y + h + 0.42, z, 0.46, 0.08, 0.46, 0x2b2a2e);
+  light(x, y + h + 0.2, z, "lamp", 0xffc77a, 10, 1.1);
+}
+function fire(x, z) {
+  const y = topAt(x, z);
+  for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; box(x + Math.cos(a) * 0.55, y, z + Math.sin(a) * 0.55, 0.3, 0.22, 0.3, 0x77706a); }
+  cone(x, y, z, 0.38, 0.9, 0xffd9a0, { ef: EF, n: 5 });
+  light(x, y + 0.6, z, "fire", 0xff9a48, 9, 1.2);
+}
+function hut(x, z, w, d, h, wall, roof, o = {}) {
+  const y = (o.y ?? topAt(x, z)), ry = o.ry || 0;
+  box(x, y, z, w, h, d, wall, { ry });
+  V.bag.three(new THREE.ConeGeometry(Math.max(w, d) * 0.78, h * 0.7, 4), M4(x, y + h + h * 0.35, z, ry + Math.PI / 4, w / Math.max(w, d), 1, d / Math.max(w, d)), lin(roof));
+  // windows on the two long sides, lit by the candle in the room behind
+  const c = Math.cos(ry), s = Math.sin(ry);
+  for (const side of [-1, 1]) for (const off of (w > 4 ? [-w * 0.25, w * 0.25] : [0])) {
+    const lx = off, lz = side * (d / 2 + 0.03);
+    const wx = x + lx * c + lz * s, wz = z - lx * s + lz * c;
+    V.bag.three(new THREE.BoxGeometry(0.7, 0.8, 0.06), M4(wx, y + h * 0.5, wz, ry), lin(0xfff0c8), null, o.dark ? null : EL);
+    if (!o.dark) light(wx + side * s * 0.4, y + h * 0.5, wz + side * c * 0.4, "window", 0xffb866, 5, 0.75);
+  }
+}
+function tree(x, z, kind = "oak", sc = 1) {
+  const y = topAt(x, z);
+  if (kind === "oak") { cyl(x, y, z, 0.28 * sc, 2.8 * sc, 0x6b4a2c); ball(x, y + 4.0 * sc, z, 2.1 * sc, 0x3d8a3a, { detail: 1 }); }
+  if (kind === "pine") { cyl(x, y, z, 0.2 * sc, 2 * sc, 0x5a3e26); cone(x, y + 1.2 * sc, z, 1.6 * sc, 3.2 * sc, 0x2f6a40, { n: 7 }); cone(x, y + 3.0 * sc, z, 1.1 * sc, 2.4 * sc, 0x37784a, { n: 7 }); }
+  if (kind === "kapok") { cyl(x, y, z, 0.5 * sc, 8 * sc, 0x7a6248, { r2: 0.35 * sc }); ball(x, y + 8.6 * sc, z, 3.4 * sc, 0x2c7a34, { detail: 1, sy: 0.55 }); ball(x + 1.6 * sc, y + 7.6 * sc, z + 1 * sc, 2.0 * sc, 0x3a8c3a, { detail: 1, sy: 0.6 }); }
+  if (kind === "palm") {
+    for (let k = 0; k < 5; k++) cyl(x + k * 0.18 * sc, y + k * 1.0 * sc, z, 0.2 * sc, 1.05 * sc, 0x8a6a44, { rz: -0.18 });
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; V.bag.three(new THREE.ConeGeometry(0.35 * sc, 2.6 * sc, 3), M4(x + 0.9 * sc + Math.cos(a) * 1.1 * sc, y + 5 * sc, z + Math.sin(a) * 1.1 * sc, -a, 1, 1, 1, Math.PI / 2 - 0.3), lin(0x4c9a3c)); }
+  }
+  if (kind === "cactus") { box(x, y, z, 0.5, 2.6 * sc, 0.5, 0x4f8a3e); box(x + 0.55, y + 1.1, z, 0.4, 0.4, 0.4, 0x4f8a3e); box(x + 0.75, y + 1.1, z, 0.36, 1.1, 0.36, 0x4f8a3e); }
+}
+function crystal(x, z, h, colour, glow) {
+  const y = topAt(x, z);
+  for (let k = 0; k < 3; k++) {
+    const a = k * 2.1, dx = Math.cos(a) * 0.45, dz = Math.sin(a) * 0.45;
+    V.bag.three(new THREE.ConeGeometry(0.32, h * (1 - k * 0.22), 5), M4(x + dx, y + h * (1 - k * 0.22) / 2, z + dz, 0, 1, 1, 1, (k - 1) * 0.3), lin(colour), glow);
+  }
+  light(x, y + h * 0.5, z, "fire", colour, 9, 1.0);
+}
+function dome(x, z, r, o = {}) {
+  const y = topAt(x, z);
+  V.bag.three(new THREE.SphereGeometry(r, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), M4(x, y, z), lin(o.c || 0xdfe3ea));
+  for (let k = 0; k < 6; k++) {
+    const a = k / 6 * Math.PI * 2 + 0.3;
+    V.bag.three(new THREE.BoxGeometry(0.9, 0.5, 0.08), M4(x + Math.cos(a) * r * 0.86, y + r * 0.42, z + Math.sin(a) * r * 0.86, -a + Math.PI / 2), lin(0xfff0c8), null, EL);
+    light(x + Math.cos(a) * (r + 0.6), y + r * 0.42, z + Math.sin(a) * (r + 0.6), "window", 0xffd9a0, 5.5, 0.8);
+  }
+}
+function mast(x, z, h = 7) {
+  const y = topAt(x, z);
+  cyl(x, y, z, 0.12, h, 0x9aa0aa, { n: 4 });
+  box(x, y + h, z, 0.9, 0.5, 0.5, 0xffffff, { el: [4, 4, 3.6] });
+  light(x, y + h - 0.6, z, "lamp", 0xe8f0ff, 18, 1.4);
+}
+function rover(x, z, ry = 0.4) {
+  const y = topAt(x, z) + 0.45;
+  box(x, y, z, 2.6, 1.0, 1.6, 0xd8d4c8, { ry });
+  for (const [a, b] of [[-0.9, -0.85], [0.9, -0.85], [-0.9, 0.85], [0.9, 0.85]]) {
+    const c = Math.cos(ry), s = Math.sin(ry);
+    V.bag.three(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 8), new THREE.Matrix4().compose(new THREE.Vector3(x + a * c + b * s, y, z - a * s + b * c), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, ry, 0)), new THREE.Vector3(1, 1, 1)), lin(0x3a3a40));
+  }
+  box(x + Math.cos(ry) * 1.32, y + 0.4, z - Math.sin(ry) * 1.32, 0.12, 0.25, 1.0, 0xffffff, { ry, el: [3, 3, 2.6] });
+  light(x + Math.cos(ry) * 3, y + 0.5, z - Math.sin(ry) * 3, "lamp", 0xe8f0ff, 9, 1);
+}
+function ship(x, z, ry = 0.8, y0) {
+  const y = (y0 ?? topAt(x, z)) + 0.8;
+  V.bag.three(new THREE.ConeGeometry(1.4, 6, 4), M4(x, y + 0.7, z, ry, 1, 1, 0.45, Math.PI / 2), lin(0xe4e6ea));
+  box(x, y + 0.9, z, 1.6, 0.6, 1.2, 0x3a8cd0, { ry });
+  for (const s of [-1, 1]) cyl(x + Math.sin(ry) * s * 1.6, y - 0.8, z + Math.cos(ry) * s * 1.6, 0.1, 1.2, 0x4a4a52);
+  box(x - Math.cos(ry) * 2.6, y + 0.4, z + Math.sin(ry) * 2.6, 0.2, 0.2, 0.2, 0xff4040, { ry, el: [3, 0.3, 0.3] });
+}
+function boat(x, z, ry, level) {
+  V.bag.three(new THREE.BoxGeometry(4.6, 0.7, 1.6), M4(x, level + 0.2, z, ry), lin(0x8a6640));
+  cyl(x, level + 0.5, z, 0.07, 4, 0x6a5038);
+  V.bag.three(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([0, 0.8, 0, 0, 4.3, 0, -2.0, 0.8, 0], 3)), M4(x, level, z, ry), lin(0xf0e6d0));
+  box(x + Math.cos(ry) * 2.1, level + 0.55, z - Math.sin(ry) * 2.1, 0.26, 0.3, 0.26, 0xfff0d0, { el: EL });
+  light(x + Math.cos(ry) * 2.1, level + 0.9, z - Math.sin(ry) * 2.1, "lamp", 0xffc77a, 8, 0.9);
+}
+function stilts(x, z, level, w = 4, d = 3.4, ry = 0) {
+  for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cyl(x + a * w * 0.4, level - 2, z + b * d * 0.4, 0.12, 4.2, 0x5a4430);
+  box(x, level + 2, z, w + 1, 0.2, d + 1, 0x7a5a3a);
+  hut(x, z, w, d, 2.4, 0x9a7a52, 0x6a7a3a, { y: level + 2.2, ry });
+}
+
+const VIG = {
+  home() {
+    terrain({
+      height: (x, z) => 1 + fbm(x * 0.028 + 3, z * 0.028) * 9 - Math.max(0, (x + z) * 0.05),
+      top: (x, z, h) => h < 0 ? lin(0x4a5a48) : h === 0 ? lin(0xd8c48a) : h > 6 ? lin(0x8a8a86) : lin(hash(x, z) > 0.5 ? 0x5ea040 : 0x67a948),
+      side: (y, d) => d === 0 ? lin(0x6a5232) : lin(y % 2 ? 0x7d6a58 : 0x857262),
+    });
+    water(0.3, 0x14508c);
+    hut(-6, -4, 5, 4, 2.8, 0xd8ccb0, 0x9a4a32, { ry: 0.3 });
+    hut(3, -9, 4, 3.6, 2.6, 0xc8b898, 0x6a4a32, { ry: -0.2 });
+    hut(-10, 6, 4.4, 3.6, 2.6, 0xd0c4a4, 0x8a4030, { ry: 1.1 });
+    for (const [x, z] of [[-1, -2], [-4, 3], [6, -3], [-12, -2]]) lampPost(x, z);
+    fire(1.5, 3.5);
+    for (const [x, z, s] of [[12, -12, 1], [15, 4, 1.1], [-18, -10, 0.9], [9, 11, 1], [-2, -16, 1.2], [-16, 12, 0.9], [18, -4, 1]]) tree(x, z, "oak", s);
+    for (const [x, z] of [[-20, 2], [20, 12], [6, 18]]) tree(x, z, "pine");
+    return { sky: 0x8fc3e8, dusk: 0xf09a5a, haze: 0.012, airless: false, skyBody: { id: "lantern", dir: [-0.5, 0.16, -0.85], size: 30 } };
+  },
+  verdance() {
+    terrain({
+      height: (x, z) => -0.4 + fbm(x * 0.04, z * 0.04 + 7) * 5,
+      top: (x, z, h) => h <= 0 ? lin(0x5a5a2a) : lin(hash(x, z) > 0.5 ? 0x2f7a34 : 0x3a8a3a),
+      side: (y, d) => d === 0 ? lin(0x4a3a24) : lin(y % 2 ? 0x6a4a34 : 0x5e4430),
+    });
+    water(0.5, 0x2a6a5a);
+    for (const [x, z, s] of [[-8, -8, 1], [10, -6, 1.1], [-14, 8, 0.9], [14, 10, 1]]) tree(x, z, "kapok", s);
+    for (const [x, z] of [[-4, 9], [16, -14], [-18, -4], [4, 16], [-10, 16]]) tree(x, z, "oak", 0.8);
+    stilts(2, 2, 0.5, 4, 3.2, 0.4); stilts(-6, 3, 0.5, 3.6, 3, -0.3);
+    for (const [x, z] of [[-1, -3], [5, 6], [-9, 0]]) { const y = 0.5; cyl(x, y - 1, z, 0.06, 3.6, 0x3a2a1e); box(x, y + 2.6, z, 0.3, 0.35, 0.3, 0xfff0d0, { el: EL }); light(x, y + 2.7, z, "lamp", 0xffc77a, 9, 1); }
+    fire(8, -1);
+    return { sky: 0x9cc8b8, dusk: 0xe0a070, haze: 0.022, fog: 0x8aa89a, skyBody: null };
+  },
+  ochre() {
+    terrain({
+      height: (x, z) => { const canyon = Math.abs(z * 0.9 + x * 0.25 + Math.sin(x * 0.12) * 4) < 5 ? -7 : 0; return 2 + fbm(x * 0.03, z * 0.03) * 6 + canyon; },
+      top: (x, z, h) => h < -2 ? lin(0xa0583a) : lin(hash(x, z) > 0.5 ? 0xc8784a : 0xd28654),
+      side: (y, d) => lin([0xb0583a, 0xc46a44, 0x9c4c34, 0xd88a5a][((y % 4) + 4) % 4]),
+    });
+    hut(-8, -9, 5, 4, 3.2, 0xd8b088, 0xc89a6a, { ry: 0.1 });
+    hut(4, -12, 4, 4, 3.0, 0xe0c098, 0xb8865a, { ry: -0.3 });
+    hut(-14, 10, 4.4, 4, 3, 0xd8b088, 0xc89a6a, { ry: 0.6 });
+    for (const [x, z] of [[-2, -10], [10, 10], [-6, 12]]) { const y = topAt(x, z); cyl(x, y, z, 0.35, 1.0, 0x3a3030, { n: 6, r2: 0.6 }); cone(x, y + 1.0, z, 0.42, 0.7, 0xffd9a0, { ef: EF, n: 5 }); light(x, y + 1.4, z, "lamp", 0xff9a48, 11, 1.2); }
+    for (const [x, z] of [[14, -6], [-16, -2], [6, 16], [18, 6], [-4, -18]]) tree(x, z, "cactus", 1);
+    fire(-2, 2);
+    return { sky: 0xe8b48c, dusk: 0xe0704a, haze: 0.010, fog: 0xd8a080, skyBody: null };
+  },
+  lantern() {
+    terrain({
+      height: (x, z) => { let h = fbm(x * 0.03, z * 0.03) * 4; for (const [a, b, r] of [[8, -6, 9], [-14, 10, 6], [-6, -16, 5]]) { const d = Math.hypot(x - a, z - b); if (d < r) h -= 3 * (1 - (d / r) ** 2); else if (d < r * 1.3) h += 1.2; } return h; },
+      top: (x, z, h) => lin(hash(x, z) > 0.6 ? 0x9a9aa4 : 0x8c8c96),
+      side: (y, d) => lin(y % 2 ? 0x707078 : 0x7a7a84),
+    });
+    dome(-6, 2, 3.4);
+    mast(-1, -3, 7);
+    rover(4, 6, 0.6);
+    ship(-12, -8, 0.4);
+    return { sky: 0x000000, airless: true, skyBody: { id: "home", dir: [-0.35, 0.14, -0.92], size: 150 } };
+  },
+  rime() {
+    terrain({
+      height: (x, z) => { const crack = Math.abs(x * 0.6 - z + Math.sin(z * 0.2) * 3) < 2.6 ? -3 : 0; return 1 + fbm(x * 0.035, z * 0.035) * 3 + crack; },
+      top: (x, z, h) => h < -1 ? lin(0x4a86c0) : lin(hash(x, z) > 0.5 ? 0xdcecf6 : 0xcfe4f2),
+      side: (y, d) => lin(y % 2 ? 0x9cc4e4 : 0xb0d2ec),
+    });
+    // a drill rig on four legs, lit
+    { const x = -5, z = -6, y = topAt(x, z); for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) V.bag.three(new THREE.CylinderGeometry(0.12, 0.12, 9, 4), M4(x + a * 0.9, y + 4.4, z + b * 0.9, 0, 1, 1, 1, a * 0.12), lin(0xc8a040)); box(x, y + 8.5, z, 1.6, 1.0, 1.6, 0x8a8a90); box(x, y + 4.6, z, 0.5, 0.4, 0.5, 0xffffff, { el: [4, 4, 3.6] }); light(x, y + 4, z, "lamp", 0xe8f0ff, 14, 1.2); }
+    dome(5, 4, 3);
+    for (const [x, z] of [[12, -10], [15, -6]]) { const y = topAt(x, z); for (let k = 0; k < 4; k++) cone(x, y + k * 2.4, z, 1.2 - k * 0.22, 2.6, 0xf4fbff, { n: 7 }); }
+    return { sky: 0x000000, airless: true, skyBody: { id: "amber", dir: [0.55, 0.12, -0.82], size: 460 } };
+  },
+  cinder() {
+    const lava = (x, z) => fbm(x * 0.05 + 11, z * 0.05) > 0.62;
+    terrain({
+      height: (x, z) => lava(x, z) ? -1 : fbm(x * 0.04, z * 0.04 + 3) * 5,
+      top: (x, z, h) => lava(x, z) ? lin(0xffb070) : fbm(x * 0.08, z * 0.08) > 0.55 ? lin(0x2e2626) : lin(hash(x, z) > 0.5 ? 0xd8b440 : 0xe0c050),
+      emit: (x, z) => lava(x, z) ? { ef: [3.4, 1.2, 0.3] } : null,
+      side: (y, d) => d === 0 ? lin(0xc89a30) : lin(y % 2 ? 0x3a3030 : 0x463a36),
+    });
+    for (const c of V.cells.values()) if (lava(c.x, c.z) && hash(c.q, c.r) > 0.6) light(c.x, c.h + 0.8, c.z, "fire", 0xff7030, 8, 0.55);
+    dome(-8, -10, 3, { c: 0xb0aaa0 });
+    mast(-3, -12, 6);
+    rover(6, -10, -0.5);
+    return { sky: 0x000000, airless: true, skyBody: { id: "amber", dir: [-0.6, 0.1, -0.79], size: 720 } };
+  },
+  murk() {
+    terrain({
+      height: (x, z) => { const sea = x + z * 0.4 > 8; return sea ? -2 : 1 + fbm(x * 0.04, z * 0.04) * 4; },
+      top: (x, z, h) => h < -1 ? lin(0x3a2e28) : lin(hash(x, z) > 0.5 ? 0x8a5a2e : 0x96643a),
+      side: (y, d) => lin(y % 2 ? 0x6a4628 : 0x5c3c22),
+    });
+    water(-1.4, 0x2a2220, 12);
+    dome(-6, -4, 3.4, { c: 0xd8d0c0 });
+    mast(-1, -8, 7);
+    for (const [x, z] of [[-10, 2], [-3, 2]]) lampPost(x, z);
+    ship(-12, -12, 0.2);
+    return { sky: 0xc48a48, dusk: 0x8a4a2a, haze: 0.05, fog: 0xa86a34, skyBody: null };
+  },
+  hollow() {
+    terrain({
+      height: (x, z) => { const d = Math.hypot(x - 2, z + 2); if (d < 9) return -9 + d * 0.3; return 1 + fbm(x * 0.04, z * 0.04) * 3; },
+      top: (x, z, h) => h < -4 ? lin(0x3a3046) : lin(hash(x, z) > 0.5 ? 0x7a7088 : 0x847a92),
+      side: (y, d) => y < -3 ? lin(y % 2 ? 0x463c56 : 0x3e3450) : lin(y % 2 ? 0x6a6078 : 0x726882),
+      base: -12,
+    });
+    for (const [x, z, h] of [[0, -2, 2.6], [4, 1, 2.0], [3, -6, 3.0], [-3, 2, 1.8], [6, -3, 2.2]]) crystal(x, z, h, 0xb070ff, [2.4, 1.2, 3.4]);
+    { const x = -1, z = -5, y = topAt(x, z); box(x, y, z, 3, 2.2, 2.6, 0x8a8494); V.bag.three(new THREE.BoxGeometry(0.8, 0.7, 0.06), M4(x, y + 1.2, z + 1.32), lin(0xfff0c8), null, EL); light(x, y + 1.2, z + 1.8, "window", 0xffc890, 5, 0.8); }
+    mast(-12, 8, 6);
+    return { sky: 0x000000, airless: true, skyBody: { id: "glaucus", dir: [0.4, 0.13, -0.9], size: 320 } };
+  },
+  tidewater() {
+    terrain({
+      height: (x, z) => { const d = Math.hypot(x + 4, z + 2); return d < 13 ? 2 - d * 0.18 + fbm(x * 0.1, z * 0.1) * 1.5 : -3 + fbm(x * 0.05, z * 0.05) * 2; },
+      top: (x, z, h) => h < 0 ? lin(0x3a6a66) : h === 0 ? lin(0xc8b480) : h < 1 ? lin(0xe6d6a4) : lin(0x6aa84a),
+      side: (y, d) => lin(y % 2 ? 0xc8b07a : 0xbaa26c),
+    });
+    water(0.4, 0x124a88, 12);
+    for (const [x, z, s] of [[-6, -5, 1], [-2, 2, 0.9], [-9, 3, 1.1], [0, -8, 0.8]]) tree(x, z, "palm", s);
+    stilts(8, -4, 0.4, 3.6, 3, 0.5); stilts(10, 4, 0.4, 3.6, 3, -0.2);
+    { // the jetty
+      box(4, 1.2, 0, 8, 0.2, 1.4, 0x7a5a3a);
+      for (const x of [1, 4, 7]) for (const s of [-0.6, 0.6]) cyl(x, -1.5, s, 0.1, 3, 0x5a4430);
+      for (const x of [2, 7]) { cyl(x, 1.4, 0.7, 0.05, 2.2, 0x2b2a2e); box(x, 3.6, 0.7, 0.3, 0.35, 0.3, 0xfff0d0, { el: EL }); light(x, 3.7, 0.7, "lamp", 0xffc77a, 9, 1); }
+    }
+    boat(14, -12, 0.6, 0.4);
+    fire(-5, -1);
+    return { sky: 0x9ec9e4, dusk: 0xf0a070, haze: 0.012, skyBody: { id: "glaucus", dir: [0.3, 0.12, -0.94], size: 420 } };
+  },
+  pebble() {
+    terrain({
+      N: 9,
+      height: (x, z) => fbm(x * 0.06, z * 0.06) * 5 - 1,
+      top: (x, z, h) => hash(x, z) > 0.88 ? lin(0xc4a070) : lin(hash(x, z) > 0.5 ? 0x7a6a5e : 0x84746a),
+      side: (y, d) => lin(y % 2 ? 0x5e5048 : 0x66584e),
+    });
+    mast(0, 0, 5);
+    { const x = 5, z = -3, y = topAt(x, z); box(x, y, z, 2.4, 1.6, 2.4, 0xc8a040); box(x, y + 1.6, z, 0.8, 1.2, 0.8, 0x8a8a90); light(x, y + 2, z - 1.6, "lamp", 0xe8f0ff, 7, 0.8); box(x, y + 1.0, z - 1.22, 0.4, 0.3, 0.06, 0xffffff, { el: [3, 3, 2.6] }); }
+    ship(-6, 4, 1.2);
+    return { sky: 0x000000, airless: true, skyBody: null };
+  },
+  giant(b) {
+    // the skimmer platform: a deck of hex cells floating at the cloud tops
+    terrain({
+      N: 4, height: () => 0, base: -1,
+      top: (x, z) => lin(hash(x, z) > 0.5 ? 0x8a8e98 : 0x7e828c),
+      side: () => lin(0x5a5e68),
+    });
+    for (const c of V.cells.values()) if (Math.hypot(c.x, c.z) > W * 3.4 && hash(c.q, c.r) > 0.35) { box(c.x, 0, c.z, 0.14, 1.2, 0.14, 0x3a3a42); box(c.x, 1.2, c.z, 0.3, 0.3, 0.3, 0xfff1d0, { el: EL }); light(c.x, 1.4, c.z, "lamp", 0xffc77a, 8, 0.9); }
+    { // the scoop
+      V.bag.three(new THREE.CylinderGeometry(1.6, 0.6, 6, 8, 1, true), M4(4, -3.5, -2, 0, 1, 1, 1, 0.3), lin(0x9aa0aa));
+      dome(-3, -3, 3.2, { c: 0xe4e0d4 });
+    }
+    ship(3, 5, 2.2, 0);
+    return { sky: b.id === "amber" ? 0xe8c08a : 0x9ad8ea, dusk: 0xd07040, haze: 0.004, fog: b.id === "amber" ? 0xd8a870 : 0x8ac8da, clouds: b.id, skyBody: null };
+  },
+};
+
+let vigObjs = [], vigMat = null, waterMat = null, cloudMat = null, vigEnv = null, glowSprites = [], vigStars = null, skyBodyMesh = null, vigSun = null;
+const GLOW_T = glowTexture("rgba(255,230,180,1)", "rgba(255,180,90,0)");
+function bake(bag, lights, Rb) {
+  const nv = bag.p.length / 3, P = bag.p, N = bag.n;
+  // bend the patch round the body: y drops by d^2 / 2R
+  for (let i = 0; i < nv; i++) P[3 * i + 1] -= (P[3 * i] ** 2 + P[3 * i + 2] ** 2) / (2 * Rb);
+  for (const L of lights) {
+    for (let i = 0; i < nv; i++) {
+      const dx = L.x - P[3 * i], dy = L.y - P[3 * i + 1], dz = L.z - P[3 * i + 2];
+      if (Math.abs(dx) > L.R || Math.abs(dz) > L.R) continue;
+      const d = Math.hypot(dx, dy, dz);
+      if (d >= L.R) continue;
+      const nd = (dx * N[3 * i] + dy * N[3 * i + 1] + dz * N[3 * i + 2]) / Math.max(d, 1e-3);
+      if (nd < -0.15) continue;
+      const f = L.p * (1 - (d / L.R) ** 2) ** 2 * (0.3 + 0.7 * Math.max(0, nd)) * d * d / (d * d + 0.36);
+      const out = L.night ? bag.l : bag.f;
+      out[3 * i] += L.col[0] * f * 1.6; out[3 * i + 1] += L.col[1] * f * 1.6; out[3 * i + 2] += L.col[2] * f * 1.6;
+    }
+  }
+}
+function meshOf(bag, mat) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(bag.p, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(bag.n, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(bag.c, 3));
+  g.setAttribute("fire", new THREE.Float32BufferAttribute(bag.f, 3));
+  g.setAttribute("lamp", new THREE.Float32BufferAttribute(bag.l, 3));
+  return new THREE.Mesh(g, mat);
+}
+function buildVignette(b) {
+  for (const o of vigObjs) { S3.remove(o); if (o.geometry) o.geometry.dispose(); }
+  vigObjs = []; glowSprites = [];
+  const noVig = document.getElementById("noVig");
+  if (!b.vig && b.id === "star") { vigEnv = null; vc.hidden = true; noVig.hidden = false; noVig.textContent = "Halcyon has no surface to stand on. Routes keep 60 km clear of it: closer, a hull heats and the dampeners cannot hold a course in the glare."; return; }
+  vc.hidden = false; noVig.hidden = true;
+  V = { bag: new Bag(), water: new Bag(), lights: [], cells: new Map() };
+  vigEnv = (b.nocells ? VIG.giant(b) : VIG[b.id]());
+  const Rb = b.nocells ? 1e9 : b.R;
+  bake(V.bag, V.lights, Rb); bake(V.water, V.lights, Rb);
+  vigMat = vigMaterial(1); waterMat = vigMaterial(0.9);
+  const m = meshOf(V.bag, vigMat); S3.add(m); vigObjs.push(m);
+  if (V.water.p.length) { const w = meshOf(V.water, waterMat); w.renderOrder = 2; S3.add(w); vigObjs.push(w); }
+  for (const L of V.lights) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW_T, color: new THREE.Color().setRGB(Math.pow(L.col[0], 1 / 2.2), Math.pow(L.col[1], 1 / 2.2), Math.pow(L.col[2], 1 / 2.2)), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+    const y = L.y - (L.x * L.x + L.z * L.z) / (2 * Rb);
+    s.position.set(L.x, y, L.z); const k = L.kind === "window" ? 1.4 : L.kind === "fire" ? 2.6 : 2.2; s.scale.set(k, k, 1); s.userData.night = L.night;
+    S3.add(s); vigObjs.push(s); glowSprites.push(s);
+  }
+  // a cloud sea under a giant's platform
+  if (vigEnv.clouds) {
+    const t = tex(`planets/map_${vigEnv.clouds}.png`); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (t.image) t.needsUpdate = true;
+    cloudMat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: t }, sunDir: vigMat.uniforms.sunDir, sunCol: vigMat.uniforms.sunCol, skyAmb: vigMat.uniforms.skyAmb, moonCol: vigMat.uniforms.moonCol, fogCol: vigMat.uniforms.fogCol, off: { value: 0 } },
+      vertexShader: `varying vec2 vUv; varying float vD; void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position,1.0); vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform sampler2D map; uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 skyAmb; uniform vec3 moonCol; uniform vec3 fogCol; uniform float off; varying vec2 vUv; varying float vD;
+      void main(){ vec3 a = pow(texture2D(map, vUv * vec2(3.0, 1.5) + vec2(off, 0.0)).rgb, vec3(2.2)); vec3 c = a * (sunCol * max(sunDir.y, 0.0) + skyAmb + moonCol * 0.6);
+      c = mix(c, fogCol, 1.0 - exp(-vD * 0.004)); gl_FragColor = vec4(pow(c / (1.0 + c * 0.12), vec3(1.0/2.2)), 1.0); }`,
+    });
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), cloudMat);
+    sea.rotation.x = -Math.PI / 2; sea.position.y = -14; S3.add(sea); vigObjs.push(sea);
+  } else cloudMat = null;
+  // a body hanging in the sky: the home world from Lantern, a giant from its moons
+  if (vigEnv.skyBody) {
+    const sb = BY[vigEnv.skyBody.id];
+    skyBodyMesh = new THREE.Mesh(new THREE.SphereGeometry(vigEnv.skyBody.size, 48, 24), planetMaterial(sb, true));
+    const d = new THREE.Vector3(...vigEnv.skyBody.dir).normalize().multiplyScalar(1900);
+    skyBodyMesh.position.copy(d);
+    if (sb.rings) { const r = ringMesh(vigEnv.skyBody.size * 1.35, vigEnv.skyBody.size * 2.3); r.position.copy(d); S3.add(r); vigObjs.push(r); }
+    S3.add(skyBodyMesh); vigObjs.push(skyBodyMesh);
+  } else skyBodyMesh = null;
+  vigStars = starField(900, 2400, 1.4); S3.add(vigStars); vigObjs.push(vigStars);
+  vigSun = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture("rgba(255,250,235,1)", "rgba(255,230,180,0)"), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
+  vigSun.scale.set(260, 260, 1); S3.add(vigSun); vigObjs.push(vigSun);
+  vigCam.dist = b.nocells ? 30 : b.id === "pebble" ? 40 : 46;
+  setTime(+timeEl.value);
+}
+const vigCam = { yaw: 0.8, pitch: 0.36, dist: 46, auto: true };
+{
+  let last = null;
+  vc.addEventListener("pointerdown", e => { vc.setPointerCapture(e.pointerId); last = { x: e.clientX, y: e.clientY }; vigCam.auto = false; });
+  vc.addEventListener("pointermove", e => { if (!last) return; vigCam.yaw -= (e.clientX - last.x) * 0.007; vigCam.pitch = THREE.MathUtils.clamp(vigCam.pitch + (e.clientY - last.y) * 0.005, 0.08, 1.3); last = { x: e.clientX, y: e.clientY }; });
+  const up = () => { last = null; }; vc.addEventListener("pointerup", up); vc.addEventListener("pointercancel", up);
+}
+const timeEl = document.getElementById("vigTime"), timeOut = document.getElementById("vigTimeOut");
+const smooth = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function setTime(h) {
+  timeOut.value = `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.round((h % 1) * 60) % 60).padStart(2, "0")}`;
+  for (const [id, lo, hi] of [["tDay", 7, 17], ["tDusk", 17, 20], ["tNight", 20, 30]]) document.getElementById(id).setAttribute("aria-pressed", (h >= lo && h < hi) || (id === "tNight" && h < 5) ? "true" : "false");
+  if (!vigEnv) return;
+  const th = (h - 6) / 24 * Math.PI * 2, elev = Math.sin(th);
+  const sd = new THREE.Vector3(Math.cos(th) * 0.8, elev, 0.42).normalize();
+  const day = smooth(-0.06, 0.25, elev), dusk = Math.max(0, 1 - Math.abs(elev) * 4) * (vigEnv.airless ? 0 : 1);
+  const U = vigMat.uniforms;
+  const sunC = new THREE.Color(0xfff4e0).lerp(new THREE.Color(vigEnv.dusk || 0xffb070), dusk * 0.7);
+  const sI = elev > 0 ? 2.4 * smooth(0, 0.18, elev) : 0;
+  U.sunDir.value.copy(sd); U.sunCol.value.set(Math.pow(sunC.r, 2.2) * sI, Math.pow(sunC.g, 2.2) * sI, Math.pow(sunC.b, 2.2) * sI);
+  // the moon (or the giant's shine, or the home world's): dim, so the lamps read
+  const nightAmt = 1 - day;
+  const mc = vigEnv.skyBody ? 0.09 : 0.06;
+  U.moonCol.value.set(0.55 * mc * nightAmt, 0.65 * mc * nightAmt, mc * nightAmt);
+  const sky = new THREE.Color(vigEnv.sky);
+  const amb = vigEnv.airless ? 0.025 : 0.42;
+  U.skyAmb.value.set(Math.pow(sky.r, 2.2) * amb * day + 0.006, Math.pow(sky.g, 2.2) * amb * day + 0.008, Math.pow(sky.b, 2.2) * amb * day + 0.014);
+  U.gndAmb.value.set(0.03 * day + 0.004, 0.03 * day + 0.004, 0.03 * day + 0.005);
+  U.uLamp.value = smooth(0.14, -0.06, elev);
+  // sky colour and haze: none on an airless body
+  let bg = new THREE.Color(0x000000);
+  if (!vigEnv.airless) {
+    const night = new THREE.Color(0x05070d), duskC = new THREE.Color(vigEnv.dusk || 0xe08a50);
+    bg = night.clone().lerp(sky, day).lerp(duskC, dusk * 0.55);
+  }
+  R3.setClearColor(bg);
+  const fogC = vigEnv.airless ? new THREE.Color(0) : (vigEnv.fog ? new THREE.Color(vigEnv.fog).lerp(new THREE.Color(0x06080e), 1 - day).lerp(new THREE.Color(vigEnv.dusk || 0xe08a50), dusk * 0.3) : bg);
+  U.fogCol.value.set(Math.pow(fogC.r, 2.2), Math.pow(fogC.g, 2.2), Math.pow(fogC.b, 2.2));
+  U.fogDen.value = vigEnv.airless ? 0 : vigEnv.haze || 0.01;
+  for (const k of ["sunDir", "sunCol", "moonDir", "moonCol", "skyAmb", "gndAmb", "uLamp", "fogCol", "fogDen"]) waterMat.uniforms[k].value = U[k].value;
+  vigStars.material.opacity = vigEnv.airless ? 0.9 : 0.9 * (1 - day) * (1 - dusk * 0.5);
+  vigSun.position.copy(sd).multiplyScalar(2000); vigSun.visible = elev > -0.05 && (vigEnv.airless || day > 0.02);
+  vigSun.material.opacity = vigEnv.airless ? 1 : 0.9;
+  if (skyBodyMesh) skyBodyMesh.material.uniforms.sunDir.value.copy(sd);
+  for (const s of glowSprites) s.material.opacity = s.userData.night ? 0.85 * U.uLamp.value : 0.9;
+}
+timeEl.addEventListener("input", () => setTime(+timeEl.value));
+for (const [id, h] of [["tDay", 10.5], ["tDusk", 18.4], ["tNight", 22]]) document.getElementById(id).addEventListener("click", () => { timeEl.value = h; setTime(h); });
+
+// =====================================================================
+// Selection: cards, inspector text, globe, vignette.
+// =====================================================================
+const CAPTION = {
+  home: "A hamlet by the sea on the home world: three houses with lit windows, four lamps, a fire, oak and pine. Lantern in the sky.",
+  verdance: "Stilt houses over a swamp under kapok giants. Lamps on poles over the water, a fire on the bank. Thick wet air.",
+  ochre: "A mud-brick oasis town on the canyon rim, braziers in the lanes. The canyon is seven layers deep.",
+  lantern: "An outpost dome, a floodlight mast, a rover with headlamps, a parked ship. Black sky by day; Pale Blue overhead. No haze, no weather.",
+  rime: "A drill rig over a crack in the ice shell, a dome, two frozen geyser cones. Amber hangs low, ringed.",
+  cinder: "Sulfur plains around lava pools. The lava lights everything near it day and night; the outpost's lamps only at night.",
+  murk: "An outpost on the shore of a methane sea. The haze swallows everything past a few cells.",
+  hollow: "The lip of a sinkhole. Violet crystals at its floor light the hole for ever; a cave hut sits among them.",
+  tidewater: "A palm islet with a jetty and two stilt houses on the reef. Glaucus never moves in this sky.",
+  pebble: "A mining claim on a 300 m rock: a beacon, a drill, a ship. The ground falls away in every direction: the patch is bent by its own 300 m radius.",
+  amber: "The skimmer platform: a deck of hex cells hovering at Amber's cloud tops, lamps round the rail, the scoop below, a ship docked.",
+  glaucus: "The same kind of platform over Glaucus's paler clouds.",
+};
+function resFig(r) {
+  const NAMES = { ice: "Water ice", iron: "Iron ore", sulfur: "Sulfur", helium3: "Helium-3", methane: "Methane", timber: "Timber", fish: "Fish", glowcrystal: "Glowcrystal", obsidian: "Volcanic glass", regolith: "Regolith", water: "Water" };
+  return `<figure><img src="planets/res_${r}.png" alt="">${NAMES[r]}</figure>`;
+}
+function chipsFor(b) {
+  if (b.id === "star") return `<span class="chip none">No surface</span>`;
+  const air = b.air ? `<span class="chip air">Air: ${b.air}</span>` : `<span class="chip none">Airless</span>`;
+  const life = b.life && b.life.length && !(b.life[0] || "").startsWith("None") ? `<span class="chip life">Life</span>` : b.caverns ? `<span class="chip prop">Cave life? P4</span>` : `<span class="chip none">Lifeless</span>`;
+  return air + life + (b.nocells ? `<span class="chip none">No cells</span>` : "");
+}
+function statsFor(b) {
+  if (b.id === "star") return [["Orbit", "centre of the system"], ["Keep-out", "60 km"], ["Display", "not to scale"]];
+  const rows = [];
+  rows.push(["Radius", `${fmt(b.R)} m${b.nocells ? " (cloud tops)" : ""}`]);
+  rows.push(["Ladder", b.nocells ? `rung L${b.L}, no cells` : `L${b.L} &middot; ${cellsTxt(b.L)} cells`]);
+  if (!b.nocells) rows.push(["Tile width", `${fmt(tileW(b), 3)} m`]);
+  rows.push(["Gravity", `${fmt(b.g, 2)} g &middot; ${fmt(b.g * G1, 1)} m/s&sup2;`]);
+  if (!b.nocells) rows.push(["Jump apex", `${fmt(JUMP * JUMP / (2 * b.g * G1), 1)} m`]);
+  rows.push(["Gravity band", `full to ${fmt(0.4 * b.R / 1000, 2)} km up, gone by ${fmt(0.8 * b.R / 1000, 2)} km`]);
+  rows.push(["Day", dayTxt(b)]);
+  rows.push([b.parent === "star" ? "Orbit" : "Orbits " + BY[b.parent].name, `${fmt(b.a)} km &middot; ${fmt(b.T, b.T < 20 ? 0 : 0)} days`]);
+  rows.push(["Circumference", `${fmt(2 * Math.PI * b.R / 1000, 1)} km`]);
+  if (b.weather) rows.push(["Weather", b.weather]); else if (!b.air) rows.push(["Sky", "black; no weather, no clouds"]);
+  return rows;
+}
+const deck = document.getElementById("deck");
+for (const b of B.slice().sort((x, y) => (x.parent === "star" ? x.a : x.parent ? BY[x.parent].a + x.a / 1000 : -1) - (y.parent === "star" ? y.a : y.parent ? BY[y.parent].a + y.a / 1000 : -1))) {
+  const el = document.createElement("button");
+  el.className = "card"; el.dataset.id = b.id;
+  const nums = b.id === "star" ? "" : `<div class="nums"><span><small>Radius</small>${fmt(b.R)} m</span><span><small>Gravity</small>${fmt(b.g, 2)} g</span><span><small>Level</small>L${b.L}</span></div>`;
+  el.innerHTML = `<div class="ch"><img class="pt" src="planets/portrait_${b.id}.png" alt=""><div><div class="nm">${b.name}</div><div class="kd">${b.kind}</div></div></div>
+    <div class="row">${chipsFor(b)}</div><p class="one">${b.one}</p>
+    <div>${nums}<div class="ri" style="margin-top:6px">${(b.res || []).map(r => `<img src="planets/res_${r}.png" alt="${r}" title="${r}">`).join("")}</div></div>`;
+  el.addEventListener("click", () => { select(b.id, false); document.getElementById("inspect").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); });
+  deck.appendChild(el);
+}
+let selected = null;
+function select(id, fromOrbit) {
+  const b = BY[id]; selected = id;
+  document.getElementById("iName").textContent = b.name;
+  document.getElementById("iKind").textContent = b.kind;
+  document.getElementById("iPortrait").src = `planets/portrait_${b.id}.png`;
+  document.getElementById("iChips").innerHTML = chipsFor(b);
+  document.getElementById("iStats").innerHTML = statsFor(b).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("");
+  const L = (t, a) => a && a.length ? `<div><h4>${t}</h4><ul>${a.map(x => `<li>${x}</li>`).join("")}</ul></div>` : "";
+  document.getElementById("iLists").innerHTML = L("Biomes", b.biomes) + L("Life roster", b.life && b.life.length ? b.life : b.id === "star" ? [] : ["None: " + (b.air ? "proposed lifeless" : "airless bodies are lifeless")]) + L("What you do there", b.doing);
+  document.getElementById("iRes").innerHTML = (b.res || []).map(resFig).join("") || `<span class="vigcap">None.</span>`;
+  document.getElementById("vigCap").textContent = CAPTION[b.id] || "";
+  for (const c of deck.children) c.setAttribute("aria-current", c.dataset.id === id ? "true" : "false");
+  for (const bb of B) NODES[bb.id].label.classList.toggle("sel", bb.id === id);
+  cam.follow = id; cam.wantDist = id === "star" ? 120 : Math.max(10, b.dR * 7 + (b.parent === "star" && id !== "pebble" ? 8 : 4));
+  setGlobe(b); buildVignette(b);
+}
+
+// =====================================================================
+// One loop for all three views.
+// =====================================================================
+let lastT = performance.now();
+function sizeTo(r, c, el) { const w = el.clientWidth, h = el.clientHeight; if (c.width !== Math.round(w * r.getPixelRatio()) || c.height !== Math.round(h * r.getPixelRatio())) { r.setSize(w, h, false); return true; } return false; }
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function frame(now) {
+  const dt = Math.max(0, Math.min(0.1, (now - lastT) / 1000)); lastT = now;
+  worldDay += dt * daysPerSec;
+  placeAll(worldDay);
+  dayOut.textContent = `Day ${fmt(worldDay, 1)} · home year ${fmt(worldDay / 100 + 1, 0)}`;
+  // orbit camera
+  if (sizeTo(R1, oc, orbitEl)) { C1.aspect = orbitEl.clientWidth / orbitEl.clientHeight; C1.updateProjectionMatrix(); }
+  const want = cam.follow && cam.follow !== "star" ? NODES[cam.follow].group.position : new THREE.Vector3();
+  cam.target.lerp(want, Math.min(1, dt * 4));
+  cam.dist += (cam.wantDist - cam.dist) * Math.min(1, dt * 3);
+  C1.position.set(cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.target.y + cam.dist * Math.sin(cam.pitch), cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw));
+  C1.lookAt(cam.target);
+  R1.render(S1, C1);
+  const w = orbitEl.clientWidth, h = orbitEl.clientHeight;
+  for (const b of B) {
+    const n = NODES[b.id], el = n.label;
+    _v.copy(b.id === "star" ? sunMesh.position : n.group.position); _v.y += (b.dR || 7);
+    _v.project(C1);
+    const moon = b.parent && b.parent !== "star";
+    const show = _v.z < 1 && (!moon || cam.dist < 90 || cam.follow === b.parent || cam.follow === b.id);
+    el.style.display = show ? "" : "none";
+    if (show) { el.style.left = ((_v.x + 1) / 2 * w) + "px"; el.style.top = ((1 - _v.y) / 2 * h) + "px"; }
+  }
+  // globe
+  const gEl = gc.parentElement;
+  if (sizeTo(R2, gc, gEl)) { C2.aspect = gEl.clientWidth / gEl.clientHeight; C2.updateProjectionMatrix(); }
+  if (globe && !reduced) globe.rotation.y += dt * 0.25;
+  R2.render(S2, C2);
+  // vignette
+  if (vigEnv) {
+    const vEl = vc.parentElement;
+    if (sizeTo(R3, vc, vEl)) { C3.aspect = vEl.clientWidth / vEl.clientHeight; C3.updateProjectionMatrix(); }
+    if (vigCam.auto && !reduced) vigCam.yaw += dt * 0.06;
+    C3.position.set(vigCam.dist * Math.cos(vigCam.pitch) * Math.sin(vigCam.yaw), vigCam.dist * Math.sin(vigCam.pitch) + 1, vigCam.dist * Math.cos(vigCam.pitch) * Math.cos(vigCam.yaw));
+    C3.lookAt(0, 3, 0);
+    vigMat.uniforms.flick.value = 0.92 + 0.08 * Math.sin(now * 0.017) * Math.sin(now * 0.0071);
+    if (cloudMat) cloudMat.uniforms.off.value += dt * 0.004;
+    R3.render(S3, C3);
+  }
+  requestAnimationFrame(frame);
+}
+// the ladder table
+{
+  const rows = [];
+  for (let L = 7; L <= 13; L++) {
+    const R = 300 * Math.pow(2, L - 7), on = B.filter(b => b.L === L);
+    rows.push(`<tr><td class="n">L${L}</td><td class="n">${fmt(R)} m</td><td class="n">${L <= 12 || on.some(b => !b.nocells) ? fmt(TILE_K * R / Math.pow(2, L), 3) + " m" : "&mdash;"}</td><td class="n">${on.every(b => b.nocells) && on.length ? "no cells" : cellsTxt(L)}</td><td>${on.map(b => b.name + (b.nocells ? " (cloud tops)" : "")).join(", ") || (L === 7 ? "" : "&mdash;")}${L === 7 ? (on.length ? "; " : "") + "Tenebris's own gold-standard planet" : ""}</td></tr>`);
+  }
+  document.getElementById("ladderTable").innerHTML = `<thead><tr><th>Level</th><th style="text-align:right">Radius</th><th style="text-align:right">Tile width</th><th style="text-align:right">Cells</th><th>Bodies on this rung</th></tr></thead><tbody>${rows.join("")}</tbody>`;
+}
+// a body can be linked: planets.html#lantern
+const fromHash = () => { const id = location.hash.slice(1); return BY[id] ? id : null; };
+const qt = new URLSearchParams(location.search).get("t");   // ?t=10.5 sets the vignette's hour (for captures)
+if (qt !== null && isFinite(+qt)) timeEl.value = +qt;
+select(fromHash() || "home", false);
+addEventListener("hashchange", () => { const id = fromHash(); if (id) select(id, false); });
+requestAnimationFrame(frame);
+</script>

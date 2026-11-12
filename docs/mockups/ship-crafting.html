@@ -1,0 +1,689 @@
+<title>Shipyard and Ship Builder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the shipyard opens the page as a wide 3D stage; the builder below is a two-pane tool (grid left, live stats right); then the reference sections. House style of towns.html. */
+:root{
+  color-scheme: dark;
+  --ground:#0e100f;
+  --panel:#17170f;
+  --panel-2:#201f16;
+  --line:rgba(226,206,160,.17);
+  --line-2:rgba(226,206,160,.32);
+  --ink:#ece4d2;
+  --muted:#a89d86;
+  --amber:#f0b43c;
+  --ember:#ff8a3d;
+  --sky:#8fc3d8;
+  --warn:#ff6b57;
+  --ok:#8fdc9a;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.55}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px;display:grid;gap:44px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;margin:0;text-wrap:balance}
+h1{font-size:clamp(34px,6vw,58px)}
+h2{font-size:28px;display:flex;gap:12px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:13px;color:var(--amber);font-weight:600;letter-spacing:0}
+h3{font-size:19px;font-weight:600}
+p{margin:0;max-width:74ch}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.16em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
+.tag.plain{border-color:var(--line-2);color:var(--muted)}
+section{display:grid;gap:16px;min-width:0}
+.lede{display:grid;gap:14px}
+.lede p{font-size:17px}
+.honest{border:1px dashed var(--line-2);border-radius:6px;padding:12px 14px;color:var(--muted);font-size:14px;max-width:none}
+.honest b{color:var(--ink);font-weight:600}
+code,.mono{font-family:var(--mono);font-size:.86em}
+code{color:var(--sky)}
+a{color:var(--amber)}
+.muted{color:var(--muted)}
+button{font:inherit}
+.seg{display:flex;flex-wrap:wrap;gap:5px}
+.seg button,.pbtn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-family:var(--display);font-size:14.5px;letter-spacing:.05em;text-align:center;color:var(--ink);background:rgba(18,17,13,.6)}
+.seg button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.14)}
+.seg button:hover,.pbtn:hover{border-color:rgba(240,180,60,.55)}
+.seg button:focus-visible,.pbtn:focus-visible,.cell:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.pbtn.go{background:var(--amber);color:var(--ground);border-color:var(--amber)}
+
+/* stage */
+.stage{position:relative;height:min(68vh,640px);min-height:380px;border-radius:8px;overflow:hidden;border:1px solid var(--line-2);background:#0b0d12}
+#yard{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#yard:active{cursor:grabbing}
+.ov{position:absolute;background:rgba(18,17,13,.84);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:10px;display:grid;gap:8px}
+.ov.tl{left:12px;top:12px;max-width:calc(100% - 24px)}
+.ov.br{right:12px;bottom:12px;max-width:min(360px,calc(100% - 24px));font-size:13px;color:var(--muted)}
+.ov.br b{color:var(--ink);font-weight:600}
+.stage .loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);letter-spacing:.1em;color:var(--muted)}
+
+/* builder */
+.builder{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;align-items:start}
+.bpane{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:10px;min-width:0}
+.palette{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.cell img.aft{transform:rotate(90deg)}
+.palette button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:1px;padding:4px 2px;border:1px solid var(--line);border-radius:4px;background:var(--panel-2);font-size:11.5px;text-align:center;line-height:1.15}
+.palette button img{width:40px;height:40px}
+.palette button kbd{font-family:var(--mono);font-size:10px;color:var(--amber)}
+.palette button[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.14)}
+.palette button:focus-visible{outline:2px solid var(--amber)}
+.gridwrap{overflow-x:auto}
+.shipgrid{display:grid;grid-template-columns:repeat(12,44px);grid-auto-rows:44px;gap:2px;user-select:none;-webkit-user-select:none;touch-action:none;width:max-content;padding:4px;border-radius:4px;
+  background:repeating-linear-gradient(0deg,transparent 0 44px,rgba(143,195,216,.0) 44px 46px),#101317;border:1px solid rgba(143,195,216,.25)}
+.cell{position:relative;border:1px dashed rgba(143,195,216,.18);border-radius:2px;display:grid;place-items:center;cursor:crosshair}
+.cell img{width:40px;height:40px;pointer-events:none}
+.cell.bad{box-shadow:inset 0 0 0 2px var(--warn)}
+.cell.filled{border-style:solid;border-color:rgba(226,206,160,.30);background:rgba(226,206,160,.05)}
+.fwd{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px}
+.stat{display:grid;gap:1px;min-width:0}
+.stat .k{font-family:var(--display);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat .v small{font-size:11px;font-weight:400;color:var(--muted);margin-left:3px}
+.stat .bar{height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+.stat .bar i{display:block;height:100%;background:var(--sky)}
+pre.ron{margin:0;font-family:var(--mono);font-size:12.5px;line-height:1.5;background:#0d0f0e;border:1px solid var(--line);border-radius:4px;padding:10px;overflow-x:auto;color:var(--ink)}
+pre.ron .c{color:var(--muted)}
+.checks{display:grid;gap:3px;font-size:13.5px}
+.checks div{display:flex;gap:8px;align-items:baseline}
+.checks .ok::before{content:"ok";font-family:var(--mono);font-size:11px;color:var(--ok);width:30px;flex:none}
+.checks .no::before{content:"no";font-family:var(--mono);font-size:11px;color:var(--warn);width:30px;flex:none}
+.checks .warn::before{content:"note";font-family:var(--mono);font-size:11px;color:var(--amber);width:30px;flex:none}
+.bom{display:flex;flex-wrap:wrap;gap:5px}
+.chipitem{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:4px;padding:2px 8px 2px 3px;background:var(--panel-2);font-size:13px;white-space:nowrap}
+.chipitem img{width:26px;height:26px}
+.chipitem b{font-family:var(--mono);font-size:12px}
+
+/* modules */
+.mods{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;align-content:start;min-width:0}
+.card .head{display:flex;gap:10px;align-items:center}
+.card .head img{width:64px;height:64px;flex:none}
+.card p{font-size:13.5px;color:var(--muted)}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:13px}
+.card dt{color:var(--muted);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:11.5px;padding-top:2px}
+.card dd{margin:0;font-family:var(--mono);font-size:12px}
+
+/* progression */
+.prog{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;position:relative}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;align-content:start;min-width:0}
+.step .who{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.step .who b{font-family:var(--display);font-size:22px;font-weight:700}
+.step .who span{font-family:var(--mono);font-size:11px;color:var(--amber)}
+.step canvas{width:100%;height:auto;max-width:100%;image-rendering:pixelated;background:#101317;border-radius:4px}
+.step p{font-size:13.5px;color:var(--muted)}
+.step ul{margin:0;padding-left:16px;font-size:13px;color:var(--muted)}
+
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-family:var(--display);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:12px;color:var(--muted);background:var(--panel)}
+tr:last-child td{border-bottom:0}
+
+.dec{display:grid;gap:10px}
+.dec .q{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:grid;gap:6px}
+.dec .q h3{font-size:18px}
+.dec .q p{font-size:14.5px;color:var(--muted)}
+.dec .q .rec{color:var(--ink)}
+.dec .q .rec b{color:var(--amber);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:13px;margin-right:6px}
+
+@media (max-width:1000px){
+  .builder{grid-template-columns:1fr}
+  .mods,.prog{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:560px){
+  .mods,.prog{grid-template-columns:1fr}
+  .palette{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .shipgrid{grid-template-columns:repeat(12,30px);grid-auto-rows:30px}
+  .cell img{width:27px;height:27px}
+  .ov.br{display:none}
+  .stage{height:62vh}
+}
+</style>
+
+<div class="wrap">
+
+<header class="lede">
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-11</span></div>
+  <h1>Shipyard and Ship Builder</h1>
+  <p>Ships made from modules on a grid, in a shipyard you walk around. Every number a ship flies with follows from its parts: mass from what you bolted on, acceleration from its thrusters, how fast it turns from its gyros and how its mass is spread. Those numbers are the game's own <code>FlightLimits</code>, so a built ship flies by the same assisted Newtonian rules the survey ship does today.</p>
+  <p class="honest"><b>About the art.</b> The module icons and the hull textures the 3D ships wear are painted by code (<code>tools/art/ship-crafting_art.py</code>) with the hand-drawn-illustration crayon kit, copying the owner's friend's marker style. Nobody drew them by hand. The ships are boxes, cylinders and cones built from the builder's own grid, so what you draw below is exactly what rolls out on the pad.</p>
+</header>
+
+<section aria-labelledby="s1">
+  <h2 id="s1"><span class="n">1</span>The shipyard</h2>
+  <p>Four example ships on their pads and a build bay between two gantries, where your design from section 2 rolls out. Drag to look around, scroll or pinch to zoom. Set the time to night: every pad light, floodlight, hangar window, nav light and thruster lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p>
+  <div class="stage">
+    <canvas id="yard" aria-label="A shipyard at the edge of a field: five pads, two gantries, a hangar and floodlight masts, with four example ships."></canvas>
+    <div class="loading" id="loading">Loading the shipyard</div>
+    <div class="ov tl">
+      <div class="seg" id="shipSel" role="group" aria-label="Look at"></div>
+      <div class="seg" id="timeSel" role="group" aria-label="Time of day">
+        <button data-t="day" aria-pressed="false">Day</button><button data-t="dusk" aria-pressed="false">Dusk</button><button data-t="night" aria-pressed="true">Night</button>
+      </div>
+    </div>
+    <div class="ov br" id="yardInfo"></div>
+  </div>
+</section>
+
+<section aria-labelledby="s2">
+  <h2 id="s2"><span class="n">2</span>The ship builder</h2>
+  <p>Opened at a fabricator in a shipyard bay. Pick a module, paint cells; right-click or the eraser clears one. The ship faces right. A grid cell is one module, a 2 m cube, so a ship's footprint is whole cells, the way a building's is. Every stat on the right is worked out from the grid as you draw.</p>
+  <div class="builder">
+    <div class="bpane">
+      <div class="seg" id="presets" role="group" aria-label="Load an example"></div>
+      <div class="palette" id="palette" role="group" aria-label="Modules"></div>
+      <div class="fwd"><span>aft</span><span>top view, 2 m cells</span><span>forward &rarr;</span></div>
+      <div class="gridwrap"><div class="shipgrid" id="grid" aria-label="Ship grid, 12 by 7 cells"></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="rollout">Roll out to the build bay</span><span class="pbtn" role="button" tabindex="0" id="clear">Clear grid</span></div>
+    </div>
+    <div class="bpane">
+      <div class="eyebrow">Follows from the parts</div>
+      <div class="stats" id="stats"></div>
+      <div class="eyebrow">Checks</div>
+      <div class="checks" id="checks"></div>
+      <div class="eyebrow">What the ship flies with</div>
+      <pre class="ron" id="ron"></pre>
+      <div class="eyebrow">Bill of materials</div>
+      <div class="bom" id="bom"></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="s3">
+  <h2 id="s3"><span class="n">3</span>How the numbers follow from the parts</h2>
+  <p>The flight code already takes a <code>FlightLimits</code>: a mode speed, an acceleration, an angular speed and acceleration, and linear and angular damping (the inertial and rotational dampeners). Today they are code defaults. A built ship computes its own, once, when it is launched, from the formulas below; the flight code does not change.</p>
+  <div class="tablebox"><table>
+    <thead><tr><th>FlightLimits field</th><th>From the parts</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>acceleration</code></td><td>main thrust / mass</td><td>Newton. More cargo pods means a slower ship unless you add thrusters.</td></tr>
+      <tr><td><code>angular_acceleration</code></td><td>gyro torque / yaw inertia, at most 6 rad/s&sup2;</td><td>Inertia is each module's mass times its distance from the centre of mass squared, so a long freighter turns slower than a compact shuttle with the same gyros.</td></tr>
+      <tr><td><code>angular_speed</code></td><td>0.3 + 0.6 &radic;&alpha;, at most the default 1.5 rad/s</td><td>A comfort cap for the pilot; the physics limit is the torque. Mouse look stays raw: this limits the ship, never the camera.</td></tr>
+      <tr><td><code>linear_damping</code></td><td>RCS thrust / mass / 5, at most 1.0</td><td>The inertial dampener can only null drift with thrust it has. It is off when the pilot turns it off (X), as now.</td></tr>
+      <tr><td><code>angular_damping</code></td><td>1.4 &alpha;, at most the default 4.0</td><td>The rotational dampener uses the same gyros that turn the ship.</td></tr>
+      <tr><td><code>speed</code></td><td>not a part stat: the flight mode's target</td><td>Momentum is Newtonian; the mode speed is what the assist aims for, not a top speed.</td></tr>
+      <tr><td>lift-off</td><td>lift jets &ge; 1.1 &times; mass &times; 25 m/s&sup2;</td><td>25 m/s&sup2; is the game's 1 g (<code>SURFACE_GRAVITY_MPS2_PER_G</code>). A ship that cannot lift off at 1 g still flies; it lives in orbit and docks.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="font-size:14px">No patched conics, maneuver nodes or n-body ship simulation come with this (CLAUDE.md). Ships keep local gravity falloff and the dampeners; planets stay on rails.</p>
+</section>
+
+<section aria-labelledby="s4">
+  <h2 id="s4"><span class="n">4</span>Modules</h2>
+  <p>Each is made at the fabricator (recipes on the <a href="https://claude.ai/artifact/6hj8UvbLY9TUsn7591sKKg">crafting page</a>). Mk I modules come from the home world. Shields need the ice moon's frost crystal and habitation needs the jungle world's glowcap, so the first ships have neither.</p>
+  <div class="mods" id="mods"></div>
+</section>
+
+<section aria-labelledby="s5">
+  <h2 id="s5"><span class="n">5</span>From a first shuttle to a freighter</h2>
+  <p>Each ship is the one that fetches what the next one needs.</p>
+  <div class="prog" id="prog"></div>
+</section>
+
+<section aria-labelledby="s6">
+  <h2 id="s6"><span class="n">6</span>Saves, and what stays true</h2>
+  <div class="mods" style="grid-template-columns:repeat(3,minmax(0,1fr))" id="rules">
+    <div class="card"><h3>A ship is a stored record</h3><p>Its stable ID, its grid, its pose in a named frame, its hold and its damage are saved the moment the ship is launched and every time they change. Leaving the seat changes who is in it, never whether it exists.</p></div>
+    <div class="card"><h3>The grid is versioned</h3><p>A saved ship names its module set's version. A module whose stats are retuned keeps the old numbers for ships already built, or the change migrates them forward on open; a removed module stays readable. A player's ship never vanishes or changes size.</p></div>
+    <div class="card"><h3>Rebuilding refunds</h3><p>Taking a module off at a fabricator gives its parts back to the pack by the give order, with drops for what does not fit, so redesigning costs time, not materials.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s7">
+  <h2 id="s7"><span class="n">7</span>Decisions and questions for the owner</h2>
+  <p class="muted">Recommendations are mine, not the owner's words. The two marked with a picture have the shipyard and the builder above to look at; the rest can be taken as recommended.</p>
+  <div class="dec" id="decisions"></div>
+</section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ======================= modules and stats =======================
+const G1 = 25; // m/s^2, SURFACE_GRAVITY_MPS2_PER_G
+const MOD = {
+  C:{name:"Cockpit", icon:"cockpit", key:"C", m:1.4, p:-1, txt:"Seats one pilot. Needs a clear view forward: nothing ahead of it in its row.", cost:[["glass",4],["circuit",2],["steel-ingot",1],["cloth",2]]},
+  H:{name:"Hull block", icon:"hull-plate", key:"H", m:0.5, p:0, txt:"Structure. Joins modules and spreads a ship out, which costs turning.", cost:[["steel-ingot",2]]},
+  K:{name:"Cargo pod", icon:"cargo", key:"K", m:0.8, p:0, cargo:8, txt:"8 m3 of hold. A full pod adds its load to the mass the thrusters push.", cost:[["steel-ingot",3],["planks",4]]},
+  T:{name:"Main thruster", icon:"thruster", key:"T", m:1.1, p:-2, thrust:90, burn:4, txt:"90 kN forward. Its nozzle needs a clear cell behind it.", cost:[["steel-ingot",3],["circuit",1],["reagent",1]], mk2:"Mk II: 135 kN, magma glass and alloy plate"},
+  L:{name:"Lift jet", icon:"thruster", key:"L", m:0.9, p:-1, lift:160, burn:3, txt:"160 kN down: what gets a ship off the ground at 1 g.", cost:[["steel-ingot",2],["circuit",1],["reagent",1]]},
+  G:{name:"Gyro and RCS", icon:"gyro", key:"G", m:0.7, p:-1, torque:200, rcs:30, txt:"200 kN m of turning torque and 30 kN of thrust every way: the dampeners' authority.", cost:[["steel-ingot",2],["circuit",2],["bronze-ingot",2]]},
+  R:{name:"Reactor", icon:"reactor", key:"R", m:2.4, p:8, txt:"8 power. Every powered module draws from it.", cost:[["steel-ingot",3],["circuit",2],["copper-ingot",4]], mk2:"Mk II: 14 power, magma glass and alloy plate"},
+  F:{name:"Fuel tank", icon:"fuel", key:"F", m:1.6, p:0, prop:2400, txt:"2.4 t of propellant, counted in its mass.", cost:[["steel-ingot",4],["polymer",1]]},
+  S:{name:"Shield", icon:"shield", key:"S", m:1.0, p:-3, shield:400, txt:"400 points of shield against impacts and debris. Needs the ice moon.", cost:[["frost-crystal",2],["circuit",2],["copper-ingot",4]]},
+  M:{name:"Mining laser", icon:"mining-laser", key:"M", m:0.9, p:-3, txt:"Cuts cells from a body without landing; drops float to the hold's magnet. Needs a clear cell ahead.", cost:[["steel-ingot",2],["circuit",1],["glass",2]]},
+  B:{name:"Habitation", icon:"habitation", key:"B", m:1.2, p:-1, berths:2, txt:"Two berths and life support. Needs the jungle world's glowcap.", cost:[["steel-ingot",2],["cloth",3],["glass",2],["glowcap",2]]},
+  W:{name:"Landing gear", icon:"landing-gear", key:"W", m:0.3, p:0, gear:1, txt:"A leg. Two or more to land on a pad or on the ground.", cost:[["steel-ingot",2]]},
+};
+const COLS = 12, ROWS = 7;
+const PRESETS = {
+  wren:{name:"Wren", role:"First shuttle", rows:["............","............","....TLW.....",".....FRGC...","....TLW.....","............","............"]},
+  prospector:{name:"Prospector", role:"Asteroid miner", rows:["............","....LLKW....","...TFRGHM...","...TFRGC....","....LLKW....","............","............"]},
+  hauler:{name:"Hauler", role:"Interplanetary cargo", rows:["............","...LLKKLW...","..TFRKKKGBC.","..TFRKKKGSH.","...LLKKLW...","............","............"]},
+  freighter:{name:"Freighter", role:"Orbit only, docks", rows:["...LKKKKKL..",".TFRKKKKKGBW",".TFRKKKKKGBS",".TFRKKKKKGBC",".TFRKKKKKGBS",".TFRKKKKKGBW","...LKKKKKL.."]},
+};
+const cellsOf = rows => { const out = []; rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== ".") out.push({c, x, y}); })); return out; };
+function stats(rows) {
+  const cells = cellsOf(rows);
+  const s = {cells: cells.length};
+  if (!cells.length) return s;
+  let m = 0, cx = 0, cy = 0;
+  cells.forEach(k => { const d = MOD[k.c]; m += d.m; cx += d.m * k.x * 2; cy += d.m * k.y * 2; });
+  cx /= m; cy /= m;
+  let I = 0; cells.forEach(k => { I += MOD[k.c].m * ((k.x * 2 - cx) ** 2 + (k.y * 2 - cy) ** 2 + 8 / 12); });
+  const sum = f => cells.reduce((a, k) => a + (MOD[k.c][f] || 0), 0);
+  const cnt = c => cells.filter(k => k.c === c).length;
+  Object.assign(s, {m, I, thrust: sum("thrust"), lift: sum("lift"), torque: sum("torque"), rcs: sum("rcs"), power: sum("p"), prop: sum("prop"), burn: sum("burn"), cargo: sum("cargo"), berths: sum("berths"), shield: sum("shield"), gear: sum("gear"), cnt});
+  s.supply = cells.filter(k => MOD[k.c].p > 0).reduce((a, k) => a + MOD[k.c].p, 0);
+  s.draw = s.supply - s.power;
+  s.acc = s.thrust / m;
+  s.alpha = Math.min(6, s.torque / I);
+  s.angSpeed = Math.min(1.5, 0.3 + 0.6 * Math.sqrt(s.alpha));
+  s.linDamp = Math.min(1, s.rcs / m / 5);
+  s.angDamp = Math.min(4, 1.4 * s.alpha);
+  s.liftRatio = s.lift / (m * G1);
+  s.burnS = s.burn ? s.prop / s.burn : 0;
+  s.len = (Math.max(...cells.map(k => k.x)) - Math.min(...cells.map(k => k.x)) + 1) * 2;
+  s.beam = (Math.max(...cells.map(k => k.y)) - Math.min(...cells.map(k => k.y)) + 1) * 2;
+  return s;
+}
+function checks(rows) {
+  const cells = cellsOf(rows), at = (x, y) => (rows[y] || "")[x] || ".", s = stats(rows), out = [], bad = new Set();
+  if (!cells.length) return {out: [["no", "Nothing on the grid yet."]], bad};
+  const cockpits = cells.filter(k => k.c === "C");
+  out.push([cockpits.length ? "ok" : "no", cockpits.length ? "A cockpit." : "Needs a cockpit."]);
+  cockpits.forEach(k => { for (let x = k.x + 1; x < COLS; x++) if (at(x, k.y) !== ".") { bad.add(k.x + "," + k.y); out.push(["no", "A cockpit has something ahead of it."]); break; } });
+  // connected
+  const seen = new Set([cells[0].x + "," + cells[0].y]), stack = [cells[0]];
+  while (stack.length) { const k = stack.pop(); for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) { const x = k.x + dx, y = k.y + dy, id = x + "," + y; if (!seen.has(id) && at(x, y) !== ".") { seen.add(id); stack.push({x, y}); } } }
+  const loose = cells.filter(k => !seen.has(k.x + "," + k.y));
+  loose.forEach(k => bad.add(k.x + "," + k.y));
+  out.push([loose.length ? "no" : "ok", loose.length ? `${loose.length} module${loose.length > 1 ? "s" : ""} not joined to the ship.` : "All modules joined."]);
+  out.push([s.power >= 0 ? "ok" : "no", s.power >= 0 ? `Power ${s.supply} made, ${s.draw} drawn.` : `Power short: ${s.supply} made, ${s.draw} drawn. Add a reactor.`]);
+  cells.filter(k => k.c === "T").forEach(k => { if (at(k.x - 1, k.y) !== ".") { bad.add(k.x + "," + k.y); out.push(["no", "A thruster's nozzle is blocked behind it."]); } });
+  cells.filter(k => k.c === "M").forEach(k => { if (at(k.x + 1, k.y) !== ".") { bad.add(k.x + "," + k.y); out.push(["no", "A mining laser is blocked ahead of it."]); } });
+  out.push([s.thrust > 0 && s.prop > 0 ? "ok" : "no", s.thrust > 0 ? (s.prop > 0 ? "Thrust and fuel." : "Thrusters but no fuel tank.") : "No main thruster."]);
+  out.push([s.gear >= 2 ? "ok" : "warn", s.gear >= 2 ? `${s.gear} landing legs.` : "Fewer than two legs: it can dock but not land."]);
+  out.push([s.liftRatio >= 1.1 ? "ok" : "warn", s.liftRatio >= 1.1 ? `Lifts off at 1 g (${s.liftRatio.toFixed(2)} of weight).` : `Lift ${s.liftRatio.toFixed(2)} of its weight at 1 g: orbit only, it docks at a station.`]);
+  return {out, bad};
+}
+
+// ======================= the builder =======================
+let grid = PRESETS.wren.rows.map(r => r.split(""));
+let tool = "T";
+const rowsNow = () => grid.map(r => r.join(""));
+const gridEl = document.getElementById("grid");
+function drawGrid() {
+  const {bad} = checks(rowsNow());
+  gridEl.innerHTML = "";
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const c = grid[y][x], d = document.createElement("div");
+    d.className = "cell" + (c !== "." ? " filled" : "") + (bad.has(x + "," + y) ? " bad" : "");
+    d.dataset.x = x; d.dataset.y = y; d.tabIndex = 0;
+    d.setAttribute("aria-label", c === "." ? `empty cell ${x},${y}` : `${MOD[c].name} at ${x},${y}`);
+    if (c !== ".") { d.title = MOD[c].name; d.innerHTML = `<img src="ship-crafting/${MOD[c].icon}.png" alt="" width="40" height="40"${c === "T" ? ' class="aft"' : ""}>${c === "L" ? `<span style="position:absolute;right:2px;bottom:0;font:600 10px var(--mono);color:var(--amber)">LIFT</span>` : ""}`; }
+    gridEl.appendChild(d);
+  }
+  renderStats();
+}
+let painting = null;
+function paintAt(el, erase) {
+  if (!el || !el.classList.contains("cell")) return;
+  const x = +el.dataset.x, y = +el.dataset.y, v = erase ? "." : tool;
+  if (grid[y][x] === v) return;
+  grid[y][x] = v; drawGrid();
+}
+gridEl.addEventListener("contextmenu", e => e.preventDefault());
+gridEl.addEventListener("pointerdown", e => { painting = e.button === 2 || tool === "." ? "erase" : "paint"; paintAt(e.target.closest(".cell"), painting === "erase"); });
+gridEl.addEventListener("pointermove", e => { if (!painting) return; paintAt(document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".cell"), painting === "erase"); });
+window.addEventListener("pointerup", () => painting = null);
+gridEl.addEventListener("keydown", e => { const el = e.target.closest(".cell"); if (!el) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); paintAt(el, false); } if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); paintAt(el, true); } });
+const pal = document.getElementById("palette");
+pal.innerHTML = Object.entries(MOD).map(([k, d]) => `<button data-k="${k}" aria-pressed="${k === tool}" title="${d.name}"><img src="ship-crafting/${d.icon}.png" alt="" width="40" height="40">${d.name}<kbd>${k}</kbd></button>`).join("") + `<button data-k="." aria-pressed="false" title="Eraser"><svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28 L22 10 L32 18 L20 32 Z" fill="#e06a7a" stroke="#6b2430" stroke-width="2"/><path d="M8 28 L14 32 L20 32" fill="none" stroke="#a89d86" stroke-width="2"/></svg>Eraser<kbd>X</kbd></button>`;
+const setTool = k => { tool = k; pal.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === k)); };
+pal.querySelectorAll("button").forEach(b => b.addEventListener("click", () => setTool(b.dataset.k)));
+window.addEventListener("keydown", e => { if (e.target.closest && e.target.closest("input,textarea")) return; const k = e.key.toUpperCase(); if (MOD[k] && document.activeElement?.closest?.(".builder")) setTool(k); if (k === "X" && document.activeElement?.closest?.(".builder")) setTool("."); });
+document.getElementById("presets").innerHTML = Object.entries(PRESETS).map(([id, p]) => `<button data-p="${id}" aria-pressed="${id === "wren"}">${p.name}</button>`).join("");
+document.querySelectorAll("#presets button").forEach(b => b.addEventListener("click", () => { grid = PRESETS[b.dataset.p].rows.map(r => r.split("")); document.querySelectorAll("#presets button").forEach(o => o.setAttribute("aria-pressed", o === b)); drawGrid(); }));
+const press = (id, f) => { const el = document.getElementById(id); el.addEventListener("click", f); el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); f(); } }); };
+press("clear", () => { grid = Array.from({length: ROWS}, () => new Array(COLS).fill(".")); drawGrid(); });
+
+const ITEM_NAMES = {"glass":"Glass","circuit":"Circuit","steel-ingot":"Steel","cloth":"Cloth","planks":"Planks","reagent":"Reagent","bronze-ingot":"Bronze","copper-ingot":"Copper","polymer":"Polymer","frost-crystal":"Frost crystal","glowcap":"Glowcap"};
+function renderStats() {
+  const rows = rowsNow(), s = stats(rows), {out} = checks(rows);
+  const st = (k, v, u, frac) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}<small>${u}</small></span>${frac != null ? `<div class="bar"><i style="width:${Math.max(0, Math.min(1, frac)) * 100}%"></i></div>` : ""}</div>`;
+  const el = document.getElementById("stats");
+  if (!s.m) { el.innerHTML = `<p class="muted">Empty grid.</p>`; document.getElementById("checks").innerHTML = ""; document.getElementById("ron").textContent = ""; document.getElementById("bom").innerHTML = ""; return; }
+  el.innerHTML = [
+    st("Mass", s.m.toFixed(1), "t"), st("Size", `${s.len}x${s.beam}`, "m"),
+    st("Main thrust", s.thrust, "kN"), st("Acceleration", s.acc.toFixed(1), `m/s2, ${(s.acc / G1).toFixed(2)} g`, s.acc / 25),
+    st("Lift at 1 g", s.liftRatio.toFixed(2), "of weight", s.liftRatio / 1.6), st("Turn rate", s.alpha.toFixed(2), "rad/s2", s.alpha / 6),
+    st("Power", `${s.power >= 0 ? "+" : ""}${s.power}`, `of ${s.supply}`), st("Full burn", Math.round(s.burnS), "s", s.burnS / 250),
+    st("Hold", s.cargo, "m3"), st("Berths", s.berths, ""),
+    st("Shield", s.shield, "pts"), st("Yaw inertia", Math.round(s.I), "t m2"),
+  ].join("");
+  document.getElementById("checks").innerHTML = out.map(([k, t]) => `<div class="${k}">${t}</div>`).join("");
+  document.getElementById("ron").innerHTML = `<span class="c">// computed at launch, saved with the ship</span>
+FlightLimits(
+    speed: 120.0, <span class="c">// the mode's target</span>
+    acceleration: ${s.acc.toFixed(2)},
+    angular_speed: ${s.angSpeed.toFixed(2)},
+    angular_acceleration: ${s.alpha.toFixed(2)},
+    linear_damping: ${s.linDamp.toFixed(2)},
+    angular_damping: ${s.angDamp.toFixed(2)},
+)`;
+  const bom = {};
+  cellsOf(rows).forEach(k => MOD[k.c].cost.forEach(([i, n]) => bom[i] = (bom[i] || 0) + n));
+  document.getElementById("bom").innerHTML = Object.entries(bom).sort((a, b) => b[1] - a[1]).map(([i, n]) => `<span class="chipitem"><img src="crafting/${i}.png" alt="" width="26" height="26">${ITEM_NAMES[i]}<b>${n}</b></span>`).join("");
+}
+drawGrid();
+
+// ======================= module cards, progression, decisions =======================
+document.getElementById("mods").innerHTML = Object.entries(MOD).map(([k, d]) => `<div class="card"><div class="head"><img src="ship-crafting/${d.icon}.png" alt="" width="64" height="64"><div><span class="eyebrow">Key ${k}</span><h3>${d.name}</h3></div></div><p>${d.txt}</p><dl><dt>Mass</dt><dd>${d.m} t</dd><dt>Power</dt><dd>${d.p > 0 ? "+" : ""}${d.p}</dd>${d.mk2 ? `<dt>Later</dt><dd>${d.mk2}</dd>` : ""}<dt>Made of</dt><dd>${d.cost.map(([i, n]) => `${n} ${ITEM_NAMES[i].toLowerCase()}`).join(", ")}</dd></dl></div>`).join("");
+
+const PROG = [
+  ["wren","1","Built from home materials once a fabricator stands. Lifts off, reaches orbit, the ice moon and the asteroids.",["No hold, no berth: a scout","Brings back frost crystal and star iron"]],
+  ["prospector","2","Two mining lasers cut asteroid cells without landing; the drops float into its 16 m3 hold.",["Star iron in quantity, for alloy plate","Still home-made parts"]],
+  ["hauler","3","Shields from frost crystal and two berths from the jungle world's glowcap. The first ship that carries crew.",["80 m3 of hold","Lands anywhere at 1 g"]],
+  ["freighter","4","Mk II reactors and thrusters from magma glass. Too heavy to lift off at 1 g: it stays in orbit and docks, and shuttles ferry its cargo down.",["280 m3, six berths","Orbit only, by design"]],
+];
+document.getElementById("prog").innerHTML = PROG.map(([id, n, txt, li]) => { const p = PRESETS[id], s = stats(p.rows); return `<div class="step"><div class="who"><b>${p.name}</b><span>STEP ${n}</span></div><span class="eyebrow">${p.role}</span><canvas data-p="${id}" width="240" height="140"></canvas><p>${txt}</p><ul>${li.map(x => `<li>${x}</li>`).join("")}<li class="mono">${s.m.toFixed(1)} t, ${s.acc.toFixed(1)} m/s2, ${s.alpha.toFixed(2)} rad/s2</li></ul></div>`; }).join("");
+// little plan drawings from the same grid
+const iconCache = {};
+const loadIcon = n => iconCache[n] || (iconCache[n] = new Promise(r => { const im = new Image(); im.onload = () => r(im); im.onerror = () => r(null); im.src = `ship-crafting/${n}.png`; }));
+document.querySelectorAll(".step canvas").forEach(async cv => {
+  const p = PRESETS[cv.dataset.p], g = cv.getContext("2d"), cs = 20, ox = (240 - COLS * cs) / 2, oy = 0;
+  g.fillStyle = "#101317"; g.fillRect(0, 0, 240, 140);
+  for (const k of cellsOf(p.rows)) { const im = await loadIcon(MOD[k.c].icon); g.fillStyle = "rgba(226,206,160,.08)"; g.fillRect(ox + k.x * cs, oy + k.y * cs, cs - 1, cs - 1); if (im) { g.save(); g.translate(ox + k.x * cs + cs / 2, oy + k.y * cs + cs / 2); if (k.c === "T") g.rotate(Math.PI / 2); g.drawImage(im, -cs / 2, -cs / 2, cs, cs); g.restore(); } }
+});
+const DEC = [
+  ["S1. Square module grid, or hex?", true, "The world is hex cells and the builder here is square. Ships are bodies of their own, built from made modules, never dug from the ground, so the hex rule (a cell is a unit of material) does not bind them. Square cells give clean thrust axes and a readable top view.", "Square, 2 m cells. Look at the builder and the pads above: the shapes read as ships."],
+  ["S2. How big may a freighter be?", true, "The grid is 12 by 7 cells (24 by 14 m). The freighter fills it and cannot lift off at 1 g, which is shown as orbit only, not as an error.", "Keep a cap per shipyard tier (12x7, then 20x10 at an orbital yard) and let heavy ships be orbit only. Look at the freighter on its pad."],
+  ["S3. One deck, or decks you build upward?", false, "This page is one deck seen from above; heights are fixed per module. A second layer would let a player stack cargo over engines.", "One deck for the first version. Walking inside a ship is a later change."],
+  ["S4. Where does a ship's hold sit?", false, "A cargo pod could be its own container of slots, or every pod could add to one ship inventory.", "One hold per ship, sized by its pods, using the same stack moves as the pack (inventory-grid)."],
+  ["S5. Damage", false, "Shields absorb first; then a module can be lost.", "A lost module drops out of the grid and the stats are recomputed at once, so a ship that loses a thruster really flies worse. It is saved like any other change."],
+  ["S6. Can a ship launch from anywhere?", false, "The builder opens at a fabricator in a shipyard bay. A ship could also be packed into an item and placed in the field.", "Shipyard only for building; any flat ground for landing."],
+];
+document.getElementById("decisions").innerHTML = DEC.map(([q, pic, ctx, rec]) => `<div class="q"><h3>${q}${pic ? ` <span class="tag" style="vertical-align:middle;margin-left:6px">has a picture</span>` : ""}</h3><p>${ctx}</p><p class="rec"><b>Recommend</b>${rec}</p></div>`).join("");
+
+// ======================= the shipyard (three.js) =======================
+(function yard() {
+  if (!window.THREE) { document.getElementById("loading").textContent = "three.js did not load"; return; }
+  const canvas = document.getElementById("yard");
+  const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 900);
+
+  // ---- textures
+  const loader = new THREE.TextureLoader();
+  const TEX = {};
+  const tex = (n, rep = 1) => { const key = n + "@" + rep; if (TEX[key]) return TEX[key]; const t = loader.load(`ship-crafting/${n}.png`); t.encoding = THREE.sRGBEncoding; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 4; return (TEX[key] = t); };
+
+  // ---- lamps: every light lights what is near it, wherever the camera is
+  const MAXL = 112;
+  const LAMPS = [];   // {p: Vector3 world, c: Color, i: intensity, r: range, night: bool}
+  const U = {uLampPos: {value: Array.from({length: MAXL}, () => new THREE.Vector3())}, uLampCol: {value: Array.from({length: MAXL}, () => new THREE.Vector4())}, uLampCount: {value: 0}, uLampOn: {value: 1}};
+  function lit(mat) {
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, U);
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+uniform vec3 uLampPos[${MAXL}];
+uniform vec4 uLampCol[${MAXL}];
+uniform int uLampCount;
+uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <lights_fragment_end>
+{
+  vec3 P = -vViewPosition;
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uLampCount) break;
+    vec3 Lv = uLampPos[i] - P;
+    float d = length(Lv);
+    float r = uLampCol[i].w;
+    if (d > r) continue;
+    float f = 1.0 - d / r;
+    float att = f * f / (1.0 + 0.03 * d * d);
+    float nl = max(dot(normal, Lv / max(d, 1e-3)), 0.0);
+    reflectedLight.directDiffuse += diffuseColor.rgb * uLampCol[i].rgb * att * (0.15 + 0.85 * nl) * uLampOn;
+  }
+}`);
+    };
+    mat.customProgramCacheKey = () => "lamps";
+    return mat;
+  }
+  const std = (o) => lit(new THREE.MeshStandardMaterial(Object.assign({roughness: 0.8, metalness: 0.1}, o)));
+  function lamp(x, y, z, color, intensity, range, opts = {}) {
+    const L = {p: new THREE.Vector3(x, y, z), c: new THREE.Color(color), i: intensity, r: range, group: opts.group || null, local: opts.local ? new THREE.Vector3(x, y, z) : null};
+    LAMPS.push(L);
+    if (opts.bulb !== false) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(opts.size || 0.18, 10, 8), new THREE.MeshBasicMaterial({color}));
+      b.position.set(x, y, z); (opts.group || scene).add(b); L.bulb = b;
+      const sp = new THREE.Sprite(GLOW(color)); sp.scale.setScalar((opts.size || 0.18) * 14); sp.position.copy(b.position); (opts.group || scene).add(sp); L.sprite = sp;
+    }
+    return L;
+  }
+  const glowCache = {};
+  function GLOW(color) {
+    const key = new THREE.Color(color).getHexString(); if (glowCache[key]) return glowCache[key];
+    const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); const col = new THREE.Color(color);
+    const rgb = `${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)}`;
+    gr.addColorStop(0, `rgba(${rgb},0.9)`); gr.addColorStop(0.25, `rgba(${rgb},0.35)`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    return (glowCache[key] = new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true}));
+  }
+
+  // ---- sky, sun, moon
+  const hemi = new THREE.HemisphereLight(0xbcd6ee, 0x3d3a2c, 0.5); scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 1.0); sun.position.set(-80, 120, 60); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, {left: -110, right: 110, top: 110, bottom: -110, near: 10, far: 400}); sun.shadow.bias = -0.0005;
+  scene.add(sun);
+  const moon = new THREE.DirectionalLight(0x9fb4e0, 0.0); moon.position.set(90, 140, -60); scene.add(moon);
+  const starGeo = new THREE.BufferGeometry(); { const a = []; for (let i = 0; i < 1500; i++) { const t = Math.random() * Math.PI * 2, u = Math.random() * 0.95 + 0.05, r = 600; a.push(r * Math.cos(t) * Math.sqrt(1 - u * u), r * u, r * Math.sin(t) * Math.sqrt(1 - u * u)); } starGeo.setAttribute("position", new THREE.Float32BufferAttribute(a, 3)); }
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xdfe6ff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0})); scene.add(stars);
+  const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(14, 32), new THREE.MeshBasicMaterial({color: 0xdfe4f0, fog: false})); moonDisc.position.set(300, 380, -420); moonDisc.lookAt(0, 0, 0); scene.add(moonDisc);
+  scene.fog = new THREE.Fog(0x9bb7cc, 160, 620);
+
+  // ---- ground and yard
+  const field = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), std({color: 0x5c6a3a, roughness: 1}));
+  field.rotation.x = -Math.PI / 2; field.receiveShadow = true; scene.add(field);
+  const apron = new THREE.Mesh(new THREE.PlaneGeometry(200, 120), std({map: tex("tex-pad", 1), roughness: 0.95}));
+  apron.material.map = tex("tex-pad", 1).clone(); apron.material.map.repeat.set(20, 12); apron.material.map.needsUpdate = true;
+  apron.rotation.x = -Math.PI / 2; apron.position.set(0, 0.02, 0); apron.receiveShadow = true; scene.add(apron);
+  // hills
+  for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2, r = 380 + (i * 53 % 90); const h = new THREE.Mesh(new THREE.ConeGeometry(70 + (i * 37 % 50), 40 + (i * 29 % 50), 7), std({color: 0x4c5a34, roughness: 1, flatShading: true})); h.position.set(Math.cos(a) * r, 10, Math.sin(a) * r); scene.add(h); }
+
+  const PADS = {wren: [-60, 0, -22], prospector: [-20, 0, -22], hauler: [20, 0, -22], freighter: [62, 0, -20], bay: [0, 0, 28]};
+  const padMat = std({map: tex("tex-pad", 2), roughness: 0.9});
+  for (const [id, [x, , z]] of Object.entries(PADS)) {
+    const r = id === "freighter" ? 18 : id === "bay" ? 17 : 14;
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 0.4, 0.3, 6), padMat); pad.position.set(x, 0.15, z); pad.receiveShadow = true; scene.add(pad);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.7, 0.18, 6, 6), new THREE.MeshBasicMaterial({color: 0xf0b43c})); ring.rotation.x = Math.PI / 2; ring.rotation.z = Math.PI / 6; ring.position.set(x, 0.32, z); scene.add(ring);
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + Math.PI / 6; lamp(x + Math.cos(a) * (r + 0.2), 0.5, z + Math.sin(a) * (r + 0.2), 0xffb347, 2.2, 9, {size: 0.22}); }
+  }
+  // the hangar, behind
+  const hangar = new THREE.Group(); hangar.position.set(0, 0, -64); scene.add(hangar);
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(70, 18, 26), std({map: tex("tex-hull-dark", 1), roughness: 0.85})); shell.material.map = tex("tex-hull-dark").clone(); shell.material.map.repeat.set(10, 3); shell.material.map.needsUpdate = true;
+  shell.position.y = 9; shell.castShadow = shell.receiveShadow = true; hangar.add(shell);
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(13, 13, 70, 16, 1, false, 0, Math.PI), std({color: 0x6b7385, roughness: 0.7, metalness: 0.3})); roof.rotation.z = Math.PI / 2; roof.rotation.y = Math.PI / 2; roof.position.y = 18; roof.scale.set(1, 1, 0.45); hangar.add(roof);
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(30, 14), new THREE.MeshStandardMaterial({color: 0x2a2620, emissive: 0xc8823a, emissiveIntensity: 0})); door.position.set(0, 7, 13.05); hangar.add(door);
+  const WINDOW_MATS = [];
+  const winMat = new THREE.MeshStandardMaterial({color: 0x3a3a3a, emissive: 0xffc878, emissiveIntensity: 0}); WINDOW_MATS.push(winMat);
+  for (let k = 0; k < 10; k++) { const w = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.6), winMat); const x = -31 + k * 6.8 + (k >= 4 && k <= 5 ? 99 : 0); if (Math.abs(x) < 17) continue; w.position.set(x, 13, 13.06); hangar.add(w); }
+  lamp(-17, 15, -50.6, 0xffd08a, 5, 22, {size: 0.3}); lamp(17, 15, -50.6, 0xffd08a, 5, 22, {size: 0.3});
+  lamp(0, 6, -48, 0xffc070, 5, 18, {bulb: false}); // the open door spills light
+  lamp(-30, 6, -50.6, 0xffd08a, 3, 12, {size: 0.22}); lamp(30, 6, -50.6, 0xffd08a, 3, 12, {size: 0.22});
+  // floodlight masts
+  for (const [x, z] of [[-90, 8], [-40, 10], [40, 10], [90, 8], [-30, 52], [30, 52]]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 16, 8), std({color: 0x5a5f6a, metalness: 0.5, roughness: 0.5})); pole.position.set(x, 8, z); pole.castShadow = true; scene.add(pole);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 1.0), std({color: 0x30343c})); head.position.set(x, 16.2, z); scene.add(head);
+    lamp(x, 15.6, z, 0xfff0d0, 9, 38, {size: 0.45});
+  }
+  // the build bay: two gantries and a bridge crane
+  const girder = std({map: tex("tex-girder"), roughness: 0.8});
+  for (const gx of [-15, 15]) {
+    for (const gz of [18, 38]) { const t = new THREE.Mesh(new THREE.BoxGeometry(2.4, 20, 2.4), girder); t.position.set(gx, 10, gz); t.castShadow = true; scene.add(t); }
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.4, 22.4), girder); beam.position.set(gx, 19, 28); beam.castShadow = true; scene.add(beam);
+    lamp(gx * 0.86, 17.6, 22, 0xfff4e0, 6, 24, {size: 0.35}); lamp(gx * 0.86, 17.6, 34, 0xfff4e0, 6, 24, {size: 0.35});
+  }
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(32.4, 1.6, 2.0), girder); bridge.position.set(0, 20.6, 28); bridge.castShadow = true; scene.add(bridge);
+  const hook = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 2.4), std({color: 0xf0b43c})); hook.position.set(0, 19.2, 28); scene.add(hook);
+  // fuel farm and crates
+  for (let k = 0; k < 3; k++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 16), std({map: tex("tex-fuel"), roughness: 0.6})); t.position.set(98, 5, -50 + k * 11); t.castShadow = true; scene.add(t); }
+  lamp(90, 4, -39, 0xff8a5a, 3, 14, {size: 0.22});
+  for (let k = 0; k < 9; k++) { const c = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), std({map: tex("tex-cargo")})); c.position.set(-96 + (k % 3) * 2.1, 1 + Math.floor(k / 3) * 0 + (k > 5 ? 2 : 0), -44 + Math.floor(k / 3) * 2.1); c.castShadow = c.receiveShadow = true; scene.add(c); }
+  lamp(-92, 3.5, -38, 0xffc070, 3, 12, {size: 0.2});
+
+  // ---- ships from the grid
+  const M = {
+    hull: std({map: tex("tex-hull"), roughness: 0.6, metalness: 0.25}), dark: std({map: tex("tex-hull-dark"), roughness: 0.6, metalness: 0.3}),
+    cargo: std({map: tex("tex-cargo")}), thr: std({map: tex("tex-thruster"), roughness: 0.5, metalness: 0.4}), fuel: std({map: tex("tex-fuel"), roughness: 0.5}),
+    reactor: std({map: tex("tex-reactor"), emissive: 0x66ddff, emissiveMap: tex("tex-reactor"), emissiveIntensity: 0.35}),
+    shield: std({map: tex("tex-shield"), emissive: 0x4a90ff, emissiveMap: tex("tex-shield"), emissiveIntensity: 0.3}),
+    laser: std({map: tex("tex-laser")}), hab: std({map: tex("tex-hab")}), glass: std({map: tex("tex-glass"), roughness: 0.15, metalness: 0.5, emissive: 0x3a6a9a, emissiveIntensity: 0.1}),
+    nozzle: std({color: 0x30333c, roughness: 0.4, metalness: 0.7}), gyro: std({color: 0xf0b43c, roughness: 0.4, metalness: 0.4}),
+  };
+  const HABWIN = new THREE.MeshStandardMaterial({color: 0x554433, emissive: 0xffc878, emissiveIntensity: 0}); WINDOW_MATS.push(HABWIN);
+  const FLAME = new THREE.MeshBasicMaterial({color: 0x8fd0ff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false});
+  const SPIN = [], FLAMES = [];
+  const GEAR_H = 1.4, BOX_H = 1.8;
+  function buildShip(rows) {
+    const g = new THREE.Group(), cells = cellsOf(rows);
+    if (!cells.length) return g;
+    const s = stats(rows); let cx = 0, cy = 0; cells.forEach(k => { cx += MOD[k.c].m * k.x; cy += MOD[k.c].m * k.y; }); cx /= s.m; cy /= s.m;
+    const at = (x, y) => (rows[y] || "")[x] || ".";
+    const base = GEAR_H, yMid = base + BOX_H / 2;
+    const add = (geo, mat, x, y, z, ry = 0, rz = 0, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = m.receiveShadow = true; g.add(m); return m; };
+    const box = new THREE.BoxGeometry(1.96, BOX_H, 1.96);
+    let minZ = 1e9, maxZ = -1e9, minX = 1e9;
+    for (const k of cells) {
+      const X = (k.x - cx) * 2, Z = (k.y - cy) * 2;
+      minZ = Math.min(minZ, Z); maxZ = Math.max(maxZ, Z); minX = Math.min(minX, X);
+      switch (k.c) {
+        case "C": {
+          add(new THREE.BoxGeometry(1.96, BOX_H * 0.55, 1.96), M.hull, X, base + BOX_H * 0.275, Z);
+          const sh = new THREE.Shape(); sh.moveTo(-0.98, 0); sh.lineTo(0.98, 0); sh.lineTo(-0.5, BOX_H * 0.55); sh.lineTo(-0.98, BOX_H * 0.55); sh.lineTo(-0.98, 0);
+          const wg = new THREE.ExtrudeGeometry(sh, {depth: 1.7, bevelEnabled: false}); wg.translate(0, 0, -0.85);
+          add(wg, M.glass, X, base + BOX_H * 0.55, Z);
+          break;
+        }
+        case "H": add(box, M.hull, X, yMid, Z); break;
+        case "K": add(box, M.cargo, X, yMid, Z); break;
+        case "R": add(box, M.reactor, X, yMid, Z); lamp(X, base + BOX_H + 0.3, Z, 0x66ddff, 1.6, 6, {group: g, bulb: false, local: true}); break;
+        case "F": { add(new THREE.CylinderGeometry(0.92, 0.92, 1.96, 14), M.fuel, X, yMid, Z, 0, Math.PI / 2); break; }
+        case "G": { add(box, M.dark, X, yMid, Z); const t = add(new THREE.TorusGeometry(0.7, 0.09, 6, 20), M.gyro, X, base + BOX_H + 0.25, Z, 0, 0, Math.PI / 2); SPIN.push(t); break; }
+        case "S": { add(box, M.dark, X, yMid, Z); add(new THREE.SphereGeometry(0.85, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.shield, X, base + BOX_H, Z); break; }
+        case "M": { add(box, M.laser, X, yMid, Z); add(new THREE.CylinderGeometry(0.22, 0.32, 1.8, 10), M.nozzle, X + 1.6, yMid, Z, 0, Math.PI / 2); lamp(X + 2.55, yMid, Z, 0xff5a40, 1.4, 4, {group: g, size: 0.14, local: true}); break; }
+        case "B": { add(box, M.hab, X, yMid, Z); for (const sz of [-1, 1]) if (at(k.x, k.y + sz) === ".") { const w = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.45), HABWIN); w.position.set(X, yMid + 0.25, Z + sz * 0.99); w.rotation.y = sz > 0 ? 0 : Math.PI; g.add(w); lamp(X, yMid + 0.25, Z + sz * 1.6, 0xffc070, 1.6, 5, {group: g, bulb: false, local: true}); } break; }
+        case "W": { add(box, M.dark, X, yMid, Z); add(new THREE.CylinderGeometry(0.14, 0.14, base, 6), M.nozzle, X, base / 2, Z); add(new THREE.CylinderGeometry(0.6, 0.7, 0.16, 8), M.nozzle, X, 0.08 + 0.3, Z); break; }
+        case "T": {
+          add(box, M.thr, X, yMid, Z);
+          add(new THREE.CylinderGeometry(0.55, 0.85, 0.9, 14, 1, true), M.nozzle, X - 1.4, yMid, Z, 0, -Math.PI / 2);
+          const fl = add(new THREE.ConeGeometry(0.6, 1.6, 12, 1, true), FLAME, X - 2.6, yMid, Z, 0, Math.PI / 2); fl.castShadow = false; FLAMES.push(fl);
+          lamp(X - 2.4, yMid, Z, 0x8fd0ff, 2.4, 7, {group: g, bulb: false, local: true});
+          break;
+        }
+        case "L": {
+          add(box, M.thr, X, yMid, Z);
+          add(new THREE.CylinderGeometry(0.5, 0.75, 0.5, 12, 1, true), M.nozzle, X, base - 0.2, Z);
+          break;
+        }
+      }
+    }
+    // nav lights: red to port, green to starboard, white strobe aft
+    lamp(0, base + BOX_H, minZ - 1.05, 0xff3030, 1.6, 6, {group: g, size: 0.16, local: true});
+    lamp(0, base + BOX_H, maxZ + 1.05, 0x30ff60, 1.6, 6, {group: g, size: 0.16, local: true});
+    lamp(minX - 1.0, base + BOX_H + 0.3, 0, 0xffffff, 1.2, 5, {group: g, size: 0.14, local: true});
+    return g;
+  }
+  const SHIPS = {};
+  function place(id, rows, yaw = 0) {
+    if (SHIPS[id]) { scene.remove(SHIPS[id]); for (let i = LAMPS.length - 1; i >= 0; i--) if (LAMPS[i].group === SHIPS[id]) LAMPS.splice(i, 1); }
+    const g = buildShip(rows); const [x, , z] = PADS[id]; g.position.set(x, 0.3, z); g.rotation.y = yaw; scene.add(g); SHIPS[id] = g;
+  }
+  place("wren", PRESETS.wren.rows, 0.4); place("prospector", PRESETS.prospector.rows, 0.2); place("hauler", PRESETS.hauler.rows, -0.2); place("freighter", PRESETS.freighter.rows, -0.35);
+  place("bay", PRESETS.wren.rows, Math.PI / 2 * 0 + 0.0);
+
+  // ---- time of day
+  const TIMES = {
+    day:  {sky: 0x9cc4e4, fog: 0xb4cbd8, hemi: 0.55, sun: 1.05, sunCol: 0xfff1dc, sunPos: [-80, 120, 60], moon: 0, lamps: 0, win: 0, stars: 0, emis: 1, moonDisc: false},
+    dusk: {sky: 0x8a6f72, fog: 0x8d7068, hemi: 0.22, sun: 0.55, sunCol: 0xff9a5a, sunPos: [-160, 22, 40], moon: 0.04, lamps: 0.55, win: 0.6, stars: 0.25, emis: 1.2, moonDisc: true},
+    night:{sky: 0x0a0f1c, fog: 0x0d1220, hemi: 0.035, sun: 0, sunCol: 0xffffff, sunPos: [-80, 120, 60], moon: 0.09, lamps: 1, win: 1.2, stars: 0.9, emis: 1.6, moonDisc: true},
+  };
+  let time = "night";
+  function setTime(t) {
+    time = t; const T = TIMES[t];
+    scene.background = new THREE.Color(T.sky); scene.fog.color.setHex(T.fog);
+    hemi.intensity = T.hemi; sun.intensity = T.sun; sun.color.setHex(T.sunCol); sun.position.set(...T.sunPos); sun.castShadow = T.sun > 0.2;
+    moon.intensity = T.moon; stars.material.opacity = T.stars; moonDisc.visible = T.moonDisc;
+    U.uLampOn.value = T.lamps;
+    for (const L of LAMPS) { if (L.sprite) L.sprite.visible = T.lamps > 0.05; if (L.bulb) L.bulb.material.color.copy(L.c).multiplyScalar(T.lamps > 0.05 ? 1 : 0.35); }
+    WINDOW_MATS.forEach(m => m.emissiveIntensity = T.win);
+    door.material.emissiveIntensity = T.win * 0.18;
+    M.reactor.emissiveIntensity = 0.35 * T.emis; M.shield.emissiveIntensity = 0.3 * T.emis; M.glass.emissiveIntensity = 0.1 * T.emis;
+    document.querySelectorAll("#timeSel button").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === t));
+    info();
+  }
+  document.querySelectorAll("#timeSel button").forEach(b => b.addEventListener("click", () => setTime(b.dataset.t)));
+
+  // ---- camera: drag to orbit, wheel or pinch to zoom
+  const cam = {target: new THREE.Vector3(0, 2, 0), yaw: 0.55, pitch: 0.42, dist: 120, goal: null};
+  const focus = id => { const [x, , z] = id === "all" ? [0, 0, -6] : PADS[id]; const d = id === "all" ? 120 : id === "freighter" ? 50 : 36; cam.goal = {t: new THREE.Vector3(x, 2.5, z), d}; focused = id; info(); };
+  let focused = "all";
+  const SEL = [["all", "Whole yard"], ["wren", "Wren"], ["prospector", "Prospector"], ["hauler", "Hauler"], ["freighter", "Freighter"], ["bay", "Build bay"]];
+  document.getElementById("shipSel").innerHTML = SEL.map(([id, n]) => `<button data-s="${id}" aria-pressed="${id === "all"}">${n}</button>`).join("");
+  document.querySelectorAll("#shipSel button").forEach(b => b.addEventListener("click", () => { focus(b.dataset.s); document.querySelectorAll("#shipSel button").forEach(o => o.setAttribute("aria-pressed", o === b)); }));
+  const ptrs = new Map(); let pinch0 = 0;
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+  canvas.addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 1) { cam.yaw -= (e.clientX - px) * 0.006; cam.pitch = Math.min(1.45, Math.max(0.06, cam.pitch + (e.clientY - py) * 0.005)); }
+    else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0) cam.dist = Math.min(320, Math.max(12, cam.dist * pinch0 / d)); pinch0 = d; }
+  });
+  const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
+  canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.min(320, Math.max(12, cam.dist * Math.exp(e.deltaY * 0.0012))); cam.goal && (cam.goal.d = cam.dist); }, {passive: false});
+
+  function info() {
+    const el = document.getElementById("yardInfo");
+    if (focused === "all" || !PRESETS[focused] && focused !== "bay") { el.innerHTML = `<div><b>${LAMPS.length} lights</b> in the yard, each lighting what is within its range (pad lights 9 m, floodlights 38 m), all at once. <b>${time === "night" ? "Night" : time === "dusk" ? "Dusk" : "Day"}</b>: ${time === "day" ? "lamps off, sun shadows." : time === "dusk" ? "lamps coming on, low sun." : "moon at 0.09, lamps full."}</div>`; return; }
+    const rows = focused === "bay" ? BAY_ROWS : PRESETS[focused].rows, s = stats(rows), name = focused === "bay" ? "Your design" : PRESETS[focused].name;
+    el.innerHTML = `<div><b>${name}</b>: ${s.m.toFixed(1)} t, ${s.len} by ${s.beam} m. Thrust ${s.thrust} kN, ${s.acc.toFixed(1)} m/s2. Turns at ${s.alpha.toFixed(2)} rad/s2. ${s.liftRatio >= 1.1 ? "Lifts off at 1 g." : "Orbit only."}</div>`;
+  }
+  let BAY_ROWS = PRESETS.wren.rows;
+  press("rollout", () => { BAY_ROWS = rowsNow(); place("bay", BAY_ROWS); setTime(time); focus("bay"); document.querySelectorAll("#shipSel button").forEach(o => o.setAttribute("aria-pressed", o.dataset.s === "bay")); document.querySelector(".stage").scrollIntoView({behavior: "smooth", block: "center"}); });
+
+  function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  new ResizeObserver(resize).observe(canvas); resize();
+  setTime("night");
+  document.getElementById("loading").remove();
+  const clock = new THREE.Clock(); const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const tmp = new THREE.Vector3();
+  function frame() {
+    const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+    if (cam.goal) { cam.target.lerp(cam.goal.t, 1 - Math.exp(-dt * 4)); cam.dist += (cam.goal.d - cam.dist) * (1 - Math.exp(-dt * 4)); if (cam.target.distanceTo(cam.goal.t) < 0.05 && Math.abs(cam.dist - cam.goal.d) < 0.1) cam.goal = null; }
+    if (!reduce && !ptrs.size && !cam.goal) cam.yaw += dt * 0.03;
+    camera.position.set(cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.target.y + cam.dist * Math.sin(cam.pitch), cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw));
+    camera.lookAt(cam.target); camera.updateMatrixWorld();
+    if (!reduce) { SPIN.forEach((s, i) => s.rotation.y = t * (1.4 + i * 0.1)); FLAMES.forEach((f, i) => { const k = 0.85 + 0.15 * Math.sin(t * 23 + i * 1.7); f.scale.set(k, k, k); }); }
+    // lamps to view space; ship lamps ride their ship
+    scene.updateMatrixWorld();
+    const n = Math.min(MAXL, LAMPS.length);
+    for (let i = 0; i < n; i++) {
+      const L = LAMPS[i];
+      tmp.copy(L.p); if (L.group) L.group.localToWorld(tmp);
+      U.uLampPos.value[i].copy(tmp).applyMatrix4(camera.matrixWorldInverse);
+      U.uLampCol.value[i].set(L.c.r * L.i, L.c.g * L.i, L.c.b * L.i, L.r);
+    }
+    U.uLampCount.value = n;
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>

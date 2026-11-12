@@ -1,0 +1,696 @@
+<title>Furrows and Greenhouses</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the farm plot you can work, full width, with its tool belt under it; then a reading column on crops, water,
+   seasons, greenhouses and pens, ending in the owner's decisions. House style of docs/mockups/towns.html, one dark look. */
+:root{
+  color-scheme: dark;
+  --ground:#0f0e0a;
+  --panel:rgba(22,19,13,.9);
+  --panel-solid:#19160f;
+  --raise:#201c14;
+  --line:rgba(226,206,160,.17);
+  --ink:#ece4d2;
+  --muted:#a89d86;
+  --amber:#f0b43c;
+  --sky:#8fc3d8;
+  --sprout:#9fdc7a;
+  --warn:#ff6b57;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+html,body{background:var(--ground);color:var(--ink)}
+body{font-family:var(--body);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:28px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,5vw,46px)}
+h2{font-size:26px;margin-bottom:10px}
+h3{font-size:18px;letter-spacing:.04em}
+p{margin:0 0 10px;max-width:72ch}
+code{font-family:var(--mono);font-size:12.5px;color:var(--sky)}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.pill{display:inline-block;font-family:var(--display);font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:12px;padding:3px 9px;border-radius:3px;border:1px solid var(--amber);color:var(--amber)}
+header.top{display:grid;gap:10px}
+header.top .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lede{font-size:17px;max-width:70ch}
+.muted{color:var(--muted)}
+
+.farm{display:grid;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.stage{position:relative;background:#000;height:min(64vh,620px);min-height:400px}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+button{font:inherit}
+.btn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:4px 9px;font-family:var(--display);font-size:14px;letter-spacing:.05em;display:inline-flex;align-items:center;gap:6px}
+.btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.btn:hover{border-color:rgba(240,180,60,.55)}
+.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.ctl{top:12px;left:12px;padding:10px;display:grid;gap:8px;width:min(290px,calc(100% - 24px))}
+.ctl label{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.ctl output{font-family:var(--mono);color:var(--ink);font-size:12px}
+.ctl input[type=range]{width:100%;accent-color:var(--amber);margin:0}
+.ctl .seg{display:flex;flex-wrap:wrap;gap:5px}
+select{background:var(--panel-solid);color:var(--ink);border:1px solid var(--line);border-radius:3px;padding:5px;font-family:var(--body);width:100%}
+.cal{right:12px;top:12px;padding:10px 12px;display:grid;gap:4px;min-width:190px;text-align:right}
+.cal .d{font-family:var(--display);font-size:24px;font-weight:700;letter-spacing:.02em;line-height:1}
+.cal .s{font-family:var(--display);letter-spacing:.12em;text-transform:uppercase;font-size:12px;color:var(--amber)}
+.cal .w{font-size:12px;color:var(--muted)}
+.cell{right:12px;bottom:12px;padding:10px 12px;width:min(270px,calc(100% - 24px));font-size:13px;display:grid;gap:4px}
+.cell .k{font-family:var(--display);letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--muted)}
+.cell b{font-family:var(--display);font-size:17px;letter-spacing:.03em}
+.cell .why{color:var(--warn)}
+.cell .ok{color:var(--sprout)}
+.cell img{width:48px;height:48px;float:left;margin-right:8px}
+.toast{left:50%;top:12px;transform:translateX(-50%);padding:5px 12px;font-family:var(--display);letter-spacing:.06em;font-size:15px;transition:opacity .4s;opacity:0;pointer-events:none;white-space:nowrap}
+
+.belt{background:var(--panel-solid);border-top:1px solid var(--line);padding:10px 12px;display:grid;gap:10px}
+.belt .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.belt .tool{all:unset;cursor:pointer;display:grid;justify-items:center;gap:1px;width:64px;padding:4px 2px;border:1px solid var(--line);border-radius:5px;font-family:var(--display);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.belt .tool img{width:40px;height:40px}
+.belt .tool kbd{font-family:var(--mono);font-size:10px;color:var(--amber)}
+.belt .tool[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.1)}
+.belt .tool:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.seeds .tool{width:58px}
+.belt .sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+.inv{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.inv .slot{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:4px;padding:2px 7px 2px 3px;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+.inv .slot img{width:28px;height:28px}
+.inv .slot.bump{border-color:var(--sprout)}
+@media (max-width:760px){
+  .stage{height:62vh}
+  .cell{display:none}
+  .cal{top:auto;bottom:12px;min-width:0}
+}
+
+section{display:grid;gap:10px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.cols>div{min-width:0}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
+tr:last-child td{border-bottom:none}
+td.stages{white-space:nowrap}
+td.stages img{width:44px;height:44px;vertical-align:bottom}
+td img.prod{width:36px;height:36px;vertical-align:middle}
+td b{font-family:var(--display);font-size:16px;letter-spacing:.03em}
+.soils{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.soil{background:var(--raise);border:1px solid var(--line);border-radius:6px;overflow:hidden;font-size:13px}
+.soil img{width:100%;aspect-ratio:1;display:block;image-rendering:pixelated;max-width:100%}
+.soil div{padding:6px 8px}
+.soil b{font-family:var(--display);font-size:15px;display:block}
+.note{border-left:3px solid var(--amber);padding:8px 12px;background:var(--raise);border-radius:0 6px 6px 0;font-size:14px}
+.note p:last-child{margin:0}
+ol.q{display:grid;gap:12px;padding-left:22px;margin:0}
+ol.q li{max-width:80ch}
+ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
+.rec{color:var(--sprout)}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="row"><span class="pill">Proposal, not built</span><span class="eyebrow">Design mockup &middot; 2026-11-11 &middot; growing food on a hex world</span></div>
+  <h1>Furrows and Greenhouses</h1>
+  <p class="lede">Farming on hex cells: till a cell, plant a crop that suits the climate, keep it watered, wait out the days and harvest. Seasons decide what grows outdoors; a greenhouse lets anything grow anywhere, including on an airless moon. Pens hold the animals you tame. None of it is in the game yet.</p>
+</header>
+
+<div class="farm">
+  <div class="stage" id="stage">
+    <canvas id="view" aria-label="A farm plot of hex cells. Click a cell to use the selected tool. Drag to orbit, scroll to zoom."></canvas>
+    <div class="panel ctl">
+      <div class="eyebrow">Where the farm is</div>
+      <select id="site" aria-label="Site">
+        <option value="fields">Home planet: fields (temperate)</option>
+        <option value="desert">Home planet: desert oasis (hot, dry)</option>
+        <option value="jungle">Home planet: jungle clearing (hot, wet)</option>
+        <option value="tundra">Home planet: tundra (cold)</option>
+        <option value="moon">Barren moon (airless)</option>
+      </select>
+      <label for="hour">Time of day <output id="hourOut">10:00</output></label>
+      <input id="hour" type="range" min="0" max="24" step="0.1" value="10">
+      <div class="seg"><button class="btn" id="night" aria-pressed="false">Night (N)</button><button class="btn" id="reset">Reset plot</button></div>
+    </div>
+    <div class="panel cal" aria-live="polite">
+      <div class="s" id="calSeason">Northern summer</div>
+      <div class="d" id="calDay">Day 0</div>
+      <div class="w" id="calWeather">Clear</div>
+    </div>
+    <div class="panel cell" id="cellInfo" aria-live="polite"><div class="k">Click a cell</div><div class="muted">With the hoe, seeds, can, fertiliser or sickle, a click works the cell. With the hand, it tells you what is growing and why.</div></div>
+    <div class="panel toast" id="toast"></div>
+  </div>
+  <div class="belt">
+    <div class="row" id="tools" role="group" aria-label="Tools"></div>
+    <div class="row seeds" id="seeds" role="group" aria-label="Seeds"></div>
+    <div class="row"><button class="btn" id="nextDay">Next day (Space)</button><button class="btn" id="next5">+5 days</button><span class="sep"></span><div class="inv" id="inv" aria-label="Harvest"></div></div>
+  </div>
+</div>
+
+<section>
+  <h2>Crops by climate</h2>
+  <p>Each crop has a climate it grows in outdoors and the seasons it grows in. A year is 100 days (<code>orbit-and-seasons</code>), a day is 48 minutes, so a 6-day wheat crop takes about five hours of play. Inside a greenhouse every crop grows in every season. The four stage sprites are what the plot shows.</p>
+  <div class="tbl"><table id="cropTable">
+    <thead><tr><th>Crop</th><th>Stages</th><th>Climate outdoors</th><th>Seasons outdoors</th><th>Days</th><th>Water</th><th>Yield</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Soil, water and fertiliser</h2>
+  <div class="soils" id="soils"></div>
+  <div class="cols">
+    <div>
+      <h3>Tilling</h3>
+      <p>The hoe turns a grass, sand or dirt cell into tilled soil. It is a top-block change, so it is a world edit on the durable path like digging (<code>dig-and-place</code>): the cell's top block becomes <i>tilled</i>, and an untended tilled cell goes back to dirt after 10 days.</p>
+      <p>Rock, ice and regolith cannot be tilled. On the moon you bring soil: a greenhouse is placed with tilled cells inside it.</p>
+    </div>
+    <div>
+      <h3>Water and irrigation</h3>
+      <p>A crop grows on a day it has water: watered by can that day, rained on, or <b>irrigated</b>, which is any cell within one cell of water. A channel dug from a river or pond keeps the cells beside it wet for good. That is a rule on the water cells around a crop, so it works today without the flow field <code>water-flow</code> leaves at zero; when water flows, a channel fed from upstream stays full.</p>
+      <p>Rice only grows on irrigated cells. Three dry days and a crop wilts: it stops growing, and a fourth kills it.</p>
+    </div>
+    <div>
+      <h3>Fertiliser</h3>
+      <p>Compost (from the pen's muck, crop scraps and the hearth's ash) makes a cell fertile: crops on it grow half again as fast and yield one more. It is used up at harvest.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Seasons, frost and greenhouses</h2>
+  <div class="cols">
+    <div>
+      <h3>Seasons</h3>
+      <p>Day 0 is the northern summer; autumn is day 25, winter 50, spring 75. Outdoors, each crop grows only in its seasons. Winter frost kills every crop in the open except frost kale. The tropics (desert, jungle) barely have seasons, so their crops grow all year.</p>
+      <p>Rain falls on some days, more in spring and autumn, and waters every open cell. The weather would come from the real atmosphere (<code>weather-rain</code>); the mockup rolls a die.</p>
+    </div>
+    <div>
+      <h3>Greenhouses</h3>
+      <p>A greenhouse is a building of glass panes over a group of cells. Inside, the season and climate do not count: it is always growing weather. On a cold world that is how you eat in winter. On an airless body the greenhouse is <b>sealed</b>, holds air, and has grow lamps, since a pane alone does not make a farm on a moon. The glowcap needs no light at all and is the first crop a moon base grows.</p>
+    </div>
+    <div>
+      <h3>Lit at night</h3>
+      <p>Lanterns on posts round the plot, a grow lamp in the greenhouse, the farmhouse's window and door lamp, the pen's lamp. Each lights what is near it wherever the camera is; the moon stays dim. Crops do not need light to grow (except in a sealed greenhouse, where the grow lamp is the sun).</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Pens and the harvest</h2>
+  <div class="cols">
+    <div>
+      <p><b>Pens</b> are fenced cells with a gate. Animals you tame (see the animals mockup: woolbacks, plodders, meadow hens, ridge goats, sand striders) are kept in them. Each morning a pen's hens lay, its plodders give milk, and its woolbacks grow fleece toward a shearing every 4 days. The plot above has a pen with three woolbacks and three hens; their produce lands in your harvest each day.</p>
+    </div>
+    <div>
+      <p><b>Harvest</b> is the sickle on a ripe crop: the produce goes straight to the inventory with a count that pops, the cell stays tilled and dry, and any fertiliser is spent. A ripe crop left standing does not rot in this proposal; it waits for you. Produce stacks in the inventory grid like anything else (<code>inventory-grid</code>).</p>
+    </div>
+    <div>
+      <p><b>Saving:</b> what the player did is stored: the tilled top blocks, each crop's species and the world time it was planted, its water days and fertiliser. Its stage is then a function of world time, so a farm costs nothing while you are away and simply has grown when you come back. World time passes only while the world is played.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>About the art</h2>
+  <p class="muted">Crop stages, produce, tools and soil textures are painted by code in the owner's friend's marker style, not by hand: <code>tools/art/farming_art.py</code> drives the hand-drawn-illustration kit. In the plot each crop is a pair of crossed sprites, the way the game's ground clutter is drawn. The ground textures are sampled with nearest filtering, as terrain is.</p>
+</section>
+
+<section>
+  <h2>Decisions / questions for the owner</h2>
+  <ol class="q">
+    <li><b>Do crops die?</b> <span class="rec">Recommendation: from frost and from four dry days only; never from neglect while you are away</span> (time stops when the game is closed, so a crop's days are only played days).</li>
+    <li><b>How fast?</b> <span class="rec">Recommendation: 3 to 7 game days to ripe</span> (2.5 to 5.5 hours of play), so a crop is something you come back to, not something you watch.</li>
+    <li><b>Is irrigation just "next to water"?</b> <span class="rec">Recommendation: yes for now;</span> when water flows (<code>voxel-engine-foundation</code>), require the channel to be fed, so a dry ditch does nothing.</li>
+    <li><b>Greenhouse as a building or as cells?</b> <span class="rec">Recommendation: a placed building from the building kit</span> (<code>player-building</code>), whose footprint marks its cells as sheltered; sealed if it has a door with an airlock.</li>
+    <li><b>Do towns farm on their own?</b> <span class="rec">Recommendation: yes, town fields (already drawn in <code>tenebris-towns</code>) grow and are harvested by townsfolk</span>, as changes the world makes that never overwrite the player's.</li>
+    <li><b>Crops per planet?</b> <span class="rec">Recommendation: like animals, an explicit roster per body;</span> a crop from one world grows elsewhere only as seed you carried, and only in a greenhouse.</li>
+  </ol>
+</section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// =====================================================================
+// Data
+// =====================================================================
+const ART = n => "farming/" + n + ".png";
+const CROPS = {
+  wheat: { name: "Wheat", days: 6, yield: 3, climate: ["temperate"], seasons: [0, 3], water: "normal", text: "fields, low mountains" },
+  turnip: { name: "Turnip", days: 4, yield: 2, climate: ["temperate", "cold"], seasons: [0, 1, 3], water: "normal", text: "fields, tundra edge" },
+  sun_melon: { name: "Sun melon", days: 7, yield: 2, climate: ["hot"], seasons: [0, 1, 2, 3], water: "thirsty", text: "desert, irrigated" },
+  chili: { name: "Chili", days: 5, yield: 4, climate: ["hot"], seasons: [0, 1, 2, 3], water: "normal", text: "jungle, desert" },
+  rice: { name: "Rice", days: 7, yield: 4, climate: ["temperate", "hot"], seasons: [0, 1, 3], water: "irrigated only", paddy: 1, text: "swamp, jungle, any channel" },
+  frost_kale: { name: "Frost kale", days: 5, yield: 2, climate: ["cold", "temperate"], seasons: [0, 1, 2, 3], water: "normal", hardy: 1, text: "tundra, mountains; survives frost" },
+  glowcap: { name: "Glowcap", days: 3, yield: 3, climate: [], seasons: [], water: "normal", dark: 1, text: "only under a roof: greenhouse or cave" },
+};
+const SITES = {
+  fields: { name: "fields", climate: "temperate", ground: "grass", seasons: 1, sky: 0x9cc6e4 },
+  desert: { name: "desert oasis", climate: "hot", ground: "sand", seasons: 0, rainless: 1, sky: 0xb8d2e6 },
+  jungle: { name: "jungle clearing", climate: "hot", ground: "grass", seasons: 0, wet: 1, sky: 0x9cc6da },
+  tundra: { name: "tundra", climate: "cold", ground: "grass", seasons: 1, snowy: 1, sky: 0xb4c8dc },
+  moon: { name: "barren moon", climate: "airless", ground: "regolith", seasons: 0, airless: 1, sky: 0x040508 },
+};
+const SEASON_NAMES = ["summer", "autumn", "winter", "spring"];
+const seasonOf = day => Math.floor(((day % 100) + 12.5) / 25) % 4;
+const TOOLS = [
+  { id: "hand", name: "Look", icon: null, key: "1" }, { id: "hoe", name: "Hoe", icon: "tool_hoe", key: "2" }, { id: "seeds", name: "Plant", icon: "tool_seeds", key: "3" },
+  { id: "can", name: "Water", icon: "tool_can", key: "4" }, { id: "fert", name: "Compost", icon: "tool_fert", key: "5" }, { id: "sickle", name: "Harvest", icon: "tool_sickle", key: "6" },
+];
+let TOOL = "seeds", SEED_CROP = "wheat", SITE = "fields", DAY = 0, HOUR = 10, RAIN = false;
+const INV = {};
+
+// crop table and soil cards (DOM, from the same data)
+(function docs() {
+  const tb = document.querySelector("#cropTable tbody");
+  const SN = s => s.length === 4 ? "all year" : s.length ? s.map(i => SEASON_NAMES[i]).join(", ") : "never outdoors";
+  for (const [id, c] of Object.entries(CROPS)) {
+    tb.insertAdjacentHTML("beforeend", `<tr><td><img class="prod" src="${ART("produce_" + id)}" alt=""> <b>${c.name}</b></td><td class="stages">${[0, 1, 2, 3].map(s => `<img src="${ART(id + "_" + s)}" alt="${c.name}, stage ${s}">`).join("")}</td><td>${c.climate.length ? c.climate.join(", ") : "none"}<br><span class="muted">${c.text}</span></td><td>${SN(c.seasons)}${c.hardy ? " <span class='muted'>(frost-hardy)</span>" : ""}</td><td>${c.days}</td><td>${c.water}</td><td>${c.yield}</td></tr>`);
+  }
+  const soils = [["ground_grass", "Grass", "Till it with the hoe"], ["ground_tilled", "Tilled", "Ready to plant"], ["ground_wet", "Watered", "Grows today"], ["ground_fertile", "Composted", "+50% growth, +1 yield"], ["ground_sand", "Sand", "Tills, dries fast"], ["ground_regolith", "Regolith", "Cannot be tilled"]];
+  document.getElementById("soils").innerHTML = soils.map(([f, n, t]) => `<div class="soil"><img src="${ART(f)}" alt="${n} texture"><div><b>${n}</b><span class="muted">${t}</span></div></div>`).join("");
+})();
+
+// =====================================================================
+// Lighting: one shader; every lamp is in one uniform array, so each lights
+// what is near it wherever the camera is. Textured sprites use it too.
+// =====================================================================
+const MAXL = 24;
+const U = {
+  uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) },
+  uSky: { value: new THREE.Color() }, uGround: { value: new THREE.Color() }, uFogCol: { value: new THREE.Color() }, uFogFar: { value: 160 },
+  uLampPos: { value: Array.from({ length: MAXL }, () => new THREE.Vector3()) }, uLampCol: { value: Array.from({ length: MAXL }, () => new THREE.Vector3()) },
+  uLampReach: { value: new Array(MAXL).fill(1) }, uLampN: { value: 0 },
+};
+const VS = `
+varying vec3 vW; varying vec3 vN; varying vec2 vUv;
+void main(){
+  vUv = uv;
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const FS = `
+uniform vec3 uColor; uniform vec3 uEmissive; uniform float uOpacity; uniform sampler2D uMap; uniform float uUseMap; uniform float uUpNormal;
+uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uSky; uniform vec3 uGround; uniform vec3 uFogCol; uniform float uFogFar;
+uniform vec3 uLampPos[${MAXL}]; uniform vec3 uLampCol[${MAXL}]; uniform float uLampReach[${MAXL}]; uniform int uLampN;
+varying vec3 vW; varying vec3 vN; varying vec2 vUv;
+void main(){
+  vec4 base = vec4(uColor, uOpacity);
+  if (uUseMap > 0.5) { vec4 t = texture2D(uMap, vUv); if (t.a < 0.5) discard; base.rgb *= t.rgb; }
+  vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
+  if (uUpNormal > 0.5) n = normalize(vec3(n.x * 0.3, 1.0, n.z * 0.3));
+  vec3 light = mix(uGround, uSky, n.y * 0.5 + 0.5) + uSunCol * max(dot(n, uSunDir), 0.0);
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uLampN) break;
+    vec3 d = uLampPos[i] - vW; float r = length(d);
+    float f = clamp(1.0 - r / uLampReach[i], 0.0, 1.0); f *= f;
+    light += uLampCol[i] * f * (0.3 + 0.7 * max(dot(n, d / max(r, 0.001)), 0.0));
+  }
+  vec3 col = base.rgb * light + uEmissive;
+  float fog = smoothstep(uFogFar * 0.35, uFogFar, length(vW - cameraPosition));
+  gl_FragColor = vec4(mix(col, uFogCol, fog), base.a);
+}`;
+function litMat(o = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: Object.assign({
+      uColor: { value: new THREE.Color(o.color ?? 0xffffff) }, uEmissive: { value: new THREE.Color(o.emissive ?? 0) }, uOpacity: { value: o.opacity ?? 1 },
+      uMap: { value: o.map || null }, uUseMap: { value: o.map ? 1 : 0 }, uUpNormal: { value: o.up ? 1 : 0 },
+    }, U),
+    vertexShader: VS, fragmentShader: FS, transparent: (o.opacity ?? 1) < 1, depthWrite: (o.opacity ?? 1) >= 1, side: o.side ?? THREE.FrontSide,
+  });
+}
+const loader = new THREE.TextureLoader();
+const TEX = {};
+function tex(name) {
+  if (TEX[name]) return TEX[name];
+  const t = loader.load(ART(name), undefined, undefined, () => { /* file:// can refuse a texture to WebGL; the colour still shows */ });
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearMipMapLinearFilter;
+  return (TEX[name] = t);
+}
+const MATS = {};
+const groundMat = name => MATS[name] || (MATS[name] = litMat({ map: tex(name) }));
+const cropMat = name => MATS[name] || (MATS[name] = litMat({ map: tex(name), side: THREE.DoubleSide, up: 1 }));
+
+// =====================================================================
+// Renderer and a small orbit control
+// =====================================================================
+const canvas = document.getElementById("view"), stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 500);
+const orbit = { yaw: 0.5, pitch: 0.72, dist: 30, target: new THREE.Vector3(0, 0, 0) };
+function placeCamera() { const cp = Math.cos(orbit.pitch); camera.position.set(orbit.target.x + orbit.dist * cp * Math.sin(orbit.yaw), orbit.target.y + orbit.dist * Math.sin(orbit.pitch), orbit.target.z + orbit.dist * cp * Math.cos(orbit.yaw)); camera.lookAt(orbit.target); }
+function resize() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+window.addEventListener("resize", resize);
+{
+  const ptrs = new Map(); let moved = 0, pinch = 0;
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); moved = 0; });
+  canvas.addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId)) { hover(e); return; }
+    const [x, y] = ptrs.get(e.pointerId); const dx = e.clientX - x, dy = e.clientY - y; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 1) { orbit.yaw -= dx * 0.006; orbit.pitch = Math.min(1.45, Math.max(0.12, orbit.pitch + dy * 0.005)); moved += Math.abs(dx) + Math.abs(dy); }
+    else if (ptrs.size === 2) { const p = [...ptrs.values()]; const d = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]); if (pinch) orbit.dist = Math.min(80, Math.max(6, orbit.dist * pinch / d)); pinch = d; moved = 99; }
+  });
+  const up = e => { ptrs.delete(e.pointerId); pinch = 0; if (moved < 5 && e.type === "pointerup") click(e); };
+  canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  canvas.addEventListener("wheel", e => { e.preventDefault(); orbit.dist = Math.min(80, Math.max(6, orbit.dist * (1 + Math.sign(e.deltaY) * 0.1))); }, { passive: false });
+}
+
+// =====================================================================
+// The plot: hex cells 2.833 m across. Ring <= 3 is farmland, a channel runs
+// along the south edge, the greenhouse sits east, the pen west.
+// =====================================================================
+const W = 2.833, RH = W / Math.sqrt(3), RINGS = 6;
+const hexXZ = (q, r) => [W * (q + r / 2), RH * 1.5 * r];
+const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+const world = new THREE.Group(); scene.add(world);
+const CELLS = new Map(); const key = (q, r) => q + "," + r;
+const LAMPS = [];
+const TOPG = new THREE.CircleGeometry(RH, 6); TOPG.rotateX(-Math.PI / 2); TOPG.rotateY(Math.PI / 6);
+const SIDEG = new THREE.CylinderGeometry(RH, RH, 4, 6, 1, true); SIDEG.translate(0, -2, 0); // a cylinder's six corners already sit where the hex top's do
+const PLANE = new THREE.PlaneGeometry(1, 1); PLANE.translate(0, 0.5, 0);
+const GH = { q: 4, r: -2 }, PEN = { q: -4, r: 1 };
+const dist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
+
+function build() {
+  while (world.children.length) world.remove(world.children[0]);
+  CELLS.clear(); LAMPS.length = 0; ANIMALS.length = 0;
+  const S = SITES[SITE];
+  const sideM = litMat({ color: SITE === "desert" ? 0xb8925c : SITE === "moon" ? 0x55555a : 0x6b4a30 });
+  for (let q = -RINGS; q <= RINGS; q++) for (let r = -RINGS; r <= RINGS; r++) {
+    if (Math.abs(q + r) > RINGS) continue;
+    const [x, z] = hexXZ(q, r);
+    const c = { q, r, x, z, h: 0, ground: S.ground, tilled: false, wet: 0, fert: false, crop: null, water: false, gh: false, pen: false, dry: 0 };
+    if (r === 4 && q >= -5 && q <= 2 && !S.airless) { c.water = true; c.h = -1; }
+    if (dist(c, GH) <= 1) c.gh = true;
+    if (dist(c, PEN) <= 1) c.pen = true;
+    CELLS.set(key(q, r), c);
+    c.top = new THREE.Mesh(TOPG, groundMat("ground_" + S.ground)); c.top.position.set(x, c.h, z); c.top.userData.cell = c; world.add(c.top);
+    const side = new THREE.Mesh(SIDEG, sideM); side.position.set(x, c.h, z); world.add(side);
+    c.plants = new THREE.Group(); c.plants.position.set(x, c.h, z); world.add(c.plants);
+    if (c.water) { const wm = new THREE.Mesh(new THREE.CylinderGeometry(RH, RH, 0.05, 6), litMat({ color: 0x2f6f9a, opacity: 0.8 })); wm.position.set(x, -0.25, z); world.add(wm); }
+  }
+  for (const c of CELLS.values()) c.irrigated = !c.water && DIRS.some(([dq, dr]) => { const n = CELLS.get(key(c.q + dq, c.r + dr)); return n && n.water; });
+  greenhouse(S); pen(); farmhouse(); posts();
+  if (S.snowy) for (const c of CELLS.values()) if (!c.water && !c.gh && Math.hypot(c.x, c.z) > 11) { const s = new THREE.Mesh(new THREE.CylinderGeometry(RH * 0.98, RH * 0.98, 0.12, 6), litMat({ color: 0xe8eef2 })); s.position.set(c.x, 0.06, c.z); world.add(s); }
+  seedPlot();
+}
+function box(w, h, d, x, y, z, mat, parent = world) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m; }
+function lamp(x, y, z, color, power, reach, kind = "lamp", mesh = null) { LAMPS.push({ pos: new THREE.Vector3(x, y, z), col: new THREE.Color(color), power, reach, kind, mesh, on: color }); }
+function lanternPost(x, z) {
+  const wood = litMat({ color: 0x4a3a2a });
+  box(0.14, 2.4, 0.14, x, 1.2, z, wood); box(0.5, 0.1, 0.1, x + 0.2, 2.35, z, wood);
+  const b = box(0.26, 0.34, 0.26, x + 0.42, 2.1, z, new THREE.MeshBasicMaterial({ color: 0xffc070 }));
+  lamp(x + 0.42, 2.0, z, 0xffc070, 1.5, 9.5, "lamp", b);
+}
+function posts() {
+  // lanterns ring the farmland, so every cell is within reach of one
+  const [gx, gz] = hexXZ(GH.q, GH.r), [px, pz] = hexXZ(PEN.q, PEN.r);
+  for (let i = 0; i < 8; i++) {
+    const a = Math.PI / 4 * i + 0.2, x = Math.cos(a) * 11.2, z = Math.sin(a) * 11.2;
+    if (Math.abs(x - gx) < 5.2 && Math.abs(z - gz) < 4.8) continue; // the greenhouse has its own lamp
+    if (Math.hypot(x - px, z - pz) < 5.6) continue;                // so has the pen
+    lanternPost(x, z);
+  }
+  lanternPost(0.4, 0.4);
+}
+function greenhouse(S) {
+  const [cx, cz] = hexXZ(GH.q, GH.r), glass = litMat({ color: 0xcfe8f0, opacity: 0.22, side: THREE.DoubleSide }), frame = litMat({ color: 0xd8d8d0 });
+  const w = 8.6, d = 7.6, h = 3.2;
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1]]) box(0.12, h, 0.12, cx + sx * w / 2, h / 2, cz + sz * d / 2, frame);
+  box(w, 0.1, 0.1, cx, h, cz - d / 2, frame); box(w, 0.1, 0.1, cx, h, cz + d / 2, frame); box(0.1, 0.1, d, cx, h + 1.4, cz, frame);
+  for (const sz of [-1, 1]) { const p = box(w, 0.04, d / 2 * 1.13, cx, h + 0.7, cz + sz * d / 4, glass); p.rotation.x = sz * 0.6; }
+  box(w, h, 0.04, cx, h / 2, cz - d / 2, glass); box(w, h, 0.04, cx, h / 2, cz + d / 2, glass); box(0.04, h, d, cx + w / 2, h / 2, cz, glass);
+  const back = box(0.04, h, d, cx - w / 2, h / 2, cz, glass); back.scale.z = 0.7; back.position.z = cz + d * 0.15;
+  if (S.airless) { box(1.2, 2.2, 1.2, cx - w / 2 - 0.6, 1.1, cz - d * 0.35, litMat({ color: 0x8a8e96 })); } // the airlock
+  const g = box(0.6, 0.12, 0.3, cx, h - 0.15, cz, new THREE.MeshBasicMaterial({ color: 0xffe8f0 }));
+  lamp(cx, h - 0.5, cz, 0xffe0f0, 1.6, 8, "grow", g);
+}
+function farmhouse() {
+  const [x, z] = hexXZ(-1, -5), wall = litMat({ color: 0xc8b48a }), roof = litMat({ color: 0x7a3a2a }), wood = litMat({ color: 0x5a3e28 });
+  box(6, 3, 4.4, x, 1.5, z, wall);
+  const r = new THREE.Mesh(new THREE.ConeGeometry(4.4, 2.2, 4), roof); r.rotation.y = Math.PI / 4; r.scale.set(1.15, 1, 0.85); r.position.set(x, 4.1, z); world.add(r);
+  box(1.0, 2.0, 0.1, x + 1.2, 1.0, z + 2.22, wood);
+  const win = box(0.9, 0.8, 0.08, x - 1.4, 1.8, z + 2.22, new THREE.MeshBasicMaterial({ color: 0xffc070 }));
+  lamp(x - 1.4, 1.8, z + 2.6, 0xffb060, 0.9, 5, "window", win);
+  const dl = box(0.22, 0.3, 0.22, x + 2.0, 2.3, z + 2.4, new THREE.MeshBasicMaterial({ color: 0xffc070 }));
+  lamp(x + 2.0, 2.2, z + 2.7, 0xffc070, 1.2, 8, "lamp", dl);
+}
+const ANIMALS = [];
+function pen() {
+  const [cx, cz] = hexXZ(PEN.q, PEN.r), wood = litMat({ color: 0x7a5a3a }), R = 4.6;
+  for (let i = 0; i < 18; i++) {
+    const a = i / 18 * Math.PI * 2, b = (i + 1) / 18 * Math.PI * 2;
+    box(0.12, 1.1, 0.12, cx + Math.cos(a) * R, 0.55, cz + Math.sin(a) * R, wood);
+    if (i === 4) continue; // the gate gap
+    const rail = box(0.08, 0.08, 2 * R * Math.sin(Math.PI / 18), cx + Math.cos((a + b) / 2) * R, 0.9, cz + Math.sin((a + b) / 2) * R, wood); rail.rotation.y = -(a + b) / 2;
+    const rail2 = rail.clone(); rail2.position.y = 0.5; world.add(rail2);
+  }
+  const trough = box(1.4, 0.35, 0.5, cx + 2.4, 0.18, cz - 1.2, wood);
+  lanternPost(cx - R - 0.4, cz + 0.6);
+  const wool = litMat({ color: 0xeee6d2 }), dark = litMat({ color: 0x4a3e3c }), hen = litMat({ color: 0xde783c }), red = litMat({ color: 0xe02828 });
+  const sph = new THREE.SphereGeometry(1, 12, 10);
+  for (let i = 0; i < 6; i++) {
+    const g = new THREE.Group(), isHen = i >= 3;
+    const s = (m, sx, sy, sz, x, y, z) => { const o = new THREE.Mesh(sph, m); o.scale.set(sx, sy, sz); o.position.set(x, y, z); g.add(o); return o; };
+    if (isHen) { s(hen, 0.22, 0.17, 0.15, 0, 0.32, 0); s(hen, 0.1, 0.1, 0.1, 0.2, 0.48, 0); s(red, 0.04, 0.06, 0.02, 0.21, 0.6, 0); }
+    else { s(wool, 0.6, 0.38, 0.36, 0, 0.75, 0); s(dark, 0.18, 0.15, 0.14, 0.62, 0.85, 0); for (const [lx, lz] of [[0.3, 0.18], [0.3, -0.18], [-0.3, 0.18], [-0.3, -0.18]]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.45, 5), dark); l.position.set(lx, 0.22, lz); g.add(l); } }
+    g.position.set(cx + (Math.random() - 0.5) * 4, 0, cz + (Math.random() - 0.5) * 4);
+    world.add(g); ANIMALS.push({ g, hen: isHen, cx, cz, R: R - 0.8, goal: new THREE.Vector2(cx, cz), t: 0 });
+  }
+}
+
+// =====================================================================
+// Farming rules: the day tick
+// =====================================================================
+const farmCells = () => [...CELLS.values()].filter(c => !c.water && !c.pen && (Math.hypot(c.x, c.z) < 10.6 || c.gh));
+function canTill(c) { return !c.water && !c.pen && (c.gh || !SITES[SITE].airless) && Math.hypot(c.x, c.z) < 18; }
+function growReason(c) {
+  // why a crop would or would not grow on this cell today; null means it grows
+  const crop = CROPS[c.crop.id], S = SITES[SITE], season = seasonOf(DAY);
+  if (!c.gh) {
+    if (S.airless) return "No air outdoors: only a sealed greenhouse grows";
+    if (crop.dark) return "Glowcaps only grow under a roof";
+    if (!crop.climate.includes(S.climate)) return `${crop.name} does not grow in the ${S.climate} climate outdoors`;
+    if (S.seasons && !crop.seasons.includes(season)) return `${crop.name} does not grow outdoors in ${SEASON_NAMES[season]}`;
+  }
+  if (crop.paddy && !c.irrigated) return "Rice needs an irrigated cell, next to water";
+  if (!(c.wet > 0 || c.irrigated || (RAIN && !c.gh))) return "Dry: water it";
+  return null;
+}
+function stageOf(c) { const crop = CROPS[c.crop.id], f = c.crop.prog / crop.days; return f >= 1 ? 3 : f >= 0.6 ? 2 : f >= 0.25 ? 1 : 0; }
+let LOG = [];
+function nextDay() {
+  const S = SITES[SITE];
+  const season = seasonOf(DAY + 1);
+  const rainChance = S.rainless || S.airless ? 0 : S.wet ? 0.5 : [0.15, 0.35, 0.2, 0.35][season];
+  RAIN = Math.random() < rainChance;
+  LOG = [];
+  let grew = 0, died = 0;
+  for (const c of CELLS.values()) {
+    if (c.crop) {
+      const before = stageOf(c);
+      const frost = !c.gh && S.seasons && season === 2 && !S.airless && !CROPS[c.crop.id].hardy && S.climate !== "hot";
+      if (frost) { c.crop = null; died++; LOG.push("frost"); continue; }
+      const why = growReason(c);
+      if (!why && before < 3) { c.crop.prog += c.fert ? 1.5 : 1; c.dry = 0; grew++; }
+      else if (why && why.startsWith("Dry")) { c.dry++; if (c.dry >= 4) { c.crop = null; died++; LOG.push("dry"); } }
+    }
+    c.wet = Math.max(0, c.wet - 1);
+    if (RAIN && !c.gh && c.tilled) c.wet = 1;
+    if (c.tilled && !c.crop) { c.idle = (c.idle || 0) + 1; if (c.idle > 10) { c.tilled = false; c.fert = false; } } else c.idle = 0;
+  }
+  DAY++;
+  // the pen: hens lay each morning, woolbacks grow fleece every 4 days
+  addInv("drop_egg", 3, false); if (DAY % 4 === 0) addInv("drop_wool", 3, false);
+  refreshAll();
+  const msg = [`Day ${DAY}`];
+  if (RAIN) msg.push("rain overnight watered the open field");
+  if (grew) msg.push(`${grew} crop${grew > 1 ? "s" : ""} grew`);
+  if (died) msg.push(`${died} lost to ${LOG.includes("frost") ? "frost" : "drought"}`);
+  msg.push("3 eggs from the pen" + (DAY % 4 === 0 ? ", and fleece" : ""));
+  toast(msg.join(": ").replace(/: /g, (m, i) => i < 8 ? ": " : ", "));
+}
+function addInv(icon, n, bump = true) { INV[icon] = (INV[icon] || 0) + n; drawInv(bump ? icon : null); }
+
+// =====================================================================
+// Drawing the cells: ground texture by state, crops as crossed sprites
+// =====================================================================
+const SPOTS = [[0, 0], [0.75, 0.35], [-0.6, 0.5], [0.15, -0.8], [-0.7, -0.45], [0.75, -0.5]];
+function refreshCell(c) {
+  const S = SITES[SITE];
+  let g = "ground_" + S.ground;
+  if (c.tilled) g = c.wet > 0 || (c.irrigated && c.crop) || (RAIN && !c.gh) ? "ground_wet" : c.fert ? "ground_fertile" : "ground_tilled";
+  else if (c.gh && S.airless) g = "ground_tilled";
+  c.top.material = groundMat(g);
+  while (c.plants.children.length) c.plants.remove(c.plants.children[0]);
+  if (!c.crop) return;
+  const s = stageOf(c), m = cropMat(c.crop.id + "_" + s), size = [0.9, 1.0, 1.25, 1.45][s];
+  const spots = s === 0 ? SPOTS.slice(0, 3) : SPOTS;
+  for (const [dx, dz] of spots) {
+    for (const a of [0, Math.PI / 2]) {
+      const p = new THREE.Mesh(PLANE, m); p.scale.set(size, size, 1); p.rotation.y = a + c.q * 0.7 + dx; p.position.set(dx * 0.9, 0.01, dz * 0.9); p.userData.cell = c; c.plants.add(p);
+    }
+  }
+}
+function refreshAll() { for (const c of CELLS.values()) refreshCell(c); calendar(); showCell(lastCell); }
+function seedPlot() {
+  // a farm in progress, so the first view shows what farming does
+  const plan = { fields: ["wheat", "turnip", "rice", "frost_kale"], desert: ["sun_melon", "chili", "rice", "sun_melon"], jungle: ["chili", "rice", "sun_melon", "chili"], tundra: ["frost_kale", "turnip", "frost_kale", "turnip"], moon: [] }[SITE];
+  for (const c of farmCells()) {
+    const d = Math.hypot(c.x, c.z);
+    if (c.gh) { if (canTill(c)) { c.tilled = true; c.wet = 1; c.crop = { id: (c.q + c.r) % 2 ? "glowcap" : SITE === "moon" ? "frost_kale" : "chili", prog: 1 + ((c.q * 7 + c.r * 3) & 3) }; } continue; }
+    if (SITES[SITE].airless || d > 9.5 || d < 1) continue;
+    const ang = Math.atan2(c.z, c.x), sector = Math.floor(((ang + Math.PI) / (Math.PI * 2)) * 6) % 6;
+    if (sector === 5) continue; // left in grass, to till yourself
+    c.tilled = true; c.wet = sector % 2;
+    if (sector === 4 && d > 5) { c.fert = true; continue; }
+    const id = c.irrigated ? "rice" : plan[sector % 4];
+    if (id === "rice" && !c.irrigated) continue;
+    c.crop = { id, prog: (CROPS[id].days * (0.2 + 0.85 * ((c.q * 13 + c.r * 7 + 20) % 5) / 4)) };
+    if (c.crop.prog >= CROPS[id].days * 0.95) c.crop.prog = CROPS[id].days;
+  }
+  if (SITES[SITE].airless) { toast("Airless: only the sealed greenhouse can be farmed"); }
+}
+
+// =====================================================================
+// Tools: a click works the cell under the cursor
+// =====================================================================
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+function cellUnder(e) {
+  const r = canvas.getBoundingClientRect(); mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hit = ray.intersectObjects(world.children, true).find(h => h.object.userData.cell);
+  return hit ? hit.object.userData.cell : null;
+}
+let lastCell = null;
+const hl = new THREE.Mesh(new THREE.RingGeometry(RH * 0.86, RH * 0.98, 6), new THREE.MeshBasicMaterial({ color: 0xf0b43c, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
+hl.rotation.x = -Math.PI / 2; hl.geometry.rotateZ(Math.PI / 6); hl.visible = false; scene.add(hl);
+function hover(e) { const c = cellUnder(e); hl.visible = !!c; if (c) hl.position.set(c.x, c.h + 0.03, c.z); }
+function click(e) {
+  const c = cellUnder(e); if (!c) return;
+  lastCell = c; hl.visible = true; hl.position.set(c.x, c.h + 0.03, c.z);
+  const S = SITES[SITE];
+  if (TOOL === "hoe") {
+    if (c.water) toast("That is the channel"); else if (c.pen) toast("That is the pen");
+    else if (!canTill(c)) toast(S.airless ? "Regolith cannot be tilled: farm inside the greenhouse" : "Too far from the farm");
+    else if (c.tilled) toast("Already tilled"); else { c.tilled = true; toast("Tilled"); }
+  } else if (TOOL === "seeds") {
+    if (!c.tilled) toast("Till the cell first (hoe)"); else if (c.crop) toast("Something is already growing here");
+    else { c.crop = { id: SEED_CROP, prog: 0 }; c.dry = 0; const why = growReason(c); toast(`Planted ${CROPS[SEED_CROP].name.toLowerCase()}` + (why && !why.startsWith("Dry") ? `, but: ${why.toLowerCase()}` : "")); }
+  } else if (TOOL === "can") {
+    if (!c.tilled) toast("Water goes on tilled soil"); else { c.wet = 1; toast(c.irrigated ? "Watered (this cell is irrigated anyway)" : "Watered for today"); }
+  } else if (TOOL === "fert") {
+    if (!c.tilled) toast("Till the cell first"); else if (c.fert) toast("Already composted"); else { c.fert = true; toast("Composted: grows half again as fast, +1 yield"); }
+  } else if (TOOL === "sickle") {
+    if (!c.crop) toast("Nothing to harvest"); else if (stageOf(c) < 3) toast(`${CROPS[c.crop.id].name} is not ripe yet`);
+    else { const crop = CROPS[c.crop.id], n = crop.yield + (c.fert ? 1 : 0); addInv("produce_" + c.crop.id, n); toast(`+${n} ${crop.name.toLowerCase()}`); c.crop = null; c.fert = false; c.wet = 0; }
+  }
+  refreshCell(c); showCell(c);
+}
+function showCell(c) {
+  const box = document.getElementById("cellInfo"); if (!c) return;
+  const S = SITES[SITE];
+  const where = c.water ? "Irrigation channel" : c.pen ? "Animal pen" : c.gh ? (S.airless ? "Sealed greenhouse" : "Greenhouse") : "Open field";
+  const soil = c.water ? "water" : c.tilled ? ["tilled", c.fert ? "composted" : null, c.wet > 0 ? "watered today" : null, c.irrigated ? "irrigated" : null].filter(Boolean).join(", ") : S.ground;
+  let crop = "";
+  if (c.crop) {
+    const cr = CROPS[c.crop.id], s = stageOf(c), why = growReason(c);
+    const left = Math.max(0, Math.ceil((cr.days - c.crop.prog) / (c.fert ? 1.5 : 1)));
+    crop = `<div><img src="${ART(c.crop.id + "_" + s)}" alt=""><b>${cr.name}</b><br><span class="muted">${["seeded", "sprouting", "growing", "ripe"][s]}${s < 3 ? `, ${left} growing day${left === 1 ? "" : "s"} to go` : ", harvest with the sickle"}</span></div><div style="clear:both" class="${why ? "why" : "ok"}">${s === 3 ? "Ready." : why ? why + "." : "Will grow tonight."}${c.dry ? ` Dry ${c.dry} day${c.dry > 1 ? "s" : ""}.` : ""}</div>`;
+  }
+  box.innerHTML = `<div class="k">${where} &middot; cell ${c.q}, ${c.r}</div><div class="muted">Soil: ${soil}</div>${crop}`;
+}
+
+// =====================================================================
+// Sky, sun, moon and lamps
+// =====================================================================
+const C = h => new THREE.Color(h);
+function sky(time) {
+  const S = SITES[SITE];
+  const a = (HOUR - 6) / 24 * Math.PI * 2, el = Math.sin(a);
+  const day = Math.max(0, Math.min(1, el * 4 + 0.15)), dusk = Math.max(0, 1 - Math.abs(el) * 5);
+  if (day > 0) { U.uSunDir.value.set(Math.cos(a) * 0.8, Math.max(el, 0.12), 0.45).normalize(); U.uSunCol.value.copy(C(0xfff1d8)).lerp(C(0xff9a5a), dusk).multiplyScalar(1.1 * day * (RAIN ? 0.6 : 1)); }
+  else { U.uSunDir.value.set(-0.3, 0.8, -0.5).normalize(); U.uSunCol.value.copy(C(0x8098c8)).multiplyScalar(0.07); } // the moon, dim enough that lamps read
+  const skyDay = C(S.sky), skyNight = S.airless ? C(0x020203) : C(0x0a1020);
+  if (RAIN && !S.airless) skyDay.lerp(C(0x8a949e), 0.6);
+  const bg = skyNight.clone().lerp(skyDay, day).lerp(C(0xe08a5a), S.airless ? 0 : dusk * 0.45);
+  scene.background = bg; U.uFogCol.value.copy(bg); U.uFogFar.value = S.airless ? 1e4 : 140;
+  U.uSky.value.copy(C(0x02040a)).lerp(C(S.airless ? 0x202024 : 0x8aa6c8), day).multiplyScalar(0.55).add(C(0x0b0f18).multiplyScalar(0.25));
+  U.uGround.value.copy(C(0x050404)).lerp(C(0x6a5a40), day).multiplyScalar(0.35);
+  const lampsOn = el < 0.08;
+  let n = 0;
+  for (const l of LAMPS) {
+    const on = lampsOn || (l.kind === "grow" && S.airless);
+    if (l.mesh) l.mesh.material.color.set(on ? l.on : 0x4a3a28);
+    if (!on || n >= MAXL) continue;
+    const f = l.kind === "window" ? 0.9 + 0.1 * Math.sin(time * 9) : 1;
+    U.uLampPos.value[n].copy(l.pos); U.uLampCol.value[n].set(l.col.r * l.power * f, l.col.g * l.power * f, l.col.b * l.power * f); U.uLampReach.value[n] = l.reach; n++;
+  }
+  U.uLampN.value = n;
+  return el;
+}
+function animals(dt, el) {
+  const asleep = el < 0;
+  for (const a of ANIMALS) {
+    a.t -= dt;
+    if (a.t <= 0) { a.t = 3 + Math.random() * 6; const ang = Math.random() * 6.28, r = Math.random() * a.R; a.goal.set(a.cx + Math.cos(ang) * r, a.cz + Math.sin(ang) * r); }
+    const dx = a.goal.x - a.g.position.x, dz = a.goal.y - a.g.position.z, d = Math.hypot(dx, dz);
+    if (!asleep && d > 0.3) { const sp = (a.hen ? 0.8 : 0.5) * dt; a.g.position.x += dx / d * sp; a.g.position.z += dz / d * sp; a.g.rotation.y = Math.atan2(-dz, dx); }
+    a.g.scale.y += ((asleep ? 0.6 : 1) - a.g.scale.y) * Math.min(1, dt * 2);
+  }
+}
+
+// =====================================================================
+// UI
+// =====================================================================
+const $ = id => document.getElementById(id);
+const toast = t => { const e = $("toast"); e.textContent = t; e.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.opacity = 0, 2600); };
+function calendar() {
+  const s = seasonOf(DAY), S = SITES[SITE];
+  $("calDay").textContent = `Day ${DAY} of 100`;
+  $("calSeason").textContent = S.airless ? "No seasons that matter" : S.seasons ? `Northern ${SEASON_NAMES[s]}` : `${SEASON_NAMES[s]}, but tropical`;
+  $("calWeather").textContent = S.airless ? "No weather" : RAIN ? "Rain: the open field is watered" : s === 2 && S.seasons ? "Frost at night" : "Clear";
+}
+function drawInv(bump) {
+  const order = Object.keys(INV);
+  $("inv").innerHTML = order.length ? order.map(k => `<span class="slot${k === bump ? " bump" : ""}"><img src="${ART(k).replace("farming/drop_", "animals/drop_")}" alt="">${INV[k]}</span>`).join("") : '<span class="muted" style="font-size:13px">Harvest goes here</span>';
+}
+(function belt() {
+  $("tools").innerHTML = TOOLS.map(t => `<button class="tool" data-tool="${t.id}" aria-pressed="${t.id === TOOL}">${t.icon ? `<img src="${ART(t.icon)}" alt="">` : '<svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><path d="M14 30 L12 16 a2 2 0 0 1 4 0 L17 22 L17 10 a2 2 0 0 1 4 0 L21 21 L22 11 a2 2 0 0 1 4 0 L25 22 L27 15 a2 2 0 0 1 4 0 L29 27 Q28 34 21 34 Z" fill="#d8b48a" stroke="#5a3e28" stroke-width="1.6"/></svg>'}${t.name}<kbd>${t.key}</kbd></button>`).join("");
+  $("seeds").innerHTML = '<span class="eyebrow" style="margin-right:4px">Seeds</span>' + Object.entries(CROPS).map(([id, c]) => `<button class="tool" data-seed="${id}" aria-pressed="${id === SEED_CROP}"><img src="${ART("produce_" + id)}" alt="">${c.name}</button>`).join("");
+  document.querySelectorAll("[data-tool]").forEach(b => b.addEventListener("click", () => setTool(b.dataset.tool)));
+  document.querySelectorAll("[data-seed]").forEach(b => b.addEventListener("click", () => { SEED_CROP = b.dataset.seed; document.querySelectorAll("[data-seed]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); setTool("seeds"); }));
+})();
+function setTool(t) { TOOL = t; document.querySelectorAll("[data-tool]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.tool === t))); }
+function setHour(h) { HOUR = (h + 24) % 24; $("hour").value = HOUR; const hh = Math.floor(HOUR), mm = Math.floor((HOUR - hh) * 60); $("hourOut").textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); $("night").setAttribute("aria-pressed", String(HOUR < 5.5 || HOUR > 19.5)); }
+$("hour").addEventListener("input", e => setHour(+e.target.value));
+$("night").addEventListener("click", () => setHour(HOUR < 5.5 || HOUR > 19.5 ? 10 : 22));
+$("nextDay").addEventListener("click", nextDay);
+$("next5").addEventListener("click", () => { for (let i = 0; i < 5; i++) nextDay(); });
+$("reset").addEventListener("click", () => { DAY = 0; RAIN = false; for (const k in INV) delete INV[k]; drawInv(); build(); refreshAll(); });
+$("site").addEventListener("change", e => { SITE = e.target.value; RAIN = false; build(); refreshAll(); if (SEED_CROP !== "glowcap" && SITE === "moon") document.querySelector('[data-seed="glowcap"]').click(); });
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  const t = TOOLS.find(t => t.key === e.key); if (t) setTool(t.id);
+  if (e.key === "n" || e.key === "N") $("night").click();
+  if (e.key === " " && e.target === document.body) { e.preventDefault(); nextDay(); }
+});
+
+// =====================================================================
+// Go
+// =====================================================================
+setHour(10); build(); refreshAll(); drawInv(); resize();
+let last = performance.now(), T = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
+  const el = sky(T); animals(dt, el); placeCamera();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

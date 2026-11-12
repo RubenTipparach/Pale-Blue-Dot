@@ -1,0 +1,1283 @@
+<title>Fish Lab and Aquariums</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one long field notebook. Each section is a bench: a live three.js view on the left,
+   its controls and readouts on the right, stacking to one column on a phone.
+   Deliberately one dark look, the same as the other Pale Blue Dot mockups (fishing.html, towns.html). */
+:root{
+  color-scheme: dark;
+  --ground:#061118;
+  --deep:#0a1b24;
+  --panel:#0d212b;
+  --line:rgba(150,210,215,.16);
+  --line-strong:rgba(150,210,215,.32);
+  --ink:#dce9e6;
+  --muted:#8aa5a3;
+  --amber:#f0b43c;
+  --sea:#5fd0d8;
+  --warn:#ff7a5c;
+  --ok:#7fe0a0;
+  --glow:#9ff4ff;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html{background:var(--ground)}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.wrap{max-width:1240px;margin:0 auto;display:grid;gap:56px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;text-wrap:balance;margin:0;line-height:1.05}
+h1{font-size:clamp(34px,6vw,58px)}
+h2{font-size:clamp(26px,3.6vw,36px)}
+h3{font-size:19px;letter-spacing:.03em}
+p{margin:0;max-width:68ch}
+a{color:var(--sea)}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.16em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* masthead */
+header.top{padding-top:36px;display:grid;gap:14px}
+.tags{display:flex;flex-wrap:wrap;gap:8px}
+.tag{font-family:var(--display);font-size:13px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line-strong);border-radius:3px;padding:3px 8px;color:var(--muted)}
+.tag.prop{border-color:var(--amber);color:var(--amber)}
+.lede{font-size:17px;color:var(--ink)}
+.honest{font-size:14px;color:var(--muted);border-left:2px solid var(--amber);padding-left:12px}
+.toc{display:flex;flex-wrap:wrap;gap:6px 16px;font-family:var(--display);font-size:15px;letter-spacing:.05em}
+.toc a{text-decoration:none;color:var(--ink);border-bottom:1px solid var(--line-strong)}
+
+section{display:grid;gap:18px;scroll-margin-top:16px}
+.sechead{display:grid;gap:6px}
+.sechead p{color:var(--muted)}
+
+/* benches: view + controls */
+.bench{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.bench{grid-template-columns:1fr}}
+.view{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--deep);aspect-ratio:16/10;max-width:100%}
+.view canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.view .hud{position:absolute;left:10px;top:8px;right:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;font-family:var(--mono);font-size:12px;color:var(--muted);text-shadow:0 1px 2px #000}
+.view .hud b{color:var(--ink);font-weight:600}
+.controls{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:12px;min-width:0}
+.row{display:grid;grid-template-columns:96px 1fr 56px;gap:8px;align-items:center;font-size:13px}
+.row label{color:var(--muted)}
+.row output{font-family:var(--mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.row input[type=range]{width:100%;accent-color:var(--amber)}
+.row select{width:100%}
+select{background:var(--deep);border:1px solid var(--line-strong);border-radius:4px;padding:5px 6px;color:var(--ink)}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.btn{all:unset;cursor:pointer;font-family:var(--display);font-size:15px;font-weight:600;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--line-strong);border-radius:4px}
+.btn.primary{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.1)}
+.btn[aria-pressed="true"]{border-color:var(--sea);color:var(--sea);background:rgba(95,208,216,.1)}
+.btn:hover{border-color:var(--ink)}
+.btn:focus-visible{outline:2px solid var(--amber)}
+.readout{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.readout div{display:grid;gap:1px}
+.readout span{font-size:11px;color:var(--muted);font-family:var(--display);letter-spacing:.1em;text-transform:uppercase}
+.readout b{font-family:var(--mono);font-size:14px;font-weight:600}
+.small{font-size:12.5px;color:var(--muted);line-height:1.45}
+.small b{color:var(--ink);font-weight:500}
+.divider{border-top:1px solid var(--line);padding-top:10px}
+
+/* species sheet */
+.sheet{display:grid;gap:10px}
+.srow{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;align-items:center;border-top:1px solid var(--line);padding-top:10px}
+.srow .who{display:grid;grid-template-columns:52px 1fr;gap:8px;align-items:center}
+.srow .who img{width:52px;height:52px;object-fit:contain}
+.srow .who b{font-family:var(--display);font-size:17px;letter-spacing:.03em;line-height:1.05}
+.srow .who small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.ind{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.ind button{all:unset;cursor:pointer;display:grid;gap:2px;border:1px solid var(--line);border-radius:4px;background:var(--deep);padding:2px}
+.ind button:hover,.ind button:focus-visible{border-color:var(--amber)}
+.ind canvas{width:100%;aspect-ratio:16/9;display:block}
+.ind small{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ind small i{font-style:normal;color:var(--amber)}
+@media (max-width:700px){.srow{grid-template-columns:1fr}.ind{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* roster */
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;align-content:start}
+.card .top{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center}
+.card img{width:96px;height:96px;object-fit:contain}
+.card h3{font-size:21px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-family:var(--display);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:3px;border:1px solid var(--line-strong);color:var(--muted);white-space:nowrap}
+.chip.r-common{color:#b9d3cf}
+.chip.r-uncommon{color:var(--ok);border-color:rgba(127,224,160,.5)}
+.chip.r-rare{color:var(--sea);border-color:rgba(95,208,216,.6)}
+.chip.r-legendary{color:var(--amber);border-color:var(--amber)}
+.chip.src-new{color:var(--warn);border-color:rgba(255,122,92,.5)}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px;margin:0}
+.facts dt{color:var(--muted);font-family:var(--display);letter-spacing:.06em;font-size:13px}
+.facts dd{margin:0;font-variant-numeric:tabular-nums}
+.card p{font-size:13.5px;color:var(--muted)}
+.card .go{justify-self:start}
+
+/* parts and patterns */
+.parts{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.part{display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:center;font-size:13px}
+.part img{width:64px;height:64px}
+.part b{font-family:var(--display);font-size:16px;letter-spacing:.03em;display:block}
+.part span{color:var(--muted)}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:640px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* aquarium */
+.decor{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.decor button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:4px 2px;border:1px solid var(--line);border-radius:4px;background:var(--deep)}
+.decor button img{width:40px;height:40px}
+.decor button span{font-family:var(--display);font-size:11.5px;letter-spacing:.04em;color:var(--muted);text-align:center;line-height:1.1}
+.decor button[aria-pressed="true"]{border-color:var(--sea);background:rgba(95,208,216,.12)}
+.decor button[aria-pressed="true"] span{color:var(--sea)}
+.decor button:focus-visible{outline:2px solid var(--amber)}
+.cap{display:grid;gap:4px}
+.cap .bar{height:8px;border-radius:4px;background:var(--deep);border:1px solid var(--line);overflow:hidden}
+.cap .bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .2s}
+.cap .bar i.over{background:var(--warn)}
+.residents{display:grid;gap:4px;max-height:220px;overflow:auto}
+.res{display:grid;grid-template-columns:30px 1fr auto auto;gap:8px;align-items:center;font-size:13px;padding:2px 4px;border-radius:3px;background:var(--deep)}
+.res img{width:30px;height:30px}
+.res .st{font-family:var(--display);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.st.ok{color:var(--ok)}.st.warn{color:var(--amber)}.st.bad{color:var(--warn)}
+.res button{all:unset;cursor:pointer;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 6px;border:1px solid var(--line);border-radius:3px}
+.res button:focus-visible{outline:2px solid var(--amber)}
+.addrow{display:grid;grid-template-columns:1fr 64px auto;gap:6px}
+.addrow input{background:var(--deep);border:1px solid var(--line-strong);border-radius:4px;padding:4px 6px;width:100%;box-sizing:border-box}
+.msgs{display:grid;gap:3px;font-size:12.5px}
+.msgs div{padding-left:10px;border-left:2px solid var(--line-strong);color:var(--muted)}
+.msgs div.warn{border-color:var(--amber);color:var(--ink)}
+.msgs div.bad{border-color:var(--warn);color:var(--ink)}
+.msgs div.ok{border-color:var(--ok)}
+
+/* decisions */
+.qs{display:grid;gap:12px}
+.q{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:grid;gap:6px}
+.q h3{font-size:18px}
+.q p{font-size:14px;color:var(--muted)}
+.q .rec{color:var(--ink)}
+.q .rec b{color:var(--amber);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:13px;font-weight:600;margin-right:6px}
+footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="tags"><span class="tag prop">Proposal, not built</span><span class="tag">Mockup</span><span class="tag">fishing-and-equipment, climate-and-fish-maps</span></div>
+  <h1>Fish Lab and Aquariums</h1>
+  <p class="lede">Every fish in Pale Blue Dot is drawn from a species and a seed. The species fixes the body plan, the fins, the palette and the size range. The seed rolls one individual: its length, its build, where its spots and bars fall, and now and then a rare colour morph. The same fish always comes out the same, so a trophy in a tank is the fish you caught.</p>
+  <p class="honest">Nothing here is in the game yet. The 3D fish are made by this page's generator in three.js. The portraits, pattern swatches and decor icons were <b>painted by code</b> (<code>tools/art/fish_art.py</code>, the hand-drawn-illustration kit) in the style of the owner's friend's drawings. A person did not draw them, and they are placeholders for the owner to judge.</p>
+  <nav class="toc" aria-label="Sections"><a href="#lab">Fish lab</a><a href="#sheet">Species sheet</a><a href="#roster">Roster</a><a href="#parts">Parts and patterns</a><a href="#tank">Aquarium</a><a href="#engine">In the engine</a><a href="#decisions">Decisions</a></nav>
+</header>
+
+<!-- ============================================================ LAB -->
+<section id="lab">
+  <div class="sechead"><span class="eyebrow">1 &middot; The generator</span><h2>Fish lab</h2>
+  <p>Pick a species and roll individuals. Every roll stays inside the species: 85 to 125% of its length (the rule in fishing-and-equipment, section 7), a small spread in depth, width and fins, and a pattern placed by its own seed. Move a slider to step outside the species and see what each number does. Drag the fish to turn it.</p></div>
+  <div class="bench">
+    <div class="view" id="labView"><canvas id="labCanvas" aria-label="A 3D fish swimming in place above a ruler"></canvas>
+      <div class="hud"><span id="labHud">-</span><span>drag to turn</span></div></div>
+    <div class="controls">
+      <div class="row"><label for="spSel">Species</label><select id="spSel"></select><span></span></div>
+      <div class="btns"><button class="btn primary" id="rollBtn">Roll individual</button><button class="btn" id="resetBtn">Back to species</button><button class="btn" id="morphBtn" aria-pressed="false">Force rare morph</button></div>
+      <div class="small mono" id="seedOut">seed -</div>
+      <div class="divider eyebrow">Body</div>
+      <div class="row"><label for="profSel">Body plan</label><select id="profSel"></select><span></span></div>
+      <div class="row"><label for="lenR">Length</label><input type="range" id="lenR" min="0.05" max="2" step="0.005"><output id="lenO"></output></div>
+      <div class="row"><label for="depR">Depth</label><input type="range" id="depR" min="0.5" max="1.8" step="0.01"><output id="depO"></output></div>
+      <div class="row"><label for="widR">Width</label><input type="range" id="widR" min="0.5" max="1.8" step="0.01"><output id="widO"></output></div>
+      <div class="divider eyebrow">Fins</div>
+      <div class="row"><label for="tailSel">Tail</label><select id="tailSel"></select><span></span></div>
+      <div class="row"><label for="finR">Fin size</label><input type="range" id="finR" min="0.4" max="1.8" step="0.01"><output id="finO"></output></div>
+      <div class="divider eyebrow">Skin</div>
+      <div class="row"><label for="patSel">Pattern</label><select id="patSel"></select><span></span></div>
+      <div class="row"><label for="denR">Density</label><input type="range" id="denR" min="0.3" max="2.2" step="0.01"><output id="denO"></output></div>
+      <div class="row"><label for="conR">Contrast</label><input type="range" id="conR" min="0" max="1" step="0.01"><output id="conO"></output></div>
+      <div class="row"><label for="hueR">Hue shift</label><input type="range" id="hueR" min="-60" max="60" step="1"><output id="hueO"></output></div>
+      <div class="readout"><div><span>Length</span><b id="rLen">-</b></div><div><span>Weight</span><b id="rWt">-</b></div><div><span>Of species</span><b id="rPct">-</b></div></div>
+      <p class="small">Weight is <b>Fulton's condition factor</b>, W = K &middot; L&sup3;, with K set by the body plan (eel 0.15, fusiform 1.0, globe 2.6) and scaled by depth and width. The ruler under the fish is in centimetres; the amber band on it is the species' range.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ SHEET -->
+<section id="sheet">
+  <div class="sechead"><span class="eyebrow">2 &middot; Variation</span><h2>Species sheet</h2>
+  <p>Six individuals of every species, seeds 0 to 5 of one school. Each row is drawn at one scale, so the size spread is real: the largest fish in a row can be half again the length of the smallest. Amber marks a rare colour morph (1 in 64). Click a fish to open it in the lab.</p></div>
+  <div class="sheet" id="sheetRows"></div>
+</section>
+
+<!-- ============================================================ ROSTER -->
+<section id="roster">
+  <div class="sechead"><span class="eyebrow">3 &middot; Thirteen species</span><h2>Roster</h2>
+  <p>The eight from fishing-and-equipment keep their water, temperature window, strength and hook window as written there. Five are new here, to cover a lake, the deep sea, the under-ice ocean of an ice moon and the volcanic vents. Rarity, bait, time of day and season are new proposals. A season is where the temperature window puts the fish through the year, because the spawner reads the water temperature now (climate-and-fish-maps).</p></div>
+  <div class="filters" id="habFilters" role="group" aria-label="Filter by habitat"></div>
+  <div class="roster" id="rosterGrid"></div>
+</section>
+
+<!-- ============================================================ PARTS -->
+<section id="parts">
+  <div class="sechead"><span class="eyebrow">4 &middot; The parts list</span><h2>Parts and patterns</h2>
+  <p>A species is a choice from each of these lists plus its numbers. Six pattern types, seven body plans, six tails. The swatches are the hand-drawn versions; in 3D each pattern is painted onto a 256 &times; 128 skin from the fish's own seed.</p></div>
+  <div class="parts" id="patParts"></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Body plan</th><th>Depth</th><th>Width</th><th>Deepest at</th><th>K (weight)</th><th>Swims by</th><th>Used by</th></tr></thead>
+    <tbody id="profRows"></tbody></table></div>
+</section>
+
+<!-- ============================================================ TANK -->
+<section id="tank">
+  <div class="sechead"><span class="eyebrow">5 &middot; Keeping fish</span><h2>Aquarium</h2>
+  <p>A tank is built from glass cells on the hex grid: one cell is 2.833 m across the flats and 1 m tall, the Tenebris gold standard, so with the sand and the air gap under the lid it holds about 6,000 litres of water. The tank checks what lives in it: the water type, the temperature, room to swim, who eats whom, and what each species needs. The fish school with the same boids the sea uses. It opens at night: the tank's lamp lights the room, the lantern and the candle light their corners, and the moon in the window stays dim. Drag to orbit, scroll to zoom.</p></div>
+  <div class="bench">
+    <div class="view" id="tankView" style="aspect-ratio:16/11"><canvas id="tankCanvas" aria-label="A room at night with a hex glass aquarium of schooling fish"></canvas>
+      <div class="hud"><span id="tankHud">-</span><span>drag, scroll</span></div></div>
+    <div class="controls">
+      <div class="btns" role="group" aria-label="Time of day"><button class="btn" id="nightBtn" aria-pressed="true">Night</button><button class="btn" id="dayBtn" aria-pressed="false">Day</button><button class="btn" id="lampBtn" aria-pressed="true">Tank lamp</button><button class="btn" id="lanternBtn" aria-pressed="true">Lantern</button></div>
+      <div class="row"><label for="tankSize">Glass</label><select id="tankSize">
+        <option value="1">1 cell, 1 layer</option><option value="3" selected>3 cells in a row</option><option value="3t">3 cells, a triangle</option><option value="7">7 cells, a ring</option></select><span></span></div>
+      <div class="row"><label for="tankH">Height</label><select id="tankH"><option value="1" selected>1 layer (1 m)</option><option value="2">2 layers (2 m)</option></select><span></span></div>
+      <div class="row"><label for="waterSel">Water</label><select id="waterSel">
+        <option value="fresh" selected>Fresh</option><option value="salt">Salt</option><option value="brine">Cold brine (ice moon)</option><option value="vent">Vent mineral water</option></select><span></span></div>
+      <div class="row"><label for="tempR">Temperature</label><input type="range" id="tempR" min="-2" max="45" step="1" value="22"><output id="tempO"></output></div>
+      <div class="eyebrow">Decor</div>
+      <div class="decor" id="decorGrid"></div>
+      <div class="eyebrow">Fish</div>
+      <div class="addrow"><select id="addSp" aria-label="Species to add"></select><input id="addN" type="number" min="1" max="40" value="4" aria-label="How many"><button class="btn primary" id="addBtn">Add</button></div>
+      <div class="cap"><div class="eyebrow" style="display:flex;justify-content:space-between"><span>Room to swim</span><span class="mono" id="capO">-</span></div><div class="bar"><i id="capBar"></i></div></div>
+      <div class="residents" id="resList"></div>
+      <div class="msgs" id="tankMsgs"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ ENGINE -->
+<section id="engine">
+  <div class="sechead"><span class="eyebrow">6 &middot; How it would be built</span><h2>In the engine</h2></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Piece</th><th>Proposal</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Species</td><td>New fields beside each species in <code>assets/config/fauna.ron</code>: <code>body</code> (plan, depth, width), <code>fins</code>, <code>tail</code>, <code>pattern</code> (type, density, contrast), <code>palette</code> (back, belly, accent, fin), <code>morphs</code>, <code>rarity</code>, <code>bait</code>, <code>active</code> (time of day).</td><td>One record per species already holds its numbers and its field-guide text. The look joins them, so the guide, the icon and the fish cannot disagree.</td></tr>
+      <tr><td>An individual</td><td>Rolled from <code>hash(school seed, index)</code>, the hash the design already uses for a fish's length. The same hash places its pattern and picks a morph.</td><td>Deterministic: a caught fish keeps its look in a slot, in a tank and after a reload, with nothing extra saved but the seed.</td></tr>
+      <tr><td>Drawing</td><td>One mesh per body plan, bent in the vertex shader by a swim wave. The per-fish numbers (length, depth, width, fin scale, hue, pattern seed) go in the instance buffer, and the pattern is computed in the fragment shader from the seed, so a school is one instanced draw.</td><td>The design draws a school in one instanced draw. Canvas skins per fish, as this page does, would not hold that at 34 fish a school.</td></tr>
+      <tr><td>A caught fish</td><td>The slot line gains the seed: <code>f{species},{n}</code> becomes <code>f{species}:{seed},{n}</code> for a fish kept whole. Older lines with no seed read as seed 0.</td><td>Saved games stay playable: the old format keeps reading, and the roster stays append-only.</td></tr>
+      <tr><td>A tank</td><td>Glass cells are blocks; the tank is the set of joined glass cells with water in them. Its contents are a stored record (species, seeds, decor) on the durable path, like any edit.</td><td>A tank is something the player made. CLAUDE.md: nothing a player made is dropped.</td></tr>
+      <tr><td>Tank boids</td><td>The sea's flocking rules (fishing-and-equipment section 6), bounded by the tank's cells instead of the seabed.</td><td>One rule for schooling in the sea and in glass.</td></tr>
+    </tbody></table></div>
+</section>
+
+<!-- ============================================================ DECISIONS -->
+<section id="decisions">
+  <div class="sechead"><span class="eyebrow">7 &middot; For the owner</span><h2>Decisions / questions for the owner</h2>
+  <p>Each has a recommendation. The ones with something to look at are on this page; the rest take the recommendation unless you say otherwise.</p></div>
+  <div class="qs" id="qs"></div>
+</section>
+
+<footer>Mockup for Pale Blue Dot, 2026-11-11. three.js r128. Portraits, swatches and decor icons painted by code with the hand-drawn-illustration kit (<code>tools/art/fish_art.py</code>), in the manner of the owner's friend's icons, not by them. Species data for the eight existing fish from <code>openspec/changes/fishing-and-equipment</code>; the five new species, rarity, bait, time, season and the aquarium are proposals.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// ------------------------------------------------------------------ utilities
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hashStr(s){ let h = 2166136261; for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+const hookWindow = s => Math.max(0.25, 0.9 * (1 - (s - 1) * 0.13));
+const fmtLen = m => m < 1 ? `${(m * 100).toFixed(1)} cm` : `${m.toFixed(2)} m`;
+const fmtWt = g => g < 1000 ? `${g.toFixed(0)} g` : `${(g / 1000).toFixed(g < 10000 ? 2 : 1)} kg`;
+
+// ------------------------------------------------------------------ body plans
+// D, W: half depth and half width as a fraction of length; uMax: where the body is deepest
+// (0 nose, 1 tail stalk); ped: the tail stalk's depth as a fraction of D; body: the share of the
+// length that is body (the rest is tail fin); K: Fulton's condition factor, W(g) = K * L(cm)^3 / 100.
+const PROFILES = {
+  fusiform:   { name:"Fusiform",   D:0.12, W:0.075, uMax:0.33, ped:0.20, body:0.80, K:1.0, swim:"body wave, tail beat" },
+  compressed: { name:"Compressed", D:0.19, W:0.060, uMax:0.38, ped:0.18, body:0.82, K:1.5, swim:"tail beat, fins to turn" },
+  disc:       { name:"Disc",       D:0.29, W:0.055, uMax:0.44, ped:0.14, body:0.82, K:1.8, swim:"fins, short tail beats" },
+  eel:        { name:"Eel",        D:0.042,W:0.036, uMax:0.10, ped:0.55, body:1.00, K:0.15, swim:"whole-body wave", eel:true },
+  flat:       { name:"Flat (ray)", D:0.05, W:0.44,  uMax:0.40, ped:0.10, body:1.00, K:0.6, swim:"wing flap", flat:true },
+  globe:      { name:"Globe",      D:0.28, W:0.26,  uMax:0.48, ped:0.18, body:0.80, K:2.6, swim:"fin flutter" },
+  angler:     { name:"Angler",     D:0.25, W:0.21,  uMax:0.26, ped:0.20, body:0.82, K:1.8, swim:"slow tail, hangs still" },
+};
+const TAILS = { forked:"Forked", deepfork:"Deep fork", lunate:"Lunate", rounded:"Rounded", truncate:"Square", eel:"None (eel fin)", whip:"Whip (ray)" };
+const PATTERNS = {
+  gradient:{ name:"Countershading", what:"Dark back, pale belly: the open-water disguise." },
+  stripes: { name:"Stripes", what:"Lines along the body; straight or wavy." },
+  bars:    { name:"Bars", what:"Bands across the body, from the back down." },
+  spots:   { name:"Spots", what:"Scattered dots, placed by the fish's own seed." },
+  mottled: { name:"Mottled", what:"Blotches for the bed and the rocks; cracks that glow at the vents." },
+  biolum:  { name:"Bioluminescent", what:"Rows of photophores that light up in the dark." },
+};
+
+// ------------------------------------------------------------------ species
+// The first eight keep fishing-and-equipment's numbers (water, window, strength, school, length).
+const SPECIES = [
+  { id:"minnow", name:"Minnow", src:"Tenebris", hab:["River","Shallow reef"], water:["fresh","salt"], wclass:"rivers, shallows", temp:[10,30], L:0.14,
+    prof:"fusiform", tail:"forked", dorsal:[[0.38,0.55,0.10,"soft"]], anal:[[0.62,0.74,0.06]], pec:0.07, eye:0.03,
+    pat:"gradient", den:1, con:0.7, cols:{back:"#4e7096",belly:"#e2e8ec",acc:"#344a68",fin:"#96afc4"}, hueVar:8,
+    rarity:"common", bait:"bread, worm", time:"any", season:"all year in warm water; summer only past 40°", strength:1, school:"24-36", speed:[1.0,2.6],
+    wiki:"The first fish most anglers land. Minnows crowd the shallows in schools of thirty or more and turn as one when a shadow crosses them." },
+  { id:"silverfin", name:"Silverfin", src:"fishing-and-equipment", hab:["Open ocean","Shallow reef"], water:["salt"], wclass:"shallows, shelf", temp:[-1.8,17], L:0.22,
+    prof:"fusiform", dMul:0.9, tail:"deepfork", dorsal:[[0.36,0.50,0.12,"soft"]], anal:[[0.60,0.72,0.07]], pec:0.07, eye:0.032,
+    pat:"stripes", den:0.5, con:0.85, cols:{back:"#407ea0",belly:"#eef4f8",acc:"#1e4262",fin:"#c4dee9"}, hueVar:6,
+    rarity:"common", bait:"shrimp, spinner", time:"day", season:"cool coasts all year; reaches the ice in summer", strength:1, school:"18-30", speed:[1.2,3.2],
+    wiki:"A bright, fast surface fish of cool coasts. Silverfin scatter at a splash and close ranks a few seconds later." },
+  { id:"perch", name:"Banded perch", src:"fishing-and-equipment", hab:["River","Lake"], water:["fresh"], wclass:"rivers", temp:[-1.8,24], L:0.38,
+    prof:"compressed", dMul:0.95, tail:"truncate", dorsal:[[0.22,0.48,0.14,"spiny"],[0.50,0.68,0.11,"soft"]], anal:[[0.62,0.74,0.08]], pec:0.08, eye:0.034,
+    pat:"bars", bars:[5,0.045,0.55], den:1, con:0.9, cols:{back:"#cea834",belly:"#f4e29c",acc:"#3a461e",fin:"#e8622c"}, hueVar:10,
+    rarity:"common", bait:"worm", time:"dawn, dusk", season:"all year; the cold rivers are its own", strength:2, school:"8-14", speed:[0.8,2.4],
+    wiki:"Striped, deep-bodied and curious. One will follow a lure a long way before it commits." },
+  { id:"ray", name:"Ray", src:"Tenebris", hab:["Shallow reef","Open ocean"], water:["salt"], wclass:"shallows, shelf (on the bed)", temp:[16,32], L:0.6,
+    prof:"flat", tail:"whip", dorsal:[], anal:[], pec:0, eye:0.026, bed:true,
+    pat:"spots", den:1, con:0.8, cols:{back:"#8c6e46",belly:"#f0ece2",acc:"#4a3622",fin:"#7a6040"}, hueVar:8,
+    rarity:"uncommon", bait:"shrimp, squid strip", time:"day", season:"warm months; all year in the tropics", strength:2, school:"1-2", speed:[0.5,1.2],
+    wiki:"A flat grazer that lies on the sand and lifts off in slow wingbeats, alone or in pairs, well out from the beach.", needs:"sand bed" },
+  { id:"eel", name:"Eel", src:"Tenebris", hab:["River","Shallow reef"], water:["fresh","salt"], wclass:"rivers, shallows (on the bed)", temp:[6,28], L:0.9,
+    prof:"eel", tail:"eel", dorsal:[], anal:[], pec:0.035, eye:0.022, bed:true, predator:true,
+    pat:"mottled", den:1, con:0.8, cols:{back:"#6c7a3a",belly:"#ccc278",acc:"#282e12",fin:"#4a5428"}, hueVar:8,
+    rarity:"uncommon", bait:"worm, cut fish", time:"night", season:"summer", strength:3, school:"1-2", speed:[0.7,1.9],
+    wiki:"Long, dark and patient. Eels keep to the bed and fight in hard, twisting runs.", needs:"rock cave" },
+  { id:"reef", name:"Reef fish", src:"Tenebris", hab:["Shallow reef"], water:["salt"], wclass:"shallows", temp:[23,32], L:0.42,
+    prof:"disc", dMul:0.95, tail:"lunate", dorsal:[[0.18,0.66,0.20,"tall"]], anal:[[0.50,0.74,0.16]], pec:0.08, eye:0.034,
+    pat:"bars", bars:[3,0.06,0.9], den:1, con:1, cols:{back:"#24aaac",belly:"#96e2d2",acc:"#ffce2c",fin:"#207896"}, hueVar:14,
+    rarity:"rare", bait:"shrimp", time:"day", season:"tropical shallows all year", strength:5, school:"6-12", speed:[0.6,1.6],
+    wiki:"The prize of warm water. Tall-finned and nervous, with the shortest bite window in the sea.", needs:"coral" },
+  { id:"deepback", name:"Deepback", src:"fishing-and-equipment", hab:["Open ocean"], water:["salt"], wclass:"shelf, deep", temp:[-1.5,9], L:0.7,
+    prof:"fusiform", dMul:1.2, tail:"lunate", dorsal:[[0.34,0.48,0.12,"soft"]], anal:[[0.62,0.72,0.07]], pec:0.07, eye:0.036, predator:true,
+    pat:"gradient", den:1, con:0.9, cols:{back:"#2c4062",belly:"#b0c4ce",acc:"#182238",fin:"#466082"}, hueVar:6,
+    rarity:"uncommon", bait:"squid strip", time:"dusk, night", season:"winter on temperate coasts; all year near the poles", strength:4, school:"4-7", speed:[0.6,1.8],
+    wiki:"A heavy cold-water fish of the deep shelf. A hooked deepback runs long and tires slowly.", needs:"chiller" },
+  { id:"serpent", name:"Sea serpent", src:"Tenebris", hab:["Open ocean"], water:["salt"], wclass:"deep", temp:[-1.8,32], L:1.3,
+    prof:"eel", dMul:1.5, tail:"eel", crest:true, dorsal:[], anal:[], pec:0.04, eye:0.026, predator:true,
+    pat:"bars", bars:[9,0.025,0.5], den:1, con:0.85, cols:{back:"#28806e",belly:"#c4deaa",acc:"#12403a",fin:"#d64034"}, hueVar:10,
+    rarity:"legendary", bait:"cut fish", time:"night", season:"any; one per region at most", strength:4, school:"1", speed:[0.8,2.2],
+    wiki:"Rare and solitary, past the drop-off. Every angler has a story about one that got away.", needs:"7 cells, 2 layers" },
+  { id:"bloatfin", name:"Bloatfin", src:"new", hab:["Shallow reef"], water:["salt"], wclass:"shallows", temp:[22,31], L:0.24,
+    prof:"globe", tail:"rounded", dorsal:[[0.56,0.68,0.10,"soft"]], anal:[[0.58,0.70,0.09]], pec:0.07, eye:0.05, spines:true,
+    pat:"spots", den:1.2, con:0.9, cols:{back:"#e4c456",belly:"#faf4dc",acc:"#54321e",fin:"#eea03c"}, hueVar:12,
+    rarity:"uncommon", bait:"shrimp", time:"day", season:"summer; all year in the tropics", strength:2, school:"2-4", speed:[0.3,0.9],
+    wiki:"A slow, spotted puffer of the warm shallows. Hooked, it swells to a spiny ball and hangs on the line like a stone." },
+  { id:"sunplate", name:"Sunplate", src:"new", hab:["Lake","River"], water:["fresh"], wclass:"lakes (proposed), rivers", temp:[12,30], L:0.30,
+    prof:"disc", dMul:0.85, tail:"truncate", dorsal:[[0.26,0.66,0.14,"spiny"]], anal:[[0.50,0.72,0.12]], pec:0.08, eye:0.034,
+    pat:"stripes", wavy:true, den:1, con:1, cols:{back:"#e28e2c",belly:"#fad678",acc:"#327ace",fin:"#aa6028"}, hueVar:16,
+    rarity:"common", bait:"worm, bread", time:"midday", season:"summer", strength:1, school:"6-10", speed:[0.4,1.4],
+    wiki:"A round, gold lake fish with blue squiggles on its cheeks. Sunplate hold still in the weed and dart at anything that drops in." },
+  { id:"lanternjaw", name:"Lanternjaw", src:"new", hab:["Deep sea"], water:["salt"], wclass:"deep, at night on the shelf", temp:[2,8], L:0.35,
+    prof:"angler", tail:"rounded", dorsal:[[0.56,0.68,0.08,"soft"]], anal:[[0.58,0.70,0.07]], pec:0.06, eye:0.024, lure:true, teeth:true, predator:true, dark:true,
+    pat:"biolum", den:1, con:1, cols:{back:"#382a48",belly:"#5c4a6e",acc:"#5af4ff",fin:"#4a3a60"}, hueVar:10,
+    rarity:"rare", bait:"glow grub", time:"night only", season:"all year", strength:3, school:"1", speed:[0.2,0.8],
+    wiki:"An angler of the deep that rises to the shelf after dark. Its lure glows; so do the rows of lights along its belly.", needs:"lamp off at night" },
+  { id:"glassback", name:"Glassback", src:"new", hab:["Under ice"], water:["brine"], wclass:"under-ice ocean (ice moon)", temp:[-2,4], L:0.28,
+    prof:"compressed", dMul:0.8, tail:"deepfork", dorsal:[[0.34,0.50,0.11,"soft"]], anal:[[0.58,0.70,0.08]], pec:0.07, eye:0.04, glass:true,
+    pat:"biolum", den:0.8, con:0.9, cols:{back:"#aad6ee",belly:"#e2f2fa",acc:"#6eaaff",fin:"#c8e6f6"}, hueVar:10,
+    rarity:"rare", bait:"glow grub", time:"any (it is always dark under the ice)", season:"the moon's year", strength:2, school:"10-20", speed:[0.6,1.8],
+    wiki:"You can see its spine through it. Glassback school under the ice of a frozen moon, blinking blue to keep together in the dark.", needs:"chiller" },
+  { id:"emberback", name:"Emberback", src:"new", hab:["Volcanic vents"], water:["vent"], wclass:"vents (proposed)", temp:[28,42], L:0.55,
+    prof:"fusiform", dMul:1.35, tail:"truncate", dorsal:[[0.24,0.58,0.12,"spiny"]], anal:[[0.60,0.72,0.08]], pec:0.08, eye:0.03, ember:true, predator:true,
+    pat:"mottled", den:1, con:0.9, cols:{back:"#463030",belly:"#785648",acc:"#ff8028",fin:"#6e3c30"}, hueVar:6,
+    rarity:"rare", bait:"cut fish", time:"any", season:"all year (the vents do not change)", strength:4, school:"2-3", speed:[0.4,1.4],
+    wiki:"Basalt-dark with cracks that glow like coals. It lives where the vent water is hot enough to scald a hand.", needs:"heater" },
+];
+const SP = Object.fromEntries(SPECIES.map(s => [s.id, s]));
+const HABITATS = ["Shallow reef","Open ocean","River","Lake","Deep sea","Under ice","Volcanic vents"];
+const WATER_NAMES = { fresh:"fresh", salt:"salt", brine:"cold brine", vent:"vent mineral" };
+
+// ------------------------------------------------------------------ an individual from a seed
+const MORPHS = ["golden","pale","dark"];
+function genome(sp, seed, forceMorph){
+  const r = mulberry32(seed ^ hashStr(sp.id));
+  const lenK = 0.85 + 0.40 * r();                    // fishing-and-equipment: 85 to 125% of the species' length
+  const age = (lenK - 0.85) / 0.40;                  // bigger fish are older and stockier
+  const g = {
+    sp, seed, prof: sp.prof, tail: sp.tail, pat: sp.pat,
+    len: sp.L * lenK,
+    depth: (sp.dMul || 1) * (1 + (r() - 0.5) * 0.14 + (age - 0.5) * 0.12),
+    width: 1 + (r() - 0.5) * 0.14 + (age - 0.5) * 0.08,
+    fin: 1 + (r() - 0.5) * 0.24,
+    den: sp.den * (1 + (r() - 0.5) * 0.3),
+    con: sp.con,
+    hue: (r() - 0.5) * 2 * sp.hueVar,
+    light: (r() - 0.5) * 0.08,
+    patSeed: Math.floor(r() * 1e9),
+    morph: null,
+  };
+  const m = r();
+  if (forceMorph || m < 1 / 64) g.morph = MORPHS[Math.floor(r() * 3)];
+  return g;
+}
+
+// ------------------------------------------------------------------ the skin
+function palette(g){
+  const c = {};
+  for (const k of ["back","belly","acc","fin"]){
+    const col = new THREE.Color(g.sp.cols[k]);
+    col.offsetHSL(g.hue / 360, 0, g.light);
+    c[k] = col;
+  }
+  if (g.morph === "golden"){ c.back.setHSL(0.12, 0.85, 0.55); c.fin.setHSL(0.08, 0.9, 0.55); c.belly.setHSL(0.13, 0.7, 0.85); }
+  if (g.morph === "pale"){ for (const k of ["back","fin","acc"]) { const h = {}; c[k].getHSL(h); c[k].setHSL(h.h, h.s * 0.25, Math.min(0.92, h.l + 0.35)); } }
+  if (g.morph === "dark"){ for (const k of ["back","belly","fin"]) { const h = {}; c[k].getHSL(h); c[k].setHSL(h.h, h.s * 0.6, h.l * 0.35); } }
+  return c;
+}
+const css = c => `#${c.getHexString()}`;
+function paintSkin(g){
+  const W = 256, H = 128, sp = Object.assign({}, g.sp, { prof: g.prof }), c = palette(g), r = mulberry32(g.patSeed);
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const ec = document.createElement("canvas"); ec.width = W; ec.height = H;
+  const x = cv.getContext("2d"), e = ec.getContext("2d");
+  e.fillStyle = "#000"; e.fillRect(0, 0, W, H);
+  // countershading: rows are the angle round the body, 0 and H the back, H/2 the belly
+  for (let y = 0; y < H; y++){
+    const t = (1 - Math.cos(2 * Math.PI * (y + 0.5) / H)) / 2;
+    const k = sp.prof === "flat" ? smooth(0.46, 0.56, t) : smooth(0.35, 0.8, t);
+    x.fillStyle = css(c.back.clone().lerp(c.belly, k)); x.fillRect(0, y, W, 1);
+  }
+  const yAt = th => th / (2 * Math.PI) * H;           // an angle from the back to a row (one flank)
+  const both = (fn) => { fn(false); x.save(); x.translate(0, H); x.scale(1, -1); fn(true); x.restore(); };
+  x.globalAlpha = g.con;
+  const accC = css(c.acc), n = k => Math.max(1, Math.round(k * g.den));
+  if (g.pat === "gradient"){
+    const gr = x.createLinearGradient(0, 0, 0, H * 0.22); gr.addColorStop(0, accC); gr.addColorStop(1, "rgba(0,0,0,0)");
+    both(() => { x.fillStyle = gr; x.fillRect(0, 0, W, H * 0.22); });
+    x.fillStyle = accC; x.globalAlpha = g.con * 0.35;   // a faint lateral line
+    both(() => x.fillRect(W * 0.1, yAt(Math.PI / 2) - 1, W * 0.88, 2));
+  } else if (g.pat === "stripes"){
+    const k = n(sp.wavy ? 5 : 2);
+    for (let i = 0; i < k; i++){
+      const th = sp.wavy ? 0.3 + i * (2.3 / k) : Math.PI * (0.38 + i * 0.16), ph = r() * 6, amp = sp.wavy ? 3 + r() * 3 : 0;
+      x.strokeStyle = accC; x.lineWidth = sp.wavy ? 2.5 : 3.5 + r() * 1.5;
+      both(() => { x.beginPath(); for (let px = 6; px <= W; px += 4){ const yy = yAt(th) + amp * Math.sin(px * 0.11 + ph); px === 6 ? x.moveTo(px, yy) : x.lineTo(px, yy); } x.stroke(); });
+    }
+  } else if (g.pat === "bars"){
+    const [nb, bw, low] = sp.bars, k = n(nb), ylow = yAt(Math.acos(-low));
+    for (let i = 0; i < k; i++){
+      const u = 0.2 + 0.72 * (i + 0.5) / k + (r() - 0.5) * 0.03, w = bw * W * (0.8 + r() * 0.5), lean = (r() - 0.5) * 8;
+      x.fillStyle = accC;
+      both(() => { x.beginPath(); x.moveTo(u * W - w / 2, 0); x.lineTo(u * W + w / 2, 0); x.lineTo(u * W + w / 2 + lean, ylow); x.lineTo(u * W - w / 2 + lean, ylow); x.fill(); });
+    }
+  } else if (g.pat === "spots"){
+    const k = n(sp.prof === "flat" ? 70 : 46);
+    for (let i = 0; i < k; i++){
+      const px = W * (0.08 + r() * 0.9), yy = H * r(), t = (1 - Math.cos(2 * Math.PI * yy / H)) / 2;
+      if (t > 0.72) continue;
+      x.fillStyle = r() < 0.72 ? accC : css(c.belly);
+      x.beginPath(); x.arc(px, yy, 1.6 + r() * 3.4, 0, 7); x.fill();
+    }
+  } else if (g.pat === "mottled"){
+    const k = n(40);
+    for (let i = 0; i < k; i++){
+      const px = W * r(), yy = H * r(), rad = 4 + r() * 9, t = (1 - Math.cos(2 * Math.PI * yy / H)) / 2;
+      if (t > 0.8) continue;
+      const gr = x.createRadialGradient(px, yy, 0, px, yy, rad);
+      gr.addColorStop(0, accC); gr.addColorStop(0.7, accC); gr.addColorStop(1, "rgba(0,0,0,0)");
+      x.fillStyle = gr; x.beginPath(); x.arc(px, yy, rad, 0, 7); x.fill();
+    }
+  }
+  x.globalAlpha = 1;
+  // emissive: photophores, ember cracks
+  if (g.pat === "biolum"){
+    const rows = [[0.74, n(9)], [0.6, n(6)]];
+    for (const [f, k] of rows) for (let i = 0; i < k; i++){
+      const px = W * (0.16 + 0.72 * i / Math.max(1, k - 1)), th = Math.PI * f;
+      for (const yy of [yAt(th), H - yAt(th)]){
+        x.fillStyle = css(c.acc.clone().lerp(new THREE.Color("#ffffff"), 0.4)); x.beginPath(); x.arc(px, yy, 2.4, 0, 7); x.fill();
+        e.fillStyle = css(c.acc); e.beginPath(); e.arc(px, yy, 2.6, 0, 7); e.fill();
+      }
+    }
+  }
+  if (sp.ember){
+    e.strokeStyle = css(c.acc); e.lineWidth = 1.8; x.strokeStyle = css(c.acc); x.lineWidth = 1.4;
+    for (let i = 0; i < n(14); i++){
+      let px = W * (0.1 + r() * 0.8), yy = H * r(); e.beginPath(); x.beginPath(); e.moveTo(px, yy); x.moveTo(px, yy);
+      for (let s = 0; s < 4; s++){ px -= 4 + r() * 10; yy += (r() - 0.5) * 10; e.lineTo(px, yy); x.lineTo(px, yy); }
+      e.stroke(); x.stroke();
+    }
+  }
+  const map = new THREE.CanvasTexture(cv), em = new THREE.CanvasTexture(ec);
+  map.encoding = THREE.sRGBEncoding; em.encoding = THREE.sRGBEncoding;
+  map.anisotropy = 4;
+  return { map, em, c, glows: g.pat === "biolum" || !!sp.ember || !!sp.lure };
+}
+
+// ------------------------------------------------------------------ the mesh
+function profH(u, P, eelTaper){
+  let h;
+  if (u <= P.uMax){ const t = u / P.uMax; h = Math.sqrt(Math.max(0, 2 * t - t * t)); }
+  else { const t = (u - P.uMax) / (1 - P.uMax); h = P.ped + (1 - P.ped) * 0.5 * (1 + Math.cos(Math.PI * t)); }
+  if (eelTaper) h *= Math.max(0.04, 1 - Math.pow(u, 3));
+  return h;
+}
+function rayW(u){ return u < 0.4 ? Math.pow(u / 0.4, 0.95) : Math.pow((1 - u) / 0.6, 1.25) * 0.97 + 0.03; }   // a diamond in plan
+
+// Builds a fish of length 1 (head at +x, back at +y); the caller scales it by the length.
+function buildFish(g){
+  const sp = g.sp, P = PROFILES[g.prof], skin = paintSkin(g);
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const D = P.D * g.depth, Wd = P.W * g.width, BL = P.body, x0 = 0.5;
+  const NU = 44, NV = 20, pos = [], uv = [], idx = [];
+  const hAt = u => D * profH(u, P, P.eel);
+  const wAt = u => P.flat ? Wd * rayW(u) : Wd * profH(u, P, P.eel);
+  for (let i = 0; i <= NU + 1; i++){
+    const u = Math.min(1, i / NU), cap = i === NU + 1;
+    const xx = x0 - u * BL - (cap ? 0.004 : 0);
+    const h = cap ? 0 : hAt(u), w = cap ? 0 : wAt(u);
+    for (let j = 0; j <= NV; j++){
+      const th = 2 * Math.PI * j / NV;
+      const belly = Math.cos(th) < 0 ? 0.94 : 1;           // a slightly flatter belly
+      pos.push(xx, h * Math.cos(th) * belly, w * Math.sin(th));
+      uv.push(u, 1 - j / NV);
+    }
+  }
+  for (let i = 0; i <= NU; i++) for (let j = 0; j < NV; j++){
+    const a = i * (NV + 1) + j, b = a + NV + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);   // wound so the normals point out
+  }
+  const bg = new THREE.BufferGeometry();
+  bg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  bg.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  bg.setIndex(idx); bg.computeVertexNormals();
+  const bodyMat = new THREE.MeshStandardMaterial({ map: skin.map, roughness: sp.glass ? 0.15 : 0.5, metalness: sp.id === "silverfin" ? 0.35 : 0.05,
+    emissiveMap: skin.em, emissive: new THREE.Color(skin.glows ? "#ffffff" : "#000000"), emissiveIntensity: skin.glows ? 1.2 : 0,
+    transparent: !!sp.glass, opacity: sp.glass ? 0.78 : 1 });
+  const bm = new THREE.Mesh(bg, bodyMat); body.add(bm);
+  const bend = [bm];
+  const finMat = new THREE.MeshStandardMaterial({ color: skin.c.fin, roughness: 0.6, side: THREE.DoubleSide, transparent: !!sp.glass, opacity: sp.glass ? 0.45 : 1 });
+  const addShape = (pts, mat = finMat, z = 0) => {
+    const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]);
+    const geo = new THREE.ShapeGeometry(s); geo.translate(0, 0, z);
+    const m = new THREE.Mesh(geo, mat); body.add(m); bend.push(m); return m;
+  };
+  const xAt = u => x0 - u * BL, F = g.fin;
+  // tail fin
+  const xt = xAt(1), hp = Math.max(hAt(1), 0.012), TL = (1 - BL + 0.04) * F;
+  const tails = {
+    forked:   [[xt+.01,hp],[xt-TL,hp+TL*.75],[xt-TL*.55,0],[xt-TL,-hp-TL*.75],[xt+.01,-hp]],
+    deepfork: [[xt+.01,hp],[xt-TL*1.05,hp+TL*.95],[xt-TL*.85,hp+TL*.7],[xt-TL*.45,0],[xt-TL*.85,-hp-TL*.7],[xt-TL*1.05,-hp-TL*.95],[xt+.01,-hp]],
+    lunate:   [[xt+.01,hp],[xt-TL*1.05,hp+TL*1.05],[xt-TL*.6,hp*.5],[xt-TL*.5,0],[xt-TL*.6,-hp*.5],[xt-TL*1.05,-hp-TL*1.05],[xt+.01,-hp]],
+    truncate: [[xt+.01,hp],[xt-TL,hp+TL*.6],[xt-TL*1.03,0],[xt-TL,-hp-TL*.6],[xt+.01,-hp]],
+  };
+  if (g.tail === "rounded"){ const p = [[xt+.01,hp]]; for (let i = 0; i <= 12; i++){ const a = -Math.PI/2 + Math.PI*i/12; p.push([xt - TL*.3 - TL*.75*Math.cos(a), -(hp + TL*.55) * Math.sin(a)]); } p.push([xt+.01,-hp]); addShape(p); }
+  else if (tails[g.tail]) addShape(tails[g.tail]);
+  // dorsal and anal fins
+  for (const [u0, u1, hh, kind] of sp.dorsal){
+    const H = hh * F, base = []; for (let i = 0; i <= 10; i++){ const u = lerp(u0, u1, i / 10); base.push([xAt(u), hAt(u) * 0.86]); }
+    let pts;
+    if (kind === "spiny"){ pts = [base[0]]; base.forEach((b, i) => pts.push([b[0], b[1] + H * (i % 2 ? 0.55 : 0.95) * (1 - 0.3 * i / 10)])); pts = pts.concat(base.slice().reverse()); }
+    else if (kind === "tall") pts = [base[0], [base[1][0] + H*.15, base[1][1] + H*1.3], [base[10][0] - H*.5, base[10][1] + H*.6], base[10], ...base.slice(1, 10).reverse()];
+    else pts = [base[0], [base[3][0] + H*.1, base[3][1] + H], [base[10][0] - H*.35, base[10][1] + H*.25], base[10], ...base.slice(1, 10).reverse()];
+    addShape(pts);
+  }
+  for (const [u0, u1, hh] of sp.anal){
+    const H = hh * F, base = []; for (let i = 0; i <= 8; i++){ const u = lerp(u0, u1, i / 8); base.push([xAt(u), -hAt(u) * 0.84]); }
+    addShape([base[0], [base[2][0] - H*.3, base[2][1] - H], [base[8][0] - H*.3, base[8][1] - H*.3], base[8], ...base.slice(1, 8).reverse()]);
+  }
+  // an eel's one long fin, a serpent's crest
+  if (P.eel){
+    const up = [], dn = []; for (let i = 0; i <= 24; i++){ const u = lerp(0.35, 1, i / 24), h = hAt(u), f = (0.003 + 0.007 * (u - 0.35) / 0.65) * F; up.push([xAt(u), h + f]); dn.push([xAt(u), -h - f]); }
+    // two thin ribbons along the back and the belly that meet at the tail tip, never across the body
+    const inUp = [], inDn = []; for (let i = 0; i <= 24; i++){ const u = lerp(0.35, 1, i / 24); inUp.push([xAt(u), hAt(u) * 0.85]); inDn.push([xAt(u), -hAt(u) * 0.85]); }
+    const tip = [xAt(1) - 0.03, 0];
+    addShape([...up, tip, ...inUp.slice().reverse()]);
+    addShape([...inDn, tip, ...dn.slice().reverse()]);
+    if (sp.crest){
+      const crestMat = new THREE.MeshStandardMaterial({ color: skin.c.fin, roughness: 0.5, side: THREE.DoubleSide });
+      const pts = []; for (let i = 0; i <= 18; i++){ const u = lerp(0.03, 0.55, i / 18), h = hAt(u); pts.push([xAt(u) + 0.004, h * 0.8 + (i % 2 ? 0.05 : 0.016) * F * (1 - i / 22)]); }
+      const base = []; for (let i = 18; i >= 0; i--){ const u = lerp(0.03, 0.55, i / 18); base.push([xAt(u), hAt(u) * 0.6]); }
+      addShape([...pts, ...base], crestMat);
+    }
+  }
+  // pectoral fins: their own pivots so they can scull
+  const pecs = [];
+  if (sp.pec){
+    const u = P.eel ? 0.07 : 0.24, s = sp.pec * F;
+    for (const side of [1, -1]){
+      const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(-s * 1.3, s * 0.15); sh.lineTo(-s * 1.6, -s * 0.35); sh.lineTo(-s * 0.9, -s * 0.5); sh.lineTo(0, -s * 0.18);
+      const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), finMat);
+      const piv = new THREE.Group(); piv.position.set(xAt(u), -hAt(u) * 0.25, side * wAt(u) * 0.9); piv.add(m);
+      piv.rotation.y = side * 0.5; piv.userData.side = side; body.add(piv); pecs.push(piv);
+    }
+  }
+  // ray: a whip tail and pelvic lobes
+  if (P.flat){
+    const tg = new THREE.CylinderGeometry(0.004, 0.016, 0.62, 6, 8); tg.rotateZ(Math.PI / 2); tg.translate(xAt(1) - 0.29, 0.01, 0);
+    const tm = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ color: skin.c.fin, roughness: 0.6 })); body.add(tm); bend.push(tm);
+  }
+  // eyes
+  const eu = P.eel ? 0.045 : (P.flat ? 0.22 : 0.08), er = sp.eye;
+  const eyeMat = new THREE.MeshStandardMaterial({ color: "#f4f0e2", roughness: 0.2 }), pupMat = new THREE.MeshStandardMaterial({ color: "#0c0a10", roughness: 0.1, metalness: 0.2 });
+  for (const side of [1, -1]){
+    const e = new THREE.Mesh(new THREE.SphereGeometry(er, 14, 10), eyeMat);
+    const ey = P.flat ? hAt(eu) * 0.9 : hAt(Math.min(0.2, P.uMax)) * 0.32;
+    const ez = P.flat ? side * wAt(eu) * 0.35 : side * (wAt(eu) * 0.9 + er * 0.25);
+    e.position.set(xAt(eu), ey, ez);
+    const p = new THREE.Mesh(new THREE.SphereGeometry(er * 0.6, 10, 8), pupMat);
+    p.position.set(er * 0.12, P.flat ? er * 0.55 : 0, side * er * 0.55); e.add(p); body.add(e);
+  }
+  // angler: lure and teeth
+  if (sp.lure){
+    const u = 0.12, top = new THREE.Vector3(xAt(u), hAt(u), 0);
+    const curve = new THREE.CatmullRomCurve3([top, top.clone().add(new THREE.Vector3(0.06, 0.16, 0)), top.clone().add(new THREE.Vector3(0.18, 0.2, 0)), top.clone().add(new THREE.Vector3(0.25, 0.14, 0))]);
+    body.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.005, 5), new THREE.MeshStandardMaterial({ color: skin.c.fin })));
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.03, 14, 10), new THREE.MeshStandardMaterial({ color: skin.c.acc, emissive: skin.c.acc, emissiveIntensity: 2.2 }));
+    bulb.position.copy(curve.getPoint(1)); body.add(bulb); root.userData.lure = bulb;
+  }
+  if (sp.teeth){
+    const tm = new THREE.MeshStandardMaterial({ color: "#efe9da", roughness: 0.3 });
+    for (let i = 0; i < 7; i++) for (const s of [1, -1]){
+      const t = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.035, 4), tm);
+      const z = (i - 3) * 0.022;
+      t.position.set(x0 - 0.02 - Math.abs(z) * 0.5, s * 0.02, z); t.rotation.z = s > 0 ? Math.PI : 0; body.add(t);
+    }
+  }
+  if (sp.spines){
+    const tm = new THREE.MeshStandardMaterial({ color: skin.c.acc, roughness: 0.5 });
+    const r = mulberry32(g.patSeed + 7);
+    for (let i = 0; i < 46; i++){
+      const u = 0.15 + r() * 0.65, th = r() * Math.PI * 2, h = hAt(u), w = wAt(u);
+      const n = new THREE.Vector3(0, Math.cos(th) / h, Math.sin(th) / w).normalize();
+      const c = new THREE.Mesh(new THREE.ConeGeometry(0.006, 0.04, 4), tm);
+      c.position.set(xAt(u), h * Math.cos(th), w * Math.sin(th)); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n); body.add(c);
+    }
+  }
+  // keep each bendable mesh's rest pose for the swim wave
+  for (const m of bend) m.userData.base = Float32Array.from(m.geometry.attributes.position.array);
+  root.userData = Object.assign(root.userData, { g, bend, pecs, body, P, phase: Math.random() * 6.28, skin });
+  return root;
+}
+// The swim wave: a travelling bend that grows toward the tail (eels bend all along), or a ray's flap.
+function swim(fish, t, rate = 1){
+  const { bend, pecs, P, g } = fish.userData;
+  const ph = fish.userData.phase + t * rate;
+  const eel = P.eel, flat = P.flat;
+  const amp = eel ? 0.06 : (g.prof === "globe" || g.prof === "angler" ? 0.02 : 0.05), waves = eel ? 1.7 : 0.8;
+  for (const m of bend){
+    const a = m.geometry.attributes.position, b = m.userData.base, arr = a.array;
+    for (let i = 0; i < arr.length; i += 3){
+      const s = 0.5 - b[i];
+      if (flat){ const zz = Math.abs(b[i + 2]) / 0.44; arr[i + 1] = b[i + 1] + 0.07 * Math.sin(ph - s * 2.5) * zz * zz; arr[i + 2] = b[i + 2]; if (s > 1) arr[i + 2] = b[i + 2] + 0.05 * Math.sin(ph * 0.7 - s * 3) * (s - 1); }
+      else { const env = eel ? (0.25 + s) : s * s * 1.3; arr[i + 2] = b[i + 2] + amp * env * Math.sin(ph - s * waves * 6.283); }
+    }
+    a.needsUpdate = true;
+  }
+  for (const p of pecs) p.rotation.y = p.userData.side * (0.5 + 0.35 * Math.sin(ph * 1.6));
+  if (fish.userData.lure) fish.userData.lure.material.emissiveIntensity = 1.8 + 0.6 * Math.sin(t * 2.3);
+}
+function disposeFish(f){
+  f.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material){ const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms){ if (m.map) m.map.dispose(); if (m.emissiveMap) m.emissiveMap.dispose(); m.dispose(); } } });
+}
+const weightG = g => PROFILES[g.prof].K * g.depth * g.width * Math.pow(g.len * 100, 3) / 100;
+
+// ------------------------------------------------------------------ the lab
+const lab = (() => {
+  const canvas = document.getElementById("labCanvas");
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+  const scene = new THREE.Scene(); scene.background = new THREE.Color("#0b2230"); scene.fog = new THREE.Fog("#0b2230", 4, 14);
+  const cam = new THREE.PerspectiveCamera(30, 16 / 10, 0.01, 50);
+  scene.add(new THREE.HemisphereLight("#bfe8ff", "#0a1820", 0.75));
+  const key = new THREE.DirectionalLight("#fff4e0", 1.3); key.position.set(-2, 3, 3); scene.add(key);
+  const rim = new THREE.DirectionalLight("#60d0ff", 0.5); rim.position.set(2, 1, -3); scene.add(rim);
+  const turn = new THREE.Group(); scene.add(turn);
+  let fish = null, ruler = null, g = null, yaw = 0.0, pitch = 0.0, drag = null;
+  canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY, yaw, pitch]; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = "grabbing"; });
+  canvas.addEventListener("pointermove", e => { if (!drag) return; yaw = drag[2] + (e.clientX - drag[0]) * 0.01; pitch = clamp(drag[3] + (e.clientY - drag[1]) * 0.006, -1.2, 1.2); });
+  canvas.addEventListener("pointerup", () => { drag = null; canvas.style.cursor = "grab"; });
+
+  function makeRuler(len, sp){
+    if (ruler){ scene.remove(ruler); ruler.geometry.dispose(); ruler.material.map.dispose(); ruler.material.dispose(); }
+    const steps = [0.1, 0.2, 0.25, 0.5, 1, 1.5, 2, 2.5, 3];
+    const span = steps.find(s => s >= len * 1.15) || 3;
+    const cmMinor = span <= 0.25 ? 1 : span <= 1 ? 5 : 10, cmMajor = span <= 0.25 ? 5 : span <= 1 ? 10 : 50;
+    const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 96; const x = cv.getContext("2d");
+    x.fillStyle = "#e9dcb4"; x.fillRect(0, 0, 1024, 96);
+    const pxPerM = 1024 / span;
+    x.fillStyle = "rgba(240,160,40,.55)"; x.fillRect((span / 2 - sp.L * 1.25 / 2) * pxPerM, 0, sp.L * 1.25 * pxPerM, 12);
+    x.fillStyle = "rgba(240,160,40,.95)"; x.fillRect((span / 2 - sp.L * 0.85 / 2) * pxPerM, 0, sp.L * 0.85 * pxPerM, 12);
+    x.fillStyle = "#2a2216"; x.font = "600 22px JetBrains Mono, monospace"; x.textAlign = "center";
+    for (let cm = 0; cm <= span * 100 + 0.01; cm += cmMinor){
+      const px = Math.min(1022, Math.max(2, cm / 100 * pxPerM)), major = Math.abs(cm % cmMajor) < 0.01;
+      x.fillRect(px - 1.5, 12, 3, major ? 40 : 22);
+      if (major) x.fillText(cm >= 100 ? `${(cm / 100).toFixed(cm % 100 ? 1 : 0)} m` : `${cm}`, clamp(px, 30, 994), 80);
+    }
+    const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
+    ruler = new THREE.Mesh(new THREE.PlaneGeometry(span, span * 96 / 1024), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }));
+    scene.add(ruler); return span;
+  }
+  function show(newG){
+    if (!g || PROFILES[g.prof].flat !== PROFILES[newG.prof].flat) pitch = PROFILES[newG.prof].flat ? 1.0 : 0;
+    g = newG;
+    if (fish){ turn.remove(fish); disposeFish(fish); }
+    fish = buildFish(g); fish.scale.setScalar(g.len); turn.add(fish);
+    const box = new THREE.Box3().setFromObject(fish), size = box.getSize(new THREE.Vector3());
+    const span = makeRuler(Math.max(g.len, size.x), g.sp);
+    const lowY = box.min.y - Math.max(0.02, span * 0.05);
+    ruler.position.set(0, lowY - span * 0.047, 0.0);
+    const fitW = span * 1.08, fitH = (size.y + span * 0.2) * 1.4;
+    const dist = Math.max(fitW / (2 * Math.tan(THREE.MathUtils.degToRad(15)) * cam.aspect), fitH / (2 * Math.tan(THREE.MathUtils.degToRad(15))));
+    cam.near = dist / 40; cam.far = dist * 6; cam.updateProjectionMatrix();   // keeps depth precise on a thin fish
+    cam.position.set(0, (box.max.y + lowY) / 2, dist); cam.lookAt(0, (box.max.y + lowY - span * 0.1) / 2, 0);
+    scene.fog.near = dist * 0.9; scene.fog.far = dist * 3;
+    document.getElementById("labHud").innerHTML = `<b>${g.sp.name}</b> &middot; ${PROFILES[g.prof].name.toLowerCase()} &middot; ${PATTERNS[g.pat].name.toLowerCase()}${g.morph ? ` &middot; <b style="color:var(--amber)">${g.morph} morph</b>` : ""}`;
+    document.getElementById("rLen").textContent = fmtLen(g.len);
+    document.getElementById("rWt").textContent = fmtWt(weightG(g));
+    document.getElementById("rPct").textContent = `${Math.round(g.len / g.sp.L * 100)}%`;
+  }
+  function resize(){ const r = canvas.getBoundingClientRect(); if (!r.width) return; renderer.setSize(r.width, r.height, false); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); if (g) show(g); }
+  new ResizeObserver(resize).observe(canvas);
+  let visible = true; new IntersectionObserver(es => visible = es[0].isIntersecting).observe(canvas);
+  const clock = new THREE.Clock();
+  function frame(){
+    requestAnimationFrame(frame);
+    if (!visible || !fish) return;
+    const t = clock.getElapsedTime();
+    turn.rotation.set(pitch * 0.5, yaw + Math.sin(t * 0.35) * 0.18, 0);
+    swim(fish, t, 7);
+    renderer.render(scene, cam);
+  }
+  frame();
+  return { show, get g(){ return g; }, get fish(){ return fish; } };
+})();
+
+// ------------------------------------------------------------------ lab controls
+const $ = id => document.getElementById(id);
+const spSel = $("spSel"), profSel = $("profSel"), tailSel = $("tailSel"), patSel = $("patSel");
+for (const s of SPECIES) spSel.add(new Option(s.name, s.id));
+for (const [k, p] of Object.entries(PROFILES)) profSel.add(new Option(p.name, k));
+for (const [k, n] of Object.entries(TAILS)) tailSel.add(new Option(n, k));
+for (const [k, p] of Object.entries(PATTERNS)) patSel.add(new Option(p.name, k));
+let cur = null, seedN = 0;
+function syncControls(){
+  spSel.value = cur.sp.id; profSel.value = cur.prof; tailSel.value = cur.tail; patSel.value = cur.pat;
+  $("lenR").max = Math.max(2, cur.sp.L * 1.6); $("lenR").value = cur.len; $("depR").value = cur.depth; $("widR").value = cur.width; $("finR").value = cur.fin;
+  $("denR").value = cur.den; $("conR").value = cur.con; $("hueR").value = Math.round(cur.hue);
+  $("lenO").textContent = fmtLen(cur.len); $("depO").textContent = cur.depth.toFixed(2); $("widO").textContent = cur.width.toFixed(2); $("finO").textContent = cur.fin.toFixed(2);
+  $("denO").textContent = cur.den.toFixed(2); $("conO").textContent = cur.con.toFixed(2); $("hueO").textContent = `${Math.round(cur.hue)}°`;
+  $("seedOut").textContent = `seed ${cur.seed}  ·  pattern seed ${cur.patSeed}${cur.morph ? "  ·  " + cur.morph : ""}`;
+}
+function roll(spId, seed, force){ cur = genome(SP[spId], seed, force); syncControls(); lab.show(cur); }
+spSel.onchange = () => { seedN = 0; roll(spSel.value, 0); };
+$("rollBtn").onclick = () => { seedN = Math.floor(Math.random() * 1e6); roll(cur.sp.id, seedN, $("morphBtn").getAttribute("aria-pressed") === "true"); };
+$("resetBtn").onclick = () => roll(cur.sp.id, cur.seed);
+$("morphBtn").onclick = e => { const on = e.currentTarget.getAttribute("aria-pressed") !== "true"; e.currentTarget.setAttribute("aria-pressed", on); roll(cur.sp.id, cur.seed, on); };
+const live = (id, key, parse = parseFloat) => $(id).addEventListener("input", e => { cur[key] = parse(e.target.value); syncControls(); lab.show(cur); });
+live("lenR", "len"); live("depR", "depth"); live("widR", "width"); live("finR", "fin"); live("denR", "den"); live("conR", "con"); live("hueR", "hue");
+live("profSel", "prof", v => v); live("tailSel", "tail", v => v); live("patSel", "pat", v => v);
+roll("perch", 3);
+
+// ------------------------------------------------------------------ species sheet (one offscreen renderer)
+const sheet = (() => {
+  const W = 320, H = 180;
+  const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, alpha: false });
+  renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.setSize(W, H, false);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color("#0c2230");
+  scene.add(new THREE.HemisphereLight("#bfe8ff", "#0a1820", 0.8));
+  const key = new THREE.DirectionalLight("#fff4e0", 1.3); key.position.set(-2, 3, 3); scene.add(key);
+  const cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 50);
+  function render(g, frame, target){
+    const f = buildFish(g); f.scale.setScalar(g.len); f.rotation.set(PROFILES[g.prof].flat ? 0.95 : 0.12, -0.35, 0); scene.add(f); swim(f, 0.4, 1);
+    const dist = frame * 1.02 / (2 * Math.tan(THREE.MathUtils.degToRad(15)) * cam.aspect);
+    cam.near = dist / 40; cam.far = dist * 6; cam.updateProjectionMatrix();
+    cam.position.set(0, frame * 0.04, dist); cam.lookAt(0, 0, 0);
+    renderer.render(scene, cam);
+    const x = target.getContext("2d"); x.drawImage(canvas, 0, 0, target.width, target.height);
+    scene.remove(f); disposeFish(f);
+  }
+  return { render };
+})();
+function buildSheet(){
+  const host = $("sheetRows");
+  SPECIES.forEach((sp, si) => {
+    const row = document.createElement("div"); row.className = "srow";
+    row.innerHTML = `<div class="who"><img src="fish/species-${sp.id}.png" alt=""><div><b>${sp.name}</b><small>${fmtLen(sp.L * 0.85)} to ${fmtLen(sp.L * 1.25)}</small></div></div><div class="ind"></div>`;
+    host.appendChild(row);
+    const ind = row.querySelector(".ind");
+    const frame = sp.L * 1.25 * (PROFILES[sp.prof].flat ? 1.6 : sp.lure ? 1.45 : 1.2);
+    const gs = [0, 1, 2, 3, 4, 5].map(s => genome(sp, s + 11));
+    if (sp.id === "reef") gs[4] = genome(sp, 15, true);       // show one rare morph on the sheet
+    if (sp.id === "minnow") gs[2] = genome(sp, 13, true);
+    gs.forEach(g => {
+      const b = document.createElement("button"); b.title = `Open in the lab`;
+      const cv = document.createElement("canvas"); cv.width = 320; cv.height = 180; b.appendChild(cv);
+      const cap = document.createElement("small"); cap.innerHTML = `#${g.seed} · ${fmtLen(g.len)}${g.morph ? ` · <i>${g.morph}</i>` : ""}`; b.appendChild(cap);
+      b.onclick = () => { cur = g; syncControls(); lab.show(g); $("lab").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); };
+      ind.appendChild(b);
+      setTimeout(() => sheet.render(g, frame, cv), 60 + si * 40);
+    });
+  });
+}
+buildSheet();
+
+// ------------------------------------------------------------------ roster
+let habOn = "All";
+function buildRoster(){
+  const f = $("habFilters"); f.innerHTML = "";
+  for (const h of ["All", ...HABITATS]){
+    const b = document.createElement("button"); b.className = "btn"; b.textContent = h; b.setAttribute("aria-pressed", h === habOn);
+    b.onclick = () => { habOn = h; buildRoster(); }; f.appendChild(b);
+  }
+  const grid = $("rosterGrid"); grid.innerHTML = "";
+  for (const sp of SPECIES){
+    if (habOn !== "All" && !sp.hab.includes(habOn)) continue;
+    const src = sp.src === "new" ? `<span class="chip src-new">New here</span>` : sp.src === "Tenebris" ? `<span class="chip">From Tenebris</span>` : `<span class="chip">fishing-and-equipment</span>`;
+    const c = document.createElement("article"); c.className = "card";
+    c.innerHTML = `<div class="top"><img src="fish/species-${sp.id}.png" alt="${sp.name}, hand-drawn portrait"><div style="display:grid;gap:6px"><h3>${sp.name}</h3>
+      <div class="chips"><span class="chip r-${sp.rarity}">${sp.rarity}</span>${src}</div><div class="chips">${sp.hab.map(h => `<span class="chip">${h}</span>`).join("")}</div></div></div>
+      <dl class="facts">
+        <dt>Size</dt><dd class="mono">${fmtLen(sp.L * 0.85)} to ${fmtLen(sp.L * 1.25)}</dd>
+        <dt>Water</dt><dd>${sp.wclass}; ${sp.water.map(w => WATER_NAMES[w]).join(" or ")}</dd>
+        <dt>Window</dt><dd class="mono">${sp.temp[0]} to ${sp.temp[1]} °C</dd>
+        <dt>Bait</dt><dd>${sp.bait}</dd>
+        <dt>Time</dt><dd>${sp.time}</dd>
+        <dt>Season</dt><dd>${sp.season}</dd>
+        <dt>Fight</dt><dd class="mono">strength ${sp.strength} · hook ${hookWindow(sp.strength).toFixed(2)} s</dd>
+        <dt>Found</dt><dd>${sp.school === "1" ? "alone" : sp.school === "1-2" ? "alone or in pairs" : "schools of " + sp.school}</dd>
+        ${sp.needs ? `<dt>In a tank</dt><dd>needs ${sp.needs}</dd>` : ""}
+      </dl><p>${sp.wiki}</p>`;
+    const go = document.createElement("button"); go.className = "btn go"; go.textContent = "Open in the lab";
+    go.onclick = () => { roll(sp.id, 0); $("lab").scrollIntoView(); };
+    c.appendChild(go); grid.appendChild(c);
+  }
+}
+buildRoster();
+
+// ------------------------------------------------------------------ parts
+(function(){
+  const p = $("patParts");
+  for (const [k, v] of Object.entries(PATTERNS)){
+    const users = SPECIES.filter(s => s.pat === k).map(s => s.name).join(", ");
+    p.insertAdjacentHTML("beforeend", `<div class="part"><img src="fish/pattern-${k}.png" alt=""><div><b>${v.name}</b><span>${v.what} ${users ? "(" + users + ")" : ""}</span></div></div>`);
+  }
+  const rows = $("profRows");
+  for (const [k, v] of Object.entries(PROFILES)){
+    const users = SPECIES.filter(s => s.prof === k).map(s => s.name).join(", ") || "-";
+    rows.insertAdjacentHTML("beforeend", `<tr><td>${v.name}</td><td class="num">${(v.D * 2 * 100).toFixed(0)}% of L</td><td class="num">${(v.W * 2 * 100).toFixed(0)}% of L</td><td class="num">${Math.round(v.uMax * 100)}% back</td><td class="num">${v.K}</td><td>${v.swim}</td><td>${users}</td></tr>`);
+  }
+})();
+
+// ------------------------------------------------------------------ the aquarium
+const CELL = 2.833, R = CELL / Math.sqrt(3), APO = CELL / 2, LAYER = 1.0, STAND = 0.45;
+const SHAPES = { "1":[[0,0]], "3":[[-1,0],[0,0],[1,0]], "3t":[[0,0],[1,0],[0,1]], "7":[[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]] };
+const cellXZ = ([q, r]) => [Math.sqrt(3) * R * (q + r / 2), 1.5 * R * r];
+const DIRS = [[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];   // neighbour at edge-normal angle 0, 60, ... 300
+const DECOR = [
+  { id:"sand-bed", name:"Sand bed" }, { id:"rock-cave", name:"Rock cave" }, { id:"kelp", name:"Kelp" }, { id:"coral", name:"Coral" },
+  { id:"driftwood", name:"Driftwood" }, { id:"heater", name:"Heater" }, { id:"chiller", name:"Chiller" }, { id:"lamp", name:"Tank lamp" }, { id:"bubbler", name:"Bubbler" },
+];
+const tank = (() => {
+  const canvas = $("tankCanvas");
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+  const scene = new THREE.Scene();
+  const cam = new THREE.PerspectiveCamera(42, 16 / 11, 0.25, 60);
+  let yaw = 0.5, pitch = 0.42, dist = 7, drag = null;
+  canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY, yaw, pitch]; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = "grabbing"; });
+  canvas.addEventListener("pointermove", e => { if (!drag) return; yaw = drag[2] - (e.clientX - drag[0]) * 0.008; pitch = clamp(drag[3] + (e.clientY - drag[1]) * 0.005, 0.02, 1.2); });
+  canvas.addEventListener("pointerup", () => { drag = null; canvas.style.cursor = "grab"; });
+  canvas.addEventListener("wheel", e => { e.preventDefault(); dist = clamp(dist * (1 + Math.sign(e.deltaY) * 0.08), 3, 16); }, { passive: false });
+
+  // ---- the room: a hex-gridded floor, two walls, a window, a shelf, a lantern, a candle, a chair
+  const ROOM_X = 4 * Math.sqrt(3) * R * 1.0, ROOM_Z = 2 * 3 * R;      // whole hex tiles, so the grid meets the tank's cells
+  const hexTile = (() => {
+    const tw = 256, th = Math.round(256 * 3 / Math.sqrt(3)), cv = document.createElement("canvas"); cv.width = tw; cv.height = th; const x = cv.getContext("2d");
+    x.fillStyle = "#6e5236"; x.fillRect(0, 0, tw, th);
+    const r0 = mulberry32(5); for (let i = 0; i < 900; i++){ x.fillStyle = `rgba(${r0() < .5 ? "40,26,14" : "150,110,70"},${0.08 + r0() * 0.1})`; x.fillRect(r0() * tw, r0() * th, 2 + r0() * 30, 1.5); }
+    const rr = tw / Math.sqrt(3); x.strokeStyle = "rgba(30,18,8,.75)"; x.lineWidth = 3;
+    for (const [cx, cy] of [[0,0],[tw,0],[0,th],[tw,th],[tw/2,th/2]]){ x.beginPath(); for (let k = 0; k <= 6; k++){ const a = Math.PI / 6 + k * Math.PI / 3; const px = cx + rr * Math.cos(a), py = cy + rr * Math.sin(a); k ? x.lineTo(px, py) : x.moveTo(px, py); } x.stroke(); }
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+    t.repeat.set(ROOM_X / (Math.sqrt(3) * R), ROOM_Z / (3 * R)); return t;
+  })();
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_X, ROOM_Z), new THREE.MeshStandardMaterial({ map: hexTile, roughness: 0.85 }));
+  floor.rotation.x = -Math.PI / 2; scene.add(floor);
+  const wallMat = new THREE.MeshStandardMaterial({ color: "#8a7a64", roughness: 0.95 });
+  const wallB = new THREE.Mesh(new THREE.BoxGeometry(ROOM_X, 4, 0.2), wallMat); wallB.position.set(0, 2, -ROOM_Z / 2 - 0.1); scene.add(wallB);
+  const wallL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, ROOM_Z), wallMat); wallL.position.set(-ROOM_X / 2 - 0.1, 2, 0); scene.add(wallL);
+  const trim = new THREE.MeshStandardMaterial({ color: "#4a3622", roughness: 0.8 });
+  const base1 = new THREE.Mesh(new THREE.BoxGeometry(ROOM_X, 0.16, 0.06), trim); base1.position.set(0, 0.08, -ROOM_Z / 2 + 0.03); scene.add(base1);
+  // window with the moon in it
+  const winPane = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.3), new THREE.MeshStandardMaterial({ color: "#000", emissive: new THREE.Color("#203a5a"), emissiveIntensity: 1 }));
+  winPane.position.set(3.2, 2.1, -ROOM_Z / 2 + 0.01); scene.add(winPane);
+  for (const [w, h, x, y] of [[1.8,0.1,0,0.7],[1.8,0.1,0,-0.7],[0.1,1.5,0.85,0],[0.1,1.5,-0.85,0],[0.06,1.3,0,0],[1.6,0.06,0,0]]){ const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.1), trim); b.position.set(3.2 + x, 2.1 + y, -ROOM_Z / 2 + 0.05); scene.add(b); }
+  const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(0.12, 24), new THREE.MeshBasicMaterial({ color: "#dfe8ff" })); moonDisc.position.set(3.55, 2.4, -ROOM_Z / 2 + 0.02); scene.add(moonDisc);
+  // shelf, books, candle
+  const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 2.2), trim); shelf.position.set(-ROOM_X / 2 + 0.2, 1.5, -1.6); scene.add(shelf);
+  const br = mulberry32(9);
+  for (let i = 0; i < 9; i++){ const h = 0.22 + br() * 0.12; const b = new THREE.Mesh(new THREE.BoxGeometry(0.22, h, 0.06 + br() * 0.04), new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(br(), 0.4, 0.3), roughness: 0.8 })); b.position.set(-ROOM_X / 2 + 0.18, 1.53 + h / 2, -2.5 + i * 0.1); scene.add(b); }
+  const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 10), new THREE.MeshStandardMaterial({ color: "#efe4c8" })); candle.position.set(-ROOM_X / 2 + 0.2, 1.6, -0.8); scene.add(candle);
+  const flame = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), new THREE.MeshBasicMaterial({ color: "#ffcf70" })); flame.scale.y = 1.8; flame.position.set(-ROOM_X / 2 + 0.2, 1.7, -0.8); scene.add(flame);
+  // lantern on a bracket by the door side
+  const lanternBody = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.26, 6), new THREE.MeshStandardMaterial({ color: "#1c1612", emissive: new THREE.Color("#ffb060"), emissiveIntensity: 1.6 }));
+  lanternBody.position.set(-ROOM_X / 2 + 0.25, 2.3, 2.4); scene.add(lanternBody);
+  const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.04), trim); bracket.position.set(-ROOM_X / 2 + 0.12, 2.47, 2.4); scene.add(bracket);
+  // a chair and a rug, so the tank's light has something to fall on
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(1.5, 6), new THREE.MeshStandardMaterial({ color: "#6a2e2a", roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(-2.4, 0.005, 2.0); scene.add(rug);
+  const chairMat = new THREE.MeshStandardMaterial({ color: "#5a3c26", roughness: 0.7 });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.6), chairMat); seat.position.set(-2.4, 0.45, 2.2); scene.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.08), chairMat); back.position.set(-2.4, 0.78, 2.5); scene.add(back);
+  for (const [dx, dz] of [[-.26,-.26],[.26,-.26],[-.26,.26],[.26,.26]]){ const l = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.45, 0.06), chairMat); l.position.set(-2.4 + dx, 0.225, 2.2 + dz); scene.add(l); }
+
+  // ---- lights: made once, switched by intensity, so the shaders never recompile
+  const hemi = new THREE.HemisphereLight("#9fb8d8", "#2a2018", 0.1); scene.add(hemi);
+  const moon = new THREE.DirectionalLight("#9fb4e8", 0.15); moon.position.set(4, 5, -8); scene.add(moon);
+  const tankLights = []; for (let i = 0; i < 7; i++){ const l = new THREE.PointLight("#8fe4ff", 0, 6, 2); scene.add(l); tankLights.push(l); }
+  const lantern = new THREE.PointLight("#ffa850", 1.4, 5, 2); lantern.position.copy(lanternBody.position).add(new THREE.Vector3(0.1, 0, 0)); scene.add(lantern);
+  const candleL = new THREE.PointLight("#ffb050", 0.8, 3.5, 2); candleL.position.set(-ROOM_X / 2 + 0.3, 1.75, -0.8); scene.add(candleL);
+
+  // caustics: a tileable net of light, two layers scrolled against each other, cast on the floor round the tank
+  const caustTex = (() => {
+    const s = 256, cv = document.createElement("canvas"); cv.width = cv.height = s; const x = cv.getContext("2d");
+    x.fillStyle = "#000"; x.fillRect(0, 0, s, s); x.strokeStyle = "rgba(170,240,255,.55)"; x.lineWidth = 2.2;
+    const r = mulberry32(3), pts = []; for (let i = 0; i < 26; i++) pts.push([r() * s, r() * s]);
+    for (let yy = 0; yy < s; yy += 3) for (let xx = 0; xx < s; xx += 3){
+      let d1 = 1e9, d2 = 1e9;
+      for (const [px, py] of pts) for (const ox of [-s, 0, s]) for (const oy of [-s, 0, s]){ const d = Math.hypot(xx - px - ox, yy - py - oy); if (d < d1){ d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
+      const v = clamp(1 - (d2 - d1) / 6, 0, 1); if (v > 0){ x.fillStyle = `rgba(170,240,255,${v * 0.8})`; x.fillRect(xx, yy, 3, 3); }
+    }
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  })();
+  const caustMats = [0, 1].map(i => { const t = caustTex.clone(); t.needsUpdate = true; t.repeat.set(3 + i, 3 + i); return new THREE.MeshBasicMaterial({ map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.0 }); });
+  const caustGroup = new THREE.Group(); scene.add(caustGroup);
+
+  // ---- the tank
+  const glassMat = new THREE.MeshStandardMaterial({ color: "#cfefff", transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false });
+  const frameMat = new THREE.MeshStandardMaterial({ color: "#1e2428", roughness: 0.5, metalness: 0.6 });
+  const waterMat = { fresh: "#3a90a0", salt: "#2a78b8", brine: "#9cc8e6", vent: "#5a8a6a" };
+  const waterSideMat = new THREE.MeshStandardMaterial({ color: "#3a90a0", transparent: true, opacity: 0.2, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false });
+  const waterTopMat = new THREE.MeshStandardMaterial({ color: "#3a90a0", transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false, emissive: new THREE.Color("#0a3a48"), emissiveIntensity: 0.4 });
+  const standMat = new THREE.MeshStandardMaterial({ color: "#3a2a1c", roughness: 0.7 });
+  const subMat = { "sand-bed": new THREE.MeshStandardMaterial({ color: "#d8c08a", roughness: 1 }), gravel: new THREE.MeshStandardMaterial({ color: "#5c5a58", roughness: 1 }) };
+  const hoodMat = new THREE.MeshStandardMaterial({ color: "#202428", roughness: 0.5, metalness: 0.5, emissive: new THREE.Color("#8fe4ff"), emissiveIntensity: 0 });
+  const tankGroup = new THREE.Group(); scene.add(tankGroup);
+  const decorGroup = new THREE.Group(); scene.add(decorGroup);
+  const fishGroup = new THREE.Group(); scene.add(fishGroup);
+  const state = { shape: "3", layers: 1, water: "fresh", temp: 22, night: true, lamp: true, lanternOn: true,
+    decor: new Set(["sand-bed", "rock-cave", "kelp", "driftwood", "heater", "lamp", "bubbler"]), residents: [] };
+  let cells = [], floorY = STAND + 0.06, topY = 0, kelps = [], bubbles = null, cave = null;
+  const hexPts = (cx, cz, r) => [0, 1, 2, 3, 4, 5].map(k => { const a = Math.PI / 6 + k * Math.PI / 3; return [cx + r * Math.cos(a), cz + r * Math.sin(a)]; });
+  // A hex prism: CylinderGeometry's six corners already sit at 30 + 60k degrees, the cells' own corners.
+  function prism(cx, cz, r, y0, h, mat){ const g = new THREE.CylinderGeometry(r, r, h, 6); const m = new THREE.Mesh(g, mat); m.position.set(cx, y0 + h / 2, cz); return m; }
+  function clearGroup(gr){ while (gr.children.length){ const c = gr.children.pop(); c.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } }
+
+  function buildTank(){
+    clearGroup(tankGroup); clearGroup(caustGroup);
+    const coords = SHAPES[state.shape], set = new Set(coords.map(c => c.join(",")));
+    cells = coords.map(cellXZ);
+    const H = state.layers * LAYER; floorY = STAND + 0.06; topY = STAND + H;
+    const quads = [], wquads = [], edges = [];
+    const waterTop = topY - 0.07;
+    coords.forEach(([q, r], ci) => {
+      const [cx, cz] = cells[ci], v = hexPts(cx, cz, R);
+      tankGroup.add(prism(cx, cz, R * 0.995, 0, STAND, standMat));
+      tankGroup.add(prism(cx, cz, R * 0.97, STAND, 0.06 + 0.02, state.decor.has("sand-bed") ? subMat["sand-bed"] : subMat.gravel));
+      const hood = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.7, 0.05, 0.16), hoodMat); hood.position.set(cx, topY + 0.03, cz); tankGroup.add(hood);
+      const wt = new THREE.Mesh(new THREE.CircleGeometry(R * 0.985, 6), waterTopMat); wt.rotation.x = -Math.PI / 2; wt.rotation.z = Math.PI / 6; wt.position.set(cx, waterTop, cz); tankGroup.add(wt);
+      for (let k = 0; k < 6; k++){
+        // edge k joins vertex k and k+1; its outward normal points at DIRS[(k + 1) % 6]... checked below by distance
+        const a = v[k], b = v[(k + 1) % 6], mx = (a[0] + b[0]) / 2 - cx, mz = (a[1] + b[1]) / 2 - cz;
+        const ang = Math.atan2(mz, mx), di = ((Math.round(ang / (Math.PI / 3)) % 6) + 6) % 6, d = DIRS[di];
+        if (set.has(`${q + d[0]},${r + d[1]}`)) continue;
+        quads.push([a, b]); edges.push(a);
+      }
+    });
+    const mk = (list, y0, y1, mat, inset) => {
+      const pos = [];
+      for (const [a, b] of list){
+        const A = inset ? lerpToCenter(a, inset) : a, B = inset ? lerpToCenter(b, inset) : b;
+        pos.push(A[0], y0, A[1], B[0], y0, B[1], B[0], y1, B[1], A[0], y0, A[1], B[0], y1, B[1], A[0], y1, A[1]);
+      }
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+      tankGroup.add(new THREE.Mesh(g, mat));
+    };
+    const lerpToCenter = (p, k) => { let best = cells[0], bd = 1e9; for (const c of cells){ const d = Math.hypot(p[0] - c[0], p[1] - c[1]); if (d < bd){ bd = d; best = c; } } return [lerp(p[0], best[0], k), lerp(p[1], best[1], k)]; };
+    mk(quads, STAND, topY, glassMat, 0);
+    mk(quads, floorY, waterTop, waterSideMat, 0.01);
+    // frame: posts at boundary corners, rails top and bottom
+    for (const [a, b] of quads){
+      for (const y of [STAND + 0.01, topY]){ const len = Math.hypot(b[0] - a[0], b[1] - a[1]); const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.035, 0.035), frameMat); rail.position.set((a[0] + b[0]) / 2, y, (a[1] + b[1]) / 2); rail.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0]); tankGroup.add(rail); }
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.035, topY - STAND, 0.035), frameMat); post.position.set(a[0], (topY + STAND) / 2, a[1]); tankGroup.add(post);
+    }
+    // caustic patches on the floor round each cell
+    for (const [cx, cz] of cells) for (const m of caustMats){ const p = new THREE.Mesh(new THREE.CircleGeometry(R * 1.35, 32), m); p.rotation.x = -Math.PI / 2; p.position.set(cx, 0.01 + caustMats.indexOf(m) * 0.002, cz); caustGroup.add(p); }
+    tankLights.forEach((l, i) => { if (i < cells.length){ l.position.set(cells[i][0], topY - 0.15, cells[i][1]); } });
+    waterTopMat.color.set(waterMat[state.water]); waterSideMat.color.set(waterMat[state.water]);
+    buildDecor(); placeResidents(); applyLight();
+    const vol = cells.length * (3 * Math.sqrt(3) / 2 * R * R) * (waterTop - floorY) * 1000;
+    state.volume = vol;
+    const span = Math.max(...cells.map(c => Math.hypot(c[0], c[1]))) + R;
+    dist = clamp(span * 1.7 + state.layers * 1.2, 4.5, 14);
+  }
+
+  function buildDecor(){
+    clearGroup(decorGroup); kelps = []; bubbles = null; cave = null;
+    const r = mulberry32(42), n = cells.length, at = i => cells[i % n];
+    const fy = floorY + 0.02;
+    if (state.decor.has("rock-cave")){
+      const [cx, cz] = at(0), m = new THREE.MeshStandardMaterial({ color: "#7c7882", roughness: 0.9, flatShading: true });
+      for (let i = 0; i < 5; i++){ const s = 0.22 + r() * 0.2; const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), m); rock.position.set(cx - 0.7 + (i % 3) * 0.3, fy + s * 0.5 + (i > 2 ? 0.28 : 0), cz - 0.45 + (i > 2 ? 0.05 : 0)); rock.rotation.set(r() * 3, r() * 3, 0); rock.scale.y = 0.8; decorGroup.add(rock); }
+      const hole = new THREE.Mesh(new THREE.CircleGeometry(0.14, 12), new THREE.MeshBasicMaterial({ color: "#050506" })); hole.position.set(cx - 0.4, fy + 0.13, cz - 0.15); decorGroup.add(hole);
+      cave = new THREE.Vector3(cx - 0.4, fy + 0.1, cz - 0.05);
+    }
+    if (state.decor.has("kelp")){
+      const km = new THREE.MeshStandardMaterial({ color: "#4f9a3c", roughness: 0.7, side: THREE.DoubleSide });
+      for (let i = 0; i < 6 * Math.min(n, 3); i++){
+        const [cx, cz] = at(i), h = (topY - floorY) * (0.55 + r() * 0.35);
+        const g = new THREE.PlaneGeometry(0.1, h, 1, 10); g.translate(0, h / 2, 0);
+        const k = new THREE.Mesh(g, km); k.position.set(cx + 0.4 + (r() - 0.5) * 0.9, fy, cz - 0.6 + (r() - 0.5) * 0.5); k.rotation.y = r() * 3;
+        k.userData.base = Float32Array.from(g.attributes.position.array); k.userData.ph = r() * 6; kelps.push(k); decorGroup.add(k);
+      }
+    }
+    if (state.decor.has("coral")){
+      const cm = new THREE.MeshStandardMaterial({ color: "#f0707c", roughness: 0.6 });
+      const [cx, cz] = at(1);
+      const branch = (p, dir, len, d) => { const e = p.clone().addScaledVector(dir, len); const g = new THREE.CylinderGeometry(0.025 - d * 0.006, 0.035 - d * 0.006, len, 6); const m = new THREE.Mesh(g, cm); m.position.copy(p).lerp(e, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); decorGroup.add(m); if (d < 2) for (const s of [-1, 1]){ const nd = dir.clone().applyAxisAngle(new THREE.Vector3(r() - 0.5, 0, r() - 0.5).normalize(), s * 0.6).normalize(); branch(e, nd, len * 0.75, d + 1); } };
+      for (let i = 0; i < 3; i++) branch(new THREE.Vector3(cx + 0.3 + i * 0.25, fy, cz + 0.4 - i * 0.2), new THREE.Vector3(0, 1, 0), 0.22, 0);
+    }
+    if (state.decor.has("driftwood")){
+      const [cx, cz] = at(n > 1 ? 2 : 0), wm = new THREE.MeshStandardMaterial({ color: "#8a6844", roughness: 0.9 });
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 1.3, 7), wm); log.rotation.z = Math.PI / 2 - 0.35; log.rotation.y = 0.6; log.position.set(cx + 0.1, fy + 0.25, cz + 0.3); decorGroup.add(log);
+      const twig = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 0.5, 6), wm); twig.rotation.z = -0.5; twig.position.set(cx + 0.2, fy + 0.45, cz + 0.25); decorGroup.add(twig);
+    }
+    if (state.decor.has("heater")){
+      const [cx, cz] = at(0), h = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 10), new THREE.MeshStandardMaterial({ color: "#3a3a40", emissive: new THREE.Color("#ff7a30"), emissiveIntensity: 1.2 }));
+      h.position.set(cx + R * 0.55, floorY + 0.35, cz - 0.55); decorGroup.add(h);
+    }
+    if (state.decor.has("chiller")){
+      const [cx, cz] = at(n - 1), c = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.2), new THREE.MeshStandardMaterial({ color: "#7aaad0", emissive: new THREE.Color("#3a7ab0"), emissiveIntensity: 0.5 }));
+      c.position.set(cx - R * 0.5, floorY + 0.25, cz - 0.6); decorGroup.add(c);
+    }
+    if (state.decor.has("bubbler")){
+      const [cx, cz] = at(n > 1 ? 1 : 0), stone = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.06, 10), new THREE.MeshStandardMaterial({ color: "#5a5e64" }));
+      stone.position.set(cx - 0.3, fy + 0.03, cz + 0.6); decorGroup.add(stone);
+      const N = 70, pos = new Float32Array(N * 3), cv = document.createElement("canvas"); cv.width = cv.height = 32; const x = cv.getContext("2d");
+      x.strokeStyle = "rgba(220,250,255,.95)"; x.lineWidth = 3; x.beginPath(); x.arc(16, 16, 11, 0, 7); x.stroke();
+      for (let i = 0; i < N; i++){ pos[i * 3] = stone.position.x; pos[i * 3 + 1] = fy + r() * (topY - fy); pos[i * 3 + 2] = stone.position.z; }
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      bubbles = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.05, map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false }));
+      bubbles.userData = { origin: stone.position.clone(), seeds: Array.from({ length: N }, () => r()) }; decorGroup.add(bubbles);
+    }
+  }
+
+  // ---- residents and their boids
+  function margin(x, z){
+    let best = -1e9, bc = cells[0];
+    for (const c of cells){
+      const dx = x - c[0], dz = z - c[1];
+      const hd = Math.max(Math.abs(dx), Math.abs(dx * 0.5 + dz * 0.866), Math.abs(-dx * 0.5 + dz * 0.866));
+      const m = APO - 0.06 - hd; if (m > best){ best = m; bc = c; }
+    }
+    return [best, bc];
+  }
+  function randomInside(r, bed){
+    for (let i = 0; i < 50; i++){ const c = cells[Math.floor(r() * cells.length)]; const x = c[0] + (r() - 0.5) * CELL * 0.8, z = c[1] + (r() - 0.5) * CELL * 0.8; if (margin(x, z)[0] > 0.3) return new THREE.Vector3(x, bed ? floorY + 0.08 : lerp(floorY + 0.25, topY - 0.25, r()), z); }
+    return new THREE.Vector3(cells[0][0], floorY + 0.4, cells[0][1]);
+  }
+  function placeResidents(){
+    for (const f of state.residents){
+      if (!f.mesh){ f.mesh = buildFish(f.g); f.mesh.scale.setScalar(f.g.len); fishGroup.add(f.mesh); }
+      const r = mulberry32(f.g.seed);
+      f.pos = randomInside(r, f.g.sp.bed); f.vel = new THREE.Vector3(r() - 0.5, 0, r() - 0.5).multiplyScalar(0.2); f.goal = randomInside(r, f.g.sp.bed); f.goalT = 0;
+    }
+  }
+  function add(spId, count){
+    const sp = SP[spId];
+    for (let i = 0; i < count; i++){
+      const seed = Math.floor(Math.random() * 1e6), g = genome(sp, seed);
+      const f = { g }; state.residents.push(f);
+      f.mesh = buildFish(g); f.mesh.scale.setScalar(g.len); fishGroup.add(f.mesh);
+      const r = mulberry32(seed); f.pos = randomInside(r, sp.bed); f.vel = new THREE.Vector3(r() - 0.5, 0, r() - 0.5).multiplyScalar(0.2); f.goal = randomInside(r, sp.bed); f.goalT = 0;
+    }
+  }
+  function remove(spId){
+    const keep = [];
+    for (const f of state.residents){ if (f.g.sp.id === spId){ fishGroup.remove(f.mesh); disposeFish(f.mesh); } else keep.push(f); }
+    state.residents = keep;
+  }
+  const tmp = new THREE.Vector3(), acc = new THREE.Vector3(), sep = new THREE.Vector3(), ali = new THREE.Vector3(), coh = new THREE.Vector3();
+  function step(dt, t){
+    const list = state.residents;
+    for (const f of list){
+      const sp = f.g.sp, L = f.g.len;
+      acc.set(0, 0, 0); sep.set(0, 0, 0); ali.set(0, 0, 0); coh.set(0, 0, 0); let nn = 0;
+      for (const o of list){
+        if (o === f) continue;
+        tmp.subVectors(f.pos, o.pos); const d = tmp.length();
+        const sr = (L + o.g.len) * 0.9 + 0.05;
+        if (d < sr && d > 1e-4) sep.addScaledVector(tmp, (sr - d) / (d * sr));
+        if (o.g.sp === sp && d < Math.max(0.6, L * 5)){ ali.add(o.vel); coh.add(o.pos); nn++; }
+      }
+      acc.addScaledVector(sep, 1.6);
+      if (nn){ ali.divideScalar(nn).sub(f.vel); coh.divideScalar(nn).sub(f.pos); acc.addScaledVector(ali, 0.6).addScaledVector(coh, 0.35); }
+      f.goalT -= dt;
+      if (f.goalT <= 0){ const r = mulberry32(Math.floor(t * 1000) ^ f.g.seed); f.goal = (sp.id === "eel" && cave && r() < 0.6) ? cave.clone() : randomInside(r, sp.bed); f.goalT = 4 + r() * 5; }
+      tmp.subVectors(f.goal, f.pos); acc.addScaledVector(tmp.normalize(), 0.25);
+      const [m, c] = margin(f.pos.x, f.pos.z);
+      if (m < 0.35){ tmp.set(c[0] - f.pos.x, 0, c[1] - f.pos.z).normalize(); acc.addScaledVector(tmp, (0.35 - m) * 6); }
+      const yLo = floorY + (sp.bed ? 0.05 : 0.15) + L * 0.15, yHi = (sp.bed ? floorY + 0.25 : topY - 0.15 - L * 0.15);
+      if (f.pos.y < yLo) acc.y += (yLo - f.pos.y) * 6; if (f.pos.y > yHi) acc.y -= (f.pos.y - yHi) * 6;
+      if (sp.bed) acc.y += (yLo + 0.02 - f.pos.y) * 2;
+      if (sp.dark && state.lamp) acc.y -= 0.3;        // light-shy: hangs low under a lit lamp
+      f.vel.addScaledVector(acc, dt);
+      const s = f.vel.length(), lo = sp.speed[0] * 0.18, hi = sp.speed[1] * 0.22;
+      if (s > hi) f.vel.multiplyScalar(hi / s); else if (s < lo) f.vel.multiplyScalar(lo / Math.max(s, 1e-4));
+      f.vel.y *= 0.96;
+      f.pos.addScaledVector(f.vel, dt);
+      const [m2, c2] = margin(f.pos.x, f.pos.z); if (m2 < 0.02){ f.pos.x = lerp(f.pos.x, c2[0], 0.03); f.pos.z = lerp(f.pos.z, c2[1], 0.03); }
+      f.pos.y = clamp(f.pos.y, floorY + 0.03, topY - 0.1);
+      f.mesh.position.copy(f.pos);
+      const yaw = Math.atan2(-f.vel.z, f.vel.x), hs = Math.hypot(f.vel.x, f.vel.z);
+      f.mesh.rotation.set(0, yaw, Math.atan2(f.vel.y, hs) * 0.6, "YZX");
+      swim(f.mesh, t, 4 + s / Math.max(0.05, L) * 1.2);
+    }
+  }
+
+  // ---- lighting by time of day
+  function applyLight(){
+    const n = state.night, lampOn = state.decor.has("lamp") && state.lamp;
+    hemi.intensity = n ? 0.06 : 0.75; hemi.color.set(n ? "#7088b8" : "#d8ecff");
+    moon.intensity = n ? 0.12 : 1.1; moon.color.set(n ? "#9fb4e8" : "#fff2d8");
+    winPane.material.emissive.set(n ? "#14243c" : "#bfe2ff"); moonDisc.visible = n;
+    scene.background = new THREE.Color(n ? "#05070c" : "#a8c4d4");
+    tankLights.forEach((l, i) => l.intensity = (lampOn && i < cells.length) ? (n ? 1.1 : 0.6) / Math.sqrt(cells.length) : 0);
+    hoodMat.emissiveIntensity = lampOn ? 1.2 : 0;
+    lantern.intensity = state.lanternOn ? (n ? 1.1 : 0.3) : 0; lanternBody.material.emissiveIntensity = state.lanternOn ? 1.6 : 0;
+    candleL.intensity = n ? 0.8 : 0.2;
+    waterTopMat.emissiveIntensity = lampOn ? (n ? 0.5 : 0.15) : 0.03;
+    for (const m of caustMats) m.opacity = lampOn ? (n ? 0.14 : 0.04) : 0;
+  }
+
+  // ---- render loop
+  function resize(){ const r = canvas.getBoundingClientRect(); if (!r.width) return; renderer.setSize(r.width, r.height, false); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); }
+  new ResizeObserver(resize).observe(canvas);
+  let visible = true; new IntersectionObserver(es => visible = es[0].isIntersecting).observe(canvas);
+  const clock = new THREE.Clock(); let last = 0;
+  function frame(){
+    requestAnimationFrame(frame);
+    if (!visible) return;
+    const t = clock.getElapsedTime(), dt = Math.min(0.05, t - last); last = t;
+    step(dt, t);
+    for (const k of kelps){ const a = k.geometry.attributes.position, b = k.userData.base; for (let i = 0; i < a.array.length; i += 3){ const h = b[i + 1]; a.array[i] = b[i] + Math.sin(t * 0.9 + k.userData.ph + h * 2.5) * 0.06 * h; } a.needsUpdate = true; }
+    if (bubbles){ const a = bubbles.geometry.attributes.position, o = bubbles.userData.origin, s = bubbles.userData.seeds; for (let i = 0; i < s.length; i++){ let y = a.array[i * 3 + 1] + dt * (0.25 + s[i] * 0.2); if (y > topY - 0.08) y = floorY + 0.05; a.array[i * 3 + 1] = y; a.array[i * 3] = o.x + Math.sin(y * 9 + s[i] * 20) * 0.03; a.array[i * 3 + 2] = o.z + Math.cos(y * 7 + s[i] * 11) * 0.03; } a.needsUpdate = true; }
+    caustMats.forEach((m, i) => { m.map.offset.set(t * (i ? 0.012 : -0.009), t * (i ? -0.007 : 0.011)); });
+    flame.scale.y = 1.8 + Math.sin(t * 13) * 0.2; candleL.intensity = (state.night ? 0.8 : 0.2) * (0.9 + 0.1 * Math.sin(t * 17));
+    const cy = STAND + state.layers * 0.5;
+    cam.position.set(Math.sin(yaw) * Math.cos(pitch) * dist, cy + Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist);
+    cam.lookAt(0, cy, 0);
+    renderer.render(scene, cam);
+  }
+  frame();
+  return { state, buildTank, applyLight, add, remove };
+})();
+
+// ------------------------------------------------------------------ aquarium rules and UI
+function tankReport(){
+  const s = tank.state, msgs = [], status = {};
+  const bySp = {}; for (const f of s.residents){ (bySp[f.g.sp.id] = bySp[f.g.sp.id] || []).push(f); }
+  let load = 0; for (const f of s.residents) load += 1000 * f.g.len * f.g.len;     // litres of room per fish: 1000 * L(m)^2
+  const vol = s.volume || 1;
+  for (const [id, fs] of Object.entries(bySp)){
+    const sp = SP[id]; let st = "ok", why = "settled";
+    const bad = (w) => { st = "bad"; why = w; }, warn = (w) => { if (st !== "bad"){ st = "warn"; why = w; } };
+    if (!sp.water.includes(s.water)) bad(`needs ${sp.water.map(w => WATER_NAMES[w]).join(" or ")} water`);
+    else if (s.temp < sp.temp[0] || s.temp > sp.temp[1]) bad(`${s.temp} °C is outside ${sp.temp[0]} to ${sp.temp[1]} °C`);
+    if (sp.id === "serpent" && !(s.shape === "7" && s.layers === 2)) bad("too big for this glass: 7 cells, 2 layers");
+    if (sp.needs === "sand bed" && !s.decor.has("sand-bed")) warn("wants a sand bed to lie on");
+    if (sp.needs === "rock cave" && !s.decor.has("rock-cave")) warn("wants a rock cave to hide in");
+    if (sp.needs === "coral" && !s.decor.has("coral")) warn("wants coral");
+    if (sp.needs === "lamp off at night" && s.decor.has("lamp") && s.lamp && s.night) warn("light-shy: turn the lamp off at night");
+    for (const [oid, os] of Object.entries(bySp)){
+      if (oid === id || !SP[oid].predator) continue;
+      const big = Math.max(...os.map(o => o.g.len)), small = Math.min(...fs.map(f => f.g.len));
+      if (big > small * 3) warn(`${SP[oid].name.toLowerCase()} will eat the small ones`);
+    }
+    status[id] = [st, why];
+  }
+  if (s.temp > 24 && !s.decor.has("heater")) msgs.push(["warn", `Holding ${s.temp} °C above room temperature needs a heater.`]);
+  if (s.temp < 14 && !s.decor.has("chiller")) msgs.push(["warn", `Holding ${s.temp} °C below room temperature needs a chiller.`]);
+  if (load > vol) msgs.push(["bad", `Overcrowded: the fish need ${Math.round(load).toLocaleString()} L of room and the tank holds ${Math.round(vol).toLocaleString()} L.`]);
+  if (!s.residents.length) msgs.push(["", "The tank is empty. Add fish from the list above."]);
+  const nBad = Object.values(status).filter(x => x[0] === "bad").length;
+  if (!nBad && s.residents.length && load <= vol) msgs.push(["ok", "Everything in this tank can live here."]);
+  return { load, vol, status, msgs };
+}
+function refreshTankUI(){
+  const s = tank.state, rep = tankReport();
+  $("capO").textContent = `${Math.round(rep.load).toLocaleString()} / ${Math.round(rep.vol).toLocaleString()} L`;
+  const bar = $("capBar"); bar.style.width = `${Math.min(100, rep.load / rep.vol * 100)}%`; bar.classList.toggle("over", rep.load > rep.vol);
+  const bySp = {}; for (const f of s.residents) bySp[f.g.sp.id] = (bySp[f.g.sp.id] || 0) + 1;
+  const rl = $("resList"); rl.innerHTML = "";
+  for (const [id, n] of Object.entries(bySp)){
+    const [st, why] = rep.status[id], d = document.createElement("div"); d.className = "res";
+    d.innerHTML = `<img src="fish/species-${id}.png" alt=""><span>${n} &times; ${SP[id].name}<br><span class="small">${why}</span></span><span class="st ${st}">${st === "ok" ? "happy" : st === "warn" ? "stressed" : "cannot live"}</span>`;
+    const b = document.createElement("button"); b.textContent = "remove"; b.setAttribute("aria-label", `Remove the ${SP[id].name}`); b.onclick = () => { tank.remove(id); refreshTankUI(); }; d.appendChild(b); rl.appendChild(d);
+  }
+  $("tankMsgs").innerHTML = rep.msgs.map(([k, m]) => `<div class="${k}">${m}</div>`).join("");
+  $("tempO").textContent = `${s.temp} °C`;
+  const cellsN = { "1":1, "3":3, "3t":3, "7":7 }[s.shape];
+  $("tankHud").innerHTML = `<b>${cellsN * s.layers} glass cell${cellsN * s.layers > 1 ? "s" : ""}</b> &middot; ${Math.round(rep.vol).toLocaleString()} L &middot; ${WATER_NAMES[s.water]} &middot; ${s.night ? "night" : "day"}`;
+}
+(function(){
+  const s = tank.state;
+  const dg = $("decorGrid");
+  for (const d of DECOR){
+    const b = document.createElement("button"); b.setAttribute("aria-pressed", s.decor.has(d.id)); b.innerHTML = `<img src="fish/decor-${d.id}.png" alt=""><span>${d.name}</span>`;
+    b.onclick = () => { s.decor.has(d.id) ? s.decor.delete(d.id) : s.decor.add(d.id); b.setAttribute("aria-pressed", s.decor.has(d.id)); tank.buildTank(); refreshTankUI(); };
+    dg.appendChild(b);
+  }
+  const addSp = $("addSp"); for (const sp of SPECIES) addSp.add(new Option(`${sp.name} (${sp.water.map(w => WATER_NAMES[w]).join("/")}, ${sp.temp[0]} to ${sp.temp[1]} °C)`, sp.id));
+  addSp.value = "sunplate";
+  $("addBtn").onclick = () => {
+    const sp = SP[addSp.value];
+    if (!sp.water.includes(s.water)){ $("tankMsgs").innerHTML = `<div class="bad">${sp.name} needs ${sp.water.map(w => WATER_NAMES[w]).join(" or ")} water. Change the water first, or pick another fish.</div>`; return; }
+    tank.add(sp.id, clamp(parseInt($("addN").value) || 1, 1, 40)); refreshTankUI();
+  };
+  const press = (id, on) => $(id).setAttribute("aria-pressed", on);
+  $("nightBtn").onclick = () => { s.night = true; press("nightBtn", true); press("dayBtn", false); tank.applyLight(); refreshTankUI(); };
+  $("dayBtn").onclick = () => { s.night = false; press("nightBtn", false); press("dayBtn", true); tank.applyLight(); refreshTankUI(); };
+  $("lampBtn").onclick = () => { s.lamp = !s.lamp; press("lampBtn", s.lamp); tank.applyLight(); refreshTankUI(); };
+  $("lanternBtn").onclick = () => { s.lanternOn = !s.lanternOn; press("lanternBtn", s.lanternOn); tank.applyLight(); };
+  $("tankSize").onchange = e => { s.shape = e.target.value; tank.buildTank(); refreshTankUI(); };
+  $("tankH").onchange = e => { s.layers = parseInt(e.target.value); tank.buildTank(); refreshTankUI(); };
+  $("waterSel").onchange = e => { s.water = e.target.value; tank.buildTank(); refreshTankUI(); };
+  $("tempR").oninput = e => { s.temp = parseInt(e.target.value); refreshTankUI(); };
+  tank.buildTank();
+  tank.add("minnow", 14); tank.add("sunplate", 3); tank.add("perch", 4); tank.add("eel", 1);
+  refreshTankUI();
+})();
+
+// ------------------------------------------------------------------ decisions
+const QS = [
+  ["Five new species", "Bloatfin (reef puffer), Sunplate (lake), Lanternjaw (deep-sea angler), Glassback (ice-moon under-ice ocean) and Emberback (vents) join the eight in fishing-and-equipment. Their names and looks are placeholders, like silverfin, perch and deepback were.",
+    "Take all five, appended after the eight so the roster stays append-only. Rename any of them freely before they ship."],
+  ["Lakes and vents as water classes", "The spawner knows river, shallows, shelf and deep. Sunplate needs a lake class (still water the river cut did not make) and Emberback a vent class (deep water over a hot spot). Neither exists in the terrain yet.",
+    "Add both as classes measured off the terrain, the way the river class is, in a separate change. Until then Sunplate spawns in rivers and Emberback is aquarium and off-world only."],
+  ["An ice moon with an ocean", "Glassback lives under the ice of a moon. CLAUDE.md makes airless frozen worlds lifeless, and the catalogue has no moon with a liquid ocean under its crust.",
+    "Keep Glassback on the page as the first species of a future ice-moon roster. Do not change the airless rule; a moon with a buried ocean would be a new kind of body with its own explicit roster."],
+  ["How much individuals vary", "This page rolls length at 85 to 125% (the existing rule), depth and width by 7%, fins by 12%, the hue by the species' own spread, and the pattern's placement from its seed. Bigger fish come out a little stockier.",
+    "Keep these spreads. They read as one species on the sheet and still tell individuals apart."],
+  ["Rare colour morphs", "One fish in 64 rolls a golden, pale or dark morph. A morph is a collectable: something to fish for and keep in a tank.",
+    "Keep morphs at 1 in 64, shown in the field guide's catch record. No other effect on the fish."],
+  ["Bait", "fishing-and-equipment has no bait: any cast can catch anything that lives there. The roster here lists a bait per species.",
+    "Bait raises the right species' bite chance and is never required, so a bare hook still catches fish. Bait items wait for crafting or trade."],
+  ["Time of day", "Each species lists when it bites. The spawner today reads only water class and temperature.",
+    "Add an activity curve per species (day, dawn and dusk, night) that scales its bite chance and, for Lanternjaw, whether it rises to the shelf at all."],
+  ["Tanks are built from glass cells", "One cell holds about 6,000 litres, which is a public aquarium, not a home tank. A smaller tabletop tank would have to be furniture inside a cell, not cells.",
+    "Ship cell tanks first, since they are blocks and fit the build system. Add a tabletop tank later as furniture if you want small ones."],
+  ["What a kept fish needs", "The checks here: water type, temperature (with a heater or chiller), room to swim (1,000 L x length squared per fish), predators eating anything under a third of their length, and one need per species (sand, cave, coral, a dark tank).",
+    "Make every check a warning that stresses the fish, never a death or a lost fish. A fish only fails to go in when the water type is wrong."],
+  ["Rendering a school", "This page paints a canvas skin per fish. The game draws a school in one instanced draw, so the pattern would move into the fragment shader, computed from the fish's seed.",
+    "Do that. The look stays the same and the cost stays one draw per school. It is a measurement before it is a promise: run the perf suite on a 34-fish school against today's plain fish."],
+  ["The portraits", "The species portraits, pattern swatches and decor icons are painted by code in your friend's style. Tenebris's five fish also have their own 16 x 16 icons, which the design keeps for the hotbar.",
+    "Use the 16 x 16 icons in the hotbar and these larger portraits in the field guide and on tank labels, once you approve them or replace them with real drawings."],
+];
+$("qs").innerHTML = QS.map(([h, p, r], i) => `<div class="q"><h3>${i + 1}. ${h}</h3><p>${p}</p><p class="rec"><b>Recommend</b>${r}</p></div>`).join("");
+</script>
