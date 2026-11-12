@@ -122,6 +122,7 @@ def load_frames(path: Path) -> list[dict]:
             if math.isnan(t) or math.isnan(ms):
                 continue  # a killed run's last row can be cut short
             rows.append({
+                "frame": int(num(r.get("frame"))) if not math.isnan(num(r.get("frame"))) else None,
                 "t": t,
                 "ms": ms,
                 "gpu_clouds": num(r.get("gpu_clouds_ms")),
@@ -252,6 +253,14 @@ def warm_up_start(text: str, rows: list[dict], zero: float | None, ready: re.Pat
     the game's ready line where it prints one, else the first frame."""
     for line in text.splitlines():
         if ready.search(line):
+            # `READY playable ... at frame N` (`loading-screen`): that frame's
+            # own row, exactly; else the line's time.
+            m = re.search(r"at frame (\d+)", line)
+            if m:
+                frame = int(m[1])
+                at = next((r["t"] for r in rows if r.get("frame") == frame), None)
+                if at is not None:
+                    return at, "ready"
             t = stamp_s(line, zero)
             if t is not None:
                 return t, "ready"
