@@ -581,6 +581,13 @@ fn sea_ssr(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
     var t = 0.1;
     var behind_before = -1.0;
     let reach = 120.0;
+    // The march's last step lands 53.2 m out (t += 0.1 + 0.14 t, 32 times).
+    // A straight ray projects to a straight line, so where its far end lands
+    // within the three texels every step skips, so does every step: nothing
+    // could be hit, and the trace returns its miss without marching
+    // (`lighting-perf` 2.2). The far sea seen from low is that case.
+    let far = sea_ssr_uv(origin + dir*min(53.3, reach));
+    if (far.z > 0.0 && length((far.xy - home)*size) < 3.0) { return vec4<f32>(0.0); }
     for (var i = 0u; i < 32u; i++) {
         t += 0.1 + t*0.14;
         if (t > reach) { break; }

@@ -2127,6 +2127,11 @@ fn ssr_trace(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
     var t = 0.04;
     var behind_before = -1.0;
     let reach = params.reflect.y;
+    // As the sea's (`lighting-perf` 2.2): the last step lands 16.75 m out
+    // (t += 0.05 + 0.12 t, 32 times); where that projects within the three
+    // texels every step skips, no step can hit.
+    let far = ssr_uv(origin + dir*min(16.8, reach));
+    if far.z > 0.0 && length((far.xy - home)*size) < 3.0 { return vec4(0.0); }
     for (var i = 0u; i < 32u; i++) {
         t += 0.05 + t*0.12;
         if t > reach { break; }
