@@ -1,0 +1,19 @@
+﻿sample 2026-11-12T08:08:45, 8 logical cores, all processes together: 6.1% of the machine
+
+Name                                 CorePct
+----                                 -------
+The Zachtronics Solitaire Collection    10.5
+powershell                              10.3
+chrome                                   8.1
+steamwebhelper                           6.9
+procexp64                                4.8
+Discord                                  2.2
+Spotify                                    2
+audiodg                                  1.7
+claude                                   0.9
+parsecd                                  0.3
+GoogleDriveFS                            0.3
+conhost                                  0.3
+RemoteDesktopCompanion                   0.2
+steam                                    0.2
+explorer                                 0.2

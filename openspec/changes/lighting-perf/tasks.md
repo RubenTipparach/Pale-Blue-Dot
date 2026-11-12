@@ -16,18 +16,25 @@
 
 ## 1. Instruments (no behaviour change)
 
-- [ ] 1.1 `PBD_REFLECT=terrain|sea|capture` (a comma list of the parts to
+- [x] 1.1 `PBD_REFLECT=terrain|sea|capture` (a comma list of the parts to
       switch off; `0` stays all of them), so L8's three parts are priced
       apart. Re-run the pricing on `rain-stroll` and `storm` and write the
-      split into the design; re-rank if it disagrees.
-- [ ] 1.2 Per-pass GPU columns in `--frame-log` from the spans Bevy already
+      split into the design; re-rank if it disagrees. (`57d94b5`, also
+      `walk` and `screen` apart. Stroll: the walk is 2.1 of L8's 2.8 ms
+      p50; storm: wet ground's screen trace is 1.1 of 1.4 ms. Re-ranked.)
+- [x] 1.2 Per-pass GPU columns in `--frame-log` from the spans Bevy already
       records (`lite_bloom`, `water_compose`, `planet_shadow`, the
       reflection capture, the main 3D pass), and confirm which pass the
-      terrain's shading is timed in.
-- [ ] 1.3 `perf_suite.py`: count the warm-up from the first frame, not from
+      terrain's shading is timed in. (`57d94b5`: 17 named columns plus
+      `gpu_other_ms`; the capture newly spanned. The terrain draws in
+      `main_transparent_pass_3d`; the tone pass has no span.)
+- [x] 1.3 `perf_suite.py`: count the warm-up from the first frame, not from
       process start (a fresh exe's first frame came 50-55 s after launch on
       a cold shader cache, so frames right after it were counted), and
       leave the fresh world's planet rebuild out of `max` or mark it.
+      (`57d94b5`, `224c137`: from the game's ready line where it prints
+      one, else the first frame; the rebuild is left out and listed;
+      `--reanalyse` redoes a sitting.)
 
 ## 2. Fixes, one A/B each against `f15a647` (after 1.1)
 
@@ -39,8 +46,10 @@
 - [ ] 2.2 L8 sea trace skipped where its reach projects under ~4 px; steps
       fall with distance (rank 2). Shots: a harbour from 30 m and 300 m.
       Measure: `storm`, `clouds`, `far-side`.
-- [ ] 2.3 L8 capture skipped (history marked invalid) when dry and no sea
+- [x] 2.3 Not pursued (measured, 1.2): L8 capture skipped (history marked invalid) when dry and no sea
       is on screen; its buffer kept (rank 3). Measure: `walk`, `far-side`.
+      The capture pass is 0.03-0.04 ms of GPU; switching it off only saves
+      what its readers then skip.
 - [ ] 2.4 Cloud-puff sites rebuilt only when the maps, the cloud step or
       the eye's cell changes (rank 4). Shots: a cloud-hop capture
       sequence, frame for frame. Measure: `clouds`, `storm`.
@@ -52,6 +61,19 @@
 - [ ] 2.7 Lamp bake and its fade skipped when no lamp is in the set's
       reach (rank 6), only if landing timings show it costs (the night
       sitting did not: -0.04 ms).
+
+- [ ] 2.8 Half resolution (owner, 2026-11-12: "consider like half
+      resolutions for expensive stuff like bloom and fog rendering"):
+      price every full-screen pass from the per-pass columns (1.2), then
+      move the reflection traces (L8, the one expensive full-resolution
+      work left after 2.1-2.3) into a half-resolution pass with a
+      depth-aware upsample, so a puddle's edge against a wall does not
+      halo. Shots: the Holbrook lane in rain at 10:00 and 22:00, a puddle
+      under a wall, pixel-diffed; measure `rain-stroll`, `storm`, `walk`.
+- [ ] 2.9 Fog and atmosphere at half resolution (the rain volume, the
+      compose's distance fog) only where 1.2's columns show a pass costs
+      more than the spread; bloom is already built from a quarter-size
+      image and is left as 2.6 has it.
 
 ## 3. Close
 

@@ -112,7 +112,132 @@ throws it away. It is in `db25fe2` too. It belongs to `town-frame-time` 3.6
 ("a fresh world freezes for about 18 s"), not here; it is recorded so the
 next reader does not take the `max` column for the lighting model.
 
+## The instruments' first sitting (measured, 2026-11-12)
+
+`57d94b5` (tasks 1.1-1.3), same machine, 1440 x 900, uncapped, release,
+clock at 10:00, interleaved. Two sittings run back to back
+(`docs/benchmarks/2026-11-12-frame-latency/` and
+`output/perf/2026-11-12-l8-split`):
+
+### Frame latency (from `crab-breeze-lessons`)
+
+The swapchain was asked for a queue of one frame. With two, every scenario
+loses 3.2-4.3 ms at p50 and more at the tail (`rain-stroll` 14.18 to 10.49,
+`storm` 10.17 to 6.67, `walk` 9.05 to 5.81, `town` 11.16 to 6.91 ms p50; 3
+repeats, p50 spread 0.07-0.76 ms), with the same GPU time: with one frame
+queued, the render world waited for the GPU's last frame before encoding the
+next. Two is the default from `71c827a` (`crab-breeze-lessons` 1.3). **This
+moves the baseline**: at latency 2 the stroll is GPU-bound (10.5 ms wall
+against 9.9 ms of GPU), so a GPU saving now shows in wall time nearly one
+for one. Every A/B below that names latency 2 is measured at it.
+
+### L8 by part (task 1.1)
+
+`PBD_REFLECT` with each part off, 2 repeats, latency 1. Cost = all on minus
+that part off; wall p50 / p95 / p99, then the terrain pass's GPU p50
+(`main_transparent_pass_3d`, where the terrain is drawn and both of wet
+ground's traces run), then the compose pass's (`water_compose`, the sea).
+
+| part | rain-stroll wall | stroll terrain GPU | storm wall | storm terrain GPU | storm sea GPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| all of L8 (`0`) | **2.77 / 4.05 / 9.54** | **2.06** | **1.36 / 2.62 / 5.30** | **1.19** | 0.14 |
+| the voxel walk (`walk`) | **2.10 / 3.07 / 7.54** | **1.50** | -0.03 / 0.53 / 1.87 | 0.05 | 0.00 |
+| wet ground's screen trace (`screen`) | 0.46 / 1.68 / 2.54 | 0.21 | **1.10 / 2.07 / 4.59** | **1.09** | 0.00 |
+| the sea's screen trace (`sea`) | 0.13 / 1.77 / 0.38 | -0.05 | 0.16 / 0.07 / 0.38 | 0.07 | 0.14 |
+| the capture (`capture`) | 0.55 / 0.11 / 2.11 | 0.17 | 1.36 / 2.35 / 4.54 | 1.14 | 0.14 |
+
+- **On foot in the rain, the cost is the voxel walk**: 2.1 of L8's 2.8 ms
+  at p50 and 7.5 of 9.5 ms at p99. Rank 1 stands.
+- **In flight, the cost is wet ground's screen trace, not the sea's**: 1.1
+  ms of 1.4, all of it in the terrain pass; the sea's trace is 0.14 ms of
+  GPU. Far wet ground runs the trace as near wet ground does, and a far
+  fragment's 16.75 m march projects to a few texels.
+- **The capture itself costs 0.03-0.04 ms of GPU** (`ssr_capture`).
+  Switching it off saves what its two readers then skip, not its own pass.
+  Rank 3 is not worth a fix: the dry case it targets saves 0.03 ms.
+- The p95 column of the sea and capture rows on the stroll is inside the
+  stroll's p95 spread (1.0 ms between `all-on`'s two runs).
+
+### GPU per pass (task 1.2)
+
+At latency 2, p50 ms (`docs/benchmarks/2026-11-12-frame-latency/`):
+
+| pass | rain-stroll | storm | walk | town |
+| --- | ---: | ---: | ---: | ---: |
+| terrain (`main_transparent_pass_3d`, with L8's traces) | 4.34 | 2.97 | 2.37* | 1.86 |
+| sun's cascades (`planet_shadow`) | 2.03 | 0.96 | 1.97* | 2.09 |
+| rain volume (`rain`, the lit rain fog) | 1.44 | 0.00 | 0.15* | 0.66 |
+| opaque (`main_opaque_pass_3d`: towns, trees, props) | 0.57 | 0.00 | 0.01* | 0.74 |
+| compose (`water_compose`: sea, distance fog) | 0.07 | 0.49 | 0.06* | 0.12 |
+| lens (`water_lens`) | 0.29 | 0.09 | 0.00* | 0.00 |
+| cloud march + puffs | 0.03 | 0.31 | 0.02* | 0.03 |
+| bloom (`lite_bloom`) | 0.09 | 0.08 | 0.07* | 0.07 |
+| tone (`tonemapping` + `upscaling`) | 0.05 | 0.05 | 0.04* | 0.04 |
+| reflection capture (`ssr_capture`) | 0.03 | 0.04 | 0.02* | 0.02 |
+
+(*) `walk` at latency 1; the passes' GPU time does not depend on the queue.
+The tone pass of L6 (`tone_grade.wgsl`, a `FullscreenMaterial`) records no
+span of its own.
+
+- **Bloom is 0.07-0.09 ms of GPU**, not the 0.33-0.36 ms its toggle took
+  off the wall at latency 1. The rest of that was its CPU half (ten
+  uniform buffers and bind groups made a frame) on a frame where CPU and
+  GPU time added up. Rank 7's GPU half has almost nothing to win; its CPU
+  half (uniforms made once) is what is left.
+- **The rain volume is the one full-screen fog-like pass with a real
+  price**: 1.44 ms on the stroll, 0.66 ms in the town walk.
+- **The sun's cascades cost 1-2 ms everywhere on foot.** They are not the
+  lighting model's (L3's soft filter costs nothing measurable) and not in
+  this change; recorded for the next reader.
+
+## Half resolution (owner, 2026-11-12)
+
+The owner: "consider like half resolutions for expensive stuff like bloom
+and fog rendering". Priced against the columns above:
+
+| pass | resolution now | GPU p50 | half resolution |
+| --- | --- | ---: | --- |
+| bloom | built from a quarter-size image | 0.07-0.09 ms | nothing to win (at most ~0.05 ms) |
+| cloud march | 0.4 scale, history, depth-aware upsample | 0.17 ms (storm) | already reduced |
+| reflection capture | 960 x 600 | 0.03 ms | already reduced |
+| compose (distance fog, sea) | full | 0.07-0.49 ms | the sea's part is per sea pixel and is L8's sea trace; the fog is a few ALU per pixel |
+| rain volume (lit rain fog) | full | **1.44 ms** stroll, 0.66 town | **candidate** (rank 3 below) |
+| L8's traces (in the terrain pass) | full, per wet fragment | **2.06 ms** stroll, 1.19 storm | **candidate after ranks 1-2** (rank 5) |
+
+- **The rain volume at half resolution** (task 2.9): march the shells into
+  a half-size target (colour and transmittance), then composite at full
+  size with a depth-aware (bilateral) upsample, the four nearest
+  half-size texels weighted by how close their depth is to the full-size
+  pixel's, so a wall's silhouette in front of rain does not take a halo of
+  rain from the half-size texel that straddles it. The streaks are thin
+  lines; at half size they may soften or alias, which the shots decide.
+  Expected (**estimate**): 0.7-1.0 ms of the stroll's 1.44.
+- **L8's traces at half resolution** (task 2.8, Crab Breeze's read agrees):
+  the traces run inside the terrain's fragment shader, so halving them
+  means a pass of their own (a half-size target of reflected colour and
+  hit weight, from the depth and normal the terrain already writes) and a
+  depth-aware upsample where the terrain reads it. That is a new pass and
+  a split of the terrain shader. It waits for ranks 1-2: if they leave
+  L8 under ~0.5 ms, it is not worth the pass.
+
 ## Ranked optimizations
+
+**Re-ranked on the split (decision 1)**, 2026-11-12. In order of work:
+
+1. L8 voxel walk ends when nothing can be hit (2.1): 2.1 ms p50 on foot in
+   rain.
+2. Both screen traces skip a march that projects inside the texels it
+   skips (2.2): 1.1 ms p50 in the storm, from wet ground's trace.
+3. The rain volume at half resolution (2.9): 1.44 ms of GPU on the stroll.
+4. Cloud-puff sites (2.4), env reads and `near_lamps` (2.5): main-thread
+   time, which latency 2 now overlaps with the GPU.
+5. L8's traces at half resolution (2.8), if 1-2 leave enough.
+6. Bloom's uniforms made once (2.6's CPU half); its composite fold has
+   ~0.05 ms of GPU to win.
+7. Not pursued: the capture skip (2.3; 0.03 ms) and the lamp bake (2.7).
+
+The sections below are the plan as first written (rank numbers as then).
+
 
 Rank = measured cost of the part x the share of it the fix is expected to
 remove. The expected share is an **estimate** from the code read; the cost
