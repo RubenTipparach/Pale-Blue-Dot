@@ -190,6 +190,45 @@ span of its own.
   lighting model's (L3's soft filter costs nothing measurable) and not in
   this change; recorded for the next reader.
 
+## The worst case: what the frames over 16.7 ms are (measured)
+
+The owner, 2026-11-12: "get worst case to 60", p99 within 16.7 ms in every
+scenario at latency 2. At latency 2 (`2026-11-12-frame-latency`, before
+2.1) p99 was 23.3 on `rain-stroll`, 16.9 in the storm, 18.7 in the town
+walk, 10.5 on the walk. `tools/tail_classes.py` puts every frame over 16.7
+ms after the warm-up in one class: a fine-set **landing** (the drawn set
+changed this frame or the two before), a **logged** piece of work within
+0.15 s (`SPENT ...`, the towns' ground), **gpu** (the GPU's own time over
+the floor), **gpu-paced** (a long frame beside a short one whose mean is
+within 1.5 ms of the GPU's time: the GPU set the pace and the queue of two
+split it unevenly, e.g. 22 ms then 5 ms against 13 ms of GPU), else
+**cpu** (nothing logged, GPU under the floor). Three runs each, latency 2:
+
+| scenario | frames over 16.7 ms | gpu-paced | gpu | cpu | `SPENT town bake` | landing | other logged |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| rain-stroll | 601 of 12,626 (4.8%) | **412** | 4 | 107 | 60 | 6 | 12 |
+| storm | 187 of 18,331 (1.0%) | 50 | 0 | **79** | 33 | 3 | 22 |
+| town | 590 of 47,459 (1.2%) | **260** | 45 | 76 | **194** | 8 | 7 |
+| walk | 192 of 82,791 (0.2%) | 2 | 13 | **152** | 0 | 17 | 8 |
+
+- **On foot in the rain the tail is the GPU.** Two thirds of the slow
+  frames are a GPU-bound frame (12-15 ms of GPU in the lane's slow
+  direction) paced unevenly. Lowering the GPU time is the lever: 2.1, then
+  the rain volume (1.44 ms) and L8's traces at half resolution, and the
+  sun's cascades (2.0 ms; not the lighting model's).
+- **In the storm and on the walk the tail is unlogged CPU spikes** of
+  30-220 ms, about one frame in 125 in the storm. In the storm 34 of a
+  run's 48 came while a fine-set rebuild was in flight (one is in flight
+  on 97% of its frames, so that says little); on the walk 11 of 50. They
+  are not named by anything the game logs. Next: a trace of the storm
+  flight (`--features trace`, `tools/trace_rank.py`) to name them, then
+  move or spread that work. The "flight tails are not the lighting
+  model's" note under "Not ranked" is reopened by this goal.
+- **In the town the tail is the town's own work**: `SPENT ... town bake`
+  (2-3 ms each, many a second) and GPU-paced frames. Town batching and
+  the town's shadow casters are `crab-breeze-lessons` ranks 2 and 5,
+  taken by the other agent (not this change).
+
 ## Half resolution (owner, 2026-11-12)
 
 The owner: "consider like half resolutions for expensive stuff like bloom
