@@ -1059,7 +1059,6 @@ let dockApi = null;
     const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
     if (playing) { water = (water + dt / 36) % 1; slider.value = Math.round(water * 1000); update(); }
     if (cam.goal) { if (view === "ship") cam.goal.t.copy(ship.position).add(new THREE.Vector3(0, 6, 0)); cam.target.lerp(cam.goal.t, 1 - Math.exp(-dt * 4)); cam.dist += (cam.goal.d - cam.dist) * (1 - Math.exp(-dt * 4)); if (cam.target.distanceTo(cam.goal.t) < 0.05 && Math.abs(cam.dist - cam.goal.d) < 0.1 && !playing) cam.goal = null; }
-    if (!reduce && !ptrs.size && !cam.goal && !shot) cam.yaw += dt * 0.025;
     camera.position.set(cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.target.y + cam.dist * Math.sin(cam.pitch), cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw));
     camera.lookAt(cam.target);
     const gx = reduce || shot ? -4 : -4 + 9 * Math.sin(t / 30);

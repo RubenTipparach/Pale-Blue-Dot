@@ -871,7 +871,6 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     if (focused === "hook") { if (!cam.goal) cam.target.lerp(hookWorld, 1 - Math.exp(-dt * 6)); else cam.goal.t.copy(hookWorld); }
     if (cam.goal) { cam.target.lerp(cam.goal.t, 1 - Math.exp(-dt * 4)); cam.dist += (cam.goal.d - cam.dist) * (1 - Math.exp(-dt * 4)); if (cam.target.distanceTo(cam.goal.t) < 0.05 && Math.abs(cam.dist - cam.goal.d) < 0.1) cam.goal = null; }
     if (cam.goalYaw != null) { cam.yaw += (cam.goalYaw - cam.yaw) * (1 - Math.exp(-dt * 3)); if (Math.abs(cam.goalYaw - cam.yaw) < 0.002) cam.goalYaw = null; }
-    if (!reduce && !shot && !ptrs.size && !cam.goal && cam.goalYaw == null) cam.yaw += dt * 0.025;
     camera.position.set(cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.target.y + cam.dist * Math.sin(cam.pitch), cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw));
     camera.lookAt(cam.target); camera.updateMatrixWorld();
     scene.updateMatrixWorld();

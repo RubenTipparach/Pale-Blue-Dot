@@ -61,6 +61,8 @@ Every page says which art is the game's and which is mockup-only.
   depth-written, never blended; no two cards coplanar.
 - 2D sprites: `image-rendering: pixelated`, whole-number scales only.
 - Cache-bust texture URLs (`?v=<n>`) when they change.
+- Nothing spins on its own: no idle camera orbit, no turntable, no parked
+  rotor turning (CLAUDE.md, "Nothing in a mockup spins on its own").
 
 ## The gate before a page is published
 

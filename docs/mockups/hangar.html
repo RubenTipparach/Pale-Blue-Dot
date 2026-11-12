@@ -226,7 +226,7 @@ tr:last-child td{border-bottom:0}
       <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="rollout">Roll out to the apron</span><span class="pbtn" role="button" tabindex="0" id="clear">Clear grid</span></div>
     </div>
     <div class="bpane">
-      <div class="pv"><canvas id="pv" aria-label="The aircraft on the grid, built in 3D, turning on the hangar floor"></canvas><div class="pvlabel" id="pvName"></div></div>
+      <div class="pv"><canvas id="pv" aria-label="The aircraft on the grid, built in 3D on the hangar floor; drag to turn it"></canvas><div class="pvlabel" id="pvName"></div></div>
       <div class="eyebrow">Follows from the parts</div>
       <div class="stats" id="stats"></div>
       <div class="eyebrow">Checks</div>
@@ -1085,10 +1085,9 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   function frame() {
     const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
     if (cam.goal) { cam.target.lerp(cam.goal.t, 1 - Math.exp(-dt * 4)); cam.dist += (cam.goal.d - cam.dist) * (1 - Math.exp(-dt * 4)); if (cam.target.distanceTo(cam.goal.t) < 0.05 && Math.abs(cam.dist - cam.goal.d) < 0.1) cam.goal = null; }
-    if (!reduce && !ptrs.size && !cam.goal && !SHOT) cam.yaw += dt * 0.03;
     camera.position.set(cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.target.y + cam.dist * Math.sin(cam.pitch), cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw));
     camera.lookAt(cam.target); camera.updateMatrixWorld();
-    if (!reduce) SPIN.forEach((s, i) => s.o.rotation[s.axis] = (SHOT ? 0.5 + i * 0.37 : t) * s.rate);   // a screenshot: blades at fixed angles
+    SPIN.forEach((s, i) => s.o.rotation[s.axis] = (0.5 + i * 0.37) * s.rate);   // parked: blades stand still at set angles (nothing turns on its own)
     // the beacon turns: white and green in turn, as an aerodrome beacon does
     const phase = (t * 0.5) % 1; beacon.c.setHex(phase < 0.5 ? 0xffffff : 0x40ff70); beacon.i = 2.6 * (0.35 + 0.65 * Math.abs(Math.sin(t * Math.PI))); if (beacon.bulb) beacon.bulb.material.color.copy(beacon.c);
     scene.updateMatrixWorld();
@@ -1146,10 +1145,9 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   if (Q.get("pyaw")) view.yaw = +Q.get("pyaw");
   function frame() {
     const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
-    if (!reduce && !ptr.on && !still) view.yaw += dt * 0.25;
     camera.position.set(view.dist * Math.cos(view.pitch) * Math.sin(view.yaw), 1.6 + view.dist * Math.sin(view.pitch), view.dist * Math.cos(view.pitch) * Math.cos(view.yaw));
     camera.lookAt(0, 1.6, 0);
-    if (!reduce) spin.forEach(s => s.o.rotation[s.axis] = t * s.rate);
+    spin.forEach((s, i) => s.o.rotation[s.axis] = (0.5 + i * 0.37) * s.rate);   // blades still; drag to turn the view
     renderer.render(scene, camera);
     if (still && ++stillFrames > 30) { document.body.dataset.pvReady = "1"; return; }
     requestAnimationFrame(frame);
