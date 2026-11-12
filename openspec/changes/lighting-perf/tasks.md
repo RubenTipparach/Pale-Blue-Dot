@@ -95,6 +95,13 @@
       (`7bcfe8f`: shots match a control. Saved nothing measurable, 1.50
       against 1.44 ms of GPU; kept, being exact.)
 
+- [x] 2.11 Not kept (measured): above its column's own top a rising ray
+      crosses the column side to side instead of stepping each layer.
+      Same exe, shaders swapped, `rain-stroll` x3: the terrain pass 4.33 to
+      4.26 ms of GPU, p50 9.94 to 9.86 ms (spread 0.16), while the shots
+      moved 22-43 pixels a lane shot by more than 2/255 (rounding where a
+      ray meets a layer boundary at a side). Too little for a moved pixel.
+
 ## 3. Close
 
 - [x] 3.1 A final sitting: `f15a647` against the change, all scenarios,

@@ -331,6 +331,32 @@ and fog rendering". Priced against the columns above:
   rain from the half-size texel that straddles it. The streaks are thin
   lines; at half size they may soften or alias, which the shots decide.
   Expected (**estimate**): 0.7-1.0 ms of the stroll's 1.44.
+- **How the rain volume goes to half resolution** (the plan, 2026-11-12,
+  after 2.10 showed its cost is the shells' per-pixel haze and streaks):
+  - `water.wgsl`: `rain_shells` returns what it gathers, `light` (rgb) and
+    `transmittance`, instead of `scene*transmittance + light`; the full-
+    size `rain` entry keeps composing them as today (so `PBD_PASS_OFF` and
+    the `today` model are unchanged).
+  - A `rain_half` entry writes `vec4(light, transmittance)` into a half-
+    size `Rgba16Float` target (`planet_water.rs`, made beside the clouds'
+    history and resized with the view), reading the full-size depth at
+    the texel's own pixel for `far`.
+  - A `rain_compose` entry at full size reads the scene, the half-size
+    target and the depth: the four half-size texels round the pixel, each
+    weighted bilinearly and by `exp(-|d_texel - d_pixel| / (0.02 d_pixel
+    + 0.1 m))`, the full-size depth loaded at each texel's own pixel, so a
+    wall in front of rain takes no rain from the texel past its edge; a
+    pixel whose four weights all fall under 1e-3 takes the nearest texel
+    by depth. Then `scene*T + light` as today.
+  - The jitter that today varies per full-size pixel varies per half-size
+    texel; the streaks are 0.004 rad wide (about 3-4 px at 1440 x 900), so
+    at half size they stay over a texel wide.
+  - Shots, against a control: the Holbrook lane in rain by day both ways,
+    at night (the lamps' glow in the rain), a wall's edge against rain, a
+    window, and the shore at 300 m in rain; pixel-diffed and shown to the
+    owner, since this one moves pixels.
+  - Expected (**estimate**): 0.8-1.1 ms of the stroll's 1.50 ms, one
+    quarter of the pixels plus a cheap compose.
 - **L8's traces at half resolution** (task 2.8, Crab Breeze's read agrees):
   the traces run inside the terrain's fragment shader, so halving them
   means a pass of their own (a half-size target of reflected colour and
