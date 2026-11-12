@@ -238,6 +238,13 @@ The page:
     tank, cargo and gun-free utility pods.
   - A live 3D preview of the chibi built from the grid sits beside it, with
     the livery.
+  - **The grid shows the paint** (the owner, 2026-11-12: "would be nice for
+    the grid pieces to actually get colors too"). Each piece on the grid is
+    drawn in its colour: the livery's base, or its trim where the livery puts
+    trim. A paint brush colours single pieces from the same swatches,
+    overriding the livery there, and the preview follows. The painted icons
+    are palette swaps made by the art script, so every colour stays in the
+    kit's palette. A piece's colour is saved with the aircraft's parts grid.
 - **Numbers from the parts**, at the game's g:
   - **Wing area**: 1 m^2 per wing cell.
   - **Stall speed**: `sqrt(2 m g / (rho S CLmax))`, with CLmax 1.4.
@@ -260,7 +267,7 @@ The page:
   rotor a disc of foils, as the Kestrel's are. A chibi aircraft flies by the
   same rules as the Kestrel, which stands in the hangar as a scale reference.
 - **Saves**: an aircraft is a stored record like a ship, with its parts
-  grid, livery, pose, fuel and damage.
+  grid (each part with its paint), livery, pose, fuel and damage.
 
 The page:
 1. **The airfield** in 3D: the hangar with its doors open, the presets parked
