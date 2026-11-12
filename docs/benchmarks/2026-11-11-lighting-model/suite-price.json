@@ -1,0 +1,2191 @@
+{
+ "meta": {
+  "when": "2026-11-11 22:49",
+  "revision": "f15a647",
+  "dirty": false,
+  "variants": [
+   {
+    "name": "new",
+    "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+    "env": {},
+    "assets": null
+   },
+   {
+    "name": "today",
+    "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+    "env": {
+     "PBD_LIGHTING": "today"
+    },
+    "assets": null
+   },
+   {
+    "name": "no-reflect",
+    "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+    "env": {
+     "PBD_REFLECT": "0"
+    },
+    "assets": null
+   },
+   {
+    "name": "no-bloom",
+    "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+    "env": {
+     "PBD_NO_BLOOM": "1"
+    },
+    "assets": null
+   },
+   {
+    "name": "no-tone",
+    "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+    "env": {
+     "PBD_NO_TONE": "1"
+    },
+    "assets": null
+   },
+   {
+    "name": "no-soft",
+    "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+    "env": {
+     "PBD_SOFT_SHADOWS": "0"
+    },
+    "assets": null
+   },
+   {
+    "name": "no-bounce-lamps",
+    "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+    "env": {
+     "PBD_BOUNCE": "0",
+     "PBD_LAMP_BAKE": "0"
+    },
+    "assets": null
+   },
+   {
+    "name": "no-clouds",
+    "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+    "env": {
+     "PBD_NO_CLOUDS": "1"
+    },
+    "assets": null
+   }
+  ],
+  "args": [
+   "--scenarios",
+   "rain-stroll,storm",
+   "--repeats",
+   "2",
+   "--out",
+   "output/perf/2026-11-11-lighting-price",
+   "--variant",
+   "new|output/perf/baseline-exe/lighting-f15a647/pbd-app.exe",
+   "--variant",
+   "today|output/perf/baseline-exe/lighting-f15a647/pbd-app.exe|PBD_LIGHTING=today",
+   "--variant",
+   "no-reflect|output/perf/baseline-exe/lighting-f15a647/pbd-app.exe|PBD_REFLECT=0",
+   "--variant",
+   "no-bloom|output/perf/baseline-exe/lighting-f15a647/pbd-app.exe|PBD_NO_BLOOM=1",
+   "--variant",
+   "no-tone|output/perf/baseline-exe/lighting-f15a647/pbd-app.exe|PBD_NO_TONE=1",
+   "--variant",
+   "no-soft|output/perf/baseline-exe/lighting-f15a647/pbd-app.exe|PBD_SOFT_SHADOWS=0",
+   "--variant",
+   "no-bounce-lamps|output/perf/baseline-exe/lighting-f15a647/pbd-app.exe|PBD_BOUNCE=0;PBD_LAMP_BAKE=0",
+   "--variant",
+   "no-clouds|output/perf/baseline-exe/lighting-f15a647/pbd-app.exe|PBD_NO_CLOUDS=1"
+  ],
+  "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)"
+ },
+ "results": [
+  {
+   "scenario": "rain-stroll",
+   "variant": "new",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {},
+   "index": 0,
+   "seconds": 66.4,
+   "frame_ms": {
+    "n": 3217,
+    "mean": 17.201568852968585,
+    "p50": 13.817,
+    "p95": 17.888,
+    "p99": 22.671,
+    "p999": 128.24,
+    "max": 6681.039,
+    "over_want": 3217,
+    "over_floor": 486
+   },
+   "gpu_total_ms": {
+    "n": 3214,
+    "mean": 9.67919601742379,
+    "p50": 9.297,
+    "p95": 12.855,
+    "p99": 13.715,
+    "p999": 14.337,
+    "max": 124.363,
+    "over_want": 1974,
+    "over_floor": 3
+   },
+   "gpu_clouds_ms": {
+    "n": 3214,
+    "mean": 0.10242906036092218,
+    "p50": 0.092,
+    "p95": 0.15,
+    "p99": 0.153,
+    "p999": 0.166,
+    "max": 1.948,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "today",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_LIGHTING": "today"
+   },
+   "index": 0,
+   "seconds": 65.8,
+   "frame_ms": {
+    "n": 3940,
+    "mean": 14.105459390862958,
+    "p50": 11.302,
+    "p95": 14.452,
+    "p99": 15.437,
+    "p999": 90.438,
+    "max": 6906.131,
+    "over_want": 3940,
+    "over_floor": 21
+   },
+   "gpu_total_ms": {
+    "n": 3937,
+    "mean": 6.0950576581153335,
+    "p50": 5.987,
+    "p95": 7.246,
+    "p99": 7.842,
+    "p999": 8.273,
+    "max": 76.709,
+    "over_want": 4,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3937,
+    "mean": 0.10431013462027099,
+    "p50": 0.099,
+    "p95": 0.15,
+    "p99": 0.152,
+    "p999": 0.165,
+    "max": 0.333,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-reflect",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_REFLECT": "0"
+   },
+   "index": 0,
+   "seconds": 65.8,
+   "frame_ms": {
+    "n": 3936,
+    "mean": 14.123633384146315,
+    "p50": 11.236,
+    "p95": 14.181,
+    "p99": 15.982,
+    "p999": 72.001,
+    "max": 6925.532,
+    "over_want": 3936,
+    "over_floor": 27
+   },
+   "gpu_total_ms": {
+    "n": 3933,
+    "mean": 6.906006356470869,
+    "p50": 6.853,
+    "p95": 8.182,
+    "p99": 8.625,
+    "p999": 9.116,
+    "max": 83.511,
+    "over_want": 109,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3933,
+    "mean": 0.1047327739638967,
+    "p50": 0.098,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.166,
+    "max": 1.985,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-bloom",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_BLOOM": "1"
+   },
+   "index": 0,
+   "seconds": 65.7,
+   "frame_ms": {
+    "n": 3309,
+    "mean": 16.753517679057154,
+    "p50": 13.524,
+    "p95": 17.518,
+    "p99": 23.283,
+    "p999": 98.397,
+    "max": 6799.736,
+    "over_want": 3309,
+    "over_floor": 367
+   },
+   "gpu_total_ms": {
+    "n": 3306,
+    "mean": 9.6262909860859,
+    "p50": 9.361,
+    "p95": 12.842,
+    "p99": 13.608,
+    "p999": 14.301,
+    "max": 110.566,
+    "over_want": 2003,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3306,
+    "mean": 0.10287447065940815,
+    "p50": 0.092,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.165,
+    "max": 1.994,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-tone",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_TONE": "1"
+   },
+   "index": 0,
+   "seconds": 65.2,
+   "frame_ms": {
+    "n": 3366,
+    "mean": 16.405677064765317,
+    "p50": 13.317,
+    "p95": 17.269,
+    "p99": 23.534,
+    "p999": 63.108,
+    "max": 6617.003,
+    "over_want": 3366,
+    "over_floor": 307
+   },
+   "gpu_total_ms": {
+    "n": 3363,
+    "mean": 9.314237882842706,
+    "p50": 9.039,
+    "p95": 12.76,
+    "p99": 13.541,
+    "p999": 14.325,
+    "max": 111.428,
+    "over_want": 1830,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3363,
+    "mean": 0.10218733273862736,
+    "p50": 0.092,
+    "p95": 0.15,
+    "p99": 0.153,
+    "p999": 0.165,
+    "max": 1.958,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-soft",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_SOFT_SHADOWS": "0"
+   },
+   "index": 0,
+   "seconds": 65.7,
+   "frame_ms": {
+    "n": 3208,
+    "mean": 17.275780860349126,
+    "p50": 14.011,
+    "p95": 18.053,
+    "p99": 25.035,
+    "p999": 126.191,
+    "max": 6767.791,
+    "over_want": 3208,
+    "over_floor": 505
+   },
+   "gpu_total_ms": {
+    "n": 3205,
+    "mean": 9.671257722308884,
+    "p50": 9.364,
+    "p95": 12.891,
+    "p99": 13.716,
+    "p999": 14.421,
+    "max": 146.369,
+    "over_want": 1940,
+    "over_floor": 3
+   },
+   "gpu_clouds_ms": {
+    "n": 3205,
+    "mean": 0.10338845553822244,
+    "p50": 0.092,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.173,
+    "max": 2.026,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-bounce-lamps",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_BOUNCE": "0",
+    "PBD_LAMP_BAKE": "0"
+   },
+   "index": 0,
+   "seconds": 65.1,
+   "frame_ms": {
+    "n": 3266,
+    "mean": 16.882375076546225,
+    "p50": 13.635,
+    "p95": 17.531,
+    "p99": 26.746,
+    "p999": 60.794,
+    "max": 6571.59,
+    "over_want": 3266,
+    "over_floor": 364
+   },
+   "gpu_total_ms": {
+    "n": 3263,
+    "mean": 9.461384615384608,
+    "p50": 9.201,
+    "p95": 12.485,
+    "p99": 13.234,
+    "p999": 13.97,
+    "max": 103.349,
+    "over_want": 1967,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3263,
+    "mean": 0.10250444376340867,
+    "p50": 0.093,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.166,
+    "max": 1.927,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-clouds",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_CLOUDS": "1"
+   },
+   "index": 0,
+   "seconds": 65.3,
+   "frame_ms": {
+    "n": 3336,
+    "mean": 16.56038998800959,
+    "p50": 13.475,
+    "p95": 17.304,
+    "p99": 25.356,
+    "p999": 97.408,
+    "max": 6657.22,
+    "over_want": 3336,
+    "over_floor": 309
+   },
+   "gpu_total_ms": {
+    "n": 3333,
+    "mean": 9.593953195319544,
+    "p50": 9.315,
+    "p95": 12.778,
+    "p99": 13.537,
+    "p999": 14.301,
+    "max": 112.471,
+    "over_want": 1997,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3333,
+    "mean": 0.0,
+    "p50": -0.0,
+    "p95": -0.0,
+    "p99": -0.0,
+    "p999": -0.0,
+    "max": -0.0,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-clouds",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_CLOUDS": "1"
+   },
+   "index": 1,
+   "seconds": 65.0,
+   "frame_ms": {
+    "n": 3319,
+    "mean": 16.610979511901185,
+    "p50": 13.317,
+    "p95": 17.551,
+    "p99": 26.724,
+    "p999": 106.969,
+    "max": 6543.397,
+    "over_want": 3319,
+    "over_floor": 355
+   },
+   "gpu_total_ms": {
+    "n": 3316,
+    "mean": 9.596613992762359,
+    "p50": 9.346,
+    "p95": 12.768,
+    "p99": 13.584,
+    "p999": 14.26,
+    "max": 112.651,
+    "over_want": 1986,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3316,
+    "mean": 0.0,
+    "p50": -0.0,
+    "p95": -0.0,
+    "p99": -0.0,
+    "p999": -0.0,
+    "max": -0.0,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-bounce-lamps",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_BOUNCE": "0",
+    "PBD_LAMP_BAKE": "0"
+   },
+   "index": 1,
+   "seconds": 65.0,
+   "frame_ms": {
+    "n": 3277,
+    "mean": 16.819982606042085,
+    "p50": 13.724,
+    "p95": 17.481,
+    "p99": 25.803,
+    "p999": 70.8,
+    "max": 6529.647,
+    "over_want": 3277,
+    "over_floor": 339
+   },
+   "gpu_total_ms": {
+    "n": 3274,
+    "mean": 9.4715442883323,
+    "p50": 9.252,
+    "p95": 12.489,
+    "p99": 13.204,
+    "p999": 14.129,
+    "max": 102.526,
+    "over_want": 1975,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3274,
+    "mean": 0.10267104459376959,
+    "p50": 0.093,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.166,
+    "max": 1.944,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-soft",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_SOFT_SHADOWS": "0"
+   },
+   "index": 1,
+   "seconds": 65.0,
+   "frame_ms": {
+    "n": 3234,
+    "mean": 17.018277056277075,
+    "p50": 13.704,
+    "p95": 17.723,
+    "p99": 23.262,
+    "p999": 126.868,
+    "max": 6459.941,
+    "over_want": 3234,
+    "over_floor": 442
+   },
+   "gpu_total_ms": {
+    "n": 3231,
+    "mean": 9.613327452800993,
+    "p50": 9.168,
+    "p95": 12.827,
+    "p99": 13.664,
+    "p999": 14.623,
+    "max": 141.128,
+    "over_want": 1933,
+    "over_floor": 3
+   },
+   "gpu_clouds_ms": {
+    "n": 3231,
+    "mean": 0.10271494893221975,
+    "p50": 0.092,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.165,
+    "max": 1.969,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-tone",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_TONE": "1"
+   },
+   "index": 1,
+   "seconds": 65.1,
+   "frame_ms": {
+    "n": 3424,
+    "mean": 16.136673481308435,
+    "p50": 12.795,
+    "p95": 17.133,
+    "p99": 21.714,
+    "p999": 111.199,
+    "max": 6645.08,
+    "over_want": 3424,
+    "over_floor": 260
+   },
+   "gpu_total_ms": {
+    "n": 3421,
+    "mean": 9.270940952937742,
+    "p50": 8.792,
+    "p95": 12.692,
+    "p99": 13.525,
+    "p999": 14.186,
+    "max": 110.365,
+    "over_want": 1841,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3421,
+    "mean": 0.1021160479392004,
+    "p50": 0.092,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.165,
+    "max": 1.94,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-bloom",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_BLOOM": "1"
+   },
+   "index": 1,
+   "seconds": 65.6,
+   "frame_ms": {
+    "n": 3333,
+    "mean": 16.64923852385237,
+    "p50": 13.432,
+    "p95": 17.374,
+    "p99": 24.687,
+    "p999": 58.647,
+    "max": 6772.986,
+    "over_want": 3333,
+    "over_floor": 316
+   },
+   "gpu_total_ms": {
+    "n": 3330,
+    "mean": 9.608727627627639,
+    "p50": 9.271,
+    "p95": 12.82,
+    "p99": 13.678,
+    "p999": 14.459,
+    "max": 115.494,
+    "over_want": 2014,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3330,
+    "mean": 0.10254054054054115,
+    "p50": 0.092,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.165,
+    "max": 1.956,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "no-reflect",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_REFLECT": "0"
+   },
+   "index": 1,
+   "seconds": 65.0,
+   "frame_ms": {
+    "n": 4012,
+    "mean": 13.746264207377875,
+    "p50": 11.053,
+    "p95": 13.563,
+    "p99": 15.545,
+    "p999": 44.413,
+    "max": 6578.802,
+    "over_want": 4012,
+    "over_floor": 30
+   },
+   "gpu_total_ms": {
+    "n": 4009,
+    "mean": 6.897753305063613,
+    "p50": 6.832,
+    "p95": 8.163,
+    "p99": 8.467,
+    "p999": 9.153,
+    "max": 86.983,
+    "over_want": 71,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 4009,
+    "mean": 0.10491593913694346,
+    "p50": 0.097,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.166,
+    "max": 1.977,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "today",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_LIGHTING": "today"
+   },
+   "index": 1,
+   "seconds": 65.0,
+   "frame_ms": {
+    "n": 4100,
+    "mean": 13.444259756097521,
+    "p50": 10.936,
+    "p95": 12.418,
+    "p99": 14.74,
+    "p999": 73.591,
+    "max": 6531.638,
+    "over_want": 4100,
+    "over_floor": 17
+   },
+   "gpu_total_ms": {
+    "n": 4097,
+    "mean": 6.266341225286796,
+    "p50": 6.106,
+    "p95": 7.271,
+    "p99": 7.834,
+    "p999": 8.589,
+    "max": 90.579,
+    "over_want": 7,
+    "over_floor": 5
+   },
+   "gpu_clouds_ms": {
+    "n": 4097,
+    "mean": 0.1058267024652199,
+    "p50": 0.099,
+    "p95": 0.15,
+    "p99": 0.152,
+    "p999": 0.171,
+    "max": 1.893,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "rain-stroll",
+   "variant": "new",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {},
+   "index": 1,
+   "seconds": 65.1,
+   "frame_ms": {
+    "n": 3225,
+    "mean": 17.11703441860466,
+    "p50": 13.876,
+    "p95": 17.898,
+    "p99": 23.207,
+    "p999": 82.069,
+    "max": 6618.365,
+    "over_want": 3225,
+    "over_floor": 476
+   },
+   "gpu_total_ms": {
+    "n": 3222,
+    "mean": 9.685599937926744,
+    "p50": 9.328,
+    "p95": 12.912,
+    "p99": 13.708,
+    "p999": 14.364,
+    "max": 116.97,
+    "over_want": 2006,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 3222,
+    "mean": 0.10343637492240895,
+    "p50": 0.093,
+    "p95": 0.151,
+    "p99": 0.153,
+    "p999": 0.349,
+    "max": 2.009,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "new",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {},
+   "index": 0,
+   "seconds": 66.1,
+   "frame_ms": {
+    "n": 4447,
+    "mean": 12.585290083202128,
+    "p50": 9.646,
+    "p95": 15.81,
+    "p99": 23.816,
+    "p999": 57.369,
+    "max": 6426.717,
+    "over_want": 3745,
+    "over_floor": 158
+   },
+   "gpu_total_ms": {
+    "n": 4445,
+    "mean": 6.059736332958387,
+    "p50": 5.367,
+    "p95": 10.391,
+    "p99": 13.191,
+    "p999": 18.158,
+    "max": 143.743,
+    "over_want": 594,
+    "over_floor": 16
+   },
+   "gpu_clouds_ms": {
+    "n": 4445,
+    "mean": 0.31831721034870414,
+    "p50": 0.396,
+    "p95": 0.427,
+    "p99": 0.434,
+    "p999": 0.659,
+    "max": 1.743,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1850,
+     "mean": 9.137820540540545,
+     "p50": 8.966,
+     "p95": 11.514,
+     "p99": 13.498,
+     "p999": 16.39,
+     "max": 17.742,
+     "over_want": 1372,
+     "over_floor": 2
+    },
+    "gpu_total_ms": {
+     "n": 1850,
+     "mean": 4.959909189189197,
+     "p50": 4.993,
+     "p95": 6.585,
+     "p99": 6.862,
+     "p999": 7.051,
+     "max": 7.23,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1850,
+     "mean": 0.40693405405405736,
+     "p50": 0.408,
+     "p95": 0.425,
+     "p99": 0.433,
+     "p999": 0.628,
+     "max": 0.694,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "today",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_LIGHTING": "today"
+   },
+   "index": 0,
+   "seconds": 66.0,
+   "frame_ms": {
+    "n": 5192,
+    "mean": 10.76327330508474,
+    "p50": 8.788,
+    "p95": 12.654,
+    "p99": 17.238,
+    "p999": 62.285,
+    "max": 6501.568,
+    "over_want": 3104,
+    "over_floor": 62
+   },
+   "gpu_total_ms": {
+    "n": 5190,
+    "mean": 4.6161842003853515,
+    "p50": 4.132,
+    "p95": 7.722,
+    "p99": 8.959,
+    "p999": 10.589,
+    "max": 53.997,
+    "over_want": 154,
+    "over_floor": 3
+   },
+   "gpu_clouds_ms": {
+    "n": 5190,
+    "mean": 0.31621136801541394,
+    "p50": 0.396,
+    "p95": 0.425,
+    "p99": 0.432,
+    "p999": 0.651,
+    "max": 1.744,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2146,
+     "mean": 7.880801491146317,
+     "p50": 7.679,
+     "p95": 10.274,
+     "p99": 11.825,
+     "p999": 15.245,
+     "max": 15.85,
+     "over_want": 808,
+     "over_floor": 0
+    },
+    "gpu_total_ms": {
+     "n": 2146,
+     "mean": 3.7820372786579606,
+     "p50": 3.766,
+     "p95": 5.254,
+     "p99": 5.524,
+     "p999": 5.738,
+     "max": 5.927,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2146,
+     "mean": 0.4059757688723207,
+     "p50": 0.407,
+     "p95": 0.424,
+     "p99": 0.431,
+     "p999": 0.646,
+     "max": 0.66,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-reflect",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_REFLECT": "0"
+   },
+   "index": 0,
+   "seconds": 65.9,
+   "frame_ms": {
+    "n": 4945,
+    "mean": 11.2858044489383,
+    "p50": 8.995,
+    "p95": 13.297,
+    "p99": 19.222,
+    "p999": 61.239,
+    "max": 6377.04,
+    "over_want": 3267,
+    "over_floor": 76
+   },
+   "gpu_total_ms": {
+    "n": 4943,
+    "mean": 4.807165688852926,
+    "p50": 4.264,
+    "p95": 8.386,
+    "p99": 9.596,
+    "p999": 10.798,
+    "max": 116.088,
+    "over_want": 277,
+    "over_floor": 2
+   },
+   "gpu_clouds_ms": {
+    "n": 4943,
+    "mean": 0.3167833299615599,
+    "p50": 0.396,
+    "p95": 0.427,
+    "p99": 0.433,
+    "p999": 0.628,
+    "max": 1.716,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2042,
+     "mean": 8.279630754162593,
+     "p50": 8.195,
+     "p95": 10.655,
+     "p99": 12.536,
+     "p999": 14.201,
+     "max": 16.603,
+     "over_want": 944,
+     "over_floor": 0
+    },
+    "gpu_total_ms": {
+     "n": 2042,
+     "mean": 3.9036870714985277,
+     "p50": 3.874,
+     "p95": 5.386,
+     "p99": 5.692,
+     "p999": 5.857,
+     "max": 5.982,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2042,
+     "mean": 0.40616405484818985,
+     "p50": 0.407,
+     "p95": 0.424,
+     "p99": 0.432,
+     "p999": 0.436,
+     "max": 0.683,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-bloom",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_BLOOM": "1"
+   },
+   "index": 0,
+   "seconds": 66.1,
+   "frame_ms": {
+    "n": 4634,
+    "mean": 12.099163573586532,
+    "p50": 9.251,
+    "p95": 15.159,
+    "p99": 23.391,
+    "p999": 62.008,
+    "max": 6425.732,
+    "over_want": 3582,
+    "over_floor": 143
+   },
+   "gpu_total_ms": {
+    "n": 4632,
+    "mean": 6.001972797927461,
+    "p50": 5.335,
+    "p95": 10.291,
+    "p99": 13.089,
+    "p999": 17.815,
+    "max": 153.211,
+    "over_want": 557,
+    "over_floor": 12
+   },
+   "gpu_clouds_ms": {
+    "n": 4632,
+    "mean": 0.3184950345423121,
+    "p50": 0.397,
+    "p95": 0.427,
+    "p99": 0.433,
+    "p999": 0.664,
+    "max": 1.575,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1934,
+     "mean": 8.742566184074466,
+     "p50": 8.698,
+     "p95": 11.023,
+     "p99": 12.675,
+     "p999": 16.041,
+     "max": 17.982,
+     "over_want": 1234,
+     "over_floor": 1
+    },
+    "gpu_total_ms": {
+     "n": 1934,
+     "mean": 4.907694932781805,
+     "p50": 4.929,
+     "p95": 6.502,
+     "p99": 6.825,
+     "p999": 7.146,
+     "max": 7.268,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1934,
+     "mean": 0.40694002068252605,
+     "p50": 0.408,
+     "p95": 0.425,
+     "p99": 0.433,
+     "p999": 0.64,
+     "max": 0.66,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-tone",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_TONE": "1"
+   },
+   "index": 0,
+   "seconds": 66.0,
+   "frame_ms": {
+    "n": 4649,
+    "mean": 11.988816519681672,
+    "p50": 9.232,
+    "p95": 15.159,
+    "p99": 23.11,
+    "p999": 60.491,
+    "max": 6261.332,
+    "over_want": 3517,
+    "over_floor": 147
+   },
+   "gpu_total_ms": {
+    "n": 4647,
+    "mean": 6.005094469550252,
+    "p50": 5.323,
+    "p95": 10.4,
+    "p99": 13.389,
+    "p999": 17.804,
+    "max": 143.383,
+    "over_want": 636,
+    "over_floor": 13
+   },
+   "gpu_clouds_ms": {
+    "n": 4647,
+    "mean": 0.3188997202496208,
+    "p50": 0.397,
+    "p95": 0.427,
+    "p99": 0.433,
+    "p999": 0.672,
+    "max": 1.727,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1953,
+     "mean": 8.654488479262676,
+     "p50": 8.572,
+     "p95": 11.1,
+     "p99": 13.373,
+     "p999": 17.033,
+     "max": 17.125,
+     "over_want": 1152,
+     "over_floor": 3
+    },
+    "gpu_total_ms": {
+     "n": 1953,
+     "mean": 4.8625442908346175,
+     "p50": 4.902,
+     "p95": 6.491,
+     "p99": 6.791,
+     "p999": 7.037,
+     "max": 7.097,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1953,
+     "mean": 0.40674603174603324,
+     "p50": 0.407,
+     "p95": 0.425,
+     "p99": 0.433,
+     "p999": 0.672,
+     "max": 0.692,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-soft",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_SOFT_SHADOWS": "0"
+   },
+   "index": 0,
+   "seconds": 65.6,
+   "frame_ms": {
+    "n": 4435,
+    "mean": 12.524837880496056,
+    "p50": 9.688,
+    "p95": 15.721,
+    "p99": 22.829,
+    "p999": 62.459,
+    "max": 6115.659,
+    "over_want": 3775,
+    "over_floor": 168
+   },
+   "gpu_total_ms": {
+    "n": 4433,
+    "mean": 6.149721858786366,
+    "p50": 5.508,
+    "p95": 10.41,
+    "p99": 13.407,
+    "p999": 17.336,
+    "max": 147.215,
+    "over_want": 590,
+    "over_floor": 9
+   },
+   "gpu_clouds_ms": {
+    "n": 4433,
+    "mean": 0.31888630724114386,
+    "p50": 0.396,
+    "p95": 0.427,
+    "p99": 0.434,
+    "p999": 0.681,
+    "max": 1.758,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1844,
+     "mean": 9.16836930585683,
+     "p50": 8.998,
+     "p95": 11.516,
+     "p99": 13.71,
+     "p999": 17.436,
+     "max": 17.51,
+     "over_want": 1405,
+     "over_floor": 6
+    },
+    "gpu_total_ms": {
+     "n": 1844,
+     "mean": 5.001563991323219,
+     "p50": 5.021,
+     "p95": 6.616,
+     "p99": 6.931,
+     "p999": 7.287,
+     "max": 7.397,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1844,
+     "mean": 0.40764750542299527,
+     "p50": 0.408,
+     "p95": 0.425,
+     "p99": 0.433,
+     "p999": 0.681,
+     "max": 0.811,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-bounce-lamps",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_BOUNCE": "0",
+    "PBD_LAMP_BAKE": "0"
+   },
+   "index": 0,
+   "seconds": 65.7,
+   "frame_ms": {
+    "n": 4452,
+    "mean": 12.527906558849935,
+    "p50": 9.603,
+    "p95": 15.763,
+    "p99": 23.809,
+    "p999": 103.76,
+    "max": 6299.53,
+    "over_want": 3757,
+    "over_floor": 159
+   },
+   "gpu_total_ms": {
+    "n": 4450,
+    "mean": 6.08181123595506,
+    "p50": 5.392,
+    "p95": 10.478,
+    "p99": 12.937,
+    "p999": 17.01,
+    "max": 133.207,
+    "over_want": 627,
+    "over_floor": 8
+   },
+   "gpu_clouds_ms": {
+    "n": 4450,
+    "mean": 0.31750786516853696,
+    "p50": 0.396,
+    "p95": 0.427,
+    "p99": 0.433,
+    "p999": 0.645,
+    "max": 1.693,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1853,
+     "mean": 9.124500809498116,
+     "p50": 8.98,
+     "p95": 11.504,
+     "p99": 14.581,
+     "p999": 17.139,
+     "max": 17.484,
+     "over_want": 1349,
+     "over_floor": 6
+    },
+    "gpu_total_ms": {
+     "n": 1853,
+     "mean": 4.937601187263891,
+     "p50": 4.97,
+     "p95": 6.551,
+     "p99": 6.872,
+     "p999": 7.041,
+     "max": 7.203,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1853,
+     "mean": 0.4068521316783619,
+     "p50": 0.407,
+     "p95": 0.425,
+     "p99": 0.432,
+     "p999": 0.641,
+     "max": 0.65,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-clouds",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_CLOUDS": "1"
+   },
+   "index": 0,
+   "seconds": 65.5,
+   "frame_ms": {
+    "n": 4813,
+    "mean": 11.562686681903163,
+    "p50": 9.088,
+    "p95": 14.928,
+    "p99": 22.102,
+    "p999": 68.212,
+    "max": 6180.157,
+    "over_want": 3243,
+    "over_floor": 123
+   },
+   "gpu_total_ms": {
+    "n": 4811,
+    "mean": 5.6525327374766094,
+    "p50": 4.977,
+    "p95": 10.275,
+    "p99": 13.426,
+    "p999": 17.549,
+    "max": 147.035,
+    "over_want": 565,
+    "over_floor": 11
+   },
+   "gpu_clouds_ms": {
+    "n": 4811,
+    "mean": 0.0,
+    "p50": -0.0,
+    "p95": -0.0,
+    "p99": -0.0,
+    "p999": -0.0,
+    "max": -0.0,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2024,
+     "mean": 8.353696640316222,
+     "p50": 8.303,
+     "p95": 11.109,
+     "p99": 12.472,
+     "p999": 15.961,
+     "max": 22.696,
+     "over_want": 995,
+     "over_floor": 1
+    },
+    "gpu_total_ms": {
+     "n": 2024,
+     "mean": 4.499616600790504,
+     "p50": 4.526,
+     "p95": 6.101,
+     "p99": 6.415,
+     "p999": 6.602,
+     "max": 6.795,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2024,
+     "mean": 0.0,
+     "p50": -0.0,
+     "p95": -0.0,
+     "p99": -0.0,
+     "p999": -0.0,
+     "max": -0.0,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-clouds",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_CLOUDS": "1"
+   },
+   "index": 1,
+   "seconds": 65.6,
+   "frame_ms": {
+    "n": 4802,
+    "mean": 11.576305289462717,
+    "p50": 9.016,
+    "p95": 15.114,
+    "p99": 22.789,
+    "p999": 61.429,
+    "max": 6190.86,
+    "over_want": 3176,
+    "over_floor": 142
+   },
+   "gpu_total_ms": {
+    "n": 4800,
+    "mean": 5.712621666666664,
+    "p50": 5.008,
+    "p95": 10.563,
+    "p99": 13.456,
+    "p999": 17.475,
+    "max": 137.813,
+    "over_want": 612,
+    "over_floor": 10
+   },
+   "gpu_clouds_ms": {
+    "n": 4800,
+    "mean": 0.0,
+    "p50": -0.0,
+    "p95": -0.0,
+    "p99": -0.0,
+    "p999": -0.0,
+    "max": -0.0,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2058,
+     "mean": 8.21315403304179,
+     "p50": 8.174,
+     "p95": 10.751,
+     "p99": 12.642,
+     "p999": 14.426,
+     "max": 20.165,
+     "over_want": 922,
+     "over_floor": 2
+    },
+    "gpu_total_ms": {
+     "n": 2058,
+     "mean": 4.435959669582113,
+     "p50": 4.435,
+     "p95": 6.076,
+     "p99": 6.391,
+     "p999": 6.49,
+     "max": 6.58,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2058,
+     "mean": 0.0,
+     "p50": -0.0,
+     "p95": -0.0,
+     "p99": -0.0,
+     "p999": -0.0,
+     "max": -0.0,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-bounce-lamps",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_BOUNCE": "0",
+    "PBD_LAMP_BAKE": "0"
+   },
+   "index": 1,
+   "seconds": 65.7,
+   "frame_ms": {
+    "n": 4482,
+    "mean": 12.429941543953595,
+    "p50": 9.577,
+    "p95": 15.941,
+    "p99": 23.002,
+    "p999": 71.234,
+    "max": 6240.979,
+    "over_want": 3787,
+    "over_floor": 160
+   },
+   "gpu_total_ms": {
+    "n": 4480,
+    "mean": 6.056460491071421,
+    "p50": 5.403,
+    "p95": 10.386,
+    "p99": 13.261,
+    "p999": 16.657,
+    "max": 132.919,
+    "over_want": 597,
+    "over_floor": 5
+   },
+   "gpu_clouds_ms": {
+    "n": 4480,
+    "mean": 0.3165042410714266,
+    "p50": 0.396,
+    "p95": 0.427,
+    "p99": 0.434,
+    "p999": 0.629,
+    "max": 1.699,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1859,
+     "mean": 9.099421194190425,
+     "p50": 8.931,
+     "p95": 11.511,
+     "p99": 14.277,
+     "p999": 16.561,
+     "max": 17.348,
+     "over_want": 1385,
+     "over_floor": 2
+    },
+    "gpu_total_ms": {
+     "n": 1859,
+     "mean": 4.94955029585799,
+     "p50": 4.983,
+     "p95": 6.568,
+     "p99": 6.851,
+     "p999": 6.978,
+     "max": 7.053,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1859,
+     "mean": 0.40703657880581157,
+     "p50": 0.407,
+     "p95": 0.425,
+     "p99": 0.433,
+     "p999": 0.633,
+     "max": 0.673,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-soft",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_SOFT_SHADOWS": "0"
+   },
+   "index": 1,
+   "seconds": 65.5,
+   "frame_ms": {
+    "n": 4455,
+    "mean": 12.507003367003385,
+    "p50": 9.576,
+    "p95": 15.855,
+    "p99": 23.88,
+    "p999": 53.795,
+    "max": 6260.533,
+    "over_want": 3734,
+    "over_floor": 160
+   },
+   "gpu_total_ms": {
+    "n": 4453,
+    "mean": 6.09750056141928,
+    "p50": 5.42,
+    "p95": 10.498,
+    "p99": 13.415,
+    "p999": 17.734,
+    "max": 146.312,
+    "over_want": 627,
+    "over_floor": 12
+   },
+   "gpu_clouds_ms": {
+    "n": 4453,
+    "mean": 0.3174733887266987,
+    "p50": 0.396,
+    "p95": 0.427,
+    "p99": 0.434,
+    "p999": 0.631,
+    "max": 1.704,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1860,
+     "mean": 9.087806989247316,
+     "p50": 8.85,
+     "p95": 11.655,
+     "p99": 13.657,
+     "p999": 18.302,
+     "max": 19.123,
+     "over_want": 1350,
+     "over_floor": 4
+    },
+    "gpu_total_ms": {
+     "n": 1860,
+     "mean": 4.958501075268825,
+     "p50": 4.996,
+     "p95": 6.563,
+     "p99": 6.906,
+     "p999": 7.098,
+     "max": 7.201,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1860,
+     "mean": 0.4070198924731197,
+     "p50": 0.408,
+     "p95": 0.425,
+     "p99": 0.433,
+     "p999": 0.646,
+     "max": 0.676,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-tone",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_TONE": "1"
+   },
+   "index": 1,
+   "seconds": 65.6,
+   "frame_ms": {
+    "n": 4663,
+    "mean": 11.955032382586296,
+    "p50": 9.266,
+    "p95": 15.051,
+    "p99": 22.384,
+    "p999": 74.612,
+    "max": 6205.13,
+    "over_want": 3523,
+    "over_floor": 132
+   },
+   "gpu_total_ms": {
+    "n": 4661,
+    "mean": 6.030745119073164,
+    "p50": 5.374,
+    "p95": 10.353,
+    "p99": 13.364,
+    "p999": 17.687,
+    "max": 147.934,
+    "over_want": 601,
+    "over_floor": 12
+   },
+   "gpu_clouds_ms": {
+    "n": 4661,
+    "mean": 0.3187453336193917,
+    "p50": 0.397,
+    "p95": 0.427,
+    "p99": 0.433,
+    "p999": 0.63,
+    "max": 1.704,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1947,
+     "mean": 8.683599383667168,
+     "p50": 8.596,
+     "p95": 10.965,
+     "p99": 12.347,
+     "p999": 15.667,
+     "max": 19.715,
+     "over_want": 1187,
+     "over_floor": 2
+    },
+    "gpu_total_ms": {
+     "n": 1947,
+     "mean": 4.91051155624037,
+     "p50": 4.94,
+     "p95": 6.525,
+     "p99": 6.82,
+     "p999": 7.142,
+     "max": 7.225,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1947,
+     "mean": 0.40679506933744397,
+     "p50": 0.408,
+     "p95": 0.425,
+     "p99": 0.432,
+     "p999": 0.437,
+     "max": 0.674,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-bloom",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_NO_BLOOM": "1"
+   },
+   "index": 1,
+   "seconds": 65.6,
+   "frame_ms": {
+    "n": 4628,
+    "mean": 12.04864585133967,
+    "p50": 9.283,
+    "p95": 15.166,
+    "p99": 23.14,
+    "p999": 69.899,
+    "max": 6208.895,
+    "over_want": 3560,
+    "over_floor": 144
+   },
+   "gpu_total_ms": {
+    "n": 4626,
+    "mean": 5.977795503674878,
+    "p50": 5.314,
+    "p95": 10.483,
+    "p99": 13.418,
+    "p999": 18.105,
+    "max": 148.55,
+    "over_want": 628,
+    "over_floor": 16
+   },
+   "gpu_clouds_ms": {
+    "n": 4626,
+    "mean": 0.31825205361002806,
+    "p50": 0.397,
+    "p95": 0.427,
+    "p99": 0.434,
+    "p999": 0.659,
+    "max": 1.711,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1938,
+     "mean": 8.720098555211557,
+     "p50": 8.652,
+     "p95": 11.054,
+     "p99": 12.905,
+     "p999": 15.822,
+     "max": 16.369,
+     "over_want": 1213,
+     "over_floor": 0
+    },
+    "gpu_total_ms": {
+     "n": 1938,
+     "mean": 4.894716718266259,
+     "p50": 4.927,
+     "p95": 6.522,
+     "p99": 6.804,
+     "p999": 7.158,
+     "max": 7.259,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1938,
+     "mean": 0.4068658410732734,
+     "p50": 0.407,
+     "p95": 0.424,
+     "p99": 0.433,
+     "p999": 0.621,
+     "max": 0.805,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "no-reflect",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_REFLECT": "0"
+   },
+   "index": 1,
+   "seconds": 65.9,
+   "frame_ms": {
+    "n": 4945,
+    "mean": 11.288504550050556,
+    "p50": 8.939,
+    "p95": 13.372,
+    "p99": 19.104,
+    "p999": 63.038,
+    "max": 6274.984,
+    "over_want": 3228,
+    "over_floor": 78
+   },
+   "gpu_total_ms": {
+    "n": 4943,
+    "mean": 4.8104766336233,
+    "p50": 4.266,
+    "p95": 8.385,
+    "p99": 9.694,
+    "p999": 10.905,
+    "max": 127.397,
+    "over_want": 272,
+    "over_floor": 3
+   },
+   "gpu_clouds_ms": {
+    "n": 4943,
+    "mean": 0.3175444062310323,
+    "p50": 0.395,
+    "p95": 0.427,
+    "p99": 0.433,
+    "p999": 0.674,
+    "max": 1.711,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2054,
+     "mean": 8.231661635832532,
+     "p50": 8.145,
+     "p95": 10.747,
+     "p99": 12.379,
+     "p999": 14.575,
+     "max": 17.039,
+     "over_want": 895,
+     "over_floor": 1
+    },
+    "gpu_total_ms": {
+     "n": 2054,
+     "mean": 3.901424050632911,
+     "p50": 3.874,
+     "p95": 5.367,
+     "p99": 5.681,
+     "p999": 5.949,
+     "max": 6.011,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2054,
+     "mean": 0.40686465433301056,
+     "p50": 0.407,
+     "p95": 0.425,
+     "p99": 0.433,
+     "p999": 0.671,
+     "max": 0.679,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "today",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {
+    "PBD_LIGHTING": "today"
+   },
+   "index": 1,
+   "seconds": 65.9,
+   "frame_ms": {
+    "n": 5169,
+    "mean": 10.77199632424068,
+    "p50": 8.822,
+    "p95": 12.705,
+    "p99": 17.729,
+    "p999": 44.072,
+    "max": 6254.218,
+    "over_want": 3080,
+    "over_floor": 65
+   },
+   "gpu_total_ms": {
+    "n": 5167,
+    "mean": 4.6537118250435325,
+    "p50": 4.135,
+    "p95": 7.725,
+    "p99": 8.943,
+    "p999": 10.796,
+    "max": 101.462,
+    "over_want": 156,
+    "over_floor": 4
+   },
+   "gpu_clouds_ms": {
+    "n": 5167,
+    "mean": 0.3174097155022266,
+    "p50": 0.396,
+    "p95": 0.426,
+    "p99": 0.433,
+    "p999": 0.641,
+    "max": 1.695,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 2136,
+     "mean": 7.918124531835183,
+     "p50": 7.729,
+     "p95": 10.293,
+     "p99": 12.377,
+     "p999": 15.828,
+     "max": 16.38,
+     "over_want": 811,
+     "over_floor": 0
+    },
+    "gpu_total_ms": {
+     "n": 2136,
+     "mean": 3.7949939138576743,
+     "p50": 3.764,
+     "p95": 5.276,
+     "p99": 5.622,
+     "p999": 5.814,
+     "max": 5.895,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 2136,
+     "mean": 0.40598408239700506,
+     "p50": 0.407,
+     "p95": 0.424,
+     "p99": 0.432,
+     "p999": 0.436,
+     "max": 0.656,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "new",
+   "exe": "C:\\Users\\santi\\repos\\pbd-perf-main\\output\\perf\\baseline-exe\\lighting-f15a647\\pbd-app.exe",
+   "env": {},
+   "index": 1,
+   "seconds": 66.2,
+   "frame_ms": {
+    "n": 4446,
+    "mean": 12.558327935222668,
+    "p50": 9.618,
+    "p95": 15.837,
+    "p99": 23.398,
+    "p999": 81.213,
+    "max": 6369.744,
+    "over_want": 3761,
+    "over_floor": 171
+   },
+   "gpu_total_ms": {
+    "n": 4444,
+    "mean": 6.06803217821783,
+    "p50": 5.382,
+    "p95": 10.427,
+    "p99": 13.238,
+    "p999": 17.915,
+    "max": 149.252,
+    "over_want": 610,
+    "over_floor": 12
+   },
+   "gpu_clouds_ms": {
+    "n": 4444,
+    "mean": 0.3177128712871267,
+    "p50": 0.396,
+    "p95": 0.427,
+    "p99": 0.433,
+    "p999": 0.662,
+    "max": 1.703,
+    "over_want": 0,
+    "over_floor": 0
+   },
+   "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1851,
+     "mean": 9.135592652620213,
+     "p50": 8.967,
+     "p95": 11.612,
+     "p99": 14.049,
+     "p999": 16.631,
+     "max": 18.455,
+     "over_want": 1391,
+     "over_floor": 2
+    },
+    "gpu_total_ms": {
+     "n": 1851,
+     "mean": 4.951014046461371,
+     "p50": 4.987,
+     "p95": 6.563,
+     "p99": 6.916,
+     "p999": 7.227,
+     "max": 7.293,
+     "over_want": 0,
+     "over_floor": 0
+    },
+    "gpu_clouds_ms": {
+     "n": 1851,
+     "mean": 0.4070399783900616,
+     "p50": 0.407,
+     "p95": 0.425,
+     "p99": 0.433,
+     "p999": 0.65,
+     "max": 0.666,
+     "over_want": 0,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  }
+ ]
+}
