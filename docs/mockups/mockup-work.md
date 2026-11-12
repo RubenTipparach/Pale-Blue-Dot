@@ -17,7 +17,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 3 | 2026-11-12 | OpenSpec changes named for M5, M6 and M9. |
 | 4 | 2026-11-12 | The lighting-perf checkpoint benchmark added to Misc. |
 | 5 | 2026-11-12 | M20 Pits, Plants and Power (industry) added. |
-| 6 | 2026-11-12 | M21 Rockets to Starships (ship-tiers), published from another session; M22 Cranes and Printers (vehicle-yards). |
+| 6 | 2026-11-12 | M21 Rockets to Starships (ship-tiers), published from another session; M22 Cranes and Printers, M23 Drydock and Hex Ship Builder and M24 Hangar and Chibi Aircraft (vehicle-yards). |
 
 Every page on it links back to it: an "All Pale Blue Dot mockups (the tracker)" line under the
 page's title (the thirteen mockups of 2026-11-12, and the survey). The earlier mockups (M14 to M19)
@@ -52,6 +52,7 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 | M20 | Pits, Plants and Power | `industry.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/JBcP2Js3bdQ2uApN3xUnHV |
 | M21 | Rockets to Starships | `ship-tiers.html` | ship-tiers | Drafted (2026-11-12), published from another session | https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD |
 | M22 | Cranes and Printers | `construction.html` | vehicle-yards | Drafted (2026-11-12); answers M3's note | https://claude.ai/artifact/2LjxDc7LuNFX6yjPbMLMwc |
+| M23 | Drydock and Hex Ship Builder | `drydock.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/DLRzGBKMJzhhFdayrbCVdx |
 
 The thirteen of 2026-11-12 were published as one batch. Their commit (`d468860`) says "Fourteen",
 but it names thirteen subjects, and thirteen pages were published.

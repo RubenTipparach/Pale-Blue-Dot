@@ -119,8 +119,11 @@ The page:
   - **Stability**: `GM = KB + BM - KG`, where `BM` is the waterplane's
     second moment about the centreline over the displaced volume. Above
     0.5 m reads "stiff", 0 to 0.5 m "tender", and below 0 "capsizes".
-  - **Sail area**: 2.83 m^2 per sail cell. A sail cell is on a layer next to
-    a mast cell and above the main deck.
+  - **Sail area**: 2.83 m^2 per sail cell. A sail cell is above the main
+    deck and joins a mast through other sail cells on its layer, so a yard
+    can span the ship (the mockup's D4). Counting only the cells beside the
+    mast, the sloop carries 57 m^2 and makes 2.4 m/s on a reach; counting
+    along the yard, 147 m^2 and 6.0 m/s.
   - **Hull speed**: `sqrt(g L / 2 pi)` with the game's g of 25 m/s^2, which
     is 2.0 sqrt(L) m/s for a waterline of L metres.
   - **Speed on a reach**: hull speed x min(1, SA/D / 18), where SA/D is the
@@ -147,7 +150,16 @@ The page:
   - States: **flooded, draining, dry, flooding, gate open**. A ship built
     dry floats as the dock floods and is warped out through the gate.
   - The dock's size caps the ship. The page's dock takes a ship 10 cells long
-    and 4 wide (28 x 11 m), 7 layers deep from keel to waterline.
+    and 5 rows wide (28 x 13.1 m), 7 layers deep from keel to waterline.
+- **Odd rows (the mockup's D2).** A ship's grid keeps the world's half-cell
+  offset between rows, so a hull is the same to port and starboard only
+  with an odd number of rows. The presets have three (the sloop, 8.2 m) and
+  five (the three-master, 13.1 m). The check still allows two rows, the
+  least that floats by the sub-cell rule.
+- **Block masses are the mockup's own** (D5), chosen so the presets float
+  and stand: the sloop draws 0.45 m, the trader 1.22 m and the three-master
+  1.39 m, with GM 5.5, 5.2 and 2.4 m. Hex ships float high and stiff. Real
+  numbers come with the build.
 - **Saves.** A ship is a stored record. It holds:
   - its stable ID and its cells with their blocks, keyed in its frame;
   - its pieces and the block set's version;
