@@ -80,10 +80,15 @@
       depth-aware upsample, so a puddle's edge against a wall does not
       halo. Shots: the Holbrook lane in rain at 10:00 and 22:00, a puddle
       under a wall, pixel-diffed; measure `rain-stroll`, `storm`, `walk`.
-- [ ] 2.9 Fog and atmosphere at half resolution (the rain volume, the
+- [x] 2.9 Fog and atmosphere at half resolution (the rain volume, the
       compose's distance fog) only where 1.2's columns show a pass costs
       more than the spread; bloom is already built from a quarter-size
-      image and is left as 2.6 has it.
+      image and is left as 2.6 has it. (The rain volume, measured: the
+      default renderer is the volume, not the shells. At half size, one
+      exe, `rain-stroll` 10.03 / 15.73 / 20.74 to 8.69 / 14.02 / 18.56 ms,
+      the rain pass 1.49 to 0.45 ms of GPU. Shots in
+      `docs/screenshots/lighting-perf/2.9-rain-half/`, for the owner's
+      look; `rain_render_scale: 1.0` restores the full-size pass.)
 
 - [x] 2.10 The rain volume's exact cuts (before its half resolution): the
       shell loop skips a kind (rain, snow) the rain map does not hold

@@ -2824,7 +2824,7 @@ fn write_frame_log(
 /// reflection walk and screen trace among it, is timed there. A pass that did
 /// not run in a frame reads 0; spans not named here are summed in
 /// `gpu_other_ms`.
-const PASS_COLUMNS: [&str; 17] = [
+const PASS_COLUMNS: [&str; 18] = [
     "planet_cull",
     "planet_shadow",
     "main_opaque_pass_3d",
@@ -2835,6 +2835,7 @@ const PASS_COLUMNS: [&str; 17] = [
     "cloud_puffs",
     "cloud_resolve",
     "clouds",
+    "rain_half",
     "rain",
     "weather_overlay",
     "water_lens",

@@ -487,6 +487,12 @@ pub struct WeatherSettings {
     /// along each axis, 0.25..=1. A full-resolution composite lays it over
     /// the scene.
     pub cloud_render_scale: f32,
+    /// The resolution the rain volume's shells are gathered at, as a fraction
+    /// of the view's along each axis, 0.25..=1 (`lighting-perf` 2.9). Below
+    /// one they are gathered small and laid over the scene at full size,
+    /// weighed by depth so an edge takes no rain from past it; one gathers
+    /// them at full size, as before.
+    pub rain_render_scale: f32,
     /// The march's nearest step, metres. Steps grow with distance from the
     /// eye from here.
     pub cloud_step_m: f32,
@@ -671,6 +677,7 @@ impl Default for WeatherSettings {
             cloud_shear_mps: 25.0,
             cloud_cells: 0.6,
             cloud_render_scale: 0.4,
+            rain_render_scale: 0.5,
             cloud_step_m: 12.0,
             cloud_max_steps: 48,
             cloud_haze: 3.0,
@@ -824,6 +831,10 @@ impl Validated for WeatherSettings {
             .contains(&s.cloud_render_scale)
             .then_some(())
             .ok_or("cloud_render_scale must be within 0.25..=1")?;
+        (0.25..=1.0)
+            .contains(&s.rain_render_scale)
+            .then_some(())
+            .ok_or("rain_render_scale must be within 0.25..=1")?;
         positive("cloud_step_m", &[s.cloud_step_m])?;
         (8..=256)
             .contains(&s.cloud_max_steps)

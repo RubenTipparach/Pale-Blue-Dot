@@ -309,6 +309,23 @@ p95 / p99 ms, `f15a647` then now:
 - **The walk** opens in a storm with the loading screen (a bug being fixed
   in `loading-screen`), so its numbers here are a walk in the rain.
 
+## The rain volume at half size (measured 2026-11-12)
+
+`docs/benchmarks/2026-11-12-rain-half/`. **The rain that is drawn by
+default is the volume** (`rain_renderer: Volume`: sixteen jittered steps of
+streak noise to the ground), not the shells; 2.10's cuts were to the
+shells, which is why they saved nothing. The half-size pass gathers either
+renderer's light and transmittance into a target at `rain_render_scale`
+(0.5) and lays it over the scene at full size, weighed by depth. One exe,
+the scale the only difference: `rain-stroll` p50 / p95 / p99 10.03 / 15.73
+/ 20.74 to **8.69 / 14.02 / 18.56** ms, the rain 1.49 to 0.45 ms of GPU;
+storm 6.03 / 10.40 / 13.88 to 5.73 / 9.57 / 12.90. The shots are hard to
+tell apart side by side, with no halo at an edge; most moved pixels move by
+2/255 or less, 17% by more at night, where the volume's grain is now per 2
+x 2 pixels. Kept, as a recommendation taken (ask only with screenshots):
+the shots are in `docs/screenshots/lighting-perf/2.9-rain-half/` for the
+owner, and `rain_render_scale: 1.0` puts the full-size pass back.
+
 ## Half resolution (owner, 2026-11-12)
 
 The owner: "consider like half resolutions for expensive stuff like bloom
