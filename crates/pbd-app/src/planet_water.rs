@@ -1346,6 +1346,7 @@ fn prepare_water_views(
                 let view = pbd_core::frustum::Planes::from_clip(clip_from_body);
                 let started = std::time::Instant::now();
                 let counts = sites.build(
+                    maps.generation,
                     &maps.from,
                     &maps.maps,
                     maps.t,
