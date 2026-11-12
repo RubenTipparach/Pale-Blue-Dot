@@ -6,6 +6,9 @@ metadata:
   version: "1.0"
 ---
 
+> **Retired here (2026-11-12).** The owner asked for the solitaire collection's pixel-art style
+> instead; the mockups' art is now drawn with `balatro-pixel-art`. This skill stays for reference.
+
 > **In this repository (Pale Blue Dot).** Copied from `RubenTipparach/rubens-solitare-collection`
 > (`.claude/skills/hand-drawn-illustration`, commit cdb3b24) on 2026-11-11, at the owner's word:
 > "create textures (pull in hand drawn art skill from the rubens-soliatire-repo)". Here it paints the
