@@ -122,6 +122,13 @@ For core-only builds, use `cargo run -p pbd-app --no-default-features -- --headl
 Desktop rendering is the default feature; that option keeps window/GPU features
 out of a dedicated simulation build.
 
+## Design history
+
+The first pre-production design, from 2026-09-15, is kept for the record: the
+[engine architecture](docs/ENGINE_ARCHITECTURE.md) and the
+[game design](docs/GAME_DESIGN.md). Where they differ from [CLAUDE.md](CLAUDE.md) or
+`openspec/`, those win: the specs say what the engine does, the changes what is planned.
+
 ## References
 
 Based on engineering and visual ideas from [Tenebris](https://github.com/RubenTipparach/tenebris)

@@ -147,6 +147,16 @@ not yet measured, and are taken up after these.
    dusk relight reaches every mesh of a town over a fraction of a second, not
    in one frame.
 
+**Superseded in the merge with main (2026-11-11).** `main` rebuilt the town
+bake independently (`field_light.rs`, "`frame-budget` 4.3" in its comments):
+a bake is made a 512-vertex slice at a time under a 2 ms budget and swapped
+in whole, and a town no column of the set `reaches` is baked open once. That
+covers decisions 3 and 4, and the merge keeps main's version: decision 2's
+cached bake points and `ColumnTier::may_cover` (with its test) are gone.
+Decisions 1 and 5-7 (corners, templates, sleeping craft, the sun step) stand.
+The town walk has not been measured on the merged build; the `town` scenario
+is kept in `tools/perf_suite.py` for that.
+
 ## Next: what the remaining 10 ms is (2026-10-08)
 
 After decisions 1-4 the town walk runs about 10.4 ms a frame against 6.3 ms of

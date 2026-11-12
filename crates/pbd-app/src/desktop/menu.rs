@@ -92,6 +92,80 @@ pub enum MenuAction {
     Overlay(u8),
     /// Open this species' entry in the field guide (`guide::press` acts).
     Species(u16),
+    /// Turn bloom on or off (`press_graphics` acts).
+    Bloom,
+}
+
+/// A panel the mouse wheel scrolls.
+#[derive(Component)]
+pub struct WheelScrolls;
+
+/// The wheel scrolls a panel that is taller than the screen.
+pub fn wheel_scroll(
+    mut wheel: MessageReader<bevy::input::mouse::MouseWheel>,
+    mut panels: Query<(&mut ScrollPosition, &InheritedVisibility), With<WheelScrolls>>,
+) {
+    let dy: f32 = wheel
+        .read()
+        .map(|w| match w.unit {
+            bevy::input::mouse::MouseScrollUnit::Line => w.y * 36.0,
+            bevy::input::mouse::MouseScrollUnit::Pixel => w.y,
+        })
+        .sum();
+    if dy == 0.0 {
+        return;
+    }
+    for (mut at, shown) in &mut panels {
+        if shown.get() {
+            at.0.y = (at.0.y - dy).max(0.0);
+        }
+    }
+}
+
+/// What the bloom row says.
+fn bloom_label(on: bool) -> String {
+    format!(
+        "BLOOM: {}",
+        if on {
+            "ON"
+        } else {
+            "OFF  (costs ~2.4 ms on a Mac)"
+        }
+    )
+}
+
+/// A press on GRAPHICS' rows changes the player's choice and keeps it.
+pub fn press_graphics(
+    rows: Query<(&Interaction, &MenuAction), Changed<Interaction>>,
+    mut graphics: ResMut<pbd_app::tone::Graphics>,
+) {
+    for (interaction, action) in &rows {
+        if (*interaction, *action) == (Interaction::Pressed, MenuAction::Bloom) {
+            graphics.bloom = !graphics.bloom;
+            graphics.keep();
+        }
+    }
+}
+
+/// The GRAPHICS rows say what is chosen.
+pub fn label_graphics(
+    graphics: Res<pbd_app::tone::Graphics>,
+    rows: Query<(&MenuAction, &Children)>,
+    mut texts: Query<&mut Text>,
+) {
+    let label = bloom_label(graphics.bloom);
+    for (action, children) in &rows {
+        if *action != MenuAction::Bloom {
+            continue;
+        }
+        for child in children.iter() {
+            if let Ok(mut text) = texts.get_mut(child)
+                && text.0 != label
+            {
+                text.0 = label.clone();
+            }
+        }
+    }
 }
 
 /// Whether the saves page is the screen the game opened on and no world has
@@ -362,12 +436,34 @@ pub fn spawn(mut commands: Commands) {
         .with_children(|layer| {
             layer
                 .spawn((
-                    panel_node(520.0),
+                    // Taller than a screen (every binding is listed), so it is
+                    // held inside one and scrolls with the wheel.
+                    Node {
+                        max_height: percent(92.0),
+                        overflow: Overflow::scroll_y(),
+                        ..panel_node(520.0)
+                    },
+                    ScrollPosition::default(),
+                    WheelScrolls,
                     BorderColor::all(EDGE),
                     BackgroundColor(PANEL_FILL),
                 ))
                 .with_children(|panel| {
                     panel.spawn(title("SETTINGS"));
+                    panel.spawn((
+                        Text::new("GRAPHICS"),
+                        TextFont {
+                            font_size: 12.0,
+                            ..default()
+                        },
+                        TextColor(MINT),
+                        Node {
+                            margin: UiRect::top(px(2)),
+                            ..default()
+                        },
+                    ));
+                    // First, above the long INPUT list, so it is always on screen. Its words are `bloom_label`'s, kept up by `label_graphics`.
+                    button(panel, "BLOOM", MenuAction::Bloom);
                     panel.spawn((
                         Text::new("INPUT"),
                         TextFont {
@@ -841,6 +937,8 @@ pub fn press(
             }
             // The guide's own system turns the page.
             MenuAction::Species(_) => {}
+            // `press_graphics` acts.
+            MenuAction::Bloom => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {
                     continue;

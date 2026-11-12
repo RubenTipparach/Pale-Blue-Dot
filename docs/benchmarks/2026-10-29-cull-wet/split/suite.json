@@ -1,0 +1,540 @@
+{
+ "meta": {
+  "when": "2026-10-29 12:17",
+  "revision": "2d12f37",
+  "dirty": false,
+  "variants": [
+   {
+    "name": "cull-and-cut",
+    "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+    "env": {},
+    "assets": null
+   },
+   {
+    "name": "cull-only",
+    "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+    "env": {},
+    "assets": "dbc88986f765614d3bf518f3dc059f41d1d0fa47"
+   }
+  ],
+  "args": [
+   "--scenarios",
+   "clouds,storm",
+   "--repeats",
+   "2",
+   "--out",
+   "output/perf/2026-10-29-split",
+   "--variant",
+   "cull-and-cut",
+   "--variant",
+   "cull-only|target/release/pbd-app||dbc88986f765614d3bf518f3dc059f41d1d0fa47"
+  ],
+  "adapter": "Apple M4 Max (Metal)"
+ },
+ "results": [
+  {
+   "scenario": "clouds",
+   "variant": "cull-and-cut",
+   "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+   "env": {},
+   "index": 0,
+   "seconds": 51.2,
+   "frame_ms": {
+    "n": 2157,
+    "mean": 18.99825081131201,
+    "p50": 17.15,
+    "p95": 31.867,
+    "p99": 49.452,
+    "p999": 56.224,
+    "max": 59.878,
+    "over_want": 2019,
+    "over_floor": 1251
+   },
+   "gpu_total_ms": {},
+   "gpu_clouds_ms": {
+    "n": 2157,
+    "mean": 12.881917941585538,
+    "p50": 12.964,
+    "p95": 15.469,
+    "p99": 16.824,
+    "p999": 17.32,
+    "max": 18.016,
+    "over_want": 2157,
+    "over_floor": 26
+   },
+   "adapter": "Apple M4 Max (Metal)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1049,
+     "mean": 16.11254242135365,
+     "p50": 16.206,
+     "p95": 20.772,
+     "p99": 32.726,
+     "p999": 34.25,
+     "max": 35.969,
+     "over_want": 995,
+     "over_floor": 384
+    },
+    "gpu_total_ms": {},
+    "gpu_clouds_ms": {
+     "n": 1049,
+     "mean": 12.524956148713063,
+     "p50": 12.919,
+     "p95": 13.924,
+     "p99": 14.175,
+     "p999": 14.405,
+     "max": 14.79,
+     "over_want": 1049,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "clouds",
+   "variant": "cull-only",
+   "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+   "env": {},
+   "index": 0,
+   "seconds": 51.6,
+   "frame_ms": {
+    "n": 1957,
+    "mean": 21.125394481348952,
+    "p50": 19.266,
+    "p95": 36.256,
+    "p99": 53.626,
+    "p999": 59.243,
+    "max": 61.413,
+    "over_want": 1820,
+    "over_floor": 1540
+   },
+   "gpu_total_ms": {},
+   "gpu_clouds_ms": {
+    "n": 1957,
+    "mean": 14.918639243740417,
+    "p50": 15.006,
+    "p95": 18.161,
+    "p99": 19.845,
+    "p999": 21.119,
+    "max": 21.323,
+    "over_want": 1957,
+    "over_floor": 271
+   },
+   "adapter": "Apple M4 Max (Metal)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 948,
+     "mean": 17.852915611814357,
+     "p50": 18.045,
+     "p95": 21.827,
+     "p99": 36.226,
+     "p999": 37.965,
+     "max": 38.003,
+     "over_want": 904,
+     "over_floor": 671
+    },
+    "gpu_total_ms": {},
+    "gpu_clouds_ms": {
+     "n": 948,
+     "mean": 14.255144514767945,
+     "p50": 14.621,
+     "p95": 16.14,
+     "p99": 16.59,
+     "p999": 17.037,
+     "max": 17.227,
+     "over_want": 948,
+     "over_floor": 5
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "clouds",
+   "variant": "cull-only",
+   "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+   "env": {},
+   "index": 1,
+   "seconds": 51.3,
+   "frame_ms": {
+    "n": 1950,
+    "mean": 21.059938974358978,
+    "p50": 19.257,
+    "p95": 36.177,
+    "p99": 54.732,
+    "p999": 59.685,
+    "max": 68.917,
+    "over_want": 1817,
+    "over_floor": 1546
+   },
+   "gpu_total_ms": {},
+   "gpu_clouds_ms": {
+    "n": 1950,
+    "mean": 14.883415384615368,
+    "p50": 14.98,
+    "p95": 18.124,
+    "p99": 19.915,
+    "p999": 21.29,
+    "max": 21.336,
+    "over_want": 1950,
+    "over_floor": 259
+   },
+   "adapter": "Apple M4 Max (Metal)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 948,
+     "mean": 17.849171940928265,
+     "p50": 17.968,
+     "p95": 25.449,
+     "p99": 36.543,
+     "p999": 38.831,
+     "max": 38.905,
+     "over_want": 899,
+     "over_floor": 670
+    },
+    "gpu_total_ms": {},
+    "gpu_clouds_ms": {
+     "n": 948,
+     "mean": 14.25720675105485,
+     "p50": 14.624,
+     "p95": 16.113,
+     "p99": 16.592,
+     "p999": 17.278,
+     "max": 17.562,
+     "over_want": 948,
+     "over_floor": 4
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "clouds",
+   "variant": "cull-and-cut",
+   "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+   "env": {},
+   "index": 1,
+   "seconds": 51.3,
+   "frame_ms": {
+    "n": 2153,
+    "mean": 19.08244728286112,
+    "p50": 17.19,
+    "p95": 32.562,
+    "p99": 50.43,
+    "p999": 58.028,
+    "max": 60.914,
+    "over_want": 2011,
+    "over_floor": 1257
+   },
+   "gpu_total_ms": {},
+   "gpu_clouds_ms": {
+    "n": 2153,
+    "mean": 12.928669763121219,
+    "p50": 13.028,
+    "p95": 15.401,
+    "p99": 16.521,
+    "p999": 17.367,
+    "max": 17.388,
+    "over_want": 2152,
+    "over_floor": 20
+   },
+   "adapter": "Apple M4 Max (Metal)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1046,
+     "mean": 16.175330783938833,
+     "p50": 16.26,
+     "p95": 20.079,
+     "p99": 33.29,
+     "p999": 35.177,
+     "max": 35.839,
+     "over_want": 996,
+     "over_floor": 400
+    },
+    "gpu_total_ms": {},
+    "gpu_clouds_ms": {
+     "n": 1046,
+     "mean": 12.565200764818362,
+     "p50": 12.954,
+     "p95": 13.952,
+     "p99": 14.45,
+     "p999": 14.834,
+     "max": 15.236,
+     "over_want": 1046,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "cull-and-cut",
+   "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+   "env": {},
+   "index": 0,
+   "seconds": 51.3,
+   "frame_ms": {
+    "n": 2158,
+    "mean": 19.0347377201112,
+    "p50": 17.154,
+    "p95": 31.648,
+    "p99": 49.854,
+    "p999": 56.035,
+    "max": 60.922,
+    "over_want": 2023,
+    "over_floor": 1245
+   },
+   "gpu_total_ms": {},
+   "gpu_clouds_ms": {
+    "n": 2158,
+    "mean": 12.91957506950879,
+    "p50": 12.989,
+    "p95": 15.463,
+    "p99": 16.601,
+    "p999": 17.367,
+    "max": 17.854,
+    "over_want": 2158,
+    "over_floor": 22
+   },
+   "adapter": "Apple M4 Max (Metal)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1048,
+     "mean": 16.14092557251907,
+     "p50": 16.278,
+     "p95": 20.114,
+     "p99": 32.951,
+     "p999": 34.418,
+     "max": 35.372,
+     "over_want": 1000,
+     "over_floor": 409
+    },
+    "gpu_total_ms": {},
+    "gpu_clouds_ms": {
+     "n": 1048,
+     "mean": 12.5566965648855,
+     "p50": 12.98,
+     "p95": 13.965,
+     "p99": 14.446,
+     "p999": 14.723,
+     "max": 15.043,
+     "over_want": 1048,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "cull-only",
+   "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+   "env": {},
+   "index": 0,
+   "seconds": 51.3,
+   "frame_ms": {
+    "n": 1946,
+    "mean": 21.085256937307314,
+    "p50": 19.179,
+    "p95": 36.402,
+    "p99": 54.952,
+    "p999": 60.811,
+    "max": 62.437,
+    "over_want": 1810,
+    "over_floor": 1551
+   },
+   "gpu_total_ms": {},
+   "gpu_clouds_ms": {
+    "n": 1946,
+    "mean": 14.909510791366928,
+    "p50": 15.004,
+    "p95": 18.181,
+    "p99": 20.031,
+    "p999": 21.438,
+    "max": 21.5,
+    "over_want": 1946,
+    "over_floor": 275
+   },
+   "adapter": "Apple M4 Max (Metal)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 946,
+     "mean": 17.889701902748396,
+     "p50": 18.106,
+     "p95": 22.137,
+     "p99": 36.183,
+     "p999": 39.558,
+     "max": 40.82,
+     "over_want": 900,
+     "over_floor": 687
+    },
+    "gpu_total_ms": {},
+    "gpu_clouds_ms": {
+     "n": 946,
+     "mean": 14.297202959830859,
+     "p50": 14.638,
+     "p95": 16.18,
+     "p99": 16.669,
+     "p999": 17.554,
+     "max": 17.648,
+     "over_want": 946,
+     "over_floor": 11
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "cull-only",
+   "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+   "env": {},
+   "index": 1,
+   "seconds": 51.3,
+   "frame_ms": {
+    "n": 1951,
+    "mean": 21.046568939005635,
+    "p50": 19.181,
+    "p95": 36.087,
+    "p99": 54.3,
+    "p999": 61.534,
+    "max": 63.52,
+    "over_want": 1815,
+    "over_floor": 1543
+   },
+   "gpu_total_ms": {},
+   "gpu_clouds_ms": {
+    "n": 1951,
+    "mean": 14.870915427985626,
+    "p50": 14.96,
+    "p95": 17.927,
+    "p99": 19.883,
+    "p999": 21.331,
+    "max": 21.338,
+    "over_want": 1951,
+    "over_floor": 259
+   },
+   "adapter": "Apple M4 Max (Metal)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 948,
+     "mean": 17.84002742616035,
+     "p50": 17.991,
+     "p95": 21.911,
+     "p99": 36.204,
+     "p999": 38.079,
+     "max": 39.615,
+     "over_want": 903,
+     "over_floor": 675
+    },
+    "gpu_total_ms": {},
+    "gpu_clouds_ms": {
+     "n": 948,
+     "mean": 14.241149789029548,
+     "p50": 14.562,
+     "p95": 16.075,
+     "p99": 16.492,
+     "p999": 16.745,
+     "max": 17.631,
+     "over_want": 948,
+     "over_floor": 6
+    }
+   },
+   "valid": true,
+   "problems": []
+  },
+  {
+   "scenario": "storm",
+   "variant": "cull-and-cut",
+   "exe": "/Users/rubentipparach/pale-blue-dot/target/release/pbd-app",
+   "env": {},
+   "index": 1,
+   "seconds": 51.3,
+   "frame_ms": {
+    "n": 2158,
+    "mean": 19.02710101946248,
+    "p50": 17.133,
+    "p95": 32.321,
+    "p99": 49.066,
+    "p999": 53.85,
+    "max": 60.402,
+    "over_want": 2008,
+    "over_floor": 1247
+   },
+   "gpu_total_ms": {},
+   "gpu_clouds_ms": {
+    "n": 2158,
+    "mean": 12.911848934198328,
+    "p50": 13.009,
+    "p95": 15.328,
+    "p99": 16.512,
+    "p999": 17.336,
+    "max": 18.666,
+    "over_want": 2158,
+    "over_floor": 17
+   },
+   "adapter": "Apple M4 Max (Metal)",
+   "cloud_leg_m": [
+    800.0,
+    2950.0
+   ],
+   "in_cloud": {
+    "frame_ms": {
+     "n": 1049,
+     "mean": 16.13672735938991,
+     "p50": 16.244,
+     "p95": 26.452,
+     "p99": 33.452,
+     "p999": 35.139,
+     "max": 35.646,
+     "over_want": 988,
+     "over_floor": 398
+    },
+    "gpu_total_ms": {},
+    "gpu_clouds_ms": {
+     "n": 1049,
+     "mean": 12.53299523355575,
+     "p50": 12.918,
+     "p95": 13.946,
+     "p99": 14.386,
+     "p999": 14.828,
+     "max": 15.596,
+     "over_want": 1049,
+     "over_floor": 0
+    }
+   },
+   "valid": true,
+   "problems": []
+  }
+ ]
+}

@@ -734,6 +734,13 @@ fn cell_shafts(frame: &ShowerFrame, shown: &crate::atmosphere::Shown, quads: &mu
     }
 }
 
+/// `PBD_PASS_OFF=shower`: a pricing instrument (`frame-budget` 4.2), beside
+/// the composite's `rain`, `lens` and `mist`. The shower is built empty, so a
+/// run says what the near streaks cost on the CPU and the GPU.
+static SHOWER_OFF: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+    std::env::var("PBD_PASS_OFF").is_ok_and(|list| list.split(',').any(|p| p.trim() == "shower"))
+});
+
 #[allow(clippy::too_many_arguments)]
 fn rebuild_shower(
     time: Res<Time>,
@@ -772,7 +779,10 @@ fn rebuild_shower(
     // from. Whether the eye is under rock is the column's answer, read off
     // `Weather` so the lens and the shower cannot disagree about it.
     let submerged = surface_height(up) < 0.0 && radius < PLANET_RADIUS;
-    let drawn = radius >= 1.0 && !submerged && rain_drawn_at(height_above_ground(eye), &settings);
+    let drawn = radius >= 1.0
+        && !submerged
+        && !*SHOWER_OFF
+        && rain_drawn_at(height_above_ground(eye), &settings);
     let Some(mesh) = meshes.get_mut(&mesh.0) else {
         return;
     };

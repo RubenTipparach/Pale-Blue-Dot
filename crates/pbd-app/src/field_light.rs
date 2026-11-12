@@ -102,6 +102,12 @@ pub struct FieldUniform {
     pub lights: [Vec4; MAX_ROOM_LIGHTS],
     pub light_colour: [Vec4; MAX_ROOM_LIGHTS],
     pub light_span: [Vec4; MAX_ROOM_LIGHTS],
+    /// `lighting-model`: x one for the new model, y the cover over the
+    /// camera, z a lamp's glow, w the sun's apparent radius (L3); and the
+    /// sky's light (L2), clear then under a
+    /// full deck ([`crate::tone::SkyLight`]).
+    pub model: Vec4,
+    pub sky_sh: [Vec4; 18],
 }
 
 /// The extension that lights a PBR material from the field, and shades it
@@ -269,9 +275,11 @@ fn light_from_the_field(
         Option<&ChildOf>,
     )>,
     faded: Query<&Faded>,
+    sky_light: Option<Res<crate::tone::SkyLight>>,
     mut lit: ResMut<Assets<FieldLitMaterial>>,
     mut read: Local<(u32, std::collections::HashMap<Entity, Corners>)>,
 ) {
+    let sky_light = sky_light.map(|s| *s).unwrap_or_default();
     let centre = frame
         .map(|frame| frame.center.as_vec3())
         .unwrap_or(Vec3::ZERO);
@@ -302,6 +310,13 @@ fn light_from_the_field(
             high: high.extend(0.0),
             centre: centre.extend(gone),
             sun: toward_sun.extend(0.0),
+            model: Vec4::new(
+                if sky_light.new_model { 1.0 } else { 0.0 },
+                sky_light.cover,
+                sky_light.lamp_glow,
+                sky_light.shadow_spread,
+            ),
+            sky_sh: sky_light.sh,
             ..default()
         };
         let Some(current) = lit.get(&material.0).map(|m| m.extension.field) else {
@@ -415,26 +430,32 @@ const GROUND_CLEAR_M: f32 = 0.5;
 /// (`cities-in-the-world`, "Finding: the stair towers have no light"): the
 /// fine set and the relight it was last baked from. Its mesh carries the
 /// field's `(sky, block)` in its second UV channel, `-1` until baked.
-///
-/// It keeps what makes a re-bake cheap (`town-frame-time` decisions 2 and
-/// 3): the cap of the sphere its points lie in, the ground-clamped point each
-/// vertex reads, and whether its last bake was the open sky everywhere. A
-/// town's outside does not move and its mesh is rewritten only by this bake,
-/// so these hold for its life; a mesh whose vertex count changes has them
-/// taken again.
+/// What a town's outside was baked from, and the bake in progress
+/// (`frame-budget` 4.3).
 #[derive(Component, Default, Clone, Debug)]
 pub struct BakedField {
-    /// The fine set and the relight it was last baked from.
-    pub key: Option<(usize, u64)>,
-    /// Whether that bake found the town off the tier: every vertex the open
-    /// sky and no lamp.
-    open: bool,
-    /// The unit direction of the points' middle and the angle, radians,
-    /// they all lie within round it.
-    cap: Option<(Vec3, f32)>,
-    /// The point each vertex reads, ground-clamped; empty until the town is
-    /// first baked on the tier.
-    points: Vec<Vec3>,
+    /// The field the vertices carry now.
+    pub baked: Option<BakeSource>,
+    /// The town's cap: its mean direction and angular radius, taken once.
+    bounds: Option<(Vec3, f32)>,
+    /// A bake being made a slice a frame, swapped in whole when done.
+    pending: Option<PendingBake>,
+}
+
+/// Where a bake's light came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BakeSource {
+    /// No column of the fine set reaches the town: every vertex reads open
+    /// sky, whichever set it is.
+    Open,
+    /// The set (by pointer) and its light version.
+    Field(usize, u64),
+}
+
+#[derive(Clone, Debug)]
+struct PendingBake {
+    source: BakeSource,
+    done: Vec<[f32; 2]>,
 }
 
 /// What a town's outside reads before it is baked: the shader takes the
@@ -445,15 +466,18 @@ pub const UNBAKED: [f32; 2] = [-1.0, 0.0];
 /// air the face looks into, not the wall it is on.
 const BAKE_FRONT_M: f32 = 0.3;
 
-/// The time spent baking towns in a frame (`town-frame-time` decision 4):
-/// meshes are baked in turn until it is spent, each swapped whole, so a town
-/// near the player re-bakes over a few frames rather than in one.
-const BAKE_BUDGET: std::time::Duration = std::time::Duration::from_millis(4);
+/// The most main-thread time the bakes take in a frame. A vertex costs about
+/// 0.45 µs (a height and a field sample), a walled town about 158,000 of them:
+/// baked whole it was a 67-75 ms frame on every landing (measured 2026-10-28).
+/// Sliced, a town is baked over about 35 frames and swapped in whole.
+const BAKE_BUDGET: std::time::Duration = std::time::Duration::from_micros(2_000);
 
-/// How far past the column tier's reach a town's cap must lie for its bake
-/// to be the open sky without reading, metres: well over a cell, so a point
-/// whose cell lies just inside is never taken for one outside.
-const BAKE_MARGIN_M: f32 = 10.0;
+/// How many vertices a slice bakes between looks at the clock.
+const BAKE_SLICE: usize = 512;
+
+/// How far past a town's cap a column of the set can still light it: two
+/// tile widths and the read in front of a face.
+const BAKE_REACH_M: f32 = 6.0 + BAKE_FRONT_M;
 
 /// Each vertex's `(sky, block)`: the field at the point `BAKE_FRONT_M` in
 /// front of it along its normal, positions and normals in the planet's
@@ -463,30 +487,40 @@ pub fn bake_vertices(
     normals: &[[f32; 3]],
     field: impl Fn(Vec3) -> (f32, f32),
 ) -> Vec<[f32; 2]> {
-    fronts(positions, normals)
-        .into_iter()
-        .map(|at| {
-            let (sky, block) = field(at);
+    positions
+        .iter()
+        .zip(normals)
+        .map(|(p, n)| {
+            let (sky, block) = field(Vec3::from(*p) + Vec3::from(*n) * BAKE_FRONT_M);
             [sky, block]
         })
         .collect()
 }
 
-/// The point each vertex reads: `BAKE_FRONT_M` in front of it along its
-/// normal.
-fn fronts(positions: &[[f32; 3]], normals: &[[f32; 3]]) -> Vec<Vec3> {
-    positions
+/// A town's cap from its vertices: their mean direction and the widest angle
+/// from it.
+fn cap_of(positions: &[[f32; 3]]) -> Option<(Vec3, f32)> {
+    let mean = positions
         .iter()
-        .zip(normals)
-        .map(|(p, n)| Vec3::from(*p) + Vec3::from(*n) * BAKE_FRONT_M)
-        .collect()
+        .fold(Vec3::ZERO, |sum, p| {
+            sum + Vec3::from(*p).normalize_or_zero()
+        })
+        .try_normalize()?;
+    let widest = positions
+        .iter()
+        .map(|p| mean.dot(Vec3::from(*p).normalize_or(mean)).clamp(-1.0, 1.0))
+        .fold(1.0f32, f32::min)
+        .acos();
+    Some((mean, widest))
 }
 
-/// Bake every town's outside from the field whenever the fine set serving
-/// it, or its light, has changed since: a dig, a lamp, dusk and dawn. A
-/// point under the ground reads the air just over it, as a corner does. A
-/// town off the tier is the open sky everywhere and is baked so once
-/// (`town-frame-time` decision 3).
+/// Bake every town's outside from the field whenever the light it reads can
+/// have changed: a fine set that reaches it landing, a dig, a lamp, dusk and
+/// dawn. A town no column of the set reaches reads open sky from any set and
+/// is baked open once, not again on every landing (`frame-budget` 4.3). A
+/// bake that reads the field is made a slice a frame, under `BAKE_BUDGET`,
+/// and swapped in whole, so the town never shows half of each. A point under
+/// the ground reads the air just over it, as a corner does.
 fn bake_town_outsides(
     fine: Option<Res<PlanetFine>>,
     contact: Option<Res<PlanetContact>>,
@@ -499,23 +533,75 @@ fn bake_town_outsides(
     if !contact.serves(&fine.set) {
         return;
     }
-    let key = (
+    let key = BakeSource::Field(
         std::sync::Arc::as_ptr(&fine.set) as usize,
         fine.set.columns.light_version(),
     );
     let config = crate::planet::terrain_config();
+    let field = |at: Vec3| {
+        let Some(up) = at.try_normalize() else {
+            return (1.0, 0.0);
+        };
+        let ground = PLANET_RADIUS + pbd_core::column::surface_m(config, up) + GROUND_CLEAR_M;
+        field_at(
+            &fine,
+            &contact,
+            if at.length() < ground {
+                up * ground
+            } else {
+                at
+            },
+        )
+    };
     let started = std::time::Instant::now();
-    let (mut baked_meshes, mut baked_vertices, mut open_meshes) = (0usize, 0usize, 0usize);
-    for (mesh, mut baked) in &mut outsides {
-        if baked.key == Some(key) {
-            continue;
+    let mut baked_vertices = 0usize;
+    for (mesh, mut state) in &mut outsides {
+        let state = &mut *state;
+        // What this town's light comes from under this set.
+        if state.bounds.is_none() {
+            let Some(m) = meshes.get(&mesh.0) else {
+                continue;
+            };
+            let Some(positions) = m
+                .attribute(Mesh::ATTRIBUTE_POSITION)
+                .and_then(|a| a.as_float3())
+            else {
+                continue;
+            };
+            state.bounds = cap_of(positions);
         }
-        if started.elapsed() >= BAKE_BUDGET {
-            break;
+        let Some((centre, angle)) = state.bounds else {
+            continue;
+        };
+        let want = if fine
+            .set
+            .columns
+            .reaches(centre, angle + BAKE_REACH_M / PLANET_RADIUS)
+        {
+            key
+        } else {
+            BakeSource::Open
+        };
+        if state.baked == Some(want) {
+            state.pending = None;
+            continue;
         }
         let Some(m) = meshes.get_mut(&mesh.0) else {
             continue;
         };
+        let Some(count) = m.attribute(Mesh::ATTRIBUTE_POSITION).map(|a| a.len()) else {
+            continue;
+        };
+        if want == BakeSource::Open {
+            // Open sky everywhere: no field to read, nothing to slice.
+            m.insert_attribute(Mesh::ATTRIBUTE_UV_1, vec![[1.0f32, 0.0]; count]);
+            state.baked = Some(BakeSource::Open);
+            state.pending = None;
+            continue;
+        }
+        if started.elapsed() >= BAKE_BUDGET {
+            continue;
+        }
         let (Some(positions), Some(normals)) = (
             m.attribute(Mesh::ATTRIBUTE_POSITION)
                 .and_then(|a| a.as_float3()),
@@ -524,82 +610,35 @@ fn bake_town_outsides(
         ) else {
             continue;
         };
-        let fronts = fronts(positions, normals);
-        if !baked.points.is_empty() && baked.points.len() != fronts.len() {
-            baked.points.clear();
-            baked.cap = None;
-            baked.open = false;
+        if state.pending.as_ref().is_none_or(|p| p.source != want) {
+            state.pending = Some(PendingBake {
+                source: want,
+                done: Vec::with_capacity(count),
+            });
         }
-        let (middle, angle) = *baked.cap.get_or_insert_with(|| cap_of(&fronts));
-        let reached = fine
-            .set
-            .columns
-            .may_cover(middle, angle + BAKE_MARGIN_M / PLANET_RADIUS);
-        if !reached {
-            if !baked.open || baked.key.is_none() {
-                m.insert_attribute(Mesh::ATTRIBUTE_UV_1, vec![[1.0f32, 0.0]; fronts.len()]);
-                baked.open = true;
-                open_meshes += 1;
-            }
-            baked.key = Some(key);
+        let Some(pending) = state.pending.as_mut() else {
             continue;
+        };
+        while pending.done.len() < count && started.elapsed() < BAKE_BUDGET {
+            let from = pending.done.len();
+            let to = (from + BAKE_SLICE).min(count);
+            pending.done.extend(bake_vertices(
+                &positions[from..to],
+                &normals[from..to],
+                field,
+            ));
+            baked_vertices += to - from;
         }
-        if baked.points.is_empty() {
-            baked.points = fronts
-                .iter()
-                .map(|&at| {
-                    let Some(up) = at.try_normalize() else {
-                        return at;
-                    };
-                    let ground =
-                        PLANET_RADIUS + pbd_core::column::surface_m(config, up) + GROUND_CLEAR_M;
-                    if at.length() < ground {
-                        up * ground
-                    } else {
-                        at
-                    }
-                })
-                .collect();
+        if pending.done.len() == count {
+            let done = std::mem::take(&mut pending.done);
+            state.pending = None;
+            m.insert_attribute(Mesh::ATTRIBUTE_UV_1, done);
+            state.baked = Some(want);
         }
-        let read: Vec<[f32; 2]> = baked
-            .points
-            .iter()
-            .map(|&at| {
-                let (sky, block) = field_at(&fine, &contact, at);
-                [sky, block]
-            })
-            .collect();
-        baked_meshes += 1;
-        baked_vertices += read.len();
-        m.insert_attribute(Mesh::ATTRIBUTE_UV_1, read);
-        baked.open = false;
-        baked.key = Some(key);
     }
-    // MEASUREMENT (`town-frame-time`): what a frame's bake did, when it
-    // passed 2 ms.
-    if baked_meshes + open_meshes > 0 {
-        crate::planet::lod::spent(
-            &format!(
-                "town bake: {baked_meshes} meshes, {baked_vertices} vertices read; \
-                 {open_meshes} meshes off the tier"
-            ),
-            started,
-        );
+    if baked_vertices > 0 {
+        crate::planet::lod::spent(&format!("town bake: {baked_vertices} vertices"), started);
     }
-}
-
-/// The unit direction of a set of points' middle, and the angle, radians,
-/// they all lie within round it.
-fn cap_of(points: &[Vec3]) -> (Vec3, f32) {
-    let middle = points
-        .iter()
-        .fold(Vec3::ZERO, |sum, p| sum + p.normalize_or_zero())
-        .normalize_or(Vec3::Y);
-    let angle = points
-        .iter()
-        .map(|p| p.normalize_or(middle).dot(middle).clamp(-1.0, 1.0).acos())
-        .fold(0.0f32, f32::max);
-    (middle, angle)
 }
 
 /// Bevy's own ambient, what lights a PBR face turned from the sun, is the
@@ -755,9 +794,9 @@ mod tests {
                 light::SKY_FILL[1],
                 light::SKY_FILL[2]
             ),
-            "let ambient = base * SKY_FILL * max(AMBIENT_FLOOR, mix(NIGHT_FILL, 1.0, daylight) * sky);"
+            "var ambient = base * SKY_FILL * max(AMBIENT_FLOOR, mix(NIGHT_FILL, 1.0, daylight) * sky);"
                 .to_string(),
-            "out.color.rgb * sun_up + ambient * (1.0 - sun_up) + lamp".to_string(),
+            "out.color.rgb * sun_up + ambient * (1.0 - sun_up) + mirrored + lamp".to_string(),
             "@binding(100) var<uniform> field: Field;".to_string(),
             // `cities-in-the-world` decision 7a: a building's own lights, as
             // many as the uniform carries, lit the mockup's way.

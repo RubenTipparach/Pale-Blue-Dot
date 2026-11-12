@@ -13,7 +13,7 @@ use crate::planet_gen::TerrainConfig;
 use crate::terrain::Material;
 use glam::Vec3;
 use std::collections::{BTreeSet, HashMap};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 /// The most rings a margin eases over: a terrace this many layers off the
@@ -430,6 +430,9 @@ static ANY: AtomicBool = AtomicBool::new(false);
 pub fn install(ground: Option<Ground>) {
     let any = ground.is_some();
     *INSTALLED.write().unwrap_or_else(|e| e.into_inner()) = ground.map(Arc::new);
+    // After the write: a thread that sees the new generation takes the new
+    // ground under the lock.
+    GENERATION.fetch_add(1, Ordering::AcqRel);
     ANY.store(any, Ordering::Release);
 }
 
@@ -441,16 +444,39 @@ pub fn installed() -> Option<Arc<Ground>> {
     INSTALLED.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
+/// Bumped by every [`install`]: a thread's copy of the ground is current
+/// while its generation matches.
+static GENERATION: AtomicU64 = AtomicU64::new(0);
+
+thread_local! {
+    /// This thread's copy of the installed ground and the generation it was
+    /// taken at. A height took the read lock every call, and from sixteen
+    /// build threads at once the lock's shared count made a height 17 times
+    /// dearer than from one (`frame-budget` design 2d); the copy is taken
+    /// once a generation.
+    static LOCAL: std::cell::RefCell<(u64, Option<Arc<Ground>>)> =
+        const { std::cell::RefCell::new((u64::MAX, None)) };
+}
+
 fn with<T>(config: &TerrainConfig, direction: Vec3, f: impl FnOnce(&GroundAt) -> T) -> Option<T> {
     if !ANY.load(Ordering::Acquire) {
         return None;
     }
-    let guard = INSTALLED.read().unwrap_or_else(|e| e.into_inner());
-    let ground = guard.as_ref()?;
-    if ground.config != *config {
-        return None;
-    }
-    ground.at(direction).map(f)
+    let generation = GENERATION.load(Ordering::Acquire);
+    LOCAL.with(|local| {
+        let mut local = local.borrow_mut();
+        if local.0 != generation {
+            *local = (
+                generation,
+                INSTALLED.read().unwrap_or_else(|e| e.into_inner()).clone(),
+            );
+        }
+        let ground = local.1.as_ref()?;
+        if ground.config != *config {
+            return None;
+        }
+        ground.at(direction).map(f)
+    })
 }
 
 /// The surface at a direction, from its natural height: what

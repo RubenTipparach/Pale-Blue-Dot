@@ -31,6 +31,15 @@ struct Params {
     anchor: vec4<f32>,         // `distance-lod-fade`: the fine set's anchor (`lod` is the fade centre),
     bands_in: vec4<f32>,       // the bands' cross-fade rings' inner edges, cosines,
     bands_prev_in: vec4<f32>,  // and those of the partition a landing dissolves from
+    light: vec4<f32>,
+    sky_sh: array<vec4<f32>,18>,
+    wet: vec4<f32>,
+    lamps: array<vec4<f32>,8>,
+    reflect: vec4<f32>,
+    lamp_bake: vec4<f32>,
+    ssr_clip: mat4x4<f32>,
+    ssr_eye: vec4<f32>,
+    rain_near: vec4<f32>,
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
