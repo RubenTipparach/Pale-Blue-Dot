@@ -38,23 +38,33 @@
 
 ## 2. Fixes, one A/B each against `f15a647` (after 1.1)
 
-- [ ] 2.1 L8 terrain trace ends when the ray is rising above the
+- [x] 2.1 L8 terrain trace ends when the ray is rising above the
       neighbourhood's top solid layer; the screen fallback is skipped for
       such a ray; both traces gated by `rain_near` (design rank 1).
       Shots: Holbrook lane both ways at 10:00 and 22:00 in rain, a puddle
       under a wall. Measure: `rain-stroll`, `storm`, `walk`.
-- [ ] 2.2 L8 sea trace skipped where its reach projects under ~4 px; steps
+      (`e9ed506`: the walk ends; the screen fallback stays, since houses
+      and trees are meshes. Shots match to the pixel. Stroll p50 / p95 /
+      p99 10.89 / 17.48 / 24.42 to 10.34 / 16.80 / 21.70 ms, terrain GPU
+      4.43 to 3.99 ms.)
+- [x] 2.2 L8 sea trace skipped where its reach projects under ~4 px; steps
       fall with distance (rank 2). Shots: a harbour from 30 m and 300 m.
       Measure: `storm`, `clouds`, `far-side`.
+      (`2185478`: both screen traces skip a march whose last step lands
+      within the three texels every step skips, exact; the approximate
+      step falloff was not needed. Storm p50 / p95 6.51 / 11.26 to 6.25 /
+      10.79 ms, terrain GPU 2.80 to 2.59 ms.)
 - [x] 2.3 Not pursued (measured, 1.2): L8 capture skipped (history marked invalid) when dry and no sea
       is on screen; its buffer kept (rank 3). Measure: `walk`, `far-side`.
       The capture pass is 0.03-0.04 ms of GPU; switching it off only saves
       what its readers then skip.
-- [ ] 2.4 Cloud-puff sites rebuilt only when the maps, the cloud step or
+- [x] 2.4 Cloud-puff sites rebuilt only when the maps, the cloud step or
       the eye's cell changes (rank 4). Shots: a cloud-hop capture
       sequence, frame for frame. Measure: `clouds`, `storm`.
-- [ ] 2.5 `near_lamps` and the env-var reads cached (rank 5), with 2.1 or
-      2.4 if they touch the same files.
+      (`ebe412a`: what the sites read off the pair is kept per pair; a
+      test checks the puffs bit for bit. Build 0.41 to 0.28 ms mean.)
+- [x] 2.5 `near_lamps` and the env-var reads cached (rank 5), with 2.1 or
+      2.4 if they touch the same files. (`6ec3ff8`; measured with 2.4.)
 - [ ] 2.6 Bloom's composite folded into the tone pass; its uniforms made
       once (rank 7). Shots: a lamp at night and the sun's disc,
       pixel-diffed.

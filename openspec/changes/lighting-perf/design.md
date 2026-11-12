@@ -229,6 +229,45 @@ split it unevenly, e.g. 22 ms then 5 ms against 13 ms of GPU), else
   the town's shadow casters are `crab-breeze-lessons` ranks 2 and 5,
   taken by the other agent (not this change).
 
+## The fixes, measured (sitting 2, 2026-11-12)
+
+One sitting, five variants interleaved, 2 repeats, latency 2 for all
+(`output/perf/2026-11-12-fixes`, `docs/benchmarks/2026-11-12-fixes/`):
+`base` (`57d94b5` at `--frame-latency 2`), `fix21` (`e9ed506`), `loading`
+(the loading screen cherry-picked, `e8016e0`), `fix22` (`2185478`, same exe
+as `loading`, its shaders), `fix245` (`6ec3ff8`). Each fix is read against
+the variant before it **on the same side of the loading screen**: the
+builds before it count their warm-up from the first frame and then freeze
+about 6 s for the towns' ground, those after from `READY`, so across that
+line they measure different stretches of a scripted route. The `walk`
+cannot be read across it at all: with the loading screen the world opens
+in a full storm where it opened dry (cover 1.00, rain 1.00 against 0.69,
+0.00; reported, being fixed in `loading-screen`). p50 / p95 / p99 ms:
+
+| fix | scenario | before | after | GPU pass before -> after |
+| --- | --- | ---: | ---: | --- |
+| 2.1 walk ends early | rain-stroll | 10.89 / 17.48 / 24.42 | **10.34 / 16.80 / 21.70** | terrain 4.43 -> 3.99 |
+| 2.1 | storm | 6.87 / 12.90 / 19.34 | 6.73 / 13.03 / 17.99 | terrain 3.10 -> 3.05 |
+| 2.2 screen traces skip | storm | 6.51 / 11.26 / 14.85 | **6.25 / 10.79** / 15.40 | terrain 2.80 -> 2.59 |
+| 2.2 | rain-stroll | 10.44 / 17.20 / 22.13 | 10.35 / 17.13 / 21.98 | terrain 4.61 -> 4.49 |
+| 2.4 + 2.5 (CPU) | storm | 6.25 / 10.79 / 15.40 | 6.24 / 10.42 / 13.76 | puff build 0.41 -> 0.28 ms mean, 0.58 -> 0.40 max |
+| 2.4 + 2.5 | rain-stroll | 10.35 / 17.13 / 21.98 | 10.39 / 17.54 / 21.57 | (none) |
+
+p50 spread between the two repeats: 0.02-0.18 ms (stroll, storm).
+
+- **2.1 took 0.55 ms off the stroll's p50 and 2.7 ms off its p99**, 0.44
+  ms of GPU in the terrain pass. Less than the walk's whole 1.5 ms: rays
+  along the lane stay below the reach top of the houses' terraced ground
+  for most of their 48 m.
+- **2.2 took 0.26 ms off the storm's p50 and 0.47 off its p95**, 0.21 ms
+  of GPU; the far wet ground's trace that is left lands outside three
+  texels.
+- **2.4 + 2.5 cut the puffs' build by a third** (0.41 to 0.28 ms a frame);
+  wall time does not show it at latency 2, where the main thread is not
+  the storm's limit at p50. Its p99 13.8 against 15.4 is one sitting.
+- **The storm is now inside the floor at p99** (13.8 ms); the stroll is
+  not (21.6 ms), and its p50 sits at its GPU time (10.4 against 9.8 ms).
+
 ## Half resolution (owner, 2026-11-12)
 
 The owner: "consider like half resolutions for expensive stuff like bloom
