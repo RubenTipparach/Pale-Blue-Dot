@@ -9,26 +9,30 @@ figure out optimizations".
 The lighting model was priced part by part on an M4 Max on 2026-10-29
 (`docs/benchmarks/2026-10-29-lighting-full`). It had never been measured on
 the owner's desktop (RTX 3070, Vulkan), and the Mac cannot time passes on
-the GPU. The sitting of 2026-11-11 on the desktop
-(`docs/benchmarks/2026-11-11-lighting-model`,
-https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9) measured it there:
+the GPU. The clean sitting of 2026-11-12 on the desktop, on a quiet machine
+(`docs/benchmarks/2026-11-12-lighting-model-clean`,
+https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9), measured it there. It
+replaces the sitting of 2026-11-11, which ran beside mockup agents rendering
+on SwiftShader; the model's costs agree between the two within 0.3 ms at p50.
 
-- **On foot in the rain it costs 2.8 ms at p50 and 3.7 ms at p95**
-  (`rain-stroll`, 11.2 to 14.0 ms p50, 14.3 to 18.0 ms p95; the spread
-  between repeats is 0.2 ms). It takes the walk under rain from inside the
-  60 fps floor at p99 (15.3 ms) to outside it (27.0 ms). This is the case
-  that costs the most.
+- **On foot in the rain it costs 2.7 ms at p50 and 4.2 ms at p95**
+  (`rain-stroll`, 11.5 to 14.3 ms p50, 14.3 to 18.5 ms p95; the spread
+  between repeats is 0.1 ms). It takes the walk under rain from inside the
+  60 fps floor at p99 (16.2 ms) to outside it (28.5 ms). This is the case
+  that costs the most. At night it is the same: 2.4 ms.
 - **Almost all of that is L8, reflections.** With `PBD_REFLECT=0` the stroll
-  reads 11.1-11.2 ms, the same as the old model (10.9-11.3). Every other
+  reads within 0.25 ms of the old model, by day and at night. Every other
   part (soft shadows, sun bounce and lamp bake, bloom, the tone pass) is
-  within 0.5 ms of the whole model, most of them inside the spread.
+  within 0.45 ms of the whole model, most of them inside the spread.
 - **The cost depends on where the eye looks.** The stroll walks a lane up
   and back. One direction reads 15-18 ms, the other 11-13 ms; the old model
-  reads 11 ms both ways. That is the shape of a ray march whose length
+  reads 11-12 ms both ways. That is the shape of a ray march whose length
   depends on what the reflected ray meets.
-- **In flight and walking in the dry it costs about 0.5-1.2 ms at p50**:
-  clouds 8.9 to 10.0 ms, far-side 5.2 to 6.2 ms, walk 8.3 to 9.2 ms
-  (the new model against the old in the same exe).
+- **In flight and walking in the dry it costs about 0.7-1.1 ms at p50 and
+  1.8-3.5 ms at p95**: clouds 9.0 to 9.9 ms, storm 9.0 to 10.1, far-side
+  5.7 to 6.7 ms, walk 9.1 to 9.8 ms (the new model against the old in the
+  same exe). In the town walk it is inside the noise (+0.4 ms against a
+  1.3 ms spread).
 
 Reading the code (`f15a647`) finds why L8 is expensive and where it does
 work that buys no picture: the wet-ground voxel walk keeps marching after

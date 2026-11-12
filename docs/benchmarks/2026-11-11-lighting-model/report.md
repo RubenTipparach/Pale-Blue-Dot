@@ -1,3 +1,11 @@
+> **Superseded and contaminated (2026-11-12).** This sitting ran while
+> other agents rendered mockups in headless Edge on SwiftShader (CPU WebGL)
+> and ran Python art scripts. That is where its 50-55 s cold starts and much
+> of its flight tails came from. Use the clean re-run in
+> [`../2026-11-12-lighting-model-clean/`](../2026-11-12-lighting-model-clean/report.md)
+> (the same exes, assets and scenarios on a quiet machine). The numbers below
+> are kept as they were measured, for the record only.
+
 # The lighting model on the owner's desktop (2026-11-11)
 
 Three sittings in one evening on the owner's desktop: RTX 3070 (driver

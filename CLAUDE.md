@@ -279,8 +279,9 @@ The `puff-frustum-cull` + `wet-near-detail` before-and-after page (the same
 Mac) is https://claude.ai/artifact/C4cAspjVyuc2uGem4G66Co.
 The `lighting-model` cost on the desktop (RTX 3070; main before the merge,
 the new model and `PBD_LIGHTING=today`, then by part and at night;
-`docs/benchmarks/2026-11-11-lighting-model/`, plan in `lighting-perf`) is
-https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9.
+`docs/benchmarks/2026-11-12-lighting-model-clean/`, a quiet machine; the
+2026-11-11 sitting it replaces was contaminated; plan in `lighting-perf`)
+is https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 

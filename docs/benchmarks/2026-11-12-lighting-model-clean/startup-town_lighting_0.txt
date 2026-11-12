@@ -1,0 +1,38 @@
+town_lighting_0.csv: 4747 frames over 100.6 s (47 fps average)
+frame ms: p50 18.04  p90 23.64  p99 32.71  p99.9 190.66  max 9508.6
+over 16.7 ms: 3785 (79.7%), over 33.3 ms: 41, over 100 ms: 7
+of those: during a fine-set rebuild 2615, within 50 ms after a landing 61; 26 landings, rebuild in flight 73% of frames
+time over budget: 32.8 s of 100.6 s
+
+worst 4 frames:
+      9.51 s   9508.6 ms  walked      0 m  
+             log     9.73  INFO pbd_app::vehicles::place: Kestrel placed at 16.3 m from the player
+             log     9.74  INFO pbd_app::vehicles::place: Tern placed at 614.9 m from the player
+             log     9.74  INFO pbd_app::vehicles::place: Loon placed at 441.5 m from the player
+     19.64 s   7230.5 ms  walked      3 m  landing +0.00s
+             log    19.41  INFO pbd_app::towns: Dunmouth stands: 12 buildings, 20730 triangles in 13 textures, a terrace at 81 m over 799 cells eased over 1856
+             log    19.49  INFO pbd_app::towns: Coringport stands: 18 buildings, 61 dressing things, a berth for its cog, 42696 triangles in 19 textures, a terrace at 0 m over 8
+             log    19.54  INFO pbd_app::vehicles::harbour: Marenstrand: 17 boats moored and its cog, 6 berths skipped (over land or too shallow)
+             log    19.59  INFO pbd_app::vehicles::harbour: Wickingstrand: 17 boats moored and its cog, 6 berths skipped (over land or too shallow)
+             log    19.64  INFO pbd_app::vehicles::harbour: Holinghaven: 17 boats moored and its cog, 6 berths skipped (over land or too shallow)
+             log    19.69  INFO pbd_app::vehicles::harbour: Coringport: 17 boats moored and its cog, 6 berths skipped (over land or too shallow)
+             log    19.84  INFO pbd_app::vehicles::harbour: Selingquay: 18 boats moored and its cog, 5 berths skipped (over land or too shallow)
+     12.41 s   2899.2 ms  walked      0 m  
+             log    12.33  INFO pbd_app::towns: Selingquay: the harbour lies with 79% of its cells agreeing about the sea
+             log    12.59  INFO pbd_app::towns: Corowstrand: the harbour lies with 86% of its cells agreeing about the sea
+     20.29 s    415.4 ms  walked      6 m  REBUILD landing +0.65s
+             log    20.13  INFO pbd_app::planet::lod: SPENT 5.7 ms town bake: 1024 vertices
+             log    20.13  INFO pbd_app::planet::lod: fine set requested: 2 m above the ground, live bands [2400, 1200, 600, 300] m, 0 m from the anchor, 8 threads
+             log    20.54  INFO pbd_app::planet::lod: SPENT 2.4 ms town bake: 920 vertices
+
+log lines within 250 ms of an over-budget frame (count):
+  11722  INFO pbd_app::planet::lod: SPENT # ms town bake: # vertices
+    798  INFO pbd_app::planet::water: PUFFS built #, over the horizon #, in vie
+    555  INFO pbd_app::planet::lod: fine set requested: # m above the ground, l
+    534  INFO pbd_app::planet::lod: SPENT # ms render: fine-set upload
+    527  INFO pbd_app::planet::lod: fine set # landed after # s: # columns, the
+     51  INFO pbd_app::weather: Weather here: cover #, rain #
+     29  INFO pbd_app::weather: Weather here: cover #, rain #, sheltered
+     27  INFO pbd_app::desktop: WALK_TURN stalled # s at # m walked
+     22  INFO pbd_app::towns: Dunmouth is out of range
+     18  INFO pbd_app::towns: Coringport is out of range

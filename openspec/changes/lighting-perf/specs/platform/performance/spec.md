@@ -53,4 +53,4 @@ repeats.
 - **WHEN** `perf_suite.py` runs `rain-stroll` with the new model and with
   `PBD_LIGHTING=today`, two repeats each
 - **THEN** the new model's p50 is within 1.0 ms of the old model's
-  (2026-11-11: 2.6-2.8 ms over)
+  (2026-11-12: 2.7 ms over)

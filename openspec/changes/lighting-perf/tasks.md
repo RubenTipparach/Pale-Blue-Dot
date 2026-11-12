@@ -1,11 +1,12 @@
 # Tasks
 
-## 0. Measure (done, 2026-11-11)
+## 0. Measure (done, 2026-11-11; clean re-run 2026-11-12)
 
 - [x] 0.1 The A/B on the owner's desktop: `db25fe2` against `f15a647`, and
       `f15a647` with `PBD_LIGHTING=today`, on `clouds`, `storm`,
       `far-side`, `walk` and `rain-stroll`, two repeats
-      (`docs/benchmarks/2026-11-11-lighting-model/`).
+      (`docs/benchmarks/2026-11-12-lighting-model-clean/`, a quiet machine;
+      the 2026-11-11 sitting it replaces was contaminated), plus `town`.
 - [x] 0.2 The pricing sitting: each part off in turn on `rain-stroll` and
       `storm` (numbers in the design).
 - [x] 0.3 The night sitting: `rain-stroll` at 22:00, new, old, L4 + L7
