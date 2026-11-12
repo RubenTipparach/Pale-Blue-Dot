@@ -197,7 +197,12 @@ impl Plugin for SunShadowPlugin {
                 ExtractResourcePlugin::<TownCasters>::default(),
             ))
             .add_systems(Startup, (create_maps, load_module))
-            .add_systems(PostUpdate, fit_cascades.after(TransformSystems::Propagate));
+            .add_systems(
+                PostUpdate,
+                fit_cascades
+                    .after(TransformSystems::Propagate)
+                    .run_if(crate::world_open),
+            );
         let render_app = app.sub_app_mut(RenderApp);
         render_app
             .init_resource::<ShadowState>()

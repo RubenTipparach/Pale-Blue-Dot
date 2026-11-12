@@ -354,6 +354,57 @@ fn build_planet(
     }
 }
 
+/// A planet built before `Startup`, on the loading thread, with the opened
+/// world's towns' ground already installed (`loading-screen` decision 1).
+/// `create_planet` takes it in place of building one, so the planet is built
+/// once.
+#[derive(Resource)]
+pub struct PreparedPlanet(Option<BuiltPlanet>);
+
+impl PreparedPlanet {
+    /// What `create_planet` would build round `near`, built now, on this
+    /// thread, with whatever ground is installed.
+    pub fn build(
+        near: Vec3,
+        columns: &crate::config::ColumnSettings,
+        scatter: &crate::config::ScatterSettings,
+        edits: &pbd_core::edits::Edits,
+    ) -> Self {
+        Self(Some(build_planet(near, columns, scatter, edits)))
+    }
+
+    /// Hashes of what the planet is made of: the base records, every fine
+    /// level's records and neighbours, and the column tier's records. Two
+    /// planets with equal hashes drew and collided the same.
+    pub fn digest(&self) -> [u64; 3] {
+        use std::hash::{Hash, Hasher};
+        let built = self.0.as_ref().expect("a prepared planet not yet taken");
+        let hash = |bytes: &[&[u8]]| {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            for b in bytes {
+                b.hash(&mut h);
+            }
+            h.finish()
+        };
+        let base = hash(&[bytemuck::cast_slice(&built.base)]);
+        let mut fine: Vec<&[u8]> = built
+            .fine
+            .levels
+            .iter()
+            .map(|l| bytemuck::cast_slice::<GpuCell, u8>(l))
+            .collect();
+        fine.push(bytemuck::cast_slice(&built.fine.finest_neighbors));
+        let fine = hash(&fine);
+        let tier = hash(&[bytemuck::cast_slice(&built.fine.columns.records)]);
+        [base, fine, tier]
+    }
+
+    /// Where the fine set is anchored.
+    pub fn anchor(&self) -> Option<Vec3> {
+        self.0.as_ref().map(|b| b.anchor)
+    }
+}
+
 /// Rebuild the planet for the generator a load just switched to, round
 /// `near`, with the opened world's edits, and put it in place of the old one
 /// in one step: nothing is ever removed, since a dozen systems take the
@@ -398,15 +449,23 @@ fn create_planet(
     columns: Res<crate::config::ColumnSettings>,
     scatter: Res<crate::config::ScatterSettings>,
     edits: Res<crate::saves::WorldSave>,
+    prepared: Option<ResMut<PreparedPlanet>>,
 ) {
     let started = std::time::Instant::now();
+    // Built already behind the loading screen, with the towns' ground in
+    // place; otherwise (a test app, a run without the screen) built here.
+    let taken = prepared.and_then(|mut p| p.0.take());
+    if taken.is_some() {
+        commands.remove_resource::<PreparedPlanet>();
+    }
     let BuiltPlanet {
         cells,
         base,
         contacts,
         fine,
         anchor,
-    } = build_planet(flight.spawn_direction, &columns, &scatter, &edits.edits);
+    } = taken
+        .unwrap_or_else(|| build_planet(flight.spawn_direction, &columns, &scatter, &edits.edits));
     let (narrowest, mean_width, widest) = tile_widths(&cells);
     if !edits.edits.is_empty() {
         info!(
@@ -1254,7 +1313,7 @@ fn prepare_views(
     cache: Res<PipelineCache>,
     pipeline: Res<PlanetPipeline>,
     planet: Option<Res<PlanetGpu>>,
-    art: Res<PlanetArt>,
+    art: Option<Res<PlanetArt>>,
     images: Res<RenderAssets<GpuImage>>,
     clock: Res<PlanetClock>,
     sun: Res<crate::sky::Sun>,
@@ -1271,7 +1330,7 @@ fn prepare_views(
     let Some(planet) = planet else {
         return;
     };
-    let Some(atlas) = images.get(&art.0) else {
+    let Some(atlas) = art.as_ref().and_then(|art| images.get(&art.0)) else {
         return;
     };
     for (entity, view, existing) in &mut views {

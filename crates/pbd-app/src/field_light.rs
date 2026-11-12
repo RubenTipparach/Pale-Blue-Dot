@@ -142,7 +142,8 @@ impl Plugin for FieldLightPlugin {
                 PostUpdate,
                 (take_the_field, light_from_the_field, repack_room_lights)
                     .chain()
-                    .after(bevy::transform::TransformSystems::Propagate),
+                    .after(bevy::transform::TransformSystems::Propagate)
+                    .run_if(crate::world_open),
             )
             .add_systems(Update, bake_town_outsides)
             .add_systems(Update, fill_follows_the_day);

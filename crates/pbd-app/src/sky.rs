@@ -106,7 +106,8 @@ impl Plugin for SkyPlugin {
                 PostUpdate,
                 position_atmosphere
                     .after(update_planet_frame)
-                    .before(TransformSystems::Propagate),
+                    .before(TransformSystems::Propagate)
+                    .run_if(crate::world_open),
             );
     }
 }

@@ -188,7 +188,8 @@ impl Plugin for VehiclePlugin {
                 (draw::place, view::follow)
                     .chain()
                     .after(crate::planet::update_planet_frame)
-                    .before(bevy::transform::TransformSystems::Propagate),
+                    .before(bevy::transform::TransformSystems::Propagate)
+                    .run_if(crate::world_open),
             )
             .add_systems(Update, (hud::show, save_vehicles, view::look));
     }

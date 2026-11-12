@@ -332,7 +332,7 @@ pub const DROP_M: f32 = 1500.0;
 pub const FADE_S: f32 = 1.0;
 
 /// What the towns are built from: the kits, the templates and the textures.
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct TownAssets {
     pub kits: Arc<Kits>,
     pub village: Template,
@@ -350,6 +350,20 @@ pub struct TownAssets {
 }
 
 impl TownAssets {
+    /// The shipped kits, templates and texture repeats.
+    pub fn load() -> Self {
+        Self {
+            kits: Arc::new(load_kits()),
+            village: load_template("village"),
+            walled: load_template("town"),
+            harbour: load_template("coast"),
+            desert: load_template("desert"),
+            tundra: load_template("tundra"),
+            jungle: load_template("jungle"),
+            repeats: Arc::new(load_repeats()),
+        }
+    }
+
     /// The template a kind of site is laid from, where one is shipped: the
     /// village's, the walled town's, the harbour's, the desert's, the
     /// tundra's and the jungle's so far (slice 4 adds a kind at a time).
@@ -448,6 +462,27 @@ impl Towns {
         }
     }
 
+    /// The towns of a world the loading thread opened (`loading-screen`
+    /// decision 1): read or laid, on disk, and their ground installed before
+    /// the planet was built, so `build_towns` has nothing left to do for
+    /// `sites` and the planet is not rebuilt. They stand as the viewer nears.
+    pub fn opened(sites: Vec<u32>, held: Vec<Held>, unsettled: Vec<u32>) -> Self {
+        Self {
+            for_sites: Some(sites),
+            held,
+            unsettled,
+            ..default()
+        }
+    }
+
+    /// Whether nothing is in hand: no town waiting on the disk, none being
+    /// cut, none fading in. The loading screen waits for it.
+    pub fn settled(&self) -> bool {
+        self.writing.is_none()
+            && self.cutting.is_empty()
+            && self.standing.iter().all(|s| s.leaving || s.shown >= 1.0)
+    }
+
     /// Whether a site's town is built: laid, stored and read back, so it
     /// stands when the viewer comes near (the map's highlight).
     pub fn built(&self, site: u32) -> bool {
@@ -539,20 +574,7 @@ pub fn build_towns(world: &mut World) {
     }
     let waiting = std::mem::take(&mut world.resource_mut::<Towns>().waiting);
     world.resource_mut::<Towns>().writing = None;
-    let mut read = Vec::new();
-    {
-        let save = world.resource::<WorldSave>();
-        for site in waiting {
-            match stored(save, site.id) {
-                Stored::Town(town) => read.push(Held { site, town }),
-                other => error!(
-                    "{} was written and does not read back: {other:?}",
-                    site.name
-                ),
-            }
-        }
-    }
-    info!("{} towns are in the save", read.len());
+    let read = read_back(world.resource::<WorldSave>(), waiting);
     world.resource_mut::<Towns>().held.extend(read);
     settle(world);
 }
@@ -595,46 +617,14 @@ fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
         return;
     }
     let config = *crate::planet::terrain_config();
-    let started = std::time::Instant::now();
-    let (mut held, mut waiting, mut wait, mut laid, mut unsettled) =
-        (Vec::new(), Vec::new(), 0u64, 0usize, Vec::new());
-    world.resource_scope(|world, mut save: Mut<WorldSave>| {
-        let assets = world.resource::<TownAssets>();
-        for site in sites {
-            let template = assets.template_for(site.kind).expect("chosen for one");
-            if stored(&save, site.id) == Stored::None {
-                laid += 1;
-            }
-            match ensure(&mut save, &site, template, &config) {
-                Ok((Some(_), seq)) if seq > 0 => {
-                    wait = wait.max(seq);
-                    waiting.push(site);
-                }
-                // Read, or stored with nothing to wait for (a save with no
-                // disk behind it): built from the records all the same.
-                Ok((Some(_), _)) => match stored(&save, site.id) {
-                    Stored::Town(town) => held.push(Held { site, town }),
-                    other => error!("{} does not read from the save: {other:?}", site.name),
-                },
-                Ok((None, seq)) => {
-                    wait = wait.max(seq);
-                    unsettled.push(site.id);
-                    info!(
-                        "{} is unsettled: the player's work is on its ground",
-                        site.name
-                    );
-                }
-                Err(why) => error!("{} is not built: {why}", site.name),
-            }
-        }
+    let Opened {
+        held,
+        waiting,
+        wait,
+        unsettled,
+    } = world.resource_scope(|world, mut save: Mut<WorldSave>| {
+        read_or_lay(&mut save, &sites, world.resource::<TownAssets>(), &config)
     });
-    info!(
-        "towns: {} read, {laid} of them laid out now, {} waiting on the disk, {} unsettled, in {:.2} s",
-        held.len(),
-        waiting.len(),
-        unsettled.len(),
-        started.elapsed().as_secs_f32()
-    );
     let mut towns = world.resource_mut::<Towns>();
     towns.held = held;
     towns.unsettled = unsettled;
@@ -645,6 +635,129 @@ fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {
         return;
     }
     settle(world);
+}
+
+/// What [`read_or_lay`] found: the towns the save holds, the ones laid now
+/// and waiting on the writer's mark `wait`, and the sites left unsettled.
+#[derive(Default)]
+pub struct Opened {
+    pub held: Vec<Held>,
+    pub waiting: Vec<Site>,
+    pub wait: u64,
+    pub unsettled: Vec<u32>,
+}
+
+/// Every templated site's town, in site-id order: read from the save, or
+/// laid from its template and stored (`ensure`). The one place a world's
+/// towns are read or laid, for the opening's loading thread
+/// (`loading-screen` decision 1) and for a world opened from the saves page.
+pub fn read_or_lay(
+    save: &mut WorldSave,
+    sites: &[Site],
+    assets: &TownAssets,
+    config: &TerrainConfig,
+) -> Opened {
+    let mut sites: Vec<Site> = sites
+        .iter()
+        .filter(|s| assets.template_for(s.kind).is_some())
+        .cloned()
+        .collect();
+    sites.sort_by_key(|s| s.id);
+    let started = std::time::Instant::now();
+    let mut opened = Opened::default();
+    let mut laid = 0usize;
+    for site in sites {
+        let template = assets.template_for(site.kind).expect("chosen for one");
+        if stored(save, site.id) == Stored::None {
+            laid += 1;
+        }
+        match ensure(save, &site, template, config) {
+            Ok((Some(_), seq)) if seq > 0 => {
+                opened.wait = opened.wait.max(seq);
+                opened.waiting.push(site);
+            }
+            // Read, or stored with nothing to wait for (a save with no
+            // disk behind it): built from the records all the same.
+            Ok((Some(_), _)) => match stored(save, site.id) {
+                Stored::Town(town) => opened.held.push(Held { site, town }),
+                other => error!("{} does not read from the save: {other:?}", site.name),
+            },
+            Ok((None, seq)) => {
+                opened.wait = opened.wait.max(seq);
+                opened.unsettled.push(site.id);
+                info!(
+                    "{} is unsettled: the player's work is on its ground",
+                    site.name
+                );
+            }
+            Err(why) => error!("{} is not built: {why}", site.name),
+        }
+    }
+    info!(
+        "towns: {} read, {laid} of them laid out now, {} waiting on the disk, {} unsettled, in {:.2} s",
+        opened.held.len(),
+        opened.waiting.len(),
+        opened.unsettled.len(),
+        started.elapsed().as_secs_f32()
+    );
+    opened
+}
+
+/// The towns laid now, read back once the writer's mark has passed them
+/// (decision 8: written before shown).
+pub fn read_back(save: &WorldSave, waiting: Vec<Site>) -> Vec<Held> {
+    let mut read = Vec::new();
+    for site in waiting {
+        match stored(save, site.id) {
+            Stored::Town(town) => read.push(Held { site, town }),
+            other => error!(
+                "{} was written and does not read back: {other:?}",
+                site.name
+            ),
+        }
+    }
+    info!("{} towns are in the save", read.len());
+    read
+}
+
+/// Every held town's ground, with its lamps, in site-id order, and the towns
+/// whose ground could be made. What `settle` installs, and what the loading
+/// thread installs before it builds the planet.
+pub fn grounds_of(
+    mut held: Vec<Held>,
+    assets: &TownAssets,
+    config: &TerrainConfig,
+) -> (Vec<TownGround>, Vec<Held>) {
+    held.sort_by_key(|h| h.site.id);
+    let mut grounds = Vec::new();
+    let mut kept = Vec::new();
+    for h in held {
+        let patch = patch_round(h.site.direction, config.radius_m, patch_m(h.site.kind));
+        let template = assets.template_named(&h.town.template);
+        match record::ground_of(&h.town, &patch, config.radius_m, natural(config)) {
+            Ok((chart, g)) => {
+                // Its street lamps and lanterns (task 5.2), from its template.
+                let lamps = template
+                    .map(|t| record::lamps_of(&h.town, t, &chart, &patch))
+                    .unwrap_or_default();
+                let g = g.with_lamps(lamps);
+                // Where the town stands: a harbour lies up to its shift from
+                // its site's marker (slice 4d).
+                let (lat, lon) = pbd_core::geo::lat_lon(g.anchor()).degrees();
+                info!(
+                    "{}: a {:?} at --at {lat:.5} {lon:.5}, a terrace at {} m, {} lamps",
+                    h.site.name,
+                    h.site.kind,
+                    h.town.terrace,
+                    g.lamps().len()
+                );
+                grounds.push(g);
+                kept.push(h);
+            }
+            Err(why) => error!("{} could not be built: {why}", h.site.name),
+        }
+    }
+    (grounds, kept)
 }
 
 /// Where the viewer is in the planet's frame: the camera, or the walker
@@ -668,40 +781,8 @@ fn viewer(world: &mut World) -> Option<Vec3> {
 fn settle(world: &mut World) {
     let started = std::time::Instant::now();
     let config = *crate::planet::terrain_config();
-    let mut held = std::mem::take(&mut world.resource_mut::<Towns>().held);
-    held.sort_by_key(|h| h.site.id);
-    let mut grounds = Vec::new();
-    let mut kept = Vec::new();
-    for h in held {
-        let patch = patch_round(h.site.direction, config.radius_m, patch_m(h.site.kind));
-        let template = world
-            .resource::<TownAssets>()
-            .template_named(&h.town.template)
-            .cloned();
-        match record::ground_of(&h.town, &patch, config.radius_m, natural(&config)) {
-            Ok((chart, g)) => {
-                // Its street lamps and lanterns (task 5.2), from its template.
-                let lamps = template
-                    .as_ref()
-                    .map(|t| record::lamps_of(&h.town, t, &chart, &patch))
-                    .unwrap_or_default();
-                let g = g.with_lamps(lamps);
-                // Where the town stands: a harbour lies up to its shift from
-                // its site's marker (slice 4d).
-                let (lat, lon) = pbd_core::geo::lat_lon(g.anchor()).degrees();
-                info!(
-                    "{}: a {:?} at --at {lat:.5} {lon:.5}, a terrace at {} m, {} lamps",
-                    h.site.name,
-                    h.site.kind,
-                    h.town.terrace,
-                    g.lamps().len()
-                );
-                grounds.push(g);
-                kept.push(h);
-            }
-            Err(why) => error!("{} could not be built: {why}", h.site.name),
-        }
-    }
+    let held = std::mem::take(&mut world.resource_mut::<Towns>().held);
+    let (grounds, kept) = grounds_of(held, world.resource::<TownAssets>(), &config);
     if grounds.is_empty() {
         return;
     }
@@ -1519,29 +1600,20 @@ pub struct TownsPlugin;
 
 impl Plugin for TownsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(TownAssets {
-            kits: Arc::new(load_kits()),
-            village: load_template("village"),
-            walled: load_template("town"),
-            harbour: load_template("coast"),
-            desert: load_template("desert"),
-            tundra: load_template("tundra"),
-            jungle: load_template("jungle"),
-            repeats: Arc::new(load_repeats()),
-        })
-        .init_resource::<Towns>()
-        .add_systems(
-            Update,
-            (
-                build_towns,
-                stand_in_range,
-                follow_frame,
-                use_doors,
-                swing_doors,
-                rooms_follow_doors,
-            )
-                .chain(),
-        );
+        app.insert_resource(TownAssets::load())
+            .init_resource::<Towns>()
+            .add_systems(
+                Update,
+                (
+                    build_towns,
+                    stand_in_range,
+                    follow_frame,
+                    use_doors,
+                    swing_doors,
+                    rooms_follow_doors,
+                )
+                    .chain(),
+            );
     }
 }
 

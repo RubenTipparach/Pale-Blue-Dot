@@ -273,7 +273,9 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye:
 pub(super) fn install_eye_water(app: &mut App) {
     app.init_resource::<EyeWaterState>().add_systems(
         PostUpdate,
-        publish_eye_water.after(bevy::transform::TransformSystems::Propagate),
+        publish_eye_water
+            .after(bevy::transform::TransformSystems::Propagate)
+            .run_if(crate::world_open),
     );
 }
 

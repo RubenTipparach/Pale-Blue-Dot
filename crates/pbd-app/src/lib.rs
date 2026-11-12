@@ -24,6 +24,8 @@ pub mod held;
 #[cfg(feature = "desktop")]
 pub mod hotbar;
 #[cfg(feature = "desktop")]
+pub mod loading;
+#[cfg(feature = "desktop")]
 pub mod overlay;
 #[cfg(feature = "desktop")]
 pub mod planet;
@@ -77,6 +79,22 @@ pub const SAFETY_ANGULAR_SPEED: f32 = 1.5;
 pub struct SimulationClock {
     pub ticks: u64,
     pub seconds: f64,
+}
+
+/// Present while the loading screen prepares the world (`loading-screen`
+/// decision 2): `Startup` has not run, so nothing the planet makes exists
+/// yet. Absent in every app without the screen.
+#[derive(Resource, Default)]
+pub struct WorldLoading {
+    /// The world is prepared: the next frame opens it.
+    pub open_next: bool,
+}
+
+/// Whether the world is open: the condition for a game system in a schedule
+/// the loading screen runs (`PostUpdate`, `Last`) that needs what `Startup`
+/// makes.
+pub fn world_open(loading: Option<Res<WorldLoading>>) -> bool {
+    loading.is_none()
 }
 
 #[derive(Resource, Clone, Copy, Debug, Default)]

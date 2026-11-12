@@ -85,6 +85,9 @@ pub struct Launch {
     /// rain, for up to one frame more between input and photon. 1 stays for
     /// a player who prefers the lower latency.
     pub frame_latency: u32,
+    /// `--capture-loading`: photograph the loading screen to `--capture`'s
+    /// path while the planet builds, then exit (`loading-screen`).
+    pub capture_loading: bool,
     pub view: String,
     pub frames: u32,
     pub tour: bool,
@@ -258,6 +261,7 @@ impl Launch {
             frame_graph: false,
             no_vsync: false,
             frame_latency: 2,
+            capture_loading: false,
             view: "coast".into(),
             frames: 180,
             dig: 0,
@@ -521,6 +525,7 @@ impl Launch {
                     assert!((1..=2).contains(&frames), "frame latency must be 1 or 2");
                     result.frame_latency = frames;
                 }
+                "--capture-loading" => result.capture_loading = true,
                 "--walk-distance" => {
                     i += 1;
                     let metres: f32 = args
@@ -806,6 +811,8 @@ pub struct FrameStats {
 }
 
 pub fn run(args: &[String]) {
+    // The `READY` line counts from here (`loading-screen` decision 4).
+    let launched = Instant::now();
     if let Some(i) = args.iter().position(|s| s == "--verify-route") {
         verify_route(route_kind(
             args.get(i + 1).map_or("far-side", String::as_str),
@@ -1077,7 +1084,8 @@ pub fn run(args: &[String]) {
                 .chain()
                 .before(pbd_app::fish::FishSet),
             digging::scripted_dig,
-            capture,
+            // A photograph is of the world, not of the loading screen.
+            capture.run_if(pbd_app::loading::ready),
         ),
     )
     .init_resource::<menu::SaveIndex>()
@@ -1092,7 +1100,11 @@ pub fn run(args: &[String]) {
     ))
     .add_systems(
         Last,
-        ((measure_frames, write_frame_log).chain(), drain_saves),
+        (
+            (measure_frames, write_frame_log).chain(),
+            // The save is the loading thread's until the world opens.
+            drain_saves.run_if(pbd_app::world_open),
+        ),
     );
     if launch.frame_log.is_some() {
         // GPU time per render pass for the frame log (`perf-rig`), and a
@@ -1204,6 +1216,14 @@ pub fn run(args: &[String]) {
     }
     if launch.fixed || launch.capture.is_some() {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
+    }
+    // The loading screen (`loading-screen`): added last, because it takes
+    // over `Main` from the plugins that made it.
+    app.add_plugins(pbd_app::loading::LoadingPlugin { launched });
+    if launch.capture_loading
+        && let Some(path) = &launch.capture
+    {
+        app.insert_resource(pbd_app::loading::CaptureLoading(path.clone()));
     }
     app.run();
 }
@@ -2747,7 +2767,8 @@ impl FrameLog {
 fn write_frame_log(
     mut log: ResMut<FrameLog>,
     stats: Res<FrameStats>,
-    fine: Res<pbd_app::planet::PlanetFine>,
+    // None while the loading screen prepares the world.
+    fine: Option<Res<pbd_app::planet::PlanetFine>>,
     near: Res<pbd_app::planet::NearField>,
     readout: Option<Res<pbd_app::flight_view::FlightReadout>>,
     walk: Option<Res<WalkProgress>>,
@@ -2779,7 +2800,7 @@ fn write_frame_log(
         "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency}",
         stats.samples.len(),
         stats.started.elapsed().as_secs_f64(),
-        fine.version,
+        fine.map_or(0, |fine| fine.version),
         walk.map_or(f32::NAN, |walk| walk.walked_m),
         // Ground distance along the route, in the units the scenic plan's
         // `into N m of cloud ... from M m` line uses.
