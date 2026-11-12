@@ -1459,8 +1459,9 @@ fn prepare_views(
                 .as_ref()
                 .map(|fine| near_lamps(&fine.set.columns, camera_position, 32.0))
                 .unwrap_or([Vec4::ZERO; NEAR_LAMPS]),
+            // x the voxel walk, w the screen trace (`PBD_REFLECT`).
             reflect: Vec4::new(
-                if lighting.reflections_on() { 1.0 } else { 0.0 },
+                if lighting.reflect_walk_on() { 1.0 } else { 0.0 },
                 lighting.reflection_reach_m,
                 bounce_gain(
                     lighting,
@@ -1468,16 +1469,25 @@ fn prepare_views(
                     tunables.bounce.as_deref(),
                     clock.0,
                 ),
-                0.0,
+                if lighting.reflect_screen_on() {
+                    1.0
+                } else {
+                    0.0
+                },
             ),
             lamp_bake: lamp_bake_state(lighting, &planet, tunables.fine.as_deref(), clock.0),
             ssr_clip: existing
                 .as_ref()
                 .map_or(Mat4::IDENTITY, |gpu| gpu.last_clip),
             rain_near: Vec4::new(w.rain_detail_reach_m, w.rain_detail_fade_m, 0.0, 0.0),
-            ssr_eye: existing
-                .as_ref()
-                .map_or(Vec4::ZERO, |gpu| gpu.last_camera.extend(1.0)),
+            // w: there is a history to read, so not while the capture is off.
+            ssr_eye: existing.as_ref().map_or(Vec4::ZERO, |gpu| {
+                gpu.last_camera.extend(if lighting.reflect_capture_on() {
+                    1.0
+                } else {
+                    0.0
+                })
+            }),
         };
         let (ssr_clip, ssr_eye) = (params.ssr_clip, params.ssr_eye);
         if let Some(mut gpu) = existing {

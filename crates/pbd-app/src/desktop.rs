@@ -79,6 +79,9 @@ pub struct Launch {
     /// `--no-vsync`: present unpaced, a measurement instrument, so a frame's
     /// time is its work and not the display's refresh.
     pub no_vsync: bool,
+    /// `--frame-latency 1|2`: how many frames the swapchain may queue, an
+    /// instrument (`crab-breeze-lessons` 1.1). The default stays 1.
+    pub frame_latency: u32,
     pub view: String,
     pub frames: u32,
     pub tour: bool,
@@ -251,6 +254,7 @@ impl Launch {
             sail_for: None,
             frame_graph: false,
             no_vsync: false,
+            frame_latency: 1,
             view: "coast".into(),
             frames: 180,
             dig: 0,
@@ -504,6 +508,16 @@ impl Launch {
                 }
                 "--frame-graph" => result.frame_graph = true,
                 "--no-vsync" => result.no_vsync = true,
+                "--frame-latency" => {
+                    i += 1;
+                    let frames: u32 = args
+                        .get(i)
+                        .expect("--frame-latency requires 1 or 2")
+                        .parse()
+                        .expect("invalid frame latency");
+                    assert!((1..=2).contains(&frames), "frame latency must be 1 or 2");
+                    result.frame_latency = frames;
+                }
                 "--walk-distance" => {
                     i += 1;
                     let metres: f32 = args
@@ -852,7 +866,7 @@ pub fn run(args: &[String]) {
                     desired_maximum_frame_latency: if launch.capture.is_some() {
                         None
                     } else {
-                        std::num::NonZeroU32::new(1)
+                        std::num::NonZeroU32::new(launch.frame_latency)
                     },
                     ..default()
                 }),
@@ -1068,7 +1082,10 @@ pub fn run(args: &[String]) {
         PreUpdate,
         (load_on_cue, load_world).chain().after(menu::toggle),
     )
-    .insert_resource(FrameLog::open(launch.frame_log.as_deref()))
+    .insert_resource(FrameLog::open(
+        launch.frame_log.as_deref(),
+        launch.frame_latency,
+    ))
     .add_systems(
         Last,
         ((measure_frames, write_frame_log).chain(), drain_saves),
@@ -2690,22 +2707,28 @@ fn capture(
 
 /// The `--frame-log` CSV, open for the run when asked for.
 #[derive(Resource)]
-struct FrameLog(Option<std::io::BufWriter<std::fs::File>>);
+struct FrameLog(Option<std::io::BufWriter<std::fs::File>>, u32);
 
 impl FrameLog {
-    fn open(path: Option<&std::path::Path>) -> Self {
+    /// The log, with the swapchain's frame latency as a column of its own
+    /// (`frame_latency`, the same in every row) so a run says what it ran.
+    fn open(path: Option<&std::path::Path>, frame_latency: u32) -> Self {
         Self(path.map(|path| {
             use std::io::Write;
             let file = std::fs::File::create(path)
                 .unwrap_or_else(|error| panic!("--frame-log {}: {error}", path.display()));
             let mut out = std::io::BufWriter::new(file);
+            let passes: String = PASS_COLUMNS
+                .iter()
+                .map(|name| format!(",gpu_{name}_ms"))
+                .collect();
             writeln!(
                 out,
-                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m"
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency"
             )
             .expect("frame log header");
             out
-        }))
+        }), frame_latency)
     }
 }
 
@@ -2728,10 +2751,12 @@ fn write_frame_log(
     route: Option<Res<pbd_app::flight_view::RouteState>>,
 ) {
     use std::io::Write;
+    let latency = log.1;
     let Some(out) = log.0.as_mut() else {
         return;
     };
-    let (mut gpu_clouds, gpu_total) = diagnostics.map_or((f64::NAN, f64::NAN), |d| gpu_times(&d));
+    let gpu = diagnostics.map_or_else(GpuTimes::unknown, |d| gpu_times(&d));
+    let (mut gpu_clouds, gpu_total) = (gpu.clouds, gpu.total);
     // Where the passes' own spans read nothing (Metal: no timestamps inside
     // a pass), the clouds' boundary timer (`cloud-puffs`).
     if (gpu_clouds.is_nan() || gpu_clouds <= 0.0)
@@ -2744,9 +2769,10 @@ fn write_frame_log(
     };
     let rebuild = near.rebuild_s.map_or(String::new(), |s| format!("{s:.3}"));
     let (clearance, speed) = readout.map_or((f32::NAN, f32::NAN), |r| (r.clearance, r.speed));
+    let passes: String = gpu.passes.iter().map(|ms| format!(",{ms:.3}")).collect();
     let _ = writeln!(
         out,
-        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}",
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency}",
         stats.samples.len(),
         stats.started.elapsed().as_secs_f64(),
         fine.version,
@@ -2754,18 +2780,67 @@ fn write_frame_log(
         // Ground distance along the route, in the units the scenic plan's
         // `into N m of cloud ... from M m` line uses.
         route.map_or(f64::NAN, |route| route.flown_rad
-            * f64::from(pbd_app::planet::PLANET_RADIUS))
+            * f64::from(pbd_app::planet::PLANET_RADIUS)),
+        gpu.other,
     );
 }
 
-/// The clouds' GPU time and the whole instrumented frame's, in ms, from the
-/// newest batch of render-diagnostic spans. A pass that did not run in that
-/// batch (the clouds under `PBD_NO_CLOUDS`) keeps an older measurement in the
-/// store, so only the spans stamped with the newest batch's time count. The
-/// total sums top-level spans only (`render/<pass>/elapsed_gpu`), so a nested
-/// span is not counted twice. The values trail the frame by the few frames a
-/// timestamp query takes to read back.
-fn gpu_times(store: &bevy::diagnostic::DiagnosticsStore) -> (f64, f64) {
+/// The top-level GPU spans the frame log gives a column each
+/// (`gpu_<name>_ms`, `lighting-perf` 1.2), in frame order: Bevy's own passes
+/// and the game's. The terrain (and the towns) draw in Bevy's
+/// `main_transparent_pass_3d`, so the terrain's shading, wet ground's
+/// reflection walk and screen trace among it, is timed there. A pass that did
+/// not run in a frame reads 0; spans not named here are summed in
+/// `gpu_other_ms`.
+const PASS_COLUMNS: [&str; 17] = [
+    "planet_cull",
+    "planet_shadow",
+    "main_opaque_pass_3d",
+    "main_transparent_pass_3d",
+    "water_compose",
+    "ssr_capture",
+    "cloud_march",
+    "cloud_puffs",
+    "cloud_resolve",
+    "clouds",
+    "rain",
+    "weather_overlay",
+    "water_lens",
+    "lens_mist",
+    "lite_bloom",
+    "tonemapping",
+    "upscaling",
+];
+
+/// One frame's GPU times, in ms: the clouds, the total, each of
+/// [`PASS_COLUMNS`] and the rest.
+struct GpuTimes {
+    clouds: f64,
+    total: f64,
+    passes: [f64; PASS_COLUMNS.len()],
+    other: f64,
+}
+
+impl GpuTimes {
+    fn unknown() -> Self {
+        Self {
+            clouds: f64::NAN,
+            total: f64::NAN,
+            passes: [f64::NAN; PASS_COLUMNS.len()],
+            other: f64::NAN,
+        }
+    }
+}
+
+/// The clouds' GPU time, each named pass's and the whole instrumented
+/// frame's, in ms, from the newest batch of render-diagnostic spans. A pass
+/// that did not run in that batch (the clouds under `PBD_NO_CLOUDS`) keeps an
+/// older measurement in the store, so only the spans stamped with the newest
+/// batch's time count. The total sums top-level spans only
+/// (`render/<pass>/elapsed_gpu`), so a nested span is not counted twice. The
+/// values trail the frame by the few frames a timestamp query takes to read
+/// back.
+fn gpu_times(store: &bevy::diagnostic::DiagnosticsStore) -> GpuTimes {
     let spans: Vec<(String, f64, Instant)> = store
         .iter()
         .filter_map(|d| {
@@ -2779,7 +2854,7 @@ fn gpu_times(store: &bevy::diagnostic::DiagnosticsStore) -> (f64, f64) {
         })
         .collect();
     let Some(newest) = spans.iter().map(|s| s.2).max() else {
-        return (f64::NAN, f64::NAN);
+        return GpuTimes::unknown();
     };
     let current = spans.iter().filter(|s| s.2 == newest);
     let clouds = current
@@ -2792,7 +2867,20 @@ fn gpu_times(store: &bevy::diagnostic::DiagnosticsStore) -> (f64, f64) {
         })
         .map(|s| s.1)
         .sum();
-    (clouds, current.map(|s| s.1).sum())
+    let mut passes = [0.0; PASS_COLUMNS.len()];
+    let mut other = 0.0;
+    for (name, ms, _) in current.clone() {
+        match PASS_COLUMNS.iter().position(|p| p == name) {
+            Some(i) => passes[i] += ms,
+            None => other += ms,
+        }
+    }
+    GpuTimes {
+        clouds,
+        total: current.map(|s| s.1).sum(),
+        passes,
+        other,
+    }
 }
 
 /// With `--frame-log`, every change in whether the window has the user's

@@ -15,7 +15,9 @@ Scenarios (each ends itself):
     town      a walk from Ashenstead's middle out through the walled town, rain forced
     sail      Holinghaven's cog cast off from its helm, --sail-for 60
 
-Variants are `name|exe|ENV=1;ENV2=2|assets` (all but the name optional). The
+Variants are `name|exe|ENV=1;ENV2=2|assets` (all but the name optional); an
+item of the third field that starts with `--` is a launch flag instead
+(`lat2||--frame-latency 2`). The
 game reads its shaders and `assets/config` from this checkout at run time, so
 an old exe would run the NEW shaders (and refuse a config field it does not
 know): `assets` is a git revision whose `assets/` files are laid over the
@@ -27,6 +29,14 @@ For example:
         --variant "clouds-off|target/release/pbd-app.exe|PBD_NO_CLOUDS=1"
     python tools/perf_suite.py --variant "before|output/perf/baseline-exe/pbd-app.exe||HEAD" \
         --variant "after"
+
+The warm-up (`--skip-s`) is counted from the end of loading (`lighting-perf`
+1.3): from the game's "ready" log line where it prints one (`--ready-pattern`),
+else from the first frame. A fresh exe on a cold shader cache once drew its
+first frame 50-55 s after launch, so a warm-up counted from launch let loading
+frames into the numbers. The fresh world's planet rebuild (`towns.rs` `settle`,
+a multi-second frame that every variant pays) is left out of the statistics and
+reported beside them as `rebuild_ms`.
 
 Budgets are the owner's: 120 fps (8.3 ms) wanted at p95, 60 fps (16.7 ms) the
 floor at p99. Run from the repository root (the game's saves are relative).
@@ -118,20 +128,28 @@ def load_frames(path: Path) -> list[dict]:
                 "gpu_total": num(r.get("gpu_total_ms")),
                 "route_m": num(r.get("route_m")),
                 "clearance": num(r.get("clearance_m")),
+                # Per-pass GPU columns (`lighting-perf` 1.2): `gpu_<pass>_ms`.
+                "passes": {k[4:-3]: num(v) for k, v in r.items()
+                           if k and k.startswith("gpu_") and k.endswith("_ms")
+                           and k not in ("gpu_clouds_ms", "gpu_total_ms")},
             })
     return rows
 
 
 def parse_variant(spec: str, default_exe: str) -> dict:
     parts = spec.split("|")
-    env = {}
+    env, args = {}, []
     if len(parts) > 2 and parts[2]:
         for pair in parts[2].split(";"):
+            if pair.strip().startswith("--"):
+                # A launch flag rather than a variable: `--frame-latency 2`.
+                args += pair.split()
+                continue
             k, _, v = pair.partition("=")
             env[k.strip()] = v.strip()
     exe = parts[1] if len(parts) > 1 and parts[1] else default_exe
     assets = parts[3] if len(parts) > 3 and parts[3] else None
-    return {"name": parts[0], "exe": str(Path(exe).resolve()), "env": env, "assets": assets}
+    return {"name": parts[0], "exe": str(Path(exe).resolve()), "env": env, "args": args, "assets": assets}
 
 
 def changed_assets(revision: str) -> list[str]:
@@ -205,6 +223,47 @@ WARN = ["obs64.exe"] if WINDOWS else ["OBS"]
 
 
 STAMP = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+)Z", re.M)
+# The line `towns.rs` `settle` logs after the multi-second planet rebuild that
+# a fresh world pays once (not a cost of anything a variant changes).
+REBUILD = re.compile(r"towns' ground installed and the planet rebuilt")
+
+
+def stamp_s(line: str, launched: float) -> float | None:
+    """A log line's time in the frame log's clock (seconds since launch), from
+    its UTC stamp and the wall time the suite launched the process at. The
+    game's clock starts within a fraction of a second of the launch."""
+    m = STAMP.match(line)
+    if not m:
+        return None
+    when = dt.datetime.fromisoformat(m[1]).replace(tzinfo=dt.timezone.utc).timestamp()
+    return when - launched
+
+
+def warm_up_start(text: str, rows: list[dict], launched: float, ready: re.Pattern) -> tuple[float, str]:
+    """Where the warm-up starts, in the frame log's clock, and what marked it:
+    the game's ready line where it prints one, else the first frame."""
+    for line in text.splitlines():
+        if ready.search(line):
+            t = stamp_s(line, launched)
+            if t is not None:
+                return t, "ready"
+    return (rows[0]["t"], "first-frame") if rows else (0.0, "none")
+
+
+def rebuild_frames(text: str, rows: list[dict], launched: float) -> set[int]:
+    """The indices of the frames the planet rebuild froze: the first frame to
+    end after each rebuild line and longer than a second."""
+    out = set()
+    for line in text.splitlines():
+        if REBUILD.search(line):
+            t = stamp_s(line, launched)
+            if t is None:
+                continue
+            for i, r in enumerate(rows):
+                if r["t"] >= t - 0.5 and r["ms"] > 1000:
+                    out.add(i)
+                    break
+    return out
 
 
 def attention_problems(text: str, skip_s: float) -> list[str]:
@@ -234,12 +293,14 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
     saves = Path("saves") / world
     shutil.rmtree(saves, ignore_errors=True)
     cmd = [variant["exe"], *SCENARIOS[scenario], "--world", world, "--time", str(a.time),
-           "--no-vsync", "--frame-log", str(csv_path)]
+           "--no-vsync", "--frame-log", str(csv_path), *variant.get("args", [])]
     env = {**os.environ, **variant["env"]}
     print(f"[{dt.datetime.now():%H:%M:%S}] {tag}: {' '.join(cmd)} {variant['env'] or ''}"
           f"{' assets@' + variant['assets'] if variant.get('assets') else ''}", flush=True)
     started = time.time()
+    launched = started
     with AssetsAt(variant.get("assets")), open(log_path, "w", encoding="utf-8", errors="replace") as log:
+        launched = time.time()
         proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env)
         try:
             code = proc.wait(timeout=a.timeout)
@@ -250,7 +311,11 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
             code, timed_out = None, True
     shutil.rmtree(saves, ignore_errors=True)
     text = ANSI.sub("", log_path.read_text(encoding="utf-8", errors="replace"))
-    rows = [r for r in load_frames(csv_path) if r["t"] >= a.skip_s]
+    every = load_frames(csv_path)
+    warm_from, warm_mark = warm_up_start(text, every, launched, a.ready)
+    stalls = rebuild_frames(text, every, launched)
+    rebuild_ms = [every[i]["ms"] for i in sorted(stalls)]
+    rows = [r for i, r in enumerate(every) if r["t"] >= warm_from + a.skip_s and i not in stalls]
 
     problems = []
     if timed_out:
@@ -260,7 +325,7 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
     # A window out of focus or hidden is paced by the OS, not the game
     # (`frame-budget`): 60 Hz unfocused in Bevy, throttled under a locked
     # screen on macOS. Its frames say nothing about the frame's cost.
-    problems += attention_problems(text, a.skip_s)
+    problems += attention_problems(text, warm_from + a.skip_s)
     if DONE[scenario] not in text:
         problems.append(f"no {DONE[scenario]} line")
     if len(rows) < 300:
@@ -271,6 +336,10 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
         "frame_ms": stats([r["ms"] for r in rows]),
         "gpu_total_ms": stats([r["gpu_total"] for r in rows]),
         "gpu_clouds_ms": stats([r["gpu_clouds"] for r in rows]),
+        "gpu_pass_ms": {name: stats([r["passes"].get(name, math.nan) for r in rows])
+                        for name in sorted({k for r in rows for k in r["passes"]})},
+        "warm_up": {"from_s": round(warm_from, 2), "marked_by": warm_mark, "skip_s": a.skip_s},
+        "rebuild_ms": rebuild_ms,
     }
     adapter = re.search(r'AdapterInfo \{ name: "([^"]+)".*?backend: (\w+)', text)
     if adapter:
@@ -317,7 +386,7 @@ def report(results: list[dict], a, meta: dict) -> str:
     lines = [f"# Performance suite, {meta['when']}", ""]
     lines.append(f"- revision: `{meta['revision']}`{' (uncommitted changes)' if meta['dirty'] else ''}")
     lines.append(f"- adapter: {meta.get('adapter', 'unknown')}; window 1440 x 900, uncapped (`--no-vsync`)")
-    lines.append(f"- clock pinned at {a.time} h; first {a.skip_s} s of each run thrown away; "
+    lines.append(f"- clock pinned at {a.time} h; first {a.skip_s} s after loading (the ready line, else the first frame) thrown away; "
                  f"{a.repeats} run(s) per variant, interleaved")
     lines.append(f"- budgets: p95 within {WANT_MS:.1f} ms (120 fps), p99 within {FLOOR_MS:.1f} ms (60 fps); "
                  "**over** marks a miss. Each cell is the median over the valid runs.")
@@ -351,6 +420,24 @@ def report(results: list[dict], a, meta: dict) -> str:
                     f"| {variant} | {fmt(fps)} | {fmt(m('p50'))} | {fmt(m('p95'), WANT_MS)} | {fmt(m('p99'), FLOOR_MS)} | "
                     f"{fmt(m('max'))} | {fmt(m('p50', 'gpu_total_ms'))} / {fmt(m('p95', 'gpu_total_ms'))} | "
                     f"{fmt(m('p50', 'gpu_clouds_ms'))} / {fmt(m('p95', 'gpu_clouds_ms'))} |")
+        passes = sorted({k for r in results if r["scenario"] == scenario and r["valid"]
+                         for k in r.get("gpu_pass_ms", {})})
+        if passes:
+            lines.append("")
+            lines.append("GPU time per pass, p50 (ms; median over the valid runs):")
+            lines.append("")
+            lines.append("| variant | " + " | ".join(passes) + " |")
+            lines.append("| --- |" + " ---: |" * len(passes))
+            for variant in a.variant_names:
+                ok = [r for r in results if r["scenario"] == scenario and r["variant"] == variant and r["valid"]]
+                cells = [fmt(median([r.get("gpu_pass_ms", {}).get(k, {}).get("p50", math.nan) for r in ok]))
+                         for k in passes]
+                lines.append(f"| {variant} | " + " | ".join(cells) + " |")
+        stalls = [ms for r in results if r["scenario"] == scenario for ms in r.get("rebuild_ms", [])]
+        if stalls:
+            lines.append("")
+            lines.append(f"Left out: the fresh world's planet rebuild, {len(stalls)} frame(s) of "
+                         f"{min(stalls):.0f}-{max(stalls):.0f} ms.")
         bad = [r for r in results if r["scenario"] == scenario and not r["valid"]]
         for r in bad:
             lines.append(f"- invalid: {r['variant']} run {r['index']}: {'; '.join(r['problems'])}")
@@ -374,7 +461,8 @@ def plot(results: list[dict], a) -> None:
         fig, (ax, ax2) = plt.subplots(2, 1, figsize=(16, 8), sharex=True, gridspec_kw={"height_ratios": [3, 2]})
         for r in rs:
             c = colours[a.variant_names.index(r["variant"]) % len(colours)]
-            rows = [x for x in load_frames(Path(r["csv"])) if x["t"] >= a.skip_s]
+            warm = r.get("warm_up", {}).get("from_s", 0.0) + a.skip_s
+            rows = [x for x in load_frames(Path(r["csv"])) if x["t"] >= warm]
             t0 = rows[0]["t"] if rows else 0
             label = f"{r['variant']} #{r['index']}" + ("" if r["valid"] else " (invalid)")
             ax.plot([x["t"] - t0 for x in rows], [x["ms"] for x in rows], lw=0.5, color=c, alpha=0.7, label=label)
@@ -403,11 +491,14 @@ def main() -> None:
     ap.add_argument("--exe", default="target/release/pbd-app" + (".exe" if WINDOWS else ""), help="the exe of a variant that names none")
     ap.add_argument("--repeats", type=int, default=2)
     ap.add_argument("--time", type=float, default=10.0, help="the pinned hour: daylight, for the scenic clouds")
-    ap.add_argument("--skip-s", type=float, default=10.0)
+    ap.add_argument("--skip-s", type=float, default=10.0, help="the warm-up, from the ready line or the first frame")
+    ap.add_argument("--ready-pattern", default=r"\bLOADING_DONE\b|\bWORLD_READY\b|\bREADY\b|loading (?:is )?(?:done|complete|finished)",
+                    help="a log line that marks the end of loading; the warm-up counts from it")
     ap.add_argument("--timeout", type=float, default=420.0)
     ap.add_argument("--out", type=Path, default=Path("output/perf") / dt.datetime.now().strftime("%Y%m%d-%H%M"))
     a = ap.parse_args()
     a.scenarios = [s.strip() for s in a.scenarios.split(",") if s.strip()]
+    a.ready = re.compile(a.ready_pattern)
     for s in a.scenarios:
         if s not in SCENARIOS:
             raise SystemExit(f"unknown scenario {s}; known: {', '.join(SCENARIOS)}")

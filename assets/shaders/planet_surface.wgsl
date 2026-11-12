@@ -2108,7 +2108,7 @@ fn ssr_uv(p: vec3<f32>) -> vec3<f32> {
     return vec3(clip.x/clip.w*0.5 + 0.5, 0.5 - clip.y/clip.w*0.5, 1.0);
 }
 fn ssr_trace(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
-    if params.ssr_eye.w < 0.5 || params.reflect.x < 0.5 { return vec4(0.0); }
+    if params.ssr_eye.w < 0.5 || params.reflect.w < 0.5 { return vec4(0.0); }
     let size = vec2<f32>(textureDimensions(ssr_history));
     let home = ssr_uv(origin).xy;
     var t = 0.04;

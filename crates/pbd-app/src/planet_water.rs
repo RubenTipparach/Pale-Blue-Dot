@@ -1321,7 +1321,10 @@ fn prepare_water_views(
                 .map(|fine| super::near_lamps(&fine.set.columns, camera, 32.0))
                 .unwrap_or([Vec4::ZERO; super::NEAR_LAMPS]),
             ssr_clip: planet_view.ssr_clip,
-            ssr_eye: if lighting.as_ref().is_some_and(|l| l.reflections_on()) {
+            ssr_eye: if lighting
+                .as_ref()
+                .is_some_and(|l| l.reflect_sea_on() && l.reflect_capture_on())
+            {
                 planet_view.ssr_eye
             } else {
                 Vec4::ZERO
