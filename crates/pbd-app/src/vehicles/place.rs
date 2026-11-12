@@ -263,10 +263,16 @@ impl Berths {
 /// opens facing land they can walk and the Kestrel has somewhere to stand.
 /// The ring is inside the Kestrel's own 16 to 40 m from a walker set down up
 /// to 4 m from the start.
+///
+/// Read on the generator's own ground ([`natural_floor`]), not the towns':
+/// a town's terrace is a level plain, and a world whose towns stood before
+/// its walker did (the loading screen, `loading-screen` decision 1) started
+/// on Holbrook's instead of where the same seed had always started, under
+/// another sky.
 pub fn level_plain(sea_radius: f32, direction: Vec3) -> bool {
     let good = |direction: Vec3| {
-        let ground = floor(direction);
-        ground - sea_radius > 0.3 && level(direction, ground)
+        let ground = natural_floor(direction);
+        ground - sea_radius > 0.3 && level_on(direction, ground, natural_floor)
     };
     let centre = direction.normalize_or(Vec3::Y);
     if !good(centre) {
@@ -329,8 +335,23 @@ pub(crate) fn floor(direction: Vec3) -> f32 {
     ) as f32
 }
 
+/// The generator's own ground under a direction, m from the centre: [`floor`]
+/// with no town's ground (`column::natural_surface_m`).
+pub(crate) fn natural_floor(direction: Vec3) -> f32 {
+    PLANET_RADIUS
+        + pbd_core::column::natural_surface_m(
+            crate::planet::terrain_config(),
+            direction.normalize_or(Vec3::Y),
+        )
+}
+
 /// Whether the ground round `direction` is level enough to land a gear on.
 fn level(direction: Vec3, ground: f32) -> bool {
+    level_on(direction, ground, floor)
+}
+
+/// [`level`] on the ground `floor` gives.
+fn level_on(direction: Vec3, ground: f32, floor: impl Fn(Vec3) -> f32) -> bool {
     let east = Vec3::Y.cross(direction).normalize_or(Vec3::X);
     let north = direction.cross(east);
     let r = ground.max(1.0);
