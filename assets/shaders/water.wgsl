@@ -1566,11 +1566,35 @@ fn rain_sun_at(p: vec3<f32>) -> f32 {
 }
 
 // How much of the stretch `a`..`b` the sun reaches, six taps jittered per
-// pixel (twelve over the two nearest shells' sixty metres).
+// pixel (twelve over the two nearest shells' sixty metres). A cascade's
+// clip space is an affine map of the point, so each cascade's clip is taken
+// at the stretch's two ends and mixed for each tap (`lighting-perf` 2.10):
+// eight matrix products a stretch instead of up to twenty-four. Each tap
+// then picks its cascade and compares exactly as `rain_sun_at` does.
 fn rain_sun_seen(eye: vec3<f32>, direction: vec3<f32>, a: f32, b: f32, jitter: f32) -> f32 {
+    if (rain_cascades.settings.x < 0.5) { return 1.0; }
+    let pa = vec4<f32>(eye + direction*a, 1.0);
+    let pb = vec4<f32>(eye + direction*b, 1.0);
+    var ca: array<vec4<f32>, 4>;
+    var cb: array<vec4<f32>, 4>;
+    for (var i = 0u; i < 4u; i++) {
+        ca[i] = rain_cascades.clip_from_body[i]*pa;
+        cb[i] = rain_cascades.clip_from_body[i]*pb;
+    }
     var seen = 0.0;
     for (var k = 0u; k < 6u; k++) {
-        seen += rain_sun_at(eye + direction*mix(a, b, (f32(k) + jitter)/6.0));
+        let f = (f32(k) + jitter)/6.0;
+        var lit = 1.0;
+        for (var i = 0u; i < 4u; i++) {
+            let clip = mix(ca[i], cb[i], f);
+            if (max(abs(clip.x), abs(clip.y)) < 1.0 && clip.z > 0.0 && clip.z < 1.0) {
+                let uv = vec2<f32>(clip.x*0.5 + 0.5, 0.5 - clip.y*0.5);
+                let bias = rain_cascades.settings.z*rain_cascades.texel_m[i]/rain_cascades.depth_m[i];
+                lit = textureSampleCompareLevel(rain_sun_map, rain_sun_cmp, uv, i, clip.z - bias);
+                break;
+            }
+        }
+        seen += lit;
     }
     return seen/6.0;
 }
@@ -1608,7 +1632,12 @@ fn rain_shells(scene: vec3<f32>, eye: vec3<f32>, direction: vec3<f32>, far: f32,
     let soft_m = max(view.rain_shell_fall.z, 0.01);
     var transmittance = 1.0;
     var light = vec3<f32>(0.0);
+    // `rain_shell_fall.w`: which kinds the rain map holds anywhere, one bit
+    // each (rain 1, snow 2). A kind it does not hold could only `continue`
+    // at every shell (`lighting-perf` 2.10).
+    let kinds = u32(view.rain_shell_fall.w + 0.5);
     for (var kind = 0u; kind < 2u; kind++) {
+        if ((kinds & (1u << kind)) == 0u) { continue; }
         let snow = kind == 1u;
         let fall = select(view.rain_look.x, view.rain_tint.w, snow);
         let relative = down*fall - velocity;

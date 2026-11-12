@@ -85,6 +85,14 @@
       more than the spread; bloom is already built from a quarter-size
       image and is left as 2.6 has it.
 
+- [ ] 2.10 The rain volume's exact cuts (before its half resolution): the
+      shell loop skips a kind (rain, snow) the rain map does not hold
+      anywhere, and the shafts take each cascade's clip at a stretch's two
+      ends and mix it per tap instead of four matrix products a tap.
+      Shots: the lane by day both ways, at dusk into the sun, at night,
+      and 300 m up in rain, against a before-and-before control.
+      Measure: `rain-stroll` by day and at night, `storm`.
+
 ## 3. Close
 
 - [ ] 3.1 A final sitting: `f15a647` against the change, all scenarios,
