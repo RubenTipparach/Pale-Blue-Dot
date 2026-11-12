@@ -6,14 +6,14 @@
 /* Layout: the shipyard opens the page as a wide 3D stage; the builder below is a two-pane tool (grid left, live stats right); then the reference sections. House style of towns.html. */
 :root{
   color-scheme: dark;
-  --ground:#0e100f;
-  --panel:#17170f;
-  --panel-2:#201f16;
-  --line:rgba(226,206,160,.17);
-  --line-2:rgba(226,206,160,.32);
-  --ink:#ece4d2;
-  --muted:#a89d86;
-  --amber:#f0b43c;
+  --ground:#0b1014;
+  --panel:#111a20;
+  --panel-2:#0d151a;
+  --line:rgba(130,175,180,.24);
+  --line-2:rgba(150,190,195,.5);
+  --ink:#e4ecee;
+  --muted:#94a8ad;
+  --amber:#e8b040;
   --ember:#ff8a3d;
   --sky:#8fc3d8;
   --warn:#ff6b57;
@@ -31,7 +31,7 @@ h2{font-size:28px;display:flex;gap:12px;align-items:baseline}
 h2 .n{font-family:var(--mono);font-size:13px;color:var(--amber);font-weight:600;letter-spacing:0}
 h3{font-size:19px;font-weight:600}
 p{margin:0;max-width:74ch}
-.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.16em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.eyebrow{font-family:var(--mono);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:12px;color:#6fc3b8}
 .tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
 .tag.plain{border-color:var(--line-2);color:var(--muted)}
 section{display:grid;gap:16px;min-width:0}
@@ -56,7 +56,16 @@ button{font:inherit}
 #yard{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 #yard:active{cursor:grabbing}
 .ov{position:absolute;background:rgba(18,17,13,.84);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:10px;display:grid;gap:8px}
-.ov.tl{left:12px;top:12px;max-width:calc(100% - 24px)}
+.ov.tl{right:12px;top:30px;max-width:calc(100% - 24px)}
+/* the game's HUD: the monospace debug line, top left, and the hotbar, bottom centre */
+.hudline{position:absolute;left:8px;top:6px;font:600 12px var(--mono);color:#fff;text-shadow:0 1px 0 #000,1px 0 0 #000;pointer-events:none}
+.hudbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px;align-items:center;pointer-events:none}
+.hudbar .hs{width:42px;height:42px;display:grid;place-items:center;background:rgba(10,18,22,.72);border:1px solid rgba(150,190,195,.55);position:relative}
+.hudbar .hs.sel{border:2px solid #e8b040;width:50px;height:50px;margin-right:8px}
+.hudbar .hs img{width:32px;height:32px;image-rendering:pixelated}
+.hudbar .hs .c{position:absolute;right:2px;bottom:0;font:600 10px var(--mono);color:#fff;text-shadow:0 1px 0 #000}
+@media (max-width:760px){.hudbar{display:none}}
+.shot .stage{position:fixed;inset:0;height:auto;min-height:0;z-index:50;border-radius:0}
 .ov.br{right:12px;bottom:12px;max-width:min(360px,calc(100% - 24px));font-size:13px;color:var(--muted)}
 .ov.br b{color:var(--ink);font-weight:600}
 .stage .loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);letter-spacing:.1em;color:var(--muted)}
@@ -66,8 +75,9 @@ button{font:inherit}
 .bpane{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:10px;min-width:0}
 .palette{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
 .cell img.aft{transform:rotate(90deg)}
-.palette button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:1px;padding:4px 2px;border:1px solid var(--line);border-radius:4px;background:var(--panel-2);font-size:11.5px;text-align:center;line-height:1.15}
-.palette button img{width:40px;height:40px}
+.palette button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:1px;padding:4px 2px;border:1px solid rgba(150,190,195,.45);border-radius:0;background:var(--panel-2);font-size:11.5px;text-align:center;line-height:1.15}
+.palette button img{width:32px;height:32px}
+img{image-rendering:pixelated}
 .palette button kbd{font-family:var(--mono);font-size:10px;color:var(--amber)}
 .palette button[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.14)}
 .palette button:focus-visible{outline:2px solid var(--amber)}
@@ -75,7 +85,7 @@ button{font:inherit}
 .shipgrid{display:grid;grid-template-columns:repeat(12,44px);grid-auto-rows:44px;gap:2px;user-select:none;-webkit-user-select:none;touch-action:none;width:max-content;padding:4px;border-radius:4px;
   background:repeating-linear-gradient(0deg,transparent 0 44px,rgba(143,195,216,.0) 44px 46px),#101317;border:1px solid rgba(143,195,216,.25)}
 .cell{position:relative;border:1px dashed rgba(143,195,216,.18);border-radius:2px;display:grid;place-items:center;cursor:crosshair}
-.cell img{width:40px;height:40px;pointer-events:none}
+.cell img{width:32px;height:32px;pointer-events:none}
 .cell.bad{box-shadow:inset 0 0 0 2px var(--warn)}
 .cell.filled{border-style:solid;border-color:rgba(226,206,160,.30);background:rgba(226,206,160,.05)}
 .fwd{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted)}
@@ -95,7 +105,7 @@ pre.ron .c{color:var(--muted)}
 .checks .warn::before{content:"note";font-family:var(--mono);font-size:11px;color:var(--amber);width:30px;flex:none}
 .bom{display:flex;flex-wrap:wrap;gap:5px}
 .chipitem{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:4px;padding:2px 8px 2px 3px;background:var(--panel-2);font-size:13px;white-space:nowrap}
-.chipitem img{width:26px;height:26px}
+.chipitem img{width:32px;height:32px}
 .chipitem b{font-family:var(--mono);font-size:12px}
 
 /* modules */
@@ -138,8 +148,8 @@ tr:last-child td{border-bottom:0}
 @media (max-width:560px){
   .mods,.prog{grid-template-columns:1fr}
   .palette{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .shipgrid{grid-template-columns:repeat(12,30px);grid-auto-rows:30px}
-  .cell img{width:27px;height:27px}
+  .shipgrid{grid-template-columns:repeat(12,34px);grid-auto-rows:34px}
+  .cell img{width:32px;height:32px}
   .ov.br{display:none}
   .stage{height:62vh}
 }
@@ -151,7 +161,7 @@ tr:last-child td{border-bottom:0}
   <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-11</span></div>
   <h1>Shipyard and Ship Builder</h1>
   <p>Ships made from modules on a grid, in a shipyard you walk around. Every number a ship flies with follows from its parts: mass from what you bolted on, acceleration from its thrusters, how fast it turns from its gyros and how its mass is spread. Those numbers are the game's own <code>FlightLimits</code>, so a built ship flies by the same assisted Newtonian rules the survey ship does today.</p>
-  <p class="honest"><b>About the art.</b> The module icons and the hull textures the 3D ships wear are painted by code (<code>tools/art/ship-crafting_art.py</code>) with the hand-drawn-illustration crayon kit, copying the owner's friend's marker style. Nobody drew them by hand. The ships are boxes, cylinders and cones built from the builder's own grid, so what you draw below is exactly what rolls out on the pad.</p>
+  <p class="honest"><b>About the art.</b> <b>The game's own</b> (byte-identical copies in <code>ship-crafting/game/</code>, see its README): the hex ground is the terrain atlas's fields sheet (<code>assets/tilesets/atlas.png</code>) on 2.833 m hex columns with 1 m layers; the apron, pads, pad rims, boardwalk, hangar walls and roof are the settlement textures granite, iron, stone, plank and slate at their <code>repeat_m</code>; the kestrel, the tern and the loon parked by the bay are the game's vehicle models (<code>assets/models/vehicles</code>); the hand in the hotbar is the game's icon. <b>Mockup-only:</b> the module icons and the ships' hull textures are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/ship-crafting_art.py</code>): 32 x 32 sprites shown at whole-number scales and 32 x 32 tiles sampled nearest with no mipmaps. The ships are boxes built from the builder's own grid, one 2 m block a module, so what you draw below is exactly what rolls out on the pad.</p>
 </header>
 
 <section aria-labelledby="s1">
@@ -167,6 +177,8 @@ tr:last-child td{border-bottom:0}
       </div>
     </div>
     <div class="ov br" id="yardInfo"></div>
+    <div class="hudline" aria-hidden="true">underfoot L0, column | shipyard apron | 5 pads, 1 bay</div>
+    <div class="hudbar" id="hudbar" aria-label="Hotbar, as the game draws it"></div>
   </div>
 </section>
 
@@ -242,6 +254,7 @@ tr:last-child td{border-bottom:0}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 // ======================= modules and stats =======================
 const G1 = 25; // m/s^2, SURFACE_GRAVITY_MPS2_PER_G
@@ -325,7 +338,7 @@ function drawGrid() {
     d.className = "cell" + (c !== "." ? " filled" : "") + (bad.has(x + "," + y) ? " bad" : "");
     d.dataset.x = x; d.dataset.y = y; d.tabIndex = 0;
     d.setAttribute("aria-label", c === "." ? `empty cell ${x},${y}` : `${MOD[c].name} at ${x},${y}`);
-    if (c !== ".") { d.title = MOD[c].name; d.innerHTML = `<img src="ship-crafting/${MOD[c].icon}.png" alt="" width="40" height="40"${c === "T" ? ' class="aft"' : ""}>${c === "L" ? `<span style="position:absolute;right:2px;bottom:0;font:600 10px var(--mono);color:var(--amber)">LIFT</span>` : ""}`; }
+    if (c !== ".") { d.title = MOD[c].name; d.innerHTML = `<img src="ship-crafting/${MOD[c].icon}.png?v=2" alt="" width="32" height="32"${c === "T" ? ' class="aft"' : ""}>${c === "L" ? `<span style="position:absolute;right:2px;bottom:0;font:600 10px var(--mono);color:var(--amber)">LIFT</span>` : ""}`; }
     gridEl.appendChild(d);
   }
   renderStats();
@@ -343,7 +356,7 @@ gridEl.addEventListener("pointermove", e => { if (!painting) return; paintAt(doc
 window.addEventListener("pointerup", () => painting = null);
 gridEl.addEventListener("keydown", e => { const el = e.target.closest(".cell"); if (!el) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); paintAt(el, false); } if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); paintAt(el, true); } });
 const pal = document.getElementById("palette");
-pal.innerHTML = Object.entries(MOD).map(([k, d]) => `<button data-k="${k}" aria-pressed="${k === tool}" title="${d.name}"><img src="ship-crafting/${d.icon}.png" alt="" width="40" height="40">${d.name}<kbd>${k}</kbd></button>`).join("") + `<button data-k="." aria-pressed="false" title="Eraser"><svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28 L22 10 L32 18 L20 32 Z" fill="#e06a7a" stroke="#6b2430" stroke-width="2"/><path d="M8 28 L14 32 L20 32" fill="none" stroke="#a89d86" stroke-width="2"/></svg>Eraser<kbd>X</kbd></button>`;
+pal.innerHTML = Object.entries(MOD).map(([k, d]) => `<button data-k="${k}" aria-pressed="${k === tool}" title="${d.name}"><img src="ship-crafting/${d.icon}.png?v=2" alt="" width="32" height="32">${d.name}<kbd>${k}</kbd></button>`).join("") + `<button data-k="." aria-pressed="false" title="Eraser"><svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28 L22 10 L32 18 L20 32 Z" fill="#e06a7a" stroke="#6b2430" stroke-width="2"/><path d="M8 28 L14 32 L20 32" fill="none" stroke="#a89d86" stroke-width="2"/></svg>Eraser<kbd>X</kbd></button>`;
 const setTool = k => { tool = k; pal.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === k)); };
 pal.querySelectorAll("button").forEach(b => b.addEventListener("click", () => setTool(b.dataset.k)));
 window.addEventListener("keydown", e => { if (e.target.closest && e.target.closest("input,textarea")) return; const k = e.key.toUpperCase(); if (MOD[k] && document.activeElement?.closest?.(".builder")) setTool(k); if (k === "X" && document.activeElement?.closest?.(".builder")) setTool("."); });
@@ -378,12 +391,12 @@ FlightLimits(
 )`;
   const bom = {};
   cellsOf(rows).forEach(k => MOD[k.c].cost.forEach(([i, n]) => bom[i] = (bom[i] || 0) + n));
-  document.getElementById("bom").innerHTML = Object.entries(bom).sort((a, b) => b[1] - a[1]).map(([i, n]) => `<span class="chipitem"><img src="crafting/${i}.png" alt="" width="26" height="26">${ITEM_NAMES[i]}<b>${n}</b></span>`).join("");
+  document.getElementById("bom").innerHTML = Object.entries(bom).sort((a, b) => b[1] - a[1]).map(([i, n]) => `<span class="chipitem"><img src="crafting/${i}.png?v=2" alt="" width="32" height="32">${ITEM_NAMES[i]}<b>${n}</b></span>`).join("");
 }
 drawGrid();
 
 // ======================= module cards, progression, decisions =======================
-document.getElementById("mods").innerHTML = Object.entries(MOD).map(([k, d]) => `<div class="card"><div class="head"><img src="ship-crafting/${d.icon}.png" alt="" width="64" height="64"><div><span class="eyebrow">Key ${k}</span><h3>${d.name}</h3></div></div><p>${d.txt}</p><dl><dt>Mass</dt><dd>${d.m} t</dd><dt>Power</dt><dd>${d.p > 0 ? "+" : ""}${d.p}</dd>${d.mk2 ? `<dt>Later</dt><dd>${d.mk2}</dd>` : ""}<dt>Made of</dt><dd>${d.cost.map(([i, n]) => `${n} ${ITEM_NAMES[i].toLowerCase()}`).join(", ")}</dd></dl></div>`).join("");
+document.getElementById("mods").innerHTML = Object.entries(MOD).map(([k, d]) => `<div class="card"><div class="head"><img src="ship-crafting/${d.icon}.png?v=2" alt="" width="64" height="64"><div><span class="eyebrow">Key ${k}</span><h3>${d.name}</h3></div></div><p>${d.txt}</p><dl><dt>Mass</dt><dd>${d.m} t</dd><dt>Power</dt><dd>${d.p > 0 ? "+" : ""}${d.p}</dd>${d.mk2 ? `<dt>Later</dt><dd>${d.mk2}</dd>` : ""}<dt>Made of</dt><dd>${d.cost.map(([i, n]) => `${n} ${ITEM_NAMES[i].toLowerCase()}`).join(", ")}</dd></dl></div>`).join("");
 
 const PROG = [
   ["wren","1","Built from home materials once a fabricator stands. Lifts off, reaches orbit, the ice moon and the asteroids.",["No hold, no berth: a scout","Brings back frost crystal and star iron"]],
@@ -391,13 +404,13 @@ const PROG = [
   ["hauler","3","Shields from frost crystal and two berths from the jungle world's glowcap. The first ship that carries crew.",["80 m3 of hold","Lands anywhere at 1 g"]],
   ["freighter","4","Mk II reactors and thrusters from magma glass. Too heavy to lift off at 1 g: it stays in orbit and docks, and shuttles ferry its cargo down.",["280 m3, six berths","Orbit only, by design"]],
 ];
-document.getElementById("prog").innerHTML = PROG.map(([id, n, txt, li]) => { const p = PRESETS[id], s = stats(p.rows); return `<div class="step"><div class="who"><b>${p.name}</b><span>STEP ${n}</span></div><span class="eyebrow">${p.role}</span><canvas data-p="${id}" width="240" height="140"></canvas><p>${txt}</p><ul>${li.map(x => `<li>${x}</li>`).join("")}<li class="mono">${s.m.toFixed(1)} t, ${s.acc.toFixed(1)} m/s2, ${s.alpha.toFixed(2)} rad/s2</li></ul></div>`; }).join("");
+document.getElementById("prog").innerHTML = PROG.map(([id, n, txt, li]) => { const p = PRESETS[id], s = stats(p.rows); return `<div class="step"><div class="who"><b>${p.name}</b><span>STEP ${n}</span></div><span class="eyebrow">${p.role}</span><canvas data-p="${id}" width="384" height="224"></canvas><p>${txt}</p><ul>${li.map(x => `<li>${x}</li>`).join("")}<li class="mono">${s.m.toFixed(1)} t, ${s.acc.toFixed(1)} m/s2, ${s.alpha.toFixed(2)} rad/s2</li></ul></div>`; }).join("");
 // little plan drawings from the same grid
 const iconCache = {};
-const loadIcon = n => iconCache[n] || (iconCache[n] = new Promise(r => { const im = new Image(); im.onload = () => r(im); im.onerror = () => r(null); im.src = `ship-crafting/${n}.png`; }));
+const loadIcon = n => iconCache[n] || (iconCache[n] = new Promise(r => { const im = new Image(); im.onload = () => r(im); im.onerror = () => r(null); im.src = `ship-crafting/${n}.png?v=2`; }));
 document.querySelectorAll(".step canvas").forEach(async cv => {
-  const p = PRESETS[cv.dataset.p], g = cv.getContext("2d"), cs = 20, ox = (240 - COLS * cs) / 2, oy = 0;
-  g.fillStyle = "#101317"; g.fillRect(0, 0, 240, 140);
+  const p = PRESETS[cv.dataset.p], g = cv.getContext("2d"), cs = 32, ox = (384 - COLS * cs) / 2, oy = 0;
+  g.imageSmoothingEnabled = false; g.fillStyle = "#101317"; g.fillRect(0, 0, 384, 224);
   for (const k of cellsOf(p.rows)) { const im = await loadIcon(MOD[k.c].icon); g.fillStyle = "rgba(226,206,160,.08)"; g.fillRect(ox + k.x * cs, oy + k.y * cs, cs - 1, cs - 1); if (im) { g.save(); g.translate(ox + k.x * cs + cs / 2, oy + k.y * cs + cs / 2); if (k.c === "T") g.rotate(Math.PI / 2); g.drawImage(im, -cs / 2, -cs / 2, cs, cs); g.restore(); } }
 });
 const DEC = [
@@ -422,9 +435,11 @@ document.getElementById("decisions").innerHTML = DEC.map(([q, pic, ctx, rec]) =>
   const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 900);
 
   // ---- textures
-  const loader = new THREE.TextureLoader();
+  const manager = new THREE.LoadingManager();
+  const loader = new THREE.TextureLoader(manager);
   const TEX = {};
-  const tex = (n, rep = 1) => { const key = n + "@" + rep; if (TEX[key]) return TEX[key]; const t = loader.load(`ship-crafting/${n}.png`); t.encoding = THREE.sRGBEncoding; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 4; return (TEX[key] = t); };
+  const texR = (n, rx, ry) => { const t = loader.load(`ship-crafting/${n}.png?v=2`); t.encoding = THREE.sRGBEncoding; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); return t; };
+  const tex = (n, rep = 1) => { const key = n + "@" + rep; if (TEX[key]) return TEX[key]; const t = loader.load(`ship-crafting/${n}.png?v=2`); t.encoding = THREE.sRGBEncoding; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); return (TEX[key] = t); };
 
   // ---- lamps: every light lights what is near it, wherever the camera is
   const MAXL = 112;
@@ -447,7 +462,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     float r = uLampCol[i].w;
     if (d > r) continue;
     float f = 1.0 - d / r;
-    float att = f * f / (1.0 + 0.03 * d * d);
+    float att = f * f;
     float nl = max(dot(normal, Lv / max(d, 1e-3)), 0.0);
     reflectedLight.directDiffuse += diffuseColor.rgb * uLampCol[i].rgb * att * (0.15 + 0.85 * nl) * uLampOn;
   }
@@ -456,15 +471,14 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     mat.customProgramCacheKey = () => "lamps";
     return mat;
   }
-  const std = (o) => lit(new THREE.MeshStandardMaterial(Object.assign({roughness: 0.8, metalness: 0.1}, o)));
+  const std = (o) => lit(new THREE.MeshStandardMaterial(Object.assign({roughness: 0.9, metalness: 0}, o)));
   function lamp(x, y, z, color, intensity, range, opts = {}) {
     const L = {p: new THREE.Vector3(x, y, z), c: new THREE.Color(color), i: intensity, r: range, group: opts.group || null, local: opts.local ? new THREE.Vector3(x, y, z) : null};
     LAMPS.push(L);
     if (opts.bulb !== false) {
-      const b = new THREE.Mesh(new THREE.SphereGeometry(opts.size || 0.18, 10, 8), new THREE.MeshBasicMaterial({color}));
+      const bs = (opts.size || 0.18) * 2; const b = new THREE.Mesh(new THREE.BoxGeometry(bs, bs, bs), new THREE.MeshBasicMaterial({color}));
       b.position.set(x, y, z); (opts.group || scene).add(b); L.bulb = b;
-      const sp = new THREE.Sprite(GLOW(color)); sp.scale.setScalar((opts.size || 0.18) * 14); sp.position.copy(b.position); (opts.group || scene).add(sp); L.sprite = sp;
-    }
+          }
     return L;
   }
   const glowCache = {};
@@ -489,64 +503,109 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(14, 32), new THREE.MeshBasicMaterial({color: 0xdfe4f0, fog: false})); moonDisc.position.set(300, 380, -420); moonDisc.lookAt(0, 0, 0); scene.add(moonDisc);
   scene.fog = new THREE.Fog(0x9bb7cc, 160, 620);
 
-  // ---- ground and yard
-  const field = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), std({color: 0x5c6a3a, roughness: 1}));
-  field.rotation.x = -Math.PI / 2; field.receiveShadow = true; scene.add(field);
-  const apron = new THREE.Mesh(new THREE.PlaneGeometry(200, 120), std({map: tex("tex-pad", 1), roughness: 0.95}));
-  apron.material.map = tex("tex-pad", 1).clone(); apron.material.map.repeat.set(20, 12); apron.material.map.needsUpdate = true;
-  apron.rotation.x = -Math.PI / 2; apron.position.set(0, 0.02, 0); apron.receiveShadow = true; scene.add(apron);
-  // hills
-  for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2, r = 380 + (i * 53 % 90); const h = new THREE.Mesh(new THREE.ConeGeometry(70 + (i * 37 % 50), 40 + (i * 29 % 50), 7), std({color: 0x4c5a34, roughness: 1, flatShading: true})); h.position.set(Math.cos(a) * r, 10, Math.sin(a) * r); scene.add(h); }
-
+  // ---- ground: the game's hex columns (2.833 m flat to flat, 1 m layers). The field is the
+  // fields biome's sheet of the game's terrain atlas, read the way planet_surface.wgsl does
+  // (ground tile on top, its side tile on the first metre, earth below). The apron, the pads, their
+  // rims and the boardwalk are the game's settlement textures (granite, iron, stone, plank) at
+  // their repeat_m.
   const PADS = {wren: [-60, 0, -22], prospector: [-20, 0, -22], hauler: [20, 0, -22], freighter: [62, 0, -20], bay: [0, 0, 28]};
-  const padMat = std({map: tex("tex-pad", 2), roughness: 0.9});
+  const PAD_R = {freighter: 18, bay: 17};
+  const HW = 2.833, HR = HW / Math.sqrt(3), RINGS = 92;
+  const hexXZ = (q, r) => [HW * (q + r / 2), HR * 1.5 * r];
+  const hsh = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const vn = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz); const a = hsh(xi, zi), b = hsh(xi + 1, zi), c = hsh(xi, zi + 1), d = hsh(xi + 1, zi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
+  const APRON = {x0: -106, x1: 106, z0: -84, z1: 66};
+  const kindAt = (x, z) => {
+    for (const [id, [px, , pz]] of Object.entries(PADS)) { const r = PAD_R[id] || 14, d = Math.hypot(x - px, z - pz); if (d < r) return "iron"; if (d < r + 2.9) return "stone"; }
+    if (x > APRON.x0 && x < APRON.x1 && z > APRON.z0 && z < APRON.z1) return Math.abs(z - 4) < 2.2 && Math.abs(x) < 100 ? "plank" : "granite";
+    return "grass";
+  };
+  const CELL = new Map();
+  for (let q = -RINGS; q <= RINGS; q++) for (let r = -RINGS; r <= RINGS; r++) {
+    if (Math.abs(q + r) > RINGS) continue;
+    const [x, z] = hexXZ(q, r), k = kindAt(x, z);
+    let h = 0;
+    if (k === "grass") { const dx = Math.max(0, Math.abs(x) - 112), dz = Math.max(0, z - 72, -90 - z); const d = Math.hypot(dx, dz); h = Math.max(0, Math.round(d / 9 + (vn(x / 22, z / 22) - 0.5) * 3 * Math.min(1, d / 20) + (vn(x / 60, z / 60) - 0.4) * d / 12)); }
+    CELL.set(q + "," + r, {x, z, k, h});
+  }
+  const ATLAS = tex("game/atlas"); ATLAS.wrapS = ATLAS.wrapT = THREE.ClampToEdgeWrapping;
+  const FIELDS = 4;   // the fields sheet, planet_terrain.rs TILESETS order
+  const auv = (tx, ty, fu, fv) => { const sx = FIELDS % 4, sy = Math.floor(FIELDS / 4); fu = 0.01 + fu * 0.98; fv = 0.01 + fv * 0.98; return [(sx * 4 + tx + fu) / 16, 1 - (sy * 4 + ty + fv) / 16]; };
+  const GEO = {}; const geo = k => GEO[k] || (GEO[k] = {p: [], n: [], u: []});
+  const REP = {granite: 2, iron: 1, stone: 2, plank: 2};   // repeat_m, assets/textures/settlement/manifest.ron
+  const NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+  const corner = i => { const a = Math.PI / 180 * (60 * i - 30); return [HR * Math.cos(a), HR * Math.sin(a)]; };
+  for (const [key, c] of CELL) {
+    const [q, r] = key.split(",").map(Number), G = geo(c.k === "grass" ? "atlas" : c.k);
+    const top = (px, pz) => c.k === "grass" ? auv(0, 0, (px - c.x) / (2 * HR) + 0.5, (pz - c.z) / (2 * HR) + 0.5) : [px / REP[c.k], -pz / REP[c.k]];
+    for (let i = 0; i < 6; i++) {
+      const [ax, az] = corner(i), [bx, bz] = corner((i + 1) % 6);
+      for (const [px, pz] of [[c.x, c.z], [c.x + bx, c.z + bz], [c.x + ax, c.z + az]]) { G.p.push(px, c.h, pz); G.n.push(0, 1, 0); G.u.push(...top(px, pz)); }
+      // walls down to the lowest neighbour across this edge (the edge of the patch drops three layers)
+      const mx = c.x + (ax + bx), mz = c.z + (az + bz);
+      let nb = null; for (const [dq, dr] of NB) { const o = CELL.get((q + dq) + "," + (r + dr)); if (o && Math.hypot(o.x - mx, o.z - mz) < HR) nb = o; }
+      const low = nb ? nb.h : c.h - 3; if (low >= c.h) continue;
+      const nx = (ax + bx) / 2, nz = (az + bz) / 2, l = Math.hypot(nx, nz), S = geo("atlas");
+      for (let y = c.h; y > low; y--) {
+        const tile = y === c.h && c.k === "grass" ? 1 : 2;
+        for (const [px, py, pz, u, v] of [[ax, y, az, 0, 0], [bx, y - 1, bz, 1, 1], [bx, y, bz, 1, 0], [ax, y, az, 0, 0], [ax, y - 1, az, 0, 1], [bx, y - 1, bz, 1, 1]]) { S.p.push(c.x + px, py, c.z + pz); S.n.push(nx / l, 0, nz / l); S.u.push(...auv(tile, 0, u, v)); }
+      }
+    }
+  }
+  const groundMat = {atlas: std({map: ATLAS, roughness: 1, side: THREE.DoubleSide}), granite: std({map: tex("game/granite"), roughness: 1}), iron: std({map: tex("game/iron"), roughness: 1}), stone: std({map: tex("game/stone"), roughness: 1}), plank: std({map: tex("game/plank"), roughness: 1})};
+  for (const [k, G] of Object.entries(GEO)) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(G.p, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(G.n, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(G.u, 2));
+    const m = new THREE.Mesh(g, groundMat[k]); m.receiveShadow = true; scene.add(m);
+  }
+  // pad lights round each pad's stone rim
   for (const [id, [x, , z]] of Object.entries(PADS)) {
-    const r = id === "freighter" ? 18 : id === "bay" ? 17 : 14;
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 0.4, 0.3, 6), padMat); pad.position.set(x, 0.15, z); pad.receiveShadow = true; scene.add(pad);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.7, 0.18, 6, 6), new THREE.MeshBasicMaterial({color: 0xf0b43c})); ring.rotation.x = Math.PI / 2; ring.rotation.z = Math.PI / 6; ring.position.set(x, 0.32, z); scene.add(ring);
-    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + Math.PI / 6; lamp(x + Math.cos(a) * (r + 0.2), 0.5, z + Math.sin(a) * (r + 0.2), 0xffb347, 2.2, 9, {size: 0.22}); }
+    const r = PAD_R[id] || 14;
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + Math.PI / 6; lamp(x + Math.cos(a) * (r + 1.2), 0.4, z + Math.sin(a) * (r + 1.2), 0xffb347, 2.2, 9, {size: 0.22}); }
   }
   // the hangar, behind
   const hangar = new THREE.Group(); hangar.position.set(0, 0, -64); scene.add(hangar);
-  const shell = new THREE.Mesh(new THREE.BoxGeometry(70, 18, 26), std({map: tex("tex-hull-dark", 1), roughness: 0.85})); shell.material.map = tex("tex-hull-dark").clone(); shell.material.map.repeat.set(10, 3); shell.material.map.needsUpdate = true;
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(70, 18, 26), std({map: texR("game/stone", 35, 9), roughness: 1}));   // stone walls, repeat_m 2
   shell.position.y = 9; shell.castShadow = shell.receiveShadow = true; hangar.add(shell);
-  const roof = new THREE.Mesh(new THREE.CylinderGeometry(13, 13, 70, 16, 1, false, 0, Math.PI), std({color: 0x6b7385, roughness: 0.7, metalness: 0.3})); roof.rotation.z = Math.PI / 2; roof.rotation.y = Math.PI / 2; roof.position.y = 18; roof.scale.set(1, 1, 0.45); hangar.add(roof);
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(30, 14), new THREE.MeshStandardMaterial({color: 0x2a2620, emissive: 0xc8823a, emissiveIntensity: 0})); door.position.set(0, 7, 13.05); hangar.add(door);
+  const roofSh = new THREE.Shape(); roofSh.moveTo(-14, 0); roofSh.lineTo(14, 0); roofSh.lineTo(0, 8); roofSh.lineTo(-14, 0);
+  const roofTex = texR("game/slate", 0.5, 0.5);   // slate, 2 m a repeat (extrude UVs are in metres)
+  const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(roofSh, {depth: 72, bevelEnabled: false}), std({map: roofTex, roughness: 1})); roof.rotation.y = Math.PI / 2; roof.position.set(-36, 18, 0); roof.castShadow = true; hangar.add(roof);
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(30, 14), new THREE.MeshStandardMaterial({map: texR("tex-thruster", 15, 7), emissive: 0xc8823a, emissiveIntensity: 0})); door.position.set(0, 7, 13.05); hangar.add(door);
   const WINDOW_MATS = [];
   const winMat = new THREE.MeshStandardMaterial({color: 0x3a3a3a, emissive: 0xffc878, emissiveIntensity: 0}); WINDOW_MATS.push(winMat);
   for (let k = 0; k < 10; k++) { const w = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.6), winMat); const x = -31 + k * 6.8 + (k >= 4 && k <= 5 ? 99 : 0); if (Math.abs(x) < 17) continue; w.position.set(x, 13, 13.06); hangar.add(w); }
-  lamp(-17, 15, -50.6, 0xffd08a, 5, 22, {size: 0.3}); lamp(17, 15, -50.6, 0xffd08a, 5, 22, {size: 0.3});
-  lamp(0, 6, -48, 0xffc070, 5, 18, {bulb: false}); // the open door spills light
+  lamp(-17, 15, -50.6, 0xffc070, 2.4, 19, {size: 0.3}); lamp(17, 15, -50.6, 0xffc070, 2.4, 19, {size: 0.3});
+  lamp(0, 6, -48, 0xffb060, 3, 13, {bulb: false}); // the open door spills light
   lamp(-30, 6, -50.6, 0xffd08a, 3, 12, {size: 0.22}); lamp(30, 6, -50.6, 0xffd08a, 3, 12, {size: 0.22});
   // floodlight masts
   for (const [x, z] of [[-90, 8], [-40, 10], [40, 10], [90, 8], [-30, 52], [30, 52]]) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 16, 8), std({color: 0x5a5f6a, metalness: 0.5, roughness: 0.5})); pole.position.set(x, 8, z); pole.castShadow = true; scene.add(pole);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 1.0), std({color: 0x30343c})); head.position.set(x, 16.2, z); scene.add(head);
-    lamp(x, 15.6, z, 0xfff0d0, 9, 38, {size: 0.45});
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.6, 16, 0.6), std({map: tex("game/iron")})); pole.position.set(x, 8, z); pole.castShadow = true; scene.add(pole);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 1.0), std({map: tex("tex-hull-dark")})); head.position.set(x, 16.2, z); scene.add(head);
+    lamp(x, 15.6, z, 0xffc880, 1.8, 19.5, {size: 0.45});
   }
   // the build bay: two gantries and a bridge crane
   const girder = std({map: tex("tex-girder"), roughness: 0.8});
   for (const gx of [-15, 15]) {
     for (const gz of [18, 38]) { const t = new THREE.Mesh(new THREE.BoxGeometry(2.4, 20, 2.4), girder); t.position.set(gx, 10, gz); t.castShadow = true; scene.add(t); }
     const beam = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.4, 22.4), girder); beam.position.set(gx, 19, 28); beam.castShadow = true; scene.add(beam);
-    lamp(gx * 0.86, 17.6, 22, 0xfff4e0, 6, 24, {size: 0.35}); lamp(gx * 0.86, 17.6, 34, 0xfff4e0, 6, 24, {size: 0.35});
+    lamp(gx * 0.86, 17.6, 22, 0xffd8a0, 2, 22, {size: 0.35}); lamp(gx * 0.86, 17.6, 34, 0xffd8a0, 2, 22, {size: 0.35});
   }
   const bridge = new THREE.Mesh(new THREE.BoxGeometry(32.4, 1.6, 2.0), girder); bridge.position.set(0, 20.6, 28); bridge.castShadow = true; scene.add(bridge);
-  const hook = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 2.4), std({color: 0xf0b43c})); hook.position.set(0, 19.2, 28); scene.add(hook);
+  const hook = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 2.4), std({map: tex("tex-laser")})); hook.position.set(0, 19.2, 28); scene.add(hook);
   // fuel farm and crates
-  for (let k = 0; k < 3; k++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 16), std({map: tex("tex-fuel"), roughness: 0.6})); t.position.set(98, 5, -50 + k * 11); t.castShadow = true; scene.add(t); }
+  for (let k = 0; k < 3; k++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10, 6), std({map: tex("tex-fuel")})); t.position.set(98, 5, -50 + k * 11); t.castShadow = true; scene.add(t); }
   lamp(90, 4, -39, 0xff8a5a, 3, 14, {size: 0.22});
   for (let k = 0; k < 9; k++) { const c = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), std({map: tex("tex-cargo")})); c.position.set(-96 + (k % 3) * 2.1, 1 + Math.floor(k / 3) * 0 + (k > 5 ? 2 : 0), -44 + Math.floor(k / 3) * 2.1); c.castShadow = c.receiveShadow = true; scene.add(c); }
   lamp(-92, 3.5, -38, 0xffc070, 3, 12, {size: 0.2});
 
   // ---- ships from the grid
   const M = {
-    hull: std({map: tex("tex-hull"), roughness: 0.6, metalness: 0.25}), dark: std({map: tex("tex-hull-dark"), roughness: 0.6, metalness: 0.3}),
-    cargo: std({map: tex("tex-cargo")}), thr: std({map: tex("tex-thruster"), roughness: 0.5, metalness: 0.4}), fuel: std({map: tex("tex-fuel"), roughness: 0.5}),
+    hull: std({map: tex("tex-hull")}), dark: std({map: tex("tex-hull-dark")}),
+    cargo: std({map: tex("tex-cargo")}), thr: std({map: tex("tex-thruster")}), fuel: std({map: tex("tex-fuel")}),
     reactor: std({map: tex("tex-reactor"), emissive: 0x66ddff, emissiveMap: tex("tex-reactor"), emissiveIntensity: 0.35}),
     shield: std({map: tex("tex-shield"), emissive: 0x4a90ff, emissiveMap: tex("tex-shield"), emissiveIntensity: 0.3}),
-    laser: std({map: tex("tex-laser")}), hab: std({map: tex("tex-hab")}), glass: std({map: tex("tex-glass"), roughness: 0.15, metalness: 0.5, emissive: 0x3a6a9a, emissiveIntensity: 0.1}),
-    nozzle: std({color: 0x30333c, roughness: 0.4, metalness: 0.7}), gyro: std({color: 0xf0b43c, roughness: 0.4, metalness: 0.4}),
+    laser: std({map: tex("tex-laser")}), hab: std({map: tex("tex-hab")}), glass: std({map: tex("tex-glass"), roughness: 0.5, emissive: 0x3a6a9a, emissiveIntensity: 0.1}),
+    nozzle: std({map: tex("tex-thruster")}), gyro: std({map: tex("tex-laser")}),
   };
   const HABWIN = new THREE.MeshStandardMaterial({color: 0x554433, emissive: 0xffc878, emissiveIntensity: 0}); WINDOW_MATS.push(HABWIN);
   const FLAME = new THREE.MeshBasicMaterial({color: 0x8fd0ff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false});
@@ -575,22 +634,22 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
         case "H": add(box, M.hull, X, yMid, Z); break;
         case "K": add(box, M.cargo, X, yMid, Z); break;
         case "R": add(box, M.reactor, X, yMid, Z); lamp(X, base + BOX_H + 0.3, Z, 0x66ddff, 1.6, 6, {group: g, bulb: false, local: true}); break;
-        case "F": { add(new THREE.CylinderGeometry(0.92, 0.92, 1.96, 14), M.fuel, X, yMid, Z, 0, Math.PI / 2); break; }
-        case "G": { add(box, M.dark, X, yMid, Z); const t = add(new THREE.TorusGeometry(0.7, 0.09, 6, 20), M.gyro, X, base + BOX_H + 0.25, Z, 0, 0, Math.PI / 2); SPIN.push(t); break; }
-        case "S": { add(box, M.dark, X, yMid, Z); add(new THREE.SphereGeometry(0.85, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.shield, X, base + BOX_H, Z); break; }
-        case "M": { add(box, M.laser, X, yMid, Z); add(new THREE.CylinderGeometry(0.22, 0.32, 1.8, 10), M.nozzle, X + 1.6, yMid, Z, 0, Math.PI / 2); lamp(X + 2.55, yMid, Z, 0xff5a40, 1.4, 4, {group: g, size: 0.14, local: true}); break; }
+        case "F": { add(box, M.fuel, X, yMid, Z); break; }
+        case "G": { add(box, M.dark, X, yMid, Z); const t = add(new THREE.BoxGeometry(1.5, 0.16, 0.5), M.gyro, X, base + BOX_H + 0.12, Z); SPIN.push(t); break; }
+        case "S": { add(box, M.dark, X, yMid, Z); add(new THREE.BoxGeometry(1.6, 0.4, 1.6), M.shield, X, base + BOX_H + 0.2, Z); add(new THREE.BoxGeometry(1.0, 0.4, 1.0), M.shield, X, base + BOX_H + 0.6, Z); break; }
+        case "M": { add(box, M.laser, X, yMid, Z); add(new THREE.BoxGeometry(1.8, 0.45, 0.45), M.nozzle, X + 1.6, yMid, Z); lamp(X + 2.55, yMid, Z, 0xff5a40, 1.4, 4, {group: g, size: 0.14, local: true}); break; }
         case "B": { add(box, M.hab, X, yMid, Z); for (const sz of [-1, 1]) if (at(k.x, k.y + sz) === ".") { const w = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.45), HABWIN); w.position.set(X, yMid + 0.25, Z + sz * 0.99); w.rotation.y = sz > 0 ? 0 : Math.PI; g.add(w); lamp(X, yMid + 0.25, Z + sz * 1.6, 0xffc070, 1.6, 5, {group: g, bulb: false, local: true}); } break; }
-        case "W": { add(box, M.dark, X, yMid, Z); add(new THREE.CylinderGeometry(0.14, 0.14, base, 6), M.nozzle, X, base / 2, Z); add(new THREE.CylinderGeometry(0.6, 0.7, 0.16, 8), M.nozzle, X, 0.08 + 0.3, Z); break; }
+        case "W": { add(box, M.dark, X, yMid, Z); add(new THREE.BoxGeometry(0.3, base, 0.3), M.nozzle, X, base / 2, Z); add(new THREE.BoxGeometry(1.2, 0.2, 1.2), M.dark, X, 0.1, Z); break; }
         case "T": {
           add(box, M.thr, X, yMid, Z);
-          add(new THREE.CylinderGeometry(0.55, 0.85, 0.9, 14, 1, true), M.nozzle, X - 1.4, yMid, Z, 0, -Math.PI / 2);
-          const fl = add(new THREE.ConeGeometry(0.6, 1.6, 12, 1, true), FLAME, X - 2.6, yMid, Z, 0, Math.PI / 2); fl.castShadow = false; FLAMES.push(fl);
+          add(new THREE.BoxGeometry(0.9, 1.4, 1.4), M.nozzle, X - 1.4, yMid, Z);
+          const fl = add(new THREE.BoxGeometry(1.6, 0.8, 0.8), FLAME, X - 2.65, yMid, Z); fl.castShadow = false; FLAMES.push(fl);
           lamp(X - 2.4, yMid, Z, 0x8fd0ff, 2.4, 7, {group: g, bulb: false, local: true});
           break;
         }
         case "L": {
           add(box, M.thr, X, yMid, Z);
-          add(new THREE.CylinderGeometry(0.5, 0.75, 0.5, 12, 1, true), M.nozzle, X, base - 0.2, Z);
+          add(new THREE.BoxGeometry(1.3, 0.5, 1.3), M.nozzle, X, base - 0.25, Z);
           break;
         }
       }
@@ -604,16 +663,34 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   const SHIPS = {};
   function place(id, rows, yaw = 0) {
     if (SHIPS[id]) { scene.remove(SHIPS[id]); for (let i = LAMPS.length - 1; i >= 0; i--) if (LAMPS[i].group === SHIPS[id]) LAMPS.splice(i, 1); }
-    const g = buildShip(rows); const [x, , z] = PADS[id]; g.position.set(x, 0.3, z); g.rotation.y = yaw; scene.add(g); SHIPS[id] = g;
+    const g = buildShip(rows); const [x, , z] = PADS[id]; g.position.set(x, 0, z); g.rotation.y = yaw; scene.add(g); SHIPS[id] = g;
   }
   place("wren", PRESETS.wren.rows, 0.4); place("prospector", PRESETS.prospector.rows, 0.2); place("hauler", PRESETS.hauler.rows, -0.2); place("freighter", PRESETS.freighter.rows, -0.35);
   place("bay", PRESETS.wren.rows, Math.PI / 2 * 0 + 0.0);
+  // ---- the game's own craft (assets/models/vehicles, byte-identical GLBs with their embedded
+  // atlas), parked beside the bay as a scale and style reference: the kestrel on the apron, the
+  // tern and the loon on plank cradles.
+  const REF = [["kestrel", -66, 42, 0.5, 0], ["tern", -88, 40, -0.3, 0.8], ["loon", -80, 56, 0.2, 0.5]];
+  if (THREE.GLTFLoader) {
+    const gl = new THREE.GLTFLoader(), cradle = std({map: tex("game/plank")});
+    // the .glb itself where it is served (a local checkout); else the same bytes as base64 text,
+    // since the published page cannot serve a .glb
+    const getGlb = (n, done) => gl.load(`ship-crafting/game/${n}.glb`, done, undefined, () =>
+      fetch(`ship-crafting/game/${n}.glb.txt`).then(r => r.text()).then(t => { const bin = atob(t.trim()), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); gl.parse(u.buffer, "", done); }));
+    for (const [n, x, z, yaw, lift] of REF) getGlb(n, gltf => {
+      const o = gltf.scene;
+      o.traverse(m => { if (!m.isMesh) return; const map = m.material.map; if (map) { map.magFilter = map.minFilter = THREE.NearestFilter; map.generateMipmaps = false; map.needsUpdate = true; } m.material = std({map, color: m.material.color, side: m.material.side}); m.castShadow = m.receiveShadow = true; });
+      o.rotation.y = yaw; const bb = new THREE.Box3().setFromObject(o); o.position.set(x, lift - bb.min.y, z); scene.add(o);
+      if (lift) for (const dz of [-1.2, 1.2]) { const c = new THREE.Mesh(new THREE.BoxGeometry(1.6, lift, 0.4), cradle); c.position.set(x + Math.sin(yaw) * dz, lift / 2, z + Math.cos(yaw) * dz); c.rotation.y = yaw + Math.PI / 2; scene.add(c); }
+    });
+  }
+  lamp(-78, 5, 47, 0xffc070, 4, 16, {size: 0.25});
 
   // ---- time of day
   const TIMES = {
     day:  {sky: 0x9cc4e4, fog: 0xb4cbd8, hemi: 0.55, sun: 1.05, sunCol: 0xfff1dc, sunPos: [-80, 120, 60], moon: 0, lamps: 0, win: 0, stars: 0, emis: 1, moonDisc: false},
     dusk: {sky: 0x8a6f72, fog: 0x8d7068, hemi: 0.22, sun: 0.55, sunCol: 0xff9a5a, sunPos: [-160, 22, 40], moon: 0.04, lamps: 0.55, win: 0.6, stars: 0.25, emis: 1.2, moonDisc: true},
-    night:{sky: 0x0a0f1c, fog: 0x0d1220, hemi: 0.035, sun: 0, sunCol: 0xffffff, sunPos: [-80, 120, 60], moon: 0.09, lamps: 1, win: 1.2, stars: 0.9, emis: 1.6, moonDisc: true},
+    night:{sky: 0x070b14, fog: 0x0a0e18, hemi: 0.02, sun: 0, sunCol: 0xffffff, sunPos: [-80, 120, 60], moon: 0.035, lamps: 1, win: 1.2, stars: 0.9, emis: 1.6, moonDisc: true},
   };
   let time = "night";
   function setTime(t) {
@@ -651,7 +728,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
 
   function info() {
     const el = document.getElementById("yardInfo");
-    if (focused === "all" || !PRESETS[focused] && focused !== "bay") { el.innerHTML = `<div><b>${LAMPS.length} lights</b> in the yard, each lighting what is within its range (pad lights 9 m, floodlights 38 m), all at once. <b>${time === "night" ? "Night" : time === "dusk" ? "Dusk" : "Day"}</b>: ${time === "day" ? "lamps off, sun shadows." : time === "dusk" ? "lamps coming on, low sun." : "moon at 0.09, lamps full."}</div>`; return; }
+    if (focused === "all" || !PRESETS[focused] && focused !== "bay") { el.innerHTML = `<div><b>${LAMPS.length} lights</b> in the yard, each lighting what is within its range (pad lights 9 m, floodlights 19.5 m), all at once. <b>${time === "night" ? "Night" : time === "dusk" ? "Dusk" : "Day"}</b>: ${time === "day" ? "lamps off, sun shadows." : time === "dusk" ? "lamps coming on, low sun." : "moon at 0.035, lamps full."}</div>`; return; }
     const rows = focused === "bay" ? BAY_ROWS : PRESETS[focused].rows, s = stats(rows), name = focused === "bay" ? "Your design" : PRESETS[focused].name;
     el.innerHTML = `<div><b>${name}</b>: ${s.m.toFixed(1)} t, ${s.len} by ${s.beam} m. Thrust ${s.thrust} kN, ${s.acc.toFixed(1)} m/s2. Turns at ${s.alpha.toFixed(2)} rad/s2. ${s.liftRatio >= 1.1 ? "Lifts off at 1 g." : "Orbit only."}</div>`;
   }
@@ -660,8 +737,11 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
 
   function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   new ResizeObserver(resize).observe(canvas); resize();
-  setTime("night");
+  setTime(TIMES[new URLSearchParams(location.search).get("time")] ? new URLSearchParams(location.search).get("time") : "night");
   document.getElementById("loading").remove();
+  { const q = new URLSearchParams(location.search); if (q.has("shot")) { document.body.classList.add("shot"); resize(); if (q.get("shot")) { focus(q.get("shot")); } } }
+  document.getElementById("hudbar").innerHTML = `<div class="hs sel"><img src="ship-crafting/game/hand.png" alt="Bare hand (the game's icon)"></div>` +
+    [["cockpit", 1], ["hull-plate", 12], ["cargo", 4], ["thruster", 2], ["fuel", 2], ["reactor", 1], ["gyro", 2], ["landing-gear", 4], ["mining-laser", 1]].map(([n, c]) => `<div class="hs"><img src="ship-crafting/${n}.png?v=2" alt="${n}"><span class="c">${c}</span></div>`).join("");
   const clock = new THREE.Clock(); const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const tmp = new THREE.Vector3();
   function frame() {
@@ -684,6 +764,8 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  let started = false;
+  const start = () => { if (started) return; started = true; requestAnimationFrame(frame); };
+  manager.onLoad = start; setTimeout(start, 10000);
 })();
 </script>

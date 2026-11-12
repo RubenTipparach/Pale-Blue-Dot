@@ -41,7 +41,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 .lede{margin:0;font-size:12.5px;line-height:1.45;color:var(--muted)}
 .biomes{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
 .biomes button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:4px 2px 5px;border:1px solid var(--line);border-radius:4px;font-family:var(--display);font-size:12.5px;letter-spacing:.03em;text-align:center;line-height:1.05}
-.biomes button img{width:40px;height:40px;image-rendering:pixelated}
+.biomes button img{width:56px;height:56px;image-rendering:pixelated}
 .biomes button small{font-family:var(--body);font-size:10px;color:var(--muted);letter-spacing:0}
 .biomes button[aria-pressed="true"]{border-color:var(--leaf);background:rgba(159,212,106,.12);color:var(--leaf)}
 .biomes button:hover{border-color:rgba(159,212,106,.55)}
@@ -95,6 +95,9 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
 .notes .close{position:sticky;top:0;float:right}
 .artrow{display:flex;flex-wrap:wrap;gap:6px}
 .artrow img{width:56px;height:56px;image-rendering:pixelated;background:rgba(255,255,255,.04);border-radius:3px}
+.atlas{left:50%;top:calc(16px + env(safe-area-inset-top,0px));transform:translateX(-50%);padding:10px;display:grid;gap:6px;max-height:calc(100% - 140px);overflow:auto;z-index:15;max-width:calc(100vw - 32px)}
+.atlas canvas{image-rendering:pixelated;display:block;background:repeating-conic-gradient(var(--panel-solid) 0 25%,#2a3226 0 50%) 0 0/12px 12px;max-width:100%}
+.atlas small{font-family:var(--mono);font-size:11px;color:var(--muted)}
 .toast{left:50%;top:calc(18px + env(safe-area-inset-top,0px));transform:translateX(-50%);padding:6px 12px;font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:14px;transition:opacity .4s;opacity:0;pointer-events:none;z-index:30}
 .loading{left:50%;top:50%;transform:translate(-50%,-50%);padding:12px 16px;font-family:var(--display);letter-spacing:.08em;font-size:16px}
 
@@ -105,7 +108,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   .rack{top:auto;bottom:calc(150px + env(safe-area-inset-bottom,0px));left:max(16px,env(safe-area-inset-left,0px));width:auto;max-height:45%}
   .rack[data-open="false"] > :not(.headrow){display:none}
   .scene{max-height:50%}
-  .biomes button img{width:30px;height:30px}
+  .biomes button img{width:28px;height:28px}
 }
 @media (prefers-reduced-motion: reduce){ .toast{transition:none} }
 </style>
@@ -138,7 +141,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   <div class="headrow"><h2>Tuning</h2><button class="btn" id="rackToggle" aria-expanded="true">Hide</button></div>
   <details open><summary>Layers</summary><div class="body" id="layers"></div></details>
   <details open><summary>Trees and plants</summary><div class="body">
-    <div class="field"><label for="treeStyle">Tree geometry</label><select id="treeStyle"><option value="detail">Detailed: parametric trunk, branches, leaf cards (proposal)</option><option value="hex">Tenebris hex prisms (what the game draws)</option></select></div>
+    <div class="field"><label for="treeStyle">Tree geometry</label><select id="treeStyle"><option value="detail">Detailed: parametric trunk, branches, leaf cards (proposal)</option><option value="hex">Tenebris hex prisms, game textures (what the game draws)</option></select></div>
     <div class="field"><label for="treeScale">Tree scale</label><output id="treeScaleOut"></output><input type="range" id="treeScale" min="0.5" max="1.6" step="0.01" value="1"></div>
     <div class="field"><label for="plantScale">Plant and clutter scale</label><output id="plantScaleOut"></output><input type="range" id="plantScale" min="0.5" max="2" step="0.01" value="1"></div>
     <div class="field"><label for="colVar">Colour variation</label><output id="colVarOut"></output><input type="range" id="colVar" min="0" max="1" step="0.01" value="0.35"></div>
@@ -149,12 +152,14 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
     <div class="field"><label for="windDir">Direction</label><output id="windDirOut"></output><input type="range" id="windDir" min="0" max="360" step="1" value="60"></div>
   </div></details>
   <details open><summary>LOD and distance</summary><div class="body">
-    <div class="field"><label for="lodMode">Switching</label><select id="lodMode"><option value="fade">Dithered cross-fade by distance (no pop)</option><option value="cut">Hard cut (what popping looks like)</option></select></div>
+    <div class="field"><label for="lodMode">Switching</label><select id="lodMode"><option value="timed">Timed dithered cross-fade (no pop, no standing dither)</option><option value="fade">Distance cross-fade band (distance-lod-fade)</option><option value="cut">Hard cut (what popping looks like)</option></select></div>
     <div class="field"><label for="near">Near ring: full geometry, to</label><output id="nearOut"></output><input type="range" id="near" min="5" max="80" step="1" value="22"></div>
     <div class="field"><label for="mid">Mid ring: cards, to</label><output id="midOut"></output><input type="range" id="mid" min="10" max="150" step="1" value="45"></div>
     <div class="field"><label for="draw">Draw distance: far impostors, to</label><output id="drawOut"></output><input type="range" id="draw" min="20" max="250" step="1" value="80"></div>
-    <div class="field"><label for="fadeW">Fade width (fraction of the ring)</label><output id="fadeWOut"></output><input type="range" id="fadeW" min="0.02" max="0.6" step="0.01" value="0.3"></div>
+    <div class="field"><label for="fadeW" id="fadeWLabel">Fade time</label><output id="fadeWOut"></output><input type="range" id="fadeW" min="0.02" max="0.6" step="0.01" value="0.3"></div>
     <label class="check"><input type="checkbox" id="lodVis"> Colour by LOD level</label>
+    <label class="check"><input type="checkbox" id="maskVis"> Show wind mask on cards (black root, white tip)</label>
+    <label class="check"><input type="checkbox" id="atlasVis"> Show the baked impostor atlas (all 8 views of each tree)</label>
     <div class="field"><label for="patch">Patch size</label><select id="patch"><option value="12">469 hex columns, 34 m across</option><option value="20">1,261 columns, 57 m</option><option value="26" selected>2,107 columns, 74 m</option><option value="34">3,571 columns, 96 m</option></select></div>
   </div></details>
   <details><summary>Share settings</summary><div class="body">
@@ -178,22 +183,31 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
 </section>
 
 <div class="panel toast" id="toast" role="status" aria-live="polite"></div>
-<div class="panel loading" id="loading">Painting the patch...</div>
+<section class="panel atlas" id="atlas" hidden aria-label="Baked impostor atlas"></section>
+<div class="panel loading" id="loading">Loading the patch...</div>
 
 <section class="panel notes" id="notes" hidden aria-label="Notes and questions">
   <button class="btn close" id="closeNotes">Close</button>
   <h2>Foliage detail playground</h2>
   <p><b>A proposal, not built behaviour.</b> The owner asked for "a new foliage detail mockup too so I can play around with detailed envs". This page is that: a patch of hex columns to tune ground cover on, by biome, season and time of day. None of it is in the game. What the game draws today is the Tenebris hex-prism tree (the "Tenebris hex prisms" choice under Trees) and the clutter in <code>tenebris-ground-clutter</code>.</p>
 
-  <h3>The art is painted by code</h3>
-  <p>Every texture, leaf card, impostor and species icon here was painted by a script, <code>tools/art/foliage_art.py</code>, with the hand-drawn-illustration kit, copying your friend's method: a flat block, hatching in the shape's own tones, form crescents, highlight dabs and a same-hue edge. It is not hand drawn and not your friend's work. The page samples it nearest, as the game samples terrain.</p>
+  <h3>Whose textures these are</h3>
+  <p><b>The game's own, wherever it has one</b> (byte-identical copies in <code>docs/mockups/foliage/game/</code>, sources named in its README):</p>
+  <ul>
+    <li><b>Terrain:</b> <code>assets/tilesets/atlas.png</code>, sampled as <code>planet_surface.wgsl</code>'s <code>pixel_tile</code> does (32 texels a tile, nearest). Each biome draws its game sheet: the top is tile (0,0); a wall is the sod-into-earth side (1,0) for its first metre, the earth (2,0) down to 4 m, then the stone (3,0); sand biomes show their own sand to 4 m; snow is the tundra sheet's (2,2). Top UVs are the game's: the cell's local position over 1.5 tile widths.</li>
+    <li><b>The game's trees</b> (Tree geometry: Tenebris hex prisms): wood is the biome sheet's tile (2,1) and leaves its (0,2), as material codes 8 and 9 are. The detailed trees use the same bark and leaf tiles, plus <code>needles</code>, <code>leaves</code> and <code>sage</code> from <code>assets/textures/settlement/</code>.</li>
+    <li><b>Grass blades</b> crop a vertical strip 0.18 wide of their ground tile, as the clutter pass does. Rocks and pebbles are the sheet's stone, logs its bark, reeds and litter the settlement <code>reed</code> and <code>litter</code>, the lanterns <code>timber</code> and <code>iron</code>. The fungal forest is the game's sporewood sheet (stalk, cap skin, spore clusters), the crystals the frozen wastes sheet's ice and frost crystals, the kelp the ocean sheet's kelp mat.</li>
+  </ul>
+  <p><b>Mockup-only: pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<code>tools/art/foliage_art.py</code>: native 16 to 56 px canvases, Sweaft-64 colours, short ramps lit from the top left, a 1 px outline, alpha 0 or 255, sampled nearest and alpha-tested), because the game has no texture for them: flower heads and the glowing bloom, red and brown mushroom caps, birch and palm bark, and the species icons. The painted tree impostors are only a placeholder for the moment before the bake below finishes. A card's leaf, needle, frond or blade <i>shape</i> is cut from the game tile by a pixel mask in the shader, so no leaf texture is drawn at all.</p>
   <div class="artrow" id="artrow"></div>
+  <p><b>Mid and far trees are baked from the near tree.</b> Once a biome's textures have loaded, every tree variant's real near model (its branches, needle sprays and game textures, in the current season, bare in winter) is rendered orthographically from 8 bearings into a strip of 48 x 72 px views, read back, snapped to the Sweaft-64 palette with alpha 0 or 255, and given to that variant's mid cards (four crossed planes, each showing the view baked from its own side) and far billboard (the view nearest the camera's bearing). Near, mid and far are one tree, so the cross-fade between them never changes what the tree is.</p>
+  <p><b>Leaf cards hang from their branches.</b> Every leaf, needle, frond and willow card has its root edge on the branch it grows from and points out along it. A wind mask, zero at the root and one at the tip (the square of the distance along the card), scales the card's own flutter, so the root stays pinned while the tree's sway moves branch and card together. "Show wind mask" colours cards black at the root and white at the tip.</p>
 
   <h3>How it stays consistent with the plans</h3>
   <ul>
-    <li><b>No pop-in</b> (priority 1). Every layer switches level with a screen-door Bayer 4 x 4 dither that crosses over a ring of width "fade width" times the ring's radius, ending at the line, as <code>detail-fade</code> and <code>distance-lod-fade</code> design it: the outgoing level keeps the pixels the incoming one gives up, so there is never a frame where both or neither show. The last level fades to nothing before the draw distance. Set Switching to "Hard cut" to see the pop it replaces, and use Fly-by to watch it in motion. The default fade width is 0.3, the shipped <code>lod_fade_width</code>.</li>
+    <li><b>No pop-in</b> (priority 1). Every layer switches level with a screen-door Bayer 4 x 4 dither in which the outgoing level keeps exactly the pixels the incoming one gives up, so there is never a frame where both or neither show. By default the switch is <i>timed</i>: when a plant crosses a ring (with 4% hysteresis) its two levels cross-fade over the fade time, then the new level is solid, so a dither is only ever on screen while a fade is in progress. Changing a setting fades the new plants in the same way. "Distance cross-fade band" is the <code>distance-lod-fade</code> design (a standing dither in a band of width "fade width" times the ring, the shipped <code>lod_fade_width</code> 0.3), kept to compare; "Hard cut" shows the pop both replace. Fly-by shows them in motion.</li>
     <li><b>Trees stand one per cell, at the cell centre</b>, as Tenebris places them, at the biome rates of <code>tenebris-tree-geometry</code> scaled by the slider. The hex-prism style is that change's geometry: a 0.20 trunk, two leaf layers at 0.65 + 0.35 x hash of the cell, a pine as one wood block under a cone of layers 0.95 down to 0.15, never rotated off the grid.</li>
-    <li><b>Grass blades take their colour from a narrow slice of the ground tile they grow on</b>, as Tenebris's scatter does; the mid ring swaps to a painted card, and past that the ground tile carries the colour.</li>
+    <li><b>Grass blades take their colour from a narrow slice of the ground tile they grow on</b>, as Tenebris's scatter does; the mid ring swaps to a crossed card cut from the same tile, and past that the ground tile carries the colour.</li>
     <li><b>Biomes are big</b> (<code>bigger-biomes</code>): one patch is one biome, about a tenth of a 750 m biome's width.</li>
     <li><b>Lit at night.</b> Lanterns along the path, a campfire, glowing fungi, crystals and fireflies each light what is near them wherever the camera is. The static lights are baked into each terrain vertex and each plant, as the towns mockup bakes block light; the 16 fireflies move, so they are summed in the shader, all of them, every frame. The moon is kept dim so the lamps read.</li>
   </ul>
@@ -202,7 +216,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   <ul>
     <li>Distances are scaled to the patch. The game's rings are hundreds of metres (trees fade out at about 1.2 to 2.4 km); here they are tens, so the whole ladder fits on screen.</li>
     <li>No shadow maps. Trees darken the ground and plants under their crowns with a baked occlusion term instead.</li>
-    <li>Changing a density or the biome rebuilds the patch, which can add plants in one frame. In the game the scatter is a pure function of the cell, so that never happens in play.</li>
+    <li>Changing a density or the biome rebuilds the patch; the new plants fade in rather than appear. In the game the scatter is a pure function of the cell, so it does not change in play.</li>
     <li>Frame time here is a browser's, not the engine's. The counters are for comparing settings against each other, not for budgets.</li>
   </ul>
 
@@ -211,7 +225,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
     <thead><tr><th>Question</th><th>Options</th><th>Recommendation</th></tr></thead>
     <tbody>
       <tr><td>1. What should a near tree be?</td><td>A. Tenebris hex prisms (today). B. Detailed parametric trees. C. Hex prisms as the shape you chop, wrapped in leaf cards for detail.</td><td><b>C.</b> The cell stays the unit of material, so mining and saves are untouched, and the cards add the softness of B. Compare A and B here with the Tree geometry switch.</td></tr>
-      <tr><td>2. The mid ring for trees</td><td>A. Three crossed impostor cards. B. One camera-facing billboard.</td><td><b>A.</b> Crossed cards do not turn with the camera, so orbiting never makes a tree swing. B stays as the far ring.</td></tr>
+      <tr><td>2. The mid ring for trees</td><td>A. Crossed cards from the baked views. B. One camera-facing billboard picking the nearest baked view.</td><td><b>A</b> for mid, B for far, both baked from the near tree (as here): crossed cards do not turn with the camera, and the far billboard is small enough that its view steps do not show.</td></tr>
       <tr><td>3. Fade width</td><td>0.15 / 0.3 (shipped) / 0.5 (Unity's default)</td><td><b>0.3.</b> Under 0.15 the dither reads as a line moving with you; over 0.5 two levels overlap long enough to cost frame time.</td></tr>
       <tr><td>4. Grass past its rings</td><td>A. Nothing, the ground tile carries it. B. A third, far level of grass.</td><td><b>A</b>, as Tenebris does. Turn on "Colour by LOD level" and fly: the tile already reads as grass from the mid ring out.</td></tr>
       <tr><td>5. Seasons</td><td>A. One calendar per planet, snow only where a biome can freeze. B. Per-biome seasons.</td><td><b>A.</b> It is one number in the world's time, and it fits the world-persistence plan, where world time passes only while the game is played.</td></tr>
@@ -231,6 +245,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
 const W = 2.833;                 // tile width, flat to flat (m)
 const R = W / Math.sqrt(3);      // circumradius
 const SQ3 = Math.sqrt(3);
+const SOD_M = 1, SOIL_M = 4;     // pbd_core::column::SOD_DEPTH_M, SOIL_DEPTH_M
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -249,50 +264,59 @@ function vnoise(x, z, seed) {
 function fbm(x, z, seed) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < 4; i++) { s += a * vnoise(x * f, z * f, seed + i * 17); a *= 0.5; f *= 2; } return s / 0.9375; }
 
 // =====================================================================
+// Textures. "S:i" is tile i of the biome's own game sheet, "A:s:i" tile i of
+// atlas sheet s, "T:game/x" a game settlement texture, "P:x" a mockup-only
+// mockup-only texture. Atlas sheets are the sorted tileset names
+// (planet_terrain.rs TILESETS); a tile index is row-major in the 4 x 4 sheet.
+// =====================================================================
+const SHEET = { asteroid: 0, basalt_wastes: 1, beach: 2, desert: 3, fields: 4, frozen_wastes: 5, jungle: 6, lunar_regolith: 7, mountains: 8, ocean: 9, redwood_forest: 10, sporewood: 11, swamp: 12, tundra: 13 };
+const SNOW = [SHEET.tundra, 10];  // the snow material: the tundra sheet's wind packed snow at (2,2)
+
+// =====================================================================
 // Biomes
 // =====================================================================
 const BIOMES = {
-  temperate: { name: "Temperate forest", icon: "oak", amp: 3, top: ["ground_grass", "ground_litter"], side: "side_dirt", sky: [0x8fbbe0, 0xd6e6ee], fog: 0xb8cfdc,
-    trees: { oak: 0.6, birch: 0.4 }, treeP: 0.32, extra: 0, grassTex: "grass_green", grass: 5, bush: { tex: "leaf_broad", n: 0.25 }, flowers: { tex: ["flower_red", "flower_yellow", "flower_white", "flower_blue"], n: 0.35 },
-    ferns: { kind: "fern", n: 0.3 }, mush: { tex: "cap_red", n: 0.12 }, rocks: 0.5, logs: 0.03, vines: 0.0, litter: 0.6, snow: true, fireflies: true },
-  jungle: { name: "Jungle", icon: "kapok", amp: 3, top: ["ground_jungle", "ground_litter"], side: "side_dirt", sky: [0x7fb2d4, 0xd8e8e0], fog: 0xb4cbbf,
-    trees: { kapok: 0.55, palm: 0.45 }, treeP: 0.55, extra: 2, grassTex: "grass_green", grass: 3, bush: { tex: "leaf_jungle", n: 0.75 }, flowers: { tex: ["flower_red", "flower_yellow"], n: 0.12 },
-    ferns: { kind: "fern", n: 1.4 }, mush: { tex: "cap_brown", n: 0.15 }, rocks: 0.25, logs: 0.05, vines: 0.7, litter: 0.6, snow: false, fireflies: true },
-  savanna: { name: "Savanna", icon: "acacia", amp: 1.5, top: ["ground_dry", "ground_sand"], side: "side_sand", sky: [0x86b6e0, 0xf0dcb0], fog: 0xe0d2b0,
-    trees: { acacia: 1 }, treeP: 0.06, extra: 0, grassTex: "grass_dry", grass: 6, bush: { tex: "leaf_acacia", n: 0.12 }, flowers: { tex: ["flower_yellow"], n: 0.06 },
+  temperate: { name: "Temperate forest", icon: "oak", amp: 3, sheet: SHEET.fields, sky: [0x8fbbe0, 0xd6e6ee], fog: 0xb8cfdc,
+    trees: { oak: 0.6, birch: 0.4 }, treeP: 0.32, extra: 0, grass: 5, bush: { tex: "S:8", n: 0.25 }, flowers: { tex: ["flower_red", "flower_yellow", "flower_white", "flower_blue"], n: 0.35 },
+    ferns: { kind: "fern", tex: "A:6:9", n: 0.3 }, mush: { tex: "P:cap_red", n: 0.12 }, rocks: 0.5, logs: 0.03, vines: 0.0, litter: 0.6, snow: true, fireflies: true },
+  jungle: { name: "Jungle", icon: "kapok", amp: 3, sheet: SHEET.jungle, sky: [0x7fb2d4, 0xd8e8e0], fog: 0xb4cbbf,
+    trees: { kapok: 0.55, palm: 0.45 }, treeP: 0.55, extra: 2, grass: 3, bush: { tex: "S:8", n: 0.75 }, flowers: { tex: ["flower_red", "flower_yellow"], n: 0.12 },
+    ferns: { kind: "fern", tex: "S:9", n: 1.4 }, mush: { tex: "P:cap_brown", n: 0.15 }, rocks: 0.25, logs: 0.05, vines: 0.7, litter: 0.6, snow: false, fireflies: true },
+  savanna: { name: "Savanna", icon: "acacia", amp: 1.5, sheet: SHEET.desert, topIdx: 8, notGame: true, sky: [0x86b6e0, 0xf0dcb0], fog: 0xe0d2b0,
+    trees: { acacia: 1 }, treeP: 0.06, extra: 0, grass: 6, bush: { tex: "T:game/sage", n: 0.12 }, flowers: { tex: ["flower_yellow"], n: 0.06 },
     ferns: { kind: "twig", n: 0.08 }, mush: null, rocks: 0.6, logs: 0.01, vines: 0, litter: 0.0, snow: false, fireflies: false },
-  taiga: { name: "Taiga", icon: "pine", amp: 4, top: ["ground_grass", "ground_snow"], side: "side_rock", sky: [0x9ab8d4, 0xdde6ee], fog: 0xc6d2dc,
-    trees: { pine: 0.85, birch: 0.15 }, treeP: 0.3, extra: 3, grassTex: "grass_green", grass: 2.5, bush: { tex: "needle", n: 0.15 }, flowers: { tex: ["flower_white", "flower_blue"], n: 0.1 },
-    ferns: { kind: "twig", n: 0.12 }, mush: { tex: "cap_brown", n: 0.12 }, rocks: 0.8, logs: 0.04, vines: 0, litter: 0.15, snow: true, coldTop: true, fireflies: false },
-  desert: { name: "Desert scrub", icon: "cactus", amp: 3, top: ["ground_sand", "ground_dry"], side: "side_sand", sky: [0x7fb4e8, 0xf2e0c0], fog: 0xead8b8,
-    trees: { cactus: 1 }, treeP: 0.07, extra: 0, grassTex: "grass_dry", grass: 0.6, bush: { tex: "twig", n: 0.2, dead: true }, flowers: { tex: ["flower_red"], n: 0.02 },
+  taiga: { name: "Taiga", icon: "pine", amp: 4, sheet: SHEET.tundra, sky: [0x9ab8d4, 0xdde6ee], fog: 0xc6d2dc,
+    trees: { pine: 0.85, birch: 0.15 }, treeP: 0.3, extra: 3, grass: 2.5, bush: { tex: "T:game/needles", n: 0.15, needle: true }, flowers: { tex: ["flower_white", "flower_blue"], n: 0.1 },
+    ferns: { kind: "twig", n: 0.12 }, mush: { tex: "P:cap_brown", n: 0.12 }, rocks: 0.8, logs: 0.04, vines: 0, litter: 0.15, snow: true, coldTop: true, fireflies: false },
+  desert: { name: "Desert scrub", icon: "cactus", amp: 3, sheet: SHEET.desert, sandy: true, sky: [0x7fb4e8, 0xf2e0c0], fog: 0xead8b8,
+    trees: { cactus: 1 }, treeP: 0.07, extra: 0, grass: 0.6, bush: { dead: true, n: 0.2 }, flowers: { tex: ["flower_red"], n: 0.02 },
     ferns: { kind: "twig", n: 0.18 }, mush: null, rocks: 0.9, logs: 0.0, vines: 0, litter: 0.0, snow: false, fireflies: false },
-  swamp: { name: "Swamp", icon: "willow", amp: 1.2, water: true, top: ["ground_mud", "ground_grass"], side: "side_dirt", sky: [0x8aa8b8, 0xc8d0c0], fog: 0xa8b4a4,
-    trees: { willow: 0.75, birch: 0.25 }, treeP: 0.26, extra: 3, grassTex: "grass_green", grass: 3, bush: { tex: "leaf_willow", n: 0.3 }, flowers: { tex: ["flower_white", "flower_yellow"], n: 0.08 },
-    ferns: { kind: "reed", n: 1.1 }, mush: { tex: "cap_brown", n: 0.25 }, rocks: 0.15, logs: 0.06, vines: 0.5, litter: 0.3, snow: true, fireflies: true },
-  fungal: { name: "Glowing fungal forest", icon: "glowcap", alien: true, amp: 3, top: ["ground_fungal", "ground_fungal"], side: "side_rock", sky: [0x5a5490, 0xb8a0c8], fog: 0x8a7ea8,
-    trees: { glowcap: 1 }, treeP: 0.2, extra: 0, grassTex: "grass_alien", grass: 3, bush: { tex: "flower_glow", n: 0.15, glow: true }, flowers: { tex: ["flower_glow"], n: 0.25, glow: true },
-    ferns: { kind: "twig", n: 0.0 }, mush: { tex: "cap_glow", n: 0.7, glow: true }, rocks: 0.3, logs: 0.0, vines: 0.2, litter: 0.0, snow: false, fireflies: true, spores: true },
-  crystal: { name: "Crystal flora", icon: "crystal", alien: true, amp: 5, top: ["ground_crystal", "ground_crystal"], side: "side_rock", sky: [0x8ab0d8, 0xe6d8f0], fog: 0xc8c0dc,
-    trees: { crystal: 1 }, treeP: 0.14, extra: 0, grassTex: "grass_alien", grass: 1.2, bush: null, flowers: { tex: ["flower_blue", "flower_white"], n: 0.08 },
+  swamp: { name: "Swamp", icon: "willow", amp: 1.2, water: true, sheet: SHEET.swamp, sky: [0x8aa8b8, 0xc8d0c0], fog: 0xa8b4a4,
+    trees: { willow: 0.75, birch: 0.25 }, treeP: 0.26, extra: 3, grass: 3, bush: { tex: "S:8", n: 0.3 }, flowers: { tex: ["flower_white", "flower_yellow"], n: 0.08 },
+    ferns: { kind: "reed", n: 1.1 }, mush: { tex: "P:cap_brown", n: 0.25 }, rocks: 0.15, logs: 0.06, vines: 0.5, litter: 0.3, snow: true, fireflies: true },
+  fungal: { name: "Glowing fungal forest", icon: "glowcap", alien: true, amp: 3, sheet: SHEET.sporewood, sky: [0x5a5490, 0xb8a0c8], fog: 0x8a7ea8,
+    trees: { glowcap: 1 }, treeP: 0.2, extra: 0, grass: 3, bush: { tex: "S:10", n: 0.15, glow: true }, flowers: { tex: ["flower_glow"], n: 0.25, glow: true },
+    ferns: { kind: "twig", n: 0.0 }, mush: { tex: "S:9", n: 0.7, glow: true }, rocks: 0.3, logs: 0.0, vines: 0.2, litter: 0.0, snow: false, fireflies: true, spores: true },
+  crystal: { name: "Crystal flora", icon: "crystal", alien: true, amp: 5, sheet: SHEET.frozen_wastes, sky: [0x8ab0d8, 0xe6d8f0], fog: 0xc8c0dc,
+    trees: { crystal: 1 }, treeP: 0.14, extra: 0, grass: 1.2, bush: null, flowers: { tex: ["flower_blue", "flower_white"], n: 0.08 },
     ferns: { kind: "shard", n: 0.35 }, mush: null, rocks: 1.2, logs: 0, vines: 0, litter: 0, snow: false, fireflies: false },
-  kelp: { name: "Low-gravity kelp", icon: "kelp", alien: true, amp: 4, top: ["ground_kelp", "ground_sand"], side: "side_sand", sky: [0x70b0b0, 0xd0e8d8], fog: 0xa8ccc4, lowg: true,
-    trees: { kelp: 1 }, treeP: 0.32, extra: 0, grassTex: "grass_alien", grass: 2, bush: null, flowers: null,
+  kelp: { name: "Low-gravity kelp", icon: "kelp", alien: true, amp: 4, sheet: SHEET.ocean, sandy: true, sky: [0x70b0b0, 0xd0e8d8], fog: 0xa8ccc4, lowg: true, grassIdx: 8,
+    trees: { kelp: 1 }, treeP: 0.32, extra: 0, grass: 2, bush: null, flowers: null,
     ferns: { kind: "kelp", n: 0.9 }, mush: null, rocks: 0.4, logs: 0, vines: 0, litter: 0, snow: false, fireflies: false },
 };
-// species: the bark, leaf texture, whether leaves drop in autumn, and how stiff in wind
+// species: bark and leaf textures (see the key above), the leaf card's mask, wind and season flags
 const SPECIES = {
-  oak: { bark: "bark_oak", leaf: "leaf_broad", decid: true, snow: true },
-  birch: { bark: "bark_birch", leaf: "leaf_birch", decid: true, snow: true },
-  pine: { bark: "bark_pine", leaf: "needle", decid: false, snow: true, cone: true },
-  kapok: { bark: "bark_kapok", leaf: "leaf_jungle", decid: false },
-  palm: { bark: "bark_palm", leaf: "leaf_palm", decid: false },
-  acacia: { bark: "bark_oak", leaf: "leaf_acacia", decid: false },
-  willow: { bark: "bark_kapok", leaf: "leaf_willow", decid: true, snow: true },
-  cactus: { bark: "bark_cactus", leaf: null, decid: false },
-  glowcap: { bark: "bark_fungal", leaf: "cap_glow", decid: false, glow: [0.35, 1.0, 0.82], glowReach: 9 },
-  crystal: { bark: "crystal", leaf: null, decid: false, glow: [0.45, 0.8, 1.0], glowReach: 7 },
-  kelp: { bark: "bark_kelp", leaf: "kelp", decid: false },
+  oak: { bark: "S:6", leaf: "S:8", mask: 1, decid: true, snow: true },
+  birch: { bark: "P:bark_birch", leaf: "T:game/leaves", mask: 1, decid: true, snow: true },
+  pine: { bark: "A:10:6", leaf: "T:game/needles", mask: 2, decid: false, snow: true, cone: true },
+  kapok: { bark: "S:6", leaf: "S:8", mask: 1, decid: false },
+  palm: { bark: "P:bark_palm", leaf: "S:8", mask: 4, decid: false },
+  acacia: { bark: "A:4:6", leaf: "T:game/sage", mask: 1, decid: false },
+  willow: { bark: "S:6", leaf: "S:8", mask: 4, decid: true, snow: true },
+  cactus: { bark: "A:3:6", leaf: null, decid: false },
+  glowcap: { bark: "A:11:6", leaf: "A:11:9", mask: 0, decid: false, glow: [0.35, 1.0, 0.82], glowReach: 9 },
+  crystal: { bark: "A:5:5", leaf: null, decid: false, glow: [0.45, 0.8, 1.0], glowReach: 7 },
+  kelp: { bark: "A:9:6", leaf: "A:9:6", mask: 6, decid: false },
 };
 
 // =====================================================================
@@ -314,7 +338,7 @@ const LAYER_DEFS = [
 ];
 const DEFAULTS = {
   biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", treeScale: 1, plantScale: 1, colVar: 0.35,
-  wind: 0.35, gust: 0.5, windDir: 60, lodMode: "fade", near: 22, mid: 45, draw: 80, fadeW: 0.3, lodVis: false, patch: 26,
+  wind: 0.35, gust: 0.5, windDir: 60, lodMode: "timed", near: 22, mid: 45, draw: 80, fadeW: 0.3, lodVis: false, maskVis: false, atlasVis: false, patch: 26,
   layers: Object.fromEntries(LAYER_DEFS.map(([k]) => [k, { on: true, dens: 1 }])),
 };
 const PRESETS = {
@@ -336,19 +360,30 @@ const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 1200);
 camera.rotation.order = "YXZ";
 
 const TEXDIR = "foliage/";
+const ART_V = 8;   // cache-bust: bump whenever any PNG changes, so no browser shows stale art
 const TEX = {};
 const loader = new THREE.TextureLoader();
-function tex(name) {
-  if (TEX[name]) return TEX[name];
-  const t = loader.load(TEXDIR + name + ".png", () => { pending--; if (pending <= 0) doneLoading(); }, undefined, () => { pending--; if (pending <= 0) doneLoading(); });
-  pending++;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.magFilter = THREE.NearestFilter;            // the game samples terrain nearest
-  t.minFilter = THREE.NearestMipmapLinearFilter;
-  TEX[name] = t; return t;
-}
 let pending = 0, loadedOnce = false;
 function doneLoading() { if (!loadedOnce) { loadedOnce = true; document.getElementById("loading").hidden = true; } }
+function tex(name) {
+  if (TEX[name]) return TEX[name];
+  pending++;
+  const fin = () => { pending--; if (pending <= 0) doneLoading(); };
+  const t = loader.load(TEXDIR + name + ".png?v=" + ART_V, fin, undefined, fin);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.NearestFilter;              // the game samples terrain nearest
+  if (name === "game/atlas") { t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; } // textureLoad at level 0, as pixel_tile does
+  else t.minFilter = THREE.NearestMipmapLinearFilter;
+  TEX[name] = t; return t;
+}
+// a texture spec to material options
+function spec(sp, B) {
+  const p = sp.split(":");
+  if (p[0] === "S") return { at: [B.sheet, +p[1]] };
+  if (p[0] === "A") return { at: [+p[1], +p[2]] };
+  if (p[0] === "T") return { tex: p.slice(1).join(":") };
+  return { tex: p.slice(1).join(":") };
+}
 
 // =====================================================================
 // Shaders: one program family for everything
@@ -360,8 +395,8 @@ const G = { // shared uniforms
   uLampOn: { value: 0 }, uWind: { value: 0.35 }, uGust: { value: 0.5 }, uWindDir: { value: new THREE.Vector2(1, 0) },
   uAutumn: { value: 0 }, uSpring: { value: 0 }, uWinter: { value: 0 }, uSnow: { value: 0 },
   uFF: { value: Array.from({ length: 16 }, () => new THREE.Vector3(0, -999, 0)) }, uFFCol: { value: new THREE.Color(0.9, 1.0, 0.4) }, uFFOn: { value: 0 },
-  uLodVis: { value: 0 }, uColVar: { value: 0.35 }, uTreeScale: { value: 1 }, uPlantScale: { value: 1 }, uExposure: { value: 1 },
-  uKeepFlower: { value: 1 }, uKeepLitter: { value: 1 }, uKeepMush: { value: 1 }, uLowG: { value: 0 }, uNight: { value: 0 },
+  uLodVis: { value: 0 }, uMaskVis: { value: 0 }, uColVar: { value: 0.35 }, uTreeScale: { value: 1 }, uPlantScale: { value: 1 }, uExposure: { value: 0.8 },
+  uKeepFlower: { value: 1 }, uKeepGrass: { value: 2 }, uKeepLitter: { value: 1 }, uKeepMush: { value: 1 }, uLowG: { value: 0 }, uNight: { value: 0 }, uBake: { value: 0 },
 };
 
 const VERT = `
@@ -371,15 +406,18 @@ attribute vec3 lampV; attribute vec3 glowV; attribute float occV;
 #else
 attribute float aFade; attribute vec3 aTint; attribute vec3 aLamp; attribute vec3 aGlow; attribute vec2 aSeed;
 #endif
-uniform float uTime, uWind, uGust, uScale, uWindAmp, uWindH, uFlutter, uUpN, uLampOn, uFFOn, uLowG;
+uniform float uTime, uWind, uGust, uScale, uWindAmp, uWindH, uFlutter, uUpN, uLampOn, uFFOn, uLowG, uSwayMask, uViews;
 uniform vec2 uWindDir; uniform vec3 uFF[16]; uniform vec3 uFFCol;
-varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vH;
+varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vSway;
 void main(){
   vUv = uv; vCard = card; vAo = ao;
+  // the wind mask: a card's own flutter is zero at its root (v = 0, on the branch) and one at its tip
+  float sw = uSwayMask > 0.5 ? clamp(uv.y, 0.0, 1.0) * clamp(uv.y, 0.0, 1.0) : 1.0;
+  vSway = sw;
 #ifdef TERRAIN
   vec3 w = (modelMatrix * vec4(position,1.0)).xyz;
   vN = normal; vTint = vec3(1.0); vFade = 1.0; vSeed = vec2(0.0, occV);
-  vBlock = lampV * uLampOn + glowV; vH = 0.0;
+  vBlock = lampV * uLampOn + glowV;
 #else
   vec3 org = instanceMatrix[3].xyz;
   float sc = length(instanceMatrix[0].xyz) * uScale;
@@ -390,11 +428,19 @@ void main(){
     vec3 rt = vec3(tc.z, 0.0, -tc.x);
     w = org + rt * position.x * sc + vec3(0.0, position.y * sc, 0.0);
     vN = normalize(tc * 0.4 + vec3(0.0,1.0,0.0));
+    if (uViews > 0.5) { // pick the baked view nearest the camera's bearing in the tree's own frame
+      float yaw = atan(-instanceMatrix[0].z, instanceMatrix[0].x);
+      float th = atan(tc.x, tc.z) - yaw;
+      float view = mod(floor(th / (6.2831853 / uViews) + 0.5), uViews);
+      vUv.x = (view + uv.x) / uViews;
+    }
   #else
     w = (instanceMatrix * vec4(lp,1.0)).xyz;
     vN = normalize(mat3(instanceMatrix) * normal);
+    if (uViews > 0.5) vUv.x = uv.x / uViews;   // crossed impostor cards: uv.x already holds the view
   #endif
-  // wind: bend grows with the square of height above the plant's base; gusts roll across the patch
+  // the plant's sway: bend grows with the square of height above its base, so a
+  // branch and every card rooted on it move together; gusts roll across the patch
   float h = abs(w.y - org.y) / uWindH;
   float ph = dot(org.xz, vec2(0.37, 0.21)) + aSeed.x * 6.28;
   float gust = sin(dot(w.xz, uWindDir) * 0.06 - uTime * 1.6) * 0.5 + 0.5;
@@ -406,64 +452,125 @@ void main(){
   w.y -= bend * sway * sway * 0.25 * uWindH;
   vec2 perp = vec2(-uWindDir.y, uWindDir.x);
   w.xz += perp * bend * uWind * 0.18 * sin(uTime * 2.7 * speed + ph * 1.7);
-  w += vec3(sin(uTime*7.0 + card*40.0 + ph), cos(uTime*6.0 + card*31.0), sin(uTime*5.0 + card*23.0)) * uFlutter * (uWind + gust * 0.5) * step(0.001, card);
+  // the card's own flutter, masked: the root stays on the branch
+  w += vec3(sin(uTime*7.0*speed + card*40.0 + ph), cos(uTime*6.0*speed + card*31.0), sin(uTime*5.0*speed + card*23.0)) * uFlutter * (uWind + gust * 0.5) * step(0.001, card) * sw;
   vN = normalize(mix(vN, vec3(0.0,1.0,0.0), uUpN));
-  vTint = aTint; vFade = aFade; vSeed = aSeed; vH = h;
+  vTint = aTint; vFade = aFade; vSeed = aSeed;
   vBlock = aLamp * uLampOn + aGlow;
 #endif
   // the fireflies: all sixteen light everything near them, wherever the camera is
   vec3 ff = vec3(0.0);
   for (int i = 0; i < 16; i++) { vec3 d = uFF[i] - w; float r = length(d); float f = max(0.0, 1.0 - r / 4.5); ff += f * f; }
-  vBlock += ff * uFFCol * uFFOn * 0.5;
+  vBlock += ff * uFFCol * uFFOn * 0.3;
   vW = w;
   gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
 }`;
 
 const FRAG = `
-uniform sampler2D map; uniform sampler2D snowMap;
-uniform vec3 uSunDir, uSunCol, uSkyAmb, uGndAmb, uFogCol, uLodCol, uEmitCol, uBase;
-uniform float uFogNear, uFogFar, uLodVis, uColVar, uAutumn, uSpring, uWinter, uSnow, uSnowable, uLeafy, uDecid, uEmit, uCardLit, uAlphaTest, uSolidLeaf, uSlice, uKeep, uExposure, uTime, uNight, uFlicker;
-varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vH;
+uniform sampler2D map;
+uniform vec3 uSunDir, uSunCol, uSkyAmb, uGndAmb, uFogCol, uLodCol, uEmitCol, uAt;
+uniform float uBake, uFogNear, uFogFar, uLodVis, uMaskVis, uColVar, uAutumn, uSpring, uWinter, uSnow, uSnowable, uLeafy, uDecid, uEmit, uCardLit, uAlphaTest, uKeep, uExposure, uTime, uNight, uFlicker, uUseAt, uMask, uSwayMask, uRep, uImp, uGrass, uViews;
+varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vSway;
 float bayer2(vec2 a){ a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
 float bayer4(vec2 a){ return bayer2(0.5 * a) * 0.25 + bayer2(a); }
 float h12(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+// planet_surface.wgsl pixel_tile: sheet by slot, tile by (column, row), 32 texels a tile, nearest
+vec4 atlasTile(vec2 uv, vec3 at){
+  vec2 p = (floor(fract(vec2(uv.x, 1.0 - uv.y)) * 32.0) + 0.5) / 32.0;
+  vec2 sheet = vec2(mod(at.x, 4.0), floor(at.x / 4.0 + 0.001)) * 0.25;
+  vec2 s = sheet + (at.yz + p) / 16.0;
+  return texture2D(map, vec2(s.x, 1.0 - s.y));
+}
+// The shape of a card, cut from a game tile by a pixel mask. v = 0 is the root
+// edge (on the branch), v = 1 the tip.
+float maskOf(vec2 uv, float m, float cid){
+  vec2 q = (floor(clamp(uv, 0.0, 0.999) * 32.0) + 0.5) / 32.0;
+  float x = q.x - 0.5, y = q.y, ax = abs(x);
+  if (m < 1.5) { // leaves on a twig: the twig from the root, leaves alternating up it, one at the tip
+    if (ax < 0.04 && y < 0.8) return 1.0;
+    for (int k = 0; k < 5; k++) {
+      float fk = float(k), s = mod(fk, 2.0) * 2.0 - 1.0;
+      vec2 c = vec2(s * 0.2 * (1.0 - fk * 0.1), 0.2 + fk * 0.14);
+      vec2 a2 = normalize(vec2(s * 0.8, 1.0));
+      if (k == 4) { c = vec2(0.0, 0.8); a2 = vec2(0.0, 1.0); }
+      vec2 d = vec2(x, y) - c;
+      float a = dot(d, a2), b = dot(d, vec2(-a2.y, a2.x));
+      float L = 0.17, Wd = 0.11 * (1.0 - abs(a) / L * 0.7);
+      if (abs(a) < L && abs(b) < Wd) return 1.0;
+    }
+    return 0.0;
+  }
+  if (m < 2.5) { // a needle spray: the twig up the middle, needles slanting toward the tip
+    if (ax < 0.035 && y < 0.95) return 1.0;
+    if (ax > 0.46 * (1.0 - y * 0.8) || y > 0.95) return 0.0;
+    return step(0.45, fract(y * 10.0 - ax * 1.8));
+  }
+  if (m < 3.5) { // a grass card: blades from the bottom edge
+    float n = 7.0, i = floor(q.x * n), f = fract(q.x * n) - 0.5;
+    float H = 0.55 + 0.45 * h12(vec2(i, cid * 13.0)), lean = (h12(vec2(i, 7.0)) - 0.5) * 0.9 * y;
+    return step(abs(f - lean), 0.42 * (1.0 - y / H)) * step(y, H);
+  }
+  if (m < 4.5) { // a frond: a spine with leaflets
+    float env = 0.46 * pow(sin(3.14159 * clamp(y, 0.0, 1.0)), 0.7);
+    if (ax < 0.035 && y < 0.97) return 1.0;
+    if (ax > env) return 0.0;
+    return step(0.35, fract(y * 12.0 - ax * 2.5));
+  }
+  if (m < 5.5) { // litter: scattered leaves
+    vec2 g = floor(q * 4.0), c = (g + 0.25 + 0.5 * vec2(h12(g), h12(g + 3.1))) / 4.0, d = q - c;
+    return step(length(d * vec2(1.0, 1.8)), 0.07 + 0.06 * h12(g + 7.0));
+  }
+  if (m < 6.5) { // a kelp ribbon
+    float c = 0.12 * sin(y * 9.0 + cid * 6.0);
+    return step(abs(x - c), 0.18 * (1.0 - y * 0.4) + 0.04 * sin(y * 31.0));
+  }
+  // reeds: stalks with a dark head
+  float i2 = floor(q.x * 4.0), f2 = abs(fract(q.x * 4.0) - 0.5), H2 = 0.75 + 0.25 * h12(vec2(i2, 2.0));
+  if (y > H2) return 0.0;
+  if (y > H2 - 0.18 && f2 < 0.14) return 1.0;
+  return step(f2, 0.05);
+}
 void main(){
   // the distance cross-fade: a screen-door dither; the outgoing level keeps what the incoming one gives up
   float th = bayer4(gl_FragCoord.xy + floor(vSeed.x * 4.0) * vec2(1.0, 2.0)) + 1.0 / 32.0;
   if (vFade < 1.5) { if (th >= vFade) discard; } else { if (th < 1.0 - (vFade - 2.0)) discard; }
   if (vSeed.x > uKeep) discard;                       // seasonal thinning (flowers, litter, mushrooms)
-  vec2 uv = vUv;
-#ifdef TERRAIN
-  uv = vec2(vW.x, vW.z) / ${W.toFixed(3)};
-  if (abs(vN.y) < 0.5) uv = vec2(vW.x + vW.z, vW.y) / ${W.toFixed(3)};
-#endif
-  vec4 tx = texture2D(map, uv);
-  if (uSolidLeaf > 0.5) { tx.rgb = mix(uBase, tx.rgb, tx.a); tx.a = 1.0; }
+  // a card's shape; a bake keeps the whole card, so a 48 px impostor crown is full rather than speckled
+  if (uMask > 0.5 && uBake < 0.5 && maskOf(vUv, uMask, vCard) < 0.5) discard;
+  vec4 tx = uUseAt > 0.5 ? atlasTile(vUv * uRep, uAt) : texture2D(map, vUv * uRep);
   if (tx.a < uAlphaTest) discard;
+  float grain = dot(tx.rgb, vec3(0.299, 0.587, 0.114));
   vec3 alb = pow(tx.rgb, vec3(2.2));
-  // per-plant colour variation
-  alb *= max(vec3(0.0), vec3(1.0) + vTint * uColVar);
-  // seasons, on leaves
-  if (uLeafy > 0.5) {
+  // the palette's greens are more saturated than the near tree's game texture: measured on the
+  // near/far side-by-side, pull the baked crown back to the near crown's mean colour
+  if (uImp > 0.5 && uViews > 0.5) { float l = dot(alb, vec3(0.2126, 0.7152, 0.0722)); alb = mix(vec3(l), alb, 0.5) * vec3(0.92, 0.95, 0.72); }
+  alb *= max(vec3(0.0), vec3(1.0) + vTint * uColVar);   // per-plant colour variation
+  if (uLeafy > 0.5) {                                    // seasons, on leaves
+    // on a far impostor only the crown's green pixels are leaves; the trunk is left alone
+    float leafPix = uImp > 0.5 ? step(max(tx.r, tx.b) * 1.05, tx.g) : 1.0;
+    if (uDecid > 0.5 && uWinter > 0.5 && leafPix > 0.5) {         // broadleaf trees are bare in winter
+      if (uImp < 0.5) discard;                                      // near: no leaf cards at all
+      alb = vec3(0.075, 0.068, 0.06) * (0.8 + grain * 0.5);        // far: a bare crown reads as a grey-brown mass of twigs
+    }
     float lum = dot(alb, vec3(0.3, 0.55, 0.15));
-    float k = h12(vec2(vSeed.x, vCard));
+    float k = h12(vec2(floor(vSeed.x * 97.0), floor(vCard * 61.0)));
     vec3 aut = mix(vec3(0.55, 0.12, 0.02), vec3(0.75, 0.42, 0.04), k) * (0.6 + lum * 3.0);
-    alb = mix(alb, aut, uAutumn * uDecid * smoothstep(0.1, 0.6, k + 0.35));
-    alb = mix(alb, alb * vec3(1.05, 1.2, 0.8) + vec3(0.01, 0.02, 0.0), uSpring);
-    if (uDecid > 0.5 && k < uWinter * 0.95) discard;   // bare in winter
+    alb = mix(alb, aut, uAutumn * uDecid * leafPix * smoothstep(0.1, 0.6, k + 0.35));
+    alb = mix(alb, alb * vec3(1.05, 1.2, 0.8) + vec3(0.01, 0.02, 0.0), uSpring * leafPix);
   }
+  // under snow, grass is dead straw, not summer green
+  if (uGrass > 0.5 && uSnow > 0.0) alb = mix(alb, vec3(0.20, 0.14, 0.06) * (0.55 + grain), 0.9);
   vec3 N = normalize(vN);
-  // snow settles on what faces up
   if (uSnowable > 0.5 && uSnow > 0.0) {
-    float n = h12(floor(vW.xz * 6.0)) * 0.35;
-    float s = smoothstep(0.35, 0.8, N.y + n) * uSnow;
 #ifdef TERRAIN
-    vec3 sn = pow(texture2D(snowMap, uv).rgb, vec3(2.2));
+    vec3 sn = pow(atlasTile(vUv, vec3(${SNOW[0]}.0, ${SNOW[1] % 4}.0, ${Math.floor(SNOW[1] / 4)}.0)).rgb, vec3(2.2));
 #else
-    vec3 sn = vec3(0.85, 0.9, 0.97);
-    s *= step(0.42 - uSnow * 0.3, n + h12(floor(vW.xz * 2.0 + vW.y)) * 0.6);
+    vec3 sn = vec3(0.80, 0.86, 0.94);
 #endif
+    // snow lies crisply on what faces up (trunks, branches, rocks, the ground);
+    // a card is frosted evenly, never speckled
+    float s = uCardLit > 0.5 ? 0.05 * uSnow : step(0.55, N.y) * uSnow;
     alb = mix(alb, sn, s);
   }
   float nd = dot(N, uSunDir);
@@ -474,10 +581,23 @@ void main(){
   vec3 light = uSunCol * diff * occ * ao + amb * ao * mix(0.65, 1.0, occ) + vBlock;
   vec3 col = alb * light;
   float fl = 1.0 + uFlicker * (0.2 * sin(uTime * 13.0) + 0.12 * sin(uTime * 23.0 + 1.0));
-  col += alb * uEmitCol * uEmit * fl * mix(0.35, 1.0, uNight);
+  col += uEmitCol * uEmit * (0.25 + grain) * fl * mix(0.3, 1.0, uNight) * 0.4;
   if (uLodVis > 0.5) col = mix(col, uLodCol * (0.25 + dot(light, vec3(0.2))), 0.65);
+  if (uBake > 0.5) { // baking an impostor: the albedo, shaped by a fixed key light and the AO, nothing else
+    // a fixed neutral daylight; a card's back face is as bright as its front, so a needle seen
+    // from behind does not go dark and snap to grey-brown
+    float key = uCardLit > 0.5 ? 1.15 : 0.85 + 0.3 * max(dot(N, normalize(vec3(-0.5, 0.8, 0.4))), 0.0);
+    // cards: dark where they root on the branch, bright at their tips, so each whorl reads as a layer
+    // cards: horizontal bands, light on top and dark underneath, one band per half metre (the whorl
+    // spacing); a band, not a per-card shade, so no dark pixel stands alone as speckle
+    float bandY = fract(vW.y / 0.5);
+    float layer = uCardLit > 0.5 ? (bandY < 0.3 ? 0.55 : bandY > 0.65 ? 1.25 : 1.0) : 1.0;
+    gl_FragColor = vec4(pow(clamp(alb * key * layer, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
+    return;
+  }
   col = aces(col * uExposure);
   col = pow(col, vec3(1.0 / 2.2));
+  if (uMaskVis > 0.5) col = uSwayMask > 0.5 ? vec3(vSway) : col * 0.25;
   float d = length(vW - cameraPosition);
   col = mix(col, uFogCol, smoothstep(uFogNear, uFogFar, d));
   gl_FragColor = vec4(col, 1.0);
@@ -485,20 +605,24 @@ void main(){
 
 const MATS = {};
 const LODCOL = [new THREE.Color(0x7be08a), new THREE.Color(0xf2d24a), new THREE.Color(0xe46ad8)];
-// kind: card (alpha-tested, lit softly), solid, terrain; flags for wind, seasons, glow
+// o: at [slot, tile index] or tex, plus card, mask, sway, wind, seasons, glow
 function mat(key, o) {
   const k = key + "|" + (o.level || 0) + (o.billboard ? "|bb" : "");
   if (MATS[k]) return MATS[k];
+  const at = o.at ? new THREE.Vector3(o.at[0], o.at[1] % 4, Math.floor(o.at[1] / 4)) : new THREE.Vector3();
   const u = Object.assign({}, G, {
-    map: { value: tex(o.tex) }, snowMap: { value: tex("ground_snow") },
+    map: { value: tex(o.at ? "game/atlas" : o.tex) }, uUseAt: { value: o.at ? 1 : 0 }, uAt: { value: at }, uRep: { value: o.rep || 1 },
+    uViews: { value: o.views || 0 }, uMask: { value: o.mask || 0 }, uSwayMask: { value: o.sway ? 1 : 0 },
     uScale: o.scaleU || G.uPlantScale, uWindAmp: { value: o.windAmp ?? 0.2 }, uWindH: { value: o.windH ?? 1 }, uFlutter: { value: o.flutter ?? 0 },
     uUpN: { value: o.upN ?? 0 }, uLodCol: { value: LODCOL[o.level || 0] }, uEmitCol: { value: new THREE.Color().fromArray(o.emitCol || [0, 0, 0]) },
-    uEmit: { value: o.emit ?? 0 }, uCardLit: { value: o.card ? 1 : 0 }, uAlphaTest: { value: o.card ? 0.5 : -1 }, uSolidLeaf: { value: o.solidLeaf ? 1 : 0 },
-    uBase: { value: new THREE.Color().fromArray(o.base || [0.25, 0.45, 0.2]) }, uLeafy: { value: o.leafy ? 1 : 0 }, uDecid: { value: o.decid ? 1 : 0 },
-    uSnowable: { value: o.snowable ? 1 : 0 }, uKeep: o.keep || { value: 2 }, uSlice: { value: 0 }, uFlicker: { value: o.flicker ? 1 : 0 },
+    uEmit: { value: o.emit ?? 0 }, uCardLit: { value: o.card ? 1 : 0 }, uAlphaTest: { value: o.alpha ? 0.5 : -1 },
+    uLeafy: { value: o.leafy ? 1 : 0 }, uDecid: { value: o.decid ? 1 : 0 },
+    uSnowable: { value: o.snowable ? 1 : 0 }, uKeep: o.keep || { value: 2 }, uFlicker: { value: o.flicker ? 1 : 0 }, uImp: { value: o.imp ? 1 : 0 }, uGrass: { value: o.grass ? 1 : 0 },
   });
   const defines = {}; if (o.terrain) defines.TERRAIN = ""; if (o.billboard) defines.BILLBOARD = "";
-  const m = new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, defines, side: o.single ? THREE.FrontSide : THREE.DoubleSide });
+  // cutouts are alpha-TESTED, never blended: opaque, depth written, no sorting
+  const m = new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, defines, side: o.single ? THREE.FrontSide : THREE.DoubleSide, transparent: false, depthWrite: true });
+  if (o.decal) { m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -4; }
   MATS[k] = m; return m;
 }
 
@@ -510,13 +634,14 @@ class GB {
   tri(a, b, c, ua, ub, uc, n, card = 0, aoa = 1, aob = 1, aoc = 1) {
     this.p.push(...a, ...b, ...c); this.uv.push(...ua, ...ub, ...uc);
     let nn = n;
-    if (!nn) { const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]; nn = norm([e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]); }
-    const na = nn.length === 3 && typeof nn[0] === "number" ? [nn, nn, nn] : nn;
+    if (!nn) { const e1 = sub(b, a), e2 = sub(c, a); nn = norm(cross(e1, e2)); }
+    const na = typeof nn[0] === "number" ? [nn, nn, nn] : nn;
     this.n.push(...na[0], ...na[1], ...na[2]); this.cd.push(card, card, card); this.ao.push(aoa, aob, aoc);
   }
   quad(a, b, c, d, uvs = [[0, 0], [1, 0], [1, 1], [0, 1]], n, card = 0, ao = [1, 1, 1, 1]) {
-    this.tri(a, b, c, uvs[0], uvs[1], uvs[2], n, card, ao[0], ao[1], ao[2]);
-    this.tri(a, c, d, uvs[0], uvs[2], uvs[3], n, card, ao[0], ao[2], ao[3]);
+    const n4 = n && typeof n[0] !== "number" ? n : null;
+    this.tri(a, b, c, uvs[0], uvs[1], uvs[2], n4 ? [n4[0], n4[1], n4[2]] : n, card, ao[0], ao[1], ao[2]);
+    this.tri(a, c, d, uvs[0], uvs[2], uvs[3], n4 ? [n4[0], n4[2], n4[3] || n4[2]] : n, card, ao[0], ao[2], ao[3]);
   }
   // a prism of `sides` from p0 to p1, radius r0 to r1 (a hex tube by default)
   tube(p0, p1, r0, r1, sides = 6, vScale = 1, rot = 0) {
@@ -547,28 +672,35 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 function rotAxis(v, axis, ang) { const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(...axis), ang); const r = new THREE.Vector3(...v).applyQuaternion(q); return [r.x, r.y, r.z]; }
+const jit = (rnd, k) => [(rnd() - 0.5) * k, (rnd() - 0.5) * k, (rnd() - 0.5) * k];
 
-// a card (quad) centred at c facing n, size s; normal leans out of the crown
-function card(gb, c, n, s, rnd, nOut, cid, flat = false) {
-  let t1 = norm(Math.abs(n[1]) < 0.9 ? cross(n, [0, 1, 0]) : cross(n, [1, 0, 0])), t2 = cross(n, t1);
-  const a = rnd() * Math.PI * 2; const r1 = add(scl(t1, Math.cos(a)), scl(t2, Math.sin(a))), r2 = cross(n, r1);
-  const h = s / 2;
-  const A = add(c, add(scl(r1, -h), scl(r2, -h))), B = add(c, add(scl(r1, h), scl(r2, -h))), C = add(c, add(scl(r1, h), scl(r2, h))), D = add(c, add(scl(r1, -h), scl(r2, h)));
-  gb.quad(A, B, C, D, undefined, [nOut, nOut, nOut], cid, [0.75, 0.75, 1, 1]);
+// A leaf card rooted ON its branch: the root edge (v = 0) sits at `root`, the
+// card runs out along `dir` to its tip (v = 1). `face` is roughly the card's
+// normal (up for a needle spray lying along its twig). The root edge is half
+// the width of the tip, so the texture is not stretched where it joins.
+function leafCard(gb, root, dir, len, w, rnd, cid, face = [0, 1, 0], nOut = null) {
+  dir = norm(dir);
+  let side = cross(face, dir); if (Math.hypot(...side) < 1e-3) side = cross([1, 0, 0], dir);
+  side = norm(rotAxis(norm(side), dir, (rnd() - 0.5) * 0.9));
+  root = add(root, scl(side, (rnd() - 0.5) * 0.04));
+  let n = norm(cross(dir, side)); if (n[1] < 0) n = scl(n, -1);
+  const nn = nOut ? norm(add(scl(nOut, 0.6), scl(n, 0.4))) : n;
+  const tip = add(root, scl(dir, len));
+  const A = add(root, scl(side, -w * 0.25)), B = add(root, scl(side, w * 0.25)), C = add(tip, scl(side, w / 2)), D = add(tip, scl(side, -w / 2));
+  gb.quad(A, B, C, D, [[0.25, 0], [0.75, 0], [1, 1], [0, 1]], nn, cid, [0.7, 0.7, 1, 1]);
 }
-function leafCluster(gb, c, s, rnd, centre, n = 3) {
-  const nOut = norm(add(sub(c, centre), [0, 0.8, 0]));
-  const cid = 0.05 + rnd() * 0.95;
-  for (let i = 0; i < n; i++) card(gb, add(c, [(rnd() - 0.5) * s * 0.4, (rnd() - 0.5) * s * 0.3, (rnd() - 0.5) * s * 0.4]), norm([rnd() - 0.5, rnd() - 0.5, rnd() - 0.5]), s * (0.8 + rnd() * 0.4), rnd, nOut, cid);
-}
+const lerp3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
 // ---------- detailed trees: one function per species, seeded ----------
+// Branches recurse; every last-order branch carries leaf cards rooted along it
+// and pointing out along it (with droop and spread), never free-floating fans.
 function branchTree(bark, leaves, rnd, P) {
-  const tips = [];
+  const twigs = [];
   function br(p, dir, len, r, depth) {
     const end = add(p, scl(dir, len));
     bark.tube(p, end, r, r * P.taper, depth >= P.depth - 1 ? 6 : 5, 1.2);
-    if (depth === 0) { tips.push(end); return; }
+    if (depth <= 1) twigs.push({ a: p, b: end, d: dir });
+    if (depth === 0) return;
     for (let k = 0; k < P.kids; k++) {
       const t = P.kids === 1 ? 1 : 0.55 + 0.45 * (k + 1) / P.kids;
       const start = add(p, scl(dir, len * t));
@@ -578,7 +710,6 @@ function branchTree(bark, leaves, rnd, P) {
       nd = norm(add(nd, [0, P.up, 0]));
       br(start, nd, len * P.shrink * (0.8 + rnd() * 0.4), r * P.taper * 0.85, depth - 1);
     }
-    if (depth <= 1) tips.push(end);
   }
   const top = [0, P.trunkH, 0];
   bark.tube([0, 0, 0], top, P.trunkR, P.trunkR * 0.75, 6, 1.2);
@@ -588,19 +719,29 @@ function branchTree(bark, leaves, rnd, P) {
     br(add(top, [0, -rnd() * P.trunkH * 0.25, 0]), d, P.len, P.trunkR * 0.6, P.depth);
   }
   const centre = [0, P.trunkH + P.len * 0.8, 0];
-  for (const t of tips) leafCluster(leaves, t, P.leafS, rnd, centre, P.cards);
-  return tips;
+  for (const tw of twigs) {
+    const cid = 0.05 + rnd() * 0.95;
+    for (let c = 0; c < P.cards; c++) {
+      const t = 0.3 + 0.7 * (c + 0.5) / P.cards;
+      const root = lerp3(tw.a, tw.b, t);
+      const side = norm(cross(tw.d, [0, 1, 0]));
+      const dir = norm(add(add(tw.d, scl(side, (c % 2 ? 1 : -1) * P.fan * (0.6 + rnd() * 0.6))), [0, -P.droop + (rnd() - 0.5) * 0.3, 0]));
+      leafCard(leaves, root, dir, P.leafS * (0.8 + rnd() * 0.4), P.leafS * 0.8, rnd, cid, [0, 1, 0], norm(sub(root, centre)));
+    }
+    leafCard(leaves, tw.b, norm(add(tw.d, [0, 0.2, 0])), P.leafS, P.leafS * 0.8, rnd, cid, [0, 1, 0], norm(sub(tw.b, centre)));
+  }
+  return twigs;
 }
 
 const TREE_BUILD = {
-  oak(rnd) { const b = new GB(), l = new GB(); branchTree(b, l, rnd, { trunkH: 2.4, trunkR: 0.24, crown: 4, len: 1.7, depth: 2, kids: 3, spread: 0.7, up: 0.25, shrink: 0.72, taper: 0.7, leafS: 1.5, cards: 3 }); return [b, l]; },
-  birch(rnd) { const b = new GB(), l = new GB(); branchTree(b, l, rnd, { trunkH: 4.6, trunkR: 0.13, crown: 4, len: 1.3, depth: 2, kids: 2, spread: 0.45, up: 0.5, shrink: 0.75, taper: 0.7, leafS: 1.1, cards: 3 }); return [b, l]; },
+  oak(rnd) { const b = new GB(), l = new GB(); branchTree(b, l, rnd, { trunkH: 2.4, trunkR: 0.24, crown: 4, len: 1.7, depth: 2, kids: 3, spread: 0.7, up: 0.25, shrink: 0.72, taper: 0.7, leafS: 1.1, cards: 3, fan: 0.9, droop: 0.15 }); return [b, l]; },
+  birch(rnd) { const b = new GB(), l = new GB(); branchTree(b, l, rnd, { trunkH: 4.6, trunkR: 0.13, crown: 4, len: 1.3, depth: 2, kids: 2, spread: 0.45, up: 0.5, shrink: 0.75, taper: 0.7, leafS: 0.85, cards: 3, fan: 0.8, droop: 0.35 }); return [b, l]; },
   willow(rnd) {
     const b = new GB(), l = new GB();
-    const tips = branchTree(b, l, rnd, { trunkH: 2.8, trunkR: 0.3, crown: 5, len: 1.8, depth: 1, kids: 3, spread: 0.9, up: 0.35, shrink: 0.75, taper: 0.7, leafS: 1.3, cards: 2 });
-    for (const t of tips) { // drooping strands
-      const a = rnd() * Math.PI, w = 0.9, len = 2.4 + rnd() * 1.6, dx = Math.cos(a) * w / 2, dz = Math.sin(a) * w / 2;
-      l.quad([t[0] - dx, t[1] - len, t[2] - dz], [t[0] + dx, t[1] - len, t[2] + dz], [t[0] + dx, t[1] + 0.2, t[2] + dz], [t[0] - dx, t[1] + 0.2, t[2] - dz], undefined, [norm([t[0], 0.6, t[2]])].concat([norm([t[0], 0.6, t[2]])]).concat([norm([t[0], 0.6, t[2]]), norm([t[0], 0.6, t[2]])]).slice(0, 3), 0.1 + rnd() * 0.9, [0.6, 0.6, 1, 1]);
+    const twigs = branchTree(b, l, rnd, { trunkH: 2.8, trunkR: 0.3, crown: 5, len: 1.8, depth: 1, kids: 3, spread: 0.9, up: 0.35, shrink: 0.75, taper: 0.7, leafS: 0.9, cards: 2, fan: 0.7, droop: 0.3 });
+    for (const tw of twigs) { // strands hang from the branch tip: root up on the branch, tip down
+      const out = norm([tw.d[0], 0, tw.d[2]]);
+      leafCard(l, tw.b, norm([out[0] * 0.25, -1, out[2] * 0.25]), 2.4 + rnd() * 1.6, 0.9, rnd, 0.1 + rnd() * 0.9, out, out);
     }
     return [b, l];
   },
@@ -611,36 +752,56 @@ const TREE_BUILD = {
     for (let k = 0; k < n; k++) {
       const az = k / n * 6.28 + rnd(), d = norm([Math.cos(az) * 0.8, 1, Math.sin(az) * 0.8]);
       const e = add([0, 1.9, 0], scl(d, 2.4)); b.tube([0, 1.9, 0], e, 0.13, 0.07, 5);
-      for (let j = 0; j < 2; j++) { const az2 = az + (j - 0.5) * 0.9, e2 = add(e, [Math.cos(az2) * 1.2, 0.35, Math.sin(az2) * 1.2]); b.tube(e, e2, 0.07, 0.04, 5);
-        for (let c = 0; c < 4; c++) card(l, add(e2, [(rnd() - 0.5) * 1.4, 0.15 + rnd() * 0.25, (rnd() - 0.5) * 1.4]), norm([(rnd() - 0.5) * 0.3, 1, (rnd() - 0.5) * 0.3]), 1.7, rnd, [0, 1, 0], 0.1 + rnd() * 0.9); }
+      for (let j = 0; j < 2; j++) {
+        const az2 = az + (j - 0.5) * 0.9, e2 = add(e, [Math.cos(az2) * 1.2, 0.35, Math.sin(az2) * 1.2]); b.tube(e, e2, 0.07, 0.04, 5);
+        const tw = norm(sub(e2, e)), cid = 0.1 + rnd() * 0.9;
+        for (let c = 0; c < 5; c++) { // a flat crown: sprays lying along the twig, rooted on it
+          const root = lerp3(e, e2, 0.4 + c * 0.15), a = (c - 2) * 0.5 + (rnd() - 0.5) * 0.3;
+          leafCard(l, root, norm(add(rotAxis(tw, [0, 1, 0], a), [0, 0.05, 0])), 1.3, 1.0, rnd, cid, [0, 1, 0]);
+        }
+      }
     }
     return [b, l];
   },
   pine(rnd) {
     const b = new GB(), l = new GB(), H = 8.5 + rnd() * 1.5;
     b.tube([0, 0, 0], [0, H, 0], 0.2, 0.03, 6, 1.2);
-    for (let y = 1.3; y < H - 0.3; y += 0.55 + rnd() * 0.2) {
-      const t = (y - 1.3) / (H - 1.3), L = (1 - t) * 2.3 + 0.35, n = 5;
+    for (let y = 1.2; y < H - 0.3; y += 0.42 + rnd() * 0.15) {
+      const t = (y - 1.2) / (H - 1.2), L = (1 - t) * 2.3 + 0.35, n = 6;
       for (let k = 0; k < n; k++) {
-        const az = k / n * 6.28 + y * 1.7, d = norm([Math.cos(az), -0.22, Math.sin(az)]), e = add([0, y, 0], scl(d, L));
-        b.tube([0, y, 0], e, 0.045, 0.015, 4);
-        const nOut = norm([d[0], 0.7, d[2]]), cid = 0.1 + rnd() * 0.9;
-        for (let c = 0; c < 2; c++) { const m = add([0, y, 0], scl(d, L * (0.35 + c * 0.45))); card(l, m, norm([d[2] * 0.3, 1, -d[0] * 0.3]), L * 0.9 + 0.5, rnd, nOut, cid); }
+        const az = k / n * 6.28 + y * 1.7, d = norm([Math.cos(az), -0.22, Math.sin(az)]), base = [0, y, 0], e = add(base, scl(d, L));
+        b.tube(base, e, 0.045, 0.015, 4);
+        const cid = 0.1 + rnd() * 0.9, side = norm(cross(d, [0, 1, 0]));
+        // sprays rooted ON the branch, each running out toward its end, drooping a little
+        // sprays rooted at points ON the branch, each running out along it and
+        // drooping, tilted off flat, alternating sides; none spans past its branch
+        const n2 = Math.max(2, Math.round(L / 0.32));
+        for (let c = 0; c < n2; c++) {
+          const tr = (c + 0.3) / n2, root = add(base, scl(d, L * tr));
+          const s2 = c % 2 ? 1 : -1, len = Math.min(0.75, L * (1 - tr) + 0.3);
+          const dir = norm(add(add(d, scl(side, s2 * 0.55)), [0, -0.3, 0]));
+          const face = norm(add([0, 1, 0], scl(side, s2 * 1.1)));
+          leafCard(l, root, dir, len, 0.55, rnd, cid, face);
+        }
+        leafCard(l, add(base, scl(d, L * 0.92)), norm(add(d, [0, -0.25, 0])), 0.4, 0.36, rnd, cid, norm(add([0, 1, 0], scl(side, 0.8))));
       }
     }
-    card(l, [0, H, 0], [1, 0, 0], 1.1, rnd, [0, 1, 0], 0.5);
+    for (let k = 0; k < 3; k++) { const a = k * 2.1; leafCard(l, [0, H - 0.7, 0], norm([Math.cos(a) * 0.3, 1, Math.sin(a) * 0.3]), 0.8, 0.4, rnd, 0.5, [Math.cos(a + 1.57), 0, Math.sin(a + 1.57)]); }
     return [b, l];
   },
   kapok(rnd) {
     const b = new GB(), l = new GB(), H = 7 + rnd();
     b.tube([0, 0, 0], [0, H, 0], 0.36, 0.24, 6, 1.4);
     for (let k = 0; k < 4; k++) { const az = k * 1.57 + rnd() * 0.4; b.tube([Math.cos(az) * 0.9, 0, Math.sin(az) * 0.9], [0, 1.8, 0], 0.12, 0.05, 4); }
-    const tips = [];
     for (let k = 0; k < 6; k++) {
       const az = k / 6 * 6.28 + rnd() * 0.5, e = [Math.cos(az) * (2.4 + rnd()), H + 0.6 + rnd() * 0.6, Math.sin(az) * (2.4 + rnd())];
-      b.tube([0, H - 0.4, 0], e, 0.16, 0.07, 5); tips.push(e, scl(add(e, [0, H + 1.0, 0]), 0.5));
+      const s = [0, H - 0.4, 0]; b.tube(s, e, 0.16, 0.07, 5);
+      const d = norm(sub(e, s)), side = norm(cross(d, [0, 1, 0])), cid = 0.1 + rnd() * 0.9;
+      for (let c = 0; c < 6; c++) {
+        const root = lerp3(s, e, 0.45 + c * 0.1);
+        leafCard(l, root, norm(add(add(d, scl(side, (c % 2 ? 1 : -1) * (0.5 + rnd() * 0.6))), [0, 0.15 - rnd() * 0.3, 0])), 1.6, 1.3, rnd, cid, [0, 1, 0], norm(sub(root, [0, H, 0])));
+      }
     }
-    for (const t of tips) leafCluster(l, t, 2.0, rnd, [0, H, 0], 3);
     return [b, l];
   },
   palm(rnd) {
@@ -648,15 +809,14 @@ const TREE_BUILD = {
     let prev = [0, 0, 0];
     for (let i = 1; i <= 6; i++) { const t = i / 6, p = [lean * t * t, H * t, 0]; b.tube(prev, p, 0.19 - t * 0.05, 0.19 - t * 0.06, 6, 0.6); prev = p; }
     const top = prev;
-    for (let k = 0; k < 9; k++) {
+    for (let k = 0; k < 9; k++) { // fronds: rooted at the crown, running out and drooping; v runs root to tip
       const az = k / 9 * 6.28 + rnd() * 0.3, d = [Math.cos(az), 0, Math.sin(az)], side = [-d[2], 0, d[0]], cid = 0.1 + rnd() * 0.9;
-      let p0 = top;
       for (let s = 0; s < 4; s++) {
         const t0 = s / 4, t1 = (s + 1) / 4, L = 2.8;
-        const y0 = 0.5 * t0 - 2.0 * t0 * t0, y1 = 0.5 * t1 - 2.0 * t1 * t1;
-        const a = add(top, [d[0] * L * t0, y0, d[2] * L * t0]), c = add(top, [d[0] * L * t1, y1, d[2] * L * t1]), w = 0.55;
+        const y0 = 0.5 * t0 - 2.0 * t0 * t0, y1 = 0.5 * t1 - 2.0 * t1 * t1, w0 = 0.15 + 0.45 * Math.sin(Math.PI * Math.max(t0, 0.15)), w1 = 0.15 + 0.45 * Math.sin(Math.PI * t1);
+        const a = add(top, [d[0] * L * t0, y0, d[2] * L * t0]), c = add(top, [d[0] * L * t1, y1, d[2] * L * t1]);
         const nn = norm([d[0] * 0.3, 1, d[2] * 0.3]);
-        l.quad(add(a, scl(side, -w)), add(a, scl(side, w)), add(c, scl(side, w)), add(c, scl(side, -w)), [[0, t0], [1, t0], [1, t1], [0, t1]], [nn, nn, nn], cid, [0.8, 0.8, 1, 1]);
+        l.quad(add(a, scl(side, -w0)), add(a, scl(side, w0)), add(c, scl(side, w1)), add(c, scl(side, -w1)), [[0, t0], [1, t0], [1, t1], [0, t1]], nn, cid, [0.8, 0.8, 1, 1]);
       }
     }
     return [b, l];
@@ -679,9 +839,9 @@ const TREE_BUILD = {
     for (let r = 0; r < rings; r++) for (let s = 0; s < segs; s++) {
       const P = (ri, si) => { const t = ri / rings, a = si / segs * 6.28, rr = Rc * Math.sin((1 - t) * 1.45 + 0.12), y = Rc * 0.55 * Math.cos((1 - t) * 1.45 + 0.12) - Rc * 0.05; return add(top, [Math.cos(a) * rr, y, Math.sin(a) * rr]); };
       const A = P(r, s), B = P(r, s + 1), C = P(r + 1, s + 1), D = P(r + 1, s), nn = norm(sub(add(A, C), scl(add(top, [0, -Rc * 0.6, 0]), 2)));
-      l.quad(A, B, C, D, [[s / segs * 2, r / rings], [(s + 1) / segs * 2, r / rings], [(s + 1) / segs * 2, (r + 1) / rings], [s / segs * 2, (r + 1) / rings]], nn);
+      l.quad(A, B, C, D, [[s / segs * 3, r / rings], [(s + 1) / segs * 3, r / rings], [(s + 1) / segs * 3, (r + 1) / rings], [s / segs * 3, (r + 1) / rings]], nn);
     }
-    for (let s = 0; s < segs; s++) { const a0 = s / segs * 6.28, a1 = (s + 1) / segs * 6.28, rr = Rc * Math.sin(1.57), y = Rc * 0.55 * Math.cos(1.57) - Rc * 0.05;
+    for (let s = 0; s < segs; s++) { const a0 = s / segs * 6.28, a1 = (s + 1) / segs * 6.28, rr = Rc, y = -Rc * 0.05;
       b.tri(add(top, [0, -0.1, 0]), add(top, [Math.cos(a1) * rr, y, Math.sin(a1) * rr]), add(top, [Math.cos(a0) * rr, y, Math.sin(a0) * rr]), [0.5, 0], [1, 1], [0, 1], [0, -1, 0]); }
     return [b, l];
   },
@@ -701,8 +861,7 @@ const TREE_BUILD = {
       for (let i = 1; i <= 8; i++) {
         const t = i / 8, p = [prev[0] + Math.sin(i * 0.9 + k) * 0.25 + Math.cos(az) * 0.2, H * t, prev[2] + Math.cos(i * 0.7 + k) * 0.25 + Math.sin(az) * 0.2];
         b.tube(prev, p, 0.08, 0.07, 5, 1);
-        if (i > 1) { const w = 0.5, a = rnd() * 3.14, dx = Math.cos(a) * w, dz = Math.sin(a) * w, nn = norm([dx, 0.5, dz]);
-          l.quad([p[0], p[1] - 1.1, p[2]], [p[0] + dx * 2, p[1] - 0.9, p[2] + dz * 2], [p[0] + dx * 2, p[1] + 0.2, p[2] + dz * 2], [p[0], p[1], p[2]], undefined, [nn, nn, nn], cid); }
+        if (i > 1) { const a = rnd() * 6.28; leafCard(l, p, norm([Math.cos(a), 0.7, Math.sin(a)]), 1.3, 0.5, rnd, cid, [-Math.sin(a), 0, Math.cos(a)]); }
         prev = p;
       }
     }
@@ -711,14 +870,16 @@ const TREE_BUILD = {
 };
 
 // ---------- Tenebris hex-prism trees (tenebris-tree-geometry) ----------
-function hexPrism(gb, y0, y1, w, uvScale = 1) {
+function hexPrism(gb, y0, y1, w) {
   const r = R * w, cs = [];
   for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 30); cs.push([Math.cos(a) * r, Math.sin(a) * r]); }
   for (let i = 0; i < 6; i++) { const a = cs[i], b = cs[(i + 1) % 6], nm = norm([a[0] + b[0], 0, a[1] + b[1]]);
-    gb.quad([b[0], y0, b[1]], [a[0], y0, a[1]], [a[0], y1, a[1]], [b[0], y1, b[1]], [[0, 0], [w * uvScale, 0], [w * uvScale, 1], [0, 1]], nm); }
+    // a flank: one tile across, one tile a metre down from the top edge, as the game's side_uv
+    gb.quad([b[0], y0, b[1]], [a[0], y0, a[1]], [a[0], y1, a[1]], [b[0], y1, b[1]], [[1, 1 - (y1 - y0)], [0, 1 - (y1 - y0)], [0, 1], [1, 1]], nm); }
+  const tuv = (x, z) => [x / (1.5 * W) + 0.5, z / (1.5 * W) + 0.5];
   for (let i = 0; i < 6; i++) { const a = cs[i], b = cs[(i + 1) % 6];
-    gb.tri([0, y1, 0], [b[0], y1, b[1]], [a[0], y1, a[1]], [0.5, 0.5], [0.5 + b[0] / W, 0.5 + b[1] / W], [0.5 + a[0] / W, 0.5 + a[1] / W], [0, 1, 0]);
-    gb.tri([0, y0, 0], [a[0], y0, a[1]], [b[0], y0, b[1]], [0.5, 0.5], [0.5 + a[0] / W, 0.5 + a[1] / W], [0.5 + b[0] / W, 0.5 + b[1] / W], [0, -1, 0]); }
+    gb.tri([0, y1, 0], [b[0], y1, b[1]], [a[0], y1, a[1]], tuv(0, 0), tuv(b[0], b[1]), tuv(a[0], a[1]), [0, 1, 0]);
+    gb.tri([0, y0, 0], [a[0], y0, a[1]], [b[0], y0, b[1]], tuv(0, 0), tuv(a[0], a[1]), tuv(b[0], b[1]), [0, -1, 0]); }
 }
 function hexTree(species, extra, v) {
   const b = new GB(), l = new GB(), sp = SPECIES[species];
@@ -737,34 +898,61 @@ function hexTree(species, extra, v) {
 }
 
 // ---------- small plants ----------
+// Grass: blades of three stacked quads, each cropping a vertical strip 0.18
+// wide of the ground tile it grows on (the clutter pass's quad_uv), root dark.
 function grassTuft(rnd, n = 9) {
   const g = new GB();
   for (let i = 0; i < n; i++) {
     const a = rnd() * 6.28, r = rnd() * 0.16, x = Math.cos(a) * r, z = Math.sin(a) * r;
     const H = 0.3 + rnd() * 0.3, lean = (rnd() - 0.3) * 0.25, la = rnd() * 6.28, w = 0.035 + rnd() * 0.02;
     const dx = Math.cos(la), dz = Math.sin(la), sx = -dz, sz = dx;
-    const u0 = rnd() * 0.9, u1 = u0 + 0.06; // a narrow slice of the ground tile, as Tenebris does
+    const u0 = rnd() * 0.82, u1 = u0 + 0.18;
     const nm = [0, 1, 0];
     let prev = null;
     for (let s = 0; s <= 3; s++) {
       const t = s / 3, ww = w * (1 - t), off = lean * t * t;
       const c = [x + dx * off, H * t, z + dz * off];
       const L = add(c, [sx * ww, 0, sz * ww]), Rr = add(c, [-sx * ww, 0, -sz * ww]);
-      if (prev) g.quad(prev[0], prev[1], Rr, L, [[u0, prev[2]], [u1, prev[2]], [u1, t], [u0, t]], [nm, nm, nm], 0, [prev[3], prev[3], 0.4 + 0.6 * t, 0.4 + 0.6 * t]);
+      if (prev) g.quad(prev[0], prev[1], Rr, L, [[u0, prev[2]], [u1, prev[2]], [u1, t], [u0, t]], nm, 0, [prev[3], prev[3], 0.4 + 0.6 * t, 0.4 + 0.6 * t]);
       prev = [L, Rr, t, 0.4 + 0.6 * t];
     }
   }
   return g;
 }
-function crossedCards(w, h, n = 2, uvs, yOff = 0) {
+function crossedCards(w, h, n = 2, yOff = 0) {
   const g = new GB();
   for (let i = 0; i < n; i++) { const a = i / n * Math.PI, dx = Math.cos(a) * w / 2, dz = Math.sin(a) * w / 2, nm = [0, 1, 0];
-    g.quad([-dx, yOff, -dz], [dx, yOff, dz], [dx, yOff + h, dz], [-dx, yOff + h, -dz], uvs, [nm, nm, nm], 0, [0.5, 0.5, 1, 1]); }
+    g.quad([-dx, yOff, -dz], [dx, yOff, dz], [dx, yOff + h, dz], [-dx, yOff + h, -dz], [[0, 0], [1, 0], [1, 1], [0, 1]], nm, 0.5, [0.5, 0.5, 1, 1]); }
   return g;
 }
-function billboardQuad(w, h) { const g = new GB(), nm = [0, 1, 0]; g.quad([-w / 2, 0, 0], [w / 2, 0, 0], [w / 2, h, 0], [-w / 2, h, 0], undefined, [nm, nm, nm], 0, [0.6, 0.6, 1, 1]); return g; }
-function bushGeo(rnd, s = 0.7) { const g = new GB(); for (let i = 0; i < 9; i++) { const a = rnd() * 6.28, r = rnd() * s * 0.5; leafCluster(g, [Math.cos(a) * r, s * 0.45 + rnd() * s * 0.45, Math.sin(a) * r], s * 0.9, rnd, [0, 0, 0], 1); } return g; }
-function deadShrub(rnd) { return crossedCards(0.8, 0.8, 3); }
+// The mid ring's crossed cards for a baked impostor: four planes at 45 degree steps, each showing
+// the view baked from its own normal (uv.x = view index + 0..1 across the plane).
+function impostorCards(w, h, views = 8, y0 = 0) {
+  const g = new GB(), nm = [0, 1, 0];
+  for (let k = 0; k < views / 2; k++) {
+    const phi = k * 2 * Math.PI / views, rx = Math.cos(phi) * w / 2, rz = -Math.sin(phi) * w / 2;
+    g.quad([-rx, y0, -rz], [rx, y0, rz], [rx, y0 + h, rz], [-rx, y0 + h, -rz], [[k, 0], [k + 1, 0], [k + 1, 1], [k, 1]], nm, 0, [0.6, 0.6, 1, 1]);
+  }
+  return g;
+}
+function billboardQuad(w, h, y0 = 0) { const g = new GB(), nm = [0, 1, 0]; g.quad([-w / 2, y0, 0], [w / 2, y0, 0], [w / 2, y0 + h, 0], [-w / 2, y0 + h, 0], undefined, nm, 0, [0.6, 0.6, 1, 1]); return g; }
+// a bush: cards rooted at its stem near the ground, fanning up and out
+function bushGeo(rnd, s = 0.7) {
+  const g = new GB();
+  for (let i = 0; i < 14; i++) {
+    const a = rnd() * 6.28, r = rnd() * s * 0.15, root = [Math.cos(a) * r, 0.05 + rnd() * s * 0.3, Math.sin(a) * r];
+    const dir = norm([Math.cos(a) * (0.5 + rnd() * 0.6), 1, Math.sin(a) * (0.5 + rnd() * 0.6)]);
+    leafCard(g, root, dir, s * (0.9 + rnd() * 0.4), s * 0.7, rnd, 0.1 + rnd() * 0.9, [Math.cos(a), 0.3, Math.sin(a)]);
+  }
+  return g;
+}
+// a dead shrub: bare twigs, drawn in wood as the game's shrub is
+function deadShrub(rnd) {
+  const g = new GB();
+  const br = (p, d, L, r, k) => { const e = add(p, scl(d, L)); g.tube(p, e, r, r * 0.6, 4, 0.6); if (k === 0) return; for (let j = 0; j < 2; j++) br(e, norm(add(d, [(rnd() - 0.5) * 1.2, 0.3, (rnd() - 0.5) * 1.2])), L * 0.65, r * 0.6, k - 1); };
+  for (let i = 0; i < 4; i++) { const a = i * 1.57 + rnd(); br([0, 0, 0], norm([Math.cos(a) * 0.5, 1, Math.sin(a) * 0.5]), 0.3, 0.025, 2); }
+  return g;
+}
 function fernGeo(rnd) {
   const g = new GB(), n = 5 + (rnd() * 3 | 0);
   for (let i = 0; i < n; i++) {
@@ -772,13 +960,13 @@ function fernGeo(rnd) {
     for (let s = 0; s < 3; s++) {
       const t0 = s / 3, t1 = (s + 1) / 3, P = t => [d[0] * L * t, L * (1.1 * t - 0.85 * t * t), d[2] * L * t];
       const a = P(t0), c = P(t1), nn = [0, 1, 0];
-      g.quad(add(a, scl(side, -1)), add(a, side), add(c, side), add(c, scl(side, -1)), [[0, t0], [1, t0], [1, t1], [0, t1]], [nn, nn, nn], cid, [0.5 + t0 * 0.5, 0.5 + t0 * 0.5, 0.5 + t1 * 0.5, 0.5 + t1 * 0.5]);
+      g.quad(add(a, scl(side, -1)), add(a, side), add(c, side), add(c, scl(side, -1)), [[0, t0], [1, t0], [1, t1], [0, t1]], nn, cid, [0.5 + t0 * 0.5, 0.5 + t0 * 0.5, 0.5 + t1 * 0.5, 0.5 + t1 * 0.5]);
     }
   }
   return g;
 }
-function flowerStem(rnd) { const g = new GB(), H = 0.28 + rnd() * 0.12, w = 0.012, nm = [0, 1, 0]; for (let i = 0; i < 2; i++) { const a = i * 1.57, dx = Math.cos(a) * w, dz = Math.sin(a) * w; g.quad([-dx, 0, -dz], [dx, 0, dz], [dx, H, dz], [-dx, H, -dz], [[0.3, 0], [0.33, 0], [0.33, 0.6], [0.3, 0.6]], [nm, nm, nm], 0, [0.4, 0.4, 1, 1]); } return { g, H }; }
-function flowerHead(H, s = 0.17) { const g = new GB(), nm = [0, 1, 0]; for (let i = 0; i < 2; i++) { const a = i * 1.57, dx = Math.cos(a) * s / 2, dz = Math.sin(a) * s / 2; g.quad([-dx, H - 0.03, -dz], [dx, H - 0.03, dz], [dx + dz * 0.1, H + 0.04, dz - dx * 0.1], [-dx + dz * 0.1, H + 0.04, -dz - dx * 0.1], undefined, [nm, nm, nm], 0.5); } g.quad([-s / 2, H, -s / 2], [s / 2, H, -s / 2], [s / 2, H, s / 2], [-s / 2, H, s / 2], undefined, [nm, nm, nm], 0.5); return g; }
+function flowerStem(rnd) { const g = new GB(), H = 0.28 + rnd() * 0.12, w = 0.012, nm = [0, 1, 0]; for (let i = 0; i < 2; i++) { const a = i * 1.57, dx = Math.cos(a) * w, dz = Math.sin(a) * w; g.quad([-dx, 0, -dz], [dx, 0, dz], [dx, H, dz], [-dx, H, -dz], [[0.3, 0], [0.48, 0], [0.48, 1], [0.3, 1]], nm, 0, [0.4, 0.4, 1, 1]); } return { g, H }; }
+function flowerHead(H, s = 0.17) { const g = new GB(), nm = [0, 1, 0]; for (let i = 0; i < 2; i++) { const a = i * 1.57, dx = Math.cos(a) * s / 2, dz = Math.sin(a) * s / 2; g.quad([-dx, H - 0.03, -dz], [dx, H - 0.03, dz], [dx + dz * 0.1, H + 0.04, dz - dx * 0.1], [-dx + dz * 0.1, H + 0.04, -dz - dx * 0.1], undefined, nm, 0.5); } g.quad([-s / 2, H, -s / 2], [s / 2, H, -s / 2], [s / 2, H, s / 2], [-s / 2, H, s / 2], undefined, nm, 0.5); return g; }
 function mushGeo(rnd) {
   const st = new GB(), cp = new GB(), n = 2 + (rnd() * 3 | 0);
   for (let i = 0; i < n; i++) {
@@ -797,9 +985,10 @@ function rockGeo(rnd) {
   for (let i = 0; i < p.count; i += 3) { const a = P(i), b = P(i + 1), c = P(i + 2); g.tri(a, b, c, [a[0] * 0.5, a[2] * 0.5 + a[1]], [b[0] * 0.5, b[2] * 0.5 + b[1]], [c[0] * 0.5, c[2] * 0.5 + c[1]], null); }
   return g;
 }
-function logGeo(rnd) { const g = new GB(), L = 2.6 + rnd() * 1.6; g.tube([-L / 2, 0.2, 0], [L / 2, 0.18, 0], 0.22, 0.19, 7, 1.2); g.tube([0.3, 0.3, 0], [0.7, 0.75, 0.25], 0.07, 0.03, 5); return g; }
-function vineStrand(rnd) { const g = new GB(), L = 2 + rnd() * 2.2, w = 0.45, nm = [0, 0.6, 1]; g.quad([-w / 2, -L, 0], [w / 2, -L, 0], [w / 2, 0, 0], [-w / 2, 0, 0], [[0, 0], [1, 0], [1, 1], [0, 1]], [nm, nm, nm], 0.3, [0.6, 0.6, 1, 1]); return g; }
-function litterGeo(rnd) { const g = new GB(), s = 0.9 + rnd() * 0.5, nm = [0, 1, 0], y = 0.02; g.quad([-s / 2, y, -s / 2], [s / 2, y, -s / 2], [s / 2, y, s / 2], [-s / 2, y, s / 2], undefined, [nm, nm, nm], 0); return g; }
+function logGeo(rnd) { const g = new GB(), L = 1.7 + rnd() * 0.6; g.tube([-L / 2, 0.2, 0], [L / 2, 0.18, 0], 0.2, 0.18, 8, 1.2); g.tube([0.3, 0.3, 0], [0.6, 0.65, 0.2], 0.06, 0.03, 6); return g; }
+// a vine: hangs from its root at the top (v = 0) down to its tip
+function vineStrand(rnd) { const g = new GB(), L = 2 + rnd() * 2.2, w = 0.45, nm = [0, 0.6, 1]; g.quad([-w / 2, 0, 0], [w / 2, 0, 0], [w / 2, -L, 0], [-w / 2, -L, 0], [[0, 0], [1, 0], [1, 1], [0, 1]], nm, 0.3, [1, 1, 0.6, 0.6]); return g; }
+function litterGeo(rnd) { const g = new GB(), s = 0.7 + rnd() * 0.2, nm = [0, 1, 0], y = 0.015; g.quad([-s / 2, y, -s / 2], [s / 2, y, -s / 2], [s / 2, y, s / 2], [-s / 2, y, s / 2], undefined, nm, 0); return g; }
 function shardGeo(rnd) { const g = new GB(); for (let k = 0; k < 3; k++) { const az = rnd() * 6.28, t = 0.2 + rnd() * 0.4, d = norm([Math.cos(az) * Math.sin(t), Math.cos(t), Math.sin(az) * Math.sin(t)]), L = 0.3 + rnd() * 0.5; g.tube([0, -0.05, 0], scl(d, L), 0.07, 0.06, 6, 0.6); g.tube(scl(d, L), scl(d, L + 0.12), 0.06, 0.005, 6, 0.6); } return g; }
 
 // =====================================================================
@@ -809,7 +998,7 @@ let BATCHES = [];
 const ROOT = new THREE.Group(); scene.add(ROOT);
 function newBatch(gb, material, level, tag) {
   const base = gb.geo ? gb.geo() : gb;
-  return { base, material, level, tag, objs: 0, tris: base.attributes.position.count / 3, mesh: null };
+  return { base, material, level, tag, objs: 0, mesh: null };
 }
 function realise(b) { // allocate once the number of objects that can use it is known
   const cap = Math.max(1, b.objs), g = new THREE.BufferGeometry();
@@ -825,7 +1014,7 @@ function realise(b) { // allocate once the number of objects that can use it is 
 // =====================================================================
 // The patch
 // =====================================================================
-let CELLS = [], CELLMAP = new Map(), LIGHTS = [], LAYERS = [], TERRAIN = [], PROPS = [];
+let CELLS = [], CELLMAP = new Map(), LIGHTS = [], LAYERS = [], TERRAIN = [];
 const cellKey = (q, r) => q * 1000 + r;
 function cellCentre(q, r) { return [W * (q + r / 2), W * SQ3 / 2 * r]; }
 function cellAt(x, z) {
@@ -848,17 +1037,14 @@ function buildCells(B) {
     const wet = B.water && h <= 0;
     if (wet) h = Math.min(h, 0);
     const n2 = fbm(x * 0.05 + 30, z * 0.05, 5);
-    let top = n2 > 0.56 ? 1 : 0;
-    if (B.coldTop) top = (h >= 2 || n2 > 0.66) ? 1 : 0;
+    const cold = !!B.coldTop && (h >= 2 || n2 > 0.66);
     const forest = smooth(0.3, 0.62, fbm(x * 0.03 + 7, z * 0.03 - 3, 23));
-    const c = { q, r, x, z, h, top, wet, forest, path: path(x, z), clear: false, id: cellKey(q, r) };
+    const c = { q, r, x, z, h, cold, wet, forest, path: path(x, z), clear: false, id: cellKey(q, r) };
     CELLS.push(c); CELLMAP.set(c.id, c);
   }
-  // a clearing round the campfire
-  for (const c of CELLS) if (Math.hypot(c.x - 6, c.z + 10) < 6) c.clear = true;
+  for (const c of CELLS) if (Math.hypot(c.x - 6, c.z + 10) < 6) c.clear = true; // a clearing round the campfire
 }
 
-const NB = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 function hexCorner(i) { const a = Math.PI / 180 * (60 * i - 30); return [Math.cos(a) * R, Math.sin(a) * R]; }
 // edge i of a pointy-top hex lies between corners i and i+1 and faces neighbour EDGE_NB[i]
 const EDGE_NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
@@ -866,10 +1052,10 @@ const EDGE_NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
 // ---------- light: every static light baked where it lands ----------
 let LGRID = new Map();
 const LG = 12;
-function addLight(x, y, z, col, reach, power, night) { const L = { x, y, z, col, reach, power, night }; LIGHTS.push(L); }
+function addLight(x, y, z, col, reach, power, night) { LIGHTS.push({ x, y, z, col, reach, power, night }); }
 function indexLights() { LGRID = new Map(); for (const L of LIGHTS) { const k = Math.floor(L.x / LG) + "," + Math.floor(L.z / LG); if (!LGRID.has(k)) LGRID.set(k, []); LGRID.get(k).push(L); } }
-function lightAt(x, y, z, n, outLamp, outGlow, o = 0) {
-  outLamp[o] = outLamp[o + 1] = outLamp[o + 2] = 0; outGlow[o] = outGlow[o + 1] = outGlow[o + 2] = 0;
+function lightAt(x, y, z, n, outLamp, outGlow) {
+  outLamp[0] = outLamp[1] = outLamp[2] = 0; outGlow[0] = outGlow[1] = outGlow[2] = 0;
   const gx = Math.floor(x / LG), gz = Math.floor(z / LG);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
     const arr = LGRID.get((gx + i) + "," + (gz + j)); if (!arr) continue;
@@ -878,7 +1064,7 @@ function lightAt(x, y, z, n, outLamp, outGlow, o = 0) {
       let f = 1 - d / L.reach; f = f * f * L.power;
       if (n) { const nd = (dx * n[0] + dy * n[1] + dz * n[2]) / (d || 1); f *= 0.35 + 0.65 * Math.max(0, nd); }
       const out = L.night ? outLamp : outGlow;
-      out[o] += L.col[0] * f; out[o + 1] += L.col[1] * f; out[o + 2] += L.col[2] * f;
+      out[0] += L.col[0] * f; out[1] += L.col[1] * f; out[2] += L.col[2] * f;
     }
   }
 }
@@ -891,42 +1077,58 @@ function occAt(x, z) {
   return Math.min(0.7, o);
 }
 
+// The terrain, in the game's tiles: the top is the sheet's (0,0); a wall is
+// face_code's stack: the sod's side (1,0) for SOD_DEPTH_M, the earth (2,0) to
+// SOIL_DEPTH_M, then stone (3,0). Sand shows its own ground to SOIL_DEPTH_M;
+// snow is the tundra sheet's, its side the tundra's (1,0), stone under it.
 function buildTerrain(B) {
   for (const m of TERRAIN) { ROOT.remove(m); m.geometry.dispose(); }
   TERRAIN = [];
   const bufs = {};
-  const buf = k => bufs[k] || (bufs[k] = { p: [], n: [], uv: [], lamp: [], glow: [], occ: [] });
+  const buf = (kind, slot, idx) => { const k = kind + ":" + slot + ":" + idx; return bufs[k] || (bufs[k] = { kind, slot, idx, p: [], n: [], uv: [], lamp: [], glow: [], occ: [] }); };
   const tmpL = [0, 0, 0], tmpG = [0, 0, 0];
-  const vert = (b, p, n) => { b.p.push(...p); b.n.push(...n); b.uv.push(0, 0); lightAt(p[0], p[1] + 0.05, p[2], n, tmpL, tmpG); b.lamp.push(...tmpL); b.glow.push(...tmpG); b.occ.push(n[1] > 0.5 ? occAt(p[0], p[2]) : occAt(p[0], p[2]) * 0.6); };
-  const N = S.patch;
+  const vert = (b, p, n, uv) => { b.p.push(...p); b.n.push(...n); b.uv.push(...uv); lightAt(p[0], p[1] + 0.05, p[2], n, tmpL, tmpG); b.lamp.push(...tmpL); b.glow.push(...tmpG); b.occ.push(n[1] > 0.5 ? occAt(p[0], p[2]) : occAt(p[0], p[2]) * 0.6); };
+  const top0 = B.topIdx || 0;
   for (const c of CELLS) {
-    const tb = buf(B.top[c.top]), sb = buf(B.side), y = c.h;
+    const y = c.h;
+    const tb = c.cold ? buf("top", SNOW[0], SNOW[1]) : buf("top", B.sheet, top0);
     const cs = []; for (let i = 0; i < 6; i++) { const [cx, cz] = hexCorner(i); cs.push([c.x + cx, c.z + cz]); }
-    for (let i = 0; i < 6; i++) { const a = cs[i], b = cs[(i + 1) % 6]; vert(tb, [c.x, y, c.z], [0, 1, 0]); vert(tb, [b[0], y, b[1]], [0, 1, 0]); vert(tb, [a[0], y, a[1]], [0, 1, 0]); }
+    const tuv = (px, pz) => [(px - c.x) / (1.5 * W) + 0.5, (pz - c.z) / (1.5 * W) + 0.5];
+    for (let i = 0; i < 6; i++) { const a = cs[i], b = cs[(i + 1) % 6]; vert(tb, [c.x, y, c.z], [0, 1, 0], tuv(c.x, c.z)); vert(tb, [b[0], y, b[1]], [0, 1, 0], tuv(b[0], b[1])); vert(tb, [a[0], y, a[1]], [0, 1, 0], tuv(a[0], a[1])); }
+    const stack = c.cold ? [[0, SOD_M, SNOW[0], 1], [SOD_M, 99, B.sheet, 3]]
+      : B.sandy ? [[0, SOIL_M, B.sheet, top0], [SOIL_M, 99, B.sheet, 3]]
+      : [[0, SOD_M, B.sheet, 1], [SOD_M, SOIL_M, B.sheet, 2], [SOIL_M, 99, B.sheet, 3]];
     for (let i = 0; i < 6; i++) {
       const [dq, dr] = EDGE_NB[i], nb = CELLMAP.get(cellKey(c.q + dq, c.r + dr));
-      const yb = nb ? nb.h : y - 4;
+      const yb = nb ? nb.h : y - 5;
       if (yb >= y) continue;
       const a = cs[i], b = cs[(i + 1) % 6], nm = norm([a[0] + b[0] - 2 * c.x, 0, a[1] + b[1] - 2 * c.z]);
-      vert(sb, [a[0], yb, a[1]], nm); vert(sb, [b[0], y, b[1]], nm); vert(sb, [b[0], yb, b[1]], nm);
-      vert(sb, [a[0], yb, a[1]], nm); vert(sb, [a[0], y, a[1]], nm); vert(sb, [b[0], y, b[1]], nm);
+      for (const [d0, d1, slot, idx] of stack) {
+        const hi = y - d0, lo = Math.max(yb, y - d1); if (lo >= hi) continue;
+        const sb = buf("side", slot, idx), vv = yy => 1 - (y - yy);   // image v = depth under the cell top, one tile a metre
+        vert(sb, [a[0], lo, a[1]], nm, [0, vv(lo)]); vert(sb, [b[0], hi, b[1]], nm, [1, vv(hi)]); vert(sb, [b[0], lo, b[1]], nm, [1, vv(lo)]);
+        vert(sb, [a[0], lo, a[1]], nm, [0, vv(lo)]); vert(sb, [a[0], hi, a[1]], nm, [0, vv(hi)]); vert(sb, [b[0], hi, b[1]], nm, [1, vv(hi)]);
+      }
     }
   }
-  for (const [k, b] of Object.entries(bufs)) {
-    const g = new THREE.BufferGeometry();
+  for (const b of Object.values(bufs)) {
+    const g = new THREE.BufferGeometry(), nv = b.p.length / 3;
     g.setAttribute("position", new THREE.Float32BufferAttribute(b.p, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(b.n, 3));
     g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2)); g.setAttribute("lampV", new THREE.Float32BufferAttribute(b.lamp, 3));
     g.setAttribute("glowV", new THREE.Float32BufferAttribute(b.glow, 3)); g.setAttribute("occV", new THREE.Float32BufferAttribute(b.occ, 1));
-    g.setAttribute("card", new THREE.Float32BufferAttribute(new Float32Array(b.p.length / 3), 1)); g.setAttribute("ao", new THREE.Float32BufferAttribute(new Float32Array(b.p.length / 3).fill(1), 1));
-    const m = new THREE.Mesh(g, mat("terrain:" + k, { tex: k, terrain: true, snowable: B.snow && !k.startsWith("side"), single: true }));
+    g.setAttribute("card", new THREE.Float32BufferAttribute(new Float32Array(nv), 1)); g.setAttribute("ao", new THREE.Float32BufferAttribute(new Float32Array(nv).fill(1), 1));
+    const m = new THREE.Mesh(g, mat("terrain:" + b.kind + ":" + b.slot + ":" + b.idx, { at: [b.slot, b.idx], terrain: true, snowable: B.snow && b.kind === "top" && b.slot !== SNOW[0], single: true }));
     m.matrixAutoUpdate = false; ROOT.add(m); TERRAIN.push(m);
   }
   // far ground past the patch, so the land does not end in a cliff over nothing
+  const N = S.patch;
   const fg = new THREE.RingGeometry(N * W * 0.98, 900, 64, 1); fg.rotateX(-Math.PI / 2); fg.translate(0, -0.5, 0);
-  const cnt = fg.attributes.position.count;
+  const cnt = fg.attributes.position.count, fuv = new Float32Array(cnt * 2);
+  for (let i = 0; i < cnt; i++) { fuv[i * 2] = fg.attributes.position.getX(i) / (1.5 * W); fuv[i * 2 + 1] = fg.attributes.position.getZ(i) / (1.5 * W); }
+  fg.setAttribute("uv", new THREE.Float32BufferAttribute(fuv, 2));
   for (const [a, n] of [["lampV", 3], ["glowV", 3], ["occV", 1], ["card", 1]]) fg.setAttribute(a, new THREE.Float32BufferAttribute(new Float32Array(cnt * n), n));
   fg.setAttribute("ao", new THREE.Float32BufferAttribute(new Float32Array(cnt).fill(1), 1));
-  const fm = new THREE.Mesh(fg, mat("terrain:" + B.top[0], { tex: B.top[0], terrain: true, snowable: B.snow, single: true })); ROOT.add(fm); TERRAIN.push(fm);
+  const fm = new THREE.Mesh(fg, mat("terrain:top:" + B.sheet + ":" + top0, { at: [B.sheet, top0], terrain: true, snowable: B.snow, single: true })); ROOT.add(fm); TERRAIN.push(fm);
   if (B.water) {
     const wg = new THREE.CircleGeometry(N * W * 1.05, 64); wg.rotateX(-Math.PI / 2); wg.translate(0, 0.35, 0);
     const wm = new THREE.Mesh(wg, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: G,
@@ -938,7 +1140,7 @@ function buildTerrain(B) {
 
 // ---------- layers ----------
 // A layer is a list of objects, each with a matrix, colour jitter, light, seed, and one set of batches per LOD level.
-function makeLayer(key, ends, opts = {}) { return { key, ends, objs: [], ...opts }; }
+function makeLayer(key, ends) { return { key, ends, objs: [] }; }
 function placeIn(c, k, salt) { // a point in the cell, deterministic in (cell, k)
   for (let t = 0; t < 8; t++) { const a = hash(c.id, k * 13 + t, salt) * 6.283, rr = Math.sqrt(hash(c.id, k * 13 + t, salt + 1)) * R * 0.92; const x = Math.cos(a) * rr, z = Math.sin(a) * rr; if (Math.abs(z) * 2 / SQ3 <= R && Math.abs(x) <= W / 2 * 0.98) return [c.x + x, c.z + z]; }
   return [c.x, c.z];
@@ -947,7 +1149,7 @@ function countIn(c, mean, salt) { const n = Math.floor(mean), f = mean - n; retu
 const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SC = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 function obj(L, x, y, z, yaw, s, lv, seed, extra) {
   Q.setFromAxisAngle(UP, yaw); M4.compose(V.set(x, y, z), Q, SC.set(s, s, s));
-  const t = [(hash(seed * 1e6 | 0, 1, 3) - 0.5) * 2, (hash(seed * 1e6 | 0, 2, 3) - 0.5) * 2, (hash(seed * 1e6 | 0, 4, 3) - 0.5) * 2];
+  const si = seed * 1e6 | 0, t = [(hash(si, 1, 3) - 0.5) * 2, (hash(si, 2, 3) - 0.5) * 2, (hash(si, 4, 3) - 0.5) * 2];
   const tint = [t[0] * 0.5 + t[1] * 0.2, t[1] * 0.6, t[2] * 0.4 + t[1] * 0.2];
   const o = { x, y, z, m: Float32Array.from(M4.elements), tint, lamp: [0, 0, 0], glow: [0, 0, 0], seed, occ: 0, lv, ly: extra?.ly ?? 0.6 * s };
   L.objs.push(o); for (const lvl of lv) for (const b of lvl) b.objs++;
@@ -956,31 +1158,31 @@ function obj(L, x, y, z, yaw, s, lv, seed, extra) {
 
 function buildLayers(B) {
   for (const b of BATCHES) if (b.mesh) { ROOT.remove(b.mesh); b.mesh.geometry.dispose(); }
-  BATCHES = []; LAYERS = []; LIGHTS = []; TGRID = new Map();
-  for (const m of PROPS) ROOT.remove(m); PROPS = [];
-  const nb = (gb, m, lvl, tag) => { const b = newBatch(gb, m, lvl, tag); BATCHES.push(b); return b; };
+  BATCHES = []; LAYERS = []; LIGHTS = []; TGRID = new Map(); BAKES.length = 0; BAKE_LOG.length = 0;
+  const nb = (gb, m, lvl) => { const b = newBatch(gb, m, lvl); BATCHES.push(b); return b; };
   const ON = k => S.layers[k].on, D = k => S.layers[k].dens;
   const usable = c => !c.wet && !c.path && !c.clear;
   const ends3 = () => [S.near, S.mid, S.draw];
+  const ground = B.grassIdx !== undefined ? B.grassIdx : (B.topIdx || 0);   // the tile the blades crop
 
   // ---- lanterns and the campfire (lit first, so everything else can bake them)
   if (ON("lights")) {
     const L = makeLayer("lights", () => [S.draw]);
     const post = new GB(); post.tube([0, 0, 0], [0, 2.3, 0], 0.07, 0.06, 6, 1); post.tube([0, 2.2, 0], [0.35, 2.3, 0], 0.04, 0.04, 4, 1);
     const glass = new GB(); glass.tube([0.35, 1.85, 0], [0.35, 2.15, 0], 0.11, 0.09, 6, 0.3);
-    const bPost = nb(post, mat("post", { tex: "bark_oak", windAmp: 0, single: true }), 0), bGlass = nb(glass, mat("lantern", { tex: "flower_yellow", emit: 6, emitCol: [1.2, 0.7, 0.3], windAmp: 0, single: true, flicker: true }), 0);
+    const bPost = nb(post, mat("post", { tex: "game/timber", windAmp: 0, single: true }), 0), bGlass = nb(glass, mat("lantern", { tex: "game/iron", emit: 9, emitCol: [1.2, 0.7, 0.3], windAmp: 0, single: true, flicker: true }), 0);
     for (let x = -S.patch * W + 8; x < S.patch * W - 8; x += 13) {
       const z = 6 * Math.sin(x * 0.05) + 2.6; const c = cellAt(x, z); if (!c || c.wet) continue;
       obj(L, x, c.h, z, 0, 1, [[bPost, bGlass]], hash(x | 0, 5, 9));
-      addLight(x + 0.35, c.h + 2.0, z, [1.0, 0.62, 0.3], 10, 1.6, true);
+      addLight(x + 0.35, c.h + 2.0, z, [1.0, 0.78, 0.42], 6.5, 1.8, true);   // a warm pool, as the game's lamps throw
     }
     const fc = cellAt(6, -10);
     if (fc) {
       const fire = new GB(); for (let k = 0; k < 3; k++) { const a = k * 2.1; fire.tube([Math.cos(a) * 0.12, 0, Math.sin(a) * 0.12], [0, 0.65, 0], 0.16, 0.0, 5, 0.5); }
       const ring = new GB(); for (let k = 0; k < 9; k++) { const a = k / 9 * 6.28; ring.tube([Math.cos(a) * 0.6, 0, Math.sin(a) * 0.6], [Math.cos(a) * 0.6, 0.18, Math.sin(a) * 0.6], 0.14, 0.11, 5, 0.4); }
-      const bFire = nb(fire, mat("fire", { tex: "flower_yellow", emit: 9, emitCol: [1.6, 0.6, 0.15], windAmp: 0, single: true, flicker: true }), 0), bRing = nb(ring, mat("rockring", { tex: "rock", single: true }), 0);
+      const bFire = nb(fire, mat("fire", { tex: "game/iron", emit: 14, emitCol: [1.6, 0.6, 0.15], windAmp: 0, single: true, flicker: true }), 0), bRing = nb(ring, mat("rockring:" + B.sheet, { at: [B.sheet, 3], single: true }), 0);
       obj(L, 6, fc.h, -10, 0, 1, [[bFire, bRing]], 0.42);
-      addLight(6, fc.h + 0.7, -10, [1.0, 0.5, 0.18], 13, 2.2, false);
+      addLight(6, fc.h + 0.7, -10, [1.0, 0.55, 0.2], 9, 2.2, false);
     }
     LAYERS.push(L);
   }
@@ -990,27 +1192,40 @@ function buildLayers(B) {
   const treeObjs = [];
   if (ON("trees")) {
     const L = makeLayer("trees", ends3);
-    const VARS = S.treeStyle === "hex" ? 6 : 4;
+    const hex = S.treeStyle === "hex";
+    const VARS = hex ? 6 : 4;
     const kit = {};
     for (const [sp] of species) {
       const SP = SPECIES[sp]; kit[sp] = [];
-      const mid = mat("imp:" + sp, { tex: "imp_" + sp, card: true, windAmp: 0.08, windH: 8, upN: 0.4, scaleU: G.uTreeScale, emit: SP.glow ? 1.2 : 0, emitCol: SP.glow || [0, 0, 0], level: 1 });
-      const far = mat("imp:" + sp, { tex: "imp_" + sp, card: true, windAmp: 0.08, windH: 8, upN: 0.4, scaleU: G.uTreeScale, emit: SP.glow ? 1.2 : 0, emitCol: SP.glow || [0, 0, 0], level: 2, billboard: true });
+      const bareImp = S.season === "winter" && SP.decid && !hex && !B.alien;
+      const impO = { tex: "imp_" + sp + (bareImp ? "_bare" : ""), views: 8, card: true, alpha: true, imp: true, leafy: !bareImp, decid: SP.decid, windAmp: 0.08, windH: 8, upN: 0.4, scaleU: G.uTreeScale, emit: SP.glow ? 1.2 : 0, emitCol: SP.glow || [0, 0, 0] };
+      // the game's tree wears its biome sheet's wood (2,1) and leaves (0,2): material codes 8 and 9
+      const barkS = hex ? "S:6" : SP.bark, leafS = hex ? "S:8" : SP.leaf;
       for (let v = 0; v < VARS; v++) {
-        const [bk, lf] = S.treeStyle === "hex" ? hexTree(sp, B.extra, v) : TREE_BUILD[sp](rngOf(9000 + v * 31 + sp.length * 7));
-        const bg = bk.geo(); const bb = bg.boundingBox; let lb = null; let lg = null;
-        if (lf && lf.tris) { lg = lf.geo(); lb = lg.boundingBox; }
-        const box = bb.clone(); if (lb) box.union(lb);
-        const Hh = box.max.y, Wd = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 1.05;
-        const bm = mat("bark:" + SP.bark + (SP.glow ? ":g" : ""), { tex: SP.bark, windAmp: B.lowg ? 0.5 : 0.1, windH: 8, scaleU: G.uTreeScale, single: true, snowable: SP.snow, emit: sp === "crystal" ? 0.7 : 0, emitCol: SP.glow || [0, 0, 0] });
+        const [bk, lf] = hex ? hexTree(sp, B.extra, v) : TREE_BUILD[sp](rngOf(9000 + v * 31 + sp.length * 7));
+        const bg = bk.geo(), box = bg.boundingBox.clone(); let lg = null;
+        if (lf && lf.tris) { lg = lf.geo(); box.union(lg.boundingBox); }
+        const Hh = box.max.y * 1.02, Wd = 2 * Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z) * 1.04;
+        const bm = mat("bark:" + barkS + ":" + B.sheet + (SP.glow ? ":g" : ""), { ...spec(barkS, B), windAmp: B.lowg ? 0.5 : 0.1, windH: 8, scaleU: G.uTreeScale, single: true, snowable: SP.snow, emit: sp === "crystal" ? 0.8 : 0, emitCol: SP.glow || [0, 0, 0] });
         let lm = null;
-        if (lg) lm = S.treeStyle === "hex"
-          ? mat("leafblock:" + SP.leaf, { tex: SP.leaf, solidLeaf: true, base: sp === "pine" ? [0.08, 0.2, 0.12] : [0.2, 0.36, 0.12], leafy: true, decid: false, windAmp: 0.04, windH: 8, scaleU: G.uTreeScale, single: true, snowable: SP.snow, emit: SP.glow ? 1.4 : 0, emitCol: SP.glow || [0, 0, 0] })
-          : sp === "glowcap" ? mat("cap:" + SP.leaf, { tex: SP.leaf, windAmp: 0.1, windH: 8, scaleU: G.uTreeScale, emit: 0.55, emitCol: SP.glow, single: false })
-          : mat("leaf:" + SP.leaf, { tex: SP.leaf, card: true, leafy: true, decid: SP.decid, snowable: SP.snow, windAmp: B.lowg ? 0.7 : 0.16, windH: 8, flutter: 0.04, scaleU: G.uTreeScale });
+        if (lg) lm = hex
+          ? mat("leafblock:" + B.sheet, { ...spec(leafS, B), leafy: true, decid: false, windAmp: 0.04, windH: 8, scaleU: G.uTreeScale, single: true, snowable: SP.snow, emit: SP.glow ? 1.4 : 0, emitCol: SP.glow || [0, 0, 0] })
+          : sp === "glowcap" ? mat("cap:" + leafS, { ...spec(leafS, B), windAmp: 0.1, windH: 8, scaleU: G.uTreeScale, emit: 1.0, emitCol: SP.glow })
+          : mat("leaf:" + leafS + ":" + B.sheet + ":" + SP.mask, { ...spec(leafS, B), card: true, mask: SP.mask, sway: true, leafy: true, decid: SP.decid, snowable: SP.snow, windAmp: B.lowg ? 0.7 : 0.16, windH: 8, flutter: 0.05, scaleU: G.uTreeScale });
         const near = [nb(bg, bm, 0)]; if (lg) near.push(nb(lg, lm, 0));
-        const midB = nb(crossedCards(Wd, Hh, 3), mid, 1), farB = nb(billboardQuad(Wd, Hh), far, 2);
-        kit[sp].push({ near, midB, farB, H: Hh, Wd });
+        // mid and far come FROM this near tree: it is baked from 8 bearings into an atlas once its
+        // textures are loaded (bakeImpostors); the painted pixel impostor shows only until then
+        const ik = "imp:" + sp + ":" + (hex ? "hex" : "det") + ":" + v + (bareImp ? ":bare" : "") + ":" + B.sheet;
+        const mid = mat(ik, { ...impO, level: 1 }), far = mat(ik, { ...impO, level: 2, billboard: true });
+        // baked from 20 degrees above, so a crown of near-flat leaf cards is seen, not edge-on;
+        // the frame then spans from just under the base to the tilted top
+        const lo = -Wd / 2 * Math.sin(BAKE_TILT), hi = Hh * Math.cos(BAKE_TILT) + Wd / 2 * Math.sin(BAKE_TILT);
+        // a conifer is baked from its trunk and needles: from outside, its branches are hidden by the
+        // sprays, and drawn they would turn a 48 px crown into a thatch of red bark
+        let bakeParts = near.map(b => [b.base, b.material]);
+        if (false && SP.cone && !hex && lg) { const tr = new GB(); tr.tube([0, 0, 0], [0, Hh * 0.45, 0], 0.2, 0.12, 6, 1.2); bakeParts = [[tr.geo(), bm], [lg, lm]]; }
+        BAKES.push({ label: sp + " " + (hex ? "hex" : "detailed") + " v" + v + (bareImp ? " bare" : ""), parts: bakeParts, Wd, lo, hi, mats: [mid, far] });
+        kit[sp].push({ near, midB: nb(impostorCards(Wd, hi - lo, 8, lo), mid, 1), farB: nb(billboardQuad(Wd, hi - lo, lo), far, 2), H: Hh, Wd });
       }
     }
     const total = species.reduce((a, [, w]) => a + w, 0);
@@ -1021,10 +1236,11 @@ function buildLayers(B) {
       let pick = hash(c.id, 2, 101) * total, sp = species[0][0];
       for (const [k, w] of species) { if (pick < w) { sp = k; break; } pick -= w; }
       const v = (hash(c.id, 3, 101) * kit[sp].length) | 0, K = kit[sp][v];
-      const hex = S.treeStyle === "hex";
       const s = hex ? 1 : 0.85 + hash(c.id, 4, 101) * 0.35, yaw = hex ? 0 : hash(c.id, 5, 101) * 6.283;
-      const o = obj(L, c.x, c.h, c.z, yaw, s, [K.near, [K.midB], [K.farB]], hash(c.id, 6, 101), { ly: K.H * 0.6 * s });
-      o.sp = sp; o.H = K.H * s; o.cr = K.Wd * 0.5 * s; treeObjs.push(o);
+      // a bare broadleaf tree in winter keeps its branches through the mid ring: a leafy card would be wrong there
+      const bare = S.season === "winter" && SPECIES[sp].decid && !hex && !B.alien;
+      const o = obj(L, c.x, c.h, c.z, yaw, s, [K.near, bare ? K.near : [K.midB], [K.farB]], hash(c.id, 6, 101), { ly: K.H * 0.6 * s });
+      o.H = K.H * s; o.cr = K.Wd * 0.5 * s; treeObjs.push(o);
       const SP = SPECIES[sp];
       if (SP.glow) addLight(c.x, c.h + K.H * s * 0.8, c.z, SP.glow, SP.glowReach, 0.9, false);
     }
@@ -1037,10 +1253,19 @@ function buildLayers(B) {
     const L = makeLayer("bushes", () => [S.near, S.mid * 0.8]);
     const vars = [];
     for (let v = 0; v < 3; v++) {
-      const r = rngOf(400 + v), g = B.bush.dead ? deadShrub(r) : B.bush.glow ? bushGeo(r, 0.5) : bushGeo(r, 0.75);
-      const m0 = mat("bush:" + B.bush.tex, { tex: B.bush.tex, card: true, leafy: !B.bush.dead && !B.bush.glow, decid: B.bush.tex !== "needle" && !B.bush.glow, snowable: B.snow, windAmp: 0.15, windH: 1, flutter: 0.02, emit: B.bush.glow ? 1.4 : 0, emitCol: [0.4, 1, 0.85] });
-      const m1 = mat("bush:" + B.bush.tex, { tex: B.bush.tex, card: true, leafy: !B.bush.dead && !B.bush.glow, decid: B.bush.tex !== "needle" && !B.bush.glow, snowable: B.snow, windAmp: 0.15, windH: 1, upN: 0.4, emit: B.bush.glow ? 1.4 : 0, emitCol: [0.4, 1, 0.85], level: 1, billboard: true });
-      vars.push([nb(g, m0, 0), nb(billboardQuad(1.3, 1.2), m1, 1)]);
+      const r = rngOf(400 + v);
+      let g0, m0, m1;
+      if (B.bush.dead) { // bare twigs in the desert's wood: the beach sheet's driftwood bark
+        g0 = deadShrub(r); m0 = mat("shrub", { at: [SHEET.beach, 6], windAmp: 0.1, windH: 0.6 });
+        m1 = mat("shrub", { at: [SHEET.beach, 6], windAmp: 0.1, windH: 0.6, level: 1 });
+        vars.push([nb(g0, m0, 0), nb(crossedCards(0.8, 0.6, 2), mat("shrubcard", { at: [SHEET.beach, 6], card: true, mask: 4, level: 1 }), 1)]);
+        continue;
+      }
+      const mk = B.bush.needle ? 2 : 1, o = { ...spec(B.bush.tex, B), card: true, mask: mk, sway: true, leafy: !B.bush.glow, decid: !B.bush.needle && !B.bush.glow, snowable: B.snow, windAmp: 0.15, windH: 1, flutter: 0.03, emit: B.bush.glow ? 1.4 : 0, emitCol: [0.4, 1, 0.85] };
+      g0 = bushGeo(r, B.bush.glow ? 0.5 : 0.75);
+      m0 = mat("bush:" + B.bush.tex + ":" + B.sheet, o);
+      m1 = mat("bush:" + B.bush.tex + ":" + B.sheet, { ...o, upN: 0.4, level: 1 });
+      vars.push([nb(g0, m0, 0), nb(crossedCards(1.2, 1.0, 3), m1, 1)]);
     }
     for (const c of CELLS) { if (!usable(c)) continue; const n = countIn(c, B.bush.n * D("bushes") * (0.4 + c.forest), 201);
       for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 202), v = vars[(hash(c.id, k, 203) * 3) | 0], s = 0.7 + hash(c.id, k, 204) * 0.6;
@@ -1048,34 +1273,29 @@ function buildLayers(B) {
     LAYERS.push(L);
   }
 
-  // ---- grass: blades near (coloured by a slice of the ground tile), crossed cards mid, then the tile alone
+  // ---- grass: blades near (a strip of the ground tile), crossed cards cut from the same tile mid, then the tile alone
   if (ON("grass")) {
     const L = makeLayer("grass", () => [S.near * 0.8, S.mid * 0.65]);
-    const tops = B.top;
-    const byTop = tops.map((t, i) => {
-      const vars = [];
-      for (let v = 0; v < 3; v++) vars.push([
-        nb(grassTuft(rngOf(700 + v), 9), mat("blade:" + t, { tex: t, card: true, windAmp: 0.18, windH: 0.6, upN: 1, snowable: B.snow }), 0),
-        nb(crossedCards(0.9, 0.55, 2), mat("gcard:" + B.grassTex, { tex: B.grassTex, card: true, windAmp: 0.15, windH: 0.6, upN: 1, snowable: B.snow, level: 1 }), 1)]);
-      return vars;
-    });
+    const vars = [];
+    for (let v = 0; v < 3; v++) vars.push([
+      nb(grassTuft(rngOf(700 + v), 9), mat("blade:" + B.sheet + ":" + ground, { at: [B.sheet, ground], card: true, grass: true, keep: G.uKeepGrass, windAmp: 0.18, windH: 0.6, upN: 1, snowable: B.snow }), 0),
+      nb(crossedCards(0.9, 0.55, 2), mat("gcard:" + B.sheet + ":" + ground, { at: [B.sheet, ground], card: true, grass: true, keep: G.uKeepGrass, mask: 3, windAmp: 0.15, windH: 0.6, upN: 1, snowable: B.snow, level: 1 }), 1)]);
     for (const c of CELLS) {
       if (c.path || c.wet) continue;
-      const grassy = /grass|jungle|dry|fungal|kelp|crystal/.test(tops[c.top]) ? 1 : 0.25;
-      const n = countIn(c, B.grass * D("grass") * grassy * (1 - c.forest * 0.4) * (c.clear ? 0.4 : 1), 301);
-      for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 302), v = byTop[c.top][(hash(c.id, k, 303) * 3) | 0], s = 0.8 + hash(c.id, k, 304) * 0.5;
+      const n = countIn(c, B.grass * D("grass") * (c.cold ? 0.15 : 1) * (1 - c.forest * 0.4) * (c.clear ? 0.4 : 1), 301);
+      for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 302), v = vars[(hash(c.id, k, 303) * 3) | 0], s = 0.8 + hash(c.id, k, 304) * 0.5;
         obj(L, x, c.h, z, hash(c.id, k, 305) * 6.28, s, [[v[0]], [v[1]]], hash(c.id, k, 306), { ly: 0.2 }); }
     }
     LAYERS.push(L);
   }
 
-  // ---- flowers
+  // ---- flowers: stems cropped from the ground tile like a blade; heads are mockup pixel art (the game has no flower art)
   if (ON("flowers") && B.flowers) {
     const L = makeLayer("flowers", () => [S.near * 0.9]);
     const stems = [0, 1].map(v => flowerStem(rngOf(800 + v)));
-    const kinds = B.flowers.tex.map(t => stems.map(st => [nb(st.g, mat("stem:" + B.top[0], { tex: B.top[0], card: true, windAmp: 0.15, windH: 0.4, upN: 1, keep: G.uKeepFlower }), 0),
-      nb(flowerHead(st.H, B.flowers.glow ? 0.22 : 0.17), mat("flower:" + t, { tex: t, card: true, windAmp: 0.15, windH: 0.4, upN: 0.6, keep: G.uKeepFlower, emit: B.flowers.glow ? 2 : 0, emitCol: [0.4, 1, 0.85] }), 0)]));
-    for (const c of CELLS) { if (!usable(c)) continue; const n = countIn(c, B.flowers.n * D("flowers") * (1.2 - c.forest), 401);
+    const kinds = B.flowers.tex.map(t => stems.map(st => [nb(st.g, mat("stem:" + B.sheet + ":" + ground, { at: [B.sheet, ground], card: true, windAmp: 0.15, windH: 0.4, upN: 1, keep: G.uKeepFlower }), 0),
+      nb(flowerHead(st.H, B.flowers.glow ? 0.22 : 0.17), mat("flower:" + t, { tex: t, card: true, alpha: true, windAmp: 0.15, windH: 0.4, upN: 0.6, keep: G.uKeepFlower, emit: B.flowers.glow ? 2 : 0, emitCol: [0.4, 1, 0.85] }), 0)]));
+    for (const c of CELLS) { if (!usable(c) || c.cold) continue; const n = countIn(c, B.flowers.n * D("flowers") * (1.2 - c.forest), 401);
       for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 402), patch = Math.floor(fbm(c.x * 0.08, c.z * 0.08, 3) * kinds.length * 1.5 + hash(c.id, k, 403) * 0.8) % kinds.length, kind = kinds[patch][(hash(c.id, k, 404) * 2) | 0];
         obj(L, x, c.h, z, hash(c.id, k, 405) * 6.28, 0.8 + hash(c.id, k, 406) * 0.5, [kind], hash(c.id, k, 407), { ly: 0.3 });
         if (B.flowers.glow) addLight(x, c.h + 0.35, z, [0.3, 1, 0.8], 2.6, 0.35, false); } }
@@ -1090,10 +1310,12 @@ function buildLayers(B) {
     for (let v = 0; v < 3; v++) {
       const r = rngOf(500 + v);
       let g0, m0, g1, m1;
-      if (kind === "fern") { g0 = fernGeo(r); m0 = mat("fern", { tex: "fern", card: true, leafy: true, decid: true, snowable: B.snow, windAmp: 0.12, windH: 0.7, upN: 0.6, flutter: 0.01 }); g1 = crossedCards(1.3, 0.7, 2); m1 = mat("fern", { tex: "fern", card: true, leafy: true, decid: true, windAmp: 0.12, windH: 0.7, upN: 0.6, level: 1 }); }
-      else if (kind === "shard") { g0 = shardGeo(r); m0 = mat("shard", { tex: "crystal", windAmp: 0, emit: 0.9, emitCol: [0.45, 0.8, 1], single: true }); g1 = billboardQuad(0.8, 0.7); m1 = mat("imp:crystal", { tex: "imp_crystal", card: true, level: 1, billboard: true, emit: 0.9, emitCol: [0.45, 0.8, 1] }); }
-      else { const t = kind === "reed" ? "reed" : kind === "kelp" ? "kelp" : "twig", h = kind === "reed" ? 1.2 : kind === "kelp" ? 1.4 : 0.6;
-        g0 = crossedCards(h * 0.8, h, 3); m0 = mat("under:" + t, { tex: t, card: true, windAmp: kind === "kelp" ? 0.5 : 0.15, windH: h, upN: 0.7 }); g1 = crossedCards(h * 0.8, h, 2); m1 = mat("under:" + t, { tex: t, card: true, windAmp: 0.15, windH: h, upN: 0.7, level: 1 }); }
+      if (kind === "fern") { const o = { ...spec(B.ferns.tex, B), card: true, mask: 4, sway: true, leafy: true, decid: true, snowable: B.snow, windAmp: 0.12, windH: 0.7, upN: 0.6, flutter: 0.02 };
+        g0 = fernGeo(r); m0 = mat("fern:" + B.sheet, o); g1 = crossedCards(1.3, 0.7, 2); m1 = mat("fern:" + B.sheet, { ...o, level: 1 }); }
+      else if (kind === "shard") { g0 = shardGeo(r); m0 = mat("shard", { at: [SHEET.frozen_wastes, 8], windAmp: 0, emit: 0.9, emitCol: [0.45, 0.8, 1], single: true }); g1 = billboardQuad(0.8, 0.7); m1 = mat("imp:crystal", { tex: "imp_crystal", card: true, alpha: true, level: 1, billboard: true, emit: 0.9, emitCol: [0.45, 0.8, 1] }); }
+      else if (kind === "twig") { g0 = deadShrub(r); m0 = mat("twig:" + B.sheet, { at: [B.sheet === SHEET.tundra ? SHEET.tundra : SHEET.beach, 6], windAmp: 0.1, windH: 0.6 }); g1 = crossedCards(0.8, 0.6, 2); m1 = mat("twigcard:" + B.sheet, { at: [B.sheet === SHEET.tundra ? SHEET.tundra : SHEET.beach, 6], card: true, mask: 4, level: 1 }); }
+      else { const reed = kind === "reed", h = reed ? 1.2 : 1.4, o = reed ? { tex: "game/reed", mask: 7 } : { at: [SHEET.ocean, 6], mask: 6 };
+        g0 = crossedCards(h * 0.8, h, 3); m0 = mat("under:" + kind, { ...o, card: true, windAmp: reed ? 0.15 : 0.5, windH: h, upN: 0.7 }); g1 = crossedCards(h * 0.8, h, 2); m1 = mat("under:" + kind, { ...o, card: true, windAmp: 0.15, windH: h, upN: 0.7, level: 1 }); }
       vars.push([nb(g0, m0, 0), nb(g1, m1, 1)]);
     }
     for (const c of CELLS) {
@@ -1106,12 +1328,12 @@ function buildLayers(B) {
     LAYERS.push(L);
   }
 
-  // ---- mushrooms
+  // ---- mushrooms: the sporewood sheet's stalk; caps are its cap skin, or mockup pixel art where the game has none
   if (ON("mush") && B.mush) {
     const L = makeLayer("mush", () => [B.mush.glow ? S.mid : S.near * 0.7]);
     const glow = !!B.mush.glow;
     const vars = [0, 1, 2].map(v => { const [st, cp] = mushGeo(rngOf(600 + v));
-      return [nb(st, mat("mstem", { tex: "bark_fungal", windAmp: 0, single: true, keep: G.uKeepMush }), 0), nb(cp, mat("mcap:" + B.mush.tex, { tex: B.mush.tex, windAmp: 0, keep: G.uKeepMush, emit: glow ? 2.2 : 0, emitCol: [0.4, 1, 0.85] }), 0)]; });
+      return [nb(st, mat("mstem", { at: [SHEET.sporewood, 6], windAmp: 0, single: true, keep: G.uKeepMush }), 0), nb(cp, mat("mcap:" + B.mush.tex, { ...spec(B.mush.tex, B), windAmp: 0, keep: G.uKeepMush, emit: glow ? 2.2 : 0, emitCol: [0.4, 1, 0.85] }), 0)]; });
     for (const c of CELLS) { if (!usable(c)) continue; const n = countIn(c, B.mush.n * D("mush") * (0.2 + c.forest * 1.5), 601);
       for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 602), s = (glow ? 1.6 : 1) * (0.8 + hash(c.id, k, 603) * 0.8);
         obj(L, x, c.h, z, hash(c.id, k, 604) * 6.28, s, [vars[(hash(c.id, k, 605) * 3) | 0]], hash(c.id, k, 606), { ly: 0.1 });
@@ -1119,32 +1341,32 @@ function buildLayers(B) {
     LAYERS.push(L);
   }
 
-  // ---- rocks and pebbles
+  // ---- rocks and pebbles: the sheet's stone (3,0), as clutter code 5 is
   if (ON("rocks") && B.rocks) {
     const big = makeLayer("rocks", () => [S.mid]), peb = makeLayer("pebbles", () => [S.near * 0.6]);
-    const rv = [0, 1, 2, 3].map(v => nb(rockGeo(rngOf(100 + v)), mat("rock", { tex: "rock", windAmp: 0, single: true, snowable: B.snow }), 0));
+    const rv = [0, 1, 2, 3].map(v => nb(rockGeo(rngOf(100 + v)), mat("rock:" + B.sheet, { at: [B.sheet, 3], windAmp: 0, single: true, snowable: B.snow }), 0));
     for (const c of CELLS) { if (c.wet) continue;
-      const nb_ = countIn(c, B.rocks * D("rocks") * 0.12, 701), np = countIn(c, B.rocks * D("rocks") * 1.2, 702);
-      for (let k = 0; k < nb_; k++) { const [x, z] = placeIn(c, k, 703); obj(big, x, c.h - 0.1, z, hash(c.id, k, 704) * 6.28, 0.45 + hash(c.id, k, 705) * 0.7, [[rv[(hash(c.id, k, 706) * 4) | 0]]], hash(c.id, k, 707), { ly: 0.3 }); }
+      const nbig = countIn(c, B.rocks * D("rocks") * 0.12, 701), np = countIn(c, B.rocks * D("rocks") * 1.2, 702);
+      for (let k = 0; k < nbig; k++) { const [x, z] = placeIn(c, k, 703); obj(big, x, c.h - 0.1, z, hash(c.id, k, 704) * 6.28, 0.45 + hash(c.id, k, 705) * 0.7, [[rv[(hash(c.id, k, 706) * 4) | 0]]], hash(c.id, k, 707), { ly: 0.3 }); }
       for (let k = 0; k < np; k++) { const [x, z] = placeIn(c, k + 10, 703); obj(peb, x, c.h - 0.02, z, hash(c.id, k, 714) * 6.28, 0.08 + hash(c.id, k, 715) * 0.12, [[rv[(hash(c.id, k, 716) * 4) | 0]]], hash(c.id, k, 717), { ly: 0.05 }); }
     }
     LAYERS.push(big, peb);
   }
 
-  // ---- fallen logs
+  // ---- fallen logs, in the first species' bark
   if (ON("logs") && B.logs && species.length) {
     const L = makeLayer("logs", () => [S.mid]);
-    const bark = SPECIES[species[0][0]].bark;
-    const vars = [0, 1].map(v => nb(logGeo(rngOf(300 + v)), mat("log:" + bark, { tex: bark, windAmp: 0, single: true, snowable: B.snow }), 0));
-    for (const c of CELLS) { if (!usable(c)) continue; if (hash(c.id, 1, 801) < B.logs * D("logs") * (0.3 + c.forest * 2)) { const [x, z] = placeIn(c, 0, 802);
+    const barkS = SPECIES[species[0][0]].bark;
+    const vars = [0, 1].map(v => nb(logGeo(rngOf(300 + v)), mat("log:" + barkS + ":" + B.sheet, { ...spec(barkS, B), windAmp: 0, single: true, snowable: B.snow }), 0));
+    for (const c of CELLS) { if (!usable(c)) continue; if (hash(c.id, 1, 801) < B.logs * D("logs") * (0.3 + c.forest * 2)) { const x = c.x, z = c.z; // centred, so it never overhangs a step
       obj(L, x, c.h, z, hash(c.id, 2, 803) * 6.28, 0.9 + hash(c.id, 3, 804) * 0.3, [[vars[(hash(c.id, 4, 805) * 2) | 0]]], hash(c.id, 5, 806), { ly: 0.2 }); } }
     LAYERS.push(L);
   }
 
-  // ---- vines, hung from the crowns of the trees placed above
+  // ---- vines, hung by their root from the crowns of the trees placed above
   if (ON("vines") && B.vines && treeObjs.length && S.treeStyle !== "hex") {
     const L = makeLayer("vines", () => [S.near * 1.1]);
-    const vars = [0, 1, 2].map(v => nb(vineStrand(rngOf(900 + v)), mat("vine", { tex: "vine", card: true, leafy: true, windAmp: 0.4, windH: 3, upN: 0.3, flutter: 0.02 }), 0));
+    const vars = [0, 1, 2].map(v => nb(vineStrand(rngOf(900 + v)), mat("vine", { tex: "game/leaves", card: true, mask: 4, sway: true, leafy: true, windAmp: 0.0, windH: 3, upN: 0.3, flutter: 0.08 }), 0));
     for (const t of treeObjs) { const seed = t.seed * 1e6 | 0; if (hash(seed, 1, 901) > B.vines * D("vines")) continue;
       const n = 3 + ((hash(seed, 2, 901) * 4) | 0);
       for (let k = 0; k < n; k++) { const a = hash(seed, k, 902) * 6.28, r = t.cr * (0.4 + hash(seed, k, 903) * 0.5), x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r, y = t.y + t.H * (0.6 + hash(seed, k, 904) * 0.25);
@@ -1152,12 +1374,12 @@ function buildLayers(B) {
     LAYERS.push(L);
   }
 
-  // ---- leaf litter
+  // ---- leaf litter: the settlement litter texture, cut into leaves
   if (ON("litter") && B.litter) {
     const L = makeLayer("litter", () => [S.near * 0.7]);
-    const vars = [0, 1].map(v => nb(litterGeo(rngOf(950 + v)), mat("litter", { tex: "litter", card: true, windAmp: 0, upN: 1, keep: G.uKeepLitter, snowable: B.snow }), 0));
+    const vars = [0, 1].map(v => nb(litterGeo(rngOf(950 + v)), mat("litter", { tex: "game/litter", card: true, mask: 5, windAmp: 0, upN: 1, keep: G.uKeepLitter, snowable: B.snow, decal: true }), 0));
     for (const c of CELLS) { if (c.wet || c.path) continue; const n = countIn(c, B.litter * D("litter") * (0.2 + c.forest * 1.6), 1001);
-      for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 1002); obj(L, x, c.h, z, hash(c.id, k, 1003) * 6.28, 1, [[vars[k % 2]]], hash(c.id, k, 1004), { ly: 0.02 }); } }
+      for (let k = 0; k < n; k++) { const a = hash(c.id, k, 1002) * 6.28, rr = Math.sqrt(hash(c.id, k, 1005)) * (R * 0.866 - 0.55), x = c.x + Math.cos(a) * rr, z = c.z + Math.sin(a) * rr; obj(L, x, c.h, z, hash(c.id, k, 1003) * 6.28, 1, [[vars[k % 2]]], hash(c.id, k, 1004), { ly: 0.02 }); } }
     LAYERS.push(L);
   }
 
@@ -1172,9 +1394,121 @@ function buildLayers(B) {
 }
 
 // =====================================================================
-// LOD: weights by distance, with a dithered cross-fade over each ring's outer edge
+// Impostors baked from the near trees. Each variant's real near model (its
+// branches, sprays and game textures, in the current season) is rendered
+// orthographically from 8 bearings into a strip of 48 x 72 px views, read back,
+// snapped to the Sweaft-64 palette with alpha 0 or 255, and handed to that
+// variant's mid cards and far billboard. Near, mid and far are one tree.
 // =====================================================================
-let lastCam = new THREE.Vector3(1e9, 0, 0), dirty = true, FADING = 0;
+const BAKES = [];
+const VIEW_W = 48, VIEW_H = 72, VIEWS = 8, BAKE_TILT = 0.55;
+const SWEAFT = ["010e1a", "011c34", "1f3b52", "3e586e", "5d778d", "92a3b2", "bfcad7", "fffefe", "a09f91", "434137", "2c2c25", "161612", "010000", "1c020d", "4a051e", "841c1d", "d4462b", "fe6420", "fb902f", "faaf5c", "003227", "05582d", "297537", "559642", "9bb675", "0c2f44", "204f63", "53998b", "84e3b5", "c1f1d8", "191954", "15578a", "1096c3", "74effe", "d2f8ff", "230c44", "4f1d83", "7d2dbd", "9e3ba2", "c34988", "dd576d", "2b1f35", "3e3551", "69608b", "170916", "2f1525", "522b2f", "7d4636", "a8633e", "e69d69", "eab798", "41322c", "725244", "ab8465", "cfaa81", "561c27", "733126", "8d4526", "c56d25", "2e0d06", "681712", "a61e1f", "d12d41", "fa3a64"]
+  .map(h => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]);
+function oklab(r, g, b) {
+  const f = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const R = f(r), Gc = f(g), B = f(b);
+  const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * Gc + 0.0514459929 * B), m = Math.cbrt(0.2119034982 * R + 0.6806995451 * Gc + 0.1073969566 * B), s2 = Math.cbrt(0.0883024619 * R + 0.2817188376 * Gc + 0.6299787005 * B);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s2, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s2, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s2];
+}
+const SWEAFT_LAB = SWEAFT.map(c => oklab(c[0], c[1], c[2]));
+const bakeScene = new THREE.Scene();
+let bakeRT = null;
+function bakeMesh(geo, material) {
+  const g = new THREE.BufferGeometry();
+  for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.attributes[k]);
+  const one = (n, v) => new THREE.InstancedBufferAttribute(new Float32Array(n).fill(v), n);
+  g.setAttribute("aFade", one(1, 1)); g.setAttribute("aTint", one(3, 0)); g.setAttribute("aLamp", one(3, 0)); g.setAttribute("aGlow", one(3, 0));
+  g.setAttribute("aSeed", new THREE.InstancedBufferAttribute(new Float32Array([0.37, 0]), 2));
+  const m = new THREE.InstancedMesh(g, material, 1); m.setMatrixAt(0, new THREE.Matrix4()); m.frustumCulled = false;
+  return m;
+}
+function bakeImpostors() {
+  if (!BAKES.length || pending > 0) return;   // wait until every texture the trees wear has loaded
+  // Each view is rendered at 3x, snapped to the palette per pixel, then each 3 x 3 block becomes one
+  // pixel: clear when 5 or more of its 9 are clear (so the sky gaps between whorls survive), else the
+  // commonest colour. The foliage and the bark are two passes: the bark is laid on top only where it
+  // fills most of a block (the trunk and the thick base of the main branches), so it survives as
+  // short red strokes rather than a thatch over the crown.
+  const S3 = 3, W = VIEW_W * VIEWS, H = VIEW_H, W3 = W * S3, H3 = H * S3;
+  if (!bakeRT) bakeRT = new THREE.WebGLRenderTarget(W3, H3, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+  const keep = { wind: G.uWind.value, gust: G.uGust.value, ts: G.uTreeScale.value, ff: G.uFFOn.value, lv: G.uLodVis.value, mv: G.uMaskVis.value, cv: G.uColVar.value, cc: renderer.getClearColor(new THREE.Color()), ca: renderer.getClearAlpha() };
+  G.uWind.value = 0; G.uGust.value = 0; G.uTreeScale.value = 1; G.uFFOn.value = 0; G.uLodVis.value = 0; G.uMaskVis.value = 0; G.uColVar.value = 0; G.uBake.value = 1;
+  const buf = new Uint8Array(W3 * H3 * 4);
+  const snapOf = (meshes, cam) => {
+    meshes.forEach(m => bakeScene.add(m));
+    renderer.setRenderTarget(bakeRT); renderer.setClearColor(0x000000, 0); bakeRT.scissorTest = false; renderer.clear();
+    bakeRT.scissorTest = true;
+    for (let k = 0; k < VIEWS; k++) {
+      const th = k * 2 * Math.PI / VIEWS;      // view k is seen from bearing th in the tree's own frame
+      cam.position.set(Math.sin(th) * Math.cos(BAKE_TILT) * 80, Math.sin(BAKE_TILT) * 80, Math.cos(th) * Math.cos(BAKE_TILT) * 80); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
+      bakeRT.viewport.set(k * VIEW_W * S3, 0, VIEW_W * S3, VIEW_H * S3); bakeRT.scissor.set(k * VIEW_W * S3, 0, VIEW_W * S3, VIEW_H * S3);
+      renderer.setRenderTarget(bakeRT); renderer.render(bakeScene, cam);
+    }
+    renderer.readRenderTargetPixels(bakeRT, 0, 0, W3, H3, buf);
+    meshes.forEach(m => bakeScene.remove(m));   // remove, never dispose: the geometry shares buffers with the live batches
+    const snap = new Int16Array(W3 * H3);
+    for (let i = 0; i < W3 * H3; i++) { // snap to the palette in OKLab, hue first: a dark green must stay green
+      snap[i] = -1;
+      if (buf[i * 4 + 3] < 128) continue;
+      const q = oklab(buf[i * 4], buf[i * 4 + 1], buf[i * 4 + 2]); let best = 0, bd = 1e9;
+      for (let c = 0; c < SWEAFT_LAB.length; c++) { const p = SWEAFT_LAB[c], d = (p[0] - q[0]) ** 2 + 8 * ((p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2); if (d < bd) { bd = d; best = c; } }
+      snap[i] = best;
+    }
+    return snap;
+  };
+  const blockOf = (snap, x, y) => { const ids = []; for (let j = 0; j < S3; j++) for (let i = 0; i < S3; i++) { const c = snap[(S3 * y + j) * W3 + S3 * x + i]; if (c >= 0) ids.push(c); } return ids; };
+  const mode = ids => { let best = ids[0], bn = 0; for (const c of ids) { let n = 0; for (const d of ids) if (d === c) n++; if (n > bn || (n === bn && SWEAFT_LAB[c][1] < SWEAFT_LAB[best][1])) { bn = n; best = c; } } return best; };
+  for (const job of BAKES) {
+    const cam = new THREE.OrthographicCamera(-job.Wd / 2, job.Wd / 2, job.hi, job.lo, 0.1, 400);
+    const split = job.parts.length > 1;   // a tree with leaves: bark is its first part
+    const crown = snapOf((split ? job.parts.slice(1) : job.parts).map(([geo, m]) => bakeMesh(geo, m)), cam);
+    const bark = split ? snapOf([bakeMesh(job.parts[0][0], job.parts[0][1])], cam) : null;
+    const out = new Uint8Array(W * H * 4);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let ids = blockOf(crown, x, y), best = -1;
+      if (ids.length >= 6) best = mode(ids);   // clear if 4 of 9 are: the sky gaps at the whorl tips survive
+      if (bark) { const b = blockOf(bark, x, y); if (b.length >= 6 || (best < 0 && b.length >= 5)) best = mode(b); }
+      if (best < 0) continue;
+      const o = (y * W + x) * 4; out[o] = SWEAFT[best][0]; out[o + 1] = SWEAFT[best][1]; out[o + 2] = SWEAFT[best][2]; out[o + 3] = 255;
+    }
+    const t = new THREE.DataTexture(out, W, H, THREE.RGBAFormat);
+    t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.needsUpdate = true;
+    for (const m of job.mats) { if (m.userData.baked && m.userData.baked !== t) m.userData.baked.dispose(); m.uniforms.map.value = t; m.userData.baked = t; }
+    BAKED++; BAKE_LOG.push({ label: job.label, w: W, h: H, data: out });
+  }
+  bakeRT.scissorTest = false; renderer.setRenderTarget(null);
+  renderer.setClearColor(keep.cc, keep.ca);
+  G.uWind.value = keep.wind; G.uGust.value = keep.gust; G.uTreeScale.value = keep.ts; G.uFFOn.value = keep.ff; G.uLodVis.value = keep.lv; G.uMaskVis.value = keep.mv; G.uColVar.value = keep.cv; G.uBake.value = 0;
+  BAKES.length = 0;
+  drawAtlas();
+}
+let BAKED = 0;
+// The debug view of what the bake made: every view of every baked tree, 3x, nearest.
+const BAKE_LOG = [];
+function drawAtlas() {
+  const box = document.getElementById("atlas");
+  box.hidden = !S.atlasVis;
+  if (!S.atlasVis) return;
+  box.innerHTML = "";
+  for (const e of BAKE_LOG.slice(-12)) {
+    const c = document.createElement("canvas"); c.width = e.w; c.height = e.h;
+    const ctx = c.getContext("2d"), id = ctx.createImageData(e.w, e.h);
+    for (let y = 0; y < e.h; y++) for (let x = 0; x < e.w; x++) { const si = ((e.h - 1 - y) * e.w + x) * 4, di = (y * e.w + x) * 4; for (let k = 0; k < 4; k++) id.data[di + k] = e.data[si + k]; }
+    ctx.putImageData(id, 0, 0); c.style.width = (e.w * 2) + "px"; c.style.height = (e.h * 2) + "px";
+    const lab = document.createElement("small"); lab.textContent = e.label;
+    box.append(lab, c);
+  }
+}
+
+// =====================================================================
+// LOD. Each object's level comes from its distance, with a little hysteresis.
+// "timed": when the level changes, the old and new levels cross-fade by a
+//   complementary dither over a fixed time, then the new one is solid: a
+//   dither shows only while a fade is in progress, never as a steady state.
+// "fade": the distance cross-fade of distance-lod-fade, a dithered band.
+// "cut": hard switching, to show the pop.
+// =====================================================================
+let lastCam = new THREE.Vector3(1e9, 0, 0), dirty = true, FADING = 0, ACTIVE = 0;
 function put(o, lvl, f) {
   for (const b of lvl) {
     const n = b.n++, m = b.mesh;
@@ -1187,23 +1521,45 @@ function put(o, lvl, f) {
     g.aSeed.array[n * 2] = o.seed; g.aSeed.array[n * 2 + 1] = o.occ;
   }
 }
-function updateLOD() {
-  const cp = camera.position;
-  if (!dirty && cp.distanceToSquared(lastCam) < 0.04) return;
-  lastCam.copy(cp); dirty = false; FADING = 0;
+function levelOf(d, ends, cur) {
+  let i = 0; while (i < ends.length && d >= ends[i]) i++;          // ends.length = none
+  if (cur >= 0 && i !== cur) {                                      // hysteresis: 4% past the line
+    const edge = i > cur ? ends[cur] : ends[i];
+    if (Math.abs(d - edge) < edge * 0.04) return cur;
+  }
+  return i;
+}
+function updateLOD(now) {
+  const cp = camera.position, moved = cp.distanceToSquared(lastCam) >= 0.04;
+  if (!dirty && !moved && ACTIVE === 0) return;
+  lastCam.copy(cp); dirty = false; FADING = 0; ACTIVE = 0;
   for (const b of BATCHES) b.n = 0;
-  const w = S.fadeW, cut = S.lodMode === "cut";
+  const w = S.fadeW, mode = S.lodMode, dur = Math.max(0.05, S.fadeW * 2);
   for (const L of LAYERS) {
     const ends = L.ends().map(e => Math.min(e, S.draw));
     for (let i = 1; i < ends.length; i++) if (ends[i] < ends[i - 1]) ends[i] = ends[i - 1];
     const max = ends[ends.length - 1];
     for (const o of L.objs) {
       const dx = o.x - cp.x, dy = o.y - cp.y, dz = o.z - cp.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const none = ends.length;
+      if (mode === "timed") {
+        if (o.cur === undefined) { o.cur = none; o.prev = none; o.t0 = -1e9; }
+        const tgt = levelOf(d, ends, o.cur);
+        if (tgt !== o.cur) { o.prev = o.cur; o.cur = tgt; o.t0 = now; }
+        const t = (now - o.t0) / dur;
+        if (t < 1) {
+          ACTIVE++; FADING++;
+          if (o.prev < none && o.lv[o.prev]) put(o, o.lv[o.prev], 1 - t);
+          if (o.cur < none && o.lv[o.cur]) put(o, o.lv[o.cur], 2 + t);
+        } else if (o.cur < none && o.lv[o.cur]) put(o, o.lv[o.cur], 1);
+        continue;
+      }
+      o.cur = undefined;
       if (d >= max) continue;
       let i = 0; while (i < ends.length - 1 && d >= ends[i]) i++;
       if (i >= o.lv.length) continue;
       const lo = ends[i] * (1 - w);
-      if (cut || d <= lo) { put(o, o.lv[i], 1); continue; }
+      if (mode === "cut" || d <= lo) { put(o, o.lv[i], 1); continue; }
       const t = (d - lo) / (ends[i] - lo);
       FADING++;
       put(o, o.lv[i], 1 - t);                                   // outgoing: keeps the dither values below 1 - t
@@ -1254,8 +1610,7 @@ function moveFireflies(t) {
     G.uFF.value[i].set(on ? x : 0, on ? y : -999, on ? z : 0); arr[i * 3] = x; arr[i * 3 + 1] = y; arr[i * 3 + 2] = z;
   });
   ffGeo.attributes.position.needsUpdate = true;
-  const blink = 0.6 + 0.4 * Math.sin(t * 3.0);
-  G.uFFOn.value = on ? G.uNight.value * blink : 0;
+  G.uFFOn.value = on ? G.uNight.value * (0.6 + 0.4 * Math.sin(t * 3.0)) : 0;
 }
 
 const cA = new THREE.Color(), cB = new THREE.Color();
@@ -1271,19 +1626,17 @@ function setTime(h) {
   skyMat.uniforms.uSunUp.value = el > -0.05 ? 1 : 0;
   if (el > 0.02) {
     G.uSunDir.value.copy(sd);
-    cA.setRGB(3.2, 3.0, 2.7); cB.setRGB(2.6, 1.3, 0.55);
+    cA.setRGB(2.0, 1.95, 1.8); cB.setRGB(2.6, 1.3, 0.55);
     G.uSunCol.value.copy(cA).lerp(cB, dusk).multiplyScalar(smooth(0.0, 0.12, el));
   } else { // the moon: dim and cool, so the lamps read
     G.uSunDir.value.copy(moon);
-    G.uSunCol.value.setRGB(0.025, 0.032, 0.055).multiplyScalar(night);
+    G.uSunCol.value.setRGB(0.008, 0.011, 0.02).multiplyScalar(night);   // night is DARK: outside a pool the ground reads near-black
   }
   const sky0 = new THREE.Color(B.sky[0]).convertSRGBToLinear(), hor0 = new THREE.Color(B.sky[1]).convertSRGBToLinear();
-  G.uSkyAmb.value.copy(sky0).multiplyScalar(0.75 * day + 0.007).lerp(new THREE.Color(0.6, 0.35, 0.25), dusk * 0.3);
-  G.uGndAmb.value.copy(hor0).multiplyScalar(0.3 * day + 0.003);
-  // the sky as seen (sRGB-ish values straight to the screen)
-  const topDay = new THREE.Color(B.sky[0]), horDay = new THREE.Color(B.sky[1]);
-  SKY.top.copy(topDay).lerp(new THREE.Color(0x05070f), night).lerp(new THREE.Color(0x3a4878), dusk * 0.4);
-  SKY.hor.copy(horDay).lerp(new THREE.Color(0x0b1020), night).lerp(new THREE.Color(0xf0a070), dusk * 0.55);
+  G.uSkyAmb.value.copy(sky0).multiplyScalar(0.75 * day + 0.0015).lerp(new THREE.Color(0.6, 0.35, 0.25), dusk * 0.3);
+  G.uGndAmb.value.copy(hor0).multiplyScalar(0.3 * day + 0.0005);
+  SKY.top.copy(new THREE.Color(B.sky[0])).lerp(new THREE.Color(0x05070f), night).lerp(new THREE.Color(0x3a4878), dusk * 0.4);
+  SKY.hor.copy(new THREE.Color(B.sky[1])).lerp(new THREE.Color(0x0b1020), night).lerp(new THREE.Color(0xf0a070), dusk * 0.55);
   const fog = new THREE.Color(B.fog).lerp(new THREE.Color(0x0a0e18), night).lerp(new THREE.Color(0xd8a080), dusk * 0.35);
   G.uFogCol.value.copy(fog);
   SKY.hor.lerp(fog, 0.4);
@@ -1319,7 +1672,7 @@ canvas.addEventListener("wheel", e => { e.preventDefault(); if (CAM.mode === "or
 
 function updateCamera(dt) {
   if (CAM.mode === "orbit") {
-    CAM.ty = lerp(CAM.ty, groundAt(CAM.tx, CAM.tz) + 1, 0.1);
+    CAM.ty = lerp(CAM.ty, groundAt(CAM.tx, CAM.tz) + (CAM.tyOff ?? 1), 0.1);
     const cp = Math.cos(CAM.pitch);
     camera.position.set(CAM.tx + Math.sin(CAM.yaw) * cp * CAM.dist, CAM.ty + Math.sin(CAM.pitch) * CAM.dist, CAM.tz + Math.cos(CAM.yaw) * cp * CAM.dist);
     camera.position.y = Math.max(camera.position.y, groundAt(camera.position.x, camera.position.z) + 0.6);
@@ -1351,7 +1704,7 @@ function buildBiomeButtons() {
   const box = $("biomes");
   for (const [k, B] of Object.entries(BIOMES)) {
     const b = document.createElement("button"); b.dataset.v = k; b.setAttribute("aria-pressed", k === S.biome);
-    b.innerHTML = `<img src="${TEXDIR}icon_${B.icon}.png" alt="">${B.name.replace("Glowing fungal forest", "Fungal forest").replace("Low-gravity kelp", "Kelp drift")}${B.alien ? "<small>alien world</small>" : ""}`;
+    b.innerHTML = `<img src="${TEXDIR}icon_${B.icon}.png?v=${ART_V}" alt="">${B.name.replace("Glowing fungal forest", "Fungal forest").replace("Low-gravity kelp", "Kelp drift")}${B.alien ? "<small>alien world</small>" : B.notGame ? "<small>not a game biome</small>" : ""}`;
     b.title = B.name;
     b.onclick = () => { S.biome = k; syncUI(); rebuild(); };
     box.appendChild(b);
@@ -1372,27 +1725,30 @@ function buildLayerRows() {
   }
 }
 const LIVE = [["treeScale", v => v.toFixed(2) + "x"], ["plantScale", v => v.toFixed(2) + "x"], ["colVar", v => v.toFixed(2)], ["wind", v => v.toFixed(2)], ["gust", v => v.toFixed(2)], ["windDir", v => v + "°"],
-  ["near", v => v + " m"], ["mid", v => v + " m"], ["draw", v => v + " m"], ["fadeW", v => v.toFixed(2)]];
+  ["near", v => v + " m"], ["mid", v => v + " m"], ["draw", v => v + " m"], ["fadeW", v => S.lodMode === "timed" ? (v * 2).toFixed(2) + " s" : v.toFixed(2)]];
 function applyLive() {
   G.uTreeScale.value = S.treeScale; G.uPlantScale.value = S.plantScale; G.uColVar.value = S.colVar;
   G.uWind.value = S.wind * (BIOMES[S.biome].lowg ? 1.3 : 1); G.uGust.value = S.gust; const a = S.windDir * Math.PI / 180; G.uWindDir.value.set(Math.cos(a), Math.sin(a));
-  G.uLodVis.value = S.lodVis ? 1 : 0; G.uLowG.value = BIOMES[S.biome].lowg ? 1 : 0;
+  G.uLodVis.value = S.lodVis ? 1 : 0; G.uMaskVis.value = S.maskVis ? 1 : 0; G.uLowG.value = BIOMES[S.biome].lowg ? 1 : 0;
   const B = BIOMES[S.biome], se = S.season;
   G.uAutumn.value = se === "autumn" ? 1 : 0; G.uSpring.value = se === "spring" ? 1 : 0; G.uWinter.value = se === "winter" ? 1 : 0;
-  G.uSnow.value = se === "winter" && B.snow ? 0.85 : 0;
+  G.uSnow.value = se === "winter" && B.snow ? 1 : 0;
   G.uKeepFlower.value = { spring: 1.01, summer: 0.75, autumn: 0.3, winter: 0 }[se];
   G.uKeepLitter.value = { spring: 0.35, summer: 0.5, autumn: 1.01, winter: 0.6 }[se];
   G.uKeepMush.value = { spring: 0.4, summer: 0.6, autumn: 1.01, winter: 0.1 }[se];
+  G.uKeepGrass.value = se === "winter" && B.snow ? 0.18 : 2;
   if (B.alien) { G.uKeepFlower.value = 1.01; G.uKeepMush.value = 1.01; G.uKeepLitter.value = 1.01; G.uAutumn.value = 0; G.uWinter.value = 0; G.uSpring.value = 0; }
   const fogFar = Math.max(S.draw * 1.6, 120); G.uFogFar.value = fogFar; G.uFogNear.value = fogFar * 0.3;
   $("legend").hidden = !S.lodVis;
+  $("fadeWLabel").textContent = S.lodMode === "timed" ? "Fade time" : "Fade width (fraction of the ring)";
+  $("fadeWOut").textContent = LIVE[9][1](S.fadeW);
   setTime(S.time);
   dirty = true; updateShare();
 }
 function syncUI() {
   for (const [k, fmt] of LIVE) { $(k).value = S[k]; $(k + "Out").textContent = fmt(+S[k]); }
   $("time").value = S.time; $("timeOut").textContent = fmtTime(S.time);
-  $("treeStyle").value = S.treeStyle; $("lodMode").value = S.lodMode; $("lodVis").checked = S.lodVis; $("patch").value = String(S.patch);
+  $("treeStyle").value = S.treeStyle; $("lodMode").value = S.lodMode; $("lodVis").checked = S.lodVis; $("maskVis").checked = S.maskVis; $("atlasVis").checked = !!S.atlasVis; $("patch").value = String(S.patch);
   for (const b of $("season").children) b.setAttribute("aria-pressed", b.dataset.v === S.season);
   for (const b of $("biomes").children) b.setAttribute("aria-pressed", b.dataset.v === S.biome);
   const B = BIOMES[S.biome];
@@ -1402,17 +1758,20 @@ function syncUI() {
     $("row_" + k).title = avail[k] ? "" : "Not in this biome";
     if ($("dens_" + k)) { $("dens_" + k).value = S.layers[k].dens; $("out_" + k).textContent = avail[k] ? "x" + S.layers[k].dens.toFixed(2) : "n/a"; }
   }
-  $("where").textContent = B.name + (B.alien ? " (alien world)" : "") + " · " + S.season + " · " + fmtTime(S.time);
+  setWhere();
   applyLive();
 }
+function setWhere() { const B = BIOMES[S.biome]; $("where").textContent = B.name + (B.alien ? " (alien world)" : "") + " · " + S.season + " · " + fmtTime(S.time); }
 function fmtTime(h) { const H = Math.floor(h) % 24, M = Math.round((h - Math.floor(h)) * 60); return String(H).padStart(2, "0") + ":" + String(M % 60).padStart(2, "0"); }
 for (const [k, fmt] of LIVE) $(k).addEventListener("input", e => { S[k] = +e.target.value; $(k + "Out").textContent = fmt(S[k]); if (k === "near" && S.mid < S.near) S.mid = S.near; if (k === "mid" && S.draw < S.mid) S.draw = S.mid; applyLive(); });
-$("time").addEventListener("input", e => { S.time = +e.target.value; $("timeOut").textContent = fmtTime(S.time); $("where").textContent = BIOMES[S.biome].name + " · " + S.season + " · " + fmtTime(S.time); applyLive(); });
+$("time").addEventListener("input", e => { S.time = +e.target.value; $("timeOut").textContent = fmtTime(S.time); setWhere(); applyLive(); });
 $("treeStyle").onchange = e => { S.treeStyle = e.target.value; syncUI(); rebuild(); };
 $("lodMode").onchange = e => { S.lodMode = e.target.value; applyLive(); };
 $("lodVis").onchange = e => { S.lodVis = e.target.checked; applyLive(); };
+$("maskVis").onchange = e => { S.maskVis = e.target.checked; applyLive(); };
+$("atlasVis").onchange = e => { S.atlasVis = e.target.checked; drawAtlas(); };
 $("patch").onchange = e => { S.patch = +e.target.value; rebuild(); };
-for (const b of $("season").children) b.onclick = () => { S.season = b.dataset.v; syncUI(); };
+for (const b of $("season").children) b.onclick = () => { const wasWinter = S.season === "winter"; S.season = b.dataset.v; syncUI(); if (wasWinter !== (S.season === "winter")) rebuild(); };
 for (const b of $("camMode").children) b.onclick = () => setCamMode(b.dataset.v);
 function setCamMode(m) {
   CAM.mode = m; for (const b of $("camMode").children) b.setAttribute("aria-pressed", b.dataset.v === m);
@@ -1442,32 +1801,33 @@ panelToggle("sceneToggle", "scenePanel"); panelToggle("rackToggle", "rack");
 $("openNotes").onclick = () => { $("notes").hidden = false; $("closeNotes").focus(); };
 $("closeNotes").onclick = () => { $("notes").hidden = true; };
 addEventListener("keydown", e => { if (e.key === "Escape") $("notes").hidden = true; });
-{ const row = $("artrow"); for (const n of ["leaf_broad", "needle", "leaf_jungle", "grass_green", "flower_red", "fern", "cap_red", "bark_birch", "ground_litter", "imp_oak", "icon_glowcap", "icon_crystal"]) { const i = document.createElement("img"); i.src = TEXDIR + n + ".png"; i.alt = n.replace("_", " "); row.appendChild(i); } }
+{ const row = $("artrow"); for (const n of ["flower_red", "flower_yellow", "flower_glow", "cap_red", "cap_brown", "bark_birch", "bark_palm", "imp_oak", "imp_oak_bare", "imp_pine", "icon_glowcap", "icon_crystal"]) { const i = document.createElement("img"); i.src = TEXDIR + n + ".png?v=" + ART_V; i.alt = n.replace("_", " "); row.appendChild(i); } }
 if (matchMedia("(max-width:860px)").matches) { $("rack").dataset.open = "false"; $("rackToggle").textContent = "Show"; $("scenePanel").dataset.open = "false"; $("sceneToggle").textContent = "Show"; }
 
 // =====================================================================
 // Build and run
 // =====================================================================
-let buildMs = 0;
 function rebuild() {
-  const t0 = performance.now(), B = BIOMES[S.biome];
+  const B = BIOMES[S.biome];
   buildCells(B);
   buildLayers(B);           // places lights and trees first, then bakes every plant
   buildTerrain(B);          // terrain bakes the same lights and the trees' occlusion
   placeFireflies(B);
   syncUI();
-  dirty = true; buildMs = performance.now() - t0;
+  dirty = true;
 }
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener("resize", resize);
 
 let last = performance.now(), fpsAcc = 0, fpsN = 0, msAvg = 16, statT = 0;
-function frame(now) {
+function frame() {
+  const now = performance.now();   // one clock for animation and fades (a rAF timestamp can lag it)
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   G.uTime.value = now / 1000;
   updateCamera(dt);
   moveFireflies(now / 1000);
-  updateLOD();
+  bakeImpostors();
+  updateLOD(now / 1000);
   sky.position.copy(camera.position);
   renderer.render(scene, camera);
   msAvg = lerp(msAvg, dt * 1000, 0.05); fpsAcc += dt; fpsN++;

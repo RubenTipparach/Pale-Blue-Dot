@@ -1,287 +1,273 @@
-"""Build-piece icons and material textures for the building mockup
-(docs/mockups/building.html).
+"""Build-piece icons and mockup-only textures for the building mockup
+(docs/mockups/building.html), also used by docs/mockups/npcs.html (the kiosk).
 
-Painted by code with the hand-drawn-illustration skill's crayon kit, in the
-manner of the owner's friend's upgrade icons. Nothing here is drawn by hand.
+Pixel art drawn in code with the balatro-pixel-art kit (pixelkit), the
+solitaire collection's style: a tiny native canvas, one bold subject, 3 to 5
+tone ramps lit from the top left, dark seams, a 1 px outline, single-pixel
+glints, every colour from Sweaft-64. Nothing here is drawn by hand.
 
-    python tools/art/building_art.py            # writes docs/mockups/building/*.png
-    python tools/art/building_art.py --sheet    # and a contact sheet beside the friend's icons
+    python tools/art/building_art.py                  # writes docs/mockups/building/*.png
+    python tools/art/building_art.py --sheet <png>    # and a contact sheet beside the kit's references
 
-Icons (icon_*.png) are the palette's pieces on a transparent ground. Textures
-(tex_*.png) fill the square and are made to wrap: the painting is crossfaded
-with itself shifted half a tile, so its edges come from its own middle and
-meet seamlessly when the mockup repeats it.
+Icons (icon_*.png, 32 x 32) are the palette's pieces on a transparent ground,
+shown at 2x. Only the textures the game does not have are drawn here: the
+habitat's metal panel and glass (tex_*.png), 32 x 32 tiles like the game's
+settlement textures, built with wrap-around arithmetic so they repeat without
+a seam. Every other wall, roof and ground in the mockups is the game's own
+(assets/textures/settlement/, assets/tilesets/atlas.png), copied byte for
+byte into docs/mockups/building/game/.
 """
 
 import math
 import os
-import subprocess
 import sys
 
-from PIL import Image, ImageDraw
+import numpy as np
+from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
-KIT = os.path.join(ROOT, ".claude", "skills", "hand-drawn-illustration", "scripts")
-sys.path.insert(0, KIT)
-from crayon import Icon, INK, S, circle, rect, roundrect, rotate, translate, lighter, darker, tone, mix  # noqa: E402
+SKILL = os.path.join(ROOT, ".claude", "skills", "balatro-pixel-art")
+sys.path.insert(0, os.path.join(SKILL, "scripts"))
+from pixelkit import Sprite, RAMPS, rgb, save, sheet  # noqa: E402
 
 OUT = os.path.join(ROOT, "docs", "mockups", "building")
+WHITE = "#fffefe"
+BRICK = ["#4a051e", "#841c1d", "#d4462b", "#fe6420"]
+TILE = ["#2e0d06", "#733126", "#a8633e", "#e69d69"]
+LIGHT = ["#c56d25", "#fb902f", "#faaf5c", "#fffefe"]
+STONE = ["#434137", "#a09f91", "#bfcad7", "#fffefe"]
 
 
-def hexagon(cx, cy, r, squash=1.0, rot=0.0):
-    return [(cx + r * math.cos(rot + k * math.pi / 3), cy + r * squash * math.sin(rot + k * math.pi / 3)) for k in range(6)]
+def darker(ramp):
+    return [ramp[0]] + ramp[:-1]
 
 
-# ---------- piece icons ---------------------------------------------------------------
-
-def icon_floor(ic):
-    top = hexagon(256, 230, 200, 0.55)
-    side = [top[0], top[1], top[2], top[3], (top[3][0], top[3][1] + 60), (top[2][0], top[2][1] + 60), (top[1][0], top[1][1] + 60), (top[0][0], top[0][1] + 60)]
-    ic.drawn(side, (140, 92, 50), hatch=0.8, highlight=0, shade=0.2)
-    ic.drawn(top, (204, 150, 88), hatch=1.0, shade=0.2, highlight=0.18, angle=0)
-    for k in (-1, 0, 1):
-        ic.line([(90, 230 + k * 50), (422, 230 + k * 50)], (150, 100, 56), 5)
+def hexagon(cx, cy, r, squash=1.0):
+    return [(cx + r * math.cos(k * math.pi / 3), cy + r * squash * math.sin(k * math.pi / 3)) for k in range(6)]
 
 
-def icon_wall(ic):
-    face = [(100, 160), (380, 120), (380, 400), (100, 440)]
-    edge = [(380, 120), (420, 140), (420, 410), (380, 400)]
-    ic.drawn(edge, (150, 90, 60), hatch=0.7, highlight=0, shade=0.2)
-    ic.drawn(face, (200, 96, 70), hatch=1.0, shade=0.22, highlight=0.16)
-    for k in range(1, 6):
-        y0 = 160 + k * 47
-        ic.line([(100, y0), (380, y0 - 40 * k / 6 * 0 - 40)], (240, 220, 200), 5, amp=1)
-    for k in range(6):
-        off = 0 if k % 2 else 70
-        y = 182 + k * 47 - 20
-        for x in range(130 + off, 380, 140):
-            ic.line([(x, y - 18), (x, y + 18)], (240, 220, 200), 5, amp=1)
-    ic.sparkle(440, 90, 22)
+def spark(sp, x, y):
+    sp.plots([(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)], "#faaf5c", glow=True)
+    sp.plot(x, y, WHITE, glow=True)
 
 
-def icon_roof(ic):
-    # a gable roof seen from the front corner: the gable end, the long slope, the eave's shadow
-    gable = [(70, 300), (190, 120), (310, 300)]
-    slope = [(190, 120), (440, 160), (470, 330), (310, 300)]
-    ic.drawn(rect(90, 300, 300, 440), (226, 214, 186), hatch=0.7, shade=0.2, highlight=0.1, edge_w=6)
-    ic.drawn(rect(300, 300, 450, 430), (190, 176, 150), hatch=0.7, shade=0.15, highlight=0, edge_w=6)
-    ic.drawn(gable, (196, 150, 96), hatch=0.9, shade=0.2, highlight=0.15)
-    ic.drawn(slope, (220, 110, 60), hatch=1.2, shade=0.22, highlight=0.2, angle=10)
-    for t in (0.3, 0.55, 0.8):
-        ic.line([(190 + (310 - 190) * t, 120 + (300 - 120) * t), (440 + (470 - 440) * t, 160 + (330 - 160) * t)], (150, 66, 40), 6)
-    ic.line([(60, 310), (190, 110), (450, 152)], (110, 50, 30), 12)
+# ---------- piece icons (32 x 32) -----------------------------------------------------------
+
+def icon_floor():
+    sp = Sprite(32, 32)
+    top = hexagon(15.5, 13, 14.5, 0.6)
+    side = [top[0], top[1], top[2], top[3], (top[3][0], top[3][1] + 6), (top[2][0], top[2][1] + 6), (top[1][0], top[1][1] + 6), (top[0][0], top[0][1] + 6)]
+    sp.part(sp.poly(side), darker(RAMPS["wood"]), "rim")
+    t = sp.poly(top)
+    sp.part(t, RAMPS["wood"], "rim")
+    for y in (9, 13, 17):                                                           # plank joints
+        sp.fill(t & sp.rect(0, y, 31, y), "#725244")
+    sp.plots([(9, 11), (22, 15), (14, 19)], "#41322c")                              # nail heads
+    sp.plot(8, 6, WHITE)
+    sp.outline()
+    return sp.image()
 
 
-def icon_door(ic):
-    frame = roundrect(130, 50, 382, 470, 26)
-    ic.drawn(frame, (130, 90, 56), hatch=0.8, highlight=0.1, shade=0.2)
-    leaf = roundrect(160, 80, 352, 470, 16)
-    ic.drawn(leaf, (190, 128, 70), hatch=1.1, shade=0.22, highlight=0.18, angle=90)
-    for x in (224, 288):
-        ic.line([(x, 92), (x, 462)], (140, 92, 50), 5)
-    for y in (150, 380):
-        ic.drawn(rect(160, y - 14, 352, y + 14), (70, 70, 80), hatch=0.4, highlight=0.1, edge=INK, edge_w=5)
-    ic.dot(326, 270, 14, (250, 200, 70), ink=INK)
+def icon_wall():
+    sp = Sprite(32, 32)
+    sp.part(sp.poly([(26, 4), (30, 6), (30, 28), (26, 28)]), darker(BRICK), "rim")  # the wall's end
+    face = sp.rect(2, 4, 26, 28)
+    sp.part(face, BRICK, "rim")
+    for k, y in enumerate(range(8, 28, 4)):                                         # mortar
+        sp.fill(sp.rect(2, y, 26, y), "#eab798")
+        off = 0 if k % 2 else 3
+        for x in range(4 + off, 26, 6):
+            sp.fill(sp.rect(x, y - 3, x, y - 1), "#eab798")
+    sp.plot(4, 5, WHITE)
+    sp.outline()
+    return sp.image()
 
 
-def icon_window(ic):
-    ic.glow((256, 250, 160), (255, 190, 80), radius=40, strength=0.6)
-    frame = rect(110, 90, 402, 420)
-    ic.drawn(frame, (130, 90, 56), hatch=0.8, highlight=0.12)
-    pane = rect(140, 120, 372, 390)
-    ic.drawn(pane, (255, 200, 90), hatch=0.9, shade=0.18, highlight=0.22, rim_color=(255, 240, 180), edge=(150, 90, 30))
-    ic.line([(256, 120), (256, 390)], (110, 74, 44), 12)
-    ic.line([(140, 255), (372, 255)], (110, 74, 44), 12)
-    ic.drawn(rect(90, 410, 422, 452), (170, 160, 150), hatch=0.6, highlight=0.12, edge_w=6)
+def icon_roof():
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(4, 19, 18, 29), RAMPS["bone"], "rim")                           # the gable wall
+    sp.part(sp.rect(18, 19, 29, 28), darker(RAMPS["bone"]), "rim")
+    sp.part(sp.poly([(2, 20), (11, 6), (20, 20)]), RAMPS["sand"], "rim")            # the gable end
+    slope = sp.poly([(11, 5), (28, 8), (31, 21), (20, 20)])
+    sp.part(slope, TILE, "rim")                                                     # the long slope
+    for t in (0.33, 0.66):
+        sp.fill(sp.line([(11 + 9 * t, 5 + 15 * t), (28 + 3 * t, 8 + 13 * t)], 1) & slope, "#733126")
+    sp.part(sp.line([(1, 21), (11, 5), (28, 8)], 2), RAMPS["wood"], "flat", base=1)  # barge boards
+    sp.fill(sp.rect(9, 23, 13, 27), "#41322c")                                      # a window in the gable
+    sp.plot(13, 8, WHITE)
+    sp.outline()
+    return sp.image()
 
 
-def icon_stairs(ic):
+def icon_door():
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(6, 2, 25, 30) & ~sp.rect(6, 2, 7, 3) & ~sp.rect(24, 2, 25, 3), darker(RAMPS["wood"]), "rim")   # frame
+    leaf = sp.rect(9, 5, 22, 30)
+    sp.part(leaf, RAMPS["wood"], "rim")
+    for x in (13, 18):
+        sp.fill(sp.rect(x, 6, x, 30), "#725244")
+    for y in (9, 25):
+        sp.part(sp.rect(9, y, 22, y + 1), RAMPS["soot"], "flat", base=2)            # iron bands
+    sp.part(sp.rect(19, 16, 20, 17), RAMPS["gold"][:4], "flat", base=3)             # the latch
+    sp.plot(10, 6, "#cfaa81")
+    sp.outline()
+    return sp.image()
+
+
+def icon_window():
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(4, 4, 27, 26), darker(RAMPS["wood"]), "rim")                    # frame
+    sp.part(sp.rect(2, 26, 29, 29), STONE, "rim")                                   # sill
+    sp.part(sp.rect(7, 7, 24, 24), LIGHT, "inset")                                  # lamplight behind the glass
+    sp.part(sp.rect(15, 7, 16, 24) | sp.rect(7, 15, 24, 16), RAMPS["wood"], "flat", base=1)   # mullions
+    sp.plots([(9, 9), (10, 9), (9, 10)], WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def icon_stairs():
+    sp = Sprite(32, 32)
     for k in range(5):
-        x0, y0 = 90 + k * 64, 420 - k * 64
-        ic.drawn(rect(x0, y0 - 64, x0 + 80 + (4 - k) * 0, 450), (180, 124, 70) if k % 2 else (200, 140, 80), hatch=0.9, shade=0.2, highlight=0.15, edge_w=6)
-    ic.line([(110, 250), (200, 160)], (255, 255, 240), 12, ink=INK, ink_w=8)
-    ic.drawn([(230, 130), (150, 150), (210, 210)], (255, 255, 240), hatch=0.2, highlight=0, shade=0, edge=INK, edge_w=6)
+        x0, y0 = 2 + k * 5, 25 - k * 5
+        sp.part(sp.rect(x0, y0, 29, y0 + 5), RAMPS["wood"] if k % 2 else darker(RAMPS["wood"]), "rim")
+    sp.part(sp.rect(2, 30, 29, 30) | sp.rect(28, 5, 29, 30), darker(RAMPS["wood"]), "flat", base=1)
+    sp.plot(23, 6, WHITE)
+    sp.outline()
+    return sp.image()
 
 
-def icon_lantern(ic):
-    ic.glow((256, 280, 150), (255, 170, 60), radius=44, strength=0.8)
-    ic.line([(256, 30), (256, 110)], (60, 60, 70), 9)
-    ic.drawn(roundrect(200, 100, 312, 150, 12), (70, 70, 84), hatch=0.5, highlight=0.15, edge=INK, edge_w=6)
-    ic.drawn(rect(196, 150, 316, 380), (255, 196, 80), hatch=0.9, shade=0.15, highlight=0.25, rim_color=(255, 245, 190), edge=(140, 80, 20))
-    for x in (196, 256, 316):
-        ic.line([(x, 150), (x, 380)], (60, 60, 70), 10)
-    ic.drawn(roundrect(180, 376, 332, 420, 10), (70, 70, 84), hatch=0.5, highlight=0.1, edge=INK, edge_w=6)
-    ic.drawn([(256, 200), (282, 270), (256, 320), (230, 270)], (255, 130, 40), hatch=0.4, highlight=0.3, shade=0, edge=None)
-    for (x, y) in ((110, 180), (400, 220), (380, 430)):
-        ic.sparkle(x, y, 20)
+def icon_lantern():
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(15, 0, 16, 5), RAMPS["soot"], "flat", base=2)                   # the hook
+    sp.part(sp.poly([(10, 9), (13, 5), (18, 5), (21, 9)]), RAMPS["soot"], "rim")    # cap
+    sp.part(sp.rect(9, 9, 22, 24), LIGHT, "inset")                                  # the lit glass
+    sp.part(sp.rect(9, 9, 9, 24) | sp.rect(22, 9, 22, 24), RAMPS["soot"], "flat", base=1, seam=False)
+    sp.part(sp.rect(8, 24, 23, 27), RAMPS["soot"], "rim")                           # base
+    sp.plot(11, 7, "#a09f91")
+    sp.outline()
+    sp.part(sp.poly([(14, 21), (14, 16), (15.5, 11), (17, 16), (17, 21)]), ["#a61e1f", "#fe6420", "#fffefe"], "inset", glow=True)   # the flame
+    spark(sp, 4, 12)
+    spark(sp, 27, 17)
+    spark(sp, 26, 4)
+    return sp.image()
 
 
-def icon_airlock(ic):
-    body = roundrect(80, 80, 432, 440, 60)
-    ic.drawn(body, (150, 162, 176), hatch=1.0, shade=0.24, highlight=0.18, edge=(30, 36, 50))
-    ring = circle(256, 260, 140)
-    ic.drawn(ring, (90, 100, 116), hatch=0.6, highlight=0.12, edge=(20, 24, 34))
-    ic.drawn(circle(256, 260, 104), (70, 180, 200), hatch=0.8, highlight=0.2, rim_color=(170, 240, 250), edge=(20, 70, 90))
-    ic.line([(256, 170), (256, 350)], (240, 190, 50), 10)
-    ic.line([(166, 260), (346, 260)], (240, 190, 50), 10)
-    ic.drawn(circle(256, 260, 28), (240, 190, 50), hatch=0.4, highlight=0.15, edge=INK, edge_w=6)
-    for k in range(8):
-        a = k * math.pi / 4 + 0.4
-        ic.dot(256 + 160 * math.cos(a), 260 + 160 * math.sin(a), 8, (200, 206, 214), ink=INK)
-    for x in (110, 402):
-        ic.drawn(rect(x - 10, 110, x + 10, 160), (240, 190, 50), hatch=0.3, highlight=0, shade=0, edge=INK, edge_w=5)
+def icon_airlock():
+    sp = Sprite(32, 32)
+    body = sp.rect(2, 2, 29, 29) & ~sp.rect(2, 2, 3, 3) & ~sp.rect(28, 2, 29, 3) & ~sp.rect(2, 28, 3, 29) & ~sp.rect(28, 28, 29, 29)
+    sp.part(body, RAMPS["metal"], "rim", base=3)
+    sp.part(sp.circle(15.5, 15.5, 10.5), RAMPS["metal"], "rim", base=1)             # the ring
+    sp.part(sp.circle(15.5, 15.5, 7.5), RAMPS["glass"], "sphere")                   # its port
+    sp.part(sp.rect(15, 8, 16, 23) | sp.rect(8, 15, 23, 16), RAMPS["gold"][:4], "flat", base=2)   # locking bars
+    sp.part(sp.rect(14, 14, 17, 17), RAMPS["gold"][:4], "rim")
+    for k in range(8):                                                              # bolts
+        a = k * math.pi / 4 + math.pi / 8
+        sp.plot(round(15.5 + 11.5 * math.cos(a)), round(15.5 + 11.5 * math.sin(a)), "#bfcad7")
+    for y in range(4, 10, 2):                                                       # hazard stripes
+        sp.fill(sp.rect(4, y, 6, y), "#fb902f")
+        sp.fill(sp.rect(25, y, 27, y), "#fb902f")
+    sp.plots([(11, 11), (12, 11), (11, 12)], "#c1f1d8")
+    sp.outline()
+    return sp.image()
 
 
-def icon_post(ic):
-    ic.drawn(rect(216, 40, 296, 470), (150, 100, 56), hatch=1.0, shade=0.22, highlight=0.18, angle=90)
-    ic.drawn(hexagon(256, 470, 90, 0.4), (130, 130, 130), hatch=0.6, highlight=0.12, edge_w=6)
-    for y in (120, 260, 400):
-        ic.line([(220, y), (292, y + 12)], (110, 70, 40), 5)
+def icon_post():
+    sp = Sprite(32, 32)
+    sp.part(sp.poly(hexagon(15.5, 27, 9, 0.4)) | sp.rect(7, 27, 24, 29), STONE, "rim", base=1)   # footing
+    sp.part(sp.rect(13, 2, 18, 27), RAMPS["wood"], "cyl_v")                         # the post
+    for y in (8, 19):
+        sp.part(sp.rect(12, y, 19, y + 1), RAMPS["soot"], "flat", base=2)
+    sp.plot(14, 3, WHITE)
+    sp.outline()
+    return sp.image()
 
 
-# ---------- textures ----------------------------------------------------------------------
+# ---------- textures (32 x 32, wrapping) ----------------------------------------------------
 
-BIG = (-40, -40, S + 40, S + 40)
-
-
-def tex_plank(ic):
-    ic.flat(rect(*BIG), (170, 116, 66), wobble=0)
-    for k in range(6):
-        y0 = k * S / 6
-        c = mix((176, 120, 68), (196, 140, 82), (k * 37 % 5) / 5)
-        ic.drawn(rect(-30, y0 + 4, S + 30, y0 + S / 6 - 4), c, hatch=1.0, shade=0.12, highlight=0.08, edge=(96, 60, 30), edge_w=6, angle=0)
-        x = (k * 173) % S
-        ic.line([(x, y0 + 6), (x, y0 + S / 6 - 6)], (96, 60, 30), 6)
-        ic.dot((x + 60) % S, y0 + S / 12, 5, (110, 70, 36))
+def tile(fn):
+    """A 32 x 32 tile from fn(x, y) -> '#rrggbb'; indices wrap, so it repeats seamlessly."""
+    a = np.zeros((32, 32, 4), np.uint8)
+    for y in range(32):
+        for x in range(32):
+            a[y, x, :3] = rgb(fn(x, y))
+            a[y, x, 3] = 255
+    return Image.fromarray(a, "RGBA")
 
 
-def tex_stone(ic):
-    ic.flat(rect(*BIG), (96, 92, 88), wobble=0)
-    import random
-    rnd = random.Random(5)
-    for row in range(5):
-        for col in range(5):
-            cx = col * S / 4 + (row % 2) * S / 8 + rnd.uniform(-10, 10)
-            cy = row * S / 4 + rnd.uniform(-10, 10)
-            r = rnd.uniform(48, 60)
-            poly = [(cx + r * math.cos(a) * rnd.uniform(0.85, 1.1), cy + r * 0.8 * math.sin(a) * rnd.uniform(0.85, 1.1)) for a in [k * math.pi / 4 for k in range(8)]]
-            g = rnd.randint(-14, 14)
-            ic.drawn(poly, (150 + g, 146 + g, 138 + g), hatch=0.8, shade=0.25, highlight=0.18, edge=(70, 66, 62), edge_w=6)
+def tex_metal():
+    """Four riveted 16 px plates: a dark seam on each plate's first row and column, a lit top and
+    left lip, a shadowed bottom and right, rivets in the corners, a few scuffs."""
+    seam, shadow, body, lit, rivet = "#1f3b52", "#3e586e", "#5d778d", "#92a3b2", "#bfcad7"
+    scuffs = {(5, 8), (6, 8), (22, 26), (23, 26), (24, 27), (27, 6), (9, 21)}
+
+    def px(x, y):
+        u, v = x % 16, y % 16
+        if u == 0 or v == 0:
+            return seam
+        if (u, v) in ((3, 3), (13, 3), (3, 13), (13, 13)):
+            return rivet
+        if (u, v) in ((3, 4), (13, 4), (3, 14), (13, 14), (4, 3), (14, 3), (4, 13), (14, 13)):
+            return shadow
+        if u == 15 or v == 15:
+            return shadow
+        if u == 1 or v == 1:
+            return lit
+        if (x, y) in scuffs:
+            return lit
+        if x >= 17 and y <= 15 and 6 <= v <= 7 and 4 <= u <= 11:                   # a stencilled label band
+            return "#fb902f" if (u + v) % 4 < 2 else "#c56d25"
+        return body
+    return tile(px)
 
 
-def tex_thatch(ic):
-    ic.flat(rect(*BIG), (180, 140, 60), wobble=0)
-    import random
-    rnd = random.Random(9)
-    for band in range(6):
-        y = band * S / 5 - 20
-        ic.scribble(rect(-20, y, S + 20, y + S / 5 + 30), (214, 170, 80), var=0.3, width=6, length=(60, 130), angle=95, spread=8, density=2.2)
-        ic.line([(-20, y + S / 5 + 20), (S + 20, y + S / 5 + 20)], (120, 86, 36), 8, amp=4)
+def tex_glass():
+    """Glazing: two 16 px panes in a dark metal frame, deep teal glass, a diagonal sheen and a
+    single bright glint on each pane."""
+    frame, frame_lit, deep, body, sheen, bright = "#1f3b52", "#3e586e", "#0c2f44", "#204f63", "#53998b", "#84e3b5"
 
-
-def tex_metal(ic):
-    ic.flat(rect(*BIG), (120, 128, 140), wobble=0)
-    for (x0, y0, x1, y1) in ((0, 0, 256, 256), (256, 0, 512, 256), (0, 256, 256, 512), (256, 256, 512, 512)):
-        ic.drawn(rect(x0 + 8, y0 + 8, x1 - 8, y1 - 8), (150, 160, 174), hatch=0.9, shade=0.2, highlight=0.15, edge=(40, 46, 60), edge_w=7, angle=20)
-        for (x, y) in ((x0 + 26, y0 + 26), (x1 - 26, y0 + 26), (x0 + 26, y1 - 26), (x1 - 26, y1 - 26)):
-            ic.dot(x, y, 7, (200, 206, 214), ink=(40, 46, 60))
-    ic.line([(30, 130), (220, 130)], (230, 180, 40), 9)
-
-
-def tex_brick(ic):
-    ic.flat(rect(*BIG), (210, 200, 186), wobble=0)
-    rows = 8
-    h = S / rows
-    for r in range(rows):
-        off = 0 if r % 2 == 0 else S / 4
-        for k in range(-1, 3):
-            x0 = k * S / 2 + off
-            g = ((r * 7 + k * 3) % 5) * 6
-            ic.drawn(rect(x0 + 6, r * h + 5, x0 + S / 2 - 6, (r + 1) * h - 5), (180 + g, 80 + g // 2, 58), hatch=0.9, shade=0.2, highlight=0.12, edge=(110, 50, 36), edge_w=5)
-
-
-def tex_plaster(ic):
-    ic.flat(rect(*BIG), (226, 214, 186), wobble=0)
-    ic.scribble(rect(*BIG), (226, 214, 186), var=0.12, width=9, length=(60, 140), angle=30, spread=40, density=1.4)
-    ic.scribble(rect(*BIG), (210, 196, 166), var=0.1, width=7, length=(30, 80), angle=-40, spread=30, density=0.5)
-
-
-def tex_regolith(ic):
-    ic.flat(rect(*BIG), (128, 124, 118), wobble=0)
-    ic.scribble(rect(*BIG), (128, 124, 118), var=0.2, width=7, length=(20, 60), spread=90, density=1.6)
-    import random
-    rnd = random.Random(3)
-    for _ in range(5):
-        x, y, r = rnd.uniform(60, 450), rnd.uniform(60, 450), rnd.uniform(24, 50)
-        ic.drawn(circle(x, y, r), (110, 106, 100), hatch=0.5, shade=0.3, highlight=0.2, edge=(80, 76, 72), edge_w=5, light=(1, 1))
-
-
-def tex_glass(ic):
-    ic.flat(rect(*BIG), (60, 120, 150), wobble=0)
-    ic.scribble(rect(*BIG), (90, 170, 200), var=0.18, width=8, length=(60, 160), angle=60, spread=10, density=1.2)
-    for k in range(3):
-        ic.line([(80 + k * 50, 420), (260 + k * 50, 90)], (200, 245, 255), 8)
+    def px(x, y):
+        u, v = x % 16, y % 16
+        if u == 0 or v == 0:
+            return frame
+        if u == 1 and v > 0 or v == 1 and u > 0:
+            return frame_lit
+        d = (u + v) % 16
+        if d in (9, 10) and 3 < u < 14:
+            return sheen
+        if d == 12 and 6 < u < 13:
+            return sheen
+        if (u, v) in ((4, 4), (5, 4), (4, 5)):
+            return bright
+        if u >= 13 or v >= 13:
+            return deep
+        return body
+    return tile(px)
 
 
 ICONS = {
-    "icon_floor": (icon_floor, 31), "icon_wall": (icon_wall, 32), "icon_roof": (icon_roof, 33), "icon_door": (icon_door, 34),
-    "icon_window": (icon_window, 35), "icon_stairs": (icon_stairs, 36), "icon_lantern": (icon_lantern, 37), "icon_airlock": (icon_airlock, 38),
-    "icon_post": (icon_post, 39),
+    "icon_floor": icon_floor, "icon_wall": icon_wall, "icon_roof": icon_roof, "icon_door": icon_door,
+    "icon_window": icon_window, "icon_stairs": icon_stairs, "icon_lantern": icon_lantern, "icon_airlock": icon_airlock,
+    "icon_post": icon_post, "tex_metal": tex_metal, "tex_glass": tex_glass,
 }
-TEXTURES = {
-    "tex_plank": (tex_plank, 41), "tex_stone": (tex_stone, 42), "tex_thatch": (tex_thatch, 43), "tex_metal": (tex_metal, 44),
-    "tex_brick": (tex_brick, 45), "tex_plaster": (tex_plaster, 46), "tex_regolith": (tex_regolith, 47), "tex_glass": (tex_glass, 48),
-}
-
-
-def seamless(im):
-    """Crossfade the painting with itself shifted half a tile: the weight is 1
-    in the middle and 0 at the edges, where the shifted copy's own middle
-    shows, so the tile wraps without a seam."""
-    w, h = im.size
-    shifted = Image.new("RGBA", (w, h))
-    shifted.paste(im.crop((w // 2, h // 2, w, h)), (0, 0))
-    shifted.paste(im.crop((0, h // 2, w // 2, h)), (w - w // 2, 0))
-    shifted.paste(im.crop((w // 2, 0, w, h // 2)), (0, h - h // 2))
-    shifted.paste(im.crop((0, 0, w // 2, h // 2)), (w - w // 2, h - h // 2))
-    mask = Image.new("L", (w, h))
-    px = mask.load()
-    for y in range(h):
-        for x in range(w):
-            u = min(x, w - 1 - x) / (w / 2)
-            v = min(y, h - 1 - y) / (h / 2)
-            t = min(1.0, min(u, v) * 2.2)
-            px[x, y] = int(255 * t * t * (3 - 2 * t))
-    return Image.composite(im, shifted, mask)
+REFS = ["armour_plating", "afterburner_kit", "emp_burst", "drop_tanks", "cluster_bombs"]
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    paths = []
-    for name, (fn, seed) in ICONS.items():
-        ic = Icon(seed)
-        fn(ic)
+    items = []
+    for name, fn in ICONS.items():
+        img = fn()
         p = os.path.join(OUT, name + ".png")
-        ic.save(p)
-        paths.append(p)
-    for name, (fn, seed) in TEXTURES.items():
-        ic = Icon(seed)
-        fn(ic)
-        im = ic.img.resize((128, 128), Image.LANCZOS)
-        im.putalpha(255)
-        im = seamless(im)
-        from PIL.PngImagePlugin import PngInfo
-        meta = PngInfo()
-        meta.add_text("source", "armory-crayon")
-        p = os.path.join(OUT, name + ".png")
-        im.save(p, pnginfo=meta)
-        paths.append(p)
-    for p in paths:
+        save(img, p, source="pixelkit (tools/art/building_art.py)")
+        items.append((name, img))
         print("wrote", p)
     if "--sheet" in sys.argv:
-        sheet = os.path.join(os.environ.get("TEMP", "."), "building_sheet.png")
-        subprocess.run([sys.executable, os.path.join(KIT, "sheet.py"), sheet] + paths + ["--ref", "plating", "--ref", "power output", "--ref", "laser drill"], check=True)
+        out = sys.argv[sys.argv.index("--sheet") + 1]
+        tiled = [(n + " 2x2", Image.fromarray(np.tile(np.array(im), (2, 2, 1)), "RGBA")) for n, im in items if n.startswith("tex_")]
+        refs = [("ref " + r, Image.open(os.path.join(SKILL, "references", r + ".png")).convert("RGBA")) for r in REFS]
+        sheet(items + tiled + refs, scale=4, cols=6, cell=(64 * 4, 64 * 4)).save(out)
+        print("sheet", out)
 
 
 if __name__ == "__main__":

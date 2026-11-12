@@ -1,7 +1,8 @@
+<meta charset="utf-8">
 <title>The Long Fall: Games and Jobs</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500;700&family=Fira+Sans:wght@400;500;600&display=swap">
 <style>
 /* Layout: a bar at night. A sticky wallet over a column of game tables, each a felt-green surface with its odds printed on it. */
 :root{
@@ -52,7 +53,9 @@ p{margin:0;max-width:70ch}
 .muted{color:var(--muted)}
 .hero{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;align-items:center}
 .hero .art{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
-.hero .art img{width:84px;height:84px}
+.hero .art img{width:96px;height:96px}
+.hero .art img[src$="card_back.png"]{width:66px}
+img{image-rendering:pixelated}
 @media (max-width:760px){.hero{grid-template-columns:1fr}}
 .banner{border:1px solid var(--line);border-radius:6px;padding:10px 14px;background:var(--panel);font-size:13.5px;color:var(--muted);display:flex;gap:10px 16px;flex-wrap:wrap;align-items:center}
 
@@ -72,22 +75,22 @@ p{margin:0;max-width:70ch}
 canvas.game{width:100%;height:auto;display:block;border-radius:8px;background:#0b1712;touch-action:manipulation}
 .reels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:360px}
 .reel{aspect-ratio:1;background:#0b0f0c;border:2px solid #3b2d12;border-radius:8px;display:grid;place-items:center;max-width:100%}
-.reel img{width:82%;height:82%}
+.reel img{width:96px;height:96px}
 .reel.win{border-color:var(--amber);box-shadow:0 0 18px rgba(240,180,60,.45)}
 .pay{font-size:13px;display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center}
-.pay img{width:22px;height:22px;vertical-align:middle}
+.pay img{width:32px;height:32px;vertical-align:middle}
 .pay .x{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
 .dice{display:flex;gap:10px}
-.dice img{width:84px;height:84px}
+.dice img{width:96px;height:96px}
 .hand{display:flex;flex-wrap:wrap;gap:6px;min-height:104px;align-items:center}
 .card{width:66px;height:96px;border-radius:7px;background:#f6efe0;color:#1a1410;border:2px solid #2b2218;display:grid;grid-template-rows:auto 1fr;padding:4px;box-sizing:border-box;font-family:var(--display);font-weight:700;font-size:20px;line-height:1}
-.card img{width:44px;height:44px;justify-self:center;align-self:center}
+.card img{width:32px;height:32px;justify-self:center;align-self:center}
 .card.back{background:none;border:none;padding:0}
 .card.back img{width:66px;height:96px;object-fit:cover}
 .tot{font-family:var(--mono);font-size:13px;color:#cfe8dc}
 .jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
-.job{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:12px;display:grid;grid-template-columns:56px 1fr;gap:10px;min-width:0}
-.job img{width:56px;height:56px}
+.job{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:12px;display:grid;grid-template-columns:64px 1fr;gap:10px;min-width:0}
+.job img{width:64px;height:64px}
 .job h3{font-size:17px}
 .job .pay2{font-family:var(--mono);color:var(--amber);font-size:13px}
 .job p{font-size:13.5px}
@@ -107,6 +110,46 @@ table.t{border-collapse:collapse;width:100%;font-size:13.5px}
 footer{font-size:12.5px;color:var(--muted)}
 .lanes button{min-width:0}
 @media (prefers-reduced-motion: reduce){.reel.win{box-shadow:none}}
+
+/* ---- The game's HUD look (crates/pbd-app/src/desktop/{menu,pack,slots}.rs): square panels of PANEL_FILL edged in EDGE,
+   mint headings, monospace labels (the game draws its UI in Fira Mono), slots for pixel icons shown at whole-number scales. */
+:root{
+  --ground:#070b0e;
+  --panel:rgba(5,15,20,.94);          /* PANEL_FILL 0.02,0.06,0.08,0.94 */
+  --panel-solid:#050f14;
+  --raise:rgba(15,33,38,.9);          /* button idle 0.06,0.13,0.15,0.9 */
+  --hover:rgba(28,56,61,.95);         /* button hovered 0.11,0.22,0.24,0.95 */
+  --line:rgba(140,191,189,.6);        /* EDGE 0.55,0.75,0.74,0.6 */
+  --slot-edge:rgba(140,191,189,.5);   /* an idle slot's border */
+  --slot-fill:rgba(5,15,20,.72);      /* an idle slot's fill */
+  --ink:#e0f0e8;                      /* INK 0.88,0.94,0.91 */
+  --muted:#99b8b8;                    /* DIM 0.6,0.72,0.72 */
+  --mint:#7accc4;                     /* MINT 0.48,0.8,0.77 */
+  --display:"Fira Mono",ui-monospace,Menlo,monospace;
+  --mono:"Fira Mono",ui-monospace,Menlo,monospace;
+  --body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*,*::before,*::after{border-radius:0 !important}
+h1,h2,h3,.eyebrow{font-family:var(--display);letter-spacing:.02em}
+h1{font-weight:500} h2,h3{font-weight:500;color:var(--mint);text-transform:uppercase}
+.b{font-family:var(--mono) !important;text-transform:uppercase;letter-spacing:.04em !important;background:var(--raise) !important;border:1px solid var(--line) !important}
+.b:hover{background:var(--hover) !important}
+.b[aria-pressed="true"]{border-color:#fad973 !important;color:#fad973 !important}
+img{image-rendering:pixelated}
+.b.main{background:rgba(250,217,115,.14) !important;color:#fad973 !important;border-color:#fad973 !important;font-weight:600}
+.b.main:hover{background:rgba(250,217,115,.26) !important}
+.b[disabled]{opacity:1 !important;color:var(--muted) !important;background:transparent !important;border:1px dashed var(--slot-edge) !important}
+.msg{font-size:14px !important}
+
+.table{background:var(--panel) !important;border:1px solid var(--line) !important}
+.reel{background:var(--slot-fill) !important;border:1px solid var(--slot-edge) !important}
+.reel.win{border-color:#fad973 !important;box-shadow:none !important}
+canvas.game{background:#050f14 !important;image-rendering:pixelated}
+.job,.banner,.wallet{background:var(--panel) !important;border-color:var(--line) !important}
+.job img,.dice img,.hero .art img{background:var(--slot-fill);outline:1px solid var(--slot-edge);outline-offset:0}
+.card{font-family:var(--mono) !important}
+.odds,.tot{color:var(--ink) !important;font-family:var(--mono)}
+h1 span{color:var(--mint)}
 </style>
 
 <div class="wallet" aria-label="Wallet">
@@ -134,7 +177,7 @@ footer{font-size:12.5px;color:var(--muted)}
       <img src="minigames/sym_star.png" alt=""><img src="minigames/die_6.png" alt=""><img src="minigames/chip_50.png" alt=""><img src="minigames/card_back.png" alt=""><img src="minigames/racer_red.png" alt=""><img src="minigames/drill.png" alt="">
     </div>
   </section>
-  <div class="banner"><span class="tag">Proposal, not built</span><span>None of this is in the engine. The art is painted by code in the owner's friend's hand-drawn style (<code>tools/art/minigames_art.py</code>, the <code>hand-drawn-illustration</code> kit), not drawn by the friend.</span></div>
+  <div class="banner"><span class="tag">Proposal, not built</span><span>None of this is in the engine. The art is pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/minigames_art.py</code>): 32 x 32 sprites shown only at whole-number scales, nearest neighbour.</span></div>
 
   <!-- ============================================================ jobs -->
   <section aria-labelledby="h-jobs">
@@ -213,7 +256,7 @@ footer{font-size:12.5px;color:var(--muted)}
     <div class="figure"><svg viewBox="0 0 900 360" role="img" aria-label="Flow of credits between the player, the house, the station and the market">
       <rect x="0" y="0" width="900" height="360" fill="#16131a"/>
       <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a89d8e"/></marker></defs>
-      <g font-family="Barlow Condensed, sans-serif" font-size="16" fill="#efe7da" text-anchor="middle">
+      <g font-family="Fira Mono, monospace" font-size="16" fill="#efe7da" text-anchor="middle">
         <rect x="30" y="140" width="150" height="70" rx="6" fill="#1e1a23" stroke="#f0b43c"/><text x="105" y="172">Player wallet</text><text x="105" y="192" font-size="12" fill="#a89d8e">jobs, trade, winnings</text>
         <rect x="300" y="40" width="160" height="64" rx="6" fill="#1e1a23" stroke="rgba(236,214,170,.4)"/><text x="380" y="68">The house</text><text x="380" y="88" font-size="12" fill="#a89d8e">keeps the edge on stakes</text>
         <rect x="300" y="250" width="160" height="64" rx="6" fill="#1e1a23" stroke="rgba(236,214,170,.4)"/><text x="380" y="278">Contract escrow</text><text x="380" y="298" font-size="12" fill="#a89d8e">funded by NPC companies</text>
@@ -235,7 +278,7 @@ footer{font-size:12.5px;color:var(--muted)}
         <path d="M770,290 L462,290"/>
         <path d="M300,282 C240,270 210,230 182,206"/>
       </g>
-      <g font-family="Barlow, sans-serif" font-size="12" fill="#a89d8e">
+      <g font-family="'Fira Mono', monospace" font-size="12" fill="#a89d8e">
         <text x="214" y="96">stakes</text><text x="204" y="150">payouts</text><text x="560" y="340">bounty pay</text><text x="560" y="284">companies post contracts</text><text x="196" y="262">delivery pay</text>
       </g>
     </svg></div>
@@ -253,7 +296,7 @@ footer{font-size:12.5px;color:var(--muted)}
       <article><h3>5. Do mining shifts pay from the market?</h3><p class="rec">Recommendation: yes. The ore sorter's pay per rock is the outpost's buy price for that ore, scaled to a shift, so a rich vein event or a crash in iron shows up in the job's pay too.</p></article>
     </div>
   </section>
-  <footer>Mockup for Pale Blue Dot. Five games run in this page with one wallet; odds for Reactor Roll are computed from its reel strips by the page itself, and the Orbit 21 edge was measured by simulation. Art painted by code in the friend's style. Nothing here is built.</footer>
+  <footer>Mockup for Pale Blue Dot. Five games run in this page with one wallet; odds for Reactor Roll are computed from its reel strips by the page itself, and the Orbit 21 edge was measured by simulation. Art: pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style. Nothing here is built.</footer>
 </div>
 </main>
 
@@ -290,7 +333,7 @@ const JOBS = [
   { img: "sym_ice", title: "Medicine to the frontier", by: "Meridian clinic", pay: "800 cr", risk: "hi", text: "40 crates of medicine to The Hollow. Legal cargo, lawless destination. Raiders read the same job board you do." },
   { img: "sym_core", title: "Samples for Lumen", by: "Lumen Deep Field", pay: "650 cr + bonus", risk: "", text: "Bring back core samples from three named sites. A rare find pays a bonus and moves Lumen's share price." },
 ];
-$("jobs").innerHTML = JOBS.map(j => `<article class="job"><img src="minigames/${j.img}.png" alt="" width="56" height="56"><div style="min-width:0"><h3>${j.title}</h3>
+$("jobs").innerHTML = JOBS.map(j => `<article class="job"><img src="minigames/${j.img}.png" alt="" width="64" height="64"><div style="min-width:0"><h3>${j.title}</h3>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pay2">${j.pay}</span><span class="risk ${j.risk}">${j.risk === "hi" ? "high risk" : j.risk === "lo" ? "low risk" : "some risk"}</span></div>
   <p class="muted" style="margin-top:2px">${j.by}</p><p>${j.text}</p></div></article>`).join("");
 
@@ -299,8 +342,8 @@ const ORES = [
   { k: "ore_iron", name: "Iron", key: "1", pay: 2 }, { k: "ore_copper", name: "Copper", key: "2", pay: 3 },
   { k: "ore_gold", name: "Gold", key: "3", pay: 9 }, { k: "ore_ice", name: "Ice", key: "4", pay: 2 }, { k: "slag", name: "Slag", key: "Space", pay: 1 },
 ];
-$("oreBins").innerHTML = ORES.map((o, i) => `<button class="b" data-i="${i}"><img src="minigames/${o.k}.png" alt="" width="26" height="26" style="vertical-align:middle;margin-right:4px">${o.key === "Space" ? "Space" : o.key}: ${o.name} <span class="muted" style="font-size:12px">${o.name === "Slag" ? "reject" : o.pay + " cr"}</span></button>`).join("");
-const oreC = $("ore"), og = oreC.getContext("2d");
+$("oreBins").innerHTML = ORES.map((o, i) => `<button class="b" data-i="${i}"><img src="minigames/${o.k}.png" alt="" width="32" height="32" style="vertical-align:middle;margin-right:4px">${o.key === "Space" ? "Space" : o.key}: ${o.name} <span class="muted" style="font-size:12px">${o.name === "Slag" ? "reject" : o.pay + " cr"}</span></button>`).join("");
+const oreC = $("ore"), og = oreC.getContext("2d"); og.imageSmoothingEnabled = false;   // pixel art at 2x, nearest neighbour
 const SORT = { on: false, t: 0, items: [], next: 0, pay: 0, pops: [] };
 const ZONE = [130, 230];
 function oreSpawn() { const r = rand(); const i = r < 0.3 ? 0 : r < 0.52 ? 1 : r < 0.6 ? 2 : r < 0.8 ? 3 : 4; SORT.items.push({ i, x: 760, done: false, y: 0 }); }
@@ -338,13 +381,13 @@ function oreDraw(dt) {
   // scanner
   og.fillStyle = "rgba(255,210,138,.12)"; og.fillRect(ZONE[0], 20, ZONE[1] - ZONE[0], 150);
   og.strokeStyle = "#f0b43c"; og.setLineDash([6, 5]); og.strokeRect(ZONE[0], 20, ZONE[1] - ZONE[0], 150); og.setLineDash([]);
-  og.fillStyle = "#f0b43c"; og.font = "600 13px 'Barlow Condensed', sans-serif"; og.fillText("SCANNER", ZONE[0] + 6, 36);
-  for (const it of SORT.items) { const im = img(ORES[it.i].k); og.globalAlpha = it.missed ? 0.4 : 1; if (im.complete) og.drawImage(im, it.x - 32, 86 + it.y, 64, 64); og.globalAlpha = 1; }
-  for (const p of SORT.pops) { p.t -= dt; p.y -= dt * 30; og.globalAlpha = Math.max(0, p.t); og.fillStyle = p.c; og.font = "700 18px 'Barlow Condensed', sans-serif"; og.fillText(p.s, p.x - 20, p.y); og.globalAlpha = 1; }
+  og.fillStyle = "#f0b43c"; og.font = "600 13px 'Fira Mono', monospace"; og.fillText("SCANNER", ZONE[0] + 6, 36);
+  for (const it of SORT.items) { const im = img(ORES[it.i].k); og.globalAlpha = it.missed ? 0.4 : 1; if (im.complete) og.drawImage(im, Math.round(it.x) - 32, Math.round(86 + it.y), 64, 64); og.globalAlpha = 1; }
+  for (const p of SORT.pops) { p.t -= dt; p.y -= dt * 30; og.globalAlpha = Math.max(0, p.t); og.fillStyle = p.c; og.font = "700 18px 'Fira Mono', monospace"; og.fillText(p.s, p.x - 20, p.y); og.globalAlpha = 1; }
   SORT.pops = SORT.pops.filter(p => p.t > 0);
   og.fillStyle = "#efe7da"; og.font = "600 16px 'JetBrains Mono', monospace";
   og.fillText(`pay ${SORT.pay} cr`, w - 170, 30); og.fillText(`${Math.max(0, 45 - SORT.t).toFixed(0)} s`, w - 170, 54);
-  if (!SORT.on && SORT.t === 0) { og.fillStyle = "#a89d8e"; og.font = "500 15px Barlow, sans-serif"; og.fillText("Rocks ride the belt right to left. Route each one while it is in the scanner.", 250, 205); }
+  if (!SORT.on && SORT.t === 0) { og.fillStyle = "#a89d8e"; og.font = "500 12px 'Fira Mono', monospace"; og.fillText("Rocks ride the belt right to left.", 250, 198); og.fillText("Route each one while it is in the scanner.", 250, 214); }
 }
 
 // ------------------------------------------------------------------ Reactor Roll
@@ -446,7 +489,7 @@ function newCard() {
   const f = RUNNERS.map(() => 0.5 + rand() * 1.5); const s = f.reduce((a, b) => a + b, 0);
   RACE.p = f.map(x => x / s); RACE.odds = RACE.p.map(p => Math.max(1.1, Math.round((1 - MARGIN) / p * 10) / 10));
   RACE.done = false; RACE.t = 0; RACE.winner = -1;
-  $("raceRunners").innerHTML = RUNNERS.map((r, i) => `<button class="b" aria-pressed="${i === RACE.pick}" data-i="${i}"><img src="minigames/${r.k}.png" alt="" width="28" height="28" style="vertical-align:middle;margin-right:4px">${r.n} <span style="font-family:var(--mono);font-size:12px">${RACE.odds[i].toFixed(1)}</span></button>`).join("");
+  $("raceRunners").innerHTML = RUNNERS.map((r, i) => `<button class="b" aria-pressed="${i === RACE.pick}" data-i="${i}"><img src="minigames/${r.k}.png" alt="" width="32" height="32" style="vertical-align:middle;margin-right:4px">${r.n} <span style="font-family:var(--mono);font-size:12px">${RACE.odds[i].toFixed(1)}</span></button>`).join("");
   $("raceRunners").querySelectorAll("button").forEach(b => b.onclick = () => { if (RACE.running) return; RACE.pick = +b.dataset.i; $("raceRunners").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); });
   $("raceMsg").textContent = `Decimal odds (stake included). ${RUNNERS[RACE.pick].n} wins ${(RACE.p[RACE.pick] * 100).toFixed(0)}% of the time on form.`;
 }
@@ -460,20 +503,20 @@ $("raceGo").onclick = () => {
   RACE.T = RUNNERS.map((_, i) => i === w ? 6 : 6.25 + rand() * 0.9); RACE.wob = RUNNERS.map(() => [rand() * 6, rand() * 6, 0.05 + rand() * 0.05]);
   $("raceGo").disabled = true; $("raceMsg").textContent = "They're off.";
 };
-const raceC = $("race"), rg = raceC.getContext("2d");
+const raceC = $("race"), rg = raceC.getContext("2d"); rg.imageSmoothingEnabled = false;
 function raceDraw(dt) {
   const w = 720, h = 250, x0 = 140, x1 = 680;
   rg.fillStyle = "#0b1712"; rg.fillRect(0, 0, w, h);
   // stars and the course buoys
   rg.fillStyle = "rgba(255,255,255,.5)"; for (let i = 0; i < 40; i++) rg.fillRect((i * 97) % w, (i * 53) % h, 1.5, 1.5);
   rg.strokeStyle = "#f0b43c"; rg.setLineDash([4, 6]); rg.beginPath(); rg.moveTo(x1, 14); rg.lineTo(x1, h - 14); rg.stroke(); rg.setLineDash([]);
-  rg.fillStyle = "#f0b43c"; rg.font = "600 12px 'Barlow Condensed', sans-serif"; rg.fillText("FINISH", x1 - 14, 12);
+  rg.fillStyle = "#f0b43c"; rg.font = "600 12px 'Fira Mono', monospace"; rg.fillText("FINISH", x1 - 14, 12);
   if (RACE.running) RACE.t += dt;
   RUNNERS.forEach((r, i) => {
     const y = 34 + i * 54; rg.strokeStyle = "rgba(255,255,255,.08)"; rg.beginPath(); rg.moveTo(x0, y + 22); rg.lineTo(x1, y + 22); rg.stroke();
     let u = 0; if (RACE.running || RACE.done) { const q = Math.min(1, RACE.t / RACE.T[i]), [a, b, k] = RACE.wob[i]; u = Math.min(1, q + k * Math.sin(q * 9 + a) * q * (1 - q) + k * 0.6 * Math.sin(q * 17 + b) * q * (1 - q)); }
-    const x = x0 + (x1 - x0) * u - 30, im = img(r.k); if (im.complete) rg.drawImage(im, x - 20, y - 6, 56, 56);
-    rg.fillStyle = "#efe7da"; rg.font = "600 13px 'Barlow Condensed', sans-serif"; rg.fillText(r.n, 6, y + 26);
+    const x = x0 + (x1 - x0) * u - 30, im = img(r.k); if (im.complete) rg.drawImage(im, Math.round(x) - 24, y - 10, 64, 64);
+    rg.fillStyle = "#efe7da"; rg.font = "600 13px 'Fira Mono', monospace"; rg.fillText(r.n, 6, y + 26);
   });
   if (RACE.running && RACE.t > Math.max(...RACE.T)) {
     RACE.running = false; RACE.done = true; $("raceGo").disabled = false;

@@ -1,16 +1,21 @@
-"""Crop growth stages, produce, farm tools and soil textures for the farming mockup
-(docs/mockups/farming.html).
+"""Crop growth stages, produce and farm tools for the farming mockup (docs/mockups/farming.html).
 
-Painted by code with the hand-drawn-illustration kit
-(.claude/skills/hand-drawn-illustration/scripts/crayon.py), in the manner of the
-owner's friend's icons. It is not hand drawn and the page says so.
+Pixel art drawn in code with the balatro-pixel-art kit
+(.claude/skills/balatro-pixel-art/scripts/pixelkit.py), the style of the owner's solitaire
+collection: a tiny native canvas, one bold subject, 3 to 5 tone ramps lit from the top left, dark
+seams, a 1 px outline, single-pixel glints, no anti-aliasing, Sweaft-64 colours only (`save()`
+refuses anything else). Alpha is 0 or 255, so the 3D plot draws the stages with an alpha test and no
+blending.
 
-Each crop has four sprites, `<crop>_0..3` (seeded, sprout, growing, ripe). The plant
-stands on the bottom centre of the square, so the mockup's three.js scene can use a
-sprite as a billboard standing on its cell.
+Ground is NOT drawn here: the mockup uses the game's own terrain atlas (assets/tilesets/atlas.png,
+whose fields sheet has a "tilled soil" tile) and settlement textures, copied to
+docs/mockups/farming/game/. Only what the game lacks is drawn.
 
-    python tools/art/farming_art.py            # writes docs/mockups/farming/*.png
-    python tools/art/farming_art.py --sheet S  # also a contact sheet beside the friend's icons
+Each crop has four stages, `<crop>_0..3` (seeded, sprout, growing, ripe), 32 x 32, the plant standing
+on the bottom centre so the 3D scene stands the sprite on its cell. Produce and tools are 24 x 24.
+
+    python tools/art/farming_art.py              # writes docs/mockups/farming/*.png
+    python tools/art/farming_art.py --sheet S    # also a contact sheet (keep it out of the repo)
 """
 
 import math
@@ -19,351 +24,410 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
-KIT = os.path.join(ROOT, ".claude", "skills", "hand-drawn-illustration", "scripts")
-sys.path.insert(0, KIT)
-from crayon import Icon, circle, ellipse, rect, rotate, translate, mix, darker, lighter, tone  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, ".claude", "skills", "balatro-pixel-art", "scripts"))
+from pixelkit import Sprite, RAMPS, save, sheet  # noqa: E402
 
 OUT = os.path.join(ROOT, "docs", "mockups", "farming")
-BASE = (256, 492)
-GREEN = (80, 170, 60)
-YOUNG = (130, 210, 80)
-GOLD = (236, 190, 60)
+CW = 32   # crop stage canvas
+IW = 24   # produce and tool canvas
+BASE = 31  # the ground row of a crop stage
+MID = 16
+WHITE = "#fffefe"
+
+R = dict(RAMPS)
+R.update({
+    "leaf": ["#003227", "#297537", "#559642", "#9bb675"],
+    "young": ["#05582d", "#559642", "#9bb675", "#c1f1d8"],
+    "stalk": ["#05582d", "#297537", "#9bb675"],
+    "grain": ["#8d4526", "#c56d25", "#fb902f", "#faaf5c"],
+    "ricegrn": ["#0c2f44", "#204f63", "#53998b", "#84e3b5"],
+    "ricehead": ["#8d4526", "#ab8465", "#cfaa81", "#eab798"],
+    "straw": ["#8d4526", "#c56d25", "#cfaa81"],
+    "dirt": ["#2f1525", "#41322c", "#725244", "#ab8465"],
+    "turnip": ["#230c44", "#4f1d83", "#9e3ba2", "#c34988"],
+    "root": ["#92a3b2", "#bfcad7", "#fffefe"],
+    "melon": ["#003227", "#297537", "#559642", "#9bb675"],
+    "flower": ["#c56d25", "#fb902f", "#faaf5c"],
+    "chili": ["#4a051e", "#a61e1f", "#d4462b", "#fa3a64"],
+    "kale": ["#0c2f44", "#204f63", "#53998b", "#84e3b5"],
+    "kale2": ["#191954", "#15578a", "#53998b", "#84e3b5"],
+    "stem": ["#a09f91", "#cfaa81", "#eab798"],
+    "capgrey": ["#2b1f35", "#3e3551", "#69608b", "#92a3b2"],
+    "capglow": ["#0c2f44", "#15578a", "#1096c3", "#74effe", "#d2f8ff"],
+    "sack": ["#725244", "#ab8465", "#cfaa81", "#eab798"],
+    "fert": ["#2f1525", "#41322c", "#725244", "#ab8465"],
+    "can": ["#0c2f44", "#15578a", "#1096c3", "#74effe"],
+    "skin": ["#7d4636", "#a8633e", "#e69d69", "#eab798"],
+    "lamp": ["#c56d25", "#fb902f", "#faaf5c", "#fffefe"],
+})
 
 
-def leaf_poly(x, y, ang, length, width, n=24):
-    """A pointed leaf from (x, y) out along `ang` (radians, 0 = right, -pi/2 = up)."""
+def leaf(sp, x, y, ang, length, width):
+    """A pointed leaf mask from (x, y) out along `ang` (radians, 0 = right, -pi/2 = up)."""
     pts = []
+    n = 10
     for i in range(n + 1):
         t = i / n
         pts.append((t * length, -math.sin(t * math.pi) * width * (1 - 0.3 * t)))
     for i in range(n, -1, -1):
         t = i / n
         pts.append((t * length, math.sin(t * math.pi) * width * (1 - 0.3 * t) * 0.6))
-    return translate(rotate(pts, ang), x, y)
+    c, s = math.cos(ang), math.sin(ang)
+    return sp.poly([(x + px * c - py * s, y + px * s + py * c) for px, py in pts])
 
 
-def leaf(ic, x, y, ang, length, width, col, vein=True):
-    ic.drawn(leaf_poly(x, y, ang, length, width), col, edge_w=6, highlight=0.12)
-    if vein:
-        ic.line([(x, y), (x + math.cos(ang) * length * 0.85, y + math.sin(ang) * length * 0.85)], tone(col, 0.3), 4)
+def frill(sp, x, y, ang, length, width):
+    """A frilly kale leaf: a row of overlapping balls along a line."""
+    m = sp.empty()
+    n = max(2, int(length / 3))
+    for i in range(n + 1):
+        t = i / n
+        r = width * (0.55 + 0.45 * math.sin(t * math.pi * 0.9 + 0.3))
+        m |= sp.circle(x + math.cos(ang) * length * t, y + math.sin(ang) * length * t, r)
+    return m
 
 
-def frilly(cx, cy, rx, ry, rot=0.0, bumps=9):
-    pts = []
-    for i in range(90):
-        t = 2 * math.pi * i / 90
-        r = 1 + 0.1 * math.sin(bumps * t)
-        pts.append((rx * r * math.cos(t), ry * r * math.sin(t)))
-    return translate(rotate(pts, rot), cx, cy)
+def outline(sp):
+    sp.outline()
+    sp.outlined = True
 
 
-def mound(ic, seed_col):
-    ic.drawn(ellipse(256, 450, 200, 52), (120, 82, 52), shade=0.25, highlight=0.1, edge_w=7)
-    for dx, dy in ((-90, -6), (-30, -18), (30, -10), (90, -2), (0, 6)):
-        ic.drawn(ellipse(256 + dx, 450 + dy, 15, 10, rot=0.4), seed_col, hatch=0.3, shade=0, highlight=0, edge_w=4)
+def spark(sp, x, y, ramp):
+    sp.plots([(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)], ramp[-2], glow=True)
+    sp.plot(x, y, WHITE, glow=True)
 
 
-# ---------- crops: fn(ic, stage) for stage 1..3 -------------------------------------
+# ---------- stage 0: a seeded mound ----------------------------------------------------------
 
-def wheat(ic, s, ripe=GOLD, droop=False, green=GREEN):
-    n = (0, 3, 5, 7)[s] + (2 if droop else 0)
-    h = (0, 150, 290, 400)[s] * (0.8 if droop else 1)
-    col = (YOUNG, YOUNG, green, mix(green, ripe, 0.75 if not droop else 0.45))[s]
+def mound(sp, seed_ramp):
+    m = sp.ellipse(4, 25, 27, 34) & sp.rect(0, 0, CW, BASE)
+    sp.part(m, R["dirt"], "sphere")
+    for x, y in ((9, 28), (14, 26), (19, 28), (23, 29), (12, 30)):
+        sp.fill(sp.rect(x, y, x + 1, y), R[seed_ramp][-2])
+        sp.plot(x, y, R[seed_ramp][-1])
+
+
+# ---------- crops: fn(sp, stage) for stage 1..3 ----------------------------------------------
+
+def wheat(sp, s, droop=False):
+    green = R["ricegrn"] if droop else R["stalk"]
+    ripe = R["ricehead"] if droop else R["grain"]
+    n = (0, 3, 5, 6)[s]
+    h = (0, 10, 18, 21)[s] * (0.95 if droop else 1)
+    stalk = R["young"] if s == 1 else (green if s == 2 else (R["straw"] if not droop else R["stalk"]))
+    heads = []
     for i in range(n):
-        f = (i - (n - 1) / 2) / max(1, n - 1)
-        x0 = 256 + f * 70
-        top = (x0 + f * 120, BASE[1] - h * (0.85 + 0.15 * math.cos(i * 1.7)))
-        ic.line([(x0, BASE[1]), ((x0 + top[0]) / 2, (BASE[1] + top[1]) / 2), top], col, 9, ink=tone(col), ink_w=5)
-        leaf(ic, (x0 * 2 + top[0]) / 3, (BASE[1] * 2 + top[1]) / 3, -math.pi / 2 + f * 1.6 + (0.7 if i % 2 else -0.7), h * 0.4, 18, col, vein=False)
+        f = (i - (n - 1) / 2) / max(1, (n - 1) / 2)
+        x0 = MID + f * 3
+        tx = MID + f * (11 if s == 3 else 8)
+        ty = BASE - h * (0.85 + 0.15 * math.cos(i * 1.7))
+        sp.part(sp.line([(x0, BASE), (tx, ty)], 1), stalk, "flat")
+        if s >= 2 and i % 2 == 0:
+            sp.part(leaf(sp, (x0 * 2 + tx) / 3, (BASE * 2 + ty) / 3, -math.pi / 2 + f * 1.2 + (0.6 if f >= 0 else -0.6), h * 0.35, 2), green, "rim")
+        if s == 1:
+            sp.part(leaf(sp, x0, BASE, -math.pi / 2 + f * 0.5, h, 2.2), R["young"], "rim")
+        heads.append((tx, ty, f))
+    for tx, ty, f in heads:
+        side = 1 if f >= 0 else -1
         if s == 3:
             if droop:
-                head = ellipse(top[0] + 26 * (1 if f >= 0 else -1), top[1] + 40, 22, 54, rot=0.5 * (1 if f >= 0 else -1))
+                # a ripe rice head bows over: a tapered plume hanging off the stalk's tip
+                sp.part(sp.taper(tx, ty - 1, tx + side * 4, ty + 6, 3, 1), ripe, "rim")
+                sp.plot(round(tx), round(ty - 1), ripe[-1])
             else:
-                head = ellipse(top[0], top[1] - 30, 20, 56, rot=f * 0.5)
-            ic.drawn(head, ripe, edge_w=6, highlight=0.2)
+                sp.part(sp.ellipse(tx - 1.5, ty - 7, tx + 1.5, ty), ripe, "cyl_v")
+                sp.plot(round(tx), round(ty - 8), ripe[-1])
         elif s == 2:
-            ic.drawn(ellipse(top[0], top[1] - 18, 12, 32, rot=f * 0.5), YOUNG, edge_w=5, highlight=0)
+            sp.part(sp.ellipse(tx - 1, ty - 4, tx + 1, ty), R["young"], "flat")
 
 
-def rice(ic, s):
-    wheat(ic, s, ripe=(240, 210, 120), droop=True, green=(60, 160, 120))
+def rice(sp, s):
+    wheat(sp, s, droop=True)
+    if s >= 1:
+        # standing water at the foot of a paddy plant
+        sp.part(sp.rect(4, BASE - 1, 27, BASE), R["glass"], "flat", seam=False)
 
 
-def turnip(ic, s):
-    sz = (0, 0.45, 0.75, 1.0)[s]
-    if s == 3:
-        ic.drawn(ellipse(256, 440, 100, 70), (238, 232, 236), edge=(120, 60, 110), edge_w=8)
-        ic.drawn(ellipse(256, 410, 98, 40), (170, 70, 160), shade=0.2, edge=(90, 30, 90), edge_w=6)
-    for i, a in enumerate((-2.4, -1.9, -1.55, -1.2, -0.7)):
-        if s == 1 and i in (0, 4):
+def turnip(sp, s):
+    k = (0, 0.5, 0.72, 0.85)[s]
+    by = BASE - 5 if s == 3 else BASE
+    angs = (-2.3, -1.9, -1.57, -1.25, -0.85)
+    for i, a in enumerate(angs):
+        if s == 1 and i in (0, 2, 4):
             continue
-        leaf(ic, 256, 420 if s == 3 else BASE[1] - 4, a, 300 * sz, 60 * sz, (GREEN, YOUNG)[i % 2])
-
-
-def melon(ic, s):
-    ic.line([(80, 470), (180, 440), (300, 470), (440, 445)], (70, 140, 50), 10, ink=(30, 70, 30), ink_w=5)
-    for x, a in ((120, -2.0), (220, -1.2), (360, -1.9), (430, -1.0))[: (0, 2, 3, 4)[s]]:
-        ic.drawn(frilly(x + math.cos(a) * 50, 450 + math.sin(a) * 50, 60, 44, rot=a, bumps=5), GREEN, edge_w=6)
-    if s == 2:
-        for x in (190, 320):
-            ic.drawn(circle(x, 420, 22), (250, 220, 60), edge_w=5, highlight=0)
+        sp.part(leaf(sp, MID, by, a, 20 * k, 5 * k), R["leaf"] if i % 2 else R["young"], "rim")
     if s == 3:
-        ic.drawn(ellipse(256, 410, 160, 100), (130, 190, 70), rim_color=(220, 250, 170), edge_w=9)
-        for dx in (-100, -50, 0, 50, 100):
-            ic.line([(256 + dx * 0.5, 315), (256 + dx, 410), (256 + dx * 0.5, 505)], (60, 120, 40), 7)
+        bulb = sp.ellipse(MID - 7, BASE - 9, MID + 7, BASE + 2) & sp.rect(0, 0, CW, BASE)
+        sp.part(bulb, R["root"], "sphere")
+        sp.part(bulb & sp.rect(0, 0, CW, BASE - 6), R["turnip"], "sphere")
+        sp.plot(MID - 4, BASE - 7, WHITE)
 
 
-def chili(ic, s):
-    h = (0, 160, 300, 380)[s]
-    ic.line([(256, BASE[1]), (250, BASE[1] - h * 0.5), (262, BASE[1] - h)], (70, 120, 40), 12, ink=(30, 60, 20), ink_w=5)
-    k = (0, 0.5, 0.8, 1.0)[s]
-    spots = [(-1, 0.35), (1, 0.45), (-1, 0.65), (1, 0.75), (-1, 0.92), (1, 1.0)][: (0, 2, 4, 6)[s]]
+def melon(sp, s):
+    sp.part(sp.line([(2, BASE - 1), (9, BASE - 3), (17, BASE - 1), (29, BASE - 3)], 2), R["stalk"], "flat")
+    leaves = ((6, -2.0), (13, -1.2), (21, -1.9), (27, -1.0))[: (0, 2, 3, 4)[s]]
+    for x, a in leaves:
+        sp.part(leaf(sp, x, BASE - 2, a, 10, 5), R["leaf"], "rim")
+    if s == 2:
+        for x in (11, 22):
+            sp.part(sp.star(x, BASE - 9, 3.5, 1.5, 5), R["flower"], "rim")
+            sp.plot(x, BASE - 9, R["grain"][0])
+    if s == 3:
+        body = sp.ellipse(MID - 11, BASE - 15, MID + 11, BASE)
+        sp.part(body, R["melon"], "sphere")
+        for dx in (-7, -3, 1, 5, 9):
+            stripe = sp.line([(MID + dx * 0.4, BASE - 15), (MID + dx, BASE - 8), (MID + dx * 0.4, BASE)], 1) & body
+            sp.fill(stripe, R["melon"][0])
+        sp.part(sp.line([(MID, BASE - 15), (MID + 2, BASE - 18)], 2), R["wood"], "flat")
+        sp.plots([(MID - 7, BASE - 12), (MID - 6, BASE - 13)], R["melon"][-1])
+        sp.plot(MID - 7, BASE - 13, WHITE)
+
+
+def chili(sp, s):
+    h = (0, 11, 19, 23)[s]
+    k = (0, 0.55, 0.8, 1.0)[s]
+    sp.part(sp.line([(MID, BASE), (MID - 1, BASE - h * 0.5), (MID + 1, BASE - h)], 2), R["stalk"], "flat")
+    spots = [(-1, 0.4), (1, 0.5), (-1, 0.7), (1, 0.8), (-1, 0.95), (1, 1.0)][: (0, 2, 4, 6)[s]]
     for side, t in spots:
-        y = BASE[1] - h * t
-        leaf(ic, 256, y, -math.pi / 2 + side * 1.1, 150 * k, 44 * k, GREEN)
+        y = BASE - h * t
+        sp.part(leaf(sp, MID, y, -math.pi / 2 + side * 1.25, 9 * k, 3 * k), R["leaf"] if side < 0 else R["young"], "rim")
     if s == 2:
         for side, t in ((-1, 0.55), (1, 0.85)):
-            ic.drawn(circle(256 + side * 70, BASE[1] - h * t, 16), (250, 250, 240), edge_w=4, highlight=0)
+            x, y = MID + side * 6, BASE - h * t
+            sp.part(sp.star(x, y, 2.6, 1.2, 5), R["paper"], "rim")
+            sp.plot(round(x), round(y), R["gold"][2])
     if s == 3:
-        for side, t in ((-1, 0.5), (1, 0.6), (-1, 0.8), (1, 0.88), (1, 0.3)):
-            x, y = 256 + side * 90, BASE[1] - h * t
-            pod = [(x - 14, y), (x + 14, y), (x + 8, y + 70), (x + side * 10, y + 96), (x - 6, y + 66)]
-            ic.drawn(pod, (230, 40, 40), edge_w=6, rim_color=(255, 150, 130))
-            ic.line([(x, y - 12), (x, y + 2)], (60, 120, 40), 6)
+        for side, t, d in ((-1, 0.45, 5), (1, 0.6, 6), (-1, 0.82, 9), (1, 0.92, 9), (1, 0.3, 4)):
+            x, y = MID + side * d, BASE - h * t
+            pod = sp.poly([(x - 1.5, y), (x + 1.5, y), (x + 1, y + 5), (x + side * 1, y + 7), (x - 1, y + 5)])
+            sp.part(pod, R["chili"], "cyl_v")
+            sp.part(sp.rect(x - 1, y - 1, x + 1, y - 1), R["stalk"], "flat")
+            sp.plot(round(x - 1), round(y + 1), R["chili"][-1])
 
 
-def kale(ic, s):
+def kale(sp, s):
     k = (0, 0.55, 0.78, 1.0)[s]
-    ic.line([(256, BASE[1]), (256, BASE[1] - 140 * k)], (120, 160, 120), 14, ink=(50, 80, 60), ink_w=5)
-    col = (90, 150, 140)
-    for i, a in enumerate((-2.6, -2.1, -1.57, -1.05, -0.55)):
-        if s == 1 and i in (0, 4):
+    sp.part(sp.rect(MID - 1, BASE - 8 * k, MID + 1, BASE), R["stem"], "cyl_v")
+    angs = (-2.6, -0.55, -2.1, -1.05, -1.57)
+    for i, a in enumerate(angs):
+        if s == 1 and i in (0, 1):
             continue
-        x = 256 + math.cos(a) * 110 * k
-        y = BASE[1] - 120 * k + math.sin(a) * 140 * k
-        ic.drawn(frilly(x, y, 110 * k, 60 * k, rot=a, bumps=11), mix(col, (60, 110, 160), (i % 2) * 0.4), edge_w=6, rim_color=lighter(col, 0.5) if s == 3 else None)
+        sp.part(frill(sp, MID, BASE - 6 * k, a, 12 * k, 3.4 * k), R["kale2"] if i % 2 else R["kale"], "sphere")
+        x, y = MID + math.cos(a) * 9 * k, BASE - 6 * k + math.sin(a) * 9 * k
+        sp.plot(round(x - 1), round(y - 1), R["kale"][-1])
     if s == 3:
-        ic.sparkle(120, 140, 24, (220, 240, 255))
-        ic.sparkle(400, 200, 18, (220, 240, 255))
+        outline(sp)
+        spark(sp, 4, 5, R["cyan"])
+        spark(sp, 27, 9, R["cyan"])
 
 
-def glowcap(ic, s):
-    caps = [(-90, 0.6, 0.7), (0, 1.0, 1.0), (95, 0.75, 0.8), (-40, 0.45, 0.5), (55, 0.4, 0.45)][: (0, 5, 4, 5)[s]]
-    k = (0, 0.25, 0.6, 1.0)[s]
-    glow = (120, 240, 255)
-    for dx, h, r in caps:
-        x = 256 + dx
-        top = BASE[1] - 230 * h * k - 20
+def glowcap(sp, s):
+    caps = [(-8, 0.6, 0.75), (0, 1.0, 1.0), (8, 0.75, 0.8), (-4, 0.4, 0.55), (4, 0.35, 0.5)][: (0, 3, 4, 5)[s]]
+    k = (0, 0.4, 0.7, 1.0)[s]
+    ramp = R["capglow"] if s == 3 else R["capgrey"]
+    order = sorted(caps, key=lambda c: -c[1])
+    for dx, h, r in order:
+        x = MID + dx
+        top = BASE - 16 * h * k - 3
+        sw = 1 if r * k > 0.7 else 0
+        sp.part(sp.rect(x - sw, top, x + sw, BASE), R["stem"], "cyl_v")
+        cw, ch = 6.5 * r * k + 1.5, 4.5 * r * k + 1
+        cap = sp.ellipse(x - cw, top - ch, x + cw, top + ch) & sp.rect(0, 0, CW, top + 1)
+        sp.part(cap, ramp, "sphere")
         if s == 3:
-            ic.glow((x, top, 90 * r), glow, radius=26, strength=0.7)
-        ic.drawn(rect(x - 12 * r - 4, top, x + 12 * r + 4, BASE[1]), (230, 226, 210), highlight=0, edge_w=5)
-        cap = [(x - 90 * r * k - 10, top + 10)] + [(x + math.cos(a) * (90 * r * k + 10), top + 10 - math.sin(a) * (60 * r * k + 10)) for a in [math.pi * i / 16 for i in range(17)]][::-1]
-        ic.drawn(cap, (70, 200, 230) if s == 3 else (120, 150, 170), rim_color=(200, 255, 255) if s == 3 else None, edge_w=6)
-        if s == 3:
-            for j in (-0.4, 0.1, 0.5):
-                ic.dot(x + j * 70 * r, top - 16 * r, 7, (230, 255, 255))
+            sp.plot(round(x - cw * 0.4), round(top - ch * 0.5), ramp[-1])
+            sp.plot(round(x + cw * 0.3), round(top - ch * 0.2), ramp[-1])
+    if s == 3:
+        outline(sp)
+        spark(sp, 3, 4, R["capglow"])
+        spark(sp, 28, 7, R["capglow"])
 
 
 CROPS = {
-    "wheat": (wheat, (236, 200, 110)),
-    "turnip": (turnip, (180, 90, 160)),
-    "sun_melon": (melon, (240, 230, 190)),
-    "chili": (chili, (240, 220, 160)),
-    "rice": (rice, (240, 236, 220)),
-    "frost_kale": (kale, (60, 50, 40)),
-    "glowcap": (glowcap, (200, 220, 230)),
+    "wheat": (wheat, "grain"),
+    "turnip": (turnip, "turnip"),
+    "sun_melon": (melon, "bone"),
+    "chili": (chili, "bone"),
+    "rice": (rice, "paper"),
+    "frost_kale": (kale, "soot"),
+    "glowcap": (glowcap, "cyan"),
 }
 
 
-# ---------- produce, tools ------------------------------------------------------------
+# ---------- produce (24 x 24) --------------------------------------------------------------------
 
-def p_wheat(ic):
-    for i in range(7):
-        f = (i - 3) / 3
-        ic.line([(256 + f * 30, 470), (256 + f * 130, 150)], (220, 180, 70), 10, ink=(130, 90, 30), ink_w=5)
-        ic.drawn(ellipse(256 + f * 140, 120, 24, 60, rot=f * 0.4), GOLD, edge_w=6)
-    ic.drawn(rect(186, 320, 326, 360), (200, 70, 50), highlight=0, edge_w=6)
-
-
-def p_turnip(ic):
-    for a in (-2.0, -1.57, -1.1):
-        leaf(ic, 256, 200, a, 170, 40, GREEN)
-    ic.drawn(ellipse(256, 320, 140, 130), (240, 234, 238), edge=(120, 60, 110), rim_color=(255, 255, 255))
-    ic.drawn(ellipse(256, 250, 136, 60), (170, 70, 160), shade=0.2, edge=(90, 30, 90), edge_w=6)
-    ic.line([(256, 450), (250, 500)], (200, 180, 190), 6)
+def p_wheat(sp):
+    for i in range(5):
+        f = (i - 2) / 2
+        sp.part(sp.line([(12 + f * 1.5, 22), (12 + f * 8, 9)], 1), R["straw"], "flat")
+    for i in (0, 4, 1, 3, 2):
+        f = (i - 2) / 2
+        x = 12 + f * 8
+        sp.part(sp.ellipse(x - 1.5, 2 + abs(f) * 3, x + 1.5, 9 + abs(f) * 3), R["grain"], "cyl_v")
+    sp.part(sp.rect(8, 14, 16, 16), R["red"], "rim")
 
 
-def p_melon(ic):
-    ic.drawn(ellipse(256, 280, 200, 150), (130, 190, 70), rim_color=(220, 250, 170), edge_w=9)
-    for dx in (-140, -70, 0, 70, 140):
-        ic.line([(256 + dx * 0.5, 135), (256 + dx, 280), (256 + dx * 0.5, 425)], (60, 120, 40), 8)
-    ic.line([(256, 135), (276, 90)], (90, 70, 40), 10)
+def p_turnip(sp):
+    for a in (-2.1, -1.57, -1.05):
+        sp.part(leaf(sp, 12, 9, a, 8, 3), R["leaf"], "rim")
+    bulb = sp.ellipse(4, 7, 20, 20)
+    sp.part(bulb, R["root"], "sphere")
+    sp.part(bulb & sp.rect(0, 0, IW, 12), R["turnip"], "sphere")
+    sp.part(sp.line([(12, 20), (12, 23)], 1), R["root"], "flat")
+    sp.plot(7, 9, WHITE)
 
 
-def p_chili(ic):
-    pod = [(150, 140), (230, 120), (330, 230), (400, 400), (380, 430), (280, 330), (180, 230)]
-    ic.drawn(pod, (230, 40, 40), rim_color=(255, 150, 130), edge_w=9)
-    ic.drawn([(120, 110), (190, 90), (200, 160), (140, 160)], (70, 150, 50), highlight=0, edge_w=6)
-    ic.line([(150, 110), (110, 60)], (70, 120, 40), 10)
+def p_melon(sp):
+    body = sp.ellipse(1, 5, 22, 21)
+    sp.part(body, R["melon"], "sphere")
+    for dx in (-8, -4, 0, 4, 8):
+        sp.fill(sp.line([(12 + dx * 0.4, 5), (12 + dx, 13), (12 + dx * 0.4, 21)], 1) & body, R["melon"][0])
+    sp.part(sp.line([(12, 5), (14, 1)], 2), R["wood"], "flat")
+    sp.plots([(5, 9), (6, 8)], R["melon"][-1])
+    sp.plot(5, 8, WHITE)
 
 
-def p_rice(ic):
-    ic.drawn([(110, 250), (402, 250), (370, 420), (142, 420)], (180, 110, 70), edge_w=9)
-    ic.drawn(ellipse(256, 250, 150, 50), (246, 242, 230), highlight=0, edge=(150, 140, 120), edge_w=6)
-    ic.drawn(ellipse(256, 236, 120, 46), (255, 252, 242), rim_color=(255, 255, 255), edge=(170, 160, 140), edge_w=4)
-    for i in range(9):
-        ic.dot(180 + (i * 47) % 150, 220 + (i * 29) % 30, 5, (225, 218, 200))
-    ic.line([(330, 150), (250, 236)], (150, 110, 60), 8)
-    ic.line([(350, 160), (270, 240)], (150, 110, 60), 8)
+def p_chili(sp):
+    pod = sp.poly([(6, 5), (10, 4), (15, 10), (19, 18), (20, 22), (17, 21), (12, 15), (7, 10)])
+    sp.part(pod, R["chili"], "rim", depth=2)
+    sp.part(sp.poly([(3, 3), (9, 2), (10, 6), (5, 7)]), R["leaf"], "rim")
+    sp.part(sp.line([(5, 3), (3, 0)], 2), R["stalk"], "flat")
+    sp.plots([(9, 7), (10, 8)], R["chili"][-1])
+    sp.plot(10, 7, WHITE)
 
 
-def p_kale(ic):
-    ic.drawn(frilly(256, 240, 170, 130, rot=-0.5, bumps=13), (90, 150, 140), rim_color=(170, 220, 210), edge_w=8)
-    ic.line([(140, 440), (256, 240), (350, 140)], (190, 220, 200), 10)
+def p_rice(sp):
+    sp.part(sp.ellipse(4, 6, 19, 14), R["ricehead"], "sphere")
+    sp.part(sp.poly([(1, 12), (22, 12), (19, 20), (4, 20)]), R["wood"], "cyl_h")
+    sp.part(sp.rect(1, 11, 22, 12), R["rust"], "rim")
+    for x, y in ((7, 8), (11, 7), (15, 9), (9, 10)):
+        sp.plot(x, y, R["ricehead"][1])
+    sp.part(sp.line([(15, 1), (11, 9)], 1), R["wood"], "flat")
+    sp.part(sp.line([(18, 2), (13, 9)], 1), R["wood"], "flat")
+    sp.plot(6, 7, WHITE)
 
 
-def p_glowcap(ic):
-    ic.glow((256, 220, 160), (120, 240, 255), radius=34, strength=0.7)
-    ic.drawn(rect(220, 230, 292, 450), (230, 226, 210), edge_w=7)
-    cap = [(60, 260)] + [(256 + math.cos(a) * 196, 260 - math.sin(a) * 160) for a in [math.pi * i / 24 for i in range(25)]][::-1]
-    ic.drawn(cap, (70, 200, 230), rim_color=(200, 255, 255), edge_w=8)
-    for x, y in ((180, 180), (300, 150), (360, 220), (250, 220)):
-        ic.dot(x, y, 12, (230, 255, 255))
+def p_kale(sp):
+    m = frill(sp, 7, 18, -0.9, 14, 4.2)
+    sp.part(m, R["kale"], "sphere")
+    sp.fill(sp.line([(3, 22), (7, 18), (15, 7)], 1) & m, R["kale"][-1])
+    sp.part(sp.line([(2, 23), (5, 20)], 2), R["stem"], "flat")
 
 
-def t_hoe(ic):
-    ic.line([(140, 470), (380, 100)], (170, 120, 70), 20, ink=(80, 50, 30), ink_w=8)
-    ic.drawn([(330, 80), (450, 110), (440, 160), (360, 150)], (150, 160, 175), edge=(40, 46, 60), edge_w=8)
+def p_glowcap(sp):
+    sp.part(sp.rect(9, 11, 14, 22), R["stem"], "cyl_v")
+    cap = sp.ellipse(1, 2, 22, 16) & sp.rect(0, 0, IW, 12)
+    sp.part(cap, R["capglow"], "sphere")
+    sp.fill(sp.rect(3, 12, 20, 12), R["capglow"][0])
+    outline(sp)
+    for x, y in ((6, 6), (12, 4), (16, 8)):
+        sp.fill(sp.rect(x, y, x + 1, y + 1), R["capglow"][-2], glow=True)
+        sp.plot(x, y, WHITE, glow=True)
 
 
-def t_can(ic):
-    ic.drawn([(300, 220), (450, 120), (470, 150), (330, 270)], (70, 150, 200), edge_w=7)
-    ic.drawn(roundbody := [(140, 200), (330, 200), (340, 430), (130, 430)], (70, 150, 200), rim_color=(170, 220, 240), edge_w=9)
-    ic.line([(150, 210), (130, 150), (230, 120), (320, 150), (320, 210)], (40, 90, 130), 12)
-    for x, y in ((470, 190), (490, 240), (460, 260)):
-        ic.drawn(ellipse(x, y, 10, 18, rot=0.4), (140, 210, 255), hatch=0.3, shade=0, highlight=0, edge_w=3)
+# ---------- tools (24 x 24) ----------------------------------------------------------------------
+
+def t_hoe(sp):
+    sp.part(sp.line([(3, 22), (17, 5)], 2), R["wood"], "flat")
+    sp.part(sp.poly([(14, 3), (21, 5), (21, 11), (18, 10), (17, 7), (13, 6)]), R["metal"], "rim")
+    sp.plot(15, 4, WHITE)
 
 
-def t_seeds(ic):
-    sack = [(170, 180), (340, 180), (400, 420), (110, 420)]
-    ic.drawn(sack, (210, 180, 120), edge_w=9)
-    ic.drawn([(190, 120), (320, 120), (340, 180), (170, 180)], (190, 160, 100), highlight=0, edge_w=7)
-    ic.line([(170, 185), (340, 185)], (140, 60, 40), 10)
-    for x, y in ((220, 300), (290, 280), (260, 350), (320, 360), (190, 370)):
-        ic.drawn(ellipse(x, y, 16, 11, rot=0.5), (120, 80, 40), hatch=0.3, shade=0, highlight=0, edge_w=4)
+def t_can(sp):
+    sp.part(sp.line([(15, 13), (22, 5)], 2), R["can"], "flat")
+    sp.part(sp.rect(20, 3, 23, 5), R["can"], "rim")
+    sp.part(sp.line([(4, 9), (5, 4), (12, 3), (16, 6), (16, 9)], 2), R["can"], "flat")
+    body = sp.rect(2, 9, 17, 22)
+    sp.part(body, R["can"], "cyl_v")
+    sp.fill(sp.rect(2, 12, 17, 12), R["can"][0])
+    sp.plot(4, 10, WHITE)
 
 
-def t_fert(ic):
-    sack = [(150, 160), (360, 160), (390, 440), (120, 440)]
-    ic.drawn(sack, (130, 100, 70), edge_w=9)
-    ic.drawn(ellipse(255, 170, 105, 30), (70, 50, 36), highlight=0, edge_w=6)
-    leaf(ic, 255, 360, -1.0, 110, 30, GREEN)
-    leaf(ic, 255, 360, -2.1, 110, 30, YOUNG)
-    ic.sparkle(410, 120, 26)
+def t_seeds(sp):
+    sp.part(sp.poly([(7, 2), (16, 2), (17, 6), (6, 6)]), R["sack"], "rim")
+    sack = sp.poly([(6, 6), (17, 6), (21, 22), (2, 22)])
+    sp.part(sack, R["sack"], "rim", depth=2)
+    sp.part(sp.rect(6, 6, 17, 7), R["red"], "flat")
+    for x, y in ((9, 13), (13, 12), (11, 17), (15, 17), (7, 18)):
+        sp.fill(sp.rect(x, y, x + 1, y), R["wood"][1])
+        sp.plot(x, y, R["wood"][2])
 
 
-def t_sickle(ic):
-    blade = [(200, 300)] + [(260 + math.cos(a) * 170, 250 - math.sin(a) * 170) for a in [math.pi * (0.1 + 0.8 * i / 20) for i in range(21)]] + \
-            [(260 + math.cos(a) * 130, 270 - math.sin(a) * 120) for a in [math.pi * (0.9 - 0.8 * i / 20) for i in range(21)]]
-    ic.drawn(blade, (180, 190, 205), rim_color=(240, 246, 255), edge=(40, 46, 60), edge_w=8)
-    ic.line([(200, 300), (110, 460)], (170, 120, 70), 22, ink=(80, 50, 30), ink_w=8)
+def t_fert(sp):
+    sack = sp.poly([(4, 5), (19, 5), (21, 22), (2, 22)])
+    sp.part(sack, R["fert"], "rim", depth=2)
+    sp.part(sp.ellipse(4, 3, 19, 7), R["dirt"], "rim")
+    sp.part(leaf(sp, 11, 17, -1.0, 8, 3), R["young"], "rim")
+    sp.part(leaf(sp, 11, 17, -2.1, 8, 3), R["leaf"], "rim")
+    outline(sp)
+    spark(sp, 21, 2, R["gold"])
 
 
-def t_lantern(ic):
-    ic.glow((256, 290, 130), (255, 190, 90), radius=40, strength=0.8)
-    ic.drawn([(196, 190), (316, 190), (330, 400), (182, 400)], (255, 210, 110), rim_color=(255, 240, 200), edge=(90, 60, 30), edge_w=9)
-    ic.drawn(rect(176, 160, 336, 196), (60, 56, 60), highlight=0, edge=(20, 20, 24), edge_w=6)
-    ic.drawn(rect(176, 396, 336, 430), (60, 56, 60), highlight=0, edge=(20, 20, 24), edge_w=6)
-    ic.line([(206, 160), (256, 100), (306, 160)], (60, 56, 60), 9)
-    ic.drawn(ellipse(256, 320, 22, 40), (255, 140, 40), hatch=0.4, shade=0, highlight=0, edge_w=4)
+def t_sickle(sp):
+    outer = sp.ellipse(4, 2, 22, 20)
+    inner = sp.ellipse(4, 6, 19, 22)
+    blade = outer & ~inner & sp.rect(0, 0, IW, 13)
+    sp.part(blade, R["metal"], "rim")
+    sp.part(sp.line([(6, 12), (2, 22)], 3), R["wood"], "flat")
+    sp.plot(12, 3, WHITE)
 
 
-# ---------- soil and ground, full squares for the hex tops ------------------------------
-
-def soil(ic, col, furrows=None, flecks=None, wet=False):
-    sq = rect(-40, -40, 552, 552)
-    ic.flat(sq, col, wobble=0)
-    ic.scribble(sq, col, var=0.28, angle=20, density=1.0, length=(40, 110), spread=16)
-    ic.scribble(sq, col, var=0.18, angle=80, density=0.4, length=(30, 80), spread=18)
-    if furrows:
-        for y in range(30, 512, 86):
-            ic.line([(-20, y), (540, y + 10)], darker(col, 0.35), 22, amp=4)
-            ic.line([(-20, y + 30), (540, y + 40)], lighter(col, 0.18), 12, amp=4)
-    if flecks:
-        for i in range(70):
-            x, y = (i * 137) % 512, (i * 211) % 512
-            ic.dot(x, y, 4 + i % 4, flecks)
-    if wet:
-        for i in range(10):
-            x, y = (i * 173 + 40) % 480, (i * 97 + 60) % 480
-            ic.dot(x, y, 10, lighter(col, 0.35))
+def t_hand(sp):
+    """The look tool: an open hand, as the game's hotbar shows one."""
+    skin = R["skin"]
+    for x0, top in ((6, 4), (9, 2), (12, 2), (15, 4)):
+        sp.part(sp.rect(x0, top, x0 + 2, 13), skin, "cyl_v")
+    sp.part(sp.taper(3, 10, 8, 16, 3, 3), skin, "rim")
+    sp.part(sp.rect(6, 12, 17, 21), skin, "rim", depth=2)
+    sp.plot(10, 3, WHITE)
 
 
-def grass_tex(ic):
-    soil(ic, (96, 150, 64))
-    for i in range(120):
-        x, y = (i * 131) % 520, (i * 197) % 520
-        ic.line([(x, y), (x + 6, y - 26)], (140, 200, 90) if i % 2 else (60, 110, 46), 5)
+def t_lantern(sp):
+    sp.part(sp.line([(8, 4), (11, 1), (13, 1), (16, 4)], 1), R["soot"], "flat")
+    sp.part(sp.rect(6, 4, 17, 6), R["soot"], "rim")
+    sp.part(sp.rect(6, 19, 17, 21), R["soot"], "rim")
+    sp.part(sp.rect(7, 7, 16, 18), R["lamp"], "flat")
+    sp.part(sp.rect(7, 7, 7, 18) | sp.rect(16, 7, 16, 18), R["soot"], "flat", seam=False)
+    outline(sp)
+    sp.fill(sp.rect(8, 7, 15, 18), R["lamp"][1], glow=True)
+    sp.fill(sp.ellipse(9, 9, 14, 17), R["lamp"][2], glow=True)
+    sp.fill(sp.ellipse(10, 11, 13, 16), R["lamp"][3], glow=True)
+    spark(sp, 21, 9, R["flame"])
 
-
-GROUND = {
-    "ground_grass": grass_tex,
-    "ground_tilled": lambda ic: soil(ic, (140, 100, 64), furrows=True),
-    "ground_wet": lambda ic: soil(ic, (86, 60, 42), furrows=True, wet=True),
-    "ground_fertile": lambda ic: soil(ic, (100, 70, 48), furrows=True, flecks=(40, 30, 24)),
-    "ground_sand": lambda ic: soil(ic, (222, 196, 140)),
-    "ground_regolith": lambda ic: soil(ic, (130, 130, 136), flecks=(90, 90, 96)),
-}
 
 ICONS = {
     "produce_wheat": p_wheat, "produce_turnip": p_turnip, "produce_sun_melon": p_melon, "produce_chili": p_chili,
     "produce_rice": p_rice, "produce_frost_kale": p_kale, "produce_glowcap": p_glowcap,
-    "tool_hoe": t_hoe, "tool_can": t_can, "tool_seeds": t_seeds, "tool_fert": t_fert, "tool_sickle": t_sickle, "tool_lantern": t_lantern,
+    "tool_hand": t_hand, "tool_hoe": t_hoe, "tool_can": t_can, "tool_seeds": t_seeds, "tool_fert": t_fert, "tool_sickle": t_sickle, "tool_lantern": t_lantern,
 }
 
 
-def save_square(ic, path):
-    """A ground texture keeps its full square: skip the icon's halo fade."""
-    from PIL import Image
-    from PIL.PngImagePlugin import PngInfo
-    meta = PngInfo()
-    meta.add_text("source", "armory-crayon")
-    ic.img.resize((128, 128), Image.LANCZOS).convert("RGB").save(path, pnginfo=meta)
+def draw(size, fn, *args):
+    sp = Sprite(size, size)
+    fn(sp, *args)
+    if not getattr(sp, "outlined", False):
+        outline(sp)
+    return sp.image()
 
 
 def main(argv):
     os.makedirs(OUT, exist_ok=True)
-    written = []
-    seed = 500
-    for name, (fn, seed_col) in CROPS.items():
+    items = []
+    src = "tools/art/farming_art.py (balatro-pixel-art kit)"
+    for name, (fn, seed) in CROPS.items():
         for s in range(4):
-            ic = Icon(seed=seed)
-            seed += 1
-            if s == 0:
-                mound(ic, seed_col)
-            else:
-                fn(ic, s)
-            p = os.path.join(OUT, f"{name}_{s}.png")
-            ic.save(p)
-            written.append(p)
+            img = draw(CW, mound, seed) if s == 0 else draw(CW, fn, s)
+            save(img, os.path.join(OUT, f"{name}_{s}.png"), src)
+            items.append((f"{name}_{s}", img))
     for name, fn in ICONS.items():
-        ic = Icon(seed=seed)
-        seed += 1
-        fn(ic)
-        p = os.path.join(OUT, name + ".png")
-        ic.save(p)
-        written.append(p)
-    for name, fn in GROUND.items():
-        ic = Icon(seed=seed)
-        seed += 1
-        fn(ic)
-        p = os.path.join(OUT, name + ".png")
-        save_square(ic, p)
-        written.append(p)
-    print("wrote", len(written), "pngs to", OUT)
+        img = draw(IW, fn)
+        save(img, os.path.join(OUT, name + ".png"), src)
+        items.append((name, img))
+    print("wrote", len(items), "pngs to", OUT)
     if "--sheet" in argv:
-        import sheet
-        sheet.main([argv[argv.index("--sheet") + 1]] + written + ["--ref", "vitality", "--ref", "power output", "--ref", "plating"])
+        out = argv[argv.index("--sheet") + 1]
+        sheet(items, scale=4, cols=8, cell=(CW * 4, CW * 4)).save(out)
+        print("sheet", out)
 
 
 if __name__ == "__main__":

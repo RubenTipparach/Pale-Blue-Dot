@@ -56,8 +56,8 @@ button{font:inherit;color:inherit}
 .clock input[type=range]{width:100%;accent-color:var(--amber);margin:0}
 .clock .small{font-size:12px;color:var(--muted);line-height:1.4}
 .card{right:12px;top:12px;width:min(300px,calc(100% - 24px));padding:12px;display:grid;gap:10px}
-.card .who{display:grid;grid-template-columns:72px 1fr;gap:10px;align-items:center}
-.card img{width:72px;height:72px;image-rendering:auto;background:var(--raise);border-radius:4px}
+.card .who{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center}
+.card img{width:96px;height:96px;image-rendering:pixelated;background:var(--raise);border-radius:4px}
 .card .name{font-family:var(--display);font-size:21px;font-weight:700;line-height:1}
 .card .meta{font-size:12.5px;color:var(--muted)}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px}
@@ -87,7 +87,7 @@ button{font:inherit;color:inherit}
 /* roles */
 .roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:12px}
 .role{display:grid;grid-template-columns:96px 1fr;gap:12px;border:1px solid var(--line);border-radius:6px;padding:12px;background:var(--panel-solid);align-items:start}
-.role img{width:96px;height:96px}
+.role img{width:96px;height:96px;image-rendering:pixelated}
 .role h3{margin-bottom:2px}
 .role .where{font-size:12px;color:var(--sky);font-family:var(--mono)}
 .role p{font-size:13.5px;color:var(--muted);margin-top:6px}
@@ -126,22 +126,22 @@ button{font:inherit;color:inherit}
 .mocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
 .mock{border:1px solid var(--line);border-radius:6px;background:linear-gradient(180deg,#191b24,#121110);padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
 .mock .tag{font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.dlg{display:grid;grid-template-columns:84px 1fr;gap:12px;align-items:start}
-.dlg img{width:84px;height:84px;background:var(--raise);border-radius:4px}
+.dlg{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start}
+.dlg img{width:96px;height:96px;image-rendering:pixelated;background:var(--raise);border-radius:4px}
 .dlg .line{font-size:15px}
 .dlg .speaker{font-family:var(--display);font-size:18px;font-weight:700;color:var(--amber)}
 .opts{display:grid;gap:5px}
-.opts button{all:unset;cursor:pointer;display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:4px;font-size:14px}
+.opts button{all:unset;cursor:pointer;display:grid;grid-template-columns:32px 1fr auto;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:4px;font-size:14px}
 .opts button:hover,.opts button:focus-visible{border-color:var(--amber);outline:none}
-.opts img{width:22px;height:22px}
+.opts img{width:32px;height:32px;image-rendering:pixelated}
 .opts small{font-family:var(--mono);font-size:11px;color:var(--muted)}
 .quest{border:1px solid rgba(240,180,60,.35);border-radius:4px;padding:10px;display:grid;gap:6px;background:rgba(240,180,60,.05)}
 .quest h3{font-size:18px}
 .quest ul{margin:0;padding-left:18px;font-size:13.5px}
 .quest li.done{color:var(--muted);text-decoration:line-through}
 .rel{display:grid;gap:8px}
-.rel .r{display:grid;grid-template-columns:40px 1fr auto;gap:8px;align-items:center;font-size:13.5px}
-.rel img{width:40px;height:40px}
+.rel .r{display:grid;grid-template-columns:48px 1fr auto;gap:8px;align-items:center;font-size:13.5px}
+.rel img{width:48px;height:48px;image-rendering:pixelated}
 .rel .meter{height:7px}
 .rel .lv{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
 .trade{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px}
@@ -169,7 +169,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; <span class="badge">Proposal, not built</span></div>
     <h1>Townsfolk and the peoples of the worlds</h1>
     <p class="lede">Who lives in the towns, what they do with their day, and how you talk, trade and fall out with them. The square below runs a whole day on <b>world time</b>, which only moves while the game is played. It is 22:30 and the lamps are lit. Click anyone to see who they are.</p>
-    <p class="note">This extends <span class="src">openspec/changes/townsfolk</span>, which builds people as the towns mockup has them (walkers, workers, idlers, a gate guard) and leaves schedules, talk and trade out of scope. Everything here past that is <b>proposed</b>. The portraits and icons are <b>painted by code</b> (<span class="src">tools/art/npcs_art.py</span>) with the hand-drawn-illustration kit, copying the owner's friend's method stroke by stroke. They are not the friend's drawings.</p>
+    <p class="note">This extends <span class="src">openspec/changes/townsfolk</span>, which builds people as the towns mockup has them (walkers, workers, idlers, a gate guard) and leaves schedules, talk and trade out of scope. Everything here past that is <b>proposed</b>. The square is <b>the game's village template</b> (<span class="src">assets/settlements/v1/village.json</span>, copied byte for byte), built the way <span class="src">towns.html</span> and the engine cut it: hex columns 2.833 m across and 1 m a layer with the terrain atlas's own tiles, walls on every outside edge per storey with its doors and windows, gable and cone roofs, the game's trees (<span class="src">planet_surface.wgsl</span>). Walls and roofs are the game's settlement textures, sampled nearest at the manifest's scale. <b>Mockup-only</b>: the stalls, well, brazier, forge, kiosk and the four lamp posts round the green (cut from the game's materials; the kiosk's metal panel is drawn), and the townsfolk, hexagonal prisms as <span class="src">townsfolk</span> design 2 builds them, wearing cloth, face and hair tiles drawn with the pixel-art kit and tinted per person. The portraits (48 px) and icons (16 px) are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="src">tools/art/npcs_art.py</span>), shown at whole-number scales with no smoothing; the kiosk's metal panel is a 32 px tile from the same kit.</p>
   </header>
 
   <section aria-labelledby="sq-h">
@@ -196,7 +196,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
       <div class="panel hint" id="hint">Drag to turn &middot; wheel or pinch to zoom &middot; click a person</div>
       <div class="panel toast" id="toast" role="status"></div>
     </div>
-    <p class="note">Lit at night as CLAUDE.md asks: each lantern, lit window, the brazier and the forge bakes its light into what is near it, wherever the camera is, with towns.html's falloff <span class="src">(1 - (d/R)^2)^2</span>. The moon is held at 0.16 so the lamps read. People move, so they cannot be baked: each one samples the same lights at its own position every frame, which is the moving-thing sampler <span class="src">lamps-and-lanterns</span> designs. The clock runs a game hour every three seconds here so a day fits in a minute and a bit.</p>
+    <p class="note">Lit at night as CLAUDE.md asks: each lantern, lit window, the brazier and the forge lights what is near it, wherever the camera is, with towns.html's falloff <span class="src">(1 - (d/R)^2)^2</span>, so each lamp throws a pool on the ground as the game's do. The moon is held at 0.035, as dark as the game's night, so the ground between the pools reads near black. The light is worked out per pixel, so the people who move are lit by the same lights as the walls. The clock runs a game hour every three seconds here so a day fits in a minute and a bit.</p>
   </section>
 
   <section aria-labelledby="pp-h">
@@ -305,11 +305,12 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     </div>
   </section>
 
-  <footer>Mockup for the owner, 2026-11-11. Proposal only: nothing on this page is built behaviour. Portraits and icons painted by code in the friend's style (<span class="src">tools/art/npcs_art.py</span>); wall and ground textures shared with the building mockup (<span class="src">tools/art/building_art.py</span>).</footer>
+  <footer>Mockup for the owner, 2026-11-11, redrawn 2026-11-12 to look like the game (<span class="src">docs/mockups/ART-DIRECTION.md</span>). Proposal only: nothing on this page is built behaviour. Portraits and icons are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<span class="src">tools/art/npcs_art.py</span>); walls, roofs and ground are the game's settlement textures, copied byte for byte (<span class="src">docs/mockups/building/game/README.md</span>); the kiosk's metal panel is drawn the same way for the mockup (<span class="src">tools/art/building_art.py</span>).</footer>
 </div>
 <div id="err" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="building/scene-kit.js?v=1"></script>
 <script>
 "use strict";
 window.addEventListener("error", e => { const el = document.getElementById("err"); el.hidden = false; el.textContent += (e.message || e) + " @" + (e.lineno || "") + "\n"; });
@@ -326,93 +327,6 @@ const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
 function hash2(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 const lin = h => new THREE.Color(h).convertSRGBToLinear();
-
-// ---- geometry: one buffer per material, every face with a normal ----------
-class Geo {
-  constructor() { this.p = []; this.n = []; }
-  tri(a, b, c, hint) {
-    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
-    if (hint && nx * hint[0] + ny * hint[1] + nz * hint[2] < 0) { nx = -nx; ny = -ny; nz = -nz; this.p.push(...a, ...c, ...b); } else this.p.push(...a, ...b, ...c);
-    for (let i = 0; i < 3; i++) this.n.push(nx, ny, nz);
-  }
-  quad(a, b, c, d, hint) { this.tri(a, b, c, hint); this.tri(a, c, d, hint); }
-  add(g, m) {
-    const gg = (g.index ? g.toNonIndexed() : g); gg.applyMatrix4(m);
-    const P = gg.attributes.position.array, N = gg.attributes.normal.array;
-    for (let i = 0; i < P.length; i++) { this.p.push(P[i]); this.n.push(N[i]); }
-  }
-  // a box, subdivided so baked light has vertices to land on
-  box(x, y0, z, sx, sy, sz, ang = 0) {
-    const s = v => Math.max(1, Math.ceil(v / 0.45));
-    this.add(new THREE.BoxGeometry(sx, sy, sz, s(sx), s(sy), s(sz)), new THREE.Matrix4().makeRotationY(-ang).setPosition(x, y0 + sy / 2, z));
-  }
-  cyl(x, y0, z, r, h, n = 8, r2) { this.add(new THREE.CylinderGeometry(r2 ?? r, r, h, n, Math.max(1, Math.ceil(h / 0.5))), new THREE.Matrix4().makeTranslation(x, y0 + h / 2, z)); }
-  // a hex cell's top, fanned and subdivided, and its sides down to y0
-  hexTop(q, r, y, y0) {
-    const c = [hx(q, r), y, hz(q, r)], N = 3;
-    for (let k = 0; k < 6; k++) {
-      const a = corner(q, r, k), b = corner(q, r, k + 1), A = [a[0], y, a[1]], B = [b[0], y, b[1]];
-      for (let i = 0; i < N; i++) for (let j = 0; j < N - i; j++) {
-        const P = (u, v) => [c[0] + (A[0] - c[0]) * u / N + (B[0] - c[0]) * v / N, y, c[2] + (A[2] - c[2]) * u / N + (B[2] - c[2]) * v / N];
-        this.tri(P(i, j), P(i + 1, j), P(i, j + 1), [0, 1, 0]);
-        if (j < N - i - 1) this.tri(P(i + 1, j), P(i + 1, j + 1), P(i, j + 1), [0, 1, 0]);
-      }
-      if (y0 !== undefined) { const mx = (a[0] + b[0]) / 2 - c[0], mz = (a[1] + b[1]) / 2 - c[2]; this.quad([a[0], y0, a[1]], [b[0], y0, b[1]], B, A, [mx, 0, mz]); }
-    }
-  }
-  build(rep = 2) {
-    const g = new THREE.BufferGeometry(), P = new Float32Array(this.p), N = new Float32Array(this.n), nv = P.length / 3, uv = new Float32Array(nv * 2);
-    for (let i = 0; i < nv; i++) {
-      const x = P[3 * i], y = P[3 * i + 1], z = P[3 * i + 2], nx = N[3 * i], ny = N[3 * i + 1], nz = N[3 * i + 2];
-      if (Math.abs(ny) > 0.7) { uv[2 * i] = x / rep; uv[2 * i + 1] = z / rep; }
-      else { const l = Math.hypot(nx, nz) || 1; uv[2 * i] = (x * -nz + z * nx) / l / rep; uv[2 * i + 1] = y / rep; }
-    }
-    g.setAttribute("position", new THREE.BufferAttribute(P, 3)); g.setAttribute("normal", new THREE.BufferAttribute(N, 3));
-    g.setAttribute("uv", new THREE.BufferAttribute(uv, 2)); g.setAttribute("blk", new THREE.BufferAttribute(new Float32Array(nv * 3), 3));
-    return g;
-  }
-}
-// Block light baked into the vertices, every light, towns.html's falloff.
-function bake(g, lights) {
-  const P = g.attributes.position.array, N = g.attributes.normal.array, B = g.attributes.blk.array; B.fill(0);
-  g.computeBoundingBox(); const bb = g.boundingBox;
-  for (const L of lights) {
-    if (L.x + L.R < bb.min.x || L.x - L.R > bb.max.x || L.z + L.R < bb.min.z || L.z - L.R > bb.max.z || L.y + L.R < bb.min.y || L.y - L.R > bb.max.y) continue;
-    const R2 = L.R * L.R;
-    for (let k = 0, nv = P.length / 3; k < nv; k++) {
-      const dx = L.x - P[3 * k], dy = L.y - P[3 * k + 1], dz = L.z - P[3 * k + 2], d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 >= R2) continue;
-      const d = Math.sqrt(d2), nd = (dx * N[3 * k] + dy * N[3 * k + 1] + dz * N[3 * k + 2]) / Math.max(d, 1e-3);
-      if (nd < -0.15) continue;
-      const f = L.p * (1 - d2 / R2) ** 2 * (0.3 + 0.7 * Math.max(0, nd)) * d2 / (d2 + 0.36);
-      B[3 * k] += L.c.r * f; B[3 * k + 1] += L.c.g * f; B[3 * k + 2] += L.c.b * f;
-    }
-  }
-  g.attributes.blk.needsUpdate = true;
-}
-// The same lights at a point, for things that move (lamps-and-lanterns' sampler).
-function sampleAt(x, y, z, lights, out) {
-  out.setRGB(0, 0, 0);
-  for (const L of lights) { const d2 = (L.x - x) ** 2 + (L.y - y) ** 2 + (L.z - z) ** 2, R2 = L.R * L.R; if (d2 >= R2) continue; const f = L.p * (1 - d2 / R2) ** 2 * 0.75; out.r += L.c.r * f; out.g += L.c.g * f; out.b += L.c.b * f; }
-  return out;
-}
-const U = { lamp: { value: 1.8 } };
-const TEX = {}, loader = new THREE.TextureLoader();
-function tex(name) {
-  if (TEX[name]) return TEX[name];
-  const t = loader.load(name); t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.NearestFilter; t.anisotropy = 4;
-  return (TEX[name] = t);
-}
-function litMat(texName, color = 0xffffff, extra = {}) {
-  const m = new THREE.MeshStandardMaterial({ map: texName ? tex(texName) : null, color, roughness: 0.93, metalness: 0, ...extra });
-  m.onBeforeCompile = sh => {
-    sh.uniforms.uLamp = U.lamp;
-    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute vec3 blk;\nuniform float uLamp;\nvarying vec3 vBlk;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvBlk = blk * uLamp;");
-    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vBlk;").replace("#include <aomap_fragment>", "#include <aomap_fragment>\nreflectedLight.indirectDiffuse += vBlk * material.diffuseColor;");
-  };
-  return m;
-}
 
 // ===================================================================
 // Peoples and roles (proposed data)
@@ -436,54 +350,14 @@ const ROLES = {
   miner:    { label: "Miner", img: "miner", where: "the hill mine", text: "Underground all day. Knows where the ore seams are and will tell you for a drink.", offers: [["trade", "Ore, coal"], ["quest", "Rumours of seams"]], prop: "pick", hat: "miner", sched: [[0, "sleep"], [6, "away"], [17, "idle"], [19, "inn"], [23, "sleep"]] },
   clerk:    { label: "Station clerk", img: "clerk", where: "starport kiosk \u00b7 stations", text: "Books docking, buys survey data, posts contracts with real destinations.", offers: [["trade", "Survey data"], ["quest", "Contracts"]], prop: "pad", hat: "headset", sched: [[0, "sleep"], [7, "work"], [20, "inn"], [22, "sleep"]] },
   smuggler: { label: "Smuggler", img: "smuggler", where: "by the well, after dark", text: "Only around at night. Buys what the stalls will not, sells what the guards would rather you did not have.", offers: [["trade", "Contraband"], ["law", "Standing risk"]], prop: "crate", hat: "hood", sched: [[0, "lurk"], [3, "sleep"], [13, "inn"], [17, "away"], [21, "lurk"]] },
-  inn:      { label: "Innkeeper", img: "trader", where: "The Lantern", text: "", offers: [], prop: "none", apron: 0xe8e0d0, sched: [[0, "work"], [1.5, "sleep"], [9, "work"]] },
+  inn:      { label: "Innkeeper", img: "trader", where: "The Plough", text: "", offers: [], prop: "none", apron: 0xe8e0d0, sched: [[0, "work"], [1.5, "sleep"], [9, "work"]] },
 };
 const ACT = { sleep: ["Asleep at home", "a-sleep"], work: ["At work", "a-work"], away: ["Away", "a-away"], inn: ["At the inn", "a-inn"], patrol: ["On patrol", "a-patrol"], idle: ["Idle about town", "a-idle"], lurk: ["Lurking", "a-lurk"] };
 
 // ===================================================================
 // A figure: hexagonal prisms that read as cubes, flat side forward.
 // ===================================================================
-function figure(spec) {
-  const g = new THREE.Group(), mats = [];
-  const M = col => { const m = new THREE.MeshStandardMaterial({ color: lin(col), roughness: 0.9 }); m.userData.base = lin(col); mats.push(m); return m; };
-  const prism = (w, h, d, col, x, y, z, parent = g) => {
-    const geo = new THREE.CylinderGeometry(w / Math.sqrt(3), w / Math.sqrt(3), h, 6); geo.rotateY(Math.PI / 6);
-    const m = new THREE.Mesh(geo, M(col)); m.scale.z = d / w; m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m;
-  };
-  const s = spec.h, b = spec.b;
-  const hip = (x) => { const p = new THREE.Group(); p.position.set(x, 0.8 * s, 0); g.add(p); prism(0.18 * b, 0.8 * s, 0.2, spec.legs, 0, -0.4 * s, 0, p); return p; };
-  const legL = hip(-0.11 * b), legR = hip(0.11 * b);
-  prism(0.5 * b, 0.72 * s, 0.28, spec.tunic, 0, 1.16 * s, 0);
-  if (spec.apron) prism(0.42 * b, 0.62 * s, 0.05, spec.apron, 0, 1.08 * s, 0.13);
-  if (spec.tabard) prism(0.3 * b, 0.6 * s, 0.05, spec.tabard, 0, 1.18 * s, 0.14);
-  prism(0.52 * b, 0.12, 0.3, 0x3a2a1c, 0, 0.86 * s, 0);
-  const headG = new THREE.Group(); headG.position.set(0, 1.54 * s, 0); g.add(headG);
-  prism(0.3, 0.32, 0.3, spec.skin, 0, 0.16, 0, headG);
-  prism(0.06, 0.05, 0.02, 0x201820, -0.07, 0.2, 0.15, headG); prism(0.06, 0.05, 0.02, 0x201820, 0.07, 0.2, 0.15, headG);
-  const hat = spec.hat;
-  if (hat === "straw") { prism(0.62, 0.04, 0.62, 0xe6c85a, 0, 0.34, 0, headG); prism(0.3, 0.14, 0.3, 0xe6c85a, 0, 0.42, 0, headG); }
-  else if (hat === "helmet") prism(0.36, 0.16, 0.36, 0x9aa4b4, 0, 0.36, 0, headG);
-  else if (hat === "sou") { prism(0.46, 0.05, 0.46, 0xf0c830, 0, 0.32, -0.03, headG); prism(0.32, 0.12, 0.32, 0xf0c830, 0, 0.38, 0, headG); }
-  else if (hat === "turban") prism(0.36, 0.16, 0.36, spec.accent || 0xe0b050, 0, 0.38, 0, headG);
-  else if (hat === "hood") { prism(0.38, 0.4, 0.36, spec.accent || 0x504870, 0, 0.2, -0.04, headG); prism(0.26, 0.24, 0.06, spec.skin, 0, 0.15, 0.16, headG); prism(0.06, 0.05, 0.02, 0x201820, -0.07, 0.2, 0.2, headG); prism(0.06, 0.05, 0.02, 0x201820, 0.07, 0.2, 0.2, headG); }
-  else if (hat === "miner") { prism(0.36, 0.14, 0.36, 0xf0b428, 0, 0.36, 0, headG); const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.03), new THREE.MeshBasicMaterial({ color: 0xfff0b0 })); lamp.position.set(0, 0.38, 0.19); headG.add(lamp); }
-  else if (hat === "headset") { prism(0.32, 0.08, 0.32, spec.hair, 0, 0.35, 0, headG); prism(0.04, 0.1, 0.06, 0x30343e, -0.17, 0.18, 0, headG); }
-  else if (hat === "cap") prism(0.33, 0.08, 0.33, spec.accent || 0x4a5a3a, 0, 0.35, 0, headG);
-  if (hat === "none" || hat === "headset" || hat === "straw") prism(0.32, 0.1, 0.32, spec.hair, 0, 0.33, 0, headG);
-  if (spec.long) prism(0.32, 0.3, 0.06, spec.hair, 0, 0.14, -0.15, headG);
-  const arm = x => { const p = new THREE.Group(); p.position.set(x * b, 1.48 * s, 0); g.add(p); prism(0.14, 0.66 * s, 0.16, spec.tunic, 0, -0.3 * s, 0, p); prism(0.11, 0.1, 0.12, spec.skin, 0, -0.66 * s, 0, p); return p; };
-  const armL = arm(-0.33), armR = arm(0.33);
-  const P = spec.prop, hand = (geo, col, y, z, rx = 0) => { const m = new THREE.Mesh(geo, M(col)); m.position.set(0, y, z); m.rotation.x = rx; armR.add(m); return m; };
-  if (P === "fork") { hand(new THREE.BoxGeometry(0.04, 1.6, 0.04), 0x8a6a3a, -0.4, 0.1); hand(new THREE.BoxGeometry(0.18, 0.2, 0.02), 0xb8bcc4, 0.45, 0.1); }
-  if (P === "spear") { hand(new THREE.BoxGeometry(0.05, 2.3, 0.05), 0x6b4a2e, -0.2, 0.1); hand(new THREE.ConeGeometry(0.05, 0.22, 4), 0xc8d0dc, 1.02, 0.1); }
-  if (P === "hammer") { hand(new THREE.BoxGeometry(0.05, 0.5, 0.05), 0x7a5a30, -0.75, 0.1); hand(new THREE.BoxGeometry(0.18, 0.1, 0.1), 0x5a606a, -0.98, 0.1); }
-  if (P === "pick") { hand(new THREE.BoxGeometry(0.05, 0.8, 0.05), 0x7a5a30, -0.6, 0.12); hand(new THREE.BoxGeometry(0.5, 0.06, 0.06), 0xb0b6c0, -0.98, 0.12); }
-  if (P === "fish") hand(new THREE.BoxGeometry(0.08, 0.36, 0.14), 0x5ab0d0, -0.82, 0.08);
-  if (P === "pad") hand(new THREE.BoxGeometry(0.22, 0.28, 0.03), 0x2a3040, -0.66, 0.16, -0.9);
-  if (P === "pouch") hand(new THREE.BoxGeometry(0.18, 0.2, 0.14), 0x8a6a3a, -0.78, 0.04);
-  if (P === "crate") { const c = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 0.34), M(0xa8784a)); c.position.set(0.28, 1.0 * s, 0.12); g.add(c); }
-  return { g, legL, legR, armL, armR, headG, mats };
-}
+function figure(spec, lit = true) { return PBD.figure(spec, lit); }
 function rollSpec(people, role, seed) {
   const rn = rng(seed * 7919 + 13), pick = a => a[Math.floor(rn() * a.length) % a.length], P = PEOPLES[people], Ro = ROLES[role] || {};
   const tunic = pick(P.cloth);
@@ -500,140 +374,84 @@ const canvas = $("sq");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0e1424, 60, 150);
-const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 400);
-const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 200 }); scene.add(sun, sun.target);
+const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0e1424, 80, 200);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 500);
+const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 260 }); scene.add(sun, sun.target);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.2); scene.add(hemi);
 
-const LIGHTS = [], FLAMES = [], PANES = [], GEO = {}, MATS = {}, PLACES = {}, SOLIDS = [];
-const geo = key => GEO[key] || (GEO[key] = new Geo());
-const MATDEF = {
-  cobble: ["building/tex_stone.png", 0xffffff, 1.4], grass: ["building/tex_plaster.png", 0x4f7034, 2.5], plaster: ["building/tex_plaster.png", 0xffffff, 2],
-  plank: ["building/tex_plank.png", 0xffffff, 2], stone: ["building/tex_stone.png", 0xffffff, 1.6], thatch: ["building/tex_thatch.png", 0xffffff, 2],
-  brick: ["building/tex_brick.png", 0xffffff, 2], dark: [null, 0x2b2b2e, 1], cloth1: [null, 0xb03a30, 1], cloth2: [null, 0x3a7ab0, 1], cloth3: [null, 0xd8a830, 1],
-  metal: ["building/tex_metal.png", 0xffffff, 1.5], glass: ["building/tex_glass.png", 0xffffff, 1.5],
-};
-function addLight(x, y, z, kind) {
-  const K = { lamp: [0xffc878, 0.5, 7], window: [0xffb860, 0.28, 4], fire: [0xff8a3a, 0.9, 9.5], forge: [0xff7a30, 0.85, 8], kiosk: [0x9ae0ff, 0.35, 5.5] }[kind];
-  LIGHTS.push({ x, y, z, c: lin(K[0]), p: K[1], R: K[2], kind });
+const LIGHTS = [], FLAMES = [], PLACES = {}, SOLIDS = [];
+// The village, as the game builds it: assets/settlements/v1/village.json (copied byte for
+// byte to npcs/game/), cut the way towns.html cuts it, on hex columns with the terrain's tiles.
+const TPL = (() => { const x = new XMLHttpRequest(); x.open("GET", "npcs/game/village.json", false); x.send(); return JSON.parse(x.responseText); })();
+const OC = 24, OR = 17;   // the green's middle, at the origin
+const VIL = PBD.buildTown(TPL, { ox: PBD.W * (OC + 0.5 * PBD.par(OR)), oz: PBD.ROW * OR });
+const GS = VIL.GS, at = (c, r) => [VIL.cx(c, r), VIL.cz(c, r), VIL.TOP[VIL.idx(c, r)]];
+function cellOf(x, z) {
+  x += PBD.W * (OC + 0.5 * PBD.par(OR)); z += PBD.ROW * OR;
+  const qf = (Math.sqrt(3) / 3 * x - z / 3) / PBD.R, rf = (2 / 3 * z) / PBD.R, sf = -qf - rf;
+  let q = Math.round(qf), r = Math.round(rf); const s = Math.round(sf), dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s - sf);
+  if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
+  return PBD.toOff(q, r);
 }
-const lampMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), fireMat = new THREE.MeshBasicMaterial({ color: 0xffa040 }), cageMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2e, wireframe: true });
-function lantern(x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), lampMat); m.position.set(x, y, z); scene.add(m); const c = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.3), cageMat); c.position.copy(m.position); scene.add(c); addLight(x, y, z, "lamp"); }
-function postLamp(x, z) { geo("dark").cyl(x, 0, z, 0.06, 2.5, 6); geo("dark").box(x, 2.45, z, 0.5, 0.06, 0.08); lantern(x + 0.22, 2.2, z); SOLIDS.push({ x, z, r: 0.25 }); }
+const groundY = (x, z) => { const [c, r] = cellOf(x, z); return VIL.inMap(c, r) ? VIL.TOP[VIL.idx(c, r)] : 1; };
+const LK = { lamp: [0xffd27a, 1.6, 5.2], wall: [0xffc070, 1.3, 4.4], window: [0xffa850, 0.35, 2.0], fire: [0xff8a3a, 1.3, 6.0], forge: [0xff7a30, 1.2, 5.5], kiosk: [0x9ae0ff, 0.6, 3.5] };
+function addLight(x, y, z, kind) { const K = LK[kind]; LIGHTS.push({ x, y, z, c: lin(K[0]), p: K[1], R: K[2], kind }); }
+const lampMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), fireMat = new THREE.MeshBasicMaterial({ color: 0xffa040 });
+function glowBox(x, y, z, s) { const m = new THREE.Mesh(new THREE.BoxGeometry(s, s * 1.3, s), lampMat); m.position.set(x, y, z); scene.add(m); return m; }
 function fire(x, y, z, s, kind) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.4 * s, 0.5 * s, 0.4 * s), fireMat); m.position.set(x, y + 0.25 * s, z); scene.add(m); FLAMES.push({ m, ph: Math.random() * 6 }); addLight(x, y + 0.6, z, kind); }
-
-// ground: a cobbled square in a ring of grass, all on layer 0
-const CELLS = new Map();
-for (let q = -9; q <= 9; q++) for (let r = -9; r <= 9; r++) { const d = hexDist(q, r); if (d > 9) continue; CELLS.set(q + "," + r, { q, r, d }); }
-for (const c of CELLS.values()) {
-  const road = (c.r === 0 && c.q > 0) || (c.q === 0 && c.r < 0);
-  const top = c.d <= 3 || (road && c.d <= 9) ? "cobble" : "grass";
-  geo(top).hexTop(c.q, c.r, 0, -1);
-}
-// houses: cells, walls on every outside edge, doors toward the square
-const OCC = new Set();
-function house(cells, kit, name, opts = {}) {
-  const set = new Set(cells.map(([q, r]) => q + "," + r)); cells.forEach(([q, r]) => OCC.add(q + "," + r));
-  const H = opts.h || STOREY, T = kit.t;
-  // choose a door: the outside edge whose normal looks most at the target
-  const tx = opts.doorTo ? opts.doorTo[0] : 0, tz = opts.doorTo ? opts.doorTo[1] : 0;
-  let door = null, best = -2;
-  const edges = [];
-  for (const [q, r] of cells) for (let d = 0; d < 6; d++) {
-    const nq = q + DIRS[d][0], nr = r + DIRS[d][1]; if (set.has(nq + "," + nr)) continue;
-    const A = corner(q, r, d), B = corner(q, r, d + 1), mx = (A[0] + B[0]) / 2, mz = (A[1] + B[1]) / 2, a = d * Math.PI / 3, nx = Math.cos(a), nz = Math.sin(a);
-    const e = { q, r, d, A, B, mx, mz, nx, nz }; edges.push(e);
-    const l = Math.hypot(tx - mx, tz - mz) || 1, s = (nx * (tx - mx) + nz * (tz - mz)) / l; if (s > best) { best = s; door = e; }
+// the template's street lamps, and a wall lantern by every door, as the game's towns light theirs
+for (const L of VIL.lamps) { glowBox(L.x, L.y, L.z, 0.2); addLight(L.x, L.y - 0.05, L.z, "lamp"); }
+for (const d of VIL.doors) { const [x, y, z] = d.lamp; GS.box("iron", x - d.nx * 0.14, y + 0.25, z - d.nz * 0.14, 0.06, 0.06, 0.3, d.ang + Math.PI / 2); glowBox(x, y, z, 0.18); addLight(x + d.nx * 0.2, y, z + d.nz * 0.2, "wall"); }
+VIL.buildings.forEach((b, i) => { if (b.door) PLACES["door_" + (i < 8 ? "h" + (i + 1) : i === 8 ? "inn" : "b" + i)] = [b.door.x, b.door.z]; for (const [c, r] of b.cells) SOLIDS.push({ x: VIL.cx(c, r), z: VIL.cz(c, r), r: PBD.R * 0.98 }); });
+// windows: a pane in every opening; a lit one glows at night and lights a little round it
+const PANE = { lit: new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide }), dark: new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide }) };
+{ const G2 = { lit: new PBD.Geo(), dark: new PBD.Geo() };
+  for (const p of VIL.panes) {
+    const tx = Math.cos(p.ang), tz = Math.sin(p.ang), hw = p.w / 2, hh = p.h / 2, P = (a, b) => [p.x + tx * a, p.y + b, p.z + tz * a];
+    G2[p.lit ? "lit" : "dark"].face([P(-hw, -hh), P(hw, -hh), P(hw, hh), P(-hw, hh)], [p.nx, 0, p.nz]);
+    if (p.lit) addLight(p.x + p.nx * 0.6, p.y, p.z + p.nz * 0.6, "window");
   }
-  for (const e of edges) {
-    const ang = Math.atan2(e.B[1] - e.A[1], e.B[0] - e.A[0]), len = R + T * 0.58, ux = Math.cos(ang), uz = Math.sin(ang), w = kit.wall;
-    const isDoor = e === door, win = !isDoor && hash2(e.q * 7 + e.d, e.r * 13 + 5) < 0.75;
-    const seg = (o, wl, y0, y1) => geo(w).box(e.mx + ux * o, y0, e.mz + uz * o, wl, y1 - y0, T, ang);
-    if (isDoor) {
-      const side = (len - 1.0) / 2; seg(-(0.5 + side / 2), side, 0, H); seg(0.5 + side / 2, side, 0, H); seg(0, 1.0, 2.2, H);
-      geo("plank").box(e.mx - e.nx * 0.05, 0, e.mz - e.nz * 0.05, 1.0, 2.2, 0.08, ang);
-      const lx = e.mx + e.nx * (T / 2 + 0.25) + ux * 0.75, lz = e.mz + e.nz * (T / 2 + 0.25) + uz * 0.75;
-      geo("dark").box(lx - e.nx * 0.12, 2.55, lz - e.nz * 0.12, 0.06, 0.06, 0.3, ang);
-      lantern(lx, 2.4, lz);
-      PLACES["door_" + name] = [e.mx + e.nx * 1.0, e.mz + e.nz * 1.0];
-    } else if (win) {
-      const side = (len - 0.8) / 2; seg(-(0.4 + side / 2), side, 0, H); seg(0.4 + side / 2, side, 0, H); seg(0, 0.8, 0, 1); seg(0, 0.8, 2, H);
-      const lit = hash2(e.q * 31 + e.d * 3, e.r * 17) < (opts.lit ?? 0.6);
-      const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.0), new THREE.MeshBasicMaterial({ color: 0x1a1a22 }));
-      pane.position.set(e.mx, 1.5, e.mz); pane.rotation.y = -Math.atan2(e.nz, e.nx) + Math.PI / 2; scene.add(pane);
-      PANES.push({ m: pane, lit, b: 0.55 + 0.45 * hash2(e.q, e.d * 9 + e.r) });
-      if (lit) addLight(e.mx + e.nx * 0.5, 1.5, e.mz + e.nz * 0.5, "window");
-      geo("plank").box(e.mx + e.nx * (T / 2 + 0.05), 0.92, e.mz + e.nz * (T / 2 + 0.05), 0.95, 0.08, 0.14, ang);
-    } else seg(0, len, 0, H);
-  }
-  // roof: a gable along x over the footprint's bounding box (towns.html's rule)
-  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
-  for (const [q, r] of cells) for (let k = 0; k < 6; k++) { const [x, z] = corner(q, r, k); x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
-  const e = 0.45; x0 -= e; x1 += e; z0 -= e; z1 += e;
-  geo(kit.wall).box((x0 + x1) / 2, H, (z0 + z1) / 2, x1 - x0 - 0.9, 0.12, z1 - z0 - 0.9);
-  const alongX = x1 - x0 >= z1 - z0, half = alongX ? (z1 - z0) / 2 : (x1 - x0) / 2, top = H + half * (kit.pitch || 1), g = geo(kit.roof), y = H - 0.15;
-  if (alongX) {
-    const zm = (z0 + z1) / 2;
-    g.quad([x0, y, z0], [x1, y, z0], [x1, top, zm], [x0, top, zm], [0, 1, -1]); g.quad([x0, y, z1], [x0, top, zm], [x1, top, zm], [x1, y, z1], [0, 1, 1]);
-    geo(kit.wall).tri([x0 + 0.45, H, z0 + 0.45], [x0 + 0.45, H, z1 - 0.45], [x0 + 0.45, top - 0.3, zm], [-1, 0, 0]); geo(kit.wall).tri([x1 - 0.45, H, z0 + 0.45], [x1 - 0.45, H, z1 - 0.45], [x1 - 0.45, top - 0.3, zm], [1, 0, 0]);
-  } else {
-    const xm = (x0 + x1) / 2;
-    g.quad([x0, y, z0], [xm, top, z0], [xm, top, z1], [x0, y, z1], [-1, 1, 0]); g.quad([x1, y, z0], [x1, y, z1], [xm, top, z1], [xm, top, z0], [1, 1, 0]);
-    geo(kit.wall).tri([x0 + 0.45, H, z0 + 0.45], [x1 - 0.45, H, z0 + 0.45], [xm, top - 0.3, z0 + 0.45], [0, 0, -1]); geo(kit.wall).tri([x0 + 0.45, H, z1 - 0.45], [x1 - 0.45, H, z1 - 0.45], [xm, top - 0.3, z1 - 0.45], [0, 0, 1]);
-  }
-  if (opts.chimney) { geo("brick").box(x1 - 1.6, H, (z0 + z1) / 2 + 0.6, 0.6, half + 1.4, 0.6); }
-  for (const [q, r] of cells) SOLIDS.push({ x: hx(q, r), z: hz(q, r), r: R * 0.98 });
+  for (const k of ["lit", "dark"]) scene.add(new THREE.Mesh(G2[k].build(), PANE[k])); }
+// The square's dressing, mockup-only but cut from the game's materials: stalls, the well, a
+// brazier, the forge in the smithy yard, the starport kiosk, lamp posts round the green.
+function stall(c, r, cloth, ang, name) {
+  const [x, z, y] = at(c, r), ux = Math.cos(ang), uz = Math.sin(ang);
+  for (const [a, b] of [[-1, -0.6], [1, -0.6], [-1, 0.6], [1, 0.6]]) GS.box("timber", x + ux * a - uz * b, y, z + uz * a + ux * b, 0.1, 2.3, 0.1, ang);
+  GS.box("plank", x, y + 0.85, z, 2.2, 0.1, 1.2, ang); GS.box(cloth, x, y + 2.3, z, 2.5, 0.08, 1.6, ang); GS.box("thatch", x + uz * 0.1, y + 0.95, z - ux * 0.1, 1.6, 0.25, 0.6, ang);
+  SOLIDS.push({ x, z, r: 1.1 }); PLACES[name] = [x - uz * 1.4, z + ux * 1.4];
 }
-const KITS = { timber: { wall: "plank", roof: "thatch", t: 0.25 }, plaster: { wall: "plaster", roof: "thatch", t: 0.3 }, stone: { wall: "stone", roof: "plank", t: 0.5 }, brick: { wall: "brick", roof: "thatch", t: 0.4 } };
-house([[-1, -5], [0, -5], [1, -5]], KITS.brick, "inn", { lit: 0.9, chimney: true });
-house([[3, -5], [4, -5]], KITS.plaster, "h1", { doorTo: [hx(3, -3), hz(3, -3)] });
-house([[5, -2], [6, -2]], KITS.timber, "h2");
-house([[5, 2], [5, 3]], KITS.stone, "h3");
-house([[1, 4], [1, 5]], KITS.plaster, "h4");
-house([[-4, 5], [-3, 5]], KITS.timber, "h5", { lit: 0.7 });
-house([[-6, 2], [-6, 3]], KITS.brick, "h6");
-house([[-5, -1], [-6, -1]], KITS.stone, "h7");
-house([[-3, -3], [-4, -3]], KITS.plaster, "h8", { doorTo: [0, 0] });
-// the forge: an open shed of posts, a stone hearth
-{ const fq = 3, fr = 1, x = hx(fq, fr) + 1.2, z = hz(fq, fr) + 1.0;
-  for (const [ox, oz] of [[-1.8, -1.2], [1.8, -1.2], [-1.8, 1.2], [1.8, 1.2]]) geo("plank").cyl(x + ox, 0, z + oz, 0.1, 2.6, 6);
-  geo("plank").box(x, 2.6, z, 4.2, 0.12, 3.0); geo("thatch").box(x, 2.72, z, 4.4, 0.25, 3.2);
-  geo("stone").box(x + 1.0, 0, z, 1.2, 0.9, 1.2); fire(x + 1.0, 0.9, z, 0.7, "forge"); geo("dark").box(x - 0.3, 0, z + 0.2, 0.7, 0.75, 0.35);
-  PLACES.forge = [x - 0.2, z - 0.6]; SOLIDS.push({ x: x + 1.0, z, r: 0.85 }); }
-// market stalls
-function stall(x, z, cloth, ang) {
-  const ux = Math.cos(ang), uz = Math.sin(ang);
-  for (const [a, b] of [[-1, -0.6], [1, -0.6], [-1, 0.6], [1, 0.6]]) geo("plank").cyl(x + ux * a - uz * b, 0, z + uz * a + ux * b, 0.05, 2.3, 5);
-  geo("plank").box(x, 0.85, z, 2.2, 0.1, 1.2, ang); geo(cloth).box(x, 2.3, z, 2.5, 0.08, 1.6, ang); geo("thatch").box(x + uz * 0.1, 0.95, z - ux * 0.1, 1.6, 0.25, 0.6, ang);
-  SOLIDS.push({ x, z, r: 1.1 });
-}
-stall(hx(-2, 2), hz(-2, 2), "cloth1", 0.5); PLACES.stall1 = [hx(-2, 2) + 0.5, hz(-2, 2) - 1.4];
-stall(hx(2, -2) - 0.6, hz(2, -2), "cloth3", -0.3); PLACES.stall2 = [hx(2, -2) - 0.9, hz(2, -2) + 1.4];
-stall(hx(-3, 0), hz(-3, 0), "cloth2", 1.6); PLACES.stall3 = [hx(-3, 0) + 1.5, hz(-3, 0) + 0.2];
-// the well and the brazier
-geo("stone").cyl(0, 0, 0, 1.0, 0.8, 6); geo("dark").cyl(0, 0.75, 0, 0.75, 0.06, 6); for (const s of [-1, 1]) geo("plank").box(s * 0.85, 0, 0, 0.12, 2.2, 0.12); geo("thatch").box(0, 2.2, 0, 2.2, 0.18, 1.4);
-SOLIDS.push({ x: 0, z: 0, r: 1.3 }); PLACES.well = [1.6, 1.4]; PLACES.alley = [hx(-4, -2) + 0.6, hz(-4, -2) + 1.6];
-{ const bx = hx(1, 1) + 0.6, bz = hz(1, 1); geo("dark").cyl(bx, 0, bz, 0.45, 0.9, 6, 0.25); fire(bx, 0.9, bz, 0.9, "fire"); SOLIDS.push({ x: bx, z: bz, r: 0.6 }); PLACES.brazier = [bx, bz]; }
-// lantern posts round the square
-for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.PI / 6; postLamp(Math.cos(a) * 9.4, Math.sin(a) * 9.4); }
-postLamp(hx(7, 0), hz(7, 0) + 1.6); postLamp(hx(0, -7) + 1.6, hz(0, -7));
-// the starport kiosk: a metal booth with a blue screen
-{ const kx = hx(4, 0) + 0.4, kz = hz(4, 0) + 1.6; geo("metal").box(kx, 0, kz, 1.6, 2.4, 1.2); geo("metal").box(kx, 2.4, kz, 2.0, 0.12, 1.6);
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), new THREE.MeshBasicMaterial({ color: 0x7ad8f0 })); scr.position.set(kx, 1.5, kz - 0.61); scr.rotation.y = Math.PI; scene.add(scr);
-  addLight(kx, 1.5, kz - 1.2, "kiosk"); PLACES.kiosk = [kx, kz - 1.3]; SOLIDS.push({ x: kx, z: kz, r: 1.0 }); }
-// inn tables outside, the beer garden
+stall(21, 14, "cloth", 0, "stall1"); stall(27, 14, "cloth2", 0, "stall2"); stall(22, 13, "cloth", 0, "stall3");
+{ const [x, z, y] = at(27, 20), p = []; for (let k = 0; k < 6; k++) { const a = (60 * k - 30) * Math.PI / 180; p.push([x + Math.cos(a), z + Math.sin(a)]); }
+  GS.prism("stone", "stone", p, y, y + 0.8); for (const s of [-1, 1]) GS.box("timber", x + s * 0.85, y, z, 0.12, 2.2, 0.12); GS.box("thatch", x, y + 2.2, z, 2.2, 0.18, 1.4);
+  SOLIDS.push({ x, z, r: 1.3 }); PLACES.well = [x - 1.6, z - 1.2]; }
+{ const [x, z, y] = at(25, 16); GS.box("iron", x, y, z, 0.7, 0.9, 0.7); fire(x, y + 0.9, z, 0.9, "fire"); SOLIDS.push({ x, z, r: 0.6 }); PLACES.brazier = [x + 1.0, z - 0.6]; }
+{ const [x, z, y] = at(27, 22);
+  for (const [ox, oz] of [[-1.8, -1.2], [1.8, -1.2], [-1.8, 1.2], [1.8, 1.2]]) GS.box("timber", x + ox, y, z + oz, 0.18, 2.6, 0.18);
+  GS.box("plank", x, y + 2.6, z, 4.2, 0.12, 3.0); GS.box("thatch", x, y + 2.72, z, 4.4, 0.25, 3.2);
+  GS.box("stone", x + 1.0, y, z, 1.2, 0.9, 1.2); fire(x + 1.0, y + 0.9, z, 0.7, "forge"); GS.box("iron", x - 0.3, y, z + 0.2, 0.7, 0.75, 0.35);
+  PLACES.forge = [x - 0.2, z - 0.9]; SOLIDS.push({ x: x + 1.0, z, r: 0.85 }); }
+{ const [x, z, y] = at(28, 18); GS.box("metal", x, y, z, 1.6, 2.4, 1.2); GS.box("metal", x, y + 2.4, z, 2.0, 0.12, 1.6);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), new THREE.MeshBasicMaterial({ color: 0x7ad8f0 })); scr.position.set(x, y + 1.5, z - 0.61); scr.rotation.y = Math.PI; scene.add(scr);
+  addLight(x, y + 1.5, z - 1.2, "kiosk"); PLACES.kiosk = [x, z - 1.4]; SOLIDS.push({ x, z, r: 1.0 }); }
+for (const [c, r] of [[20, 13], [28, 13], [20, 21], [28, 21]]) { const [x, z, y] = at(c, r); PBD.lampPost(GS, x, y, z); glowBox(x + 0.45, y + 2.25, z, 0.2); addLight(x + 0.45, y + 2.2, z, "lamp"); SOLIDS.push({ x, z, r: 0.3 }); }
 const SEATS = [];
-{ const [dx, dz] = PLACES.door_inn; for (let k = -1; k <= 1; k++) { const x = dx + k * 2.4, z = dz + 2.2; geo("plank").box(x, 0.72, z, 1.4, 0.08, 0.8); geo("plank").box(x, 0, z, 0.1, 0.72, 0.6); SOLIDS.push({ x, z, r: 0.6 }); SEATS.push([x - 0.9, z], [x + 0.9, z]); } }
-PLACES.east = [hx(9, 0), hz(9, 0)]; PLACES.north = [hx(0, -9), hz(0, -9)];
-PLACES.gateA = [hx(6, 0), hz(6, 0) - 0.6]; PLACES.gateB = [hx(0, -6) - 0.4, hz(0, -6)];
-// a few oaks outside the ring
-for (const [q, r] of [[8, -4], [-8, 3], [3, 6], [-2, -8], [7, 1], [-7, -1]]) { const x = hx(q, r), z = hz(q, r); geo("plank").cyl(x, 0, z, 0.25, 2.6, 6); geo("grass").cyl(x, 2.2, z, 1.6, 2.4, 6, 0.6); }
-
-for (const [k, g] of Object.entries(GEO)) {
-  const [t, col, rep] = MATDEF[k], bg = g.build(rep); bake(bg, LIGHTS);
-  const mesh = new THREE.Mesh(bg, litMat(t, col, k === "thatch" || k.startsWith("cloth") ? { side: THREE.DoubleSide } : {})); mesh.castShadow = k !== "cobble" && k !== "grass"; mesh.receiveShadow = true; scene.add(mesh);
+{ const d = VIL.buildings[8].door; for (let k = -1; k <= 1; k++) { const x = d.x + d.nx * 1.4 + Math.cos(d.ang) * k * 2.4, z = d.z + d.nz * 1.4 + Math.sin(d.ang) * k * 2.4, y = groundY(x, z); GS.box("plank", x, y + 0.72, z, 1.4, 0.08, 0.8, d.ang); GS.box("timber", x, y, z, 0.1, 0.72, 0.6, d.ang); SOLIDS.push({ x, z, r: 0.6 }); SEATS.push([x - Math.cos(d.ang) * 0.9, z - Math.sin(d.ang) * 0.9], [x + Math.cos(d.ang) * 0.9, z + Math.sin(d.ang) * 0.9]); } }
+{ const p = (c, r) => at(c, r).slice(0, 2); PLACES.east = p(46, 17); PLACES.north = p(24, 4); PLACES.gateA = p(38, 17); PLACES.gateB = p(24, 10); PLACES.alley = p(13, 16); }
+// the game's trees on the fields round the village (planet_surface.wgsl's, one to a cell)
+for (let r = 0; r < VIL.NR; r++) for (let c = 0; c < VIL.NC; c++) {
+  const i = VIL.idx(c, r); if (VIL.MAT[i] !== "grass" || VIL.AREA[i] !== "Fields" || PBD.hash2(c * 3 + 1, r * 5 + 2) > 0.09) continue;
+  let clear = true; for (let d = 0; d < 6; d++) { const [c2, r2] = PBD.nb(c, r, d); if (VIL.inMap(c2, r2) && (VIL.BLD[VIL.idx(c2, r2)] >= 0 || VIL.MAT[VIL.idx(c2, r2)] !== "grass" || VIL.AREA[VIL.idx(c2, r2)] !== "Fields")) clear = false; }
+  if (!clear) continue;
+  PBD.tree(GS, VIL.hexPts(c, r), VIL.cx(c, r), VIL.cz(c, r), VIL.TOP[i], c * 97 + r, "a:bark", "a:leaves");
+  SOLIDS.push({ x: VIL.cx(c, r), z: VIL.cz(c, r), r: 0.5 });
 }
+PBD.REP.cloth = 2.5; PBD.REP.cloth2 = 2.5; PBD.REP.metal = 1.5;
+PBD.addMeshes(GS, scene, { mat: k => k === "metal" ? (PBD._metal || (PBD._metal = PBD.litMaterial(PBD.tex("building/tex_metal.png?v=2")))) : PBD.mat(k), cast: k => k !== "a:grass" && k !== "a:path" });
+// the pond
+if (VIL.water) { const g = new PBD.Geo(); for (const [c, r] of VIL.water) g.face(VIL.hexPts(c, r).map(p => [p[0], 0.82, p[1]]), [0, 1, 0]); scene.add(new THREE.Mesh(g.build(), PBD.litMaterial(null, 0x2f5f8a, { transparent: true, opacity: 0.82 }))); }
+PBD.setLights(LIGHTS);
+const U = { lamp: PBD.LU.uLamp };
 // sky dome stars at night
 const stars = (() => { const n = 600, p = new Float32Array(n * 3), rn = rng(5); for (let i = 0; i < n; i++) { const a = rn() * 6.283, e = 0.08 + rn() * 1.4; p[3 * i] = Math.cos(a) * Math.cos(e) * 300; p[3 * i + 1] = Math.sin(e) * 300; p[3 * i + 2] = Math.sin(a) * Math.cos(e) * 300; } const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(p, 3)); const m = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.2, sizeAttenuation: false, fog: false, transparent: true })); scene.add(m); return m; })();
 
@@ -658,11 +476,11 @@ function workPlace(n) {
 function target(n, a) {
   if (a === "sleep") return { p: PLACES["door_" + n.home], hide: true, label: "Asleep at home" };
   if (a === "away") { const p = n.role === "fisher" ? PLACES.north : PLACES.east; return { p, hide: true, label: { farmer: "In the fields", fisher: "At sea", miner: "Down the hill mine", smuggler: "Out of town" }[n.role] || "Away" }; }
-  if (a === "inn") return { p: n.seat, label: "At The Lantern" };
+  if (a === "inn") return { p: n.seat, label: "At The Plough" };
   if (a === "patrol") return { p: n.i === 3 ? PLACES.gateA : PLACES.gateB, patrol: n.i === 3 ? [PLACES.gateA, PLACES.brazier] : [PLACES.gateB, PLACES.well], label: "On patrol" };
   if (a === "idle") return { p: PLACES.well, label: "Idling by the well" };
   if (a === "lurk") return { p: PLACES.alley, label: "Lurking in the alley" };
-  const w = workPlace(n); return { p: PLACES[w], work: true, label: { stall1: "Selling at the stall", stall2: "Selling at the stall", stall3: "Selling at the stall", forge: "Hammering at the forge", kiosk: "At the starport kiosk", door_inn: "Serving at The Lantern" }[w] || "Working" };
+  const w = workPlace(n); return { p: PLACES[w], work: true, label: { stall1: "Selling at the stall", stall2: "Selling at the stall", stall3: "Selling at the stall", forge: "Hammering at the forge", kiosk: "At the starport kiosk", door_inn: "Serving at The Plough" }[w] || "Working" };
 }
 const STATE = { hour: 22.5, play: false, hover: null, sel: null };
 function placeAll(snap) {
@@ -689,16 +507,14 @@ function stepNpc(n, dt, T) {
   else n.vis = Math.min(1, n.vis + dt * 2);
   // slide round solids (houses, stalls, the well), as the walker does
   for (const s of SOLIDS) { const ox = n.x - s.x, oz = n.z - s.z, l = Math.hypot(ox, oz), m = s.r + 0.28; if (l < m && l > 1e-4 && d > 0.3) { n.x = s.x + ox / l * m; n.z = s.z + oz / l * m; } }
-  const f = n.f; f.g.position.set(n.x, 0, n.z); f.g.rotation.y = n.face; f.g.visible = n.vis > 0.02; f.g.scale.setScalar(0.4 + 0.6 * n.vis);
+  const f = n.f; f.g.position.set(n.x, groundY(n.x, n.z), n.z); f.g.rotation.y = n.face; f.g.visible = n.vis > 0.02; f.g.scale.setScalar(0.4 + 0.6 * n.vis);
   const sw = walking ? Math.sin(T * 7 + n.phase) * 0.6 : 0;
   f.legL.rotation.x = sw; f.legR.rotation.x = -sw; f.armL.rotation.x = -sw * 0.8;
   if (!walking && t.work) f.armR.rotation.x = -1.2 + Math.abs(Math.sin(T * (n.role === "smith" ? 5 : 2) + n.phase)) * (n.role === "smith" ? 1.4 : 0.5);
   else if (!walking && n.act === "inn") f.armR.rotation.x = -0.4 - 0.6 * Math.max(0, Math.sin(T * 0.7 + n.phase * 3));
   else f.armR.rotation.x = sw * 0.8;
   if (!walking) { f.headG.rotation.y = Math.sin(T * 0.4 + n.phase) * 0.5; if (!t.work && !t.patrol) n.face += (Math.atan2(-n.x, -n.z) - n.face) * 0; } else f.headG.rotation.y = 0;
-  // lit like everything else that moves: sample the lights at the body
-  sampleAt(n.x, 1.2, n.z, LIGHTS, tmpC).multiplyScalar(U.lamp.value);
-  for (const m of f.mats) m.emissive.setRGB(m.userData.base.r * tmpC.r, m.userData.base.g * tmpC.g, m.userData.base.b * tmpC.b);
+  // lit like everything else: the block light reaches the figure per pixel (scene-kit.js)
 }
 
 // ---- time of day ----------------------------------------------------------
@@ -710,12 +526,12 @@ function setHour(h) {
   cA.set(0x0e1424).lerp(new THREE.Color(0x9fc6e2), day).lerp(new THREE.Color(0xe0a27a), dusk * 0.55);
   scene.background = cA.clone(); scene.fog.color.copy(cA);
   sun.position.copy(sunDir).multiplyScalar(80); sun.target.position.set(0, 0, 0);
-  if (el > 0) { sun.color.setHSL(0.09 - 0.03 * dusk, 0.5 + 0.4 * dusk, 0.85 - 0.15 * dusk); sun.intensity = 2.4 * clamp(el * 3, 0, 1); } else { sun.color.set(0x8fa6d8); sun.intensity = 0.16; }
-  hemi.intensity = 0.13 + 0.7 * day; hemi.color.copy(cA).lerp(new THREE.Color(0xffffff), 0.35); hemi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
+  if (el > 0) { sun.color.setHSL(0.09 - 0.03 * dusk, 0.5 + 0.4 * dusk, 0.85 - 0.15 * dusk); sun.intensity = 1.8 * clamp(el * 3, 0, 1); } else { sun.color.set(0x8fa6d8); sun.intensity = 0.035; }
+  hemi.intensity = 0.008 + 0.57 * day; hemi.color.copy(cA).lerp(new THREE.Color(0xffffff), 0.35); hemi.groundColor.set(day > 0.5 ? 0x5a5040 : 0x1a1a22);
   const night = 1 - day; STATE.night = night;
   U.lamp.value = 0.85 * clamp((night - 0.25) / 0.35, 0, 1);
   lampMat.color.set(night > 0.3 ? 0xffd9a0 : 0x6a655a);
-  for (const p of PANES) p.m.material.color.setRGB(...(p.lit && night > 0.3 ? [1.0 * p.b, 0.78 * p.b, 0.42 * p.b] : [0.1, 0.11, 0.14]));
+  PANE.lit.color.setRGB(...(night > 0.3 ? [1.0, 0.72, 0.36] : [0.1, 0.11, 0.14]));
   stars.material.opacity = clamp(night * 1.2 - 0.2, 0, 1);
   const hh = Math.floor(STATE.hour), mm = Math.floor((STATE.hour % 1) * 60);
   $("clock").textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
@@ -725,7 +541,7 @@ function setHour(h) {
 }
 
 // ---- camera: orbit ----------------------------------------------------------
-const ORB = { tx: 0, ty: 1.2, tz: 1, dist: 23, yaw: 0.9, pitch: 0.5 };
+const ORB = { tx: 1, ty: 1.5, tz: 1, dist: 27, yaw: 0.6, pitch: 0.58 };
 function placeCam() { const cp = Math.cos(ORB.pitch); camera.position.set(ORB.tx + Math.sin(ORB.yaw) * cp * ORB.dist, ORB.ty + Math.sin(ORB.pitch) * ORB.dist, ORB.tz + Math.cos(ORB.yaw) * cp * ORB.dist); camera.lookAt(ORB.tx, ORB.ty, ORB.tz); }
 function orbitControls(el, orb, onClick) {
   const pts = new Map(); let moved = 0, pinch = 0;
@@ -756,7 +572,7 @@ function showCard(n) {
   $("cImg").src = "npcs/" + R0.img + ".png"; $("cImg").alt = "Portrait of " + n.name;
   $("cName").textContent = n.name; $("cMeta").textContent = R0.label + " \u00b7 Fields folk of Tenebris";
   $("cNow").textContent = n.t.label; $("cNext").textContent = next ? (ACT[next[1]][0] + " at " + fmt(next[0] + n.shift)) : "-";
-  $("cHome").textContent = n.home === "inn" ? "Rooms above The Lantern" : "House " + n.home.slice(1) + " on the square"; $("cRel").style.width = n.rel + "%";
+  $("cHome").textContent = n.home === "inn" ? "Rooms above The Plough" : "House " + n.home.slice(1) + " on the square"; $("cRel").style.width = n.rel + "%";
 }
 function toast(t) { const el = $("toast"); el.textContent = t; el.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.opacity = 0, 2600); }
 
@@ -774,6 +590,7 @@ function frame(now) {
   if (STATE.play) setHour(STATE.hour + dt / 3);
   for (const n of NPCS) stepNpc(n, dt, T);
   for (const f of FLAMES) f.m.scale.set(1, 0.8 + 0.3 * Math.sin(T * 9 + f.ph) * Math.sin(T * 5.3 + f.ph * 2), 1);
+  if (FOCUS) { ORB.tx = FOCUS.x; ORB.tz = FOCUS.z; ORB.ty = groundY(FOCUS.x, FOCUS.z) + 1.2; }
   placeCam(); renderer.render(scene, camera); requestAnimationFrame(frame);
 }
 
@@ -808,7 +625,7 @@ function lineup() {
   for (const o of LU) ls.remove(o); LU = [];
   LU_PEOPLES.forEach((p, gi) => LU_ROLES[p].forEach((role, k) => {
     const spec = rollSpec(p, role, townSeed * 1000 + gi * 10 + k); if (role === "inn") spec.prop = "none";
-    const f = figure(spec); f.g.position.set((gi - 2.5) * 3.2 + (k - 1.5) * 0.72, 0, (k % 2) * 0.5); f.g.rotation.y = (k - 1.5) * 0.2; ls.add(f.g); LU.push(f.g);
+    const f = figure(spec, false); f.g.position.set((gi - 2.5) * 3.2 + (k - 1.5) * 0.72, 0, (k % 2) * 0.5); f.g.rotation.y = (k - 1.5) * 0.2; ls.add(f.g); LU.push(f.g);
   }));
   $("luLabels").innerHTML = LU_PEOPLES.map(p => `<span>${PEOPLES[p].name}</span>`).join("");
 }
@@ -819,7 +636,10 @@ function luResize() { const w = lu.clientWidth, h = lu.clientHeight; lr.setSize(
 addEventListener("resize", luResize);
 function luFrame(now) { if (spin) LU.forEach((g, i) => g.rotation.y += 0.008); lr.render(ls, lc); requestAnimationFrame(luFrame); }
 
-resize(); setHour(22.5); placeAll(true); STATE.sel = NPCS[1]; showCard(NPCS[1]); requestAnimationFrame(frame);
+const Q = new URLSearchParams(location.search);
+resize(); setHour(Q.has("hour") ? +Q.get("hour") : 22.5); placeAll(true);
+for (const k of ["dist", "yaw", "pitch", "tx", "tz"]) if (Q.has(k)) ORB[k] = +Q.get(k);
+const FOCUS = Q.has("focus") ? NPCS[+Q.get("focus")] : null; STATE.sel = NPCS[1]; showCard(NPCS[1]); requestAnimationFrame(frame);
 lineup(); luResize(); requestAnimationFrame(luFrame);
 window.__npcs = { NPCS, LIGHTS, setHour, scene };
 </script>

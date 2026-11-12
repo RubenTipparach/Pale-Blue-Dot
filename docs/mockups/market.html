@@ -1,7 +1,8 @@
+<meta charset="utf-8">
 <title>Exchange Terminal</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500;700&family=Fira+Sans:wght@400;500;600&display=swap">
 <style>
 /* Layout: a trading terminal. Status strip, then the station's board beside the chart, then shares, the cross-station board, contracts and the news wire. */
 :root{
@@ -67,6 +68,7 @@ table.t{border-collapse:collapse;width:100%;font-size:13.5px}
 .t tr.sel td{background:rgba(57,135,229,.10)}
 .t tr.click{cursor:pointer}
 .t img{width:28px;height:28px;vertical-align:middle}
+img{image-rendering:pixelated}
 .chg{font-family:var(--mono);font-size:12.5px}
 .acts{display:flex;gap:4px}
 .chart svg{display:block;width:100%;height:auto}
@@ -87,8 +89,8 @@ table.t{border-collapse:collapse;width:100%;font-size:13.5px}
 .news div.ev{border-left-color:var(--amber)}
 .news .when{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-right:8px}
 .con{display:grid;gap:8px}
-.con article{border:1px solid var(--line);border-radius:5px;padding:9px 10px;display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center;background:var(--raise);min-width:0}
-.con article img{width:36px;height:36px}
+.con article{border:1px solid var(--line);border-radius:5px;padding:9px 10px;display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;background:var(--raise);min-width:0}
+.con article img{width:56px;height:56px}
 .con .who{font-size:12px;color:var(--muted)}
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--raise);border:1px solid var(--amber);border-radius:5px;padding:7px 14px;font-family:var(--display);letter-spacing:.05em;font-size:15px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9}
 .q{display:grid;gap:10px}
@@ -98,6 +100,40 @@ table.t{border-collapse:collapse;width:100%;font-size:13.5px}
 .notes .box p{font-size:13.5px}
 footer{font-size:12.5px;color:var(--muted)}
 @media (prefers-reduced-motion: reduce){.toast{transition:none}}
+
+/* ---- The game's HUD look (crates/pbd-app/src/desktop/{menu,pack,slots}.rs): square panels of PANEL_FILL edged in EDGE,
+   mint headings, monospace labels (the game draws its UI in Fira Mono), slots for pixel icons shown at whole-number scales. */
+:root{
+  --ground:#070b0e;
+  --panel:rgba(5,15,20,.94);          /* PANEL_FILL 0.02,0.06,0.08,0.94 */
+  --panel-solid:#050f14;
+  --raise:rgba(15,33,38,.9);          /* button idle 0.06,0.13,0.15,0.9 */
+  --hover:rgba(28,56,61,.95);         /* button hovered 0.11,0.22,0.24,0.95 */
+  --line:rgba(140,191,189,.6);        /* EDGE 0.55,0.75,0.74,0.6 */
+  --slot-edge:rgba(140,191,189,.5);   /* an idle slot's border */
+  --slot-fill:rgba(5,15,20,.72);      /* an idle slot's fill */
+  --ink:#e0f0e8;                      /* INK 0.88,0.94,0.91 */
+  --muted:#99b8b8;                    /* DIM 0.6,0.72,0.72 */
+  --mint:#7accc4;                     /* MINT 0.48,0.8,0.77 */
+  --display:"Fira Mono",ui-monospace,Menlo,monospace;
+  --mono:"Fira Mono",ui-monospace,Menlo,monospace;
+  --body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*,*::before,*::after{border-radius:0 !important}
+h1,h2,h3,.eyebrow{font-family:var(--display);letter-spacing:.02em}
+h1{font-weight:500} h2,h3{font-weight:500;color:var(--mint);text-transform:uppercase}
+.b{font-family:var(--mono) !important;text-transform:uppercase;letter-spacing:.04em !important;background:var(--raise) !important;border:1px solid var(--line) !important}
+.b:hover{background:var(--hover) !important}
+.b[aria-pressed="true"]{border-color:#fad973 !important;color:#fad973 !important}
+img{image-rendering:pixelated}
+.b.main{background:rgba(250,217,115,.14) !important;color:#fad973 !important;border-color:#fad973 !important;font-weight:600}
+.b.main:hover{background:rgba(250,217,115,.26) !important}
+.b[disabled]{opacity:1 !important;color:var(--muted) !important;background:transparent !important;border:1px dashed var(--slot-edge) !important}
+
+.strip,.box,.con article,.q article{background:var(--panel) !important;border-color:var(--line) !important}
+.t img,.con article img{background:var(--slot-fill);outline:1px solid var(--slot-edge);outline-offset:0}
+.t th{font-family:var(--mono) !important;color:var(--mint) !important}
+select{background:var(--raise) !important;border:1px solid var(--line) !important;font-family:var(--mono)}
 </style>
 
 <div class="strip" aria-label="Status">
@@ -121,7 +157,7 @@ footer{font-size:12.5px;color:var(--muted)}
     <span class="eyebrow">Pale Blue Dot, a design for trading</span>
     <h1>The exchange terminal</h1>
     <p>Every station keeps its own stock of eight goods, and its prices follow that stock: what it makes piles up and gets cheap, what it eats runs short and gets dear. NPC haulers move goods toward the price gaps, and events (a mine collapse, a blight, a navy exercise) push them apart again. Five companies are listed; their shares follow the goods they live on. The market below is running: buy here, dock somewhere else, sell.</p>
-    <p class="muted" style="font-size:13px"><span class="tag">Proposal, not built</span> &nbsp;Nothing here is in the engine. Travel is instant in this mockup, so arbitrage is easier than it will be. Icons and company marks are painted by code in the owner's friend's hand-drawn style (<code>tools/art/market_art.py</code>), not by the friend.</p>
+    <p class="muted" style="font-size:13px"><span class="tag">Proposal, not built</span> &nbsp;Nothing here is in the engine. Travel is instant in this mockup, so arbitrage is easier than it will be. Icons and company marks are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/market_art.py</code>): 28 x 28 sprites shown at 1x and 2x, nearest neighbour.</p>
   </section>
 
   <div class="grid2">
@@ -355,7 +391,7 @@ function lineChart(svgId, wrapId, series, opts) {
   const X = i => L + (W - L - R) * i / (n - 1), Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
   let g = "";
   for (let v = lo; v <= hi + 1e-9; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" font-family="JetBrains Mono" font-size="10.5" fill="var(--muted)">${opts.fmt(v)}</text>`;
-  for (const t of opts.ticks) g += `<text x="${X(t.i)}" y="${H - 8}" text-anchor="middle" font-family="Barlow" font-size="11" fill="var(--muted)">${t.s}</text>`;
+  for (const t of opts.ticks) g += `<text x="${X(t.i)}" y="${H - 8}" text-anchor="middle" font-family="Fira Mono" font-size="11" fill="var(--muted)">${t.s}</text>`;
   const path = s => s.v.map((x, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(x).toFixed(1)).join("");
   const order = series.slice().sort((a, b) => (a.main ? 1 : 0) - (b.main ? 1 : 0));
   for (const s of order) {
@@ -365,7 +401,7 @@ function lineChart(svgId, wrapId, series, opts) {
   // direct labels at the right end: the emphasised series always, others only when they fit
   const ends = series.map(s => ({ s, y: Y(s.v[n - 1]) })).sort((a, b) => a.y - b.y); let lastY = -99;
   for (const e of ends) { if (!e.s.main && Math.abs(e.y - lastY) < 13) continue; const yy = Math.max(e.y, lastY + 13); lastY = yy;
-    g += `<text x="${W - R + 6}" y="${yy + 4}" font-family="Barlow Condensed" font-size="12" fill="${e.s.main ? "var(--ink)" : "var(--muted)"}">${e.s.name}</text>`; }
+    g += `<text x="${W - R + 6}" y="${yy + 4}" font-family="Fira Mono" font-size="12" fill="${e.s.main ? "var(--ink)" : "var(--muted)"}">${e.s.name}</text>`; }
   const m = series.find(s => s.main); if (m) g += `<circle cx="${X(n - 1)}" cy="${Y(m.v[n - 1])}" r="4" fill="var(--series)" stroke="var(--panel)" stroke-width="2"/>`;
   g += `<line id="${svgId}x" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="${svgId}hit"/>`;
   svg.innerHTML = g;
@@ -407,7 +443,7 @@ const hex = h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
 const CHEAP = hex("#3987e5"), DEAR = hex("#d95926"), MID = hex("#3a4048");
 function divColor(x) { x = Math.max(-1, Math.min(1, x)); const a = x < 0 ? CHEAP : DEAR, t = Math.abs(x); return `rgb(${MID.map((m, k) => Math.round(m + (a[k] - m) * t)).join(",")})`; }
 function paintHeat() {
-  let h = `<thead><tr><th>Station</th>${GOODS.map(g => `<th style="text-align:center"><img src="market/${g.id}.png" alt="" style="width:26px;height:26px"><br>${g.n}</th>`).join("")}</tr></thead><tbody>`;
+  let h = `<thead><tr><th>Station</th>${GOODS.map(g => `<th style="text-align:center"><img src="market/${g.id}.png" alt="" style="width:28px;height:28px"><br>${g.n}</th>`).join("")}</tr></thead><tbody>`;
   STN.forEach((s, k) => { h += `<tr><td>${s.short}${k === ME.at ? ' <span style="color:var(--amber)">&#9679;</span>' : ""}</td>` + GOODS.map((g, i) => { const p = priceOf(s, i); return `<td class="c${k === ME.at ? " here" : ""}" style="background:${divColor(Math.log2(p / g.base))}" title="${s.short}, ${g.n}: ${fmt(p)} cr/t">${fmt(p)}</td>`; }).join("") + "</tr>"; });
   $("heat").innerHTML = h + "</tbody>";
 }
@@ -437,5 +473,7 @@ function loop(now) {
   if (CLK.run) { CLK.acc += dt * (CLK.fast ? 8 : 2); let did = false; while (CLK.acc >= 1) { CLK.acc -= 1; tick(); did = true; } if (did) paintAll(true); }
   requestAnimationFrame(loop);
 }
+// keep every icon decoded in memory, so the board can redraw its rows every frame without the icons flickering out
+const ICONS = [...GOODS.map(g => g.id), ...COS.map(c => c.id), ...CON.map(c => c.img)].map(id => Object.assign(new Image(), { src: `market/${id}.png` }));
 paintAll(); paintNews(); requestAnimationFrame(loop);
 </script>

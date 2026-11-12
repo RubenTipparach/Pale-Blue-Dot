@@ -40,11 +40,14 @@ header.top .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .lede{font-size:17px;color:var(--ink);max-width:70ch}
 .muted{color:var(--muted)}
 
+/* pixel art: whole-number scales only (portraits 36 px drawn at 72, drops 24 px at 24 and 48), never smoothed */
+img{image-rendering:pixelated}
+
 /* the scene */
 .stage{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#000;height:min(72vh,680px);min-height:420px}
 #view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
-.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
-.ctl{top:12px;left:12px;padding:10px;display:grid;gap:8px;width:min(300px,calc(100% - 24px))}
+.panel{position:absolute;background:rgba(10,22,22,.82);border:1px solid #5d7a78;border-radius:0}
+.ctl{top:28px;left:8px;padding:10px;display:grid;gap:8px;width:min(300px,calc(100% - 24px))}
 .ctl .seg{display:flex;flex-wrap:wrap;gap:5px}
 .ctl button,.chipbtn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:4px 8px;font-family:var(--display);font-size:14px;letter-spacing:.05em}
 .ctl button[aria-pressed="true"],.chipbtn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
@@ -54,13 +57,20 @@ header.top .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .ctl output{font-family:var(--mono);color:var(--ink);font-size:12px}
 .ctl input[type=range]{width:100%;accent-color:var(--amber);margin:0}
 select{background:var(--panel-solid);color:var(--ink);border:1px solid var(--line);border-radius:3px;padding:5px;font-family:var(--body);width:100%}
-.who{right:12px;top:12px;padding:10px 12px;width:min(270px,calc(100% - 24px));display:grid;gap:6px;font-size:13px}
-.who img{width:64px;height:64px;image-rendering:auto;float:left;margin-right:8px}
+.who{right:8px;top:28px;padding:10px 12px;width:min(270px,calc(100% - 24px));display:grid;gap:6px;font-size:13px}
+.who img{width:72px;height:72px;float:left;margin-right:8px}
 .who .k{font-family:var(--display);letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--muted)}
 .who b{font-family:var(--display);font-size:18px;letter-spacing:.03em}
-.legend{left:12px;right:12px;bottom:12px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.legend .chipbtn{font-size:13px;padding:2px 7px;display:inline-flex;align-items:center;gap:5px}
-.legend .chipbtn img{width:22px;height:22px}
+/* the game's HUD: monospace debug line top left, hotbar slots bottom centre (docs/screenshots/hud-after.png) */
+.dbg{position:absolute;left:8px;top:6px;font-family:ui-monospace,Consolas,"DejaVu Sans Mono",monospace;font-size:12px;color:#fff;text-shadow:1px 1px 0 #000;pointer-events:none;white-space:nowrap;overflow:hidden;max-width:calc(100% - 16px)}
+.legend{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:6px;align-items:center;max-width:calc(100% - 24px);flex-wrap:wrap;justify-content:center}
+.legend .slot{all:unset;cursor:pointer;position:relative;width:44px;height:44px;display:grid;place-items:center;background:rgba(10,22,22,.82);border:1px solid #5d7a78;box-sizing:border-box}
+.legend .slot img{width:36px;height:36px}
+.legend .slot .n{position:absolute;right:3px;bottom:1px;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#fff;text-shadow:1px 1px 0 #000}
+.legend .slot.away img{opacity:.35}
+.legend .slot[aria-pressed="true"],.legend .slot:hover{border:2px solid #e8a83a}
+.legend .slot:focus-visible{outline:2px solid #fffefe}
+.legend .msg{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#fff;text-shadow:1px 1px 0 #000;background:rgba(10,22,22,.82);border:1px solid #5d7a78;padding:6px 10px}
 .banner{left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 18px;text-align:center;max-width:360px}
 .banner b{font-family:var(--display);font-size:22px;display:block}
 .toast{left:50%;top:12px;transform:translateX(-50%);padding:5px 12px;font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:13px;transition:opacity .4s;opacity:0;pointer-events:none}
@@ -68,7 +78,7 @@ select{background:var(--panel-solid);color:var(--ink);border:1px solid var(--lin
   .stage{height:78vh}
   .who{top:auto;bottom:64px;right:12px}
   .ctl{width:calc(100% - 24px)}
-  .legend{display:none}
+  .legend .slot{width:36px;height:36px}.legend .slot img{width:36px;height:36px}
 }
 
 /* reading sections */
@@ -89,20 +99,20 @@ section{display:grid;gap:10px}
 .tag.glow{color:var(--glow);border-color:rgba(198,255,120,.5)}
 .card p{font-size:13px;margin:0;grid-column:2;color:var(--muted)}
 .drops{display:flex;gap:3px;grid-column:2}
-.drops img{width:26px;height:26px}
+.drops img{width:24px;height:24px}
 .tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
 th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
 tr:last-child td{border-bottom:none}
-td img{width:30px;height:30px;vertical-align:middle}
+td img{width:24px;height:24px;vertical-align:middle}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
 .cols>div{min-width:0}
 .note{border-left:3px solid var(--amber);padding:8px 12px;background:var(--raise);border-radius:0 6px 6px 0;font-size:14px}
 .note p:last-child{margin:0}
 .dropgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .drop{display:flex;gap:8px;align-items:center;background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px}
-.drop img{width:44px;height:44px}
+.drop img{width:48px;height:48px}
 .drop b{display:block;font-family:var(--display);font-size:15px;letter-spacing:.03em}
 ol.q{display:grid;gap:12px;padding-left:22px;margin:0}
 ol.q li{max-width:80ch}
@@ -148,7 +158,8 @@ ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
     <div class="k">Click an animal</div>
     <div class="muted">Each one is built from its species' body plan with its own size, colour and pattern drawn from a seed.</div>
   </div>
-  <div class="panel legend" id="legend"></div>
+  <div class="dbg" id="dbg">underfoot L0, column | fields | 10:00</div>
+  <div class="legend" id="legend" role="toolbar" aria-label="Roster"></div>
   <div class="panel banner" id="banner" hidden><b>Nothing lives here</b><span class="muted">An airless body has an empty roster: no animals, no birds, no insects. Only your own lamps.</span></div>
   <div class="panel toast" id="toast"></div>
 </div>
@@ -218,7 +229,8 @@ ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
 
 <section>
   <h2>About the art</h2>
-  <p class="muted">The portraits and drop icons are painted by code, not by hand: <code>tools/art/animals_art.py</code> drives the hand-drawn-illustration kit, which copies the owner's friend's marker method (flat block, hatching in the shape's own tones, form crescents, a same-hue edge). It gets close; it is not the friend's work. Every four-legged portrait comes from one function fed the same body-plan numbers as the 3D creatures above. The 3D creatures are primitives (ellipsoids, cylinders, cones) as a stand-in for real models.</p>
+  <p class="muted">The portraits and drop icons are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/animals_art.py</code>): portraits on a 36 px canvas and drops on 24 px, shown only at whole-number scales, every colour from the Sweaft-64 palette, short ramps lit from the top left, a dark seam between parts and a 1 px outline. Every four-legged portrait comes from one function fed the same body-plan numbers as the 3D creatures above. The 3D creatures are built from boxes, as the game builds things, and each box wears the species' pixel-art hide (<code>animals/hide_&lt;species&gt;.png</code>, eight seamless 32 px tiles drawn by the same script); an individual's seed sets its size, a slight tint and the spacing of its spots or stripes.</p>
+  <p class="muted"><b>The game's own textures:</b> the hex ground is the shipped terrain atlas (<code>assets/tilesets/atlas.png</code>), read the way the terrain shader reads it (each biome's sheet; ground on top, the ground-into-earth tile on a side's first metre, earth below; snow from the tundra sheet). Trees are the game's Tenebris hex-prism trees on the cell centre (a 0.2-cell trunk and two leaf layers, a pine a cone of layers), wood and leaves from the biome's own atlas sheet, tiles (2,1) and (0,2). Lantern posts, the campfire ring and the tent are the settlement textures at their <code>repeat_m</code>. The HUD is the game's: the monospace debug line and hotbar slots. All are byte-identical copies in <code>docs/mockups/animals/game/</code>, nearest-sampled. Mockup-only: the portraits, drops and hides, the autumn tint on the ground and the oak's canopy, and water.</p>
 </section>
 
 <section>
@@ -240,7 +252,7 @@ ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
 // =====================================================================
 // Data: rosters per biome. Sizes are metres; a cell is 2.833 m across.
 // =====================================================================
-const IMG = n => "animals/" + n + ".png";
+const IMG = n => "animals/" + n + ".png?v=2";   // cache-bust: redrawn as pixel art
 const DROPS = {
   wool: ["Wool", "Shorn, or from the wild flock"], hide: ["Hide", "Leather for packs and tents"], meat: ["Meat", "Cooked at a hearth"],
   egg: ["Egg", "One a day from a penned hen"], feather: ["Feather", "Fletching, bedding, a quill"], glow: ["Glow jar", "A dim lamp you carry"],
@@ -275,14 +287,14 @@ const SPECIES = {
   gull: { name: "Gull", role: "bird", act: "day", herd: [3, 5], plan: "bird", p: { L: 0.45, col: 0xf0f4f6, wing: 0x96a4b4, beak: 0xf0c040, tail: 0x282c32 }, drops: ["feather", "egg"], text: "Follows boats and steals your catch." },
 };
 const BIOMES = {
-  fields: { name: "Fields", sub: "22% of land at 750 m", top: [0x6a9a44, 0x7fae50], side: 0x6b4a30, water: 0.05, relief: 1.2, trees: 5, tree: "oak", roster: ["woolback", "plodder", "hen", "meadow_hare", "red_fox", "lark", "firefly"] },
-  desert: { name: "Desert", sub: "22% of land", top: [0xd8bc84, 0xe4c890], side: 0xb8925c, water: 0.0, relief: 1.6, trees: 2, tree: "cactus", roster: ["sand_strider", "dust_hound", "scarab"] },
-  jungle: { name: "Jungle", sub: "21% of land", top: [0x3f7a32, 0x4f8c3a], side: 0x5a3c26, water: 0.04, relief: 1.2, trees: 16, tree: "kapok", roster: ["stripe_cat", "tusk_boar", "parrot", "glowmoth"] },
-  swamp: { name: "Swamp", sub: "1% of land, low and wet", top: [0x4e6a3a, 0x5d7242], side: 0x4a3626, water: 0.32, relief: 0.6, trees: 6, tree: "alder", roster: ["bog_toad", "heron", "mire_lurker", "firefly"] },
-  mountains: { name: "Mountains", sub: "above 105 m", top: [0x8a8a84, 0x7c7e76], side: 0x5e5c58, water: 0.0, relief: 4.5, trees: 2, tree: "pine", snowAbove: 3, roster: ["ridge_goat", "crag_eagle", "meadow_hare"] },
-  tundra: { name: "Tundra", sub: "past latitude 0.875", top: [0x8c9a74, 0x9aa680], snow: [0xe6ecf0, 0xd8e0e6], side: 0x6a5c4c, water: 0.06, relief: 1.0, trees: 1, tree: "pine", roster: ["shagback", "pale_wolf", "snow_hare"] },
-  beach: { name: "Beach", sub: "the 2 m band at the sea", top: [0xe6d29e, 0xeedaa8], side: 0xc8aa74, water: 0.45, relief: 0.5, trees: 1, tree: "palm", coast: 1, roster: ["shore_crab", "gull"] },
-  moon: { name: "Barren moon", sub: "airless, roster empty", top: [0x77777c, 0x6a6a70], side: 0x55555a, water: 0, relief: 1.4, trees: 0, roster: [], airless: 1 },
+  fields: { sheet: 4, name: "Fields", sub: "22% of land at 750 m", water: 0.05, relief: 1.2, trees: 5, tree: "oak", roster: ["woolback", "plodder", "hen", "meadow_hare", "red_fox", "lark", "firefly"] },
+  desert: { sheet: 3, name: "Desert", sub: "22% of land", water: 0.0, relief: 1.6, trees: 2, tree: "cactus", roster: ["sand_strider", "dust_hound", "scarab"] },
+  jungle: { sheet: 6, name: "Jungle", sub: "21% of land", water: 0.04, relief: 1.2, trees: 16, tree: "kapok", roster: ["stripe_cat", "tusk_boar", "parrot", "glowmoth"] },
+  swamp: { sheet: 12, name: "Swamp", sub: "1% of land, low and wet", water: 0.32, relief: 0.6, trees: 6, tree: "alder", roster: ["bog_toad", "heron", "mire_lurker", "firefly"] },
+  mountains: { sheet: 8, name: "Mountains", sub: "above 105 m", water: 0.0, relief: 4.5, trees: 2, tree: "pine", snowAbove: 3, roster: ["ridge_goat", "crag_eagle", "meadow_hare"] },
+  tundra: { sheet: 13, name: "Tundra", sub: "past latitude 0.875", water: 0.06, relief: 1.0, trees: 1, tree: "pine", roster: ["shagback", "pale_wolf", "snow_hare"] },
+  beach: { sheet: 2, name: "Beach", sub: "the 2 m band at the sea", water: 0.45, relief: 0.5, trees: 1, tree: "palm", coast: 1, roster: ["shore_crab", "gull"] },
+  moon: { sheet: 7, name: "Barren moon", sub: "airless, roster empty", water: 0, relief: 1.4, trees: 0, roster: [], airless: 1 },
 };
 const ROSTER_ORDER = ["fields", "desert", "jungle", "swamp", "mountains", "tundra", "beach"];
 const SEASONS = ["summer", "autumn", "winter", "spring"];
@@ -299,7 +311,7 @@ const actTag = s => s.act === "night" ? '<span class="tag night">night</span>' :
     const el = document.createElement("div"); el.className = "biome";
     el.innerHTML = `<header><h3>${B.name}</h3><span class="muted">${B.sub}</span></header><div class="cards">${B.roster.map(id => {
       const s = SPECIES[id];
-      return `<div class="card"><img class="por" src="${IMG(id)}" alt="${s.name}, painted portrait"><h4>${s.name}</h4><div class="tags">${roleTag(s)}${actTag(s)}${s.glow ? '<span class="tag glow">glows</span>' : ""}${s.tame ? `<span class="tag live">tame: ${s.tame.toLowerCase()}</span>` : ""}${s.away ? '<span class="tag">migrates</span>' : ""}</div><p>${s.text}</p><div class="drops">${s.drops.map(d => `<img src="${IMG("drop_" + d)}" alt="${DROPS[d][0]}" title="${DROPS[d][0]}">`).join("")}</div></div>`;
+      return `<div class="card"><img class="por" src="${IMG(id)}" alt="${s.name}, pixel-art portrait"><h4>${s.name}</h4><div class="tags">${roleTag(s)}${actTag(s)}${s.glow ? '<span class="tag glow">glows</span>' : ""}${s.tame ? `<span class="tag live">tame: ${s.tame.toLowerCase()}</span>` : ""}${s.away ? '<span class="tag">migrates</span>' : ""}</div><p>${s.text}</p><div class="drops">${s.drops.map(d => `<img src="${IMG("drop_" + d)}" alt="${DROPS[d][0]}" title="${DROPS[d][0]}">`).join("")}</div></div>`;
     }).join("")}</div>`;
     root.appendChild(el);
   }
@@ -325,9 +337,10 @@ const U = {
   uLampReach: { value: new Array(MAXL).fill(1) }, uLampN: { value: 0 }, uNight: { value: 0 },
 };
 const VS = `
-varying vec3 vW; varying vec3 vN; varying vec3 vL; varying vec3 vC; varying vec2 vUv;
+attribute vec3 aTile;
+varying vec3 vW; varying vec3 vN; varying vec3 vL; varying vec3 vC; varying vec2 vUv; varying vec3 vTile;
 void main(){
-  vL = position; vUv = uv;
+  vL = position; vUv = uv; vTile = aTile;
   #ifdef USE_COLOR
   vC = color;
   #else
@@ -339,11 +352,30 @@ void main(){
 }`;
 const FS = `
 uniform vec3 uColor; uniform vec3 uEmissive; uniform float uNightEmit; uniform int uPattern; uniform vec3 uPatCol; uniform float uPatScale; uniform float uOpacity;
+uniform sampler2D uMap; uniform float uMode; uniform float uRep; uniform float uCell;
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uSky; uniform vec3 uGround; uniform vec3 uFogCol; uniform float uFogFar; uniform float uNight;
 uniform vec3 uLampPos[${MAXL}]; uniform vec3 uLampCol[${MAXL}]; uniform float uLampReach[${MAXL}]; uniform int uLampN;
-varying vec3 vW; varying vec3 vN; varying vec3 vL; varying vec3 vC; varying vec2 vUv;
+varying vec3 vW; varying vec3 vN; varying vec3 vL; varying vec3 vC; varying vec2 vUv; varying vec3 vTile;
+// The game's atlas, read the way planet_surface.wgsl's pixel_tile does: four sheets
+// across and down, each a 4x4 grid of 32-texel tiles, point-sampled.
+vec3 atlasTile(vec2 uv, vec3 t0) {
+  vec3 t = floor(t0 + 0.5);   // an interpolated varying drifts off its integer: round it, or mod() picks the wrong sheet
+  vec2 px = (floor(fract(uv) * 32.0) + 0.5) / 32.0;
+  vec2 sheet = vec2(mod(t.x, 4.0), floor(t.x / 4.0)) * 0.25;
+  vec2 s = sheet + (t.yz + px) / 16.0;
+  return texture2D(uMap, vec2(s.x, 1.0 - s.y)).rgb;
+}
 void main(){
   vec3 base = uColor * vC;
+  if (uMode > 0.5 && uMode < 1.5) { // a settlement texture, repeat_m metres a repeat, on the face's own plane
+    vec3 an = abs(vN); vec2 w = an.y > max(an.x, an.z) ? vW.xz : (an.x > an.z ? vW.zy : vW.xy);
+    base *= texture2D(uMap, vec2(w.x, -w.y) / uRep).rgb;
+  }
+  if (uMode > 1.5 && uMode < 2.5) base *= atlasTile(vUv, vTile);
+  if (uMode > 2.5) { // a hide strip: eight 32 px tiles across, this part's tile repeating a metre (uRep) apart
+    vec2 px = (floor(fract(vUv * uRep) * 32.0) + 0.5) / 32.0;
+    base *= texture2D(uMap, vec2((uCell + px.x) / 8.0, px.y)).rgb;
+  }
   if (uPattern == 1) { float s = step(0.62, fract(vL.x * uPatScale + 0.15 * sin(vL.y * 9.0))); base = mix(base, uPatCol, s * step(-0.2, vL.y)); }
   if (uPattern == 2) { vec3 q = fract(vL * uPatScale + vec3(0.3, 0.1, 0.7)) - 0.5; base = mix(base, uPatCol, step(length(q), 0.24)); }
   vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
@@ -364,11 +396,27 @@ function litMat(o = {}) {
     uniforms: Object.assign({
       uColor: { value: new THREE.Color(o.color ?? 0xffffff) }, uEmissive: { value: new THREE.Color(o.emissive ?? 0x000000) }, uNightEmit: { value: o.nightEmit ?? 0 },
       uPattern: { value: o.pattern ?? 0 }, uPatCol: { value: new THREE.Color(o.patCol ?? 0) }, uPatScale: { value: o.patScale ?? 3 }, uOpacity: { value: o.opacity ?? 1 },
+      uMap: { value: o.map || null }, uMode: { value: o.mode ?? 0 }, uRep: { value: o.rep ?? 1 }, uCell: { value: o.cell ?? 0 },
     }, U),
     vertexShader: VS, fragmentShader: FS, vertexColors: !!o.vc, transparent: (o.opacity ?? 1) < 1, side: o.side ?? THREE.FrontSide, depthWrite: (o.opacity ?? 1) >= 1,
   });
   return m;
 }
+
+// The game's textures (docs/mockups/animals/game/, byte-identical copies; see its README).
+const loader = new THREE.TextureLoader(), GTEX = {};
+function gameTex(name) {
+  if (GTEX[name]) return GTEX[name];
+  const t = loader.load("animals/game/" + name + ".png");
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return (GTEX[name] = t);
+}
+const ATLAS = gameTex("atlas");
+const REPEAT = { timber: 1, bark: 1, kapok: 2, alder: 2, leaves: 2, needles: 1, cactus: 1, fieldstone: 2, linen: 1 };   // repeat_m, manifest.ron
+const GMATS = {};
+const gameMat = name => GMATS[name] || (GMATS[name] = litMat({ map: gameTex(name), mode: 1, rep: REPEAT[name] }));
+// atlas slots in planet_terrain.rs TILESETS order; snow takes the tundra sheet, as the shader's snow slot does
+const SLOT = { beach: 2, desert: 3, fields: 4, jungle: 6, lunar: 7, mountains: 8, swamp: 12, tundra: 13 };
 
 // =====================================================================
 // Renderer, camera, a small orbit control (drag, wheel, pinch)
@@ -378,7 +426,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
-const orbit = { yaw: 0.7, pitch: 0.55, dist: 46, target: new THREE.Vector3(0, 0, 0), follow: null };
+const orbit = { yaw: 0.7, pitch: 0.5, dist: 34, target: new THREE.Vector3(0, 0, 0), follow: null };
 function placeCamera() {
   if (orbit.follow) orbit.target.lerp(orbit.follow.g.position, 0.08);
   const cp = Math.cos(orbit.pitch);
@@ -427,23 +475,22 @@ let BIOME = "fields", SEASON = 0, SEED = 7;
 const groundY = (x, z) => { const c = CELLS.get(xzHex(x, z).join(",")); return c ? Math.max(c.h, c.water ? -0.35 : c.h) : -3; };
 const cellAt = (x, z) => CELLS.get(xzHex(x, z).join(","));
 
-function seasonTop(B, h, rnd) {
-  const c = new THREE.Color(B.top[rnd() < 0.5 ? 0 : 1]);
-  if (B.snowAbove !== undefined && h >= B.snowAbove) c.set(0xeef2f4);
-  if (BIOME === "tundra" && (SEASON === 2 || (SEASON === 1 && rnd() < 0.4) || (SEASON === 3 && rnd() < 0.5))) c.set(B.snow[rnd() < 0.5 ? 0 : 1]);
-  if (BIOME === "fields" || BIOME === "mountains") {
-    if (SEASON === 1) c.lerp(new THREE.Color(0xb09a48), 0.45);
-    if (SEASON === 2) c.lerp(new THREE.Color(0xdfe6ea), BIOME === "fields" ? 0.55 : 0.75);
-  }
-  c.offsetHSL(0, 0, (rnd() - 0.5) * 0.06);
-  return c;
+// What a cell's top is drawn with: its biome sheet's ground, or snow (the tundra sheet's
+// wind-packed snow, as the shader's snow slot) above the snow line and in a fields winter.
+// The autumn tint is mockup-only: the game has no seasonal ground yet.
+function topOf(B, h, rnd) {
+  const snow = (B.snowAbove !== undefined && h >= B.snowAbove) || (SEASON === 2 && (BIOME === "fields" || BIOME === "mountains") && rnd() < 0.7);
+  const tint = new THREE.Color(1, 1, 1);
+  if (SEASON === 1 && (BIOME === "fields" || BIOME === "mountains")) tint.set(0xe8d49a);
+  tint.offsetHSL(0, 0, (rnd() - 0.5) * 0.05);
+  return { tile: snow ? [SLOT.tundra, 2, 2] : [B.sheet, 0, 0], side: snow ? [SLOT.tundra, 1, 0] : [B.sheet, 1, 0], tint };
 }
 function buildPatch() {
   while (world.children.length) { const o = world.children.pop(); o.traverse(m => { if (m.geometry) m.geometry.dispose(); }); }
   CELLS.clear(); LAMPS.length = 0;
   const B = BIOMES[BIOME], rnd = rng(SEED * 31 + 5);
-  const pos = [], nor = [], col = [];
-  const push = (p, n, c) => { pos.push(...p); nor.push(...n); col.push(c.r, c.g, c.b); };
+  const pos = [], nor = [], col = [], uvs = [], til = [];
+  const vert = (x, y, z, nx, ny, nz, u, v, t, c) => { pos.push(x, y, z); nor.push(nx, ny, nz); uvs.push(u, v); til.push(...t); col.push(c.r, c.g, c.b); };
   const corners = i => { const a = Math.PI / 180 * (60 * i - 30); return [RH * Math.cos(a), RH * Math.sin(a)]; };
   const waterCells = [];
   for (let q = -RINGS; q <= RINGS; q++) for (let r = -RINGS; r <= RINGS; r++) {
@@ -457,15 +504,21 @@ function buildPatch() {
     else if (wet < B.water * 1.15 + 0.12 && B.water > 0 && n < 0.55) { water = true; h = -1; }
     if (BIOME === "mountains") h = Math.max(0, Math.round((n - 0.2) * 6 + Math.abs(x) * 0.08));
     const cell = { q, r, x, z, h, water }; CELLS.set(q + "," + r, cell);
-    const top = water ? new THREE.Color(B.side).multiplyScalar(0.7) : seasonTop(B, h, rnd);
-    const side = new THREE.Color(B.side).offsetHSL(0, 0, (rnd() - 0.5) * 0.04);
+    // the game's rule: the cap's tile on top, its side tile on the first metre, earth below
+    const T = water ? { tile: [B.sheet, 2, 0], side: [B.sheet, 2, 0], tint: new THREE.Color(0.7, 0.7, 0.7) } : topOf(B, h, rnd);
+    const earth = [B.sheet, 2, 0], white = new THREE.Color(1, 1, 1);
+    const tu = (px, pz) => [px / (2 * RH) + 0.5, pz / (2 * RH) + 0.5];
     for (let i = 0; i < 6; i++) {
       const [ax, az] = corners(i), [bx, bz] = corners((i + 1) % 6);
-      push([x, h, z, x + bx, h, z + bz, x + ax, h, z + az], [0, 1, 0, 0, 1, 0, 0, 1, 0], top), col.push(top.r, top.g, top.b, top.r, top.g, top.b);
-      const nx = (ax + bx) / 2, nz = (az + bz) / 2, l = Math.hypot(nx, nz), sh = side.clone().multiplyScalar(0.8 + 0.2 * (nx / l * -0.5 + 0.5));
-      const y0 = -4;
-      pos.push(x + ax, h, z + az, x + bx, h, z + bz, x + bx, y0, z + bz, x + ax, h, z + az, x + bx, y0, z + bz, x + ax, y0, z + az);
-      for (let k = 0; k < 6; k++) { nor.push(nx / l, 0, nz / l); col.push(sh.r, sh.g, sh.b); }
+      vert(x, h, z, 0, 1, 0, 0.5, 0.5, T.tile, T.tint);
+      vert(x + bx, h, z + bz, 0, 1, 0, ...tu(bx, bz), T.tile, T.tint);
+      vert(x + ax, h, z + az, 0, 1, 0, ...tu(ax, az), T.tile, T.tint);
+      const nx = (ax + bx) / 2, nz = (az + bz) / 2, l = Math.hypot(nx, nz);
+      for (let k = 0; k < 5; k++) {
+        const y1 = h - k, y0 = h - k - 1, t = k === 0 ? T.side : earth;
+        for (const [px, py, pz, u, v] of [[ax, y1, az, 0, 0], [bx, y1, bz, 0.999, 0], [bx, y0, bz, 0.999, 0.999], [ax, y1, az, 0, 0], [bx, y0, bz, 0.999, 0.999], [ax, y0, az, 0, 0.999]])
+          vert(x + px, py, z + pz, nx / l, 0, nz / l, u, v, t, white);
+      }
     }
     if (water) waterCells.push(cell);
   }
@@ -473,7 +526,9 @@ function buildPatch() {
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-  world.add(new THREE.Mesh(g, litMat({ vc: true })));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  g.setAttribute("aTile", new THREE.Float32BufferAttribute(til, 3));
+  world.add(new THREE.Mesh(g, litMat({ vc: true, map: ATLAS, mode: 2, side: THREE.DoubleSide })));
   if (waterCells.length) {
     const wg = new THREE.CylinderGeometry(RH * 1.001, RH * 1.001, 0.05, 6);
     const wm = litMat({ color: BIOME === "swamp" ? 0x3a5a48 : 0x2f6f9a, opacity: 0.78 });
@@ -483,7 +538,7 @@ function buildPatch() {
   const land = [...CELLS.values()].filter(c => !c.water && Math.hypot(c.x, c.z) > 6);
   for (let i = 0; i < B.trees; i++) {
     const c = land[Math.floor(rnd() * land.length)]; if (!c || c.tree) continue; c.tree = 1;
-    tree(B.tree, c.x + (rnd() - 0.5), c.h, c.z + (rnd() - 0.5), 0.8 + rnd() * 0.5);
+    tree(B.tree, c, Math.floor(rnd() * 1e6));
   }
   // lamps: a hunter's camp near the middle, posts along a track. They light at night.
   const camp = land.length ? land.reduce((a, c) => Math.hypot(c.x - 8, c.z + 6) < Math.hypot(a.x - 8, a.z + 6) ? c : a) : { x: 8, z: -6, h: 0 };
@@ -495,141 +550,220 @@ function buildPatch() {
     for (const [dx, dz] of [[-6, -4], [6, 6]]) { const c = cellAt(dx, dz); lantern(c.x, c.h, c.z, 0xcfe4ff); }
   }
 }
-function tree(kind, x, y, z, s) {
-  const trunkM = litMat({ color: kind === "alder" ? 0x5a5048 : kind === "palm" ? 0x9a7a52 : 0x6a4a30 });
-  if (kind === "cactus") {
-    const m = litMat({ color: 0x4a8a46 });
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 3 * s, 7), m); t.position.set(x, y + 1.5 * s, z); world.add(t);
-    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 1.2 * s, 7), m); a.position.set(x + 0.5, y + 2 * s, z); world.add(a);
+// The game's tree: Tenebris hex prisms on the cell centre, never rotated off the grid
+// (tenebris-tree-geometry, as docs/mockups/foliage.html draws it). Wood is the biome sheet's tile
+// (2,1) and leaves its (0,2) in the shipped atlas, as material codes 8 and 9 are; a flank shows one
+// tile across and a tile a metre up. A trunk is 0.2 of the cell wide and 3 or 4 blocks tall with two
+// leaf layers 0.65 to 1.0 of the cell wide; a pine is one wood block under a cone of 8 or 9 layers.
+const PRISM = {};
+function prismGeo(h, w, tile) {
+  const k = h + "/" + w.toFixed(3) + "/" + tile.join();
+  if (PRISM[k]) return PRISM[k];
+  const g = new THREE.CylinderGeometry(RH * w, RH * w, h, 6, 1).toNonIndexed();
+  const uv = g.attributes.uv, nor = g.attributes.normal, til = [];
+  for (let i = 0; i < uv.count; i++) {
+    if (Math.abs(nor.getY(i)) < 0.5) uv.setXY(i, uv.getX(i) * 6, uv.getY(i) * h);   // a flank: a tile across, a tile a metre
+    til.push(...tile);
+  }
+  g.setAttribute("aTile", new THREE.Float32BufferAttribute(til, 3));
+  g.translate(0, h / 2, 0);
+  return (PRISM[k] = g);
+}
+const TREEMATS = {};
+const treeMat = tint => TREEMATS[tint] || (TREEMATS[tint] = litMat({ map: ATLAS, mode: 2, color: tint }));
+function prism(x, y0, z, h, w, tile, tint = 0xffffff) { const m = new THREE.Mesh(prismGeo(h, w, tile), treeMat(tint)); m.position.set(x, y0, z); world.add(m); return m; }
+function tree(kind, c, v) {
+  const sheet = BIOMES[BIOME].sheet, wood = [sheet, 2, 1], leaf = [sheet, 0, 2];
+  const x = c.x, y = c.h, z = c.z, bit = v & 1;
+  if (kind === "pine") {
+    prism(x, y, z, 1, 0.2, wood);
+    const n = 8 + bit;
+    for (let i = 0; i < n; i++) prism(x, y + 1 + i, z, 1, 0.95 + (0.15 - 0.95) * i / (n - 1), leaf);
     return;
   }
-  const H = { kapok: 9, oak: 5, alder: 5.5, pine: 6, palm: 6 }[kind] * s;
-  const t = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.38 * s, H, 7), trunkM); t.position.set(x, y + H / 2, z); world.add(t);
-  const leafC = { kapok: 0x2f6a2a, oak: 0x4a7c34, alder: 0x56703e, pine: 0x2c4c34, palm: 0x4a8a3a }[kind];
-  const lm = litMat({ color: SEASON === 1 && kind === "oak" ? 0xb07a30 : leafC });
-  if (kind === "pine") { for (let i = 0; i < 3; i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(1.8 * s - i * 0.45, 2.4 * s, 8), lm); c.position.set(x, y + H * 0.45 + i * 1.3 * s, z); world.add(c); } return; }
+  const extra = kind === "kapok" ? 3 : kind === "palm" ? 2 : 0;
+  const trunk = 3 + bit + extra;
+  prism(x, y, z, trunk, 0.2, wood);
+  if (kind === "cactus") { prism(x, y + trunk, z, 1, 0.2, wood); return; }
   if (SEASON === 2 && (kind === "oak" || kind === "alder")) return; // bare in winter
-  const r = { kapok: 4.2, oak: 2.6, alder: 2, palm: 2.2 }[kind] * s;
-  const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), lm); c.scale.y = kind === "kapok" || kind === "palm" ? 0.45 : 0.85; c.position.set(x, y + H + r * 0.2, z); world.add(c);
+  const tint = SEASON === 1 && kind === "oak" ? 0xe0a050 : 0xffffff;   // the autumn tint is mockup-only
+  for (let i = 0; i < (kind === "palm" ? 1 : 2); i++) prism(x, y + trunk + i, z, 1, 0.65 + 0.35 * hash(v, i, 71), leaf, tint);
 }
 // ---- lamps (all of them reach the shader) ----
 const LAMPS = [];
 const bulbOff = new THREE.MeshBasicMaterial({ color: 0x4a3a28 });
 function lantern(x, y, z, color = 0xffc070) {
-  const post = litMat({ color: 0x4a3a2a });
-  const p = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.4, 0.14), post); p.position.set(x, y + 1.2, z); world.add(p);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.1), post); arm.position.set(x + 0.25, y + 2.35, z); world.add(arm);
-  const b = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.34, 0.26), new THREE.MeshBasicMaterial({ color })); b.position.set(x + 0.5, y + 2.1, z); world.add(b);
-  LAMPS.push({ pos: new THREE.Vector3(x + 0.5, y + 2.0, z), col: new THREE.Color(color), power: 1.6, reach: 10, mesh: b, on: color, night: true });
+  const post = gameMat("timber");
+  bx(world, post, 0.16, 2.4, 0.16, x, y + 1.2, z);
+  bx(world, post, 0.6, 0.12, 0.12, x + 0.25, y + 2.35, z);
+  const b = new THREE.Mesh(boxGeo(0.26, 0.34, 0.26), new THREE.MeshBasicMaterial({ color })); b.position.set(x + 0.5, y + 2.1, z); world.add(b);
+  LAMPS.push({ pos: new THREE.Vector3(x + 0.5, y + 2.0, z), col: new THREE.Color(color), power: 2.6, reach: 6.5, mesh: b, on: color, night: true });
 }
 function campfire(x, y, z) {
-  const stone = litMat({ color: 0x6a665e });
-  for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const s = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22), stone); s.position.set(x + Math.cos(a) * 0.6, y + 0.12, z + Math.sin(a) * 0.6); world.add(s); }
-  const f = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.8, 6), new THREE.MeshBasicMaterial({ color: 0xff8a3a })); f.position.set(x, y + 0.4, z); world.add(f);
-  LAMPS.push({ pos: new THREE.Vector3(x, y + 0.8, z), col: new THREE.Color(0xff9a4a), power: 2.2, reach: 13, mesh: f, on: 0xff8a3a, night: true, flicker: 1 });
-  const tent = new THREE.Mesh(new THREE.ConeGeometry(1.4, 2, 4), litMat({ color: 0x9a8a6a })); tent.position.set(x + 2.4, y + 1, z - 1.6); tent.rotation.y = 0.4; world.add(tent);
+  const stone = gameMat("fieldstone");
+  for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const s = bx(world, stone, 0.34, 0.24, 0.34, x + Math.cos(a) * 0.62, y + 0.12, z + Math.sin(a) * 0.62); s.rotation.y = a; }
+  const logs = gameMat("timber");
+  for (const a of [0.3, 1.9]) { const l = bx(world, logs, 1.0, 0.14, 0.14, x, y + 0.1, z); l.rotation.y = a; }
+  const f = new THREE.Mesh(boxGeo(0.34, 0.6, 0.34), new THREE.MeshBasicMaterial({ color: 0xff8a3a })); f.position.set(x, y + 0.42, z); f.rotation.y = 0.6; world.add(f);
+  LAMPS.push({ pos: new THREE.Vector3(x, y + 0.8, z), col: new THREE.Color(0xff9a4a), power: 2.8, reach: 7.5, mesh: f, on: 0xff8a3a, night: true, flicker: 1 });
+  // a ridge tent: a triangular prism of linen
+  const tg = new THREE.CylinderGeometry(1.25, 1.25, 2.4, 3);
+  tg.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)));   // axis along x, ridge up
+  const tent = new THREE.Mesh(tg, gameMat("linen")); tent.rotation.y = 0.4; tent.position.set(x + 2.4, y + 0.625, z - 1.6); world.add(tent);
 }
 
 // =====================================================================
 // Creatures: one body plan per kind, varied per individual by a seed
 // =====================================================================
-const SPH = new THREE.SphereGeometry(1, 16, 12), CYL = new THREE.CylinderGeometry(1, 0.8, 1, 7), CONE = new THREE.ConeGeometry(1, 1, 6);
-const WOOL = (() => { const g = new THREE.IcosahedronGeometry(1, 2); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(p, i); v.multiplyScalar(1 + 0.08 * Math.sin(v.x * 11) * Math.sin(v.y * 9) * Math.sin(v.z * 10)); p.setXYZ(i, v.x, v.y, v.z); } g.computeVertexNormals(); return g; })();
-const mesh = (geo, mat, sx, sy, sz, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); parent.add(m); return m; };
+// Every creature is built from boxes, the way the game builds things, and every box wears a
+// pixel-art hide: animals/hide_<species>.png, eight seamless 32 px tiles (0 body with its coat
+// pattern, 1 legs, 2 head, 3 horns / crest / eyes, 4 tail, 5 mane or wing or tail tip, 6 snout or
+// beak, 7 ears or belly), drawn by tools/art/animals_art.py with the balatro-pixel-art kit. A box's
+// UVs are in metres, so a tile covers a metre over the creature's own scale at every size.
+const HIDE = {};
+function hideTex(id) {
+  if (HIDE[id]) return HIDE[id];
+  const t = loader.load("animals/hide_" + id + ".png?v=2");
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  return (HIDE[id] = t);
+}
+const GEO = {};
+function boxGeo(w, h, d) {
+  const k = w.toFixed(3) + "," + h.toFixed(3) + "," + d.toFixed(3);
+  if (GEO[k]) return GEO[k];
+  const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) { const j = f * 4 + i; uv.setXY(j, uv.getX(j) * dims[f][0], uv.getY(j) * dims[f][1]); }
+  return (GEO[k] = g);
+}
+const bx = (parent, mat, w, h, d, x, y, z) => { const m = new THREE.Mesh(boxGeo(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m; };
 let CREATURES = [];
 const creatureRoot = new THREE.Group(); scene.add(creatureRoot);
 
-function coatOf(sp) { if (!sp.coat) return sp.p.col; let c = sp.coat[SEASON]; if (c === undefined) c = sp.coat[0]; return c; }
+function coatOf(sp) { if (!sp.coat) return null; let c = sp.coat[SEASON]; if (c === undefined) c = sp.coat[0]; return c; }
+// One material per hide tile, for this individual: its seed sets a slight tint and the scale of
+// the coat pattern (spots and stripes repeat at their own spacing on every animal).
+function hideMats(c, rnd) {
+  const sp = c.sp, coat = coatOf(sp), map = hideTex(c.id);
+  const tint = coat !== null ? new THREE.Color(coat).multiplyScalar(1 / Math.max(0.6, new THREE.Color(sp.p.col).getHSL({}).l + 0.15)) : new THREE.Color(1, 1, 1);
+  tint.offsetHSL((rnd() - 0.5) * 0.02, 0, (rnd() - 0.5) * 0.08);
+  const rep = (0.8 + rnd() * 0.45) / Math.max(0.5, c.k);
+  return Array.from({ length: 8 }, (_, i) => litMat({ map, mode: 3, cell: i, rep: i === 0 ? rep : 1.3, color: tint }));
+}
+function eyeMat(sp, glow) {
+  const m = litMat({ color: 0x0a0a08 });
+  if (sp.eyes || glow) { m.uniforms.uEmissive.value.set(glow || 0x1a3a1c); m.uniforms.uNightEmit.value = sp.eyes ? 4 : 2; }
+  return m;
+}
+
 function buildQuad(sp, k, rnd, c) {
   const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-  const col = new THREE.Color(coatOf(sp)).offsetHSL((rnd() - 0.5) * 0.03, (rnd() - 0.5) * 0.1, (rnd() - 0.5) * 0.1);
-  const mB = litMat({ color: col, pattern: p.pattern || 0, patCol: p.patCol || 0, patScale: (p.patScale || 3) * (0.8 + rnd() * 0.4) });
-  const mL = litMat({ color: p.legCol ?? col.clone().multiplyScalar(0.8) }), mH = p.headCol ? litMat({ color: p.headCol }) : mB;
+  const M = hideMats(c, rnd);
   const L = p.L * k, H = p.H * k, leg = p.leg * k;
-  const torso = mesh(p.wool ? WOOL : SPH, mB, L / 2, H / 2, H / 2 * 0.92, 0, leg + H * 0.45, 0, body);
-  if (p.hump) mesh(p.wool ? WOOL : SPH, mB, L * 0.22, H * 0.32, H * 0.3, -L * 0.02, leg + H * 0.92, 0, body);
-  if (p.mane) mesh(SPH, litMat({ color: p.mane }), L * 0.22, H * 0.45, H * 0.4, L * 0.28, leg + H * 0.6, 0, body);
+  const ty = leg + H * 0.45;
+  if (p.wool) { bx(body, M[0], L * 1.04, H * 1.04, H * 0.98, 0, ty, 0); bx(body, M[0], L * 0.8, H * 0.18, H * 0.8, 0, ty + H * 0.58, 0); }
+  else bx(body, M[0], L, H * 0.92, H * 0.86, 0, ty, 0);
+  if (p.hump) bx(body, M[0], L * 0.42, H * 0.42, H * 0.62, -L * 0.04, ty + H * 0.6, 0);
+  if (p.mane) bx(body, M[5], L * 0.42, H * 1.02, H * 0.96, L * 0.3, ty + H * 0.06, 0);
   c.legs = [];
-  for (const fx of [L * 0.3, -L * 0.3]) for (const s of [-1, 1]) {
-    const piv = new THREE.Group(); piv.position.set(fx, leg + H * 0.2, s * H * 0.24); body.add(piv);
-    const lw = Math.max(0.04, H * 0.11) * (p.wool ? 0.8 : 1);
-    mesh(CYL, mL, lw, leg + H * 0.2, lw, 0, -(leg + H * 0.2) / 2, 0, piv);
+  const lw = Math.max(0.08, H * 0.2) * (p.wool ? 0.8 : 1);
+  for (const fx of [L * 0.34, -L * 0.34]) for (const s of [-1, 1]) {
+    const piv = new THREE.Group(); piv.position.set(fx, leg + H * 0.2, s * H * 0.26); body.add(piv);
+    bx(piv, M[1], lw, leg + H * 0.2, lw, 0, -(leg + H * 0.2) / 2, 0);
     c.legs.push(piv);
   }
-  const hp = new THREE.Group(); hp.position.set(L * 0.42, leg + H * 0.6, 0); body.add(hp); c.head = hp;
+  const hp = new THREE.Group(); hp.position.set(L * 0.42, leg + H * 0.62, 0); body.add(hp); c.head = hp;
   const hr = p.head * k, nk = p.neck * k * 1.6;
-  if (p.neck > 0.15) { const n = mesh(CYL, mB, H * 0.16, nk, H * 0.16, nk * 0.25, nk * 0.45, 0, hp); n.rotation.z = -0.5; }
+  if (p.neck > 0.15) { const n = bx(hp, M[0], H * 0.34, nk + H * 0.2, H * 0.34, nk * 0.25, nk * 0.45, 0); n.rotation.z = -0.5; }
   const hx = nk * 0.5 + hr * 0.5, hy = nk * 0.85;
-  mesh(SPH, mH, hr * 1.05, hr * 0.85, hr * 0.8, hx, hy, 0, hp);
-  mesh(SPH, mH, hr * (0.45 + (p.snout || 0.5) * 0.35), hr * 0.42, hr * 0.48, hx + hr * (0.75 + (p.snout || 0.5) * 0.3), hy - hr * 0.2, 0, hp);
-  const earM = mH;
-  if (p.ears === "long") for (const s of [-1, 1]) { const e = mesh(SPH, earM, hr * 0.18, hr * 0.9, hr * 0.1, hx - hr * 0.2, hy + hr * 1.2, s * hr * 0.3, hp); e.rotation.z = -0.25; }
-  if (p.ears === "point") for (const s of [-1, 1]) mesh(CONE, earM, hr * 0.28, hr * 0.6, hr * 0.15, hx - hr * 0.2, hy + hr * 0.95, s * hr * 0.45, hp);
-  if (p.ears === "round") for (const s of [-1, 1]) mesh(SPH, earM, hr * 0.25, hr * 0.25, hr * 0.1, hx - hr * 0.3, hy + hr * 0.8, s * hr * 0.55, hp);
-  if (p.ears === "flop") for (const s of [-1, 1]) { const e = mesh(SPH, earM, hr * 0.42, hr * 0.15, hr * 0.2, hx - hr * 0.3, hy + hr * 0.25, s * hr * 0.85, hp); e.rotation.x = s * 0.5; }
-  const hornM = litMat({ color: p.hornCol ?? 0xece0b8 });
-  if (p.horns === "spike") for (const s of [-1, 1]) { const h = mesh(CONE, hornM, hr * 0.12, hr * 0.8, hr * 0.12, hx - hr * 0.1, hy + hr * 1.1, s * hr * 0.35, hp); h.rotation.x = -s * 0.4; }
-  if (p.horns === "curl") for (const s of [-1, 1]) { const t = new THREE.Mesh(new THREE.TorusGeometry(hr * 0.45, hr * 0.12, 6, 12, Math.PI * 1.4), hornM); t.position.set(hx - hr * 0.5, hy + hr * 0.6, s * hr * 0.45); t.rotation.z = 0.6; hp.add(t); }
-  if (p.horns === "droop") for (const s of [-1, 1]) { const t = new THREE.Mesh(new THREE.TorusGeometry(hr * 0.55, hr * 0.13, 6, 12, Math.PI), hornM); t.position.set(hx - hr * 0.1, hy + hr * 0.3, s * hr * 0.75); t.rotation.set(0, s * 1.3, Math.PI / 2); hp.add(t); }
-  if (p.horns === "tusk") for (const s of [-1, 1]) { const h = mesh(CONE, hornM, hr * 0.08, hr * 0.5, hr * 0.08, hx + hr * 1.1, hy + hr * 0.05, s * hr * 0.3, hp); h.rotation.z = -0.5; }
+  bx(hp, M[2], hr * 1.8, hr * 1.5, hr * 1.4, hx, hy, 0);
+  const sn = p.snout ?? 0.5;
+  bx(hp, M[6], hr * (0.5 + sn * 0.6), hr * 0.75, hr * 0.9, hx + hr * (0.9 + sn * 0.3), hy - hr * 0.3, 0);
+  bx(hp, M[3], hr * 0.12, hr * 0.18, hr * 0.3, hx + hr * (1.15 + sn * 0.6), hy - hr * 0.12, 0);   // the nose
+  if (p.ears === "long") for (const s of [-1, 1]) { const e = bx(hp, M[7], hr * 0.32, hr * 1.5, hr * 0.14, hx - hr * 0.3, hy + hr * 1.4, s * hr * 0.32); e.rotation.z = -0.2; }
+  if (p.ears === "point") for (const s of [-1, 1]) bx(hp, M[7], hr * 0.4, hr * 0.62, hr * 0.16, hx - hr * 0.35, hy + hr * 1.02, s * hr * 0.45);
+  if (p.ears === "round") for (const s of [-1, 1]) bx(hp, M[7], hr * 0.42, hr * 0.42, hr * 0.14, hx - hr * 0.4, hy + hr * 0.9, s * hr * 0.55);
+  if (p.ears === "flop") for (const s of [-1, 1]) { const e = bx(hp, M[7], hr * 0.8, hr * 0.24, hr * 0.36, hx - hr * 0.35, hy + hr * 0.35, s * hr * 0.88); e.rotation.x = s * 0.4; }
+  if (p.horns === "spike") for (const s of [-1, 1]) { const h = bx(hp, M[3], hr * 0.22, hr * 0.9, hr * 0.22, hx - hr * 0.2, hy + hr * 1.15, s * hr * 0.42); h.rotation.x = -s * 0.35; }
+  if (p.horns === "curl") for (const s of [-1, 1]) {   // three blocks round a curl: up, back, down
+    bx(hp, M[3], hr * 0.3, hr * 0.7, hr * 0.26, hx - hr * 0.2, hy + hr * 1.0, s * hr * 0.5);
+    bx(hp, M[3], hr * 0.8, hr * 0.3, hr * 0.26, hx - hr * 0.6, hy + hr * 1.35, s * hr * 0.55);
+    bx(hp, M[3], hr * 0.3, hr * 0.8, hr * 0.26, hx - hr * 1.0, hy + hr * 0.9, s * hr * 0.6);
+  }
+  if (p.horns === "droop") for (const s of [-1, 1]) {
+    bx(hp, M[3], hr * 0.4, hr * 0.32, hr * 0.7, hx - hr * 0.1, hy + hr * 0.75, s * hr * 0.95);
+    bx(hp, M[3], hr * 0.32, hr * 0.9, hr * 0.32, hx + hr * 0.05, hy + hr * 0.2, s * hr * 1.2);
+  }
+  if (p.horns === "tusk") for (const s of [-1, 1]) { const h = bx(hp, M[3], hr * 0.16, hr * 0.6, hr * 0.16, hx + hr * 1.2, hy, s * hr * 0.42); h.rotation.z = -0.5; }
   // eyes, which catch lamplight at night for hunters
-  const eyeM = sp.eyes ? litMat({ color: 0x141018, emissive: 0x000000, nightEmit: 0 }) : litMat({ color: 0x141018 });
-  if (sp.eyes) { eyeM.uniforms.uEmissive.value.set(0x0a1a0c); eyeM.uniforms.uNightEmit.value = 6; }
-  for (const s of [-1, 1]) mesh(SPH, eyeM, hr * 0.12, hr * 0.12, hr * 0.12, hx + hr * 0.55, hy + hr * 0.2, s * hr * 0.55, hp);
-  // tail
-  const tm = p.tailCol ? litMat({ color: p.tailCol }) : mB;
-  if (p.tail === "bush") { const t = mesh(SPH, mB, L * 0.32, H * 0.2, H * 0.2, -L * 0.62, leg + H * 0.35, 0, body); t.rotation.z = 0.5; mesh(SPH, litMat({ color: p.tipCol || 0xffffff }), L * 0.1, H * 0.14, H * 0.14, -L * 0.88, leg + H * 0.12, 0, body); }
-  else if (p.tail === "long") { const t = mesh(CYL, mB, H * 0.07, L * 0.75, H * 0.07, -L * 0.75, leg + H * 0.4, 0, body); t.rotation.z = 1.0; }
-  else if (p.tail === "tuft" || p.tail === "thin") { const t = mesh(CYL, mB, H * 0.05, L * 0.4, H * 0.05, -L * 0.55, leg + H * 0.3, 0, body); t.rotation.z = -0.35; }
-  else if (p.tail === "stub") mesh(SPH, tm, H * 0.14, H * 0.14, H * 0.14, -L * 0.5, leg + H * 0.55, 0, body);
+  const eM = eyeMat(sp);
+  for (const s of [-1, 1]) bx(hp, eM, hr * 0.22, hr * 0.22, hr * 0.08, hx + hr * 0.45, hy + hr * 0.25, s * hr * 0.72);
+  if (p.tail === "bush") { const t = bx(body, M[4], L * 0.55, H * 0.34, H * 0.34, -L * 0.62, leg + H * 0.38, 0); t.rotation.z = 0.5; bx(body, M[5], L * 0.18, H * 0.3, H * 0.3, -L * 0.9, leg + H * 0.18, 0); }
+  else if (p.tail === "long") { const t = bx(body, M[4], L * 0.8, H * 0.13, H * 0.13, -L * 0.78, leg + H * 0.72, 0); t.rotation.z = -0.8; }
+  else if (p.tail === "tuft" || p.tail === "thin") { const t = bx(body, M[4], L * 0.4, H * 0.1, H * 0.1, -L * 0.62, leg + H * 0.3, 0); t.rotation.z = 0.9; if (p.tail === "tuft") bx(body, M[5], H * 0.18, H * 0.26, H * 0.18, -L * 0.72, leg + H * 0.05, 0); }
+  else if (p.tail === "stub") bx(body, M[4], H * 0.28, H * 0.28, H * 0.28, -L * 0.54, leg + H * 0.6, 0);
   c.body = body; c.legLen = leg + H * 0.2; c.radius = L * 0.6;
   return g;
 }
 function buildBird(sp, k, rnd, c) {
   const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-  const col = new THREE.Color(p.col).offsetHSL(0, 0, (rnd() - 0.5) * 0.08), L = p.L * k;
-  const mB = litMat({ color: col }), mW = litMat({ color: p.wing ?? col, side: THREE.DoubleSide });
+  const M = hideMats(c, rnd), L = p.L * k;
   const legH = L * (p.legs || 0.6);
-  for (const s of [-1, 1]) mesh(CYL, litMat({ color: 0xd8a040 }), L * 0.03, legH, L * 0.03, 0, legH / 2, s * L * 0.1, body);
-  mesh(SPH, mB, L * 0.5, L * 0.3, L * 0.28, 0, legH + L * 0.25, 0, body);
-  mesh(SPH, litMat({ color: p.head ?? col }), L * 0.18, L * 0.18, L * 0.18, L * 0.42, legH + L * 0.48, 0, body);
-  const bk = mesh(CONE, litMat({ color: p.beak }), L * 0.06, L * 0.25 * (p.legs > 1 ? 2 : 1), L * 0.06, L * 0.62 + (p.legs > 1 ? L * 0.15 : 0), legH + L * 0.46, 0, body); bk.rotation.z = -Math.PI / 2;
-  if (p.crest) mesh(CONE, litMat({ color: p.crest }), L * 0.06, L * 0.18, L * 0.04, L * 0.4, legH + L * 0.68, 0, body);
-  const tl = mesh(SPH, litMat({ color: p.tail ?? p.wing ?? col }), L * 0.3, L * 0.05, L * 0.14, -L * 0.55, legH + L * 0.3, 0, body); tl.rotation.z = 0.3;
+  for (const s of [-1, 1]) { bx(body, M[1], L * 0.07, legH, L * 0.07, 0, legH / 2, s * L * 0.1); bx(body, M[1], L * 0.22, L * 0.04, L * 0.12, L * 0.06, L * 0.02, s * L * 0.1); }
+  bx(body, M[0], L, L * 0.56, L * 0.52, 0, legH + L * 0.25, 0);
+  bx(body, M[7], L * 0.6, L * 0.2, L * 0.46, L * 0.1, legH + L * 0.06, 0);
+  bx(body, M[2], L * 0.38, L * 0.36, L * 0.34, L * 0.5, legH + L * 0.6, 0);
+  const bl = L * 0.24 * (p.legs > 1 ? 2.2 : 1);
+  bx(body, M[6], bl, L * 0.1, L * 0.1, L * 0.69 + bl / 2, legH + L * 0.56, 0);
+  if (p.crest) bx(body, M[3], L * 0.2, L * 0.14, L * 0.06, L * 0.5, legH + L * 0.84, 0);
+  const tl = bx(body, M[4], L * 0.5, L * 0.08, L * 0.3, -L * 0.62, legH + L * 0.36, 0); tl.rotation.z = 0.3;
+  const eM = eyeMat(sp);
+  for (const s of [-1, 1]) bx(body, eM, L * 0.07, L * 0.07, L * 0.02, L * 0.6, legH + L * 0.66, s * L * 0.17);
   c.wings = [];
-  for (const s of [-1, 1]) { const piv = new THREE.Group(); piv.position.set(0, legH + L * 0.38, s * L * 0.2); body.add(piv); const w = mesh(new THREE.BoxGeometry(1, 1, 1), mW, L * 0.5, L * 0.03, L * (p.soar ? 1.3 : 0.75), -L * 0.05, 0, s * L * (p.soar ? 0.65 : 0.38), piv); c.wings.push([piv, s]); }
+  for (const s of [-1, 1]) {
+    const piv = new THREE.Group(); piv.position.set(0, legH + L * 0.4, s * L * 0.26); body.add(piv);
+    bx(piv, M[5], L * 0.62, L * 0.05, L * (p.soar ? 1.3 : 0.75), -L * 0.05, 0, s * L * (p.soar ? 0.65 : 0.38));
+    c.wings.push([piv, s]);
+  }
   c.body = body; c.legLen = legH; c.radius = L;
   return g;
 }
 function buildCrab(sp, k, rnd, c) {
   const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-  const L = p.L * k, m = litMat({ color: new THREE.Color(p.col).offsetHSL(0, 0, (rnd() - 0.5) * 0.1) });
-  mesh(SPH, m, L * 0.45, L * 0.2, L * 0.35, 0, L * 0.3, 0, body);
+  const L = p.L * k, M = hideMats(c, rnd);
+  bx(body, M[0], L * 0.9, L * 0.34, L * 0.7, 0, L * 0.3, 0);
   c.legs = [];
-  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) { const piv = new THREE.Group(); piv.position.set(-L * 0.2 + i * L * 0.2, L * 0.3, s * L * 0.3); body.add(piv); const l = mesh(CYL, m, L * 0.04, L * 0.45, L * 0.04, 0, -L * 0.15, s * L * 0.15, piv); l.rotation.x = s * 0.9; c.legs.push(piv); }
-  if (BIOME !== "desert") for (const s of [-1, 1]) mesh(SPH, m, L * 0.18, L * 0.12, L * 0.12, L * 0.5, L * 0.35, s * L * 0.3, body);
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) {
+    const piv = new THREE.Group(); piv.position.set(-L * 0.25 + i * L * 0.25, L * 0.28, s * L * 0.33); body.add(piv);
+    const l = bx(piv, M[1], L * 0.07, L * 0.4, L * 0.07, 0, -L * 0.12, s * L * 0.12); l.rotation.x = s * 0.9; c.legs.push(piv);
+  }
+  if (sp.plan === "crab" && c.id === "shore_crab") for (const s of [-1, 1]) { bx(body, M[0], L * 0.34, L * 0.22, L * 0.22, L * 0.55, L * 0.36, s * L * 0.3); bx(body, M[3], L * 0.06, L * 0.16, L * 0.06, L * 0.28, L * 0.55, s * L * 0.12); }
+  else bx(body, M[2], L * 0.3, L * 0.26, L * 0.5, L * 0.55, L * 0.3, 0);   // a scarab's head
   c.body = body; c.legLen = 0.0; c.radius = L;
   return g;
 }
 function buildToad(sp, k, rnd, c) {
   const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-  const L = p.L * k, m = litMat({ color: new THREE.Color(p.col).offsetHSL(0, 0, (rnd() - 0.5) * 0.1) });
-  mesh(SPH, m, L * 0.5, L * 0.32, L * 0.45, 0, L * 0.3, 0, body);
-  for (const s of [-1, 1]) mesh(SPH, litMat({ color: 0xf0d050 }), L * 0.1, L * 0.1, L * 0.1, L * 0.3, L * 0.55, s * L * 0.2, body);
+  const L = p.L * k, M = hideMats(c, rnd);
+  bx(body, M[0], L, L * 0.5, L * 0.86, 0, L * 0.3, 0);
+  bx(body, M[7], L * 0.7, L * 0.12, L * 0.7, L * 0.08, L * 0.08, 0);
+  for (const s of [-1, 1]) { bx(body, M[0], L * 0.36, L * 0.16, L * 0.22, -L * 0.3, L * 0.08, s * L * 0.48); bx(body, M[3], L * 0.18, L * 0.18, L * 0.18, L * 0.3, L * 0.6, s * L * 0.22); }
   const gm = litMat({ color: 0x3a5a40, emissive: new THREE.Color(sp.glow).multiplyScalar(0.05), nightEmit: 6 });
-  for (let i = 0; i < 6; i++) mesh(SPH, gm, L * 0.07, L * 0.05, L * 0.07, (rnd() - 0.5) * L * 0.6, L * 0.58, (rnd() - 0.5) * L * 0.6, body);
+  for (let i = 0; i < 6; i++) bx(body, gm, L * 0.1, L * 0.04, L * 0.1, (rnd() - 0.5) * L * 0.6, L * 0.56, (rnd() - 0.5) * L * 0.6);
   c.body = body; c.legLen = 0; c.radius = L; c.glowMat = gm;
   return g;
 }
 function buildCroc(sp, k, rnd, c) {
   const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-  const L = p.L * k, H = p.H * k, m = litMat({ color: new THREE.Color(p.col).offsetHSL(0, 0, (rnd() - 0.5) * 0.08) });
-  mesh(SPH, m, L * 0.32, H * 0.5, H * 0.7, 0, H * 0.55, 0, body);
-  mesh(SPH, m, L * 0.25, H * 0.3, H * 0.35, L * 0.42, H * 0.5, 0, body);
-  const t = mesh(CONE, m, H * 0.5, L * 0.5, H * 0.3, -L * 0.5, H * 0.45, 0, body); t.rotation.z = Math.PI / 2;
-  for (const s of [-1, 1]) mesh(SPH, litMat({ color: 0xf0d050, emissive: 0x081000, nightEmit: 6 }), H * 0.1, H * 0.1, H * 0.1, L * 0.28, H * 0.85, s * H * 0.28, body);
+  const L = p.L * k, H = p.H * k, M = hideMats(c, rnd);
+  bx(body, M[0], L * 0.6, H, H * 1.3, 0, H * 0.55, 0);
+  bx(body, M[2], L * 0.32, H * 0.6, H * 0.8, L * 0.44, H * 0.5, 0);
+  bx(body, M[6], L * 0.2, H * 0.32, H * 0.6, L * 0.68, H * 0.38, 0);
+  bx(body, M[4], L * 0.28, H * 0.6, H * 0.8, -L * 0.42, H * 0.45, 0);
+  bx(body, M[4], L * 0.25, H * 0.36, H * 0.44, -L * 0.68, H * 0.35, 0);
+  const eM = eyeMat(sp, 0x3a3a08);
+  for (const s of [-1, 1]) bx(body, eM, H * 0.2, H * 0.2, H * 0.2, L * 0.4, H * 0.88, s * H * 0.3);
   c.legs = [];
-  for (const fx of [L * 0.2, -L * 0.2]) for (const s of [-1, 1]) { const piv = new THREE.Group(); piv.position.set(fx, H * 0.4, s * H * 0.6); body.add(piv); mesh(CYL, m, H * 0.15, H * 0.5, H * 0.15, 0, -H * 0.2, 0, piv); c.legs.push(piv); }
+  for (const fx of [L * 0.2, -L * 0.2]) for (const s of [-1, 1]) { const piv = new THREE.Group(); piv.position.set(fx, H * 0.4, s * H * 0.7); body.add(piv); bx(piv, M[1], H * 0.3, H * 0.5, H * 0.3, 0, -H * 0.2, 0); c.legs.push(piv); }
   c.body = body; c.legLen = 0; c.radius = L * 0.5;
   return g;
 }
@@ -775,12 +909,12 @@ function sky(time) {
   U.uNight.value = 1 - day;
   const sunDir = new THREE.Vector3(Math.cos(a) * 0.8, Math.max(el, 0.12), 0.45).normalize();
   if (day > 0) { U.uSunDir.value.copy(sunDir); U.uSunCol.value.copy(C(0xfff1d8)).lerp(C(0xff9a5a), dusk).multiplyScalar(1.15 * day); }
-  else { U.uSunDir.value.set(-0.3, 0.8, -0.5).normalize(); U.uSunCol.value.copy(C(0x8098c8)).multiplyScalar(0.07); } // the moon, dim enough that lamps read
+  else { U.uSunDir.value.set(-0.3, 0.8, -0.5).normalize(); U.uSunCol.value.copy(C(0x8098c8)).multiplyScalar(0.03); } // the moon, dim enough that lamps read
   const skyDay = B.airless ? C(0x050608) : C(0x9cc6e4), skyNight = B.airless ? C(0x020203) : C(0x0a1020);
   const bg = skyNight.clone().lerp(skyDay, day).lerp(C(0xe08a5a), dusk * 0.45 * (B.airless ? 0 : 1));
   scene.background = bg; U.uFogCol.value.copy(bg); U.uFogFar.value = B.airless ? 1e4 : 170;
-  U.uSky.value.copy(C(0x02040a)).lerp(C(B.airless ? 0x202024 : 0x8aa6c8), day).multiplyScalar(B.airless ? 0.35 : 0.55).add(C(0x0b0f18).multiplyScalar(0.25));
-  U.uGround.value.copy(C(0x050404)).lerp(C(0x6a5a40), day).multiplyScalar(0.35);
+  U.uSky.value.copy(C(0x02040a)).lerp(C(B.airless ? 0x202024 : 0x8aa6c8), day).multiplyScalar(B.airless ? 0.35 : 0.55).add(C(0x0b0f18).multiplyScalar(0.25 * day + 0.04));   // at night only a trace of ambient: unlit ground reads near-black, as in the game
+  U.uGround.value.copy(C(0x020202)).lerp(C(0x6a5a40), day).multiplyScalar(0.35);
   // lamps: lit after dusk, each one lights what is near it
   const lampsOn = el < 0.08;
   let n = 0;
@@ -823,12 +957,13 @@ function rebuild() {
 }
 function legend() {
   const L = $("legend"), B = BIOMES[BIOME]; L.innerHTML = "";
-  if (!B.roster.length) { L.innerHTML = '<span class="muted" style="font-size:13px">Roster: empty. Airless bodies are lifeless.</span>'; return; }
+  if (!B.roster.length) { L.innerHTML = '<span class="msg">Roster: empty. Airless bodies are lifeless.</span>'; return; }
   for (const id of B.roster) {
     const sp = SPECIES[id], gone = sp.away && sp.away.includes(SEASON);
     const n = CREATURES.filter(c => c.id === id).length + SWARMS.filter(s => s.id === id).reduce((a, s) => a + s.motes.length, 0);
-    const b = document.createElement("button"); b.className = "chipbtn"; b.setAttribute("aria-pressed", "false");
-    b.innerHTML = `<img src="${IMG(id)}" alt="">${sp.name} <span class="muted">${gone ? "away" : n}</span>`;
+    const b = document.createElement("button"); b.className = "slot" + (gone ? " away" : ""); b.setAttribute("aria-pressed", "false");
+    b.title = sp.name + (gone ? ": away" : ": " + n); b.setAttribute("aria-label", b.title);
+    b.innerHTML = `<img src="${IMG(id)}" alt=""><span class="n">${gone ? "" : n}</span>`;
     b.addEventListener("click", () => { const c = CREATURES.find(x => x.id === id); if (c) { select(c); } else if (gone) toast(sp.name + ": away for the " + SEASONS[SEASON]); else toast(sp.name + ": out only at night"); });
     L.appendChild(b);
   }
@@ -836,6 +971,7 @@ function legend() {
 let selected = null;
 function select(c) {
   selected = c; orbit.follow = c; orbit.dist = Math.min(orbit.dist, 18);
+  document.querySelectorAll("#legend .slot").forEach((b, i) => b.setAttribute("aria-pressed", String(BIOMES[BIOME].roster[i] === c.id)));
   showWho();
 }
 function showWho() {
@@ -867,7 +1003,9 @@ function frame(now) {
   const el = sky(T);
   if (!paused) step(dt, T, el);
   placeCamera();
-  whoT += dt; if (whoT > 0.5 && selected) { whoT = 0; const s = document.querySelector("#who b[style]"); if (s) s.textContent = selected.state; }
+  whoT += dt; if (whoT > 0.5) { whoT = 0; if (selected) { const s = document.querySelector("#who b[style]"); if (s) s.textContent = selected.state; }
+    const hh = Math.floor(HOUR), mm = Math.floor((HOUR - hh) * 60);
+    $("dbg").textContent = `underfoot L0, column | ${BIOME} ${SEASONS[SEASON]} | ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")} | ${CREATURES.length} animals, ${SWARMS.reduce((a, s) => a + s.motes.length, 0)} motes | ${U.uLampN.value} lights | seed ${SEED}`; }
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }

@@ -1,192 +1,250 @@
-"""Commodity icons and company marks for docs/mockups/market.html, painted in
-the friend's hand-drawn manner by the crayon kit
-(.claude/skills/hand-drawn-illustration).
+"""Commodity icons and company marks for docs/mockups/market.html: pixel art drawn in code with the
+balatro-pixel-art kit (.claude/skills/balatro-pixel-art), the solitaire collection's style.
 
-    python tools/art/market_art.py               # writes docs/mockups/market/*.png
-    python tools/art/market_art.py --sheet OUT.png
+    python tools/art/market_art.py                 # writes docs/mockups/market/*.png
+    python tools/art/market_art.py --sheet OUT.png # and a contact sheet beside the kit's references
 
-Painted by code, not by hand. Eight commodities (the trade terminal's rows)
-and five listed companies (the share board).
+Eight commodities (the trade terminal's rows) and five listed companies (the share board), each
+28 x 28 at native size: the page shows them at 1x in its tables and contracts, nearest neighbour.
 """
 
 import math
 import os
-import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-KIT = os.path.join(ROOT, ".claude", "skills", "hand-drawn-illustration", "scripts")
+KIT = os.path.join(ROOT, ".claude", "skills", "balatro-pixel-art", "scripts")
 sys.path.insert(0, KIT)
-import crayon  # noqa: E402
-from crayon import (Icon, INK, circle, ellipse, rect, roundrect, star, rotate,  # noqa: E402
-                    translate, scale, lighter, darker, tone)
+from pixelkit import Sprite, RAMPS, save, sheet  # noqa: E402
+from PIL import Image  # noqa: E402
 
 OUT_DIR = os.path.join(ROOT, "docs", "mockups", "market")
-crayon.OUT = 128
+N = 28
+WHITE = '#fffefe'
+WARM = '#faaf5c'
 
 
-# ---- commodities ---------------------------------------------------------------
-
-def iron_ore(ic):
-    for cx, cy, r, s in ((200, 300, 130, 2), (330, 330, 100, 5), (290, 200, 80, 8)):
-        ic.drawn(star(cx, cy, r, r * 0.84, 7, jag=0.2, seed=s), (160, 72, 58), shade=0.3, edge_w=8)
-        ic.dot(cx - r * 0.2, cy - r * 0.2, 9, (220, 220, 230), ink=(80, 30, 25))
-
-
-def water_ice(ic):
-    ic.drawn(roundrect(90, 140, 420, 420, 40), (120, 210, 250), rim_color=(230, 250, 255), edge=(30, 90, 150), edge_w=10)
-    ic.line([(250, 160), (230, 250), (280, 300), (260, 400)], (40, 120, 180), 6)
-    ic.line([(230, 250), (150, 290)], (40, 120, 180), 5)
-    ic.line([(140, 200), (220, 180)], (240, 252, 255), 10)
-    ic.line([(150, 240), (180, 232)], (240, 252, 255), 8)
-    for x in (160, 256, 350):
-        ic.drawn([(x - 22, 420), (x + 22, 420), (x, 480)], (120, 210, 250), highlight=0, edge=(30, 90, 150), edge_w=5)
-    ic.sparkle(400, 110, 24, (220, 250, 255))
+def lumpy(sp, cx, cy, rx, ry, n=9, jag=0.16, seed=1):
+    pts = []
+    for i in range(n):
+        a = 2 * math.pi * i / n + 0.3
+        k = 1 + jag * math.sin(seed * 12.9898 + i * 78.233)
+        pts.append((cx + rx * k * math.cos(a), cy + ry * k * math.sin(a)))
+    return sp.poly(pts)
 
 
-def fuel_cells(ic):
-    for x, col in ((90, (250, 190, 40)), (210, (250, 200, 50)), (330, (250, 190, 40))):
-        ic.drawn(roundrect(x, 150, x + 100, 440, 24), col, edge=(130, 80, 10), edge_w=8)
-        ic.drawn(rect(x + 26, 120, x + 74, 150), (120, 128, 140), highlight=0, edge=INK, edge_w=5)
-        ic.zap([(x + 62, 220), (x + 34, 300), (x + 64, 300), (x + 36, 380)], (255, 255, 210), 7, jag=3, seed=x)
+def spark(sp, x, y, color=WARM):
+    sp.plots([(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)], color, glow=True)
+    sp.plot(x, y, WHITE, glow=True)
 
 
-def grain(ic):
-    ic.drawn(roundrect(120, 230, 392, 470, 60), (200, 160, 90), edge=(110, 70, 30), edge_w=9)   # the sack
-    ic.line([(170, 260), (342, 260)], (130, 90, 40), 8)
-    for a in (-0.5, -0.2, 0.15, 0.45):
-        x0, y0 = 256, 260
-        x1, y1 = x0 + 220 * math.sin(a), y0 - 220 * math.cos(a)
-        ic.line([(x0, y0), (x1, y1)], (130, 160, 60), 7)
-        for k in range(4):
-            t = 0.55 + 0.12 * k
-            px, py = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
-            ic.drawn(ellipse(px, py, 14, 26, 16, a), (250, 210, 80), highlight=0, shade=0.2, edge=(150, 100, 20), edge_w=4)
+def hexagon(sp, cx, cy, r, turn=30):
+    return sp.poly([(cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a)))
+                    for a in range(turn, turn + 360, 60)])
 
 
-def alloy(ic):
-    def ingot(dx, dy, col):
-        top = translate([(130, 250), (330, 250), (390, 200), (190, 200)], dx, dy)
-        front = translate([(130, 250), (330, 250), (310, 330), (110, 330)], dx, dy)
-        side = translate([(330, 250), (390, 200), (370, 280), (310, 330)], dx, dy)
-        ic.drawn(front, col, edge=tone(col), edge_w=7)
-        ic.drawn(side, darker(col, 0.25), highlight=0, edge=tone(col), edge_w=7)
-        ic.drawn(top, lighter(col, 0.25), shade=0.1, edge=tone(col), edge_w=7)
-    ingot(-10, 120, (170, 186, 210))
-    ingot(30, 20, (190, 206, 228))
-    ic.sparkle(120, 140, 26)
+# ---- commodities ------------------------------------------------------------------------------
+
+def iron_ore():
+    sp = Sprite(N, N)
+    for cx, cy, rx, ry, s in ((17, 12, 8, 7, 8), (9, 18, 8, 7, 2), (19, 20, 7, 6, 5)):
+        sp.part(lumpy(sp, cx, cy, rx, ry, seed=s), RAMPS['rust'], 'sphere')
+        sp.part(sp.rect(cx - 3, cy - 3, cx - 2, cy - 2), RAMPS['metal'][2:], 'flat', base=2, seam_color='#2e0d06')
+    sp.outline()
+    return sp
 
 
-def medicine(ic):
-    ic.drawn(roundrect(110, 110, 402, 440, 50), (240, 244, 248), rim_color=(255, 255, 255), edge=(80, 96, 120), edge_w=10)
-    ic.drawn(rect(110, 110, 402, 170), (60, 180, 120), highlight=0.1, edge=(20, 90, 50), edge_w=7)
-    cross = [(226, 220), (286, 220), (286, 270), (336, 270), (336, 330), (286, 330), (286, 380), (226, 380), (226, 330), (176, 330), (176, 270), (226, 270)]
-    ic.drawn(cross, (230, 60, 60), edge=(120, 20, 20), edge_w=7)
+def water_ice():
+    sp = Sprite(N, N)
+    sp.part(sp.poly([(3, 9), (10, 3), (25, 3), (18, 9)]), RAMPS['cyan'], 'flat', base=4)
+    sp.part(sp.poly([(18, 9), (25, 3), (25, 18), (18, 25)]), RAMPS['cyan'], 'flat', base=1)
+    sp.part(sp.rect(3, 9, 18, 25), RAMPS['cyan'], 'rim', base=3)
+    sp.fill(sp.line([(11, 10), (9, 15), (13, 18), (11, 24)], 1), '#1096c3')
+    sp.plots([(5, 11), (5, 12), (6, 11)], WHITE)
+    sp.outline()
+    spark(sp, 25, 23, '#74effe')
+    return sp
 
 
-def electronics(ic):
-    ic.drawn(rect(130, 130, 382, 382), (40, 150, 90), edge=(10, 60, 30), edge_w=9)
-    for k in range(5):
-        v = 160 + k * 48
-        for a, b in (((v, 130), (v, 80)), ((v, 382), (v, 432)), ((130, v), (80, v)), ((382, v), (432, v))):
-            ic.line([a, b], (220, 200, 120), 9, ink=INK, ink_w=5)
-    ic.drawn(rect(196, 196, 316, 316), (40, 44, 56), highlight=0.1, edge=INK, edge_w=6)
-    ic.line([(160, 170), (196, 210)], (250, 220, 120), 5)
-    ic.dot(256, 256, 16, (120, 255, 200), ink=INK)
+def fuel_cells():
+    sp = Sprite(N, N)
+    for x0, ramp in ((3, RAMPS['green']), (14, RAMPS['gold'][:4])):
+        sp.part(sp.rect(x0, 7, x0 + 10, 25), ramp, 'cyl_v')
+        sp.part(sp.rect(x0 + 3, 4, x0 + 7, 6), RAMPS['steel'], 'cyl_v')
+        sp.fill(sp.rect(x0, 11, x0 + 10, 11), ramp[0])
+        sp.fill(sp.rect(x0, 21, x0 + 10, 21), ramp[0])
+    sp.part(sp.poly([(21, 12), (17, 17), (20, 17), (18, 21), (23, 15), (20, 15), (22, 12)]), ['#2e0d06', '#733126'], 'flat', base=1, seam=False)
+    sp.plots([(4, 8), (15, 8)], WHITE)
+    sp.outline()
+    return sp
 
 
-def spice(ic):
-    jar = [(170, 150), (342, 150), (380, 220), (370, 440), (142, 440), (132, 220)]
-    ic.drawn(jar, (180, 60, 140), rim_color=(250, 170, 230), edge=(80, 20, 70), edge_w=10)
-    ic.drawn(rect(180, 100, 332, 154), (230, 180, 60), highlight=0, edge=(120, 80, 10), edge_w=7)
-    ic.drawn(roundrect(170, 270, 342, 370, 16), (250, 240, 210), highlight=0, shade=0, edge=(80, 20, 70), edge_w=5)
-    ic.dot(256, 320, 22, (220, 90, 40), ink=(100, 30, 10))
-    for x, y in ((420, 140), (100, 200), (430, 330)):
-        ic.sparkle(x, y, 20, (255, 170, 230))
+def grain():
+    """Grain: a tied sack with ears of wheat standing out of its neck."""
+    sp = Sprite(N, N)
+    for x, top in ((10, 1), (14, 0), (18, 2)):
+        sp.part(sp.rect(x, top + 5, x, 10), RAMPS['olive'], 'flat', base=2, seam=False)
+        sp.part(sp.ellipse(x - 1, top, x + 1, top + 5), ['#c56d25', '#fb902f', '#faaf5c'], 'rim', seam=False)
+    sack = sp.poly([(6, 10), (21, 10), (24, 18), (23, 25), (4, 25), (3, 18)])
+    sp.part(sack, RAMPS['sand'], 'sphere')
+    sp.part(sp.rect(9, 8, 18, 10), RAMPS['wood'], 'rim')
+    sp.part(sp.rect(5, 17, 22, 19) & sack, RAMPS['wood'], 'flat', base=1, seam=False)
+    sp.plots([(7, 12), (6, 13)], WHITE)
+    sp.outline()
+    return sp
 
 
-# ---- company marks --------------------------------------------------------------
+def alloy():
+    sp = Sprite(N, N)
 
-def hexplate(ic, col, inner):
-    h = circle(256, 256, 220, 6, start=math.pi / 6)
-    ic.drawn(h, col, edge=tone(col), edge_w=10)
-    ic.drawn(scale(h, 0.8), inner, highlight=0.1, shade=0.15, edge=tone(inner), edge_w=6)
+    def ingot(x, y, w):
+        top = sp.poly([(x + 2, y), (x + w - 2, y), (x + w, y + 3), (x, y + 3)])
+        sp.part(top, RAMPS['metal'], 'flat', base=4)
+        sp.part(sp.rect(x, y + 4, x + w, y + 8), RAMPS['metal'], 'cyl_h')
+    ingot(2, 15, 12)
+    ingot(14, 15, 12)
+    ingot(8, 7, 12)
+    sp.plots([(11, 8), (12, 8)], WHITE)
+    sp.outline()
+    spark(sp, 24, 5, '#d2f8ff')
+    return sp
 
 
-def kessler(ic):
+def medicine():
+    sp = Sprite(N, N)
+    sp.part(sp.rect(10, 4, 17, 7) & ~sp.rect(12, 6, 15, 7), RAMPS['steel'], 'rim')
+    sp.part(sp.rect(2, 7, 25, 25), RAMPS['paper'] + [WHITE], 'rim', base=2, depth=2)
+    sp.part(sp.rect(11, 10, 16, 22) | sp.rect(7, 13, 20, 18), RAMPS['red'], 'rim', seam_color='#92a3b2')
+    sp.outline()
+    return sp
+
+
+def electronics():
+    sp = Sprite(N, N)
+    for i in range(4):
+        x = 7 + i * 4
+        for r in (sp.rect(x, 2, x + 1, 5), sp.rect(x, 22, x + 1, 25), sp.rect(2, x, 5, x + 1), sp.rect(22, x, 25, x + 1)):
+            sp.part(r, RAMPS['gold'][1:4], 'flat', base=2, seam=False)
+    sp.part(sp.rect(5, 5, 22, 22), RAMPS['green'], 'rim')
+    sp.part(sp.rect(9, 9, 18, 18), RAMPS['soot'], 'rim')
+    sp.plots([(6, 6), (7, 6)], '#9bb675')
+    sp.plot(10, 10, WHITE)
+    sp.outline()
+    sp.plots([(16, 16), (17, 16)], '#74effe', glow=True)
+    return sp
+
+
+def spice():
+    sp = Sprite(N, N)
+    jar = sp.rect(5, 11, 22, 25) & ~sp.rect(5, 25, 5, 25) & ~sp.rect(22, 25, 22, 25)
+    sp.part(jar, RAMPS['violet'][:4], 'cyl_v')
+    sp.part(sp.rect(5, 15, 22, 20), RAMPS['bone'], 'rim', seam_color='#230c44')
+    sp.part(sp.ellipse(6, 4, 21, 13), ['#681712', '#c56d25', '#fe6420', '#fb902f'], 'sphere')
+    sp.plots([(9, 6), (10, 5)], WHITE)
+    sp.fill(sp.rect(11, 17, 16, 18), '#7d2dbd')
+    sp.outline()
+    spark(sp, 24, 4, '#c34988')
+    return sp
+
+
+# ---- company marks ----------------------------------------------------------------------------
+
+def plate(sp, ramp):
+    sp.part(hexagon(sp, 14, 14, 13), ramp, 'rim', depth=2)
+    sp.part(hexagon(sp, 14, 14, 10), [ramp[0]] + ramp[:-1], 'flat', base=1)
+
+
+def kessler():
     """Kessler Deep Mining: a pick across a hex."""
-    hexplate(ic, (230, 140, 40), (70, 50, 40))
-    ic.line([(150, 400), (330, 150)], (235, 175, 90), 34, ink=INK, ink_w=10)
-    head = [(170, 150), (250, 100), (340, 100), (420, 150), (450, 230), (390, 170), (320, 150), (250, 160), (180, 200)]
-    ic.drawn(head, (210, 216, 226), rim_color=(250, 250, 255), edge=INK, edge_w=7)
-    ic.sparkle(150, 160, 22)
+    sp = Sprite(N, N)
+    plate(sp, RAMPS['metal'])
+    sp.part(sp.line([(8, 22), (19, 9)], 3), RAMPS['wood'], 'rim')
+    head = sp.poly([(10, 5), (17, 6), (22, 9), (26, 14), (21, 12), (16, 10), (11, 8)])
+    sp.part(head, RAMPS['gold'][:4], 'rim')
+    sp.plots([(12, 6), (13, 6)], WHITE)
+    sp.outline()
+    return sp
 
 
-def halyard(ic):
+def halyard():
     """Halyard Shipyards: a hull on a slipway under a gantry."""
-    hexplate(ic, (70, 110, 180), (30, 44, 70))
-    ic.line([(140, 130), (372, 130)], (240, 190, 50), 14, ink=INK, ink_w=6)
-    ic.line([(160, 130), (160, 360)], (240, 190, 50), 12, ink=INK, ink_w=6)
-    ic.line([(352, 130), (352, 360)], (240, 190, 50), 12, ink=INK, ink_w=6)
-    hull = [(160, 260), (330, 230), (390, 280), (330, 330), (160, 310)]
-    ic.drawn(hull, (220, 226, 236), rim_color=(255, 255, 255), edge=(40, 50, 70), edge_w=7)
-    ic.line([(256, 130), (256, 236)], (200, 200, 210), 5)
+    sp = Sprite(N, N)
+    sp.part(sp.rect(3, 3, 5, 24) | sp.rect(22, 3, 24, 24) | sp.rect(3, 3, 24, 5), RAMPS['gold'][:4], 'rim')
+    sp.part(sp.rect(13, 6, 14, 10), RAMPS['steel'], 'flat', base=1)
+    hull = sp.poly([(6, 12), (19, 12), (22, 15), (19, 18), (6, 18)])
+    sp.part(hull, RAMPS['blue'], 'cyl_h')
+    sp.part(sp.rect(9, 10, 13, 12), RAMPS['paper'], 'rim')
+    sp.part(sp.rect(1, 22, 26, 25), RAMPS['steel'], 'cyl_h')
+    sp.plots([(8, 13), (9, 13)], '#d2f8ff')
+    sp.outline()
+    return sp
 
 
-def greenbelt(ic):
-    """Greenbelt Co-op: a sprout in a dome."""
-    hexplate(ic, (80, 170, 70), (230, 240, 210))
-    ic.drawn(rect(150, 330, 362, 370), (140, 100, 60), highlight=0, edge=(70, 40, 20), edge_w=6)
-    ic.line([(256, 340), (256, 200)], (60, 140, 50), 12)
-    ic.drawn(ellipse(200, 220, 60, 30, 24, -0.5), (90, 200, 70), edge=(30, 90, 30), edge_w=6)
-    ic.drawn(ellipse(312, 190, 64, 32, 24, 0.5), (90, 200, 70), edge=(30, 90, 30), edge_w=6)
-    dome = [(150 + 106 - 106 * math.cos(t), 330 - 170 * math.sin(t)) for t in [i * math.pi / 30 for i in range(31)]]
-    ic.line(dome, (120, 200, 240), 7)
+def greenbelt():
+    """Greenbelt Co-op: a sprout under a dome."""
+    sp = Sprite(N, N)
+    sp.part(sp.rect(3, 21, 24, 25), RAMPS['wood'], 'cyl_h')
+    sp.part(sp.ellipse(4, 3, 23, 38) & sp.rect(0, 0, N, 20), RAMPS['glass'], 'sphere', base=2)
+    sp.part(sp.rect(13, 12, 14, 20), RAMPS['green'], 'flat', base=1, seam=False)
+    sp.part(sp.ellipse(6, 9, 13, 14), RAMPS['green'], 'sphere', seam_color='#003227')
+    sp.part(sp.ellipse(14, 7, 21, 12), RAMPS['green'], 'sphere', seam_color='#003227')
+    sp.plots([(8, 7), (8, 8)], WHITE)
+    sp.outline()
+    return sp
 
 
-def ventra(ic):
+def ventra():
     """Ventra Power: a bolt in a ring."""
-    ic.drawn(circle(256, 256, 220), (240, 110, 40), edge=(120, 40, 10), edge_w=10)
-    ic.drawn(circle(256, 256, 160), (60, 30, 30), highlight=0.05, edge=(30, 10, 10), edge_w=6)
-    bolt = [(290, 100), (180, 280), (250, 280), (210, 420), (340, 220), (270, 220), (320, 100)]
-    ic.drawn(bolt, (255, 220, 60), rim_color=(255, 250, 200), edge=(140, 80, 0), edge_w=8)
-    for a in (0.3, 2.2, 4.0, 5.4):
-        ic.sparkle(256 + 200 * math.cos(a), 256 + 200 * math.sin(a), 18, (255, 230, 120))
+    sp = Sprite(N, N)
+    sp.part(sp.circle(14, 14, 13) & ~sp.circle(14, 14, 10), RAMPS['cyan'], 'sphere')
+    sp.part(sp.poly([(17, 2), (6, 16), (13, 16), (10, 26), (22, 11), (15, 11), (19, 2)]), RAMPS['gold'][:4], 'rim', seam_color='#0c2f44')
+    sp.plots([(16, 4), (15, 5)], WHITE)
+    sp.outline()
+    return sp
 
 
-def lumen(ic):
+def lumen():
     """Lumen Labs: a glowing flask."""
-    ic.glow((256, 330, 110), (150, 120, 255), radius=30, strength=0.5)
-    flask = [(220, 80), (292, 80), (292, 220), (400, 420), (112, 420), (220, 220)]
-    ic.drawn(flask, (220, 230, 245), rim_color=(255, 255, 255), edge=(60, 70, 100), edge_w=9)
-    liquid = [(176, 320), (336, 320), (392, 412), (120, 412)]
-    ic.drawn(liquid, (150, 110, 250), highlight=0.2, edge=None)
-    for x, y, r in ((220, 360, 14), (290, 380, 10), (250, 290, 8)):
-        ic.dot(x, y, r, (230, 220, 255))
-    ic.drawn(rect(206, 50, 306, 86), (120, 128, 140), highlight=0, edge=INK, edge_w=6)
+    sp = Sprite(N, N)
+    flask = sp.poly([(11, 9), (16, 9), (24, 23), (22, 26), (5, 26), (3, 23)]) | sp.rect(11, 3, 16, 9)
+    sp.part(flask, RAMPS['paper'], 'rim')
+    sp.part(sp.rect(10, 2, 17, 4), RAMPS['wood'], 'rim')
+    sp.outline()
+    liquid = flask & sp.rect(0, 16, N, N) & ~sp.rect(0, 26, N, N)
+    liquid &= ~(sp.empty() | (flask & ~sp.poly([(10, 16), (17, 16), (23, 24), (21, 25), (6, 25), (4, 24)])))
+    sp.part(liquid, ['#05582d', '#559642', '#84e3b5', '#c1f1d8'], 'inset', glow=True)
+    sp.plots([(11, 21), (15, 19), (18, 22)], WHITE, glow=True)
+    sp.plots([(12, 5), (12, 6), (12, 7)], WHITE)
+    spark(sp, 23, 6, '#84e3b5')
+    return sp
 
 
-ICONS = {
-    "iron_ore": (iron_ore, 1), "water_ice": (water_ice, 2), "fuel_cells": (fuel_cells, 3), "grain": (grain, 4),
-    "alloy": (alloy, 5), "medicine": (medicine, 6), "electronics": (electronics, 7), "spice": (spice, 8),
-    "co_kessler": (kessler, 20), "co_halyard": (halyard, 21), "co_greenbelt": (greenbelt, 22),
-    "co_ventra": (ventra, 23), "co_lumen": (lumen, 24),
+SPRITES = {
+    "iron_ore": iron_ore, "water_ice": water_ice, "fuel_cells": fuel_cells, "grain": grain,
+    "alloy": alloy, "medicine": medicine, "electronics": electronics, "spice": spice,
+    "co_kessler": kessler, "co_halyard": halyard, "co_greenbelt": greenbelt,
+    "co_ventra": ventra, "co_lumen": lumen,
 }
+
+REFS = ["emp_burst", "drop_tanks", "armour_plating", "afterburner_kit", "all_in", "ejection_seat"]
 
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
-    paths = []
-    for name, (fn, seed) in ICONS.items():
-        ic = Icon(seed)
-        fn(ic)
-        p = os.path.join(OUT_DIR, name + ".png")
-        ic.save(p)
-        paths.append(p)
-    print("wrote", len(paths), "icons to", OUT_DIR)
+    items = []
+    for name, fn in SPRITES.items():
+        img = fn().image()
+        path = os.path.join(OUT_DIR, name + ".png")
+        save(img, path, "tools/art/market_art.py (balatro-pixel-art kit)")
+        items.append((name, img))
+    print("wrote", len(items), "sprites to", OUT_DIR)
     if "--sheet" in sys.argv:
-        out = sys.argv[sys.argv.index("--sheet") + 1]
-        subprocess.run([sys.executable, os.path.join(KIT, "sheet.py"), out, *paths, "--ref", "laser drill", "--ref", "plating"], check=True)
+        i = sys.argv.index("--sheet")
+        out = sys.argv[i + 1] if len(sys.argv) > i + 1 else "market_sheet.png"
+        ref_dir = os.path.join(os.path.dirname(KIT), "references")
+        refs = [("ref " + n, Image.open(os.path.join(ref_dir, n + ".png")).convert("RGBA")) for n in REFS]
+        sheet(items + refs, scale=4, cols=7, cell=(224, 224)).save(out)
+        print("sheet", out)
 
 
 if __name__ == "__main__":

@@ -74,6 +74,15 @@ section > .wrap{display:grid;gap:16px}
 .globe{position:relative;aspect-ratio:1/1;max-width:100%;background:radial-gradient(circle at 50% 50%,#0d1120,#05060a 70%);border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .globe canvas,.vig canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .vigwrap{display:grid;gap:8px;min-width:0}
+.ghud{position:absolute;inset:0;pointer-events:none}
+.gdbg{position:absolute;left:8px;top:6px;font:12px/1.2 ui-monospace,Consolas,"DejaVu Sans Mono",monospace;color:#fff;text-shadow:1px 1px 0 #000;white-space:nowrap}
+.gbar{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:4px;align-items:flex-end}
+.gslot{width:44px;height:44px;box-sizing:border-box;border:1px solid rgba(140,191,189,.5);background:rgba(5,15,20,.72);position:relative;display:grid;place-items:center}
+.gslot.tool{width:52px;height:52px;border:2px solid #f0a830;margin-right:8px}
+.gslot img{width:32px;height:32px;image-rendering:pixelated}
+.gslot i{display:block;width:32px;height:32px;image-rendering:pixelated;background-repeat:no-repeat}
+.gslot b{position:absolute;right:3px;bottom:1px;font:600 10px ui-monospace,Consolas,monospace;color:#ebf7f2;text-shadow:1px 1px 0 #000}
+@media (max-width:760px){.gbar{display:none}}
 .vig{position:relative;aspect-ratio:16/9;max-width:100%;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#05060a}
 .vig canvas{touch-action:none;cursor:grab}
 .vig .novig{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);font-size:14px}
@@ -83,14 +92,14 @@ section > .wrap{display:grid;gap:16px}
 .vigcap{font-size:13px;color:var(--muted)}
 .facts{display:grid;gap:12px;min-width:0}
 .fhead{display:flex;gap:12px;align-items:center}
-.fhead img{width:72px;height:72px;flex:none}
+.fhead img{width:96px;height:96px;flex:none;image-rendering:pixelated}
 .fhead .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
 table.stats{border-collapse:collapse;width:100%;font-size:14px}
 table.stats th{text-align:left;font-weight:400;color:var(--muted);padding:3px 10px 3px 0;white-space:nowrap;vertical-align:top}
 table.stats td{padding:3px 0;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
 .res{display:flex;flex-wrap:wrap;gap:8px}
-.res figure{margin:0;display:grid;justify-items:center;gap:0;width:64px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.2}
-.res img{width:48px;height:48px}
+.res figure{margin:0;display:grid;justify-items:center;gap:0;width:72px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.2}
+.res img{width:64px;height:64px;image-rendering:pixelated}
 .lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .lists div{min-width:0}
 .lists h4{margin:0 0 3px;font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
@@ -104,13 +113,13 @@ table.stats td{padding:3px 0;font-family:var(--mono);font-size:13px;font-variant
 .card:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .card[aria-current="true"]{border-color:var(--amber);background:var(--panel-2)}
 .card .ch{display:flex;gap:10px;align-items:center}
-.card img.pt{width:56px;height:56px;flex:none}
+.card img.pt{width:48px;height:48px;flex:none;image-rendering:pixelated}
 .card .nm{font-family:var(--display);font-size:20px;font-weight:600;line-height:1}
 .card .kd{font-size:12px;color:var(--muted)}
 .card .row{display:flex;flex-wrap:wrap;gap:5px}
 .card .one{font-size:13px;color:var(--muted)}
 .card .ri{display:flex;gap:2px}
-.card .ri img{width:26px;height:26px}
+.card .ri img{width:32px;height:32px;image-rendering:pixelated}
 .card .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
 .card .nums span{display:grid}
 .card .nums small{font-family:var(--display);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
@@ -128,6 +137,8 @@ table.grid td.rec{color:var(--ok)}
 .note b{color:var(--ink);font-weight:500}
 figure.sheet{margin:0;display:grid;gap:6px}
 figure.sheet img{width:100%;border:1px solid var(--line);border-radius:6px;background:#20242e}
+.pxrow{display:flex;flex-wrap:wrap;gap:6px;padding:10px;border:1px solid var(--line);border-radius:6px;background:#1f3b52}
+.pxrow img{image-rendering:pixelated;flex:none}
 figure.sheet figcaption{font-size:13px;color:var(--muted)}
 footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
 
@@ -169,11 +180,11 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
     <div class="insp">
       <div class="facts">
         <div class="globe"><canvas id="globeCanvas" aria-label="The selected body, turning, lit from the left, its night side on the right"></canvas></div>
-        <div class="fhead"><img id="iPortrait" alt="" src="planets/portrait_home.png"><div><div id="iKind" class="kd"></div><div class="chips" id="iChips"></div></div></div>
+        <div class="fhead"><img id="iPortrait" alt="" src="planets/portrait_home.png?v=3"><div><div id="iKind" class="kd"></div><div class="chips" id="iChips"></div></div></div>
         <table class="stats" id="iStats"></table>
       </div>
       <div class="vigwrap">
-        <div class="vig" id="vig"><canvas id="vigCanvas" tabindex="0" aria-label="A lit surface vignette of the selected body on the hex grid. Drag to turn."></canvas><div class="novig" id="noVig" hidden></div></div>
+        <div class="vig" id="vig"><canvas id="vigCanvas" tabindex="0" aria-label="A lit surface vignette of the selected body on the hex grid. Drag to turn."></canvas><div class="novig" id="noVig" hidden></div><div class="ghud" aria-hidden="true"><div class="gdbg" id="vDbg"></div><div class="gbar" id="vBar"></div></div></div>
         <div class="vigbar">
           <button class="btn" id="tDay">Day</button>
           <button class="btn" id="tDusk">Dusk</button>
@@ -223,7 +234,7 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
       <div style="display:grid;gap:10px">
         <div class="eyebrow">From orbit too</div>
         <h2>Lights on the night side</h2>
-        <p class="note">The globes carry a painted lights map on their dark side: town lights on the three habitable worlds and Tidewater, lava on Cinder, violet cave glow through Hollow's sinkholes, one outpost on Murk. It fades in across the terminator, so dusk on a world reads from space.</p>
+        <p class="note">The globes carry a pixel-art lights map on their dark side: town lights on the three habitable worlds and Tidewater, lava on Cinder, violet cave glow through Hollow's sinkholes, one outpost on Murk. It fades in across the terminator, so dusk on a world reads from space.</p>
       </div>
     </div>
   </div>
@@ -233,12 +244,13 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
   <div class="wrap">
     <div>
       <div class="eyebrow">Where the art comes from</div>
-      <h2>Painted by code, in the friend's style</h2>
+      <h2>Pixel art, in the solitaire collection's style</h2>
     </div>
-    <p class="note">The surface maps, portraits and resource icons are <b>painted by code</b> with the crayon kit in <span class="mono">.claude/skills/hand-drawn-illustration</span>, copying the owner's friend's method stroke by stroke: a flat saturated block, loose hatching in the shape's own lighter and darker tones, a shadow crescent that follows the form, highlight dabs, a bright rim, an edge in a deep tone of the same hue. <b>None of it is the friend's drawing</b>, and it is not proposed as final game art. The script is <span class="mono">tools/art/planets_art.py</span>; it took three passes against the sheets below (fixes: darker terminators, seam-wrapped bands without stray edges, a sulfur fountain instead of a crown on Cinder, a geyser spray on Rime, bases no longer cut off).</p>
+    <p class="note"><b>The game's own art</b>, copied byte-identical into <span class="mono">planets/game/</span> (its README names each source): the vignettes' hex columns wear the terrain atlas (<span class="mono">assets/tilesets/atlas.png</span>), each cell its biome sheet's ground on top, the ground-into-earth tile on the first metre of wall, earth then stone below, as <span class="mono">planet_surface.wgsl</span> picks them; trees are the game's hex-prism trees in the sheet's wood and leaf tiles; houses, habs, posts and decks wear the settlement materials (<span class="mono">assets/textures/settlement</span>); the landed ship is the Kestrel and the boat the Tern (<span class="mono">assets/models/vehicles</span>, loaded with GLTFLoader); the hotbar shows the game's item icons and atlas block tiles. All of it is sampled nearest without mipmaps. Bodies the game does not have yet borrow the nearest sheet: Cinder is the basalt sheet with its own sulfur and lava tiles, Hollow is sporewood, Murk the desert sheet tinted.</p>
+    <p class="note"><b>Mockup-only art</b>: the surface maps, night-light maps, portraits and resource icons are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="mono">.claude/skills/balatro-pixel-art</span>): a tiny native canvas, one bold subject, three to five tones a material lit from the top left, a dark seam between parts, a 1 px outline, single-pixel glints, no anti-aliasing, and every colour from the Sweaft-64 palette (the kit refuses to save a pixel off it). Maps are 128 x 64, drawn per pixel from noise on the sphere so the globes have no seam, with Bayer dithering for soft edges. Portraits are 48 x 48 (each body's own map wrapped on a lit disc, its night lights on the dark side), icons 32 x 32, all shown at whole-number scales. The script is <span class="mono">tools/art/planets_art.py</span>; it took three passes against contact sheets beside six of the solitaire collection's sprites (fixes: thinner cloud decks, solid polar ice on Lantern, one crack network on Rime, larger ice crystals, a lit shoulder that keeps each colour's hue).</p>
     <div class="two">
-      <figure class="sheet"><img src="planets/contact_portraits.png" alt="Contact sheet: the thirteen body portraits blown up and at 64 and 48 pixels, beside two of the friend's icons, magnetic field and inferno" loading="lazy"><figcaption>Portraits beside two of the friend's icons (marked "theirs").</figcaption></figure>
-      <figure class="sheet"><img src="planets/contact_resources.png" alt="Contact sheet: eleven resource icons beside the friend's plating and vitality icons" loading="lazy"><figcaption>Resource icons beside the friend's plating and vitality.</figcaption></figure>
+      <figure class="sheet"><div class="pxrow" id="pxPortraits"></div><figcaption>The thirteen portraits at 2x (native 48 px).</figcaption></figure>
+      <figure class="sheet"><div class="pxrow" id="pxRes"></div><figcaption>The eleven resource icons at 2x (native 32 px).</figcaption></figure>
     </div>
   </div>
 </section>
@@ -270,6 +282,7 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
 <footer class="wrap">Mockup page for the planets design. Three.js r128. Art: <span class="mono">tools/art/planets_art.py</span>, output in <span class="mono">docs/mockups/planets/</span>. Related designs: <span class="mono">orbit-and-seasons</span>, <span class="mono">gravity-model</span>, <span class="mono">per-body-rendering</span>, <span class="mono">planet-spin</span>, <span class="mono">far-side-flight</span>.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 "use strict";
 // =====================================================================
@@ -363,9 +376,11 @@ function dayTxt(b) {
 // an atmosphere rim on bodies with air, haze over Murk.
 // =====================================================================
 const loader = new THREE.TextureLoader();
+const AV = "?v=3";   // cache-bust every texture and model URL (ART-DIRECTION.md); bump when art changes
 const TEX = {};
 function tex(path) {
-  if (!TEX[path]) { const t = loader.load(path); t.anisotropy = 4; TEX[path] = t; }
+  // pixel art: nearest sampling, no mipmaps, so every map pixel stays a hard square
+  if (!TEX[path]) { const t = loader.load(path + AV); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; TEX[path] = t; }
   return TEX[path];
 }
 const LIGHTS_OF = new Set(["home", "verdance", "ochre", "cinder", "murk", "hollow", "tidewater"]);
@@ -583,16 +598,73 @@ const R3 = new THREE.WebGLRenderer({ canvas: vc, antialias: true });
 R3.setPixelRatio(Math.min(devicePixelRatio, 2));
 const S3 = new THREE.Scene(), C3 = new THREE.PerspectiveCamera(48, 16 / 9, 0.3, 3000);
 const lin = c => [Math.pow(((c >> 16) & 255) / 255, 2.2), Math.pow(((c >> 8) & 255) / 255, 2.2), Math.pow((c & 255) / 255, 2.2)];
-const VIG_VS = `attribute vec3 color; attribute vec3 fire; attribute vec3 lamp;
-varying vec3 vC; varying vec3 vN; varying vec3 vF; varying vec3 vL; varying float vD;
-void main(){ vC = color; vN = normal; vF = fire; vL = lamp; vec4 mv = modelViewMatrix * vec4(position, 1.0); vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`;
+// ---- the game's textures: the terrain atlas, the settlement materials, the vehicles' own atlases.
+// Every one is sampled nearest with no mipmaps, as the game samples them.
+const GAME = "planets/game/";
+function nearestTex(t) { t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.flipY = false; t.needsUpdate = true; return t; }
+const ATLAS_T = nearestTex(new THREE.TextureLoader().load(GAME + "atlas.png" + AV));
+// The tilesets in the order atlas.png holds them (planet_terrain.rs TILESETS): sheet i at
+// column i % 4, row i / 4, 128 px; each sheet a 4x4 grid of 32 px tiles.
+const SHEETS = ["asteroid", "basalt_wastes", "beach", "desert", "fields", "frozen_wastes", "jungle", "lunar_regolith", "mountains", "ocean", "redwood_forest", "sporewood", "swamp", "tundra"];
+const HEXR_ = 2.833 / Math.sqrt(3);
+// AT(sheet, tx, ty): a terrain tile. One tile across a cell top, one per metre layer on a wall,
+// as planet_surface.wgsl draws them.
+function AT(sheet, tx, ty, tint) {
+  const i = SHEETS.indexOf(sheet);
+  return { s: 1, ox: (i % 4) * 128 + tx * 32, oy: Math.floor(i / 4) * 128 + ty * 32, ru: HEXR_, rv: 1, rt: 2.833, tint };
+}
+// Settlement materials (assets/textures/settlement, repeat_m from its manifest.ron), packed at
+// load time into one 256 px canvas, eight 32 px tiles a row, copied pixel for pixel.
+const MATS = { plaster: 2, thatch: 2, timber: 1, plank: 2, leaves: 2, bark: 1, iron: 1, stone: 2, shingle: 2, cloth: 1 };
+const MAT_NAMES = Object.keys(MATS);
+const matCanvas = document.createElement("canvas"); matCanvas.width = matCanvas.height = 256;
+const MATS_T = nearestTex(new THREE.CanvasTexture(matCanvas));
+MAT_NAMES.forEach((n, i) => { const im = new Image(); im.onload = () => { const x = matCanvas.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(im, (i % 8) * 32, Math.floor(i / 8) * 32); MATS_T.needsUpdate = true; }; im.src = GAME + n + ".png" + AV; });
+function MT(name, tint) { const i = MAT_NAMES.indexOf(name), r = MATS[name]; return { s: 2, ox: (i % 8) * 32, oy: Math.floor(i / 8) * 32, ru: r, rv: r, rt: r, tint }; }
+// A flat-colour guess for the inline props that name only a colour: grey metal is iron, pale
+// is plaster, warm is plank or timber, green is leaves.
+function autoMat(col) {
+  const [r, g, b] = col.map(v => Math.pow(v, 1 / 2.2)), mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = 0.3 * r + 0.59 * g + 0.11 * b;
+  if (mx - mn < 0.12) return l < 0.5 ? MT("iron") : MT("plaster");
+  if (g > r && g > b) return MT("leaves");
+  if (r >= g && g >= b) return l < 0.42 ? MT("timber") : MT("plank");
+  return MT("iron");
+}
+// The game's own vehicles, loaded with GLTFLoader; their meshes go into the vignette's bag with
+// their own UVs, sampled from their own atlas.
+const VEH = {}, VEH_T = [new THREE.Texture(), new THREE.Texture()];
+let vehLoaded = 0;
+if (THREE.GLTFLoader) {
+  ["kestrel", "tern"].forEach((n, k) => new THREE.GLTFLoader().load(GAME + n + ".gltf.json" + AV, gl => {
+    gl.scene.updateMatrixWorld(true);
+    gl.scene.traverse(o => { if (o.isMesh && o.material && o.material.map && !VEH[n]) VEH_T[k] = nearestTex(o.material.map); });
+    VEH[n] = { scene: gl.scene, s: 3 + k };
+    if (vigMat) { vigMat.uniforms["veh" + k].value = VEH_T[k]; }
+    if (++vehLoaded === 2 && selected && vigEnv) buildVignette(BY[selected]);
+  }));
+}
+const VIG_VS = `attribute vec3 color; attribute vec3 fire; attribute vec3 lamp; attribute vec3 tile; attribute vec2 tuv;
+varying vec3 vC; varying vec3 vN; varying vec3 vF; varying vec3 vL; varying float vD; varying vec3 vT; varying vec2 vU;
+void main(){ vC = color; vN = normal; vF = fire; vL = lamp; vT = tile; vU = tuv; vec4 mv = modelViewMatrix * vec4(position, 1.0); vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`;
 const VIG_FS = `uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 moonDir; uniform vec3 moonCol; uniform vec3 skyAmb; uniform vec3 gndAmb;
 uniform float uLamp; uniform vec3 fogCol; uniform float fogDen; uniform float alpha; uniform float flick;
-varying vec3 vC; varying vec3 vN; varying vec3 vF; varying vec3 vL; varying float vD;
+uniform sampler2D atlas; uniform sampler2D mats; uniform sampler2D veh0; uniform sampler2D veh1;
+varying vec3 vC; varying vec3 vN; varying vec3 vF; varying vec3 vL; varying float vD; varying vec3 vT; varying vec2 vU;
+vec3 albedo(){
+  if (vT.z < 0.5) return vC;
+  vec2 f = clamp(fract(vU), 0.0005, 0.9995);
+  vec4 t;
+  if (vT.z < 1.5) t = texture2D(atlas, (vT.xy + f * 32.0) / 512.0);
+  else if (vT.z < 2.5) t = texture2D(mats, (vT.xy + f * 32.0) / 256.0);
+  else if (vT.z < 3.5) t = texture2D(veh0, vU);
+  else t = texture2D(veh1, vU);
+  return pow(t.rgb, vec3(2.2)) * vC;
+}
 void main(){
   vec3 N = normalize(vN);
+  vec3 A = albedo();
   vec3 lit = sunCol * max(dot(N, sunDir), 0.0) + moonCol * max(dot(N, moonDir), 0.0) + mix(gndAmb, skyAmb, N.y * 0.5 + 0.5);
-  vec3 col = vC * lit + vC * vF * flick + vC * vL * uLamp;
+  vec3 col = A * lit + A * vF * flick + A * vL * uLamp + (vT.z < 0.5 ? vec3(0.0) : vec3(0.0));
   col = col / (1.0 + col * 0.12);
   float f = 1.0 - exp(-fogDen * fogDen * vD * vD);
   col = mix(col, fogCol, f);
@@ -605,29 +677,56 @@ function vigMaterial(alpha) {
       moonDir: { value: new THREE.Vector3(-0.3, 0.8, -0.4).normalize() }, moonCol: { value: new THREE.Vector3() },
       skyAmb: { value: new THREE.Vector3(0.2, 0.25, 0.3) }, gndAmb: { value: new THREE.Vector3(0.05, 0.05, 0.05) },
       uLamp: { value: 1 }, fogCol: { value: new THREE.Vector3() }, fogDen: { value: 0 }, alpha: { value: alpha }, flick: { value: 1 },
+      atlas: { value: ATLAS_T }, mats: { value: MATS_T }, veh0: { value: VEH_T[0] }, veh1: { value: VEH_T[1] },
     },
     vertexShader: VIG_VS, fragmentShader: VIG_FS, transparent: alpha < 1, depthWrite: alpha >= 1, side: THREE.DoubleSide,
   });
 }
-// A bag of flat-shaded triangles with a colour and two emissions each.
+// A bag of flat-shaded triangles with a colour, two emissions and a texture tile each. `spec`
+// names the tile (AT, MT or a vehicle); without one a face is its flat colour (light, water).
+const WHITE = [1, 1, 1];
 class Bag {
-  constructor() { this.p = []; this.n = []; this.c = []; this.f = []; this.l = []; }
-  push(pt, nx, ny, nz, col, ef, el) {
-    this.p.push(pt[0], pt[1], pt[2]); this.n.push(nx, ny, nz); this.c.push(col[0], col[1], col[2]);
+  constructor() { this.p = []; this.n = []; this.c = []; this.f = []; this.l = []; this.t = []; this.u = []; }
+  push(pt, nx, ny, nz, col, ef, el, spec, uv) {
+    this.p.push(pt[0], pt[1], pt[2]); this.n.push(nx, ny, nz);
+    const c = spec ? (spec.tint || WHITE) : col;
+    this.c.push(c[0], c[1], c[2]);
     this.f.push(ef ? ef[0] : 0, ef ? ef[1] : 0, ef ? ef[2] : 0); this.l.push(el ? el[0] : 0, el ? el[1] : 0, el ? el[2] : 0);
+    if (!spec) { this.t.push(0, 0, 0); this.u.push(0, 0); return; }
+    this.t.push(spec.ox || 0, spec.oy || 0, spec.s);
+    if (uv) { this.u.push(uv[0], uv[1]); return; }
+    if (Math.abs(ny) > 0.7) this.u.push(pt[0] / spec.rt, pt[2] / spec.rt);
+    else { const L = Math.hypot(nx, nz) || 1; this.u.push((pt[0] * -nz + pt[2] * nx) / L / spec.ru, -pt[1] / spec.rv); }
   }
-  tri(a, b, c, col, hint, ef, el) {
+  tri(a, b, c, col, hint, ef, el, spec, uvs) {
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     const L = Math.hypot(nx, ny, nz) || 1; nx /= L; ny /= L; nz /= L;
     if (hint && nx * hint[0] + ny * hint[1] + nz * hint[2] < 0) { nx = -nx; ny = -ny; nz = -nz; }
-    this.push(a, nx, ny, nz, col, ef, el); this.push(b, nx, ny, nz, col, ef, el); this.push(c, nx, ny, nz, col, ef, el);
+    this.push(a, nx, ny, nz, col, ef, el, spec, uvs && uvs[0]); this.push(b, nx, ny, nz, col, ef, el, spec, uvs && uvs[1]); this.push(c, nx, ny, nz, col, ef, el, spec, uvs && uvs[2]);
   }
-  quad(a, b, c, d, col, hint, ef, el) { this.tri(a, b, c, col, hint, ef, el); this.tri(a, c, d, col, hint, ef, el); }
-  three(g, m, col, ef, el) {
+  quad(a, b, c, d, col, hint, ef, el, spec, uvs) {
+    this.tri(a, b, c, col, hint, ef, el, spec, uvs && [uvs[0], uvs[1], uvs[2]]);
+    this.tri(a, c, d, col, hint, ef, el, spec, uvs && [uvs[0], uvs[2], uvs[3]]);
+  }
+  three(g, m, col, ef, el, spec) {
+    if (spec === undefined) spec = (ef || el) ? null : autoMat(col);
     g = g.index ? g.toNonIndexed() : g; g.applyMatrix4(m); g.computeVertexNormals();
     const P = g.attributes.position.array, N = g.attributes.normal.array;
-    for (let i = 0; i < P.length; i += 3) this.push([P[i], P[i + 1], P[i + 2]], N[i], N[i + 1], N[i + 2], col, ef, el);
+    for (let i = 0; i < P.length; i += 3) this.push([P[i], P[i + 1], P[i + 2]], N[i], N[i + 1], N[i + 2], col, ef, el, spec);
+  }
+  // a vehicle GLB, every mesh with its own UVs
+  glb(name, m) {
+    const v = VEH[name]; if (!v) return false;
+    v.scene.traverse(o => {
+      if (!o.isMesh) return;
+      let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(m, o.matrixWorld));
+      if (!g.attributes.normal) g.computeVertexNormals();
+      const P = g.attributes.position.array, N = g.attributes.normal.array, U = g.attributes.uv ? g.attributes.uv.array : null;
+      for (let i = 0, j = 0; i < P.length; i += 3, j += 2) this.push([P[i], P[i + 1], P[i + 2]], N[i], N[i + 1], N[i + 2], WHITE, null, null, { s: v.s }, U ? [U[j], U[j + 1]] : [0, 0]);
+    });
+    return true;
   }
 }
 const M4 = (x, y, z, ry = 0, sx = 1, sy = 1, sz = 1, rz = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, rz)), new THREE.Vector3(sx, sy, sz));
@@ -651,139 +750,191 @@ const topAt = (x, z) => { const [q, r] = axialAt(x, z), c = V.cells.get(q + "," 
 const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
 
 function terrain(o) {
-  // o: { N, height(x,z)->m, topAt(x,z,h)->colour, side(y)->colour, base, emit(x,z,h)->{ef} }
+  // o: { N, height(x,z)->m, sheet(x,z,h)->tileset name | spec | null, tint(x,z,h)->linear rgb,
+  //      top(x,z,h)->colour (where no sheet: lava), base, emit(x,z,h)->{ef} }
+  // A cell is drawn as planet_surface.wgsl draws it: its sheet's ground (0,0) on top, the
+  // ground-over-earth transition (1,0) on the first metre of wall, earth (2,0) for the sod's
+  // depth, stone (3,0) under it. Tiles are the game's, in their own colours.
   const N = o.N || 10, base = o.base ?? -5;
+  V.sheet = o.trees || null;
   for (let q = -N; q <= N; q++) for (let r = Math.max(-N, -q - N); r <= Math.min(N, -q + N); r++) {
     const x = cx(q, r), z = cz(r);
     V.cells.set(q + "," + r, { q, r, x, z, h: Math.round(o.height(x, z)) });
   }
+  const specOf = (sh, tx, ty, tint) => !sh ? null : typeof sh === "string" ? AT(sh, tx, ty, tint) : Object.assign({}, sh, tint ? { tint } : {});
   for (const c of V.cells.values()) {
     const corner = k => { const a = (-30 + 60 * k) * Math.PI / 180; return [c.x + HEXR * Math.cos(a), c.z + HEXR * Math.sin(a)]; };
+    const sh = o.sheet ? o.sheet(c.x, c.z, c.h) : null, tint = o.tint ? o.tint(c.x, c.z, c.h) : null;
     const col = o.top(c.x, c.z, c.h), em = o.emit ? o.emit(c.x, c.z, c.h) : null;
+    const topSpec = specOf(sh, ...(o.topTile ? o.topTile(c.x, c.z, c.h) : [0, 0]), tint);
     for (let k = 0; k < 6; k++) {
       const [ax, az] = corner(k), [bx, bz] = corner(k + 1);
-      V.bag.tri([c.x, c.h, c.z], [ax, c.h, az], [bx, c.h, bz], col, [0, 1, 0], em && em.ef, em && em.el);
+      // the top's UV is the cell's own: one tile across the hex, centred
+      const tu = (px, pz) => [(px - c.x) / W + 0.5, (pz - c.z) / W + 0.5];
+      V.bag.tri([c.x, c.h, c.z], [ax, c.h, az], [bx, c.h, bz], col, [0, 1, 0], em && em.ef, em && em.el, topSpec, [tu(c.x, c.z), tu(ax, az), tu(bx, bz)]);
       const nb = V.cells.get((c.q + DIRS[k][0]) + "," + (c.r + DIRS[k][1]));
       const floor = nb ? nb.h : base;
       const mid = 60 * k * Math.PI / 180, hint = [Math.cos(mid), 0, Math.sin(mid)];
       for (let y = c.h; y > floor; y--) {
-        const sc = o.side(y, c.h - y);
-        V.bag.quad([ax, y, az], [bx, y, bz], [bx, y - 1, bz], [ax, y - 1, az], sc, hint);
+        const d = c.h - y, slot = d === 0 ? [1, 0] : d < 3 ? [2, 0] : [3, 0];
+        const sideSh = o.sideSheet ? o.sideSheet(c.x, c.z, c.h, y) : sh;
+        const sp = specOf(sideSh, slot[0], slot[1], tint);
+        V.bag.quad([ax, y, az], [bx, y, bz], [bx, y - 1, bz], [ax, y - 1, az], sp ? WHITE : o.side(y, d), hint, null, null, sp, [[0, 0], [1, 0], [1, 1], [0, 1]]);
       }
     }
   }
 }
 function water(level, colour, N = 11) {
-  // a fine grid so lamplight on the water reads
+  // a fine grid so lamplight on the water reads; the game draws water as a tint
   const span = W * N * 1.05, n = 44, col = lin(colour);
   for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
     const x0 = -span + 2 * span * i / n, x1 = -span + 2 * span * (i + 1) / n, z0 = -span + 2 * span * j / n, z1 = -span + 2 * span * (j + 1) / n;
     if (Math.hypot((x0 + x1) / 2, (z0 + z1) / 2) > span * 0.93) continue;
-    V.water.quad([x0, level, z0], [x1, level, z0], [x1, level, z1], [x0, level, z1], col, [0, 1, 0]);
+    V.water.quad([x0, level, z0], [x1, level, z0], [x1, level, z1], [x0, level, z1], col, [0, 1, 0], null, null, null);
   }
 }
-// props: every helper puts its feet on the cell top at (x, z)
-const box = (x, y, z, w, h, d, c, o = {}) => V.bag.three(new THREE.BoxGeometry(w, h, d), M4(x, y + h / 2, z, o.ry || 0), lin(c), o.ef, o.el);
-const cyl = (x, y, z, r, h, c, o = {}) => V.bag.three(new THREE.CylinderGeometry(o.r2 ?? r, r, h, o.n || 6), M4(x, y + h / 2, z, o.ry || 0, 1, 1, 1, o.rz || 0), lin(c), o.ef, o.el);
-const cone = (x, y, z, r, h, c, o = {}) => V.bag.three(new THREE.ConeGeometry(r, h, o.n || 6), M4(x, y + h / 2, z, o.ry || 0), lin(c), o.ef, o.el);
-const ball = (x, y, z, r, c, o = {}) => V.bag.three(new THREE.IcosahedronGeometry(r, o.detail ?? 0), M4(x, y, z, 0, o.sx || 1, o.sy || 1, o.sz || 1), lin(c), o.ef, o.el);
+// props: every helper puts its feet on the cell top at (x, z). `o.m` is the texture (MT/AT);
+// without one a prop is textured by its colour (autoMat), unless it is a light.
+const box = (x, y, z, w, h, d, c, o = {}) => V.bag.three(new THREE.BoxGeometry(w, h, d), M4(x, y + h / 2, z, o.ry || 0), lin(c), o.ef, o.el, o.m);
+const cyl = (x, y, z, r, h, c, o = {}) => V.bag.three(new THREE.CylinderGeometry(o.r2 ?? r, r, h, o.n || 6), M4(x, y + h / 2, z, o.ry || 0, 1, 1, 1, o.rz || 0), lin(c), o.ef, o.el, o.m);
+const cone = (x, y, z, r, h, c, o = {}) => V.bag.three(new THREE.ConeGeometry(r, h, o.n || 6), M4(x, y + h / 2, z, o.ry || 0), lin(c), o.ef, o.el, o.m);
+// A hex prism on the cell grid's own corners, rb at the bottom and rt at the top (metres from
+// the axis): the game's tree parts, and its round-ish buildings.
+function hexPrism(x, z, y0, y1, rb, rt, spec, caps = true) {
+  const at = (k, r, y) => { const a = (-30 + 60 * k) * Math.PI / 180; return [x + r * Math.cos(a), y, z + r * Math.sin(a)]; };
+  const hgt = Math.max(1, y1 - y0);
+  for (let k = 0; k < 6; k++) {
+    const mid = 60 * k * Math.PI / 180, hint = [Math.cos(mid), 0, Math.sin(mid)];
+    V.bag.quad(at(k, rb, y0), at(k + 1, rb, y0), at(k + 1, rt, y1), at(k, rt, y1), WHITE, hint, null, null, spec, [[0, hgt], [1, hgt], [1, 0], [0, 0]]);
+    if (caps && rt > 0) {
+      const tu = (p) => [(p[0] - x) / (2 * rt) + 0.5, (p[2] - z) / (2 * rt) + 0.5];
+      const A = at(k, rt, y1), B = at(k + 1, rt, y1);
+      V.bag.tri([x, y1, z], A, B, WHITE, [0, 1, 0], null, null, spec, [[0.5, 0.5], tu(A), tu(B)]);
+      if (rb > 0) { const C = at(k, rb, y0), D = at(k + 1, rb, y0); V.bag.tri([x, y0, z], C, D, WHITE, [0, -1, 0], null, null, spec, [[0.5, 0.5], tu(C), tu(D)]); }
+    }
+  }
+}
+// A straight-walled house's pitched roof: two slopes and two gable ends, ridge along x.
+function gable(x, y, z, w, d, h, ry, roofSpec, wallSpec) {
+  const m = M4(x, y, z, ry), P = (a, b, c) => new THREE.Vector3(a, b, c).applyMatrix4(m).toArray();
+  const e = 0.3, hw = w / 2 + e, hd = d / 2 + e;
+  const r0 = P(-hw, h, 0), r1 = P(hw, h, 0);
+  V.bag.quad(P(-hw, 0, -hd), P(hw, 0, -hd), r1, r0, WHITE, null, null, null, roofSpec, [[0, 1.6], [w / 2, 1.6], [w / 2, 0], [0, 0]]);
+  V.bag.quad(P(hw, 0, hd), P(-hw, 0, hd), r0, r1, WHITE, null, null, null, roofSpec, [[0, 1.6], [w / 2, 1.6], [w / 2, 0], [0, 0]]);
+  for (const s of [-1, 1]) V.bag.tri(P(s * w / 2, 0, -d / 2), P(s * w / 2, 0, d / 2), P(s * w / 2, h, 0), WHITE, null, null, null, wallSpec, [[0, h / 2], [d / 2, h / 2], [d / 4, 0]]);
+}
 function light(x, y, z, kind, colour, R, p = 1) {
-  V.lights.push({ x, y, z, R, p, col: lin(colour), night: kind !== "fire", kind });
+  // tight pools, as the game draws them: dark ground between lamps (ART-DIRECTION, night is dark)
+  V.lights.push({ x, y, z, R: R * 0.65, p, col: lin(colour), night: kind !== "fire", kind });
 }
 const EL = [3.2, 2.5, 1.4], EF = [3.0, 1.5, 0.45];
 function lampPost(x, z, h = 2.8) {
   const y = topAt(x, z);
-  cyl(x, y, z, 0.07, h, 0x2b2a2e, { n: 5 });
+  cyl(x, y, z, 0.07, h, 0x2b2a2e, { n: 6, m: MT("iron") });
   box(x, y + h, z, 0.36, 0.42, 0.36, 0xfff1d0, { el: EL });
-  box(x, y + h + 0.42, z, 0.46, 0.08, 0.46, 0x2b2a2e);
+  box(x, y + h + 0.42, z, 0.46, 0.08, 0.46, 0x2b2a2e, { m: MT("iron") });
   light(x, y + h + 0.2, z, "lamp", 0xffc77a, 10, 1.1);
 }
 function fire(x, z) {
   const y = topAt(x, z);
-  for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; box(x + Math.cos(a) * 0.55, y, z + Math.sin(a) * 0.55, 0.3, 0.22, 0.3, 0x77706a); }
-  cone(x, y, z, 0.38, 0.9, 0xffd9a0, { ef: EF, n: 5 });
+  for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; box(x + Math.cos(a) * 0.55, y, z + Math.sin(a) * 0.55, 0.3, 0.22, 0.3, 0x77706a, { m: MT("stone") }); }
+  cone(x, y, z, 0.38, 0.9, 0xffd9a0, { ef: EF, n: 6 });
   light(x, y + 0.6, z, "fire", 0xff9a48, 9, 1.2);
 }
 function hut(x, z, w, d, h, wall, roof, o = {}) {
   const y = (o.y ?? topAt(x, z)), ry = o.ry || 0;
-  box(x, y, z, w, h, d, wall, { ry });
-  V.bag.three(new THREE.ConeGeometry(Math.max(w, d) * 0.78, h * 0.7, 4), M4(x, y + h + h * 0.35, z, ry + Math.PI / 4, w / Math.max(w, d), 1, d / Math.max(w, d)), lin(roof));
+  const wallSpec = o.wallM || MT("plaster"), roofSpec = o.roofM || MT("thatch");
+  box(x, y, z, w, h, d, wall, { ry, m: wallSpec });
+  gable(x, y + h, z, w, d, h * 0.6, ry, roofSpec, wallSpec);
   // windows on the two long sides, lit by the candle in the room behind
   const c = Math.cos(ry), s = Math.sin(ry);
   for (const side of [-1, 1]) for (const off of (w > 4 ? [-w * 0.25, w * 0.25] : [0])) {
     const lx = off, lz = side * (d / 2 + 0.03);
     const wx = x + lx * c + lz * s, wz = z - lx * s + lz * c;
-    V.bag.three(new THREE.BoxGeometry(0.7, 0.8, 0.06), M4(wx, y + h * 0.5, wz, ry), lin(0xfff0c8), null, o.dark ? null : EL);
+    V.bag.three(new THREE.BoxGeometry(0.7, 0.8, 0.06), M4(wx, y + h * 0.5, wz, ry), lin(o.dark ? 0x2a2420 : 0xfff0c8), null, o.dark ? null : EL, o.dark ? MT("timber") : null);
     if (!o.dark) light(wx + side * s * 0.4, y + h * 0.5, wz + side * c * 0.4, "window", 0xffb866, 5, 0.75);
   }
 }
+// The game's tree (planet_surface.wgsl): voxels in ONE cell drawn as hex prisms shrunk toward the
+// cell centre, wood at 0.20 of the cell and each of two leaf layers at 0.65 + 0.35 * a hash, in
+// the cell's sheet's wood (2,1) and leaf (0,2) tiles. A pine is one wood block under a leaf run
+// that tapers from a wide skirt to a point.
 function tree(x, z, kind = "oak", sc = 1) {
-  const y = topAt(x, z);
-  if (kind === "oak") { cyl(x, y, z, 0.28 * sc, 2.8 * sc, 0x6b4a2c); ball(x, y + 4.0 * sc, z, 2.1 * sc, 0x3d8a3a, { detail: 1 }); }
-  if (kind === "pine") { cyl(x, y, z, 0.2 * sc, 2 * sc, 0x5a3e26); cone(x, y + 1.2 * sc, z, 1.6 * sc, 3.2 * sc, 0x2f6a40, { n: 7 }); cone(x, y + 3.0 * sc, z, 1.1 * sc, 2.4 * sc, 0x37784a, { n: 7 }); }
-  if (kind === "kapok") { cyl(x, y, z, 0.5 * sc, 8 * sc, 0x7a6248, { r2: 0.35 * sc }); ball(x, y + 8.6 * sc, z, 3.4 * sc, 0x2c7a34, { detail: 1, sy: 0.55 }); ball(x + 1.6 * sc, y + 7.6 * sc, z + 1 * sc, 2.0 * sc, 0x3a8c3a, { detail: 1, sy: 0.6 }); }
-  if (kind === "palm") {
-    for (let k = 0; k < 5; k++) cyl(x + k * 0.18 * sc, y + k * 1.0 * sc, z, 0.2 * sc, 1.05 * sc, 0x8a6a44, { rz: -0.18 });
-    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; V.bag.three(new THREE.ConeGeometry(0.35 * sc, 2.6 * sc, 3), M4(x + 0.9 * sc + Math.cos(a) * 1.1 * sc, y + 5 * sc, z + Math.sin(a) * 1.1 * sc, -a, 1, 1, 1, Math.PI / 2 - 0.3), lin(0x4c9a3c)); }
+  const [q, r] = axialAt(x, z), X = cx(q, r), Z = cz(r), y = topAt(X, Z);
+  const sheet = V.sheet || "fields", wood = AT(sheet, 2, 1), leaf = AT(sheet, 0, 2), h = hash(q * 1.7, r * 2.3);
+  const lw = k => HEXR * (0.65 + 0.35 * hash(q + k * 3.1, r - k * 1.3));
+  if (kind === "pine") {
+    const crown = y + 3 + (h > 0.5 ? 1 : 0) + 3, mid = (y + 1 + crown) / 2;
+    hexPrism(X, Z, y, y + 1, HEXR * 0.2, HEXR * 0.2, wood);
+    hexPrism(X, Z, y + 1, mid, HEXR * 0.95, HEXR * 0.55, leaf);
+    hexPrism(X, Z, mid, crown, HEXR * 0.55, HEXR * 0.15, leaf);
+    return;
   }
-  if (kind === "cactus") { box(x, y, z, 0.5, 2.6 * sc, 0.5, 0x4f8a3e); box(x + 0.55, y + 1.1, z, 0.4, 0.4, 0.4, 0x4f8a3e); box(x + 0.75, y + 1.1, z, 0.36, 1.1, 0.36, 0x4f8a3e); }
+  if (kind === "cactus") { hexPrism(X, Z, y, y + 3, HEXR * 0.3, HEXR * 0.3, leaf); return; }
+  const extra = kind === "kapok" ? 2 : 0, trunk = 3 + (h > 0.5 ? 1 : 0) + extra + (kind === "palm" ? 1 : 0);
+  hexPrism(X, Z, y, y + trunk, HEXR * 0.2, HEXR * 0.2, wood);
+  if (kind === "palm") { hexPrism(X, Z, y + trunk, y + trunk + 1, HEXR, HEXR, leaf); return; }
+  hexPrism(X, Z, y + trunk, y + trunk + 1, lw(0), lw(0), leaf);
+  hexPrism(X, Z, y + trunk + 1, y + trunk + 2, lw(1), lw(1), leaf);
 }
 function crystal(x, z, h, colour, glow) {
   const y = topAt(x, z);
   for (let k = 0; k < 3; k++) {
     const a = k * 2.1, dx = Math.cos(a) * 0.45, dz = Math.sin(a) * 0.45;
-    V.bag.three(new THREE.ConeGeometry(0.32, h * (1 - k * 0.22), 5), M4(x + dx, y + h * (1 - k * 0.22) / 2, z + dz, 0, 1, 1, 1, (k - 1) * 0.3), lin(colour), glow);
+    V.bag.three(new THREE.CylinderGeometry(0.05, 0.32, h * (1 - k * 0.22), 6), M4(x + dx, y + h * (1 - k * 0.22) / 2, z + dz, 0, 1, 1, 1, (k - 1) * 0.3), lin(colour), glow);
   }
   light(x, y + h * 0.5, z, "fire", colour, 9, 1.0);
 }
+// A hab: a hex-prism building on the grid, a hex roof, lit windows round it.
 function dome(x, z, r, o = {}) {
-  const y = topAt(x, z);
-  V.bag.three(new THREE.SphereGeometry(r, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), M4(x, y, z), lin(o.c || 0xdfe3ea));
+  const y = topAt(x, z), wallM = o.m || MT(o.c && o.c < 0xd0d0d0 ? "iron" : "plaster");
+  hexPrism(x, z, y, y + r * 0.7, r, r, wallM, false);
+  hexPrism(x, z, y + r * 0.7, y + r * 1.2, r * 1.08, 0.3, MT("shingle"));
   for (let k = 0; k < 6; k++) {
-    const a = k / 6 * Math.PI * 2 + 0.3;
-    V.bag.three(new THREE.BoxGeometry(0.9, 0.5, 0.08), M4(x + Math.cos(a) * r * 0.86, y + r * 0.42, z + Math.sin(a) * r * 0.86, -a + Math.PI / 2), lin(0xfff0c8), null, EL);
-    light(x + Math.cos(a) * (r + 0.6), y + r * 0.42, z + Math.sin(a) * (r + 0.6), "window", 0xffd9a0, 5.5, 0.8);
+    const a = (k * 60) * Math.PI / 180;
+    V.bag.three(new THREE.BoxGeometry(0.9, 0.5, 0.08), M4(x + Math.cos(a) * r * 0.87, y + r * 0.38, z + Math.sin(a) * r * 0.87, -a + Math.PI / 2), lin(0xfff0c8), null, EL);
+    light(x + Math.cos(a) * (r + 0.6), y + r * 0.38, z + Math.sin(a) * (r + 0.6), "window", 0xffd9a0, 5.5, 0.8);
   }
 }
 function mast(x, z, h = 7) {
   const y = topAt(x, z);
-  cyl(x, y, z, 0.12, h, 0x9aa0aa, { n: 4 });
+  cyl(x, y, z, 0.12, h, 0x9aa0aa, { n: 6, m: MT("iron") });
   box(x, y + h, z, 0.9, 0.5, 0.5, 0xffffff, { el: [4, 4, 3.6] });
   light(x, y + h - 0.6, z, "lamp", 0xe8f0ff, 18, 1.4);
 }
 function rover(x, z, ry = 0.4) {
   const y = topAt(x, z) + 0.45;
-  box(x, y, z, 2.6, 1.0, 1.6, 0xd8d4c8, { ry });
+  box(x, y, z, 2.6, 1.0, 1.6, 0xd8d4c8, { ry, m: MT("plaster") });
+  box(x, y + 1.0, z, 1.2, 0.5, 1.4, 0x8a8a90, { ry, m: MT("iron") });
   for (const [a, b] of [[-0.9, -0.85], [0.9, -0.85], [-0.9, 0.85], [0.9, 0.85]]) {
     const c = Math.cos(ry), s = Math.sin(ry);
-    V.bag.three(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 8), new THREE.Matrix4().compose(new THREE.Vector3(x + a * c + b * s, y, z - a * s + b * c), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, ry, 0)), new THREE.Vector3(1, 1, 1)), lin(0x3a3a40));
+    V.bag.three(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 6), new THREE.Matrix4().compose(new THREE.Vector3(x + a * c + b * s, y, z - a * s + b * c), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, ry, 0)), new THREE.Vector3(1, 1, 1)), lin(0x3a3a40), null, null, MT("iron"));
   }
   box(x + Math.cos(ry) * 1.32, y + 0.4, z - Math.sin(ry) * 1.32, 0.12, 0.25, 1.0, 0xffffff, { ry, el: [3, 3, 2.6] });
   light(x + Math.cos(ry) * 3, y + 0.5, z - Math.sin(ry) * 3, "lamp", 0xe8f0ff, 9, 1);
 }
+// The ship on the pad is the game's own Kestrel (assets/models/vehicles/kestrel), landed.
 function ship(x, z, ry = 0.8, y0) {
-  const y = (y0 ?? topAt(x, z)) + 0.8;
-  V.bag.three(new THREE.ConeGeometry(1.4, 6, 4), M4(x, y + 0.7, z, ry, 1, 1, 0.45, Math.PI / 2), lin(0xe4e6ea));
-  box(x, y + 0.9, z, 1.6, 0.6, 1.2, 0x3a8cd0, { ry });
-  for (const s of [-1, 1]) cyl(x + Math.sin(ry) * s * 1.6, y - 0.8, z + Math.cos(ry) * s * 1.6, 0.1, 1.2, 0x4a4a52);
-  box(x - Math.cos(ry) * 2.6, y + 0.4, z + Math.sin(ry) * 2.6, 0.2, 0.2, 0.2, 0xff4040, { ry, el: [3, 0.3, 0.3] });
+  const y = (y0 ?? topAt(x, z)) + 0.69;
+  if (!V.bag.glb("kestrel", M4(x, y, z, ry))) box(x, y - 0.69, z, 1.5, 1.4, 9, 0xe4e6ea, { ry, m: MT("plaster") });
+  box(x - Math.sin(ry) * 5.2, y + 0.3, z - Math.cos(ry) * 5.2, 0.2, 0.2, 0.2, 0xff4040, { ry, el: [3, 0.3, 0.3] });
 }
+// The boat at the jetty is the game's own Tern (assets/models/vehicles/tern).
 function boat(x, z, ry, level) {
-  V.bag.three(new THREE.BoxGeometry(4.6, 0.7, 1.6), M4(x, level + 0.2, z, ry), lin(0x8a6640));
-  cyl(x, level + 0.5, z, 0.07, 4, 0x6a5038);
-  V.bag.three(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([0, 0.8, 0, 0, 4.3, 0, -2.0, 0.8, 0], 3)), M4(x, level, z, ry), lin(0xf0e6d0));
-  box(x + Math.cos(ry) * 2.1, level + 0.55, z - Math.sin(ry) * 2.1, 0.26, 0.3, 0.26, 0xfff0d0, { el: EL });
-  light(x + Math.cos(ry) * 2.1, level + 0.9, z - Math.sin(ry) * 2.1, "lamp", 0xffc77a, 8, 0.9);
+  if (!V.bag.glb("tern", M4(x, level + 0.05, z, ry))) box(x, level, z, 1.8, 0.6, 6, 0x8a6640, { ry, m: MT("plank") });
+  box(x + Math.sin(ry) * 2.8, level + 0.9, z + Math.cos(ry) * 2.8, 0.26, 0.3, 0.26, 0xfff0d0, { el: EL });
+  light(x + Math.sin(ry) * 2.8, level + 1.2, z + Math.cos(ry) * 2.8, "lamp", 0xffc77a, 8, 0.9);
 }
 function stilts(x, z, level, w = 4, d = 3.4, ry = 0) {
-  for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cyl(x + a * w * 0.4, level - 2, z + b * d * 0.4, 0.12, 4.2, 0x5a4430);
-  box(x, level + 2, z, w + 1, 0.2, d + 1, 0x7a5a3a);
-  hut(x, z, w, d, 2.4, 0x9a7a52, 0x6a7a3a, { y: level + 2.2, ry });
+  for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cyl(x + a * w * 0.4, level - 2, z + b * d * 0.4, 0.12, 4.2, 0x5a4430, { m: MT("timber") });
+  box(x, level + 2, z, w + 1, 0.2, d + 1, 0x7a5a3a, { m: MT("plank") });
+  hut(x, z, w, d, 2.4, 0x9a7a52, 0x6a7a3a, { y: level + 2.2, ry, wallM: MT("plank"), roofM: MT("thatch") });
 }
 
 const VIG = {
   home() {
     terrain({
+      sheet: (x, z, h) => h <= 0 ? "beach" : h > 7 ? "mountains" : "fields", trees: "fields",
       height: (x, z) => 1 + fbm(x * 0.028 + 3, z * 0.028) * 9 - Math.max(0, (x + z) * 0.05),
       top: (x, z, h) => h < 0 ? lin(0x4a5a48) : h === 0 ? lin(0xd8c48a) : h > 6 ? lin(0x8a8a86) : lin(hash(x, z) > 0.5 ? 0x5ea040 : 0x67a948),
       side: (y, d) => d === 0 ? lin(0x6a5232) : lin(y % 2 ? 0x7d6a58 : 0x857262),
@@ -800,6 +951,7 @@ const VIG = {
   },
   verdance() {
     terrain({
+      sheet: (x, z, h) => h <= 0 ? "swamp" : "jungle", trees: "jungle",
       height: (x, z) => -0.4 + fbm(x * 0.04, z * 0.04 + 7) * 5,
       top: (x, z, h) => h <= 0 ? lin(0x5a5a2a) : lin(hash(x, z) > 0.5 ? 0x2f7a34 : 0x3a8a3a),
       side: (y, d) => d === 0 ? lin(0x4a3a24) : lin(y % 2 ? 0x6a4a34 : 0x5e4430),
@@ -814,6 +966,7 @@ const VIG = {
   },
   ochre() {
     terrain({
+      sheet: () => "desert", trees: "desert",
       height: (x, z) => { const canyon = Math.abs(z * 0.9 + x * 0.25 + Math.sin(x * 0.12) * 4) < 5 ? -7 : 0; return 2 + fbm(x * 0.03, z * 0.03) * 6 + canyon; },
       top: (x, z, h) => h < -2 ? lin(0xa0583a) : lin(hash(x, z) > 0.5 ? 0xc8784a : 0xd28654),
       side: (y, d) => lin([0xb0583a, 0xc46a44, 0x9c4c34, 0xd88a5a][((y % 4) + 4) % 4]),
@@ -828,6 +981,7 @@ const VIG = {
   },
   lantern() {
     terrain({
+      sheet: () => "lunar_regolith",
       height: (x, z) => { let h = fbm(x * 0.03, z * 0.03) * 4; for (const [a, b, r] of [[8, -6, 9], [-14, 10, 6], [-6, -16, 5]]) { const d = Math.hypot(x - a, z - b); if (d < r) h -= 3 * (1 - (d / r) ** 2); else if (d < r * 1.3) h += 1.2; } return h; },
       top: (x, z, h) => lin(hash(x, z) > 0.6 ? 0x9a9aa4 : 0x8c8c96),
       side: (y, d) => lin(y % 2 ? 0x707078 : 0x7a7a84),
@@ -840,19 +994,21 @@ const VIG = {
   },
   rime() {
     terrain({
+      sheet: (x, z, h) => h < -1 ? "ocean" : "frozen_wastes",
       height: (x, z) => { const crack = Math.abs(x * 0.6 - z + Math.sin(z * 0.2) * 3) < 2.6 ? -3 : 0; return 1 + fbm(x * 0.035, z * 0.035) * 3 + crack; },
       top: (x, z, h) => h < -1 ? lin(0x4a86c0) : lin(hash(x, z) > 0.5 ? 0xdcecf6 : 0xcfe4f2),
       side: (y, d) => lin(y % 2 ? 0x9cc4e4 : 0xb0d2ec),
     });
     // a drill rig on four legs, lit
-    { const x = -5, z = -6, y = topAt(x, z); for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) V.bag.three(new THREE.CylinderGeometry(0.12, 0.12, 9, 4), M4(x + a * 0.9, y + 4.4, z + b * 0.9, 0, 1, 1, 1, a * 0.12), lin(0xc8a040)); box(x, y + 8.5, z, 1.6, 1.0, 1.6, 0x8a8a90); box(x, y + 4.6, z, 0.5, 0.4, 0.5, 0xffffff, { el: [4, 4, 3.6] }); light(x, y + 4, z, "lamp", 0xe8f0ff, 14, 1.2); }
+    { const x = -5, z = -6, y = topAt(x, z); for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) V.bag.three(new THREE.CylinderGeometry(0.12, 0.12, 9, 6), M4(x + a * 0.9, y + 4.4, z + b * 0.9, 0, 1, 1, 1, a * 0.12), lin(0xc8a040), null, null, MT("iron")); box(x, y + 8.5, z, 1.6, 1.0, 1.6, 0x8a8a90); box(x, y + 4.6, z, 0.5, 0.4, 0.5, 0xffffff, { el: [4, 4, 3.6] }); light(x, y + 4, z, "lamp", 0xe8f0ff, 14, 1.2); }
     dome(5, 4, 3);
-    for (const [x, z] of [[12, -10], [15, -6]]) { const y = topAt(x, z); for (let k = 0; k < 4; k++) cone(x, y + k * 2.4, z, 1.2 - k * 0.22, 2.6, 0xf4fbff, { n: 7 }); }
+    for (const [x, z] of [[12, -10], [15, -6]]) { const y = topAt(x, z); hexPrism(x, z, y, y + 9, 1.3, 0.2, AT("frozen_wastes", 0, 0)); }
     return { sky: 0x000000, airless: true, skyBody: { id: "amber", dir: [0.55, 0.12, -0.82], size: 460 } };
   },
   cinder() {
     const lava = (x, z) => fbm(x * 0.05 + 11, z * 0.05) > 0.62;
     terrain({
+      sheet: () => "basalt_wastes", topTile: (x, z) => lava(x, z) ? [3, 3] : fbm(x * 0.08, z * 0.08) > 0.55 ? [0, 0] : [1, 1],   // the basalt sheet's own lava (3,3) and sulfur (1,1) tiles
       height: (x, z) => lava(x, z) ? -1 : fbm(x * 0.04, z * 0.04 + 3) * 5,
       top: (x, z, h) => lava(x, z) ? lin(0xffb070) : fbm(x * 0.08, z * 0.08) > 0.55 ? lin(0x2e2626) : lin(hash(x, z) > 0.5 ? 0xd8b440 : 0xe0c050),
       emit: (x, z) => lava(x, z) ? { ef: [3.4, 1.2, 0.3] } : null,
@@ -866,6 +1022,7 @@ const VIG = {
   },
   murk() {
     terrain({
+      sheet: (x, z, h) => h < -1 ? "swamp" : "desert", tint: () => [0.95, 0.62, 0.42],
       height: (x, z) => { const sea = x + z * 0.4 > 8; return sea ? -2 : 1 + fbm(x * 0.04, z * 0.04) * 4; },
       top: (x, z, h) => h < -1 ? lin(0x3a2e28) : lin(hash(x, z) > 0.5 ? 0x8a5a2e : 0x96643a),
       side: (y, d) => lin(y % 2 ? 0x6a4628 : 0x5c3c22),
@@ -879,6 +1036,7 @@ const VIG = {
   },
   hollow() {
     terrain({
+      sheet: () => "sporewood",
       height: (x, z) => { const d = Math.hypot(x - 2, z + 2); if (d < 9) return -9 + d * 0.3; return 1 + fbm(x * 0.04, z * 0.04) * 3; },
       top: (x, z, h) => h < -4 ? lin(0x3a3046) : lin(hash(x, z) > 0.5 ? 0x7a7088 : 0x847a92),
       side: (y, d) => y < -3 ? lin(y % 2 ? 0x463c56 : 0x3e3450) : lin(y % 2 ? 0x6a6078 : 0x726882),
@@ -891,6 +1049,7 @@ const VIG = {
   },
   tidewater() {
     terrain({
+      sheet: (x, z, h) => h < 1 ? "beach" : "jungle", trees: "jungle",
       height: (x, z) => { const d = Math.hypot(x + 4, z + 2); return d < 13 ? 2 - d * 0.18 + fbm(x * 0.1, z * 0.1) * 1.5 : -3 + fbm(x * 0.05, z * 0.05) * 2; },
       top: (x, z, h) => h < 0 ? lin(0x3a6a66) : h === 0 ? lin(0xc8b480) : h < 1 ? lin(0xe6d6a4) : lin(0x6aa84a),
       side: (y, d) => lin(y % 2 ? 0xc8b07a : 0xbaa26c),
@@ -899,7 +1058,7 @@ const VIG = {
     for (const [x, z, s] of [[-6, -5, 1], [-2, 2, 0.9], [-9, 3, 1.1], [0, -8, 0.8]]) tree(x, z, "palm", s);
     stilts(8, -4, 0.4, 3.6, 3, 0.5); stilts(10, 4, 0.4, 3.6, 3, -0.2);
     { // the jetty
-      box(4, 1.2, 0, 8, 0.2, 1.4, 0x7a5a3a);
+      box(4, 1.2, 0, 8, 0.2, 1.4, 0x7a5a3a, { m: MT("plank") });
       for (const x of [1, 4, 7]) for (const s of [-0.6, 0.6]) cyl(x, -1.5, s, 0.1, 3, 0x5a4430);
       for (const x of [2, 7]) { cyl(x, 1.4, 0.7, 0.05, 2.2, 0x2b2a2e); box(x, 3.6, 0.7, 0.3, 0.35, 0.3, 0xfff0d0, { el: EL }); light(x, 3.7, 0.7, "lamp", 0xffc77a, 9, 1); }
     }
@@ -909,6 +1068,7 @@ const VIG = {
   },
   pebble() {
     terrain({
+      sheet: () => "asteroid",
       N: 9,
       height: (x, z) => fbm(x * 0.06, z * 0.06) * 5 - 1,
       top: (x, z, h) => hash(x, z) > 0.88 ? lin(0xc4a070) : lin(hash(x, z) > 0.5 ? 0x7a6a5e : 0x84746a),
@@ -922,13 +1082,14 @@ const VIG = {
   giant(b) {
     // the skimmer platform: a deck of hex cells floating at the cloud tops
     terrain({
+      sheet: () => MT("iron"),
       N: 4, height: () => 0, base: -1,
       top: (x, z) => lin(hash(x, z) > 0.5 ? 0x8a8e98 : 0x7e828c),
       side: () => lin(0x5a5e68),
     });
     for (const c of V.cells.values()) if (Math.hypot(c.x, c.z) > W * 3.4 && hash(c.q, c.r) > 0.35) { box(c.x, 0, c.z, 0.14, 1.2, 0.14, 0x3a3a42); box(c.x, 1.2, c.z, 0.3, 0.3, 0.3, 0xfff1d0, { el: EL }); light(c.x, 1.4, c.z, "lamp", 0xffc77a, 8, 0.9); }
     { // the scoop
-      V.bag.three(new THREE.CylinderGeometry(1.6, 0.6, 6, 8, 1, true), M4(4, -3.5, -2, 0, 1, 1, 1, 0.3), lin(0x9aa0aa));
+      V.bag.three(new THREE.CylinderGeometry(1.6, 0.6, 6, 6, 1, true), M4(4, -3.5, -2, 0, 1, 1, 1, 0.3), lin(0x9aa0aa), null, null, MT("iron"));
       dome(-3, -3, 3.2, { c: 0xe4e0d4 });
     }
     ship(3, 5, 2.2, 0);
@@ -963,6 +1124,8 @@ function meshOf(bag, mat) {
   g.setAttribute("color", new THREE.Float32BufferAttribute(bag.c, 3));
   g.setAttribute("fire", new THREE.Float32BufferAttribute(bag.f, 3));
   g.setAttribute("lamp", new THREE.Float32BufferAttribute(bag.l, 3));
+  g.setAttribute("tile", new THREE.Float32BufferAttribute(bag.t, 3));
+  g.setAttribute("tuv", new THREE.Float32BufferAttribute(bag.u, 2));
   return new THREE.Mesh(g, mat);
 }
 function buildVignette(b) {
@@ -981,7 +1144,7 @@ function buildVignette(b) {
   for (const L of V.lights) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW_T, color: new THREE.Color().setRGB(Math.pow(L.col[0], 1 / 2.2), Math.pow(L.col[1], 1 / 2.2), Math.pow(L.col[2], 1 / 2.2)), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
     const y = L.y - (L.x * L.x + L.z * L.z) / (2 * Rb);
-    s.position.set(L.x, y, L.z); const k = L.kind === "window" ? 1.4 : L.kind === "fire" ? 2.6 : 2.2; s.scale.set(k, k, 1); s.userData.night = L.night;
+    s.position.set(L.x, y, L.z); const k = (L.kind === "window" ? 1.4 : L.kind === "fire" ? 2.6 : 2.2) * 0.5;   // small: the game has no halo, only the pool s.scale.set(k, k, 1); s.userData.night = L.night;
     S3.add(s); vigObjs.push(s); glowSprites.push(s);
   }
   // a cloud sea under a giant's platform
@@ -1010,6 +1173,7 @@ function buildVignette(b) {
   vigSun = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture("rgba(255,250,235,1)", "rgba(255,230,180,0)"), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
   vigSun.scale.set(260, 260, 1); S3.add(vigSun); vigObjs.push(vigSun);
   vigCam.dist = b.nocells ? 30 : b.id === "pebble" ? 40 : 46;
+  hudLine(b);
   setTime(+timeEl.value);
 }
 const vigCam = { yaw: 0.8, pitch: 0.36, dist: 46, auto: true };
@@ -1034,7 +1198,7 @@ function setTime(h) {
   U.sunDir.value.copy(sd); U.sunCol.value.set(Math.pow(sunC.r, 2.2) * sI, Math.pow(sunC.g, 2.2) * sI, Math.pow(sunC.b, 2.2) * sI);
   // the moon (or the giant's shine, or the home world's): dim, so the lamps read
   const nightAmt = 1 - day;
-  const mc = vigEnv.skyBody ? 0.09 : 0.06;
+  const mc = vigEnv.skyBody ? 0.03 : 0.02;
   U.moonCol.value.set(0.55 * mc * nightAmt, 0.65 * mc * nightAmt, mc * nightAmt);
   const sky = new THREE.Color(vigEnv.sky);
   const amb = vigEnv.airless ? 0.025 : 0.42;
@@ -1080,7 +1244,7 @@ const CAPTION = {
 };
 function resFig(r) {
   const NAMES = { ice: "Water ice", iron: "Iron ore", sulfur: "Sulfur", helium3: "Helium-3", methane: "Methane", timber: "Timber", fish: "Fish", glowcrystal: "Glowcrystal", obsidian: "Volcanic glass", regolith: "Regolith", water: "Water" };
-  return `<figure><img src="planets/res_${r}.png" alt="">${NAMES[r]}</figure>`;
+  return `<figure><img src="planets/res_${r}.png${AV}" alt="">${NAMES[r]}</figure>`;
 }
 function chipsFor(b) {
   if (b.id === "star") return `<span class="chip none">No surface</span>`;
@@ -1108,9 +1272,9 @@ for (const b of B.slice().sort((x, y) => (x.parent === "star" ? x.a : x.parent ?
   const el = document.createElement("button");
   el.className = "card"; el.dataset.id = b.id;
   const nums = b.id === "star" ? "" : `<div class="nums"><span><small>Radius</small>${fmt(b.R)} m</span><span><small>Gravity</small>${fmt(b.g, 2)} g</span><span><small>Level</small>L${b.L}</span></div>`;
-  el.innerHTML = `<div class="ch"><img class="pt" src="planets/portrait_${b.id}.png" alt=""><div><div class="nm">${b.name}</div><div class="kd">${b.kind}</div></div></div>
+  el.innerHTML = `<div class="ch"><img class="pt" src="planets/portrait_${b.id}.png${AV}" alt=""><div><div class="nm">${b.name}</div><div class="kd">${b.kind}</div></div></div>
     <div class="row">${chipsFor(b)}</div><p class="one">${b.one}</p>
-    <div>${nums}<div class="ri" style="margin-top:6px">${(b.res || []).map(r => `<img src="planets/res_${r}.png" alt="${r}" title="${r}">`).join("")}</div></div>`;
+    <div>${nums}<div class="ri" style="margin-top:6px">${(b.res || []).map(r => `<img src="planets/res_${r}.png${AV}" alt="${r}" title="${r}">`).join("")}</div></div>`;
   el.addEventListener("click", () => { select(b.id, false); document.getElementById("inspect").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); });
   deck.appendChild(el);
 }
@@ -1119,7 +1283,7 @@ function select(id, fromOrbit) {
   const b = BY[id]; selected = id;
   document.getElementById("iName").textContent = b.name;
   document.getElementById("iKind").textContent = b.kind;
-  document.getElementById("iPortrait").src = `planets/portrait_${b.id}.png`;
+  document.getElementById("iPortrait").src = `planets/portrait_${b.id}.png${AV}`;
   document.getElementById("iChips").innerHTML = chipsFor(b);
   document.getElementById("iStats").innerHTML = statsFor(b).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("");
   const L = (t, a) => a && a.length ? `<div><h4>${t}</h4><ul>${a.map(x => `<li>${x}</li>`).join("")}</ul></div>` : "";
@@ -1193,6 +1357,25 @@ const fromHash = () => { const id = location.hash.slice(1); return BY[id] ? id :
 const qt = new URLSearchParams(location.search).get("t");   // ?t=10.5 sets the vignette's hour (for captures)
 if (qt !== null && isFinite(+qt)) timeEl.value = +qt;
 select(fromHash() || "home", false);
+if (new URLSearchParams(location.search).get("view") === "vig") document.getElementById("vig").scrollIntoView({ block: "center" });   // ?view=vig, for captures
 addEventListener("hashchange", () => { const id = fromHash(); if (id) select(id, false); });
 requestAnimationFrame(frame);
+
+// the art section's sprite rows, at whole-number scales
+document.getElementById("pxPortraits").innerHTML = ["star","home","verdance","ochre","lantern","rime","cinder","murk","hollow","tidewater","pebble","amber","glaucus"].map(n => `<img src="planets/portrait_${n}.png${AV}" width="96" height="96" alt="${n}" title="${n}">`).join("");
+document.getElementById("pxRes").innerHTML = ["ice","iron","sulfur","helium3","methane","timber","fish","glowcrystal","obsidian","regolith","water"].map(n => `<img src="planets/res_${n}.png${AV}" width="64" height="64" alt="${n}" title="${n}">`).join("");
+
+// The game's HUD over the vignette: the debug line and the hotbar as desktop/slots.rs draws
+// them (44 px slots, 4 px apart, 1 px borders), with the game's own icons: blocks are the
+// side tiles of atlas.png at 1x, items their 16 px PNGs at 2x.
+{
+  const blk = (sheet, tx, ty) => { const i = SHEETS.indexOf(sheet); return `<i style="background-image:url(${GAME}atlas.png${AV});background-position:-${(i % 4) * 128 + tx * 32}px -${Math.floor(i / 4) * 128 + ty * 32}px"></i>`; };
+  const it = n => `<img src="${GAME}${n}.png${AV}" alt="">`;
+  const slots = [[blk("fields", 1, 0), 64], [blk("fields", 2, 0), 64], [blk("fields", 3, 0), 48], [blk("beach", 0, 0), 12], [it("torch"), 16], [it("lantern_post"), 8], [it("lantern_wall"), 8], [it("lantern_hanging"), 8], [it("brazier"), 4], [it("candle"), 16]];
+  document.getElementById("vBar").innerHTML = `<div class="gslot tool">${it("pickaxe")}</div>` + slots.map(([h, n]) => `<div class="gslot">${h}<b>${n}</b></div>`).join("");
+}
+function hudLine(b) {
+  const el = document.getElementById("vDbg"); if (!el) return;
+  el.textContent = b.nocells ? `platform, NO COLUMN | ${b.name} cloud tops | ${V ? V.cells.size : 0} deck cells` : `underfoot L${b.L}, column | ${b.name} | ${V ? V.cells.size : 0} columns`;
+}
 </script>

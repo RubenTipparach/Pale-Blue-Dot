@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Fish Lab and Aquariums</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -84,8 +85,8 @@ select{background:var(--deep);border:1px solid var(--line-strong);border-radius:
 /* species sheet */
 .sheet{display:grid;gap:10px}
 .srow{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;align-items:center;border-top:1px solid var(--line);padding-top:10px}
-.srow .who{display:grid;grid-template-columns:52px 1fr;gap:8px;align-items:center}
-.srow .who img{width:52px;height:52px;object-fit:contain}
+.srow .who{display:grid;grid-template-columns:48px 1fr;gap:8px;align-items:center}
+.srow .who img{width:48px;height:48px}
 .srow .who b{font-family:var(--display);font-size:17px;letter-spacing:.03em;line-height:1.05}
 .srow .who small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted)}
 .ind{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
@@ -100,8 +101,13 @@ select{background:var(--deep);border:1px solid var(--line-strong);border-radius:
 .filters{display:flex;flex-wrap:wrap;gap:6px}
 .roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;align-content:start}
-.card .top{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center}
-.card img{width:96px;height:96px;object-fit:contain}
+.card .top{display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:center}
+.card .top>img{width:64px;height:64px}
+img{image-rendering:pixelated;image-rendering:crisp-edges}
+.gamestrip{display:flex;flex-wrap:wrap;gap:14px;align-items:end}
+.gamestrip figure{margin:0;display:grid;justify-items:center;gap:4px;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+.gamestrip img.i16{width:48px;height:48px}
+.gamestrip img.i32{width:64px;height:64px}
 .card h3{font-size:21px}
 .chips{display:flex;flex-wrap:wrap;gap:4px}
 .chip{font-family:var(--display);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:3px;border:1px solid var(--line-strong);color:var(--muted);white-space:nowrap}
@@ -131,7 +137,7 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
 /* aquarium */
 .decor{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
 .decor button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:4px 2px;border:1px solid var(--line);border-radius:4px;background:var(--deep)}
-.decor button img{width:40px;height:40px}
+.decor button img{width:48px;height:48px}
 .decor button span{font-family:var(--display);font-size:11.5px;letter-spacing:.04em;color:var(--muted);text-align:center;line-height:1.1}
 .decor button[aria-pressed="true"]{border-color:var(--sea);background:rgba(95,208,216,.12)}
 .decor button[aria-pressed="true"] span{color:var(--sea)}
@@ -141,8 +147,8 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
 .cap .bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .2s}
 .cap .bar i.over{background:var(--warn)}
 .residents{display:grid;gap:4px;max-height:220px;overflow:auto}
-.res{display:grid;grid-template-columns:30px 1fr auto auto;gap:8px;align-items:center;font-size:13px;padding:2px 4px;border-radius:3px;background:var(--deep)}
-.res img{width:30px;height:30px}
+.res{display:grid;grid-template-columns:32px 1fr auto auto;gap:8px;align-items:center;font-size:13px;padding:2px 4px;border-radius:3px;background:var(--deep)}
+.res img{width:32px;height:32px}
 .res .st{font-family:var(--display);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
 .st.ok{color:var(--ok)}.st.warn{color:var(--amber)}.st.bad{color:var(--warn)}
 .res button{all:unset;cursor:pointer;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 6px;border:1px solid var(--line);border-radius:3px}
@@ -171,7 +177,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
   <div class="tags"><span class="tag prop">Proposal, not built</span><span class="tag">Mockup</span><span class="tag">fishing-and-equipment, climate-and-fish-maps</span></div>
   <h1>Fish Lab and Aquariums</h1>
   <p class="lede">Every fish in Pale Blue Dot is drawn from a species and a seed. The species fixes the body plan, the fins, the palette and the size range. The seed rolls one individual: its length, its build, where its spots and bars fall, and now and then a rare colour morph. The same fish always comes out the same, so a trophy in a tank is the fish you caught.</p>
-  <p class="honest">Nothing here is in the game yet. The 3D fish are made by this page's generator in three.js. The portraits, pattern swatches and decor icons were <b>painted by code</b> (<code>tools/art/fish_art.py</code>, the hand-drawn-illustration kit) in the style of the owner's friend's drawings. A person did not draw them, and they are placeholders for the owner to judge.</p>
+  <p class="honest">Nothing here is in the game yet. <b>Which art is whose:</b> the eight fish the game already has use <b>the game's own 16 &times; 16 icons</b> (<code>assets/items/fish</code>), and the aquarium room is built from <b>the game's settlement textures</b> (plank, stone, plaster, timber, iron, sand; <code>assets/textures/settlement</code>), all copied byte for byte into <code>fish/game/</code>. Mockup only: the five new species' icons, drawn in the game icons' manner, the pattern swatches and the decor icons are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<code>tools/art/fish_art.py</code>, Sweaft-64 colours, shown at whole multiples). The 3D fish are this page's generator: low-poly, faceted bodies with 64 &times; 32 pixel-art skins sampled nearest. A person drew none of the new art; it is placeholder art for the owner to judge.</p>
   <nav class="toc" aria-label="Sections"><a href="#lab">Fish lab</a><a href="#sheet">Species sheet</a><a href="#roster">Roster</a><a href="#parts">Parts and patterns</a><a href="#tank">Aquarium</a><a href="#engine">In the engine</a><a href="#decisions">Decisions</a></nav>
 </header>
 
@@ -223,8 +229,10 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
 <!-- ============================================================ PARTS -->
 <section id="parts">
   <div class="sechead"><span class="eyebrow">4 &middot; The parts list</span><h2>Parts and patterns</h2>
-  <p>A species is a choice from each of these lists plus its numbers. Six pattern types, seven body plans, six tails. The swatches are the hand-drawn versions; in 3D each pattern is painted onto a 256 &times; 128 skin from the fish's own seed.</p></div>
+  <p>A species is a choice from each of these lists plus its numbers. Six pattern types, seven body plans, six tails. The swatches are the pixel-art versions; in 3D each pattern is painted as pixel art onto a 64 &times; 32 skin from the fish's own seed, in Sweaft-64 colours, and drawn with nearest filtering so its pixels stay square.</p></div>
   <div class="parts" id="patParts"></div>
+  <div class="gamestrip" id="gameStrip" aria-label="The game's own fish art"></div>
+  <p class="small">Above: the game's own fish art, not redrawn. The eight 16 &times; 16 item icons (<code>assets/items/fish</code>) at 3&times; and the market stall's 32 &times; 32 fish texture (<code>assets/textures/settlement/fish.png</code>) at 2&times;.</p>
   <div class="table-wrap"><table>
     <thead><tr><th>Body plan</th><th>Depth</th><th>Width</th><th>Deepest at</th><th>K (weight)</th><th>Swims by</th><th>Used by</th></tr></thead>
     <tbody id="profRows"></tbody></table></div>
@@ -278,7 +286,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
   <div class="qs" id="qs"></div>
 </section>
 
-<footer>Mockup for Pale Blue Dot, 2026-11-11. three.js r128. Portraits, swatches and decor icons painted by code with the hand-drawn-illustration kit (<code>tools/art/fish_art.py</code>), in the manner of the owner's friend's icons, not by them. Species data for the eight existing fish from <code>openspec/changes/fishing-and-equipment</code>; the five new species, rarity, bait, time, season and the aquarium are proposals.</footer>
+<footer>Mockup for Pale Blue Dot, 2026-11-11, art reworked 2026-11-12. three.js r128. The game's art (fish icons, settlement textures, the stall texture) is copied byte for byte into <code>fish/game/</code>, listed in its README. The five new species' icons, the swatches, the decor icons and the fish skins are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/fish_art.py</code>). Species data for the eight existing fish from <code>openspec/changes/fishing-and-equipment</code>; the five new species, rarity, bait, time, season and the aquarium are proposals.</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -387,6 +395,9 @@ const SPECIES = [
     wiki:"Basalt-dark with cracks that glow like coals. It lives where the vent water is hot enough to scald a hand.", needs:"heater" },
 ];
 const SP = Object.fromEntries(SPECIES.map(s => [s.id, s]));
+const GAME_ICONS = new Set(["minnow","silverfin","perch","ray","eel","reef","deepback","serpent"]);   // assets/items/fish, copied to fish/game/
+// The eight fish the game has use its own 16 x 16 icons; the five new ones are drawn in their manner (tools/art/fish_art.py).
+const iconSrc = id => GAME_ICONS.has(id) ? `fish/game/${id}.png` : `fish/species-${id}.png?v=2`;
 const HABITATS = ["Shallow reef","Open ocean","River","Lake","Deep sea","Under ice","Volcanic vents"];
 const WATER_NAMES = { fresh:"fresh", salt:"salt", brine:"cold brine", vent:"vent mineral" };
 
@@ -428,83 +439,102 @@ function palette(g){
   return c;
 }
 const css = c => `#${c.getHexString()}`;
+// The skin is pixel art: a 64 x 32 canvas, every pixel snapped to Sweaft-64 (the balatro-pixel-art
+// kit's palette, the solitaire collection's), hard-edged shapes, ordered dither for the countershading,
+// and nearest filtering with no mipmaps so its pixels stay square on the fish.
+const SWEAFT_64 = ["#010e1a","#011c34","#1f3b52","#3e586e","#5d778d","#92a3b2","#bfcad7","#fffefe","#a09f91","#434137","#2c2c25","#161612","#010000","#1c020d","#4a051e","#841c1d",
+  "#d4462b","#fe6420","#fb902f","#faaf5c","#003227","#05582d","#297537","#559642","#9bb675","#0c2f44","#204f63","#53998b","#84e3b5","#c1f1d8","#191954","#15578a",
+  "#1096c3","#74effe","#d2f8ff","#230c44","#4f1d83","#7d2dbd","#9e3ba2","#c34988","#dd576d","#2b1f35","#3e3551","#69608b","#170916","#2f1525","#522b2f","#7d4636",
+  "#a8633e","#e69d69","#eab798","#41322c","#725244","#ab8465","#cfaa81","#561c27","#733126","#8d4526","#c56d25","#2e0d06","#681712","#a61e1f","#d12d41","#fa3a64"];
+const SWEAFT_RGB = SWEAFT_64.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+function snap(col){            // a THREE.Color to the nearest Sweaft-64 entry, as [r, g, b]
+  const r = col.r * 255, g = col.g * 255, b = col.b * 255; let best = 0, bd = 1e9;
+  SWEAFT_RGB.forEach((p, i) => { const d = (p[0] - r) ** 2 * 2 + (p[1] - g) ** 2 * 4 + (p[2] - b) ** 2 * 3; if (d < bd){ bd = d; best = i; } });
+  return SWEAFT_RGB[best];
+}
+const BAYER4 = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+const bay = (x, y) => (BAYER4[y & 3][x & 3] + 0.5) / 16;
+function pixelTexture(cv){
+  const t = new THREE.CanvasTexture(cv);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  return t;
+}
 function paintSkin(g){
-  const W = 256, H = 128, sp = Object.assign({}, g.sp, { prof: g.prof }), c = palette(g), r = mulberry32(g.patSeed);
-  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-  const ec = document.createElement("canvas"); ec.width = W; ec.height = H;
-  const x = cv.getContext("2d"), e = ec.getContext("2d");
-  e.fillStyle = "#000"; e.fillRect(0, 0, W, H);
-  // countershading: rows are the angle round the body, 0 and H the back, H/2 the belly
+  const W = 64, H = 32, sp = Object.assign({}, g.sp, { prof: g.prof }), c = palette(g), r = mulberry32(g.patSeed);
+  const map = new Array(W * H), emi = new Array(W * H).fill(null);
+  const wrapY = y => ((Math.round(y) % H) + H) % H;
+  const put = (x, y, col, e) => { x = Math.round(x); if (x < 0 || x >= W) return; const i = wrapY(y) * W + x; map[i] = col; if (e) emi[i] = e; };
+  const putBoth = (x, y, col, e) => { put(x, y, col, e); put(x, H - 1 - Math.round(y), col, e); };   // both flanks
+  const keep = (x, y) => bay(x, wrapY(y)) < g.con;                     // contrast thins the pattern by ordered dither
+  // countershading: rows are the angle round the body, 0 and H the back, H/2 the belly; four snapped tones, dithered between
+  const tones = [0, 1 / 3, 2 / 3, 1].map(k => snap(c.back.clone().lerp(c.belly, k)));
   for (let y = 0; y < H; y++){
     const t = (1 - Math.cos(2 * Math.PI * (y + 0.5) / H)) / 2;
-    const k = sp.prof === "flat" ? smooth(0.46, 0.56, t) : smooth(0.35, 0.8, t);
-    x.fillStyle = css(c.back.clone().lerp(c.belly, k)); x.fillRect(0, y, W, 1);
+    const k = (sp.prof === "flat" ? smooth(0.46, 0.56, t) : smooth(0.35, 0.8, t)) * 3, i = Math.floor(k), f = k - i;
+    for (let x = 0; x < W; x++) map[y * W + x] = tones[Math.min(3, f > bay(x, y) ? i + 1 : i)];
   }
-  const yAt = th => th / (2 * Math.PI) * H;           // an angle from the back to a row (one flank)
-  const both = (fn) => { fn(false); x.save(); x.translate(0, H); x.scale(1, -1); fn(true); x.restore(); };
-  x.globalAlpha = g.con;
-  const accC = css(c.acc), n = k => Math.max(1, Math.round(k * g.den));
+  const yAt = th => th / (2 * Math.PI) * H;
+  const accC = snap(c.acc), n = k => Math.max(1, Math.round(k * g.den));
   if (g.pat === "gradient"){
-    const gr = x.createLinearGradient(0, 0, 0, H * 0.22); gr.addColorStop(0, accC); gr.addColorStop(1, "rgba(0,0,0,0)");
-    both(() => { x.fillStyle = gr; x.fillRect(0, 0, W, H * 0.22); });
-    x.fillStyle = accC; x.globalAlpha = g.con * 0.35;   // a faint lateral line
-    both(() => x.fillRect(W * 0.1, yAt(Math.PI / 2) - 1, W * 0.88, 2));
+    const band = H * 0.22;
+    for (let y = 0; y < band; y++) for (let x = 0; x < W; x++) if (bay(x, y) < (1 - y / band) * g.con * 1.2) putBoth(x, y, accC);
+    for (let x = Math.round(W * 0.1); x < W * 0.98; x += 2) if (g.con > 0.3) putBoth(x, yAt(Math.PI / 2), accC);     // a dashed lateral line
   } else if (g.pat === "stripes"){
     const k = n(sp.wavy ? 5 : 2);
     for (let i = 0; i < k; i++){
-      const th = sp.wavy ? 0.3 + i * (2.3 / k) : Math.PI * (0.38 + i * 0.16), ph = r() * 6, amp = sp.wavy ? 3 + r() * 3 : 0;
-      x.strokeStyle = accC; x.lineWidth = sp.wavy ? 2.5 : 3.5 + r() * 1.5;
-      both(() => { x.beginPath(); for (let px = 6; px <= W; px += 4){ const yy = yAt(th) + amp * Math.sin(px * 0.11 + ph); px === 6 ? x.moveTo(px, yy) : x.lineTo(px, yy); } x.stroke(); });
+      const th = sp.wavy ? 0.3 + i * (2.3 / k) : Math.PI * (0.38 + i * 0.16), ph = r() * 6, amp = sp.wavy ? 0.8 + r() * 0.8 : 0, w = sp.wavy ? 1 : 1 + Math.round(r());
+      for (let x = 1; x < W; x++){ const yy = yAt(th) + amp * Math.sin(x * 0.44 + ph); for (let d = 0; d < w; d++) if (keep(x, yy + d)) putBoth(x, yy + d, accC); }
     }
   } else if (g.pat === "bars"){
     const [nb, bw, low] = sp.bars, k = n(nb), ylow = yAt(Math.acos(-low));
     for (let i = 0; i < k; i++){
-      const u = 0.2 + 0.72 * (i + 0.5) / k + (r() - 0.5) * 0.03, w = bw * W * (0.8 + r() * 0.5), lean = (r() - 0.5) * 8;
-      x.fillStyle = accC;
-      both(() => { x.beginPath(); x.moveTo(u * W - w / 2, 0); x.lineTo(u * W + w / 2, 0); x.lineTo(u * W + w / 2 + lean, ylow); x.lineTo(u * W - w / 2 + lean, ylow); x.fill(); });
+      const u = 0.2 + 0.72 * (i + 0.5) / k + (r() - 0.5) * 0.03, w = Math.max(2, Math.round(bw * W * (0.8 + r() * 0.5))), lean = (r() - 0.5) * 2;
+      for (let y = 0; y <= ylow; y++){ const x0 = Math.round(u * W - w / 2 + lean * y / Math.max(1, ylow)); for (let x = x0; x < x0 + w; x++) if (keep(x, y)) putBoth(x, y, accC); }
     }
   } else if (g.pat === "spots"){
-    const k = n(sp.prof === "flat" ? 70 : 46);
+    const k = n(sp.prof === "flat" ? 60 : 40), bel = snap(c.belly);
     for (let i = 0; i < k; i++){
-      const px = W * (0.08 + r() * 0.9), yy = H * r(), t = (1 - Math.cos(2 * Math.PI * yy / H)) / 2;
-      if (t > 0.72) continue;
-      x.fillStyle = r() < 0.72 ? accC : css(c.belly);
-      x.beginPath(); x.arc(px, yy, 1.6 + r() * 3.4, 0, 7); x.fill();
+      const px = Math.floor(W * (0.08 + r() * 0.9)), yy = Math.floor(H * r()), t = (1 - Math.cos(2 * Math.PI * yy / H)) / 2, big = r() < 0.45, col = r() < 0.72 ? accC : bel;
+      if (t > 0.72 || r() > g.con + 0.05) continue;
+      put(px, yy, col); if (big){ put(px + 1, yy, col); put(px, yy + 1, col); put(px + 1, yy + 1, col); }
     }
   } else if (g.pat === "mottled"){
-    const k = n(40);
+    const k = n(26);
     for (let i = 0; i < k; i++){
-      const px = W * r(), yy = H * r(), rad = 4 + r() * 9, t = (1 - Math.cos(2 * Math.PI * yy / H)) / 2;
+      const px = W * r(), yy = H * r(), rx = 1 + r() * 2.2, ry = 0.8 + r() * 1.4, t = (1 - Math.cos(2 * Math.PI * yy / H)) / 2;
       if (t > 0.8) continue;
-      const gr = x.createRadialGradient(px, yy, 0, px, yy, rad);
-      gr.addColorStop(0, accC); gr.addColorStop(0.7, accC); gr.addColorStop(1, "rgba(0,0,0,0)");
-      x.fillStyle = gr; x.beginPath(); x.arc(px, yy, rad, 0, 7); x.fill();
+      for (let y = Math.floor(yy - ry); y <= yy + ry; y++) for (let x = Math.floor(px - rx); x <= px + rx; x++)
+        if (((x + 0.5 - px) / rx) ** 2 + ((y + 0.5 - yy) / ry) ** 2 <= 1 && keep(x, y)) put(x, y, accC);
     }
   }
-  x.globalAlpha = 1;
-  // emissive: photophores, ember cracks
+  // emissive: photophores, ember cracks (single pixels, never soft)
   if (g.pat === "biolum"){
-    const rows = [[0.74, n(9)], [0.6, n(6)]];
-    for (const [f, k] of rows) for (let i = 0; i < k; i++){
-      const px = W * (0.16 + 0.72 * i / Math.max(1, k - 1)), th = Math.PI * f;
-      for (const yy of [yAt(th), H - yAt(th)]){
-        x.fillStyle = css(c.acc.clone().lerp(new THREE.Color("#ffffff"), 0.4)); x.beginPath(); x.arc(px, yy, 2.4, 0, 7); x.fill();
-        e.fillStyle = css(c.acc); e.beginPath(); e.arc(px, yy, 2.6, 0, 7); e.fill();
-      }
+    const lit = snap(c.acc.clone().lerp(new THREE.Color("#ffffff"), 0.4));
+    for (const [f, k] of [[0.74, n(9)], [0.6, n(6)]]) for (let i = 0; i < k; i++){
+      const px = W * (0.16 + 0.72 * i / Math.max(1, k - 1));
+      putBoth(px, yAt(Math.PI * f), lit, accC);
     }
   }
   if (sp.ember){
-    e.strokeStyle = css(c.acc); e.lineWidth = 1.8; x.strokeStyle = css(c.acc); x.lineWidth = 1.4;
-    for (let i = 0; i < n(14); i++){
-      let px = W * (0.1 + r() * 0.8), yy = H * r(); e.beginPath(); x.beginPath(); e.moveTo(px, yy); x.moveTo(px, yy);
-      for (let s = 0; s < 4; s++){ px -= 4 + r() * 10; yy += (r() - 0.5) * 10; e.lineTo(px, yy); x.lineTo(px, yy); }
-      e.stroke(); x.stroke();
+    for (let i = 0; i < n(12); i++){
+      let px = W * (0.1 + r() * 0.8), yy = H * r();
+      for (let s = 0; s < 8; s++){ put(px, yy, accC, accC); px -= 1; if (r() < 0.35) yy += r() < 0.5 ? -1 : 1; }
     }
   }
-  const map = new THREE.CanvasTexture(cv), em = new THREE.CanvasTexture(ec);
-  map.encoding = THREE.sRGBEncoding; em.encoding = THREE.sRGBEncoding;
-  map.anisotropy = 4;
-  return { map, em, c, glows: g.pat === "biolum" || !!sp.ember || !!sp.lure };
+  const toCanvas = (buf, bg) => {
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const x = cv.getContext("2d"), im = x.createImageData(W, H);
+    for (let i = 0; i < W * H; i++){ const p = buf[i] || bg; im.data[i * 4] = p[0]; im.data[i * 4 + 1] = p[1]; im.data[i * 4 + 2] = p[2]; im.data[i * 4 + 3] = 255; }
+    x.putImageData(im, 0, 0); return cv;
+  };
+  const mapT = pixelTexture(toCanvas(map, [0, 0, 0])), em = pixelTexture(toCanvas(emi, [0, 0, 0]));
+  // fins: an 8 x 8 tile in the fin's colour, a darker ray every other column and a lit edge row, repeated
+  const finCv = document.createElement("canvas"); finCv.width = finCv.height = 8; const fx = finCv.getContext("2d"), fim = fx.createImageData(8, 8);
+  const fMid = snap(c.fin), fDark = snap(c.fin.clone().multiplyScalar(0.62)), fLit = snap(c.fin.clone().lerp(new THREE.Color("#ffffff"), 0.3));
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++){ const p = (x % 4 === 1) ? fDark : (x % 4 === 2 && y % 2 === 0) ? fLit : fMid, i = (y * 8 + x) * 4; fim.data[i] = p[0]; fim.data[i + 1] = p[1]; fim.data[i + 2] = p[2]; fim.data[i + 3] = 255; }
+  fx.putImageData(fim, 0, 0);
+  const fin = pixelTexture(finCv); fin.wrapS = fin.wrapT = THREE.RepeatWrapping; fin.repeat.set(9, 9); fin.encoding = THREE.sRGBEncoding;
+  mapT.encoding = THREE.sRGBEncoding; em.encoding = THREE.sRGBEncoding;
+  return { map: mapT, em, fin, c, glows: g.pat === "biolum" || !!sp.ember || !!sp.lure };
 }
 
 // ------------------------------------------------------------------ the mesh
@@ -522,7 +552,8 @@ function buildFish(g){
   const sp = g.sp, P = PROFILES[g.prof], skin = paintSkin(g);
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
   const D = P.D * g.depth, Wd = P.W * g.width, BL = P.body, x0 = 0.5;
-  const NU = 44, NV = 20, pos = [], uv = [], idx = [];
+  // Low-poly and faceted, as the game builds things: a six-sided body (a hex in section) in a few rings.
+  const NU = P.eel ? 22 : 12, NV = 6, pos = [], uv = [], idx = [];
   const hAt = u => D * profH(u, P, P.eel);
   const wAt = u => P.flat ? Wd * rayW(u) : Wd * profH(u, P, P.eel);
   for (let i = 0; i <= NU + 1; i++){
@@ -530,7 +561,7 @@ function buildFish(g){
     const xx = x0 - u * BL - (cap ? 0.004 : 0);
     const h = cap ? 0 : hAt(u), w = cap ? 0 : wAt(u);
     for (let j = 0; j <= NV; j++){
-      const th = 2 * Math.PI * j / NV;
+      const th = 2 * Math.PI * j / NV + Math.PI / NV;
       const belly = Math.cos(th) < 0 ? 0.94 : 1;           // a slightly flatter belly
       pos.push(xx, h * Math.cos(th) * belly, w * Math.sin(th));
       uv.push(u, 1 - j / NV);
@@ -544,12 +575,12 @@ function buildFish(g){
   bg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   bg.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   bg.setIndex(idx); bg.computeVertexNormals();
-  const bodyMat = new THREE.MeshStandardMaterial({ map: skin.map, roughness: sp.glass ? 0.15 : 0.5, metalness: sp.id === "silverfin" ? 0.35 : 0.05,
+  const bodyMat = new THREE.MeshStandardMaterial({ map: skin.map, flatShading: true, roughness: sp.glass ? 0.15 : 0.5, metalness: sp.id === "silverfin" ? 0.35 : 0.05,
     emissiveMap: skin.em, emissive: new THREE.Color(skin.glows ? "#ffffff" : "#000000"), emissiveIntensity: skin.glows ? 1.2 : 0,
     transparent: !!sp.glass, opacity: sp.glass ? 0.78 : 1 });
   const bm = new THREE.Mesh(bg, bodyMat); body.add(bm);
   const bend = [bm];
-  const finMat = new THREE.MeshStandardMaterial({ color: skin.c.fin, roughness: 0.6, side: THREE.DoubleSide, transparent: !!sp.glass, opacity: sp.glass ? 0.45 : 1 });
+  const finMat = new THREE.MeshStandardMaterial({ map: skin.fin, roughness: 0.6, alphaTest: 0.5, side: THREE.DoubleSide, transparent: !!sp.glass, opacity: sp.glass ? 0.45 : 1 });
   const addShape = (pts, mat = finMat, z = 0) => {
     const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]);
     const geo = new THREE.ShapeGeometry(s); geo.translate(0, 0, z);
@@ -588,7 +619,7 @@ function buildFish(g){
     addShape([...up, tip, ...inUp.slice().reverse()]);
     addShape([...inDn, tip, ...dn.slice().reverse()]);
     if (sp.crest){
-      const crestMat = new THREE.MeshStandardMaterial({ color: skin.c.fin, roughness: 0.5, side: THREE.DoubleSide });
+      const crestMat = finMat;
       const pts = []; for (let i = 0; i <= 18; i++){ const u = lerp(0.03, 0.55, i / 18), h = hAt(u); pts.push([xAt(u) + 0.004, h * 0.8 + (i % 2 ? 0.05 : 0.016) * F * (1 - i / 22)]); }
       const base = []; for (let i = 18; i >= 0; i--){ const u = lerp(0.03, 0.55, i / 18); base.push([xAt(u), hAt(u) * 0.6]); }
       addShape([...pts, ...base], crestMat);
@@ -608,25 +639,25 @@ function buildFish(g){
   // ray: a whip tail and pelvic lobes
   if (P.flat){
     const tg = new THREE.CylinderGeometry(0.004, 0.016, 0.62, 6, 8); tg.rotateZ(Math.PI / 2); tg.translate(xAt(1) - 0.29, 0.01, 0);
-    const tm = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ color: skin.c.fin, roughness: 0.6 })); body.add(tm); bend.push(tm);
+    const tm = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ map: skin.fin, flatShading: true, roughness: 0.6 })); body.add(tm); bend.push(tm);
   }
   // eyes
   const eu = P.eel ? 0.045 : (P.flat ? 0.22 : 0.08), er = sp.eye;
   const eyeMat = new THREE.MeshStandardMaterial({ color: "#f4f0e2", roughness: 0.2 }), pupMat = new THREE.MeshStandardMaterial({ color: "#0c0a10", roughness: 0.1, metalness: 0.2 });
   for (const side of [1, -1]){
-    const e = new THREE.Mesh(new THREE.SphereGeometry(er, 14, 10), eyeMat);
+    const e = new THREE.Mesh(new THREE.BoxGeometry(er * 1.8, er * 1.8, er * 1.2), eyeMat);   // a block eye, like a pixel
     const ey = P.flat ? hAt(eu) * 0.9 : hAt(Math.min(0.2, P.uMax)) * 0.32;
     const ez = P.flat ? side * wAt(eu) * 0.35 : side * (wAt(eu) * 0.9 + er * 0.25);
     e.position.set(xAt(eu), ey, ez);
-    const p = new THREE.Mesh(new THREE.SphereGeometry(er * 0.6, 10, 8), pupMat);
+    const p = new THREE.Mesh(new THREE.BoxGeometry(er * 1.0, er * 1.0, er * 0.4), pupMat);
     p.position.set(er * 0.12, P.flat ? er * 0.55 : 0, side * er * 0.55); e.add(p); body.add(e);
   }
   // angler: lure and teeth
   if (sp.lure){
     const u = 0.12, top = new THREE.Vector3(xAt(u), hAt(u), 0);
     const curve = new THREE.CatmullRomCurve3([top, top.clone().add(new THREE.Vector3(0.06, 0.16, 0)), top.clone().add(new THREE.Vector3(0.18, 0.2, 0)), top.clone().add(new THREE.Vector3(0.25, 0.14, 0))]);
-    body.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.005, 5), new THREE.MeshStandardMaterial({ color: skin.c.fin })));
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.03, 14, 10), new THREE.MeshStandardMaterial({ color: skin.c.acc, emissive: skin.c.acc, emissiveIntensity: 2.2 }));
+    body.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 6, 0.006, 4), new THREE.MeshStandardMaterial({ map: skin.fin, flatShading: true })));
+    const bulb = new THREE.Mesh(new THREE.OctahedronGeometry(0.032, 0), new THREE.MeshStandardMaterial({ color: skin.c.acc, flatShading: true, emissive: skin.c.acc, emissiveIntensity: 2.2 }));
     bulb.position.copy(curve.getPoint(1)); body.add(bulb); root.userData.lure = bulb;
   }
   if (sp.teeth){
@@ -798,7 +829,7 @@ function buildSheet(){
   const host = $("sheetRows");
   SPECIES.forEach((sp, si) => {
     const row = document.createElement("div"); row.className = "srow";
-    row.innerHTML = `<div class="who"><img src="fish/species-${sp.id}.png" alt=""><div><b>${sp.name}</b><small>${fmtLen(sp.L * 0.85)} to ${fmtLen(sp.L * 1.25)}</small></div></div><div class="ind"></div>`;
+    row.innerHTML = `<div class="who"><img src="${iconSrc(sp.id)}" alt=""><div><b>${sp.name}</b><small>${fmtLen(sp.L * 0.85)} to ${fmtLen(sp.L * 1.25)}</small></div></div><div class="ind"></div>`;
     host.appendChild(row);
     const ind = row.querySelector(".ind");
     const frame = sp.L * 1.25 * (PROFILES[sp.prof].flat ? 1.6 : sp.lure ? 1.45 : 1.2);
@@ -830,8 +861,8 @@ function buildRoster(){
     if (habOn !== "All" && !sp.hab.includes(habOn)) continue;
     const src = sp.src === "new" ? `<span class="chip src-new">New here</span>` : sp.src === "Tenebris" ? `<span class="chip">From Tenebris</span>` : `<span class="chip">fishing-and-equipment</span>`;
     const c = document.createElement("article"); c.className = "card";
-    c.innerHTML = `<div class="top"><img src="fish/species-${sp.id}.png" alt="${sp.name}, hand-drawn portrait"><div style="display:grid;gap:6px"><h3>${sp.name}</h3>
-      <div class="chips"><span class="chip r-${sp.rarity}">${sp.rarity}</span>${src}</div><div class="chips">${sp.hab.map(h => `<span class="chip">${h}</span>`).join("")}</div></div></div>
+    c.innerHTML = `<div class="top"><img src="${iconSrc(sp.id)}" alt="${sp.name}, ${GAME_ICONS.has(sp.id) ? "the game's icon" : "a new pixel-art icon"}"><div style="display:grid;gap:6px"><h3>${sp.name}</h3>
+      <div class="chips"><span class="chip r-${sp.rarity}">${sp.rarity}</span>${src}</div><div class="chips">${sp.hab.map(h => `<span class="chip">${h}</span>`).join("")}</div><div class="chips"><span class="chip">${GAME_ICONS.has(sp.id) ? "icon: the game's" : "icon: new, mockup only"}</span></div></div></div>
       <dl class="facts">
         <dt>Size</dt><dd class="mono">${fmtLen(sp.L * 0.85)} to ${fmtLen(sp.L * 1.25)}</dd>
         <dt>Water</dt><dd>${sp.wclass}; ${sp.water.map(w => WATER_NAMES[w]).join(" or ")}</dd>
@@ -857,6 +888,9 @@ buildRoster();
     const users = SPECIES.filter(s => s.pat === k).map(s => s.name).join(", ");
     p.insertAdjacentHTML("beforeend", `<div class="part"><img src="fish/pattern-${k}.png" alt=""><div><b>${v.name}</b><span>${v.what} ${users ? "(" + users + ")" : ""}</span></div></div>`);
   }
+  const gs = $("gameStrip");
+  for (const id of GAME_ICONS) gs.insertAdjacentHTML("beforeend", `<figure><img class="i16" src="fish/game/${id}.png" alt="${SP[id].name}, the game's icon"><figcaption>${id}</figcaption></figure>`);
+  gs.insertAdjacentHTML("beforeend", `<figure><img class="i32" src="fish/game/stall-fish.png" alt="The market stall's fish texture"><figcaption>stall</figcaption></figure>`);
   const rows = $("profRows");
   for (const [k, v] of Object.entries(PROFILES)){
     const users = SPECIES.filter(s => s.prof === k).map(s => s.name).join(", ") || "-";
@@ -886,77 +920,111 @@ const tank = (() => {
   canvas.addEventListener("pointerup", () => { drag = null; canvas.style.cursor = "grab"; });
   canvas.addEventListener("wheel", e => { e.preventDefault(); dist = clamp(dist * (1 + Math.sign(e.deltaY) * 0.08), 3, 16); }, { passive: false });
 
-  // ---- the room: a hex-gridded floor, two walls, a window, a shelf, a lantern, a candle, a chair
+  // ---- the room, built the way the game builds: plank hex columns for the floor, a stone wall and a plaster
+  //      wall, timber posts and trim, every surface one of the game's settlement textures (copied into
+  //      fish/game/ from assets/textures/settlement) repeating at its manifest repeat_m, sampled nearest.
   const ROOM_X = 4 * Math.sqrt(3) * R * 1.0, ROOM_Z = 2 * 3 * R;      // whole hex tiles, so the grid meets the tank's cells
-  const hexTile = (() => {
-    const tw = 256, th = Math.round(256 * 3 / Math.sqrt(3)), cv = document.createElement("canvas"); cv.width = tw; cv.height = th; const x = cv.getContext("2d");
-    x.fillStyle = "#6e5236"; x.fillRect(0, 0, tw, th);
-    const r0 = mulberry32(5); for (let i = 0; i < 900; i++){ x.fillStyle = `rgba(${r0() < .5 ? "40,26,14" : "150,110,70"},${0.08 + r0() * 0.1})`; x.fillRect(r0() * tw, r0() * th, 2 + r0() * 30, 1.5); }
-    const rr = tw / Math.sqrt(3); x.strokeStyle = "rgba(30,18,8,.75)"; x.lineWidth = 3;
-    for (const [cx, cy] of [[0,0],[tw,0],[0,th],[tw,th],[tw/2,th/2]]){ x.beginPath(); for (let k = 0; k <= 6; k++){ const a = Math.PI / 6 + k * Math.PI / 3; const px = cx + rr * Math.cos(a), py = cy + rr * Math.sin(a); k ? x.lineTo(px, py) : x.moveTo(px, py); } x.stroke(); }
-    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
-    t.repeat.set(ROOM_X / (Math.sqrt(3) * R), ROOM_Z / (3 * R)); return t;
-  })();
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_X, ROOM_Z), new THREE.MeshStandardMaterial({ map: hexTile, roughness: 0.85 }));
-  floor.rotation.x = -Math.PI / 2; scene.add(floor);
-  const wallMat = new THREE.MeshStandardMaterial({ color: "#8a7a64", roughness: 0.95 });
-  const wallB = new THREE.Mesh(new THREE.BoxGeometry(ROOM_X, 4, 0.2), wallMat); wallB.position.set(0, 2, -ROOM_Z / 2 - 0.1); scene.add(wallB);
-  const wallL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, ROOM_Z), wallMat); wallL.position.set(-ROOM_X / 2 - 0.1, 2, 0); scene.add(wallL);
-  const trim = new THREE.MeshStandardMaterial({ color: "#4a3622", roughness: 0.8 });
-  const base1 = new THREE.Mesh(new THREE.BoxGeometry(ROOM_X, 0.16, 0.06), trim); base1.position.set(0, 0.08, -ROOM_Z / 2 + 0.03); scene.add(base1);
-  // window with the moon in it
+  const texLoader = new THREE.TextureLoader();
+  const REPEAT_M = { plank: 2, stone: 2, plaster: 2, timber: 1, iron: 1, sand: 2, rubble: 2, driftwood: 2, wool: 1, boards: 2 };   // manifest.ron
+  const TEX = {};
+  for (const n of Object.keys(REPEAT_M)){
+    const t = texLoader.load(`fish/game/${n}.png?v=1`);
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; TEX[n] = t;
+  }
+  const texMat = (name, extra = {}) => new THREE.MeshStandardMaterial(Object.assign({ map: TEX[name], roughness: 0.9 }, extra));
+  // A box whose texture repeats every repeat_m metres on every face.
+  function texBox(w, h, d, mat, rep){
+    const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv;
+    const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+    for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++){ const i = f * 4 + k; uv.setXY(i, uv.getX(i) * dims[f][0] / rep, uv.getY(i) * dims[f][1] / rep); }
+    return new THREE.Mesh(g, mat);
+  }
+  // A hex column: CylinderGeometry's six corners already sit at 30 + 60k degrees, the cells' own corners.
+  // The top is mapped in world metres, so neighbouring columns' planks run on; the sides wrap round the edge.
+  function hexColumn(cx, cz, r, y0, h, mat, rep){
+    const g = new THREE.CylinderGeometry(r, r, h, 6, 1), pos = g.attributes.position, nrm = g.attributes.normal, uv = g.attributes.uv;
+    for (let i = 0; i < pos.count; i++){
+      if (Math.abs(nrm.getY(i)) > 0.5) uv.setXY(i, (pos.getX(i) + cx) / rep, (pos.getZ(i) + cz) / rep);
+      else uv.setXY(i, uv.getX(i) * 6 * r / rep, uv.getY(i) * h / rep);
+    }
+    const m = new THREE.Mesh(g, mat); m.position.set(cx, y0 + h / 2, cz); return m;
+  }
+  const plankMat = texMat("plank"), stoneMat = texMat("stone"), plasterMat = texMat("plaster"), timberMat = texMat("timber");
+  const room = new THREE.Group(); scene.add(room);
+  // the floor: plank hex columns, 0.3 m deep, their tops at y = 0
+  for (let q = -6; q <= 6; q++) for (let rr = -5; rr <= 5; rr++){
+    const [x, z] = cellXZ([q, rr]);
+    if (Math.abs(x) > ROOM_X / 2 + R || Math.abs(z) > ROOM_Z / 2 + R) continue;
+    room.add(hexColumn(x, z, R * 0.999, -0.3, 0.3, plankMat, REPEAT_M.plank));
+  }
+  const wallB = texBox(ROOM_X + 0.6, 4, 0.3, stoneMat, 2); wallB.position.set(0, 2 - 0.3, -ROOM_Z / 2 - 0.15); room.add(wallB);
+  const wallL = texBox(0.3, 4, ROOM_Z + 0.6, plasterMat, 2); wallL.position.set(-ROOM_X / 2 - 0.15, 2 - 0.3, 0); room.add(wallL);
+  for (const [x, z] of [[-ROOM_X / 2 + 0.1, -ROOM_Z / 2 + 0.1], [ROOM_X / 2 - 0.1, -ROOM_Z / 2 + 0.1], [-ROOM_X / 2 + 0.1, ROOM_Z / 2 - 0.1]]){
+    const post = texBox(0.24, 4, 0.24, timberMat, 1); post.position.set(x, 1.7, z); room.add(post);
+  }
+  const beam = texBox(ROOM_X, 0.24, 0.24, timberMat, 1); beam.position.set(0, 3.2, -ROOM_Z / 2 + 0.1); room.add(beam);
+  const sill = texBox(ROOM_X, 0.16, 0.08, timberMat, 1); sill.position.set(0, 0.08, -ROOM_Z / 2 + 0.04); room.add(sill);
+  // window with the moon in it, framed in timber
   const winPane = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.3), new THREE.MeshStandardMaterial({ color: "#000", emissive: new THREE.Color("#203a5a"), emissiveIntensity: 1 }));
-  winPane.position.set(3.2, 2.1, -ROOM_Z / 2 + 0.01); scene.add(winPane);
-  for (const [w, h, x, y] of [[1.8,0.1,0,0.7],[1.8,0.1,0,-0.7],[0.1,1.5,0.85,0],[0.1,1.5,-0.85,0],[0.06,1.3,0,0],[1.6,0.06,0,0]]){ const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.1), trim); b.position.set(3.2 + x, 2.1 + y, -ROOM_Z / 2 + 0.05); scene.add(b); }
-  const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(0.12, 24), new THREE.MeshBasicMaterial({ color: "#dfe8ff" })); moonDisc.position.set(3.55, 2.4, -ROOM_Z / 2 + 0.02); scene.add(moonDisc);
+  winPane.position.set(3.2, 2.1, -ROOM_Z / 2 + 0.01); room.add(winPane);
+  for (const [w, h, x, y] of [[1.8,0.12,0,0.7],[1.8,0.12,0,-0.7],[0.12,1.5,0.85,0],[0.12,1.5,-0.85,0],[0.08,1.3,0,0],[1.6,0.08,0,0]]){ const b = texBox(w, h, 0.12, timberMat, 1); b.position.set(3.2 + x, 2.1 + y, -ROOM_Z / 2 + 0.06); room.add(b); }
+  const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(0.12, 6), new THREE.MeshBasicMaterial({ color: "#dfe8ff" })); moonDisc.position.set(3.55, 2.4, -ROOM_Z / 2 + 0.02); room.add(moonDisc);
   // shelf, books, candle
-  const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 2.2), trim); shelf.position.set(-ROOM_X / 2 + 0.2, 1.5, -1.6); scene.add(shelf);
-  const br = mulberry32(9);
-  for (let i = 0; i < 9; i++){ const h = 0.22 + br() * 0.12; const b = new THREE.Mesh(new THREE.BoxGeometry(0.22, h, 0.06 + br() * 0.04), new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(br(), 0.4, 0.3), roughness: 0.8 })); b.position.set(-ROOM_X / 2 + 0.18, 1.53 + h / 2, -2.5 + i * 0.1); scene.add(b); }
-  const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 10), new THREE.MeshStandardMaterial({ color: "#efe4c8" })); candle.position.set(-ROOM_X / 2 + 0.2, 1.6, -0.8); scene.add(candle);
-  const flame = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), new THREE.MeshBasicMaterial({ color: "#ffcf70" })); flame.scale.y = 1.8; flame.position.set(-ROOM_X / 2 + 0.2, 1.7, -0.8); scene.add(flame);
-  // lantern on a bracket by the door side
-  const lanternBody = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.26, 6), new THREE.MeshStandardMaterial({ color: "#1c1612", emissive: new THREE.Color("#ffb060"), emissiveIntensity: 1.6 }));
-  lanternBody.position.set(-ROOM_X / 2 + 0.25, 2.3, 2.4); scene.add(lanternBody);
-  const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.04), trim); bracket.position.set(-ROOM_X / 2 + 0.12, 2.47, 2.4); scene.add(bracket);
-  // a chair and a rug, so the tank's light has something to fall on
-  const rug = new THREE.Mesh(new THREE.CircleGeometry(1.5, 6), new THREE.MeshStandardMaterial({ color: "#6a2e2a", roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(-2.4, 0.005, 2.0); scene.add(rug);
-  const chairMat = new THREE.MeshStandardMaterial({ color: "#5a3c26", roughness: 0.7 });
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.6), chairMat); seat.position.set(-2.4, 0.45, 2.2); scene.add(seat);
-  const back = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.08), chairMat); back.position.set(-2.4, 0.78, 2.5); scene.add(back);
-  for (const [dx, dz] of [[-.26,-.26],[.26,-.26],[-.26,.26],[.26,.26]]){ const l = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.45, 0.06), chairMat); l.position.set(-2.4 + dx, 0.225, 2.2 + dz); scene.add(l); }
+  const shelf = texBox(0.4, 0.08, 2.2, plankMat, 2); shelf.position.set(-ROOM_X / 2 + 0.2, 1.5, -1.6); room.add(shelf);
+  const br = mulberry32(9), bookHues = ["#a61e1f", "#15578a", "#297537", "#8d4526", "#4f1d83"];
+  for (let i = 0; i < 9; i++){ const h = 0.22 + br() * 0.12; const b = texBox(0.22, h, 0.07, texMat("wool", { color: bookHues[i % 5] }), 1); b.position.set(-ROOM_X / 2 + 0.18, 1.54 + h / 2, -2.5 + i * 0.1); room.add(b); }
+  const candle = texBox(0.07, 0.14, 0.07, texMat("plaster", { color: "#fff2d8" }), 1); candle.position.set(-ROOM_X / 2 + 0.2, 1.61, -0.8); room.add(candle);
+  const flame = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.03), new THREE.MeshBasicMaterial({ color: "#faaf5c" })); flame.position.set(-ROOM_X / 2 + 0.2, 1.71, -0.8); room.add(flame);
+  // a wall lantern on a timber bracket: an iron cage round a lit glass block
+  const lanternBody = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.2, 0.13), new THREE.MeshStandardMaterial({ color: "#1c1612", emissive: new THREE.Color("#fb902f"), emissiveIntensity: 1.6 }));
+  lanternBody.position.set(-ROOM_X / 2 + 0.3, 2.3, 2.4); room.add(lanternBody);
+  for (const y of [0.12, -0.12]){ const cap = texBox(0.18, 0.04, 0.18, texMat("iron"), 1); cap.position.set(-ROOM_X / 2 + 0.3, 2.3 + y, 2.4); room.add(cap); }
+  const bracket = texBox(0.3, 0.06, 0.06, timberMat, 1); bracket.position.set(-ROOM_X / 2 + 0.15, 2.47, 2.4); room.add(bracket);
+  // a chair and a hex rug, so the light has something to fall on
+  const rug = hexColumn(-2.4, 2.0, 1.4, 0, 0.02, texMat("wool", { color: "#d4462b" }), 1); room.add(rug);
+  const seat = texBox(0.6, 0.08, 0.6, plankMat, 2); seat.position.set(-2.4, 0.45, 2.2); room.add(seat);
+  const back = texBox(0.6, 0.6, 0.08, plankMat, 2); back.position.set(-2.4, 0.78, 2.5); room.add(back);
+  for (const [dx, dz] of [[-.26,-.26],[.26,-.26],[-.26,.26],[.26,.26]]){ const l = texBox(0.06, 0.45, 0.06, timberMat, 1); l.position.set(-2.4 + dx, 0.225, 2.2 + dz); room.add(l); }
 
   // ---- lights: made once, switched by intensity, so the shaders never recompile
   const hemi = new THREE.HemisphereLight("#9fb8d8", "#2a2018", 0.1); scene.add(hemi);
   const moon = new THREE.DirectionalLight("#9fb4e8", 0.15); moon.position.set(4, 5, -8); scene.add(moon);
-  const tankLights = []; for (let i = 0; i < 7; i++){ const l = new THREE.PointLight("#8fe4ff", 0, 6, 2); scene.add(l); tankLights.push(l); }
+  const tankLights = []; for (let i = 0; i < 7; i++){ const l = new THREE.PointLight("#8fe4ff", 0, 4.5, 2); scene.add(l); tankLights.push(l); }
   const lantern = new THREE.PointLight("#ffa850", 1.4, 5, 2); lantern.position.copy(lanternBody.position).add(new THREE.Vector3(0.1, 0, 0)); scene.add(lantern);
   const candleL = new THREE.PointLight("#ffb050", 0.8, 3.5, 2); candleL.position.set(-ROOM_X / 2 + 0.3, 1.75, -0.8); scene.add(candleL);
 
   // caustics: a tileable net of light, two layers scrolled against each other, cast on the floor round the tank
   const caustTex = (() => {
-    const s = 256, cv = document.createElement("canvas"); cv.width = cv.height = s; const x = cv.getContext("2d");
-    x.fillStyle = "#000"; x.fillRect(0, 0, s, s); x.strokeStyle = "rgba(170,240,255,.55)"; x.lineWidth = 2.2;
-    const r = mulberry32(3), pts = []; for (let i = 0; i < 26; i++) pts.push([r() * s, r() * s]);
-    for (let yy = 0; yy < s; yy += 3) for (let xx = 0; xx < s; xx += 3){
+    // pixel art: a 64 x 64 net, each pixel lit or not, in one palette colour, sampled nearest
+    const s = 64, cv = document.createElement("canvas"); cv.width = cv.height = s; const x = cv.getContext("2d");
+    x.fillStyle = "#000"; x.fillRect(0, 0, s, s);
+    const r = mulberry32(3), pts = []; for (let i = 0; i < 10; i++) pts.push([r() * s, r() * s]);
+    for (let yy = 0; yy < s; yy++) for (let xx = 0; xx < s; xx++){
       let d1 = 1e9, d2 = 1e9;
       for (const [px, py] of pts) for (const ox of [-s, 0, s]) for (const oy of [-s, 0, s]){ const d = Math.hypot(xx - px - ox, yy - py - oy); if (d < d1){ d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
-      const v = clamp(1 - (d2 - d1) / 6, 0, 1); if (v > 0){ x.fillStyle = `rgba(170,240,255,${v * 0.8})`; x.fillRect(xx, yy, 3, 3); }
+      if (d2 - d1 < 1.1){ x.fillStyle = "#74effe"; x.fillRect(xx, yy, 1, 1); }
     }
-    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+    const t = pixelTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
   })();
   const caustMats = [0, 1].map(i => { const t = caustTex.clone(); t.needsUpdate = true; t.repeat.set(3 + i, 3 + i); return new THREE.MeshBasicMaterial({ map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.0 }); });
   const caustGroup = new THREE.Group(); scene.add(caustGroup);
 
   // ---- the tank
   const glassMat = new THREE.MeshStandardMaterial({ color: "#cfefff", transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false });
-  const frameMat = new THREE.MeshStandardMaterial({ color: "#1e2428", roughness: 0.5, metalness: 0.6 });
+  const frameMat = texMat("iron", { roughness: 0.6 });
   const waterMat = { fresh: "#3a90a0", salt: "#2a78b8", brine: "#9cc8e6", vent: "#5a8a6a" };
   const waterSideMat = new THREE.MeshStandardMaterial({ color: "#3a90a0", transparent: true, opacity: 0.2, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false });
   const waterTopMat = new THREE.MeshStandardMaterial({ color: "#3a90a0", transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false, emissive: new THREE.Color("#0a3a48"), emissiveIntensity: 0.4 });
-  const standMat = new THREE.MeshStandardMaterial({ color: "#3a2a1c", roughness: 0.7 });
-  const subMat = { "sand-bed": new THREE.MeshStandardMaterial({ color: "#d8c08a", roughness: 1 }), gravel: new THREE.MeshStandardMaterial({ color: "#5c5a58", roughness: 1 }) };
-  const hoodMat = new THREE.MeshStandardMaterial({ color: "#202428", roughness: 0.5, metalness: 0.5, emissive: new THREE.Color("#8fe4ff"), emissiveIntensity: 0 });
+  const standMat = texMat("boards");
+  const subMat = { "sand-bed": texMat("sand"), gravel: texMat("rubble") };
+  const hoodMat = texMat("iron", { emissive: new THREE.Color("#74effe"), emissiveIntensity: 0 });
+  // mockup-only pixel textures for the decor the game has no texture for (Sweaft-64, sampled nearest)
+  const pixTex = (rows, pal) => { const h = rows.length, w = rows[0].length, cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
+    rows.forEach((row, y) => [...row].forEach((ch, xx) => { if (ch !== "."){ x.fillStyle = pal[ch]; x.fillRect(xx, y, 1, 1); } }));
+    const t = pixelTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; return t; };
+  const kelpTex = pixTex(["aBBc..", ".aBBc.", ".aBBBc", "aBBBc.", "aBBc..", "aBBBc.", ".aBBc.", ".aBBBc"], { a: "#05582d", B: "#297537", c: "#559642" });
+  const coralTex = pixTex(["CCdC", "CeCC", "dCCe", "CCdC"], { C: "#d12d41", d: "#841c1d", e: "#fa3a64" });
   const tankGroup = new THREE.Group(); scene.add(tankGroup);
   const decorGroup = new THREE.Group(); scene.add(decorGroup);
   const fishGroup = new THREE.Group(); scene.add(fishGroup);
@@ -965,7 +1033,6 @@ const tank = (() => {
   let cells = [], floorY = STAND + 0.06, topY = 0, kelps = [], bubbles = null, cave = null;
   const hexPts = (cx, cz, r) => [0, 1, 2, 3, 4, 5].map(k => { const a = Math.PI / 6 + k * Math.PI / 3; return [cx + r * Math.cos(a), cz + r * Math.sin(a)]; });
   // A hex prism: CylinderGeometry's six corners already sit at 30 + 60k degrees, the cells' own corners.
-  function prism(cx, cz, r, y0, h, mat){ const g = new THREE.CylinderGeometry(r, r, h, 6); const m = new THREE.Mesh(g, mat); m.position.set(cx, y0 + h / 2, cz); return m; }
   function clearGroup(gr){ while (gr.children.length){ const c = gr.children.pop(); c.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } }
 
   function buildTank(){
@@ -977,9 +1044,9 @@ const tank = (() => {
     const waterTop = topY - 0.07;
     coords.forEach(([q, r], ci) => {
       const [cx, cz] = cells[ci], v = hexPts(cx, cz, R);
-      tankGroup.add(prism(cx, cz, R * 0.995, 0, STAND, standMat));
-      tankGroup.add(prism(cx, cz, R * 0.97, STAND, 0.06 + 0.02, state.decor.has("sand-bed") ? subMat["sand-bed"] : subMat.gravel));
-      const hood = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.7, 0.05, 0.16), hoodMat); hood.position.set(cx, topY + 0.03, cz); tankGroup.add(hood);
+      tankGroup.add(hexColumn(cx, cz, R * 0.995, 0, STAND, standMat, 2));
+      tankGroup.add(hexColumn(cx, cz, R * 0.97, STAND, 0.06 + 0.02, state.decor.has("sand-bed") ? subMat["sand-bed"] : subMat.gravel, 2));
+      const hood = texBox(CELL * 0.7, 0.06, 0.18, hoodMat, 1); hood.position.set(cx, topY + 0.03, cz); tankGroup.add(hood);
       const wt = new THREE.Mesh(new THREE.CircleGeometry(R * 0.985, 6), waterTopMat); wt.rotation.x = -Math.PI / 2; wt.rotation.z = Math.PI / 6; wt.position.set(cx, waterTop, cz); tankGroup.add(wt);
       for (let k = 0; k < 6; k++){
         // edge k joins vertex k and k+1; its outward normal points at DIRS[(k + 1) % 6]... checked below by distance
@@ -1003,11 +1070,11 @@ const tank = (() => {
     mk(quads, floorY, waterTop, waterSideMat, 0.01);
     // frame: posts at boundary corners, rails top and bottom
     for (const [a, b] of quads){
-      for (const y of [STAND + 0.01, topY]){ const len = Math.hypot(b[0] - a[0], b[1] - a[1]); const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.035, 0.035), frameMat); rail.position.set((a[0] + b[0]) / 2, y, (a[1] + b[1]) / 2); rail.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0]); tankGroup.add(rail); }
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.035, topY - STAND, 0.035), frameMat); post.position.set(a[0], (topY + STAND) / 2, a[1]); tankGroup.add(post);
+      for (const y of [STAND + 0.01, topY]){ const len = Math.hypot(b[0] - a[0], b[1] - a[1]); const rail = texBox(len, 0.05, 0.05, frameMat, 1); rail.position.set((a[0] + b[0]) / 2, y, (a[1] + b[1]) / 2); rail.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0]); tankGroup.add(rail); }
+      const post = texBox(0.05, topY - STAND, 0.05, frameMat, 1); post.position.set(a[0], (topY + STAND) / 2, a[1]); tankGroup.add(post);
     }
     // caustic patches on the floor round each cell
-    for (const [cx, cz] of cells) for (const m of caustMats){ const p = new THREE.Mesh(new THREE.CircleGeometry(R * 1.35, 32), m); p.rotation.x = -Math.PI / 2; p.position.set(cx, 0.01 + caustMats.indexOf(m) * 0.002, cz); caustGroup.add(p); }
+    for (const [cx, cz] of cells) for (const m of caustMats){ const p = new THREE.Mesh(new THREE.CircleGeometry(R * 1.35, 6), m); p.rotation.z = Math.PI / 6; p.rotation.x = -Math.PI / 2; p.position.set(cx, 0.01 + caustMats.indexOf(m) * 0.002, cz); caustGroup.add(p); }
     tankLights.forEach((l, i) => { if (i < cells.length){ l.position.set(cells[i][0], topY - 0.15, cells[i][1]); } });
     waterTopMat.color.set(waterMat[state.water]); waterSideMat.color.set(waterMat[state.water]);
     buildDecor(); placeResidents(); applyLight();
@@ -1022,47 +1089,48 @@ const tank = (() => {
     const r = mulberry32(42), n = cells.length, at = i => cells[i % n];
     const fy = floorY + 0.02;
     if (state.decor.has("rock-cave")){
-      const [cx, cz] = at(0), m = new THREE.MeshStandardMaterial({ color: "#7c7882", roughness: 0.9, flatShading: true });
-      for (let i = 0; i < 5; i++){ const s = 0.22 + r() * 0.2; const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), m); rock.position.set(cx - 0.7 + (i % 3) * 0.3, fy + s * 0.5 + (i > 2 ? 0.28 : 0), cz - 0.45 + (i > 2 ? 0.05 : 0)); rock.rotation.set(r() * 3, r() * 3, 0); rock.scale.y = 0.8; decorGroup.add(rock); }
-      const hole = new THREE.Mesh(new THREE.CircleGeometry(0.14, 12), new THREE.MeshBasicMaterial({ color: "#050506" })); hole.position.set(cx - 0.4, fy + 0.13, cz - 0.15); decorGroup.add(hole);
+      const [cx, cz] = at(0), m = texMat("rubble");
+      for (let i = 0; i < 5; i++){ const s = 0.16 + r() * 0.12, hh = 0.18 + r() * 0.22; const rock = hexColumn(cx - 0.7 + (i % 3) * 0.3, cz - 0.45 + (i > 2 ? 0.05 : 0), s, fy - 0.02 + (i > 2 ? 0.3 : 0), hh, m, 1); rock.rotation.y = r() * 3; decorGroup.add(rock); }   // stacked rubble prisms
+      const hole = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.2, 0.02), new THREE.MeshBasicMaterial({ color: "#010e1a" })); hole.position.set(cx - 0.4, fy + 0.13, cz - 0.15); decorGroup.add(hole);
       cave = new THREE.Vector3(cx - 0.4, fy + 0.1, cz - 0.05);
     }
     if (state.decor.has("kelp")){
-      const km = new THREE.MeshStandardMaterial({ color: "#4f9a3c", roughness: 0.7, side: THREE.DoubleSide });
+      const km = new THREE.MeshStandardMaterial({ map: kelpTex, alphaTest: 0.5, roughness: 0.7, side: THREE.DoubleSide });
       for (let i = 0; i < 6 * Math.min(n, 3); i++){
         const [cx, cz] = at(i), h = (topY - floorY) * (0.55 + r() * 0.35);
-        const g = new THREE.PlaneGeometry(0.1, h, 1, 10); g.translate(0, h / 2, 0);
+        const g = new THREE.PlaneGeometry(0.12, h, 1, 6); g.translate(0, h / 2, 0);
+        { const uv = g.attributes.uv; for (let j = 0; j < uv.count; j++) uv.setY(j, uv.getY(j) * h / 0.16); }   // 8 px every 16 cm
         const k = new THREE.Mesh(g, km); k.position.set(cx + 0.4 + (r() - 0.5) * 0.9, fy, cz - 0.6 + (r() - 0.5) * 0.5); k.rotation.y = r() * 3;
         k.userData.base = Float32Array.from(g.attributes.position.array); k.userData.ph = r() * 6; kelps.push(k); decorGroup.add(k);
       }
     }
     if (state.decor.has("coral")){
-      const cm = new THREE.MeshStandardMaterial({ color: "#f0707c", roughness: 0.6 });
+      const cm = new THREE.MeshStandardMaterial({ map: coralTex, flatShading: true, roughness: 0.6 });
       const [cx, cz] = at(1);
-      const branch = (p, dir, len, d) => { const e = p.clone().addScaledVector(dir, len); const g = new THREE.CylinderGeometry(0.025 - d * 0.006, 0.035 - d * 0.006, len, 6); const m = new THREE.Mesh(g, cm); m.position.copy(p).lerp(e, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); decorGroup.add(m); if (d < 2) for (const s of [-1, 1]){ const nd = dir.clone().applyAxisAngle(new THREE.Vector3(r() - 0.5, 0, r() - 0.5).normalize(), s * 0.6).normalize(); branch(e, nd, len * 0.75, d + 1); } };
+      const branch = (p, dir, len, d) => { const e = p.clone().addScaledVector(dir, len); const g = new THREE.CylinderGeometry(0.03 - d * 0.006, 0.03 - d * 0.006, len, 6); const m = new THREE.Mesh(g, cm); m.position.copy(p).lerp(e, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); decorGroup.add(m); if (d < 2) for (const s of [-1, 1]){ const nd = dir.clone().applyAxisAngle(new THREE.Vector3(r() - 0.5, 0, r() - 0.5).normalize(), s * 0.6).normalize(); branch(e, nd, len * 0.75, d + 1); } };
       for (let i = 0; i < 3; i++) branch(new THREE.Vector3(cx + 0.3 + i * 0.25, fy, cz + 0.4 - i * 0.2), new THREE.Vector3(0, 1, 0), 0.22, 0);
     }
     if (state.decor.has("driftwood")){
-      const [cx, cz] = at(n > 1 ? 2 : 0), wm = new THREE.MeshStandardMaterial({ color: "#8a6844", roughness: 0.9 });
-      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 1.3, 7), wm); log.rotation.z = Math.PI / 2 - 0.35; log.rotation.y = 0.6; log.position.set(cx + 0.1, fy + 0.25, cz + 0.3); decorGroup.add(log);
-      const twig = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 0.5, 6), wm); twig.rotation.z = -0.5; twig.position.set(cx + 0.2, fy + 0.45, cz + 0.25); decorGroup.add(twig);
+      const [cx, cz] = at(n > 1 ? 2 : 0), wm = texMat("driftwood", { flatShading: true });
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 6), wm); log.rotation.z = Math.PI / 2 - 0.35; log.rotation.y = 0.6; log.position.set(cx + 0.1, fy + 0.25, cz + 0.3); decorGroup.add(log);
+      const twig = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 6), wm); twig.rotation.z = -0.5; twig.position.set(cx + 0.2, fy + 0.45, cz + 0.25); decorGroup.add(twig);
     }
     if (state.decor.has("heater")){
-      const [cx, cz] = at(0), h = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 10), new THREE.MeshStandardMaterial({ color: "#3a3a40", emissive: new THREE.Color("#ff7a30"), emissiveIntensity: 1.2 }));
+      const [cx, cz] = at(0), h = texBox(0.08, 0.5, 0.08, texMat("iron", { emissive: new THREE.Color("#fe6420"), emissiveIntensity: 0.9 }), 1);
       h.position.set(cx + R * 0.55, floorY + 0.35, cz - 0.55); decorGroup.add(h);
     }
     if (state.decor.has("chiller")){
-      const [cx, cz] = at(n - 1), c = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.2), new THREE.MeshStandardMaterial({ color: "#7aaad0", emissive: new THREE.Color("#3a7ab0"), emissiveIntensity: 0.5 }));
+      const [cx, cz] = at(n - 1), c = texBox(0.3, 0.4, 0.2, texMat("iron", { color: "#bfcad7", emissive: new THREE.Color("#15578a"), emissiveIntensity: 0.5 }), 1);
       c.position.set(cx - R * 0.5, floorY + 0.25, cz - 0.6); decorGroup.add(c);
     }
     if (state.decor.has("bubbler")){
-      const [cx, cz] = at(n > 1 ? 1 : 0), stone = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.06, 10), new THREE.MeshStandardMaterial({ color: "#5a5e64" }));
-      stone.position.set(cx - 0.3, fy + 0.03, cz + 0.6); decorGroup.add(stone);
-      const N = 70, pos = new Float32Array(N * 3), cv = document.createElement("canvas"); cv.width = cv.height = 32; const x = cv.getContext("2d");
-      x.strokeStyle = "rgba(220,250,255,.95)"; x.lineWidth = 3; x.beginPath(); x.arc(16, 16, 11, 0, 7); x.stroke();
+      const [cx, cz] = at(n > 1 ? 1 : 0), stone = hexColumn(cx - 0.3, cz + 0.6, 0.1, fy, 0.06, texMat("rubble"), 1); decorGroup.add(stone);
+      const N = 70, pos = new Float32Array(N * 3), cv = document.createElement("canvas"); cv.width = cv.height = 8; const x = cv.getContext("2d");
+      x.fillStyle = "#74effe"; for (const [px, py, w, h] of [[2,0,4,1],[2,7,4,1],[0,2,1,4],[7,2,1,4],[1,1,1,1],[6,1,1,1],[1,6,1,1],[6,6,1,1]]) x.fillRect(px, py, w, h);
+      x.fillStyle = "#fffefe"; x.fillRect(2, 2, 1, 1);   // a pixel bubble ring and its glint
       for (let i = 0; i < N; i++){ pos[i * 3] = stone.position.x; pos[i * 3 + 1] = fy + r() * (topY - fy); pos[i * 3 + 2] = stone.position.z; }
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      bubbles = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.05, map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false }));
+      bubbles = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.05, map: pixelTexture(cv), transparent: true, alphaTest: 0.5, depthWrite: false }));
       bubbles.userData = { origin: stone.position.clone(), seeds: Array.from({ length: N }, () => r()) }; decorGroup.add(bubbles);
     }
   }
@@ -1145,10 +1213,10 @@ const tank = (() => {
     const n = state.night, lampOn = state.decor.has("lamp") && state.lamp;
     hemi.intensity = n ? 0.06 : 0.75; hemi.color.set(n ? "#7088b8" : "#d8ecff");
     moon.intensity = n ? 0.12 : 1.1; moon.color.set(n ? "#9fb4e8" : "#fff2d8");
-    winPane.material.emissive.set(n ? "#14243c" : "#bfe2ff"); moonDisc.visible = n;
+    winPane.material.emissive.set(n ? "#010e1a" : "#bfe2ff"); moonDisc.visible = n;
     scene.background = new THREE.Color(n ? "#05070c" : "#a8c4d4");
     tankLights.forEach((l, i) => l.intensity = (lampOn && i < cells.length) ? (n ? 1.1 : 0.6) / Math.sqrt(cells.length) : 0);
-    hoodMat.emissiveIntensity = lampOn ? 1.2 : 0;
+    hoodMat.emissiveIntensity = lampOn ? 0.45 : 0;
     lantern.intensity = state.lanternOn ? (n ? 1.1 : 0.3) : 0; lanternBody.material.emissiveIntensity = state.lanternOn ? 1.6 : 0;
     candleL.intensity = n ? 0.8 : 0.2;
     waterTopMat.emissiveIntensity = lampOn ? (n ? 0.5 : 0.15) : 0.03;
@@ -1217,7 +1285,7 @@ function refreshTankUI(){
   const rl = $("resList"); rl.innerHTML = "";
   for (const [id, n] of Object.entries(bySp)){
     const [st, why] = rep.status[id], d = document.createElement("div"); d.className = "res";
-    d.innerHTML = `<img src="fish/species-${id}.png" alt=""><span>${n} &times; ${SP[id].name}<br><span class="small">${why}</span></span><span class="st ${st}">${st === "ok" ? "happy" : st === "warn" ? "stressed" : "cannot live"}</span>`;
+    d.innerHTML = `<img src="${iconSrc(id)}" alt=""><span>${n} &times; ${SP[id].name}<br><span class="small">${why}</span></span><span class="st ${st}">${st === "ok" ? "happy" : st === "warn" ? "stressed" : "cannot live"}</span>`;
     const b = document.createElement("button"); b.textContent = "remove"; b.setAttribute("aria-label", `Remove the ${SP[id].name}`); b.onclick = () => { tank.remove(id); refreshTankUI(); }; d.appendChild(b); rl.appendChild(d);
   }
   $("tankMsgs").innerHTML = rep.msgs.map(([k, m]) => `<div class="${k}">${m}</div>`).join("");
@@ -1276,8 +1344,10 @@ const QS = [
     "Make every check a warning that stresses the fish, never a death or a lost fish. A fish only fails to go in when the water type is wrong."],
   ["Rendering a school", "This page paints a canvas skin per fish. The game draws a school in one instanced draw, so the pattern would move into the fragment shader, computed from the fish's seed.",
     "Do that. The look stays the same and the cost stays one draw per school. It is a measurement before it is a promise: run the perf suite on a 34-fish school against today's plain fish."],
-  ["The portraits", "The species portraits, pattern swatches and decor icons are painted by code in your friend's style. Tenebris's five fish also have their own 16 x 16 icons, which the design keeps for the hotbar.",
-    "Use the 16 x 16 icons in the hotbar and these larger portraits in the field guide and on tank labels, once you approve them or replace them with real drawings."],
+  ["The icons", "The game's eight fish keep their own 16 x 16 icons. The five new species get icons drawn in the same manner (16 x 16, a darker rim of the body's hue, a 1 px eye), in Sweaft-64 colours with the balatro-pixel-art kit.",
+    "Ship the five new icons beside the eight in assets/items/fish once you approve them, and use the same icons on tank labels and in the field guide."],
 ];
 $("qs").innerHTML = QS.map(([h, p, r], i) => `<div class="q"><h3>${i + 1}. ${h}</h3><p>${p}</p><p class="rec"><b>Recommend</b>${r}</p></div>`).join("");
+// Deep links for review shots: #tank-day opens the aquarium by day, #tank-night by night.
+if (/^#tank/.test(location.hash)){ if (/day/.test(location.hash)) $("dayBtn").click(); document.querySelector(".wrap").prepend($("tank")); }
 </script>

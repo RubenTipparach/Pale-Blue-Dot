@@ -47,7 +47,16 @@ header.top .lede b{color:var(--ink);font-weight:500}
 
 .scene{position:relative;height:clamp(380px,58vh,660px);border-top:1px solid var(--line);background:#04050a;overflow:hidden}
 .scene canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
-.scene .tag{position:absolute;left:max(16px,env(safe-area-inset-left,0px));top:14px;font-family:var(--display);font-size:22px;font-weight:600;letter-spacing:.03em;text-shadow:0 1px 4px #000}
+.ghud{position:absolute;inset:0;pointer-events:none}
+.gdbg{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:84px;font:12px/1.2 ui-monospace,Consolas,"DejaVu Sans Mono",monospace;color:#fff;text-shadow:1px 1px 0 #000;white-space:nowrap;background:rgba(0,0,0,.5);padding:2px 5px}
+.gbar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:4px;align-items:flex-end}
+.gslot{width:44px;height:44px;box-sizing:border-box;border:1px solid rgba(140,191,189,.5);background:rgba(5,15,20,.72);position:relative;display:grid;place-items:center}
+.gslot.tool{width:52px;height:52px;border:2px solid #f0a830;margin-right:8px}
+.gslot img{width:32px;height:32px;image-rendering:pixelated}
+.gslot i{display:block;width:32px;height:32px;background-repeat:no-repeat}
+.gslot b{position:absolute;right:3px;bottom:1px;font:600 10px ui-monospace,Consolas,monospace;color:#ebf7f2;text-shadow:1px 1px 0 #000}
+@media (max-width:760px){.gbar{display:none}.gdbg{bottom:52px}}
+.scene .tag{position:absolute;left:max(16px,env(safe-area-inset-left,0px));top:14px;background:rgba(9,11,16,.82);border:1px solid var(--line);border-radius:4px;padding:6px 10px 8px;max-width:min(440px,calc(100% - 210px));font-family:var(--display);font-size:22px;font-weight:600;letter-spacing:.03em;text-shadow:0 1px 4px #000}
 .scene .tag small{display:block;font-family:var(--body);font-size:13px;font-weight:400;color:var(--muted);letter-spacing:0;max-width:52ch}
 .scene .cams{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:14px;display:flex;gap:6px}
 .strip{border-bottom:1px solid var(--line);background:var(--panel)}
@@ -89,7 +98,7 @@ table.grid td.rec{color:var(--ok)}
 .daybar input{flex:1 1 220px;accent-color:var(--amber);min-width:160px}
 .icons{display:flex;flex-wrap:wrap;gap:14px}
 .icons figure{margin:0;display:grid;justify-items:center;width:92px;text-align:center;font-size:12.5px;color:var(--muted);line-height:1.25}
-.icons img{width:64px;height:64px}
+.icons img{width:64px;height:64px;image-rendering:pixelated}
 .note{font-size:14px;color:var(--muted);max-width:80ch}
 .note b{color:var(--ink);font-weight:500}
 .bar{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:14px}
@@ -115,6 +124,7 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
 <div class="scene" id="scene">
   <canvas id="sceneCanvas" tabindex="0" aria-label="A three-dimensional transfer from Pale Blue's night side to the skimmer platform at Amber's cloud tops. Drag to turn the camera."></canvas>
   <div class="tag">Pale Blue to Amber<small>A town on the night side to the skimmer platform, 900 km. Not to scale: the bodies are enlarged and pulled together. The numbers in the strip below are the real ones.</small></div>
+  <div class="ghud" aria-hidden="true"><div class="gdbg" id="gDbg"></div><div class="gbar" id="gBar"></div></div>
   <div class="cams"><button class="btn" id="camChase" aria-pressed="true">Chase</button><button class="btn" id="camWide">Whole route</button></div>
 </div>
 <div class="strip">
@@ -273,11 +283,11 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
     <div class="two">
       <div class="bars" id="fuelBars"></div>
       <div class="icons">
-        <figure><img src="travel/icon_fuel.png" alt="">Hydrogen cell: the fuel</figure>
-        <figure><img src="planets/res_ice.png" alt="">Water ice: Rime, Lantern's poles</figure>
-        <figure><img src="planets/res_helium3.png" alt="">Helium-3: skimmed, double strength</figure>
-        <figure><img src="planets/res_methane.png" alt="">Methane: Murk, burns in a pinch</figure>
-        <figure><img src="travel/icon_skimmer.png" alt="">The scoop, flown low over a giant</figure>
+        <figure><img src="travel/icon_fuel.png?v=3" alt="">Hydrogen cell: the fuel</figure>
+        <figure><img src="planets/res_ice.png?v=3" alt="">Water ice: Rime, Lantern's poles</figure>
+        <figure><img src="planets/res_helium3.png?v=3" alt="">Helium-3: skimmed, double strength</figure>
+        <figure><img src="planets/res_methane.png?v=3" alt="">Methane: Murk, burns in a pinch</figure>
+        <figure><img src="travel/icon_skimmer.png?v=3" alt="">The scoop, flown low over a giant</figure>
       </div>
     </div>
   </div>
@@ -289,7 +299,7 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
       <div style="display:grid;gap:10px;align-content:start">
         <div class="eyebrow">Lanes and gates</div><h2>A shortcut to the giants, built late</h2>
         <p class="note">A pair of gates makes a lane: fly through one aligned and slow, and the ship is carried at 25 km/s to the other, which rides its own body's rails, so the lane's length changes through the year. Nothing is simulated in between. Pale Blue to Glaucus drops from eight to ten minutes to about two and a half. <b>Recommended for later</b>: the system works without them, and building the first pair is a goal worth having.</p>
-        <div class="icons"><figure><img src="travel/icon_gate.png" alt="">Lane gate</figure><figure><img src="travel/icon_station.png" alt="">Station</figure><figure><img src="travel/icon_ship.png" alt="">The runabout</figure><figure><img src="travel/icon_dampener.png" alt="">Dampeners</figure></div>
+        <div class="icons"><figure><img src="travel/icon_gate.png?v=3" alt="">Lane gate</figure><figure><img src="travel/icon_station.png?v=3" alt="">Station</figure><figure><img src="travel/icon_ship.png?v=3" alt="">The runabout</figure><figure><img src="travel/icon_dampener.png?v=3" alt="">Dampeners</figure></div>
       </div>
       <div class="fig"><svg viewBox="0 0 600 260" role="img" aria-label="Two lane gates, one by Pale Blue and one by Glaucus, joined by a lane" style="min-width:420px">
         <circle cx="80" cy="150" r="34" fill="#2a6ab0"/><text x="80" y="208" text-anchor="middle" font-size="13">Pale Blue</text>
@@ -308,9 +318,10 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
 
 <section id="art">
   <div class="wrap">
-    <div><div class="eyebrow">Where the art comes from</div><h2>Painted by code, in the friend's style</h2></div>
-    <p class="note">The icons on this page, and the globes' maps, are <b>painted by code</b> with the crayon kit in <span class="mono">.claude/skills/hand-drawn-illustration</span>, copying the owner's friend's method. <b>They are not the friend's drawings.</b> Script: <span class="mono">tools/art/travel_art.py</span>, two passes against the sheet below (the dampener's arrows pulled in; the ship's engine flames enlarged).</p>
-    <figure class="sheet" style="max-width:820px"><img src="travel/contact_travel.png" alt="Contact sheet: the six travel icons blown up and at 64 and 48 pixels, beside the friend's power output and eagle eye icons" loading="lazy"><figcaption>The travel icons beside two of the friend's (marked "theirs").</figcaption></figure>
+    <div><div class="eyebrow">Where the art comes from</div><h2>Pixel art, in the solitaire collection's style</h2></div>
+    <p class="note"><b>The game's own art</b>, copied byte-identical into <span class="mono">travel/game/</span> (its README names each source): the ship is the Kestrel (<span class="mono">assets/models/vehicles/kestrel/kestrel.glb</span>, its own pixel atlas, loaded with GLTFLoader); Highport's hull blocks, the departure pad with the town's first houses, and the skimmer platform's hex deck, hab, rails and scoop are block-built in the settlement iron, plank, plaster and thatch (<span class="mono">assets/textures/settlement</span>); the hotbar in the scene is the game's (<span class="mono">desktop/slots.rs</span> sizes, its item icons and atlas block tiles), and the debug line its monospace. Textures are sampled nearest without mipmaps.</p>
+    <p class="note"><b>Mockup-only art</b>: the icons below and the globes' maps are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="mono">.claude/skills/balatro-pixel-art</span>): 32 x 32 native sprites, short ramps lit from the top left, a 1 px outline, plumes and fields drawn as light over it, every colour from Sweaft-64, shown at 2x. Amber's cloud deck under the platform is a 64 x 64 pixel-art band tile (<span class="mono">travel/cloud_amber.png</span>) drawn by the same script. The globes sample their 128 x 64 maps nearest, without mipmaps; the town's lights are hard square pixels, as the lights maps draw them. Script: <span class="mono">tools/art/travel_art.py</span>, two passes against a contact sheet beside six of the solitaire collection's sprites (the runabout enlarged to fill its frame).</p>
+    <figure class="sheet" style="max-width:820px"><div style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;border:1px solid var(--line);border-radius:6px;background:#1f3b52"><img src="travel/icon_ship.png?v=3" width="96" height="96" alt="ship" title="ship" style="image-rendering:pixelated"><img src="travel/icon_gate.png?v=3" width="96" height="96" alt="gate" title="gate" style="image-rendering:pixelated"><img src="travel/icon_station.png?v=3" width="96" height="96" alt="station" title="station" style="image-rendering:pixelated"><img src="travel/icon_fuel.png?v=3" width="96" height="96" alt="fuel" title="fuel" style="image-rendering:pixelated"><img src="travel/icon_dampener.png?v=3" width="96" height="96" alt="dampener" title="dampener" style="image-rendering:pixelated"><img src="travel/icon_skimmer.png?v=3" width="96" height="96" alt="skimmer" title="skimmer" style="image-rendering:pixelated"></div><figcaption>The six travel icons at 3x (native 32 px).</figcaption></figure>
   </div>
 </section>
 
@@ -337,6 +348,7 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
 <footer class="wrap">Mockup page for the travel design. Three.js r128. Art: <span class="mono">tools/art/travel_art.py</span> and <span class="mono">tools/art/planets_art.py</span>. Related designs: <span class="mono">gravity-model</span>, <span class="mono">far-side-flight</span>, <span class="mono">planet-spin</span>, <span class="mono">orbit-and-seasons</span>, <span class="mono">per-body-rendering</span>.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 "use strict";
 const fmt = (v, d = 0) => v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -398,7 +410,17 @@ const R = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
 R.setPixelRatio(Math.min(devicePixelRatio, 2));
 const S = new THREE.Scene(), C = new THREE.PerspectiveCamera(45, 1, 0.01, 6000);
 const SUN = new THREE.Vector3(-1, 0.18, 0.32).normalize();
-const loader = new THREE.TextureLoader(), tex = p => loader.load(p);
+// pixel-art maps: nearest sampling, no mipmaps
+const AV = "?v=3";   // cache-bust every texture and model URL (ART-DIRECTION.md); bump when art changes
+const loader = new THREE.TextureLoader(), tex = p => { const t = loader.load(p + AV); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; };
+// The game's own art (travel/game/, copied byte-identical; see its README): settlement
+// materials for the station hulls, the Kestrel for the ship. Nearest, no mipmaps.
+const GAME = "travel/game/";
+const nearest = t => { t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
+const IRON = "iron.png", PLANK = "plank.png", PLASTER = "plaster.png", THATCH = "thatch.png";
+const gameMat = (f, rx = 1, ry = 1) => { const t = nearest(loader.load(GAME + f + AV)); t.repeat.set(rx, ry); return new THREE.MeshLambertMaterial({ map: t }); };
+S.add(new THREE.AmbientLight(0x8a94a8, 0.55));
+{ const d = new THREE.DirectionalLight(0xfff4e0, 1.1); d.position.copy(SUN).multiplyScalar(100); S.add(d); }
 const PV = `varying vec3 vN; varying vec3 vW; varying vec2 vUv; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
 const PF = `uniform sampler2D map; uniform sampler2D lights; uniform float lightsAmt; uniform vec3 sunDir; uniform vec3 air; uniform float airAmt;
 varying vec3 vN; varying vec3 vW; varying vec2 vUv;
@@ -430,11 +452,12 @@ function glowTex(c0 = "rgba(255,240,210,1)") {
 }
 const GT = glowTex();
 const sprite = (pos, colour, size, parent = S) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GT, color: colour, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false })); s.position.copy(pos); s.scale.set(size, size, 1); parent.add(s); return s; };
+let STARS = null;
 { // stars and the far sun
   const g = new THREE.BufferGeometry(), p = []; let s = 3; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   for (let i = 0; i < 2200; i++) { const y = rnd() * 2 - 1, a = rnd() * 6.283, q = Math.sqrt(1 - y * y); p.push(q * Math.cos(a) * 3000, y * 3000, q * Math.sin(a) * 3000); }
   g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
-  S.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 1.5, sizeAttenuation: false })));
+  STARS = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 1.5, sizeAttenuation: false, transparent: true })); S.add(STARS);
   sprite(SUN.clone().multiplyScalar(2800), 0xfff0c8, 420);
 }
 const HOME_R = 10, HOME = new THREE.Vector3(0, 0, 0);
@@ -469,37 +492,91 @@ const CURVE = new THREE.CatmullRomCurve3(PTS, false, "centripetal");
   l.computeLineDistances(); S.add(l);
 }
 // the town on the night side: a cluster of lamps where the ship lifts off
-for (let i = 0; i < 70; i++) {
-  const k = 0.012 + 0.03 * (i % 7) / 7;
-  const v = d0.clone().add(new THREE.Vector3(Math.sin(i * 12.9) * k, Math.sin(i * 7.7) * k, Math.sin(i * 4.1) * k)).normalize().multiplyScalar(HOME_R + 0.004);
-  sprite(v, i % 9 ? 0xffc070 : 0xfff0d0, 0.02 + (i % 3) * 0.012);
+// drawn as the planet's lights map draws them: hard square pixels, warm, a few white cores
+{
+  const warm = [], core = [];
+  for (let i = 0; i < 70; i++) {
+    const k = 0.012 + 0.03 * (i % 7) / 7;
+    const v = d0.clone().add(new THREE.Vector3(Math.sin(i * 12.9) * k, Math.sin(i * 7.7) * k, Math.sin(i * 4.1) * k)).normalize().multiplyScalar(HOME_R + 0.004);
+    (i % 9 ? warm : core).push(v);
+  }
+  for (const [pts, c, sz] of [[warm, 0xfaaf5c, 3], [core, 0xfffefe, 4]]) S.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(pts), new THREE.PointsMaterial({ color: c, size: sz, sizeAttenuation: false })));
+}
+// the pad the ship lifts off from: seven hex cells of plank and iron, rail lamps, and the town's
+// first houses round it (settlement plaster walls, thatch roofs, lit windows); not to scale
+{
+  const g = new THREE.Group(); g.position.copy(d0.clone().multiplyScalar(HOME_R + 0.004));
+  g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d0);
+  const cell = 0.075, hexAt = (q, r) => [cell * Math.sqrt(3) * (q + r / 2), cell * 1.5 * r];
+  for (const [q, r] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]]) {
+    const [x, z] = hexAt(q, r), m = new THREE.Mesh(new THREE.CylinderGeometry(cell, cell, 0.012, 6), gameMat(q || r ? PLANK : IRON, 1, 1));
+    m.position.set(x, 0.006, z); m.rotation.y = Math.PI / 6; g.add(m);
+  }
+  for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283 + 0.52; sprite(new THREE.Vector3(Math.cos(a) * 0.24, 0.02, Math.sin(a) * 0.24), 0xffc77a, 0.035, g); }
+  for (const [x, z, ry] of [[0.42, 0.1, 0.3], [0.38, -0.22, -0.2], [-0.4, 0.2, 0.9], [-0.1, 0.45, 0.1], [0.12, -0.45, 0.5]]) {
+    const h = new THREE.Group(); h.position.set(x, 0, z); h.rotation.y = ry;
+    const w = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.07), gameMat(PLASTER, 1, 1)); w.position.y = 0.03; h.add(w);
+    const rf = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.05, 4), gameMat(THATCH, 1, 1)); rf.position.y = 0.085; rf.rotation.y = Math.PI / 4; rf.scale.set(1, 1, 0.75); h.add(rf);
+    for (const s of [-1, 1]) { const win = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.016, 0.002), new THREE.MeshBasicMaterial({ color: 0xffc070 })); win.position.set(s * 0.025, 0.032, 0.036); h.add(win); }
+    sprite(new THREE.Vector3(0, 0.03, 0.06), 0xffa850, 0.05, h);
+    g.add(h);
+  }
+  S.add(g);
 }
 // Highport, over the town
 {
   const p = d0.clone().multiplyScalar(HOME_R + 2.6), g = new THREE.Group(); g.position.copy(p); g.lookAt(HOME);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.08, 6, 24), new THREE.MeshBasicMaterial({ color: 0x8a8e98 })); g.add(ring);
+  // a ring of iron-plated hull blocks (settlement iron.png), straight-walled like the game builds
+  for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283, b = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.14, 0.14), gameMat(IRON, 2, 1)); b.position.set(Math.cos(a) * 0.6, Math.sin(a) * 0.6, 0); b.rotation.z = a + Math.PI / 2; g.add(b); }
   for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283; sprite(new THREE.Vector3(Math.cos(a) * 0.6, Math.sin(a) * 0.6, 0), 0xfff0c8, 0.14, g); }
   S.add(g);
 }
-// the skimmer platform at Amber's cloud tops: a hex deck with rail lamps
+// Amber's cloud deck near the platform: a cap of the giant at its cloud tops, wearing a pixel-art
+// band tile (travel/cloud_amber.png) at about a hundred texels a scene unit, flat-mapped so the
+// bands run one way rather than radiating from the cap's centre. Beyond it the globe's own map.
+{
+  const cap = new THREE.SphereGeometry(AMB_R + 0.02, 160, 40, 0, Math.PI * 2, 0, 0.45);
+  const P = cap.attributes.position, UV = cap.attributes.uv;
+  for (let i = 0; i < P.count; i++) UV.setXY(i, P.getX(i) / 0.6, P.getZ(i) / 0.6);
+  const t = nearest(loader.load("travel/cloud_amber.png" + AV));
+  const m = new THREE.Mesh(cap, new THREE.MeshLambertMaterial({ map: t }));
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dA); m.position.copy(AMB); S.add(m);
+}
+// the skimmer platform: a deck of hex cells (iron), a plank hab with an iron roof, rail posts
+// with lamps, a scoop pipe hanging into the cloud; block-built at the cloud tops
 {
   const g = new THREE.Group(); g.position.copy(AMB.clone().add(dA.clone().multiplyScalar(AMB_R + 0.1)));
   g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dA);
-  const deck = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 6), new THREE.MeshBasicMaterial({ color: 0x6e727c })); g.add(deck);
-  const domeM = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 6, 0, 6.283, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xc8c4b8 })); domeM.position.set(-0.15, 0.03, -0.1); g.add(domeM);
-  for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; sprite(new THREE.Vector3(Math.cos(a) * 0.48, 0.08, Math.sin(a) * 0.48), 0xffc77a, 0.1, g); }
-  sprite(new THREE.Vector3(0, 0.1, 0), 0xffd9a0, 0.5, g);
+  const cell = 0.11, hexAt = (q, r) => [cell * Math.sqrt(3) * (q + r / 2), cell * 1.5 * r];
+  const cells = [];
+  for (let q = -2; q <= 2; q++) for (let r = Math.max(-2, -q - 2); r <= Math.min(2, -q + 2); r++) cells.push([q, r]);
+  for (const [q, r] of cells) {
+    const [x, z] = hexAt(q, r), m = new THREE.Mesh(new THREE.CylinderGeometry(cell, cell, 0.04, 6), gameMat((q + r) % 2 ? PLANK : IRON, 1, 1));
+    m.position.set(x, -0.02, z); m.rotation.y = Math.PI / 6; g.add(m);
+    if (Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) === 2 && (q * 3 + r) % 2 === 0) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.07, 0.012), gameMat(IRON, 1, 1)); post.position.set(x, 0.035, z); g.add(post);
+      sprite(new THREE.Vector3(x, 0.075, z), 0xffc77a, 0.035, g);
+    }
+  }
+  const hab = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.14), gameMat(PLANK, 2, 1)); hab.position.set(-0.16, 0.05, -0.14); g.add(hab);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.06, 4), gameMat(IRON, 2, 1)); roof.position.set(-0.16, 0.13, -0.14); roof.rotation.y = Math.PI / 4; roof.scale.set(1, 1, 0.72); g.add(roof);
+  for (const x of [-0.2, -0.12]) { const win = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.02, 0.002), new THREE.MeshBasicMaterial({ color: 0xffc070 })); win.position.set(x, 0.055, -0.069); g.add(win); }
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 6), gameMat(IRON, 1, 4)); pipe.position.set(0.2, -0.25, 0.12); g.add(pipe);
   S.add(g);
 }
 // the ship: a wedge, two engines, nav lights, a flame
 const ship = new THREE.Group();
 {
-  const hull = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 4), new THREE.MeshBasicMaterial({ color: 0xe4e6ea })); hull.rotation.x = Math.PI / 2; hull.scale.set(1, 1, 0.45); ship.add(hull);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.08), new THREE.MeshBasicMaterial({ color: 0xf0aa40 })); stripe.position.set(0, 0.012, -0.01); ship.add(stripe);
-  sprite(new THREE.Vector3(-0.05, 0, -0.06), 0xff4040, 0.05, ship); sprite(new THREE.Vector3(0.05, 0, -0.06), 0x40ff70, 0.05, ship);
-  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0x8fc8ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
-  flame.rotation.x = -Math.PI / 2; flame.position.z = -0.2; ship.add(flame); ship.userData.flame = flame;
-  ship.userData.glow = sprite(new THREE.Vector3(0, 0, -0.14), 0x8fc8ff, 0.2, ship);
+  // the game's own Kestrel (assets/models/vehicles/kestrel/kestrel.glb), 10 m long, shown at
+  // 0.024 scene units a metre; its nose is -z, so it turns to face the group's +z
+  if (THREE.GLTFLoader) new THREE.GLTFLoader().load(GAME + "kestrel.gltf.json" + AV, gl => {
+    gl.scene.traverse(o => { if (o.isMesh && o.material) { const t = o.material.map; if (t) { t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; } o.material = new THREE.MeshLambertMaterial({ map: t || null, color: t ? 0xffffff : o.material.color }); } });
+    gl.scene.scale.setScalar(0.024); gl.scene.rotation.y = Math.PI; ship.add(gl.scene);
+  });
+  sprite(new THREE.Vector3(-0.12, 0.01, 0.0), 0xff4040, 0.05, ship); sprite(new THREE.Vector3(0.12, 0.01, 0.0), 0x40ff70, 0.05, ship);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.1, 6), new THREE.MeshBasicMaterial({ color: 0x8fc8ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+  flame.rotation.x = -Math.PI / 2; flame.position.z = -0.24; ship.add(flame); ship.userData.flame = flame;
+  ship.userData.glow = sprite(new THREE.Vector3(0, 0, -0.16), 0x8fc8ff, 0.07, ship);
 }
 S.add(ship);
 
@@ -546,6 +623,7 @@ function readouts(st) {
   ro("roFuel").textContent = `${fmt(fuel, 1)} km/s`;
   ro("roLeft").textContent = `${fmt(Math.max(0, D_KM - d / 1000), D_KM - d / 1000 < 10 ? 2 : 0)} km`;
   ro("pnote").innerHTML = p.note;
+  ro("gDbg").textContent = `frame ${frame} | ${ro("roSpeed").textContent} | drive ${p.drive} | dampeners ${p.damp}`;
   for (const b of phasesEl.children) b.setAttribute("aria-current", b.dataset.key === p.key ? "true" : "false");
 }
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), camPos = new THREE.Vector3(30, 22, 48), camLook = new THREE.Vector3();
@@ -556,7 +634,19 @@ function update() {
   CURVE.getPoint(u, _a); CURVE.getPoint(Math.min(1, u + 0.0015), _b);
   ship.position.copy(_a);
   const fwd = _b.clone().sub(_a);
-  if (fwd.lengthSq() > 1e-10) { const look = st.p.key === "brake" ? _a.clone().sub(fwd) : _b; ship.lookAt(look); }
+  const near = { pad: 1, air: 1, desc: 1, dock: 1 }[st.p.key];
+  if (near) {
+    const up = _a.clone().sub(st.i < 4 ? HOME : AMB).normalize();
+    // the level course: toward Amber leaving home, onward arriving (the route's direction, flattened)
+    let h = (st.i < 4 ? AMB.clone().sub(_a) : _a.clone().sub(HOME)); h.addScaledVector(up, -h.dot(up)); h.normalize();
+    ship.up.copy(up); ship.lookAt(_a.clone().add(h)); ship.userData.course = h; ship.userData.radial = up;
+    ship.userData.flame.rotation.set(Math.PI, 0, 0); ship.userData.flame.position.set(0, -0.06, 0);
+    ship.userData.glow.position.set(0, -0.04, 0);
+  } else if (fwd.lengthSq() > 1e-10) {
+    ship.up.set(0, 1, 0); const look = st.p.key === "brake" ? _a.clone().sub(fwd) : _b; ship.lookAt(look);
+    ship.userData.flame.rotation.set(-Math.PI / 2, 0, 0); ship.userData.flame.position.set(0, 0, -0.18);
+    ship.userData.glow.position.set(0, 0, -0.16);
+  }
   const thrust = { pad: 0.8, air: 1, band: 0.5, burn: 1, coast: 0, brake: 1, desc: 0.5, dock: 0.15 }[st.p.key];
   ship.userData.flame.scale.set(1, 0.3 + thrust * (0.9 + 0.2 * Math.sin(performance.now() * 0.05)), 1);
   ship.userData.flame.visible = thrust > 0; ship.userData.glow.visible = thrust > 0;
@@ -580,9 +670,16 @@ function loop(now) {
   const w = sc.clientWidth, h = sc.clientHeight;
   if (cv.width !== Math.round(w * R.getPixelRatio()) || cv.height !== Math.round(h * R.getPixelRatio())) { R.setSize(w, h, false); C.aspect = w / h; C.updateProjectionMatrix(); }
   // chase distance grows with speed, so the ship stays readable from the pad to the coast
-  const k = st.p.key, far = { pad: 1.5, air: 2.2, band: 3.5, burn: 10, coast: 26, brake: 12, desc: 3, dock: 1.1 }[k];
+  const k = st.p.key, far = { pad: 0.8, air: 1.1, band: 3.5, burn: 10, coast: 26, brake: 12, desc: 1.6, dock: 1.0 }[k];
   let wantPos, wantLook;
-  if (chase) {
+  if (chase && ship.userData.course && { pad: 1, air: 1, desc: 1, dock: 1 }[k]) {
+    const up = ship.userData.radial, h = ship.userData.course, side = new THREE.Vector3().crossVectors(h, up).normalize();
+    const back = h.clone().multiplyScalar(-1).applyAxisAngle(up, 0.5 + yawOff);
+    wantPos = ship.position.clone().addScaledVector(back, far).addScaledVector(up, far * (0.42 + pitchOff * 0.6)).addScaledVector(side, far * 0.1);
+    wantLook = ship.position.clone().addScaledVector(h, far * 0.2).addScaledVector(up, -far * 0.16);
+    C.up.copy(up);   // the horizon level, as the player sees it standing on the body
+  } else if (chase) {
+    C.up.set(0, 1, 0);
     const fwd = _b.clone().sub(_a).normalize(), up = ship.position.clone().sub(st.i < 4 ? HOME : st.i > 5 ? AMB : HOME).normalize();
     const side = new THREE.Vector3().crossVectors(fwd, up).normalize();
     const back = fwd.clone().multiplyScalar(-1).applyAxisAngle(up, 0.55 + yawOff);
@@ -591,11 +688,18 @@ function loop(now) {
   } else {
     const c = HOME.clone().lerp(AMB, 0.5); const r = 340;
     wantPos = c.clone().add(new THREE.Vector3(Math.sin(0.4 + yawOff) * r * Math.cos(0.55 + pitchOff), r * Math.sin(0.55 + pitchOff), Math.cos(0.4 + yawOff) * r * Math.cos(0.55 + pitchOff)));
-    wantLook = c;
+    wantLook = c; C.up.set(0, 1, 0);
   }
   const kk = Math.min(1, dt * 2.5);
   camPos.lerp(wantPos, kk); camLook.lerp(wantLook, kk);
   C.position.copy(camPos); C.lookAt(camLook);
+  { // Amber's sky and haze when the camera is down among its cloud tops
+    const alt = camPos.distanceTo(AMB) - AMB_R, kSky = Math.min(1, Math.max(0, (3.5 - alt) / 3));
+    const skyC = new THREE.Color(0x000000).lerp(new THREE.Color(0xd9a46a), kSky);
+    R.setClearColor(skyC);
+    if (kSky > 0.01) { if (!S.fog) S.fog = new THREE.Fog(0, 2, 10); S.fog.color.copy(skyC); S.fog.near = 2.5; S.fog.far = 9; } else S.fog = null;
+    if (STARS) STARS.material.opacity = 1 - kSky;
+  }
   home.rotation.y += dt * 0.004;
   R.render(S, C);
   requestAnimationFrame(loop);
@@ -690,4 +794,16 @@ drawMap(+dayIn.value);
   box.innerHTML = rows.map(([n, dv]) => `<div class="bar"><span>${n}</span><span class="track"><span class="fill" style="width:${dv / TANK * 100}%"></span></span><span class="v">${fmt(dv, 1)} / 30</span></div>`).join("") +
     `<p class="note">&Delta;v for one way at the longest, in km/s, against a full 30 km/s tank. A round trip to either giant, there and back, uses 16 of it.</p>`;
 }
+
+// The game's hotbar (desktop/slots.rs: 44 px slots 4 px apart, 1 px borders) with its own icons:
+// blocks are atlas.png side tiles at 1x, items their 16 px PNGs at 2x.
+{
+  const SH = ["asteroid", "basalt_wastes", "beach", "desert", "fields", "frozen_wastes", "jungle", "lunar_regolith", "mountains", "ocean", "redwood_forest", "sporewood", "swamp", "tundra"];
+  const blk = (sheet, tx, ty) => { const i = SH.indexOf(sheet); return `<i style="background-image:url(${GAME}atlas.png${AV});background-position:-${(i % 4) * 128 + tx * 32}px -${Math.floor(i / 4) * 128 + ty * 32}px"></i>`; };
+  const it = n => `<img src="${GAME}${n}.png${AV}" alt="">`;
+  const slots = [[blk("fields", 1, 0), 64], [blk("fields", 2, 0), 64], [blk("fields", 3, 0), 48], [blk("beach", 0, 0), 12], [it("torch"), 16], [it("lantern_post"), 8], [it("lantern_wall"), 8], [it("lantern_hanging"), 8], [it("brazier"), 4], [it("candle"), 16]];
+  document.getElementById("gBar").innerHTML = `<div class="gslot tool">${it("pickaxe")}</div>` + slots.map(([h, n]) => `<div class="gslot">${h}<b>${n}</b></div>`).join("");
+}
+// ?at=<seconds> holds the transfer at that moment (for captures)
+{ const at = new URLSearchParams(location.search).get("at"); if (at !== null && isFinite(+at)) { simT = +at; playing = false; document.getElementById("play").textContent = "Play"; } }
 </script>

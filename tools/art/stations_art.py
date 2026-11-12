@@ -1,225 +1,378 @@
-"""Station portraits for docs/mockups/stations.html, painted in the friend's
-hand-drawn manner by the crayon kit (.claude/skills/hand-drawn-illustration).
+"""Station portraits for docs/mockups/stations.html: pixel art drawn in code with the
+balatro-pixel-art kit (.claude/skills/balatro-pixel-art), the solitaire collection's style.
 
-    python tools/art/stations_art.py            # writes docs/mockups/stations/*.png
-    python tools/art/stations_art.py --sheet    # and a contact sheet beside the friend's icons
+    python tools/art/stations_art.py                 # writes docs/mockups/stations/*.png
+    python tools/art/stations_art.py --sheet OUT.png # and a contact sheet beside the kit's references
 
-Painted by code, not by hand: the kit copies the friend's method stroke by
-stroke (block, hatch, crescents, dabs, tone edge, energy last). Each portrait is
-one station type from the stations mockup, light from the upper left.
+Each portrait is one station type from the stations mockup, 96 x 64 at native size (the size of the
+reference set's boss portraits), shown on the page at 2x with nearest-neighbour scaling. One bold
+subject, short ramps from Sweaft-64 lit from the top left, dark seams, a 1 px outline, lamps and
+flames drawn last as light (never outlined).
 """
 
 import math
 import os
-import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-KIT = os.path.join(ROOT, ".claude", "skills", "hand-drawn-illustration", "scripts")
+KIT = os.path.join(ROOT, ".claude", "skills", "balatro-pixel-art", "scripts")
 sys.path.insert(0, KIT)
-import crayon  # noqa: E402
-from crayon import (Icon, INK, circle, ellipse, rect, roundrect, star, rotate,  # noqa: E402
-                    translate, scale, lighter, darker, tone)
+from pixelkit import Sprite, RAMPS, save, sheet  # noqa: E402
+from PIL import Image  # noqa: E402
 
 OUT_DIR = os.path.join(ROOT, "docs", "mockups", "stations")
-crayon.OUT = 256  # portraits are shown bigger than an upgrade icon
+W, H = 96, 64
 
-STEEL = (120, 146, 186)
-NAVY = (40, 52, 82)
-AMBER = (255, 196, 70)
-WARM = (255, 220, 130)
-CYAN = (70, 220, 235)
-RUST = (170, 92, 52)
-ROCK = (138, 104, 84)
+ROCK = ['#2c2c25', '#41322c', '#725244', '#ab8465']
+DUSK_ROCK = ['#2b1f35', '#3e3551', '#69608b', '#92a3b2']
+NAVY = ['#011c34', '#1f3b52', '#3e586e', '#5d778d']
+WARM = '#faaf5c'
+WHITE = '#fffefe'
 
 
-def ell_ring(cx, cy, rx, ry, k, n=64, rot=0.0):
-    """An elliptical ring as one polygon (a ring seen at an angle)."""
-    a = ellipse(cx, cy, rx, ry, n, rot)
-    b = ellipse(cx, cy, rx * k, ry * k, n, rot)
-    return a + [a[0], b[0]] + b[::-1] + [b[0]]
+def far(ramp):
+    """The far side of a thing: one ramp step darker."""
+    return [ramp[0]] + ramp[:-1]
 
 
-def windows(ic, pts, color=WARM, r=6):
+def lumpy(sp, cx, cy, rx, ry, n=18, jag=0.14, seed=1, top_flat=None):
+    """A lumpy rock outline: an ellipse with a deterministic wobble on its radius."""
+    pts = []
+    for i in range(n):
+        a = 2 * math.pi * i / n
+        k = 1 + jag * math.sin(seed * 12.9898 + i * 78.233) * 1.0
+        k += jag * 0.5 * math.sin(seed * 4.1 + i * 2.7)
+        pts.append((cx + rx * k * math.cos(a), cy + ry * k * math.sin(a)))
+    return sp.poly(pts)
+
+
+def spark(sp, x, y, color=WARM):
+    """A sparkle: a white pixel in a plus of the palest warm tone (light, never outlined)."""
+    sp.plots([(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)], color, glow=True)
+    sp.plot(x, y, WHITE, glow=True)
+
+
+def lamps(sp, pts, color=WARM, core=None):
+    """Lit windows: 2 x 1 pixels of warm light, after the outline."""
     for x, y in pts:
-        ic.dot(x, y, r + 3, tone(color, 0.7))
-        ic.dot(x, y, r, color)
+        sp.plots([(x, y), (x + 1, y)], color, glow=True)
+        if core:
+            sp.plot(x, y, core, glow=True)
 
 
-def trade_ring(ic):
+def trade_ring():
     """The orbital trade hub: a spinning ring on spokes round a still hub."""
-    ic.glow((256, 270, 150), (90, 150, 255), radius=30, strength=0.25)
-    # the far half of the ring first, then hub and spokes, then the near half on top
-    ring = ell_ring(256, 280, 236, 132, 0.72)
-    ic.drawn(ring, STEEL, edge_w=9)
-    for a in (0.5, 2.1, 3.7, 5.3):
-        x, y = 256 + 186 * math.cos(a), 280 + 104 * math.sin(a)
-        ic.line([(256, 272), (x, y)], (95, 112, 140), 12, ink=tone(STEEL), ink_w=8)
-    hub = roundrect(206, 150, 306, 360, 34)
-    ic.drawn(hub, (150, 170, 205), edge_w=8)
-    ic.drawn(roundrect(228, 100, 284, 156, 12), (200, 90, 70), highlight=0, edge_w=6)   # the docking collar
-    ic.line([(256, 100), (256, 44)], (210, 214, 220), 6, ink=INK, ink_w=6)                # mast
-    ic.sparkle(256, 38, 24, (255, 90, 80))
-    # the near half of the ring, drawn over the hub
-    near = [p for p in ellipse(256, 280, 236, 132, 64)][0:33]
-    inner = [p for p in ellipse(256, 280, 170, 95, 64)][0:33]
-    band = near + inner[::-1]
-    ic.drawn(band, (132, 158, 200), shade=0.3, edge_w=9)
-    windows(ic, [(256 + 203 * math.cos(t), 280 + 113 * math.sin(t)) for t in [0.3 + 0.32 * i for i in range(9)]], r=7)
-    for x, y in ((238, 196), (274, 196), (238, 240), (274, 240), (256, 320)):
-        ic.dot(x, y, 6, AMBER, ink=INK)
-    ic.sparkle(70, 120, 18)
-    ic.sparkle(452, 400, 14, (160, 230, 255))
+    sp = Sprite(W, H)
+    cy = 38
+    band = sp.ellipse(3, 16, 92, 60) & ~sp.ellipse(14, 24, 81, 52)
+    rows = sp.empty()
+    rows[:cy, :] = True
+    sp.part(band & rows, far(RAMPS['metal']), 'cyl_h')
+    for a in (0.55, 2.6, 3.7, 5.75):
+        x, y = 48 + 40 * math.cos(a), cy + 18 * math.sin(a)
+        sp.part(sp.line([(48, cy - 4), (x, y)], 2), RAMPS['steel'], 'flat', base=1, seam=False)
+    hub = sp.rect(40, 12, 55, 50)
+    sp.part(hub, RAMPS['metal'], 'cyl_v')
+    for y in (20, 30, 40):
+        sp.fill(sp.rect(40, y, 55, y), '#3e586e')
+    sp.part(sp.rect(42, 6, 53, 12), RAMPS['red'], 'cyl_v')
+    sp.part(sp.rect(46, 1, 49, 6), RAMPS['steel'], 'cyl_v')
+    sp.part(band & ~rows, RAMPS['metal'], 'cyl_h')
+    # the ring's plating joints
+    for t in range(0, 360, 30):
+        a = math.radians(t)
+        if math.sin(a) > 0.05:
+            x = round(48 + 40.5 * math.cos(a))
+            ys = [y for y in range(cy, H) if band[y, x]]
+            for y in ys[1:-1]:
+                sp.plot(x, y, '#3e586e')
+    sp.plots([(41, 14), (42, 14), (44, 7)], WHITE)
+    sp.outline()
+    lamps(sp, [(round(48 + 40 * math.cos(math.radians(t))), round(cy + 16 + 1 * math.sin(math.radians(t))) - 1)
+               for t in range(20, 170, 18)])
+    lamps(sp, [(44, 24), (50, 24), (44, 34), (50, 34), (47, 44)])
+    sp.plots([(47, 0), (48, 0)], '#fa3a64', glow=True)
+    spark(sp, 10, 7)
+    spark(sp, 86, 8, '#74effe')
+    return sp
 
 
-def lumpy(cx, cy, r, n=22, jag=0.16, seed=3):
-    p = star(cx, cy, r, r * 0.93, n // 2, jag=jag, seed=seed)
-    return p
-
-
-def mining_outpost(ic):
-    """A mining outpost bolted onto a rock: a derrick, a dome, ore spilling out."""
-    rock = lumpy(256, 320, 190, 26, 0.12, seed=11)
-    ic.drawn(rock, ROCK, shade=0.3, edge_w=10)
-    for x, y, r in ((180, 360, 28), (310, 400, 22), (350, 300, 18), (200, 280, 14)):
-        ic.drawn(circle(x, y, r, 20), darker(ROCK, 0.25), highlight=0, shade=0.4, edge=tone(ROCK, 0.6), edge_w=5)
-    # the derrick, a lattice tower
-    leg = [(290, 210), (318, 210), (300, 60), (296, 60)]
-    ic.drawn([(270, 214), (300, 60), (306, 60), (338, 214)], (230, 180, 60), highlight=0.1, edge=INK, edge_w=7)
-    for y in (180, 140, 100):
-        ic.line([(278 + (214 - y) * 0.03, y), (330 - (214 - y) * 0.03, y)], (60, 50, 40), 5)
-    ic.line([(303, 60), (303, 250)], (80, 80, 90), 6)
-    ic.sparkle(303, 48, 18, (255, 100, 80))
-    # the dome with lit windows
-    dome = [(p[0], p[1]) for p in circle(170, 214, 70, 40) if p[1] <= 216]
-    ic.drawn(dome, (110, 200, 220), rim_color=(200, 250, 255), edge_w=8)
-    windows(ic, [(140, 196), (170, 186), (200, 196)], r=6)
-    ic.drawn(rect(96, 210, 246, 236), (90, 96, 110), highlight=0, edge=INK, edge_w=6)
+def mining_outpost():
+    """A mining outpost bolted onto a rock: a derrick, a dome, ore breaking out."""
+    sp = Sprite(W, H)
+    rock = lumpy(sp, 48, 46, 44, 16, n=20, jag=0.1, seed=3)
+    sp.part(rock, ROCK, 'sphere')
+    for cx, cy, r in ((30, 52, 4), (60, 55, 3), (74, 46, 3), (44, 57, 2)):
+        sp.part(sp.ellipse(cx - r, cy - r + 1, cx + r, cy + r - 1), far(ROCK), 'inset')
+    # the derrick, a lattice tower over a drill hole
+    sp.part(sp.taper(57, 36, 64, 4, 3, 2), RAMPS['brass'], 'flat', base=2)
+    sp.part(sp.taper(73, 36, 66, 4, 3, 2), RAMPS['brass'], 'flat', base=1)
+    for y, hw in ((30, 7), (22, 5), (14, 3)):
+        sp.part(sp.rect(65 - hw, y, 65 + hw, y + 1), RAMPS['brass'], 'flat', base=2, seam=False)
+    sp.part(sp.rect(62, 2, 68, 5), RAMPS['steel'], 'rim')
+    sp.part(sp.rect(64, 6, 65, 38), RAMPS['ink'], 'flat', base=2, seam=False)
+    # the dome and its deck
+    sp.part(sp.rect(8, 33, 46, 37), NAVY, 'cyl_h')
+    dome = sp.ellipse(12, 16, 42, 48)
+    dome[34:, :] = False
+    sp.part(dome, RAMPS['glass'], 'sphere')
+    sp.part(sp.rect(26, 16, 27, 33), RAMPS['glass'][:2], 'flat', base=1, seam=False)
+    sp.part(sp.rect(13, 26, 41, 26), RAMPS['glass'][:2], 'flat', base=1, seam=False)
+    sp.plots([(18, 20), (19, 20), (17, 21)], WHITE)
     # ore crystals breaking out of the rock
-    for cx, cy, h, rot, col in ((390, 250, 70, 0.4, (255, 140, 40)), (420, 300, 50, 0.8, (255, 170, 60)), (120, 380, 46, -0.5, CYAN)):
-        cr = rotate([(cx - 14, cy + 10), (cx - 12, cy - h), (cx, cy - h - 18), (cx + 12, cy - h), (cx + 14, cy + 10)], rot, (cx, cy))
-        ic.drawn(cr, col, edge_w=6)
-    for x, y in ((440, 210), (460, 250), (90, 330)):
-        ic.dot(x, y, 7, (255, 170, 60), ink=tone((255, 150, 40)))
+    for pts, ramp in (([(78, 42), (80, 26), (84, 22), (87, 28), (86, 42)], RAMPS['amber']),
+                      ([(86, 44), (89, 34), (92, 33), (93, 45)], RAMPS['amber']),
+                      ([(6, 50), (6, 40), (10, 36), (13, 41), (12, 50)], RAMPS['cyan'])):
+        sp.part(sp.poly(pts), ramp, 'inset')
+    sp.plots([(83, 24), (9, 39)], WHITE)
+    sp.outline()
+    lamps(sp, [(16, 30), (21, 29), (31, 29), (36, 30)])
+    lamps(sp, [(12, 35), (20, 35), (28, 35), (36, 35)], '#fb902f')
+    sp.plots([(64, 1), (65, 1)], '#fa3a64', glow=True)
+    spark(sp, 90, 14)
+    spark(sp, 4, 30, '#74effe')
+    return sp
 
 
-def refinery(ic):
-    """A refinery: stacked tanks and a cracking tower with a gas flare."""
-    ic.glow((256, 96, 90), (255, 130, 40), radius=26, strength=0.45)
-    # the long spine
-    ic.drawn(rect(60, 320, 460, 364), (110, 118, 130), highlight=0.1, edge=INK, edge_w=7)
-    for cx, cy, r, col in ((120, 400, 76, (230, 230, 220)), (280, 410, 84, (230, 230, 220)), (430, 390, 56, (200, 80, 60))):
-        ic.drawn(circle(cx, cy, r, 40), col, rim_color=lighter(col, 0.6), edge_w=8)
-        ic.line([(cx - r * 0.6, cy - r * 0.15), (cx + r * 0.6, cy - r * 0.15)], darker(col, 0.25), 6)
-    # the cracking tower
-    tower = [(222, 320), (218, 150), (296, 150), (292, 320)]
-    ic.drawn(tower, (230, 186, 64), edge=INK, edge_w=8)
-    for y in (180, 220, 260, 300):
-        ic.line([(220, y), (294, y)], (120, 80, 30), 6)
-    ic.line([(296, 190), (370, 190), (370, 320)], (150, 156, 170), 10, ink=INK, ink_w=6)
-    # the flare: a little inferno on the stack
-    flame = star(257, 100, 84, 46, 8, jag=0.3, seed=4)
-    ic.drawn(flame, (255, 120, 30), rim_color=(255, 230, 90), edge=(170, 50, 10), edge_w=7)
-    ic.drawn(scale(flame, 0.45, (257, 112)), (255, 230, 100), highlight=0, shade=0, edge=None)
-    windows(ic, [(90, 342), (150, 342), (340, 342), (400, 342)], r=6)
-    for x, y, a in ((350, 70, -20), (160, 80, 200)):
-        ic.speed(x, y, 40, a, (255, 200, 90), 6)
+def refinery():
+    """A refinery: a spine of tanks and a cracking tower with a gas flare."""
+    sp = Sprite(W, H)
+    sp.part(sp.rect(3, 42, 92, 48), RAMPS['metal'], 'cyl_h')
+    sp.part(sp.line([(56, 28), (68, 28), (68, 42)], 3), RAMPS['steel'], 'flat', base=2)
+    tower = sp.rect(38, 19, 54, 45)
+    sp.part(tower, RAMPS['brass'], 'cyl_v')
+    for y in (25, 31, 37):
+        sp.fill(sp.rect(38, y, 54, y), '#733126')
+    sp.part(sp.rect(36, 17, 56, 20), RAMPS['steel'], 'cyl_h')
+    sp.part(sp.rect(44, 11, 48, 17), RAMPS['soot'], 'cyl_v')
+    for cx, cy, r, ramp in ((17, 50, 12, RAMPS['bone']), (82, 51, 10, RAMPS['red']), (61, 53, 9, RAMPS['bone'])):
+        sp.part(sp.circle(cx, cy, r), ramp, 'sphere')
+        sp.fill(sp.rect(cx - r + 2, cy - 1, cx + r - 2, cy - 1), ramp[0])
+        sp.plot(cx - r // 2, cy - r // 2 - 1, WHITE)
+    sp.outline()
+    flame = sp.taper(46, 11, 46, 0, 9, 1) | sp.taper(46, 11, 51, 3, 5, 0) | sp.taper(46, 11, 42, 4, 4, 0)
+    sp.part(flame, RAMPS['flame'], 'inset', glow=True)
+    lamps(sp, [(28, 45), (72, 45), (90, 45)])
+    lamps(sp, [(41, 22), (49, 22), (41, 33), (49, 39)], '#fffefe')
+    spark(sp, 8, 14)
+    spark(sp, 84, 24)
+    return sp
 
 
-def customs_post(ic):
-    """A military customs post: an armoured hex, red stripe, guns and a beacon."""
-    hexa = circle(256, 270, 190, 6, start=math.pi / 6)
-    ic.drawn(hexa, (88, 104, 140), edge=(20, 26, 46), edge_w=10)
-    inner = scale(hexa, 0.78, (256, 270))
-    ic.drawn(inner, (44, 52, 74), highlight=0, shade=0.12, edge=(18, 20, 32), edge_w=6)
-    for p in scale(hexa, 0.89, (256, 270)):
-        ic.dot(p[0], p[1], 7, (170, 178, 196), ink=(16, 18, 26))
-    face = scale(hexa, 0.6, (256, 270))
-    ic.drawn(face, (70, 98, 150), edge=(25, 35, 60), edge_w=6)
-    # the stripe and the customs gate (a lit slot)
-    ic.drawn(rect(150, 248, 362, 282), (220, 60, 50), highlight=0.1, edge=(110, 20, 20), edge_w=5)
-    ic.drawn(roundrect(216, 300, 296, 350, 10), (255, 214, 110), highlight=0, shade=0.2, edge=(120, 80, 20), edge_w=6)
-    # turrets
-    for x, a in ((120, -0.5), (392, 0.5)):
-        ic.drawn(circle(x, 150, 34, 24), (130, 140, 160), edge=INK, edge_w=6)
-        ic.line([(x, 150), (x + 70 * math.sin(a), 150 - 70 * math.cos(a))], (60, 64, 76), 14, ink=INK, ink_w=6)
-    ic.line([(256, 80), (256, 30)], (210, 214, 220), 6, ink=INK, ink_w=6)
-    ic.sparkle(256, 30, 26, (255, 80, 70))
-    ic.speed(200, 22, 30, 200, (255, 120, 110), 5)
-    ic.speed(312, 22, 30, -20, (255, 120, 110), 5)
+def customs_post():
+    """A military customs post: an armoured hex, red stripe, two turrets and a beacon."""
+    sp = Sprite(W, H)
+    hexa = lambda r, ry: sp.poly([(48 + r * math.cos(math.radians(a)), 38 + ry * math.sin(math.radians(a)))
+                                  for a in range(0, 360, 60)])
+    for x, s in ((14, -1), (82, 1)):
+        sp.part(sp.taper(x, 16, x + 9 * s, 3, 4, 3), RAMPS['soot'], 'flat', base=2)
+        sp.part(sp.circle(x, 17, 6), RAMPS['steel'], 'sphere')
+    sp.part(sp.rect(18, 18, 26, 22), RAMPS['soot'], 'rim')
+    sp.part(sp.rect(70, 18, 78, 22), RAMPS['soot'], 'rim')
+    sp.part(hexa(40, 25), NAVY, 'rim', depth=2)
+    sp.part(hexa(31, 19), RAMPS['metal'], 'rim')
+    for a in range(0, 360, 60):
+        x, y = 48 + 36 * math.cos(math.radians(a)), 38 + 22.5 * math.sin(math.radians(a))
+        sp.plot(round(x), round(y), '#bfcad7')
+    sp.part(sp.rect(20, 33, 76, 37), RAMPS['red'], 'cyl_h')
+    sp.part(sp.rect(40, 42, 56, 51), RAMPS['ink'], 'flat', base=0)
+    sp.part(sp.rect(46, 4, 49, 13), RAMPS['steel'], 'cyl_v')
+    sp.plots([(38, 23), (39, 22), (12, 13)], WHITE)
+    sp.outline()
+    sp.part(sp.rect(42, 44, 54, 49), RAMPS['amber'], 'inset', glow=True)
+    sp.plots([(47, 2), (48, 2), (47, 3), (48, 3)], '#fa3a64', glow=True)
+    sp.plot(47, 2, WHITE, glow=True)
+    for x in (40, 44, 51, 55):
+        sp.plot(x, 1, '#d12d41', glow=True)
+    lamps(sp, [(28, 39), (64, 39), (24, 29), (68, 29)])
+    spark(sp, 6, 50, '#74effe')
+    return sp
 
 
-def smuggler_den(ic):
-    """A smuggler den in a hollow rock: a neon sign, a lit cave mouth, crates."""
-    rock = lumpy(256, 280, 200, 28, 0.16, seed=7)
-    ic.drawn(rock, (96, 82, 100), shade=0.3, edge_w=10)
-    mouth = ellipse(250, 300, 110, 74, 40)
-    ic.glow((250, 300, 80), (255, 120, 220), radius=28, strength=0.6)
-    ic.drawn(mouth, (40, 24, 50), highlight=0, shade=0, edge=(20, 10, 30), edge_w=8)
-    ic.drawn(scale(mouth, 0.7, (250, 312)), (255, 150, 90), highlight=0.2, shade=0.25, edge=None)
-    # crates in the mouth
-    for x, y, c in ((200, 320, (190, 130, 70)), (246, 330, (80, 160, 90)), (226, 300, (190, 130, 70))):
-        ic.drawn(rect(x, y, x + 40, y + 34), c, highlight=0, edge=INK, edge_w=5)
-    # the neon sign above, a crooked bar of magenta
-    sign = rotate(roundrect(150, 150, 360, 200, 18), -0.12, (255, 175))
-    ic.drawn(sign, (40, 20, 50), highlight=0, shade=0, edge=(255, 70, 200), edge_w=8)
-    ic.line([(178, 186), (200, 162), (222, 186)], (255, 90, 210), 7)    # a neon zigzag
-    ic.line([(236, 180), (262, 164), (290, 172), (320, 156)], (90, 255, 230), 7)
-    ic.sparkle(388, 120, 22, (255, 120, 220))
-    ic.sparkle(112, 210, 14, (120, 255, 230))
-    ic.line([(380, 260), (460, 230)], (120, 120, 130), 6, ink=INK, ink_w=5)   # a mooring line
-    ic.drawn(rotate(roundrect(440, 200, 500, 236, 10), -0.35, (470, 218)), (200, 70, 60), edge=INK, edge_w=6)
+def smuggler_den():
+    """A smuggler den in a hollow rock: a neon sign, a lit cave mouth, crates, a cutter moored."""
+    sp = Sprite(W, H)
+    rock = lumpy(sp, 46, 38, 42, 24, n=22, jag=0.12, seed=7)
+    sp.part(rock, DUSK_ROCK, 'sphere')
+    sp.part(sp.ellipse(16, 36, 22, 40), far(DUSK_ROCK), 'inset')
+    sp.part(sp.ellipse(64, 48, 72, 52), far(DUSK_ROCK), 'inset')
+    mouth = sp.ellipse(26, 30, 66, 58)
+    sp.part(mouth, ['#170916'], 'flat', base=0)
+    sp.part(sp.ellipse(31, 36, 61, 58) & ~sp.rect(0, 57, W, H), ['#841c1d', '#d4462b', '#fe6420', '#fb902f'], 'inset')
+    for x, y, ramp in ((34, 48, RAMPS['wood']), (49, 48, RAMPS['green']), (41, 42, RAMPS['wood'])):
+        sp.part(sp.rect(x, y, x + 8, y + 7), ramp, 'rim')
+        sp.fill(sp.rect(x, y + 3, x + 8, y + 3), ramp[0])
+    # the neon sign, a crooked bar
+    sign = sp.poly([(24, 10), (70, 6), (71, 17), (25, 21)])
+    sp.part(sign, ['#170916', '#2b1f35'], 'flat', base=0)
+    # a cutter moored at the right
+    sp.part(sp.line([(84, 34), (92, 30)], 1), RAMPS['steel'], 'flat', base=1, seam=False)
+    sp.part(sp.poly([(80, 26), (92, 22), (95, 25), (92, 30), (80, 31)]), RAMPS['red'], 'cyl_h')
+    sp.plot(90, 24, WHITE)
+    sp.outline()
+    for pts, c in (([(29, 18), (32, 13), (35, 18), (38, 13), (41, 17)], '#fa3a64'),
+                   ([(45, 15), (50, 12), (55, 15), (60, 11), (66, 13)], '#74effe')):
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            sp.fill(sp.line([(x0, y0), (x1, y1)], 2), c, glow=True)
+    sp.plots([(32, 13), (60, 11)], WHITE, glow=True)
+    spark(sp, 80, 8, '#fa3a64')
+    spark(sp, 8, 22, '#74effe')
+    sp.plots([(78, 28), (77, 28)], '#fe6420', glow=True)
+    return sp
 
 
-def research_station(ic):
-    """A research station: a sphere lab, solar wings and a big dish."""
-    for x0, x1 in ((24, 170), (342, 488)):
-        wing = rect(x0, 236, x1, 296)
-        ic.drawn(wing, (40, 120, 200), highlight=0.12, edge=(15, 40, 80), edge_w=7)
-        for k in range(1, 4):
-            x = x0 + (x1 - x0) * k / 4
-            ic.line([(x, 240), (x, 292)], (140, 210, 255), 4)
-        ic.line([(x0, 266), (x1, 266)], (140, 210, 255), 4)
-    ic.line([(170, 266), (342, 266)], (150, 156, 170), 12, ink=INK, ink_w=6)
-    ic.glow((256, 270, 110), (120, 255, 170), radius=30, strength=0.4)
-    sph = circle(256, 270, 104, 48)
-    ic.drawn(sph, (230, 236, 240), rim_color=(255, 255, 255), edge=(60, 80, 100), edge_w=9)
-    ic.line([(160, 250), (352, 250)], (90, 110, 130), 6)
-    windows(ic, [(212, 230), (246, 222), (282, 224), (316, 234)], (140, 255, 190), 7)
-    # the dish
-    dish = [p for p in ellipse(316, 130, 74, 38, 40, rot=-0.5)]
-    ic.line([(290, 180), (318, 136)], (150, 156, 170), 10, ink=INK, ink_w=6)
-    ic.drawn(dish, (220, 224, 230), edge=(60, 70, 90), edge_w=7)
-    ic.line([(316, 130), (350, 100)], (80, 80, 90), 5)
-    for r in (40, 64, 88):
-        pts = [(350 + r * math.cos(a), 100 + r * math.sin(a)) for a in [-1.3 + 0.1 * i for i in range(9)]]
-        ic.line(pts, (120, 255, 190), 5)
-    ic.sparkle(120, 120, 20, (140, 255, 200))
+def research_station():
+    """A research station: a sphere lab on a truss, solar wings, a dish talking home."""
+    sp = Sprite(W, H)
+    sp.part(sp.rect(18, 37, 78, 40), RAMPS['steel'], 'cyl_h')
+    for x0, x1 in ((2, 26), (70, 93)):
+        sp.part(sp.rect(x0, 30, x1, 46), RAMPS['blue'], 'rim')
+        for x in range(x0 + 6, x1, 6):
+            sp.fill(sp.rect(x, 30, x, 46), '#191954')
+        sp.fill(sp.rect(x0, 38, x1, 38), '#191954')
+        sp.plot(x0 + 2, 32, '#d2f8ff')
+    sp.part(sp.line([(56, 22), (66, 12)], 2), RAMPS['steel'], 'flat', base=1)
+    dish = sp.ellipse(58, 2, 82, 14)
+    sp.part(dish, RAMPS['bone'], 'rim')
+    sp.part(sp.ellipse(62, 5, 80, 12), RAMPS['paper'], 'flat', base=0)
+    sp.part(sp.line([(70, 8), (76, 3)], 1), RAMPS['ink'], 'flat', base=2, seam=False)
+    lab = sp.circle(48, 38, 18)
+    sp.part(lab, RAMPS['paper'] + [WHITE], 'sphere', base=2)
+    sp.part(sp.rect(31, 40, 65, 41) & lab, RAMPS['metal'], 'flat', base=2)
+    sp.plots([(40, 26), (41, 26), (39, 27)], WHITE)
+    sp.outline()
+    lamps(sp, [(38, 34), (44, 32), (50, 32), (56, 34)], '#84e3b5', '#c1f1d8')
+    lamps(sp, [(40, 46), (52, 46)], WARM)
+    for r in (5, 9, 13):
+        pts = [(76 + r * math.cos(a), 3 - 0 + r * math.sin(a) * 0.9) for a in [k * 0.08 - 0.3 for k in range(14)]]
+        for x, y in pts:
+            if 0 <= y < H and 0 <= x < W and not sp.alpha[int(round(y)), int(round(x))]:
+                sp.plot(int(round(x)), int(round(y)), '#84e3b5', glow=True)
+    spark(sp, 10, 12, '#84e3b5')
+    spark(sp, 88, 56)
+    return sp
 
 
-ICONS = {
-    "trade_ring": (trade_ring, 3),
-    "mining_outpost": (mining_outpost, 5),
-    "refinery": (refinery, 8),
-    "customs_post": (customs_post, 9),
-    "smuggler_den": (smuggler_den, 12),
-    "research_station": (research_station, 14),
+SPRITES = {
+    "trade_ring": trade_ring,
+    "mining_outpost": mining_outpost,
+    "refinery": refinery,
+    "customs_post": customs_post,
+    "smuggler_den": smuggler_den,
+    "research_station": research_station,
 }
+
+# ---- hull textures for the 3D scene ---------------------------------------------------------------
+# 32 x 32 tiles that repeat (the scene maps one tile to TEX_M metres of hull, nearest, no mipmaps).
+# Drawn with the same kit and palette; no outline, since a texture tiles edge to edge.
+
+T = 32
+
+
+def tile():
+    sp = Sprite(T, T)
+    sp.fill(sp.rect(0, 0, T - 1, T - 1), '#5d778d')
+    return sp
+
+
+def panels(sp, pw, ph, body, light, dark, rivet, offset=0):
+    """Plates pw x ph with a lit top/left edge, a dark seam bottom/right and corner rivets."""
+    for py in range(0, T, ph):
+        off = offset if (py // ph) % 2 else 0
+        for px in range(-pw, T + pw, pw):
+            x0 = px + off
+            sp.fill(sp.rect(x0, py, x0 + pw - 1, py + ph - 1), body)
+            sp.fill(sp.rect(x0, py, x0 + pw - 1, py), light)
+            sp.fill(sp.rect(x0, py, x0, py + ph - 1), light)
+            sp.fill(sp.rect(x0, py + ph - 1, x0 + pw - 1, py + ph - 1), dark)
+            sp.fill(sp.rect(x0 + pw - 1, py, x0 + pw - 1, py + ph - 1), dark)
+            for rx, ry in ((x0 + 2, py + 2), (x0 + pw - 3, py + 2), (x0 + 2, py + ph - 3), (x0 + pw - 3, py + ph - 3)):
+                sp.plot(rx, ry, rivet)
+
+
+def tex_hull():
+    sp = tile()
+    panels(sp, 16, 16, '#92a3b2', '#bfcad7', '#3e586e', '#5d778d')
+    sp.dither(sp.rect(17, 17, 30, 30), '#92a3b2', '#5d778d', 0.12)
+    sp.fill(sp.rect(4, 7, 11, 8), '#5d778d')   # a vent on one plate
+    return sp
+
+
+def tex_armour():
+    sp = tile()
+    panels(sp, 32, 16, '#3e586e', '#5d778d', '#011c34', '#92a3b2', offset=16)
+    return sp
+
+
+def tex_redband():
+    sp = tile()
+    panels(sp, 16, 16, '#a61e1f', '#d12d41', '#4a051e', '#fa3a64', offset=8)
+    return sp
+
+
+def tex_solar():
+    sp = tile()
+    sp.fill(sp.rect(0, 0, T - 1, T - 1), '#191954')
+    for y in range(0, T, 8):
+        for x in range(0, T, 8):
+            sp.fill(sp.rect(x + 1, y + 1, x + 7, y + 7), '#15578a')
+            sp.fill(sp.rect(x + 1, y + 1, x + 7, y + 1), '#1096c3')
+            sp.plot(x + 2, y + 2, '#74effe')
+    sp.fill(sp.rect(0, 15, T - 1, 16), '#bfcad7')
+    return sp
+
+
+def tex_hazard():
+    sp = tile()
+    sp.fill(sp.rect(0, 0, T - 1, T - 1), '#fb902f')
+    for y in range(T):
+        for x in range(T):
+            if (x + y) % 16 < 8:
+                sp.plot(x, y, '#161612')
+    return sp
+
+
+def tex_glass():
+    sp = tile()
+    sp.fill(sp.rect(0, 0, T - 1, T - 1), '#204f63')
+    for y in range(0, T, 16):
+        for x in range(0, T, 16):
+            sp.fill(sp.rect(x, y, x + 15, y), '#92a3b2')
+            sp.fill(sp.rect(x, y, x, y + 15), '#92a3b2')
+            sp.fill(sp.line([(x + 3, y + 12), (x + 12, y + 3)], 1), '#53998b')
+            sp.plot(x + 4, y + 3, '#84e3b5')
+    return sp
+
+
+TEXTURES = {"tex_hull": tex_hull, "tex_armour": tex_armour, "tex_redband": tex_redband,
+            "tex_solar": tex_solar, "tex_hazard": tex_hazard, "tex_glass": tex_glass}
+
+
+REFS = ["furnace_barge", "foreman_okafor", "captain_zefir", "dreadnought_ascendant", "glass_seraph", "brine_hive"]
 
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
-    paths = []
-    for name, (fn, seed) in ICONS.items():
-        ic = Icon(seed)
-        fn(ic)
-        p = os.path.join(OUT_DIR, name + ".png")
-        ic.save(p)
-        paths.append(p)
-        print("wrote", p)
+    items = []
+    for name, fn in SPRITES.items():
+        img = fn().image()
+        path = os.path.join(OUT_DIR, name + ".png")
+        save(img, path, "tools/art/stations_art.py (balatro-pixel-art kit)")
+        items.append((name, img))
+        print("wrote", path)
+    for name, fn in TEXTURES.items():
+        img = fn().image()
+        path = os.path.join(OUT_DIR, name + ".png")
+        save(img, path, "tools/art/stations_art.py (balatro-pixel-art kit)")
+        items.append((name, img))
+        print("wrote", path)
     if "--sheet" in sys.argv:
-        out = sys.argv[sys.argv.index("--sheet") + 1] if len(sys.argv) > sys.argv.index("--sheet") + 1 else "stations_sheet.png"
-        subprocess.run([sys.executable, os.path.join(KIT, "sheet.py"), out, *paths, "--ref", "plating", "--ref", "power output"], check=True)
+        i = sys.argv.index("--sheet")
+        out = sys.argv[i + 1] if len(sys.argv) > i + 1 else "stations_sheet.png"
+        ref_dir = os.path.join(os.path.dirname(KIT), "references")
+        refs = [("ref " + n, Image.open(os.path.join(ref_dir, n + ".png")).convert("RGBA")) for n in REFS]
+        sheet(items + refs, scale=3, cols=4).save(out)
+        print("sheet", out)
 
 
 if __name__ == "__main__":

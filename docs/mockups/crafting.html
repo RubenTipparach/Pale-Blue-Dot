@@ -6,14 +6,14 @@
 /* Layout: one reading column of numbered proposal sections, with a wide game-screen mock in the middle. House style of towns.html: dark ground, amber accent, condensed display face. */
 :root{
   color-scheme: dark;
-  --ground:#0f100d;
-  --panel:#18170f;
-  --panel-2:#211f16;
-  --line:rgba(226,206,160,.17);
-  --line-2:rgba(226,206,160,.32);
-  --ink:#ece4d2;
-  --muted:#a89d86;
-  --amber:#f0b43c;
+  --ground:#0b1014;
+  --panel:#111a20;
+  --panel-2:#0d151a;
+  --line:rgba(130,175,180,.24);
+  --line-2:rgba(150,190,195,.5);
+  --ink:#e4ecee;
+  --muted:#94a8ad;
+  --amber:#e8b040;
   --ember:#ff8a3d;
   --sky:#8fc3d8;
   --warn:#ff6b57;
@@ -32,7 +32,7 @@ h2{font-size:28px;display:flex;gap:12px;align-items:baseline}
 h2 .n{font-family:var(--mono);font-size:13px;color:var(--amber);font-weight:600;letter-spacing:0}
 h3{font-size:19px;font-weight:600}
 p{margin:0;max-width:72ch}
-.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.16em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.eyebrow{font-family:var(--mono);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:12px;color:#6fc3b8}
 .tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
 .tag.plain{border-color:var(--line-2);color:var(--muted)}
 section{display:grid;gap:16px;min-width:0}
@@ -44,12 +44,14 @@ code,.mono{font-family:var(--mono);font-size:.86em}
 code{color:var(--sky)}
 a{color:var(--amber)}
 .muted{color:var(--muted)}
-.icon{image-rendering:auto;display:block}
+.icon{image-rendering:pixelated;display:block}
+/* pixel art: 32 px sprites, only ever shown at 32, 64 or 96 px, nearest neighbour */
+img,svg image{image-rendering:pixelated}
 
 /* flow */
 .flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:stretch}
 .flow .step{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;align-content:start;min-width:0}
-.flow .step img{width:56px;height:56px}
+.flow .step img{width:64px;height:64px}
 .flow .step b{font-family:var(--display);font-size:17px;font-weight:600;letter-spacing:.03em}
 .flow .step span{font-size:13.5px;color:var(--muted)}
 .flow .step .src{font-family:var(--mono);font-size:11px;color:var(--sky)}
@@ -63,14 +65,14 @@ tr:last-child td{border-bottom:0}
 td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .items{display:flex;flex-wrap:wrap;gap:6px}
 .chipitem{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:4px;padding:2px 8px 2px 3px;background:var(--panel-2);font-size:13px;white-space:nowrap}
-.chipitem img{width:28px;height:28px}
+.chipitem img{width:32px;height:32px}
 
 /* cards */
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
 .card .head{display:flex;gap:12px;align-items:center}
-.card .head img{width:72px;height:72px;flex:none}
+.card .head img{width:64px;height:64px;flex:none}
 .card .head div{display:grid;gap:2px;min-width:0}
 .card p{font-size:14px;color:var(--muted)}
 .card dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0;font-size:13.5px}
@@ -102,19 +104,19 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
   linear-gradient(180deg,#3a4651 0%,#56514a 45%,#2b2a22 46%,#1d1c16 100%);padding:18px;display:grid;gap:14px}
 .screen .scrlabel{position:absolute;right:12px;top:10px;font-family:var(--mono);font-size:11px;color:var(--muted)}
 .ui{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;align-items:start}
-.station{background:rgba(18,17,13,.92);border:1px solid var(--line-2);border-radius:6px;padding:12px;display:grid;gap:10px;min-width:0}
+.station{background:rgba(14,22,27,.94);border:1px solid var(--line-2);border-radius:0;padding:12px;display:grid;gap:10px;min-width:0}
 .station header{display:flex;align-items:center;gap:10px}
-.station header img{width:44px;height:44px}
-.station header h3{font-size:22px}
+.station header img{width:32px;height:32px}
+.station header h3{font-size:16px;font-family:var(--mono);text-transform:uppercase;color:#6fc3b8;letter-spacing:.06em}
 .tabs{display:flex;flex-wrap:wrap;gap:4px}
-.tabs button{all:unset;cursor:pointer;display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:4px;padding:3px 8px 3px 3px;font-family:var(--display);font-size:13.5px;letter-spacing:.04em;color:var(--muted)}
-.tabs button img{width:24px;height:24px}
+.tabs button{all:unset;cursor:pointer;display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:0;padding:3px 8px 3px 3px;font-family:var(--mono);font-size:12px;text-transform:uppercase;font-size:13.5px;letter-spacing:.04em;color:var(--muted)}
+.tabs button img{width:32px;height:32px}
 .tabs button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
 .tabs button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
 .split{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:10px}
 .recipes{display:grid;gap:3px;max-height:330px;overflow:auto;padding-right:2px;align-content:start}
-.recipes button{all:unset;cursor:pointer;display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:4px 6px;border-radius:4px;border:1px solid transparent}
-.recipes button img{width:34px;height:34px}
+.recipes button{all:unset;cursor:pointer;display:grid;grid-template-columns:32px 1fr auto;gap:8px;align-items:center;padding:4px 6px;border-radius:4px;border:1px solid transparent}
+.recipes button img{width:32px;height:32px}
 .recipes button span{font-size:14px}
 .recipes button small{font-family:var(--mono);font-size:11px;color:var(--muted)}
 .recipes button.short span{color:var(--muted)}
@@ -123,11 +125,11 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
 .recipes button:focus-visible{outline:2px solid var(--amber)}
 .detail{display:grid;gap:10px;align-content:start;border-left:1px solid var(--line);padding-left:10px;min-width:0}
 .detail .out{display:flex;gap:10px;align-items:center}
-.detail .out .slot{width:64px;height:64px}
+.detail .out .slot{width:72px;height:72px}
 .detail .out b{font-family:var(--display);font-size:20px;font-weight:600}
 .ins{display:grid;gap:4px}
-.ins div{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;font-size:13.5px}
-.ins img{width:30px;height:30px}
+.ins div{display:grid;grid-template-columns:32px 1fr auto;gap:8px;align-items:center;font-size:13.5px}
+.ins img{width:32px;height:32px}
 .ins .have{font-family:var(--mono);font-size:12px}
 .ins .have.no{color:var(--warn)}
 .ins .have.yes{color:var(--ok)}
@@ -137,16 +139,16 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
 .btn[aria-disabled="true"]{opacity:.35;cursor:not-allowed}
 .btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .queue{display:grid;gap:5px}
-.qrow{display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:center;font-size:12.5px}
-.qrow img{width:28px;height:28px}
+.qrow{display:grid;grid-template-columns:32px 1fr;gap:8px;align-items:center;font-size:12.5px}
+.qrow img{width:32px;height:32px}
 .bar{height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--ember);width:0}
-.packpanel{background:rgba(18,17,13,.92);border:1px solid var(--line-2);border-radius:6px;padding:12px;display:grid;gap:8px;min-width:0}
+.packpanel{background:rgba(14,22,27,.94);border:1px solid var(--line-2);border-radius:0;padding:12px;display:grid;gap:8px;min-width:0}
 .slots{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px}
-.slot{position:relative;aspect-ratio:1;max-width:100%;border:2px solid rgba(226,206,160,.28);background:rgba(8,8,6,.6);border-radius:3px;display:grid;place-items:center}
-.slot img{width:84%;height:84%}
+.slot{position:relative;aspect-ratio:1;max-width:100%;border:1px solid rgba(150,190,195,.55);background:rgba(10,18,22,.72);border-radius:0;display:grid;place-items:center}
+.slot img{width:32px;height:32px}
 .slot .c{position:absolute;right:2px;bottom:0;font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;text-shadow:0 1px 0 #000,0 0 3px #000}
-.slot.sel{border-color:var(--amber);transform:translateY(-4px);box-shadow:0 0 0 1px var(--amber)}
+.slot.sel{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
 .slot.flash{animation:flash .9s}
 @keyframes flash{0%{background:rgba(143,220,154,.55)}100%{background:rgba(8,8,6,.6)}}
 .hotbar{padding-top:8px;border-top:1px solid var(--line)}
@@ -156,7 +158,9 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
 /* tiers */
 .tiers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .tier{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;justify-items:start}
-.tier img{width:88px;height:88px}
+.tier img{width:96px;height:96px}
+.tier .gamepick{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.tier .gamepick img{width:32px;height:32px}
 .tier b{font-family:var(--display);font-size:19px;font-weight:600}
 .tier .meter{width:100%;display:grid;gap:3px;font-size:12px;color:var(--muted)}
 .tier .meter .bar i{background:var(--amber)}
@@ -191,18 +195,18 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
   <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-11</span></div>
   <h1>Forge and Fabricator</h1>
   <p>Crafting for Pale Blue Dot: what a dig gives you, where you take it, what it becomes, and how it ends up as a ship. Everything here is a design to argue with. The game has no crafting today; the pack has a <code>Crafting</code> non-goal in <code>inventory-grid</code>, and this is the change that would pick it up.</p>
-  <p class="honest"><b>About the art.</b> Every icon on this page is painted by code (<code>tools/art/crafting_art.py</code>) with the hand-drawn-illustration crayon kit, copying the owner's friend's marker style stroke by stroke: flat block, hatching in the shape's own tones, form crescents, highlight dabs, an edge in a deep tone of the same hue. Nobody drew these by hand, and they are placeholders for the friend's own drawings if wanted. The recipe numbers are first guesses, chosen to be easy to change.</p>
+  <p class="honest"><b>About the art.</b> <b>The game's own:</b> the hand, torch, lantern and candle icons in the pack and the pickaxe in section 7 are the game's item icons (<code>assets/items/</code>, 16 px, shown at 2x and 6x), copied byte for byte into <code>crafting/game/</code>. <b>Mockup-only:</b> every other icon is pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/crafting_art.py</code>): 32 x 32, Sweaft-64 palette, a 1 px outline, light from the top left, shown only at 32, 64 or 96 px, nearest neighbour. The panels follow the game's HUD (the pack, the hotbar, the monospace headings). The recipe numbers are first guesses, chosen to be easy to change.</p>
 </header>
 
 <section aria-labelledby="s1">
   <h2 id="s1"><span class="n">1</span>From a dug cell to a made thing</h2>
   <p>Crafting starts where <code>dig-and-place</code> and <code>inventory-grid</code> already end. A dig removes a cell and drops its material as a floating hex prism, the magnet pulls it in, and the give order puts it in the hotbar or the pack. Crafting adds two steps after that, and one rule before it: what tool you hold decides what a dig can take.</p>
   <div class="flow">
-    <div class="step"><img src="crafting/pick-bronze.png" alt="" width="56" height="56"><b>Dig</b><span>Hold a pick, break a cell. Ore needs the right tier of pick (section 5).</span><span class="src">dig-and-place</span></div>
-    <div class="step"><img src="crafting/copper-ore.png" alt="" width="56" height="56"><b>Drop</b><span>The cell floats as a 0.16 m prism for 300 s of world time. Saved with the dig's log line.</span><span class="src">inventory-grid, decision 4</span></div>
-    <div class="step"><img src="crafting/coal.png" alt="" width="56" height="56"><b>Carry</b><span>Hotbar first, then the 30-slot pack. Ore stacks to 99, a tool to 1.</span><span class="src">inventory-grid, decision 2</span></div>
-    <div class="step"><img src="crafting/forge.png" alt="" width="56" height="56"><b>Station</b><span>Press <span class="mono">E</span> at a placed station. Its panel opens beside the pack, over the running world.</span><span class="src">new: this change</span></div>
-    <div class="step"><img src="crafting/copper-ingot.png" alt="" width="56" height="56"><b>Make</b><span>A recipe takes from the pack and gives back by the same give order. One log line per craft.</span><span class="src">new: this change</span></div>
+    <div class="step"><img src="crafting/pick-bronze.png" alt="" width="64" height="64"><b>Dig</b><span>Hold a pick, break a cell. Ore needs the right tier of pick (section 5).</span><span class="src">dig-and-place</span></div>
+    <div class="step"><img src="crafting/copper-ore.png" alt="" width="64" height="64"><b>Drop</b><span>The cell floats as a 0.16 m prism for 300 s of world time. Saved with the dig's log line.</span><span class="src">inventory-grid, decision 4</span></div>
+    <div class="step"><img src="crafting/coal.png" alt="" width="64" height="64"><b>Carry</b><span>Hotbar first, then the 30-slot pack. Ore stacks to 99, a tool to 1.</span><span class="src">inventory-grid, decision 2</span></div>
+    <div class="step"><img src="crafting/forge.png" alt="" width="64" height="64"><b>Station</b><span>Press <span class="mono">E</span> at a placed station. Its panel opens beside the pack, over the running world.</span><span class="src">new: this change</span></div>
+    <div class="step"><img src="crafting/copper-ingot.png" alt="" width="64" height="64"><b>Make</b><span>A recipe takes from the pack and gives back by the same give order. One log line per craft.</span><span class="src">new: this change</span></div>
   </div>
 </section>
 
@@ -243,7 +247,7 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
     <span class="scrlabel">mock: forge panel over the running world, E to open, Esc to close</span>
     <div class="ui">
       <div class="station">
-        <header><img id="stIcon" src="crafting/forge.png" alt="" width="44" height="44"><div><div class="eyebrow">Station</div><h3 id="stName">Forge</h3></div></header>
+        <header><img id="stIcon" src="crafting/forge.png" alt="" width="32" height="32"><div><div class="eyebrow">Station</div><h3 id="stName">Forge</h3></div></header>
         <div class="tabs" id="stTabs" role="group" aria-label="Station (mockup only: in game a station opens its own panel)"></div>
         <div class="split">
           <div class="recipes" id="recipeList" role="listbox" aria-label="Recipes"></div>
@@ -265,6 +269,7 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
   <h2 id="s7"><span class="n">7</span>Tool tiers and quality</h2>
   <p>Four picks. A pick's tier sets what it can break and how fast; the break time is Tenebris's shape (<code>mining::break_time</code>, which <code>dig-and-place</code> left out): the cell's hardness over the tool's speed. A pick below a cell's tier cannot take it: the cell cracks and says which pick it wants. There is no random quality roll: the same recipe always makes the same tool, so two players' tools agree, and a multiplayer server has one rule to check.</p>
   <div class="tiers" id="tiers"></div>
+  <div class="gamepick" style="display:flex;gap:12px;align-items:center"><img src="crafting/game/pickaxe.png" alt="The game's pickaxe" width="96" height="96" style="width:96px;height:96px;image-rendering:pixelated;background:rgba(10,18,22,.72);border:1px solid rgba(150,190,195,.55)"><p class="muted" style="font-size:14px">The one pickaxe the game ships today (<code>assets/items/tools/pickaxe.png</code>, 16 px, here at 6x). The four tiers above are drawn at 32 px for this page; decision C7 asks which size the inventory takes.</p></div>
   <div class="tablebox">
     <table>
       <thead><tr><th>Cell</th><th>Hardness</th><th>Tier</th><th>Stone pick</th><th>Bronze pick</th><th>Iron pick</th><th>Steel pick</th></tr></thead>
@@ -292,7 +297,7 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:now
 </div>
 
 <script>
-const I = n => `crafting/${n}.png`;
+const I = n => `crafting/${n}.png?v=2`;
 const ITEMS = {
   stone:["Stone",0], flint:["Flint",0], log:["Log",0], fibre:["Plant fibre",0], clay:["Clay",0], sand:["Quartz sand",0],
   "copper-ore":["Copper ore",1], "tin-ore":["Tin ore",1], coal:["Coal",1], "iron-ore":["Iron ore",2],
@@ -304,8 +309,10 @@ const ITEMS = {
   workbench:["Workbench",0], forge:["Forge",1], kiln:["Kiln",1], loom:["Loom",1], "chem-lab":["Chem lab",3], fabricator:["Fabricator",4],
   "s:hull-plate":["Hull block",4], "s:thruster":["Thruster",4], "s:reactor":["Reactor",4], "s:shield":["Shield",4], "s:cockpit":["Cockpit",4], "s:fuel":["Fuel tank",4], "s:cargo":["Cargo pod",4],
   "s:gyro":["Gyro and RCS",4], "s:habitation":["Habitation",4], "s:thruster2":["Thruster Mk II",4], "s:reactor2":["Reactor Mk II",4],
+  // the game's own items, with its own 16 px icons (assets/items/)
+  "g:hand":["Bare hand",0], "g:torch":["Torch",0], "g:lantern_post":["Lantern post",0], "g:candle":["Candle",0],
 };
-const icon = id => id.startsWith("s:") ? `ship-crafting/${id.slice(2).replace(/2$/, "")}.png` : I(id);
+const icon = id => id.startsWith("g:") ? `crafting/game/${id.slice(2)}.png` : id.startsWith("s:") ? `ship-crafting/${id.slice(2).replace(/2$/, "")}.png?v=2` : I(id);
 const nm = id => ITEMS[id][0];
 const STATIONS = {
   hand:{name:"By hand", color:"#a89d86"},
@@ -362,7 +369,7 @@ const TIERS = [
   ["3","Iron pick",["star-iron","frost-crystal"],["steel-ingot","reagent","polymer"],"chem-lab"],
   ["4","Steel pick",["magma-glass"],["circuit","alloy-plate","s:thruster2"],"fabricator"],
 ];
-const chip = id => `<span class="chipitem"><img src="${icon(id)}" alt="" width="28" height="28">${nm(id)}</span>`;
+const chip = id => `<span class="chipitem"><img src="${icon(id)}" alt="" width="32" height="32">${nm(id)}</span>`;
 document.getElementById("tierRows").innerHTML = TIERS.map(([t,g,raw,worked,st]) =>
   `<tr><td class="num">${t}</td><td>${g}</td><td><div class="items">${raw.map(chip).join("")}</div></td><td><div class="items">${worked.map(chip).join("")}</div></td><td>${chip(st)}</td></tr>`).join("");
 
@@ -374,7 +381,7 @@ const ALIEN = [
   ["star-iron","Asteroids","#b9a6ff","Meteoric iron in small airless bodies. Lifeless catalogue worlds, the first trip that needs a ship.","Alloy plate, for every Mk II module","Iron pick"],
 ];
 document.getElementById("alien").innerHTML = ALIEN.map(([id,where,c,txt,use,tool]) =>
-  `<div class="card planet" style="--c:${c}"><div class="head"><img src="${I(id)}" alt="" width="72" height="72"><div><span class="eyebrow">${where}</span><h3>${nm(id)}</h3></div></div><p>${txt}</p><dl><dt>Used in</dt><dd>${use}</dd><dt>Take with</dt><dd>${tool}</dd></dl></div>`).join("");
+  `<div class="card planet" style="--c:${c}"><div class="head"><img src="${I(id)}" alt="" width="64" height="64"><div><span class="eyebrow">${where}</span><h3>${nm(id)}</h3></div></div><p>${txt}</p><dl><dt>Used in</dt><dd>${use}</dd><dt>Take with</dt><dd>${tool}</dd></dl></div>`).join("");
 
 // ---- stations
 const ST = [
@@ -386,7 +393,7 @@ const ST = [
   ["fabricator","Steel, glass, polymer","2 cells, 2 layers","Circuits, alloy plate and every ship module. Stands in a shipyard bay, where the ship builder opens. The first shuttle is made from home materials only; shields, berths and Mk II parts need what the shuttle brings back.","cold blue"],
 ];
 document.getElementById("stations").innerHTML = ST.map(([id,cost,size,txt,light]) =>
-  `<div class="card"><div class="head"><img src="${I(id)}" alt="" width="72" height="72"><div><span class="eyebrow">Station</span><h3>${nm(id)}</h3></div></div><p>${txt}</p><dl><dt>Made of</dt><dd>${cost}</dd><dt>Size</dt><dd>${size}</dd><dt>Light</dt><dd>${light}</dd></dl></div>`).join("");
+  `<div class="card"><div class="head"><img src="${I(id)}" alt="" width="64" height="64"><div><span class="eyebrow">Station</span><h3>${nm(id)}</h3></div></div><p>${txt}</p><dl><dt>Made of</dt><dd>${cost}</dd><dt>Size</dt><dd>${size}</dd><dt>Light</dt><dd>${light}</dd></dl></div>`).join("");
 
 // ---- tree
 (function tree(){
@@ -418,7 +425,7 @@ document.getElementById("stations").innerHTML = ST.map(([id,cost,size,txt,light]
   const made = {}; RECIPES.forEach(r => made[r[0]] = r[2]);
   Object.entries(pos).forEach(([id, p]) => {
     const st = made[id] ? STATIONS[made[id]].name.toLowerCase() : "gathered";
-    out.push(`<g class="node" tabindex="0" data-id="${id}" transform="translate(${p.x},${p.y})" aria-label="${nm(id)}, ${st}"><rect width="${nodeW}" height="${nodeH}" rx="4"/><image href="${icon(id)}" x="3" y="3" width="34" height="34"/><text x="42" y="17">${nm(id)}</text><text class="st" x="42" y="31">${st}</text></g>`);
+    out.push(`<g class="node" tabindex="0" data-id="${id}" transform="translate(${p.x},${p.y})" aria-label="${nm(id)}, ${st}"><rect width="${nodeW}" height="${nodeH}" rx="4"/><image href="${icon(id)}" x="4" y="4" width="32" height="32"/><text x="42" y="17">${nm(id)}</text><text class="st" x="42" y="31">${st}</text></g>`);
   });
   svg.innerHTML = out.join("");
   const ups = id => { const s = new Set([id]); const walk = x => RECIPES.filter(r => r[0] === x).forEach(r => r[4].forEach(([i]) => { if (!s.has(i)) { s.add(i); walk(i); } })); walk(id); return s; };
@@ -434,9 +441,9 @@ document.getElementById("stations").innerHTML = ST.map(([id,cost,size,txt,light]
 })();
 
 // ---- the working panel
-const STACK = id => id.startsWith("pick-") ? 1 : (["workbench","forge","kiln","loom","chem-lab","fabricator"].includes(id) || id.startsWith("s:")) ? 1 : 99;
+const STACK = id => id === "g:hand" ? 1 : id.startsWith("pick-") ? 1 : (["workbench","forge","kiln","loom","chem-lab","fabricator"].includes(id) || id.startsWith("s:")) ? 1 : 99;
 const slots = new Array(40).fill(null); // 0-9 hotbar, 10-39 pack (inventory-grid decision 2)
-const seed = [["stone",64],["planks",12],["brick",8],["glass",3],["log",6],null,null,null,null,null,
+const seed = [["g:hand",1],["stone",64],["planks",12],["brick",8],["glass",3],["log",6],["g:torch",16],["g:lantern_post",8],["g:candle",16],null,
   ["copper-ore",14],["tin-ore",6],["iron-ore",9],["coal",20],["clay",10],["sand",16],["fibre",22],["rope",2],["copper-ingot",2],["glowcap",3],
   ["steel-ingot",4],["polymer",1],["star-iron",2],["frost-crystal",1]];
 seed.forEach((s, i) => { if (s) slots[i] = {id: s[0], n: s[1]}; });
@@ -450,7 +457,7 @@ function give(id, n) {
   return {left: n, touched};
 }
 function slotHTML(s, i) {
-  return `<div class="slot${i === selected ? " sel" : ""}" data-i="${i}" title="${s ? nm(s.id) : "empty"}">${s ? `<img src="${icon(s.id)}" alt="${nm(s.id)}" width="48" height="48">${s.n > 1 ? `<span class="c">${s.n}</span>` : ""}` : ""}</div>`;
+  return `<div class="slot${i === selected ? " sel" : ""}" data-i="${i}" title="${s ? nm(s.id) : "empty"}">${s ? `<img src="${icon(s.id)}" alt="${nm(s.id)}" width="32" height="32">${s.n > 1 ? `<span class="c">${s.n}</span>` : ""}` : ""}</div>`;
 }
 function renderSlots(flash = []) {
   document.getElementById("hotbar").innerHTML = slots.slice(0, 10).map((s, i) => slotHTML(s, i)).join("");
@@ -461,22 +468,22 @@ function renderSlots(flash = []) {
 const canMake = r => r[4].every(([i, n]) => count(i) >= n);
 function renderTabs() {
   const ids = ["workbench","forge","kiln","loom","chem-lab","fabricator"];
-  document.getElementById("stTabs").innerHTML = ids.map(id => `<button aria-pressed="${id === station}" data-st="${id}"><img src="${I(id)}" alt="" width="24" height="24">${nm(id)}</button>`).join("");
+  document.getElementById("stTabs").innerHTML = ids.map(id => `<button aria-pressed="${id === station}" data-st="${id}"><img src="${I(id)}" alt="" width="32" height="32">${nm(id)}</button>`).join("");
   document.querySelectorAll("#stTabs button").forEach(b => b.addEventListener("click", () => { station = b.dataset.st; recipe = null; renderAll(); }));
   document.getElementById("stIcon").src = I(station); document.getElementById("stName").textContent = nm(station);
 }
 function renderRecipes() {
   const list = RECIPES.filter(r => r[2] === station || (station === "workbench" && r[2] === "hand"));
   if (!recipe || !list.includes(recipe)) recipe = list.find(canMake) || list[0];
-  document.getElementById("recipeList").innerHTML = list.map((r, k) => `<button role="option" aria-selected="${r === recipe}" class="${canMake(r) ? "" : "short"}" data-k="${RECIPES.indexOf(r)}"><img src="${icon(r[0])}" alt="" width="34" height="34"><span>${nm(r[0])}${r[1] > 1 ? ` x${r[1]}` : ""}</span><small>${r[3]} s</small></button>`).join("");
+  document.getElementById("recipeList").innerHTML = list.map((r, k) => `<button role="option" aria-selected="${r === recipe}" class="${canMake(r) ? "" : "short"}" data-k="${RECIPES.indexOf(r)}"><img src="${icon(r[0])}" alt="" width="32" height="32"><span>${nm(r[0])}${r[1] > 1 ? ` x${r[1]}` : ""}</span><small>${r[3]} s</small></button>`).join("");
   document.querySelectorAll("#recipeList button").forEach(b => b.addEventListener("click", () => { recipe = RECIPES[+b.dataset.k]; renderAll(); }));
 }
 function renderDetail() {
   const r = recipe, ok = canMake(r);
   document.getElementById("detail").innerHTML = `
-    <div class="out"><div class="slot"><img src="${icon(r[0])}" alt="" width="54" height="54">${r[1] > 1 ? `<span class="c">${r[1]}</span>` : ""}</div><div><div class="eyebrow">Makes</div><b>${nm(r[0])}${r[1] > 1 ? ` x${r[1]}` : ""}</b><div class="muted mono" style="font-size:12px">${r[3]} s at the ${STATIONS[r[2]].name.toLowerCase()}</div></div></div>
+    <div class="out"><div class="slot"><img src="${icon(r[0])}" alt="" width="64" height="64">${r[1] > 1 ? `<span class="c">${r[1]}</span>` : ""}</div><div><div class="eyebrow">Makes</div><b>${nm(r[0])}${r[1] > 1 ? ` x${r[1]}` : ""}</b><div class="muted mono" style="font-size:12px">${r[3]} s at the ${STATIONS[r[2]].name.toLowerCase()}</div></div></div>
     <div class="eyebrow">Needs</div>
-    <div class="ins">${r[4].map(([i, n]) => { const h = count(i); return `<div><img src="${icon(i)}" alt="" width="30" height="30"><span>${nm(i)}</span><span class="have ${h >= n ? "yes" : "no"}">${h}/${n}</span></div>`; }).join("")}</div>
+    <div class="ins">${r[4].map(([i, n]) => { const h = count(i); return `<div><img src="${icon(i)}" alt="" width="32" height="32"><span>${nm(i)}</span><span class="have ${h >= n ? "yes" : "no"}">${h}/${n}</span></div>`; }).join("")}</div>
     <div class="actions"><span class="btn" role="button" tabindex="0" id="craft1" aria-disabled="${!ok}">Craft</span><span class="btn ghost" role="button" tabindex="0" id="craft5" aria-disabled="${!r[4].every(([i, n]) => count(i) >= n * 5)}">Craft 5</span></div>`;
   const go = k => () => { for (let j = 0; j < k; j++) { if (!canMake(r)) break; r[4].forEach(([i, n]) => take(i, n)); enqueue(r); } renderAll(); };
   for (const [id, k] of [["craft1", 1], ["craft5", 5]]) { const el = document.getElementById(id); const f = go(k); el.addEventListener("click", () => el.getAttribute("aria-disabled") === "false" && f()); el.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && el.getAttribute("aria-disabled") === "false") { e.preventDefault(); f(); } }); }
@@ -484,7 +491,7 @@ function renderDetail() {
 const queue = [];
 function enqueue(r) { queue.push({r, t: 0}); }
 function renderQueue() {
-  document.getElementById("queue").innerHTML = queue.length ? `<div class="eyebrow">Queue</div>` + queue.map((q, k) => `<div class="qrow"><img src="${icon(q.r[0])}" alt="" width="28" height="28"><div><div>${nm(q.r[0])}${q.r[1] > 1 ? ` x${q.r[1]}` : ""} <span class="muted mono" style="font-size:11px">${k ? "waiting" : Math.ceil(q.r[3] * (1 - q.t)) + " s"}</span></div><div class="bar"><i style="width:${q.t * 100}%"></i></div></div></div>`).join("") : `<div class="hint">Queue empty. A job runs only while the world is played, and is saved with the station.</div>`;
+  document.getElementById("queue").innerHTML = queue.length ? `<div class="eyebrow">Queue</div>` + queue.map((q, k) => `<div class="qrow"><img src="${icon(q.r[0])}" alt="" width="32" height="32"><div><div>${nm(q.r[0])}${q.r[1] > 1 ? ` x${q.r[1]}` : ""} <span class="muted mono" style="font-size:11px">${k ? "waiting" : Math.ceil(q.r[3] * (1 - q.t)) + " s"}</span></div><div class="bar"><i style="width:${q.t * 100}%"></i></div></div></div>`).join("") : `<div class="hint">Queue empty. A job runs only while the world is played, and is saved with the station.</div>`;
 }
 function renderAll() { renderTabs(); renderRecipes(); renderDetail(); renderQueue(); renderSlots(); }
 let last = performance.now();
@@ -501,7 +508,7 @@ renderAll(); requestAnimationFrame(tick);
 
 // ---- tool tiers
 const PICKS = [["pick-stone","Stone pick",1.0,0,"Stone, flint and tier 0 ground. Copper, tin and coal."],["pick-bronze","Bronze pick",1.6,2,"Iron ore. The first tool from a forge."],["pick-iron","Iron pick",2.4,3,"Star iron and frost crystal: the off-world tier."],["pick-steel","Steel pick",3.6,4,"Magma glass. Everything the game has."]];
-document.getElementById("tiers").innerHTML = PICKS.map(([id, name, sp, t, txt]) => `<div class="tier"><img src="${I(id)}" alt="" width="88" height="88"><b>${name}</b><span class="muted" style="font-size:13.5px">${txt}</span><div class="meter"><span>Speed ${sp.toFixed(1)}x, takes tier ${t === 0 ? "0-1" : "up to " + t}</span><div class="bar"><i style="width:${sp / 3.6 * 100}%"></i></div></div></div>`).join("");
+document.getElementById("tiers").innerHTML = PICKS.map(([id, name, sp, t, txt]) => `<div class="tier"><img src="${I(id)}" alt="" width="96" height="96"><b>${name}</b><span class="muted" style="font-size:13.5px">${txt}</span><div class="meter"><span>Speed ${sp.toFixed(1)}x, takes tier ${t === 0 ? "0-1" : "up to " + t}</span><div class="bar"><i style="width:${sp / 3.6 * 100}%"></i></div></div></div>`).join("");
 const CELLS = [["Dirt, grass, sand",0.6,0],["Stone, rock",1.5,0],["Copper / tin ore, coal",2.2,1],["Iron ore",3.0,2],["Star iron, frost crystal",4.0,3],["Magma glass",6.0,4]];
 const reach = [1, 2, 3, 4];
 document.getElementById("breakRows").innerHTML = CELLS.map(([n, h, t]) => `<tr><td>${n}</td><td class="num">${h.toFixed(1)}</td><td class="num">${t}</td>${PICKS.map(([, , sp], k) => `<td class="num">${t <= reach[k] ? (h / sp).toFixed(2) + " s" : "-"}</td>`).join("")}</tr>`).join("");
@@ -512,9 +519,9 @@ const DEC = [
   ["What does a too-weak pick do to ore?","Choices: it cannot break it (the cell cracks and names the pick it wants); it breaks it slowly and drops plain stone; it breaks it at a fifth of the speed and drops the ore.","Cannot break it, with the hint. It keeps the tier gate honest and a hint teaches the chain."],
   ["Stations as blocks, or as placed objects?","A station that is a Material flows through every path a block already has (the aim ray, the edit log, relighting), the way the lanterns did. A placed object can be bigger and turn to face you.","Blocks, like the lanterns: one cell, a facing stored in the edit. The fabricator's two cells are two linked cells."],
   ["Queue length per station","A station could take one job at a time, or a queue the player fills and walks away from.","A queue of eight. It saves with the station as a stored record and runs only while the world is played."],
-  ["Quality rolls","Some crafting games give a random quality per craft. This page has none: tier is the material.","No random quality. Deterministic results are one rule for a future multiplayer server, and the friend's icons can show the tier by colour alone."],
+  ["Quality rolls","Some crafting games give a random quality per craft. This page has none: tier is the material.","No random quality. Deterministic results are one rule for a future multiplayer server, and the icons show the tier by colour alone."],
   ["Old worlds' generic Ore","An existing save has one Ore material. New worlds get copper, tin and iron veins from a new generator version.","Old Ore smelts as mixed ore at a fixed split (2 copper : 1 tin : 1 iron per 4). The old world stays cell for cell as it was."],
-  ["Icons: the friend's hand, or the kit's?","The icons here are the crayon kit's copies of the friend's style. The friend could draw over them, or draw them fresh.","Use these as placeholders and ask the friend for the ten the player sees most (the six stations and the four picks)."],
+  ["Icons: 32 px, or the game's 16 px?","The icons here are 32 x 32 pixel art in the solitaire collection's style. The game's own item icons today (assets/items: tools, fish, lights) are 16 x 16, like the pickaxe beside the steel pick in section 7.","Draw inventory icons at 32 px from here on and redraw the five tools at 32 when the inventory shows them; 16 px leaves no room for the ramps and seams that make these read."],
 ];
 document.getElementById("decisions").innerHTML = DEC.map(([q, ctx, rec], k) => `<div class="q"><h3>C${k + 1}. ${q}</h3><p>${ctx}</p><p class="rec"><b>Recommend</b>${rec}</p></div>`).join("");
 </script>

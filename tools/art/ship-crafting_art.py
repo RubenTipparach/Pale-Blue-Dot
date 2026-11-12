@@ -1,348 +1,400 @@
 """Module icons and hull textures for the ship-crafting mockup (docs/mockups/ship-crafting.html).
 
-Painted in code with the hand-drawn-illustration skill's crayon kit, in the manner of
-the owner's friend's upgrade icons. Nothing here is drawn by hand. Two kinds of output:
+Pixel art drawn in code with the balatro-pixel-art kit (`.claude/skills/balatro-pixel-art`), the
+solitaire collection's style, every colour from Sweaft-64 (the kit's save() refuses anything else).
+Two kinds of output:
 
-- module icons (128 px, transparent, framed to the subject like the crafting icons);
-- hull textures (256 px, full frame) that the page's three.js ships and shipyard wear,
-  sampled with nearest filtering so the marker strokes stay visible.
+- module icons: 32 x 32, transparent, one bold subject, 1 px outline, light from the top left;
+  the page shows them only at whole multiples of 32 px with `image-rendering: pixelated`;
+- hull textures: 32 x 32 tiles that repeat seamlessly, opaque, no outline, like the game's own
+  settlement textures (assets/textures/settlement/), which the page's three.js ships and
+  shipyard sample with NearestFilter and no mipmaps.
+
+The shipyard's apron and the hangar walls are not drawn here: they wear the game's own
+granite and iron textures, copied byte for byte into docs/mockups/ship-crafting/game/.
 
     python tools/art/ship-crafting_art.py
     python tools/art/ship-crafting_art.py --sheet OUT.png
 """
 
-import math
+import glob
 import os
-import random
-import subprocess
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-from crafting_art import KIT, ROOT, FillIcon, lump  # noqa: E402
+import numpy as np
 
-import crayon  # noqa: E402
-from crayon import (INK, Icon, circle, darker, ellipse, lighter, mix, rect,  # noqa: E402
-                    rotate, roundrect, star, tone, translate)
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+SKILL = os.path.join(ROOT, ".claude", "skills", "balatro-pixel-art")
+sys.path.insert(0, os.path.join(SKILL, "scripts"))
+from pixelkit import RAMPS, Sprite, save, sheet  # noqa: E402
 
 OUT = os.path.join(ROOT, "docs", "mockups", "ship-crafting")
-S = crayon.S
+N = 32
+
+R = dict(RAMPS)
+R.update({
+    "white": ["#3e586e", "#5d778d", "#92a3b2", "#bfcad7", "#fffefe"],
+    "dark": ["#010e1a", "#011c34", "#1f3b52", "#3e586e", "#5d778d"],
+    "orange": ["#733126", "#c56d25", "#fb902f", "#faaf5c"],
+    "hazard": ["#8d4526", "#c56d25", "#fb902f", "#faaf5c"],
+    "tank": ["#4a051e", "#a61e1f", "#d12d41", "#fa3a64"],
+    "plume": ["#15578a", "#1096c3", "#74effe", "#d2f8ff", "#fffefe"],
+})
+GLINT = "#fffefe"
 
 
-# ---------- module icons ----------------------------------------------------------------
-
-def cockpit(ic):
-    body = [(70, 380), (110, 240), (220, 150), (380, 140), (450, 220), (450, 380)]
-    ic.drawn(body, (200, 210, 225), shade=0.25, edge=(40, 50, 70), edge_w=11)
-    glass = [(130, 250), (226, 172), (360, 166), (410, 230), (300, 262)]
-    ic.drawn(glass, (60, 150, 220), rim_color=(170, 225, 255), edge=(20, 50, 90), edge_w=9)
-    ic.line([(190, 200), (240, 236)], (220, 245, 255), 9)
-    ic.line([(90, 330), (440, 330)], (240, 180, 40), 9)
-    ic.sparkle(400, 90, 28, (230, 245, 255))
+def glint_star(sp, x, y, ramp):
+    sp.plot(x, y, GLINT, glow=True)
+    sp.plots([(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)], ramp[3], glow=True)
 
 
-def cargo(ic):
-    box = [(80, 170), (360, 170), (360, 430), (80, 430)]
-    top = [(80, 170), (160, 100), (440, 100), (360, 170)]
-    side = [(360, 170), (440, 100), (440, 360), (360, 430)]
-    ic.drawn(side, (190, 100, 30), highlight=0, shade=0.2, edge=(100, 50, 10), edge_w=10)
-    ic.drawn(box, (240, 140, 40), edge=(110, 56, 14), edge_w=10)
-    ic.drawn(top, (255, 186, 90), shade=0.1, edge=(110, 56, 14), edge_w=10)
-    for x in (140, 220, 300):
-        ic.line([(x, 180), (x, 420)], (200, 104, 30), 7)
-    ic.drawn(rect(150, 250, 290, 310), (40, 40, 50), highlight=0, shade=0, edge=None)
-    for k in range(4):
-        ic.line([(160 + k * 34, 300), (186 + k * 34, 258)], (250, 210, 60), 9)
+# ---------------------------------------------------------------- module icons
+
+def cockpit(sp):
+    hull = sp.poly([(2, 27), (4, 17), (11, 9), (20, 6), (27, 8), (30, 14), (30, 27)])
+    sp.part(hull, R["white"], "rim", base=3, depth=2)
+    canopy = sp.poly([(6, 18), (12, 11), (20, 8), (26, 10), (27, 15), (18, 17)])
+    sp.part(canopy, R["cyan"], "rim", base=2)
+    sp.fill(sp.line([(11, 15), (16, 11)], 2) & canopy, R["cyan"][4])
+    sp.part(sp.rect(3, 21, 29, 23), R["hazard"], "rim", base=2)
+    sp.part(sp.rect(3, 25, 29, 28), R["dark"], "flat", base=2)
+    sp.plots([(12, 11), (13, 10)], GLINT)
+    sp.outline()
 
 
-def thruster(ic):
-    ic.glow((256, 420, 110), (120, 200, 255), 40, 0.7)
-    flame = [(160, 380), (220, 470), (256, 520), (292, 470), (352, 380)]
-    ic.drawn(flame, (120, 210, 255), shade=0, rim_color=(230, 250, 255), edge=None)
-    bell = [(200, 200), (312, 200), (380, 400), (132, 400)]
-    ic.drawn(bell, (80, 84, 100), shade=0.25, rim_color=(150, 160, 190), edge=INK, edge_w=11)
-    ic.drawn(ellipse(256, 400, 124, 26), (255, 170, 60), shade=0, highlight=0, edge=(150, 60, 20), edge_w=8)
-    can = roundrect(170, 60, 342, 210, 20)
-    ic.drawn(can, (200, 206, 220), edge=(40, 50, 70), edge_w=10)
-    ic.line([(180, 130), (332, 130)], (240, 180, 40), 9)
-    for x in (130, 382):
-        ic.speed(x, 440, 60, 90, (200, 235, 255), 7)
+def cargo(sp):
+    top = sp.poly([(7, 3), (29, 3), (25, 8), (3, 8)])
+    front = sp.rect(3, 9, 24, 29)
+    side = sp.poly([(25, 9), (29, 4), (29, 24), (25, 29)])
+    sp.part(front, R["orange"], "rim", base=2)
+    for x in (8, 13, 18):
+        sp.fill(sp.rect(x, 10, x, 28), R["orange"][1])
+    sp.part(side, R["orange"], "flat", base=1)
+    sp.part(top, R["orange"], "flat", base=3)
+    band = sp.rect(4, 18, 23, 22)
+    ys, xs = np.mgrid[0:N, 0:N]
+    sp.fill(band & (((xs + ys) // 2) % 2 == 0), R["ink"][1])
+    sp.fill(band & (((xs + ys) // 2) % 2 == 1), R["gold"][3])
+    sp.plots([(8, 4), (9, 4)], GLINT)
+    sp.outline()
 
 
-def reactor(ic):
-    ic.glow((256, 270, 150), (90, 230, 255), 50, 0.6)
-    shell = roundrect(110, 80, 402, 460, 60)
-    ic.drawn(shell, (90, 96, 116), shade=0.25, edge=INK, edge_w=11)
-    core = circle(256, 270, 100)
-    ic.drawn(core, (90, 220, 250), rim_color=(220, 255, 255), edge=(20, 80, 110), edge_w=9)
-    ic.zap([(190, 240), (240, 300), (270, 230), (320, 300)], (240, 255, 255), 8, jag=10, seed=3)
-    for y in (110, 430):
-        ic.drawn(rect(160, y - 14, 352, y + 14), (240, 180, 40), highlight=0, edge=(110, 70, 10), edge_w=7)
-    ic.sparkle(420, 90, 26, (210, 250, 255))
+def thruster(sp):
+    mount = sp.rect(9, 2, 22, 8)
+    sp.part(mount, R["white"], "rim", base=3)
+    bell = sp.poly([(10, 9), (21, 9), (27, 21), (4, 21)])
+    sp.part(bell, R["dark"], "cyl_v", base=3)
+    sp.part(sp.rect(4, 19, 27, 21), R["steel"], "rim", base=2)
+    sp.plots([(10, 3), (11, 3)], GLINT)
+    sp.outline()
+    plume = sp.poly([(6, 22), (25, 22), (19, 30), (16, 31), (12, 30)])
+    sp.part(plume, R["plume"], "inset", glow=True)
 
 
-def fuel(ic):
-    tank = roundrect(140, 60, 372, 460, 110)
-    ic.drawn(tank, (220, 70, 60), rim_color=(255, 160, 140), edge=(110, 24, 20), edge_w=11)
-    ic.drawn(rect(146, 220, 366, 290), (240, 236, 226), shade=0.15, edge=None)
-    ic.line([(146, 220), (366, 220)], (110, 24, 20), 6)
-    ic.line([(146, 290), (366, 290)], (110, 24, 20), 6)
-    ic.drawn(rect(226, 30, 286, 70), (120, 126, 140), edge_w=8)
-    drop = [(256, 230)] + [(256 + 24 * math.sin(t), 266 - 24 * math.cos(t)) for t in
-                           [math.pi * 0.25 + i * math.pi * 1.5 / 10 for i in range(11)]]
-    ic.drawn(drop, (240, 150, 40), shade=0, highlight=0, edge=(120, 60, 10), edge_w=5)
+def reactor(sp):
+    for y in (3, 25):
+        sp.part(sp.rect(5, y, 26, y + 4), R["steel"], "cyl_h")
+    core = sp.rect(8, 8, 23, 24)
+    sp.part(core, R["dark"], "cyl_v", base=2)
+    for x in (8, 23):
+        sp.part(sp.rect(x - 1, 8, x + 1, 24), R["white"], "cyl_v")
+    sp.plots([(6, 4), (7, 4)], GLINT)
+    sp.outline()
+    sp.part(sp.rect(11, 10, 20, 22), R["plume"], "inset", glow=True)
+    sp.plot(13, 12, GLINT, glow=True)
 
 
-def shield(ic):
-    ic.glow((256, 250, 170), (110, 170, 255), 50, 0.5)
-    for r, w in ((210, 9), (170, 7)):
-        ic.outline([(256 + r * math.cos(a), 250 + r * math.sin(a)) for a in
-                    [math.pi * (1.1 + i * 0.8 / 20) for i in range(21)]], (150, 210, 255), w, closed=False, passes=1)
-    emitter = [(150, 460), (180, 330), (332, 330), (362, 460)]
-    ic.drawn(emitter, (120, 130, 150), shade=0.25, edge=INK, edge_w=10)
-    dish = ellipse(256, 300, 130, 50)
-    ic.drawn(dish, (90, 150, 240), rim_color=(200, 230, 255), edge=(20, 40, 100), edge_w=9)
-    ic.dot(256, 300, 22, (230, 245, 255), ink=(20, 40, 100))
-    hexes = [(256 + 150 * math.cos(a), 200 + 110 * math.sin(a)) for a in (-2.4, -1.57, -0.74)]
-    for x, y in hexes:
-        ic.outline(circle(x, y, 26, n=6, start=math.pi / 6), (180, 225, 255), 6, passes=1)
+def fuel(sp):
+    tank = sp.rect(7, 5, 24, 29) & ~sp.rect(7, 5, 7, 6) & ~sp.rect(24, 5, 24, 6)
+    sp.part(tank, R["tank"], "cyl_v", base=2)
+    sp.part(sp.rect(7, 14, 24, 19), R["white"], "cyl_v", base=3)
+    sp.part(sp.rect(13, 1, 18, 4), R["steel"], "rim", base=2)
+    flame = sp.poly([(15, 15), (18, 18), (15, 19), (13, 18)])
+    sp.part(flame, R["flame"], "flat", base=2, seam=False)
+    sp.plots([(9, 7), (9, 8), (10, 7)], GLINT)
+    sp.outline()
 
 
-def bar_along(p0, p1, half):
-    """A straight bar from p0 to p1, `half` wide either side."""
-    dx, dy = p1[0] - p0[0], p1[1] - p0[1]
-    L = math.hypot(dx, dy)
-    nx, ny = -dy / L * half, dx / L * half
-    return [(p0[0] + nx, p0[1] + ny), (p1[0] + nx, p1[1] + ny), (p1[0] - nx, p1[1] - ny), (p0[0] - nx, p0[1] - ny)]
+def shield(sp):
+    base = sp.rect(7, 24, 24, 29)
+    sp.part(base, R["steel"], "rim", base=2)
+    sp.part(sp.rect(13, 18, 18, 23), R["white"], "cyl_v")
+    dish = sp.ellipse(6, 13, 25, 21)
+    sp.part(dish, R["white"], "sphere", base=3)
+    sp.part(sp.ellipse(11, 14, 20, 18), R["blue"], "rim", base=2)
+    sp.outline()
+    arc = sp.ellipse(1, 1, 30, 30) & ~sp.ellipse(3, 3, 28, 28) & sp.rect(0, 0, 31, 14)
+    sp.fill(arc, R["blue"][3], glow=True)
+    sp.fill(sp.ellipse(1, 1, 30, 30) & ~sp.ellipse(2, 2, 29, 29) & sp.rect(0, 0, 31, 6), R["cyan"][4], glow=True)
+    sp.plot(15, 15, GLINT, glow=True)
 
 
-def mining_laser(ic):
-    ic.glow((410, 150, 70), (255, 90, 60), 30, 0.7)
-    ic.drawn(bar_along((330, 220), (470, 100), 16), (255, 110, 80), shade=0, rim_color=(255, 235, 210), edge=None)
-    ic.drawn(bar_along((210, 320), (340, 210), 36), (70, 74, 88), shade=0.2, edge=INK, edge_w=10)
-    ic.drawn(bar_along((330, 222), (352, 203), 46), (120, 126, 146), edge=INK, edge_w=8)
-    ic.drawn(bar_along((70, 430), (240, 290), 82), (245, 200, 50), edge=(120, 90, 10), edge_w=11)
-    for k in range(3):
-        c = (110 + k * 45, 400 - k * 38)
-        ic.line(bar_along((c[0] - 30, c[1] - 36), (c[0] + 30, c[1] + 36), 1)[:2], (40, 36, 40), 14)
-    rock = lump(450, 110, 56, 9)
-    ic.drawn(rock, (150, 90, 70), shade=0.25, edge_w=8)
-    for x, y in ((380, 60), (500, 190), (400, 190)):
-        ic.sparkle(x, y, 18, (255, 220, 120))
+def mining_laser(sp):
+    body = sp.taper(3, 28, 19, 12, 10, 10)
+    sp.part(body, R["hazard"], "rim", base=2)
+    for t in (0.3, 0.55):
+        x, y = 3 + 16 * t, 28 - 16 * t
+        sp.fill(sp.taper(x - 3, y - 3, x + 3, y + 3, 2, 2) & body, R["ink"][1])
+    barrel = sp.taper(17, 14, 25, 6, 6, 5)
+    sp.part(barrel, R["steel"], "rim", base=2)
+    sp.part(sp.taper(24, 7, 27, 4, 6, 6), R["dark"], "rim", base=2)
+    sp.plots([(7, 21), (8, 20)], GLINT)
+    sp.outline()
+    sp.part(sp.taper(27, 4, 31, 0, 3, 2), R["flame"], "inset", glow=True)
+    glint_star(sp, 29, 2, R["flame"])
 
 
-def habitation(ic):
-    body = roundrect(60, 130, 452, 400, 80)
-    ic.drawn(body, (236, 236, 228), shade=0.25, edge=(70, 80, 100), edge_w=11)
-    for x in (130, 220, 310):
-        ic.glow((x + 30, 230, 30), (255, 200, 90), 18, 0.6)
-        ic.drawn(roundrect(x, 200, x + 60, 260, 16), (255, 200, 90), rim_color=(255, 240, 180),
-                 edge=(110, 70, 20), edge_w=7)
-    ic.line([(80, 320), (432, 320)], (90, 160, 210), 10)
-    ic.drawn(rect(380, 180, 430, 300), (200, 204, 210), shade=0.1, edge=(70, 80, 100), edge_w=7)
-    leaf = ellipse(150, 360, 40, 18, rot=-0.4)
-    ic.drawn(leaf, (90, 190, 80), edge_w=6)
+def habitation(sp):
+    hull = sp.rect(2, 7, 29, 25) & ~sp.rect(2, 7, 2, 8) & ~sp.rect(29, 7, 29, 8) & ~sp.rect(2, 24, 2, 25) & ~sp.rect(29, 24, 29, 25)
+    sp.part(hull, R["white"], "cyl_h", base=3)
+    for x in (6, 13, 20):
+        sp.part(sp.rect(x, 11, x + 4, 15), R["gold"], "rim", base=3)
+    sp.part(sp.rect(3, 19, 28, 20), R["blue"], "flat", base=2)
+    sp.part(sp.ellipse(22, 21, 27, 24), R["green"], "rim")
+    sp.plots([(4, 9), (5, 9)], GLINT)
+    sp.outline()
 
 
-def gyro(ic):
-    for r, col, rot in ((200, (240, 180, 40), 0.0), (160, (90, 200, 240), 1.0)):
-        ic.outline(ellipse(256, 256, r, r * 0.42, rot=rot), tone(col), 22, passes=1)
-        ic.outline(ellipse(256, 256, r, r * 0.42, rot=rot), col, 13, passes=1)
-    ic.drawn(circle(256, 256, 80), (200, 206, 220), rim_color=(240, 245, 255), edge=(40, 50, 70), edge_w=10)
-    ic.dot(256, 256, 22, (60, 66, 84))
-    for a in (0.6, 2.6, 4.4):
-        ic.line([(256 + 230 * math.cos(a), 256 + 230 * math.sin(a)),
-                 (256 + 250 * math.cos(a + 0.35), 256 + 250 * math.sin(a + 0.35))], (240, 240, 240), 8)
+def gyro(sp):
+    ring = sp.ellipse(1, 9, 30, 23) & ~sp.ellipse(4, 12, 27, 20)
+    back = ring & sp.rect(0, 0, 31, 15)
+    front = ring & sp.rect(0, 16, 31, 31)
+    sp.part(back, R["gold"], "rim", base=1)
+    disc = sp.circle(16, 15, 9)
+    sp.part(disc, R["white"], "sphere", base=3)
+    sp.part(sp.circle(16, 15, 3), R["dark"], "rim", base=2)
+    sp.part(front, R["gold"], "rim", base=3)
+    sp.plots([(11, 9), (12, 8)], GLINT)
+    sp.outline()
 
 
-def hull_plate(ic):
-    plate = [(90, 120), (420, 90), (440, 400), (80, 420)]
-    ic.drawn(plate, (170, 180, 196), rim_color=(225, 232, 245), edge=(40, 50, 70), edge_w=11)
-    ic.line([(260, 108), (262, 410)], (110, 120, 140), 6)
-    for x, y in ((120, 150), (390, 125), (410, 370), (115, 385), (240, 140), (280, 390)):
-        ic.dot(x, y, 10, (210, 214, 224), ink=(30, 34, 46))
+def hull_plate(sp):
+    plate = sp.rect(3, 3, 28, 28)
+    sp.part(plate, R["white"], "rim", base=3, depth=2)
+    sp.fill(sp.rect(15, 4, 15, 27), R["white"][1])
+    sp.fill(sp.rect(4, 15, 27, 15), R["white"][1])
+    for x in (6, 12, 19, 25):
+        for y in (6, 12, 19, 25):
+            sp.plot(x, y, R["white"][1])
+            sp.plot(x - 1, y - 1, R["white"][4])
+    sp.plots([(4, 4), (5, 4), (4, 5)], GLINT)
+    sp.outline()
 
 
-def landing_gear(ic):
-    ic.drawn(rect(150, 50, 362, 110), (120, 126, 140), edge=(40, 50, 70), edge_w=10)
-    ic.drawn(bar_along((256, 100), (256, 330), 34), (190, 196, 210), edge=(40, 50, 70), edge_w=10)
-    ic.drawn(bar_along((256, 200), (256, 330), 20), (230, 236, 245), shade=0.1, edge=(40, 50, 70), edge_w=7)
-    ic.drawn(bar_along((180, 110), (240, 280), 14), (240, 180, 40), edge_w=8)
-    foot = [(110, 400), (160, 330), (352, 330), (402, 400)]
-    ic.drawn(foot, (70, 74, 88), shade=0.2, rim_color=(140, 150, 170), edge=INK, edge_w=11)
-    ic.line([(120, 420), (392, 420)], (240, 180, 40), 10)
-    for x in (90, 422):
-        ic.speed(x, 330, 50, 90, (230, 230, 230), 7)
+def landing_gear(sp):
+    sp.part(sp.rect(6, 2, 25, 6), R["white"], "rim", base=3)
+    strut = sp.taper(16, 7, 16, 22, 5, 5)
+    sp.part(strut, R["steel"], "cyl_v", base=2)
+    sp.part(sp.taper(16, 7, 16, 15, 7, 7), R["dark"], "cyl_v", base=3)
+    sp.part(sp.taper(10, 8, 15, 18, 3, 3), R["hazard"], "rim", base=2)
+    foot = sp.poly([(5, 24), (27, 24), (29, 29), (3, 29)])
+    sp.part(foot, R["dark"], "rim", base=3)
+    sp.part(sp.rect(5, 24, 26, 25), R["hazard"], "flat", base=2)
+    sp.plots([(7, 3), (8, 3)], GLINT)
+    sp.outline()
 
 
 ICONS = {
-    "cockpit": (cockpit, 3), "cargo": (cargo, 5), "thruster": (thruster, 7), "reactor": (reactor, 9),
-    "fuel": (fuel, 11), "shield": (shield, 13), "mining-laser": (mining_laser, 15),
-    "habitation": (habitation, 17), "gyro": (gyro, 19), "hull-plate": (hull_plate, 21),
-    "landing-gear": (landing_gear, 23),
+    "cockpit": cockpit, "cargo": cargo, "thruster": thruster, "reactor": reactor, "fuel": fuel,
+    "shield": shield, "mining-laser": mining_laser, "habitation": habitation, "gyro": gyro,
+    "hull-plate": hull_plate, "landing-gear": landing_gear,
 }
 
 
-# ---------- textures (full frame) --------------------------------------------------------
+# ---------------------------------------------------------------- hull textures (32 x 32 tiles)
+# Each one repeats seamlessly: every pattern's period divides 32.
 
-def ground(ic, color, angle=30, hatch=1.0):
-    full = rect(-20, -20, S + 20, S + 20)
-    ic.flat(full, color, wobble=0)
-    ic.scribble(full, color, var=0.18, angle=angle, density=hatch * 0.9, length=(50, 140), spread=10)
-    ic.scribble(full, color, var=0.12, angle=angle + 60, density=hatch * 0.3, length=(30, 90), spread=14)
+YS, XS = np.mgrid[0:N, 0:N]
+SPECK = np.random.default_rng(7).random((N, N)) < 0.05  # fixed grain, the same every run
 
 
-def seams(ic, color, cols=2, rows=2, rivets=True, w=7):
-    for i in range(1, cols):
-        x = S * i / cols
-        ic.line([(x, -10), (x, S + 10)], color, w, amp=1.5)
-    for j in range(1, rows):
-        y = S * j / rows
-        ic.line([(-10, y), (S + 10, y)], color, w, amp=1.5)
-    ic.line([(0, 3), (S, 3)], color, w)
-    ic.line([(3, 0), (3, S)], color, w)
+def tile():
+    return Sprite(N, N)
+
+
+def plates(sp, ramp, cell=16, rivets=True):
+    """Riveted plates: a seam on the plate's top and left, a lit line inside it, a shadow line on
+    its bottom and right, rivets near the corners, and a sparse dither of grain."""
+    full = sp.rect(0, 0, N - 1, N - 1)
+    base = len(ramp) - 2
+    sp.fill(full, ramp[base])
+    sp.fill(full & SPECK, ramp[base - 1])
+    u, v = XS % cell, YS % cell
+    sp.fill((u == 1) | (v == 1), ramp[base + 1])
+    sp.fill((u == cell - 1) | (v == cell - 1), ramp[base - 1])
+    sp.fill((u == 0) | (v == 0), ramp[0])
     if rivets:
-        for i in range(cols):
-            for j in range(rows):
-                x0, y0 = S * i / cols, S * j / rows
-                for dx, dy in ((22, 22), (S / cols - 22, 22), (22, S / rows - 22), (S / cols - 22, S / rows - 22)):
-                    ic.dot(x0 + dx, y0 + dy, 7, lighter(color, 0.55), ink=darker(color, 0.4))
+        for rx, ry in [(3, 3), (cell - 4, 3), (3, cell - 4), (cell - 4, cell - 4)]:
+            sp.fill((u == rx) & (v == ry), ramp[base + 1])
+            sp.fill((u == rx + 1) & (v == ry + 1), ramp[1])
 
 
-def tex_hull(ic):
-    ground(ic, (178, 188, 204))
-    seams(ic, (110, 120, 142))
-    ic.dabs(rect(0, 0, S, S), (225, 232, 245), n=10, size=14)
+def tex_hull(sp):
+    plates(sp, R["white"])
 
 
-def tex_hull_dark(ic):
-    ground(ic, (70, 76, 92))
-    seams(ic, (40, 44, 56), 2, 3)
+def tex_hull_dark(sp):
+    plates(sp, R["dark"])
 
 
-def tex_cargo(ic):
-    ground(ic, (236, 136, 40), angle=80)
-    for x in (S * 0.25, S * 0.5, S * 0.75):
-        ic.line([(x, -10), (x, S + 10)], (190, 96, 24), 12)
-    for k in range(-2, 8):
-        x = k * 80
-        ic.line([(x, S - 10), (x + 60, S - 70)], (40, 36, 40), 26)
-    ic.line([(0, S - 80), (S, S - 80)], (90, 46, 12), 7)
+def tex_cargo(sp):
+    ramp = R["orange"]
+    sp.fill(sp.rect(0, 0, 31, 31), ramp[2])
+    u = XS % 8
+    sp.fill(u == 0, ramp[0])
+    sp.fill(u == 1, ramp[3])
+    sp.fill((u == 6) | (u == 7), ramp[1])
+    band = (YS >= 22) & (YS <= 29)
+    sp.fill(band & (((XS + YS) // 4) % 2 == 0), R["ink"][1])
+    sp.fill(band & (((XS + YS) // 4) % 2 == 1), R["gold"][3])
+    sp.fill((YS == 21) | (YS == 30), R["ink"][1])
 
 
-def tex_reactor(ic):
-    ground(ic, (60, 66, 84))
-    for y in (90, 200, 310, 420):
-        ic.glow((256, y, 40), (90, 230, 255), 20, 0.6)
-        ic.drawn(roundrect(70, y - 22, 442, y + 22, 18), (90, 220, 250), shade=0, rim_color=(220, 255, 255),
-                 edge=(20, 70, 100), edge_w=6, hatch=0.6)
-    seams(ic, (30, 34, 46), 1, 1, rivets=True)
+def tex_reactor(sp):
+    ramp = R["dark"]
+    sp.fill(sp.rect(0, 0, 31, 31), ramp[1])
+    v = YS % 16
+    sp.fill(v == 0, ramp[0])
+    sp.fill(v == 1, ramp[3])
+    bar = (v >= 6) & (v <= 9) & ((XS % 16) >= 3) & ((XS % 16) <= 12)
+    sp.fill(bar, R["plume"][2])
+    sp.fill(bar & (v == 7), R["plume"][3])
+    sp.fill(bar & (v == 9), R["plume"][1])
+    sp.fill(((XS % 16) == 1) & ((v == 4) | (v == 12)), ramp[4])
 
 
-def tex_thruster(ic):
-    ground(ic, (84, 88, 104))
-    for k, y in enumerate(range(40, S, 70)):
-        ic.line([(-10, y), (S + 10, y)], (50, 52, 64) if k % 2 else (130, 136, 156), 14)
+def tex_thruster(sp):
+    ramp = R["dark"]
+    v = YS % 4
+    sp.fill(v == 0, ramp[0])
+    sp.fill(v == 1, ramp[4])
+    sp.fill(v == 2, ramp[3])
+    sp.fill(v == 3, ramp[2])
+    sp.fill((XS % 16 == 0) & (v != 0), ramp[1])
 
 
-def tex_fuel(ic):
-    ground(ic, (220, 70, 60), angle=20)
-    ic.flat(rect(-10, 190, S + 10, 320), (240, 236, 226), wobble=1)
-    ic.scribble(rect(-10, 190, S + 10, 320), (240, 236, 226), var=0.12, angle=20, density=0.8)
-    ic.line([(-10, 190), (S + 10, 190)], (110, 24, 20), 8)
-    ic.line([(-10, 320), (S + 10, 320)], (110, 24, 20), 8)
+def tex_fuel(sp):
+    tank = R["tank"]
+    sp.fill(sp.rect(0, 0, 31, 31), tank[2])
+    sp.fill(YS % 32 == 0, tank[0])
+    sp.fill(YS % 32 == 1, tank[3])
+    band = (YS >= 12) & (YS <= 19)
+    sp.fill(band, R["white"][3])
+    sp.fill(YS == 12, R["white"][4])
+    sp.fill((YS == 11) | (YS == 20), tank[0])
+    sp.fill(band & ((XS % 16) >= 6) & ((XS % 16) <= 9) & (YS >= 14) & (YS <= 17), R["flame"][1])
+    sp.fill(SPECK & ~band & (YS > 1), tank[1])
 
 
-def tex_shield(ic):
-    ground(ic, (60, 110, 200), angle=50)
-    r = 46
-    for j in range(-1, 8):
-        for i in range(-1, 8):
-            x = i * r * 1.75 + (j % 2) * r * 0.87
-            y = j * r * 1.5
-            ic.outline(circle(x, y, r, n=6, start=math.pi / 6), (150, 210, 255), 6, passes=1, amp=1.2)
+def hex_edges(cell_w=16, row_h=8):
+    """A wrapped hexagon lattice (period 32 in x and y): True on the cell edges."""
+    centres = []
+    for r in range(N // row_h):
+        for c in range(N // cell_w):
+            centres.append((c * cell_w + (cell_w // 2 if r % 2 else 0), r * row_h))
+    d = np.full((N, N, len(centres)), 1e9)
+    for i, (cx, cy) in enumerate(centres):
+        for ox in (-N, 0, N):
+            for oy in (-N, 0, N):
+                dd = np.hypot(XS + 0.5 - cx - ox, (YS + 0.5 - cy - oy) * 1.7)
+                d[..., i] = np.minimum(d[..., i], dd)
+    s = np.sort(d, axis=2)
+    return (s[..., 1] - s[..., 0]) < 1.6
 
 
-def tex_laser(ic):
-    ground(ic, (245, 200, 50), angle=40)
-    for k in range(-4, 8):
-        x = k * 110
-        ic.flat([(x, -10), (x + 55, -10), (x + 55 + S, S + 10), (x + S, S + 10)], (40, 36, 40), wobble=1.5)
+def tex_shield(sp):
+    ramp = R["blue"]
+    sp.fill(sp.rect(0, 0, 31, 31), ramp[1])
+    sp.dither(sp.rect(0, 0, 31, 31) & ((YS % 8) < 3), ramp[1], ramp[2], 0.5)
+    sp.fill(hex_edges(), ramp[3])
 
 
-def tex_hab(ic):
-    ground(ic, (232, 232, 224))
-    seams(ic, (150, 156, 170), 2, 2, rivets=False)
-    for x in (60, 316):
-        ic.drawn(roundrect(x, 190, x + 136, 300, 24), (255, 200, 90), rim_color=(255, 240, 180),
-                 edge=(80, 70, 60), edge_w=8, shade=0.1)
-    ic.line([(-10, 380), (S + 10, 380)], (90, 160, 210), 16)
+def tex_laser(sp):
+    stripe = ((XS + YS) // 4) % 2 == 0
+    sp.fill(stripe, R["gold"][3])
+    sp.fill(~stripe, R["ink"][1])
+    sp.fill(stripe & (((XS + YS) % 8) == 0), R["gold"][4])
+    sp.fill(~stripe & (((XS + YS) % 8) == 7), R["ink"][0])
 
 
-def tex_glass(ic):
-    ground(ic, (40, 90, 150), angle=60)
-    for a, b, w in (((60, 300), (260, 80), 22), ((140, 360), (360, 130), 10), ((330, 460), (470, 300), 14)):
-        ic.line([a, b], (170, 225, 255), w)
+def tex_hab(sp):
+    plates(sp, R["white"], cell=32, rivets=False)
+    for x0 in (4, 18):
+        w = sp.rect(x0, 6, x0 + 9, 13)
+        sp.fill(w, R["gold"][3])
+        sp.fill(sp.rect(x0, 6, x0 + 9, 6) | sp.rect(x0, 6, x0, 13), R["gold"][4])
+        sp.fill(sp.rect(x0, 13, x0 + 9, 13) | sp.rect(x0 + 9, 6, x0 + 9, 13), R["gold"][1])
+    sp.fill(sp.rect(0, 22, 31, 23), R["blue"][2])
+    sp.fill(sp.rect(0, 24, 31, 24), R["blue"][0])
 
 
-def tex_pad(ic):
-    ground(ic, (128, 128, 122), angle=10)
-    r = 74
-    for j in range(-1, 6):
-        for i in range(-1, 6):
-            x = i * r * 1.75 + (j % 2) * r * 0.87
-            y = j * r * 1.5
-            ic.outline(circle(x, y, r, n=6, start=math.pi / 6), (86, 86, 82), 6, passes=1, amp=1.5)
-    ic.line([(0, 470), (S, 470)], (245, 200, 50), 18)
+def tex_glass(sp):
+    ramp = R["cyan"]
+    sp.fill(sp.rect(0, 0, 31, 31), ramp[1])
+    sp.dither(sp.rect(0, 0, 31, 31), ramp[1], ramp[0], 0.25)
+    d = (XS + YS) % 32
+    sp.fill((d == 4) | (d == 5), ramp[3])
+    sp.fill(d == 11, ramp[2])
+    sp.fill(((XS + YS) % 32 == 5) & (XS % 8 == 0), ramp[4])
 
 
-def tex_girder(ic):
-    ground(ic, (190, 110, 60), angle=70)
-    ic.line([(-10, 30), (S + 10, 30)], (120, 60, 30), 30)
-    ic.line([(-10, S - 30), (S + 10, S - 30)], (120, 60, 30), 30)
-    for k in range(-1, 5):
-        x = k * 140
-        ic.line([(x, 40), (x + 140, S - 40)], (150, 80, 40), 22, ink=(90, 44, 20), ink_w=8)
-        ic.line([(x + 140, 40), (x, S - 40)], (150, 80, 40), 22, ink=(90, 44, 20), ink_w=8)
+def tex_girder(sp):
+    sp.fill(sp.rect(0, 0, 31, 31), R["night"][1])
+    rust = R["rust"]
+    u, v = XS % 32, YS % 32
+    diag = (np.abs(u - v) <= 1) | (np.abs(u + v - 31) <= 1)
+    sp.fill(diag, rust[2])
+    sp.fill(diag & ((u - v) == -1), rust[3])
+    frame = (u <= 2) | (u >= 29) | (v <= 2) | (v >= 29)
+    sp.fill(frame, rust[2])
+    sp.fill((u == 0) | (v == 0), rust[3])
+    sp.fill((u == 2) & (v > 2) & (v < 29) | (v == 2) & (u > 2) & (u < 29), rust[1])
+    sp.fill(((u == 31) | (v == 31)), rust[0])
+    for rx, ry in [(1, 1), (30, 1), (1, 30), (30, 30), (15, 15), (16, 16)]:
+        sp.fill((u == rx) & (v == ry), rust[3])
 
 
 TEXTURES = {
-    "tex-hull": (tex_hull, 101), "tex-hull-dark": (tex_hull_dark, 103), "tex-cargo": (tex_cargo, 105),
-    "tex-reactor": (tex_reactor, 107), "tex-thruster": (tex_thruster, 109), "tex-fuel": (tex_fuel, 111),
-    "tex-shield": (tex_shield, 113), "tex-laser": (tex_laser, 115), "tex-hab": (tex_hab, 117),
-    "tex-glass": (tex_glass, 119), "tex-pad": (tex_pad, 121), "tex-girder": (tex_girder, 123),
+    "tex-hull": tex_hull, "tex-hull-dark": tex_hull_dark, "tex-cargo": tex_cargo, "tex-reactor": tex_reactor,
+    "tex-thruster": tex_thruster, "tex-fuel": tex_fuel, "tex-shield": tex_shield, "tex-laser": tex_laser,
+    "tex-hab": tex_hab, "tex-glass": tex_glass, "tex-girder": tex_girder,
 }
-
-
-def save_texture(ic, path):
-    from PIL import Image
-    from PIL.PngImagePlugin import PngInfo
-    im = ic.img.convert("RGB").resize((256, 256), Image.LANCZOS)
-    meta = PngInfo()
-    meta.add_text("source", "armory-crayon")
-    im.save(path, pnginfo=meta)
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    paths = []
-    for name, (fn, seed) in ICONS.items():
-        ic = FillIcon(seed)
-        fn(ic)
-        p = os.path.join(OUT, name + ".png")
-        ic.save(p)
-        paths.append(p)
-    for name, (fn, seed) in TEXTURES.items():
-        ic = Icon(seed)
-        fn(ic)
-        p = os.path.join(OUT, name + ".png")
-        save_texture(ic, p)
-        paths.append(p)
-    print("wrote", len(paths), "files to", OUT)
+    icons, texes = [], []
+    for name, draw in ICONS.items():
+        sp = Sprite(N, N)
+        draw(sp)
+        img = sp.image()
+        save(img, os.path.join(OUT, name + ".png"), source="balatro-pixel-art pixelkit")
+        icons.append((name, img))
+    for name, draw in TEXTURES.items():
+        sp = tile()
+        draw(sp)
+        img = sp.image()
+        assert img.getchannel("A").getextrema() == (255, 255), name + " has holes"
+        save(img.convert("RGB"), os.path.join(OUT, name + ".png"), source="balatro-pixel-art pixelkit")
+        texes.append((name, img))
+    print("wrote", len(icons), "icons and", len(texes), "textures to", OUT)
     if "--sheet" in sys.argv:
-        sheet = sys.argv[sys.argv.index("--sheet") + 1]
-        subprocess.run([sys.executable, os.path.join(KIT, "sheet.py"), sheet] + paths +
-                       ["--ref", "laser drill", "--ref", "plating", "--ref", "power output"], check=True)
+        from PIL import Image
+        path = sys.argv[sys.argv.index("--sheet") + 1]
+        refs = sorted(p for p in glob.glob(os.path.join(SKILL, "references", "*.png")) if not p.endswith("_contact.png"))
+        refs = [(os.path.basename(p)[:-4], Image.open(p).convert("RGBA")) for p in refs]
+        refs = [r for r in refs if r[1].size == (56, 56)][-6:]
+        # each texture shown as a 2 x 2 repeat, so a seam would show
+        tiled = []
+        for name, img in texes:
+            t = Image.new("RGBA", (64, 64))
+            for ox in (0, 32):
+                for oy in (0, 32):
+                    t.paste(img, (ox, oy))
+            tiled.append((name, t))
+        sheet(refs + icons + tiled, scale=3, cols=8).save(path)
+        print("sheet", path)
 
 
 if __name__ == "__main__":

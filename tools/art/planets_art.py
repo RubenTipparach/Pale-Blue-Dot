@@ -1,768 +1,797 @@
-"""Paint the art for docs/mockups/planets.html in the friend's hand-drawn manner.
+"""Draw the art for docs/mockups/planets.html as pixel art (balatro-pixel-art kit).
 
     python tools/art/planets_art.py            # every PNG into docs/mockups/planets/
-    python tools/art/planets_art.py --sheet    # also a contact sheet beside the friend's icons
+    python tools/art/planets_art.py --sheet    # also contact sheets (beside six of the
+                                               # solitaire collection's sprites) in
+                                               # $ART_SHEET_DIR, default target/art-sheets
 
-The crayon kit (.claude/skills/hand-drawn-illustration/scripts/crayon.py) is
-used as it is. Three kinds of picture come out:
+The style is the solitaire collection's (`.claude/skills/balatro-pixel-art`): a tiny
+native canvas, short ramps lit from the top left, a 1 px outline, single-pixel glints,
+no anti-aliasing, every colour from Sweaft-64 (the kit's save() refuses anything else).
+Four kinds of picture come out:
 
-- `map_<body>.png`, 1024 x 512 equirectangular surface maps for the three.js
-  spheres, painted on a 1024 canvas (the kit's canvas size is a module global,
-  set here for the maps and put back after). Shapes near the seam are painted
-  twice, a world apart, and the overlap is cross-faded so the sphere has no
-  seam at longitude 0.
-- `lights_<body>.png`, the same size, black with the night lights (towns,
-  lava, glowing caves), added on the dark side of the sphere.
-- `portrait_<body>.png` and `res_<resource>.png`, 128 px icons in the friend's
-  own format: a transparent ground, no frame.
-
-Everything here is painted by code copying the friend's method. None of it is
-the friend's drawing.
+- `map_<body>.png`, 128 x 64 equirectangular surface maps for the three.js globes,
+  drawn per pixel from noise sampled on the sphere (no seam at longitude 0), soft
+  boundaries as 4x4 Bayer dithers. The page samples them nearest, no mipmaps.
+- `lights_<body>.png`, the same grid, near-black with the night lights (towns, lava,
+  cave glow) as single palette pixels.
+- `portrait_<body>.png`, 48 x 48: the body's own map wrapped on a lit disc (day side
+  top left, a dithered terminator, the night lights on the dark side), outlined.
+- `res_<resource>.png`, 32 x 32 item icons.
 """
 
 import math
 import os
-import random
 import sys
+
+import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
-KIT = os.path.join(ROOT, ".claude", "skills", "hand-drawn-illustration", "scripts")
+KIT = os.path.join(ROOT, ".claude", "skills", "balatro-pixel-art", "scripts")
+REFS = os.path.join(ROOT, ".claude", "skills", "balatro-pixel-art", "references")
 sys.path.insert(0, KIT)
 
-import crayon  # noqa: E402
-from crayon import Icon, circle, ellipse, rect, star, rotate, translate, scale, mix, darker, lighter, tone  # noqa: E402
-from PIL import Image, ImageChops, ImageDraw, ImageFilter  # noqa: E402
-from PIL.PngImagePlugin import PngInfo  # noqa: E402
+from pixelkit import BAYER4, INK, PALETTE, RAMPS, SWEAFT_64, Sprite, rgb, save, sheet  # noqa: E402,F401
+
+SCRATCH = os.environ.get("ART_SHEET_DIR") or os.path.join(ROOT, "target", "art-sheets")
+
+
+def hexc(h):
+    return np.array(rgb(h), np.uint8)
+
+
+# ---------- noise on the sphere ---------------------------------------------------------------
+
+def _hash(ix, iy, iz, seed):
+    s = np.sin(ix * 127.1 + iy * 311.7 + iz * 74.7 + seed * 13.37) * 43758.5453
+    return s - np.floor(s)
+
+
+def vnoise3(p, seed):
+    """Value noise in 3D, p shape (..., 3), smooth interpolation, 0..1."""
+    i = np.floor(p)
+    f = p - i
+    u = f * f * (3 - 2 * f)
+    ix, iy, iz = i[..., 0], i[..., 1], i[..., 2]
+    out = 0
+    for dx in (0, 1):
+        wx = u[..., 0] if dx else 1 - u[..., 0]
+        for dy in (0, 1):
+            wy = u[..., 1] if dy else 1 - u[..., 1]
+            for dz in (0, 1):
+                wz = u[..., 2] if dz else 1 - u[..., 2]
+                out = out + wx * wy * wz * _hash(ix + dx, iy + dy, iz + dz, seed)
+    return out
+
+
+def fbm(p, seed, freq=2.0, octaves=4):
+    tot, amp, norm = 0.0, 1.0, 0.0
+    for o in range(octaves):
+        tot = tot + amp * vnoise3(p * freq * (2.03 ** o), seed + o * 17)
+        norm += amp
+        amp *= 0.5
+    return tot / norm
+
+
+class Grid:
+    """An equirectangular map grid: pixel centres as longitude, latitude and sphere points."""
+
+    def __init__(self, w=128, h=64):
+        self.w, self.h = w, h
+        ys, xs = np.mgrid[0:h, 0:w]
+        self.x, self.y = xs, ys
+        self.lon = 2 * math.pi * (xs + 0.5) / w
+        self.lat = math.pi / 2 - math.pi * (ys + 0.5) / h
+        cl = np.cos(self.lat)
+        self.p = np.stack([cl * np.cos(self.lon), cl * np.sin(self.lon), np.sin(self.lat)], -1)
+        self.bayer = (BAYER4[ys % 4, xs % 4] + 0.5) / 16.0
+        self.img = np.zeros((h, w, 3), np.uint8)
+
+    def noise(self, seed, freq=2.0, octaves=4, stretch=(1, 1, 1)):
+        return fbm(self.p * np.array(stretch, float), seed, freq, octaves)
+
+    def put(self, mask, h):
+        self.img[mask] = hexc(h)
+
+    def ramp(self, v, cols, mask=None, spread=1.0):
+        """Fill with a dithered ramp: v 0..1 picks a colour of cols (dark to light)."""
+        n = len(cols)
+        idx = np.clip(np.floor(v * n + (self.bayer - 0.5) * spread), 0, n - 1).astype(int)
+        m = np.ones(v.shape, bool) if mask is None else mask
+        for i, c in enumerate(cols):
+            self.put(m & (idx == i), c)
+
+    def edge(self, v, t, width=0.03):
+        """Pixels of a field near the threshold t, dithered over `width`: a soft boundary."""
+        return (v > t - width) & (v < t + width) & (self.bayer < (v - (t - width)) / (2 * width))
+
+    def wrapdx(self, cx):
+        return ((self.x - cx + self.w / 2) % self.w) - self.w / 2
+
+    def disc(self, cx, cy, r, aspect=1.0):
+        dx = self.wrapdx(cx) / aspect
+        dy = self.y - cy
+        return dx, dy, (dx * dx + dy * dy) <= r * r
+
+    def crater(self, cx, cy, r, floor, shadow, lit):
+        """A pit: its floor, the shadowed wall on the upper left, the lit wall lower right."""
+        dx, dy, m = self.disc(cx, cy, r + 0.3)
+        self.put(m, floor)
+        inner = (dx * dx + dy * dy) <= (r - 1.1) ** 2
+        rim = m & ~inner
+        self.put(rim & (dx + dy < 0), shadow)
+        self.put(rim & (dx + dy > 0.8), lit)
+
+    def save(self, path):
+        from PIL import Image
+        save(Image.fromarray(self.img, "RGB").convert("RGBA"), path, source="pixelkit (tools/art/planets_art.py)")
+
+
+# ---------- the palette, darker and lighter -----------------------------------------------------
+
+_PAL = np.array(PALETTE, float)
+
+
+def _lum(c):
+    c = np.asarray(c, float)
+    return 0.3 * c[..., 0] + 0.59 * c[..., 1] + 0.11 * c[..., 2]
+
+
+def nearest(c, darker_than=None, lighter_than=None):
+    c = np.asarray(c, float)
+    d = ((_PAL - c) ** 2).sum(1)
+    if darker_than is not None:
+        d = np.where(_lum(_PAL) < _lum(darker_than) - 6, d, 1e12)
+    if lighter_than is not None:
+        d = np.where(_lum(_PAL) > _lum(lighter_than) + 6, d, 1e12)
+    return tuple(int(v) for v in _PAL[int(np.argmin(d))])
+
+
+_SHADE = {}
+
+
+def shade(c, k):
+    """The palette colour for colour c (an rgb tuple) at brightness k (<1 darker, >1 lighter)."""
+    key = (tuple(c), k)
+    if key not in _SHADE:
+        c = np.asarray(c, float)
+        if k < 1:
+            # towards a night blue, so the dark side reads as night, not as mud
+            t = c * k + np.array([2, 8, 26]) * (1 - k)
+            _SHADE[key] = nearest(t, darker_than=c)
+        else:
+            t = np.minimum(c * k + 18, 255)
+            out = nearest(t, lighter_than=c)
+            o = np.array(out, float)
+            same_hue = (int(np.argmax(o)) == int(np.argmax(c)) and np.abs(o - c).sum() < 150
+                        and abs((o[0] - o[2]) - (c[0] - c[2])) < 30 and abs((o[1] - o[2]) - (c[1] - c[2])) < 30)
+            _SHADE[key] = out if same_hue else tuple(int(v) for v in c)
+    return _SHADE[key]
+
+
+# ---------- a globe sprite from a map -----------------------------------------------------------
+
+LIGHT = np.array([-0.55, -0.62, 0.56])
+LIGHT = LIGHT / np.linalg.norm(LIGHT)
+
+
+def globe(sp, mapimg, cx, cy, r, lon0=0.0, tilt=0.35, lights=None, lumpy=None, air=None):
+    """Paint a lit globe onto sprite sp from a map (an HxWx3 array): day side top left,
+    a dithered terminator, night side bottom right with the map's night lights on it."""
+    h, w = sp.h, sp.w
+    ys, xs = np.mgrid[0:h, 0:w]
+    nx = (xs + 0.5 - cx) / r
+    ny = (ys + 0.5 - cy) / r
+    rr = nx * nx + ny * ny
+    if lumpy is not None:
+        ang = np.arctan2(ny, nx)
+        edge = lumpy(ang)
+        inside = rr <= edge * edge
+        rr = np.minimum(rr / (edge * edge), 0.999)
+        nx, ny = nx / edge, ny / edge
+    else:
+        inside = rr <= 1.0
+    nz = np.sqrt(np.clip(1 - nx * nx - ny * ny, 0, 1))
+    # tip the north pole towards the viewer
+    wy = -ny * math.cos(tilt) + nz * math.sin(tilt)
+    wz = ny * math.sin(tilt) + nz * math.cos(tilt)
+    lat = np.arcsin(np.clip(wy, -1, 1))
+    lon = (np.arctan2(nx, wz) + lon0) % (2 * math.pi)
+    mh, mw = mapimg.shape[:2]
+    mx = np.clip((lon / (2 * math.pi) * mw).astype(int), 0, mw - 1)
+    my = np.clip(((0.5 - lat / math.pi) * mh).astype(int), 0, mh - 1)
+    ndl = nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]
+    bay = (BAYER4[ys % 4, xs % 4] + 0.5) / 16.0
+    # bands: lit rim, day, dusk (dithered), night, deep night
+    level = np.where(ndl > 0.80, 1.25, 1.0)
+    dusk = (ndl < 0.12) & (ndl > -0.12) & (bay < (0.12 - ndl) / 0.24)
+    level = np.where(dusk | (ndl <= -0.12), 0.55, level)
+    deep = (ndl < -0.45) | ((ndl < -0.30) & (bay < (-0.30 - ndl) / 0.15))
+    level = np.where(deep, 0.28, level)
+    for y, x in zip(*np.nonzero(inside)):
+        c = tuple(int(v) for v in mapimg[my[y, x], mx[y, x]])
+        k = float(level[y, x])
+        col = c if k == 1.0 else shade(c, k)
+        if lights is not None and k < 1.0:
+            lc = tuple(int(v) for v in lights[my[y, x], mx[y, x]])
+            if sum(lc) > 60:
+                col = lc
+        sp.rgb[y, x] = col
+        sp.alpha[y, x] = True
+    return inside
+
+
+def air_rim(sp, inside, colour):
+    """After the outline: a 1 px band of air outside it on the lit side, drawn as light."""
+    from pixelkit import dilate
+    ring2 = dilate(dilate(inside)) & ~dilate(inside)
+    ys, xs = np.nonzero(inside)
+    cy, cx = ys.mean(), xs.mean()
+    yy, xx = np.mgrid[0:sp.h, 0:sp.w]
+    lit = (xx - cx) * LIGHT[0] + (yy - cy) * LIGHT[1] > -2
+    m = ring2 & lit & ~sp.alpha
+    sp.fill(m, colour, glow=True)
+
+
+# ---------- maps --------------------------------------------------------------------------------
 
 OUT = os.path.join(ROOT, "docs", "mockups", "planets")
-MW = 1024          # the map canvas
-WRAP = 896         # columns that are one full turn of longitude; the rest overlaps the start
+MAPS_DONE = {}
+LIGHTS_DONE = {}
 
 
-def meta():
-    m = PngInfo()
-    m.add_text("source", "pbd-crayon (tools/art/planets_art.py)")
+def towns(g, land, n, seed, warm="#faaf5c", core="#fffefe", big=0.2):
+    """Night lights on land: single warm pixels, a few big towns with a white core and a neighbour."""
+    lights = np.zeros_like(g.img)
+    lights[:] = hexc("#010000")
+    rnd = np.random.default_rng(seed)
+    ys, xs = np.nonzero(land & (np.abs(g.lat) < 1.2))
+    if not len(ys):
+        return lights
+    pick = rnd.choice(len(ys), size=min(n, len(ys)), replace=False)
+    for k in pick:
+        y, x = ys[k], xs[k]
+        if rnd.random() < big:
+            lights[y, x] = hexc(core)
+            for dx, dy in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+                if rnd.random() < 0.6 and 0 <= y + dy < g.h:
+                    lights[y + dy, (x + dx) % g.w] = hexc(warm)
+        else:
+            lights[y, x] = hexc(warm)
+    return lights
+
+
+def caps(g, top, bot, seed, cols=("#bfcad7", "#fffefe")):
+    n = g.noise(seed, 6, 2)
+    north = g.lat > math.radians(90 - top) - n * 0.25
+    south = g.lat < -math.radians(90 - bot) + n * 0.25
+    m = north | south
+    g.put(m, cols[1])
+    g.put(m & g.edge(np.abs(g.lat) - (math.radians(90 - top) - n * 0.25), 0.05, 0.05), cols[0])
     return m
 
 
-def blob(cx, cy, r, seed, n=44, rough=0.30, aspect=1.0, rot=0.0):
-    """A coastline: a circle pushed in and out by a few random harmonics."""
-    rnd = random.Random(seed)
-    harm = [(k, rough / k * rnd.uniform(0.5, 1.2), rnd.uniform(0, 6.28)) for k in range(2, 7)]
-    pts = []
-    for i in range(n):
-        a = 2 * math.pi * i / n
-        rr = r * (1 + sum(amp * math.sin(k * a + ph) for k, amp, ph in harm))
-        pts.append((rr * math.cos(a) * aspect, rr * math.sin(a)))
-    return translate(rotate(pts, rot), cx, cy)
-
-
-def band(y0, y1, seed, amp=14, waves=(3, 7, 13)):
-    """A horizontal band right round the map with wavy top and bottom edges."""
-    rnd = random.Random(seed)
-    ph = [rnd.uniform(0, 6.28) for _ in range(6)]
-    top, bot = [], []
-    for i in range(0, 41):
-        x = -60 + (MW + 120) * i / 40
-        u = 2 * math.pi * x / WRAP
-        top.append((x, y0 + amp * sum(math.sin(w * u + ph[k]) / (k + 1) for k, w in enumerate(waves))))
-        bot.append((x, y1 + amp * sum(math.sin(w * u + ph[k + 3]) / (k + 1) for k, w in enumerate(waves))))
-    return top + bot[::-1]
-
-
-def wiggle(x0, y0, length, ang, seed, n=9, jit=26):
-    rnd = random.Random(seed)
-    pts = []
-    for i in range(n):
-        t = i / (n - 1)
-        a = ang + rnd.uniform(-0.5, 0.5)
-        pts.append((x0 + math.cos(ang) * length * t + rnd.uniform(-jit, jit) * math.sin(a),
-                    y0 + math.sin(ang) * length * t + rnd.uniform(-jit, jit) * math.cos(a)))
-    return pts
-
-
-# ---------- maps -------------------------------------------------------------------
-
-class Map:
-    """One surface map. Every call paints the shape, and again a turn of
-    longitude to the left or right when it reaches past the seam."""
-
-    def __init__(self, seed, base, angle=0, spread=10):
-        crayon.S = MW
-        self.ic = Icon(seed)
-        self.rnd = random.Random(seed * 7 + 1)
-        full = rect(-12, -12, MW + 12, MW + 12)
-        self.ic.flat(full, base, wobble=0)
-        self.ic.scribble(full, base, var=0.20, width=10, length=(70, 180), angle=angle, spread=spread, density=0.85)
-        self.ic.scribble(full, base, var=0.12, width=7, length=(40, 110), angle=angle + 50, spread=20, density=0.25)
-        self.lights = Image.new("RGBA", (MW, MW), (0, 0, 0, 255))
-        self.land = []
-
-    def copies(self, poly):
-        xs = [p[0] for p in poly]
-        out = [poly]
-        if max(xs) - min(xs) >= WRAP:      # a band right round the map needs no copy
-            return out
-        if min(xs) < MW - WRAP:
-            out.append(translate(poly, WRAP, 0))
-        if max(xs) > WRAP:
-            out.append(translate(poly, -WRAP, 0))
-        return out
-
-    def drawn(self, poly, color, shade=0.10, highlight=0.0, edge_w=9, angle=None, hatch=1.0, edge="tone"):
-        for p in self.copies(poly):
-            self.ic.drawn(p, color, shade=shade, highlight=highlight, edge_w=edge_w, angle=angle, hatch=hatch, edge=edge)
-
-    def patch(self, poly, color, angle=None, edge=None, edge_w=6, density=0.9):
-        """Flat colour with hatching, an optional thin edge: a biome inside a continent."""
-        for p in self.copies(poly):
-            q = self.ic.flat(p, color)
-            self.ic.scribble(q, color, var=0.24, width=8, angle=angle if angle is not None else self.rnd.uniform(20, 70),
-                             length=(40, 110), spread=14, density=density)
-            if edge:
-                self.ic.outline(q, edge, edge_w, passes=1)
-
-    def line(self, pts, color, width=8):
-        for p in self.copies(pts):
-            self.ic.line(p, color, width)
-
-    def crater(self, cx, cy, r, color):
-        c = circle(cx, cy, r, n=28)
-        for p in self.copies(c):
-            self.ic.drawn(p, color, shade=0.0, highlight=0.0, edge_w=max(3, int(r / 7)), hatch=0.6)
-            # the lit wall on the lower right, the shadowed wall upper left (a pit)
-            self.ic.scribble_in(self.ic.crescent(p, (-1, -1), 0.35), darker(color, 0.35), width=5, density=1.3, length=(10, 30))
-            self.ic.scribble_in(self.ic.crescent(p, (1, 1), 0.28), lighter(color, 0.4), width=4, density=1.1, length=(10, 30))
-
-    def light(self, x, y, r, color, core=1.0):
-        """A night light on the lights map: a soft glow and a bright core."""
-        d = ImageDraw.Draw(self.lights)
-        for xx in (x, x + WRAP, x - WRAP):
-            if -40 < xx < MW + 40:
-                g = Image.new("L", (MW, MW), 0)
-                ImageDraw.Draw(g).ellipse((xx - r * 2.6, y - r * 2.6, xx + r * 2.6, y + r * 2.6), fill=120)
-                g = g.filter(ImageFilter.GaussianBlur(r * 1.6))
-                self.lights.paste(Image.new("RGBA", (MW, MW), color + (255,)), (0, 0), ImageChops.multiply(g, Image.new("L", (MW, MW), int(200 * core))))
-                d.ellipse((xx - r * 0.55, y - r * 0.55, xx + r * 0.55, y + r * 0.55), fill=lighter(color, 0.5) + (255,))
-
-    def towns(self, polys, n, seed, color=(255, 190, 110)):
-        """Scatter towns on land: a few big clusters and many small ones."""
-        rnd = random.Random(seed)
-        m = Image.new("L", (MW, MW), 0)
-        for p in polys:
-            ImageDraw.Draw(m).polygon([(round(x), round(y)) for x, y in scale(p, 0.86, (sum(q[0] for q in p) / len(p), sum(q[1] for q in p) / len(p)))], fill=255)
-        placed = 0
-        tries = 0
-        while placed < n and tries < n * 60:
-            tries += 1
-            x, y = rnd.uniform(0, WRAP), rnd.uniform(90, MW - 90)
-            if m.getpixel((int(x), int(y))) > 0:
-                big = rnd.random() < 0.18
-                self.light(x, y, 9 if big else 4.5, color, 1.0 if big else 0.7)
-                placed += 1
-
-    def save(self, name):
-        crayon.S = MW
-        img = self.ic.halo.copy()
-        img.alpha_composite(self.ic.img)
-        finish(img).save(os.path.join(OUT, "map_" + name + ".png"), pnginfo=meta())
-        if self.lights.getbbox() and ImageChops.difference(self.lights.convert("RGB"), Image.new("RGB", (MW, MW))).getbbox():
-            finish(self.lights).save(os.path.join(OUT, "lights_" + name + ".png"), pnginfo=meta())
-        crayon.S = 512
-        print("map", name)
-
-
-def finish(img):
-    """Cross-fade the overlap onto the start of the turn, then squash to 2:1."""
-    band_w = MW - WRAP
-    a = img.crop((0, 0, WRAP, MW)).convert("RGBA")
-    tail = img.crop((WRAP, 0, MW, MW)).convert("RGBA")
-    head = a.crop((0, 0, band_w, MW))
-    m = Image.new("L", (band_w, MW))
-    dm = ImageDraw.Draw(m)
-    for x in range(band_w):
-        dm.line([(x, 0), (x, MW)], fill=int(255 * (1 - x / band_w)))
-    a.paste(Image.composite(tail, head, m), (0, 0))
-    return a.resize((1024, 512), Image.LANCZOS).convert("RGB")
-
-
-def caps(mp, color, edge, top=70, bot=70, seed=1):
-    mp.drawn(band(-60, top, seed, amp=18), color, shade=0.0, edge_w=8)
-    mp.drawn(band(MW - bot, MW + 60, seed + 1, amp=18), color, shade=0.0, edge_w=8)
-
-
-def clouds(mp, n, seed, color=(245, 248, 252), lat=(140, 880)):
-    rnd = random.Random(seed)
-    for i in range(n):
-        x, y = rnd.uniform(0, WRAP), rnd.uniform(*lat)
-        L = rnd.uniform(60, 170)
-        pts = [(x + L * t, y + 18 * math.sin(t * 5 + i)) for t in [k / 7 for k in range(8)]]
-        mp.line(pts, color, rnd.choice((7, 9, 11)))
+def clouds(g, seed, amount=0.62, freq=3.0, col="#fffefe", soft="#bfcad7"):
+    c = g.noise(seed, freq, 4, stretch=(1, 1, 3.2))
+    g.put((c > amount - 0.04) & (g.bayer < 0.5), soft)
+    g.put(c > amount, col)
 
 
 def map_home():
-    mp = Map(11, (38, 104, 186))
-    conts = [blob(150, 360, 120, 1, aspect=0.9), blob(170, 620, 95, 2, aspect=0.8, rot=0.4), blob(420, 300, 150, 3, aspect=1.3),
-             blob(520, 560, 90, 4), blob(720, 420, 135, 5, aspect=1.1, rot=-0.3), blob(820, 680, 70, 6)]
-    for c in conts:
-        mp.patch(scale(c, 1.12, (sum(p[0] for p in c) / len(c), sum(p[1] for p in c) / len(c))), (64, 146, 206), density=0.6)
-    for c in conts:
-        mp.drawn(c, (88, 168, 66), edge_w=9)
-    mp.patch(blob(430, 400, 55, 21, aspect=1.6), (214, 182, 98), edge=(150, 110, 50))     # a desert
-    mp.patch(blob(730, 470, 48, 22, aspect=1.4), (214, 182, 98), edge=(150, 110, 50))
-    for cx, cy, r, s in ((150, 330, 55, 23), (420, 250, 60, 24), (700, 380, 50, 25), (180, 610, 40, 26)):
-        mp.patch(blob(cx, cy, r, s), (42, 118, 58), edge=(22, 70, 34))                   # forest
-    for x, y, L, a, s in ((360, 270, 140, 0.3, 31), (690, 360, 120, -0.6, 32), (110, 380, 90, 1.2, 33)):
-        mp.line(wiggle(x, y, L, a, s), (128, 104, 82), 12)                               # ranges
-        for px, py in wiggle(x, y, L, a, s)[1::2]:
-            mp.ic.dot(px, py, 6, (246, 248, 252))
-    caps(mp, (236, 244, 250), None, 64, 74, 41)
-    clouds(mp, 26, 42)
-    mp.towns(conts, 140, 43)
-    mp.save("home")
+    g = Grid()
+    e = g.noise(101, 1.6, 5)
+    m = g.noise(102, 2.4, 3)
+    sea = e < 0.52
+    g.ramp(np.clip((e - 0.30) / 0.24, 0, 1), ["#15578a", "#15578a", "#1096c3"], sea, spread=1.2)
+    land = ~sea
+    g.put(land, "#559642")
+    g.put(land & (m > 0.55), "#297537")
+    g.put(land & (m > 0.66), "#05582d")
+    g.put(land & (m < 0.38) & (np.abs(g.lat) < 0.7), "#cfaa81")
+    g.put(land & (m < 0.38) & (m > 0.35) & (g.bayer < 0.5) & (np.abs(g.lat) < 0.7), "#9bb675")
+    g.put(land & (e > 0.66), "#725244")
+    g.put(land & (e > 0.71), "#a09f91")
+    g.put(land & (e > 0.75), "#fffefe")
+    g.put(land & ~(np.roll(land, 1, 0) & np.roll(land, -1, 0) & np.roll(land, 1, 1) & np.roll(land, -1, 1)) & (e < 0.535), "#cfaa81")
+    caps(g, 20, 24, 103)
+    lights = towns(g, land & ~(np.abs(g.lat) > 1.1), 120, 104)
+    clouds(g, 105, 0.67, freq=2.4)
+    return g, lights
 
 
 def map_verdance():
-    mp = Map(12, (26, 116, 128))
-    isl = []
-    rnd = random.Random(5)
-    for i in range(16):
-        cx, cy = rnd.uniform(0, WRAP), rnd.uniform(220, 800)
-        isl.append(blob(cx, cy, rnd.uniform(30, 85), 100 + i, aspect=rnd.uniform(0.8, 1.6), rot=rnd.uniform(0, 3)))
-    for c in isl:
-        mp.patch(scale(c, 1.2, (sum(p[0] for p in c) / len(c), sum(p[1] for p in c) / len(c))), (52, 160, 150), density=0.6)
-    for c in isl:
-        mp.drawn(c, (40, 150, 58), edge_w=8)
-    for c in isl[::2]:
-        cx, cy = sum(p[0] for p in c) / len(c), sum(p[1] for p in c) / len(c)
-        mp.patch(blob(cx + 6, cy, 22, int(cx)), (104, 122, 46), edge=(60, 72, 24), edge_w=4)  # swamp
-    for c in isl[1::3]:
-        cx, cy = sum(p[0] for p in c) / len(c), sum(p[1] for p in c) / len(c)
-        mp.patch(blob(cx, cy - 4, 20, int(cy)), (24, 104, 44))                              # deep jungle
-    caps(mp, (214, 236, 232), None, 44, 50, 51)
-    clouds(mp, 40, 52, lat=(100, 920))
-    mp.towns(isl, 60, 53, color=(255, 214, 140))
-    mp.save("verdance")
+    g = Grid()
+    e = g.noise(201, 3.2, 5)
+    m = g.noise(202, 4.0, 3)
+    sea = e < 0.56
+    g.ramp(np.clip((e - 0.36) / 0.22, 0, 1), ["#204f63", "#204f63", "#53998b", "#53998b"], sea, spread=1.2)
+    land = ~sea
+    g.put(land, "#297537")
+    g.put(land & (m > 0.52), "#559642")
+    g.put(land & (m < 0.40), "#05582d")
+    g.put(land & (m > 0.62), "#434137")
+    g.put(land & (m > 0.62) & (g.bayer < 0.35), "#9bb675")
+    caps(g, 14, 16, 203, cols=("#84e3b5", "#c1f1d8"))
+    lights = towns(g, land, 50, 204, warm="#faaf5c")
+    clouds(g, 205, 0.64, freq=2.8)
+    return g, lights
 
 
 def map_ochre():
-    mp = Map(13, (192, 104, 58))
-    for i, (cx, cy, r) in enumerate(((150, 400, 120), (480, 600, 150), (760, 330, 130), (330, 230, 80))):
-        mp.patch(blob(cx, cy, r, 200 + i, aspect=1.3), (154, 72, 44), edge=(100, 40, 26))       # highlands
-    for i, (cx, cy, r) in enumerate(((300, 480, 60), (620, 400, 45), (820, 620, 55))):
-        mp.patch(blob(cx, cy, r, 210 + i, aspect=1.6), (210, 176, 94), edge=(150, 116, 52))     # steppe
-    mp.patch(blob(560, 470, 34, 220, aspect=1.7), (238, 228, 204), edge=(170, 150, 120))       # salt flat
-    sea = blob(380, 700, 70, 221, aspect=1.5)
-    mp.drawn(sea, (58, 112, 146), edge_w=8)                                                     # an inland sea
-    for x, y, L, a, s in ((100, 520, 260, -0.2, 61), (520, 300, 220, 0.5, 62), (700, 560, 200, -0.7, 63)):
-        mp.line(wiggle(x, y, L, a, s, n=12, jit=30), (98, 38, 28), 13)                          # canyons
-        mp.line(wiggle(x, y, L, a, s, n=12, jit=30), (226, 140, 92), 3)
-    oases = [(300, 470), (640, 390), (560, 660), (180, 560), (820, 610)]
+    g = Grid()
+    e = g.noise(301, 2.0, 5)
+    g.ramp(np.clip((e - 0.25) / 0.5, 0, 1), ["#7d4636", "#a8633e", "#a8633e", "#c56d25"], spread=1.0)
+    hi = g.noise(302, 2.4, 3)
+    g.put(hi > 0.60, "#7d4636")
+    g.put((hi > 0.57) & (hi <= 0.60) & (g.bayer < 0.5), "#7d4636")
+    st = g.noise(303, 3.0, 3)
+    g.put((st < 0.36) & (hi < 0.55), "#cfaa81")
+    _, _, salt = g.disc(70, 34, 4, aspect=1.8)
+    g.put(salt, "#eab798")
+    _, _, sea = g.disc(54, 46, 5, aspect=1.6)
+    g.put(sea, "#15578a")
+    can = np.abs(g.noise(304, 2.2, 4) - 0.5) < 0.012
+    g.put(can & (np.abs(g.lat) < 1.1), "#522b2f")
+    oases = [(38, 30), (80, 26), (70, 42), (22, 36), (103, 40)]
+    lights = np.zeros_like(g.img)
+    lights[:] = hexc("#010000")
     for x, y in oases:
-        mp.ic.dot(x, y, 12, (70, 160, 70))
-        mp.ic.dot(x, y, 5, (70, 150, 200))
-    caps(mp, (240, 234, 226), None, 34, 40, 64)
-    clouds(mp, 8, 65, color=(250, 236, 220))
-    for x, y in oases:
-        mp.light(x, y, 7, (255, 186, 100))
-    mp.towns([sea], 10, 66)
-    mp.save("ochre")
+        g.put(g.disc(x, y, 1.2)[2], "#297537")
+        g.img[y, x] = hexc("#1096c3")
+        lights[y, x] = hexc("#fffefe")
+        lights[y, (x + 1) % g.w] = hexc("#faaf5c")
+        lights[y + 1, x] = hexc("#faaf5c")
+    caps(g, 8, 10, 305, cols=("#eab798", "#fffefe"))
+    lights = np.maximum(lights, towns(g, sea | g.disc(54, 46, 9, aspect=1.6)[2], 8, 306))
+    return g, lights
 
 
 def map_lantern():
-    mp = Map(14, (150, 150, 162), angle=40, spread=40)
-    for i, (cx, cy, r) in enumerate(((220, 380, 130), (520, 520, 110), (760, 340, 90), (380, 700, 70))):
-        mp.patch(blob(cx, cy, r, 300 + i, aspect=1.2), (98, 98, 114), edge=(70, 70, 86))      # maria
-    rnd = random.Random(9)
-    for i in range(34):
-        r = rnd.choice((10, 14, 18, 26, 40))
-        mp.crater(rnd.uniform(0, WRAP), rnd.uniform(80, MW - 80), r, (136, 136, 150))
-    for x in (120, 420, 700):
-        mp.patch(blob(x, 40, 40, x), (220, 236, 248))                                           # polar ice in shadow
-        mp.patch(blob(x + 140, MW - 40, 36, x + 1), (220, 236, 248))
-    mp.save("lantern")
+    g = Grid()
+    n = g.noise(401, 3.0, 4)
+    g.ramp(np.clip((n - 0.3) / 0.4, 0, 1), ["#5d778d", "#92a3b2", "#92a3b2", "#bfcad7"], spread=1.0)
+    maria = g.noise(402, 1.6, 3)
+    g.put(maria < 0.42, "#3e586e")
+    g.put(g.edge(maria, 0.42, 0.03), "#3e586e")
+    rnd = np.random.default_rng(403)
+    for _ in range(26):
+        r = float(rnd.choice([1.5, 2, 2.5, 3, 4]))
+        g.crater(rnd.uniform(0, 128), rnd.uniform(6, 58), r, "#5d778d", "#1f3b52", "#bfcad7")
+    pole = np.abs(g.lat) + g.noise(404, 6, 2) * 0.2
+    g.put(pole > 1.42, "#d2f8ff")
+    g.put(g.edge(pole, 1.42, 0.04), "#bfcad7")
+    return g, None
 
 
 def map_rime():
-    mp = Map(15, (208, 232, 244), angle=20)
-    for i, (cx, cy, r) in enumerate(((200, 300, 140), (600, 640, 160), (760, 260, 90))):
-        mp.patch(blob(cx, cy, r, 400 + i, aspect=1.4), (166, 208, 236))
-    rnd = random.Random(15)
-    for i in range(16):
-        x, y = rnd.uniform(0, WRAP), rnd.uniform(120, 900)
-        pts = wiggle(x, y, rnd.uniform(160, 360), rnd.uniform(-0.6, 0.6), 500 + i, n=10, jit=18)
-        mp.line(pts, (70, 132, 196), 7)                                                         # the ice's cracks
-        mp.line(pts, (240, 250, 255), 2)
-    for i in range(8):
-        mp.crater(rnd.uniform(0, WRAP), rnd.uniform(120, 900), rnd.choice((12, 18, 26)), (190, 220, 238))
-    for x, y in ((300, 860), (420, 900), (520, 870)):                                           # geysers at the south pole
-        mp.ic.dot(x, y, 10, (255, 255, 255))
-    mp.save("rime")
+    g = Grid()
+    n = g.noise(501, 2.4, 4)
+    g.ramp(np.clip((n - 0.3) / 0.4, 0, 1), ["#92a3b2", "#bfcad7", "#d2f8ff", "#d2f8ff", "#fffefe"], spread=1.2)
+    for s in (502,):
+        crack = np.abs(g.noise(s, 1.6, 3) - 0.5) < 0.010
+        g.put(crack, "#15578a")
+        g.put(np.roll(crack, -1, 0) & ~crack & (g.bayer < 0.5), "#74effe")
+    rnd = np.random.default_rng(504)
+    for _ in range(7):
+        g.crater(rnd.uniform(0, 128), rnd.uniform(10, 54), float(rnd.choice([1.5, 2, 3])), "#bfcad7", "#5d778d", "#fffefe")
+    for x in (40, 52, 60):                       # geysers at the south pole
+        g.img[60, x] = hexc("#fffefe")
+        g.img[59, x] = hexc("#74effe")
+    return g, None
 
 
 def map_cinder():
-    mp = Map(16, (228, 194, 66), angle=30, spread=30)
-    rnd = random.Random(16)
-    for i in range(10):
-        mp.patch(blob(rnd.uniform(0, WRAP), rnd.uniform(120, 900), rnd.uniform(50, 110), 600 + i, aspect=1.3), rnd.choice(((232, 140, 52), (240, 232, 196), (196, 150, 40))))
-    for i in range(9):
-        mp.drawn(blob(rnd.uniform(0, WRAP), rnd.uniform(140, 880), rnd.uniform(30, 70), 620 + i, aspect=1.5, rough=0.45), (46, 34, 34), edge_w=6)  # black flows
-    lakes = [(rnd.uniform(0, WRAP), rnd.uniform(160, 860), rnd.uniform(10, 22)) for _ in range(16)]
-    for x, y, r in lakes:
-        mp.drawn(circle(x, y, r * 1.6, n=24), (120, 40, 26), shade=0, edge_w=4, hatch=0.5)
-        mp.drawn(circle(x, y, r, n=24), (255, 96, 30), shade=0, edge_w=3, hatch=0.6, edge=(255, 210, 80))
-        mp.light(x, y, r * 0.9, (255, 110, 40))
-    mp.save("cinder")
+    g = Grid()
+    n = g.noise(601, 2.6, 4)
+    g.ramp(np.clip((n - 0.3) / 0.4, 0, 1), ["#c56d25", "#fb902f", "#faaf5c", "#faaf5c", "#eab798"], spread=1.3)
+    p = g.noise(602, 2.0, 3)
+    g.put(p > 0.62, "#fe6420")
+    g.put(p < 0.34, "#eab798")
+    flow = g.noise(603, 2.8, 4)
+    g.put(flow > 0.64, "#2c2c25")
+    g.put(g.edge(flow, 0.64, 0.025), "#161612")
+    lights = np.zeros_like(g.img)
+    lights[:] = hexc("#010000")
+    rnd = np.random.default_rng(604)
+    for _ in range(18):
+        x, y, r = rnd.uniform(0, 128), rnd.uniform(8, 56), float(rnd.choice([1.0, 1.5, 2.0]))
+        _, _, outer = g.disc(x, y, r + 1)
+        _, _, core = g.disc(x, y, r)
+        g.put(outer, "#a61e1f")
+        g.put(core, "#fe6420")
+        g.img[int(y), int(x) % 128] = hexc("#faaf5c")
+        lights[outer] = hexc("#a61e1f")
+        lights[core] = hexc("#fe6420")
+        lights[int(y), int(x) % 128] = hexc("#faaf5c")
+    return g, lights
 
 
 def map_murk():
-    mp = Map(17, (198, 136, 58), angle=0, spread=6)
-    ys = [0, 120, 230, 330, 420, 520, 600, 700, 800, 900, MW]
-    cols = [(214, 158, 78), (186, 122, 52), (206, 148, 70), (176, 112, 48), (210, 154, 76)]
-    for i in range(len(ys) - 1):
-        if i % 2:
-            mp.patch(band(ys[i], ys[i + 1], 700 + i, amp=10), cols[i % len(cols)], angle=0, density=0.8)
-    for i, (x, y, r) in enumerate(((150, 110, 60), (420, 90, 80), (700, 130, 50), (300, 920, 70), (640, 900, 55))):
-        mp.drawn(blob(x, y, r, 720 + i, aspect=1.6, rough=0.4), (58, 46, 44), edge_w=7)      # methane seas, dark
-    mp.light(420, 260, 6, (255, 200, 120))                                                   # one outpost
-    mp.save("murk")
+    g = Grid()
+    warp = g.noise(701, 3.0, 3)
+    b = np.sin(g.lat * 7 + warp * 3.0) * 0.5 + 0.5
+    g.ramp(b, ["#8d4526", "#a8633e", "#c56d25", "#c56d25", "#e69d69"], spread=1.4)
+    sea = g.noise(702, 3.0, 3)
+    polar = np.abs(g.lat) > 1.0
+    g.put(polar & (sea > 0.5), "#522b2f")
+    g.put(polar & (sea > 0.58), "#2f1525")
+    lights = np.zeros_like(g.img)
+    lights[:] = hexc("#010000")
+    lights[22, 60] = hexc("#fffefe")
+    lights[22, 61] = hexc("#faaf5c")
+    return g, lights
 
 
 def map_hollow():
-    mp = Map(18, (112, 100, 124), angle=50, spread=30)
-    rnd = random.Random(18)
-    for i in range(8):
-        mp.patch(blob(rnd.uniform(0, WRAP), rnd.uniform(100, 920), rnd.uniform(60, 120), 800 + i, aspect=1.4), (136, 124, 146))
-    for i in range(14):
-        x, y, r = rnd.uniform(0, WRAP), rnd.uniform(140, 880), rnd.uniform(14, 34)
-        mp.drawn(blob(x, y, r, 820 + i, aspect=1.3), (34, 26, 44), shade=0, edge_w=5)         # sinkholes into the caves
-        mp.ic.dot(x + 2, y + 2, r * 0.25, (178, 120, 240))
-        mp.light(x, y, r * 0.5, (176, 112, 255), 0.8)
-    for i in range(10):
-        mp.crater(rnd.uniform(0, WRAP), rnd.uniform(100, 920), rnd.choice((10, 16, 22)), (122, 110, 134))
-    mp.save("hollow")
+    g = Grid()
+    n = g.noise(801, 2.6, 4)
+    g.ramp(np.clip((n - 0.3) / 0.4, 0, 1), ["#3e3551", "#69608b", "#69608b", "#92a3b2"], spread=1.2)
+    rnd = np.random.default_rng(802)
+    for _ in range(9):
+        g.crater(rnd.uniform(0, 128), rnd.uniform(8, 56), float(rnd.choice([1.5, 2, 3])), "#3e3551", "#2b1f35", "#92a3b2")
+    lights = np.zeros_like(g.img)
+    lights[:] = hexc("#010000")
+    for _ in range(14):
+        x, y, r = rnd.uniform(0, 128), rnd.uniform(10, 54), float(rnd.choice([1.0, 1.5, 2.0]))
+        _, _, hole = g.disc(x, y, r, aspect=1.3)
+        g.put(hole, "#170916")
+        cx, cy = int(x) % 128, int(y)
+        g.img[cy, cx] = hexc("#7d2dbd")
+        lights[hole] = hexc("#4f1d83")
+        lights[cy, cx] = hexc("#c34988")
+    return g, lights
 
 
 def map_tidewater():
-    mp = Map(19, (22, 64, 146), angle=15)
-    rnd = random.Random(19)
-    for i in range(9):
-        mp.patch(blob(rnd.uniform(0, WRAP), rnd.uniform(160, 860), rnd.uniform(60, 130), 900 + i, aspect=1.8), (40, 98, 172), density=0.6)
-    reef = blob(448, 512, 110, 950, aspect=1.2)                     # the face that always looks at the giant
-    mp.patch(reef, (56, 164, 170), density=0.7)
-    mp.patch(scale(reef, 0.7, (448, 512)), (32, 110, 170), density=0.6)
-    isl = [blob(430 + 30 * k, 470 + 25 * math.sin(k), 18 + 4 * (k % 3), 960 + k) for k in range(5)]
-    isl += [blob(rnd.uniform(0, WRAP), rnd.uniform(250, 780), rnd.uniform(14, 26), 970 + k) for k in range(6)]
-    for c in isl:
-        mp.drawn(c, (96, 168, 82), edge_w=5)
-    caps(mp, (220, 236, 246), None, 50, 56, 71)
-    clouds(mp, 30, 72)
-    mp.towns(isl, 14, 73, color=(255, 210, 140))
-    mp.save("tidewater")
+    g = Grid()
+    n = g.noise(901, 2.2, 4)
+    g.ramp(np.clip((n - 0.3) / 0.4, 0, 1), ["#191954", "#15578a", "#15578a", "#1096c3"], spread=1.2)
+    dx, dy, reef = g.disc(64, 32, 13, aspect=1.2)
+    d = np.sqrt(dx * dx + dy * dy) / 13
+    g.ramp(np.clip(1 - d, 0, 1) * 0.99, ["#1096c3", "#53998b", "#84e3b5"], reef, spread=1.6)
+    isl = np.zeros_like(reef)
+    for k in range(5):
+        isl |= g.disc(58 + 3 * k, 30 + 2 * math.sin(k), 1.2 + 0.5 * (k % 2))[2]
+    rnd = np.random.default_rng(902)
+    for _ in range(6):
+        isl |= g.disc(rnd.uniform(0, 128), rnd.uniform(18, 46), 1.4)[2]
+    g.put(isl, "#559642")
+    g.put(isl & ~(np.roll(isl, 1, 0) & np.roll(isl, -1, 0) & np.roll(isl, 1, 1) & np.roll(isl, -1, 1)), "#cfaa81")
+    caps(g, 14, 16, 903)
+    lights = towns(g, isl, 14, 904)
+    clouds(g, 905, 0.68, freq=2.4)
+    return g, lights
 
 
 def map_pebble():
-    mp = Map(20, (122, 106, 94), angle=60, spread=40)
-    rnd = random.Random(20)
-    for i in range(6):
-        mp.patch(blob(rnd.uniform(0, WRAP), rnd.uniform(100, 920), rnd.uniform(60, 140), 1000 + i), (98, 86, 78))
-    for i in range(40):
-        mp.crater(rnd.uniform(0, WRAP), rnd.uniform(80, 940), rnd.choice((8, 12, 16, 24, 36)), (116, 100, 90))
-    for i in range(10):
-        mp.ic.dot(rnd.uniform(0, WRAP), rnd.uniform(100, 920), 5, (196, 150, 96))           # metal glints
-    mp.save("pebble")
+    g = Grid()
+    n = g.noise(1001, 2.6, 4)
+    g.ramp(np.clip((n - 0.3) / 0.4, 0, 1), ["#41322c", "#725244", "#725244", "#ab8465"], spread=1.2)
+    rnd = np.random.default_rng(1002)
+    for _ in range(34):
+        g.crater(rnd.uniform(0, 128), rnd.uniform(6, 58), float(rnd.choice([1.5, 2, 2.5, 3.5])), "#725244", "#41322c", "#ab8465")
+    for _ in range(12):
+        g.img[int(rnd.uniform(6, 58)), int(rnd.uniform(0, 128))] = hexc("#faaf5c")
+    return g, None
 
 
 def map_amber():
-    mp = Map(21, (232, 206, 156), angle=0, spread=4)
-    ys = [-40, 70, 150, 230, 300, 360, 430, 500, 560, 640, 720, 800, 880, 960, MW + 40]
-    cols = [(206, 128, 66), (232, 206, 156), (170, 92, 52), (226, 178, 112), (214, 146, 80), (240, 222, 180), (180, 104, 58)]
-    for i in range(len(ys) - 1):
-        mp.patch(band(ys[i], ys[i + 1], 1100 + i, amp=9, waves=(4, 9, 17)), cols[i % len(cols)], angle=0, density=0.8)
-    for i in range(8):                                                     # band edge eddies
-        mp.ic.dot(random.Random(i).uniform(0, WRAP), ys[3 + i % 8], 9, (244, 230, 200))
-    storm = ellipse(560, 620, 90, 48, n=40)
-    mp.drawn(scale(storm, 1.35, (560, 620)), (238, 214, 172), shade=0, edge_w=6, angle=0)
-    mp.drawn(storm, (204, 72, 50), shade=0.12, edge_w=7, angle=0)
-    mp.drawn(scale(storm, 0.5, (560, 620)), (232, 120, 80), shade=0, edge_w=0, edge=None, angle=0)
-    mp.save("amber")
+    g = Grid()
+    warp = g.noise(1101, 3.0, 4)
+    b = np.sin(g.lat * 11 + warp * 2.4) * 0.5 + 0.5
+    g.ramp(b, ["#8d4526", "#a8633e", "#e69d69", "#cfaa81", "#eab798"], spread=1.5)
+    dx, dy, storm = g.disc(80, 42, 5, aspect=1.9)
+    g.put(g.disc(80, 42, 6.5, aspect=1.9)[2], "#eab798")
+    g.put(storm, "#d4462b")
+    g.put(g.disc(80, 42, 2.5, aspect=1.9)[2], "#fe6420")
+    g.put(g.disc(78, 41, 1.0, aspect=1.9)[2], "#faaf5c")
+    return g, None
 
 
 def map_glaucus():
-    mp = Map(22, (112, 192, 216), angle=0, spread=4)
-    ys = [-40, 110, 260, 420, 600, 760, 900, MW + 40]
-    cols = [(92, 168, 204), (132, 208, 226), (100, 180, 212)]
-    for i in range(len(ys) - 1):
-        if i % 2 == 0:
-            mp.patch(band(ys[i], ys[i + 1], 1200 + i, amp=7, waves=(3, 5, 9)), cols[i % 3], angle=0, density=0.7)
-    spot = ellipse(300, 600, 70, 34, n=36)
-    mp.drawn(spot, (36, 74, 150), shade=0, edge_w=6, angle=0)
-    for i in range(10):
-        x = random.Random(50 + i).uniform(0, WRAP)
-        mp.line([(x, 560 + i % 3 * 30), (x + 120, 556 + i % 3 * 30)], (240, 250, 255), 6)
-    mp.save("glaucus")
+    g = Grid()
+    warp = g.noise(1201, 2.4, 3)
+    b = np.sin(g.lat * 6 + warp * 1.4) * 0.5 + 0.5
+    g.ramp(b, ["#1096c3", "#74effe", "#74effe", "#d2f8ff"], spread=1.6)
+    g.put(g.disc(36, 38, 4, aspect=2.0)[2], "#15578a")
+    g.put(g.disc(36, 38, 2, aspect=2.0)[2], "#191954")
+    rnd = np.random.default_rng(1202)
+    for _ in range(9):
+        x, y = int(rnd.uniform(0, 128)), int(rnd.choice([18, 26, 40, 46]))
+        for k in range(int(rnd.uniform(5, 12))):
+            g.img[y, (x + k) % 128] = hexc("#fffefe")
+    return g, None
 
 
-# ---------- portraits --------------------------------------------------------------
-
-def clip_patch(ic, poly, disc_mask, color):
-    m = ImageChops.multiply(ic._mask(ic._wobble(poly, amp=2.5)), disc_mask)
-    ic.img.paste(Image.new("RGBA", (512, 512), color + (255,)), (0, 0), m)
-    ic.scribble_in(m, color, var=0.22, width=6, density=0.9, length=(30, 90), spread=14)
-    layer = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-    w = ic._wobble(poly, amp=2.0)
-    ImageDraw.Draw(layer).line(w + [w[0]], fill=tone(color, 0.4) + (255,), width=5, joint="curve")
-    ic._comp(layer, disc_mask)
+MAPS = {"home": map_home, "verdance": map_verdance, "ochre": map_ochre, "lantern": map_lantern, "rime": map_rime,
+        "cinder": map_cinder, "murk": map_murk, "hollow": map_hollow, "tidewater": map_tidewater, "pebble": map_pebble,
+        "amber": map_amber, "glaucus": map_glaucus}
 
 
-def planet(ic, base, patches=(), air=None, r=178, cx=256, cy=262, lines=()):
-    disc = circle(cx, cy, r, n=64)
+def write_maps():
+    from PIL import Image
+    for name, fn in MAPS.items():
+        g, lights = fn()
+        g.save(os.path.join(OUT, "map_" + name + ".png"))
+        MAPS_DONE[name] = g.img.copy()
+        if lights is not None:
+            save(Image.fromarray(lights, "RGB").convert("RGBA"), os.path.join(OUT, "lights_" + name + ".png"),
+                 source="pixelkit (tools/art/planets_art.py)")
+            LIGHTS_DONE[name] = lights
+        print("map", name)
+
+
+# ---------- portraits (48 x 48) -----------------------------------------------------------------
+
+def portrait(name, r=20, lon0=0.0, tilt=0.35, air=None, lumpy=None, extra=None, behind=None):
+    sp = Sprite(48, 48)
+    if behind:
+        behind(sp)
+    inside = globe(sp, MAPS_DONE[name], 24, 24, r, lon0=lon0, tilt=tilt, lights=LIGHTS_DONE.get(name), lumpy=lumpy)
+    ys, xs = np.nonzero(inside)
+    # one glint on the lit shoulder
+    k = np.argmin((xs - 24) * 0.7 + (ys - 24))
+    sp.plot(int(xs[k]) + 4, int(ys[k]) + 3, "#fffefe")
+    if extra:
+        extra(sp, "solid")
+    sp.outline()
     if air:
-        ic.glow((cx, cy, r + 18), air, radius=22, strength=0.7)
-    disc = ic.flat(disc, base)
-    a = 30
-    ic.scribble(disc, base, var=0.26, angle=a, density=0.8, length=(40, 110), spread=14)
-    dm = ic._mask(disc)
-    for poly, col in patches:
-        clip_patch(ic, poly, dm, col)
-    for pts, col, w in lines:
-        layer = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-        ImageDraw.Draw(layer).line(ic._wobble(pts, closed=False, amp=2), fill=col + (255,), width=w, joint="curve")
-        ic._comp(layer, dm)
-    night = mix(darker(base, 0.55), (16, 18, 48), 0.35)
-    ic.scribble_in(ic.crescent(disc, (1, 1), 0.46), night, var=0.12, angle=a, density=1.8, length=(36, 90), spread=14)
-    ic.scribble_in(ic.crescent(disc, (1, 1), 0.24), mix(night, (8, 8, 26), 0.55), var=0.10, angle=a, density=2.0, length=(30, 80), spread=14)
-    ic.scribble_in(ic.crescent(disc, (-1, -1), 0.16), lighter(base, 0.5), var=0.1, angle=a + 20, density=1.2, width=5, length=(30, 80), spread=14)
-    ic.dabs(disc, lighter(base, 0.65), (-1, -1), n=4, size=13)
-    if air:
-        ic.rim(disc, lighter(air, 0.3), width=9, inset=8)
-    ic.outline(disc, tone(base), 10)
-    return disc
+        air_rim(sp, inside, air)
+    if extra:
+        extra(sp, "glow")
+    return sp
 
 
-def P(fn):
-    def run(name, seed):
-        ic = Icon(seed)
-        fn(ic)
-        ic.save(os.path.join(OUT, "portrait_" + name + ".png"))
-        print("portrait", name)
-    return run
+def p_star():
+    sp = Sprite(48, 48)
+    sp.part(sp.star(24, 24, 23, 15, 12), RAMPS["flame"], "inset", glow=True)
+    sp.part(sp.circle(24, 24, 15), ["#8d4526", "#c56d25", "#fb902f", "#faaf5c", "#fffefe"], "sphere", base=3)
+    for x, y in ((18, 26), (28, 31), (29, 20)):
+        sp.fill(sp.rect(x, y, x + 1, y), "#fb902f")
+    sp.plots([(17, 16), (18, 15)], "#fffefe")
+    return sp
 
 
-@P
-def p_star(ic):
-    ic.glow((256, 256, 200), (255, 200, 80), radius=34, strength=0.9)
-    ic.drawn(star(256, 256, 236, 176, 14, jag=0.12, seed=4), (255, 150, 40), shade=0.1, highlight=0, edge=(200, 70, 20), edge_w=7)
-    ic.drawn(circle(256, 256, 160), (255, 214, 70), shade=0.2, highlight=0.2, rim_color=(255, 246, 190), edge=(214, 120, 20))
-    for x, y in ((210, 210), (300, 300), (296, 200)):
-        ic.dot(x, y, 9, (255, 170, 60))
+def ring_parts(sp, front):
+    outer = sp.ellipse(1, 18, 46, 31)
+    inner = sp.ellipse(7, 21, 40, 28)
+    ring = outer & ~inner
+    yy = np.mgrid[0:48, 0:48][0]
+    half = ring & ((yy >= 25) if front else (yy < 25))
+    sp.part(half, ["#8d4526", "#a8633e", "#cfaa81", "#eab798"], "rim")
 
 
-@P
-def p_home(ic):
-    planet(ic, (40, 108, 196), air=(120, 200, 255), patches=[
-        (blob(200, 210, 90, 1, aspect=1.1), (88, 170, 66)), (blob(330, 340, 70, 2), (88, 170, 66)),
-        (blob(190, 220, 34, 3, aspect=1.5), (214, 182, 98)), (blob(256, 96, 70, 4, aspect=2.2), (238, 246, 252)),
-        (blob(330, 330, 30, 5), (40, 120, 58))],
-        lines=[([(120, 300), (210, 290), (290, 312)], (246, 248, 252), 8), ([(260, 170), (360, 180)], (246, 248, 252), 7)])
+def p_amber():
+    sp = Sprite(48, 48)
+    ring_parts(sp, False)
+    inside = globe(sp, MAPS_DONE["amber"], 24, 24, 15, tilt=0.25)
+    sp.plot(18, 14, "#fffefe")
+    ring_parts(sp, True)
+    sp.outline()
+    del inside
+    return sp
 
 
-@P
-def p_verdance(ic):
-    planet(ic, (28, 124, 132), air=(140, 230, 200), patches=[
-        (blob(180, 200, 46, 1), (42, 152, 58)), (blob(300, 250, 60, 2, aspect=1.4), (42, 152, 58)), (blob(220, 340, 40, 3), (42, 152, 58)),
-        (blob(340, 380, 30, 4), (42, 152, 58)), (blob(300, 250, 26, 5), (104, 122, 46)), (blob(180, 200, 20, 6), (24, 104, 44))],
-        lines=[([(110, 260), (200, 250), (260, 280)], (240, 248, 248), 9), ([(240, 150), (330, 160)], (240, 248, 248), 7), ([(280, 330), (380, 320)], (240, 248, 248), 7)])
+def p_cinder_extra(sp, phase):
+    if phase != "glow":
+        return
+    # a sulfur fountain off the upper-left limb
+    for pts in (((10, 12), (6, 5), (3, 9)), ((11, 11), (10, 3), (14, 2))):
+        m = sp.line(list(pts), 1)
+        sp.fill(m & ~sp.alpha, "#faaf5c", glow=True)
+    sp.plots([(3, 10), (14, 3), (6, 4)], "#fffefe", glow=True)
 
 
-@P
-def p_ochre(ic):
-    planet(ic, (196, 106, 58), air=(255, 196, 150), patches=[
-        (blob(190, 220, 70, 1, aspect=1.3), (154, 72, 44)), (blob(330, 330, 60, 2), (154, 72, 44)),
-        (blob(270, 290, 26, 3, aspect=1.6), (238, 228, 204)), (blob(200, 350, 34, 4, aspect=1.5), (58, 112, 146)),
-        (blob(256, 92, 90, 5, aspect=2.4), (240, 234, 226))],
-        lines=[([(120, 260), (190, 250), (250, 280), (330, 270)], (98, 38, 28), 9), ([(300, 180), (360, 230), (400, 240)], (98, 38, 28), 8)])
+def p_rime_extra(sp, phase):
+    if phase != "glow":
+        return
+    m = sp.taper(24, 44, 24, 47, 2, 5)
+    sp.fill(m & ~sp.alpha, "#d2f8ff", glow=True)
+    sp.plots([(22, 46), (26, 47)], "#fffefe", glow=True)
 
 
-@P
-def p_lantern(ic):
-    rnd = random.Random(3)
-    patches = [(blob(200, 230, 70, 1), (100, 100, 116)), (blob(310, 330, 54, 2), (100, 100, 116))]
-    for i in range(7):
-        x, y, r = rnd.uniform(130, 380), rnd.uniform(140, 390), rnd.uniform(12, 26)
-        patches.append((circle(x, y, r, n=20), (124, 124, 138)))
-    planet(ic, (156, 156, 168), patches=patches)
+def p_hollow_extra(sp, phase):
+    if phase == "glow":
+        for x, y in ((40, 7),):
+            sp.plots([(x, y), (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)], "#c34988", glow=True)
+            sp.plot(x, y, "#fffefe", glow=True)
 
 
-@P
-def p_rime(ic):
-    rnd = random.Random(4)
-    lines = []
-    for i in range(6):
-        x, y = rnd.uniform(100, 300), rnd.uniform(130, 380)
-        lines.append((wiggle(x, y, 200, rnd.uniform(-0.5, 0.5), i, n=7, jit=12), (66, 132, 200), 6))
-    planet(ic, (204, 232, 246), patches=[(blob(220, 250, 80, 1, aspect=1.4), (166, 208, 236))], lines=lines)
-    ic.sparkle(96, 110, 30, (220, 248, 255), ink=(40, 110, 170))
-    ic.sparkle(420, 400, 22, (220, 248, 255), ink=(40, 110, 170))
-    ic.glow((262, 470, 34), (220, 245, 255), radius=14, strength=0.8)    # a geyser's spray off the south pole
-    for w, L in ((-30, 46), (-10, 62), (10, 66), (30, 48)):
-        ic.line([(256 + w * 0.15, 438), (256 + w * 0.5, 438 + L * 0.5), (256 + w, 438 + L)], (236, 248, 255), 5)
+def pebble_edge(a):
+    return 0.86 + 0.10 * np.sin(3 * a + 1) + 0.06 * np.sin(5 * a + 2) + 0.04 * np.cos(7 * a)
 
 
-@P
-def p_cinder(ic):
-    rnd = random.Random(5)
-    patches = [(blob(200, 220, 60, 1), (232, 140, 52)), (blob(320, 330, 54, 2, aspect=1.4), (46, 34, 34)), (blob(180, 340, 36, 3), (240, 232, 196))]
-    for i in range(6):
-        x, y = rnd.uniform(140, 370), rnd.uniform(150, 380)
-        patches.append((circle(x, y, rnd.uniform(9, 16), n=18), (255, 92, 30)))
-    planet(ic, (230, 196, 66), patches=patches)
-    # a sulfur fountain off the upper-left limb: arcs that rise and fall back
-    bx, by = 150, 140
-    for k, (h, w) in enumerate(((110, -70), (130, -20), (100, 40), (80, -100))):
-        pts = [(bx + w * t, by - 4 * h * t * (1 - t) * 1.0 - 10 * t) for t in [i / 10 for i in range(11)]]
-        ic.line(pts, (250, 230, 130), 9, ink=(170, 110, 30), ink_w=6)
-    for x, y in ((96, 70), (150, 40), (190, 60), (70, 120)):
-        ic.dot(x, y, 7, (255, 110, 40), ink=(120, 40, 20))
+PORTRAITS = {
+    "star": p_star,
+    "home": lambda: portrait("home", air="#74effe", lon0=0.4),
+    "verdance": lambda: portrait("verdance", air="#84e3b5", lon0=1.0),
+    "ochre": lambda: portrait("ochre", air="#e69d69", lon0=2.6),
+    "lantern": lambda: portrait("lantern"),
+    "rime": lambda: portrait("rime", extra=p_rime_extra, tilt=0.15),
+    "cinder": lambda: portrait("cinder", extra=p_cinder_extra, lon0=0.6),
+    "murk": lambda: portrait("murk", air="#fb902f"),
+    "hollow": lambda: portrait("hollow", extra=p_hollow_extra, lon0=0.3),
+    "tidewater": lambda: portrait("tidewater", air="#74effe", lon0=math.pi - 0.2),
+    "pebble": lambda: portrait("pebble", r=19, lumpy=pebble_edge, tilt=0.2),
+    "amber": p_amber,
+    "glaucus": lambda: portrait("glaucus", air="#d2f8ff", tilt=0.2),
+}
 
 
-@P
-def p_murk(ic):
-    patches = [(band(150 + 70 * k, 190 + 70 * k, 30 + k, amp=6), c) for k, c in enumerate(((186, 122, 52), (214, 158, 78), (176, 112, 48), (206, 148, 70)))]
-    patches.append((blob(230, 120, 46, 9, aspect=1.6), (58, 46, 44)))
-    # band() spans the map's width; on a 512 canvas it simply crosses the disc
-    planet(ic, (200, 138, 58), air=(255, 170, 70), patches=patches)
+# ---------- resource icons (32 x 32) ------------------------------------------------------------
+
+ICE = ["#15578a", "#1096c3", "#74effe", "#d2f8ff", "#fffefe"]
+ROCK = ["#2c2c25", "#434137", "#a09f91", "#bfcad7"]
+DROCK = ["#161612", "#2c2c25", "#434137", "#a09f91"]
 
 
-@P
-def p_hollow(ic):
-    rnd = random.Random(6)
-    patches = [(blob(220, 260, 90, 1), (136, 124, 146))]
-    holes = []
-    for i in range(6):
-        x, y, r = rnd.uniform(140, 370), rnd.uniform(150, 380), rnd.uniform(14, 26)
-        patches.append((blob(x, y, r, 10 + i, aspect=1.3), (34, 26, 44)))
-        holes.append((x, y, r))
-    planet(ic, (114, 102, 128), patches=patches)
-    for x, y, r in holes[:4]:
-        ic.dot(x + 3, y + 3, max(4, r * 0.3), (190, 130, 255))
-    ic.sparkle(420, 120, 26, (210, 160, 255), ink=(70, 30, 120))
+def prism(sp, x0, y0, w, h, ramp):
+    """A hexagonal crystal standing up: lit left face, front face, dark right face, a pointed top."""
+    body = sp.poly([(x0, y0 + w // 2), (x0 + w // 2, y0), (x0 + w, y0 + w // 2), (x0 + w, y0 + h), (x0 + w // 2, y0 + h + 2), (x0, y0 + h)])
+    sp.part(body, ramp, "cyl_v")
+    return body
 
 
-@P
-def p_tidewater(ic):
-    planet(ic, (24, 70, 156), air=(120, 200, 255), patches=[
-        (blob(256, 262, 90, 1, aspect=1.2), (56, 164, 170)), (blob(256, 262, 60, 2), (32, 110, 170)),
-        (circle(236, 250, 14), (96, 168, 82)), (circle(266, 270, 11), (96, 168, 82)), (circle(290, 246, 9), (96, 168, 82)),
-        (blob(256, 90, 120, 3, aspect=2.4), (226, 240, 248))],
-        lines=[([(120, 330), (200, 320), (260, 350)], (240, 248, 252), 8), ([(300, 160), (390, 170)], (240, 248, 252), 7)])
+def r_ice():
+    sp = Sprite(32, 32)
+    prism(sp, 3, 3, 12, 24, ICE)
+    prism(sp, 15, 10, 12, 18, ICE)
+    sp.plots([(6, 7), (18, 14)], "#fffefe")
+    sp.outline()
+    sp.plots([(26, 5), (25, 5), (27, 5), (26, 4), (26, 6)], "#d2f8ff", glow=True)
+    sp.plot(26, 5, "#fffefe", glow=True)
+    return sp
 
 
-@P
-def p_pebble(ic):
-    rnd = random.Random(8)
-    lump = blob(256, 262, 150, 77, rough=0.45, n=40)
-    ic.drawn(lump, (124, 106, 94), shade=0.32, highlight=0.18)
-    for i in range(9):
-        x, y, r = rnd.uniform(160, 350), rnd.uniform(170, 360), rnd.uniform(10, 24)
-        c = circle(x, y, r, n=18)
-        ic.drawn(c, (100, 86, 78), shade=0, highlight=0, edge_w=4, hatch=0.5)
-    for x, y in ((210, 220), (300, 300), (250, 330)):
-        ic.sparkle(x, y, 14, (255, 210, 120), ink=(90, 60, 30))
+def r_iron():
+    sp = Sprite(32, 32)
+    sp.part(sp.poly([(3, 18), (8, 7), (19, 4), (28, 11), (29, 22), (20, 28), (7, 27)]), ROCK, "sphere")
+    for x, y, r in ((11, 13, 3), (19, 19, 3), (21, 10, 2), (10, 21, 2)):
+        sp.part(sp.circle(x, y, r), ["#561c27", "#8d4526", "#c56d25", "#e69d69"], "sphere")
+    sp.plots([(10, 12), (18, 18)], "#eab798")
+    sp.outline()
+    return sp
 
 
-@P
-def p_amber(ic):
-    ring_back = ellipse(256, 270, 240, 56, n=60, rot=-0.18)
-    ic.outline(ring_back, (200, 170, 120), 20, passes=1)
-    patches = []
-    for k, c in enumerate(((206, 128, 66), (170, 92, 52), (214, 146, 80), (180, 104, 58), (206, 128, 66))):
-        patches.append((band(110 + 64 * k, 140 + 64 * k, 60 + k, amp=5), c))
-    patches.append((ellipse(300, 330, 34, 20, n=30), (204, 72, 50)))
-    planet(ic, (232, 206, 156), patches=patches, r=170)
-    # the near half of the ring, in front of the disc
-    front = [p for p in ellipse(256, 270, 240, 56, n=60, rot=-0.18) if p[1] > 262 + (p[0] - 256) * -0.18]
-    ic.line(front, (226, 196, 140), 18, ink=(120, 90, 50), ink_w=8)
+def r_sulfur():
+    sp = Sprite(32, 32)
+    sp.part(sp.ellipse(3, 22, 29, 30), DROCK, "rim")
+    for x, y, h in ((6, 10, 14), (13, 3, 22), (21, 9, 15)):
+        sp.part(sp.poly([(x, y + 3), (x + 3, y), (x + 6, y + 3), (x + 6, y + h), (x, y + h)]), RAMPS["gold"][:4], "cyl_v")
+    sp.plots([(15, 6), (8, 13)], "#fffefe")
+    sp.outline()
+    return sp
 
 
-@P
-def p_glaucus(ic):
-    planet(ic, (112, 192, 216), air=(170, 240, 255), patches=[
-        (band(170, 210, 1, amp=4), (92, 168, 204)), (band(290, 330, 2, amp=4), (132, 208, 226)),
-        (ellipse(210, 300, 40, 18), (36, 74, 150))],
-        lines=[([(150, 240), (240, 236)], (240, 250, 255), 6), ([(280, 360), (360, 356)], (240, 250, 255), 6)])
+def r_helium3():
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(12, 2, 19, 6), RAMPS["metal"], "cyl_v")
+    sp.part(sp.ellipse(6, 5, 25, 30), RAMPS["metal"], "cyl_v")
+    sp.part(sp.rect(10, 11, 21, 24), ["#0c2f44", "#204f63", "#53998b", "#84e3b5"], "flat", base=0)
+    sp.outline()
+    sp.part(sp.rect(11, 12, 20, 23), ["#53998b", "#84e3b5", "#c1f1d8"], "inset", glow=True)
+    sp.plots([(13, 14), (13, 15)], "#fffefe", glow=True)
+    sp.plot(9, 9, "#fffefe")
+    return sp
 
 
-# ---------- resource icons ---------------------------------------------------------
-
-def R(fn):
-    def run(name, seed):
-        ic = Icon(seed)
-        fn(ic)
-        ic.save(os.path.join(OUT, "res_" + name + ".png"))
-        print("res", name)
-    return run
+def drop(sp, cx=16, top=2, r=11):
+    return sp.circle(cx, top + 2 * r - 2, r) | sp.poly([(cx, top), (cx - r + 2, top + r + 2), (cx + r - 2, top + r + 2)])
 
 
-def hexagon(cx, cy, r, rot=0.0):
-    return [(cx + r * math.cos(rot + k * math.pi / 3), cy + r * math.sin(rot + k * math.pi / 3)) for k in range(6)]
+def r_methane():
+    sp = Sprite(32, 32)
+    sp.part(drop(sp), ["#733126", "#c56d25", "#fb902f", "#faaf5c"], "sphere")
+    sp.outline()
+    sp.part(sp.poly([(16, 12), (20, 20), (19, 25), (16, 27), (13, 25), (12, 20)]), ["#191954", "#15578a", "#1096c3", "#74effe", "#d2f8ff"], "inset", glow=True)
+    sp.plot(11, 14, "#fffefe")
+    return sp
 
 
-def prism(ic, cx, cy, w, h, color, edge=None):
-    """A hexagonal prism standing up: a side face, a lit face, a top."""
-    top = [(cx - w, cy - h), (cx - w * 0.5, cy - h - w * 0.45), (cx + w * 0.5, cy - h - w * 0.45), (cx + w, cy - h), (cx + w * 0.5, cy - h + w * 0.45), (cx - w * 0.5, cy - h + w * 0.45)]
-    left = [(cx - w, cy - h), (cx - w * 0.5, cy - h + w * 0.45), (cx - w * 0.5, cy + w * 0.45), (cx - w, cy)]
-    mid = [(cx - w * 0.5, cy - h + w * 0.45), (cx + w * 0.5, cy - h + w * 0.45), (cx + w * 0.5, cy + w * 0.45), (cx - w * 0.5, cy + w * 0.45)]
-    right = [(cx + w * 0.5, cy - h + w * 0.45), (cx + w, cy - h), (cx + w, cy), (cx + w * 0.5, cy + w * 0.45)]
-    e = edge or tone(color)
-    ic.drawn(left, lighter(color, 0.25), edge=e, edge_w=7, shade=0.1)
-    ic.drawn(mid, color, edge=e, edge_w=7)
-    ic.drawn(right, darker(color, 0.3), edge=e, edge_w=7, highlight=0)
-    ic.drawn(top, lighter(color, 0.5), edge=e, edge_w=7, shade=0)
+def r_timber():
+    sp = Sprite(32, 32)
+    sp.part(sp.poly([(3, 20), (20, 9), (26, 16), (9, 27)]), RAMPS["wood"], "cyl_h")
+    sp.part(sp.ellipse(19, 8, 28, 19), ["#725244", "#ab8465", "#cfaa81", "#eab798"], "flat", base=2)
+    ring = sp.ellipse(21, 10, 26, 17) & ~sp.ellipse(23, 12, 24, 15)
+    sp.fill(ring, "#ab8465")
+    sp.part(sp.circle(8, 8, 5), RAMPS["green"], "sphere")
+    sp.plots([(6, 6), (21, 10)], "#fffefe")
+    sp.outline()
+    return sp
 
 
-@R
-def r_ice(ic):
-    prism(ic, 200, 400, 70, 190, (120, 200, 240))
-    prism(ic, 330, 430, 56, 130, (150, 220, 250))
-    ic.sparkle(120, 120, 34, (240, 252, 255), ink=(40, 110, 170))
-    ic.sparkle(400, 210, 24, (240, 252, 255), ink=(40, 110, 170))
+def r_fish():
+    sp = Sprite(32, 32)
+    sp.part(sp.poly([(22, 16), (30, 8), (29, 16), (30, 24)]), RAMPS["glass"], "rim")
+    sp.part(sp.poly([(10, 10), (15, 5), (18, 11)]), RAMPS["glass"], "rim")
+    sp.part(sp.ellipse(2, 9, 25, 23), ["#204f63", "#1096c3", "#74effe", "#d2f8ff"], "cyl_h")
+    sp.fill(sp.rect(6, 13, 8, 15), "#fffefe")
+    sp.plot(7, 14, INK)
+    sp.outline()
+    return sp
 
 
-@R
-def r_iron(ic):
-    rock = blob(256, 290, 170, 3, rough=0.35, aspect=1.15)
-    ic.drawn(rock, (110, 112, 126), shade=0.3, highlight=0.18)
-    for x, y, r in ((200, 240, 30), (300, 320, 26), (330, 220, 20), (210, 350, 18)):
-        ic.drawn(blob(x, y, r, int(x), rough=0.4), (196, 110, 60), shade=0.1, highlight=0.2, edge_w=5)
-    ic.sparkle(400, 130, 26, (255, 230, 170), ink=(110, 60, 30))
+def r_glowcrystal():
+    sp = Sprite(32, 32)
+    sp.part(sp.ellipse(3, 23, 29, 30), ["#170916", "#2b1f35", "#3e3551", "#69608b"], "rim")
+    sp.outline()
+    for x, y, h in ((5, 11, 13), (12, 3, 21), (20, 9, 15)):
+        sp.part(sp.poly([(x, y + 3), (x + 3, y), (x + 6, y + 3), (x + 6, y + h), (x, y + h)]), RAMPS["violet"], "cyl_v", glow=True)
+    sp.plots([(14, 6), (7, 14)], "#fffefe", glow=True)
+    sp.plots([(27, 4), (26, 4), (28, 4), (27, 3), (27, 5)], "#c34988", glow=True)
+    return sp
 
 
-@R
-def r_sulfur(ic):
-    for x, y, h, rot in ((180, 420, 260, -0.35), (290, 430, 320, 0.1), (370, 430, 210, 0.45)):
-        crystal = [(x - 36, y), (x - 40, y - h * 0.75), (x, y - h), (x + 40, y - h * 0.75), (x + 36, y)]
-        ic.drawn(rotate(crystal, rot, (x, y - 40)), (246, 214, 40), edge=(160, 110, 10), edge_w=8)
-    ic.drawn(blob(266, 410, 70, 4, aspect=2.6, rough=0.2), (110, 90, 70), shade=0.25, highlight=0.1)
+def r_obsidian():
+    sp = Sprite(32, 32)
+    sp.part(sp.poly([(7, 27), (4, 15), (12, 3), (22, 5), (27, 15), (24, 27)]), ["#170916", "#2b1f35", "#3e3551", "#69608b"], "rim")
+    sp.part(sp.poly([(10, 8), (14, 5), (12, 18)]), ["#4f1d83", "#7d2dbd", "#9e3ba2"], "flat", base=1)
+    sp.fill(sp.line([(17, 8), (22, 16)], 1), "#69608b")
+    sp.plot(12, 7, "#fffefe")
+    sp.outline()
+    sp.part(sp.ellipse(9, 27, 23, 30) & ~sp.alpha, RAMPS["flame"][:4], "inset", glow=True)
+    return sp
 
 
-@R
-def r_helium(ic):
-    ic.glow((256, 270, 150), (120, 255, 220), radius=26, strength=0.6)
-    body = [(170, 140), (342, 140), (342, 430), (170, 430)]
-    ic.drawn(roundrect_pts(160, 130, 352, 440, 40), (200, 210, 224), shade=0.28, highlight=0.18, edge=(50, 60, 80))
-    ic.drawn(rect(196, 190, 316, 380), (70, 230, 200), shade=0.15, highlight=0.2, edge=(20, 110, 100), edge_w=6, rim_color=(190, 255, 240))
-    ic.drawn(rect(220, 86, 292, 134), (110, 120, 140), edge=(40, 46, 60))
-    for y in (240, 300):
-        ic.line([(214, y), (298, y)], (190, 255, 240), 6)
-    ic.sparkle(410, 120, 24, (200, 255, 240), ink=(20, 110, 100))
-    del body
+def r_regolith():
+    sp = Sprite(32, 32)
+    pile = sp.poly([(2, 28), (8, 18), (14, 12), (19, 13), (25, 19), (30, 28)])
+    sp.part(pile, ["#3e586e", "#5d778d", "#92a3b2", "#bfcad7"], "sphere")
+    for x, y in ((9, 24), (15, 20), (20, 25), (24, 23), (12, 27)):
+        sp.fill(sp.rect(x, y, x + 1, y), "#3e586e")
+    sp.part(sp.ellipse(3, 23, 10, 29), ["#2c2c25", "#434137", "#a09f91", "#bfcad7"], "sphere")
+    sp.part(sp.ellipse(21, 24, 27, 29), ["#2c2c25", "#434137", "#a09f91", "#bfcad7"], "sphere")
+    sp.plots([(14, 14), (15, 14), (5, 24)], "#fffefe")
+    sp.outline()
+    sp.plots([(24, 6), (23, 6), (25, 6), (24, 5), (24, 7)], "#84e3b5", glow=True)
+    sp.plot(24, 6, "#fffefe", glow=True)
+    return sp
 
 
-def roundrect_pts(x0, y0, x1, y1, r):
-    return crayon.roundrect(x0, y0, x1, y1, r)
+def r_water():
+    sp = Sprite(32, 32)
+    sp.part(drop(sp), ["#191954", "#15578a", "#1096c3", "#74effe", "#d2f8ff"], "sphere", base=2)
+    sp.plots([(11, 16), (11, 17), (12, 15)], "#fffefe")
+    sp.outline()
+    return sp
 
 
-@R
-def r_methane(ic):
-    drop = [(256, 70)] + [(256 + 150 * math.sin(t), 330 - 150 * math.cos(t)) for t in [math.pi * (0.25 + 1.5 * k / 30) for k in range(31)]]
-    ic.drawn(drop, (232, 132, 44), rim_color=(255, 214, 140), edge=(130, 60, 20))
-    flame = [(256, 210), (296, 300), (282, 380), (256, 400), (230, 380), (216, 300)]
-    ic.drawn(flame, (70, 150, 255), shade=0.1, highlight=0.2, edge=(30, 60, 160), edge_w=6)
+RESOURCES = {"ice": r_ice, "iron": r_iron, "sulfur": r_sulfur, "helium3": r_helium3, "methane": r_methane, "timber": r_timber,
+             "fish": r_fish, "glowcrystal": r_glowcrystal, "obsidian": r_obsidian, "regolith": r_regolith, "water": r_water}
+
+SHEET_REFS = ["armour_plating", "drop_tanks", "emp_burst", "glass_seraph", "cluster_bombs", "afterburner_kit"]
 
 
-@R
-def r_timber(ic):
-    log = rotate(crayon.roundrect(90, 210, 400, 330, 50), -0.3, (256, 270))
-    ic.drawn(log, (150, 96, 54), shade=0.3, highlight=0.15)
-    for y in (250, 290):
-        ic.line(rotate([(130, y), (360, y)], -0.3, (256, 270)), (110, 66, 36), 5)
-    end = ellipse(392, 222, 48, 64, rot=-0.3)
-    ic.drawn(end, (226, 186, 120), shade=0.1, highlight=0, edge=(120, 76, 40))
-    ic.outline(ellipse(392, 222, 26, 36, rot=-0.3), (170, 120, 70), 5, passes=1)
-    ic.drawn(blob(170, 150, 60, 3), (70, 170, 60), edge_w=6)
+def refs():
+    from PIL import Image
+    return [("ref " + n, Image.open(os.path.join(REFS, n + ".png")).convert("RGBA")) for n in SHEET_REFS]
 
 
-@R
-def r_fish(ic):
-    body = ellipse(236, 262, 150, 86, n=50)
-    tail = [(370, 262), (450, 186), (440, 262), (450, 338)]
-    ic.drawn(tail, (60, 170, 200), edge=(20, 80, 110))
-    ic.drawn(body, (90, 196, 220), rim_color=(200, 250, 255), edge=(20, 80, 110))
-    ic.drawn([(200, 190), (260, 140), (300, 196)], (60, 170, 200), edge=(20, 80, 110), edge_w=6)
-    ic.dot(150, 240, 16, (250, 250, 250), ink=(20, 30, 40))
-    ic.dot(154, 240, 8, (20, 30, 40))
-    for y, L in ((230, 40), (262, 56), (294, 40)):
-        ic.speed(470, y, L, 0, (220, 240, 255), width=6, ink=(20, 80, 110))
-
-
-@R
-def r_crystal(ic):
-    ic.glow((256, 300, 160), (180, 110, 255), radius=30, strength=0.7)
-    for x, y, h, rot in ((200, 390, 250, -0.3), (280, 400, 300, 0.05), (350, 390, 200, 0.4)):
-        c = [(x - 32, y), (x - 36, y - h * 0.78), (x, y - h), (x + 36, y - h * 0.78), (x + 32, y)]
-        ic.drawn(rotate(c, rot, (x, y)), (176, 110, 250), rim_color=(230, 210, 255), edge=(80, 30, 140), edge_w=7)
-    ic.drawn(blob(270, 412, 70, 5, aspect=2.6, rough=0.2), (80, 70, 90), shade=0.25, highlight=0.1)
-    ic.sparkle(110, 140, 28, (240, 220, 255), ink=(80, 30, 140))
-
-
-@R
-def r_obsidian(ic):
-    shard = [(150, 420), (120, 250), (220, 90), (330, 120), (400, 260), (360, 420)]
-    ic.drawn(shard, (50, 40, 62), shade=0.2, highlight=0.0, edge=(18, 12, 26))
-    ic.drawn([(200, 140), (250, 110), (230, 300)], (130, 100, 190), shade=0, highlight=0.2, edge=None)
-    ic.line([(280, 150), (350, 280)], (160, 130, 220), 7)
-    ic.drawn(blob(256, 430, 40, 2, aspect=3), (255, 110, 40), shade=0, edge=(150, 40, 10), edge_w=5)
-
-
-@R
-def r_regolith(ic):
-    pile = [(70, 420), (140, 300), (230, 220), (300, 240), (380, 320), (450, 420)]
-    ic.drawn(pile, (176, 172, 180), shade=0.3, highlight=0.18)
-    rnd = random.Random(7)
-    for i in range(14):
-        ic.dot(rnd.uniform(140, 380), rnd.uniform(290, 400), rnd.uniform(4, 9), rnd.choice(((120, 118, 130), (220, 220, 228))))
-    ic.sparkle(330, 170, 26, (180, 255, 230), ink=(20, 110, 90))
-
-
-@R
-def r_water(ic):
-    drop = [(256, 60)] + [(256 + 150 * math.sin(t), 330 - 150 * math.cos(t)) for t in [math.pi * (0.25 + 1.5 * k / 30) for k in range(31)]]
-    ic.drawn(drop, (60, 150, 240), rim_color=(190, 230, 255), edge=(20, 60, 140))
-    ic.dabs(drop, (230, 245, 255), (-1, -1), n=3, size=16)
-
-
-MAPS = [map_home, map_verdance, map_ochre, map_lantern, map_rime, map_cinder, map_murk, map_hollow, map_tidewater, map_pebble, map_amber, map_glaucus]
-PORTRAITS = [("star", p_star, 2), ("home", p_home, 3), ("verdance", p_verdance, 4), ("ochre", p_ochre, 5), ("lantern", p_lantern, 6),
-             ("rime", p_rime, 7), ("cinder", p_cinder, 8), ("murk", p_murk, 9), ("hollow", p_hollow, 10), ("tidewater", p_tidewater, 11),
-             ("pebble", p_pebble, 12), ("amber", p_amber, 13), ("glaucus", p_glaucus, 14)]
-RESOURCES = [("ice", r_ice, 21), ("iron", r_iron, 22), ("sulfur", r_sulfur, 23), ("helium3", r_helium, 24), ("methane", r_methane, 25),
-             ("timber", r_timber, 26), ("fish", r_fish, 27), ("glowcrystal", r_crystal, 28), ("obsidian", r_obsidian, 29),
-             ("regolith", r_regolith, 30), ("water", r_water, 31)]
+def main():
+    from PIL import Image
+    os.makedirs(OUT, exist_ok=True)
+    write_maps()
+    items_p, items_r = [], []
+    for name, fn in PORTRAITS.items():
+        im = fn().image()
+        save(im, os.path.join(OUT, "portrait_" + name + ".png"), source="pixelkit (tools/art/planets_art.py)")
+        items_p.append((name, im))
+    for name, fn in RESOURCES.items():
+        im = fn().image()
+        save(im, os.path.join(OUT, "res_" + name + ".png"), source="pixelkit (tools/art/planets_art.py)")
+        items_r.append((name, im))
+    print("portraits and resources written")
+    if "--sheet" in sys.argv:
+        os.makedirs(SCRATCH, exist_ok=True)
+        sheet(items_p + refs(), scale=3, cols=7, cell=(288, 192)).save(os.path.join(SCRATCH, "sheet_portraits.png"))
+        sheet(items_r + refs(), scale=3, cols=6, cell=(288, 192)).save(os.path.join(SCRATCH, "sheet_resources.png"))
+        maps = [(n, Image.fromarray(MAPS_DONE[n], "RGB").convert("RGBA")) for n in MAPS]
+        sheet(maps, scale=3, cols=3).save(os.path.join(SCRATCH, "sheet_maps.png"))
+        lights = [(n, Image.fromarray(LIGHTS_DONE[n], "RGB").convert("RGBA")) for n in LIGHTS_DONE]
+        sheet(lights, scale=3, cols=3).save(os.path.join(SCRATCH, "sheet_lights.png"))
+        print("sheets in", SCRATCH)
 
 
 if __name__ == "__main__":
-    os.makedirs(OUT, exist_ok=True)
-    only = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if "--no-maps" not in sys.argv:
-        for fn in MAPS:
-            if not only or fn.__name__[4:] in only:
-                fn()
-    crayon.S = 512
-    for name, fn, seed in PORTRAITS + RESOURCES:
-        fn(name, seed)
-    if "--sheet" in sys.argv:
-        import subprocess
-        sheet = os.path.join(KIT, "sheet.py")
-        scratch = os.environ.get("ART_SHEET_DIR", OUT)
-        pngs = [os.path.join(OUT, "portrait_" + n + ".png") for n, _, _ in PORTRAITS]
-        subprocess.run([sys.executable, sheet, os.path.join(scratch, "sheet_portraits.png")] + pngs + ["--ref", "magnetic field", "--ref", "inferno"])
-        pngs = [os.path.join(OUT, "res_" + n + ".png") for n, _, _ in RESOURCES]
-        subprocess.run([sys.executable, sheet, os.path.join(scratch, "sheet_resources.png")] + pngs + ["--ref", "plating", "--ref", "vitality"])
-        maps = sorted(f for f in os.listdir(OUT) if f.startswith("map_"))
-        mont = Image.new("RGB", (1024, 256 * ((len(maps) + 1) // 2)), (20, 20, 26))
-        for k, f in enumerate(maps):
-            mont.paste(Image.open(os.path.join(OUT, f)).resize((512, 256)), ((k % 2) * 512, (k // 2) * 256))
-        mont.save(os.path.join(scratch, "sheet_maps.png"))
-        print("wrote maps montage")
+    main()
