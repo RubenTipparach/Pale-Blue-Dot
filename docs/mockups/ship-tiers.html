@@ -1,0 +1,1492 @@
+<title>Rockets to Starships</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one wide 3D stage per tier tab (the game's HUD over it), a working panel under it, then the reference sections. House style of ship-crafting.html. A deliberately dark, single-theme page, like every game mockup here. */
+:root{
+  color-scheme: dark;
+  --ground:#0b1014;
+  --panel:#111a20;
+  --panel-2:#0d151a;
+  --line:rgba(130,175,180,.24);
+  --line-2:rgba(150,190,195,.5);
+  --ink:#e4ecee;
+  --muted:#94a8ad;
+  --amber:#e8b040;
+  --sky:#8fc3d8;
+  --warn:#ff6b57;
+  --ok:#8fdc9a;
+  --cyan:#59e6f2;      /* Tenebris: bound orbit 0.35,0.9,0.95 */
+  --orange:#f2993f;    /* Tenebris: escape 0.95,0.6,0.25 */
+  --purple:#b861f2;    /* Tenebris: post-burn path 0.72,0.38,0.95 */
+  --pink:#fa59bf;      /* Tenebris: target */
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.55}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px;display:grid;gap:40px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;margin:0;text-wrap:balance}
+h1{font-size:clamp(34px,6vw,58px)}
+h2{font-size:28px}
+h3{font-size:19px;font-weight:600}
+p{margin:0;max-width:76ch}
+.eyebrow{font-family:var(--mono);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:12px;color:#6fc3b8}
+.tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
+.tag.plain{border-color:var(--line-2);color:var(--muted)}
+section{display:grid;gap:14px;min-width:0}
+.lede{display:grid;gap:12px}
+.lede p{font-size:17px}
+.honest{border:1px dashed var(--line-2);border-radius:6px;padding:12px 14px;color:var(--muted);font-size:14px;max-width:none}
+.honest b{color:var(--ink);font-weight:600}
+code,.mono{font-family:var(--mono);font-size:.86em}
+code{color:var(--sky)}
+a{color:var(--amber)}
+.muted{color:var(--muted)}
+button{font:inherit}
+.seg{display:flex;flex-wrap:wrap;gap:5px}
+.seg button,.pbtn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-family:var(--display);font-size:14.5px;letter-spacing:.05em;text-align:center;color:var(--ink);background:rgba(13,21,26,.75)}
+.seg button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.14)}
+.seg button:hover,.pbtn:hover{border-color:rgba(240,180,60,.55)}
+.seg button:focus-visible,.pbtn:focus-visible,.tab:focus-visible,.part:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.pbtn.go{background:var(--amber);color:var(--ground);border-color:var(--amber)}
+.pbtn[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
+
+/* tier tabs */
+.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.tab{all:unset;cursor:pointer;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--panel)}
+.tab img{grid-row:span 2;width:32px;height:32px}
+.tab b{font-family:var(--display);font-size:18px;letter-spacing:.03em}
+.tab span{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.tab[aria-selected="true"]{border-color:var(--amber);background:rgba(240,180,60,.10)}
+.tab[aria-selected="true"] b{color:var(--amber)}
+
+/* stage */
+.stage{position:relative;height:min(68vh,640px);min-height:400px;border-radius:8px;overflow:hidden;border:1px solid var(--line-2);background:#05070b}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#view.place{cursor:crosshair}
+.ov{position:absolute;background:rgba(13,21,26,.84);border:1px solid var(--line);border-radius:6px;padding:9px;display:grid;gap:7px}
+.ov.tr{right:12px;top:30px;max-width:calc(100% - 24px);justify-items:end}
+.ov.br{right:12px;bottom:12px;max-width:min(380px,calc(100% - 24px));font-size:13px;color:var(--muted)}
+.ov.br b{color:var(--ink);font-weight:600}
+.hudline{position:absolute;left:8px;top:6px;font:600 12px/1.45 var(--mono);color:#fff;text-shadow:0 1px 0 #000,1px 0 0 #000;pointer-events:none;white-space:pre}
+.hudline .c{color:var(--cyan)} .hudline .o{color:var(--orange)} .hudline .p{color:var(--purple)} .hudline .w{color:var(--warn)} .hudline .g{color:var(--ok)} .hudline .a{color:var(--amber)}
+.hudbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:5px;align-items:center}
+.hudbar .hs{all:unset;cursor:pointer;width:42px;height:42px;display:grid;place-items:center;background:rgba(10,18,22,.72);border:1px solid rgba(150,190,195,.55);position:relative}
+.hudbar .hs.sel{border:2px solid #e8b040;width:48px;height:48px}
+.hudbar .hs img{width:32px;height:32px;image-rendering:pixelated}
+.hudbar .hs .k{position:absolute;left:2px;top:0;font:600 10px var(--mono);color:#fff;text-shadow:0 1px 0 #000}
+.hudbar .hs.locked img{opacity:.35}
+.loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);letter-spacing:.1em;color:var(--muted)}
+.lbl{position:absolute;transform:translate(-50%,-120%);font:600 11px var(--mono);white-space:nowrap;pointer-events:none;text-shadow:0 1px 0 #000,1px 0 0 #000,-1px 0 0 #000}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.shot .stage{position:fixed;inset:0;height:auto;min-height:0;z-index:50;border-radius:0}
+.shot .ov.br{display:none}
+@media (max-width:760px){.hudbar .hs{width:34px;height:34px}.hudbar .hs.sel{width:38px;height:38px}.hudbar .hs img{width:32px;height:32px}.ov.br{display:none}.tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* working panel under the stage */
+.work{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:14px;align-items:start}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:10px;min-width:0}
+.parts{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:5px}
+.part{all:unset;cursor:pointer;display:grid;justify-items:center;gap:2px;padding:5px 3px;border:1px solid rgba(150,190,195,.4);background:var(--panel-2);font-size:12px;text-align:center;line-height:1.15}
+.part img{width:32px;height:32px;image-rendering:pixelated}
+.part small{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.part[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.14)}
+.part.locked{cursor:not-allowed;opacity:.5}
+img{image-rendering:pixelated}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:7px 9px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-family:var(--display);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:12px;color:var(--muted);background:var(--panel-2)}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+tr:last-child td{border-bottom:0}
+.bad{color:var(--warn)} .good{color:var(--ok)}
+.checks{display:grid;gap:3px;font-size:13.5px}
+.checks div{display:flex;gap:8px;align-items:baseline}
+.checks .ok::before{content:"ok";font-family:var(--mono);font-size:11px;color:var(--ok);width:32px;flex:none}
+.checks .no::before{content:"no";font-family:var(--mono);font-size:11px;color:var(--warn);width:32px;flex:none}
+.checks .note::before{content:"note";font-family:var(--mono);font-size:11px;color:var(--amber);width:32px;flex:none}
+.bars{display:grid;gap:5px}
+.bar{display:grid;grid-template-columns:150px minmax(0,1fr) 70px;gap:8px;align-items:center;font-size:13px}
+.bar .t{height:10px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden;position:relative}
+.bar .t i{position:absolute;inset:0 auto 0 0;background:var(--sky)}
+.bar .t i.short{background:var(--warn)}
+.bar .v{font-family:var(--mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+canvas.plot{width:100%;height:auto;max-width:100%;background:#070b10;border:1px solid var(--line);border-radius:4px}
+.prog{height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;min-width:80px}
+.prog i{display:block;height:100%;background:var(--cyan)}
+form.addroute{display:flex;flex-wrap:wrap;gap:6px;align-items:end}
+form.addroute label{display:grid;gap:2px;font-size:12px;color:var(--muted)}
+form.addroute select{font:inherit;font-size:13.5px;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;align-content:start;min-width:0}
+.card .head{display:flex;gap:10px;align-items:center}
+.card .head img{width:64px;height:64px;flex:none}
+.card p,.card li{font-size:13.5px;color:var(--muted)}
+.card ul{margin:0;padding-left:16px;display:grid;gap:3px}
+.card .pw{font-family:var(--mono);font-size:11px;color:var(--amber)}
+.opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.opt{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:6px;align-content:start}
+.opt.rec{border-color:var(--amber)}
+.opt h3{font-size:18px}
+.opt p{font-size:14px;color:var(--muted)}
+.dec{display:grid;gap:8px}
+.dec .q{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 14px;display:grid;gap:4px}
+.dec .q h3{font-size:17px}
+.dec .q p{font-size:14px;color:var(--muted)}
+.dec .q .rec b{color:var(--amber);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:13px;margin-right:6px}
+@media (max-width:1000px){.work{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.opts{grid-template-columns:1fr}}
+@media (max-width:560px){.cards{grid-template-columns:1fr}.bar{grid-template-columns:110px minmax(0,1fr) 62px}.stage{height:62vh}}
+</style>
+
+<div class="wrap">
+
+<header class="lede">
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-12</span><span class="tag plain">OpenSpec: ship-tiers</span></div>
+  <h1>Rockets to Starships</h1>
+  <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+  <p>Three tiers of ship, each unlocked by the next rung of the power ladder. <b>Chemical and nuclear rockets</b> are stacked from hex cells in the assembly building and fly to orbit on thrust-to-weight and delta-v. <b>Fusion</b> ships stay in space, fly courses their nav computer plots, run freight on their own, and meet landers in low orbit. <b>Antimatter</b> makes the lander the ship that goes anywhere, and a warp drive opens the neighbouring stars.</p>
+  <p class="honest"><b>One thing here needs your call, and it is the reason for the screenshots in the survey.</b> CLAUDE.md says ships fly Newtonian with local gravity falloff and that patched conics, maneuver nodes and transfer windows stay out. The chemical tier's "orbital stuff" pulls against that. Tab 2 flies the same rocket both ways: <b>today's bounded field</b> and <b>the inverse-square field Tenebris flies its rockets in</b>. The recommendation is at the bottom of the page.</p>
+</header>
+
+<section aria-labelledby="h-tiers">
+  <h2 id="h-tiers" class="sr" style="position:absolute;left:-9999px">The tiers</h2>
+  <div class="tabs" role="tablist" aria-label="Ship tiers" id="tabs">
+    <button class="tab" role="tab" data-tab="vab" aria-selected="true"><img src="ship-tiers/tank.png?v=1" alt=""><b>Hex VAB</b><span>build a stack</span></button>
+    <button class="tab" role="tab" data-tab="orbit" aria-selected="false"><img src="ship-tiers/engine-chem.png?v=1" alt=""><b>Chemical: orbit</b><span>tier 1 &middot; fission</span></button>
+    <button class="tab" role="tab" data-tab="fusion" aria-selected="false"><img src="ship-tiers/fusion.png?v=1" alt=""><b>Fusion</b><span>tier 2 &middot; fusion power</span></button>
+    <button class="tab" role="tab" data-tab="antimatter" aria-selected="false"><img src="ship-tiers/antimatter.png?v=1" alt=""><b>Antimatter</b><span>tier 3 &middot; the collider</span></button>
+  </div>
+  <div class="stage" id="stage">
+    <canvas id="view" aria-label="The current tier's 3D view"></canvas>
+    <div class="loading" id="loading">Loading</div>
+    <div id="labels" aria-hidden="true"></div>
+    <div class="flash" id="flash"></div>
+    <div class="hudline" id="hud" aria-live="polite"></div>
+    <div class="ov tr" id="ctl"></div>
+    <div class="ov br" id="info"></div>
+    <div class="hudbar" id="hudbar" aria-label="Hotbar, as the game draws it"></div>
+  </div>
+  <div class="work" id="work"></div>
+</section>
+
+<section aria-labelledby="h-ladder">
+  <div class="eyebrow">What each tier unlocks</div>
+  <h2 id="h-ladder">The ladder, from the boats to the stars</h2>
+  <p>The tiers follow the power the player has built (the industry mockup's grid: coal, wind and hydro, then the fission reactor; the fusion plant and the antimatter collider are its later rungs). Each tier adds parts; nothing is taken away, so a chemical rocket still flies in the antimatter age.</p>
+  <div class="cards" id="ladder"></div>
+</section>
+
+<section aria-labelledby="h-orb">
+  <div class="eyebrow">For the owner</div>
+  <h2 id="h-orb">"The orbital mechanics in Tenebris rust was pretty cool"</h2>
+  <p><b>What Tenebris does</b> (read from <code>tenebris-rs/crates/tenebris-core</code>): planets and moons ride circular rails, and for physics they are parked at t&nbsp;=&nbsp;0 (<code>orbit.rs</code>, <code>nav.rs</code>: "the bodies are parked"). The rocket is integrated Newtonian (semi-implicit Euler) in <code>orbital_gravity_at</code>, the sum of true inverse-square pull from every body plus the star, uncapped. On top of that it draws <b>patched conics</b>: <code>Conic::from_state</code> builds the orbit from position and velocity, Kepler's equation is solved by Newton's method, the sphere of influence is whichever body pulls hardest, and the drawn path hops up to 5 SOIs over 2 hours. It has <b>maneuver nodes</b> (click the path, drag prograde, normal and radial handles), an Ap/Pe/T readout, a navball, and SAS hold modes (prograde, normal, radial, target, node). There is no autopilot that flies a burn.</p>
+  <p><b>What this game says today.</b> CLAUDE.md, "Non-negotiable world and flight invariants": "Ships use local gravity falloff, Newtonian motion ... Do not restore rocket patched conics, maneuver nodes, transfer-window requirements, or n-body ship simulation." The flight spec's first requirement, "No orbital rocket mechanics", says the same, and the gravity-model change adopted Tenebris's bounded anchor field (full pull to 1.4&nbsp;R, nothing past 1.8&nbsp;R) for ships, without its orbital field.</p>
+  <div class="opts" id="opts"></div>
+</section>
+
+<section aria-labelledby="h-fit">
+  <div class="eyebrow">Fitting it to what is there</div>
+  <h2 id="h-fit">The craft and mockups it joins</h2>
+  <div class="tablebox"><table>
+    <thead><tr><th>What</th><th>Where it sits</th></tr></thead>
+    <tbody>
+      <tr><td>Kestrel, Tern, Loon (<code>assets/models/vehicles</code>)</td><td>Before the tiers: the air and sea craft of the home world, built now. The Kestrel's tilt-rotor hover is assisted flight in the air; none of them reaches space. They stay useful at every tier (a Kestrel parks by the launch pad in tab 1).</td></tr>
+      <tr><td>Shipyard and Ship Builder (<code>ship-crafting.html</code>)</td><td>Its module grid becomes the fusion-tier ship builder, on the same hex cells as the assembly building (2.833 m across, 1 m layers) instead of 2 m squares, so one grid builds everything. Its <code>FlightLimits</code> from parts carry over for assisted ships.</td></tr>
+      <tr><td>Halcyon Transit (<code>travel.html</code>)</td><td>Its transit drive (accelerate, coast, flip, brake) is the fusion tier's nav-computer course. Its free hover compensation becomes a tier-2 lander and tier-3 feature: a chemical rocket's engines must beat its weight, which is the point of thrust-to-weight.</td></tr>
+      <tr><td>Pits, plants and power (<code>industry.html</code>)</td><td>The power ladder: fission fuel rods feed the nuclear thermal engine; a fusion plant makes the fusion drive and its pellets; the collider makes antimatter cells. Freighters move that industry's goods between worlds.</td></tr>
+      <tr><td>Stations and Outposts (<code>stations.html</code>)</td><td>Highport and the docks are where fusion ships live and where freighter routes stop. A starship is built at a station's yard.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="h-dec">
+  <div class="eyebrow">Decisions</div>
+  <h2 id="h-dec">Asked, and recommendations taken</h2>
+  <p class="muted">One question goes to the survey with tab 2's and tab 3's screenshots beside it. The rest have nothing to compare side by side, so each is recorded as "recommendation taken (ask only with screenshots)" and can be overturned on the tracker.</p>
+  <div class="dec" id="decisions"></div>
+</section>
+
+<section aria-labelledby="h-art">
+  <div class="eyebrow">Where the art comes from</div>
+  <h2 id="h-art">The game's own, and what is new</h2>
+  <p class="honest"><b>The game's own</b> (byte-identical copies in <code>ship-tiers/game/</code>, see its README): every hex column, on the launch field, the landing sites and each globe from orbit, wears the terrain atlas (<code>assets/tilesets/atlas.png</code>; fields, lunar regolith, basalt, frozen, desert, jungle and mountain sheets) on 2.833 m cells with 1 m layers; the pad, gantry, apron, rim and hall are the settlement textures iron, granite, stone and slate at their <code>repeat_m</code>; the Kestrel by the pad is the game's model; hotbar items are the game's icons. <b>Mockup-only:</b> the part icons and part textures are pixel art in the solitaire collection's style, drawn by <code>tools/art/ship_tiers_art.py</code> with the balatro-pixel-art kit (32 x 32, Sweaft-64, sampled nearest with no mipmaps). Rockets, landers, freighters and the starship are hex cells built by the page from those parts. Globes from orbit use cells 64 times wider than the game's so they read at that distance; the orbit, the moon's distance and every number in tab 2 are to scale. Water and the air shell are flat tints, as the game draws them.</p>
+</section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+"use strict";
+// =====================================================================================
+// numbers. Units: tonnes, kN, m/s. kN / t = m/s^2, so TWR = F / (m * g).
+// =====================================================================================
+const G1 = 25;                         // m/s^2: the game's 1 g (SURFACE_GRAVITY_MPS2_PER_G)
+const BODIES = {
+  pale: {name: "Pale Blue", R: 4800, g: 25},
+  lantern: {name: "Lantern", R: 1200, g: 9},
+  verdance: {name: "Verdance", R: 2400, g: 22.5},
+};
+const MU = 25 * 4800 * 4800;           // Pale Blue, m^3/s^2
+const LO_ALT = 960;                    // low orbit: 1.2 R, the first band of travel.html
+const PARTS = {
+  pod:   {name: "Command pod", icon: "pod", m: 1.3, where: "core", txt: "One seat, the heat shield under it. The top of the stack."},
+  tank:  {name: "Fuel tank", icon: "tank", m: 0.4, prop: 4.2, where: "any", txt: "4.2 t of propellant in one hex cell; feeds its stage's engines."},
+  chem:  {name: "Chemical engine", icon: "engine-chem", m: 1.0, F: 520, ve: 600, where: "any", engine: true, txt: "520 kN, exhaust 600 m/s. Lifts off; thirsty."},
+  ntr:   {name: "Nuclear thermal", icon: "engine-ntr", m: 2.6, F: 220, ve: 1500, where: "any", engine: true, txt: "220 kN, exhaust 1,500 m/s. Too weak to lift off at 1 g; the upper stage. Needs fission fuel rods."},
+  dec:   {name: "Decoupler", icon: "decoupler", m: 0.25, where: "core", txt: "Splits the stack: everything below it is the stage that fires first."},
+  srb:   {name: "Solid booster", icon: "booster", m: 0.35, prop: 2.4, F: 200, ve: 480, where: "ring", txt: "Per cell: 200 kN for 5.8 s, cannot throttle. Drops when spent."},
+  fin:   {name: "Fin", icon: "fin", m: 0.08, where: "ring", txt: "Keeps the nose into the air on the climb."},
+  legs:  {name: "Landing legs", icon: "legs", m: 0.15, where: "ring", txt: "Three or more on the bottom layer to land."},
+  fusion:{name: "Fusion drive", icon: "fusion", locked: "Tier 2: a fusion plant", txt: "400 kN at 8 km/s exhaust. Never lands."},
+  am:    {name: "Antimatter core", icon: "antimatter", locked: "Tier 3: the collider", txt: "Lifts off anywhere, 60 km/s of delta-v."},
+  warp:  {name: "Warp ring", icon: "warp", locked: "Tier 3: the collider", txt: "Starships only; built at a station yard."},
+};
+const PALETTE = ["pod", "tank", "chem", "ntr", "dec", "srb", "fin", "legs", "fusion", "am", "warp"];
+const HW = 2.833, HR = HW / Math.sqrt(3);
+const NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];   // by angle 0, 60, ... 300
+const hexXZ = (q, r) => [HW * (q + r / 2), HR * 1.5 * r];
+
+// presets: layer lists bottom to top. core part, then ring parts by neighbour index
+const PRESETS = {
+  hop: {name: "Single stage", rows: [["chem", {1: "fin", 3: "fin", 5: "fin"}], ["tank"], ["pod"]]},
+  orbit: {name: "First orbit", rows: [
+    ["chem", {0: "srb", 2: "srb", 4: "srb", 1: "fin", 3: "fin", 5: "fin"}],
+    ["tank", {0: "srb", 2: "srb", 4: "srb"}], ["tank", {0: "srb", 2: "srb", 4: "srb"}], ["tank"],
+    ["dec"], ["ntr"], ["tank"], ["tank"], ["pod"]]},
+  heavy: {name: "Too heavy", rows: [["chem", {1: "fin", 3: "fin", 5: "fin"}], ["tank"], ["tank"], ["tank"], ["tank"], ["tank"], ["dec"], ["ntr"], ["tank"], ["tank"], ["pod"]]},
+  lander: {name: "Lantern lander", rows: [
+    ["chem", {0: "srb", 3: "srb"}], ["tank", {0: "srb", 3: "srb"}], ["tank"], ["dec"],
+    ["ntr", {1: "legs", 3: "legs", 5: "legs"}], ["tank"], ["tank"], ["pod"]]},
+};
+let CELLS = new Map();   // "q,r,y" -> part id
+const key = (q, r, y) => q + "," + r + "," + y;
+function loadPreset(id) {
+  CELLS = new Map();
+  PRESETS[id].rows.forEach(([c, ring], y) => { CELLS.set(key(0, 0, y), c); if (ring) for (const [i, p] of Object.entries(ring)) { const [q, r] = NB[+i]; CELLS.set(key(q, r, y), p); } });
+}
+loadPreset("orbit");
+const cellList = () => [...CELLS].map(([k, p]) => { const [q, r, y] = k.split(",").map(Number); return {q, r, y, p, core: q === 0 && r === 0}; });
+
+// ---- stages: decouplers in the core column split the stack; a decoupler goes with the stage below it
+function analyse(g = G1) {
+  const cells = cellList();
+  const decs = cells.filter(c => c.core && c.p === "dec").map(c => c.y).sort((a, b) => a - b);
+  const stageOf = y => decs.filter(d => d < y).length;
+  const K = decs.length + 1;
+  const S = Array.from({length: K}, (_, i) => ({i, m: 0, liqProp: 0, liqF: 0, liqMdot: 0, srbProp: 0, srbF: 0, srbMdot: 0, srbDry: 0, cells: 0, engines: []}));
+  for (const c of cells) {
+    const s = S[stageOf(c.y)], P = PARTS[c.p]; s.cells++;
+    s.m += P.m + (P.prop || 0);
+    if (c.p === "tank") s.liqProp += P.prop;
+    if (c.p === "chem" || c.p === "ntr") { s.liqF += P.F; s.liqMdot += P.F / P.ve; s.engines.push(c.p); }
+    if (c.p === "srb") { s.srbProp += P.prop; s.srbF += P.F; s.srbMdot += P.F / P.ve; s.srbDry += P.m; }
+  }
+  let above = 0;
+  for (let k = K - 1; k >= 0; k--) { S[k].above = above; above += S[k].m; }
+  const phases = [];
+  for (const s of S) {
+    const m0 = s.above + s.m; s.m0 = m0;
+    s.F = s.srbF + (s.liqProp > 0 ? s.liqF : 0);
+    s.twr = s.F / (m0 * g);
+    let m = m0, dv = 0, t = 0, liq = s.liqProp;
+    const liqOn = s.liqF > 0 && liq > 0;
+    if (s.srbF > 0) {
+      const tA = s.srbProp / s.srbMdot, used = liqOn ? Math.min(liq, s.liqMdot * tA) : 0;
+      const F = s.srbF + (liqOn ? s.liqF : 0), md = s.srbMdot + (liqOn ? s.liqMdot : 0);
+      const m1 = m - s.srbProp - used; dv += F / md * Math.log(m / m1); t += tA;
+      phases.push({F, mdot: md, prop: s.srbProp + used, drop: s.srbDry, stage: s.i, srb: true});
+      m = m1 - s.srbDry; liq -= used;
+    }
+    if (liqOn && liq > 0) {
+      const ve = s.liqF / s.liqMdot, m1 = m - liq; dv += ve * Math.log(m / m1); t += liq / s.liqMdot;
+      phases.push({F: s.liqF, mdot: s.liqMdot, prop: liq, drop: 0, stage: s.i});
+      m = m1;
+    }
+    const restDry = s.m - s.liqProp - s.srbProp - s.srbDry;
+    if (phases.length && phases[phases.length - 1].stage === s.i) phases[phases.length - 1].drop += restDry + (s.srbF > 0 && phases[phases.length - 1].srb ? 0 : 0);
+    else phases.push({F: 0, mdot: 0, prop: 0, drop: restDry, stage: s.i});
+    s.dv = dv; s.t = t;
+  }
+  // the last stage's dry mass never drops
+  if (phases.length) phases[phases.length - 1].drop = 0;
+  const total = S.reduce((a, s) => a + s.dv, 0);
+  return {S, phases, total, mass: above, cells};
+}
+function checks(A, g) {
+  const out = [], cells = A.cells, has = (q, r, y) => CELLS.has(key(q, r, y));
+  const pods = cells.filter(c => c.p === "pod");
+  const coreYs = cells.filter(c => c.core).map(c => c.y);
+  const top = coreYs.length ? Math.max(...coreYs) : -1;
+  if (!cells.length) return [["no", "Nothing on the pad yet. Pick a part and click a cell."]];
+  out.push(pods.length === 1 ? (CELLS.get(key(0, 0, top)) === "pod" ? ["ok", "A command pod on top."] : ["no", "The pod has to be the top of the stack."]) : ["no", pods.length ? "One pod per rocket." : "Needs a command pod."]);
+  let gap = false; for (let y = 0; y <= top; y++) if (!has(0, 0, y)) gap = true;
+  out.push(gap ? ["no", "A gap in the stack: every core cell sits on the one below."] : ["ok", `Stack of ${top + 1} layers, ${top + 1} m tall.`]);
+  const loose = cells.filter(c => !c.core && !has(0, 0, c.y));
+  if (loose.length) out.push(["no", `${loose.length} radial part${loose.length > 1 ? "s have" : " has"} no core cell beside it.`]);
+  const blocked = cells.filter(c => (c.p === "chem" || c.p === "ntr" || c.p === "srb") && c.y > 0 && has(c.q, c.r, c.y - 1) && !(c.core && CELLS.get(key(0, 0, c.y - 1)) === "dec") && !(c.p === "srb" && CELLS.get(key(c.q, c.r, c.y - 1)) === "srb"));
+  if (blocked.length) out.push(["no", "An engine's nozzle is blocked by the cell under it."]);
+  const s0 = A.S[0];
+  out.push(s0.twr >= 1 ? ["ok", `Lifts off: TWR ${s0.twr.toFixed(2)} at ${(g / G1).toFixed(2)} g.`] : ["no", `TWR ${s0.twr.toFixed(2)}: its first stage cannot lift its own weight at ${(g / G1).toFixed(2)} g.`]);
+  A.S.forEach(s => { if (s.liqProp > 0 && !s.liqF && !s.srbF) out.push(["note", `Stage ${s.i + 1} carries fuel but no engine: dead weight.`]); });
+  out.push(A.total >= 540 ? ["ok", `${Math.round(A.total).toLocaleString()} m/s: enough to reach low orbit (about 540 m/s with a good gravity turn).`] : ["note", `${Math.round(A.total)} m/s: marginal. Low orbit takes 530 to 575 m/s, depending on the climb (tab 2).`]);
+  const legs = cells.filter(c => c.p === "legs").length;
+  if (legs) out.push([legs >= 3 ? "ok" : "note", `${legs} landing leg${legs > 1 ? "s" : ""}${legs >= 3 ? ": it can land" : ": three to land"}.`]);
+  return out;
+}
+
+// =====================================================================================
+// the renderer, shared by every tab; each tab's world is built the first time it is opened
+// =====================================================================================
+const Q = new URLSearchParams(location.search);
+if (Q.get("shot")) document.documentElement.classList.add("shot");
+const $ = id => document.getElementById(id);
+const canvas = $("view");
+let renderer = null, active = null;
+const WORLDS = {};
+const PX = "ship-tiers/", GAME = "ship-tiers/game/", V = "?v=1";
+let TL, GLTF = null;
+const TEX = {};
+function tex(n, rx = 1, ry = rx) {
+  const k = n + "@" + rx + "x" + ry; if (TEX[k]) return TEX[k];
+  const t = TL.load(n + ".png" + V); t.encoding = THREE.sRGBEncoding; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); return (TEX[k] = t);
+}
+
+// lamps: every lamp lights what is near it, wherever the camera is (ship-crafting.html's shader)
+const MAXL = 48;
+const U = {uLampPos: {value: Array.from({length: MAXL}, () => new THREE.Vector3())}, uLampCol: {value: Array.from({length: MAXL}, () => new THREE.Vector4())}, uLampCount: {value: 0}};
+function lit(mat) {
+  mat.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, U);
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+uniform vec3 uLampPos[${MAXL}];
+uniform vec4 uLampCol[${MAXL}];
+uniform int uLampCount;`).replace("#include <lights_fragment_end>", `#include <lights_fragment_end>
+{
+  vec3 P = -vViewPosition;
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uLampCount) break;
+    vec3 Lv = uLampPos[i] - P;
+    float d = length(Lv);
+    float r = uLampCol[i].w;
+    if (d > r) continue;
+    float f = 1.0 - d / r;
+    float att = f * f;
+    float nl = max(dot(normal, Lv / max(d, 1e-3)), 0.0);
+    reflectedLight.directDiffuse += diffuseColor.rgb * uLampCol[i].rgb * att * (0.15 + 0.85 * nl);
+  }
+}`);
+  };
+  mat.customProgramCacheKey = () => "lamps";
+  return mat;
+}
+const std = o => lit(new THREE.MeshStandardMaterial(Object.assign({roughness: 0.9, metalness: 0}, o)));
+const glowCache = {};
+function glowMat(color) {
+  const k = new THREE.Color(color).getHexString(); if (glowCache[k]) return glowCache[k];
+  const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); const col = new THREE.Color(color);
+  const rgb = `${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)}`;
+  gr.addColorStop(0, `rgba(${rgb},0.95)`); gr.addColorStop(0.25, `rgba(${rgb},0.35)`); gr.addColorStop(1, `rgba(${rgb},0)`);
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  return (glowCache[k] = new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true}));
+}
+function makeWorld(name) {
+  const W = {name, scene: new THREE.Scene(), lamps: [], labels: [], cam: {target: new THREE.Vector3(), yaw: 0.6, pitch: 0.35, dist: 60, min: 5, max: 400}, update: () => {}, hud: () => "", fov: 50, near: 0.3, far: 3000};
+  W.camera = new THREE.PerspectiveCamera(W.fov, 1, W.near, W.far);
+  W.lamp = (x, y, z, color, intensity, range, opts = {}) => {
+    const L = {p: new THREE.Vector3(x, y, z), c: new THREE.Color(color), i: intensity, r: range, parent: opts.parent || null, on: opts.always ? 2 : 1};
+    if (opts.bulb !== false) { const s = (opts.size || 0.18) * 2, b = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), new THREE.MeshBasicMaterial({color})); b.position.copy(L.p); (opts.parent || W.scene).add(b); L.bulb = b; }
+    if (opts.halo) { const sp = new THREE.Sprite(glowMat(color)); sp.scale.setScalar(opts.halo); sp.position.copy(L.p); (opts.parent || W.scene).add(sp); L.sprite = sp; }
+    W.lamps.push(L); return L;
+  };
+  W.label = (text, cls, obj, color) => { const el = document.createElement("div"); el.className = "lbl " + (cls || ""); el.textContent = text; if (color) el.style.color = color; $("labels").appendChild(el); const L = {el, obj, v: new THREE.Vector3(), show: true}; W.labels.push(L); el.hidden = true; return L; };
+  WORLDS[name] = W; return W;
+}
+const tmpV = new THREE.Vector3();
+function pushLamps(W) {
+  let n = 0;
+  const view = W.camera.matrixWorldInverse;
+  for (const L of W.lamps) {
+    if (n >= MAXL) break;
+    const on = L.on === 2 ? 1 : (W.lampsOn ?? 1); if (on <= 0.01 || L.i <= 0) continue;
+    tmpV.copy(L.p); if (L.parent) L.parent.localToWorld(tmpV);
+    U.uLampPos.value[n].copy(tmpV).applyMatrix4(view);
+    U.uLampCol.value[n].set(L.c.r * L.i * on, L.c.g * L.i * on, L.c.b * L.i * on, L.r); n++;
+  }
+  U.uLampCount.value = n;
+}
+
+// ---- hex ground: the game's columns (2.833 m flat to flat, 1 m layers) with the terrain atlas read
+// the way planet_surface.wgsl does: ground tile (0,0) on top, its side (1,0) on the first metre, earth (2,0) below
+const auv = (sheet, tx, ty, fu, fv) => { const sx = sheet % 4, sy = Math.floor(sheet / 4); fu = 0.01 + fu * 0.98; fv = 0.01 + fv * 0.98; return [(sx * 4 + tx + fu) / 16, 1 - (sy * 4 + ty + fv) / 16]; };
+const SHEET = {asteroid: 0, basalt: 1, beach: 2, desert: 3, fields: 4, frozen: 5, jungle: 6, regolith: 7, mountains: 8, ocean: 9, redwood: 10, swamp: 13 - 1, tundra: 13};
+const REP = {granite: 2, iron: 1, stone: 2, slate: 2, plank: 2};
+const hsh = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const vn = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz); const a = hsh(xi, zi), b = hsh(xi + 1, zi), c = hsh(xi, zi + 1), d = hsh(xi + 1, zi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
+function hexGround(W, {rings, sheet, kindAt}) {
+  const CELL = new Map(), GEO = {}, geo = k => GEO[k] || (GEO[k] = {p: [], n: [], u: []});
+  for (let q = -rings; q <= rings; q++) for (let r = -rings; r <= rings; r++) {
+    if (Math.abs(q + r) > rings) continue;
+    const [x, z] = hexXZ(q, r); CELL.set(q + "," + r, Object.assign({x, z}, kindAt(x, z)));
+  }
+  const corner = i => { const a = Math.PI / 180 * (60 * i - 30); return [HR * Math.cos(a), HR * Math.sin(a)]; };
+  for (const [k, c] of CELL) {
+    const [q, r] = k.split(",").map(Number), G = geo(c.k === "atlas" ? "atlas" : c.k);
+    const top = (px, pz) => c.k === "atlas" ? auv(sheet, 0, 0, (px - c.x) / (2 * HR) + 0.5, (pz - c.z) / (2 * HR) + 0.5) : [px / REP[c.k], -pz / REP[c.k]];
+    for (let i = 0; i < 6; i++) {
+      const [ax, az] = corner(i), [bx, bz] = corner((i + 1) % 6);
+      for (const [px, pz] of [[c.x, c.z], [c.x + bx, c.z + bz], [c.x + ax, c.z + az]]) { G.p.push(px, c.h, pz); G.n.push(0, 1, 0); G.u.push(...top(px, pz)); }
+      const mx = c.x + (ax + bx), mz = c.z + (az + bz);
+      let nb = null; for (const [dq, dr] of NB) { const o = CELL.get((q + dq) + "," + (r + dr)); if (o && Math.hypot(o.x - mx, o.z - mz) < HR) nb = o; }
+      const low = nb ? nb.h : c.h - 3; if (low >= c.h) continue;
+      const nx = (ax + bx) / 2, nz = (az + bz) / 2, l = Math.hypot(nx, nz), S = c.k === "atlas" ? geo("atlas") : geo(c.k + "w");
+      for (let y = c.h; y > low; y--) {
+        const tile = y === c.h ? 1 : 2;
+        for (const [px, py, pz, u, v] of [[ax, y, az, 0, 0], [bx, y - 1, bz, 1, 1], [bx, y, bz, 1, 0], [ax, y, az, 0, 0], [ax, y - 1, az, 0, 1], [bx, y - 1, bz, 1, 1]]) {
+          S.p.push(c.x + px, py, c.z + pz); S.n.push(nx / l, 0, nz / l);
+          S.u.push(...(c.k === "atlas" ? auv(sheet, tile, 0, u, v) : [u * HR / REP[c.k], (py) / REP[c.k]]));
+        }
+      }
+    }
+  }
+  const mats = {atlas: std({map: W.atlas, roughness: 1, side: THREE.DoubleSide})};
+  for (const [k, G] of Object.entries(GEO)) {
+    const base = k.replace(/w$/, "");
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(G.p, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(G.n, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(G.u, 2));
+    const m = new THREE.Mesh(g, mats[base] || (mats[base] = std({map: tex(GAME + base), roughness: 1, side: THREE.DoubleSide}))); m.receiveShadow = true; W.scene.add(m);
+  }
+  return CELL;
+}
+
+// ---- sky and time of day for a ground scene. Night is dark: pools of lamplight with dark gaps.
+function groundSky(W, sheetFog) {
+  const s = W.scene;
+  W.hemi = new THREE.HemisphereLight(0xbcd6ee, 0x3d3a2c, 0.5); s.add(W.hemi);
+  W.sun = new THREE.DirectionalLight(0xfff1dc, 1.0); W.sun.position.set(-60, 110, 50); W.sun.castShadow = true;
+  W.sun.shadow.mapSize.set(2048, 2048); Object.assign(W.sun.shadow.camera, {left: -70, right: 70, top: 70, bottom: -70, near: 10, far: 400}); W.sun.shadow.bias = -0.0005; s.add(W.sun);
+  W.moon = new THREE.DirectionalLight(0x9fb4e0, 0); W.moon.position.set(80, 120, -60); s.add(W.moon);
+  const a = []; for (let i = 0; i < 1400; i++) { const t = Math.random() * Math.PI * 2, u = Math.random() * 0.95 + 0.05, r = 900; a.push(r * Math.cos(t) * Math.sqrt(1 - u * u), r * u, r * Math.sin(t) * Math.sqrt(1 - u * u)); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(a, 3));
+  W.stars = new THREE.Points(sg, new THREE.PointsMaterial({color: 0xdfe6ff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, fog: false})); s.add(W.stars);
+  s.fog = new THREE.Fog(0x9bb7cc, 140, 520);
+  W.times = Object.assign({
+    day: {sky: 0x9cc4e4, fog: 0xb4cbd8, hemi: 0.55, sun: 1.05, moon: 0, lamps: 0, stars: 0},
+    night: {sky: 0x05080f, fog: 0x070a12, hemi: 0.018, sun: 0, moon: 0.03, lamps: 1, stars: 0.9},
+  }, sheetFog || {});
+  W.setTime = t => {
+    W.time = t; const T = W.times[t];
+    s.background = new THREE.Color(T.sky); s.fog.color.setHex(T.fog);
+    W.hemi.intensity = T.hemi; W.sun.intensity = T.sun; W.sun.castShadow = T.sun > 0.2; W.moon.intensity = T.moon; W.stars.material.opacity = T.stars;
+    W.lampsOn = T.lamps;
+    for (const L of W.lamps) { if (L.sprite) L.sprite.visible = L.on === 2 || T.lamps > 0.05; if (L.bulb && L.on !== 2) L.bulb.material.color.copy(L.c).multiplyScalar(T.lamps > 0.05 ? 1 : 0.35); }
+    (W.emissive || []).forEach(m => m.emissiveIntensity = t === "night" ? 0.75 : 0.12);
+    renderCtl();
+  };
+}
+
+// =====================================================================================
+// hex-cell craft: every part is one cell, 2.833 m across and 1 m tall
+// =====================================================================================
+let PM = null;
+function partMats() {
+  if (PM) return PM;
+  const T = (n, rx = 6, ry = 1) => tex(PX + n, rx, ry);
+  PM = {
+    pod: std({map: T("tex-pod", 6, 1)}), tank: std({map: T("tex-tank", 6, 1)}), engine: std({map: T("tex-engine", 6, 1), metalness: 0.3, roughness: 0.6}),
+    hazard: std({map: T("tex-hazard", 6, 0.5)}), fin: std({map: T("tex-fin", 2, 2)}), booster: std({map: T("tex-booster", 6, 1)}),
+    ntr: std({map: T("tex-ntr", 6, 1)}), fusion: std({map: T("tex-fusion", 6, 1), emissive: 0x0a3540, emissiveMap: T("tex-fusion", 6, 1)}),
+    am: std({map: T("tex-am", 6, 1), emissive: 0x401030, emissiveMap: T("tex-am", 6, 1)}), warp: std({map: T("tex-warp", 4, 1), emissive: 0x401870, emissiveMap: T("tex-warp", 4, 1)}),
+    dark: std({map: T("tex-engine", 6, 1), color: 0x7a8890}), red: std({map: T("tex-fin", 6, 1)}),
+    glass: std({color: 0x74effe, emissive: 0x1096c3, emissiveIntensity: 0.6, roughness: 0.3}),
+  };
+  return PM;
+}
+const FLAME = {chem: 0xffa040, ntr: 0x9fe8ff, srb: 0xffc070, fusion: 0x74effe, am: 0xff5ab8};
+function flameMesh(color, len, r0, r1) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, len, 6, 1, true), new THREE.MeshBasicMaterial({color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide}));
+  m.position.y = -len / 2; m.raycast = () => {}; return m;
+}
+// one part's meshes, with y = 0 at the bottom of its cell; returns a Group with .flames
+function partMesh(p, ctx = {}) {
+  const M = partMats(), g = new THREE.Group(); g.flames = [];
+  const add = (geo, mat, y, extra) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.castShadow = m.receiveShadow = true; if (extra) extra(m); g.add(m); return m; };
+  const prism = (r, h, mat, y, top = r) => add(new THREE.CylinderGeometry(top, r, h, 6), mat, y + h / 2);
+  switch (p) {
+    case "pod": prism(HR * 0.98, 0.25, M.dark, 0); prism(HR * 0.95, 0.75, M.pod, 0.25, HR * 0.42); add(new THREE.BoxGeometry(0.5, 0.22, 0.08), M.glass, 0.62, m => m.position.z = HR * 0.66); break;
+    case "tank": prism(HR, 1, M.tank, 0); break;
+    case "chem": { prism(HR * 0.9, 0.35, M.pod, 0.65); prism(HR * 0.82, 0.65, M.engine, 0, HR * 0.42); const f = flameMesh(FLAME.chem, 3.2, HR * 0.7, HR * 0.15); g.add(f); g.flames.push(f); break; }
+    case "ntr": { prism(HR * 0.75, 0.55, M.ntr, 0.45); prism(HR * 0.6, 0.45, M.engine, 0, HR * 0.4); const f = flameMesh(FLAME.ntr, 2.6, HR * 0.5, HR * 0.1); g.add(f); g.flames.push(f); break; }
+    case "dec": prism(HR, 0.3, M.hazard, 0); prism(HR * 0.7, 0.7, M.dark, 0.3); break;
+    case "srb": {
+      prism(HR * 0.78, 1, M.booster, 0);
+      if (!ctx.above) add(new THREE.CylinderGeometry(0.05, HR * 0.78, 1.0, 6), M.red, 1.5);
+      if (!ctx.below) { prism(HR * 0.5, 0.3, M.engine, -0.3, HR * 0.35); const f = flameMesh(FLAME.srb, 3.6, HR * 0.6, HR * 0.1); f.position.y -= 0.3; g.add(f); g.flames.push(f); }
+      break;
+    }
+    case "fin": { const a = ctx.angle || 0; const m = add(new THREE.BoxGeometry(0.16, 0.95, HR * 1.4), M.fin, 0.48); m.rotation.y = Math.PI / 2 - a; break; }
+    case "legs": { const a = ctx.angle || 0; const s = new THREE.Group(); s.rotation.y = Math.PI / 2 - a; g.add(s);
+      const st = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.6, 0.18), M.dark); st.position.set(0, 0.1, -HR * 0.1); st.rotation.x = -0.55; s.add(st);
+      const ft = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 0.12, 6), M.dark); ft.position.set(0, -0.6, HR * 0.38); s.add(ft); st.castShadow = ft.castShadow = true; break; }
+    case "fusion": { prism(HR, 0.6, M.fusion, 0.4); prism(HR * 0.7, 0.4, M.engine, 0, HR * 0.95); const f = flameMesh(FLAME.fusion, 9, HR * 0.5, HR * 0.08); g.add(f); g.flames.push(f); break; }
+    case "am": { prism(HR, 1, M.am, 0); const f = flameMesh(FLAME.am, 5, HR * 0.55, HR * 0.1); g.add(f); g.flames.push(f); break; }
+    case "warp": prism(HR, 1, M.warp, 0); break;
+    case "hab": prism(HR, 1, M.pod, 0); break;
+    case "cargo": prism(HR, 1, M.tank, 0); break;
+  }
+  return g;
+}
+// a craft from a cell list; core column at (0,0)
+function buildCraft(cells, opts = {}) {
+  const g = new THREE.Group(); g.flames = []; g.parts = [];
+  const has = (q, r, y, p) => cells.some(c => c.q === q && c.r === r && c.y === y && (!p || c.p === p));
+  for (const c of cells) {
+    const [x, z] = hexXZ(c.q, c.r);
+    const angle = Math.atan2(z, x);
+    const m = partMesh(c.p, {angle, above: has(c.q, c.r, c.y + 1, c.p), below: has(c.q, c.r, c.y - 1, c.p)});
+    m.position.set(x, c.y, z); m.userData = Object.assign({}, c); g.add(m); g.parts.push(m);
+    m.flames.forEach(f => { f.userData.part = c.p; f.visible = false; g.flames.push(f); });
+  }
+  return g;
+}
+
+// =====================================================================================
+// tab 1: the hex VAB, a launch pad on the home world's fields
+// =====================================================================================
+let VAB = {sel: "tank", sym: 3, body: "pale", launching: null};
+function padWorld(name, {sheet, layout}) {
+  const W = makeWorld(name);
+  W.atlas = tex(GAME + "atlas"); W.atlas.wrapS = W.atlas.wrapT = THREE.ClampToEdgeWrapping; W.atlas.repeat.set(1, 1);
+  groundSky(W);
+  W.emissive = [];
+  const padR = layout === "vab" ? 9 : 6;
+  hexGround(W, {rings: 44, sheet, kindAt: (x, z) => {
+    const d = Math.hypot(x, z);
+    if (d < padR) return {k: "stone", h: 1};
+    if (d < padR + 2.4) return {k: "iron", h: 1};
+    if (layout === "vab" && x > -40 && x < 46 && z > -34 && z < 30) return {k: "granite", h: 0};
+    if (layout !== "vab" && d < padR + 9) return {k: "atlas", h: 0};
+    const dd = Math.max(0, d - (layout === "vab" ? 58 : 26));
+    return {k: "atlas", h: Math.max(0, Math.round(dd / 8 + (vn(x / 18, z / 18) - 0.5) * 3 * Math.min(1, dd / 16) + (vn(x / 50, z / 50) - 0.4) * dd / 10))};
+  }});
+  // pad rim lamps: six warm pools
+  for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + Math.PI / 6; W.lamp(Math.cos(a) * (padR + 1.2), 1.4, Math.sin(a) * (padR + 1.2), 0xffb347, 2.0, 9, {size: 0.2, halo: 1.6}); }
+  return W;
+}
+function buildVab() {
+  const W = padWorld("vab", {sheet: SHEET.fields, layout: "vab"});
+  const iron = std({map: tex(GAME + "iron", 1, 1)}), stone = std({map: tex(GAME + "stone", 1, 1)});
+  // gantry: an iron tower one cell off the stack, with an arm and a work lamp per 4 m
+  const gx = -HW * 3, gantry = new THREE.Group(); W.scene.add(gantry);
+  for (let y = 1; y < 22; y += 1) { const b = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 2), std({map: tex(GAME + "iron", 2, 1)})); b.position.set(gx, y + 0.5, -3); b.castShadow = b.receiveShadow = true; gantry.add(b); }
+  for (let y = 4; y < 22; y += 5) { W.lamp(gx + 1.3, y, -1.7, 0xffd9a0, 2.4, 10, {size: 0.16}); }
+  W.lamp(gx, 22.3, -3, 0xff3030, 1.5, 5, {size: 0.2, halo: 1.4, always: true});
+  // the assembly hall behind: stone walls, slate roof, a lit door
+  const hall = new THREE.Group(); hall.position.set(4, 0, -42); W.scene.add(hall);
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(34, 26, 14), std({map: tex(GAME + "stone", 17, 13)})); shell.position.y = 13; shell.castShadow = shell.receiveShadow = true; hall.add(shell);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(35, 1, 15), std({map: tex(GAME + "slate", 17, 7)})); roof.position.y = 26.5; hall.add(roof);
+  const doorMat = std({color: 0x1a1612, emissive: 0xffb860, emissiveIntensity: 1}); W.emissive.push(doorMat);
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(12, 22), doorMat); door.position.set(0, 11, 7.02); hall.add(door);
+  for (let i = -1; i <= 1; i++) W.lamp(4 + i * 5, 3, -33, 0xffc070, 2.2, 12, {bulb: false});
+  // floodlight masts round the pad
+  for (const [x, z] of [[-26, 14], [26, 14], [26, -16], [-24, -18]]) {
+    const mast = new THREE.Mesh(new THREE.BoxGeometry(0.6, 16, 0.6), iron); mast.position.set(x, 8, z); mast.castShadow = true; W.scene.add(mast);
+    W.lamp(x * 0.9, 15.5, z * 0.9, 0xfff0d0, 3.0, 30, {size: 0.4, halo: 3});
+  }
+  // a flame trench of stone under the pad's edge
+  const trench = new THREE.Mesh(new THREE.BoxGeometry(5, 0.6, 12), stone); trench.position.set(0, 0.7, 14); W.scene.add(trench);
+  // the game's Kestrel, parked on the apron as the craft before the tiers
+  if (GLTF) GLTF.load(GAME + "kestrel.gltf.json" + V, gl => {
+    const o = gl.scene; o.traverse(m => { if (!m.isMesh) return; const map = m.material.map; if (map) { map.magFilter = map.minFilter = THREE.NearestFilter; map.generateMipmaps = false; map.needsUpdate = true; } m.material = std({map, color: m.material.color}); m.castShadow = m.receiveShadow = true; });
+    o.rotation.y = 2.4; const bb = new THREE.Box3().setFromObject(o); o.position.set(28, -bb.min.y, -2); W.scene.add(o);
+    W.lamp(28, 4, 3, 0xffc070, 1.6, 9, {size: 0.15});
+  });
+  // the stack and its placement ghosts
+  W.rocket = null; W.ghosts = new THREE.Group(); W.scene.add(W.ghosts);
+  W.debris = [];
+  W.flameLamp = W.lamp(0, 0, 0, 0xffa040, 0, 30, {bulb: false, always: true});
+  W.ghostGeo = new THREE.CylinderGeometry(HR * 0.96, HR * 0.96, 0.96, 6);
+  W.ghostMat = new THREE.MeshBasicMaterial({color: 0x8fc3d8, transparent: true, opacity: 0.06, depthWrite: false});
+  W.ghostEdge = new THREE.LineBasicMaterial({color: 0x8fc3d8, transparent: true, opacity: 0.28});
+  W.ghostEdgeGeo = new THREE.EdgesGeometry(W.ghostGeo);
+  W.base = 1;   // the pad's top
+  W.cam = {target: new THREE.Vector3(0, 5.5, 0), yaw: 0.55, pitch: 0.26, dist: 27, min: 8, max: 160};
+  W.rebuild = () => {
+    if (W.rocket) W.scene.remove(W.rocket);
+    W.rocket = buildCraft(cellList()); W.rocket.position.y = W.base; W.scene.add(W.rocket);
+    W.ghosts.clear();
+    if (W.launch) return;
+    const coreYs = cellList().filter(c => c.core).map(c => c.y), top = coreYs.length ? Math.max(...coreYs) : -1;
+    const spots = [];
+    for (let y = 0; y <= top + 1; y++) if (!CELLS.has(key(0, 0, y))) spots.push([0, 0, y]);
+    for (let y = 0; y <= top; y++) if (CELLS.has(key(0, 0, y))) NB.forEach(([q, r]) => { if (!CELLS.has(key(q, r, y))) spots.push([q, r, y]); });
+    for (const [q, r, y] of spots) {
+      const [x, z] = hexXZ(q, r);
+      const m = new THREE.Mesh(W.ghostGeo, W.ghostMat); m.position.set(x, W.base + y + 0.5, z); m.userData = {q, r, y}; W.ghosts.add(m);
+      const e = new THREE.LineSegments(W.ghostEdgeGeo, W.ghostEdge); e.position.copy(m.position); e.raycast = () => {}; W.ghosts.add(e);
+    }
+  };
+  W.rebuild();
+  W.click = (ray, button) => {
+    if (W.launch) return;
+    const hitsP = ray.intersectObjects(W.rocket.children, true);
+    const hitsG = ray.intersectObjects(W.ghosts.children.filter(o => o.isMesh), false);
+    const dp = hitsP.length ? hitsP[0].distance : 1e9, dg = hitsG.length ? hitsG[0].distance : 1e9;
+    if (button === 2 || VAB.sel === "erase") {
+      if (dp < 1e9) { let o = hitsP[0].object; while (o.parent !== W.rocket) o = o.parent; const c = o.userData; symCells(c.q, c.r).forEach(([q, r]) => CELLS.delete(key(q, r, c.y))); changed(); }
+      return;
+    }
+    if (dg >= dp) return;
+    const {q, r, y} = hitsG[0].object.userData, P = PARTS[VAB.sel];
+    if (P.locked) return;
+    const core = q === 0 && r === 0;
+    if (P.where === "core" && !core) { flashInfo(`${P.name} goes in the core column.`); return; }
+    if (P.where === "ring" && core) { flashInfo(`${P.name} goes on the side of the stack.`); return; }
+    (core ? [[0, 0]] : symCells(q, r)).forEach(([a, b]) => { if (!CELLS.has(key(a, b, y))) CELLS.set(key(a, b, y), VAB.sel); });
+    changed();
+  };
+  W.update = (dt, t) => {
+    W.rocket.flames.forEach(f => { if (f.visible) f.scale.set(1 + 0.12 * Math.sin(t * 40 + f.id), 0.9 + 0.2 * Math.random(), 1 + 0.12 * Math.sin(t * 33)); });
+    const L = W.launch;
+    if (!L) { W.flameLamp.i = 0; return; }
+    L.t += dt;
+    if (L.stuck) {
+      W.rocket.position.x = (Math.random() - 0.5) * 0.08; W.flameLamp.p.set(0, W.base, 0); W.flameLamp.i = 3.5;
+      if (L.t > 3) endLaunch();
+      return;
+    }
+    const sub = 10, h = dt / sub, g = BODIES[VAB.body].g;
+    for (let i = 0; i < sub; i++) {
+      const ph = L.phases[L.k];
+      let a = -g;
+      if (ph && ph.F > 0) { a += ph.F / L.m; const use = Math.min(ph.prop, ph.mdot * h); ph.prop -= use; L.m -= use; }
+      if (ph && ph.prop <= 1e-6) { stageSep(L, ph); L.k++; }
+      L.v += a * h; L.y += L.v * h; if (L.y < 0) { L.y = 0; L.v = Math.max(0, L.v); }
+      L.x += L.vx * h; if (L.y > 25) L.vx = Math.min(L.vx + 1.4 * h, 30);
+    }
+    W.rocket.position.set(L.x, W.base + L.y, 0);
+    W.rocket.rotation.z = -Math.min(0.5, L.vx / 60);
+    const ph = L.phases[L.k], on = ph && ph.F > 0;
+    W.rocket.flames.forEach(f => f.visible = on && !f.userData.gone && f.userData.stage === ph.stage && (!f.userData.srb || ph.srb));
+    W.flameLamp.p.set(L.x, W.base + L.y - 2, 0); W.flameLamp.i = on ? 5 : 0;
+    for (const d of W.debris) { d.v -= g * dt; d.o.position.y += d.v * dt; d.o.position.x += d.vx * dt; d.o.rotation.z += d.spin * dt; if (d.o.position.y < 1) { d.o.position.y = 1; d.v = 0; d.vx *= 0.9; d.spin = 0; } }
+    W.cam.target.lerp(new THREE.Vector3(L.x, W.base + L.y + 3, 0), 0.08);
+    W.cam.dist = Math.min(110, 27 + L.y * 0.5);
+    if (L.t > 16 || L.y > 900) endLaunch();
+  };
+  W.hud = () => {
+    const A = analyse(BODIES[VAB.body].g), L = W.launch;
+    if (L) return `launch preview | alt ${Math.round(L.y)} m  v ${Math.round(L.v)} m/s  stage ${Math.min(L.k + 1, A.S.length)}/${A.S.length}${L.stuck ? "  <span class='w'>TWR under 1: it cannot lift off</span>" : ""}`;
+    const s0 = A.S[0];
+    return `assembly building | hex stack ${A.cells.length} cells  mass ${A.mass.toFixed(1)} t  stages ${A.S.length}\nTWR ${s0 ? `<span class='${s0.twr >= 1 ? "g" : "w"}'>${s0.twr.toFixed(2)}</span>` : "-"} at ${BODIES[VAB.body].name}  delta-v <span class='c'>${Math.round(A.total).toLocaleString()} m/s</span>  | ${VAB.sel === "erase" ? "eraser" : PARTS[VAB.sel].name}, symmetry ${VAB.sym}x`;
+  };
+  return W;
+}
+function symCells(q, r) {
+  const i = NB.findIndex(([a, b]) => a === q && b === r); if (i < 0) return [[q, r]];
+  const step = {1: 6, 2: 3, 3: 2, 6: 1}[VAB.sym];
+  const out = []; for (let k = 0; k < 6; k += step) out.push(NB[(i + k) % 6]); return out;
+}
+function stageSep(L, ph) {
+  const W = WORLDS.vab;
+  // what this phase drops: spent boosters, or the whole stage below the decoupler
+  const drop = W.rocket.parts.filter(m => !m.userData.gone && m.userData.stage === ph.stage && (ph.srb ? m.userData.p === "srb" : true));
+  if (!ph.drop || !drop.length) return;
+  L.m -= ph.drop;
+  for (const m of drop) {
+    m.userData.gone = true; m.flames.forEach(f => f.userData.gone = true);
+    const wp = new THREE.Vector3(); m.getWorldPosition(wp); W.rocket.remove(m); m.position.copy(wp); W.scene.add(m);
+    W.debris.push({o: m, v: L.v * 0.9, vx: (m.position.x - L.x) * 0.6 + L.vx, spin: (Math.random() - 0.5) * 1.2});
+  }
+}
+function startLaunch() {
+  const W = WORLDS.vab; if (!W || W.launch) return;
+  const A = analyse(BODIES[VAB.body].g);
+  W.rebuild();
+  const stageOf = (() => { const decs = A.cells.filter(c => c.core && c.p === "dec").map(c => c.y); return y => decs.filter(d => d < y).length; })();
+  W.rocket.parts.forEach(m => { m.userData.stage = stageOf(m.userData.y); m.flames.forEach(f => { f.userData.stage = m.userData.stage; f.userData.srb = m.userData.p === "srb"; }); });
+  W.launch = {t: 0, y: 0, v: 0, x: 0, vx: 0, m: A.mass, k: 0, phases: A.phases.map(p => Object.assign({}, p)), stuck: !(A.S[0] && A.S[0].twr >= 1)};
+  W.ghosts.clear();
+  if (W.launch.stuck) W.rocket.flames.forEach(f => f.visible = (f.userData.stage === 0));
+  renderCtl();
+}
+function endLaunch() {
+  const W = WORLDS.vab; W.launch = null;
+  W.debris.forEach(d => W.scene.remove(d.o)); W.debris = [];
+  W.cam.target.set(0, 5.5, 0); W.cam.dist = 27; W.rocket.position.set(0, W.base, 0); W.rocket.rotation.z = 0;
+  W.rebuild(); renderCtl();
+}
+
+// =====================================================================================
+// globes from orbit: a Goldberg sphere of hex cells (12 pentagons), each cell a column
+// =====================================================================================
+function icoGrid(level) {
+  const t = (1 + Math.sqrt(5)) / 2;
+  const V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(v => new THREE.Vector3(...v).normalize());
+  let F = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+  for (let l = 0; l < level; l++) {
+    const cache = new Map(), mid = (a, b) => { const k = a < b ? a + "_" + b : b + "_" + a; if (cache.has(k)) return cache.get(k); V.push(V[a].clone().add(V[b]).normalize()); cache.set(k, V.length - 1); return V.length - 1; };
+    const NF = []; for (const [a, b, c] of F) { const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a); NF.push([a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]); } F = NF;
+  }
+  return {V, F};
+}
+function n3(p, s) { // 3D value noise
+  const h = (x, y, z) => { let k = (x * 374761393 + y * 668265263 + z * 2147483647 + s * 1013904223) | 0; k = Math.imul(k ^ (k >>> 13), 1274126177); return ((k ^ (k >>> 16)) >>> 0) / 4294967296; };
+  const xi = Math.floor(p.x), yi = Math.floor(p.y), zi = Math.floor(p.z), fx = p.x - xi, fy = p.y - yi, fz = p.z - zi;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz);
+  const L = (a, b, t) => a + (b - a) * t;
+  return L(L(L(h(xi, yi, zi), h(xi + 1, yi, zi), u), L(h(xi, yi + 1, zi), h(xi + 1, yi + 1, zi), u), v), L(L(h(xi, yi, zi + 1), h(xi + 1, yi, zi + 1), u), L(h(xi, yi + 1, zi + 1), h(xi + 1, yi + 1, zi + 1), u), v), w);
+}
+const fbm = (p, s, f = 2, o = 4) => { let a = 0, amp = 0.5, n = 0; for (let i = 0; i < o; i++) { a += amp * n3(p.clone().multiplyScalar(f), s + i * 17); n += amp; amp *= 0.5; f *= 2; } return a / n; };
+const BIOMES = {
+  home: (p) => { const e = fbm(p, 3, 1.6), m = fbm(p, 9, 2.2), lat = Math.abs(p.y); if (lat > 0.86) return {sheet: SHEET.frozen, h: 1}; if (e < 0.5) return {ocean: true}; const h = 1 + Math.floor((e - 0.5) * 14); if (e > 0.66) return {sheet: SHEET.mountains, h}; if (lat > 0.66) return {sheet: SHEET.tundra, h}; if (lat < 0.42 && m < 0.44) return {sheet: SHEET.desert, h}; if (lat < 0.4 && m > 0.56) return {sheet: SHEET.jungle, h}; return {sheet: SHEET.fields, h, town: m > 0.47 && m < 0.5}; },
+  verdance: (p) => { const e = fbm(p, 21, 1.8), lat = Math.abs(p.y); if (e < 0.46) return {ocean: true}; return {sheet: lat > 0.8 ? SHEET.tundra : SHEET.jungle, h: 1 + Math.floor((e - 0.46) * 10)}; },
+  lantern: (p) => ({sheet: SHEET.regolith, h: 1 + Math.floor(fbm(p, 5, 2.4) * 4)}),
+  cinder: (p) => { const e = fbm(p, 41, 2); return {sheet: e > 0.55 ? SHEET.basalt : SHEET.desert, h: 1 + Math.floor(e * 5)}; },
+  far: (p) => { const e = fbm(p, 77, 1.7), lat = Math.abs(p.y); if (e < 0.44) return {ocean: true, tint: 0x5a3a6a}; return {sheet: lat > 0.7 ? SHEET.frozen : e > 0.62 ? SHEET.basalt : SHEET.desert, h: 1 + Math.floor((e - 0.44) * 10)}; },
+};
+function hexGlobe(W, {level, radius, biome, layer, ocean = 0x1d4f7a, lights = false}) {
+  const {V, F} = icoGrid(level);
+  const C = F.map(f => V[f[0]].clone().add(V[f[1]]).add(V[f[2]]).normalize());
+  const vf = V.map(() => []); F.forEach((f, i) => f.forEach(v => vf[v].push(i)));
+  const info = V.map(v => biome(v));
+  const rad = i => radius + (info[i].ocean ? 0 : info[i].h * layer);
+  const top = {p: [], n: [], u: []}, sea = {p: [], n: []}, wall = {p: [], n: [], u: []};
+  const town = [];
+  const cellR = radius * 1.2 / Math.pow(2, level);
+  V.forEach((v, i) => {
+    const e1 = new THREE.Vector3(0, 1, 0).cross(v); if (e1.lengthSq() < 1e-6) e1.set(1, 0, 0); e1.normalize(); const e2 = v.clone().cross(e1);
+    const fs = vf[i].slice().sort((a, b) => { const da = C[a].clone().sub(v), db = C[b].clone().sub(v); return Math.atan2(da.dot(e2), da.dot(e1)) - Math.atan2(db.dot(e2), db.dot(e1)); });
+    const r = rad(i), I = info[i];
+    const corners = fs.map(f => C[f].clone().multiplyScalar(r));
+    const cen = v.clone().multiplyScalar(r);
+    const uvOf = c => { const d = c.clone().divideScalar(r).sub(v); return auv(I.sheet || 0, 0, 0, Math.min(1, Math.max(0, d.dot(e1) / (cellR / radius * 1.15) * 0.5 + 0.5)), Math.min(1, Math.max(0, d.dot(e2) / (cellR / radius * 1.15) * 0.5 + 0.5))); };
+    for (let k = 0; k < fs.length; k++) {
+      const a = corners[k], b = corners[(k + 1) % fs.length];
+      if (I.ocean) { sea.p.push(cen.x, cen.y, cen.z, a.x, a.y, a.z, b.x, b.y, b.z); for (let j = 0; j < 3; j++) sea.n.push(v.x, v.y, v.z); }
+      else { top.p.push(cen.x, cen.y, cen.z, a.x, a.y, a.z, b.x, b.y, b.z); for (let j = 0; j < 3; j++) top.n.push(v.x, v.y, v.z); top.u.push(...uvOf(cen), ...uvOf(a), ...uvOf(b)); }
+      // wall down to the lower neighbour across edge (fs[k], fs[k+1])
+      const fa = F[fs[k]], fb = F[fs[(k + 1) % fs.length]];
+      const j = fa.find(x => x !== i && fb.includes(x));
+      if (j === undefined) continue;
+      const rj = rad(j); if (rj >= r - 1e-9) continue;
+      const a2 = C[fs[k]].clone().multiplyScalar(rj), b2 = C[fs[(k + 1) % fs.length]].clone().multiplyScalar(rj);
+      const nrm = a.clone().add(b).multiplyScalar(0.5).sub(cen).normalize();
+      const sh = I.ocean ? SHEET.beach : I.sheet, vv = (r - rj) / layer;
+      for (const [P, uu, vvv] of [[a, 0, 0], [b2, 1, vv], [b, 1, 0], [a, 0, 0], [a2, 0, vv], [b2, 1, vv]]) { wall.p.push(P.x, P.y, P.z); wall.n.push(nrm.x, nrm.y, nrm.z); wall.u.push(...auv(sh, 1, 0, uu, Math.min(1, vvv))); }
+    }
+    if (lights && I.town) town.push(v.clone().multiplyScalar(r * 1.002));
+  });
+  const mk = (G, mat) => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(G.p, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(G.n, 3)); if (G.u) g.setAttribute("uv", new THREE.Float32BufferAttribute(G.u, 2)); return new THREE.Mesh(g, mat); };
+  const grp = new THREE.Group();
+  const am = new THREE.MeshLambertMaterial({map: W.atlas});
+  grp.add(mk(top, am)); grp.add(mk(wall, am));
+  if (sea.p.length) grp.add(mk(sea, new THREE.MeshPhongMaterial({color: ocean, shininess: 40, specular: 0x334455})));
+  if (town.length) {
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(town.flatMap(v => [v.x, v.y, v.z]), 3));
+    grp.townLights = new THREE.Points(g, new THREE.PointsMaterial({color: 0xffc070, size: 2.5, sizeAttenuation: false})); grp.add(grp.townLights); grp.townPos = town;
+  }
+  return grp;
+}
+function airShell(radius, color, sunDir) {
+  const m = new THREE.ShaderMaterial({uniforms: {c: {value: new THREE.Color(color)}, sunDir: {value: sunDir}},
+    vertexShader: "varying vec3 vN; varying vec3 vV; varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW = normalize(w.xyz - (modelMatrix*vec4(0.0,0.0,0.0,1.0)).xyz); vN = normalize(normalMatrix*normal); vec4 mv = viewMatrix*w; vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }",
+    fragmentShader: "uniform vec3 c; uniform vec3 sunDir; varying vec3 vN; varying vec3 vV; varying vec3 vW; void main(){ float f = pow(1.0 - max(dot(vN, vV), 0.0), 2.6); float lit = smoothstep(-0.25, 0.45, dot(vW, sunDir)); gl_FragColor = vec4(c * f * (0.08 + 0.92 * lit), 1.0); }",
+    blending: THREE.AdditiveBlending, transparent: true, depthWrite: false});
+  return new THREE.Mesh(new THREE.SphereGeometry(radius, 64, 32), m);
+}
+function spaceBase(W, {starCount = 2600} = {}) {
+  W.scene.background = new THREE.Color(0x02030a);
+  const a = []; for (let i = 0; i < starCount; i++) { const v = new THREE.Vector3().randomDirection ? new THREE.Vector3().randomDirection() : new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(); v.multiplyScalar(1800); a.push(v.x, v.y, v.z); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(a, 3));
+  W.stars = new THREE.Points(g, new THREE.PointsMaterial({color: 0xdfe6ff, size: 1.5, sizeAttenuation: false})); W.scene.add(W.stars);
+  W.sunDir = new THREE.Vector3(-0.8, 0.25, 0.55).normalize();
+  W.sun = new THREE.DirectionalLight(0xfff4e0, 1.25); W.sun.position.copy(W.sunDir).multiplyScalar(100); W.scene.add(W.sun);
+  W.amb = new THREE.AmbientLight(0x8090b0, 0.07); W.scene.add(W.amb);
+  W.atlas = tex(GAME + "atlas"); W.atlas.wrapS = W.atlas.wrapT = THREE.ClampToEdgeWrapping;
+}
+function line(color, n, opts = {}) {
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setDrawRange(0, 0);
+  const m = opts.dashed ? new THREE.LineDashedMaterial({color, dashSize: opts.dash || 0.3, gapSize: opts.gap || 0.2, transparent: true, opacity: opts.opacity ?? 0.9}) : new THREE.LineBasicMaterial({color, transparent: true, opacity: opts.opacity ?? 0.9});
+  const l = new THREE.Line(g, m); l.frustumCulled = false; return l;
+}
+function setLine(l, pts) {
+  const a = l.geometry.attributes.position; const n = Math.min(pts.length, a.count);
+  for (let i = 0; i < n; i++) a.setXYZ(i, pts[i].x, pts[i].y, pts[i].z);
+  a.needsUpdate = true; l.geometry.setDrawRange(0, n); if (l.material.isLineDashedMaterial) l.computeLineDistances();
+}
+
+// =====================================================================================
+// tab 2: the chemical tier in orbit round Pale Blue, to scale (1 unit = 1 km)
+// =====================================================================================
+const ORB = {field: "inverse", warp: 4, launchAnim: false};
+const gravAt = (x, y, field) => {
+  const r = Math.hypot(x, y);
+  if (field === "inverse") { const a = MU / (r * r * r); return [-a * x, -a * y, MU / (r * r)]; }
+  const R = 4800; const m = r <= 1.4 * R ? 1 : r >= 1.8 * R ? 0 : (1.8 * R - r) / (0.4 * R); const a = 25 * m / r; return [-a * x, -a * y, 25 * m];
+};
+function predict(s, field, dt = 1, max = 4000) {
+  let {x, y, vx, vy} = s, ang = 0, prev = Math.atan2(y, x), apR = 0, peR = 1e12, ap = null, pe = null;
+  const pts = [{x, y}]; let period = null, impact = false, escape = false;
+  for (let i = 0; i < max; i++) {
+    const [ax, ay] = gravAt(x, y, field);
+    vx += ax * dt; vy += ay * dt; x += vx * dt; y += vy * dt;
+    const r = Math.hypot(x, y);
+    if (r > apR) { apR = r; ap = {x, y}; } if (r < peR) { peR = r; pe = {x, y}; }
+    if (i % 2 === 0) pts.push({x, y});
+    const a = Math.atan2(y, x); let d = a - prev; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; ang += d; prev = a;
+    if (r < 4800) { impact = true; break; }
+    if (r > 60000) { escape = true; break; }
+    if (Math.abs(ang) >= 2 * Math.PI) { period = (i + 1) * dt; break; }
+  }
+  pts.push({x, y});
+  return {pts, apR, peR, ap, pe, period, impact, escape, bound: !!period};
+}
+// the ascent: a gravity turn flown with the phases from the assembly building
+function flyAscent(field, record) {
+  const A = analyse(G1), ph = A.phases.map(p => Object.assign({}, p));
+  const s = {x: 4800, y: 0, vx: 0, vy: 0, m: A.mass, k: 0, t: 0, mode: "ascent", events: []};
+  const trail = []; const dt = 0.05; let nextCheck = 0;
+  const tgt = 4800 + LO_ALT;
+  for (let step = 0; step < 40000; step++) {
+    const r = Math.hypot(s.x, s.y), rx = s.x / r, ry = s.y / r, tx = -ry, ty = rx; // prograde = counter-clockwise
+    const alt = r - 4800, vr = s.vx * rx + s.vy * ry, vt = s.vx * tx + s.vy * ty;
+    let thrust = false, dirx = 0, diry = 0;
+    const p = ph[s.k];
+    if (s.mode === "ascent") {
+      const th = Math.min(Math.PI / 2 * 0.98, Math.PI / 2 * Math.sqrt(Math.max(0, alt - 40) / 1300));
+      dirx = Math.cos(th) * rx + Math.sin(th) * tx; diry = Math.cos(th) * ry + Math.sin(th) * ty; thrust = true;
+      if (s.t >= nextCheck) { nextCheck = s.t + 0.25; const pr = predict(s, field, 1, 400); if (pr.apR >= tgt || pr.escape) { s.mode = "coast"; s.events.push({t: s.t, x: s.x, y: s.y, what: "cut-off"}); } }
+    } else if (s.mode === "coast") {
+      if (vr <= 2) { s.mode = "circ"; s.events.push({t: s.t, x: s.x, y: s.y, what: "circularise"}); }
+    } else if (s.mode === "circ") {
+      const vc = field === "inverse" ? Math.sqrt(MU / r) : Math.sqrt(gravAt(s.x, s.y, field)[2] * r);
+      if (vt >= vc) { s.mode = "orbit"; s.events.push({t: s.t, x: s.x, y: s.y, what: "orbit"}); }
+      else { thrust = true; dirx = tx; diry = ty; }
+    }
+    if (thrust && p && p.F > 0) {
+      const a = p.F / s.m; s.vx += a * dirx * dt; s.vy += a * diry * dt;
+      const use = Math.min(p.prop, p.mdot * dt); p.prop -= use; s.m -= use;
+      if (p.prop <= 1e-6) { s.m -= p.drop; s.k++; s.events.push({t: s.t, x: s.x, y: s.y, what: "staging"}); }
+    } else if (thrust && p && p.F === 0) { s.m -= p.drop; s.k++; }
+    else if (thrust && !p && s.mode !== "orbit") { s.mode = "out"; s.events.push({t: s.t, x: s.x, y: s.y, what: "out of fuel"}); }
+    const [gx, gy] = gravAt(s.x, s.y, field);
+    s.vx += gx * dt; s.vy += gy * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.t += dt;
+    if (step % 10 === 0) trail.push({x: s.x, y: s.y, t: s.t, alt: Math.hypot(s.x, s.y) - 4800, down: Math.atan2(s.y, s.x) * 4800});
+    if (Math.hypot(s.x, s.y) < 4799) { s.mode = "crashed"; break; }
+    if (s.mode === "orbit" || s.mode === "out") break;
+  }
+  s.phases = ph; s.trail = trail;
+  s.dvLeft = ph.slice(s.k).reduce((acc, p, i) => { const m0 = s.m - (i ? 0 : 0); return acc; }, 0);
+  return s;
+}
+function dvLeft(s) {
+  let m = s.m, dv = 0;
+  for (let k = s.k; k < s.phases.length; k++) { const p = s.phases[k]; if (p.F > 0 && p.prop > 0) { const ve = p.F / p.mdot; dv += ve * Math.log(m / (m - p.prop)); m -= p.prop; } m -= p.drop; }
+  return dv;
+}
+function buildOrbit() {
+  const W = makeWorld("orbit"); spaceBase(W);
+  W.near = 0.01; W.camera.near = 0.01; W.camera.far = 5000;
+  W.globe = hexGlobe(W, {level: 5, radius: 4.8, biome: BIOMES.home, layer: 0.035, lights: true}); W.scene.add(W.globe);
+  W.scene.add(airShell(5.25, 0x5aa8ff, W.sunDir));
+  // the orbital plane, tilted toward the camera
+  const ex = new THREE.Vector3(1, 0, 0), ey = new THREE.Vector3(0, 0.36, -0.93).normalize();
+  W.to3 = (x, y) => ex.clone().multiplyScalar(x / 1000).add(ey.clone().multiplyScalar(y / 1000));
+  // town lights only on the night side
+  if (W.globe.townLights) { const keep = W.globe.townPos.filter(v => v.clone().normalize().dot(W.sunDir) < -0.08); setPoints(W.globe.townLights, keep); }
+  W.path = line(0x59e6f2, 2400); W.scene.add(W.path);
+  W.trailL = line(0xe8b040, 3000, {opacity: 0.8}); W.scene.add(W.trailL);
+  W.band14 = ring(1.4 * 4.8, 0x94a8ad, 0.25, ex, ey); W.band18 = ring(1.8 * 4.8, 0x94a8ad, 0.18, ex, ey); W.scene.add(W.band14, W.band18);
+  W.apM = marker(0x59e6f2); W.peM = marker(0x59e6f2); W.scene.add(W.apM, W.peM);
+  W.apL = W.label("Ap", "", W.apM, "#59e6f2"); W.peL = W.label("Pe", "", W.peM, "#59e6f2");
+  W.b14L = W.label("1.4 R: full pull ends", "", null, "#94a8ad"); W.b18L = W.label("1.8 R: today's field lets go", "", null, "#94a8ad");
+  W.b14L.pos = W.to3(0, -1.4 * 4800); W.b18L.pos = W.to3(0, -1.8 * 4800);
+  // the ship: the upper stage of the stack from tab 1, drawn 30x size
+  W.ship = new THREE.Group(); W.scene.add(W.ship);
+  W.shipL = W.label("ship (30x size)", "", W.ship, "#ffffff");
+  const site = W.to3(4800, 0); W.pad = new THREE.Sprite(glowMat(0xffb347)); W.pad.scale.setScalar(0.25); W.pad.position.copy(site.clone().multiplyScalar(1.01)); W.scene.add(W.pad);
+  W.padL = W.label("launch site", "", W.pad, "#e8b040");
+  W.cam = {target: new THREE.Vector3(0, 0, 0), yaw: 0.25, pitch: 0.55, dist: 26, min: 6, max: 120};
+  W.reset = (animate) => {
+    const s = flyAscent(ORB.field);
+    W.flight = s; W.anim = animate ? {i: 0, t: 0} : null;
+    W.state = {x: s.x, y: s.y, vx: s.vx, vy: s.vy, m: s.m, k: s.k, phases: s.phases, t: 0};
+    W.ship.clear(); const top = upperStage(); const craft = buildCraft(top); craft.scale.setScalar(0.03); craft.rotation.z = -Math.PI / 2; W.ship.add(craft); W.craft = craft;
+    W.repredict(); drawProfile(); renderWork();
+  };
+  W.repredict = () => { const s = W.state; W.pred = predict(s, ORB.field, 0.5, 6000); setLine(W.path, W.pred.pts.map(p => W.to3(p.x, p.y))); W.path.material.color.setHex(W.pred.bound ? 0x59e6f2 : 0xf2993f); };
+  W.update = (dt) => {
+    const s = W.state;
+    if (W.anim) {
+      const tr = W.flight.trail; W.anim.t += dt * ORB.warp;
+      while (W.anim.i < tr.length - 1 && tr[W.anim.i].t < W.anim.t) W.anim.i++;
+      const p = tr[W.anim.i]; W.ship.position.copy(W.to3(p.x, p.y));
+      setLine(W.trailL, tr.slice(0, W.anim.i + 1).map(q => W.to3(q.x, q.y)));
+      if (W.anim.i >= tr.length - 1) W.anim = null;
+      W.path.visible = !W.anim; W.apM.visible = W.peM.visible = !W.anim;
+      return;
+    }
+    W.path.visible = true;
+    setLine(W.trailL, W.flight.trail.map(q => W.to3(q.x, q.y)));
+    const sub = 20, h = dt * ORB.warp / sub;
+    for (let i = 0; i < sub; i++) { const [ax, ay] = gravAt(s.x, s.y, ORB.field); s.vx += ax * h; s.vy += ay * h; s.x += s.vx * h; s.y += s.vy * h; s.t += h; if (Math.hypot(s.x, s.y) < 4800) { s.vx = s.vy = 0; break; } }
+    W.ship.position.copy(W.to3(s.x, s.y));
+    const vel = W.to3(s.vx, s.vy).normalize(); W.ship.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vel);
+    W.craft.rotation.z = 0;
+    const pr = W.pred; W.apM.visible = W.peM.visible = !!pr.ap;
+    if (pr.ap) { W.apM.position.copy(W.to3(pr.ap.x, pr.ap.y)); W.peM.position.copy(W.to3(pr.pe.x, pr.pe.y)); W.apL.el.textContent = `Ap ${fmtM(pr.apR - 4800)}`; W.peL.el.textContent = pr.impact ? "impact" : `Pe ${fmtM(pr.peR - 4800)}`; }
+    if (s.t > 2 && Math.floor(s.t / 3) !== Math.floor((s.t - dt * ORB.warp) / 3)) W.repredict();
+  };
+  W.hud = () => {
+    const s = W.state, pr = W.pred || {}, r = Math.hypot(s.x, s.y), v = Math.hypot(s.vx, s.vy);
+    const orbitLine = W.flight.mode === "crashed" ? `<span class='w'>fell back: not enough delta-v for orbit</span>` : pr.bound ? `<span class='c'>orbit [Pale Blue]  Ap ${fmtM(pr.apR - 4800)}  Pe ${fmtM(pr.peR - 4800)}  T ${Math.round(pr.period)} s</span>` : pr.impact ? `<span class='o'>SUBORBITAL [Pale Blue]  Ap ${fmtM(pr.apR - 4800)}  impact</span>` : `<span class='o'>ESCAPE [Pale Blue]  Pe ${fmtM(pr.peR - 4800)}</span>`;
+    return `${orbitLine}\nalt ${fmtM(r - 4800)}  v ${Math.round(v)} m/s  stage ${Math.min(s.k + 1, W.flight.phases.length)}  delta-v left ${Math.round(dvLeft(s)).toLocaleString()} m/s\nfield: ${ORB.field === "inverse" ? "<span class='a'>inverse-square from the body (proposal B)</span>" : "<span class='a'>today's anchor band: full to 1.4 R, none past 1.8 R</span>"}  warp x${ORB.warp}`;
+  };
+  W.burn = dv => {
+    const s = W.state, v = Math.hypot(s.vx, s.vy); if (!v) return;
+    const left = dvLeft(s); const use = Math.sign(dv) * Math.min(Math.abs(dv), left); if (!use) { flashInfo("No delta-v left in this stage stack."); return; }
+    s.vx += s.vx / v * use; s.vy += s.vy / v * use;
+    // spend the propellant: rocket equation on the current phase
+    let need = Math.abs(use); for (let k = s.k; k < s.phases.length && need > 0; k++) { const p = s.phases[k]; if (!(p.F > 0 && p.prop > 0)) { s.m -= p.drop; s.k++; continue; } const ve = p.F / p.mdot, can = ve * Math.log(s.m / (s.m - p.prop)); if (can >= need) { const mf = s.m / Math.exp(need / ve); p.prop -= s.m - mf; s.m = mf; need = 0; } else { s.m -= p.prop; p.prop = 0; s.m -= p.drop; s.k++; need -= can; } }
+    W.repredict();
+  };
+  W.reset(false);
+  return W;
+}
+function setPoints(pts, list) { pts.geometry.setAttribute("position", new THREE.Float32BufferAttribute(list.flatMap(v => [v.x, v.y, v.z]), 3)); }
+function ring(r, color, op, ex, ey, n = 128) { const l = line(color, n + 1, {opacity: op}); const pts = []; for (let i = 0; i <= n; i++) { const a = i / n * Math.PI * 2; pts.push(ex.clone().multiplyScalar(r * Math.cos(a)).add(ey.clone().multiplyScalar(r * Math.sin(a)))); } setLine(l, pts); return l; }
+function marker(color) { const s = new THREE.Sprite(glowMat(color)); s.scale.setScalar(0.35); return s; }
+const fmtM = m => Math.abs(m) >= 10000 ? (m / 1000).toFixed(1) + " km" : Math.round(m).toLocaleString() + " m";
+function upperStage() {
+  const cells = cellList(), decs = cells.filter(c => c.core && c.p === "dec").map(c => c.y);
+  const d = decs.length ? Math.max(...decs) : -1;
+  return cells.filter(c => c.y > d).map(c => Object.assign({}, c, {y: c.y - d - 1}));
+}
+function drawProfile() {
+  const cv = $("profile"); const W = WORLDS.orbit; if (!cv || !W) return;
+  const g = cv.getContext("2d"), w = cv.width, h = cv.height; g.clearRect(0, 0, w, h);
+  const tr = W.flight.trail; if (!tr.length) return;
+  const maxD = Math.max(2000, ...tr.map(p => p.down)), maxA = Math.max(1200, ...tr.map(p => p.alt));
+  const X = d => 44 + d / maxD * (w - 60), Y = a => h - 26 - a / maxA * (h - 44);
+  g.strokeStyle = "rgba(130,175,180,.18)"; g.lineWidth = 1; g.font = "11px JetBrains Mono, monospace"; g.fillStyle = "#94a8ad";
+  for (let a = 0; a <= maxA; a += 500) { g.beginPath(); g.moveTo(44, Y(a)); g.lineTo(w - 16, Y(a)); g.stroke(); g.fillText(a >= 1000 ? (a / 1000) + "k" : a, 4, Y(a) + 4); }
+  for (let d = 0; d <= maxD; d += 2000) { g.fillText((d / 1000) + " km", X(d) - 10, h - 8); }
+  g.strokeStyle = "rgba(89,230,242,.5)"; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(44, Y(LO_ALT)); g.lineTo(w - 16, Y(LO_ALT)); g.stroke(); g.setLineDash([]);
+  g.fillStyle = "#59e6f2"; g.fillText("low orbit 960 m", w - 130, Y(LO_ALT) - 5);
+  g.strokeStyle = "#e8b040"; g.lineWidth = 2; g.beginPath(); tr.forEach((p, i) => i ? g.lineTo(X(p.down), Y(p.alt)) : g.moveTo(X(p.down), Y(p.alt))); g.stroke();
+  for (const e of W.flight.events) { const d = Math.atan2(e.y, e.x) * 4800, a = Math.hypot(e.x, e.y) - 4800; g.fillStyle = e.what === "staging" ? "#ff8a3d" : "#e4ecee"; g.beginPath(); g.arc(X(d), Y(a), 3.5, 0, 7); g.fill(); g.fillText(e.what, X(d) + 6, Y(a) - 6); }
+}
+
+// =====================================================================================
+// tab 3: fusion. Courses (to scale for the moon, a schematic for the planets), freighters, a lander
+// =====================================================================================
+const FUS = {view: "course", to: "lantern", time: "night", t: 0};
+const ROUTES = [
+  {ship: "Dray 1", from: "Lantern mine", to: "Highport", cargo: "Helium-3, 40 t", trip: 210, p: 0.35},
+  {ship: "Dray 2", from: "Highport", to: "Verdance dock", cargo: "Steel plate, 60 t", trip: 260, p: 0.7},
+  {ship: "Lugger", from: "Verdance dock", to: "Highport", cargo: "Glowcap, 12 t", trip: 260, p: 0.1},
+];
+const STOPS = {"Highport": [-14, 1.6, 2], "Lantern mine": [-8, 1, -7], "Verdance dock": [18, 1.6, 6], "Amber skimmer": [6, 1, -18]};
+function buildFusion() {
+  const W = makeWorld("fusion"); spaceBase(W);
+  W.camera.near = 0.01; W.camera.far = 6000;
+  // --- to scale: Pale Blue and Lantern, 1 unit = 1 km
+  W.moonSys = new THREE.Group(); W.scene.add(W.moonSys);
+  const pb = hexGlobe(W, {level: 4, radius: 4.8, biome: BIOMES.home, layer: 0.035, lights: true}); W.moonSys.add(pb, airShell(5.25, 0x5aa8ff, W.sunDir));
+  const ln = hexGlobe(W, {level: 3, radius: 1.2, biome: BIOMES.lantern, layer: 0.03}); ln.position.set(-26 * Math.cos(2.4), 0, -26 * Math.sin(2.4)); W.moonSys.add(ln);
+  const ex = new THREE.Vector3(1, 0, 0), ez = new THREE.Vector3(0, 0, -1);
+  W.moonSys.add(ring(26, 0xb3b8d9, 0.45, ex, ez)); W.moonSys.add(ring(5.76, 0x59e6f2, 0.35, ex, ez));
+  // chemical: a Hohmann half-ellipse from 5.76 km to 26 km, arriving where Lantern will be
+  const r1 = 5.76, r2 = 26, a = (r1 + r2) / 2, e = (r2 - r1) / (r2 + r1), arr = 2.4, dep = arr - Math.PI;
+  const hoh = []; for (let i = 0; i <= 120; i++) { const nu = i / 120 * Math.PI, r = a * (1 - e * e) / (1 + e * Math.cos(nu)); const th = dep + nu; hoh.push(new THREE.Vector3(r * Math.cos(th), 0, -r * Math.sin(th))); }
+  W.chemL = line(0xe8d966, 130, {dashed: true, dash: 0.6, gap: 0.4}); setLine(W.chemL, hoh); W.moonSys.add(W.chemL);
+  // fusion: from low orbit straight at where Lantern will be one minute on; burn, flip, brake
+  const d0 = new THREE.Vector3(r1 * Math.cos(arr - 0.25), 0, -r1 * Math.sin(arr - 0.25)), d1 = new THREE.Vector3((r2 - 1.6) * Math.cos(arr), 0, -(r2 - 1.6) * Math.sin(arr));
+  const mid = d0.clone().lerp(d1, 0.5);
+  W.fusA = line(0x59e6f2, 2); setLine(W.fusA, [d0, mid]); W.fusB = line(0xb861f2, 2); setLine(W.fusB, [mid, d1]); W.moonSys.add(W.fusA, W.fusB);
+  const flip = marker(0xffe38a); flip.position.copy(mid); W.moonSys.add(flip);
+  W.l1 = W.label("chemical: Hohmann arc 4 min 22 s, 88 + 52 m/s", "", null, "#e8d966"); W.l1.pos = hoh[70].clone();
+  W.l2 = W.label("fusion: burn 32 s, flip, brake 32 s", "", null, "#59e6f2"); W.l2.pos = mid.clone().add(new THREE.Vector3(0, 1.4, 0));
+  W.l3 = W.label("Lantern, 26 km", "", ln, "#b3b8d9"); W.l4 = W.label("Pale Blue", "", null, "#8fc3d8"); W.l4.pos = new THREE.Vector3(0, 5.8, 0);
+  W.lFlip = W.label("flip", "", flip, "#ffe38a");
+  W.chemShip = shipSprite(0xe8d966); W.fusShip = shipSprite(0x59e6f2); W.moonSys.add(W.chemShip, W.fusShip);
+  W.hoh = hoh; W.fpath = [d0, mid, d1];
+  // --- schematic: the star, Pale Blue and Verdance pulled together; stations; freighters
+  W.sys = new THREE.Group(); W.scene.add(W.sys);
+  const star = new THREE.Sprite(glowMat(0xffe8b0)); star.scale.setScalar(26); star.position.set(-2, 0, -46); W.sys.add(star);
+  const starCore = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 1), new THREE.MeshBasicMaterial({color: 0xfff1c8})); starCore.position.copy(star.position); W.sys.add(starCore);
+  const pb2 = hexGlobe(W, {level: 3, radius: 2.4, biome: BIOMES.home, layer: 0.03}); pb2.position.set(-16, 0, 0); W.sys.add(pb2);
+  const vd = hexGlobe(W, {level: 3, radius: 2.0, biome: BIOMES.verdance, layer: 0.03, ocean: 0x1b5a5a}); vd.position.set(18, 0, 6); W.sys.add(vd);
+  const ln2 = hexGlobe(W, {level: 2, radius: 0.6, biome: BIOMES.lantern, layer: 0.02}); ln2.position.set(-8, 0, -7); W.sys.add(ln2);
+  for (const [r, op] of [[46.2, 0.4], [55, 0.4]]) { const c = ring(r, 0x7390bf, op, ex, ez); c.position.copy(star.position); W.sys.add(c); }
+  W.sysL = [W.label("Pale Blue", "", pb2, "#8fc3d8"), W.label("Verdance", "", vd, "#9cf0d0"), W.label("Lantern", "", ln2, "#b3b8d9"), W.label("Halcyon (the star)", "", starCore, "#ffe8b0")];
+  // chemical to Verdance: climb out of Pale Blue's well on a curl, then a long straight coast
+  const curl = []; for (let i = 0; i <= 40; i++) { const t = i / 40, th = Math.PI * 1.1 * t; curl.push(new THREE.Vector3(-16 + Math.cos(Math.PI - th) * (3 + 3 * t * t), 0, Math.sin(Math.PI - th) * (3 + 3 * t * t) * -1)); }
+  const end = new THREE.Vector3(15.6, 0, 5.2); const last = curl[curl.length - 1]; for (let i = 1; i <= 30; i++) curl.push(last.clone().lerp(end, i / 30));
+  W.chem2 = line(0xe8d966, 80, {dashed: true, dash: 0.8, gap: 0.5}); setLine(W.chem2, curl); W.sys.add(W.chem2);
+  const s0 = new THREE.Vector3(-13.4, 0, 0.8), s1 = new THREE.Vector3(15.8, 0, 5.4), sm = s0.clone().lerp(s1, 0.5);
+  W.fus2a = line(0x59e6f2, 2); setLine(W.fus2a, [s0, sm]); W.fus2b = line(0xb861f2, 2); setLine(W.fus2b, [sm, s1]); W.sys.add(W.fus2a, W.fus2b);
+  const flip2 = marker(0xffe38a); flip2.position.copy(sm); W.sys.add(flip2);
+  W.sysCourse = [W.chem2, W.fus2a, W.fus2b, flip2];
+  W.c1 = W.label("chemical: climb out, coast 11 min, 434 m/s", "", null, "#e8d966"); W.c1.pos = curl[52].clone().add(new THREE.Vector3(0, 1.4, 0));
+  W.c2 = W.label("fusion: 3 min 20 s, 4.0 km/s", "", null, "#59e6f2"); W.c2.pos = sm.clone().add(new THREE.Vector3(0, -1.6, 0));
+  W.curl = curl; W.fpath2 = [s0, sm, s1];
+  // stations and freighter routes
+  W.stops = {}; for (const [n, p] of Object.entries(STOPS)) { const m = new THREE.Sprite(glowMat(0x66cc99)); m.scale.setScalar(0.9); m.position.set(...p); W.sys.add(m); W.stops[n] = m; }
+  W.stopL = Object.keys(STOPS).map(n => W.label(n, "", W.stops[n], "#66cc99"));
+  W.routeLines = new THREE.Group(); W.sys.add(W.routeLines);
+  W.freighters = [];
+  W.syncRoutes = () => {
+    W.routeLines.clear(); W.freighters.forEach(f => W.sys.remove(f.s)); W.freighters = [];
+    ROUTES.forEach(R => { const a = new THREE.Vector3(...STOPS[R.from]), b = new THREE.Vector3(...STOPS[R.to]); const l = line(0x66cc99, 2, {opacity: 0.55}); setLine(l, [a, b]); W.routeLines.add(l); const s = shipSprite(0x66cc99, "freighter"); W.sys.add(s); W.freighters.push({R, a, b, s}); });
+  };
+  W.syncRoutes();
+  // --- the lander: its own pad world (built on first use)
+  W.cam = {target: new THREE.Vector3(-8, 0, -8), yaw: 0.35, pitch: 0.95, dist: 46, min: 4, max: 200};
+  W.update = (dt) => {
+    FUS.t += dt;
+    const show = FUS.view;
+    W.moonSys.visible = show === "course" && FUS.to === "lantern";
+    W.sys.visible = show === "freight" || (show === "course" && FUS.to === "verdance");
+    W.sysCourse.forEach(o => o.visible = show === "course"); W.routeLines.visible = show === "freight";
+    W.freighters.forEach(f => f.s.visible = show === "freight");
+    const vis = (arr, on) => arr.forEach(L => L.show = on);
+    vis([W.l1, W.l2, W.l3, W.l4, W.lFlip], W.moonSys.visible); vis(W.sysL, W.sys.visible); vis([W.c1, W.c2], show === "course" && FUS.to === "verdance"); vis(W.stopL, show === "freight");
+    if (W.moonSys.visible) { const T = 262, tc = (FUS.t * 20) % (T + 40), tf = (FUS.t * 20) % (T + 40); W.chemShip.position.copy(along(W.hoh, Math.min(1, tc / T))); W.fusShip.position.copy(brach(W.fpath, Math.min(1, tf / 64))); }
+    if (show === "freight") for (const f of W.freighters) { f.R.p = (f.R.p + dt * 6 / f.R.trip) % 1; f.s.position.copy(f.a).lerp(f.b, f.R.p < 0.5 ? brachT(f.R.p * 2) * 0.5 : 0.5 + brachT((f.R.p - 0.5) * 2) * 0.5); }
+    if (show === "freight" && Math.floor(FUS.t * 2) !== Math.floor((FUS.t - dt) * 2)) updateRouteRows();
+  };
+  W.hud = () => FUS.view === "freight" ? `freight board | ${ROUTES.length} routes  ${ROUTES.length} freighters flying  <span class='g'>automated</span>\nstation track <span class='g'>green</span>; each run is the nav computer's course, flown for real near a player, on rails away from one`
+    : FUS.to === "lantern" ? `nav computer | Pale Blue low orbit -> Lantern  <span class='c'>course plotted</span>\n<span class='a'>chemical Hohmann arc</span>: 4 min 22 s, 140 m/s   <span class='c'>fusion</span> burn 32 s <span class='p'>brake</span> 32 s: 1 min 4 s, 1.27 km/s   (to scale, 1 km a unit)`
+    : `nav computer | Pale Blue -> Verdance, 200 km  <span class='c'>course plotted</span>\n<span class='a'>chemical</span>: 11 min, 434 m/s, arrive at 300 m/s   <span class='c'>fusion</span>: 3 min 20 s, 4.0 km/s at 20 m/s^2   (schematic: bodies enlarged)`;
+  return W;
+}
+const brachT = t => t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
+function brach(path, t) { const u = brachT(t); return u < 0.5 ? path[0].clone().lerp(path[1], u * 2) : path[1].clone().lerp(path[2], (u - 0.5) * 2); }
+function along(pts, t) { const f = t * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(f)); return pts[i].clone().lerp(pts[i + 1], f - i); }
+function shipSprite(color, icon = "starship") {
+  const t = tex(PX + icon, 1, 1); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({map: t, color: 0xffffff, alphaTest: 0.5, depthWrite: true, sizeAttenuation: false}));
+  s.scale.set(0.045, 0.045, 1); const g = new THREE.Sprite(glowMat(color)); g.scale.set(16, 16, 1); s.add(g); return s;
+}
+function buildLanderWorld(name, sheet, kind) {
+  const W = padWorld(name, {sheet, layout: kind});
+  W.cam = {target: new THREE.Vector3(0, 5, 0), yaw: 0.7, pitch: 0.24, dist: 30, min: 8, max: 200};
+  const am = kind === "am";
+  const cells = am
+    ? [{q: 0, r: 0, y: 0, p: "am"}, {q: 0, r: 0, y: 1, p: "tank"}, {q: 0, r: 0, y: 2, p: "pod"}, ...[1, 3, 5].map(i => ({q: NB[i][0], r: NB[i][1], y: 0, p: "legs"}))]
+    : [{q: 0, r: 0, y: 0, p: "chem"}, {q: 0, r: 0, y: 1, p: "tank"}, {q: 0, r: 0, y: 2, p: "tank"}, {q: 0, r: 0, y: 3, p: "tank"}, {q: 0, r: 0, y: 4, p: "pod"}, ...[1, 3, 5].map(i => ({q: NB[i][0], r: NB[i][1], y: 0, p: "legs"}))];
+  W.craft = buildCraft(cells); W.craft.position.y = 1.9; W.scene.add(W.craft);
+  W.flameLamp = W.lamp(0, 0, 0, am ? 0xff5ab8 : 0xffa040, 0, 26, {bulb: false, always: true});
+  // outpost beacons and a few lamp posts round the landing ground
+  for (const [x, z] of [[-14, 6], [12, 10], [15, -9], [-11, -12]]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 0.3), std({map: tex(GAME + "iron", 1, 3)})); post.position.set(x, 1.6 + (kind === "vab" ? 0 : 0), z); post.castShadow = true; W.scene.add(post);
+    W.lamp(x, 3.4, z, 0xffc070, 2.4, 13, {size: 0.22, halo: 1.8});
+  }
+  // the orbiting ship above: a lit point that the lander meets
+  W.mother = new THREE.Sprite(glowMat(am ? 0xff5ab8 : 0x74effe)); W.mother.scale.setScalar(14); W.mother.position.set(-90, 260, -300); W.scene.add(W.mother);
+  W.motherL = W.label(am ? "Cinder outpost beacon" : "fusion ship in low orbit, 960 m up", "", W.mother, am ? "#fa59bf" : "#59e6f2");
+  W.fly = {t: 0, y: am ? 160 : 0, v: am ? -24 : 0, mode: am ? "land" : "pad"};
+  W.update = (dt, t) => {
+    const F = W.fly; F.t += dt;
+    if (am) {   // descends from the sky, hovers, sets down, waits, lifts again
+      if (F.mode === "land") { const want = -Math.max(2, Math.min(24, F.y * 0.25)); F.v += (want - F.v) * Math.min(1, dt * 1.5); F.y += F.v * dt; if (F.y <= 0) { F.y = 0; F.v = 0; F.mode = "down"; F.t = 0; } }
+      else if (F.mode === "down") { if (F.t > 4) { F.mode = "up"; F.t = 0; } }
+      else { F.v += 14 * dt; F.y += F.v * dt; if (F.y > 260) { F.y = 160; F.v = -24; F.mode = "land"; } }
+    } else {
+      if (F.mode === "pad") { if (F.t > 2) { F.mode = "up"; F.t = 0; } }
+      else { F.v += 6.2 * dt; F.y += F.v * dt; if (F.y > 320) { F.y = 0; F.v = 0; F.mode = "pad"; F.t = 0; } }
+    }
+    W.craft.position.y = 1.9 + F.y;
+    const burning = F.mode === "up" || F.mode === "land";
+    W.craft.flames.forEach(f => { f.visible = burning; f.scale.set(1 + 0.1 * Math.sin(t * 40), 0.85 + 0.25 * Math.random(), 1); });
+    W.flameLamp.p.set(0, 1.9 + F.y - 1.5, 0); W.flameLamp.i = burning ? Math.max(0, 6 - F.y * 0.03) : 0;
+    W.cam.target.lerp(new THREE.Vector3(0, 4 + Math.min(F.y, 60) * 0.8, 0), 0.06);
+  };
+  W.hud = () => am ? `Cinder, basalt flats | antimatter lander <span class='g'>landed from Pale Blue's surface</span>\nsurface to surface 5 min 10 s, no orbit stop  delta-v used 9.8 of 60 km/s  alt ${Math.round(W.fly.y)} m`
+    : `Highport field, Pale Blue | lander  alt ${Math.round(W.fly.y)} m  ${W.fly.mode === "pad" ? "on the pad" : "climbing to low orbit"}\nTWR 1.26 at 1 g  delta-v 860 m/s: to orbit (540); refuelled up there for the way down (450)`;
+  return W;
+}
+
+// =====================================================================================
+// tab 4: antimatter. Landers anywhere, the starship and its warp, the star map
+// =====================================================================================
+const AM = {view: "ship", here: "Halcyon", dest: "Tessaly", warp: null, time: "night"};
+const SYSTEMS = [
+  {n: "Halcyon", cls: "G4, home", c: 0xffe8b0, p: [0, 0, 0]},
+  {n: "Mire", cls: "M1 red dwarf", c: 0xff8a60, p: [2.4, 0.8, -2.6]},
+  {n: "Tessaly", cls: "K2", c: 0xffc890, p: [-3.6, -0.6, -2.0]},
+  {n: "Ardent Pair", cls: "G8 + M3", c: 0xfff0c0, p: [4.8, -1.2, 3.6]},
+  {n: "Corvane", cls: "F5", c: 0xf4f6ff, p: [-6.2, 1.8, 4.0]},
+  {n: "Hesper", cls: "G2", c: 0xfff4d8, p: [7.8, 2.2, -4.8]},
+  {n: "Ostrel", cls: "K7", c: 0xffb070, p: [-9.4, -2.6, -6.0]},
+  {n: "Vael", cls: "A3", c: 0xcfe0ff, p: [11.6, 3.0, 7.6]},
+];
+const JUMP = 8;   // light years per jump
+const dist = (a, b) => Math.hypot(a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]);
+const sysOf = n => SYSTEMS.find(s => s.n === n);
+function starshipCells() {
+  const c = [];
+  const spine = ["am", "am", "tank", "tank", "cargo", "warp", "hab", "hab", "pod"];
+  spine.forEach((p, y) => c.push({q: 0, r: 0, y, p}));
+  NB.forEach(([q, r], i) => { c.push({q, r, y: 0, p: i % 2 ? "am" : "tank"}); c.push({q, r, y: 1, p: "tank"}); c.push({q, r, y: 5, p: "warp"}); if (i % 2 === 0) c.push({q, r, y: 6, p: "hab"}); });
+  [[2, 0], [0, 2], [-2, 2], [-2, 0], [0, -2], [2, -2], [1, 1], [-1, 2], [-2, 1], [-1, -1], [1, -2], [2, -1]].forEach(([q, r]) => c.push({q, r, y: 5, p: "warp"}));
+  return c;
+}
+function buildAntimatter() {
+  const W = makeWorld("antimatter"); spaceBase(W);
+  W.camera.near = 0.05; W.camera.far = 6000;
+  // --- the starship in orbit of Pale Blue, then of wherever it warps to
+  W.shipView = new THREE.Group(); W.scene.add(W.shipView);
+  W.planet = hexGlobe(W, {level: 4, radius: 60, biome: BIOMES.home, layer: 0.5, lights: true}); W.planet.position.set(0, -95, -40); W.shipView.add(W.planet);
+  W.air = airShell(65, 0x5aa8ff, W.sunDir); W.air.position.copy(W.planet.position); W.shipView.add(W.air);
+  W.starGlow = new THREE.Sprite(glowMat(0xffe8b0)); W.starGlow.scale.setScalar(120); W.starGlow.position.copy(W.sunDir).multiplyScalar(900); W.shipView.add(W.starGlow);
+  W.ship = buildCraft(starshipCells()); W.ship.rotation.z = Math.PI / 2; W.ship.position.set(4, 0, 0); W.shipView.add(W.ship);
+  W.ship.flames.forEach(f => { f.visible = true; f.scale.y = 0.6; });
+  W.shipLamps = [[0, 6.5, 3.2, 0x74effe], [0, 6.5, -3.2, 0x74effe], [0, 0.4, 3.4, 0xff3030], [0, 0.4, -3.4, 0x30ff60]];
+  W.shipLamps.forEach(([x, y, z, c]) => W.lamp(x, y, z, c, 2.2, 7, {parent: W.ship, size: 0.16, halo: 1.6, always: true}));
+  W.warpLamp = W.lamp(0, 5.5, 0, 0x9e3ba2, 0, 18, {parent: W.ship, bulb: false, always: true});
+  W.shipL = W.label("starship Long Reach: warp ring, antimatter drive, 9 layers", "", null, "#e4ecee"); W.shipL.pos = new THREE.Vector3(4, 7, 0);
+  W.streaks = null;
+  // --- the star map
+  W.map = new THREE.Group(); W.scene.add(W.map); W.map.visible = false;
+  W.mapStars = {};
+  SYSTEMS.forEach(s => { const g = new THREE.Sprite(glowMat(s.c)); g.scale.setScalar(s.n === "Halcyon" ? 2.4 : 1.8); g.position.set(...s.p); W.map.add(g); const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 0), new THREE.MeshBasicMaterial({color: s.c})); core.position.set(...s.p); W.map.add(core); W.mapStars[s.n] = core; core.userData.sys = s.n; });
+  W.mapL = SYSTEMS.map(s => W.label(s.n, "", W.mapStars[s.n], "#e4ecee"));
+  W.grid = new THREE.PolarGridHelper(14, 12, 7, 64, 0x2a4050, 0x1a2a36); W.grid.position.y = -3; W.map.add(W.grid);
+  W.jumpLines = new THREE.Group(); W.map.add(W.jumpLines);
+  W.rangeRing = new THREE.Mesh(new THREE.SphereGeometry(JUMP, 32, 16), new THREE.MeshBasicMaterial({color: 0x9e3ba2, wireframe: true, transparent: true, opacity: 0.08})); W.map.add(W.rangeRing);
+  W.selRing = new THREE.Sprite(glowMat(0xfa59bf)); W.selRing.scale.setScalar(1.4); W.map.add(W.selRing);
+  W.syncMap = () => {
+    W.jumpLines.clear(); const here = sysOf(AM.here); W.rangeRing.position.set(...here.p);
+    SYSTEMS.forEach(s => { if (s === here) return; const d = dist(here, s); if (d > JUMP) return; const l = line(s.n === AM.dest ? 0xfa59bf : 0x7d2dbd, 2, {opacity: s.n === AM.dest ? 0.95 : 0.4}); setLine(l, [new THREE.Vector3(...here.p), new THREE.Vector3(...s.p)]); W.jumpLines.add(l); });
+    W.selRing.position.set(...sysOf(AM.dest).p);
+    W.mapL.forEach((L, i) => { const s = SYSTEMS[i]; const d = dist(here, s); L.el.textContent = s.n === AM.here ? `${s.n} (you are here)` : `${s.n} ${d.toFixed(1)} ly${d > JUMP ? " (out of range)" : ""}`; L.el.style.color = s.n === AM.dest ? "#fa59bf" : s.n === AM.here ? "#e8b040" : d > JUMP ? "#5d778d" : "#e4ecee"; });
+  };
+  W.syncMap();
+  W.click = (ray) => { if (!W.map.visible) return; const h = ray.intersectObjects(Object.values(W.mapStars)); if (!h.length) return; const n = h[0].object.userData.sys; if (n !== AM.here) { AM.dest = n; W.syncMap(); renderWork(); } };
+  W.cam = {target: new THREE.Vector3(4, 4, 0), yaw: 0.9, pitch: 0.18, dist: 30, min: 6, max: 200};
+  W.update = (dt, t) => {
+    W.shipView.visible = AM.view === "ship"; W.map.visible = AM.view === "map";
+    W.shipL.show = W.shipView.visible; W.mapL.forEach(L => L.show = W.map.visible);
+    W.ship.flames.forEach(f => f.scale.set(1 + 0.08 * Math.sin(t * 30), 0.55 + 0.1 * Math.random(), 1));
+    W.planet.rotation.y += dt * 0.01;
+    const w = AM.warp;
+    PM.warp.emissiveIntensity = w ? Math.min(4, 1 + w.t * 1.2) : 1 + 0.3 * Math.sin(t * 2);
+    W.warpLamp.i = w ? Math.min(6, w.t * 2) : 0.6;
+    if (w) {
+      w.t += dt;
+      if (w.t > 2.4 && !w.jumped) { w.jumped = true; flash(); arrive(W, w.to); }
+      if (W.stars.material) W.stars.scale.setScalar(w.t < 2.4 ? 1 - Math.min(0.4, (w.t - 1.2) * 0.3 * (w.t > 1.2)) : 1);
+      if (w.t > 1.2 && w.t < 2.4) { if (!W.streaks) W.streaks = makeStreaks(W); W.streaks.visible = true; W.streaks.scale.z = 1 + (w.t - 1.2) * 20; }
+      else if (W.streaks) W.streaks.visible = false;
+      if (w.t > 3.6) { AM.warp = null; W.stars.scale.setScalar(1); renderWork(); }
+    }
+  };
+  W.hud = () => AM.view === "map" ? `star map | at ${AM.here}  target <span style="color:#fa59bf">${AM.dest}</span> ${dist(sysOf(AM.here), sysOf(AM.dest)).toFixed(1)} ly\nwarp range ${JUMP} ly a jump  charge 30 s  1 antimatter cell a light year  nothing simulated between stars`
+    : `starship Long Reach | in orbit of ${AM.here === "Halcyon" ? "Pale Blue" : AM.here + " b"}  frame [${AM.here}]  ${AM.warp ? "<span class='p'>WARP " + (AM.warp.t < 2.4 ? "charging " + Math.round(AM.warp.t / 2.4 * 100) + "%" : "arrived") + "</span>" : "warp ready"}\nsystem frame f64, ship frame f32 round the ship; a jump changes the frame's root, not the coordinates' size`;
+  return W;
+}
+function makeStreaks(W) {
+  const a = []; for (let i = 0; i < 700; i++) { const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(60 + Math.random() * 200); a.push(v.x, v.y, v.z, v.x * 1.04, v.y * 1.04, v.z * 1.04); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(a, 3));
+  const s = new THREE.LineSegments(g, new THREE.LineBasicMaterial({color: 0xd2f8ff, transparent: true, opacity: 0.8})); W.scene.add(s); return s;
+}
+function flash() { const f = $("flash"); f.style.transition = "none"; f.style.opacity = 0.9; requestAnimationFrame(() => { f.style.transition = "opacity 1.2s"; f.style.opacity = 0; }); }
+function arrive(W, to) {
+  AM.here = to; const s = sysOf(to);
+  W.shipView.remove(W.planet); W.planet = hexGlobe(W, {level: 4, radius: 60, biome: to === "Halcyon" ? BIOMES.home : BIOMES.far, layer: 0.5, ocean: 0x3a2a5a}); W.planet.position.set(0, -95, -40); W.shipView.add(W.planet);
+  W.air.material.uniforms.c.value.setHex(to === "Halcyon" ? 0x5aa8ff : 0xc890ff);
+  W.starGlow.material = glowMat(s.c); W.sun.color.setHex(s.c);
+  const next = SYSTEMS.find(x => x.n !== to && dist(s, x) <= JUMP && x.n !== "Halcyon") || sysOf("Halcyon"); AM.dest = next.n; W.syncMap();
+}
+function startWarp() {
+  const W = WORLDS.antimatter; if (!W || AM.warp) return;
+  const d = dist(sysOf(AM.here), sysOf(AM.dest)); if (d > JUMP) { flashInfo(`${AM.dest} is ${d.toFixed(1)} ly away: past the ${JUMP} ly a jump reaches.`); return; }
+  AM.view = "ship"; AM.warp = {t: 0, to: AM.dest}; renderCtl(); renderWork();
+}
+
+// =====================================================================================
+// the views under the stage, the controls on it, and the loop
+// =====================================================================================
+let TAB = "vab";
+const CTL = $("ctl"), INFO = $("info"), WORK = $("work");
+function seg(id, items, cur, label) { return `<div class="seg" role="group" aria-label="${label}" id="${id}">${items.map(([v, n]) => `<button data-v="${v}" aria-pressed="${v === cur}">${n}</button>`).join("")}</div>`; }
+function bindSeg(id, fn) { const el = $(id); if (el) el.querySelectorAll("button").forEach(b => b.onclick = () => fn(b.dataset.v)); }
+function curWorld() {
+  if (TAB === "vab") return WORLDS.vab;
+  if (TAB === "orbit") return WORLDS.orbit;
+  if (TAB === "fusion") return FUS.view === "lander" ? WORLDS.flander : WORLDS.fusion;
+  return AM.view === "lander" ? WORLDS.alander : WORLDS.antimatter;
+}
+function ensureWorlds() {
+  if (TAB === "vab" && !WORLDS.vab) buildVab();
+  if (TAB === "orbit" && !WORLDS.orbit) buildOrbit();
+  if (TAB === "fusion") { if (!WORLDS.fusion) buildFusion(); if (FUS.view === "lander" && !WORLDS.flander) { buildLanderWorld("flander", SHEET.fields, "lander"); WORLDS.flander.setTime(FUS.time); } }
+  if (TAB === "antimatter") { if (!WORLDS.antimatter) buildAntimatter(); if (AM.view === "lander" && !WORLDS.alander) { buildLanderWorld("alander", SHEET.basalt, "am"); WORLDS.alander.setTime(AM.time); } }
+  if (WORLDS.vab && WORLDS.vab.time === undefined) WORLDS.vab.setTime(Q.get("time") || "day");
+  const W = curWorld();
+  if (W !== active) { if (active) active.labels.forEach(L => L.el.hidden = true); active = W; resize(); }
+}
+function renderCtl() {
+  let h = "";
+  if (TAB === "vab") {
+    const W = WORLDS.vab;
+    h = seg("timeSel", [["day", "Day"], ["night", "Night"]], W ? W.time : "day", "Time of day") + seg("symSel", [["1", "1x"], ["2", "2x"], ["3", "3x"], ["6", "6x"]], String(VAB.sym), "Radial symmetry")
+      + `<div class="seg"><button class="pbtn go" id="launchB">${W && W.launch ? "Launching" : "Launch preview"}</button><button class="pbtn" id="eraseB" aria-pressed="${VAB.sel === "erase"}">Eraser</button></div>`;
+  } else if (TAB === "orbit") {
+    h = seg("fieldSel", [["inverse", "Inverse-square (B)"], ["anchor", "Today's band (A)"]], ORB.field, "Gravity field")
+      + `<div class="seg"><button class="pbtn go" id="relaunch">Launch again</button><button class="pbtn" id="pro">Prograde +20</button><button class="pbtn" id="retro">Retrograde -20</button></div>`
+      + seg("warpSel", [["1", "x1"], ["4", "x4"], ["16", "x16"]], String(ORB.warp), "Time warp");
+  } else if (TAB === "fusion") {
+    h = seg("fview", [["course", "Nav computer"], ["freight", "Freighters"], ["lander", "Lander"]], FUS.view, "View");
+    if (FUS.view === "course") h += seg("fto", [["lantern", "To Lantern (to scale)"], ["verdance", "To Verdance"]], FUS.to, "Destination");
+    if (FUS.view === "lander") h += seg("ftime", [["day", "Day"], ["night", "Night"]], FUS.time, "Time of day");
+  } else {
+    h = seg("aview", [["ship", "Starship"], ["map", "Star map"], ["lander", "Lander anywhere"]], AM.view, "View");
+    if (AM.view !== "lander") h += `<div class="seg"><button class="pbtn go" id="warpB">Warp to ${AM.dest}</button></div>`;
+    if (AM.view === "lander") h += seg("atime", [["day", "Day"], ["night", "Night"]], AM.time, "Time of day");
+  }
+  CTL.innerHTML = h;
+  bindSeg("timeSel", v => WORLDS.vab.setTime(v));
+  bindSeg("symSel", v => { VAB.sym = +v; renderCtl(); });
+  if ($("launchB")) $("launchB").onclick = startLaunch;
+  if ($("eraseB")) $("eraseB").onclick = () => { VAB.sel = VAB.sel === "erase" ? "tank" : "erase"; renderCtl(); renderHotbar(); renderWork(); };
+  bindSeg("fieldSel", v => { ORB.field = v; WORLDS.orbit.reset(false); renderCtl(); });
+  bindSeg("warpSel", v => { ORB.warp = +v; renderCtl(); });
+  if ($("relaunch")) $("relaunch").onclick = () => WORLDS.orbit.reset(true);
+  if ($("pro")) $("pro").onclick = () => WORLDS.orbit.burn(20);
+  if ($("retro")) $("retro").onclick = () => WORLDS.orbit.burn(-20);
+  bindSeg("fview", v => { FUS.view = v; go(); });
+  bindSeg("fto", v => { FUS.to = v; go(); });
+  bindSeg("ftime", v => { FUS.time = v; WORLDS.flander.setTime(v); });
+  bindSeg("aview", v => { AM.view = v; go(); });
+  bindSeg("atime", v => { AM.time = v; WORLDS.alander.setTime(v); });
+  if ($("warpB")) $("warpB").onclick = startWarp;
+  renderInfo();
+}
+function renderInfo() {
+  const T = {
+    vab: "<b>Click a ghost cell</b> to place the selected part; right-click or the eraser takes one off. Drag to look round, scroll to zoom. Radial parts copy round the stack at the symmetry you pick.",
+    orbit: "<b>To scale</b>: Pale Blue is 4.8 km across the middle, low orbit 960 m up. The cyan line is the path the ship will fly, integrated forward through the same field it flies in; orange means it escapes or comes down.",
+    fusion: FUS.view === "freight" ? "<b>Freighters</b> fly the nav computer's courses between stops, with no pilot. Add a route in the panel below." : FUS.view === "lander" ? "<b>Landers</b> lift off to low orbit to meet the fusion ship, which never lands. Set it to night: the pad lamps and the exhaust light the ground." : "<b>The nav computer</b> plots a near-straight course: burn, flip at the midpoint, brake. The dashed line is what a chemical rocket flies instead.",
+    antimatter: AM.view === "map" ? "<b>Click a star</b> to target it; anything inside the 8 ly sphere is one jump." : AM.view === "lander" ? "<b>Antimatter landers</b> go from any surface to any other, with no orbit stop." : "<b>The warp ring</b> charges, the stars stretch, and the ship is in another system's frame.",
+  };
+  INFO.innerHTML = T[TAB];
+}
+function renderHotbar() {
+  const HB = $("hudbar");
+  if (TAB !== "vab") { const items = [["game/hand", "Hand"], ["game/pickaxe", "Pickaxe"], ["game/lantern_post", "Lantern post"], ["game/torch", "Torch"]]; HB.innerHTML = items.map(([i, n], k) => `<span class="hs${k === 0 ? " sel" : ""}" title="${n}"><span class="k">${k + 1}</span><img src="${PX}${i}.png${V}" alt="${n}"></span>`).join(""); return; }
+  HB.innerHTML = PALETTE.slice(0, 9).map((p, k) => `<button class="hs${VAB.sel === p ? " sel" : ""}${PARTS[p].locked ? " locked" : ""}" data-p="${p}" title="${PARTS[p].name}${PARTS[p].locked ? " (" + PARTS[p].locked + ")" : ""}"><span class="k">${k + 1}</span><img src="${PX}${PARTS[p].icon}.png${V}" alt="${PARTS[p].name}"></button>`).join("");
+  HB.querySelectorAll("button").forEach(b => b.onclick = () => selPart(b.dataset.p));
+}
+function selPart(p) { if (PARTS[p].locked) { flashInfo(`${PARTS[p].name}: ${PARTS[p].locked}.`); return; } VAB.sel = p; renderHotbar(); renderWork(); renderCtl(); }
+let infoTimer = 0;
+function flashInfo(t) { INFO.innerHTML = `<b>${t}</b>`; clearTimeout(infoTimer); infoTimer = setTimeout(renderInfo, 2800); }
+function changed() { WORLDS.vab && WORLDS.vab.rebuild(); renderWork(); if (WORLDS.orbit) WORLDS.orbit.dirty = true; }
+
+function renderWork() {
+  if (TAB === "vab") {
+    const g = BODIES[VAB.body].g, A = analyse(g), C = checks(A, g);
+    const req = [["Low orbit, Pale Blue", 540], ["+ to Lantern's orbit", 680], ["+ land on Lantern", 790], ["+ home again", 1040]];
+    WORK.innerHTML = `<div class="pane">
+      <div class="eyebrow">Parts: one hex cell each, 2.833 m across, 1 m tall</div>
+      <div class="parts">${PALETTE.map(p => { const P = PARTS[p]; return `<button class="part${P.locked ? " locked" : ""}" data-p="${p}" aria-pressed="${VAB.sel === p}"><img src="${PX}${P.icon}.png${V}" alt=""><span>${P.name}</span><small>${P.locked ? P.locked : (P.m + (P.prop || 0)).toFixed(2) + " t" + (P.F ? ", " + P.F + " kN" : "")}</small></button>`; }).join("")}</div>
+      <p class="muted" style="font-size:13.5px">${VAB.sel === "erase" ? "Eraser: click a part to take it off." : PARTS[VAB.sel].txt}</p>
+      <div class="eyebrow">Examples</div>
+      ${seg("presetSel", Object.entries(PRESETS).map(([k, v]) => [k, v.name]), "", "Example rockets")}
+      <div class="eyebrow">TWR measured at</div>
+      ${seg("bodySel", Object.entries(BODIES).map(([k, b]) => [k, `${b.name} ${(b.g / G1).toFixed(2)} g`]), VAB.body, "Body")}
+      <div class="eyebrow">Rules</div>
+      <ul class="muted" style="margin:0;padding-left:18px;font-size:13.5px;display:grid;gap:3px">
+        <li>The core column stacks straight up, one part a layer, the pod on top.</li>
+        <li>Radial parts sit in the six cells round a core cell, or stack on a radial cell below.</li>
+        <li>A decoupler ends a stage: what is below it fires first and falls away.</li>
+        <li>An engine's nozzle needs the cell under it empty (or a decoupler).</li>
+      </ul>
+    </div>
+    <div class="pane">
+      <div class="eyebrow">Stages, first to fire at the top</div>
+      <div class="tablebox"><table><thead><tr><th>Stage</th><th>Engines</th><th>Mass at light</th><th>Thrust</th><th>TWR</th><th>Burn</th><th>Delta-v</th></tr></thead><tbody>
+      ${A.S.map(s => `<tr><td>${s.i + 1}</td><td>${[...new Set(s.engines)].map(e => PARTS[e].name).join(", ") || "-"}${s.srbF ? `${s.engines.length ? " + " : ""}${s.srbF / 200} booster cells` : ""}</td><td class="n">${s.m0.toFixed(1)} t</td><td class="n">${Math.round(s.F)} kN</td><td class="n ${s.twr >= 1 ? "good" : (s.i ? "" : "bad")}">${s.twr.toFixed(2)}</td><td class="n">${s.t.toFixed(1)} s</td><td class="n">${Math.round(s.dv)} m/s</td></tr>`).join("")}
+      <tr><td colspan="6"><b>Total</b></td><td class="n"><b>${Math.round(A.total).toLocaleString()} m/s</b></td></tr></tbody></table></div>
+      <div class="eyebrow">Delta-v map from the pad (inverse-square field, measured off tab 2's flight)</div>
+      <div class="bars">${req.map(([n, v]) => `<div class="bar"><span>${n}</span><span class="t"><i class="${A.total < v ? "short" : ""}" style="width:${Math.min(100, A.total / v * 100)}%"></i></span><span class="v">${v} m/s</span></div>`).join("")}</div>
+      <div class="eyebrow">Checks</div>
+      <div class="checks">${C.map(([k, t]) => `<div class="${k}">${t}</div>`).join("")}</div>
+    </div>`;
+    WORK.querySelectorAll(".part").forEach(b => b.onclick = () => selPart(b.dataset.p));
+    bindSeg("presetSel", v => { loadPreset(v); changed(); });
+    bindSeg("bodySel", v => { VAB.body = v; renderWork(); });
+  } else if (TAB === "orbit") {
+    const W = WORLDS.orbit, f = W.flight;
+    WORK.innerHTML = `<div class="pane">
+      <div class="eyebrow">Ascent profile: the stack from tab 1, flown with a gravity turn</div>
+      <canvas class="plot" id="profile" width="620" height="240"></canvas>
+      <p class="muted" style="font-size:13.5px">Straight up to 40 m, then the nose tips east a little more each metre; the engines cut when the predicted apoapsis reaches 960 m, and a short burn at apoapsis rounds the orbit off. ${f.mode === "orbit" ? `In orbit after <b>${Math.round(f.t)} s</b> with <b>${Math.round(dvLeft(W.state))} m/s</b> left.` : f.mode === "crashed" ? "<b class='bad'>This stack falls back: add tanks or a stage in tab 1.</b>" : "<b>Out of fuel before orbit.</b>"}</p>
+    </div>
+    <div class="pane">
+      <div class="eyebrow">The same rocket in both fields</div>
+      <div class="tablebox"><table><thead><tr><th></th><th>A: today's band</th><th>B: inverse-square</th></tr></thead><tbody>
+        <tr><td>Pull at 960 m up</td><td class="n">25.0 m/s&sup2;</td><td class="n">17.4 m/s&sup2;</td></tr>
+        <tr><td>Circular speed, low orbit</td><td class="n">379 m/s</td><td class="n">316 m/s</td></tr>
+        <tr><td>Orbits possible</td><td>Inside 1.8 R only, and they do not close: the path rosettes round</td><td>Any height; ellipses that close, as in Tenebris</td></tr>
+        <tr><td>Past 1.8 R</td><td>No pull at all: a ship coasts in a straight line</td><td>Pull falls off, never stops; the moon's 26 km is reachable on an arc</td></tr>
+        <tr><td>Apoapsis and periapsis</td><td>Read off the integrated path</td><td>Read off the integrated path</td></tr>
+      </tbody></table></div>
+      <p class="muted" style="font-size:13.5px">Flip the field at the top right and the same rocket is flown again. The readout is Tenebris's: <span class="mono">orbit [Body] Ap Pe T</span> in cyan while bound, <span class="mono">ESCAPE</span> in orange. No maneuver nodes: you burn and the line moves.</p>
+    </div>`;
+    drawProfile();
+  } else if (TAB === "fusion") {
+    if (FUS.view === "freight") {
+      WORK.innerHTML = `<div class="pane" style="grid-column:1/-1">
+        <div class="eyebrow">Freight board: routes run themselves</div>
+        <div class="tablebox"><table><thead><tr><th>Freighter</th><th>From</th><th>To</th><th>Cargo</th><th>Trip</th><th>Progress</th></tr></thead><tbody id="routeRows"></tbody></table></div>
+        <form class="addroute" id="addRoute"><label>From<select id="rFrom">${Object.keys(STOPS).map(s => `<option>${s}</option>`).join("")}</select></label><label>To<select id="rTo">${Object.keys(STOPS).map((s, i) => `<option${i === 2 ? " selected" : ""}>${s}</option>`).join("")}</select></label><label>Cargo<select id="rCargo"><option>Helium-3, 40 t</option><option>Steel plate, 60 t</option><option>Fuel pellets, 20 t</option><option>Glowcap, 12 t</option><option>Antimatter cells, 2</option></select></label><button class="pbtn go" type="submit">Add route</button></form>
+        <p class="muted" style="font-size:13.5px">A route is a stored record with its freighter's ID. Near a player the freighter flies its course in the world; away from every player it moves on rails along the same course, so it is where the course says when you arrive. Loading and unloading go through the durable save path, authored by the freighter, and never take from a player's own store.</p>
+      </div>`;
+      updateRouteRows();
+      $("addRoute").onsubmit = e => { e.preventDefault(); const from = $("rFrom").value, to = $("rTo").value; if (from === to) { flashInfo("A route needs two different stops."); return; } ROUTES.push({ship: "Dray " + (ROUTES.length + 1), from, to, cargo: $("rCargo").value, trip: 180 + Math.round(Math.random() * 120), p: 0}); WORLDS.fusion.syncRoutes(); updateRouteRows(); };
+    } else if (FUS.view === "lander") {
+      WORK.innerHTML = `<div class="pane"><div class="eyebrow">The lander</div><div class="tablebox"><table><tbody>
+        <tr><td>Stack</td><td>Chemical engine, three tanks, the pod, three legs: 8 cells</td></tr><tr><td>Mass full / dry</td><td class="n">16.6 t / 4.0 t</td></tr><tr><td>TWR at Pale Blue</td><td class="n">1.26 on the pad</td></tr><tr><td>Delta-v</td><td class="n">860 m/s</td></tr><tr><td>Surface to low orbit</td><td class="n">540 m/s</td></tr><tr><td>Low orbit to surface</td><td class="n">450 m/s (a powered landing), after a refuel in orbit</td></tr></tbody></table></div></div>
+        <div class="pane"><div class="eyebrow">Why the fusion ship stays up</div><p class="muted" style="font-size:14px">A fusion drive pushes 400 kN at 8 km/s exhaust: a ship that crosses the system in minutes but cannot lift its own weight off a 1 g world, and whose exhaust would cook the pad. So the tier splits the job the way the owner put it: the fusion ship crosses, the lander goes up and down. A freighter on the Highport route tops the lander's tanks up in orbit, so one tankful only has to get it up.</p></div>`;
+    } else {
+      WORK.innerHTML = `<div class="pane"><div class="eyebrow">Two ways to the same place</div><div class="tablebox"><table><thead><tr><th></th><th>Chemical</th><th>Fusion, nav computer</th></tr></thead><tbody>
+        <tr><td>To Lantern (26 km)</td><td class="n">4 min 22 s, 140 m/s</td><td class="n">1 min 4 s, 1.27 km/s</td></tr>
+        <tr><td>To Verdance (200 km)</td><td class="n">about 11 min, 434 m/s</td><td class="n">3 min 20 s, 4.0 km/s</td></tr>
+        <tr><td>Shape</td><td>An arc round the body: leave at the right moment, from the right side</td><td>Near straight: burn toward where the target will be, flip, brake</td></tr>
+        <tr><td>Who flies it</td><td>You, by the predicted line</td><td>The nav computer; you can take the stick</td></tr></tbody></table></div></div>
+        <div class="pane"><div class="eyebrow">What the nav computer does</div><ul class="muted" style="margin:0;padding-left:18px;font-size:14px;display:grid;gap:4px"><li>Takes a destination (a body's orbit, a station, a freighter) and the ship's thrust, mass and fuel.</li><li>Solves for the departure direction that meets the target's rail position at arrival (the rails are closed-form, so this is exact).</li><li>Shows the burn, the flip and the brake on the map, with times and delta-v; engages on a key.</li><li>Holds attitude with Tenebris's SAS modes (prograde, retrograde, target) through the burns.</li></ul></div>`;
+    }
+  } else {
+    if (AM.view === "map") {
+      const here = sysOf(AM.here);
+      WORK.innerHTML = `<div class="pane" style="grid-column:1/-1"><div class="eyebrow">Neighbouring systems</div><div class="tablebox"><table><thead><tr><th>System</th><th>Star</th><th>Distance</th><th>Jumps</th><th>Cells</th></tr></thead><tbody>${SYSTEMS.map(s => { const d = dist(here, s); return `<tr><td>${s.n === AM.dest ? "<b style='color:var(--pink)'>" + s.n + "</b>" : s.n}${s.n === AM.here ? " (here)" : ""}</td><td>${s.cls}</td><td class="n">${d.toFixed(1)} ly</td><td class="n">${s.n === AM.here ? "-" : Math.ceil(d / JUMP)}</td><td class="n">${s.n === AM.here ? "-" : Math.ceil(d)}</td></tr>`; }).join("")}</tbody></table></div>
+      <p class="muted" style="font-size:13.5px">Every system is its own world: a seed, a generator version and its own bodies on rails, made the first time a ship arrives and stored from then on. A jump is not simulated in between: the ship leaves one system's frame and appears in the other's, 40 km off its star's first body.</p></div>`;
+    } else if (AM.view === "lander") {
+      WORK.innerHTML = `<div class="pane"><div class="eyebrow">The antimatter lander</div><div class="tablebox"><table><tbody><tr><td>Stack</td><td>Antimatter core, one tank, the pod, three legs: 6 cells</td></tr><tr><td>TWR at 1 g</td><td class="n">3.2</td></tr><tr><td>Delta-v</td><td class="n">60 km/s</td></tr><tr><td>Pale Blue surface to Cinder surface</td><td class="n">5 min 10 s, 9.8 km/s</td></tr></tbody></table></div></div>
+      <div class="pane"><div class="eyebrow">What changes</div><p class="muted" style="font-size:14px">The lander is now the ship. It lifts off at three times its weight, flies the nav computer's course to another world's surface and sets down; orbits become optional. Its exhaust is the brightest thing in the night: the magenta pool on the basalt is the drive.</p></div>`;
+    } else {
+      WORK.innerHTML = `<div class="pane"><div class="eyebrow">The starship</div><div class="tablebox"><table><tbody><tr><td>Built</td><td>At a station's yard (stations mockup), never on the ground</td></tr><tr><td>Cells</td><td class="n">${starshipCells().length}</td></tr><tr><td>Warp</td><td>8 ly a jump, 30 s to charge, 1 antimatter cell a light year</td></tr><tr><td>In a system</td><td>Flies like any antimatter ship; carries landers</td></tr></tbody></table></div></div>
+      <div class="pane"><div class="eyebrow">What the engine needs</div><ul class="muted" style="margin:0;padding-left:18px;font-size:14px;display:grid;gap:4px"><li>More than one star system: a system record (seed, generator version, bodies) and a galaxy list of systems; today there is one hard-wired system.</li><li>Frames: each system's root frame in f64; a ship names its system and its frame. A jump re-roots the ship's frame at a tick boundary, with pose, velocity and interpolation rebased together (CLAUDE.md).</li><li>Never one f64 frame across stars: positions stay system-local; the galaxy map uses light years only for the map.</li><li>Saves: per system, created on first arrival; world time runs in every system together, only while played.</li></ul></div>`;
+    }
+  }
+}
+function updateRouteRows() {
+  const tb = $("routeRows"); if (!tb) return;
+  tb.innerHTML = ROUTES.map(R => `<tr><td>${R.ship}</td><td>${R.from}</td><td>${R.to}</td><td>${R.cargo}</td><td class="n">${Math.floor(R.trip / 60)}:${String(R.trip % 60).padStart(2, "0")}</td><td><div class="prog"><i style="width:${Math.round(R.p * 100)}%"></i></div></td></tr>`).join("");
+}
+
+function go() {
+  ensureWorlds(); renderCtl(); renderHotbar(); renderWork();
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === TAB));
+  canvas.classList.toggle("place", TAB === "vab");
+}
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => { TAB = b.dataset.tab; try { history.replaceState(null, "", "#" + TAB); } catch (e) {} go(); });
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (["vab", "orbit", "fusion", "antimatter"].includes(h) && h !== TAB) { TAB = h; go(); } });
+window.addEventListener("keydown", e => { if (TAB !== "vab" || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return; const n = +e.key; if (n >= 1 && n <= 9) selPart(PALETTE[n - 1]); });
+
+function resize() {
+  if (!renderer || !active) return;
+  const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); active.camera.aspect = w / h; active.camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+// camera: drag to orbit, wheel or pinch to zoom; a click (no drag) goes to the world
+const ptrs = new Map(); let pinch0 = 0, down = null;
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); down = {x: e.clientX, y: e.clientY, b: e.button, moved: 0}; if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+canvas.addEventListener("pointermove", e => {
+  if (!ptrs.has(e.pointerId) || !active) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  const C = active.cam;
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0) C.dist = Math.max(C.min, Math.min(C.max, C.dist * pinch0 / d)); pinch0 = d; return; }
+  if (down) down.moved += Math.abs(e.clientX - px) + Math.abs(e.clientY - py);
+  C.yaw -= (e.clientX - px) * 0.006; C.pitch = Math.max(-1.3, Math.min(1.45, C.pitch + (e.clientY - py) * 0.005));
+});
+canvas.addEventListener("pointerup", e => {
+  ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0;
+  if (down && down.moved < 6 && active && active.click) { const r = canvas.getBoundingClientRect(), ray = new THREE.Raycaster(); ray.setFromCamera({x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1}, active.camera); active.click(ray, down.b); }
+  down = null;
+});
+canvas.addEventListener("wheel", e => { e.preventDefault(); if (!active) return; const C = active.cam; C.dist = Math.max(C.min, Math.min(C.max, C.dist * Math.exp(e.deltaY * 0.0012))); }, {passive: false});
+
+function start() {
+  if (!window.THREE) { $("loading").textContent = "three.js did not load"; return; }
+  renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  TL = new THREE.TextureLoader();
+  if (THREE.GLTFLoader) GLTF = new THREE.GLTFLoader();
+  const h = location.hash.slice(1), qt = Q.get("tab");
+  TAB = ["vab", "orbit", "fusion", "antimatter"].includes(qt) ? qt : ["vab", "orbit", "fusion", "antimatter"].includes(h) ? h : "vab";
+  if (Q.get("sub")) { if (TAB === "fusion") FUS.view = Q.get("sub"); if (TAB === "antimatter") AM.view = Q.get("sub"); }
+  if (Q.get("to")) FUS.to = Q.get("to");
+  if (Q.get("field")) ORB.field = Q.get("field");
+  if (Q.get("time")) FUS.time = AM.time = Q.get("time");
+  if (Q.get("preset") && PRESETS[Q.get("preset")]) loadPreset(Q.get("preset"));
+  go();
+  if (TAB !== "vab" && WORLDS.vab === undefined) {} // the VAB world is built when its tab opens
+  if (Q.get("launch") && TAB === "vab") setTimeout(startLaunch, 200);
+  if (Q.get("warp") && TAB === "antimatter") setTimeout(startWarp, 200);
+  $("loading").hidden = true;
+  let last = performance.now(), t0 = last;
+  const loop = now => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = (now - t0) / 1000;
+    const W = active;
+    if (W) {
+      if (W.name === "orbit" && W.dirty) { W.dirty = false; W.reset(false); }
+      W.update(dt, t);
+      const C = W.cam, cp = Math.cos(C.pitch);
+      W.camera.position.set(C.target.x + C.dist * cp * Math.sin(C.yaw), C.target.y + C.dist * Math.sin(C.pitch), C.target.z + C.dist * cp * Math.cos(C.yaw));
+      W.camera.lookAt(C.target); W.camera.updateMatrixWorld();
+      pushLamps(W);
+      renderer.render(W.scene, W.camera);
+      $("hud").innerHTML = W.hud();
+      const r = canvas.getBoundingClientRect();
+      for (const L of W.labels) {
+        const p = L.pos ? tmpV.copy(L.pos) : L.obj ? L.obj.getWorldPosition(tmpV) : null;
+        let vis = !!p && L.show !== false && (!L.obj || L.obj.visible !== false);
+        if (vis && L.obj) { let o = L.obj; while (o) { if (o.visible === false) { vis = false; break; } o = o.parent; } }
+        if (vis && L.pos && L.posParentHidden) vis = false;
+        if (vis) { p.project(W.camera); vis = p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1; if (vis) { L.el.style.left = ((p.x + 1) / 2 * r.width) + "px"; L.el.style.top = ((1 - p.y) / 2 * r.height) + "px"; } }
+        L.el.hidden = !vis;
+      }
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+
+// =====================================================================================
+// the ladder cards, the three options and the decisions
+// =====================================================================================
+$("ladder").innerHTML = [
+  ["kestrel", "game/hand", "Before the tiers", "Air and sea", "Built now", ["Kestrel tilt-rotor, Tern sailboat, Loon canoe", "Assisted flight in the air; nothing reaches space", "Stay useful at every tier"]],
+  ["chem", "engine-chem", "Tier 1", "Chemical and nuclear rockets", "Power: coal to fission", ["Hex stacks in the assembly building, nothing else", "TWR over 1 to leave the pad; delta-v to reach orbit", "Staging, boosters, the nuclear upper stage (fuel rods)", "Orbit Pale Blue; reach Lantern and land; come home in the pod"]],
+  ["fus", "fusion", "Tier 2", "Fusion", "Power: a fusion plant", ["Ships built in orbit at a station; they never land", "The nav computer plots and flies near-straight courses", "Freighters run routes on their own", "Landers lift off to low orbit to meet them"]],
+  ["am", "antimatter", "Tier 3", "Antimatter", "Power: the collider", ["Landers go from any surface to any surface", "Starships with a warp ring, built at a station yard", "Neighbouring star systems, 8 ly a jump"]],
+].map(([id, icon, tier, name, pw, li]) => `<div class="card"><div class="head"><img src="${PX}${icon}.png${V}" alt=""><div><div class="eyebrow">${tier}</div><h3>${name}</h3><div class="pw">${pw}</div></div></div><ul>${li.map(x => `<li>${x}</li>`).join("")}</ul></div>`).join("");
+$("opts").innerHTML = [
+  ["A. Keep the invariant as written", "", "Chemical rockets fly in today's bounded field. Orbits only fit inside 1.8 R and never close; past it a rocket coasts straight. The moon at 26 km is a straight coast, not an arc. Apoapsis and periapsis are read off the integrated path. Nothing in CLAUDE.md changes.", false],
+  ["B. Tenebris's orbital field for rockets, no nodes", "Recommended", "Rockets integrate Tenebris's orbital field: inverse-square pull from every body on its rails and from the star, Newtonian, the same Euler step as today. The predicted path is that integration run forward (no conic solver, no sphere-of-influence hops), with Ap, Pe and T. No maneuver nodes: you burn and the line moves; the fusion tier's nav computer is the planner. No transfer-window requirement: the nav computer makes windows a choice, not a wait. Walkers, hover and assisted ships keep the bounded anchor field. Ships never pull on each other. Moons' rail speeds must match circular speed in their parent's field.", true],
+  ["C. All of Tenebris", "", "Patched conics drawn from Kepler solutions, sphere-of-influence hand-overs, maneuver nodes with prograde, normal and radial handles, the navball. The most like Kerbal. It brings back most of what the invariant was written to keep out, and a second, analytic way of saying where a ship will be that must agree with the integrator.", false],
+].map(([h, tag, p, rec]) => `<div class="opt${rec ? " rec" : ""}">${tag ? `<span class="tag">${tag}</span>` : ""}<h3>${h}</h3><p>${p}</p></div>`).join("")
+  + `<p class="muted" style="grid-column:1/-1;font-size:14px">B changes the invariant in one place: "ships use local gravity falloff" becomes "assisted ships use the bounded anchor field; rockets use the orbital field". Patched conics, maneuver nodes, transfer-window requirements and ship-to-ship gravity stay out. This is the survey's question G4, with tab 2's screenshots in both fields and tab 3's course beside it.</p>`;
+const DEC = [
+  ["G4. How do chemical rockets meet orbits? (asked, with screenshots)", "A keep the invariant, B Tenebris's orbital field without nodes, C all of Tenebris.", "B. It is the orbital play Tenebris has, with the part that made the invariant necessary (a second, analytic model of motion) left out. Until you answer, the plan is written for B and marked provisional."],
+  ["One build grid", "The VAB builds hex stacks; the shipyard mockup builds on 2 m squares.", "Recommendation taken (ask only with screenshots): both on the 2.833 m hex cell with 1 m layers, so a part is a unit of the world like a block."],
+  ["Exhaust speeds are the world's scale", "Real kerosene engines exhaust at about 3 km/s; low orbit here is 316 m/s.", "Recommendation taken: chemical 600 m/s, solid 480, nuclear thermal 1,500, fusion 8,000, antimatter 60,000, so a tank of fuel matters as it does in Kerbal and staging pays."],
+  ["Spent stages", "Dropped boosters and stages could be saved as debris.", "Recommendation taken: they fall, break and are gone; nothing is left in orbit. A player's rocket and its payload are records like any ship."],
+  ["Who flies a freighter far from the player", "Simulating every freighter everywhere costs frame time.", "Recommendation taken: on rails along its plotted course when no player is near, flown in the world when one is; its cargo moves through the durable save path."],
+  ["When starships come", "Other systems need a system record, frames per system and saves per system.", "Recommendation taken: the last tier, after stations; the engine work is its own change."],
+];
+$("decisions").innerHTML = DEC.map(([q, ctx, rec]) => `<div class="q"><h3>${q}</h3><p>${ctx}</p><p class="rec"><b>${q.startsWith("G4") ? "Recommend" : "Taken"}</b>${rec}</p></div>`).join("");
+
+start();
+</script>
