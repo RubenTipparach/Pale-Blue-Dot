@@ -833,6 +833,91 @@ fn print_the_cost_of_a_height_with_the_villages() {
     );
 }
 
+/// A measurement instrument, run by hand (`frame-budget` 2.5): a height's
+/// cost from one thread and from every core at once, with no ground installed
+/// and with every village's. Opening a world rebuilt the planet in 9.2 s with
+/// the towns' ground against 0.8 s without; this names how much of that is
+/// the process-wide lock and config compare every height takes, and how much
+/// the towns' own lookup. Installs ground for the process, so run alone:
+/// `cargo test --release -p pbd-app --lib print_the_cost_of_a_height_from_every_core -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn print_the_cost_of_a_height_from_every_core() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("village");
+    let grounds: Vec<TownGround> = villages()
+        .iter()
+        .map(|site| {
+            let town = lay_out(site, &template, &config).unwrap();
+            let patch = patch_round(site.direction, config.radius_m, PATCH_M);
+            record::ground_of(&town, &patch, config.radius_m, natural(&config))
+                .unwrap()
+                .1
+        })
+        .collect();
+    let directions: Vec<Vec3> = (0..400_000u32)
+        .map(|i| {
+            let t = (i as f32 + 0.5) / 400_000.0;
+            let z = 1.0 - 2.0 * t;
+            let r = (1.0 - z * z).sqrt();
+            let a = i as f32 * 2.399_963;
+            Vec3::new(r * a.cos(), z, r * a.sin())
+        })
+        .collect();
+    let cores = std::thread::available_parallelism().map_or(8, |n| n.get());
+    // Every thread reads all the directions, as every build thread reads its
+    // own share of the sphere's heights at once.
+    let time = |threads: usize| {
+        let started = std::time::Instant::now();
+        let sum: f32 = std::thread::scope(|scope| {
+            let jobs: Vec<_> = (0..threads)
+                .map(|_| {
+                    scope.spawn(|| {
+                        directions
+                            .iter()
+                            .map(|d| pbd_core::column::surface_m(&config, *d))
+                            .sum::<f32>()
+                    })
+                })
+                .collect();
+            jobs.into_iter().map(|j| j.join().unwrap()).sum()
+        });
+        let wall = started.elapsed().as_secs_f64();
+        // Per height as one thread sees it: wall time over its own share.
+        (wall * 1e9 / directions.len() as f64, sum)
+    };
+    let ground = Ground::new(config, grounds);
+    // The towns' lookup alone, no lock: what a snapshot of the ground costs.
+    let bare = {
+        let started = std::time::Instant::now();
+        let mut hits = 0usize;
+        for d in &directions {
+            hits += usize::from(ground.at(*d).is_some());
+        }
+        (
+            started.elapsed().as_nanos() as f64 / directions.len() as f64,
+            hits,
+        )
+    };
+    for (label, installed) in [("no towns", None), ("every village", Some(ground.clone()))] {
+        ground::install(installed);
+        let (one, _) = time(1);
+        let (all, sum) = time(cores);
+        println!(
+            "{label}: {one:.0} ns a height on 1 thread, {all:.0} ns on each of {cores} at once \
+             ({:.1}x) ({sum:.0})",
+            all / one
+        );
+    }
+    ground::install(None);
+    println!(
+        "the towns' lookup alone, no lock: {:.0} ns a direction ({} of {} in a town)",
+        bare.0,
+        bare.1,
+        directions.len()
+    );
+}
+
 /// Slice 4b: every walled site of the shipped seed lays and cuts the walled
 /// town on its own ground, on its levels, dry.
 #[test]

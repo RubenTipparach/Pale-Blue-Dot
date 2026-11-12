@@ -4,6 +4,8 @@
 #[cfg(feature = "desktop")]
 pub mod atmosphere;
 #[cfg(feature = "desktop")]
+pub mod bloom;
+#[cfg(feature = "desktop")]
 pub mod compass;
 #[cfg(feature = "desktop")]
 pub mod config;
@@ -33,6 +35,8 @@ pub mod sea;
 pub mod sites;
 #[cfg(feature = "desktop")]
 pub mod sky;
+#[cfg(feature = "desktop")]
+pub mod tone;
 #[cfg(feature = "desktop")]
 pub mod towns;
 #[cfg(feature = "desktop")]

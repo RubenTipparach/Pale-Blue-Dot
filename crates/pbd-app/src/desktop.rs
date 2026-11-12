@@ -60,6 +60,16 @@ pub struct Launch {
     /// once it has walked that far: a repeatable stretch of streaming for the
     /// frame log to measure.
     pub walk_distance: Option<f32>,
+    /// `--stroll SECONDS`: a recording instrument. The walker walks (no
+    /// sprint) straight ahead, turns round every leg and walks back, hops what
+    /// it stalls on, never digs, turns a quarter after three seconds stuck,
+    /// logs `STROLL_START` and `STROLL_DONE` and quits after that long: a
+    /// walk up and down a town's lane for a video (`--walk --at` puts it
+    /// there).
+    pub stroll: Option<f32>,
+    /// `--stroll-leg SECONDS`: how long the stroll walks before it turns
+    /// round (half the stroll when not given): a short leg paces one lane.
+    pub stroll_leg: Option<f32>,
     /// `--sail-for SECONDS`: a measurement instrument. Once aboard a cog
     /// (`--aboard cog --sail DEG`), the run sails it that long in real
     /// time, logs `SAIL_DONE` and quits: `perf_suite.py`'s `sail`.
@@ -236,6 +246,8 @@ impl Launch {
             capture: None,
             frame_log: None,
             walk_distance: None,
+            stroll: None,
+            stroll_leg: None,
             sail_for: None,
             frame_graph: false,
             no_vsync: false,
@@ -505,6 +517,31 @@ impl Launch {
                     );
                     result.walk_distance = Some(metres);
                     result.walk = true;
+                }
+                "--stroll" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .and_then(|s| s.parse().ok())
+                        .expect("--stroll requires seconds");
+                    assert!(
+                        seconds.is_finite() && seconds > 0.0,
+                        "--stroll takes seconds"
+                    );
+                    result.stroll = Some(seconds);
+                    result.walk = true;
+                }
+                "--stroll-leg" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .and_then(|s| s.parse().ok())
+                        .expect("--stroll-leg requires seconds");
+                    assert!(
+                        seconds.is_finite() && seconds > 0.0,
+                        "--stroll-leg takes seconds"
+                    );
+                    result.stroll_leg = Some(seconds);
                 }
                 "--frame-log" => {
                     i += 1;
@@ -833,6 +870,8 @@ pub fn run(args: &[String]) {
         PlanetPlugin,
         FlightViewPlugin,
         SkyPlugin,
+        pbd_app::tone::TonePlugin,
+        pbd_app::bloom::LiteBloomPlugin,
     ))
     .insert_resource(CelestialScene::planet_at_origin(PLANET_RADIUS as f64, 1.0))
     .insert_resource(PhysicsFrame(pbd_core::frame::LocalFrame {
@@ -990,6 +1029,15 @@ pub fn run(args: &[String]) {
     .add_systems(
         Update,
         (
+            menu::press_graphics,
+            menu::label_graphics,
+            menu::wheel_scroll,
+        )
+            .chain(),
+    )
+    .add_systems(
+        Update,
+        (
             configure_camera,
             scene::move_moon,
             scene::turn_stars,
@@ -1028,8 +1076,15 @@ pub fn run(args: &[String]) {
     if launch.frame_log.is_some() {
         // GPU time per render pass for the frame log (`perf-rig`), and a
         // route that ends the run when it lands, like `--walk-distance`.
-        app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin)
-            .add_systems(Last, quit_after_route);
+        // Not on macOS: its spans write timestamps inside a pass, which Apple
+        // GPUs cannot, so they read nought there, and the counter sample
+        // buffers it still makes for every frame in flight ran out under slow
+        // frames ("Cannot allocate sample buffer", a crash). The clouds'
+        // boundary timer measures them there instead (`cloud-puffs`).
+        if !cfg!(target_os = "macos") {
+            app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
+        }
+        app.add_systems(Last, (quit_after_route, log_window_attention));
     }
     // Towns are lit by the field in every run, a still from above as much as
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
@@ -1111,6 +1166,9 @@ pub fn run(args: &[String]) {
             // Where the swim's keys go, for the same reason (below).
             app.init_resource::<WalkProgress>()
                 .add_systems(PreUpdate, walk_script.after(bevy::input::InputSystems));
+        }
+        if launch.stroll.is_some() {
+            app.add_systems(PreUpdate, stroll_script.after(bevy::input::InputSystems));
         }
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
@@ -2180,18 +2238,22 @@ fn walk_script(
     let (anchor, since) = *progress.anchor.get_or_insert((here, now));
     if here.distance(anchor) > 4.0 {
         progress.anchor = Some((here, now));
+        mouse.release(MouseButton::Left);
     } else {
         let stalled = now.duration_since(since).as_secs_f32();
         // Stuck, as a player gets unstuck: jump (a tap every 0.7 s, released
         // between so each counts), then dig through what is in front with the
-        // pickaxe, and only then turn. (Fly is F, not the jump key.)
+        // pickaxe, and only then turn. (Fly is F, not the jump key.) Breaking
+        // is a HOLD (`dig_and_place`): the button stays down from 2.5 s on, as
+        // the owner put it, "gotta hold mouse down to break blocks". Tapped,
+        // it only ever started a crack and let go.
         let pulse = |period: f32| (stalled % period) < 0.05;
         if stalled > 0.6 && pulse(0.7) {
             keys.press(KeyCode::Space);
         } else {
             keys.release(KeyCode::Space);
         }
-        if stalled > 2.5 && pulse(0.4) {
+        if stalled > 2.5 {
             mouse.press(MouseButton::Left);
         } else {
             mouse.release(MouseButton::Left);
@@ -2214,6 +2276,135 @@ fn walk_script(
             now.duration_since(started).as_secs_f32(),
             progress.turns
         );
+        exit.write(AppExit::Success);
+    }
+}
+
+/// Metres along the ground between two points' directions.
+fn ground_m(a: Vec3, b: Vec3) -> f32 {
+    a.normalize_or(Vec3::Y)
+        .angle_between(b.normalize_or(Vec3::Y))
+        * pbd_app::planet::PLANET_RADIUS
+}
+
+/// The `--stroll` instrument: walk ahead at walking pace for a video, hop
+/// what stalls it, turn a quarter after three seconds stuck, never dig.
+// Ten parameters, `walk_script`'s reason: an instrument that drives keys,
+// reads the walker and the towns, and quits.
+#[allow(clippy::too_many_arguments)]
+fn stroll_script(
+    launch: Res<Launch>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    walkers: Query<&Position, With<pbd_app::walking::Walker>>,
+    mut exit: MessageWriter<AppExit>,
+    mut clock: Local<Option<(Instant, Vec3, Instant)>>,
+    mut legs: Local<u32>,
+    towns: Option<Res<pbd_app::towns::Towns>>,
+    mut stood: Local<Option<Instant>>,
+    mut stood_log: Local<Option<Instant>>,
+) {
+    let stood_log = stood_log.get_or_insert_with(Instant::now);
+    let Some(seconds) = launch.stroll else {
+        return;
+    };
+    if !state.active {
+        return;
+    }
+    let Ok(position) = walkers.single() else {
+        return;
+    };
+    // Not before the walker stands in a town that stands (within 150 m of
+    // its anchor), and a second after: towns stand from kilometres off, and
+    // the walker is put at `--at` only once its town is up.
+    if clock.is_none() {
+        let near = towns.as_ref().is_some_and(|t| {
+            t.standing
+                .iter()
+                .any(|s| ground_m(s.anchor, position.0) < 150.0)
+        });
+        if !near {
+            *stood = None;
+            if towns.as_ref().is_none_or(|t| t.standing.is_empty())
+                && stood_log.elapsed().as_secs_f32() > 5.0
+            {
+                *stood_log = Instant::now();
+                info!("STROLL_WAIT no town stands yet, {:?}", position.0);
+            }
+            if let Some(t) = towns.as_ref()
+                && let Some((d, name)) = t
+                    .standing
+                    .iter()
+                    .map(|s| (ground_m(s.anchor, position.0), s.name.as_str()))
+                    .min_by(|a, b| a.0.total_cmp(&b.0))
+                && stood_log.elapsed().as_secs_f32() > 5.0
+            {
+                *stood_log = Instant::now();
+                info!("STROLL_WAIT {d:.0} m from {name}");
+            }
+            return;
+        }
+        let since = *stood.get_or_insert_with(Instant::now);
+        if since.elapsed().as_secs_f32() < 1.0 {
+            return;
+        }
+    }
+    let here = position.0;
+    let now = Instant::now();
+    state.captured = true;
+    state.scripted = true;
+    let nearest = towns
+        .as_ref()
+        .and_then(|t| {
+            t.standing
+                .iter()
+                .map(|s| (ground_m(s.anchor, here), s.name.clone(), s.anchor))
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+        })
+        .unwrap_or((f32::NAN, String::new(), Vec3::ZERO));
+    if clock.is_none() {
+        // Face the town's middle, whatever way the walker was put down.
+        let up = here.normalize_or(Vec3::Y);
+        let toward = nearest.2 - up * nearest.2.dot(up);
+        if toward.length() > 1e-6 {
+            state.face(up, toward.normalize());
+        }
+    }
+    let (started, anchor, since) = *clock.get_or_insert_with(|| {
+        info!(
+            "STROLL_START {seconds:.0} s, {:.0} m from {}'s anchor",
+            nearest.0, nearest.1
+        );
+        (now, here, now)
+    });
+    keys.press(KeyCode::KeyW);
+    let leg = launch.stroll_leg.unwrap_or(seconds * 0.5);
+    let walked = now.duration_since(started).as_secs_f32();
+    if walked >= leg * (*legs + 1) as f32 {
+        let up = here.normalize_or(Vec3::Y);
+        let back = Quat::from_axis_angle(up, std::f32::consts::PI) * state.view().0;
+        state.face(up, back);
+        *legs += 1;
+        info!("STROLL_TURN");
+    }
+    if here.distance(anchor) > 1.5 {
+        *clock = Some((started, here, now));
+    } else {
+        let stalled = now.duration_since(since).as_secs_f32();
+        if stalled > 0.5 && (stalled % 0.7) < 0.05 {
+            keys.press(KeyCode::Space);
+        } else {
+            keys.release(KeyCode::Space);
+        }
+        if stalled > 3.0 {
+            let up = here.normalize_or(Vec3::Y);
+            let turned = Quat::from_axis_angle(up, std::f32::consts::FRAC_PI_2) * state.view().0;
+            state.face(up, turned);
+            *clock = Some((started, here, now));
+        }
+    }
+    if now.duration_since(started).as_secs_f32() >= seconds {
+        info!("STROLL_DONE");
         exit.write(AppExit::Success);
     }
 }
@@ -2540,7 +2731,14 @@ fn write_frame_log(
     let Some(out) = log.0.as_mut() else {
         return;
     };
-    let (gpu_clouds, gpu_total) = diagnostics.map_or((f64::NAN, f64::NAN), |d| gpu_times(&d));
+    let (mut gpu_clouds, gpu_total) = diagnostics.map_or((f64::NAN, f64::NAN), |d| gpu_times(&d));
+    // Where the passes' own spans read nothing (Metal: no timestamps inside
+    // a pass), the clouds' boundary timer (`cloud-puffs`).
+    if (gpu_clouds.is_nan() || gpu_clouds <= 0.0)
+        && let Some(ms) = pbd_app::planet::cloud_gpu_ms()
+    {
+        gpu_clouds = ms;
+    }
     let Some(ms) = stats.samples.last() else {
         return;
     };
@@ -2586,10 +2784,32 @@ fn gpu_times(store: &bevy::diagnostic::DiagnosticsStore) -> (f64, f64) {
     let current = spans.iter().filter(|s| s.2 == newest);
     let clouds = current
         .clone()
-        .filter(|s| matches!(s.0.as_str(), "cloud_march" | "cloud_resolve" | "clouds"))
+        .filter(|s| {
+            matches!(
+                s.0.as_str(),
+                "cloud_march" | "cloud_resolve" | "cloud_puffs" | "clouds"
+            )
+        })
         .map(|s| s.1)
         .sum();
     (clouds, current.map(|s| s.1).sum())
+}
+
+/// With `--frame-log`, every change in whether the window has the user's
+/// attention: a window out of focus or hidden is paced by the OS (Bevy updates
+/// an unfocused window at 60 Hz; macOS throttles one it cannot show, as under a
+/// locked screen), so a run that saw one measured the pacing, not the game.
+/// `tools/perf_suite.py` marks such a run invalid (`frame-budget`).
+fn log_window_attention(
+    mut focus: MessageReader<bevy::window::WindowFocused>,
+    mut occluded: MessageReader<bevy::window::WindowOccluded>,
+) {
+    for event in focus.read() {
+        info!("WINDOW_FOCUS {}", event.focused);
+    }
+    for event in occluded.read() {
+        info!("WINDOW_OCCLUDED {}", event.occluded);
+    }
 }
 
 /// With `--frame-log`, a route run ends itself once the route is complete.

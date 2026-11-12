@@ -730,6 +730,14 @@ const START_SEARCH_CAPS: usize = 2000;
 /// is rebuilt for another generator (`bigger-biomes` decision 8) the land a
 /// new world starts on can be somewhere else.
 pub fn find_spawn_again(world: &mut World) {
+    // A start asked for exactly (`--at`) stays where it was asked for: the
+    // search for level ground walked it kilometres off a town's lane.
+    if world
+        .get_resource::<WalkingConfig>()
+        .is_some_and(|c| c.exact_start)
+    {
+        return;
+    }
     let direction = world.resource::<FlightViewConfig>().spawn_direction;
     let sea = world
         .get_resource::<crate::sea::Sea>()

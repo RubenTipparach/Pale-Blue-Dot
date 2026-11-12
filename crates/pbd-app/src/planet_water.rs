@@ -9,7 +9,7 @@
 //! Design: `openspec/changes/water-composite/design.md`.
 
 use super::{GpuCell, PlanetClock, PlanetGpu, PlanetRenderFrame, PlanetViewGpu, terrain};
-use crate::config::{WaterSettings, WeatherSettings};
+use crate::config::{CloudRenderer, RainRenderer, WaterSettings, WeatherSettings};
 use crate::weather::Weather;
 use bevy::{
     core_pipeline::{
@@ -27,8 +27,8 @@ use bevy::{
         },
         render_resource::{
             binding_types::{
-                sampler, storage_buffer_read_only_sized, texture_2d, texture_3d, texture_depth_2d,
-                texture_depth_2d_multisampled, uniform_buffer,
+                sampler, storage_buffer_read_only_sized, texture_2d, texture_2d_array, texture_3d,
+                texture_depth_2d, texture_depth_2d_multisampled, uniform_buffer,
             },
             *,
         },
@@ -130,7 +130,39 @@ pub(super) struct WaterView {
     /// lifts the image toward its own brightness; w the drops' scale
     /// (`rain_lens_scale`).
     mist_look: Vec4,
+    /// The puffs' look (`cloud-puffs`): the sun's wrap, a white and a storm
+    /// column's base shade, the silver lining.
+    cloud_puff: Vec4,
+    /// Their edge erosion, the fade in front of the ground (m), the fade-in
+    /// from the eye (m); w one when the puffs draw the clouds.
+    cloud_puff_fade: Vec4,
+    /// The rain shells (`rain-shells`): xyz the eye's velocity, body-local
+    /// m/s; w one when the shells draw the rain instead of the volume.
+    rain_shell: Vec4,
+    /// How far the rain and the snow have fallen past the eye, m, wrapped at
+    /// `RAIN_SHELL_WRAP_M`; the fade in front of the ground, m; w spare.
+    rain_shell_fall: Vec4,
+    /// `lighting-model`, the rain fog lit: rgb the sky's mean radiance where
+    /// the eye is (L2, by the cover), w one while the new model draws; rgb
+    /// the sun after the air and the cloud, w the forward scatter's g; and
+    /// the lights nearest the eye (planet frame, w the level 0..1).
+    rain_sky: Vec4,
+    rain_sun: Vec4,
+    rain_lamps: [Vec4; super::NEAR_LAMPS],
+    /// `lighting-model` L8 (10.3): the screen trace's history frame, as the
+    /// terrain's (`PlanetViewGpu::ssr_clip`), so the sea mirrors the land,
+    /// the houses and the trees as the wet ground does.
+    ssr_clip: Mat4,
+    ssr_eye: Vec4,
 }
+
+/// Where the shells' fall wraps, m: a multiple of every shell's streak cycle
+/// (`RAIN_SHELL_CYCLE_M` in `water.wgsl`, powers of two up to 512), so the
+/// pattern never jumps when it wraps.
+const RAIN_SHELL_WRAP_M: f32 = 8192.0;
+/// How fast the shells' sense of the eye's velocity follows it, per second:
+/// a frame's step is noisy, and the lean must not shiver.
+const RAIN_SHELL_VELOCITY_RATE: f32 = 8.0;
 
 /// `SeaView` in `sea.wgsl`: `pbd_core::sea::SeaGpu` laid out for the GPU.
 #[derive(Clone, ShaderType)]
@@ -343,6 +375,14 @@ struct WaterPipelines {
     mist_layout: BindGroupLayoutDescriptor,
     /// The lens's fourth group: the mist the probe just wrote.
     lens_layout: BindGroupLayoutDescriptor,
+    /// The puffs' fourth group (`cloud-puffs`): this frame's instances.
+    puff_layout: BindGroupLayoutDescriptor,
+    /// The rain's fourth group (`lighting-model`, the rain fog lit): the sun's
+    /// cascades, their comparison sampler and where each stands.
+    rain_light_layout: BindGroupLayoutDescriptor,
+    /// The compose and the cap's fourth group (`lighting-model` L8): the
+    /// screen trace's history.
+    ssr_layout: BindGroupLayoutDescriptor,
     sampler: Sampler,
     cells: TextureView,
     cells_sampler: Sampler,
@@ -404,6 +444,55 @@ fn composite_layout() -> BindGroupLayoutDescriptor {
                 ),
                 // The near field's fog, sampled bilinearly (`cloud-entry`).
                 (7, texture_2d(TextureSampleType::Float { filterable: true })),
+            ),
+        ),
+    )
+}
+
+fn puff_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "cloud puffs",
+        &BindGroupLayoutEntries::with_indices(
+            ShaderStages::VERTEX_FRAGMENT,
+            ((
+                10,
+                storage_buffer_read_only_sized(
+                    false,
+                    NonZeroU64::new(size_of::<super::cloud_puffs::PuffInstance>() as u64),
+                ),
+            ),),
+        ),
+    )
+}
+
+fn ssr_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "water: the screen trace's history",
+        &BindGroupLayoutEntries::with_indices(
+            ShaderStages::FRAGMENT,
+            ((
+                14,
+                texture_2d(TextureSampleType::Float { filterable: false }),
+            ),),
+        ),
+    )
+}
+
+fn rain_light_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "rain: the sun's cascades",
+        &BindGroupLayoutEntries::with_indices(
+            ShaderStages::FRAGMENT,
+            (
+                (11, texture_2d_array(TextureSampleType::Depth)),
+                (12, sampler(SamplerBindingType::Comparison)),
+                (
+                    13,
+                    storage_buffer_read_only_sized(
+                        false,
+                        NonZeroU64::new(size_of::<super::shadow::GpuCascades>() as u64),
+                    ),
+                ),
             ),
         ),
     )
@@ -542,10 +631,13 @@ fn initialize_pipelines(
         scene_layout: scene_layout(false),
         scene_layout_multisampled: scene_layout(true),
         history_layout: history_layout(),
+        rain_light_layout: rain_light_layout(),
+        ssr_layout: ssr_layout(),
         composite_layout: composite_layout(),
         resolve_layout: resolve_layout(),
         mist_layout: mist_layout(),
         lens_layout: lens_layout(),
+        puff_layout: puff_layout(),
         sampler: device.create_sampler(&SamplerDescriptor {
             label: Some("water scene sampler"),
             mag_filter: FilterMode::Linear,
@@ -563,6 +655,7 @@ enum Pass {
     Compose,
     CloudMarch,
     CloudResolve,
+    CloudPuffs,
     Clouds,
     Rain,
     Overlay,
@@ -615,6 +708,16 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 self.fullscreen.to_vertex_state(),
                 "cloud_march_pass",
             ),
+            Pass::CloudPuffs => (
+                "Cloud puffs into the history, far to near",
+                VertexState {
+                    shader: self.shader.clone(),
+                    shader_defs: defs.clone(),
+                    entry_point: Some(Cow::Borrowed("cloud_puff_vertex")),
+                    ..default()
+                },
+                "cloud_puff_fragment",
+            ),
             Pass::Clouds => (
                 "Clouds over the whole scene, against its depth",
                 self.fullscreen.to_vertex_state(),
@@ -653,6 +756,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
             | Pass::Rain
             | Pass::CloudMarch
             | Pass::CloudResolve
+            | Pass::CloudPuffs
             | Pass::Clouds
             | Pass::Overlay => None,
             pass => Some(DepthStencilState {
@@ -671,7 +775,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
             label: Some(Cow::Borrowed(label)),
             layout: if matches!(
                 key.pass,
-                Pass::Clouds | Pass::CloudMarch | Pass::CloudResolve
+                Pass::Clouds | Pass::CloudMarch | Pass::CloudResolve | Pass::CloudPuffs
             ) {
                 vec![
                     self.data_layout.clone(),
@@ -680,8 +784,23 @@ impl SpecializedRenderPipeline for WaterPipelines {
                     match key.pass {
                         Pass::CloudMarch => self.history_layout.clone(),
                         Pass::CloudResolve => self.resolve_layout.clone(),
+                        Pass::CloudPuffs => self.puff_layout.clone(),
                         _ => self.composite_layout.clone(),
                     },
+                ]
+            } else if matches!(key.pass, Pass::Cap | Pass::Compose) {
+                vec![
+                    self.data_layout.clone(),
+                    scene,
+                    super::weather_maps::layout(),
+                    self.ssr_layout.clone(),
+                ]
+            } else if key.pass == Pass::Rain {
+                vec![
+                    self.data_layout.clone(),
+                    scene,
+                    super::weather_maps::layout(),
+                    self.rain_light_layout.clone(),
                 ]
             } else if matches!(key.pass, Pass::Lens | Pass::LensMist) {
                 vec![
@@ -733,6 +852,29 @@ impl SpecializedRenderPipeline for WaterPipelines {
                         })
                     })
                     .to_vec()
+                } else if key.pass == Pass::CloudPuffs {
+                    // Premultiplied light "over" what is behind; the nearest
+                    // puff's distance and the scene's stop under it.
+                    let min = BlendComponent {
+                        src_factor: BlendFactor::One,
+                        dst_factor: BlendFactor::One,
+                        operation: BlendOperation::Min,
+                    };
+                    vec![
+                        Some(ColorTargetState {
+                            format: CLOUD_HISTORY_FORMAT,
+                            blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                            write_mask: ColorWrites::ALL,
+                        }),
+                        Some(ColorTargetState {
+                            format: CLOUD_DEPTH_FORMAT,
+                            blend: Some(BlendState {
+                                color: min,
+                                alpha: min,
+                            }),
+                            write_mask: ColorWrites::ALL,
+                        }),
+                    ]
                 } else if key.pass == Pass::LensMist {
                     vec![Some(ColorTargetState {
                         format: MIST_FORMAT,
@@ -772,6 +914,7 @@ pub(super) struct WaterViewGpu {
     compose: CachedRenderPipelineId,
     cloud_march: CachedRenderPipelineId,
     cloud_resolve: CachedRenderPipelineId,
+    cloud_puffs: CachedRenderPipelineId,
     clouds: CachedRenderPipelineId,
     lens: CachedRenderPipelineId,
     lens_mist: CachedRenderPipelineId,
@@ -820,6 +963,46 @@ pub(super) struct WaterViewGpu {
     mist_active: bool,
     /// When this view was last prepared, for the mist's clock.
     last_frame: Option<std::time::Instant>,
+    /// Whether the puffs draw the clouds this frame, and their instances,
+    /// sorted far to near (`cloud-puffs`). The buffer grows, never shrinks.
+    puffs_on: bool,
+    puff_buffer: Buffer,
+    puff_count: u32,
+    /// Whether the march pass runs: always for the march, and for the puffs
+    /// only while the eye is within the near fog's reach of the layer.
+    near_fog_needed: bool,
+    /// The eye's velocity as the rain shells lean to it, eased, body-local
+    /// m/s, and how far the rain (x) and the snow (y) have fallen past the
+    /// eye, m (`rain-shells`).
+    rain_velocity: Vec3,
+    rain_fallen: Vec2,
+}
+
+/// One frame of the rain shells' motion (`rain-shells`): the eye's velocity
+/// eased toward this frame's `step` over `dt`, and how far the rain and the
+/// snow (`fall`, m/s, x and y) have fallen past the eye, which is the speed of
+/// the fall against the moving eye, accumulated and wrapped at
+/// `RAIN_SHELL_WRAP_M`. Accumulated rather than `clock * speed`, so a change of
+/// speed moves the streaks on from where they are instead of jumping them.
+fn rain_shell_step(
+    velocity: Vec3,
+    step: Vec3,
+    dt: f32,
+    fallen: Vec2,
+    down: Vec3,
+    fall: Vec2,
+) -> (Vec3, Vec2) {
+    if dt.is_nan() || dt <= 0.0 || !step.is_finite() || !velocity.is_finite() {
+        return (Vec3::ZERO, fallen);
+    }
+    let ease = 1.0 - (-RAIN_SHELL_VELOCITY_RATE * dt).exp();
+    let velocity = velocity + (step / dt - velocity) * ease;
+    let speed = |f: f32| (down * f - velocity).length() * dt;
+    let fallen = Vec2::new(
+        (fallen.x + speed(fall.x)).rem_euclid(RAIN_SHELL_WRAP_M),
+        (fallen.y + speed(fall.y)).rem_euclid(RAIN_SHELL_WRAP_M),
+    );
+    (velocity, fallen)
 }
 
 /// What the sky is doing, as the water pass reads it: the weather, its
@@ -834,6 +1017,16 @@ pub(super) struct WaterSky<'w> {
     rain_map: Option<Res<'w, crate::weather::RainMap>>,
     maps: Res<'w, super::weather_maps::WeatherMapsNow>,
     sea: Res<'w, crate::sea::SeaNow>,
+    lighting: Option<Res<'w, crate::config::LightingSettings>>,
+    fine: Option<Res<'w, super::lod::PlanetFine>>,
+}
+
+/// The sky's mean radiance for a sun at elevation sine `e` under `cover`:
+/// the zeroth of L2's nine coefficients, which is what light from all round
+/// gives a drop of rain.
+fn rain_sky(e: f32, cover: f32) -> Vec3 {
+    let sh = super::sky_sh_pair(e);
+    sh[0].lerp(sh[9], cover.clamp(0.0, 1.0)).truncate() * 0.282_095
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -851,6 +1044,10 @@ fn prepare_water_views(
     sun: Res<crate::sky::Sun>,
     frame: Res<PlanetRenderFrame>,
     eye: Res<EyeWaterState>,
+    mut puffs: Local<(
+        Option<super::cloud_puffs::PuffSites>,
+        Vec<super::cloud_puffs::PuffInstance>,
+    )>,
     mut views: Query<(
         Entity,
         &ExtractedView,
@@ -869,7 +1066,13 @@ fn prepare_water_views(
         rain_map,
         maps,
         sea: sea_now,
+        lighting,
+        fine,
     } = sky;
+    let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
+    // `lighting-model`: under the new model the rain's rings on the water are
+    // as many as it is raining (the terrain's own rule), not one a cell.
+    let rings_follow_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
     let (overlay, overlay_flow) =
         crate::overlay::overlay_lanes(maps.overlay_kind, &weather_settings);
     let overlay_needed = maps.overlay_kind.is_some();
@@ -961,6 +1164,24 @@ fn prepare_water_views(
             let l = LinearRgba::from(Srgba::rgb(c[0], c[1], c[2]));
             Vec3::new(l.red, l.green, l.blue)
         };
+        let puffs_on = weather_settings.cloud_renderer.resolved() == CloudRenderer::Puffs;
+        // The eye's velocity, eased, and how far the rain and the snow have
+        // fallen past it (`rain-shells`).
+        let shells_on = weather_settings.rain_renderer.resolved() == RainRenderer::Shells;
+        let (rain_velocity, rain_fallen) =
+            existing.as_ref().map_or((Vec3::ZERO, Vec2::ZERO), |gpu| {
+                rain_shell_step(
+                    gpu.rain_velocity,
+                    camera - gpu.prev_camera,
+                    frame_s,
+                    gpu.rain_fallen,
+                    -camera.normalize_or_zero(),
+                    Vec2::new(
+                        weather_settings.rain_fall_mps,
+                        weather_settings.snow_fall_mps,
+                    ),
+                )
+            });
         let params = WaterView {
             clip_from_local: clip_from_body,
             local_from_clip: clip_from_body.as_dmat4().inverse().as_mat4(),
@@ -1011,7 +1232,12 @@ fn prepare_water_views(
             lod: planet_view.centre.extend(super::lod::BASE_LEVEL as f32),
             bands: planet.lod.bands,
             bands_in: planet.lod.bands_in,
-            rain: Vec4::new(lens_rain, frame_s, airspeed, 0.0),
+            rain: Vec4::new(
+                lens_rain,
+                frame_s,
+                airspeed,
+                if rings_follow_rain { 1.0 } else { 0.0 },
+            ),
             cloud_clouds: clouds.clouds,
             cloud_slab: clouds.slab,
             cloud_storm: clouds.storm,
@@ -1062,7 +1288,93 @@ fn prepare_water_views(
                 weather_settings.lens_mist_whiten,
                 weather_settings.rain_lens_scale,
             ),
+            cloud_puff: Vec4::new(
+                weather_settings.cloud_puff_wrap,
+                weather_settings.cloud_puff_base_shade,
+                weather_settings.cloud_puff_storm_shade,
+                weather_settings.cloud_puff_silver,
+            ),
+            cloud_puff_fade: Vec4::new(
+                weather_settings.cloud_puff_erosion,
+                weather_settings.cloud_puff_soft_m,
+                weather_settings.cloud_puff_near_m,
+                if puffs_on { 1.0 } else { 0.0 },
+            ),
+            rain_shell: rain_velocity.extend(if shells_on { 1.0 } else { 0.0 }),
+            rain_shell_fall: Vec4::new(
+                rain_fallen.x,
+                rain_fallen.y,
+                weather_settings.rain_shell_soft_m,
+                0.0,
+            ),
+            rain_sky: rain_sky(sun.elevation(camera), weather.cover).extend(if lit_rain {
+                1.0
+            } else {
+                0.0
+            }),
+            rain_sun: (Vec3::from_array(pbd_core::sky_light::sun_air(sun.elevation(camera)))
+                * (1.0 - 0.85 * weather.cover.clamp(0.0, 1.0)))
+            .extend(0.55),
+            rain_lamps: fine
+                .as_ref()
+                .filter(|_| lit_rain)
+                .map(|fine| super::near_lamps(&fine.set.columns, camera, 32.0))
+                .unwrap_or([Vec4::ZERO; super::NEAR_LAMPS]),
+            ssr_clip: planet_view.ssr_clip,
+            ssr_eye: if lighting.as_ref().is_some_and(|l| l.reflections_on()) {
+                planet_view.ssr_eye
+            } else {
+                Vec4::ZERO
+            },
         };
+        // The puffs under the shown weather, far to near from this eye
+        // (`cloud-puffs`).
+        let puffs_drawn = puffs_on && !overlay_needed && !*NO_CLOUDS;
+        let (sites, instances) = &mut *puffs;
+        instances.clear();
+        if puffs_drawn {
+            let spacing = weather_settings.cloud_puff_spacing_m;
+            if sites.as_ref().is_none_or(|s| s.spacing_m() != spacing) {
+                *sites = Some(super::cloud_puffs::PuffSites::new(spacing));
+            }
+            if let Some(sites) = sites.as_mut() {
+                let view = pbd_core::frustum::Planes::from_clip(clip_from_body);
+                let started = std::time::Instant::now();
+                let counts = sites.build(
+                    &maps.from,
+                    &maps.maps,
+                    maps.t,
+                    camera,
+                    Some(&view),
+                    &weather_settings,
+                    instances,
+                );
+                // The cull's measure (`puff-frustum-cull`): one line in 120
+                // frames, which `tools/frame_graph.py` lines up with the log.
+                static BUILDS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                if BUILDS
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    .is_multiple_of(120)
+                {
+                    info!(
+                        "PUFFS built {}, over the horizon {}, in view {}, build {:.2} ms",
+                        counts.built,
+                        counts.over_horizon,
+                        counts.in_view,
+                        started.elapsed().as_secs_f64() * 1e3
+                    );
+                }
+            }
+        }
+        let puff_count = instances.len() as u32;
+        // With the puffs, the march pass only makes the near fog, which the
+        // composite reads only where the layer is within its reach of the eye
+        // (design 3a): further off, the pass is skipped.
+        let reach = weather_settings.cloud_puff_near_m;
+        let eye_r = camera.length();
+        let near_fog_needed = !puffs_drawn
+            || (eye_r > crate::sky::CLOUD_RADIUS - reach
+                && eye_r < crate::sky::CLOUD_RADIUS + crate::sky::CLOUD_THICKNESS + reach);
         let lens_needed = lens_rain > 0.001 || drips > 0.001 || mist_active;
         let map = rain_map.as_deref().filter(|map| {
             !map.values.is_empty() && map.values.iter().any(|value| value.abs() > 1e-3)
@@ -1104,8 +1416,20 @@ fn prepare_water_views(
                 (gpu.frame % 65_536) as f32,
                 weather_settings.cloud_haze,
             );
+            gpu.puffs_on = puffs_drawn;
+            gpu.near_fog_needed = near_fog_needed;
+            gpu.puff_count = puff_count;
+            if puff_count > 0 {
+                let bytes: &[u8] = bytemuck::cast_slice(instances.as_slice());
+                if gpu.puff_buffer.size() < bytes.len() as u64 {
+                    gpu.puff_buffer = puff_buffer(&device, instances.len());
+                }
+                queue.write_buffer(&gpu.puff_buffer, 0, bytes);
+            }
             gpu.prev_clip = clip_from_body;
             gpu.prev_camera = camera;
+            gpu.rain_velocity = rain_velocity;
+            gpu.rain_fallen = rain_fallen;
             gpu.clouds_ran = !overlay_needed;
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
@@ -1125,6 +1449,11 @@ fn prepare_water_views(
         }
         let mut uniform = UniformBuffer::from(params);
         uniform.write_buffer(&device, &queue);
+        let puff_buffer = puff_buffer(&device, instances.len());
+        if puff_count > 0 {
+            queue.write_buffer(&puff_buffer, 0, bytemuck::cast_slice(instances.as_slice()));
+        }
+        let puffs_on = puffs_drawn;
         // The flow field: zero for every cell, because the world has no rivers
         // and no water voxels yet. See openspec/changes/water-flow.
         let flow = device.create_buffer(&BufferDescriptor {
@@ -1175,6 +1504,7 @@ fn prepare_water_views(
             compose: pipeline(Pass::Compose),
             cloud_march: pipeline(Pass::CloudMarch),
             cloud_resolve: pipeline(Pass::CloudResolve),
+            cloud_puffs: pipeline(Pass::CloudPuffs),
             clouds: pipeline(Pass::Clouds),
             lens: pipeline(Pass::Lens),
             lens_mist: pipeline(Pass::LensMist),
@@ -1206,9 +1536,19 @@ fn prepare_water_views(
             mist_until,
             mist_active,
             last_frame: Some(now),
+            puffs_on,
+            puff_buffer,
+            puff_count,
+            near_fog_needed,
+            rain_velocity,
+            rain_fallen,
         });
     }
 }
+
+/// Where the march stops for a ray that meets nothing, metres:
+/// `CLOUD_FAR_CAP_M` in `water.wgsl`. The puffs clear their distances to it.
+const CLOUD_FAR_CAP_M: f32 = 60_000.0;
 
 /// The clouds' history pair for a view of this size, cleared by the first
 /// pass that writes it.
@@ -1229,6 +1569,18 @@ fn cloud_current(device: &RenderDevice, size: UVec2) -> [TextureView; 3] {
         cloud_target(device, size, CLOUD_DEPTH_FORMAT),
         cloud_target(device, size, CLOUD_HISTORY_FORMAT),
     ]
+}
+
+/// The puffs' instances (`cloud-puffs`), room for at least `count` and never
+/// fewer than a full sky's worth, so it is rarely remade.
+fn puff_buffer(device: &RenderDevice, count: usize) -> Buffer {
+    let room = count.max(8_192).next_power_of_two();
+    device.create_buffer(&BufferDescriptor {
+        label: Some("cloud puff instances"),
+        size: (room * size_of::<super::cloud_puffs::PuffInstance>()) as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
 }
 
 /// One of the clouds' march targets, drawn to and then read.
@@ -1271,7 +1623,7 @@ fn water_depth(device: &RenderDevice, size: UVec2) -> TextureView {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct WaterCompositeLabel;
+pub(super) struct WaterCompositeLabel;
 
 /// `PBD_NO_CLOUDS=1`: a pricing instrument (`perf-rig`), not a setting. It skips
 /// the cloud march and composite so a run can say what the clouds cost on the
@@ -1347,6 +1699,12 @@ impl ViewNode for WaterCompositeNode {
         // present (`--frame-log`); otherwise these spans do nothing.
         let diagnostics = ctx.diagnostic_recorder();
         let clouds_on = !water.overlay_needed && !*NO_CLOUDS;
+        // The clouds' GPU time at their passes' boundaries, where Bevy's
+        // spans cannot reach (`planet_cloud_timer.rs`).
+        let timer = world.get_resource::<super::cloud_timer::CloudTimer>();
+        if clouds_on && let Some(timer) = timer {
+            timer.begin_frame();
+        }
         let scene_bind_group = |source: &TextureView| {
             device.create_bind_group(
                 Some("water scene"),
@@ -1354,6 +1712,15 @@ impl ViewNode for WaterCompositeNode {
                 &BindGroupEntries::sequential((source, depth.view(), &pipelines.sampler)),
             )
         };
+        // The screen trace's history (`lighting-model` L8), for the cap.
+        let Some(planet_gpu) = world.get_resource::<PlanetGpu>() else {
+            return Ok(());
+        };
+        let ssr_group = device.create_bind_group(
+            Some("water: the screen trace's history"),
+            &cache.get_bind_group_layout(&pipelines.ssr_layout),
+            &BindGroupEntries::with_indices(((14, &planet_gpu.ssr_view),)),
+        );
         // Compose then the cap, both reading the scene and writing the other
         // main texture. Compose touches every pixel, so nothing needs clearing.
         {
@@ -1386,6 +1753,7 @@ impl ViewNode for WaterCompositeNode {
             pass.set_bind_group(0, &water.data_bind_group, &[]);
             pass.set_bind_group(1, &scene, &[]);
             pass.set_bind_group(2, &maps.bind_group, &[]);
+            pass.set_bind_group(3, &ssr_group, &[]);
             let span = diagnostics.pass_span(&mut pass, "water_compose");
             pass.set_render_pipeline(compose);
             pass.draw(0..3, 0..1);
@@ -1422,12 +1790,101 @@ impl ViewNode for WaterCompositeNode {
             // The march reads only the scene's depth; the colour bound beside
             // it is whichever main texture is current.
             let scene = scene_bind_group(target.main_texture_view());
-            // The march writes every texel of its history, so nothing there
-            // needs keeping.
-            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("Cloud march"),
-                color_attachments: &[&water.current[0], &water.current[1], &water.current[2]].map(
-                    |view| {
+            if water.near_fog_needed {
+                // The march writes every texel of its history, so nothing there
+                // needs keeping.
+                let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                    label: Some("Cloud march"),
+                    color_attachments: &[&water.current[0], &water.current[1], &water.current[2]]
+                        .map(|view| {
+                            Some(RenderPassColorAttachment {
+                                view,
+                                depth_slice: None,
+                                resolve_target: None,
+                                ops: Operations {
+                                    load: LoadOp::Clear(LinearRgba::NONE.into()),
+                                    store: StoreOp::Store,
+                                },
+                            })
+                        }),
+                    depth_stencil_attachment: None,
+                    timestamp_writes: timer.and_then(|t| t.writes(0)),
+                    occlusion_query_set: None,
+                });
+                pass.set_bind_group(0, &water.data_bind_group, &[]);
+                pass.set_bind_group(1, &scene, &[]);
+                pass.set_bind_group(2, &maps.bind_group, &[]);
+                pass.set_bind_group(3, &march_group, &[]);
+                let span = diagnostics.pass_span(&mut pass, "cloud_march");
+                pass.set_render_pipeline(cloud_march);
+                pass.draw(0..3, 0..1);
+                span.end(&mut pass);
+                drop(pass);
+            }
+            if water.puffs_on {
+                // The puffs (`cloud-puffs`) are drawn straight into the
+                // history the composite reads: no noise, so nothing to
+                // accumulate. Its distances clear to the far cap, which the
+                // composite reads as no cloud, and keep the nearest.
+                let Some(puffs) = cache.get_render_pipeline(water.cloud_puffs) else {
+                    return Ok(());
+                };
+                let puff_group = device.create_bind_group(
+                    Some("cloud puffs"),
+                    &cache.get_bind_group_layout(&pipelines.puff_layout),
+                    &BindGroupEntries::with_indices(((10, water.puff_buffer.as_entire_binding()),)),
+                );
+                let clears = [
+                    LinearRgba::NONE,
+                    LinearRgba::rgb(CLOUD_FAR_CAP_M, CLOUD_FAR_CAP_M, 0.0),
+                ];
+                let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                    label: Some("Cloud puffs"),
+                    color_attachments: &[(history_write, clears[0]), (depth_write, clears[1])].map(
+                        |(view, clear)| {
+                            Some(RenderPassColorAttachment {
+                                view,
+                                depth_slice: None,
+                                resolve_target: None,
+                                ops: Operations {
+                                    load: LoadOp::Clear(clear.into()),
+                                    store: StoreOp::Store,
+                                },
+                            })
+                        },
+                    ),
+                    depth_stencil_attachment: None,
+                    timestamp_writes: timer.and_then(|t| t.writes(1)),
+                    occlusion_query_set: None,
+                });
+                pass.set_bind_group(0, &water.data_bind_group, &[]);
+                pass.set_bind_group(1, &scene, &[]);
+                pass.set_bind_group(2, &maps.bind_group, &[]);
+                pass.set_bind_group(3, &puff_group, &[]);
+                let span = diagnostics.pass_span(&mut pass, "cloud_puffs");
+                pass.set_render_pipeline(puffs);
+                pass.draw(0..6, 0..water.puff_count);
+                span.end(&mut pass);
+            } else {
+                // The resolve folds this frame's march into the history
+                // (`cloud-history-clip`): it reads the previous history and
+                // distances and this frame's march and distances, and writes the
+                // history the composite reads.
+                let read = water.history_read;
+                let resolve_group = device.create_bind_group(
+                    Some("clouds resolve"),
+                    &cache.get_bind_group_layout(&pipelines.resolve_layout),
+                    &BindGroupEntries::with_indices((
+                        (0, &water.history[read]),
+                        (1, &pipelines.sampler),
+                        (4, &water.cloud_depth[read]),
+                        (5, &water.current[0]),
+                        (6, &water.current[1]),
+                    )),
+                );
+                let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                    label: Some("Cloud resolve"),
+                    color_attachments: &[history_write, depth_write].map(|view| {
                         Some(RenderPassColorAttachment {
                             view,
                             depth_slice: None,
@@ -1437,62 +1894,20 @@ impl ViewNode for WaterCompositeNode {
                                 store: StoreOp::Store,
                             },
                         })
-                    },
-                ),
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            pass.set_bind_group(0, &water.data_bind_group, &[]);
-            pass.set_bind_group(1, &scene, &[]);
-            pass.set_bind_group(2, &maps.bind_group, &[]);
-            pass.set_bind_group(3, &march_group, &[]);
-            let span = diagnostics.pass_span(&mut pass, "cloud_march");
-            pass.set_render_pipeline(cloud_march);
-            pass.draw(0..3, 0..1);
-            span.end(&mut pass);
-            drop(pass);
-            // The resolve folds this frame's march into the history
-            // (`cloud-history-clip`): it reads the previous history and
-            // distances and this frame's march and distances, and writes the
-            // history the composite reads.
-            let read = water.history_read;
-            let resolve_group = device.create_bind_group(
-                Some("clouds resolve"),
-                &cache.get_bind_group_layout(&pipelines.resolve_layout),
-                &BindGroupEntries::with_indices((
-                    (0, &water.history[read]),
-                    (1, &pipelines.sampler),
-                    (4, &water.cloud_depth[read]),
-                    (5, &water.current[0]),
-                    (6, &water.current[1]),
-                )),
-            );
-            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("Cloud resolve"),
-                color_attachments: &[history_write, depth_write].map(|view| {
-                    Some(RenderPassColorAttachment {
-                        view,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: Operations {
-                            load: LoadOp::Clear(LinearRgba::NONE.into()),
-                            store: StoreOp::Store,
-                        },
-                    })
-                }),
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            pass.set_bind_group(0, &water.data_bind_group, &[]);
-            pass.set_bind_group(1, &scene, &[]);
-            pass.set_bind_group(2, &maps.bind_group, &[]);
-            pass.set_bind_group(3, &resolve_group, &[]);
-            let span = diagnostics.pass_span(&mut pass, "cloud_resolve");
-            pass.set_render_pipeline(cloud_resolve);
-            pass.draw(0..3, 0..1);
-            span.end(&mut pass);
+                    }),
+                    depth_stencil_attachment: None,
+                    timestamp_writes: timer.and_then(|t| t.writes(1)),
+                    occlusion_query_set: None,
+                });
+                pass.set_bind_group(0, &water.data_bind_group, &[]);
+                pass.set_bind_group(1, &scene, &[]);
+                pass.set_bind_group(2, &maps.bind_group, &[]);
+                pass.set_bind_group(3, &resolve_group, &[]);
+                let span = diagnostics.pass_span(&mut pass, "cloud_resolve");
+                pass.set_render_pipeline(cloud_resolve);
+                pass.draw(0..3, 0..1);
+                span.end(&mut pass);
+            }
         }
         // The lens mist's probe (`lens-weather`): one pixel, the cloud's
         // density at the eye, eased into the mist the lens draws.
@@ -1532,6 +1947,30 @@ impl ViewNode for WaterCompositeNode {
             pass.draw(0..3, 0..1);
             span.end(&mut pass);
         }
+        // The sun's cascades for the lit rain (`lighting-model`): the rain
+        // waits a frame for them where they are not up yet.
+        let rain_light_group = {
+            let images = world.resource::<bevy::render::render_asset::RenderAssets<
+                bevy::render::texture::GpuImage,
+            >>();
+            let storage = world.resource::<bevy::render::render_asset::RenderAssets<
+                bevy::render::storage::GpuShaderStorageBuffer,
+            >>();
+            world
+                .get_resource::<super::shadow::SunShadowMaps>()
+                .and_then(|m| Some((images.get(&m.map)?, storage.get(&m.cascades)?)))
+                .map(|(map, cascades)| {
+                    device.create_bind_group(
+                        Some("rain: the sun's cascades"),
+                        &cache.get_bind_group_layout(&pipelines.rain_light_layout),
+                        &BindGroupEntries::with_indices((
+                            (11, &map.texture_view),
+                            (12, &map.sampler),
+                            (13, cascades.buffer.as_entire_binding()),
+                        )),
+                    )
+                })
+        };
         let lens_group = device.create_bind_group(
             Some("lens mist"),
             &cache.get_bind_group_layout(&pipelines.lens_layout),
@@ -1542,7 +1981,7 @@ impl ViewNode for WaterCompositeNode {
             // and the cloud overlay is where cloud is shown then.
             (clouds_on, clouds, "Clouds", "clouds"),
             (
-                water.rain_needed && !PASSES_OFF[0],
+                water.rain_needed && !PASSES_OFF[0] && rain_light_group.is_some(),
                 rain,
                 "Rain volume",
                 "rain",
@@ -1580,7 +2019,11 @@ impl ViewNode for WaterCompositeNode {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: None,
+                timestamp_writes: if is_clouds {
+                    timer.and_then(|t| t.writes(2))
+                } else {
+                    None
+                },
                 occlusion_query_set: None,
             });
             pass.set_bind_group(0, &water.data_bind_group, &[]);
@@ -1590,11 +2033,18 @@ impl ViewNode for WaterCompositeNode {
                 pass.set_bind_group(3, &composite_group, &[]);
             } else if label == "Water lens" {
                 pass.set_bind_group(3, &lens_group, &[]);
+            } else if label == "Rain volume"
+                && let Some(group) = &rain_light_group
+            {
+                pass.set_bind_group(3, group, &[]);
             }
             let span = diagnostics.pass_span(&mut pass, span_name);
             pass.set_render_pipeline(pipeline);
             pass.draw(0..3, 0..1);
             span.end(&mut pass);
+        }
+        if clouds_on && let Some(timer) = timer {
+            timer.end_frame(ctx.command_encoder());
         }
         Ok(())
     }
@@ -1603,7 +2053,14 @@ impl ViewNode for WaterCompositeNode {
 pub(super) fn build(render_app: &mut SubApp) {
     render_app
         .init_resource::<SpecializedRenderPipelines<WaterPipelines>>()
-        .add_systems(RenderStartup, initialize_pipelines)
+        .add_systems(
+            RenderStartup,
+            (initialize_pipelines, super::cloud_timer::init),
+        )
+        .add_systems(
+            Render,
+            super::cloud_timer::read_back.in_set(RenderSystems::Cleanup),
+        )
         .add_systems(
             Render,
             prepare_water_views
@@ -1695,14 +2152,16 @@ mod tests {
 
     #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
-        // Three mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
+        // Four mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
         let shader = include_str!("../../../assets/shaders/water.wgsl");
         let start = shader.find("struct WaterView {").unwrap();
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
-        let vec4 = block.matches("vec4<f32>").count();
-        assert_eq!((mat4, vec4), (3, 45));
+        // The lit rain's lamps are one array of eight lanes (`lighting-model`).
+        let lamps = block.matches("array<vec4<f32>, 8>").count();
+        let vec4 = block.matches("vec4<f32>").count() + 7 * lamps;
+        assert_eq!((mat4, vec4, lamps), (4, 60, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");
@@ -1712,6 +2171,60 @@ mod tests {
             mat4 * 64 + vec4 * 16 + sea_size as usize,
             "the Rust uniform must be the WGSL struct's size"
         );
+    }
+
+    /// The shells' fall wraps where every streak cycle does, so the pattern
+    /// never jumps (`rain-shells`).
+    #[test]
+    fn the_rain_shells_fall_wraps_on_every_cycle() {
+        let shader = include_str!("../../../assets/shaders/water.wgsl");
+        let line = shader
+            .lines()
+            .find(|l| l.starts_with("const RAIN_SHELL_CYCLE_M"))
+            .unwrap();
+        let list = &line[line.rfind('(').unwrap() + 1..line.rfind(')').unwrap()];
+        let cycles: Vec<f32> = list.split(',').map(|v| v.trim().parse().unwrap()).collect();
+        assert_eq!(cycles.len(), 6);
+        for cycle in cycles {
+            assert_eq!(RAIN_SHELL_WRAP_M % cycle, 0.0, "{cycle}");
+        }
+    }
+
+    /// The shells lean to the eye's velocity and fall at the speed of the
+    /// fall against it, eased, from where they were (`rain-shells`).
+    #[test]
+    fn the_rain_shells_follow_the_eye_and_fall_on() {
+        let down = Vec3::NEG_Y;
+        let fall = Vec2::new(9.0, 1.0);
+        // Standing still: the rain falls past at its own speed.
+        let (v, fallen) = rain_shell_step(Vec3::ZERO, Vec3::ZERO, 0.5, Vec2::ZERO, down, fall);
+        assert_eq!(v, Vec3::ZERO);
+        assert!((fallen.x - 4.5).abs() < 1e-4 && (fallen.y - 0.5).abs() < 1e-4);
+        // Flying level at 50 m/s for a while: the velocity is followed, and
+        // the fall past the eye is the slanted speed, so the streaks rush by.
+        let (mut v, mut fallen) = (Vec3::ZERO, Vec2::ZERO);
+        for _ in 0..120 {
+            (v, fallen) = rain_shell_step(v, Vec3::X * 50.0 / 60.0, 1.0 / 60.0, fallen, down, fall);
+        }
+        assert!((v - Vec3::X * 50.0).length() < 0.5, "{v}");
+        let (_, next) = rain_shell_step(v, Vec3::X * 50.0 / 60.0, 1.0 / 60.0, fallen, down, fall);
+        let rushed = (next.x - fallen.x).rem_euclid(RAIN_SHELL_WRAP_M) * 60.0;
+        assert!(
+            (rushed - (50.0f32.powi(2) + 81.0).sqrt()).abs() < 0.5,
+            "{rushed}"
+        );
+        // It wraps, and a bad frame neither moves it nor poisons it.
+        let (_, wrapped) = rain_shell_step(
+            Vec3::ZERO,
+            Vec3::ZERO,
+            1.0,
+            Vec2::splat(RAIN_SHELL_WRAP_M - 1.0),
+            down,
+            Vec2::splat(3.0),
+        );
+        assert!((wrapped - Vec2::splat(2.0)).length() < 1e-3, "{wrapped}");
+        let (v, same) = rain_shell_step(Vec3::ONE, Vec3::NAN, 0.1, Vec2::ONE, down, fall);
+        assert_eq!((v, same), (Vec3::ZERO, Vec2::ONE));
     }
 
     /// The column has the last word: air at the eye is dry at any depth,

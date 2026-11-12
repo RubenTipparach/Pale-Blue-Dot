@@ -51,12 +51,16 @@ SCENARIOS = {
     "cloud-hop": ["--route", "clouds"],
     "far-side": ["--route", "far-side"],
     "walk": ["--walk-distance", "1000"],
+    # Up and down Holbrook's lane in a forced rain (`wet-near-detail`): wet
+    # ground near and far of the eye, on a script that never digs.
+    "rain-stroll": ["--walk", "--at", "29.69673", "1.19287", "--yaw", "179.4", "--rain", "1",
+                    "--stroll", "45", "--stroll-leg", "7"],
     # Holinghaven's cog cast off with its yard braced, from its helm
     # (`sail-the-cog` task 6.1).
     "sail": ["--walk", "--at", "23.71891", "-115.27982", "--aboard", "cog", "--sail", "-40",
              "--seat", "--sail-for", "60"],
 }
-DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE",
+DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE", "rain-stroll": "STROLL_DONE",
         "sail": "SAIL_DONE"}
 WANT_MS = 1000 / 120
 FLOOR_MS = 1000 / 60
@@ -163,16 +167,58 @@ class AssetsAt:
         return False
 
 
+WINDOWS = sys.platform == "win32"
+
+
 def running(image: str) -> bool:
+    if not WINDOWS:
+        # macOS and Linux: the same names without `.exe`, matched exactly.
+        name = image.removesuffix(".exe")
+        return subprocess.run(["pgrep", "-x", name], capture_output=True).returncode == 0
     out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {image}"], capture_output=True, text=True).stdout
     return image.lower() in out.lower()
+
+
+def screen_locked() -> bool:
+    """macOS: whether the console session's screen is locked."""
+    if sys.platform != "darwin":
+        return False
+    out = subprocess.run(["ioreg", "-r", "-k", "IOConsoleUsers", "-d1"], capture_output=True, text=True).stdout
+    return '"CGSSessionScreenIsLocked"=Yes' in out
 
 
 # Anything that would share the machine with a run. A build in the background
 # once made a walk read 37 ms at p50 that reads a fraction of that alone.
 BUSY = ["pbd-app.exe", "cargo.exe", "rustc.exe"]
+# Apps that draw on the GPU or burn CPU behind the game's back (owner,
+# 2026-10-29: "close out any apps using the gpu before doing your run").
+# Steam was found at 173% CPU through a whole sitting.
+if sys.platform == "darwin":
+    BUSY += ["steam_osx", "Google Chrome", "Spotify", "Electron", "Code"]
 # Idle, these cost little; recording, they cost a lot. Warn rather than refuse.
-WARN = ["obs64.exe"]
+WARN = ["obs64.exe"] if WINDOWS else ["OBS"]
+
+
+STAMP = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+)Z", re.M)
+
+
+def attention_problems(text: str, skip_s: float) -> list[str]:
+    """A window that lost focus or was hidden after the warm-up: paced by the
+    OS, not measured. A new window reports itself unfocused for a moment
+    before it takes focus, inside the warm-up, which is not a loss."""
+    stamps = STAMP.findall(text)
+    if not stamps:
+        return []
+    start = dt.datetime.fromisoformat(stamps[0])
+    problems = []
+    for line in text.splitlines():
+        for marker, problem in (("WINDOW_FOCUS false", "the window lost focus"),
+                                ("WINDOW_OCCLUDED true", "the window was hidden")):
+            m = STAMP.match(line)
+            if marker in line and m and (dt.datetime.fromisoformat(m[1]) - start).total_seconds() > skip_s:
+                if problem not in problems:
+                    problems.append(problem)
+    return problems
 
 
 def run_once(scenario: str, variant: dict, index: int, a) -> dict:
@@ -206,6 +252,10 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
         problems.append(f"timed out after {a.timeout} s")
     elif code != 0:
         problems.append(f"exit code {code}")
+    # A window out of focus or hidden is paced by the OS, not the game
+    # (`frame-budget`): 60 Hz unfocused in Bevy, throttled under a locked
+    # screen on macOS. Its frames say nothing about the frame's cost.
+    problems += attention_problems(text, a.skip_s)
     if DONE[scenario] not in text:
         problems.append(f"no {DONE[scenario]} line")
     if len(rows) < 300:
@@ -345,7 +395,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenarios", default="clouds,storm,cloud-hop,far-side,walk")
     ap.add_argument("--variant", action="append", help="name|exe|ENV=1;ENV2=2 (repeatable)")
-    ap.add_argument("--exe", default="target/release/pbd-app.exe", help="the exe of a variant that names none")
+    ap.add_argument("--exe", default="target/release/pbd-app" + (".exe" if WINDOWS else ""), help="the exe of a variant that names none")
     ap.add_argument("--repeats", type=int, default=2)
     ap.add_argument("--time", type=float, default=10.0, help="the pinned hour: daylight, for the scenic clouds")
     ap.add_argument("--skip-s", type=float, default=10.0)
@@ -361,6 +411,13 @@ def main() -> None:
     for v in variants:
         if not Path(v["exe"]).exists():
             raise SystemExit(f"{v['name']}: no exe at {v['exe']}")
+    if screen_locked():
+        raise SystemExit("the screen is locked: macOS throttles the game's window, so every run would be paced, not measured")
+    if sys.platform == "darwin":
+        # Hold the display awake and the user active for the whole sitting,
+        # so the screen cannot sleep and lock part-way (`tools/keep_awake.sh`);
+        # caffeinate ends with this process.
+        subprocess.Popen(["caffeinate", "-dimsu", "-w", str(os.getpid())])
     busy = [image for image in BUSY if running(image)]
     if busy:
         raise SystemExit(f"{', '.join(busy)} running: close it, it would share the machine with the runs")

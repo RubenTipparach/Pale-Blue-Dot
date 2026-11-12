@@ -1,0 +1,1795 @@
+<title>Pale Blue Dot Lighting</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a render bench. The two pictures lead, the knobs sit under them like a lighting desk, then the evidence. */
+:root {
+  --bg: #0d1117; --panel: #151b24; --line: #263040; --fg: #dfe6ee; --dim: #8b98a8;
+  --sun: #f2b84b; --sky: #6fa8dc; --now: #b9c2cc; --new: #f2b84b;
+  --display: "Silkscreen", "Courier New", monospace;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--body); line-height: 1.5; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; display: grid; gap: 22px; }
+header { display: grid; gap: 6px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(22px, 3.4vw, 34px); margin: 0; letter-spacing: .02em; text-wrap: balance; }
+h1 span { color: var(--sun); }
+.lede { color: var(--dim); max-width: 72ch; margin: 0; }
+h2 { font-family: var(--display); font-weight: 400; font-size: 17px; margin: 0 0 10px; letter-spacing: .04em; color: var(--fg); }
+#stage { position: relative; width: 100%; background: #000; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; touch-action: none; cursor: grab; }
+#stage:active { cursor: grabbing; }
+#c { display: block; width: 100%; }
+.tag { position: absolute; font-family: var(--mono); font-size: 12px; padding: 3px 8px; border-radius: 3px; background: rgba(8,10,14,.72); pointer-events: none; }
+.tag b { font-weight: 500; }
+.tag.now b { color: var(--now); } .tag.new b { color: var(--new); }
+.joy { position: absolute; left: 14px; bottom: 14px; width: 92px; height: 92px; border-radius: 50%; background: rgba(8,10,14,.45); border: 1px solid rgba(220,230,240,.35); touch-action: none; cursor: grab; }
+.joy .knobdot { position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; background: rgba(242,184,75,.85); box-shadow: 0 1px 4px rgba(0,0,0,.5); pointer-events: none; }
+.hint { position: absolute; right: 10px; bottom: 8px; font-family: var(--mono); font-size: 11px; color: #c9d2dc; background: rgba(8,10,14,.6); padding: 2px 7px; border-radius: 3px; pointer-events: none; }
+.desk { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 18px; }
+@media (max-width: 820px) { .desk { grid-template-columns: minmax(0, 1fr); } }
+.tabbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 10px; }
+/* the view stays pinned while a tab's controls scroll under it */
+@media (min-height: 560px) { #stage { position: sticky; top: 0; z-index: 6; } .tabbar { position: sticky; z-index: 5; background: var(--bg); padding: 8px 0; margin: 6px 0 8px; } }
+.tabbar button { font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: inherit; cursor: pointer; }
+.tabbar button[aria-selected="true"] { background: var(--accent, #e8b04a); color: #1a1408; border-color: transparent; font-weight: 600; }
+.tabbody > .card:not(.on) { display: none; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.row { display: grid; grid-template-columns: 92px minmax(0,1fr) 64px; align-items: center; gap: 10px; }
+.row label { font-size: 13px; color: var(--dim); }
+.row output { font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--sun); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+button.chip { font: 500 12px var(--mono); color: var(--fg); background: #1c2430; border: 1px solid var(--line); border-radius: 3px; padding: 5px 9px; cursor: pointer; }
+button.chip:hover { border-color: var(--sun); }
+button.chip[aria-pressed=true] { background: var(--sun); color: #1b1305; border-color: var(--sun); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.part { display: grid; grid-template-columns: 22px 34px minmax(0,1fr); gap: 2px 8px; align-items: start; }
+.part > input { margin: 3px 0 0; accent-color: var(--sun); width: 16px; height: 16px; }
+.part .id { font-family: var(--mono); font-size: 12px; color: var(--sun); padding-top: 2px; }
+.part .name { font-size: 14px; font-weight: 600; }
+.part .what { grid-column: 3; font-size: 12.5px; color: var(--dim); }
+.part .cost { font-family: var(--mono); font-size: 11.5px; color: var(--sky); }
+.sub { grid-column: 3; display: grid; grid-template-columns: 76px minmax(0,1fr) 48px; gap: 8px; align-items: center; font-size: 12px; color: var(--dim); }
+.sub output { font-family: var(--mono); text-align: right; }
+select { font: 13px var(--mono); background: #1c2430; color: var(--fg); border: 1px solid var(--line); border-radius: 3px; padding: 4px 6px; max-width: 100%; }
+.knobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 8px 24px; }
+.knob { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 48px; gap: 8px; align-items: center; font-size: 12.5px; color: var(--dim); }
+.knob output { font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; color: var(--fg); }
+.knob .who { font-family: var(--mono); font-size: 10.5px; color: var(--sky); margin-left: 4px; }
+.knob .who.new { color: var(--sun); }
+.io { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+textarea { width: 100%; box-sizing: border-box; font: 12px/1.45 var(--mono); background: #0f141b; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 8px; resize: vertical; }
+.shots { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+@media (max-width: 760px) { .shots { grid-template-columns: minmax(0,1fr); } }
+figure { margin: 0; display: grid; gap: 6px; }
+figure img { width: 100%; border-radius: 4px; border: 1px solid var(--line); display: block; }
+figcaption { font-size: 12.5px; color: var(--dim); }
+figcaption b { color: var(--fg); font-family: var(--mono); font-weight: 500; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 620px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+td.m { font-family: var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.note { font-size: 12.5px; color: var(--dim); max-width: 90ch; margin: 0; }
+code { font-family: var(--mono); font-size: .92em; color: var(--fg); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Lighting: <span>now</span> against <span>new</span></h1>
+    <p class="lede">The same little world lit two ways: on the left, the terrain shader's model as it is today; on the right, the six parts proposed in <code>openspec/changes/lighting-model</code>. Turn the parts on and off, move the sun, and drag to look around. Lanterns light the night on both sides.</p>
+  </header>
+
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div class="tag now" id="tagNow"><b>NOW</b> · the game's model</div>
+    <div class="tag new" id="tagNew"><b>NEW</b> · <span id="newList">L1–L6</span></div>
+    <div class="hint">drag to orbit · scroll or pinch to zoom · joystick or WASD to pan · Q/E down/up</div>
+    <div class="joy" id="joy" aria-label="Pan joystick"><div class="knobdot" id="joyKnob"></div></div>
+  </div>
+
+  <div class="tabbar" role="tablist" aria-label="Controls">
+    <button role="tab" data-tab="scene">Scene</button>
+    <button role="tab" data-tab="parts">Lighting parts</button>
+    <button role="tab" data-tab="rain">Rain and wet</button>
+    <button role="tab" data-tab="game">The game today</button>
+    <button role="tab" data-tab="costs">Costs and order</button>
+  </div>
+  <div class="tabbody">
+    <section class="card" data-tab="scene" aria-label="Scene">
+      <h2>Scene</h2>
+      <div class="row"><label for="time">Time</label><input id="time" type="range" min="4.5" max="23.5" step="0.05" value="18.6"><output id="timeOut">18:36</output></div>
+      <div class="chips" id="presets">
+        <button class="chip" data-t="8">08:00</button>
+        <button class="chip" data-t="12.5">12:30</button>
+        <button class="chip" data-t="17.5">17:30</button>
+        <button class="chip" data-t="18.6">golden 18:36</button>
+        <button class="chip" data-t="19.35">sunset 19:21</button>
+        <button class="chip" data-t="22.5">night 22:30</button>
+      </div>
+      <div class="row"><label for="cover">Cloud cover</label><input id="cover" type="range" min="0" max="1" step="0.01" value="0"><output id="coverOut">0.00</output></div>
+      <div class="row"><label>View</label>
+        <div class="chips" id="views">
+          <button class="chip" data-v="split" aria-pressed="true">side by side</button>
+          <button class="chip" data-v="now">now only</button>
+          <button class="chip" data-v="new">new only</button>
+        </div><span></span>
+      </div>
+      <p class="note">Square blocks stand in for the hex columns, and the shading is a hand-port of <code>planet_surface.wgsl</code>'s terms: fixed sun colour <code>(1.12, 1.03, 0.87)</code>, fixed fill <code>(0.16, 0.21, 0.27)</code> on tops and <code>(0.30, 0.32, 0.34)</code> on walls, the sky field flooded the way the column tier floods it (trees are not in it), 3×3 PCF at the cascade's texel for the distance, one exposure, a Tony-like curve. The game's own screenshots are below.</p>
+    </section>
+
+    <section class="card" data-tab="parts" aria-label="New lighting parts">
+      <h2>New lighting parts</h2>
+      <div class="part"><input type="checkbox" id="L1" checked><span class="id">L1</span><span class="name">Sun colour from the air</span>
+        <span class="what">Transmittance along the sun's path: same as today at noon, gold at 10°, red at the horizon. <span class="cost">GPU: 0 ms</span></span></div>
+      <div class="part"><input type="checkbox" id="L2" checked><span class="id">L2</span><span class="name">Sky light probe + ground bounce</span>
+        <span class="what">Fill from the real sky as 9 SH coefficients, and the sunlit ground lighting things from below. <span class="cost">GPU: ~0 ms (9 MADs)</span></span></div>
+      <div class="part"><input type="checkbox" id="L3" checked><span class="id">L3</span><span class="name">Harsher, contact-hardening shadows</span>
+        <span class="what">Sharp where a shadow touches its caster, wider further away, softer under cloud. <span class="cost">GPU: +0.3–0.6 ms</span></span>
+        <div class="sub"><label for="sunSize">Sun size</label><input id="sunSize" type="range" min="1" max="16" step="0.5" value="12"><output id="sunSizeOut">×12</output></div></div>
+      <div class="part"><input type="checkbox" id="L4" checked><span class="id">L4</span><span class="name">Sun bounce in the voxel field</span>
+        <span class="what">The game's version of SVOGI: sunlit faces light nearby shade in their own colour, under the overhang, in the doorway, below the leaves. <span class="cost">CPU bake, off-thread · GPU: 1 read</span></span></div>
+      <div class="part"><input type="checkbox" id="L5" checked><span class="id">L5</span><span class="name">Reflection probe</span>
+        <span class="what">A cube of the world around the eye, for water, the wet ground and metal. Today these reflect a sky with nothing in it. <span class="cost">GPU: ~0.1–0.2 ms</span></span></div>
+      <div class="part"><input type="checkbox" id="L6" checked><span class="id">L6</span><span class="name">Simulated HDR: exposure, bloom, grade</span>
+        <span class="what">The eye adapts (±2 EV), what is brighter than white glows, a warm grade at golden hour and a cool one at night. <span class="cost">GPU: ~0.3–0.5 ms</span></span>
+        <div class="sub"><label for="tone">Curve</label><select id="tone">
+          <option value="3" selected>Khronos Neutral (chosen)</option>
+          <option value="1">AgX</option>
+          <option value="2">AgX punchy</option>
+          <option value="0">Tony-like (today)</option>
+        </select><output id="evOut">+0.0 EV</output></div>
+        <div class="sub"><label for="bloom">Bloom</label><input id="bloom" type="range" min="0" max="1.5" step="0.05" value="0.6"><output id="bloomOut">0.60</output></div></div>
+      <div class="part"><input type="checkbox" id="L7" checked><span class="id">L7</span><span class="name">Lamp bake with shadows and bounce</span>
+        <span class="what">Each vertex sees each lamp or not, falls off with distance and faces it or not, and takes one bounce off the lit surfaces around it. Baked a few milliseconds a frame, then faded in. <span class="cost">CPU, time-sliced · GPU: 0 ms</span> <span class="cost" id="bakeOut">waiting</span></span></div>
+      <div class="part"><input type="checkbox" id="L8" checked><span class="id">L8</span><span class="name">Screen-space reflections</span>
+        <span class="what">Puddles and wet floors mirror what is really around them. The reflected ray walks the block grid first, so undersides, blocks off screen and behind you show; the screen trace only catches what is not a block (the ball). The pond uses the screen trace. Bent by the ripples, fading to the sky. <span class="cost">GPU: to measure</span></span></div>
+    </section>
+
+  <section class="card" data-tab="rain" aria-label="Rain and wet">
+    <h2>Rain and wet ground</h2>
+    <div class="chips" id="wetPresets">
+      <button class="chip" data-p="dry">dry</button>
+      <button class="chip" data-p="shower">passing shower</button>
+      <button class="chip" data-p="storm">storm</button>
+      <button class="chip" data-p="after">after the rain</button>
+    </div>
+    <div class="knobs" id="knobs"></div>
+    <p class="note">Knobs marked <b>both</b> are the game's own (<code>weather.ron</code>, <code>rain_*</code>) and move both sides. Knobs marked <b>new</b> only exist in the new wet model. Today's wet ground mirrors a dim fixed sky colour, and its glint asks only where the sun is, not where you are looking from, so a wet field reads as darker, not shinier. The new one is a glossy film: it reflects what is really around it (L8, screen-space reflections, falling back to the sky), and catches highlights from the sun, the moon and every lamp.</p>
+    <div class="io">
+      <button class="chip" id="exportBtn">copy settings as JSON</button>
+      <button class="chip" id="importBtn">apply JSON</button>
+      <span class="note" id="ioNote"></span>
+    </div>
+    <label for="json" class="note">Settings (paste JSON here and apply it to load a setup)</label>
+    <textarea id="json" rows="7" spellcheck="false"></textarea>
+  </section>
+
+  <section class="card" data-tab="game" aria-label="The game today">
+    <h2>The game today</h2>
+    <div class="shots">
+      <figure><img src="shots/meadow-17.5.jpg" alt="The meadow at 17:30 in the game"><figcaption><b>17:30</b> Sunlit faces are the same colour as at noon. Shade is a flat blue-grey.</figcaption></figure>
+      <figure><img src="shots/meadow-19.jpg" alt="The meadow at 19:00 in the game"><figcaption><b>19:00</b> The sun is a few degrees up, but the meadow is lit like midday: no gold, no long warm light.</figcaption></figure>
+      <figure><img src="shots/meadow-13.jpg" alt="The meadow at 13:00 under rain in the game"><figcaption><b>13:00, rain</b> Under cover the whole frame goes to one flat grey, and the trees' shadows are gone.</figcaption></figure>
+    </div>
+    <p class="note">Release build on the M4 Max, <code>--view meadow --time &lt;h&gt;</code>, 2026-10-28.</p>
+  </section>
+
+  <section class="card" data-tab="costs" aria-label="The six parts">
+    <h2>What each part costs, and the order</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Part</th><th>Replaces</th><th>Frame cost (est.)</th><th>Order</th></tr></thead>
+      <tbody>
+        <tr><td>L1 Sun colour from the air</td><td>The literal <code>(1.12, 1.03, 0.87)</code></td><td class="m">0 ms GPU</td><td class="m">1</td></tr>
+        <tr><td>L2 Sky probe + ground bounce</td><td>Constant fill per face kind</td><td class="m">~0 ms</td><td class="m">1</td></tr>
+        <tr><td>L6 Exposure, bloom, curve, grade</td><td>Fixed exposure, TonyMcMapface</td><td class="m">0.3–0.5 ms</td><td class="m">2</td></tr>
+        <tr><td>L3 Contact-hardening shadows</td><td>3×3 PCF at 1.5 texels</td><td class="m">0.3–0.6 ms</td><td class="m">3</td></tr>
+        <tr><td>L4 Voxel sun bounce</td><td>Nothing (no bounce today)</td><td class="m">CPU bake; 1 read</td><td class="m">4</td></tr>
+        <tr><td>L7 Lamp bake: shadows + bounce</td><td>The flood fill's lamp level</td><td class="m">CPU, sliced; 0 ms GPU</td><td class="m">4</td></tr>
+        <tr><td>L5 Reflection probe</td><td>Analytic sky in water</td><td class="m">0.1–0.2 ms</td><td class="m">5</td></tr>
+        <tr><td>SVOGI / voxel cone tracing</td><td>(rejected)</td><td class="m">3–8 ms at 1080p</td><td class="m">no</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">The near-ground frame is already over 16.7 ms at p95 with rain off, so full voxel cone tracing does not fit. L4 gets most of its look from the light field the column tier already floods. Every part lands with captures and a <code>perf_suite</code> A/B.</p>
+  </section>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+// tabs: one card at a time under the view, so nothing needs scrolling to
+{
+  const tabs = [...document.querySelectorAll('.tabbar [data-tab]')];
+  const show = (t) => {
+    for (const b of tabs) b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false');
+    for (const c of document.querySelectorAll('.tabbody > .card')) c.classList.toggle('on', c.dataset.tab === t);
+    try { localStorage.setItem('pbd-light-tab', t); } catch (e) {}
+  };
+  for (const b of tabs) b.addEventListener('click', () => show(b.dataset.tab));
+  let first = 'scene';
+  try { first = localStorage.getItem('pbd-light-tab') || 'scene'; } catch (e) {}
+  show(tabs.some(b => b.dataset.tab === first) ? first : 'scene');
+}
+const canvas = document.getElementById('c');
+const stage = document.getElementById('stage');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+} catch (e) {
+  stage.insertAdjacentHTML('beforeend', '<p style="padding:24px;color:#dfe6ee">This mockup needs WebGL 2, which this browser did not give it.</p>');
+  return;
+}
+renderer.autoClear = false;
+// if the GPU is reset (a driver timeout), start again rather than freeze
+canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('WebGL context lost; reloading when it is back'); });
+canvas.addEventListener('webglcontextrestored', () => location.reload());
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+// ---------- the world: a voxel grid, 1 m cells ----------
+const W = 48, D = 48, H = 20, PLANE_Y = 4;
+const AIR=0, GRASS=1, DIRT=2, STONE=3, TRUNK=4, LEAF=5, PLASTER=6, ROOF=7, SAND=8, LANTERN=9, PLANK=10, POST=11;
+const ALB = {
+  [GRASS]:[0.20,0.40,0.10], [DIRT]:[0.40,0.26,0.14], [STONE]:[0.38,0.38,0.37], [TRUNK]:[0.30,0.19,0.10],
+  [LEAF]:[0.11,0.30,0.07], [PLASTER]:[0.78,0.74,0.66], [ROOF]:[0.62,0.28,0.13], [SAND]:[0.70,0.62,0.42],
+  [LANTERN]:[1,0.8,0.46], [PLANK]:[0.55,0.38,0.20], [POST]:[0.33,0.22,0.12]
+};
+const vox = new Uint8Array(W*D*H);
+const I = (x,y,z) => x + W*(z + D*y);
+const inside = (x,y,z) => x>=0 && x<W && z>=0 && z<D && y>=0 && y<H;
+const get = (x,y,z) => inside(x,y,z) ? vox[I(x,y,z)] : (y < PLANE_Y ? GRASS : AIR);
+const set = (x,y,z,m) => { if (inside(x,y,z)) vox[I(x,y,z)] = m; };
+const hash = (a,b) => { let h = (a*374761393 + b*668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+
+const top = new Int32Array(W*D);
+for (let x=0;x<W;x++) for (let z=0;z<D;z++) {
+  let h = 4.4 + 1.3*Math.sin(x*0.23+1.3) + 1.0*Math.cos(z*0.19) + 0.6*Math.sin((x+z)*0.11);
+  const edge = Math.min(x, z, W-1-x, D-1-z);
+  if (edge < 4) h = PLANE_Y + (h - PLANE_Y) * (edge/4);
+  if (z >= 36) h = 10 + (hash(x,z) > 0.8 ? 1 : 0);
+  const pd = Math.hypot(x-10, z-22);
+  if (pd < 5) h = 2; else if (pd < 6.6) h = 4;
+  if (x>=28 && x<=37 && z>=9 && z<=18) h = 5;
+  if (z >= 29 && z < 36 && x >= 18 && x <= 28) h = 4;
+  top[x+W*z] = Math.max(2, Math.round(h));
+}
+for (let x=0;x<W;x++) for (let z=0;z<D;z++) {
+  const h = top[x+W*z];
+  const pd = Math.hypot(x-10, z-22);
+  for (let y=0;y<h;y++) {
+    let m = y===h-1 ? GRASS : (y > h-4 ? DIRT : STONE);
+    if (y===h-1 && pd < 6.6) m = SAND;
+    set(x,y,z,m);
+  }
+}
+// a packed path from the house door to the pond, for puddles to stand on
+for (let x=14;x<=33;x++) for (let z=8;z<=9;z++) { const h = top[x+W*z]; if (vox[I(x,h-1,z)] === GRASS) set(x,h-1,z,DIRT); }
+for (let z=8;z<=16;z++) for (let x=14;x<=15;x++) { const h = top[x+W*z]; if (vox[I(x,h-1,z)] === GRASS) set(x,h-1,z,DIRT); }
+// the overhang: a slab off the mesa, open to the south, ground under it
+for (let x=18;x<=28;x++) for (let z=29;z<36;z++) { set(x,8,z,DIRT); set(x,9,z,GRASS); }
+// a house: plaster walls, a south door, windows, a stepped roof, plank floor
+for (let x=29;x<=36;x++) for (let z=11;z<=17;z++) {
+  set(x,4,z,PLANK);
+  const wall = x===29 || x===36 || z===11 || z===17;
+  if (!wall) continue;
+  for (let y=5;y<=8;y++) set(x,y,z,PLASTER);
+}
+for (let x=32;x<=33;x++) for (let y=5;y<=7;y++) set(x,y,11,AIR);
+for (let z=13;z<=14;z++) for (let y=6;y<=7;y++) set(29,y,z,AIR);
+for (let x=30;x<=31;x++) for (let y=6;y<=7;y++) set(x,y,17,AIR);
+[[28,37,10,18,9],[29,36,11,17,10],[30,35,12,16,11],[31,34,13,15,12]].forEach(([x0,x1,z0,z1,y]) => {
+  for (let x=x0;x<=x1;x++) for (let z=z0;z<=z1;z++) set(x,y,z,ROOF);
+});
+// trees
+const trees = [[5,6],[8,33],[20,12],[42,24],[44,7],[24,41],[39,42],[4,42],[14,4],[41,31],[16,26]];
+for (const [tx,tz] of trees) {
+  const g = top[tx+W*tz];
+  const t = g + 5;
+  for (let y=g;y<t;y++) set(tx,y,tz,TRUNK);
+  for (let y=t-2;y<=t+1;y++) {
+    const r = y === t+1 ? 1 : 2;
+    for (let dx=-r;dx<=r;dx++) for (let dz=-r;dz<=r;dz++) {
+      if (Math.abs(dx)===r && Math.abs(dz)===r && hash(tx*7+dx+y, tz*5+dz) > 0.35) continue;
+      if (get(tx+dx,y,tz+dz) === AIR) set(tx+dx,y,tz+dz,LEAF);
+    }
+  }
+}
+// lanterns on posts (the night's lights), one inside the house
+const lanterns = [];
+const lantern = (x,z,postH) => {
+  let g = top[x+W*z];
+  if (x>=29 && x<=36 && z>=11 && z<=17) g = 5;
+  for (let y=g;y<g+postH;y++) set(x,y,z,POST);
+  set(x,g+postH,z,LANTERN); lanterns.push([x,g+postH,z]);
+};
+lantern(23,33,1); lantern(16,18,2); lantern(34,15,0); lantern(31,9,2); lantern(6,27,2);
+// the chrome ball's post
+const ballX = 19, ballZ = 22, ballG = top[ballX+W*ballZ];
+set(ballX,ballG,ballZ,POST); set(ballX,ballG+1,ballZ,POST);
+const ballPos = new THREE.Vector3(ballX+0.5, ballG+2.9, ballZ+0.5);
+
+// ---------- light fields, flooded the way the column tier floods them ----------
+// The game's field does not hold trees, so they do not block sky light here either.
+const fieldSolid = (m) => m !== AIR && m !== TRUNK && m !== LEAF;
+function flood(seed) {
+  const lvl = new Uint8Array(W*D*H);
+  const q = [];
+  seed(lvl, q);
+  for (let i=0;i<q.length;i++) {
+    const c = q[i], l = lvl[c];
+    if (l <= 1) continue;
+    const x = c % W, z = ((c / W) | 0) % D, y = (c / (W*D)) | 0;
+    for (const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]) {
+      const nx=x+dx, ny=y+dy, nz=z+dz;
+      if (!inside(nx,ny,nz)) continue;
+      const n = I(nx,ny,nz);
+      if (fieldSolid(vox[n]) && vox[n] !== LANTERN) continue;
+      if (lvl[n] >= l-1) continue;
+      lvl[n] = l-1; q.push(n);
+    }
+  }
+  return lvl;
+}
+const skyField = flood((lvl,q) => {
+  for (let x=0;x<W;x++) for (let z=0;z<D;z++) for (let y=H-1;y>=0;y--) {
+    if (fieldSolid(vox[I(x,y,z)])) break;
+    lvl[I(x,y,z)] = 15; q.push(I(x,y,z));
+  }
+});
+const torchField = flood((lvl,q) => { for (const [x,y,z] of lanterns) { lvl[I(x,y,z)] = 14; q.push(I(x,y,z)); } });
+const fieldAt = (f, x,y,z, outside) => inside(x,y,z) ? f[I(x,y,z)]/15 : outside;
+
+// ---------- the mesh: every face that meets air ----------
+const solid = (m) => m !== AIR;
+const FACES = [
+  { n:[ 1,0,0], u:[0,0,1], v:[0,1,0] }, { n:[-1,0,0], u:[0,0,-1], v:[0,1,0] },
+  { n:[0, 1,0], u:[1,0,0], v:[0,0,-1] }, { n:[0,-1,0], u:[1,0,0], v:[0,0,1] },
+  { n:[0,0, 1], u:[-1,0,0], v:[0,1,0] }, { n:[0,0,-1], u:[1,0,0], v:[0,1,0] },
+];
+const AO_LADDER = [0.55, 0.70, 0.85, 1.0];
+const pos=[], nrm=[], alb=[], uvs=[], mat=[], ao=[], sky=[], torch=[], seed=[], idx=[];
+const faceList = [];   // for the bounce: centre, normal, vertex range
+function addFace(x,y,z,m,F) {
+  const [nx,ny,nz] = F.n, [ux,uy,uz] = F.u, [vx,vy,vz] = F.v;
+  const cx = x+0.5+nx*0.5, cy = y+0.5+ny*0.5, cz = z+0.5+nz*0.5;
+  const qx = x+nx, qy = y+ny, qz = z+nz;
+  const base = pos.length/3;
+  const corners = [[-1,-1],[1,-1],[1,1],[-1,1]];
+  const s = hash(x*31+y*7, z*17+F.n[0]*3+F.n[2]*5+F.n[1]*11);
+  for (const [a,b] of corners) {
+    pos.push(cx + (ux*a + vx*b)*0.5, cy + (uy*a + vy*b)*0.5, cz + (uz*a + vz*b)*0.5);
+    nrm.push(nx,ny,nz);
+    const c = ALB[m]; alb.push(c[0],c[1],c[2]);
+    uvs.push((a+1)/2, (b+1)/2);
+    mat.push(m); seed.push(s);
+    const s1 = solid(get(qx+ux*a, qy+uy*a, qz+uz*a)) ? 1 : 0;
+    const s2 = solid(get(qx+vx*b, qy+vy*b, qz+vz*b)) ? 1 : 0;
+    const cc = solid(get(qx+ux*a+vx*b, qy+uy*a+vy*b, qz+uz*a+vz*b)) ? 1 : 0;
+    ao.push(AO_LADDER[s1 && s2 ? 0 : 3 - (s1+s2+cc)]);
+    sky.push(fieldAt(skyField, qx,qy,qz, qy >= PLANE_Y ? 1 : 0));
+    torch.push(fieldAt(torchField, qx,qy,qz, 0));
+  }
+  // wind the quad so its front faces out: (u x v) . n > 0 is counter-clockwise from outside
+  const cx2 = uy*vz - uz*vy, cy2 = uz*vx - ux*vz, cz2 = ux*vy - uy*vx;
+  if (cx2*nx + cy2*ny + cz2*nz > 0) idx.push(base, base+1, base+2, base, base+2, base+3);
+  else idx.push(base, base+2, base+1, base, base+3, base+2);
+  faceList.push({ c:[cx,cy,cz], n:F.n, v0:base });
+}
+for (let y=0;y<H;y++) for (let z=0;z<D;z++) for (let x=0;x<W;x++) {
+  const m = vox[I(x,y,z)];
+  if (!m) continue;
+  for (const F of FACES) {
+    const nb = get(x+F.n[0], y+F.n[1], z+F.n[2]);
+    if (nb && nb !== LANTERN) continue;
+    if (y === 0 && F.n[1] < 0) continue;
+    addFace(x,y,z,m,F);
+  }
+}
+// the plain beyond the grid, at PLANE_Y
+{
+  const R = 700, y = PLANE_Y;
+  const quads = [[-R,-R,0,R+D],[W,-R,R+W,R+D],[0,-R,W,0],[0,D,W,R+D]];
+  for (const [x0,z0,x1,z1] of quads) {
+    const base = pos.length/3;
+    for (const [x,z] of [[x0,z1],[x1,z1],[x1,z0],[x0,z0]]) {
+      pos.push(x,y,z); nrm.push(0,1,0); alb.push(...ALB[GRASS]); uvs.push(x,z); mat.push(GRASS); ao.push(1); sky.push(1); torch.push(0); seed.push(0.5);
+    }
+    idx.push(base, base+1, base+2, base, base+2, base+3);
+  }
+}
+const nVerts = pos.length/3;
+const bounce = new Float32Array(nVerts*3);
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm,3));
+geo.setAttribute('albedo', new THREE.Float32BufferAttribute(alb,3));
+geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs,2));
+geo.setAttribute('mat', new THREE.Float32BufferAttribute(mat,1));
+geo.setAttribute('ao', new THREE.Float32BufferAttribute(ao,1));
+geo.setAttribute('sky', new THREE.Float32BufferAttribute(sky,1));
+geo.setAttribute('torch', new THREE.Float32BufferAttribute(torch,1));
+geo.setAttribute('seed', new THREE.Float32BufferAttribute(seed,1));
+const bounceAttr = new THREE.BufferAttribute(bounce,3);
+geo.setAttribute('bounce', bounceAttr);
+geo.setIndex(idx);
+
+// ---------- the sky, shared by the sky dome, the SH probe and the sun ----------
+const TAU = [0.040, 0.100, 0.240], TAU_M = 0.07, KR = 0.9, KM = 0.5;
+const SUN_NOW = [1.12, 1.03, 0.87];
+const smooth = (a,b,x) => { const t = Math.min(1, Math.max(0, (x-a)/(b-a))); return t*t*(3-2*t); };
+function airmass(e) {
+  const h = Math.asin(Math.min(1, Math.max(0, e)));
+  return 1/(Math.sin(h) + 0.50572*Math.pow(h*57.2958 + 6.07995, -1.6364));
+}
+const trans = (e) => TAU.map(t => Math.exp(-(t + TAU_M)*airmass(e)));
+const TN = trans(Math.sin(Math.PI/3));
+function sunAir(e) { // L1: the sun after the air, normalised to today's colour at 60 degrees
+  const t = trans(e), k = smooth(-0.02, 0.01, e);
+  return t.map((v,i) => v/TN[i]*SUN_NOW[i]*k);
+}
+function hg(mu, g) { return (1-g*g)/(4*Math.PI*Math.pow(1+g*g-2*g*mu, 1.5)); }
+function skyRad(d, s, cover) {
+  const ev = Math.max(d[1], 0.0), mv = Math.min(airmass(ev), 14);
+  const mu = d[0]*s[0]+d[1]*s[1]+d[2]*s[2];
+  const sa = sunAir(s[1]), sh = sunAir(Math.min(1, s[1] + 0.22)).map((v,i) => v*smooth(-0.12, 0.0, s[1])/Math.max(smooth(-0.02, 0.01, Math.min(1, s[1] + 0.22)), 1e-3));
+  const hi = smooth(0.0, 0.5, ev);
+  const pm = hg(mu, 0.76), tm = 1 - Math.exp(-TAU_M*mv);
+  const tw = smooth(-0.2, 0.0, s[1]) * (1 - smooth(0.0, 0.2, s[1]));
+  const L = [0,1,2].map(i => {
+    const tr = (1 - Math.exp(-TAU[i]*mv)) * Math.exp(-TAU[i]*mv*0.3);
+    const illum = Math.pow(Math.max(sa[i], 0), 0.75)*(1 - hi) + Math.pow(Math.max(sh[i], 0), 0.75)*hi;
+    return illum*(tr*0.75*(1+mu*mu)*KR + tm*pm*KM) + [0.012,0.02,0.045][i]*tw + [0.0012,0.0018,0.0035][i];
+  });
+  // Night: the moon and the stars light the sky, and a cloud deck catches that
+  // light and spreads it, so an overcast night is an even, soft grey-blue and
+  // never black.
+  const nightF = 1 - smooth(-0.12, 0.02, s[1]);
+  const moonSky = [0.008, 0.011, 0.020], deckGlow = [0.026, 0.029, 0.038];
+  for (let i=0;i<3;i++) L[i] += moonSky[i]*nightF;
+  const g = 0.2126*L[0] + 0.7152*L[1] + 0.0722*L[2];
+  const day = smooth(-0.1, 0.1, s[1]);
+  return L.map((v,i) => v + ((g*0.75 + [0.10,0.105,0.11][i]*day*0.6 + deckGlow[i]*nightF) - v)*cover*0.92);
+}
+// L2: the sky's radiance as 9 SH coefficients, with the sunlit ground below,
+// pre-convolved to irradiance over pi (the same units as the fill it replaces)
+const FIB = []; { const n = 256; for (let i=0;i<n;i++) { const y = 1 - 2*(i+0.5)/n, r = Math.sqrt(1-y*y), p = i*2.399963; FIB.push([Math.cos(p)*r, y, Math.sin(p)*r]); } }
+const shBasis = ([x,y,z]) => [0.282095, 0.488603*y, 0.488603*z, 0.488603*x, 1.092548*x*y, 1.092548*y*z, 0.315392*(3*z*z-1), 1.092548*x*z, 0.546274*(x*x-y*y)];
+const BAND = [1, 2/3,2/3,2/3, 1/4,1/4,1/4,1/4,1/4];
+const GROUND_ALB = [0.18, 0.26, 0.11];
+function skySH(s, cover, sunC) {
+  let up = [0,0,0], w = 0;
+  for (const d of FIB) if (d[1] > 0) { const L = skyRad(d, s, cover); for (let i=0;i<3;i++) up[i] += L[i]*d[1]; w += d[1]; }
+  up = up.map(v => v/w);
+  const ground = GROUND_ALB.map((a,i) => a*(sunC[i]*Math.max(s[1],0) + up[i]));
+  const c = Array.from({length:9}, () => [0,0,0]);
+  for (const d of FIB) {
+    const L = d[1] > 0 ? skyRad(d, s, cover) : ground;
+    const Y = shBasis(d);
+    for (let k=0;k<9;k++) for (let i=0;i<3;i++) c[k][i] += L[i]*Y[k]*4*Math.PI/FIB.length;
+  }
+  return c.map((v,k) => new THREE.Vector3(v[0]*BAND[k], v[1]*BAND[k], v[2]*BAND[k]));
+}
+
+// ---------- the sun's (or the moon's) shadow map ----------
+const SPAN = 80, SM = 2048, NEARL = 1, FARL = 220;
+const lightCam = new THREE.OrthographicCamera(-SPAN/2, SPAN/2, SPAN/2, -SPAN/2, NEARL, FARL);
+const shadowRT = new THREE.WebGLRenderTarget(SM, SM, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+shadowRT.depthTexture = new THREE.DepthTexture(SM, SM, THREE.FloatType);
+const lightVP = new THREE.Matrix4();
+const shadowScene = new THREE.Scene();
+const depthMat = new THREE.MeshBasicMaterial({ colorWrite: false });
+shadowScene.add(new THREE.Mesh(geo, depthMat));
+const ballShadow = new THREE.Mesh(new THREE.SphereGeometry(0.8, 24, 16), depthMat);
+ballShadow.position.copy(ballPos); shadowScene.add(ballShadow);
+
+// ---------- shaders ----------
+const SKY_GLSL = `
+const vec3 TAU = vec3(0.040, 0.100, 0.240);
+const float TAU_M = 0.07;
+float airmass(float e) {
+  float h = asin(clamp(e, 0.0, 1.0));
+  return 1.0/(sin(h) + 0.50572*pow(h*57.2958 + 6.07995, -1.6364));
+}
+uniform vec3 uSunAir; uniform vec3 uSunHigh; uniform vec3 uSunDir; uniform float uCover;
+float hg(float mu, float g) { return (1.0-g*g)/(12.566*pow(1.0+g*g-2.0*g*mu, 1.5)); }
+vec3 skyRad(vec3 d) {
+  vec3 s = uSunDir;
+  float ev = max(d.y, 0.0), mv = min(airmass(ev), 14.0), mu = dot(d, s);
+  float tw = smoothstep(-0.2, 0.0, s.y)*(1.0 - smoothstep(0.0, 0.2, s.y));
+  vec3 tr = (1.0 - exp(-TAU*mv))*exp(-TAU*mv*0.3);
+  vec3 illum = mix(pow(max(uSunAir, vec3(0.0)), vec3(0.75)), pow(max(uSunHigh, vec3(0.0)), vec3(0.75)), smoothstep(0.0, 0.5, ev));
+  vec3 L = illum*(tr*0.75*(1.0+mu*mu)*0.9 + (1.0-exp(-TAU_M*mv))*hg(mu, 0.76)*0.5)
+         + vec3(0.012,0.02,0.045)*tw + vec3(0.0012,0.0018,0.0035);
+  float nightF = 1.0 - smoothstep(-0.12, 0.02, s.y);
+  L += vec3(0.008, 0.011, 0.020)*nightF;
+  float g = dot(L, vec3(0.2126,0.7152,0.0722));
+  float day = smoothstep(-0.1, 0.1, s.y);
+  return mix(L, vec3(g*0.75) + vec3(0.10,0.105,0.11)*day*0.6 + vec3(0.026, 0.029, 0.038)*nightF, uCover*0.92);
+}`;
+
+const FOG_GLSL = `
+uniform int uModel;
+uniform sampler2D uShadow; uniform mat4 uLightVP;
+uniform float uRain; uniform vec3 uLampPos[5]; uniform vec3 uFogSun; uniform vec3 uFogDir; uniform vec3 uFogAmb; uniform vec3 uFogGrey; uniform float uFogDay;
+float hgF(float mu, float g) { return (1.0-g*g)/(12.566*pow(1.0+g*g-2.0*g*mu, 1.5)); }
+float fogT(vec3 p) { return exp(-uRain*0.035*length(p - cameraPosition)); }
+// Rain fog along the view ray. Today's model: the game's grey veil. New: the
+// rain takes the new light: the sky probe from all round, the sun (or moon)
+// scattered forward and shadowed by what stands in it, and every lamp glowing
+// in the drops.
+vec3 fogApply(vec3 col, vec3 p, bool shadowed) {
+  if (uRain <= 0.0) return col;
+  vec3 o = cameraPosition, v = p - o;
+  float d = length(v); v /= d;
+  float rho = uRain*0.035, T = exp(-rho*d);
+  if (uModel == 0) return mix(col, uFogGrey, 1.0 - T);
+  vec3 ins = uFogAmb*(1.0 - T);
+  float ph = 3.1416*hgF(dot(v, uFogDir), 0.55);
+  float vis = 1.0;
+  if (shadowed) {
+    float reach = min(d, 60.0);
+    // interleaved gradient noise, not white noise: neighbouring pixels take
+    // evenly spread offsets, so the march's error reads as a fine even grain
+    float j = fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float acc = 0.0, wsum = 0.0;
+    for (int i = 0; i < 16; i++) {
+      float s = (float(i) + j)/16.0*reach;
+      vec3 c = (uLightVP*vec4(o + v*s, 1.0)).xyz*0.5 + 0.5;
+      float lit = 1.0;
+      if (all(greaterThan(c, vec3(0.0))) && all(lessThan(c, vec3(1.0)))) lit = textureLod(uShadow, c.xy, 0.0).r < c.z - 0.0002 ? 0.0 : 1.0;
+      float w = exp(-rho*s); acc += lit*w; wsum += w;
+    }
+    float share = (1.0 - exp(-rho*reach))/max(1.0 - T, 1e-4);
+    vis = acc/max(wsum, 1e-4)*share + (1.0 - share);
+  }
+  ins += uFogSun*ph*(1.0 - T)*vis;
+  vec3 ls = vec3(0.0);
+  for (int i = 0; i < 5; i++) {
+    vec3 q = uLampPos[i] - o;
+    float a = dot(q, v), h = sqrt(max(dot(q, q) - a*a, 0.0) + 0.2);
+    ls += vec3((atan((d - a)/h) + atan(a/h))/h)*exp(-rho*max(a, 0.0));
+  }
+  ins += ls*vec3(1.0, 0.70, 0.30)*1.25*11.6*rho*0.24*(1.0 - 0.8*uFogDay);
+  return col*T + ins;
+}`;
+
+const terrainVS = `
+attribute vec4 lamp; attribute vec3 albedo; attribute float mat; attribute float ao; attribute float sky; attribute float torch; attribute float seed; attribute vec3 bounce;
+varying vec4 vLamp; varying vec3 vAlb; varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying float vMatRaw; varying float vAO; varying float vSky; varying float vTorch; varying vec3 vBounce; varying float vSeed;
+void main() {
+  vLamp = lamp; vAlb = albedo; vN = normal; vW = position; vUv = uv; vMatRaw = mat; vAO = ao; vSky = sky; vTorch = torch; vBounce = bounce; vSeed = seed;
+  gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0);
+}`;
+
+// rain rings, shared by wet ground and the pond
+const RIPPLE_GLSL = `
+float rrh12(vec2 p) { vec3 p3 = fract(vec3(p.x, p.y, p.x)*0.1031); p3 += dot(p3, p3.yzx + 19.19); return fract((p3.x + p3.y)*p3.z); }
+vec2 rrh22(vec2 p) { vec3 p3 = fract(vec3(p.x, p.y, p.x)*vec3(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yzx + 19.19); return fract((p3.xx + p3.yz)*p3.zy); }
+// Rain rings: a drop per cell per cycle, kept with a chance equal to the rain
+// (picked anew each cycle, so the pattern never repeats), and a second grid,
+// offset, for the heavier half: a drizzle dots a puddle, a storm boils it.
+vec2 rippleLayer(vec2 uv, float t, float keep, float salt) {
+  vec2 p0 = floor(uv), circles = vec2(0.0);
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec2 pi = p0 + vec2(float(i), float(j));
+    vec2 p = pi + rrh22(pi + salt);
+    float ph = 0.3*t + rrh12(pi + salt);
+    float tt = fract(ph);
+    if (rrh12(pi*1.37 + floor(ph)*7.13 + salt) >= keep) continue;
+    vec2 v = p - uv; float len = length(v) + 1e-6;
+    float d = len - 2.0*tt, h = 0.012, d1 = d - h, d2 = d + h;
+    float q1 = sin(31.0*d1)*smoothstep(-0.6, -0.3, d1)*smoothstep(0.0, -0.3, d1);
+    float q2 = sin(31.0*d2)*smoothstep(-0.6, -0.3, d2)*smoothstep(0.0, -0.3, d2);
+    circles += 0.5*(v/len)*((q2 - q1)/(2.0*h)*(1.0 - tt)*(1.0 - tt));
+  }
+  return circles/9.0;
+}
+vec2 rippleGrad(vec2 uv, float t, float rain) {
+  vec2 g = rippleLayer(uv, t, clamp(rain*2.0, 0.0, 1.0), 0.0);
+  if (rain > 0.5) g += rippleLayer(uv + vec2(0.5, 0.37), t*1.07, rain*2.0 - 1.0, 41.0);
+  return g;
+}
+`;
+
+// L8: screen-space reflections. The view is first drawn without them into a
+// half-size colour and depth target; a wet floor or the pond then marches its
+// reflected ray through that depth, and takes the colour where the ray goes
+// behind something. Off screen, or hidden, it falls back to the sky.
+const SSR_GLSL = `
+uniform bool uSSROn; uniform sampler2D uSSRCol; uniform sampler2D uSSRDepth; uniform mat4 uVP; uniform vec2 uNF;
+float ssrLin(float d) { float z = d*2.0 - 1.0; return 2.0*uNF.x*uNF.y/(uNF.y + uNF.x - z*(uNF.y - uNF.x)); }
+// xyz the colour seen, w how much to trust it (0 off screen or no hit)
+// explicit level 0 inside the loop: a loop that can stop early has no
+// reliable screen derivatives, and Direct3D warns and compiles it slowly
+vec4 ssrTrace(vec3 p, vec3 r, float rough) {
+  if (!uSSROn) return vec4(0.0);
+  // far ground is seen edge on, and the half-size depth there jumps from row
+  // to row: a ray would hit its own ground every other row (lines). So start
+  // further out with distance, and ignore hits within a few pixels of home.
+  vec4 c0 = uVP*vec4(p, 1.0);
+  vec2 uv0 = c0.xy/c0.w*0.5 + 0.5;
+  vec2 res = vec2(textureSize(uSSRDepth, 0));
+  float t = 0.04 + 0.01*c0.w, tPrev = 0.0, dzPrev = -1.0;
+  for (int i = 0; i < 48; i++) {
+    vec4 c = uVP*vec4(p + r*t, 1.0);
+    if (c.w <= 0.05) break;
+    vec2 uv = c.xy/c.w*0.5 + 0.5;
+    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) break;
+    float dz = c.w - ssrLin(textureLod(uSSRDepth, uv, 0.0).r);
+    // a hit: just behind a surface, or crossed from in front of one to behind
+    // it between two steps (long steps toward a low sun jump a 1 m block)
+    // a crossing counts only within a block's depth, or rays passing behind
+    // the house or a tree would smear it down the reflection
+    bool home = length((uv - uv0)*res) < 3.0;
+    if (!home && dz > 0.0 && (dz < clamp(0.25 + 0.06*t, 0.25, 1.2) || (dzPrev < 0.0 && dz < 1.2))) {
+      // halve the step back to where the ray first went behind the surface
+      float a = tPrev, b = t;
+      for (int k = 0; k < 5; k++) {
+        float m = 0.5*(a + b);
+        vec4 cm = uVP*vec4(p + r*m, 1.0);
+        vec2 um = cm.xy/cm.w*0.5 + 0.5;
+        if (cm.w - ssrLin(textureLod(uSSRDepth, um, 0.0).r) > 0.0) b = m; else a = m;
+      }
+      vec4 cb = uVP*vec4(p + r*b, 1.0);
+      uv = cb.xy/cb.w*0.5 + 0.5;
+      // rougher film, blurrier image: a small cross of taps that widens
+      vec2 o = vec2(rough*0.045 + 0.0015, 0.0);
+      vec3 col = textureLod(uSSRCol, uv, 0.0).rgb*0.4
+               + (textureLod(uSSRCol, uv + o, 0.0).rgb + textureLod(uSSRCol, uv - o, 0.0).rgb
+                + textureLod(uSSRCol, uv + o.yx, 0.0).rgb + textureLod(uSSRCol, uv - o.yx, 0.0).rgb)*0.15;
+      // fade near the screen's edge and at the end of the march, never cut
+      vec2 e = smoothstep(0.0, 0.1, uv)*smoothstep(1.0, 0.9, uv);
+      // only the last stretch of the march fades: a far block still hides the sun
+      return vec4(col, e.x*e.y*(1.0 - smoothstep(0.75, 1.0, float(i)/48.0)));
+    }
+    dzPrev = home ? -1.0 : dz;
+    tPrev = t;
+    // finer steps (about 50 m in 48): coarse ones band the reflection
+    t += 0.05 + t*0.1;
+  }
+  return vec4(0.0);
+}`;
+
+const terrainFS = SKY_GLSL + FOG_GLSL + SSR_GLSL + RIPPLE_GLSL + `
+uniform vec4 uWetA; uniform vec4 uWetB; uniform vec4 uWetC; uniform vec4 uWetD; uniform samplerCube uEnv; uniform bool uL5;
+uniform bool uL8; uniform bool uL1; uniform bool uL2; uniform bool uL3; uniform bool uL4; uniform bool uL6; uniform bool uL7; uniform float uLampMix;
+varying vec4 vLamp;
+uniform bool uInProbe; uniform float uElev; uniform vec3 uSH[9]; uniform vec3 uKeyDir; uniform vec3 uMoon; uniform vec3 uHaze;
+uniform float uSunSize; uniform float uTexel; uniform float uSpanM; uniform float uDepthM;
+varying vec3 vAlb; varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying float vMatRaw;
+// the material rounded: blended across a face it can land a hair off its
+// whole number on some GPUs, and an exact test then fails pixel by pixel
+#define vMat floor(vMatRaw + 0.5)
+varying float vAO; varying float vSky; varying float vTorch; varying vec3 vBounce; varying float vSeed;
+
+// arithmetic hash (no sin): sin of a large argument is inexact on some GPUs
+// (Intel through Direct3D), and amplified it scatters a texel into dots
+float h21(vec2 p) { vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y)*p3.z); }
+vec3 shIrr(vec3 n) {
+  return uSH[0]*0.282095 + uSH[1]*0.488603*n.y + uSH[2]*0.488603*n.z + uSH[3]*0.488603*n.x
+       + uSH[4]*1.092548*n.x*n.y + uSH[5]*1.092548*n.y*n.z + uSH[6]*0.315392*(3.0*n.z*n.z-1.0)
+       + uSH[7]*1.092548*n.x*n.z + uSH[8]*0.546274*(n.x*n.x-n.y*n.y);
+}
+const vec2 POISSON[12] = vec2[12](vec2(-0.326,-0.406), vec2(-0.840,-0.074), vec2(-0.696,0.457), vec2(-0.203,0.621),
+  vec2(0.962,-0.195), vec2(0.473,-0.480), vec2(0.519,0.767), vec2(0.185,-0.893), vec2(0.507,0.064),
+  vec2(0.896,0.412), vec2(-0.322,-0.933), vec2(-0.792,-0.598));
+// how fast the surface's own depth climbs per metre sideways in the shadow
+// map: a tap that far off must allow for it, or the ground shadows itself
+float gTanL = 0.0;
+vec3 lightSpace(vec3 n) {
+  float nl = clamp(dot(n, uKeyDir), 0.05, 1.0);
+  gTanL = min(sqrt(1.0 - nl*nl)/nl, 8.0);
+  vec4 lp = uLightVP*vec4(vW + n*0.05, 1.0);
+  return lp.xyz*0.5 + 0.5;
+}
+float pcf(vec3 c, float radiusM, float spin) {
+  float r = radiusM/uSpanM, lit = 0.0;
+  float cs = cos(spin), sn = sin(spin);
+  for (int i = 0; i < 12; i++) {
+    vec2 o = POISSON[i]; o = vec2(o.x*cs - o.y*sn, o.x*sn + o.y*cs);
+    float bias = 0.00012 + length(o)*radiusM*gTanL*1.2/uDepthM;
+    lit += textureLod(uShadow, c.xy + o*r, 0.0).r < c.z - bias ? 0.0 : 1.0;
+  }
+  return lit/12.0;
+}
+// Today: 3 x 3 bilinear taps 1.5 texels soft, in the cascade the distance falls in.
+// one fixed rotation for every pixel: a per-pixel spin swims as the camera
+// moves, and a per-cell one turns the penumbra blotchy
+float worldSpin(vec3 c) { return 0.0; }
+float shadowNow(vec3 n, float dist) {
+  vec3 c = lightSpace(n);
+  if (any(lessThan(c, vec3(0.0))) || any(greaterThan(c, vec3(1.0)))) return 1.0;
+  float texelM = dist < 14.4 ? 0.010 : dist < 42.6 ? 0.031 : dist < 165.0 ? 0.12 : 0.66;
+  return pcf(c, max(1.5*texelM, uTexel), worldSpin(c));
+}
+// L3: a blocker search, then a penumbra as wide as the sun makes it at that distance.
+float shadowPCSS(vec3 n) {
+  vec3 c = lightSpace(n);
+  if (any(lessThan(c, vec3(0.0))) || any(greaterThan(c, vec3(1.0)))) return 1.0;
+  float sunTan = tan(0.00466*uSunSize*(1.0 + 5.0*uCover));
+  float search = clamp(12.0*sunTan*8.0, 0.08, 1.6)/uSpanM;
+  float spin = worldSpin(c);
+  float cs = cos(spin), sn = sin(spin);
+  float sum = 0.0, cnt = 0.0;
+  float searchM = search*uSpanM;
+  for (int i = 0; i < 12; i++) {
+    vec2 o = POISSON[i]; o = vec2(o.x*cs - o.y*sn, o.x*sn + o.y*cs);
+    float d = textureLod(uShadow, c.xy + o*search, 0.0).r;
+    if (d < c.z - 0.00012 - length(o)*searchM*gTanL*1.2/uDepthM) { sum += d; cnt += 1.0; }
+  }
+  if (cnt < 0.5) return 1.0;
+  float gapM = (c.z - sum/cnt)*uDepthM;
+  float pen = max(gapM*sunTan, uTexel*0.6);
+  return pcf(c, pen, spin + 1.7);
+}
+
+// ---- wet ground: the game's model, ported, and the new one ----
+float rdn(float t) { return fract(sin(t*12345.564)*7658.76); }
+float rivulets(vec2 uv, float t) {
+  float lane = floor(uv.x), fx = fract(uv.x);
+  float h1 = rdn(lane), h2 = rdn(lane + 41.0), h3 = rdn(lane + 91.0);
+  float center = 0.5 + (h1 - 0.5)*0.3 + 0.06*sin(uv.y*1.7 + h2*6.2831);
+  float across = smoothstep(0.07 + 0.09*h2, 0.0, abs(fx - center))*smoothstep(0.0, 0.06, fx)*smoothstep(1.0, 0.94, fx);
+  float y = uv.y + t;
+  return step(0.32, h3)*across*clamp(0.62 + 0.26*sin(y*6.2831 + h1*6.2831) + 0.12*sin(y*17.0 - h2*9.0), 0.0, 1.0);
+}
+float pnoise(vec2 p) { vec2 i = floor(p), f = fract(p), w = f*f*(3.0 - 2.0*f);
+  return mix(mix(rrh12(i), rrh12(i + vec2(1, 0)), w.x), mix(rrh12(i + vec2(0, 1)), rrh12(i + vec2(1, 1)), w.x), w.y); }
+float ggx(float nh, float a) { float a2 = a*a; float d = nh*nh*(a2 - 1.0) + 1.0; return a2/(3.1416*d*d); }
+vec3 specLight(vec3 n, vec3 v, vec3 l, vec3 c, float a) {
+  float nl = max(dot(n, l), 0.0); if (nl <= 0.0) return vec3(0.0);
+  vec3 h = normalize(v + l);
+  float nv = max(dot(n, v), 1e-3), k = a*0.5;
+  float vis = 0.25/((nl*(1.0 - k) + k)*(nv*(1.0 - k) + k));
+  float f = 0.02 + 0.98*pow(1.0 - max(dot(v, h), 0.0), 5.0);
+  return c*ggx(max(dot(n, h), 0.0), a)*vis*f*nl;
+}
+struct Wet { float wet; float puddle; float top; vec3 n; };
+float gFoot = 0.0;
+Wet wetMasks(vec3 n) {
+  Wet w; w.wet = 0.0; w.puddle = 0.0; w.top = 0.0; w.n = n;
+  float soak = uWetA.x*smoothstep(0.9, 1.0, vSky);
+  if (soak <= 0.001 || vMat == 9.0) return w;
+  float face = n.y;
+  float top_w = smoothstep(0.35, 0.85, face);
+  float side_w = (1.0 - smoothstep(0.1, 0.5, face))*smoothstep(-0.5, -0.1, face);
+  vec3 an = abs(n); vec2 uv = vW.xz; vec3 axa = vec3(1, 0, 0), axb = vec3(0, 0, 1);
+  if (an.x >= an.y && an.x >= an.z) { uv = vW.zy; axa = vec3(0, 0, 1); axb = vec3(0, 1, 0); }
+  else if (an.z > an.y) { uv = vW.xy; axa = vec3(1, 0, 0); axb = vec3(0, 1, 0); }
+  axa = normalize(axa - n*dot(axa, n)); axb = normalize(axb - n*dot(axb, n));
+  bool floorLike = vMat == 2.0 || vMat == 3.0 || vMat == 8.0 || vMat == 10.0;
+  float flatW = smoothstep(0.90, 0.97, face);
+  float ps = max(uWetA.z, 0.01);
+  float mask = pnoise(uv/ps)*0.65 + pnoise(uv/(ps*0.37) + vec2(17.0, 5.0))*0.35;
+  float share = clamp(uWetA.y*soak, 1e-4, 0.9999);
+  float edge = 0.5003 + 0.1587*log((1.0 - share)/share)/1.702;
+  float puddle = floorLike ? flatW*smoothstep(edge - 0.03, edge + 0.03, mask) : 0.0;
+  float rings = top_w*max(puddle, floorLike ? 1.0 : uWetB.y);
+  float t = uWetD.w;
+  vec2 pg = vec2(0.0);
+  if (rings > 0.001) {
+    pg += vec2(cos(uv.x*7.0 + t*1.4) + 0.7*cos((uv.x + uv.y)*4.2 - t*1.12),
+               cos(uv.y*7.0 - t*1.26) + 0.7*cos((uv.x - uv.y)*4.2 + t*0.98))*(uWetB.z*0.1*puddle);
+    // the game today: every cell's drop, louder with rain; new: as many drops as rain
+    pg += uModel == 0 ? rippleGrad(uv*uWetA.w, t, 1.0)*(uWetB.x*rings)*(0.3 + 0.7*uWetD.z)
+                      : rippleGrad(uv*uWetA.w, t, uWetD.z)*(uWetB.x*rings);
+  }
+  // fade the rings once they fall under a pixel, as the game's water does,
+  // or they turn into speckle
+  pg /= 1.0 + pow(gFoot*uWetA.w*3.0, 2.0);
+  vec3 pert = axa*pg.x + axb*pg.y;
+  if (side_w > 0.001) {
+    vec3 down = vec3(0.0, -1.0, 0.0) - n*dot(vec3(0.0, -1.0, 0.0), n);
+    down = length(down) > 1e-4 ? normalize(down) : axa;
+    vec3 acr = normalize(cross(n, down));
+    vec2 duv = vec2(vUv.x*4.0, vUv.y), de = vec2(0.01, 0.0);
+    float dm = rivulets(duv, t*1.3);
+    vec2 dn = vec2(rivulets(duv + de, t*1.3) - dm, rivulets(duv + de.yx, t*1.3) - dm);
+    pert += (acr*dn.x + down*dn.y)*(-2.0*side_w);
+  }
+  w.wet = soak*max(top_w, side_w); w.puddle = puddle; w.top = top_w*soak;
+  w.n = normalize(n + pert);
+  return w;
+}
+
+// L8's voxel trace: the reflected ray walks the block grid itself (a 3D
+// texture: albedo, and the material in alpha), so it finds the face it
+// really reaches: an eave's underside, a block behind the camera, one off
+// screen. The face is then lit here like the terrain: sky, sun or moon
+// with its shadow, the lamps, and a lantern glows.
+uniform highp sampler3D uVox;
+bool voxTrace(vec3 ro, vec3 rd, out vec3 hp, out vec3 hn, out vec4 tx) {
+  ivec3 c = ivec3(floor(ro));
+  vec3 sg = sign(rd);
+  vec3 inv = 1.0/max(abs(rd), vec3(1e-5));
+  vec3 tMax = (sg*(vec3(c) - ro) + sg*0.5 + 0.5)*inv;
+  hn = vec3(0.0); hp = ro; tx = vec4(0.0);
+  float t = 0.0;
+  for (int i = 0; i < 72; i++) {
+    if (tMax.x < tMax.y && tMax.x < tMax.z) { t = tMax.x; tMax.x += inv.x; c.x += int(sg.x); hn = vec3(-sg.x, 0.0, 0.0); }
+    else if (tMax.y < tMax.z) { t = tMax.y; tMax.y += inv.y; c.y += int(sg.y); hn = vec3(0.0, -sg.y, 0.0); }
+    else { t = tMax.z; tMax.z += inv.z; c.z += int(sg.z); hn = vec3(0.0, 0.0, -sg.z); }
+    if (t > 48.0 || (c.y >= 20 && sg.y >= 0.0) || c.y < 0) break;
+    if (c.x < 0 || c.z < 0 || c.x >= 48 || c.z >= 48) {
+      // past the grid, the plain: ground below its top, air above
+      if (c.y < 4) { hp = ro + rd*t; tx = vec4(0.20, 0.40, 0.10, 1.0/255.0); return true; }
+      continue;
+    }
+    vec4 v = texelFetch(uVox, ivec3(c.x, c.z, c.y), 0);
+    if (v.a > 0.5/255.0) { hp = ro + rd*t; tx = v; return true; }
+  }
+  return false;
+}
+vec3 voxShade(vec3 p, vec3 n, vec4 tx) {
+  float m = floor(tx.a*255.0 + 0.5);
+  if (m == 9.0) return vec3(1.0, 0.80, 0.46)*(uL6 ? 6.0 : 0.95);
+  vec3 alb = tx.rgb;
+  if (m == 1.0 && n.y < 0.5) alb = vec3(0.40, 0.26, 0.14);
+  vec2 uv = abs(n.x) > 0.5 ? p.zy : (abs(n.z) > 0.5 ? p.xy : p.xz);
+  alb *= 0.80 + 0.40*h21(floor(uv*8.0) + floor(p.y)*3.1);
+  float daylight = smoothstep(-0.13, 0.20, uElev), sunlight = smoothstep(-0.0145, 0.02, uElev);
+  // sky light: an underside sees ground, not sky; a wall half of it
+  float open = n.y > 0.5 ? 1.0 : (n.y < -0.5 ? 0.25 : 0.6);
+  vec3 amb = max(max(shIrr(n), vec3(0.0))*open, vec3(0.006, 0.008, 0.011));
+  vec4 lp = uLightVP*vec4(p + n*0.06, 1.0);
+  vec3 lc = lp.xyz*0.5 + 0.5;
+  float sh = 1.0;
+  if (all(greaterThan(lc, vec3(0.0))) && all(lessThan(lc, vec3(1.0)))) sh = textureLod(uShadow, lc.xy, 0.0).r < lc.z - 0.0004 ? 0.0 : 1.0;
+  vec3 sunC = uL1 ? uSunAir : vec3(1.12, 1.03, 0.87)*sunlight;
+  vec3 key = (sunC*max(dot(n, uSunDir), 0.0) + uMoon*max(dot(n, uKeyDir), 0.0))*(1.0 - 0.85*uCover)*sh;
+  vec3 lamps = vec3(0.0);
+  for (int i = 0; i < 5; i++) {
+    vec3 q = uLampPos[i] - p; float d = length(q);
+    if (d < 16.0) lamps += vec3(1.0, 0.70, 0.30)*1.25*2.4*max(dot(n, q/d), 0.0)/(1.0 + d*d)*(1.0 - d/16.0);
+  }
+  return alb*(amb + key + lamps*(1.0 - daylight*0.9));
+}
+
+vec3 albedoAt() {
+  vec2 cell = floor(vUv*8.0);
+  // the face's seed rounded: it is one value per face, but interpolated it
+  // can differ in its last bits pixel to pixel
+  float sd = floor(vSeed*256.0 + 0.5);
+  float n = h21(cell + sd*7.31);
+  vec3 a = vAlb;
+  if (vMat == 1.0 && abs(vN.y) < 0.5) {
+    float edge = 0.72 + 0.16*h21(vec2(cell.x, sd*1.7));
+    if (vUv.y < edge) a = vec3(0.40, 0.26, 0.14);
+  }
+  if (vMat == 1.0 && vN.y < -0.5) a = vec3(0.40, 0.26, 0.14);
+  if (vMat == 5.0) n = n < 0.3 ? 0.35 : n;
+  if (vMat == 4.0 || vMat == 11.0) n = 0.6 + 0.4*h21(vec2(cell.x, 3.0));
+  return a*(0.80 + 0.40*n);
+}
+void main() {
+  vec3 n = normalize(vN);
+  vec3 alb = albedoAt();
+  gFoot = length(fwidth(vW));
+  Wet wm = wetMasks(n);
+  vec3 dnW = fwidth(wm.n);
+  if (wm.wet > 0.0) {
+    // wet darkens and deepens the colour: water fills the grain
+    float dk = uModel == 1 ? mix(1.0, uWetB.w*0.85, wm.wet)*mix(1.0, 0.7, wm.puddle) : mix(1.0, uWetB.w, wm.wet);
+    alb *= dk;
+    float g = dot(alb, vec3(0.2126, 0.7152, 0.0722));
+    alb = max(mix(vec3(g), alb, 1.0 + 0.25*wm.wet), vec3(0.0));
+  }
+  float dist = length(vW - cameraPosition);
+  float daylight = smoothstep(-0.13, 0.20, uElev);
+  float sunlight = smoothstep(-0.0145, 0.02, uElev);
+  float skyl = vSky*vAO;
+  float lampShare = 1.0 - daylight*vSky;
+  float lf = clamp(vTorch, 0.0, 1.0)*(2.0 - clamp(vTorch, 0.0, 1.0));
+  vec3 torch = alb*vec3(1.0, 0.70, 0.30)*1.25*lf*lf*lampShare;
+  if (uModel == 1 && uL7) {
+    // L7: the baked lamp, direct (seen, facing, falling off) and one bounce
+    vec3 baked = alb*vec3(1.0, 0.70, 0.30)*1.25*(vec3(vLamp.a) + vLamp.rgb)*lampShare;
+    torch = mix(torch, baked, uLampMix);
+  }
+  vec3 col;
+  float shadeK = 1.0;
+  if (vMat == 9.0) {
+    // in the probe a lamp is only a lit surface: its glint on wet ground is
+    // the exact per-lamp highlight, and a full-bright lamp in a cube map taken
+    // from one place floats in the wrong spot and sparkles on the ripples
+    col = vec3(1.0, 0.80, 0.46)*(uModel == 1 && uL6 && !uInProbe ? 6.0 : 0.95);
+  } else if (uModel == 0) {
+    bool wall = n.y < 0.5;
+    vec3 fill = wall ? vec3(0.30, 0.32, 0.34) : vec3(0.16, 0.21, 0.27);
+    float night = wall ? 0.20 : 0.12, gain = wall ? 0.95 : 1.0;
+    float facing = max(dot(n, uSunDir), 0.0)*sunlight;
+    float shade = facing > 0.0 ? shadowNow(n, dist) : 1.0;
+    shadeK = shade;
+    col = alb*(fill*max(0.05, mix(night, 1.0, daylight)*skyl*(1.0 - 0.48*uCover))
+        + vec3(1.12, 1.03, 0.87)*facing*(1.0 - 0.72*uCover)*shade*skyl)*gain + torch;
+  } else {
+    vec3 sunC = uL1 ? uSunAir : vec3(1.12, 1.03, 0.87)*sunlight;
+    float facing = max(dot(n, uSunDir), 0.0);
+    float keyFacing = max(dot(n, uKeyDir), 0.0);
+    float shade = keyFacing > 0.0 ? (uL3 ? shadowPCSS(n) : shadowNow(n, dist)) : 1.0;
+    shadeK = shade;
+    vec3 direct = sunC*facing*(1.0 - 0.85*uCover);
+    vec3 moon = uMoon*keyFacing*(1.0 - 0.85*uCover);
+    vec3 amb;
+    if (uL2) {
+      amb = max(shIrr(n), vec3(0.0))*skyl;
+    } else {
+      bool wall = n.y < 0.5;
+      vec3 fill = wall ? vec3(0.30, 0.32, 0.34) : vec3(0.16, 0.21, 0.27);
+      amb = fill*mix(wall ? 0.20 : 0.12, 1.0, daylight)*skyl*(1.0 - 0.48*uCover);
+    }
+    amb = max(amb, vec3(0.006, 0.008, 0.011));
+    vec3 bnc = uL4 ? vBounce*mix(1.0, vAO, 0.5) : vec3(0.0);
+    col = alb*(amb + (direct + moon)*shade*mix(1.0, vAO, 0.35) + bnc) + torch;
+  }
+  if (wm.wet > 0.0) {
+    vec3 v = normalize(cameraPosition - vW);
+    vec3 r = reflect(-v, wm.n);
+    float cv = clamp(dot(wm.n, v), 0.0, 1.0);
+    float fres = 0.02 + 0.98*pow(1.0 - cv, 5.0);
+    if (uModel == 0) {
+      // the game: a dim authored sky mixed in, and a glint that only asks
+      // where the sun is, not where the eye is
+      vec3 clear = mix(vec3(0.10, 0.20, 0.29), vec3(0.32, 0.49, 0.57), max(uElev, 0.0));
+      vec3 gs = mix(clear, vec3(dot(clear, vec3(0.2126, 0.7152, 0.0722))), uCover*0.75)*(1.0 - uCover*0.6);
+      vec3 skySeen = gs*mix(0.12, 1.0, daylight)*mix(0.55, 1.0, smoothstep(-0.05, 0.35, r.y));
+      float mirror = fres*uWetC.x*mix(0.25, 1.0, wm.puddle)*wm.top;
+      col = mix(col, skySeen, clamp(mirror, 0.0, 1.0));
+      float glint = pow(max(dot(wm.n, uSunDir), 0.0), max(uWetC.y, 1.0));
+      col += vec3(uWetC.z)*glint*wm.wet*sunlight*(1.0 - 0.72*uCover)*shadeK;
+    } else {
+      // new: a glossy film that reflects what is really there (the probe, or
+      // the real sky), with highlights from the sun or moon and every lamp
+      float rough = mix(uWetC.w, uWetD.x, wm.puddle);
+      // specular anti-aliasing: where the rippled normal turns fast across a
+      // pixel, widen the lobe, or the rings shimmer as white specks
+      rough = clamp(sqrt(rough*rough + 2.0*dot(dnW, dnW)), rough, 0.6);
+      float a = rough*rough;
+      // the real sky, not the probe: one cube taken at the ball pastes what
+      // it saw (a lamp, a wall) onto ground metres away, in the wrong place
+      vec3 env = skyRad(vec3(r.x, max(r.y, 0.0), r.z));
+      if (r.y < 0.0) env *= 0.35;
+      env *= mix(0.4, 1.0, skyl);
+      // L8: what is really there, where the screen holds it
+      float frW = fres*(1.0 - rough)*uWetC.x*mix(0.45, 1.0, wm.puddle);
+      // only where the film shows a reflection: the march is the costly part
+      vec4 hit = vec4(0.0);
+      if (uL8 && frW > 0.03) {
+        vec3 vp, vn; vec4 vt;
+        if (voxTrace(vW + n*0.02, r, vp, vn, vt)) hit = vec4(voxShade(vp, vn, vt), 1.0);
+        else hit = ssrTrace(vW + n*0.02, r, rough);
+      }
+      env = mix(env, hit.rgb, hit.a);
+      float fr = fres*(1.0 - rough)*uWetC.x*mix(0.45, 1.0, wm.puddle);
+      col = col*(1.0 - fr) + env*fr;
+      vec3 keyC = uFogSun;
+      float aKey = max(a, 0.02 + 0.25*uCover);
+      // where the reflection finds a block, that block hides the sun's glint
+      col += min(specLight(wm.n, v, uFogDir, keyC*3.1416, aKey), vec3(3.0))*shadeK*wm.wet*(1.0 - hit.a);
+      vec3 ls = vec3(0.0);
+      for (int i = 0; i < 5; i++) {
+        vec3 q = uLampPos[i] - vW; float d = length(q);
+        if (d < 16.0) ls += specLight(wm.n, v, q/d, vec3(1.0, 0.70, 0.30)*1.25*11.6/(4.84 + d*d)*(1.0 - d/16.0), max(a, 0.02));
+      }
+      // a lamp the trace already sees is in the image; keep its lobe for the rest
+      col += min(ls, vec3(6.0))*uWetD.y*wm.wet*lampShare*(1.0 - 0.8*hit.a);
+    }
+  }
+  // submerged ground: the terrain shader's own absorption toward the deep colour
+  // only where the sheet is: the open cell a face looks into is a pond cell
+  // (the same test the sheet's mesh uses), so low ground past the rim stays dry
+  vec2 cellW = floor(vW.xz + normalize(vN).xz*0.5);
+  float wd = max(3.6 - vW.y, 0.0)*step(length(cellW - vec2(10.0, 22.0)), 4.999);
+  if (wd > 0.0) {
+    vec3 att = exp(-vec3(0.90, 0.25, 0.08)*wd);
+    col = mix(col*att, vec3(0.0, 0.12, 0.28)*att, (1.0 - dot(att, vec3(1.0/3.0)))*0.5);
+  }
+  float fog = 1.0 - exp(-dist/1400.0);
+  col = mix(col, uHaze, fog);
+  gl_FragColor = vec4(fogApply(col, vW, true), 1.0);
+}`;
+
+const skyFS = SKY_GLSL + FOG_GLSL + `
+varying vec3 vDir;
+void main() {
+  vec3 d = normalize(vDir);
+  vec3 L = skyRad(vec3(d.x, max(d.y, 0.0), d.z));
+  if (d.y < 0.0) L *= 0.55;
+  float disc = smoothstep(0.99996, 0.99999, dot(d, uSunDir));
+  L += uSunAir*disc*40.0*(1.0 - uCover);
+  gl_FragColor = vec4(fogApply(L, cameraPosition + d*400.0, true), 1.0);
+}`;
+const skyVS = `varying vec3 vDir; void main() { vDir = position; vec4 p = projectionMatrix*viewMatrix*vec4(position + cameraPosition, 1.0); gl_Position = p.xyww; }`;
+
+const mirrorFS = SKY_GLSL + FOG_GLSL + SSR_GLSL + RIPPLE_GLSL + `
+uniform float uRainAmt;
+uniform bool uL5; uniform samplerCube uProbe; uniform float uTime; uniform bool uWater; uniform int uPass;
+uniform vec3 uSH[9]; uniform vec3 uHaze; uniform float uElev;
+varying vec3 vW; varying vec3 vN;
+// water.ron as shipped: absorption per metre, deep colour, the authored sky the
+// sheet mirrors, the night sky, the night floor, the sun's glint
+const vec3 ABSORB = vec3(0.90, 0.25, 0.08);
+const vec3 DEEP = vec3(0.0, 0.12, 0.28);
+const vec3 SKY_HORIZON = vec3(0.10, 0.36, 0.72);
+const vec3 SKY_ZENITH = vec3(0.03, 0.18, 0.55);
+const vec3 NIGHT_SKY = vec3(0.035, 0.070, 0.100);
+const float HORIZON_STRENGTH = 0.22, NIGHT_FLOOR = 0.18, SPEC = 0.06, SPEC_POW = 140.0;
+const vec3 SUN_TINT = vec3(1.10, 1.15, 1.20);
+const float WATER_TOP = 3.6, POND_FLOOR = 2.0;
+float h3(vec3 p) { p = fract(p*0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y)*p.z); }
+float vnoise(vec3 p) {
+  vec3 i = floor(p), f = fract(p); f = f*f*(3.0 - 2.0*f);
+  return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z)*2.0 - 1.0;
+}
+float fbm(vec3 p) { return 0.5*vnoise(p) + 0.25*vnoise(p*2.03 + 1.7) + 0.125*vnoise(p*4.01 + 3.1); }
+void main() {
+  vec3 v = normalize(vW - cameraPosition);
+  if (!uWater) {
+    vec3 n = normalize(vN);
+    vec3 r = reflect(v, n);
+    vec3 refl = (uModel == 1 && uL5) ? textureCube(uProbe, r).rgb : skyRad(vec3(r.x, max(r.y, 0.0), r.z));
+    gl_FragColor = vec4(fogApply(mix(refl*vec3(0.92, 0.90, 0.86), uHaze, 1.0 - exp(-length(vW - cameraPosition)/1400.0)), vW, true), 1.0);
+    return;
+  }
+  // the game's ripples: fbm of the advected position, its gradient bent into
+  // the normal at the wave steepness, the slope capped
+  float t = uTime*0.75;
+  vec3 p = vec3(vW.x, t*0.6, vW.z)*1.5;
+  float f0 = fbm(p);
+  vec2 g = vec2(fbm(p + vec3(0.08, 0.0, 0.0)) - f0, fbm(p + vec3(0.0, 0.0, 0.08)) - f0)*12.5;
+  g *= min(1.0, 0.7/max(length(g), 1e-6));
+  vec3 n = normalize(vec3(-g.x*0.45, 1.0, -g.y*0.45));
+  // new: rain rings on the pond too, as many as it is raining
+  if (uModel == 1 && uRainAmt > 0.0) {
+    vec2 rg = rippleGrad(vW.xz*5.0, uTime, uRainAmt)*2.0;
+    rg /= 1.0 + pow(length(fwidth(vW))*15.0, 2.0);
+    n = normalize(n + vec3(rg.x, 0.0, rg.y));
+  }
+  vec3 look = -v;
+  float daylight = smoothstep(-0.13, 0.20, uElev);
+  float lit = mix(NIGHT_FLOOR, 1.0, daylight);
+  // through the water to the seabed: the path under the sheet, along the view
+  float path = (WATER_TOP - POND_FLOOR)/max(abs(v.y), 0.12);
+  vec3 trans = exp(-ABSORB*path);
+  vec3 r = reflect(v, n);
+  float rh = clamp(r.y, 0.0, 1.0);
+  float fres = (0.02 + 0.98*pow(1.0 - max(dot(look, n), 0.0), 5.0))*mix(HORIZON_STRENGTH, 1.0, rh);
+  vec3 reflected;
+  if (uModel == 1 && uL5) reflected = textureCube(uProbe, r).rgb;
+  else if (uModel == 1) reflected = skyRad(vec3(r.x, max(r.y, 0.0), r.z));
+  else reflected = mix(NIGHT_SKY*(0.35 + 0.65*smoothstep(-0.6, 0.6, dot(r, uSunDir))), mix(SKY_HORIZON, SKY_ZENITH, rh), daylight);
+  float ssrA = 0.0;
+  if (uModel == 1 && uWater) { vec4 hit = ssrTrace(vW, r, 0.02); reflected = mix(reflected, hit.rgb, hit.a); ssrA = hit.a; }
+  if (uPass == 0) {
+    // multiply what is under the sheet (the lit seabed) by what gets through
+    gl_FragColor = vec4(trans*lit*(1.0 - fres)*fogT(vW), 1.0);
+    return;
+  }
+  vec3 sunC = uModel == 1 ? uSunAir : vec3(1.0)*smoothstep(-0.0145, 0.02, uElev);
+  vec3 h = normalize(look + uSunDir);
+  vec3 spec = SUN_TINT*pow(max(dot(n, h), 0.0), SPEC_POW)*SPEC*lit*(uModel == 1 ? 12.0*sunC : vec3(1.0))*(1.0 - uCover)*(1.0 - ssrA);
+  vec3 add = DEEP*(1.0 - trans)*lit*(1.0 - fres) + reflected*fres + spec;
+  gl_FragColor = vec4(fogApply(add, vW, true), 1.0);
+}`;
+const mirrorVS = `varying vec3 vW; varying vec3 vN; void main() { vec4 w = modelMatrix*vec4(position, 1.0); vW = w.xyz; vN = mat3(modelMatrix)*normal; gl_Position = projectionMatrix*viewMatrix*w; }`;
+
+const shared = {
+  uSunAir: { value: new THREE.Vector3() }, uSunHigh: { value: new THREE.Vector3() }, uSunDir: { value: new THREE.Vector3(0,1,0) }, uCover: { value: 0 },
+  uSH: { value: Array.from({length:9}, () => new THREE.Vector3()) }, uHaze: { value: new THREE.Vector3() },
+  uModel: { value: 0 },
+  uRainAmt: { value: 0 },
+  uSSROn: { value: false }, uSSRCol: { value: null }, uSSRDepth: { value: null }, uVP: { value: new THREE.Matrix4() }, uNF: { value: new THREE.Vector2(0.25, 1500) },
+  uShadow: { value: shadowRT.depthTexture }, uLightVP: { value: lightVP },
+  uRain: { value: 0 }, uLampPos: { value: lanterns.map(([x,y,z]) => new THREE.Vector3(x+0.5, y+0.5, z+0.5)) },
+  uFogSun: { value: new THREE.Vector3() }, uFogDir: { value: new THREE.Vector3(0,1,0) }, uFogAmb: { value: new THREE.Vector3() },
+  uFogGrey: { value: new THREE.Vector3() }, uFogDay: { value: 0 },
+};
+const terrainMat = new THREE.ShaderMaterial({
+  vertexShader: terrainVS, fragmentShader: terrainFS,
+  uniforms: Object.assign({}, shared, {
+    uL1: { value: true }, uL2: { value: true }, uL3: { value: true }, uL4: { value: true }, uL5: { value: true }, uL6: { value: true }, uL7: { value: true }, uL8: { value: true }, uLampMix: { value: 0 },
+    uWetA: { value: new THREE.Vector4() }, uWetB: { value: new THREE.Vector4() }, uWetC: { value: new THREE.Vector4() }, uWetD: { value: new THREE.Vector4() }, uEnv: { value: null },
+    uVox: { value: null }, uInProbe: { value: false }, uElev: { value: 0 }, uKeyDir: { value: new THREE.Vector3(0,1,0) }, uMoon: { value: new THREE.Vector3() },
+    uSunSize: { value: 12 },
+    uTexel: { value: SPAN/SM }, uSpanM: { value: SPAN }, uDepthM: { value: FARL - NEARL },
+  }),
+});
+const skyMat = new THREE.ShaderMaterial({ vertexShader: skyVS, fragmentShader: skyFS, uniforms: shared, side: THREE.BackSide, depthWrite: false });
+const probeRT = new THREE.WebGLCubeRenderTarget(128, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
+const mirrorUniforms = (water, pass) => Object.assign({}, shared, { uL5: { value: true }, uProbe: { value: probeRT.texture }, uTime: { value: 0 }, uWater: { value: water }, uPass: { value: pass }, uElev: terrainMat.uniforms.uElev });
+// The game's sheet is see-through: the seabed times what gets through, plus
+// the water's own colour, the mirrored sky and the glint. Two passes, so the
+// seabed already drawn is the 'scene' the game's composite reads.
+const waterMul = new THREE.ShaderMaterial({ vertexShader: mirrorVS, fragmentShader: mirrorFS, uniforms: mirrorUniforms(true, 0), transparent: true, depthWrite: false,
+  blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor });
+const waterAdd = new THREE.ShaderMaterial({ vertexShader: mirrorVS, fragmentShader: mirrorFS, uniforms: mirrorUniforms(true, 1), transparent: true, depthWrite: false,
+  blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor });
+const waterMat = waterAdd;
+const ballMat = new THREE.ShaderMaterial({ vertexShader: mirrorVS, fragmentShader: mirrorFS, uniforms: mirrorUniforms(false, 1) });
+
+// L8: the block grid for the voxel trace (x across, z down, y in layers)
+const voxTex = (() => {
+  const d = new Uint8Array(W*D*H*4);
+  for (let y = 0; y < H; y++) for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) {
+    const m = vox[I(x,y,z)]; if (!m) continue;
+    const a = ALB[m], o = ((y*D + z)*W + x)*4;
+    d[o] = Math.round(a[0]*255); d[o+1] = Math.round(a[1]*255); d[o+2] = Math.round(a[2]*255); d[o+3] = m;
+  }
+  const t = new THREE.DataTexture3D(d, W, D, H);
+  t.format = THREE.RGBAFormat; t.type = THREE.UnsignedByteType;
+  t.minFilter = t.magFilter = THREE.NearestFilter; t.unpackAlignment = 1; t.needsUpdate = true;
+  return t;
+})();
+terrainMat.uniforms.uVox.value = voxTex;
+const scene = new THREE.Scene();
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), skyMat);
+skyDome.frustumCulled = false; skyDome.renderOrder = -1;
+scene.add(skyDome);
+const terrain = new THREE.Mesh(geo, terrainMat);
+terrain.frustumCulled = false;
+scene.add(terrain);
+// The sheet covers exactly the cells the pond holds water in, one quad a cell.
+const waterGeo = (() => {
+  const wp = [], wn = [], wi = [];
+  for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) {
+    if (top[x + W*z] >= 3.6 || Math.hypot(x - 10, z - 22) >= 6.6) continue;
+    const b = wp.length/3;
+    wp.push(x, 3.6, z, x, 3.6, z+1, x+1, 3.6, z+1, x+1, 3.6, z);
+    wn.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
+    wi.push(b, b+1, b+2, b, b+2, b+3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(wn, 3));
+  g.setIndex(wi);
+  return g;
+})();
+for (const [m, order] of [[waterMul, 1], [waterAdd, 2]]) {
+  const w = new THREE.Mesh(waterGeo, m);
+  w.layers.set(1); w.renderOrder = order; scene.add(w);
+}
+const ball = new THREE.Mesh(new THREE.SphereGeometry(0.8, 48, 32), ballMat);
+ball.position.copy(ballPos); ball.layers.set(1); scene.add(ball);
+const probeCam = new THREE.CubeCamera(0.3, 2000, probeRT);
+probeCam.position.set(14.5, 4.6, 22.5);
+scene.add(probeCam);
+
+// Rain streaks: drops in a box that follows the eye, falling and wrapping.
+// Today's: the game's grey streaks. New: lit by the sky, the key light seen
+// through them, and the lamps they pass.
+const RAIN_N = 9000;
+const rainGeo = (() => {
+  const seed = new Float32Array(RAIN_N*2*4);
+  for (let i = 0; i < RAIN_N; i++) {
+    const a = Math.random(), b = Math.random(), c = Math.random(), k = i/RAIN_N;
+    seed.set([a, b, c, k], i*8); seed.set([a, b, c, k], i*8 + 4);
+  }
+  const end = new Float32Array(RAIN_N*2);
+  for (let i = 0; i < RAIN_N; i++) end[i*2 + 1] = 1;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(RAIN_N*2*3), 3));
+  g.setAttribute('seed', new THREE.BufferAttribute(seed, 4));
+  g.setAttribute('endv', new THREE.BufferAttribute(end, 1));
+  return g;
+})();
+// The rain mask: the top of the highest block over each cell, seen from above.
+// A streak below it is under a roof (the house, the overhang, a tree) and is
+// not drawn: one read per streak end, the cheap way (owner).
+const rainMask = (() => {
+  const d = new Float32Array(W*D);
+  for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) {
+    let t = 0; for (let y = H - 1; y >= 0; y--) if (vox[I(x,y,z)]) { t = y + 1; break; }
+    d[x + W*z] = t;
+  }
+  const t = new THREE.DataTexture(d, W, D, THREE.RedFormat, THREE.FloatType);
+  t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
+  return t;
+})();
+const rainMat = new THREE.ShaderMaterial({
+  uniforms: Object.assign({}, shared, { uT: { value: 0 }, uAmt: { value: 0 }, uRainMask: { value: rainMask } }),
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `
+    attribute vec4 seed; attribute float endv;
+    uniform float uT; uniform float uAmt; uniform sampler2D uRainMask; uniform int uModel; uniform vec3 uLampPos[5]; uniform vec3 uFogAmb; uniform vec3 uFogSun; uniform vec3 uFogDir; uniform vec3 uFogGrey; uniform float uFogDay;
+    varying vec3 vC; varying float vA;
+    void main() {
+      vec3 box = vec3(44.0, 26.0, 44.0);
+      float speed = 8.0 + 3.0*seed.x;
+      vec3 p = seed.xyz*box - vec3(0.0, uT*speed, 0.0) + vec3(uT*0.8, 0.0, 0.0);
+      vec3 rel = mod(p - cameraPosition + box*0.5, box) - box*0.5;
+      vec3 w = cameraPosition + rel + vec3(0.0, 4.0, 0.0);
+      w += vec3(0.05, 0.55, 0.0)*endv;
+      vA = seed.w < uAmt ? 1.0 : 0.0;
+      float d = length(w - cameraPosition);
+      vA *= smoothstep(0.6, 2.0, d)*(1.0 - smoothstep(14.0, 22.0, d));
+      // under a roof: below the mask's top over this spot (the plain outside the grid is open)
+      vec2 mc = (floor(w.xz) + 0.5)/vec2(48.0, 48.0);
+      if (all(greaterThanEqual(mc, vec2(0.0))) && all(lessThanEqual(mc, vec2(1.0))) && w.y < texture2D(uRainMask, mc).r) vA = 0.0;
+      if (uModel == 0) {
+        vC = uFogGrey*1.6 + 0.02;
+      } else {
+        vec3 c = uFogAmb*1.3;
+        vec3 v = normalize(w - cameraPosition);
+        c += uFogSun*pow(max(dot(v, uFogDir), 0.0), 8.0)*2.0;
+        for (int i = 0; i < 5; i++) { vec3 q = uLampPos[i] - w; c += vec3(1.0, 0.7, 0.3)*1.25*11.6/(1.0 + dot(q, q)*1.4)*(1.0 - 0.8*uFogDay); }
+        vC = c;
+      }
+      gl_Position = projectionMatrix*viewMatrix*vec4(w, 1.0);
+    }`,
+  fragmentShader: `varying vec3 vC; varying float vA; void main() { if (vA <= 0.0) discard; gl_FragColor = vec4(vC*0.22*vA, 1.0); }`,
+});
+const rainLines = new THREE.LineSegments(rainGeo, rainMat);
+rainLines.frustumCulled = false; rainLines.layers.set(1); rainLines.renderOrder = 3;
+scene.add(rainLines);
+
+// near 0.25 m, far 1.5 km: three's render target can get a 16-bit depth
+// buffer (Direct3D gives it as asked), and 0.1-3000 left too little of it
+const camera = new THREE.PerspectiveCamera(55, 1, 0.25, 1500);
+camera.layers.enable(1);
+
+// ---------- the post chain: exposure, bloom, curve, grade ----------
+const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const quadGeo = new THREE.PlaneGeometry(2, 2);
+const quad = new THREE.Mesh(quadGeo);
+const quadScene = new THREE.Scene(); quadScene.add(quad);
+const postVS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const brightMat = new THREE.ShaderMaterial({ vertexShader: postVS, uniforms: { uSrc: { value: null }, uExposure: { value: 1 }, uTexel: { value: new THREE.Vector2() } }, fragmentShader: `
+uniform sampler2D uSrc; uniform float uExposure; uniform vec2 uTexel; varying vec2 vUv;
+void main() {
+  // Karis average: each tap weighted by 1/(1 + its brightness), so a lone
+  // sparkling pixel cannot outweigh its neighbours and flicker the glow
+  vec3 c = vec3(0.0); float ws = 0.0;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec3 s = texture2D(uSrc, vUv + vec2(x, y)*uTexel*1.5).rgb*uExposure;
+    float w = 1.0/(1.0 + max(s.r, max(s.g, s.b)));
+    c += s*w; ws += w;
+  }
+  c /= ws;
+  float l = max(c.r, max(c.g, c.b));
+  gl_FragColor = vec4(c*smoothstep(0.75, 2.5, l), 1.0);
+}` });
+const blurMat = new THREE.ShaderMaterial({ vertexShader: postVS, uniforms: { uSrc: { value: null }, uDir: { value: new THREE.Vector2() } }, fragmentShader: `
+uniform sampler2D uSrc; uniform vec2 uDir; varying vec2 vUv;
+void main() {
+  vec3 c = texture2D(uSrc, vUv).rgb*0.227;
+  c += (texture2D(uSrc, vUv + uDir*1.385).rgb + texture2D(uSrc, vUv - uDir*1.385).rgb)*0.316;
+  c += (texture2D(uSrc, vUv + uDir*3.231).rgb + texture2D(uSrc, vUv - uDir*3.231).rgb)*0.070;
+  gl_FragColor = vec4(c, 1.0);
+}` });
+const lumMat = new THREE.ShaderMaterial({ vertexShader: postVS, uniforms: { uSrc: { value: null } }, fragmentShader: `
+uniform sampler2D uSrc; varying vec2 vUv;
+void main() {
+  float s = 0.0;
+  for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++) {
+    vec3 c = texture2D(uSrc, vUv + (vec2(x, y) - 1.5)/64.0).rgb;
+    s += log(dot(c, vec3(0.2126, 0.7152, 0.0722)) + 1e-4);
+  }
+  gl_FragColor = vec4(s/16.0, 0.0, 0.0, 1.0);
+}` });
+const finalMat = new THREE.ShaderMaterial({ vertexShader: postVS, uniforms: {
+  uSrc: { value: null }, uBloom: { value: null }, uExposure: { value: 1 }, uBloomStr: { value: 0 },
+  uTone: { value: 0 }, uWB: { value: new THREE.Vector3(1,1,1) }, uSat: { value: 1 }, uGrade: { value: false } }, fragmentShader: `
+uniform sampler2D uSrc; uniform sampler2D uBloom; uniform float uExposure; uniform float uBloomStr; uniform int uTone;
+uniform vec3 uWB; uniform float uSat; uniform bool uGrade; varying vec2 vUv;
+vec3 agxContrast(vec3 x) { vec3 x2 = x*x, x4 = x2*x2; return 15.5*x4*x2 - 40.14*x4*x + 31.96*x4 - 6.868*x2*x + 0.4298*x2 + 0.1191*x - 0.00232; }
+vec3 agx(vec3 c, bool punchy) {
+  const mat3 inset = mat3(0.856627153315983, 0.137318972929847, 0.11189821299995,
+                          0.0951212405381588, 0.761241990602591, 0.0767994186031903,
+                          0.0482516061458583, 0.101439036467562, 0.811302368396859);
+  const mat3 outset = mat3(1.1271005818144368, -0.1413297634984383, -0.14132976349843826,
+                           -0.11060664309660323, 1.157823702216272, -0.11060664309660294,
+                           -0.016493938717834573, -0.016493938717834257, 1.2519364065950405);
+  c = inset*c;
+  c = clamp((log2(max(c, 1e-10)) + 12.47393)/16.5, 0.0, 1.0);
+  c = agxContrast(c);
+  if (punchy) { float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = pow(max(c, 0.0), vec3(1.35)); l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = l + 1.15*(c - l); }
+  c = outset*c;
+  return clamp(pow(max(c, 0.0), vec3(2.2)), 0.0, 1.0);
+}
+vec3 neutral(vec3 c) {
+  float x = min(c.r, min(c.g, c.b));
+  float off = x < 0.08 ? x - 6.25*x*x : 0.04;
+  c -= off;
+  float peak = max(c.r, max(c.g, c.b));
+  if (peak < 0.76) return c;
+  float d = 0.24, np = 1.0 - d*d/(peak + d - 0.76);
+  c *= np/peak;
+  float g = 1.0 - 1.0/(0.15*(peak - np) + 1.0);
+  return mix(c, vec3(np), g);
+}
+vec3 tonyLike(vec3 c) {
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  vec3 t = c/(1.0 + l);
+  float tl = dot(t, vec3(0.2126, 0.7152, 0.0722));
+  return mix(t, vec3(tl), smoothstep(0.6, 1.0, tl)*0.4)*1.12;
+}
+vec3 srgb(vec3 c) { c = clamp(c, 0.0, 1.0); return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4)) - 0.055, step(0.0031308, c)); }
+void main() {
+  vec3 c = texture2D(uSrc, vUv).rgb*uExposure;
+  c += texture2D(uBloom, vUv).rgb*uBloomStr;
+  if (uGrade) c *= uWB;
+  if (uTone == 1) c = agx(c, false); else if (uTone == 2) c = agx(c, true); else if (uTone == 3) c = neutral(c); else c = tonyLike(c);
+  if (uGrade) { float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = max(vec3(l) + uSat*(c - l), 0.0); }
+  gl_FragColor = vec4(srgb(c), 1.0);
+}` });
+
+function makeTargets(w, h) {
+  const hdr = new THREE.WebGLMultisampleRenderTarget(w, h, { type: THREE.HalfFloatType, format: THREE.RGBAFormat });
+  hdr.samples = 4;
+  const bw = Math.max(1, w >> 2), bh = Math.max(1, h >> 2);
+  const opt = { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+  const sw = Math.max(1, w >> 1), sh = Math.max(1, h >> 1);
+  const ssr = new THREE.WebGLRenderTarget(sw, sh, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+  ssr.depthTexture = new THREE.DepthTexture(sw, sh, THREE.FloatType);
+  return { w, h, hdr, ssr, b1: new THREE.WebGLRenderTarget(bw, bh, opt), b2: new THREE.WebGLRenderTarget(bw, bh, opt),
+           lum: new THREE.WebGLRenderTarget(16, 16, { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }) };
+}
+let views = { now: null, new: null };
+const lumBuf = new Float32Array(16*16*4);
+const adapt = { ev: 0, target: 0 };
+
+// ---------- state, controls ----------
+const state = { time: 18.6, cover: 0, rain: 0, view: 'split', L1: true, L2: true, L3: true, L4: true, L5: true, L6: true, L7: true, L8: true, sunSize: 12, tone: 3, bloom: 0.6 };
+const $ = (id) => document.getElementById(id);
+const fmtTime = (t) => { const h = Math.floor(t), m = Math.round((t - h)*60); return String(h).padStart(2,'0') + ':' + String(m === 60 ? 0 : m).padStart(2,'0'); };
+let lightDirty = true, bounceDirty = true, probeDirty = true, bounceTimer = 0;
+function markLight() { lightDirty = true; probeDirty = true; clearTimeout(bounceTimer); bounceTimer = setTimeout(() => { bounceDirty = true; }, 140); }
+$('time').addEventListener('input', e => { state.time = +e.target.value; $('timeOut').textContent = fmtTime(state.time); syncPresets(); markLight(); });
+$('cover').addEventListener('input', e => { state.cover = +e.target.value; $('coverOut').textContent = state.cover.toFixed(2); markLight(); });
+$('sunSize').addEventListener('input', e => { state.sunSize = +e.target.value; $('sunSizeOut').textContent = '×' + state.sunSize; });
+$('tone').addEventListener('change', e => { state.tone = +e.target.value; });
+$('bloom').addEventListener('input', e => { state.bloom = +e.target.value; $('bloomOut').textContent = state.bloom.toFixed(2); });
+for (const k of ['L1','L2','L3','L4','L5','L6','L7','L8']) $(k).addEventListener('change', e => { state[k] = e.target.checked; updateTag(); if (k === 'L1' || k === 'L4') bounceDirty = true; if (k === 'L5') probeDirty = true; });
+function syncPresets() { for (const b of $('presets').children) b.setAttribute('aria-pressed', Math.abs(+b.dataset.t - state.time) < 0.03 ? 'true' : 'false'); }
+$('presets').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.time = +b.dataset.t; $('time').value = state.time; $('timeOut').textContent = fmtTime(state.time); syncPresets(); markLight(); });
+$('views').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.view = b.dataset.v; for (const c of $('views').children) c.setAttribute('aria-pressed', c === b ? 'true' : 'false'); layout(); });
+function updateTag() { const on = ['L1','L2','L3','L4','L5','L6','L7','L8'].filter(k => state[k]); $('newList').textContent = on.length ? on.join(' ') : 'nothing on (same as now)'; }
+syncPresets(); updateTag();
+
+// ---------- rain and wet knobs ----------
+const KNOBS = [
+  { id: 'rainFx', label: 'Rain intensity', who: 'both', min: 0, max: 1, step: 0.01, val: 0 },
+  { id: 'rain', label: 'Fog in rain', who: 'both', min: 0, max: 1, step: 0.01, val: 0 },
+  { id: 'wet', label: 'Wetness (soak)', who: 'both', min: 0, max: 1, step: 0.01, val: 0 },
+  { id: 'puddleShare', label: 'Puddle share', who: 'both', min: 0, max: 1, step: 0.01, val: 0.35 },
+  { id: 'puddleScale', label: 'Puddle size, m', who: 'both', min: 0.1, max: 2, step: 0.05, val: 0.4 },
+  { id: 'rippleScale', label: 'Ripple scale', who: 'both', min: 1, max: 10, step: 0.1, val: 5 },
+  { id: 'rippleStrength', label: 'Ripple strength', who: 'both', min: 0, max: 5, step: 0.1, val: 2 },
+  { id: 'grassRings', label: 'Rings on grass', who: 'both', min: 0, max: 1, step: 0.05, val: 0.5 },
+  { id: 'waveStrength', label: 'Puddle waves', who: 'both', min: 0, max: 2, step: 0.05, val: 0.6 },
+  { id: 'darken', label: 'Wet darken', who: 'both', min: 0.3, max: 1, step: 0.01, val: 0.72 },
+  { id: 'mirror', label: 'Mirror strength', who: 'both', min: 0, max: 2, step: 0.05, val: 1 },
+  { id: 'glintPower', label: 'Glint power', who: 'now', min: 1, max: 200, step: 1, val: 24 },
+  { id: 'glintStrength', label: 'Glint strength', who: 'now', min: 0, max: 2, step: 0.05, val: 0.5 },
+  { id: 'roughWet', label: 'Wet roughness', who: 'new', min: 0.02, max: 0.6, step: 0.01, val: 0.18 },
+  { id: 'roughPuddle', label: 'Puddle roughness', who: 'new', min: 0.01, max: 0.3, step: 0.01, val: 0.04 },
+  { id: 'lampSpec', label: 'Lamp highlights', who: 'new', min: 0, max: 3, step: 0.05, val: 1 },
+];
+const knobBox = $('knobs');
+for (const k of KNOBS) {
+  state[k.id] = k.val;
+  const row = document.createElement('div');
+  row.className = 'knob';
+  row.innerHTML = '<label for="k_' + k.id + '">' + k.label + '<span class="who ' + (k.who === 'new' ? 'new' : '') + '">' + k.who + '</span></label>' +
+    '<input id="k_' + k.id + '" type="range" min="' + k.min + '" max="' + k.max + '" step="' + k.step + '" value="' + k.val + '"><output id="o_' + k.id + '"></output>';
+  knobBox.appendChild(row);
+  const inp = row.querySelector('input'), out = row.querySelector('output');
+  const show = () => { out.textContent = (+state[k.id]).toFixed(k.step < 0.1 ? 2 : k.step < 1 ? 1 : 0); };
+  show();
+  inp.addEventListener('input', () => { state[k.id] = +inp.value; show(); if (k.id === 'rain') { lightDirty = true; probeDirty = true; } });
+  k.set = (v) => { state[k.id] = v; inp.value = v; show(); };
+}
+const WET_PRESETS = {
+  dry: { rainFx: 0, rain: 0, wet: 0, cover: 0 },
+  shower: { rainFx: 0.45, rain: 0.15, wet: 0.6, cover: 0.45 },
+  storm: { rainFx: 1, rain: 0.45, wet: 1, cover: 0.9 },
+  after: { rainFx: 0, rain: 0.05, wet: 1, cover: 0.2 },
+};
+function applySettings(o) {
+  for (const k of KNOBS) if (typeof o[k.id] === 'number') k.set(o[k.id]);
+  if (typeof o.time === 'number') { state.time = o.time; $('time').value = o.time; $('timeOut').textContent = fmtTime(o.time); syncPresets(); }
+  if (typeof o.cover === 'number') { state.cover = o.cover; $('cover').value = o.cover; $('coverOut').textContent = o.cover.toFixed(2); }
+  if (typeof o.sunSize === 'number') { state.sunSize = o.sunSize; $('sunSize').value = o.sunSize; $('sunSizeOut').textContent = '×' + o.sunSize; }
+  if (typeof o.bloom === 'number') { state.bloom = o.bloom; $('bloom').value = o.bloom; $('bloomOut').textContent = o.bloom.toFixed(2); }
+  if (typeof o.tone === 'number') { state.tone = o.tone; $('tone').value = String(o.tone); }
+  for (const L of ['L1','L2','L3','L4','L5','L6','L7','L8']) if (typeof o[L] === 'boolean') { state[L] = o[L]; $(L).checked = o[L]; }
+  updateTag(); markLight(); probeDirty = true;
+}
+$('wetPresets').addEventListener('click', e => { const b = e.target.closest('button'); if (b) applySettings(WET_PRESETS[b.dataset.p]); });
+function settingsJSON() {
+  const o = { page: 'pale-blue-dot lighting mockup', version: 1 };
+  for (const k of ['time','cover','sunSize','bloom','tone','L1','L2','L3','L4','L5','L6','L7','L8']) o[k] = state[k];
+  o.toneName = { 0: 'tony-like', 1: 'agx', 2: 'agx-punchy', 3: 'khronos-neutral' }[state.tone];
+  o.rainAndWet = {};
+  for (const k of KNOBS) o.rainAndWet[k.id] = state[k.id];
+  return JSON.stringify(o, null, 2);
+}
+$('exportBtn').addEventListener('click', () => {
+  const text = settingsJSON();
+  $('json').value = text;
+  const note = $('ioNote');
+  try {
+    navigator.clipboard.writeText(text).then(() => { note.textContent = 'Copied to the clipboard.'; }, () => { $('json').select(); note.textContent = 'Selected below: press copy.'; });
+  } catch (e) { $('json').select(); note.textContent = 'Selected below: press copy.'; }
+});
+$('importBtn').addEventListener('click', () => {
+  try {
+    const o = JSON.parse($('json').value);
+    applySettings(Object.assign({}, o, o.rainAndWet || {}));
+    $('ioNote').textContent = 'Applied.';
+  } catch (e) { $('ioNote').textContent = 'That is not valid JSON: ' + e.message; }
+});
+
+// a small orbit: drag to turn, wheel or pinch to zoom
+const orbit = { target: new THREE.Vector3(23, 7, 22), yaw: -0.35, pitch: 0.26, dist: 34 };
+function placeCamera() {
+  const cp = Math.cos(orbit.pitch);
+  camera.position.set(orbit.target.x + Math.sin(orbit.yaw)*cp*orbit.dist, orbit.target.y + Math.sin(orbit.pitch)*orbit.dist, orbit.target.z - Math.cos(orbit.yaw)*cp*orbit.dist);
+  camera.lookAt(orbit.target);
+}
+// pan: a joystick, or WASD, moves the point the camera turns round, along the ground
+const joy = { x: 0, y: 0, id: null }, keys = new Set();
+const joyEl = $('joy'), joyKnob = $('joyKnob');
+function joyMove(e) {
+  const r = joyEl.getBoundingClientRect();
+  let dx = (e.clientX - (r.left + r.width/2))/(r.width/2), dy = (e.clientY - (r.top + r.height/2))/(r.height/2);
+  const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+  joy.x = dx; joy.y = dy;
+  joyKnob.style.transform = 'translate(' + dx*27 + 'px,' + dy*27 + 'px)';
+}
+joyEl.addEventListener('pointerdown', e => { e.stopPropagation(); joy.id = e.pointerId; joyEl.setPointerCapture(e.pointerId); joyMove(e); });
+joyEl.addEventListener('pointermove', e => { if (e.pointerId === joy.id) joyMove(e); });
+const joyUp = e => { if (e.pointerId !== joy.id) return; joy.id = null; joy.x = joy.y = 0; joyKnob.style.transform = ''; };
+joyEl.addEventListener('pointerup', joyUp); joyEl.addEventListener('pointercancel', joyUp);
+window.addEventListener('keydown', e => { if (e.target.closest && e.target.closest('input, textarea, select')) return; const k = e.key.toLowerCase(); if ('wasdqe'.includes(k) && k.length === 1) { keys.add(k); e.preventDefault(); } });
+window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+window.addEventListener('blur', () => keys.clear());
+function pan(dt) {
+  let fx = -joy.y, rx = joy.x, up = 0;
+  if (keys.has('w')) fx += 1; if (keys.has('s')) fx -= 1; if (keys.has('d')) rx += 1; if (keys.has('a')) rx -= 1;
+  if (keys.has('e')) up += 1; if (keys.has('q')) up -= 1;
+  if (!fx && !rx && !up) return;
+  const speed = 6 + orbit.dist*0.35;
+  const f = new THREE.Vector3(-Math.sin(orbit.yaw), 0, Math.cos(orbit.yaw)), r = new THREE.Vector3(-f.z, 0, f.x);
+  orbit.target.addScaledVector(f, fx*speed*dt).addScaledVector(r, rx*speed*dt);
+  orbit.target.y = Math.min(30, Math.max(1, orbit.target.y + up*speed*0.6*dt));
+  orbit.target.x = Math.min(120, Math.max(-70, orbit.target.x)); orbit.target.z = Math.min(120, Math.max(-70, orbit.target.z));
+}
+const pointers = new Map(); let pinch0 = 0;
+canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); });
+canvas.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  const [px, py] = pointers.get(e.pointerId);
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a[0]-b[0], a[1]-b[1]);
+    if (pinch0) orbit.dist = Math.min(110, Math.max(8, orbit.dist*pinch0/d));
+    pinch0 = d; return;
+  }
+  orbit.yaw += (e.clientX - px)*0.006;
+  orbit.pitch = Math.min(1.35, Math.max(0.03, orbit.pitch + (e.clientY - py)*0.005));
+});
+const up = e => { pointers.delete(e.pointerId); pinch0 = 0; };
+canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+canvas.addEventListener('wheel', e => { e.preventDefault(); orbit.dist = Math.min(110, Math.max(8, orbit.dist*Math.exp(e.deltaY*0.001))); }, { passive: false });
+
+// ---------- the sun's path ----------
+function sunDir(t) {
+  const a = (t - 5.5)/14*Math.PI;
+  const v = new THREE.Vector3(Math.cos(a), Math.sin(a)*0.92, -0.38*Math.sin(a) - 0.12);
+  return v.normalize();
+}
+let sunC = [0,0,0], sunNowC = [0,0,0];
+function updateLight() {
+  const s = sunDir(state.time);
+  const sv = [s.x, s.y, s.z];
+  const sa = sunAir(s.y);
+  sunC = state.L1 ? sa : SUN_NOW.map(v => v*smooth(-0.0145, 0.02, s.y));
+  shared.uSunDir.value.copy(s);
+  shared.uSunAir.value.set(sa[0], sa[1], sa[2]);
+  const shi = sunAir(Math.min(1, s.y + 0.22)).map(v => v*smooth(-0.12, 0.0, s.y)/Math.max(smooth(-0.02, 0.01, Math.min(1, s.y + 0.22)), 1e-3));
+  shared.uSunHigh.value.set(shi[0], shi[1], shi[2]);
+  shared.uCover.value = state.cover;
+  const sh = skySH(sv, state.cover, sunC.map(v => v*(1 - 0.85*state.cover)));
+  sh.forEach((v,i) => shared.uSH.value[i].copy(v));
+  const hz = [0,1,2,3].map(k => skyRad([Math.cos(k*1.57), 0.03, Math.sin(k*1.57)], sv, state.cover));
+  shared.uHaze.value.set(...[0,1,2].map(i => (hz[0][i]+hz[1][i]+hz[2][i]+hz[3][i])/4));
+  terrainMat.uniforms.uElev.value = s.y;
+  // the shadow's light: the sun while it is up, else the moon
+  const moonUp = s.y < 0.0;
+  const moon = new THREE.Vector3(-s.x*0.6 + 0.2, Math.max(0.35, -s.y), -s.z*0.6 - 0.4).normalize();
+  const key = moonUp ? moon : s;
+  terrainMat.uniforms.uKeyDir.value.copy(key);
+  const mk = smooth(0.0, -0.12, s.y);
+  terrainMat.uniforms.uMoon.value.set(0.035*mk, 0.045*mk, 0.07*mk);
+  // the rain fog's light
+  const dayl = smooth(-0.13, 0.20, s.y);
+  shared.uFogDay.value = dayl;
+  const dim = 1 - 0.85*state.cover;
+  if (moonUp) shared.uFogSun.value.set(0.035*mk*dim, 0.045*mk*dim, 0.07*mk*dim);
+  else shared.uFogSun.value.set(sunC[0]*dim, sunC[1]*dim, sunC[2]*dim);
+  shared.uFogDir.value.copy(key);
+  shared.uFogAmb.value.copy(shared.uSH.value[0]).multiplyScalar(0.282095);
+  const clr = [0,1,2].map(i => [0.10,0.20,0.29][i] + ([0.32,0.49,0.57][i] - [0.10,0.20,0.29][i])*Math.max(s.y, 0));
+  const gry = (0.2126*clr[0] + 0.7152*clr[1] + 0.0722*clr[2])*0.75*(0.1 + 0.9*dayl);
+  shared.uFogGrey.value.set(gry, gry, gry*1.04);
+  shared.uRain.value = state.rain;
+  const centre = new THREE.Vector3(24, 6, 24);
+  lightCam.position.copy(centre).addScaledVector(key, 110);
+  lightCam.up.set(0, 0, 1);
+  lightCam.lookAt(centre);
+  lightCam.updateMatrixWorld(); lightCam.updateProjectionMatrix();
+  lightVP.multiplyMatrices(lightCam.projectionMatrix, lightCam.matrixWorldInverse);
+  renderer.setRenderTarget(shadowRT);
+  renderer.clear();
+  renderer.render(shadowScene, lightCam);
+  renderer.setRenderTarget(null);
+}
+
+// ---------- L4: sun bounce, one bounce of sunlight off the voxels ----------
+function march(ox, oy, oz, dx, dy, dz, maxT) {
+  dx = dx || 1e-6; dy = dy || 1e-6; dz = dz || 1e-6;
+  // DDA through the grid; the plain at PLANE_Y outside it
+  let x = Math.floor(ox), y = Math.floor(oy), z = Math.floor(oz);
+  const sx = Math.sign(dx), sy = Math.sign(dy), sz = Math.sign(dz);
+  const tdx = Math.abs(1/dx), tdy = Math.abs(1/dy), tdz = Math.abs(1/dz);
+  let tx = dx > 0 ? (x+1-ox)*tdx : (ox-x)*tdx, ty = dy > 0 ? (y+1-oy)*tdy : (oy-y)*tdy, tz = dz > 0 ? (z+1-oz)*tdz : (oz-z)*tdz;
+  let t = 0, nx = 0, ny = 0, nz = 0;
+  while (t < maxT) {
+    if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; nx = -sx; ny = 0; nz = 0; }
+    else if (ty < tz) { y += sy; t = ty; ty += tdy; nx = 0; ny = -sy; nz = 0; }
+    else { z += sz; t = tz; tz += tdz; nx = 0; ny = 0; nz = -sz; }
+    if (y >= H && dy >= 0) return null;
+    const m = get(x, y, z);
+    if (m) return { m, t, x: ox + dx*t, y: oy + dy*t, z: oz + dz*t, nx, ny, nz };
+    if (!inside(x, Math.min(y, H-1), z) && y >= PLANE_Y && dy >= 0) return null;
+  }
+  return null;
+}
+const HEMI = []; { const n = 14; for (let i=0;i<n;i++) { const u = (i+0.5)/n, p = i*2.399963, r = Math.sqrt(u); HEMI.push([Math.cos(p)*r, Math.sqrt(1-u), Math.sin(p)*r]); } }
+function computeBounce() {
+  bounce.fill(0);
+  const s = shared.uSunDir.value;
+  if (s.y > -0.01) {
+    const dim = 1 - 0.85*state.cover;
+    const sc = sunC.map(v => v*dim);
+    for (const f of faceList) {
+      const [nx,ny,nz] = f.n;
+      // a tangent frame round the face's normal
+      const tx = nx !== 0 ? 0 : 1, ty = 0, tz = nx !== 0 ? 1 : 0;
+      const bx = ny*tz - nz*ty, by = nz*tx - nx*tz, bz = nx*ty - ny*tx;
+      let r = 0, g = 0, b = 0;
+      for (const [hx, hz2, hy] of HEMI.map(d => [d[0], d[1], d[2]])) {
+        const dx = tx*hx + bx*hy + nx*hz2, dy = ty*hx + by*hy + ny*hz2, dz = tz*hx + bz*hy + nz*hz2;
+        const hit = march(f.c[0] + nx*0.02, f.c[1] + ny*0.02, f.c[2] + nz*0.02, dx, dy, dz, 10);
+        if (!hit || hit.m === LANTERN) continue;
+        const nl = hit.nx*s.x + hit.ny*s.y + hit.nz*s.z;
+        if (nl <= 0) continue;
+        if (march(hit.x + hit.nx*0.02, hit.y + hit.ny*0.02, hit.z + hit.nz*0.02, s.x, s.y, s.z, 60)) continue;
+        const a = ALB[hit.m];
+        const k = nl/(1 + 0.04*hit.t*hit.t);
+        r += a[0]*sc[0]*k; g += a[1]*sc[1]*k; b += a[2]*sc[2]*k;
+      }
+      const n = HEMI.length;
+      for (let v=0; v<4; v++) { const o = (f.v0+v)*3; bounce[o] = r/n; bounce[o+1] = g/n; bounce[o+2] = b/n; }
+    }
+  }
+  bounceAttr.needsUpdate = true;
+}
+
+// ---------- L7: the lamp bake, time-sliced ----------
+// Per vertex: every lamp in reach that the vertex can see, by N.L and a
+// windowed inverse square. Then per face: one bounce, the lamp light the faces
+// around it send back in their own colour. A few milliseconds a frame; the
+// result fades in over the flood-fill light when it is complete, never in
+// pieces.
+const lampArr = new Float32Array(nVerts*4);
+const lampAttr = new THREE.BufferAttribute(lampArr, 4);
+geo.setAttribute('lamp', lampAttr);
+const LAMP_R = 16, LAMP_GAIN = 2.4;
+const faceDirect = new Float32Array(faceList.length);
+const faceKey = new Map();
+faceList.forEach((f, i) => {
+  const vx = Math.floor(f.c[0] - f.n[0]*0.5), vy = Math.floor(f.c[1] - f.n[1]*0.5), vz = Math.floor(f.c[2] - f.n[2]*0.5);
+  faceKey.set(vx + ',' + vy + ',' + vz + ',' + f.n.join(','), i);
+});
+function lampDirect(px, py, pz, nx, ny, nz) {
+  let sum = 0;
+  for (const [lx, ly, lz] of lanterns) {
+    let dx = lx + 0.5 - px, dy = ly + 0.5 - py, dz = lz + 0.5 - pz;
+    const d = Math.hypot(dx, dy, dz);
+    if (d > LAMP_R || d < 1e-3) continue;
+    dx /= d; dy /= d; dz /= d;
+    const nl = dx*nx + dy*ny + dz*nz;
+    if (nl <= 0) continue;
+    const hit = march(px + nx*0.03, py + ny*0.03, pz + nz*0.03, dx, dy, dz, d - 0.45);
+    if (hit && hit.m !== LANTERN) continue;
+    const w = Math.max(0, 1 - Math.pow(d/LAMP_R, 4));
+    sum += nl*w*w/(1 + (d/2.2)*(d/2.2))*LAMP_GAIN;
+  }
+  return sum;
+}
+const bake = { phase: 0, i: 0, frames: 0, ms: 0, done: false, mix: 0 };
+function bakeSlice(budgetMs) {
+  if (bake.done) return;
+  const t0 = performance.now();
+  bake.frames++;
+  while (!bake.done && performance.now() - t0 < budgetMs) {
+    if (bake.phase === 0) {
+      const f = faceList[bake.i];
+      const [nx, ny, nz] = f.n;
+      let acc = 0;
+      for (let v = 0; v < 4; v++) {
+        const o = (f.v0 + v)*3;
+        const px = pos[o]*0.85 + f.c[0]*0.15, py = pos[o+1]*0.85 + f.c[1]*0.15, pz = pos[o+2]*0.85 + f.c[2]*0.15;
+        const L = lampDirect(px, py, pz, nx, ny, nz);
+        lampArr[(f.v0 + v)*4 + 3] = L; acc += L;
+      }
+      faceDirect[bake.i] = acc/4;
+      if (++bake.i >= faceList.length) { bake.phase = 1; bake.i = 0; }
+    } else {
+      const f = faceList[bake.i];
+      const [nx, ny, nz] = f.n;
+      const tx = nx !== 0 ? 0 : 1, tz = nx !== 0 ? 1 : 0;
+      const bx = -ny*tz, by = nz*tx - nx*tz, bz = ny*tx;
+      let r = 0, g = 0, b = 0;
+      for (const [hx, hn, hy] of HEMI) {
+        const dx = tx*hx + bx*hy + nx*hn, dy = by*hy + ny*hn, dz = tz*hx + bz*hy + nz*hn;
+        const hit = march(f.c[0] + nx*0.02, f.c[1] + ny*0.02, f.c[2] + nz*0.02, dx, dy, dz, 8);
+        if (!hit || hit.m === LANTERN) continue;
+        const k = faceKey.get(Math.floor(hit.x - hit.nx*0.5) + ',' + Math.floor(hit.y - hit.ny*0.5) + ',' + Math.floor(hit.z - hit.nz*0.5) + ',' + hit.nx + ',' + hit.ny + ',' + hit.nz);
+        if (k === undefined) continue;
+        const a = ALB[hit.m], L = faceDirect[k];
+        r += a[0]*L; g += a[1]*L; b += a[2]*L;
+      }
+      const n = HEMI.length;
+      for (let v = 0; v < 4; v++) { const o = (f.v0 + v)*4; lampArr[o] = r/n; lampArr[o+1] = g/n; lampArr[o+2] = b/n; }
+      if (++bake.i >= faceList.length) { bake.done = true; lampAttr.needsUpdate = true; }
+    }
+  }
+  bake.ms += performance.now() - t0;
+  const pct = bake.done ? 100 : Math.floor(100*(bake.phase*faceList.length + bake.i)/(2*faceList.length));
+  $('bakeOut').textContent = bake.done ? 'baked: ' + bake.frames + ' frames, 4 ms each' : 'baking ' + pct + '%';
+}
+
+// ---------- layout ----------
+let layoutMode = 'side', vw = 0, vh = 0;
+function layout() {
+  const w = stage.clientWidth;
+  const both = state.view === 'split';
+  layoutMode = both && w < 720 ? 'stack' : 'side';
+  const cols = both && layoutMode === 'side' ? 2 : 1;
+  const rows = both && layoutMode === 'stack' ? 2 : 1;
+  const cellW = w/cols;
+  const cellH = Math.round(Math.min(window.innerHeight*(rows === 2 ? 0.3 : 0.52), cellW*(cols === 2 ? 0.8 : 0.56)));
+  canvas.style.height = (cellH*rows) + 'px';
+  document.querySelector('.tabbar').style.top = (cellH*rows + 2) + 'px';
+  renderer.setSize(w, cellH*rows, false);
+  const pr = renderer.getPixelRatio();
+  vw = Math.round(cellW*pr); vh = Math.round(cellH*pr);
+  for (const k of ['now', 'new']) { if (views[k]) for (const t of ['hdr','ssr','b1','b2','lum']) views[k][t].dispose(); views[k] = makeTargets(vw, vh); }
+  camera.aspect = cellW/cellH; camera.updateProjectionMatrix();
+  const tn = $('tagNow'), tw = $('tagNew');
+  tn.hidden = state.view === 'new'; tw.hidden = state.view === 'now';
+  tn.style.left = '10px'; tn.style.top = '10px';
+  if (both && layoutMode === 'side') { tw.style.left = (cellW + 10) + 'px'; tw.style.top = '10px'; }
+  else if (both) { tw.style.left = '10px'; tw.style.top = (cellH + 10) + 'px'; }
+  else { tw.style.left = '10px'; tw.style.top = '10px'; }
+}
+window.addEventListener('resize', layout);
+
+function pass(mat, target) { quad.material = mat; renderer.setRenderTarget(target); renderer.render(quadScene, quadCam); }
+let frame = 0, last = performance.now();
+function renderView(which, x, y) {
+  const V = views[which];
+  const isNew = which === 'new';
+  shared.uModel.value = isNew ? 1 : 0;
+  for (const k of ['L1','L2','L3','L4','L5','L6','L7','L8']) terrainMat.uniforms['u'+k].value = state[k];
+  terrainMat.uniforms.uEnv.value = probeRT.texture;
+  terrainMat.uniforms.uSunSize.value = state.sunSize;
+  waterMul.uniforms.uL5.value = state.L5; waterAdd.uniforms.uL5.value = state.L5; ballMat.uniforms.uL5.value = state.L5;
+  const ssrOn = isNew && state.L8;
+  // unbind first: a sampler left on the target being drawn is a feedback loop
+  shared.uSSROn.value = false; shared.uSSRCol.value = null; shared.uSSRDepth.value = null;
+  if (ssrOn) {
+    renderer.setRenderTarget(V.ssr);
+    renderer.clear();
+    renderer.render(scene, camera);
+    camera.updateMatrixWorld();
+    shared.uVP.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    shared.uNF.value.set(camera.near, camera.far);
+    shared.uSSRCol.value = V.ssr.texture; shared.uSSRDepth.value = V.ssr.depthTexture;
+    shared.uSSROn.value = true;
+  }
+  renderer.setRenderTarget(V.hdr);
+  renderer.clear();
+  renderer.render(scene, camera);
+  shared.uSSROn.value = false;
+  const hdrTex = V.hdr.texture;
+  const fx = isNew && state.L6;
+  let exposure = 1;
+  if (fx) {
+    if (frame % 4 === 0) {
+      lumMat.uniforms.uSrc.value = hdrTex; pass(lumMat, V.lum);
+      try {
+        renderer.readRenderTargetPixels(V.lum, 0, 0, 16, 16, lumBuf);
+        let s = 0; for (let i=0;i<256;i++) s += lumBuf[i*4];
+        const avg = Math.exp(s/256);
+        // at night the eye adapts less far, so lamp-lit walls stay under the curve's shoulder and keep their colour
+        const night = 1 - smooth(-0.12, 0.02, shared.uSunDir.value.y);
+        adapt.target = Math.min(2.0 - 1.2*night, Math.max(-1.0, Math.log2(0.16/Math.max(avg, 1e-5))*0.62));
+      } catch (e) { adapt.target = 0; }
+    }
+    exposure = Math.pow(2, adapt.ev);
+    brightMat.uniforms.uSrc.value = hdrTex; brightMat.uniforms.uExposure.value = exposure;
+    brightMat.uniforms.uTexel.value.set(1/V.w, 1/V.h);
+    pass(brightMat, V.b1);
+    for (let i=0;i<4;i++) {
+      blurMat.uniforms.uSrc.value = V.b1.texture; blurMat.uniforms.uDir.value.set((1+2*i)/V.b1.width, 0); pass(blurMat, V.b2);
+      blurMat.uniforms.uSrc.value = V.b2.texture; blurMat.uniforms.uDir.value.set(0, (1+2*i)/V.b1.height); pass(blurMat, V.b1);
+    }
+  }
+  const s = shared.uSunDir.value.y;
+  const golden = smooth(0.35, 0.05, s)*smooth(-0.06, 0.03, s);
+  const night = 1 - smooth(-0.12, 0.02, s);
+  const u = finalMat.uniforms;
+  u.uSrc.value = hdrTex; u.uBloom.value = V.b1.texture; u.uExposure.value = exposure; u.uBloomStr.value = fx ? state.bloom : 0;
+  u.uTone.value = fx ? state.tone : 0; u.uGrade.value = fx;
+  // Night is cooled by the moon's own colour, not by the grade: a grade that
+  // cools the frame cools the lanterns with it.
+  u.uWB.value.set(1 + 0.07*golden + 0.03*night, 1 + 0.005*golden, 1 - 0.10*golden - 0.04*night);
+  u.uSat.value = 1.08 - 0.05*night - 0.15*state.cover;
+  quad.material = finalMat;
+  renderer.setRenderTarget(null);
+  const cssW = vw/renderer.getPixelRatio(), cssH = vh/renderer.getPixelRatio();
+  renderer.setViewport(x*cssW, y*cssH, cssW, cssH);
+  renderer.setScissor(x*cssW, y*cssH, cssW, cssH);
+  renderer.setScissorTest(true);
+  renderer.render(quadScene, quadCam);
+  renderer.setScissorTest(false);
+}
+function tick(now) {
+  const dt = Math.min(0.1, (now - last)/1000); last = now;
+  waterMul.uniforms.uTime.value = now/1000; waterAdd.uniforms.uTime.value = now/1000;
+  const tu = terrainMat.uniforms;
+  tu.uWetA.value.set(state.wet, state.puddleShare, state.puddleScale, state.rippleScale);
+  tu.uWetB.value.set(state.rippleStrength, state.grassRings, state.waveStrength, state.darken);
+  tu.uWetC.value.set(state.mirror, state.glintPower, state.glintStrength, state.roughWet);
+  tu.uWetD.value.set(state.roughPuddle, state.lampSpec, state.rainFx, now/1000);
+  rainMat.uniforms.uT.value = now/1000; rainMat.uniforms.uAmt.value = state.rainFx; shared.uRainAmt.value = state.rainFx;
+  if (shared.uRain.value !== state.rain) { shared.uRain.value = state.rain; }
+  adapt.ev += (adapt.target - adapt.ev)*(1 - Math.exp(-dt*2.0));
+  $('evOut').textContent = state.L6 ? (adapt.ev >= 0 ? '+' : '') + adapt.ev.toFixed(1) + ' EV' : 'fixed';
+  if (lightDirty) { updateLight(); lightDirty = false; }
+  if (bounceDirty) { computeBounce(); bounceDirty = false; }
+  bakeSlice(4);
+  if (bake.done && bake.mix < 1) { bake.mix = Math.min(1, bake.mix + dt*2); terrainMat.uniforms.uLampMix.value = bake.mix; }
+  if (probeDirty && state.L5) {
+    shared.uModel.value = 1;
+    for (const k of ['L1','L2','L3','L4','L6','L7']) terrainMat.uniforms['u'+k].value = state[k];
+    terrainMat.uniforms.uEnv.value = null; terrainMat.uniforms.uL5.value = false;
+    terrainMat.uniforms.uInProbe.value = true;
+    probeCam.update(renderer, scene); probeDirty = false;
+    terrainMat.uniforms.uInProbe.value = false;
+  }
+  pan(dt);
+  placeCamera();
+  renderer.setRenderTarget(null); renderer.setScissorTest(false); renderer.clear();
+  const both = state.view === 'split';
+  if (both && layoutMode === 'side') { renderView('now', 0, 0); renderView('new', 1, 0); }
+  else if (both) { renderView('now', 0, 1); renderView('new', 0, 0); }
+  else renderView(state.view, 0, 0);
+  frame++;
+  requestAnimationFrame(tick);
+}
+layout();
+requestAnimationFrame(tick);
+})();
+</script>

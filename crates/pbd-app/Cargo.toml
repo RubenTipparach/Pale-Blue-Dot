@@ -25,6 +25,10 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 serde = { version = "1", features = ["derive"] }
 gltf = { version = "1.4.1", default-features = false, features = ["names", "utils"], optional = true }
 serde_json = { version = "1", optional = true }
+# The clouds' GPU timer writes timestamps at pass boundaries, the form Metal
+# supports (`planet_cloud_timer.rs`), and needs wgpu's query set, which Bevy
+# does not re-export. The same wgpu Bevy already carries.
+wgpu = { version = "27", default-features = false }
 
 [dev-dependencies]
 # The shipped WGSL is parsed and validated on the CPU in tests, so a shader

@@ -152,6 +152,20 @@ pub struct ColumnTier {
     /// baked from it vertex by vertex, watches to bake again
     /// (`cities-in-the-world`, "Finding: the stair towers have no light").
     relit: u64,
+    /// Every light the last bake lit from, where it stands: what the new
+    /// lighting model's highlights, reflections and rain glow read
+    /// (`lighting-model`), so they find the same lamps the field does.
+    lamps: Vec<LampSpot>,
+}
+
+/// One emitting cell: its column's unit direction, the middle of its layer
+/// in metres above the planet's radius, and its level, 0..`light::MAX`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LampSpot {
+    pub slot: usize,
+    pub direction: Vec3,
+    pub altitude: f32,
+    pub level: u8,
 }
 
 impl ColumnTier {
@@ -167,7 +181,22 @@ impl ColumnTier {
             centres: Vec::new(),
             sides: Vec::new(),
             relit: 0,
+            lamps: Vec::new(),
         }
+    }
+
+    /// Whether any of the tier's columns lies within `angle` radians of
+    /// `direction`: where none does, every point there samples open sky
+    /// whatever the tier holds (`light::sample`), so a bake from it changes
+    /// nothing (`frame-budget` 4.3).
+    pub fn reaches(&self, direction: Vec3, angle: f32) -> bool {
+        let cos = angle.min(std::f32::consts::PI).cos();
+        self.centres.iter().any(|c| c.dot(direction) >= cos)
+    }
+
+    /// Every light of the last bake.
+    pub fn lamps(&self) -> &[LampSpot] {
+        &self.lamps
     }
 
     /// How many times the field has been baked.
@@ -370,6 +399,51 @@ impl ColumnTier {
         words
     }
 
+    /// Every slot's unit direction, w spare: what the shader's walk over the
+    /// columns steps between cells by (`lighting-model` L8).
+    pub fn gpu_centres(&self) -> Vec<[f32; 4]> {
+        self.centres.iter().map(|c| [c.x, c.y, c.z, 0.0]).collect()
+    }
+
+    /// `lighting-model` L4: the sun's bounce over this tier for a sun toward
+    /// `sun` (planet frame) of colour `light`, slot for slot.
+    pub fn bake_bounce(&self, sun: Vec3, light: Vec3) -> pbd_core::bounce::Field {
+        pbd_core::bounce::bake(
+            &pbd_core::bounce::Region {
+                columns: &self.columns,
+                neighbors: &self.sides,
+                centres: &self.centres,
+                radius: PLANET_RADIUS,
+            },
+            sun,
+            light,
+        )
+    }
+
+    /// `lighting-model` L7: the lamp bake over this tier, from the lamps of
+    /// its last light bake (not the glowing flowers, which keep the flood).
+    pub fn bake_lamps(&self) -> pbd_core::lamp_bake::LampField {
+        let lamps: Vec<pbd_core::lamp_bake::Lamp> = self
+            .lamps
+            .iter()
+            .filter(|l| l.level > flora::GLOW_FLOWER_LEVEL)
+            .map(|l| pbd_core::lamp_bake::Lamp {
+                slot: l.slot,
+                at: l.direction * (PLANET_RADIUS + l.altitude),
+                level: l.level as f32 / 14.0,
+            })
+            .collect();
+        pbd_core::lamp_bake::bake(
+            &pbd_core::bounce::Region {
+                columns: &self.columns,
+                neighbors: &self.sides,
+                centres: &self.centres,
+                radius: PLANET_RADIUS,
+            },
+            &lamps,
+        )
+    }
+
     /// Re-light the whole tier from its columns.
     ///
     /// The whole tier rather than the reference's bounded incremental pass,
@@ -383,6 +457,18 @@ impl ColumnTier {
         self.relit += 1;
         self.sides = self.neighbor_slots();
         let emitters = self.emitters();
+        self.lamps = emitters
+            .iter()
+            .filter_map(|e| {
+                let direction = *self.centres.get(e.column as usize)?;
+                Some(LampSpot {
+                    slot: e.column as usize,
+                    direction,
+                    altitude: column::layer_altitude(e.layer as usize) + 0.5,
+                    level: e.level,
+                })
+            })
+            .collect();
         self.light = light::bake(
             &light::Region {
                 columns: &self.columns,
@@ -752,6 +838,7 @@ pub fn build(
         centres,
         sides: Vec::new(),
         relit: 0,
+        lamps: Vec::new(),
     };
     // The light comes last, because it is a function of the finished columns:
     // the rim's solid ring and every edit are already in them, and lighting
@@ -1828,6 +1915,7 @@ mod tests {
             centres: vec![Vec3::Y; N as usize],
             sides: Vec::new(),
             relit: 0,
+            lamps: Vec::new(),
         };
         tier.relight();
         assert_eq!(tier.light_at(0, 41).block(), 0, "the lantern is out by day");
@@ -2055,6 +2143,7 @@ mod tests {
             centres: vec![Vec3::Y; N],
             sides: Vec::new(),
             relit: 0,
+            lamps: Vec::new(),
         };
         tier.relight();
         let emits = |tier: &ColumnTier, slot: u32| {
