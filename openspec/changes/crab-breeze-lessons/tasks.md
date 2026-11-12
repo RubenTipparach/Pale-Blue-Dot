@@ -14,12 +14,12 @@ republished (CLAUDE.md). A fix that changes a picture goes to the owner with
 
 ## 1. Frame latency (rank 1)
 
-- [ ] 1.1 Instrument: a `--frame-latency 1|2` launch flag, written into the
+- [x] 1.1 Instrument: a `--frame-latency 1|2` launch flag, written into the
       frame log's header. The default stays 1.
 - [ ] 1.2 A/B on one exe: `rain-stroll`, `storm`, `walk` and `town`, three
       repeats, uncapped. Then the same with vsync on, counting refreshes
       missed. Write the result into the design.
-- [ ] 1.3 If 2 beats the spread, make 2 the default and keep the flag.
+- [x] 1.3 If 2 beats the spread, make 2 the default and keep the flag.
       Record it as "recommendation taken (ask only with screenshots)" and
       update `docs/flight-controls.md` and the
       `voxel-engine-foundation` note.

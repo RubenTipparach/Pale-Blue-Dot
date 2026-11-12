@@ -79,8 +79,11 @@ pub struct Launch {
     /// `--no-vsync`: present unpaced, a measurement instrument, so a frame's
     /// time is its work and not the display's refresh.
     pub no_vsync: bool,
-    /// `--frame-latency 1|2`: how many frames the swapchain may queue, an
-    /// instrument (`crab-breeze-lessons` 1.1). The default stays 1.
+    /// `--frame-latency 1|2`: how many frames the swapchain may queue
+    /// (`crab-breeze-lessons` 1.1). The default is 2 (1.3): measured on the
+    /// owner's desktop it took 3.6 ms off p50 in flight and on foot in the
+    /// rain, for up to one frame more between input and photon. 1 stays for
+    /// a player who prefers the lower latency.
     pub frame_latency: u32,
     pub view: String,
     pub frames: u32,
@@ -254,7 +257,7 @@ impl Launch {
             sail_for: None,
             frame_graph: false,
             no_vsync: false,
-            frame_latency: 1,
+            frame_latency: 2,
             view: "coast".into(),
             frames: 180,
             dig: 0,
@@ -861,8 +864,9 @@ pub fn run(args: &[String]) {
                     } else {
                         PresentMode::AutoVsync
                     },
-                    // Keep interactive input close to presentation instead of
-                    // queuing multiple old camera poses behind the current one.
+                    // Two frames in flight by default (`crab-breeze-lessons`
+                    // 1.3): with one, the render world waited on the GPU's
+                    // previous frame before it could encode the next.
                     desired_maximum_frame_latency: if launch.capture.is_some() {
                         None
                     } else {

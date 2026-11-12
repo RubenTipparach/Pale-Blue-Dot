@@ -98,8 +98,10 @@ returning to walking places the player on dry ground below or nearby.
 
 Both manual cameras apply raw mouse motion at 0.002 radians per pixel, without
 easing or pose interpolation. Interactive presentation uses VSync and requests
-a maximum frame latency of one from the backend; this is a queue hint, not a
-measured end-to-end latency guarantee. There is no additional main-thread frame
+a maximum frame latency of two from the backend (`--frame-latency 1` asks for
+one; `crab-breeze-lessons` 1.3 measured two 3.6 ms faster at p50 on the
+owner's desktop); this is a queue hint, not a measured end-to-end latency
+guarantee. There is no additional main-thread frame
 pacer. Capture runs remain uncapped with VSync disabled.
 
 The live GPU path uses a visible-ID buffer sized for every prototype column;
