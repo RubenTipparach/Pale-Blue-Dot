@@ -1356,8 +1356,7 @@ impl LightingSettings {
     /// penumbra's metres per metre from caster to receiver; zero while
     /// contact-hardening shadows are off (or today's model draws).
     pub fn shadow_spread(&self) -> f32 {
-        let off = std::env::var("PBD_SOFT_SHADOWS").is_ok_and(|v| v == "0");
-        if !self.new_model_on() || !self.soft_shadows || off {
+        if !self.new_model_on() || !self.soft_shadows || ENV.soft_shadows_off {
             return 0.0;
         }
         (pbd_core::sky_light::SUN_RADIUS_RAD * self.sun_size).tan()
@@ -1365,14 +1364,12 @@ impl LightingSettings {
 
     /// L7: whether the lamps are baked and drawn from the bake.
     pub fn lamp_bake_on(&self) -> bool {
-        let off = std::env::var("PBD_LAMP_BAKE").is_ok_and(|v| v == "0");
-        self.new_model_on() && self.lamp_bake && !off
+        self.new_model_on() && self.lamp_bake && !ENV.lamp_bake_off
     }
 
     /// L4: whether the sun's bounce is baked and drawn.
     pub fn bounce_on(&self) -> bool {
-        let off = std::env::var("PBD_BOUNCE").is_ok_and(|v| v == "0");
-        self.new_model_on() && self.bounce && !off
+        self.new_model_on() && self.bounce && !ENV.bounce_off
     }
 
     /// L8: whether any part of the reflections runs, after the
@@ -1411,11 +1408,7 @@ impl LightingSettings {
 
     /// Whether the new model draws, after the environment's say.
     pub fn new_model_on(&self) -> bool {
-        match std::env::var("PBD_LIGHTING").ok().as_deref() {
-            Some("today") => false,
-            Some("new") => true,
-            _ => self.new_model,
-        }
+        ENV.lighting.unwrap_or(self.new_model)
     }
 }
 
@@ -1472,6 +1465,31 @@ impl ReflectOff {
         self.walk && self.screen && self.sea && self.capture
     }
 }
+
+/// The lighting model's A/B switches (`PBD_LIGHTING`, `PBD_SOFT_SHADOWS`,
+/// `PBD_LAMP_BAKE`, `PBD_BOUNCE`), read once (`lighting-perf` 2.5): they were
+/// read on every call, several times a frame, and the environment does not
+/// change in a run.
+struct LightingEnv {
+    lighting: Option<bool>,
+    soft_shadows_off: bool,
+    lamp_bake_off: bool,
+    bounce_off: bool,
+}
+
+static ENV: std::sync::LazyLock<LightingEnv> = std::sync::LazyLock::new(|| {
+    let zero = |name: &str| std::env::var(name).is_ok_and(|v| v == "0");
+    LightingEnv {
+        lighting: match std::env::var("PBD_LIGHTING").ok().as_deref() {
+            Some("today") => Some(false),
+            Some("new") => Some(true),
+            _ => None,
+        },
+        soft_shadows_off: zero("PBD_SOFT_SHADOWS"),
+        lamp_bake_off: zero("PBD_LAMP_BAKE"),
+        bounce_off: zero("PBD_BOUNCE"),
+    }
+});
 
 static REFLECT_OFF: std::sync::LazyLock<ReflectOff> =
     std::sync::LazyLock::new(|| ReflectOff::parse(std::env::var("PBD_REFLECT").ok().as_deref()));

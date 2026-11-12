@@ -755,23 +755,25 @@ pub(crate) fn near_lamps(
     camera: Vec3,
     reach: f32,
 ) -> [Vec4; NEAR_LAMPS] {
-    let mut found: Vec<(f32, Vec4)> = tier
+    // The nearest few, kept in order as they are found (`lighting-perf`
+    // 2.5): no list of every lamp in reach is made and sorted each frame.
+    // A tie keeps the lamp found first, as the stable sort it replaces did.
+    let mut near = [(f32::INFINITY, Vec4::ZERO); NEAR_LAMPS];
+    for l in tier
         .lamps()
         .iter()
         .filter(|l| l.level > pbd_core::flora::GLOW_FLOWER_LEVEL)
-        .filter_map(|l| {
-            let at = l.direction * (PLANET_RADIUS + l.altitude);
-            let d = at.distance_squared(camera);
-            (d < reach * reach)
-                .then(|| (d, at.extend(l.level as f32 / pbd_core::light::MAX as f32)))
-        })
-        .collect();
-    found.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let mut out = [Vec4::ZERO; NEAR_LAMPS];
-    for (slot, (_, lamp)) in out.iter_mut().zip(found) {
-        *slot = lamp;
+    {
+        let at = l.direction * (PLANET_RADIUS + l.altitude);
+        let d = at.distance_squared(camera);
+        if d >= reach * reach || d >= near[NEAR_LAMPS - 1].0 {
+            continue;
+        }
+        let at_rank = near.iter().position(|n| d < n.0).unwrap_or(NEAR_LAMPS - 1);
+        near.copy_within(at_rank..NEAR_LAMPS - 1, at_rank + 1);
+        near[at_rank] = (d, at.extend(l.level as f32 / pbd_core::light::MAX as f32));
     }
-    out
+    near.map(|(_, lamp)| lamp)
 }
 
 /// The sky's light (`lighting-model` L2) for a sun at elevation sine `e`: a
