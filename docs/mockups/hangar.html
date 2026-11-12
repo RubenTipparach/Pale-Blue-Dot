@@ -1,0 +1,1160 @@
+<title>Hangar and Chibi Aircraft</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the airfield opens the page as a wide 3D stage; the builder below is a two-pane tool (grid and livery left, live preview and stats right); then the reference sections. House style of ship-crafting.html (M4). */
+:root{
+  color-scheme: dark;
+  --ground:#0b1014;
+  --panel:#111a20;
+  --panel-2:#0d151a;
+  --line:rgba(130,175,180,.24);
+  --line-2:rgba(150,190,195,.5);
+  --ink:#e4ecee;
+  --muted:#94a8ad;
+  --amber:#e8b040;
+  --ember:#ff8a3d;
+  --sky:#8fc3d8;
+  --warn:#ff6b57;
+  --ok:#8fdc9a;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.55}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px;display:grid;gap:44px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;margin:0;text-wrap:balance}
+h1{font-size:clamp(34px,6vw,58px)}
+h2{font-size:28px;display:flex;gap:12px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:13px;color:var(--amber);font-weight:600;letter-spacing:0}
+h3{font-size:19px;font-weight:600}
+p{margin:0;max-width:74ch}
+.eyebrow{font-family:var(--mono);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:12px;color:#6fc3b8}
+.tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
+.tag.plain{border-color:var(--line-2);color:var(--muted)}
+section{display:grid;gap:16px;min-width:0}
+.lede{display:grid;gap:14px}
+.lede p{font-size:17px}
+.honest{border:1px dashed var(--line-2);border-radius:6px;padding:12px 14px;color:var(--muted);font-size:14px;max-width:none}
+.honest b{color:var(--ink);font-weight:600}
+code,.mono{font-family:var(--mono);font-size:.86em}
+code{color:var(--sky)}
+a{color:var(--amber)}
+.muted{color:var(--muted)}
+button{font:inherit}
+.seg{display:flex;flex-wrap:wrap;gap:5px}
+.seg button,.pbtn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-family:var(--display);font-size:14.5px;letter-spacing:.05em;text-align:center;color:var(--ink);background:rgba(18,17,13,.6)}
+.seg button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.14)}
+.seg button:hover,.pbtn:hover{border-color:rgba(240,180,60,.55)}
+.seg button:focus-visible,.pbtn:focus-visible,.cell:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.pbtn.go{background:var(--amber);color:var(--ground);border-color:var(--amber)}
+
+/* stage */
+.stage{position:relative;height:min(68vh,640px);min-height:380px;border-radius:8px;overflow:hidden;border:1px solid var(--line-2);background:#0b0d12}
+#yard{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#yard:active{cursor:grabbing}
+.ov{position:absolute;background:rgba(18,17,13,.84);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:10px;display:grid;gap:8px}
+.ov.tl{right:12px;top:30px;max-width:calc(100% - 24px)}
+/* the game's HUD: the monospace debug line, top left, and the hotbar, bottom centre */
+.hudline{position:absolute;left:8px;top:6px;font:600 12px var(--mono);color:#fff;text-shadow:0 1px 0 #000,1px 0 0 #000;pointer-events:none}
+.hudbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px;align-items:center;pointer-events:none}
+.hudbar .hs{width:42px;height:42px;display:grid;place-items:center;background:rgba(10,18,22,.72);border:1px solid rgba(150,190,195,.55);position:relative}
+.hudbar .hs.sel{border:2px solid #e8b040;width:50px;height:50px;margin-right:8px}
+.hudbar .hs img{width:32px;height:32px;image-rendering:pixelated}
+.hudbar .hs .c{position:absolute;right:2px;bottom:0;font:600 10px var(--mono);color:#fff;text-shadow:0 1px 0 #000}
+@media (max-width:760px){.hudbar{display:none}}
+.shot .stage{position:fixed;inset:0;height:auto;min-height:0;z-index:50;border-radius:0}
+.ov.br{right:12px;bottom:12px;max-width:min(360px,calc(100% - 24px));font-size:13px;color:var(--muted)}
+.ov.br b{color:var(--ink);font-weight:600}
+.stage .loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);letter-spacing:.1em;color:var(--muted)}
+
+/* builder */
+.builder{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;align-items:start}
+.bpane{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:10px;min-width:0}
+.palette{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.cell img.aft{transform:rotate(90deg)}
+.palette button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:1px;padding:4px 2px;border:1px solid rgba(150,190,195,.45);border-radius:0;background:var(--panel-2);font-size:11.5px;text-align:center;line-height:1.15}
+.palette button img{width:32px;height:32px}
+img{image-rendering:pixelated}
+.palette button kbd{font-family:var(--mono);font-size:10px;color:var(--amber)}
+.palette button[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.14)}
+.palette button:focus-visible{outline:2px solid var(--amber)}
+.gridwrap{overflow-x:auto}
+.shipgrid{display:grid;grid-template-columns:repeat(12,44px);grid-auto-rows:44px;gap:2px;user-select:none;-webkit-user-select:none;touch-action:none;width:max-content;padding:4px;border-radius:4px;
+  background:repeating-linear-gradient(0deg,transparent 0 44px,rgba(143,195,216,.0) 44px 46px),#101317;border:1px solid rgba(143,195,216,.25)}
+.cell{position:relative;border:1px dashed rgba(143,195,216,.18);border-radius:2px;display:grid;place-items:center;cursor:crosshair}
+.cell img{width:32px;height:32px;pointer-events:none}
+.cell.bad{box-shadow:inset 0 0 0 2px var(--warn)}
+.cell.filled{border-style:solid;border-color:rgba(226,206,160,.30);background:rgba(226,206,160,.05)}
+.fwd{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px}
+.stat{display:grid;gap:1px;min-width:0}
+.stat .k{font-family:var(--display);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat .v small{font-size:11px;font-weight:400;color:var(--muted);margin-left:3px}
+.stat .bar{height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+.stat .bar i{display:block;height:100%;background:var(--sky)}
+pre.ron{margin:0;font-family:var(--mono);font-size:12.5px;line-height:1.5;background:#0d0f0e;border:1px solid var(--line);border-radius:4px;padding:10px;overflow-x:auto;color:var(--ink)}
+pre.ron .c{color:var(--muted)}
+.checks{display:grid;gap:3px;font-size:13.5px}
+.checks div{display:flex;gap:8px;align-items:baseline}
+.checks .ok::before{content:"ok";font-family:var(--mono);font-size:11px;color:var(--ok);width:30px;flex:none}
+.checks .no::before{content:"no";font-family:var(--mono);font-size:11px;color:var(--warn);width:30px;flex:none}
+.checks .warn::before{content:"note";font-family:var(--mono);font-size:11px;color:var(--amber);width:30px;flex:none}
+.bom{display:flex;flex-wrap:wrap;gap:5px}
+.chipitem{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:4px;padding:2px 8px 2px 3px;background:var(--panel-2);font-size:13px;white-space:nowrap}
+.chipitem img{width:32px;height:32px}
+.chipitem b{font-family:var(--mono);font-size:12px}
+
+/* modules */
+.mods{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;align-content:start;min-width:0}
+.card .head{display:flex;gap:10px;align-items:center}
+.card .head img{width:64px;height:64px;flex:none}
+.card p{font-size:13.5px;color:var(--muted)}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:13px}
+.card dt{color:var(--muted);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:11.5px;padding-top:2px}
+.card dd{margin:0;font-family:var(--mono);font-size:12px}
+
+/* progression */
+.prog{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;position:relative}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;align-content:start;min-width:0}
+.step .who{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.step .who b{font-family:var(--display);font-size:22px;font-weight:700}
+.step .who span{font-family:var(--mono);font-size:11px;color:var(--amber)}
+.step canvas{width:100%;height:auto;max-width:100%;image-rendering:pixelated;background:#101317;border-radius:4px}
+.step p{font-size:13.5px;color:var(--muted)}
+.step ul{margin:0;padding-left:16px;font-size:13px;color:var(--muted)}
+
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-family:var(--display);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:12px;color:var(--muted);background:var(--panel)}
+tr:last-child td{border-bottom:0}
+
+.dec{display:grid;gap:10px}
+.dec .q{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:grid;gap:6px}
+.dec .q h3{font-size:18px}
+.dec .q p{font-size:14.5px;color:var(--muted)}
+.dec .q .rec{color:var(--ink)}
+.dec .q .rec b{color:var(--amber);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:13px;margin-right:6px}
+
+@media (max-width:1000px){
+  .builder{grid-template-columns:1fr}
+  .mods,.prog{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:560px){
+  .mods,.prog{grid-template-columns:1fr}
+  .palette{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .shipgrid{grid-template-columns:repeat(12,34px);grid-auto-rows:34px}
+  .cell img{width:32px;height:32px}
+  .ov.br{display:none}
+  .stage{height:62vh}
+}
+/* hangar additions: a 13 x 11 grid of 1 m cells, the livery panel and the live preview */
+.shipgrid{grid-template-columns:repeat(13,38px);grid-auto-rows:38px}
+.shipgrid .cell.mid{background:rgba(232,176,64,.05)}
+.palette{grid-template-columns:repeat(8,minmax(0,1fr))}
+.toolrow{display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:13.5px;color:var(--muted)}
+.toolrow label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.toolrow input{accent-color:var(--amber)}
+.livery{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center;font-size:13px}
+.livery .k{font-family:var(--display);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sw{display:flex;flex-wrap:wrap;gap:4px}
+.sw button{all:unset;cursor:pointer;width:26px;height:26px;border:1px solid rgba(150,190,195,.45);background-size:52px 52px;image-rendering:pixelated}
+.sw button[aria-pressed="true"]{outline:2px solid var(--amber);outline-offset:1px}
+.sw button:focus-visible{outline:2px solid var(--ink)}
+.sw.rd button{width:32px;height:32px;background-size:32px 32px;background-repeat:no-repeat;background-color:var(--panel-2)}
+.livery input[type=text]{font:600 14px var(--mono);width:5ch;background:var(--panel-2);color:var(--ink);border:1px solid var(--line-2);border-radius:3px;padding:3px 6px}
+.pv{position:relative;aspect-ratio:16/10;max-width:100%;border:1px solid var(--line-2);border-radius:6px;overflow:hidden;background:#141a1f}
+.pv canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.pv .pvlabel{position:absolute;left:8px;top:6px;font:600 12px var(--mono);color:#fff;text-shadow:0 1px 0 #000;pointer-events:none}
+@media (max-width:560px){
+  .shipgrid{grid-template-columns:repeat(13,24px);grid-auto-rows:24px}
+  .shipgrid .cell img{width:24px;height:24px}
+  .palette{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+</style>
+
+<div class="wrap">
+
+<header class="lede">
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-12</span><span class="tag plain">M24</span></div>
+  <h1>Hangar and Chibi Aircraft</h1>
+  <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+  <p>The owner: <i>"more mockups for planes, helicopters, vtols. make air vehicles these cute little chibi versions. they require a hangar, and the player has a ui similar to your ship builder that lets them put these together".</i> So: a hangar on the edge of a field, five little aircraft, and a builder. Every number an aircraft flies with follows from its parts and the game's own gravity of 25 m/s&sup2;, and each one is flown by the same foil model the game's Kestrel already flies by.</p>
+  <p class="honest"><b>About the art.</b> <b>The game's own</b> (byte-identical copies in <code>hangar/game/</code>, see its README): the hex ground is the terrain atlas's fields sheet (<code>assets/tilesets/atlas.png</code>) on 2.833 m hex columns with 1 m layers; the apron, the helipad, the hangar's walls and roof, the struts and masts are the settlement textures granite, flag, stone, slate, iron and plank at their <code>repeat_m</code>; the Kestrel on the apron is the game's model (<code>assets/models/vehicles/kestrel</code>); the hand in the hotbar is the game's icon. <b>Mockup-only:</b> the part icons, the livery paints, the shark mouth, the three roundels, the digits, the canopy glass, rotor blades, tyres, the roller doors, the runway's asphalt and markings and the windsock are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/hangar_art.py</code>): 32 x 32 sprites shown at whole-number scales, 32 x 32 tiles sampled nearest with no mipmaps. The aircraft are octagonal prisms and boxes built from the builder's own grid, so what you draw below is exactly what rolls out of the door. The roundels are the player's own; there is no real air force's insignia here.</p>
+</header>
+
+<section aria-labelledby="s1">
+  <h2 id="s1"><span class="n">1</span>The airfield</h2>
+  <p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p>
+  <div class="stage">
+    <canvas id="yard" aria-label="An airfield at night: a three-bay hangar with its doors open, five chibi aircraft, the Kestrel, a runway with edge lights, a helipad and a beacon tower."></canvas>
+    <div class="loading" id="loading">Loading the airfield</div>
+    <div class="ov tl">
+      <div class="seg" id="shipSel" role="group" aria-label="Look at"></div>
+      <div class="seg" id="timeSel" role="group" aria-label="Time of day">
+        <button data-t="day" aria-pressed="false">Day</button><button data-t="dusk" aria-pressed="false">Dusk</button><button data-t="night" aria-pressed="true">Night</button>
+      </div>
+    </div>
+    <div class="ov br" id="yardInfo"></div>
+    <div class="hudline" aria-hidden="true">underfoot L0, column | airfield apron | 3 bays, 1 pad, runway 09/27</div>
+    <div class="hudbar" id="hudbar" aria-label="Hotbar, as the game draws it"></div>
+  </div>
+</section>
+
+<section aria-labelledby="s2">
+  <h2 id="s2"><span class="n">2</span>The aircraft builder</h2>
+  <p>Opened at the workbench in a hangar bay. Pick a part, paint cells; right-click or the eraser clears one. Mirror painting puts every part on both sides at once. The nose faces right and port is up. A cell is 1 m: aircraft are small, so their shapes need the finer grid that a ship's 2 m modules do not. The preview is built from the grid as you draw, in your livery, and every number on the right is worked out from the parts.</p>
+  <div class="builder">
+    <div class="bpane">
+      <div class="seg" id="presets" role="group" aria-label="Load an example"></div>
+      <div class="palette" id="palette" role="group" aria-label="Parts"></div>
+      <div class="toolrow"><label><input type="checkbox" id="mirror" checked> Mirror: port and starboard alike</label></div>
+      <div class="fwd"><span>tail</span><span>top view, 1 m cells, port up</span><span>nose &rarr;</span></div>
+      <div class="gridwrap"><div class="shipgrid" id="grid" aria-label="Aircraft grid, 13 by 11 cells"></div></div>
+      <div class="eyebrow">Livery</div>
+      <div class="livery" id="livery">
+        <span class="k">Base</span><div class="sw" id="swBase" role="group" aria-label="Base colour"></div>
+        <span class="k">Trim</span><div class="sw" id="swTrim" role="group" aria-label="Trim colour"></div>
+        <span class="k">Roundel</span><div class="sw rd" id="swRound" role="group" aria-label="Roundel"></div>
+        <span class="k">Nose</span><div class="toolrow"><label><input type="checkbox" id="shark"> Shark mouth</label><label>Number <input type="text" id="num" maxlength="3" inputmode="numeric" value="106"></label></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="rollout">Roll out to the apron</span><span class="pbtn" role="button" tabindex="0" id="clear">Clear grid</span></div>
+    </div>
+    <div class="bpane">
+      <div class="pv"><canvas id="pv" aria-label="The aircraft on the grid, built in 3D, turning on the hangar floor"></canvas><div class="pvlabel" id="pvName"></div></div>
+      <div class="eyebrow">Follows from the parts</div>
+      <div class="stats" id="stats"></div>
+      <div class="eyebrow">Checks</div>
+      <div class="checks" id="checks"></div>
+      <div class="eyebrow">Bill of materials</div>
+      <div class="bom" id="bom"></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="s3">
+  <h2 id="s3"><span class="n">3</span>How the numbers follow from the parts</h2>
+  <p>All at the game's 1 g of 25 m/s&sup2; (<code>SURFACE_GRAVITY_MPS2_PER_G</code>) and its air of 1.225 kg/m&sup3; (<code>pbd_core::vehicle::AIR_DENSITY</code>). These are the steady-state summary the builder can show; in flight the foil model does the work, each wing cell a foil segment and each rotor a disc of foils, as the Kestrel's are.</p>
+  <div class="tablebox"><table>
+    <thead><tr><th>Number</th><th>From the parts</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Mass</td><td>the sum of the parts, a cockpit's pilot and a tank's fuel counted in</td><td>Everything below divides by it.</td></tr>
+      <tr><td>Wing area <i>S</i></td><td>1 m&sup2; a wing cell</td><td>Tailplanes trim, they do not carry the weight.</td></tr>
+      <tr><td>Stall speed</td><td>&radic;(2 <i>m g</i> / (&rho; <i>S</i> C<sub>L,max</sub>)), C<sub>L,max</sub> 1.4</td><td>The slowest it can fly on its wings. The runway is long enough for a stall of 45 m/s. At 25 m/s&sup2; that is faster than the same aircraft on Earth; more wing or less weight is the lever.</td></tr>
+      <tr><td>Hover margin</td><td>rotor thrust / weight, thrust (2 &rho; <i>A</i>)<sup>1/3</sup> <i>P</i><sup>2/3</sup> &times; 0.8 per rotor of disc area <i>A</i> and power <i>P</i></td><td>Momentum theory with a figure of merit. Over 1.1 it lifts straight up and needs no runway.</td></tr>
+      <tr><td>Top speed</td><td>(2 <i>P</i> &eta; / (&rho; C<sub>d</sub> <i>A</i><sub>front</sub>))<sup>1/3</sup></td><td>Power against drag. Chibi bodies are fat, so <i>A</i><sub>front</sub> is the body's octagon plus the wings' edges, wheels and floats; C<sub>d</sub> 0.2, or 0.5 with a main rotor's hub in the wind.</td></tr>
+      <tr><td>Balance</td><td>centre of mass against the wing's centre of lift (a quarter chord back from the leading edge), and against the rotors' axis</td><td>A plane's centre of mass sits 0 to 1.5 m ahead of its lift, or it pitches up and stalls. A hovering craft hangs within 0.6 m of its rotors, or it tips.</td></tr>
+      <tr><td>Range</td><td>fuel / burn at cruise &times; cruise speed; cruise is 0.6 of the power and 0.75 of top speed</td><td>Burn is power times a fuel rate: 0.25 kg/kWh for a piston, 0.3 for a nacelle, 0.32 for a turbine, 0.38 for a jet.</td></tr>
+      <tr><td>Fits the hangar</td><td>its width across, rotor discs included, against the 12 m bay door</td><td>An aircraft lives in a bay. A bigger one needs a bigger hangar.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="s4">
+  <h2 id="s4"><span class="n">4</span>Parts</h2>
+  <p>Each is made at the fabricator (recipes on the <a href="https://claude.ai/artifact/6hj8UvbLY9TUsn7591sKKg">crafting page</a>). Jets, main rotors and their alloy plate need star iron from the asteroids, so the first aircraft are prop planes and floatplanes.</p>
+  <div class="mods" id="mods"></div>
+</section>
+
+<section aria-labelledby="s5">
+  <h2 id="s5"><span class="n">5</span>The hangar's rules</h2>
+  <div class="mods" id="rulesHangar">
+    <div class="card"><h3>Built in a hangar</h3><p>The builder opens at the workbench in a hangar bay, and nowhere else. A hangar is a building the player puts up from the town's pieces (the Hex House Builder, M6) with a bay door at least 12 m wide and 6.5 m high.</p></div>
+    <div class="card"><h3>Kept in a bay</h3><p>Weather acts on every craft, flown or not. In a bay an aircraft is out of the wind; left on the apron it rocks on its wheels and a gale can tip it, unless it is chocked or tied down.</p></div>
+    <div class="card"><h3>Out through the door</h3><p>Rolled out, it taxis on its own wheels or is pushed; a helicopter on skids is towed on a dolly. The door's width caps the span, rotors included, so a big design is a reason to build a bigger hangar.</p></div>
+    <div class="card"><h3>Runway or pad</h3><p>A plane whose stall is under 45 m/s takes off from the runway; one with a hover margin over 1.1 lifts off any flat cell, and a floatplane from water. A runway is a strip of flat cells, so a player can build one.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s6">
+  <h2 id="s6"><span class="n">6</span>Saves, and what stays true</h2>
+  <div class="mods" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="card"><h3>An aircraft is a stored record</h3><p>Its stable ID, its parts grid, its livery, its pose in a named frame, its fuel and its damage are saved the moment it rolls out and every time they change. Leaving the seat changes who is in it, never whether it exists.</p></div>
+    <div class="card"><h3>The parts are versioned</h3><p>A saved aircraft names its part set's version. A part whose numbers are retuned keeps the old ones for aircraft already built, or migrates them forward on open; a removed part stays readable. A player's aircraft never changes shape on its own.</p></div>
+    <div class="card"><h3>Rebuilding refunds</h3><p>Taking a part off at the workbench gives its materials back to the pack by the give order, with drops for what does not fit. A livery is free to change.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s7">
+  <h2 id="s7"><span class="n">7</span>Decisions and questions for the owner</h2>
+  <p class="muted">Recommendations are mine, not the owner's words. The one marked with a picture goes to the survey with this page's screenshots; the rest are taken as recommended (ask only with screenshots).</p>
+  <div class="dec" id="decisions"></div>
+</section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+// ======================= parts and numbers (no DOM: node can run this block) =======================
+const G1 = 25, RHO = 1.225, CLMAX = 1.4, DOOR_W = 12, COLS = 13, ROWS = 11, MID = 5;
+const MOD = {
+  C:{name:"Cockpit", icon:"cockpit", kg:110, seats:1, cost:[["glass",3],["circuit",2],["steel-ingot",1],["cloth",1]], txt:"A seat and its pilot (70 kg counted in). At the front it makes a glass nose; further back, a big bubble canopy. Needs a clear view forward."},
+  F:{name:"Fuselage", icon:"fuselage", kg:26, cost:[["steel-ingot",1],["polymer",1]], txt:"Body. Cells side by side make the fat chibi body; one cell wide is a tail boom."},
+  P:{name:"Prop engine", icon:"prop", kg:120, power:230, eta:0.8, sfc:0.25, cost:[["steel-ingot",3],["copper-ingot",2],["circuit",1]], txt:"230 kW in the nose and a fat three-blade prop. Nothing may sit ahead of it."},
+  J:{name:"Jet", icon:"jet", kg:130, power:420, eta:0.85, sfc:0.38, cost:[["steel-ingot",3],["alloy-plate",2],["circuit",2]], txt:"420 kW of thrust power at cruise, thirsty. Its exhaust needs a clear cell behind it."},
+  W:{name:"Wing", icon:"wing", kg:16, wing:1, cost:[["steel-ingot",1],["cloth",1]], txt:"1 m2 of lift, thick and stubby. Its centre of lift is a quarter chord back from the leading edge."},
+  H:{name:"Tailplane", icon:"tailplane", kg:8, tail:1, cost:[["steel-ingot",1]], txt:"Holds the nose level. Every plane with wings wants one behind them."},
+  V:{name:"Fin", icon:"fin", kg:7, cost:[["steel-ingot",1]], txt:"Keeps it pointing straight. Stands on the body; painted in the trim colour."},
+  R:{name:"Rotor mast", icon:"rotor", kg:150, power:450, rotorR:4.5, eta:0.45, sfc:0.32, cost:[["steel-ingot",4],["alloy-plate",2],["circuit",2],["bronze-ingot",2]], txt:"A 9 m two-blade main rotor and its 450 kW turbine. Its torque spins the body unless a tail rotor or a second mast cancels it."},
+  T:{name:"Tail rotor", icon:"tail-rotor", kg:14, cost:[["steel-ingot",1],["bronze-ingot",1]], txt:"Cancels a main rotor's torque. It must sit at least 3 m behind the mast."},
+  N:{name:"Tilt nacelle", icon:"nacelle", kg:75, power:270, rotorR:2.0, eta:0.75, sfc:0.3, cost:[["steel-ingot",2],["copper-ingot",2],["circuit",2]], txt:"A 4 m rotor that tilts: up to hover, forward to fly on the wing. In mirror pairs only."},
+  G:{name:"Landing gear", icon:"gear", kg:12, gear:1, cost:[["steel-ingot",1],["polymer",1]], txt:"A big chibi wheel. Under a helicopter the wheels become skids."},
+  O:{name:"Float", icon:"float", kg:22, float:1, cost:[["steel-ingot",1],["planks",2]], txt:"A pontoon: lands on water, and on grass at a pinch."},
+  E:{name:"Fuel tank", icon:"fuel", kg:12, fuel:40, cost:[["steel-ingot",1],["polymer",1]], txt:"40 kg of fuel, counted in the mass. Outboard of the body it hangs under the wing."},
+  K:{name:"Cargo pod", icon:"cargo", kg:20, hold:120, cost:[["steel-ingot",1],["planks",2]], txt:"120 kg of hold. Outboard it hangs under the wing."},
+  U:{name:"Utility pod", icon:"utility", kg:25, cost:[["steel-ingot",1],["glass",1],["circuit",1]], txt:"A searchlight and a winch, slung under the body. Lights the ground ahead at night."},
+};
+const CORE = new Set(["C","F","P","J","R","V","T"]), FILL = new Set(["G","O","E","K","U"]), SLAB = new Set(["W","H"]);
+const PRESETS = {
+  sharky:{name:"Sharky", role:"Prop fighter, shark mouth", livery:{base:"teal", trim:"sunny", shark:true, num:"106", roundel:"dot"}, rows:[
+    ".............",
+    "......WWW....",
+    "......WWW....",
+    "....H.WGW....",
+    "....H.FFFFF..",
+    "....VFFCEFFP.",
+    "....H.FFFFF..",
+    "....H.WGW....",
+    "......WWW....",
+    "......WWW....",
+    "............."]},
+  bumble:{name:"Bumble", role:"Utility helicopter", livery:{base:"green", trim:"white", shark:false, num:"07", roundel:"sun"}, rows:[
+    ".............",
+    ".............",
+    ".............",
+    ".............",
+    "...H..GFFGC..",
+    ".TFFFFEFRFC..",
+    "...H..GFFGC..",
+    ".............",
+    ".............",
+    ".............",
+    "............."]},
+  puffin:{name:"Puffin", role:"Tiltrotor VTOL", livery:{base:"white", trim:"orange", shark:false, num:"21", roundel:"chevron"}, rows:[
+    ".............",
+    ".......N.....",
+    "......WW.....",
+    "...H..WW.....",
+    "...H.GFFG....",
+    "...VFFEFFC...",
+    "...H.GFFG....",
+    "...H..WW.....",
+    "......WW.....",
+    ".......N.....",
+    "............."]},
+  gull:{name:"Gull", role:"Floatplane", livery:{base:"sunny", trim:"blue", shark:false, num:"33", roundel:"dot"}, rows:[
+    ".....WWW.....",
+    ".....WWW.....",
+    ".....WWW.....",
+    "...H..OOOO...",
+    "...H..FFF....",
+    "..VFFFFECFP..",
+    "...H..FFF....",
+    "...H..OOOO...",
+    ".....WWW.....",
+    ".....WWW.....",
+    ".....WWW....."]},
+  dart:{name:"Dart", role:"Little jet", livery:{base:"red", trim:"white", shark:true, num:"88", roundel:"sun"}, rows:[
+    ".............",
+    "....WW.......",
+    "....WWW......",
+    "...HWWWG.....",
+    "...H.FFFFF...",
+    "..JVFFEECFF..",
+    "...H.FFFFF...",
+    "...HWWWG.....",
+    "....WWW......",
+    "....WW.......",
+    "............."]},
+};
+const cellsOf = rows => { const out = []; rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== ".") out.push({c, x, y}); })); return out; };
+// what each filler cell hangs from: the body, a wing, or nothing
+function hosts(rows) {
+  const at = (x, y) => (rows[y] || "")[x] || ".", out = {};
+  for (const k of cellsOf(rows)) {
+    if (CORE.has(k.c)) { out[k.x + "," + k.y] = "body"; continue; }
+    if (SLAB.has(k.c) || k.c === "N") { out[k.x + "," + k.y] = "wing"; continue; }
+    const dir = Math.sign(k.y - MID);
+    const under = k.c === "O";
+    let wing = false;
+    if (dir) for (let y = k.y + dir; y >= 0 && y < ROWS; y += dir) { const c = at(k.x, y); if (c === "W" || c === "N") { wing = true; break; } if (c === "." ) break; }
+    if (wing) { out[k.x + "," + k.y] = "wing"; continue; }
+    if (under) { out[k.x + "," + k.y] = wing ? "wing" : "under"; continue; }
+    let body = k.y === MID;
+    if (!body && dir) for (let y = k.y - dir; y !== MID - dir; y -= dir) { const c = at(k.x, y); if (c === ".") break; if (CORE.has(c) || (y === MID && FILL.has(c))) { body = true; break; } }
+    if (!body) body = [[1,0],[-1,0]].some(([dx]) => CORE.has(at(k.x + dx, k.y)));
+    if (body) { out[k.x + "," + k.y] = "body"; continue; }
+    out[k.x + "," + k.y] = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx, dy]) => SLAB.has(at(k.x + dx, k.y + dy))) ? "wing" : "free";
+  }
+  return out;
+}
+// the body's cross-section per column: rows it spans, so its width and its height
+function bodyCols(rows) {
+  const h = hosts(rows), cols = {};
+  for (const k of cellsOf(rows)) if (h[k.x + "," + k.y] === "body") { const c = cols[k.x] || (cols[k.x] = {min: 99, max: -1}); c.min = Math.min(c.min, k.y); c.max = Math.max(c.max, k.y); }
+  for (const c of Object.values(cols)) { c.n = c.max - c.min + 1; c.w = c.n * 0.95; c.h = 0.55 + 0.45 * Math.min(c.n, 3); c.z = (c.min + c.max + 1) / 2 - MID - 0.5; }
+  return cols;
+}
+const thrustOf = d => (2 * RHO * Math.PI * d.rotorR * d.rotorR) ** (1 / 3) * (d.power * 1000) ** (2 / 3) * 0.8;
+function stats(rows) {
+  const cells = cellsOf(rows), s = {cells: cells.length};
+  if (!cells.length) return s;
+  const sum = f => cells.reduce((a, k) => a + (MOD[k.c][f] || 0), 0), cnt = c => cells.filter(k => k.c === c).length;
+  s.fuel = sum("fuel"); s.m = sum("kg") + s.fuel;
+  s.cg = cells.reduce((a, k) => a + (MOD[k.c].kg + (MOD[k.c].fuel || 0)) * (k.x + 0.5), 0) / s.m;
+  s.S = sum("wing"); s.seats = sum("seats"); s.hold = sum("hold"); s.gear = sum("gear"); s.floats = sum("float");
+  s.W = s.m * G1;
+  s.stall = s.S ? Math.sqrt(2 * s.W / (RHO * s.S * CLMAX)) : Infinity;
+  // centre of lift: a quarter chord back from each wing row's leading edge, weighted by chord
+  let cl = 0, cw = 0;
+  for (let y = 0; y < ROWS; y++) { let x = COLS - 1; while (x >= 0) { if (rows[y][x] === "W") { let e = x; while (e >= 0 && rows[y][e] === "W") e--; const chord = x - e, le = x + 1; cl += (le - chord / 4) * chord; cw += chord; x = e; } else x--; } }
+  s.cl = cw ? cl / cw : null;
+  const rot = cells.filter(k => MOD[k.c].rotorR);
+  s.thrust = rot.reduce((a, k) => a + thrustOf(MOD[k.c]), 0);
+  s.hover = s.thrust / s.W;
+  s.axis = rot.length ? rot.reduce((a, k) => a + thrustOf(MOD[k.c]) * (k.x + 0.5), 0) / s.thrust : null;
+  s.power = sum("power");
+  const fwd = cells.filter(k => "PJN".includes(k.c)), prop = fwd.length ? fwd : cells.filter(k => k.c === "R");
+  s.peff = prop.reduce((a, k) => a + MOD[k.c].power * 1000 * MOD[k.c].eta, 0);
+  const bc = Object.values(bodyCols(rows));
+  const bodyA = bc.length ? Math.max(...bc.map(c => c.w * c.h)) * 0.83 : 0;
+  const ys = cells.filter(k => SLAB.has(k.c) || k.c === "N").map(k => k.y);
+  s.wingSpan = ys.length ? Math.max(...ys) - Math.min(...ys) + 1 : 0;
+  s.A = bodyA + s.wingSpan * 0.1 + 0.1 * s.gear + 0.15 * s.floats + 0.6 * cnt("R");
+  s.cd = cnt("R") ? 0.5 : 0.2;
+  s.top = s.peff ? Math.cbrt(2 * s.peff / (RHO * s.cd * s.A)) : 0;
+  s.cruise = 0.75 * s.top;
+  s.burn = cells.reduce((a, k) => a + (MOD[k.c].power || 0) * 0.6 * (MOD[k.c].sfc || 0), 0) / 3600; // kg/s
+  s.range = s.burn ? s.fuel / s.burn * s.cruise / 1000 : 0;
+  // how wide and long it is, rotors included
+  let z0 = 1e9, z1 = -1e9, x0 = 1e9, x1 = -1e9;
+  for (const k of cells) { const r = MOD[k.c].rotorR || 0, zc = k.y + 0.5 - MID - 0.5, xc = k.x + 0.5; z0 = Math.min(z0, zc - Math.max(0.5, r)); z1 = Math.max(z1, zc + Math.max(0.5, r)); x0 = Math.min(x0, xc - Math.max(0.5, k.c === "R" ? r : 0)); x1 = Math.max(x1, xc + Math.max(0.5, k.c === "R" ? r : 0)); }
+  s.width = z1 - z0; s.len = x1 - x0;
+  s.canHover = s.hover >= 1.1; s.canRunway = s.stall <= 45;
+  return s;
+}
+function checks(rows) {
+  const cells = cellsOf(rows), at = (x, y) => (rows[y] || "")[x] || ".", s = stats(rows), out = [], bad = new Set();
+  const flag = k => bad.add(k.x + "," + k.y);
+  if (!cells.length) return {out: [["no", "Nothing on the grid yet."]], bad, s};
+  const cps = cells.filter(k => k.c === "C");
+  out.push([cps.length ? "ok" : "no", cps.length ? `${cps.length} seat${cps.length > 1 ? "s" : ""}.` : "Needs a cockpit."]);
+  const BLOCK = new Set(["J","R","N","V","T","H","W","K","U"]);
+  cps.forEach(k => { for (let x = k.x + 1; x < COLS; x++) if (BLOCK.has(at(x, k.y))) { flag(k); out.push(["no", `A cockpit looks straight at a ${MOD[at(x, k.y)].name.toLowerCase()}.`]); break; } });
+  const seen = new Set([cells[0].x + "," + cells[0].y]), stack = [cells[0]];
+  while (stack.length) { const k = stack.pop(); for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) { const x = k.x + dx, y = k.y + dy, id = x + "," + y; if (!seen.has(id) && at(x, y) !== ".") { seen.add(id); stack.push({x, y}); } } }
+  const loose = cells.filter(k => !seen.has(k.x + "," + k.y)); loose.forEach(flag);
+  out.push([loose.length ? "no" : "ok", loose.length ? `${loose.length} part${loose.length > 1 ? "s" : ""} not joined on.` : "Every part joined on."]);
+  const engines = cells.filter(k => MOD[k.c].power);
+  out.push([engines.length ? "ok" : "no", engines.length ? `${s.power} kW of engines.` : "No engine, rotor or nacelle."]);
+  cells.filter(k => k.c === "P").forEach(k => { for (let x = k.x + 1; x < COLS; x++) if (at(x, k.y) !== ".") { flag(k); out.push(["no", "Something sits in a prop's disc, ahead of it."]); break; } });
+  cells.filter(k => k.c === "J").forEach(k => { if (at(k.x - 1, k.y) !== ".") { flag(k); out.push(["no", "A jet's exhaust is blocked behind it."]); } });
+  out.push([s.fuel ? "ok" : "no", s.fuel ? `${s.fuel} kg of fuel.` : "No fuel tank."]);
+  const legs = s.gear + s.floats;
+  out.push([legs >= 2 ? "ok" : "no", legs >= 2 ? (s.floats ? `${s.floats} floats: it lands on water.` : `${s.gear} wheels${cells.some(k => k.c === "R") && !s.S ? ", drawn as skids" : ""}.`) : "Nothing to stand on: two wheels or floats at least."]);
+  if (s.canHover) out.push(["ok", `Lifts straight up: rotors give ${s.hover.toFixed(2)} of its weight.`]);
+  if (s.S) out.push([s.canRunway ? "ok" : (s.canHover ? "warn" : "no"), s.canRunway ? `Stalls at ${s.stall.toFixed(0)} m/s: takes off from the runway.` : `Stalls at ${s.stall.toFixed(0)} m/s, over the runway's 45${s.canHover ? ": takes off straight up only" : ": it cannot take off"}.`]);
+  else if (!s.canHover) out.push(["no", rotorsSay(s)]);
+  // torque
+  const masts = cells.filter(k => k.c === "R"), tails = cells.filter(k => k.c === "T");
+  if (masts.length === 1) { const m = masts[0], t = tails.find(t => (m.x - t.x) >= 3); if (!t) { flag(m); out.push(["no", tails.length ? "The tail rotor is under 3 m behind the mast: the body spins." : "One main rotor and no tail rotor: the body spins against it."]); } else out.push(["ok", `Tail rotor ${m.x - t.x} m behind the mast.`]); }
+  else if (masts.length >= 2) out.push(["ok", `${masts.length} masts turn against each other: no tail rotor needed.`]);
+  // nacelles in mirror pairs
+  const nac = cells.filter(k => k.c === "N"), lone = nac.filter(k => at(k.x, 2 * MID - k.y) !== "N" || k.y === MID);
+  if (nac.length) { lone.forEach(flag); out.push([lone.length ? "no" : "ok", lone.length ? "A nacelle has no mirror twin: it would roll over on lift-off." : `${nac.length} nacelles in mirror pairs.`]); }
+  // balance
+  if (s.S && s.canRunway) { const d = s.cg - s.cl; out.push([d >= 0 && d <= 1.5 ? "ok" : "no", d < 0 ? `Centre of mass ${(-d).toFixed(2)} m behind the wing's lift: it pitches up and stalls.` : d > 1.5 ? `Centre of mass ${d.toFixed(2)} m ahead of the lift: too nose-heavy to rotate.` : `Centre of mass ${d.toFixed(2)} m ahead of the lift: stable.`]); }
+  if (s.canHover) { const d = s.cg - s.axis; out.push([Math.abs(d) <= 0.6 ? "ok" : "no", Math.abs(d) <= 0.6 ? `Hangs level: centre of mass ${Math.abs(d).toFixed(2)} m from the rotors' axis.` : `Centre of mass ${Math.abs(d).toFixed(2)} m ${d > 0 ? "ahead of" : "behind"} the rotors: it tips over in the hover.`]); }
+  out.push([s.width <= DOOR_W ? "ok" : "no", s.width <= DOOR_W ? `${s.width.toFixed(1)} m across: fits a ${DOOR_W} m bay door.` : `${s.width.toFixed(1)} m across: wider than the ${DOOR_W} m bay door.`]);
+  return {out, bad, s};
+}
+const rotorsSay = s => s.thrust ? `Rotors lift ${s.hover.toFixed(2)} of its weight, under 1.1: it cannot hover, and it has no wing.` : "No wing and no rotor: it cannot fly.";
+
+// ======================= the builder =======================
+const PAINT_NAMES = ["red", "orange", "sunny", "green", "teal", "blue", "white", "violet", "tan"];
+const ROUNDELS = [["dot", "Pale blue dot"], ["sun", "Sun"], ["chevron", "Chevron"]];
+const ITEM_NAMES = {"glass":"Glass","circuit":"Circuit","steel-ingot":"Steel","cloth":"Cloth","planks":"Planks","polymer":"Polymer","copper-ingot":"Copper","bronze-ingot":"Bronze","alloy-plate":"Alloy plate"};
+const Q = new URLSearchParams(location.search);
+const startPreset = PRESETS[Q.get("preset")] ? Q.get("preset") : "sharky";
+let grid = PRESETS[startPreset].rows.map(r => r.split(""));
+let livery = Object.assign({}, PRESETS[startPreset].livery);
+let designName = PRESETS[startPreset].name;
+let tool = "W";
+const rowsNow = () => grid.map(r => r.join(""));
+const gridEl = document.getElementById("grid"), mirrorEl = document.getElementById("mirror");
+const listeners = [];
+const changed = () => { drawGrid(); listeners.forEach(f => f()); };
+function drawGrid() {
+  const {bad} = checks(rowsNow());
+  gridEl.innerHTML = "";
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const c = grid[y][x], d = document.createElement("div");
+    d.className = "cell" + (c !== "." ? " filled" : "") + (bad.has(x + "," + y) ? " bad" : "") + (y === MID ? " mid" : "");
+    d.dataset.x = x; d.dataset.y = y; d.tabIndex = 0;
+    d.setAttribute("aria-label", c === "." ? `empty cell ${x},${y}` : `${MOD[c].name} at ${x},${y}`);
+    if (c !== ".") { d.title = MOD[c].name; d.innerHTML = `<img src="hangar/${MOD[c].icon}.png?v=1" alt="" width="32" height="32">`; }
+    gridEl.appendChild(d);
+  }
+  renderStats();
+}
+let painting = null;
+function paintAt(el, erase) {
+  if (!el || !el.classList.contains("cell")) return;
+  const x = +el.dataset.x, y = +el.dataset.y, v = erase ? "." : tool, my = 2 * MID - y;
+  if (grid[y][x] === v && (!mirrorEl.checked || grid[my][x] === v)) return;
+  grid[y][x] = v; if (mirrorEl.checked) grid[my][x] = v;
+  designName = "Your design"; changed();
+}
+gridEl.addEventListener("contextmenu", e => e.preventDefault());
+gridEl.addEventListener("pointerdown", e => { painting = e.button === 2 || tool === "." ? "erase" : "paint"; paintAt(e.target.closest(".cell"), painting === "erase"); });
+gridEl.addEventListener("pointermove", e => { if (!painting) return; paintAt(document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".cell"), painting === "erase"); });
+window.addEventListener("pointerup", () => painting = null);
+gridEl.addEventListener("keydown", e => { const el = e.target.closest(".cell"); if (!el) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); paintAt(el, false); } if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); paintAt(el, true); } });
+const pal = document.getElementById("palette");
+pal.innerHTML = Object.entries(MOD).map(([k, d]) => `<button data-k="${k}" aria-pressed="${k === tool}" title="${d.name}"><img src="hangar/${d.icon}.png?v=1" alt="" width="32" height="32">${d.name}<kbd>${k}</kbd></button>`).join("") + `<button data-k="." aria-pressed="false" title="Eraser"><svg width="32" height="32" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28 L22 10 L32 18 L20 32 Z" fill="#e06a7a" stroke="#6b2430" stroke-width="2"/><path d="M8 28 L14 32 L20 32" fill="none" stroke="#a89d86" stroke-width="2"/></svg>Eraser<kbd>X</kbd></button>`;
+const setTool = k => { tool = k; pal.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === k)); };
+pal.querySelectorAll("button").forEach(b => b.addEventListener("click", () => setTool(b.dataset.k)));
+window.addEventListener("keydown", e => { if (e.target.closest && e.target.closest("input,textarea")) return; const k = e.key.toUpperCase(); if (!document.activeElement?.closest?.(".builder")) return; if (MOD[k]) setTool(k); if (k === "X") setTool("."); });
+const presetBtns = () => document.querySelectorAll("#presets button");
+document.getElementById("presets").innerHTML = Object.entries(PRESETS).map(([id, p]) => `<button data-p="${id}" aria-pressed="${id === startPreset}">${p.name}</button>`).join("");
+function loadPreset(id) { const p = PRESETS[id]; grid = p.rows.map(r => r.split("")); livery = Object.assign({}, p.livery); designName = p.name; presetBtns().forEach(o => o.setAttribute("aria-pressed", o.dataset.p === id)); drawLivery(); changed(); }
+presetBtns().forEach(b => b.addEventListener("click", () => loadPreset(b.dataset.p)));
+const press = (id, f) => { const el = document.getElementById(id); el.addEventListener("click", f); el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); f(); } }); };
+press("clear", () => { grid = Array.from({length: ROWS}, () => new Array(COLS).fill(".")); designName = "Your design"; changed(); });
+
+// the livery panel
+function drawLivery() {
+  const sw = (id, key) => { document.getElementById(id).innerHTML = PAINT_NAMES.map(n => `<button data-v="${n}" aria-pressed="${livery[key] === n}" title="${n}" aria-label="${key} ${n}" style="background-image:url(hangar/paint-${n}.png?v=1)"></button>`).join(""); };
+  sw("swBase", "base"); sw("swTrim", "trim");
+  document.getElementById("swRound").innerHTML = ROUNDELS.map(([n, t]) => `<button data-v="${n}" aria-pressed="${livery.roundel === n}" title="${t}" aria-label="Roundel: ${t}" style="background-image:url(hangar/roundel-${n}.png?v=1)"></button>`).join("");
+  document.getElementById("shark").checked = !!livery.shark;
+  document.getElementById("num").value = livery.num || "";
+  for (const [id, key] of [["swBase", "base"], ["swTrim", "trim"], ["swRound", "roundel"]]) document.querySelectorAll(`#${id} button`).forEach(b => b.addEventListener("click", () => { livery[key] = b.dataset.v; drawLivery(); listeners.forEach(f => f()); }));
+}
+document.getElementById("shark").addEventListener("change", e => { livery.shark = e.target.checked; listeners.forEach(f => f()); });
+document.getElementById("num").addEventListener("input", e => { livery.num = e.target.value.replace(/[^0-9]/g, "").slice(0, 3); listeners.forEach(f => f()); });
+drawLivery();
+
+function renderStats() {
+  const rows = rowsNow(), {out, s} = checks(rows);
+  const st = (k, v, u, frac) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}<small>${u}</small></span>${frac != null ? `<div class="bar"><i style="width:${Math.max(0, Math.min(1, frac)) * 100}%"></i></div>` : ""}</div>`;
+  const el = document.getElementById("stats");
+  document.getElementById("pvName").textContent = designName;
+  if (!s.m) { el.innerHTML = `<p class="muted">Empty grid.</p>`; document.getElementById("checks").innerHTML = out.map(([k, t]) => `<div class="${k}">${t}</div>`).join(""); document.getElementById("bom").innerHTML = ""; return; }
+  const bal = s.canHover && s.axis != null ? `${Math.abs(s.cg - s.axis).toFixed(2)}` : s.cl != null ? `${(s.cg - s.cl).toFixed(2)}` : "-";
+  const balU = s.canHover && s.axis != null ? "m off the rotors" : s.cl != null ? "m ahead of lift" : "";
+  el.innerHTML = [
+    st("Mass", Math.round(s.m), "kg"), st("Size", `${s.len.toFixed(0)}x${s.width.toFixed(1)}`, "m"),
+    st("Wing area", s.S, "m2"), st("Stall", isFinite(s.stall) ? s.stall.toFixed(1) : "-", "m/s, runway 45", isFinite(s.stall) ? 1 - (s.stall - 30) / 30 : 0),
+    st("Hover margin", s.thrust ? s.hover.toFixed(2) : "-", "of weight", s.hover / 1.6), st("Top speed", s.top.toFixed(0), "m/s", s.top / 90),
+    st("Power", s.power, "kW"), st("Balance", bal, balU),
+    st("Range", Math.round(s.range), "km", s.range / 250), st("Seats", s.seats, ""),
+    st("Fuel", s.fuel, "kg"), st("Hold", s.hold, "kg"),
+  ].join("");
+  document.getElementById("checks").innerHTML = out.map(([k, t]) => `<div class="${k}">${t}</div>`).join("");
+  const bom = {};
+  cellsOf(rows).forEach(k => MOD[k.c].cost.forEach(([i, n]) => bom[i] = (bom[i] || 0) + n));
+  document.getElementById("bom").innerHTML = Object.entries(bom).sort((a, b) => b[1] - a[1]).map(([i, n]) => `<span class="chipitem"><img src="crafting/${i}.png?v=2" alt="" width="32" height="32">${ITEM_NAMES[i]}<b>${n}</b></span>`).join("");
+}
+
+document.getElementById("mods").innerHTML = Object.entries(MOD).map(([k, d]) => `<div class="card"><div class="head"><img src="hangar/${d.icon}.png?v=1" alt="" width="64" height="64"><div><span class="eyebrow">Key ${k}</span><h3>${d.name}</h3></div></div><p>${d.txt}</p><dl><dt>Mass</dt><dd>${d.kg + (d.fuel || 0)} kg</dd>${d.power ? `<dt>Power</dt><dd>${d.power} kW</dd>` : ""}${d.rotorR ? `<dt>Rotor</dt><dd>${d.rotorR * 2} m, ${(thrustOf(d) / 1000).toFixed(1)} kN</dd>` : ""}<dt>Made of</dt><dd>${d.cost.map(([i, n]) => `${n} ${ITEM_NAMES[i].toLowerCase()}`).join(", ")}</dd></dl></div>`).join("");
+const DEC = [
+  ["H1. How chibi?", true, "Read from the owner's two pictures: the canopy is about a third of the body, the body is as fat as it is tall, the wings are stubby and thick, the wheels big and the rotor blades fat, all in bright paint. Built of octagonal prisms and boxes, never spheres, like everything else in the game.", "As drawn. The owner judges the proportions on the screenshots: the five presets close up, beside the Kestrel."],
+  ["H2. A 1 m grid for aircraft?", false, "Spacecraft use 2 m modules (M4) and ocean ships the world's 2.833 m hex cells (M23). An aircraft of 2 m cells would be four cells long and could not have a tail.", "1 m cells. An aircraft is a body of its own, built from made parts and never dug from the ground, so the hex rule does not bind it."],
+  ["H3. Does a hangar have to be built first?", false, "The owner: \"they require a hangar\". A town could have one to rent, or the player builds one.", "Both: a harbour town or a city has a hangar with a bay to rent; a player's own is built from the town's pieces with a 12 m door."],
+  ["H4. Guns?", false, "The first reference is a fighter. The game has no combat.", "No weapons. Utility pods (a searchlight and a winch) instead; a fighter's look is a livery."],
+  ["H5. One flight model?", false, "The Kestrel already flies by foils: every lifting surface one foil model, rotors converting to wing lift.", "Yes. Each wing cell is a foil segment and each rotor a disc of foils; the numbers on this page are their steady state, not a second model."],
+  ["H6. How many seats, and can you walk inside?", false, "Bumble's cabin is three cockpit cells.", "A cockpit cell is a seat. Passengers board by the interaction key, as aboard the Kestrel; nobody walks about inside an aircraft."],
+];
+document.getElementById("decisions").innerHTML = DEC.map(([q, pic, ctx, rec]) => `<div class="q"><h3>${q}${pic ? ` <span class="tag" style="vertical-align:middle;margin-left:6px">has a picture</span>` : ""}</h3><p>${ctx}</p><p class="rec"><b>Recommend</b>${rec}</p></div>`).join("");
+drawGrid();
+
+// ======================= aircraft in 3D, from the grid =======================
+const OCT_K = 1 / Math.cos(Math.PI / 8);
+// an octagonal frustum along +x from (w0, h0) at x = 0 to (w1, h1) at x = len; flat top, bottom and sides;
+// uv in metres (along the length, round the perimeter)
+function octo(len, w0, h0, w1, h1, caps = [true, true]) {
+  const P = [], U = [];
+  const ring = (w, h) => Array.from({length: 8}, (_, k) => { const a = Math.PI / 8 + k * Math.PI / 4; return [h / 2 * OCT_K * Math.sin(a), w / 2 * OCT_K * Math.cos(a)]; });
+  const r0 = ring(w0, h0), r1 = ring(w1, h1), acc = [0];
+  for (let k = 0; k < 8; k++) { const a = r0[k], b = r0[(k + 1) % 8]; acc.push(acc[k] + Math.hypot(a[0] - b[0], a[1] - b[1])); }
+  const tri = (a, b, c) => { P.push(...a.p, ...b.p, ...c.p); U.push(...a.u, ...b.u, ...c.u); };
+  for (let k = 0; k < 8; k++) {
+    const k2 = (k + 1) % 8;
+    const A = {p: [0, r0[k][0], r0[k][1]], u: [0, acc[k]]}, B = {p: [0, r0[k2][0], r0[k2][1]], u: [0, acc[k + 1]]};
+    const C = {p: [len, r1[k2][0], r1[k2][1]], u: [len, acc[k + 1]]}, D = {p: [len, r1[k][0], r1[k][1]], u: [len, acc[k]]};
+    tri(A, D, C); tri(A, C, B);
+  }
+  for (const [end, r, x] of [[0, r0, 0], [1, r1, len]]) {
+    if (!caps[end] || !r[0][1] && !r[0][0]) continue;
+    const O = {p: [x, 0, 0], u: [0, 0]};
+    for (let k = 0; k < 8; k++) { const k2 = (k + 1) % 8, a = {p: [x, r[k][0], r[k][1]], u: [r[k][1], r[k][0]]}, b = {p: [x, r[k2][0], r[k2][1]], u: [r[k2][1], r[k2][0]]}; if (end === 0) tri(O, a, b); else tri(O, b, a); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(U, 2));
+  g.computeVertexNormals();
+  return g;
+}
+function boxM(w, h, d) { const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]]; for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) { const j = f * 4 + i; uv.setXY(j, uv.getX(j) * dims[f][0], uv.getY(j) * dims[f][1]); } return g; }
+function nearest(t, rep = 1) { t.encoding = THREE.sRGBEncoding; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); return t; }
+const TEXLOAD = new THREE.LoadingManager(), TL = new THREE.TextureLoader(TEXLOAD), TEXC = {};
+const T = (n, rep = 1) => TEXC[n + "@" + rep] || (TEXC[n + "@" + rep] = nearest(TL.load(`hangar/${n}.png?v=1`), rep));
+const DIGITS = new Image(); const digitsReady = new Promise(r => { DIGITS.onload = r; DIGITS.onerror = r; }); DIGITS.src = "hangar/digits.png?v=1";
+const DECALC = {};
+function numberTex(str) {
+  if (DECALC["n" + str]) return DECALC["n" + str];
+  const c = document.createElement("canvas"); c.width = Math.max(1, str.length) * 5; c.height = 7; const g = c.getContext("2d");
+  [...str].forEach((d, i) => g.drawImage(DIGITS, +d * 5, 0, 5, 7, i * 5, 0, 5, 7));
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  return (DECALC["n" + str] = t);
+}
+// one material set a renderer: `make(opts)` builds a material (lit by the yard's lamps, or plain)
+function matSet(make) {
+  const C = {};
+  return {
+    paint: n => C["p" + n] || (C["p" + n] = make({map: T("paint-" + n), roughness: 0.7})),
+    glass: () => C.glass || (C.glass = make({map: T("tex-canopy"), roughness: 0.25, metalness: 0.1, emissive: 0x2a5a7a, emissiveIntensity: 0.12})),
+    blade: () => C.blade || (C.blade = make({map: T("tex-blade"), roughness: 0.8})),
+    tyre: () => C.tyre || (C.tyre = make({map: T("tex-tyre"), roughness: 1})),
+    iron: () => C.iron || (C.iron = make({map: T("game/iron"), roughness: 0.8})),
+    decal: (map, flip) => { const k = "d" + map.uuid + (flip ? "f" : ""); return C[k] || (C[k] = make({map, alphaTest: 0.5, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2})); },
+  };
+}
+const planeUV = (w, h, flip) => { const g = new THREE.PlaneGeometry(w, h); if (flip) { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i)); } return g; };
+// rows -> a group; lampFn(x, y, z, colour, intensity, range, opts) adds a light riding the group
+function buildCraft(rows, liv, M, lampFn) {
+  const g = new THREE.Group(), spin = [], cells = cellsOf(rows);
+  const LF = lampFn ? (x, y, z, c, i, r, o = {}) => lampFn(x, y, z, c, i, r, Object.assign({group: g}, o)) : null;
+  if (!cells.length) return {g, spin};
+  const H = hosts(rows), BC = bodyCols(rows), s = stats(rows), at = (x, y) => (rows[y] || "")[x] || ".";
+  const skids = cells.some(k => k.c === "R") && !s.S, floats = s.floats > 0;
+  const hasN = cells.some(k => k.c === "N");
+  const hMax = Math.max(1, ...Object.values(BC).map(c => c.h));
+  const gearH = skids ? 0.6 : floats ? 1.45 : 1.1, yc = gearH + hMax / 2;
+  const highWing = floats || hasN, wingY = highWing ? yc + hMax / 2 - 0.22 : yc - hMax / 2 + 0.4, WT = 0.34;
+  const X = x => x - 6.5, Z = y => y - 5;   // a cell's left edge in x, its centre in z
+  const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, parent = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = m.receiveShadow = true; parent.add(m); return m; };
+  const base = M.paint(liv.base), trim = M.paint(liv.trim);
+  const xs = Object.keys(BC).map(Number).sort((a, b) => a - b);
+  const colC = x => cells.some(k => k.x === x && k.c === "C" && H[k.x + "," + k.y] === "body");
+  const front = xs.length ? xs[xs.length - 1] : null, back = xs.length ? xs[0] : null;
+  const glassNose = front != null && colC(front);
+  const size = x => { const c = BC[x]; if (!c) return null; if (cells.some(k => k.x === x && k.c === "P") && BC[x - 1]) return {w: BC[x - 1].w * 0.85, h: BC[x - 1].h * 0.85, z: c.z}; return c; };
+  // the body: an octagonal frustum a column, each face the mean of its neighbours, the ends rounded in
+  for (const x of xs) {
+    const c = size(x), p = size(x - 1), n = size(x + 1);
+    const b = p ? {w: (p.w + c.w) / 2, h: (p.h + c.h) / 2} : {w: c.w * 0.62, h: c.h * 0.62};
+    const f = n ? {w: (n.w + c.w) / 2, h: (n.h + c.h) / 2} : {w: c.w * (glassNose && x === front ? 0.7 : 0.6), h: c.h * (glassNose && x === front ? 0.72 : 0.6)};
+    const isP = cells.some(k => k.x === x && k.c === "P"), len = x === front && glassNose ? 1.35 : 1;
+    const mat = x === front && glassNose ? M.glass() : isP ? trim : base;
+    add(octo(len, b.w, b.h, f.w, f.h, [!p, !n]), mat, X(x), yc, c.z);
+    Object.assign(BC[x], {bw: b.w, fw: f.w, bh: b.h, fh: f.h});
+  }
+  // a big bubble canopy over a cockpit run that is not the nose
+  for (let i = 0; i < xs.length; i++) {
+    const x = xs[i]; if (!colC(x) || (glassNose && x === front) || colC(x - 1)) continue;
+    let e = x; while (colC(e + 1) && !(glassNose && e + 1 === front)) e++;
+    const c = BC[x], cw = Math.min(1.6, c.w * 0.62), ch = 1.15, len = e - x + 1 + 1.4, y = yc + c.h / 2 + 0.2;
+    add(octo(len * 0.55, cw * 0.55, ch * 0.5, cw, ch), M.glass(), X(x) - 0.8, y, c.z, 0, 0, 0);
+    add(octo(len * 0.45, cw, ch, cw * 0.62, ch * 0.55), M.glass(), X(x) - 0.8 + len * 0.55, y, c.z);
+  }
+  // wings and tailplanes: thick stubby slabs; the outermost cell of a wing in the trim colour
+  for (const k of cells) {
+    const host = H[k.x + "," + k.y];
+    if (k.c === "W" || (host === "wing" && "GEKUO".includes(k.c))) {
+      const out = at(k.x, k.y + Math.sign(k.y - MID)) === ".";
+      add(boxM(1.0, WT, 1.0), out && k.c === "W" ? trim : base, X(k.x) + 0.5, wingY, Z(k.y));
+    }
+    if (k.c === "H") add(boxM(1.0, 0.2, 1.0), trim, X(k.x) + 0.5, yc + (skids ? 0.25 : 0.05), Z(k.y));
+  }
+  const top = x => yc + (BC[x] ? BC[x].h / 2 : 0.5);
+  for (const k of cells) {
+    const cx = X(k.x) + 0.5, cz = Z(k.y), c = BC[k.x];
+    switch (k.c) {
+      case "V": case "T": {   // a swept fin on the body, in the trim colour
+        const hh = k.c === "V" ? 1.35 : 1.0, sh = new THREE.Shape();
+        sh.moveTo(0, 0); sh.lineTo(1, 0); sh.lineTo(0.55, hh); sh.lineTo(0.08, hh * 1.04); sh.lineTo(0, 0);
+        const fg = new THREE.ExtrudeGeometry(sh, {depth: 0.22, bevelEnabled: false}); fg.translate(0, 0, -0.11);
+        add(fg, trim, X(k.x), top(k.x) - 0.12, cz);
+        if (k.c === "T") {   // the tail rotor, on the port side
+          const hub = new THREE.Group(); hub.position.set(cx, top(k.x) + 0.35, cz - (c ? c.w / 2 : 0.5) - 0.3); g.add(hub);
+          add(boxM(0.28, 1.7, 0.08), M.blade(), 0, 0, 0, 0, 0, 0, hub); add(boxM(0.3, 0.3, 0.2), M.iron(), 0, 0, 0.06, 0, 0, 0, hub);
+          spin.push({o: hub, axis: "z", rate: 16});
+        }
+        break;
+      }
+      case "P": {   // spinner and a fat three-blade prop
+        const hub = new THREE.Group(); hub.position.set(X(k.x) + 1.0, yc, cz); g.add(hub);
+        add(octo(0.6, 0.62, 0.62, 0.12, 0.12), trim, 0, 0, 0, 0, 0, 0, hub);
+        for (let b = 0; b < 3; b++) { const bl = add(boxM(0.1, 1.25, 0.34), M.blade(), 0.18, 0, 0, b * Math.PI * 2 / 3, 0, 0, hub); bl.geometry.translate(0, 0.62, 0); }
+        spin.push({o: hub, axis: "x", rate: 9});
+        break;
+      }
+      case "J": {   // the nozzle, dark, at the back of the body
+        const w = c ? c.bw : 0.8, h = c ? c.bh : 0.8;
+        add(octo(0.35, w * 0.8, h * 0.8, w * 0.9, h * 0.9), M.blade(), X(k.x) - 0.3, yc, cz);
+        if (LF) LF(X(k.x) - 0.6, yc, cz, 0xff7a30, 0.9, 3, {size: 0.12});
+        break;
+      }
+      case "R": {   // mast, hub and two fat blades
+        const y0 = top(k.x) - 0.05;
+        add(boxM(0.36, 0.7, 0.36), M.iron(), cx, y0 + 0.35, cz);
+        const hub = new THREE.Group(); hub.position.set(cx, y0 + 0.8, cz); g.add(hub);
+        add(boxM(0.7, 0.26, 0.7), M.iron(), 0, 0, 0, 0, 0, 0, hub);
+        const r = MOD.R.rotorR;
+        add(boxM(2 * r - 0.8, 0.09, 0.5), M.blade(), 0, 0.08, 0, 0, 0, 0, hub);
+        for (const sx of [-1, 1]) add(boxM(0.4, 0.1, 0.52), trim, sx * (r - 0.2), 0.08, 0, 0, 0, 0, hub);
+        spin.push({o: hub, axis: "y", rate: 3.2});
+        break;
+      }
+      case "N": {   // a nacelle stood up for the hover, its rotor on top
+        const y0 = wingY - 0.4;
+        const pod = add(octo(1.5, 0.78, 0.78, 0.66, 0.66), base, 0, 0, 0); pod.position.set(cx, y0, cz); pod.rotation.z = Math.PI / 2;
+        add(octo(0.18, 0.8, 0.8, 0.8, 0.8), trim, 0, 0, 0).position.set(cx, y0 + 0.55, cz);
+        g.children[g.children.length - 1].rotation.z = Math.PI / 2;
+        const hub = new THREE.Group(); hub.position.set(cx, y0 + 1.55, cz); g.add(hub);
+        const sp = add(octo(0.45, 0.5, 0.5, 0.1, 0.1), trim, 0, 0, 0, 0, 0, Math.PI / 2, hub);
+        const r = MOD.N.rotorR;
+        for (let b = 0; b < 3; b++) { const bl = add(boxM(r - 0.2, 0.08, 0.42), M.blade(), 0, 0.12, 0, 0, b * Math.PI * 2 / 3, 0, hub); bl.geometry.translate((r - 0.2) / 2 + 0.2, 0, 0); }
+        spin.push({o: hub, axis: "y", rate: 5});
+        break;
+      }
+      case "G": {
+        if (skids) break;
+        const host = H[k.x + "," + k.y], attach = host === "wing" ? wingY - WT / 2 : gearH + 0.25;
+        add(boxM(0.16, attach - 0.42, 0.16), M.iron(), cx, (attach + 0.42) / 2, cz);
+        add(octo(0.32, 0.86, 0.86, 0.86, 0.86), M.tyre(), cx, 0.43, cz + 0.16, 0, Math.PI / 2, 0);
+        add(octo(0.36, 0.36, 0.36, 0.36, 0.36), M.paint("white"), cx, 0.43, cz + 0.18, 0, Math.PI / 2, 0);
+        break;
+      }
+      case "E": case "K": case "U": {
+        const host = H[k.x + "," + k.y];
+        if (k.c === "U" || host === "wing") {
+          const y = (host === "wing" ? wingY - WT / 2 : gearH + 0.1) - 0.32;
+          if (k.c === "E") add(octo(1.1, 0.48, 0.48, 0.3, 0.3), M.paint("white"), X(k.x) - 0.05, y, cz);
+          else if (k.c === "K") add(boxM(0.85, 0.55, 0.7), M.paint("tan"), cx, y, cz);
+          else { add(boxM(0.8, 0.4, 0.45), M.paint("white"), cx, y, cz); add(boxM(0.12, 0.32, 0.32), M.glass(), cx + 0.46, y, cz); if (LF) LF(cx + 1.2, y - 0.2, cz, 0xfff0c0, 3.2, 12, {size: 0.14}); }
+        }
+        break;
+      }
+    }
+  }
+  // skids: a bar under each row of wheels, with struts up to the body
+  if (skids) {
+    const byRow = {};
+    cells.filter(k => k.c === "G").forEach(k => (byRow[k.y] = byRow[k.y] || []).push(k.x));
+    for (const [y, list] of Object.entries(byRow)) {
+      const a = Math.min(...list), b = Math.max(...list), z = Z(+y) * 0.9;
+      add(boxM(b - a + 2.0, 0.16, 0.16), M.iron(), X(a) + (b - a + 1) / 2 + 0.2, 0.1, z);
+      add(boxM(0.5, 0.16, 0.16), M.iron(), X(b) + 1.85, 0.25, z, 0, 0, 0.6);
+      for (const x of list) add(boxM(0.14, gearH - 0.05, 0.14), M.iron(), X(x) + 0.5, (gearH + 0.1) / 2, z);
+    }
+  }
+  // floats: one pontoon a row of float cells, struts up to whatever is above
+  {
+    const byRow = {};
+    cells.filter(k => k.c === "O").forEach(k => (byRow[k.y] = byRow[k.y] || []).push(k.x));
+    for (const [y, list] of Object.entries(byRow)) {
+      const a = Math.min(...list), b = Math.max(...list), z = Z(+y);
+      add(octo(b - a + 1.4, 0.72, 0.62, 0.42, 0.34), trim, X(a) - 0.2, 0.36, z);
+      for (const x of [a, b]) { const wing = at(x, +y + Math.sign(+y - MID)) === "W" || H[x + "," + y] === "wing", up = wing ? wingY - WT / 2 : gearH + 0.45, zz = wing ? z : z * 0.6; add(boxM(0.14, up - 0.6, 0.14), M.iron(), X(x) + 0.5, (up + 0.6) / 2, zz); }
+    }
+  }
+  // the livery: shark mouth on the front sides, the number behind the cockpit, roundels on the wings
+  const sideFace = (x, side) => { const c = BC[x]; const zb = c.bw / 2, zf = c.fw / 2, mid = (zb + zf) / 2; return {x: X(x) + 0.5, z: c.z + side * (mid + 0.015), ry: (side > 0 ? 0 : Math.PI) + side * Math.atan2(zb - zf, 1), h: Math.min(c.bh, c.fh) * 0.414}; };
+  const decal = (geo, map, x, x0, side, y, flip) => { const f = sideFace(x0, side); const m = new THREE.Mesh(geo, M.decal(map, flip)); m.position.set(x != null ? x : f.x, y, f.z); m.rotation.y = f.ry; m.renderOrder = 1; g.add(m); return f; };
+  const wide = xs.filter(x => BC[x].n >= 2);
+  if (liv.shark && wide.length) {
+    const x = wide[wide.length - 1];
+    if (!(glassNose && x === front)) { const f = sideFace(x, 1), hh = Math.min(0.6, f.h * 1.15); for (const side of [-1, 1]) decal(planeUV(hh * 2, hh, side < 0), T("shark-mouth"), null, x, side, yc - 0.02, side < 0); }
+  }
+  const cockX = xs.filter(colC), numX = cockX.length ? (BC[Math.min(...cockX) - 1] && !(liv.shark && Math.min(...cockX) - 1 === wide[wide.length - 1]) ? Math.min(...cockX) - 1 : Math.max(...cockX) + 1) : null;
+  if (liv.num && numX != null && BC[numX] && !(glassNose && numX === front)) {
+    const t = numberTex(liv.num), hgt = Math.min(0.55, sideFace(numX, 1).h * 1.3), w = hgt * t.image.width / 7;
+    for (const side of [-1, 1]) decal(planeUV(w, hgt, false), t, null, numX, side, yc + 0.02, false);
+  }
+  const wingCells = cells.filter(k => k.c === "W");
+  if (wingCells.length) {
+    for (const side of [-1, 1]) {
+      const ws = wingCells.filter(k => Math.sign(k.y - MID) === side); if (!ws.length) continue;
+      const yOut = side < 0 ? Math.min(...ws.map(k => k.y)) : Math.max(...ws.map(k => k.y)), row = ws.filter(k => k.y === yOut + (Math.abs(yOut - MID) > 1 ? -side : 0));
+      const use = row.length ? row : ws.filter(k => k.y === yOut), xm = use.reduce((a, k) => a + k.x, 0) / use.length;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.85), M.decal(T("roundel-" + liv.roundel), false)); m.rotation.x = -Math.PI / 2; m.position.set(X(xm) + 0.5, wingY + WT / 2 + 0.012, Z(use[0].y)); g.add(m);
+    }
+  } else if (xs.length) {
+    const x = xs.find(x => !cells.some(k => k.x === x && (k.c === "V" || k.c === "T"))) ?? xs[0];
+    for (const side of [-1, 1]) { const f = sideFace(x, side); decal(planeUV(f.h * 1.1, f.h * 1.1, false), T("roundel-" + liv.roundel), null, x, side, yc, false); }
+  }
+  // nav lights: red to port, green to starboard, white at the tail
+  if (LF) {
+    let zMin = 0, zMax = 0; cells.forEach(k => { zMin = Math.min(zMin, Z(k.y)); zMax = Math.max(zMax, Z(k.y)); });
+    const yN = s.S ? wingY + 0.1 : yc + 0.3, xN = s.S ? X(wingCells.reduce((a, k) => Math.max(a, k.x), 0)) + 0.85 : 0;
+    LF(xN, yN, zMin - 0.55, 0xff3030, 1.4, 5, {size: 0.11});
+    LF(xN, yN, zMax + 0.55, 0x30ff60, 1.4, 5, {size: 0.11});
+    LF(X(back) - 0.2, yc + 0.5, 0, 0xffffff, 1.1, 4, {size: 0.1});
+  }
+  return {g, spin, s};
+}
+
+// ======================= the airfield (three.js) =======================
+(function yard() {
+  const canvas = document.getElementById("yard");
+  const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 900);
+  const loader = new THREE.TextureLoader(TEXLOAD);
+
+  // ---- lamps: every light lights what is near it, wherever the camera is
+  const MAXL = 104, LAMPS = [];
+  const U = {uLampPos: {value: Array.from({length: MAXL}, () => new THREE.Vector3())}, uLampCol: {value: Array.from({length: MAXL}, () => new THREE.Vector4())}, uLampCount: {value: 0}, uLampOn: {value: 1}};
+  function lit(mat) {
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, U);
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+uniform vec3 uLampPos[${MAXL}];
+uniform vec4 uLampCol[${MAXL}];
+uniform int uLampCount;
+uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <lights_fragment_end>
+{
+  vec3 P = -vViewPosition;
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uLampCount) break;
+    vec3 Lv = uLampPos[i] - P;
+    float d = length(Lv);
+    float r = uLampCol[i].w;
+    if (d > r) continue;
+    float f = 1.0 - d / r;
+    float att = f * f;
+    float nl = max(dot(normal, Lv / max(d, 1e-3)), 0.0);
+    reflectedLight.directDiffuse += diffuseColor.rgb * uLampCol[i].rgb * att * (0.15 + 0.85 * nl) * uLampOn;
+  }
+}`);
+    };
+    mat.customProgramCacheKey = () => "lamps" + (mat.alphaTest ? "a" : "");
+    return mat;
+  }
+  const std = o => lit(new THREE.MeshStandardMaterial(Object.assign({roughness: 0.9, metalness: 0}, o)));
+  const BULBS = [];
+  function lamp(x, y, z, color, intensity, range, opts = {}) {
+    const L = {p: new THREE.Vector3(x, y, z), c: new THREE.Color(color), i: intensity, r: range, group: opts.group || null};
+    LAMPS.push(L);
+    if (opts.bulb !== false) {
+      const bs = (opts.size || 0.18) * 2, b = new THREE.Mesh(new THREE.BoxGeometry(bs, bs, bs), new THREE.MeshBasicMaterial({color}));
+      b.position.set(x, y, z); (opts.group || scene).add(b); L.bulb = b; BULBS.push(L);
+    }
+    return L;
+  }
+  const M = matSet(std);
+
+  // ---- sky, sun, moon
+  const hemi = new THREE.HemisphereLight(0xbcd6ee, 0x3d3a2c, 0.5); scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 1.0); sun.position.set(-80, 120, 60); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, {left: -120, right: 120, top: 120, bottom: -120, near: 10, far: 420}); sun.shadow.bias = -0.0005;
+  scene.add(sun);
+  const moon = new THREE.DirectionalLight(0x9fb4e0, 0.0); moon.position.set(90, 140, -60); scene.add(moon);
+  const starGeo = new THREE.BufferGeometry(); { const a = []; for (let i = 0; i < 1500; i++) { const t = Math.random() * Math.PI * 2, u = Math.random() * 0.95 + 0.05, r = 600; a.push(r * Math.cos(t) * Math.sqrt(1 - u * u), r * u, r * Math.sin(t) * Math.sqrt(1 - u * u)); } starGeo.setAttribute("position", new THREE.Float32BufferAttribute(a, 3)); }
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xdfe6ff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0})); scene.add(stars);
+  const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(14, 32), new THREE.MeshBasicMaterial({color: 0xdfe4f0, fog: false})); moonDisc.position.set(300, 380, -420); moonDisc.lookAt(0, 0, 0); scene.add(moonDisc);
+  scene.fog = new THREE.Fog(0x9bb7cc, 170, 640);
+
+  // ---- ground: the game's hex columns (2.833 m flat to flat, 1 m layers). The field is the fields
+  // biome's sheet of the game's terrain atlas, read the way planet_surface.wgsl does; the apron,
+  // taxiway and hangar floor are the game's granite and the helipad its flag, at their repeat_m. The
+  // runway is the mockup's asphalt.
+  const RW = {z: 35, half: 8, x: 118}, PAD = [60, -4], PAD_R = 9;
+  const HW = 2.833, HR = HW / Math.sqrt(3), RINGS = 84;
+  const hexXZ = (q, r) => [HW * (q + r / 2), HR * 1.5 * r];
+  const hsh = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const vn = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz); const a = hsh(xi, zi), b = hsh(xi + 1, zi), c = hsh(xi, zi + 1), d = hsh(xi + 1, zi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
+  const kindAt = (x, z) => {
+    if (Math.hypot(x - PAD[0], z - PAD[1]) < PAD_R) return "flag";
+    if (Math.abs(z - RW.z) < RW.half && Math.abs(x) < RW.x) return "runway";
+    if (x > -60 && x < 80 && z > -50 && z < 14) return "granite";
+    if (Math.abs(x) < 7 && z >= 14 && z < RW.z) return "granite";
+    return "grass";
+  };
+  const CELL = new Map();
+  for (let q = -RINGS; q <= RINGS; q++) for (let r = -RINGS; r <= RINGS; r++) {
+    if (Math.abs(q + r) > RINGS) continue;
+    const [x, z] = hexXZ(q, r), k = kindAt(x, z);
+    let h = 0;
+    if (k === "grass") { const dx = Math.max(0, Math.abs(x) - 128), dz = Math.max(0, z - 54, -64 - z); const d = Math.hypot(dx, dz); h = Math.max(0, Math.round(d / 9 + (vn(x / 22, z / 22) - 0.5) * 3 * Math.min(1, d / 20) + (vn(x / 60, z / 60) - 0.4) * d / 12)); }
+    CELL.set(q + "," + r, {x, z, k, h});
+  }
+  const ATLAS = nearest(loader.load("hangar/game/atlas.png")); ATLAS.wrapS = ATLAS.wrapT = THREE.ClampToEdgeWrapping;
+  const FIELDS = 4;   // the fields sheet, planet_terrain.rs TILESETS order
+  const auv = (tx, ty, fu, fv) => { const sx = FIELDS % 4, sy = Math.floor(FIELDS / 4); fu = 0.01 + fu * 0.98; fv = 0.01 + fv * 0.98; return [(sx * 4 + tx + fu) / 16, 1 - (sy * 4 + ty + fv) / 16]; };
+  const GEO = {}; const geo = k => GEO[k] || (GEO[k] = {p: [], n: [], u: []});
+  const REP = {granite: 2, flag: 2.5, runway: 4};   // repeat_m (manifest.ron for the game's; 4 m for the asphalt)
+  const NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+  const corner = i => { const a = Math.PI / 180 * (60 * i - 30); return [HR * Math.cos(a), HR * Math.sin(a)]; };
+  for (const [key, c] of CELL) {
+    const [q, r] = key.split(",").map(Number), G = geo(c.k === "grass" ? "atlas" : c.k);
+    const top = (px, pz) => c.k === "grass" ? auv(0, 0, (px - c.x) / (2 * HR) + 0.5, (pz - c.z) / (2 * HR) + 0.5) : [px / REP[c.k], -pz / REP[c.k]];
+    for (let i = 0; i < 6; i++) {
+      const [ax, az] = corner(i), [bx, bz] = corner((i + 1) % 6);
+      for (const [px, pz] of [[c.x, c.z], [c.x + bx, c.z + bz], [c.x + ax, c.z + az]]) { G.p.push(px, c.h, pz); G.n.push(0, 1, 0); G.u.push(...top(px, pz)); }
+      const mx = c.x + (ax + bx), mz = c.z + (az + bz);
+      let nb = null; for (const [dq, dr] of NB) { const o = CELL.get((q + dq) + "," + (r + dr)); if (o && Math.hypot(o.x - mx, o.z - mz) < HR) nb = o; }
+      const low = nb ? nb.h : c.h - 3; if (low >= c.h) continue;
+      const nx = (ax + bx) / 2, nz = (az + bz) / 2, l = Math.hypot(nx, nz), S = geo("atlas");
+      for (let y = c.h; y > low; y--) {
+        const tile = y === c.h && c.k === "grass" ? 1 : 2;
+        for (const [px, py, pz, u, v] of [[ax, y, az, 0, 0], [bx, y - 1, bz, 1, 1], [bx, y, bz, 1, 0], [ax, y, az, 0, 0], [ax, y - 1, az, 0, 1], [bx, y - 1, bz, 1, 1]]) { S.p.push(c.x + px, py, c.z + pz); S.n.push(nx / l, 0, nz / l); S.u.push(...auv(tile, 0, u, v)); }
+      }
+    }
+  }
+  const groundMat = {atlas: std({map: ATLAS, roughness: 1, side: THREE.DoubleSide}), granite: std({map: nearest(loader.load("hangar/game/granite.png")), roughness: 1}), flag: std({map: nearest(loader.load("hangar/game/flag.png")), roughness: 1}), runway: std({map: nearest(loader.load("hangar/tex-runway.png?v=1")), roughness: 1})};
+  for (const [k, G] of Object.entries(GEO)) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(G.p, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(G.n, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(G.u, 2));
+    const m = new THREE.Mesh(g, groundMat[k]); m.receiveShadow = true; scene.add(m);
+  }
+  const put = (geo, mat, x, y, z, ry = 0, cast = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = cast; m.receiveShadow = true; scene.add(m); return m; };
+  const metre = (n, rep) => std({map: (() => { const t = nearest(loader.load(n)); t.repeat.set(1 / rep, 1 / rep); return t; })(), roughness: 1});
+  const STONE = metre("hangar/game/stone.png", 2), SLATE = metre("hangar/game/slate.png", 2), IRON = metre("hangar/game/iron.png", 1), PLANK = metre("hangar/game/plank.png", 2);
+  const WHITE = metre("hangar/tex-marking.png?v=1", 2), YELLOW = metre("hangar/tex-marking-yellow.png?v=1", 2), DOOR = metre("hangar/tex-door.png?v=1", 1);
+  const flat = (w, d, mat, x, z, ry = 0) => { const m = new THREE.Mesh(boxM(w, 0.04, d), mat); m.position.set(x, 0.03, z); m.rotation.y = ry; m.receiveShadow = true; scene.add(m); return m; };
+
+  // ---- runway markings: centreline dashes, edge lines, threshold keys and the designators
+  for (let x = -100; x <= 100; x += 14) flat(7, 0.7, WHITE, x, RW.z);
+  for (const s of [-1, 1]) flat(2 * RW.x - 4, 0.45, WHITE, 0, RW.z + s * (RW.half - 0.9));
+  for (const s of [-1, 1]) for (let k = 0; k < 8; k++) flat(7, 0.9, WHITE, s * (RW.x - 6), RW.z - 6.3 + k * 1.8);
+  const desig = (str, x, ry) => { const t = numberTex(str), m = new THREE.Mesh(new THREE.PlaneGeometry(9, 9 * 7 / t.image.width), lit(new THREE.MeshStandardMaterial({map: t, alphaTest: 0.5, roughness: 1}))); m.rotation.set(-Math.PI / 2, 0, ry); m.position.set(x, 0.06, RW.z); m.receiveShadow = true; scene.add(m); };
+  desig("09", -RW.x + 17, -Math.PI / 2); desig("27", RW.x - 17, Math.PI / 2);
+  // taxiway: a yellow centreline and a hold-short bar
+  flat(0.5, RW.z - RW.half - 14, YELLOW, 0, (14 + RW.z - RW.half) / 2);
+  for (const dz of [0, 1.2]) flat(12, 0.35, YELLOW, 0, RW.z - RW.half - 4 + dz);
+  // helipad: a yellow octagon ring and a white H
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, r = 7.4; flat(r * 2 * Math.tan(Math.PI / 8), 0.5, YELLOW, PAD[0] + Math.cos(a) * r, PAD[1] + Math.sin(a) * r, -a + Math.PI / 2); }
+  flat(0.9, 5.2, WHITE, PAD[0] - 1.6, PAD[1]); flat(0.9, 5.2, WHITE, PAD[0] + 1.6, PAD[1]); flat(2.4, 0.9, WHITE, PAD[0], PAD[1]);
+  // bay lines on the apron, in front of each door
+  for (const bx of [-13, 0, 13]) flat(0.4, 26, YELLOW, bx, -10);
+
+  // ---- runway, taxiway and pad lights: small, so they pool on the asphalt
+  const edge = [];
+  for (let x = -RW.x + 4; x <= RW.x - 4; x += 15) for (const s of [-1, 1]) { const z = RW.z + s * (RW.half + 0.4); put(boxM(0.18, 0.4, 0.18), IRON, x, 0.2, z); lamp(x, 0.5, z, 0xfff0c8, 1.7, 6, {size: 0.13}); }
+  for (let k = 0; k < 5; k++) { const z = RW.z - 6 + k * 3; lamp(-RW.x - 1.2, 0.35, z, 0x4cff6a, 1.8, 5, {size: 0.14}); lamp(RW.x + 1.2, 0.35, z, 0xff3a2a, 1.8, 5, {size: 0.14}); }
+  for (const s of [-1, 1]) for (let z = 16; z < RW.z - RW.half - 1; z += 5) lamp(s * 7.6, 0.35, z, 0x4a7aff, 1.6, 4, {size: 0.12});
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4 + Math.PI / 8; lamp(PAD[0] + Math.cos(a) * (PAD_R + 0.4), 0.3, PAD[1] + Math.sin(a) * (PAD_R + 0.4), 0x58ff7a, 1.8, 5, {size: 0.13}); }
+
+  // ---- the hangar: three bays, stone walls, a slate roof on iron trusses, roller doors up
+  const HZ0 = -48, HZ1 = -21, EAVE = 9, RIDGE = 13, DOOR_H = 6.5;
+  const hg = new THREE.Group(); scene.add(hg);
+  const hput = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; hg.add(m); return m; };
+  hput(boxM(40, EAVE, 0.8), STONE, 0, EAVE / 2, HZ0 + 0.4);
+  for (const s of [-1, 1]) hput(boxM(0.8, EAVE, HZ1 - HZ0), STONE, s * 19.6, EAVE / 2, (HZ0 + HZ1) / 2);
+  for (const px of [-19.5, -6.5, 6.5, 19.5]) hput(boxM(1, DOOR_H, 0.8), STONE, px, DOOR_H / 2, HZ1 - 0.4);
+  hput(boxM(40, EAVE - DOOR_H, 0.8), STONE, 0, DOOR_H + (EAVE - DOOR_H) / 2, HZ1 - 0.4);
+  const gable = new THREE.Shape(); gable.moveTo(-20, 0); gable.lineTo(20, 0); gable.lineTo(0, RIDGE - EAVE); gable.lineTo(-20, 0);
+  for (const z of [HZ1 - 0.8, HZ0]) { const m = new THREE.Mesh(new THREE.ExtrudeGeometry(gable, {depth: 0.8, bevelEnabled: false}), STONE); m.position.set(0, EAVE, z); m.castShadow = true; hg.add(m); }
+  const slope = Math.atan2(RIDGE - EAVE, 20), rl = Math.hypot(20.8, RIDGE - EAVE + 0.4);
+  for (const s of [-1, 1]) { const r = hput(boxM(rl, 0.4, HZ1 - HZ0 + 1.6), SLATE, s * 10.2, EAVE + (RIDGE - EAVE) / 2 + 0.25, (HZ0 + HZ1) / 2); r.rotation.z = -s * slope; }
+  for (let z = HZ0 + 4; z < HZ1; z += 6) { hput(boxM(39, 0.35, 0.35), IRON, 0, EAVE - 0.2, z); hput(boxM(0.35, RIDGE - EAVE, 0.35), IRON, 0, EAVE + (RIDGE - EAVE) / 2, z); }
+  for (const bx of [-13, 0, 13]) hput(octo(12, 0.7, 0.7, 0.7, 0.7), DOOR, bx - 6, DOOR_H + 0.35, HZ1 + 0.1);
+  for (const bx of [-6.5, 6.5]) flat(0.3, HZ1 - HZ0 - 1.6, YELLOW, bx, (HZ0 + HZ1) / 2);
+  // the workbench at the back of the middle bay, where the builder opens; a wing on a stand
+  hput(boxM(4.5, 1.0, 1.3), PLANK, 0, 0.5, HZ0 + 1.6); hput(boxM(5, 2.4, 0.15), PLANK, 0, 2.6, HZ0 + 0.9);
+  for (const dx of [-1.6, 1.6]) hput(boxM(0.2, 1.4, 0.2), IRON, 6.6 + dx, 0.7, HZ0 + 4);
+  { const w = hput(boxM(4.2, 0.34, 1.2), M.paint("red"), 6.6, 1.55, HZ0 + 4); w.rotation.y = 0.15; }
+  hput(boxM(8.4, 0.09, 0.5), M.blade(), -6.8, 0.5, HZ0 + 2.2).rotation.z = 0.06;
+  for (let k = 0; k < 6; k++) hput(boxM(1.1, 1.1, 1.1), M.paint("tan"), -17.4 + (k % 2) * 1.15, 0.55 + Math.floor(k / 2) * 1.12, HZ0 + 2.5);
+  // lamps: one hanging in each bay, one over each door outside, and the light the doors spill
+  const WINDOW_MATS = [];
+  for (const bx of [-13, 0, 13]) {
+    hput(boxM(1.4, 0.35, 1.4), IRON, bx, EAVE - 0.9, -34);
+    lamp(bx, EAVE - 1.3, -34, 0xffc070, 3.4, 15, {size: 0.3});
+    hput(boxM(1.2, 0.3, 0.6), IRON, bx, DOOR_H + 1.6, HZ1 + 0.3);
+    lamp(bx, DOOR_H + 1.3, HZ1 + 0.6, 0xffd08a, 2.6, 13, {size: 0.26});
+    lamp(bx, 2.8, HZ1 + 2.5, 0xffb868, 1.6, 9, {bulb: false});
+  }
+  const winMat = new THREE.MeshStandardMaterial({color: 0x3a3a3a, emissive: 0xffc878, emissiveIntensity: 0}); WINDOW_MATS.push(winMat);
+  for (const s of [-1, 1]) for (let z = HZ0 + 3; z < HZ1 - 1; z += 4.5) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.3), winMat); w.position.set(s * 20.02, 6.8, z); w.rotation.y = s * Math.PI / 2; hg.add(w); }
+
+  // ---- the tower and its beacon, the floodlight masts, the windsock
+  const TW = [-74, -16];
+  put(boxM(6, 10, 6), STONE, TW[0], 5, TW[1]);
+  const cab = new THREE.MeshStandardMaterial({map: T("tex-canopy"), emissive: 0xffc070, emissiveIntensity: 0}); WINDOW_MATS.push(cab);
+  put(boxM(7, 2.6, 7), cab, TW[0], 11.3, TW[1]); put(boxM(7.6, 0.4, 7.6), IRON, TW[0], 12.8, TW[1]);
+  lamp(TW[0], 11.3, TW[1] + 4.5, 0xffc878, 2.2, 11, {bulb: false});
+  put(boxM(0.8, 0.9, 0.8), IRON, TW[0], 13.45, TW[1]);
+  const beacon = lamp(TW[0], 14.2, TW[1], 0xffffff, 2.6, 26, {size: 0.32});
+  for (const [x, z] of [[-48, 8], [-24, 12], [24, 12], [48, 8], [82, 2]]) {
+    put(boxM(0.6, 11, 0.6), IRON, x, 5.5, z);
+    put(boxM(2.2, 0.6, 1.0), IRON, x, 11.2, z);
+    lamp(x, 10.6, z, 0xffc880, 2.4, 19, {size: 0.42});
+  }
+  const SOCK = [98, 20];
+  put(boxM(0.25, 7, 0.25), IRON, SOCK[0], 3.5, SOCK[1]);
+  const sock = new THREE.Group(); sock.position.set(SOCK[0], 6.7, SOCK[1]); sock.rotation.z = -0.22; scene.add(sock);
+  { const SM = std({map: T("tex-sock"), roughness: 1}); let w = 1.0; for (let k = 0; k < 4; k++) { const m = new THREE.Mesh(octo(0.85, w, w, w * 0.84, w * 0.84), SM); m.position.x = k * 0.85; m.castShadow = true; sock.add(m); w *= 0.84; } }
+  lamp(SOCK[0], 7.6, SOCK[1] + 0.6, 0xfff0c0, 2.2, 6, {size: 0.16});
+
+  // ---- the aircraft
+  const CRAFT = {}, SPIN = [];
+  const SPOTS = {sharky: [-13, -31, -Math.PI / 2], gull: [13, -32, -Math.PI / 2], puffin: [-30, -6, -Math.PI / 2], dart: [28, -4, -Math.PI / 2], bumble: [PAD[0], PAD[1], Math.PI], yours: [0, -6, -Math.PI / 2]};
+  function place(id, rows, liv) {
+    if (CRAFT[id]) { scene.remove(CRAFT[id].g); for (let i = LAMPS.length - 1; i >= 0; i--) if (LAMPS[i].group === CRAFT[id].g) LAMPS.splice(i, 1); for (let i = SPIN.length - 1; i >= 0; i--) if (SPIN[i].owner === id) SPIN.splice(i, 1); }
+    const [x, z, yaw] = SPOTS[id], d = buildCraft(rows, liv, M, lamp);   // its lamps ride its group
+    d.g.position.set(x, 0, z); d.g.rotation.y = yaw; scene.add(d.g); CRAFT[id] = d;
+    d.spin.forEach(s => SPIN.push(Object.assign(s, {owner: id})));
+  }
+  const kestrel = {g: null};
+  function placeAll() { for (const id of ["sharky", "gull", "puffin", "dart", "bumble"]) place(id, PRESETS[id].rows, PRESETS[id].livery); }
+  // the game's Kestrel (assets/models/vehicles, byte-identical GLB with its embedded atlas), parked
+  // on the apron as the scale and style reference
+  if (THREE.GLTFLoader) {
+    const gl = new THREE.GLTFLoader();
+    const getGlb = (n, done) => gl.load(`hangar/game/${n}.glb`, done, undefined, () =>
+      fetch(`hangar/game/${n}.glb.txt`).then(r => r.text()).then(t => { const bin = atob(t.trim()), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); gl.parse(u.buffer, "", done); }));
+    getGlb("kestrel", gltf => {
+      const o = gltf.scene;
+      o.traverse(m => { if (!m.isMesh) return; const map = m.material.map; if (map) { map.magFilter = map.minFilter = THREE.NearestFilter; map.generateMipmaps = false; map.needsUpdate = true; } m.material = std({map, color: m.material.color, side: m.material.side}); m.castShadow = m.receiveShadow = true; });
+      o.rotation.y = Math.PI / 2; const bb = new THREE.Box3().setFromObject(o); o.position.set(-50, -bb.min.y, -6); scene.add(o); kestrel.g = o;
+      const sz = new THREE.Vector3(); bb.getSize(sz); kestrel.size = sz;
+      info();
+    });
+  }
+
+  // ---- time of day
+  const TIMES = {
+    day:  {sky: 0x9cc4e4, fog: 0xb4cbd8, hemi: 0.55, sun: 1.05, sunCol: 0xfff1dc, sunPos: [-80, 120, 60], moon: 0, lamps: 0, win: 0, stars: 0, moonDisc: false},
+    dusk: {sky: 0x8a6f72, fog: 0x8d7068, hemi: 0.22, sun: 0.55, sunCol: 0xff9a5a, sunPos: [-160, 22, 40], moon: 0.04, lamps: 0.55, win: 0.6, stars: 0.25, moonDisc: true},
+    night:{sky: 0x070b14, fog: 0x0a0e18, hemi: 0.012, sun: 0, sunCol: 0xffffff, sunPos: [-80, 120, 60], moon: 0.035, lamps: 1, win: 1.2, stars: 0.9, moonDisc: true},
+  };
+  let time = "night";
+  function setTime(t) {
+    time = t; const P = TIMES[t];
+    scene.background = new THREE.Color(P.sky); scene.fog.color.setHex(P.fog);
+    hemi.intensity = P.hemi; sun.intensity = P.sun; sun.color.setHex(P.sunCol); sun.position.set(...P.sunPos); sun.castShadow = P.sun > 0.2;
+    moon.intensity = P.moon; stars.material.opacity = P.stars; moonDisc.visible = P.moonDisc;
+    U.uLampOn.value = P.lamps;
+    for (const L of LAMPS) if (L.bulb) L.bulb.material.color.copy(L.c).multiplyScalar(P.lamps > 0.05 ? 1 : 0.35);
+    WINDOW_MATS.forEach(m => m.emissiveIntensity = P.win);
+    M.glass().emissiveIntensity = t === "night" ? 0.25 : 0.12;
+    document.querySelectorAll("#timeSel button").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === t));
+    info();
+  }
+  document.querySelectorAll("#timeSel button").forEach(b => b.addEventListener("click", () => setTime(b.dataset.t)));
+
+  // ---- camera: drag to orbit, wheel or pinch to zoom
+  const cam = {target: new THREE.Vector3(0, 2, -12), yaw: 0.62, pitch: 0.36, dist: 105, goal: null};
+  let focused = "all";
+  const VIEW = {all: [0, -12, 105], hangar: [0, -30, 46], sharky: [-13, -31, 15], gull: [13, -32, 16], puffin: [-30, -6, 17], dart: [28, -4, 15], bumble: [PAD[0], PAD[1], 18], kestrel: [-50, -6, 17], yours: [0, -6, 16]};
+  const focus = id => { const [x, z, d] = VIEW[id]; cam.goal = {t: new THREE.Vector3(x, id === "all" ? 2 : 2.2, z), d}; focused = id; info(); };
+  const SEL = [["all", "Whole field"], ["hangar", "Hangar"], ["sharky", "Sharky"], ["bumble", "Bumble"], ["puffin", "Puffin"], ["gull", "Gull"], ["dart", "Dart"], ["kestrel", "Kestrel"], ["yours", "Your design"]];
+  document.getElementById("shipSel").innerHTML = SEL.map(([id, n]) => `<button data-s="${id}" aria-pressed="${id === "all"}">${n}</button>`).join("");
+  const selPress = id => document.querySelectorAll("#shipSel button").forEach(o => o.setAttribute("aria-pressed", o.dataset.s === id));
+  document.querySelectorAll("#shipSel button").forEach(b => b.addEventListener("click", () => { focus(b.dataset.s); selPress(b.dataset.s); }));
+  const ptrs = new Map(); let pinch0 = 0;
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+  canvas.addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 1) { cam.yaw -= (e.clientX - px) * 0.006; cam.pitch = Math.min(1.45, Math.max(0.05, cam.pitch + (e.clientY - py) * 0.005)); }
+    else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0) cam.dist = Math.min(320, Math.max(6, cam.dist * pinch0 / d)); pinch0 = d; }
+  });
+  const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
+  canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.min(320, Math.max(6, cam.dist * Math.exp(e.deltaY * 0.0012))); cam.goal && (cam.goal.d = cam.dist); }, {passive: false});
+
+  let yours = null;
+  function info() {
+    const el = document.getElementById("yardInfo");
+    const desc = (name, s) => `<div><b>${name}</b>: ${Math.round(s.m)} kg, ${s.len.toFixed(0)} by ${s.width.toFixed(1)} m. ${s.canHover ? `Hovers at ${s.hover.toFixed(2)} of its weight` : `Stalls at ${s.stall.toFixed(0)} m/s`}, tops out at ${s.top.toFixed(0)} m/s, ${Math.round(s.range)} km on its fuel.</div>`;
+    if (PRESETS[focused]) { el.innerHTML = desc(PRESETS[focused].name, stats(PRESETS[focused].rows)); return; }
+    if (focused === "yours") { el.innerHTML = yours ? desc(yours.name, stats(yours.rows)) : `<div><b>Your design</b> rolls out here, in front of the middle bay. Draw one in section 2 and press <b>Roll out</b>.</div>`; return; }
+    if (focused === "kestrel") { el.innerHTML = `<div><b>Kestrel</b>, the game's own tiltrotor (<code>assets/models/vehicles/kestrel</code>), 1,200 kg${kestrel.size ? `, ${kestrel.size.x.toFixed(1)} m long` : ""}. The chibi aircraft are measured against it and fly by its foil model.</div>`; return; }
+    el.innerHTML = `<div><b>${LAMPS.length} lights</b> on the field, each lighting what is within its range (runway edge lights 6 m, pad lights 5 m, bay lamps 15 m, floodlights 19 m), all at once. <b>${time === "night" ? "Night" : time === "dusk" ? "Dusk" : "Day"}</b>: ${time === "day" ? "lamps off, sun shadows." : time === "dusk" ? "lamps coming on, low sun." : "moon at 0.035, lamps full."}</div>`;
+  }
+  press("rollout", () => { if (!cellsOf(rowsNow()).length) return; yours = {rows: rowsNow(), name: designName}; place("yours", yours.rows, Object.assign({}, livery)); setTime(time); focus("yours"); selPress("yours"); document.querySelector(".stage").scrollIntoView({behavior: "smooth", block: "center"}); });
+
+  function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  new ResizeObserver(resize).observe(canvas); resize();
+  document.getElementById("hudbar").innerHTML = `<div class="hs sel"><img src="hangar/game/hand.png" alt="Bare hand (the game's icon)"></div>` +
+    [["cockpit", 1], ["fuselage", 6], ["wing", 16], ["prop", 1], ["rotor", 1], ["nacelle", 2], ["gear", 2], ["fuel", 2], ["livery", 1]].map(([n, c]) => `<div class="hs"><img src="hangar/${n}.png?v=1" alt="${n}"><span class="c">${c}</span></div>`).join("");
+  const clock = new THREE.Clock(), reduce = matchMedia("(prefers-reduced-motion: reduce)").matches, tmp = new THREE.Vector3();
+  function frame() {
+    const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+    if (cam.goal) { cam.target.lerp(cam.goal.t, 1 - Math.exp(-dt * 4)); cam.dist += (cam.goal.d - cam.dist) * (1 - Math.exp(-dt * 4)); if (cam.target.distanceTo(cam.goal.t) < 0.05 && Math.abs(cam.dist - cam.goal.d) < 0.1) cam.goal = null; }
+    if (!reduce && !ptrs.size && !cam.goal && !SHOT) cam.yaw += dt * 0.03;
+    camera.position.set(cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.target.y + cam.dist * Math.sin(cam.pitch), cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw));
+    camera.lookAt(cam.target); camera.updateMatrixWorld();
+    if (!reduce) SPIN.forEach((s, i) => s.o.rotation[s.axis] = (SHOT ? 0.5 + i * 0.37 : t) * s.rate);   // a screenshot: blades at fixed angles
+    // the beacon turns: white and green in turn, as an aerodrome beacon does
+    const phase = (t * 0.5) % 1; beacon.c.setHex(phase < 0.5 ? 0xffffff : 0x40ff70); beacon.i = 2.6 * (0.35 + 0.65 * Math.abs(Math.sin(t * Math.PI))); if (beacon.bulb) beacon.bulb.material.color.copy(beacon.c);
+    scene.updateMatrixWorld();
+    const n = Math.min(MAXL, LAMPS.length);
+    for (let i = 0; i < n; i++) {
+      const L = LAMPS[i];
+      tmp.copy(L.p); if (L.group) L.group.localToWorld(tmp);
+      U.uLampPos.value[i].copy(tmp).applyMatrix4(camera.matrixWorldInverse);
+      U.uLampCol.value[i].set(L.c.r * L.i, L.c.g * L.i, L.c.b * L.i, L.r);
+    }
+    U.uLampCount.value = n;
+    renderer.render(scene, camera);
+    if ((SHOT && ++shotFrames > 45) || (STILL && ++shotFrames > 3)) { if (SHOT) document.body.dataset.ready = "1"; return; }   // a screenshot: hold the picture
+    requestAnimationFrame(frame);
+  }
+  const SHOT = Q.has("shot"), STILL = Q.has("still"); let shotFrames = 0;
+  let started = false;
+  const start = () => {
+    if (started) return; started = true;
+    placeAll(); setTime(TIMES[Q.get("time")] ? Q.get("time") : "night");
+    document.getElementById("loading")?.remove();
+    if (SHOT) { document.body.classList.add("shot"); resize(); const id = Q.get("shot"); if (VIEW[id]) { focus(id); selPress(id); const g = cam.goal; cam.target.copy(g.t); cam.dist = g.d; cam.goal = null; } if (Q.get("yaw")) cam.yaw = +Q.get("yaw"); if (Q.get("pitch")) cam.pitch = +Q.get("pitch"); if (Q.get("dist")) cam.dist = +Q.get("dist"); }
+    requestAnimationFrame(frame);
+  };
+  digitsReady.then(start);
+})();
+
+// ======================= the builder's live preview =======================
+(function preview() {
+  const canvas = document.getElementById("pv");
+  const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputEncoding = THREE.sRGBEncoding; renderer.shadowMap.enabled = true;
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x141a1f);
+  const camera = new THREE.PerspectiveCamera(38, 1.6, 0.1, 200);
+  scene.add(new THREE.HemisphereLight(0xdfe8f0, 0x3a3428, 0.75));
+  const key = new THREE.DirectionalLight(0xffe6c0, 0.95); key.position.set(-8, 14, 9); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); Object.assign(key.shadow.camera, {left: -10, right: 10, top: 10, bottom: -10}); scene.add(key);
+  const fill = new THREE.PointLight(0xffb868, 0.6, 30); fill.position.set(7, 6, -6); scene.add(fill);
+  const floorTex = nearest(new THREE.TextureLoader(TEXLOAD).load("hangar/game/granite.png")); floorTex.repeat.set(0.5, 0.5);
+  const floor = new THREE.Mesh(boxM(30, 0.2, 30), new THREE.MeshStandardMaterial({map: floorTex, roughness: 1})); floor.position.y = -0.1; floor.receiveShadow = true; scene.add(floor);
+  const M = matSet(o => new THREE.MeshStandardMaterial(o));
+  let craft = null, spin = [];
+  const rebuild = () => { if (craft) scene.remove(craft); const c = buildCraft(rowsNow(), livery, M, null); craft = c.g; spin = c.spin; scene.add(craft); };
+  let pending = false;
+  listeners.push(() => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; rebuild(); }); });
+  const view = {yaw: 0.85, pitch: 0.42, dist: 17};
+  const ptr = {on: false, x: 0, y: 0};
+  canvas.addEventListener("pointerdown", e => { ptr.on = true; ptr.x = e.clientX; ptr.y = e.clientY; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener("pointermove", e => { if (!ptr.on) return; view.yaw -= (e.clientX - ptr.x) * 0.008; view.pitch = Math.min(1.3, Math.max(0.05, view.pitch + (e.clientY - ptr.y) * 0.006)); ptr.x = e.clientX; ptr.y = e.clientY; });
+  canvas.addEventListener("pointerup", () => ptr.on = false);
+  canvas.addEventListener("wheel", e => { e.preventDefault(); view.dist = Math.min(40, Math.max(7, view.dist * Math.exp(e.deltaY * 0.0012))); }, {passive: false});
+  function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  new ResizeObserver(resize).observe(canvas); resize();
+  const clock = new THREE.Clock(), reduce = matchMedia("(prefers-reduced-motion: reduce)").matches, still = Q.has("still");
+  if (Q.get("pyaw")) view.yaw = +Q.get("pyaw");
+  function frame() {
+    const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+    if (!reduce && !ptr.on && !still) view.yaw += dt * 0.25;
+    camera.position.set(view.dist * Math.cos(view.pitch) * Math.sin(view.yaw), 1.6 + view.dist * Math.sin(view.pitch), view.dist * Math.cos(view.pitch) * Math.cos(view.yaw));
+    camera.lookAt(0, 1.6, 0);
+    if (!reduce) spin.forEach(s => s.o.rotation[s.axis] = t * s.rate);
+    renderer.render(scene, camera);
+    if (still && ++stillFrames > 30) { document.body.dataset.pvReady = "1"; return; }
+    requestAnimationFrame(frame);
+  }
+  let stillFrames = 0;
+  if (!Q.has("shot")) digitsReady.then(() => { rebuild(); requestAnimationFrame(frame); });
+})();
+</script>

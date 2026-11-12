@@ -9,9 +9,9 @@ judged against what they would cost.
 
 - [x] 1.1 M22 Cranes and Printers, `docs/mockups/construction.html` (https://claude.ai/artifact/2LjxDc7LuNFX6yjPbMLMwc), with `tools/art/construction_art.py` and the game's art in `construction/game/`. Verify: day and night shots in `docs/screenshots/mockup-construction/`; the print slider runs plot to roof; an overload is refused with its number.
 - [x] 1.2 M23 Drydock and Hex Ship Builder, `docs/mockups/drydock.html` (https://claude.ai/artifact/DLRzGBKMJzhhFdayrbCVdx), with `tools/art/drydock_art.py` and the game's art in `drydock/game/`. Verify: day and night shots in `docs/screenshots/mockup-drydock/`; the water slider floats the ship off its blocks at its solved draft; the walk-the-deck view keeps the walker on the deck through the turn.
-- [ ] 1.3 M24 Hangar and Chibi Aircraft, `docs/mockups/hangar.html`, with `tools/art/hangar_art.py` and the game's art in `hangar/game/`. Verify: day and night shots and the five presets in `docs/screenshots/mockup-hangar/`; a helicopter with no tail rotor is refused.
-- [ ] 1.4 Publish the three, list them on the tracker (M22 to M24) and in `docs/mockups/mockup-work.md`, and record their links here. Verify: each page carries the tracker link under its title.
-- [ ] 1.5 Put the two questions judged by eye (chibi proportions; hex hull blockiness) in the survey, with screenshots. Verify: they are in `docs/design/survey.html` with the shots beside them.
+- [x] 1.3 M24 Hangar and Chibi Aircraft, `docs/mockups/hangar.html` (https://claude.ai/artifact/HrLdbcwrwbAD7PN1KojKKu), with `tools/art/hangar_art.py` and the game's art in `hangar/game/`. Verify: day and night shots and the five presets in `docs/screenshots/mockup-hangar/`; a helicopter with no tail rotor is refused.
+- [x] 1.4 Publish the three, list them on the tracker (M22 to M24) and in `docs/mockups/mockup-work.md`, and record their links here. Verify: each page carries the tracker link under its title.
+- [x] 1.5 Put the two questions judged by eye (chibi proportions; hex hull blockiness) in the survey, with screenshots. Verify: they are in `docs/design/survey.html` with the shots beside them (A1, A2; https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5).
 
 ## 2. The owner's review
 
