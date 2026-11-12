@@ -16,6 +16,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 2 | 2026-11-12 | The HTML survey added to Misc. |
 | 3 | 2026-11-12 | OpenSpec changes named for M5, M6 and M9. |
 | 4 | 2026-11-12 | The lighting-perf checkpoint benchmark added to Misc. |
+| 5 | 2026-11-12 | M20 Pits, Plants and Power (industry) added. |
 
 Every page on it links back to it: an "All Pale Blue Dot mockups (the tracker)" line under the
 page's title (the thirteen mockups of 2026-11-12, and the survey). The earlier mockups (M14 to M19)
@@ -47,6 +48,7 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 | M17 | Hex Tool Bench | `held-tools.html` | hex-held-tools (archived) | Approved for game, recorded: "Perfect", built and archived 2026-09-26 | https://claude.ai/artifact/YEf1BuLEk9Dppk55znZ5gr |
 | M18 | Rod, Shovel and School | `fishing.html` | fishing-and-equipment | Drafted (2026-09-24) | https://claude.ai/artifact/9XiEvkxSFJMtqaktg4eovj |
 | M19 | Kestrel, Tern and Loon | `vehicles.html` | vehicles, vehicle-models | Approved for game, recorded: approved, and the Rust port built (vehicles design) | https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D |
+| M20 | Pits, Plants and Power | `industry.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/JBcP2Js3bdQ2uApN3xUnHV |
 
 The thirteen of 2026-11-12 were published as one batch. Their commit (`d468860`) says "Fourteen",
 but it names thirteen subjects, and thirteen pages were published.
