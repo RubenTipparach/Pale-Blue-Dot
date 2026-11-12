@@ -228,41 +228,49 @@ STAMP = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+)Z", re.M)
 REBUILD = re.compile(r"towns' ground installed and the planet rebuilt")
 
 
-def stamp_s(line: str, launched: float) -> float | None:
-    """A log line's time in the frame log's clock (seconds since launch), from
-    its UTC stamp and the wall time the suite launched the process at. The
-    game's clock starts within a fraction of a second of the launch."""
+def log_zero(text: str) -> float | None:
+    """The frame log's zero as a UTC time: the game's first log line. The
+    frame log's clock starts as the app is built, within a fraction of a
+    second of that line; the process launch comes several seconds earlier."""
+    m = STAMP.search(text)
+    return dt.datetime.fromisoformat(m[1]).replace(tzinfo=dt.timezone.utc).timestamp() if m else None
+
+
+def stamp_s(line: str, zero: float | None) -> float | None:
+    """A log line's time in the frame log's clock, from its UTC stamp."""
+    if zero is None:
+        return None
     m = STAMP.match(line)
     if not m:
         return None
     when = dt.datetime.fromisoformat(m[1]).replace(tzinfo=dt.timezone.utc).timestamp()
-    return when - launched
+    return when - zero
 
 
-def warm_up_start(text: str, rows: list[dict], launched: float, ready: re.Pattern) -> tuple[float, str]:
+def warm_up_start(text: str, rows: list[dict], zero: float | None, ready: re.Pattern) -> tuple[float, str]:
     """Where the warm-up starts, in the frame log's clock, and what marked it:
     the game's ready line where it prints one, else the first frame."""
     for line in text.splitlines():
         if ready.search(line):
-            t = stamp_s(line, launched)
+            t = stamp_s(line, zero)
             if t is not None:
                 return t, "ready"
     return (rows[0]["t"], "first-frame") if rows else (0.0, "none")
 
 
-def rebuild_frames(text: str, rows: list[dict], launched: float) -> set[int]:
-    """The indices of the frames the planet rebuild froze: the first frame to
-    end after each rebuild line and longer than a second."""
+def rebuild_frames(text: str, rows: list[dict], zero: float | None) -> set[int]:
+    """The indices of the frames the planet rebuild froze: for each rebuild
+    line, the longest frame over a second ending within 3 s of it."""
     out = set()
     for line in text.splitlines():
         if REBUILD.search(line):
-            t = stamp_s(line, launched)
+            t = stamp_s(line, zero)
             if t is None:
                 continue
-            for i, r in enumerate(rows):
-                if r["t"] >= t - 0.5 and r["ms"] > 1000:
-                    out.add(i)
-                    break
+            near = [(r["ms"], i) for i, r in enumerate(rows)
+                    if abs(r["t"] - t) <= 3.0 and r["ms"] > 1000 and i not in out]
+            if near:
+                out.add(max(near)[1])
     return out
 
 
@@ -298,9 +306,7 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
     print(f"[{dt.datetime.now():%H:%M:%S}] {tag}: {' '.join(cmd)} {variant['env'] or ''}"
           f"{' assets@' + variant['assets'] if variant.get('assets') else ''}", flush=True)
     started = time.time()
-    launched = started
     with AssetsAt(variant.get("assets")), open(log_path, "w", encoding="utf-8", errors="replace") as log:
-        launched = time.time()
         proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env)
         try:
             code = proc.wait(timeout=a.timeout)
@@ -310,10 +316,20 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
             proc.wait()
             code, timed_out = None, True
     shutil.rmtree(saves, ignore_errors=True)
+    return analyse(scenario, variant, index, a, csv_path, log_path, code, timed_out,
+                   round(time.time() - started, 1))
+
+
+def analyse(scenario: str, variant: dict, index: int, a, csv_path: Path, log_path: Path,
+            code: int | None, timed_out: bool, seconds: float) -> dict:
+    """One run's result from its frame log and its game log (also what
+    `--reanalyse` redoes for a sitting already run)."""
+    tag = f"{scenario}_{variant['name']}_{index}"
     text = ANSI.sub("", log_path.read_text(encoding="utf-8", errors="replace"))
     every = load_frames(csv_path)
-    warm_from, warm_mark = warm_up_start(text, every, launched, a.ready)
-    stalls = rebuild_frames(text, every, launched)
+    zero = log_zero(text)
+    warm_from, warm_mark = warm_up_start(text, every, zero, a.ready)
+    stalls = rebuild_frames(text, every, zero)
     rebuild_ms = [every[i]["ms"] for i in sorted(stalls)]
     rows = [r for i, r in enumerate(every) if r["t"] >= warm_from + a.skip_s and i not in stalls]
 
@@ -332,7 +348,7 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
         problems.append(f"only {len(rows)} frames after the warm-up")
     result = {
         "scenario": scenario, "variant": variant["name"], "exe": variant["exe"], "env": variant["env"],
-        "index": index, "seconds": round(time.time() - started, 1), "csv": str(csv_path), "log": str(log_path),
+        "index": index, "seconds": seconds, "csv": str(csv_path), "log": str(log_path),
         "frame_ms": stats([r["ms"] for r in rows]),
         "gpu_total_ms": stats([r["gpu_total"] for r in rows]),
         "gpu_clouds_ms": stats([r["gpu_clouds"] for r in rows]),
@@ -484,6 +500,35 @@ def plot(results: list[dict], a) -> None:
         plt.close(fig)
 
 
+def reanalyse(a) -> None:
+    """Recompute every run of the sitting in `a.reanalyse` with this file's
+    analysis (the warm-up, the rebuild, the pass columns), keeping how each
+    run ended, and rewrite its JSON, `suite.json`, graphs and report."""
+    a.out = a.reanalyse
+    suite = json.loads((a.out / "suite.json").read_text(encoding="utf-8"))
+    meta, old = suite["meta"], suite["results"]
+    a.ready = re.compile(a.ready_pattern)
+    a.scenarios = list(dict.fromkeys(r["scenario"] for r in old))
+    a.variant_names = list(dict.fromkeys(r["variant"] for r in old))
+    a.repeats = max(r["index"] for r in old) + 1
+    variants = {v["name"]: v for v in meta["variants"]}
+    results = []
+    for r in old:
+        problems = r.get("problems", [])
+        timed_out = any(p.startswith("timed out") for p in problems)
+        code = next((int(p.split()[-1]) for p in problems if p.startswith("exit code")), 0)
+        tag = f"{r['scenario']}_{r['variant']}_{r['index']}"
+        new = analyse(r["scenario"], variants[r["variant"]], r["index"], a,
+                      a.out / f"{tag}.csv", a.out / f"{tag}.log", code, timed_out, r["seconds"])
+        results.append(new)
+    meta["reanalysed"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    (a.out / "suite.json").write_text(json.dumps({"meta": meta, "results": results}, indent=2), encoding="utf-8")
+    plot(results, a)
+    text = report(results, a, meta)
+    (a.out / "report.md").write_text(text + "\n", encoding="utf-8")
+    print(text)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenarios", default="clouds,storm,cloud-hop,far-side,walk")
@@ -496,7 +541,11 @@ def main() -> None:
                     help="a log line that marks the end of loading; the warm-up counts from it")
     ap.add_argument("--timeout", type=float, default=420.0)
     ap.add_argument("--out", type=Path, default=Path("output/perf") / dt.datetime.now().strftime("%Y%m%d-%H%M"))
+    ap.add_argument("--reanalyse", type=Path, help="redo a sitting's results and report from its CSVs and logs")
     a = ap.parse_args()
+    if a.reanalyse:
+        reanalyse(a)
+        return
     a.scenarios = [s.strip() for s in a.scenarios.split(",") if s.strip()]
     a.ready = re.compile(a.ready_pattern)
     for s in a.scenarios:
