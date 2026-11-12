@@ -15,6 +15,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 1 | 2026-11-12 | First publish: 19 mockups, 1 guide, 15 misc pages. |
 | 2 | 2026-11-12 | The HTML survey added to Misc. |
 | 3 | 2026-11-12 | OpenSpec changes named for M5, M6 and M9. |
+| 4 | 2026-11-12 | The lighting-perf checkpoint benchmark added to Misc. |
 
 Every page on it links back to it: an "All Pale Blue Dot mockups (the tracker)" line under the
 page's title (the thirteen mockups of 2026-11-12, and the survey). The earlier mockups (M14 to M19)

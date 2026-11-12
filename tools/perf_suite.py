@@ -129,6 +129,7 @@ def load_frames(path: Path) -> list[dict]:
                 "gpu_total": num(r.get("gpu_total_ms")),
                 "route_m": num(r.get("route_m")),
                 "clearance": num(r.get("clearance_m")),
+                "walked_m": num(r.get("walked_m")),
                 # Per-pass GPU columns (`lighting-perf` 1.2): `gpu_<pass>_ms`.
                 "passes": {k[4:-3]: num(v) for k, v in r.items()
                            if k and k.startswith("gpu_") and k.endswith("_ms")
@@ -369,6 +370,10 @@ def analyse(scenario: str, variant: dict, index: int, a, csv_path: Path, log_pat
                         for name in sorted({k for r in rows for k in r["passes"]})},
         "warm_up": {"from_s": round(warm_from, 2), "marked_by": warm_mark, "skip_s": a.skip_s},
         "rebuild_ms": rebuild_ms,
+        # Frames over SPIKE_MS, by where along the scenario they fell (the
+        # route's or the walk's metre, else seconds after the warm-up), for
+        # the report to say which recur in other runs.
+        "spikes": spike_places(rows, warm_from + a.skip_s),
     }
     adapter = re.search(r'AdapterInfo \{ name: "([^"]+)".*?backend: (\w+)', text)
     if adapter:
@@ -399,17 +404,44 @@ def analyse(scenario: str, variant: dict, index: int, a, csv_path: Path, log_pat
     return result
 
 
+SPIKE_MS = 30.0
+
+
+def spike_places(rows: list[dict], start: float) -> list[list]:
+    """Each frame over SPIKE_MS as [unit, place, ms]: along the route (m),
+    the walk (m) or the clock (s after the warm-up)."""
+    out = []
+    for r in rows:
+        if r["ms"] <= SPIKE_MS:
+            continue
+        if not math.isnan(r.get("route_m", math.nan)) and r["route_m"] > 0:
+            out.append(["route_m", r["route_m"], r["ms"]])
+        elif not math.isnan(r.get("walked_m", math.nan)):
+            out.append(["walked_m", r["walked_m"], r["ms"]])
+        else:
+            out.append(["s", r["t"] - start, r["ms"]])
+    return out
+
+
+def reproduced(spike: list, others: list[list[list]]) -> int:
+    """In how many of `others` (each a run's spikes) a spike of the same unit
+    falls near `spike`: 25 m along a route (a dozen spikes over 4 km), 5 m
+    along a walk (dozens over 1 km, where 25 m would match by chance), 1 s."""
+    near = {"route_m": 25.0, "walked_m": 5.0}.get(spike[0], 1.0)
+    return sum(any(o[0] == spike[0] and abs(o[1] - spike[1]) <= near for o in run) for run in others)
+
+
 def missed_refreshes(values: list[float]) -> dict:
-    """With vsync on, the frames that held the screen for more than one
-    refresh: over 1.5 refresh intervals, the interval read off the median
-    frame (16.7 ms on a 60 Hz display)."""
-    v = sorted(x for x in values if not math.isnan(x))
+    """With vsync on, the frames over the owner's floor: longer than one
+    60 Hz refresh (16.7 ms), and longer than two. On a faster display the
+    game's frames are not whole refreshes of 16.7 ms, so the floor is
+    counted, not the display's own refreshes."""
+    v = [x for x in values if not math.isnan(x)]
     if not v:
         return {}
-    interval = pct(v, 0.5)
-    late = [x for x in v if x > 1.5 * interval]
-    return {"interval_ms": interval, "frames": len(v), "missed": len(late),
-            "share": len(late) / len(v), "refreshes_lost": sum(round(x / interval) - 1 for x in late)}
+    over = [x for x in v if x > FLOOR_MS]
+    return {"frames": len(v), "missed": len(over), "share": len(over) / len(v),
+            "over_two": sum(x > 2 * FLOOR_MS for x in v)}
 
 
 def median(values: list[float]) -> float:
@@ -465,18 +497,17 @@ def report(results: list[dict], a, meta: dict) -> str:
                     f"{fmt(m('p50', 'gpu_clouds_ms'))} / {fmt(m('p95', 'gpu_clouds_ms'))} |")
         if getattr(a, "vsync", False):
             lines.append("")
-            lines.append("With vsync on: frames that missed a refresh (held the screen for more than one):")
+            lines.append(f"With vsync on: frames over the 60 fps floor ({FLOOR_MS:.1f} ms) and over two of it:")
             lines.append("")
-            lines.append("| variant | refresh, ms | missed | share | refreshes lost |")
-            lines.append("| --- | ---: | ---: | ---: | ---: |")
+            lines.append("| variant | over the floor | share | over twice it |")
+            lines.append("| --- | ---: | ---: | ---: |")
             for variant in a.variant_names:
                 ok = [r["missed"] for r in results
                       if r["scenario"] == scenario and r["variant"] == variant and r["valid"] and r.get("missed")]
                 if ok:
-                    lines.append(f"| {variant} | {median([m['interval_ms'] for m in ok]):.2f} | "
-                                 f"{sum(m['missed'] for m in ok)} of {sum(m['frames'] for m in ok)} | "
+                    lines.append(f"| {variant} | {sum(m['missed'] for m in ok)} of {sum(m['frames'] for m in ok)} | "
                                  f"{100 * sum(m['missed'] for m in ok) / sum(m['frames'] for m in ok):.2f}% | "
-                                 f"{sum(m['refreshes_lost'] for m in ok)} |")
+                                 f"{sum(m['over_two'] for m in ok)} |")
         passes = sorted({k for r in results if r["scenario"] == scenario and r["valid"]
                          for k in r.get("gpu_pass_ms", {})})
         if passes:
@@ -490,6 +521,29 @@ def report(results: list[dict], a, meta: dict) -> str:
                 cells = [fmt(median([r.get("gpu_pass_ms", {}).get(k, {}).get("p50", math.nan) for r in ok]))
                          for k in passes]
                 lines.append(f"| {variant} | " + " | ".join(cells) + " |")
+        runs = [r for r in results if r["scenario"] == scenario and r["valid"] and "spikes" in r]
+        if len(runs) > 1:
+            lines.append("")
+            lines.append(f"Frames over {SPIKE_MS:.0f} ms per run, and how many recur at the same place (25 m of route, 5 m of walk, or 1 s) in at "
+                         "least half of the scenario's other runs, of any variant. Those that recur are the "
+                         "game's own work at that place; the rest come and go between repeats (async work "
+                         "landing at another moment, or the machine):")
+            lines.append("")
+            lines.append("| variant | spikes per run | recurring | not recurring |")
+            lines.append("| --- | --- | ---: | ---: |")
+            for variant in a.variant_names:
+                mine = [r for r in runs if r["variant"] == variant]
+                if not mine:
+                    continue
+                rec = non = 0
+                for r in mine:
+                    others = [o["spikes"] for o in runs if o is not r]
+                    for sp in r["spikes"]:
+                        if reproduced(sp, others) * 2 >= len(others):
+                            rec += 1
+                        else:
+                            non += 1
+                lines.append(f"| {variant} | {', '.join(str(len(r['spikes'])) for r in mine)} | {rec} | {non} |")
         stalls = [ms for r in results if r["scenario"] == scenario for ms in r.get("rebuild_ms", [])]
         if stalls:
             lines.append("")
@@ -579,7 +633,7 @@ def main() -> None:
     ap.add_argument("--repeats", type=int, default=2)
     ap.add_argument("--time", type=float, default=10.0, help="the pinned hour: daylight, for the scenic clouds")
     ap.add_argument("--vsync", action="store_true",
-                    help="present with vsync (no --no-vsync) and count the frames that missed a refresh")
+                    help="present with vsync (no --no-vsync) and count the frames over the 60 fps floor")
     ap.add_argument("--skip-s", type=float, default=10.0, help="the warm-up, from the ready line or the first frame")
     ap.add_argument("--ready-pattern", default=r"\bLOADING_DONE\b|\bWORLD_READY\b|\bREADY\b|loading (?:is )?(?:done|complete|finished)",
                     help="a log line that marks the end of loading; the warm-up counts from it")

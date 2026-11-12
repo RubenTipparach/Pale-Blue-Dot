@@ -223,6 +223,7 @@ pre{background:var(--panel);border:1px solid var(--rule);border-radius:8px;paddi
 
 <div class="wrap">
 <header>
+  <a class="mono" href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk">All Pale Blue Dot mockups (the tracker)</a>
   <h3>%%EYEBROW%%</h3>
   <h1>%%TITLE%%</h1>
   <p>%%INTRO%%</p>

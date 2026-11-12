@@ -302,6 +302,11 @@ the new model and `PBD_LIGHTING=today`, then by part and at night;
 `docs/benchmarks/2026-11-12-lighting-model-clean/`, a quiet machine; the
 2026-11-11 sitting it replaces was contaminated; plan in `lighting-perf`)
 is https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9.
+The `lighting-perf` checkpoint (the desktop, main's `f15a647` against the
+branch before it and the branch with frame latency 2 and the L8 fixes, every
+scenario, at night, with vsync, and the slow frames classified;
+`docs/benchmarks/2026-11-12-lighting-perf/`) is
+https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 

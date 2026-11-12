@@ -268,6 +268,47 @@ p50 spread between the two repeats: 0.02-0.18 ms (stroll, storm).
 - **The storm is now inside the floor at p99** (13.8 ms); the stroll is
   not (21.6 ms), and its p50 sits at its GPU time (10.4 against 9.8 ms).
 
+## The checkpoint (task 3.1, measured 2026-11-12)
+
+`docs/benchmarks/2026-11-12-lighting-perf/`
+(https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH): `f15a647`, the branch
+before this change (`86361b1`) and the branch at `cdf0317` (latency 2, 2.1,
+2.2, 2.4, 2.5, 2.10, the loading screen), every scenario, 2 repeats. p50 /
+p95 / p99 ms, `f15a647` then now:
+
+| scenario | `f15a647` | now | p99 within 16.7 ms |
+| --- | ---: | ---: | --- |
+| clouds | 9.89 / 15.85 / 24.05 | 6.27 / 10.55 / 13.62 | yes |
+| storm | 9.93 / 16.20 / 24.74 | 6.17 / 10.77 / 13.74 | yes |
+| far-side | 6.57 / 11.95 / 15.94 | 4.08 / 6.98 / 9.04 | yes |
+| rain-stroll | 14.03 / 18.30 / 27.93 | 9.98 / 15.63 / 20.37 | **no** |
+| rain-stroll, 22:00 | 14.13 / 21.65 / 29.42 | 9.84 / 16.20 / 21.12 | **no** |
+| town (rain) | 17.33 / 24.87 / 29.99 | 9.90 / 16.54 / 22.01 | **no** |
+
+- **What is left over the floor is on foot in the rain, and it is the GPU**:
+  the stroll's GPU p50 9.5 ms against a wall p50 of 10.0. The model still
+  costs 2.8 ms there (9.95 against 7.18 ms p50 with `PBD_LIGHTING=today`
+  in the same exe); the spec's 1.0 ms is not met.
+- **2.10 saved nothing measurable** (the rain pass 1.50 ms against 1.44):
+  the snow kind's loop and the shafts' matrix products were not the cost.
+  The cuts are exact and stay; the rain volume's cost is its shells' haze
+  and streaks per pixel, which is the half-resolution task.
+- **With vsync on** (the game as played), frames over 16.7 ms: 3.9% on the
+  stroll, 1.0% in the town, 0.5% in the storm.
+- **The spikes over 30 ms** (`perf_suite.py` now says which recur at the
+  same place in the other runs): in the storm four a run recur at the same
+  route metres in every build (3544 m, 110 m above the ground; 3808 m, 58
+  m up, a fine-set landing with an 11.6 ms upload; 4122 m, 36 m up; and
+  touchdown), 30-65 ms each; the rest, and nearly all the walk's, fall at
+  different places in each repeat. **Closing the Solitaire game changed
+  nothing** (the owner's question): 14-30 spikes a walk run with it
+  closed against 23 open, same exe, p99 20.2-20.7 against 20.3. They are
+  not where p99 is set (the walk's and the storm's p99 are inside the
+  floor), so no fix effort goes to them; the four descent spikes are
+  written up here and wait for a trace.
+- **The walk** opens in a storm with the loading screen (a bug being fixed
+  in `loading-screen`), so its numbers here are a walk in the rain.
+
 ## Half resolution (owner, 2026-11-12)
 
 The owner: "consider like half resolutions for expensive stuff like bloom

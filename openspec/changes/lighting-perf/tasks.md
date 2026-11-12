@@ -85,17 +85,22 @@
       more than the spread; bloom is already built from a quarter-size
       image and is left as 2.6 has it.
 
-- [ ] 2.10 The rain volume's exact cuts (before its half resolution): the
+- [x] 2.10 The rain volume's exact cuts (before its half resolution): the
       shell loop skips a kind (rain, snow) the rain map does not hold
       anywhere, and the shafts take each cascade's clip at a stretch's two
       ends and mix it per tap instead of four matrix products a tap.
       Shots: the lane by day both ways, at dusk into the sun, at night,
       and 300 m up in rain, against a before-and-before control.
       Measure: `rain-stroll` by day and at night, `storm`.
+      (`7bcfe8f`: shots match a control. Saved nothing measurable, 1.50
+      against 1.44 ms of GPU; kept, being exact.)
 
 ## 3. Close
 
-- [ ] 3.1 A final sitting: `f15a647` against the change, all scenarios,
+- [x] 3.1 A final sitting: `f15a647` against the change, all scenarios,
       report and page in `docs/benchmarks/<date>-lighting-perf/`.
+      (A checkpoint toward "get worst case to 60": flight is inside the
+      floor at p99, on foot in rain is not;
+      https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH.)
 - [ ] 3.2 Move the requirements below into `openspec/specs/platform/
       performance` with the tests and the suite rows that prove them.
