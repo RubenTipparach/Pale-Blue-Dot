@@ -1329,13 +1329,11 @@ function frame(now) {
   // globe
   const gEl = gc.parentElement;
   if (sizeTo(R2, gc, gEl)) { C2.aspect = gEl.clientWidth / gEl.clientHeight; C2.updateProjectionMatrix(); }
-  if (globe && !reduced) globe.rotation.y += dt * 0.25;
   R2.render(S2, C2);
   // vignette
   if (vigEnv) {
     const vEl = vc.parentElement;
     if (sizeTo(R3, vc, vEl)) { C3.aspect = vEl.clientWidth / vEl.clientHeight; C3.updateProjectionMatrix(); }
-    if (vigCam.auto && !reduced) vigCam.yaw += dt * 0.06;
     C3.position.set(vigCam.dist * Math.cos(vigCam.pitch) * Math.sin(vigCam.yaw), vigCam.dist * Math.sin(vigCam.pitch) + 1, vigCam.dist * Math.cos(vigCam.pitch) * Math.cos(vigCam.yaw));
     C3.lookAt(0, 3, 0);
     vigMat.uniforms.flick.value = 0.92 + 0.08 * Math.sin(now * 0.017) * Math.sin(now * 0.0071);

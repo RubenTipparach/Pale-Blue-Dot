@@ -217,7 +217,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
       <p class="lede">Built from hexagonal prisms that read as cubes, as the owner chose (survey T2). Every figure is rolled from the settlement's seed and the person's index, so a town's people are the same on every visit and every machine. Roll another town to see the spread.</p></div>
     <div class="lineup">
       <canvas id="lu" aria-label="A lineup of townsfolk figures from six peoples, each rolled with different height, build, skin, hair and clothes."></canvas>
-      <div class="panel"><button class="btn" id="reroll">Roll another town</button><button class="btn" id="spin" aria-pressed="true">Turn</button></div>
+      <div class="panel"><button class="btn" id="reroll">Roll another town</button><button class="btn" id="spin" aria-pressed="false">Turn</button></div>
       <div class="labels" id="luLabels"></div>
     </div>
     <div class="parts">
@@ -630,7 +630,7 @@ function lineup() {
   }));
   $("luLabels").innerHTML = LU_PEOPLES.map(p => `<span>${PEOPLES[p].name}</span>`).join("");
 }
-let spin = true;
+let spin = false;
 $("reroll").addEventListener("click", () => { townSeed++; lineup(); });
 $("spin").addEventListener("click", () => { spin = !spin; $("spin").setAttribute("aria-pressed", spin); });
 function luResize() { const w = lu.clientWidth, h = lu.clientHeight; lr.setSize(w, h, false); lc.aspect = w / h; const dist = Math.max(14, 10.8 / (Math.tan(15 * Math.PI / 180) * lc.aspect)); lc.position.set(0, 2.6 + dist * 0.08, dist); lc.lookAt(0, 1.0, 0); lc.updateProjectionMatrix(); }

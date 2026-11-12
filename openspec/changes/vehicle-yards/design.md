@@ -50,7 +50,24 @@ Each page follows `docs/mockups/ART-DIRECTION.md`:
 
 ### 2. M22: the fabricator ladder past M3
 
-M3 ends at the fabricator, which hands over pack-sized items. Above it:
+The owner, on the first version of the page (2026-11-12): "you should have
+medeival cranes/scaffolds for building older style houses too, those metal
+cranes are for building new homes, and 3d printer is kind of for smaller
+homes and general assembly of like planes and parts and stuff."
+
+So the yard builds three ways, one per era of building:
+
+| Way | Machine | Builds | Load |
+| --- | --- | --- | --- |
+| Old | Timber scaffold and a treadwheel crane: a wooden jib, a rope and a wheel walked by a worker or the player | Old-style houses, the towns' own kits: stone and timber walls raised piece by piece from the scaffold's planks | About 1 t, close in (rated 6 t m, 1.5 t hook) |
+| New | Steel tower crane | New homes: a larger modern house set in panels | 120 t m, 8 t hook |
+| Printed | Hex printer | Small homes printed a layer a pass; and parts: a printer bed that prints aircraft and vehicle parts (a wing, a propeller, a fuselage section) for the assembly bay and the hangar | Its gantry's span |
+
+The scaffold is pieces on the cut too: poles at cell corners, planks on
+layer lines, ladders between, so a player stands on it to set the next
+course, and it is taken down piece by piece when the house is done.
+
+The ladder, M3's fabricator upward:
 
 | Tier | Machine | Makes | Needs |
 | --- | --- | --- | --- |
@@ -78,10 +95,16 @@ M3 ends at the fabricator, which hands over pack-sized items. Above it:
   piece.
 
 The page:
-1. **The yard** in 3D: the printer mid-print, the tower crane over it, the
-   assembly bay, stacked crates and a site office. A print slider runs the
-   building from bare plot to roof. Crane controls (slew, trolley, hoist)
-   move the hook and its load, and the load chart refuses an overload.
+1. **The yard** in 3D, three building sites side by side:
+   - **old**: a stone-and-timber house of the towns' kit going up inside a
+     timber scaffold, with a treadwheel crane lifting a beam;
+   - **new**: a larger modern home set in panels under the steel tower
+     crane, whose slew, trolley and hoist controls move the hook and whose
+     load chart refuses an overload;
+   - **printed**: the hex printer printing a small home, a slider running it
+     from bare plot to roof, and a parts printer bed beside it printing a
+     wing and a propeller for the assembly bay.
+   Also the assembly bay, stacked crates and a site office.
 2. **The assembly bay's queue**: large recipes with mass, footprint, time and
    inputs (icons from M3 where they exist).
 3. **The printer's pass plan**: one layer drawn in plan with the head's path.
@@ -204,7 +227,11 @@ The page:
   doors to the apron, the runway or the helipad. A bay's door width caps the
   span.
 - **The builder is M4's**: a top-view grid of 1 m cells with the nose to the
-  right.
+  right. The owner, seeing it (2026-11-12), first asked for parts made on
+  3x3 tables and assembled on a smaller plane table ("the tail part is kind
+  of a different shape, but we can probably compress that into another 3x3
+  piece"), then: "naw actually this grid thing is AWESOME!". The 1 m grid
+  stays. Its parts come from the hex printer (decision 2).
   - Mirror painting is on by default.
   - Parts include: cockpit, fuselage, nose prop engine, jet, wing, tailplane,
     fin, main rotor mast, tail rotor, tilt nacelle, landing gear, float, fuel
@@ -240,8 +267,11 @@ The page:
    inside and on the apron, the runway, the helipad, a windsock and the
    Kestrel.
    - At night: runway edge lights, threshold lights, helipad lights, a
-     rotating beacon, the warm hangar interior and nav lights on every craft.
-   - Rotors and props turn.
+     beacon flashing white and green, the warm hangar interior and nav
+     lights on every craft.
+   - Nothing turns on its own (the owner: "dont auto spin anything lol"):
+     parked rotors and props stand still, and the views turn only when
+     dragged.
 2. **The builder** with presets:
    - **Sharky**, a prop fighter after the owner's first reference, with a
      shark mouth and a nose number;

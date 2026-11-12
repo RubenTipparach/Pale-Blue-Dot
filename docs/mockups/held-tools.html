@@ -522,7 +522,6 @@
     heldRenderer.render(heldScene, heldCam);
     for (const tt of turns) {
       fit(tt.renderer, tt.cam, tt.canvas);
-      if (!tt.drag && !reduced) tt.yaw += dt * 0.4;
       const d = tt.span * 2.1;
       tt.cam.position.set(Math.sin(tt.yaw) * Math.cos(tt.pitch) * d, Math.sin(tt.pitch) * d, Math.cos(tt.yaw) * Math.cos(tt.pitch) * d);
       tt.cam.lookAt(0, 0, 0);
