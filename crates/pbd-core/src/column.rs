@@ -428,8 +428,14 @@ pub fn material_at_depth(top: Material, depth_m: f32) -> Material {
 /// terrace in its footprint, eased back to this across its margin. This is
 /// the one place it is asked, because every height is read from here.
 pub fn surface_m(terrain: &TerrainConfig, direction: Vec3) -> f32 {
-    let natural = planet_gen::surface_altitude(terrain, direction).floor();
-    crate::settlement::ground::surface(terrain, direction, natural)
+    crate::settlement::ground::surface(terrain, direction, natural_surface_m(terrain, direction))
+}
+
+/// [`surface_m`] as the generator alone makes it, whatever towns' ground is
+/// installed: what a new world's start is chosen on, so the same seed starts
+/// in the same place whether or not its towns are standing yet.
+pub fn natural_surface_m(terrain: &TerrainConfig, direction: Vec3) -> f32 {
+    planet_gen::surface_altitude(terrain, direction).floor()
 }
 
 pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {

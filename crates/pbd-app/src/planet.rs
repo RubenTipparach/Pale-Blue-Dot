@@ -373,6 +373,14 @@ impl PreparedPlanet {
         Self(Some(build_planet(near, columns, scatter, edits)))
     }
 
+    /// Where a new world's walker starts on this planet, from `direction`
+    /// ([`crate::walking::new_world_start`]).
+    pub fn new_world_start(&self, sea_radius: f32, direction: Vec3) -> Option<Vec3> {
+        self.0
+            .as_ref()
+            .map(|b| crate::walking::new_world_start(&b.contacts, sea_radius, direction))
+    }
+
     /// Hashes of what the planet is made of: the base records, every fine
     /// level's records and neighbours, and the column tier's records. Two
     /// planets with equal hashes drew and collided the same.

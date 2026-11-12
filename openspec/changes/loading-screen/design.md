@@ -156,6 +156,19 @@ Measured with `tools/capture_repeat.py` (each scene captured twice,
 Holbrook lane 0 pixels differed and a harbour from 30 m (rain, night) 44.6%
 (578,454 of 1,296,000, worst 77/255); with it, 0 and 0.
 
+## Found in the build: a new world started on a town's terrace
+
+Before the screen, a new world's walker was set down at `Startup` on a
+planet with no towns' ground, and the towns stood later. Built once with
+their ground (decision 1), the start's search for a level plain found
+Holbrook's terrace, 470 m from where the same seed had always started and
+under a passing storm: the perf suite's `walk` read cover 1.00, rain 1.00
+where it had read 0.69 and 0.00. The start is now chosen on the
+generator's own ground (`column::natural_surface_m`, `place::level_plain`),
+and `tests/new_world_start.rs` holds it, and the weather over it, to the
+path before the screen. A craft's berths and a saved world's pose do not
+search, and are unchanged.
+
 ## The screen
 
 Full window, the game's clear colour; a panel with the menu's edge, `PALE BLUE
