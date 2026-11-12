@@ -108,16 +108,21 @@ owner says otherwise:
 
 **Standing instruction from the user:** "you need some sort of survey form
 for me to fill out ... that claude doc thing was good for that, maybe that
-should be a skill." Open questions for the owner go into a survey Claude Doc,
-never a list in chat. Each question gets its options, a recommendation and
-an answer column, and answers are folded back into the OpenSpec changes they
-shape. The `owner-survey` skill (`.claude/skills/owner-survey`) says how. The
-current survey is https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn. Keep
-editing it rather than starting another.
+should be a skill." Open questions for the owner go into the survey, never a
+list in chat. Each question gets its options, a recommendation and a place to
+answer, and answers are folded back into the OpenSpec changes they shape.
 
-If a session has no Claude Docs connector, say so, and publish the same
-tables as an artifact page with an answer field per question, linked from the
-survey's "Already decided" section once the connector is back.
+**The survey is an HTML page (owner, 2026-11-12):** "can you create a mockup
+tracking dock, and a survey html tracker? both of these skills are found in
+fleet command repo". Questions go into
+https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5 (`docs/design/survey.html`),
+whose database holds the answers; the `html-survey` skill
+(`.claude/skills/html-survey`) says how to ask, read the answers back with
+`ArtifactData`, and move them to "Already decided". Keep republishing that
+page rather than starting another. The Claude Doc survey before it,
+https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn, is kept as the earlier
+record and is no longer edited; its answers are copied into the HTML survey's
+"Already decided".
 
 **Ask only with screenshots (owner, 2026-09-29):** "approve, dont ask me
 questions unless you have screenshots for me to review lol". A question goes
@@ -127,6 +132,21 @@ recommendation and carry on. Record it in the change as "recommendation
 taken (ask only with screenshots)", so it is never mistaken for the owner's
 own words, and say so in the reply. A gate is still the owner's, and it goes
 with its screenshots.
+
+## The mockup tracker (owner, 2026-11-12)
+
+**Standing instruction from the user** (the same message): every Pale Blue
+Dot artifact is listed on one master page, the mockup tracker,
+https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`).
+Its sections are Game mockups (each approved by the owner for build, then for
+the game), Guides and Misc (surveys, benchmark reports, gate pages). Every new
+mockup, and every other page published for this repository, goes on it in
+the same step that first publishes it, and the page carries an "All Pale Blue
+Dot mockups (the tracker)" link near its top. Approvals are the owner's, read
+back with `ArtifactData` (collection `reviews`) and recorded in
+`docs/mockups/mockup-work.md` and the mockup's OpenSpec change; an approval
+for the game still waits for a request before any game code. The
+`mockup-tracker` skill (`.claude/skills/mockup-tracker`) says how.
 
 ## Saved games survive every change (owner, 2026-09-28)
 

@@ -1,0 +1,400 @@
+<title>Pale Blue Dot Mockups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: the game's HUD turned into a review board. Each mockup is a hotbar-style slot card with its two approvals;
+   guides and misc pages are smaller slots. Dark first, like the game at night; a daylight variant for light viewers. */
+:root {
+  --bg: #0b1119; --panel: #131c28; --slot: #0f1722; --ink: #dfe8f1; --muted: #8a9bb0; --line: #2a3a4f;
+  --bevel-hi: #3b5170; --bevel-lo: #060a10;
+  --accent: #e8b44c; --accent-soft: #3a2c12;
+  --done: #7fcf86; --done-soft: #17301c; --go: #7fb2f0; --go-soft: #15263c; --warn: #f07a6a;
+  --display: "Pixelify Sans", "Courier New", monospace;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #e9eef3; --panel: #f7f9fb; --slot: #ffffff; --ink: #142030; --muted: #52637a; --line: #c5d0dc;
+    --bevel-hi: #ffffff; --bevel-lo: #9fb0c3;
+    --accent: #9a6a10; --accent-soft: #f6e6c4;
+    --done: #2f7a3a; --done-soft: #dcefdc; --go: #2a5ea8; --go-soft: #dde8f7; --warn: #b8392b;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #e9eef3; --panel: #f7f9fb; --slot: #ffffff; --ink: #142030; --muted: #52637a; --line: #c5d0dc;
+  --bevel-hi: #ffffff; --bevel-lo: #9fb0c3;
+  --accent: #9a6a10; --accent-soft: #f6e6c4;
+  --done: #2f7a3a; --done-soft: #dcefdc; --go: #2a5ea8; --go-soft: #dde8f7; --warn: #b8392b;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 400 15px/1.55 var(--mono);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 56px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 28px; }
+header.top { padding-top: 28px; display: grid; gap: 12px; }
+.hudline { font: 500 12px/1.4 var(--mono); color: var(--muted); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.hudline b { color: var(--accent); font-weight: 600; }
+h1 { font: 700 clamp(34px, 7vw, 56px)/1 var(--display); margin: 0; letter-spacing: 0.02em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 70ch; }
+.stages { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+.stages li { display: flex; align-items: center; gap: 8px; }
+.chip { font: 600 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 8px; border: 1px solid currentColor; white-space: nowrap; }
+.chip.listed { color: var(--muted); }
+.chip.drafted { color: var(--accent); }
+.chip.build { color: var(--done); background: var(--done-soft); }
+.chip.impl { color: var(--go); background: var(--go-soft); }
+.notice { font-size: 13px; color: var(--ink); background: var(--accent-soft); padding: 10px 12px; margin: 0; border-left: 3px solid var(--accent); }
+.sect { display: grid; gap: 14px; }
+.sect > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; border-top: 2px solid var(--line); padding-top: 16px; }
+.sect h2 { font: 700 28px/1 var(--display); margin: 0; }
+.sect .sd { margin: 0; color: var(--muted); font-size: 13px; flex: 1 1 280px; }
+.count { font: 600 12px/1 var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 14px; }
+.links { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+/* A hotbar slot: a square-edged panel with a bevel, as the game's HUD draws its slots. */
+.slot {
+  background: var(--slot); border: 2px solid var(--line);
+  box-shadow: inset 2px 2px 0 var(--bevel-hi), inset -2px -2px 0 var(--bevel-lo);
+  padding: 14px; display: grid; gap: 10px; align-content: start; min-width: 0;
+}
+.slot.reviewed { border-color: color-mix(in srgb, var(--done) 60%, var(--line)); }
+.head { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.mid { font: 600 12px/1 var(--mono); color: var(--accent); border: 1px solid currentColor; padding: 4px 6px; font-variant-numeric: tabular-nums; }
+.slot h3 { font: 700 21px/1.1 var(--display); margin: 0; flex: 1 1 180px; min-width: 0; text-wrap: balance; }
+.summary { margin: 0; font-size: 14px; }
+.meta { margin: 0; font: 400 12px/1.6 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.recorded { margin: 0; font-size: 12px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+a.open, .toggle {
+  font: 600 13px/1 var(--mono); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  padding: 0 12px; min-height: 40px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; text-decoration: none;
+}
+a.open { border-color: var(--accent); color: var(--accent); }
+a.open:hover, .toggle:hover:not(:disabled) { border-color: var(--ink); }
+.toggle[aria-pressed="true"].b { background: var(--done-soft); border-color: var(--done); color: var(--done); }
+.toggle[aria-pressed="true"].i { background: var(--go-soft); border-color: var(--go); color: var(--go); }
+.toggle:disabled { opacity: 0.45; cursor: not-allowed; }
+.toggle .box { width: 14px; height: 14px; border: 2px solid currentColor; display: inline-grid; place-items: center; font-size: 11px; line-height: 1; }
+a.open:focus-visible, .toggle:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label.note { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
+textarea { font: 400 14px/1.45 var(--mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line); padding: 8px 10px; min-height: 56px; resize: vertical; width: 100%; }
+.status { font: 500 11px/1 var(--mono); color: var(--muted); min-height: 11px; }
+.status.ok { color: var(--done); }
+.status.err { color: var(--warn); }
+.group-h { font: 600 12px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 6px 0 0; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="hudline"><b>PALE BLUE DOT</b> &middot; mockup reviews &middot; hex 2.833 m &middot; layer 1.000 m</div>
+    <h1>Mockup Tracker</h1>
+    <p class="lede">Every Pale Blue Dot page in one place: the game mockups with their approvals, the guides, and everything else (benchmark reports, gate pages, surveys). A mockup is approved for build first, then for the game. Nothing goes into the game without both.</p>
+    <ul class="stages" aria-label="Stages">
+      <li><span class="chip listed">Listed</span> not built yet</li>
+      <li><span class="chip drafted">Drafted</span> published, waiting on you</li>
+      <li><span class="chip build">Approved for build</span></li>
+      <li><span class="chip impl">Approved for game</span></li>
+    </ul>
+    <p class="notice" id="mode" hidden></p>
+  </header>
+
+  <section class="sect" aria-labelledby="s-mockups">
+    <header><h2 id="s-mockups">Game mockups</h2><span class="count" id="n-mockups"></span>
+      <p class="sd">Each mockup with its stage, its two approvals and your notes. Tick "Approved for build" first; "Approved for game" opens after it.</p></header>
+    <h3 class="group-h">November 2026</h3>
+    <div class="grid" id="list-new"></div>
+    <h3 class="group-h">Earlier mockups</h3>
+    <div class="grid" id="list-old"></div>
+  </section>
+
+  <section class="sect" aria-labelledby="s-guides">
+    <header><h2 id="s-guides">Guides</h2><span class="count" id="n-guides"></span>
+      <p class="sd">Reference pages to read and point at.</p></header>
+    <div class="links" id="guides"></div>
+  </section>
+
+  <section class="sect" aria-labelledby="s-misc">
+    <header><h2 id="s-misc">Misc</h2><span class="count" id="n-misc"></span>
+      <p class="sd">Everything else published for Pale Blue Dot: the surveys, benchmark reports and gate pages, newest first.</p></header>
+    <div class="links" id="misc"></div>
+  </section>
+</div>
+
+<script>
+// The mockups, in the order of docs/mockups/mockup-work.md. Reviews live in the db collection `reviews`, one document per id.
+// `recorded` is a stage the owner gave in their own words before this tracker existed (where, in `recordedNote`); a review
+// on this page overrides it.
+const MOCKUPS = [
+  { id: 'M1', batch: 'new', title: 'The Halcyon System', change: '', page: 'docs/mockups/planets.html',
+    url: 'https://claude.ai/artifact/7gnj2sgXFmYnMzNWEPE7pG', published: '2026-11-12',
+    summary: 'Twelve bodies round one star: three living worlds, two gas giants and seven moons and rocks, each on the same hex cell.' },
+  { id: 'M2', batch: 'new', title: 'Halcyon Transit', change: '', page: 'docs/mockups/travel.html',
+    url: 'https://claude.ai/artifact/7PCRHRjCkBk3mesWsd6Dfq', published: '2026-11-12',
+    summary: 'Flying between worlds yourself: lift off, light the transit drive, coast, flip, brake and dock. No orbits to plan.' },
+  { id: 'M3', batch: 'new', title: 'Forge and Fabricator', change: '', page: 'docs/mockups/crafting.html',
+    url: 'https://claude.ai/artifact/6hj8UvbLY9TUsn7591sKKg', published: '2026-11-12',
+    summary: 'Crafting: what a dig gives you, which station turns it into what, and the recipe sheet up to ship modules.' },
+  { id: 'M4', batch: 'new', title: 'Shipyard and Ship Builder', change: '', page: 'docs/mockups/ship-crafting.html',
+    url: 'https://claude.ai/artifact/ANihdavwCucwXDCq2YzFvY', published: '2026-11-12',
+    summary: 'Ships built from modules on a grid; mass, thrust and turn rate follow from the parts and fly by the game\'s own limits.' },
+  { id: 'M5', batch: 'new', title: 'Townsfolk and Peoples', change: 'townsfolk (extends it)', page: 'docs/mockups/npcs.html',
+    url: 'https://claude.ai/artifact/LECf4Jk3ESP54w5JV55LMc', published: '2026-11-12',
+    summary: 'Who lives in the towns, their day on world time, and how you talk, trade and fall out with them.' },
+  { id: 'M6', batch: 'new', title: 'Hex House Builder', change: 'player-building', page: 'docs/mockups/building.html',
+    url: 'https://claude.ai/artifact/NPvmoZMkdg6HEc91Vngicp', published: '2026-11-12',
+    summary: 'Walls on cell edges, floors in cells, a storey every three layers; a ghost that says why a piece will not fit.' },
+  { id: 'M7', batch: 'new', title: 'Herds, Hunters and Glowmoths', change: '', page: 'docs/mockups/animals.html',
+    url: 'https://claude.ai/artifact/GWCsAqGcVi75rHPYVGLye7', published: '2026-11-12',
+    summary: 'Animals biome by biome: grazers, hunters, night creatures, what can be tamed and what each drops.' },
+  { id: 'M8', batch: 'new', title: 'Furrows and Greenhouses', change: '', page: 'docs/mockups/farming.html',
+    url: 'https://claude.ai/artifact/4uqkQQB55Hq8dbEc52scwD', published: '2026-11-12',
+    summary: 'Till a cell, plant for the climate, water and harvest; greenhouses grow anything anywhere, pens hold tamed animals.' },
+  { id: 'M9', batch: 'new', title: 'Fish Lab and Aquariums', change: 'fishing-and-equipment (extends it)', page: 'docs/mockups/fish.html',
+    url: 'https://claude.ai/artifact/VbVmuUHVTUczkiMYGHEZSn', published: '2026-11-12',
+    summary: 'Every fish drawn from a species and a seed, so a trophy in a tank is the fish you caught; tanks to keep them in.' },
+  { id: 'M10', batch: 'new', title: 'Stations and Outposts', change: '', page: 'docs/mockups/stations.html',
+    url: 'https://claude.ai/artifact/7tPp8n2btkNzx1tgeQF7P4', published: '2026-11-12',
+    summary: 'The stations Meridian, Kessler and Gatehouse: their modules, docking, and life in sunlight and in the planet\'s shadow.' },
+  { id: 'M11', batch: 'new', title: 'The Long Fall: Games and Jobs', change: '', page: 'docs/mockups/minigames.html',
+    url: 'https://claude.ai/artifact/M6bJTTQmSRcfZoGyjAZZvD', published: '2026-11-12',
+    summary: 'A station bar, casino and job board: an ore-sorter shift, contracts and five playable games, each showing its odds.' },
+  { id: 'M12', batch: 'new', title: 'Exchange Terminal', change: '', page: 'docs/mockups/market.html',
+    url: 'https://claude.ai/artifact/MepSVNts31YTwsZ4QmZhPK', published: '2026-11-12',
+    summary: 'Each station\'s stock of eight goods sets its prices; haulers chase the gaps, events widen them, five companies trade.' },
+  { id: 'M13', batch: 'new', title: 'Foliage Detail Playground', change: '', page: 'docs/mockups/foliage.html',
+    url: 'https://claude.ai/artifact/PnPpDKgcqqbGyBHdXxsiBF', published: '2026-11-12',
+    summary: 'Ground cover on a hex patch: pick a biome, tune the layers, scrub the clock into night.' },
+  { id: 'M14', batch: 'old', title: 'Pale Blue Dot Lighting', change: 'lighting-model', page: 'docs/mockups/lighting.html',
+    url: 'https://claude.ai/artifact/LLzP5j8G8k3Do9j4Z7Qyaj', published: '2026-10-29',
+    summary: 'The lighting model: the game\'s light today beside the new one, by day and at night.' },
+  { id: 'M15', batch: 'old', title: 'Tenebris Towns', change: 'tenebris-towns', page: 'docs/mockups/towns.html',
+    url: 'https://claude.ai/artifact/59zS9ERBTkrVrzPedfoUL2', published: '2026-09-30',
+    recordedNote: 'Every feature of it is on the roadmap (survey, 2026-09-27); the towns in the game are built from it.',
+    summary: 'A walled market town on the hex grid, lit by its own lamps at night: the reference for the towns in the game.' },
+  { id: 'M16', batch: 'old', title: 'Tenebris World Map', change: 'world-map, city-sites', page: 'docs/mockups/world-map.html',
+    url: 'https://claude.ai/artifact/G7QY9BYXYMH8tgaEv8E7az', published: '2026-09-29', recorded: 'build',
+    recordedNote: 'Approved: "good approve" (survey M6, 2026-09-27); the 55 city sites "approve" (C4, C5, 2026-09-29). The in-game map is built from it.',
+    summary: 'The whole planet as a flat map with towns, weather overlays and the 55 city sites, finer as you zoom in.' },
+  { id: 'M17', batch: 'old', title: 'Hex Tool Bench', change: 'hex-held-tools (archived)', page: 'docs/mockups/held-tools.html',
+    url: 'https://claude.ai/artifact/YEf1BuLEk9Dppk55znZ5gr', published: '2026-09-26', recorded: 'impl',
+    recordedNote: 'Approved ("Perfect") and built in the game: hex-held-tools, archived 2026-09-26.',
+    summary: 'The pickaxe, axe, shovel and rod as hex-block models, in the hand.' },
+  { id: 'M18', batch: 'old', title: 'Rod, Shovel and School', change: 'fishing-and-equipment', page: 'docs/mockups/fishing.html',
+    url: 'https://claude.ai/artifact/9XiEvkxSFJMtqaktg4eovj', published: '2026-09-24',
+    summary: 'Every fishing mechanic running: casting, the bite, schools and digging for bait. Fixed daylight.' },
+  { id: 'M19', batch: 'old', title: 'Kestrel, Tern and Loon', change: 'vehicles, vehicle-models', page: 'docs/mockups/vehicles.html',
+    url: 'https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D', published: '2026-09-24', recorded: 'impl',
+    recordedNote: 'Approved, and the Rust port is built: the sea, the gusts, the three craft, boarding and saving (vehicles design).',
+    summary: 'The three craft on the sea and in the gusts, boarded and left where you parked them.' },
+];
+
+// Every other published artifact, by section, newest first.
+const GUIDES = [
+  { title: 'Fish Range Atlas', page: 'docs/wiki/fish-ranges/index.html', url: 'https://claude.ai/artifact/DwruVvwvPRm71T5tnuNN9s',
+    published: '2026-09-24', summary: 'One range map per fish species, field-guide style, measured off the climate.' },
+];
+const MISC = [
+  { title: 'Owner Survey', kind: 'Survey', page: 'docs/design/survey.html', url: 'https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5',
+    published: '2026-11-12', summary: 'Open questions for you, each with its screenshots and a recommendation; a blank answer accepts it.' },
+  { title: 'Lighting model cost (RTX 3070)', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-12-lighting-model-clean/report.html', url: 'https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9',
+    published: '2026-11-12', summary: 'The new lighting against main on the desktop, by part and at night, on a quiet machine.' },
+  { title: 'Puff cull and rain detail', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-29-cull-wet/report.html', url: 'https://claude.ai/artifact/C4cAspjVyuc2uGem4G66Co',
+    published: '2026-10-29', summary: 'puff-frustum-cull and wet-near-detail, before and after, on the M4 Max Mac.' },
+  { title: 'Where the frame goes', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-29-lighting-all/', url: 'https://claude.ai/artifact/3hvQJvSQJJhAQX7hUjHzQn',
+    published: '2026-10-29', summary: 'Each part switched off in turn (clouds, rain passes, lighting, reflections) to see what it costs.' },
+  { title: 'Lighting: today against new', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-29-lighting-full/report.html', url: 'https://claude.ai/artifact/C1ENmiyd73ia1pnxxKPtj7',
+    published: '2026-10-29', summary: 'The full sitting of the lighting-model change on the Mac.' },
+  { title: 'Rain shells', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-28-rain-shells/report.html', url: 'https://claude.ai/artifact/DwjHNxEt99BvDNS1azKDdQ',
+    published: '2026-10-28', summary: 'Rain as a volume against rain as shells, on the Mac.' },
+  { title: 'Cloud puffs', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-28-cloud-puffs/report.html', url: 'https://claude.ai/artifact/PuWVaY1gADriGx1KjfGrbx',
+    published: '2026-10-28', summary: 'Marched clouds against puffs against none, on the Mac.' },
+  { title: 'Town frame time', kind: 'Benchmark', page: 'docs/benchmarks/2026-10-08-town-frame-time/report.html', url: 'https://claude.ai/artifact/UijFaGpci12P1wHjR4otzk',
+    published: '2026-10-08', summary: 'A walk through a town, main against the town-frame-time branch.' },
+  { title: 'Caves in town ground (T14)', kind: 'Question page', page: '', url: 'https://claude.ai/artifact/RriyuLo9EEZ1gTzGq58A2r',
+    published: '2026-10-01', summary: 'Holbrook\'s lane with a cave mouth in it; answered "crust" on 2026-10-01.' },
+  { title: 'Lights, in the game', kind: 'Gate page', page: '', url: 'https://claude.ai/artifact/VXzmu3dLgZC4GYyzJJ4gVz',
+    published: '2026-09-29', summary: 'The lamps-and-lanterns screenshots: caves, torches, a candle-lit room and a glowing meadow.' },
+  { title: 'The map, in the game', kind: 'Gate page', page: '', url: 'https://claude.ai/artifact/2Vs2e3h3rQS1EPKQSKA1gF',
+    published: '2026-09-29', summary: 'Each in-game map view beside the approved mockup\'s.' },
+  { title: 'Taller mountains, in the game', kind: 'Gate page', page: 'docs/screenshots/taller-mountains/', url: 'https://claude.ai/artifact/BXtLUoFSif3oVt1eutiuEr',
+    published: '2026-09-28', summary: 'Version 5 beside version 6 from orbit, on the map, near a range and at eye level.' },
+  { title: 'Exact cell keys', kind: 'Gate page', page: 'docs/screenshots/exact-cell-keys/', url: 'https://claude.ai/artifact/UkLbLNDm3mfS17Wu3K6uWe',
+    published: '2026-09-27', summary: 'The gate video: a dug cell, its far twin left alone, a reload and the ground unchanged.' },
+  { title: 'Tenebris Cities: Owner Survey (earlier)', kind: 'Survey', page: '', url: 'https://claude.ai/artifact/Wu1hTkYLApRguXZCfCtvgn',
+    published: '2026-10-08', summary: 'The Claude Doc survey used until November 2026, kept as the record of your earlier answers.' },
+  { title: 'Detail fade', kind: 'Benchmark', page: 'docs/benchmarks/2026-09-25-detail-fade/report.html', url: 'https://claude.ai/artifact/P1WypbYauGUsPrC1NpSuzQ',
+    published: '2026-09-25', summary: 'detail-fade, before and after.' },
+  { title: 'Cloud close-up', kind: 'Benchmark', page: 'docs/benchmarks/2026-09-25-cloud-close-up/report.html', url: 'https://claude.ai/artifact/SSeb4wCF2B7xCgYsExSRKx',
+    published: '2026-09-25', summary: 'cloud-close-up, before and after, on the branch build.' },
+  { title: 'Baseline', kind: 'Benchmark', page: 'docs/benchmarks/2026-09-25-baseline/report.html', url: 'https://claude.ai/artifact/CbuRh6C4kZZvULnQyrtor1',
+    published: '2026-09-25', summary: 'The first baseline of the performance suite: clouds, storm, far side and walk.' },
+];
+
+const reviews = {}; // id -> { build, implementation, note }
+const cards = {};
+let db = null;
+let canWrite = true;
+
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'text') n.textContent = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k);
+  return n;
+}
+
+function stageOf(m) {
+  const r = reviews[m.id];
+  if (!m.url) return ['listed', 'Listed'];
+  const s = r ? (r.implementation ? 'impl' : r.build ? 'build' : 'drafted') : (m.recorded || 'drafted');
+  return [s, { impl: 'Approved for game', build: 'Approved for build', drafted: 'Drafted' }[s]];
+}
+
+function card(m) {
+  const chip = el('span', { class: 'chip' });
+  const status = el('div', { class: 'status', 'aria-live': 'polite' });
+  const build = el('button', { class: 'toggle b', type: 'button', id: `build-${m.id}`, 'aria-pressed': 'false', onclick: () => toggle(m.id, 'build') },
+    el('span', { class: 'box', 'aria-hidden': 'true' }), 'Approved for build');
+  const impl = el('button', { class: 'toggle i', type: 'button', id: `impl-${m.id}`, 'aria-pressed': 'false', onclick: () => toggle(m.id, 'implementation') },
+    el('span', { class: 'box', 'aria-hidden': 'true' }), 'Approved for game');
+  const note = el('textarea', { id: `note-${m.id}`, rows: '2', placeholder: 'What to change, or why it is approved' });
+  note.addEventListener('input', () => { reviews[m.id] = { ...(reviews[m.id] ?? {}), note: note.value }; queueSave(m.id); });
+  note.addEventListener('blur', () => flush(m.id));
+  const open = m.url
+    ? el('a', { class: 'open', href: m.url, target: '_blank', rel: 'noopener' }, 'Open mockup')
+    : el('span', { class: 'meta', text: 'Not built yet' });
+  const meta = el('p', { class: 'meta', text: `OpenSpec: ${m.change || 'none yet'}  ·  ${m.page}${m.published ? `  ·  published ${m.published}` : ''}` });
+  const root = el('article', { class: 'slot', id: `card-${m.id}` },
+    el('div', { class: 'head' }, el('span', { class: 'mid', text: m.id }), el('h3', { text: m.title }), chip),
+    el('p', { class: 'summary', text: m.summary }), meta,
+    m.recordedNote ? el('p', { class: 'recorded', text: m.recordedNote }) : null,
+    el('div', { class: 'row' }, open, build, impl),
+    el('label', { class: 'note', for: `note-${m.id}` }, 'Your notes', note), status);
+  cards[m.id] = { root, chip, build, impl, note, status };
+  return root;
+}
+
+function paint(id) {
+  const m = MOCKUPS.find((x) => x.id === id);
+  const c = cards[id];
+  const r = reviews[id] ?? {};
+  const [cls, label] = stageOf(m);
+  c.chip.className = `chip ${cls}`;
+  c.chip.textContent = label;
+  c.root.classList.toggle('reviewed', cls === 'build' || cls === 'impl');
+  c.build.setAttribute('aria-pressed', String(!!r.build));
+  c.impl.setAttribute('aria-pressed', String(!!r.implementation));
+  c.build.querySelector('.box').textContent = r.build ? '✓' : '';
+  c.impl.querySelector('.box').textContent = r.implementation ? '✓' : '';
+  c.build.disabled = !canWrite || !m.url;
+  c.impl.disabled = !canWrite || !m.url || !r.build;
+  c.note.disabled = !canWrite;
+  if (document.activeElement !== c.note) c.note.value = r.note ?? '';
+}
+
+function setStatus(id, text, cls = '') {
+  const s = cards[id].status;
+  s.textContent = text;
+  s.className = 'status ' + cls;
+}
+
+function toggle(id, key) {
+  if (!canWrite) return;
+  const r = { ...(reviews[id] ?? {}) };
+  r[key] = !r[key];
+  if (key === 'build' && !r.build) r.implementation = false; // the game approval rests on the build approval
+  reviews[id] = r;
+  paint(id);
+  flush(id);
+}
+
+const timers = {};
+const inflight = {};
+function queueSave(id) {
+  clearTimeout(timers[id]);
+  setStatus(id, 'Editing…');
+  timers[id] = setTimeout(() => flush(id), 900);
+}
+
+async function flush(id) {
+  clearTimeout(timers[id]);
+  if (!canWrite || !db) return;
+  if (inflight[id]) { inflight[id].again = true; return; }
+  const r = reviews[id] ?? {};
+  const body = { build: !!r.build, implementation: !!r.implementation, note: r.note ?? '', updatedAt: new Date().toISOString() };
+  inflight[id] = { again: false };
+  setStatus(id, 'Saving…');
+  try {
+    await db.collection('reviews').doc(id).set(body);
+    setStatus(id, 'Saved', 'ok');
+  } catch (e) {
+    setStatus(id, 'Not saved. Try again in a moment.', 'err');
+  }
+  const again = inflight[id].again;
+  inflight[id] = null;
+  if (again) flush(id);
+}
+
+function showMode(text) {
+  const m = document.getElementById('mode');
+  m.textContent = text;
+  m.hidden = false;
+}
+
+async function connect() {
+  if (!window.claude) {
+    canWrite = false;
+    MOCKUPS.forEach((m) => paint(m.id));
+    showMode('This copy is open outside claude.ai, so approvals cannot be saved here.');
+    return;
+  }
+  const [store, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+  if (!store) {
+    canWrite = false;
+    MOCKUPS.forEach((m) => paint(m.id));
+    showMode('Reviews cannot be loaded here. Open the tracker on claude.ai while signed in.');
+    return;
+  }
+  db = store;
+  if (user && (await user.can('data.write')) === false) {
+    canWrite = false;
+    showMode('You can read this tracker, but only its owner can approve mockups.');
+  }
+  MOCKUPS.forEach((m) => paint(m.id));
+  db.collection('reviews').onSnapshot((snap) => {
+    for (const d of snap.docs) {
+      if (!d.exists || !cards[d.id] || inflight[d.id] || document.activeElement === cards[d.id].note) continue;
+      const b = d.data();
+      reviews[d.id] = { build: !!b.build, implementation: !!b.implementation, note: typeof b.note === 'string' ? b.note : '' };
+      paint(d.id);
+    }
+  }, () => showMode('Live updates stopped. Reload the page to see the latest reviews.'));
+}
+
+function linkCard(a) {
+  return el('article', { class: 'slot' },
+    el('div', { class: 'head' }, a.kind ? el('span', { class: 'mid', text: a.kind }) : null, el('h3', { text: a.title })),
+    el('p', { class: 'summary', text: a.summary }),
+    el('p', { class: 'meta', text: `${a.page ? a.page + '  ·  ' : ''}published ${a.published}` }),
+    el('div', { class: 'row' }, el('a', { class: 'open', href: a.url, target: '_blank', rel: 'noopener' }, 'Open')));
+}
+
+MOCKUPS.forEach((m) => document.getElementById(m.batch === 'new' ? 'list-new' : 'list-old').append(card(m)));
+GUIDES.forEach((a) => document.getElementById('guides').append(linkCard(a)));
+MISC.forEach((a) => document.getElementById('misc').append(linkCard(a)));
+document.getElementById('n-mockups').textContent = `${MOCKUPS.length} mockups`;
+document.getElementById('n-guides').textContent = `${GUIDES.length} guide${GUIDES.length === 1 ? '' : 's'}`;
+document.getElementById('n-misc').textContent = `${MISC.length} pages`;
+MOCKUPS.forEach((m) => paint(m.id));
+connect();
+</script>
