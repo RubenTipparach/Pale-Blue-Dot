@@ -405,6 +405,32 @@ impl ColumnTier {
         self.centres.iter().map(|c| [c.x, c.y, c.z, 0.0]).collect()
     }
 
+    /// The records as the terrain shader reads them (`lighting-perf` 2.1):
+    /// each carries, above its degree in `more[2]`, its [`reach top`]: the
+    /// highest solid layer, plus one, of every column a reflected ray of
+    /// `reach_m` metres that is in this column could still enter. A ray
+    /// that is rising and already at or above it can hit nothing, so the
+    /// walk ends there with the miss it would have ended with anyway.
+    ///
+    /// Made at upload from the records as they stand, so an edit that lands
+    /// a block is in the bound the moment its records go up.
+    ///
+    /// [`reach top`]: REACH_TOP_SHIFT
+    pub(crate) fn gpu_records_with_reach(&self, reach_m: f32) -> Vec<GpuColumn> {
+        let records = self.gpu_records();
+        let rings = reach_rings(records, &self.centres, reach_m);
+        let tops = reach_tops(records, rings);
+        records
+            .iter()
+            .zip(tops)
+            .map(|(record, top)| {
+                let mut out = *record;
+                out.more[2] = (record.more[2] & DEGREE_MASK) | u32::from(top) << REACH_TOP_SHIFT;
+                out
+            })
+            .collect()
+    }
+
     /// `lighting-model` L4: the sun's bounce over this tier for a sun toward
     /// `sun` (planet frame) of colour `light`, slot for slot.
     pub fn bake_bounce(&self, sun: Vec3, light: Vec3) -> pbd_core::bounce::Field {
@@ -634,6 +660,95 @@ pub fn has_lamp(column: &Column) -> bool {
 
 /// The rim flag's bit in `more[3]`.
 pub const RIM_BIT: u32 = 1;
+
+/// The degree's bits in `more[2]` (five or six); the rest of the word is free
+/// in the tier's own records.
+pub const DEGREE_MASK: u32 = 0xff;
+/// Where the uploaded records carry their reach top (`lighting-perf` 2.1):
+/// nine bits above the degree, a layer index plus one, nought where nothing
+/// solid is in reach. Only the GPU's copy carries it
+/// ([`ColumnTier::gpu_records_with_reach`]).
+pub const REACH_TOP_SHIFT: u32 = 8;
+const _: () = assert!(LAYERS < 0x1ff);
+
+/// A record's own top: the highest solid layer its runs hold, plus one (a
+/// run's top word is `altitude - COLUMN_BASE_M`, and the cell under that
+/// altitude is the run's top cell), or nought for a column with none.
+fn record_top(record: &GpuColumn) -> u16 {
+    record
+        .runs
+        .iter()
+        .map(|word| ((word >> 9) & 0x1ff) as u16)
+        .max()
+        .unwrap_or(0)
+}
+
+/// A record's neighbour across side `side`, if it has one in the tier.
+fn record_side(record: &GpuColumn, side: usize) -> Option<usize> {
+    let raw = if side < 4 {
+        record.neighbors[side]
+    } else {
+        record.more[side - 4]
+    };
+    (raw != NO_NEIGHBOR).then_some(raw as usize)
+}
+
+/// Each record's top, raised to the highest top within `rings` steps of
+/// it over the tier's own neighbour links (`lighting-perf` 2.1).
+pub(crate) fn reach_tops(records: &[GpuColumn], rings: usize) -> Vec<u16> {
+    let mut tops: Vec<u16> = records.iter().map(record_top).collect();
+    let mut next = tops.clone();
+    for _ in 0..rings {
+        let mut changed = false;
+        for (i, record) in records.iter().enumerate() {
+            let degree = ((record.more[2] & DEGREE_MASK) as usize).min(6);
+            let mut top = tops[i];
+            for side in 0..degree {
+                if let Some(n) = record_side(record, side).filter(|&n| n < tops.len()) {
+                    top = top.max(tops[n]);
+                }
+            }
+            changed |= top != tops[i];
+            next[i] = top;
+        }
+        std::mem::swap(&mut tops, &mut next);
+        if !changed {
+            break;
+        }
+    }
+    tops
+}
+
+/// How many neighbour steps hold every column a ray of `reach_m` metres can
+/// enter after any point of its path, from the tier's own spacing: the
+/// path's angle at the lowest radius a column reaches, plus a cell's
+/// circumradius at each end, over the closest ring spacing a hex grid has
+/// (its inradius, `sqrt 3 / 2` of the narrowest centre spacing), plus two
+/// for the pentagons and rounding. Over-counting costs only a looser bound.
+pub(crate) fn reach_rings(records: &[GpuColumn], centres: &[Vec3], reach_m: f32) -> usize {
+    let (mut narrow, mut wide) = (f32::INFINITY, 0.0f32);
+    for (i, record) in records.iter().enumerate().take(centres.len()) {
+        let degree = ((record.more[2] & DEGREE_MASK) as usize).min(6);
+        for side in 0..degree {
+            if let Some(n) = record_side(record, side).filter(|&n| n < centres.len()) {
+                // From the chord: `angle_between`'s arccosine of a dot
+                // within f32's step of one reads neighbours 0.0006 rad apart
+                // as nought.
+                let angle = 2.0 * ((centres[i] - centres[n]).length() / 2.0).asin();
+                narrow = narrow.min(angle);
+                wide = wide.max(angle);
+            }
+        }
+    }
+    if !narrow.is_finite() || narrow <= 0.0 {
+        // No spacing to read: every ring there is, which bounds nothing
+        // and so cuts nothing short.
+        return records.len();
+    }
+    let lowest = crate::planet::PLANET_RADIUS + pbd_core::column::BASE_M as f32;
+    let span = reach_m.max(0.0) / lowest + 2.0 * wide / 3f32.sqrt();
+    (span / (narrow * 3f32.sqrt() / 2.0)).ceil() as usize + 2
+}
 
 /// The topmost water layer of a column, plus one, shifted: nought where the
 /// column holds no water. The shader turns it into the altitude of the water's
@@ -1042,6 +1157,78 @@ mod water_below_sea {
 
 #[cfg(test)]
 mod tests {
+    /// `lighting-perf` 2.1: a column's reach top is the highest solid layer,
+    /// plus one, within the rings asked for and no further, and it rides
+    /// above the degree, which the shader still reads whole.
+    #[test]
+    fn reach_tops_hold_the_highest_layer_in_reach() {
+        // A chain of seven columns, each linked to the next and the last.
+        let tops = [3u32, 0, 5, 2, 2, 9, 1];
+        let records: Vec<GpuColumn> = (0..tops.len())
+            .map(|i| {
+                let mut runs = [column::Run::ABSENT; MAX_RUNS];
+                if tops[i] > 0 {
+                    runs[0] = column::Run {
+                        from: 0,
+                        to: tops[i] as usize,
+                        material: Material::Stone,
+                        body: Material::Stone,
+                    }
+                    .packed(1, 1);
+                }
+                let next = if i + 1 < tops.len() {
+                    (i + 1) as u32
+                } else {
+                    NO_NEIGHBOR
+                };
+                let back = if i > 0 { (i - 1) as u32 } else { NO_NEIGHBOR };
+                GpuColumn {
+                    runs,
+                    neighbors: [next, back, NO_NEIGHBOR, NO_NEIGHBOR],
+                    more: [NO_NEIGHBOR, NO_NEIGHBOR, 2, 0],
+                }
+            })
+            .collect();
+        assert_eq!(reach_tops(&records, 0), vec![3, 0, 5, 2, 2, 9, 1]);
+        assert_eq!(reach_tops(&records, 1), vec![3, 5, 5, 5, 9, 9, 9]);
+        assert_eq!(reach_tops(&records, 2), vec![5, 5, 5, 9, 9, 9, 9]);
+        assert_eq!(reach_tops(&records, 99), vec![9; 7]);
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        for line in [
+            format!("const REACH_TOP_SHIFT: u32 = {REACH_TOP_SHIFT}u;"),
+            format!("const DEGREE_MASK: u32 = {DEGREE_MASK}u;"),
+        ] {
+            assert!(
+                shader.contains(&line),
+                "planet_surface.wgsl should declare `{line}`"
+            );
+        }
+    }
+
+    /// The rings cover the reach: on the shipped tier's spacing (about 2.8
+    /// m), 48 m is some twenty rings, and a longer reach is never fewer.
+    #[test]
+    fn reach_rings_cover_the_reach() {
+        let spacing = 2.833 / crate::planet::PLANET_RADIUS;
+        let centres = [
+            Vec3::X,
+            bevy::prelude::Quat::from_rotation_z(spacing) * Vec3::X,
+        ];
+        let pair = |other: u32| GpuColumn {
+            runs: [column::Run::ABSENT; MAX_RUNS],
+            neighbors: [other, NO_NEIGHBOR, NO_NEIGHBOR, NO_NEIGHBOR],
+            more: [NO_NEIGHBOR, NO_NEIGHBOR, 1, 0],
+        };
+        let records = [pair(1), pair(0)];
+        let rings = reach_rings(&records, &centres, 48.0);
+        assert!(
+            rings as f32 * 2.833 * 3f32.sqrt() / 2.0 >= 48.0,
+            "{rings} rings"
+        );
+        assert!(rings < 40, "{rings} rings");
+        assert!(reach_rings(&records, &centres, 96.0) > rings);
+    }
+
     use super::*;
     use crate::planet::lod;
 
@@ -1051,6 +1238,33 @@ mod tests {
         let mut set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
         let tier = set.take_columns();
         (set, tier)
+    }
+
+    /// `lighting-perf` 2.1 on a real tier (Holbrook's): every column's reach
+    /// top is at least the top of every column whose centre is within the
+    /// reach plus a cell on each side, measured straight, not by rings.
+    #[test]
+    fn a_real_tiers_reach_tops_cover_the_reach() {
+        let anchor = Vec3::new(0.868_428, 0.495_384, 0.020_667).normalize();
+        let (_, tier) = tier(anchor);
+        let reach_m = 48.0;
+        let records = tier.gpu_records_with_reach(reach_m);
+        let own: Vec<u16> = tier.gpu_records().iter().map(record_top).collect();
+        let rings = reach_rings(tier.gpu_records(), &tier.centres, reach_m);
+        let lowest = crate::planet::PLANET_RADIUS + pbd_core::column::BASE_M as f32;
+        let span = (reach_m + 2.0 * 3.2) / lowest;
+        let mut worst = 0;
+        for (i, record) in records.iter().enumerate() {
+            let top = ((record.more[2] >> REACH_TOP_SHIFT) & 0x1ff) as u16;
+            assert_eq!(record.more[2] & DEGREE_MASK, tier.gpu_records()[i].more[2]);
+            for (j, c) in tier.centres.iter().enumerate() {
+                let chord = (tier.centres[i] - *c).length();
+                if 2.0 * (chord / 2.0).asin() <= span && own[j] > top {
+                    worst = worst.max(own[j] - top);
+                }
+            }
+        }
+        assert_eq!(worst, 0, "{rings} rings fall short by up to {worst} layers");
     }
 
     /// Measurement for `overcast-and-rain` section 5: how many cave floors in

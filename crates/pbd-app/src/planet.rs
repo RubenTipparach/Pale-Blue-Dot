@@ -994,6 +994,7 @@ fn upload_fine(
     bounce: Option<Res<bounce::BounceField>>,
     lamps: Option<Res<bounce::LampBakeField>>,
     clock: Res<PlanetClock>,
+    lighting: Option<Res<crate::config::LightingSettings>>,
 ) {
     let (Some(fine), Some(mut planet)) = (fine, planet) else {
         return;
@@ -1042,9 +1043,15 @@ fn upload_fine(
         }
         planet.counts[k] = level.len().min(lod::FINE_CAPACITY as usize) as u32;
     }
-    let records = fine.set.columns.gpu_records();
+    // With each column's reach top, which ends a reflected ray's walk once
+    // it has risen past everything it could still meet (`lighting-perf` 2.1).
+    let reach_m = lighting.map_or_else(
+        || crate::config::LightingSettings::default().reflection_reach_m,
+        |l| l.reflection_reach_m,
+    );
+    let records = fine.set.columns.gpu_records_with_reach(reach_m);
     if !records.is_empty() {
-        queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(records));
+        queue.write_buffer(&planet.columns, 0, bytemuck::cast_slice(&records));
         // The light goes up with the records that decide what it lights. Two
         // uploads a frame apart would draw one frame of the new geometry lit
         // by the old world.

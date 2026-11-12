@@ -30,16 +30,20 @@ top-level render pass the game times, by name, beside the existing
 
 ### Requirement: A reflection ray that cannot hit anything stops
 
-The wet-ground reflection trace SHALL stop, and return the sky it returns
-on a miss today, once its ray is rising above the highest solid layer it
-could still reach, and SHALL NOT then run the screen-space fallback.
+The wet-ground reflection walk SHALL stop, and return the miss it returns
+when it runs out of reach today, once its ray is rising and at or above the
+highest solid layer of every column it could still enter within its reach.
+The screen-space trace that follows a miss SHALL still run: the towns'
+buildings and the trees are not in the columns, and the screen trace is
+what reflects them.
 
 #### Scenario: A puddle under open sky
 
 - **WHEN** a wet fragment's reflected ray points up into open air above the
-  column tier's top solid layer around it
-- **THEN** the trace ends within the column it is in, and the fragment's
-  colour equals what the full walk would give it
+  highest solid layer within its reach
+- **THEN** the walk ends in the column it is in, and the frame is the frame
+  the full walk gives, pixel for pixel (`--capture` shots of Holbrook's
+  lane, 2026-11-12)
 
 ### Requirement: The lighting model's cost on foot in the rain is held
 

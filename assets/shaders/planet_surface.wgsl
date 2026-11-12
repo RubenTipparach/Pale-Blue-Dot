@@ -358,6 +358,14 @@ fn run_hi(word: u32) -> f32 { return COLUMN_BASE_M + f32((word >> 9u) & 0x1ffu);
 // came back as.
 fn run_code(word: u32) -> u32 { return (word >> 18u) & 0xfu; }
 fn run_body(word: u32) -> u32 { return (word >> 22u) & 0xfu; }
+// `more[2]` is the cell's degree in its low byte and, in the records the
+// GPU is given, the column's reach top above it (`lighting-perf` 2.1,
+// `ColumnTier::gpu_records_with_reach`): the highest solid layer, plus one,
+// of every column a reflected ray in this one could still enter.
+const DEGREE_MASK: u32 = 255u;
+const REACH_TOP_SHIFT: u32 = 8u;
+fn column_degree(rec: ColumnRec) -> u32 { return min(rec.more[2] & DEGREE_MASK, 6u); }
+fn reach_top(rec: ColumnRec) -> u32 { return (rec.more[2] >> REACH_TOP_SHIFT) & 0x1ffu; }
 fn column_side(rec: ColumnRec, side: u32) -> u32 {
     if side < 4u { return rec.neighbors[side]; }
     return rec.more[side - 4u];
@@ -1856,7 +1864,7 @@ fn column_of(q: vec3<f32>, slot: u32) -> u32 {
     let c = centres[slot - 1u].xyz;
     var best = slot;
     var past = 0.0;
-    for (var s = 0u; s < min(rec.more[2], 6u); s++) {
+    for (var s = 0u; s < column_degree(rec); s++) {
         let ns = column_neighbour(rec, s);
         if ns == 0u { continue; }
         let nc = centres[ns - 1u].xyz;
@@ -1878,7 +1886,7 @@ fn column_pair(q: vec3<f32>, slot: u32) -> vec3<f32> {
     var first_score = 0.0;
     var second = 0u;
     var second_score = -1e9;
-    for (var s = 0u; s < min(rec.more[2], 6u); s++) {
+    for (var s = 0u; s < column_degree(rec); s++) {
         let ns = column_neighbour(rec, s);
         if ns == 0u { continue; }
         let nc = centres[ns - 1u].xyz;
@@ -2014,8 +2022,13 @@ fn reflect_trace(origin: vec3<f32>, dir: vec3<f32>, start: u32, sun: vec3<f32>,
     for (var i = 0u; i < 72u; i++) {
         if layer >= LIGHT_LAYERS { return vec4(0.0); }
         let rec = columns[slot - 1u];
+        // Rising (its altitude only grows from here on) and at or above the
+        // highest solid layer of every column it could still enter: nothing
+        // is left to hit, so the walk ends with the miss it would have ended
+        // with after the rest of its steps (`lighting-perf` 2.1).
+        if dot(p, dir) >= 0.0 && layer >= reach_top(rec) { return vec4(0.0); }
         let c = centres[slot - 1u].xyz;
-        let degree = min(rec.more[2], 6u);
+        let degree = column_degree(rec);
         var t_exit = 1e9;
         var next = slot;
         var next_layer = layer;
