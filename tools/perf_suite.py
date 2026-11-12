@@ -310,7 +310,7 @@ def run_once(scenario: str, variant: dict, index: int, a) -> dict:
     saves = Path("saves") / world
     shutil.rmtree(saves, ignore_errors=True)
     cmd = [variant["exe"], *SCENARIOS[scenario], "--world", world, "--time", str(a.time),
-           "--no-vsync", "--frame-log", str(csv_path), *variant.get("args", [])]
+           *([] if a.vsync else ["--no-vsync"]), "--frame-log", str(csv_path), *variant.get("args", [])]
     env = {**os.environ, **variant["env"]}
     print(f"[{dt.datetime.now():%H:%M:%S}] {tag}: {' '.join(cmd)} {variant['env'] or ''}"
           f"{' assets@' + variant['assets'] if variant.get('assets') else ''}", flush=True)
@@ -359,6 +359,10 @@ def analyse(scenario: str, variant: dict, index: int, a, csv_path: Path, log_pat
         "scenario": scenario, "variant": variant["name"], "exe": variant["exe"], "env": variant["env"],
         "index": index, "seconds": seconds, "csv": str(csv_path), "log": str(log_path),
         "frame_ms": stats([r["ms"] for r in rows]),
+        # With `--vsync`: frames that missed a refresh, i.e. took more than
+        # one and a half 60 Hz intervals (a display at another rate reads
+        # its own interval from the median frame).
+        "missed": missed_refreshes([r["ms"] for r in rows]) if a.vsync else None,
         "gpu_total_ms": stats([r["gpu_total"] for r in rows]),
         "gpu_clouds_ms": stats([r["gpu_clouds"] for r in rows]),
         "gpu_pass_ms": {name: stats([r["passes"].get(name, math.nan) for r in rows])
@@ -395,6 +399,19 @@ def analyse(scenario: str, variant: dict, index: int, a, csv_path: Path, log_pat
     return result
 
 
+def missed_refreshes(values: list[float]) -> dict:
+    """With vsync on, the frames that held the screen for more than one
+    refresh: over 1.5 refresh intervals, the interval read off the median
+    frame (16.7 ms on a 60 Hz display)."""
+    v = sorted(x for x in values if not math.isnan(x))
+    if not v:
+        return {}
+    interval = pct(v, 0.5)
+    late = [x for x in v if x > 1.5 * interval]
+    return {"interval_ms": interval, "frames": len(v), "missed": len(late),
+            "share": len(late) / len(v), "refreshes_lost": sum(round(x / interval) - 1 for x in late)}
+
+
 def median(values: list[float]) -> float:
     v = sorted(x for x in values if not math.isnan(x))
     return v[len(v) // 2] if v else math.nan
@@ -410,7 +427,8 @@ def fmt(x: float, want: float | None = None) -> str:
 def report(results: list[dict], a, meta: dict) -> str:
     lines = [f"# Performance suite, {meta['when']}", ""]
     lines.append(f"- revision: `{meta['revision']}`{' (uncommitted changes)' if meta['dirty'] else ''}")
-    lines.append(f"- adapter: {meta.get('adapter', 'unknown')}; window 1440 x 900, uncapped (`--no-vsync`)")
+    paced = "vsync on (`--vsync`)" if getattr(a, "vsync", False) else "uncapped (`--no-vsync`)"
+    lines.append(f"- adapter: {meta.get('adapter', 'unknown')}; window 1440 x 900, {paced}")
     lines.append(f"- clock pinned at {a.time} h; first {a.skip_s} s after loading (the ready line, else the first frame) thrown away; "
                  f"{a.repeats} run(s) per variant, interleaved")
     lines.append(f"- budgets: p95 within {WANT_MS:.1f} ms (120 fps), p99 within {FLOOR_MS:.1f} ms (60 fps); "
@@ -445,6 +463,20 @@ def report(results: list[dict], a, meta: dict) -> str:
                     f"| {variant} | {fmt(fps)} | {fmt(m('p50'))} | {fmt(m('p95'), WANT_MS)} | {fmt(m('p99'), FLOOR_MS)} | "
                     f"{fmt(m('max'))} | {fmt(m('p50', 'gpu_total_ms'))} / {fmt(m('p95', 'gpu_total_ms'))} | "
                     f"{fmt(m('p50', 'gpu_clouds_ms'))} / {fmt(m('p95', 'gpu_clouds_ms'))} |")
+        if getattr(a, "vsync", False):
+            lines.append("")
+            lines.append("With vsync on: frames that missed a refresh (held the screen for more than one):")
+            lines.append("")
+            lines.append("| variant | refresh, ms | missed | share | refreshes lost |")
+            lines.append("| --- | ---: | ---: | ---: | ---: |")
+            for variant in a.variant_names:
+                ok = [r["missed"] for r in results
+                      if r["scenario"] == scenario and r["variant"] == variant and r["valid"] and r.get("missed")]
+                if ok:
+                    lines.append(f"| {variant} | {median([m['interval_ms'] for m in ok]):.2f} | "
+                                 f"{sum(m['missed'] for m in ok)} of {sum(m['frames'] for m in ok)} | "
+                                 f"{100 * sum(m['missed'] for m in ok) / sum(m['frames'] for m in ok):.2f}% | "
+                                 f"{sum(m['refreshes_lost'] for m in ok)} |")
         passes = sorted({k for r in results if r["scenario"] == scenario and r["valid"]
                          for k in r.get("gpu_pass_ms", {})})
         if passes:
@@ -520,6 +552,7 @@ def reanalyse(a) -> None:
     a.scenarios = list(dict.fromkeys(r["scenario"] for r in old))
     a.variant_names = list(dict.fromkeys(r["variant"] for r in old))
     a.repeats = max(r["index"] for r in old) + 1
+    a.vsync = "--vsync" in meta.get("args", [])
     variants = {v["name"]: v for v in meta["variants"]}
     results = []
     for r in old:
@@ -545,6 +578,8 @@ def main() -> None:
     ap.add_argument("--exe", default="target/release/pbd-app" + (".exe" if WINDOWS else ""), help="the exe of a variant that names none")
     ap.add_argument("--repeats", type=int, default=2)
     ap.add_argument("--time", type=float, default=10.0, help="the pinned hour: daylight, for the scenic clouds")
+    ap.add_argument("--vsync", action="store_true",
+                    help="present with vsync (no --no-vsync) and count the frames that missed a refresh")
     ap.add_argument("--skip-s", type=float, default=10.0, help="the warm-up, from the ready line or the first frame")
     ap.add_argument("--ready-pattern", default=r"\bLOADING_DONE\b|\bWORLD_READY\b|\bREADY\b|loading (?:is )?(?:done|complete|finished)",
                     help="a log line that marks the end of loading; the warm-up counts from it")
