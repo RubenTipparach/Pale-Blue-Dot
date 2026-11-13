@@ -176,7 +176,10 @@ cell each unless noted. Numbers are mockup first guesses.
   - 0.25 t of diesel;
   - 0.15 t of polymer feed (the polymer M3 already uses);
   - 0.15 t of residue (asphalt, used for roads).
-- **The oil plant** is a 40 MW boiler and turbine on fuel oil. On the power
+- **The oil plant** is a 1,000 kW boiler and turbine on fuel oil, above the
+  coal plant (600 kW) and below fission (4,000 kW) on M20's scale. It burns
+  6 t of fuel oil a day at full load, which is about five pumpjacks' worth.
+  The first figure, 40 MW, was 180 wells a plant, and the mockup showed it. On the power
   ladder it sits between coal and wind, with smoke and an output figure
   like the coal plant's.
 
