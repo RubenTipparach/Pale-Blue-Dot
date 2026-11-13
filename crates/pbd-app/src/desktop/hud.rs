@@ -17,9 +17,11 @@
 //! level drawing the ground underfoot, whether that cell has a column, how
 //! far the resident set's anchor is and whether a rebuild is in flight. It is
 //! what says "you have outrun the streaming" while the near-field-streaming
-//! change is built, and it goes when that change lands.
+//! change is built, and it goes when that change lands. Under it, also at the
+//! owner's request, where the camera is (`position-readout`).
 
 use bevy::prelude::*;
+use pbd_app::place::CameraPlace;
 use pbd_app::planet::NearField;
 
 /// The near-field readout's text node.
@@ -58,12 +60,24 @@ pub fn setup(mut commands: Commands) {
     ));
 }
 
-/// Keep the readout current; the resource changes only when a number does.
-pub fn near_field(near: Res<NearField>, mut text: Query<&mut Text, With<NearFieldText>>) {
-    if !near.is_changed() {
+/// Keep the readout current; the resources change only when a number does.
+/// Under it, where the camera is (`position-readout`): what a screenshot
+/// needs to say where it was taken.
+pub fn near_field(
+    near: Res<NearField>,
+    place: Res<CameraPlace>,
+    mut text: Query<&mut Text, With<NearFieldText>>,
+) {
+    if !near.is_changed() && !place.is_changed() {
         return;
     }
+    let line = match place.0 {
+        Some(place) => format!("{}\n{}", near.line(), place.line()),
+        None => near.line(),
+    };
     for mut text in &mut text {
-        text.0 = near.line();
+        if text.0 != line {
+            text.0.clone_from(&line);
+        }
     }
 }

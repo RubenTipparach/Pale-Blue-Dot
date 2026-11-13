@@ -764,6 +764,9 @@ pub fn warm(world: &mut World) {
         launched.elapsed().as_secs_f64(),
         warming.started.elapsed().as_secs_f64()
     );
+    if let Some(place) = crate::place::of_world(world) {
+        info!("PLACE ready {}", place.line());
+    }
 }
 
 /// Turn the active 3D cameras through four headings behind the screen, so

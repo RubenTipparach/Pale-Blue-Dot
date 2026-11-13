@@ -28,6 +28,8 @@ pub mod loading;
 #[cfg(feature = "desktop")]
 pub mod overlay;
 #[cfg(feature = "desktop")]
+pub mod place;
+#[cfg(feature = "desktop")]
 pub mod planet;
 #[cfg(feature = "desktop")]
 pub mod saves;

@@ -1037,6 +1037,7 @@ pub fn run(args: &[String]) {
     })
     .insert_resource(launch.clone())
     .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
+    .add_plugins(pbd_app::place::PlacePlugin)
     .add_systems(
         Startup,
         (
@@ -2765,6 +2766,14 @@ fn capture(
             state.requested = true;
         }
         println!("CAPTURE_REQUEST {} frame={}", path.display(), state.frame);
+        // Where it was taken (`position-readout`), so the shot can be taken
+        // again with `--at`.
+        let named = path.display().to_string();
+        commands.queue(move |world: &mut World| {
+            if let Some(place) = pbd_app::place::of_world(world) {
+                info!("PLACE capture {named} {}", place.line());
+            }
+        });
     }
     if launch.capture.is_some() && state.saved && state.frame >= state.finish_frame {
         if launch.tour {
